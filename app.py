@@ -5,42 +5,77 @@ import smtplib
 from email.mime.text import MIMEText
 
 # --- CONFIGURATION ---
-# REPLACE THE ID BELOW WITH YOUR GOOGLE SHEET ID
+# Your Specific Sheet ID
 SHEET_ID = "18m752GcvGIPPpqUn_gB0DfA3e4z2UGD0ki0dUZh2Qek"
 SHEET_URL = f"https://docs.google.com/spreadsheets/d/{SHEET_ID}/gviz/tq?tqx=out:csv&sheet=Bills"
 
 # API SETUP
-API_KEY = st.secrets.get("OPENSTATES_API_KEY", "YOUR_API_KEY_HERE")
+API_KEY = st.secrets.get("OPENSTATES_API_KEY")
 
-st.set_page_config(page_title="VA Bill Tracker", layout="wide")
+st.set_page_config(page_title="VA Bill Tracker 2026", layout="wide")
 
 # --- HELPER FUNCTIONS ---
-def get_bill_data(bill_identifier):
-    """Fetch bill details from Open States API."""
-    # Using the standard V3 API endpoint
-    url = "https://v3.openstates.org/bills"
-    params = {
-        "jurisdiction": "Virginia",
-        "identifier": bill_identifier,
-        "include": ["abstracts", "actions", "sponsorships"],
-        "apikey": API_KEY
-    }
-    try:
-        response = requests.get(url, params=params)
-        if response.status_code == 200:
-            results = response.json().get('results', [])
-            if results:
-                return results[0]
-    except Exception as e:
-        return None
-    return None
+def get_bill_data_batch(bill_numbers):
+    """
+    Fetches 2026 bill data for a list of bill numbers.
+    """
+    results = []
+    
+    # Clean bill numbers (remove spaces, make uppercase)
+    clean_bills = [str(b).strip().upper() for b in bill_numbers if str(b).strip()]
+
+    for bill_num in clean_bills:
+        url = "https://v3.openstates.org/bills"
+        params = {
+            "jurisdiction": "Virginia",
+            "session": "2026",  # <--- FORCES 2026 SESSION
+            "identifier": bill_num,
+            "include": ["actions", "sponsorships"],
+            "apikey": API_KEY
+        }
+        
+        try:
+            response = requests.get(url, params=params)
+            data = response.json()
+            
+            if data['results']:
+                # Found the bill
+                item = data['results'][0]
+                latest_action = item['actions'][0]['description'] if item['actions'] else "Introduced"
+                latest_date = item['actions'][0]['date'] if item['actions'] else ""
+                sponsor = item['sponsorships'][0]['name'] if item['sponsorships'] else "Unknown"
+                
+                results.append({
+                    "Bill Number": bill_num,
+                    "Official Title": item['title'], # Renamed for clarity
+                    "Status": latest_action,
+                    "Date": latest_date,
+                    "Sponsor": sponsor,
+                    "History": item['actions']
+                })
+            else:
+                # Bill not found
+                results.append({
+                    "Bill Number": bill_num,
+                    "Official Title": "Not found in 2026 Session",
+                    "Status": "Unknown",
+                    "Date": "-",
+                    "Sponsor": "-",
+                    "History": []
+                })
+                
+        except Exception as e:
+            # API Error
+            print(f"Error fetching {bill_num}: {e}")
+            
+    return pd.DataFrame(results)
 
 def send_notification(email_to, subject, body):
     email_user = st.secrets.get("EMAIL_USER")
     email_pass = st.secrets.get("EMAIL_PASS")
     
     if not email_user or not email_pass:
-        st.error("Email credentials not configured in Secrets!")
+        st.warning("Cannot send email: Credentials missing in Secrets.")
         return
 
     msg = MIMEText(body)
@@ -57,113 +92,112 @@ def send_notification(email_to, subject, body):
         st.error(f"Failed to send email: {e}")
 
 # --- APP LAYOUT ---
-st.title("🏛️ Virginia General Assembly Tracker")
+st.title("🏛️ Virginia General Assembly Tracker (2026)")
 
 # 1. LOAD DATA FROM GOOGLE SHEET
 try:
-    df_tracking = pd.read_csv(SHEET_URL)
-    # Basic cleaning to handle potential empty rows or bad data
-    df_tracking = df_tracking.dropna(how='all')
+    sheet_df = pd.read_csv(SHEET_URL)
+    # Clean up column names (remove extra spaces)
+    sheet_df.columns = sheet_df.columns.str.strip()
     
-    # Check if 'Bill Number' column exists
-    if 'Bill Number' not in df_tracking.columns:
-        st.error("Error: Your Google Sheet must have a column named 'Bill Number' in Row 1.")
+    if 'Bill Number' not in sheet_df.columns:
+        st.error("Error: Your Google Sheet must have a 'Bill Number' column.")
         st.stop()
+        
+    # Standardize Bill Numbers in Sheet
+    sheet_df['Bill Number'] = sheet_df['Bill Number'].astype(str).str.strip().str.upper()
+    
+    # Handle "Folder" column
+    if 'Folder' not in sheet_df.columns:
+        sheet_df['Folder'] = "Uncategorized"
+    sheet_df['Folder'] = sheet_df['Folder'].fillna("Uncategorized")
+    
+    # Handle "My Title" column (The new custom category)
+    if 'My Title' not in sheet_df.columns:
+        # If you haven't added the column yet, we create it temporarily so code doesn't crash
+        sheet_df['My Title'] = "-"
+    sheet_df['My Title'] = sheet_df['My Title'].fillna("-")
+    
 except Exception as e:
-    st.error(f"Could not load Google Sheet. Make sure it is 'Public to anyone with link'. Error: {e}")
+    st.error(f"Could not load Google Sheet. Check permissions. Error: {e}")
     st.stop()
 
-# Sidebar: Filtering
-st.sidebar.header("Filter & Sort")
-all_folders = df_tracking['Folder'].unique().tolist() if 'Folder' in df_tracking.columns else []
-selected_folder = st.sidebar.multiselect("Filter by Folder", all_folders)
+# 2. FETCH REAL DATA AND MERGE
+st.write("Fetching latest 2026 data...")
+bills_to_track = sheet_df['Bill Number'].unique().tolist()
 
-if selected_folder:
-    bills_to_show = df_tracking[df_tracking['Folder'].isin(selected_folder)]
-else:
-    bills_to_show = df_tracking
-
-# 2. FETCH LATEST DATA
-if not bills_to_show.empty:
-    bill_data_list = []
+if bills_to_track:
+    api_df = get_bill_data_batch(bills_to_track)
     
-    st.write(f"Tracking **{len(bills_to_show)}** bills...")
-    my_bar = st.progress(0)
+    # MERGE: Combine your Sheet (Folders/My Title) with API (Status/Official Title)
+    final_df = pd.merge(sheet_df, api_df, on="Bill Number", how="left")
     
-    for index, row in bills_to_show.iterrows():
-        bill_num = row['Bill Number']
-        # Skip empty bill numbers
-        if pd.isna(bill_num) or str(bill_num).strip() == "":
-            continue
-            
-        data = get_bill_data(str(bill_num).strip())
-        
-        if data:
-            latest_action = data['actions'][0]['description'] if data['actions'] else "No actions yet"
-            latest_date = data['actions'][0]['date'] if data['actions'] else ""
-            sponsor = data['sponsorships'][0]['name'] if data['sponsorships'] else "Unknown"
-            title = data['title']
-            
-            bill_data_list.append({
-                "Bill": data['identifier'],
-                "Title": title,
-                "Sponsor": sponsor,
-                "Folder": row.get('Folder', 'Uncategorized'),
-                "Last Action": latest_action,
-                "Date": latest_date,
-                "History": data['actions']
-            })
-        else:
-            # Handle cases where bill isn't found (maybe a typo in the sheet)
-            bill_data_list.append({
-                "Bill": bill_num,
-                "Title": "Not Found (Check Typos)",
-                "Sponsor": "-",
-                "Folder": row.get('Folder', 'Uncategorized'),
-                "Last Action": "Error loading",
-                "Date": "-",
-                "History": []
-            })
-            
-        my_bar.progress((index + 1) / len(bills_to_show))
-        
-    df_results = pd.DataFrame(bill_data_list)
+    # Fill in blanks
+    final_df['Official Title'] = final_df['Official Title'].fillna("Loading Error")
+    
+    # 3. SIDEBAR FILTERS
+    st.sidebar.header("Filters")
+    available_folders = final_df['Folder'].unique()
+    selected_folders = st.sidebar.multiselect("Filter by Folder", available_folders)
+    
+    if selected_folders:
+        display_df = final_df[final_df['Folder'].isin(selected_folders)]
+    else:
+        display_df = final_df
 
-    # 3. DASHBOARD VIEW
+    # 4. DISPLAY DASHBOARD
     st.divider()
     
-    # SIMPLE VIEW
-    st.subheader("📋 Simplified View")
-    if not df_results.empty:
-        st.dataframe(df_results[['Bill', 'Folder', 'Last Action', 'Date', 'Sponsor']], use_container_width=True)
+    st.subheader(f"Tracking {len(display_df)} Bills")
+    
+    # Sort
+    display_df = display_df.sort_values(by=['Folder', 'Bill Number'])
+    
+    # REORDER COLUMNS: Folder -> Bill -> YOUR TITLE -> Official Title -> Status
+    cols_to_show = ['Folder', 'Bill Number', 'My Title', 'Official Title', 'Status', 'Date']
+    
+    # Show the table
+    st.dataframe(
+        display_df[cols_to_show],
+        use_container_width=True,
+        hide_index=True
+    )
 
-        # EXPANDED VIEW
-        st.subheader("🔍 Expanded View & History")
-        for i, row in df_results.iterrows():
-            with st.expander(f"{row['Bill']}: {row['Title']} ({row['Last Action']})"):
-                st.write(f"**Sponsor:** {row['Sponsor']}")
-                st.write(f"**Folder:** {row['Folder']}")
-                st.write("**Full History:**")
-                
-                history_df = pd.DataFrame(row['History'])
-                if not history_df.empty:
-                    st.table(history_df[['date', 'description']])
-                else:
-                    st.write("No history available.")
-                    
-        # 4. NOTIFICATIONS
-        st.sidebar.divider()
-        st.sidebar.header("🔔 Notifications")
-        email_target = st.sidebar.text_input("Enter Email for Update")
+    # Expanded View
+    st.divider()
+    st.subheader("🔍 Detailed History")
+    
+    for i, row in display_df.iterrows():
+        # Using YOUR custom title in the expander header if it exists
+        display_name = row['My Title'] if row['My Title'] != "-" else row['Official Title']
         
-        if st.sidebar.button("Check for Updates & Notify"):
-            summary_text = "Virginia Bill Tracker Update:\n\n"
-            for i, row in df_results.iterrows():
-                summary_text += f"{row['Bill']}: {row['Last Action']} ({row['Date']})\n"
-                
-            send_notification(email_target, "VA Bill Tracker Update", summary_text)
-    else:
-        st.warning("No data found for these bills.")
+        label = f"{row['Bill Number']} ({row['Folder']}): {display_name}"
+        
+        with st.expander(label):
+            st.markdown(f"**My Summary:** {row['My Title']}")
+            st.markdown(f"**Official Title:** {row['Official Title']}")
+            st.markdown(f"**Sponsor:** {row['Sponsor']}")
+            st.write(f"**Current Status:** {row['Status']} ({row['Date']})")
+            
+            st.write("**Recent History:**")
+            if isinstance(row['History'], list) and len(row['History']) > 0:
+                hist_df = pd.DataFrame(row['History'])
+                st.table(hist_df[['date', 'description']])
+            else:
+                st.write("No history available.")
 
+    # 5. NOTIFICATIONS
+    st.sidebar.divider()
+    if st.sidebar.button("📧 Email Me Update"):
+        email_target = st.sidebar.text_input("Confirm Email:")
+        if email_target:
+            summary = "VA 2026 Bill Tracker Update:\n\n"
+            for i, row in final_df.iterrows():
+                # Use My Title in email if available
+                title_used = row['My Title'] if row['My Title'] != "-" else row['Official Title']
+                summary += f"{row['Bill Number']} - {title_used}: {row['Status']} ({row['Date']})\n"
+                
+            send_notification(email_target, "Bill Tracker Update", summary)
+            
 else:
-    st.info("No bills found in your Google Sheet! Add rows to the 'Bills' tab.")
+    st.warning("Your Google Sheet appears to be empty.")
