@@ -28,7 +28,7 @@ def get_bill_data_batch(bill_numbers):
         url = "https://v3.openstates.org/bills"
         params = {
             "jurisdiction": "Virginia",
-            "session": "2026",  # <--- FORCES 2026 SESSION
+            "session": "2026",
             "identifier": bill_num,
             "include": ["actions", "sponsorships"],
             "apikey": API_KEY
@@ -47,7 +47,7 @@ def get_bill_data_batch(bill_numbers):
                 
                 results.append({
                     "Bill Number": bill_num,
-                    "Official Title": item['title'], # Renamed for clarity
+                    "Official Title": item['title'],
                     "Status": latest_action,
                     "Date": latest_date,
                     "Sponsor": sponsor,
@@ -104,6 +104,14 @@ try:
         st.error("Error: Your Google Sheet must have a 'Bill Number' column.")
         st.stop()
         
+    # --- FIX FOR "NAN" ISSUE ---
+    # 1. Drop rows where Bill Number is completely missing
+    sheet_df = sheet_df.dropna(subset=['Bill Number'])
+    # 2. Convert to string and remove empty text or 'nan' text
+    sheet_df = sheet_df[sheet_df['Bill Number'].astype(str).str.strip().str.lower() != 'nan']
+    sheet_df = sheet_df[sheet_df['Bill Number'].astype(str).str.strip() != '']
+    # ---------------------------
+
     # Standardize Bill Numbers in Sheet
     sheet_df['Bill Number'] = sheet_df['Bill Number'].astype(str).str.strip().str.upper()
     
@@ -112,9 +120,8 @@ try:
         sheet_df['Folder'] = "Uncategorized"
     sheet_df['Folder'] = sheet_df['Folder'].fillna("Uncategorized")
     
-    # Handle "My Title" column (The new custom category)
+    # Handle "My Title" column
     if 'My Title' not in sheet_df.columns:
-        # If you haven't added the column yet, we create it temporarily so code doesn't crash
         sheet_df['My Title'] = "-"
     sheet_df['My Title'] = sheet_df['My Title'].fillna("-")
     
@@ -150,7 +157,7 @@ if bills_to_track:
     
     st.subheader(f"Tracking {len(display_df)} Bills")
     
-    # Sort
+    # Sort by Folder first, then Bill Number
     display_df = display_df.sort_values(by=['Folder', 'Bill Number'])
     
     # REORDER COLUMNS: Folder -> Bill -> YOUR TITLE -> Official Title -> Status
@@ -168,7 +175,7 @@ if bills_to_track:
     st.subheader("🔍 Detailed History")
     
     for i, row in display_df.iterrows():
-        # Using YOUR custom title in the expander header if it exists
+        # Use My Title if it exists, otherwise Official Title
         display_name = row['My Title'] if row['My Title'] != "-" else row['Official Title']
         
         label = f"{row['Bill Number']} ({row['Folder']}): {display_name}"
@@ -193,11 +200,10 @@ if bills_to_track:
         if email_target:
             summary = "VA 2026 Bill Tracker Update:\n\n"
             for i, row in final_df.iterrows():
-                # Use My Title in email if available
                 title_used = row['My Title'] if row['My Title'] != "-" else row['Official Title']
                 summary += f"{row['Bill Number']} - {title_used}: {row['Status']} ({row['Date']})\n"
                 
             send_notification(email_target, "Bill Tracker Update", summary)
             
 else:
-    st.warning("Your Google Sheet appears to be empty.")
+    st.info("No bills found. Add Bill Numbers to your Google Sheet to start tracking!")
