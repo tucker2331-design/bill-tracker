@@ -23,8 +23,6 @@ CARRIERS = {
 }
 
 # --- SMART CATEGORIZATION CONFIG ---
-# 1. First priority: Check these keywords in the Title.
-# 2. Second priority: Use the official API Subject tag.
 TOPIC_KEYWORDS = {
     "Economy & Labor": ["wage", "salary", "worker", "employment", "labor", "business", "tax", "commerce", "job", "pay"],
     "Education": ["school", "education", "student", "university", "college", "teacher", "curriculum", "scholarship"],
@@ -38,40 +36,23 @@ TOPIC_KEYWORDS = {
 # --- HELPER FUNCTIONS ---
 
 def determine_lifecycle(status_text):
-    """Sorts bills into 4 buckets: Passed, Awaiting Sig, Active, Failed."""
     status = str(status_text).lower()
-    
-    # 1. PASSED & ENACTED
     if any(x in status for x in ["signed by governor", "enacted", "approved by governor", "chapter"]):
         return "✅ Passed & Signed"
-    
-    # 2. DEAD / FAILED
     dead_keywords = ["tabled", "failed", "stricken", "passed by indefinitely", "left in", "defeated", "no action taken", "incorporated into"]
     if any(word in status for word in dead_keywords):
         return "❌ Dead / Tabled"
-
-    # 3. AWAITING SIGNATURE
     if any(x in status for x in ["enrolled", "communicated to governor", "bill text as passed"]):
         return "✍️ Awaiting Signature"
-        
-    # 4. ACTIVE (Default)
     return "🚀 Active"
 
 def get_smart_subject(title, api_subjects):
-    """Determines subject based on Keywords -> API Tag -> Fallback."""
     title_lower = str(title).lower()
-    
-    # 1. Check Custom Keywords
     for category, keywords in TOPIC_KEYWORDS.items():
         if any(k in title_lower for k in keywords):
             return category
-            
-    # 2. Dynamic: Use Government API Subject if available
-    # This automatically creates new folders for new topics (e.g. "Gambling")
     if api_subjects and len(api_subjects) > 0:
         return api_subjects[0]
-        
-    # 3. Last Resort
     return "General / Unsorted"
 
 def get_bill_data_batch(bill_numbers):
@@ -83,23 +64,17 @@ def get_bill_data_batch(bill_numbers):
 
     for i, bill_num in enumerate(clean_bills):
         if not bill_num: continue
-        
-        # Rate limit pause
         time.sleep(1.0)
         progress_bar.progress((i + 1) / total, text=f"Checking {bill_num}...")
 
         url = "https://v3.openstates.org/bills"
         params = {
-            "jurisdiction": "Virginia",
-            "session": "2026",
-            "identifier": bill_num,
-            "include": ["actions", "sponsorships", "abstracts"], 
-            "apikey": API_KEY
+            "jurisdiction": "Virginia", "session": "2026", "identifier": bill_num,
+            "include": ["actions", "sponsorships", "abstracts"], "apikey": API_KEY
         }
         
         try:
             response = requests.get(url, params=params)
-            
             if response.status_code != 200:
                 results.append({"Bill Number": bill_num, "Status": "Error/Not Found", "Lifecycle": "Unknown"})
                 continue
@@ -108,25 +83,20 @@ def get_bill_data_batch(bill_numbers):
             if data['results']:
                 item = data['results'][0]
                 latest_action = item['actions'][0]['description'] if item['actions'] else "Introduced"
-                latest_date = item['actions'][0]['date'] if item['actions'] else ""
-                
-                # SMART SUBJECT
-                official_subjects = item.get('subject', [])
-                smart_folder = get_smart_subject(item['title'], official_subjects)
+                smart_folder = get_smart_subject(item['title'], item.get('subject', []))
 
                 results.append({
                     "Bill Number": bill_num,
                     "Official Title": item['title'],
                     "Status": latest_action,
-                    "Date": latest_date,
+                    "Date": item['actions'][0]['date'] if item['actions'] else "",
                     "Sponsor": item['sponsorships'][0]['name'] if item['sponsorships'] else "Unknown",
                     "Auto_Folder": smart_folder,
-                    "History": item['actions'], # Stores full list of dicts
+                    "History": item['actions'],
                     "Lifecycle": determine_lifecycle(latest_action)
                 })
             else:
                 results.append({"Bill Number": bill_num, "Official Title": "Not Found", "Auto_Folder": "Unassigned", "Lifecycle": "Unknown"})
-                
         except Exception as e:
             results.append({"Bill Number": bill_num, "Status": f"Error: {e}", "Auto_Folder": "Error", "Lifecycle": "Unknown"})
             
@@ -143,12 +113,10 @@ def send_notification(email_to, phone_num, carrier, subject, body):
 
     recipients = []
     if email_to: recipients.append(email_to)
-    
     if phone_num and carrier: 
         clean_phone = "".join(filter(str.isdigit, str(phone_num)))
         if len(clean_phone) == 10:
-            sms_email = f"{clean_phone}@{CARRIERS[carrier]}"
-            recipients.append(sms_email)
+            recipients.append(f"{clean_phone}@{CARRIERS[carrier]}")
 
     if not recipients:
         st.warning("No valid email or phone number entered.")
@@ -169,30 +137,22 @@ def send_notification(email_to, phone_num, carrier, subject, body):
 
 # --- DISPLAY COMPONENT ---
 def render_bill_card(row):
-    """Renders a single bill's details."""
     display_title = row['My Title'] if row['My Title'] != "-" else row.get('Official Title', 'Loading...')
     status = row.get('Status', 'Unknown')
     
     st.markdown(f"**{row['Bill Number']}:** {display_title}")
     st.caption(f"Status: {status} | Last Action: {row.get('Date', '-')}")
     
-    # Full History Table
     history_data = row.get('History')
     if isinstance(history_data, list) and history_data:
-        # Convert list of dicts to DataFrame
         hist_df = pd.DataFrame(history_data)
-        # Select relevant cols
         if 'date' in hist_df.columns and 'description' in hist_df.columns:
-            hist_df = hist_df[['date', 'description']]
-            hist_df.columns = ['Date', 'Action']
-            st.dataframe(hist_df, hide_index=True, use_container_width=True)
-    
+            st.dataframe(hist_df[['date', 'description']], hide_index=True, use_container_width=True)
     st.divider()
 
 # --- MAIN APP ---
 st.title("🏛️ Virginia General Assembly Tracker")
 
-# 1. LOAD DATA
 try:
     raw_df = pd.read_csv(SHEET_URL)
     raw_df.columns = raw_df.columns.str.strip()
@@ -219,11 +179,9 @@ except Exception as e:
     st.error(f"Sheet Error: {e}")
     st.stop()
 
-# 2. REFRESH BUTTON
 if st.button("🔄 Refresh Data"):
     st.rerun()
 
-# 3. FETCH & DISPLAY
 bills_to_track = sheet_df['Bill Number'].unique().tolist()
 
 if bills_to_track:
@@ -233,13 +191,10 @@ if bills_to_track:
     api_df = st.session_state['bill_data']
     final_df = pd.merge(sheet_df, api_df, on="Bill Number", how="left")
     
-    # --- SECTION 1: CATEGORIZED VIEW ---
     def draw_categorized_section(bills, title, color_code):
         if bills.empty: return
         st.markdown(f"### {color_code} {title} ({len(bills)})")
-        
         subjects = sorted([s for s in bills['Auto_Folder'].unique() if str(s) != 'nan'])
-        
         for subj in subjects:
             subset = bills[bills['Auto_Folder'] == subj]
             with st.expander(f"📁 {subj} ({len(subset)})", expanded=False):
@@ -251,6 +206,7 @@ if bills_to_track:
 
     for tab, b_type in [(tab_involved, "Involved"), (tab_watching, "Watching")]:
         with tab:
+            # 1. CATEGORIZED VIEW
             subset = final_df[final_df['Type'] == b_type]
             
             awaiting = subset[subset['Lifecycle'] == "✍️ Awaiting Signature"]
@@ -266,32 +222,29 @@ if bills_to_track:
             if not passed.empty: st.markdown("---")
             draw_categorized_section(dead, "Dead / Failed", "❌")
 
-    # --- SECTION 2: FLAT NUMERICAL LIST ---
-    st.markdown("---")
-    st.subheader("📜 Master List (Numerical)")
-    
-    # Combine all bills for this view
-    all_bills = final_df.copy()
-    # Sort numerically (simple alphanumeric sort)
-    all_bills = all_bills.sort_values(by="Bill Number")
+            # 2. MASTER LIST (Specific to this Tab)
+            st.markdown("---")
+            st.subheader(f"📜 Master List ({b_type})")
+            
+            # Filter specifically for this tab
+            tab_flat_active = subset[subset['Lifecycle'].isin(["🚀 Active", "✍️ Awaiting Signature", "✅ Passed & Signed"])]
+            tab_flat_failed = subset[subset['Lifecycle'] == "❌ Dead / Tabled"]
+            
+            # Numerical Sort
+            tab_flat_active = tab_flat_active.sort_values(by="Bill Number")
+            tab_flat_failed = tab_flat_failed.sort_values(by="Bill Number")
 
-    # Split into the requested flat sections
-    flat_active = all_bills[all_bills['Lifecycle'].isin(["🚀 Active", "✍️ Awaiting Signature", "✅ Passed & Signed"])]
-    flat_failed = all_bills[all_bills['Lifecycle'] == "❌ Dead / Tabled"]
-
-    col1, col2 = st.columns(2)
-    
-    with col1:
-        st.markdown("#### 🚀 Active / Passed")
-        for i, row in flat_active.iterrows():
-            with st.expander(f"{row['Bill Number']} - {row.get('Status')}"):
-                render_bill_card(row)
-
-    with col2:
-        st.markdown("#### ❌ Failed / Tabled")
-        for i, row in flat_failed.iterrows():
-            with st.expander(f"{row['Bill Number']} - {row.get('Status')}"):
-                render_bill_card(row)
+            col1, col2 = st.columns(2)
+            with col1:
+                st.markdown("#### 🚀 Active / Passed")
+                for i, row in tab_flat_active.iterrows():
+                    with st.expander(f"{row['Bill Number']} - {row.get('Status')}"):
+                        render_bill_card(row)
+            with col2:
+                st.markdown("#### ❌ Failed / Tabled")
+                for i, row in tab_flat_failed.iterrows():
+                    with st.expander(f"{row['Bill Number']} - {row.get('Status')}"):
+                        render_bill_card(row)
 
     # --- ALERTS SIDEBAR ---
     st.sidebar.header("📢 Alerts")
@@ -308,6 +261,5 @@ if bills_to_track:
                 report += f"[{r.get('Auto_Folder','-')}] {r['Bill Number']}: {r.get('Status', 'Unknown')}\n"
             report += "\n"
         send_notification(email_target, phone_target, carrier_target, "Bill Tracker Update", report)
-
 else:
     st.info("Add bills to your Google Sheet.")
