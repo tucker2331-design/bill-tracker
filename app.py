@@ -21,18 +21,32 @@ def get_bill_data_batch(bill_numbers):
     for bill_num in clean_bills:
         if not bill_num: continue
         
-        # We ask for 'subject' to do the auto-sorting
         url = "https://v3.openstates.org/bills"
         params = {
             "jurisdiction": "Virginia",
             "session": "2026",
             "identifier": bill_num,
-            "include": ["actions", "sponsorships", "subject"], 
+            # CRITICAL FIX: Removed 'subject' from this list to prevent crash
+            "include": ["actions", "sponsorships", "abstracts"], 
             "apikey": API_KEY
         }
         
         try:
             response = requests.get(url, params=params)
+            
+            # 1. ERROR CHECKING
+            if response.status_code != 200:
+                results.append({
+                    "Bill Number": bill_num,
+                    "Official Title": f"API Error: {response.status_code} - {response.reason}",
+                    "Status": "Connection Failed",
+                    "Date": "-",
+                    "Sponsor": "-",
+                    "Auto_Folder": "Error",
+                    "History": []
+                })
+                continue
+
             data = response.json()
             
             if data['results']:
@@ -40,9 +54,10 @@ def get_bill_data_batch(bill_numbers):
                 latest_action = item['actions'][0]['description'] if item['actions'] else "Introduced"
                 latest_date = item['actions'][0]['date'] if item['actions'] else ""
                 
-                # AUTO-SORTING LOGIC
-                # Grab the first subject tag (e.g., "Education") or use "Uncategorized"
+                # 2. AUTO-SORTING (Read Subject Correctly)
+                # We read the 'subject' field from the main data, not the include list
                 subjects = item.get('subject', [])
+                # If list is empty, mark as Uncategorized
                 auto_folder = subjects[0] if subjects else "General / Uncategorized"
                 
                 results.append({
@@ -64,10 +79,11 @@ def get_bill_data_batch(bill_numbers):
                     "Auto_Folder": "Unknown",
                     "History": []
                 })
-        except Exception:
+        except Exception as e:
+            # Catch unexpected Python errors
             results.append({
                 "Bill Number": bill_num,
-                "Official Title": "Error Loading",
+                "Official Title": f"Python Error: {str(e)}",
                 "Status": "Error",
                 "Date": "-",
                 "Sponsor": "-",
@@ -104,12 +120,9 @@ st.title("🏛️ Virginia General Assembly Tracker")
 # 1. LOAD AND PROCESS THE TWO LISTS
 try:
     raw_df = pd.read_csv(SHEET_URL)
-    
-    # Clean Column Names
     raw_df.columns = raw_df.columns.str.strip()
     
-    # LIST 1: WATCHING (Columns A & B)
-    # We check if these columns exist, then grab data
+    # LIST 1: WATCHING
     if 'Bills Watching' in raw_df.columns:
         df_watching = raw_df[['Bills Watching', 'Title (Watching)']].copy()
         df_watching = df_watching.rename(columns={'Bills Watching': 'Bill Number', 'Title (Watching)': 'My Title'})
@@ -117,7 +130,7 @@ try:
     else:
         df_watching = pd.DataFrame()
 
-    # LIST 2: WORKING ON (Columns C & D)
+    # LIST 2: WORKING ON
     if 'Bills Working On' in raw_df.columns:
         df_working = raw_df[['Bills Working On', 'Title (Working)']].copy()
         df_working = df_working.rename(columns={'Bills Working On': 'Bill Number', 'Title (Working)': 'My Title'})
@@ -125,7 +138,7 @@ try:
     else:
         df_working = pd.DataFrame()
         
-    # Combine both lists into one master list
+    # Combine lists
     sheet_df = pd.concat([df_watching, df_working], ignore_index=True)
     
     # Cleanup empty rows
@@ -148,7 +161,7 @@ with col2:
 bills_to_track = sheet_df['Bill Number'].unique().tolist()
 
 if bills_to_track:
-    # Get API Data (Including Subjects)
+    # Get API Data
     api_df = get_bill_data_batch(bills_to_track)
     
     # Merge
@@ -162,21 +175,23 @@ if bills_to_track:
             st.info("No bills in this list.")
             return
 
-        # AUTO-SORT FOLDERS (Using 'Auto_Folder' from API)
-        with st.expander("📂 View by Subject (Auto-Sorted)"):
-            # Sort subjects alphabetically
-            subjects = sorted([s for s in dataframe['Auto_Folder'].unique() if str(s) != 'nan'])
-            
-            for s in subjects:
-                folder_bills = dataframe[dataframe['Auto_Folder'] == s]
-                st.write(f"**{s} ({len(folder_bills)})**")
-                # Small table for quick view
-                st.dataframe(folder_bills[['Bill Number', 'My Title', 'Status']], hide_index=True)
+        # --- SEPARATE SECTION: SUBJECT SORTING ---
+        st.markdown("#### 📂 Bills by Official Subject")
+        
+        # Get unique subjects and sort them
+        subjects = sorted([s for s in dataframe['Auto_Folder'].unique() if str(s) != 'nan'])
+        
+        # Create expandable sections for each subject
+        for s in subjects:
+            folder_bills = dataframe[dataframe['Auto_Folder'] == s]
+            with st.expander(f"{s} ({len(folder_bills)})"):
+                 st.dataframe(folder_bills[['Bill Number', 'My Title', 'Status']], hide_index=True)
 
-        # MAIN EXPANDED LIST
-        st.write("### Detailed List")
+        st.divider()
+
+        # --- SEPARATE SECTION: DETAILED LIST ---
+        st.markdown("#### 📝 Detailed List")
         for i, row in dataframe.iterrows():
-            # Choose Title: My Title > Official Title
             display_title = row['My Title'] if row['My Title'] != "-" else row['Official Title']
             
             with st.expander(f"{row['Bill Number']}: {display_title} — {row['Status']}"):
@@ -193,7 +208,7 @@ if bills_to_track:
                 else:
                     st.write("No history available.")
 
-    # DRAW THE TABS
+    # DRAW TABS
     with tab_involved:
         involved_bills = final_df[final_df['Type'] == 'Involved']
         draw_bill_list(involved_bills)
@@ -202,7 +217,7 @@ if bills_to_track:
         watching_bills = final_df[final_df['Type'] == 'Watching']
         draw_bill_list(watching_bills)
 
-    # 5. ALERTS (Bottom Sidebar)
+    # 5. ALERTS
     st.sidebar.header("📢 Email Alerts")
     email_target = st.sidebar.text_input("Recipient Email:")
     
