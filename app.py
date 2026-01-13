@@ -2,6 +2,7 @@ import streamlit as st
 import pandas as pd
 import requests
 import smtplib
+import time  # <--- NEW: Needed to pause between requests
 from email.mime.text import MIMEText
 from datetime import datetime
 
@@ -18,15 +19,26 @@ def get_bill_data_batch(bill_numbers):
     # Remove duplicates and clean
     clean_bills = list(set([str(b).strip().upper() for b in bill_numbers if str(b).strip() != 'nan']))
 
-    for bill_num in clean_bills:
+    # Progress Bar Setup
+    progress_text = "Fetching bill data from government server..."
+    my_bar = st.progress(0, text=progress_text)
+    total_bills = len(clean_bills)
+
+    for i, bill_num in enumerate(clean_bills):
         if not bill_num: continue
         
+        # --- CRITICAL FIX: SLOW DOWN (Rate Limiting) ---
+        # We wait 1.1 seconds between requests to avoid Error 429
+        time.sleep(1.1) 
+        
+        # Update Progress Bar
+        my_bar.progress((i + 1) / total_bills, text=f"Fetching {bill_num}...")
+
         url = "https://v3.openstates.org/bills"
         params = {
             "jurisdiction": "Virginia",
             "session": "2026",
             "identifier": bill_num,
-            # CRITICAL FIX: Removed 'subject' from this list to prevent crash
             "include": ["actions", "sponsorships", "abstracts"], 
             "apikey": API_KEY
         }
@@ -38,7 +50,7 @@ def get_bill_data_batch(bill_numbers):
             if response.status_code != 200:
                 results.append({
                     "Bill Number": bill_num,
-                    "Official Title": f"API Error: {response.status_code} - {response.reason}",
+                    "Official Title": f"API Error: {response.status_code}",
                     "Status": "Connection Failed",
                     "Date": "-",
                     "Sponsor": "-",
@@ -54,10 +66,8 @@ def get_bill_data_batch(bill_numbers):
                 latest_action = item['actions'][0]['description'] if item['actions'] else "Introduced"
                 latest_date = item['actions'][0]['date'] if item['actions'] else ""
                 
-                # 2. AUTO-SORTING (Read Subject Correctly)
-                # We read the 'subject' field from the main data, not the include list
+                # 2. AUTO-SORTING
                 subjects = item.get('subject', [])
-                # If list is empty, mark as Uncategorized
                 auto_folder = subjects[0] if subjects else "General / Uncategorized"
                 
                 results.append({
@@ -80,10 +90,9 @@ def get_bill_data_batch(bill_numbers):
                     "History": []
                 })
         except Exception as e:
-            # Catch unexpected Python errors
             results.append({
                 "Bill Number": bill_num,
-                "Official Title": f"Python Error: {str(e)}",
+                "Official Title": f"Error: {str(e)}",
                 "Status": "Error",
                 "Date": "-",
                 "Sponsor": "-",
@@ -91,6 +100,7 @@ def get_bill_data_batch(bill_numbers):
                 "History": []
             })
             
+    my_bar.empty() # Remove progress bar when done
     return pd.DataFrame(results)
 
 def send_notification(email_to, subject, body):
