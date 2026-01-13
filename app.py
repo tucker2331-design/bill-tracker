@@ -2,7 +2,7 @@ import streamlit as st
 import pandas as pd
 import requests
 import smtplib
-import time  # <--- NEW: Needed to pause between requests
+import time
 from email.mime.text import MIMEText
 from datetime import datetime
 
@@ -14,25 +14,28 @@ API_KEY = st.secrets.get("OPENSTATES_API_KEY")
 st.set_page_config(page_title="VA Bill Tracker 2026", layout="wide")
 
 # --- FUNCTIONS ---
+
+# @st.cache_data keeps this data in memory for 600 seconds (10 mins)
+# This prevents the app from hitting the API limits if you refresh often.
+@st.cache_data(ttl=600, show_spinner="Fetching latest data from VA Legislature...")
 def get_bill_data_batch(bill_numbers):
     results = []
-    # Remove duplicates and clean
     clean_bills = list(set([str(b).strip().upper() for b in bill_numbers if str(b).strip() != 'nan']))
 
-    # Progress Bar Setup
-    progress_text = "Fetching bill data from government server..."
-    my_bar = st.progress(0, text=progress_text)
     total_bills = len(clean_bills)
+    
+    # Create a placeholder for the progress bar
+    progress_bar = st.progress(0, text="Starting secure download...")
 
     for i, bill_num in enumerate(clean_bills):
         if not bill_num: continue
         
-        # --- CRITICAL FIX: SLOW DOWN (Rate Limiting) ---
-        # We wait 1.1 seconds between requests to avoid Error 429
-        time.sleep(1.1) 
+        # --- SAFETY DELAY: 2.1 SECONDS ---
+        # Slower, but keeps you safe from Error 429
+        time.sleep(2.1)
         
-        # Update Progress Bar
-        my_bar.progress((i + 1) / total_bills, text=f"Fetching {bill_num}...")
+        # Update progress
+        progress_bar.progress((i + 1) / total_bills, text=f"Downloading {bill_num}...")
 
         url = "https://v3.openstates.org/bills"
         params = {
@@ -46,7 +49,20 @@ def get_bill_data_batch(bill_numbers):
         try:
             response = requests.get(url, params=params)
             
-            # 1. ERROR CHECKING
+            # HANDLE 429 (TOO MANY REQUESTS) SPECIFICALLY
+            if response.status_code == 429:
+                results.append({
+                    "Bill Number": bill_num,
+                    "Official Title": "⚠️ SERVER BUSY (Try again in 15 mins)",
+                    "Status": "Rate Limited",
+                    "Date": "-",
+                    "Sponsor": "-",
+                    "Auto_Folder": "Error",
+                    "History": []
+                })
+                continue
+            
+            # HANDLE OTHER ERRORS
             if response.status_code != 200:
                 results.append({
                     "Bill Number": bill_num,
@@ -66,7 +82,6 @@ def get_bill_data_batch(bill_numbers):
                 latest_action = item['actions'][0]['description'] if item['actions'] else "Introduced"
                 latest_date = item['actions'][0]['date'] if item['actions'] else ""
                 
-                # 2. AUTO-SORTING
                 subjects = item.get('subject', [])
                 auto_folder = subjects[0] if subjects else "General / Uncategorized"
                 
@@ -100,7 +115,7 @@ def get_bill_data_batch(bill_numbers):
                 "History": []
             })
             
-    my_bar.empty() # Remove progress bar when done
+    progress_bar.empty() # Clear bar when done
     return pd.DataFrame(results)
 
 def send_notification(email_to, subject, body):
@@ -127,12 +142,11 @@ def send_notification(email_to, subject, body):
 # --- MAIN APP ---
 st.title("🏛️ Virginia General Assembly Tracker")
 
-# 1. LOAD AND PROCESS THE TWO LISTS
+# 1. LOAD SHEETS
 try:
     raw_df = pd.read_csv(SHEET_URL)
     raw_df.columns = raw_df.columns.str.strip()
     
-    # LIST 1: WATCHING
     if 'Bills Watching' in raw_df.columns:
         df_watching = raw_df[['Bills Watching', 'Title (Watching)']].copy()
         df_watching = df_watching.rename(columns={'Bills Watching': 'Bill Number', 'Title (Watching)': 'My Title'})
@@ -140,7 +154,6 @@ try:
     else:
         df_watching = pd.DataFrame()
 
-    # LIST 2: WORKING ON
     if 'Bills Working On' in raw_df.columns:
         df_working = raw_df[['Bills Working On', 'Title (Working)']].copy()
         df_working = df_working.rename(columns={'Bills Working On': 'Bill Number', 'Title (Working)': 'My Title'})
@@ -148,36 +161,35 @@ try:
     else:
         df_working = pd.DataFrame()
         
-    # Combine lists
     sheet_df = pd.concat([df_watching, df_working], ignore_index=True)
-    
-    # Cleanup empty rows
     sheet_df = sheet_df.dropna(subset=['Bill Number'])
     sheet_df = sheet_df[sheet_df['Bill Number'].astype(str).str.strip() != '']
     sheet_df['Bill Number'] = sheet_df['Bill Number'].astype(str).str.strip().str.upper()
     sheet_df['My Title'] = sheet_df['My Title'].fillna("-")
 
 except Exception as e:
-    st.error(f"Error loading sheet. Please ensure headers are: 'Bills Watching', 'Title (Watching)', 'Bills Working On', 'Title (Working)'. Error: {e}")
+    st.error(f"Sheet Error: {e}")
     st.stop()
 
-# 2. REFRESH BUTTON
+# 2. REFRESH BUTTON (Uses Cache clearing)
 col1, col2 = st.columns([3, 1])
 with col2:
-    if st.button("🔄 Refresh & Check Alerts"):
+    if st.button("🔄 Force Refresh"):
+        # This clears the memory so we get fresh data
+        get_bill_data_batch.clear()
         st.rerun()
 
-# 3. FETCH DATA & MERGE
+# 3. FETCH DATA
 bills_to_track = sheet_df['Bill Number'].unique().tolist()
 
 if bills_to_track:
-    # Get API Data
+    # Get Data (Cached)
     api_df = get_bill_data_batch(bills_to_track)
     
     # Merge
     final_df = pd.merge(sheet_df, api_df, on="Bill Number", how="left")
     
-    # 4. TABS LAYOUT
+    # 4. TABS
     tab_involved, tab_watching = st.tabs(["🚀 Directly Involved", "👀 Watching"])
 
     def draw_bill_list(dataframe):
@@ -185,13 +197,9 @@ if bills_to_track:
             st.info("No bills in this list.")
             return
 
-        # --- SEPARATE SECTION: SUBJECT SORTING ---
+        # SORTING
         st.markdown("#### 📂 Bills by Official Subject")
-        
-        # Get unique subjects and sort them
         subjects = sorted([s for s in dataframe['Auto_Folder'].unique() if str(s) != 'nan'])
-        
-        # Create expandable sections for each subject
         for s in subjects:
             folder_bills = dataframe[dataframe['Auto_Folder'] == s]
             with st.expander(f"{s} ({len(folder_bills)})"):
@@ -199,7 +207,7 @@ if bills_to_track:
 
         st.divider()
 
-        # --- SEPARATE SECTION: DETAILED LIST ---
+        # DETAILED LIST
         st.markdown("#### 📝 Detailed List")
         for i, row in dataframe.iterrows():
             display_title = row['My Title'] if row['My Title'] != "-" else row['Official Title']
@@ -208,17 +216,14 @@ if bills_to_track:
                 st.markdown(f"**Subject:** {row['Auto_Folder']}")
                 st.markdown(f"**Official Title:** {row['Official Title']}")
                 st.markdown(f"**Sponsor:** {row['Sponsor']}")
-                st.markdown(f"**Last Update:** {row['Date']}")
-                st.info(f"**Latest Action:** {row['Status']}")
+                st.info(f"**Latest Action:** {row['Status']} ({row['Date']})")
                 
-                st.write("**History:**")
                 if isinstance(row['History'], list) and len(row['History']) > 0:
                     hist_df = pd.DataFrame(row['History'])
                     st.table(hist_df[['date', 'description']])
                 else:
                     st.write("No history available.")
 
-    # DRAW TABS
     with tab_involved:
         involved_bills = final_df[final_df['Type'] == 'Involved']
         draw_bill_list(involved_bills)
@@ -246,4 +251,4 @@ if bills_to_track:
             send_notification(email_target, "Legislative Update", report)
 
 else:
-    st.info("Your list is empty. Add bills to Columns A or C in your Google Sheet.")
+    st.info("Add bills to your Google Sheet.")
