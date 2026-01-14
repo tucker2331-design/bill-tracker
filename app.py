@@ -15,9 +15,9 @@ SUBS_URL = f"https://docs.google.com/spreadsheets/d/{SHEET_ID}/gviz/tq?tqx=out:c
 # --- VIRGINIA LIS DATA FEEDS ---
 LIS_BASE_URL = "https://lis.blob.core.windows.net/lisfiles/20261/"
 LIS_BILLS_CSV = LIS_BASE_URL + "BILLS.CSV"      
-LIS_SUBDOCKET_CSV = LIS_BASE_URL + "SUBDOCKET.CSV"  
-LIS_DOCKET_CSV = LIS_BASE_URL + "DOCKET.CSV"        
-LIS_CALENDAR_CSV = LIS_BASE_URL + "CALENDAR.CSV"    
+LIS_SUBDOCKET_CSV = LIS_BASE_URL + "SUBDOCKET.CSV"  # Subcommittees
+LIS_DOCKET_CSV = LIS_BASE_URL + "DOCKET.CSV"        # Main Standing Committees
+LIS_CALENDAR_CSV = LIS_BASE_URL + "CALENDAR.CSV"    # Floor Sessions / Votes
 
 st.set_page_config(page_title="VA Bill Tracker 2026", layout="wide")
 
@@ -111,11 +111,12 @@ def get_bill_data_batch(bill_numbers, lis_df):
             if not date_val or date_val == 'nan':
                 date_val = str(item.get('last_senate_action_date', ''))
 
-            # Grab both actions for the history table
-            house_act = item.get('last_house_action', '')
-            house_date = item.get('last_house_action_date', '')
-            senate_act = item.get('last_senate_action', '')
-            senate_date = item.get('last_senate_action_date', '')
+            # Gather history for the table
+            history_data = []
+            if item.get('last_house_action'):
+                history_data.append({"Date": item.get('last_house_action_date'), "Action": f"[House] {item.get('last_house_action')}"})
+            if item.get('last_senate_action'):
+                history_data.append({"Date": item.get('last_senate_action_date'), "Action": f"[Senate] {item.get('last_senate_action')}"})
 
             results.append({
                 "Bill Number": bill_num,
@@ -124,11 +125,7 @@ def get_bill_data_batch(bill_numbers, lis_df):
                 "Date": date_val, 
                 "Lifecycle": determine_lifecycle(str(status)),
                 "Auto_Folder": get_smart_subject(title),
-                # New fields for history table
-                "Raw_History": [
-                    {"Date": house_date, "Action": house_act},
-                    {"Date": senate_date, "Action": senate_act}
-                ]
+                "History_Data": history_data
             })
         else:
             results.append({
@@ -167,13 +164,16 @@ def check_and_broadcast(df_bills, df_subscribers, demo_mode):
     for i, row in df_bills.iterrows():
         if "LIS Connection Error" in str(row.get('Status')): continue
         
-        check_str = f"*{row['Bill Number']}*: {row.get('Status')}"
+        display_date = row.get('Date', '')
+        if not display_date or display_date == 'nan': display_date = datetime.now().strftime('%Y-%m-%d')
+        
+        # FIX: The check string must be IDENTICAL to the sent string to prevent duplicates
+        check_str = f"*{row['Bill Number']}* ({display_date}): {row.get('Status')}"
+        
         if check_str in history_text: continue
         
         updates_found = True
-        display_date = row.get('Date', '')
-        if not display_date or display_date == 'nan': display_date = datetime.now().strftime('%Y-%m-%d')
-        report += f"\n⚪ *{row['Bill Number']}* ({display_date}): {row.get('Status')}"
+        report += f"\n⚪ {check_str}"
 
     if updates_found:
         st.toast(f"📢 Sending updates to {len(subscriber_list)} people...")
@@ -207,23 +207,17 @@ def render_master_list_item(df):
         with st.expander(f"{row['Bill Number']} - {header_title}"):
             st.markdown(f"**📌 Designated Title:** {row.get('My Title', '-')}")
             st.markdown(f"**📜 Official Title:** {row.get('Official Title', '-')}")
-            st.markdown(f"**🔄 Status / History:** {row.get('Status', '-')}")
+            st.markdown(f"**🔄 Status:** {row.get('Status', '-')}")
             
             # --- HISTORY TABLE ---
-            # Build a mini dataframe for the history table
-            raw_hist = row.get('Raw_History', [])
-            if isinstance(raw_hist, list):
-                # Filter out empty entries
-                valid_hist = [h for h in raw_hist if h.get('Action') and str(h.get('Action')) != 'nan']
-                if valid_hist:
-                    hist_df = pd.DataFrame(valid_hist)
-                    st.dataframe(hist_df, hide_index=True, use_container_width=True)
-                else:
-                    st.caption(f"Date: {row.get('Date', '-')}") # Fallback
+            hist_data = row.get('History_Data', [])
+            if isinstance(hist_data, list) and hist_data:
+                st.markdown("**📜 History:**")
+                st.dataframe(pd.DataFrame(hist_data), hide_index=True, use_container_width=True)
             else:
-                st.caption(f"Date: {row.get('Date', '-')}") # Fallback
+                st.caption(f"Date: {row.get('Date', '-')}")
 
-            # FIXED: Exact Link Format
+            # FIXED LINK
             lis_link = f"https://lis.virginia.gov/bill-details/20261/{row['Bill Number']}"
             st.markdown(f"🔗 [View Official Bill on LIS]({lis_link})")
 
@@ -293,7 +287,7 @@ if bills_to_track:
                 "Bill Number": b, "Official Title": f"[DEMO] {mock_t}", "Status": mock_s,
                 "Lifecycle": "🚀 Active", "Auto_Folder": get_smart_subject(mock_t),
                 "My Title": "My Demo Title", "Date": "2026-01-14",
-                "Raw_History": [{"Date": "2026-01-14", "Action": mock_s}]
+                "History_Data": [{"Date": "2026-01-14", "Action": mock_s}]
             })
         api_df = pd.DataFrame(mock_results)
     else:
