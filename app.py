@@ -66,7 +66,8 @@ def fetch_lis_data():
         except: df = pd.read_csv(LIS_BILLS_CSV.replace(".CSV", ".csv"), encoding='ISO-8859-1')
         df.columns = df.columns.str.strip().str.lower()
         if 'bill_id' in df.columns:
-            df['bill_clean'] = df['bill_id'].astype(str).str.upper().str.strip()
+            # FIX: Remove spaces for perfect matching (SB 4 -> SB4)
+            df['bill_clean'] = df['bill_id'].astype(str).str.upper().str.replace(" ", "").str.strip()
             data['bills'] = df
         else: data['bills'] = pd.DataFrame() 
     except: data['bills'] = pd.DataFrame()
@@ -80,7 +81,8 @@ def fetch_lis_data():
             df.columns = df.columns.str.strip().str.lower()
             col = next((c for c in df.columns if "bill" in c), None)
             if col:
-                df['bill_clean'] = df[col].astype(str).str.upper().str.strip()
+                # FIX: Remove spaces for perfect matching
+                df['bill_clean'] = df[col].astype(str).str.upper().str.replace(" ", "").str.strip()
                 df['event_type'] = type_label
                 calendar_dfs.append(df)
         except: pass
@@ -94,7 +96,9 @@ def fetch_lis_data():
 
 def get_bill_data_batch(bill_numbers, lis_df):
     results = []
-    clean_bills = list(set([str(b).strip().upper() for b in bill_numbers if str(b).strip() != 'nan']))
+    # FIX: Remove spaces from input for matching
+    clean_bills = list(set([str(b).strip().upper().replace(" ", "") for b in bill_numbers if str(b).strip() != 'nan']))
+    
     if lis_df.empty:
         for b in clean_bills:
              results.append({"Bill Number": b, "Status": "LIS Connection Error", "Lifecycle": "🚀 Active", "Official Title": "Error"})
@@ -122,7 +126,7 @@ def get_bill_data_batch(bill_numbers, lis_df):
             if pd.notna(s_act) and str(s_act).lower() != 'nan' and str(s_act).strip() != '':
                  history_data.append({"Date": item.get('last_senate_action_date'), "Action": f"[Senate] {s_act}"})
 
-            # FIX: Robust Initialization (Check existence properly)
+            # Robust Committee & Subcommittee Extraction
             curr_comm = item.get('last_house_committee')
             if pd.isna(curr_comm) or str(curr_comm).strip().lower() in ['nan', 'none', '']:
                 curr_comm = item.get('last_senate_committee')
@@ -132,20 +136,16 @@ def get_bill_data_batch(bill_numbers, lis_df):
             curr_sub = "-"
             status_lower = str(status).lower()
             
-            # --- PARSING LOGIC: Always check text for "sub:" to get subcommittee ---
+            # PARSING LOGIC: Always check text for "sub:" to get subcommittee
             if "sub:" in status_lower:
                 try:
                     parts = status_lower.split("sub:")
-                    # If comm was missing, try to grab it from left of 'sub:'
                     if curr_comm == "-":
-                        # Extracts "Education" from "Assigned Education"
-                        left_part = parts[0].replace("assigned", "").replace("referred to committee on", "").strip()
-                        if left_part: curr_comm = left_part.title()
-                    # Always capture subcommittee
+                        curr_comm = parts[0].replace("assigned", "").replace("referred to committee on", "").strip().title()
                     curr_sub = parts[1].strip().title()
                 except: pass
             
-            # Fallback Parsing if still missing
+            # Fallback Parsing
             if curr_comm == "-":
                 if "referred to committee on" in status_lower:
                     curr_comm = status_lower.split("referred to committee on")[-1].strip().title()
@@ -301,7 +301,8 @@ try:
         df_i['Type'] = 'Involved'
 
     sheet_df = pd.concat([df_w, df_i], ignore_index=True).dropna(subset=['Bill Number'])
-    sheet_df['Bill Number'] = sheet_df['Bill Number'].astype(str).str.strip().str.upper()
+    # FIX: Remove spaces from user input too (SB 4 -> SB4)
+    sheet_df['Bill Number'] = sheet_df['Bill Number'].astype(str).str.strip().str.upper().str.replace(" ", "")
     sheet_df = sheet_df[sheet_df['Bill Number'] != 'NAN']
     sheet_df['My Title'] = sheet_df['My Title'].fillna("-")
 
@@ -456,10 +457,9 @@ if bills_to_track:
                             if pd.isna(time_val) or str(time_val) == 'nan' or str(time_val).strip() == '':
                                 time_val = row.get('start_time', '')
                             
-                            # Last resort: Look for digits in description
                             if pd.isna(time_val) or str(time_val) == 'nan' or str(time_val).strip() == '':
                                 if pd.notna(desc):
-                                    match = re.search(r'\d{1,2}:\d{2}\s?(?:AM|PM|am|pm)', str(desc))
+                                    match = re.search(r'\d{1,2}:\d{2}\s?(?:AM|PM|am|pm)', str(desc), re.IGNORECASE)
                                     if match: time_val = match.group(0)
                                     elif any(x in str(desc).lower() for x in ['adjourn', 'caucus']):
                                         time_val = desc
