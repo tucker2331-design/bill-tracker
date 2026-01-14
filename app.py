@@ -66,7 +66,7 @@ def fetch_lis_data():
         try: df = pd.read_csv(LIS_BILLS_CSV, encoding='ISO-8859-1')
         except: df = pd.read_csv(LIS_BILLS_CSV.replace(".CSV", ".csv"), encoding='ISO-8859-1')
         
-        # FIX: Normalize columns heavily
+        # FIX: Normalize columns heavily to catch "meeting_time" vs "time" vs "Meeting Time"
         df.columns = df.columns.str.strip().str.lower().str.replace(' ', '_').str.replace('/', '_').str.replace('.', '')
         
         if 'bill_id' in df.columns:
@@ -77,15 +77,16 @@ def fetch_lis_data():
 
     # 2. Fetch Calendars
     calendar_dfs = []
+    # Note: We tag them here so we know if it came from the Subcommittee file
     for url, type_label in [(LIS_SUBDOCKET_CSV, "Subcommittee"), (LIS_DOCKET_CSV, "Committee"), (LIS_CALENDAR_CSV, "Floor")]:
         try:
             try: df = pd.read_csv(url, encoding='ISO-8859-1')
             except: df = pd.read_csv(url.replace(".CSV", ".csv"), encoding='ISO-8859-1')
             
-            # FIX: Normalize columns heavily
+            # FIX: Normalize columns heavily here too
             df.columns = df.columns.str.strip().str.lower().str.replace(' ', '_').str.replace('/', '_').str.replace('.', '')
             
-            # Find bill column dynamically (it varies)
+            # Dynamically find the bill number column
             col = next((c for c in df.columns if "bill" in c), None)
             if col:
                 df['bill_clean'] = df[col].astype(str).str.upper().str.replace(" ", "").str.strip()
@@ -102,6 +103,7 @@ def fetch_lis_data():
 
 def get_bill_data_batch(bill_numbers, lis_df):
     results = []
+    # FIX: Remove spaces from input for matching
     clean_bills = list(set([str(b).strip().upper().replace(" ", "") for b in bill_numbers if str(b).strip() != 'nan']))
     
     if lis_df.empty:
@@ -130,7 +132,7 @@ def get_bill_data_batch(bill_numbers, lis_df):
             if pd.notna(s_act) and str(s_act).lower() != 'nan':
                  history_data.append({"Date": item.get('last_senate_action_date'), "Action": f"[Senate] {s_act}"})
 
-            # --- ROBUST COMMITTEE EXTRACTION ---
+            # --- ROBUST COMMITTEE EXTRACTION (The "Inference" Engine) ---
             curr_comm = "-"
             
             # 1. Try explicit columns first
@@ -147,7 +149,7 @@ def get_bill_data_batch(bill_numbers, lis_df):
                 if comm_match:
                     curr_comm = comm_match.group(1).title().strip()
             
-            # 3. Sub-committee extraction
+            # 3. Sub-committee extraction from Status Text
             curr_sub = "-"
             if "sub:" in status_lower:
                 try:
@@ -226,8 +228,10 @@ def check_and_broadcast(df_bills, df_subscribers, demo_mode):
 # --- UI COMPONENTS ---
 
 def render_bill_card(row):
-    title = row.get('Official Title')
-    display_title = title if title not in ["Unknown", "Error", "Not Found", None] else row.get('My Title', 'No Title')
+    if row.get('Official Title') not in ["Unknown", "Error", "Not Found", None]:
+        display_title = row['Official Title']
+    else:
+        display_title = row.get('My Title', 'No Title Provided')
     st.markdown(f"**{row['Bill Number']}**")
     st.caption(f"{display_title}")
     st.caption(f"_{row.get('Status')}_")
@@ -310,6 +314,7 @@ lis_data = fetch_lis_data()
 bills_to_track = sheet_df['Bill Number'].unique().tolist()
 
 if bills_to_track:
+    # Match User Bills to LIS Data
     if demo_mode:
         import random
         mock_results = []
@@ -358,16 +363,22 @@ if bills_to_track:
             st.markdown("---")
             st.subheader(f"📜 Master List ({b_type})")
             active = subset[subset['Lifecycle'] == "🚀 Active"]
-            passed = subset[subset['Lifecycle'] != "🚀 Active"]
-            m1, m2 = st.columns(2)
+            awaiting = subset[subset['Lifecycle'] == "✍️ Awaiting Signature"]
+            signed = subset[subset['Lifecycle'] == "✅ Signed & Enacted"]
+            dead = subset[subset['Lifecycle'] == "❌ Dead / Tabled"]
+            
+            m1, m2, m3 = st.columns(3)
             with m1:
                 st.markdown("#### 🚀 Active")
                 render_master_list_item(active)
             with m2:
-                st.markdown("#### 🏁 Completed/Inactive")
-                render_master_list_item(passed)
+                st.markdown("#### 🎉 Passed")
+                render_master_list_item(pd.concat([awaiting, signed]))
+            with m3:
+                st.markdown("#### ❌ Failed")
+                render_master_list_item(dead)
 
-    # --- TAB 3: UPCOMING (FIXED & ROBUST) ---
+    # --- TAB 3: UPCOMING (FIXED: Time Scraper + Committee Inference) ---
     with tab_upcoming:
         st.subheader("📅 Your Weekly Calendar")
         full_schedule = lis_data.get('schedule', pd.DataFrame())
@@ -379,6 +390,7 @@ if bills_to_track:
             else:
                 full_schedule['dt'] = pd.NaT
 
+        # Create Map from Bill Number -> Committee (from the Master List status)
         bill_to_comm_map = final_df.set_index('Bill Number')['Current_Committee'].to_dict()
         bill_to_sub_map = final_df.set_index('Bill Number')['Current_Sub'].to_dict()
 
@@ -388,8 +400,10 @@ if bills_to_track:
         
         for i in range(7):
             target_date = today + timedelta(days=i)
+            display_date_str = target_date.strftime("%a %m/%d")
+            
             with cols[i]:
-                st.markdown(f"**{target_date.strftime('%a %m/%d')}**")
+                st.markdown(f"**{display_date_str}**")
                 st.divider()
                 
                 if not full_schedule.empty and 'dt' in full_schedule.columns and 'bill_clean' in full_schedule.columns:
@@ -401,29 +415,37 @@ if bills_to_track:
                         for idx, row in day_matches.iterrows():
                             st.error(f"**{row['bill_clean']}**")
                             
-                            # --- BRUTE FORCE COLUMN FINDER ---
-                            # This finds ANY column that looks like committee, sub, or time
+                            # --- LOGIC FIX: INFER COMMITTEE FROM MASTER LIST ---
+                            # Get all column values for "Brute Force" search
                             all_cols = row.index.tolist()
                             
-                            # 1. Find Committee Info
+                            # 1. Find Scraped Committee Name (if any)
+                            # Look for cols like 'committee', 'committee_name', 'meeting_type'
                             comm_col = next((c for c in all_cols if 'committee' in c and 'sub' not in c), None)
                             sub_col = next((c for c in all_cols if 'sub' in c and 'committee' in c), None) # e.g. subcommittee_name
                             if not sub_col: sub_col = next((c for c in all_cols if 'sub' in c and 'name' in c), None)
 
-                            raw_comm = row[comm_col] if comm_col else ""
-                            raw_sub = row[sub_col] if sub_col else ""
+                            scraped_comm = str(row[comm_col]).strip() if comm_col else ""
+                            scraped_sub = str(row[sub_col]).strip() if sub_col else ""
                             
-                            # Logic: If it's a sub-docket, usually the 'committee' column IS the sub name
                             header = "Committee"
                             sub_text = ""
                             
+                            # 2. Logic: If Event is Subcommittee, use Master List for Header (Parent Comm)
                             if "Subcommittee" in str(row.get('event_type', '')):
-                                sub_text = raw_comm if raw_comm else raw_sub
-                                # Fallback to map for parent
+                                sub_text = scraped_comm if scraped_comm and scraped_comm != 'nan' else scraped_sub
+                                # INFERENCE: Grab Parent from Master Map
                                 header = bill_to_comm_map.get(row['bill_clean'], 'Committee')
                             else:
-                                header = raw_comm if raw_comm else bill_to_comm_map.get(row['bill_clean'], 'Committee')
-                                sub_text = raw_sub if raw_sub else bill_to_sub_map.get(row['bill_clean'], '')
+                                # Regular Committee Meeting
+                                if scraped_comm and scraped_comm != 'nan':
+                                    header = scraped_comm
+                                else:
+                                    # Fallback to Master Map
+                                    header = bill_to_comm_map.get(row['bill_clean'], 'Committee')
+                                
+                                # Try to find sub from map
+                                sub_text = bill_to_sub_map.get(row['bill_clean'], '')
 
                             if str(header) in ['nan', '', '-']: header = "Committee (TBD)"
                             st.write(f"🏛️ **{header}**")
@@ -431,33 +453,22 @@ if bills_to_track:
                             if str(sub_text) not in ['nan', '', '-']: 
                                 st.caption(f"↳ {sub_text}")
                             
-                            # 2. Find Time Info
-                            time_col = next((c for c in all_cols if 'time' in c and 'date' not in c), None)
-                            raw_time = str(row[time_col]) if time_col else ""
+                            # 3. Find Time (Brute Force Regex Search)
+                            # Concatenate ALL text in the row to find the time anywhere
+                            row_text = " ".join([str(val) for val in row.values])
                             
-                            desc_col = next((c for c in all_cols if 'desc' in c), None)
-                            raw_desc = str(row[desc_col]) if desc_col else ""
-
-                            if raw_desc and raw_desc != 'nan': st.caption(f"📝 {raw_desc}")
-
-                            # Combined Search for Time
-                            full_text = f"{raw_time} {raw_desc} {header} {sub_text}"
-                            # Relaxed Regex to catch 8:00am, 8:00 a.m., 8:00 AM
-                            t_match = re.search(r'(\d{1,2}:\d{2}\s?(?:[ap]\.?m\.?|noon))', full_text, re.IGNORECASE)
+                            # Regex for 8:00 AM, 8:00AM, 8:00 am, 10:00 a.m.
+                            t_match = re.search(r'(\d{1,2}:\d{2}\s?(?:[ap]\.?m\.?|noon))', row_text, re.IGNORECASE)
                             
                             if t_match:
                                 st.caption(f"⏰ {t_match.group(1)}")
-                            elif "adjourn" in full_text.lower():
+                            elif "adjourn" in row_text.lower():
                                 st.caption("⏰ 1/2 hr after adjournment")
                             else:
                                 st.caption("⏰ TBD")
                             
                             st.divider()
-                    else: st.caption("-")
-                else: st.caption("-")
-    
-    # DEBUGGER (Uncomment to see raw columns if still broken)
-    # with st.expander("🛠️ Debug Data Schema"):
-    #     if 'schedule' in lis_data:
-    #         st.write(lis_data['schedule'].columns.tolist())
-    #         st.dataframe(lis_data['schedule'].head())
+                    else:
+                        st.caption("-")
+                else:
+                    st.caption("-")
