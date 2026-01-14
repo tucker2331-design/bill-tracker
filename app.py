@@ -121,21 +121,26 @@ def get_bill_data_batch(bill_numbers, lis_df):
             if pd.notna(s_act) and str(s_act).lower() != 'nan' and str(s_act).strip() != '':
                  history_data.append({"Date": item.get('last_senate_action_date'), "Action": f"[Senate] {s_act}"})
 
-            # FIX: Improved Committee Extraction Logic
+            # FIX: Robust Committee & Subcommittee Extraction
             curr_comm = item.get('last_house_committee', item.get('last_senate_committee', ''))
+            curr_sub = "-"
             status_lower = str(status).lower()
             
+            # 1. Parse Status Text
             if not curr_comm or str(curr_comm) == 'nan':
                 if "referred to committee on" in status_lower:
                     curr_comm = status_lower.split("referred to committee on")[-1].strip().title()
                 elif "referred to committee for" in status_lower:
                     curr_comm = status_lower.split("referred to committee for")[-1].strip().title()
-                elif "assigned" in status_lower and "sub:" in status_lower:
-                    # Handle "Assigned Education sub: Public Education" -> "Education"
-                    parts = status_lower.replace("assigned", "").split("sub:")
-                    curr_comm = parts[0].strip().title()
                 elif "assigned" in status_lower:
-                     curr_comm = status_lower.replace("assigned", "").strip().title()
+                    # Handle "Assigned Education sub: Public Education"
+                    temp = status_lower.replace("assigned", "").strip()
+                    if "sub:" in temp:
+                        parts = temp.split("sub:")
+                        curr_comm = parts[0].strip().title()
+                        curr_sub = parts[1].strip().title() # EXTRACT SUBCOMMITTEE
+                    else:
+                        curr_comm = temp.title()
                 else:
                     curr_comm = "-"
 
@@ -147,7 +152,8 @@ def get_bill_data_batch(bill_numbers, lis_df):
                 "Lifecycle": determine_lifecycle(str(status)),
                 "Auto_Folder": get_smart_subject(title),
                 "History_Data": history_data,
-                "Current_Committee": curr_comm.strip()
+                "Current_Committee": curr_comm.strip(),
+                "Current_Sub": curr_sub.strip()
             })
         else:
             results.append({
@@ -226,10 +232,14 @@ def render_master_list_item(df):
         header_title = row['My Title'] if row['My Title'] != "-" else row.get('Official Title', '')
         with st.expander(f"{row['Bill Number']} - {header_title}"):
             st.markdown(f"**🏛️ Current Committee:** {row.get('Current_Committee', '-')}")
+            if row.get('Current_Sub') and row.get('Current_Sub') != '-':
+                st.markdown(f"**↳ Subcommittee:** {row.get('Current_Sub')}")
+                
             st.markdown(f"**📌 Designated Title:** {row.get('My Title', '-')}")
             st.markdown(f"**📜 Official Title:** {row.get('Official Title', '-')}")
             st.markdown(f"**🔄 Status:** {row.get('Status', '-')}")
             
+            # --- HISTORY TABLE ---
             hist_data = row.get('History_Data', [])
             if isinstance(hist_data, list) and hist_data:
                 st.markdown("**📜 History:**")
@@ -307,7 +317,7 @@ if bills_to_track:
                 "Lifecycle": "🚀 Active", "Auto_Folder": get_smart_subject(mock_t),
                 "My Title": "My Demo Title", "Date": "2026-01-14",
                 "History_Data": [{"Date": "2026-01-14", "Action": mock_s}],
-                "Current_Committee": "Commerce and Labor"
+                "Current_Committee": "Commerce and Labor", "Current_Sub": "-"
             })
         api_df = pd.DataFrame(mock_results)
     else:
@@ -378,8 +388,9 @@ if bills_to_track:
             else:
                 full_schedule['dt'] = pd.NaT
 
-        # Create Map of Bill -> Current Committee from Master List
+        # Create Maps
         bill_to_comm_map = final_df.set_index('Bill Number')['Current_Committee'].to_dict()
+        bill_to_sub_map = final_df.set_index('Bill Number')['Current_Sub'].to_dict()
 
         today = datetime.now().date()
         cols = st.columns(7)
@@ -411,20 +422,24 @@ if bills_to_track:
                                 if master_comm and master_comm != '-':
                                     header = f"{master_comm} (per Status)"
                                 else:
-                                    # If genuinely on floor, it will have a cal_type or description
-                                    header = row.get('cal_type', '')
-                                    if not header: header = row.get('description', 'Floor Session')
+                                    header = row.get('cal_type', 'Floor Session')
 
                             st.write(f"🏛️ **{header}**")
                             
+                            # Subcommittee Cross-Reference
                             sub = row.get('subcommittee_name', '')
+                            if pd.isna(sub) or str(sub) == 'nan':
+                                master_sub = bill_to_sub_map.get(row['bill_clean'])
+                                if master_sub and master_sub != '-':
+                                    sub = master_sub
+
                             if pd.notna(sub) and str(sub) != 'nan': st.caption(f"↳ {sub}")
                             
                             ctype = row.get('cal_type', '')
-                            if pd.notna(ctype) and str(ctype) != 'nan' and ctype != header: st.caption(f"📑 {ctype}")
+                            if pd.notna(ctype) and str(ctype) != 'nan': st.caption(f"📑 {ctype}")
                             
                             desc = row.get('description', '')
-                            if pd.notna(desc) and str(desc) != 'nan' and desc != header: st.caption(f"📝 {desc}")
+                            if pd.notna(desc) and str(desc) != 'nan': st.caption(f"📝 {desc}")
 
                             time_val = row.get('time', '')
                             if pd.isna(time_val) or str(time_val) == 'nan' or str(time_val).strip() == '':
