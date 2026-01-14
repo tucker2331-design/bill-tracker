@@ -385,7 +385,7 @@ if bills_to_track:
                 st.markdown("#### ❌ Failed")
                 render_master_list_item(dead)
 
-    # --- TAB 3: UPCOMING (NORMALIZED MATCHING & ROBUST TIME FINDER) ---
+    # --- TAB 3: UPCOMING (STRICTER FILTERING & DEBUGGER) ---
     with tab_upcoming:
         st.subheader("📅 Your Weekly Calendar")
         full_schedule = lis_data.get('schedule', pd.DataFrame())
@@ -433,12 +433,17 @@ if bills_to_track:
                             is_house_bill = bill.startswith('H')
 
                             # 2. Matching Logic
-                            # Match A: Explicit
+                            # Match A: Explicit (Bill Number is in the text)
                             match_explicit = todays_schedule[todays_schedule['bill_clean'] == bill]
                             
-                            # Match B: Implicit (Normalized Committee Name Scan)
+                            # Match B: Implicit (Committee Name Scan) - NOW STRICTER
                             match_implicit = pd.DataFrame()
-                            if master_comm_clean and master_comm_clean != '':
+                            
+                            # STOPWORD FILTER: Don't match if the committee is just "Committee" or "House"
+                            stopwords = ['committee', 'house', 'senate', 'pending', '-', '']
+                            is_valid_comm_name = (master_comm_clean not in stopwords) and (len(master_comm_clean) > 4)
+                            
+                            if is_valid_comm_name:
                                 match_implicit = todays_schedule[
                                     todays_schedule.apply(lambda r: master_comm_clean in normalize_text(str(r.values)), axis=1)
                                 ]
@@ -463,8 +468,17 @@ if bills_to_track:
                                 
                                 st.error(f"**{bill}**")
                                 
-                                # Header
-                                header = raw_master_comm.title() if raw_master_comm and raw_master_comm != '-' else "Committee"
+                                # Header (Prefer Master List Committee, Fallback to Schedule Row)
+                                # This fixes the "Committee" generic header issue
+                                header = "Committee"
+                                if raw_master_comm and raw_master_comm not in stopwords:
+                                    header = raw_master_comm.title()
+                                else:
+                                    # Fallback: Scrape it from the schedule row
+                                    # Find any column with 'committee' in the name
+                                    comm_col = next((c for c in row.index if 'committee' in c and 'sub' not in c), None)
+                                    if comm_col: header = str(row[comm_col]).title()
+
                                 st.write(f"🏛️ **{header}**")
                                 
                                 if master_sub and master_sub != '-':
@@ -473,27 +487,26 @@ if bills_to_track:
                                 if master_status:
                                     st.caption(f"ℹ️ {master_status}")
 
-                                # --- 3. TIME SCRAPER (Improved Regex for "30 Minutes After...") ---
-                                # We also check specific columns first if they exist
-                                time_col_name = next((c for c in row.index if 'time' in c and 'date' not in c), None)
-                                specific_time_val = str(row[time_col_name]) if time_col_name else ""
-                                
+                                # --- 3. TIME SCRAPER (Robust) ---
                                 row_text = " ".join([str(val) for val in row.values])
                                 
-                                # Regex breakdown:
-                                # 1. Complex phrase: (Optional "30 Minutes") + (after/upon/before) + ... + (adjourn/recess/conven)
-                                # 2. Simple time: 10:00 AM
+                                # Regex for:
+                                # 1. "Upon Recess", "After Adjournment"
+                                # 2. "30 Minutes after"
+                                # 3. "10:00 AM"
                                 time_pattern = r'(?:(?:\d+|one|two|half)\s*(?:hr|hour|min|minute)s?\s+)?(?:after|upon|before|until)\s+(?:.*?)?(?:adjourn|recess|conven|call)|(?:\d{1,2}:\d{2}\s?(?:[ap]\.?m\.?|noon))'
                                 
                                 t_match = re.search(time_pattern, row_text, re.IGNORECASE)
                                 
                                 if t_match:
                                     st.caption(f"⏰ {t_match.group(0).strip()}")
-                                elif len(specific_time_val) > 4 and specific_time_val.lower() != 'nan':
-                                     # Fallback: If regex failed but we have a specific 'time' column with text, use it
-                                    st.caption(f"⏰ {specific_time_val}")
                                 else:
-                                    st.caption("⏰ TBD")
+                                    # Fallback: Check if there is a specific 'time' column we ignored
+                                    t_col = next((c for c in row.index if 'time' in c and 'date' not in c), None)
+                                    if t_col and str(row[t_col]).strip() != 'nan':
+                                         st.caption(f"⏰ {row[t_col]}")
+                                    else:
+                                        st.caption("⏰ TBD")
                                 
                                 st.divider()
 
@@ -503,3 +516,10 @@ if bills_to_track:
                         st.caption("-")
                 else:
                     st.caption("-")
+
+    # --- DEBUGGER (Visible only to help find column names) ---
+    with st.expander("🛠️ Developer Debug - Schedule Columns"):
+        if not full_schedule.empty:
+            st.write("Columns found in Calendar File:", full_schedule.columns.tolist())
+            st.write("Sample Data (First 3 Rows):")
+            st.dataframe(full_schedule.head(3))
