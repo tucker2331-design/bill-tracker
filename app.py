@@ -2,7 +2,7 @@ import streamlit as st
 import pandas as pd
 import requests
 import time
-from datetime import datetime, timedelta # Added timedelta for the 7-day calc
+from datetime import datetime, timedelta
 import pytz # For EST Timezone
 from slack_sdk import WebClient
 from slack_sdk.errors import SlackApiError
@@ -52,7 +52,7 @@ def get_smart_subject(title):
             return category
     return "📂 Unassigned / General"
 
-# --- DATA FETCHING ---
+# --- DATA FETCHING (DIRECT FROM LIS) ---
 @st.cache_data(ttl=300) 
 def fetch_lis_data():
     data = {}
@@ -70,8 +70,12 @@ def fetch_lis_data():
         try: df_docket = pd.read_csv(LIS_DOCKET_CSV, encoding='ISO-8859-1')
         except: df_docket = pd.read_csv(LIS_DOCKET_CSV.replace(".CSV", ".csv"), encoding='ISO-8859-1')
         df_docket.columns = df_docket.columns.str.strip().str.lower()
-        if 'bill_id' in df_docket.columns:
-            df_docket['bill_clean'] = df_docket['bill_id'].astype(str).str.upper().str.strip()
+        
+        # Ensure we create a clean bill column if possible
+        bill_col_candidate = next((c for c in df_docket.columns if "bill" in c), None)
+        if bill_col_candidate:
+            df_docket['bill_clean'] = df_docket[bill_col_candidate].astype(str).str.upper().str.strip()
+            
         data['docket'] = df_docket
     except: data['docket'] = pd.DataFrame()
     return data
@@ -300,7 +304,7 @@ if bills_to_track:
                 st.markdown("#### ❌ Failed")
                 render_master_list_item(dead)
 
-    # --- TAB 3: UPCOMING (7-DAY CALENDAR) ---
+    # --- TAB 3: UPCOMING (7-DAY CALENDAR - SMART FIXED) ---
     with tab_upcoming:
         st.subheader("📅 Your Weekly Calendar")
         docket_df = lis_data.get('docket', pd.DataFrame())
@@ -308,39 +312,55 @@ if bills_to_track:
         if docket_df.empty:
             st.info("No official committee dockets found.")
         else:
-            if 'meeting_date' in docket_df.columns and 'bill_clean' in docket_df.columns:
-                # 1. Convert Docket Dates to Datetime objects for comparison
-                docket_df['dt'] = pd.to_datetime(docket_df['meeting_date'], errors='coerce')
+            # --- SMART COLUMN FINDER ---
+            # Try to guess the column names if 'meeting_date' isn't exact
+            date_col = next((c for c in docket_df.columns if "date" in c), None)
+            
+            # If we have a date column and our bill column
+            if date_col and 'bill_clean' in docket_df.columns:
                 
-                # 2. Get User's Bills
+                # Convert dates safely
+                docket_df['dt'] = pd.to_datetime(docket_df[date_col], errors='coerce')
+                
                 my_bills = [b.upper() for b in bills_to_track]
                 
-                # 3. Create 7 Columns for the Next 7 Days
-                today = datetime.now().date()
-                cols = st.columns(7)
-                
-                for i in range(7):
-                    target_date = today + timedelta(days=i)
-                    display_date_str = target_date.strftime("%a %m/%d") # e.g., "Wed 01/14"
+                # Check if ANY of my bills are in the file at all
+                any_matches = docket_df[docket_df['bill_clean'].isin(my_bills)]
+                if any_matches.empty:
+                    st.success("✅ Good news: No hearings scheduled for your bills in this file.")
+                else:
+                    # Draw Calendar
+                    today = datetime.now().date()
+                    cols = st.columns(7)
                     
-                    with cols[i]:
-                        st.markdown(f"**{display_date_str}**")
-                        st.divider()
+                    for i in range(7):
+                        target_date = today + timedelta(days=i)
+                        display_date_str = target_date.strftime("%a %m/%d")
                         
-                        # Filter for bills on this specific day
-                        day_matches = docket_df[
-                            (docket_df['dt'].dt.date == target_date) & 
-                            (docket_df['bill_clean'].isin(my_bills))
-                        ]
-                        
-                        if not day_matches.empty:
-                            for idx, row in day_matches.iterrows():
-                                st.error(f"**{row['bill_clean']}**")
-                                st.caption(f"{row.get('committee_name', 'Committee')}")
-                                st.caption(f"📍 {row.get('room', '-')}")
-                                st.caption(f"⏰ {row.get('time', '-')}")
-                                st.divider()
-                        else:
-                            st.caption("-") # Empty placeholder
+                        with cols[i]:
+                            st.markdown(f"**{display_date_str}**")
+                            st.divider()
+                            
+                            day_matches = docket_df[
+                                (docket_df['dt'].dt.date == target_date) & 
+                                (docket_df['bill_clean'].isin(my_bills))
+                            ]
+                            
+                            if not day_matches.empty:
+                                for idx, row in day_matches.iterrows():
+                                    st.error(f"**{row['bill_clean']}**")
+                                    
+                                    # Find committee/room columns dynamically too
+                                    comm_col = next((c for c in docket_df.columns if "com" in c), "Committee")
+                                    room_col = next((c for c in docket_df.columns if "room" in c), None)
+                                    time_col = next((c for c in docket_df.columns if "time" in c), None)
+                                    
+                                    st.caption(f"{row.get(comm_col, 'Comm')}")
+                                    if room_col: st.caption(f"📍 {row[room_col]}")
+                                    if time_col: st.caption(f"⏰ {row[time_col]}")
+                                    st.divider()
+                            else:
+                                st.caption("-")
             else:
-                st.warning("Docket format error (Missing date columns).")
+                st.warning("⚠️ Docket Format Error")
+                st.write("Could not find a 'Date' column. Columns found:", docket_df.columns.tolist())
