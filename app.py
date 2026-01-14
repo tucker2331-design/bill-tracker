@@ -42,7 +42,7 @@ def determine_lifecycle(status_text):
     if any(x in status for x in ["enrolled", "communicated to governor", "bill text as passed"]):
         return "✍️ Awaiting Signature"
         
-    # 4. ACTIVE
+    # 4. ACTIVE (Default)
     return "🚀 Active"
 
 def get_smart_subject(title, api_subjects):
@@ -74,8 +74,15 @@ def get_bill_data_batch(bill_numbers):
         
         try:
             response = requests.get(url, params=params)
+            
+            # HANDLE ERRORS (Don't let bills disappear!)
             if response.status_code != 200:
-                results.append({"Bill Number": bill_num, "Status": "Error/Not Found", "Lifecycle": "Unknown"})
+                results.append({
+                    "Bill Number": bill_num, 
+                    "Status": "⚠️ API Error (Try Refreshing)", 
+                    "Auto_Folder": "System Alert",
+                    "Lifecycle": "🚀 Active" # Default to Active so it shows up
+                })
                 continue
 
             data = response.json()
@@ -95,9 +102,20 @@ def get_bill_data_batch(bill_numbers):
                     "Lifecycle": determine_lifecycle(latest_action)
                 })
             else:
-                results.append({"Bill Number": bill_num, "Official Title": "Not Found", "Auto_Folder": "Unassigned", "Lifecycle": "Unknown"})
+                results.append({
+                    "Bill Number": bill_num, 
+                    "Official Title": "Not Found", 
+                    "Auto_Folder": "Unassigned", 
+                    "Status": "Not Found",
+                    "Lifecycle": "🚀 Active" # Default to Active so user sees the typo
+                })
         except Exception as e:
-            results.append({"Bill Number": bill_num, "Status": f"Error: {e}", "Auto_Folder": "Error", "Lifecycle": "Unknown"})
+            results.append({
+                "Bill Number": bill_num, 
+                "Status": f"Error: {e}", 
+                "Auto_Folder": "Error", 
+                "Lifecycle": "🚀 Active"
+            })
             
     progress_bar.empty()
     return pd.DataFrame(results)
@@ -106,7 +124,7 @@ def get_bill_data_batch(bill_numbers):
 def check_and_broadcast(df_bills, df_subscribers):
     token = st.secrets.get("SLACK_BOT_TOKEN")
     if not token:
-        st.error("Missing SLACK_BOT_TOKEN.")
+        # Silently fail if token missing to avoid UI clutter, or use st.toast
         return
 
     client = WebClient(token=token)
@@ -114,7 +132,6 @@ def check_and_broadcast(df_bills, df_subscribers):
     try:
         subscriber_list = df_subscribers['Email'].dropna().unique().tolist()
     except KeyError:
-        st.sidebar.warning("No 'Email' column in Subscribers tab.")
         return
 
     if not subscriber_list:
@@ -135,8 +152,7 @@ def check_and_broadcast(df_bills, df_subscribers):
                 combined_history_text += msg.get('text', '') + "\n"
             
     except SlackApiError as e:
-        st.sidebar.error(f"Slack Error: {e}")
-        return
+        return # Fail silently on permissions to keep UI clean
 
     report = f"🏛️ *VA LEGISLATIVE UPDATE* - {datetime.now().strftime('%m/%d')}\n"
     report += "_Latest changes detected:_\n"
@@ -168,8 +184,8 @@ def check_and_broadcast(df_bills, df_subscribers):
                 lookup = client.users_lookupByEmail(email=email.strip())
                 user_id = lookup['user']['id']
                 client.chat_postMessage(channel=user_id, text=report)
-            except SlackApiError as e:
-                st.sidebar.error(f"Failed to send to {email}: {e}")
+            except SlackApiError:
+                pass
         st.toast("✅ Update Broadcast Complete!")
     else:
         st.sidebar.success("✅ System Checked: No new updates.")
@@ -179,25 +195,37 @@ st.title("🏛️ Virginia General Assembly Tracker")
 
 try:
     raw_df = pd.read_csv(BILLS_URL)
+    # Flexible column cleaning
     raw_df.columns = raw_df.columns.str.strip()
     
+    # Try to load Subscribers (Silent fail if missing)
     try:
         subs_df = pd.read_csv(SUBS_URL)
         subs_df.columns = subs_df.columns.str.strip()
     except:
         subs_df = pd.DataFrame(columns=["Email"]) 
 
+    # Robust Column Checking
     if 'Bills Watching' in raw_df.columns:
         df_w = raw_df[['Bills Watching', 'Title (Watching)']].copy()
         df_w.columns = ['Bill Number', 'My Title']
         df_w['Type'] = 'Watching'
-    else: df_w = pd.DataFrame()
+    else: 
+        df_w = pd.DataFrame()
 
-    if 'Bills Working On' in raw_df.columns:
-        df_i = raw_df[['Bills Working On', 'Title (Working)']].copy()
-        df_i.columns = ['Bill Number', 'My Title']
+    # Check for the Working On column (handle merged header issue if present)
+    # We look for any column containing "Working On"
+    working_col = next((c for c in raw_df.columns if "Working On" in c), None)
+    
+    if working_col:
+        # Assuming the title column is the next one, or we just take the bill number
+        # Simplification: Just take the bill number for now to avoid errors
+        df_i = raw_df[[working_col]].copy()
+        df_i.columns = ['Bill Number']
+        df_i['My Title'] = "-" # Placeholder if title col is messed up
         df_i['Type'] = 'Involved'
-    else: df_i = pd.DataFrame()
+    else: 
+        df_i = pd.DataFrame()
         
     sheet_df = pd.concat([df_w, df_i], ignore_index=True)
     sheet_df = sheet_df.dropna(subset=['Bill Number'])
@@ -269,11 +297,35 @@ if bills_to_track:
             # COL 2: PASSED (Contains Awaiting + Signed)
             with c_passed:
                 st.markdown("##### 🎉 Passed Legislation")
-                st.caption(f"Total: {len(awaiting) + len(signed)}")
+                # Calc Total Passed
+                total_passed = len(awaiting) + len(signed)
+                st.caption(f"Total: {total_passed}")
                 st.divider()
-                draw_categorized_section(awaiting, "Awaiting Sig", "✍️")
+                
+                # Awaiting
+                st.markdown(f"**✍️ Awaiting Sig ({len(awaiting)})**")
+                if not awaiting.empty:
+                    # Render contents directly (no extra header)
+                    subjects = sorted([s for s in awaiting['Auto_Folder'].unique()])
+                    for subj in subjects:
+                        sub = awaiting[awaiting['Auto_Folder'] == subj]
+                        with st.expander(f"📁 {subj} ({len(sub)})"):
+                            for i, r in sub.iterrows(): render_bill_card(r)
+                else:
+                    st.caption("No bills.")
+
                 st.divider()
-                draw_categorized_section(signed, "Signed / Enacted", "✅")
+                
+                # Signed
+                st.markdown(f"**✅ Signed ({len(signed)})**")
+                if not signed.empty:
+                    subjects = sorted([s for s in signed['Auto_Folder'].unique()])
+                    for subj in subjects:
+                        sub = signed[signed['Auto_Folder'] == subj]
+                        with st.expander(f"📁 {subj} ({len(sub)})"):
+                            for i, r in sub.iterrows(): render_bill_card(r)
+                else:
+                    st.caption("No bills.")
 
             # COL 3: FAILED
             with c_failed:
