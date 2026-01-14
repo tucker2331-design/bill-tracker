@@ -111,12 +111,15 @@ def get_bill_data_batch(bill_numbers, lis_df):
             if not date_val or date_val == 'nan':
                 date_val = str(item.get('last_senate_action_date', ''))
 
-            # Gather history for the table
+            # FIX: Filter out "nan" or empty actions from history table
             history_data = []
-            if item.get('last_house_action'):
-                history_data.append({"Date": item.get('last_house_action_date'), "Action": f"[House] {item.get('last_house_action')}"})
-            if item.get('last_senate_action'):
-                history_data.append({"Date": item.get('last_senate_action_date'), "Action": f"[Senate] {item.get('last_senate_action')}"})
+            h_act = item.get('last_house_action')
+            if h_act and str(h_act).lower() != 'nan':
+                 history_data.append({"Date": item.get('last_house_action_date'), "Action": f"[House] {h_act}"})
+            
+            s_act = item.get('last_senate_action')
+            if s_act and str(s_act).lower() != 'nan':
+                 history_data.append({"Date": item.get('last_senate_action_date'), "Action": f"[Senate] {s_act}"})
 
             results.append({
                 "Bill Number": bill_num,
@@ -167,9 +170,7 @@ def check_and_broadcast(df_bills, df_subscribers, demo_mode):
         display_date = row.get('Date', '')
         if not display_date or display_date == 'nan': display_date = datetime.now().strftime('%Y-%m-%d')
         
-        # FIX: The check string must be IDENTICAL to the sent string to prevent duplicates
         check_str = f"*{row['Bill Number']}* ({display_date}): {row.get('Status')}"
-        
         if check_str in history_text: continue
         
         updates_found = True
@@ -217,7 +218,6 @@ def render_master_list_item(df):
             else:
                 st.caption(f"Date: {row.get('Date', '-')}")
 
-            # FIXED LINK
             lis_link = f"https://lis.virginia.gov/bill-details/20261/{row['Bill Number']}"
             st.markdown(f"🔗 [View Official Bill on LIS]({lis_link})")
 
@@ -377,13 +377,18 @@ if bills_to_track:
                     ]
                     if not day_matches.empty:
                         for idx, row in day_matches.iterrows():
-                            etype = str(row.get('event_type', 'Event'))
+                            # FIX: Print Committee and Time
                             st.error(f"**{row['bill_clean']}**")
-                            st.caption(f"{etype}")
-                            loc = row.get('room', row.get('committee_name', ''))
-                            if loc: st.caption(f"📍 {loc}")
+                            
+                            comm = row.get('committee_name', '')
+                            sub = row.get('subcommittee_name', '')
+                            
+                            if comm and str(comm) != 'nan': st.write(f"🏛️ **{comm}**")
+                            if sub and str(sub) != 'nan': st.caption(f"↳ {sub}")
+                            
                             time_val = row.get('time', '')
-                            if time_val: st.caption(f"⏰ {time_val}")
+                            if time_val and str(time_val) != 'nan': st.caption(f"⏰ {time_val}")
+                            
                             st.divider()
                     else:
                         st.caption("-")
