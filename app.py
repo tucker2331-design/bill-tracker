@@ -2,9 +2,9 @@ import streamlit as st
 import pandas as pd
 import requests
 import time
-import re # Added for time searching
+import re 
 from datetime import datetime, timedelta
-import pytz # For EST Timezone
+import pytz 
 from slack_sdk import WebClient
 from slack_sdk.errors import SlackApiError
 
@@ -122,25 +122,29 @@ def get_bill_data_batch(bill_numbers, lis_df):
             if pd.notna(s_act) and str(s_act).lower() != 'nan' and str(s_act).strip() != '':
                  history_data.append({"Date": item.get('last_senate_action_date'), "Action": f"[Senate] {s_act}"})
 
-            # FIX: Robust Committee & Subcommittee Extraction
-            curr_comm = item.get('last_house_committee', item.get('last_senate_committee', ''))
-            if pd.isna(curr_comm) or str(curr_comm) == 'nan': curr_comm = "-"
+            # FIX: Robust Initialization (Handle empty strings properly)
+            curr_comm = item.get('last_house_committee')
+            if not curr_comm: curr_comm = item.get('last_senate_committee')
+            
+            # If it's effectively empty, mark as dash to trigger text search
+            if pd.isna(curr_comm) or str(curr_comm).strip().lower() in ['nan', 'none', '']:
+                curr_comm = "-"
             
             curr_sub = "-"
             status_lower = str(status).lower()
             
-            # ALWAYS parse text for subcommittee, even if committee is known
+            # PARSING LOGIC: Always check text for "sub:" to get subcommittee
             if "sub:" in status_lower:
                 try:
                     parts = status_lower.split("sub:")
-                    # If comm was missing, try to grab it from left of 'sub:'
+                    # Only overwrite committee if it was missing
                     if curr_comm == "-":
                         curr_comm = parts[0].replace("assigned", "").replace("referred to committee on", "").strip().title()
-                    # Always grab sub from right of 'sub:'
+                    # Always capture subcommittee
                     curr_sub = parts[1].strip().title()
                 except: pass
             
-            # Fallback for Comm if still empty
+            # Fallback Parsing if still missing
             if curr_comm == "-":
                 if "referred to committee on" in status_lower:
                     curr_comm = status_lower.split("referred to committee on")[-1].strip().title()
@@ -244,7 +248,6 @@ def render_master_list_item(df):
             st.markdown(f"**📜 Official Title:** {row.get('Official Title', '-')}")
             st.markdown(f"**🔄 Status:** {row.get('Status', '-')}")
             
-            # --- HISTORY TABLE ---
             hist_data = row.get('History_Data', [])
             if isinstance(hist_data, list) and hist_data:
                 st.markdown("**📜 History:**")
@@ -421,6 +424,7 @@ if bills_to_track:
                             # Header Selection with Cross-Reference
                             header = row.get('committee_name', '')
                             
+                            # If header invalid, check Master List
                             if pd.isna(header) or str(header) == 'nan' or str(header).strip() == '':
                                 master_comm = bill_to_comm_map.get(row['bill_clean'])
                                 if master_comm and master_comm != '-':
@@ -432,7 +436,6 @@ if bills_to_track:
                             
                             # Subcommittee Cross-Reference
                             sub = row.get('subcommittee_name', '')
-                            # If docket is empty, check our master list for sub
                             if pd.isna(sub) or str(sub) == 'nan':
                                 master_sub = bill_to_sub_map.get(row['bill_clean'])
                                 if master_sub and master_sub != '-':
@@ -456,7 +459,6 @@ if bills_to_track:
                             # Last resort: Look for digits in description
                             if pd.isna(time_val) or str(time_val) == 'nan' or str(time_val).strip() == '':
                                 if pd.notna(desc):
-                                    # Basic regex for "8:00 AM" or "3:30 PM"
                                     match = re.search(r'\d{1,2}:\d{2}\s?(?:AM|PM|am|pm)', str(desc))
                                     if match: time_val = match.group(0)
                                     elif any(x in str(desc).lower() for x in ['adjourn', 'caucus']):
