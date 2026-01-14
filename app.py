@@ -72,10 +72,7 @@ def fetch_lis_data():
     try:
         try: df = pd.read_csv(LIS_BILLS_CSV, encoding='ISO-8859-1')
         except: df = pd.read_csv(LIS_BILLS_CSV.replace(".CSV", ".csv"), encoding='ISO-8859-1')
-        
-        # FIX: Normalize columns heavily
         df.columns = df.columns.str.strip().str.lower().str.replace(' ', '_').str.replace('/', '_').str.replace('.', '')
-        
         if 'bill_id' in df.columns:
             df['bill_clean'] = df['bill_id'].astype(str).str.upper().str.replace(" ", "").str.strip()
             data['bills'] = df
@@ -84,13 +81,12 @@ def fetch_lis_data():
 
     # 2. Fetch Calendars
     calendar_dfs = []
-    # Note: We tag them here so we know if it came from the Subcommittee file
     for url, type_label in [(LIS_SUBDOCKET_CSV, "Subcommittee"), (LIS_DOCKET_CSV, "Committee"), (LIS_CALENDAR_CSV, "Floor")]:
         try:
             try: df = pd.read_csv(url, encoding='ISO-8859-1')
             except: df = pd.read_csv(url.replace(".CSV", ".csv"), encoding='ISO-8859-1')
             
-            # FIX: Normalize columns heavily here too
+            # Normalize columns
             df.columns = df.columns.str.strip().str.lower().str.replace(' ', '_').str.replace('/', '_').str.replace('.', '')
             
             # Dynamically find the bill number column
@@ -110,7 +106,6 @@ def fetch_lis_data():
 
 def get_bill_data_batch(bill_numbers, lis_df):
     results = []
-    # FIX: Remove spaces from input for matching
     clean_bills = list(set([str(b).strip().upper().replace(" ", "") for b in bill_numbers if str(b).strip() != 'nan']))
     
     if lis_df.empty:
@@ -142,21 +137,17 @@ def get_bill_data_batch(bill_numbers, lis_df):
             # --- ROBUST COMMITTEE EXTRACTION ---
             curr_comm = "-"
             
-            # 1. Try explicit columns first
             c1 = item.get('last_house_committee')
             c2 = item.get('last_senate_committee')
             if pd.notna(c1) and str(c1).strip() not in ['nan', '']: curr_comm = c1
             elif pd.notna(c2) and str(c2).strip() not in ['nan', '']: curr_comm = c2
             
-            # 2. Status Text Regex (Better for Resolutions like "Referred to Rules")
             status_lower = str(status).lower()
             if curr_comm == "-":
-                # Matches: "referred to committee on X", "referred to X"
                 comm_match = re.search(r'referred to (?:committee on|the committee on)?\s?([a-z\s&]+)', status_lower)
                 if comm_match:
                     curr_comm = comm_match.group(1).title().strip()
             
-            # 3. Sub-committee extraction from Status Text
             curr_sub = "-"
             if "sub:" in status_lower:
                 try:
@@ -385,7 +376,7 @@ if bills_to_track:
                 st.markdown("#### ❌ Failed")
                 render_master_list_item(dead)
 
-    # --- TAB 3: UPCOMING (STRICTER FILTERING & DEBUGGER) ---
+    # --- TAB 3: UPCOMING (STRICT LOGIC FIX) ---
     with tab_upcoming:
         st.subheader("📅 Your Weekly Calendar")
         full_schedule = lis_data.get('schedule', pd.DataFrame())
@@ -440,8 +431,8 @@ if bills_to_track:
                             match_implicit = pd.DataFrame()
                             
                             # STOPWORD FILTER: Don't match if the committee is just "Committee" or "House"
-                            stopwords = ['committee', 'house', 'senate', 'pending', '-', '']
-                            is_valid_comm_name = (master_comm_clean not in stopwords) and (len(master_comm_clean) > 4)
+                            stopwords = ['committee', 'house', 'senate', 'pending', '-', '', 'none']
+                            is_valid_comm_name = (master_comm_clean not in stopwords) and (len(master_comm_clean) > 3)
                             
                             if is_valid_comm_name:
                                 match_implicit = todays_schedule[
@@ -469,13 +460,11 @@ if bills_to_track:
                                 st.error(f"**{bill}**")
                                 
                                 # Header (Prefer Master List Committee, Fallback to Schedule Row)
-                                # This fixes the "Committee" generic header issue
                                 header = "Committee"
-                                if raw_master_comm and raw_master_comm not in stopwords:
+                                if is_valid_comm_name:
                                     header = raw_master_comm.title()
                                 else:
-                                    # Fallback: Scrape it from the schedule row
-                                    # Find any column with 'committee' in the name
+                                    # Fallback: Scrape it from the schedule row if Master List is generic
                                     comm_col = next((c for c in row.index if 'committee' in c and 'sub' not in c), None)
                                     if comm_col: header = str(row[comm_col]).title()
 
@@ -487,26 +476,15 @@ if bills_to_track:
                                 if master_status:
                                     st.caption(f"ℹ️ {master_status}")
 
-                                # --- 3. TIME SCRAPER (Robust) ---
+                                # --- 3. TIME SCRAPER (Regex) ---
                                 row_text = " ".join([str(val) for val in row.values])
-                                
-                                # Regex for:
-                                # 1. "Upon Recess", "After Adjournment"
-                                # 2. "30 Minutes after"
-                                # 3. "10:00 AM"
                                 time_pattern = r'(?:(?:\d+|one|two|half)\s*(?:hr|hour|min|minute)s?\s+)?(?:after|upon|before|until)\s+(?:.*?)?(?:adjourn|recess|conven|call)|(?:\d{1,2}:\d{2}\s?(?:[ap]\.?m\.?|noon))'
                                 
                                 t_match = re.search(time_pattern, row_text, re.IGNORECASE)
-                                
                                 if t_match:
                                     st.caption(f"⏰ {t_match.group(0).strip()}")
                                 else:
-                                    # Fallback: Check if there is a specific 'time' column we ignored
-                                    t_col = next((c for c in row.index if 'time' in c and 'date' not in c), None)
-                                    if t_col and str(row[t_col]).strip() != 'nan':
-                                         st.caption(f"⏰ {row[t_col]}")
-                                    else:
-                                        st.caption("⏰ TBD")
+                                    st.caption("⏰ TBD")
                                 
                                 st.divider()
 
@@ -516,10 +494,3 @@ if bills_to_track:
                         st.caption("-")
                 else:
                     st.caption("-")
-
-    # --- DEBUGGER (Visible only to help find column names) ---
-    with st.expander("🛠️ Developer Debug - Schedule Columns"):
-        if not full_schedule.empty:
-            st.write("Columns found in Calendar File:", full_schedule.columns.tolist())
-            st.write("Sample Data (First 3 Rows):")
-            st.dataframe(full_schedule.head(3))
