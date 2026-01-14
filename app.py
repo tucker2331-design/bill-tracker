@@ -38,6 +38,7 @@ TOPIC_KEYWORDS = {
 }
 
 # --- HELPER FUNCTIONS ---
+
 def determine_lifecycle(status_text):
     status = str(status_text).lower()
     if any(x in status for x in ["signed by governor", "enacted", "approved by governor", "chapter"]):
@@ -74,7 +75,8 @@ def fetch_lis_data():
 
     # 2. Fetch Calendars
     calendar_dfs = []
-    for url, type_label in [(LIS_SUBDOCKET_CSV, "🏛️ Subcommittee"), (LIS_DOCKET_CSV, "🏛️ Committee"), (LIS_CALENDAR_CSV, "📜 Floor/Vote")]:
+    # Note: We tag them here so we know if it came from the Subcommittee file
+    for url, type_label in [(LIS_SUBDOCKET_CSV, "Subcommittee"), (LIS_DOCKET_CSV, "Committee"), (LIS_CALENDAR_CSV, "Floor")]:
         try:
             try: df = pd.read_csv(url, encoding='ISO-8859-1')
             except: df = pd.read_csv(url.replace(".CSV", ".csv"), encoding='ISO-8859-1')
@@ -172,6 +174,7 @@ def get_bill_data_batch(bill_numbers, lis_df):
     return pd.DataFrame(results)
 
 # --- ALERTS ---
+
 def check_and_broadcast(df_bills, df_subscribers, demo_mode):
     st.sidebar.header("🤖 Slack Bot Status")
     if demo_mode:
@@ -224,6 +227,7 @@ def check_and_broadcast(df_bills, df_subscribers, demo_mode):
         st.sidebar.info("💤 No new updates needed.")
 
 # --- UI COMPONENTS ---
+
 def render_bill_card(row):
     if row.get('Official Title') not in ["Unknown", "Error", "Not Found", None]:
         display_title = row['Official Title']
@@ -423,51 +427,47 @@ if bills_to_track:
                         for idx, row in day_matches.iterrows():
                             st.error(f"**{row['bill_clean']}**")
                             
-                            # Header Selection with Cross-Reference
-                            header = row.get('committee_name', '')
+                            # --- IMPROVED SCRAPER LOGIC START ---
+                            # 1. Grab raw data regardless of column name
+                            raw_comm_val = row.get('committee', row.get('committee_name', ''))
+                            raw_desc_val = row.get('description', row.get('desc', ''))
                             
-                            if pd.isna(header) or str(header) == 'nan' or str(header).strip() == '':
-                                master_comm = bill_to_comm_map.get(row['bill_clean'])
-                                if master_comm and master_comm != '-':
-                                    header = f"{master_comm} (per Status)"
-                                else:
-                                    header = row.get('cal_type', 'Floor Session')
+                            header = ""
+                            sub = ""
 
+                            # 2. Distinguish Subcommittee vs Committee events
+                            if "Subcommittee" in str(row.get('event_type', '')):
+                                sub = raw_comm_val # In subdocket, the committee col IS the sub name
+                                master_comm = bill_to_comm_map.get(row['bill_clean'], '-')
+                                header = master_comm if master_comm != '-' else "Committee"
+                            else:
+                                header = raw_comm_val
+                                if pd.isna(header) or str(header).strip() == '':
+                                    master_comm = bill_to_comm_map.get(row['bill_clean'])
+                                    header = master_comm if master_comm else row.get('cal_type', 'Floor Session')
+                                
+                                sub = bill_to_sub_map.get(row['bill_clean'], '')
+
+                            # 3. Render Committee / Subcommittee
                             st.write(f"🏛️ **{header}**")
                             
-                            # Subcommittee Cross-Reference
-                            sub = row.get('subcommittee_name', '')
-                            if pd.isna(sub) or str(sub) == 'nan':
-                                master_sub = bill_to_sub_map.get(row['bill_clean'])
-                                if master_sub and master_sub != '-':
-                                    sub = master_sub
-
-                            if pd.notna(sub) and str(sub) != 'nan': st.caption(f"↳ {sub}")
+                            if pd.notna(sub) and str(sub).strip() not in ['nan', '-', '']: 
+                                st.caption(f"↳ {sub}")
                             
-                            ctype = row.get('cal_type', '')
-                            if pd.notna(ctype) and str(ctype) != 'nan': st.caption(f"📑 {ctype}")
-                            
-                            desc = row.get('description', '')
-                            if pd.notna(desc) and str(desc) != 'nan': st.caption(f"📝 {desc}")
+                            if pd.notna(raw_desc_val) and str(raw_desc_val) != 'nan': 
+                                st.caption(f"📝 {raw_desc_val}")
 
-                            # TIME SCRAPER
-                            time_val = row.get('time', '')
-                            if pd.isna(time_val) or str(time_val) == 'nan' or str(time_val).strip() == '':
-                                time_val = row.get('meeting_time', '')
-                            if pd.isna(time_val) or str(time_val) == 'nan' or str(time_val).strip() == '':
-                                time_val = row.get('start_time', '')
+                            # 4. Time Extraction (Search ALL text fields)
+                            full_text_search = f"{header} {sub} {raw_desc_val} {row.get('time', '')}"
+                            time_match = re.search(r'(\d{1,2}:\d{2}\s?(?:AM|PM|am|pm))', full_text_search)
                             
-                            if pd.isna(time_val) or str(time_val) == 'nan' or str(time_val).strip() == '':
-                                if pd.notna(desc):
-                                    match = re.search(r'\d{1,2}:\d{2}\s?(?:AM|PM|am|pm)', str(desc), re.IGNORECASE)
-                                    if match: time_val = match.group(0)
-                                    elif any(x in str(desc).lower() for x in ['adjourn', 'caucus']):
-                                        time_val = desc
-
-                            if pd.notna(time_val) and str(time_val) != 'nan' and str(time_val).strip() != '':
-                                st.caption(f"⏰ {time_val}")
+                            if time_match:
+                                st.caption(f"⏰ {time_match.group(1)}")
+                            elif "adjourn" in full_text_search.lower():
+                                st.caption("⏰ 1/2 hr after adjournment")
                             else:
                                 st.caption("⏰ TBD")
+                            # --- IMPROVED SCRAPER LOGIC END ---
                             
                             st.divider()
                     else:
