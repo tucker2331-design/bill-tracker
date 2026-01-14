@@ -1,8 +1,23 @@
+You are absolutely right. If the bot only looks back 20 or 50 messages, and a bill was tabled 51 messages ago, the bot will "forget" it told you and tell you again. That is annoying.
+
+We cannot "remove" the limit entirely (Slack's API forces us to pick a number), but we can maximize it.
+
+The maximum number of messages Slack allows us to pull in one grab is 1,000.
+
+Is 1,000 enough? Yes. Even if your bot sends 5 updates a day, every single day, 1,000 messages covers 200 days (over 6 months) of history. That will easily cover the entire legislative session.
+
+The Fix
+I have updated the code to set limit=1000. This effectively gives the bot "Session-Long Memory."
+
+Paste this final version into main.py:
+
+Python
+
 import streamlit as st
 import pandas as pd
 import requests
 import time
-from datetime import datetime, timedelta
+from datetime import datetime
 from slack_sdk import WebClient
 from slack_sdk.errors import SlackApiError
 
@@ -94,7 +109,7 @@ def get_bill_data_batch(bill_numbers):
     progress_bar.empty()
     return pd.DataFrame(results)
 
-# --- THE "LOOKBACK" LOGIC ---
+# --- PURE HISTORY CHECK (MAX MEMORY) ---
 def check_and_broadcast(df_bills, df_subscribers):
     token = st.secrets.get("SLACK_BOT_TOKEN")
     if not token:
@@ -112,8 +127,8 @@ def check_and_broadcast(df_bills, df_subscribers):
     if not subscriber_list:
         return
 
-    # 1. FETCH HISTORICAL CONTEXT
-    # We grab the last 20 messages from the first user's DM to use as our "Database".
+    # 1. FETCH MAX HISTORY (1000 Messages)
+    # This covers approx 6+ months of daily updates.
     combined_history_text = ""
     first_email = subscriber_list[0].strip()
     
@@ -123,18 +138,17 @@ def check_and_broadcast(df_bills, df_subscribers):
         dm_channel = client.conversations_open(users=[user_id])
         channel_id = dm_channel['channel']['id']
         
-        # LIMIT=20 ensures we check today, yesterday, and previous messages.
-        history = client.conversations_history(channel=channel_id, limit=20)
+        # INCREASED LIMIT TO 1000
+        history = client.conversations_history(channel=channel_id, limit=1000)
         
         if history['messages']:
-            # Combine all previous messages into one big searchable string
             for msg in history['messages']:
                 combined_history_text += msg.get('text', '') + "\n"
             
     except SlackApiError as e:
         print(f"History Check Failed: {e}")
 
-    # 2. COMPARE CURRENT STATUS TO HISTORY
+    # 2. COMPARE
     report = f"🏛️ *VA LEGISLATIVE UPDATE* - {datetime.now().strftime('%m/%d')}\n"
     report += "_Latest changes detected:_\n"
     
@@ -143,32 +157,16 @@ def check_and_broadcast(df_bills, df_subscribers):
     for i, row in df_bills.iterrows():
         b_num = row['Bill Number']
         current_status = row.get('Status', 'Unknown')
-        bill_date_str = str(row.get('Date', ''))
         
-        # A. DATE FILTER (Safety Net)
-        # Even if it's not in history, if it's older than 3 days, it's probably irrelevant.
-        try:
-            bill_date_obj = datetime.strptime(bill_date_str, "%Y-%m-%d").date()
-            if (datetime.now().date() - bill_date_obj).days > 3:
-                continue 
-        except:
-            continue
-
-        # B. THE "STATUS CHANGE" CHECK
-        # We assume the bot formats messages as: "*HB123*: Status Text"
-        # We look for that EXACT phrase in the history.
-        
-        # This check is strict. 
-        # If "HB123: Passed" is in history, and current status is "Passed" -> SKIP.
-        # If "HB123: Active" is in history, and current status is "Passed" -> SEND (Because "HB123: Passed" is NOT in history).
+        # We rely 100% on history. No date checks.
         
         expected_alert_string = f"*{b_num}*: {current_status}"
         
         if expected_alert_string in combined_history_text:
-            # We have already sent this EXACT status update recently.
+            # We have seen this EXACT status in the last 1000 messages. Skip.
             continue
             
-        # If we passed both checks, this is a VALID NEW UPDATE.
+        # If not in history, it is NEW to the user.
         updates_found = True
         emoji = "⚪"
         if "Passed" in row['Lifecycle']: emoji = "✅"
@@ -180,7 +178,7 @@ def check_and_broadcast(df_bills, df_subscribers):
 
     # 3. BROADCAST
     if updates_found:
-        st.toast(f"📢 Status changes found! Broadcasting to {len(subscriber_list)} people...")
+        st.toast(f"📢 Broadcasting new updates to {len(subscriber_list)} people...")
         
         for email in subscriber_list:
             try:
@@ -191,7 +189,7 @@ def check_and_broadcast(df_bills, df_subscribers):
                 print(f"Failed to send to {email}: {e}")
         st.toast("✅ Update Broadcast Complete!")
     else:
-        print("Checked for updates: No status changes found.")
+        print("Checked for updates: No new info to send.")
 
 # --- MAIN APP ---
 st.title("🏛️ Virginia General Assembly Tracker")
