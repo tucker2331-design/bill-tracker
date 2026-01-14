@@ -222,9 +222,7 @@ if bills_to_track:
     
     # --- HELPER FOR DRAWING SECTIONS ---
     def draw_categorized_section(bills, title, color_code):
-        # ALWAYS SHOW HEADER (Even if empty)
-        st.markdown(f"#### {color_code} {title} ({len(bills)})")
-        
+        st.markdown(f"##### {color_code} {title} ({len(bills)})")
         if bills.empty:
             st.caption("No bills.")
             return
@@ -261,22 +259,27 @@ if bills_to_track:
             signed = subset[subset['Lifecycle'] == "✅ Signed & Enacted"]
             dead = subset[subset['Lifecycle'] == "❌ Dead / Tabled"]
             
-            # 1. ACTIVE (Always Visible)
-            draw_categorized_section(active, "Active Bills", "🚀")
-            st.markdown("---")
+            # --- HORIZONTAL LAYOUT (3 COLUMNS) ---
+            c_active, c_passed, c_failed = st.columns(3)
             
-            # 2. PASSED SECTION (Always Visible Header)
-            st.markdown("### 🎉 Passed Legislation")
+            # COL 1: ACTIVE
+            with c_active:
+                draw_categorized_section(active, "Active", "🚀")
             
-            # Sub-sections (Always Visible)
-            draw_categorized_section(awaiting, "Awaiting Signature", "✍️")
-            draw_categorized_section(signed, "Signed & Enacted", "✅")
-            st.markdown("---")
+            # COL 2: PASSED (Contains Awaiting + Signed)
+            with c_passed:
+                st.markdown("##### 🎉 Passed Legislation")
+                st.caption(f"Total: {len(awaiting) + len(signed)}")
+                st.divider()
+                draw_categorized_section(awaiting, "Awaiting Sig", "✍️")
+                st.divider()
+                draw_categorized_section(signed, "Signed / Enacted", "✅")
 
-            # 3. FAILED (Always Visible)
-            draw_categorized_section(dead, "Dead / Failed", "❌")
+            # COL 3: FAILED
+            with c_failed:
+                draw_categorized_section(dead, "Dead / Failed", "❌")
 
-            # --- MASTER LIST ---
+            # --- MASTER LIST (Full Width Below) ---
             st.markdown("---")
             st.subheader(f"📜 Master List ({b_type})")
             
