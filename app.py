@@ -15,7 +15,8 @@ SUBS_URL = f"https://docs.google.com/spreadsheets/d/{SHEET_ID}/gviz/tq?tqx=out:c
 # --- VIRGINIA LIS DATA FEEDS ---
 LIS_BASE_URL = "https://lis.blob.core.windows.net/lisfiles/20261/"
 LIS_BILLS_CSV = LIS_BASE_URL + "BILLS.CSV"      
-LIS_DOCKET_CSV = LIS_BASE_URL + "SUBDOCKET.CSV" 
+LIS_DOCKET_CSV = LIS_BASE_URL + "SUBDOCKET.CSV"  # Committee Hearings
+LIS_CALENDAR_CSV = LIS_BASE_URL + "CALENDAR.CSV" # Floor Sessions / Votes
 
 st.set_page_config(page_title="VA Bill Tracker 2026", layout="wide")
 
@@ -56,6 +57,8 @@ def get_smart_subject(title):
 @st.cache_data(ttl=300) 
 def fetch_lis_data():
     data = {}
+    
+    # 1. Fetch Bills
     try:
         try: df_bills = pd.read_csv(LIS_BILLS_CSV, encoding='ISO-8859-1')
         except: df_bills = pd.read_csv(LIS_BILLS_CSV.replace(".CSV", ".csv"), encoding='ISO-8859-1')
@@ -66,17 +69,34 @@ def fetch_lis_data():
         else: data['bills'] = pd.DataFrame() 
     except: data['bills'] = pd.DataFrame()
 
+    # 2. Fetch Docket (Committee Hearings)
     try:
         try: df_docket = pd.read_csv(LIS_DOCKET_CSV, encoding='ISO-8859-1')
         except: df_docket = pd.read_csv(LIS_DOCKET_CSV.replace(".CSV", ".csv"), encoding='ISO-8859-1')
         df_docket.columns = df_docket.columns.str.strip().str.lower()
         
-        bill_col_candidate = next((c for c in df_docket.columns if "bill" in c), None)
-        if bill_col_candidate:
-            df_docket['bill_clean'] = df_docket[bill_col_candidate].astype(str).str.upper().str.strip()
-            
-        data['docket'] = df_docket
+        col = next((c for c in df_docket.columns if "bill" in c), None)
+        if col:
+            df_docket['bill_clean'] = df_docket[col].astype(str).str.upper().str.strip()
+            df_docket['event_type'] = "🏛️ Committee"
+            data['docket'] = df_docket
+        else: data['docket'] = pd.DataFrame()
     except: data['docket'] = pd.DataFrame()
+
+    # 3. Fetch Calendar (Floor Votes/Sessions) - ADDED FOR COVERAGE
+    try:
+        try: df_cal = pd.read_csv(LIS_CALENDAR_CSV, encoding='ISO-8859-1')
+        except: df_cal = pd.read_csv(LIS_CALENDAR_CSV.replace(".CSV", ".csv"), encoding='ISO-8859-1')
+        df_cal.columns = df_cal.columns.str.strip().str.lower()
+        
+        col = next((c for c in df_cal.columns if "bill" in c), None)
+        if col:
+            df_cal['bill_clean'] = df_cal[col].astype(str).str.upper().str.strip()
+            df_cal['event_type'] = "📜 Floor/Vote"
+            data['calendar'] = df_cal
+        else: data['calendar'] = pd.DataFrame()
+    except: data['calendar'] = pd.DataFrame()
+
     return data
 
 def get_bill_data_batch(bill_numbers, lis_df):
@@ -303,28 +323,37 @@ if bills_to_track:
                 st.markdown("#### ❌ Failed")
                 render_master_list_item(dead)
 
-    # --- TAB 3: UPCOMING (7-DAY CALENDAR - ALWAYS VISIBLE) ---
+    # --- TAB 3: UPCOMING (7-DAY CALENDAR - WITH FLOOR & COMMITTEES) ---
     with tab_upcoming:
         st.subheader("📅 Your Weekly Calendar")
-        docket_df = lis_data.get('docket', pd.DataFrame())
-
-        # Check column names safely
-        date_col = next((c for c in docket_df.columns if "date" in c), None)
         
-        # We always draw the calendar, even if docket is empty
+        # Merge Docket (Committees) and Calendar (Floor)
+        df1 = lis_data.get('docket', pd.DataFrame())
+        df2 = lis_data.get('calendar', pd.DataFrame())
+        
+        # Ensure 'dt' column exists in both (Smart Find)
+        full_schedule = pd.DataFrame()
+        
+        try:
+            # Prepare DOCKET
+            if not df1.empty:
+                d_col = next((c for c in df1.columns if "date" in c), None)
+                if d_col: df1['dt'] = pd.to_datetime(df1[d_col], errors='coerce')
+            
+            # Prepare CALENDAR
+            if not df2.empty:
+                d_col = next((c for c in df2.columns if "date" in c), None)
+                if d_col: df2['dt'] = pd.to_datetime(df2[d_col], errors='coerce')
+                
+            full_schedule = pd.concat([df1, df2], ignore_index=True)
+        except:
+            full_schedule = pd.DataFrame()
+
+        # Always Draw Calendar
         today = datetime.now().date()
         cols = st.columns(7)
-        
         my_bills = [b.upper() for b in bills_to_track]
         
-        # Convert docket dates if possible
-        if not docket_df.empty and date_col and 'bill_clean' in docket_df.columns:
-            docket_df['dt'] = pd.to_datetime(docket_df[date_col], errors='coerce')
-        else:
-            # If empty or invalid, just create an empty DF with 'dt' column to avoid errors
-            docket_df = pd.DataFrame(columns=['dt', 'bill_clean'])
-
-        # RENDER 7-DAY GRID
         for i in range(7):
             target_date = today + timedelta(days=i)
             display_date_str = target_date.strftime("%a %m/%d")
@@ -334,21 +363,29 @@ if bills_to_track:
                 st.divider()
                 
                 # Check for matches
-                day_matches = docket_df[
-                    (docket_df['dt'].dt.date == target_date) & 
-                    (docket_df['bill_clean'].isin(my_bills))
-                ]
-                
-                if not day_matches.empty:
-                    for idx, row in day_matches.iterrows():
-                        st.error(f"**{row['bill_clean']}**")
-                        comm_col = next((c for c in docket_df.columns if "com" in c), "Committee")
-                        room_col = next((c for c in docket_df.columns if "room" in c), None)
-                        time_col = next((c for c in docket_df.columns if "time" in c), None)
-                        
-                        st.caption(f"{row.get(comm_col, 'Comm')}")
-                        if room_col: st.caption(f"📍 {row[room_col]}")
-                        if time_col: st.caption(f"⏰ {row[time_col]}")
-                        st.divider()
+                if not full_schedule.empty and 'dt' in full_schedule.columns and 'bill_clean' in full_schedule.columns:
+                    day_matches = full_schedule[
+                        (full_schedule['dt'].dt.date == target_date) & 
+                        (full_schedule['bill_clean'].isin(my_bills))
+                    ]
+                    
+                    if not day_matches.empty:
+                        for idx, row in day_matches.iterrows():
+                            # Determine Event Type Icon
+                            etype = str(row.get('event_type', 'Event'))
+                            icon = "🏛️" if "Committee" in etype else "📜"
+                            
+                            st.error(f"**{row['bill_clean']}**")
+                            st.caption(f"{icon} {etype}")
+                            
+                            # Dynamic info extraction
+                            loc = row.get('room', row.get('committee_name', ''))
+                            if loc: st.caption(f"📍 {loc}")
+                            
+                            time_val = row.get('time', '')
+                            if time_val: st.caption(f"⏰ {time_val}")
+                            st.divider()
+                    else:
+                        st.caption("-")
                 else:
-                    st.caption("-") # Empty placeholder
+                    st.caption("-")
