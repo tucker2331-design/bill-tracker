@@ -2,6 +2,7 @@ import streamlit as st
 import pandas as pd
 import requests
 import time
+import re # Added for time searching
 from datetime import datetime, timedelta
 import pytz # For EST Timezone
 from slack_sdk import WebClient
@@ -123,26 +124,30 @@ def get_bill_data_batch(bill_numbers, lis_df):
 
             # FIX: Robust Committee & Subcommittee Extraction
             curr_comm = item.get('last_house_committee', item.get('last_senate_committee', ''))
+            if pd.isna(curr_comm) or str(curr_comm) == 'nan': curr_comm = "-"
+            
             curr_sub = "-"
             status_lower = str(status).lower()
             
-            # 1. Parse Status Text
-            if not curr_comm or str(curr_comm) == 'nan':
+            # ALWAYS parse text for subcommittee, even if committee is known
+            if "sub:" in status_lower:
+                try:
+                    parts = status_lower.split("sub:")
+                    # If comm was missing, try to grab it from left of 'sub:'
+                    if curr_comm == "-":
+                        curr_comm = parts[0].replace("assigned", "").replace("referred to committee on", "").strip().title()
+                    # Always grab sub from right of 'sub:'
+                    curr_sub = parts[1].strip().title()
+                except: pass
+            
+            # Fallback for Comm if still empty
+            if curr_comm == "-":
                 if "referred to committee on" in status_lower:
                     curr_comm = status_lower.split("referred to committee on")[-1].strip().title()
                 elif "referred to committee for" in status_lower:
                     curr_comm = status_lower.split("referred to committee for")[-1].strip().title()
                 elif "assigned" in status_lower:
-                    # Handle "Assigned Education sub: Public Education"
-                    temp = status_lower.replace("assigned", "").strip()
-                    if "sub:" in temp:
-                        parts = temp.split("sub:")
-                        curr_comm = parts[0].strip().title()
-                        curr_sub = parts[1].strip().title() # EXTRACT SUBCOMMITTEE
-                    else:
-                        curr_comm = temp.title()
-                else:
-                    curr_comm = "-"
+                    curr_comm = status_lower.replace("assigned", "").strip().title()
 
             results.append({
                 "Bill Number": bill_num,
@@ -416,7 +421,6 @@ if bills_to_track:
                             # Header Selection with Cross-Reference
                             header = row.get('committee_name', '')
                             
-                            # If header invalid, check Master List
                             if pd.isna(header) or str(header) == 'nan' or str(header).strip() == '':
                                 master_comm = bill_to_comm_map.get(row['bill_clean'])
                                 if master_comm and master_comm != '-':
@@ -428,6 +432,7 @@ if bills_to_track:
                             
                             # Subcommittee Cross-Reference
                             sub = row.get('subcommittee_name', '')
+                            # If docket is empty, check our master list for sub
                             if pd.isna(sub) or str(sub) == 'nan':
                                 master_sub = bill_to_sub_map.get(row['bill_clean'])
                                 if master_sub and master_sub != '-':
@@ -441,14 +446,21 @@ if bills_to_track:
                             desc = row.get('description', '')
                             if pd.notna(desc) and str(desc) != 'nan': st.caption(f"📝 {desc}")
 
+                            # TIME SCRAPER
                             time_val = row.get('time', '')
                             if pd.isna(time_val) or str(time_val) == 'nan' or str(time_val).strip() == '':
                                 time_val = row.get('meeting_time', '')
                             if pd.isna(time_val) or str(time_val) == 'nan' or str(time_val).strip() == '':
                                 time_val = row.get('start_time', '')
                             
-                            if pd.notna(row.get('description')) and any(x in str(row.get('description')).lower() for x in ['adjourn', 'caucus']):
-                                time_val = row.get('description')
+                            # Last resort: Look for digits in description
+                            if pd.isna(time_val) or str(time_val) == 'nan' or str(time_val).strip() == '':
+                                if pd.notna(desc):
+                                    # Basic regex for "8:00 AM" or "3:30 PM"
+                                    match = re.search(r'\d{1,2}:\d{2}\s?(?:AM|PM|am|pm)', str(desc))
+                                    if match: time_val = match.group(0)
+                                    elif any(x in str(desc).lower() for x in ['adjourn', 'caucus']):
+                                        time_val = desc
 
                             if pd.notna(time_val) and str(time_val) != 'nan' and str(time_val).strip() != '':
                                 st.caption(f"⏰ {time_val}")
