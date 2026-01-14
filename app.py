@@ -2,18 +2,20 @@ import streamlit as st
 import pandas as pd
 import requests
 import time
-from datetime import datetime
+from datetime import datetime, timedelta
 from slack_sdk import WebClient
 from slack_sdk.errors import SlackApiError
 
 # --- CONFIGURATION ---
 SHEET_ID = "18m752GcvGIPPpqUn_gB0DfA3e4z2UGD0ki0dUZh2Qek"
-SHEET_URL = f"https://docs.google.com/spreadsheets/d/{SHEET_ID}/gviz/tq?tqx=out:csv&sheet=Bills"
+BILLS_URL = f"https://docs.google.com/spreadsheets/d/{SHEET_ID}/gviz/tq?tqx=out:csv&sheet=Bills"
+SUBS_URL = f"https://docs.google.com/spreadsheets/d/{SHEET_ID}/gviz/tq?tqx=out:csv&sheet=Subscribers"
+
 API_KEY = st.secrets.get("OPENSTATES_API_KEY")
 
 st.set_page_config(page_title="VA Bill Tracker 2026", layout="wide")
 
-# --- SMART CATEGORIZATION CONFIG ---
+# --- SMART CATEGORIZATION ---
 TOPIC_KEYWORDS = {
     "Economy & Labor": ["wage", "salary", "worker", "employment", "labor", "business", "tax", "commerce", "job", "pay"],
     "Education": ["school", "education", "student", "university", "college", "teacher", "curriculum", "scholarship"],
@@ -25,38 +27,23 @@ TOPIC_KEYWORDS = {
 }
 
 # --- HELPER FUNCTIONS ---
-
 def determine_lifecycle(status_text):
-    """Sorts bills into 4 buckets: Passed, Awaiting Sig, Active, Failed."""
     status = str(status_text).lower()
-    
-    # 1. PASSED & ENACTED
     if any(x in status for x in ["signed by governor", "enacted", "approved by governor", "chapter"]):
         return "✅ Passed & Signed"
-    
-    # 2. DEAD / FAILED
-    dead_keywords = ["tabled", "failed", "stricken", "passed by indefinitely", "left in", "defeated", "no action taken", "incorporated into"]
-    if any(word in status for word in dead_keywords):
+    if any(x in status for x in ["tabled", "failed", "stricken", "passed by indefinitely", "left in", "defeated", "no action taken", "incorporated into"]):
         return "❌ Dead / Tabled"
-
-    # 3. AWAITING SIGNATURE
     if any(x in status for x in ["enrolled", "communicated to governor", "bill text as passed"]):
         return "✍️ Awaiting Signature"
-        
-    # 4. ACTIVE (Default)
     return "🚀 Active"
 
 def get_smart_subject(title, api_subjects):
-    """Determines subject based on Keywords -> API Tag -> Fallback."""
     title_lower = str(title).lower()
-    
     for category, keywords in TOPIC_KEYWORDS.items():
         if any(k in title_lower for k in keywords):
             return category
-            
     if api_subjects and len(api_subjects) > 0:
         return api_subjects[0]
-        
     return "General / Unsorted"
 
 def get_bill_data_batch(bill_numbers):
@@ -68,22 +55,17 @@ def get_bill_data_batch(bill_numbers):
 
     for i, bill_num in enumerate(clean_bills):
         if not bill_num: continue
-        
-        time.sleep(1.0) # Rate limit pause
+        time.sleep(1.0) 
         progress_bar.progress((i + 1) / total, text=f"Checking {bill_num}...")
 
         url = "https://v3.openstates.org/bills"
         params = {
-            "jurisdiction": "Virginia",
-            "session": "2026",
-            "identifier": bill_num,
-            "include": ["actions", "sponsorships", "abstracts"], 
-            "apikey": API_KEY
+            "jurisdiction": "Virginia", "session": "2026", "identifier": bill_num,
+            "include": ["actions", "sponsorships", "abstracts"], "apikey": API_KEY
         }
         
         try:
             response = requests.get(url, params=params)
-            
             if response.status_code != 200:
                 results.append({"Bill Number": bill_num, "Status": "Error/Not Found", "Lifecycle": "Unknown"})
                 continue
@@ -106,65 +88,124 @@ def get_bill_data_batch(bill_numbers):
                 })
             else:
                 results.append({"Bill Number": bill_num, "Official Title": "Not Found", "Auto_Folder": "Unassigned", "Lifecycle": "Unknown"})
-                
         except Exception as e:
             results.append({"Bill Number": bill_num, "Status": f"Error: {e}", "Auto_Folder": "Error", "Lifecycle": "Unknown"})
             
     progress_bar.empty()
     return pd.DataFrame(results)
 
-# --- SLACK NOTIFICATION FUNCTION ---
-def send_slack_dm(user_email, subject, body):
+# --- THE "LOOKBACK" LOGIC ---
+def check_and_broadcast(df_bills, df_subscribers):
     token = st.secrets.get("SLACK_BOT_TOKEN")
     if not token:
-        st.error("Missing SLACK_BOT_TOKEN in secrets.toml")
+        st.error("Missing SLACK_BOT_TOKEN.")
         return
 
     client = WebClient(token=token)
-
+    
     try:
-        # 1. Lookup User by Email
-        lookup = client.users_lookupByEmail(email=user_email)
+        subscriber_list = df_subscribers['Email'].dropna().unique().tolist()
+    except KeyError:
+        st.sidebar.warning("No 'Email' column in Subscribers tab.")
+        return
+
+    if not subscriber_list:
+        return
+
+    # 1. FETCH HISTORICAL CONTEXT
+    # We grab the last 20 messages from the first user's DM to use as our "Database".
+    combined_history_text = ""
+    first_email = subscriber_list[0].strip()
+    
+    try:
+        lookup = client.users_lookupByEmail(email=first_email)
         user_id = lookup['user']['id']
+        dm_channel = client.conversations_open(users=[user_id])
+        channel_id = dm_channel['channel']['id']
         
-        # 2. Format Message
-        formatted_text = f"*{subject}*\n\n{body}"
-
-        # 3. Send DM
-        client.chat_postMessage(channel=user_id, text=formatted_text)
-        st.sidebar.success(f"✅ Sent to {user_email}!")
+        # LIMIT=20 ensures we check today, yesterday, and previous messages.
+        history = client.conversations_history(channel=channel_id, limit=20)
         
+        if history['messages']:
+            # Combine all previous messages into one big searchable string
+            for msg in history['messages']:
+                combined_history_text += msg.get('text', '') + "\n"
+            
     except SlackApiError as e:
-        if e.response['error'] == 'users_not_found':
-            st.sidebar.error(f"❌ No Slack user found for: {user_email}")
-        else:
-            st.sidebar.error(f"Slack Error: {e.response['error']}")
+        print(f"History Check Failed: {e}")
 
-# --- DISPLAY COMPONENT ---
-def render_bill_card(row):
-    """Renders a single bill's details."""
-    display_title = row['My Title'] if row['My Title'] != "-" else row.get('Official Title', 'Loading...')
-    status = row.get('Status', 'Unknown')
+    # 2. COMPARE CURRENT STATUS TO HISTORY
+    report = f"🏛️ *VA LEGISLATIVE UPDATE* - {datetime.now().strftime('%m/%d')}\n"
+    report += "_Latest changes detected:_\n"
     
-    st.markdown(f"**{row['Bill Number']}:** {display_title}")
-    st.caption(f"Status: {status} | Last Action: {row.get('Date', '-')}")
+    updates_found = False
     
-    history_data = row.get('History')
-    if isinstance(history_data, list) and history_data:
-        hist_df = pd.DataFrame(history_data)
-        if 'date' in hist_df.columns and 'description' in hist_df.columns:
-            st.dataframe(hist_df[['date', 'description']], hide_index=True, use_container_width=True)
-    
-    st.divider()
+    for i, row in df_bills.iterrows():
+        b_num = row['Bill Number']
+        current_status = row.get('Status', 'Unknown')
+        bill_date_str = str(row.get('Date', ''))
+        
+        # A. DATE FILTER (Safety Net)
+        # Even if it's not in history, if it's older than 3 days, it's probably irrelevant.
+        try:
+            bill_date_obj = datetime.strptime(bill_date_str, "%Y-%m-%d").date()
+            if (datetime.now().date() - bill_date_obj).days > 3:
+                continue 
+        except:
+            continue
+
+        # B. THE "STATUS CHANGE" CHECK
+        # We assume the bot formats messages as: "*HB123*: Status Text"
+        # We look for that EXACT phrase in the history.
+        
+        # This check is strict. 
+        # If "HB123: Passed" is in history, and current status is "Passed" -> SKIP.
+        # If "HB123: Active" is in history, and current status is "Passed" -> SEND (Because "HB123: Passed" is NOT in history).
+        
+        expected_alert_string = f"*{b_num}*: {current_status}"
+        
+        if expected_alert_string in combined_history_text:
+            # We have already sent this EXACT status update recently.
+            continue
+            
+        # If we passed both checks, this is a VALID NEW UPDATE.
+        updates_found = True
+        emoji = "⚪"
+        if "Passed" in row['Lifecycle']: emoji = "✅"
+        elif "Dead" in row['Lifecycle']: emoji = "❌"
+        elif "Active" in row['Lifecycle']: emoji = "🚀"
+        elif "Awaiting" in row['Lifecycle']: emoji = "✍️"
+        
+        report += f"\n{emoji} {expected_alert_string}"
+
+    # 3. BROADCAST
+    if updates_found:
+        st.toast(f"📢 Status changes found! Broadcasting to {len(subscriber_list)} people...")
+        
+        for email in subscriber_list:
+            try:
+                lookup = client.users_lookupByEmail(email=email.strip())
+                user_id = lookup['user']['id']
+                client.chat_postMessage(channel=user_id, text=report)
+            except SlackApiError as e:
+                print(f"Failed to send to {email}: {e}")
+        st.toast("✅ Update Broadcast Complete!")
+    else:
+        print("Checked for updates: No status changes found.")
 
 # --- MAIN APP ---
 st.title("🏛️ Virginia General Assembly Tracker")
 
-# 1. LOAD DATA
 try:
-    raw_df = pd.read_csv(SHEET_URL)
+    raw_df = pd.read_csv(BILLS_URL)
     raw_df.columns = raw_df.columns.str.strip()
     
+    try:
+        subs_df = pd.read_csv(SUBS_URL)
+        subs_df.columns = subs_df.columns.str.strip()
+    except:
+        subs_df = pd.DataFrame(columns=["Email"]) 
+
     if 'Bills Watching' in raw_df.columns:
         df_w = raw_df[['Bills Watching', 'Title (Watching)']].copy()
         df_w.columns = ['Bill Number', 'My Title']
@@ -187,32 +228,40 @@ except Exception as e:
     st.error(f"Sheet Error: {e}")
     st.stop()
 
-# 2. REFRESH BUTTON
-if st.button("🔄 Refresh Data"):
+if st.button("🔄 Check for Updates"):
     st.rerun()
 
-# 3. FETCH & DISPLAY
 bills_to_track = sheet_df['Bill Number'].unique().tolist()
 
 if bills_to_track:
-    if 'bill_data' not in st.session_state or st.button("Force Server Update"):
-        st.session_state['bill_data'] = get_bill_data_batch(bills_to_track)
-    
-    api_df = st.session_state['bill_data']
+    api_df = get_bill_data_batch(bills_to_track)
     final_df = pd.merge(sheet_df, api_df, on="Bill Number", how="left")
     
-    # --- HELPER FOR CATEGORIZED VIEW ---
+    # RUN CHECK
+    check_and_broadcast(final_df, subs_df)
+    
+    # DISPLAY
     def draw_categorized_section(bills, title, color_code):
         if bills.empty: return
         st.markdown(f"### {color_code} {title} ({len(bills)})")
-        
         subjects = sorted([s for s in bills['Auto_Folder'].unique() if str(s) != 'nan'])
-        
         for subj in subjects:
             subset = bills[bills['Auto_Folder'] == subj]
             with st.expander(f"📁 {subj} ({len(subset)})", expanded=False):
                 for i, row in subset.iterrows():
                     render_bill_card(row)
+
+    def render_bill_card(row):
+        display_title = row['My Title'] if row['My Title'] != "-" else row.get('Official Title', 'Loading...')
+        st.markdown(f"**{row['Bill Number']}:** {display_title}")
+        st.caption(f"Status: {row.get('Status')} | Last Action: {row.get('Date', '-')}")
+        
+        history_data = row.get('History')
+        if isinstance(history_data, list) and history_data:
+            hist_df = pd.DataFrame(history_data)
+            if 'date' in hist_df.columns and 'description' in hist_df.columns:
+                st.dataframe(hist_df[['date', 'description']], hide_index=True, use_container_width=True)
+        st.divider()
 
     st.subheader("🗂️ Categorized View")
     tab_involved, tab_watching = st.tabs(["🚀 Directly Involved", "👀 Watching"])
@@ -220,13 +269,11 @@ if bills_to_track:
     for tab, b_type in [(tab_involved, "Involved"), (tab_watching, "Watching")]:
         with tab:
             subset = final_df[final_df['Type'] == b_type]
-            
             awaiting = subset[subset['Lifecycle'] == "✍️ Awaiting Signature"]
             passed = subset[subset['Lifecycle'] == "✅ Passed & Signed"]
             active = subset[subset['Lifecycle'] == "🚀 Active"]
             dead = subset[subset['Lifecycle'] == "❌ Dead / Tabled"]
             
-            # 1. CATEGORIZED FOLDERS
             draw_categorized_section(awaiting, "Awaiting Signature", "✍️")
             if not awaiting.empty: st.markdown("---")
             draw_categorized_section(active, "Active Bills", "🚀")
@@ -235,7 +282,6 @@ if bills_to_track:
             if not passed.empty: st.markdown("---")
             draw_categorized_section(dead, "Dead / Failed", "❌")
 
-            # 2. MASTER LIST (Specific to this Tab)
             st.markdown("---")
             st.subheader(f"📜 Master List ({b_type})")
             
@@ -256,34 +302,8 @@ if bills_to_track:
                 for i, row in tab_flat_failed.iterrows():
                     with st.expander(f"{row['Bill Number']} - {row.get('Status')}"):
                         render_bill_card(row)
-
-    # --- NEW SLACK SIDEBAR ---
-    st.sidebar.header("📢 Slack Alerts")
-    st.sidebar.info("Send this report to yourself via Slack.")
     
-    slack_email = st.sidebar.text_input("Enter your Work Email:")
-    
-    if st.sidebar.button("Send Slack Update"):
-        if not slack_email:
-            st.sidebar.warning("Please enter an email.")
-        else:
-            # Build Report
-            report = f"🏛️ *VA LEGISLATIVE UPDATE* - {datetime.now().strftime('%m/%d')}\n"
-            for b_type in ["Involved", "Watching"]:
-                report += f"\n*=== {b_type.upper()} ===*\n"
-                rows = final_df[final_df['Type'] == b_type]
-                if rows.empty: report += "_No bills._\n"
-                
-                for i, r in rows.iterrows():
-                    emoji = "⚪"
-                    if "Passed" in r['Lifecycle']: emoji = "✅"
-                    elif "Dead" in r['Lifecycle']: emoji = "❌"
-                    elif "Active" in r['Lifecycle']: emoji = "🚀"
-                    elif "Awaiting" in r['Lifecycle']: emoji = "✍️"
-                    
-                    report += f"{emoji} *{r['Bill Number']}*: {r.get('Status', 'Unknown')}\n"
-
-            send_slack_dm(slack_email, "Daily Bill Tracker Update", report)
+    st.sidebar.success("✅ System Online")
 
 else:
     st.info("Add bills to your Google Sheet.")
