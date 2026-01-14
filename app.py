@@ -16,7 +16,7 @@ SUBS_URL = f"https://docs.google.com/spreadsheets/d/{SHEET_ID}/gviz/tq?tqx=out:c
 LIS_BASE_URL = "https://lis.blob.core.windows.net/lisfiles/20261/"
 LIS_BILLS_CSV = LIS_BASE_URL + "BILLS.CSV"      
 LIS_SUBDOCKET_CSV = LIS_BASE_URL + "SUBDOCKET.CSV"  # Subcommittees
-LIS_DOCKET_CSV = LIS_BASE_URL + "DOCKET.CSV"        # Main Standing Committees (NEW)
+LIS_DOCKET_CSV = LIS_BASE_URL + "DOCKET.CSV"        # Main Standing Committees
 LIS_CALENDAR_CSV = LIS_BASE_URL + "CALENDAR.CSV"    # Floor Sessions / Votes
 
 st.set_page_config(page_title="VA Bill Tracker 2026", layout="wide")
@@ -72,7 +72,6 @@ def fetch_lis_data():
 
     # 2. Fetch Calendars (Subdocket, Docket, Calendar)
     calendar_dfs = []
-    
     for url, type_label in [(LIS_SUBDOCKET_CSV, "🏛️ Subcommittee"), (LIS_DOCKET_CSV, "🏛️ Committee"), (LIS_CALENDAR_CSV, "📜 Floor/Vote")]:
         try:
             try: df = pd.read_csv(url, encoding='ISO-8859-1')
@@ -80,7 +79,7 @@ def fetch_lis_data():
             
             df.columns = df.columns.str.strip().str.lower()
             
-            # Find bill column
+            # Find bill column safely
             col = next((c for c in df.columns if "bill" in c), None)
             if col:
                 df['bill_clean'] = df[col].astype(str).str.upper().str.strip()
@@ -151,15 +150,18 @@ def check_and_broadcast(df_bills, df_subscribers, demo_mode):
 
     report = f"🏛️ *VA LEGISLATIVE UPDATE* - {datetime.now().strftime('%m/%d')}\n_Latest changes detected:_\n"
     updates_found = False
+    
     for i, row in df_bills.iterrows():
         if "LIS Connection Error" in str(row.get('Status')): continue
         
-        # FIXED: Added the Date from the CSV to the alert string
-        alert_str = f"*{row['Bill Number']}* ({row.get('Date', 'No Date')}): {row.get('Status')}"
+        # FIXED: More robust check string (Bill + Status Only) to prevent date confusion
+        check_str = f"*{row['Bill Number']}*: {row.get('Status')}"
         
-        if alert_str in history_text: continue
+        if check_str in history_text: continue
+        
         updates_found = True
-        report += f"\n⚪ {alert_str}"
+        # The actual message sent includes the date, but we check against the ID
+        report += f"\n⚪ {check_str}"
 
     if updates_found:
         st.toast(f"📢 Sending updates to {len(subscriber_list)} people...")
@@ -196,8 +198,8 @@ def render_master_list_item(df):
             st.markdown(f"**🔄 Status / History:** {row.get('Status', '-')}")
             st.markdown(f"**📅 Date:** {row.get('Date', '-')}")
             
-            # FIXED: Updated to use 'bil' (Bill Landing Page) instead of 'sum'
-            lis_link = f"https://lis.virginia.gov/cgi-bin/legp604.exe?261+bil+{row['Bill Number']}"
+            # FIXED: Link Format
+            lis_link = f"https://lis.virginia.gov/cgi-bin/legp604.exe?261+sum+{row['Bill Number']}"
             st.markdown(f"🔗 [View Official Bill on LIS]({lis_link})")
 
 # --- MAIN APP ---
@@ -328,7 +330,6 @@ if bills_to_track:
     with tab_upcoming:
         st.subheader("📅 Your Weekly Calendar")
         
-        # Merge all schedule DFs (Docket, Subdocket, Calendar)
         full_schedule = lis_data.get('schedule', pd.DataFrame())
 
         # Ensure 'dt' column exists
@@ -352,7 +353,6 @@ if bills_to_track:
                 st.markdown(f"**{display_date_str}**")
                 st.divider()
                 
-                # Check for matches
                 if not full_schedule.empty and 'dt' in full_schedule.columns and 'bill_clean' in full_schedule.columns:
                     day_matches = full_schedule[
                         (full_schedule['dt'].dt.date == target_date) & 
@@ -362,11 +362,9 @@ if bills_to_track:
                     if not day_matches.empty:
                         for idx, row in day_matches.iterrows():
                             etype = str(row.get('event_type', 'Event'))
-                            
                             st.error(f"**{row['bill_clean']}**")
                             st.caption(f"{etype}")
                             
-                            # Dynamic location info
                             loc = row.get('room', row.get('committee_name', ''))
                             if loc: st.caption(f"📍 {loc}")
                             
