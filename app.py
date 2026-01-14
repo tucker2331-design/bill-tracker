@@ -12,11 +12,11 @@ SHEET_ID = "18m752GcvGIPPpqUn_gB0DfA3e4z2UGD0ki0dUZh2Qek"
 BILLS_URL = f"https://docs.google.com/spreadsheets/d/{SHEET_ID}/gviz/tq?tqx=out:csv&sheet=Bills"
 SUBS_URL = f"https://docs.google.com/spreadsheets/d/{SHEET_ID}/gviz/tq?tqx=out:csv&sheet=Subscribers"
 
-# --- VIRGINIA LIS DATA FEEDS (The "Public Website" Data) ---
-# 20261 = 2026 Regular Session
+# --- VIRGINIA LIS DATA FEEDS ---
+# FIXED: Using UPPERCASE filenames (Required by LIS Server)
 LIS_BASE_URL = "https://lis.blob.core.windows.net/lisfiles/20261/"
-LIS_BILLS_CSV = LIS_BASE_URL + "BILLS.csv"      # Status & Titles
-LIS_DOCKET_CSV = LIS_BASE_URL + "SUBDOCKET.csv" # Upcoming Hearings
+LIS_BILLS_CSV = LIS_BASE_URL + "BILLS.CSV"      
+LIS_DOCKET_CSV = LIS_BASE_URL + "SUBDOCKET.CSV" 
 
 st.set_page_config(page_title="VA Bill Tracker 2026", layout="wide")
 
@@ -61,25 +61,34 @@ def fetch_lis_data():
     
     # 1. Fetch Bills
     try:
-        df_bills = pd.read_csv(LIS_BILLS_CSV, encoding='ISO-8859-1')
-        # LIS Columns: Bill_id, Bill_description, Patron_name, Last_house_action, Last_house_action_date, etc.
+        # Try Official Uppercase URL First
+        try:
+            df_bills = pd.read_csv(LIS_BILLS_CSV, encoding='ISO-8859-1')
+        except:
+            # Fallback: Try lowercase if uppercase fails
+            df_bills = pd.read_csv(LIS_BILLS_CSV.replace(".CSV", ".csv"), encoding='ISO-8859-1')
+
         # Normalize column names
         df_bills.columns = df_bills.columns.str.strip().str.lower()
-        # Create a unified 'status' column
-        # LIS separates House/Senate actions. We'll grab the most recent one we can find.
-        # Usually 'last_house_action' or 'last_senate_action'.
-        # For simplicity, we'll combine them or prioritize one.
         
-        # We need a clean bill number key
-        df_bills['bill_clean'] = df_bills['bill_id'].astype(str).str.upper().str.strip()
-        data['bills'] = df_bills
+        # Create clean key
+        if 'bill_id' in df_bills.columns:
+            df_bills['bill_clean'] = df_bills['bill_id'].astype(str).str.upper().str.strip()
+            data['bills'] = df_bills
+        else:
+            data['bills'] = pd.DataFrame() # Empty if schema wrong
+            
     except Exception as e:
         print(f"LIS Bill Fetch Error: {e}")
         data['bills'] = pd.DataFrame()
 
     # 2. Fetch Docket
     try:
-        df_docket = pd.read_csv(LIS_DOCKET_CSV, encoding='ISO-8859-1')
+        try:
+            df_docket = pd.read_csv(LIS_DOCKET_CSV, encoding='ISO-8859-1')
+        except:
+            df_docket = pd.read_csv(LIS_DOCKET_CSV.replace(".CSV", ".csv"), encoding='ISO-8859-1')
+            
         df_docket.columns = df_docket.columns.str.strip().str.lower()
         if 'bill_id' in df_docket.columns:
             df_docket['bill_clean'] = df_docket['bill_id'].astype(str).str.upper().str.strip()
@@ -101,7 +110,6 @@ def get_bill_data_batch(bill_numbers, lis_df):
         return pd.DataFrame(results)
 
     # Convert LIS df to dictionary for O(1) lookup
-    # We index by 'bill_clean'
     lis_lookup = lis_df.set_index('bill_clean').to_dict('index')
 
     for bill_num in clean_bills:
@@ -109,15 +117,10 @@ def get_bill_data_batch(bill_numbers, lis_df):
         
         if item:
             # Found in LIS!
-            # Determine Status: LIS has 'last_house_action' and 'last_senate_action'.
-            # We pick the one with the later date, or just combine them.
             status = item.get('last_house_action', '')
-            if pd.isna(status) or status == '':
+            # Fallback to Senate Action if House is empty (for Senate bills)
+            if pd.isna(status) or str(status).strip() == '':
                  status = item.get('last_senate_action', 'Introduced')
-            
-            # If both exist, we might want the most recent.
-            # For now, let's trust 'last_house_action' if the bill started in House, etc.
-            # Better: Just use the non-empty one.
             
             title = item.get('bill_description', 'No Title')
             
@@ -125,7 +128,7 @@ def get_bill_data_batch(bill_numbers, lis_df):
                 "Bill Number": bill_num,
                 "Official Title": title,
                 "Status": str(status),
-                "Date": str(item.get('last_house_action_date', '')), # Simple date string
+                "Date": str(item.get('last_house_action_date', '')), 
                 "Lifecycle": determine_lifecycle(str(status)),
                 "Auto_Folder": get_smart_subject(title)
             })
@@ -262,7 +265,6 @@ bills_to_track = sheet_df['Bill Number'].unique().tolist()
 if bills_to_track:
     # Match User Bills to LIS Data
     if demo_mode:
-        # Mock Data Generator
         import random
         mock_results = []
         for b in bills_to_track:
