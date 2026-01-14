@@ -378,7 +378,7 @@ if bills_to_track:
                 st.markdown("#### ❌ Failed")
                 render_master_list_item(dead)
 
-    # --- TAB 3: UPCOMING (The "Merge Strategy" Implementation) ---
+    # --- TAB 3: UPCOMING (INVERTED LOOP & TEXT SCRAPER) ---
     with tab_upcoming:
         st.subheader("📅 Your Weekly Calendar")
         full_schedule = lis_data.get('schedule', pd.DataFrame())
@@ -407,53 +407,71 @@ if bills_to_track:
                 st.markdown(f"**{display_date_str}**")
                 st.divider()
                 
-                if not full_schedule.empty and 'dt' in full_schedule.columns and 'bill_clean' in full_schedule.columns:
-                    day_matches = full_schedule[
-                        (full_schedule['dt'].dt.date == target_date) & 
-                        (full_schedule['bill_clean'].isin(my_bills))
-                    ]
-                    if not day_matches.empty:
-                        for idx, row in day_matches.iterrows():
-                            # Bill Number
-                            st.error(f"**{row['bill_clean']}**")
+                # Filter schedule for this specific date
+                if not full_schedule.empty and 'dt' in full_schedule.columns:
+                    todays_schedule = full_schedule[full_schedule['dt'].dt.date == target_date]
+                    
+                    if not todays_schedule.empty:
+                        # --- KEY CHANGE: Iterate through MY BILLS, not the schedule ---
+                        # This ensures even if the bill isn't explicitly listed, we find the committee meeting
+                        
+                        bills_found_today = False
+                        
+                        for bill in my_bills:
+                            # 1. Get Bill's "Brain" Data
+                            master_comm = bill_to_comm_map.get(bill, '').lower()
+                            master_status = bill_to_status_map.get(bill, '')
+                            master_sub = bill_to_sub_map.get(bill, '')
+
+                            # 2. Search Logic
+                            # Match A: Bill is explicitly in the schedule row
+                            match_explicit = todays_schedule[todays_schedule['bill_clean'] == bill]
                             
-                            # --- 1. ABSTRACT TITLE (FROM MASTER LIST) ---
-                            # We check the Master Map first. If it's a sub meeting, we check the sub map.
-                            master_comm = bill_to_comm_map.get(row['bill_clean'])
-                            master_sub = bill_to_sub_map.get(row['bill_clean'])
-                            
-                            header = "Committee"
+                            # Match B: Committee Name matches (Implicit Match)
+                            # We check if 'master_comm' (e.g. "Privileges and Elections") appears in the schedule row string
+                            match_implicit = pd.DataFrame()
                             if master_comm and master_comm != '-':
-                                header = master_comm
-                            elif row.get('cal_type'):
-                                header = row.get('cal_type') # e.g., "Floor Session"
+                                # We scan all columns for the committee name
+                                match_implicit = todays_schedule[
+                                    todays_schedule.apply(lambda r: master_comm in str(r.values).lower(), axis=1)
+                                ]
+                            
+                            # Combine matches
+                            final_matches = pd.concat([match_explicit, match_implicit]).drop_duplicates()
+                            
+                            if not final_matches.empty:
+                                bills_found_today = True
+                                # Pick the first relevant meeting found
+                                row = final_matches.iloc[0]
                                 
-                            st.write(f"🏛️ **{header}**")
-                            
-                            if master_sub and master_sub != '-':
-                                st.caption(f"↳ {master_sub}")
+                                st.error(f"**{bill}**")
+                                
+                                # Header (Prefer Master List Committee)
+                                header = master_comm.title() if master_comm and master_comm != '-' else "Committee"
+                                st.write(f"🏛️ **{header}**")
+                                
+                                if master_sub and master_sub != '-':
+                                    st.caption(f"↳ {master_sub}")
 
-                            # --- 2. SHOW LATEST ACTION (FROM MASTER LIST) ---
-                            # This answers "Why is it on the calendar?"
-                            latest_status = bill_to_status_map.get(row['bill_clean'])
-                            if latest_status:
-                                st.caption(f"ℹ️ {latest_status}")
+                                if master_status:
+                                    st.caption(f"ℹ️ {master_status}")
 
-                            # --- 3. FIND TIME (FROM CALENDAR FILE - BRUTE FORCE) ---
-                            # Join all data in the row into one string to find the time
-                            row_text = " ".join([str(val) for val in row.values])
-                            
-                            # Regex for 8:00 AM, 8:00AM, 8:00 am, 10:00 a.m.
-                            t_match = re.search(r'(\d{1,2}:\d{2}\s?(?:[ap]\.?m\.?|noon))', row_text, re.IGNORECASE)
-                            
-                            if t_match:
-                                st.caption(f"⏰ {t_match.group(1)}")
-                            elif "adjourn" in row_text.lower():
-                                st.caption("⏰ 1/2 hr after adjournment")
-                            else:
-                                st.caption("⏰ TBD")
-                            
-                            st.divider()
+                                # --- 3. TIME SCRAPER (KEYWORD UPGRADE) ---
+                                row_text = " ".join([str(val) for val in row.values])
+                                
+                                # Look for digits (8:00) OR keywords (Upon, After, Recess)
+                                time_keywords = r'(?:upon|after|before)\s+(?:adjourn|recess|conven)|(?:\d+\s+minutes?\s+after)|(\d{1,2}:\d{2}\s?(?:[ap]\.?m\.?|noon))'
+                                t_match = re.search(time_keywords, row_text, re.IGNORECASE)
+                                
+                                if t_match:
+                                    st.caption(f"⏰ {t_match.group(0)}") # Grab the whole match (e.g. "Upon Recess")
+                                else:
+                                    st.caption("⏰ TBD")
+                                
+                                st.divider()
+
+                        if not bills_found_today:
+                            st.caption("-")
                     else:
                         st.caption("-")
                 else:
