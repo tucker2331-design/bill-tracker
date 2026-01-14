@@ -65,7 +65,10 @@ def fetch_lis_data():
     try:
         try: df = pd.read_csv(LIS_BILLS_CSV, encoding='ISO-8859-1')
         except: df = pd.read_csv(LIS_BILLS_CSV.replace(".CSV", ".csv"), encoding='ISO-8859-1')
-        df.columns = df.columns.str.strip().str.lower()
+        
+        # FIX: Replace spaces with underscores to normalize column names
+        df.columns = df.columns.str.strip().str.lower().str.replace(' ', '_').str.replace('/', '_')
+        
         if 'bill_id' in df.columns:
             # FIX: Remove spaces for perfect matching (SB 4 -> SB4)
             df['bill_clean'] = df['bill_id'].astype(str).str.upper().str.replace(" ", "").str.strip()
@@ -80,7 +83,10 @@ def fetch_lis_data():
         try:
             try: df = pd.read_csv(url, encoding='ISO-8859-1')
             except: df = pd.read_csv(url.replace(".CSV", ".csv"), encoding='ISO-8859-1')
-            df.columns = df.columns.str.strip().str.lower()
+            
+            # FIX: Replace spaces with underscores here too
+            df.columns = df.columns.str.strip().str.lower().str.replace(' ', '_').str.replace('/', '_')
+            
             col = next((c for c in df.columns if "bill" in c), None)
             if col:
                 # FIX: Remove spaces for perfect matching
@@ -129,6 +135,7 @@ def get_bill_data_batch(bill_numbers, lis_df):
                  history_data.append({"Date": item.get('last_senate_action_date'), "Action": f"[Senate] {s_act}"})
 
             # Robust Committee & Subcommittee Extraction
+            # Now that we normalized columns, 'last_house_committee' should work even if CSV was 'Last House Committee'
             curr_comm = item.get('last_house_committee')
             if pd.isna(curr_comm) or str(curr_comm).strip().lower() in ['nan', 'none', '']:
                 curr_comm = item.get('last_senate_committee')
@@ -429,9 +436,13 @@ if bills_to_track:
                             
                             # --- IMPROVED SCRAPER LOGIC START ---
                             # 1. Grab raw data regardless of column name
+                            # Now that we normalized with underscores, we can check standard names
                             raw_comm_val = row.get('committee', row.get('committee_name', ''))
-                            raw_desc_val = row.get('description', row.get('desc', ''))
+                            if not raw_comm_val: raw_comm_val = row.get('meeting_type', '') # sometimes here
                             
+                            raw_desc_val = row.get('description', row.get('desc', ''))
+                            if not raw_desc_val: raw_desc_val = row.get('comments', '')
+
                             header = ""
                             sub = ""
 
@@ -458,12 +469,15 @@ if bills_to_track:
                                 st.caption(f"📝 {raw_desc_val}")
 
                             # 4. Time Extraction (Search ALL text fields)
-                            full_text_search = f"{header} {sub} {raw_desc_val} {row.get('time', '')}"
-                            time_match = re.search(r'(\d{1,2}:\d{2}\s?(?:AM|PM|am|pm))', full_text_search)
+                            # We also look for specific time columns like meeting_time or time
+                            t_col = row.get('time', row.get('meeting_time', row.get('start_time', '')))
+                            
+                            full_text_search = f"{header} {sub} {raw_desc_val} {t_col}"
+                            time_match = re.search(r'(\d{1,2}:\d{2}\s?(?:AM|PM|am|pm))', str(full_text_search))
                             
                             if time_match:
                                 st.caption(f"⏰ {time_match.group(1)}")
-                            elif "adjourn" in full_text_search.lower():
+                            elif "adjourn" in str(full_text_search).lower():
                                 st.caption("⏰ 1/2 hr after adjournment")
                             else:
                                 st.caption("⏰ TBD")
@@ -474,3 +488,10 @@ if bills_to_track:
                         st.caption("-")
                 else:
                     st.caption("-")
+
+    # DEBUG SECTION (Bottom of page)
+    # Uncomment this if you still see issues to see what columns the LIS file actually has!
+    # with st.expander("🛠️ Developer Debug - Raw Data Columns"):
+    #     if 'schedule' in lis_data and not lis_data['schedule'].empty:
+    #         st.write("Schedule Columns:", lis_data['schedule'].columns.tolist())
+    #         st.write("First Row:", lis_data['schedule'].iloc[0])
