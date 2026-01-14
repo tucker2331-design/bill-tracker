@@ -17,15 +17,19 @@ API_KEY = st.secrets.get("OPENSTATES_API_KEY")
 
 st.set_page_config(page_title="VA Bill Tracker 2026", layout="wide")
 
-# --- SMART CATEGORIZATION ---
+# --- EXPANDED SMART CATEGORIZATION ---
 TOPIC_KEYWORDS = {
-    "Economy & Labor": ["wage", "salary", "worker", "employment", "labor", "business", "tax", "commerce", "job", "pay"],
-    "Education": ["school", "education", "student", "university", "college", "teacher", "curriculum", "scholarship"],
-    "Public Safety & Law": ["firearm", "gun", "police", "crime", "penalty", "court", "judge", "enforcement", "prison", "arrest"],
-    "Health": ["health", "medical", "hospital", "patient", "doctor", "insurance", "care", "mental"],
-    "Environment": ["energy", "water", "pollution", "environment", "climate", "solar", "conservation", "waste"],
-    "Housing": ["rent", "landlord", "tenant", "housing", "lease", "property", "zoning", "eviction"],
-    "Transportation": ["road", "highway", "vehicle", "driver", "license", "transit", "traffic"]
+    "🗳️ Elections & Democracy": ["election", "vote", "ballot", "campaign", "poll", "voter", "registrar", "districting", "suffrage"],
+    "🏗️ Housing & Property": ["rent", "landlord", "tenant", "housing", "lease", "property", "zoning", "eviction", "homeowner", "development", "residential"],
+    "✊ Labor & Workers Rights": ["wage", "salary", "worker", "employment", "labor", "union", "bargaining", "leave", "compensation", "workplace", "employee"],
+    "💰 Economy & Business": ["tax", "commerce", "business", "market", "consumer", "corporation", "finance", "budget", "economic", "trade"],
+    "🎓 Education": ["school", "education", "student", "university", "college", "teacher", "curriculum", "scholarship", "tuition", "board of education"],
+    "🚓 Public Safety & Law": ["firearm", "gun", "police", "crime", "penalty", "court", "judge", "enforcement", "prison", "arrest", "criminal", "justice"],
+    "🏥 Health & Healthcare": ["health", "medical", "hospital", "patient", "doctor", "insurance", "care", "mental", "pharmacy", "drug", "medicaid"],
+    "🌳 Environment & Energy": ["energy", "water", "pollution", "environment", "climate", "solar", "conservation", "waste", "carbon", "natural resources"],
+    "🚗 Transportation": ["road", "highway", "vehicle", "driver", "license", "transit", "traffic", "transportation", "motor"],
+    "💻 Tech & Utilities": ["internet", "broadband", "data", "privacy", "utility", "cyber", "technology", "telecom", "artificial intelligence"],
+    "⚖️ Civil Rights": ["discrimination", "rights", "equity", "minority", "gender", "religious", "freedom", "speech"],
 }
 
 # --- HELPER FUNCTIONS ---
@@ -37,7 +41,6 @@ def determine_lifecycle(status_text):
         return "❌ Dead / Tabled"
     if any(x in status for x in ["enrolled", "communicated to governor", "bill text as passed"]):
         return "✍️ Awaiting Signature"
-    # Default everything else (including errors) to Active so it stays visible
     return "🚀 Active"
 
 def get_smart_subject(title, api_subjects):
@@ -47,10 +50,10 @@ def get_smart_subject(title, api_subjects):
             return category
     if api_subjects and len(api_subjects) > 0:
         return api_subjects[0]
-    return "General / Unsorted"
+    return "📂 Unassigned / General"
 
 # --- DATA FETCHING ---
-@st.cache_data(ttl=300) # Cache docket for 5 min
+@st.cache_data(ttl=300) 
 def get_upcoming_hearings():
     try:
         df = pd.read_csv(DOCKET_URL, encoding='ISO-8859-1')
@@ -65,7 +68,6 @@ def get_bill_data_batch(bill_numbers):
     
     if not clean_bills: return pd.DataFrame()
 
-    # Chunking to prevent massive URL failures
     chunk_size = 20
     chunks = [clean_bills[i:i + chunk_size] for i in range(0, len(clean_bills), chunk_size)]
     
@@ -101,12 +103,11 @@ def get_bill_data_batch(bill_numbers):
                 else:
                     results.append({
                         "Bill Number": bill_num, "Status": "Not Found / Prefiled",
-                        "Lifecycle": "🚀 Active", "Auto_Folder": "Unassigned"
+                        "Lifecycle": "🚀 Active", "Auto_Folder": "📂 Unassigned / General"
                     })
         except:
-            # ON ERROR: Default to Active so it doesn't disappear
             for b in chunk:
-                results.append({"Bill Number": b, "Status": "⚠️ API Error (Wait)", "Lifecycle": "🚀 Active", "Auto_Folder": "System Alert"})
+                results.append({"Bill Number": b, "Status": "⚠️ API Error (Wait)", "Lifecycle": "🚀 Active", "Auto_Folder": "⚠️ System Alert"})
         
         total_processed += len(chunk)
         progress_bar.progress(total_processed / len(clean_bills))
@@ -114,20 +115,32 @@ def get_bill_data_batch(bill_numbers):
     progress_bar.empty()
     return pd.DataFrame(results)
 
-# --- ALERTS ---
+# --- ALERTS & SIDEBAR STATUS ---
 def check_and_broadcast(df_bills, df_subscribers):
+    st.sidebar.header("🤖 Slack Bot Status")
+    
     token = st.secrets.get("SLACK_BOT_TOKEN")
-    if not token: return
+    if not token: 
+        st.sidebar.error("❌ Token Missing")
+        return
+
     client = WebClient(token=token)
     try:
         subscriber_list = df_subscribers['Email'].dropna().unique().tolist()
-        if not subscriber_list: return
+        if not subscriber_list: 
+            st.sidebar.warning("⚠️ No Subscribers")
+            return
         
         # Check history of first user
         user_id = client.users_lookupByEmail(email=subscriber_list[0].strip())['user']['id']
         history = client.conversations_history(channel=client.conversations_open(users=[user_id])['channel']['id'], limit=100)
         history_text = "\n".join([m.get('text', '') for m in history['messages']])
-    except:
+        
+        st.sidebar.success("✅ Connected to Slack")
+        st.sidebar.caption(f"Monitoring for {len(subscriber_list)} users")
+        
+    except Exception as e:
+        st.sidebar.error(f"❌ Connection Error: {e}")
         return
 
     report = f"🏛️ *VA LEGISLATIVE UPDATE* - {datetime.now().strftime('%m/%d')}\n_Latest changes detected:_\n"
@@ -148,6 +161,9 @@ def check_and_broadcast(df_bills, df_subscribers):
                 client.chat_postMessage(channel=uid, text=report)
             except: pass
         st.toast("✅ Sent!")
+        st.sidebar.info("📢 Update Sent!")
+    else:
+        st.sidebar.success("✅ Up to Date (No new changes)")
 
 # --- UI COMPONENTS ---
 def render_bill_card(row):
@@ -157,23 +173,21 @@ def render_bill_card(row):
     st.caption(f"_{row.get('Status')}_")
     st.divider()
 
-def draw_column_content(bills, title, icon):
-    st.markdown(f"##### {icon} {title} ({len(bills)})")
-    if bills.empty:
-        st.caption("No bills.")
-        return
-    
-    # Group by Smart Folder
-    folders = sorted([s for s in bills['Auto_Folder'].unique() if str(s) != 'nan'])
-    for f in folders:
-        subset = bills[bills['Auto_Folder'] == f]
-        with st.expander(f"📁 {f} ({len(subset)})"):
-            for i, r in subset.iterrows(): render_bill_card(r)
-
 # --- MAIN APP ---
 st.title("🏛️ Virginia General Assembly Tracker")
 
-if st.button("🔄 Check for Updates"): st.rerun()
+# Initialize Session State for Timer
+if 'last_run' not in st.session_state:
+    st.session_state['last_run'] = datetime.now().strftime("%I:%M %p")
+
+# Refresh Button & Timer Layout
+col_btn, col_time = st.columns([1, 6])
+with col_btn:
+    if st.button("🔄 Check for Updates"):
+        st.session_state['last_run'] = datetime.now().strftime("%I:%M %p")
+        st.rerun()
+with col_time:
+    st.markdown(f"**Last Refreshed:** `{st.session_state['last_run']}`")
 
 # 1. LOAD DATA
 try:
@@ -182,7 +196,6 @@ try:
     try: subs_df = pd.read_csv(SUBS_URL)
     except: subs_df = pd.DataFrame(columns=["Email"])
     
-    # Normalize Columns
     df_w = pd.DataFrame()
     if 'Bills Watching' in raw_df.columns:
         df_w = raw_df[['Bills Watching', 'Title (Watching)']].copy()
@@ -212,49 +225,42 @@ if bills_to_track:
     api_df = get_bill_data_batch(bills_to_track)
     final_df = pd.merge(sheet_df, api_df, on="Bill Number", how="left")
     
-    # Run Alerts
+    # Run Alerts (Populates Sidebar)
     check_and_broadcast(final_df, subs_df)
 
     # 3. RENDER TABS
     tab_involved, tab_watching, tab_upcoming = st.tabs(["🚀 Directly Involved", "👀 Watching", "📅 Upcoming Hearings"])
 
-    # --- TABS 1 & 2: TRACKER ---
     for tab, b_type in [(tab_involved, "Involved"), (tab_watching, "Watching")]:
         with tab:
             subset = final_df[final_df['Type'] == b_type]
             
-            # Buckets
+            # --- TOP SECTION: BY TOPIC (GRID LAYOUT) ---
+            st.subheader("🗂️ Browse by Topic")
+            
+            unique_folders = sorted(subset['Auto_Folder'].unique())
+            
+            if len(unique_folders) == 0:
+                st.info("No bills found.")
+            else:
+                cols = st.columns(3)
+                for i, folder in enumerate(unique_folders):
+                    with cols[i % 3]:
+                        bills_in_folder = subset[subset['Auto_Folder'] == folder]
+                        with st.expander(f"{folder} ({len(bills_in_folder)})"):
+                            for _, row in bills_in_folder.iterrows():
+                                render_bill_card(row)
+
+            st.markdown("---")
+
+            # --- BOTTOM SECTION: MASTER LIST (STATUS) ---
+            st.subheader(f"📜 Master List ({b_type})")
+            
             active = subset[subset['Lifecycle'] == "🚀 Active"]
             awaiting = subset[subset['Lifecycle'] == "✍️ Awaiting Signature"]
             signed = subset[subset['Lifecycle'] == "✅ Signed & Enacted"]
             dead = subset[subset['Lifecycle'] == "❌ Dead / Tabled"]
             
-            # --- TOP SECTION: CATEGORIZED VIEW ---
-            st.subheader("🗂️ Categorized View")
-            c1, c2, c3 = st.columns(3)
-            
-            with c1: # ACTIVE
-                draw_column_content(active, "Active", "🚀")
-            
-            with c2: # PASSED (Split)
-                st.markdown(f"##### 🎉 Passed ({len(awaiting) + len(signed)})")
-                st.caption("--- Awaiting Signature ---")
-                if not awaiting.empty:
-                    for i, r in awaiting.iterrows(): render_bill_card(r)
-                else: st.caption("No bills.")
-                
-                st.caption("--- Signed & Enacted ---")
-                if not signed.empty:
-                    for i, r in signed.iterrows(): render_bill_card(r)
-                else: st.caption("No bills.")
-
-            with c3: # FAILED
-                draw_column_content(dead, "Failed", "❌")
-
-            st.markdown("---")
-
-            # --- BOTTOM SECTION: MASTER LIST ---
-            st.subheader(f"📜 Master List ({b_type})")
             m1, m2, m3 = st.columns(3)
             
             with m1:
@@ -278,7 +284,6 @@ if bills_to_track:
         if docket_df.empty:
             st.info("No docket data available (Session may not have started).")
         else:
-            # Filter for MY bills
             my_bills = [b.upper() for b in bills_to_track]
             if 'bill_id' in docket_df.columns:
                 docket_df['bill_id_clean'] = docket_df['bill_id'].astype(str).str.upper().str.strip()
