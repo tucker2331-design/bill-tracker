@@ -13,7 +13,6 @@ BILLS_URL = f"https://docs.google.com/spreadsheets/d/{SHEET_ID}/gviz/tq?tqx=out:
 SUBS_URL = f"https://docs.google.com/spreadsheets/d/{SHEET_ID}/gviz/tq?tqx=out:csv&sheet=Subscribers"
 
 # --- VIRGINIA LIS DATA FEEDS ---
-# FIXED: Using UPPERCASE filenames (Required by LIS Server)
 LIS_BASE_URL = "https://lis.blob.core.windows.net/lisfiles/20261/"
 LIS_BILLS_CSV = LIS_BASE_URL + "BILLS.CSV"      
 LIS_DOCKET_CSV = LIS_BASE_URL + "SUBDOCKET.CSV" 
@@ -56,28 +55,21 @@ def get_smart_subject(title):
 # --- DATA FETCHING (DIRECT FROM LIS) ---
 @st.cache_data(ttl=300) 
 def fetch_lis_data():
-    """Downloads the official LIS CSV files for Bills and Dockets."""
     data = {}
     
     # 1. Fetch Bills
     try:
-        # Try Official Uppercase URL First
         try:
             df_bills = pd.read_csv(LIS_BILLS_CSV, encoding='ISO-8859-1')
         except:
-            # Fallback: Try lowercase if uppercase fails
             df_bills = pd.read_csv(LIS_BILLS_CSV.replace(".CSV", ".csv"), encoding='ISO-8859-1')
 
-        # Normalize column names
         df_bills.columns = df_bills.columns.str.strip().str.lower()
-        
-        # Create clean key
         if 'bill_id' in df_bills.columns:
             df_bills['bill_clean'] = df_bills['bill_id'].astype(str).str.upper().str.strip()
             data['bills'] = df_bills
         else:
-            data['bills'] = pd.DataFrame() # Empty if schema wrong
-            
+            data['bills'] = pd.DataFrame() 
     except Exception as e:
         print(f"LIS Bill Fetch Error: {e}")
         data['bills'] = pd.DataFrame()
@@ -99,26 +91,21 @@ def fetch_lis_data():
     return data
 
 def get_bill_data_batch(bill_numbers, lis_df):
-    """Matches user bill numbers against the downloaded LIS database."""
     results = []
     clean_bills = list(set([str(b).strip().upper() for b in bill_numbers if str(b).strip() != 'nan']))
     
     if lis_df.empty:
-        # Fallback if LIS download failed
         for b in clean_bills:
              results.append({"Bill Number": b, "Status": "LIS Connection Error", "Lifecycle": "🚀 Active", "Official Title": "Error"})
         return pd.DataFrame(results)
 
-    # Convert LIS df to dictionary for O(1) lookup
     lis_lookup = lis_df.set_index('bill_clean').to_dict('index')
 
     for bill_num in clean_bills:
         item = lis_lookup.get(bill_num)
         
         if item:
-            # Found in LIS!
             status = item.get('last_house_action', '')
-            # Fallback to Senate Action if House is empty (for Senate bills)
             if pd.isna(status) or str(status).strip() == '':
                  status = item.get('last_senate_action', 'Introduced')
             
@@ -133,7 +120,6 @@ def get_bill_data_batch(bill_numbers, lis_df):
                 "Auto_Folder": get_smart_subject(title)
             })
         else:
-            # Not found in LIS (Likely typo or very new)
             results.append({
                 "Bill Number": bill_num, 
                 "Status": "Not Found on LIS", 
@@ -207,6 +193,25 @@ def render_bill_card(row):
     st.caption(f"_{row.get('Status')}_")
     st.divider()
 
+def render_master_list_item(df):
+    if df.empty:
+        st.caption("No bills.")
+        return
+    
+    for i, row in df.iterrows():
+        # Dropdown Header: Bill Number - My Title (or Official)
+        header_title = row['My Title'] if row['My Title'] != "-" else row.get('Official Title', '')
+        
+        with st.expander(f"{row['Bill Number']} - {header_title}"):
+            st.markdown(f"**📌 Designated Title:** {row.get('My Title', '-')}")
+            st.markdown(f"**📜 Official Title:** {row.get('Official Title', '-')}")
+            st.markdown(f"**🔄 Status / History:** {row.get('Status', '-')}")
+            st.markdown(f"**📅 Date:** {row.get('Date', '-')}")
+            
+            # Direct Link to LIS
+            lis_link = f"https://lis.virginia.gov/cgi-bin/legp604.exe?261+sum+{row['Bill Number']}"
+            st.markdown(f"🔗 [View Official Bill on LIS]({lis_link})")
+
 # --- MAIN APP ---
 st.title("🏛️ Virginia General Assembly Tracker")
 
@@ -272,7 +277,8 @@ if bills_to_track:
             mock_s = "Referred to Committee on Commerce and Labor"
             mock_results.append({
                 "Bill Number": b, "Official Title": f"[DEMO] {mock_t}", "Status": mock_s,
-                "Lifecycle": "🚀 Active", "Auto_Folder": get_smart_subject(mock_t)
+                "Lifecycle": "🚀 Active", "Auto_Folder": get_smart_subject(mock_t),
+                "My Title": "My Demo Title"
             })
         api_df = pd.DataFrame(mock_results)
     else:
@@ -316,6 +322,7 @@ if bills_to_track:
 
             st.markdown("---")
 
+            # --- MASTER LIST (Using New Helper Function) ---
             st.subheader(f"📜 Master List ({b_type})")
             active = subset[subset['Lifecycle'] == "🚀 Active"]
             awaiting = subset[subset['Lifecycle'] == "✍️ Awaiting Signature"]
@@ -325,14 +332,13 @@ if bills_to_track:
             m1, m2, m3 = st.columns(3)
             with m1:
                 st.markdown("#### 🚀 Active")
-                st.dataframe(active[['Bill Number', 'Status']], hide_index=True, use_container_width=True)
+                render_master_list_item(active)
             with m2:
                 st.markdown("#### 🎉 Passed")
-                passed_all = pd.concat([awaiting, signed])
-                st.dataframe(passed_all[['Bill Number', 'Status']], hide_index=True, use_container_width=True)
+                render_master_list_item(pd.concat([awaiting, signed]))
             with m3:
                 st.markdown("#### ❌ Failed")
-                st.dataframe(dead[['Bill Number', 'Status']], hide_index=True, use_container_width=True)
+                render_master_list_item(dead)
 
     # --- TAB 3: UPCOMING ---
     with tab_upcoming:
