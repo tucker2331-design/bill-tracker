@@ -2,7 +2,7 @@ import streamlit as st
 import pandas as pd
 import requests
 import time
-from datetime import datetime
+from datetime import datetime, timedelta # Added timedelta for the 7-day calc
 import pytz # For EST Timezone
 from slack_sdk import WebClient
 from slack_sdk.errors import SlackApiError
@@ -52,65 +52,45 @@ def get_smart_subject(title):
             return category
     return "📂 Unassigned / General"
 
-# --- DATA FETCHING (DIRECT FROM LIS) ---
+# --- DATA FETCHING ---
 @st.cache_data(ttl=300) 
 def fetch_lis_data():
     data = {}
-    
-    # 1. Fetch Bills
     try:
-        try:
-            df_bills = pd.read_csv(LIS_BILLS_CSV, encoding='ISO-8859-1')
-        except:
-            df_bills = pd.read_csv(LIS_BILLS_CSV.replace(".CSV", ".csv"), encoding='ISO-8859-1')
-
+        try: df_bills = pd.read_csv(LIS_BILLS_CSV, encoding='ISO-8859-1')
+        except: df_bills = pd.read_csv(LIS_BILLS_CSV.replace(".CSV", ".csv"), encoding='ISO-8859-1')
         df_bills.columns = df_bills.columns.str.strip().str.lower()
         if 'bill_id' in df_bills.columns:
             df_bills['bill_clean'] = df_bills['bill_id'].astype(str).str.upper().str.strip()
             data['bills'] = df_bills
-        else:
-            data['bills'] = pd.DataFrame() 
-    except Exception as e:
-        print(f"LIS Bill Fetch Error: {e}")
-        data['bills'] = pd.DataFrame()
+        else: data['bills'] = pd.DataFrame() 
+    except: data['bills'] = pd.DataFrame()
 
-    # 2. Fetch Docket
     try:
-        try:
-            df_docket = pd.read_csv(LIS_DOCKET_CSV, encoding='ISO-8859-1')
-        except:
-            df_docket = pd.read_csv(LIS_DOCKET_CSV.replace(".CSV", ".csv"), encoding='ISO-8859-1')
-            
+        try: df_docket = pd.read_csv(LIS_DOCKET_CSV, encoding='ISO-8859-1')
+        except: df_docket = pd.read_csv(LIS_DOCKET_CSV.replace(".CSV", ".csv"), encoding='ISO-8859-1')
         df_docket.columns = df_docket.columns.str.strip().str.lower()
         if 'bill_id' in df_docket.columns:
             df_docket['bill_clean'] = df_docket['bill_id'].astype(str).str.upper().str.strip()
         data['docket'] = df_docket
-    except Exception as e:
-        data['docket'] = pd.DataFrame()
-        
+    except: data['docket'] = pd.DataFrame()
     return data
 
 def get_bill_data_batch(bill_numbers, lis_df):
     results = []
     clean_bills = list(set([str(b).strip().upper() for b in bill_numbers if str(b).strip() != 'nan']))
-    
     if lis_df.empty:
         for b in clean_bills:
              results.append({"Bill Number": b, "Status": "LIS Connection Error", "Lifecycle": "🚀 Active", "Official Title": "Error"})
         return pd.DataFrame(results)
 
     lis_lookup = lis_df.set_index('bill_clean').to_dict('index')
-
     for bill_num in clean_bills:
         item = lis_lookup.get(bill_num)
-        
         if item:
             status = item.get('last_house_action', '')
-            if pd.isna(status) or str(status).strip() == '':
-                 status = item.get('last_senate_action', 'Introduced')
-            
+            if pd.isna(status) or str(status).strip() == '': status = item.get('last_senate_action', 'Introduced')
             title = item.get('bill_description', 'No Title')
-            
             results.append({
                 "Bill Number": bill_num,
                 "Official Title": title,
@@ -121,18 +101,13 @@ def get_bill_data_batch(bill_numbers, lis_df):
             })
         else:
             results.append({
-                "Bill Number": bill_num, 
-                "Status": "Not Found on LIS", 
-                "Lifecycle": "🚀 Active", 
-                "Official Title": "Unknown"
+                "Bill Number": bill_num, "Status": "Not Found on LIS", "Lifecycle": "🚀 Active", "Official Title": "Unknown"
             })
-            
     return pd.DataFrame(results)
 
 # --- ALERTS ---
 def check_and_broadcast(df_bills, df_subscribers, demo_mode):
     st.sidebar.header("🤖 Slack Bot Status")
-    
     if demo_mode:
         st.sidebar.warning("🛠️ Demo Mode Active")
         return
@@ -141,27 +116,22 @@ def check_and_broadcast(df_bills, df_subscribers, demo_mode):
     if not token: 
         st.sidebar.error("❌ Disconnected (Token Missing)")
         return
-
     client = WebClient(token=token)
     try:
         subscriber_list = df_subscribers['Email'].dropna().unique().tolist()
         if not subscriber_list: 
             st.sidebar.warning("⚠️ No Subscribers Found")
             return
-        
         user_id = client.users_lookupByEmail(email=subscriber_list[0].strip())['user']['id']
         history = client.conversations_history(channel=client.conversations_open(users=[user_id])['channel']['id'], limit=100)
         history_text = "\n".join([m.get('text', '') for m in history['messages']])
-        
         st.sidebar.success(f"✅ Connected to Slack")
-        
     except Exception as e:
         st.sidebar.error(f"❌ Slack Error: {e}")
         return
 
     report = f"🏛️ *VA LEGISLATIVE UPDATE* - {datetime.now().strftime('%m/%d')}\n_Latest changes detected:_\n"
     updates_found = False
-    
     for i, row in df_bills.iterrows():
         if "LIS Connection Error" in str(row.get('Status')): continue
         alert_str = f"*{row['Bill Number']}*: {row.get('Status')}"
@@ -187,7 +157,6 @@ def render_bill_card(row):
         display_title = row['Official Title']
     else:
         display_title = row.get('My Title', 'No Title Provided')
-        
     st.markdown(f"**{row['Bill Number']}**")
     st.caption(f"{display_title}")
     st.caption(f"_{row.get('Status')}_")
@@ -197,18 +166,13 @@ def render_master_list_item(df):
     if df.empty:
         st.caption("No bills.")
         return
-    
     for i, row in df.iterrows():
-        # Dropdown Header: Bill Number - My Title (or Official)
         header_title = row['My Title'] if row['My Title'] != "-" else row.get('Official Title', '')
-        
         with st.expander(f"{row['Bill Number']} - {header_title}"):
             st.markdown(f"**📌 Designated Title:** {row.get('My Title', '-')}")
             st.markdown(f"**📜 Official Title:** {row.get('Official Title', '-')}")
             st.markdown(f"**🔄 Status / History:** {row.get('Status', '-')}")
             st.markdown(f"**📅 Date:** {row.get('Date', '-')}")
-            
-            # Direct Link to LIS
             lis_link = f"https://lis.virginia.gov/cgi-bin/legp604.exe?261+sum+{row['Bill Number']}"
             st.markdown(f"🔗 [View Official Bill on LIS]({lis_link})")
 
@@ -228,7 +192,7 @@ col_btn, col_time = st.columns([1, 6])
 with col_btn:
     if st.button("🔄 Check for Updates"):
         st.session_state['last_run'] = datetime.now(est).strftime("%I:%M %p EST")
-        st.cache_data.clear() # Force clear cache to get fresh CSV
+        st.cache_data.clear() 
         st.rerun()
 with col_time:
     st.markdown(f"**Last Refreshed:** `{st.session_state['last_run']}`")
@@ -245,7 +209,6 @@ try:
         df_w = raw_df[['Bills Watching', 'Title (Watching)']].copy()
         df_w.columns = ['Bill Number', 'My Title']
         df_w['Type'] = 'Watching'
-        
     df_i = pd.DataFrame()
     w_col = next((c for c in raw_df.columns if "Working On" in c), None)
     if w_col:
@@ -286,7 +249,6 @@ if bills_to_track:
 
     final_df = pd.merge(sheet_df, api_df, on="Bill Number", how="left")
     
-    # Backup Categorization
     def assign_folder(row):
         title_to_check = row.get('Official Title', '')
         if str(title_to_check) in ["Unknown", "Error", "Not Found", "nan", "None", ""]:
@@ -296,7 +258,6 @@ if bills_to_track:
     if 'Auto_Folder' not in final_df.columns or final_df['Auto_Folder'].isnull().any():
          final_df['Auto_Folder'] = final_df.apply(assign_folder, axis=1)
 
-    # Run Alerts
     check_and_broadcast(final_df, subs_df, demo_mode)
 
     # 3. RENDER TABS
@@ -308,7 +269,6 @@ if bills_to_track:
             
             st.subheader("🗂️ Browse by Topic")
             unique_folders = sorted(subset['Auto_Folder'].unique())
-            
             if len(unique_folders) == 0:
                 st.info("No bills found.")
             else:
@@ -322,7 +282,7 @@ if bills_to_track:
 
             st.markdown("---")
 
-            # --- MASTER LIST (Using New Helper Function) ---
+            # MASTER LIST
             st.subheader(f"📜 Master List ({b_type})")
             active = subset[subset['Lifecycle'] == "🚀 Active"]
             awaiting = subset[subset['Lifecycle'] == "✍️ Awaiting Signature"]
@@ -340,23 +300,47 @@ if bills_to_track:
                 st.markdown("#### ❌ Failed")
                 render_master_list_item(dead)
 
-    # --- TAB 3: UPCOMING ---
+    # --- TAB 3: UPCOMING (7-DAY CALENDAR) ---
     with tab_upcoming:
-        st.subheader("📅 Committee Dockets (Next 7 Days)")
+        st.subheader("📅 Your Weekly Calendar")
         docket_df = lis_data.get('docket', pd.DataFrame())
-        
+
         if docket_df.empty:
-            st.info("No docket data available.")
+            st.info("No official committee dockets found.")
         else:
-            my_bills = [b.upper() for b in bills_to_track]
-            if 'bill_clean' in docket_df.columns:
-                my_upcoming = docket_df[docket_df['bill_clean'].isin(my_bills)]
-                if not my_upcoming.empty:
-                    st.success(f"⚠️ We found {len(my_upcoming)} of your bills on the agenda!")
-                    st.dataframe(my_upcoming, hide_index=True)
-                else:
-                    st.info("None of your tracked bills are on the current dockets.")
-                with st.expander("See Full Public Docket"):
-                    st.dataframe(docket_df)
+            if 'meeting_date' in docket_df.columns and 'bill_clean' in docket_df.columns:
+                # 1. Convert Docket Dates to Datetime objects for comparison
+                docket_df['dt'] = pd.to_datetime(docket_df['meeting_date'], errors='coerce')
+                
+                # 2. Get User's Bills
+                my_bills = [b.upper() for b in bills_to_track]
+                
+                # 3. Create 7 Columns for the Next 7 Days
+                today = datetime.now().date()
+                cols = st.columns(7)
+                
+                for i in range(7):
+                    target_date = today + timedelta(days=i)
+                    display_date_str = target_date.strftime("%a %m/%d") # e.g., "Wed 01/14"
+                    
+                    with cols[i]:
+                        st.markdown(f"**{display_date_str}**")
+                        st.divider()
+                        
+                        # Filter for bills on this specific day
+                        day_matches = docket_df[
+                            (docket_df['dt'].dt.date == target_date) & 
+                            (docket_df['bill_clean'].isin(my_bills))
+                        ]
+                        
+                        if not day_matches.empty:
+                            for idx, row in day_matches.iterrows():
+                                st.error(f"**{row['bill_clean']}**")
+                                st.caption(f"{row.get('committee_name', 'Committee')}")
+                                st.caption(f"📍 {row.get('room', '-')}")
+                                st.caption(f"⏰ {row.get('time', '-')}")
+                                st.divider()
+                        else:
+                            st.caption("-") # Empty placeholder
             else:
-                st.warning("Docket format error.")
+                st.warning("Docket format error (Missing date columns).")
