@@ -1,18 +1,3 @@
-You are absolutely right. If the bot only looks back 20 or 50 messages, and a bill was tabled 51 messages ago, the bot will "forget" it told you and tell you again. That is annoying.
-
-We cannot "remove" the limit entirely (Slack's API forces us to pick a number), but we can maximize it.
-
-The maximum number of messages Slack allows us to pull in one grab is 1,000.
-
-Is 1,000 enough? Yes. Even if your bot sends 5 updates a day, every single day, 1,000 messages covers 200 days (over 6 months) of history. That will easily cover the entire legislative session.
-
-The Fix
-I have updated the code to set limit=1000. This effectively gives the bot "Session-Long Memory."
-
-Paste this final version into main.py:
-
-Python
-
 import streamlit as st
 import pandas as pd
 import requests
