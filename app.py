@@ -4,7 +4,7 @@ import requests
 import time
 import re 
 from datetime import datetime, timedelta
-import pytz 
+import pytz # For EST Timezone
 from slack_sdk import WebClient
 from slack_sdk.errors import SlackApiError
 
@@ -122,24 +122,25 @@ def get_bill_data_batch(bill_numbers, lis_df):
             if pd.notna(s_act) and str(s_act).lower() != 'nan' and str(s_act).strip() != '':
                  history_data.append({"Date": item.get('last_senate_action_date'), "Action": f"[Senate] {s_act}"})
 
-            # FIX: Robust Initialization (Handle empty strings properly)
+            # FIX: Robust Initialization (Check existence properly)
             curr_comm = item.get('last_house_committee')
-            if not curr_comm: curr_comm = item.get('last_senate_committee')
-            
-            # If it's effectively empty, mark as dash to trigger text search
+            if pd.isna(curr_comm) or str(curr_comm).strip().lower() in ['nan', 'none', '']:
+                curr_comm = item.get('last_senate_committee')
             if pd.isna(curr_comm) or str(curr_comm).strip().lower() in ['nan', 'none', '']:
                 curr_comm = "-"
             
             curr_sub = "-"
             status_lower = str(status).lower()
             
-            # PARSING LOGIC: Always check text for "sub:" to get subcommittee
+            # --- PARSING LOGIC: Always check text for "sub:" to get subcommittee ---
             if "sub:" in status_lower:
                 try:
                     parts = status_lower.split("sub:")
-                    # Only overwrite committee if it was missing
+                    # If comm was missing, try to grab it from left of 'sub:'
                     if curr_comm == "-":
-                        curr_comm = parts[0].replace("assigned", "").replace("referred to committee on", "").strip().title()
+                        # Extracts "Education" from "Assigned Education"
+                        left_part = parts[0].replace("assigned", "").replace("referred to committee on", "").strip()
+                        if left_part: curr_comm = left_part.title()
                     # Always capture subcommittee
                     curr_sub = parts[1].strip().title()
                 except: pass
@@ -424,7 +425,6 @@ if bills_to_track:
                             # Header Selection with Cross-Reference
                             header = row.get('committee_name', '')
                             
-                            # If header invalid, check Master List
                             if pd.isna(header) or str(header) == 'nan' or str(header).strip() == '':
                                 master_comm = bill_to_comm_map.get(row['bill_clean'])
                                 if master_comm and master_comm != '-':
