@@ -111,17 +111,17 @@ def get_bill_data_batch(bill_numbers, lis_df):
             if not date_val or date_val == 'nan':
                 date_val = str(item.get('last_senate_action_date', ''))
 
-            # History Data
+            # FIX: Filter out "nan" or empty actions from history table
             history_data = []
             h_act = item.get('last_house_action')
-            if h_act and str(h_act).lower() != 'nan':
+            if pd.notna(h_act) and str(h_act).lower() != 'nan' and str(h_act).strip() != '':
                  history_data.append({"Date": item.get('last_house_action_date'), "Action": f"[House] {h_act}"})
             
             s_act = item.get('last_senate_action')
-            if s_act and str(s_act).lower() != 'nan':
+            if pd.notna(s_act) and str(s_act).lower() != 'nan' and str(s_act).strip() != '':
                  history_data.append({"Date": item.get('last_senate_action_date'), "Action": f"[Senate] {s_act}"})
 
-            # Determine Current Committee (Try column first, then regex status)
+            # Determine Current Committee
             curr_comm = item.get('last_house_committee', item.get('last_senate_committee', ''))
             if not curr_comm or str(curr_comm) == 'nan':
                 # Fallback: Extract from status string
@@ -218,11 +218,10 @@ def render_master_list_item(df):
     for i, row in df.iterrows():
         header_title = row['My Title'] if row['My Title'] != "-" else row.get('Official Title', '')
         with st.expander(f"{row['Bill Number']} - {header_title}"):
-            # FIX: Added Current Committee Line
-            st.markdown(f"**🏛️ Current Committee:** {row.get('Current_Committee', '-')}")
             st.markdown(f"**📌 Designated Title:** {row.get('My Title', '-')}")
             st.markdown(f"**📜 Official Title:** {row.get('Official Title', '-')}")
             st.markdown(f"**🔄 Status:** {row.get('Status', '-')}")
+            st.markdown(f"**🏛️ Current Committee:** {row.get('Current_Committee', '-')}") # MOVED HERE
             
             # --- HISTORY TABLE ---
             hist_data = row.get('History_Data', [])
@@ -392,28 +391,43 @@ if bills_to_track:
                     ]
                     if not day_matches.empty:
                         for idx, row in day_matches.iterrows():
-                            # FIX: Explicitly check for Committee OR Description (Floor)
+                            # Header Selection
+                            header = row.get('committee_name', '')
+                            # Fallback Logic
+                            if pd.isna(header) or str(header) == 'nan' or str(header).strip() == '':
+                                header = row.get('cal_type', '') # Try Uncontested/Contested first
+                            if pd.isna(header) or str(header) == 'nan' or str(header).strip() == '':
+                                header = row.get('description', 'Floor Session') # Try Description
+                                
                             st.error(f"**{row['bill_clean']}**")
-                            
-                            comm = row.get('committee_name', '')
-                            # Fallback Logic: If no committee, try description or calendar type
-                            if pd.isna(comm) or str(comm) == 'nan' or str(comm).strip() == '':
-                                comm = row.get('description', '')
-                                if pd.isna(comm) or str(comm) == 'nan' or str(comm).strip() == '':
-                                    comm = row.get('cal_type', 'Floor Session') # Final fallback
+                            st.write(f"🏛️ **{header}**")
                             
                             sub = row.get('subcommittee_name', '')
-                            
-                            # FIX: Show Calendar Type (Contested/Uncontested)
-                            cal_type = row.get('calendar_type', row.get('cal_type', ''))
-                            if pd.notna(cal_type) and str(cal_type) != 'nan':
-                                st.caption(f"📑 {cal_type}")
-
-                            if pd.notna(comm) and str(comm) != 'nan': st.write(f"🏛️ **{comm}**")
                             if pd.notna(sub) and str(sub) != 'nan': st.caption(f"↳ {sub}")
                             
+                            # SHOW CALENDAR TYPE (Contested/Uncontested)
+                            ctype = row.get('cal_type', '')
+                            if pd.notna(ctype) and str(ctype) != 'nan': st.caption(f"📑 {ctype}")
+                            
+                            # SHOW DESCRIPTION (if not used as header)
+                            desc = row.get('description', '')
+                            if pd.notna(desc) and str(desc) != 'nan' and desc != header:
+                                st.caption(f"📝 {desc}")
+
+                            # TIME
                             time_val = row.get('time', '')
-                            if pd.notna(time_val) and str(time_val) != 'nan': st.caption(f"⏰ {time_val}")
+                            if pd.isna(time_val) or str(time_val) == 'nan' or str(time_val).strip() == '':
+                                time_val = row.get('meeting_time', '')
+                            if pd.isna(time_val) or str(time_val) == 'nan' or str(time_val).strip() == '':
+                                time_val = row.get('start_time', '')
+                            
+                            if pd.notna(row.get('description')) and any(x in str(row.get('description')).lower() for x in ['adjourn', 'caucus']):
+                                time_val = row.get('description')
+
+                            if pd.notna(time_val) and str(time_val) != 'nan' and str(time_val).strip() != '':
+                                st.caption(f"⏰ {time_val}")
+                            else:
+                                st.caption("⏰ TBD")
                             
                             st.divider()
                     else:
