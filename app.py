@@ -15,8 +15,9 @@ SUBS_URL = f"https://docs.google.com/spreadsheets/d/{SHEET_ID}/gviz/tq?tqx=out:c
 # --- VIRGINIA LIS DATA FEEDS ---
 LIS_BASE_URL = "https://lis.blob.core.windows.net/lisfiles/20261/"
 LIS_BILLS_CSV = LIS_BASE_URL + "BILLS.CSV"      
-LIS_DOCKET_CSV = LIS_BASE_URL + "SUBDOCKET.CSV"  # Committee Hearings
-LIS_CALENDAR_CSV = LIS_BASE_URL + "CALENDAR.CSV" # Floor Sessions / Votes
+LIS_SUBDOCKET_CSV = LIS_BASE_URL + "SUBDOCKET.CSV"  # Subcommittees
+LIS_DOCKET_CSV = LIS_BASE_URL + "DOCKET.CSV"        # Main Standing Committees (NEW)
+LIS_CALENDAR_CSV = LIS_BASE_URL + "CALENDAR.CSV"    # Floor Sessions / Votes
 
 st.set_page_config(page_title="VA Bill Tracker 2026", layout="wide")
 
@@ -60,42 +61,37 @@ def fetch_lis_data():
     
     # 1. Fetch Bills
     try:
-        try: df_bills = pd.read_csv(LIS_BILLS_CSV, encoding='ISO-8859-1')
-        except: df_bills = pd.read_csv(LIS_BILLS_CSV.replace(".CSV", ".csv"), encoding='ISO-8859-1')
-        df_bills.columns = df_bills.columns.str.strip().str.lower()
-        if 'bill_id' in df_bills.columns:
-            df_bills['bill_clean'] = df_bills['bill_id'].astype(str).str.upper().str.strip()
-            data['bills'] = df_bills
+        try: df = pd.read_csv(LIS_BILLS_CSV, encoding='ISO-8859-1')
+        except: df = pd.read_csv(LIS_BILLS_CSV.replace(".CSV", ".csv"), encoding='ISO-8859-1')
+        df.columns = df.columns.str.strip().str.lower()
+        if 'bill_id' in df.columns:
+            df['bill_clean'] = df['bill_id'].astype(str).str.upper().str.strip()
+            data['bills'] = df
         else: data['bills'] = pd.DataFrame() 
     except: data['bills'] = pd.DataFrame()
 
-    # 2. Fetch Docket (Committee Hearings)
-    try:
-        try: df_docket = pd.read_csv(LIS_DOCKET_CSV, encoding='ISO-8859-1')
-        except: df_docket = pd.read_csv(LIS_DOCKET_CSV.replace(".CSV", ".csv"), encoding='ISO-8859-1')
-        df_docket.columns = df_docket.columns.str.strip().str.lower()
-        
-        col = next((c for c in df_docket.columns if "bill" in c), None)
-        if col:
-            df_docket['bill_clean'] = df_docket[col].astype(str).str.upper().str.strip()
-            df_docket['event_type'] = "🏛️ Committee"
-            data['docket'] = df_docket
-        else: data['docket'] = pd.DataFrame()
-    except: data['docket'] = pd.DataFrame()
+    # 2. Fetch Calendars (Subdocket, Docket, Calendar)
+    calendar_dfs = []
+    
+    for url, type_label in [(LIS_SUBDOCKET_CSV, "🏛️ Subcommittee"), (LIS_DOCKET_CSV, "🏛️ Committee"), (LIS_CALENDAR_CSV, "📜 Floor/Vote")]:
+        try:
+            try: df = pd.read_csv(url, encoding='ISO-8859-1')
+            except: df = pd.read_csv(url.replace(".CSV", ".csv"), encoding='ISO-8859-1')
+            
+            df.columns = df.columns.str.strip().str.lower()
+            
+            # Find bill column
+            col = next((c for c in df.columns if "bill" in c), None)
+            if col:
+                df['bill_clean'] = df[col].astype(str).str.upper().str.strip()
+                df['event_type'] = type_label
+                calendar_dfs.append(df)
+        except: pass
 
-    # 3. Fetch Calendar (Floor Votes/Sessions) - ADDED FOR COVERAGE
-    try:
-        try: df_cal = pd.read_csv(LIS_CALENDAR_CSV, encoding='ISO-8859-1')
-        except: df_cal = pd.read_csv(LIS_CALENDAR_CSV.replace(".CSV", ".csv"), encoding='ISO-8859-1')
-        df_cal.columns = df_cal.columns.str.strip().str.lower()
-        
-        col = next((c for c in df_cal.columns if "bill" in c), None)
-        if col:
-            df_cal['bill_clean'] = df_cal[col].astype(str).str.upper().str.strip()
-            df_cal['event_type'] = "📜 Floor/Vote"
-            data['calendar'] = df_cal
-        else: data['calendar'] = pd.DataFrame()
-    except: data['calendar'] = pd.DataFrame()
+    if calendar_dfs:
+        data['schedule'] = pd.concat(calendar_dfs, ignore_index=True)
+    else:
+        data['schedule'] = pd.DataFrame()
 
     return data
 
@@ -157,7 +153,10 @@ def check_and_broadcast(df_bills, df_subscribers, demo_mode):
     updates_found = False
     for i, row in df_bills.iterrows():
         if "LIS Connection Error" in str(row.get('Status')): continue
-        alert_str = f"*{row['Bill Number']}*: {row.get('Status')}"
+        
+        # FIXED: Added the Date from the CSV to the alert string
+        alert_str = f"*{row['Bill Number']}* ({row.get('Date', 'No Date')}): {row.get('Status')}"
+        
         if alert_str in history_text: continue
         updates_found = True
         report += f"\n⚪ {alert_str}"
@@ -196,7 +195,9 @@ def render_master_list_item(df):
             st.markdown(f"**📜 Official Title:** {row.get('Official Title', '-')}")
             st.markdown(f"**🔄 Status / History:** {row.get('Status', '-')}")
             st.markdown(f"**📅 Date:** {row.get('Date', '-')}")
-            lis_link = f"https://lis.virginia.gov/cgi-bin/legp604.exe?261+sum+{row['Bill Number']}"
+            
+            # FIXED: Updated to use 'bil' (Bill Landing Page) instead of 'sum'
+            lis_link = f"https://lis.virginia.gov/cgi-bin/legp604.exe?261+bil+{row['Bill Number']}"
             st.markdown(f"🔗 [View Official Bill on LIS]({lis_link})")
 
 # --- MAIN APP ---
@@ -264,7 +265,7 @@ if bills_to_track:
             mock_results.append({
                 "Bill Number": b, "Official Title": f"[DEMO] {mock_t}", "Status": mock_s,
                 "Lifecycle": "🚀 Active", "Auto_Folder": get_smart_subject(mock_t),
-                "My Title": "My Demo Title"
+                "My Title": "My Demo Title", "Date": "2026-01-14"
             })
         api_df = pd.DataFrame(mock_results)
     else:
@@ -323,33 +324,22 @@ if bills_to_track:
                 st.markdown("#### ❌ Failed")
                 render_master_list_item(dead)
 
-    # --- TAB 3: UPCOMING (7-DAY CALENDAR - WITH FLOOR & COMMITTEES) ---
+    # --- TAB 3: UPCOMING (7-DAY CALENDAR) ---
     with tab_upcoming:
         st.subheader("📅 Your Weekly Calendar")
         
-        # Merge Docket (Committees) and Calendar (Floor)
-        df1 = lis_data.get('docket', pd.DataFrame())
-        df2 = lis_data.get('calendar', pd.DataFrame())
-        
-        # Ensure 'dt' column exists in both (Smart Find)
-        full_schedule = pd.DataFrame()
-        
-        try:
-            # Prepare DOCKET
-            if not df1.empty:
-                d_col = next((c for c in df1.columns if "date" in c), None)
-                if d_col: df1['dt'] = pd.to_datetime(df1[d_col], errors='coerce')
-            
-            # Prepare CALENDAR
-            if not df2.empty:
-                d_col = next((c for c in df2.columns if "date" in c), None)
-                if d_col: df2['dt'] = pd.to_datetime(df2[d_col], errors='coerce')
-                
-            full_schedule = pd.concat([df1, df2], ignore_index=True)
-        except:
-            full_schedule = pd.DataFrame()
+        # Merge all schedule DFs (Docket, Subdocket, Calendar)
+        full_schedule = lis_data.get('schedule', pd.DataFrame())
 
-        # Always Draw Calendar
+        # Ensure 'dt' column exists
+        if not full_schedule.empty:
+            date_col = next((c for c in full_schedule.columns if "date" in c), None)
+            if date_col:
+                full_schedule['dt'] = pd.to_datetime(full_schedule[date_col], errors='coerce')
+            else:
+                full_schedule['dt'] = pd.NaT
+
+        # Always Draw Calendar Grid
         today = datetime.now().date()
         cols = st.columns(7)
         my_bills = [b.upper() for b in bills_to_track]
@@ -371,14 +361,12 @@ if bills_to_track:
                     
                     if not day_matches.empty:
                         for idx, row in day_matches.iterrows():
-                            # Determine Event Type Icon
                             etype = str(row.get('event_type', 'Event'))
-                            icon = "🏛️" if "Committee" in etype else "📜"
                             
                             st.error(f"**{row['bill_clean']}**")
-                            st.caption(f"{icon} {etype}")
+                            st.caption(f"{etype}")
                             
-                            # Dynamic info extraction
+                            # Dynamic location info
                             loc = row.get('room', row.get('committee_name', ''))
                             if loc: st.caption(f"📍 {loc}")
                             
