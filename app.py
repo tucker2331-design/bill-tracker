@@ -378,7 +378,7 @@ if bills_to_track:
                 st.markdown("#### ❌ Failed")
                 render_master_list_item(dead)
 
-    # --- TAB 3: UPCOMING (INVERTED LOOP & TEXT SCRAPER) ---
+    # --- TAB 3: UPCOMING (INVERTED LOOP & AGGRESSIVE TEXT SCRAPER) ---
     with tab_upcoming:
         st.subheader("📅 Your Weekly Calendar")
         full_schedule = lis_data.get('schedule', pd.DataFrame())
@@ -412,41 +412,46 @@ if bills_to_track:
                     todays_schedule = full_schedule[full_schedule['dt'].dt.date == target_date]
                     
                     if not todays_schedule.empty:
-                        # --- KEY CHANGE: Iterate through MY BILLS, not the schedule ---
-                        # This ensures even if the bill isn't explicitly listed, we find the committee meeting
-                        
                         bills_found_today = False
                         
                         for bill in my_bills:
-                            # 1. Get Bill's "Brain" Data
                             master_comm = bill_to_comm_map.get(bill, '').lower()
                             master_status = bill_to_status_map.get(bill, '')
                             master_sub = bill_to_sub_map.get(bill, '')
 
-                            # 2. Search Logic
-                            # Match A: Bill is explicitly in the schedule row
+                            # --- KEY FIX: House vs Senate Matching ---
+                            is_senate_bill = bill.startswith('S')
+                            is_house_bill = bill.startswith('H')
+
                             match_explicit = todays_schedule[todays_schedule['bill_clean'] == bill]
                             
-                            # Match B: Committee Name matches (Implicit Match)
-                            # We check if 'master_comm' (e.g. "Privileges and Elections") appears in the schedule row string
                             match_implicit = pd.DataFrame()
                             if master_comm and master_comm != '-':
-                                # We scan all columns for the committee name
+                                # Scan rows for the committee name
                                 match_implicit = todays_schedule[
                                     todays_schedule.apply(lambda r: master_comm in str(r.values).lower(), axis=1)
                                 ]
+                                
+                                # Safety Check: Prevent SJ1 matching "House Committee"
+                                if not match_implicit.empty:
+                                    def is_safe_match(row_text):
+                                        row_lower = str(row_text).lower()
+                                        if is_senate_bill and 'house' in row_lower and 'joint' not in row_lower: return False
+                                        if is_house_bill and 'senate' in row_lower and 'joint' not in row_lower: return False
+                                        return True
+                                    
+                                    match_implicit = match_implicit[
+                                        match_implicit.apply(lambda r: is_safe_match(r.values), axis=1)
+                                    ]
                             
-                            # Combine matches
                             final_matches = pd.concat([match_explicit, match_implicit]).drop_duplicates()
                             
                             if not final_matches.empty:
                                 bills_found_today = True
-                                # Pick the first relevant meeting found
                                 row = final_matches.iloc[0]
                                 
                                 st.error(f"**{bill}**")
                                 
-                                # Header (Prefer Master List Committee)
                                 header = master_comm.title() if master_comm and master_comm != '-' else "Committee"
                                 st.write(f"🏛️ **{header}**")
                                 
@@ -456,15 +461,15 @@ if bills_to_track:
                                 if master_status:
                                     st.caption(f"ℹ️ {master_status}")
 
-                                # --- 3. TIME SCRAPER (KEYWORD UPGRADE) ---
+                                # --- KEY FIX: Aggressive Time Regex ---
                                 row_text = " ".join([str(val) for val in row.values])
                                 
-                                # Look for digits (8:00) OR keywords (Upon, After, Recess)
-                                time_keywords = r'(?:upon|after|before)\s+(?:adjourn|recess|conven)|(?:\d+\s+minutes?\s+after)|(\d{1,2}:\d{2}\s?(?:[ap]\.?m\.?|noon))'
+                                # Matches "Upon Recess of the House", "30 Minutes after adjournment", etc.
+                                time_keywords = r'(?:upon|after|before|until)\s+.*?(?:adjourn|recess|conven|call)|(?:\d{1,2}:\d{2}\s?(?:[ap]\.?m\.?|noon))'
                                 t_match = re.search(time_keywords, row_text, re.IGNORECASE)
                                 
                                 if t_match:
-                                    st.caption(f"⏰ {t_match.group(0)}") # Grab the whole match (e.g. "Upon Recess")
+                                    st.caption(f"⏰ {t_match.group(0)}")
                                 else:
                                     st.caption("⏰ TBD")
                                 
