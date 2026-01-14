@@ -29,12 +29,21 @@ TOPIC_KEYWORDS = {
 # --- HELPER FUNCTIONS ---
 def determine_lifecycle(status_text):
     status = str(status_text).lower()
+    
+    # 1. PASSED & SIGNED (Law)
     if any(x in status for x in ["signed by governor", "enacted", "approved by governor", "chapter"]):
-        return "✅ Passed & Signed"
+        return "✅ Signed & Enacted"
+    
+    # 2. DEAD / FAILED
     if any(x in status for x in ["tabled", "failed", "stricken", "passed by indefinitely", "left in", "defeated", "no action taken", "incorporated into"]):
         return "❌ Dead / Tabled"
+    
+    # 3. PASSED LEGISLATURE (Waiting on Governor)
+    # "Enrolled" = Passed both chambers. "Communicated" = On Gov's desk.
     if any(x in status for x in ["enrolled", "communicated to governor", "bill text as passed"]):
         return "✍️ Awaiting Signature"
+        
+    # 4. ACTIVE (Still in House/Senate)
     return "🚀 Active"
 
 def get_smart_subject(title, api_subjects):
@@ -94,7 +103,7 @@ def get_bill_data_batch(bill_numbers):
     progress_bar.empty()
     return pd.DataFrame(results)
 
-# --- CHECK AND BROADCAST WITH DEBUGGING ---
+# --- HISTORY CHECK & BROADCAST ---
 def check_and_broadcast(df_bills, df_subscribers):
     token = st.secrets.get("SLACK_BOT_TOKEN")
     if not token:
@@ -112,34 +121,27 @@ def check_and_broadcast(df_bills, df_subscribers):
     if not subscriber_list:
         return
 
-    # 1. FETCH HISTORY (DEBUG MODE)
+    # 1. FETCH HISTORY (MAX MEMORY)
     combined_history_text = ""
-    # We check the history of the FIRST person in the list.
-    # MAKE SURE THIS IS A REAL EMAIL.
     first_email = subscriber_list[0].strip()
     
-    with st.sidebar.expander("🕵️ Debug: Bot Memory", expanded=True):
-        st.write(f"Checking history for: `{first_email}`")
-        try:
-            lookup = client.users_lookupByEmail(email=first_email)
-            user_id = lookup['user']['id']
-            dm_channel = client.conversations_open(users=[user_id])
-            channel_id = dm_channel['channel']['id']
+    try:
+        lookup = client.users_lookupByEmail(email=first_email)
+        user_id = lookup['user']['id']
+        dm_channel = client.conversations_open(users=[user_id])
+        channel_id = dm_channel['channel']['id']
+        
+        # Pull 1000 messages (Session-Long Memory)
+        history = client.conversations_history(channel=channel_id, limit=1000)
+        
+        if history['messages']:
+            for msg in history['messages']:
+                combined_history_text += msg.get('text', '') + "\n"
             
-            # Fetch 1000 messages
-            history = client.conversations_history(channel=channel_id, limit=1000)
-            
-            if history['messages']:
-                st.success(f"✅ Found {len(history['messages'])} past messages.")
-                for msg in history['messages']:
-                    combined_history_text += msg.get('text', '') + "\n"
-            else:
-                st.warning("⚠️ History is EMPTY. Bot thinks everything is new.")
-                
-        except SlackApiError as e:
-            st.error(f"❌ HISTORY ERROR: {e}")
-            st.info("💡 FIX: Go to Slack API -> OAuth -> Add 'im:history' -> Click 'Reinstall to Workspace'")
-            return # STOP HERE if we can't read history
+    except SlackApiError as e:
+        # If this fails, we show the error in sidebar
+        st.sidebar.error(f"Slack Error: {e}")
+        return
 
     # 2. COMPARE
     report = f"🏛️ *VA LEGISLATIVE UPDATE* - {datetime.now().strftime('%m/%d')}\n"
@@ -151,18 +153,17 @@ def check_and_broadcast(df_bills, df_subscribers):
         b_num = row['Bill Number']
         current_status = row.get('Status', 'Unknown')
         
-        # Construct the EXACT string we send to Slack
+        # CREATE ALERT STRING
         expected_alert_string = f"*{b_num}*: {current_status}"
         
-        # Check if this exact string exists in the history blob
+        # DUPLICATE CHECK
         if expected_alert_string in combined_history_text:
-            # We found it! It's a duplicate.
             continue
             
-        # If we get here, it's NEW.
+        # NEW UPDATE
         updates_found = True
         emoji = "⚪"
-        if "Passed" in row['Lifecycle']: emoji = "✅"
+        if "Signed" in row['Lifecycle']: emoji = "✅"
         elif "Dead" in row['Lifecycle']: emoji = "❌"
         elif "Active" in row['Lifecycle']: emoji = "🚀"
         elif "Awaiting" in row['Lifecycle']: emoji = "✍️"
@@ -171,8 +172,7 @@ def check_and_broadcast(df_bills, df_subscribers):
 
     # 3. BROADCAST
     if updates_found:
-        st.toast(f"📢 Sending updates to {len(subscriber_list)} people...")
-        
+        st.toast(f"📢 Broadcasting to {len(subscriber_list)} people...")
         for email in subscriber_list:
             try:
                 lookup = client.users_lookupByEmail(email=email.strip())
@@ -180,9 +180,9 @@ def check_and_broadcast(df_bills, df_subscribers):
                 client.chat_postMessage(channel=user_id, text=report)
             except SlackApiError as e:
                 st.sidebar.error(f"Failed to send to {email}: {e}")
-        st.toast("✅ Sent!")
+        st.toast("✅ Update Broadcast Complete!")
     else:
-        st.sidebar.success("✅ Checked History: No new updates.")
+        st.sidebar.success("✅ System Checked: No new updates.")
 
 # --- MAIN APP ---
 st.title("🏛️ Virginia General Assembly Tracker")
@@ -231,10 +231,10 @@ if bills_to_track:
     # RUN CHECK
     check_and_broadcast(final_df, subs_df)
     
-    # DISPLAY
+    # --- HELPER FOR DRAWING SECTIONS ---
     def draw_categorized_section(bills, title, color_code):
         if bills.empty: return
-        st.markdown(f"### {color_code} {title} ({len(bills)})")
+        st.markdown(f"#### {color_code} {title} ({len(bills)})")
         subjects = sorted([s for s in bills['Auto_Folder'].unique() if str(s) != 'nan'])
         for subj in subjects:
             subset = bills[bills['Auto_Folder'] == subj]
@@ -260,23 +260,40 @@ if bills_to_track:
     for tab, b_type in [(tab_involved, "Involved"), (tab_watching, "Watching")]:
         with tab:
             subset = final_df[final_df['Type'] == b_type]
-            awaiting = subset[subset['Lifecycle'] == "✍️ Awaiting Signature"]
-            passed = subset[subset['Lifecycle'] == "✅ Passed & Signed"]
+            
+            # --- LIFECYCLE BUCKETS ---
             active = subset[subset['Lifecycle'] == "🚀 Active"]
+            awaiting = subset[subset['Lifecycle'] == "✍️ Awaiting Signature"]
+            signed = subset[subset['Lifecycle'] == "✅ Signed & Enacted"]
             dead = subset[subset['Lifecycle'] == "❌ Dead / Tabled"]
             
-            draw_categorized_section(awaiting, "Awaiting Signature", "✍️")
-            if not awaiting.empty: st.markdown("---")
-            draw_categorized_section(active, "Active Bills", "🚀")
-            if not active.empty: st.markdown("---")
-            draw_categorized_section(passed, "Passed / Signed", "✅")
-            if not passed.empty: st.markdown("---")
+            # 1. ACTIVE
+            if not active.empty:
+                draw_categorized_section(active, "Active Bills", "🚀")
+                st.markdown("---")
+            
+            # 2. PASSED SECTION (Grouped)
+            if not awaiting.empty or not signed.empty:
+                st.markdown("### 🎉 Passed Legislation")
+                
+                # Awaiting Signature
+                if not awaiting.empty:
+                    draw_categorized_section(awaiting, "Awaiting Signature", "✍️")
+                
+                # Signed & Enacted
+                if not signed.empty:
+                    draw_categorized_section(signed, "Signed & Enacted", "✅")
+                
+                st.markdown("---")
+
+            # 3. FAILED
             draw_categorized_section(dead, "Dead / Failed", "❌")
 
+            # --- MASTER LIST ---
             st.markdown("---")
             st.subheader(f"📜 Master List ({b_type})")
             
-            tab_flat_active = subset[subset['Lifecycle'].isin(["🚀 Active", "✍️ Awaiting Signature", "✅ Passed & Signed"])]
+            tab_flat_active = subset[subset['Lifecycle'].isin(["🚀 Active", "✍️ Awaiting Signature", "✅ Signed & Enacted"])]
             tab_flat_failed = subset[subset['Lifecycle'] == "❌ Dead / Tabled"]
             
             tab_flat_active = tab_flat_active.sort_values(by="Bill Number")
