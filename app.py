@@ -15,9 +15,9 @@ SUBS_URL = f"https://docs.google.com/spreadsheets/d/{SHEET_ID}/gviz/tq?tqx=out:c
 # --- VIRGINIA LIS DATA FEEDS ---
 LIS_BASE_URL = "https://lis.blob.core.windows.net/lisfiles/20261/"
 LIS_BILLS_CSV = LIS_BASE_URL + "BILLS.CSV"      
-LIS_SUBDOCKET_CSV = LIS_BASE_URL + "SUBDOCKET.CSV"  # Subcommittees
-LIS_DOCKET_CSV = LIS_BASE_URL + "DOCKET.CSV"        # Main Standing Committees
-LIS_CALENDAR_CSV = LIS_BASE_URL + "CALENDAR.CSV"    # Floor Sessions / Votes
+LIS_SUBDOCKET_CSV = LIS_BASE_URL + "SUBDOCKET.CSV"  
+LIS_DOCKET_CSV = LIS_BASE_URL + "DOCKET.CSV"        
+LIS_CALENDAR_CSV = LIS_BASE_URL + "CALENDAR.CSV"    
 
 st.set_page_config(page_title="VA Bill Tracker 2026", layout="wide")
 
@@ -70,18 +70,13 @@ def fetch_lis_data():
         else: data['bills'] = pd.DataFrame() 
     except: data['bills'] = pd.DataFrame()
 
-    # 2. Fetch Calendars (Subdocket, Docket, Calendar)
+    # 2. Fetch Calendars
     calendar_dfs = []
-    
-    # We loop through all 3 files to build a master schedule
     for url, type_label in [(LIS_SUBDOCKET_CSV, "🏛️ Subcommittee"), (LIS_DOCKET_CSV, "🏛️ Committee"), (LIS_CALENDAR_CSV, "📜 Floor/Vote")]:
         try:
             try: df = pd.read_csv(url, encoding='ISO-8859-1')
             except: df = pd.read_csv(url.replace(".CSV", ".csv"), encoding='ISO-8859-1')
-            
             df.columns = df.columns.str.strip().str.lower()
-            
-            # Find bill column safely
             col = next((c for c in df.columns if "bill" in c), None)
             if col:
                 df['bill_clean'] = df[col].astype(str).str.upper().str.strip()
@@ -112,10 +107,15 @@ def get_bill_data_batch(bill_numbers, lis_df):
             if pd.isna(status) or str(status).strip() == '': status = item.get('last_senate_action', 'Introduced')
             title = item.get('bill_description', 'No Title')
             
-            # Smart Date Fetch
             date_val = str(item.get('last_house_action_date', ''))
             if not date_val or date_val == 'nan':
                 date_val = str(item.get('last_senate_action_date', ''))
+
+            # Grab both actions for the history table
+            house_act = item.get('last_house_action', '')
+            house_date = item.get('last_house_action_date', '')
+            senate_act = item.get('last_senate_action', '')
+            senate_date = item.get('last_senate_action_date', '')
 
             results.append({
                 "Bill Number": bill_num,
@@ -123,7 +123,12 @@ def get_bill_data_batch(bill_numbers, lis_df):
                 "Status": str(status),
                 "Date": date_val, 
                 "Lifecycle": determine_lifecycle(str(status)),
-                "Auto_Folder": get_smart_subject(title)
+                "Auto_Folder": get_smart_subject(title),
+                # New fields for history table
+                "Raw_History": [
+                    {"Date": house_date, "Action": house_act},
+                    {"Date": senate_date, "Action": senate_act}
+                ]
             })
         else:
             results.append({
@@ -162,17 +167,12 @@ def check_and_broadcast(df_bills, df_subscribers, demo_mode):
     for i, row in df_bills.iterrows():
         if "LIS Connection Error" in str(row.get('Status')): continue
         
-        # 1. CHECK ID: Simple ID to check against history (Status only, ignore date formatting issues)
-        check_id = f"*{row['Bill Number']}*: {row.get('Status')}"
-        
-        if check_id in history_text: continue
+        check_str = f"*{row['Bill Number']}*: {row.get('Status')}"
+        if check_str in history_text: continue
         
         updates_found = True
-        
-        # 2. DISPLAY STRING: The actual message includes the date
         display_date = row.get('Date', '')
         if not display_date or display_date == 'nan': display_date = datetime.now().strftime('%Y-%m-%d')
-        
         report += f"\n⚪ *{row['Bill Number']}* ({display_date}): {row.get('Status')}"
 
     if updates_found:
@@ -208,9 +208,22 @@ def render_master_list_item(df):
             st.markdown(f"**📌 Designated Title:** {row.get('My Title', '-')}")
             st.markdown(f"**📜 Official Title:** {row.get('Official Title', '-')}")
             st.markdown(f"**🔄 Status / History:** {row.get('Status', '-')}")
-            st.markdown(f"**📅 Date:** {row.get('Date', '-')}")
             
-            # FIXED: Exact Link Format Requested
+            # --- HISTORY TABLE ---
+            # Build a mini dataframe for the history table
+            raw_hist = row.get('Raw_History', [])
+            if isinstance(raw_hist, list):
+                # Filter out empty entries
+                valid_hist = [h for h in raw_hist if h.get('Action') and str(h.get('Action')) != 'nan']
+                if valid_hist:
+                    hist_df = pd.DataFrame(valid_hist)
+                    st.dataframe(hist_df, hide_index=True, use_container_width=True)
+                else:
+                    st.caption(f"Date: {row.get('Date', '-')}") # Fallback
+            else:
+                st.caption(f"Date: {row.get('Date', '-')}") # Fallback
+
+            # FIXED: Exact Link Format
             lis_link = f"https://lis.virginia.gov/bill-details/20261/{row['Bill Number']}"
             st.markdown(f"🔗 [View Official Bill on LIS]({lis_link})")
 
@@ -279,7 +292,8 @@ if bills_to_track:
             mock_results.append({
                 "Bill Number": b, "Official Title": f"[DEMO] {mock_t}", "Status": mock_s,
                 "Lifecycle": "🚀 Active", "Auto_Folder": get_smart_subject(mock_t),
-                "My Title": "My Demo Title", "Date": "2026-01-14"
+                "My Title": "My Demo Title", "Date": "2026-01-14",
+                "Raw_History": [{"Date": "2026-01-14", "Action": mock_s}]
             })
         api_df = pd.DataFrame(mock_results)
     else:
@@ -341,10 +355,8 @@ if bills_to_track:
     # --- TAB 3: UPCOMING (7-DAY CALENDAR) ---
     with tab_upcoming:
         st.subheader("📅 Your Weekly Calendar")
-        
         full_schedule = lis_data.get('schedule', pd.DataFrame())
 
-        # Ensure 'dt' column exists
         if not full_schedule.empty:
             date_col = next((c for c in full_schedule.columns if "date" in c), None)
             if date_col:
@@ -352,7 +364,6 @@ if bills_to_track:
             else:
                 full_schedule['dt'] = pd.NaT
 
-        # Always Draw Calendar Grid
         today = datetime.now().date()
         cols = st.columns(7)
         my_bills = [b.upper() for b in bills_to_track]
@@ -370,16 +381,13 @@ if bills_to_track:
                         (full_schedule['dt'].dt.date == target_date) & 
                         (full_schedule['bill_clean'].isin(my_bills))
                     ]
-                    
                     if not day_matches.empty:
                         for idx, row in day_matches.iterrows():
                             etype = str(row.get('event_type', 'Event'))
                             st.error(f"**{row['bill_clean']}**")
                             st.caption(f"{etype}")
-                            
                             loc = row.get('room', row.get('committee_name', ''))
                             if loc: st.caption(f"📍 {loc}")
-                            
                             time_val = row.get('time', '')
                             if time_val: st.caption(f"⏰ {time_val}")
                             st.divider()
