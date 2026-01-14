@@ -111,6 +111,7 @@ def get_bill_data_batch(bill_numbers, lis_df):
             if not date_val or date_val == 'nan':
                 date_val = str(item.get('last_senate_action_date', ''))
 
+            # History Data
             history_data = []
             h_act = item.get('last_house_action')
             if pd.notna(h_act) and str(h_act).lower() != 'nan' and str(h_act).strip() != '':
@@ -120,13 +121,21 @@ def get_bill_data_batch(bill_numbers, lis_df):
             if pd.notna(s_act) and str(s_act).lower() != 'nan' and str(s_act).strip() != '':
                  history_data.append({"Date": item.get('last_senate_action_date'), "Action": f"[Senate] {s_act}"})
 
-            # Determine Current Committee
+            # FIX: Improved Committee Extraction Logic
             curr_comm = item.get('last_house_committee', item.get('last_senate_committee', ''))
+            status_lower = str(status).lower()
+            
             if not curr_comm or str(curr_comm) == 'nan':
-                if "referred to committee on" in str(status).lower():
-                    curr_comm = str(status).lower().split("referred to committee on")[-1].title()
-                elif "referred to committee for" in str(status).lower():
-                    curr_comm = str(status).lower().split("referred to committee for")[-1].title()
+                if "referred to committee on" in status_lower:
+                    curr_comm = status_lower.split("referred to committee on")[-1].strip().title()
+                elif "referred to committee for" in status_lower:
+                    curr_comm = status_lower.split("referred to committee for")[-1].strip().title()
+                elif "assigned" in status_lower and "sub:" in status_lower:
+                    # Handle "Assigned Education sub: Public Education" -> "Education"
+                    parts = status_lower.replace("assigned", "").split("sub:")
+                    curr_comm = parts[0].strip().title()
+                elif "assigned" in status_lower:
+                     curr_comm = status_lower.replace("assigned", "").strip().title()
                 else:
                     curr_comm = "-"
 
@@ -221,7 +230,6 @@ def render_master_list_item(df):
             st.markdown(f"**📜 Official Title:** {row.get('Official Title', '-')}")
             st.markdown(f"**🔄 Status:** {row.get('Status', '-')}")
             
-            # --- HISTORY TABLE ---
             hist_data = row.get('History_Data', [])
             if isinstance(hist_data, list) and hist_data:
                 st.markdown("**📜 History:**")
@@ -392,6 +400,8 @@ if bills_to_track:
                     ]
                     if not day_matches.empty:
                         for idx, row in day_matches.iterrows():
+                            st.error(f"**{row['bill_clean']}**")
+                            
                             # Header Selection with Cross-Reference
                             header = row.get('committee_name', '')
                             
@@ -401,24 +411,21 @@ if bills_to_track:
                                 if master_comm and master_comm != '-':
                                     header = f"{master_comm} (per Status)"
                                 else:
-                                    # Fallback to Cal Type or Floor if status unknown
-                                    header = row.get('cal_type', 'Floor Session')
+                                    # If genuinely on floor, it will have a cal_type or description
+                                    header = row.get('cal_type', '')
+                                    if not header: header = row.get('description', 'Floor Session')
 
-                            st.error(f"**{row['bill_clean']}**")
                             st.write(f"🏛️ **{header}**")
                             
                             sub = row.get('subcommittee_name', '')
                             if pd.notna(sub) and str(sub) != 'nan': st.caption(f"↳ {sub}")
                             
-                            # SHOW CALENDAR TYPE (Contested/Uncontested)
                             ctype = row.get('cal_type', '')
-                            if pd.notna(ctype) and str(ctype) != 'nan': st.caption(f"📑 {ctype}")
+                            if pd.notna(ctype) and str(ctype) != 'nan' and ctype != header: st.caption(f"📑 {ctype}")
                             
-                            # SHOW DESCRIPTION
                             desc = row.get('description', '')
-                            if pd.notna(desc) and str(desc) != 'nan': st.caption(f"📝 {desc}")
+                            if pd.notna(desc) and str(desc) != 'nan' and desc != header: st.caption(f"📝 {desc}")
 
-                            # TIME
                             time_val = row.get('time', '')
                             if pd.isna(time_val) or str(time_val) == 'nan' or str(time_val).strip() == '':
                                 time_val = row.get('meeting_time', '')
