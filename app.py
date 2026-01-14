@@ -66,7 +66,7 @@ def fetch_lis_data():
         try: df = pd.read_csv(LIS_BILLS_CSV, encoding='ISO-8859-1')
         except: df = pd.read_csv(LIS_BILLS_CSV.replace(".CSV", ".csv"), encoding='ISO-8859-1')
         
-        # FIX: Normalize columns heavily to catch "meeting_time" vs "time" vs "Meeting Time"
+        # FIX: Normalize columns heavily
         df.columns = df.columns.str.strip().str.lower().str.replace(' ', '_').str.replace('/', '_').str.replace('.', '')
         
         if 'bill_id' in df.columns:
@@ -132,7 +132,7 @@ def get_bill_data_batch(bill_numbers, lis_df):
             if pd.notna(s_act) and str(s_act).lower() != 'nan':
                  history_data.append({"Date": item.get('last_senate_action_date'), "Action": f"[Senate] {s_act}"})
 
-            # --- ROBUST COMMITTEE EXTRACTION (The "Inference" Engine) ---
+            # --- ROBUST COMMITTEE EXTRACTION ---
             curr_comm = "-"
             
             # 1. Try explicit columns first
@@ -378,7 +378,7 @@ if bills_to_track:
                 st.markdown("#### ❌ Failed")
                 render_master_list_item(dead)
 
-    # --- TAB 3: UPCOMING (FIXED: Time Scraper + Committee Inference) ---
+    # --- TAB 3: UPCOMING (The "Merge Strategy" Implementation) ---
     with tab_upcoming:
         st.subheader("📅 Your Weekly Calendar")
         full_schedule = lis_data.get('schedule', pd.DataFrame())
@@ -390,9 +390,10 @@ if bills_to_track:
             else:
                 full_schedule['dt'] = pd.NaT
 
-        # Create Map from Bill Number -> Committee (from the Master List status)
+        # --- THE BRAIN: Maps from Master List ---
         bill_to_comm_map = final_df.set_index('Bill Number')['Current_Committee'].to_dict()
         bill_to_sub_map = final_df.set_index('Bill Number')['Current_Sub'].to_dict()
+        bill_to_status_map = final_df.set_index('Bill Number')['Status'].to_dict()
 
         today = datetime.now().date()
         cols = st.columns(7)
@@ -413,48 +414,33 @@ if bills_to_track:
                     ]
                     if not day_matches.empty:
                         for idx, row in day_matches.iterrows():
+                            # Bill Number
                             st.error(f"**{row['bill_clean']}**")
                             
-                            # --- LOGIC FIX: INFER COMMITTEE FROM MASTER LIST ---
-                            # Get all column values for "Brute Force" search
-                            all_cols = row.index.tolist()
-                            
-                            # 1. Find Scraped Committee Name (if any)
-                            # Look for cols like 'committee', 'committee_name', 'meeting_type'
-                            comm_col = next((c for c in all_cols if 'committee' in c and 'sub' not in c), None)
-                            sub_col = next((c for c in all_cols if 'sub' in c and 'committee' in c), None) # e.g. subcommittee_name
-                            if not sub_col: sub_col = next((c for c in all_cols if 'sub' in c and 'name' in c), None)
-
-                            scraped_comm = str(row[comm_col]).strip() if comm_col else ""
-                            scraped_sub = str(row[sub_col]).strip() if sub_col else ""
+                            # --- 1. ABSTRACT TITLE (FROM MASTER LIST) ---
+                            # We check the Master Map first. If it's a sub meeting, we check the sub map.
+                            master_comm = bill_to_comm_map.get(row['bill_clean'])
+                            master_sub = bill_to_sub_map.get(row['bill_clean'])
                             
                             header = "Committee"
-                            sub_text = ""
-                            
-                            # 2. Logic: If Event is Subcommittee, use Master List for Header (Parent Comm)
-                            if "Subcommittee" in str(row.get('event_type', '')):
-                                sub_text = scraped_comm if scraped_comm and scraped_comm != 'nan' else scraped_sub
-                                # INFERENCE: Grab Parent from Master Map
-                                header = bill_to_comm_map.get(row['bill_clean'], 'Committee')
-                            else:
-                                # Regular Committee Meeting
-                                if scraped_comm and scraped_comm != 'nan':
-                                    header = scraped_comm
-                                else:
-                                    # Fallback to Master Map
-                                    header = bill_to_comm_map.get(row['bill_clean'], 'Committee')
+                            if master_comm and master_comm != '-':
+                                header = master_comm
+                            elif row.get('cal_type'):
+                                header = row.get('cal_type') # e.g., "Floor Session"
                                 
-                                # Try to find sub from map
-                                sub_text = bill_to_sub_map.get(row['bill_clean'], '')
-
-                            if str(header) in ['nan', '', '-']: header = "Committee (TBD)"
                             st.write(f"🏛️ **{header}**")
                             
-                            if str(sub_text) not in ['nan', '', '-']: 
-                                st.caption(f"↳ {sub_text}")
-                            
-                            # 3. Find Time (Brute Force Regex Search)
-                            # Concatenate ALL text in the row to find the time anywhere
+                            if master_sub and master_sub != '-':
+                                st.caption(f"↳ {master_sub}")
+
+                            # --- 2. SHOW LATEST ACTION (FROM MASTER LIST) ---
+                            # This answers "Why is it on the calendar?"
+                            latest_status = bill_to_status_map.get(row['bill_clean'])
+                            if latest_status:
+                                st.caption(f"ℹ️ {latest_status}")
+
+                            # --- 3. FIND TIME (FROM CALENDAR FILE - BRUTE FORCE) ---
+                            # Join all data in the row into one string to find the time
                             row_text = " ".join([str(val) for val in row.values])
                             
                             # Regex for 8:00 AM, 8:00AM, 8:00 am, 10:00 a.m.
