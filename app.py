@@ -39,11 +39,10 @@ def determine_lifecycle(status_text):
         return "❌ Dead / Tabled"
     
     # 3. PASSED LEGISLATURE (Waiting on Governor)
-    # "Enrolled" = Passed both chambers. "Communicated" = On Gov's desk.
     if any(x in status for x in ["enrolled", "communicated to governor", "bill text as passed"]):
         return "✍️ Awaiting Signature"
         
-    # 4. ACTIVE (Still in House/Senate)
+    # 4. ACTIVE
     return "🚀 Active"
 
 def get_smart_subject(title, api_subjects):
@@ -121,7 +120,6 @@ def check_and_broadcast(df_bills, df_subscribers):
     if not subscriber_list:
         return
 
-    # 1. FETCH HISTORY (MAX MEMORY)
     combined_history_text = ""
     first_email = subscriber_list[0].strip()
     
@@ -130,8 +128,6 @@ def check_and_broadcast(df_bills, df_subscribers):
         user_id = lookup['user']['id']
         dm_channel = client.conversations_open(users=[user_id])
         channel_id = dm_channel['channel']['id']
-        
-        # Pull 1000 messages (Session-Long Memory)
         history = client.conversations_history(channel=channel_id, limit=1000)
         
         if history['messages']:
@@ -139,11 +135,9 @@ def check_and_broadcast(df_bills, df_subscribers):
                 combined_history_text += msg.get('text', '') + "\n"
             
     except SlackApiError as e:
-        # If this fails, we show the error in sidebar
         st.sidebar.error(f"Slack Error: {e}")
         return
 
-    # 2. COMPARE
     report = f"🏛️ *VA LEGISLATIVE UPDATE* - {datetime.now().strftime('%m/%d')}\n"
     report += "_Latest changes detected:_\n"
     
@@ -153,14 +147,11 @@ def check_and_broadcast(df_bills, df_subscribers):
         b_num = row['Bill Number']
         current_status = row.get('Status', 'Unknown')
         
-        # CREATE ALERT STRING
         expected_alert_string = f"*{b_num}*: {current_status}"
         
-        # DUPLICATE CHECK
         if expected_alert_string in combined_history_text:
             continue
             
-        # NEW UPDATE
         updates_found = True
         emoji = "⚪"
         if "Signed" in row['Lifecycle']: emoji = "✅"
@@ -170,7 +161,6 @@ def check_and_broadcast(df_bills, df_subscribers):
         
         report += f"\n{emoji} {expected_alert_string}"
 
-    # 3. BROADCAST
     if updates_found:
         st.toast(f"📢 Broadcasting to {len(subscriber_list)} people...")
         for email in subscriber_list:
@@ -228,13 +218,17 @@ if bills_to_track:
     api_df = get_bill_data_batch(bills_to_track)
     final_df = pd.merge(sheet_df, api_df, on="Bill Number", how="left")
     
-    # RUN CHECK
     check_and_broadcast(final_df, subs_df)
     
     # --- HELPER FOR DRAWING SECTIONS ---
     def draw_categorized_section(bills, title, color_code):
-        if bills.empty: return
+        # ALWAYS SHOW HEADER (Even if empty)
         st.markdown(f"#### {color_code} {title} ({len(bills)})")
+        
+        if bills.empty:
+            st.caption("No bills.")
+            return
+
         subjects = sorted([s for s in bills['Auto_Folder'].unique() if str(s) != 'nan'])
         for subj in subjects:
             subset = bills[bills['Auto_Folder'] == subj]
@@ -267,26 +261,19 @@ if bills_to_track:
             signed = subset[subset['Lifecycle'] == "✅ Signed & Enacted"]
             dead = subset[subset['Lifecycle'] == "❌ Dead / Tabled"]
             
-            # 1. ACTIVE
-            if not active.empty:
-                draw_categorized_section(active, "Active Bills", "🚀")
-                st.markdown("---")
+            # 1. ACTIVE (Always Visible)
+            draw_categorized_section(active, "Active Bills", "🚀")
+            st.markdown("---")
             
-            # 2. PASSED SECTION (Grouped)
-            if not awaiting.empty or not signed.empty:
-                st.markdown("### 🎉 Passed Legislation")
-                
-                # Awaiting Signature
-                if not awaiting.empty:
-                    draw_categorized_section(awaiting, "Awaiting Signature", "✍️")
-                
-                # Signed & Enacted
-                if not signed.empty:
-                    draw_categorized_section(signed, "Signed & Enacted", "✅")
-                
-                st.markdown("---")
+            # 2. PASSED SECTION (Always Visible Header)
+            st.markdown("### 🎉 Passed Legislation")
+            
+            # Sub-sections (Always Visible)
+            draw_categorized_section(awaiting, "Awaiting Signature", "✍️")
+            draw_categorized_section(signed, "Signed & Enacted", "✅")
+            st.markdown("---")
 
-            # 3. FAILED
+            # 3. FAILED (Always Visible)
             draw_categorized_section(dead, "Dead / Failed", "❌")
 
             # --- MASTER LIST ---
