@@ -71,7 +71,6 @@ def fetch_lis_data():
         except: df_docket = pd.read_csv(LIS_DOCKET_CSV.replace(".CSV", ".csv"), encoding='ISO-8859-1')
         df_docket.columns = df_docket.columns.str.strip().str.lower()
         
-        # Ensure we create a clean bill column if possible
         bill_col_candidate = next((c for c in df_docket.columns if "bill" in c), None)
         if bill_col_candidate:
             df_docket['bill_clean'] = df_docket[bill_col_candidate].astype(str).str.upper().str.strip()
@@ -304,63 +303,52 @@ if bills_to_track:
                 st.markdown("#### ❌ Failed")
                 render_master_list_item(dead)
 
-    # --- TAB 3: UPCOMING (7-DAY CALENDAR - SMART FIXED) ---
+    # --- TAB 3: UPCOMING (7-DAY CALENDAR - ALWAYS VISIBLE) ---
     with tab_upcoming:
         st.subheader("📅 Your Weekly Calendar")
         docket_df = lis_data.get('docket', pd.DataFrame())
 
-        if docket_df.empty:
-            st.info("No official committee dockets found.")
+        # Check column names safely
+        date_col = next((c for c in docket_df.columns if "date" in c), None)
+        
+        # We always draw the calendar, even if docket is empty
+        today = datetime.now().date()
+        cols = st.columns(7)
+        
+        my_bills = [b.upper() for b in bills_to_track]
+        
+        # Convert docket dates if possible
+        if not docket_df.empty and date_col and 'bill_clean' in docket_df.columns:
+            docket_df['dt'] = pd.to_datetime(docket_df[date_col], errors='coerce')
         else:
-            # --- SMART COLUMN FINDER ---
-            # Try to guess the column names if 'meeting_date' isn't exact
-            date_col = next((c for c in docket_df.columns if "date" in c), None)
+            # If empty or invalid, just create an empty DF with 'dt' column to avoid errors
+            docket_df = pd.DataFrame(columns=['dt', 'bill_clean'])
+
+        # RENDER 7-DAY GRID
+        for i in range(7):
+            target_date = today + timedelta(days=i)
+            display_date_str = target_date.strftime("%a %m/%d")
             
-            # If we have a date column and our bill column
-            if date_col and 'bill_clean' in docket_df.columns:
+            with cols[i]:
+                st.markdown(f"**{display_date_str}**")
+                st.divider()
                 
-                # Convert dates safely
-                docket_df['dt'] = pd.to_datetime(docket_df[date_col], errors='coerce')
+                # Check for matches
+                day_matches = docket_df[
+                    (docket_df['dt'].dt.date == target_date) & 
+                    (docket_df['bill_clean'].isin(my_bills))
+                ]
                 
-                my_bills = [b.upper() for b in bills_to_track]
-                
-                # Check if ANY of my bills are in the file at all
-                any_matches = docket_df[docket_df['bill_clean'].isin(my_bills)]
-                if any_matches.empty:
-                    st.success("✅ Good news: No hearings scheduled for your bills in this file.")
-                else:
-                    # Draw Calendar
-                    today = datetime.now().date()
-                    cols = st.columns(7)
-                    
-                    for i in range(7):
-                        target_date = today + timedelta(days=i)
-                        display_date_str = target_date.strftime("%a %m/%d")
+                if not day_matches.empty:
+                    for idx, row in day_matches.iterrows():
+                        st.error(f"**{row['bill_clean']}**")
+                        comm_col = next((c for c in docket_df.columns if "com" in c), "Committee")
+                        room_col = next((c for c in docket_df.columns if "room" in c), None)
+                        time_col = next((c for c in docket_df.columns if "time" in c), None)
                         
-                        with cols[i]:
-                            st.markdown(f"**{display_date_str}**")
-                            st.divider()
-                            
-                            day_matches = docket_df[
-                                (docket_df['dt'].dt.date == target_date) & 
-                                (docket_df['bill_clean'].isin(my_bills))
-                            ]
-                            
-                            if not day_matches.empty:
-                                for idx, row in day_matches.iterrows():
-                                    st.error(f"**{row['bill_clean']}**")
-                                    
-                                    # Find committee/room columns dynamically too
-                                    comm_col = next((c for c in docket_df.columns if "com" in c), "Committee")
-                                    room_col = next((c for c in docket_df.columns if "room" in c), None)
-                                    time_col = next((c for c in docket_df.columns if "time" in c), None)
-                                    
-                                    st.caption(f"{row.get(comm_col, 'Comm')}")
-                                    if room_col: st.caption(f"📍 {row[room_col]}")
-                                    if time_col: st.caption(f"⏰ {row[time_col]}")
-                                    st.divider()
-                            else:
-                                st.caption("-")
-            else:
-                st.warning("⚠️ Docket Format Error")
-                st.write("Could not find a 'Date' column. Columns found:", docket_df.columns.tolist())
+                        st.caption(f"{row.get(comm_col, 'Comm')}")
+                        if room_col: st.caption(f"📍 {row[room_col]}")
+                        if time_col: st.caption(f"⏰ {row[time_col]}")
+                        st.divider()
+                else:
+                    st.caption("-") # Empty placeholder
