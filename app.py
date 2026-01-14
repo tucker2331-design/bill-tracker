@@ -1,10 +1,10 @@
 import streamlit as st
 import pandas as pd
 import requests
-import smtplib
 import time
-from email.mime.text import MIMEText
 from datetime import datetime
+from slack_sdk import WebClient
+from slack_sdk.errors import SlackApiError
 
 # --- CONFIGURATION ---
 SHEET_ID = "18m752GcvGIPPpqUn_gB0DfA3e4z2UGD0ki0dUZh2Qek"
@@ -12,15 +12,6 @@ SHEET_URL = f"https://docs.google.com/spreadsheets/d/{SHEET_ID}/gviz/tq?tqx=out:
 API_KEY = st.secrets.get("OPENSTATES_API_KEY")
 
 st.set_page_config(page_title="VA Bill Tracker 2026", layout="wide")
-
-# --- CARRIER LIST FOR SMS ---
-CARRIERS = {
-    "Verizon": "vtext.com",
-    "T-Mobile": "tmomail.net",
-    "AT&T": "txt.att.net",
-    "Sprint": "messaging.sprintpcs.com",
-    "Google Fi": "msg.fi.google.com",
-}
 
 # --- SMART CATEGORIZATION CONFIG ---
 TOPIC_KEYWORDS = {
@@ -36,23 +27,36 @@ TOPIC_KEYWORDS = {
 # --- HELPER FUNCTIONS ---
 
 def determine_lifecycle(status_text):
+    """Sorts bills into 4 buckets: Passed, Awaiting Sig, Active, Failed."""
     status = str(status_text).lower()
+    
+    # 1. PASSED & ENACTED
     if any(x in status for x in ["signed by governor", "enacted", "approved by governor", "chapter"]):
         return "✅ Passed & Signed"
+    
+    # 2. DEAD / FAILED
     dead_keywords = ["tabled", "failed", "stricken", "passed by indefinitely", "left in", "defeated", "no action taken", "incorporated into"]
     if any(word in status for word in dead_keywords):
         return "❌ Dead / Tabled"
+
+    # 3. AWAITING SIGNATURE
     if any(x in status for x in ["enrolled", "communicated to governor", "bill text as passed"]):
         return "✍️ Awaiting Signature"
+        
+    # 4. ACTIVE (Default)
     return "🚀 Active"
 
 def get_smart_subject(title, api_subjects):
+    """Determines subject based on Keywords -> API Tag -> Fallback."""
     title_lower = str(title).lower()
+    
     for category, keywords in TOPIC_KEYWORDS.items():
         if any(k in title_lower for k in keywords):
             return category
+            
     if api_subjects and len(api_subjects) > 0:
         return api_subjects[0]
+        
     return "General / Unsorted"
 
 def get_bill_data_batch(bill_numbers):
@@ -64,17 +68,22 @@ def get_bill_data_batch(bill_numbers):
 
     for i, bill_num in enumerate(clean_bills):
         if not bill_num: continue
-        time.sleep(1.0)
+        
+        time.sleep(1.0) # Rate limit pause
         progress_bar.progress((i + 1) / total, text=f"Checking {bill_num}...")
 
         url = "https://v3.openstates.org/bills"
         params = {
-            "jurisdiction": "Virginia", "session": "2026", "identifier": bill_num,
-            "include": ["actions", "sponsorships", "abstracts"], "apikey": API_KEY
+            "jurisdiction": "Virginia",
+            "session": "2026",
+            "identifier": bill_num,
+            "include": ["actions", "sponsorships", "abstracts"], 
+            "apikey": API_KEY
         }
         
         try:
             response = requests.get(url, params=params)
+            
             if response.status_code != 200:
                 results.append({"Bill Number": bill_num, "Status": "Error/Not Found", "Lifecycle": "Unknown"})
                 continue
@@ -97,46 +106,43 @@ def get_bill_data_batch(bill_numbers):
                 })
             else:
                 results.append({"Bill Number": bill_num, "Official Title": "Not Found", "Auto_Folder": "Unassigned", "Lifecycle": "Unknown"})
+                
         except Exception as e:
             results.append({"Bill Number": bill_num, "Status": f"Error: {e}", "Auto_Folder": "Error", "Lifecycle": "Unknown"})
             
     progress_bar.empty()
     return pd.DataFrame(results)
 
-def send_notification(email_to, phone_num, carrier, subject, body):
-    email_user = st.secrets.get("EMAIL_USER")
-    email_pass = st.secrets.get("EMAIL_PASS")
-    
-    if not email_user or not email_pass:
-        st.error("Error: EMAIL_USER or EMAIL_PASS missing in Secrets.")
+# --- SLACK NOTIFICATION FUNCTION ---
+def send_slack_dm(user_email, subject, body):
+    token = st.secrets.get("SLACK_BOT_TOKEN")
+    if not token:
+        st.error("Missing SLACK_BOT_TOKEN in secrets.toml")
         return
 
-    recipients = []
-    if email_to: recipients.append(email_to)
-    if phone_num and carrier: 
-        clean_phone = "".join(filter(str.isdigit, str(phone_num)))
-        if len(clean_phone) == 10:
-            recipients.append(f"{clean_phone}@{CARRIERS[carrier]}")
-
-    if not recipients:
-        st.warning("No valid email or phone number entered.")
-        return
+    client = WebClient(token=token)
 
     try:
-        with smtplib.SMTP_SSL('smtp.gmail.com', 465) as server:
-            server.login(email_user, email_pass)
-            for recipient in recipients:
-                msg = MIMEText(body)
-                msg['Subject'] = subject
-                msg['From'] = email_user
-                msg['To'] = recipient
-                server.sendmail(email_user, recipient, msg.as_string())
-        st.success(f"Alerts sent to {len(recipients)} recipients!")
-    except Exception as e:
-        st.error(f"Failed to send: {e}")
+        # 1. Lookup User by Email
+        lookup = client.users_lookupByEmail(email=user_email)
+        user_id = lookup['user']['id']
+        
+        # 2. Format Message
+        formatted_text = f"*{subject}*\n\n{body}"
+
+        # 3. Send DM
+        client.chat_postMessage(channel=user_id, text=formatted_text)
+        st.sidebar.success(f"✅ Sent to {user_email}!")
+        
+    except SlackApiError as e:
+        if e.response['error'] == 'users_not_found':
+            st.sidebar.error(f"❌ No Slack user found for: {user_email}")
+        else:
+            st.sidebar.error(f"Slack Error: {e.response['error']}")
 
 # --- DISPLAY COMPONENT ---
 def render_bill_card(row):
+    """Renders a single bill's details."""
     display_title = row['My Title'] if row['My Title'] != "-" else row.get('Official Title', 'Loading...')
     status = row.get('Status', 'Unknown')
     
@@ -148,11 +154,13 @@ def render_bill_card(row):
         hist_df = pd.DataFrame(history_data)
         if 'date' in hist_df.columns and 'description' in hist_df.columns:
             st.dataframe(hist_df[['date', 'description']], hide_index=True, use_container_width=True)
+    
     st.divider()
 
 # --- MAIN APP ---
 st.title("🏛️ Virginia General Assembly Tracker")
 
+# 1. LOAD DATA
 try:
     raw_df = pd.read_csv(SHEET_URL)
     raw_df.columns = raw_df.columns.str.strip()
@@ -179,9 +187,11 @@ except Exception as e:
     st.error(f"Sheet Error: {e}")
     st.stop()
 
+# 2. REFRESH BUTTON
 if st.button("🔄 Refresh Data"):
     st.rerun()
 
+# 3. FETCH & DISPLAY
 bills_to_track = sheet_df['Bill Number'].unique().tolist()
 
 if bills_to_track:
@@ -191,10 +201,13 @@ if bills_to_track:
     api_df = st.session_state['bill_data']
     final_df = pd.merge(sheet_df, api_df, on="Bill Number", how="left")
     
+    # --- HELPER FOR CATEGORIZED VIEW ---
     def draw_categorized_section(bills, title, color_code):
         if bills.empty: return
         st.markdown(f"### {color_code} {title} ({len(bills)})")
+        
         subjects = sorted([s for s in bills['Auto_Folder'].unique() if str(s) != 'nan'])
+        
         for subj in subjects:
             subset = bills[bills['Auto_Folder'] == subj]
             with st.expander(f"📁 {subj} ({len(subset)})", expanded=False):
@@ -206,7 +219,6 @@ if bills_to_track:
 
     for tab, b_type in [(tab_involved, "Involved"), (tab_watching, "Watching")]:
         with tab:
-            # 1. CATEGORIZED VIEW
             subset = final_df[final_df['Type'] == b_type]
             
             awaiting = subset[subset['Lifecycle'] == "✍️ Awaiting Signature"]
@@ -214,6 +226,7 @@ if bills_to_track:
             active = subset[subset['Lifecycle'] == "🚀 Active"]
             dead = subset[subset['Lifecycle'] == "❌ Dead / Tabled"]
             
+            # 1. CATEGORIZED FOLDERS
             draw_categorized_section(awaiting, "Awaiting Signature", "✍️")
             if not awaiting.empty: st.markdown("---")
             draw_categorized_section(active, "Active Bills", "🚀")
@@ -226,11 +239,9 @@ if bills_to_track:
             st.markdown("---")
             st.subheader(f"📜 Master List ({b_type})")
             
-            # Filter specifically for this tab
             tab_flat_active = subset[subset['Lifecycle'].isin(["🚀 Active", "✍️ Awaiting Signature", "✅ Passed & Signed"])]
             tab_flat_failed = subset[subset['Lifecycle'] == "❌ Dead / Tabled"]
             
-            # Numerical Sort
             tab_flat_active = tab_flat_active.sort_values(by="Bill Number")
             tab_flat_failed = tab_flat_failed.sort_values(by="Bill Number")
 
@@ -246,20 +257,33 @@ if bills_to_track:
                     with st.expander(f"{row['Bill Number']} - {row.get('Status')}"):
                         render_bill_card(row)
 
-    # --- ALERTS SIDEBAR ---
-    st.sidebar.header("📢 Alerts")
-    email_target = st.sidebar.text_input("Email Address:")
-    phone_target = st.sidebar.text_input("Phone Number (10 digits):")
-    carrier_target = st.sidebar.selectbox("Select Carrier:", list(CARRIERS.keys()))
+    # --- NEW SLACK SIDEBAR ---
+    st.sidebar.header("📢 Slack Alerts")
+    st.sidebar.info("Send this report to yourself via Slack.")
     
-    if st.sidebar.button("Send Alerts"):
-        report = f"VA LEGISLATIVE UPDATE - {datetime.now().strftime('%m/%d')}\n\n"
-        for b_type in ["Involved", "Watching"]:
-            report += f"=== {b_type.upper()} ===\n"
-            rows = final_df[final_df['Type'] == b_type]
-            for i, r in rows.iterrows():
-                report += f"[{r.get('Auto_Folder','-')}] {r['Bill Number']}: {r.get('Status', 'Unknown')}\n"
-            report += "\n"
-        send_notification(email_target, phone_target, carrier_target, "Bill Tracker Update", report)
+    slack_email = st.sidebar.text_input("Enter your Work Email:")
+    
+    if st.sidebar.button("Send Slack Update"):
+        if not slack_email:
+            st.sidebar.warning("Please enter an email.")
+        else:
+            # Build Report
+            report = f"🏛️ *VA LEGISLATIVE UPDATE* - {datetime.now().strftime('%m/%d')}\n"
+            for b_type in ["Involved", "Watching"]:
+                report += f"\n*=== {b_type.upper()} ===*\n"
+                rows = final_df[final_df['Type'] == b_type]
+                if rows.empty: report += "_No bills._\n"
+                
+                for i, r in rows.iterrows():
+                    emoji = "⚪"
+                    if "Passed" in r['Lifecycle']: emoji = "✅"
+                    elif "Dead" in r['Lifecycle']: emoji = "❌"
+                    elif "Active" in r['Lifecycle']: emoji = "🚀"
+                    elif "Awaiting" in r['Lifecycle']: emoji = "✍️"
+                    
+                    report += f"{emoji} *{r['Bill Number']}*: {r.get('Status', 'Unknown')}\n"
+
+            send_slack_dm(slack_email, "Daily Bill Tracker Update", report)
+
 else:
     st.info("Add bills to your Google Sheet.")
