@@ -111,7 +111,6 @@ def get_bill_data_batch(bill_numbers, lis_df):
             if not date_val or date_val == 'nan':
                 date_val = str(item.get('last_senate_action_date', ''))
 
-            # FIX: Filter out "nan" or empty actions from history table
             history_data = []
             h_act = item.get('last_house_action')
             if pd.notna(h_act) and str(h_act).lower() != 'nan' and str(h_act).strip() != '':
@@ -124,7 +123,6 @@ def get_bill_data_batch(bill_numbers, lis_df):
             # Determine Current Committee
             curr_comm = item.get('last_house_committee', item.get('last_senate_committee', ''))
             if not curr_comm or str(curr_comm) == 'nan':
-                # Fallback: Extract from status string
                 if "referred to committee on" in str(status).lower():
                     curr_comm = str(status).lower().split("referred to committee on")[-1].title()
                 elif "referred to committee for" in str(status).lower():
@@ -218,10 +216,10 @@ def render_master_list_item(df):
     for i, row in df.iterrows():
         header_title = row['My Title'] if row['My Title'] != "-" else row.get('Official Title', '')
         with st.expander(f"{row['Bill Number']} - {header_title}"):
+            st.markdown(f"**🏛️ Current Committee:** {row.get('Current_Committee', '-')}")
             st.markdown(f"**📌 Designated Title:** {row.get('My Title', '-')}")
             st.markdown(f"**📜 Official Title:** {row.get('Official Title', '-')}")
             st.markdown(f"**🔄 Status:** {row.get('Status', '-')}")
-            st.markdown(f"**🏛️ Current Committee:** {row.get('Current_Committee', '-')}") # MOVED HERE
             
             # --- HISTORY TABLE ---
             hist_data = row.get('History_Data', [])
@@ -372,6 +370,9 @@ if bills_to_track:
             else:
                 full_schedule['dt'] = pd.NaT
 
+        # Create Map of Bill -> Current Committee from Master List
+        bill_to_comm_map = final_df.set_index('Bill Number')['Current_Committee'].to_dict()
+
         today = datetime.now().date()
         cols = st.columns(7)
         my_bills = [b.upper() for b in bills_to_track]
@@ -391,14 +392,18 @@ if bills_to_track:
                     ]
                     if not day_matches.empty:
                         for idx, row in day_matches.iterrows():
-                            # Header Selection
+                            # Header Selection with Cross-Reference
                             header = row.get('committee_name', '')
-                            # Fallback Logic
+                            
+                            # If header invalid, check Master List
                             if pd.isna(header) or str(header) == 'nan' or str(header).strip() == '':
-                                header = row.get('cal_type', '') # Try Uncontested/Contested first
-                            if pd.isna(header) or str(header) == 'nan' or str(header).strip() == '':
-                                header = row.get('description', 'Floor Session') # Try Description
-                                
+                                master_comm = bill_to_comm_map.get(row['bill_clean'])
+                                if master_comm and master_comm != '-':
+                                    header = f"{master_comm} (per Status)"
+                                else:
+                                    # Fallback to Cal Type or Floor if status unknown
+                                    header = row.get('cal_type', 'Floor Session')
+
                             st.error(f"**{row['bill_clean']}**")
                             st.write(f"🏛️ **{header}**")
                             
@@ -409,10 +414,9 @@ if bills_to_track:
                             ctype = row.get('cal_type', '')
                             if pd.notna(ctype) and str(ctype) != 'nan': st.caption(f"📑 {ctype}")
                             
-                            # SHOW DESCRIPTION (if not used as header)
+                            # SHOW DESCRIPTION
                             desc = row.get('description', '')
-                            if pd.notna(desc) and str(desc) != 'nan' and desc != header:
-                                st.caption(f"📝 {desc}")
+                            if pd.notna(desc) and str(desc) != 'nan': st.caption(f"📝 {desc}")
 
                             # TIME
                             time_val = row.get('time', '')
