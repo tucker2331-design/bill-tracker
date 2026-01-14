@@ -3,6 +3,7 @@ import pandas as pd
 import requests
 import time
 from datetime import datetime
+import pytz # For EST Timezone
 from slack_sdk import WebClient
 from slack_sdk.errors import SlackApiError
 
@@ -21,7 +22,7 @@ st.set_page_config(page_title="VA Bill Tracker 2026", layout="wide")
 TOPIC_KEYWORDS = {
     "🗳️ Elections & Democracy": ["election", "vote", "ballot", "campaign", "poll", "voter", "registrar", "districting", "suffrage"],
     "🏗️ Housing & Property": ["rent", "landlord", "tenant", "housing", "lease", "property", "zoning", "eviction", "homeowner", "development", "residential"],
-    "✊ Labor & Workers Rights": ["wage", "salary", "worker", "employment", "labor", "union", "bargaining", "leave", "compensation", "workplace", "employee"],
+    "✊ Labor & Workers Rights": ["wage", "salary", "worker", "employment", "labor", "union", "bargaining", "leave", "compensation", "workplace", "employee", "minimum"],
     "💰 Economy & Business": ["tax", "commerce", "business", "market", "consumer", "corporation", "finance", "budget", "economic", "trade"],
     "🎓 Education": ["school", "education", "student", "university", "college", "teacher", "curriculum", "scholarship", "tuition", "board of education"],
     "🚓 Public Safety & Law": ["firearm", "gun", "police", "crime", "penalty", "court", "judge", "enforcement", "prison", "arrest", "criminal", "justice"],
@@ -43,7 +44,7 @@ def determine_lifecycle(status_text):
         return "✍️ Awaiting Signature"
     return "🚀 Active"
 
-def get_smart_subject(title, api_subjects):
+def get_smart_subject(title, api_subjects=None):
     title_lower = str(title).lower()
     for category, keywords in TOPIC_KEYWORDS.items():
         if any(k in title_lower for k in keywords):
@@ -90,24 +91,24 @@ def get_bill_data_batch(bill_numbers):
                 item = found_data.get(bill_num)
                 if item:
                     latest_action = item['actions'][0]['description'] if item['actions'] else "Introduced"
-                    smart_folder = get_smart_subject(item['title'], item.get('subject', []))
+                    # Note: We do NOT categorize here anymore. We wait until the merge.
                     results.append({
                         "Bill Number": bill_num,
                         "Official Title": item['title'],
                         "Status": latest_action,
                         "Date": item['actions'][0]['date'] if item['actions'] else "",
-                        "Auto_Folder": smart_folder,
+                        "Subject_Tags": item.get('subject', []),
                         "Lifecycle": determine_lifecycle(latest_action),
                         "History": item['actions']
                     })
                 else:
                     results.append({
                         "Bill Number": bill_num, "Status": "Not Found / Prefiled",
-                        "Lifecycle": "🚀 Active", "Auto_Folder": "📂 Unassigned / General"
+                        "Lifecycle": "🚀 Active", "Official Title": "Unknown"
                     })
         except:
             for b in chunk:
-                results.append({"Bill Number": b, "Status": "⚠️ API Error (Wait)", "Lifecycle": "🚀 Active", "Auto_Folder": "⚠️ System Alert"})
+                results.append({"Bill Number": b, "Status": "⚠️ API Error (Wait)", "Lifecycle": "🚀 Active", "Official Title": "Error"})
         
         total_processed += len(chunk)
         progress_bar.progress(total_processed / len(clean_bills))
@@ -121,14 +122,14 @@ def check_and_broadcast(df_bills, df_subscribers):
     
     token = st.secrets.get("SLACK_BOT_TOKEN")
     if not token: 
-        st.sidebar.error("❌ Token Missing")
+        st.sidebar.error("❌ Disconnected (Token Missing)")
         return
 
     client = WebClient(token=token)
     try:
         subscriber_list = df_subscribers['Email'].dropna().unique().tolist()
         if not subscriber_list: 
-            st.sidebar.warning("⚠️ No Subscribers")
+            st.sidebar.warning("⚠️ No Subscribers Found")
             return
         
         # Check history of first user
@@ -136,17 +137,19 @@ def check_and_broadcast(df_bills, df_subscribers):
         history = client.conversations_history(channel=client.conversations_open(users=[user_id])['channel']['id'], limit=100)
         history_text = "\n".join([m.get('text', '') for m in history['messages']])
         
-        st.sidebar.success("✅ Connected to Slack")
-        st.sidebar.caption(f"Monitoring for {len(subscriber_list)} users")
+        st.sidebar.success(f"✅ Connected to Slack")
         
     except Exception as e:
-        st.sidebar.error(f"❌ Connection Error: {e}")
+        st.sidebar.error(f"❌ Slack Error: {e}")
         return
 
     report = f"🏛️ *VA LEGISLATIVE UPDATE* - {datetime.now().strftime('%m/%d')}\n_Latest changes detected:_\n"
     updates_found = False
     
     for i, row in df_bills.iterrows():
+        # Prevent alert loops on API errors
+        if "API Error" in str(row.get('Status')): continue
+        
         alert_str = f"*{row['Bill Number']}*: {row.get('Status')}"
         if alert_str in history_text: continue
         
@@ -161,30 +164,39 @@ def check_and_broadcast(df_bills, df_subscribers):
                 client.chat_postMessage(channel=uid, text=report)
             except: pass
         st.toast("✅ Sent!")
-        st.sidebar.info("📢 Update Sent!")
+        st.sidebar.info("🚀 New Update Sent!")
     else:
-        st.sidebar.success("✅ Up to Date (No new changes)")
+        st.sidebar.info("💤 No new updates needed.")
 
 # --- UI COMPONENTS ---
 def render_bill_card(row):
-    title = row['My Title'] if row['My Title'] != "-" else row.get('Official Title', 'Loading...')
+    # Use Official Title if available, otherwise use User Title
+    if row.get('Official Title') not in ["Unknown", "Error", "Not Found"]:
+        display_title = row['Official Title']
+    else:
+        display_title = row['My Title']
+        
     st.markdown(f"**{row['Bill Number']}**")
-    st.caption(f"{title}")
+    st.caption(f"{display_title}")
     st.caption(f"_{row.get('Status')}_")
     st.divider()
 
 # --- MAIN APP ---
 st.title("🏛️ Virginia General Assembly Tracker")
 
-# Initialize Session State for Timer
-if 'last_run' not in st.session_state:
-    st.session_state['last_run'] = datetime.now().strftime("%I:%M %p")
+# EST Timezone Setup
+est = pytz.timezone('US/Eastern')
+current_time_est = datetime.now(est).strftime("%I:%M %p EST")
 
-# Refresh Button & Timer Layout
+# Initialize Session State
+if 'last_run' not in st.session_state:
+    st.session_state['last_run'] = current_time_est
+
+# Refresh Button & Timer
 col_btn, col_time = st.columns([1, 6])
 with col_btn:
     if st.button("🔄 Check for Updates"):
-        st.session_state['last_run'] = datetime.now().strftime("%I:%M %p")
+        st.session_state['last_run'] = datetime.now(est).strftime("%I:%M %p EST")
         st.rerun()
 with col_time:
     st.markdown(f"**Last Refreshed:** `{st.session_state['last_run']}`")
@@ -225,6 +237,18 @@ if bills_to_track:
     api_df = get_bill_data_batch(bills_to_track)
     final_df = pd.merge(sheet_df, api_df, on="Bill Number", how="left")
     
+    # --- INTELLIGENT CATEGORIZATION (BACKUP LOGIC) ---
+    # Determine folder based on Official Title OR User Title (Fallback)
+    def assign_folder(row):
+        title_to_check = row.get('Official Title', '')
+        if title_to_check in ["Unknown", "Error", "Not Found", ""]:
+            # Fallback to the title you wrote in Google Sheets
+            title_to_check = row.get('My Title', '')
+        
+        return get_smart_subject(title_to_check, row.get('Subject_Tags', []))
+
+    final_df['Auto_Folder'] = final_df.apply(assign_folder, axis=1)
+
     # Run Alerts (Populates Sidebar)
     check_and_broadcast(final_df, subs_df)
 
