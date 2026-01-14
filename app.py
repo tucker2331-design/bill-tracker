@@ -72,6 +72,8 @@ def fetch_lis_data():
 
     # 2. Fetch Calendars (Subdocket, Docket, Calendar)
     calendar_dfs = []
+    
+    # We loop through all 3 files to build a master schedule
     for url, type_label in [(LIS_SUBDOCKET_CSV, "🏛️ Subcommittee"), (LIS_DOCKET_CSV, "🏛️ Committee"), (LIS_CALENDAR_CSV, "📜 Floor/Vote")]:
         try:
             try: df = pd.read_csv(url, encoding='ISO-8859-1')
@@ -109,11 +111,17 @@ def get_bill_data_batch(bill_numbers, lis_df):
             status = item.get('last_house_action', '')
             if pd.isna(status) or str(status).strip() == '': status = item.get('last_senate_action', 'Introduced')
             title = item.get('bill_description', 'No Title')
+            
+            # Smart Date Fetch
+            date_val = str(item.get('last_house_action_date', ''))
+            if not date_val or date_val == 'nan':
+                date_val = str(item.get('last_senate_action_date', ''))
+
             results.append({
                 "Bill Number": bill_num,
                 "Official Title": title,
                 "Status": str(status),
-                "Date": str(item.get('last_house_action_date', '')), 
+                "Date": date_val, 
                 "Lifecycle": determine_lifecycle(str(status)),
                 "Auto_Folder": get_smart_subject(title)
             })
@@ -154,14 +162,18 @@ def check_and_broadcast(df_bills, df_subscribers, demo_mode):
     for i, row in df_bills.iterrows():
         if "LIS Connection Error" in str(row.get('Status')): continue
         
-        # FIXED: More robust check string (Bill + Status Only) to prevent date confusion
-        check_str = f"*{row['Bill Number']}*: {row.get('Status')}"
+        # 1. CHECK ID: Simple ID to check against history (Status only, ignore date formatting issues)
+        check_id = f"*{row['Bill Number']}*: {row.get('Status')}"
         
-        if check_str in history_text: continue
+        if check_id in history_text: continue
         
         updates_found = True
-        # The actual message sent includes the date, but we check against the ID
-        report += f"\n⚪ {check_str}"
+        
+        # 2. DISPLAY STRING: The actual message includes the date
+        display_date = row.get('Date', '')
+        if not display_date or display_date == 'nan': display_date = datetime.now().strftime('%Y-%m-%d')
+        
+        report += f"\n⚪ *{row['Bill Number']}* ({display_date}): {row.get('Status')}"
 
     if updates_found:
         st.toast(f"📢 Sending updates to {len(subscriber_list)} people...")
@@ -198,8 +210,8 @@ def render_master_list_item(df):
             st.markdown(f"**🔄 Status / History:** {row.get('Status', '-')}")
             st.markdown(f"**📅 Date:** {row.get('Date', '-')}")
             
-            # FIXED: Link Format
-            lis_link = f"https://lis.virginia.gov/cgi-bin/legp604.exe?261+sum+{row['Bill Number']}"
+            # FIXED: Exact Link Format Requested
+            lis_link = f"https://lis.virginia.gov/bill-details/20261/{row['Bill Number']}"
             st.markdown(f"🔗 [View Official Bill on LIS]({lis_link})")
 
 # --- MAIN APP ---
