@@ -94,7 +94,7 @@ def get_bill_data_batch(bill_numbers):
     progress_bar.empty()
     return pd.DataFrame(results)
 
-# --- PURE HISTORY CHECK (MAX MEMORY) ---
+# --- CHECK AND BROADCAST WITH DEBUGGING ---
 def check_and_broadcast(df_bills, df_subscribers):
     token = st.secrets.get("SLACK_BOT_TOKEN")
     if not token:
@@ -112,26 +112,34 @@ def check_and_broadcast(df_bills, df_subscribers):
     if not subscriber_list:
         return
 
-    # 1. FETCH MAX HISTORY (1000 Messages)
-    # This covers approx 6+ months of daily updates.
+    # 1. FETCH HISTORY (DEBUG MODE)
     combined_history_text = ""
+    # We check the history of the FIRST person in the list.
+    # MAKE SURE THIS IS A REAL EMAIL.
     first_email = subscriber_list[0].strip()
     
-    try:
-        lookup = client.users_lookupByEmail(email=first_email)
-        user_id = lookup['user']['id']
-        dm_channel = client.conversations_open(users=[user_id])
-        channel_id = dm_channel['channel']['id']
-        
-        # INCREASED LIMIT TO 1000
-        history = client.conversations_history(channel=channel_id, limit=1000)
-        
-        if history['messages']:
-            for msg in history['messages']:
-                combined_history_text += msg.get('text', '') + "\n"
+    with st.sidebar.expander("🕵️ Debug: Bot Memory", expanded=True):
+        st.write(f"Checking history for: `{first_email}`")
+        try:
+            lookup = client.users_lookupByEmail(email=first_email)
+            user_id = lookup['user']['id']
+            dm_channel = client.conversations_open(users=[user_id])
+            channel_id = dm_channel['channel']['id']
             
-    except SlackApiError as e:
-        print(f"History Check Failed: {e}")
+            # Fetch 1000 messages
+            history = client.conversations_history(channel=channel_id, limit=1000)
+            
+            if history['messages']:
+                st.success(f"✅ Found {len(history['messages'])} past messages.")
+                for msg in history['messages']:
+                    combined_history_text += msg.get('text', '') + "\n"
+            else:
+                st.warning("⚠️ History is EMPTY. Bot thinks everything is new.")
+                
+        except SlackApiError as e:
+            st.error(f"❌ HISTORY ERROR: {e}")
+            st.info("💡 FIX: Go to Slack API -> OAuth -> Add 'im:history' -> Click 'Reinstall to Workspace'")
+            return # STOP HERE if we can't read history
 
     # 2. COMPARE
     report = f"🏛️ *VA LEGISLATIVE UPDATE* - {datetime.now().strftime('%m/%d')}\n"
@@ -143,15 +151,15 @@ def check_and_broadcast(df_bills, df_subscribers):
         b_num = row['Bill Number']
         current_status = row.get('Status', 'Unknown')
         
-        # We rely 100% on history. No date checks.
-        
+        # Construct the EXACT string we send to Slack
         expected_alert_string = f"*{b_num}*: {current_status}"
         
+        # Check if this exact string exists in the history blob
         if expected_alert_string in combined_history_text:
-            # We have seen this EXACT status in the last 1000 messages. Skip.
+            # We found it! It's a duplicate.
             continue
             
-        # If not in history, it is NEW to the user.
+        # If we get here, it's NEW.
         updates_found = True
         emoji = "⚪"
         if "Passed" in row['Lifecycle']: emoji = "✅"
@@ -163,7 +171,7 @@ def check_and_broadcast(df_bills, df_subscribers):
 
     # 3. BROADCAST
     if updates_found:
-        st.toast(f"📢 Broadcasting new updates to {len(subscriber_list)} people...")
+        st.toast(f"📢 Sending updates to {len(subscriber_list)} people...")
         
         for email in subscriber_list:
             try:
@@ -171,10 +179,10 @@ def check_and_broadcast(df_bills, df_subscribers):
                 user_id = lookup['user']['id']
                 client.chat_postMessage(channel=user_id, text=report)
             except SlackApiError as e:
-                print(f"Failed to send to {email}: {e}")
-        st.toast("✅ Update Broadcast Complete!")
+                st.sidebar.error(f"Failed to send to {email}: {e}")
+        st.toast("✅ Sent!")
     else:
-        print("Checked for updates: No new info to send.")
+        st.sidebar.success("✅ Checked History: No new updates.")
 
 # --- MAIN APP ---
 st.title("🏛️ Virginia General Assembly Tracker")
