@@ -56,6 +56,13 @@ def get_smart_subject(title):
             return category
     return "📂 Unassigned / General"
 
+def normalize_text(text):
+    """Normalize text for better matching (remove punctuation, lower case, standardize 'and')"""
+    if pd.isna(text): return ""
+    text = str(text).lower()
+    text = text.replace('&', 'and').replace('.', '').replace(',', '')
+    return " ".join(text.split())
+
 # --- DATA FETCHING (DIRECT FROM LIS) ---
 @st.cache_data(ttl=300) 
 def fetch_lis_data():
@@ -378,7 +385,7 @@ if bills_to_track:
                 st.markdown("#### ❌ Failed")
                 render_master_list_item(dead)
 
-    # --- TAB 3: UPCOMING (INVERTED LOOP & AGGRESSIVE TEXT SCRAPER) ---
+    # --- TAB 3: UPCOMING (NORMALIZED MATCHING & ROBUST TIME FINDER) ---
     with tab_upcoming:
         st.subheader("📅 Your Weekly Calendar")
         full_schedule = lis_data.get('schedule', pd.DataFrame())
@@ -415,29 +422,33 @@ if bills_to_track:
                         bills_found_today = False
                         
                         for bill in my_bills:
-                            master_comm = bill_to_comm_map.get(bill, '').lower()
+                            # 1. Get "Brain" Data & Normalize
+                            raw_master_comm = bill_to_comm_map.get(bill, '')
+                            master_comm_clean = normalize_text(raw_master_comm) # e.g. "privileges and elections"
+                            
                             master_status = bill_to_status_map.get(bill, '')
                             master_sub = bill_to_sub_map.get(bill, '')
 
-                            # --- KEY FIX: House vs Senate Matching ---
                             is_senate_bill = bill.startswith('S')
                             is_house_bill = bill.startswith('H')
 
+                            # 2. Matching Logic
+                            # Match A: Explicit
                             match_explicit = todays_schedule[todays_schedule['bill_clean'] == bill]
                             
+                            # Match B: Implicit (Normalized Committee Name Scan)
                             match_implicit = pd.DataFrame()
-                            if master_comm and master_comm != '-':
-                                # Scan rows for the committee name
+                            if master_comm_clean and master_comm_clean != '':
                                 match_implicit = todays_schedule[
-                                    todays_schedule.apply(lambda r: master_comm in str(r.values).lower(), axis=1)
+                                    todays_schedule.apply(lambda r: master_comm_clean in normalize_text(str(r.values)), axis=1)
                                 ]
                                 
-                                # Safety Check: Prevent SJ1 matching "House Committee"
+                                # Safety Check (House vs Senate)
                                 if not match_implicit.empty:
-                                    def is_safe_match(row_text):
-                                        row_lower = str(row_text).lower()
-                                        if is_senate_bill and 'house' in row_lower and 'joint' not in row_lower: return False
-                                        if is_house_bill and 'senate' in row_lower and 'joint' not in row_lower: return False
+                                    def is_safe_match(row_values):
+                                        row_text = normalize_text(str(row_values))
+                                        if is_senate_bill and 'house' in row_text and 'joint' not in row_text: return False
+                                        if is_house_bill and 'senate' in row_text and 'joint' not in row_text: return False
                                         return True
                                     
                                     match_implicit = match_implicit[
@@ -452,7 +463,8 @@ if bills_to_track:
                                 
                                 st.error(f"**{bill}**")
                                 
-                                header = master_comm.title() if master_comm and master_comm != '-' else "Committee"
+                                # Header
+                                header = raw_master_comm.title() if raw_master_comm and raw_master_comm != '-' else "Committee"
                                 st.write(f"🏛️ **{header}**")
                                 
                                 if master_sub and master_sub != '-':
@@ -461,15 +473,25 @@ if bills_to_track:
                                 if master_status:
                                     st.caption(f"ℹ️ {master_status}")
 
-                                # --- KEY FIX: Aggressive Time Regex ---
+                                # --- 3. TIME SCRAPER (Improved Regex for "30 Minutes After...") ---
+                                # We also check specific columns first if they exist
+                                time_col_name = next((c for c in row.index if 'time' in c and 'date' not in c), None)
+                                specific_time_val = str(row[time_col_name]) if time_col_name else ""
+                                
                                 row_text = " ".join([str(val) for val in row.values])
                                 
-                                # Matches "Upon Recess of the House", "30 Minutes after adjournment", etc.
-                                time_keywords = r'(?:upon|after|before|until)\s+.*?(?:adjourn|recess|conven|call)|(?:\d{1,2}:\d{2}\s?(?:[ap]\.?m\.?|noon))'
-                                t_match = re.search(time_keywords, row_text, re.IGNORECASE)
+                                # Regex breakdown:
+                                # 1. Complex phrase: (Optional "30 Minutes") + (after/upon/before) + ... + (adjourn/recess/conven)
+                                # 2. Simple time: 10:00 AM
+                                time_pattern = r'(?:(?:\d+|one|two|half)\s*(?:hr|hour|min|minute)s?\s+)?(?:after|upon|before|until)\s+(?:.*?)?(?:adjourn|recess|conven|call)|(?:\d{1,2}:\d{2}\s?(?:[ap]\.?m\.?|noon))'
+                                
+                                t_match = re.search(time_pattern, row_text, re.IGNORECASE)
                                 
                                 if t_match:
-                                    st.caption(f"⏰ {t_match.group(0)}")
+                                    st.caption(f"⏰ {t_match.group(0).strip()}")
+                                elif len(specific_time_val) > 4 and specific_time_val.lower() != 'nan':
+                                     # Fallback: If regex failed but we have a specific 'time' column with text, use it
+                                    st.caption(f"⏰ {specific_time_val}")
                                 else:
                                     st.caption("⏰ TBD")
                                 
