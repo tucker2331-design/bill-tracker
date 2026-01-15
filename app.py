@@ -21,8 +21,9 @@ LIS_SUBDOCKET_CSV = LIS_BASE_URL + "SUBDOCKET.CSV"  # Subcommittees
 LIS_DOCKET_CSV = LIS_BASE_URL + "DOCKET.CSV"        # Main Standing Committees
 LIS_CALENDAR_CSV = LIS_BASE_URL + "CALENDAR.CSV"    # Floor Sessions / Votes
 
-# Note: We now define the URLs inside the scraper function to try multiple options
-LIS_SCHEDULE_ROOT = "https://lis.virginia.gov/cgi-bin/legp604.exe?261"
+# --- CRITICAL FIX: USE THE "LIVE" REDIRECT URL ---
+# This URL automatically redirects to the current active session (whatever it is)
+LIS_SCHEDULE_URL = "https://lis.virginia.gov/schedule"
 
 st.set_page_config(page_title="VA Bill Tracker 2026", layout="wide")
 
@@ -66,91 +67,113 @@ def normalize_text(text):
     text = text.replace('&', 'and').replace('.', '').replace(',', '')
     return " ".join(text.split())
 
-# --- NEW: MULTI-URL "BRUTE FORCE" SCRAPER ---
+# --- NEW: ROBUST "REDIRECT" SCRAPER ---
 @st.cache_data(ttl=600)
 def fetch_schedule_from_web():
     """
-    Tries multiple hidden URLs to find the one with the actual data.
+    Hits the main schedule URL, follows redirects, handles frames, 
+    and uses Pandas to parse the tables.
     """
     schedule_map = {}
     debug_log = [] 
     
-    # LIST OF URLS TO TRY (The "Keys" to the hidden doors)
-    # 1. +sub+S01: Usually the inner frame for the visual schedule
-    # 2. +oth+MTG: The master text list of meetings
-    # 3. +img+S01: The outer wrapper (fallback)
-    candidates = [
-        ("https://lis.virginia.gov/cgi-bin/legp604.exe?261+sub+S01", "Inner Frame"),
-        ("https://lis.virginia.gov/cgi-bin/legp604.exe?261+oth+MTG", "Master List"),
-        ("https://lis.virginia.gov/cgi-bin/legp604.exe?261+img+S01", "Outer Shell")
-    ]
-    
-    headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'}
+    try:
+        # 1. Hit the main "reliable" URL and follow where it goes
+        headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'}
+        
+        debug_log.append(f"📡 Accessing: {LIS_SCHEDULE_URL}")
+        session = requests.Session()
+        response = session.get(LIS_SCHEDULE_URL, headers=headers, allow_redirects=True)
+        debug_log.append(f"📍 Redirected to: {response.url}")
+        
+        final_html = response.text
 
-    for url, label in candidates:
+        # 2. Check for Frame (The "Inner" Page)
+        # If we landed on a frameset, we need to grab the 'src' of the frame
+        frame_match = re.search(r'(?:frame|iframe).*?src=["\']([^"\']+)["\']', final_html, re.IGNORECASE)
+        if frame_match:
+            frame_url = frame_match.group(1)
+            # Fix relative URLs
+            if not frame_url.startswith("http"):
+                base_url = "https://lis.virginia.gov"
+                if not frame_url.startswith("/"): base_url += "/cgi-bin/"
+                frame_url = base_url + frame_url
+                # Clean double slashes if any
+                frame_url = frame_url.replace("/cgi-bin//", "/cgi-bin/")
+            
+            debug_log.append(f"🖼️ Found Frame. Jumping to: {frame_url}")
+            response = session.get(frame_url, headers=headers)
+            final_html = response.text
+
+        # 3. Use Pandas to find the tables (The "Magic" Step)
+        # This works much better than regex for the visual schedule tables
         try:
-            debug_log.append(f"🔄 Trying: {label}...")
-            response = requests.get(url, headers=headers, timeout=5)
-            
-            if response.status_code != 200:
-                debug_log.append(f"   ❌ Failed ({response.status_code})")
-                continue
+            dfs = pd.read_html(final_html)
+            debug_log.append(f"📊 Found {len(dfs)} tables on page.")
+        except Exception as parse_e:
+            debug_log.append(f"❌ HTML Parsing failed: {parse_e}")
+            dfs = []
 
-            soup = BeautifulSoup(response.text, 'html.parser')
-            lines = [line.strip() for line in soup.get_text(separator='\n').splitlines() if line.strip()]
+        # 4. Extract Data from Tables
+        current_date_str = None
+        count = 0
+        
+        # We assume the schedule is one big list. We iterate through the raw strings of the tables.
+        for df in dfs:
+            # Convert the whole table to a list of strings to scan row by row
+            # This handles multi-column layouts gracefully
+            rows = df.astype(str).values.flatten()
             
-            # If we found less than 15 lines, this URL is empty/wrapper. Try the next one.
-            if len(lines) < 15:
-                debug_log.append(f"   ⚠️ Too short ({len(lines)} lines). Skipping.")
-                continue
-            
-            debug_log.append(f"   ✅ SUCCESS! Found {len(lines)} lines.")
-            
-            # PROCESS DATA
-            current_date_str = None
-            found_count = 0
-            
-            for line in lines:
-                # Detect Date
+            for line in rows:
+                line = str(line).strip()
+                if line == 'nan' or len(line) < 5: continue
+
+                # A. Detect Date
                 try:
                     clean_line = line.replace("1st", "1").replace("2nd", "2").replace("3rd", "3").replace("th", "")
+                    # Look for "Friday, January 16, 2026" format
                     dt = datetime.strptime(clean_line, "%A, %B %d, %Y")
                     current_date_str = dt.strftime("%Y-%m-%d")
-                    continue 
+                    debug_log.append(f"🗓️ Found Date: {current_date_str}")
+                    continue
                 except:
-                    pass 
+                    pass
                 
                 if not current_date_str: continue
 
-                # Detect Time (Anywhere in line)
+                # B. Detect Time (Regex)
+                # Look for "9:00 AM" or "Upon Adjournment"
                 time_pattern = r'(?:\d{1,2}:\d{2}\s*[AP]M|Noon|Upon\s+.*?|1\/2\s+hr|\d+\s+Minutes?\s+after)'
                 time_match = re.search(time_pattern, line, re.IGNORECASE)
-                
+
                 if time_match:
                     time_val = time_match.group(0)
-                    remaining_text = line.replace(time_val, "").strip(' .:-')
+                    
+                    # Clean the Committee Name
+                    text_parts = line.split(time_val)
+                    # Usually the name is AFTER the time, but sometimes before.
+                    # We take the longest part that remains.
+                    remaining_text = max(text_parts, key=len).strip(' .:-')
                     
                     if "-" in remaining_text: remaining_text = remaining_text.split("-")[0]
                     if "Room" in remaining_text: remaining_text = remaining_text.split("Room")[0]
                     
                     comm_name_clean = normalize_text(remaining_text)
                     comm_name_clean = comm_name_clean.replace("senate", "").replace("house", "").replace("committee", "").strip()
-                    
-                    if len(comm_name_clean) < 4: continue
 
+                    if len(comm_name_clean) < 4: continue
+                    
                     key = (current_date_str, comm_name_clean)
                     if key not in schedule_map:
                         schedule_map[key] = time_val
-                        found_count += 1
-            
-            debug_log.append(f"   📥 Extracted {found_count} meetings.")
-            
-            # If we found data, STOP checking other URLs. We are done.
-            if found_count > 0:
-                break
-                
-        except Exception as e:
-            debug_log.append(f"   ❌ Error: {str(e)}")
+                        count += 1
+                        debug_log.append(f"   ✅ {comm_name_clean} -> {time_val}")
+
+    except Exception as e:
+        debug_log.append(f"❌ Critical Error: {str(e)}")
+        # If failed, log the raw HTML snippet to see what we got
+        if 'final_html' in locals():
+            debug_log.append(f"📄 Page Source Preview: {final_html[:200]}")
 
     st.session_state['debug_data'] = {
         "map_keys": list(schedule_map.keys()),
