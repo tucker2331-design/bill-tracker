@@ -63,6 +63,48 @@ def normalize_text(text):
     text = text.replace('&', 'and').replace('.', '').replace(',', '')
     return " ".join(text.split())
 
+def clean_committee_name(name):
+    """Fix common LIS abbreviations, formatting, and remove Chair names"""
+    if not name or str(name).lower() == 'nan': return ""
+    name = str(name).strip()
+    
+    # 1. Remove names attached with a comma (e.g. "Education Rasoul, Sam" -> "Education Rasoul")
+    # This splits at the comma and takes the first part
+    if "," in name:
+        name = name.split(",")[0].strip()
+    
+    # 2. Remove lingering Chair Last Names if they are at the end (e.g. "Education Rasoul")
+    # We assume standard committee names don't end in random proper nouns not in the list
+    name = name.replace(" Rasoul", "").replace(" Lucas", "").replace(" Helmer", "").strip()
+
+    # 3. Map Abbreviations
+    mapping = {
+        "HED": "Education",
+        "P&E": "Privileges & Elections",
+        "C&L": "Commerce & Labor",
+        "HWI": "Health, Welfare & Institutions",
+        "APP": "Appropriations",
+        "FIN": "Finance",
+        "JUD": "Courts of Justice",
+        "GL": "General Laws",
+        "AG": "Agriculture",
+        "TRAN": "Transportation",
+        "SFIN": "Senate Finance",
+        "HFIN": "House Finance"
+    }
+    
+    # Check exact match (Case Insensitive)
+    upper_name = name.upper()
+    if upper_name in mapping:
+        return mapping[upper_name]
+        
+    # Check if abbreviation is IN the string (e.g. "House HED")
+    for abbr, full in mapping.items():
+        if f" {abbr}" in f" {upper_name}": # check for whole word match
+             return name.upper().replace(abbr, full).title()
+
+    return name.title()
+
 # --- NEW: ROBUST SCRAPER (Fixed for "Minutes After") ---
 @st.cache_data(ttl=600)
 def fetch_schedule_from_web():
@@ -632,68 +674,64 @@ if bills_to_track:
                             
                             st.divider()
 
-                # --- STEP B: HISTORY BACKFILL (Only for TODAY, if Scraper missed it) ---
-                if i == 0: # Only check history for "Today"
-                    # Find bills that have an action dated TODAY
+                # --- STEP B: HISTORY BACKFILL (GROUPED & CLEANED) ---
+                if i == 0: 
+                    # 1. Collect everything first
+                    history_groups = {}
+                    
                     for b_id, info in bill_info_map.items():
                         if b_id in bills_shown_today: continue
                         
                         last_date = str(info.get('Date', ''))
                         
-                        # --- FIX: Date Format Translator ---
+                        # Date Translator
                         is_today = False
-                        if last_date == target_date_str: 
-                            is_today = True
+                        if last_date == target_date_str: is_today = True
                         else:
                             try:
-                                # Try parsing MM/DD/YYYY to compare
                                 lis_dt = datetime.strptime(last_date, "%m/%d/%Y").date()
                                 if lis_dt == target_date: is_today = True
                             except: pass
 
                         if is_today:
-                            # It happened today, but scraper missed it (deleted?). Show it!
                             events_found = True
                             bills_shown_today.add(b_id)
                             
-                            # Fallback Display Info
+                            # Determine Group Name
                             raw_comm = str(info.get('Current_Committee', ''))
-                            comm_display = raw_comm.strip()
-                            lis_status = str(info.get('Status', 'Updated Today'))
+                            lis_status = str(info.get('Status', ''))
                             
-                            # --- HEADER REPAIR ---
-                            # Clean up the "-" or "nan"
-                            if comm_display in ["-", "nan", "None", ""]:
-                                comm_display = ""
+                            # Clean up
+                            if raw_comm in ["-", "nan", "None", ""]: raw_comm = ""
+                            
+                            # Naming Logic
+                            if "fiscal" in lis_status.lower(): group_name = "Fiscal Impact Report"
+                            elif b_id.startswith(("HJ", "SJ", "HR", "SR")): group_name = "Floor Session"
+                            elif not raw_comm:
+                                if any(x in lis_status.lower() for x in ["read", "pass", "engross", "defeat"]):
+                                    group_name = "Floor Session / Action"
+                                else: group_name = "General Assembly Action"
+                            else:
+                                group_name = clean_committee_name(raw_comm)
+                            
+                            if group_name not in history_groups: history_groups[group_name] = []
+                            history_groups[group_name].append(b_id)
 
-                            # 1. Fiscal Impact Check (Status or Title)
-                            if "fiscal" in lis_status.lower():
-                                comm_display = "Fiscal Impact Report"
-                            
-                            # 2. Joint Resolutions (HJ/SJ/HR/SR) -> Floor
-                            elif b_id.startswith(("HJ", "SJ", "HR", "SR")):
-                                comm_display = "Floor Session"
-                            
-                            # 3. If still empty, infer based on status keywords
-                            elif not comm_display:
-                                lower_stat = lis_status.lower()
-                                if any(x in lower_stat for x in ["read", "pass", "engross", "defeat", "voted", "senate", "house"]):
-                                    comm_display = "Floor Session / Action"
-                                else:
-                                    comm_display = "General Assembly Action"
-                            
-                            st.markdown(f"**{comm_display}**")
-                            st.caption("⏰ Completed / Actioned")
-                            
-                            # Status Text (My Status + LIS Status/Vote)
+                    # 2. Render Groups
+                    for g_name, b_list in history_groups.items():
+                        st.markdown(f"**{g_name}**")
+                        st.caption("⏰ Completed / Actioned")
+                        
+                        for b_id in b_list:
+                            info = bill_info_map.get(b_id, {})
                             status_text = ""
                             raw_status = str(info.get('My Status', '')).strip()
                             if raw_status and raw_status != 'nan' and raw_status != '-':
                                 status_text = f" - {raw_status}"
                             
                             st.error(f"**{b_id}**{status_text}")
-                            st.caption(f"_{lis_status}_") # Shows "Reported (22-Y 0-N)"
-                            st.divider()
+                            st.caption(f"_{info.get('Status')}_")
+                        st.divider()
 
                 if not events_found:
                     st.caption("-")
