@@ -7,7 +7,13 @@ from datetime import datetime, timedelta
 import pytz 
 from slack_sdk import WebClient
 from slack_sdk.errors import SlackApiError
-from bs4 import BeautifulSoup # <--- This works only after you update requirements.txt
+
+# --- TRY IMPORTING BS4 WITH VISUAL ERROR CHECK ---
+try:
+    from bs4 import BeautifulSoup
+    BS4_AVAILABLE = True
+except ImportError:
+    BS4_AVAILABLE = False
 
 # --- CONFIGURATION ---
 SHEET_ID = "18m752GcvGIPPpqUn_gB0DfA3e4z2UGD0ki0dUZh2Qek"
@@ -20,8 +26,8 @@ LIS_BILLS_CSV = LIS_BASE_URL + "BILLS.CSV"
 LIS_SUBDOCKET_CSV = LIS_BASE_URL + "SUBDOCKET.CSV"
 LIS_DOCKET_CSV = LIS_BASE_URL + "DOCKET.CSV"
 LIS_CALENDAR_CSV = LIS_BASE_URL + "CALENDAR.CSV"
-# Official Schedule Page for scraping times
-LIS_SCHEDULE_URL = "https://lis.virginia.gov/schedule"
+# Using the Daily Session Schedule which is often cleaner to scrape
+LIS_SCHEDULE_URL = "https://lis.virginia.gov/cgi-bin/legp604.exe?261+dss+S01"
 
 st.set_page_config(page_title="VA Bill Tracker 2026", layout="wide")
 
@@ -60,7 +66,6 @@ def get_smart_subject(title):
     return "📂 Unassigned / General"
 
 def normalize_text(text):
-    """Normalize text for better matching"""
     if pd.isna(text): return ""
     text = str(text).lower()
     text = text.replace('&', 'and').replace('.', '').replace(',', '')
@@ -69,7 +74,7 @@ def normalize_text(text):
 # --- WEB SCRAPER FOR TIMES ---
 @st.cache_data(ttl=600)
 def fetch_schedule_from_web():
-    """Scrapes the official LIS Schedule page to find the real times."""
+    if not BS4_AVAILABLE: return {}
     schedule_map = {}
     try:
         response = requests.get(LIS_SCHEDULE_URL)
@@ -83,7 +88,7 @@ def fetch_schedule_from_web():
             line = line.strip()
             if not line: continue
             
-            # Detect Date Header
+            # Detect Date
             try:
                 dt = datetime.strptime(line, "%A, %B %d, %Y")
                 current_date_str = dt.strftime("%Y-%m-%d")
@@ -92,7 +97,7 @@ def fetch_schedule_from_web():
             
             if not current_date_str: continue
 
-            # Detect Time (e.g. "7:30 AM", "Upon Recess")
+            # Detect Time
             time_match = re.match(r'^(\d{1,2}:\d{2}\s*[AP]M|Noon|Upon\s+Recess|1\/2\s+hr|\d+\s+Minutes?\s+after)', line, re.IGNORECASE)
             if time_match:
                 time_val = time_match.group(0)
@@ -109,7 +114,6 @@ def fetch_schedule_from_web():
 @st.cache_data(ttl=300) 
 def fetch_lis_data():
     data = {}
-    # 1. Fetch Bills
     try:
         try: df = pd.read_csv(LIS_BILLS_CSV, encoding='ISO-8859-1')
         except: df = pd.read_csv(LIS_BILLS_CSV.replace(".CSV", ".csv"), encoding='ISO-8859-1')
@@ -120,7 +124,6 @@ def fetch_lis_data():
         else: data['bills'] = pd.DataFrame() 
     except: data['bills'] = pd.DataFrame()
 
-    # 2. Fetch Calendars
     calendar_dfs = []
     for url, type_label in [(LIS_SUBDOCKET_CSV, "Subcommittee"), (LIS_DOCKET_CSV, "Committee"), (LIS_CALENDAR_CSV, "Floor")]:
         try:
@@ -158,7 +161,6 @@ def get_bill_data_batch(bill_numbers, lis_df):
             date_val = str(item.get('last_house_action_date', ''))
             if not date_val or date_val == 'nan': date_val = str(item.get('last_senate_action_date', ''))
 
-            # Committee Extraction
             curr_comm = "-"
             c1 = item.get('last_house_committee')
             c2 = item.get('last_senate_committee')
@@ -220,6 +222,9 @@ def render_master_list_item(df):
 
 # --- MAIN APP ---
 st.title("🏛️ Virginia General Assembly Tracker")
+if not BS4_AVAILABLE:
+    st.error("⚠️ CRITICAL: 'beautifulsoup4' is missing! Please add it to requirements.txt in GitHub.")
+
 est = pytz.timezone('US/Eastern')
 if 'last_run' not in st.session_state: st.session_state['last_run'] = datetime.now(est).strftime("%I:%M %p EST")
 
@@ -262,14 +267,14 @@ except Exception as e:
     st.error(f"Sheet Error: {e}")
     st.stop()
 
-# 2. FETCH LIS DATA
+# 2. FETCH LIS DATA & WEB SCHEDULE
 lis_data = fetch_lis_data()
 bills_to_track = sheet_df['Bill Number'].unique().tolist()
-web_schedule_map = fetch_schedule_from_web() # Hybrid Fetch
+web_schedule_map = fetch_schedule_from_web()
 
 if bills_to_track:
     if demo_mode:
-        api_df = pd.DataFrame() # Demo logic omitted
+        api_df = pd.DataFrame() 
     else:
         api_df = get_bill_data_batch(bills_to_track, lis_data['bills'])
 
@@ -304,7 +309,7 @@ if bills_to_track:
             st.subheader(f"📜 Master List ({b_type})")
             render_master_list_item(subset)
 
-    # --- TAB 3: UPCOMING (HYBRID + STRICT FILTERING) ---
+    # --- TAB 3: UPCOMING (FIXED: GHOST BILLS & GENERIC HEADERS) ---
     with tab_upcoming:
         st.subheader("📅 Your Weekly Calendar")
         full_schedule = lis_data.get('schedule', pd.DataFrame())
@@ -339,7 +344,6 @@ if bills_to_track:
                         bills_found_today = False
                         
                         for bill in my_bills:
-                            # 1. Get "Brain" Data
                             raw_master_comm = bill_to_comm_map.get(bill, '')
                             master_comm_clean = normalize_text(raw_master_comm)
                             master_status = bill_to_status_map.get(bill, '')
@@ -348,12 +352,11 @@ if bills_to_track:
                             is_senate_bill = bill.startswith('S')
                             is_house_bill = bill.startswith('H')
 
-                            # 2. Matching Logic
                             match_explicit = todays_schedule[todays_schedule['bill_clean'] == bill]
                             match_implicit = pd.DataFrame()
                             
-                            # STOPWORD FILTER - Prevents "Ghost Bills"
-                            stopwords = ['committee', 'house', 'senate', 'pending', '-', '', 'none']
+                            # --- FIX: STOPWORD FILTER (Kills Ghost Bills) ---
+                            stopwords = ['committee', 'house', 'senate', 'pending', '-', '', 'none', 'referral pending']
                             is_valid_comm_name = (master_comm_clean not in stopwords) and (len(master_comm_clean) > 4)
                             
                             if is_valid_comm_name:
@@ -375,10 +378,12 @@ if bills_to_track:
                                 row = final_matches.iloc[0]
                                 st.error(f"**{bill}**")
                                 
-                                # Header (Fallback Logic for "Generic Headers")
+                                # --- FIX: GENERIC HEADER FALLBACK ---
                                 header = "Committee"
-                                if is_valid_comm_name: header = raw_master_comm.title()
+                                if is_valid_comm_name: 
+                                    header = raw_master_comm.title()
                                 else:
+                                    # Fallback: Scrape it from the schedule row if Master List is generic
                                     comm_col = next((c for c in row.index if 'committee' in c and 'sub' not in c), None)
                                     if comm_col: header = str(row[comm_col]).title()
 
@@ -386,18 +391,17 @@ if bills_to_track:
                                 if master_sub and master_sub != '-': st.caption(f"↳ {master_sub}")
                                 if master_status: st.caption(f"ℹ️ {master_status}")
 
-                                # --- 3. TIME LOOKUP (Web Scraper Check) ---
+                                # --- TIME LOOKUP (Hybrid) ---
                                 time_found = "TBD"
-                                # Look for match in scraped data
+                                # 1. Web Scraper Lookup
                                 for key, t_val in web_schedule_map.items():
                                     k_date, k_comm = key
                                     if k_date == target_date_str:
-                                        # Flexible match
                                         if master_comm_clean in k_comm or k_comm in master_comm_clean:
                                             time_found = t_val
                                             break
                                 
-                                # Fallback Regex
+                                # 2. Text Search Fallback
                                 if time_found == "TBD":
                                     row_text = " ".join([str(val) for val in row.values])
                                     time_pattern = r'(?:(?:\d+|one|two|half)\s*(?:hr|hour|min|minute)s?\s+)?(?:after|upon|before|until)\s+(?:.*?)?(?:adjourn|recess|conven|call)|(?:\d{1,2}:\d{2}\s?(?:[ap]\.?m\.?|noon))'
@@ -410,3 +414,9 @@ if bills_to_track:
                         if not bills_found_today: st.caption("-")
                     else: st.caption("-")
                 else: st.caption("-")
+    
+    # --- DEBUGGER ---
+    with st.expander("🛠️ Developer Debug"):
+        st.write(f"Web Scraper found {len(web_schedule_map)} meetings.")
+        if len(web_schedule_map) > 0:
+            st.write(web_schedule_map)
