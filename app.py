@@ -63,7 +63,7 @@ def normalize_text(text):
     text = text.replace('&', 'and').replace('.', '').replace(',', '')
     return " ".join(text.split())
 
-# --- RESTORED ROBUST SCRAPER (64+ Items) ---
+# --- NEW: "SMART BACKTRACK" SCRAPER ---
 @st.cache_data(ttl=600)
 def fetch_schedule_from_web():
     schedule_map = {}
@@ -79,8 +79,8 @@ def fetch_schedule_from_web():
         lines = [line.strip() for line in soup.get_text("\n", strip=True).splitlines() if line.strip()]
         
         for i, line in enumerate(lines):
+            # Senate: Date and Time on same line
             if "2026" in line and ("AM" in line or "PM" in line or "noon" in line.lower()):
-                # Regex for "7:30 AM" or "30 Minutes After"
                 time_match = re.search(r'(\d{1,2}:\d{2}\s*[AP]M|noon|upon\s+adjourn|\d+\s+minutes?\s+after)', line, re.IGNORECASE)
                 if time_match:
                     time_val = time_match.group(0).upper()
@@ -94,12 +94,11 @@ def fetch_schedule_from_web():
                             comm_name = lines[i-1]
                             if "Cancelled" in comm_name: continue
                             
-                            # Clean the name but KEEP "Subcommittee" for the Splitter logic later
                             clean_name = normalize_text(comm_name)
                             clean_name = clean_name.replace("senate", "").replace("house", "").replace("committee", "").strip()
                             
                             key = (date_str, clean_name)
-                            schedule_map[key] = (time_val, comm_name) # Store RAW name for display
+                            schedule_map[key] = (time_val, comm_name)
                     except: pass
     except Exception as e:
         debug_log.append(f"❌ Senate Error: {str(e)}")
@@ -114,6 +113,7 @@ def fetch_schedule_from_web():
         
         current_date_str = None
         for i, line in enumerate(lines):
+            # A. Date Header
             if "JANUARY" in line.upper() or "FEBRUARY" in line.upper():
                 try:
                     date_text = line if "2026" in line else f"{line}, 2026"
@@ -127,25 +127,36 @@ def fetch_schedule_from_web():
             
             if not current_date_str: continue
 
-            time_match = re.search(r'^(\d{1,2}:\d{2}\s*[AP]M|Noon)', line, re.IGNORECASE)
+            # B. Time Detection
+            time_match = re.search(r'^(\d{1,2}:\d{2}\s*[AP]M|Noon|1/2)', line, re.IGNORECASE)
             if time_match:
                 time_val = time_match.group(0)
-                if i > 0:
-                    comm_name = lines[i-1]
-                    # Backtrack logic for names
-                    if "," in comm_name or "View Agenda" in comm_name:
-                        if i > 1:
-                            prev_prev = lines[i-2]
-                            if len(prev_prev) > 4: comm_name = prev_prev
+                
+                # C. Backtrack for Name (Skip Buttons and People)
+                # Look backwards up to 4 lines to find the real committee name
+                found_name = None
+                for back_step in range(1, 5):
+                    if (i - back_step) < 0: break
+                    candidate = lines[i - back_step]
                     
-                    if "New Meeting" in comm_name: continue
-
-                    clean_name = normalize_text(comm_name)
+                    # SKIP LOGIC:
+                    # Skip "New Meeting", "View Agenda", "ics", empty lines
+                    if any(x in candidate for x in ["New Meeting", "View Agenda", "ics", "Agenda"]): continue
+                    if len(candidate) < 4: continue
+                    # Skip Names (Look for comma like "Last, First")
+                    if "," in candidate and len(candidate.split()) < 4: continue 
+                    
+                    # If we survived the filters, this is probably the committee name
+                    found_name = candidate
+                    break
+                
+                if found_name:
+                    clean_name = normalize_text(found_name)
                     clean_name = clean_name.replace("senate", "").replace("house", "").replace("committee", "").strip()
                     
                     if len(clean_name) > 3:
                         key = (current_date_str, clean_name)
-                        schedule_map[key] = (time_val, comm_name) # Store RAW name
+                        schedule_map[key] = (time_val, found_name)
 
     except Exception as e:
         debug_log.append(f"❌ House Error: {str(e)}")
@@ -486,7 +497,6 @@ if bills_to_track:
                 st.markdown(f"**{display_date_str}**")
                 st.divider()
                 
-                # Retrieve scraper results for this date
                 todays_meetings = {k[1]: v for k, v in web_schedule_map.items() if k[0] == target_date_str}
                 
                 bills_found_today = False
@@ -527,10 +537,9 @@ if bills_to_track:
                             
                             # --- SPLITTER LOGIC (Streamline Header vs Arrow) ---
                             # Try to separate "Finance — Public Safety" into Header and Arrow
-                            display_header = raw_comm.title() # Default to user's clean Main Committee
-                            display_sub = raw_sub # Default to user's clean Sub
+                            display_header = raw_comm.title()
+                            display_sub = raw_sub 
                             
-                            # If the scraped name has more detail (like a specific sub), extract it
                             if "—" in match_comm_raw:
                                 parts = match_comm_raw.split("—")
                                 if len(parts) > 1:
@@ -538,7 +547,6 @@ if bills_to_track:
                                     if not display_sub or display_sub == '-':
                                         display_sub = scraped_sub
                             elif "Subcommittee" in match_comm_raw:
-                                # Try to grab the words before "Subcommittee"
                                 match = re.search(r'([A-Za-z\s&]+) Subcommittee', match_comm_raw, re.IGNORECASE)
                                 if match:
                                     scraped_sub = match.group(1).strip()
