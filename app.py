@@ -295,12 +295,29 @@ def check_and_broadcast(df_bills, df_subscribers, demo_mode):
     
     for i, row in df_bills.iterrows():
         if "LIS Connection Error" in str(row.get('Status')): continue
-        display_date = row.get('Date', '')
-        if not display_date or display_date == 'nan': display_date = datetime.now().strftime('%Y-%m-%d')
-        check_str = f"*{row['Bill Number']}* ({display_date}): {row.get('Status')}"
-        if check_str in history_text: continue
+        
+        # --- NEW LOGIC: SMART TITLE ---
+        # 1. Try to use the Google Sheet 'My Title' first
+        display_name = str(row.get('My Title', '-'))
+        
+        # 2. If no custom title, use the Official Title (Truncated)
+        if display_name == "-" or display_name == "nan" or not display_name:
+            official = str(row.get('Official Title', ''))
+            # Truncate to 60 chars to keep it readable
+            display_name = (official[:60] + '..') if len(official) > 60 else official
+            
+        # 3. Clean up Status
+        status_msg = row.get('Status', 'No Status')
+        
+        # Build the unique string to check against history (to prevent duplicates)
+        # We check specific bill + status combo
+        unique_signature = f"{row['Bill Number']}: {status_msg}"
+        
+        if unique_signature in history_text: continue
+        
         updates_found = True
-        report += f"\n⚪ {check_str}"
+        # Format: *HB123* | My Custom Title \n > Status Update
+        report += f"\n⚪ *{row['Bill Number']}* | {display_name}\n> _{status_msg}_\n"
 
     if updates_found:
         st.toast(f"📢 Sending updates to {len(subscriber_list)} people...")
@@ -313,7 +330,6 @@ def check_and_broadcast(df_bills, df_subscribers, demo_mode):
         st.sidebar.info("🚀 New Update Sent!")
     else:
         st.sidebar.info("💤 No new updates needed.")
-
 # --- UI COMPONENTS ---
 def render_bill_card(row):
     if row.get('Official Title') not in ["Unknown", "Error", "Not Found", None]:
