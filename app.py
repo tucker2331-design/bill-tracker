@@ -470,7 +470,7 @@ if bills_to_track:
                 st.markdown("#### ❌ Failed")
                 render_master_list_item(dead)
 
-# --- TAB 3: UPCOMING (STRICT AGENDA MATCHING + FIXED CALENDAR) ---
+# --- TAB 3: UPCOMING (STRICT AGENDA MATCHING + ROBUST MAPPING) ---
     with tab_upcoming:
         st.subheader("📅 Your Confirmed Agenda")
         
@@ -478,20 +478,20 @@ if bills_to_track:
         today = datetime.now().date()
         cols = st.columns(7)
         
-        # 2. Get Data
+        # 2. Get Data & Build the "Whitelist"
         schedule_df = lis_data.get('schedule', pd.DataFrame())
         my_bills_clean = [b.upper().strip() for b in bills_to_track]
         
-        # Prepare the confirmed docket if data exists
-        confirmed_docket = pd.DataFrame()
+        # A set of all bills that appear on ANY official calendar/docket
+        confirmed_bills_set = set()
         if not schedule_df.empty:
-            confirmed_docket = schedule_df[schedule_df['bill_clean'].isin(my_bills_clean)].copy()
-            # Normalize committee column
-            comm_col = next((c for c in confirmed_docket.columns if "committee" in c or "desc" in c), None)
-            if comm_col:
-                confirmed_docket['comm_norm'] = confirmed_docket[comm_col].apply(normalize_text)
-            else:
-                confirmed_docket['comm_norm'] = "" # Placeholder
+            # We filter for our bills
+            matches = schedule_df[schedule_df['bill_clean'].isin(my_bills_clean)]
+            confirmed_bills_set = set(matches['bill_clean'].unique())
+
+        # Create a lookup for our bills' current committee status (from the main clean data)
+        # This is more reliable than the raw Docket CSV headers
+        bill_info_map = final_df.set_index('Bill Number')[['Current_Committee', 'Current_Sub']].to_dict('index')
 
         # 3. Loop 7 Days
         for i in range(7):
@@ -503,74 +503,79 @@ if bills_to_track:
                 st.markdown(f"**{display_date_str}**")
                 st.divider()
                 
-                # If we have no data, just stop here for this day
-                if confirmed_docket.empty:
-                    st.caption("-")
-                    continue
-
                 # Get scraper meetings for this specific day
                 todays_meetings = {k[1]: v for k, v in web_schedule_map.items() if k[0] == target_date_str}
                 
                 events_found = False
                 
-                # If the scraper found nothing for this day, we can't match times
                 if not todays_meetings:
                     st.caption("-")
                     continue
 
-                # Check matches
+                # Check every meeting found by the scraper
                 for scraper_clean_name, (scraper_time, scraper_full_name) in todays_meetings.items():
                     
-                    # FILTER: Skip Caucuses (Too noisy/not usually bill hearings)
+                    # FILTER: Skip Caucuses
                     if "caucus" in scraper_full_name.lower():
                         continue
 
-                    is_scraper_sub = "subcommittee" in scraper_full_name.lower() or "sub" in scraper_full_name.lower()
+                    # CHECK: Which of my "Confirmed" bills belong to this committee?
+                    # We iterate through our "Confirmed Whitelist" and check their assigned committee
+                    matched_bills = []
                     
-                    # SAFETY CHECK: Only match if we actually have a valid committee name in the docket
-                    # The bug was that "" is inside "String", so we must ensure x is not empty.
-                    if 'comm_norm' in confirmed_docket.columns:
-                        relevant_bills = confirmed_docket[
-                            confirmed_docket['comm_norm'].apply(
-                                lambda x: len(str(x)) > 2 and (scraper_clean_name in str(x) or str(x) in scraper_clean_name)
-                            )
-                        ]
-                    else:
-                        relevant_bills = pd.DataFrame()
+                    for b_id in confirmed_bills_set:
+                        # Get the clean committee info from our main data
+                        info = bill_info_map.get(b_id, {})
+                        curr_comm = normalize_text(info.get('Current_Committee', ''))
+                        curr_sub = normalize_text(info.get('Current_Sub', ''))
+                        
+                        # MATCHING LOGIC:
+                        # 1. Does the bill's committee match the scraper meeting?
+                        # 2. OR does the bill's subcommittee match?
+                        
+                        match = False
+                        # Main Committee Match (e.g. "Commerce" in "House Commerce and Labor")
+                        if curr_comm and len(curr_comm) > 2:
+                            if curr_comm in scraper_clean_name or scraper_clean_name in curr_comm:
+                                match = True
+                        
+                        # Sub Match (e.g. "Sub #1" in "Commerce Sub #1")
+                        if curr_sub and len(curr_sub) > 2:
+                            if curr_sub in scraper_clean_name or scraper_clean_name in curr_sub:
+                                match = True
+                                
+                        if match:
+                            matched_bills.append(b_id)
 
-                    if not relevant_bills.empty:
-                        for _, bill_row in relevant_bills.iterrows():
-                            events_found = True
-                            
-                            b_num = bill_row['bill_clean']
-                            is_sub = bill_row.get('event_type') == 'Subcommittee' or is_scraper_sub
-                            
-                            # Header Formatting
-                            header_display = scraper_full_name
-                            sub_display = None
-                            
-                            if is_sub:
-                                if "—" in scraper_full_name:
-                                    parts = scraper_full_name.split("—")
-                                    header_display = parts[0].strip()
-                                    sub_display = parts[1].strip()
-                                elif "Subcommittee" in scraper_full_name:
-                                    match = re.search(r'(.+?)\s+(Subcommittee.*)', scraper_full_name, re.IGNORECASE)
-                                    if match:
-                                        header_display = match.group(1).strip()
-                                        sub_display = match.group(2).strip()
-                                    else:
-                                        sub_display = "Subcommittee"
-                            
-                            # Render Card
-                            st.error(f"**{b_num}**")
-                            st.markdown(f"**{header_display}**")
-                            if sub_display:
-                                st.markdown(f"↳ _{sub_display}_")
-                            
-                            st.caption(f"⏰ {scraper_time}")
-                            st.caption(f"Details: {bill_row.get('event_type', 'Agenda')}")
-                            st.divider()
+                    # RENDER MATCHES
+                    if matched_bills:
+                        events_found = True
+                        
+                        # Header Formatting
+                        header_display = scraper_full_name
+                        sub_display = None
+                        
+                        # Attempt clean split for display
+                        if "—" in scraper_full_name:
+                            parts = scraper_full_name.split("—")
+                            header_display = parts[0].strip()
+                            sub_display = parts[1].strip()
+                        elif "Subcommittee" in scraper_full_name:
+                            match = re.search(r'(.+?)\s+(Subcommittee.*)', scraper_full_name, re.IGNORECASE)
+                            if match:
+                                header_display = match.group(1).strip()
+                                sub_display = match.group(2).strip()
+
+                        st.markdown(f"**{header_display}**")
+                        if sub_display:
+                            st.markdown(f"↳ _{sub_display}_")
+                        st.caption(f"⏰ {scraper_time}")
+                        
+                        # List the bills for this meeting
+                        for b_id in matched_bills:
+                            st.error(f"**{b_id}**")
+                        
+                        st.divider()
 
                 if not events_found:
                     st.caption("-")
