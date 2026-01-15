@@ -21,8 +21,9 @@ LIS_SUBDOCKET_CSV = LIS_BASE_URL + "SUBDOCKET.CSV"  # Subcommittees
 LIS_DOCKET_CSV = LIS_BASE_URL + "DOCKET.CSV"        # Main Standing Committees
 LIS_CALENDAR_CSV = LIS_BASE_URL + "CALENDAR.CSV"    # Floor Sessions / Votes
 
-# The Official Schedule Page (The only place with real times)
-LIS_SCHEDULE_URL = "https://lis.virginia.gov/cgi-bin/legp604.exe?261+img+S01"
+# --- CRITICAL FIX: CHANGED URL TO MASTER TEXT LIST ---
+# Old URL was an image wrapper (+img). This is the text list (+oth+MTG).
+LIS_SCHEDULE_URL = "https://lis.virginia.gov/cgi-bin/legp604.exe?261+oth+MTG"
 
 st.set_page_config(page_title="VA Bill Tracker 2026", layout="wide")
 
@@ -66,7 +67,7 @@ def normalize_text(text):
     text = text.replace('&', 'and').replace('.', '').replace(',', '')
     return " ".join(text.split())
 
-# --- NEW: DIAGNOSTIC WEB SCRAPER ---
+# --- NEW: DIAGNOSTIC WEB SCRAPER (FIXED) ---
 @st.cache_data(ttl=600)
 def fetch_schedule_from_web():
     """
@@ -86,8 +87,22 @@ def fetch_schedule_from_web():
             return {}
 
         soup = BeautifulSoup(response.text, 'html.parser')
-        lines = [line.strip() for line in soup.get_text(separator='\n').splitlines() if line.strip()]
         
+        # 2. Check for Frameset (The "6 Lines" Bug)
+        if soup.find('frame'):
+            debug_log.append("⚠️ Frameset detected! Switching to frame content...")
+            frame_src = soup.find('frame').get('src')
+            # Re-construct URL if relative
+            if not frame_src.startswith("http"):
+                base_url = "https://lis.virginia.gov"
+                if frame_src.startswith("/"): frame_src = base_url + frame_src
+                else: frame_src = "https://lis.virginia.gov/cgi-bin/" + frame_src
+            
+            debug_log.append(f"🔗 Jumping to: {frame_src}")
+            response = requests.get(frame_src, headers=headers)
+            soup = BeautifulSoup(response.text, 'html.parser')
+
+        lines = [line.strip() for line in soup.get_text(separator='\n').splitlines() if line.strip()]
         debug_log.append(f"📄 Lines found: {len(lines)}")
         
         current_date_str = None
@@ -105,21 +120,26 @@ def fetch_schedule_from_web():
             
             if not current_date_str: continue
 
-            # Detect Time
-            time_match = re.match(r'^(\d{1,2}:\d{2}\s*[AP]M|Noon|Upon\s+.*?|1\/2\s+hr|\d+\s+Minutes?\s+after)', line, re.IGNORECASE)
+            # Detect Time (Searching ANYWHERE in the line now)
+            time_pattern = r'(?:\d{1,2}:\d{2}\s*[AP]M|Noon|Upon\s+.*?|1\/2\s+hr|\d+\s+Minutes?\s+after)'
+            time_match = re.search(time_pattern, line, re.IGNORECASE)
             
             if time_match:
                 time_val = time_match.group(0)
-                remaining_text = line[len(time_val):].strip(' .:-')
+                
+                # The committee name is whatever part of the line ISN'T the time
+                remaining_text = line.replace(time_val, "").strip(' .:-')
                 
                 # Clean Name
-                raw_name = remaining_text
                 if "-" in remaining_text: remaining_text = remaining_text.split("-")[0]
                 if "Room" in remaining_text: remaining_text = remaining_text.split("Room")[0]
                 
                 comm_name_clean = normalize_text(remaining_text)
                 comm_name_clean = comm_name_clean.replace("senate", "").replace("house", "").replace("committee", "").strip()
                 
+                # Filter out garbage matches (too short)
+                if len(comm_name_clean) < 4: continue
+
                 key = (current_date_str, comm_name_clean)
                 
                 debug_log.append(f"   ✅ MATCH: '{comm_name_clean}' at {time_val}")
