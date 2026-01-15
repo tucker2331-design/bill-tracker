@@ -63,101 +63,122 @@ def normalize_text(text):
     text = text.replace('&', 'and').replace('.', '').replace(',', '')
     return " ".join(text.split())
 
-# --- NEW: FINAL "FLEXIBLE" SCRAPER ---
+# --- NEW: DUAL-MODE SCRAPER (HOUSE & SENATE) ---
 @st.cache_data(ttl=600)
 def fetch_schedule_from_web():
-    """
-    Scrapes House and Senate portals. 
-    Uses flexible regex to find times anywhere in the line.
-    Handles multi-line layouts (Time on line 1, Name on line 2).
-    """
     schedule_map = {}
     debug_log = [] 
-    
-    targets = [
-        ("https://virginiageneralassembly.gov/house/schedule/schedule.php", "House Portal"),
-        ("https://apps.senate.virginia.gov/Senator/ComMeetings.php", "Senate Portal")
-    ]
-    
     headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'}
 
-    for url, label in targets:
-        try:
-            debug_log.append(f"🔄 Connecting to: {label}")
-            response = requests.get(url, headers=headers, timeout=10)
-            soup = BeautifulSoup(response.text, 'html.parser')
-            
-            # Get clean text lines (preserving structure)
-            all_text = soup.get_text("\n", strip=True)
-            lines = all_text.splitlines()
-            
-            debug_log.append(f"   📄 Extracted {len(lines)} lines.")
-            
-            current_date_str = None
-            
-            for i, line in enumerate(lines):
-                line = line.strip()
-                if len(line) < 3: continue
-
-                # A. DATE TRIGGER
-                if "2026" in line:
-                    try:
-                        clean_line = line.replace("1st", "1").replace("2nd", "2").replace("3rd", "3").replace("th", "")
-                        match = re.search(r'([A-Za-z]+, )?([A-Za-z]+ \d{1,2}, \d{4})', clean_line)
-                        if match:
-                            dt_str = match.group(0)
-                            try: dt = datetime.strptime(dt_str, "%A, %B %d, %Y")
-                            except: dt = datetime.strptime(dt_str, "%B %d, %Y")
-                            
-                            current_date_str = dt.strftime("%Y-%m-%d")
-                            # debug_log.append(f"      🗓️ Date Switch: {current_date_str}")
-                            continue
-                    except: pass
+    # ---------------------------------------------------------
+    # 1. SENATE PORTAL SCRAPER (Target: apps.senate.virginia.gov)
+    # Strategy: Name is on the line BEFORE the Date/Time
+    # ---------------------------------------------------------
+    try:
+        url_senate = "https://apps.senate.virginia.gov/Senator/ComMeetings.php"
+        debug_log.append(f"🏛️ Senate: Checking {url_senate}")
+        resp = requests.get(url_senate, headers=headers, timeout=5)
+        soup = BeautifulSoup(resp.text, 'html.parser')
+        
+        # Get raw lines
+        lines = [line.strip() for line in soup.get_text("\n", strip=True).splitlines() if line.strip()]
+        
+        for i, line in enumerate(lines):
+            # Look for line with Date AND Time (e.g. "Thursday, January 15, 2026 - 7:30 AM")
+            if "2026" in line and ("AM" in line or "PM" in line or "noon" in line.lower()):
                 
-                if not current_date_str: continue
-
-                # B. TIME TRIGGER (FLEXIBLE)
-                # Matches: "9:00 AM", "  9:00 a.m.", "Noon", "1/2 hr after"
-                # Removed '^' anchor so it matches indented text
-                time_pattern = r'(\d{1,2}:\d{2}\s*?[aApP]\.?[mM]\.?|Noon|Upon\s+.*?|1\/2\s+hr|\d+\s+min)'
-                time_match = re.search(time_pattern, line, re.IGNORECASE)
-                
+                # Extract Time
+                time_match = re.search(r'(\d{1,2}:\d{2}\s*[AP]M|noon|upon\s+adjourn)', line, re.IGNORECASE)
                 if time_match:
-                    time_val = time_match.group(0)
+                    time_val = time_match.group(0).upper()
                     
-                    # C. FIND COMMITTEE NAME
-                    # Strategy 1: Check same line
-                    remaining = line.replace(time_val, "").strip(" -:")
-                    
-                    # Strategy 2: If line is mostly just the time, check NEXT line
-                    if len(remaining) < 4 and (i + 1) < len(lines):
-                        next_line = lines[i+1].strip()
-                        # Avoid merging if next line is another time or date
-                        if not re.search(time_pattern, next_line, re.IGNORECASE) and "2026" not in next_line:
-                            remaining = next_line
-                    
-                    # Cleanup Junk
-                    for junk in ["Room", "Virtual", "House Committee", "Senate Committee", "Meeting", "Subcommittee"]:
-                         if junk in remaining: remaining = remaining.split(junk)[0]
-                    
-                    comm_name_clean = normalize_text(remaining)
-                    comm_name_clean = comm_name_clean.replace("senate", "").replace("house", "").replace("committee", "").strip()
-                    
-                    if len(comm_name_clean) > 3:
-                        key = (current_date_str, comm_name_clean)
+                    # Extract Date
+                    try:
+                        clean_line = line.split("-")[0].strip() # Get part before dash
+                        clean_line = clean_line.replace("1st", "1").replace("2nd", "2").replace("3rd", "3").replace("th", "")
+                        dt = datetime.strptime(clean_line, "%A, %B %d, %Y")
+                        date_str = dt.strftime("%Y-%m-%d")
                         
-                        # Debug first few matches
-                        if len(schedule_map) < 3:
-                             debug_log.append(f"         📍 Match: {comm_name_clean} @ {time_val}")
-                             
-                        if key not in schedule_map:
+                        # THE KEY FIX: The Committee Name is usually the PREVIOUS line
+                        if i > 0:
+                            comm_name = lines[i-1]
+                            
+                            # Clean it up
+                            if "Cancelled" in comm_name: continue
+                            
+                            clean_name = normalize_text(comm_name)
+                            clean_name = clean_name.replace("senate", "").replace("house", "").replace("committee", "").strip()
+                            
+                            key = (date_str, clean_name)
                             schedule_map[key] = time_val
+                            # debug_log.append(f"   ✅ Senate: {clean_name} @ {time_val} ({date_str})")
+                            
+                    except: pass
 
-        except Exception as e:
-            debug_log.append(f"   ❌ Error: {str(e)}")
+    except Exception as e:
+        debug_log.append(f"❌ Senate Error: {str(e)}")
 
-    debug_log.append(f"✅ Total Meetings Found: {len(schedule_map)}")
+    # ---------------------------------------------------------
+    # 2. HOUSE PORTAL SCRAPER (Target: house.vga.virginia.gov)
+    # Strategy: Date header is separate. Time & Name are in blocks.
+    # ---------------------------------------------------------
+    try:
+        url_house = "https://house.vga.virginia.gov/schedule/meetings" # Corrected/likely URL
+        debug_log.append(f"🏛️ House: Checking {url_house}")
+        resp = requests.get(url_house, headers=headers, timeout=5)
+        soup = BeautifulSoup(resp.text, 'html.parser')
+        
+        # House site uses "cards". We grab text stream.
+        lines = [line.strip() for line in soup.get_text("\n", strip=True).splitlines() if line.strip()]
+        
+        current_date_str = None
+        
+        for i, line in enumerate(lines):
+            # A. Detect Date Header "THURSDAY, JANUARY 15" (Note: Missing year sometimes, assume 2026)
+            if "JANUARY" in line.upper() or "FEBRUARY" in line.upper():
+                try:
+                    # Append year if missing
+                    date_text = line if "2026" in line else f"{line}, 2026"
+                    date_text = date_text.replace("THURSDAY,", "THURSDAY").strip() # Cleanup
+                    
+                    # Try parsing "THURSDAY, JANUARY 15, 2026"
+                    # Remove weekday to make it easier "JANUARY 15, 2026"
+                    match = re.search(r'([A-Z]+ \d{1,2}, 2026)', date_text, re.IGNORECASE)
+                    if match:
+                        dt = datetime.strptime(match.group(0), "%B %d, %Y")
+                        current_date_str = dt.strftime("%Y-%m-%d")
+                        # debug_log.append(f"   🗓️ House Date: {current_date_str}")
+                        continue
+                except: pass
+            
+            if not current_date_str: continue
 
+            # B. Detect Time "8:30 AM"
+            time_match = re.search(r'^(\d{1,2}:\d{2}\s*[AP]M|Noon)', line, re.IGNORECASE)
+            if time_match:
+                time_val = time_match.group(0)
+                
+                # In House portal, Committee Name is usually the PREVIOUS line or NEXT line
+                # Let's look at the PREVIOUS line first (common in card headers)
+                if i > 0:
+                    comm_name = lines[i-1]
+                    # If previous line is just "Agenda" or "View", look TWO lines back
+                    if len(comm_name) < 5 or "Agenda" in comm_name:
+                        if i > 1: comm_name = lines[i-2]
+                    
+                    clean_name = normalize_text(comm_name)
+                    clean_name = clean_name.replace("senate", "").replace("house", "").replace("committee", "").strip()
+                    
+                    if len(clean_name) > 3 and "agenda" not in clean_name:
+                        key = (current_date_str, clean_name)
+                        schedule_map[key] = time_val
+                        # debug_log.append(f"   ✅ House: {clean_name} @ {time_val}")
+
+    except Exception as e:
+        debug_log.append(f"❌ House Error: {str(e)}")
+
+    debug_log.append(f"📊 Total Meetings Found: {len(schedule_map)}")
+    
     st.session_state['debug_data'] = {
         "map_keys": list(schedule_map.keys()),
         "log": debug_log
