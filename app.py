@@ -63,70 +63,57 @@ def normalize_text(text):
     text = text.replace('&', 'and').replace('.', '').replace(',', '')
     return " ".join(text.split())
 
-# --- NEW: ROBUST DUAL SCRAPER (FIXED CHAIR NAMES) ---
+# --- RESTORED ROBUST SCRAPER (64+ Items) ---
 @st.cache_data(ttl=600)
 def fetch_schedule_from_web():
     schedule_map = {}
     debug_log = [] 
     headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'}
 
-    # ---------------------------------------------------------
-    # 1. SENATE PORTAL (Structure: Name on line X, Date/Time on line X+1)
-    # ---------------------------------------------------------
+    # 1. SENATE PORTAL
     try:
         url_senate = "https://apps.senate.virginia.gov/Senator/ComMeetings.php"
         debug_log.append(f"🏛️ Senate: Checking {url_senate}")
         resp = requests.get(url_senate, headers=headers, timeout=5)
         soup = BeautifulSoup(resp.text, 'html.parser')
-        
         lines = [line.strip() for line in soup.get_text("\n", strip=True).splitlines() if line.strip()]
         
         for i, line in enumerate(lines):
-            # Senate puts Date and Time on the SAME line
             if "2026" in line and ("AM" in line or "PM" in line or "noon" in line.lower()):
-                
-                # Extract Time (including "30 Minutes After")
+                # Regex for "7:30 AM" or "30 Minutes After"
                 time_match = re.search(r'(\d{1,2}:\d{2}\s*[AP]M|noon|upon\s+adjourn|\d+\s+minutes?\s+after)', line, re.IGNORECASE)
                 if time_match:
                     time_val = time_match.group(0).upper()
-                    
-                    # Extract Date
                     try:
                         clean_line = line.split("-")[0].strip()
                         clean_line = clean_line.replace("1st", "1").replace("2nd", "2").replace("3rd", "3").replace("th", "")
                         dt = datetime.strptime(clean_line, "%A, %B %d, %Y")
                         date_str = dt.strftime("%Y-%m-%d")
                         
-                        # The Committee Name is the PREVIOUS line
                         if i > 0:
                             comm_name = lines[i-1]
                             if "Cancelled" in comm_name: continue
                             
+                            # Clean the name but KEEP "Subcommittee" for the Splitter logic later
                             clean_name = normalize_text(comm_name)
                             clean_name = clean_name.replace("senate", "").replace("house", "").replace("committee", "").strip()
                             
                             key = (date_str, clean_name)
-                            schedule_map[key] = time_val
+                            schedule_map[key] = (time_val, comm_name) # Store RAW name for display
                     except: pass
-
     except Exception as e:
         debug_log.append(f"❌ Senate Error: {str(e)}")
 
-    # ---------------------------------------------------------
-    # 2. HOUSE PORTAL (Structure: Date Header -> Name -> Chair -> Time)
-    # ---------------------------------------------------------
+    # 2. HOUSE PORTAL
     try:
         url_house = "https://house.vga.virginia.gov/schedule/meetings"
         debug_log.append(f"🏛️ House: Checking {url_house}")
         resp = requests.get(url_house, headers=headers, timeout=5)
         soup = BeautifulSoup(resp.text, 'html.parser')
-        
         lines = [line.strip() for line in soup.get_text("\n", strip=True).splitlines() if line.strip()]
         
         current_date_str = None
-        
         for i, line in enumerate(lines):
-            # A. Detect Date Header (House excludes year often)
             if "JANUARY" in line.upper() or "FEBRUARY" in line.upper():
                 try:
                     date_text = line if "2026" in line else f"{line}, 2026"
@@ -140,17 +127,12 @@ def fetch_schedule_from_web():
             
             if not current_date_str: continue
 
-            # B. Detect Time
             time_match = re.search(r'^(\d{1,2}:\d{2}\s*[AP]M|Noon)', line, re.IGNORECASE)
             if time_match:
                 time_val = time_match.group(0)
-                
-                # C. Find Name (Backtracking)
                 if i > 0:
                     comm_name = lines[i-1]
-                    
-                    # --- FIX: DETECT CHAIR NAME ---
-                    # If line has a comma (e.g. "Rasoul, Sam"), it's likely a person. Go back one more.
+                    # Backtrack logic for names
                     if "," in comm_name or "View Agenda" in comm_name:
                         if i > 1:
                             prev_prev = lines[i-2]
@@ -163,7 +145,7 @@ def fetch_schedule_from_web():
                     
                     if len(clean_name) > 3:
                         key = (current_date_str, clean_name)
-                        schedule_map[key] = time_val
+                        schedule_map[key] = (time_val, comm_name) # Store RAW name
 
     except Exception as e:
         debug_log.append(f"❌ House Error: {str(e)}")
@@ -504,6 +486,7 @@ if bills_to_track:
                 st.markdown(f"**{display_date_str}**")
                 st.divider()
                 
+                # Retrieve scraper results for this date
                 todays_meetings = {k[1]: v for k, v in web_schedule_map.items() if k[0] == target_date_str}
                 
                 bills_found_today = False
@@ -517,16 +500,16 @@ if bills_to_track:
                         clean_sub = normalize_text(raw_sub).replace("subcommittee", "").replace("sub", "").strip()
                         
                         match_time = None
-                        match_comm_name = None
+                        match_comm_raw = None
                         
-                        for scraper_comm, scraper_time in todays_meetings.items():
+                        for scraper_comm, (scraper_time, scraper_raw_name) in todays_meetings.items():
                             # A. Sub Match
                             if len(clean_sub) > 3 and (clean_sub in scraper_comm or scraper_comm in clean_sub):
                                 match_time = scraper_time
-                                match_comm_name = scraper_comm
+                                match_comm_raw = scraper_raw_name
                                 break
                             
-                            # B. Main Committee Match
+                            # B. Main Match
                             tokens_bill = set(clean_comm.split())
                             tokens_scraper = set(scraper_comm.split())
                             ignore = {'and', 'the', 'of', 'committee', 'subcommittee', 'sub', 'house', 'senate'}
@@ -535,19 +518,37 @@ if bills_to_track:
                             
                             if len(tokens_bill) > 0 and tokens_bill.issubset(tokens_scraper):
                                 match_time = scraper_time
-                                match_comm_name = scraper_comm
+                                match_comm_raw = scraper_raw_name
                                 break
                         
                         if match_time:
                             bills_found_today = True
                             st.error(f"**{bill}**")
                             
-                            # CLEANED UP DISPLAY
-                            display_comm = match_comm_name.title().replace("Committee", "").strip()
-                            st.write(f"🏛️ **{display_comm}**")
+                            # --- SPLITTER LOGIC (Streamline Header vs Arrow) ---
+                            # Try to separate "Finance — Public Safety" into Header and Arrow
+                            display_header = raw_comm.title() # Default to user's clean Main Committee
+                            display_sub = raw_sub # Default to user's clean Sub
                             
-                            if raw_sub and raw_sub != '-': 
-                                st.caption(f"↳ {raw_sub}")
+                            # If the scraped name has more detail (like a specific sub), extract it
+                            if "—" in match_comm_raw:
+                                parts = match_comm_raw.split("—")
+                                if len(parts) > 1:
+                                    scraped_sub = parts[1].strip().replace("Subcommittee", "").strip()
+                                    if not display_sub or display_sub == '-':
+                                        display_sub = scraped_sub
+                            elif "Subcommittee" in match_comm_raw:
+                                # Try to grab the words before "Subcommittee"
+                                match = re.search(r'([A-Za-z\s&]+) Subcommittee', match_comm_raw, re.IGNORECASE)
+                                if match:
+                                    scraped_sub = match.group(1).strip()
+                                    if not display_sub or display_sub == '-':
+                                        display_sub = scraped_sub
+
+                            st.write(f"🏛️ **{display_header}**")
+                            
+                            if display_sub and display_sub != '-': 
+                                st.caption(f"↳ {display_sub}")
                             
                             st.caption(f"⏰ {match_time}")
                             st.divider()
