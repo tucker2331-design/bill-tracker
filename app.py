@@ -63,20 +63,21 @@ def normalize_text(text):
     text = text.replace('&', 'and').replace('.', '').replace(',', '')
     return " ".join(text.split())
 
-# --- NEW: AGGRESSIVE SCRAPER + TEXT PEEK ---
+# --- NEW: BACKUP-ENABLED SCRAPER ---
 @st.cache_data(ttl=600)
 def fetch_schedule_from_web():
     """
-    Scrapes legacy URLs and captures raw text for debugging.
+    Scrapes the schedule. Tries LIS Legacy first, then falls back to the General Assembly Portal.
     """
     schedule_map = {}
     debug_log = [] 
     
-    # We try specific sub-pages that are more likely to have text
+    # 1. LIS Legacy URLs (Often broken for new sessions)
+    # 2. VA General Assembly Portal (Reliable HTML Backup)
     candidates = [
-        ("https://lis.virginia.gov/cgi-bin/legp604.exe?261+oth+MTG", "Master List"),
-        ("https://lis.virginia.gov/cgi-bin/legp604.exe?261+sub+S01", "Subcommittees"),
-        ("https://lis.virginia.gov/cgi-bin/legp604.exe?261+doc+S01", "Dockets"),
+        ("https://lis.virginia.gov/cgi-bin/legp604.exe?261+oth+MTG", "LIS Master List"),
+        ("https://virginiageneralassembly.gov/house/schedule/schedule.php", "GA Portal (House/Joint)"),
+        ("https://lis.virginia.gov/cgi-bin/legp604.exe?261+sub+S01", "LIS Subcommittees")
     ]
     
     headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'}
@@ -86,34 +87,29 @@ def fetch_schedule_from_web():
             debug_log.append(f"🔄 Checking: {label}")
             response = requests.get(url, headers=headers, timeout=5)
             
-            # Use basic HTML parser (no LXML)
-            soup = BeautifulSoup(response.text, 'html.parser')
-            
-            # Get clean lines of text
-            lines = [line.strip() for line in soup.get_text(separator='\n').splitlines() if line.strip()]
-            
-            # LOGGING: Print the first 3 lines of what we actually found
-            if len(lines) > 0:
-                preview = " | ".join(lines[:3])
-                debug_log.append(f"   👀 Page Title/Header: {preview[:100]}...")
-            
-            if len(lines) < 10:
-                debug_log.append("   ⚠️ Page too short. Skipping.")
+            # Basic Check: Is the page empty or an error?
+            if "could not be processed" in response.text or len(response.text.splitlines()) < 20:
+                debug_log.append("   ⚠️ Page Error/Empty. Skipping.")
                 continue
 
+            soup = BeautifulSoup(response.text, 'html.parser')
+            
+            # Extract text lines (handles both LIS pre-formatted text and GA Portal tables)
+            lines = [line.strip() for line in soup.get_text(separator='\n').splitlines() if line.strip()]
+            
             current_date_str = None
+            found_count = 0
             
             for line in lines:
-                # 1. Detect Date (Loose Format)
-                # Matches: "Friday, January 16, 2026" OR "January 16, 2026"
+                # 1. Detect Date
+                # Matches: "Friday, January 16, 2026" or "January 16, 2026"
                 if "2026" in line:
                     try:
-                        # Attempt to extract a date
                         clean_line = line.replace("1st", "1").replace("2nd", "2").replace("3rd", "3").replace("th", "")
                         match = re.search(r'([A-Za-z]+, )?([A-Za-z]+ \d{1,2}, \d{4})', clean_line)
                         if match:
                             dt_str = match.group(0)
-                            # Try parsing with weekday
+                            # Parse flexible date formats
                             try: dt = datetime.strptime(dt_str, "%A, %B %d, %Y")
                             except: dt = datetime.strptime(dt_str, "%B %d, %Y")
                             
@@ -121,31 +117,34 @@ def fetch_schedule_from_web():
                             debug_log.append(f"   🗓️ Date locked: {current_date_str}")
                     except: pass
                 
-                # 2. Detect Time (Aggressive)
                 if not current_date_str: continue
 
-                # Regex for "9:00 AM" or "1/2 hr after"
-                time_match = re.search(r'(\d{1,2}:\d{2}\s*[AP]M|Noon|Upon\s+.*?|1\/2\s+hr|\d+\s+min)', line, re.IGNORECASE)
+                # 2. Detect Time
+                # Matches "9:00 AM", "9:00 a.m.", "Noon", "1/2 hr after"
+                time_pattern = r'(\d{1,2}:\d{2}\s*?[aApP]\.?[mM]\.?|Noon|Upon\s+.*?|1\/2\s+hr|\d+\s+min)'
+                time_match = re.search(time_pattern, line, re.IGNORECASE)
                 
                 if time_match:
                     time_val = time_match.group(0)
                     
-                    # Everything else is the name
+                    # Everything else in the line is potential Name info
                     remaining = line.replace(time_val, "").strip(" .:-")
                     
-                    # Clean it up
+                    # Clean Name
                     if "-" in remaining: remaining = remaining.split("-")[0]
                     clean_name = normalize_text(remaining)
                     clean_name = clean_name.replace("senate", "").replace("house", "").replace("committee", "").strip()
                     
+                    # Save if it looks like a real committee name
                     if len(clean_name) > 3:
                         key = (current_date_str, clean_name)
                         if key not in schedule_map:
                             schedule_map[key] = time_val
+                            found_count += 1
             
-            if len(schedule_map) > 0:
-                debug_log.append(f"   ✅ Found {len(schedule_map)} times. Stopping.")
-                break
+            if found_count > 0:
+                debug_log.append(f"   ✅ SUCCESS! Extracted {found_count} meetings.")
+                break # We found data, stop trying other URLs
 
         except Exception as e:
             debug_log.append(f"   ❌ Error: {str(e)}")
