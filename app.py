@@ -80,11 +80,10 @@ def fetch_schedule_from_web():
         resp = requests.get(url_senate, headers=headers, timeout=5)
         soup = BeautifulSoup(resp.text, 'html.parser')
         
-        # Get raw lines
         lines = [line.strip() for line in soup.get_text("\n", strip=True).splitlines() if line.strip()]
         
         for i, line in enumerate(lines):
-            # Look for line with Date AND Time (e.g. "Thursday, January 15, 2026 - 7:30 AM")
+            # Look for line with Date AND Time
             if "2026" in line and ("AM" in line or "PM" in line or "noon" in line.lower()):
                 
                 # Extract Time
@@ -94,16 +93,14 @@ def fetch_schedule_from_web():
                     
                     # Extract Date
                     try:
-                        clean_line = line.split("-")[0].strip() # Get part before dash
+                        clean_line = line.split("-")[0].strip()
                         clean_line = clean_line.replace("1st", "1").replace("2nd", "2").replace("3rd", "3").replace("th", "")
                         dt = datetime.strptime(clean_line, "%A, %B %d, %Y")
                         date_str = dt.strftime("%Y-%m-%d")
                         
-                        # THE KEY FIX: The Committee Name is usually the PREVIOUS line
+                        # THE KEY: The Committee Name is the PREVIOUS line
                         if i > 0:
                             comm_name = lines[i-1]
-                            
-                            # Clean it up
                             if "Cancelled" in comm_name: continue
                             
                             clean_name = normalize_text(comm_name)
@@ -111,7 +108,6 @@ def fetch_schedule_from_web():
                             
                             key = (date_str, clean_name)
                             schedule_map[key] = time_val
-                            # debug_log.append(f"   ✅ Senate: {clean_name} @ {time_val} ({date_str})")
                             
                     except: pass
 
@@ -123,31 +119,25 @@ def fetch_schedule_from_web():
     # Strategy: Date header is separate. Time & Name are in blocks.
     # ---------------------------------------------------------
     try:
-        url_house = "https://house.vga.virginia.gov/schedule/meetings" # Corrected/likely URL
+        url_house = "https://house.vga.virginia.gov/schedule/meetings"
         debug_log.append(f"🏛️ House: Checking {url_house}")
         resp = requests.get(url_house, headers=headers, timeout=5)
         soup = BeautifulSoup(resp.text, 'html.parser')
         
-        # House site uses "cards". We grab text stream.
         lines = [line.strip() for line in soup.get_text("\n", strip=True).splitlines() if line.strip()]
         
         current_date_str = None
         
         for i, line in enumerate(lines):
-            # A. Detect Date Header "THURSDAY, JANUARY 15" (Note: Missing year sometimes, assume 2026)
+            # A. Detect Date Header
             if "JANUARY" in line.upper() or "FEBRUARY" in line.upper():
                 try:
-                    # Append year if missing
                     date_text = line if "2026" in line else f"{line}, 2026"
-                    date_text = date_text.replace("THURSDAY,", "THURSDAY").strip() # Cleanup
-                    
-                    # Try parsing "THURSDAY, JANUARY 15, 2026"
-                    # Remove weekday to make it easier "JANUARY 15, 2026"
+                    date_text = date_text.replace("THURSDAY,", "THURSDAY").strip()
                     match = re.search(r'([A-Z]+ \d{1,2}, 2026)', date_text, re.IGNORECASE)
                     if match:
                         dt = datetime.strptime(match.group(0), "%B %d, %Y")
                         current_date_str = dt.strftime("%Y-%m-%d")
-                        # debug_log.append(f"   🗓️ House Date: {current_date_str}")
                         continue
                 except: pass
             
@@ -158,21 +148,23 @@ def fetch_schedule_from_web():
             if time_match:
                 time_val = time_match.group(0)
                 
-                # In House portal, Committee Name is usually the PREVIOUS line or NEXT line
-                # Let's look at the PREVIOUS line first (common in card headers)
+                # In House portal, look backwards for Name
                 if i > 0:
                     comm_name = lines[i-1]
-                    # If previous line is just "Agenda" or "View", look TWO lines back
-                    if len(comm_name) < 5 or "Agenda" in comm_name:
+                    
+                    # FILTER: If it says "New Meeting", go back one more line
+                    if "New Meeting" in comm_name or "View Agenda" in comm_name:
                         if i > 1: comm_name = lines[i-2]
                     
+                    # Final Filter
+                    if "New Meeting" in comm_name: continue
+
                     clean_name = normalize_text(comm_name)
                     clean_name = clean_name.replace("senate", "").replace("house", "").replace("committee", "").strip()
                     
-                    if len(clean_name) > 3 and "agenda" not in clean_name:
+                    if len(clean_name) > 3:
                         key = (current_date_str, clean_name)
                         schedule_map[key] = time_val
-                        # debug_log.append(f"   ✅ House: {clean_name} @ {time_val}")
 
     except Exception as e:
         debug_log.append(f"❌ House Error: {str(e)}")
@@ -608,11 +600,30 @@ if bills_to_track:
                                     k_date, k_comm = key
                                     
                                     if k_date == target_date_str:
-                                        # Flexible Check
+                                        # Flexible Match Strategy: Token Overlap
+                                        # Split both names into words and check if significant words match
+                                        
+                                        # 1. Exact Match
                                         if lookup_comm == k_comm:
                                             time_found = t_val
                                             break
-                                        elif len(lookup_comm) > 3 and (lookup_comm in k_comm or k_comm in lookup_comm):
+                                        
+                                        # 2. Substring Match (e.g. "Education" in "Education and Health")
+                                        if len(lookup_comm) > 3 and (lookup_comm in k_comm or k_comm in lookup_comm):
+                                            time_found = t_val
+                                            break
+                                            
+                                        # 3. Token Overlap Match (e.g. "Public Education" vs "Education Public Sub")
+                                        tokens_bill = set(lookup_comm.split())
+                                        tokens_scraper = set(k_comm.split())
+                                        
+                                        # Ignore common words
+                                        ignore = {'and', 'the', 'of', 'committee', 'subcommittee', 'sub'}
+                                        tokens_bill = {t for t in tokens_bill if t not in ignore}
+                                        tokens_scraper = {t for t in tokens_scraper if t not in ignore}
+                                        
+                                        # If we share at least 2 significant words, or 100% of a short name
+                                        if len(tokens_bill) > 0 and tokens_bill.issubset(tokens_scraper):
                                             time_found = t_val
                                             break
                                 
