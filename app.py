@@ -641,7 +641,6 @@ if bills_to_track:
                         last_date = str(info.get('Date', ''))
                         
                         # --- FIX: Date Format Translator ---
-                        # LIS uses MM/DD/YYYY, Code uses YYYY-MM-DD
                         is_today = False
                         if last_date == target_date_str: 
                             is_today = True
@@ -658,8 +657,19 @@ if bills_to_track:
                             bills_shown_today.add(b_id)
                             
                             # Fallback Display Info
-                            comm_display = info.get('Current_Committee', 'Recent Action')
-                            lis_status = info.get('Status', 'Updated Today')
+                            raw_comm = str(info.get('Current_Committee', ''))
+                            comm_display = raw_comm.strip()
+                            lis_status = str(info.get('Status', 'Updated Today'))
+                            
+                            # --- HEADER REPAIR ---
+                            # If no committee (e.g., Floor vote or Fiscal Impact), give it a good name
+                            if not comm_display or comm_display in ["-", "nan", "None", ""]:
+                                if b_id.startswith("HJ") or b_id.startswith("SJ"):
+                                    comm_display = "Floor Session"
+                                elif "fiscal" in lis_status.lower():
+                                    comm_display = "General Assembly Action"
+                                else:
+                                    comm_display = "Floor Session / Action"
                             
                             st.markdown(f"**{comm_display}**")
                             st.caption("⏰ Completed / Actioned")
