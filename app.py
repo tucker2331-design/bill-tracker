@@ -470,7 +470,7 @@ if bills_to_track:
                 st.markdown("#### ❌ Failed")
                 render_master_list_item(dead)
 
-    # --- TAB 3: UPCOMING (STRICT AGENDA MATCHING + FIXED CALENDAR) ---
+# --- TAB 3: UPCOMING (STRICT AGENDA MATCHING + FIXED CALENDAR) ---
     with tab_upcoming:
         st.subheader("📅 Your Confirmed Agenda")
         
@@ -491,8 +491,7 @@ if bills_to_track:
             if comm_col:
                 confirmed_docket['comm_norm'] = confirmed_docket[comm_col].apply(normalize_text)
             else:
-                # SAFETY FALLBACK: If we can't find a committee column, use empty string to prevent crash
-                confirmed_docket['comm_norm'] = ""
+                confirmed_docket['comm_norm'] = "" # Placeholder
 
         # 3. Loop 7 Days
         for i in range(7):
@@ -522,13 +521,19 @@ if bills_to_track:
                 # Check matches
                 for scraper_clean_name, (scraper_time, scraper_full_name) in todays_meetings.items():
                     
+                    # FILTER: Skip Caucuses (Too noisy/not usually bill hearings)
+                    if "caucus" in scraper_full_name.lower():
+                        continue
+
                     is_scraper_sub = "subcommittee" in scraper_full_name.lower() or "sub" in scraper_full_name.lower()
                     
-                    # Find bills that match this committee name
-                    # SAFETY CHECK: Ensure comm_norm exists before filtering
+                    # SAFETY CHECK: Only match if we actually have a valid committee name in the docket
+                    # The bug was that "" is inside "String", so we must ensure x is not empty.
                     if 'comm_norm' in confirmed_docket.columns:
                         relevant_bills = confirmed_docket[
-                            confirmed_docket['comm_norm'].apply(lambda x: scraper_clean_name in x or x in scraper_clean_name)
+                            confirmed_docket['comm_norm'].apply(
+                                lambda x: len(str(x)) > 2 and (scraper_clean_name in str(x) or str(x) in scraper_clean_name)
+                            )
                         ]
                     else:
                         relevant_bills = pd.DataFrame()
@@ -569,7 +574,6 @@ if bills_to_track:
 
                 if not events_found:
                     st.caption("-")
-
 # --- DEV DEBUGGER ---
 with st.sidebar:
     st.divider()
