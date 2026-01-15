@@ -63,56 +63,75 @@ def normalize_text(text):
     return " ".join(text.split())
 
 def clean_committee_name(name):
-    """Robust cleaner for committee names"""
+    """Robust cleaner that preserves Chamber identity (House vs Senate)"""
     if not name or str(name).lower() == 'nan': return ""
     name = str(name).strip()
     
+    # 1. Clean up "Name, Chair" format
     if "," in name: name = name.split(",")[0].strip()
 
-    # Strict Mappings with House/Senate distinction
+    # 2. Strict Mappings (Explicitly add Chamber)
     mapping = {
         "HED": "House Education",
         "HEDC": "House Education",
-        "P&E": "Privileges & Elections",
-        "C&L": "Commerce & Labor",
-        "HWI": "Health, Welfare & Institutions",
-        "APP": "Appropriations",
-        "FIN": "Finance",
-        "JUD": "Courts of Justice",
-        "GL": "General Laws",
+        "P&E": "Privileges & Elections", # Ambiguous, will be handled by context usually
+        "C&L": "Commerce & Labor",       # Ambiguous
+        "HWI": "House Health, Welfare & Inst.",
+        "APP": "House Appropriations",
+        "FIN": "Senate Finance & Appropriations", # Senate usually uses FIN
+        "JUD": "Courts of Justice",      # Ambiguous
+        "GL": "General Laws",            # Ambiguous
         "AG": "Agriculture",
         "TRAN": "Transportation",
-        "SFIN": "Senate Finance",
+        "SFIN": "Senate Finance & Appropriations",
         "HFIN": "House Finance",
-        "SEH": "Senate Education & Health"
+        "SEH": "Senate Education & Health",
+        "CL": "Commerce & Labor",
+        "SCL": "Senate Commerce & Labor",
+        "HCL": "House Commerce & Labor"
     }
     
     upper_name = name.upper()
-    if upper_name in mapping:
-        return mapping[upper_name]
+    if upper_name in mapping: return mapping[upper_name]
 
-    # Standard Committees Stripper
+    # 3. Detect Chamber in text
+    is_senate = "SENATE" in upper_name
+    is_house = "HOUSE" in upper_name
+
+    # 4. Standardize Base Name
+    base_name = name
     standard_committees = [
-        "Education", "Commerce and Labor", "General Laws", "Transportation",
+        "Education and Health", "Education", "Commerce and Labor", "General Laws", "Transportation",
         "Finance", "Appropriations", "Courts of Justice", "Privileges and Elections",
         "Agriculture", "Rules", "Local Government", "Public Safety", "Counties Cities and Towns",
-        "Health", "Rehabilitation and Social Services"
+        "Health, Welfare and Institutions", "Rehabilitation and Social Services"
     ]
     
     for std in standard_committees:
         if std.lower() in name.lower():
-            # If it's just "Education", try to detect House vs Senate if possible
-            # (Though often the scraper name doesn't specify until mapped)
-            return std
+            base_name = std
+            break # Stop at first match
+    
+    # 5. Reconstruct with Chamber (if known)
+    # If the base name already has Senate/House, don't add it again
+    if "Senate" in base_name or "House" in base_name:
+        return base_name
+        
+    if is_senate: return f"Senate {base_name}"
+    if is_house: return f"House {base_name}"
+    
+    # Special overrides for distinct committees
+    if "Health, Welfare" in base_name: return f"House {base_name}"
+    if "Rehabilitation" in base_name: return f"Senate {base_name}"
+    if "Education and Health" in base_name: return f"Senate {base_name}"
 
-    return name.title()
+    return base_name.title()
 
 def clean_status_text(text):
-    """Replaces abbreviations in the status description for readability"""
+    """Replaces abbreviations in the status description"""
     if not text: return ""
     text = str(text)
     
-    # Map abbreviations to clean words
     replacements = {
         "HED": "House Education",
         "sub:": "Subcommittee:",
@@ -121,7 +140,6 @@ def clean_status_text(text):
     }
     
     for abbr, full in replacements.items():
-        # Case insensitive replacement, ensuring we match the abbreviation
         pattern = re.compile(re.escape(abbr), re.IGNORECASE)
         text = pattern.sub(full, text)
         
@@ -137,7 +155,6 @@ def fetch_schedule_from_web():
     # 1. SENATE PORTAL
     try:
         url_senate = "https://apps.senate.virginia.gov/Senator/ComMeetings.php"
-        debug_log.append(f"🏛️ Senate: Checking {url_senate}")
         resp = requests.get(url_senate, headers=headers, timeout=5)
         soup = BeautifulSoup(resp.text, 'html.parser')
         lines = [line.strip() for line in soup.get_text("\n", strip=True).splitlines() if line.strip()]
@@ -145,30 +162,38 @@ def fetch_schedule_from_web():
         for i, line in enumerate(lines):
             if "2026" in line: 
                 time_match = re.search(r'(\d{1,2}:\d{2}\s*[AP]M|noon|upon\s+adjourn|\d+\s+minutes?\s+after)', line, re.IGNORECASE)
-                
                 if time_match:
                     time_val = time_match.group(0).upper()
                     try:
-                        clean_line = line.split("-")[0] if "-" in line else line.split("–")[0]
-                        clean_line = clean_line.strip().replace("1st", "1").replace("2nd", "2").replace("3rd", "3").replace("th", "")
+                        clean_line = line.split("-")[0].replace("–", "-").split("-")[0].strip()
+                        clean_line = clean_line.replace("1st", "1").replace("2nd", "2").replace("3rd", "3").replace("th", "")
                         dt = datetime.strptime(clean_line, "%A, %B %d, %Y")
                         date_str = dt.strftime("%Y-%m-%d")
                         
                         if i > 0:
                             comm_name = lines[i-1]
                             if "Cancelled" in comm_name: continue
+                            
+                            # Force "Senate" prefix if missing for key generation
                             clean_name = normalize_text(comm_name)
-                            clean_name = clean_name.replace("senate", "").replace("house", "").replace("committee", "").strip()
+                            clean_name = clean_name.replace("committee", "").strip()
+                            if "senate" not in clean_name and "house" not in clean_name:
+                                clean_name = "senate " + clean_name # It came from Senate portal
+                            
+                            # Clean up key
+                            clean_name = clean_name.replace("senate", "").replace("house", "").strip()
+                            
                             key = (date_str, clean_name)
-                            schedule_map[key] = (time_val, comm_name) 
+                            # Store with explicit Senate prefix for display
+                            display_name = comm_name
+                            if "Senate" not in display_name: display_name = f"Senate {display_name}"
+                            schedule_map[key] = (time_val, display_name) 
                     except: pass
-    except Exception as e:
-        debug_log.append(f"❌ Senate Error: {str(e)}")
+    except: pass
 
     # 2. HOUSE PORTAL
     try:
         url_house = "https://house.vga.virginia.gov/schedule/meetings"
-        debug_log.append(f"🏛️ House: Checking {url_house}")
         resp = requests.get(url_house, headers=headers, timeout=5)
         soup = BeautifulSoup(resp.text, 'html.parser')
         lines = [line.strip() for line in soup.get_text("\n", strip=True).splitlines() if line.strip()]
@@ -200,22 +225,23 @@ def fetch_schedule_from_web():
                     
                     if "New Meeting" in comm_name: continue
 
+                    # Force "House" prefix logic
                     clean_name = normalize_text(comm_name)
-                    clean_name = clean_name.replace("senate", "").replace("house", "").replace("committee", "").strip()
+                    clean_name = clean_name.replace("committee", "").strip()
+                    if "senate" not in clean_name and "house" not in clean_name:
+                        clean_name = "house " + clean_name # Came from House portal
                     
-                    if len(clean_name) > 3:
-                        key = (current_date_str, clean_name)
-                        schedule_map[key] = (time_val, comm_name)
+                    clean_name = clean_name.replace("senate", "").replace("house", "").strip()
+                    
+                    key = (current_date_str, clean_name)
+                    
+                    display_name = comm_name
+                    if "House" not in display_name: display_name = f"House {display_name}"
+                    schedule_map[key] = (time_val, display_name)
 
-    except Exception as e:
-        debug_log.append(f"❌ House Error: {str(e)}")
-
-    debug_log.append(f"📊 Total Meetings Found: {len(schedule_map)}")
+    except: pass
     
-    st.session_state['debug_data'] = {
-        "map_keys": list(schedule_map.keys()),
-        "log": debug_log
-    }
+    st.session_state['debug_data'] = {"map_keys": list(schedule_map.keys()), "log": debug_log}
     return schedule_map
 
 # --- DATA FETCHING (DIRECT FROM LIS) ---
@@ -350,10 +376,8 @@ def check_and_broadcast(df_bills, df_subscribers, demo_mode):
     
     for i, row in df_bills.iterrows():
         if "LIS Connection Error" in str(row.get('Status')): continue
-        
         b_num = str(row['Bill Number']).strip()
         status_msg = str(row.get('Status', 'No Status')).strip()
-
         if b_num in history_text and status_msg in history_text: continue
         
         display_name = str(row.get('My Title', '-'))
@@ -622,6 +646,7 @@ if bills_to_track:
                         if matched_bills:
                             events_found = True
                             
+                            # CLEAN THE SCRAPER HEADER HERE
                             header_display = clean_committee_name(scraper_full_name)
                             
                             sub_display = None
@@ -676,7 +701,11 @@ if bills_to_track:
                                     group_name = "Floor Session / Action"
                                 else: group_name = "General Assembly Action"
                             else:
+                                # CHAMBER INFERENCE: If generic "Education", check Bill ID
                                 group_name = clean_committee_name(raw_comm)
+                                if group_name == "Education":
+                                    if b_id.startswith("HB") or b_id.startswith("HJ"): group_name = "House Education"
+                                    elif b_id.startswith("SB") or b_id.startswith("SJ"): group_name = "Senate Education & Health"
                             
                             if group_name not in history_groups: history_groups[group_name] = []
                             history_groups[group_name].append(b_id)
@@ -691,8 +720,6 @@ if bills_to_track:
                             if raw_status and raw_status != 'nan' and raw_status != '-':
                                 status_text = f" - {raw_status}"
                             st.error(f"**{b_id}**{status_text}")
-                            
-                            # Cleaned Status Here
                             st.caption(f"_{clean_status_text(info.get('Status'))}_")
                         st.divider()
 
