@@ -21,9 +21,8 @@ LIS_SUBDOCKET_CSV = LIS_BASE_URL + "SUBDOCKET.CSV"  # Subcommittees
 LIS_DOCKET_CSV = LIS_BASE_URL + "DOCKET.CSV"        # Main Standing Committees
 LIS_CALENDAR_CSV = LIS_BASE_URL + "CALENDAR.CSV"    # Floor Sessions / Votes
 
-# --- CRITICAL FIX: CHANGED URL TO MASTER TEXT LIST ---
-# Old URL was an image wrapper (+img). This is the text list (+oth+MTG).
-LIS_SCHEDULE_URL = "https://lis.virginia.gov/cgi-bin/legp604.exe?261+oth+MTG"
+# We use the main visual schedule URL, but we will "jailbreak" the frame inside the scraper
+LIS_SCHEDULE_URL = "https://lis.virginia.gov/cgi-bin/legp604.exe?261+img+S01"
 
 st.set_page_config(page_title="VA Bill Tracker 2026", layout="wide")
 
@@ -67,42 +66,48 @@ def normalize_text(text):
     text = text.replace('&', 'and').replace('.', '').replace(',', '')
     return " ".join(text.split())
 
-# --- NEW: DIAGNOSTIC WEB SCRAPER (FIXED) ---
+# --- NEW: DIAGNOSTIC WEB SCRAPER (FORCE FRAME BREAK) ---
 @st.cache_data(ttl=600)
 def fetch_schedule_from_web():
     """
     Scrapes LIS and logs what it finds for debugging.
+    Uses REGEX to find frames if BeautifulSoup fails.
     """
     schedule_map = {}
-    debug_log = [] # <--- Stores debug info
+    debug_log = [] 
     
     try:
         # 1. Try to Connect
         headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'}
         response = requests.get(LIS_SCHEDULE_URL, headers=headers)
         
-        debug_log.append(f"📡 HTTP Status: {response.status_code}")
-        if response.status_code != 200:
-            st.session_state['debug_data'] = {"error": f"Failed with {response.status_code}", "log": debug_log}
-            return {}
-
-        soup = BeautifulSoup(response.text, 'html.parser')
+        debug_log.append(f"📡 Initial Status: {response.status_code}")
         
-        # 2. Check for Frameset (The "6 Lines" Bug)
-        if soup.find('frame'):
-            debug_log.append("⚠️ Frameset detected! Switching to frame content...")
-            frame_src = soup.find('frame').get('src')
-            # Re-construct URL if relative
-            if not frame_src.startswith("http"):
-                base_url = "https://lis.virginia.gov"
-                if frame_src.startswith("/"): frame_src = base_url + frame_src
-                else: frame_src = "https://lis.virginia.gov/cgi-bin/" + frame_src
+        # 2. FORCE CHECK FOR FRAME (The "6 Lines" Fix)
+        # We search the RAW text for 'src=' because sometimes BeautifulSoup misses it in Framesets
+        frame_match = re.search(r'(?:frame|iframe).*?src=["\']([^"\']+)["\']', response.text, re.IGNORECASE)
+        
+        final_response_text = response.text
+        
+        if frame_match:
+            frame_url = frame_match.group(1)
+            debug_log.append(f"⚠️ Frameset detected! Jumping to: {frame_url}")
             
-            debug_log.append(f"🔗 Jumping to: {frame_src}")
-            response = requests.get(frame_src, headers=headers)
-            soup = BeautifulSoup(response.text, 'html.parser')
+            # Handle relative URLs
+            if not frame_url.startswith("http"):
+                base = "https://lis.virginia.gov"
+                if not frame_url.startswith("/"): base += "/cgi-bin/"
+                frame_url = base + frame_url
+                
+            # Request the INNER content
+            inner_resp = requests.get(frame_url, headers=headers)
+            final_response_text = inner_resp.text
+            debug_log.append(f"📡 Inner Status: {inner_resp.status_code}")
 
+        # 3. Parse the REAL content
+        soup = BeautifulSoup(final_response_text, 'html.parser')
         lines = [line.strip() for line in soup.get_text(separator='\n').splitlines() if line.strip()]
+        
         debug_log.append(f"📄 Lines found: {len(lines)}")
         
         current_date_str = None
@@ -110,6 +115,7 @@ def fetch_schedule_from_web():
         for line in lines:
             # Detect Date
             try:
+                # Cleanup suffixes like 14th, 1st
                 clean_line = line.replace("1st", "1").replace("2nd", "2").replace("3rd", "3").replace("th", "")
                 dt = datetime.strptime(clean_line, "%A, %B %d, %Y")
                 current_date_str = dt.strftime("%Y-%m-%d")
@@ -120,7 +126,7 @@ def fetch_schedule_from_web():
             
             if not current_date_str: continue
 
-            # Detect Time (Searching ANYWHERE in the line now)
+            # Detect Time (Searching ANYWHERE in the line)
             time_pattern = r'(?:\d{1,2}:\d{2}\s*[AP]M|Noon|Upon\s+.*?|1\/2\s+hr|\d+\s+Minutes?\s+after)'
             time_match = re.search(time_pattern, line, re.IGNORECASE)
             
@@ -137,7 +143,7 @@ def fetch_schedule_from_web():
                 comm_name_clean = normalize_text(remaining_text)
                 comm_name_clean = comm_name_clean.replace("senate", "").replace("house", "").replace("committee", "").strip()
                 
-                # Filter out garbage matches (too short)
+                # Filter out garbage matches
                 if len(comm_name_clean) < 4: continue
 
                 key = (current_date_str, comm_name_clean)
@@ -150,7 +156,6 @@ def fetch_schedule_from_web():
     except Exception as e:
         debug_log.append(f"❌ Error: {str(e)}")
     
-    # Save to session state
     st.session_state['debug_data'] = {
         "map_keys": list(schedule_map.keys()),
         "log": debug_log
