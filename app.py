@@ -57,7 +57,6 @@ def get_smart_subject(title):
     return "📂 Unassigned / General"
 
 def normalize_text(text):
-    """Normalize text for better matching (remove punctuation, lower case, standardize 'and')"""
     if pd.isna(text): return ""
     text = str(text).lower()
     text = text.replace('&', 'and').replace('.', '').replace(',', '')
@@ -68,13 +67,12 @@ def clean_committee_name(name):
     if not name or str(name).lower() == 'nan': return ""
     name = str(name).strip()
     
-    # 1. Clean up "Name, Chair" format
-    if "," in name:
-        name = name.split(",")[0].strip()
+    if "," in name: name = name.split(",")[0].strip()
 
-    # 2. Strict Abbreviation Mapping
+    # Strict Mappings with House/Senate distinction
     mapping = {
-        "HED": "Education",
+        "HED": "House Education",
+        "HEDC": "House Education",
         "P&E": "Privileges & Elections",
         "C&L": "Commerce & Labor",
         "HWI": "Health, Welfare & Institutions",
@@ -85,28 +83,49 @@ def clean_committee_name(name):
         "AG": "Agriculture",
         "TRAN": "Transportation",
         "SFIN": "Senate Finance",
-        "HFIN": "House Finance"
+        "HFIN": "House Finance",
+        "SEH": "Senate Education & Health"
     }
     
-    # Check exact abbreviation match
     upper_name = name.upper()
     if upper_name in mapping:
         return mapping[upper_name]
 
-    # 3. Known Standard Committees (If the string contains these, strip everything else)
-    # This removes Chair names like "Education Rasoul" -> "Education"
+    # Standard Committees Stripper
     standard_committees = [
         "Education", "Commerce and Labor", "General Laws", "Transportation",
         "Finance", "Appropriations", "Courts of Justice", "Privileges and Elections",
-        "Agriculture", "Rules", "Local Government", "Public Safety", "Counties Cities and Towns"
+        "Agriculture", "Rules", "Local Government", "Public Safety", "Counties Cities and Towns",
+        "Health", "Rehabilitation and Social Services"
     ]
     
     for std in standard_committees:
-        # Check if the name starts with a standard committee name (case insensitive)
-        if name.lower().startswith(std.lower()):
+        if std.lower() in name.lower():
+            # If it's just "Education", try to detect House vs Senate if possible
+            # (Though often the scraper name doesn't specify until mapped)
             return std
 
     return name.title()
+
+def clean_status_text(text):
+    """Replaces abbreviations in the status description for readability"""
+    if not text: return ""
+    text = str(text)
+    
+    # Map abbreviations to clean words
+    replacements = {
+        "HED": "House Education",
+        "sub:": "Subcommittee:",
+        "P&E": "Privileges & Elections",
+        "C&L": "Commerce & Labor"
+    }
+    
+    for abbr, full in replacements.items():
+        # Case insensitive replacement, ensuring we match the abbreviation
+        pattern = re.compile(re.escape(abbr), re.IGNORECASE)
+        text = pattern.sub(full, text)
+        
+    return text
 
 # --- NEW: ROBUST SCRAPER (Fixed for "Minutes After") ---
 @st.cache_data(ttl=600)
@@ -132,17 +151,14 @@ def fetch_schedule_from_web():
                     try:
                         clean_line = line.split("-")[0] if "-" in line else line.split("–")[0]
                         clean_line = clean_line.strip().replace("1st", "1").replace("2nd", "2").replace("3rd", "3").replace("th", "")
-                        
                         dt = datetime.strptime(clean_line, "%A, %B %d, %Y")
                         date_str = dt.strftime("%Y-%m-%d")
                         
                         if i > 0:
                             comm_name = lines[i-1]
                             if "Cancelled" in comm_name: continue
-                            
                             clean_name = normalize_text(comm_name)
                             clean_name = clean_name.replace("senate", "").replace("house", "").replace("committee", "").strip()
-                            
                             key = (date_str, clean_name)
                             schedule_map[key] = (time_val, comm_name) 
                     except: pass
@@ -346,7 +362,7 @@ def check_and_broadcast(df_bills, df_subscribers, demo_mode):
             display_name = (official[:60] + '..') if len(official) > 60 else official
             
         updates_found = True
-        report += f"\n⚪ *{b_num}* | {display_name}\n> _{status_msg}_\n"
+        report += f"\n⚪ *{b_num}* | {display_name}\n> _{clean_status_text(status_msg)}_\n"
 
     if updates_found:
         st.toast(f"📢 Sending updates to {len(subscriber_list)} people...")
@@ -373,7 +389,7 @@ def render_bill_card(row):
         st.info(f"🏷️ **Status:** {my_status}")
     
     st.caption(f"{display_title}")
-    st.caption(f"_{row.get('Status')}_")
+    st.caption(f"_{clean_status_text(row.get('Status'))}_")
     st.divider()
 
 def render_master_list_item(df):
@@ -391,13 +407,13 @@ def render_master_list_item(df):
              label_text += f" - {header_title}"
         
         with st.expander(label_text):
-            st.markdown(f"**🏛️ Current Committee:** {row.get('Current_Committee', '-')}")
+            st.markdown(f"**🏛️ Current Committee:** {clean_committee_name(row.get('Current_Committee', '-'))}")
             if row.get('Current_Sub') and row.get('Current_Sub') != '-':
                 st.markdown(f"**↳ Subcommittee:** {row.get('Current_Sub')}")
                 
             st.markdown(f"**📌 Designated Title:** {row.get('My Title', '-')}")
             st.markdown(f"**📜 Official Title:** {row.get('Official Title', '-')}")
-            st.markdown(f"**🔄 Status:** {row.get('Status', '-')}")
+            st.markdown(f"**🔄 Status:** {clean_status_text(row.get('Status', '-'))}")
             
             hist_data = row.get('History_Data', [])
             if isinstance(hist_data, list) and hist_data:
@@ -606,7 +622,6 @@ if bills_to_track:
                         if matched_bills:
                             events_found = True
                             
-                            # CLEAN THE SCRAPER HEADER HERE
                             header_display = clean_committee_name(scraper_full_name)
                             
                             sub_display = None
@@ -661,7 +676,6 @@ if bills_to_track:
                                     group_name = "Floor Session / Action"
                                 else: group_name = "General Assembly Action"
                             else:
-                                # CLEAN THE HISTORY HEADER HERE
                                 group_name = clean_committee_name(raw_comm)
                             
                             if group_name not in history_groups: history_groups[group_name] = []
@@ -677,7 +691,9 @@ if bills_to_track:
                             if raw_status and raw_status != 'nan' and raw_status != '-':
                                 status_text = f" - {raw_status}"
                             st.error(f"**{b_id}**{status_text}")
-                            st.caption(f"_{info.get('Status')}_")
+                            
+                            # Cleaned Status Here
+                            st.caption(f"_{clean_status_text(info.get('Status'))}_")
                         st.divider()
 
                 if not events_found:
