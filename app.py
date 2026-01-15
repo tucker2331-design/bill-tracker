@@ -349,13 +349,22 @@ def render_master_list_item(df):
     for i, row in df.iterrows():
         header_title = row['My Title'] if row['My Title'] != "-" else row.get('Official Title', '')
         
-        # NEW: Show Status IN THE TITLE (Master List)
+        # NEW: Show Status IN THE TITLE (Clean format)
+        # Format: HB123 - ALL OUT - Title
         my_status = str(row.get('My Status', '')).strip()
-        status_suffix = ""
-        if my_status and my_status != 'nan' and my_status != '-':
-            status_suffix = f"   [`{my_status}`]"
         
-        with st.expander(f"{row['Bill Number']}{status_suffix} - {header_title}"):
+        # Build label
+        label_text = f"{row['Bill Number']}"
+        
+        # Append Status if present
+        if my_status and my_status != 'nan' and my_status != '-':
+            label_text += f" - {my_status}"
+        
+        # Append Title
+        if header_title:
+             label_text += f" - {header_title}"
+        
+        with st.expander(label_text):
             st.markdown(f"**🏛️ Current Committee:** {row.get('Current_Committee', '-')}")
             if row.get('Current_Sub') and row.get('Current_Sub') != '-':
                 st.markdown(f"**↳ Subcommittee:** {row.get('Current_Sub')}")
@@ -612,12 +621,12 @@ if bills_to_track:
                         st.caption(f"⏰ {scraper_time}")
                         
                         for b_id in matched_bills:
-                            # NEW: Show Status IN THE CALENDAR (Next to bill number)
+                            # NEW: Show Status IN THE CALENDAR (Clean Text)
                             status_text = ""
                             info = bill_info_map.get(b_id, {})
                             raw_status = str(info.get('My Status', '')).strip()
                             if raw_status and raw_status != 'nan' and raw_status != '-':
-                                status_text = f" [`{raw_status}`]"
+                                status_text = f" - {raw_status}"
                                 
                             st.error(f"**{b_id}**{status_text}")
                         
