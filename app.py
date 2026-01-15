@@ -471,62 +471,105 @@ if bills_to_track:
                 render_master_list_item(dead)
 
     # --- TAB 3: UPCOMING (HYBRID + STRICT FILTERING) ---
+    # --- TAB 3: UPCOMING (STRICT AGENDA MATCHING) ---
     with tab_upcoming:
-        st.subheader("📅 Your Weekly Calendar")
-        today = datetime.now().date()
-        cols = st.columns(7)
-        my_bills = [b.upper() for b in bills_to_track]
+        st.subheader("📅 Your Confirmed Agenda")
         
-        bill_to_comm_map = final_df.set_index('Bill Number')['Current_Committee'].to_dict()
-        bill_to_sub_map = final_df.set_index('Bill Number')['Current_Sub'].to_dict()
-        bill_to_status_map = final_df.set_index('Bill Number')['Status'].to_dict()
-
-        for i in range(7):
-            target_date = today + timedelta(days=i)
-            target_date_str = target_date.strftime('%Y-%m-%d')
-            display_date_str = target_date.strftime("%a %m/%d")
+        # 1. Prepare the "Confirmed" list from LIS Data
+        schedule_df = lis_data.get('schedule', pd.DataFrame())
+        
+        if schedule_df.empty:
+            st.info("No LIS Docket data available yet. (Session might not be active)")
+        else:
+            # Filter the Master Schedule down to ONLY your bills
+            my_bills_clean = [b.upper().strip() for b in bills_to_track]
+            confirmed_docket = schedule_df[schedule_df['bill_clean'].isin(my_bills_clean)].copy()
             
-            with cols[i]:
-                st.markdown(f"**{display_date_str}**")
-                st.divider()
+            # Normalize committee names in the docket for matching
+            # We look for common column names LIS uses for committees
+            comm_col = next((c for c in confirmed_docket.columns if "committee" in c or "desc" in c), None)
+            
+            if not confirmed_docket.empty and comm_col:
+                confirmed_docket['comm_norm'] = confirmed_docket[comm_col].apply(normalize_text)
                 
-                todays_meetings = {k[1]: v for k, v in web_schedule_map.items() if k[0] == target_date_str}
-                bills_found_today = False
-                
-                if todays_meetings:
-                    for bill in my_bills:
-                        raw_comm = bill_to_comm_map.get(bill, '')
-                        raw_sub = bill_to_sub_map.get(bill, '')
+                # 2. Build the Calendar
+                today = datetime.now().date()
+                cols = st.columns(7)
+
+                for i in range(7):
+                    target_date = today + timedelta(days=i)
+                    target_date_str = target_date.strftime('%Y-%m-%d')
+                    display_date_str = target_date.strftime("%a %m/%d")
+                    
+                    with cols[i]:
+                        st.markdown(f"**{display_date_str}**")
+                        st.divider()
                         
-                        clean_comm = normalize_text(raw_comm).replace("committee", "").strip()
-                        clean_sub = normalize_text(raw_sub).replace("subcommittee", "").replace("sub", "").strip()
+                        # Get all committee meetings the SCRAPER found for this date
+                        # structure: key=(date, clean_name), val=(time, full_display_name)
+                        todays_meetings = {k[1]: v for k, v in web_schedule_map.items() if k[0] == target_date_str}
                         
-                        match_time = None
-                        match_comm_raw = None
-                        
-                        for scraper_comm, (scraper_time, scraper_raw_name) in todays_meetings.items():
-                            # A. Sub Match (Strongest)
-                            if len(clean_sub) > 3 and (clean_sub in scraper_comm or scraper_comm in clean_sub):
-                                match_time = scraper_time
-                                match_comm_raw = scraper_raw_name
-                                break
+                        events_found = False
+
+                        # Loop through every committee meeting happening today
+                        for scraper_clean_name, (scraper_time, scraper_full_name) in todays_meetings.items():
                             
-                            # B. Main Match
-                            tokens_bill = set(clean_comm.split())
-                            tokens_scraper = set(scraper_comm.split())
-                            ignore = {'and', 'the', 'of', 'committee', 'subcommittee', 'sub', 'house', 'senate'}
-                            tokens_bill = {t for t in tokens_bill if t not in ignore}
-                            tokens_scraper = {t for t in tokens_scraper if t not in ignore}
+                            # CHECK: Are any of my bills assigned to this specific committee?
+                            # We match the Scraper Name (scraper_clean_name) vs LIS Docket Name (comm_norm)
                             
-                            if len(tokens_bill) > 0 and tokens_bill.issubset(tokens_scraper):
-                                match_time = scraper_time
-                                match_comm_raw = scraper_raw_name
-                                break
-                        
-                        if match_time:
-                            bills_found_today = True
-                            st.error(f"**{bill}**")
+                            # distinct check: is the scraper looking at a sub?
+                            is_scraper_sub = "subcommittee" in scraper_full_name.lower() or "sub" in scraper_full_name.lower()
                             
+                            # Filter the docket to find bills for THIS committee
+                            # Logic: If the scraper name is inside the docket name OR docket name inside scraper
+                            relevant_bills = confirmed_docket[
+                                confirmed_docket['comm_norm'].apply(lambda x: scraper_clean_name in x or x in scraper_clean_name)
+                            ]
+
+                            if not relevant_bills.empty:
+                                for _, bill_row in relevant_bills.iterrows():
+                                    events_found = True
+                                    
+                                    # --- FORMATTING THE CARD ---
+                                    b_num = bill_row['bill_clean']
+                                    
+                                    # Determine if it's a subcommittee (Check LIS event type OR Scraper name)
+                                    is_sub = bill_row.get('event_type') == 'Subcommittee' or is_scraper_sub
+                                    
+                                    # Header logic
+                                    header_display = scraper_full_name
+                                    sub_display = None
+                                    
+                                    # Attempt to split "Committee ↳ Subcommittee"
+                                    if is_sub:
+                                        # If scraped name has a dash or similar, split it
+                                        if "—" in scraper_full_name:
+                                            parts = scraper_full_name.split("—")
+                                            header_display = parts[0].strip()
+                                            sub_display = parts[1].strip()
+                                        elif "Subcommittee" in scraper_full_name:
+                                            # Regex to pull out the sub name
+                                            match = re.search(r'(.+?)\s+(Subcommittee.*)', scraper_full_name, re.IGNORECASE)
+                                            if match:
+                                                header_display = match.group(1).strip()
+                                                sub_display = match.group(2).strip()
+                                            else:
+                                                sub_display = "Subcommittee"
+                                    
+                                    # RENDER
+                                    st.error(f"**{b_num}**")
+                                    st.markdown(f"**{header_display}**")
+                                    if sub_display:
+                                        st.markdown(f"↳ _{sub_display}_")
+                                    
+                                    st.caption(f"⏰ {scraper_time}")
+                                    st.caption(f"Details: {bill_row.get('event_type', 'Agenda')}")
+                                    st.divider()
+
+                        if not events_found:
+                            st.caption("-")
+            else:
+                st.caption("No upcoming agenda items found for your bills.")              
                             # --- SPLITTER LOGIC (RESTORED ARROW) ---
                             # Extract Subcommittee from the scraped text if present
                             display_header = raw_comm.title()
