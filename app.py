@@ -639,7 +639,20 @@ if bills_to_track:
                         if b_id in bills_shown_today: continue
                         
                         last_date = str(info.get('Date', ''))
-                        if last_date == target_date_str:
+                        
+                        # --- FIX: Date Format Translator ---
+                        # LIS uses MM/DD/YYYY, Code uses YYYY-MM-DD
+                        is_today = False
+                        if last_date == target_date_str: 
+                            is_today = True
+                        else:
+                            try:
+                                # Try parsing MM/DD/YYYY to compare
+                                lis_dt = datetime.strptime(last_date, "%m/%d/%Y").date()
+                                if lis_dt == target_date: is_today = True
+                            except: pass
+
+                        if is_today:
                             # It happened today, but scraper missed it (deleted?). Show it!
                             events_found = True
                             bills_shown_today.add(b_id)
