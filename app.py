@@ -63,80 +63,110 @@ def normalize_text(text):
     text = text.replace('&', 'and').replace('.', '').replace(',', '')
     return " ".join(text.split())
 
-# --- NEW: DUAL-MODE SCRAPER ---
+# --- NEW: PATCHED SCRAPER (Catches "Minutes After") ---
 @st.cache_data(ttl=600)
 def fetch_schedule_from_web():
     schedule_map = {}
     debug_log = [] 
     headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'}
 
-    targets = [
-        ("https://apps.senate.virginia.gov/Senator/ComMeetings.php", "Senate"),
-        ("https://virginiageneralassembly.gov/house/schedule/schedule.php", "House")
-    ]
-
-    for url, label in targets:
-        try:
-            debug_log.append(f"🔄 {label}: {url}")
-            response = requests.get(url, headers=headers, timeout=5)
-            soup = BeautifulSoup(response.text, 'html.parser')
-            
-            # Senate & House text stream extraction
-            all_text = soup.get_text("\n", strip=True)
-            lines = all_text.splitlines()
-            
-            debug_log.append(f"   📄 Extracted {len(lines)} lines.")
-            current_date_str = None
-            
-            for i, line in enumerate(lines):
-                line = line.strip()
-                if len(line) < 3: continue
-
-                # A. DATE TRIGGER
-                if "2026" in line:
-                    try:
-                        clean_line = line.replace("1st", "1").replace("2nd", "2").replace("3rd", "3").replace("th", "")
-                        match = re.search(r'([A-Za-z]+, )?([A-Za-z]+ \d{1,2}, \d{4})', clean_line)
-                        if match:
-                            dt_str = match.group(0)
-                            try: dt = datetime.strptime(dt_str, "%A, %B %d, %Y")
-                            except: dt = datetime.strptime(dt_str, "%B %d, %Y")
-                            current_date_str = dt.strftime("%Y-%m-%d")
-                            continue
-                    except: pass
+    # ---------------------------------------------------------
+    # 1. SENATE PORTAL (Fixed for "30 Minutes After")
+    # ---------------------------------------------------------
+    try:
+        url_senate = "https://apps.senate.virginia.gov/Senator/ComMeetings.php"
+        debug_log.append(f"🏛️ Senate: Checking {url_senate}")
+        resp = requests.get(url_senate, headers=headers, timeout=5)
+        soup = BeautifulSoup(resp.text, 'html.parser')
+        
+        lines = [line.strip() for line in soup.get_text("\n", strip=True).splitlines() if line.strip()]
+        
+        for i, line in enumerate(lines):
+            # Check for 2026 Date Line
+            if "2026" in line and "-" in line:
                 
-                if not current_date_str: continue
-
-                # B. TIME TRIGGER
-                time_pattern = r'(\d{1,2}:\d{2}\s*?[aApP]\.?[mM]\.?|Noon|Upon\s+.*?|1\/2\s+hr|\d+\s+min)'
-                time_match = re.search(time_pattern, line, re.IGNORECASE)
+                # EXTENDED TIME REGEX: Now catches "30 Minutes After"
+                time_match = re.search(r'(\d{1,2}:\d{2}\s*[AP]M|noon|upon\s+adjourn|\d+\s+minutes?\s+after)', line, re.IGNORECASE)
                 
                 if time_match:
-                    time_val = time_match.group(0)
+                    time_val = time_match.group(0).upper() # e.g. "30 MINUTES AFTER"
                     
-                    # C. FIND COMMITTEE NAME (Check Prev Line then Current Line)
-                    candidate_name = ""
-                    if i > 0:
-                        prev = lines[i-1].strip()
-                        if len(prev) > 4 and "Agenda" not in prev and "View" not in prev:
-                            candidate_name = prev
-                    
-                    if len(candidate_name) < 4:
-                        candidate_name = line.replace(time_val, "").strip(" -:")
+                    # Extract Date (Left of the dash)
+                    # Ex: "Thursday, January 15, 2026 - 30 Minutes..."
+                    try:
+                        clean_line = line.split("-")[0].strip()
+                        clean_line = clean_line.replace("1st", "1").replace("2nd", "2").replace("3rd", "3").replace("th", "")
+                        dt = datetime.strptime(clean_line, "%A, %B %d, %Y")
+                        date_str = dt.strftime("%Y-%m-%d")
+                        
+                        # Committee Name is strictly the PREVIOUS line
+                        if i > 0:
+                            comm_name = lines[i-1]
+                            if "Cancelled" in comm_name: continue
+                            
+                            clean_name = normalize_text(comm_name)
+                            clean_name = clean_name.replace("senate", "").replace("house", "").replace("committee", "").strip()
+                            
+                            key = (date_str, clean_name)
+                            schedule_map[key] = time_val
+                            
+                    except: pass
 
-                    if "New Meeting" in candidate_name: continue
+    except Exception as e:
+        debug_log.append(f"❌ Senate Error: {str(e)}")
+
+    # ---------------------------------------------------------
+    # 2. HOUSE PORTAL (Stable)
+    # ---------------------------------------------------------
+    try:
+        url_house = "https://house.vga.virginia.gov/schedule/meetings"
+        debug_log.append(f"🏛️ House: Checking {url_house}")
+        resp = requests.get(url_house, headers=headers, timeout=5)
+        soup = BeautifulSoup(resp.text, 'html.parser')
+        
+        lines = [line.strip() for line in soup.get_text("\n", strip=True).splitlines() if line.strip()]
+        
+        current_date_str = None
+        
+        for i, line in enumerate(lines):
+            # Detect Date Header
+            if "JANUARY" in line.upper() or "FEBRUARY" in line.upper():
+                try:
+                    date_text = line if "2026" in line else f"{line}, 2026"
+                    date_text = date_text.replace("THURSDAY,", "THURSDAY").strip()
+                    match = re.search(r'([A-Z]+ \d{1,2}, 2026)', date_text, re.IGNORECASE)
+                    if match:
+                        dt = datetime.strptime(match.group(0), "%B %d, %Y")
+                        current_date_str = dt.strftime("%Y-%m-%d")
+                        continue
+                except: pass
+            
+            if not current_date_str: continue
+
+            # Detect Time
+            time_match = re.search(r'^(\d{1,2}:\d{2}\s*[AP]M|Noon)', line, re.IGNORECASE)
+            if time_match:
+                time_val = time_match.group(0)
+                
+                if i > 0:
+                    comm_name = lines[i-1]
+                    if "New Meeting" in comm_name or "View Agenda" in comm_name:
+                        if i > 1: comm_name = lines[i-2]
                     
-                    clean_name = normalize_text(candidate_name)
+                    if "New Meeting" in comm_name: continue
+
+                    clean_name = normalize_text(comm_name)
                     clean_name = clean_name.replace("senate", "").replace("house", "").replace("committee", "").strip()
                     
                     if len(clean_name) > 3:
                         key = (current_date_str, clean_name)
-                        if key not in schedule_map:
-                            schedule_map[key] = time_val
+                        schedule_map[key] = time_val
 
-        except Exception as e:
-            debug_log.append(f"❌ {label} Error: {str(e)}")
+    except Exception as e:
+        debug_log.append(f"❌ House Error: {str(e)}")
 
+    debug_log.append(f"📊 Total Meetings Found: {len(schedule_map)}")
+    
     st.session_state['debug_data'] = {
         "map_keys": list(schedule_map.keys()),
         "log": debug_log
@@ -156,6 +186,25 @@ def fetch_lis_data():
             data['bills'] = df
         else: data['bills'] = pd.DataFrame() 
     except: data['bills'] = pd.DataFrame()
+
+    calendar_dfs = []
+    for url, type_label in [(LIS_SUBDOCKET_CSV, "Subcommittee"), (LIS_DOCKET_CSV, "Committee"), (LIS_CALENDAR_CSV, "Floor")]:
+        try:
+            try: df = pd.read_csv(url, encoding='ISO-8859-1')
+            except: df = pd.read_csv(url.replace(".CSV", ".csv"), encoding='ISO-8859-1')
+            df.columns = df.columns.str.strip().str.lower().str.replace(' ', '_').str.replace('/', '_').str.replace('.', '')
+            col = next((c for c in df.columns if "bill" in c), None)
+            if col:
+                df['bill_clean'] = df[col].astype(str).str.upper().str.replace(" ", "").str.strip()
+                df['event_type'] = type_label
+                calendar_dfs.append(df)
+        except: pass
+
+    if calendar_dfs:
+        data['schedule'] = pd.concat(calendar_dfs, ignore_index=True)
+    else:
+        data['schedule'] = pd.DataFrame()
+
     return data
 
 def get_bill_data_batch(bill_numbers, lis_df):
@@ -431,7 +480,7 @@ if bills_to_track:
                 st.markdown("#### ❌ Failed")
                 render_master_list_item(dead)
 
-    # --- TAB 3: UPCOMING (REWRITTEN: SCRAPER DRIVEN) ---
+    # --- TAB 3: UPCOMING (HYBRID + STRICT FILTERING) ---
     with tab_upcoming:
         st.subheader("📅 Your Weekly Calendar")
         
