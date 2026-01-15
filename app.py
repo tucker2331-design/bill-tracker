@@ -535,7 +535,7 @@ if bills_to_track:
                 st.markdown("#### ❌ Failed")
                 render_master_list_item(dead)
 
-    # --- TAB 3: UPCOMING (STRICT AGENDA MATCHING + ROBUST MAPPING) ---
+    # --- TAB 3: UPCOMING (STRICT AGENDA MATCHING + ROBUST MAPPING + TODAY PERSISTENCE) ---
     with tab_upcoming:
         st.subheader("📅 Your Confirmed Agenda")
         
@@ -554,7 +554,7 @@ if bills_to_track:
             confirmed_bills_set = set(matches['bill_clean'].unique())
 
         # Create a lookup for our bills' current info
-        bill_info_map = final_df.set_index('Bill Number')[['Current_Committee', 'Current_Sub', 'My Status']].to_dict('index')
+        bill_info_map = final_df.set_index('Bill Number')[['Current_Committee', 'Current_Sub', 'My Status', 'Status', 'Date']].to_dict('index')
 
         # 3. Loop 7 Days
         for i in range(7):
@@ -566,71 +566,100 @@ if bills_to_track:
                 st.markdown(f"**{display_date_str}**")
                 st.divider()
                 
-                # Get scraper meetings for this specific day
+                events_found = False
+                bills_shown_today = set()
+
+                # --- STEP A: SCRAPER MATCHING (For Future & Active Meetings) ---
                 todays_meetings = {k[1]: v for k, v in web_schedule_map.items() if k[0] == target_date_str}
                 
-                events_found = False
-                
-                if not todays_meetings:
-                    st.caption("-")
-                    continue
-
-                # Check every meeting found by the scraper
-                for scraper_clean_name, (scraper_time, scraper_full_name) in todays_meetings.items():
-                    
-                    if "caucus" in scraper_full_name.lower():
-                        continue
-
-                    matched_bills = []
-                    
-                    for b_id in confirmed_bills_set:
-                        info = bill_info_map.get(b_id, {})
-                        curr_comm = normalize_text(info.get('Current_Committee', ''))
-                        curr_sub = normalize_text(info.get('Current_Sub', ''))
+                if todays_meetings:
+                    for scraper_clean_name, (scraper_time, scraper_full_name) in todays_meetings.items():
                         
-                        match = False
-                        if curr_comm and len(curr_comm) > 2:
-                            if curr_comm in scraper_clean_name or scraper_clean_name in curr_comm:
-                                match = True
-                        if curr_sub and len(curr_sub) > 2:
-                            if curr_sub in scraper_clean_name or scraper_clean_name in curr_sub:
-                                match = True
-                                
-                        if match:
-                            matched_bills.append(b_id)
+                        if "caucus" in scraper_full_name.lower():
+                            continue
 
-                    if matched_bills:
-                        events_found = True
+                        matched_bills = []
                         
-                        header_display = scraper_full_name
-                        sub_display = None
-                        
-                        if "—" in scraper_full_name:
-                            parts = scraper_full_name.split("—")
-                            header_display = parts[0].strip()
-                            sub_display = parts[1].strip()
-                        elif "Subcommittee" in scraper_full_name:
-                            match = re.search(r'(.+?)\s+(Subcommittee.*)', scraper_full_name, re.IGNORECASE)
-                            if match:
-                                header_display = match.group(1).strip()
-                                sub_display = match.group(2).strip()
+                        for b_id in confirmed_bills_set:
+                            if b_id in bills_shown_today: continue # Don't duplicate
 
-                        st.markdown(f"**{header_display}**")
-                        if sub_display:
-                            st.markdown(f"↳ _{sub_display}_")
-                        st.caption(f"⏰ {scraper_time}")
-                        
-                        for b_id in matched_bills:
-                            # NEW: Show Status IN THE CALENDAR (Clean Text)
-                            status_text = ""
                             info = bill_info_map.get(b_id, {})
+                            curr_comm = normalize_text(info.get('Current_Committee', ''))
+                            curr_sub = normalize_text(info.get('Current_Sub', ''))
+                            
+                            match = False
+                            if curr_comm and len(curr_comm) > 2:
+                                if curr_comm in scraper_clean_name or scraper_clean_name in curr_comm:
+                                    match = True
+                            if curr_sub and len(curr_sub) > 2:
+                                if curr_sub in scraper_clean_name or scraper_clean_name in curr_sub:
+                                    match = True
+                                    
+                            if match:
+                                matched_bills.append(b_id)
+                                bills_shown_today.add(b_id)
+
+                        if matched_bills:
+                            events_found = True
+                            
+                            header_display = scraper_full_name
+                            sub_display = None
+                            
+                            if "—" in scraper_full_name:
+                                parts = scraper_full_name.split("—")
+                                header_display = parts[0].strip()
+                                sub_display = parts[1].strip()
+                            elif "Subcommittee" in scraper_full_name:
+                                match = re.search(r'(.+?)\s+(Subcommittee.*)', scraper_full_name, re.IGNORECASE)
+                                if match:
+                                    header_display = match.group(1).strip()
+                                    sub_display = match.group(2).strip()
+
+                            st.markdown(f"**{header_display}**")
+                            if sub_display:
+                                st.markdown(f"↳ _{sub_display}_")
+                            st.caption(f"⏰ {scraper_time}")
+                            
+                            for b_id in matched_bills:
+                                # Status Text
+                                info = bill_info_map.get(b_id, {})
+                                status_text = ""
+                                raw_status = str(info.get('My Status', '')).strip()
+                                if raw_status and raw_status != 'nan' and raw_status != '-':
+                                    status_text = f" - {raw_status}"
+                                
+                                st.error(f"**{b_id}**{status_text}")
+                            
+                            st.divider()
+
+                # --- STEP B: HISTORY BACKFILL (Only for TODAY, if Scraper missed it) ---
+                if i == 0: # Only check history for "Today"
+                    # Find bills that have an action dated TODAY
+                    for b_id, info in bill_info_map.items():
+                        if b_id in bills_shown_today: continue
+                        
+                        last_date = str(info.get('Date', ''))
+                        if last_date == target_date_str:
+                            # It happened today, but scraper missed it (deleted?). Show it!
+                            events_found = True
+                            bills_shown_today.add(b_id)
+                            
+                            # Fallback Display Info
+                            comm_display = info.get('Current_Committee', 'Recent Action')
+                            lis_status = info.get('Status', 'Updated Today')
+                            
+                            st.markdown(f"**{comm_display}**")
+                            st.caption("⏰ Completed / Actioned")
+                            
+                            # Status Text (My Status + LIS Status/Vote)
+                            status_text = ""
                             raw_status = str(info.get('My Status', '')).strip()
                             if raw_status and raw_status != 'nan' and raw_status != '-':
                                 status_text = f" - {raw_status}"
-                                
+                            
                             st.error(f"**{b_id}**{status_text}")
-                        
-                        st.divider()
+                            st.caption(f"_{lis_status}_") # Shows "Reported (22-Y 0-N)"
+                            st.divider()
 
                 if not events_found:
                     st.caption("-")
