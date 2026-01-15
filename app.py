@@ -283,6 +283,7 @@ def check_and_broadcast(df_bills, df_subscribers, demo_mode):
             st.sidebar.warning("⚠️ No Subscribers Found")
             return
         user_id = client.users_lookupByEmail(email=subscriber_list[0].strip())['user']['id']
+        # Fetch history
         history = client.conversations_history(channel=client.conversations_open(users=[user_id])['channel']['id'], limit=100)
         history_text = "\n".join([m.get('text', '') for m in history['messages']])
         st.sidebar.success(f"✅ Connected to Slack")
@@ -296,28 +297,27 @@ def check_and_broadcast(df_bills, df_subscribers, demo_mode):
     for i, row in df_bills.iterrows():
         if "LIS Connection Error" in str(row.get('Status')): continue
         
-        # --- NEW LOGIC: SMART TITLE ---
-        # 1. Try to use the Google Sheet 'My Title' first
+        b_num = str(row['Bill Number']).strip()
+        status_msg = str(row.get('Status', 'No Status')).strip()
+
+        # --- SPAM PREVENTION (FUZZY MATCH) ---
+        # We check if BOTH the Bill Number and the Status Text exist in the history.
+        # This catches the old format AND the new format, preventing duplicates.
+        if b_num in history_text and status_msg in history_text:
+            continue
+        
+        # --- PRETTY FORMATTING ---
+        # 1. Try Google Sheet 'My Title'
         display_name = str(row.get('My Title', '-'))
         
-        # 2. If no custom title, use the Official Title (Truncated)
+        # 2. Fallback to Simplified Official Title
         if display_name == "-" or display_name == "nan" or not display_name:
             official = str(row.get('Official Title', ''))
-            # Truncate to 60 chars to keep it readable
             display_name = (official[:60] + '..') if len(official) > 60 else official
             
-        # 3. Clean up Status
-        status_msg = row.get('Status', 'No Status')
-        
-        # Build the unique string to check against history (to prevent duplicates)
-        # We check specific bill + status combo
-        unique_signature = f"{row['Bill Number']}: {status_msg}"
-        
-        if unique_signature in history_text: continue
-        
         updates_found = True
-        # Format: *HB123* | My Custom Title \n > Status Update
-        report += f"\n⚪ *{row['Bill Number']}* | {display_name}\n> _{status_msg}_\n"
+        # The pretty message you wanted:
+        report += f"\n⚪ *{b_num}* | {display_name}\n> _{status_msg}_\n"
 
     if updates_found:
         st.toast(f"📢 Sending updates to {len(subscriber_list)} people...")
