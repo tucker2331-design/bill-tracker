@@ -490,6 +490,9 @@ if bills_to_track:
             comm_col = next((c for c in confirmed_docket.columns if "committee" in c or "desc" in c), None)
             if comm_col:
                 confirmed_docket['comm_norm'] = confirmed_docket[comm_col].apply(normalize_text)
+            else:
+                # SAFETY FALLBACK: If we can't find a committee column, use empty string to prevent crash
+                confirmed_docket['comm_norm'] = ""
 
         # 3. Loop 7 Days
         for i in range(7):
@@ -522,9 +525,13 @@ if bills_to_track:
                     is_scraper_sub = "subcommittee" in scraper_full_name.lower() or "sub" in scraper_full_name.lower()
                     
                     # Find bills that match this committee name
-                    relevant_bills = confirmed_docket[
-                        confirmed_docket['comm_norm'].apply(lambda x: scraper_clean_name in x or x in scraper_clean_name)
-                    ]
+                    # SAFETY CHECK: Ensure comm_norm exists before filtering
+                    if 'comm_norm' in confirmed_docket.columns:
+                        relevant_bills = confirmed_docket[
+                            confirmed_docket['comm_norm'].apply(lambda x: scraper_clean_name in x or x in scraper_clean_name)
+                        ]
+                    else:
+                        relevant_bills = pd.DataFrame()
 
                     if not relevant_bills.empty:
                         for _, bill_row in relevant_bills.iterrows():
