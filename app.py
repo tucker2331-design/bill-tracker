@@ -301,22 +301,16 @@ def check_and_broadcast(df_bills, df_subscribers, demo_mode):
         status_msg = str(row.get('Status', 'No Status')).strip()
 
         # --- SPAM PREVENTION (FUZZY MATCH) ---
-        # We check if BOTH the Bill Number and the Status Text exist in the history.
-        # This catches the old format AND the new format, preventing duplicates.
         if b_num in history_text and status_msg in history_text:
             continue
         
         # --- PRETTY FORMATTING ---
-        # 1. Try Google Sheet 'My Title'
         display_name = str(row.get('My Title', '-'))
-        
-        # 2. Fallback to Simplified Official Title
         if display_name == "-" or display_name == "nan" or not display_name:
             official = str(row.get('Official Title', ''))
             display_name = (official[:60] + '..') if len(official) > 60 else official
             
         updates_found = True
-        # The pretty message you wanted:
         report += f"\n⚪ *{b_num}* | {display_name}\n> _{status_msg}_\n"
 
     if updates_found:
@@ -330,6 +324,7 @@ def check_and_broadcast(df_bills, df_subscribers, demo_mode):
         st.sidebar.info("🚀 New Update Sent!")
     else:
         st.sidebar.info("💤 No new updates needed.")
+
 # --- UI COMPONENTS ---
 def render_bill_card(row):
     if row.get('Official Title') not in ["Unknown", "Error", "Not Found", None]:
@@ -337,6 +332,12 @@ def render_bill_card(row):
     else:
         display_title = row.get('My Title', 'No Title Provided')
     st.markdown(f"**{row['Bill Number']}**")
+    
+    # NEW: Show Status Badge INSIDE the card (Category View)
+    my_status = str(row.get('My Status', '')).strip()
+    if my_status and my_status != 'nan' and my_status != '-':
+        st.info(f"🏷️ **Status:** {my_status}")
+    
     st.caption(f"{display_title}")
     st.caption(f"_{row.get('Status')}_")
     st.divider()
@@ -347,7 +348,14 @@ def render_master_list_item(df):
         return
     for i, row in df.iterrows():
         header_title = row['My Title'] if row['My Title'] != "-" else row.get('Official Title', '')
-        with st.expander(f"{row['Bill Number']} - {header_title}"):
+        
+        # NEW: Show Status IN THE TITLE (Master List)
+        my_status = str(row.get('My Status', '')).strip()
+        status_suffix = ""
+        if my_status and my_status != 'nan' and my_status != '-':
+            status_suffix = f"   [`{my_status}`]"
+        
+        with st.expander(f"{row['Bill Number']}{status_suffix} - {header_title}"):
             st.markdown(f"**🏛️ Current Committee:** {row.get('Current_Committee', '-')}")
             if row.get('Current_Sub') and row.get('Current_Sub') != '-':
                 st.markdown(f"**↳ Subcommittee:** {row.get('Current_Sub')}")
@@ -392,17 +400,47 @@ try:
     try: subs_df = pd.read_csv(SUBS_URL)
     except: subs_df = pd.DataFrame(columns=["Email"])
     
+    # --- WATCHING SECTION ---
+    cols_w = ['Bills Watching', 'Title (Watching)']
+    if 'Status (Watching)' in raw_df.columns:
+        cols_w.append('Status (Watching)')
+    
     df_w = pd.DataFrame()
     if 'Bills Watching' in raw_df.columns:
-        df_w = raw_df[['Bills Watching', 'Title (Watching)']].copy()
-        df_w.columns = ['Bill Number', 'My Title']
+        df_w = raw_df[cols_w].copy()
+        # Rename columns standardly
+        new_cols = ['Bill Number', 'My Title']
+        if 'Status (Watching)' in raw_df.columns:
+             new_cols.append('My Status')
+        df_w.columns = new_cols
         df_w['Type'] = 'Watching'
+
+    # --- INVOLVED SECTION ---
     df_i = pd.DataFrame()
-    w_col = next((c for c in raw_df.columns if "Working On" in c), None)
-    if w_col:
-        df_i = raw_df[[w_col]].copy()
-        df_i.columns = ['Bill Number']
-        df_i['My Title'] = "-"
+    w_col_name = next((c for c in raw_df.columns if "Working On" in c and "Title" not in c and "Status" not in c), None)
+    
+    if w_col_name:
+        # Build list of involved columns dynamically
+        cols_i = [w_col_name]
+        
+        # Find Title (Working)
+        title_work_col = next((c for c in raw_df.columns if "Title (Working)" in c), None)
+        if title_work_col: cols_i.append(title_work_col)
+        
+        # Find Status (Working)
+        status_work_col = next((c for c in raw_df.columns if "Status (Working)" in c), None)
+        if status_work_col: cols_i.append(status_work_col)
+        
+        df_i = raw_df[cols_i].copy()
+        
+        # Rename involved columns
+        i_new_cols = ['Bill Number']
+        if title_work_col: i_new_cols.append('My Title')
+        if status_work_col: i_new_cols.append('My Status')
+        
+        df_i.columns = i_new_cols
+        
+        if 'My Title' not in df_i.columns: df_i['My Title'] = "-"
         df_i['Type'] = 'Involved'
 
     sheet_df = pd.concat([df_w, df_i], ignore_index=True).dropna(subset=['Bill Number'])
@@ -410,6 +448,8 @@ try:
     sheet_df = sheet_df[sheet_df['Bill Number'] != 'NAN']
     sheet_df = sheet_df.drop_duplicates(subset=['Bill Number'])
     sheet_df['My Title'] = sheet_df['My Title'].fillna("-")
+    if 'My Status' not in sheet_df.columns: sheet_df['My Status'] = "-"
+    
 except Exception as e:
     st.error(f"Sheet Error: {e}")
     st.stop()
@@ -431,7 +471,7 @@ if bills_to_track:
                 "Bill Number": b, "Official Title": "[DEMO] Bill Title", "Status": "Referred to Commerce",
                 "Lifecycle": "🚀 Active", "Auto_Folder": "💰 Economy & Business",
                 "My Title": "Demo Title", "Date": "2026-01-14",
-                "History_Data": [], "Current_Committee": "Commerce", "Current_Sub": "-"
+                "History_Data": [], "Current_Committee": "Commerce", "Current_Sub": "-", "My Status": "Demo Status"
             })
         api_df = pd.DataFrame(mock_results)
     else:
@@ -486,7 +526,7 @@ if bills_to_track:
                 st.markdown("#### ❌ Failed")
                 render_master_list_item(dead)
 
-# --- TAB 3: UPCOMING (STRICT AGENDA MATCHING + ROBUST MAPPING) ---
+    # --- TAB 3: UPCOMING (STRICT AGENDA MATCHING + ROBUST MAPPING) ---
     with tab_upcoming:
         st.subheader("📅 Your Confirmed Agenda")
         
@@ -501,13 +541,11 @@ if bills_to_track:
         # A set of all bills that appear on ANY official calendar/docket
         confirmed_bills_set = set()
         if not schedule_df.empty:
-            # We filter for our bills
             matches = schedule_df[schedule_df['bill_clean'].isin(my_bills_clean)]
             confirmed_bills_set = set(matches['bill_clean'].unique())
 
-        # Create a lookup for our bills' current committee status (from the main clean data)
-        # This is more reliable than the raw Docket CSV headers
-        bill_info_map = final_df.set_index('Bill Number')[['Current_Committee', 'Current_Sub']].to_dict('index')
+        # Create a lookup for our bills' current info
+        bill_info_map = final_df.set_index('Bill Number')[['Current_Committee', 'Current_Sub', 'My Status']].to_dict('index')
 
         # 3. Loop 7 Days
         for i in range(7):
@@ -531,31 +569,20 @@ if bills_to_track:
                 # Check every meeting found by the scraper
                 for scraper_clean_name, (scraper_time, scraper_full_name) in todays_meetings.items():
                     
-                    # FILTER: Skip Caucuses
                     if "caucus" in scraper_full_name.lower():
                         continue
 
-                    # CHECK: Which of my "Confirmed" bills belong to this committee?
-                    # We iterate through our "Confirmed Whitelist" and check their assigned committee
                     matched_bills = []
                     
                     for b_id in confirmed_bills_set:
-                        # Get the clean committee info from our main data
                         info = bill_info_map.get(b_id, {})
                         curr_comm = normalize_text(info.get('Current_Committee', ''))
                         curr_sub = normalize_text(info.get('Current_Sub', ''))
                         
-                        # MATCHING LOGIC:
-                        # 1. Does the bill's committee match the scraper meeting?
-                        # 2. OR does the bill's subcommittee match?
-                        
                         match = False
-                        # Main Committee Match (e.g. "Commerce" in "House Commerce and Labor")
                         if curr_comm and len(curr_comm) > 2:
                             if curr_comm in scraper_clean_name or scraper_clean_name in curr_comm:
                                 match = True
-                        
-                        # Sub Match (e.g. "Sub #1" in "Commerce Sub #1")
                         if curr_sub and len(curr_sub) > 2:
                             if curr_sub in scraper_clean_name or scraper_clean_name in curr_sub:
                                 match = True
@@ -563,15 +590,12 @@ if bills_to_track:
                         if match:
                             matched_bills.append(b_id)
 
-                    # RENDER MATCHES
                     if matched_bills:
                         events_found = True
                         
-                        # Header Formatting
                         header_display = scraper_full_name
                         sub_display = None
                         
-                        # Attempt clean split for display
                         if "—" in scraper_full_name:
                             parts = scraper_full_name.split("—")
                             header_display = parts[0].strip()
@@ -587,14 +611,21 @@ if bills_to_track:
                             st.markdown(f"↳ _{sub_display}_")
                         st.caption(f"⏰ {scraper_time}")
                         
-                        # List the bills for this meeting
                         for b_id in matched_bills:
-                            st.error(f"**{b_id}**")
+                            # NEW: Show Status IN THE CALENDAR (Next to bill number)
+                            status_text = ""
+                            info = bill_info_map.get(b_id, {})
+                            raw_status = str(info.get('My Status', '')).strip()
+                            if raw_status and raw_status != 'nan' and raw_status != '-':
+                                status_text = f" [`{raw_status}`]"
+                                
+                            st.error(f"**{b_id}**{status_text}")
                         
                         st.divider()
 
                 if not events_found:
                     st.caption("-")
+
 # --- DEV DEBUGGER ---
 with st.sidebar:
     st.divider()
