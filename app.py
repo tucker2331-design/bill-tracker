@@ -103,7 +103,7 @@ def fetch_schedule_from_web():
             response = session.get(frame_url, headers=headers)
             final_html = response.text
 
-        # 3. Use BeautifulSoup to get text (No lxml needed)
+        # 3. Use BeautifulSoup to get text (NO PANDAS READ_HTML)
         soup = BeautifulSoup(final_html, 'html.parser')
         
         # Get all text separated by newlines to handle tables/divs/paragraphs
