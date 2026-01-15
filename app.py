@@ -63,16 +63,17 @@ def normalize_text(text):
     text = text.replace('&', 'and').replace('.', '').replace(',', '')
     return " ".join(text.split())
 
-# --- NEW: CELL-SMART SCRAPER (HOUSE & SENATE) ---
+# --- NEW: UNIVERSAL TEXT-STREAM SCRAPER ---
 @st.cache_data(ttl=600)
 def fetch_schedule_from_web():
     """
-    Scrapes both House and Senate portals using cell-based detection logic.
+    Scrapes House and Senate portals by treating the page as a stream of text.
+    Finds Date -> Finds Time -> Grabs Next Line as Committee Name.
     """
     schedule_map = {}
     debug_log = [] 
     
-    # TARGET URLS
+    # 1. Official Portal URLs (House & Senate)
     targets = [
         ("https://virginiageneralassembly.gov/house/schedule/schedule.php", "House Portal"),
         ("https://apps.senate.virginia.gov/Senator/ComMeetings.php", "Senate Portal")
@@ -86,22 +87,24 @@ def fetch_schedule_from_web():
             response = requests.get(url, headers=headers, timeout=10)
             soup = BeautifulSoup(response.text, 'html.parser')
             
-            # Find all Table Rows
-            rows = soup.find_all('tr')
-            debug_log.append(f"   📊 Found {len(rows)} rows.")
+            # Get text separated by newlines to preserve structure
+            # This flattens divs, spans, and table cells into a single list of strings
+            all_text = soup.get_text("\n", strip=True)
+            lines = all_text.splitlines()
+            
+            debug_log.append(f"   📄 Extracted {len(lines)} lines of text.")
             
             current_date_str = None
             
-            for row in rows:
-                # Get all cells in this row
-                cells = [c.get_text(" ", strip=True) for c in row.find_all(['td', 'th'])]
-                row_text = " ".join(cells)
-                
-                # --- 1. DATE DETECTION ---
-                # Check if this row is a Date Header (e.g. "Friday, January 16, 2026")
-                if "2026" in row_text:
+            # We iterate through the lines looking for triggers
+            for i, line in enumerate(lines):
+                line = line.strip()
+                if len(line) < 3: continue
+
+                # A. DATE TRIGGER
+                if "2026" in line:
                     try:
-                        clean_line = row_text.replace("1st", "1").replace("2nd", "2").replace("3rd", "3").replace("th", "")
+                        clean_line = line.replace("1st", "1").replace("2nd", "2").replace("3rd", "3").replace("th", "")
                         match = re.search(r'([A-Za-z]+, )?([A-Za-z]+ \d{1,2}, \d{4})', clean_line)
                         if match:
                             dt_str = match.group(0)
@@ -109,38 +112,47 @@ def fetch_schedule_from_web():
                             except: dt = datetime.strptime(dt_str, "%B %d, %Y")
                             
                             current_date_str = dt.strftime("%Y-%m-%d")
-                            # debug_log.append(f"      🗓️ Date: {current_date_str}")
+                            debug_log.append(f"      🗓️ Date Switch: {current_date_str}")
                             continue
                     except: pass
                 
                 if not current_date_str: continue
 
-                # --- 2. MEETING DETECTION (Look for Time) ---
-                # Pattern: "9:00 AM", "Noon", "1/2 hr after"
-                time_pattern = r'(\d{1,2}:\d{2}\s*?[aApP]\.?[mM]\.?|Noon|Upon\s+.*?|1\/2\s+hr|\d+\s+min)'
-                time_match = re.search(time_pattern, row_text, re.IGNORECASE)
+                # B. TIME TRIGGER
+                # Looks for: "9:00 a.m.", "9:00 AM", "Noon", "1/2 hr after"
+                # We want a strict start to avoid matching dates or other numbers
+                time_pattern = r'^(?:(\d{1,2}:\d{2}\s*?[aApP]\.?[mM]\.?)|Noon|Upon\s+.*?|1\/2\s+hr|\d+\s+min)'
+                time_match = re.search(time_pattern, line, re.IGNORECASE)
                 
                 if time_match:
                     time_val = time_match.group(0)
                     
-                    # Committee Name is the text that REMAINS after removing time and location keywords
-                    # This logic handles multi-column layouts by joining them first
+                    # C. COMMITTEE NAME EXTRACTION
+                    # Strategy 1: Is the name on the SAME line? (e.g. "9:00 AM Senate Finance")
+                    remaining = line.replace(time_val, "").strip(" -:")
                     
-                    # Remove the time
-                    remaining = row_text.replace(time_val, "")
+                    # Strategy 2: If the line ends with the time, the name is likely on the NEXT line.
+                    if len(remaining) < 3 and (i + 1) < len(lines):
+                        next_line = lines[i+1].strip()
+                        if len(next_line) > 3:
+                            remaining = next_line
                     
-                    # Remove common junk
-                    for junk in ["Room", "Virtual", "House Committee", "Senate Committee", "Meeting", "Subcommittee"]:
-                         if junk in remaining: remaining = remaining.split(junk)[0]
+                    # Cleanup
+                    if "Room" in remaining: remaining = remaining.split("Room")[0]
+                    if "Virtual" in remaining: remaining = remaining.split("Virtual")[0]
+                    if "Subcommittee" in remaining: remaining = remaining.split("Subcommittee")[0] # Optional: keep sub if you want
                     
                     comm_name_clean = normalize_text(remaining)
                     comm_name_clean = comm_name_clean.replace("senate", "").replace("house", "").replace("committee", "").strip()
                     
+                    # Save it
                     if len(comm_name_clean) > 3:
                         key = (current_date_str, comm_name_clean)
                         if key not in schedule_map:
                             schedule_map[key] = time_val
-                            # debug_log.append(f"         ✅ {comm_name_clean} @ {time_val}")
+                            # Log first 3 for validation
+                            if len(schedule_map) < 4:
+                                debug_log.append(f"         📍 Found: {comm_name_clean} @ {time_val}")
 
         except Exception as e:
             debug_log.append(f"   ❌ Error: {str(e)}")
@@ -628,7 +640,7 @@ with st.sidebar:
         else:
             st.warning(f"No times found for {target_debug}")
 
-        # 3. Show Raw Scraper Log (First 10 lines)
+        # 3. Show Raw Scraper Log (First 15 lines)
         st.markdown("---")
         st.write("**Scraper Log (First 15 lines):**")
         st.text("\n".join(logs[:15]))
