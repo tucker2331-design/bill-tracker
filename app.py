@@ -64,20 +64,15 @@ def normalize_text(text):
     return " ".join(text.split())
 
 def clean_committee_name(name):
-    """Fix common LIS abbreviations, formatting, and remove Chair names"""
+    """Robust cleaner for committee names"""
     if not name or str(name).lower() == 'nan': return ""
     name = str(name).strip()
     
-    # 1. Remove names attached with a comma (e.g. "Education Rasoul, Sam" -> "Education Rasoul")
-    # This splits at the comma and takes the first part
+    # 1. Clean up "Name, Chair" format
     if "," in name:
         name = name.split(",")[0].strip()
-    
-    # 2. Remove lingering Chair Last Names if they are at the end (e.g. "Education Rasoul")
-    # We assume standard committee names don't end in random proper nouns not in the list
-    name = name.replace(" Rasoul", "").replace(" Lucas", "").replace(" Helmer", "").strip()
 
-    # 3. Map Abbreviations
+    # 2. Strict Abbreviation Mapping
     mapping = {
         "HED": "Education",
         "P&E": "Privileges & Elections",
@@ -93,15 +88,23 @@ def clean_committee_name(name):
         "HFIN": "House Finance"
     }
     
-    # Check exact match (Case Insensitive)
+    # Check exact abbreviation match
     upper_name = name.upper()
     if upper_name in mapping:
         return mapping[upper_name]
-        
-    # Check if abbreviation is IN the string (e.g. "House HED")
-    for abbr, full in mapping.items():
-        if f" {abbr}" in f" {upper_name}": # check for whole word match
-             return name.upper().replace(abbr, full).title()
+
+    # 3. Known Standard Committees (If the string contains these, strip everything else)
+    # This removes Chair names like "Education Rasoul" -> "Education"
+    standard_committees = [
+        "Education", "Commerce and Labor", "General Laws", "Transportation",
+        "Finance", "Appropriations", "Courts of Justice", "Privileges and Elections",
+        "Agriculture", "Rules", "Local Government", "Public Safety", "Counties Cities and Towns"
+    ]
+    
+    for std in standard_committees:
+        # Check if the name starts with a standard committee name (case insensitive)
+        if name.lower().startswith(std.lower()):
+            return std
 
     return name.title()
 
@@ -121,32 +124,27 @@ def fetch_schedule_from_web():
         lines = [line.strip() for line in soup.get_text("\n", strip=True).splitlines() if line.strip()]
         
         for i, line in enumerate(lines):
-            # Check for year 2026 to ensure validity
             if "2026" in line: 
-                # Extended regex to catch "15 Minutes after"
                 time_match = re.search(r'(\d{1,2}:\d{2}\s*[AP]M|noon|upon\s+adjourn|\d+\s+minutes?\s+after)', line, re.IGNORECASE)
                 
                 if time_match:
                     time_val = time_match.group(0).upper()
                     try:
-                        # Extract Date (Handle different dash types)
                         clean_line = line.split("-")[0] if "-" in line else line.split("–")[0]
                         clean_line = clean_line.strip().replace("1st", "1").replace("2nd", "2").replace("3rd", "3").replace("th", "")
                         
                         dt = datetime.strptime(clean_line, "%A, %B %d, %Y")
                         date_str = dt.strftime("%Y-%m-%d")
                         
-                        # Committee Name is the PREVIOUS line
                         if i > 0:
                             comm_name = lines[i-1]
                             if "Cancelled" in comm_name: continue
                             
-                            # Clean name but keep "Subcommittee" for the splitter later
                             clean_name = normalize_text(comm_name)
                             clean_name = clean_name.replace("senate", "").replace("house", "").replace("committee", "").strip()
                             
                             key = (date_str, clean_name)
-                            schedule_map[key] = (time_val, comm_name) # Store Full Name for display
+                            schedule_map[key] = (time_val, comm_name) 
                     except: pass
     except Exception as e:
         debug_log.append(f"❌ Senate Error: {str(e)}")
@@ -179,7 +177,6 @@ def fetch_schedule_from_web():
                 time_val = time_match.group(0)
                 if i > 0:
                     comm_name = lines[i-1]
-                    # Backtrack logic for names (Skip Chairs)
                     if "," in comm_name or "View Agenda" in comm_name:
                         if i > 1:
                             prev_prev = lines[i-2]
@@ -325,7 +322,6 @@ def check_and_broadcast(df_bills, df_subscribers, demo_mode):
             st.sidebar.warning("⚠️ No Subscribers Found")
             return
         user_id = client.users_lookupByEmail(email=subscriber_list[0].strip())['user']['id']
-        # Fetch history
         history = client.conversations_history(channel=client.conversations_open(users=[user_id])['channel']['id'], limit=100)
         history_text = "\n".join([m.get('text', '') for m in history['messages']])
         st.sidebar.success(f"✅ Connected to Slack")
@@ -342,11 +338,8 @@ def check_and_broadcast(df_bills, df_subscribers, demo_mode):
         b_num = str(row['Bill Number']).strip()
         status_msg = str(row.get('Status', 'No Status')).strip()
 
-        # --- SPAM PREVENTION (FUZZY MATCH) ---
-        if b_num in history_text and status_msg in history_text:
-            continue
+        if b_num in history_text and status_msg in history_text: continue
         
-        # --- PRETTY FORMATTING ---
         display_name = str(row.get('My Title', '-'))
         if display_name == "-" or display_name == "nan" or not display_name:
             official = str(row.get('Official Title', ''))
@@ -375,7 +368,6 @@ def render_bill_card(row):
         display_title = row.get('My Title', 'No Title Provided')
     st.markdown(f"**{row['Bill Number']}**")
     
-    # NEW: Show Status Badge INSIDE the card (Category View)
     my_status = str(row.get('My Status', '')).strip()
     if my_status and my_status != 'nan' and my_status != '-':
         st.info(f"🏷️ **Status:** {my_status}")
@@ -391,18 +383,10 @@ def render_master_list_item(df):
     for i, row in df.iterrows():
         header_title = row['My Title'] if row['My Title'] != "-" else row.get('Official Title', '')
         
-        # NEW: Show Status IN THE TITLE (Clean format)
-        # Format: HB123 - ALL OUT - Title
         my_status = str(row.get('My Status', '')).strip()
-        
-        # Build label
         label_text = f"{row['Bill Number']}"
-        
-        # Append Status if present
         if my_status and my_status != 'nan' and my_status != '-':
             label_text += f" - {my_status}"
-        
-        # Append Title
         if header_title:
              label_text += f" - {header_title}"
         
@@ -451,46 +435,32 @@ try:
     try: subs_df = pd.read_csv(SUBS_URL)
     except: subs_df = pd.DataFrame(columns=["Email"])
     
-    # --- WATCHING SECTION ---
     cols_w = ['Bills Watching', 'Title (Watching)']
-    if 'Status (Watching)' in raw_df.columns:
-        cols_w.append('Status (Watching)')
+    if 'Status (Watching)' in raw_df.columns: cols_w.append('Status (Watching)')
     
     df_w = pd.DataFrame()
     if 'Bills Watching' in raw_df.columns:
         df_w = raw_df[cols_w].copy()
-        # Rename columns standardly
         new_cols = ['Bill Number', 'My Title']
-        if 'Status (Watching)' in raw_df.columns:
-             new_cols.append('My Status')
+        if 'Status (Watching)' in raw_df.columns: new_cols.append('My Status')
         df_w.columns = new_cols
         df_w['Type'] = 'Watching'
 
-    # --- INVOLVED SECTION ---
     df_i = pd.DataFrame()
     w_col_name = next((c for c in raw_df.columns if "Working On" in c and "Title" not in c and "Status" not in c), None)
     
     if w_col_name:
-        # Build list of involved columns dynamically
         cols_i = [w_col_name]
-        
-        # Find Title (Working)
         title_work_col = next((c for c in raw_df.columns if "Title (Working)" in c), None)
         if title_work_col: cols_i.append(title_work_col)
-        
-        # Find Status (Working)
         status_work_col = next((c for c in raw_df.columns if "Status (Working)" in c), None)
         if status_work_col: cols_i.append(status_work_col)
         
         df_i = raw_df[cols_i].copy()
-        
-        # Rename involved columns
         i_new_cols = ['Bill Number']
         if title_work_col: i_new_cols.append('My Title')
         if status_work_col: i_new_cols.append('My Status')
-        
         df_i.columns = i_new_cols
-        
         if 'My Title' not in df_i.columns: df_i['My Title'] = "-"
         df_i['Type'] = 'Involved'
 
@@ -513,7 +483,6 @@ bills_to_track = sheet_df['Bill Number'].unique().tolist()
 web_schedule_map = fetch_schedule_from_web()
 
 if bills_to_track:
-    # Match User Bills to LIS Data
     if demo_mode:
         import random
         mock_results = []
@@ -581,24 +550,19 @@ if bills_to_track:
     with tab_upcoming:
         st.subheader("📅 Your Confirmed Agenda")
         
-        # 1. Setup the 7-Day Grid (Always Visible)
         today = datetime.now().date()
         cols = st.columns(7)
         
-        # 2. Get Data & Build the "Whitelist"
         schedule_df = lis_data.get('schedule', pd.DataFrame())
         my_bills_clean = [b.upper().strip() for b in bills_to_track]
         
-        # A set of all bills that appear on ANY official calendar/docket
         confirmed_bills_set = set()
         if not schedule_df.empty:
             matches = schedule_df[schedule_df['bill_clean'].isin(my_bills_clean)]
             confirmed_bills_set = set(matches['bill_clean'].unique())
 
-        # Create a lookup for our bills' current info
         bill_info_map = final_df.set_index('Bill Number')[['Current_Committee', 'Current_Sub', 'My Status', 'Status', 'Date']].to_dict('index')
 
-        # 3. Loop 7 Days
         for i in range(7):
             target_date = today + timedelta(days=i)
             target_date_str = target_date.strftime('%Y-%m-%d')
@@ -611,19 +575,17 @@ if bills_to_track:
                 events_found = False
                 bills_shown_today = set()
 
-                # --- STEP A: SCRAPER MATCHING (For Future & Active Meetings) ---
                 todays_meetings = {k[1]: v for k, v in web_schedule_map.items() if k[0] == target_date_str}
                 
                 if todays_meetings:
                     for scraper_clean_name, (scraper_time, scraper_full_name) in todays_meetings.items():
                         
-                        if "caucus" in scraper_full_name.lower():
-                            continue
+                        if "caucus" in scraper_full_name.lower(): continue
 
                         matched_bills = []
                         
                         for b_id in confirmed_bills_set:
-                            if b_id in bills_shown_today: continue # Don't duplicate
+                            if b_id in bills_shown_today: continue 
 
                             info = bill_info_map.get(b_id, {})
                             curr_comm = normalize_text(info.get('Current_Committee', ''))
@@ -644,47 +606,37 @@ if bills_to_track:
                         if matched_bills:
                             events_found = True
                             
-                            header_display = scraper_full_name
-                            sub_display = None
+                            # CLEAN THE SCRAPER HEADER HERE
+                            header_display = clean_committee_name(scraper_full_name)
                             
+                            sub_display = None
                             if "—" in scraper_full_name:
                                 parts = scraper_full_name.split("—")
-                                header_display = parts[0].strip()
                                 sub_display = parts[1].strip()
                             elif "Subcommittee" in scraper_full_name:
                                 match = re.search(r'(.+?)\s+(Subcommittee.*)', scraper_full_name, re.IGNORECASE)
-                                if match:
-                                    header_display = match.group(1).strip()
-                                    sub_display = match.group(2).strip()
+                                if match: sub_display = match.group(2).strip()
 
                             st.markdown(f"**{header_display}**")
-                            if sub_display:
-                                st.markdown(f"↳ _{sub_display}_")
+                            if sub_display: st.markdown(f"↳ _{sub_display}_")
                             st.caption(f"⏰ {scraper_time}")
                             
                             for b_id in matched_bills:
-                                # Status Text
                                 info = bill_info_map.get(b_id, {})
                                 status_text = ""
                                 raw_status = str(info.get('My Status', '')).strip()
                                 if raw_status and raw_status != 'nan' and raw_status != '-':
                                     status_text = f" - {raw_status}"
-                                
                                 st.error(f"**{b_id}**{status_text}")
                             
                             st.divider()
 
-                # --- STEP B: HISTORY BACKFILL (GROUPED & CLEANED) ---
                 if i == 0: 
-                    # 1. Collect everything first
                     history_groups = {}
-                    
                     for b_id, info in bill_info_map.items():
                         if b_id in bills_shown_today: continue
                         
                         last_date = str(info.get('Date', ''))
-                        
-                        # Date Translator
                         is_today = False
                         if last_date == target_date_str: is_today = True
                         else:
@@ -697,14 +649,11 @@ if bills_to_track:
                             events_found = True
                             bills_shown_today.add(b_id)
                             
-                            # Determine Group Name
                             raw_comm = str(info.get('Current_Committee', ''))
                             lis_status = str(info.get('Status', ''))
                             
-                            # Clean up
                             if raw_comm in ["-", "nan", "None", ""]: raw_comm = ""
                             
-                            # Naming Logic
                             if "fiscal" in lis_status.lower(): group_name = "Fiscal Impact Report"
                             elif b_id.startswith(("HJ", "SJ", "HR", "SR")): group_name = "Floor Session"
                             elif not raw_comm:
@@ -712,23 +661,21 @@ if bills_to_track:
                                     group_name = "Floor Session / Action"
                                 else: group_name = "General Assembly Action"
                             else:
+                                # CLEAN THE HISTORY HEADER HERE
                                 group_name = clean_committee_name(raw_comm)
                             
                             if group_name not in history_groups: history_groups[group_name] = []
                             history_groups[group_name].append(b_id)
 
-                    # 2. Render Groups
                     for g_name, b_list in history_groups.items():
                         st.markdown(f"**{g_name}**")
                         st.caption("⏰ Completed / Actioned")
-                        
                         for b_id in b_list:
                             info = bill_info_map.get(b_id, {})
                             status_text = ""
                             raw_status = str(info.get('My Status', '')).strip()
                             if raw_status and raw_status != 'nan' and raw_status != '-':
                                 status_text = f" - {raw_status}"
-                            
                             st.error(f"**{b_id}**{status_text}")
                             st.caption(f"_{info.get('Status')}_")
                         st.divider()
@@ -741,26 +688,10 @@ with st.sidebar:
     st.divider()
     with st.expander("👨‍💻 Developer Debugger", expanded=True):
         st.write("Take a screenshot of this box!")
-        
         debug_data = st.session_state.get('debug_data', {})
         logs = debug_data.get('log', [])
         keys = debug_data.get('map_keys', [])
-        
         st.write(f"**Scraper Status:** {'🟢 Active' if keys else '🔴 Empty'}")
         st.write(f"**Items Found:** {len(keys)}")
-        
-        st.markdown("---")
-        st.write("**Target Date (Today + 1):**")
-        target_debug = (datetime.now().date() + timedelta(days=1)).strftime('%Y-%m-%d')
-        st.code(target_debug)
-        
-        st.write("**Available Keys for Target Date:**")
-        relevant_keys = [k[1] for k in keys if k[0] == target_debug]
-        if relevant_keys:
-            st.json(relevant_keys)
-        else:
-            st.warning(f"No times found for {target_debug}")
-
-        st.markdown("---")
         st.write("**Scraper Log (First 15 lines):**")
         st.text("\n".join(logs[:15]))
