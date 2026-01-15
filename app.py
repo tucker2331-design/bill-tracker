@@ -66,47 +66,54 @@ def normalize_text(text):
     text = text.replace('&', 'and').replace('.', '').replace(',', '')
     return " ".join(text.split())
 
-# --- NEW: WEB SCRAPER FOR TIMES (UPDATED LOGIC) ---
+# --- NEW: DIAGNOSTIC WEB SCRAPER ---
 @st.cache_data(ttl=600)
 def fetch_schedule_from_web():
     """
-    Scrapes the official LIS Schedule page to find the real times.
-    Returns a dictionary: { ('YYYY-MM-DD', 'normalized committee name') : 'Time String' }
+    Scrapes LIS and logs what it finds for debugging.
     """
     schedule_map = {}
+    debug_log = [] # <--- Stores debug info
+    
     try:
-        # Use headers to mimic a browser so LIS doesn't block the request
+        # 1. Try to Connect
         headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'}
         response = requests.get(LIS_SCHEDULE_URL, headers=headers)
-        response.raise_for_status()
+        
+        debug_log.append(f"📡 HTTP Status: {response.status_code}")
+        if response.status_code != 200:
+            st.session_state['debug_data'] = {"error": f"Failed with {response.status_code}", "log": debug_log}
+            return {}
+
         soup = BeautifulSoup(response.text, 'html.parser')
+        lines = [line.strip() for line in soup.get_text(separator='\n').splitlines() if line.strip()]
+        
+        debug_log.append(f"📄 Lines found: {len(lines)}")
         
         current_date_str = None
         
-        # The LIS schedule is usually a list of text lines.
-        lines = [line.strip() for line in soup.get_text(separator='\n').splitlines() if line.strip()]
-        
         for line in lines:
-            # 1. Detect Date Header (e.g., "Wednesday, January 14, 2026")
+            # Detect Date
             try:
-                # Cleanup suffixes like 14th, 1st if present
                 clean_line = line.replace("1st", "1").replace("2nd", "2").replace("3rd", "3").replace("th", "")
-                dt = datetime.strptime(line, "%A, %B %d, %Y")
+                dt = datetime.strptime(clean_line, "%A, %B %d, %Y")
                 current_date_str = dt.strftime("%Y-%m-%d")
+                debug_log.append(f"🗓️ Date: {current_date_str}")
                 continue 
             except:
                 pass 
             
             if not current_date_str: continue
 
-            # 2. Detect Meeting Row (e.g., "7:30 AM. Senate Finance...")
+            # Detect Time
             time_match = re.match(r'^(\d{1,2}:\d{2}\s*[AP]M|Noon|Upon\s+.*?|1\/2\s+hr|\d+\s+Minutes?\s+after)', line, re.IGNORECASE)
             
             if time_match:
                 time_val = time_match.group(0)
                 remaining_text = line[len(time_val):].strip(' .:-')
                 
-                # CLEANUP: Remove "Room A", "Senate", "Committee" to make matching easier
+                # Clean Name
+                raw_name = remaining_text
                 if "-" in remaining_text: remaining_text = remaining_text.split("-")[0]
                 if "Room" in remaining_text: remaining_text = remaining_text.split("Room")[0]
                 
@@ -114,12 +121,20 @@ def fetch_schedule_from_web():
                 comm_name_clean = comm_name_clean.replace("senate", "").replace("house", "").replace("committee", "").strip()
                 
                 key = (current_date_str, comm_name_clean)
+                
+                debug_log.append(f"   ✅ MATCH: '{comm_name_clean}' at {time_val}")
+                
                 if key not in schedule_map:
                     schedule_map[key] = time_val
-                    
+    
     except Exception as e:
-        print(f"Web Scraping Error: {e}")
-        return {}
+        debug_log.append(f"❌ Error: {str(e)}")
+    
+    # Save to session state
+    st.session_state['debug_data'] = {
+        "map_keys": list(schedule_map.keys()),
+        "log": debug_log
+    }
     return schedule_map
 
 # --- DATA FETCHING (DIRECT FROM LIS) ---
@@ -354,6 +369,7 @@ try:
     sheet_df = pd.concat([df_w, df_i], ignore_index=True).dropna(subset=['Bill Number'])
     sheet_df['Bill Number'] = sheet_df['Bill Number'].astype(str).str.strip().str.upper().str.replace(" ", "")
     sheet_df = sheet_df[sheet_df['Bill Number'] != 'NAN']
+    sheet_df = sheet_df.drop_duplicates(subset=['Bill Number'])
     sheet_df['My Title'] = sheet_df['My Title'].fillna("-")
 except Exception as e:
     st.error(f"Sheet Error: {e}")
@@ -568,3 +584,35 @@ if bills_to_track:
                         st.caption("-")
                 else:
                     st.caption("-")
+
+# --- DEV DEBUGGER ---
+with st.sidebar:
+    st.divider()
+    with st.expander("👨‍💻 Developer Debugger", expanded=True):
+        st.write("Take a screenshot of this box!")
+        
+        # 1. Check if we scraped anything
+        debug_data = st.session_state.get('debug_data', {})
+        logs = debug_data.get('log', [])
+        keys = debug_data.get('map_keys', [])
+        
+        st.write(f"**Scraper Status:** {'🟢 Active' if keys else '🔴 Empty'}")
+        st.write(f"**Items Found:** {len(keys)}")
+        
+        # 2. Show what the 'Brain' is trying to match
+        st.markdown("---")
+        st.write("**Target Date (Today + 1):**")
+        target_debug = (datetime.now().date() + timedelta(days=1)).strftime('%Y-%m-%d')
+        st.code(target_debug)
+        
+        st.write("**Available Keys for Target Date:**")
+        relevant_keys = [k[1] for k in keys if k[0] == target_debug]
+        if relevant_keys:
+            st.json(relevant_keys)
+        else:
+            st.warning(f"No times found for {target_debug}")
+
+        # 3. Show Raw Scraper Log (First 10 lines)
+        st.markdown("---")
+        st.write("**Scraper Log (First 15 lines):**")
+        st.text("\n".join(logs[:15]))
