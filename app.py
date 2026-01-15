@@ -662,14 +662,25 @@ if bills_to_track:
                             lis_status = str(info.get('Status', 'Updated Today'))
                             
                             # --- HEADER REPAIR ---
-                            # If no committee (e.g., Floor vote or Fiscal Impact), give it a good name
-                            if not comm_display or comm_display in ["-", "nan", "None", ""]:
-                                if b_id.startswith("HJ") or b_id.startswith("SJ"):
-                                    comm_display = "Floor Session"
-                                elif "fiscal" in lis_status.lower():
-                                    comm_display = "General Assembly Action"
-                                else:
+                            # Clean up the "-" or "nan"
+                            if comm_display in ["-", "nan", "None", ""]:
+                                comm_display = ""
+
+                            # 1. Fiscal Impact Check (Status or Title)
+                            if "fiscal" in lis_status.lower():
+                                comm_display = "Fiscal Impact Report"
+                            
+                            # 2. Joint Resolutions (HJ/SJ/HR/SR) -> Floor
+                            elif b_id.startswith(("HJ", "SJ", "HR", "SR")):
+                                comm_display = "Floor Session"
+                            
+                            # 3. If still empty, infer based on status keywords
+                            elif not comm_display:
+                                lower_stat = lis_status.lower()
+                                if any(x in lower_stat for x in ["read", "pass", "engross", "defeat", "voted", "senate", "house"]):
                                     comm_display = "Floor Session / Action"
+                                else:
+                                    comm_display = "General Assembly Action"
                             
                             st.markdown(f"**{comm_display}**")
                             st.caption("⏰ Completed / Actioned")
