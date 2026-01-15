@@ -21,10 +21,6 @@ LIS_SUBDOCKET_CSV = LIS_BASE_URL + "SUBDOCKET.CSV"  # Subcommittees
 LIS_DOCKET_CSV = LIS_BASE_URL + "DOCKET.CSV"        # Main Standing Committees
 LIS_CALENDAR_CSV = LIS_BASE_URL + "CALENDAR.CSV"    # Floor Sessions / Votes
 
-# --- CRITICAL FIX: USE THE "LIVE" REDIRECT URL ---
-# This URL automatically redirects to the current active session
-LIS_SCHEDULE_URL = "https://lis.virginia.gov/schedule"
-
 st.set_page_config(page_title="VA Bill Tracker 2026", layout="wide")
 
 # --- EXPANDED SMART CATEGORIZATION ---
@@ -67,98 +63,93 @@ def normalize_text(text):
     text = text.replace('&', 'and').replace('.', '').replace(',', '')
     return " ".join(text.split())
 
-# --- NEW: ROBUST "REDIRECT" SCRAPER (NO LXML DEPENDENCY) ---
+# --- NEW: HUNTER SCRAPER (IGNORES REACT APP) ---
 @st.cache_data(ttl=600)
 def fetch_schedule_from_web():
     """
-    Hits the main schedule URL, follows redirects, handles frames, 
-    and uses BeautifulSoup (NOT Pandas) to parse text.
+    Hunts for the legacy plain-text schedule by trying known Session IDs.
+    Bypasses the modern React app entirely.
     """
     schedule_map = {}
     debug_log = [] 
     
-    try:
-        # 1. Hit the main "reliable" URL and follow where it goes
-        headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'}
-        
-        debug_log.append(f"📡 Accessing: {LIS_SCHEDULE_URL}")
-        session = requests.Session()
-        response = session.get(LIS_SCHEDULE_URL, headers=headers, allow_redirects=True)
-        debug_log.append(f"📍 Redirected to: {response.url}")
-        
-        final_html = response.text
+    # We ignore the modern URL because it's a React app (Empty Shell).
+    # We force the Legacy CGI script which is plain text.
+    # We try typical Session IDs for 2026.
+    
+    candidates = [
+        # 1. 2026 Regular Session Master List
+        "https://lis.virginia.gov/cgi-bin/legp604.exe?261+oth+MTG",
+        # 2. 2026 Regular Session "Sub-Dockets" (often has times)
+        "https://lis.virginia.gov/cgi-bin/legp604.exe?261+sub+S01",
+        # 3. 2026 Regular Session "Committee Dockets"
+        "https://lis.virginia.gov/cgi-bin/legp604.exe?261+doc+S01",
+        # 4. Fallback to 2025 (For testing/verification if 2026 is empty)
+        "https://lis.virginia.gov/cgi-bin/legp604.exe?251+oth+MTG"
+    ]
+    
+    headers = {'User-Agent': 'Mozilla/5.0'}
 
-        # 2. Check for Frame (The "Inner" Page)
-        frame_match = re.search(r'(?:frame|iframe).*?src=["\']([^"\']+)["\']', final_html, re.IGNORECASE)
-        if frame_match:
-            frame_url = frame_match.group(1)
-            # Fix relative URLs
-            if not frame_url.startswith("http"):
-                base_url = "https://lis.virginia.gov"
-                if not frame_url.startswith("/"): base_url += "/cgi-bin/"
-                frame_url = base_url + frame_url
-                frame_url = frame_url.replace("/cgi-bin//", "/cgi-bin/")
+    for url in candidates:
+        try:
+            debug_log.append(f"🔄 Trying Legacy URL: {url}")
+            response = requests.get(url, headers=headers, timeout=5)
             
-            debug_log.append(f"🖼️ Found Frame. Jumping to: {frame_url}")
-            response = session.get(frame_url, headers=headers)
-            final_html = response.text
-
-        # 3. Use BeautifulSoup to get text (NO PANDAS READ_HTML)
-        soup = BeautifulSoup(final_html, 'html.parser')
-        
-        # Get all text separated by newlines to handle tables/divs/paragraphs
-        lines = [line.strip() for line in soup.get_text(separator='\n').splitlines() if line.strip()]
-        debug_log.append(f"📄 Extracted {len(lines)} lines of text.")
-
-        # 4. Extract Data
-        current_date_str = None
-        count = 0
-        
-        for line in lines:
-            if len(line) < 5: continue
-
-            # A. Detect Date
-            try:
-                # Cleanup suffixes like 14th, 1st
-                clean_line = line.replace("1st", "1").replace("2nd", "2").replace("3rd", "3").replace("th", "")
-                dt = datetime.strptime(clean_line, "%A, %B %d, %Y")
-                current_date_str = dt.strftime("%Y-%m-%d")
-                debug_log.append(f"🗓️ Found Date: {current_date_str}")
+            # If the legacy page is just the "6 lines" error page, skip it.
+            if len(response.text.splitlines()) < 20:
+                debug_log.append(f"   ⚠️ Empty/Error Page ({len(response.text.splitlines())} lines). Skipping.")
                 continue
-            except:
-                pass
             
-            if not current_date_str: continue
-
-            # B. Detect Time (Regex)
-            # Look for "9:00 AM" or "Upon Adjournment"
-            time_pattern = r'(?:\d{1,2}:\d{2}\s*[AP]M|Noon|Upon\s+.*?|1\/2\s+hr|\d+\s+Minutes?\s+after)'
-            time_match = re.search(time_pattern, line, re.IGNORECASE)
-
-            if time_match:
-                time_val = time_match.group(0)
+            debug_log.append(f"   ✅ SUCCESS! Found content.")
+            
+            soup = BeautifulSoup(response.text, 'html.parser')
+            lines = [line.strip() for line in soup.get_text(separator='\n').splitlines() if line.strip()]
+            
+            current_date_str = None
+            found_count = 0
+            
+            for line in lines:
+                # Detect Date (e.g. Friday, January 16, 2026)
+                try:
+                    clean_line = line.replace("1st", "1").replace("2nd", "2").replace("3rd", "3").replace("th", "")
+                    dt = datetime.strptime(clean_line, "%A, %B %d, %Y")
+                    current_date_str = dt.strftime("%Y-%m-%d")
+                    debug_log.append(f"   🗓️ Date: {current_date_str}")
+                    continue 
+                except:
+                    pass 
                 
-                # Clean the Committee Name
-                # Usually name is like: "9:00 AM Senate Finance"
-                remaining_text = line.replace(time_val, "").strip(' .:-')
-                
-                if "-" in remaining_text: remaining_text = remaining_text.split("-")[0]
-                if "Room" in remaining_text: remaining_text = remaining_text.split("Room")[0]
-                
-                comm_name_clean = normalize_text(remaining_text)
-                comm_name_clean = comm_name_clean.replace("senate", "").replace("house", "").replace("committee", "").strip()
+                if not current_date_str: continue
 
-                if len(comm_name_clean) < 4: continue
+                # Detect Time (Anywhere in line)
+                # Matches "9:00 AM", "Noon", "1/2 hr after"
+                time_pattern = r'(?:\d{1,2}:\d{2}\s*[AP]M|Noon|Upon\s+.*?|1\/2\s+hr|\d+\s+Minutes?\s+after)'
+                time_match = re.search(time_pattern, line, re.IGNORECASE)
                 
-                key = (current_date_str, comm_name_clean)
-                if key not in schedule_map:
-                    schedule_map[key] = time_val
-                    count += 1
-                    # Only log the first few matches to keep debug clean
-                    if count < 5: debug_log.append(f"   ✅ {comm_name_clean} -> {time_val}")
+                if time_match:
+                    time_val = time_match.group(0)
+                    
+                    # Clean the Committee Name
+                    remaining_text = line.replace(time_val, "").strip(' .:-')
+                    if "-" in remaining_text: remaining_text = remaining_text.split("-")[0]
+                    if "Room" in remaining_text: remaining_text = remaining_text.split("Room")[0]
+                    
+                    comm_name_clean = normalize_text(remaining_text)
+                    comm_name_clean = comm_name_clean.replace("senate", "").replace("house", "").replace("committee", "").strip()
+                    
+                    if len(comm_name_clean) < 4: continue
 
-    except Exception as e:
-        debug_log.append(f"❌ Critical Error: {str(e)}")
+                    key = (current_date_str, comm_name_clean)
+                    if key not in schedule_map:
+                        schedule_map[key] = time_val
+                        found_count += 1
+            
+            if found_count > 0:
+                debug_log.append(f"   📥 Extracted {found_count} meetings. Stopping search.")
+                break # We found data, stop trying other URLs
+                
+        except Exception as e:
+            debug_log.append(f"   ❌ Error: {str(e)}")
 
     st.session_state['debug_data'] = {
         "map_keys": list(schedule_map.keys()),
