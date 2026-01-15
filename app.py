@@ -21,8 +21,8 @@ LIS_SUBDOCKET_CSV = LIS_BASE_URL + "SUBDOCKET.CSV"  # Subcommittees
 LIS_DOCKET_CSV = LIS_BASE_URL + "DOCKET.CSV"        # Main Standing Committees
 LIS_CALENDAR_CSV = LIS_BASE_URL + "CALENDAR.CSV"    # Floor Sessions / Votes
 
-# We use the main visual schedule URL, but we will "jailbreak" the frame inside the scraper
-LIS_SCHEDULE_URL = "https://lis.virginia.gov/cgi-bin/legp604.exe?261+img+S01"
+# Note: We now define the URLs inside the scraper function to try multiple options
+LIS_SCHEDULE_ROOT = "https://lis.virginia.gov/cgi-bin/legp604.exe?261"
 
 st.set_page_config(page_title="VA Bill Tracker 2026", layout="wide")
 
@@ -66,96 +66,92 @@ def normalize_text(text):
     text = text.replace('&', 'and').replace('.', '').replace(',', '')
     return " ".join(text.split())
 
-# --- NEW: DIAGNOSTIC WEB SCRAPER (FORCE FRAME BREAK) ---
+# --- NEW: MULTI-URL "BRUTE FORCE" SCRAPER ---
 @st.cache_data(ttl=600)
 def fetch_schedule_from_web():
     """
-    Scrapes LIS and logs what it finds for debugging.
-    Uses REGEX to find frames if BeautifulSoup fails.
+    Tries multiple hidden URLs to find the one with the actual data.
     """
     schedule_map = {}
     debug_log = [] 
     
-    try:
-        # 1. Try to Connect
-        headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'}
-        response = requests.get(LIS_SCHEDULE_URL, headers=headers)
-        
-        debug_log.append(f"📡 Initial Status: {response.status_code}")
-        
-        # 2. FORCE CHECK FOR FRAME (The "6 Lines" Fix)
-        # We search the RAW text for 'src=' because sometimes BeautifulSoup misses it in Framesets
-        frame_match = re.search(r'(?:frame|iframe).*?src=["\']([^"\']+)["\']', response.text, re.IGNORECASE)
-        
-        final_response_text = response.text
-        
-        if frame_match:
-            frame_url = frame_match.group(1)
-            debug_log.append(f"⚠️ Frameset detected! Jumping to: {frame_url}")
-            
-            # Handle relative URLs
-            if not frame_url.startswith("http"):
-                base = "https://lis.virginia.gov"
-                if not frame_url.startswith("/"): base += "/cgi-bin/"
-                frame_url = base + frame_url
-                
-            # Request the INNER content
-            inner_resp = requests.get(frame_url, headers=headers)
-            final_response_text = inner_resp.text
-            debug_log.append(f"📡 Inner Status: {inner_resp.status_code}")
-
-        # 3. Parse the REAL content
-        soup = BeautifulSoup(final_response_text, 'html.parser')
-        lines = [line.strip() for line in soup.get_text(separator='\n').splitlines() if line.strip()]
-        
-        debug_log.append(f"📄 Lines found: {len(lines)}")
-        
-        current_date_str = None
-        
-        for line in lines:
-            # Detect Date
-            try:
-                # Cleanup suffixes like 14th, 1st
-                clean_line = line.replace("1st", "1").replace("2nd", "2").replace("3rd", "3").replace("th", "")
-                dt = datetime.strptime(clean_line, "%A, %B %d, %Y")
-                current_date_str = dt.strftime("%Y-%m-%d")
-                debug_log.append(f"🗓️ Date: {current_date_str}")
-                continue 
-            except:
-                pass 
-            
-            if not current_date_str: continue
-
-            # Detect Time (Searching ANYWHERE in the line)
-            time_pattern = r'(?:\d{1,2}:\d{2}\s*[AP]M|Noon|Upon\s+.*?|1\/2\s+hr|\d+\s+Minutes?\s+after)'
-            time_match = re.search(time_pattern, line, re.IGNORECASE)
-            
-            if time_match:
-                time_val = time_match.group(0)
-                
-                # The committee name is whatever part of the line ISN'T the time
-                remaining_text = line.replace(time_val, "").strip(' .:-')
-                
-                # Clean Name
-                if "-" in remaining_text: remaining_text = remaining_text.split("-")[0]
-                if "Room" in remaining_text: remaining_text = remaining_text.split("Room")[0]
-                
-                comm_name_clean = normalize_text(remaining_text)
-                comm_name_clean = comm_name_clean.replace("senate", "").replace("house", "").replace("committee", "").strip()
-                
-                # Filter out garbage matches
-                if len(comm_name_clean) < 4: continue
-
-                key = (current_date_str, comm_name_clean)
-                
-                debug_log.append(f"   ✅ MATCH: '{comm_name_clean}' at {time_val}")
-                
-                if key not in schedule_map:
-                    schedule_map[key] = time_val
+    # LIST OF URLS TO TRY (The "Keys" to the hidden doors)
+    # 1. +sub+S01: Usually the inner frame for the visual schedule
+    # 2. +oth+MTG: The master text list of meetings
+    # 3. +img+S01: The outer wrapper (fallback)
+    candidates = [
+        ("https://lis.virginia.gov/cgi-bin/legp604.exe?261+sub+S01", "Inner Frame"),
+        ("https://lis.virginia.gov/cgi-bin/legp604.exe?261+oth+MTG", "Master List"),
+        ("https://lis.virginia.gov/cgi-bin/legp604.exe?261+img+S01", "Outer Shell")
+    ]
     
-    except Exception as e:
-        debug_log.append(f"❌ Error: {str(e)}")
-    
+    headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'}
+
+    for url, label in candidates:
+        try:
+            debug_log.append(f"🔄 Trying: {label}...")
+            response = requests.get(url, headers=headers, timeout=5)
+            
+            if response.status_code != 200:
+                debug_log.append(f"   ❌ Failed ({response.status_code})")
+                continue
+
+            soup = BeautifulSoup(response.text, 'html.parser')
+            lines = [line.strip() for line in soup.get_text(separator='\n').splitlines() if line.strip()]
+            
+            # If we found less than 15 lines, this URL is empty/wrapper. Try the next one.
+            if len(lines) < 15:
+                debug_log.append(f"   ⚠️ Too short ({len(lines)} lines). Skipping.")
+                continue
+            
+            debug_log.append(f"   ✅ SUCCESS! Found {len(lines)} lines.")
+            
+            # PROCESS DATA
+            current_date_str = None
+            found_count = 0
+            
+            for line in lines:
+                # Detect Date
+                try:
+                    clean_line = line.replace("1st", "1").replace("2nd", "2").replace("3rd", "3").replace("th", "")
+                    dt = datetime.strptime(clean_line, "%A, %B %d, %Y")
+                    current_date_str = dt.strftime("%Y-%m-%d")
+                    continue 
+                except:
+                    pass 
+                
+                if not current_date_str: continue
+
+                # Detect Time (Anywhere in line)
+                time_pattern = r'(?:\d{1,2}:\d{2}\s*[AP]M|Noon|Upon\s+.*?|1\/2\s+hr|\d+\s+Minutes?\s+after)'
+                time_match = re.search(time_pattern, line, re.IGNORECASE)
+                
+                if time_match:
+                    time_val = time_match.group(0)
+                    remaining_text = line.replace(time_val, "").strip(' .:-')
+                    
+                    if "-" in remaining_text: remaining_text = remaining_text.split("-")[0]
+                    if "Room" in remaining_text: remaining_text = remaining_text.split("Room")[0]
+                    
+                    comm_name_clean = normalize_text(remaining_text)
+                    comm_name_clean = comm_name_clean.replace("senate", "").replace("house", "").replace("committee", "").strip()
+                    
+                    if len(comm_name_clean) < 4: continue
+
+                    key = (current_date_str, comm_name_clean)
+                    if key not in schedule_map:
+                        schedule_map[key] = time_val
+                        found_count += 1
+            
+            debug_log.append(f"   📥 Extracted {found_count} meetings.")
+            
+            # If we found data, STOP checking other URLs. We are done.
+            if found_count > 0:
+                break
+                
+        except Exception as e:
+            debug_log.append(f"   ❌ Error: {str(e)}")
+
     st.session_state['debug_data'] = {
         "map_keys": list(schedule_map.keys()),
         "log": debug_log
