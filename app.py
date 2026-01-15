@@ -2,9 +2,9 @@ import streamlit as st
 import pandas as pd
 import requests
 import time
-import re 
+import re
 from datetime import datetime, timedelta
-import pytz 
+import pytz
 from slack_sdk import WebClient
 from slack_sdk.errors import SlackApiError
 from bs4 import BeautifulSoup # <--- REQUIRED: pip install beautifulsoup4
@@ -20,6 +20,7 @@ LIS_BILLS_CSV = LIS_BASE_URL + "BILLS.CSV"
 LIS_SUBDOCKET_CSV = LIS_BASE_URL + "SUBDOCKET.CSV"  # Subcommittees
 LIS_DOCKET_CSV = LIS_BASE_URL + "DOCKET.CSV"        # Main Standing Committees
 LIS_CALENDAR_CSV = LIS_BASE_URL + "CALENDAR.CSV"    # Floor Sessions / Votes
+
 # The Official Schedule Page (The only place with real times)
 LIS_SCHEDULE_URL = "https://lis.virginia.gov/cgi-bin/legp604.exe?261+img+S01"
 
@@ -41,7 +42,6 @@ TOPIC_KEYWORDS = {
 }
 
 # --- HELPER FUNCTIONS ---
-
 def determine_lifecycle(status_text):
     status = str(status_text).lower()
     if any(x in status for x in ["signed by governor", "enacted", "approved by governor", "chapter"]):
@@ -66,7 +66,7 @@ def normalize_text(text):
     text = text.replace('&', 'and').replace('.', '').replace(',', '')
     return " ".join(text.split())
 
-# --- NEW: WEB SCRAPER FOR TIMES ---
+# --- NEW: WEB SCRAPER FOR TIMES (UPDATED LOGIC) ---
 @st.cache_data(ttl=600)
 def fetch_schedule_from_web():
     """
@@ -75,21 +75,22 @@ def fetch_schedule_from_web():
     """
     schedule_map = {}
     try:
-        response = requests.get(LIS_SCHEDULE_URL)
+        # Use headers to mimic a browser so LIS doesn't block the request
+        headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'}
+        response = requests.get(LIS_SCHEDULE_URL, headers=headers)
         response.raise_for_status()
         soup = BeautifulSoup(response.text, 'html.parser')
         
         current_date_str = None
         
         # The LIS schedule is usually a list of text lines.
-        lines = soup.get_text(separator='\n').splitlines()
+        lines = [line.strip() for line in soup.get_text(separator='\n').splitlines() if line.strip()]
         
         for line in lines:
-            line = line.strip()
-            if not line: continue
-            
             # 1. Detect Date Header (e.g., "Wednesday, January 14, 2026")
             try:
+                # Cleanup suffixes like 14th, 1st if present
+                clean_line = line.replace("1st", "1").replace("2nd", "2").replace("3rd", "3").replace("th", "")
                 dt = datetime.strptime(line, "%A, %B %d, %Y")
                 current_date_str = dt.strftime("%Y-%m-%d")
                 continue 
@@ -99,12 +100,18 @@ def fetch_schedule_from_web():
             if not current_date_str: continue
 
             # 2. Detect Meeting Row (e.g., "7:30 AM. Senate Finance...")
-            time_match = re.match(r'^(\d{1,2}:\d{2}\s*[AP]M|Noon|Upon\s+Recess|1\/2\s+hr|\d+\s+Minutes?\s+after)', line, re.IGNORECASE)
+            time_match = re.match(r'^(\d{1,2}:\d{2}\s*[AP]M|Noon|Upon\s+.*?|1\/2\s+hr|\d+\s+Minutes?\s+after)', line, re.IGNORECASE)
             
             if time_match:
                 time_val = time_match.group(0)
                 remaining_text = line[len(time_val):].strip(' .:-')
+                
+                # CLEANUP: Remove "Room A", "Senate", "Committee" to make matching easier
+                if "-" in remaining_text: remaining_text = remaining_text.split("-")[0]
+                if "Room" in remaining_text: remaining_text = remaining_text.split("Room")[0]
+                
                 comm_name_clean = normalize_text(remaining_text)
+                comm_name_clean = comm_name_clean.replace("senate", "").replace("house", "").replace("committee", "").strip()
                 
                 key = (current_date_str, comm_name_clean)
                 if key not in schedule_map:
@@ -221,7 +228,6 @@ def get_bill_data_batch(bill_numbers, lis_df):
     return pd.DataFrame(results)
 
 # --- ALERTS ---
-
 def check_and_broadcast(df_bills, df_subscribers, demo_mode):
     st.sidebar.header("🤖 Slack Bot Status")
     if demo_mode:
@@ -271,7 +277,6 @@ def check_and_broadcast(df_bills, df_subscribers, demo_mode):
         st.sidebar.info("💤 No new updates needed.")
 
 # --- UI COMPONENTS ---
-
 def render_bill_card(row):
     if row.get('Official Title') not in ["Unknown", "Error", "Not Found", None]:
         display_title = row['Official Title']
@@ -527,19 +532,27 @@ if bills_to_track:
                                 if master_status:
                                     st.caption(f"ℹ️ {master_status}")
 
-                                # --- 3. TIME LOOKUP (Using Scraped Web Data) ---
+                                # --- 3. TIME LOOKUP (UPDATED TO FIX TBD) ---
                                 time_found = "TBD"
                                 
-                                # Exact Match Check: (Date + Master Committee Name)
+                                # Clean the CSV committee name to match the Scraper logic
+                                lookup_comm = normalize_text(raw_master_comm)
+                                lookup_comm = lookup_comm.replace("senate", "").replace("house", "").replace("committee", "").strip()
+
+                                # Try to find a match in the scraped data
                                 for key, t_val in web_schedule_map.items():
                                     k_date, k_comm = key
+                                    
                                     if k_date == target_date_str:
-                                        # Flexible match: if "Finance" is in "Senate Finance"
-                                        if master_comm_clean in k_comm or k_comm in master_comm_clean:
+                                        # Flexible Check
+                                        if lookup_comm == k_comm:
+                                            time_found = t_val
+                                            break
+                                        elif len(lookup_comm) > 3 and (lookup_comm in k_comm or k_comm in lookup_comm):
                                             time_found = t_val
                                             break
                                 
-                                # Fallback to Text Search in Schedule Row if Lookup Failed
+                                # Fallback: Text Search in Schedule Row if Lookup Failed
                                 if time_found == "TBD":
                                     row_text = " ".join([str(val) for val in row.values])
                                     time_pattern = r'(?:(?:\d+|one|two|half)\s*(?:hr|hour|min|minute)s?\s+)?(?:after|upon|before|until)\s+(?:.*?)?(?:adjourn|recess|conven|call)|(?:\d{1,2}:\d{2}\s?(?:[ap]\.?m\.?|noon))'
