@@ -63,91 +63,90 @@ def normalize_text(text):
     text = text.replace('&', 'and').replace('.', '').replace(',', '')
     return " ".join(text.split())
 
-# --- NEW: HUNTER SCRAPER (IGNORES REACT APP) ---
+# --- NEW: AGGRESSIVE SCRAPER + TEXT PEEK ---
 @st.cache_data(ttl=600)
 def fetch_schedule_from_web():
     """
-    Hunts for the legacy plain-text schedule by trying known Session IDs.
-    Bypasses the modern React app entirely.
+    Scrapes legacy URLs and captures raw text for debugging.
     """
     schedule_map = {}
     debug_log = [] 
     
-    # We ignore the modern URL because it's a React app (Empty Shell).
-    # We force the Legacy CGI script which is plain text.
-    # We try typical Session IDs for 2026.
-    
+    # We try specific sub-pages that are more likely to have text
     candidates = [
-        # 1. 2026 Regular Session Master List
-        "https://lis.virginia.gov/cgi-bin/legp604.exe?261+oth+MTG",
-        # 2. 2026 Regular Session "Sub-Dockets" (often has times)
-        "https://lis.virginia.gov/cgi-bin/legp604.exe?261+sub+S01",
-        # 3. 2026 Regular Session "Committee Dockets"
-        "https://lis.virginia.gov/cgi-bin/legp604.exe?261+doc+S01",
-        # 4. Fallback to 2025 (For testing/verification if 2026 is empty)
-        "https://lis.virginia.gov/cgi-bin/legp604.exe?251+oth+MTG"
+        ("https://lis.virginia.gov/cgi-bin/legp604.exe?261+oth+MTG", "Master List"),
+        ("https://lis.virginia.gov/cgi-bin/legp604.exe?261+sub+S01", "Subcommittees"),
+        ("https://lis.virginia.gov/cgi-bin/legp604.exe?261+doc+S01", "Dockets"),
     ]
     
-    headers = {'User-Agent': 'Mozilla/5.0'}
+    headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'}
 
-    for url in candidates:
+    for url, label in candidates:
         try:
-            debug_log.append(f"🔄 Trying Legacy URL: {url}")
+            debug_log.append(f"🔄 Checking: {label}")
             response = requests.get(url, headers=headers, timeout=5)
             
-            # If the legacy page is just the "6 lines" error page, skip it.
-            if len(response.text.splitlines()) < 20:
-                debug_log.append(f"   ⚠️ Empty/Error Page ({len(response.text.splitlines())} lines). Skipping.")
-                continue
-            
-            debug_log.append(f"   ✅ SUCCESS! Found content.")
-            
+            # Use basic HTML parser (no LXML)
             soup = BeautifulSoup(response.text, 'html.parser')
+            
+            # Get clean lines of text
             lines = [line.strip() for line in soup.get_text(separator='\n').splitlines() if line.strip()]
             
+            # LOGGING: Print the first 3 lines of what we actually found
+            if len(lines) > 0:
+                preview = " | ".join(lines[:3])
+                debug_log.append(f"   👀 Page Title/Header: {preview[:100]}...")
+            
+            if len(lines) < 10:
+                debug_log.append("   ⚠️ Page too short. Skipping.")
+                continue
+
             current_date_str = None
-            found_count = 0
             
             for line in lines:
-                # Detect Date (e.g. Friday, January 16, 2026)
-                try:
-                    clean_line = line.replace("1st", "1").replace("2nd", "2").replace("3rd", "3").replace("th", "")
-                    dt = datetime.strptime(clean_line, "%A, %B %d, %Y")
-                    current_date_str = dt.strftime("%Y-%m-%d")
-                    debug_log.append(f"   🗓️ Date: {current_date_str}")
-                    continue 
-                except:
-                    pass 
+                # 1. Detect Date (Loose Format)
+                # Matches: "Friday, January 16, 2026" OR "January 16, 2026"
+                if "2026" in line:
+                    try:
+                        # Attempt to extract a date
+                        clean_line = line.replace("1st", "1").replace("2nd", "2").replace("3rd", "3").replace("th", "")
+                        match = re.search(r'([A-Za-z]+, )?([A-Za-z]+ \d{1,2}, \d{4})', clean_line)
+                        if match:
+                            dt_str = match.group(0)
+                            # Try parsing with weekday
+                            try: dt = datetime.strptime(dt_str, "%A, %B %d, %Y")
+                            except: dt = datetime.strptime(dt_str, "%B %d, %Y")
+                            
+                            current_date_str = dt.strftime("%Y-%m-%d")
+                            debug_log.append(f"   🗓️ Date locked: {current_date_str}")
+                    except: pass
                 
+                # 2. Detect Time (Aggressive)
                 if not current_date_str: continue
 
-                # Detect Time (Anywhere in line)
-                # Matches "9:00 AM", "Noon", "1/2 hr after"
-                time_pattern = r'(?:\d{1,2}:\d{2}\s*[AP]M|Noon|Upon\s+.*?|1\/2\s+hr|\d+\s+Minutes?\s+after)'
-                time_match = re.search(time_pattern, line, re.IGNORECASE)
+                # Regex for "9:00 AM" or "1/2 hr after"
+                time_match = re.search(r'(\d{1,2}:\d{2}\s*[AP]M|Noon|Upon\s+.*?|1\/2\s+hr|\d+\s+min)', line, re.IGNORECASE)
                 
                 if time_match:
                     time_val = time_match.group(0)
                     
-                    # Clean the Committee Name
-                    remaining_text = line.replace(time_val, "").strip(' .:-')
-                    if "-" in remaining_text: remaining_text = remaining_text.split("-")[0]
-                    if "Room" in remaining_text: remaining_text = remaining_text.split("Room")[0]
+                    # Everything else is the name
+                    remaining = line.replace(time_val, "").strip(" .:-")
                     
-                    comm_name_clean = normalize_text(remaining_text)
-                    comm_name_clean = comm_name_clean.replace("senate", "").replace("house", "").replace("committee", "").strip()
+                    # Clean it up
+                    if "-" in remaining: remaining = remaining.split("-")[0]
+                    clean_name = normalize_text(remaining)
+                    clean_name = clean_name.replace("senate", "").replace("house", "").replace("committee", "").strip()
                     
-                    if len(comm_name_clean) < 4: continue
-
-                    key = (current_date_str, comm_name_clean)
-                    if key not in schedule_map:
-                        schedule_map[key] = time_val
-                        found_count += 1
+                    if len(clean_name) > 3:
+                        key = (current_date_str, clean_name)
+                        if key not in schedule_map:
+                            schedule_map[key] = time_val
             
-            if found_count > 0:
-                debug_log.append(f"   📥 Extracted {found_count} meetings. Stopping search.")
-                break # We found data, stop trying other URLs
-                
+            if len(schedule_map) > 0:
+                debug_log.append(f"   ✅ Found {len(schedule_map)} times. Stopping.")
+                break
+
         except Exception as e:
             debug_log.append(f"   ❌ Error: {str(e)}")
 
@@ -632,7 +631,7 @@ with st.sidebar:
         else:
             st.warning(f"No times found for {target_debug}")
 
-        # 3. Show Raw Scraper Log (First 10 lines)
+        # 3. Show Raw Scraper Log (First 15 lines)
         st.markdown("---")
         st.write("**Scraper Log (First 15 lines):**")
         st.text("\n".join(logs[:15]))
