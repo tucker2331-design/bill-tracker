@@ -67,20 +67,19 @@ def clean_committee_name(name):
     if not name or str(name).lower() == 'nan': return ""
     name = str(name).strip()
     
-    # 1. Clean up "Name, Chair" format
     if "," in name: name = name.split(",")[0].strip()
 
-    # 2. Strict Mappings (Explicitly add Chamber)
+    # Strict Mappings (Explicitly add Chamber)
     mapping = {
         "HED": "House Education",
         "HEDC": "House Education",
-        "P&E": "Privileges & Elections", # Ambiguous, will be handled by context usually
-        "C&L": "Commerce & Labor",       # Ambiguous
+        "P&E": "Privileges & Elections",
+        "C&L": "Commerce & Labor",
         "HWI": "House Health, Welfare & Inst.",
         "APP": "House Appropriations",
-        "FIN": "Senate Finance & Appropriations", # Senate usually uses FIN
-        "JUD": "Courts of Justice",      # Ambiguous
-        "GL": "General Laws",            # Ambiguous
+        "FIN": "Senate Finance & Appropriations",
+        "JUD": "Courts of Justice",
+        "GL": "General Laws",
         "AG": "Agriculture",
         "TRAN": "Transportation",
         "SFIN": "Senate Finance & Appropriations",
@@ -94,11 +93,9 @@ def clean_committee_name(name):
     upper_name = name.upper()
     if upper_name in mapping: return mapping[upper_name]
 
-    # 3. Detect Chamber in text
     is_senate = "SENATE" in upper_name
     is_house = "HOUSE" in upper_name
 
-    # 4. Standardize Base Name
     base_name = name
     standard_committees = [
         "Education and Health", "Education", "Commerce and Labor", "General Laws", "Transportation",
@@ -110,17 +107,13 @@ def clean_committee_name(name):
     for std in standard_committees:
         if std.lower() in name.lower():
             base_name = std
-            break # Stop at first match
+            break
     
-    # 5. Reconstruct with Chamber (if known)
-    # If the base name already has Senate/House, don't add it again
-    if "Senate" in base_name or "House" in base_name:
-        return base_name
-        
+    if "Senate" in base_name or "House" in base_name: return base_name
     if is_senate: return f"Senate {base_name}"
     if is_house: return f"House {base_name}"
     
-    # Special overrides for distinct committees
+    # Overrides for distinct names
     if "Health, Welfare" in base_name: return f"House {base_name}"
     if "Rehabilitation" in base_name: return f"Senate {base_name}"
     if "Education and Health" in base_name: return f"Senate {base_name}"
@@ -128,21 +121,17 @@ def clean_committee_name(name):
     return base_name.title()
 
 def clean_status_text(text):
-    """Replaces abbreviations in the status description"""
     if not text: return ""
     text = str(text)
-    
     replacements = {
         "HED": "House Education",
         "sub:": "Subcommittee:",
         "P&E": "Privileges & Elections",
         "C&L": "Commerce & Labor"
     }
-    
     for abbr, full in replacements.items():
         pattern = re.compile(re.escape(abbr), re.IGNORECASE)
         text = pattern.sub(full, text)
-        
     return text
 
 # --- NEW: ROBUST SCRAPER (Fixed for "Minutes After") ---
@@ -169,22 +158,15 @@ def fetch_schedule_from_web():
                         clean_line = clean_line.replace("1st", "1").replace("2nd", "2").replace("3rd", "3").replace("th", "")
                         dt = datetime.strptime(clean_line, "%A, %B %d, %Y")
                         date_str = dt.strftime("%Y-%m-%d")
-                        
                         if i > 0:
                             comm_name = lines[i-1]
                             if "Cancelled" in comm_name: continue
-                            
-                            # Force "Senate" prefix if missing for key generation
                             clean_name = normalize_text(comm_name)
                             clean_name = clean_name.replace("committee", "").strip()
                             if "senate" not in clean_name and "house" not in clean_name:
-                                clean_name = "senate " + clean_name # It came from Senate portal
-                            
-                            # Clean up key
+                                clean_name = "senate " + clean_name 
                             clean_name = clean_name.replace("senate", "").replace("house", "").strip()
-                            
                             key = (date_str, clean_name)
-                            # Store with explicit Senate prefix for display
                             display_name = comm_name
                             if "Senate" not in display_name: display_name = f"Senate {display_name}"
                             schedule_map[key] = (time_val, display_name) 
@@ -210,7 +192,6 @@ def fetch_schedule_from_web():
                         current_date_str = dt.strftime("%Y-%m-%d")
                         continue
                 except: pass
-            
             if not current_date_str: continue
 
             time_match = re.search(r'^(\d{1,2}:\d{2}\s*[AP]M|Noon)', line, re.IGNORECASE)
@@ -222,23 +203,18 @@ def fetch_schedule_from_web():
                         if i > 1:
                             prev_prev = lines[i-2]
                             if len(prev_prev) > 4: comm_name = prev_prev
-                    
                     if "New Meeting" in comm_name: continue
 
-                    # Force "House" prefix logic
                     clean_name = normalize_text(comm_name)
                     clean_name = clean_name.replace("committee", "").strip()
                     if "senate" not in clean_name and "house" not in clean_name:
-                        clean_name = "house " + clean_name # Came from House portal
-                    
+                        clean_name = "house " + clean_name 
                     clean_name = clean_name.replace("senate", "").replace("house", "").strip()
                     
                     key = (current_date_str, clean_name)
-                    
                     display_name = comm_name
                     if "House" not in display_name: display_name = f"House {display_name}"
                     schedule_map[key] = (time_val, display_name)
-
     except: pass
     
     st.session_state['debug_data'] = {"map_keys": list(schedule_map.keys()), "log": debug_log}
@@ -299,7 +275,6 @@ def get_bill_data_batch(bill_numbers, lis_df):
             if not date_val or date_val == 'nan':
                 date_val = str(item.get('last_senate_action_date', ''))
 
-            # History Data
             history_data = []
             h_act = item.get('last_house_action')
             if pd.notna(h_act) and str(h_act).lower() != 'nan':
@@ -308,7 +283,6 @@ def get_bill_data_batch(bill_numbers, lis_df):
             if pd.notna(s_act) and str(s_act).lower() != 'nan':
                  history_data.append({"Date": item.get('last_senate_action_date'), "Action": f"[Senate] {s_act}"})
 
-            # --- ROBUST COMMITTEE EXTRACTION ---
             curr_comm = "-"
             c1 = item.get('last_house_committee')
             c2 = item.get('last_senate_committee')
@@ -619,11 +593,9 @@ if bills_to_track:
                 
                 if todays_meetings:
                     for scraper_clean_name, (scraper_time, scraper_full_name) in todays_meetings.items():
-                        
                         if "caucus" in scraper_full_name.lower(): continue
 
                         matched_bills = []
-                        
                         for b_id in confirmed_bills_set:
                             if b_id in bills_shown_today: continue 
 
@@ -646,9 +618,7 @@ if bills_to_track:
                         if matched_bills:
                             events_found = True
                             
-                            # CLEAN THE SCRAPER HEADER HERE
                             header_display = clean_committee_name(scraper_full_name)
-                            
                             sub_display = None
                             if "—" in scraper_full_name:
                                 parts = scraper_full_name.split("—")
@@ -686,12 +656,25 @@ if bills_to_track:
                             except: pass
 
                         if is_today:
+                            lis_status = str(info.get('Status', ''))
+                            
+                            # --- FILTER: IGNORE ADMINISTRATIVE ACTIONS ---
+                            # Only show if there was a meeting outcome or floor action
+                            # Skip simple assignments/referrals which aren't "meetings"
+                            skip_keywords = ["assigned", "referred", "printed", "presentation", "reading waived"]
+                            
+                            # However, we must allow "Reported" or "Passed" or "Defeated" to show through
+                            is_outcome = any(x in lis_status.lower() for x in ["reported", "passed", "defeat", "stricken", "agreed", "read", "engross", "vote"])
+                            is_admin = any(x in lis_status.lower() for x in skip_keywords)
+                            
+                            # If it's administrative AND NOT an outcome, skip it.
+                            if is_admin and not is_outcome:
+                                continue
+
                             events_found = True
                             bills_shown_today.add(b_id)
                             
                             raw_comm = str(info.get('Current_Committee', ''))
-                            lis_status = str(info.get('Status', ''))
-                            
                             if raw_comm in ["-", "nan", "None", ""]: raw_comm = ""
                             
                             if "fiscal" in lis_status.lower(): group_name = "Fiscal Impact Report"
@@ -701,7 +684,6 @@ if bills_to_track:
                                     group_name = "Floor Session / Action"
                                 else: group_name = "General Assembly Action"
                             else:
-                                # CHAMBER INFERENCE: If generic "Education", check Bill ID
                                 group_name = clean_committee_name(raw_comm)
                                 if group_name == "Education":
                                     if b_id.startswith("HB") or b_id.startswith("HJ"): group_name = "House Education"
