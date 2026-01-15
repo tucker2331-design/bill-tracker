@@ -63,91 +63,89 @@ def normalize_text(text):
     text = text.replace('&', 'and').replace('.', '').replace(',', '')
     return " ".join(text.split())
 
-# --- NEW: BACKUP-ENABLED SCRAPER ---
+# --- NEW: CELL-SMART SCRAPER (HOUSE & SENATE) ---
 @st.cache_data(ttl=600)
 def fetch_schedule_from_web():
     """
-    Scrapes the schedule. Tries LIS Legacy first, then falls back to the General Assembly Portal.
+    Scrapes both House and Senate portals using cell-based detection logic.
     """
     schedule_map = {}
     debug_log = [] 
     
-    # 1. LIS Legacy URLs (Often broken for new sessions)
-    # 2. VA General Assembly Portal (Reliable HTML Backup)
-    candidates = [
-        ("https://lis.virginia.gov/cgi-bin/legp604.exe?261+oth+MTG", "LIS Master List"),
-        ("https://virginiageneralassembly.gov/house/schedule/schedule.php", "GA Portal (House/Joint)"),
-        ("https://lis.virginia.gov/cgi-bin/legp604.exe?261+sub+S01", "LIS Subcommittees")
+    # TARGET URLS
+    targets = [
+        ("https://virginiageneralassembly.gov/house/schedule/schedule.php", "House Portal"),
+        ("https://apps.senate.virginia.gov/Senator/ComMeetings.php", "Senate Portal")
     ]
     
     headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'}
 
-    for url, label in candidates:
+    for url, label in targets:
         try:
-            debug_log.append(f"🔄 Checking: {label}")
-            response = requests.get(url, headers=headers, timeout=5)
-            
-            # Basic Check: Is the page empty or an error?
-            if "could not be processed" in response.text or len(response.text.splitlines()) < 20:
-                debug_log.append("   ⚠️ Page Error/Empty. Skipping.")
-                continue
-
+            debug_log.append(f"🔄 Connecting to: {label}")
+            response = requests.get(url, headers=headers, timeout=10)
             soup = BeautifulSoup(response.text, 'html.parser')
             
-            # Extract text lines (handles both LIS pre-formatted text and GA Portal tables)
-            lines = [line.strip() for line in soup.get_text(separator='\n').splitlines() if line.strip()]
+            # Find all Table Rows
+            rows = soup.find_all('tr')
+            debug_log.append(f"   📊 Found {len(rows)} rows.")
             
             current_date_str = None
-            found_count = 0
             
-            for line in lines:
-                # 1. Detect Date
-                # Matches: "Friday, January 16, 2026" or "January 16, 2026"
-                if "2026" in line:
+            for row in rows:
+                # Get all cells in this row
+                cells = [c.get_text(" ", strip=True) for c in row.find_all(['td', 'th'])]
+                row_text = " ".join(cells)
+                
+                # --- 1. DATE DETECTION ---
+                # Check if this row is a Date Header (e.g. "Friday, January 16, 2026")
+                if "2026" in row_text:
                     try:
-                        clean_line = line.replace("1st", "1").replace("2nd", "2").replace("3rd", "3").replace("th", "")
+                        clean_line = row_text.replace("1st", "1").replace("2nd", "2").replace("3rd", "3").replace("th", "")
                         match = re.search(r'([A-Za-z]+, )?([A-Za-z]+ \d{1,2}, \d{4})', clean_line)
                         if match:
                             dt_str = match.group(0)
-                            # Parse flexible date formats
                             try: dt = datetime.strptime(dt_str, "%A, %B %d, %Y")
                             except: dt = datetime.strptime(dt_str, "%B %d, %Y")
                             
                             current_date_str = dt.strftime("%Y-%m-%d")
-                            debug_log.append(f"   🗓️ Date locked: {current_date_str}")
+                            # debug_log.append(f"      🗓️ Date: {current_date_str}")
+                            continue
                     except: pass
                 
                 if not current_date_str: continue
 
-                # 2. Detect Time
-                # Matches "9:00 AM", "9:00 a.m.", "Noon", "1/2 hr after"
+                # --- 2. MEETING DETECTION (Look for Time) ---
+                # Pattern: "9:00 AM", "Noon", "1/2 hr after"
                 time_pattern = r'(\d{1,2}:\d{2}\s*?[aApP]\.?[mM]\.?|Noon|Upon\s+.*?|1\/2\s+hr|\d+\s+min)'
-                time_match = re.search(time_pattern, line, re.IGNORECASE)
+                time_match = re.search(time_pattern, row_text, re.IGNORECASE)
                 
                 if time_match:
                     time_val = time_match.group(0)
                     
-                    # Everything else in the line is potential Name info
-                    remaining = line.replace(time_val, "").strip(" .:-")
+                    # Committee Name is the text that REMAINS after removing time and location keywords
+                    # This logic handles multi-column layouts by joining them first
                     
-                    # Clean Name
-                    if "-" in remaining: remaining = remaining.split("-")[0]
-                    clean_name = normalize_text(remaining)
-                    clean_name = clean_name.replace("senate", "").replace("house", "").replace("committee", "").strip()
+                    # Remove the time
+                    remaining = row_text.replace(time_val, "")
                     
-                    # Save if it looks like a real committee name
-                    if len(clean_name) > 3:
-                        key = (current_date_str, clean_name)
+                    # Remove common junk
+                    for junk in ["Room", "Virtual", "House Committee", "Senate Committee", "Meeting", "Subcommittee"]:
+                         if junk in remaining: remaining = remaining.split(junk)[0]
+                    
+                    comm_name_clean = normalize_text(remaining)
+                    comm_name_clean = comm_name_clean.replace("senate", "").replace("house", "").replace("committee", "").strip()
+                    
+                    if len(comm_name_clean) > 3:
+                        key = (current_date_str, comm_name_clean)
                         if key not in schedule_map:
                             schedule_map[key] = time_val
-                            found_count += 1
-            
-            if found_count > 0:
-                debug_log.append(f"   ✅ SUCCESS! Extracted {found_count} meetings.")
-                break # We found data, stop trying other URLs
+                            # debug_log.append(f"         ✅ {comm_name_clean} @ {time_val}")
 
         except Exception as e:
             debug_log.append(f"   ❌ Error: {str(e)}")
+
+    debug_log.append(f"✅ Total Meetings Found: {len(schedule_map)}")
 
     st.session_state['debug_data'] = {
         "map_keys": list(schedule_map.keys()),
@@ -630,7 +628,7 @@ with st.sidebar:
         else:
             st.warning(f"No times found for {target_debug}")
 
-        # 3. Show Raw Scraper Log (First 15 lines)
+        # 3. Show Raw Scraper Log (First 10 lines)
         st.markdown("---")
         st.write("**Scraper Log (First 15 lines):**")
         st.text("\n".join(logs[:15]))
