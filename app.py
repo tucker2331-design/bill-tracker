@@ -22,7 +22,7 @@ LIS_DOCKET_CSV = LIS_BASE_URL + "DOCKET.CSV"        # Main Standing Committees
 LIS_CALENDAR_CSV = LIS_BASE_URL + "CALENDAR.CSV"    # Floor Sessions / Votes
 
 # --- CRITICAL FIX: USE THE "LIVE" REDIRECT URL ---
-# This URL automatically redirects to the current active session (whatever it is)
+# This URL automatically redirects to the current active session
 LIS_SCHEDULE_URL = "https://lis.virginia.gov/schedule"
 
 st.set_page_config(page_title="VA Bill Tracker 2026", layout="wide")
@@ -67,12 +67,12 @@ def normalize_text(text):
     text = text.replace('&', 'and').replace('.', '').replace(',', '')
     return " ".join(text.split())
 
-# --- NEW: ROBUST "REDIRECT" SCRAPER ---
+# --- NEW: ROBUST "REDIRECT" SCRAPER (NO LXML DEPENDENCY) ---
 @st.cache_data(ttl=600)
 def fetch_schedule_from_web():
     """
     Hits the main schedule URL, follows redirects, handles frames, 
-    and uses Pandas to parse the tables.
+    and uses BeautifulSoup (NOT Pandas) to parse text.
     """
     schedule_map = {}
     debug_log = [] 
@@ -89,7 +89,6 @@ def fetch_schedule_from_web():
         final_html = response.text
 
         # 2. Check for Frame (The "Inner" Page)
-        # If we landed on a frameset, we need to grab the 'src' of the frame
         frame_match = re.search(r'(?:frame|iframe).*?src=["\']([^"\']+)["\']', final_html, re.IGNORECASE)
         if frame_match:
             frame_url = frame_match.group(1)
@@ -98,82 +97,68 @@ def fetch_schedule_from_web():
                 base_url = "https://lis.virginia.gov"
                 if not frame_url.startswith("/"): base_url += "/cgi-bin/"
                 frame_url = base_url + frame_url
-                # Clean double slashes if any
                 frame_url = frame_url.replace("/cgi-bin//", "/cgi-bin/")
             
             debug_log.append(f"🖼️ Found Frame. Jumping to: {frame_url}")
             response = session.get(frame_url, headers=headers)
             final_html = response.text
 
-        # 3. Use Pandas to find the tables (The "Magic" Step)
-        # This works much better than regex for the visual schedule tables
-        try:
-            dfs = pd.read_html(final_html)
-            debug_log.append(f"📊 Found {len(dfs)} tables on page.")
-        except Exception as parse_e:
-            debug_log.append(f"❌ HTML Parsing failed: {parse_e}")
-            dfs = []
+        # 3. Use BeautifulSoup to get text (No lxml needed)
+        soup = BeautifulSoup(final_html, 'html.parser')
+        
+        # Get all text separated by newlines to handle tables/divs/paragraphs
+        lines = [line.strip() for line in soup.get_text(separator='\n').splitlines() if line.strip()]
+        debug_log.append(f"📄 Extracted {len(lines)} lines of text.")
 
-        # 4. Extract Data from Tables
+        # 4. Extract Data
         current_date_str = None
         count = 0
         
-        # We assume the schedule is one big list. We iterate through the raw strings of the tables.
-        for df in dfs:
-            # Convert the whole table to a list of strings to scan row by row
-            # This handles multi-column layouts gracefully
-            rows = df.astype(str).values.flatten()
+        for line in lines:
+            if len(line) < 5: continue
+
+            # A. Detect Date
+            try:
+                # Cleanup suffixes like 14th, 1st
+                clean_line = line.replace("1st", "1").replace("2nd", "2").replace("3rd", "3").replace("th", "")
+                dt = datetime.strptime(clean_line, "%A, %B %d, %Y")
+                current_date_str = dt.strftime("%Y-%m-%d")
+                debug_log.append(f"🗓️ Found Date: {current_date_str}")
+                continue
+            except:
+                pass
             
-            for line in rows:
-                line = str(line).strip()
-                if line == 'nan' or len(line) < 5: continue
+            if not current_date_str: continue
 
-                # A. Detect Date
-                try:
-                    clean_line = line.replace("1st", "1").replace("2nd", "2").replace("3rd", "3").replace("th", "")
-                    # Look for "Friday, January 16, 2026" format
-                    dt = datetime.strptime(clean_line, "%A, %B %d, %Y")
-                    current_date_str = dt.strftime("%Y-%m-%d")
-                    debug_log.append(f"🗓️ Found Date: {current_date_str}")
-                    continue
-                except:
-                    pass
+            # B. Detect Time (Regex)
+            # Look for "9:00 AM" or "Upon Adjournment"
+            time_pattern = r'(?:\d{1,2}:\d{2}\s*[AP]M|Noon|Upon\s+.*?|1\/2\s+hr|\d+\s+Minutes?\s+after)'
+            time_match = re.search(time_pattern, line, re.IGNORECASE)
+
+            if time_match:
+                time_val = time_match.group(0)
                 
-                if not current_date_str: continue
+                # Clean the Committee Name
+                # Usually name is like: "9:00 AM Senate Finance"
+                remaining_text = line.replace(time_val, "").strip(' .:-')
+                
+                if "-" in remaining_text: remaining_text = remaining_text.split("-")[0]
+                if "Room" in remaining_text: remaining_text = remaining_text.split("Room")[0]
+                
+                comm_name_clean = normalize_text(remaining_text)
+                comm_name_clean = comm_name_clean.replace("senate", "").replace("house", "").replace("committee", "").strip()
 
-                # B. Detect Time (Regex)
-                # Look for "9:00 AM" or "Upon Adjournment"
-                time_pattern = r'(?:\d{1,2}:\d{2}\s*[AP]M|Noon|Upon\s+.*?|1\/2\s+hr|\d+\s+Minutes?\s+after)'
-                time_match = re.search(time_pattern, line, re.IGNORECASE)
-
-                if time_match:
-                    time_val = time_match.group(0)
-                    
-                    # Clean the Committee Name
-                    text_parts = line.split(time_val)
-                    # Usually the name is AFTER the time, but sometimes before.
-                    # We take the longest part that remains.
-                    remaining_text = max(text_parts, key=len).strip(' .:-')
-                    
-                    if "-" in remaining_text: remaining_text = remaining_text.split("-")[0]
-                    if "Room" in remaining_text: remaining_text = remaining_text.split("Room")[0]
-                    
-                    comm_name_clean = normalize_text(remaining_text)
-                    comm_name_clean = comm_name_clean.replace("senate", "").replace("house", "").replace("committee", "").strip()
-
-                    if len(comm_name_clean) < 4: continue
-                    
-                    key = (current_date_str, comm_name_clean)
-                    if key not in schedule_map:
-                        schedule_map[key] = time_val
-                        count += 1
-                        debug_log.append(f"   ✅ {comm_name_clean} -> {time_val}")
+                if len(comm_name_clean) < 4: continue
+                
+                key = (current_date_str, comm_name_clean)
+                if key not in schedule_map:
+                    schedule_map[key] = time_val
+                    count += 1
+                    # Only log the first few matches to keep debug clean
+                    if count < 5: debug_log.append(f"   ✅ {comm_name_clean} -> {time_val}")
 
     except Exception as e:
         debug_log.append(f"❌ Critical Error: {str(e)}")
-        # If failed, log the raw HTML snippet to see what we got
-        if 'final_html' in locals():
-            debug_log.append(f"📄 Page Source Preview: {final_html[:200]}")
 
     st.session_state['debug_data'] = {
         "map_keys": list(schedule_map.keys()),
