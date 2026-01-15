@@ -63,32 +63,29 @@ def normalize_text(text):
     text = text.replace('&', 'and').replace('.', '').replace(',', '')
     return " ".join(text.split())
 
-# --- CELL-SMART SCRAPER ---
+# --- NEW: DUAL-MODE SCRAPER ---
 @st.cache_data(ttl=600)
 def fetch_schedule_from_web():
     schedule_map = {}
     debug_log = [] 
-    
-    # Updated to ensure we hit the exact URLs you provided
-    targets = [
-        ("https://virginiageneralassembly.gov/house/schedule/schedule.php", "House Portal"),
-        ("https://apps.senate.virginia.gov/Senator/ComMeetings.php", "Senate Portal")
-    ]
-    
     headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'}
+
+    targets = [
+        ("https://apps.senate.virginia.gov/Senator/ComMeetings.php", "Senate"),
+        ("https://virginiageneralassembly.gov/house/schedule/schedule.php", "House")
+    ]
 
     for url, label in targets:
         try:
-            debug_log.append(f"🔄 Connecting to: {label}")
-            response = requests.get(url, headers=headers, timeout=10)
+            debug_log.append(f"🔄 {label}: {url}")
+            response = requests.get(url, headers=headers, timeout=5)
             soup = BeautifulSoup(response.text, 'html.parser')
             
-            # Senate uses basic lines, House uses tables/cards. We stream text to handle both.
+            # Senate & House text stream extraction
             all_text = soup.get_text("\n", strip=True)
             lines = all_text.splitlines()
             
             debug_log.append(f"   📄 Extracted {len(lines)} lines.")
-            
             current_date_str = None
             
             for i, line in enumerate(lines):
@@ -111,27 +108,22 @@ def fetch_schedule_from_web():
                 if not current_date_str: continue
 
                 # B. TIME TRIGGER
-                # Flexible match for times like "9:00 AM" or "Noon"
                 time_pattern = r'(\d{1,2}:\d{2}\s*?[aApP]\.?[mM]\.?|Noon|Upon\s+.*?|1\/2\s+hr|\d+\s+min)'
                 time_match = re.search(time_pattern, line, re.IGNORECASE)
                 
                 if time_match:
                     time_val = time_match.group(0)
                     
-                    # C. FIND COMMITTEE NAME
-                    # 1. Check Previous Line (Senate Style)
+                    # C. FIND COMMITTEE NAME (Check Prev Line then Current Line)
                     candidate_name = ""
                     if i > 0:
-                        prev_line = lines[i-1]
-                        if len(prev_line) > 4 and "Agenda" not in prev_line:
-                            candidate_name = prev_line
+                        prev = lines[i-1].strip()
+                        if len(prev) > 4 and "Agenda" not in prev and "View" not in prev:
+                            candidate_name = prev
                     
-                    # 2. If Previous was empty, Check Current Line (House Style)
                     if len(candidate_name) < 4:
                         candidate_name = line.replace(time_val, "").strip(" -:")
 
-                    # 3. Clean and Save
-                    # Remove "New Meeting" buttons and junk
                     if "New Meeting" in candidate_name: continue
                     
                     clean_name = normalize_text(candidate_name)
@@ -143,9 +135,7 @@ def fetch_schedule_from_web():
                             schedule_map[key] = time_val
 
         except Exception as e:
-            debug_log.append(f"   ❌ Error: {str(e)}")
-
-    debug_log.append(f"✅ Total Meetings Found: {len(schedule_map)}")
+            debug_log.append(f"❌ {label} Error: {str(e)}")
 
     st.session_state['debug_data'] = {
         "map_keys": list(schedule_map.keys()),
@@ -166,25 +156,6 @@ def fetch_lis_data():
             data['bills'] = df
         else: data['bills'] = pd.DataFrame() 
     except: data['bills'] = pd.DataFrame()
-
-    calendar_dfs = []
-    for url, type_label in [(LIS_SUBDOCKET_CSV, "Subcommittee"), (LIS_DOCKET_CSV, "Committee"), (LIS_CALENDAR_CSV, "Floor")]:
-        try:
-            try: df = pd.read_csv(url, encoding='ISO-8859-1')
-            except: df = pd.read_csv(url.replace(".CSV", ".csv"), encoding='ISO-8859-1')
-            df.columns = df.columns.str.strip().str.lower().str.replace(' ', '_').str.replace('/', '_').str.replace('.', '')
-            col = next((c for c in df.columns if "bill" in c), None)
-            if col:
-                df['bill_clean'] = df[col].astype(str).str.upper().str.replace(" ", "").str.strip()
-                df['event_type'] = type_label
-                calendar_dfs.append(df)
-        except: pass
-
-    if calendar_dfs:
-        data['schedule'] = pd.concat(calendar_dfs, ignore_index=True)
-    else:
-        data['schedule'] = pd.DataFrame()
-
     return data
 
 def get_bill_data_batch(bill_numbers, lis_df):
@@ -460,27 +431,22 @@ if bills_to_track:
                 st.markdown("#### ❌ Failed")
                 render_master_list_item(dead)
 
-    # --- TAB 3: UPCOMING (HYBRID + STRICT FILTERING) ---
+    # --- TAB 3: UPCOMING (REWRITTEN: SCRAPER DRIVEN) ---
     with tab_upcoming:
         st.subheader("📅 Your Weekly Calendar")
-        full_schedule = lis_data.get('schedule', pd.DataFrame())
-
-        if not full_schedule.empty:
-            date_col = next((c for c in full_schedule.columns if "date" in c), None)
-            if date_col:
-                full_schedule['dt'] = pd.to_datetime(full_schedule[date_col], errors='coerce')
-            else:
-                full_schedule['dt'] = pd.NaT
-
-        # --- THE BRAIN: Maps from Master List ---
-        bill_to_comm_map = final_df.set_index('Bill Number')['Current_Committee'].to_dict()
-        bill_to_sub_map = final_df.set_index('Bill Number')['Current_Sub'].to_dict()
-        bill_to_status_map = final_df.set_index('Bill Number')['Status'].to_dict()
+        
+        # We NO LONGER rely on 'full_schedule' CSV because it's empty/broken for 2026.
+        # Instead, we iterate the Next 7 Days and check the SCRAPER MAP.
 
         today = datetime.now().date()
         cols = st.columns(7)
         my_bills = [b.upper() for b in bills_to_track]
         
+        # Helper: Brain Dictionary
+        bill_to_comm_map = final_df.set_index('Bill Number')['Current_Committee'].to_dict()
+        bill_to_sub_map = final_df.set_index('Bill Number')['Current_Sub'].to_dict()
+        bill_to_status_map = final_df.set_index('Bill Number')['Status'].to_dict()
+
         for i in range(7):
             target_date = today + timedelta(days=i)
             target_date_str = target_date.strftime('%Y-%m-%d')
@@ -490,132 +456,56 @@ if bills_to_track:
                 st.markdown(f"**{display_date_str}**")
                 st.divider()
                 
-                # Filter schedule for this specific date
-                if not full_schedule.empty and 'dt' in full_schedule.columns:
-                    todays_schedule = full_schedule[full_schedule['dt'].dt.date == target_date]
-                    
-                    if not todays_schedule.empty:
-                        bills_found_today = False
+                # Check if we have ANY scraped meetings for this date
+                # web_schedule_map keys are (Date, CommitteeName)
+                
+                todays_meetings = {k[1]: v for k, v in web_schedule_map.items() if k[0] == target_date_str}
+                
+                bills_found_today = False
+                
+                if todays_meetings:
+                    for bill in my_bills:
+                        # 1. Get Bill Info
+                        raw_comm = bill_to_comm_map.get(bill, '')
+                        raw_sub = bill_to_sub_map.get(bill, '')
                         
-                        for bill in my_bills:
-                            # 1. Get "Brain" Data & Normalize
-                            raw_master_comm = bill_to_comm_map.get(bill, '')
-                            master_comm_clean = normalize_text(raw_master_comm) # e.g. "privileges and elections"
+                        clean_comm = normalize_text(raw_comm).replace("committee", "").strip()
+                        clean_sub = normalize_text(raw_sub).replace("subcommittee", "").replace("sub", "").strip()
+                        
+                        # 2. Check for Match in Today's Meetings
+                        match_time = None
+                        match_comm_name = None
+                        
+                        for scraper_comm, scraper_time in todays_meetings.items():
+                            # MATCH LOGIC:
+                            # A. Sub Match (Strongest)
+                            if len(clean_sub) > 3 and (clean_sub in scraper_comm or scraper_comm in clean_sub):
+                                match_time = scraper_time
+                                match_comm_name = scraper_comm
+                                break
                             
-                            master_status = bill_to_status_map.get(bill, '')
-                            master_sub = bill_to_sub_map.get(bill, '')
-
-                            is_senate_bill = bill.startswith('S')
-                            is_house_bill = bill.startswith('H')
-
-                            # 2. Matching Logic
-                            # Match A: Explicit (Bill Number is in the text)
-                            match_explicit = todays_schedule[todays_schedule['bill_clean'] == bill]
+                            # B. Main Committee Match (Weaker, check overlap)
+                            # Only if scraper_comm is generic enough or matches well
+                            tokens_bill = set(clean_comm.split())
+                            tokens_scraper = set(scraper_comm.split())
+                            ignore = {'and', 'the', 'of', 'committee', 'subcommittee', 'sub', 'house', 'senate'}
+                            tokens_bill = {t for t in tokens_bill if t not in ignore}
+                            tokens_scraper = {t for t in tokens_scraper if t not in ignore}
                             
-                            # Match B: Implicit (Committee Name Scan) - NOW STRICTER
-                            match_implicit = pd.DataFrame()
-                            
-                            # STOPWORD FILTER: Don't match if the committee is just "Committee" or "House"
-                            stopwords = ['committee', 'house', 'senate', 'pending', '-', '']
-                            is_valid_comm_name = (master_comm_clean not in stopwords) and (len(master_comm_clean) > 4)
-                            
-                            if is_valid_comm_name:
-                                match_implicit = todays_schedule[
-                                    todays_schedule.apply(lambda r: master_comm_clean in normalize_text(str(r.values)), axis=1)
-                                ]
-                                
-                                # Safety Check (House vs Senate)
-                                if not match_implicit.empty:
-                                    def is_safe_match(row_values):
-                                        row_text = normalize_text(str(row_values))
-                                        if is_senate_bill and 'house' in row_text and 'joint' not in row_text: return False
-                                        if is_house_bill and 'senate' in row_text and 'joint' not in row_text: return False
-                                        return True
-                                    
-                                    match_implicit = match_implicit[
-                                        match_implicit.apply(lambda r: is_safe_match(r.values), axis=1)
-                                    ]
-                            
-                            final_matches = pd.concat([match_explicit, match_implicit]).drop_duplicates()
-                            
-                            if not final_matches.empty:
-                                bills_found_today = True
-                                row = final_matches.iloc[0]
-                                
-                                st.error(f"**{bill}**")
-                                
-                                # Header (Prefer Master List Committee, Fallback to Schedule Row)
-                                header = "Committee"
-                                if is_valid_comm_name:
-                                    header = raw_master_comm.title()
-                                else:
-                                    # Fallback: Scrape it from the schedule row if Master List is generic
-                                    comm_col = next((c for c in row.index if 'committee' in c and 'sub' not in c), None)
-                                    if comm_col: header = str(row[comm_col]).title()
+                            if len(tokens_bill) > 0 and tokens_bill.issubset(tokens_scraper):
+                                match_time = scraper_time
+                                match_comm_name = scraper_comm
+                                break
+                        
+                        if match_time:
+                            bills_found_today = True
+                            st.error(f"**{bill}**")
+                            st.write(f"🏛️ **{match_comm_name.title()}**")
+                            if raw_sub and raw_sub != '-': st.caption(f"↳ {raw_sub}")
+                            st.caption(f"⏰ {match_time}")
+                            st.divider()
 
-                                st.write(f"🏛️ **{header}**")
-                                
-                                if master_sub and master_sub != '-':
-                                    st.caption(f"↳ {master_sub}")
-
-                                if master_status:
-                                    st.caption(f"ℹ️ {master_status}")
-
-                                # --- 3. TIME LOOKUP (UPDATED) ---
-                                time_found = "TBD"
-                                
-                                # Clean the CSV committee name
-                                lookup_comm = normalize_text(raw_master_comm)
-                                lookup_comm = lookup_comm.replace("senate", "").replace("house", "").replace("committee", "").strip()
-                                
-                                # Clean the CSV subcommittee name (NEW)
-                                lookup_sub = normalize_text(master_sub)
-                                lookup_sub = lookup_sub.replace("subcommittee", "").replace("sub", "").strip()
-
-                                # Try to find a match in the scraped data
-                                for key, t_val in web_schedule_map.items():
-                                    k_date, k_comm = key
-                                    
-                                    if k_date == target_date_str:
-                                        # Match 1: Main Committee
-                                        if lookup_comm == k_comm:
-                                            time_found = t_val
-                                            break
-                                        elif len(lookup_comm) > 3 and (lookup_comm in k_comm or k_comm in lookup_comm):
-                                            time_found = t_val
-                                            break
-                                        
-                                        # Match 2: Subcommittee (The Magic Fix)
-                                        if len(lookup_sub) > 3 and (lookup_sub in k_comm or k_comm in lookup_sub):
-                                            time_found = t_val
-                                            break
-                                        
-                                        # Match 3: Token Overlap (Fall back)
-                                        tokens_bill = set(lookup_comm.split())
-                                        tokens_scraper = set(k_comm.split())
-                                        ignore = {'and', 'the', 'of', 'committee', 'subcommittee', 'sub'}
-                                        tokens_bill = {t for t in tokens_bill if t not in ignore}
-                                        tokens_scraper = {t for t in tokens_scraper if t not in ignore}
-                                        
-                                        if len(tokens_bill) > 0 and tokens_bill.issubset(tokens_scraper):
-                                            time_found = t_val
-                                            break
-                                
-                                # Fallback: Text Search in Schedule Row if Lookup Failed
-                                if time_found == "TBD":
-                                    row_text = " ".join([str(val) for val in row.values])
-                                    time_pattern = r'(?:(?:\d+|one|two|half)\s*(?:hr|hour|min|minute)s?\s+)?(?:after|upon|before|until)\s+(?:.*?)?(?:adjourn|recess|conven|call)|(?:\d{1,2}:\d{2}\s?(?:[ap]\.?m\.?|noon))'
-                                    t_match = re.search(time_pattern, row_text, re.IGNORECASE)
-                                    if t_match: time_found = t_match.group(0).strip()
-
-                                st.caption(f"⏰ {time_found}")
-                                st.divider()
-
-                        if not bills_found_today:
-                            st.caption("-")
-                    else:
-                        st.caption("-")
-                else:
+                if not bills_found_today:
                     st.caption("-")
 
 # --- DEV DEBUGGER ---
