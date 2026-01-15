@@ -63,17 +63,17 @@ def normalize_text(text):
     text = text.replace('&', 'and').replace('.', '').replace(',', '')
     return " ".join(text.split())
 
-# --- NEW: UNIVERSAL TEXT-STREAM SCRAPER ---
+# --- NEW: FINAL "FLEXIBLE" SCRAPER ---
 @st.cache_data(ttl=600)
 def fetch_schedule_from_web():
     """
-    Scrapes House and Senate portals by treating the page as a stream of text.
-    Finds Date -> Finds Time -> Grabs Next Line as Committee Name.
+    Scrapes House and Senate portals. 
+    Uses flexible regex to find times anywhere in the line.
+    Handles multi-line layouts (Time on line 1, Name on line 2).
     """
     schedule_map = {}
     debug_log = [] 
     
-    # 1. Official Portal URLs (House & Senate)
     targets = [
         ("https://virginiageneralassembly.gov/house/schedule/schedule.php", "House Portal"),
         ("https://apps.senate.virginia.gov/Senator/ComMeetings.php", "Senate Portal")
@@ -87,16 +87,14 @@ def fetch_schedule_from_web():
             response = requests.get(url, headers=headers, timeout=10)
             soup = BeautifulSoup(response.text, 'html.parser')
             
-            # Get text separated by newlines to preserve structure
-            # This flattens divs, spans, and table cells into a single list of strings
+            # Get clean text lines (preserving structure)
             all_text = soup.get_text("\n", strip=True)
             lines = all_text.splitlines()
             
-            debug_log.append(f"   📄 Extracted {len(lines)} lines of text.")
+            debug_log.append(f"   📄 Extracted {len(lines)} lines.")
             
             current_date_str = None
             
-            # We iterate through the lines looking for triggers
             for i, line in enumerate(lines):
                 line = line.strip()
                 if len(line) < 3: continue
@@ -112,47 +110,48 @@ def fetch_schedule_from_web():
                             except: dt = datetime.strptime(dt_str, "%B %d, %Y")
                             
                             current_date_str = dt.strftime("%Y-%m-%d")
-                            debug_log.append(f"      🗓️ Date Switch: {current_date_str}")
+                            # debug_log.append(f"      🗓️ Date Switch: {current_date_str}")
                             continue
                     except: pass
                 
                 if not current_date_str: continue
 
-                # B. TIME TRIGGER
-                # Looks for: "9:00 a.m.", "9:00 AM", "Noon", "1/2 hr after"
-                # We want a strict start to avoid matching dates or other numbers
-                time_pattern = r'^(?:(\d{1,2}:\d{2}\s*?[aApP]\.?[mM]\.?)|Noon|Upon\s+.*?|1\/2\s+hr|\d+\s+min)'
+                # B. TIME TRIGGER (FLEXIBLE)
+                # Matches: "9:00 AM", "  9:00 a.m.", "Noon", "1/2 hr after"
+                # Removed '^' anchor so it matches indented text
+                time_pattern = r'(\d{1,2}:\d{2}\s*?[aApP]\.?[mM]\.?|Noon|Upon\s+.*?|1\/2\s+hr|\d+\s+min)'
                 time_match = re.search(time_pattern, line, re.IGNORECASE)
                 
                 if time_match:
                     time_val = time_match.group(0)
                     
-                    # C. COMMITTEE NAME EXTRACTION
-                    # Strategy 1: Is the name on the SAME line? (e.g. "9:00 AM Senate Finance")
+                    # C. FIND COMMITTEE NAME
+                    # Strategy 1: Check same line
                     remaining = line.replace(time_val, "").strip(" -:")
                     
-                    # Strategy 2: If the line ends with the time, the name is likely on the NEXT line.
-                    if len(remaining) < 3 and (i + 1) < len(lines):
+                    # Strategy 2: If line is mostly just the time, check NEXT line
+                    if len(remaining) < 4 and (i + 1) < len(lines):
                         next_line = lines[i+1].strip()
-                        if len(next_line) > 3:
+                        # Avoid merging if next line is another time or date
+                        if not re.search(time_pattern, next_line, re.IGNORECASE) and "2026" not in next_line:
                             remaining = next_line
                     
-                    # Cleanup
-                    if "Room" in remaining: remaining = remaining.split("Room")[0]
-                    if "Virtual" in remaining: remaining = remaining.split("Virtual")[0]
-                    if "Subcommittee" in remaining: remaining = remaining.split("Subcommittee")[0] # Optional: keep sub if you want
+                    # Cleanup Junk
+                    for junk in ["Room", "Virtual", "House Committee", "Senate Committee", "Meeting", "Subcommittee"]:
+                         if junk in remaining: remaining = remaining.split(junk)[0]
                     
                     comm_name_clean = normalize_text(remaining)
                     comm_name_clean = comm_name_clean.replace("senate", "").replace("house", "").replace("committee", "").strip()
                     
-                    # Save it
                     if len(comm_name_clean) > 3:
                         key = (current_date_str, comm_name_clean)
+                        
+                        # Debug first few matches
+                        if len(schedule_map) < 3:
+                             debug_log.append(f"         📍 Match: {comm_name_clean} @ {time_val}")
+                             
                         if key not in schedule_map:
                             schedule_map[key] = time_val
-                            # Log first 3 for validation
-                            if len(schedule_map) < 4:
-                                debug_log.append(f"         📍 Found: {comm_name_clean} @ {time_val}")
 
         except Exception as e:
             debug_log.append(f"   ❌ Error: {str(e)}")
