@@ -51,7 +51,6 @@ def clean_bill_id(bill_text):
 def determine_lifecycle(status_text, committee_name):
     """
     Revised Logic: Sticky Committee.
-    If it has a committee, keep it IN COMMITTEE unless it explicitly exits.
     """
     status = str(status_text).lower()
     comm = str(committee_name).strip()
@@ -69,19 +68,15 @@ def determine_lifecycle(status_text, committee_name):
         return "✍️ Awaiting Signature"
         
     # 4. Explicit Exit Keywords (Moved to Floor)
-    # Only if one of these is found do we consider it "Out"
     exit_keywords = ["reported", "passed", "agreed", "engrossed", "communicated", "reading waived", "read second", "read third"]
     if any(x in status for x in exit_keywords):
         return "📣 Out of Committee"
 
-    # 5. Sticky Committee (The Fix)
-    # If a committee is assigned, and we haven't seen an exit keyword, STAY HERE.
-    # This catches "Fiscal Impact", "Continued", "Referred", etc.
+    # 5. Sticky Committee
     if comm not in ["-", "nan", "None", ""] and len(comm) > 3:
         return "📥 In Committee"
 
     # 6. Default Fallback
-    # If no committee and no exit, it's likely Prefiled/Introduced -> In Committee
     return "📥 In Committee"
 
 def get_smart_subject(title):
@@ -250,7 +245,6 @@ def fetch_lis_data():
         else: data['history'] = pd.DataFrame()
     except: data['history'] = pd.DataFrame()
 
-    # (Note: CSV Calendar fetching removed here as we are using Web Scraper logic below)
     return data
 
 def get_bill_data_batch(bill_numbers, lis_data_dict):
@@ -403,27 +397,69 @@ def render_bill_card(row):
     st.caption(f"_{clean_status_text(row.get('Status'))}_")
     st.divider()
 
+# --- GROUPING LOGIC (UPDATED) ---
 def render_master_list_item(df):
-    if df.empty: st.caption("No bills."); return
-    for i, row in df.iterrows():
-        header_title = row['My Title'] if row['My Title'] != "-" else row.get('Official Title', '')
-        my_status = str(row.get('My Status', '')).strip()
-        label_text = f"{row['Bill Number']}"
-        if my_status and my_status != 'nan' and my_status != '-': label_text += f" - {my_status}"
-        if header_title: label_text += f" - {header_title}"
-        with st.expander(label_text):
-            st.markdown(f"**🏛️ Current Status:** {row.get('Display_Committee', '-')}")
-            if row.get('Current_Sub') and row.get('Current_Sub') != '-': st.markdown(f"**↳ Subcommittee:** {row.get('Current_Sub')}")
-            st.markdown(f"**📌 Designated Title:** {row.get('My Title', '-')}")
-            st.markdown(f"**📜 Official Title:** {row.get('Official Title', '-')}")
-            st.markdown(f"**🔄 Status:** {clean_status_text(row.get('Status', '-'))}")
-            hist_data = row.get('History_Data', [])
-            if isinstance(hist_data, list) and hist_data:
-                st.markdown("**📜 History:**")
-                st.dataframe(pd.DataFrame(hist_data), hide_index=True, use_container_width=True)
-            else: st.caption(f"Date: {row.get('Date', '-')}")
-            lis_link = f"https://lis.virginia.gov/bill-details/20261/{row['Bill Number']}"
-            st.markdown(f"🔗 [View Official Bill on LIS]({lis_link})")
+    if df.empty:
+        st.caption("No bills.")
+        return
+
+    # 1. Prepare Data for Grouping
+    df['Current_Committee'] = df['Current_Committee'].fillna('-')
+    df['Current_Sub'] = df['Current_Sub'].fillna('-')
+
+    # 2. Get Sorted List of Unique Committees
+    unique_committees = sorted(df['Current_Committee'].unique())
+    if '-' in unique_committees:
+        unique_committees.remove('-')
+        unique_committees.append('-') # Move unassigned to end
+
+    # 3. Iterate Groups
+    for comm_name in unique_committees:
+        # COMMITTEE HEADER
+        if comm_name != '-':
+            st.markdown(f"##### 🏛️ {comm_name}")
+        else:
+            st.markdown(f"##### 📂 Unassigned / General")
+
+        # Filter for this committee
+        comm_df = df[df['Current_Committee'] == comm_name]
+
+        # Get Sorted Subcommittees
+        unique_subs = sorted(comm_df['Current_Sub'].unique())
+        if '-' in unique_subs:
+            unique_subs.remove('-')
+            unique_subs.insert(0, '-') # Put main committee first (no sub)
+
+        for sub_name in unique_subs:
+            # SUBCOMMITTEE HEADER
+            if sub_name != '-':
+                st.markdown(f"&nbsp;&nbsp;&nbsp;&nbsp;**↳ {sub_name}**") # Indent
+
+            # Filter for this subcommittee
+            sub_df = comm_df[comm_df['Current_Sub'] == sub_name]
+
+            # RENDER BILLS
+            for i, row in sub_df.iterrows():
+                header_title = row['My Title'] if row['My Title'] != "-" else row.get('Official Title', '')
+                my_status = str(row.get('My Status', '')).strip()
+                label_text = f"{row['Bill Number']}"
+                if my_status and my_status != 'nan' and my_status != '-': label_text += f" - {my_status}"
+                if header_title: label_text += f" - {header_title}"
+                
+                with st.expander(label_text):
+                    st.markdown(f"**🏛️ Current Status:** {row.get('Display_Committee', '-')}")
+                    if row.get('Current_Sub') and row.get('Current_Sub') != '-':
+                        st.markdown(f"**↳ Subcommittee:** {row.get('Current_Sub')}")
+                    st.markdown(f"**📌 Designated Title:** {row.get('My Title', '-')}")
+                    st.markdown(f"**📜 Official Title:** {row.get('Official Title', '-')}")
+                    st.markdown(f"**🔄 Status:** {clean_status_text(row.get('Status', '-'))}")
+                    hist_data = row.get('History_Data', [])
+                    if isinstance(hist_data, list) and hist_data:
+                        st.markdown("**📜 History:**")
+                        st.dataframe(pd.DataFrame(hist_data), hide_index=True, use_container_width=True)
+                    else: st.caption(f"Date: {row.get('Date', '-')}")
+                    lis_link = f"https://lis.virginia.gov/bill-details/20261/{row['Bill Number']}"
+                    st.markdown(f"🔗 [View Official Bill on LIS]({lis_link})")
 
 # --- MAIN APP ---
 st.title("🏛️ Virginia General Assembly Tracker")
