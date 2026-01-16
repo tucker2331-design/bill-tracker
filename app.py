@@ -115,10 +115,11 @@ def fetch_html_calendar():
                                     clean = clean_committee_name(f"{prefix} {raw}")
                                     if curr_date not in calendar_times: calendar_times[curr_date] = {}
                                     
-                                    # Normalize key
+                                    # CREATE FUZZY MATCH KEY
                                     key = clean.lower()
-                                    for w in ["committee", "house", "senate", "for", "of", "and", "&"]: key = key.replace(w, "")
-                                    key = " ".join(key.split())
+                                    for word in ["house", "senate", "committee", "for", "of", "and", "&"]:
+                                        key = key.replace(word, "")
+                                    key = " ".join(key.split()) 
                                     
                                     calendar_times[curr_date][key] = t_val 
         except: pass
@@ -239,8 +240,11 @@ def get_bill_data_batch(bill_numbers, lis_data_dict):
             d_date = d.get('meeting_date') or d.get('doc_date')
             d_comm_raw = str(d.get('committee_name', 'Unknown'))
             
-            # IF DOCKET HAS NO NAME (Unknown), USE CURRENT COMMITTEE
-            if d_comm_raw == 'Unknown' or d_comm_raw == 'nan':
+            # --- ZOMBIE FIX: If bill is out of committee, don't use old committee name ---
+            if lifecycle == "📣 Out of Committee" or lifecycle == "✅ Signed & Enacted":
+                d_comm_raw = "Floor Session / Chamber Action"
+            elif d_comm_raw == 'Unknown' or d_comm_raw == 'nan':
+                # Use current committee ONLY if bill is still in committee
                 d_comm_raw = curr_comm
 
             if d_date:
