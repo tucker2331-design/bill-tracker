@@ -17,10 +17,33 @@ SUBS_URL = f"https://docs.google.com/spreadsheets/d/{SHEET_ID}/gviz/tq?tqx=out:c
 LIS_BASE_URL = "https://lis.blob.core.windows.net/lisfiles/20261/"
 LIS_BILLS_CSV = LIS_BASE_URL + "BILLS.CSV"       
 LIS_HISTORY_CSV = LIS_BASE_URL + "HISTORY.CSV"
+DEFAULT_SESSION_ID = "261" # Fixed: Defined here to prevent NameError
 
 st.set_page_config(page_title="VA Bill Tracker 2026", layout="wide")
 
+# --- TOPIC CATEGORIES ---
+TOPIC_KEYWORDS = {
+    "🗳️ Elections & Democracy": ["election", "vote", "ballot", "campaign", "poll", "voter", "registrar", "districting", "suffrage"],
+    "🏗️ Housing & Property": ["rent", "landlord", "tenant", "housing", "lease", "property", "zoning", "eviction", "homeowner", "development", "residential"],
+    "✊ Labor & Workers Rights": ["wage", "salary", "worker", "employment", "labor", "union", "bargaining", "leave", "compensation", "workplace", "employee", "minimum", "overtime"],
+    "💰 Economy & Business": ["tax", "commerce", "business", "market", "consumer", "corporation", "finance", "budget", "economic", "trade"],
+    "🎓 Education": ["school", "education", "student", "university", "college", "teacher", "curriculum", "scholarship", "tuition", "board of education"],
+    "🚓 Public Safety & Law": ["firearm", "gun", "police", "crime", "penalty", "court", "judge", "enforcement", "prison", "arrest", "criminal", "justice"],
+    "🏥 Health & Healthcare": ["health", "medical", "hospital", "patient", "doctor", "insurance", "care", "mental", "pharmacy", "drug", "medicaid"],
+    "🌳 Environment & Energy": ["energy", "water", "pollution", "environment", "climate", "solar", "conservation", "waste", "carbon", "natural resources", "wind", "power", "electricity", "hydroelectric", "nuclear", "chesapeake", "bay", "river", "watershed"],
+    "🚗 Transportation": ["road", "highway", "vehicle", "driver", "license", "transit", "traffic", "transportation", "motor"],
+    "💻 Tech & Utilities": ["internet", "broadband", "data", "privacy", "utility", "cyber", "technology", "telecom", "artificial intelligence"],
+    "⚖️ Civil Rights": ["discrimination", "rights", "equity", "minority", "gender", "religious", "freedom", "speech"],
+}
+
 # --- HELPER FUNCTIONS ---
+
+def get_smart_subject(title):
+    # Moved up to prevent NameError
+    title_lower = str(title).lower()
+    for category, keywords in TOPIC_KEYWORDS.items():
+        if any(k in title_lower for k in keywords): return category
+    return "📂 Unassigned / General"
 
 def clean_bill_id(bill_text):
     if pd.isna(bill_text): return ""
@@ -84,10 +107,6 @@ def fetch_html_calendar():
         resp = requests.get(url, headers=headers, timeout=4)
         if resp.status_code == 200:
             soup = BeautifulSoup(resp.text, 'html.parser')
-            # House page usually lists dates as headers (e.g. "Friday, January 16, 2026")
-            # We look for rows. This is highly specific to their current layout.
-            
-            # Simple Text Parser Strategy (More robust against layout changes)
             lines = [line.strip() for line in soup.get_text("\n", strip=True).splitlines() if line.strip()]
             
             current_date_str = None
@@ -95,19 +114,17 @@ def fetch_html_calendar():
                 # Detect Date
                 if "JANUARY" in line.upper() or "FEBRUARY" in line.upper():
                     try:
-                        # cleanup "Friday, January 16, 2026"
                         clean_d = line.split("–")[0].split("-")[0].strip()
                         if "2026" not in clean_d: clean_d += ", 2026"
                         dt = datetime.strptime(clean_d, "%A, %B %d, %Y")
                         current_date_str = dt.strftime("%Y-%m-%d")
                     except: pass
                 
-                # Detect Time (Start of a meeting entry)
+                # Detect Time
                 if current_date_str:
                     time_match = re.search(r'^\d{1,2}:\d{2}\s*[AP]M', line)
                     if time_match:
                         mtg_time = time_match.group(0)
-                        # The committee name is usually the PREVIOUS line
                         if i > 0:
                             raw_name = lines[i-1]
                             if "Agenda" not in raw_name and "Meeting" not in raw_name:
@@ -132,21 +149,15 @@ def fetch_html_calendar():
             soup = BeautifulSoup(resp.text, 'html.parser')
             lines = [line.strip() for line in soup.get_text("\n", strip=True).splitlines() if line.strip()]
             
-            # Senate layout is usually: Committee Name (Line 1) -> Date/Time (Line 2)
             for i, line in enumerate(lines):
                 if "2026" in line and ("AM" in line or "PM" in line):
                     try:
-                        # Line looks like: "Friday, January 16, 2026 8:00 AM" or similar
-                        # Split date and time
                         parts = line.split("2026")
                         if len(parts) > 1:
                             date_part = parts[0] + "2026"
                             time_part = parts[1].strip()
-                            
                             dt = datetime.strptime(date_part.strip(), "%A, %B %d, %Y")
                             d_str = dt.strftime("%Y-%m-%d")
-                            
-                            # Committee is likely the line before
                             if i > 0:
                                 raw_name = lines[i-1]
                                 if "Cancelled" not in raw_name:
@@ -164,33 +175,31 @@ def fetch_html_calendar():
 
     return calendar_data, debug_log
 
-# --- DATA FETCHING (CSV for Status/History) ---
+# --- DATA FETCHING ---
 @st.cache_data(ttl=300) 
 def fetch_lis_data():
     data = {}
-    est = pytz.timezone('US/Eastern')
-    data['fetch_time'] = datetime.now(est).strftime("%I:%M %p EST")
+    try:
+        try: df = pd.read_csv(LIS_BILLS_CSV, encoding='ISO-8859-1')
+        except: df = pd.read_csv(LIS_BILLS_CSV.replace(".CSV", ".csv"), encoding='ISO-8859-1')
+        df.columns = df.columns.str.strip().str.lower().str.replace(' ', '_').str.replace('/', '_').str.replace('.', '')
+        if 'bill_id' in df.columns: df['bill_clean'] = df['bill_id'].apply(clean_bill_id)
+        elif 'bill_number' in df.columns: df['bill_clean'] = df['bill_number'].apply(clean_bill_id)
+        data['bills'] = df
+    except: data['bills'] = pd.DataFrame()
 
-    def load_csv(url):
-        try:
-            df = pd.read_csv(url, encoding='ISO-8859-1', on_bad_lines='skip', low_memory=False)
-            df.columns = df.columns.str.strip().str.lower().str.replace(' ', '_').str.replace('/', '_').str.replace('.', '')
-            return df
-        except: return pd.DataFrame()
-
-    df_bills = load_csv(LIS_BILLS_CSV)
-    if not df_bills.empty:
-        col = 'bill_number' if 'bill_number' in df_bills.columns else 'bill_id'
-        if col in df_bills.columns:
-            df_bills['bill_clean'] = df_bills[col].astype(str).apply(clean_bill_id)
-            data['bills'] = df_bills
-    
-    df_hist = load_csv(LIS_HISTORY_CSV)
-    if not df_hist.empty:
-        col = 'bill_number' if 'bill_number' in df_hist.columns else 'bill_id'
-        if col in df_hist.columns:
-            df_hist['bill_clean'] = df_hist[col].astype(str).apply(clean_bill_id)
+    try:
+        try: df_hist = pd.read_csv(LIS_HISTORY_CSV, encoding='ISO-8859-1')
+        except: df_hist = pd.read_csv(LIS_HISTORY_CSV.replace(".CSV", ".csv"), encoding='ISO-8859-1')
+        df_hist.columns = df_hist.columns.str.strip().str.lower().str.replace(' ', '_').str.replace('/', '_').str.replace('.', '')
+        hist_bill_col = next((c for c in df_hist.columns if "bill_id" in c), None)
+        if not hist_bill_col: hist_bill_col = next((c for c in df_hist.columns if "number" in c), None)
+        if hist_bill_col:
+            df_hist['bill_clean'] = df_hist[hist_bill_col].apply(clean_bill_id)
             data['history'] = df_hist
+        else: data['history'] = pd.DataFrame()
+    except: data['history'] = pd.DataFrame()
+
     return data
 
 def get_bill_data_batch(bill_numbers, lis_data_dict):
@@ -198,11 +207,9 @@ def get_bill_data_batch(bill_numbers, lis_data_dict):
     history_df = lis_data_dict.get('history', pd.DataFrame())
     results = []
     clean_bills = list(set([clean_bill_id(b) for b in bill_numbers if str(b).strip() != 'nan']))
-    
     lis_lookup = {}
     if not lis_df.empty and 'bill_clean' in lis_df.columns:
         lis_lookup = lis_df.set_index('bill_clean').to_dict('index')
-
     history_lookup = {}
     if not history_df.empty and 'bill_clean' in history_df.columns:
         for b_id, group in history_df.groupby('bill_clean'):
@@ -210,7 +217,13 @@ def get_bill_data_batch(bill_numbers, lis_data_dict):
 
     for bill_num in clean_bills:
         item = lis_lookup.get(bill_num)
-        title = "Unknown"; status = "Not Found"; date_val = ""; curr_comm = "-"; curr_sub = "-"; history_data = []
+        title = "Unknown"
+        status = "Not Found"
+        date_val = ""
+        curr_comm = "-"
+        curr_sub = "-"
+        history_data = []
+
         if item:
             title = item.get('bill_description', 'No Title')
             status = item.get('last_house_action', '')
@@ -221,35 +234,47 @@ def get_bill_data_batch(bill_numbers, lis_data_dict):
         raw_history = history_lookup.get(bill_num, [])
         if raw_history:
             for h_row in raw_history:
-                desc = ""; date_h = ""
-                for col in ['history_description', 'description', 'action', 'history']:
-                    if col in h_row and pd.notna(h_row[col]): desc = str(h_row[col]); break
+                desc = ""
+                for col in ['history_description', 'description', 'action', 'history', 'event']:
+                    if col in h_row:
+                        desc = str(h_row[col]); break
+                date_h = ""
                 for col in ['history_date', 'date', 'action_date']:
-                    if col in h_row and pd.notna(h_row[col]): date_h = str(h_row[col]); break
+                    if col in h_row:
+                        date_h = str(h_row[col]); break
                 if desc:
                     history_data.append({"Date": date_h, "Action": desc})
                     desc_lower = desc.lower()
-                    if "referred to" in desc_lower:
-                        match = re.search(r'referred to (?:committee on|the committee on)?\s?([a-z\s&,]+)', desc_lower)
+                    if "referred to" in desc_lower and "committee" in desc_lower:
+                        match = re.search(r'(?:committee(?:\s+on)?)\s+([a-z\s&,]+)', desc_lower)
                         if match:
-                            found = match.group(1).strip().title()
-                            if len(found) > 3: curr_comm = found
+                            found_name = match.group(1).title().strip()
+                            if "Minutes" not in found_name: curr_comm = found_name
+                    elif "referred to" in desc_lower:
+                         match = re.search(r'referred to\s+([a-z\s&,]+)', desc_lower)
+                         if match:
+                             candidate = match.group(1).title().strip()
+                             candidate = candidate.replace("Committee On", "").replace("Committee", "").strip()
+                             if len(candidate) > 3 and "Minutes" not in candidate: curr_comm = candidate
                     if "sub:" in desc_lower:
                         try:
                             parts = desc_lower.split("sub:")
                             curr_sub = parts[1].strip().title()
                         except: pass
+        
         if curr_comm == "-":
             potential_cols = ['last_house_committee', 'last_senate_committee', 'house_committee', 'senate_committee']
             if item:
                 for col in potential_cols:
                     val = item.get(col)
-                    if pd.notna(val) and str(val).strip() not in ['nan', '', '-', '0']: curr_comm = str(val).strip(); break
+                    if pd.notna(val) and str(val).strip() not in ['nan', '', '-', '0']:
+                        curr_comm = str(val).strip(); break
+        
         curr_comm = clean_committee_name(curr_comm)
         if curr_comm and "Senate" not in curr_comm and "House" not in curr_comm:
              if bill_num.startswith("SB") or bill_num.startswith("SJ") or bill_num.startswith("SR"): curr_comm = f"Senate {curr_comm}"
              elif bill_num.startswith("HB") or bill_num.startswith("HJ") or bill_num.startswith("HR"): curr_comm = f"House {curr_comm}"
-        
+
         lifecycle = determine_lifecycle(str(status), str(curr_comm))
         display_comm = curr_comm
         if lifecycle == "📣 Out of Committee" or lifecycle == "✅ Signed & Enacted":
@@ -259,20 +284,73 @@ def get_bill_data_batch(bill_numbers, lis_data_dict):
              else: display_comm = "On Floor / Reported"
 
         results.append({
-            "Bill Number": bill_num, "Official Title": title, "Status": str(status), "Date": date_val, 
-            "Lifecycle": lifecycle, "Auto_Folder": get_smart_subject(title), "History_Data": history_data[::-1], 
-            "Current_Committee": str(curr_comm).strip(), "Display_Committee": str(display_comm).strip(), "Current_Sub": str(curr_sub).strip()
+            "Bill Number": bill_num,
+            "Official Title": title,
+            "Status": str(status),
+            "Date": date_val, 
+            "Lifecycle": lifecycle,
+            "Auto_Folder": get_smart_subject(title),
+            "History_Data": history_data[::-1], 
+            "Current_Committee": str(curr_comm).strip(), 
+            "Display_Committee": str(display_comm).strip(), 
+            "Current_Sub": str(curr_sub).strip()
         })
-    return pd.DataFrame(results) if results else pd.DataFrame()
+    if not results: return pd.DataFrame()
+    return pd.DataFrame(results)
+
+# --- ALERTS ---
+def check_and_broadcast(df_bills, df_subscribers, demo_mode):
+    st.sidebar.header("🤖 Slack Bot Status")
+    if demo_mode: st.sidebar.warning("🛠️ Demo Mode Active"); return
+    token = st.secrets.get("SLACK_BOT_TOKEN")
+    if not token: st.sidebar.error("❌ Disconnected (Token Missing)"); return
+    client = WebClient(token=token)
+    try:
+        subscriber_list = df_subscribers['Email'].dropna().unique().tolist()
+        if not subscriber_list: st.sidebar.warning("⚠️ No Subscribers Found"); return
+        user_id = client.users_lookupByEmail(email=subscriber_list[0].strip())['user']['id']
+        history = client.conversations_history(channel=client.conversations_open(users=[user_id])['channel']['id'], limit=100)
+        raw_history_text = "\n".join([m.get('text', '') for m in history['messages']])
+        history_text = raw_history_text.replace("&amp;", "&").replace("&lt;", "<").replace("&gt;", ">")
+        st.sidebar.success(f"✅ Connected to Slack")
+    except Exception as e: st.sidebar.error(f"❌ Slack Error: {e}"); return
+
+    report = f"🏛️ *VA LEGISLATIVE UPDATE* - {datetime.now().strftime('%m/%d')}\n_Latest changes detected:_\n"
+    updates_found = False
+    for i, row in df_bills.iterrows():
+        if "LIS Connection Error" in str(row.get('Status')): continue
+        b_num = str(row['Bill Number']).strip()
+        raw_status = str(row.get('Status', 'No Status')).strip()
+        clean_status = clean_status_text(raw_status)
+        if b_num in history_text and clean_status in history_text: continue
+        display_name = str(row.get('My Title', '-'))
+        if display_name == "-" or display_name == "nan" or not display_name:
+            official = str(row.get('Official Title', ''))
+            display_name = (official[:60] + '..') if len(official) > 60 else official
+        updates_found = True
+        report += f"\n⚪ *{b_num}* | {display_name}\n> _{clean_status}_\n"
+
+    if updates_found:
+        st.toast(f"📢 Sending updates to {len(subscriber_list)} people...")
+        for email in subscriber_list:
+            try:
+                uid = client.users_lookupByEmail(email=email.strip())['user']['id']
+                client.chat_postMessage(channel=uid, text=report)
+            except: pass
+        st.toast("✅ Sent!")
+        st.sidebar.info("🚀 New Update Sent!")
+    else: st.sidebar.info("💤 No new updates needed.")
 
 # --- UI COMPONENTS ---
 def render_bill_card(row):
-    display_title = row.get('Official Title', 'No Title')
-    if display_title in ["Unknown", "Error", "Not Found", None]: display_title = row.get('My Title', 'No Title')
+    if row.get('Official Title') not in ["Unknown", "Error", "Not Found", None]: display_title = row['Official Title']
+    else: display_title = row.get('My Title', 'No Title Provided')
     st.markdown(f"**{row['Bill Number']}**")
     my_status = str(row.get('My Status', '')).strip()
     if my_status and my_status != 'nan' and my_status != '-': st.info(f"🏷️ **Status:** {my_status}")
-    st.caption(f"{display_title}"); st.caption(f"_{clean_status_text(row.get('Status'))}_"); st.divider()
+    st.caption(f"{display_title}")
+    st.caption(f"_{clean_status_text(row.get('Status'))}_")
+    st.divider()
 
 def render_grouped_list_item(df):
     if df.empty: st.caption("No bills."); return
@@ -281,6 +359,7 @@ def render_grouped_list_item(df):
         if name in ['-', 'nan', 'None', '', '0']: return "Unassigned"
         if name == "House -": return "House - Unassigned"
         if name == "Senate -": return "Senate - Unassigned"
+        if name.endswith("-"): return name + " Unassigned"
         return name
     df['Display_Comm_Group'] = df['Current_Committee'].fillna('-').apply(rename_unassigned)
     df['Current_Sub'] = df['Current_Sub'].fillna('-')
@@ -315,7 +394,8 @@ def _render_single_bill_row(row):
         st.markdown(f"**🔄 Status:** {clean_status_text(row.get('Status', '-'))}")
         hist_data = row.get('History_Data', [])
         if isinstance(hist_data, list) and hist_data:
-            st.markdown("**📜 History:**"); st.dataframe(pd.DataFrame(hist_data), hide_index=True, use_container_width=True)
+            st.markdown("**📜 History:**")
+            st.dataframe(pd.DataFrame(hist_data), hide_index=True, use_container_width=True)
         else: st.caption(f"Date: {row.get('Date', '-')}")
         lis_link = f"https://lis.virginia.gov/bill-details/20261/{row['Bill Number']}"
         st.markdown(f"🔗 [View Official Bill on LIS]({lis_link})")
@@ -323,37 +403,43 @@ def _render_single_bill_row(row):
 # --- MAIN APP ---
 st.title("🏛️ Virginia General Assembly Tracker")
 est = pytz.timezone('US/Eastern')
+current_time_est = datetime.now(est).strftime("%I:%M %p EST")
+if 'last_run' not in st.session_state: st.session_state['last_run'] = current_time_est
 
 # --- SIDEBAR ---
 demo_mode = st.sidebar.checkbox("🛠️ Enable Demo Mode", value=False)
 col_btn, col_time = st.columns([1, 6])
 with col_btn:
-    if st.button("🔄 Check for Updates"): st.cache_data.clear(); st.rerun()
-
-lis_data = fetch_lis_data()
-fetch_time_display = lis_data.get('fetch_time', 'Unknown')
-with col_time: st.markdown(f"**Last Data Update:** `{fetch_time_display}`")
+    if st.button("🔄 Check for Updates"):
+        st.session_state['last_run'] = datetime.now(est).strftime("%I:%M %p EST")
+        st.cache_data.clear(); st.rerun()
+with col_time: st.markdown(f"**Last Refreshed:** `{st.session_state['last_run']}`")
 
 # 1. LOAD USER DATA
 try:
-    raw_df = pd.read_csv(BILLS_URL); raw_df.columns = raw_df.columns.str.strip()
+    raw_df = pd.read_csv(BILLS_URL)
+    raw_df.columns = raw_df.columns.str.strip()
     try: subs_df = pd.read_csv(SUBS_URL)
     except: subs_df = pd.DataFrame(columns=["Email"])
     cols_w = ['Bills Watching', 'Title (Watching)']
     if 'Status (Watching)' in raw_df.columns: cols_w.append('Status (Watching)')
     df_w = pd.DataFrame()
     if 'Bills Watching' in raw_df.columns:
-        df_w = raw_df[cols_w].copy(); new_cols = ['Bill Number', 'My Title']
+        df_w = raw_df[cols_w].copy()
+        new_cols = ['Bill Number', 'My Title']
         if 'Status (Watching)' in raw_df.columns: new_cols.append('My Status')
-        df_w.columns = new_cols; df_w['Type'] = 'Watching'
+        df_w.columns = new_cols
+        df_w['Type'] = 'Watching'
     df_i = pd.DataFrame()
     w_col_name = next((c for c in raw_df.columns if "Working On" in c and "Title" not in c and "Status" not in c), None)
     if w_col_name:
-        cols_i = [w_col_name]; title_work_col = next((c for c in raw_df.columns if "Title (Working)" in c), None)
+        cols_i = [w_col_name]
+        title_work_col = next((c for c in raw_df.columns if "Title (Working)" in c), None)
         if title_work_col: cols_i.append(title_work_col)
         status_work_col = next((c for c in raw_df.columns if "Status (Working)" in c), None)
         if status_work_col: cols_i.append(status_work_col)
-        df_i = raw_df[cols_i].copy(); i_new_cols = ['Bill Number']
+        df_i = raw_df[cols_i].copy()
+        i_new_cols = ['Bill Number']
         if title_work_col: i_new_cols.append('My Title')
         if status_work_col: i_new_cols.append('My Status')
         df_i.columns = i_new_cols
@@ -367,37 +453,58 @@ try:
     if 'My Status' not in sheet_df.columns: sheet_df['My Status'] = "-"
 except Exception as e: st.error(f"Sheet Error: {e}"); st.stop()
 
+# 2. FETCH LIS DATA
+lis_data = fetch_lis_data()
 bills_to_track = sheet_df['Bill Number'].unique().tolist()
 
-# --- RUN HTML SCRAPER ---
+# 2b. FETCH HTML CALENDAR
 html_calendar, scrape_logs = fetch_html_calendar()
 
 if bills_to_track:
     if demo_mode:
-        import random; mock_results = []
+        import random
+        mock_results = []
         for b in bills_to_track:
-            mock_results.append({"Bill Number": b, "Official Title": "[DEMO] Bill Title", "Status": "Referred to Commerce", "Lifecycle": "🚀 Active", "Auto_Folder": "💰 Economy & Business", "My Title": "Demo Title", "Date": "2026-01-14", "History_Data": [], "Current_Committee": "Commerce", "Current_Sub": "-", "My Status": "Demo Status"})
+            mock_results.append({
+                "Bill Number": b, "Official Title": "[DEMO] Bill Title", "Status": "Referred to Commerce",
+                "Lifecycle": "🚀 Active", "Auto_Folder": "💰 Economy & Business",
+                "My Title": "Demo Title", "Date": "2026-01-14",
+                "History_Data": [], "Current_Committee": "Commerce", "Current_Sub": "-", "My Status": "Demo Status"
+            })
         api_df = pd.DataFrame(mock_results)
-    else: api_df = get_bill_data_batch(bills_to_track, lis_data)
+    else:
+        api_df = get_bill_data_batch(bills_to_track, lis_data)
 
     final_df = pd.merge(sheet_df, api_df, on="Bill Number", how="left")
-    def assign_folder(row):
-        title_to_check = row.get('Official Title', ''); 
-        if str(title_to_check) in ["Unknown", "Error", "Not Found", "nan", "None", ""]: title_to_check = row.get('My Title', '')
-        return get_smart_subject(str(title_to_check))
-    if 'Auto_Folder' not in final_df.columns or final_df['Auto_Folder'].isnull().any(): final_df['Auto_Folder'] = final_df.apply(assign_folder, axis=1)
+    
+    if 'Auto_Folder' not in final_df.columns or final_df['Auto_Folder'].isnull().any():
+         final_df['Auto_Folder'] = final_df.apply(lambda row: get_smart_subject(row.get('Official Title', row.get('My Title', ''))), axis=1)
+
+    check_and_broadcast(final_df, subs_df, demo_mode)
 
     # 3. RENDER TABS
     tab_involved, tab_watching, tab_upcoming = st.tabs(["🚀 Directly Involved", "👀 Watching", "📅 Upcoming Hearings"])
+
     for tab, b_type in [(tab_involved, "Involved"), (tab_watching, "Watching")]:
         with tab:
-            subset = final_df[final_df['Type'] == b_type]; st.subheader("🗂️ Browse by Topic"); unique_folders = sorted(subset['Auto_Folder'].unique()); cols = st.columns(3)
+            subset = final_df[final_df['Type'] == b_type]
+            st.subheader("🗂️ Browse by Topic")
+            unique_folders = sorted(subset['Auto_Folder'].unique())
+            cols = st.columns(3)
             for i, folder in enumerate(unique_folders):
                 with cols[i % 3]:
                     bills_in_folder = subset[subset['Auto_Folder'] == folder]
                     with st.expander(f"{folder} ({len(bills_in_folder)})"):
                         for _, row in bills_in_folder.iterrows(): render_bill_card(row)
-            st.markdown("---"); st.subheader(f"📜 Master List ({b_type})"); in_comm = subset[subset['Lifecycle'] == "📥 In Committee"]; out_comm = subset[subset['Lifecycle'] == "📣 Out of Committee"]; passed = subset[subset['Lifecycle'].isin(["✅ Signed & Enacted", "✍️ Awaiting Signature"])]; failed = subset[subset['Lifecycle'] == "❌ Dead / Tabled"]; m1, m2, m3, m4 = st.columns(4)
+            st.markdown("---")
+            st.subheader(f"📜 Master List ({b_type})")
+            
+            in_comm = subset[subset['Lifecycle'] == "📥 In Committee"]
+            out_comm = subset[subset['Lifecycle'] == "📣 Out of Committee"]
+            passed = subset[subset['Lifecycle'].isin(["✅ Signed & Enacted", "✍️ Awaiting Signature"])]
+            failed = subset[subset['Lifecycle'] == "❌ Dead / Tabled"]
+            
+            m1, m2, m3, m4 = st.columns(4)
             with m1: st.markdown("#### 📥 In Committee"); render_grouped_list_item(in_comm)
             with m2: st.markdown("#### 📣 Out of Committee"); render_simple_list_item(out_comm)
             with m3: st.markdown("#### 🎉 Passed"); render_simple_list_item(passed)
@@ -416,6 +523,7 @@ if bills_to_track:
             target_date = today + timedelta(days=i)
             target_date_str = target_date.strftime('%Y-%m-%d')
             display_date_str = target_date.strftime("%a %m/%d")
+            
             with cols[i]:
                 st.markdown(f"**{display_date_str}**")
                 st.divider()
@@ -428,7 +536,6 @@ if bills_to_track:
                     for m in meetings:
                         # Time Check (Skip past meetings)
                         try:
-                            # Parse time if possible (e.g. "8:00 AM")
                             t_str = m['Time'].split("(")[0].strip()
                             mtg_dt_str = f"{target_date_str} {t_str}"
                             mtg_dt = datetime.strptime(mtg_dt_str, "%Y-%m-%d %I:%M %p")
@@ -436,8 +543,7 @@ if bills_to_track:
                             if mtg_dt < current_dt: continue 
                         except: pass
 
-                        # FILTER: Only show committee if we have bills there?
-                        # Use fuzzy match on committee name
+                        # FILTER: Only show committee if we have bills there
                         comm_clean = m['Committee'].lower().replace("committee", "").strip()
                         
                         relevant_bills = []
@@ -453,10 +559,10 @@ if bills_to_track:
                             st.markdown(f"**{m['Committee']}**")
                             st.caption(f"⏰ {m['Time']}")
                             st.caption("⚠️ _Potential Hearing (Based on Committee)_")
-                            # Official Docket Link
-                            # Format: session=261, doc=DO+mmdd
+                            
+                            # GENERATE OFFICIAL LINK
                             mmdd = datetime.strptime(target_date_str, "%Y-%m-%d").strftime("%m%d")
-                            link = f"https://lis.virginia.gov/cgi-bin/legp604.exe?261+doc+DO{mmdd}"
+                            link = f"https://lis.virginia.gov/cgi-bin/legp604.exe?{DEFAULT_SESSION_ID}+doc+DO{mmdd}"
                             st.markdown(f"[📄 View Official Docket]({link})")
                             st.divider()
 
