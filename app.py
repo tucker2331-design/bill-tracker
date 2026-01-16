@@ -375,13 +375,19 @@ def render_bill_card(row):
     st.caption(f"_{clean_status_text(row.get('Status'))}_")
     st.divider()
 
-# --- GROUPING LOGIC (UPDATED: Rename & Sort Unassigned Last) ---
-def render_master_list_item(df):
+# --- RENDERERS ---
+
+def render_grouped_list_item(df):
+    """
+    Used ONLY for 'In Committee'.
+    Organizes by Committee -> Subcommittee.
+    Forces 'Unassigned' groups to the bottom.
+    """
     if df.empty:
         st.caption("No bills.")
         return
 
-    # 1. Prepare & Rename Logic
+    # 1. Prepare & Rename
     def rename_unassigned(name):
         name = str(name).strip()
         if name in ['-', 'nan', 'None', '', '0']: return "Unassigned"
@@ -393,55 +399,62 @@ def render_master_list_item(df):
     df['Display_Comm_Group'] = df['Current_Committee'].fillna('-').apply(rename_unassigned)
     df['Current_Sub'] = df['Current_Sub'].fillna('-')
 
-    # 2. Sort Groups (Active First, Unassigned Last)
+    # 2. Sort Groups (Active first, Unassigned last)
     def sort_key(name):
-        # Return tuple: (is_unassigned, name)
-        # False (0) comes before True (1)
-        is_unassigned = "Unassigned" in name
-        return (is_unassigned, name)
+        return ("Unassigned" in name, name) # False < True
 
     unique_committees = sorted(df['Display_Comm_Group'].unique(), key=sort_key)
 
-    # 3. Iterate
     for comm_name in unique_committees:
-        if "Unassigned" in comm_name:
-             st.markdown(f"##### 📂 {comm_name}")
-        else:
-             st.markdown(f"##### 🏛️ {comm_name}")
+        if "Unassigned" in comm_name: st.markdown(f"##### 📂 {comm_name}")
+        else: st.markdown(f"##### 🏛️ {comm_name}")
 
         comm_df = df[df['Display_Comm_Group'] == comm_name]
-
+        
+        # Sort Subcommittees
         unique_subs = sorted([s for s in comm_df['Current_Sub'].unique() if s != '-'])
-        if '-' in comm_df['Current_Sub'].unique():
-            unique_subs.insert(0, '-') 
+        if '-' in comm_df['Current_Sub'].unique(): unique_subs.insert(0, '-')
 
         for sub_name in unique_subs:
-            if sub_name != '-':
-                st.markdown(f"**↳ {sub_name}**") 
+            if sub_name != '-': st.markdown(f"**↳ {sub_name}**") 
 
             sub_df = comm_df[comm_df['Current_Sub'] == sub_name]
-
             for i, row in sub_df.iterrows():
-                header_title = row['My Title'] if row['My Title'] != "-" else row.get('Official Title', '')
-                my_status = str(row.get('My Status', '')).strip()
-                label_text = f"{row['Bill Number']}"
-                if my_status and my_status != 'nan' and my_status != '-': label_text += f" - {my_status}"
-                if header_title: label_text += f" - {header_title}"
-                
-                with st.expander(label_text):
-                    st.markdown(f"**🏛️ Current Status:** {row.get('Display_Committee', '-')}")
-                    if row.get('Current_Sub') and row.get('Current_Sub') != '-':
-                        st.markdown(f"**↳ Subcommittee:** {row.get('Current_Sub')}")
-                    st.markdown(f"**📌 Designated Title:** {row.get('My Title', '-')}")
-                    st.markdown(f"**📜 Official Title:** {row.get('Official Title', '-')}")
-                    st.markdown(f"**🔄 Status:** {clean_status_text(row.get('Status', '-'))}")
-                    hist_data = row.get('History_Data', [])
-                    if isinstance(hist_data, list) and hist_data:
-                        st.markdown("**📜 History:**")
-                        st.dataframe(pd.DataFrame(hist_data), hide_index=True, use_container_width=True)
-                    else: st.caption(f"Date: {row.get('Date', '-')}")
-                    lis_link = f"https://lis.virginia.gov/bill-details/20261/{row['Bill Number']}"
-                    st.markdown(f"🔗 [View Official Bill on LIS]({lis_link})")
+                _render_single_bill_row(row)
+
+def render_simple_list_item(df):
+    """
+    Used for 'Out of Committee', 'Passed', 'Failed'.
+    Just a flat list of bills.
+    """
+    if df.empty:
+        st.caption("No bills.")
+        return
+    for i, row in df.iterrows():
+        _render_single_bill_row(row)
+
+def _render_single_bill_row(row):
+    """Helper to render one expandable bill row"""
+    header_title = row['My Title'] if row['My Title'] != "-" else row.get('Official Title', '')
+    my_status = str(row.get('My Status', '')).strip()
+    label_text = f"{row['Bill Number']}"
+    if my_status and my_status != 'nan' and my_status != '-': label_text += f" - {my_status}"
+    if header_title: label_text += f" - {header_title}"
+    
+    with st.expander(label_text):
+        st.markdown(f"**🏛️ Current Status:** {row.get('Display_Committee', '-')}")
+        if row.get('Current_Sub') and row.get('Current_Sub') != '-':
+            st.markdown(f"**↳ Subcommittee:** {row.get('Current_Sub')}")
+        st.markdown(f"**📌 Designated Title:** {row.get('My Title', '-')}")
+        st.markdown(f"**📜 Official Title:** {row.get('Official Title', '-')}")
+        st.markdown(f"**🔄 Status:** {clean_status_text(row.get('Status', '-'))}")
+        hist_data = row.get('History_Data', [])
+        if isinstance(hist_data, list) and hist_data:
+            st.markdown("**📜 History:**")
+            st.dataframe(pd.DataFrame(hist_data), hide_index=True, use_container_width=True)
+        else: st.caption(f"Date: {row.get('Date', '-')}")
+        lis_link = f"https://lis.virginia.gov/bill-details/20261/{row['Bill Number']}"
+        st.markdown(f"🔗 [View Official Bill on LIS]({lis_link})")
 
 # --- MAIN APP ---
 st.title("🏛️ Virginia General Assembly Tracker")
@@ -550,10 +563,10 @@ if bills_to_track:
             failed = subset[subset['Lifecycle'] == "❌ Dead / Tabled"]
             
             m1, m2, m3, m4 = st.columns(4)
-            with m1: st.markdown("#### 📥 In Committee"); render_master_list_item(in_comm)
-            with m2: st.markdown("#### 📣 Out of Committee"); render_master_list_item(out_comm)
-            with m3: st.markdown("#### 🎉 Passed"); render_master_list_item(passed)
-            with m4: st.markdown("#### ❌ Failed"); render_master_list_item(failed)
+            with m1: st.markdown("#### 📥 In Committee"); render_grouped_list_item(in_comm)
+            with m2: st.markdown("#### 📣 Out of Committee"); render_simple_list_item(out_comm)
+            with m3: st.markdown("#### 🎉 Passed"); render_simple_list_item(passed)
+            with m4: st.markdown("#### ❌ Failed"); render_simple_list_item(failed)
 
     # --- TAB 3: CALENDAR (COMMITTEE MATCHING MODE) ---
     with tab_upcoming:
