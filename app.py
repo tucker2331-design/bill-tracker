@@ -42,48 +42,29 @@ TOPIC_KEYWORDS = {
 # --- HELPER FUNCTIONS ---
 
 def clean_bill_id(bill_text):
-    """Standardizes Bill IDs (e.g. 'HJ0001' -> 'HJ1')"""
     if pd.isna(bill_text): return ""
     clean = str(bill_text).upper().replace(" ", "").strip()
     clean = re.sub(r'^([A-Z]+)0+(\d+)$', r'\1\2', clean)
     return clean
 
 def determine_lifecycle(status_text, committee_name):
-    """
-    Revised Logic: Sticky Committee.
-    """
     status = str(status_text).lower()
     comm = str(committee_name).strip()
     
-    # 1. Final Stages
-    if any(x in status for x in ["signed by governor", "enacted", "approved by governor", "chapter"]):
-        return "✅ Signed & Enacted"
+    if any(x in status for x in ["signed by governor", "enacted", "approved by governor", "chapter"]): return "✅ Signed & Enacted"
+    if any(x in status for x in ["tabled", "failed", "stricken", "passed by indefinitely", "left in", "defeated", "no action taken", "incorporated into"]): return "❌ Dead / Tabled"
+    if any(x in status for x in ["enrolled", "communicated to governor", "bill text as passed"]): return "✍️ Awaiting Signature"
     
-    # 2. Dead
-    if any(x in status for x in ["tabled", "failed", "stricken", "passed by indefinitely", "left in", "defeated", "no action taken", "incorporated into"]):
-        return "❌ Dead / Tabled"
-    
-    # 3. Passed Legislature
-    if any(x in status for x in ["enrolled", "communicated to governor", "bill text as passed"]):
-        return "✍️ Awaiting Signature"
-        
-    # 4. Explicit Exit Keywords (Moved to Floor)
-    exit_keywords = ["reported", "passed", "agreed", "engrossed", "communicated", "reading waived", "read second", "read third"]
-    if any(x in status for x in exit_keywords):
-        return "📣 Out of Committee"
+    out_keywords = ["reported", "passed", "agreed", "engrossed", "communicated", "reading waived", "read second", "read third"]
+    if any(x in status for x in out_keywords): return "📣 Out of Committee"
 
-    # 5. Sticky Committee
-    if comm not in ["-", "nan", "None", ""] and len(comm) > 3:
-        return "📥 In Committee"
-
-    # 6. Default Fallback
+    if comm not in ["-", "nan", "None", ""] and len(comm) > 3: return "📥 In Committee"
     return "📥 In Committee"
 
 def get_smart_subject(title):
     title_lower = str(title).lower()
     for category, keywords in TOPIC_KEYWORDS.items():
-        if any(k in title_lower for k in keywords):
-            return category
+        if any(k in title_lower for k in keywords): return category
     return "📂 Unassigned / General"
 
 def clean_committee_name(name):
@@ -99,7 +80,6 @@ def clean_committee_name(name):
         "SFIN": "Senate Finance & Appropriations", "HFIN": "House Finance", "SEH": "Senate Education & Health",
         "CL": "Commerce & Labor", "SCL": "Senate Commerce & Labor", "HCL": "House Commerce & Labor"
     }
-    
     upper_name = name.upper()
     if upper_name in mapping: return mapping[upper_name]
     if name.lower() == "education": return "Education"
@@ -145,7 +125,6 @@ def fetch_schedule_from_web():
     debug_log = [] 
     headers = {'User-Agent': 'Mozilla/5.0'}
 
-    # SENATE
     try:
         url_senate = "https://apps.senate.virginia.gov/Senator/ComMeetings.php"
         resp = requests.get(url_senate, headers=headers, timeout=5)
@@ -176,7 +155,6 @@ def fetch_schedule_from_web():
                     except: pass
     except: pass
 
-    # HOUSE
     try:
         url_house = "https://house.vga.virginia.gov/schedule/meetings"
         resp = requests.get(url_house, headers=headers, timeout=5)
@@ -397,48 +375,37 @@ def render_bill_card(row):
     st.caption(f"_{clean_status_text(row.get('Status'))}_")
     st.divider()
 
-# --- GROUPING LOGIC (UPDATED) ---
+# --- GROUPING LOGIC (UPDATED WITH SUBHEADINGS & UNASSIGNED LAST) ---
 def render_master_list_item(df):
     if df.empty:
         st.caption("No bills.")
         return
 
-    # 1. Prepare Data for Grouping
     df['Current_Committee'] = df['Current_Committee'].fillna('-')
     df['Current_Sub'] = df['Current_Sub'].fillna('-')
 
-    # 2. Get Sorted List of Unique Committees
-    unique_committees = sorted(df['Current_Committee'].unique())
-    if '-' in unique_committees:
-        unique_committees.remove('-')
-        unique_committees.append('-') # Move unassigned to end
+    # Get sorted list of committees (Unassigned moved to last)
+    unique_committees = sorted([c for c in df['Current_Committee'].unique() if c != '-'])
+    if '-' in df['Current_Committee'].unique():
+        unique_committees.append('-') 
 
-    # 3. Iterate Groups
     for comm_name in unique_committees:
-        # COMMITTEE HEADER
-        if comm_name != '-':
-            st.markdown(f"##### 🏛️ {comm_name}")
-        else:
-            st.markdown(f"##### 📂 Unassigned / General")
+        if comm_name != '-': st.markdown(f"##### 🏛️ {comm_name}")
+        else: st.markdown(f"##### 📂 Unassigned / General")
 
-        # Filter for this committee
         comm_df = df[df['Current_Committee'] == comm_name]
 
-        # Get Sorted Subcommittees
-        unique_subs = sorted(comm_df['Current_Sub'].unique())
-        if '-' in unique_subs:
-            unique_subs.remove('-')
-            unique_subs.insert(0, '-') # Put main committee first (no sub)
+        # Sort Subcommittees (Main first, then subs alphabetically)
+        unique_subs = sorted([s for s in comm_df['Current_Sub'].unique() if s != '-'])
+        if '-' in comm_df['Current_Sub'].unique():
+            unique_subs.insert(0, '-') # Empty sub goes first
 
         for sub_name in unique_subs:
-            # SUBCOMMITTEE HEADER
             if sub_name != '-':
-                st.markdown(f"&nbsp;&nbsp;&nbsp;&nbsp;**↳ {sub_name}**") # Indent
+                st.markdown(f"**↳ {sub_name}**") # Subheading style
 
-            # Filter for this subcommittee
             sub_df = comm_df[comm_df['Current_Sub'] == sub_name]
 
-            # RENDER BILLS
             for i, row in sub_df.iterrows():
                 header_title = row['My Title'] if row['My Title'] != "-" else row.get('Official Title', '')
                 my_status = str(row.get('My Status', '')).strip()
