@@ -16,9 +16,8 @@ SUBS_URL = f"https://docs.google.com/spreadsheets/d/{SHEET_ID}/gviz/tq?tqx=out:c
 # --- VIRGINIA LIS API & DATA FEEDS ---
 LIS_API_KEY = "81D70A54-FCDC-4023-A00B-A3FD114D5984" 
 LIS_API_BASE = "https://lis.virginia.gov/api/v1"
-DEFAULT_SESSION_ID = "261" 
 
-# CSVs for Master List
+# CSVs for Master List (History/Status)
 LIS_BASE_URL = "https://lis.blob.core.windows.net/lisfiles/20261/"
 LIS_BILLS_CSV = LIS_BASE_URL + "BILLS.CSV"       
 LIS_HISTORY_CSV = LIS_BASE_URL + "HISTORY.CSV"
@@ -69,43 +68,36 @@ def get_smart_subject(title):
     return "📂 Unassigned / General"
 
 def clean_committee_name(name):
+    """
+    STRICT WHITELIST: Only allows known committee names.
+    Anything else (like "Rasoul" or "Hayes") is ignored.
+    """
     if not name or str(name).lower() == 'nan': return ""
-    name = str(name).strip()
+    upper = str(name).upper().strip()
     
-    # AGGRESSIVE CLEANING (Whitelist Approach)
-    # We map known keywords to clean names. If no keyword matches, we use the raw name but stripped.
-    
-    upper = name.upper()
-    
-    # 1. Direct Maps
-    mapping = {
-        "HED": "House Education", "HAPP": "House Appropriations", "FIN": "Senate Finance",
-        "JUD": "Courts of Justice", "GL": "General Laws", "AG": "Agriculture", "TRAN": "Transportation",
-        "P&E": "Privileges & Elections", "C&L": "Commerce & Labor", "HWI": "House Health, Welfare & Inst."
-    }
-    if upper in mapping: return mapping[upper]
-
-    # 2. Keyword Search (Prioritize strict matches)
-    if "APPROP" in upper: return "House Appropriations" if "HOUSE" in upper else "Senate Finance & Appropriations"
-    if "FINANCE" in upper: return "Senate Finance & Appropriations"
-    if "COMMERCE" in upper: return "Commerce & Labor"
-    if "LABOR" in upper: return "Commerce & Labor"
+    # 1. House Whitelist
+    if "PRIVILEGES" in upper and "ELECTIONS" in upper: return "House Privileges & Elections"
+    if "COURTS" in upper or "JUSTICE" in upper: return "House Courts of Justice" if "HOUSE" in upper else "Senate Courts of Justice"
     if "EDUCATION" in upper: return "House Education" if "HOUSE" in upper else "Senate Education & Health"
     if "HEALTH" in upper: return "House Health & Human Services" if "HOUSE" in upper else "Senate Education & Health"
-    if "COURTS" in upper: return "Courts of Justice"
-    if "JUSTICE" in upper: return "Courts of Justice"
-    if "GENERAL LAWS" in upper: return "General Laws"
-    if "TRANSPORTATION" in upper: return "Transportation"
+    if "GENERAL LAWS" in upper: return "House General Laws" if "HOUSE" in upper else "Senate General Laws"
+    if "TRANSPORTATION" in upper: return "House Transportation" if "HOUSE" in upper else "Senate Transportation"
+    if "APPROPRIATIONS" in upper: return "House Appropriations"
+    if "FINANCE" in upper: return "House Finance" if "HOUSE" in upper else "Senate Finance & Appropriations"
+    if "COUNTIES" in upper: return "House Counties, Cities & Towns"
+    if "LABOR" in upper or "COMMERCE" in upper: return "House Labor & Commerce" if "HOUSE" in upper else "Senate Commerce & Labor"
     if "PUBLIC SAFETY" in upper: return "House Public Safety"
-    if "LOCAL GOV" in upper: return "Local Government"
-    if "COUNTIES" in upper: return "Counties, Cities & Towns"
-    if "PRIVILEGES" in upper: return "Privileges & Elections"
-    if "AGRICULTURE" in upper: return "Agriculture, Chesapeake & Nat. Res."
-    if "RULES" in upper: return "Rules"
+    if "COMMUNICATIONS" in upper: return "House Communications & Technology"
+    if "AGRICULTURE" in upper: return "House Agriculture & Chesapeake" if "HOUSE" in upper else "Senate Agriculture"
+    if "RULES" in upper: return "House Rules" if "HOUSE" in upper else "Senate Rules"
+    if "LOCAL GOV" in upper: return "Senate Local Government"
+    if "REHAB" in upper: return "Senate Rehabilitation & Social Services"
 
-    # 3. Fallback: Strip known politician names manually if whitelist failed
-    clean = re.sub(r'\b(Simon|Rasoul|Willett|Helmer|Lucas|Surovell|Locke|Deeds|Favola|Marsden|Ebbin|McPike)\b', '', name, flags=re.IGNORECASE).strip()
-    return clean.title()
+    # If it's the Senate/House floor
+    if "FLOOR" in upper: return "Floor Session"
+
+    # Default: Clean capitalization, but warn it might be weird
+    return name.title()
 
 def clean_status_text(text):
     if not text: return ""
@@ -120,47 +112,95 @@ def clean_status_text(text):
         text = pattern.sub(full, text)
     return text
 
-# --- API FETCH ---
+# --- API AUTO-DISCOVERY FETCH ---
 @st.cache_data(ttl=300)
-def fetch_api_calendar(session_id):
+def fetch_api_calendar_discovery():
+    """
+    Tries multiple Session IDs to find the one that returns valid JSON.
+    Returns: (calendar_data, debug_log, successful_session_id)
+    """
     calendar_data = {}
     debug_log = []
+    
+    # LIST OF SESSION IDS TO TRY
+    # 20261 = Standard LIS ID
+    # 261 = Short ID
+    # 2026 = Year
+    # 26REG = Alternate format
+    candidates = ["20261", "261", "2026", "26REG"]
+    
     today = datetime.now()
     dates_to_check = [(today + timedelta(days=i)).strftime("%Y-%m-%d") for i in range(8)]
     
-    for date_str in dates_to_check:
+    successful_session = None
+
+    # Brute Force Search for Working ID
+    for session_id in candidates:
         try:
-            url = f"{LIS_API_BASE}/schedules/{session_id}/{date_str}"
-            headers = {"Auth-Token": LIS_API_KEY} 
-            params = {"key": LIS_API_KEY} 
-            resp = requests.get(url, headers=headers, params=params, timeout=4)
+            # Test with just TODAY'S date first to save time
+            test_date = dates_to_check[0]
+            url = f"{LIS_API_BASE}/schedules/{session_id}/{test_date}"
+            resp = requests.get(url, params={"key": LIS_API_KEY}, timeout=3)
+            
+            # If we get valid JSON (list or dict), this ID works!
             if resp.status_code == 200:
                 try:
-                    data = resp.json()
-                    day_events = []
-                    for meeting in data:
-                        chamber = meeting.get('ChamberCode', '')
-                        comm_name = meeting.get('CommitteeName', 'Unknown')
-                        if chamber == 'H' and "House" not in comm_name: comm_name = f"House {comm_name}"
-                        if chamber == 'S' and "Senate" not in comm_name: comm_name = f"Senate {comm_name}"
-                        mtg_time = meeting.get('MeetingTime', 'TBA')
-                        bills = []
-                        dockets = meeting.get('Dockets', [])
-                        if isinstance(dockets, list):
-                            for d in dockets:
-                                if isinstance(d, dict):
-                                    bn = d.get('BillNumber')
-                                    if bn: bills.append(clean_bill_id(bn))
-                                elif isinstance(d, str):
-                                    bills.append(clean_bill_id(d))
-                        day_events.append({"Committee": clean_committee_name(comm_name), "Time": mtg_time, "Bills": bills})
-                    if day_events: calendar_data[date_str] = day_events
-                except: debug_log.append(f"{date_str}: Not JSON")
-            else: debug_log.append(f"{date_str}: Failed ({resp.status_code})")
-        except Exception as e: debug_log.append(f"{date_str}: Error")
-    return calendar_data, debug_log
+                    test_json = resp.json()
+                    if isinstance(test_json, (list, dict)):
+                        successful_session = session_id
+                        debug_log.append(f"✅ FOUND VALID SESSION: {session_id}")
+                        break
+                except: pass
+        except: pass
+    
+    if not successful_session:
+        debug_log.append("❌ All Session IDs failed to return JSON.")
+        return {}, debug_log, None
 
-# --- SCRAPER FALLBACK ---
+    # Now fetch ALL dates with the winner
+    for date_str in dates_to_check:
+        try:
+            url = f"{LIS_API_BASE}/schedules/{successful_session}/{date_str}"
+            resp = requests.get(url, params={"key": LIS_API_KEY}, timeout=4)
+            
+            if resp.status_code == 200:
+                data = resp.json()
+                day_events = []
+                for meeting in data:
+                    chamber = meeting.get('ChamberCode', '')
+                    comm_name = meeting.get('CommitteeName', 'Unknown')
+                    
+                    # Force Chamber Label
+                    if chamber == 'H': comm_name = f"House {comm_name}"
+                    elif chamber == 'S': comm_name = f"Senate {comm_name}"
+                    
+                    mtg_time = meeting.get('MeetingTime', 'TBA')
+                    
+                    bills = []
+                    dockets = meeting.get('Dockets', [])
+                    if isinstance(dockets, list):
+                        for d in dockets:
+                            if isinstance(d, dict):
+                                bn = d.get('BillNumber')
+                                if bn: bills.append(clean_bill_id(bn))
+                            elif isinstance(d, str):
+                                bills.append(clean_bill_id(d))
+                    
+                    day_events.append({
+                        "Committee": clean_committee_name(comm_name),
+                        "Time": mtg_time,
+                        "Bills": bills,
+                        "Source": "API"
+                    })
+                
+                if day_events:
+                    calendar_data[date_str] = day_events
+        except Exception as e:
+            debug_log.append(f"{date_str}: Error {e}")
+            
+    return calendar_data, debug_log, successful_session
+
+# --- SCRAPER FALLBACK (FOR MEETINGS ONLY) ---
 @st.cache_data(ttl=600)
 def fetch_schedule_from_web_safe():
     schedule_map = {}
@@ -168,7 +208,7 @@ def fetch_schedule_from_web_safe():
         from bs4 import BeautifulSoup 
         headers = {'User-Agent': 'Mozilla/5.0'}
         
-        # HOUSE SCRAPER
+        # HOUSE
         try:
             resp = requests.get("https://house.vga.virginia.gov/schedule/meetings", headers=headers, timeout=3)
             soup = BeautifulSoup(resp.text, 'html.parser')
@@ -183,11 +223,12 @@ def fetch_schedule_from_web_safe():
                 if current_date and re.search(r'^\d{1,2}:\d{2}\s*[AP]M', line):
                     if i > 0:
                         raw_name = lines[i-1]
+                        # Use strict cleaner
                         comm = f"House {raw_name}"
                         schedule_map[(current_date, comm.lower())] = (line, comm)
         except: pass
 
-        # SENATE SCRAPER
+        # SENATE
         try:
             resp = requests.get("https://apps.senate.virginia.gov/Senator/ComMeetings.php", headers=headers, timeout=3)
             soup = BeautifulSoup(resp.text, 'html.parser')
@@ -402,7 +443,6 @@ with col_btn:
 lis_data = fetch_lis_data()
 fetch_time_display = lis_data.get('fetch_time', 'Unknown')
 with col_time: st.markdown(f"**Last Data Update:** `{fetch_time_display}`")
-session_input = st.sidebar.text_input("LIS Session ID", value=DEFAULT_SESSION_ID)
 
 # 1. LOAD USER DATA
 try:
@@ -438,8 +478,15 @@ try:
 except Exception as e: st.error(f"Sheet Error: {e}"); st.stop()
 
 bills_to_track = sheet_df['Bill Number'].unique().tolist()
-api_calendar_data, api_log = fetch_api_calendar(session_input)
+
+# --- HYBRID FETCH LOGIC (AUTO-DISCOVERY) ---
+api_calendar_data, api_log, active_session_id = fetch_api_calendar_discovery()
 web_schedule_map = fetch_schedule_from_web_safe()
+
+if active_session_id:
+    st.sidebar.success(f"✅ Connected to API (Session {active_session_id})")
+else:
+    st.sidebar.warning("⚠️ API Failed (Using Backup Scraper)")
 
 if bills_to_track:
     if demo_mode:
@@ -450,16 +497,12 @@ if bills_to_track:
     else: api_df = get_bill_data_batch(bills_to_track, lis_data)
 
     final_df = pd.merge(sheet_df, api_df, on="Bill Number", how="left")
-    
-    # FIXED SYNTAX ERROR HERE
     def assign_folder(row):
-        title_to_check = row.get('Official Title', '')
-        if str(title_to_check) in ["Unknown", "Error", "Not Found", "nan", "None", ""]: 
-            title_to_check = row.get('My Title', '')
+        title_to_check = row.get('Official Title', ''); 
+        if str(title_to_check) in ["Unknown", "Error", "Not Found", "nan", "None", ""]: title_to_check = row.get('My Title', '')
         return get_smart_subject(str(title_to_check))
         
-    if 'Auto_Folder' not in final_df.columns or final_df['Auto_Folder'].isnull().any(): 
-        final_df['Auto_Folder'] = final_df.apply(assign_folder, axis=1)
+    if 'Auto_Folder' not in final_df.columns or final_df['Auto_Folder'].isnull().any(): final_df['Auto_Folder'] = final_df.apply(assign_folder, axis=1)
 
     check_and_broadcast(final_df, subs_df, demo_mode)
 
@@ -479,7 +522,7 @@ if bills_to_track:
             with m3: st.markdown("#### 🎉 Passed"); render_simple_list_item(passed)
             with m4: st.markdown("#### ❌ Failed"); render_simple_list_item(failed)
 
-    # --- TAB 3: HYBRID CALENDAR ---
+    # --- TAB 3: HYBRID CALENDAR (With Strict Rules) ---
     with tab_upcoming:
         st.subheader("📅 Your Confirmed Agenda")
         today = datetime.now(est).date()
@@ -498,13 +541,13 @@ if bills_to_track:
                 events_found = False
                 bills_shown_today = set()
                 
-                # PLAN A: API
+                # PLAN A: API (Gold Standard - Shows Bills)
                 todays_api_meetings = api_calendar_data.get(target_date_str, [])
                 if todays_api_meetings:
                     for meeting in todays_api_meetings:
                         matched_bills = [b for b in meeting['Bills'] if b in my_bills_clean]
                         if matched_bills:
-                            # Time Check (API)
+                            # Strict Time Check
                             try:
                                 mtg_dt_str = f"{target_date_str} {meeting['Time']}"
                                 mtg_dt = datetime.strptime(mtg_dt_str, "%Y-%m-%d %I:%M %p")
@@ -514,17 +557,17 @@ if bills_to_track:
 
                             events_found = True
                             st.markdown(f"**{meeting['Committee']}**"); st.caption(f"⏰ {meeting['Time']}")
+                            st.success("✅ Confirmed on Docket")
                             for b_id in matched_bills:
                                 bills_shown_today.add(b_id); info = bill_info_map.get(b_id, {}); status_text = ""; raw_status = str(info.get('My Status', '')).strip()
                                 if raw_status and raw_status != 'nan' and raw_status != '-': status_text = f" - {raw_status}"
                                 st.error(f"**{b_id}**{status_text}")
                             st.divider()
                 
-                # PLAN B: SCRAPER (Fallback)
+                # PLAN B: SCRAPER (Fallback - SHOWS NO BILLS)
                 if not events_found and not todays_api_meetings:
                     for (scrape_date, scrape_comm), (scrape_time, scrape_full) in web_schedule_map.items():
                         if scrape_date == target_date_str:
-                            # Time Check (Scraper)
                             try:
                                 clean_t = re.search(r'\d{1,2}:\d{2}\s*[AP]M', scrape_time)
                                 if clean_t:
@@ -535,28 +578,22 @@ if bills_to_track:
                                     if mtg_dt < current_dt: continue 
                             except: pass
 
-                            matched_bills = []
+                            # Determine if any of our bills match this committee
+                            has_potential_bills = False
                             for b_id, info in bill_info_map.items():
-                                if b_id in bills_shown_today: continue 
-                                
-                                # IGNORE DEAD/PASSED BILLS FOR INFERRED AGENDA
-                                if info.get('Lifecycle') in ["✅ Signed & Enacted", "❌ Dead / Tabled", "✍️ Awaiting Signature"]:
-                                    continue
-
+                                if info.get('Lifecycle') in ["✅ Signed & Enacted", "❌ Dead / Tabled", "✍️ Awaiting Signature"]: continue
                                 b_comm = str(info.get('Current_Committee', '')).lower().replace('committee','').strip()
-                                b_sub = str(info.get('Current_Sub', '')).lower().replace('subcommittee','').strip()
-                                if (len(b_comm) > 3 and b_comm in scrape_comm) or (len(b_sub) > 3 and b_sub in scrape_comm):
-                                    matched_bills.append(b_id); bills_shown_today.add(b_id)
-                            if matched_bills:
+                                if len(b_comm) > 3 and b_comm in scrape_comm:
+                                    has_potential_bills = True
+                                    break
+                            
+                            if has_potential_bills:
                                 events_found = True
-                                cleaned_header = clean_committee_name(scrape_full) # Use the aggressive whitelist cleaner
+                                cleaned_header = clean_committee_name(scrape_full) # Use strict whitelist
                                 st.markdown(f"**{cleaned_header}**"); 
                                 st.caption(f"⏰ {scrape_time}")
-                                st.caption("⚠️ _Potential Hearing (Based on Committee)_") # INFERRED LABEL
-                                for b_id in matched_bills:
-                                    info = bill_info_map.get(b_id, {}); status_text = ""; raw_status = str(info.get('My Status', '')).strip()
-                                    if raw_status and raw_status != 'nan' and raw_status != '-': status_text = f" - {raw_status}"
-                                    st.error(f"**{b_id}**{status_text}")
+                                st.warning("⚠️ Docket Unavailable - Check LIS") # NO BILLS SHOWN
+                                st.markdown(f"[View Official Docket](https://lis.virginia.gov/cgi-bin/legp604.exe?{DEFAULT_SESSION_ID}+doc+DO{datetime.strptime(target_date_str, '%Y-%m-%d').strftime('%m%d')})")
                                 st.divider()
 
                 # PLAN C: TODAY COMPLETED
@@ -599,9 +636,8 @@ with st.sidebar:
     st.divider()
     with st.expander("👨‍💻 Developer Debugger", expanded=True):
         st.write("System Status:")
-        hist_cols = st.session_state.get('history_cols', [])
         if 'history' in lis_data and not lis_data['history'].empty: st.write(f"**History File:** 🟢 Loaded ({len(lis_data['history'])} rows)")
         else: st.write(f"**History File:** 🔴 Not loaded")
-        if api_calendar_data: st.write(f"**API Calendar:** 🟢 Connected ({len(api_calendar_data)} days found)")
-        else: st.write(f"**API Calendar:** ⚠️ Empty/Failed")
-        st.write("**API Logs:**"); st.text("\n".join(api_log[:15]))
+        if active_session_id: st.write(f"**API Status:** 🟢 Active (Session {active_session_id})")
+        else: st.write(f"**API Status:** ⚠️ Failed (Using Scraper)")
+        st.write("**API Discovery Log:**"); st.text("\n".join(api_log))
