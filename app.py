@@ -39,14 +39,20 @@ TOPIC_KEYWORDS = {
 }
 
 # --- HELPER FUNCTIONS ---
-def determine_lifecycle(status_text):
+def determine_lifecycle(status_text, committee_name):
+    """
+    Determines where the bill is in the process.
+    'Sticky Committee' Logic: If a committee is assigned, assume it is IN COMMITTEE
+    unless the status explicitly says it moved out (Reported, Passed, etc).
+    """
     status = str(status_text).lower()
+    comm = str(committee_name).strip()
     
-    # 1. Final Stages (Passed/Enacted)
+    # 1. Final Stages (Passed/Enacted) - Takes Priority
     if any(x in status for x in ["signed by governor", "enacted", "approved by governor", "chapter"]):
         return "✅ Signed & Enacted"
     
-    # 2. Dead
+    # 2. Dead - Takes Priority
     if any(x in status for x in ["tabled", "failed", "stricken", "passed by indefinitely", "left in", "defeated", "no action taken", "incorporated into"]):
         return "❌ Dead / Tabled"
     
@@ -54,13 +60,23 @@ def determine_lifecycle(status_text):
     if any(x in status for x in ["enrolled", "communicated to governor", "bill text as passed"]):
         return "✍️ Awaiting Signature"
         
-    # 4. In Committee (Stuck/Waiting)
-    # If the status says it's referred or assigned, it is IN a committee.
-    if any(x in status for x in ["referred", "assigned", "continued"]):
+    # 4. Sticky Committee Logic
+    # We define "Exit Keywords" that imply a bill has LEFT a committee.
+    # If the bill HAS a committee assigned, but the status DOES NOT contain an exit keyword,
+    # we force it to be "In Committee" (even if status is 'Fiscal Impact' or 'Printed').
+    exit_keywords = ["reported", "read", "passed", "agreed", "engrossed", "calendar", "candidate", "communicated"]
+    
+    has_committee = comm not in ["-", "nan", "None", ""]
+    is_exiting = any(x in status for x in exit_keywords)
+    
+    if has_committee and not is_exiting:
+        return "📥 In Committee"
+
+    # 5. Standard Status Check (Fallback)
+    if any(x in status for x in ["referred", "assigned", "continued", "committee"]):
         return "📥 In Committee"
         
-    # 5. Out of Committee (Moving on Floor)
-    # If it's active but NOT referred/assigned, it's on the floor (Reported, Read, Engrossed, etc.)
+    # 6. Default to Out/Floor
     return "📣 Out of Committee"
 
 def get_smart_subject(title):
@@ -309,12 +325,14 @@ def get_bill_data_batch(bill_numbers, lis_df):
             if pd.notna(s_act) and str(s_act).lower() != 'nan':
                  history_data.append({"Date": item.get('last_senate_action_date'), "Action": f"[Senate] {s_act}"})
 
+            # --- ROBUST COMMITTEE EXTRACTION ---
             curr_comm = "-"
             c1 = item.get('last_house_committee')
             c2 = item.get('last_senate_committee')
             if pd.notna(c1) and str(c1).strip() not in ['nan', '']: curr_comm = c1
             elif pd.notna(c2) and str(c2).strip() not in ['nan', '']: curr_comm = c2
             
+            # If still empty, try to parse from status text
             status_lower = str(status).lower()
             if curr_comm == "-":
                 comm_match = re.search(r'referred to (?:committee on|the committee on)?\s?([a-z\s&]+)', status_lower)
@@ -329,12 +347,15 @@ def get_bill_data_batch(bill_numbers, lis_df):
                     curr_sub = parts[1].strip().title()
                 except: pass
 
+            # --- FIX: Pass 'curr_comm' to determine_lifecycle for "Sticky" logic ---
+            lifecycle = determine_lifecycle(str(status), str(curr_comm))
+
             results.append({
                 "Bill Number": bill_num,
                 "Official Title": title,
                 "Status": str(status),
                 "Date": date_val, 
-                "Lifecycle": determine_lifecycle(str(status)),
+                "Lifecycle": lifecycle,
                 "Auto_Folder": get_smart_subject(title),
                 "History_Data": history_data,
                 "Current_Committee": str(curr_comm).strip(),
@@ -416,6 +437,11 @@ def render_bill_card(row):
         display_title = row.get('My Title', 'No Title Provided')
     st.markdown(f"**{row['Bill Number']}**")
     
+    # Show Committee Name explicitly if 'In Committee'
+    if row['Lifecycle'] == "📥 In Committee":
+        comm = clean_committee_name(row.get('Current_Committee', '-'))
+        st.markdown(f"🏛️ **{comm}**")
+
     my_status = str(row.get('My Status', '')).strip()
     if my_status and my_status != 'nan' and my_status != '-':
         st.info(f"🏷️ **Status:** {my_status}")
