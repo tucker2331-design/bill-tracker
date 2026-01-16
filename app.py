@@ -325,14 +325,27 @@ def get_bill_data_batch(bill_numbers, lis_df):
             if pd.notna(s_act) and str(s_act).lower() != 'nan':
                  history_data.append({"Date": item.get('last_senate_action_date'), "Action": f"[Senate] {s_act}"})
 
-            # --- ROBUST COMMITTEE EXTRACTION ---
+            # --- ROBUST COMMITTEE EXTRACTION (WITH HISTORY SCAN) ---
             curr_comm = "-"
+            
+            # 1. Try Official Columns First
             c1 = item.get('last_house_committee')
             c2 = item.get('last_senate_committee')
             if pd.notna(c1) and str(c1).strip() not in ['nan', '']: curr_comm = c1
             elif pd.notna(c2) and str(c2).strip() not in ['nan', '']: curr_comm = c2
             
-            # If still empty, try to parse from status text
+            # 2. If empty, SCAN HISTORY for "Referred to" (Deep Search)
+            if curr_comm == "-":
+                full_history_text = f"{str(h_act)} {str(s_act)}".lower()
+                # Look for "Referred to Committee on [Name]"
+                match = re.search(r'referred to (?:committee on|the committee on)?\s?([a-z\s&]+)', full_history_text)
+                if match:
+                    found_name = match.group(1).title().strip()
+                    # Basic cleanup to ensure it's not garbage text
+                    if len(found_name) > 3 and "reading" not in found_name.lower():
+                        curr_comm = found_name
+
+            # 3. Fallback: Try to parse current status if history didn't help
             status_lower = str(status).lower()
             if curr_comm == "-":
                 comm_match = re.search(r'referred to (?:committee on|the committee on)?\s?([a-z\s&]+)', status_lower)
@@ -347,7 +360,7 @@ def get_bill_data_batch(bill_numbers, lis_df):
                     curr_sub = parts[1].strip().title()
                 except: pass
 
-            # --- FIX: Pass 'curr_comm' to determine_lifecycle for "Sticky" logic ---
+            # Pass 'curr_comm' to determine_lifecycle for "Sticky" logic
             lifecycle = determine_lifecycle(str(status), str(curr_comm))
 
             results.append({
@@ -437,11 +450,6 @@ def render_bill_card(row):
         display_title = row.get('My Title', 'No Title Provided')
     st.markdown(f"**{row['Bill Number']}**")
     
-    # Show Committee Name explicitly if 'In Committee'
-    if row['Lifecycle'] == "📥 In Committee":
-        comm = clean_committee_name(row.get('Current_Committee', '-'))
-        st.markdown(f"🏛️ **{comm}**")
-
     my_status = str(row.get('My Status', '')).strip()
     if my_status and my_status != 'nan' and my_status != '-':
         st.info(f"🏷️ **Status:** {my_status}")
