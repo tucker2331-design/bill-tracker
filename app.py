@@ -56,13 +56,10 @@ def get_smart_subject(title):
             return category
     return "📂 Unassigned / General"
 
-def normalize_text_strict(text):
-    """Normalize text but PRESERVE Chamber identity (House/Senate)"""
+def normalize_text(text):
     if pd.isna(text): return ""
     text = str(text).lower()
-    # Only remove punctuation, DO NOT remove 'house' or 'senate' or 'committee'
-    # This ensures "House Education" != "Senate Education"
-    text = text.replace('&', 'and').replace('.', '').replace(',', '').replace('-', ' ')
+    text = text.replace('&', 'and').replace('.', '').replace(',', '')
     return " ".join(text.split())
 
 def clean_committee_name(name):
@@ -80,6 +77,7 @@ def clean_committee_name(name):
         "C&L": "Commerce & Labor",
         "HWI": "House Health, Welfare & Inst.",
         "APP": "House Appropriations",
+        "HAPP": "House Appropriations", # Added HAPP
         "FIN": "Senate Finance & Appropriations",
         "JUD": "Courts of Justice",
         "GL": "General Laws",
@@ -128,6 +126,7 @@ def clean_status_text(text):
     text = str(text)
     replacements = {
         "HED": "House Education",
+        "HAPP": "House Appropriations",
         "sub:": "Subcommittee:",
         "P&E": "Privileges & Elections",
         "C&L": "Commerce & Labor"
@@ -167,9 +166,12 @@ def fetch_schedule_from_web():
                             if "Cancelled" in comm_name: continue
                             
                             # Preserve "Senate" in key to prevent merging with House
-                            clean_name = normalize_text_strict(comm_name)
+                            clean_name = normalize_text(comm_name)
+                            clean_name = clean_name.replace("committee", "").strip()
                             if "senate" not in clean_name and "house" not in clean_name:
                                 clean_name = "senate " + clean_name 
+                            
+                            clean_name = clean_name.replace("senate", "").replace("house", "").strip()
                             
                             key = (date_str, clean_name)
                             
@@ -213,9 +215,12 @@ def fetch_schedule_from_web():
                     if "New Meeting" in comm_name: continue
 
                     # Preserve "House" in key to prevent merging with Senate
-                    clean_name = normalize_text_strict(comm_name)
+                    clean_name = normalize_text(comm_name)
+                    clean_name = clean_name.replace("committee", "").strip()
                     if "senate" not in clean_name and "house" not in clean_name:
                         clean_name = "house " + clean_name 
+                    
+                    clean_name = clean_name.replace("senate", "").replace("house", "").strip()
                     
                     key = (current_date_str, clean_name)
                     
@@ -571,8 +576,7 @@ if bills_to_track:
     with tab_upcoming:
         st.subheader("📅 Your Confirmed Agenda")
         
-        # 1. FIXED: Force 'Today' to use EST so it doesn't roll over at 7PM EST
-        today = datetime.now(est).date()
+        today = datetime.now(est).date() # Use EST to prevent 7PM rollback issue
         cols = st.columns(7)
         
         schedule_df = lis_data.get('schedule', pd.DataFrame())
@@ -608,7 +612,12 @@ if bills_to_track:
                             if b_id in bills_shown_today: continue 
 
                             info = bill_info_map.get(b_id, {})
-                            # 2. FIXED: Use Strict Normalization (Preserves House/Senate)
+                            # Use strict normalization (keeps 'house'/'senate')
+                            def normalize_text_strict(t):
+                                if pd.isna(t): return ""
+                                t = str(t).lower().replace('&','and').replace('.','').replace(',','').replace('-',' ')
+                                return " ".join(t.split())
+
                             curr_comm = normalize_text_strict(info.get('Current_Committee', ''))
                             curr_sub = normalize_text_strict(info.get('Current_Sub', ''))
                             
