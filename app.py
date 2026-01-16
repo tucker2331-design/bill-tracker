@@ -6,6 +6,7 @@ from datetime import datetime, timedelta
 import pytz
 from slack_sdk import WebClient
 from slack_sdk.errors import SlackApiError
+from bs4 import BeautifulSoup 
 
 # --- CONFIGURATION ---
 SHEET_ID = "18m752GcvGIPPpqUn_gB0DfA3e4z2UGD0ki0dUZh2Qek"
@@ -17,6 +18,7 @@ LIS_BASE_URL = "https://lis.blob.core.windows.net/lisfiles/20261/"
 LIS_BILLS_CSV = LIS_BASE_URL + "BILLS.CSV"       
 LIS_HISTORY_CSV = LIS_BASE_URL + "HISTORY.CSV"
 LIS_DOCKET_CSV = LIS_BASE_URL + "DOCKET.CSV"
+DEFAULT_SESSION_ID = "261" 
 
 st.set_page_config(page_title="VA Bill Tracker 2026", layout="wide")
 
@@ -66,6 +68,16 @@ def clean_committee_name(name):
     # Strip names
     name = re.sub(r'\b[A-Z][a-z]+, [A-Z]\. ?[A-Z]?\.?.*$', '', name) 
     name = re.sub(r'\b(Simon|Rasoul|Willett|Helmer|Lucas|Surovell|Locke|Deeds|Favola|Marsden|Ebbin|McPike|Hayes|Carroll Foy|Subcommittee #\d+)\b.*', '', name, flags=re.IGNORECASE)
+    
+    # Standardize
+    upper = name.upper().strip()
+    mapping = {
+        "HED": "House Education", "HAPP": "House Appropriations", "FIN": "Senate Finance",
+        "JUD": "Courts of Justice", "GL": "General Laws", "AG": "Agriculture", "TRAN": "Transportation",
+        "P&E": "Privileges & Elections", "C&L": "Commerce & Labor", "HWI": "House Health, Welfare & Inst."
+    }
+    for k, v in mapping.items():
+        if k in upper: return v
     return name.strip().title()
 
 def clean_status_text(text):
@@ -73,7 +85,46 @@ def clean_status_text(text):
     text = str(text)
     return text.replace("HED", "House Education").replace("sub:", "Subcommittee:")
 
-# --- DATA FETCHING (DOCKET + HISTORY) ---
+# --- 1. HTML SCRAPER (GETS TIMES) ---
+@st.cache_data(ttl=600)
+def fetch_html_calendar():
+    """Returns { '2026-01-16': {'House Education': '8:00 AM', ...} }"""
+    calendar_times = {}
+    headers = {'User-Agent': 'Mozilla/5.0'}
+    
+    def scrape(url, prefix):
+        try:
+            resp = requests.get(url, headers=headers, timeout=4)
+            if resp.status_code == 200:
+                soup = BeautifulSoup(resp.text, 'html.parser')
+                lines = [line.strip() for line in soup.get_text("\n", strip=True).splitlines() if line.strip()]
+                curr_date = None
+                for i, line in enumerate(lines):
+                    if "JANUARY" in line.upper() or "FEBRUARY" in line.upper():
+                        try:
+                            clean_d = line.split("–")[0].split("-")[0].strip()
+                            if "2026" not in clean_d: clean_d += ", 2026"
+                            dt = datetime.strptime(clean_d, "%A, %B %d, %Y")
+                            curr_date = dt.strftime("%Y-%m-%d")
+                        except: pass
+                    
+                    if curr_date:
+                        time_match = re.search(r'^\d{1,2}:\d{2}\s*[AP]M', line)
+                        if time_match:
+                            t_val = time_match.group(0)
+                            if i > 0:
+                                raw = lines[i-1]
+                                if "Agenda" not in raw:
+                                    clean = clean_committee_name(f"{prefix} {raw}")
+                                    if curr_date not in calendar_times: calendar_times[curr_date] = {}
+                                    calendar_times[curr_date][clean.lower()] = t_val # Store as dict for lookup
+        except: pass
+
+    scrape("https://house.vga.virginia.gov/schedule/meetings", "House")
+    scrape("https://apps.senate.virginia.gov/Senator/ComMeetings.php", "Senate")
+    return calendar_times
+
+# --- 2. DATA FETCHING ---
 @st.cache_data(ttl=60) 
 def fetch_lis_data():
     data = {}
@@ -87,40 +138,22 @@ def fetch_lis_data():
             return df
         except: return pd.DataFrame()
 
-    # 1. BILLS
-    df_bills = load_csv(LIS_BILLS_CSV)
-    if not df_bills.empty:
-        col = 'bill_number' if 'bill_number' in df_bills.columns else 'bill_id'
-        if col in df_bills.columns: df_bills['bill_clean'] = df_bills[col].astype(str).apply(clean_bill_id)
-    data['bills'] = df_bills
+    data['bills'] = load_csv(LIS_BILLS_CSV)
+    if not data['bills'].empty:
+        col = next((c for c in data['bills'].columns if c in ['bill_number','bill_id']), None)
+        if col: data['bills']['bill_clean'] = data['bills'][col].astype(str).apply(clean_bill_id)
 
-    # 2. HISTORY
-    df_hist = load_csv(LIS_HISTORY_CSV)
-    if not df_hist.empty:
-        col = 'bill_number' if 'bill_number' in df_hist.columns else 'bill_id'
-        if col in df_hist.columns: df_hist['bill_clean'] = df_hist[col].astype(str).apply(clean_bill_id)
-    data['history'] = df_hist
+    data['history'] = load_csv(LIS_HISTORY_CSV)
+    if not data['history'].empty:
+        col = next((c for c in data['history'].columns if c in ['bill_number','bill_id']), None)
+        if col: data['history']['bill_clean'] = data['history'][col].astype(str).apply(clean_bill_id)
 
-    # 3. DOCKET (Calendar)
-    df_docket = load_csv(LIS_DOCKET_CSV)
-    if not df_docket.empty:
-        # MAP WEIRD COLUMNS
-        # LIS DOCKET.CSV cols are often: 'com_des', 'meet_date', 'meet_time', 'bill_no'
+    data['docket'] = load_csv(LIS_DOCKET_CSV)
+    if not data['docket'].empty:
+        # MAP COLUMNS based on your screenshot
+        col = next((c for c in data['docket'].columns if c in ['bill_no','bill_number','bill_id']), None)
+        if col: data['docket']['bill_clean'] = data['docket'][col].astype(str).apply(clean_bill_id)
         
-        # 1. Find Bill Column
-        bill_col = next((c for c in df_docket.columns if c in ['bill_no', 'bill_number', 'bill_id']), None)
-        if bill_col: df_docket['bill_clean'] = df_docket[bill_col].astype(str).apply(clean_bill_id)
-        
-        # 2. Rename for consistency
-        rename_map = {}
-        for c in df_docket.columns:
-            if 'com' in c and 'des' in c: rename_map[c] = 'committee_name'
-            if 'date' in c and 'meet' in c: rename_map[c] = 'meeting_date'
-            if 'time' in c and 'meet' in c: rename_map[c] = 'meeting_time'
-        df_docket.rename(columns=rename_map, inplace=True)
-        
-    data['docket'] = df_docket
-
     return data
 
 def get_bill_data_batch(bill_numbers, lis_data_dict):
@@ -190,37 +223,26 @@ def get_bill_data_batch(bill_numbers, lis_data_dict):
              elif "passed" in str(status).lower(): display_comm = "🎉 Passed Chamber"
              else: display_comm = "On Floor / Reported"
 
-        # --- DOCKET MATCHING (FIXED COLUMNS) ---
+        # --- DOCKET MATCHING ---
         upcoming_meetings = []
         raw_docket = docket_lookup.get(bill_num, [])
         for d in raw_docket:
-            # Flexible Key Search
-            d_date = d.get('meeting_date')
-            d_time = d.get('meeting_time', 'TBA')
-            d_comm = d.get('committee_name', 'Unknown')
+            # Use columns found in debugger: 'doc_date'
+            d_date = d.get('doc_date') or d.get('meeting_date')
             
             if d_date:
-                # Format Date
                 try:
-                    # LIS usually uses MM/DD/YYYY
-                    if "/" in str(d_date): 
-                        dt_obj = datetime.strptime(str(d_date), "%m/%d/%Y")
-                        fmt_date = dt_obj.strftime("%Y-%m-%d")
-                    else:
-                        fmt_date = str(d_date)
-                except: fmt_date = str(d_date)
-
-                upcoming_meetings.append({
-                    "Date": fmt_date,
-                    "Time": str(d_time),
-                    "Committee": clean_committee_name(str(d_comm))
-                })
+                    if "/" in str(d_date): dt_obj = datetime.strptime(str(d_date), "%m/%d/%Y")
+                    else: dt_obj = datetime.strptime(str(d_date), "%Y-%m-%d")
+                    fmt_date = dt_obj.strftime("%Y-%m-%d")
+                    upcoming_meetings.append(fmt_date)
+                except: pass
 
         results.append({
             "Bill Number": bill_num, "Official Title": title, "Status": str(status), "Date": date_val, 
             "Lifecycle": lifecycle, "Auto_Folder": get_smart_subject(title), "History_Data": history_data[::-1], 
             "Current_Committee": str(curr_comm).strip(), "Display_Committee": str(display_comm).strip(), 
-            "Current_Sub": str(curr_sub).strip(), "Upcoming_Meetings": upcoming_meetings
+            "Current_Sub": str(curr_sub).strip(), "Upcoming_Meetings": list(set(upcoming_meetings))
         })
     return pd.DataFrame(results) if results else pd.DataFrame()
 
@@ -253,7 +275,7 @@ def check_and_broadcast(df_bills, df_subscribers, demo_mode):
         report += f"\n⚪ *{b_num}* | {display_name}\n> _{clean_status}_\n"
     
     if updates_found:
-        st.toast(f"📢 Sending updates to {len(subscriber_list)} people...")
+        st.toast(f"📢 Sending updates...")
         for email in subscriber_list:
             try: uid = client.users_lookupByEmail(email=email.strip())['user']['id']; client.chat_postMessage(channel=uid, text=report)
             except: pass
@@ -327,7 +349,6 @@ demo_mode = st.sidebar.checkbox("🛠️ Enable Demo Mode", value=False)
 col_btn, col_time = st.columns([1, 6])
 with col_btn:
     if st.button("🔄 Check for Updates"):
-        st.session_state['last_run'] = datetime.now(est).strftime("%I:%M %p EST")
         st.cache_data.clear(); st.rerun()
 with col_time: st.markdown(f"**Last Refreshed:** `{st.session_state['last_run']}`")
 
@@ -341,21 +362,17 @@ try:
     if 'Status (Watching)' in raw_df.columns: cols_w.append('Status (Watching)')
     df_w = pd.DataFrame()
     if 'Bills Watching' in raw_df.columns:
-        df_w = raw_df[cols_w].copy()
-        new_cols = ['Bill Number', 'My Title']
+        df_w = raw_df[cols_w].copy(); new_cols = ['Bill Number', 'My Title']
         if 'Status (Watching)' in raw_df.columns: new_cols.append('My Status')
-        df_w.columns = new_cols
-        df_w['Type'] = 'Watching'
+        df_w.columns = new_cols; df_w['Type'] = 'Watching'
     df_i = pd.DataFrame()
     w_col_name = next((c for c in raw_df.columns if "Working On" in c and "Title" not in c and "Status" not in c), None)
     if w_col_name:
-        cols_i = [w_col_name]
-        title_work_col = next((c for c in raw_df.columns if "Title (Working)" in c), None)
+        cols_i = [w_col_name]; title_work_col = next((c for c in raw_df.columns if "Title (Working)" in c), None)
         if title_work_col: cols_i.append(title_work_col)
         status_work_col = next((c for c in raw_df.columns if "Status (Working)" in c), None)
         if status_work_col: cols_i.append(status_work_col)
-        df_i = raw_df[cols_i].copy()
-        i_new_cols = ['Bill Number']
+        df_i = raw_df[cols_i].copy(); i_new_cols = ['Bill Number']
         if title_work_col: i_new_cols.append('My Title')
         if status_work_col: i_new_cols.append('My Status')
         df_i.columns = i_new_cols
@@ -369,21 +386,16 @@ try:
     if 'My Status' not in sheet_df.columns: sheet_df['My Status'] = "-"
 except Exception as e: st.error(f"Sheet Error: {e}"); st.stop()
 
-# 2. FETCH DATA
+# 2. FETCH DATA & SCRAPER
 lis_data = fetch_lis_data()
 bills_to_track = sheet_df['Bill Number'].unique().tolist()
+scraped_times = fetch_html_calendar() # Get meeting times
 
 if bills_to_track:
     if demo_mode:
-        import random
-        mock_results = []
+        import random; mock_results = []
         for b in bills_to_track:
-            mock_results.append({
-                "Bill Number": b, "Official Title": "[DEMO] Bill Title", "Status": "Referred to Commerce",
-                "Lifecycle": "🚀 Active", "Auto_Folder": "💰 Economy & Business",
-                "My Title": "Demo Title", "Date": "2026-01-14",
-                "History_Data": [], "Current_Committee": "Commerce", "Current_Sub": "-", "My Status": "Demo Status"
-            })
+            mock_results.append({"Bill Number": b, "Official Title": "[DEMO] Bill Title", "Status": "Referred to Commerce", "Lifecycle": "🚀 Active", "Auto_Folder": "💰 Economy & Business", "My Title": "Demo Title", "Date": "2026-01-14", "History_Data": [], "Current_Committee": "Commerce", "Current_Sub": "-", "My Status": "Demo Status"})
         api_df = pd.DataFrame(mock_results)
     else:
         api_df = get_bill_data_batch(bills_to_track, lis_data)
@@ -423,39 +435,22 @@ if bills_to_track:
             with m3: st.markdown("#### 🎉 Passed"); render_simple_list_item(passed)
             with m4: st.markdown("#### ❌ Failed"); render_simple_list_item(failed)
 
-    # --- TAB 3: CALENDAR (DOCKET FILE) ---
+    # --- TAB 3: TRIPLE-CHECK CALENDAR ---
     with tab_upcoming:
         st.subheader("📅 Your Confirmed Agenda")
         today = datetime.now(est).date()
         cols = st.columns(7)
         
-        # Build Calendar Map from the 'Upcoming_Meetings' column in final_df
+        # Structure: { '2026-01-16': [ {'Bill': 'HB1', 'Row': full_row_object} ] }
         calendar_map = {}
+        
         for _, row in final_df.iterrows():
+            # Source 1: DOCKET FILE (Confirmed Date)
             meetings = row.get('Upcoming_Meetings', [])
             if isinstance(meetings, list):
-                for m in meetings:
-                    m_date_str = str(m['Date']).split(" ")[0]
-                    try:
-                        if "/" in m_date_str: d_obj = datetime.strptime(m_date_str, "%m/%d/%Y").date()
-                        else: d_obj = datetime.strptime(m_date_str, "%Y-%m-%d").date()
-                        formatted_date = d_obj.strftime("%Y-%m-%d")
-                        
-                        if formatted_date not in calendar_map: calendar_map[formatted_date] = []
-                        # Pass full row info to the calendar event
-                        calendar_map[formatted_date].append({
-                            'Bill': row['Bill Number'],
-                            'My Title': row.get('My Title', '-'),
-                            'Official Title': row.get('Official Title', '-'),
-                            'My Status': row.get('My Status', '-'),
-                            'Status': row.get('Status', '-'),
-                            'Time': m['Time'],
-                            'Committee': m['Committee'],
-                            'Current_Committee': row.get('Current_Committee', '-'),
-                            'Current_Sub': row.get('Current_Sub', '-'),
-                            'History_Data': row.get('History_Data', [])
-                        })
-                    except: pass
+                for m_date in meetings:
+                    if m_date not in calendar_map: calendar_map[m_date] = []
+                    calendar_map[m_date].append(row)
 
         for i in range(7):
             target_date = today + timedelta(days=i)
@@ -465,57 +460,54 @@ if bills_to_track:
                 st.markdown(f"**{display_date_str}**")
                 st.divider()
                 
-                # SECTION 1: UPCOMING MEETINGS (FROM DOCKET)
+                # A. SHOW DOCKET ITEMS (Scheduled Future)
                 if target_date_str in calendar_map:
                     events = calendar_map[target_date_str]
-                    for e in events:
-                        st.markdown(f"**{e['Committee']}**")
-                        st.caption(f"⏰ {e['Time']}")
+                    for row in events:
+                        # Source 2: MASTER LIST (Committee Name)
+                        comm_name = row.get('Current_Committee', 'Unknown Committee')
                         
-                        # RENDER FULL CARD HERE
-                        label_text = f"✅ {e['Bill']}"
-                        if e['My Status'] != '-': label_text += f" - {e['My Status']}"
+                        # Source 3: HTML SCRAPER (Time)
+                        time_display = "Time TBA"
+                        if target_date_str in scraped_times:
+                            # Fuzzy match committee name to scraped times
+                            c_key = comm_name.lower().replace("committee","").strip()
+                            for s_key, s_time in scraped_times[target_date_str].items():
+                                if c_key in s_key or s_key in c_key:
+                                    time_display = s_time
+                                    break
                         
-                        with st.expander(label_text):
-                            st.markdown(f"**📌 Designated Title:** {e['My Title']}")
-                            st.markdown(f"**📜 Official Title:** {e['Official Title']}")
-                            st.markdown(f"**🔄 Status:** {clean_status_text(e['Status'])}")
-                            
-                            hist_data = e.get('History_Data', [])
-                            if isinstance(hist_data, list) and hist_data:
-                                st.markdown("**📜 History:**")
-                                st.dataframe(pd.DataFrame(hist_data), hide_index=True, use_container_width=True)
-                            
-                            lis_link = f"https://lis.virginia.gov/bill-details/20261/{e['Bill']}"
-                            st.markdown(f"🔗 [View Official Bill on LIS]({lis_link})")
+                        st.markdown(f"**{comm_name}**")
+                        st.caption(f"⏰ {time_display}")
+                        _render_single_bill_row(row)
                         st.divider()
 
-                # SECTION 2: COMPLETED ACTIONS (FROM HISTORY - RESTORED!)
+                # B. SHOW HISTORY ITEMS (Completed Today)
                 if i == 0:
-                    events_found = False
+                    history_found = False
                     for _, row in final_df.iterrows():
                         last_date = str(row.get('Date', ''))
                         is_today = False
                         try:
-                            # Handle M/D/Y vs Y-M-D
                             if "/" in last_date: lis_dt = datetime.strptime(last_date, "%m/%d/%Y").date()
                             else: lis_dt = datetime.strptime(last_date, "%Y-%m-%d").date()
                             if lis_dt == target_date: is_today = True
                         except: pass
                         
                         if is_today:
-                            # Filter out admin actions (referred, printed)
+                            # Skip if already shown in Docket section above
+                            if target_date_str in calendar_map and row['Bill Number'] in [r['Bill Number'] for r in calendar_map[target_date_str]]:
+                                continue
+
                             lis_status = str(row.get('Status', '')).lower()
-                            is_outcome = any(x in lis_status for x in ["reported", "passed", "defeat", "stricken", "agreed", "read", "engross", "vote"])
-                            
-                            if is_outcome:
-                                if not events_found: 
+                            # Show significant actions
+                            if any(x in lis_status for x in ["reported", "passed", "defeat", "stricken", "agreed", "read", "engross", "vote"]):
+                                if not history_found:
                                     st.caption("🏁 **Completed Today**")
-                                    events_found = True
-                                    
+                                    history_found = True
                                 _render_single_bill_row(row)
 
-                if not (target_date_str in calendar_map) and (i != 0 or not events_found):
+                if not (target_date_str in calendar_map) and (i != 0 or not history_found):
                     st.caption("-")
 
 # --- DEV DEBUGGER ---
@@ -525,8 +517,7 @@ with st.sidebar:
         st.write("System Status:")
         if 'docket' in lis_data and not lis_data['docket'].empty:
              st.write(f"**Docket File:** 🟢 Loaded ({len(lis_data['docket'])} rows)")
-             # Debug columns to fix mapping
-             st.write(f"**Found Columns:** {list(lis_data['docket'].columns)}")
+             st.write(f"**Found Cols:** {list(lis_data['docket'].columns)}")
         else:
              st.write(f"**Docket File:** 🔴 Not Found")
         
