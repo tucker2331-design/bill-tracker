@@ -375,34 +375,49 @@ def render_bill_card(row):
     st.caption(f"_{clean_status_text(row.get('Status'))}_")
     st.divider()
 
-# --- GROUPING LOGIC (UPDATED WITH SUBHEADINGS & UNASSIGNED LAST) ---
+# --- GROUPING LOGIC (UPDATED: Rename & Sort Unassigned Last) ---
 def render_master_list_item(df):
     if df.empty:
         st.caption("No bills.")
         return
 
-    df['Current_Committee'] = df['Current_Committee'].fillna('-')
+    # 1. Prepare & Rename Logic
+    def rename_unassigned(name):
+        name = str(name).strip()
+        if name in ['-', 'nan', 'None', '', '0']: return "Unassigned"
+        if name == "House -": return "House - Unassigned"
+        if name == "Senate -": return "Senate - Unassigned"
+        if name.endswith("-"): return name + " Unassigned"
+        return name
+
+    df['Display_Comm_Group'] = df['Current_Committee'].fillna('-').apply(rename_unassigned)
     df['Current_Sub'] = df['Current_Sub'].fillna('-')
 
-    # Get sorted list of committees (Unassigned moved to last)
-    unique_committees = sorted([c for c in df['Current_Committee'].unique() if c != '-'])
-    if '-' in df['Current_Committee'].unique():
-        unique_committees.append('-') 
+    # 2. Sort Groups (Active First, Unassigned Last)
+    def sort_key(name):
+        # Return tuple: (is_unassigned, name)
+        # False (0) comes before True (1)
+        is_unassigned = "Unassigned" in name
+        return (is_unassigned, name)
 
+    unique_committees = sorted(df['Display_Comm_Group'].unique(), key=sort_key)
+
+    # 3. Iterate
     for comm_name in unique_committees:
-        if comm_name != '-': st.markdown(f"##### 🏛️ {comm_name}")
-        else: st.markdown(f"##### 📂 Unassigned / General")
+        if "Unassigned" in comm_name:
+             st.markdown(f"##### 📂 {comm_name}")
+        else:
+             st.markdown(f"##### 🏛️ {comm_name}")
 
-        comm_df = df[df['Current_Committee'] == comm_name]
+        comm_df = df[df['Display_Comm_Group'] == comm_name]
 
-        # Sort Subcommittees (Main first, then subs alphabetically)
         unique_subs = sorted([s for s in comm_df['Current_Sub'].unique() if s != '-'])
         if '-' in comm_df['Current_Sub'].unique():
-            unique_subs.insert(0, '-') # Empty sub goes first
+            unique_subs.insert(0, '-') 
 
         for sub_name in unique_subs:
             if sub_name != '-':
-                st.markdown(f"**↳ {sub_name}**") # Subheading style
+                st.markdown(f"**↳ {sub_name}**") 
 
             sub_df = comm_df[comm_df['Current_Sub'] == sub_name]
 
