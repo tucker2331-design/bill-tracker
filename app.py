@@ -3,7 +3,7 @@ import pandas as pd
 import requests
 import time
 import re
-import concurrent.futures # For speed (Parallel Scraping)
+import concurrent.futures # <--- NEW: For Parallel Speed
 from datetime import datetime, timedelta
 import pytz
 from slack_sdk import WebClient
@@ -18,11 +18,26 @@ SUBS_URL = f"https://docs.google.com/spreadsheets/d/{SHEET_ID}/gviz/tq?tqx=out:c
 # --- VIRGINIA LIS DATA FEEDS ---
 LIS_BASE_URL = "https://lis.blob.core.windows.net/lisfiles/20261/"
 LIS_BILLS_CSV = LIS_BASE_URL + "BILLS.CSV"       
-LIS_SUBDOCKET_CSV = LIS_BASE_URL + "SUBDOCKET.CSV"
-LIS_DOCKET_CSV = LIS_BASE_URL + "DOCKET.CSV"
-LIS_CALENDAR_CSV = LIS_BASE_URL + "CALENDAR.CSV"
+LIS_SUBDOCKET_CSV = LIS_BASE_URL + "SUBDOCKET.CSV"  
+LIS_DOCKET_CSV = LIS_BASE_URL + "DOCKET.CSV"        
+LIS_CALENDAR_CSV = LIS_BASE_URL + "CALENDAR.CSV"    
 
 st.set_page_config(page_title="VA Bill Tracker 2026", layout="wide")
+
+# --- EXPANDED SMART CATEGORIZATION ---
+TOPIC_KEYWORDS = {
+    "🗳️ Elections & Democracy": ["election", "vote", "ballot", "campaign", "poll", "voter", "registrar", "districting", "suffrage"],
+    "🏗️ Housing & Property": ["rent", "landlord", "tenant", "housing", "lease", "property", "zoning", "eviction", "homeowner", "development", "residential"],
+    "✊ Labor & Workers Rights": ["wage", "salary", "worker", "employment", "labor", "union", "bargaining", "leave", "compensation", "workplace", "employee", "minimum", "overtime"],
+    "💰 Economy & Business": ["tax", "commerce", "business", "market", "consumer", "corporation", "finance", "budget", "economic", "trade"],
+    "🎓 Education": ["school", "education", "student", "university", "college", "teacher", "curriculum", "scholarship", "tuition", "board of education"],
+    "🚓 Public Safety & Law": ["firearm", "gun", "police", "crime", "penalty", "court", "judge", "enforcement", "prison", "arrest", "criminal", "justice"],
+    "🏥 Health & Healthcare": ["health", "medical", "hospital", "patient", "doctor", "insurance", "care", "mental", "pharmacy", "drug", "medicaid"],
+    "🌳 Environment & Energy": ["energy", "water", "pollution", "environment", "climate", "solar", "conservation", "waste", "carbon", "natural resources", "wind", "power", "electricity", "hydroelectric", "nuclear", "chesapeake", "bay", "river", "watershed"],
+    "🚗 Transportation": ["road", "highway", "vehicle", "driver", "license", "transit", "traffic", "transportation", "motor"],
+    "💻 Tech & Utilities": ["internet", "broadband", "data", "privacy", "utility", "cyber", "technology", "telecom", "artificial intelligence"],
+    "⚖️ Civil Rights": ["discrimination", "rights", "equity", "minority", "gender", "religious", "freedom", "speech"],
+}
 
 # --- HELPER FUNCTIONS ---
 def clean_committee_name(name):
@@ -31,15 +46,24 @@ def clean_committee_name(name):
     if "," in name: name = name.split(",")[0].strip()
 
     mapping = {
-        "HED": "House Education", "HEDC": "House Education",
-        "P&E": "Privileges & Elections", "C&L": "Commerce & Labor",
-        "HWI": "House Health, Welfare & Inst.", "APP": "House Appropriations",
-        "HAPP": "House Appropriations", "FIN": "Senate Finance & Appropriations",
-        "JUD": "Courts of Justice", "GL": "General Laws",
-        "AG": "Agriculture", "TRAN": "Transportation",
-        "SFIN": "Senate Finance & Appropriations", "HFIN": "House Finance",
-        "SEH": "Senate Education & Health", "CL": "Commerce & Labor",
-        "SCL": "Senate Commerce & Labor", "HCL": "House Commerce & Labor"
+        "HED": "House Education",
+        "HEDC": "House Education",
+        "P&E": "Privileges & Elections",
+        "C&L": "Commerce & Labor",
+        "HWI": "House Health, Welfare & Inst.",
+        "APP": "House Appropriations",
+        "HAPP": "House Appropriations",
+        "FIN": "Senate Finance & Appropriations",
+        "JUD": "Courts of Justice",
+        "GL": "General Laws",
+        "AG": "Agriculture",
+        "TRAN": "Transportation",
+        "SFIN": "Senate Finance & Appropriations",
+        "HFIN": "House Finance",
+        "SEH": "Senate Education & Health",
+        "CL": "Commerce & Labor",
+        "SCL": "Senate Commerce & Labor",
+        "HCL": "House Commerce & Labor"
     }
     
     upper_name = name.upper()
@@ -72,7 +96,6 @@ def clean_committee_name(name):
     return base_name.title()
 
 def determine_lifecycle(status_text, committee_name):
-    # Sticky Logic: If we have a committee, we are IN COMMITTEE unless explicitly moved out
     status = str(status_text).lower()
     comm = str(committee_name).strip()
     
@@ -84,6 +107,7 @@ def determine_lifecycle(status_text, committee_name):
         return "✍️ Awaiting Signature"
         
     exit_keywords = ["reported", "read", "passed", "agreed", "engrossed", "calendar", "candidate", "communicated"]
+    
     has_committee = comm not in ["-", "nan", "None", ""]
     is_exiting = any(x in status for x in exit_keywords)
     
@@ -97,19 +121,6 @@ def determine_lifecycle(status_text, committee_name):
 
 def get_smart_subject(title):
     title_lower = str(title).lower()
-    TOPIC_KEYWORDS = {
-        "🗳️ Elections & Democracy": ["election", "vote", "ballot", "campaign", "poll", "voter", "registrar", "districting", "suffrage"],
-        "🏗️ Housing & Property": ["rent", "landlord", "tenant", "housing", "lease", "property", "zoning", "eviction", "homeowner", "development", "residential"],
-        "✊ Labor & Workers Rights": ["wage", "salary", "worker", "employment", "labor", "union", "bargaining", "leave", "compensation", "workplace", "employee", "minimum", "overtime"],
-        "💰 Economy & Business": ["tax", "commerce", "business", "market", "consumer", "corporation", "finance", "budget", "economic", "trade"],
-        "🎓 Education": ["school", "education", "student", "university", "college", "teacher", "curriculum", "scholarship", "tuition", "board of education"],
-        "🚓 Public Safety & Law": ["firearm", "gun", "police", "crime", "penalty", "court", "judge", "enforcement", "prison", "arrest", "criminal", "justice"],
-        "🏥 Health & Healthcare": ["health", "medical", "hospital", "patient", "doctor", "insurance", "care", "mental", "pharmacy", "drug", "medicaid"],
-        "🌳 Environment & Energy": ["energy", "water", "pollution", "environment", "climate", "solar", "conservation", "waste", "carbon", "natural resources", "wind", "power", "electricity", "hydroelectric", "nuclear", "chesapeake", "bay", "river", "watershed"],
-        "🚗 Transportation": ["road", "highway", "vehicle", "driver", "license", "transit", "traffic", "transportation", "motor"],
-        "💻 Tech & Utilities": ["internet", "broadband", "data", "privacy", "utility", "cyber", "technology", "telecom", "artificial intelligence"],
-        "⚖️ Civil Rights": ["discrimination", "rights", "equity", "minority", "gender", "religious", "freedom", "speech"],
-    }
     for category, keywords in TOPIC_KEYWORDS.items():
         if any(k in title_lower for k in keywords):
             return category
@@ -124,9 +135,12 @@ def clean_status_text(text):
     if not text: return ""
     text = str(text)
     replacements = {
-        "HED": "House Education", "HAPP": "House Appropriations",
-        "sub:": "Subcommittee:", "P&E": "Privileges & Elections",
-        "C&L": "Commerce & Labor", "floor offered": "Floor Amendment Offered",
+        "HED": "House Education",
+        "HAPP": "House Appropriations",
+        "sub:": "Subcommittee:",
+        "P&E": "Privileges & Elections",
+        "C&L": "Commerce & Labor",
+        "floor offered": "Floor Amendment Offered",
         "passed by indefinitely": "Passed By Indefinitely (Dead)"
     }
     for abbr, full in replacements.items():
@@ -134,126 +148,60 @@ def clean_status_text(text):
         text = pattern.sub(full, text)
     return text
 
-# --- CORE LOGIC: SINGLE BILL SCRAPER ---
-# This runs inside the threads
-def scrape_single_bill(bill_num, csv_info):
-    url = f"https://lis.virginia.gov/cgi-bin/legp604.exe?261+sum+{bill_num}"
+# --- NEW: DEEP SCRAPER (SINGLE ITEM) ---
+# NOTE: We keep caching here so repeated runs are instant
+@st.cache_data(ttl=600)
+def scrape_bill_details(bill_number):
+    url = f"https://lis.virginia.gov/cgi-bin/legp604.exe?261+sum+{bill_number}"
     headers = {'User-Agent': 'Mozilla/5.0'}
     
-    # Defaults from CSV (Fast Fallback)
-    status = csv_info.get('last_house_action', csv_info.get('last_senate_action', 'Introduced'))
-    if pd.isna(status): status = "Introduced"
-    
-    # Basic data
     details = {
-        "status": str(status),
+        "status": "Unknown",
         "history": [],
         "committee": "-"
     }
     
     try:
-        # Request LIS Page
         resp = requests.get(url, headers=headers, timeout=5)
-        if resp.status_code == 200:
-            soup = BeautifulSoup(resp.content, 'html.parser')
-            
-            # Find History Table
-            history_rows = []
-            history_header = soup.find('h4', string=re.compile('History'))
-            if history_header:
-                history_table = history_header.find_next('table')
-                if history_table:
-                    rows = history_table.find_all('tr')
-                    for row in rows:
-                        cols = row.find_all('td')
-                        if len(cols) >= 2:
-                            d = cols[0].get_text(strip=True)
-                            a = cols[1].get_text(strip=True)
-                            history_rows.append({"Date": d, "Action": a})
-            
-            details['history'] = history_rows
-            
-            # Update Status if we found history (Top row is newest)
-            if history_rows:
-                details['status'] = history_rows[0]['Action']
-                
-                # STICKY COMMITTEE SEARCH
-                # Look backwards through history for "Referred to"
-                for row in history_rows:
-                    action = row['Action'].lower()
-                    if "referred to committee" in action:
-                        match = re.search(r'committee (?:on|for) (.+)', action, re.IGNORECASE)
-                        if match:
-                            raw_comm = match.group(1).split("(")[0]
-                            chamber = "House" if bill_num.upper().startswith("H") else "Senate"
-                            clean_comm = clean_committee_name(raw_comm)
-                            # Fix missing chamber prefix
-                            if "House" not in clean_comm and "Senate" not in clean_comm:
-                                clean_comm = f"{chamber} {clean_comm}"
-                            details['committee'] = clean_comm
-                            break
-    except:
-        pass # If fail, return CSV defaults
+        if resp.status_code != 200: return details
         
+        soup = BeautifulSoup(resp.content, 'html.parser')
+        
+        history_rows = []
+        history_header = soup.find('h4', string=re.compile('History'))
+        if history_header:
+            history_table = history_header.find_next('table')
+            if history_table:
+                rows = history_table.find_all('tr')
+                for row in rows:
+                    cols = row.find_all('td')
+                    if len(cols) >= 2:
+                        date_text = cols[0].get_text(strip=True)
+                        action_text = cols[1].get_text(strip=True)
+                        history_rows.append({"Date": date_text, "Action": action_text})
+        
+        details['history'] = history_rows
+        
+        if history_rows:
+            details['status'] = history_rows[0]['Action']
+            
+            # Search history for committee assignment
+            for row in history_rows:
+                action = row['Action'].lower()
+                if "referred to committee" in action:
+                    match = re.search(r'committee (?:on|for) (.+)', action, re.IGNORECASE)
+                    if match:
+                        raw_comm = match.group(1).split("(")[0]
+                        chamber = "House" if bill_number.upper().startswith("H") else "Senate"
+                        clean_comm = clean_committee_name(raw_comm)
+                        if "House" not in clean_comm and "Senate" not in clean_comm:
+                            clean_comm = f"{chamber} {clean_comm}"
+                        details['committee'] = clean_comm
+                        break
+    except: pass
     return details
 
-# --- BATCH PROCESSOR (PARALLEL) ---
-def get_bill_data_batch(bill_numbers, lis_df):
-    clean_bills = list(set([str(b).strip().upper().replace(" ", "") for b in bill_numbers if str(b).strip() != 'nan']))
-    
-    # Index CSV for fast lookup
-    lis_lookup = {}
-    if not lis_df.empty:
-        lis_lookup = lis_df.set_index('bill_clean').to_dict('index')
-
-    results = []
-    
-    # Helper for the ThreadPool
-    def worker(b_num):
-        csv_data = lis_lookup.get(b_num, {})
-        scraped = scrape_single_bill(b_num, csv_data)
-        
-        # Merge Scraped Data + CSV Titles
-        title = csv_data.get('bill_description', 'No Title')
-        
-        # Date Logic
-        date_val = ""
-        if scraped['history']:
-            date_val = scraped['history'][0]['Date']
-        else:
-            # Fallback Date
-            date_val = str(csv_data.get('last_house_action_date', ''))
-            
-        lifecycle = determine_lifecycle(scraped['status'], scraped['committee'])
-        
-        return {
-            "Bill Number": b_num,
-            "Official Title": title,
-            "Status": scraped['status'], # From Scraper
-            "Date": date_val, 
-            "Lifecycle": lifecycle,
-            "Auto_Folder": get_smart_subject(title),
-            "History_Data": scraped['history'],
-            "Current_Committee": scraped['committee'],
-            "Current_Sub": "-"
-        }
-
-    # Run Parallel (10 workers)
-    # This keeps the UI responsive
-    with concurrent.futures.ThreadPoolExecutor(max_workers=10) as executor:
-        future_to_bill = {executor.submit(worker, b): b for b in clean_bills}
-        
-        # Optional: Add a spinner/progress if you want, but this runs fast enough usually
-        for future in concurrent.futures.as_completed(future_to_bill):
-            try:
-                res = future.result()
-                results.append(res)
-            except:
-                pass
-
-    return pd.DataFrame(results)
-
-# --- SCHEDULE SCRAPER (ORIGINAL) ---
+# --- SCHEDULE SCRAPER ---
 @st.cache_data(ttl=600)
 def fetch_schedule_from_web():
     schedule_map = {}
@@ -299,7 +247,7 @@ def fetch_schedule_from_web():
         except: pass
     return schedule_map
 
-# --- DATA FETCHING (CSV) ---
+# --- DATA FETCHING (MAIN) ---
 @st.cache_data(ttl=300) 
 def fetch_lis_data():
     data = {}
@@ -312,6 +260,70 @@ def fetch_lis_data():
         else: data['bills'] = pd.DataFrame() 
     except: data['bills'] = pd.DataFrame()
     return data
+
+# --- NEW: PARALLEL BATCH PROCESSOR ---
+def get_bill_data_batch(bill_numbers, lis_df):
+    clean_bills = list(set([str(b).strip().upper().replace(" ", "") for b in bill_numbers if str(b).strip() != 'nan']))
+    
+    # Pre-index CSV
+    lis_lookup = {}
+    if not lis_df.empty:
+        lis_lookup = lis_df.set_index('bill_clean').to_dict('index')
+
+    results = []
+    
+    # Define a helper to run inside the thread
+    def process_single_bill(bill_num):
+        csv_info = lis_lookup.get(bill_num, {})
+        title = csv_info.get('bill_description', 'No Title')
+        
+        # This is the "Deep Scrape" - cached individually
+        scraped_data = scrape_bill_details(bill_num)
+        
+        status = scraped_data['status']
+        if status == "Unknown": 
+            status = csv_info.get('last_house_action', csv_info.get('last_senate_action', 'Introduced'))
+            
+        history_data = scraped_data['history']
+        curr_comm = scraped_data['committee']
+        lifecycle = determine_lifecycle(status, curr_comm)
+        
+        date_val = ""
+        if history_data: date_val = history_data[0]['Date']
+
+        return {
+            "Bill Number": bill_num,
+            "Official Title": title,
+            "Status": str(status),
+            "Date": date_val, 
+            "Lifecycle": lifecycle,
+            "Auto_Folder": get_smart_subject(title),
+            "History_Data": history_data,
+            "Current_Committee": curr_comm,
+            "Current_Sub": "-"
+        }
+
+    # Parallel Execution (10 workers = 10x faster)
+    with concurrent.futures.ThreadPoolExecutor(max_workers=10) as executor:
+        # Submit all jobs
+        future_to_bill = {executor.submit(process_single_bill, b): b for b in clean_bills}
+        
+        # Progress bar
+        bar = st.progress(0)
+        completed = 0
+        
+        for future in concurrent.futures.as_completed(future_to_bill):
+            try:
+                data = future.result()
+                results.append(data)
+            except Exception as e:
+                pass # Skip errors
+            completed += 1
+            bar.progress(completed / len(clean_bills))
+            
+        bar.empty() # Hide bar when done
+
+    return pd.DataFrame(results)
 
 # --- ALERTS ---
 def check_and_broadcast(df_bills, df_subscribers, demo_mode):
@@ -424,7 +436,7 @@ current_time_est = datetime.now(est).strftime("%I:%M %p EST")
 if 'last_run' not in st.session_state:
     st.session_state['last_run'] = current_time_est
 
-# --- SIDEBAR CONTROLS ---
+# --- SIDEBAR ---
 demo_mode = st.sidebar.checkbox("🛠️ Enable Demo Mode", value=False)
 col_btn, col_time = st.columns([1, 6])
 with col_btn:
@@ -496,7 +508,6 @@ if bills_to_track:
             })
         api_df = pd.DataFrame(mock_results)
     else:
-        # PARALLEL FETCHING
         api_df = get_bill_data_batch(bills_to_track, lis_data['bills'])
 
     final_df = pd.merge(sheet_df, api_df, on="Bill Number", how="left")
@@ -556,7 +567,8 @@ if bills_to_track:
     with tab_upcoming:
         st.subheader("📅 Your Confirmed Agenda")
         
-        # FIXED: Use EST for today calculation
+        # Fix for 7PM UTC rollover - Use EST
+        est = pytz.timezone('US/Eastern')
         today = datetime.now(est).date()
         cols = st.columns(7)
         
@@ -593,6 +605,11 @@ if bills_to_track:
                             if b_id in bills_shown_today: continue 
 
                             info = bill_info_map.get(b_id, {})
+                            def normalize_text_strict(t):
+                                if pd.isna(t): return ""
+                                t = str(t).lower().replace('&','and').replace('.','').replace(',','').replace('-',' ')
+                                return " ".join(t.split())
+
                             curr_comm = normalize_text_strict(info.get('Current_Committee', ''))
                             curr_sub = normalize_text_strict(info.get('Current_Sub', ''))
                             
