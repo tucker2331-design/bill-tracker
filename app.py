@@ -24,7 +24,7 @@ LIS_HISTORY_CSV = LIS_BASE_URL + "HISTORY.CSV"
 
 st.set_page_config(page_title="VA Bill Tracker 2026", layout="wide")
 
-# --- RESTORED: TOPIC CATEGORIES ---
+# --- TOPIC CATEGORIES ---
 TOPIC_KEYWORDS = {
     "🗳️ Elections & Democracy": ["election", "vote", "ballot", "campaign", "poll", "voter", "registrar", "districting", "suffrage"],
     "🏗️ Housing & Property": ["rent", "landlord", "tenant", "housing", "lease", "property", "zoning", "eviction", "homeowner", "development", "residential"],
@@ -45,26 +45,29 @@ def determine_lifecycle(status_text, committee_name):
     status = str(status_text).lower()
     comm = str(committee_name).strip()
     
+    # 1. Final Stages
     if any(x in status for x in ["signed by governor", "enacted", "approved by governor", "chapter"]):
         return "✅ Signed & Enacted"
     
+    # 2. Dead
     if any(x in status for x in ["tabled", "failed", "stricken", "passed by indefinitely", "left in", "defeated", "no action taken", "incorporated into"]):
         return "❌ Dead / Tabled"
     
+    # 3. Passed Legislature / Waiting
     if any(x in status for x in ["enrolled", "communicated to governor", "bill text as passed"]):
         return "✍️ Awaiting Signature"
         
-    exit_keywords = ["reported", "read", "passed", "agreed", "engrossed", "communicated"]
-    
-    has_committee = comm not in ["-", "nan", "None", ""]
-    is_exiting = any(x in status for x in exit_keywords)
-    
-    if has_committee and not is_exiting:
-        return "📥 In Committee"
+    # 4. Out of Committee Indicators (Strict)
+    # If it says Reported, Read, Engrossed -> It is OUT.
+    out_keywords = ["reported", "read", "passed", "agreed", "engrossed", "communicated", "on floor", "calendar"]
+    if any(x in status for x in out_keywords):
+        return "📣 Out of Committee"
 
-    if any(x in status for x in ["referred", "assigned", "continued", "committee"]):
+    # 5. In Committee Indicators
+    if any(x in status for x in ["referred", "assigned", "continued", "committee", "recommitted"]):
         return "📥 In Committee"
         
+    # Default
     return "📣 Out of Committee"
 
 def get_smart_subject(title):
@@ -307,17 +310,15 @@ def get_bill_data_batch(bill_numbers, lis_data_dict):
             if not date_val or date_val == 'nan':
                 date_val = str(item.get('last_senate_action_date', ''))
 
-        # --- PROCESS HISTORY (Fixed Column Names) ---
+        # --- PROCESS HISTORY ---
         raw_history = history_lookup.get(bill_num, [])
         if raw_history:
             for h_row in raw_history:
-                # 1. Get Description
                 desc = ""
                 for col in ['history_description', 'description', 'action', 'history', 'event']:
                     if col in h_row:
                         desc = str(h_row[col])
                         break
-                # 2. Get Date
                 date_h = ""
                 for col in ['history_date', 'date', 'action_date']:
                     if col in h_row:
@@ -327,7 +328,7 @@ def get_bill_data_batch(bill_numbers, lis_data_dict):
                 if desc:
                     history_data.append({"Date": date_h, "Action": desc})
 
-                    # 3. Detect Committee
+                    # Detect Committee
                     desc_lower = desc.lower()
                     if "referred to" in desc_lower and "committee" in desc_lower:
                         match = re.search(r'(?:committee(?:\s+on)?)\s+([a-z\s&,]+)', desc_lower)
@@ -342,7 +343,7 @@ def get_bill_data_batch(bill_numbers, lis_data_dict):
                              if len(candidate) > 3 and "Minutes" not in candidate:
                                  curr_comm = candidate
 
-                    # 4. Detect Subcommittee
+                    # Detect Subcommittee
                     if "sub:" in desc_lower:
                         try:
                             parts = desc_lower.split("sub:")
@@ -369,6 +370,18 @@ def get_bill_data_batch(bill_numbers, lis_data_dict):
                  curr_comm = f"House {curr_comm}"
 
         lifecycle = determine_lifecycle(str(status), str(curr_comm))
+        
+        # --- UI TWEAK: IF OUT OF COMMITTEE, OVERWRITE DISPLAY NAME ---
+        display_comm = curr_comm
+        if lifecycle == "📣 Out of Committee" or lifecycle == "✅ Signed & Enacted":
+             if "engross" in str(status).lower():
+                 display_comm = "🏛️ Engrossed (Passed Chamber)"
+             elif "read" in str(status).lower():
+                 display_comm = "📜 On Floor (Read/Reported)"
+             elif "passed" in str(status).lower():
+                 display_comm = "🎉 Passed Chamber"
+             else:
+                 display_comm = "On Floor / Reported"
 
         results.append({
             "Bill Number": bill_num,
@@ -378,7 +391,8 @@ def get_bill_data_batch(bill_numbers, lis_data_dict):
             "Lifecycle": lifecycle,
             "Auto_Folder": get_smart_subject(title),
             "History_Data": history_data[::-1], 
-            "Current_Committee": str(curr_comm).strip(),
+            "Current_Committee": str(curr_comm).strip(), # Raw committee for calendar
+            "Display_Committee": str(display_comm).strip(), # UI display
             "Current_Sub": str(curr_sub).strip()
         })
 
@@ -416,7 +430,8 @@ def render_master_list_item(df):
              label_text += f" - {header_title}"
         
         with st.expander(label_text):
-            st.markdown(f"**🏛️ Current Committee:** {clean_committee_name(row.get('Current_Committee', '-'))}")
+            # USE DISPLAY COMMITTEE (Logic Refined)
+            st.markdown(f"**🏛️ Current Status:** {row.get('Display_Committee', '-')}")
             if row.get('Current_Sub') and row.get('Current_Sub') != '-':
                 st.markdown(f"**↳ Subcommittee:** {row.get('Current_Sub')}")
                 
@@ -572,21 +587,12 @@ if bills_to_track:
                 st.markdown("#### ❌ Failed")
                 render_master_list_item(failed)
 
-    # --- TAB 3: RESTORED STRICT DOCKET CHECK ---
+    # --- TAB 3: RESTORED ORIGINAL (LOOSE) CALENDAR ---
     with tab_upcoming:
         st.subheader("📅 Your Confirmed Agenda")
         today = datetime.now(est).date()
         cols = st.columns(7)
         
-        schedule_df = lis_data.get('schedule', pd.DataFrame())
-        my_bills_clean = [b.upper().strip() for b in bills_to_track]
-        
-        # STRICT FILTER: Must exist in LIS Dockets
-        confirmed_bills_set = set()
-        if not schedule_df.empty:
-            matches = schedule_df[schedule_df['bill_clean'].isin(my_bills_clean)]
-            confirmed_bills_set = set(matches['bill_clean'].unique())
-            
         bill_info_map = final_df.set_index('Bill Number')[['Current_Committee', 'Current_Sub', 'My Status', 'Status']].to_dict('index')
 
         for i in range(7):
@@ -608,16 +614,17 @@ if bills_to_track:
                         if "caucus" in scraper_full_name.lower(): continue
 
                         matched_bills = []
-                        # STRICT MATCH: Only check Verified Docket Bills
-                        for b_id in confirmed_bills_set:
+                        # LOOSE MATCHING (Reverted to OG)
+                        # We check all bills, not just those on LIS Docket
+                        for b_id, info in bill_info_map.items():
                             if b_id in bills_shown_today: continue 
 
-                            info = bill_info_map.get(b_id, {})
                             def normalize_text_strict(t):
                                 if pd.isna(t): return ""
                                 t = str(t).lower().replace('&','and').replace('.','').replace(',','').replace('-',' ')
                                 return " ".join(t.split())
 
+                            # Check raw committee name from history
                             curr_comm = normalize_text_strict(info.get('Current_Committee', ''))
                             curr_sub = normalize_text_strict(info.get('Current_Sub', ''))
                             
