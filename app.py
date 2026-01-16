@@ -3,12 +3,11 @@ import pandas as pd
 import requests
 import time
 import re
-import concurrent.futures # <--- NEW: For Parallel Speed
 from datetime import datetime, timedelta
 import pytz
 from slack_sdk import WebClient
 from slack_sdk.errors import SlackApiError
-from bs4 import BeautifulSoup 
+from bs4 import BeautifulSoup # <--- REQUIRED: pip install beautifulsoup4
 
 # --- CONFIGURATION ---
 SHEET_ID = "18m752GcvGIPPpqUn_gB0DfA3e4z2UGD0ki0dUZh2Qek"
@@ -18,9 +17,9 @@ SUBS_URL = f"https://docs.google.com/spreadsheets/d/{SHEET_ID}/gviz/tq?tqx=out:c
 # --- VIRGINIA LIS DATA FEEDS ---
 LIS_BASE_URL = "https://lis.blob.core.windows.net/lisfiles/20261/"
 LIS_BILLS_CSV = LIS_BASE_URL + "BILLS.CSV"       
-LIS_SUBDOCKET_CSV = LIS_BASE_URL + "SUBDOCKET.CSV"  
-LIS_DOCKET_CSV = LIS_BASE_URL + "DOCKET.CSV"        
-LIS_CALENDAR_CSV = LIS_BASE_URL + "CALENDAR.CSV"    
+LIS_SUBDOCKET_CSV = LIS_BASE_URL + "SUBDOCKET.CSV"  # Subcommittees
+LIS_DOCKET_CSV = LIS_BASE_URL + "DOCKET.CSV"        # Main Standing Committees
+LIS_CALENDAR_CSV = LIS_BASE_URL + "CALENDAR.CSV"    # Floor Sessions / Votes
 
 st.set_page_config(page_title="VA Bill Tracker 2026", layout="wide")
 
@@ -40,9 +39,64 @@ TOPIC_KEYWORDS = {
 }
 
 # --- HELPER FUNCTIONS ---
+def determine_lifecycle(status_text, committee_name):
+    """
+    Determines where the bill is in the process.
+    'Sticky Committee' Logic: If a committee is assigned, assume it is IN COMMITTEE
+    unless the status explicitly says it moved out (Reported, Passed, etc).
+    """
+    status = str(status_text).lower()
+    comm = str(committee_name).strip()
+    
+    # 1. Final Stages (Passed/Enacted) - Takes Priority
+    if any(x in status for x in ["signed by governor", "enacted", "approved by governor", "chapter"]):
+        return "✅ Signed & Enacted"
+    
+    # 2. Dead - Takes Priority
+    if any(x in status for x in ["tabled", "failed", "stricken", "passed by indefinitely", "left in", "defeated", "no action taken", "incorporated into"]):
+        return "❌ Dead / Tabled"
+    
+    # 3. Passed Legislature (Waiting for Gov)
+    if any(x in status for x in ["enrolled", "communicated to governor", "bill text as passed"]):
+        return "✍️ Awaiting Signature"
+        
+    # 4. Sticky Committee Logic
+    # We define "Exit Keywords" that imply a bill has LEFT a committee.
+    # If the bill HAS a committee assigned, but the status DOES NOT contain an exit keyword,
+    # we force it to be "In Committee" (even if status is 'Fiscal Impact' or 'Printed').
+    exit_keywords = ["reported", "read", "passed", "agreed", "engrossed", "calendar", "candidate", "communicated"]
+    
+    has_committee = comm not in ["-", "nan", "None", ""]
+    is_exiting = any(x in status for x in exit_keywords)
+    
+    if has_committee and not is_exiting:
+        return "📥 In Committee"
+
+    # 5. Standard Status Check (Fallback)
+    if any(x in status for x in ["referred", "assigned", "continued", "committee"]):
+        return "📥 In Committee"
+        
+    # 6. Default to Out/Floor
+    return "📣 Out of Committee"
+
+def get_smart_subject(title):
+    title_lower = str(title).lower()
+    for category, keywords in TOPIC_KEYWORDS.items():
+        if any(k in title_lower for k in keywords):
+            return category
+    return "📂 Unassigned / General"
+
+def normalize_text(text):
+    if pd.isna(text): return ""
+    text = str(text).lower()
+    text = text.replace('&', 'and').replace('.', '').replace(',', '')
+    return " ".join(text.split())
+
 def clean_committee_name(name):
-    if not name or str(name).lower() in ['nan', '-', 'none', '']: return ""
+    """Robust cleaner that preserves Chamber identity (House vs Senate)"""
+    if not name or str(name).lower() == 'nan': return ""
     name = str(name).strip()
+    
     if "," in name: name = name.split(",")[0].strip()
 
     mapping = {
@@ -95,45 +149,10 @@ def clean_committee_name(name):
 
     return base_name.title()
 
-def determine_lifecycle(status_text, committee_name):
-    status = str(status_text).lower()
-    comm = str(committee_name).strip()
-    
-    if any(x in status for x in ["signed by governor", "enacted", "approved by governor", "chapter"]):
-        return "✅ Signed & Enacted"
-    if any(x in status for x in ["tabled", "failed", "stricken", "passed by indefinitely", "left in", "defeated", "no action taken", "incorporated into"]):
-        return "❌ Dead / Tabled"
-    if any(x in status for x in ["enrolled", "communicated to governor", "bill text as passed"]):
-        return "✍️ Awaiting Signature"
-        
-    exit_keywords = ["reported", "read", "passed", "agreed", "engrossed", "calendar", "candidate", "communicated"]
-    
-    has_committee = comm not in ["-", "nan", "None", ""]
-    is_exiting = any(x in status for x in exit_keywords)
-    
-    if has_committee and not is_exiting:
-        return "📥 In Committee"
-
-    if any(x in status for x in ["referred", "assigned", "continued", "committee"]):
-        return "📥 In Committee"
-        
-    return "📣 Out of Committee"
-
-def get_smart_subject(title):
-    title_lower = str(title).lower()
-    for category, keywords in TOPIC_KEYWORDS.items():
-        if any(k in title_lower for k in keywords):
-            return category
-    return "📂 Unassigned / General"
-
-def normalize_text_strict(t):
-    if pd.isna(t): return ""
-    t = str(t).lower().replace('&','and').replace('.','').replace(',','').replace('-',' ')
-    return " ".join(t.split())
-
 def clean_status_text(text):
     if not text: return ""
     text = str(text)
+    
     replacements = {
         "HED": "House Education",
         "HAPP": "House Appropriations",
@@ -143,186 +162,222 @@ def clean_status_text(text):
         "floor offered": "Floor Amendment Offered",
         "passed by indefinitely": "Passed By Indefinitely (Dead)"
     }
+    
     for abbr, full in replacements.items():
         pattern = re.compile(re.escape(abbr), re.IGNORECASE)
         text = pattern.sub(full, text)
+        
     return text
 
-# --- NEW: DEEP SCRAPER (SINGLE ITEM) ---
-# NOTE: We keep caching here so repeated runs are instant
-@st.cache_data(ttl=600)
-def scrape_bill_details(bill_number):
-    url = f"https://lis.virginia.gov/cgi-bin/legp604.exe?261+sum+{bill_number}"
-    headers = {'User-Agent': 'Mozilla/5.0'}
-    
-    details = {
-        "status": "Unknown",
-        "history": [],
-        "committee": "-"
-    }
-    
-    try:
-        resp = requests.get(url, headers=headers, timeout=5)
-        if resp.status_code != 200: return details
-        
-        soup = BeautifulSoup(resp.content, 'html.parser')
-        
-        history_rows = []
-        history_header = soup.find('h4', string=re.compile('History'))
-        if history_header:
-            history_table = history_header.find_next('table')
-            if history_table:
-                rows = history_table.find_all('tr')
-                for row in rows:
-                    cols = row.find_all('td')
-                    if len(cols) >= 2:
-                        date_text = cols[0].get_text(strip=True)
-                        action_text = cols[1].get_text(strip=True)
-                        history_rows.append({"Date": date_text, "Action": action_text})
-        
-        details['history'] = history_rows
-        
-        if history_rows:
-            details['status'] = history_rows[0]['Action']
-            
-            # Search history for committee assignment
-            for row in history_rows:
-                action = row['Action'].lower()
-                if "referred to committee" in action:
-                    match = re.search(r'committee (?:on|for) (.+)', action, re.IGNORECASE)
-                    if match:
-                        raw_comm = match.group(1).split("(")[0]
-                        chamber = "House" if bill_number.upper().startswith("H") else "Senate"
-                        clean_comm = clean_committee_name(raw_comm)
-                        if "House" not in clean_comm and "Senate" not in clean_comm:
-                            clean_comm = f"{chamber} {clean_comm}"
-                        details['committee'] = clean_comm
-                        break
-    except: pass
-    return details
-
-# --- SCHEDULE SCRAPER ---
+# --- NEW: ROBUST SCRAPER (Fixed for "Minutes After") ---
 @st.cache_data(ttl=600)
 def fetch_schedule_from_web():
     schedule_map = {}
-    headers = {'User-Agent': 'Mozilla/5.0'}
-    urls = [
-        ("https://apps.senate.virginia.gov/Senator/ComMeetings.php", "Senate"),
-        ("https://house.vga.virginia.gov/schedule/meetings", "House")
-    ]
+    debug_log = [] 
+    headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'}
 
-    for url, chamber in urls:
-        try:
-            resp = requests.get(url, headers=headers, timeout=5)
-            soup = BeautifulSoup(resp.text, 'html.parser')
-            lines = [line.strip() for line in soup.get_text("\n", strip=True).splitlines() if line.strip()]
-            
-            for i, line in enumerate(lines):
-                if "2026" in line:
-                    time_match = re.search(r'(\d{1,2}:\d{2}\s*[AP]M|noon|upon\s+adjourn|\d+\s+minutes?\s+after)', line, re.IGNORECASE)
-                    if time_match:
-                        time_val = time_match.group(0).upper()
-                        try:
-                            clean_line = line.split("-")[0].replace("–", "-").split("-")[0].strip()
-                            clean_line = clean_line.replace("1st", "1").replace("2nd", "2").replace("3rd", "3").replace("th", "")
-                            dt = datetime.strptime(clean_line, "%A, %B %d, %Y")
-                            date_str = dt.strftime("%Y-%m-%d")
+    try:
+        url_senate = "https://apps.senate.virginia.gov/Senator/ComMeetings.php"
+        resp = requests.get(url_senate, headers=headers, timeout=5)
+        soup = BeautifulSoup(resp.text, 'html.parser')
+        lines = [line.strip() for line in soup.get_text("\n", strip=True).splitlines() if line.strip()]
+        
+        for i, line in enumerate(lines):
+            if "2026" in line: 
+                time_match = re.search(r'(\d{1,2}:\d{2}\s*[AP]M|noon|upon\s+adjourn|\d+\s+minutes?\s+after)', line, re.IGNORECASE)
+                if time_match:
+                    time_val = time_match.group(0).upper()
+                    try:
+                        clean_line = line.split("-")[0].replace("–", "-").split("-")[0].strip()
+                        clean_line = clean_line.replace("1st", "1").replace("2nd", "2").replace("3rd", "3").replace("th", "")
+                        dt = datetime.strptime(clean_line, "%A, %B %d, %Y")
+                        date_str = dt.strftime("%Y-%m-%d")
+                        if i > 0:
+                            comm_name = lines[i-1]
+                            if "Cancelled" in comm_name: continue
                             
-                            if i > 0:
-                                comm_name = lines[i-1]
-                                if "Cancelled" in comm_name: continue
-                                if "View Agenda" in comm_name: 
-                                    if i > 1: comm_name = lines[i-2]
+                            def normalize_text_strict(t):
+                                if pd.isna(t): return ""
+                                t = str(t).lower().replace('&','and').replace('.','').replace(',','').replace('-',' ')
+                                return " ".join(t.split())
 
-                                clean_name = normalize_text_strict(comm_name)
-                                if "senate" not in clean_name and "house" not in clean_name:
-                                    clean_name = f"{chamber.lower()} {clean_name}"
-                                clean_name = clean_name.replace("senate", "").replace("house", "").strip()
-                                
-                                key = (date_str, clean_name)
-                                display_name = clean_committee_name(comm_name)
-                                if chamber not in display_name: display_name = f"{chamber} {display_name}"
-                                schedule_map[key] = (time_val, display_name)
-                        except: pass
-        except: pass
+                            clean_name = normalize_text_strict(comm_name)
+                            if "senate" not in clean_name and "house" not in clean_name:
+                                clean_name = "senate " + clean_name 
+                            clean_name = clean_name.replace("senate", "").replace("house", "").strip()
+                            key = (date_str, clean_name)
+                            display_name = comm_name
+                            if "Senate" not in display_name: display_name = f"Senate {display_name}"
+                            schedule_map[key] = (time_val, display_name) 
+                    except: pass
+    except: pass
+
+    try:
+        url_house = "https://house.vga.virginia.gov/schedule/meetings"
+        resp = requests.get(url_house, headers=headers, timeout=5)
+        soup = BeautifulSoup(resp.text, 'html.parser')
+        lines = [line.strip() for line in soup.get_text("\n", strip=True).splitlines() if line.strip()]
+        
+        current_date_str = None
+        for i, line in enumerate(lines):
+            if "JANUARY" in line.upper() or "FEBRUARY" in line.upper():
+                try:
+                    date_text = line if "2026" in line else f"{line}, 2026"
+                    date_text = date_text.replace("THURSDAY,", "THURSDAY").strip()
+                    match = re.search(r'([A-Z]+ \d{1,2}, 2026)', date_text, re.IGNORECASE)
+                    if match:
+                        dt = datetime.strptime(match.group(0), "%B %d, %Y")
+                        current_date_str = dt.strftime("%Y-%m-%d")
+                        continue
+                except: pass
+            if not current_date_str: continue
+
+            time_match = re.search(r'^(\d{1,2}:\d{2}\s*[AP]M|Noon)', line, re.IGNORECASE)
+            if time_match:
+                time_val = time_match.group(0)
+                if i > 0:
+                    comm_name = lines[i-1]
+                    if "," in comm_name or "View Agenda" in comm_name:
+                        if i > 1:
+                            prev_prev = lines[i-2]
+                            if len(prev_prev) > 4: comm_name = prev_prev
+                    if "New Meeting" in comm_name: continue
+
+                    def normalize_text_strict(t):
+                        if pd.isna(t): return ""
+                        t = str(t).lower().replace('&','and').replace('.','').replace(',','').replace('-',' ')
+                        return " ".join(t.split())
+
+                    clean_name = normalize_text_strict(comm_name)
+                    if "senate" not in clean_name and "house" not in clean_name:
+                        clean_name = "house " + clean_name 
+                    clean_name = clean_name.replace("senate", "").replace("house", "").strip()
+                    
+                    key = (current_date_str, clean_name)
+                    display_name = comm_name
+                    if "House" not in display_name: display_name = f"House {display_name}"
+                    schedule_map[key] = (time_val, display_name)
+    except: pass
+    
+    st.session_state['debug_data'] = {"map_keys": list(schedule_map.keys()), "log": debug_log}
     return schedule_map
 
-# --- DATA FETCHING (MAIN) ---
+# --- DATA FETCHING (DIRECT FROM LIS) ---
 @st.cache_data(ttl=300) 
 def fetch_lis_data():
     data = {}
     try:
-        df = pd.read_csv(LIS_BILLS_CSV, encoding='ISO-8859-1')
+        try: df = pd.read_csv(LIS_BILLS_CSV, encoding='ISO-8859-1')
+        except: df = pd.read_csv(LIS_BILLS_CSV.replace(".CSV", ".csv"), encoding='ISO-8859-1')
         df.columns = df.columns.str.strip().str.lower().str.replace(' ', '_').str.replace('/', '_').str.replace('.', '')
         if 'bill_id' in df.columns:
             df['bill_clean'] = df['bill_id'].astype(str).str.upper().str.replace(" ", "").str.strip()
             data['bills'] = df
         else: data['bills'] = pd.DataFrame() 
     except: data['bills'] = pd.DataFrame()
+
+    calendar_dfs = []
+    for url, type_label in [(LIS_SUBDOCKET_CSV, "Subcommittee"), (LIS_DOCKET_CSV, "Committee"), (LIS_CALENDAR_CSV, "Floor")]:
+        try:
+            try: df = pd.read_csv(url, encoding='ISO-8859-1')
+            except: df = pd.read_csv(url.replace(".CSV", ".csv"), encoding='ISO-8859-1')
+            df.columns = df.columns.str.strip().str.lower().str.replace(' ', '_').str.replace('/', '_').str.replace('.', '')
+            col = next((c for c in df.columns if "bill" in c), None)
+            if col:
+                df['bill_clean'] = df[col].astype(str).str.upper().str.replace(" ", "").str.strip()
+                df['event_type'] = type_label
+                calendar_dfs.append(df)
+        except: pass
+
+    if calendar_dfs:
+        data['schedule'] = pd.concat(calendar_dfs, ignore_index=True)
+    else:
+        data['schedule'] = pd.DataFrame()
+
     return data
 
-# --- NEW: PARALLEL BATCH PROCESSOR ---
 def get_bill_data_batch(bill_numbers, lis_df):
+    results = []
     clean_bills = list(set([str(b).strip().upper().replace(" ", "") for b in bill_numbers if str(b).strip() != 'nan']))
     
-    # Pre-index CSV
-    lis_lookup = {}
-    if not lis_df.empty:
-        lis_lookup = lis_df.set_index('bill_clean').to_dict('index')
+    if lis_df.empty:
+        for b in clean_bills:
+             results.append({"Bill Number": b, "Status": "LIS Connection Error", "Lifecycle": "🚀 Active", "Official Title": "Error"})
+        return pd.DataFrame(results)
 
-    results = []
-    
-    # Define a helper to run inside the thread
-    def process_single_bill(bill_num):
-        csv_info = lis_lookup.get(bill_num, {})
-        title = csv_info.get('bill_description', 'No Title')
-        
-        # This is the "Deep Scrape" - cached individually
-        scraped_data = scrape_bill_details(bill_num)
-        
-        status = scraped_data['status']
-        if status == "Unknown": 
-            status = csv_info.get('last_house_action', csv_info.get('last_senate_action', 'Introduced'))
+    lis_lookup = lis_df.set_index('bill_clean').to_dict('index')
+    for bill_num in clean_bills:
+        item = lis_lookup.get(bill_num)
+        if item:
+            status = item.get('last_house_action', '')
+            if pd.isna(status) or str(status).strip() == '': status = item.get('last_senate_action', 'Introduced')
+            title = item.get('bill_description', 'No Title')
             
-        history_data = scraped_data['history']
-        curr_comm = scraped_data['committee']
-        lifecycle = determine_lifecycle(status, curr_comm)
-        
-        date_val = ""
-        if history_data: date_val = history_data[0]['Date']
+            date_val = str(item.get('last_house_action_date', ''))
+            if not date_val or date_val == 'nan':
+                date_val = str(item.get('last_senate_action_date', ''))
 
-        return {
-            "Bill Number": bill_num,
-            "Official Title": title,
-            "Status": str(status),
-            "Date": date_val, 
-            "Lifecycle": lifecycle,
-            "Auto_Folder": get_smart_subject(title),
-            "History_Data": history_data,
-            "Current_Committee": curr_comm,
-            "Current_Sub": "-"
-        }
+            history_data = []
+            h_act = item.get('last_house_action')
+            if pd.notna(h_act) and str(h_act).lower() != 'nan':
+                 history_data.append({"Date": item.get('last_house_action_date'), "Action": f"[House] {h_act}"})
+            s_act = item.get('last_senate_action')
+            if pd.notna(s_act) and str(s_act).lower() != 'nan':
+                 history_data.append({"Date": item.get('last_senate_action_date'), "Action": f"[Senate] {s_act}"})
 
-    # Parallel Execution (10 workers = 10x faster)
-    with concurrent.futures.ThreadPoolExecutor(max_workers=10) as executor:
-        # Submit all jobs
-        future_to_bill = {executor.submit(process_single_bill, b): b for b in clean_bills}
-        
-        # Progress bar
-        bar = st.progress(0)
-        completed = 0
-        
-        for future in concurrent.futures.as_completed(future_to_bill):
-            try:
-                data = future.result()
-                results.append(data)
-            except Exception as e:
-                pass # Skip errors
-            completed += 1
-            bar.progress(completed / len(clean_bills))
+            # --- ROBUST COMMITTEE EXTRACTION (WITH HISTORY SCAN) ---
+            curr_comm = "-"
             
-        bar.empty() # Hide bar when done
+            # 1. Try Official Columns First
+            c1 = item.get('last_house_committee')
+            c2 = item.get('last_senate_committee')
+            if pd.notna(c1) and str(c1).strip() not in ['nan', '']: curr_comm = c1
+            elif pd.notna(c2) and str(c2).strip() not in ['nan', '']: curr_comm = c2
+            
+            # 2. If empty, SCAN HISTORY for "Referred to" (Deep Search)
+            if curr_comm == "-":
+                full_history_text = f"{str(h_act)} {str(s_act)}".lower()
+                # Look for "Referred to Committee on [Name]"
+                match = re.search(r'referred to (?:committee on|the committee on)?\s?([a-z\s&]+)', full_history_text)
+                if match:
+                    found_name = match.group(1).title().strip()
+                    # Basic cleanup to ensure it's not garbage text
+                    if len(found_name) > 3 and "reading" not in found_name.lower():
+                        curr_comm = found_name
 
+            # 3. Fallback: Try to parse current status if history didn't help
+            status_lower = str(status).lower()
+            if curr_comm == "-":
+                comm_match = re.search(r'referred to (?:committee on|the committee on)?\s?([a-z\s&]+)', status_lower)
+                if comm_match:
+                    curr_comm = comm_match.group(1).title().strip()
+            
+            curr_sub = "-"
+            if "sub:" in status_lower:
+                try:
+                    parts = status_lower.split("sub:")
+                    if curr_comm == "-": curr_comm = parts[0].replace("assigned", "").strip().title()
+                    curr_sub = parts[1].strip().title()
+                except: pass
+
+            # Pass 'curr_comm' to determine_lifecycle for "Sticky" logic
+            lifecycle = determine_lifecycle(str(status), str(curr_comm))
+
+            results.append({
+                "Bill Number": bill_num,
+                "Official Title": title,
+                "Status": str(status),
+                "Date": date_val, 
+                "Lifecycle": lifecycle,
+                "Auto_Folder": get_smart_subject(title),
+                "History_Data": history_data,
+                "Current_Committee": str(curr_comm).strip(),
+                "Current_Sub": str(curr_sub).strip()
+            })
+        else:
+            results.append({
+                "Bill Number": bill_num, "Status": "Not Found on LIS", "Lifecycle": "🚀 Active", "Official Title": "Unknown"
+            })
     return pd.DataFrame(results)
 
 # --- ALERTS ---
@@ -344,8 +399,11 @@ def check_and_broadcast(df_bills, df_subscribers, demo_mode):
             return
         user_id = client.users_lookupByEmail(email=subscriber_list[0].strip())['user']['id']
         history = client.conversations_history(channel=client.conversations_open(users=[user_id])['channel']['id'], limit=100)
+        
+        # FIX: Unescape the history so '&amp;' becomes '&'
         raw_history_text = "\n".join([m.get('text', '') for m in history['messages']])
         history_text = raw_history_text.replace("&amp;", "&").replace("&lt;", "<").replace("&gt;", ">")
+        
         st.sidebar.success(f"✅ Connected to Slack")
     except Exception as e:
         st.sidebar.error(f"❌ Slack Error: {e}")
@@ -357,10 +415,12 @@ def check_and_broadcast(df_bills, df_subscribers, demo_mode):
     for i, row in df_bills.iterrows():
         if "LIS Connection Error" in str(row.get('Status')): continue
         b_num = str(row['Bill Number']).strip()
+        
         raw_status = str(row.get('Status', 'No Status')).strip()
         clean_status = clean_status_text(raw_status)
         
-        if b_num in history_text and clean_status in history_text: continue
+        if b_num in history_text and clean_status in history_text: 
+            continue
         
         display_name = str(row.get('My Title', '-'))
         if display_name == "-" or display_name == "nan" or not display_name:
@@ -390,9 +450,6 @@ def render_bill_card(row):
         display_title = row.get('My Title', 'No Title Provided')
     st.markdown(f"**{row['Bill Number']}**")
     
-    if row['Lifecycle'] == "📥 In Committee":
-        st.markdown(f"🏛️ **{row['Current_Committee']}**")
-
     my_status = str(row.get('My Status', '')).strip()
     if my_status and my_status != 'nan' and my_status != '-':
         st.info(f"🏷️ **Status:** {my_status}")
@@ -407,13 +464,19 @@ def render_master_list_item(df):
         return
     for i, row in df.iterrows():
         header_title = row['My Title'] if row['My Title'] != "-" else row.get('Official Title', '')
+        
         my_status = str(row.get('My Status', '')).strip()
         label_text = f"{row['Bill Number']}"
-        if my_status and my_status != 'nan' and my_status != '-': label_text += f" - {my_status}"
-        if header_title: label_text += f" - {header_title}"
+        if my_status and my_status != 'nan' and my_status != '-':
+            label_text += f" - {my_status}"
+        if header_title:
+             label_text += f" - {header_title}"
         
         with st.expander(label_text):
             st.markdown(f"**🏛️ Current Committee:** {clean_committee_name(row.get('Current_Committee', '-'))}")
+            if row.get('Current_Sub') and row.get('Current_Sub') != '-':
+                st.markdown(f"**↳ Subcommittee:** {row.get('Current_Sub')}")
+                
             st.markdown(f"**📌 Designated Title:** {row.get('My Title', '-')}")
             st.markdown(f"**📜 Official Title:** {row.get('Official Title', '-')}")
             st.markdown(f"**🔄 Status:** {clean_status_text(row.get('Status', '-'))}")
@@ -436,7 +499,7 @@ current_time_est = datetime.now(est).strftime("%I:%M %p EST")
 if 'last_run' not in st.session_state:
     st.session_state['last_run'] = current_time_est
 
-# --- SIDEBAR ---
+# --- SIDEBAR CONTROLS ---
 demo_mode = st.sidebar.checkbox("🛠️ Enable Demo Mode", value=False)
 col_btn, col_time = st.columns([1, 6])
 with col_btn:
@@ -456,6 +519,7 @@ try:
     
     cols_w = ['Bills Watching', 'Title (Watching)']
     if 'Status (Watching)' in raw_df.columns: cols_w.append('Status (Watching)')
+    
     df_w = pd.DataFrame()
     if 'Bills Watching' in raw_df.columns:
         df_w = raw_df[cols_w].copy()
@@ -466,12 +530,14 @@ try:
 
     df_i = pd.DataFrame()
     w_col_name = next((c for c in raw_df.columns if "Working On" in c and "Title" not in c and "Status" not in c), None)
+    
     if w_col_name:
         cols_i = [w_col_name]
         title_work_col = next((c for c in raw_df.columns if "Title (Working)" in c), None)
         if title_work_col: cols_i.append(title_work_col)
         status_work_col = next((c for c in raw_df.columns if "Status (Working)" in c), None)
         if status_work_col: cols_i.append(status_work_col)
+        
         df_i = raw_df[cols_i].copy()
         i_new_cols = ['Bill Number']
         if title_work_col: i_new_cols.append('My Title')
@@ -486,6 +552,7 @@ try:
     sheet_df = sheet_df.drop_duplicates(subset=['Bill Number'])
     sheet_df['My Title'] = sheet_df['My Title'].fillna("-")
     if 'My Status' not in sheet_df.columns: sheet_df['My Status'] = "-"
+    
 except Exception as e:
     st.error(f"Sheet Error: {e}")
     st.stop()
@@ -493,6 +560,8 @@ except Exception as e:
 # 2. FETCH LIS DATA
 lis_data = fetch_lis_data()
 bills_to_track = sheet_df['Bill Number'].unique().tolist()
+
+# 2b. FETCH WEB SCHEDULE (HYBRID MODE)
 web_schedule_map = fetch_schedule_from_web()
 
 if bills_to_track:
@@ -544,6 +613,7 @@ if bills_to_track:
             st.markdown("---")
             st.subheader(f"📜 Master List ({b_type})")
             
+            # --- 4-COLUMN LAYOUT UPDATE ---
             in_comm = subset[subset['Lifecycle'] == "📥 In Committee"]
             out_comm = subset[subset['Lifecycle'] == "📣 Out of Committee"]
             passed = subset[subset['Lifecycle'].isin(["✅ Signed & Enacted", "✍️ Awaiting Signature"])]
@@ -563,12 +633,10 @@ if bills_to_track:
                 st.markdown("#### ❌ Failed")
                 render_master_list_item(failed)
 
-    # --- TAB 3: UPCOMING ---
+    # --- TAB 3: UPCOMING (STRICT AGENDA MATCHING + ROBUST MAPPING + TODAY PERSISTENCE) ---
     with tab_upcoming:
         st.subheader("📅 Your Confirmed Agenda")
         
-        # Fix for 7PM UTC rollover - Use EST
-        est = pytz.timezone('US/Eastern')
         today = datetime.now(est).date()
         cols = st.columns(7)
         
@@ -615,9 +683,11 @@ if bills_to_track:
                             
                             match = False
                             if curr_comm and len(curr_comm) > 2:
-                                if curr_comm in scraper_clean_name or scraper_clean_name in curr_comm: match = True
+                                if curr_comm in scraper_clean_name or scraper_clean_name in curr_comm:
+                                    match = True
                             if curr_sub and len(curr_sub) > 2:
-                                if curr_sub in scraper_clean_name or scraper_clean_name in curr_sub: match = True
+                                if curr_sub in scraper_clean_name or scraper_clean_name in curr_sub:
+                                    match = True
                                     
                             if match:
                                 matched_bills.append(b_id)
@@ -625,6 +695,7 @@ if bills_to_track:
 
                         if matched_bills:
                             events_found = True
+                            
                             header_display = clean_committee_name(scraper_full_name)
                             sub_display = None
                             if "—" in scraper_full_name:
@@ -664,10 +735,14 @@ if bills_to_track:
 
                         if is_today:
                             lis_status = str(info.get('Status', ''))
+                            
                             skip_keywords = ["referred", "printed", "presentation", "reading waived"]
+                            
                             is_outcome = any(x in lis_status.lower() for x in ["reported", "passed", "defeat", "stricken", "agreed", "read", "engross", "vote", "assigned"])
                             is_admin = any(x in lis_status.lower() for x in skip_keywords)
-                            if is_admin and not is_outcome: continue
+                            
+                            if is_admin and not is_outcome:
+                                continue
 
                             events_found = True
                             bills_shown_today.add(b_id)
@@ -678,7 +753,8 @@ if bills_to_track:
                             if "fiscal" in lis_status.lower(): group_name = "Fiscal Impact Report"
                             elif b_id.startswith(("HJ", "SJ", "HR", "SR")): group_name = "Floor Session"
                             elif not raw_comm:
-                                if any(x in lis_status.lower() for x in ["read", "pass", "engross", "defeat"]): group_name = "Floor Session / Action"
+                                if any(x in lis_status.lower() for x in ["read", "pass", "engross", "defeat"]):
+                                    group_name = "Floor Session / Action"
                                 else: group_name = "General Assembly Action"
                             else:
                                 group_name = clean_committee_name(raw_comm)
