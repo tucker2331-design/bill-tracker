@@ -15,10 +15,11 @@ BILLS_URL = f"https://docs.google.com/spreadsheets/d/{SHEET_ID}/gviz/tq?tqx=out:
 SUBS_URL = f"https://docs.google.com/spreadsheets/d/{SHEET_ID}/gviz/tq?tqx=out:csv&sheet=Subscribers"
 
 # --- VIRGINIA LIS API & DATA FEEDS ---
-LIS_API_KEY = "81D70A54-FCDC-4023-A00B-A3FD114D5984"  # <--- YOUR KEY
+LIS_API_KEY = "81D70A54-FCDC-4023-A00B-A3FD114D5984" 
 LIS_API_BASE = "https://lis.virginia.gov/api/v1"
+SESSION_ID = "20261"  # 2026 Regular Session
 
-# We keep CSVs for the Master List (Bill Status/History)
+# CSVs for Master List (History/Status)
 LIS_BASE_URL = "https://lis.blob.core.windows.net/lisfiles/20261/"
 LIS_BILLS_CSV = LIS_BASE_URL + "BILLS.CSV"       
 LIS_HISTORY_CSV = LIS_BASE_URL + "HISTORY.CSV"
@@ -45,6 +46,7 @@ TOPIC_KEYWORDS = {
 def clean_bill_id(bill_text):
     if pd.isna(bill_text): return ""
     clean = str(bill_text).upper().replace(" ", "").strip()
+    # Remove leading zeros (HJ0001 -> HJ1)
     clean = re.sub(r'^([A-Z]+)0+(\d+)$', r'\1\2', clean)
     return clean
 
@@ -56,9 +58,11 @@ def determine_lifecycle(status_text, committee_name):
     if any(x in status for x in ["tabled", "failed", "stricken", "passed by indefinitely", "left in", "defeated", "no action taken", "incorporated into"]): return "❌ Dead / Tabled"
     if any(x in status for x in ["enrolled", "communicated to governor", "bill text as passed"]): return "✍️ Awaiting Signature"
     
+    # Exit keywords
     out_keywords = ["reported", "passed", "agreed", "engrossed", "communicated", "reading waived", "read second", "read third"]
     if any(x in status for x in out_keywords): return "📣 Out of Committee"
 
+    # Sticky Committee
     if comm not in ["-", "nan", "None", ""] and len(comm) > 3: return "📥 In Committee"
     return "📥 In Committee"
 
@@ -72,39 +76,8 @@ def clean_committee_name(name):
     if not name or str(name).lower() == 'nan': return ""
     name = str(name).strip()
     if "," in name: name = name.split(",")[0].strip()
-
-    mapping = {
-        "HED": "House Education", "HEDC": "House Education", "P&E": "Privileges & Elections",
-        "C&L": "Commerce & Labor", "HWI": "House Health, Welfare & Inst.", "APP": "House Appropriations",
-        "HAPP": "House Appropriations", "FIN": "Senate Finance & Appropriations", "JUD": "Courts of Justice",
-        "GL": "General Laws", "AG": "Agriculture", "TRAN": "Transportation",
-        "SFIN": "Senate Finance & Appropriations", "HFIN": "House Finance", "SEH": "Senate Education & Health",
-        "CL": "Commerce & Labor", "SCL": "Senate Commerce & Labor", "HCL": "House Commerce & Labor"
-    }
-    upper_name = name.upper()
-    if upper_name in mapping: return mapping[upper_name]
-    if name.lower() == "education": return "Education"
-
-    is_senate = "SENATE" in upper_name
-    is_house = "HOUSE" in upper_name
-    base_name = name
-    standard_committees = [
-        "Education and Health", "Education", "Commerce and Labor", "General Laws", "Transportation",
-        "Finance", "Appropriations", "Courts of Justice", "Privileges and Elections",
-        "Agriculture", "Rules", "Local Government", "Public Safety", "Counties Cities and Towns",
-        "Health, Welfare and Institutions", "Rehabilitation and Social Services"
-    ]
-    for std in standard_committees:
-        if std.lower() in name.lower():
-            base_name = std
-            break
-    if "Senate" in base_name or "House" in base_name: return base_name
-    if is_senate: return f"Senate {base_name}"
-    if is_house: return f"House {base_name}"
-    if "Health, Welfare" in base_name: return f"House {base_name}"
-    if "Rehabilitation" in base_name: return f"Senate {base_name}"
-    if "Education and Health" in base_name: return f"Senate {base_name}"
-    return base_name.title()
+    # Capitalize
+    return name.title()
 
 def clean_status_text(text):
     if not text: return ""
@@ -119,60 +92,72 @@ def clean_status_text(text):
         text = pattern.sub(full, text)
     return text
 
-# --- NEW: API CALENDAR FETCHER ---
+# --- API CALENDAR FETCHER (STRICT) ---
 @st.cache_data(ttl=300)
 def fetch_api_calendar():
     """
-    Fetches the next 7 days of meetings directly from the LIS API.
-    Returns a dictionary: { 'YYYY-MM-DD': [ { 'Time': '...', 'Committee': '...', 'Bills': ['HB1', 'SB2'] } ] }
+    Queries LIS API for the next 8 days.
+    Returns: { 'YYYY-MM-DD': [ { 'Committee': 'Senate Finance', 'Time': '9:00 AM', 'Bills': ['SB1', 'SB2'] } ] }
     """
     calendar_data = {}
-    headers = {"User-Agent": "Mozilla/5.0", "Auth-Token": LIS_API_KEY} # Note: LIS API usually passes Key in URL or Header
-    
-    # LIS API Structure usually requires Session ID (20261).
-    # We will try the standard public endpoints.
-    # Note: If this fails, it usually returns an empty dict, safe for the app.
-    
     today = datetime.now()
     dates_to_check = [(today + timedelta(days=i)).strftime("%Y-%m-%d") for i in range(8)]
     
-    # We use a simulated response structure here because without full API documentation 
-    # specific to the 2026 session endpoints, we construct the most standard query.
-    # Typically: GET https://lis.virginia.gov/api/v1/schedules/{session_id}/{date}
-    
+    # We loop through dates and hit the schedule endpoint
     for date_str in dates_to_check:
         try:
-            # Construct API URL (This is the standard LIS format)
-            url = f"{LIS_API_BASE}/schedules/20261/{date_str}?key={LIS_API_KEY}"
-            resp = requests.get(url, timeout=4)
+            # Endpoint: /schedules/{session}/{date}
+            url = f"{LIS_API_BASE}/schedules/{SESSION_ID}/{date_str}"
+            # Pass key in query parameters
+            resp = requests.get(url, params={"key": LIS_API_KEY}, timeout=5)
             
             if resp.status_code == 200:
                 data = resp.json()
-                # Parse JSON response
-                # Expected: [{'MeetingTime': '09:00 AM', 'CommitteeName': '...', 'Dockets': [{'BillNumber': 'HB1'}]}]
+                # If API returns an error or empty list
+                if not isinstance(data, list): continue
                 
                 day_events = []
                 for meeting in data:
+                    # 1. Get Committee Name & Chamber
+                    chamber_code = meeting.get('ChamberCode', '') # 'H' or 'S'
+                    comm_name = meeting.get('CommitteeName', 'Unknown')
+                    
+                    # Fix Chamber Label
+                    prefix = ""
+                    if chamber_code == "H": prefix = "House"
+                    elif chamber_code == "S": prefix = "Senate"
+                    
+                    # Avoid double naming (e.g. "Senate Senate Finance")
+                    if prefix and prefix not in comm_name:
+                        display_name = f"{prefix} {comm_name}"
+                    else:
+                        display_name = comm_name
+                        
                     mtg_time = meeting.get('MeetingTime', 'TBA')
-                    comm_name = meeting.get('CommitteeName', 'Unknown Committee')
                     
-                    # Extract bills
-                    bills = []
+                    # 2. Get Bills from Dockets
+                    docket_bills = []
                     dockets = meeting.get('Dockets', [])
-                    for d in dockets:
-                        b_num = d.get('BillNumber')
-                        if b_num: bills.append(clean_bill_id(b_num))
+                    # Dockets might be a list of objects or sometimes nested
+                    if isinstance(dockets, list):
+                        for dock in dockets:
+                            # Try standard fields
+                            b_num = dock.get('BillNumber')
+                            if b_num: 
+                                docket_bills.append(clean_bill_id(b_num))
                     
+                    # Only add if there are bills or it's a major meeting
                     day_events.append({
+                        "Committee": clean_committee_name(display_name),
                         "Time": mtg_time,
-                        "Committee": clean_committee_name(comm_name),
-                        "Bills": bills
+                        "Bills": docket_bills
                     })
                 
                 if day_events:
                     calendar_data[date_str] = day_events
-        except:
-            pass # Fail silently if API is down/limited
+        except Exception as e:
+            # If API fails, we just skip that day (don't crash app)
+            pass
             
     return calendar_data
 
@@ -181,10 +166,11 @@ def fetch_api_calendar():
 def fetch_lis_data():
     data = {}
     
-    # Timestamp
+    # Store timestamp
     est = pytz.timezone('US/Eastern')
     data['fetch_time'] = datetime.now(est).strftime("%I:%M %p EST")
 
+    # 1. Master List Status
     try:
         try: df = pd.read_csv(LIS_BILLS_CSV, encoding='ISO-8859-1')
         except: df = pd.read_csv(LIS_BILLS_CSV.replace(".CSV", ".csv"), encoding='ISO-8859-1')
@@ -194,6 +180,7 @@ def fetch_lis_data():
         data['bills'] = df
     except: data['bills'] = pd.DataFrame()
 
+    # 2. Master List History
     try:
         try: df_hist = pd.read_csv(LIS_HISTORY_CSV, encoding='ISO-8859-1')
         except: df_hist = pd.read_csv(LIS_HISTORY_CSV.replace(".CSV", ".csv"), encoding='ISO-8859-1')
@@ -237,6 +224,7 @@ def get_bill_data_batch(bill_numbers, lis_data_dict):
             date_val = str(item.get('last_house_action_date', ''))
             if not date_val or date_val == 'nan': date_val = str(item.get('last_senate_action_date', ''))
 
+        # Process History
         raw_history = history_lookup.get(bill_num, [])
         if raw_history:
             for h_row in raw_history:
@@ -461,7 +449,7 @@ try:
 except Exception as e: st.error(f"Sheet Error: {e}"); st.stop()
 
 bills_to_track = sheet_df['Bill Number'].unique().tolist()
-# NEW: USE API CALENDAR INSTEAD OF SCRAPER
+# USE API FOR CALENDAR
 api_calendar_data = fetch_api_calendar()
 
 if bills_to_track:
@@ -518,13 +506,14 @@ if bills_to_track:
             with m3: st.markdown("#### 🎉 Passed"); render_simple_list_item(passed)
             with m4: st.markdown("#### ❌ Failed"); render_simple_list_item(failed)
 
-    # --- TAB 3: CALENDAR (API POWERED) ---
+    # --- TAB 3: CALENDAR (API STRICT) ---
     with tab_upcoming:
         st.subheader("📅 Your Confirmed Agenda")
         today = datetime.now(est).date()
         cols = st.columns(7)
         
         bill_info_map = final_df.set_index('Bill Number')[['Current_Committee', 'Current_Sub', 'My Status', 'Status', 'Date']].to_dict('index')
+        # Use Clean IDs for matching
         my_bills_clean = [clean_bill_id(b) for b in bills_to_track]
 
         for i in range(7):
@@ -538,12 +527,12 @@ if bills_to_track:
                 events_found = False
                 bills_shown_today = set()
                 
-                # A. SHOW BILLS CONFIRMED ON API AGENDA
+                # A. SHOW BILLS CONFIRMED ON API AGENDA (STRICT)
                 todays_api_meetings = api_calendar_data.get(target_date_str, [])
                 
                 if todays_api_meetings:
                     for meeting in todays_api_meetings:
-                        # Check if any of our bills are in this meeting's bill list
+                        # STRICT MATCH: Only bills in the API docket list
                         matched_bills = [b for b in meeting['Bills'] if b in my_bills_clean]
                         
                         if matched_bills:
@@ -612,7 +601,6 @@ with st.sidebar:
         if hist_cols: st.write(f"**History File:** 🟢 Loaded")
         else: st.write("**History File:** 🔴 Not loaded")
         
-        # Check API Status
         if api_calendar_data:
              st.write(f"**API Calendar:** 🟢 Connected")
              st.write(f"Days Fetched: {len(api_calendar_data)}")
