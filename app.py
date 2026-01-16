@@ -17,7 +17,7 @@ SUBS_URL = f"https://docs.google.com/spreadsheets/d/{SHEET_ID}/gviz/tq?tqx=out:c
 LIS_BASE_URL = "https://lis.blob.core.windows.net/lisfiles/20261/"
 LIS_BILLS_CSV = LIS_BASE_URL + "BILLS.CSV"       
 LIS_HISTORY_CSV = LIS_BASE_URL + "HISTORY.CSV"
-DEFAULT_SESSION_ID = "261" 
+DEFAULT_SESSION_ID = "261"
 
 st.set_page_config(page_title="VA Bill Tracker 2026", layout="wide")
 
@@ -65,11 +65,11 @@ def clean_committee_name(name):
     if not name or str(name).lower() == 'nan': return ""
     name = str(name).strip()
     
-    # 1. REMOVE NAMES (Strict Regex)
+    # Remove Names (Aggressive)
     name = re.sub(r'\b[A-Z][a-z]+, [A-Z]\. ?[A-Z]?\.?.*$', '', name) 
     name = re.sub(r'\b(Simon|Rasoul|Willett|Helmer|Lucas|Surovell|Locke|Deeds|Favola|Marsden|Ebbin|McPike|Hayes|Carroll Foy|Subcommittee #\d+)\b.*', '', name, flags=re.IGNORECASE)
     
-    # 2. MAP TO STANDARD
+    # Map to Standard
     upper = name.upper().strip()
     mapping = {
         "HED": "House Education", "HAPP": "House Appropriations", "FIN": "Senate Finance",
@@ -88,99 +88,107 @@ def clean_status_text(text):
     text = str(text)
     return text.replace("HED", "House Education").replace("sub:", "Subcommittee:")
 
-# --- SMART HTML CALENDAR SCRAPER ---
+# --- SLACK BOT (RESTORED) ---
+def check_and_broadcast(df_bills, df_subscribers, demo_mode):
+    st.sidebar.header("🤖 Slack Bot Status")
+    if demo_mode: st.sidebar.warning("🛠️ Demo Mode Active"); return
+    token = st.secrets.get("SLACK_BOT_TOKEN")
+    if not token: st.sidebar.error("❌ Disconnected (Token Missing)"); return
+    client = WebClient(token=token)
+    try:
+        subscriber_list = df_subscribers['Email'].dropna().unique().tolist()
+        if not subscriber_list: st.sidebar.warning("⚠️ No Subscribers Found"); return
+        # Get history to prevent duplicate alerts
+        user_id = client.users_lookupByEmail(email=subscriber_list[0].strip())['user']['id']
+        history = client.conversations_history(channel=client.conversations_open(users=[user_id])['channel']['id'], limit=100)
+        raw_history_text = "\n".join([m.get('text', '') for m in history['messages']])
+        history_text = raw_history_text.replace("&amp;", "&").replace("&lt;", "<").replace("&gt;", ">")
+        st.sidebar.success(f"✅ Connected to Slack")
+    except Exception as e: st.sidebar.error(f"❌ Slack Error: {e}"); return
+
+    report = f"🏛️ *VA LEGISLATIVE UPDATE* - {datetime.now().strftime('%m/%d')}\n_Latest changes detected:_\n"
+    updates_found = False
+    
+    for i, row in df_bills.iterrows():
+        if "LIS Connection Error" in str(row.get('Status')): continue
+        b_num = str(row['Bill Number']).strip()
+        raw_status = str(row.get('Status', 'No Status')).strip()
+        clean_status = clean_status_text(raw_status)
+        
+        # Logic: If bill+status NOT in history, send it.
+        if b_num in history_text and clean_status in history_text: continue
+        
+        display_name = str(row.get('My Title', '-'))
+        if display_name == "-" or display_name == "nan" or not display_name:
+            official = str(row.get('Official Title', ''))
+            display_name = (official[:60] + '..') if len(official) > 60 else official
+            
+        updates_found = True
+        report += f"\n⚪ *{b_num}* | {display_name}\n> _{clean_status}_\n"
+
+    if updates_found:
+        st.toast(f"📢 Sending updates to {len(subscriber_list)} people...")
+        for email in subscriber_list:
+            try:
+                uid = client.users_lookupByEmail(email=email.strip())['user']['id']
+                client.chat_postMessage(channel=uid, text=report)
+            except: pass
+        st.toast("✅ Sent!")
+        st.sidebar.info("🚀 New Update Sent!")
+    else:
+        st.sidebar.info("💤 No new updates needed.")
+
+# --- SCRAPER ---
 @st.cache_data(ttl=600)
 def fetch_html_calendar():
-    """
-    Scrapes Schedule + BILL NUMBERS if visible in the text.
-    """
     calendar_data = {}
     debug_log = []
     headers = {'User-Agent': 'Mozilla/5.0'}
     
-    # 1. HOUSE SCRAPER
-    try:
-        url = "https://house.vga.virginia.gov/schedule/meetings"
-        resp = requests.get(url, headers=headers, timeout=4)
-        if resp.status_code == 200:
-            soup = BeautifulSoup(resp.text, 'html.parser')
-            lines = [line.strip() for line in soup.get_text("\n", strip=True).splitlines() if line.strip()]
-            
-            current_date_str = None
-            for i, line in enumerate(lines):
-                # Detect Date
-                if "JANUARY" in line.upper() or "FEBRUARY" in line.upper():
-                    try:
-                        clean_d = line.split("–")[0].split("-")[0].strip()
-                        if "2026" not in clean_d: clean_d += ", 2026"
-                        dt = datetime.strptime(clean_d, "%A, %B %d, %Y")
-                        current_date_str = dt.strftime("%Y-%m-%d")
-                    except: pass
+    def run_scraper(url, prefix):
+        try:
+            resp = requests.get(url, headers=headers, timeout=4)
+            if resp.status_code == 200:
+                soup = BeautifulSoup(resp.text, 'html.parser')
+                lines = [line.strip() for line in soup.get_text("\n", strip=True).splitlines() if line.strip()]
                 
-                # Detect Time
-                if current_date_str:
-                    time_match = re.search(r'^\d{1,2}:\d{2}\s*[AP]M', line)
-                    if time_match:
-                        mtg_time = time_match.group(0)
-                        if i > 0:
-                            raw_name = lines[i-1]
-                            if "Agenda" not in raw_name and "Meeting" not in raw_name:
-                                full_name = f"House {raw_name}"
-                                
-                                # NEW: Scan 5 lines ahead/behind for Bill Numbers (e.g. HB 123)
-                                context_text = " ".join(lines[max(0, i-2):min(len(lines), i+15)]).upper()
-                                found_bills = re.findall(r'\b(HB|SB|HJ|SJ)\s?(\d+)\b', context_text)
-                                clean_found = [f"{b[0]}{b[1]}" for b in found_bills]
-                                
-                                if current_date_str not in calendar_data: calendar_data[current_date_str] = []
-                                calendar_data[current_date_str].append({
-                                    "Time": mtg_time,
-                                    "Committee": clean_committee_name(full_name),
-                                    "Chamber": "House",
-                                    "BillsFound": clean_found
-                                })
-            debug_log.append(f"House Scraper: Success")
-    except Exception as e:
-        debug_log.append(f"House Scraper Error: {e}")
-
-    # 2. SENATE SCRAPER
-    try:
-        url = "https://apps.senate.virginia.gov/Senator/ComMeetings.php"
-        resp = requests.get(url, headers=headers, timeout=4)
-        if resp.status_code == 200:
-            soup = BeautifulSoup(resp.text, 'html.parser')
-            lines = [line.strip() for line in soup.get_text("\n", strip=True).splitlines() if line.strip()]
-            
-            for i, line in enumerate(lines):
-                if "2026" in line and ("AM" in line or "PM" in line):
-                    try:
-                        parts = line.split("2026")
-                        if len(parts) > 1:
-                            date_part = parts[0] + "2026"
-                            time_part = parts[1].strip()
-                            dt = datetime.strptime(date_part.strip(), "%A, %B %d, %Y")
-                            d_str = dt.strftime("%Y-%m-%d")
+                current_date_str = None
+                for i, line in enumerate(lines):
+                    # Date Detection
+                    if "JANUARY" in line.upper() or "FEBRUARY" in line.upper():
+                        try:
+                            clean_d = line.split("–")[0].split("-")[0].strip()
+                            if "2026" not in clean_d: clean_d += ", 2026"
+                            dt = datetime.strptime(clean_d, "%A, %B %d, %Y")
+                            current_date_str = dt.strftime("%Y-%m-%d")
+                        except: pass
+                    
+                    # Time Detection
+                    if current_date_str:
+                        time_match = re.search(r'^\d{1,2}:\d{2}\s*[AP]M', line)
+                        if time_match:
+                            mtg_time = time_match.group(0)
                             if i > 0:
                                 raw_name = lines[i-1]
-                                if "Cancelled" not in raw_name:
-                                    full_name = f"Senate {raw_name}"
+                                if "Agenda" not in raw_name and "Meeting" not in raw_name and "Cancelled" not in raw_name:
+                                    full_name = f"{prefix} {raw_name}"
                                     
-                                    # NEW: Scan nearby text for bill IDs
-                                    context_text = " ".join(lines[max(0, i-2):min(len(lines), i+15)]).upper()
-                                    found_bills = re.findall(r'\b(HB|SB|HJ|SJ)\s?(\d+)\b', context_text)
-                                    clean_found = [f"{b[0]}{b[1]}" for b in found_bills]
+                                    # DEBUG: Capture context to see if bills are hidden
+                                    context = " ".join(lines[i:i+5])
+                                    debug_log.append(f"[{current_date_str}] Found: {full_name} @ {mtg_time}. Context: {context[:50]}...")
 
-                                    if d_str not in calendar_data: calendar_data[d_str] = []
-                                    calendar_data[d_str].append({
-                                        "Time": time_part,
+                                    if current_date_str not in calendar_data: calendar_data[current_date_str] = []
+                                    calendar_data[current_date_str].append({
+                                        "Time": mtg_time,
                                         "Committee": clean_committee_name(full_name),
-                                        "Chamber": "Senate",
-                                        "BillsFound": clean_found
+                                        "RawName": full_name,
+                                        "Chamber": prefix
                                     })
-                    except: pass
-            debug_log.append(f"Senate Scraper: Success")
-    except Exception as e:
-        debug_log.append(f"Senate Scraper Error: {e}")
+        except Exception as e:
+            debug_log.append(f"{prefix} Error: {e}")
+
+    run_scraper("https://house.vga.virginia.gov/schedule/meetings", "House")
+    run_scraper("https://apps.senate.virginia.gov/Senator/ComMeetings.php", "Senate")
 
     return calendar_data, debug_log
 
@@ -408,6 +416,9 @@ if bills_to_track:
     if 'Auto_Folder' not in final_df.columns or final_df['Auto_Folder'].isnull().any():
          final_df['Auto_Folder'] = final_df.apply(lambda row: get_smart_subject(row.get('Official Title', row.get('My Title', ''))), axis=1)
 
+    # RESTORED SLACK CALL
+    check_and_broadcast(final_df, subs_df, demo_mode)
+
     # 3. RENDER TABS
     tab_involved, tab_watching, tab_upcoming = st.tabs(["🚀 Directly Involved", "👀 Watching", "📅 Upcoming Hearings"])
 
@@ -436,7 +447,7 @@ if bills_to_track:
             with m3: st.markdown("#### 🎉 Passed"); render_simple_list_item(passed)
             with m4: st.markdown("#### ❌ Failed"); render_simple_list_item(failed)
 
-    # --- TAB 3: CALENDAR (SMART SCRAPER) ---
+    # --- TAB 3: CALENDAR (STRICT HTML) ---
     with tab_upcoming:
         st.subheader("📅 Your Confirmed Agenda")
         today = datetime.now(est).date()
@@ -455,6 +466,7 @@ if bills_to_track:
                 events_found = False
                 bills_shown_today = set()
                 
+                # PLAN A: DIRECT HTML CALENDAR
                 if target_date_str in html_calendar:
                     meetings = html_calendar[target_date_str]
                     for m in meetings:
@@ -467,46 +479,24 @@ if bills_to_track:
                             if mtg_dt < current_dt: continue 
                         except: pass
 
-                        # Logic:
-                        # 1. Did scraper see specific bill numbers? (m['BillsFound'])
-                        # 2. If not, does the committee name match any of our bills? (Inference)
+                        # FILTER: Only show committee if we have bills there
+                        comm_clean = m['Committee'].lower().replace("committee", "").strip()
                         
-                        confirmed_bills = []
-                        potential_bills = []
-                        
-                        # Check confirmed bills first
-                        if 'BillsFound' in m and m['BillsFound']:
-                            for b_num in m['BillsFound']:
-                                if b_num in bill_info_map:
-                                    confirmed_bills.append(b_num)
-                        
-                        # Fallback to committee matching if no confirmed bills found
-                        if not confirmed_bills:
-                            comm_clean = m['Committee'].lower().replace("committee", "").strip()
-                            for b_id, info in bill_info_map.items():
-                                if info.get('Lifecycle') in ["✅ Signed & Enacted", "❌ Dead / Tabled"]: continue
-                                b_comm = str(info.get('Current_Committee', '')).lower()
-                                if comm_clean in b_comm or b_comm in comm_clean:
-                                    potential_bills.append(b_id)
-
-                        # RENDER
-                        if confirmed_bills:
-                            events_found = True
-                            st.markdown(f"**{m['Committee']}**")
-                            st.caption(f"⏰ {m['Time']}")
-                            st.success("✅ Confirmed on Docket")
-                            for b_id in confirmed_bills:
-                                bills_shown_today.add(b_id)
-                                info = bill_info_map.get(b_id, {})
-                                st.error(f"**{b_id}**")
-                            st.divider()
-                        elif potential_bills:
-                            events_found = True
-                            st.markdown(f"**{m['Committee']}**")
-                            st.caption(f"⏰ {m['Time']}")
-                            st.warning("⚠️ Potential Hearing")
+                        relevant_bills = []
+                        for b_id, info in bill_info_map.items():
+                            if info.get('Lifecycle') in ["✅ Signed & Enacted", "❌ Dead / Tabled"]: continue
                             
-                            # Official Link
+                            b_comm = str(info.get('Current_Committee', '')).lower()
+                            if comm_clean in b_comm or b_comm in comm_clean:
+                                relevant_bills.append(b_id)
+                        
+                        if relevant_bills:
+                            events_found = True
+                            st.markdown(f"**{m['Committee']}**")
+                            st.caption(f"⏰ {m['Time']}")
+                            st.caption("⚠️ _Potential Hearing (Based on Committee)_")
+                            
+                            # GENERATE OFFICIAL LINK
                             mmdd = datetime.strptime(target_date_str, "%Y-%m-%d").strftime("%m%d")
                             link = f"https://lis.virginia.gov/cgi-bin/legp604.exe?{DEFAULT_SESSION_ID}+doc+DO{mmdd}"
                             st.markdown(f"[📄 View Official Docket]({link})")
@@ -557,5 +547,5 @@ with st.sidebar:
         else: st.write(f"**History File:** 🔴 Not loaded")
         
         st.write(f"**HTML Scraper:** {'🟢 Active' if html_calendar else '🔴 Empty'}")
-        st.write("**Scraper Log:**")
+        st.write("**Raw Scraper Data (First 10 Lines):**")
         st.text("\n".join(scrape_logs[:10]))
