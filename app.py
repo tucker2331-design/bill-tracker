@@ -17,8 +17,8 @@ SUBS_URL = f"https://docs.google.com/spreadsheets/d/{SHEET_ID}/gviz/tq?tqx=out:c
 # --- VIRGINIA LIS DATA FEEDS ---
 LIS_BASE_URL = "https://lis.blob.core.windows.net/lisfiles/20261/"
 LIS_BILLS_CSV = LIS_BASE_URL + "BILLS.CSV"       
-LIS_SUBDOCKET_CSV = LIS_BASE_URL + "SUBDOCKET.CSV"  # <--- OFFICIAL AGENDA SOURCE
-LIS_DOCKET_CSV = LIS_BASE_URL + "DOCKET.CSV"        # <--- OFFICIAL AGENDA SOURCE
+LIS_SUBDOCKET_CSV = LIS_BASE_URL + "SUBDOCKET.CSV"
+LIS_DOCKET_CSV = LIS_BASE_URL + "DOCKET.CSV"
 LIS_CALENDAR_CSV = LIS_BASE_URL + "CALENDAR.CSV"
 LIS_HISTORY_CSV = LIS_BASE_URL + "HISTORY.CSV"
 
@@ -41,16 +41,26 @@ TOPIC_KEYWORDS = {
 
 # --- HELPER FUNCTIONS ---
 
+def clean_bill_id(bill_text):
+    """
+    Standardizes Bill IDs so 'HJ0001' == 'HJ1' == 'HJ 1'
+    """
+    if pd.isna(bill_text): return ""
+    # 1. Upper case and remove spaces
+    clean = str(bill_text).upper().replace(" ", "").strip()
+    # 2. Regex to remove leading zeros from the number part
+    #    Groups: (Letters)(Zeros)(Numbers) -> Replace with (Letters)(Numbers)
+    clean = re.sub(r'^([A-Z]+)0+(\d+)$', r'\1\2', clean)
+    return clean
+
 def determine_lifecycle(status_text, committee_name):
     status = str(status_text).lower()
     comm = str(committee_name).strip()
     
     if any(x in status for x in ["signed by governor", "enacted", "approved by governor", "chapter"]):
         return "✅ Signed & Enacted"
-    
     if any(x in status for x in ["tabled", "failed", "stricken", "passed by indefinitely", "left in", "defeated", "no action taken", "incorporated into"]):
         return "❌ Dead / Tabled"
-    
     if any(x in status for x in ["enrolled", "communicated to governor", "bill text as passed"]):
         return "✍️ Awaiting Signature"
         
@@ -127,7 +137,7 @@ def clean_status_text(text):
         text = pattern.sub(full, text)
     return text
 
-# --- WEB SCRAPER (Still needed to get Time of meeting) ---
+# --- WEB SCRAPER ---
 @st.cache_data(ttl=600)
 def fetch_schedule_from_web():
     schedule_map = {}
@@ -219,11 +229,12 @@ def fetch_lis_data():
         try: df = pd.read_csv(LIS_BILLS_CSV, encoding='ISO-8859-1')
         except: df = pd.read_csv(LIS_BILLS_CSV.replace(".CSV", ".csv"), encoding='ISO-8859-1')
         df.columns = df.columns.str.strip().str.lower().str.replace(' ', '_').str.replace('/', '_').str.replace('.', '')
-        # Prioritize 'bill_id' (SB160)
+        
+        # USE NEW CLEANER
         if 'bill_id' in df.columns:
-            df['bill_clean'] = df['bill_id'].astype(str).str.upper().str.replace(" ", "").str.strip()
+            df['bill_clean'] = df['bill_id'].apply(clean_bill_id)
         elif 'bill_number' in df.columns:
-             df['bill_clean'] = df['bill_number'].astype(str).str.upper().str.replace(" ", "").str.strip()
+             df['bill_clean'] = df['bill_number'].apply(clean_bill_id)
         data['bills'] = df
     except: data['bills'] = pd.DataFrame()
 
@@ -233,12 +244,13 @@ def fetch_lis_data():
         except: df_hist = pd.read_csv(LIS_HISTORY_CSV.replace(".CSV", ".csv"), encoding='ISO-8859-1')
         df_hist.columns = df_hist.columns.str.strip().str.lower().str.replace(' ', '_').str.replace('/', '_').str.replace('.', '')
         
-        hist_bill_col = next((c for c in df_hist.columns if "bill_id" in c), None) # Try ID first
+        hist_bill_col = next((c for c in df_hist.columns if "bill_id" in c), None)
         if not hist_bill_col:
-            hist_bill_col = next((c for c in df_hist.columns if "number" in c), None) # Fallback
+            hist_bill_col = next((c for c in df_hist.columns if "number" in c), None)
 
         if hist_bill_col:
-            df_hist['bill_clean'] = df_hist[hist_bill_col].astype(str).str.upper().str.replace(" ", "").str.strip()
+            # USE NEW CLEANER
+            df_hist['bill_clean'] = df_hist[hist_bill_col].apply(clean_bill_id)
             data['history'] = df_hist
         else:
             data['history'] = pd.DataFrame()
@@ -247,28 +259,23 @@ def fetch_lis_data():
 
     # 3. Fetch Calendar/Schedules (DOCKETS)
     calendar_dfs = []
-    # Note: We are downloading DOCKET and SUBDOCKET here
     for url, type_label in [(LIS_SUBDOCKET_CSV, "Subcommittee"), (LIS_DOCKET_CSV, "Committee"), (LIS_CALENDAR_CSV, "Floor")]:
         try:
             try: df = pd.read_csv(url, encoding='ISO-8859-1')
             except: df = pd.read_csv(url.replace(".CSV", ".csv"), encoding='ISO-8859-1')
             df.columns = df.columns.str.strip().str.lower().str.replace(' ', '_').str.replace('/', '_').str.replace('.', '')
             
-            # Find Bill Column (e.g. 'bill_id' or 'bill_number')
             col = next((c for c in df.columns if "bill" in c), None)
-            
-            # Find Date Column (Crucial for Calendar)
             date_col = next((c for c in df.columns if "date" in c), None)
 
             if col and date_col:
-                df['bill_clean'] = df[col].astype(str).str.upper().str.replace(" ", "").str.strip()
+                # USE NEW CLEANER (Crucial for Docket Match)
+                df['bill_clean'] = df[col].apply(clean_bill_id)
                 df['event_type'] = type_label
-                # Normalize Date
                 try:
                     df['meeting_date'] = pd.to_datetime(df[date_col], errors='coerce').dt.strftime('%Y-%m-%d')
                 except:
                     df['meeting_date'] = ""
-                
                 calendar_dfs.append(df)
         except: pass
 
@@ -284,7 +291,8 @@ def get_bill_data_batch(bill_numbers, lis_data_dict):
     history_df = lis_data_dict.get('history', pd.DataFrame())
 
     results = []
-    clean_bills = list(set([str(b).strip().upper().replace(" ", "") for b in bill_numbers if str(b).strip() != 'nan']))
+    # USE NEW CLEANER ON USER INPUT
+    clean_bills = list(set([clean_bill_id(b) for b in bill_numbers if str(b).strip() != 'nan']))
     
     lis_lookup = {}
     if not lis_df.empty and 'bill_clean' in lis_df.columns:
@@ -315,7 +323,6 @@ def get_bill_data_batch(bill_numbers, lis_data_dict):
             if not date_val or date_val == 'nan':
                 date_val = str(item.get('last_senate_action_date', ''))
 
-        # --- PROCESS HISTORY ---
         raw_history = history_lookup.get(bill_num, [])
         if raw_history:
             for h_row in raw_history:
@@ -355,7 +362,6 @@ def get_bill_data_batch(bill_numbers, lis_data_dict):
                             curr_sub = parts[1].strip().title()
                         except: pass
         
-        # Fallback to columns
         if curr_comm == "-":
             potential_cols = ['last_house_committee', 'last_senate_committee', 'house_committee', 'senate_committee']
             if item:
@@ -367,7 +373,6 @@ def get_bill_data_batch(bill_numbers, lis_data_dict):
         
         curr_comm = clean_committee_name(curr_comm)
         
-        # Add Chamber Prefix
         if curr_comm and "Senate" not in curr_comm and "House" not in curr_comm:
              if bill_num.startswith("SB") or bill_num.startswith("SJ") or bill_num.startswith("SR"):
                  curr_comm = f"Senate {curr_comm}"
@@ -510,7 +515,8 @@ try:
         df_i['Type'] = 'Involved'
 
     sheet_df = pd.concat([df_w, df_i], ignore_index=True).dropna(subset=['Bill Number'])
-    sheet_df['Bill Number'] = sheet_df['Bill Number'].astype(str).str.strip().str.upper().str.replace(" ", "")
+    # USE NEW CLEANER
+    sheet_df['Bill Number'] = sheet_df['Bill Number'].apply(clean_bill_id)
     sheet_df = sheet_df[sheet_df['Bill Number'] != 'NAN']
     sheet_df = sheet_df.drop_duplicates(subset=['Bill Number'])
     sheet_df['My Title'] = sheet_df['My Title'].fillna("-")
@@ -553,6 +559,8 @@ if bills_to_track:
     if 'Auto_Folder' not in final_df.columns or final_df['Auto_Folder'].isnull().any():
          final_df['Auto_Folder'] = final_df.apply(assign_folder, axis=1)
 
+    check_and_broadcast(final_df, subs_df, demo_mode)
+
     # 3. RENDER TABS
     tab_involved, tab_watching, tab_upcoming = st.tabs(["🚀 Directly Involved", "👀 Watching", "📅 Upcoming Hearings"])
 
@@ -590,7 +598,7 @@ if bills_to_track:
                 st.markdown("#### ❌ Failed")
                 render_master_list_item(failed)
 
-    # --- TAB 3: STRICT AGENDA MATCHING (Backend Driven) ---
+    # --- TAB 3: STRICT AGENDA MATCHING ---
     with tab_upcoming:
         st.subheader("📅 Your Confirmed Agenda")
         today = datetime.now(est).date()
@@ -600,13 +608,11 @@ if bills_to_track:
         schedule_df = lis_data.get('schedule', pd.DataFrame())
         
         # 1. Filter Schedule for OUR bills only
-        my_bills_clean = [b.upper().strip() for b in bills_to_track]
+        # USE NEW CLEANER
+        my_bills_clean = [clean_bill_id(b) for b in bills_to_track]
         
-        # Create a dictionary of {date: [bills]}
         daily_dockets = {}
-        
         if not schedule_df.empty:
-            # Filter for my bills
             my_events = schedule_df[schedule_df['bill_clean'].isin(my_bills_clean)].copy()
             if not my_events.empty:
                 for _, row in my_events.iterrows():
@@ -634,10 +640,9 @@ if bills_to_track:
                 
                 if bills_on_docket:
                     events_found = True
-                    # Try to find meeting time from web scraper if possible
+                    # Find meeting time
                     todays_web_meetings = {k[1]: v for k, v in web_schedule_map.items() if k[0] == target_date_str}
                     
-                    # Group by Committee
                     grouped_by_comm = {}
                     for b_id in bills_on_docket:
                         info = bill_info_map.get(b_id, {})
@@ -646,13 +651,13 @@ if bills_to_track:
                         grouped_by_comm[comm_name].append(b_id)
                     
                     for comm_name, b_list in grouped_by_comm.items():
-                        # Find matching time
+                        # Fuzzy Time Match
                         display_time = "Time TBA"
                         clean_c = clean_committee_name(comm_name).lower()
                         for w_clean, (w_time, w_full) in todays_web_meetings.items():
                             if w_clean in clean_c or clean_c in w_clean:
                                 display_time = w_time
-                                comm_name = w_full # Use pretty name
+                                comm_name = w_full 
                                 break
                         
                         st.markdown(f"**{clean_committee_name(comm_name)}**")
@@ -671,7 +676,6 @@ if bills_to_track:
                 if i == 0: 
                     history_groups = {}
                     for b_id, info in bill_info_map.items():
-                        # Don't show if already listed above
                         if b_id in bills_on_docket: continue 
                         
                         last_date = str(info.get('Date', ''))
@@ -685,16 +689,12 @@ if bills_to_track:
 
                         if is_today:
                             lis_status = str(info.get('Status', ''))
-                            # Skip administrative steps
                             skip_keywords = ["referred", "printed", "presentation", "reading waived"]
                             is_outcome = any(x in lis_status.lower() for x in ["reported", "passed", "defeat", "stricken", "agreed", "read", "engross", "vote", "assigned"])
                             is_admin = any(x in lis_status.lower() for x in skip_keywords)
-                            
                             if is_admin and not is_outcome: continue
 
                             events_found = True
-                            
-                            # Grouping Logic
                             raw_comm = str(info.get('Current_Committee', ''))
                             if raw_comm in ["-", "nan", "None", ""]: raw_comm = ""
                             
