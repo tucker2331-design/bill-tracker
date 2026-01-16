@@ -59,8 +59,10 @@ def determine_lifecycle(status_text, committee_name):
     
     if any(x in status for x in ["signed by governor", "enacted", "approved by governor", "chapter"]):
         return "✅ Signed & Enacted"
+    
     if any(x in status for x in ["tabled", "failed", "stricken", "passed by indefinitely", "left in", "defeated", "no action taken", "incorporated into"]):
         return "❌ Dead / Tabled"
+    
     if any(x in status for x in ["enrolled", "communicated to governor", "bill text as passed"]):
         return "✍️ Awaiting Signature"
         
@@ -407,6 +409,67 @@ def get_bill_data_batch(bill_numbers, lis_data_dict):
 
     if not results: return pd.DataFrame()
     return pd.DataFrame(results)
+
+# --- ALERTS FUNCTION (RESTORED) ---
+def check_and_broadcast(df_bills, df_subscribers, demo_mode):
+    st.sidebar.header("🤖 Slack Bot Status")
+    if demo_mode:
+        st.sidebar.warning("🛠️ Demo Mode Active")
+        return
+
+    token = st.secrets.get("SLACK_BOT_TOKEN")
+    if not token: 
+        st.sidebar.error("❌ Disconnected (Token Missing)")
+        return
+    client = WebClient(token=token)
+    try:
+        subscriber_list = df_subscribers['Email'].dropna().unique().tolist()
+        if not subscriber_list: 
+            st.sidebar.warning("⚠️ No Subscribers Found")
+            return
+        user_id = client.users_lookupByEmail(email=subscriber_list[0].strip())['user']['id']
+        history = client.conversations_history(channel=client.conversations_open(users=[user_id])['channel']['id'], limit=100)
+        
+        raw_history_text = "\n".join([m.get('text', '') for m in history['messages']])
+        history_text = raw_history_text.replace("&amp;", "&").replace("&lt;", "<").replace("&gt;", ">")
+        
+        st.sidebar.success(f"✅ Connected to Slack")
+    except Exception as e:
+        st.sidebar.error(f"❌ Slack Error: {e}")
+        return
+
+    report = f"🏛️ *VA LEGISLATIVE UPDATE* - {datetime.now().strftime('%m/%d')}\n_Latest changes detected:_\n"
+    updates_found = False
+    
+    for i, row in df_bills.iterrows():
+        if "LIS Connection Error" in str(row.get('Status')): continue
+        b_num = str(row['Bill Number']).strip()
+        
+        raw_status = str(row.get('Status', 'No Status')).strip()
+        clean_status = clean_status_text(raw_status)
+        
+        if b_num in history_text and clean_status in history_text: 
+            continue
+        
+        display_name = str(row.get('My Title', '-'))
+        if display_name == "-" or display_name == "nan" or not display_name:
+            official = str(row.get('Official Title', ''))
+            display_name = (official[:60] + '..') if len(official) > 60 else official
+            
+        updates_found = True
+        report += f"\n⚪ *{b_num}* | {display_name}\n> _{clean_status}_\n"
+
+    if updates_found:
+        st.toast(f"📢 Sending updates to {len(subscriber_list)} people...")
+        for email in subscriber_list:
+            try:
+                uid = client.users_lookupByEmail(email=email.strip())['user']['id']
+                client.chat_postMessage(channel=uid, text=report)
+            except: pass
+        st.toast("✅ Sent!")
+        st.sidebar.info("🚀 New Update Sent!")
+    else:
+        st.sidebar.info("💤 No new updates needed.")
 
 # --- UI COMPONENTS ---
 def render_bill_card(row):
