@@ -123,14 +123,14 @@ def clean_status_text(text):
     if not text: return ""
     text = str(text)
     
-    # 1. Expand Abbreviations
     replacements = {
         "HED": "House Education",
         "HAPP": "House Appropriations",
         "sub:": "Subcommittee:",
         "P&E": "Privileges & Elections",
         "C&L": "Commerce & Labor",
-        "floor offered": "Floor Amendment Offered" # Added clarification
+        "floor offered": "Floor Amendment Offered", # Clarification added
+        "passed by indefinitely": "Passed By Indefinitely (Dead)"
     }
     
     for abbr, full in replacements.items():
@@ -146,7 +146,6 @@ def fetch_schedule_from_web():
     debug_log = [] 
     headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'}
 
-    # 1. SENATE PORTAL
     try:
         url_senate = "https://apps.senate.virginia.gov/Senator/ComMeetings.php"
         resp = requests.get(url_senate, headers=headers, timeout=5)
@@ -183,7 +182,6 @@ def fetch_schedule_from_web():
                     except: pass
     except: pass
 
-    # 2. HOUSE PORTAL
     try:
         url_house = "https://house.vga.virginia.gov/schedule/meetings"
         resp = requests.get(url_house, headers=headers, timeout=5)
@@ -353,7 +351,11 @@ def check_and_broadcast(df_bills, df_subscribers, demo_mode):
             return
         user_id = client.users_lookupByEmail(email=subscriber_list[0].strip())['user']['id']
         history = client.conversations_history(channel=client.conversations_open(users=[user_id])['channel']['id'], limit=100)
-        history_text = "\n".join([m.get('text', '') for m in history['messages']])
+        
+        # FIX: Unescape the history so '&amp;' becomes '&' to match our bill status
+        raw_history_text = "\n".join([m.get('text', '') for m in history['messages']])
+        history_text = raw_history_text.replace("&amp;", "&").replace("&lt;", "<").replace("&gt;", ">")
+        
         st.sidebar.success(f"✅ Connected to Slack")
     except Exception as e:
         st.sidebar.error(f"❌ Slack Error: {e}")
@@ -366,13 +368,10 @@ def check_and_broadcast(df_bills, df_subscribers, demo_mode):
         if "LIS Connection Error" in str(row.get('Status')): continue
         b_num = str(row['Bill Number']).strip()
         
-        # 1. Get raw status
         raw_status = str(row.get('Status', 'No Status')).strip()
-        
-        # 2. Clean status IMMEDIATELY (Fixes the loop bug)
         clean_status = clean_status_text(raw_status)
         
-        # 3. Check history using the CLEAN status (Apples to Apples)
+        # Check against the unescaped history
         if b_num in history_text and clean_status in history_text: 
             continue
         
