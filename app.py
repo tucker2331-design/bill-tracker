@@ -469,16 +469,35 @@ if bills_to_track:
         cols = st.columns(7)
         
         # Build Calendar Map from the 'Upcoming_Meetings' column in final_df
-        # Structure: { '2026-01-16': [ row_object ] }
         calendar_map = {}
         for _, row in final_df.iterrows():
             meetings = row.get('Upcoming_Meetings', [])
             if isinstance(meetings, list):
                 for m in meetings:
-                    m_date = m.get('Date')
-                    if m_date:
-                        if m_date not in calendar_map: calendar_map[m_date] = []
-                        calendar_map[m_date].append(row)
+                    m_date_str = str(m['Date']).split(" ")[0]
+                    m_comm_raw = m.get('CommitteeRaw', 'Unknown')
+                    
+                    # INTELLIGENT COMMITTEE NAMING
+                    # Use Bill Prefix to determine House vs Senate
+                    b_id = row['Bill Number']
+                    clean_name = clean_committee_name(m_comm_raw)
+                    
+                    if "Senate" not in clean_name and "House" not in clean_name:
+                        if b_id.startswith("HB") or b_id.startswith("HJ") or b_id.startswith("HR"):
+                            clean_name = f"House {clean_name}"
+                        elif b_id.startswith("SB") or b_id.startswith("SJ") or b_id.startswith("SR"):
+                            clean_name = f"Senate {clean_name}"
+                            
+                    try:
+                        if "/" in m_date_str: d_obj = datetime.strptime(m_date_str, "%m/%d/%Y").date()
+                        else: d_obj = datetime.strptime(m_date_str, "%Y-%m-%d").date()
+                        formatted_date = d_obj.strftime("%Y-%m-%d")
+                        
+                        if formatted_date not in calendar_map: calendar_map[formatted_date] = {}
+                        if clean_name not in calendar_map[formatted_date]: calendar_map[formatted_date][clean_name] = []
+                        
+                        calendar_map[formatted_date][clean_name].append(row)
+                    except: pass
 
         for i in range(7):
             target_date = today + timedelta(days=i)
@@ -488,47 +507,18 @@ if bills_to_track:
                 st.markdown(f"**{display_date_str}**")
                 st.divider()
                 
-                # SECTION 1: UPCOMING MEETINGS (GROUPED)
+                # SECTION 1: UPCOMING MEETINGS (FROM DOCKET)
                 if target_date_str in calendar_map:
-                    events = calendar_map[target_date_str]
-                    
-                    # GROUP BY COMMITTEE (Fixed Logic)
-                    grouped_events = {}
-                    for row in events:
-                        # Find the SPECIFIC meeting obj for this date to get committee name
-                        meetings = row.get('Upcoming_Meetings', [])
-                        comm_name = "Unknown"
-                        for m in meetings:
-                            if m.get('Date') == target_date_str:
-                                raw = m.get('CommitteeRaw', '')
-                                clean = clean_committee_name(raw)
-                                
-                                # Force Prefix based on Bill
-                                if "Senate" not in clean and "House" not in clean:
-                                    if row['Bill Number'].startswith("SB") or row['Bill Number'].startswith("SJ"): clean = f"Senate {clean}"
-                                    elif row['Bill Number'].startswith("HB") or row['Bill Number'].startswith("HJ"): clean = f"House {clean}"
-                                
-                                comm_name = clean
-                                break
-                        
-                        if comm_name not in grouped_events: grouped_events[comm_name] = []
-                        grouped_events[comm_name].append(row)
-                    
-                    # RENDER GROUPS
-                    for comm_name, bills in grouped_events.items():
-                        # Fuzzy Time Match
+                    # Iterate specific committees for this day
+                    for comm_name, bills in calendar_map[target_date_str].items():
+                        # Find Time Match
                         time_display = "Time TBA"
                         if target_date_str in scraped_times:
-                            # Normalize key: strip 'committee', 'house', 'senate', 'for', 'of'
-                            def normalize_key(s):
-                                s = s.lower()
-                                for w in ["committee", "house", "senate", "for", "of", "and", "&"]: s = s.replace(w, "")
-                                return "".join(s.split())
-                            
-                            c_key = normalize_key(comm_name)
+                            # Fuzzy Match
+                            core_name = comm_name.lower().replace("house","").replace("senate","").replace("committee","").strip()
                             for s_key_raw, s_time in scraped_times[target_date_str].items():
-                                s_key = normalize_key(s_key_raw)
-                                if c_key in s_key or s_key in c_key:
+                                s_key = s_key_raw.lower().replace("committee","").strip()
+                                if core_name in s_key or s_key in core_name:
                                     time_display = s_time
                                     break
                         
@@ -537,17 +527,12 @@ if bills_to_track:
                         
                         for row in bills:
                             _render_single_bill_row(row)
-                        
                         st.divider()
 
-                # SECTION 2: COMPLETED ACTIONS (TODAY ONLY)
+                # SECTION 2: COMPLETED ACTIONS (FROM HISTORY)
                 if i == 0:
                     events_found = False
                     for _, row in final_df.iterrows():
-                        # Skip if already shown in Docket section above
-                        if target_date_str in calendar_map and row['Bill Number'] in [r['Bill Number'] for r in calendar_map[target_date_str]]:
-                            continue
-
                         last_date = str(row.get('Date', ''))
                         is_today = False
                         try:
@@ -557,35 +542,40 @@ if bills_to_track:
                         except: pass
                         
                         if is_today:
-                            lis_status = str(row.get('Status', '')).lower()
-                            if any(x in lis_status for x in ["reported", "passed", "defeat", "stricken", "agreed", "read", "engross", "vote"]):
-                                if not events_found: 
-                                    st.caption("🏁 **Completed Today**")
-                                    events_found = True
-                                
-                                # Render Expanded Card for Completed
-                                title = row.get('Official Title', 'No Title')
-                                if title in ["Unknown", "Error", None]: title = row.get('My Title', 'No Title')
-                                my_status = str(row.get('My Status', '')).strip()
-                                
-                                # VOTE RESULT
-                                vote_str = extract_vote_info(row.get('Status', ''))
-                                label_text = f"{row['Bill Number']}"
-                                if vote_str: label_text += f" **PASSED {vote_str}**"
-                                elif my_status != '-': label_text += f" - {my_status}"
-                                
-                                with st.expander(label_text):
-                                    st.markdown(f"**🏛️ Current Status:** {row.get('Display_Committee', '-')}")
-                                    st.markdown(f"**📌 Designated Title:** {row.get('My Title', '-')}")
-                                    st.markdown(f"**🔄 Status:** {clean_status_text(row.get('Status', '-'))}")
+                            # Check if already shown above
+                            already_shown = False
+                            if target_date_str in calendar_map:
+                                for c_list in calendar_map[target_date_str].values():
+                                    if row['Bill Number'] in [r['Bill Number'] for r in c_list]:
+                                        already_shown = True
+                            
+                            if not already_shown:
+                                lis_status = str(row.get('Status', '')).lower()
+                                if any(x in lis_status for x in ["reported", "passed", "defeat", "stricken", "agreed", "read", "engross", "vote"]):
+                                    if not events_found: 
+                                        st.caption("🏁 **Completed Today**")
+                                        events_found = True
                                     
-                                    hist_data = row.get('History_Data', [])
-                                    if isinstance(hist_data, list) and hist_data:
-                                        st.markdown("**📜 History:**")
-                                        st.dataframe(pd.DataFrame(hist_data), hide_index=True, use_container_width=True)
+                                    # Vote Extraction
+                                    vote_str = extract_vote_info(row.get('Status', ''))
                                     
-                                    lis_link = f"https://lis.virginia.gov/bill-details/20261/{row['Bill Number']}"
-                                    st.markdown(f"🔗 [View Official Bill on LIS]({lis_link})")
+                                    # Render
+                                    label_text = f"{row['Bill Number']}"
+                                    if vote_str: label_text += f" **PASSED {vote_str}**"
+                                    elif my_status != '-': label_text += f" - {my_status}"
+                                    
+                                    with st.expander(label_text):
+                                        st.markdown(f"**🏛️ Current Status:** {row.get('Display_Committee', '-')}")
+                                        st.markdown(f"**📌 Designated Title:** {row.get('My Title', '-')}")
+                                        st.markdown(f"**🔄 Status:** {clean_status_text(row.get('Status', '-'))}")
+                                        
+                                        hist_data = row.get('History_Data', [])
+                                        if isinstance(hist_data, list) and hist_data:
+                                            st.markdown("**📜 History:**")
+                                            st.dataframe(pd.DataFrame(hist_data), hide_index=True, use_container_width=True)
+                                        
+                                        lis_link = f"https://lis.virginia.gov/bill-details/20261/{row['Bill Number']}"
+                                        st.markdown(f"🔗 [View Official Bill on LIS]({lis_link})")
 
                 if not (target_date_str in calendar_map) and (i != 0 or not events_found):
                     st.caption("-")
