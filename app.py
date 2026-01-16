@@ -15,7 +15,8 @@ SUBS_URL = f"https://docs.google.com/spreadsheets/d/{SHEET_ID}/gviz/tq?tqx=out:c
 
 # --- VIRGINIA LIS API & DATA FEEDS ---
 LIS_API_KEY = "81D70A54-FCDC-4023-A00B-A3FD114D5984" 
-LIS_API_BASE = "https://lis.virginia.gov/api"  # Base URL
+LIS_API_BASE = "https://lis.virginia.gov/api/v1"
+SESSION_ID = "20261"  # <--- RESTORED THIS MISSING LINE
 
 # CSVs for Master List (History/Status)
 LIS_BASE_URL = "https://lis.blob.core.windows.net/lisfiles/20261/"
@@ -42,12 +43,8 @@ TOPIC_KEYWORDS = {
 # --- HELPER FUNCTIONS ---
 
 def clean_bill_id(bill_text):
-    """
-    Standardizes Bill IDs so 'HJ0001' == 'HJ1' == 'HJ 1'
-    """
     if pd.isna(bill_text): return ""
     clean = str(bill_text).upper().replace(" ", "").strip()
-    # Remove leading zeros: HJ0001 -> HJ1
     clean = re.sub(r'^([A-Z]+)0+(\d+)$', r'\1\2', clean)
     return clean
 
@@ -107,10 +104,9 @@ def fetch_api_calendar(session_id):
             # Construct URL: https://lis.virginia.gov/api/schedules/20261/2026-01-16
             url = f"{LIS_API_BASE}/schedules/{session_id}/{date_str}"
             
-            # Note: LIS API authentication varies. Sometimes it's a header, sometimes a query param.
-            # We try passing it in the header as standard practice.
+            # API Auth
             headers = {"Auth-Token": LIS_API_KEY} 
-            params = {"key": LIS_API_KEY} # Fallback query param
+            params = {"key": LIS_API_KEY} 
             
             resp = requests.get(url, headers=headers, params=params, timeout=5)
             
@@ -123,20 +119,15 @@ def fetch_api_calendar(session_id):
                     chamber = meeting.get('ChamberCode', '')
                     comm_name = meeting.get('CommitteeName', 'Unknown')
                     
-                    # Force Chamber Label
                     if chamber == 'H' and "House" not in comm_name: comm_name = f"House {comm_name}"
                     if chamber == 'S' and "Senate" not in comm_name: comm_name = f"Senate {comm_name}"
                     
                     mtg_time = meeting.get('MeetingTime', 'TBA')
                     
-                    # Parse Dockets
                     bills = []
                     dockets = meeting.get('Dockets', [])
-                    
-                    # Handle nested or flat dockets
                     if isinstance(dockets, list):
                         for d in dockets:
-                            # It might be a simple string or an object
                             if isinstance(d, dict):
                                 bn = d.get('BillNumber')
                                 if bn: bills.append(clean_bill_id(bn))
@@ -158,7 +149,7 @@ def fetch_api_calendar(session_id):
             
     return calendar_data, debug_log
 
-# --- DATA FETCHING (CSV for Status/History) ---
+# --- DATA FETCHING (CSV with Safety Checks) ---
 @st.cache_data(ttl=300) 
 def fetch_lis_data():
     data = {}
@@ -167,7 +158,8 @@ def fetch_lis_data():
 
     def load_csv(url):
         try:
-            df = pd.read_csv(url, encoding='ISO-8859-1', on_bad_lines='skip')
+            # Added low_memory=False to prevent crashes on big files
+            df = pd.read_csv(url, encoding='ISO-8859-1', on_bad_lines='skip', low_memory=False)
             df.columns = df.columns.str.strip().str.lower().str.replace(' ', '_').str.replace('/', '_').str.replace('.', '')
             return df
         except: return pd.DataFrame()
@@ -234,13 +226,11 @@ def get_bill_data_batch(bill_numbers, lis_data_dict):
                 desc = ""
                 for col in ['history_description', 'description', 'action', 'history']:
                     if col in h_row and pd.notna(h_row[col]):
-                        desc = str(h_row[col])
-                        break
+                        desc = str(h_row[col]); break
                 date_h = ""
                 for col in ['history_date', 'date', 'action_date']:
                     if col in h_row and pd.notna(h_row[col]):
-                        date_h = str(h_row[col])
-                        break
+                        date_h = str(h_row[col]); break
                 
                 if desc:
                     history_data.append({"Date": date_h, "Action": desc})
@@ -413,7 +403,6 @@ lis_data = fetch_lis_data()
 fetch_time_display = lis_data.get('fetch_time', 'Unknown')
 with col_time: st.markdown(f"**Last Data Update:** `{fetch_time_display}`")
 
-# Session Config (New)
 session_input = st.sidebar.text_input("LIS Session ID", value=SESSION_ID)
 
 # 1. LOAD USER DATA
