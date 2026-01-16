@@ -51,11 +51,14 @@ def clean_bill_id(bill_text):
 def determine_lifecycle(status_text, committee_name):
     status = str(status_text).lower()
     comm = str(committee_name).strip()
+    
     if any(x in status for x in ["signed by governor", "enacted", "approved by governor", "chapter"]): return "✅ Signed & Enacted"
     if any(x in status for x in ["tabled", "failed", "stricken", "passed by indefinitely", "left in", "defeated", "no action taken", "incorporated into"]): return "❌ Dead / Tabled"
     if any(x in status for x in ["enrolled", "communicated to governor", "bill text as passed"]): return "✍️ Awaiting Signature"
+    
     out_keywords = ["reported", "passed", "agreed", "engrossed", "communicated", "reading waived", "read second", "read third"]
     if any(x in status for x in out_keywords): return "📣 Out of Committee"
+
     if comm not in ["-", "nan", "None", ""] and len(comm) > 3: return "📥 In Committee"
     return "📥 In Committee"
 
@@ -69,19 +72,40 @@ def clean_committee_name(name):
     if not name or str(name).lower() == 'nan': return ""
     name = str(name).strip()
     
-    # 1. Remove Chair Names (The "Leaking Names" Fix)
-    # Remove common last names if they appear at the end of the string
-    name = re.sub(r'\b(Simon|Rasoul|Willett|Helmer|Lucas|Surovell|Locke|Deeds|Favola|Marsden|Ebbin|McPike)\b', '', name, flags=re.IGNORECASE)
+    # AGGRESSIVE CLEANING (Whitelist Approach)
+    # We map known keywords to clean names. If no keyword matches, we use the raw name but stripped.
     
-    # 2. Map Abbreviations
+    upper = name.upper()
+    
+    # 1. Direct Maps
     mapping = {
         "HED": "House Education", "HAPP": "House Appropriations", "FIN": "Senate Finance",
         "JUD": "Courts of Justice", "GL": "General Laws", "AG": "Agriculture", "TRAN": "Transportation",
-        "P&E": "Privileges & Elections", "C&L": "Commerce & Labor"
+        "P&E": "Privileges & Elections", "C&L": "Commerce & Labor", "HWI": "House Health, Welfare & Inst."
     }
-    if name.upper() in mapping: return mapping[name.upper()]
-    
-    return name.strip().title()
+    if upper in mapping: return mapping[upper]
+
+    # 2. Keyword Search (Prioritize strict matches)
+    if "APPROP" in upper: return "House Appropriations" if "HOUSE" in upper else "Senate Finance & Appropriations"
+    if "FINANCE" in upper: return "Senate Finance & Appropriations"
+    if "COMMERCE" in upper: return "Commerce & Labor"
+    if "LABOR" in upper: return "Commerce & Labor"
+    if "EDUCATION" in upper: return "House Education" if "HOUSE" in upper else "Senate Education & Health"
+    if "HEALTH" in upper: return "House Health & Human Services" if "HOUSE" in upper else "Senate Education & Health"
+    if "COURTS" in upper: return "Courts of Justice"
+    if "JUSTICE" in upper: return "Courts of Justice"
+    if "GENERAL LAWS" in upper: return "General Laws"
+    if "TRANSPORTATION" in upper: return "Transportation"
+    if "PUBLIC SAFETY" in upper: return "House Public Safety"
+    if "LOCAL GOV" in upper: return "Local Government"
+    if "COUNTIES" in upper: return "Counties, Cities & Towns"
+    if "PRIVILEGES" in upper: return "Privileges & Elections"
+    if "AGRICULTURE" in upper: return "Agriculture, Chesapeake & Nat. Res."
+    if "RULES" in upper: return "Rules"
+
+    # 3. Fallback: Strip known politician names manually if whitelist failed
+    clean = re.sub(r'\b(Simon|Rasoul|Willett|Helmer|Lucas|Surovell|Locke|Deeds|Favola|Marsden|Ebbin|McPike)\b', '', name, flags=re.IGNORECASE).strip()
+    return clean.title()
 
 def clean_status_text(text):
     if not text: return ""
@@ -159,9 +183,7 @@ def fetch_schedule_from_web_safe():
                 if current_date and re.search(r'^\d{1,2}:\d{2}\s*[AP]M', line):
                     if i > 0:
                         raw_name = lines[i-1]
-                        # CLEAN NAMES: Remove "Rasoul", "Simon", etc.
-                        clean_name = re.sub(r'\b(Simon|Rasoul|Willett|Helmer|Lucas|Surovell|Locke|Deeds|Favola|Marsden|Ebbin|McPike)\b', '', raw_name, flags=re.IGNORECASE).strip()
-                        comm = f"House {clean_name}"
+                        comm = f"House {raw_name}"
                         schedule_map[(current_date, comm.lower())] = (line, comm)
         except: pass
 
@@ -178,8 +200,7 @@ def fetch_schedule_from_web_safe():
                         date_str = dt.strftime("%Y-%m-%d")
                         if i > 0:
                             raw_name = lines[i-1]
-                            clean_name = re.sub(r'\b(Simon|Rasoul|Willett|Helmer|Lucas|Surovell|Locke|Deeds|Favola|Marsden|Ebbin|McPike)\b', '', raw_name, flags=re.IGNORECASE).strip()
-                            comm = f"Senate {clean_name}"
+                            comm = f"Senate {raw_name}"
                             time_match = re.search(r'\d{1,2}:\d{2}\s*[AP]M', line)
                             t_val = time_match.group(0) if time_match else "TBA"
                             schedule_map[(date_str, comm.lower())] = (t_val, comm)
@@ -201,7 +222,6 @@ def fetch_lis_data():
             return df
         except: return pd.DataFrame()
     data['bills'] = load_csv(LIS_BILLS_CSV)
-    # Ensure bill_clean exists
     if not data['bills'].empty:
         col = 'bill_number' if 'bill_number' in data['bills'].columns else 'bill_id'
         if col in data['bills'].columns: data['bills']['bill_clean'] = data['bills'][col].astype(str).apply(clean_bill_id)
@@ -430,10 +450,16 @@ if bills_to_track:
     else: api_df = get_bill_data_batch(bills_to_track, lis_data)
 
     final_df = pd.merge(sheet_df, api_df, on="Bill Number", how="left")
+    
+    # FIXED SYNTAX ERROR HERE
     def assign_folder(row):
-        title_to_check = row.get('Official Title', ''); if str(title_to_check) in ["Unknown", "Error", "Not Found", "nan", "None", ""]: title_to_check = row.get('My Title', '')
+        title_to_check = row.get('Official Title', '')
+        if str(title_to_check) in ["Unknown", "Error", "Not Found", "nan", "None", ""]: 
+            title_to_check = row.get('My Title', '')
         return get_smart_subject(str(title_to_check))
-    if 'Auto_Folder' not in final_df.columns or final_df['Auto_Folder'].isnull().any(): final_df['Auto_Folder'] = final_df.apply(assign_folder, axis=1)
+        
+    if 'Auto_Folder' not in final_df.columns or final_df['Auto_Folder'].isnull().any(): 
+        final_df['Auto_Folder'] = final_df.apply(assign_folder, axis=1)
 
     check_and_broadcast(final_df, subs_df, demo_mode)
 
@@ -459,7 +485,7 @@ if bills_to_track:
         today = datetime.now(est).date()
         current_dt = datetime.now(est)
         cols = st.columns(7)
-        bill_info_map = final_df.set_index('Bill Number')[['Current_Committee', 'Current_Sub', 'My Status', 'Status', 'Date']].to_dict('index')
+        bill_info_map = final_df.set_index('Bill Number')[['Current_Committee', 'Current_Sub', 'My Status', 'Status', 'Date', 'Lifecycle']].to_dict('index')
         my_bills_clean = [clean_bill_id(b) for b in bills_to_track]
 
         for i in range(7):
@@ -481,11 +507,10 @@ if bills_to_track:
                             # Time Check (API)
                             try:
                                 mtg_dt_str = f"{target_date_str} {meeting['Time']}"
-                                # Approximate time check (assuming standard formats like 9:00 AM)
                                 mtg_dt = datetime.strptime(mtg_dt_str, "%Y-%m-%d %I:%M %p")
                                 mtg_dt = est.localize(mtg_dt)
-                                if mtg_dt < current_dt: continue # Skip past meetings
-                            except: pass # If time format is weird, show it anyway
+                                if mtg_dt < current_dt: continue 
+                            except: pass 
 
                             events_found = True
                             st.markdown(f"**{meeting['Committee']}**"); st.caption(f"⏰ {meeting['Time']}")
@@ -501,27 +526,33 @@ if bills_to_track:
                         if scrape_date == target_date_str:
                             # Time Check (Scraper)
                             try:
-                                # Clean scrape_time (remove "Est", etc)
                                 clean_t = re.search(r'\d{1,2}:\d{2}\s*[AP]M', scrape_time)
                                 if clean_t:
                                     t_str = clean_t.group(0)
                                     mtg_dt_str = f"{target_date_str} {t_str}"
                                     mtg_dt = datetime.strptime(mtg_dt_str, "%Y-%m-%d %I:%M %p")
                                     mtg_dt = est.localize(mtg_dt)
-                                    if mtg_dt < current_dt: continue # Skip past
+                                    if mtg_dt < current_dt: continue 
                             except: pass
 
                             matched_bills = []
                             for b_id, info in bill_info_map.items():
                                 if b_id in bills_shown_today: continue 
+                                
+                                # IGNORE DEAD/PASSED BILLS FOR INFERRED AGENDA
+                                if info.get('Lifecycle') in ["✅ Signed & Enacted", "❌ Dead / Tabled", "✍️ Awaiting Signature"]:
+                                    continue
+
                                 b_comm = str(info.get('Current_Committee', '')).lower().replace('committee','').strip()
                                 b_sub = str(info.get('Current_Sub', '')).lower().replace('subcommittee','').strip()
                                 if (len(b_comm) > 3 and b_comm in scrape_comm) or (len(b_sub) > 3 and b_sub in scrape_comm):
                                     matched_bills.append(b_id); bills_shown_today.add(b_id)
                             if matched_bills:
                                 events_found = True
-                                # Scrape full name is cleaner now via clean_committee_name function logic applied earlier
-                                st.markdown(f"**{clean_committee_name(scrape_full)}**"); st.caption(f"⏰ {scrape_time} (Est)")
+                                cleaned_header = clean_committee_name(scrape_full) # Use the aggressive whitelist cleaner
+                                st.markdown(f"**{cleaned_header}**"); 
+                                st.caption(f"⏰ {scrape_time}")
+                                st.caption("⚠️ _Potential Hearing (Based on Committee)_") # INFERRED LABEL
                                 for b_id in matched_bills:
                                     info = bill_info_map.get(b_id, {}); status_text = ""; raw_status = str(info.get('My Status', '')).strip()
                                     if raw_status and raw_status != 'nan' and raw_status != '-': status_text = f" - {raw_status}"
