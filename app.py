@@ -325,27 +325,24 @@ def get_bill_data_batch(bill_numbers, lis_df):
             if pd.notna(s_act) and str(s_act).lower() != 'nan':
                  history_data.append({"Date": item.get('last_senate_action_date'), "Action": f"[Senate] {s_act}"})
 
-            # --- ROBUST COMMITTEE EXTRACTION (WITH HISTORY SCAN) ---
+            # --- ROBUST COMMITTEE EXTRACTION (MULTI-COLUMN SEARCH) ---
             curr_comm = "-"
             
-            # 1. Try Official Columns First
-            c1 = item.get('last_house_committee')
-            c2 = item.get('last_senate_committee')
-            if pd.notna(c1) and str(c1).strip() not in ['nan', '']: curr_comm = c1
-            elif pd.notna(c2) and str(c2).strip() not in ['nan', '']: curr_comm = c2
+            # 1. Search all potential committee columns in priority order
+            # Note: 'h_committee' and 's_committee' are common LIS CSV headers
+            potential_cols = [
+                'last_house_committee', 'last_senate_committee', 
+                'house_committee', 'senate_committee',
+                'h_committee', 's_committee'
+            ]
             
-            # 2. If empty, SCAN HISTORY for "Referred to" (Deep Search)
-            if curr_comm == "-":
-                full_history_text = f"{str(h_act)} {str(s_act)}".lower()
-                # Look for "Referred to Committee on [Name]"
-                match = re.search(r'referred to (?:committee on|the committee on)?\s?([a-z\s&]+)', full_history_text)
-                if match:
-                    found_name = match.group(1).title().strip()
-                    # Basic cleanup to ensure it's not garbage text
-                    if len(found_name) > 3 and "reading" not in found_name.lower():
-                        curr_comm = found_name
-
-            # 3. Fallback: Try to parse current status if history didn't help
+            for col in potential_cols:
+                val = item.get(col)
+                if pd.notna(val) and str(val).strip() not in ['nan', '', '-', '0']:
+                    curr_comm = str(val).strip()
+                    break # Found one! Stop searching.
+            
+            # 2. Fallback: If still empty, try to parse from status text
             status_lower = str(status).lower()
             if curr_comm == "-":
                 comm_match = re.search(r'referred to (?:committee on|the committee on)?\s?([a-z\s&]+)', status_lower)
