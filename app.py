@@ -1,43 +1,24 @@
 import streamlit as st
 import pandas as pd
 import requests
-import time
 import re
 from datetime import datetime, timedelta
 import pytz
 from slack_sdk import WebClient
 from slack_sdk.errors import SlackApiError
+from bs4 import BeautifulSoup 
 
 # --- CONFIGURATION ---
 SHEET_ID = "18m752GcvGIPPpqUn_gB0DfA3e4z2UGD0ki0dUZh2Qek"
 BILLS_URL = f"https://docs.google.com/spreadsheets/d/{SHEET_ID}/gviz/tq?tqx=out:csv&sheet=Bills"
 SUBS_URL = f"https://docs.google.com/spreadsheets/d/{SHEET_ID}/gviz/tq?tqx=out:csv&sheet=Subscribers"
 
-# --- VIRGINIA LIS API & DATA FEEDS ---
-LIS_API_KEY = "81D70A54-FCDC-4023-A00B-A3FD114D5984" 
-LIS_API_BASE = "https://lis.virginia.gov/api/v1"
-
-# CSVs for Master List (History/Status)
+# --- VIRGINIA LIS DATA FEEDS ---
 LIS_BASE_URL = "https://lis.blob.core.windows.net/lisfiles/20261/"
 LIS_BILLS_CSV = LIS_BASE_URL + "BILLS.CSV"       
 LIS_HISTORY_CSV = LIS_BASE_URL + "HISTORY.CSV"
 
 st.set_page_config(page_title="VA Bill Tracker 2026", layout="wide")
-
-# --- TOPIC CATEGORIES ---
-TOPIC_KEYWORDS = {
-    "🗳️ Elections & Democracy": ["election", "vote", "ballot", "campaign", "poll", "voter", "registrar", "districting", "suffrage"],
-    "🏗️ Housing & Property": ["rent", "landlord", "tenant", "housing", "lease", "property", "zoning", "eviction", "homeowner", "development", "residential"],
-    "✊ Labor & Workers Rights": ["wage", "salary", "worker", "employment", "labor", "union", "bargaining", "leave", "compensation", "workplace", "employee", "minimum", "overtime"],
-    "💰 Economy & Business": ["tax", "commerce", "business", "market", "consumer", "corporation", "finance", "budget", "economic", "trade"],
-    "🎓 Education": ["school", "education", "student", "university", "college", "teacher", "curriculum", "scholarship", "tuition", "board of education"],
-    "🚓 Public Safety & Law": ["firearm", "gun", "police", "crime", "penalty", "court", "judge", "enforcement", "prison", "arrest", "criminal", "justice"],
-    "🏥 Health & Healthcare": ["health", "medical", "hospital", "patient", "doctor", "insurance", "care", "mental", "pharmacy", "drug", "medicaid"],
-    "🌳 Environment & Energy": ["energy", "water", "pollution", "environment", "climate", "solar", "conservation", "waste", "carbon", "natural resources", "wind", "power", "electricity", "hydroelectric", "nuclear", "chesapeake", "bay", "river", "watershed"],
-    "🚗 Transportation": ["road", "highway", "vehicle", "driver", "license", "transit", "traffic", "transportation", "motor"],
-    "💻 Tech & Utilities": ["internet", "broadband", "data", "privacy", "utility", "cyber", "technology", "telecom", "artificial intelligence"],
-    "⚖️ Civil Rights": ["discrimination", "rights", "equity", "minority", "gender", "religious", "freedom", "speech"],
-}
 
 # --- HELPER FUNCTIONS ---
 
@@ -50,227 +31,166 @@ def clean_bill_id(bill_text):
 def determine_lifecycle(status_text, committee_name):
     status = str(status_text).lower()
     comm = str(committee_name).strip()
-    
     if any(x in status for x in ["signed by governor", "enacted", "approved by governor", "chapter"]): return "✅ Signed & Enacted"
     if any(x in status for x in ["tabled", "failed", "stricken", "passed by indefinitely", "left in", "defeated", "no action taken", "incorporated into"]): return "❌ Dead / Tabled"
     if any(x in status for x in ["enrolled", "communicated to governor", "bill text as passed"]): return "✍️ Awaiting Signature"
-    
     out_keywords = ["reported", "passed", "agreed", "engrossed", "communicated", "reading waived", "read second", "read third"]
     if any(x in status for x in out_keywords): return "📣 Out of Committee"
-
     if comm not in ["-", "nan", "None", ""] and len(comm) > 3: return "📥 In Committee"
     return "📥 In Committee"
 
-def get_smart_subject(title):
-    title_lower = str(title).lower()
-    for category, keywords in TOPIC_KEYWORDS.items():
-        if any(k in title_lower for k in keywords): return category
-    return "📂 Unassigned / General"
-
 def clean_committee_name(name):
-    """
-    STRICT WHITELIST: Only allows known committee names.
-    Anything else (like "Rasoul" or "Hayes") is ignored.
-    """
     if not name or str(name).lower() == 'nan': return ""
-    upper = str(name).upper().strip()
+    name = str(name).strip()
     
-    # 1. House Whitelist
-    if "PRIVILEGES" in upper and "ELECTIONS" in upper: return "House Privileges & Elections"
-    if "COURTS" in upper or "JUSTICE" in upper: return "House Courts of Justice" if "HOUSE" in upper else "Senate Courts of Justice"
-    if "EDUCATION" in upper: return "House Education" if "HOUSE" in upper else "Senate Education & Health"
-    if "HEALTH" in upper: return "House Health & Human Services" if "HOUSE" in upper else "Senate Education & Health"
-    if "GENERAL LAWS" in upper: return "House General Laws" if "HOUSE" in upper else "Senate General Laws"
-    if "TRANSPORTATION" in upper: return "House Transportation" if "HOUSE" in upper else "Senate Transportation"
-    if "APPROPRIATIONS" in upper: return "House Appropriations"
-    if "FINANCE" in upper: return "House Finance" if "HOUSE" in upper else "Senate Finance & Appropriations"
-    if "COUNTIES" in upper: return "House Counties, Cities & Towns"
-    if "LABOR" in upper or "COMMERCE" in upper: return "House Labor & Commerce" if "HOUSE" in upper else "Senate Commerce & Labor"
-    if "PUBLIC SAFETY" in upper: return "House Public Safety"
-    if "COMMUNICATIONS" in upper: return "House Communications & Technology"
-    if "AGRICULTURE" in upper: return "House Agriculture & Chesapeake" if "HOUSE" in upper else "Senate Agriculture"
-    if "RULES" in upper: return "House Rules" if "HOUSE" in upper else "Senate Rules"
-    if "LOCAL GOV" in upper: return "Senate Local Government"
-    if "REHAB" in upper: return "Senate Rehabilitation & Social Services"
-
-    # If it's the Senate/House floor
-    if "FLOOR" in upper: return "Floor Session"
-
-    # Default: Clean capitalization, but warn it might be weird
-    return name.title()
+    # 1. REMOVE NAMES (Strict Regex)
+    # Removes patterns like "LastName, F. M." or just "LastName" at end of string
+    name = re.sub(r'\b[A-Z][a-z]+, [A-Z]\. ?[A-Z]?\.?.*$', '', name) 
+    name = re.sub(r'\b(Simon|Rasoul|Willett|Helmer|Lucas|Surovell|Locke|Deeds|Favola|Marsden|Ebbin|McPike|Hayes|Carroll Foy|Subcommittee #\d+)\b.*', '', name, flags=re.IGNORECASE)
+    
+    # 2. MAP TO STANDARD
+    upper = name.upper().strip()
+    mapping = {
+        "HED": "House Education", "HAPP": "House Appropriations", "FIN": "Senate Finance",
+        "JUD": "Courts of Justice", "GL": "General Laws", "AG": "Agriculture", "TRAN": "Transportation",
+        "P&E": "Privileges & Elections", "C&L": "Commerce & Labor", "HWI": "House Health, Welfare & Inst.",
+        "COUNTIES CITIES AND TOWNS": "House Counties, Cities & Towns",
+        "COMMUNICATIONS TECHNOLOGY AND INNOVATION": "House Communications & Tech"
+    }
+    for k, v in mapping.items():
+        if k in upper: return v
+        
+    return name.strip().title()
 
 def clean_status_text(text):
     if not text: return ""
     text = str(text)
-    replacements = {
-        "HED": "House Education", "HAPP": "House Appropriations", "sub:": "Subcommittee:",
-        "P&E": "Privileges & Elections", "C&L": "Commerce & Labor",
-        "floor offered": "Floor Amendment Offered", "passed by indefinitely": "Passed By Indefinitely (Dead)"
-    }
-    for abbr, full in replacements.items():
-        pattern = re.compile(re.escape(abbr), re.IGNORECASE)
-        text = pattern.sub(full, text)
-    return text
+    return text.replace("HED", "House Education").replace("sub:", "Subcommittee:")
 
-# --- API AUTO-DISCOVERY FETCH ---
-@st.cache_data(ttl=300)
-def fetch_api_calendar_discovery():
+# --- DIRECT HTML CALENDAR SCRAPER ---
+@st.cache_data(ttl=600)
+def fetch_html_calendar():
     """
-    Tries multiple Session IDs to find the one that returns valid JSON.
-    Returns: (calendar_data, debug_log, successful_session_id)
+    Scrapes the official House and Senate schedule pages directly.
+    Returns: { '2026-01-16': [ {'Time': '8:00 AM', 'Committee': 'House Courts', 'Raw': '...'} ] }
     """
     calendar_data = {}
     debug_log = []
+    headers = {'User-Agent': 'Mozilla/5.0'}
     
-    # LIST OF SESSION IDS TO TRY
-    # 20261 = Standard LIS ID
-    # 261 = Short ID
-    # 2026 = Year
-    # 26REG = Alternate format
-    candidates = ["20261", "261", "2026", "26REG"]
-    
-    today = datetime.now()
-    dates_to_check = [(today + timedelta(days=i)).strftime("%Y-%m-%d") for i in range(8)]
-    
-    successful_session = None
-
-    # Brute Force Search for Working ID
-    for session_id in candidates:
-        try:
-            # Test with just TODAY'S date first to save time
-            test_date = dates_to_check[0]
-            url = f"{LIS_API_BASE}/schedules/{session_id}/{test_date}"
-            resp = requests.get(url, params={"key": LIS_API_KEY}, timeout=3)
-            
-            # If we get valid JSON (list or dict), this ID works!
-            if resp.status_code == 200:
-                try:
-                    test_json = resp.json()
-                    if isinstance(test_json, (list, dict)):
-                        successful_session = session_id
-                        debug_log.append(f"✅ FOUND VALID SESSION: {session_id}")
-                        break
-                except: pass
-        except: pass
-    
-    if not successful_session:
-        debug_log.append("❌ All Session IDs failed to return JSON.")
-        return {}, debug_log, None
-
-    # Now fetch ALL dates with the winner
-    for date_str in dates_to_check:
-        try:
-            url = f"{LIS_API_BASE}/schedules/{successful_session}/{date_str}"
-            resp = requests.get(url, params={"key": LIS_API_KEY}, timeout=4)
-            
-            if resp.status_code == 200:
-                data = resp.json()
-                day_events = []
-                for meeting in data:
-                    chamber = meeting.get('ChamberCode', '')
-                    comm_name = meeting.get('CommitteeName', 'Unknown')
-                    
-                    # Force Chamber Label
-                    if chamber == 'H': comm_name = f"House {comm_name}"
-                    elif chamber == 'S': comm_name = f"Senate {comm_name}"
-                    
-                    mtg_time = meeting.get('MeetingTime', 'TBA')
-                    
-                    bills = []
-                    dockets = meeting.get('Dockets', [])
-                    if isinstance(dockets, list):
-                        for d in dockets:
-                            if isinstance(d, dict):
-                                bn = d.get('BillNumber')
-                                if bn: bills.append(clean_bill_id(bn))
-                            elif isinstance(d, str):
-                                bills.append(clean_bill_id(d))
-                    
-                    day_events.append({
-                        "Committee": clean_committee_name(comm_name),
-                        "Time": mtg_time,
-                        "Bills": bills,
-                        "Source": "API"
-                    })
-                
-                if day_events:
-                    calendar_data[date_str] = day_events
-        except Exception as e:
-            debug_log.append(f"{date_str}: Error {e}")
-            
-    return calendar_data, debug_log, successful_session
-
-# --- SCRAPER FALLBACK (FOR MEETINGS ONLY) ---
-@st.cache_data(ttl=600)
-def fetch_schedule_from_web_safe():
-    schedule_map = {}
+    # 1. HOUSE SCRAPER
     try:
-        from bs4 import BeautifulSoup 
-        headers = {'User-Agent': 'Mozilla/5.0'}
-        
-        # HOUSE
-        try:
-            resp = requests.get("https://house.vga.virginia.gov/schedule/meetings", headers=headers, timeout=3)
+        url = "https://house.vga.virginia.gov/schedule/meetings"
+        resp = requests.get(url, headers=headers, timeout=4)
+        if resp.status_code == 200:
             soup = BeautifulSoup(resp.text, 'html.parser')
+            # House page usually lists dates as headers (e.g. "Friday, January 16, 2026")
+            # We look for rows. This is highly specific to their current layout.
+            
+            # Simple Text Parser Strategy (More robust against layout changes)
             lines = [line.strip() for line in soup.get_text("\n", strip=True).splitlines() if line.strip()]
-            current_date = None
+            
+            current_date_str = None
             for i, line in enumerate(lines):
+                # Detect Date
                 if "JANUARY" in line.upper() or "FEBRUARY" in line.upper():
                     try:
-                        dt = datetime.strptime(f"{line}, 2026".replace(", 2026, 2026", ", 2026"), "%A, %B %d, %Y")
-                        current_date = dt.strftime("%Y-%m-%d")
+                        # cleanup "Friday, January 16, 2026"
+                        clean_d = line.split("–")[0].split("-")[0].strip()
+                        if "2026" not in clean_d: clean_d += ", 2026"
+                        dt = datetime.strptime(clean_d, "%A, %B %d, %Y")
+                        current_date_str = dt.strftime("%Y-%m-%d")
                     except: pass
-                if current_date and re.search(r'^\d{1,2}:\d{2}\s*[AP]M', line):
-                    if i > 0:
-                        raw_name = lines[i-1]
-                        # Use strict cleaner
-                        comm = f"House {raw_name}"
-                        schedule_map[(current_date, comm.lower())] = (line, comm)
-        except: pass
-
-        # SENATE
-        try:
-            resp = requests.get("https://apps.senate.virginia.gov/Senator/ComMeetings.php", headers=headers, timeout=3)
-            soup = BeautifulSoup(resp.text, 'html.parser')
-            lines = [line.strip() for line in soup.get_text("\n", strip=True).splitlines() if line.strip()]
-            for i, line in enumerate(lines):
-                if "2026" in line:
-                    try:
-                        clean_line = line.split("-")[0].strip().replace("–","-")
-                        dt = datetime.strptime(clean_line, "%A, %B %d, %Y")
-                        date_str = dt.strftime("%Y-%m-%d")
+                
+                # Detect Time (Start of a meeting entry)
+                if current_date_str:
+                    time_match = re.search(r'^\d{1,2}:\d{2}\s*[AP]M', line)
+                    if time_match:
+                        mtg_time = time_match.group(0)
+                        # The committee name is usually the PREVIOUS line
                         if i > 0:
                             raw_name = lines[i-1]
-                            comm = f"Senate {raw_name}"
-                            time_match = re.search(r'\d{1,2}:\d{2}\s*[AP]M', line)
-                            t_val = time_match.group(0) if time_match else "TBA"
-                            schedule_map[(date_str, comm.lower())] = (t_val, comm)
-                    except: pass
-        except: pass
-    except: return {} 
-    return schedule_map
+                            if "Agenda" not in raw_name and "Meeting" not in raw_name:
+                                full_name = f"House {raw_name}"
+                                if current_date_str not in calendar_data: calendar_data[current_date_str] = []
+                                calendar_data[current_date_str].append({
+                                    "Time": mtg_time,
+                                    "Committee": clean_committee_name(full_name),
+                                    "Chamber": "House"
+                                })
+            debug_log.append(f"House Scraper: Success")
+        else:
+            debug_log.append(f"House Scraper: HTTP {resp.status_code}")
+    except Exception as e:
+        debug_log.append(f"House Scraper Error: {e}")
 
-# --- DATA FETCHING (CSV) ---
+    # 2. SENATE SCRAPER
+    try:
+        url = "https://apps.senate.virginia.gov/Senator/ComMeetings.php"
+        resp = requests.get(url, headers=headers, timeout=4)
+        if resp.status_code == 200:
+            soup = BeautifulSoup(resp.text, 'html.parser')
+            lines = [line.strip() for line in soup.get_text("\n", strip=True).splitlines() if line.strip()]
+            
+            # Senate layout is usually: Committee Name (Line 1) -> Date/Time (Line 2)
+            for i, line in enumerate(lines):
+                if "2026" in line and ("AM" in line or "PM" in line):
+                    try:
+                        # Line looks like: "Friday, January 16, 2026 8:00 AM" or similar
+                        # Split date and time
+                        parts = line.split("2026")
+                        if len(parts) > 1:
+                            date_part = parts[0] + "2026"
+                            time_part = parts[1].strip()
+                            
+                            dt = datetime.strptime(date_part.strip(), "%A, %B %d, %Y")
+                            d_str = dt.strftime("%Y-%m-%d")
+                            
+                            # Committee is likely the line before
+                            if i > 0:
+                                raw_name = lines[i-1]
+                                if "Cancelled" not in raw_name:
+                                    full_name = f"Senate {raw_name}"
+                                    if d_str not in calendar_data: calendar_data[d_str] = []
+                                    calendar_data[d_str].append({
+                                        "Time": time_part,
+                                        "Committee": clean_committee_name(full_name),
+                                        "Chamber": "Senate"
+                                    })
+                    except: pass
+            debug_log.append(f"Senate Scraper: Success")
+    except Exception as e:
+        debug_log.append(f"Senate Scraper Error: {e}")
+
+    return calendar_data, debug_log
+
+# --- DATA FETCHING (CSV for Status/History) ---
 @st.cache_data(ttl=300) 
 def fetch_lis_data():
     data = {}
     est = pytz.timezone('US/Eastern')
     data['fetch_time'] = datetime.now(est).strftime("%I:%M %p EST")
+
     def load_csv(url):
         try:
             df = pd.read_csv(url, encoding='ISO-8859-1', on_bad_lines='skip', low_memory=False)
             df.columns = df.columns.str.strip().str.lower().str.replace(' ', '_').str.replace('/', '_').str.replace('.', '')
             return df
         except: return pd.DataFrame()
-    data['bills'] = load_csv(LIS_BILLS_CSV)
-    if not data['bills'].empty:
-        col = 'bill_number' if 'bill_number' in data['bills'].columns else 'bill_id'
-        if col in data['bills'].columns: data['bills']['bill_clean'] = data['bills'][col].astype(str).apply(clean_bill_id)
+
+    df_bills = load_csv(LIS_BILLS_CSV)
+    if not df_bills.empty:
+        col = 'bill_number' if 'bill_number' in df_bills.columns else 'bill_id'
+        if col in df_bills.columns:
+            df_bills['bill_clean'] = df_bills[col].astype(str).apply(clean_bill_id)
+            data['bills'] = df_bills
     
-    data['history'] = load_csv(LIS_HISTORY_CSV)
-    if not data['history'].empty:
-        col = 'bill_number' if 'bill_number' in data['history'].columns else 'bill_id'
-        if col in data['history'].columns: data['history']['bill_clean'] = data['history'][col].astype(str).apply(clean_bill_id)
+    df_hist = load_csv(LIS_HISTORY_CSV)
+    if not df_hist.empty:
+        col = 'bill_number' if 'bill_number' in df_hist.columns else 'bill_id'
+        if col in df_hist.columns:
+            df_hist['bill_clean'] = df_hist[col].astype(str).apply(clean_bill_id)
+            data['history'] = df_hist
     return data
 
 def get_bill_data_batch(bill_numbers, lis_data_dict):
@@ -278,9 +198,11 @@ def get_bill_data_batch(bill_numbers, lis_data_dict):
     history_df = lis_data_dict.get('history', pd.DataFrame())
     results = []
     clean_bills = list(set([clean_bill_id(b) for b in bill_numbers if str(b).strip() != 'nan']))
+    
     lis_lookup = {}
     if not lis_df.empty and 'bill_clean' in lis_df.columns:
         lis_lookup = lis_df.set_index('bill_clean').to_dict('index')
+
     history_lookup = {}
     if not history_df.empty and 'bill_clean' in history_df.columns:
         for b_id, group in history_df.groupby('bill_clean'):
@@ -295,6 +217,7 @@ def get_bill_data_batch(bill_numbers, lis_data_dict):
             if pd.isna(status) or str(status).strip() == '': status = item.get('last_senate_action', 'Introduced')
             date_val = str(item.get('last_house_action_date', ''))
             if not date_val or date_val == 'nan': date_val = str(item.get('last_senate_action_date', ''))
+
         raw_history = history_lookup.get(bill_num, [])
         if raw_history:
             for h_row in raw_history:
@@ -326,6 +249,7 @@ def get_bill_data_batch(bill_numbers, lis_data_dict):
         if curr_comm and "Senate" not in curr_comm and "House" not in curr_comm:
              if bill_num.startswith("SB") or bill_num.startswith("SJ") or bill_num.startswith("SR"): curr_comm = f"Senate {curr_comm}"
              elif bill_num.startswith("HB") or bill_num.startswith("HJ") or bill_num.startswith("HR"): curr_comm = f"House {curr_comm}"
+        
         lifecycle = determine_lifecycle(str(status), str(curr_comm))
         display_comm = curr_comm
         if lifecycle == "📣 Out of Committee" or lifecycle == "✅ Signed & Enacted":
@@ -333,6 +257,7 @@ def get_bill_data_batch(bill_numbers, lis_data_dict):
              elif "read" in str(status).lower(): display_comm = "📜 On Floor (Read/Reported)"
              elif "passed" in str(status).lower(): display_comm = "🎉 Passed Chamber"
              else: display_comm = "On Floor / Reported"
+
         results.append({
             "Bill Number": bill_num, "Official Title": title, "Status": str(status), "Date": date_val, 
             "Lifecycle": lifecycle, "Auto_Folder": get_smart_subject(title), "History_Data": history_data[::-1], 
@@ -340,44 +265,10 @@ def get_bill_data_batch(bill_numbers, lis_data_dict):
         })
     return pd.DataFrame(results) if results else pd.DataFrame()
 
-# --- ALERTS ---
-def check_and_broadcast(df_bills, df_subscribers, demo_mode):
-    st.sidebar.header("🤖 Slack Bot Status")
-    if demo_mode: st.sidebar.warning("🛠️ Demo Mode Active"); return
-    token = st.secrets.get("SLACK_BOT_TOKEN")
-    if not token: st.sidebar.error("❌ Disconnected (Token Missing)"); return
-    client = WebClient(token=token)
-    try:
-        subscriber_list = df_subscribers['Email'].dropna().unique().tolist()
-        if not subscriber_list: st.sidebar.warning("⚠️ No Subscribers Found"); return
-        user_id = client.users_lookupByEmail(email=subscriber_list[0].strip())['user']['id']
-        history = client.conversations_history(channel=client.conversations_open(users=[user_id])['channel']['id'], limit=100)
-        raw_history_text = "\n".join([m.get('text', '') for m in history['messages']])
-        history_text = raw_history_text.replace("&amp;", "&").replace("&lt;", "<").replace("&gt;", ">")
-        st.sidebar.success(f"✅ Connected to Slack")
-    except Exception as e: st.sidebar.error(f"❌ Slack Error: {e}"); return
-    report = f"🏛️ *VA LEGISLATIVE UPDATE* - {datetime.now().strftime('%m/%d')}\n_Latest changes detected:_\n"
-    updates_found = False
-    for i, row in df_bills.iterrows():
-        if "LIS Connection Error" in str(row.get('Status')): continue
-        b_num = str(row['Bill Number']).strip(); raw_status = str(row.get('Status', 'No Status')).strip(); clean_status = clean_status_text(raw_status)
-        if b_num in history_text and clean_status in history_text: continue
-        display_name = str(row.get('My Title', '-'))
-        if display_name == "-" or display_name == "nan" or not display_name: official = str(row.get('Official Title', '')); display_name = (official[:60] + '..') if len(official) > 60 else official
-        updates_found = True
-        report += f"\n⚪ *{b_num}* | {display_name}\n> _{clean_status}_\n"
-    if updates_found:
-        st.toast(f"📢 Sending updates to {len(subscriber_list)} people...")
-        for email in subscriber_list:
-            try: uid = client.users_lookupByEmail(email=email.strip())['user']['id']; client.chat_postMessage(channel=uid, text=report)
-            except: pass
-        st.toast("✅ Sent!"); st.sidebar.info("🚀 New Update Sent!")
-    else: st.sidebar.info("💤 No new updates needed.")
-
 # --- UI COMPONENTS ---
 def render_bill_card(row):
-    if row.get('Official Title') not in ["Unknown", "Error", "Not Found", None]: display_title = row['Official Title']
-    else: display_title = row.get('My Title', 'No Title Provided')
+    display_title = row.get('Official Title', 'No Title')
+    if display_title in ["Unknown", "Error", "Not Found", None]: display_title = row.get('My Title', 'No Title')
     st.markdown(f"**{row['Bill Number']}**")
     my_status = str(row.get('My Status', '')).strip()
     if my_status and my_status != 'nan' and my_status != '-': st.info(f"🏷️ **Status:** {my_status}")
@@ -390,7 +281,6 @@ def render_grouped_list_item(df):
         if name in ['-', 'nan', 'None', '', '0']: return "Unassigned"
         if name == "House -": return "House - Unassigned"
         if name == "Senate -": return "Senate - Unassigned"
-        if name.endswith("-"): return name + " Unassigned"
         return name
     df['Display_Comm_Group'] = df['Current_Committee'].fillna('-').apply(rename_unassigned)
     df['Current_Sub'] = df['Current_Sub'].fillna('-')
@@ -479,14 +369,8 @@ except Exception as e: st.error(f"Sheet Error: {e}"); st.stop()
 
 bills_to_track = sheet_df['Bill Number'].unique().tolist()
 
-# --- HYBRID FETCH LOGIC (AUTO-DISCOVERY) ---
-api_calendar_data, api_log, active_session_id = fetch_api_calendar_discovery()
-web_schedule_map = fetch_schedule_from_web_safe()
-
-if active_session_id:
-    st.sidebar.success(f"✅ Connected to API (Session {active_session_id})")
-else:
-    st.sidebar.warning("⚠️ API Failed (Using Backup Scraper)")
+# --- RUN HTML SCRAPER ---
+html_calendar, scrape_logs = fetch_html_calendar()
 
 if bills_to_track:
     if demo_mode:
@@ -501,10 +385,7 @@ if bills_to_track:
         title_to_check = row.get('Official Title', ''); 
         if str(title_to_check) in ["Unknown", "Error", "Not Found", "nan", "None", ""]: title_to_check = row.get('My Title', '')
         return get_smart_subject(str(title_to_check))
-        
     if 'Auto_Folder' not in final_df.columns or final_df['Auto_Folder'].isnull().any(): final_df['Auto_Folder'] = final_df.apply(assign_folder, axis=1)
-
-    check_and_broadcast(final_df, subs_df, demo_mode)
 
     # 3. RENDER TABS
     tab_involved, tab_watching, tab_upcoming = st.tabs(["🚀 Directly Involved", "👀 Watching", "📅 Upcoming Hearings"])
@@ -522,14 +403,14 @@ if bills_to_track:
             with m3: st.markdown("#### 🎉 Passed"); render_simple_list_item(passed)
             with m4: st.markdown("#### ❌ Failed"); render_simple_list_item(failed)
 
-    # --- TAB 3: HYBRID CALENDAR (With Strict Rules) ---
+    # --- TAB 3: CALENDAR (STRICT HTML) ---
     with tab_upcoming:
         st.subheader("📅 Your Confirmed Agenda")
         today = datetime.now(est).date()
         current_dt = datetime.now(est)
         cols = st.columns(7)
+        
         bill_info_map = final_df.set_index('Bill Number')[['Current_Committee', 'Current_Sub', 'My Status', 'Status', 'Date', 'Lifecycle']].to_dict('index')
-        my_bills_clean = [clean_bill_id(b) for b in bills_to_track]
 
         for i in range(7):
             target_date = today + timedelta(days=i)
@@ -541,60 +422,43 @@ if bills_to_track:
                 events_found = False
                 bills_shown_today = set()
                 
-                # PLAN A: API (Gold Standard - Shows Bills)
-                todays_api_meetings = api_calendar_data.get(target_date_str, [])
-                if todays_api_meetings:
-                    for meeting in todays_api_meetings:
-                        matched_bills = [b for b in meeting['Bills'] if b in my_bills_clean]
-                        if matched_bills:
-                            # Strict Time Check
-                            try:
-                                mtg_dt_str = f"{target_date_str} {meeting['Time']}"
-                                mtg_dt = datetime.strptime(mtg_dt_str, "%Y-%m-%d %I:%M %p")
-                                mtg_dt = est.localize(mtg_dt)
-                                if mtg_dt < current_dt: continue 
-                            except: pass 
+                # PLAN A: DIRECT HTML CALENDAR
+                if target_date_str in html_calendar:
+                    meetings = html_calendar[target_date_str]
+                    for m in meetings:
+                        # Time Check (Skip past meetings)
+                        try:
+                            # Parse time if possible (e.g. "8:00 AM")
+                            t_str = m['Time'].split("(")[0].strip()
+                            mtg_dt_str = f"{target_date_str} {t_str}"
+                            mtg_dt = datetime.strptime(mtg_dt_str, "%Y-%m-%d %I:%M %p")
+                            mtg_dt = est.localize(mtg_dt)
+                            if mtg_dt < current_dt: continue 
+                        except: pass
 
-                            events_found = True
-                            st.markdown(f"**{meeting['Committee']}**"); st.caption(f"⏰ {meeting['Time']}")
-                            st.success("✅ Confirmed on Docket")
-                            for b_id in matched_bills:
-                                bills_shown_today.add(b_id); info = bill_info_map.get(b_id, {}); status_text = ""; raw_status = str(info.get('My Status', '')).strip()
-                                if raw_status and raw_status != 'nan' and raw_status != '-': status_text = f" - {raw_status}"
-                                st.error(f"**{b_id}**{status_text}")
-                            st.divider()
-                
-                # PLAN B: SCRAPER (Fallback - SHOWS NO BILLS)
-                if not events_found and not todays_api_meetings:
-                    for (scrape_date, scrape_comm), (scrape_time, scrape_full) in web_schedule_map.items():
-                        if scrape_date == target_date_str:
-                            try:
-                                clean_t = re.search(r'\d{1,2}:\d{2}\s*[AP]M', scrape_time)
-                                if clean_t:
-                                    t_str = clean_t.group(0)
-                                    mtg_dt_str = f"{target_date_str} {t_str}"
-                                    mtg_dt = datetime.strptime(mtg_dt_str, "%Y-%m-%d %I:%M %p")
-                                    mtg_dt = est.localize(mtg_dt)
-                                    if mtg_dt < current_dt: continue 
-                            except: pass
-
-                            # Determine if any of our bills match this committee
-                            has_potential_bills = False
-                            for b_id, info in bill_info_map.items():
-                                if info.get('Lifecycle') in ["✅ Signed & Enacted", "❌ Dead / Tabled", "✍️ Awaiting Signature"]: continue
-                                b_comm = str(info.get('Current_Committee', '')).lower().replace('committee','').strip()
-                                if len(b_comm) > 3 and b_comm in scrape_comm:
-                                    has_potential_bills = True
-                                    break
+                        # FILTER: Only show committee if we have bills there?
+                        # Use fuzzy match on committee name
+                        comm_clean = m['Committee'].lower().replace("committee", "").strip()
+                        
+                        relevant_bills = []
+                        for b_id, info in bill_info_map.items():
+                            if info.get('Lifecycle') in ["✅ Signed & Enacted", "❌ Dead / Tabled"]: continue
                             
-                            if has_potential_bills:
-                                events_found = True
-                                cleaned_header = clean_committee_name(scrape_full) # Use strict whitelist
-                                st.markdown(f"**{cleaned_header}**"); 
-                                st.caption(f"⏰ {scrape_time}")
-                                st.warning("⚠️ Docket Unavailable - Check LIS") # NO BILLS SHOWN
-                                st.markdown(f"[View Official Docket](https://lis.virginia.gov/cgi-bin/legp604.exe?{DEFAULT_SESSION_ID}+doc+DO{datetime.strptime(target_date_str, '%Y-%m-%d').strftime('%m%d')})")
-                                st.divider()
+                            b_comm = str(info.get('Current_Committee', '')).lower()
+                            if comm_clean in b_comm or b_comm in comm_clean:
+                                relevant_bills.append(b_id)
+                        
+                        if relevant_bills:
+                            events_found = True
+                            st.markdown(f"**{m['Committee']}**")
+                            st.caption(f"⏰ {m['Time']}")
+                            st.caption("⚠️ _Potential Hearing (Based on Committee)_")
+                            # Official Docket Link
+                            # Format: session=261, doc=DO+mmdd
+                            mmdd = datetime.strptime(target_date_str, "%Y-%m-%d").strftime("%m%d")
+                            link = f"https://lis.virginia.gov/cgi-bin/legp604.exe?261+doc+DO{mmdd}"
+                            st.markdown(f"[📄 View Official Docket]({link})")
+                            st.divider()
 
                 # PLAN C: TODAY COMPLETED
                 if i == 0: 
@@ -636,8 +500,10 @@ with st.sidebar:
     st.divider()
     with st.expander("👨‍💻 Developer Debugger", expanded=True):
         st.write("System Status:")
+        hist_cols = st.session_state.get('history_cols', [])
         if 'history' in lis_data and not lis_data['history'].empty: st.write(f"**History File:** 🟢 Loaded ({len(lis_data['history'])} rows)")
         else: st.write(f"**History File:** 🔴 Not loaded")
-        if active_session_id: st.write(f"**API Status:** 🟢 Active (Session {active_session_id})")
-        else: st.write(f"**API Status:** ⚠️ Failed (Using Scraper)")
-        st.write("**API Discovery Log:**"); st.text("\n".join(api_log))
+        
+        st.write(f"**HTML Scraper:** {'🟢 Active' if html_calendar else '🔴 Empty'}")
+        st.write("**Scraper Log:**")
+        st.text("\n".join(scrape_logs[:10]))
