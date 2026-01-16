@@ -24,6 +24,21 @@ LIS_HISTORY_CSV = LIS_BASE_URL + "HISTORY.CSV"
 
 st.set_page_config(page_title="VA Bill Tracker 2026", layout="wide")
 
+# --- RESTORED: TOPIC CATEGORIES ---
+TOPIC_KEYWORDS = {
+    "🗳️ Elections & Democracy": ["election", "vote", "ballot", "campaign", "poll", "voter", "registrar", "districting", "suffrage"],
+    "🏗️ Housing & Property": ["rent", "landlord", "tenant", "housing", "lease", "property", "zoning", "eviction", "homeowner", "development", "residential"],
+    "✊ Labor & Workers Rights": ["wage", "salary", "worker", "employment", "labor", "union", "bargaining", "leave", "compensation", "workplace", "employee", "minimum", "overtime"],
+    "💰 Economy & Business": ["tax", "commerce", "business", "market", "consumer", "corporation", "finance", "budget", "economic", "trade"],
+    "🎓 Education": ["school", "education", "student", "university", "college", "teacher", "curriculum", "scholarship", "tuition", "board of education"],
+    "🚓 Public Safety & Law": ["firearm", "gun", "police", "crime", "penalty", "court", "judge", "enforcement", "prison", "arrest", "criminal", "justice"],
+    "🏥 Health & Healthcare": ["health", "medical", "hospital", "patient", "doctor", "insurance", "care", "mental", "pharmacy", "drug", "medicaid"],
+    "🌳 Environment & Energy": ["energy", "water", "pollution", "environment", "climate", "solar", "conservation", "waste", "carbon", "natural resources", "wind", "power", "electricity", "hydroelectric", "nuclear", "chesapeake", "bay", "river", "watershed"],
+    "🚗 Transportation": ["road", "highway", "vehicle", "driver", "license", "transit", "traffic", "transportation", "motor"],
+    "💻 Tech & Utilities": ["internet", "broadband", "data", "privacy", "utility", "cyber", "technology", "telecom", "artificial intelligence"],
+    "⚖️ Civil Rights": ["discrimination", "rights", "equity", "minority", "gender", "religious", "freedom", "speech"],
+}
+
 # --- HELPER FUNCTIONS ---
 
 def determine_lifecycle(status_text, committee_name):
@@ -53,7 +68,10 @@ def determine_lifecycle(status_text, committee_name):
     return "📣 Out of Committee"
 
 def get_smart_subject(title):
-    # (Simplified for brevity, same logic as before)
+    title_lower = str(title).lower()
+    for category, keywords in TOPIC_KEYWORDS.items():
+        if any(k in title_lower for k in keywords):
+            return category
     return "📂 Unassigned / General"
 
 def clean_committee_name(name):
@@ -205,7 +223,7 @@ def fetch_lis_data():
         try: df = pd.read_csv(LIS_BILLS_CSV, encoding='ISO-8859-1')
         except: df = pd.read_csv(LIS_BILLS_CSV.replace(".CSV", ".csv"), encoding='ISO-8859-1')
         df.columns = df.columns.str.strip().str.lower().str.replace(' ', '_').str.replace('/', '_').str.replace('.', '')
-        # RESTORED: Prioritize 'bill_id' (SB160) over 'bill_number' (160)
+        # Prioritize 'bill_id' (SB160)
         if 'bill_id' in df.columns:
             df['bill_clean'] = df['bill_id'].astype(str).str.upper().str.replace(" ", "").str.strip()
         elif 'bill_number' in df.columns:
@@ -219,9 +237,6 @@ def fetch_lis_data():
         except: df_hist = pd.read_csv(LIS_HISTORY_CSV.replace(".CSV", ".csv"), encoding='ISO-8859-1')
         df_hist.columns = df_hist.columns.str.strip().str.lower().str.replace(' ', '_').str.replace('/', '_').str.replace('.', '')
         
-        # Capture History Columns for Debugger
-        st.session_state['history_cols'] = list(df_hist.columns)
-
         # Match logic for History file
         hist_bill_col = next((c for c in df_hist.columns if "bill_id" in c), None) # Try ID first
         if not hist_bill_col:
@@ -292,19 +307,19 @@ def get_bill_data_batch(bill_numbers, lis_data_dict):
             if not date_val or date_val == 'nan':
                 date_val = str(item.get('last_senate_action_date', ''))
 
-        # --- PROCESS HISTORY ---
+        # --- PROCESS HISTORY (Fixed Column Names) ---
         raw_history = history_lookup.get(bill_num, [])
         if raw_history:
             for h_row in raw_history:
-                # 1. Get Description 
+                # 1. Get Description
                 desc = ""
-                for col in ['description', 'action', 'history', 'event']:
+                for col in ['history_description', 'description', 'action', 'history', 'event']:
                     if col in h_row:
                         desc = str(h_row[col])
                         break
                 # 2. Get Date
                 date_h = ""
-                for col in ['date', 'action_date', 'history_date']:
+                for col in ['history_date', 'date', 'action_date']:
                     if col in h_row:
                         date_h = str(h_row[col])
                         break
@@ -312,7 +327,7 @@ def get_bill_data_batch(bill_numbers, lis_data_dict):
                 if desc:
                     history_data.append({"Date": date_h, "Action": desc})
 
-                    # 3. Detect Committee (The "Education" Fix)
+                    # 3. Detect Committee
                     desc_lower = desc.lower()
                     if "referred to" in desc_lower and "committee" in desc_lower:
                         match = re.search(r'(?:committee(?:\s+on)?)\s+([a-z\s&,]+)', desc_lower)
@@ -511,27 +526,22 @@ if bills_to_track:
 
     final_df = pd.merge(sheet_df, api_df, on="Bill Number", how="left")
     
-    # Check if History Link Failed (Debugger Support)
-    history_success = False
-    if 'History_Data' in final_df.columns:
-        if final_df['History_Data'].str.len().sum() > 0:
-            history_success = True
+    def assign_folder(row):
+        title_to_check = row.get('Official Title', '')
+        if str(title_to_check) in ["Unknown", "Error", "Not Found", "nan", "None", ""]:
+            title_to_check = row.get('My Title', '')
+        return get_smart_subject(str(title_to_check))
 
+    if 'Auto_Folder' not in final_df.columns or final_df['Auto_Folder'].isnull().any():
+         final_df['Auto_Folder'] = final_df.apply(assign_folder, axis=1)
+
+    # 3. RENDER TABS
     tab_involved, tab_watching, tab_upcoming = st.tabs(["🚀 Directly Involved", "👀 Watching", "📅 Upcoming Hearings"])
 
     for tab, b_type in [(tab_involved, "Involved"), (tab_watching, "Watching")]:
         with tab:
             subset = final_df[final_df['Type'] == b_type]
             st.subheader("🗂️ Browse by Topic")
-            # Auto-Folder logic
-            def assign_folder(row):
-                title_to_check = row.get('Official Title', '')
-                if str(title_to_check) in ["Unknown", "Error", "Not Found", "nan", "None", ""]:
-                    title_to_check = row.get('My Title', '')
-                return get_smart_subject(str(title_to_check))
-            if 'Auto_Folder' not in final_df.columns or final_df['Auto_Folder'].isnull().any():
-                final_df['Auto_Folder'] = final_df.apply(assign_folder, axis=1)
-                
             unique_folders = sorted(subset['Auto_Folder'].unique())
             cols = st.columns(3)
             for i, folder in enumerate(unique_folders):
@@ -562,7 +572,7 @@ if bills_to_track:
                 st.markdown("#### ❌ Failed")
                 render_master_list_item(failed)
 
-    # --- TAB 3: RESTORED ORIGINAL CALENDAR LOGIC ---
+    # --- TAB 3: RESTORED STRICT DOCKET CHECK ---
     with tab_upcoming:
         st.subheader("📅 Your Confirmed Agenda")
         today = datetime.now(est).date()
@@ -571,7 +581,7 @@ if bills_to_track:
         schedule_df = lis_data.get('schedule', pd.DataFrame())
         my_bills_clean = [b.upper().strip() for b in bills_to_track]
         
-        # RESTORED FILTER: Only check bills that exist in LIS Dockets
+        # STRICT FILTER: Must exist in LIS Dockets
         confirmed_bills_set = set()
         if not schedule_df.empty:
             matches = schedule_df[schedule_df['bill_clean'].isin(my_bills_clean)]
@@ -598,7 +608,7 @@ if bills_to_track:
                         if "caucus" in scraper_full_name.lower(): continue
 
                         matched_bills = []
-                        # RESTORED: Iterate ONLY over confirmed bills, not all bills
+                        # STRICT MATCH: Only check Verified Docket Bills
                         for b_id in confirmed_bills_set:
                             if b_id in bills_shown_today: continue 
 
@@ -643,9 +653,8 @@ if bills_to_track:
 with st.sidebar:
     st.divider()
     with st.expander("👨‍💻 Developer Debugger", expanded=True):
-        st.write("Take a screenshot if History Table is still empty!")
+        st.write("All Systems Go?")
         
-        # 1. Show Columns found in History File (Crucial for diagnosis)
         hist_cols = st.session_state.get('history_cols', [])
         if hist_cols:
             st.write(f"**History File Columns:**")
@@ -654,6 +663,5 @@ with st.sidebar:
             st.write("**History File Columns:** Not loaded")
             
         debug_data = st.session_state.get('debug_data', {})
-        logs = debug_data.get('log', [])
         keys = debug_data.get('map_keys', [])
         st.write(f"**Scraper Status:** {'🟢 Active' if keys else '🔴 Empty'}")
