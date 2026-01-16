@@ -41,13 +41,27 @@ TOPIC_KEYWORDS = {
 # --- HELPER FUNCTIONS ---
 def determine_lifecycle(status_text):
     status = str(status_text).lower()
+    
+    # 1. Final Stages (Passed/Enacted)
     if any(x in status for x in ["signed by governor", "enacted", "approved by governor", "chapter"]):
         return "✅ Signed & Enacted"
+    
+    # 2. Dead
     if any(x in status for x in ["tabled", "failed", "stricken", "passed by indefinitely", "left in", "defeated", "no action taken", "incorporated into"]):
         return "❌ Dead / Tabled"
+    
+    # 3. Passed Legislature (Waiting for Gov)
     if any(x in status for x in ["enrolled", "communicated to governor", "bill text as passed"]):
         return "✍️ Awaiting Signature"
-    return "🚀 Active"
+        
+    # 4. In Committee (Stuck/Waiting)
+    # If the status says it's referred or assigned, it is IN a committee.
+    if any(x in status for x in ["referred", "assigned", "continued"]):
+        return "📥 In Committee"
+        
+    # 5. Out of Committee (Moving on Floor)
+    # If it's active but NOT referred/assigned, it's on the floor (Reported, Read, Engrossed, etc.)
+    return "📣 Out of Committee"
 
 def get_smart_subject(title):
     title_lower = str(title).lower()
@@ -129,7 +143,7 @@ def clean_status_text(text):
         "sub:": "Subcommittee:",
         "P&E": "Privileges & Elections",
         "C&L": "Commerce & Labor",
-        "floor offered": "Floor Amendment Offered", # Clarification added
+        "floor offered": "Floor Amendment Offered",
         "passed by indefinitely": "Passed By Indefinitely (Dead)"
     }
     
@@ -352,7 +366,7 @@ def check_and_broadcast(df_bills, df_subscribers, demo_mode):
         user_id = client.users_lookupByEmail(email=subscriber_list[0].strip())['user']['id']
         history = client.conversations_history(channel=client.conversations_open(users=[user_id])['channel']['id'], limit=100)
         
-        # FIX: Unescape the history so '&amp;' becomes '&' to match our bill status
+        # FIX: Unescape the history so '&amp;' becomes '&'
         raw_history_text = "\n".join([m.get('text', '') for m in history['messages']])
         history_text = raw_history_text.replace("&amp;", "&").replace("&lt;", "<").replace("&gt;", ">")
         
@@ -371,7 +385,6 @@ def check_and_broadcast(df_bills, df_subscribers, demo_mode):
         raw_status = str(row.get('Status', 'No Status')).strip()
         clean_status = clean_status_text(raw_status)
         
-        # Check against the unescaped history
         if b_num in history_text and clean_status in history_text: 
             continue
         
@@ -565,27 +578,32 @@ if bills_to_track:
                                 render_bill_card(row)
             st.markdown("---")
             st.subheader(f"📜 Master List ({b_type})")
-            active = subset[subset['Lifecycle'] == "🚀 Active"]
-            awaiting = subset[subset['Lifecycle'] == "✍️ Awaiting Signature"]
-            signed = subset[subset['Lifecycle'] == "✅ Signed & Enacted"]
-            dead = subset[subset['Lifecycle'] == "❌ Dead / Tabled"]
             
-            m1, m2, m3 = st.columns(3)
+            # --- 4-COLUMN LAYOUT UPDATE ---
+            in_comm = subset[subset['Lifecycle'] == "📥 In Committee"]
+            out_comm = subset[subset['Lifecycle'] == "📣 Out of Committee"]
+            passed = subset[subset['Lifecycle'].isin(["✅ Signed & Enacted", "✍️ Awaiting Signature"])]
+            failed = subset[subset['Lifecycle'] == "❌ Dead / Tabled"]
+            
+            m1, m2, m3, m4 = st.columns(4)
             with m1:
-                st.markdown("#### 🚀 Active")
-                render_master_list_item(active)
+                st.markdown("#### 📥 In Committee")
+                render_master_list_item(in_comm)
             with m2:
-                st.markdown("#### 🎉 Passed")
-                render_master_list_item(pd.concat([awaiting, signed]))
+                st.markdown("#### 📣 Out of Committee")
+                render_master_list_item(out_comm)
             with m3:
+                st.markdown("#### 🎉 Passed")
+                render_master_list_item(passed)
+            with m4:
                 st.markdown("#### ❌ Failed")
-                render_master_list_item(dead)
+                render_master_list_item(failed)
 
     # --- TAB 3: UPCOMING (STRICT AGENDA MATCHING + ROBUST MAPPING + TODAY PERSISTENCE) ---
     with tab_upcoming:
         st.subheader("📅 Your Confirmed Agenda")
         
-        today = datetime.now(est).date() # Use EST to prevent 7PM rollback issue
+        today = datetime.now(est).date()
         cols = st.columns(7)
         
         schedule_df = lis_data.get('schedule', pd.DataFrame())
