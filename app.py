@@ -64,10 +64,8 @@ def determine_lifecycle(status_text, committee_name):
 def clean_committee_name(name):
     if not name or str(name).lower() == 'nan': return ""
     name = str(name).strip()
-    # Strip names
     name = re.sub(r'\b[A-Z][a-z]+, [A-Z]\. ?[A-Z]?\.?.*$', '', name) 
     name = re.sub(r'\b(Simon|Rasoul|Willett|Helmer|Lucas|Surovell|Locke|Deeds|Favola|Marsden|Ebbin|McPike|Hayes|Carroll Foy|Subcommittee #\d+)\b.*', '', name, flags=re.IGNORECASE)
-    # Fix LIS oddities
     name = name.replace("Committee For", "").replace("Committee On", "").replace("Committee", "").strip()
     return name.title()
 
@@ -77,7 +75,6 @@ def clean_status_text(text):
     return text.replace("HED", "House Education").replace("sub:", "Subcommittee:")
 
 def extract_vote_info(status_text):
-    """Finds vote counts like (21-Y 18-N)"""
     match = re.search(r'\((\d{1,3}-Y \d{1,3}-N)\)', str(status_text))
     if match: return match.group(1)
     return None
@@ -114,14 +111,7 @@ def fetch_html_calendar():
                                 if "Agenda" not in raw:
                                     clean = clean_committee_name(f"{prefix} {raw}")
                                     if curr_date not in calendar_times: calendar_times[curr_date] = {}
-                                    
-                                    # CREATE FUZZY MATCH KEY
-                                    key = clean.lower()
-                                    for word in ["house", "senate", "committee", "for", "of", "and", "&"]:
-                                        key = key.replace(word, "")
-                                    key = " ".join(key.split()) 
-                                    
-                                    calendar_times[curr_date][key] = t_val 
+                                    calendar_times[curr_date][clean.lower()] = t_val 
         except: pass
 
     scrape("https://house.vga.virginia.gov/schedule/meetings", "House")
@@ -240,11 +230,10 @@ def get_bill_data_batch(bill_numbers, lis_data_dict):
             d_date = d.get('meeting_date') or d.get('doc_date')
             d_comm_raw = str(d.get('committee_name', 'Unknown'))
             
-            # --- ZOMBIE FIX: If bill is out of committee, don't use old committee name ---
+            # ZOMBIE FIX: If out of comm, ignore
             if lifecycle == "📣 Out of Committee" or lifecycle == "✅ Signed & Enacted":
                 d_comm_raw = "Floor Session / Chamber Action"
             elif d_comm_raw == 'Unknown' or d_comm_raw == 'nan':
-                # Use current committee ONLY if bill is still in committee
                 d_comm_raw = curr_comm
 
             if d_date:
@@ -511,18 +500,17 @@ if bills_to_track:
                 # SECTION 1: UPCOMING MEETINGS (FROM DOCKET)
                 if target_date_str in calendar_map:
                     for comm_name, bills in calendar_map[target_date_str].items():
-                        # Fuzzy Time Match
+                        # --- KEYWORD INTERSECTION MATCHING ---
                         time_display = "Time TBA"
                         if target_date_str in scraped_times:
-                            def normalize_key(s):
-                                s = s.lower()
-                                for w in ["committee", "house", "senate", "for", "of", "and", "&"]: s = s.replace(w, "")
-                                return "".join(s.split())
+                            # Break Docket Name into keywords
+                            docket_words = set(comm_name.lower().replace("house","").replace("senate","").replace("committee","").split())
+                            docket_words.discard("of"); docket_words.discard("for"); docket_words.discard("and"); docket_words.discard("&")
                             
-                            c_key = normalize_key(comm_name)
-                            for s_key_raw, s_time in scraped_times[target_date_str].items():
-                                s_key = normalize_key(s_key_raw)
-                                if c_key in s_key or s_key in c_key:
+                            # Check against Scraper Keys
+                            for scraper_key, s_time in scraped_times[target_date_str].items():
+                                # Does the scraper key contain ALL the docket keywords?
+                                if all(w in scraper_key for w in docket_words):
                                     time_display = s_time
                                     break
                         
@@ -558,7 +546,7 @@ if bills_to_track:
                                     events_found = True
                                 
                                 # Render Expanded Card for Completed
-                                my_status = str(row.get('My Status', '')).strip()
+                                my_status = str(row.get('My Status', '')).strip() # DEFINE VARIABLE HERE
                                 vote_str = extract_vote_info(row.get('Status', ''))
                                 
                                 label_text = f"{row['Bill Number']}"
@@ -591,7 +579,10 @@ with st.sidebar:
         else:
              st.write(f"**Docket File:** 🔴 Not Found")
         
-        if 'history' in lis_data and not lis_data['history'].empty:
-             st.write(f"**History File:** 🟢 Loaded ({len(lis_data['history'])} rows)")
+        st.write("**Time Matcher Debug:**")
+        today_str = datetime.now(est).strftime('%Y-%m-%d')
+        if today_str in scraped_times:
+             st.write(f"Scraper Keys for {today_str}:")
+             st.json(list(scraped_times[today_str].keys()))
         else:
-             st.write(f"**History File:** 🔴 Not loaded")
+             st.write(f"No scraper data for {today_str}")
