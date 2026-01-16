@@ -198,10 +198,15 @@ def fetch_schedule_from_web():
     st.session_state['debug_data'] = {"map_keys": list(schedule_map.keys()), "log": debug_log}
     return schedule_map
 
-# --- DATA FETCHING ---
+# --- DATA FETCHING (UPDATED WITH TIMESTAMP) ---
 @st.cache_data(ttl=300) 
 def fetch_lis_data():
     data = {}
+    
+    # Store the actual fetch time
+    est = pytz.timezone('US/Eastern')
+    data['fetch_time'] = datetime.now(est).strftime("%I:%M %p EST")
+
     try:
         try: df = pd.read_csv(LIS_BILLS_CSV, encoding='ISO-8859-1')
         except: df = pd.read_csv(LIS_BILLS_CSV.replace(".CSV", ".csv"), encoding='ISO-8859-1')
@@ -459,17 +464,20 @@ def _render_single_bill_row(row):
 # --- MAIN APP ---
 st.title("🏛️ Virginia General Assembly Tracker")
 est = pytz.timezone('US/Eastern')
-current_time_est = datetime.now(est).strftime("%I:%M %p EST")
-if 'last_run' not in st.session_state: st.session_state['last_run'] = current_time_est
 
 # --- SIDEBAR ---
 demo_mode = st.sidebar.checkbox("🛠️ Enable Demo Mode", value=False)
 col_btn, col_time = st.columns([1, 6])
 with col_btn:
     if st.button("🔄 Check for Updates"):
-        st.session_state['last_run'] = datetime.now(est).strftime("%I:%M %p EST")
         st.cache_data.clear(); st.rerun()
-with col_time: st.markdown(f"**Last Refreshed:** `{st.session_state['last_run']}`")
+
+# 2. FETCH LIS DATA
+lis_data = fetch_lis_data()
+fetch_time_display = lis_data.get('fetch_time', 'Unknown')
+
+with col_time: 
+    st.markdown(f"**Last Data Update:** `{fetch_time_display}`")
 
 # 1. LOAD USER DATA
 try:
@@ -509,8 +517,6 @@ try:
     if 'My Status' not in sheet_df.columns: sheet_df['My Status'] = "-"
 except Exception as e: st.error(f"Sheet Error: {e}"); st.stop()
 
-# 2. FETCH LIS DATA
-lis_data = fetch_lis_data()
 bills_to_track = sheet_df['Bill Number'].unique().tolist()
 web_schedule_map = fetch_schedule_from_web()
 
