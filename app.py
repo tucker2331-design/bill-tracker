@@ -69,7 +69,6 @@ def clean_committee_name(name):
     
     if "," in name: name = name.split(",")[0].strip()
 
-    # Strict Mappings (Explicitly add Chamber)
     mapping = {
         "HED": "House Education",
         "HEDC": "House Education",
@@ -77,7 +76,7 @@ def clean_committee_name(name):
         "C&L": "Commerce & Labor",
         "HWI": "House Health, Welfare & Inst.",
         "APP": "House Appropriations",
-        "HAPP": "House Appropriations", # Added HAPP
+        "HAPP": "House Appropriations",
         "FIN": "Senate Finance & Appropriations",
         "JUD": "Courts of Justice",
         "GL": "General Laws",
@@ -114,7 +113,6 @@ def clean_committee_name(name):
     if is_senate: return f"Senate {base_name}"
     if is_house: return f"House {base_name}"
     
-    # Overrides for distinct names
     if "Health, Welfare" in base_name: return f"House {base_name}"
     if "Rehabilitation" in base_name: return f"Senate {base_name}"
     if "Education and Health" in base_name: return f"Senate {base_name}"
@@ -124,16 +122,21 @@ def clean_committee_name(name):
 def clean_status_text(text):
     if not text: return ""
     text = str(text)
+    
+    # 1. Expand Abbreviations
     replacements = {
         "HED": "House Education",
         "HAPP": "House Appropriations",
         "sub:": "Subcommittee:",
         "P&E": "Privileges & Elections",
-        "C&L": "Commerce & Labor"
+        "C&L": "Commerce & Labor",
+        "floor offered": "Floor Amendment Offered" # Added clarification
     }
+    
     for abbr, full in replacements.items():
         pattern = re.compile(re.escape(abbr), re.IGNORECASE)
         text = pattern.sub(full, text)
+        
     return text
 
 # --- NEW: ROBUST SCRAPER (Fixed for "Minutes After") ---
@@ -146,7 +149,6 @@ def fetch_schedule_from_web():
     # 1. SENATE PORTAL
     try:
         url_senate = "https://apps.senate.virginia.gov/Senator/ComMeetings.php"
-        debug_log.append(f"🏛️ Senate: Checking {url_senate}")
         resp = requests.get(url_senate, headers=headers, timeout=5)
         soup = BeautifulSoup(resp.text, 'html.parser')
         lines = [line.strip() for line in soup.get_text("\n", strip=True).splitlines() if line.strip()]
@@ -165,16 +167,16 @@ def fetch_schedule_from_web():
                             comm_name = lines[i-1]
                             if "Cancelled" in comm_name: continue
                             
-                            # Preserve "Senate" in key to prevent merging with House
-                            clean_name = normalize_text(comm_name)
-                            clean_name = clean_name.replace("committee", "").strip()
+                            def normalize_text_strict(t):
+                                if pd.isna(t): return ""
+                                t = str(t).lower().replace('&','and').replace('.','').replace(',','').replace('-',' ')
+                                return " ".join(t.split())
+
+                            clean_name = normalize_text_strict(comm_name)
                             if "senate" not in clean_name and "house" not in clean_name:
                                 clean_name = "senate " + clean_name 
-                            
                             clean_name = clean_name.replace("senate", "").replace("house", "").strip()
-                            
                             key = (date_str, clean_name)
-                            
                             display_name = comm_name
                             if "Senate" not in display_name: display_name = f"Senate {display_name}"
                             schedule_map[key] = (time_val, display_name) 
@@ -184,7 +186,6 @@ def fetch_schedule_from_web():
     # 2. HOUSE PORTAL
     try:
         url_house = "https://house.vga.virginia.gov/schedule/meetings"
-        debug_log.append(f"🏛️ House: Checking {url_house}")
         resp = requests.get(url_house, headers=headers, timeout=5)
         soup = BeautifulSoup(resp.text, 'html.parser')
         lines = [line.strip() for line in soup.get_text("\n", strip=True).splitlines() if line.strip()]
@@ -214,16 +215,17 @@ def fetch_schedule_from_web():
                             if len(prev_prev) > 4: comm_name = prev_prev
                     if "New Meeting" in comm_name: continue
 
-                    # Preserve "House" in key to prevent merging with Senate
-                    clean_name = normalize_text(comm_name)
-                    clean_name = clean_name.replace("committee", "").strip()
+                    def normalize_text_strict(t):
+                        if pd.isna(t): return ""
+                        t = str(t).lower().replace('&','and').replace('.','').replace(',','').replace('-',' ')
+                        return " ".join(t.split())
+
+                    clean_name = normalize_text_strict(comm_name)
                     if "senate" not in clean_name and "house" not in clean_name:
                         clean_name = "house " + clean_name 
-                    
                     clean_name = clean_name.replace("senate", "").replace("house", "").strip()
                     
                     key = (current_date_str, clean_name)
-                    
                     display_name = comm_name
                     if "House" not in display_name: display_name = f"House {display_name}"
                     schedule_map[key] = (time_val, display_name)
@@ -363,8 +365,16 @@ def check_and_broadcast(df_bills, df_subscribers, demo_mode):
     for i, row in df_bills.iterrows():
         if "LIS Connection Error" in str(row.get('Status')): continue
         b_num = str(row['Bill Number']).strip()
-        status_msg = str(row.get('Status', 'No Status')).strip()
-        if b_num in history_text and status_msg in history_text: continue
+        
+        # 1. Get raw status
+        raw_status = str(row.get('Status', 'No Status')).strip()
+        
+        # 2. Clean status IMMEDIATELY (Fixes the loop bug)
+        clean_status = clean_status_text(raw_status)
+        
+        # 3. Check history using the CLEAN status (Apples to Apples)
+        if b_num in history_text and clean_status in history_text: 
+            continue
         
         display_name = str(row.get('My Title', '-'))
         if display_name == "-" or display_name == "nan" or not display_name:
@@ -372,7 +382,7 @@ def check_and_broadcast(df_bills, df_subscribers, demo_mode):
             display_name = (official[:60] + '..') if len(official) > 60 else official
             
         updates_found = True
-        report += f"\n⚪ *{b_num}* | {display_name}\n> _{clean_status_text(status_msg)}_\n"
+        report += f"\n⚪ *{b_num}* | {display_name}\n> _{clean_status}_\n"
 
     if updates_found:
         st.toast(f"📢 Sending updates to {len(subscriber_list)} people...")
@@ -612,7 +622,6 @@ if bills_to_track:
                             if b_id in bills_shown_today: continue 
 
                             info = bill_info_map.get(b_id, {})
-                            # Use strict normalization (keeps 'house'/'senate')
                             def normalize_text_strict(t):
                                 if pd.isna(t): return ""
                                 t = str(t).lower().replace('&','and').replace('.','').replace(',','').replace('-',' ')
