@@ -1,21 +1,3 @@
-I have implemented the logic to handle the "Passed" column intelligently.
-
-**The Changes:**
-
-1. **Updated Lifecycle Logic:** I modified `determine_lifecycle` to explicitly recognize **Resolutions and Amendments** (bills starting with HJ, SJ, HR, SR). If they are "Agreed to," they are now categorized as **"✅ Passed (Resolution)"** instead of just "Out of Committee."
-2. **New Grouped Renderer:** I created a new display function `render_passed_grouped_list_item`. Instead of a flat list, it now sorts the "Passed" column into four distinct buckets:
-* ✅ **Signed & Enacted**
-* ✍️ **Awaiting Signature** (Passed Bills)
-* 📜 **Resolutions & Amendments** (Final Passage, no signature needed)
-* ❌ **Vetoed**
-
-
-
-This ensures `HJ1` will appear in the "Passed" column under the "Resolution" header, while standard bills like `HB7` will appear under "Awaiting Signature" or "Signed."
-
-### Copy and Paste this ENTIRE Block (Final Categorized Version):
-
-```python
 import streamlit as st
 import pandas as pd
 import requests
@@ -69,20 +51,30 @@ def clean_bill_id(bill_text):
     clean = re.sub(r'^([A-Z]+)0+(\d+)$', r'\1\2', clean)
     return clean
 
-def determine_lifecycle(status_text, committee_name, bill_id=""):
+def determine_lifecycle(status_text, committee_name, bill_id="", history_text=""):
     status = str(status_text).lower()
     comm = str(committee_name).strip()
     b_id = str(bill_id).upper()
+    hist = str(history_text).lower()
     
     # 1. Passed / Enacted Types
     if any(x in status for x in ["signed by governor", "enacted", "approved by governor", "chapter"]): return "✅ Signed & Enacted"
     if "vetoed" in status: return "❌ Vetoed"
     
-    # 2. Resolutions / Amendments (No Signature Required)
-    # If it's a HJ, SJ, HR, SR and it says "Agreed to", it is fully passed.
+    # 2. Resolutions / Amendments (CHECK HISTORY FOR BOTH CHAMBERS)
     is_resolution = any(prefix in b_id for prefix in ["HJ", "SJ", "HR", "SR"])
-    if is_resolution and ("agreed to by" in status or "passed" in status):
-        return "✅ Passed (Resolution)"
+    if is_resolution:
+        # Single Chamber Resolutions (HR/SR) - Pass if agreed to
+        if b_id.startswith("HR") or b_id.startswith("SR"):
+            if "agreed to" in status or "agreed to" in hist: return "✅ Passed (Resolution)"
+        
+        # Joint Resolutions (HJ/SJ) - Must pass BOTH
+        if b_id.startswith("HJ"):
+            # Needs Senate Agreement
+            if "agreed to by senate" in hist or "passed senate" in hist: return "✅ Passed (Resolution)"
+        elif b_id.startswith("SJ"):
+            # Needs House Agreement
+            if "agreed to by house" in hist or "passed house" in hist: return "✅ Passed (Resolution)"
 
     # 3. Passed Legislature (Bills needing signature)
     if any(x in status for x in ["enrolled", "communicated to governor", "bill text as passed"]): return "✍️ Awaiting Signature"
@@ -94,8 +86,8 @@ def determine_lifecycle(status_text, committee_name, bill_id=""):
     out_keywords = ["reported", "passed", "agreed", "engrossed", "communicated", "reading waived", "read second", "read third"]
     if any(x in status for x in out_keywords): return "📣 Out of Committee"
     
-    # 6. In Committee Logic
-    if "pending" in status or "prefiled" in status: return "📥 In Committee" 
+    # 6. In Committee
+    if "pending" in status or "prefiled" in status: return "📥 In Committee"
     if comm not in ["-", "nan", "None", "", "Unassigned"] and len(comm) > 2: return "📥 In Committee"
     
     return "📥 In Committee"
@@ -119,6 +111,11 @@ def extract_vote_info(status_text):
     match = re.search(r'\((\d{1,3}-Y \d{1,3}-N)\)', str(status_text))
     if match: return match.group(1)
     return None
+
+# --- LAST RESORT SCRAPER (DISABLED) ---
+@st.cache_data(ttl=3600)
+def scrape_committee_from_bill_page(bill_number):
+    return None # Disabled for speed
 
 # --- 1. HTML SCRAPER (CALENDAR) ---
 @st.cache_data(ttl=600)
@@ -279,10 +276,15 @@ def get_bill_data_batch(bill_numbers, lis_data_dict):
         if "pending" in str(status).lower() or "prefiled" in str(status).lower():
             if "referred" not in str(status).lower(): 
                 curr_comm = "Unassigned"
+        
+        # --- FIX: SKEPTICAL "COURTS OF JUSTICE" CHECK ---
+        if "Courts" in str(curr_comm) and "referred" not in history_blob and "referred" not in str(status).lower():
+            curr_comm = "Unassigned"
 
         curr_comm = clean_committee_name(curr_comm)
-        # Pass bill_num to logic to check for HJ/SJ
-        lifecycle = determine_lifecycle(str(status), str(curr_comm), bill_num)
+        
+        # --- PASSED HISTORY TO LIFECYCLE FOR RESOLUTION CHECK ---
+        lifecycle = determine_lifecycle(str(status), str(curr_comm), bill_num, history_blob)
         
         display_comm = curr_comm
         if "Passed" in lifecycle or "Signed" in lifecycle or "Awaiting" in lifecycle:
@@ -388,8 +390,6 @@ def render_grouped_list_item(df):
 # --- NEW: PASSED BILL GROUPER ---
 def render_passed_grouped_list_item(df):
     if df.empty: st.caption("No bills."); return
-    
-    # Bucket Categories
     g_signed = df[df['Lifecycle'] == "✅ Signed & Enacted"]
     g_vetoed = df[df['Lifecycle'] == "❌ Vetoed"]
     g_res = df[df['Lifecycle'] == "✅ Passed (Resolution)"]
@@ -398,15 +398,12 @@ def render_passed_grouped_list_item(df):
     if not g_signed.empty: 
         st.markdown("##### ✅ Signed & Enacted")
         for i, r in g_signed.iterrows(): _render_single_bill_row(r)
-        
     if not g_awaiting.empty:
         st.markdown("##### ✍️ Awaiting Signature")
         for i, r in g_awaiting.iterrows(): _render_single_bill_row(r)
-        
     if not g_res.empty:
         st.markdown("##### 📜 Resolution / Amendment (Passed)")
         for i, r in g_res.iterrows(): _render_single_bill_row(r)
-        
     if not g_vetoed.empty:
         st.markdown("##### ❌ Vetoed")
         for i, r in g_vetoed.iterrows(): _render_single_bill_row(r)
@@ -553,14 +550,12 @@ if bills_to_track:
             
             in_comm = subset[subset['Lifecycle'] == "📥 In Committee"]
             out_comm = subset[subset['Lifecycle'] == "📣 Out of Committee"]
-            # Updated Pass Filter
             passed = subset[subset['Lifecycle'].isin(["✅ Signed & Enacted", "✍️ Awaiting Signature", "✅ Passed (Resolution)", "❌ Vetoed"])]
             failed = subset[subset['Lifecycle'] == "❌ Dead / Tabled"]
             
             m1, m2, m3, m4 = st.columns(4)
             with m1: st.markdown("#### 📥 In Committee"); render_grouped_list_item(in_comm)
             with m2: st.markdown("#### 📣 Out of Committee"); render_simple_list_item(out_comm)
-            # Use NEW Renderer here
             with m3: st.markdown("#### 🎉 Passed"); render_passed_grouped_list_item(passed)
             with m4: st.markdown("#### ❌ Failed"); render_simple_list_item(failed)
 
@@ -685,9 +680,3 @@ with st.sidebar:
         
         st.write("**Scraper Log (First 10):**")
         st.text("\n".join(scrape_log[:10]))
-
-```
-
-```
-
-```
