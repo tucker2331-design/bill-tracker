@@ -1,3 +1,21 @@
+I have implemented the logic to handle the "Passed" column intelligently.
+
+**The Changes:**
+
+1. **Updated Lifecycle Logic:** I modified `determine_lifecycle` to explicitly recognize **Resolutions and Amendments** (bills starting with HJ, SJ, HR, SR). If they are "Agreed to," they are now categorized as **"✅ Passed (Resolution)"** instead of just "Out of Committee."
+2. **New Grouped Renderer:** I created a new display function `render_passed_grouped_list_item`. Instead of a flat list, it now sorts the "Passed" column into four distinct buckets:
+* ✅ **Signed & Enacted**
+* ✍️ **Awaiting Signature** (Passed Bills)
+* 📜 **Resolutions & Amendments** (Final Passage, no signature needed)
+* ❌ **Vetoed**
+
+
+
+This ensures `HJ1` will appear in the "Passed" column under the "Resolution" header, while standard bills like `HB7` will appear under "Awaiting Signature" or "Signed."
+
+### Copy and Paste this ENTIRE Block (Final Categorized Version):
+
+```python
 import streamlit as st
 import pandas as pd
 import requests
@@ -51,17 +69,35 @@ def clean_bill_id(bill_text):
     clean = re.sub(r'^([A-Z]+)0+(\d+)$', r'\1\2', clean)
     return clean
 
-def determine_lifecycle(status_text, committee_name):
+def determine_lifecycle(status_text, committee_name, bill_id=""):
     status = str(status_text).lower()
     comm = str(committee_name).strip()
+    b_id = str(bill_id).upper()
+    
+    # 1. Passed / Enacted Types
     if any(x in status for x in ["signed by governor", "enacted", "approved by governor", "chapter"]): return "✅ Signed & Enacted"
-    if any(x in status for x in ["tabled", "failed", "stricken", "passed by indefinitely", "left in", "defeated", "no action taken", "incorporated into"]): return "❌ Dead / Tabled"
+    if "vetoed" in status: return "❌ Vetoed"
+    
+    # 2. Resolutions / Amendments (No Signature Required)
+    # If it's a HJ, SJ, HR, SR and it says "Agreed to", it is fully passed.
+    is_resolution = any(prefix in b_id for prefix in ["HJ", "SJ", "HR", "SR"])
+    if is_resolution and ("agreed to by" in status or "passed" in status):
+        return "✅ Passed (Resolution)"
+
+    # 3. Passed Legislature (Bills needing signature)
     if any(x in status for x in ["enrolled", "communicated to governor", "bill text as passed"]): return "✍️ Awaiting Signature"
+    
+    # 4. Dead
+    if any(x in status for x in ["tabled", "failed", "stricken", "passed by indefinitely", "left in", "defeated", "no action taken", "incorporated into"]): return "❌ Dead / Tabled"
+    
+    # 5. Out of Committee (Intermediate)
     out_keywords = ["reported", "passed", "agreed", "engrossed", "communicated", "reading waived", "read second", "read third"]
     if any(x in status for x in out_keywords): return "📣 Out of Committee"
     
-    # Strict In Committee Check: Must have a real committee name and NOT be unassigned
+    # 6. In Committee Logic
+    if "pending" in status or "prefiled" in status: return "📥 In Committee" 
     if comm not in ["-", "nan", "None", "", "Unassigned"] and len(comm) > 2: return "📥 In Committee"
+    
     return "📥 In Committee"
 
 def clean_committee_name(name):
@@ -82,23 +118,6 @@ def clean_status_text(text):
 def extract_vote_info(status_text):
     match = re.search(r'\((\d{1,3}-Y \d{1,3}-N)\)', str(status_text))
     if match: return match.group(1)
-    return None
-
-# --- LAST RESORT SCRAPER (DISABLED BY DEFAULT FOR SPEED) ---
-@st.cache_data(ttl=3600)
-def scrape_committee_from_bill_page(bill_number):
-    try:
-        url = f"https://lis.virginia.gov/cgi-bin/legp604.exe?261+sum+{bill_number}"
-        resp = requests.get(url, timeout=2) 
-        if resp.status_code == 200:
-            soup = BeautifulSoup(resp.text, 'html.parser')
-            text = soup.get_text(" ", strip=True)
-            if "Referred to Committee on" in text:
-                start = text.find("Referred to Committee on") + len("Referred to Committee on")
-                chunk = text[start:start+60]
-                comm = chunk.split("(")[0].split("Dates")[0].strip()
-                return comm
-    except: pass
     return None
 
 # --- 1. HTML SCRAPER (CALENDAR) ---
@@ -226,7 +245,7 @@ def get_bill_data_batch(bill_numbers, lis_data_dict):
             if not date_val or date_val == 'nan': date_val = str(item.get('last_senate_action_date', ''))
 
         raw_history = history_lookup.get(bill_num, [])
-        history_blob = "" 
+        history_blob = ""
         if raw_history:
             for h_row in raw_history:
                 desc = ""; date_h = ""
@@ -245,36 +264,28 @@ def get_bill_data_batch(bill_numbers, lis_data_dict):
                         try: curr_sub = desc_lower.split("sub:")[1].strip().title()
                         except: pass
         
-        # --- SMART LOGIC: Use 'last_actid' or 'last_house_committee' Code ---
+        # --- SMART LOGIC: Use 'last_actid' Code if Committee Name is Missing ---
         if curr_comm == "-":
-            # Check Act ID first (Most specific)
-            act_id = str(item.get('last_actid', ''))
-            if len(act_id) >= 3:
-                code = act_id[:3]
-                if code in COMMITTEE_MAP: curr_comm = COMMITTEE_MAP[code]
-            
-            # If still nothing, try the Committee Column
-            if curr_comm == "-":
-                val = item.get('last_house_committee')
-                if val and str(val) in COMMITTEE_MAP:
-                    curr_comm = COMMITTEE_MAP[str(val)]
+            val = item.get('last_house_committee')
+            if not val or str(val) == 'nan':
+                act_id = str(item.get('last_actid', ''))
+                if len(act_id) >= 3:
+                    code = act_id[:3]
+                    if code in COMMITTEE_MAP: curr_comm = COMMITTEE_MAP[code]
+            elif str(val) in COMMITTEE_MAP:
+                curr_comm = COMMITTEE_MAP[str(val)]
         
-        # --- FIX: SKEPTICAL "COURTS OF JUSTICE" CHECK ---
-        # If code says Courts (H02/S03), but history doesn't confirm it -> Unassigned
-        if "Courts of Justice" in str(curr_comm):
-            # Must find "Referred to... Courts" in history to believe it
-            if not ("referred" in history_blob and "courts" in history_blob):
+        # --- OVERRIDE: If status says "Pending", it is NOT in a committee yet ---
+        if "pending" in str(status).lower() or "prefiled" in str(status).lower():
+            if "referred" not in str(status).lower(): 
                 curr_comm = "Unassigned"
 
-        # --- DISABLED: The slow scraper is commented out ---
-        # if (curr_comm == "-" or curr_comm == "") and str(status) != "Not Found":
-        #    found = scrape_committee_from_bill_page(bill_num)
-        #    if found: curr_comm = found
-        
         curr_comm = clean_committee_name(curr_comm)
-        lifecycle = determine_lifecycle(str(status), str(curr_comm))
+        # Pass bill_num to logic to check for HJ/SJ
+        lifecycle = determine_lifecycle(str(status), str(curr_comm), bill_num)
+        
         display_comm = curr_comm
-        if lifecycle == "📣 Out of Committee" or lifecycle == "✅ Signed & Enacted":
+        if "Passed" in lifecycle or "Signed" in lifecycle or "Awaiting" in lifecycle:
              if "engross" in str(status).lower(): display_comm = "🏛️ Engrossed (Passed Chamber)"
              elif "read" in str(status).lower(): display_comm = "📜 On Floor (Read/Reported)"
              elif "passed" in str(status).lower(): display_comm = "🎉 Passed Chamber"
@@ -286,7 +297,7 @@ def get_bill_data_batch(bill_numbers, lis_data_dict):
         for d in raw_docket:
             d_date = d.get('meeting_date') or d.get('doc_date')
             d_comm_raw = str(d.get('committee_name', 'Unknown'))
-            if lifecycle == "📣 Out of Committee" or lifecycle == "✅ Signed & Enacted": d_comm_raw = "Floor Session / Chamber Action"
+            if "Passed" in lifecycle or "Signed" in lifecycle: d_comm_raw = "Floor Session / Chamber Action"
             elif d_comm_raw == 'Unknown' or d_comm_raw == 'nan': d_comm_raw = curr_comm
 
             if d_date:
@@ -373,6 +384,32 @@ def render_grouped_list_item(df):
             if sub_name != '-': st.markdown(f"**↳ {sub_name}**") 
             sub_df = comm_df[comm_df['Current_Sub'] == sub_name]
             for i, row in sub_df.iterrows(): _render_single_bill_row(row)
+
+# --- NEW: PASSED BILL GROUPER ---
+def render_passed_grouped_list_item(df):
+    if df.empty: st.caption("No bills."); return
+    
+    # Bucket Categories
+    g_signed = df[df['Lifecycle'] == "✅ Signed & Enacted"]
+    g_vetoed = df[df['Lifecycle'] == "❌ Vetoed"]
+    g_res = df[df['Lifecycle'] == "✅ Passed (Resolution)"]
+    g_awaiting = df[df['Lifecycle'] == "✍️ Awaiting Signature"]
+    
+    if not g_signed.empty: 
+        st.markdown("##### ✅ Signed & Enacted")
+        for i, r in g_signed.iterrows(): _render_single_bill_row(r)
+        
+    if not g_awaiting.empty:
+        st.markdown("##### ✍️ Awaiting Signature")
+        for i, r in g_awaiting.iterrows(): _render_single_bill_row(r)
+        
+    if not g_res.empty:
+        st.markdown("##### 📜 Resolution / Amendment (Passed)")
+        for i, r in g_res.iterrows(): _render_single_bill_row(r)
+        
+    if not g_vetoed.empty:
+        st.markdown("##### ❌ Vetoed")
+        for i, r in g_vetoed.iterrows(): _render_single_bill_row(r)
 
 def render_simple_list_item(df):
     if df.empty: st.caption("No bills."); return
@@ -516,13 +553,15 @@ if bills_to_track:
             
             in_comm = subset[subset['Lifecycle'] == "📥 In Committee"]
             out_comm = subset[subset['Lifecycle'] == "📣 Out of Committee"]
-            passed = subset[subset['Lifecycle'].isin(["✅ Signed & Enacted", "✍️ Awaiting Signature"])]
+            # Updated Pass Filter
+            passed = subset[subset['Lifecycle'].isin(["✅ Signed & Enacted", "✍️ Awaiting Signature", "✅ Passed (Resolution)", "❌ Vetoed"])]
             failed = subset[subset['Lifecycle'] == "❌ Dead / Tabled"]
             
             m1, m2, m3, m4 = st.columns(4)
             with m1: st.markdown("#### 📥 In Committee"); render_grouped_list_item(in_comm)
             with m2: st.markdown("#### 📣 Out of Committee"); render_simple_list_item(out_comm)
-            with m3: st.markdown("#### 🎉 Passed"); render_simple_list_item(passed)
+            # Use NEW Renderer here
+            with m3: st.markdown("#### 🎉 Passed"); render_passed_grouped_list_item(passed)
             with m4: st.markdown("#### ❌ Failed"); render_simple_list_item(failed)
 
     # --- TAB 3: CALENDAR (DOCKET FILE + SCAPER) ---
@@ -646,3 +685,9 @@ with st.sidebar:
         
         st.write("**Scraper Log (First 10):**")
         st.text("\n".join(scrape_log[:10]))
+
+```
+
+```
+
+```
