@@ -84,6 +84,23 @@ def extract_vote_info(status_text):
     if match: return match.group(1)
     return None
 
+# --- LAST RESORT SCRAPER ---
+@st.cache_data(ttl=3600)
+def scrape_committee_from_bill_page(bill_number):
+    try:
+        url = f"https://lis.virginia.gov/cgi-bin/legp604.exe?261+sum+{bill_number}"
+        resp = requests.get(url, timeout=2) 
+        if resp.status_code == 200:
+            soup = BeautifulSoup(resp.text, 'html.parser')
+            text = soup.get_text(" ", strip=True)
+            if "Referred to Committee on" in text:
+                start = text.find("Referred to Committee on") + len("Referred to Committee on")
+                chunk = text[start:start+60]
+                comm = chunk.split("(")[0].split("Dates")[0].strip()
+                return comm
+    except: pass
+    return None
+
 # --- 1. HTML SCRAPER (CALENDAR) ---
 @st.cache_data(ttl=600)
 def fetch_html_calendar():
@@ -237,11 +254,6 @@ def get_bill_data_batch(bill_numbers, lis_data_dict):
             elif str(val) in COMMITTEE_MAP:
                 curr_comm = COMMITTEE_MAP[str(val)]
         
-        # --- DISABLED: The slow scraper is commented out here ---
-        # if (curr_comm == "-" or curr_comm == "") and str(status) != "Not Found":
-        #    found = scrape_committee_from_bill_page(bill_num)
-        #    if found: curr_comm = found
-        
         # --- OVERRIDE: If status says "Pending", it is NOT in a committee yet ---
         # This fixes HB700 showing up in Courts of Justice erroneously
         if "pending" in str(status).lower() or "prefiled" in str(status).lower():
@@ -331,7 +343,7 @@ def render_grouped_list_item(df):
     if df.empty: st.caption("No bills."); return
     def rename_unassigned(name):
         name = str(name).strip()
-        if name in ['-', 'nan', 'None', '', '0', 'Unassigned']: return "Unassigned"
+        if name in ['-', 'nan', 'None', '', '0']: return "Unassigned"
         if name == "House -": return "House - Unassigned"
         if name == "Senate -": return "Senate - Unassigned"
         if name.endswith("-"): return name + " Unassigned"
