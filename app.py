@@ -7,6 +7,7 @@ import pytz
 from slack_sdk import WebClient
 from slack_sdk.errors import SlackApiError
 from bs4 import BeautifulSoup 
+import time
 
 # --- CONFIGURATION ---
 SHEET_ID = "18m752GcvGIPPpqUn_gB0DfA3e4z2UGD0ki0dUZh2Qek"
@@ -21,8 +22,7 @@ LIS_DOCKET_CSV = LIS_BASE_URL + "DOCKET.CSV"
 
 st.set_page_config(page_title="VA Bill Tracker 2026", layout="wide")
 
-# --- COMMITTEE CODE MAP (The "Lag" Fix) ---
-# Maps LIS Codes (e.g. H24) to Names when history text is missing
+# --- COMMITTEE CODE MAP (Fallback) ---
 COMMITTEE_MAP = {
     "H01": "House Privileges and Elections", "H02": "House Courts of Justice", "H03": "House Education",
     "H04": "House General Laws", "H05": "House Roads and Internal Navigation", "H06": "House Finance",
@@ -35,18 +35,16 @@ COMMITTEE_MAP = {
     "H23": "House Education", "H24": "House Education", "H25": "House Health and Human Services",
     "H26": "House Public Safety", "H27": "House Transportation", "H28": "House Communications, Technology and Innovation",
     "H29": "House Health and Human Services",
-    # Senate Codes (Generic patterns often S01 etc, added safeguards)
-    "S01": "Senate Agriculture, Conservation and Natural Resources", "S02": "Senate Commerce and Labor",
     "S03": "Senate Courts of Justice", "S04": "Senate Education and Health", "S05": "Senate Finance and Appropriations",
-    "S06": "Senate General Laws and Technology", "S07": "Senate Local Government", "S08": "Senate Privileges and Elections",
-    "S09": "Senate Rehabilitation and Social Services", "S10": "Senate Transportation", "S11": "Senate Rules"
+    "S06": "Senate General Laws and Technology", "S08": "Senate Privileges and Elections",
+    "S10": "Senate Transportation", "S11": "Senate Rules"
 }
 
 # --- HELPER FUNCTIONS ---
 
 def get_smart_subject(title):
     title_lower = str(title).lower()
-    return "📂 Unassigned / General" # Simplified for brevity, logic remains in main app if needed
+    return "📂 Unassigned / General" 
 
 def clean_bill_id(bill_text):
     if pd.isna(bill_text): return ""
@@ -62,22 +60,14 @@ def determine_lifecycle(status_text, committee_name):
     if any(x in status for x in ["enrolled", "communicated to governor", "bill text as passed"]): return "✍️ Awaiting Signature"
     out_keywords = ["reported", "passed", "agreed", "engrossed", "communicated", "reading waived", "read second", "read third"]
     if any(x in status for x in out_keywords): return "📣 Out of Committee"
-    # Logic Update: If we have a valid committee name OR a code that mapped, it's "In Committee"
     if comm not in ["-", "nan", "None", ""] and len(comm) > 2: return "📥 In Committee"
     return "📥 In Committee"
 
 def clean_committee_name(name):
     if not name or str(name).lower() == 'nan': return ""
     name = str(name).strip()
-    
-    # 1. Check Code Map First
-    if name in COMMITTEE_MAP:
-        return COMMITTEE_MAP[name]
-
-    # 2. Strip H- / S- prefixes
-    if name.startswith("H-") or name.startswith("S-") or name.startswith("h-") or name.startswith("s-"):
-        name = name[2:]
-
+    if name in COMMITTEE_MAP: return COMMITTEE_MAP[name]
+    if name.startswith("H-") or name.startswith("S-") or name.startswith("h-") or name.startswith("s-"): name = name[2:]
     name = re.sub(r'\b[A-Z][a-z]+, [A-Z]\. ?[A-Z]?\.?.*$', '', name) 
     name = re.sub(r'\b(Simon|Rasoul|Willett|Helmer|Lucas|Surovell|Locke|Deeds|Favola|Marsden|Ebbin|McPike|Hayes|Carroll Foy|Subcommittee #\d+)\b.*', '', name, flags=re.IGNORECASE)
     name = name.replace("Committee For", "").replace("Committee On", "").replace("Committee", "").strip()
@@ -93,10 +83,30 @@ def extract_vote_info(status_text):
     if match: return match.group(1)
     return None
 
-# --- 1. HTML SCRAPER ---
+# --- NEW: FALLBACK BILL PAGE SCRAPER ---
+@st.cache_data(ttl=3600) # Cache for 1 hour to prevent slow loads
+def scrape_committee_from_bill_page(bill_number):
+    """Visits the bill page directly to find 'Referred to...' if CSV fails"""
+    try:
+        url = f"https://lis.virginia.gov/cgi-bin/legp604.exe?261+sum+{bill_number}"
+        resp = requests.get(url, timeout=3)
+        if resp.status_code == 200:
+            text = resp.text
+            # Look for "Referred to Committee on..."
+            match = re.search(r'Referred to Committee on\s+([A-Za-z\s&,-]+)', text)
+            if match:
+                found = match.group(1).strip()
+                # Clean HTML tags if any slipped in
+                found = re.sub(r'<[^>]+>', '', found)
+                return found
+    except: pass
+    return None
+
+# --- 1. HTML SCRAPER (CALENDAR) ---
 @st.cache_data(ttl=600)
 def fetch_html_calendar():
     calendar_times = {'NO_DATE': {}}
+    debug_log = []
     headers = {'User-Agent': 'Mozilla/5.0'}
     
     # HOUSE
@@ -235,19 +245,10 @@ def get_bill_data_batch(bill_numbers, lis_data_dict):
                         try: curr_sub = desc_lower.split("sub:")[1].strip().title()
                         except: pass
         
-        # --- FALLBACK: If history didn't give us a name, use the CODE from Bills file ---
-        if curr_comm == "-":
-            potential_cols = ['last_house_committee', 'last_senate_committee', 'house_committee', 'senate_committee']
-            if item:
-                for col in potential_cols:
-                    val = item.get(col)
-                    # Check if val is a known code or string
-                    if pd.notna(val) and str(val).strip() not in ['nan', '', '-', '0']: 
-                        raw_code = str(val).strip()
-                        # Try to map H24 -> Education immediately
-                        if raw_code in COMMITTEE_MAP: curr_comm = COMMITTEE_MAP[raw_code]
-                        else: curr_comm = raw_code # Use code if map fails, better than nothing
-                        break
+        # --- FAIL-SAFE: If still unknown, scrape the page ---
+        if (curr_comm == "-" or curr_comm == "") and str(status) != "Not Found":
+            found_comm = scrape_committee_from_bill_page(bill_num)
+            if found_comm: curr_comm = found_comm
         
         curr_comm = clean_committee_name(curr_comm)
         lifecycle = determine_lifecycle(str(status), str(curr_comm))
@@ -451,7 +452,7 @@ if bills_to_track:
 
     final_df = pd.merge(sheet_df, api_df, on="Bill Number", how="left")
     
-    # Simple Topic Matching (Restored)
+    # Auto Topic Folder
     TOPIC_KEYWORDS = {
     "🗳️ Elections & Democracy": ["election", "vote", "ballot", "campaign", "poll", "voter", "registrar", "districting", "suffrage"],
     "🏗️ Housing & Property": ["rent", "landlord", "tenant", "housing", "lease", "property", "zoning", "eviction", "homeowner", "development", "residential"],
@@ -465,14 +466,12 @@ if bills_to_track:
     "💻 Tech & Utilities": ["internet", "broadband", "data", "privacy", "utility", "cyber", "technology", "telecom", "artificial intelligence"],
     "⚖️ Civil Rights": ["discrimination", "rights", "equity", "minority", "gender", "religious", "freedom", "speech"],
     }
-    
     def get_subject(row):
         txt = str(row.get('Official Title', '')) + " " + str(row.get('My Title', ''))
         txt = txt.lower()
         for cat, keys in TOPIC_KEYWORDS.items():
             if any(k in txt for k in keys): return cat
         return "📂 Unassigned / General"
-
     final_df['Auto_Folder'] = final_df.apply(get_subject, axis=1)
 
     check_and_broadcast(final_df, subs_df, demo_mode)
@@ -520,7 +519,6 @@ if bills_to_track:
                     m_date_str = str(m['Date']).split(" ")[0]
                     m_comm_raw = m.get('CommitteeRaw', 'Unknown')
                     
-                    # INTELLIGENT NAMING
                     b_id = row['Bill Number']
                     clean_name = clean_committee_name(m_comm_raw)
                     if "Senate" not in clean_name and "House" not in clean_name:
