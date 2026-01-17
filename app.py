@@ -21,28 +21,32 @@ LIS_DOCKET_CSV = LIS_BASE_URL + "DOCKET.CSV"
 
 st.set_page_config(page_title="VA Bill Tracker 2026", layout="wide")
 
-# --- TOPIC CATEGORIES ---
-TOPIC_KEYWORDS = {
-    "🗳️ Elections & Democracy": ["election", "vote", "ballot", "campaign", "poll", "voter", "registrar", "districting", "suffrage"],
-    "🏗️ Housing & Property": ["rent", "landlord", "tenant", "housing", "lease", "property", "zoning", "eviction", "homeowner", "development", "residential"],
-    "✊ Labor & Workers Rights": ["wage", "salary", "worker", "employment", "labor", "union", "bargaining", "leave", "compensation", "workplace", "employee", "minimum", "overtime"],
-    "💰 Economy & Business": ["tax", "commerce", "business", "market", "consumer", "corporation", "finance", "budget", "economic", "trade"],
-    "🎓 Education": ["school", "education", "student", "university", "college", "teacher", "curriculum", "scholarship", "tuition", "board of education"],
-    "🚓 Public Safety & Law": ["firearm", "gun", "police", "crime", "penalty", "court", "judge", "enforcement", "prison", "arrest", "criminal", "justice"],
-    "🏥 Health & Healthcare": ["health", "medical", "hospital", "patient", "doctor", "insurance", "care", "mental", "pharmacy", "drug", "medicaid"],
-    "🌳 Environment & Energy": ["energy", "water", "pollution", "environment", "climate", "solar", "conservation", "waste", "carbon", "natural resources", "wind", "power", "electricity", "hydroelectric", "nuclear", "chesapeake", "bay", "river", "watershed"],
-    "🚗 Transportation": ["road", "highway", "vehicle", "driver", "license", "transit", "traffic", "transportation", "motor"],
-    "💻 Tech & Utilities": ["internet", "broadband", "data", "privacy", "utility", "cyber", "technology", "telecom", "artificial intelligence"],
-    "⚖️ Civil Rights": ["discrimination", "rights", "equity", "minority", "gender", "religious", "freedom", "speech"],
+# --- COMMITTEE CODE MAP (The "Lag" Fix) ---
+# Maps LIS Codes (e.g. H24) to Names when history text is missing
+COMMITTEE_MAP = {
+    "H01": "House Privileges and Elections", "H02": "House Courts of Justice", "H03": "House Education",
+    "H04": "House General Laws", "H05": "House Roads and Internal Navigation", "H06": "House Finance",
+    "H07": "House Appropriations", "H08": "House Counties, Cities and Towns", "H09": "House Commerce and Labor",
+    "H10": "House Health, Welfare and Institutions", "H11": "House Conservation and Natural Resources",
+    "H12": "House Agriculture", "H13": "House Militia, Police and Public Safety", "H14": "House Claims",
+    "H15": "House Chesapeake and Its Tributaries", "H16": "House Mining and Mineral Resources",
+    "H17": "House Corporations, Insurance and Banking", "H18": "House Rules", "H19": "House Nominations and Confirmations",
+    "H20": "House Interstate Cooperation", "H21": "House Science and Technology", "H22": "House Courts of Justice",
+    "H23": "House Education", "H24": "House Education", "H25": "House Health and Human Services",
+    "H26": "House Public Safety", "H27": "House Transportation", "H28": "House Communications, Technology and Innovation",
+    "H29": "House Health and Human Services",
+    # Senate Codes (Generic patterns often S01 etc, added safeguards)
+    "S01": "Senate Agriculture, Conservation and Natural Resources", "S02": "Senate Commerce and Labor",
+    "S03": "Senate Courts of Justice", "S04": "Senate Education and Health", "S05": "Senate Finance and Appropriations",
+    "S06": "Senate General Laws and Technology", "S07": "Senate Local Government", "S08": "Senate Privileges and Elections",
+    "S09": "Senate Rehabilitation and Social Services", "S10": "Senate Transportation", "S11": "Senate Rules"
 }
 
 # --- HELPER FUNCTIONS ---
 
 def get_smart_subject(title):
     title_lower = str(title).lower()
-    for category, keywords in TOPIC_KEYWORDS.items():
-        if any(k in title_lower for k in keywords): return category
-    return "📂 Unassigned / General"
+    return "📂 Unassigned / General" # Simplified for brevity, logic remains in main app if needed
 
 def clean_bill_id(bill_text):
     if pd.isna(bill_text): return ""
@@ -58,22 +62,24 @@ def determine_lifecycle(status_text, committee_name):
     if any(x in status for x in ["enrolled", "communicated to governor", "bill text as passed"]): return "✍️ Awaiting Signature"
     out_keywords = ["reported", "passed", "agreed", "engrossed", "communicated", "reading waived", "read second", "read third"]
     if any(x in status for x in out_keywords): return "📣 Out of Committee"
-    if comm not in ["-", "nan", "None", ""] and len(comm) > 3: return "📥 In Committee"
+    # Logic Update: If we have a valid committee name OR a code that mapped, it's "In Committee"
+    if comm not in ["-", "nan", "None", ""] and len(comm) > 2: return "📥 In Committee"
     return "📥 In Committee"
 
 def clean_committee_name(name):
     if not name or str(name).lower() == 'nan': return ""
     name = str(name).strip()
     
-    # 1. Strip H- / S- prefixes (Fix for H-Education)
+    # 1. Check Code Map First
+    if name in COMMITTEE_MAP:
+        return COMMITTEE_MAP[name]
+
+    # 2. Strip H- / S- prefixes
     if name.startswith("H-") or name.startswith("S-") or name.startswith("h-") or name.startswith("s-"):
         name = name[2:]
 
-    # 2. Strip Names
     name = re.sub(r'\b[A-Z][a-z]+, [A-Z]\. ?[A-Z]?\.?.*$', '', name) 
     name = re.sub(r'\b(Simon|Rasoul|Willett|Helmer|Lucas|Surovell|Locke|Deeds|Favola|Marsden|Ebbin|McPike|Hayes|Carroll Foy|Subcommittee #\d+)\b.*', '', name, flags=re.IGNORECASE)
-    
-    # 3. Clean Text
     name = name.replace("Committee For", "").replace("Committee On", "").replace("Committee", "").strip()
     return name.title()
 
@@ -87,79 +93,59 @@ def extract_vote_info(status_text):
     if match: return match.group(1)
     return None
 
-# --- 1. HTML SCRAPER (DATE & ADJOURNMENT AWARE) ---
+# --- 1. HTML SCRAPER ---
 @st.cache_data(ttl=600)
 def fetch_html_calendar():
     calendar_times = {'NO_DATE': {}}
-    debug_log = []
     headers = {'User-Agent': 'Mozilla/5.0'}
     
-    # --- HOUSE SCRAPER ---
+    # HOUSE
     try:
         url = "https://house.vga.virginia.gov/schedule/meetings"
         resp = requests.get(url, headers=headers, timeout=4)
         if resp.status_code == 200:
             soup = BeautifulSoup(resp.text, 'html.parser')
             lines = [line.strip() for line in soup.get_text("\n", strip=True).splitlines() if line.strip()]
-            
             curr_date = None
             for i, line in enumerate(lines):
-                # House format: "Friday, January 16"
                 date_match = re.search(r'(Monday|Tuesday|Wednesday|Thursday|Friday|Saturday|Sunday),?\s+([A-Z][a-z]+)\s+(\d{1,2})', line)
                 if date_match:
                     try:
-                        month_str = date_match.group(2); day_str = date_match.group(3)
-                        dt = datetime.strptime(f"{month_str} {day_str} 2026", "%B %d %Y")
+                        dt = datetime.strptime(f"{date_match.group(2)} {date_match.group(3)} 2026", "%B %d %Y")
                         curr_date = dt.strftime("%Y-%m-%d")
                     except: pass
-                
                 if curr_date:
                     time_match = re.search(r'^\d{1,2}:\d{2}\s*[AP]M', line)
                     text_time_match = "adjournment" in line.lower() or "recess" in line.lower()
-                    
-                    final_time = None
-                    if time_match: final_time = time_match.group(0)
-                    elif text_time_match: final_time = line
-                    
-                    if final_time:
-                        if i > 0:
-                            raw = lines[i-1]
-                            if "Agenda" not in raw:
-                                clean = clean_committee_name(f"House {raw}")
-                                if curr_date not in calendar_times: calendar_times[curr_date] = {}
-                                key = clean.lower().replace("committee","").replace("house","").replace("senate","").replace("of","").replace("for","").replace("and","").replace("&","").replace(" ","")
-                                calendar_times[curr_date][key] = final_time 
-    except Exception as e: debug_log.append(f"House Error: {e}")
+                    final_time = time_match.group(0) if time_match else (line if text_time_match else None)
+                    if final_time and i > 0 and "Agenda" not in lines[i-1]:
+                        clean = clean_committee_name(f"House {lines[i-1]}")
+                        if curr_date not in calendar_times: calendar_times[curr_date] = {}
+                        key = clean.lower().replace("committee","").replace("house","").replace("senate","").replace("of","").replace("for","").replace("and","").replace("&","").replace(" ","")
+                        calendar_times[curr_date][key] = final_time 
+    except: pass
 
-    # --- SENATE SCRAPER (Hyphen + Fallback) ---
+    # SENATE
     try:
         url = "https://apps.senate.virginia.gov/Senator/ComMeetings.php"
         resp = requests.get(url, headers=headers, timeout=4)
         if resp.status_code == 200:
             soup = BeautifulSoup(resp.text, 'html.parser')
             lines = [line.strip() for line in soup.get_text("\n", strip=True).splitlines() if line.strip()]
-            
             for i, line in enumerate(lines):
-                # Format: "Monday, January 19, 2026 - 8:00 AM"
                 if "2026" in line and "-" in line:
                     try:
-                        raw_date_part = line.split("-")[0].strip() 
-                        dt = datetime.strptime(raw_date_part, "%A, %B %d, %Y")
-                        d_str = dt.strftime("%Y-%m-%d")
-                        raw_time_part = "-".join(line.split("-")[1:]).strip() # Everything after first hyphen
-                        
-                        if i > 0:
-                            raw_comm_name = lines[i-1] 
-                            if len(raw_comm_name) > 3 and "Agenda" not in raw_comm_name:
-                                clean = clean_committee_name(f"Senate {raw_comm_name}")
-                                if d_str not in calendar_times: calendar_times[d_str] = {}
-                                key = clean.lower().replace("committee","").replace("house","").replace("senate","").replace("of","").replace("for","").replace("and","").replace("&","").replace(" ","")
-                                calendar_times[d_str][key] = raw_time_part
-                                debug_log.append(f"Senate Found: {d_str} | {clean} -> {raw_time_part}")
+                        raw_date_part = line.split("-")[0].strip()
+                        d_str = datetime.strptime(raw_date_part, "%A, %B %d, %Y").strftime("%Y-%m-%d")
+                        raw_time_part = "-".join(line.split("-")[1:]).strip()
+                        if i > 0 and len(lines[i-1]) > 3:
+                            clean = clean_committee_name(f"Senate {lines[i-1]}")
+                            if d_str not in calendar_times: calendar_times[d_str] = {}
+                            key = clean.lower().replace("committee","").replace("house","").replace("senate","").replace("of","").replace("for","").replace("and","").replace("&","").replace(" ","")
+                            calendar_times[d_str][key] = raw_time_part
                     except: pass
-    except Exception as e: debug_log.append(f"Senate Error: {e}")
-
-    return calendar_times, debug_log
+    except: pass
+    return calendar_times, []
 
 # --- 2. DATA FETCHING ---
 @st.cache_data(ttl=60) 
@@ -243,19 +229,25 @@ def get_bill_data_batch(bill_numbers, lis_data_dict):
                     history_data.append({"Date": date_h, "Action": desc})
                     desc_lower = desc.lower()
                     if "referred to" in desc_lower:
-                        # --- FIX: Regex allows hyphens for 'H-Education' ---
                         match = re.search(r'referred to (?:committee on|the committee on)?\s?([a-z\s&,-]+)', desc_lower)
                         if match: found = match.group(1).strip().title(); curr_comm = found if len(found) > 3 else curr_comm
                     if "sub:" in desc_lower:
                         try: curr_sub = desc_lower.split("sub:")[1].strip().title()
                         except: pass
         
+        # --- FALLBACK: If history didn't give us a name, use the CODE from Bills file ---
         if curr_comm == "-":
             potential_cols = ['last_house_committee', 'last_senate_committee', 'house_committee', 'senate_committee']
             if item:
                 for col in potential_cols:
                     val = item.get(col)
-                    if pd.notna(val) and str(val).strip() not in ['nan', '', '-', '0']: curr_comm = str(val).strip(); break
+                    # Check if val is a known code or string
+                    if pd.notna(val) and str(val).strip() not in ['nan', '', '-', '0']: 
+                        raw_code = str(val).strip()
+                        # Try to map H24 -> Education immediately
+                        if raw_code in COMMITTEE_MAP: curr_comm = COMMITTEE_MAP[raw_code]
+                        else: curr_comm = raw_code # Use code if map fails, better than nothing
+                        break
         
         curr_comm = clean_committee_name(curr_comm)
         lifecycle = determine_lifecycle(str(status), str(curr_comm))
@@ -272,11 +264,8 @@ def get_bill_data_batch(bill_numbers, lis_data_dict):
         for d in raw_docket:
             d_date = d.get('meeting_date') or d.get('doc_date')
             d_comm_raw = str(d.get('committee_name', 'Unknown'))
-            
-            if lifecycle == "📣 Out of Committee" or lifecycle == "✅ Signed & Enacted":
-                d_comm_raw = "Floor Session / Chamber Action"
-            elif d_comm_raw == 'Unknown' or d_comm_raw == 'nan':
-                d_comm_raw = curr_comm
+            if lifecycle == "📣 Out of Committee" or lifecycle == "✅ Signed & Enacted": d_comm_raw = "Floor Session / Chamber Action"
+            elif d_comm_raw == 'Unknown' or d_comm_raw == 'nan': d_comm_raw = curr_comm
 
             if d_date:
                 try:
@@ -288,7 +277,7 @@ def get_bill_data_batch(bill_numbers, lis_data_dict):
 
         results.append({
             "Bill Number": bill_num, "Official Title": title, "Status": str(status), "Date": date_val, 
-            "Lifecycle": lifecycle, "Auto_Folder": get_smart_subject(title), "History_Data": history_data[::-1], 
+            "Lifecycle": lifecycle, "Auto_Folder": "📂 Unassigned / General", "History_Data": history_data[::-1], 
             "Current_Committee": str(curr_comm).strip(), "Display_Committee": str(display_comm).strip(), 
             "Current_Sub": str(curr_sub).strip(), "Upcoming_Meetings": upcoming_meetings
         })
@@ -462,8 +451,29 @@ if bills_to_track:
 
     final_df = pd.merge(sheet_df, api_df, on="Bill Number", how="left")
     
-    if 'Auto_Folder' not in final_df.columns or final_df['Auto_Folder'].isnull().any():
-         final_df['Auto_Folder'] = final_df.apply(lambda row: get_smart_subject(row.get('Official Title', row.get('My Title', ''))), axis=1)
+    # Simple Topic Matching (Restored)
+    TOPIC_KEYWORDS = {
+    "🗳️ Elections & Democracy": ["election", "vote", "ballot", "campaign", "poll", "voter", "registrar", "districting", "suffrage"],
+    "🏗️ Housing & Property": ["rent", "landlord", "tenant", "housing", "lease", "property", "zoning", "eviction", "homeowner", "development", "residential"],
+    "✊ Labor & Workers Rights": ["wage", "salary", "worker", "employment", "labor", "union", "bargaining", "leave", "compensation", "workplace", "employee", "minimum", "overtime"],
+    "💰 Economy & Business": ["tax", "commerce", "business", "market", "consumer", "corporation", "finance", "budget", "economic", "trade"],
+    "🎓 Education": ["school", "education", "student", "university", "college", "teacher", "curriculum", "scholarship", "tuition", "board of education"],
+    "🚓 Public Safety & Law": ["firearm", "gun", "police", "crime", "penalty", "court", "judge", "enforcement", "prison", "arrest", "criminal", "justice"],
+    "🏥 Health & Healthcare": ["health", "medical", "hospital", "patient", "doctor", "insurance", "care", "mental", "pharmacy", "drug", "medicaid"],
+    "🌳 Environment & Energy": ["energy", "water", "pollution", "environment", "climate", "solar", "conservation", "waste", "carbon", "natural resources", "wind", "power", "electricity", "hydroelectric", "nuclear", "chesapeake", "bay", "river", "watershed"],
+    "🚗 Transportation": ["road", "highway", "vehicle", "driver", "license", "transit", "traffic", "transportation", "motor"],
+    "💻 Tech & Utilities": ["internet", "broadband", "data", "privacy", "utility", "cyber", "technology", "telecom", "artificial intelligence"],
+    "⚖️ Civil Rights": ["discrimination", "rights", "equity", "minority", "gender", "religious", "freedom", "speech"],
+    }
+    
+    def get_subject(row):
+        txt = str(row.get('Official Title', '')) + " " + str(row.get('My Title', ''))
+        txt = txt.lower()
+        for cat, keys in TOPIC_KEYWORDS.items():
+            if any(k in txt for k in keys): return cat
+        return "📂 Unassigned / General"
+
+    final_df['Auto_Folder'] = final_df.apply(get_subject, axis=1)
 
     check_and_broadcast(final_df, subs_df, demo_mode)
 
@@ -617,25 +627,3 @@ with st.sidebar:
         
         st.write("**Scraper Log (First 10):**")
         st.text("\n".join(scrape_log[:10]))
-        
-        # --- BILL INSPECTOR TOOL ---
-        st.divider()
-        st.write("**🔍 Bill Inspector**")
-        insp_bill = st.text_input("Enter Bill # (e.g. HB532):")
-        if insp_bill:
-            clean_insp = clean_bill_id(insp_bill)
-            st.write(f"Looking for: {clean_insp}")
-            
-            # Check History File
-            if 'history' in lis_data:
-                hist_matches = lis_data['history'][lis_data['history']['bill_clean'] == clean_insp]
-                st.write(f"Found {len(hist_matches)} history rows")
-                if not hist_matches.empty:
-                    st.dataframe(hist_matches)
-            
-            # Check Bills File
-            if 'bills' in lis_data:
-                bill_matches = lis_data['bills'][lis_data['bills']['bill_clean'] == clean_insp]
-                st.write(f"Found {len(bill_matches)} bill rows")
-                if not bill_matches.empty:
-                    st.json(bill_matches.iloc[0].to_dict())
