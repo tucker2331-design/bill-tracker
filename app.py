@@ -21,7 +21,7 @@ LIS_DOCKET_CSV = LIS_BASE_URL + "DOCKET.CSV"
 
 st.set_page_config(page_title="VA Bill Tracker 2026", layout="wide")
 
-# --- COMMITTEE CODE MAP (Critical for missing CSV data) ---
+# --- COMMITTEE CODE MAP ---
 COMMITTEE_MAP = {
     "H01": "House Privileges and Elections", "H02": "House Courts of Justice", "H03": "House Education",
     "H04": "House General Laws", "H05": "House Roads and Internal Navigation", "H06": "House Finance",
@@ -34,7 +34,6 @@ COMMITTEE_MAP = {
     "H23": "House Education", "H24": "House Education", "H25": "House Health and Human Services",
     "H26": "House Public Safety", "H27": "House Transportation", "H28": "House Communications, Technology and Innovation",
     "H29": "House Health and Human Services",
-    # Senate Codes
     "S01": "Senate Agriculture", "S02": "Senate Commerce and Labor", "S03": "Senate Courts of Justice", 
     "S04": "Senate Education and Health", "S05": "Senate Finance and Appropriations", "S06": "Senate General Laws", 
     "S07": "Senate Local Government", "S08": "Senate Privileges and Elections", "S09": "Senate Rehab", 
@@ -44,7 +43,7 @@ COMMITTEE_MAP = {
 # --- HELPER FUNCTIONS ---
 
 def get_smart_subject(title):
-    return "📂 Unassigned / General" # Placeholder, logic applied in main
+    return "📂 Unassigned / General" 
 
 def clean_bill_id(bill_text):
     if pd.isna(bill_text): return ""
@@ -60,17 +59,16 @@ def determine_lifecycle(status_text, committee_name):
     if any(x in status for x in ["enrolled", "communicated to governor", "bill text as passed"]): return "✍️ Awaiting Signature"
     out_keywords = ["reported", "passed", "agreed", "engrossed", "communicated", "reading waived", "read second", "read third"]
     if any(x in status for x in out_keywords): return "📣 Out of Committee"
+    # Logic Update: Only considered "In Committee" if not pending/unassigned
+    if "pending" in status or "prefiled" in status: return "📥 In Committee" # Will be grouped as Unassigned
     if comm not in ["-", "nan", "None", ""] and len(comm) > 2: return "📥 In Committee"
     return "📥 In Committee"
 
 def clean_committee_name(name):
     if not name or str(name).lower() == 'nan': return ""
     name = str(name).strip()
-    # Check Map first
     if name in COMMITTEE_MAP: return COMMITTEE_MAP[name]
-    # Strip prefixes
     if name.startswith("H-") or name.startswith("S-") or name.startswith("h-") or name.startswith("s-"): name = name[2:]
-    # Clean text
     name = re.sub(r'\b[A-Z][a-z]+, [A-Z]\. ?[A-Z]?\.?.*$', '', name) 
     name = re.sub(r'\b(Simon|Rasoul|Willett|Helmer|Lucas|Surovell|Locke|Deeds|Favola|Marsden|Ebbin|McPike|Hayes|Carroll Foy|Subcommittee #\d+)\b.*', '', name, flags=re.IGNORECASE)
     name = name.replace("Committee For", "").replace("Committee On", "").replace("Committee", "").strip()
@@ -86,20 +84,18 @@ def extract_vote_info(status_text):
     if match: return match.group(1)
     return None
 
-# --- LAST RESORT SCRAPER (Only runs if absolutely needed) ---
+# --- LAST RESORT SCRAPER ---
 @st.cache_data(ttl=3600)
 def scrape_committee_from_bill_page(bill_number):
     try:
         url = f"https://lis.virginia.gov/cgi-bin/legp604.exe?261+sum+{bill_number}"
-        resp = requests.get(url, timeout=2) # Short timeout for speed
+        resp = requests.get(url, timeout=2) 
         if resp.status_code == 200:
             soup = BeautifulSoup(resp.text, 'html.parser')
             text = soup.get_text(" ", strip=True)
-            # Look for specific phrase
             if "Referred to Committee on" in text:
                 start = text.find("Referred to Committee on") + len("Referred to Committee on")
                 chunk = text[start:start+60]
-                # Cleanup: stop at parenthesis or next keyword
                 comm = chunk.split("(")[0].split("Dates")[0].strip()
                 return comm
     except: pass
@@ -249,26 +245,25 @@ def get_bill_data_batch(bill_numbers, lis_data_dict):
         
         # --- SMART LOGIC: Use 'last_actid' Code if Committee Name is Missing ---
         if curr_comm == "-":
-            # 1. Try standard column
             val = item.get('last_house_committee')
-            # 2. If empty, check actid (e.g. H2401)
             if not val or str(val) == 'nan':
                 act_id = str(item.get('last_actid', ''))
                 if len(act_id) >= 3:
-                    code = act_id[:3] # Get H24 from H2401
-                    if code in COMMITTEE_MAP:
-                        curr_comm = COMMITTEE_MAP[code]
-            
-            # 3. If standard column had a code like "H24"
+                    code = act_id[:3]
+                    if code in COMMITTEE_MAP: curr_comm = COMMITTEE_MAP[code]
             elif str(val) in COMMITTEE_MAP:
                 curr_comm = COMMITTEE_MAP[str(val)]
         
         # --- LAST RESORT: Scrape Page ---
         if (curr_comm == "-" or curr_comm == "") and str(status) != "Not Found":
-            # Only do this if we truly have no clue, to save time
             found = scrape_committee_from_bill_page(bill_num)
             if found: curr_comm = found
         
+        # --- OVERRIDE: If status says "Pending", it is NOT in a committee yet ---
+        if "pending" in str(status).lower() or "prefiled" in str(status).lower():
+            if "referred" not in str(status).lower(): # Ensure we don't clear "Referred" status
+                curr_comm = "Unassigned"
+
         curr_comm = clean_committee_name(curr_comm)
         lifecycle = determine_lifecycle(str(status), str(curr_comm))
         display_comm = curr_comm
