@@ -64,10 +64,13 @@ def determine_lifecycle(status_text, committee_name):
 def clean_committee_name(name):
     if not name or str(name).lower() == 'nan': return ""
     name = str(name).strip()
-    # Strip names
+    
+    # Remove H- or S- prefixes (e.g. H-Education -> Education)
+    if name.startswith("H-") or name.startswith("S-") or name.startswith("h-") or name.startswith("s-"):
+        name = name[2:]
+
     name = re.sub(r'\b[A-Z][a-z]+, [A-Z]\. ?[A-Z]?\.?.*$', '', name) 
     name = re.sub(r'\b(Simon|Rasoul|Willett|Helmer|Lucas|Surovell|Locke|Deeds|Favola|Marsden|Ebbin|McPike|Hayes|Carroll Foy|Subcommittee #\d+)\b.*', '', name, flags=re.IGNORECASE)
-    # Fix LIS oddities
     name = name.replace("Committee For", "").replace("Committee On", "").replace("Committee", "").strip()
     return name.title()
 
@@ -84,9 +87,6 @@ def extract_vote_info(status_text):
 # --- 1. HTML SCRAPER (ADJOURNMENT AWARE) ---
 @st.cache_data(ttl=600)
 def fetch_html_calendar():
-    """
-    Returns: { '2026-01-16': {'courts': '8:00 AM', 'commerce': '15 Min After Adjournment'} }
-    """
     calendar_times = {}
     debug_log = []
     headers = {'User-Agent': 'Mozilla/5.0'}
@@ -101,7 +101,6 @@ def fetch_html_calendar():
             
             curr_date = None
             for i, line in enumerate(lines):
-                # House format: "Friday, January 16"
                 date_match = re.search(r'(Monday|Tuesday|Wednesday|Thursday|Friday|Saturday|Sunday),?\s+([A-Z][a-z]+)\s+(\d{1,2})', line)
                 if date_match:
                     try:
@@ -112,15 +111,12 @@ def fetch_html_calendar():
                     except: pass
                 
                 if curr_date:
-                    # CHECK 1: Clock Time (8:00 AM)
                     time_match = re.search(r'^\d{1,2}:\d{2}\s*[AP]M', line)
-                    
-                    # CHECK 2: Text Time ("15 minutes after adjournment")
                     text_time_match = "adjournment" in line.lower() or "recess" in line.lower()
                     
                     final_time = None
                     if time_match: final_time = time_match.group(0)
-                    elif text_time_match: final_time = line # Capture the whole phrase
+                    elif text_time_match: final_time = line
                     
                     if final_time:
                         if i > 0:
@@ -132,7 +128,7 @@ def fetch_html_calendar():
                                 calendar_times[curr_date][key] = final_time 
     except Exception as e: debug_log.append(f"House Error: {e}")
 
-    # --- SENATE SCRAPER (HYPHEN LOGIC) ---
+    # --- SENATE SCRAPER ---
     try:
         url = "https://apps.senate.virginia.gov/Senator/ComMeetings.php"
         resp = requests.get(url, headers=headers, timeout=4)
@@ -141,29 +137,18 @@ def fetch_html_calendar():
             lines = [line.strip() for line in soup.get_text("\n", strip=True).splitlines() if line.strip()]
             
             for i, line in enumerate(lines):
-                # Senate Format: "Monday, January 19, 2026 - 8:00 AM"
-                # OR "Monday, January 19, 2026 - 15 Minutes After Adjournment"
                 if "2026" in line and "-" in line:
                     try:
-                        # Extract Date
                         raw_date_part = line.split("-")[0].strip() 
                         dt = datetime.strptime(raw_date_part, "%A, %B %d, %Y")
                         d_str = dt.strftime("%Y-%m-%d")
-                        
-                        # Extract Time (Everything after the first hyphen)
-                        # Join rest in case there are multiple hyphens
                         raw_time_part = "-".join(line.split("-")[1:]).strip()
                         
-                        # Extract Committee (FROM PREVIOUS LINE)
                         if i > 0:
                             raw_comm_name = lines[i-1] 
-                            
                             if len(raw_comm_name) > 3 and "Agenda" not in raw_comm_name:
                                 clean = clean_committee_name(f"Senate {raw_comm_name}")
-                                
                                 if d_str not in calendar_times: calendar_times[d_str] = {}
-                                
-                                # Strict Normalization for Matching
                                 key = clean.lower().replace("committee","").replace("house","").replace("senate","").replace("of","").replace("for","").replace("and","").replace("&","").replace(" ","")
                                 calendar_times[d_str][key] = raw_time_part
                                 debug_log.append(f"Senate Found: {d_str} | {clean} -> {raw_time_part}")
@@ -255,7 +240,8 @@ def get_bill_data_batch(bill_numbers, lis_data_dict):
                     history_data.append({"Date": date_h, "Action": desc})
                     desc_lower = desc.lower()
                     if "referred to" in desc_lower:
-                        match = re.search(r'referred to (?:committee on|the committee on)?\s?([a-z\s&,]+)', desc_lower)
+                        # --- BUG FIX HERE: Added hyphen to regex ---
+                        match = re.search(r'referred to (?:committee on|the committee on)?\s?([a-z\s&,-]+)', desc_lower)
                         if match: found = match.group(1).strip().title(); curr_comm = found if len(found) > 3 else curr_comm
                     if "sub:" in desc_lower:
                         try: curr_sub = desc_lower.split("sub:")[1].strip().title()
@@ -294,11 +280,7 @@ def get_bill_data_batch(bill_numbers, lis_data_dict):
                     if "/" in str(d_date): dt_obj = datetime.strptime(str(d_date), "%m/%d/%Y")
                     else: dt_obj = datetime.strptime(str(d_date), "%Y-%m-%d")
                     fmt_date = dt_obj.strftime("%Y-%m-%d")
-                    
-                    upcoming_meetings.append({
-                        "Date": fmt_date,
-                        "CommitteeRaw": d_comm_raw 
-                    })
+                    upcoming_meetings.append({"Date": fmt_date, "CommitteeRaw": d_comm_raw})
                 except: pass
 
         results.append({
