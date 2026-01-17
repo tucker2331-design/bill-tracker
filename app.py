@@ -64,8 +64,10 @@ def determine_lifecycle(status_text, committee_name):
 def clean_committee_name(name):
     if not name or str(name).lower() == 'nan': return ""
     name = str(name).strip()
+    # Strip names
     name = re.sub(r'\b[A-Z][a-z]+, [A-Z]\. ?[A-Z]?\.?.*$', '', name) 
     name = re.sub(r'\b(Simon|Rasoul|Willett|Helmer|Lucas|Surovell|Locke|Deeds|Favola|Marsden|Ebbin|McPike|Hayes|Carroll Foy|Subcommittee #\d+)\b.*', '', name, flags=re.IGNORECASE)
+    # Fix LIS oddities
     name = name.replace("Committee For", "").replace("Committee On", "").replace("Committee", "").strip()
     return name.title()
 
@@ -79,68 +81,86 @@ def extract_vote_info(status_text):
     if match: return match.group(1)
     return None
 
-# --- 1. HTML SCRAPER (RAW SEARCH METHOD) ---
+# --- 1. HTML SCRAPER (CORRECTED SENATE LOGIC) ---
 @st.cache_data(ttl=600)
 def fetch_html_calendar():
     """
-    Scrapes the text of the schedule pages.
-    Returns: { '2026-01-19': {'courts': '8:00 AM', 'finance': '9:00 AM'} }
+    Returns: { '2026-01-16': {'courts': '8:00 AM'}, ... }
     """
     calendar_times = {}
     debug_log = []
     headers = {'User-Agent': 'Mozilla/5.0'}
     
-    def scrape(url, chamber_prefix):
-        try:
-            resp = requests.get(url, headers=headers, timeout=5)
-            if resp.status_code == 200:
-                soup = BeautifulSoup(resp.text, 'html.parser')
-                text_content = soup.get_text("\n", strip=True)
-                lines = text_content.splitlines()
+    # --- HOUSE SCRAPER ---
+    try:
+        url = "https://house.vga.virginia.gov/schedule/meetings"
+        resp = requests.get(url, headers=headers, timeout=4)
+        if resp.status_code == 200:
+            soup = BeautifulSoup(resp.text, 'html.parser')
+            lines = [line.strip() for line in soup.get_text("\n", strip=True).splitlines() if line.strip()]
+            
+            curr_date = None
+            for i, line in enumerate(lines):
+                # House format: "Friday, January 16"
+                date_match = re.search(r'(Monday|Tuesday|Wednesday|Thursday|Friday|Saturday|Sunday),?\s+([A-Z][a-z]+)\s+(\d{1,2})', line)
+                if date_match:
+                    try:
+                        month_str = date_match.group(2)
+                        day_str = date_match.group(3)
+                        dt = datetime.strptime(f"{month_str} {day_str} 2026", "%B %d %Y")
+                        curr_date = dt.strftime("%Y-%m-%d")
+                    except: pass
                 
-                current_date = None
-                for line in lines:
-                    # Date Detector
-                    if "JANUARY" in line.upper() or "FEBRUARY" in line.upper():
-                        try:
-                            # Try to extract a date object
-                            clean_d = line.split("–")[0].split("-")[0].strip()
-                            if "2026" not in clean_d: clean_d += ", 2026"
-                            dt = datetime.strptime(clean_d, "%A, %B %d, %Y")
-                            current_date = dt.strftime("%Y-%m-%d")
-                        except:
-                            pass # Keep previous date if fail
-                    
-                    # Time + Committee Detector
-                    if current_date:
-                        time_match = re.search(r'(\d{1,2}:\d{2}\s*[AP]M)', line)
-                        if time_match:
-                            t_val = time_match.group(1)
+                if curr_date:
+                    time_match = re.search(r'^\d{1,2}:\d{2}\s*[AP]M', line)
+                    if time_match:
+                        t_val = time_match.group(0)
+                        if i > 0:
+                            raw = lines[i-1]
+                            if "Agenda" not in raw:
+                                clean = clean_committee_name(f"House {raw}")
+                                if curr_date not in calendar_times: calendar_times[curr_date] = {}
+                                key = clean.lower().replace("committee","").replace("house","").replace("senate","").replace("of","").replace("for","").replace("and","").replace("&","").replace(" ","")
+                                calendar_times[curr_date][key] = t_val 
+    except Exception as e: debug_log.append(f"House Error: {e}")
+
+    # --- SENATE SCRAPER (FIXED: LOOKS UP ONE LINE) ---
+    try:
+        url = "https://apps.senate.virginia.gov/Senator/ComMeetings.php"
+        resp = requests.get(url, headers=headers, timeout=4)
+        if resp.status_code == 200:
+            soup = BeautifulSoup(resp.text, 'html.parser')
+            lines = [line.strip() for line in soup.get_text("\n", strip=True).splitlines() if line.strip()]
+            
+            for i, line in enumerate(lines):
+                # Senate Format: "Monday, January 19, 2026 - 8:00 AM"
+                if "2026" in line and "-" in line and ("AM" in line or "PM" in line):
+                    try:
+                        # Extract Date
+                        raw_date_part = line.split("-")[0].strip() # "Monday, January 19, 2026"
+                        dt = datetime.strptime(raw_date_part, "%A, %B %d, %Y")
+                        d_str = dt.strftime("%Y-%m-%d")
+                        
+                        # Extract Time
+                        raw_time_part = line.split("-")[-1].strip() # "8:00 AM"
+                        
+                        # Extract Committee (FROM PREVIOUS LINE)
+                        if i > 0:
+                            raw_comm_name = lines[i-1] # "Courts of Justice"
                             
-                            # Clean the line to find keywords
-                            # "Senate Courts of Justice - 8:00 AM" -> "courts justice"
-                            clean_line = line.lower().replace(t_val.lower(), "")
-                            for w in ["senate", "house", "committee", "meeting", "agenda", "room", "subcommittee", "of", "for", "and", "&", "-"]:
-                                clean_line = clean_line.replace(w, "")
-                            
-                            # Valid keywords usually > 3 chars
-                            keywords = [w for w in clean_line.split() if len(w) > 3]
-                            
-                            if keywords:
-                                if current_date not in calendar_times: calendar_times[current_date] = {}
+                            # Validate it looks like a name
+                            if len(raw_comm_name) > 3 and "Agenda" not in raw_comm_name:
+                                clean = clean_committee_name(f"Senate {raw_comm_name}")
                                 
-                                # Store checking keys
-                                for k in keywords:
-                                    calendar_times[current_date][k] = t_val
-                                    
-                                debug_log.append(f"[{current_date}] {chamber_prefix}: Found '{keywords}' -> {t_val}")
+                                if d_str not in calendar_times: calendar_times[d_str] = {}
+                                
+                                # Strict Normalization for Matching
+                                key = clean.lower().replace("committee","").replace("house","").replace("senate","").replace("of","").replace("for","").replace("and","").replace("&","").replace(" ","")
+                                calendar_times[d_str][key] = raw_time_part
+                                debug_log.append(f"Senate Found: {d_str} | {clean} -> {raw_time_part}")
+                    except: pass
+    except Exception as e: debug_log.append(f"Senate Error: {e}")
 
-        except Exception as e:
-            debug_log.append(f"{chamber_prefix} Error: {e}")
-
-    scrape("https://house.vga.virginia.gov/schedule/meetings", "House")
-    scrape("https://apps.senate.virginia.gov/Senator/ComMeetings.php", "Senate")
-    
     return calendar_times, debug_log
 
 # --- 2. DATA FETCHING ---
@@ -255,6 +275,7 @@ def get_bill_data_batch(bill_numbers, lis_data_dict):
             d_date = d.get('meeting_date') or d.get('doc_date')
             d_comm_raw = str(d.get('committee_name', 'Unknown'))
             
+            # ZOMBIE FIX
             if lifecycle == "📣 Out of Committee" or lifecycle == "✅ Signed & Enacted":
                 d_comm_raw = "Floor Session / Chamber Action"
             elif d_comm_raw == 'Unknown' or d_comm_raw == 'nan':
@@ -309,7 +330,7 @@ def check_and_broadcast(df_bills, df_subscribers, demo_mode):
         report += f"\n⚪ *{b_num}* | {display_name}\n> _{clean_status}_\n"
     
     if updates_found:
-        st.toast(f"📢 Sending updates...")
+        st.toast(f"📢 Sending updates..."); 
         for email in subscriber_list:
             try: uid = client.users_lookupByEmail(email=email.strip())['user']['id']; client.chat_postMessage(channel=uid, text=report)
             except: pass
@@ -429,7 +450,7 @@ except Exception as e: st.error(f"Sheet Error: {e}"); st.stop()
 # 2. FETCH DATA & SCRAPER
 lis_data = fetch_lis_data()
 bills_to_track = sheet_df['Bill Number'].unique().tolist()
-scraped_times, scrape_log = fetch_html_calendar() # UPDATED
+scraped_times, scrape_log = fetch_html_calendar() # Run CORRECTED smart scraper
 
 if bills_to_track:
     if demo_mode:
@@ -496,6 +517,7 @@ if bills_to_track:
                     m_date_str = str(m['Date']).split(" ")[0]
                     m_comm_raw = m.get('CommitteeRaw', 'Unknown')
                     
+                    # INTELLIGENT NAMING
                     b_id = row['Bill Number']
                     clean_name = clean_committee_name(m_comm_raw)
                     if "Senate" not in clean_name and "House" not in clean_name:
@@ -525,16 +547,14 @@ if bills_to_track:
                     for comm_name, bills in calendar_map[target_date_str].items():
                         # RAW SEARCH MATCHING (Keyword Intersection)
                         time_display = "Time TBA"
+                        
+                        # TRY EXACT DATE FIRST
                         if target_date_str in scraped_times:
                             docket_words = set(comm_name.lower().replace("house","").replace("senate","").replace("committee","").split())
                             docket_words.discard("of"); docket_words.discard("for"); docket_words.discard("and"); docket_words.discard("&"); docket_words.discard("-")
-                            
-                            # Filter empty strings
                             docket_words = {w for w in docket_words if len(w) > 3}
-
                             if docket_words:
                                 for s_key, s_time in scraped_times[target_date_str].items():
-                                    # Does s_key contain ANY major keyword from docket?
                                     if any(w in s_key.lower() for w in docket_words):
                                         time_display = s_time
                                         break
