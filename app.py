@@ -59,8 +59,8 @@ def determine_lifecycle(status_text, committee_name):
     if any(x in status for x in ["enrolled", "communicated to governor", "bill text as passed"]): return "✍️ Awaiting Signature"
     out_keywords = ["reported", "passed", "agreed", "engrossed", "communicated", "reading waived", "read second", "read third"]
     if any(x in status for x in out_keywords): return "📣 Out of Committee"
-    # Logic Update: Only considered "In Committee" if not pending/unassigned
-    if "pending" in status or "prefiled" in status: return "📥 In Committee" # Will be grouped as Unassigned
+    
+    # Strict In Committee Check: Must have a real committee name and NOT be unassigned
     if comm not in ["-", "nan", "None", "", "Unassigned"] and len(comm) > 2: return "📥 In Committee"
     return "📥 In Committee"
 
@@ -84,7 +84,7 @@ def extract_vote_info(status_text):
     if match: return match.group(1)
     return None
 
-# --- LAST RESORT SCRAPER ---
+# --- LAST RESORT SCRAPER (DISABLED BY DEFAULT FOR SPEED) ---
 @st.cache_data(ttl=3600)
 def scrape_committee_from_bill_page(bill_number):
     try:
@@ -226,6 +226,7 @@ def get_bill_data_batch(bill_numbers, lis_data_dict):
             if not date_val or date_val == 'nan': date_val = str(item.get('last_senate_action_date', ''))
 
         raw_history = history_lookup.get(bill_num, [])
+        history_blob = "" 
         if raw_history:
             for h_row in raw_history:
                 desc = ""; date_h = ""
@@ -235,6 +236,7 @@ def get_bill_data_batch(bill_numbers, lis_data_dict):
                     if col in h_row and pd.notna(h_row[col]): date_h = str(h_row[col]); break
                 if desc:
                     history_data.append({"Date": date_h, "Action": desc})
+                    history_blob += desc.lower() + " "
                     desc_lower = desc.lower()
                     if "referred to" in desc_lower:
                         match = re.search(r'referred to (?:committee on|the committee on)?\s?([a-z\s&,-]+)', desc_lower)
@@ -243,23 +245,32 @@ def get_bill_data_batch(bill_numbers, lis_data_dict):
                         try: curr_sub = desc_lower.split("sub:")[1].strip().title()
                         except: pass
         
-        # --- SMART LOGIC: Use 'last_actid' Code if Committee Name is Missing ---
+        # --- SMART LOGIC: Use 'last_actid' or 'last_house_committee' Code ---
         if curr_comm == "-":
-            val = item.get('last_house_committee')
-            if not val or str(val) == 'nan':
-                act_id = str(item.get('last_actid', ''))
-                if len(act_id) >= 3:
-                    code = act_id[:3]
-                    if code in COMMITTEE_MAP: curr_comm = COMMITTEE_MAP[code]
-            elif str(val) in COMMITTEE_MAP:
-                curr_comm = COMMITTEE_MAP[str(val)]
+            # Check Act ID first (Most specific)
+            act_id = str(item.get('last_actid', ''))
+            if len(act_id) >= 3:
+                code = act_id[:3]
+                if code in COMMITTEE_MAP: curr_comm = COMMITTEE_MAP[code]
+            
+            # If still nothing, try the Committee Column
+            if curr_comm == "-":
+                val = item.get('last_house_committee')
+                if val and str(val) in COMMITTEE_MAP:
+                    curr_comm = COMMITTEE_MAP[str(val)]
         
-        # --- OVERRIDE: If status says "Pending", it is NOT in a committee yet ---
-        # This fixes HB700 showing up in Courts of Justice erroneously
-        if "pending" in str(status).lower() or "prefiled" in str(status).lower():
-            if "referred" not in str(status).lower(): 
+        # --- FIX: SKEPTICAL "COURTS OF JUSTICE" CHECK ---
+        # If code says Courts (H02/S03), but history doesn't confirm it -> Unassigned
+        if "Courts of Justice" in str(curr_comm):
+            # Must find "Referred to... Courts" in history to believe it
+            if not ("referred" in history_blob and "courts" in history_blob):
                 curr_comm = "Unassigned"
 
+        # --- DISABLED: The slow scraper is commented out ---
+        # if (curr_comm == "-" or curr_comm == "") and str(status) != "Not Found":
+        #    found = scrape_committee_from_bill_page(bill_num)
+        #    if found: curr_comm = found
+        
         curr_comm = clean_committee_name(curr_comm)
         lifecycle = determine_lifecycle(str(status), str(curr_comm))
         display_comm = curr_comm
@@ -343,7 +354,7 @@ def render_grouped_list_item(df):
     if df.empty: st.caption("No bills."); return
     def rename_unassigned(name):
         name = str(name).strip()
-        if name in ['-', 'nan', 'None', '', '0']: return "Unassigned"
+        if name in ['-', 'nan', 'None', '', '0', 'Unassigned']: return "Unassigned"
         if name == "House -": return "House - Unassigned"
         if name == "Senate -": return "Senate - Unassigned"
         if name.endswith("-"): return name + " Unassigned"
