@@ -65,12 +65,15 @@ def clean_committee_name(name):
     if not name or str(name).lower() == 'nan': return ""
     name = str(name).strip()
     
-    # Remove H- or S- prefixes (e.g. H-Education -> Education)
+    # 1. Strip H- / S- prefixes (Fix for H-Education)
     if name.startswith("H-") or name.startswith("S-") or name.startswith("h-") or name.startswith("s-"):
         name = name[2:]
 
+    # 2. Strip Names
     name = re.sub(r'\b[A-Z][a-z]+, [A-Z]\. ?[A-Z]?\.?.*$', '', name) 
     name = re.sub(r'\b(Simon|Rasoul|Willett|Helmer|Lucas|Surovell|Locke|Deeds|Favola|Marsden|Ebbin|McPike|Hayes|Carroll Foy|Subcommittee #\d+)\b.*', '', name, flags=re.IGNORECASE)
+    
+    # 3. Clean Text
     name = name.replace("Committee For", "").replace("Committee On", "").replace("Committee", "").strip()
     return name.title()
 
@@ -84,10 +87,10 @@ def extract_vote_info(status_text):
     if match: return match.group(1)
     return None
 
-# --- 1. HTML SCRAPER (ADJOURNMENT AWARE) ---
+# --- 1. HTML SCRAPER (DATE & ADJOURNMENT AWARE) ---
 @st.cache_data(ttl=600)
 def fetch_html_calendar():
-    calendar_times = {}
+    calendar_times = {'NO_DATE': {}}
     debug_log = []
     headers = {'User-Agent': 'Mozilla/5.0'}
     
@@ -101,11 +104,11 @@ def fetch_html_calendar():
             
             curr_date = None
             for i, line in enumerate(lines):
+                # House format: "Friday, January 16"
                 date_match = re.search(r'(Monday|Tuesday|Wednesday|Thursday|Friday|Saturday|Sunday),?\s+([A-Z][a-z]+)\s+(\d{1,2})', line)
                 if date_match:
                     try:
-                        month_str = date_match.group(2)
-                        day_str = date_match.group(3)
+                        month_str = date_match.group(2); day_str = date_match.group(3)
                         dt = datetime.strptime(f"{month_str} {day_str} 2026", "%B %d %Y")
                         curr_date = dt.strftime("%Y-%m-%d")
                     except: pass
@@ -128,7 +131,7 @@ def fetch_html_calendar():
                                 calendar_times[curr_date][key] = final_time 
     except Exception as e: debug_log.append(f"House Error: {e}")
 
-    # --- SENATE SCRAPER ---
+    # --- SENATE SCRAPER (Hyphen + Fallback) ---
     try:
         url = "https://apps.senate.virginia.gov/Senator/ComMeetings.php"
         resp = requests.get(url, headers=headers, timeout=4)
@@ -137,12 +140,13 @@ def fetch_html_calendar():
             lines = [line.strip() for line in soup.get_text("\n", strip=True).splitlines() if line.strip()]
             
             for i, line in enumerate(lines):
+                # Format: "Monday, January 19, 2026 - 8:00 AM"
                 if "2026" in line and "-" in line:
                     try:
                         raw_date_part = line.split("-")[0].strip() 
                         dt = datetime.strptime(raw_date_part, "%A, %B %d, %Y")
                         d_str = dt.strftime("%Y-%m-%d")
-                        raw_time_part = "-".join(line.split("-")[1:]).strip()
+                        raw_time_part = "-".join(line.split("-")[1:]).strip() # Everything after first hyphen
                         
                         if i > 0:
                             raw_comm_name = lines[i-1] 
@@ -185,7 +189,6 @@ def fetch_lis_data():
     if not data['docket'].empty:
         col = next((c for c in data['docket'].columns if c in ['bill_no','bill_number','bill_id']), None)
         if col: data['docket']['bill_clean'] = data['docket'][col].astype(str).apply(clean_bill_id)
-        
         rename_map = {}
         for c in data['docket'].columns:
             if 'com' in c and 'des' in c: rename_map[c] = 'committee_name'
@@ -240,7 +243,7 @@ def get_bill_data_batch(bill_numbers, lis_data_dict):
                     history_data.append({"Date": date_h, "Action": desc})
                     desc_lower = desc.lower()
                     if "referred to" in desc_lower:
-                        # --- BUG FIX HERE: Added hyphen to regex ---
+                        # --- FIX: Regex allows hyphens for 'H-Education' ---
                         match = re.search(r'referred to (?:committee on|the committee on)?\s?([a-z\s&,-]+)', desc_lower)
                         if match: found = match.group(1).strip().title(); curr_comm = found if len(found) > 3 else curr_comm
                     if "sub:" in desc_lower:
@@ -614,3 +617,25 @@ with st.sidebar:
         
         st.write("**Scraper Log (First 10):**")
         st.text("\n".join(scrape_log[:10]))
+        
+        # --- BILL INSPECTOR TOOL ---
+        st.divider()
+        st.write("**🔍 Bill Inspector**")
+        insp_bill = st.text_input("Enter Bill # (e.g. HB532):")
+        if insp_bill:
+            clean_insp = clean_bill_id(insp_bill)
+            st.write(f"Looking for: {clean_insp}")
+            
+            # Check History File
+            if 'history' in lis_data:
+                hist_matches = lis_data['history'][lis_data['history']['bill_clean'] == clean_insp]
+                st.write(f"Found {len(hist_matches)} history rows")
+                if not hist_matches.empty:
+                    st.dataframe(hist_matches)
+            
+            # Check Bills File
+            if 'bills' in lis_data:
+                bill_matches = lis_data['bills'][lis_data['bills']['bill_clean'] == clean_insp]
+                st.write(f"Found {len(bill_matches)} bill rows")
+                if not bill_matches.empty:
+                    st.json(bill_matches.iloc[0].to_dict())
