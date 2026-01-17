@@ -81,11 +81,11 @@ def extract_vote_info(status_text):
     if match: return match.group(1)
     return None
 
-# --- 1. HTML SCRAPER (CORRECTED SENATE LOGIC) ---
+# --- 1. HTML SCRAPER (ADJOURNMENT AWARE) ---
 @st.cache_data(ttl=600)
 def fetch_html_calendar():
     """
-    Returns: { '2026-01-16': {'courts': '8:00 AM'}, ... }
+    Returns: { '2026-01-16': {'courts': '8:00 AM', 'commerce': '15 Min After Adjournment'} }
     """
     calendar_times = {}
     debug_log = []
@@ -112,19 +112,27 @@ def fetch_html_calendar():
                     except: pass
                 
                 if curr_date:
+                    # CHECK 1: Clock Time (8:00 AM)
                     time_match = re.search(r'^\d{1,2}:\d{2}\s*[AP]M', line)
-                    if time_match:
-                        t_val = time_match.group(0)
+                    
+                    # CHECK 2: Text Time ("15 minutes after adjournment")
+                    text_time_match = "adjournment" in line.lower() or "recess" in line.lower()
+                    
+                    final_time = None
+                    if time_match: final_time = time_match.group(0)
+                    elif text_time_match: final_time = line # Capture the whole phrase
+                    
+                    if final_time:
                         if i > 0:
                             raw = lines[i-1]
                             if "Agenda" not in raw:
                                 clean = clean_committee_name(f"House {raw}")
                                 if curr_date not in calendar_times: calendar_times[curr_date] = {}
                                 key = clean.lower().replace("committee","").replace("house","").replace("senate","").replace("of","").replace("for","").replace("and","").replace("&","").replace(" ","")
-                                calendar_times[curr_date][key] = t_val 
+                                calendar_times[curr_date][key] = final_time 
     except Exception as e: debug_log.append(f"House Error: {e}")
 
-    # --- SENATE SCRAPER (FIXED: LOOKS UP ONE LINE) ---
+    # --- SENATE SCRAPER (HYPHEN LOGIC) ---
     try:
         url = "https://apps.senate.virginia.gov/Senator/ComMeetings.php"
         resp = requests.get(url, headers=headers, timeout=4)
@@ -134,21 +142,22 @@ def fetch_html_calendar():
             
             for i, line in enumerate(lines):
                 # Senate Format: "Monday, January 19, 2026 - 8:00 AM"
-                if "2026" in line and "-" in line and ("AM" in line or "PM" in line):
+                # OR "Monday, January 19, 2026 - 15 Minutes After Adjournment"
+                if "2026" in line and "-" in line:
                     try:
                         # Extract Date
-                        raw_date_part = line.split("-")[0].strip() # "Monday, January 19, 2026"
+                        raw_date_part = line.split("-")[0].strip() 
                         dt = datetime.strptime(raw_date_part, "%A, %B %d, %Y")
                         d_str = dt.strftime("%Y-%m-%d")
                         
-                        # Extract Time
-                        raw_time_part = line.split("-")[-1].strip() # "8:00 AM"
+                        # Extract Time (Everything after the first hyphen)
+                        # Join rest in case there are multiple hyphens
+                        raw_time_part = "-".join(line.split("-")[1:]).strip()
                         
                         # Extract Committee (FROM PREVIOUS LINE)
                         if i > 0:
-                            raw_comm_name = lines[i-1] # "Courts of Justice"
+                            raw_comm_name = lines[i-1] 
                             
-                            # Validate it looks like a name
                             if len(raw_comm_name) > 3 and "Agenda" not in raw_comm_name:
                                 clean = clean_committee_name(f"Senate {raw_comm_name}")
                                 
@@ -275,7 +284,6 @@ def get_bill_data_batch(bill_numbers, lis_data_dict):
             d_date = d.get('meeting_date') or d.get('doc_date')
             d_comm_raw = str(d.get('committee_name', 'Unknown'))
             
-            # ZOMBIE FIX
             if lifecycle == "📣 Out of Committee" or lifecycle == "✅ Signed & Enacted":
                 d_comm_raw = "Floor Session / Chamber Action"
             elif d_comm_raw == 'Unknown' or d_comm_raw == 'nan':
