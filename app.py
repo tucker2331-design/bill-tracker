@@ -49,9 +49,9 @@ TOPIC_KEYWORDS = {
     "🏛️ Local Government": ["charter", "ordinance", "locality", "county", "city", "town", "annexation", "sovereign", "immunity"],
     "✊ Labor & Workers Rights": ["wage", "salary", "worker", "employment", "labor", "union", "bargaining", "leave", "compensation", "workplace", "employee", "minimum", "overtime"],
     "💰 Economy & Business": ["tax", "commerce", "business", "market", "consumer", "corporation", "finance", "budget", "economic", "trade", "gaming", "casino", "abc", "alcohol"],
-    "🎓 Education": ["university", "college", "teacher", "curriculum", "scholarship", "tuition", "board of education", "higher education"],
+    "🎓 Education": ["school", "student", "education", "university", "college", "teacher", "curriculum", "scholarship", "tuition", "board of education", "higher education", "academic", "instruction", "learning", "literacy", "principal", "superintendent"],
     "🚓 Public Safety": ["firearm", "gun", "police", "crime", "penalty", "enforcement", "prison", "arrest", "criminal", "weapon", "ammo", "magazine", "correctional", "facility", "incarcerat", "jail"],
-    "⚖️ Criminal Justice & Courts": ["court", "judge", "attorney", "civil", "suit", "liability", "damages", "evidence", "jury", "appeal", "justice", "lawyer", "bar", "probation", "parole", "sentence", "sentencing"],
+    "⚖️ Criminal Justice & Courts": ["court", "judge", "attorney", "civil", "suit", "liability", "damages", "evidence", "jury", "appeal", "justice", "lawyer", "bar", "probation", "parole", "sentence", "sentencing", "custody", "divorce", "domestic", "violence", "abuse", "victim", "protective order"],
     "🏥 Health & Healthcare": ["health", "medical", "hospital", "patient", "doctor", "insurance", "care", "mental", "pharmacy", "drug", "medicaid", "nurse"],
     "🌳 Environment & Energy": ["energy", "water", "pollution", "environment", "climate", "solar", "conservation", "waste", "carbon", "natural resources", "wind", "power", "electricity", "hydroelectric", "nuclear", "chesapeake", "bay", "river", "watershed"],
     "🚗 Transportation": ["road", "highway", "vehicle", "driver", "license", "transit", "traffic", "transportation", "motor"],
@@ -66,9 +66,7 @@ def get_smart_subject(row):
     comm = str(row.get('Current_Committee', '')).strip()
     
     # 1. DIRECT COMMITTEE MATCHING
-    # FIX: Added specific check for House Education (which lacks "Health" in the name)
     if "Education" in comm and "Health" not in comm: return "🎓 Education"
-    
     if "Agriculture" in comm or "Chesapeake" in comm or "Conservation" in comm: return "🌳 Environment & Energy"
     if "Transportation" in comm: return "🚗 Transportation"
     if "Communications" in comm or "Technology" in comm: return "💻 Tech & Utilities"
