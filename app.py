@@ -66,6 +66,9 @@ def get_smart_subject(row):
     comm = str(row.get('Current_Committee', '')).strip()
     
     # 1. DIRECT COMMITTEE MATCHING
+    # FIX: Added specific check for House Education (which lacks "Health" in the name)
+    if "Education" in comm and "Health" not in comm: return "🎓 Education"
+    
     if "Agriculture" in comm or "Chesapeake" in comm or "Conservation" in comm: return "🌳 Environment & Energy"
     if "Transportation" in comm: return "🚗 Transportation"
     if "Communications" in comm or "Technology" in comm: return "💻 Tech & Utilities"
@@ -390,7 +393,6 @@ def render_bill_card(row, show_youth_tag=False):
     if title in ["Unknown", "Error", None]: title = row.get('My Title', 'No Title')
     
     b_num_display = row['Bill Number']
-    # If the caller asks to show the tag (because we are in a normal category), add it
     if show_youth_tag and row.get('Is_Youth', False):
         b_num_display = f"👶 {b_num_display}"
     
@@ -554,26 +556,21 @@ if bills_to_track:
             st.subheader("🗂️ Browse by Topic")
             
             # --- CUSTOM FOLDER LOGIC (DUPLICATION) ---
-            # 1. Get natural folders
             unique_folders = sorted(subset['Auto_Folder'].unique())
-            # 2. Add Youth folder explicitly if relevant bills exist
             has_youth = subset['Is_Youth'].any()
             if has_youth: unique_folders.insert(0, "👶 Youth & Children (All)")
             
             cols = st.columns(3)
             for i, folder in enumerate(unique_folders):
                 with cols[i % 3]:
-                    # Filter logic: Standard folder OR Special Youth Folder
                     if folder == "👶 Youth & Children (All)":
                         bills_in_folder = subset[subset['Is_Youth'] == True]
                     else:
                         bills_in_folder = subset[subset['Auto_Folder'] == folder]
-                        # Sort by Youth flag descending (True first)
                         bills_in_folder = bills_in_folder.sort_values(by='Is_Youth', ascending=False)
 
                     with st.expander(f"{folder} ({len(bills_in_folder)})"):
                         for _, row in bills_in_folder.iterrows(): 
-                            # Pass flag to render function to show icon
                             render_bill_card(row, show_youth_tag=(folder != "👶 Youth & Children (All)"))
             
             st.markdown("---")
