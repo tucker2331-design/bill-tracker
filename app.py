@@ -40,9 +40,10 @@ COMMITTEE_MAP = {
     "S10": "Senate Transportation", "S11": "Senate Rules"
 }
 
-# --- NEW: ADVANCED TOPIC SORTING ---
+# --- KEYWORD DEFINITIONS ---
+YOUTH_KEYWORDS = ["child", "youth", "juvenile", "minor", "student", "school", "parental", "infant", "baby", "custody", "foster", "adoption", "delinquen"]
+
 TOPIC_KEYWORDS = {
-    "👶 Youth & Children": ["child", "youth", "juvenile", "minor", "student", "school", "parental", "infant", "baby", "custody", "foster", "adoption", "delinquen"],
     "🗳️ Elections & Democracy": ["election", "vote", "ballot", "campaign", "poll", "voter", "registrar", "districting", "suffrage"],
     "🏗️ Housing & Property": ["rent", "landlord", "tenant", "housing", "lease", "property", "zoning", "eviction", "homeowner", "development", "residential", "condo", "building code"],
     "🏛️ Local Government": ["charter", "ordinance", "locality", "county", "city", "town", "annexation", "sovereign", "immunity"],
@@ -59,18 +60,12 @@ TOPIC_KEYWORDS = {
 }
 
 def get_smart_subject(row):
-    """Sorts bills: Youth First -> Committee -> Context -> Keywords."""
+    """Sorts bills: Committee First -> Context -> Keywords. (Youth handled separately)"""
     title = str(row.get('Official Title', '')) + " " + str(row.get('My Title', ''))
     title_lower = title.lower()
     comm = str(row.get('Current_Committee', '')).strip()
     
-    # 1. YOUTH OVERRIDE (Highest Priority)
-    # Checks for: child, youth, juvenile, minor, student, school, etc.
-    youth_keys = TOPIC_KEYWORDS["👶 Youth & Children"]
-    if any(k in title_lower for k in youth_keys):
-        return "👶 Youth & Children"
-
-    # 2. DIRECT COMMITTEE MATCHING
+    # 1. DIRECT COMMITTEE MATCHING
     if "Agriculture" in comm or "Chesapeake" in comm or "Conservation" in comm: return "🌳 Environment & Energy"
     if "Transportation" in comm: return "🚗 Transportation"
     if "Communications" in comm or "Technology" in comm: return "💻 Tech & Utilities"
@@ -78,42 +73,38 @@ def get_smart_subject(row):
     if "Finance" in comm or "Appropriations" in comm: return "💰 Economy & Business"
     if "Commerce" in comm and "Labor" in comm: return "💰 Economy & Business"
     
-    # 3. SPLIT COMMITTEES (CONTEXT AWARE)
-    
-    # A. Local Gov (Split Housing vs Gov)
+    # 2. SPLIT COMMITTEES (CONTEXT AWARE)
     if "Counties" in comm or "Local Government" in comm:
-        if any(x in title_lower for x in ["zoning", "rent", "housing", "tenant", "landlord", "eviction", "lease", "property", "development", "condo"]):
-            return "🏗️ Housing & Property"
+        if any(x in title_lower for x in ["zoning", "rent", "housing", "tenant", "landlord", "eviction", "lease", "property", "development", "condo"]): return "🏗️ Housing & Property"
         return "🏛️ Local Government" 
 
-    # B. Courts (Split Safety vs Justice)
     if "Courts of Justice" in comm:
-        if any(x in title_lower for x in ["firearm", "gun", "weapon", "ammunition", "concealed", "magazine", "carry"]):
-            return "🚓 Public Safety"
+        if any(x in title_lower for x in ["firearm", "gun", "weapon", "ammunition", "concealed", "magazine", "carry"]): return "🚓 Public Safety"
         return "⚖️ Criminal Justice & Courts"
 
-    # C. Public Safety (House)
     if "Public Safety" in comm: return "🚓 Public Safety"
 
-    # D. Education & Health (Senate)
     if "Education and Health" in comm:
-        if any(x in title_lower for x in ["health", "medical", "nursing", "doctor", "patient", "hospital", "professions"]):
-            return "🏥 Health & Healthcare"
+        if any(x in title_lower for x in ["health", "medical", "nursing", "doctor", "patient", "hospital", "professions"]): return "🏥 Health & Healthcare"
         return "🎓 Education" 
 
-    # E. Health (House)
     if "Health" in comm: return "🏥 Health & Healthcare"
     
-    # F. General Laws (The Junk Drawer)
     if "General Laws" in comm:
         if any(x in title_lower for x in ["housing", "real estate", "property", "landlord"]): return "🏗️ Housing & Property"
         if any(x in title_lower for x in ["gaming", "alcohol", "abc", "casino"]): return "💰 Economy & Business"
 
-    # 4. FALLBACK: GLOBAL KEYWORD SEARCH
+    # 3. FALLBACK: GLOBAL KEYWORD SEARCH
     for cat, keys in TOPIC_KEYWORDS.items():
         if any(k in title_lower for k in keys): return cat
         
     return "📂 Unassigned / General"
+
+def check_youth_flag(row):
+    """Returns True if bill relates to youth (independent of category)"""
+    title = str(row.get('Official Title', '')) + " " + str(row.get('My Title', ''))
+    title_lower = title.lower()
+    return any(k in title_lower for k in YOUTH_KEYWORDS)
 
 # --- HELPER FUNCTIONS ---
 
@@ -142,7 +133,6 @@ def determine_lifecycle(status_text, committee_name, bill_id="", history_text=""
             if "agreed to by house" in hist or "passed house" in hist: return "✅ Passed (Resolution)"
 
     if any(x in status for x in ["enrolled", "communicated to governor", "bill text as passed"]): return "✍️ Awaiting Signature"
-    
     if any(x in status for x in ["tabled", "failed", "stricken", "passed by indefinitely", "left in", "defeated", "no action taken", "incorporated into"]): return "❌ Dead / Tabled"
     
     out_keywords = ["reported", "passed", "agreed", "engrossed", "communicated", "reading waived", "read second", "read third"]
@@ -172,18 +162,14 @@ def extract_vote_info(status_text):
     if match: return match.group(1)
     return None
 
-# --- LAST RESORT SCRAPER (DISABLED) ---
 @st.cache_data(ttl=3600)
 def scrape_committee_from_bill_page(bill_number):
     return None 
 
-# --- 1. HTML SCRAPER (CALENDAR) ---
 @st.cache_data(ttl=600)
 def fetch_html_calendar():
     calendar_times = {'NO_DATE': {}}
     headers = {'User-Agent': 'Mozilla/5.0'}
-    
-    # HOUSE
     try:
         url = "https://house.vga.virginia.gov/schedule/meetings"
         resp = requests.get(url, headers=headers, timeout=3)
@@ -208,8 +194,6 @@ def fetch_html_calendar():
                         key = clean.lower().replace("committee","").replace("house","").replace("senate","").replace("of","").replace("for","").replace("and","").replace("&","").replace(" ","")
                         calendar_times[curr_date][key] = final_time 
     except: pass
-
-    # SENATE
     try:
         url = "https://apps.senate.virginia.gov/Senator/ComMeetings.php"
         resp = requests.get(url, headers=headers, timeout=3)
@@ -231,30 +215,25 @@ def fetch_html_calendar():
     except: pass
     return calendar_times, []
 
-# --- 2. DATA FETCHING ---
 @st.cache_data(ttl=60) 
 def fetch_lis_data():
     data = {}
     est = pytz.timezone('US/Eastern')
     data['fetch_time'] = datetime.now(est).strftime("%I:%M %p EST")
-
     def load_csv(url):
         try:
             df = pd.read_csv(url, encoding='ISO-8859-1', on_bad_lines='skip', low_memory=False)
             df.columns = df.columns.str.strip().str.lower().str.replace(' ', '_').str.replace('/', '_').str.replace('.', '')
             return df
         except: return pd.DataFrame()
-
     data['bills'] = load_csv(LIS_BILLS_CSV)
     if not data['bills'].empty:
         col = next((c for c in data['bills'].columns if c in ['bill_number','bill_id']), None)
         if col: data['bills']['bill_clean'] = data['bills'][col].astype(str).apply(clean_bill_id)
-
     data['history'] = load_csv(LIS_HISTORY_CSV)
     if not data['history'].empty:
         col = next((c for c in data['history'].columns if c in ['bill_number','bill_id']), None)
         if col: data['history']['bill_clean'] = data['history'][col].astype(str).apply(clean_bill_id)
-
     data['docket'] = load_csv(LIS_DOCKET_CSV)
     if not data['docket'].empty:
         col = next((c for c in data['docket'].columns if c in ['bill_no','bill_number','bill_id']), None)
@@ -265,7 +244,6 @@ def fetch_lis_data():
             if 'date' in c and 'meet' in c: rename_map[c] = 'meeting_date' 
             if 'doc' in c and 'date' in c: rename_map[c] = 'meeting_date'
         data['docket'].rename(columns=rename_map, inplace=True)
-        
     return data
 
 def get_bill_data_batch(bill_numbers, lis_data_dict):
@@ -321,7 +299,6 @@ def get_bill_data_batch(bill_numbers, lis_data_dict):
                         try: curr_sub = desc_lower.split("sub:")[1].strip().title()
                         except: pass
         
-        # --- SMART LOGIC: Use 'last_actid' Code if Committee Name is Missing ---
         if curr_comm == "-":
             val = item.get('last_house_committee')
             if not val or str(val) == 'nan':
@@ -332,12 +309,10 @@ def get_bill_data_batch(bill_numbers, lis_data_dict):
             elif str(val) in COMMITTEE_MAP:
                 curr_comm = COMMITTEE_MAP[str(val)]
         
-        # --- OVERRIDE: If status says "Pending", it is NOT in a committee yet ---
         if "pending" in str(status).lower() or "prefiled" in str(status).lower():
             if "referred" not in str(status).lower(): 
                 curr_comm = "Unassigned"
         
-        # --- FIX: SKEPTICAL "COURTS OF JUSTICE" CHECK ---
         if "Courts" in str(curr_comm) and "referred" not in history_blob and "referred" not in str(status).lower():
             curr_comm = "Unassigned"
 
@@ -350,7 +325,6 @@ def get_bill_data_batch(bill_numbers, lis_data_dict):
              elif "passed" in str(status).lower(): display_comm = "🎉 Passed Chamber"
              else: display_comm = "On Floor / Reported"
 
-        # --- DOCKET MATCHING ---
         upcoming_meetings = []
         raw_docket = docket_lookup.get(bill_num, [])
         for d in raw_docket:
@@ -375,7 +349,6 @@ def get_bill_data_batch(bill_numbers, lis_data_dict):
         })
     return pd.DataFrame(results) if results else pd.DataFrame()
 
-# --- SLACK BOT ---
 def check_and_broadcast(df_bills, df_subscribers, demo_mode):
     st.sidebar.header("🤖 Slack Bot Status")
     if demo_mode: st.sidebar.warning("🛠️ Demo Mode Active"); return
@@ -412,10 +385,16 @@ def check_and_broadcast(df_bills, df_subscribers, demo_mode):
     else: st.sidebar.info("💤 No new updates needed.")
 
 # --- UI RENDERERS ---
-def render_bill_card(row):
+def render_bill_card(row, show_youth_tag=False):
     title = row.get('Official Title', 'No Title')
     if title in ["Unknown", "Error", None]: title = row.get('My Title', 'No Title')
-    st.markdown(f"**{row['Bill Number']}**")
+    
+    b_num_display = row['Bill Number']
+    # If the caller asks to show the tag (because we are in a normal category), add it
+    if show_youth_tag and row.get('Is_Youth', False):
+        b_num_display = f"👶 {b_num_display}"
+    
+    st.markdown(f"**{b_num_display}**")
     my_status = str(row.get('My Status', '')).strip()
     if my_status and my_status != 'nan' and my_status != '-': st.info(f"🏷️ **Status:** {my_status}")
     st.caption(f"{title}"); st.caption(f"_{clean_status_text(row.get('Status'))}_"); st.divider()
@@ -444,14 +423,12 @@ def render_grouped_list_item(df):
             sub_df = comm_df[comm_df['Current_Sub'] == sub_name]
             for i, row in sub_df.iterrows(): _render_single_bill_row(row)
 
-# --- NEW: PASSED BILL GROUPER ---
 def render_passed_grouped_list_item(df):
     if df.empty: st.caption("No bills."); return
     g_signed = df[df['Lifecycle'] == "✅ Signed & Enacted"]
     g_vetoed = df[df['Lifecycle'] == "❌ Vetoed"]
     g_res = df[df['Lifecycle'] == "✅ Passed (Resolution)"]
     g_awaiting = df[df['Lifecycle'] == "✍️ Awaiting Signature"]
-    
     if not g_signed.empty: 
         st.markdown("##### ✅ Signed & Enacted")
         for i, r in g_signed.iterrows(): _render_single_bill_row(r)
@@ -545,7 +522,7 @@ except Exception as e: st.error(f"Sheet Error: {e}"); st.stop()
 # 2. FETCH DATA & SCRAPER
 lis_data = fetch_lis_data()
 bills_to_track = sheet_df['Bill Number'].unique().tolist()
-scraped_times, scrape_log = fetch_html_calendar() # Run CORRECTED smart scraper
+scraped_times, scrape_log = fetch_html_calendar() 
 
 if bills_to_track:
     if demo_mode:
@@ -564,6 +541,7 @@ if bills_to_track:
 
     final_df = pd.merge(sheet_df, api_df, on="Bill Number", how="left")
     final_df['Auto_Folder'] = final_df.apply(get_smart_subject, axis=1)
+    final_df['Is_Youth'] = final_df.apply(check_youth_flag, axis=1)
 
     check_and_broadcast(final_df, subs_df, demo_mode)
 
@@ -574,36 +552,50 @@ if bills_to_track:
         with tab:
             subset = final_df[final_df['Type'] == b_type]
             st.subheader("🗂️ Browse by Topic")
+            
+            # --- CUSTOM FOLDER LOGIC (DUPLICATION) ---
+            # 1. Get natural folders
             unique_folders = sorted(subset['Auto_Folder'].unique())
+            # 2. Add Youth folder explicitly if relevant bills exist
+            has_youth = subset['Is_Youth'].any()
+            if has_youth: unique_folders.insert(0, "👶 Youth & Children (All)")
+            
             cols = st.columns(3)
             for i, folder in enumerate(unique_folders):
                 with cols[i % 3]:
-                    bills_in_folder = subset[subset['Auto_Folder'] == folder]
+                    # Filter logic: Standard folder OR Special Youth Folder
+                    if folder == "👶 Youth & Children (All)":
+                        bills_in_folder = subset[subset['Is_Youth'] == True]
+                    else:
+                        bills_in_folder = subset[subset['Auto_Folder'] == folder]
+                        # Sort by Youth flag descending (True first)
+                        bills_in_folder = bills_in_folder.sort_values(by='Is_Youth', ascending=False)
+
                     with st.expander(f"{folder} ({len(bills_in_folder)})"):
-                        for _, row in bills_in_folder.iterrows(): render_bill_card(row)
+                        for _, row in bills_in_folder.iterrows(): 
+                            # Pass flag to render function to show icon
+                            render_bill_card(row, show_youth_tag=(folder != "👶 Youth & Children (All)"))
+            
             st.markdown("---")
             st.subheader(f"📜 Master List ({b_type})")
             
             in_comm = subset[subset['Lifecycle'] == "📥 In Committee"]
             out_comm = subset[subset['Lifecycle'] == "📣 Out of Committee"]
-            # Updated Pass Filter
             passed = subset[subset['Lifecycle'].isin(["✅ Signed & Enacted", "✍️ Awaiting Signature", "✅ Passed (Resolution)", "❌ Vetoed"])]
             failed = subset[subset['Lifecycle'] == "❌ Dead / Tabled"]
             
             m1, m2, m3, m4 = st.columns(4)
             with m1: st.markdown("#### 📥 In Committee"); render_grouped_list_item(in_comm)
             with m2: st.markdown("#### 📣 Out of Committee"); render_simple_list_item(out_comm)
-            # Use NEW Renderer here
             with m3: st.markdown("#### 🎉 Passed"); render_passed_grouped_list_item(passed)
             with m4: st.markdown("#### ❌ Failed"); render_simple_list_item(failed)
 
-    # --- TAB 3: CALENDAR (DOCKET FILE + SCAPER) ---
+    # --- TAB 3: CALENDAR ---
     with tab_upcoming:
         st.subheader("📅 Your Confirmed Agenda")
         today = datetime.now(est).date()
         cols = st.columns(7)
         
-        # Build Calendar Map
         calendar_map = {}
         for _, row in final_df.iterrows():
             meetings = row.get('Upcoming_Meetings', [])
@@ -611,7 +603,6 @@ if bills_to_track:
                 for m in meetings:
                     m_date_str = str(m['Date']).split(" ")[0]
                     m_comm_raw = m.get('CommitteeRaw', 'Unknown')
-                    
                     b_id = row['Bill Number']
                     clean_name = clean_committee_name(m_comm_raw)
                     if "Senate" not in clean_name and "House" not in clean_name:
@@ -622,7 +613,6 @@ if bills_to_track:
                         if "/" in m_date_str: d_obj = datetime.strptime(m_date_str, "%m/%d/%Y").date()
                         else: d_obj = datetime.strptime(m_date_str, "%Y-%m-%d").date()
                         formatted_date = d_obj.strftime("%Y-%m-%d")
-                        
                         if formatted_date not in calendar_map: calendar_map[formatted_date] = {}
                         if clean_name not in calendar_map[formatted_date]: calendar_map[formatted_date][clean_name] = []
                         calendar_map[formatted_date][clean_name].append(row)
@@ -635,14 +625,9 @@ if bills_to_track:
             with cols[i]:
                 st.markdown(f"**{display_date_str}**")
                 st.divider()
-                
-                # SECTION 1: UPCOMING MEETINGS (FROM DOCKET)
                 if target_date_str in calendar_map:
                     for comm_name, bills in calendar_map[target_date_str].items():
-                        # RAW SEARCH MATCHING (Keyword Intersection)
                         time_display = "Time TBA"
-                        
-                        # TRY EXACT DATE FIRST
                         if target_date_str in scraped_times:
                             docket_words = set(comm_name.lower().replace("house","").replace("senate","").replace("committee","").split())
                             docket_words.discard("of"); docket_words.discard("for"); docket_words.discard("and"); docket_words.discard("&"); docket_words.discard("-")
@@ -652,13 +637,11 @@ if bills_to_track:
                                     if any(w in s_key.lower() for w in docket_words):
                                         time_display = s_time
                                         break
-                        
                         st.markdown(f"**{comm_name}**")
                         st.caption(f"⏰ {time_display}")
                         for row in bills: _render_single_bill_row(row)
                         st.divider()
 
-                # SECTION 2: COMPLETED ACTIONS (TODAY ONLY)
                 if i == 0:
                     events_found = False
                     for _, row in final_df.iterrows():
@@ -682,24 +665,19 @@ if bills_to_track:
                                 if not events_found: 
                                     st.caption("🏁 **Completed Today**")
                                     events_found = True
-                                
                                 my_status = str(row.get('My Status', '')).strip() 
                                 vote_str = extract_vote_info(row.get('Status', ''))
-                                
                                 label_text = f"{row['Bill Number']}"
                                 if vote_str: label_text += f" **PASSED {vote_str}**"
                                 elif my_status != '-' and my_status != 'nan': label_text += f" - {my_status}"
-                                
                                 with st.expander(label_text):
                                     st.markdown(f"**🏛️ Current Status:** {row.get('Display_Committee', '-')}")
                                     st.markdown(f"**📌 Designated Title:** {row.get('My Title', '-')}")
                                     st.markdown(f"**🔄 Status:** {clean_status_text(row.get('Status', '-'))}")
-                                    
                                     hist_data = row.get('History_Data', [])
                                     if isinstance(hist_data, list) and hist_data:
                                         st.markdown("**📜 History:**")
                                         st.dataframe(pd.DataFrame(hist_data), hide_index=True, use_container_width=True)
-                                    
                                     lis_link = f"https://lis.virginia.gov/bill-details/20261/{row['Bill Number']}"
                                     st.markdown(f"🔗 [View Official Bill on LIS]({lis_link})")
 
@@ -715,6 +693,5 @@ with st.sidebar:
              st.write(f"**Docket File:** 🟢 Loaded ({len(lis_data['docket'])} rows)")
         else:
              st.write(f"**Docket File:** 🔴 Not Found")
-        
         st.write("**Scraper Log (First 10):**")
         st.text("\n".join(scrape_log[:10]))
