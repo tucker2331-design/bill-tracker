@@ -41,7 +41,8 @@ COMMITTEE_MAP = {
 }
 
 # --- KEYWORD DEFINITIONS ---
-YOUTH_KEYWORDS = ["child", "youth", "juvenile", "minor", "student", "school", "parental", "infant", "baby", "custody", "foster", "adoption", "delinquen"]
+# UPDATED: "custody" -> "child custody" to avoid prison bills
+YOUTH_KEYWORDS = ["child", "youth", "juvenile", "minor", "student", "school", "parental", "infant", "baby", "child custody", "foster", "adoption", "delinquen"]
 
 TOPIC_KEYWORDS = {
     "🗳️ Elections & Democracy": ["election", "vote", "ballot", "campaign", "poll", "voter", "registrar", "districting", "suffrage"],
@@ -102,9 +103,16 @@ def get_smart_subject(row):
     return "📂 Unassigned / General"
 
 def check_youth_flag(row):
-    """Returns True if bill relates to youth (independent of category)"""
+    """Returns True if bill relates to youth (independent of category) with EXCLUSIONS"""
     title = str(row.get('Official Title', '')) + " " + str(row.get('My Title', ''))
     title_lower = title.lower()
+    
+    # --- EXCLUSION LOGIC (Option B + Child Care Ban) ---
+    # If title contains these words, it is NOT a youth bill, even if it says "school" or "child"
+    exclusions = ["child care", "teacher", "training", "employee", "adult correctional"]
+    if any(ex in title_lower for ex in exclusions):
+        return False
+        
     return any(k in title_lower for k in YOUTH_KEYWORDS)
 
 # --- HELPER FUNCTIONS ---
