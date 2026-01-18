@@ -41,7 +41,6 @@ COMMITTEE_MAP = {
 }
 
 # --- KEYWORD DEFINITIONS ---
-# UPDATED: "custody" -> "child custody" to avoid prison bills
 YOUTH_KEYWORDS = ["child", "youth", "juvenile", "minor", "student", "school", "parental", "infant", "baby", "child custody", "foster", "adoption", "delinquen"]
 
 TOPIC_KEYWORDS = {
@@ -86,11 +85,13 @@ def get_smart_subject(row):
 
     if "Public Safety" in comm: return "🚓 Public Safety"
 
-    if "Education and Health" in comm:
+    # FIX: Robust check for "Education & Health" vs "Education and Health"
+    if "Education" in comm and "Health" in comm:
         if any(x in title_lower for x in ["health", "medical", "nursing", "doctor", "patient", "hospital", "professions"]): return "🏥 Health & Healthcare"
         return "🎓 Education" 
 
-    if "Health" in comm: return "🏥 Health & Healthcare"
+    # FIX: Strict Health Check - Don't steal Education bills!
+    if "Health" in comm and "Education" not in comm: return "🏥 Health & Healthcare"
     
     if "General Laws" in comm:
         if any(x in title_lower for x in ["housing", "real estate", "property", "landlord"]): return "🏗️ Housing & Property"
@@ -107,8 +108,7 @@ def check_youth_flag(row):
     title = str(row.get('Official Title', '')) + " " + str(row.get('My Title', ''))
     title_lower = title.lower()
     
-    # --- EXCLUSION LOGIC (Option B + Child Care Ban) ---
-    # If title contains these words, it is NOT a youth bill, even if it says "school" or "child"
+    # --- EXCLUSION LOGIC ---
     exclusions = ["child care", "teacher", "training", "employee", "adult correctional"]
     if any(ex in title_lower for ex in exclusions):
         return False
