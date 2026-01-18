@@ -41,6 +41,7 @@ COMMITTEE_MAP = {
 }
 
 # --- KEYWORD DEFINITIONS ---
+# Note: "custody" changed to "child custody" to avoid prison bills
 YOUTH_KEYWORDS = ["child", "youth", "juvenile", "minor", "student", "school", "parental", "infant", "baby", "child custody", "foster", "adoption", "delinquen"]
 
 TOPIC_KEYWORDS = {
@@ -111,6 +112,7 @@ def check_youth_flag(row):
     title_lower = title.lower()
     
     # --- EXCLUSION LOGIC ---
+    # These override youth keywords. If found, bill is NOT marked as youth.
     exclusions = ["child care", "teacher", "training", "employee", "adult correctional"]
     if any(ex in title_lower for ex in exclusions):
         return False
