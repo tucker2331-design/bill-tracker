@@ -40,10 +40,82 @@ COMMITTEE_MAP = {
     "S10": "Senate Transportation", "S11": "Senate Rules"
 }
 
-# --- HELPER FUNCTIONS ---
+# --- NEW: ADVANCED TOPIC SORTING ---
+TOPIC_KEYWORDS = {
+    "👶 Youth & Children": ["child", "youth", "juvenile", "minor", "student", "school", "parental", "infant", "baby", "custody", "foster", "adoption", "delinquen"],
+    "🗳️ Elections & Democracy": ["election", "vote", "ballot", "campaign", "poll", "voter", "registrar", "districting", "suffrage"],
+    "🏗️ Housing & Property": ["rent", "landlord", "tenant", "housing", "lease", "property", "zoning", "eviction", "homeowner", "development", "residential", "condo", "building code"],
+    "🏛️ Local Government": ["charter", "ordinance", "locality", "county", "city", "town", "annexation", "sovereign", "immunity"],
+    "✊ Labor & Workers Rights": ["wage", "salary", "worker", "employment", "labor", "union", "bargaining", "leave", "compensation", "workplace", "employee", "minimum", "overtime"],
+    "💰 Economy & Business": ["tax", "commerce", "business", "market", "consumer", "corporation", "finance", "budget", "economic", "trade", "gaming", "casino", "abc", "alcohol"],
+    "🎓 Education": ["university", "college", "teacher", "curriculum", "scholarship", "tuition", "board of education", "higher education"],
+    "🚓 Public Safety": ["firearm", "gun", "police", "crime", "penalty", "enforcement", "prison", "arrest", "criminal", "weapon", "ammo", "magazine", "correctional", "facility", "incarcerat", "jail"],
+    "⚖️ Criminal Justice & Courts": ["court", "judge", "attorney", "civil", "suit", "liability", "damages", "evidence", "jury", "appeal", "justice", "lawyer", "bar", "probation", "parole", "sentence", "sentencing"],
+    "🏥 Health & Healthcare": ["health", "medical", "hospital", "patient", "doctor", "insurance", "care", "mental", "pharmacy", "drug", "medicaid", "nurse"],
+    "🌳 Environment & Energy": ["energy", "water", "pollution", "environment", "climate", "solar", "conservation", "waste", "carbon", "natural resources", "wind", "power", "electricity", "hydroelectric", "nuclear", "chesapeake", "bay", "river", "watershed"],
+    "🚗 Transportation": ["road", "highway", "vehicle", "driver", "license", "transit", "traffic", "transportation", "motor"],
+    "💻 Tech & Utilities": ["internet", "broadband", "data", "privacy", "utility", "cyber", "technology", "telecom", "artificial intelligence"],
+    "⚖️ Civil Rights": ["discrimination", "rights", "equity", "minority", "gender", "religious", "freedom", "speech"],
+}
 
-def get_smart_subject(title):
-    return "📂 Unassigned / General" 
+def get_smart_subject(row):
+    """Sorts bills: Youth First -> Committee -> Context -> Keywords."""
+    title = str(row.get('Official Title', '')) + " " + str(row.get('My Title', ''))
+    title_lower = title.lower()
+    comm = str(row.get('Current_Committee', '')).strip()
+    
+    # 1. YOUTH OVERRIDE (Highest Priority)
+    # Checks for: child, youth, juvenile, minor, student, school, etc.
+    youth_keys = TOPIC_KEYWORDS["👶 Youth & Children"]
+    if any(k in title_lower for k in youth_keys):
+        return "👶 Youth & Children"
+
+    # 2. DIRECT COMMITTEE MATCHING
+    if "Agriculture" in comm or "Chesapeake" in comm or "Conservation" in comm: return "🌳 Environment & Energy"
+    if "Transportation" in comm: return "🚗 Transportation"
+    if "Communications" in comm or "Technology" in comm: return "💻 Tech & Utilities"
+    if "Privileges" in comm and "Elections" in comm: return "🗳️ Elections & Democracy"
+    if "Finance" in comm or "Appropriations" in comm: return "💰 Economy & Business"
+    if "Commerce" in comm and "Labor" in comm: return "💰 Economy & Business"
+    
+    # 3. SPLIT COMMITTEES (CONTEXT AWARE)
+    
+    # A. Local Gov (Split Housing vs Gov)
+    if "Counties" in comm or "Local Government" in comm:
+        if any(x in title_lower for x in ["zoning", "rent", "housing", "tenant", "landlord", "eviction", "lease", "property", "development", "condo"]):
+            return "🏗️ Housing & Property"
+        return "🏛️ Local Government" 
+
+    # B. Courts (Split Safety vs Justice)
+    if "Courts of Justice" in comm:
+        if any(x in title_lower for x in ["firearm", "gun", "weapon", "ammunition", "concealed", "magazine", "carry"]):
+            return "🚓 Public Safety"
+        return "⚖️ Criminal Justice & Courts"
+
+    # C. Public Safety (House)
+    if "Public Safety" in comm: return "🚓 Public Safety"
+
+    # D. Education & Health (Senate)
+    if "Education and Health" in comm:
+        if any(x in title_lower for x in ["health", "medical", "nursing", "doctor", "patient", "hospital", "professions"]):
+            return "🏥 Health & Healthcare"
+        return "🎓 Education" 
+
+    # E. Health (House)
+    if "Health" in comm: return "🏥 Health & Healthcare"
+    
+    # F. General Laws (The Junk Drawer)
+    if "General Laws" in comm:
+        if any(x in title_lower for x in ["housing", "real estate", "property", "landlord"]): return "🏗️ Housing & Property"
+        if any(x in title_lower for x in ["gaming", "alcohol", "abc", "casino"]): return "💰 Economy & Business"
+
+    # 4. FALLBACK: GLOBAL KEYWORD SEARCH
+    for cat, keys in TOPIC_KEYWORDS.items():
+        if any(k in title_lower for k in keys): return cat
+        
+    return "📂 Unassigned / General"
+
+# --- HELPER FUNCTIONS ---
 
 def clean_bill_id(bill_text):
     if pd.isna(bill_text): return ""
@@ -57,39 +129,27 @@ def determine_lifecycle(status_text, committee_name, bill_id="", history_text=""
     b_id = str(bill_id).upper()
     hist = str(history_text).lower()
     
-    # 1. Passed / Enacted Types
     if any(x in status for x in ["signed by governor", "enacted", "approved by governor", "chapter"]): return "✅ Signed & Enacted"
     if "vetoed" in status: return "❌ Vetoed"
     
-    # 2. Resolutions / Amendments (CHECK HISTORY FOR BOTH CHAMBERS)
     is_resolution = any(prefix in b_id for prefix in ["HJ", "SJ", "HR", "SR"])
     if is_resolution:
-        # Single Chamber Resolutions (HR/SR) - Pass if agreed to
         if b_id.startswith("HR") or b_id.startswith("SR"):
             if "agreed to" in status or "agreed to" in hist: return "✅ Passed (Resolution)"
-        
-        # Joint Resolutions (HJ/SJ) - Must pass BOTH
         if b_id.startswith("HJ"):
-            # Needs Senate Agreement
             if "agreed to by senate" in hist or "passed senate" in hist: return "✅ Passed (Resolution)"
         elif b_id.startswith("SJ"):
-            # Needs House Agreement
             if "agreed to by house" in hist or "passed house" in hist: return "✅ Passed (Resolution)"
 
-    # 3. Passed Legislature (Bills needing signature)
     if any(x in status for x in ["enrolled", "communicated to governor", "bill text as passed"]): return "✍️ Awaiting Signature"
     
-    # 4. Dead
     if any(x in status for x in ["tabled", "failed", "stricken", "passed by indefinitely", "left in", "defeated", "no action taken", "incorporated into"]): return "❌ Dead / Tabled"
     
-    # 5. Out of Committee (Intermediate)
     out_keywords = ["reported", "passed", "agreed", "engrossed", "communicated", "reading waived", "read second", "read third"]
     if any(x in status for x in out_keywords): return "📣 Out of Committee"
     
-    # 6. In Committee
     if "pending" in status or "prefiled" in status: return "📥 In Committee"
     if comm not in ["-", "nan", "None", "", "Unassigned"] and len(comm) > 2: return "📥 In Committee"
-    
     return "📥 In Committee"
 
 def clean_committee_name(name):
@@ -115,7 +175,7 @@ def extract_vote_info(status_text):
 # --- LAST RESORT SCRAPER (DISABLED) ---
 @st.cache_data(ttl=3600)
 def scrape_committee_from_bill_page(bill_number):
-    return None # Disabled for speed
+    return None 
 
 # --- 1. HTML SCRAPER (CALENDAR) ---
 @st.cache_data(ttl=600)
@@ -282,10 +342,7 @@ def get_bill_data_batch(bill_numbers, lis_data_dict):
             curr_comm = "Unassigned"
 
         curr_comm = clean_committee_name(curr_comm)
-        
-        # --- PASSED HISTORY TO LIFECYCLE FOR RESOLUTION CHECK ---
         lifecycle = determine_lifecycle(str(status), str(curr_comm), bill_num, history_blob)
-        
         display_comm = curr_comm
         if "Passed" in lifecycle or "Signed" in lifecycle or "Awaiting" in lifecycle:
              if "engross" in str(status).lower(): display_comm = "🏛️ Engrossed (Passed Chamber)"
@@ -312,7 +369,7 @@ def get_bill_data_batch(bill_numbers, lis_data_dict):
 
         results.append({
             "Bill Number": bill_num, "Official Title": title, "Status": str(status), "Date": date_val, 
-            "Lifecycle": lifecycle, "Auto_Folder": "📂 Unassigned / General", "History_Data": history_data[::-1], 
+            "Lifecycle": lifecycle, "History_Data": history_data[::-1], 
             "Current_Committee": str(curr_comm).strip(), "Display_Committee": str(display_comm).strip(), 
             "Current_Sub": str(curr_sub).strip(), "Upcoming_Meetings": upcoming_meetings
         })
@@ -506,28 +563,7 @@ if bills_to_track:
         api_df = get_bill_data_batch(bills_to_track, lis_data)
 
     final_df = pd.merge(sheet_df, api_df, on="Bill Number", how="left")
-    
-    # Auto Topic Folder
-    TOPIC_KEYWORDS = {
-    "🗳️ Elections & Democracy": ["election", "vote", "ballot", "campaign", "poll", "voter", "registrar", "districting", "suffrage"],
-    "🏗️ Housing & Property": ["rent", "landlord", "tenant", "housing", "lease", "property", "zoning", "eviction", "homeowner", "development", "residential"],
-    "✊ Labor & Workers Rights": ["wage", "salary", "worker", "employment", "labor", "union", "bargaining", "leave", "compensation", "workplace", "employee", "minimum", "overtime"],
-    "💰 Economy & Business": ["tax", "commerce", "business", "market", "consumer", "corporation", "finance", "budget", "economic", "trade"],
-    "🎓 Education": ["school", "education", "student", "university", "college", "teacher", "curriculum", "scholarship", "tuition", "board of education"],
-    "🚓 Public Safety & Law": ["firearm", "gun", "police", "crime", "penalty", "court", "judge", "enforcement", "prison", "arrest", "criminal", "justice"],
-    "🏥 Health & Healthcare": ["health", "medical", "hospital", "patient", "doctor", "insurance", "care", "mental", "pharmacy", "drug", "medicaid"],
-    "🌳 Environment & Energy": ["energy", "water", "pollution", "environment", "climate", "solar", "conservation", "waste", "carbon", "natural resources", "wind", "power", "electricity", "hydroelectric", "nuclear", "chesapeake", "bay", "river", "watershed"],
-    "🚗 Transportation": ["road", "highway", "vehicle", "driver", "license", "transit", "traffic", "transportation", "motor"],
-    "💻 Tech & Utilities": ["internet", "broadband", "data", "privacy", "utility", "cyber", "technology", "telecom", "artificial intelligence"],
-    "⚖️ Civil Rights": ["discrimination", "rights", "equity", "minority", "gender", "religious", "freedom", "speech"],
-    }
-    def get_subject(row):
-        txt = str(row.get('Official Title', '')) + " " + str(row.get('My Title', ''))
-        txt = txt.lower()
-        for cat, keys in TOPIC_KEYWORDS.items():
-            if any(k in txt for k in keys): return cat
-        return "📂 Unassigned / General"
-    final_df['Auto_Folder'] = final_df.apply(get_subject, axis=1)
+    final_df['Auto_Folder'] = final_df.apply(get_smart_subject, axis=1)
 
     check_and_broadcast(final_df, subs_df, demo_mode)
 
@@ -550,12 +586,14 @@ if bills_to_track:
             
             in_comm = subset[subset['Lifecycle'] == "📥 In Committee"]
             out_comm = subset[subset['Lifecycle'] == "📣 Out of Committee"]
+            # Updated Pass Filter
             passed = subset[subset['Lifecycle'].isin(["✅ Signed & Enacted", "✍️ Awaiting Signature", "✅ Passed (Resolution)", "❌ Vetoed"])]
             failed = subset[subset['Lifecycle'] == "❌ Dead / Tabled"]
             
             m1, m2, m3, m4 = st.columns(4)
             with m1: st.markdown("#### 📥 In Committee"); render_grouped_list_item(in_comm)
             with m2: st.markdown("#### 📣 Out of Committee"); render_simple_list_item(out_comm)
+            # Use NEW Renderer here
             with m3: st.markdown("#### 🎉 Passed"); render_passed_grouped_list_item(passed)
             with m4: st.markdown("#### ❌ Failed"); render_simple_list_item(failed)
 
