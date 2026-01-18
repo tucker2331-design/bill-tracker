@@ -66,7 +66,9 @@ def get_smart_subject(row):
     comm = str(row.get('Current_Committee', '')).strip()
     
     # 1. DIRECT COMMITTEE MATCHING
+    # FIX: Added specific check for House Education (which lacks "Health" in the name)
     if "Education" in comm and "Health" not in comm: return "🎓 Education"
+    
     if "Agriculture" in comm or "Chesapeake" in comm or "Conservation" in comm: return "🌳 Environment & Energy"
     if "Transportation" in comm: return "🚗 Transportation"
     if "Communications" in comm or "Technology" in comm: return "💻 Tech & Utilities"
