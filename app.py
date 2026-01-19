@@ -41,12 +41,12 @@ COMMITTEE_MAP = {
 }
 
 # --- KEYWORD DEFINITIONS ---
-# Note: "custody" changed to "child custody" to avoid prison bills
 YOUTH_KEYWORDS = ["child", "youth", "juvenile", "minor", "student", "school", "parental", "infant", "baby", "child custody", "foster", "adoption", "delinquen"]
 
+# REMOVED "development" (too broad) and rely on regex for others to avoid partial matches
 TOPIC_KEYWORDS = {
     "🗳️ Elections & Democracy": ["election", "vote", "ballot", "campaign", "poll", "voter", "registrar", "districting", "suffrage"],
-    "🏗️ Housing & Property": ["rent", "landlord", "tenant", "housing", "lease", "property", "zoning", "eviction", "homeowner", "development", "residential", "condo", "building code"],
+    "🏗️ Housing & Property": ["rent", "landlord", "tenant", "housing", "lease", "property", "zoning", "eviction", "homeowner", "residential", "condo", "building code"],
     "🏛️ Local Government": ["charter", "ordinance", "locality", "county", "city", "town", "annexation", "sovereign", "immunity"],
     "✊ Labor & Workers Rights": ["wage", "salary", "worker", "employment", "labor", "union", "bargaining", "leave", "compensation", "workplace", "employee", "minimum", "overtime"],
     "💰 Economy & Business": ["tax", "commerce", "business", "market", "consumer", "corporation", "finance", "budget", "economic", "trade", "gaming", "casino", "abc", "alcohol"],
@@ -60,6 +60,15 @@ TOPIC_KEYWORDS = {
     "⚖️ Civil Rights": ["discrimination", "rights", "equity", "minority", "gender", "religious", "freedom", "speech"],
 }
 
+def match_whole_word(text, keyword_list):
+    """Returns True only if a whole word matches, avoiding partials like 'parent' -> 'rent'"""
+    for k in keyword_list:
+        # Regex: \b matches word boundary. Escaped to handle special chars.
+        pattern = r'\b' + re.escape(k) + r'\b'
+        if re.search(pattern, text, re.IGNORECASE):
+            return True
+    return False
+
 def get_smart_subject(row):
     """Sorts bills: Committee First -> Context -> Keywords. (Youth handled separately)"""
     title = str(row.get('Official Title', '')) + " " + str(row.get('My Title', ''))
@@ -67,9 +76,7 @@ def get_smart_subject(row):
     comm = str(row.get('Current_Committee', '')).strip()
     
     # 1. DIRECT COMMITTEE MATCHING
-    # FIX: Added specific check for House Education (which lacks "Health" in the name)
     if "Education" in comm and "Health" not in comm: return "🎓 Education"
-    
     if "Agriculture" in comm or "Chesapeake" in comm or "Conservation" in comm: return "🌳 Environment & Energy"
     if "Transportation" in comm: return "🚗 Transportation"
     if "Communications" in comm or "Technology" in comm: return "💻 Tech & Utilities"
@@ -79,7 +86,7 @@ def get_smart_subject(row):
     
     # 2. SPLIT COMMITTEES (CONTEXT AWARE)
     if "Counties" in comm or "Local Government" in comm:
-        if any(x in title_lower for x in ["zoning", "rent", "housing", "tenant", "landlord", "eviction", "lease", "property", "development", "condo"]): return "🏗️ Housing & Property"
+        if any(x in title_lower for x in ["zoning", "rent", "housing", "tenant", "landlord", "eviction", "lease", "property", "condo"]): return "🏗️ Housing & Property"
         return "🏛️ Local Government" 
 
     if "Courts of Justice" in comm:
@@ -88,21 +95,19 @@ def get_smart_subject(row):
 
     if "Public Safety" in comm: return "🚓 Public Safety"
 
-    # FIX: Robust check for "Education & Health" vs "Education and Health"
     if "Education" in comm and "Health" in comm:
         if any(x in title_lower for x in ["health", "medical", "nursing", "doctor", "patient", "hospital", "professions"]): return "🏥 Health & Healthcare"
         return "🎓 Education" 
 
-    # FIX: Strict Health Check - Don't steal Education bills!
     if "Health" in comm and "Education" not in comm: return "🏥 Health & Healthcare"
     
     if "General Laws" in comm:
         if any(x in title_lower for x in ["housing", "real estate", "property", "landlord"]): return "🏗️ Housing & Property"
         if any(x in title_lower for x in ["gaming", "alcohol", "abc", "casino"]): return "💰 Economy & Business"
 
-    # 3. FALLBACK: GLOBAL KEYWORD SEARCH
+    # 3. FALLBACK: GLOBAL KEYWORD SEARCH (NOW WITH WORD BOUNDARIES)
     for cat, keys in TOPIC_KEYWORDS.items():
-        if any(k in title_lower for k in keys): return cat
+        if match_whole_word(title_lower, keys): return cat
         
     return "📂 Unassigned / General"
 
@@ -112,7 +117,6 @@ def check_youth_flag(row):
     title_lower = title.lower()
     
     # --- EXCLUSION LOGIC ---
-    # These override youth keywords. If found, bill is NOT marked as youth.
     exclusions = ["child care", "teacher", "training", "employee", "adult correctional"]
     if any(ex in title_lower for ex in exclusions):
         return False
@@ -409,7 +413,13 @@ def render_bill_card(row, show_youth_tag=False):
     st.markdown(f"**{b_num_display}**")
     my_status = str(row.get('My Status', '')).strip()
     if my_status and my_status != 'nan' and my_status != '-': st.info(f"🏷️ **Status:** {my_status}")
-    st.caption(f"{title}"); st.caption(f"_{clean_status_text(row.get('Status'))}_"); st.divider()
+    st.caption(f"{title}"); st.caption(f"_{clean_status_text(row.get('Status'))}_")
+    
+    # --- ADDED: Link to LIS ---
+    lis_link = f"https://lis.virginia.gov/bill-details/20261/{row['Bill Number']}"
+    st.markdown(f"[🔗 View on LIS]({lis_link})")
+    
+    st.divider()
 
 def render_grouped_list_item(df):
     if df.empty: st.caption("No bills."); return
