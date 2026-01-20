@@ -597,13 +597,13 @@ if bills_to_track:
             with m3: st.markdown("#### 🎉 Passed"); render_passed_grouped_list_item(passed)
             with m4: st.markdown("#### ❌ Failed"); render_simple_list_item(failed)
 
-# --- TAB 3: CALENDAR (Final: Grouped, Filtered & "Kill" Aware) ---
+# --- TAB 3: CALENDAR (Final: "Polite Kills" & Nuance Included) ---
     with tab_upcoming:
         st.subheader("📅 Your Confirmed Agenda")
         today = datetime.now(est).date()
         cols = st.columns(7)
         
-        # 1. PRE-CALCULATE DOCKET (Scheduled Meetings)
+        # 1. PRE-CALCULATE DOCKET
         calendar_map = {}
         for _, row in final_df.iterrows():
             meetings = row.get('Upcoming_Meetings', [])
@@ -636,11 +636,10 @@ if bills_to_track:
                 st.markdown(f"**{display_date_str}**")
                 st.divider()
                 
-                # --- A. SCHEDULED MEETINGS (FUTURE/TODAY DOCKET) ---
+                # --- A. SCHEDULED MEETINGS ---
                 if target_date_str in calendar_map:
                     for comm_name, bills in calendar_map[target_date_str].items():
                         time_display = "Time TBA"
-                        # Try to match scraper times
                         if target_date_str in scraped_times:
                             docket_words = set(comm_name.lower().replace("house","").replace("senate","").replace("committee","").split())
                             docket_words.discard("of"); docket_words.discard("for"); docket_words.discard("and"); docket_words.discard("&"); docket_words.discard("-")
@@ -667,7 +666,6 @@ if bills_to_track:
                     completed_map = {}
                     
                     for _, row in final_df.iterrows():
-                        # 1. Skip if already shown in the docket above (avoid duplicates)
                         is_dup = False
                         if target_date_str in calendar_map:
                             for c_list in calendar_map[target_date_str].values():
@@ -676,7 +674,7 @@ if bills_to_track:
 
                         happened_today = False
                         
-                        # 2. Check HISTORY Log
+                        # Check History
                         hist_data = row.get('History_Data', [])
                         if isinstance(hist_data, list):
                             for h in hist_data:
@@ -687,7 +685,7 @@ if bills_to_track:
                                     if h_dt == target_date: happened_today = True
                                 except: pass
                         
-                        # 3. Check DATE Column
+                        # Check Date Col
                         if not happened_today:
                             last_date = str(row.get('Date', ''))
                             try:
@@ -696,7 +694,7 @@ if bills_to_track:
                                 if lis_dt == target_date: happened_today = True
                             except: pass
 
-                        # 4. Check TEXT for Today's Date
+                        # Check Text
                         if not happened_today:
                             status_txt = str(row.get('Status', ''))
                             d_check_1 = target_date.strftime("%-m/%-d/%Y")
@@ -705,24 +703,40 @@ if bills_to_track:
                                 happened_today = True
 
                         if happened_today:
-                            # --- FILTER LOGIC (UPDATED) ---
                             status_lower = str(row.get('Status', '')).lower()
                             
-                            # Noise terms (skip ONLY if no important keywords found)
-                            is_noise = any(x in status_lower for x in ["fiscal impact", "statement from", "note filed"])
-                            
-                            # Important terms (Outcome = Alive or Dead)
-                            # Added: stricken, indefinitely (PBI), left in, incorporated, no action
+                            # --- KEYWORD DEFINITIONS (UPDATED) ---
+                            # These indicate a substantive outcome (Good, Bad, or Delayed)
                             important_keywords = [
-                                "passed", "reported", "agreed", "engrossed", "read", "vote", # Alive/Moving
-                                "tabled", "failed", "defeat", "stricken", "indefinitely", "left in", "incorporated", "no action" # Dead/Killed
+                                "passed", "reported", "agreed", "engrossed", "vote", # Forward
+                                "tabled", "failed", "defeat", "stricken", "indefinitely", # Killed
+                                "left in", "no action", "withdrawn", # Passive Killed
+                                "incorporated", "subject matter", # Hidden/Polite Killed
+                                "continued", "rereferred", "recommitted" # Movement/Delay
                             ]
-                            is_important = any(x in status_lower for x in important_keywords)
                             
-                            # Logic: If it's noise AND NOT important, skip it.
-                            if is_noise and not is_important: continue
+                            # These indicate administrative noise to filter out
+                            noise_keywords = [
+                                "fiscal impact", "statement from", "note filed",
+                                "assigned", "referred", "docketed"
+                                # Note: "Rereferred" is NOT noise, so it's in 'important' to override this.
+                            ]
+                            
+                            is_important = any(x in status_lower for x in important_keywords)
+                            is_noise = any(x in status_lower for x in noise_keywords)
 
-                            # --- GROUPING ---
+                            # LOGIC: 
+                            # If Important: Show it.
+                            # If Noise (and not Important): Hide it.
+                            # If Neutral: Hide it (default to clean list).
+                            
+                            if is_important:
+                                pass 
+                            elif is_noise:
+                                continue 
+                            else:
+                                continue 
+                            
                             group_key = row.get('Display_Committee', 'Other Actions')
                             if group_key == "On Floor / Reported" or "Chamber" in group_key:
                                 if row['Bill Number'].startswith('H'): group_key = "House Floor / General Orders"
@@ -731,7 +745,6 @@ if bills_to_track:
                             if group_key not in completed_map: completed_map[group_key] = []
                             completed_map[group_key].append(row)
 
-                    # RENDER COMPLETED GROUPS
                     if completed_map:
                         st.success("✅ **Completed Today**")
                         for comm_key, bills in completed_map.items():
