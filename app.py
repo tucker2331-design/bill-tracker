@@ -597,12 +597,13 @@ if bills_to_track:
             with m3: st.markdown("#### 🎉 Passed"); render_passed_grouped_list_item(passed)
             with m4: st.markdown("#### ❌ Failed"); render_simple_list_item(failed)
 
-    # --- TAB 3: CALENDAR (FIXED) ---
+# --- TAB 3: CALENDAR (FIXED & DEBUGGED) ---
     with tab_upcoming:
         st.subheader("📅 Your Confirmed Agenda")
         today = datetime.now(est).date()
         cols = st.columns(7)
         
+        # 1. PRE-CALCULATE DOCKET (Scheduled Meetings)
         calendar_map = {}
         for _, row in final_df.iterrows():
             meetings = row.get('Upcoming_Meetings', [])
@@ -612,6 +613,7 @@ if bills_to_track:
                     m_comm_raw = m.get('CommitteeRaw', 'Unknown')
                     b_id = row['Bill Number']
                     clean_name = clean_committee_name(m_comm_raw)
+                    # Deduce chamber if missing
                     if "Senate" not in clean_name and "House" not in clean_name:
                         if b_id.startswith("HB") or b_id.startswith("HJ") or b_id.startswith("HR"): clean_name = f"House {clean_name}"
                         elif b_id.startswith("SB") or b_id.startswith("SJ") or b_id.startswith("SR"): clean_name = f"Senate {clean_name}"
@@ -625,18 +627,21 @@ if bills_to_track:
                         calendar_map[formatted_date][clean_name].append(row)
                     except: pass
 
+        # 2. RENDER THE 7-DAY VIEW
         for i in range(7):
             target_date = today + timedelta(days=i)
             target_date_str = target_date.strftime('%Y-%m-%d')
             display_date_str = target_date.strftime("%a %m/%d")
+            
             with cols[i]:
                 st.markdown(f"**{display_date_str}**")
                 st.divider()
                 
-                # 1. RENDER SCHEDULED MEETINGS (FROM DOCKET)
+                # --- A. SCHEDULED MEETINGS ---
                 if target_date_str in calendar_map:
                     for comm_name, bills in calendar_map[target_date_str].items():
                         time_display = "Time TBA"
+                        # Try to match scraper times
                         if target_date_str in scraped_times:
                             docket_words = set(comm_name.lower().replace("house","").replace("senate","").replace("committee","").split())
                             docket_words.discard("of"); docket_words.discard("for"); docket_words.discard("and"); docket_words.discard("&"); docket_words.discard("-")
@@ -658,19 +663,22 @@ if bills_to_track:
                         for row in bills: _render_single_bill_row(row)
                         st.divider()
 
-                # 2. RENDER COMPLETED EVENTS (DETECTED FROM HISTORY/STATUS) - TODAY ONLY
+                # --- B. COMPLETED EVENTS (TODAY ONLY) ---
+                # This logic checks if a bill happened today but wasn't on the scheduled docket
                 if i == 0: 
-                    completed_header_shown = False
+                    events_found = False  # <--- FIXED: Variable explicitly defined now
+                    
                     for _, row in final_df.iterrows():
-                        # A. Check if bill already shown above (in docket)
+                        # 1. Skip if we already showed it in the schedule above
                         is_dup = False
                         if target_date_str in calendar_map:
                             for c_list in calendar_map[target_date_str].values():
                                 if row['Bill Number'] in [r['Bill Number'] for r in c_list]: is_dup = True
                         if is_dup: continue
 
-                        # B. Check HISTORY for today's date (More reliable than 'Last Action Date')
                         happened_today = False
+                        
+                        # 2. Check HISTORY Log
                         hist_data = row.get('History_Data', [])
                         if isinstance(hist_data, list):
                             for h in hist_data:
@@ -681,7 +689,7 @@ if bills_to_track:
                                     if h_dt == target_date: happened_today = True
                                 except: pass
                         
-                        # Fallback: Check 'Date' column if History didn't catch it
+                        # 3. Check DATE Column
                         if not happened_today:
                             last_date = str(row.get('Date', ''))
                             try:
@@ -690,12 +698,22 @@ if bills_to_track:
                                 if lis_dt == target_date: happened_today = True
                             except: pass
 
+                        # 4. NEW: Check TEXT for Today's Date (Catches "Fiscal Impact... 1/20")
+                        if not happened_today:
+                            status_txt = str(row.get('Status', ''))
+                            # Check for "1/20/2026" or "01/20/2026" or "1/20/26"
+                            d_check_1 = target_date.strftime("%-m/%-d/%Y")
+                            d_check_2 = target_date.strftime("%m/%d/%Y")
+                            d_check_3 = target_date.strftime("%-m/%-d/%y")
+                            if d_check_1 in status_txt or d_check_2 in status_txt or d_check_3 in status_txt:
+                                happened_today = True
+
                         if happened_today:
-                            if not completed_header_shown: 
+                            if not events_found: 
                                 st.caption("🏁 **Completed / Updates Today**")
-                                completed_header_shown = True
+                                events_found = True
                             
-                            # Construct Label
+                            # Render the Bill
                             my_status = str(row.get('My Status', '')).strip() 
                             vote_str = extract_vote_info(row.get('Status', ''))
                             label_text = f"{row['Bill Number']}"
@@ -712,8 +730,16 @@ if bills_to_track:
                                 lis_link = f"https://lis.virginia.gov/bill-details/20261/{row['Bill Number']}"
                                 st.markdown(f"🔗 [View Official Bill on LIS]({lis_link})")
 
-                if not (target_date_str in calendar_map) and (i != 0 or not events_found): # events_found logic replaced by explicit header checks above
-                    if i != 0: st.caption("-")
+                # --- C. EMPTY STATE ---
+                # Only show "-" if NO schedule and NO events found
+                has_schedule = (target_date_str in calendar_map)
+                
+                # For future days (i > 0), events_found is always False effectively
+                if i > 0: events_found = False
+                
+                if not has_schedule and not events_found:
+                     if i != 0: st.caption("-") # Show dash for future empty days
+                     elif i == 0: st.info("No hearings or updates yet today.") # Friendly message for Today
 # --- DEV DEBUGGER ---
 with st.sidebar:
     st.divider()
