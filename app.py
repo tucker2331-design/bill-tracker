@@ -597,7 +597,7 @@ if bills_to_track:
             with m3: st.markdown("#### 🎉 Passed"); render_passed_grouped_list_item(passed)
             with m4: st.markdown("#### ❌ Failed"); render_simple_list_item(failed)
 
-# --- TAB 3: CALENDAR (FIXED & DEBUGGED) ---
+# --- TAB 3: CALENDAR (Final: Grouped, Filtered & "Kill" Aware) ---
     with tab_upcoming:
         st.subheader("📅 Your Confirmed Agenda")
         today = datetime.now(est).date()
@@ -613,7 +613,6 @@ if bills_to_track:
                     m_comm_raw = m.get('CommitteeRaw', 'Unknown')
                     b_id = row['Bill Number']
                     clean_name = clean_committee_name(m_comm_raw)
-                    # Deduce chamber if missing
                     if "Senate" not in clean_name and "House" not in clean_name:
                         if b_id.startswith("HB") or b_id.startswith("HJ") or b_id.startswith("HR"): clean_name = f"House {clean_name}"
                         elif b_id.startswith("SB") or b_id.startswith("SJ") or b_id.startswith("SR"): clean_name = f"Senate {clean_name}"
@@ -637,7 +636,7 @@ if bills_to_track:
                 st.markdown(f"**{display_date_str}**")
                 st.divider()
                 
-                # --- A. SCHEDULED MEETINGS ---
+                # --- A. SCHEDULED MEETINGS (FUTURE/TODAY DOCKET) ---
                 if target_date_str in calendar_map:
                     for comm_name, bills in calendar_map[target_date_str].items():
                         time_display = "Time TBA"
@@ -663,13 +662,12 @@ if bills_to_track:
                         for row in bills: _render_single_bill_row(row)
                         st.divider()
 
-                # --- B. COMPLETED EVENTS (TODAY ONLY) ---
-                # This logic checks if a bill happened today but wasn't on the scheduled docket
+                # --- B. COMPLETED / ACTED ON (TODAY ONLY) ---
                 if i == 0: 
-                    events_found = False  # <--- FIXED: Variable explicitly defined now
+                    completed_map = {}
                     
                     for _, row in final_df.iterrows():
-                        # 1. Skip if we already showed it in the schedule above
+                        # 1. Skip if already shown in the docket above (avoid duplicates)
                         is_dup = False
                         if target_date_str in calendar_map:
                             for c_list in calendar_map[target_date_str].values():
@@ -698,48 +696,67 @@ if bills_to_track:
                                 if lis_dt == target_date: happened_today = True
                             except: pass
 
-                        # 4. NEW: Check TEXT for Today's Date (Catches "Fiscal Impact... 1/20")
+                        # 4. Check TEXT for Today's Date
                         if not happened_today:
                             status_txt = str(row.get('Status', ''))
-                            # Check for "1/20/2026" or "01/20/2026" or "1/20/26"
                             d_check_1 = target_date.strftime("%-m/%-d/%Y")
                             d_check_2 = target_date.strftime("%m/%d/%Y")
-                            d_check_3 = target_date.strftime("%-m/%-d/%y")
-                            if d_check_1 in status_txt or d_check_2 in status_txt or d_check_3 in status_txt:
+                            if d_check_1 in status_txt or d_check_2 in status_txt:
                                 happened_today = True
 
                         if happened_today:
-                            if not events_found: 
-                                st.caption("🏁 **Completed / Updates Today**")
-                                events_found = True
+                            # --- FILTER LOGIC (UPDATED) ---
+                            status_lower = str(row.get('Status', '')).lower()
                             
-                            # Render the Bill
-                            my_status = str(row.get('My Status', '')).strip() 
-                            vote_str = extract_vote_info(row.get('Status', ''))
-                            label_text = f"{row['Bill Number']}"
-                            if vote_str: label_text += f" **PASSED {vote_str}**"
-                            elif my_status != '-' and my_status != 'nan': label_text += f" - {my_status}"
+                            # Noise terms (skip ONLY if no important keywords found)
+                            is_noise = any(x in status_lower for x in ["fiscal impact", "statement from", "note filed"])
                             
-                            with st.expander(label_text):
-                                st.markdown(f"**🏛️ Current Status:** {row.get('Display_Committee', '-')}")
-                                st.markdown(f"**📌 Designated Title:** {row.get('My Title', '-')}")
-                                st.markdown(f"**🔄 Status:** {clean_status_text(row.get('Status', '-'))}")
-                                if isinstance(hist_data, list) and hist_data:
-                                    st.markdown("**📜 History:**")
-                                    st.dataframe(pd.DataFrame(hist_data), hide_index=True, use_container_width=True)
-                                lis_link = f"https://lis.virginia.gov/bill-details/20261/{row['Bill Number']}"
-                                st.markdown(f"🔗 [View Official Bill on LIS]({lis_link})")
+                            # Important terms (Outcome = Alive or Dead)
+                            # Added: stricken, indefinitely (PBI), left in, incorporated, no action
+                            important_keywords = [
+                                "passed", "reported", "agreed", "engrossed", "read", "vote", # Alive/Moving
+                                "tabled", "failed", "defeat", "stricken", "indefinitely", "left in", "incorporated", "no action" # Dead/Killed
+                            ]
+                            is_important = any(x in status_lower for x in important_keywords)
+                            
+                            # Logic: If it's noise AND NOT important, skip it.
+                            if is_noise and not is_important: continue
+
+                            # --- GROUPING ---
+                            group_key = row.get('Display_Committee', 'Other Actions')
+                            if group_key == "On Floor / Reported" or "Chamber" in group_key:
+                                if row['Bill Number'].startswith('H'): group_key = "House Floor / General Orders"
+                                else: group_key = "Senate Floor / General Orders"
+                            
+                            if group_key not in completed_map: completed_map[group_key] = []
+                            completed_map[group_key].append(row)
+
+                    # RENDER COMPLETED GROUPS
+                    if completed_map:
+                        st.success("✅ **Completed Today**")
+                        for comm_key, bills in completed_map.items():
+                            st.markdown(f"**{comm_key}**")
+                            for row in bills:
+                                my_status = str(row.get('My Status', '')).strip() 
+                                vote_str = extract_vote_info(row.get('Status', ''))
+                                label_text = f"{row['Bill Number']}"
+                                if vote_str: label_text += f" **PASSED {vote_str}**"
+                                elif my_status != '-' and my_status != 'nan': label_text += f" - {my_status}"
+                                
+                                with st.expander(label_text):
+                                    st.markdown(f"**🔄 Outcome:** {clean_status_text(row.get('Status', '-'))}")
+                                    st.caption(f"📌 {row.get('My Title', '-')}")
+                                    lis_link = f"https://lis.virginia.gov/bill-details/20261/{row['Bill Number']}"
+                                    st.markdown(f"🔗 [View on LIS]({lis_link})")
+                            st.divider()
 
                 # --- C. EMPTY STATE ---
-                # Only show "-" if NO schedule and NO events found
                 has_schedule = (target_date_str in calendar_map)
+                has_completed = (i == 0 and len(completed_map) > 0) if 'completed_map' in locals() else False
                 
-                # For future days (i > 0), events_found is always False effectively
-                if i > 0: events_found = False
-                
-                if not has_schedule and not events_found:
-                     if i != 0: st.caption("-") # Show dash for future empty days
-                     elif i == 0: st.info("No hearings or updates yet today.") # Friendly message for Today
+                if not has_schedule and not has_completed:
+                     if i != 0: st.caption("-")
+                     elif i == 0: st.info("No hearings or updates yet today.")
 # --- DEV DEBUGGER ---
 with st.sidebar:
     st.divider()
