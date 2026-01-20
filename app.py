@@ -558,7 +558,7 @@ if bills_to_track:
 
     check_and_broadcast(final_df, subs_df, demo_mode)
 
-    # 3. RENDER TABS
+   # 3. RENDER TABS
     tab_involved, tab_watching, tab_upcoming = st.tabs(["🚀 Directly Involved", "👀 Watching", "📅 Upcoming Hearings"])
 
     for tab, b_type in [(tab_involved, "Involved"), (tab_watching, "Watching")]:
@@ -597,7 +597,7 @@ if bills_to_track:
             with m3: st.markdown("#### 🎉 Passed"); render_passed_grouped_list_item(passed)
             with m4: st.markdown("#### ❌ Failed"); render_simple_list_item(failed)
 
-    # --- TAB 3: CALENDAR ---
+    # --- TAB 3: CALENDAR (FIXED) ---
     with tab_upcoming:
         st.subheader("📅 Your Confirmed Agenda")
         today = datetime.now(est).date()
@@ -632,11 +632,11 @@ if bills_to_track:
             with cols[i]:
                 st.markdown(f"**{display_date_str}**")
                 st.divider()
+                
+                # 1. RENDER SCHEDULED MEETINGS (FROM DOCKET)
                 if target_date_str in calendar_map:
                     for comm_name, bills in calendar_map[target_date_str].items():
                         time_display = "Time TBA"
-                        
-                        # --- IMPROVED MATCHING LOGIC ---
                         if target_date_str in scraped_times:
                             docket_words = set(comm_name.lower().replace("house","").replace("senate","").replace("committee","").split())
                             docket_words.discard("of"); docket_words.discard("for"); docket_words.discard("and"); docket_words.discard("&"); docket_words.discard("-")
@@ -645,15 +645,10 @@ if bills_to_track:
                             if docket_words:
                                 for s_key, s_time in scraped_times[target_date_str].items():
                                     s_key_lower = s_key.lower()
-                                    
-                                    # 1. Chamber Mismatch Guard
                                     is_house_comm = "house" in comm_name.lower()
                                     is_senate_comm = "senate" in comm_name.lower()
-                                    
                                     if is_house_comm and "senate" in s_key_lower: continue
                                     if is_senate_comm and "house" in s_key_lower: continue
-                                    
-                                    # 2. Fuzzy Keyword Match (allows Subcommittees to find their parents)
                                     if any(w in s_key_lower for w in docket_words):
                                         time_display = s_time
                                         break
@@ -663,48 +658,62 @@ if bills_to_track:
                         for row in bills: _render_single_bill_row(row)
                         st.divider()
 
-                if i == 0:
-                    events_found = False
+                # 2. RENDER COMPLETED EVENTS (DETECTED FROM HISTORY/STATUS) - TODAY ONLY
+                if i == 0: 
+                    completed_header_shown = False
                     for _, row in final_df.iterrows():
+                        # A. Check if bill already shown above (in docket)
+                        is_dup = False
                         if target_date_str in calendar_map:
-                            is_dup = False
                             for c_list in calendar_map[target_date_str].values():
                                 if row['Bill Number'] in [r['Bill Number'] for r in c_list]: is_dup = True
-                            if is_dup: continue
+                        if is_dup: continue
 
-                        last_date = str(row.get('Date', ''))
-                        is_today = False
-                        try:
-                            if "/" in last_date: lis_dt = datetime.strptime(last_date, "%m/%d/%Y").date()
-                            else: lis_dt = datetime.strptime(last_date, "%Y-%m-%d").date()
-                            if lis_dt == target_date: is_today = True
-                        except: pass
+                        # B. Check HISTORY for today's date (More reliable than 'Last Action Date')
+                        happened_today = False
+                        hist_data = row.get('History_Data', [])
+                        if isinstance(hist_data, list):
+                            for h in hist_data:
+                                h_date_str = str(h.get('Date', ''))
+                                try:
+                                    if "/" in h_date_str: h_dt = datetime.strptime(h_date_str, "%m/%d/%Y").date()
+                                    else: h_dt = datetime.strptime(h_date_str, "%Y-%m-%d").date()
+                                    if h_dt == target_date: happened_today = True
+                                except: pass
                         
-                        if is_today:
-                            lis_status = str(row.get('Status', '')).lower()
-                            if any(x in lis_status for x in ["reported", "passed", "defeat", "stricken", "agreed", "read", "engross", "vote"]):
-                                if not events_found: 
-                                    st.caption("🏁 **Completed Today**")
-                                    events_found = True
-                                my_status = str(row.get('My Status', '')).strip() 
-                                vote_str = extract_vote_info(row.get('Status', ''))
-                                label_text = f"{row['Bill Number']}"
-                                if vote_str: label_text += f" **PASSED {vote_str}**"
-                                elif my_status != '-' and my_status != 'nan': label_text += f" - {my_status}"
-                                with st.expander(label_text):
-                                    st.markdown(f"**🏛️ Current Status:** {row.get('Display_Committee', '-')}")
-                                    st.markdown(f"**📌 Designated Title:** {row.get('My Title', '-')}")
-                                    st.markdown(f"**🔄 Status:** {clean_status_text(row.get('Status', '-'))}")
-                                    hist_data = row.get('History_Data', [])
-                                    if isinstance(hist_data, list) and hist_data:
-                                        st.markdown("**📜 History:**")
-                                        st.dataframe(pd.DataFrame(hist_data), hide_index=True, use_container_width=True)
-                                    lis_link = f"https://lis.virginia.gov/bill-details/20261/{row['Bill Number']}"
-                                    st.markdown(f"🔗 [View Official Bill on LIS]({lis_link})")
+                        # Fallback: Check 'Date' column if History didn't catch it
+                        if not happened_today:
+                            last_date = str(row.get('Date', ''))
+                            try:
+                                if "/" in last_date: lis_dt = datetime.strptime(last_date, "%m/%d/%Y").date()
+                                else: lis_dt = datetime.strptime(last_date, "%Y-%m-%d").date()
+                                if lis_dt == target_date: happened_today = True
+                            except: pass
 
-                if not (target_date_str in calendar_map) and (i != 0 or not events_found):
-                    st.caption("-")
+                        if happened_today:
+                            if not completed_header_shown: 
+                                st.caption("🏁 **Completed / Updates Today**")
+                                completed_header_shown = True
+                            
+                            # Construct Label
+                            my_status = str(row.get('My Status', '')).strip() 
+                            vote_str = extract_vote_info(row.get('Status', ''))
+                            label_text = f"{row['Bill Number']}"
+                            if vote_str: label_text += f" **PASSED {vote_str}**"
+                            elif my_status != '-' and my_status != 'nan': label_text += f" - {my_status}"
+                            
+                            with st.expander(label_text):
+                                st.markdown(f"**🏛️ Current Status:** {row.get('Display_Committee', '-')}")
+                                st.markdown(f"**📌 Designated Title:** {row.get('My Title', '-')}")
+                                st.markdown(f"**🔄 Status:** {clean_status_text(row.get('Status', '-'))}")
+                                if isinstance(hist_data, list) and hist_data:
+                                    st.markdown("**📜 History:**")
+                                    st.dataframe(pd.DataFrame(hist_data), hide_index=True, use_container_width=True)
+                                lis_link = f"https://lis.virginia.gov/bill-details/20261/{row['Bill Number']}"
+                                st.markdown(f"🔗 [View Official Bill on LIS]({lis_link})")
 
+                if not (target_date_str in calendar_map) and (i != 0 or not events_found): # events_found logic replaced by explicit header checks above
+                    if i != 0: st.caption("-")
 # --- DEV DEBUGGER ---
 with st.sidebar:
     st.divider()
