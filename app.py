@@ -27,7 +27,7 @@ COMMITTEE_MAP = {
     "H04": "House General Laws", "H05": "House Roads and Internal Navigation", "H06": "House Finance",
     "H07": "House Appropriations", "H08": "House Counties, Cities and Towns", "H09": "House Commerce and Labor",
     "H10": "House Health, Welfare and Institutions", "H11": "House Conservation and Natural Resources",
-    "H12": "House Agriculture", "H13": "House Militia, Police and Public Safety", "H14": "House Claims",
+    "H12": "House Agriculture", "H13": "House Militia, Police and Public Safety", "H14": "House Labor and Commerce",
     "H15": "House Chesapeake and Its Tributaries", "H16": "House Mining and Mineral Resources",
     "H17": "House Corporations, Insurance and Banking", "H18": "House Rules", "H19": "House Nominations and Confirmations",
     "H20": "House Interstate Cooperation", "H21": "House Science and Technology", "H22": "House Courts of Justice",
