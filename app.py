@@ -25,7 +25,7 @@ st.set_page_config(page_title="VA Bill Tracker 2026", layout="wide")
 COMMITTEE_MAP = {
     "H01": "House Privileges and Elections", "H02": "House Courts of Justice", "H03": "House Education",
     "H04": "House General Laws", "H05": "House Roads and Internal Navigation", "H06": "House Finance",
-    "H07": "House Appropriations", "H08": "House Counties, Cities and Towns", "H09": "House Commerce and Labor",
+    "H07": "House Appropriations", "H08": "House Counties, Cities and Towns",
     "H10": "House Health, Welfare and Institutions", "H11": "House Conservation and Natural Resources",
     "H12": "House Agriculture", "H13": "House Militia, Police and Public Safety", "H14": "House Labor and Commerce",
     "H15": "House Chesapeake and Its Tributaries", "H16": "House Mining and Mineral Resources",
