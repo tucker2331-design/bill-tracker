@@ -801,7 +801,34 @@ with st.sidebar:
         st.write("System Status:")
         if 'docket' in lis_data and not lis_data['docket'].empty:
              st.write(f"**Docket File:** 🟢 Loaded ({len(lis_data['docket'])} rows)")
+             
+             # --- PROBE START: CHECK FOR HB1 ---
+             st.markdown("---")
+             st.write("**🕵️ Probe: HB1 Analysis**")
+             
+             # 1. Search Docket for HB1
+             d_df = lis_data['docket']
+             hb1_docket = d_df[d_df['bill_clean'] == 'HB1']
+             
+             if not hb1_docket.empty:
+                 st.success(f"✅ Found {len(hb1_docket)} entries in DOCKET.CSV")
+                 st.dataframe(hb1_docket) # Show us the raw columns!
+             else:
+                 st.error("❌ HB1 is NOT in DOCKET.CSV")
+                 st.caption("This implies the bill was a 'Walk-on' or the LIS file is incomplete.")
+                 
+             # 2. Search Bills Metadata
+             st.write("**Bill Metadata:**")
+             b_df = lis_data['bills']
+             hb1_meta = b_df[b_df['bill_clean'] == 'HB1']
+             if not hb1_meta.empty:
+                 st.json(hb1_meta.iloc[0].to_dict())
+             else:
+                 st.error("Bill Metadata missing.")
+             # --- PROBE END ---
+
         else:
              st.write(f"**Docket File:** 🔴 Not Found")
+        
         st.write("**Scraper Log (First 10):**")
         st.text("\n".join(scrape_log[:10]))
