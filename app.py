@@ -15,7 +15,7 @@ SUBS_URL = f"https://docs.google.com/spreadsheets/d/{SHEET_ID}/gviz/tq?tqx=out:c
 
 # --- VIRGINIA LIS DATA FEEDS ---
 LIS_BASE_URL = "https://lis.blob.core.windows.net/lisfiles/20261/"
-LIS_BILLS_CSV = LIS_BASE_URL + "BILLS.CSV"       
+LIS_BILLS_CSV = LIS_BASE_URL + "BILLS.CSV"        
 LIS_HISTORY_CSV = LIS_BASE_URL + "HISTORY.CSV"
 LIS_DOCKET_CSV = LIS_BASE_URL + "DOCKET.CSV"
 
@@ -43,7 +43,6 @@ COMMITTEE_MAP = {
 # --- KEYWORD DEFINITIONS ---
 YOUTH_KEYWORDS = ["child", "youth", "juvenile", "minor", "student", "school", "parental", "infant", "baby", "child custody", "foster", "adoption", "delinquen"]
 
-# REMOVED "development" (too broad) and rely on regex for others to avoid partial matches
 TOPIC_KEYWORDS = {
     "🗳️ Elections & Democracy": ["election", "vote", "ballot", "campaign", "poll", "voter", "registrar", "districting", "suffrage"],
     "🏗️ Housing & Property": ["rent", "landlord", "tenant", "housing", "lease", "property", "zoning", "eviction", "homeowner", "residential", "condo", "building code"],
@@ -63,19 +62,17 @@ TOPIC_KEYWORDS = {
 def match_whole_word(text, keyword_list):
     """Returns True only if a whole word matches, avoiding partials like 'parent' -> 'rent'"""
     for k in keyword_list:
-        # Regex: \b matches word boundary. Escaped to handle special chars.
         pattern = r'\b' + re.escape(k) + r'\b'
         if re.search(pattern, text, re.IGNORECASE):
             return True
     return False
 
 def get_smart_subject(row):
-    """Sorts bills: Committee First -> Context -> Keywords. (Youth handled separately)"""
+    """Sorts bills: Committee First -> Context -> Keywords."""
     title = str(row.get('Official Title', '')) + " " + str(row.get('My Title', ''))
     title_lower = title.lower()
     comm = str(row.get('Current_Committee', '')).strip()
     
-    # 1. DIRECT COMMITTEE MATCHING
     if "Education" in comm and "Health" not in comm: return "🎓 Education"
     if "Agriculture" in comm or "Chesapeake" in comm or "Conservation" in comm: return "🌳 Environment & Energy"
     if "Transportation" in comm: return "🚗 Transportation"
@@ -84,7 +81,6 @@ def get_smart_subject(row):
     if "Finance" in comm or "Appropriations" in comm: return "💰 Economy & Business"
     if "Commerce" in comm and "Labor" in comm: return "💰 Economy & Business"
     
-    # 2. SPLIT COMMITTEES (CONTEXT AWARE)
     if "Counties" in comm or "Local Government" in comm:
         if any(x in title_lower for x in ["zoning", "rent", "housing", "tenant", "landlord", "eviction", "lease", "property", "condo"]): return "🏗️ Housing & Property"
         return "🏛️ Local Government" 
@@ -105,7 +101,6 @@ def get_smart_subject(row):
         if any(x in title_lower for x in ["housing", "real estate", "property", "landlord"]): return "🏗️ Housing & Property"
         if any(x in title_lower for x in ["gaming", "alcohol", "abc", "casino"]): return "💰 Economy & Business"
 
-    # 3. FALLBACK: GLOBAL KEYWORD SEARCH (NOW WITH WORD BOUNDARIES)
     for cat, keys in TOPIC_KEYWORDS.items():
         if match_whole_word(title_lower, keys): return cat
         
@@ -115,12 +110,9 @@ def check_youth_flag(row):
     """Returns True if bill relates to youth (independent of category) with EXCLUSIONS"""
     title = str(row.get('Official Title', '')) + " " + str(row.get('My Title', ''))
     title_lower = title.lower()
-    
-    # --- EXCLUSION LOGIC ---
     exclusions = ["child care", "teacher", "training", "employee", "adult correctional"]
     if any(ex in title_lower for ex in exclusions):
         return False
-        
     return any(k in title_lower for k in YOUTH_KEYWORDS)
 
 # --- HELPER FUNCTIONS ---
@@ -160,12 +152,16 @@ def determine_lifecycle(status_text, committee_name, bill_id="", history_text=""
     return "📥 In Committee"
 
 def clean_committee_name(name):
+    """Standardizes committee names, now LESS aggressive to preserve Subcommittee info."""
     if not name or str(name).lower() == 'nan': return ""
     name = str(name).strip()
     if name in COMMITTEE_MAP: return COMMITTEE_MAP[name]
     if name.startswith("H-") or name.startswith("S-") or name.startswith("h-") or name.startswith("s-"): name = name[2:]
-    name = re.sub(r'\b[A-Z][a-z]+, [A-Z]\. ?[A-Z]?\.?.*$', '', name) 
-    name = re.sub(r'\b(Simon|Rasoul|Willett|Helmer|Lucas|Surovell|Locke|Deeds|Favola|Marsden|Ebbin|McPike|Hayes|Carroll Foy|Subcommittee #\d+)\b.*', '', name, flags=re.IGNORECASE)
+    
+    # Remove specific politician names but KEEP "Subcommittee" and numbers
+    name = re.sub(r'\b(Simon|Rasoul|Willett|Helmer|Lucas|Surovell|Locke|Deeds|Favola|Marsden|Ebbin|McPike|Hayes|Carroll Foy)\b.*', '', name, flags=re.IGNORECASE)
+    
+    # Clean up standard artifacts
     name = name.replace("Committee For", "").replace("Committee On", "").replace("Committee", "").strip()
     return name.title()
 
@@ -178,10 +174,6 @@ def extract_vote_info(status_text):
     match = re.search(r'\((\d{1,3}-Y \d{1,3}-N)\)', str(status_text))
     if match: return match.group(1)
     return None
-
-@st.cache_data(ttl=3600)
-def scrape_committee_from_bill_page(bill_number):
-    return None 
 
 @st.cache_data(ttl=600)
 def fetch_html_calendar():
@@ -415,7 +407,6 @@ def render_bill_card(row, show_youth_tag=False):
     if my_status and my_status != 'nan' and my_status != '-': st.info(f"🏷️ **Status:** {my_status}")
     st.caption(f"{title}"); st.caption(f"_{clean_status_text(row.get('Status'))}_")
     
-    # --- ADDED: Link to LIS ---
     lis_link = f"https://lis.virginia.gov/bill-details/20261/{row['Bill Number']}"
     st.markdown(f"[🔗 View on LIS]({lis_link})")
     
@@ -575,7 +566,6 @@ if bills_to_track:
             subset = final_df[final_df['Type'] == b_type]
             st.subheader("🗂️ Browse by Topic")
             
-            # --- CUSTOM FOLDER LOGIC (DUPLICATION) ---
             unique_folders = sorted(subset['Auto_Folder'].unique())
             has_youth = subset['Is_Youth'].any()
             if has_youth: unique_folders.insert(0, "👶 Youth & Children (All)")
@@ -645,15 +635,29 @@ if bills_to_track:
                 if target_date_str in calendar_map:
                     for comm_name, bills in calendar_map[target_date_str].items():
                         time_display = "Time TBA"
+                        
+                        # --- IMPROVED MATCHING LOGIC ---
                         if target_date_str in scraped_times:
                             docket_words = set(comm_name.lower().replace("house","").replace("senate","").replace("committee","").split())
                             docket_words.discard("of"); docket_words.discard("for"); docket_words.discard("and"); docket_words.discard("&"); docket_words.discard("-")
                             docket_words = {w for w in docket_words if len(w) > 3}
+                            
                             if docket_words:
                                 for s_key, s_time in scraped_times[target_date_str].items():
-                                    if any(w in s_key.lower() for w in docket_words):
+                                    s_key_lower = s_key.lower()
+                                    
+                                    # 1. Chamber Mismatch Guard
+                                    is_house_comm = "house" in comm_name.lower()
+                                    is_senate_comm = "senate" in comm_name.lower()
+                                    
+                                    if is_house_comm and "senate" in s_key_lower: continue
+                                    if is_senate_comm and "house" in s_key_lower: continue
+                                    
+                                    # 2. Fuzzy Keyword Match (allows Subcommittees to find their parents)
+                                    if any(w in s_key_lower for w in docket_words):
                                         time_display = s_time
                                         break
+                                        
                         st.markdown(f"**{comm_name}**")
                         st.caption(f"⏰ {time_display}")
                         for row in bills: _render_single_bill_row(row)
