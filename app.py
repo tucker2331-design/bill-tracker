@@ -597,7 +597,7 @@ if bills_to_track:
             with m3: st.markdown("#### 🎉 Passed"); render_passed_grouped_list_item(passed)
             with m4: st.markdown("#### ❌ Failed"); render_simple_list_item(failed)
 
-# --- TAB 3: CALENDAR (Final: "Polite Kills" & Nuance Included) ---
+# --- TAB 3: CALENDAR (Corrected: Fuzzy Matching & Vote Detection) ---
     with tab_upcoming:
         st.subheader("📅 Your Confirmed Agenda")
         today = datetime.now(est).date()
@@ -673,7 +673,6 @@ if bills_to_track:
                         if is_dup: continue
 
                         happened_today = False
-                        
                         # Check History
                         hist_data = row.get('History_Data', [])
                         if isinstance(hist_data, list):
@@ -684,7 +683,6 @@ if bills_to_track:
                                     else: h_dt = datetime.strptime(h_date_str, "%Y-%m-%d").date()
                                     if h_dt == target_date: happened_today = True
                                 except: pass
-                        
                         # Check Date Col
                         if not happened_today:
                             last_date = str(row.get('Date', ''))
@@ -693,7 +691,6 @@ if bills_to_track:
                                 else: lis_dt = datetime.strptime(last_date, "%Y-%m-%d").date()
                                 if lis_dt == target_date: happened_today = True
                             except: pass
-
                         # Check Text
                         if not happened_today:
                             status_txt = str(row.get('Status', ''))
@@ -705,37 +702,33 @@ if bills_to_track:
                         if happened_today:
                             status_lower = str(row.get('Status', '')).lower()
                             
-                            # --- KEYWORD DEFINITIONS (UPDATED) ---
-                            # These indicate a substantive outcome (Good, Bad, or Delayed)
+                            # 1. DETECT VOTE (Always Important)
+                            has_vote = bool(re.search(r'\d{1,3}-y', status_lower))
+
+                            # 2. IMPORTANT KEYWORDS (Broader matching)
+                            # "Report" matches "Reported", "Reporting", "Report"
                             important_keywords = [
-                                "passed", "reported", "agreed", "engrossed", "vote", # Forward
-                                "tabled", "failed", "defeat", "stricken", "indefinitely", # Killed
-                                "left in", "no action", "withdrawn", # Passive Killed
-                                "incorporated", "subject matter", # Hidden/Polite Killed
-                                "continued", "rereferred", "recommitted" # Movement/Delay
+                                "passed", "report", "agreed", "engross", "read", "vote", 
+                                "tabled", "failed", "defeat", "stricken", "indefinitely", 
+                                "left in", "incorporated", "no action", "continued",
+                                "withdrawn", "recommitted", "rereferred"
                             ]
                             
-                            # These indicate administrative noise to filter out
+                            # 3. NOISE KEYWORDS
                             noise_keywords = [
                                 "fiscal impact", "statement from", "note filed",
                                 "assigned", "referred", "docketed"
-                                # Note: "Rereferred" is NOT noise, so it's in 'important' to override this.
                             ]
                             
-                            is_important = any(x in status_lower for x in important_keywords)
+                            is_important = any(x in status_lower for x in important_keywords) or has_vote
                             is_noise = any(x in status_lower for x in noise_keywords)
 
-                            # LOGIC: 
-                            # If Important: Show it.
-                            # If Noise (and not Important): Hide it.
-                            # If Neutral: Hide it (default to clean list).
-                            
                             if is_important:
-                                pass 
+                                pass # Keep it
                             elif is_noise:
-                                continue 
+                                continue # Filter it
                             else:
-                                continue 
+                                continue # Filter neutral updates
                             
                             group_key = row.get('Display_Committee', 'Other Actions')
                             if group_key == "On Floor / Reported" or "Chamber" in group_key:
