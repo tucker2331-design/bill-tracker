@@ -25,9 +25,10 @@ st.set_page_config(page_title="VA Bill Tracker 2026", layout="wide")
 COMMITTEE_MAP = {
     "H01": "House Privileges and Elections", "H02": "House Courts of Justice", "H03": "House Education",
     "H04": "House General Laws", "H05": "House Roads and Internal Navigation", "H06": "House Finance",
-    "H07": "House Appropriations", "H08": "House Counties, Cities and Towns",
+    "H07": "House Appropriations", "H08": "House Counties, Cities and Towns", 
     "H10": "House Health, Welfare and Institutions", "H11": "House Conservation and Natural Resources",
-    "H12": "House Agriculture", "H13": "House Militia, Police and Public Safety", "H14": "House Labor and Commerce",
+    "H12": "House Agriculture", "H13": "House Militia, Police and Public Safety", 
+    "H14": "House Labor and Commerce", # <--- FIXED: Correct committee for HB1
     "H15": "House Chesapeake and Its Tributaries", "H16": "House Mining and Mineral Resources",
     "H17": "House Corporations, Insurance and Banking", "H18": "House Rules", "H19": "House Nominations and Confirmations",
     "H20": "House Interstate Cooperation", "H21": "House Science and Technology", "H22": "House Courts of Justice",
@@ -558,7 +559,7 @@ if bills_to_track:
 
     check_and_broadcast(final_df, subs_df, demo_mode)
 
-   # 3. RENDER TABS
+    # 3. RENDER TABS
     tab_involved, tab_watching, tab_upcoming = st.tabs(["🚀 Directly Involved", "👀 Watching", "📅 Upcoming Hearings"])
 
     for tab, b_type in [(tab_involved, "Involved"), (tab_watching, "Watching")]:
@@ -597,7 +598,7 @@ if bills_to_track:
             with m3: st.markdown("#### 🎉 Passed"); render_passed_grouped_list_item(passed)
             with m4: st.markdown("#### ❌ Failed"); render_simple_list_item(failed)
 
-# --- TAB 3: CALENDAR (Sorted by Time) ---
+    # --- TAB 3: CALENDAR (Sorted, Grouped & "Failsafe" Aware) ---
     with tab_upcoming:
         st.subheader("📅 Your Confirmed Agenda")
         today = datetime.now(est).date()
@@ -609,8 +610,6 @@ if bills_to_track:
             if not time_str or "TBA" in time_str: return 23.9 # End of day
             t_lower = time_str.lower()
             if "adjournment" in t_lower or "recess" in t_lower: return 12.5 # Approximate "After Floor" slot
-            
-            # Extract HH:MM
             match = re.search(r'(\d{1,2}):(\d{2})', time_str)
             if match:
                 h = int(match.group(1))
@@ -618,7 +617,7 @@ if bills_to_track:
                 if "pm" in t_lower and h != 12: h += 12
                 if "am" in t_lower and h == 12: h = 0
                 return h + (m / 60.0)
-            return 23.9 # Default to end if parse fails
+            return 23.9
 
         # 1. PRE-CALCULATE DOCKET
         calendar_map = {}
@@ -654,20 +653,15 @@ if bills_to_track:
                 st.divider()
                 
                 # --- SORTING PREPARATION ---
-                # We need to associate each committee with its time *before* rendering
                 comm_time_map = {} 
-                
                 if target_date_str in calendar_map:
-                    # Find times for all committees on this day
                     for comm_name in calendar_map[target_date_str].keys():
                         t_found = "Time TBA"
                         t_rank = 23.9
-                        
                         if target_date_str in scraped_times:
                             docket_words = set(comm_name.lower().replace("house","").replace("senate","").replace("committee","").split())
                             docket_words.discard("of"); docket_words.discard("for"); docket_words.discard("and"); docket_words.discard("&"); docket_words.discard("-")
                             docket_words = {w for w in docket_words if len(w) > 3}
-                            
                             if docket_words:
                                 for s_key, s_time in scraped_times[target_date_str].items():
                                     s_key_lower = s_key.lower()
@@ -683,18 +677,15 @@ if bills_to_track:
 
                 # --- A. SCHEDULED MEETINGS (SORTED) ---
                 if target_date_str in calendar_map:
-                    # Sort committees by their parsed rank
                     sorted_comms = sorted(calendar_map[target_date_str].items(), key=lambda x: comm_time_map.get(x[0], {}).get('rank', 23.9))
-                    
                     for comm_name, bills in sorted_comms:
                         time_display = comm_time_map.get(comm_name, {}).get('display', 'Time TBA')
-                        
                         st.markdown(f"**{comm_name}**")
                         st.caption(f"⏰ {time_display}")
                         for row in bills: _render_single_bill_row(row)
                         st.divider()
 
-                # --- B. COMPLETED / ACTED ON (TODAY ONLY - SORTED) ---
+                # --- B. COMPLETED / ACTED ON (FAILSAFE & SORTED) ---
                 if i == 0: 
                     completed_map = {}
                     
@@ -706,7 +697,7 @@ if bills_to_track:
                         if is_dup: continue
 
                         happened_today = False
-                        
+                        # 1. Check History List
                         hist_data = row.get('History_Data', [])
                         if isinstance(hist_data, list):
                             for h in hist_data:
@@ -717,6 +708,7 @@ if bills_to_track:
                                     if h_dt == target_date: happened_today = True
                                 except: pass
                         
+                        # 2. Check Date Column
                         if not happened_today:
                             last_date = str(row.get('Date', ''))
                             try:
@@ -725,6 +717,7 @@ if bills_to_track:
                                 if lis_dt == target_date: happened_today = True
                             except: pass
 
+                        # 3. Check Status Text for Date (Walk-on Failsafe Part 1)
                         if not happened_today:
                             status_txt = str(row.get('Status', ''))
                             d_check_1 = target_date.strftime("%-m/%-d/%Y")
@@ -734,14 +727,19 @@ if bills_to_track:
 
                         if happened_today:
                             status_lower = str(row.get('Status', '')).lower()
+                            
+                            # --- FAILSAFE PART 2: KEYWORD MATCHING ---
                             has_vote = bool(re.search(r'\d{1,3}-y', status_lower))
                             
+                            # Important: Shows Action taken (even if docket missed it)
                             important_keywords = [
                                 "passed", "report", "agreed", "engross", "read", "vote", 
                                 "tabled", "failed", "defeat", "stricken", "indefinitely", 
                                 "left in", "incorporated", "no action", "continued",
-                                "withdrawn", "recommitted", "rereferred"
+                                "withdrawn", "recommitted", "rereferred", "carried over", "approved"
                             ]
+                            
+                            # Noise: Administrative only
                             noise_keywords = [
                                 "fiscal impact", "statement from", "note filed",
                                 "assigned", "referred", "docketed"
@@ -765,10 +763,7 @@ if bills_to_track:
                     if completed_map:
                         st.success("✅ **Completed Today**")
                         
-                        # --- SORT COMPLETED BY TIME TOO ---
-                        # We try to use the SAME committee time map we built for the upcoming list
-                        # If the committee isn't in comm_time_map (e.g. it finished earlier), we guess 12.0
-                        
+                        # Sort using the main committee map (best guess for time)
                         sorted_completed = sorted(completed_map.items(), key=lambda x: comm_time_map.get(x[0], {}).get('rank', 12.0))
                         
                         for comm_key, bills in sorted_completed:
@@ -794,6 +789,7 @@ if bills_to_track:
                 if not has_schedule and not has_completed:
                      if i != 0: st.caption("-")
                      elif i == 0: st.info("No hearings or updates yet today.")
+
 # --- DEV DEBUGGER ---
 with st.sidebar:
     st.divider()
@@ -801,34 +797,7 @@ with st.sidebar:
         st.write("System Status:")
         if 'docket' in lis_data and not lis_data['docket'].empty:
              st.write(f"**Docket File:** 🟢 Loaded ({len(lis_data['docket'])} rows)")
-             
-             # --- PROBE START: CHECK FOR HB1 ---
-             st.markdown("---")
-             st.write("**🕵️ Probe: HB1 Analysis**")
-             
-             # 1. Search Docket for HB1
-             d_df = lis_data['docket']
-             hb1_docket = d_df[d_df['bill_clean'] == 'HB1']
-             
-             if not hb1_docket.empty:
-                 st.success(f"✅ Found {len(hb1_docket)} entries in DOCKET.CSV")
-                 st.dataframe(hb1_docket) # Show us the raw columns!
-             else:
-                 st.error("❌ HB1 is NOT in DOCKET.CSV")
-                 st.caption("This implies the bill was a 'Walk-on' or the LIS file is incomplete.")
-                 
-             # 2. Search Bills Metadata
-             st.write("**Bill Metadata:**")
-             b_df = lis_data['bills']
-             hb1_meta = b_df[b_df['bill_clean'] == 'HB1']
-             if not hb1_meta.empty:
-                 st.json(hb1_meta.iloc[0].to_dict())
-             else:
-                 st.error("Bill Metadata missing.")
-             # --- PROBE END ---
-
         else:
              st.write(f"**Docket File:** 🔴 Not Found")
-        
         st.write("**Scraper Log (First 10):**")
         st.text("\n".join(scrape_log[:10]))
