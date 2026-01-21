@@ -3,7 +3,7 @@ import requests
 import json
 
 # --- CONFIGURATION ---
-# 🔑 REPLACE THIS with your actual API Key
+# 🔑 Your API Key (Rotate this after testing!)
 API_KEY = "81D70A54-FCDC-4023-A00B-A3FD114D5984" 
 SESSION_CODE = 20261 
 
