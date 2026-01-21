@@ -3,23 +3,31 @@ import requests
 import re
 from bs4 import BeautifulSoup
 from datetime import datetime, timedelta
+import concurrent.futures # <-- THE SPEED ENGINE
 
 # --- CONFIGURATION ---
 API_KEY = "81D70A54-FCDC-4023-A00B-A3FD114D5984" 
 SESSION_CODE = "20261" 
 
-st.set_page_config(page_title="v12 Auto-Forecast", page_icon="⚡", layout="wide")
-st.title("⚡ v12: The Auto-Scanning Weekly Forecast")
+# 🎯 YOUR WATCHLIST (In the real app, this comes from your Google Sheet)
+# This mimics "only checking for bills we have"
+MY_WATCHLIST = ["HB1", "HB104", "HB270", "SB5", "HB397"] 
 
-# --- FUNCTIONS ---
+st.set_page_config(page_title="v13 Turbo Forecast", page_icon="🏎️", layout="wide")
+st.title("🏎️ v13: The Turbo Forecast")
+
+# --- CACHED FUNCTIONS (Speed Layer 1) ---
+
+@st.cache_data(ttl=900) # Cache for 15 minutes
 def get_full_schedule():
+    """Gets the Master Schedule (Fast)"""
     url = "https://lis.virginia.gov/Schedule/api/getschedulelistasync"
     headers = {"WebAPIKey": API_KEY, "Accept": "application/json"}
     all_items = []
     for chamber in ["H", "S"]:
         try:
             params = {"sessionCode": SESSION_CODE, "chamberCode": chamber}
-            resp = requests.get(url, headers=headers, params=params, timeout=10)
+            resp = requests.get(url, headers=headers, params=params, timeout=5)
             if resp.status_code == 200:
                 data = resp.json().get("Schedules", [])
                 for item in data: item['Chamber'] = chamber
@@ -33,13 +41,13 @@ def extract_agenda_link(html_string):
     for link in soup.find_all('a'):
         href = link.get('href')
         text = link.get_text().lower()
-        if any(x in text for x in ["agenda", "committee info", "docket", "meeting info"]):
+        if any(x in text for x in ["agenda", "committee info", "docket"]):
             if href.startswith("/"): return f"https://house.vga.virginia.gov{href}"
             return href
     return None
 
 def scan_agenda_page(url):
-    """Visits the link and scrapes bill numbers"""
+    """The Worker Function"""
     try:
         headers = {'User-Agent': 'Mozilla/5.0'}
         resp = requests.get(url, headers=headers, timeout=5)
@@ -52,37 +60,54 @@ def scan_agenda_page(url):
         return sorted(list(clean_bills))
     except: return []
 
-def parse_time_for_sort(time_str):
-    if not time_str: return 9999
-    try:
-        clean = time_str.lower().replace(".", "").strip()
-        dt = datetime.strptime(clean, "%I:%M %p")
-        return dt.hour * 60 + dt.minute
-    except: return 9999
+# --- PARALLEL PROCESSOR (Speed Layer 2) ---
+def fetch_bills_parallel(meetings_list):
+    """Scans all URLs at the same time using threads"""
+    
+    # Identify which meetings actually have links
+    tasks = []
+    for m in meetings_list:
+        if m.get('AgendaLink'):
+            tasks.append((m, m['AgendaLink']))
+            
+    results = {}
+    
+    # Run 10 requests at once
+    with concurrent.futures.ThreadPoolExecutor(max_workers=10) as executor:
+        # Create a dictionary of {Future: Meeting}
+        future_to_meeting = {executor.submit(scan_agenda_page, url): m for m, url in tasks}
+        
+        for future in concurrent.futures.as_completed(future_to_meeting):
+            meeting = future_to_meeting[future]
+            try:
+                bills = future.result()
+                results[meeting['ScheduleID']] = bills
+            except:
+                results[meeting['ScheduleID']] = []
+                
+    return results
 
 # --- MAIN UI ---
 
-if st.button("🚀 Generate & Scan Week"):
+if st.button("🚀 Run Turbo Scan"):
     
-    # 1. FETCH SCHEDULE
-    with st.spinner("Fetching Schedule from LIS..."):
+    # 1. GET SCHEDULE (Cached)
+    with st.spinner("Fetching Schedule..."):
         all_meetings = get_full_schedule()
         
-    # 2. FILTER & PREPARE
+    # 2. FILTER DATES
     today = datetime.now().date()
     week_map = {}
     for i in range(7):
-        day = today + timedelta(days=i)
-        week_map[day] = [] 
+        week_map[today + timedelta(days=i)] = []
         
-    # Filter meetings
     valid_meetings = []
+    
     for m in all_meetings:
-        raw_date = m.get("ScheduleDate", "").split("T")[0]
-        if not raw_date: continue
-        m_date = datetime.strptime(raw_date, "%Y-%m-%d").date()
+        raw = m.get("ScheduleDate", "").split("T")[0]
+        if not raw: continue
+        m_date = datetime.strptime(raw, "%Y-%m-%d").date()
         
-        # Date & Spam Filter
         if m_date in week_map:
             name = m.get("OwnerName", "")
             if "Caucus" in name or "Press" in name: continue
@@ -92,53 +117,58 @@ if st.button("🚀 Generate & Scan Week"):
             valid_meetings.append(m)
             week_map[m_date].append(m)
 
-    # 3. AUTO-SCAN LOOP (The Magic Part)
-    # We use a progress bar because this might take 10-20 seconds
-    progress_bar = st.progress(0, text="Scanning agendas for bills...")
-    total = len(valid_meetings)
-    
-    for i, m in enumerate(valid_meetings):
-        # Update Progress
-        progress_bar.progress((i + 1) / total, text=f"Scanning meeting {i+1} of {total}...")
+    # 3. PARALLEL SCAN (The Fast Part)
+    with st.spinner(f"⚡ Scanning {len(valid_meetings)} agendas in parallel..."):
+        bill_results = fetch_bills_parallel(valid_meetings)
         
-        if m['AgendaLink']:
-            # AUTOMATICALLY SCRAPE
-            m['Bills'] = scan_agenda_page(m['AgendaLink'])
-        else:
-            m['Bills'] = []
-            
-    progress_bar.empty() # Hide bar when done
+    # Merge results back into objects
+    for m in valid_meetings:
+        m['Bills'] = bill_results.get(m['ScheduleID'], [])
 
-    # 4. RENDER HORIZONTALLY
+    # 4. RENDER
     cols = st.columns(7)
-    sorted_days = sorted(week_map.keys())
+    days = sorted(week_map.keys())
     
-    for day_index, day in enumerate(sorted_days):
-        col = cols[day_index]
-        daily_meetings = week_map[day]
-        daily_meetings.sort(key=lambda x: parse_time_for_sort(x.get("ScheduleTime")))
-        
-        with col:
+    for i, day in enumerate(days):
+        with cols[i]:
             st.markdown(f"### {day.strftime('%a')}")
             st.caption(day.strftime('%b %d'))
             st.divider()
+            
+            daily_meetings = week_map[day]
             
             if not daily_meetings:
                 st.info("No Committees")
             else:
                 for m in daily_meetings:
+                    # CHECK FOR OUR BILLS
+                    my_bills_found = [b for b in m.get('Bills', []) if b in MY_WATCHLIST]
+                    has_my_bills = len(my_bills_found) > 0
+                    
+                    # CARD STYLE: Highlight if it has our bills
+                    border_color = "red" if has_my_bills else None
+                    
                     with st.container(border=True):
-                        # TIME & NAME
+                        if has_my_bills:
+                            st.error(f"🚨 **{len(my_bills_found)} WATCHED BILLS!**")
+                        
                         st.markdown(f"**{m.get('ScheduleTime')}**")
                         short_name = m.get("OwnerName", "").replace("Committee", "").replace("House", "H.").replace("Senate", "S.")
                         st.caption(short_name[:40])
                         
-                        # BILLS DISPLAY (No Buttons!)
+                        # Show Bills
                         if m.get('Bills'):
-                            # Green "Pill" style for bills
+                            # Only show ALL bills if you want, otherwise just show ours?
+                            # For now, listing all, highlighting ours
+                            bill_badges = []
                             for b in m['Bills']:
-                                st.markdown(f":green-background[**{b}**]")
+                                if b in MY_WATCHLIST:
+                                    bill_badges.append(f"**:red[{b}]**") # Highlight
+                                else:
+                                    bill_badges.append(b)
+                            
+                            st.markdown(", ".join(bill_badges))
                         elif m['AgendaLink']:
-                            st.caption("*(Link found, 0 bills listed)*")
+                            st.caption("*(0 bills)*")
                         else:
-                            st.caption("*(No Agenda Link)*")
+                            st.caption("*(No Link)*")
