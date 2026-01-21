@@ -8,8 +8,8 @@ from datetime import datetime, timedelta
 API_KEY = "81D70A54-FCDC-4023-A00B-A3FD114D5984" 
 SESSION_CODE = "20261" 
 
-st.set_page_config(page_title="v11 Stable Calendar", page_icon="🗓️", layout="wide")
-st.title("🗓️ v11: The Crash-Proof Weekly Forecast")
+st.set_page_config(page_title="v12 Auto-Forecast", page_icon="⚡", layout="wide")
+st.title("⚡ v12: The Auto-Scanning Weekly Forecast")
 
 # --- FUNCTIONS ---
 def get_full_schedule():
@@ -39,6 +39,7 @@ def extract_agenda_link(html_string):
     return None
 
 def scan_agenda_page(url):
+    """Visits the link and scrapes bill numbers"""
     try:
         headers = {'User-Agent': 'Mozilla/5.0'}
         resp = requests.get(url, headers=headers, timeout=5)
@@ -61,41 +62,60 @@ def parse_time_for_sort(time_str):
 
 # --- MAIN UI ---
 
-if st.button("🚀 Generate Weekly Calendar"):
-    with st.spinner("Building Calendar..."):
+if st.button("🚀 Generate & Scan Week"):
+    
+    # 1. FETCH SCHEDULE
+    with st.spinner("Fetching Schedule from LIS..."):
         all_meetings = get_full_schedule()
         
-    # 1. INITIALIZE 7-DAY BUCKETS (Empty slots for every day)
+    # 2. FILTER & PREPARE
     today = datetime.now().date()
     week_map = {}
     for i in range(7):
         day = today + timedelta(days=i)
         week_map[day] = [] 
         
-    # 2. FILL BUCKETS
+    # Filter meetings
+    valid_meetings = []
     for m in all_meetings:
         raw_date = m.get("ScheduleDate", "").split("T")[0]
         if not raw_date: continue
         m_date = datetime.strptime(raw_date, "%Y-%m-%d").date()
         
-        # Only add if it falls in our 7-day window
+        # Date & Spam Filter
         if m_date in week_map:
             name = m.get("OwnerName", "")
             if "Caucus" in name or "Press" in name: continue
             
+            m['CleanDate'] = m_date
             m['AgendaLink'] = extract_agenda_link(m.get("Description"))
+            valid_meetings.append(m)
             week_map[m_date].append(m)
 
-    # 3. RENDER HORIZONTALLY
+    # 3. AUTO-SCAN LOOP (The Magic Part)
+    # We use a progress bar because this might take 10-20 seconds
+    progress_bar = st.progress(0, text="Scanning agendas for bills...")
+    total = len(valid_meetings)
+    
+    for i, m in enumerate(valid_meetings):
+        # Update Progress
+        progress_bar.progress((i + 1) / total, text=f"Scanning meeting {i+1} of {total}...")
+        
+        if m['AgendaLink']:
+            # AUTOMATICALLY SCRAPE
+            m['Bills'] = scan_agenda_page(m['AgendaLink'])
+        else:
+            m['Bills'] = []
+            
+    progress_bar.empty() # Hide bar when done
+
+    # 4. RENDER HORIZONTALLY
     cols = st.columns(7)
     sorted_days = sorted(week_map.keys())
     
-    # Outer Loop: The 7 Days (Columns)
     for day_index, day in enumerate(sorted_days):
         col = cols[day_index]
         daily_meetings = week_map[day]
-        
-        # Sort Chronologically
         daily_meetings.sort(key=lambda x: parse_time_for_sort(x.get("ScheduleTime")))
         
         with col:
@@ -106,26 +126,19 @@ if st.button("🚀 Generate Weekly Calendar"):
             if not daily_meetings:
                 st.info("No Committees")
             else:
-                # Inner Loop: The Meetings within that day
-                for meeting_index, m in enumerate(daily_meetings):
-                    
-                    # --- CRASH PROOF KEY ---
-                    # Key is now: "ID" + "DayIndex" + "MeetingIndex"
-                    # This guarantees it is unique even if the ID is duplicated
-                    btn_key = f"btn_{m.get('ScheduleID')}_{day_index}_{meeting_index}"
-                    
+                for m in daily_meetings:
                     with st.container(border=True):
+                        # TIME & NAME
                         st.markdown(f"**{m.get('ScheduleTime')}**")
                         short_name = m.get("OwnerName", "").replace("Committee", "").replace("House", "H.").replace("Senate", "S.")
                         st.caption(short_name[:40])
                         
-                        if m['AgendaLink']:
-                            if st.button("Bills?", key=btn_key):
-                                bills = scan_agenda_page(m['AgendaLink'])
-                                if bills:
-                                    st.success(f"{len(bills)} Bills")
-                                    st.code(", ".join(bills))
-                                else:
-                                    st.warning("Empty Agenda")
+                        # BILLS DISPLAY (No Buttons!)
+                        if m.get('Bills'):
+                            # Green "Pill" style for bills
+                            for b in m['Bills']:
+                                st.markdown(f":green-background[**{b}**]")
+                        elif m['AgendaLink']:
+                            st.caption("*(Link found, 0 bills listed)*")
                         else:
-                            st.caption("No Link")
+                            st.caption("*(No Agenda Link)*")
