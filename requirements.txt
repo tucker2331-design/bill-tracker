@@ -3,3 +3,4 @@ pandas
 requests
 slack_sdk
 beautifulsoup4
+pypdf
