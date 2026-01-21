@@ -2,14 +2,15 @@ import streamlit as st
 import requests
 import re
 from bs4 import BeautifulSoup
-from datetime import datetime
+from datetime import datetime, timedelta
 
 # --- CONFIGURATION ---
 API_KEY = "81D70A54-FCDC-4023-A00B-A3FD114D5984" 
 SESSION_CODE = 20261 
 
-st.set_page_config(page_title="v4 Agenda Crawler", page_icon="🕷️", layout="wide")
-st.title("🕷️ v4: The Agenda Crawler")
+st.set_page_config(page_title="v5 Week Crawler", page_icon="📅", layout="wide")
+st.title("📅 v5: 7-Day Agenda Crawler")
+st.caption("Scanning the next 7 days of Committee Agendas directly from the source.")
 
 # --- FUNCTIONS ---
 
@@ -26,16 +27,17 @@ def get_schedule_from_api(chamber):
     return []
 
 def extract_url_from_html(html_string):
-    """Step 2: Find the 'Agenda' link inside the messy description"""
+    """Step 2: Find the link. Enhanced to catch Senate 'Committee Info' links too."""
     if not html_string: return None
-    # Look for the pattern href="..."
     soup = BeautifulSoup(html_string, 'html.parser')
     for link in soup.find_all('a'):
         href = link.get('href')
         text = link.get_text().lower()
-        # We want the link that says 'Agenda'
-        if "agenda" in text and href:
-            # Fix relative links if necessary
+        
+        # KEYWORDS TO LOOK FOR
+        valid_keywords = ["agenda", "committee info", "docket", "meeting info"]
+        
+        if any(word in text for word in valid_keywords) and href:
             if href.startswith("/"): return f"https://house.vga.virginia.gov{href}"
             return href
     return None
@@ -48,65 +50,83 @@ def scan_agenda_page(url):
         soup = BeautifulSoup(resp.text, 'html.parser')
         text_content = soup.get_text()
         
-        # Regex to find bills (e.g., HB1, SB 50, H.B. 100)
-        # Matches: (HB or SB or HJ or SJ) followed by optional spaces/dots, then numbers
+        # Regex to find bills (HB1, SB 50, etc.)
         bills = re.findall(r'\b(H\.?B\.?|S\.?B\.?|H\.?J\.?|S\.?J\.?|H\.?R\.?|S\.?R\.?)\s*(\d+)', text_content, re.IGNORECASE)
         
-        # Clean up the results
         clean_bills = set()
         for prefix, number in bills:
             clean_prefix = prefix.upper().replace(".","").strip()
             clean_bills.add(f"{clean_prefix}{number}")
             
-        return list(clean_bills)
-    except Exception as e:
+        return sorted(list(clean_bills))
+    except:
         return []
 
 # --- MAIN UI ---
 
-if st.button("🚀 Run Crawler (Today's Meetings)"):
+if st.button("🚀 Scan Next 7 Days"):
     
-    # 1. Get House Meetings
-    with st.spinner("Talking to API..."):
-        meetings = get_schedule_from_api("H")
+    # 1. Fetch Data
+    with st.spinner("Fetching Master Schedule..."):
+        h_meetings = get_schedule_from_api("H")
+        s_meetings = get_schedule_from_api("S")
+        all_meetings = h_meetings + s_meetings
         
-    today_str = datetime.now().strftime("%Y-%m-%d")
-    found_count = 0
+    # 2. Filter for Next 7 Days
+    today = datetime.now()
+    end_date = today + timedelta(days=7)
     
-    for m in meetings:
-        raw_date = m.get("ScheduleDate", "")
+    # Bucket meetings by date strings (e.g., "2026-01-21")
+    calendar_buckets = {}
+    
+    for m in all_meetings:
+        raw_date_str = m.get("ScheduleDate", "").split("T")[0]
+        if not raw_date_str: continue
         
-        # Filter for TODAY (or recent/future)
-        if raw_date.startswith(today_str):
-            found_count += 1
+        try:
+            m_date = datetime.strptime(raw_date_str, "%Y-%m-%d")
+            # Check if within range
+            if today.date() <= m_date.date() <= end_date.date():
+                if raw_date_str not in calendar_buckets:
+                    calendar_buckets[raw_date_str] = []
+                calendar_buckets[raw_date_str].append(m)
+        except:
+            continue
+
+    # 3. Display Logic
+    sorted_dates = sorted(calendar_buckets.keys())
+    
+    if not sorted_dates:
+        st.warning("No meetings found for the next 7 days.")
+    
+    for date_str in sorted_dates:
+        # Convert date to nice format (e.g. "Wednesday, Jan 21")
+        nice_date = datetime.strptime(date_str, "%Y-%m-%d").strftime("%A, %b %d")
+        
+        st.header(f"🗓️ {nice_date}")
+        
+        for m in calendar_buckets[date_str]:
             name = m.get("OwnerName", "Unknown Committee")
+            time = m.get("ScheduleTime", "TBA")
             desc_html = m.get("Description", "")
             
-            st.markdown(f"### 🏛️ {name}")
-            st.caption(f"Time: {m.get('ScheduleTime')}")
-            
-            # 2. Extract Link
-            target_url = extract_url_from_html(desc_html)
-            
-            if target_url:
-                st.success(f"🔗 Found Agenda Link: {target_url}")
+            with st.expander(f"⏰ {time} - {name}"):
+                # Find Link
+                target_url = extract_url_from_html(desc_html)
                 
-                # 3. Scan It
-                with st.spinner("Scanning Agenda Page..."):
-                    found_bills = scan_agenda_page(target_url)
+                if target_url:
+                    st.markdown(f"🔗 [View Original Agenda]({target_url})")
                     
-                if found_bills:
-                    st.balloons()
-                    st.warning(f"🚨 FOUND {len(found_bills)} BILLS ON AGENDA!")
-                    st.write(found_bills)
+                    # SCAN BUTTON (Manual trigger to save speed)
+                    if st.button(f"🔍 Scan Bills for {name}", key=m.get('ScheduleID')):
+                        with st.spinner("Reading Agenda..."):
+                            found_bills = scan_agenda_page(target_url)
+                            if found_bills:
+                                st.success(f"Found {len(found_bills)} Bills:")
+                                st.write(found_bills)
+                            else:
+                                st.warning("Link found, but no bills listed on page yet.")
                 else:
-                    st.info("Link found, but no bills detected on page.")
-            else:
-                st.error("No 'Agenda' link found in API description.")
-                with st.expander("See Raw Description"):
-                    st.code(desc_html)
-            
-            st.divider()
-            
-    if found_count == 0:
-        st.warning(f"No meetings found in API for today ({today_str}).")
+                    st.info("No online agenda link posted yet.")
+        
+        st.divider()
