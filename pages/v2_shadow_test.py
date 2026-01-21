@@ -6,19 +6,16 @@ from datetime import datetime, timedelta
 
 # --- CONFIGURATION ---
 API_KEY = "81D70A54-FCDC-4023-A00B-A3FD114D5984" 
-SESSION_CODE = "20261" # Strict String Match
+SESSION_CODE = "20261" 
 
-st.set_page_config(page_title="v8 Forecast", page_icon="🔮", layout="wide")
-st.title("🔮 v8: The Clean 7-Day Forecast")
+st.set_page_config(page_title="v10 Horizontal Calendar", page_icon="🗓️", layout="wide")
+st.title("🗓️ v10: The Weekly Horizontal Forecast")
 
 # --- FUNCTIONS ---
 def get_full_schedule():
-    """Gets the MASTER list of all meetings"""
     url = "https://lis.virginia.gov/Schedule/api/getschedulelistasync"
     headers = {"WebAPIKey": API_KEY, "Accept": "application/json"}
-    
     all_items = []
-    # Fetch both chambers
     for chamber in ["H", "S"]:
         try:
             params = {"sessionCode": SESSION_CODE, "chamberCode": chamber}
@@ -28,30 +25,25 @@ def get_full_schedule():
                 for item in data: item['Chamber'] = chamber
                 all_items.extend(data)
         except: pass
-        
     return all_items
 
 def extract_agenda_link(html_string):
-    """Finds the hidden PDF/Page link"""
     if not html_string: return None
     soup = BeautifulSoup(html_string, 'html.parser')
     for link in soup.find_all('a'):
         href = link.get('href')
         text = link.get_text().lower()
-        # Look for these specific link text patterns
         if any(x in text for x in ["agenda", "committee info", "docket", "meeting info"]):
             if href.startswith("/"): return f"https://house.vga.virginia.gov{href}"
             return href
     return None
 
 def scan_agenda_page(url):
-    """Visits the link and scrapes bill numbers"""
     try:
         headers = {'User-Agent': 'Mozilla/5.0'}
         resp = requests.get(url, headers=headers, timeout=5)
         soup = BeautifulSoup(resp.text, 'html.parser')
         text = soup.get_text()
-        # Find patterns like HB1, SB 50, H.B. 100
         bills = re.findall(r'\b(H\.?B\.?|S\.?B\.?|H\.?J\.?|S\.?J\.?)\s*(\d+)', text, re.IGNORECASE)
         clean_bills = set()
         for p, n in bills:
@@ -59,74 +51,85 @@ def scan_agenda_page(url):
         return sorted(list(clean_bills))
     except: return []
 
+def parse_time_for_sort(time_str):
+    """Converts '9:00 AM' into a sortable number"""
+    if not time_str: return 9999 # Put unknowns at the end
+    try:
+        # Remove dots (a.m. -> am) and whitespace
+        clean = time_str.lower().replace(".", "").strip()
+        dt = datetime.strptime(clean, "%I:%M %p")
+        return dt.hour * 60 + dt.minute
+    except:
+        return 9999
+
 # --- MAIN UI ---
 
-if st.button("🚀 Generate Forecast"):
-    with st.spinner("Fetching Schedule..."):
+if st.button("🚀 Generate Weekly Calendar"):
+    with st.spinner("Building Calendar..."):
         all_meetings = get_full_schedule()
         
-    # Setup Dates
+    # 1. SETUP THE 7-DAY BUCKETS
     today = datetime.now().date()
-    end_date = today + timedelta(days=14) # Look 2 weeks ahead
-    
-    future_meetings = []
-    
+    # Create a dictionary for the next 7 days: { "2026-01-21": [], "2026-01-22": [] ... }
+    week_map = {}
+    for i in range(7):
+        day = today + timedelta(days=i)
+        week_map[day] = [] # Initialize empty list for every day
+        
+    # 2. FILL BUCKETS
     for m in all_meetings:
-        # 1. PARSE DATE
         raw_date = m.get("ScheduleDate", "").split("T")[0]
         if not raw_date: continue
         m_date = datetime.strptime(raw_date, "%Y-%m-%d").date()
         
-        # 2. FILTER: MUST be Today or Future (No 2022 stuff!)
-        if today <= m_date <= end_date:
-            
-            # 3. FILTER: Must be a Committee (No Caucuses)
+        # Only add if it falls in our 7-day window
+        if m_date in week_map:
             name = m.get("OwnerName", "")
-            sType = m.get("ScheduleType", "")
+            # Skip noise
+            if "Caucus" in name or "Press" in name: continue
             
-            # Skip Caucuses, Press Conferences, and empty placeholders
-            if "Caucus" in name or "Press" in name:
-                continue
-                
-            m['CleanDate'] = m_date
-            
-            # 4. PRE-CALCULATE LINK (Optimization)
             m['AgendaLink'] = extract_agenda_link(m.get("Description"))
-            
-            future_meetings.append(m)
+            week_map[m_date].append(m)
 
-    # Sort chronological
-    future_meetings.sort(key=lambda x: x['CleanDate'])
+    # 3. RENDER HORIZONTALLY
+    # Create 7 columns
+    cols = st.columns(7)
     
-    if not future_meetings:
-        st.warning("No Committee meetings found for the next 14 days.")
-    else:
-        st.success(f"Found {len(future_meetings)} Upcoming Committee Meetings")
+    # Loop through the days sorted (Today -> +6 days)
+    sorted_days = sorted(week_map.keys())
+    
+    for i, day in enumerate(sorted_days):
+        col = cols[i]
+        daily_meetings = week_map[day]
         
-        # GROUP BY DAY
-        current_date = None
-        for m in future_meetings:
-            if m['CleanDate'] != current_date:
-                current_date = m['CleanDate']
-                st.markdown(f"### 🗓️ {current_date.strftime('%A, %b %d')}")
-                st.divider()
-
-            with st.container():
-                col1, col2 = st.columns([3, 1])
-                with col1:
-                    st.markdown(f"**{m.get('OwnerName')}**")
-                    st.caption(f"⏰ {m.get('ScheduleTime')} | 📍 {m.get('RoomDescription')}")
-                
-                with col2:
-                    if m['AgendaLink']:
-                        # THE "SCAN" BUTTON
-                        if st.button(f"🔍 Scan Bills", key=m['ScheduleID']):
-                            with st.spinner("Checking..."):
+        # SORT BY TIME (e.g. 7:30 AM before 9:00 AM)
+        daily_meetings.sort(key=lambda x: parse_time_for_sort(x.get("ScheduleTime")))
+        
+        with col:
+            # Header: "Wed 21"
+            st.markdown(f"### {day.strftime('%a')}")
+            st.caption(day.strftime('%b %d'))
+            st.divider()
+            
+            if not daily_meetings:
+                st.markdown("*No Meetings*")
+            else:
+                for m in daily_meetings:
+                    # Unique Key for Buttons
+                    btn_key = f"{m.get('ScheduleID')}_{i}"
+                    
+                    with st.container(border=True):
+                        st.markdown(f"**{m.get('ScheduleTime')}**")
+                        # Shorten huge names (e.g. "House Agriculture..." -> "House Ag...")
+                        short_name = m.get("OwnerName", "").replace("Committee", "").replace("House", "H.").replace("Senate", "S.")
+                        st.caption(short_name[:40]) # Cut off if too long
+                        
+                        if m['AgendaLink']:
+                            if st.button("Bills?", key=btn_key):
                                 bills = scan_agenda_page(m['AgendaLink'])
                                 if bills:
-                                    st.success(f"Found {len(bills)} Bills!")
-                                    st.code(", ".join(bills))
+                                    st.toast(f"Found: {', '.join(bills)}", icon="✅")
                                 else:
-                                    st.warning("Agenda page found, but no bills listed yet.")
-                    else:
-                        st.caption("No Agenda Link")
+                                    st.toast("Empty Agenda", icon="⚠️")
+                        else:
+                            st.caption("No Link")
