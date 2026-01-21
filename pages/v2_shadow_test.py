@@ -9,30 +9,14 @@ import time
 API_KEY = "81D70A54-FCDC-4023-A00B-A3FD114D5984" 
 SESSION_CODE = 20261 
 
-# Setup the page
-st.set_page_config(
-    page_title="v2 Shadow Tracker (API Test)", 
-    page_icon="🧪", 
-    layout="wide"
-)
+st.set_page_config(page_title="v2 Shadow Tracker", page_icon="🧪", layout="wide")
+st.title("🧪 v2 Shadow Tracker (API Version)")
 
 # --- API HANDLER ---
 def fetch_api_calendar(chamber_code):
-    """
-    Connects to the Official Virginia LIS API.
-    chamber_code: 'H' or 'S'
-    """
     url = "https://lis.virginia.gov/Calendar/api/getcalendarlistasync"
-    
-    headers = {
-        "WebAPIKey": API_KEY,
-        "Accept": "application/json"
-    }
-    
-    params = {
-        "sessionCode": SESSION_CODE,
-        "chamberCode": chamber_code,
-    }
+    headers = {"WebAPIKey": API_KEY, "Accept": "application/json"}
+    params = {"sessionCode": SESSION_CODE, "chamberCode": chamber_code}
     
     try:
         start_time = time.time()
@@ -42,86 +26,94 @@ def fetch_api_calendar(chamber_code):
         if resp.status_code == 200:
             return resp.json(), duration, None
         elif resp.status_code == 401:
-            return [], 0, "❌ Auth Failed (Check Key)"
+            return {}, 0, "❌ Auth Failed (Check Key)"
         else:
-            return [], 0, f"❌ Error {resp.status_code}"
+            return {}, 0, f"❌ Error {resp.status_code}"
             
     except Exception as e:
-        return [], 0, f"💥 Connection Error: {e}"
+        return {}, 0, f"💥 Connection Error: {e}"
 
-# --- UI LAYOUT ---
-st.title("🧪 v2 Shadow Tracker (API Version)")
+# --- MAIN LOGIC ---
+h_data, h_time, h_err = fetch_api_calendar("H")
+s_data, s_time, s_err = fetch_api_calendar("S")
 
-# Sidebar Controls
+# --- SIDEBAR (CONTROLS & DEBUG) ---
 with st.sidebar:
     st.header("⚙️ Monitor Controls")
-    st.caption("These controls let you keep this tab open as a live dashboard.")
     auto_refresh = st.toggle("🔄 Auto-Refresh (Live Monitor)", value=False)
     refresh_rate = st.slider("Refresh Rate (Seconds)", 10, 300, 60)
     
     if st.button("🚀 Force Refresh Now", type="primary"):
         st.rerun()
-    
+
     st.divider()
-    st.markdown("**Debug Tools**")
-    bill_search = st.text_input("🔍 Search Raw Data for Bill (e.g. HB1)", "")
+    st.header("👨‍💻 Developer Data")
+    
+    # DEBUG BOX: HOUSE
+    with st.expander("🔍 House Raw Data", expanded=False):
+        if h_data: st.json(h_data)
+        else: st.warning("No House Data")
+        
+    # DEBUG BOX: SENATE
+    with st.expander("🔍 Senate Raw Data", expanded=False):
+        if s_data: st.json(s_data)
+        else: st.warning("No Senate Data")
 
-# --- MAIN LOGIC ---
-
+# --- UI DISPLAY ---
 col1, col2 = st.columns(2)
 
 # HOUSE COLUMN
 with col1:
-    st.subheader("🏛️ House Calendar")
-    h_data, h_time, h_err = fetch_api_calendar("H")
-    
+    st.subheader("🏛️ House Calendar Files")
     if h_err:
         st.error(h_err)
     else:
-        st.success(f"🟢 Online ({h_time}s) - {len(h_data)} Items Found")
+        # SAFE PARSING: Look specifically for the "Calendars" key
+        calendars = h_data.get("Calendars", [])
+        st.success(f"🟢 Online ({h_time}s) - Found {len(calendars)} Calendar Days")
         
-        # --- DEVELOPER DATA DUMP (Screenshot this!) ---
-        with st.expander("👨‍💻 RAW DATA (Open for Screenshot)", expanded=True):
-            st.write("The API returned this data structure:")
-            st.write(h_data)
-
-        # CRASH-PROOF LOOP
-        if h_data:
-            for item in h_data:
-                # If it's a simple string (which caused the error before)
-                if isinstance(item, str):
-                    st.info(f"📝 String Entry: {item}")
-                
-                # If it's a Dictionary (Object)
-                elif isinstance(item, dict):
-                    desc = item.get('CommitteeName') or item.get('description') or "Unknown"
-                    m_time = item.get('MeetingTime') or "TBA"
-                    st.write(f"**{desc}** at {m_time}")
-                
-                # If it's something else
+        if len(calendars) == 0:
+            st.info("API returned no calendar entries.")
+        
+        for item in calendars:
+            # Each 'item' is a day on the calendar
+            date_str = item.get("CalendarDate", "Unknown Date").split("T")[0]
+            desc = item.get("Description", "Calendar")
+            
+            with st.expander(f"📅 {date_str} - {desc}"):
+                # Loop through the FILES attached to this day
+                files = item.get("CalendarFiles", [])
+                if files:
+                    for f in files:
+                        f_url = f.get("FileURL", "#")
+                        st.markdown(f"📄 [Download File]({f_url}) (ID: {f.get('CalendarFileID')})")
                 else:
-                    st.warning(f"Unknown Format: {type(item)}")
+                    st.caption("No files attached.")
 
 # SENATE COLUMN
 with col2:
-    st.subheader("🏛️ Senate Calendar")
-    s_data, s_time, s_err = fetch_api_calendar("S")
-    
+    st.subheader("🏛️ Senate Calendar Files")
     if s_err:
         st.error(s_err)
     else:
-        st.success(f"🟢 Online ({s_time}s) - {len(s_data)} Items Found")
+        calendars = s_data.get("Calendars", [])
+        st.success(f"🟢 Online ({s_time}s) - Found {len(calendars)} Calendar Days")
         
-        with st.expander("👨‍💻 RAW DATA (Open for Screenshot)"):
-            st.write(s_data)
+        if len(calendars) == 0:
+            st.info("API returned no calendar entries.")
             
-        if s_data:
-            for item in s_data:
-                if isinstance(item, str):
-                    st.info(f"📝 String Entry: {item}")
-                elif isinstance(item, dict):
-                    desc = item.get('CommitteeName') or item.get('description') or "Unknown"
-                    st.write(f"**{desc}**")
+        for item in calendars:
+            date_str = item.get("CalendarDate", "Unknown Date").split("T")[0]
+            desc = item.get("Description", "Calendar")
+            
+            with st.expander(f"📅 {date_str} - {desc}"):
+                files = item.get("CalendarFiles", [])
+                if files:
+                    for f in files:
+                        f_url = f.get("FileURL", "#")
+                        st.markdown(f"📄 [Download File]({f_url}) (ID: {f.get('CalendarFileID')})")
+                else:
+                    st.caption("No files attached.")
 
 # --- AUTO REFRESH LOOP ---
 if auto_refresh:
