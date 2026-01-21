@@ -1,88 +1,132 @@
 import streamlit as st
 import requests
-from datetime import datetime
+import re
+from bs4 import BeautifulSoup
+from datetime import datetime, timedelta
 
 # --- CONFIGURATION ---
 API_KEY = "81D70A54-FCDC-4023-A00B-A3FD114D5984" 
-SESSION_CODE = 20261 
+SESSION_CODE = "20261" # Strict String Match
 
-st.set_page_config(page_title="v6 Endpoint War", page_icon="⚔️", layout="wide")
-st.title("⚔️ v6: Battle of the Endpoints")
+st.set_page_config(page_title="v8 Forecast", page_icon="🔮", layout="wide")
+st.title("🔮 v8: The Clean 7-Day Forecast")
 
-def inspect_endpoint(name, url):
-    """Pings an endpoint and checks its Date Horizon"""
+# --- FUNCTIONS ---
+def get_full_schedule():
+    """Gets the MASTER list of all meetings"""
+    url = "https://lis.virginia.gov/Schedule/api/getschedulelistasync"
     headers = {"WebAPIKey": API_KEY, "Accept": "application/json"}
-    params = {"sessionCode": SESSION_CODE, "chamberCode": "H"} # Testing House
     
-    st.subheader(f"📡 Testing: `{name}`")
-    
-    try:
-        resp = requests.get(url, headers=headers, params=params, timeout=10)
-        if resp.status_code == 200:
-            data = resp.json()
-            
-            # The key name changes based on endpoint
-            # Schedule -> "Schedules", Committee -> "CommitteeMeetings"
-            items = data.get("Schedules") or data.get("CommitteeMeetings") or []
-            
-            if not items:
-                st.warning("⚠️ No items returned.")
-                return
-
-            st.success(f"✅ Downloaded {len(items)} items.")
-            
-            # --- DATE FORENSICS ---
-            dates = []
-            for item in items:
-                # Try every possible date key
-                d_str = item.get("ScheduleDate") or item.get("MeetingDate") or item.get("Date")
-                if d_str:
-                    try:
-                        # Clean "T" format
-                        d_clean = d_str.split("T")[0]
-                        dates.append(d_clean)
-                    except: pass
-            
-            dates.sort()
-            if dates:
-                st.info(f"🗓️ Date Range: **{dates[0]}** to **{dates[-1]}**")
-                
-                # CHECK FUTURE
-                today = datetime.now().strftime("%Y-%m-%d")
-                future_dates = [d for d in dates if d > today]
-                
-                if future_dates:
-                    st.balloons()
-                    st.success(f"🔥 FOUND FUTURE DATA! ({len(future_dates)} meetings)")
-                    st.write("First 5 Future Dates found:", future_dates[:5])
-                    
-                    # Inspect one future item to see if it has the LINK
-                    st.markdown("**Example Future Meeting Data:**")
-                    # Find the object that matches the first future date
-                    for item in items:
-                        d_str = item.get("ScheduleDate") or item.get("MeetingDate")
-                        if d_str and d_str.split("T")[0] == future_dates[0]:
-                            st.json(item)
-                            break
-                else:
-                    st.error("❌ NO Future Data found (Max date is Today or Past).")
-            else:
-                st.warning("Could not parse any dates.")
-                
-        else:
-            st.error(f"❌ API Error: {resp.status_code}")
-            
-    except Exception as e:
-        st.error(f"💥 Connection Error: {e}")
-
-if st.button("🚀 Run Comparison"):
-    
-    col1, col2 = st.columns(2)
-    
-    with col1:
-        # TEST 1: The one we used before (likely failing)
-        inspect_endpoint("Schedule List", "https://lis.virginia.gov/Schedule/api/getschedulelistasync")
+    all_items = []
+    # Fetch both chambers
+    for chamber in ["H", "S"]:
+        try:
+            params = {"sessionCode": SESSION_CODE, "chamberCode": chamber}
+            resp = requests.get(url, headers=headers, params=params, timeout=10)
+            if resp.status_code == 200:
+                data = resp.json().get("Schedules", [])
+                for item in data: item['Chamber'] = chamber
+                all_items.extend(data)
+        except: pass
         
-    with col2:
-        # TEST 2: The New Hope (Committee Meetings)
-        inspect_endpoint("Committee Meetings", "https://lis.virginia.gov/Committee/api/getcommitteemeetinglistasync")
+    return all_items
+
+def extract_agenda_link(html_string):
+    """Finds the hidden PDF/Page link"""
+    if not html_string: return None
+    soup = BeautifulSoup(html_string, 'html.parser')
+    for link in soup.find_all('a'):
+        href = link.get('href')
+        text = link.get_text().lower()
+        # Look for these specific link text patterns
+        if any(x in text for x in ["agenda", "committee info", "docket", "meeting info"]):
+            if href.startswith("/"): return f"https://house.vga.virginia.gov{href}"
+            return href
+    return None
+
+def scan_agenda_page(url):
+    """Visits the link and scrapes bill numbers"""
+    try:
+        headers = {'User-Agent': 'Mozilla/5.0'}
+        resp = requests.get(url, headers=headers, timeout=5)
+        soup = BeautifulSoup(resp.text, 'html.parser')
+        text = soup.get_text()
+        # Find patterns like HB1, SB 50, H.B. 100
+        bills = re.findall(r'\b(H\.?B\.?|S\.?B\.?|H\.?J\.?|S\.?J\.?)\s*(\d+)', text, re.IGNORECASE)
+        clean_bills = set()
+        for p, n in bills:
+            clean_bills.add(f"{p.upper().replace('.','').strip()}{n}")
+        return sorted(list(clean_bills))
+    except: return []
+
+# --- MAIN UI ---
+
+if st.button("🚀 Generate Forecast"):
+    with st.spinner("Fetching Schedule..."):
+        all_meetings = get_full_schedule()
+        
+    # Setup Dates
+    today = datetime.now().date()
+    end_date = today + timedelta(days=14) # Look 2 weeks ahead
+    
+    future_meetings = []
+    
+    for m in all_meetings:
+        # 1. PARSE DATE
+        raw_date = m.get("ScheduleDate", "").split("T")[0]
+        if not raw_date: continue
+        m_date = datetime.strptime(raw_date, "%Y-%m-%d").date()
+        
+        # 2. FILTER: MUST be Today or Future (No 2022 stuff!)
+        if today <= m_date <= end_date:
+            
+            # 3. FILTER: Must be a Committee (No Caucuses)
+            name = m.get("OwnerName", "")
+            sType = m.get("ScheduleType", "")
+            
+            # Skip Caucuses, Press Conferences, and empty placeholders
+            if "Caucus" in name or "Press" in name:
+                continue
+                
+            m['CleanDate'] = m_date
+            
+            # 4. PRE-CALCULATE LINK (Optimization)
+            m['AgendaLink'] = extract_agenda_link(m.get("Description"))
+            
+            future_meetings.append(m)
+
+    # Sort chronological
+    future_meetings.sort(key=lambda x: x['CleanDate'])
+    
+    if not future_meetings:
+        st.warning("No Committee meetings found for the next 14 days.")
+    else:
+        st.success(f"Found {len(future_meetings)} Upcoming Committee Meetings")
+        
+        # GROUP BY DAY
+        current_date = None
+        for m in future_meetings:
+            if m['CleanDate'] != current_date:
+                current_date = m['CleanDate']
+                st.markdown(f"### 🗓️ {current_date.strftime('%A, %b %d')}")
+                st.divider()
+
+            with st.container():
+                col1, col2 = st.columns([3, 1])
+                with col1:
+                    st.markdown(f"**{m.get('OwnerName')}**")
+                    st.caption(f"⏰ {m.get('ScheduleTime')} | 📍 {m.get('RoomDescription')}")
+                
+                with col2:
+                    if m['AgendaLink']:
+                        # THE "SCAN" BUTTON
+                        if st.button(f"🔍 Scan Bills", key=m['ScheduleID']):
+                            with st.spinner("Checking..."):
+                                bills = scan_agenda_page(m['AgendaLink'])
+                                if bills:
+                                    st.success(f"Found {len(bills)} Bills!")
+                                    st.code(", ".join(bills))
+                                else:
+                                    st.warning("Agenda page found, but no bills listed yet.")
+                    else:
+                        st.caption("No Agenda Link")
