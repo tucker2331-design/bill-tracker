@@ -9,37 +9,67 @@ import concurrent.futures
 API_KEY = "81D70A54-FCDC-4023-A00B-A3FD114D5984" 
 SESSION_CODE = "20261" 
 
-st.set_page_config(page_title="v32 Calendar Inspector", page_icon="🕵️‍♀️", layout="wide")
-st.title("🕵️‍♀️ v32: The Calendar Inspector")
+st.set_page_config(page_title="v34 Final Logic", page_icon="🏁", layout="wide")
+st.title("🏁 v34: The Cancellation-Aware Scraper")
 
 # --- SPEED ENGINE ---
 session = requests.Session()
 adapter = requests.adapters.HTTPAdapter(pool_connections=20, pool_maxsize=20)
 session.mount('https://', adapter)
 
+# --- DEBUG TOGGLE ---
+debug_mode = st.sidebar.checkbox("🐞 Match Debugger", value=False)
+
 # --- HELPER: TEXT CLEANING ---
 def get_clean_tokens(text):
     if not text: return set()
-    clean_text = text.lower().replace("#", " ").replace("-", " ")
+    # Handle specific artifacts seen in screenshots
+    clean_text = text.lower().replace(".ics", "").replace("view agenda", "")
+    clean_text = clean_text.replace("-", " ").replace("#", " ")
     clean_text = re.sub(r'[^a-z0-9\s]', '', clean_text)
+    
     noise = {
         "house", "senate", "committee", "subcommittee", "room", "building", 
         "meeting", "the", "of", "and", "&", "agenda", "view", "video", 
-        "signup", "speak", "public", "testimony", "bill", "summit", "caucus"
+        "signup", "speak", "public", "testimony", "bill", "summit", "caucus",
+        "general", "assembly", "commonwealth", "new", "time", "changed", "meeting"
     }
     return set(clean_text.split()) - noise
 
-def is_time_string(line):
-    l = line.lower()
-    if "adjourn" in l or "recess" in l or "upon" in l or "immediately" in l or "after" in l: return True
-    if re.search(r'\d{1,2}:\d{2}', l) and ("am" in l or "pm" in l or "noon" in l): return True
-    return False
+def extract_time_from_block(block_text):
+    """Scans a raw block of text for time indicators OR cancellations."""
+    lower_text = block_text.lower()
+    
+    # 1. CANCELLATION CHECK (High Priority)
+    if "cancel" in lower_text:
+        return "❌ Cancelled"
 
-# --- COMPONENT 1: THE FLAT SCRAPER ---
+    # 2. Look for specific phrases (Medium Priority)
+    phrases = [
+        "immediately upon adjournment", "upon adjournment", "1/2 hour after adjournment", 
+        "15 minutes after adjournment", "recess", "after adjournment"
+    ]
+    for p in phrases:
+        if p in lower_text:
+            # Try to return the whole line containing the phrase for context
+            for line in block_text.splitlines():
+                if p in line.lower(): return line.strip()
+            return p.title()
+
+    # 3. Look for standard times (Low Priority)
+    # Regex for "7:00 AM" or "10:00 a.m."
+    time_match = re.search(r'(\d{1,2}:\d{2}\s*[aA|pP]\.?[mM]\.?)', block_text)
+    if time_match:
+        return time_match.group(1).upper()
+        
+    return None
+
+# --- COMPONENT 1: THE BLOCK SCRAPER (Source B) ---
 @st.cache_data(ttl=300)
-def fetch_daily_text_lines():
+def fetch_daily_blocks():
     """
-    Scrapes the website and organizes text into Date Buckets.
+    Returns: { DateObject: [ "Raw Block Text 1", "Raw Block Text 2" ] }
+    Splits the page by '.ics' to create distinct meeting buckets.
     """
     schedule_map = {} 
     headers = {'User-Agent': 'Mozilla/5.0'}
@@ -48,37 +78,48 @@ def fetch_daily_text_lines():
         resp = session.get(url, headers=headers, timeout=3)
         soup = BeautifulSoup(resp.text, 'html.parser')
         
-        # Get raw lines
         text_blob = soup.get_text("\n")
-        raw_lines = [x.strip() for x in text_blob.splitlines() if x.strip()]
         
-        current_date = "Unknown Date" # Default bucket for lost lines
-        if current_date not in schedule_map: schedule_map[current_date] = []
+        # 1. SPLIT BY DATE HEADERS FIRST
+        lines = [x.strip() for x in text_blob.splitlines() if x.strip()]
         
-        for i, line in enumerate(raw_lines):
-            # 1. Detect Date Header
+        current_date = None
+        current_block_lines = []
+        
+        for line in lines:
+            # Date Detection
             if any(day in line for day in ["Monday,", "Tuesday,", "Wednesday,", "Thursday,", "Friday,"]):
                 try:
-                    # Regex to extract standard date format
                     match = re.search(r'(Monday|Tuesday|Wednesday|Thursday|Friday),\s+([A-Z][a-z]+)\s+(\d{1,2})', line)
                     if match:
+                        # Flush previous block
+                        if current_date and current_block_lines:
+                            schedule_map[current_date].append("\n".join(current_block_lines))
+                            current_block_lines = []
+                            
                         clean_date_str = f"{match.group(0)} 2026"
                         dt = datetime.strptime(clean_date_str, "%A, %B %d %Y")
                         current_date = dt.date()
                         if current_date not in schedule_map: schedule_map[current_date] = []
+                        continue
                 except: pass
             
-            # 2. Store Line
-            if current_date:
-                schedule_map[current_date].append({
-                    "id": i,
-                    "text": line,
-                    "tokens": get_clean_tokens(line),
-                    "used": False
-                })
-    except Exception as e: 
-        st.error(f"Scraper Error: {e}")
-        
+            if not current_date: continue
+            
+            # Add line to current block
+            current_block_lines.append(line)
+            
+            # END OF BLOCK DETECTOR (.ics)
+            # ".ics" or "Archived" ends a meeting card
+            if ".ics" in line.lower() or "archived" in line.lower():
+                schedule_map[current_date].append("\n".join(current_block_lines))
+                current_block_lines = []
+                
+        # Flush last block
+        if current_date and current_block_lines:
+            schedule_map[current_date].append("\n".join(current_block_lines))
+            
+    except Exception as e: pass
     return schedule_map
 
 # --- COMPONENT 2: API FETCH ---
@@ -87,7 +128,6 @@ def get_full_schedule():
     url = "https://lis.virginia.gov/Schedule/api/getschedulelistasync"
     headers = {"WebAPIKey": API_KEY, "Accept": "application/json"}
     raw_items = []
-    
     def fetch_chamber(chamber):
         try:
             params = {"sessionCode": SESSION_CODE, "chamberCode": chamber}
@@ -98,19 +138,17 @@ def get_full_schedule():
                 return data
         except: return []
         return []
-
     with concurrent.futures.ThreadPoolExecutor(max_workers=2) as executor:
         results = executor.map(fetch_chamber, ["H", "S"])
         for r in results: raw_items.extend(r)
-        
-    unique_items = []
+    unique = []
     seen = set()
     for m in raw_items:
         sig = (m.get('ScheduleDate'), m.get('ScheduleTime'), m.get('OwnerName'))
         if sig not in seen:
             seen.add(sig)
-            unique_items.append(m)
-    return unique_items
+            unique.append(m)
+    return unique
 
 def extract_agenda_link(html_string):
     if not html_string: return None
@@ -128,13 +166,13 @@ def scan_agenda_page(url):
         soup = BeautifulSoup(resp.text, 'html.parser')
         text = soup.get_text()
         bills = re.findall(r'\b(H\.?B\.?|S\.?B\.?|H\.?J\.?|S\.?J\.?)\s*(\d+)', text, re.IGNORECASE)
-        clean_bills = set()
-        for p, n in bills: clean_bills.add(f"{p.upper().replace('.','').strip()}{n}")
-        def natural_sort_key(s):
+        clean = set()
+        for p, n in bills: clean.add(f"{p.upper().replace('.','').strip()}{n}")
+        def n_sort(s):
             parts = re.match(r"([A-Za-z]+)(\d+)", s)
             if parts: return parts.group(1), int(parts.group(2))
             return s, 0
-        return sorted(list(clean_bills), key=natural_sort_key)
+        return sorted(list(clean), key=n_sort)
     except: return []
 
 def fetch_bills_parallel(meetings_list):
@@ -151,10 +189,10 @@ def fetch_bills_parallel(meetings_list):
     return results
 
 def parse_time_rank(time_str):
-    if not time_str: return 9999
+    if not time_str or "Not Listed" in time_str or "TBA" in time_str: return 9999
+    if "Cancelled" in time_str: return 9998 # Cancelled at bottom
     clean = time_str.lower().replace(".", "").strip()
     if "adjourn" in clean or "recess" in clean or "upon" in clean or "after" in clean: return 960 
-    if "tba" in clean: return 9999
     try:
         dt = datetime.strptime(clean, "%I:%M %p")
         return dt.hour * 60 + dt.minute
@@ -168,106 +206,20 @@ def parse_committee_name(full_name):
         return full_name, None
     return full_name, None
 
-# --- MATCHING ENGINE ---
-def find_time_for_tokens(tokens, lines):
-    found_match_index = -1
-    best_score = 0.0
-    debug_cands = []
-    
-    for i, line_obj in enumerate(lines):
-        web_tokens = line_obj['tokens']
-        if not web_tokens: continue
-        
-        intersection = tokens.intersection(web_tokens)
-        overlap_count = len(intersection)
-        if overlap_count == 0: continue
-        
-        # Scoring
-        min_len = min(len(tokens), len(web_tokens))
-        score = overlap_count / min_len if min_len > 0 else 0
-        
-        # Boost numbers
-        if intersection.intersection({'1','2','3','4','5','6'}): score += 0.3
-        
-        if score > 0:
-            debug_cands.append(f"{score:.2f} | {line_obj['text']}")
-        
-        if score > best_score and score > 0.6:
-            best_score = score
-            found_match_index = i
-            
-    if found_match_index != -1:
-        # Look Down
-        for offset in range(1, 6):
-            if found_match_index + offset >= len(lines): break
-            candidate = lines[found_match_index + offset]['text']
-            if is_time_string(candidate):
-                return candidate, debug_cands
-    return None, debug_cands
-
 # --- MAIN UI ---
 
-# INSPECTOR CONTROLS
-st.sidebar.header("🔍 Inspector Controls")
-show_inspector = st.sidebar.checkbox("Show Calendar Inspector", value=True)
-inspector_query = st.sidebar.text_input("Search Scraped Text (e.g. 'Capital Outlay')")
-
-if st.button("🚀 Run Forecast & Inspect"):
+if st.button("🚀 Run Final Forecast"):
     
-    # 1. FETCH DATA
     with st.spinner("Fetching API..."):
         all_meetings = get_full_schedule()
+        daily_blocks_map = fetch_daily_blocks()
         
-    with st.spinner("Scraping Website (Source B)..."):
-        daily_lines_map = fetch_daily_text_lines()
-
-    # --- THE CALENDAR INSPECTOR UI ---
-    if show_inspector:
-        st.divider()
-        st.subheader("🗓️ Calendar Inspector (Diagnostic)")
-        
-        # Metric: Dates Found
-        found_dates = [d for d in daily_lines_map.keys() if isinstance(d, datetime) or isinstance(d, type(datetime.now().date()))]
-        sorted_dates = sorted(found_dates)
-        
-        cols = st.columns(len(sorted_dates) + 1 if sorted_dates else 1)
-        for i, d in enumerate(sorted_dates):
-            count = len(daily_lines_map[d])
-            cols[i].metric(d.strftime("%a %m/%d"), f"{count} Lines")
-            
-        if "Unknown Date" in daily_lines_map:
-            cols[-1].metric("⚠️ Unknown Date", f"{len(daily_lines_map['Unknown Date'])} Lines", delta="Error", delta_color="inverse")
-
-        # Search / Inspect
-        with st.expander("🔎 Deep Dive: Raw Scraped Text", expanded=True):
-            if inspector_query:
-                st.info(f"Searching for: **'{inspector_query}'**")
-                hits = []
-                for d, lines in daily_lines_map.items():
-                    d_str = d.strftime("%A %m/%d") if hasattr(d, 'strftime') else str(d)
-                    for line_obj in lines:
-                        if inspector_query.lower() in line_obj['text'].lower():
-                            hits.append(f"**{d_str}**: {line_obj['text']}")
-                
-                if hits:
-                    for h in hits: st.markdown(h)
-                else:
-                    st.warning("No text matches found in any date bucket.")
-            else:
-                # Show all text for first date as example
-                if sorted_dates:
-                    first_d = sorted_dates[0]
-                    st.write(f"**Showing lines for {first_d.strftime('%A %m/%d')}:**")
-                    st.dataframe([l['text'] for l in daily_lines_map[first_d]], use_container_width=True)
-
-        st.divider()
-
-    # --- NORMAL FORECAST RENDERING ---
     today = datetime.now().date()
     week_map = {}
     for i in range(7): week_map[today + timedelta(days=i)] = []
     valid_meetings = []
     
+    # Sort API items: Longest names first (Specific Subcommittees > Generic Parents)
     all_meetings.sort(key=lambda x: len(x.get("OwnerName", "")), reverse=True)
     
     for m in all_meetings:
@@ -281,38 +233,65 @@ if st.button("🚀 Run Forecast & Inspect"):
             
             api_time = m.get("ScheduleTime")
             api_comments = m.get("Comments") or ""
-            final_time = api_time
-            debug_log = []
             
+            # Default State: ASSUME NOT LISTED unless proven otherwise
+            final_time = "⚠️ Not Listed on Schedule"
+            match_debug = []
+            
+            # 1. API Comments Authority (e.g. "Upon Adjournment")
             if "adjourn" in api_comments.lower() or "upon" in api_comments.lower():
                 final_time = api_comments
                 
-            elif not api_time or "12:00" in str(api_time) or "TBA" in str(api_time):
-                if m_date in daily_lines_map:
-                    lines = daily_lines_map[m_date]
-                    api_tokens = get_clean_tokens(name)
+            # 2. Block Search
+            elif m_date in daily_blocks_map:
+                blocks = daily_blocks_map[m_date]
+                api_tokens = get_clean_tokens(name)
+                
+                best_block = None
+                best_score = 0.0
+                
+                for block_text in blocks:
+                    block_tokens = get_clean_tokens(block_text)
+                    intersection = api_tokens.intersection(block_tokens)
                     
-                    # Exact/Fuzzy Match
-                    scraped_time, logs = find_time_for_tokens(api_tokens, lines)
-                    debug_log = logs
+                    if not intersection: continue
                     
-                    if scraped_time:
-                        final_time = scraped_time
+                    # Scoring
+                    score = len(intersection) / len(api_tokens)
+                    
+                    # Bonus for Numbers ("#1", "#2") - CRITICAL
+                    numbers = {'1','2','3','4','5','6'}
+                    if intersection.intersection(numbers): score += 0.5
+                    
+                    match_debug.append(f"{score:.2f}: {block_text[:30]}...")
+                    
+                    if score > best_score and score > 0.65:
+                        best_score = score
+                        best_block = block_text
+                
+                if best_block:
+                    # FOUND THE BLOCK! Extract time or CANCELLATION
+                    extracted_time = extract_time_from_block(best_block)
+                    if extracted_time:
+                        final_time = extracted_time
                     else:
-                        # Parent Fallback
-                        if "-" in name:
-                            parent_name = name.split("-")[0].strip()
-                            parent_tokens = get_clean_tokens(parent_name)
-                            p_time, p_logs = find_time_for_tokens(parent_tokens, lines)
-                            if p_time: final_time = f"See Parent: {p_time}"
+                        final_time = "Time Not Listed" # Found block, but no time
             
-            if not final_time or final_time == "12:00 PM": final_time = "Time TBA"
-            
+            # If API had a valid time (not 12:00/TBA) and we didn't find a better one...
+            # BUT check if we found a "Not Listed" state.
+            if "Not Listed" in final_time:
+                # Only fallback to API if API has a REAL time (not default)
+                if api_time and "12:00" not in str(api_time) and "TBA" not in str(api_time):
+                    final_time = api_time 
+
             m['DisplayTime'] = final_time
             m['CleanDate'] = m_date
             m['AgendaLink'] = extract_agenda_link(m.get("Description"))
             m['ApiTokens'] = get_clean_tokens(name)
-            if final_time == "Time TBA": m['DebugInfo'] = debug_log[:5]
+            m['DebugInfo'] = sorted(match_debug, reverse=True)[:5]
+            
+            # Optional: Hide "Not Listed" meetings completely?
+            # if "Not Listed" in final_time: continue 
             
             valid_meetings.append(m)
             week_map[m_date].append(m)
@@ -343,17 +322,24 @@ if st.button("🚀 Run Forecast & Inspect"):
                     if len(time_str) > 60: time_str = "See Details"
                     
                     with st.container(border=True):
-                        if len(time_str) > 15: st.caption(f"🕒 *{time_str}*") 
-                        else: st.markdown(f"**{time_str}**")
+                        # TIME / STATUS DISPLAY
+                        if "Cancelled" in time_str:
+                            st.error(f"{time_str}") # Red Box for Cancelled
+                        elif "Not Listed" in time_str:
+                            st.warning(f"{time_str}") # Yellow for Ghost
+                        elif "Time Not Listed" in time_str:
+                            st.info(f"{time_str}") # Blue for Found but Empty
+                        elif len(time_str) > 15: 
+                            st.caption(f"🕒 *{time_str}*") 
+                        else: 
+                            st.markdown(f"**{time_str}**")
+                        
                         st.markdown(f"**{parent_name}**")
                         if sub_name: st.caption(f"↳ *{sub_name}*")
                         
-                        if time_str == "Time TBA":
-                            st.error(f"MISSED")
-                            if show_inspector:
-                                with st.expander("Debug"):
-                                    st.caption(f"Tokens: {m['ApiTokens']}")
-                                    for l in m.get('DebugInfo', []): st.text(l)
+                        if debug_mode and "Not Listed" in time_str:
+                            st.caption(f"Tokens: {m['ApiTokens']}")
+                            for d in m.get('DebugInfo', []): st.text(d)
 
                         if bill_count > 0:
                             st.success(f"**{bill_count} Bills Listed**")
