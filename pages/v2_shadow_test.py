@@ -9,35 +9,25 @@ import concurrent.futures
 API_KEY = "81D70A54-FCDC-4023-A00B-A3FD114D5984" 
 SESSION_CODE = "20261" 
 
-st.set_page_config(page_title="v31 Parent Fallback", page_icon="🛡️", layout="wide")
-st.title("🛡️ v31: The 'Parent Fallback' Protocol")
+st.set_page_config(page_title="v32 Calendar Inspector", page_icon="🕵️‍♀️", layout="wide")
+st.title("🕵️‍♀️ v32: The Calendar Inspector")
 
 # --- SPEED ENGINE ---
 session = requests.Session()
 adapter = requests.adapters.HTTPAdapter(pool_connections=20, pool_maxsize=20)
 session.mount('https://', adapter)
 
-# --- DEBUG TOGGLE ---
-debug_mode = st.sidebar.checkbox("🐞 Match Debugger", value=True)
-
 # --- HELPER: TEXT CLEANING ---
 def get_clean_tokens(text):
     if not text: return set()
-    # 1. Handle "Subcommittee #1" -> "subcommittee 1"
-    clean_text = text.lower().replace("#", " ")
-    clean_text = clean_text.replace("-", " ")
-    # Keep alphanumeric (letters + numbers)
+    clean_text = text.lower().replace("#", " ").replace("-", " ")
     clean_text = re.sub(r'[^a-z0-9\s]', '', clean_text)
-    
     noise = {
         "house", "senate", "committee", "subcommittee", "room", "building", 
         "meeting", "the", "of", "and", "&", "agenda", "view", "video", 
         "signup", "speak", "public", "testimony", "bill", "summit", "caucus"
     }
-    
-    words = set(clean_text.split())
-    # Return meaningful words + numbers
-    return words - noise
+    return set(clean_text.split()) - noise
 
 def is_time_string(line):
     l = line.lower()
@@ -48,27 +38,37 @@ def is_time_string(line):
 # --- COMPONENT 1: THE FLAT SCRAPER ---
 @st.cache_data(ttl=300)
 def fetch_daily_text_lines():
+    """
+    Scrapes the website and organizes text into Date Buckets.
+    """
     schedule_map = {} 
     headers = {'User-Agent': 'Mozilla/5.0'}
     try:
         url = "https://house.vga.virginia.gov/schedule/meetings"
         resp = session.get(url, headers=headers, timeout=3)
         soup = BeautifulSoup(resp.text, 'html.parser')
+        
+        # Get raw lines
         text_blob = soup.get_text("\n")
         raw_lines = [x.strip() for x in text_blob.splitlines() if x.strip()]
         
-        current_date = None
+        current_date = "Unknown Date" # Default bucket for lost lines
+        if current_date not in schedule_map: schedule_map[current_date] = []
+        
         for i, line in enumerate(raw_lines):
-            # Detect Date
+            # 1. Detect Date Header
             if any(day in line for day in ["Monday,", "Tuesday,", "Wednesday,", "Thursday,", "Friday,"]):
                 try:
-                    clean_date = line.split(", ")[1] + " 2026"
-                    dt = datetime.strptime(clean_date, "%B %d %Y")
-                    current_date = dt.date()
-                    if current_date not in schedule_map: schedule_map[current_date] = []
+                    # Regex to extract standard date format
+                    match = re.search(r'(Monday|Tuesday|Wednesday|Thursday|Friday),\s+([A-Z][a-z]+)\s+(\d{1,2})', line)
+                    if match:
+                        clean_date_str = f"{match.group(0)} 2026"
+                        dt = datetime.strptime(clean_date_str, "%A, %B %d %Y")
+                        current_date = dt.date()
+                        if current_date not in schedule_map: schedule_map[current_date] = []
                 except: pass
             
-            # Add Line
+            # 2. Store Line
             if current_date:
                 schedule_map[current_date].append({
                     "id": i,
@@ -76,7 +76,9 @@ def fetch_daily_text_lines():
                     "tokens": get_clean_tokens(line),
                     "used": False
                 })
-    except: pass
+    except Exception as e: 
+        st.error(f"Scraper Error: {e}")
+        
     return schedule_map
 
 # --- COMPONENT 2: API FETCH ---
@@ -85,6 +87,7 @@ def get_full_schedule():
     url = "https://lis.virginia.gov/Schedule/api/getschedulelistasync"
     headers = {"WebAPIKey": API_KEY, "Accept": "application/json"}
     raw_items = []
+    
     def fetch_chamber(chamber):
         try:
             params = {"sessionCode": SESSION_CODE, "chamberCode": chamber}
@@ -95,17 +98,19 @@ def get_full_schedule():
                 return data
         except: return []
         return []
+
     with concurrent.futures.ThreadPoolExecutor(max_workers=2) as executor:
         results = executor.map(fetch_chamber, ["H", "S"])
         for r in results: raw_items.extend(r)
-    unique = []
+        
+    unique_items = []
     seen = set()
     for m in raw_items:
         sig = (m.get('ScheduleDate'), m.get('ScheduleTime'), m.get('OwnerName'))
         if sig not in seen:
             seen.add(sig)
-            unique.append(m)
-    return unique
+            unique_items.append(m)
+    return unique_items
 
 def extract_agenda_link(html_string):
     if not html_string: return None
@@ -123,13 +128,13 @@ def scan_agenda_page(url):
         soup = BeautifulSoup(resp.text, 'html.parser')
         text = soup.get_text()
         bills = re.findall(r'\b(H\.?B\.?|S\.?B\.?|H\.?J\.?|S\.?J\.?)\s*(\d+)', text, re.IGNORECASE)
-        clean = set()
-        for p, n in bills: clean.add(f"{p.upper().replace('.','').strip()}{n}")
-        def n_sort(s):
+        clean_bills = set()
+        for p, n in bills: clean_bills.add(f"{p.upper().replace('.','').strip()}{n}")
+        def natural_sort_key(s):
             parts = re.match(r"([A-Za-z]+)(\d+)", s)
             if parts: return parts.group(1), int(parts.group(2))
             return s, 0
-        return sorted(list(clean), key=n_sort)
+        return sorted(list(clean_bills), key=natural_sort_key)
     except: return []
 
 def fetch_bills_parallel(meetings_list):
@@ -165,14 +170,11 @@ def parse_committee_name(full_name):
 
 # --- MATCHING ENGINE ---
 def find_time_for_tokens(tokens, lines):
-    """Core logic to find a matching line in the daily schedule"""
     found_match_index = -1
     best_score = 0.0
+    debug_cands = []
     
     for i, line_obj in enumerate(lines):
-        # Allow reusing parent lines for multiple subcommittees if needed
-        # if line_obj['used']: continue 
-        
         web_tokens = line_obj['tokens']
         if not web_tokens: continue
         
@@ -180,45 +182,92 @@ def find_time_for_tokens(tokens, lines):
         overlap_count = len(intersection)
         if overlap_count == 0: continue
         
-        # SCORE: Overlap Coefficient
-        # If Web has 2 words and both match -> Score 1.0 (Perfect Subset)
-        # If API has 6 words and Web matches 2 -> Score 0.3 (Weak) BUT...
+        # Scoring
         min_len = min(len(tokens), len(web_tokens))
         score = overlap_count / min_len if min_len > 0 else 0
         
-        # Bonus for Numbers
-        numbers = {'1','2','3','4','5','6'}
-        if intersection.intersection(numbers): score += 0.2
+        # Boost numbers
+        if intersection.intersection({'1','2','3','4','5','6'}): score += 0.3
         
-        if score > best_score and score > 0.6: # Relaxed Threshold
+        if score > 0:
+            debug_cands.append(f"{score:.2f} | {line_obj['text']}")
+        
+        if score > best_score and score > 0.6:
             best_score = score
             found_match_index = i
             
     if found_match_index != -1:
-        # line_obj['used'] = True # Optional: Don't consume to allow sharing
         # Look Down
         for offset in range(1, 6):
             if found_match_index + offset >= len(lines): break
             candidate = lines[found_match_index + offset]['text']
             if is_time_string(candidate):
-                return candidate
-    return None
+                return candidate, debug_cands
+    return None, debug_cands
 
 # --- MAIN UI ---
 
-if st.button("🚀 Run Fallback Forecast"):
+# INSPECTOR CONTROLS
+st.sidebar.header("🔍 Inspector Controls")
+show_inspector = st.sidebar.checkbox("Show Calendar Inspector", value=True)
+inspector_query = st.sidebar.text_input("Search Scraped Text (e.g. 'Capital Outlay')")
+
+if st.button("🚀 Run Forecast & Inspect"):
     
+    # 1. FETCH DATA
     with st.spinner("Fetching API..."):
         all_meetings = get_full_schedule()
-        daily_lines_map = fetch_daily_text_lines()
         
+    with st.spinner("Scraping Website (Source B)..."):
+        daily_lines_map = fetch_daily_text_lines()
+
+    # --- THE CALENDAR INSPECTOR UI ---
+    if show_inspector:
+        st.divider()
+        st.subheader("🗓️ Calendar Inspector (Diagnostic)")
+        
+        # Metric: Dates Found
+        found_dates = [d for d in daily_lines_map.keys() if isinstance(d, datetime) or isinstance(d, type(datetime.now().date()))]
+        sorted_dates = sorted(found_dates)
+        
+        cols = st.columns(len(sorted_dates) + 1 if sorted_dates else 1)
+        for i, d in enumerate(sorted_dates):
+            count = len(daily_lines_map[d])
+            cols[i].metric(d.strftime("%a %m/%d"), f"{count} Lines")
+            
+        if "Unknown Date" in daily_lines_map:
+            cols[-1].metric("⚠️ Unknown Date", f"{len(daily_lines_map['Unknown Date'])} Lines", delta="Error", delta_color="inverse")
+
+        # Search / Inspect
+        with st.expander("🔎 Deep Dive: Raw Scraped Text", expanded=True):
+            if inspector_query:
+                st.info(f"Searching for: **'{inspector_query}'**")
+                hits = []
+                for d, lines in daily_lines_map.items():
+                    d_str = d.strftime("%A %m/%d") if hasattr(d, 'strftime') else str(d)
+                    for line_obj in lines:
+                        if inspector_query.lower() in line_obj['text'].lower():
+                            hits.append(f"**{d_str}**: {line_obj['text']}")
+                
+                if hits:
+                    for h in hits: st.markdown(h)
+                else:
+                    st.warning("No text matches found in any date bucket.")
+            else:
+                # Show all text for first date as example
+                if sorted_dates:
+                    first_d = sorted_dates[0]
+                    st.write(f"**Showing lines for {first_d.strftime('%A %m/%d')}:**")
+                    st.dataframe([l['text'] for l in daily_lines_map[first_d]], use_container_width=True)
+
+        st.divider()
+
+    # --- NORMAL FORECAST RENDERING ---
     today = datetime.now().date()
     week_map = {}
     for i in range(7): week_map[today + timedelta(days=i)] = []
     valid_meetings = []
     
-    # Sort: Subcommittees first so they don't get eaten by parents?
-    # Actually, with Parent Fallback, order matters less.
     all_meetings.sort(key=lambda x: len(x.get("OwnerName", "")), reverse=True)
     
     for m in all_meetings:
@@ -233,32 +282,29 @@ if st.button("🚀 Run Fallback Forecast"):
             api_time = m.get("ScheduleTime")
             api_comments = m.get("Comments") or ""
             final_time = api_time
+            debug_log = []
             
-            # 1. API Comments
             if "adjourn" in api_comments.lower() or "upon" in api_comments.lower():
                 final_time = api_comments
                 
-            # 2. Scrape Match
             elif not api_time or "12:00" in str(api_time) or "TBA" in str(api_time):
                 if m_date in daily_lines_map:
                     lines = daily_lines_map[m_date]
-                    
-                    # A. Try Exact Match (Full Subcommittee Name)
                     api_tokens = get_clean_tokens(name)
-                    scraped_time = find_time_for_tokens(api_tokens, lines)
+                    
+                    # Exact/Fuzzy Match
+                    scraped_time, logs = find_time_for_tokens(api_tokens, lines)
+                    debug_log = logs
                     
                     if scraped_time:
                         final_time = scraped_time
                     else:
-                        # B. PARENT FALLBACK (The Safety Net)
-                        # If "Appropriations - Capital Outlay" fails, try just "Appropriations"
+                        # Parent Fallback
                         if "-" in name:
                             parent_name = name.split("-")[0].strip()
                             parent_tokens = get_clean_tokens(parent_name)
-                            parent_time = find_time_for_tokens(parent_tokens, lines)
-                            
-                            if parent_time:
-                                final_time = f"See Parent: {parent_time}"
+                            p_time, p_logs = find_time_for_tokens(parent_tokens, lines)
+                            if p_time: final_time = f"See Parent: {p_time}"
             
             if not final_time or final_time == "12:00 PM": final_time = "Time TBA"
             
@@ -266,6 +312,7 @@ if st.button("🚀 Run Fallback Forecast"):
             m['CleanDate'] = m_date
             m['AgendaLink'] = extract_agenda_link(m.get("Description"))
             m['ApiTokens'] = get_clean_tokens(name)
+            if final_time == "Time TBA": m['DebugInfo'] = debug_log[:5]
             
             valid_meetings.append(m)
             week_map[m_date].append(m)
@@ -301,8 +348,12 @@ if st.button("🚀 Run Fallback Forecast"):
                         st.markdown(f"**{parent_name}**")
                         if sub_name: st.caption(f"↳ *{sub_name}*")
                         
-                        if debug_mode and time_str == "Time TBA":
-                            st.error(f"MISSED: {m['ApiTokens']}")
+                        if time_str == "Time TBA":
+                            st.error(f"MISSED")
+                            if show_inspector:
+                                with st.expander("Debug"):
+                                    st.caption(f"Tokens: {m['ApiTokens']}")
+                                    for l in m.get('DebugInfo', []): st.text(l)
 
                         if bill_count > 0:
                             st.success(f"**{bill_count} Bills Listed**")
