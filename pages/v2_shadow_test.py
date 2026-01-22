@@ -3,36 +3,44 @@ import requests
 import re
 from bs4 import BeautifulSoup
 from datetime import datetime, timedelta
-import concurrent.futures # <-- THE SPEED ENGINE
+import concurrent.futures
 
 # --- CONFIGURATION ---
 API_KEY = "81D70A54-FCDC-4023-A00B-A3FD114D5984" 
 SESSION_CODE = "20261" 
 
-# 🎯 YOUR WATCHLIST (In the real app, this comes from your Google Sheet)
-# This mimics "only checking for bills we have"
-MY_WATCHLIST = ["HB1", "HB104", "HB270", "SB5", "HB397"] 
+st.set_page_config(page_title="v14 Nitro Forecast", page_icon="🔥", layout="wide")
+st.title("🔥 v14: The Nitro Forecast (Unfiltered)")
 
-st.set_page_config(page_title="v13 Turbo Forecast", page_icon="🏎️", layout="wide")
-st.title("🏎️ v13: The Turbo Forecast")
+# --- SPEED ENGINE: PERSISTENT SESSION ---
+# This keeps the connection open so we don't handshake 20 times
+session = requests.Session()
+adapter = requests.adapters.HTTPAdapter(pool_connections=20, pool_maxsize=20)
+session.mount('https://', adapter)
 
-# --- CACHED FUNCTIONS (Speed Layer 1) ---
-
-@st.cache_data(ttl=900) # Cache for 15 minutes
+# --- CACHED SCHEDULE FETCH ---
+@st.cache_data(ttl=600) 
 def get_full_schedule():
-    """Gets the Master Schedule (Fast)"""
     url = "https://lis.virginia.gov/Schedule/api/getschedulelistasync"
     headers = {"WebAPIKey": API_KEY, "Accept": "application/json"}
     all_items = []
-    for chamber in ["H", "S"]:
+    
+    # We can even parallelize the initial API calls
+    def fetch_chamber(chamber):
         try:
             params = {"sessionCode": SESSION_CODE, "chamberCode": chamber}
-            resp = requests.get(url, headers=headers, params=params, timeout=5)
+            resp = session.get(url, headers=headers, params=params, timeout=5)
             if resp.status_code == 200:
                 data = resp.json().get("Schedules", [])
                 for item in data: item['Chamber'] = chamber
-                all_items.extend(data)
-        except: pass
+                return data
+        except: return []
+        return []
+
+    with concurrent.futures.ThreadPoolExecutor(max_workers=2) as executor:
+        results = executor.map(fetch_chamber, ["H", "S"])
+        for r in results: all_items.extend(r)
+        
     return all_items
 
 def extract_agenda_link(html_string):
@@ -47,10 +55,11 @@ def extract_agenda_link(html_string):
     return None
 
 def scan_agenda_page(url):
-    """The Worker Function"""
+    """Worker function using the global SESSION for speed"""
     try:
         headers = {'User-Agent': 'Mozilla/5.0'}
-        resp = requests.get(url, headers=headers, timeout=5)
+        # Use 'session.get' instead of 'requests.get'
+        resp = session.get(url, headers=headers, timeout=5)
         soup = BeautifulSoup(resp.text, 'html.parser')
         text = soup.get_text()
         bills = re.findall(r'\b(H\.?B\.?|S\.?B\.?|H\.?J\.?|S\.?J\.?)\s*(\d+)', text, re.IGNORECASE)
@@ -60,11 +69,8 @@ def scan_agenda_page(url):
         return sorted(list(clean_bills))
     except: return []
 
-# --- PARALLEL PROCESSOR (Speed Layer 2) ---
+# --- PARALLEL PROCESSOR (Max Power) ---
 def fetch_bills_parallel(meetings_list):
-    """Scans all URLs at the same time using threads"""
-    
-    # Identify which meetings actually have links
     tasks = []
     for m in meetings_list:
         if m.get('AgendaLink'):
@@ -72,26 +78,23 @@ def fetch_bills_parallel(meetings_list):
             
     results = {}
     
-    # Run 10 requests at once
-    with concurrent.futures.ThreadPoolExecutor(max_workers=10) as executor:
-        # Create a dictionary of {Future: Meeting}
-        future_to_meeting = {executor.submit(scan_agenda_page, url): m for m, url in tasks}
+    # Increased workers to 20 for maximum throughput
+    with concurrent.futures.ThreadPoolExecutor(max_workers=20) as executor:
+        future_to_id = {executor.submit(scan_agenda_page, url): m['ScheduleID'] for m, url in tasks}
         
-        for future in concurrent.futures.as_completed(future_to_meeting):
-            meeting = future_to_meeting[future]
+        for future in concurrent.futures.as_completed(future_to_id):
+            mid = future_to_id[future]
             try:
-                bills = future.result()
-                results[meeting['ScheduleID']] = bills
+                results[mid] = future.result()
             except:
-                results[meeting['ScheduleID']] = []
-                
+                results[mid] = []
     return results
 
 # --- MAIN UI ---
 
-if st.button("🚀 Run Turbo Scan"):
+if st.button("🚀 Run Nitro Scan"):
     
-    # 1. GET SCHEDULE (Cached)
+    # 1. FETCH SCHEDULE
     with st.spinner("Fetching Schedule..."):
         all_meetings = get_full_schedule()
         
@@ -103,6 +106,7 @@ if st.button("🚀 Run Turbo Scan"):
         
     valid_meetings = []
     
+    # Pre-process list
     for m in all_meetings:
         raw = m.get("ScheduleDate", "").split("T")[0]
         if not raw: continue
@@ -117,11 +121,12 @@ if st.button("🚀 Run Turbo Scan"):
             valid_meetings.append(m)
             week_map[m_date].append(m)
 
-    # 3. PARALLEL SCAN (The Fast Part)
-    with st.spinner(f"⚡ Scanning {len(valid_meetings)} agendas in parallel..."):
+    # 3. PARALLEL SCAN
+    # No progress bar this time - purely optimized for speed
+    with st.spinner(f"🔥 Blasting {len(valid_meetings)} agendas..."):
         bill_results = fetch_bills_parallel(valid_meetings)
         
-    # Merge results back into objects
+    # Merge results
     for m in valid_meetings:
         m['Bills'] = bill_results.get(m['ScheduleID'], [])
 
@@ -136,39 +141,28 @@ if st.button("🚀 Run Turbo Scan"):
             st.divider()
             
             daily_meetings = week_map[day]
+            # Sort by time
+            daily_meetings.sort(key=lambda x: x.get("ScheduleTime", "0"))
             
             if not daily_meetings:
                 st.info("No Committees")
             else:
                 for m in daily_meetings:
-                    # CHECK FOR OUR BILLS
-                    my_bills_found = [b for b in m.get('Bills', []) if b in MY_WATCHLIST]
-                    has_my_bills = len(my_bills_found) > 0
-                    
-                    # CARD STYLE: Highlight if it has our bills
-                    border_color = "red" if has_my_bills else None
+                    # Determine Card Color based on bill count
+                    bill_count = len(m.get('Bills', []))
                     
                     with st.container(border=True):
-                        if has_my_bills:
-                            st.error(f"🚨 **{len(my_bills_found)} WATCHED BILLS!**")
-                        
                         st.markdown(f"**{m.get('ScheduleTime')}**")
                         short_name = m.get("OwnerName", "").replace("Committee", "").replace("House", "H.").replace("Senate", "S.")
                         st.caption(short_name[:40])
                         
-                        # Show Bills
-                        if m.get('Bills'):
-                            # Only show ALL bills if you want, otherwise just show ours?
-                            # For now, listing all, highlighting ours
-                            bill_badges = []
-                            for b in m['Bills']:
-                                if b in MY_WATCHLIST:
-                                    bill_badges.append(f"**:red[{b}]**") # Highlight
-                                else:
-                                    bill_badges.append(b)
-                            
-                            st.markdown(", ".join(bill_badges))
+                        if bill_count > 0:
+                            # Show bill count badge
+                            st.success(f"**{bill_count} Bills Listed**")
+                            # Expandable list so it doesn't clutter the view
+                            with st.expander("See Bills"):
+                                st.write(", ".join(m['Bills']))
                         elif m['AgendaLink']:
-                            st.caption("*(0 bills)*")
+                            st.caption("*(Link found, 0 bills)*")
                         else:
                             st.caption("*(No Link)*")
