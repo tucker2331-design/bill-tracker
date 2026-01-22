@@ -9,8 +9,8 @@ import concurrent.futures
 API_KEY = "81D70A54-FCDC-4023-A00B-A3FD114D5984" 
 SESSION_CODE = "20261" 
 
-st.set_page_config(page_title="v30 Fuzzy Scorer", page_icon="🧮", layout="wide")
-st.title("🧮 v30: The 'Fuzzy Score' Scraper")
+st.set_page_config(page_title="v31 Parent Fallback", page_icon="🛡️", layout="wide")
+st.title("🛡️ v31: The 'Parent Fallback' Protocol")
 
 # --- SPEED ENGINE ---
 session = requests.Session()
@@ -163,9 +163,50 @@ def parse_committee_name(full_name):
         return full_name, None
     return full_name, None
 
+# --- MATCHING ENGINE ---
+def find_time_for_tokens(tokens, lines):
+    """Core logic to find a matching line in the daily schedule"""
+    found_match_index = -1
+    best_score = 0.0
+    
+    for i, line_obj in enumerate(lines):
+        # Allow reusing parent lines for multiple subcommittees if needed
+        # if line_obj['used']: continue 
+        
+        web_tokens = line_obj['tokens']
+        if not web_tokens: continue
+        
+        intersection = tokens.intersection(web_tokens)
+        overlap_count = len(intersection)
+        if overlap_count == 0: continue
+        
+        # SCORE: Overlap Coefficient
+        # If Web has 2 words and both match -> Score 1.0 (Perfect Subset)
+        # If API has 6 words and Web matches 2 -> Score 0.3 (Weak) BUT...
+        min_len = min(len(tokens), len(web_tokens))
+        score = overlap_count / min_len if min_len > 0 else 0
+        
+        # Bonus for Numbers
+        numbers = {'1','2','3','4','5','6'}
+        if intersection.intersection(numbers): score += 0.2
+        
+        if score > best_score and score > 0.6: # Relaxed Threshold
+            best_score = score
+            found_match_index = i
+            
+    if found_match_index != -1:
+        # line_obj['used'] = True # Optional: Don't consume to allow sharing
+        # Look Down
+        for offset in range(1, 6):
+            if found_match_index + offset >= len(lines): break
+            candidate = lines[found_match_index + offset]['text']
+            if is_time_string(candidate):
+                return candidate
+    return None
+
 # --- MAIN UI ---
 
-if st.button("🚀 Run Fuzzy Forecast"):
+if st.button("🚀 Run Fallback Forecast"):
     
     with st.spinner("Fetching API..."):
         all_meetings = get_full_schedule()
@@ -176,6 +217,8 @@ if st.button("🚀 Run Fuzzy Forecast"):
     for i in range(7): week_map[today + timedelta(days=i)] = []
     valid_meetings = []
     
+    # Sort: Subcommittees first so they don't get eaten by parents?
+    # Actually, with Parent Fallback, order matters less.
     all_meetings.sort(key=lambda x: len(x.get("OwnerName", "")), reverse=True)
     
     for m in all_meetings:
@@ -190,56 +233,32 @@ if st.button("🚀 Run Fuzzy Forecast"):
             api_time = m.get("ScheduleTime")
             api_comments = m.get("Comments") or ""
             final_time = api_time
-            debug_info = []
             
+            # 1. API Comments
             if "adjourn" in api_comments.lower() or "upon" in api_comments.lower():
                 final_time = api_comments
                 
+            # 2. Scrape Match
             elif not api_time or "12:00" in str(api_time) or "TBA" in str(api_time):
-                
                 if m_date in daily_lines_map:
                     lines = daily_lines_map[m_date]
+                    
+                    # A. Try Exact Match (Full Subcommittee Name)
                     api_tokens = get_clean_tokens(name)
+                    scraped_time = find_time_for_tokens(api_tokens, lines)
                     
-                    found_match_index = -1
-                    best_score = 0.0
-                    
-                    for i, line_obj in enumerate(lines):
-                        if line_obj['used']: continue
-                        
-                        web_tokens = line_obj['tokens']
-                        if not web_tokens: continue
-                        
-                        # --- SCORING LOGIC ---
-                        # Intersection / Union (Jaccard-ish)
-                        intersection = api_tokens.intersection(web_tokens)
-                        overlap_count = len(intersection)
-                        
-                        if overlap_count == 0: continue
-                        
-                        # Base Score: What % of API words were found?
-                        score = overlap_count / len(api_tokens)
-                        
-                        # Bonus: Unique Numbers (1, 2, 3) are critical
-                        numbers = {'1','2','3','4','5','6'}
-                        common_numbers = intersection.intersection(numbers)
-                        if common_numbers: score += 0.5 # Massive boost for matching "#2"
-                        
-                        debug_info.append(f"{score:.2f}: {line_obj['text']}")
-                        
-                        # Threshold: Match if > 50% score
-                        if score > best_score and score > 0.5:
-                            best_score = score
-                            found_match_index = i
+                    if scraped_time:
+                        final_time = scraped_time
+                    else:
+                        # B. PARENT FALLBACK (The Safety Net)
+                        # If "Appropriations - Capital Outlay" fails, try just "Appropriations"
+                        if "-" in name:
+                            parent_name = name.split("-")[0].strip()
+                            parent_tokens = get_clean_tokens(parent_name)
+                            parent_time = find_time_for_tokens(parent_tokens, lines)
                             
-                    if found_match_index != -1:
-                        lines[found_match_index]['used'] = True
-                        for offset in range(1, 6):
-                            if found_match_index + offset >= len(lines): break
-                            candidate = lines[found_match_index + offset]['text']
-                            if is_time_string(candidate):
-                                final_time = candidate
-                                break
+                            if parent_time:
+                                final_time = f"See Parent: {parent_time}"
             
             if not final_time or final_time == "12:00 PM": final_time = "Time TBA"
             
@@ -247,7 +266,6 @@ if st.button("🚀 Run Fuzzy Forecast"):
             m['CleanDate'] = m_date
             m['AgendaLink'] = extract_agenda_link(m.get("Description"))
             m['ApiTokens'] = get_clean_tokens(name)
-            if final_time == "Time TBA": m['DebugInfo'] = sorted(debug_info, reverse=True)[:3]
             
             valid_meetings.append(m)
             week_map[m_date].append(m)
@@ -285,7 +303,6 @@ if st.button("🚀 Run Fuzzy Forecast"):
                         
                         if debug_mode and time_str == "Time TBA":
                             st.error(f"MISSED: {m['ApiTokens']}")
-                            for d in m.get('DebugInfo', []): st.caption(d)
 
                         if bill_count > 0:
                             st.success(f"**{bill_count} Bills Listed**")
