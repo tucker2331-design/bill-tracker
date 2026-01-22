@@ -9,8 +9,8 @@ import concurrent.futures
 API_KEY = "81D70A54-FCDC-4023-A00B-A3FD114D5984" 
 SESSION_CODE = "20261" 
 
-st.set_page_config(page_title="v16 Bug Fixes", page_icon="🐞", layout="wide")
-st.title("🐞 v16: Fixed Sorting & Duplicates")
+st.set_page_config(page_title="v17 Time Detective", page_icon="🕵️", layout="wide")
+st.title("🕵️ v17: The 'Time Detective' Fix")
 
 # --- SPEED ENGINE ---
 session = requests.Session()
@@ -23,25 +23,28 @@ def natural_sort_key(s):
     if parts: return parts.group(1), int(parts.group(2))
     return s, 0
 
-# --- HELPER: TIME PARSER (FIXES SORTING) ---
+# --- HELPER: TIME PARSER (SMARTER) ---
 def parse_time_rank(time_str):
-    """Converts '9:00 AM' to 540 minutes for proper sorting"""
-    if not time_str: return 9999 # TBA goes to bottom
+    """
+    Converts time strings into minutes from midnight for sorting.
+    Handles '9:00 AM', 'After Adjournment' (late day), and 'TBA' (very last).
+    """
+    if not time_str: return 9999
+    
+    clean = time_str.lower().replace(".", "").strip()
+    
+    # 1. Handle Special Keywords
+    if "adjourn" in clean or "recess" in clean:
+        return 900 # ~3:00 PM (Sorts after morning meetings)
+    if "tba" in clean:
+        return 9999
+        
+    # 2. Handle Standard Time (7:00 AM)
     try:
-        clean = time_str.lower().replace(".", "").strip()
         dt = datetime.strptime(clean, "%I:%M %p")
         return dt.hour * 60 + dt.minute
     except:
         return 9999
-
-# --- HELPER: SUBCOMMITTEE PARSER ---
-def parse_committee_name(full_name):
-    if " - " in full_name:
-        parts = full_name.split(" - ", 1)
-        return parts[0], parts[1]
-    elif "Subcommittee" in full_name:
-        return full_name, None
-    return full_name, None
 
 # --- CORE FUNCTIONS ---
 
@@ -51,7 +54,6 @@ def get_full_schedule():
     headers = {"WebAPIKey": API_KEY, "Accept": "application/json"}
     raw_items = []
     
-    # 1. Fetch Data
     def fetch_chamber(chamber):
         try:
             params = {"sessionCode": SESSION_CODE, "chamberCode": chamber}
@@ -67,20 +69,11 @@ def get_full_schedule():
         results = executor.map(fetch_chamber, ["H", "S"])
         for r in results: raw_items.extend(r)
         
-    # 2. DEDUPLICATE (FIXES DOUBLE MEETINGS)
-    # We create a "signature" for each meeting: Date + Time + Name
-    # If we see the same signature twice, we skip it.
+    # DEDUPLICATE
     unique_items = []
     seen_signatures = set()
-    
     for m in raw_items:
-        # Create unique ID based on content, not just ID
-        sig = (
-            m.get('ScheduleDate'), 
-            m.get('ScheduleTime'), 
-            m.get('OwnerName')
-        )
-        
+        sig = (m.get('ScheduleDate'), m.get('ScheduleTime'), m.get('OwnerName'))
         if sig not in seen_signatures:
             seen_signatures.add(sig)
             unique_items.append(m)
@@ -126,6 +119,14 @@ def fetch_bills_parallel(meetings_list):
             except: results[mid] = []
     return results
 
+def parse_committee_name(full_name):
+    if " - " in full_name:
+        parts = full_name.split(" - ", 1)
+        return parts[0], parts[1]
+    elif "Subcommittee" in full_name:
+        return full_name, None
+    return full_name, None
+
 # --- MAIN UI ---
 
 if st.button("🚀 Run Forecast"):
@@ -149,8 +150,39 @@ if st.button("🚀 Run Forecast"):
             name = m.get("OwnerName", "")
             if "Caucus" in name or "Press" in name: continue
             
+            # --- THE TIME DETECTIVE LOGIC ---
+            raw_time = m.get("ScheduleTime")
+            raw_date_iso = m.get("ScheduleDate", "") # e.g. 2026-01-21T13:00:00
+            comments = m.get("Comments") or ""
+            
+            display_time = "Time TBA"
+            
+            # 1. Check for "Adjournment" keywords in comments
+            if "adjourn" in comments.lower() or "recess" in comments.lower():
+                display_time = "After Adjournment"
+                
+            # 2. If no time, try to extract from Date ISO
+            elif not raw_time:
+                try:
+                    # Extract HH:MM:SS from T-split
+                    if "T" in raw_date_iso:
+                        time_part = raw_date_iso.split("T")[1] # 13:00:00
+                        # Convert 13:00 to 1:00 PM
+                        dt_obj = datetime.strptime(time_part, "%H:%M:%S")
+                        
+                        # Only use it if it's NOT midnight (00:00)
+                        if dt_obj.hour != 0 or dt_obj.minute != 0:
+                            display_time = dt_obj.strftime("%-I:%M %p")
+                except: pass
+            
+            # 3. Use raw time if it exists
+            elif raw_time:
+                display_time = raw_time
+                
+            m['FinalTime'] = display_time
             m['CleanDate'] = m_date
             m['AgendaLink'] = extract_agenda_link(m.get("Description"))
+            
             valid_meetings.append(m)
             week_map[m_date].append(m)
 
@@ -171,9 +203,8 @@ if st.button("🚀 Run Forecast"):
             
             daily_meetings = week_map[day]
             
-            # --- SORTING FIX ---
-            # Sort by rank (minutes from midnight) instead of string
-            daily_meetings.sort(key=lambda x: parse_time_rank(x.get("ScheduleTime")))
+            # Sort by our smart time parser
+            daily_meetings.sort(key=lambda x: parse_time_rank(x.get("FinalTime")))
             
             if not daily_meetings:
                 st.info("No Committees")
@@ -183,12 +214,10 @@ if st.button("🚀 Run Forecast"):
                     full_name = m.get("OwnerName", "")
                     parent_name, sub_name = parse_committee_name(full_name)
                     
-                    # --- TIME FIX ---
-                    time_display = m.get("ScheduleTime")
-                    if not time_display: time_display = "Time TBA"
-                    
                     with st.container(border=True):
-                        st.markdown(f"**{time_display}**")
+                        # Use the NEW calculated time
+                        st.markdown(f"**{m['FinalTime']}**")
+                        
                         st.markdown(f"**{parent_name}**")
                         if sub_name: st.caption(f"↳ *{sub_name}*")
                         
