@@ -9,72 +9,71 @@ import concurrent.futures
 API_KEY = "81D70A54-FCDC-4023-A00B-A3FD114D5984" 
 SESSION_CODE = "20261" 
 
-st.set_page_config(page_title="v51 Match Inspector", page_icon="🕵️‍♂️", layout="wide")
-st.title("🕵️‍♂️ v51: The Match Inspector")
+st.set_page_config(page_title="v52 DNA Matcher", page_icon="🧬", layout="wide")
+st.title("🧬 v52: The 'DNA' Matcher & Live Inspector")
 
 # --- SPEED ENGINE ---
 session = requests.Session()
 adapter = requests.adapters.HTTPAdapter(pool_connections=20, pool_maxsize=20)
 session.mount('https://', adapter)
 
-# --- SIDEBAR CONTROLS ---
-st.sidebar.header("🔍 Inspector Tools")
-show_inspector = st.sidebar.checkbox("Enable Investigator Mode", value=True)
-
-# --- HELPER: TEXT CLEANING ---
-def get_clean_tokens(text):
+# --- HELPER: DNA EXTRACTION ---
+def get_dna_tokens(text):
+    """
+    Extracts ONLY the high-value, unique keywords.
+    Ignores common parliamentary words.
+    """
     if not text: return set()
     lower = text.lower()
     
-    # 1. CLEANING
-    # Remove standard noise
+    # 1. Clean
     lower = lower.replace(".ics", "").replace("view agenda", "")
-    lower = lower.replace("-", " ") 
-    # Keep alphanumeric and #
-    clean_text = re.sub(r'[^a-z0-9\s#]', '', lower)
+    lower = re.sub(r'[^a-z0-9\s]', '', lower)
     
-    # 2. NOISE FILTER
-    # We remove generic words, but KEEP specific identifiers like 'house' for now
-    # so we can see if they are the problem in the Inspector.
-    noise = {
-        "room", "building", "meeting", "the", "of", "and", "&", 
-        "agenda", "view", "video", "signup", "speak", "public", 
-        "testimony", "bill", "summit", "caucus", "general", 
-        "assembly", "commonwealth"
+    # 2. Split
+    tokens = set(lower.split())
+    
+    # 3. DNA FILTER (Ignore these common words)
+    # We want to match on 'Compensation', 'Retirement', 'Innovation', etc.
+    # We DO NOT want to match on 'House', 'Senate', 'Committee' because everyone has those.
+    generic_dna = {
+        "house", "senate", "committee", "subcommittee", "room", "building", 
+        "meeting", "the", "of", "and", "a", "an", "&", "agenda", "view", 
+        "video", "public", "testimony", "bill", "caucus", "general", 
+        "assembly", "commonwealth", "session", "convenes", "adjourned"
     }
-    return set(clean_text.split()) - noise
+    
+    return tokens - generic_dna
 
 def extract_time_from_block(block_text):
     lower_text = block_text.lower()
     if "cancel" in lower_text: return "❌ Cancelled"
     if "noon" in lower_text: return "12:00 PM"
     
-    # Priority: Adjournment sentences
     if "adjourn" in lower_text or "recess" in lower_text:
         for line in block_text.splitlines():
             if "adjourn" in line.lower() or "recess" in line.lower():
                 return line.strip()
 
-    # Standard Time
     time_match = re.search(r'(\d{1,2}:\d{2}\s*[aA|pP]\.?[mM]\.?)', block_text)
     if time_match: return time_match.group(1).upper()
     return None
 
-# --- SCRAPER ---
+# --- SCRAPER (Source B) ---
 @st.cache_data(ttl=300)
 def fetch_house_blocks():
     schedule_map = {} 
     
     today = datetime.now().date()
-    # Calculate Next Monday
     days_ahead = 0 - today.weekday() if today.weekday() > 0 else 0 
     if days_ahead <= 0: days_ahead += 7
     next_monday = today + timedelta(days=days_ahead)
     
+    # Try multiple formats to force the server to respond
     urls = [
-        ("Current Week", "https://house.vga.virginia.gov/schedule/meetings"),
-        ("Next Week (US)", f"https://house.vga.virginia.gov/schedule/meetings?date={next_monday.strftime('%m/%d/%Y')}"),
-        ("Next Week (ISO)", f"https://house.vga.virginia.gov/schedule/meetings?date={next_monday.strftime('%Y-%m-%d')}")
+        ("Current", "https://house.vga.virginia.gov/schedule/meetings"),
+        ("Next (US)", f"https://house.vga.virginia.gov/schedule/meetings?date={next_monday.strftime('%m/%d/%Y')}"),
+        ("Next (ISO)", f"https://house.vga.virginia.gov/schedule/meetings?date={next_monday.strftime('%Y-%m-%d')}")
     ]
     
     headers = {'User-Agent': 'Mozilla/5.0'}
@@ -201,12 +200,32 @@ with st.spinner("Loading Data..."):
     all_meetings = get_full_schedule()
     daily_blocks_map = fetch_house_blocks()
 
+# --- LIVE INSPECTOR (SIDEBAR) ---
+st.sidebar.header("🧬 Live DNA Inspector")
+st.sidebar.info("Type a word (e.g. 'Compensation') to see if it exists in the raw data.")
+debug_query = st.sidebar.text_input("DNA Probe:")
+if debug_query:
+    st.sidebar.markdown(f"**Probing for: '{debug_query}'**")
+    probe_dna = get_dna_tokens(debug_query)
+    st.sidebar.write(f"**DNA:** `{probe_dna}`")
+    
+    hits = 0
+    for date, blocks in daily_blocks_map.items():
+        for block in blocks:
+            block_dna = get_dna_tokens(block)
+            if probe_dna.issubset(block_dna):
+                hits += 1
+                with st.sidebar.expander(f"Hit #{hits} ({date.strftime('%a')})"):
+                    st.write(block)
+    if hits == 0:
+        st.sidebar.error("No DNA matches found!")
+
+# --- CALENDAR LOGIC ---
 today = datetime.now().date()
 week_map = {}
 for i in range(8): week_map[today + timedelta(days=i)] = []
 
 all_meetings.sort(key=lambda x: len(x.get("OwnerName", "")), reverse=True)
-meetings_for_inspector = [] # Store for dropdown
 
 for m in all_meetings:
     raw = m.get("ScheduleDate", "").split("T")[0]
@@ -222,28 +241,29 @@ for m in all_meetings:
     api_comments = m.get("Comments") or ""
     final_time = "⚠️ Not Listed on Schedule"
     
-    # --- LOGIC START ---
+    # --- MATCH LOGIC ---
     if "adjourn" in api_comments.lower() or "upon" in api_comments.lower():
         final_time = api_comments
     
     elif m_date in daily_blocks_map:
         blocks = daily_blocks_map[m_date]
-        api_tokens = get_clean_tokens(name)
+        api_dna = get_dna_tokens(name) # Extract rare keywords only
         
-        # We save this for the Inspector
-        m['InspectorData'] = {
-            'tokens': api_tokens,
-            'blocks': blocks
-        }
+        # DEBUG DATA
+        m['DNA_Tokens'] = api_dna
         
         for block_text in blocks:
-            block_tokens = get_clean_tokens(block_text)
-            if api_tokens.issubset(block_tokens):
+            block_dna = get_dna_tokens(block_text)
+            
+            # THE DNA TEST:
+            # Does the block contain ALL the rare keywords from the API?
+            # Example: API={compensation, retirement}. Block={compensation, retirement, askew}.
+            # {comp, ret} is subset of {comp, ret, askew} -> TRUE.
+            if api_dna.issubset(block_dna):
                 extracted_time = extract_time_from_block(block_text)
                 final_time = extracted_time if extracted_time else "Time Not Listed"
                 break
-    # --- LOGIC END ---
-    
+            
     if "Not Listed" in final_time and api_time and "12:00" not in str(api_time) and "TBA" not in str(api_time):
         final_time = api_time 
 
@@ -252,49 +272,8 @@ for m in all_meetings:
     m['AgendaLink'] = extract_agenda_link(m.get("Description"))
     
     week_map[m_date].append(m)
-    
-    # Add to Inspector List if it's missing or has generic time
-    if "Not Listed" in final_time or "Time Not Listed" in final_time:
-        meetings_for_inspector.append(m)
 
-# --- INSPECTOR UI ---
-if show_inspector:
-    st.subheader("🕵️‍♂️ Investigator Mode")
-    st.info("Select a failing meeting to see WHY it failed.")
-    
-    # Create dropdown labels
-    options = {f"{m['CleanDate'].strftime('%a')} - {m['OwnerName']}": m for m in meetings_for_inspector}
-    selected_label = st.selectbox("Select Meeting:", list(options.keys()))
-    
-    if selected_label:
-        target = options[selected_label]
-        target_tokens = target.get('InspectorData', {}).get('tokens', set())
-        daily_blocks = target.get('InspectorData', {}).get('blocks', [])
-        
-        st.write(f"**Target Tokens (What we need):** `{target_tokens}`")
-        st.write(f"**Total Blocks Found on {target['CleanDate']}:** {len(daily_blocks)}")
-        st.divider()
-        
-        # Scorecard
-        for i, block in enumerate(daily_blocks):
-            block_tokens = get_clean_tokens(block)
-            missing = target_tokens - block_tokens
-            
-            # Formatting
-            color = "red" if missing else "green"
-            status = "❌ MISMATCH" if missing else "✅ MATCH"
-            
-            if len(missing) < 3: # Only show blocks that are somewhat close
-                with st.expander(f"{status} (Block #{i+1})"):
-                    st.write(f"**Block Text:** *{block.strip()[:200]}...*")
-                    if missing:
-                        st.markdown(f":red[**Missing Tokens:**] `{missing}`")
-                    else:
-                        st.markdown(":green[**Perfect Match!**]")
-
-    st.divider()
-
-# --- CALENDAR UI ---
+# --- RENDER ---
 cols = st.columns(len(week_map)) 
 days = sorted(week_map.keys())
 
@@ -329,3 +308,7 @@ for i, day in enumerate(days):
                         st.link_button("View Agenda", m['AgendaLink'])
                     else:
                         st.caption("*(No Link)*")
+                    
+                    if "Not Listed" in time_str:
+                         with st.expander("🧬 DNA Mismatch"):
+                             st.write(f"Required DNA: `{m.get('DNA_Tokens', 'None')}`")
