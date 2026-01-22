@@ -9,8 +9,8 @@ import concurrent.futures
 API_KEY = "81D70A54-FCDC-4023-A00B-A3FD114D5984" 
 SESSION_CODE = "20261" 
 
-st.set_page_config(page_title="v28 Date Fix", page_icon="🩹", layout="wide")
-st.title("🩹 v28: The 'Date-Eater' Fix")
+st.set_page_config(page_title="v29 Structure Scraper", page_icon="🏗️", layout="wide")
+st.title("🏗️ v29: The HTML Structure Scraper")
 
 # --- SPEED ENGINE ---
 session = requests.Session()
@@ -18,34 +18,34 @@ adapter = requests.adapters.HTTPAdapter(pool_connections=20, pool_maxsize=20)
 session.mount('https://', adapter)
 
 # --- DEBUG TOGGLE ---
-debug_mode = st.sidebar.checkbox("🐞 Enable Match Debugger", value=True)
+debug_mode = st.sidebar.checkbox("🐞 Match Debugger", value=True)
 
 # --- HELPER: TEXT CLEANING ---
 def get_clean_tokens(text):
     if not text: return set()
-    # Replace hyphens with spaces to split "Laws-Professions"
     clean_text = text.replace("-", " ").lower()
     clean_text = re.sub(r'[^a-z0-9\s]', '', clean_text)
-    
     noise = {
         "house", "senate", "committee", "subcommittee", "room", "building", 
         "meeting", "the", "of", "and", "&", "agenda", "view", "video", 
-        "signup", "speak", "public", "testimony", "bill", "summit", "caucus",
-        "general", "assembly", "thursday", "january", "february", "march", "wednesday", "tuesday", "monday", "friday"
+        "signup", "speak", "public", "testimony", "bill", "summit", "caucus"
     }
-    
     words = set(clean_text.split())
     return words - noise
 
-def is_time_string(line):
-    l = line.lower()
+def is_time_string(text):
+    l = text.lower()
     if "adjourn" in l or "recess" in l or "upon" in l or "immediately" in l or "after" in l: return True
     if re.search(r'\d{1,2}:\d{2}', l) and ("am" in l or "pm" in l or "noon" in l): return True
     return False
 
-# --- COMPONENT 1: THE INTELLIGENT SCRAPER ---
+# --- COMPONENT 1: THE STRUCTURE SCRAPER (Source B) ---
 @st.cache_data(ttl=300)
-def fetch_daily_text_lines():
+def fetch_daily_structure():
+    """
+    Returns a map: { DateObject: [ {tokens: set, time_text: str} ] }
+    This version walks the HTML TREE instead of reading lines.
+    """
     schedule_map = {} 
     headers = {'User-Agent': 'Mozilla/5.0'}
     
@@ -54,43 +54,64 @@ def fetch_daily_text_lines():
         resp = session.get(url, headers=headers, timeout=3)
         soup = BeautifulSoup(resp.text, 'html.parser')
         
-        text_blob = soup.get_text("\n")
-        raw_lines = [x.strip() for x in text_blob.splitlines() if x.strip()]
+        # KEY INSIGHT: The schedule is likely a list of Headers (h4/div) followed by Details
+        # We find all "Blocks" that look like committee headers
+        
+        # 1. Find all potential Committee Headers
+        # Based on your screenshots, these are often links <a> or bold <strong> tags inside divs
+        # We grab essentially EVERYTHING and filter later.
+        all_elements = soup.find_all(['div', 'span', 'p', 'h4', 'h5', 'a'])
         
         current_date = None
         
-        for i, line in enumerate(raw_lines):
-            # 1. DETECT DATE
-            # Look for "Day, Month DD"
-            date_match = False
-            if any(day in line for day in ["Monday,", "Tuesday,", "Wednesday,", "Thursday,", "Friday,"]):
+        for i, elem in enumerate(all_elements):
+            text = elem.get_text(" ", strip=True)
+            if not text: continue
+            
+            # A. DATE DETECTOR
+            if any(day in text for day in ["Monday,", "Tuesday,", "Wednesday,", "Thursday,", "Friday,"]):
                 try:
-                    # Clean up the date string (sometimes it has extra garbage attached)
-                    # Regex to find "Wednesday, January 21"
-                    match = re.search(r'(Monday|Tuesday|Wednesday|Thursday|Friday),\s+([A-Z][a-z]+)\s+(\d{1,2})', line)
+                    match = re.search(r'(Monday|Tuesday|Wednesday|Thursday|Friday),\s+([A-Z][a-z]+)\s+(\d{1,2})', text)
                     if match:
-                        clean_date_str = f"{match.group(0)} 2026"
-                        dt = datetime.strptime(clean_date_str, "%A, %B %d %Y")
+                        clean_date = f"{match.group(0)} 2026"
+                        dt = datetime.strptime(clean_date, "%A, %B %d %Y")
                         current_date = dt.date()
                         if current_date not in schedule_map: schedule_map[current_date] = []
-                        date_match = True
                 except: pass
+                continue # It's a date header, move on
             
-            # 2. LOGIC FIX: Don't discard the line just because it had a date!
-            # Only discard if it is SHORT (meaning it's *just* a header)
-            # If it's long, it probably contains content merged with the date.
-            if date_match and len(line) < 40:
-                continue 
-            
-            # 3. ADD TO CONTENT
-            if current_date:
-                schedule_map[current_date].append({
-                    "id": i,
-                    "text": line,
-                    "tokens": get_clean_tokens(line),
-                    "used": False
-                })
+            # B. COMMITTEE BLOCK DETECTOR
+            # If we are inside a date, and this looks like a committee name...
+            if current_date and len(text) > 10 and len(text) < 100:
+                # Basic check: does it have committee-like words?
+                if "committee" in text.lower() or "caucus" in text.lower() or "commission" in text.lower():
                     
+                    # FOUND A HEADER: Now look at its immediate neighbors in the list
+                    # We look forward up to 10 elements to find the time
+                    found_time = None
+                    
+                    for offset in range(1, 10):
+                        if i + offset >= len(all_elements): break
+                        
+                        sibling = all_elements[i + offset]
+                        sib_text = sibling.get_text(" ", strip=True)
+                        
+                        # Stop if we hit another Header/Date
+                        if "committee" in sib_text.lower() and len(sib_text) < 100: break 
+                        if "Monday," in sib_text or "Tuesday," in sib_text: break
+                        
+                        # Check for Time
+                        if is_time_string(sib_text):
+                            found_time = sib_text
+                            break # Found it!
+                    
+                    if found_time:
+                        schedule_map[current_date].append({
+                            "tokens": get_clean_tokens(text),
+                            "raw_name": text,
+                            "time_text": found_time
+                        })
+
     except Exception as e: pass
     return schedule_map
 
@@ -100,7 +121,6 @@ def get_full_schedule():
     url = "https://lis.virginia.gov/Schedule/api/getschedulelistasync"
     headers = {"WebAPIKey": API_KEY, "Accept": "application/json"}
     raw_items = []
-    
     def fetch_chamber(chamber):
         try:
             params = {"sessionCode": SESSION_CODE, "chamberCode": chamber}
@@ -111,19 +131,17 @@ def get_full_schedule():
                 return data
         except: return []
         return []
-
     with concurrent.futures.ThreadPoolExecutor(max_workers=2) as executor:
         results = executor.map(fetch_chamber, ["H", "S"])
         for r in results: raw_items.extend(r)
-        
-    unique_items = []
+    unique = []
     seen = set()
     for m in raw_items:
         sig = (m.get('ScheduleDate'), m.get('ScheduleTime'), m.get('OwnerName'))
         if sig not in seen:
             seen.add(sig)
-            unique_items.append(m)
-    return unique_items
+            unique.append(m)
+    return unique
 
 def extract_agenda_link(html_string):
     if not html_string: return None
@@ -141,13 +159,13 @@ def scan_agenda_page(url):
         soup = BeautifulSoup(resp.text, 'html.parser')
         text = soup.get_text()
         bills = re.findall(r'\b(H\.?B\.?|S\.?B\.?|H\.?J\.?|S\.?J\.?)\s*(\d+)', text, re.IGNORECASE)
-        clean_bills = set()
-        for p, n in bills: clean_bills.add(f"{p.upper().replace('.','').strip()}{n}")
-        def natural_sort_key(s):
+        clean = set()
+        for p, n in bills: clean.add(f"{p.upper().replace('.','').strip()}{n}")
+        def n_sort(s):
             parts = re.match(r"([A-Za-z]+)(\d+)", s)
             if parts: return parts.group(1), int(parts.group(2))
             return s, 0
-        return sorted(list(clean_bills), key=natural_sort_key)
+        return sorted(list(clean), key=n_sort)
     except: return []
 
 def fetch_bills_parallel(meetings_list):
@@ -183,18 +201,19 @@ def parse_committee_name(full_name):
 
 # --- MAIN UI ---
 
-if st.button("🚀 Run Logic Fix"):
+if st.button("🚀 Run Structure Forecast"):
     
-    with st.spinner("Fetching Schedule..."):
+    with st.spinner("Fetching API..."):
         all_meetings = get_full_schedule()
-        daily_lines_map = fetch_daily_text_lines()
+        
+    with st.spinner("Walking HTML Tree..."):
+        daily_structure_map = fetch_daily_structure()
         
     today = datetime.now().date()
     week_map = {}
     for i in range(7): week_map[today + timedelta(days=i)] = []
     valid_meetings = []
     
-    # Sort to prioritize Specific Names over Generic ones
     all_meetings.sort(key=lambda x: len(x.get("OwnerName", "")), reverse=True)
     
     for m in all_meetings:
@@ -209,62 +228,37 @@ if st.button("🚀 Run Logic Fix"):
             api_time = m.get("ScheduleTime")
             api_comments = m.get("Comments") or ""
             final_time = api_time
-            match_debug = []
+            debug_cands = []
             
-            # 1. API Comment Trust
             if "adjourn" in api_comments.lower() or "upon" in api_comments.lower():
                 final_time = api_comments
                 
-            # 2. Scrape Match
             elif not api_time or "12:00" in str(api_time) or "TBA" in str(api_time):
-                if m_date in daily_lines_map:
-                    lines = daily_lines_map[m_date]
+                
+                if m_date in daily_structure_map:
+                    scraped_blocks = daily_structure_map[m_date]
                     api_tokens = get_clean_tokens(name)
                     
-                    found_match_index = -1
                     best_overlap = 0
                     
-                    for i, line_obj in enumerate(lines):
-                        if line_obj['used']: continue
-                        
-                        web_tokens = line_obj['tokens']
+                    for block in scraped_blocks:
+                        web_tokens = block['tokens']
                         overlap = len(api_tokens.intersection(web_tokens))
                         
-                        if overlap > 0:
-                            match_debug.append(f"({overlap}) {line_obj['text'][:50]}...")
+                        debug_cands.append(f"{overlap}: {block['raw_name']}")
                         
-                        # MATCH RULES
-                        # A. Perfect containment (e.g. "Appropriations" inside "House Appropriations")
-                        # B. High overlap (2+ words)
-                        if api_tokens and api_tokens.issubset(web_tokens):
-                            best_overlap = 99
-                            found_match_index = i
-                            break # Exact match found, stop looking
-                        
-                        if overlap >= max(1, len(api_tokens) - 1) and overlap > best_overlap:
+                        # Match: Needs Significant Overlap
+                        if overlap > 0 and overlap >= max(1, len(api_tokens) - 1) and overlap > best_overlap:
                             best_overlap = overlap
-                            found_match_index = i
-                            
-                    if found_match_index != -1:
-                        lines[found_match_index]['used'] = True # Consume
-                        
-                        # Look Down for Time
-                        for offset in range(1, 6):
-                            if found_match_index + offset >= len(lines): break
-                            candidate = lines[found_match_index + offset]['text']
-                            if is_time_string(candidate):
-                                final_time = candidate
-                                break
+                            final_time = block['time_text']
             
-            # 3. Fallback / Cleanup
             if not final_time or final_time == "12:00 PM": final_time = "Time TBA"
             
             m['DisplayTime'] = final_time
             m['CleanDate'] = m_date
             m['AgendaLink'] = extract_agenda_link(m.get("Description"))
             m['ApiTokens'] = get_clean_tokens(name)
-            if final_time == "Time TBA":
-                m['DebugInfo'] = match_debug[:5]
+            if final_time == "Time TBA": m['DebugCandidates'] = debug_cands[:5]
             
             valid_meetings.append(m)
             week_map[m_date].append(m)
@@ -281,7 +275,6 @@ if st.button("🚀 Run Logic Fix"):
             st.markdown(f"### {day.strftime('%a')}")
             st.caption(day.strftime('%b %d'))
             st.divider()
-            
             daily_meetings = week_map[day]
             daily_meetings.sort(key=lambda x: parse_time_rank(x.get("DisplayTime")))
             
@@ -292,7 +285,6 @@ if st.button("🚀 Run Logic Fix"):
                     bill_count = len(m.get('Bills', []))
                     full_name = m.get("OwnerName", "")
                     parent_name, sub_name = parse_committee_name(full_name)
-                    
                     time_str = m['DisplayTime']
                     if len(time_str) > 60: time_str = "See Details"
                     
@@ -306,9 +298,8 @@ if st.button("🚀 Run Logic Fix"):
                         if debug_mode and time_str == "Time TBA":
                             st.error("MISSED")
                             st.write(m['ApiTokens'])
-                            if m.get('DebugInfo'):
-                                st.caption("Candidates seen:")
-                                for d in m['DebugInfo']: st.text(d)
+                            if m.get('DebugCandidates'):
+                                for c in m['DebugCandidates']: st.text(c)
 
                         if bill_count > 0:
                             st.success(f"**{bill_count} Bills Listed**")
