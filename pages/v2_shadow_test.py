@@ -9,8 +9,8 @@ import concurrent.futures
 API_KEY = "81D70A54-FCDC-4023-A00B-A3FD114D5984" 
 SESSION_CODE = "20261" 
 
-st.set_page_config(page_title="v36 Horizon Scraper", page_icon="🔭", layout="wide")
-st.title("🔭 v36: The 'Horizon' Scraper (Multi-Week Fix)")
+st.set_page_config(page_title="v37 Deep Search", page_icon="🔭", layout="wide")
+st.title("🔭 v37: The 'Deep Search' Scraper")
 
 # --- SPEED ENGINE ---
 session = requests.Session()
@@ -36,7 +36,6 @@ def get_clean_tokens(text):
         "general", "assembly", "commonwealth", "meeting"
     }
     
-    # If it's a session, don't strip "house" or "senate"
     if not is_session:
         noise.update({"house", "senate"})
         
@@ -82,28 +81,26 @@ def fetch_daily_blocks():
         current_block_lines = []
         
         for line in lines:
-            # 1. DATE DETECTION (LOOSENED REGEX)
-            # Looks for "Monday, Jan 26" or "Monday, January 26"
+            # 1. DATE DETECTION (The Fix for Next Week)
+            # Regex captures "Monday, Jan 26" OR "Monday, January 26"
             if any(day in line for day in ["Monday,", "Tuesday,", "Wednesday,", "Thursday,", "Friday,"]):
                 try:
-                    # Capture "Day, Month DD"
-                    match = re.search(r'(Monday|Tuesday|Wednesday|Thursday|Friday),.*(\d{1,2})', line)
+                    # Look for Day + Word + Number
+                    match = re.search(r'(Monday|Tuesday|Wednesday|Thursday|Friday),\s+([A-Za-z]+)\s+(\d{1,2})', line)
                     if match:
                         # Flush previous
                         if current_date and current_block_lines:
                             schedule_map[current_date].append("\n".join(current_block_lines))
                             current_block_lines = []
                         
-                        # Parse Date (Handle various formats)
-                        raw_date = match.group(0)
-                        # Remove commas and clean up
-                        clean_date_str = raw_date.replace(",", "") + " 2026"
-                        # Try full month first, then abbreviation
+                        # Parse Date
+                        raw_str = f"{match.group(0)} 2026"
                         try:
-                            dt = datetime.strptime(clean_date_str, "%A %B %d %Y")
+                            # Try full month "January"
+                            dt = datetime.strptime(raw_str, "%A, %B %d %Y")
                         except:
-                            # Fallback for "Jan" vs "January"
-                            try: dt = datetime.strptime(clean_date_str, "%A %b %d %Y")
+                            # Try short month "Jan"
+                            try: dt = datetime.strptime(raw_str, "%A, %b %d %Y")
                             except: continue
 
                         current_date = dt.date()
@@ -113,18 +110,17 @@ def fetch_daily_blocks():
             
             if not current_date: continue
             
-            # 2. BLOCK SPLITTING LOGIC
-            # New Rule: "House Convenes" STARTS a new block
-            is_start_marker = "convenes" in line.lower()
+            # 2. BLOCK START DETECTION (Fix for Convenes)
+            # "House Convenes" creates a NEW block immediately
+            is_new_start = "convenes" in line.lower()
             
-            if is_start_marker and current_block_lines:
-                # Flush existing before starting new
+            if is_new_start and current_block_lines:
                 schedule_map[current_date].append("\n".join(current_block_lines))
                 current_block_lines = []
 
             current_block_lines.append(line)
             
-            # 3. END MARKERS (.ics)
+            # 3. BLOCK END DETECTION
             low_line = line.lower()
             if ".ics" in low_line or "archived" in low_line or "pledge of allegiance" in low_line:
                 schedule_map[current_date].append("\n".join(current_block_lines))
@@ -223,28 +219,31 @@ def parse_committee_name(full_name):
 
 # --- MAIN UI ---
 
-# INSPECTOR CONTROLS (Restored)
+# SIDEBAR INSPECTOR (Restored)
 st.sidebar.header("🔍 Inspector Controls")
 show_inspector = st.sidebar.checkbox("Show Calendar Inspector", value=True)
 inspector_query = st.sidebar.text_input("Search Scraped Text (e.g. 'Convenes')")
 
-if st.button("🚀 Run Horizon Forecast"):
+if st.button("🚀 Run Deep Search Forecast"):
     
     with st.spinner("Fetching API..."):
         all_meetings = get_full_schedule()
         daily_blocks_map = fetch_daily_blocks()
         
-    # --- INSPECTOR UI ---
+    # --- INSPECTOR UI (Restored) ---
     if show_inspector:
         st.divider()
         st.subheader("🗓️ Calendar Inspector")
         
         # 1. Date Metrics
         found_dates = sorted([d for d in daily_blocks_map.keys() if isinstance(d, datetime) or isinstance(d, type(datetime.now().date()))])
-        cols = st.columns(len(found_dates) if found_dates else 1)
-        for i, d in enumerate(found_dates):
-            count = len(daily_blocks_map[d])
-            cols[i].metric(d.strftime("%a %m/%d"), f"{count} Blocks")
+        if not found_dates:
+            st.error("No dates found! Scraper logic broken.")
+        else:
+            cols = st.columns(len(found_dates) if found_dates else 1)
+            for i, d in enumerate(found_dates):
+                count = len(daily_blocks_map[d])
+                cols[i].metric(d.strftime("%a %m/%d"), f"{count} Blocks")
             
         # 2. Search
         if inspector_query:
@@ -304,9 +303,9 @@ if st.button("🚀 Run Horizon Forecast"):
                     score = len(intersection) / len(api_tokens)
                     if intersection.intersection({'1','2','3','4','5','6'}): score += 0.5
                     
-                    # Session Boost
+                    # SESSION BOOST
                     if "convenes" in name.lower() and "convenes" in block_text.lower():
-                        score += 0.8
+                        score += 2.0 # Guaranteed match
                     
                     match_debug.append(f"{score:.2f}: {block_text[:30]}...")
                     
