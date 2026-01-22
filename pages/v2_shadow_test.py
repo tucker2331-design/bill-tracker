@@ -9,8 +9,8 @@ import concurrent.futures
 API_KEY = "81D70A54-FCDC-4023-A00B-A3FD114D5984" 
 SESSION_CODE = "20261" 
 
-st.set_page_config(page_title="v17 Time Detective", page_icon="🕵️", layout="wide")
-st.title("🕵️ v17: The 'Time Detective' Fix")
+st.set_page_config(page_title="v18 Final Polish", page_icon="💎", layout="wide")
+st.title("💎 v18: Context-Aware Scheduler")
 
 # --- SPEED ENGINE ---
 session = requests.Session()
@@ -23,31 +23,38 @@ def natural_sort_key(s):
     if parts: return parts.group(1), int(parts.group(2))
     return s, 0
 
-# --- HELPER: TIME PARSER (SMARTER) ---
+# --- HELPER: SMART TIME PARSER ---
 def parse_time_rank(time_str):
     """
-    Converts time strings into minutes from midnight for sorting.
-    Handles '9:00 AM', 'After Adjournment' (late day), and 'TBA' (very last).
+    Sorts meetings logically:
+    1. Specific Times (8:00 AM) -> 0-899
+    2. Floor Adjournment (After House/Senate) -> 900
+    3. Committee Adjournment (After another comm) -> 910
+    4. TBA -> 9999
     """
     if not time_str: return 9999
     
     clean = time_str.lower().replace(".", "").strip()
     
-    # 1. Handle Special Keywords
+    # 1. HIERARCHY DETECTION
     if "adjourn" in clean or "recess" in clean:
-        return 900 # ~3:00 PM (Sorts after morning meetings)
-    if "tba" in clean:
-        return 9999
+        # If waiting for the whole House/Senate/Floor -> Priority 1 (3:00 PM equivalent)
+        if any(x in clean for x in ["house", "senate", "floor", "session"]):
+            return 900 
+        # If waiting for another Committee -> Priority 2 (3:10 PM equivalent)
+        else:
+            return 910
+            
+    if "tba" in clean: return 9999
         
-    # 2. Handle Standard Time (7:00 AM)
+    # 2. STANDARD TIME PARSING
     try:
         dt = datetime.strptime(clean, "%I:%M %p")
         return dt.hour * 60 + dt.minute
     except:
-        return 9999
+        return 9999 # Fallback for weird text
 
 # --- CORE FUNCTIONS ---
-
 @st.cache_data(ttl=600) 
 def get_full_schedule():
     url = "https://lis.virginia.gov/Schedule/api/getschedulelistasync"
@@ -69,7 +76,6 @@ def get_full_schedule():
         results = executor.map(fetch_chamber, ["H", "S"])
         for r in results: raw_items.extend(r)
         
-    # DEDUPLICATE
     unique_items = []
     seen_signatures = set()
     for m in raw_items:
@@ -77,7 +83,6 @@ def get_full_schedule():
         if sig not in seen_signatures:
             seen_signatures.add(sig)
             unique_items.append(m)
-            
     return unique_items
 
 def extract_agenda_link(html_string):
@@ -107,9 +112,7 @@ def scan_agenda_page(url):
 def fetch_bills_parallel(meetings_list):
     tasks = []
     for m in meetings_list:
-        if m.get('AgendaLink'):
-            tasks.append((m, m['AgendaLink']))
-            
+        if m.get('AgendaLink'): tasks.append((m, m['AgendaLink']))
     results = {}
     with concurrent.futures.ThreadPoolExecutor(max_workers=20) as executor:
         future_to_id = {executor.submit(scan_agenda_page, url): m['ScheduleID'] for m, url in tasks}
@@ -130,7 +133,6 @@ def parse_committee_name(full_name):
 # --- MAIN UI ---
 
 if st.button("🚀 Run Forecast"):
-    
     with st.spinner("Fetching Schedule..."):
         all_meetings = get_full_schedule()
         
@@ -150,34 +152,29 @@ if st.button("🚀 Run Forecast"):
             name = m.get("OwnerName", "")
             if "Caucus" in name or "Press" in name: continue
             
-            # --- THE TIME DETECTIVE LOGIC ---
             raw_time = m.get("ScheduleTime")
-            raw_date_iso = m.get("ScheduleDate", "") # e.g. 2026-01-21T13:00:00
+            raw_date_iso = m.get("ScheduleDate", "") 
             comments = m.get("Comments") or ""
             
-            display_time = "Time TBA"
-            
-            # 1. Check for "Adjournment" keywords in comments
+            # --- THE LOGIC FIX ---
+            # Priority 1: Use specific text instructions if available
             if "adjourn" in comments.lower() or "recess" in comments.lower():
-                display_time = "After Adjournment"
-                
-            # 2. If no time, try to extract from Date ISO
-            elif not raw_time:
-                try:
-                    # Extract HH:MM:SS from T-split
-                    if "T" in raw_date_iso:
-                        time_part = raw_date_iso.split("T")[1] # 13:00:00
-                        # Convert 13:00 to 1:00 PM
-                        dt_obj = datetime.strptime(time_part, "%H:%M:%S")
-                        
-                        # Only use it if it's NOT midnight (00:00)
-                        if dt_obj.hour != 0 or dt_obj.minute != 0:
-                            display_time = dt_obj.strftime("%-I:%M %p")
-                except: pass
-            
-            # 3. Use raw time if it exists
+                display_time = comments # <--- KEEP THE ORIGINAL TEXT
+            # Priority 2: Use Time field
             elif raw_time:
                 display_time = raw_time
+            # Priority 3: Extract from Date ISO
+            elif "T" in raw_date_iso:
+                 try:
+                    time_part = raw_date_iso.split("T")[1]
+                    dt_obj = datetime.strptime(time_part, "%H:%M:%S")
+                    if dt_obj.hour != 0 or dt_obj.minute != 0:
+                        display_time = dt_obj.strftime("%-I:%M %p")
+                    else:
+                        display_time = "Time TBA"
+                 except: display_time = "Time TBA"
+            else:
+                display_time = "Time TBA"
                 
             m['FinalTime'] = display_time
             m['CleanDate'] = m_date
@@ -203,7 +200,7 @@ if st.button("🚀 Run Forecast"):
             
             daily_meetings = week_map[day]
             
-            # Sort by our smart time parser
+            # Sort: Fixed Times -> Floor Adj -> Comm Adj -> TBA
             daily_meetings.sort(key=lambda x: parse_time_rank(x.get("FinalTime")))
             
             if not daily_meetings:
@@ -214,10 +211,19 @@ if st.button("🚀 Run Forecast"):
                     full_name = m.get("OwnerName", "")
                     parent_name, sub_name = parse_committee_name(full_name)
                     
+                    time_str = m['FinalTime']
+                    # Visual Cleanup: If text is huge, truncate it nicely or make it small
+                    is_long_text = len(time_str) > 15
+                    
                     with st.container(border=True):
-                        # Use the NEW calculated time
-                        st.markdown(f"**{m['FinalTime']}**")
+                        # TIME DISPLAY
+                        if is_long_text:
+                            # Use italic caption for long instructions like "1/2 hr after..."
+                            st.caption(f"🕒 *{time_str}*") 
+                        else:
+                            st.markdown(f"**{time_str}**")
                         
+                        # NAME DISPLAY
                         st.markdown(f"**{parent_name}**")
                         if sub_name: st.caption(f"↳ *{sub_name}*")
                         
