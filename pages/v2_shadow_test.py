@@ -9,8 +9,8 @@ import concurrent.futures
 API_KEY = "81D70A54-FCDC-4023-A00B-A3FD114D5984" 
 SESSION_CODE = "20261" 
 
-st.set_page_config(page_title="v29 Structure Scraper", page_icon="🏗️", layout="wide")
-st.title("🏗️ v29: The HTML Structure Scraper")
+st.set_page_config(page_title="v30 Fuzzy Scorer", page_icon="🧮", layout="wide")
+st.title("🧮 v30: The 'Fuzzy Score' Scraper")
 
 # --- SPEED ENGINE ---
 session = requests.Session()
@@ -23,96 +23,60 @@ debug_mode = st.sidebar.checkbox("🐞 Match Debugger", value=True)
 # --- HELPER: TEXT CLEANING ---
 def get_clean_tokens(text):
     if not text: return set()
-    clean_text = text.replace("-", " ").lower()
+    # 1. Handle "Subcommittee #1" -> "subcommittee 1"
+    clean_text = text.lower().replace("#", " ")
+    clean_text = clean_text.replace("-", " ")
+    # Keep alphanumeric (letters + numbers)
     clean_text = re.sub(r'[^a-z0-9\s]', '', clean_text)
+    
     noise = {
         "house", "senate", "committee", "subcommittee", "room", "building", 
         "meeting", "the", "of", "and", "&", "agenda", "view", "video", 
         "signup", "speak", "public", "testimony", "bill", "summit", "caucus"
     }
+    
     words = set(clean_text.split())
+    # Return meaningful words + numbers
     return words - noise
 
-def is_time_string(text):
-    l = text.lower()
+def is_time_string(line):
+    l = line.lower()
     if "adjourn" in l or "recess" in l or "upon" in l or "immediately" in l or "after" in l: return True
     if re.search(r'\d{1,2}:\d{2}', l) and ("am" in l or "pm" in l or "noon" in l): return True
     return False
 
-# --- COMPONENT 1: THE STRUCTURE SCRAPER (Source B) ---
+# --- COMPONENT 1: THE FLAT SCRAPER ---
 @st.cache_data(ttl=300)
-def fetch_daily_structure():
-    """
-    Returns a map: { DateObject: [ {tokens: set, time_text: str} ] }
-    This version walks the HTML TREE instead of reading lines.
-    """
+def fetch_daily_text_lines():
     schedule_map = {} 
     headers = {'User-Agent': 'Mozilla/5.0'}
-    
     try:
         url = "https://house.vga.virginia.gov/schedule/meetings"
         resp = session.get(url, headers=headers, timeout=3)
         soup = BeautifulSoup(resp.text, 'html.parser')
-        
-        # KEY INSIGHT: The schedule is likely a list of Headers (h4/div) followed by Details
-        # We find all "Blocks" that look like committee headers
-        
-        # 1. Find all potential Committee Headers
-        # Based on your screenshots, these are often links <a> or bold <strong> tags inside divs
-        # We grab essentially EVERYTHING and filter later.
-        all_elements = soup.find_all(['div', 'span', 'p', 'h4', 'h5', 'a'])
+        text_blob = soup.get_text("\n")
+        raw_lines = [x.strip() for x in text_blob.splitlines() if x.strip()]
         
         current_date = None
-        
-        for i, elem in enumerate(all_elements):
-            text = elem.get_text(" ", strip=True)
-            if not text: continue
-            
-            # A. DATE DETECTOR
-            if any(day in text for day in ["Monday,", "Tuesday,", "Wednesday,", "Thursday,", "Friday,"]):
+        for i, line in enumerate(raw_lines):
+            # Detect Date
+            if any(day in line for day in ["Monday,", "Tuesday,", "Wednesday,", "Thursday,", "Friday,"]):
                 try:
-                    match = re.search(r'(Monday|Tuesday|Wednesday|Thursday|Friday),\s+([A-Z][a-z]+)\s+(\d{1,2})', text)
-                    if match:
-                        clean_date = f"{match.group(0)} 2026"
-                        dt = datetime.strptime(clean_date, "%A, %B %d %Y")
-                        current_date = dt.date()
-                        if current_date not in schedule_map: schedule_map[current_date] = []
+                    clean_date = line.split(", ")[1] + " 2026"
+                    dt = datetime.strptime(clean_date, "%B %d %Y")
+                    current_date = dt.date()
+                    if current_date not in schedule_map: schedule_map[current_date] = []
                 except: pass
-                continue # It's a date header, move on
             
-            # B. COMMITTEE BLOCK DETECTOR
-            # If we are inside a date, and this looks like a committee name...
-            if current_date and len(text) > 10 and len(text) < 100:
-                # Basic check: does it have committee-like words?
-                if "committee" in text.lower() or "caucus" in text.lower() or "commission" in text.lower():
-                    
-                    # FOUND A HEADER: Now look at its immediate neighbors in the list
-                    # We look forward up to 10 elements to find the time
-                    found_time = None
-                    
-                    for offset in range(1, 10):
-                        if i + offset >= len(all_elements): break
-                        
-                        sibling = all_elements[i + offset]
-                        sib_text = sibling.get_text(" ", strip=True)
-                        
-                        # Stop if we hit another Header/Date
-                        if "committee" in sib_text.lower() and len(sib_text) < 100: break 
-                        if "Monday," in sib_text or "Tuesday," in sib_text: break
-                        
-                        # Check for Time
-                        if is_time_string(sib_text):
-                            found_time = sib_text
-                            break # Found it!
-                    
-                    if found_time:
-                        schedule_map[current_date].append({
-                            "tokens": get_clean_tokens(text),
-                            "raw_name": text,
-                            "time_text": found_time
-                        })
-
-    except Exception as e: pass
+            # Add Line
+            if current_date:
+                schedule_map[current_date].append({
+                    "id": i,
+                    "text": line,
+                    "tokens": get_clean_tokens(line),
+                    "used": False
+                })
+    except: pass
     return schedule_map
 
 # --- COMPONENT 2: API FETCH ---
@@ -201,13 +165,11 @@ def parse_committee_name(full_name):
 
 # --- MAIN UI ---
 
-if st.button("🚀 Run Structure Forecast"):
+if st.button("🚀 Run Fuzzy Forecast"):
     
     with st.spinner("Fetching API..."):
         all_meetings = get_full_schedule()
-        
-    with st.spinner("Walking HTML Tree..."):
-        daily_structure_map = fetch_daily_structure()
+        daily_lines_map = fetch_daily_text_lines()
         
     today = datetime.now().date()
     week_map = {}
@@ -228,29 +190,56 @@ if st.button("🚀 Run Structure Forecast"):
             api_time = m.get("ScheduleTime")
             api_comments = m.get("Comments") or ""
             final_time = api_time
-            debug_cands = []
+            debug_info = []
             
             if "adjourn" in api_comments.lower() or "upon" in api_comments.lower():
                 final_time = api_comments
                 
             elif not api_time or "12:00" in str(api_time) or "TBA" in str(api_time):
                 
-                if m_date in daily_structure_map:
-                    scraped_blocks = daily_structure_map[m_date]
+                if m_date in daily_lines_map:
+                    lines = daily_lines_map[m_date]
                     api_tokens = get_clean_tokens(name)
                     
-                    best_overlap = 0
+                    found_match_index = -1
+                    best_score = 0.0
                     
-                    for block in scraped_blocks:
-                        web_tokens = block['tokens']
-                        overlap = len(api_tokens.intersection(web_tokens))
+                    for i, line_obj in enumerate(lines):
+                        if line_obj['used']: continue
                         
-                        debug_cands.append(f"{overlap}: {block['raw_name']}")
+                        web_tokens = line_obj['tokens']
+                        if not web_tokens: continue
                         
-                        # Match: Needs Significant Overlap
-                        if overlap > 0 and overlap >= max(1, len(api_tokens) - 1) and overlap > best_overlap:
-                            best_overlap = overlap
-                            final_time = block['time_text']
+                        # --- SCORING LOGIC ---
+                        # Intersection / Union (Jaccard-ish)
+                        intersection = api_tokens.intersection(web_tokens)
+                        overlap_count = len(intersection)
+                        
+                        if overlap_count == 0: continue
+                        
+                        # Base Score: What % of API words were found?
+                        score = overlap_count / len(api_tokens)
+                        
+                        # Bonus: Unique Numbers (1, 2, 3) are critical
+                        numbers = {'1','2','3','4','5','6'}
+                        common_numbers = intersection.intersection(numbers)
+                        if common_numbers: score += 0.5 # Massive boost for matching "#2"
+                        
+                        debug_info.append(f"{score:.2f}: {line_obj['text']}")
+                        
+                        # Threshold: Match if > 50% score
+                        if score > best_score and score > 0.5:
+                            best_score = score
+                            found_match_index = i
+                            
+                    if found_match_index != -1:
+                        lines[found_match_index]['used'] = True
+                        for offset in range(1, 6):
+                            if found_match_index + offset >= len(lines): break
+                            candidate = lines[found_match_index + offset]['text']
+                            if is_time_string(candidate):
+                                final_time = candidate
+                                break
             
             if not final_time or final_time == "12:00 PM": final_time = "Time TBA"
             
@@ -258,7 +247,7 @@ if st.button("🚀 Run Structure Forecast"):
             m['CleanDate'] = m_date
             m['AgendaLink'] = extract_agenda_link(m.get("Description"))
             m['ApiTokens'] = get_clean_tokens(name)
-            if final_time == "Time TBA": m['DebugCandidates'] = debug_cands[:5]
+            if final_time == "Time TBA": m['DebugInfo'] = sorted(debug_info, reverse=True)[:3]
             
             valid_meetings.append(m)
             week_map[m_date].append(m)
@@ -291,15 +280,12 @@ if st.button("🚀 Run Structure Forecast"):
                     with st.container(border=True):
                         if len(time_str) > 15: st.caption(f"🕒 *{time_str}*") 
                         else: st.markdown(f"**{time_str}**")
-                        
                         st.markdown(f"**{parent_name}**")
                         if sub_name: st.caption(f"↳ *{sub_name}*")
                         
                         if debug_mode and time_str == "Time TBA":
-                            st.error("MISSED")
-                            st.write(m['ApiTokens'])
-                            if m.get('DebugCandidates'):
-                                for c in m['DebugCandidates']: st.text(c)
+                            st.error(f"MISSED: {m['ApiTokens']}")
+                            for d in m.get('DebugInfo', []): st.caption(d)
 
                         if bill_count > 0:
                             st.success(f"**{bill_count} Bills Listed**")
