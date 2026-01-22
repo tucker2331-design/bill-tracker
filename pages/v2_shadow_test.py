@@ -9,8 +9,8 @@ import concurrent.futures
 API_KEY = "81D70A54-FCDC-4023-A00B-A3FD114D5984" 
 SESSION_CODE = "20261" 
 
-st.set_page_config(page_title="v21 Fuzzy Hybrid", page_icon="🧬", layout="wide")
-st.title("🧬 v21: The Fuzzy Hybrid (Smart Matching)")
+st.set_page_config(page_title="v22 Omni-Scraper", page_icon="🧿", layout="wide")
+st.title("🧿 v22: The Omni-Directional Scraper")
 
 # --- SPEED ENGINE ---
 session = requests.Session()
@@ -19,19 +19,14 @@ session.mount('https://', adapter)
 
 # --- HELPER: TEXT NORMALIZATION ---
 def get_significant_words(text):
-    """Turns 'House General Laws - Professions' into {'general', 'laws', 'professions'}"""
     if not text: return set()
-    # Remove standard noise words
-    noise = {"house", "senate", "committee", "subcommittee", "room", "building", "meeting", "the", "of", "and", "&", "-"}
-    # Clean and split
+    noise = {"house", "senate", "committee", "subcommittee", "room", "building", "meeting", "the", "of", "and", "&", "-", "agenda", "view", "video"}
     words = set(re.sub(r'[^a-zA-Z\s]', '', text.lower()).split())
-    # Return only meaningful words
     return words - noise
 
-# --- COMPONENT 1: THE MASTER TIME SCRAPER (Source B) ---
+# --- COMPONENT 1: THE OMNI-SCRAPER (Source B) ---
 @st.cache_data(ttl=300)
 def fetch_master_times():
-    """Scrapes public schedule and returns a map of {Date: [{Words: set, Time: str}]}"""
     schedule_map = {} 
     headers = {'User-Agent': 'Mozilla/5.0'}
     
@@ -41,35 +36,67 @@ def fetch_master_times():
         soup = BeautifulSoup(resp.text, 'html.parser')
         
         current_date = None
+        # Get text lines preserving layout
         text_blob = soup.get_text("\n")
         lines = [x.strip() for x in text_blob.splitlines() if x.strip()]
         
+        # We need to know valid committee names to identify "Anchors"
+        # Since we don't have the API list yet, we look for "Committee" or "Subcommittee" keywords
+        # or we scan for lines that look like titles.
+        
         for i, line in enumerate(lines):
-            # 1. Detect Date
-            if "Monday," in line or "Tuesday," in line or "Wednesday," in line or "Thursday," in line or "Friday," in line:
+            # 1. Detect Date Header
+            if any(day in line for day in ["Monday,", "Tuesday,", "Wednesday,", "Thursday,", "Friday,"]):
                 try:
+                    # "Wednesday, January 21, 2026"
                     clean_date = line.split(", ")[1] + " 2026"
                     dt = datetime.strptime(clean_date, "%B %d %Y")
                     current_date = dt.date()
                 except: pass
             
-            # 2. Detect Time + Committee
-            if current_date:
-                # Look for time signatures
-                if any(x in line.lower() for x in ["am", "pm", "adjournment", "recess", "noon", "upon"]):
-                    time_val = line
-                    # The next line is usually the committee
-                    if i + 1 < len(lines):
-                        comm_name = lines[i+1]
-                        
-                        # Store as an object we can fuzzy match against later
+            if not current_date: continue
+
+            # 2. PATTERN A: SENATE STYLE (Time matches first)
+            # "9:00 AM" ... next line "Senate Finance"
+            if any(x in line.lower() for x in ["am", "pm", "noon"]) and "time" not in line.lower():
+                # Check Next Line for Committee
+                if i + 1 < len(lines):
+                    potential_comm = lines[i+1]
+                    # Validate it looks like a committee
+                    if "senate" in potential_comm.lower() or "house" in potential_comm.lower():
                         if current_date not in schedule_map: schedule_map[current_date] = []
                         schedule_map[current_date].append({
-                            "words": get_significant_words(comm_name),
-                            "raw_name": comm_name,
-                            "time": time_val
+                            "words": get_significant_words(potential_comm),
+                            "time": line,
+                            "source": "Senate-Style (Time First)"
                         })
-    except: pass
+
+            # 3. PATTERN B: HOUSE STYLE (Committee matches first)
+            # "House General Laws" ... next line "Room B" ... next line "1/2 hr after adjournment"
+            if "house" in line.lower() or "senate" in line.lower():
+                # Potential Committee Header found. Look DOWN for time.
+                # Scan next 3 lines
+                found_time = None
+                for offset in range(1, 4):
+                    if i + offset >= len(lines): break
+                    sub_line = lines[i + offset]
+                    sub_lower = sub_line.lower()
+                    
+                    # Look for Time Keywords
+                    if any(k in sub_lower for k in ["adjournment", "recess", "upon", "immediately", "after", "am", "pm"]):
+                        found_time = sub_line
+                        break
+                
+                if found_time:
+                    if current_date not in schedule_map: schedule_map[current_date] = []
+                    schedule_map[current_date].append({
+                        "words": get_significant_words(line),
+                        "time": found_time,
+                        "source": "House-Style (Time Below)"
+                    })
+
+    except Exception as e: 
+        print(e)
     return schedule_map
 
 # --- COMPONENT 2: API FETCH (Source A) ---
@@ -148,6 +175,7 @@ def fetch_bills_parallel(meetings_list):
 def parse_time_rank(time_str):
     if not time_str: return 9999
     clean = time_str.lower().replace(".", "").strip()
+    # Adjournment meetings go LATE (4:00 PM = 960 mins)
     if "adjourn" in clean or "recess" in clean or "upon" in clean or "after" in clean: return 960 
     if "tba" in clean: return 9999
     try:
@@ -165,12 +193,12 @@ def parse_committee_name(full_name):
 
 # --- MAIN UI ---
 
-if st.button("🚀 Run Fuzzy Hybrid"):
+if st.button("🚀 Run Omni-Scraper"):
     
     with st.spinner("Fetching API Schedule..."):
         all_meetings = get_full_schedule()
         
-    with st.spinner("Scraping Public Schedule & Matching Times..."):
+    with st.spinner("Scraping Public Schedule (Checking Above & Below)..."):
         master_schedule = fetch_master_times()
         
     today = datetime.now().date()
@@ -189,28 +217,30 @@ if st.button("🚀 Run Fuzzy Hybrid"):
             name = m.get("OwnerName", "")
             if "Caucus" in name or "Press" in name: continue
             
-            # --- THE FUZZY MATCH LOGIC ---
+            # --- THE MATCHING LOGIC ---
             api_time = m.get("ScheduleTime")
+            api_comments = m.get("Comments") or ""
+            
             final_time = api_time
             
-            # Only try to fix if API failed
-            if not api_time or "12:00" in str(api_time) or "TBA" in str(api_time):
+            # 1. Trust API Comments first (e.g. "Upon Adjournment")
+            if "adjourn" in api_comments.lower() or "upon" in api_comments.lower():
+                final_time = api_comments
                 
-                # Get the core words of this committee (e.g. {general, laws, professions})
+            # 2. If API is bad, check Scraper
+            elif not api_time or "12:00" in str(api_time) or "TBA" in str(api_time):
+                
                 api_words = get_significant_words(name)
                 
                 if m_date in master_schedule:
-                    # Look through all scraped meetings for this day
                     best_match = None
                     max_overlap = 0
                     
                     for candidate in master_schedule[m_date]:
                         scraped_words = candidate['words']
-                        # Count overlap
                         overlap = len(api_words.intersection(scraped_words))
                         
-                        # We need at least 2 words to match (or 1 if it's a very unique word)
-                        # "Professions" + "Laws" = 2 matches -> High confidence
+                        # Strict Match: Need 2+ words (or 1 if unique)
                         if overlap > max_overlap:
                             max_overlap = overlap
                             best_match = candidate['time']
@@ -218,7 +248,7 @@ if st.button("🚀 Run Fuzzy Hybrid"):
                     if best_match and max_overlap >= 1:
                         final_time = best_match
 
-            # Fallback
+            # 3. Fallback
             if not final_time or final_time == "12:00 PM": final_time = "Time TBA"
                 
             m['DisplayTime'] = final_time
