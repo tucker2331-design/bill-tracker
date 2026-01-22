@@ -9,8 +9,8 @@ import concurrent.futures
 API_KEY = "81D70A54-FCDC-4023-A00B-A3FD114D5984" 
 SESSION_CODE = "20261" 
 
-st.set_page_config(page_title="v18 Final Polish", page_icon="💎", layout="wide")
-st.title("💎 v18: Context-Aware Scheduler")
+st.set_page_config(page_title="v19 True Time", page_icon="🕰️", layout="wide")
+st.title("🕰️ v19: The 'True Time' Scraper")
 
 # --- SPEED ENGINE ---
 session = requests.Session()
@@ -28,31 +28,31 @@ def parse_time_rank(time_str):
     """
     Sorts meetings logically:
     1. Specific Times (8:00 AM) -> 0-899
-    2. Floor Adjournment (After House/Senate) -> 900
-    3. Committee Adjournment (After another comm) -> 910
-    4. TBA -> 9999
+    2. 'After Adjournment' -> 960 (4:00 PM approx)
+    3. TBA -> 9999
     """
     if not time_str: return 9999
-    
     clean = time_str.lower().replace(".", "").strip()
     
-    # 1. HIERARCHY DETECTION
-    if "adjourn" in clean or "recess" in clean:
-        # If waiting for the whole House/Senate/Floor -> Priority 1 (3:00 PM equivalent)
-        if any(x in clean for x in ["house", "senate", "floor", "session"]):
-            return 900 
-        # If waiting for another Committee -> Priority 2 (3:10 PM equivalent)
-        else:
-            return 910
+    # Priority for "Adjournment" (Push to afternoon)
+    if "adjourn" in clean or "recess" in clean or "upon" in clean or "after" in clean:
+        return 960 
             
     if "tba" in clean: return 9999
         
-    # 2. STANDARD TIME PARSING
     try:
         dt = datetime.strptime(clean, "%I:%M %p")
         return dt.hour * 60 + dt.minute
     except:
-        return 9999 # Fallback for weird text
+        return 9999 
+
+# --- HELPER: TEXT CLEANER ---
+def clean_scraped_time(text):
+    """Cleans up the raw scraped line"""
+    # Remove "Time:" prefix if exists
+    text = text.replace("Time:", "").strip()
+    # Normalize spaces
+    return " ".join(text.split())
 
 # --- CORE FUNCTIONS ---
 @st.cache_data(ttl=600) 
@@ -97,17 +97,43 @@ def extract_agenda_link(html_string):
     return None
 
 def scan_agenda_page(url):
+    """
+    Scrapes BOTH the Bills AND the specific Meeting Time from the HTML
+    """
     try:
         headers = {'User-Agent': 'Mozilla/5.0'}
         resp = session.get(url, headers=headers, timeout=5)
         soup = BeautifulSoup(resp.text, 'html.parser')
-        text = soup.get_text()
-        bills = re.findall(r'\b(H\.?B\.?|S\.?B\.?|H\.?J\.?|S\.?J\.?)\s*(\d+)', text, re.IGNORECASE)
+        text_content = soup.get_text()
+        
+        # 1. FIND BILLS
+        bills = re.findall(r'\b(H\.?B\.?|S\.?B\.?|H\.?J\.?|S\.?J\.?)\s*(\d+)', text_content, re.IGNORECASE)
         clean_bills = set()
         for p, n in bills:
             clean_bills.add(f"{p.upper().replace('.','').strip()}{n}")
-        return sorted(list(clean_bills), key=natural_sort_key)
-    except: return []
+            
+        # 2. FIND TIME (The "True Time")
+        # Look for specific phrases in the first 20 lines of the page
+        scraped_time = None
+        lines = [line.strip() for line in text_content.splitlines() if line.strip()]
+        
+        # Heuristic: Scan top lines for time keywords
+        for line in lines[:20]:
+            lower_line = line.lower()
+            if any(k in lower_line for k in ["adjournment", "recess", "upon", "immediately", "1/2 hour after"]):
+                # Found a relative time! (e.g. "1/2 hour after adjournment")
+                scraped_time = line
+                break
+            if "time:" in lower_line:
+                scraped_time = line
+                break
+                
+        return {
+            "bills": sorted(list(clean_bills), key=natural_sort_key),
+            "scraped_time": clean_scraped_time(scraped_time) if scraped_time else None
+        }
+    except: 
+        return {"bills": [], "scraped_time": None}
 
 def fetch_bills_parallel(meetings_list):
     tasks = []
@@ -119,7 +145,7 @@ def fetch_bills_parallel(meetings_list):
         for future in concurrent.futures.as_completed(future_to_id):
             mid = future_to_id[future]
             try: results[mid] = future.result()
-            except: results[mid] = []
+            except: results[mid] = {"bills": [], "scraped_time": None}
     return results
 
 def parse_committee_name(full_name):
@@ -152,42 +178,35 @@ if st.button("🚀 Run Forecast"):
             name = m.get("OwnerName", "")
             if "Caucus" in name or "Press" in name: continue
             
-            raw_time = m.get("ScheduleTime")
-            raw_date_iso = m.get("ScheduleDate", "") 
-            comments = m.get("Comments") or ""
-            
-            # --- THE LOGIC FIX ---
-            # Priority 1: Use specific text instructions if available
-            if "adjourn" in comments.lower() or "recess" in comments.lower():
-                display_time = comments # <--- KEEP THE ORIGINAL TEXT
-            # Priority 2: Use Time field
-            elif raw_time:
-                display_time = raw_time
-            # Priority 3: Extract from Date ISO
-            elif "T" in raw_date_iso:
-                 try:
-                    time_part = raw_date_iso.split("T")[1]
-                    dt_obj = datetime.strptime(time_part, "%H:%M:%S")
-                    if dt_obj.hour != 0 or dt_obj.minute != 0:
-                        display_time = dt_obj.strftime("%-I:%M %p")
-                    else:
-                        display_time = "Time TBA"
-                 except: display_time = "Time TBA"
-            else:
-                display_time = "Time TBA"
+            # Initial Time Guess (From API)
+            api_time = m.get("ScheduleTime")
+            if not api_time or api_time == "12:00 PM":
+                api_time = "Time TBA" # Treat 12:00 PM default as TBA initially
                 
-            m['FinalTime'] = display_time
+            m['DisplayTime'] = api_time
             m['CleanDate'] = m_date
             m['AgendaLink'] = extract_agenda_link(m.get("Description"))
             
             valid_meetings.append(m)
             week_map[m_date].append(m)
 
-    with st.spinner(f"🔥 Scanning {len(valid_meetings)} agendas..."):
-        bill_results = fetch_bills_parallel(valid_meetings)
+    with st.spinner(f"🔥 Scanning {len(valid_meetings)} agendas (Bills + Times)..."):
+        scan_results = fetch_bills_parallel(valid_meetings)
         
     for m in valid_meetings:
-        m['Bills'] = bill_results.get(m['ScheduleID'], [])
+        result = scan_results.get(m['ScheduleID'], {})
+        m['Bills'] = result.get('bills', [])
+        
+        # --- THE TIME OVERRIDE ---
+        # If the scraper found a specific time string (e.g. "1/2 hour after..."), use it!
+        found_time = result.get('scraped_time')
+        if found_time:
+             # If API said 12:00 PM or TBA, definitively overwrite it
+             if m['DisplayTime'] == "Time TBA" or "12:00" in m['DisplayTime']:
+                 m['DisplayTime'] = found_time
+             # Even if API had a time, prefer the "After Adjournment" text if found
+             elif "adjourn" in found_time.lower():
+                 m['DisplayTime'] = found_time
 
     cols = st.columns(7)
     days = sorted(week_map.keys())
@@ -201,7 +220,7 @@ if st.button("🚀 Run Forecast"):
             daily_meetings = week_map[day]
             
             # Sort: Fixed Times -> Floor Adj -> Comm Adj -> TBA
-            daily_meetings.sort(key=lambda x: parse_time_rank(x.get("FinalTime")))
+            daily_meetings.sort(key=lambda x: parse_time_rank(x.get("DisplayTime")))
             
             if not daily_meetings:
                 st.info("No Committees")
@@ -211,19 +230,16 @@ if st.button("🚀 Run Forecast"):
                     full_name = m.get("OwnerName", "")
                     parent_name, sub_name = parse_committee_name(full_name)
                     
-                    time_str = m['FinalTime']
-                    # Visual Cleanup: If text is huge, truncate it nicely or make it small
+                    time_str = m['DisplayTime']
+                    # Visual Cleanup
                     is_long_text = len(time_str) > 15
                     
                     with st.container(border=True):
-                        # TIME DISPLAY
                         if is_long_text:
-                            # Use italic caption for long instructions like "1/2 hr after..."
                             st.caption(f"🕒 *{time_str}*") 
                         else:
                             st.markdown(f"**{time_str}**")
                         
-                        # NAME DISPLAY
                         st.markdown(f"**{parent_name}**")
                         if sub_name: st.caption(f"↳ *{sub_name}*")
                         
