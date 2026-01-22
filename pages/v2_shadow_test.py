@@ -9,8 +9,8 @@ import concurrent.futures
 API_KEY = "81D70A54-FCDC-4023-A00B-A3FD114D5984" 
 SESSION_CODE = "20261" 
 
-st.set_page_config(page_title="v47 Low-Filter Scraper", page_icon="🛡️", layout="wide")
-st.title("🛡️ v47: The 'Low-Filter' Scraper")
+st.set_page_config(page_title="v48 Chair-Aware Scraper", page_icon="🪑", layout="wide")
+st.title("🪑 v48: The 'Chair-Aware' Scraper")
 
 # --- SPEED ENGINE ---
 session = requests.Session()
@@ -21,22 +21,20 @@ session.mount('https://', adapter)
 show_debug = st.sidebar.checkbox("Show Raw Scraper Table", value=False)
 filter_text = st.sidebar.text_input("Filter Raw Table (e.g. 'Jan 26')")
 
-# --- HELPER: TEXT CLEANING (CORRECTED) ---
+# --- HELPER: TEXT CLEANING ---
 def get_clean_tokens(text):
     if not text: return set()
     lower = text.lower()
     
-    # 1. REMOVE ONLY REAL NOISE (Keep 'House', 'Senate', 'Subcommittee', '#')
+    # Clean out the Chair's name pattern if possible (e.g. "Smith, John")
+    # This removes text patterns that look like names at the end of lines
+    lower = re.sub(r'[a-z]+,\s+[a-z]+\s+[a-z]\.?$', '', lower)
+    
     clean_text = lower.replace(".ics", "").replace("view agenda", "")
-    # clean_text = clean_text.replace("-", " ") # Keep hyphens? Maybe replace with space.
-    clean_text = clean_text.replace("-", " ")
+    clean_text = clean_text.replace("-", " ").replace("#", " ")
+    clean_text = re.sub(r'[^a-z0-9\s]', '', clean_text)
     
-    # Allow alphanumeric + # (for #1, #2)
-    clean_text = re.sub(r'[^a-z0-9\s#]', '', clean_text)
-    
-    # 2. REDUCED STOPWORDS LIST
-    # Removed: 'house', 'senate', 'committee', 'subcommittee'
-    # These are CRITICAL identifiers for the meetings we were missing.
+    # Keep 'house', 'senate', 'subcommittee' - distinct identifiers
     noise = {
         "room", "building", "meeting", "the", "of", "and", "&", 
         "agenda", "view", "video", "signup", "speak", "public", 
@@ -52,30 +50,32 @@ def extract_time_from_block(block_text):
     if "cancel" in lower_text: return "❌ Cancelled"
     if "noon" in lower_text: return "12:00 PM"
 
+    # PRIORITY: Look for "Adjournment" or "Recess" strings
     if "adjourn" in lower_text or "recess" in lower_text:
+        # Split into sentences or lines and find the one with the keyword
         for line in block_text.splitlines():
             if "adjourn" in line.lower() or "recess" in line.lower():
                 return line.strip()
 
+    # SECONDARY: Standard Time
     time_match = re.search(r'(\d{1,2}:\d{2}\s*[aA|pP]\.?[mM]\.?)', block_text)
     if time_match: return time_match.group(1).upper()
     
     return None
 
-# --- COMPONENT 1: THE BRUTE-FORCE HOUSE SCRAPER (Source B) ---
+# --- COMPONENT 1: HOUSE SCRAPER (Source B) ---
 @st.cache_data(ttl=300)
 def fetch_house_blocks():
     schedule_map = {} 
     raw_line_data = [] 
     
-    # 1. Calculate Dates
     today = datetime.now().date()
+    # Calculate Next Monday
     days_ahead = 0 - today.weekday() if today.weekday() > 0 else 0 
     if days_ahead <= 0: days_ahead += 7
     next_monday = today + timedelta(days=days_ahead)
     
-    # 2. BRUTE FORCE URL PARAMETERS (Fix for Next Week)
-    # We send multiple formats to ensure the server understands one of them.
+    # Fetch Current + Next Week (US Format + ISO Format)
     urls = [
         ("Current Week", "https://house.vga.virginia.gov/schedule/meetings"),
         ("Next Week (US)", f"https://house.vga.virginia.gov/schedule/meetings?date={next_monday.strftime('%m/%d/%Y')}"),
@@ -122,20 +122,19 @@ def fetch_house_blocks():
 
                 if not current_date: continue
                 
-                # BLOCK SPLITTING (Expanded)
-                # Split on: Convenes OR Session OR .ics
+                # BLOCK START/END LOGIC
                 low_text = text.lower()
-                is_start_marker = "convenes" in low_text or "session" in low_text
+                is_start = "convenes" in low_text or "session" in low_text
+                is_end = ".ics" in low_text or "archived" in low_text or "pledge" in low_text
                 
-                if is_start_marker and current_block_lines:
+                if is_start and current_block_lines:
                     if current_date not in schedule_map: schedule_map[current_date] = []
                     schedule_map[current_date].append("\n".join(current_block_lines))
                     current_block_lines = []
 
                 current_block_lines.append(text)
                 
-                # END MARKER
-                if ".ics" in low_text or "archived" in low_text or "pledge" in low_text:
+                if is_end:
                     if current_date not in schedule_map: schedule_map[current_date] = []
                     schedule_map[current_date].append("\n".join(current_block_lines))
                     current_block_lines = []
@@ -213,13 +212,12 @@ def parse_committee_name(full_name):
 with st.spinner("Fetching Schedule..."):
     all_meetings = get_full_schedule()
     
-with st.spinner("Scraping House Schedule (Brute Force)..."):
+with st.spinner("Scraping House Website..."):
     daily_blocks_map, raw_debug_data = fetch_house_blocks()
 
 # --- DEV BOX ---
 if show_debug:
-    st.subheader("🔍 Raw Scraper Output (Low-Filter)")
-    st.info("Check if 'House', 'Senate', and '#1' are preserved in the text.")
+    st.subheader("🔍 Raw Scraper Output")
     display_data = raw_debug_data
     if filter_text:
         display_data = [row for row in raw_debug_data if filter_text.lower() in row['text'].lower()]
@@ -229,7 +227,7 @@ if show_debug:
 # --- FORECAST LOGIC ---
 today = datetime.now().date()
 
-# STRICT WINDOW: Only Today + 7 Days
+# 1. Strict Window to prevent IndexError
 week_map = {}
 for i in range(8): 
     week_map[today + timedelta(days=i)] = []
@@ -242,7 +240,7 @@ for m in all_meetings:
     if not raw: continue
     m_date = datetime.strptime(raw, "%Y-%m-%d").date()
     
-    # STRICT FILTER: Discard past dates or far future
+    # 2. Skip dates outside our window
     if m_date not in week_map: continue
     
     name = m.get("OwnerName", "")
@@ -253,14 +251,14 @@ for m in all_meetings:
     final_time = "⚠️ Not Listed on Schedule"
     match_debug = []
     
-    # 1. API Comments
+    # API Authority
     if "adjourn" in api_comments.lower() or "upon" in api_comments.lower():
         final_time = api_comments
         
-    # 2. Block Search (Low-Filter Match)
+    # Scraper Match
     elif m_date in daily_blocks_map:
         blocks = daily_blocks_map[m_date]
-        api_tokens = get_clean_tokens(name) # Now preserves 'subcommittee', 'house', etc.
+        api_tokens = get_clean_tokens(name)
         
         best_block = None
         best_score = 0.0
@@ -273,16 +271,15 @@ for m in all_meetings:
             
             score = len(intersection) / len(api_tokens)
             
-            # NUMBER BOOST: If both have "#1", massive boost
-            # Using basic regex to find digit identifiers
-            api_nums = re.findall(r'\d+', name)
-            block_nums = re.findall(r'\d+', block_text)
-            if api_nums and block_nums and set(api_nums).intersection(set(block_nums)):
-                score += 0.4
-            
+            # Boost if #Numbers match
+            if re.search(r'#\d+', name) and re.search(r'#\d+', block_text):
+                 if re.findall(r'#\d+', name)[0] == re.findall(r'#\d+', block_text)[0]:
+                     score += 0.4
+
             match_debug.append(f"{score:.2f}: {block_text[:30]}...")
             
-            if score > best_score and score > 0.5: # Lower threshold because we trust tokens more
+            # LOWER THRESHOLD to 0.30 to catch "Committee + Chair Name" mismatches
+            if score > best_score and score > 0.30:
                 best_score = score
                 best_block = block_text
         
@@ -303,7 +300,7 @@ for m in all_meetings:
     week_map[m_date].append(m)
 
 # --- DISPLAY ---
-cols = st.columns(len(week_map)) # Dynamic based on actual bucket count
+cols = st.columns(len(week_map)) 
 days = sorted(week_map.keys())
 
 for i, day in enumerate(days):
