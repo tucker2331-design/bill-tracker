@@ -9,8 +9,8 @@ import concurrent.futures
 API_KEY = "81D70A54-FCDC-4023-A00B-A3FD114D5984" 
 SESSION_CODE = "20261" 
 
-st.set_page_config(page_title="v48 Chair-Aware Scraper", page_icon="🪑", layout="wide")
-st.title("🪑 v48: The 'Chair-Aware' Scraper")
+st.set_page_config(page_title="v50 Checklist Scraper", page_icon="✅", layout="wide")
+st.title("✅ v50: The 'Checklist' Scraper (All-or-Nothing)")
 
 # --- SPEED ENGINE ---
 session = requests.Session()
@@ -26,15 +26,15 @@ def get_clean_tokens(text):
     if not text: return set()
     lower = text.lower()
     
-    # Clean out the Chair's name pattern if possible (e.g. "Smith, John")
-    # This removes text patterns that look like names at the end of lines
-    lower = re.sub(r'[a-z]+,\s+[a-z]+\s+[a-z]\.?$', '', lower)
+    # Clean out obvious garbage
+    lower = lower.replace(".ics", "").replace("view agenda", "")
+    lower = lower.replace("-", " ") 
     
-    clean_text = lower.replace(".ics", "").replace("view agenda", "")
-    clean_text = clean_text.replace("-", " ").replace("#", " ")
-    clean_text = re.sub(r'[^a-z0-9\s]', '', clean_text)
+    # We keep letters, numbers, and the # symbol (for Subcommittee #1)
+    clean_text = re.sub(r'[^a-z0-9\s#]', '', lower)
     
-    # Keep 'house', 'senate', 'subcommittee' - distinct identifiers
+    # Words to IGNORE (The Checklist won't look for these)
+    # Note: We KEEP 'house', 'senate', 'subcommittee' to ensure we match the right entity
     noise = {
         "room", "building", "meeting", "the", "of", "and", "&", 
         "agenda", "view", "video", "signup", "speak", "public", 
@@ -51,13 +51,13 @@ def extract_time_from_block(block_text):
     if "noon" in lower_text: return "12:00 PM"
 
     # PRIORITY: Look for "Adjournment" or "Recess" strings
+    # This catches "Immediately upon adjournment of..."
     if "adjourn" in lower_text or "recess" in lower_text:
-        # Split into sentences or lines and find the one with the keyword
         for line in block_text.splitlines():
             if "adjourn" in line.lower() or "recess" in line.lower():
                 return line.strip()
 
-    # SECONDARY: Standard Time
+    # SECONDARY: Standard Time (e.g. 7:00 AM)
     time_match = re.search(r'(\d{1,2}:\d{2}\s*[aA|pP]\.?[mM]\.?)', block_text)
     if time_match: return time_match.group(1).upper()
     
@@ -122,7 +122,7 @@ def fetch_house_blocks():
 
                 if not current_date: continue
                 
-                # BLOCK START/END LOGIC
+                # BLOCK SPLITTING
                 low_text = text.lower()
                 is_start = "convenes" in low_text or "session" in low_text
                 is_end = ".ics" in low_text or "archived" in low_text or "pledge" in low_text
@@ -226,13 +226,12 @@ if show_debug:
 
 # --- FORECAST LOGIC ---
 today = datetime.now().date()
-
-# 1. Strict Window to prevent IndexError
 week_map = {}
 for i in range(8): 
     week_map[today + timedelta(days=i)] = []
     
 valid_meetings = []
+# Sort by Longest Name First -> Specific Subcommittees match before generic Parents
 all_meetings.sort(key=lambda x: len(x.get("OwnerName", "")), reverse=True)
 
 for m in all_meetings:
@@ -240,7 +239,6 @@ for m in all_meetings:
     if not raw: continue
     m_date = datetime.strptime(raw, "%Y-%m-%d").date()
     
-    # 2. Skip dates outside our window
     if m_date not in week_map: continue
     
     name = m.get("OwnerName", "")
@@ -251,50 +249,50 @@ for m in all_meetings:
     final_time = "⚠️ Not Listed on Schedule"
     match_debug = []
     
-    # API Authority
+    # 1. API Authority
     if "adjourn" in api_comments.lower() or "upon" in api_comments.lower():
         final_time = api_comments
         
-    # Scraper Match
+    # 2. CHECKLIST MATCHER
     elif m_date in daily_blocks_map:
         blocks = daily_blocks_map[m_date]
         api_tokens = get_clean_tokens(name)
         
-        best_block = None
-        best_score = 0.0
+        # We need a set of "Required Tokens"
+        # Since we cleaned noise, basically ALL remaining tokens are required.
+        required_tokens = api_tokens
         
         for block_text in blocks:
             block_tokens = get_clean_tokens(block_text)
-            intersection = api_tokens.intersection(block_tokens)
             
-            if not intersection: continue
-            
-            score = len(intersection) / len(api_tokens)
-            
-            # Boost if #Numbers match
-            if re.search(r'#\d+', name) and re.search(r'#\d+', block_text):
-                 if re.findall(r'#\d+', name)[0] == re.findall(r'#\d+', block_text)[0]:
-                     score += 0.4
+            # THE CHECKLIST: Do ALL required API tokens exist in the block?
+            # We use issubset() which returns True only if EVERY element of required_tokens is in block_tokens
+            if required_tokens.issubset(block_tokens):
+                
+                # Perfect Match Found!
+                extracted_time = extract_time_from_block(block_text)
+                if extracted_time: 
+                    final_time = extracted_time
+                else: 
+                    final_time = "Time Not Listed"
+                
+                # Stop looking once we find the first valid match (since we sorted by specificity)
+                break
+            else:
+                # Debugging partial matches
+                intersection = required_tokens.intersection(block_tokens)
+                if len(intersection) > 0:
+                     missing = required_tokens - block_tokens
+                     match_debug.append(f"Partial: {block_text[:30]}... (Missing: {missing})")
 
-            match_debug.append(f"{score:.2f}: {block_text[:30]}...")
-            
-            # LOWER THRESHOLD to 0.30 to catch "Committee + Chair Name" mismatches
-            if score > best_score and score > 0.30:
-                best_score = score
-                best_block = block_text
-        
-        if best_block:
-            extracted_time = extract_time_from_block(best_block)
-            if extracted_time: final_time = extracted_time
-            else: final_time = "Time Not Listed"
-    
+    # Fallback
     if "Not Listed" in final_time and api_time and "12:00" not in str(api_time) and "TBA" not in str(api_time):
         final_time = api_time 
 
     m['DisplayTime'] = final_time
     m['CleanDate'] = m_date
     m['AgendaLink'] = extract_agenda_link(m.get("Description"))
-    m['DebugInfo'] = sorted(match_debug, reverse=True)[:5]
+    m['DebugInfo'] = match_debug[:3]
     
     valid_meetings.append(m)
     week_map[m_date].append(m)
@@ -334,3 +332,13 @@ for i, day in enumerate(days):
                         st.link_button("View Agenda", m['AgendaLink'])
                     else:
                         st.caption("*(No Link)*")
+
+                    # DIAGNOSTICS
+                    if "Not Listed" in time_str:
+                         with st.expander("🛠️ Why no match?"):
+                             st.caption(f"**Required Tokens:** {get_clean_tokens(m['OwnerName'])}")
+                             if not m['DebugInfo']:
+                                 st.write("No blocks had ANY token overlap.")
+                             else:
+                                 st.write("Closest attempts:")
+                                 for log in m['DebugInfo']: st.text(log)
