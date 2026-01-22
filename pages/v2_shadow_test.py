@@ -3,13 +3,14 @@ import requests
 import re
 from bs4 import BeautifulSoup
 from datetime import datetime, timedelta
+import concurrent.futures  # <--- FIXED: Added missing import
 
 # --- CONFIGURATION ---
 API_KEY = "81D70A54-FCDC-4023-A00B-A3FD114D5984" 
 SESSION_CODE = "20261" 
 
-st.set_page_config(page_title="v44 Lean Master", page_icon="🚀", layout="wide")
-st.title("🚀 v44: The 'Lean Master' (No Scanning)")
+st.set_page_config(page_title="v45 Fixed Lean Master", page_icon="🛠️", layout="wide")
+st.title("🛠️ v45: The 'Fixed Lean Master'")
 
 # --- SPEED ENGINE ---
 session = requests.Session()
@@ -44,7 +45,7 @@ def fetch_lis_schedule():
     schedule_map = {} 
     raw_line_data = [] 
     
-    # "ALL" parameter usually forces the full list
+    # "ALL" parameter forces the full list (House + Senate + Future)
     url = "https://lis.virginia.gov/cgi-bin/legp604.exe?261+sbh+ALL" 
     
     headers = {'User-Agent': 'Mozilla/5.0'}
@@ -58,8 +59,10 @@ def fetch_lis_schedule():
         current_date = None
         
         for row in rows:
-            # 1. DATE DETECTION (LIS Format: "Thursday, January 22, 2026")
             text = row.get_text(" ", strip=True)
+            if not text: continue
+            
+            # 1. DATE DETECTION (LIS Format: "Thursday, January 22, 2026")
             if any(day in text for day in ["Monday,", "Tuesday,", "Wednesday,", "Thursday,", "Friday,"]):
                 match = re.search(r'(Monday|Tuesday|Wednesday|Thursday|Friday),\s+([A-Za-z]+)\s+(\d{1,2})', text)
                 if match:
@@ -81,7 +84,6 @@ def fetch_lis_schedule():
                 if not info_text: continue
                 
                 # Check if it looks like a meeting (Time in col 1)
-                # LIS puts "7:00 AM" or "Upon Adjournment" in Col 1
                 if any(c.isdigit() for c in time_text) or "adj" in time_text.lower() or "convenes" in info_text.lower():
                     if current_date not in schedule_map: schedule_map[current_date] = []
                     
@@ -111,7 +113,6 @@ def get_full_schedule():
     headers = {"WebAPIKey": API_KEY, "Accept": "application/json"}
     raw_items = []
     
-    # Only fetch, NO bill scanning logic attached later
     def fetch_chamber(chamber):
         try:
             params = {"sessionCode": SESSION_CODE, "chamberCode": chamber}
@@ -147,6 +148,7 @@ def extract_agenda_link(html_string):
 
 def parse_time_rank(time_str):
     if not time_str or "Not Listed" in time_str or "TBA" in time_str: return 9999
+    if "Cancelled" in time_str: return 9998
     clean = time_str.lower().replace(".", "").strip()
     if "adjourn" in clean or "recess" in clean or "upon" in clean or "after" in clean: return 960 
     try:
