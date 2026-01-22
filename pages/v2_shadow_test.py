@@ -9,8 +9,8 @@ import concurrent.futures
 API_KEY = "81D70A54-FCDC-4023-A00B-A3FD114D5984" 
 SESSION_CODE = "20261" 
 
-st.set_page_config(page_title="v25 Context Window", page_icon="🪟", layout="wide")
-st.title("🪟 v25: The 'Context Window' Scraper")
+st.set_page_config(page_title="v26 Token Consumer", page_icon="🧶", layout="wide")
+st.title("🧶 v26: The 'Token Consumer' (Duplicate Fix)")
 
 # --- SPEED ENGINE ---
 session = requests.Session()
@@ -18,21 +18,23 @@ adapter = requests.adapters.HTTPAdapter(pool_connections=20, pool_maxsize=20)
 session.mount('https://', adapter)
 
 # --- HELPER: TEXT CLEANING ---
-def normalize_string(s):
-    """Simplifies string for matching (removes punctuation/case)"""
-    return re.sub(r'[^a-zA-Z0-9]', '', s.lower())
-
-def is_committee_header(line):
-    """Heuristic to guess if a line is a committee header (to stop scanning)"""
-    l = line.lower()
-    return "committee" in l or "subcommittee" in l or "caucus" in l or "commission" in l
+def get_clean_tokens(text):
+    """Turns 'House General Laws - Professions' into {'general', 'laws', 'professions'}"""
+    if not text: return set()
+    # Words to remove to get to the "core identity"
+    noise = {
+        "house", "senate", "committee", "subcommittee", "room", "building", 
+        "meeting", "the", "of", "and", "&", "-", "agenda", "view", "video", 
+        "signup", "speak", "public", "testimony", "bill", "summit", "caucus"
+    }
+    # Clean, lowercase, split
+    words = set(re.sub(r'[^a-zA-Z\s]', '', text.lower()).split())
+    return words - noise
 
 def is_time_string(line):
     """Checks if a line looks like a time instruction"""
     l = line.lower()
-    # Key markers for complex times
     if "adjourn" in l or "recess" in l or "upon" in l or "immediately" in l or "after" in l: return True
-    # Standard time (9:00 AM)
     if re.search(r'\d{1,2}:\d{2}', l) and ("am" in l or "pm" in l or "noon" in l): return True
     return False
 
@@ -40,8 +42,8 @@ def is_time_string(line):
 @st.cache_data(ttl=300)
 def fetch_daily_text_lines():
     """
-    Returns a map: { DateObject: [ "Line 1", "Line 2", ... ] }
-    We flatten the HTML into a simple list of text lines.
+    Returns a map: { DateObject: [ {"id": 1, "text": "Line 1"}, ... ] }
+    We give each line an ID so we can 'consume' it later.
     """
     schedule_map = {} 
     headers = {'User-Agent': 'Mozilla/5.0'}
@@ -51,14 +53,12 @@ def fetch_daily_text_lines():
         resp = session.get(url, headers=headers, timeout=3)
         soup = BeautifulSoup(resp.text, 'html.parser')
         
-        # Get all text nodes separated by newlines
-        # This preserves the "Line 1, Line 2" structure visually
         text_blob = soup.get_text("\n")
         raw_lines = [x.strip() for x in text_blob.splitlines() if x.strip()]
         
         current_date = None
         
-        for line in raw_lines:
+        for i, line in enumerate(raw_lines):
             # 1. Detect Date Header
             if any(day in line for day in ["Monday,", "Tuesday,", "Wednesday,", "Thursday,", "Friday,"]):
                 try:
@@ -69,9 +69,14 @@ def fetch_daily_text_lines():
                 except: pass
                 continue
             
-            # 2. Add line to current date bucket
+            # 2. Add line with ID
             if current_date:
-                schedule_map[current_date].append(line)
+                schedule_map[current_date].append({
+                    "id": i,
+                    "text": line,
+                    "tokens": get_clean_tokens(line),
+                    "used": False # Track consumption
+                })
                     
     except Exception as e: pass
     return schedule_map
@@ -165,7 +170,7 @@ def parse_committee_name(full_name):
 
 # --- MAIN UI ---
 
-if st.button("🚀 Run Context Forecast"):
+if st.button("🚀 Run Token-Consumer Forecast"):
     
     with st.spinner("Fetching API Schedule..."):
         all_meetings = get_full_schedule()
@@ -178,6 +183,10 @@ if st.button("🚀 Run Context Forecast"):
     for i in range(7): week_map[today + timedelta(days=i)] = []
     valid_meetings = []
     
+    # PRE-SORT MEETINGS to prioritize subcommittees (more specific) before parents
+    # This helps matching "Subcommittee #1" before matching generic "Appropriations"
+    all_meetings.sort(key=lambda x: len(x.get("OwnerName", "")), reverse=True)
+    
     for m in all_meetings:
         raw = m.get("ScheduleDate", "").split("T")[0]
         if not raw: continue
@@ -187,7 +196,7 @@ if st.button("🚀 Run Context Forecast"):
             name = m.get("OwnerName", "")
             if "Caucus" in name or "Press" in name: continue
             
-            # --- THE CONTEXT LOGIC ---
+            # --- THE CONSUMER LOGIC ---
             api_time = m.get("ScheduleTime")
             api_comments = m.get("Comments") or ""
             
@@ -202,36 +211,33 @@ if st.button("🚀 Run Context Forecast"):
                 
                 if m_date in daily_lines_map:
                     lines = daily_lines_map[m_date]
+                    api_tokens = get_clean_tokens(name)
                     
-                    # Search for this committee in the list
-                    target_norm = normalize_string(name)
+                    found_match_index = -1
                     
-                    for i, line in enumerate(lines):
-                        # FOUND THE HEADER!
-                        # Use loose matching because scraper text might vary slightly
-                        # e.g. "House General Laws" in "House General Laws Committee"
-                        if normalize_string(line) in target_norm or target_norm in normalize_string(line):
+                    # Find matching line
+                    for i, line_obj in enumerate(lines):
+                        if line_obj['used']: continue # Skip lines we already matched!
+                        
+                        web_tokens = line_obj['tokens']
+                        
+                        # MATCH: Check if all API core words exist in Web line
+                        # e.g. API={general, laws} in Web={general, laws, professions} -> MATCH
+                        if api_tokens and api_tokens.issubset(web_tokens):
+                            found_match_index = i
+                            line_obj['used'] = True # MARK CONSUMED
+                            break
                             
-                            # LOOK DOWN (Next 5 lines)
-                            found_scan_time = None
-                            for offset in range(1, 6):
-                                if i + offset >= len(lines): break
-                                
-                                candidate = lines[i + offset]
-                                
-                                # Safety Check: Don't read into the NEXT committee
-                                # But ignore "Room B" etc.
-                                if is_committee_header(candidate) and not is_time_string(candidate):
-                                    # If we hit another committee name before a time, we failed.
-                                    break 
-                                    
-                                if is_time_string(candidate):
-                                    found_scan_time = candidate
-                                    break
+                    # If match found, look down for time
+                    if found_match_index != -1:
+                        for offset in range(1, 6):
+                            if found_match_index + offset >= len(lines): break
                             
-                            if found_scan_time:
-                                final_time = found_scan_time
-                                break # Stop searching lines
+                            candidate = lines[found_match_index + offset]['text']
+                            
+                            if is_time_string(candidate):
+                                final_time = candidate
+                                break
 
             # 3. Fallback
             if not final_time or final_time == "12:00 PM": final_time = "Time TBA"
