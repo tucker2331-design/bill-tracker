@@ -9,23 +9,43 @@ import concurrent.futures
 API_KEY = "81D70A54-FCDC-4023-A00B-A3FD114D5984" 
 SESSION_CODE = "20261" 
 
-st.set_page_config(page_title="v14 Nitro Forecast", page_icon="🔥", layout="wide")
-st.title("🔥 v14: The Nitro Forecast (Unfiltered)")
+st.set_page_config(page_title="v15 Polished Forecast", page_icon="🎩", layout="wide")
+st.title("🎩 v15: The Polished Weekly Forecast")
 
-# --- SPEED ENGINE: PERSISTENT SESSION ---
-# This keeps the connection open so we don't handshake 20 times
+# --- SPEED ENGINE ---
 session = requests.Session()
 adapter = requests.adapters.HTTPAdapter(pool_connections=20, pool_maxsize=20)
 session.mount('https://', adapter)
 
-# --- CACHED SCHEDULE FETCH ---
+# --- HELPER: NATURAL SORTING ---
+def natural_sort_key(s):
+    """Sorts HB2 before HB10 correctly"""
+    # Split into ["HB", 10]
+    parts = re.match(r"([A-Za-z]+)(\d+)", s)
+    if parts:
+        return parts.group(1), int(parts.group(2))
+    return s, 0
+
+# --- HELPER: SUBCOMMITTEE PARSER ---
+def parse_committee_name(full_name):
+    """Splits 'House Appropriations - Higher Ed' into ('House Appropriations', 'Higher Ed')"""
+    if " - " in full_name:
+        parts = full_name.split(" - ", 1)
+        return parts[0], parts[1]
+    elif "Subcommittee" in full_name:
+        # Fallback for names without hyphens but with 'Subcommittee'
+        # Heuristic: split by spaces if needed, or just return as is
+        return full_name, None
+    return full_name, None
+
+# --- CORE FUNCTIONS ---
+
 @st.cache_data(ttl=600) 
 def get_full_schedule():
     url = "https://lis.virginia.gov/Schedule/api/getschedulelistasync"
     headers = {"WebAPIKey": API_KEY, "Accept": "application/json"}
     all_items = []
     
-    # We can even parallelize the initial API calls
     def fetch_chamber(chamber):
         try:
             params = {"sessionCode": SESSION_CODE, "chamberCode": chamber}
@@ -55,10 +75,8 @@ def extract_agenda_link(html_string):
     return None
 
 def scan_agenda_page(url):
-    """Worker function using the global SESSION for speed"""
     try:
         headers = {'User-Agent': 'Mozilla/5.0'}
-        # Use 'session.get' instead of 'requests.get'
         resp = session.get(url, headers=headers, timeout=5)
         soup = BeautifulSoup(resp.text, 'html.parser')
         text = soup.get_text()
@@ -66,10 +84,11 @@ def scan_agenda_page(url):
         clean_bills = set()
         for p, n in bills:
             clean_bills.add(f"{p.upper().replace('.','').strip()}{n}")
-        return sorted(list(clean_bills))
+        
+        # Sort using the smart sorter
+        return sorted(list(clean_bills), key=natural_sort_key)
     except: return []
 
-# --- PARALLEL PROCESSOR (Max Power) ---
 def fetch_bills_parallel(meetings_list):
     tasks = []
     for m in meetings_list:
@@ -77,8 +96,6 @@ def fetch_bills_parallel(meetings_list):
             tasks.append((m, m['AgendaLink']))
             
     results = {}
-    
-    # Increased workers to 20 for maximum throughput
     with concurrent.futures.ThreadPoolExecutor(max_workers=20) as executor:
         future_to_id = {executor.submit(scan_agenda_page, url): m['ScheduleID'] for m, url in tasks}
         
@@ -92,13 +109,12 @@ def fetch_bills_parallel(meetings_list):
 
 # --- MAIN UI ---
 
-if st.button("🚀 Run Nitro Scan"):
+if st.button("🚀 Run Forecast"):
     
-    # 1. FETCH SCHEDULE
+    # 1. FETCH & PREPARE
     with st.spinner("Fetching Schedule..."):
         all_meetings = get_full_schedule()
         
-    # 2. FILTER DATES
     today = datetime.now().date()
     week_map = {}
     for i in range(7):
@@ -106,7 +122,6 @@ if st.button("🚀 Run Nitro Scan"):
         
     valid_meetings = []
     
-    # Pre-process list
     for m in all_meetings:
         raw = m.get("ScheduleDate", "").split("T")[0]
         if not raw: continue
@@ -121,16 +136,14 @@ if st.button("🚀 Run Nitro Scan"):
             valid_meetings.append(m)
             week_map[m_date].append(m)
 
-    # 3. PARALLEL SCAN
-    # No progress bar this time - purely optimized for speed
-    with st.spinner(f"🔥 Blasting {len(valid_meetings)} agendas..."):
+    # 2. SCAN
+    with st.spinner(f"🔥 Scanning {len(valid_meetings)} agendas..."):
         bill_results = fetch_bills_parallel(valid_meetings)
         
-    # Merge results
     for m in valid_meetings:
         m['Bills'] = bill_results.get(m['ScheduleID'], [])
 
-    # 4. RENDER
+    # 3. RENDER
     cols = st.columns(7)
     days = sorted(week_map.keys())
     
@@ -141,26 +154,33 @@ if st.button("🚀 Run Nitro Scan"):
             st.divider()
             
             daily_meetings = week_map[day]
-            # Sort by time
             daily_meetings.sort(key=lambda x: x.get("ScheduleTime", "0"))
             
             if not daily_meetings:
                 st.info("No Committees")
             else:
                 for m in daily_meetings:
-                    # Determine Card Color based on bill count
                     bill_count = len(m.get('Bills', []))
+                    
+                    # NAME PARSING
+                    full_name = m.get("OwnerName", "")
+                    parent_name, sub_name = parse_committee_name(full_name)
                     
                     with st.container(border=True):
                         st.markdown(f"**{m.get('ScheduleTime')}**")
-                        short_name = m.get("OwnerName", "").replace("Committee", "").replace("House", "H.").replace("Senate", "S.")
-                        st.caption(short_name[:40])
                         
+                        # Display Parent
+                        st.markdown(f"**{parent_name}**")
+                        
+                        # Display Sub (if exists)
+                        if sub_name:
+                            st.caption(f"↳ *{sub_name}*")
+                        
+                        # BILLS
                         if bill_count > 0:
-                            # Show bill count badge
                             st.success(f"**{bill_count} Bills Listed**")
-                            # Expandable list so it doesn't clutter the view
-                            with st.expander("See Bills"):
+                            with st.expander("View Bills"):
+                                # Bills are already sorted naturally by scan_agenda_page
                                 st.write(", ".join(m['Bills']))
                         elif m['AgendaLink']:
                             st.caption("*(Link found, 0 bills)*")
