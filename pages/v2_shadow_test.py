@@ -9,15 +9,17 @@ import concurrent.futures
 API_KEY = "81D70A54-FCDC-4023-A00B-A3FD114D5984" 
 SESSION_CODE = "20261" 
 
-st.set_page_config(page_title="v41 Speed Demon", page_icon="⚡", layout="wide")
-st.title("⚡ v41: The 'Speed Demon' (No Bill Scanning)")
+st.set_page_config(page_title="v42 Hybrid Restoration", page_icon="⚖️", layout="wide")
+st.title("⚖️ v42: The 'Hybrid' (Restored Data + Speed Toggle)")
 
 # --- SPEED ENGINE ---
 session = requests.Session()
 adapter = requests.adapters.HTTPAdapter(pool_connections=20, pool_maxsize=20)
 session.mount('https://', adapter)
 
-# --- DEBUG TOGGLE ---
+# --- SIDEBAR CONTROLS ---
+st.sidebar.header("⚙️ Configuration")
+enable_deep_scan = st.sidebar.checkbox("Enable Deep Bill Scan (Slower)", value=False, help="Checks every agenda page to count bills. Turn off for speed.")
 show_debug = st.sidebar.checkbox("Show Raw Scraper Table", value=False)
 filter_text = st.sidebar.text_input("Filter Raw Table (e.g. 'Jan 26')")
 
@@ -57,52 +59,91 @@ def extract_time_from_block(block_text):
     if time_match: return time_match.group(1).upper()
     return None
 
-# --- COMPONENT 1: THE LIS SCRAPER (Source C) ---
+# --- COMPONENT 1: THE HOUSE SCRAPER (Source B - Restored) ---
 @st.cache_data(ttl=300)
 def fetch_scraper_data():
     """
-    Scrapes the LIS Schedule page directly. Fast and simple.
+    Fetches house.vga.virginia.gov for CURRENT and NEXT week.
     """
     schedule_map = {} 
     raw_line_data = [] 
     
-    url = "https://lis.virginia.gov/cgi-bin/legp604.exe?261+sbh+HOUS" 
+    # Calculate Next Monday
+    today = datetime.now().date()
+    days_ahead = 0 - today.weekday() if today.weekday() > 0 else 0 
+    if days_ahead <= 0: days_ahead += 7
+    next_monday = today + timedelta(days=days_ahead)
+    next_monday_str = next_monday.strftime("%Y-%m-%d")
+    
+    # We guess the URL pattern for next week
+    urls = [
+        ("Current Week", "https://house.vga.virginia.gov/schedule/meetings"),
+        ("Next Week", f"https://house.vga.virginia.gov/schedule/meetings?date={next_monday_str}")
+    ]
+    
     headers = {'User-Agent': 'Mozilla/5.0'}
     
-    try:
-        raw_line_data.append({"date": "SYSTEM", "text": f"--- FETCHING: {url} ---", "tag": "info"})
-        resp = session.get(url, headers=headers, timeout=5)
-        soup = BeautifulSoup(resp.text, 'html.parser')
-        
-        rows = soup.find_all('tr')
-        current_date = None
-        
-        for row in rows:
-            text = row.get_text(" ", strip=True)
-            if not text: continue
+    for label, url in urls:
+        try:
+            raw_line_data.append({"date": "SYSTEM", "text": f"--- FETCHING {label}: {url} ---", "tag": "info"})
+            resp = session.get(url, headers=headers, timeout=5)
+            soup = BeautifulSoup(resp.text, 'html.parser')
             
-            # DATE DETECTION
-            if any(day in text for day in ["Monday,", "Tuesday,", "Wednesday,", "Thursday,", "Friday,"]):
-                try:
-                    match = re.search(r'(Monday|Tuesday|Wednesday|Thursday|Friday),\s+([A-Za-z]+)\s+(\d{1,2}),\s+(\d{4})', text)
+            # Grab all text containers
+            all_tags = soup.find_all(['div', 'span', 'p', 'h4', 'h5', 'a', 'li'])
+            
+            current_date = None
+            current_block_lines = []
+            
+            for tag in all_tags:
+                text = tag.get_text(" ", strip=True)
+                if not text: continue
+                
+                # DATE DETECTION
+                # Captures "Monday, January 26" OR "Monday, Jan 26"
+                if any(day in text for day in ["Monday,", "Tuesday,", "Wednesday,", "Thursday,", "Friday,"]):
+                    match = re.search(r'(Monday|Tuesday|Wednesday|Thursday|Friday),\s+([A-Za-z]+)\s+(\d{1,2})', text)
                     if match:
-                        raw_str = match.group(0)
-                        dt = datetime.strptime(raw_str, "%A, %B %d, %Y")
+                        if current_date and current_block_lines:
+                            if current_date not in schedule_map: schedule_map[current_date] = []
+                            schedule_map[current_date].append("\n".join(current_block_lines))
+                            current_block_lines = []
+                        
+                        raw_str = f"{match.group(0)} 2026"
+                        try: dt = datetime.strptime(raw_str, "%A, %B %d %Y")
+                        except: 
+                            try: dt = datetime.strptime(raw_str, "%A, %b %d %Y")
+                            except: continue
+
                         current_date = dt.date()
                         raw_line_data.append({"date": str(current_date), "text": f"DATE FOUND: {text}", "tag": "HEADER"})
-                        if current_date not in schedule_map: schedule_map[current_date] = []
                         continue
-                except: pass
-            
-            # CAPTURE ROW
-            raw_line_data.append({"date": str(current_date) if current_date else "Unknown", "text": text, "tag": "tr"})
-            
-            if current_date:
+                
+                raw_line_data.append({"date": str(current_date) if current_date else "Unknown", "text": text, "tag": tag.name})
+
+                if not current_date: continue
+                
+                # BLOCK LOGIC
+                is_new_start = "convenes" in text.lower()
+                if is_new_start and current_block_lines:
+                    if current_date not in schedule_map: schedule_map[current_date] = []
+                    schedule_map[current_date].append("\n".join(current_block_lines))
+                    current_block_lines = []
+
+                current_block_lines.append(text)
+                
+                low_text = text.lower()
+                if ".ics" in low_text or "archived" in low_text or "pledge" in low_text:
+                    if current_date not in schedule_map: schedule_map[current_date] = []
+                    schedule_map[current_date].append("\n".join(current_block_lines))
+                    current_block_lines = []
+                    
+            if current_date and current_block_lines:
                 if current_date not in schedule_map: schedule_map[current_date] = []
-                schedule_map[current_date].append(text)
-            
-    except Exception as e: 
-        raw_line_data.append({"date": "ERROR", "text": str(e), "tag": "error"})
+                schedule_map[current_date].append("\n".join(current_block_lines))
+                
+        except Exception as e: 
+            raw_line_data.append({"date": "ERROR", "text": f"Failed {label}: {e}", "tag": "error"})
             
     return schedule_map, raw_line_data
 
@@ -143,6 +184,35 @@ def extract_agenda_link(html_string):
             return f"https://house.vga.virginia.gov{href}" if href.startswith("/") else href
     return None
 
+def scan_agenda_page(url):
+    try:
+        headers = {'User-Agent': 'Mozilla/5.0'}
+        resp = session.get(url, headers=headers, timeout=5)
+        soup = BeautifulSoup(resp.text, 'html.parser')
+        text = soup.get_text()
+        bills = re.findall(r'\b(H\.?B\.?|S\.?B\.?|H\.?J\.?|S\.?J\.?)\s*(\d+)', text, re.IGNORECASE)
+        clean = set()
+        for p, n in bills: clean.add(f"{p.upper().replace('.','').strip()}{n}")
+        def n_sort(s):
+            parts = re.match(r"([A-Za-z]+)(\d+)", s)
+            if parts: return parts.group(1), int(parts.group(2))
+            return s, 0
+        return sorted(list(clean), key=n_sort)
+    except: return []
+
+def fetch_bills_parallel(meetings_list):
+    tasks = []
+    for m in meetings_list:
+        if m.get('AgendaLink'): tasks.append((m, m['AgendaLink']))
+    results = {}
+    with concurrent.futures.ThreadPoolExecutor(max_workers=20) as executor:
+        future_to_id = {executor.submit(scan_agenda_page, url): m['ScheduleID'] for m, url in tasks}
+        for future in concurrent.futures.as_completed(future_to_id):
+            mid = future_to_id[future]
+            try: results[mid] = future.result()
+            except: results[mid] = []
+    return results
+
 def parse_time_rank(time_str):
     if not time_str or "Not Listed" in time_str or "TBA" in time_str: return 9999
     if "Cancelled" in time_str: return 9998
@@ -170,7 +240,7 @@ with st.spinner("Fetching Schedule..."):
 
 # --- THE OG DEV BOX ---
 if show_debug:
-    st.subheader("🔍 Raw LIS Scraper Output")
+    st.subheader("🔍 Raw Scraper Output (Multi-Week)")
     display_data = raw_debug_data
     if filter_text:
         display_data = [row for row in raw_debug_data if filter_text.lower() in row['text'].lower()]
@@ -205,7 +275,7 @@ for m in all_meetings:
     if "adjourn" in api_comments.lower() or "upon" in api_comments.lower():
         final_time = api_comments
         
-    # 2. Block Search (LIS Rows)
+    # 2. Block Search
     elif m_date in daily_blocks_map:
         blocks = daily_blocks_map[m_date]
         api_tokens = get_clean_tokens(name)
@@ -222,11 +292,8 @@ for m in all_meetings:
             score = len(intersection) / len(api_tokens)
             if intersection.intersection({'1','2','3','4','5','6'}): score += 0.5
             
-            # SESSION BOOST
             if "convenes" in name.lower() and "convenes" in block_text.lower():
                 score += 2.0 
-            
-            match_debug.append(f"{score:.2f}: {block_text[:30]}...")
             
             if score > best_score and score > 0.65:
                 best_score = score
@@ -243,13 +310,19 @@ for m in all_meetings:
     m['DisplayTime'] = final_time
     m['CleanDate'] = m_date
     m['AgendaLink'] = extract_agenda_link(m.get("Description"))
-    m['ApiTokens'] = get_clean_tokens(name)
-    m['DebugInfo'] = sorted(match_debug, reverse=True)[:5]
     
     valid_meetings.append(m)
     week_map[m_date].append(m)
 
-# Display 7 days
+# --- BILL SCANNING (CONDITIONAL) ---
+if enable_deep_scan:
+    with st.spinner(f"🔥 Scanning bills (Slower)..."):
+        bill_results = fetch_bills_parallel(valid_meetings)
+        for m in valid_meetings: m['Bills'] = bill_results.get(m['ScheduleID'], [])
+else:
+    for m in valid_meetings: m['Bills'] = []
+
+# --- DISPLAY ---
 cols = st.columns(7)
 days = sorted([d for d in week_map.keys() if d <= today + timedelta(days=6)])
 
@@ -280,6 +353,13 @@ for i, day in enumerate(days):
                     st.markdown(f"**{parent_name}**")
                     if sub_name: st.caption(f"↳ *{sub_name}*")
                     
+                    # BILLS
+                    if enable_deep_scan and len(m.get('Bills', [])) > 0:
+                        st.success(f"**{len(m['Bills'])} Bills Listed**")
+                        with st.expander("View Bills"):
+                            st.write(", ".join(m['Bills']))
+                            
+                    # LINK
                     if m['AgendaLink']:
                         st.link_button("View Agenda", m['AgendaLink'])
                     else:
