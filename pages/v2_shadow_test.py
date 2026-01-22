@@ -9,28 +9,39 @@ import concurrent.futures
 API_KEY = "81D70A54-FCDC-4023-A00B-A3FD114D5984" 
 SESSION_CODE = "20261" 
 
-st.set_page_config(page_title="v24 Sniper Scraper", page_icon="🎯", layout="wide")
-st.title("🎯 v24: The 'Sniper' Scraper")
+st.set_page_config(page_title="v25 Context Window", page_icon="🪟", layout="wide")
+st.title("🪟 v25: The 'Context Window' Scraper")
 
 # --- SPEED ENGINE ---
 session = requests.Session()
 adapter = requests.adapters.HTTPAdapter(pool_connections=20, pool_maxsize=20)
 session.mount('https://', adapter)
 
-# --- HELPER: TEXT NORMALIZATION ---
-def get_clean_tokens(text):
-    """Turns 'House General Laws - Professions' into {'general', 'laws', 'professions'}"""
-    if not text: return set()
-    # Words to ignore to prevent false positives
-    noise = {"house", "senate", "committee", "subcommittee", "room", "building", "meeting", "the", "of", "and", "&", "-", "agenda", "view", "video", "signup", "speak", "public", "testimony"}
-    words = set(re.sub(r'[^a-zA-Z\s]', '', text.lower()).split())
-    return words - noise
+# --- HELPER: TEXT CLEANING ---
+def normalize_string(s):
+    """Simplifies string for matching (removes punctuation/case)"""
+    return re.sub(r'[^a-zA-Z0-9]', '', s.lower())
 
-# --- COMPONENT 1: THE SCRAPER (Source B) ---
+def is_committee_header(line):
+    """Heuristic to guess if a line is a committee header (to stop scanning)"""
+    l = line.lower()
+    return "committee" in l or "subcommittee" in l or "caucus" in l or "commission" in l
+
+def is_time_string(line):
+    """Checks if a line looks like a time instruction"""
+    l = line.lower()
+    # Key markers for complex times
+    if "adjourn" in l or "recess" in l or "upon" in l or "immediately" in l or "after" in l: return True
+    # Standard time (9:00 AM)
+    if re.search(r'\d{1,2}:\d{2}', l) and ("am" in l or "pm" in l or "noon" in l): return True
+    return False
+
+# --- COMPONENT 1: THE FLAT SCRAPER (Source B) ---
 @st.cache_data(ttl=300)
-def fetch_master_times():
+def fetch_daily_text_lines():
     """
-    Returns a dictionary: { Date: [ {text: "Full line text", tokens: {set of words}} ] }
+    Returns a map: { DateObject: [ "Line 1", "Line 2", ... ] }
+    We flatten the HTML into a simple list of text lines.
     """
     schedule_map = {} 
     headers = {'User-Agent': 'Mozilla/5.0'}
@@ -40,33 +51,27 @@ def fetch_master_times():
         resp = session.get(url, headers=headers, timeout=3)
         soup = BeautifulSoup(resp.text, 'html.parser')
         
-        current_date = None
-        # Get all text elements
-        all_tags = soup.find_all(['div', 'span', 'p', 'h4'])
+        # Get all text nodes separated by newlines
+        # This preserves the "Line 1, Line 2" structure visually
+        text_blob = soup.get_text("\n")
+        raw_lines = [x.strip() for x in text_blob.splitlines() if x.strip()]
         
-        for tag in all_tags:
-            text = tag.get_text(" ", strip=True)
-            if not text: continue
-            
-            # 1. Detect Date Change
-            if any(day in text for day in ["Monday,", "Tuesday,", "Wednesday,", "Thursday,", "Friday,"]):
+        current_date = None
+        
+        for line in raw_lines:
+            # 1. Detect Date Header
+            if any(day in line for day in ["Monday,", "Tuesday,", "Wednesday,", "Thursday,", "Friday,"]):
                 try:
-                    # "Wednesday, January 21, 2026"
-                    clean_date = text.split(", ")[1] + " 2026"
+                    clean_date = line.split(", ")[1] + " 2026"
                     dt = datetime.strptime(clean_date, "%B %d %Y")
                     current_date = dt.date()
+                    if current_date not in schedule_map: schedule_map[current_date] = []
                 except: pass
                 continue
             
-            # 2. Store Content
+            # 2. Add line to current date bucket
             if current_date:
-                # We store EVERY meaningful line for this date
-                if len(text) > 10:
-                    if current_date not in schedule_map: schedule_map[current_date] = []
-                    schedule_map[current_date].append({
-                        "text": text,
-                        "tokens": get_clean_tokens(text)
-                    })
+                schedule_map[current_date].append(line)
                     
     except Exception as e: pass
     return schedule_map
@@ -143,7 +148,6 @@ def fetch_bills_parallel(meetings_list):
 def parse_time_rank(time_str):
     if not time_str: return 9999
     clean = time_str.lower().replace(".", "").strip()
-    # Push Adjournment times to end of day (4:00 PM equivalent)
     if "adjourn" in clean or "recess" in clean or "upon" in clean or "after" in clean: return 960 
     if "tba" in clean: return 9999
     try:
@@ -161,11 +165,13 @@ def parse_committee_name(full_name):
 
 # --- MAIN UI ---
 
-if st.button("🚀 Run Sniper Forecast"):
+if st.button("🚀 Run Context Forecast"):
     
-    with st.spinner("Fetching Schedule..."):
+    with st.spinner("Fetching API Schedule..."):
         all_meetings = get_full_schedule()
-        master_scraped_data = fetch_master_times()
+        
+    with st.spinner("Scraping Text Lines..."):
+        daily_lines_map = fetch_daily_text_lines()
         
     today = datetime.now().date()
     week_map = {}
@@ -181,48 +187,51 @@ if st.button("🚀 Run Sniper Forecast"):
             name = m.get("OwnerName", "")
             if "Caucus" in name or "Press" in name: continue
             
-            # --- THE SNIPER LOGIC ---
+            # --- THE CONTEXT LOGIC ---
             api_time = m.get("ScheduleTime")
             api_comments = m.get("Comments") or ""
             
             final_time = api_time
             
-            # 1. Trust API Comments first
+            # 1. Check API Comments
             if "adjourn" in api_comments.lower() or "upon" in api_comments.lower():
                 final_time = api_comments
                 
-            # 2. If API is vague, HUNT in the scraped data
+            # 2. If API fails, SCAN THE TEXT LINES
             elif not api_time or "12:00" in str(api_time) or "TBA" in str(api_time):
                 
-                # Get tokens for this committee (e.g. {general, laws})
-                target_tokens = get_clean_tokens(name)
-                
-                if m_date in master_scraped_data:
-                    candidates = master_scraped_data[m_date]
+                if m_date in daily_lines_map:
+                    lines = daily_lines_map[m_date]
                     
-                    # Find the BEST matching line in the scraped text
-                    best_line = None
-                    max_score = 0
+                    # Search for this committee in the list
+                    target_norm = normalize_string(name)
                     
-                    for line_obj in candidates:
-                        line_tokens = line_obj['tokens']
-                        line_text = line_obj['text'].lower()
-                        
-                        # Calculate Overlap Score
-                        overlap = len(target_tokens.intersection(line_tokens))
-                        
-                        # Only consider lines that ALSO have time info
-                        has_time_info = any(x in line_text for x in ["adjournment", "recess", "upon", "after", "immediately", "am", "pm"])
-                        
-                        if overlap > max_score and has_time_info:
-                            max_score = overlap
-                            best_line = line_obj['text']
+                    for i, line in enumerate(lines):
+                        # FOUND THE HEADER!
+                        # Use loose matching because scraper text might vary slightly
+                        # e.g. "House General Laws" in "House General Laws Committee"
+                        if normalize_string(line) in target_norm or target_norm in normalize_string(line):
                             
-                    # If we found a line with High Confidence (2+ matching words + time info)
-                    if best_line and max_score >= 1:
-                        # Extract the time phrase from the line (simplified: just use the line)
-                        # Often the line IS the time: "1/2 hour after adjournment..."
-                        final_time = best_line
+                            # LOOK DOWN (Next 5 lines)
+                            found_scan_time = None
+                            for offset in range(1, 6):
+                                if i + offset >= len(lines): break
+                                
+                                candidate = lines[i + offset]
+                                
+                                # Safety Check: Don't read into the NEXT committee
+                                # But ignore "Room B" etc.
+                                if is_committee_header(candidate) and not is_time_string(candidate):
+                                    # If we hit another committee name before a time, we failed.
+                                    break 
+                                    
+                                if is_time_string(candidate):
+                                    found_scan_time = candidate
+                                    break
+                            
+                            if found_scan_time:
+                                final_time = found_scan_time
+                                break # Stop searching lines
 
             # 3. Fallback
             if not final_time or final_time == "12:00 PM": final_time = "Time TBA"
@@ -260,8 +269,7 @@ if st.button("🚀 Run Sniper Forecast"):
                     parent_name, sub_name = parse_committee_name(full_name)
                     
                     time_str = m['DisplayTime']
-                    # Clean up really long scraped lines
-                    if len(time_str) > 50: time_str = "See Details (Complex Time)"
+                    if len(time_str) > 50: time_str = "See Details"
                     
                     with st.container(border=True):
                         if len(time_str) > 15: st.caption(f"🕒 *{time_str}*") 
