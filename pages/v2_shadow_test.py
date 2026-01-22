@@ -3,14 +3,13 @@ import requests
 import re
 from bs4 import BeautifulSoup
 from datetime import datetime, timedelta
-import concurrent.futures
 
 # --- CONFIGURATION ---
 API_KEY = "81D70A54-FCDC-4023-A00B-A3FD114D5984" 
 SESSION_CODE = "20261" 
 
-st.set_page_config(page_title="v43 LIS Master", page_icon="🏛️", layout="wide")
-st.title("🏛️ v43: The 'LIS Master' Scraper")
+st.set_page_config(page_title="v44 Lean Master", page_icon="🚀", layout="wide")
+st.title("🚀 v44: The 'Lean Master' (No Scanning)")
 
 # --- SPEED ENGINE ---
 session = requests.Session()
@@ -19,17 +18,15 @@ session.mount('https://', adapter)
 
 # --- DEBUG TOGGLE ---
 show_debug = st.sidebar.checkbox("Show Raw Scraper Table", value=True)
-filter_text = st.sidebar.text_input("Filter Raw Table (e.g. 'Subcommittee #2')")
+filter_text = st.sidebar.text_input("Filter Raw Table (e.g. 'Jan 26')")
 
 # --- HELPER: TEXT CLEANING ---
 def get_clean_tokens(text):
     if not text: return set()
     lower = text.lower()
-    
     clean_text = lower.replace(".ics", "").replace("view agenda", "")
     clean_text = clean_text.replace("-", " ").replace("#", " ")
     clean_text = re.sub(r'[^a-z0-9\s]', '', clean_text)
-    
     noise = {
         "committee", "subcommittee", "room", "building", 
         "meeting", "the", "of", "and", "&", "agenda", "view", "video", 
@@ -38,70 +35,54 @@ def get_clean_tokens(text):
     }
     return set(clean_text.split()) - noise
 
-# --- COMPONENT 1: THE LIS SCRAPER (Source C - Dual Fetch) ---
+# --- COMPONENT 1: THE LIS "ALL" SCRAPER (Source C) ---
 @st.cache_data(ttl=300)
 def fetch_lis_schedule():
     """
-    Fetches raw LIS tables for BOTH House and Senate to match the user's 'All' view.
-    Parses the exact table structure seen in the screenshot.
+    Fetches the 'ALL' schedule from LIS to capture House, Senate, and Future Dates.
     """
     schedule_map = {} 
     raw_line_data = [] 
     
-    # We fetch both chambers to ensure we cover the "Mixed" view
-    urls = [
-        ("House", "https://lis.virginia.gov/cgi-bin/legp604.exe?261+sbh+HOUS"),
-        ("Senate", "https://lis.virginia.gov/cgi-bin/legp604.exe?261+sbh+SEN")
-    ]
+    # "ALL" parameter usually forces the full list
+    url = "https://lis.virginia.gov/cgi-bin/legp604.exe?261+sbh+ALL" 
     
     headers = {'User-Agent': 'Mozilla/5.0'}
     
-    for label, url in urls:
-        try:
-            raw_line_data.append({"date": "SYSTEM", "text": f"--- FETCHING {label} ---", "col1": "", "col2": ""})
-            resp = session.get(url, headers=headers, timeout=5)
-            soup = BeautifulSoup(resp.text, 'html.parser')
+    try:
+        raw_line_data.append({"date": "SYSTEM", "text": f"--- FETCHING: {url} ---", "col1": "", "col2": ""})
+        resp = session.get(url, headers=headers, timeout=5)
+        soup = BeautifulSoup(resp.text, 'html.parser')
+        
+        rows = soup.find_all('tr')
+        current_date = None
+        
+        for row in rows:
+            # 1. DATE DETECTION (LIS Format: "Thursday, January 22, 2026")
+            text = row.get_text(" ", strip=True)
+            if any(day in text for day in ["Monday,", "Tuesday,", "Wednesday,", "Thursday,", "Friday,"]):
+                match = re.search(r'(Monday|Tuesday|Wednesday|Thursday|Friday),\s+([A-Za-z]+)\s+(\d{1,2})', text)
+                if match:
+                    raw_str = f"{match.group(0)} 2026"
+                    try: 
+                        dt = datetime.strptime(raw_str, "%A, %B %d %Y")
+                        current_date = dt.date()
+                        raw_line_data.append({"date": str(current_date), "text": "DATE HEADER", "col1": "", "col2": ""})
+                    except: pass
+                continue
             
-            # LIS uses a main table. We look for rows.
-            # The structure in your screenshot is:
-            # Header Row: Date
-            # Data Rows: [Time] [Committee Info]
-            
-            rows = soup.find_all('tr')
-            current_date = None
-            
-            for row in rows:
-                cells = row.find_all('td')
-                if not cells: 
-                    # Might be a Date Header in a <h4> inside a <ul> or outside the table
-                    # LIS is messy. Let's check the text of the whole row.
-                    row_text = row.get_text(" ", strip=True)
-                    if any(day in row_text for day in ["Monday,", "Tuesday,", "Wednesday,", "Thursday,", "Friday,"]):
-                         # Date Detection
-                        match = re.search(r'(Monday|Tuesday|Wednesday|Thursday|Friday),\s+([A-Za-z]+)\s+(\d{1,2})', row_text)
-                        if match:
-                            raw_str = f"{match.group(0)} 2026"
-                            try: 
-                                dt = datetime.strptime(raw_str, "%A, %B %d %Y")
-                                current_date = dt.date()
-                                raw_line_data.append({"date": str(current_date), "text": "DATE HEADER", "col1": "", "col2": ""})
-                            except: pass
-                    continue
+            # 2. CAPTURE DATA ROWS
+            cells = row.find_all('td')
+            if len(cells) >= 2:
+                time_text = cells[0].get_text(" ", strip=True)
+                info_text = cells[1].get_text(" ", strip=True)
                 
-                # If we have cells, it's likely a meeting
-                # LIS rows usually have 2 or 3 columns.
-                # Col 1: Time (e.g. "7:00 AM")
-                # Col 2: Name (e.g. "House Counties...")
+                if not current_date: continue
+                if not info_text: continue
                 
-                if len(cells) >= 2:
-                    time_text = cells[0].get_text(" ", strip=True)
-                    info_text = cells[1].get_text(" ", strip=True)
-                    
-                    # Validate it's a meeting row
-                    if not current_date: continue
-                    if not info_text: continue
-                    
-                    # Store
+                # Check if it looks like a meeting (Time in col 1)
+                # LIS puts "7:00 AM" or "Upon Adjournment" in Col 1
+                if any(c.isdigit() for c in time_text) or "adj" in time_text.lower() or "convenes" in info_text.lower():
                     if current_date not in schedule_map: schedule_map[current_date] = []
                     
                     entry = {
@@ -111,16 +92,15 @@ def fetch_lis_schedule():
                     }
                     schedule_map[current_date].append(entry)
                     
-                    # Debug log
                     raw_line_data.append({
                         "date": str(current_date), 
-                        "text": "Meeting Row", 
+                        "text": "Meeting", 
                         "col1": time_text, 
                         "col2": info_text
                     })
                     
-        except Exception as e:
-            raw_line_data.append({"date": "ERROR", "text": str(e), "col1": "", "col2": ""})
+    except Exception as e:
+        raw_line_data.append({"date": "ERROR", "text": str(e), "col1": "", "col2": ""})
             
     return schedule_map, raw_line_data
 
@@ -130,6 +110,8 @@ def get_full_schedule():
     url = "https://lis.virginia.gov/Schedule/api/getschedulelistasync"
     headers = {"WebAPIKey": API_KEY, "Accept": "application/json"}
     raw_items = []
+    
+    # Only fetch, NO bill scanning logic attached later
     def fetch_chamber(chamber):
         try:
             params = {"sessionCode": SESSION_CODE, "chamberCode": chamber}
@@ -140,9 +122,11 @@ def get_full_schedule():
                 return data
         except: return []
         return []
+        
     with concurrent.futures.ThreadPoolExecutor(max_workers=2) as executor:
         results = executor.map(fetch_chamber, ["H", "S"])
         for r in results: raw_items.extend(r)
+        
     unique = []
     seen = set()
     for m in raw_items:
@@ -160,36 +144,6 @@ def extract_agenda_link(html_string):
         if any(x in link.get_text().lower() for x in ["agenda", "committee info", "docket"]):
             return f"https://house.vga.virginia.gov{href}" if href.startswith("/") else href
     return None
-
-# --- RESTORED BILL COUNTING LOGIC ---
-def scan_agenda_page(url):
-    try:
-        headers = {'User-Agent': 'Mozilla/5.0'}
-        resp = session.get(url, headers=headers, timeout=5)
-        soup = BeautifulSoup(resp.text, 'html.parser')
-        text = soup.get_text()
-        bills = re.findall(r'\b(H\.?B\.?|S\.?B\.?|H\.?J\.?|S\.?J\.?)\s*(\d+)', text, re.IGNORECASE)
-        clean = set()
-        for p, n in bills: clean.add(f"{p.upper().replace('.','').strip()}{n}")
-        def n_sort(s):
-            parts = re.match(r"([A-Za-z]+)(\d+)", s)
-            if parts: return parts.group(1), int(parts.group(2))
-            return s, 0
-        return sorted(list(clean), key=n_sort)
-    except: return []
-
-def fetch_bills_parallel(meetings_list):
-    tasks = []
-    for m in meetings_list:
-        if m.get('AgendaLink'): tasks.append((m, m['AgendaLink']))
-    results = {}
-    with concurrent.futures.ThreadPoolExecutor(max_workers=20) as executor:
-        future_to_id = {executor.submit(scan_agenda_page, url): m['ScheduleID'] for m, url in tasks}
-        for future in concurrent.futures.as_completed(future_to_id):
-            mid = future_to_id[future]
-            try: results[mid] = future.result()
-            except: results[mid] = []
-    return results
 
 def parse_time_rank(time_str):
     if not time_str or "Not Listed" in time_str or "TBA" in time_str: return 9999
@@ -214,18 +168,15 @@ def parse_committee_name(full_name):
 with st.spinner("Fetching Schedule..."):
     all_meetings = get_full_schedule()
     
-with st.spinner("Scraping LIS Master Table..."):
+with st.spinner("Scraping LIS Master List..."):
     daily_lis_map, raw_debug_data = fetch_lis_schedule()
 
-# --- THE OG DEV BOX ---
+# --- DEV BOX ---
 if show_debug:
     st.subheader("🔍 Raw LIS Table Output")
-    st.info("Columns 1 & 2 match the screenshot structure: Time | Info")
-    
     display_data = raw_debug_data
     if filter_text:
         display_data = [row for row in raw_debug_data if filter_text.lower() in str(row).lower()]
-        
     st.dataframe(display_data, use_container_width=True, height=400)
     st.divider()
 
@@ -251,7 +202,6 @@ for m in all_meetings:
     api_time = m.get("ScheduleTime")
     api_comments = m.get("Comments") or ""
     final_time = "⚠️ Not Listed on Schedule"
-    match_debug = []
     
     # 1. API Comments
     if "adjourn" in api_comments.lower() or "upon" in api_comments.lower():
@@ -274,7 +224,7 @@ for m in all_meetings:
             score = len(intersection) / len(api_tokens)
             if intersection.intersection({'1','2','3','4','5','6'}): score += 0.5
             
-            # Boost for exact subcommittee match
+            # Boost for subcommittee match
             if "subcommittee" in name.lower() and "subcommittee" in row['name_raw'].lower():
                 score += 0.2
             
@@ -283,7 +233,6 @@ for m in all_meetings:
                 best_row = row
         
         if best_row:
-            # We trust LIS Time (Column 1) completely
             final_time = best_row['time_raw']
             if not final_time: final_time = "Time Not Listed"
     
@@ -296,11 +245,6 @@ for m in all_meetings:
     
     valid_meetings.append(m)
     week_map[m_date].append(m)
-
-# --- BILL SCANNING (RESTORED) ---
-with st.spinner(f"🔥 Scanning bills for {len(valid_meetings)} agendas..."):
-    bill_results = fetch_bills_parallel(valid_meetings)
-    for m in valid_meetings: m['Bills'] = bill_results.get(m['ScheduleID'], [])
 
 # --- DISPLAY ---
 cols = st.columns(7)
@@ -332,11 +276,6 @@ for i, day in enumerate(days):
                     
                     st.markdown(f"**{parent_name}**")
                     if sub_name: st.caption(f"↳ *{sub_name}*")
-                    
-                    if len(m.get('Bills', [])) > 0:
-                        st.success(f"**{len(m['Bills'])} Bills Listed**")
-                        with st.expander("View Bills"):
-                            st.write(", ".join(m['Bills']))
                             
                     if m['AgendaLink']:
                         st.link_button("View Agenda", m['AgendaLink'])
