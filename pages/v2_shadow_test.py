@@ -9,21 +9,17 @@ import concurrent.futures
 API_KEY = "81D70A54-FCDC-4023-A00B-A3FD114D5984" 
 SESSION_CODE = "20261" 
 
-st.set_page_config(page_title="v34 Final Logic", page_icon="🏁", layout="wide")
-st.title("🏁 v34: The Cancellation-Aware Scraper")
+st.set_page_config(page_title="v35 Chain Reaction", page_icon="🔗", layout="wide")
+st.title("🔗 v35: Chain-Reaction & Inspector")
 
 # --- SPEED ENGINE ---
 session = requests.Session()
 adapter = requests.adapters.HTTPAdapter(pool_connections=20, pool_maxsize=20)
 session.mount('https://', adapter)
 
-# --- DEBUG TOGGLE ---
-debug_mode = st.sidebar.checkbox("🐞 Match Debugger", value=False)
-
 # --- HELPER: TEXT CLEANING ---
 def get_clean_tokens(text):
     if not text: return set()
-    # Handle specific artifacts seen in screenshots
     clean_text = text.lower().replace(".ics", "").replace("view agenda", "")
     clean_text = clean_text.replace("-", " ").replace("#", " ")
     clean_text = re.sub(r'[^a-z0-9\s]', '', clean_text)
@@ -32,31 +28,26 @@ def get_clean_tokens(text):
         "house", "senate", "committee", "subcommittee", "room", "building", 
         "meeting", "the", "of", "and", "&", "agenda", "view", "video", 
         "signup", "speak", "public", "testimony", "bill", "summit", "caucus",
-        "general", "assembly", "commonwealth", "new", "time", "changed", "meeting"
+        "general", "assembly", "commonwealth", "meeting"
     }
     return set(clean_text.split()) - noise
 
 def extract_time_from_block(block_text):
-    """Scans a raw block of text for time indicators OR cancellations."""
+    """Scans a raw block for complex 'Chain Reaction' times or standard times."""
     lower_text = block_text.lower()
     
-    # 1. CANCELLATION CHECK (High Priority)
-    if "cancel" in lower_text:
-        return "❌ Cancelled"
+    # 1. CANCELLATION (Top Priority)
+    if "cancel" in lower_text: return "❌ Cancelled"
 
-    # 2. Look for specific phrases (Medium Priority)
-    phrases = [
-        "immediately upon adjournment", "upon adjournment", "1/2 hour after adjournment", 
-        "15 minutes after adjournment", "recess", "after adjournment"
-    ]
-    for p in phrases:
-        if p in lower_text:
-            # Try to return the whole line containing the phrase for context
-            for line in block_text.splitlines():
-                if p in line.lower(): return line.strip()
-            return p.title()
+    # 2. CHAIN REACTION / ADJOURNMENT (High Priority)
+    # Catches: "15 minutes after adjournment of Professions..."
+    if "adjournment" in lower_text or "recess" in lower_text:
+        # Find the specific line with the instruction
+        for line in block_text.splitlines():
+            if "adjourn" in line.lower() or "recess" in line.lower():
+                return line.strip()
 
-    # 3. Look for standard times (Low Priority)
+    # 3. STANDARD TIME (Medium Priority)
     # Regex for "7:00 AM" or "10:00 a.m."
     time_match = re.search(r'(\d{1,2}:\d{2}\s*[aA|pP]\.?[mM]\.?)', block_text)
     if time_match:
@@ -67,10 +58,7 @@ def extract_time_from_block(block_text):
 # --- COMPONENT 1: THE BLOCK SCRAPER (Source B) ---
 @st.cache_data(ttl=300)
 def fetch_daily_blocks():
-    """
-    Returns: { DateObject: [ "Raw Block Text 1", "Raw Block Text 2" ] }
-    Splits the page by '.ics' to create distinct meeting buckets.
-    """
+    """Returns: { DateObject: [ "Raw Block Text 1", ... ] }"""
     schedule_map = {} 
     headers = {'User-Agent': 'Mozilla/5.0'}
     try:
@@ -79,24 +67,20 @@ def fetch_daily_blocks():
         soup = BeautifulSoup(resp.text, 'html.parser')
         
         text_blob = soup.get_text("\n")
-        
-        # 1. SPLIT BY DATE HEADERS FIRST
         lines = [x.strip() for x in text_blob.splitlines() if x.strip()]
         
         current_date = None
         current_block_lines = []
         
         for line in lines:
-            # Date Detection
+            # 1. Date Detection
             if any(day in line for day in ["Monday,", "Tuesday,", "Wednesday,", "Thursday,", "Friday,"]):
                 try:
                     match = re.search(r'(Monday|Tuesday|Wednesday|Thursday|Friday),\s+([A-Z][a-z]+)\s+(\d{1,2})', line)
                     if match:
-                        # Flush previous block
                         if current_date and current_block_lines:
                             schedule_map[current_date].append("\n".join(current_block_lines))
                             current_block_lines = []
-                            
                         clean_date_str = f"{match.group(0)} 2026"
                         dt = datetime.strptime(clean_date_str, "%A, %B %d %Y")
                         current_date = dt.date()
@@ -106,16 +90,18 @@ def fetch_daily_blocks():
             
             if not current_date: continue
             
-            # Add line to current block
+            # 2. Add line to block
             current_block_lines.append(line)
             
-            # END OF BLOCK DETECTOR (.ics)
-            # ".ics" or "Archived" ends a meeting card
-            if ".ics" in line.lower() or "archived" in line.lower():
+            # 3. END OF BLOCK DETECTORS
+            # - ".ics" (Standard Committee)
+            # - "Archived" (Old style)
+            # - "Pledge of Allegiance" (Often ends the Floor Session block)
+            low_line = line.lower()
+            if ".ics" in low_line or "archived" in low_line or "pledge of allegiance" in low_line:
                 schedule_map[current_date].append("\n".join(current_block_lines))
                 current_block_lines = []
                 
-        # Flush last block
         if current_date and current_block_lines:
             schedule_map[current_date].append("\n".join(current_block_lines))
             
@@ -190,7 +176,7 @@ def fetch_bills_parallel(meetings_list):
 
 def parse_time_rank(time_str):
     if not time_str or "Not Listed" in time_str or "TBA" in time_str: return 9999
-    if "Cancelled" in time_str: return 9998 # Cancelled at bottom
+    if "Cancelled" in time_str: return 9998
     clean = time_str.lower().replace(".", "").strip()
     if "adjourn" in clean or "recess" in clean or "upon" in clean or "after" in clean: return 960 
     try:
@@ -208,18 +194,44 @@ def parse_committee_name(full_name):
 
 # --- MAIN UI ---
 
-if st.button("🚀 Run Final Forecast"):
+# SIDEBAR INSPECTOR (Restored)
+st.sidebar.header("🔍 Inspector Controls")
+show_inspector = st.sidebar.checkbox("Show Calendar Inspector", value=True)
+inspector_query = st.sidebar.text_input("Search Scraped Text (e.g. 'Consumer')")
+
+if st.button("🚀 Run Chain-Reaction Forecast"):
     
     with st.spinner("Fetching API..."):
         all_meetings = get_full_schedule()
         daily_blocks_map = fetch_daily_blocks()
         
+    # --- INSPECTOR UI ---
+    if show_inspector:
+        st.divider()
+        st.subheader("🗓️ Calendar Inspector")
+        if inspector_query:
+            st.info(f"Searching for: **'{inspector_query}'**")
+            hits = []
+            for d, blocks in daily_blocks_map.items():
+                d_str = d.strftime("%A %m/%d") if hasattr(d, 'strftime') else str(d)
+                for block in blocks:
+                    if inspector_query.lower() in block.lower():
+                        hits.append(f"**{d_str}**\n```\n{block}\n```")
+            if hits:
+                for h in hits: st.markdown(h)
+            else:
+                st.warning("No matches found in scraped blocks.")
+        else:
+            found_dates = sorted([d for d in daily_blocks_map.keys() if isinstance(d, datetime) or isinstance(d, type(datetime.now().date()))])
+            st.write(f"**Dates Scraped:** {[d.strftime('%a %m/%d') for d in found_dates]}")
+        st.divider()
+
+    # --- FORECAST LOGIC ---
     today = datetime.now().date()
     week_map = {}
     for i in range(7): week_map[today + timedelta(days=i)] = []
     valid_meetings = []
     
-    # Sort API items: Longest names first (Specific Subcommittees > Generic Parents)
     all_meetings.sort(key=lambda x: len(x.get("OwnerName", "")), reverse=True)
     
     for m in all_meetings:
@@ -233,12 +245,10 @@ if st.button("🚀 Run Final Forecast"):
             
             api_time = m.get("ScheduleTime")
             api_comments = m.get("Comments") or ""
-            
-            # Default State: ASSUME NOT LISTED unless proven otherwise
             final_time = "⚠️ Not Listed on Schedule"
             match_debug = []
             
-            # 1. API Comments Authority (e.g. "Upon Adjournment")
+            # 1. API Comments Authority
             if "adjourn" in api_comments.lower() or "upon" in api_comments.lower():
                 final_time = api_comments
                 
@@ -253,45 +263,32 @@ if st.button("🚀 Run Final Forecast"):
                 for block_text in blocks:
                     block_tokens = get_clean_tokens(block_text)
                     intersection = api_tokens.intersection(block_tokens)
-                    
                     if not intersection: continue
                     
-                    # Scoring
                     score = len(intersection) / len(api_tokens)
+                    # Number Boost
+                    if intersection.intersection({'1','2','3','4','5','6'}): score += 0.5
                     
-                    # Bonus for Numbers ("#1", "#2") - CRITICAL
-                    numbers = {'1','2','3','4','5','6'}
-                    if intersection.intersection(numbers): score += 0.5
-                    
-                    match_debug.append(f"{score:.2f}: {block_text[:30]}...")
+                    match_debug.append(f"{score:.2f}: {block_text[:40]}...")
                     
                     if score > best_score and score > 0.65:
                         best_score = score
                         best_block = block_text
                 
                 if best_block:
-                    # FOUND THE BLOCK! Extract time or CANCELLATION
                     extracted_time = extract_time_from_block(best_block)
-                    if extracted_time:
-                        final_time = extracted_time
-                    else:
-                        final_time = "Time Not Listed" # Found block, but no time
+                    if extracted_time: final_time = extracted_time
+                    else: final_time = "Time Not Listed"
             
-            # If API had a valid time (not 12:00/TBA) and we didn't find a better one...
-            # BUT check if we found a "Not Listed" state.
-            if "Not Listed" in final_time:
-                # Only fallback to API if API has a REAL time (not default)
-                if api_time and "12:00" not in str(api_time) and "TBA" not in str(api_time):
-                    final_time = api_time 
+            # Fallback Logic
+            if "Not Listed" in final_time and api_time and "12:00" not in str(api_time) and "TBA" not in str(api_time):
+                final_time = api_time 
 
             m['DisplayTime'] = final_time
             m['CleanDate'] = m_date
             m['AgendaLink'] = extract_agenda_link(m.get("Description"))
             m['ApiTokens'] = get_clean_tokens(name)
             m['DebugInfo'] = sorted(match_debug, reverse=True)[:5]
-            
-            # Optional: Hide "Not Listed" meetings completely?
-            # if "Not Listed" in final_time: continue 
             
             valid_meetings.append(m)
             week_map[m_date].append(m)
@@ -322,25 +319,14 @@ if st.button("🚀 Run Final Forecast"):
                     if len(time_str) > 60: time_str = "See Details"
                     
                     with st.container(border=True):
-                        # TIME / STATUS DISPLAY
-                        if "Cancelled" in time_str:
-                            st.error(f"{time_str}") # Red Box for Cancelled
-                        elif "Not Listed" in time_str:
-                            st.warning(f"{time_str}") # Yellow for Ghost
-                        elif "Time Not Listed" in time_str:
-                            st.info(f"{time_str}") # Blue for Found but Empty
-                        elif len(time_str) > 15: 
-                            st.caption(f"🕒 *{time_str}*") 
-                        else: 
-                            st.markdown(f"**{time_str}**")
+                        if "Not Listed" in time_str: st.warning(f"{time_str}")
+                        elif "Time Not Listed" in time_str: st.info(f"{time_str}")
+                        elif len(time_str) > 15: st.caption(f"🕒 *{time_str}*") 
+                        else: st.markdown(f"**{time_str}**")
                         
                         st.markdown(f"**{parent_name}**")
                         if sub_name: st.caption(f"↳ *{sub_name}*")
                         
-                        if debug_mode and "Not Listed" in time_str:
-                            st.caption(f"Tokens: {m['ApiTokens']}")
-                            for d in m.get('DebugInfo', []): st.text(d)
-
                         if bill_count > 0:
                             st.success(f"**{bill_count} Bills Listed**")
                             with st.expander("View Bills"):
