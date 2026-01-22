@@ -9,42 +9,51 @@ import concurrent.futures
 API_KEY = "81D70A54-FCDC-4023-A00B-A3FD114D5984" 
 SESSION_CODE = "20261" 
 
-st.set_page_config(page_title="v26 Token Consumer", page_icon="🧶", layout="wide")
-st.title("🧶 v26: The 'Token Consumer' (Duplicate Fix)")
+st.set_page_config(page_title="v27 Match X-Ray", page_icon="🩻", layout="wide")
+st.title("🩻 v27: The Match X-Ray (Hyphen Fix + Debugger)")
 
 # --- SPEED ENGINE ---
 session = requests.Session()
 adapter = requests.adapters.HTTPAdapter(pool_connections=20, pool_maxsize=20)
 session.mount('https://', adapter)
 
-# --- HELPER: TEXT CLEANING ---
+# --- DEBUG STORAGE ---
+debug_info = {} # Stores match attempts for the UI
+
+# --- HELPER: TEXT CLEANING (THE FIX) ---
 def get_clean_tokens(text):
-    """Turns 'House General Laws - Professions' into {'general', 'laws', 'professions'}"""
+    """
+    Turns 'House General Laws-Professions' into {'general', 'laws', 'professions'}
+    CRITICAL FIX: Replaces hyphens with spaces first!
+    """
     if not text: return set()
-    # Words to remove to get to the "core identity"
+    
+    # 1. Replace hyphens with spaces so "Laws-Professions" becomes "Laws Professions"
+    clean_text = text.replace("-", " ").lower()
+    
+    # 2. Remove non-alpha characters
+    clean_text = re.sub(r'[^a-z0-9\s]', '', clean_text)
+    
+    # 3. Define Noise Words
     noise = {
         "house", "senate", "committee", "subcommittee", "room", "building", 
-        "meeting", "the", "of", "and", "&", "-", "agenda", "view", "video", 
-        "signup", "speak", "public", "testimony", "bill", "summit", "caucus"
+        "meeting", "the", "of", "and", "&", "agenda", "view", "video", 
+        "signup", "speak", "public", "testimony", "bill", "summit", "caucus",
+        "general", "assembly" # Added "general assembly" as noise since it appears in addresses
     }
-    # Clean, lowercase, split
-    words = set(re.sub(r'[^a-zA-Z\s]', '', text.lower()).split())
+    
+    words = set(clean_text.split())
     return words - noise
 
 def is_time_string(line):
-    """Checks if a line looks like a time instruction"""
     l = line.lower()
     if "adjourn" in l or "recess" in l or "upon" in l or "immediately" in l or "after" in l: return True
     if re.search(r'\d{1,2}:\d{2}', l) and ("am" in l or "pm" in l or "noon" in l): return True
     return False
 
-# --- COMPONENT 1: THE FLAT SCRAPER (Source B) ---
+# --- COMPONENT 1: THE FLAT SCRAPER ---
 @st.cache_data(ttl=300)
 def fetch_daily_text_lines():
-    """
-    Returns a map: { DateObject: [ {"id": 1, "text": "Line 1"}, ... ] }
-    We give each line an ID so we can 'consume' it later.
-    """
     schedule_map = {} 
     headers = {'User-Agent': 'Mozilla/5.0'}
     
@@ -59,7 +68,6 @@ def fetch_daily_text_lines():
         current_date = None
         
         for i, line in enumerate(raw_lines):
-            # 1. Detect Date Header
             if any(day in line for day in ["Monday,", "Tuesday,", "Wednesday,", "Thursday,", "Friday,"]):
                 try:
                     clean_date = line.split(", ")[1] + " 2026"
@@ -69,19 +77,19 @@ def fetch_daily_text_lines():
                 except: pass
                 continue
             
-            # 2. Add line with ID
             if current_date:
+                # Store full context for debugging
                 schedule_map[current_date].append({
                     "id": i,
                     "text": line,
                     "tokens": get_clean_tokens(line),
-                    "used": False # Track consumption
+                    "used": False
                 })
                     
     except Exception as e: pass
     return schedule_map
 
-# --- COMPONENT 2: API FETCH (Source A) ---
+# --- COMPONENT 2: API FETCH ---
 @st.cache_data(ttl=600) 
 def get_full_schedule():
     url = "https://lis.virginia.gov/Schedule/api/getschedulelistasync"
@@ -170,12 +178,13 @@ def parse_committee_name(full_name):
 
 # --- MAIN UI ---
 
-if st.button("🚀 Run Token-Consumer Forecast"):
+# SIDEBAR DEBUG TOGGLE
+debug_mode = st.sidebar.checkbox("🐞 Enable Match Debugger", value=True)
+
+if st.button("🚀 Run X-Ray Forecast"):
     
-    with st.spinner("Fetching API Schedule..."):
+    with st.spinner("Fetching Schedule..."):
         all_meetings = get_full_schedule()
-        
-    with st.spinner("Scraping Text Lines..."):
         daily_lines_map = fetch_daily_text_lines()
         
     today = datetime.now().date()
@@ -183,8 +192,7 @@ if st.button("🚀 Run Token-Consumer Forecast"):
     for i in range(7): week_map[today + timedelta(days=i)] = []
     valid_meetings = []
     
-    # PRE-SORT MEETINGS to prioritize subcommittees (more specific) before parents
-    # This helps matching "Subcommittee #1" before matching generic "Appropriations"
+    # Sort by Name Length (Longest First) to prevent parents eating children
     all_meetings.sort(key=lambda x: len(x.get("OwnerName", "")), reverse=True)
     
     for m in all_meetings:
@@ -196,17 +204,19 @@ if st.button("🚀 Run Token-Consumer Forecast"):
             name = m.get("OwnerName", "")
             if "Caucus" in name or "Press" in name: continue
             
-            # --- THE CONSUMER LOGIC ---
+            # --- THE LOGIC ---
             api_time = m.get("ScheduleTime")
             api_comments = m.get("Comments") or ""
-            
             final_time = api_time
+            
+            # Debug Stats
+            match_candidates = [] 
             
             # 1. Check API Comments
             if "adjourn" in api_comments.lower() or "upon" in api_comments.lower():
                 final_time = api_comments
                 
-            # 2. If API fails, SCAN THE TEXT LINES
+            # 2. Scrape Match
             elif not api_time or "12:00" in str(api_time) or "TBA" in str(api_time):
                 
                 if m_date in daily_lines_map:
@@ -214,37 +224,55 @@ if st.button("🚀 Run Token-Consumer Forecast"):
                     api_tokens = get_clean_tokens(name)
                     
                     found_match_index = -1
+                    best_overlap = 0
                     
-                    # Find matching line
+                    # 2a. Find Best Header Line
                     for i, line_obj in enumerate(lines):
-                        if line_obj['used']: continue # Skip lines we already matched!
+                        if line_obj['used']: continue 
                         
                         web_tokens = line_obj['tokens']
+                        overlap = len(api_tokens.intersection(web_tokens))
                         
-                        # MATCH: Check if all API core words exist in Web line
-                        # e.g. API={general, laws} in Web={general, laws, professions} -> MATCH
-                        if api_tokens and api_tokens.issubset(web_tokens):
+                        # Store for Debugger
+                        if overlap > 0:
+                            match_candidates.append({
+                                "line": line_obj['text'], 
+                                "score": overlap, 
+                                "missing": list(api_tokens - web_tokens)
+                            })
+                        
+                        # STRICT MATCH RULE: 
+                        # Must match at least 70% of the API tokens OR contain ALL unique tokens
+                        required_matches = max(1, len(api_tokens) - 1) # Allow 1 missing word
+                        
+                        if overlap >= required_matches and overlap > best_overlap:
+                            best_overlap = overlap
                             found_match_index = i
-                            line_obj['used'] = True # MARK CONSUMED
-                            break
                             
-                    # If match found, look down for time
+                    # 2b. Consume & Look Down
                     if found_match_index != -1:
+                        # Mark consumed
+                        lines[found_match_index]['used'] = True 
+                        
+                        # Look down 5 lines for time
                         for offset in range(1, 6):
                             if found_match_index + offset >= len(lines): break
-                            
                             candidate = lines[found_match_index + offset]['text']
-                            
                             if is_time_string(candidate):
                                 final_time = candidate
                                 break
-
+            
             # 3. Fallback
             if not final_time or final_time == "12:00 PM": final_time = "Time TBA"
                 
             m['DisplayTime'] = final_time
             m['CleanDate'] = m_date
             m['AgendaLink'] = extract_agenda_link(m.get("Description"))
+            
+            # Attach Debug Info
+            if final_time == "Time TBA":
+                m['DebugCandidates'] = sorted(match_candidates, key=lambda x: x['score'], reverse=True)[:3]
+                m['ApiTokens'] = get_clean_tokens(name)
             
             valid_meetings.append(m)
             week_map[m_date].append(m)
@@ -278,12 +306,26 @@ if st.button("🚀 Run Token-Consumer Forecast"):
                     if len(time_str) > 50: time_str = "See Details"
                     
                     with st.container(border=True):
+                        # TIME DISPLAY
                         if len(time_str) > 15: st.caption(f"🕒 *{time_str}*") 
                         else: st.markdown(f"**{time_str}**")
                         
+                        # NAME DISPLAY
                         st.markdown(f"**{parent_name}**")
                         if sub_name: st.caption(f"↳ *{sub_name}*")
                         
+                        # DEBUGGER (Only if enabled + TBA)
+                        if debug_mode and time_str == "Time TBA":
+                            st.error("⚠️ MATCH FAILED")
+                            st.write("API Tokens:", m.get('ApiTokens'))
+                            if m.get('DebugCandidates'):
+                                st.write("Best Candidates:")
+                                for c in m['DebugCandidates']:
+                                    st.code(f"Score: {c['score']} | {c['line']}")
+                            else:
+                                st.write("No similar lines found.")
+
+                        # BILLS
                         if bill_count > 0:
                             st.success(f"**{bill_count} Bills Listed**")
                             with st.expander("View Bills"):
