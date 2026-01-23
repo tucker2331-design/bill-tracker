@@ -9,8 +9,8 @@ import concurrent.futures
 API_KEY = "81D70A54-FCDC-4023-A00B-A3FD114D5984" 
 SESSION_CODE = "20261" 
 
-st.set_page_config(page_title="v52 DNA Matcher", page_icon="🧬", layout="wide")
-st.title("🧬 v52: The 'DNA' Matcher & Live Inspector")
+st.set_page_config(page_title="v53 LIS + DNA", page_icon="🧬", layout="wide")
+st.title("🧬 v53: The 'LIS + DNA' Hybrid")
 
 # --- SPEED ENGINE ---
 session = requests.Session()
@@ -21,117 +21,102 @@ session.mount('https://', adapter)
 def get_dna_tokens(text):
     """
     Extracts ONLY the high-value, unique keywords.
-    Ignores common parliamentary words.
     """
     if not text: return set()
     lower = text.lower()
     
     # 1. Clean
     lower = lower.replace(".ics", "").replace("view agenda", "")
-    lower = re.sub(r'[^a-z0-9\s]', '', lower)
+    # Replace separators with spaces to avoid merging words
+    lower = lower.replace("-", " ").replace("–", " ").replace("&", " and ")
+    lower = re.sub(r'[^a-z0-9\s#]', '', lower)
     
     # 2. Split
     tokens = set(lower.split())
     
-    # 3. DNA FILTER (Ignore these common words)
-    # We want to match on 'Compensation', 'Retirement', 'Innovation', etc.
-    # We DO NOT want to match on 'House', 'Senate', 'Committee' because everyone has those.
+    # 3. DNA FILTER (Ignore common words to focus on unique identifiers)
     generic_dna = {
         "house", "senate", "committee", "subcommittee", "room", "building", 
-        "meeting", "the", "of", "and", "a", "an", "&", "agenda", "view", 
+        "meeting", "the", "of", "and", "a", "an", "agenda", "view", 
         "video", "public", "testimony", "bill", "caucus", "general", 
-        "assembly", "commonwealth", "session", "convenes", "adjourned"
+        "assembly", "commonwealth", "session", "adjourned"
+        # Removed "appropriations" etc. as they are valuable keywords
     }
     
     return tokens - generic_dna
 
-def extract_time_from_block(block_text):
-    lower_text = block_text.lower()
-    if "cancel" in lower_text: return "❌ Cancelled"
-    if "noon" in lower_text: return "12:00 PM"
+def parse_lis_time(time_text):
+    """
+    Parses LIS time strings like '7:00 AM' or 'Upon adjournment'.
+    """
+    clean = time_text.strip()
+    if not clean: return "Time Not Listed"
     
-    if "adjourn" in lower_text or "recess" in lower_text:
-        for line in block_text.splitlines():
-            if "adjourn" in line.lower() or "recess" in line.lower():
-                return line.strip()
+    lower = clean.lower()
+    if "cancel" in lower: return "❌ Cancelled"
+    if "noon" in lower: return "12:00 PM"
+    
+    # Check for specific time format
+    match = re.search(r'(\d{1,2}:\d{2}\s*[aA|pP]\.?[mM]\.?)', clean)
+    if match:
+        return match.group(1).upper()
+        
+    # If no time, return the text (e.g. "Upon Adjournment")
+    if "adj" in lower or "convenes" in lower:
+        return clean
+        
+    return "Time Not Listed"
 
-    time_match = re.search(r'(\d{1,2}:\d{2}\s*[aA|pP]\.?[mM]\.?)', block_text)
-    if time_match: return time_match.group(1).upper()
-    return None
-
-# --- SCRAPER (Source B) ---
+# --- SCRAPER (Source C: LIS MASTER LIST) ---
 @st.cache_data(ttl=300)
-def fetch_house_blocks():
+def fetch_lis_rows():
     schedule_map = {} 
     
-    today = datetime.now().date()
-    days_ahead = 0 - today.weekday() if today.weekday() > 0 else 0 
-    if days_ahead <= 0: days_ahead += 7
-    next_monday = today + timedelta(days=days_ahead)
-    
-    # Try multiple formats to force the server to respond
-    urls = [
-        ("Current", "https://house.vga.virginia.gov/schedule/meetings"),
-        ("Next (US)", f"https://house.vga.virginia.gov/schedule/meetings?date={next_monday.strftime('%m/%d/%Y')}"),
-        ("Next (ISO)", f"https://house.vga.virginia.gov/schedule/meetings?date={next_monday.strftime('%Y-%m-%d')}")
-    ]
-    
+    # The "ALL" parameter gives us everything on one page. No date guessing.
+    url = "https://lis.virginia.gov/cgi-bin/legp604.exe?261+sbh+ALL"
     headers = {'User-Agent': 'Mozilla/5.0'}
     
-    for label, url in urls:
-        try:
-            resp = session.get(url, headers=headers, timeout=5)
-            soup = BeautifulSoup(resp.text, 'html.parser')
-            all_tags = soup.find_all(['div', 'span', 'p', 'h4', 'h5', 'a', 'li'])
+    try:
+        resp = session.get(url, headers=headers, timeout=5)
+        soup = BeautifulSoup(resp.text, 'html.parser')
+        
+        # LIS uses tables. We iterate through rows.
+        rows = soup.find_all('tr')
+        current_date = None
+        
+        for row in rows:
+            text = row.get_text(" ", strip=True)
+            if not text: continue
             
-            current_date = None
-            current_block_lines = []
-            
-            for tag in all_tags:
-                text = tag.get_text(" ", strip=True)
-                if not text: continue
-                
-                # DATE DETECTION
-                if any(day in text for day in ["Monday,", "Tuesday,", "Wednesday,", "Thursday,", "Friday,"]):
-                    match = re.search(r'(Monday|Tuesday|Wednesday|Thursday|Friday),\s+([A-Za-z]+)\s+(\d{1,2})', text)
-                    if match:
-                        if current_date and current_block_lines:
-                            if current_date not in schedule_map: schedule_map[current_date] = []
-                            schedule_map[current_date].append("\n".join(current_block_lines))
-                            current_block_lines = []
-                        
-                        raw_str = f"{match.group(0)} 2026"
-                        try: dt = datetime.strptime(raw_str, "%A, %B %d %Y")
-                        except: 
-                            try: dt = datetime.strptime(raw_str, "%A, %b %d %Y")
-                            except: continue
+            # 1. DATE HEADER DETECTION
+            if any(day in text for day in ["Monday,", "Tuesday,", "Wednesday,", "Thursday,", "Friday,"]):
+                match = re.search(r'(Monday|Tuesday|Wednesday|Thursday|Friday),\s+([A-Za-z]+)\s+(\d{1,2})', text)
+                if match:
+                    raw_str = f"{match.group(0)} 2026"
+                    try: 
+                        dt = datetime.strptime(raw_str, "%A, %B %d %Y")
                         current_date = dt.date()
-                        continue
-
-                if not current_date: continue
-                
-                # BLOCK LOGIC
-                low_text = text.lower()
-                is_start = "convenes" in low_text or "session" in low_text
-                is_end = ".ics" in low_text or "archived" in low_text or "pledge" in low_text
-                
-                if is_start and current_block_lines:
-                    if current_date not in schedule_map: schedule_map[current_date] = []
-                    schedule_map[current_date].append("\n".join(current_block_lines))
-                    current_block_lines = []
-
-                current_block_lines.append(text)
-                
-                if is_end:
-                    if current_date not in schedule_map: schedule_map[current_date] = []
-                    schedule_map[current_date].append("\n".join(current_block_lines))
-                    current_block_lines = []
+                    except: pass
+                continue
             
-            if current_date and current_block_lines:
-                if current_date not in schedule_map: schedule_map[current_date] = []
-                schedule_map[current_date].append("\n".join(current_block_lines))
+            # 2. MEETING ROW DETECTION
+            # LIS rows usually have 2 columns: [Time] [Committee Name]
+            cells = row.find_all('td')
+            if len(cells) >= 2:
+                time_col = cells[0].get_text(" ", strip=True)
+                name_col = cells[1].get_text(" ", strip=True)
                 
-        except: pass
+                if current_date and name_col:
+                    if current_date not in schedule_map: schedule_map[current_date] = []
+                    
+                    schedule_map[current_date].append({
+                        'raw_time': time_col,
+                        'raw_name': name_col,
+                        'dna': get_dna_tokens(name_col)
+                    })
+                    
+    except Exception as e:
+        pass # Fail silently, API will fallback
             
     return schedule_map
 
@@ -196,27 +181,28 @@ def parse_committee_name(full_name):
 # --- MAIN UI ---
 
 # 1. FETCH
-with st.spinner("Loading Data..."):
+with st.spinner("Fetching Schedule..."):
     all_meetings = get_full_schedule()
-    daily_blocks_map = fetch_house_blocks()
+    
+with st.spinner("Scraping LIS Master List..."):
+    lis_data_map = fetch_lis_rows()
 
 # --- LIVE INSPECTOR (SIDEBAR) ---
 st.sidebar.header("🧬 Live DNA Inspector")
-st.sidebar.info("Type a word (e.g. 'Compensation') to see if it exists in the raw data.")
-debug_query = st.sidebar.text_input("DNA Probe:")
+debug_query = st.sidebar.text_input("DNA Probe (e.g. 'Transportation'):")
 if debug_query:
     st.sidebar.markdown(f"**Probing for: '{debug_query}'**")
     probe_dna = get_dna_tokens(debug_query)
     st.sidebar.write(f"**DNA:** `{probe_dna}`")
     
     hits = 0
-    for date, blocks in daily_blocks_map.items():
-        for block in blocks:
-            block_dna = get_dna_tokens(block)
-            if probe_dna.issubset(block_dna):
+    for date, rows in lis_data_map.items():
+        for row in rows:
+            if probe_dna.issubset(row['dna']):
                 hits += 1
                 with st.sidebar.expander(f"Hit #{hits} ({date.strftime('%a')})"):
-                    st.write(block)
+                    st.write(f"**Time:** {row['raw_time']}")
+                    st.write(f"**Name:** {row['raw_name']}")
     if hits == 0:
         st.sidebar.error("No DNA matches found!")
 
@@ -245,23 +231,19 @@ for m in all_meetings:
     if "adjourn" in api_comments.lower() or "upon" in api_comments.lower():
         final_time = api_comments
     
-    elif m_date in daily_blocks_map:
-        blocks = daily_blocks_map[m_date]
-        api_dna = get_dna_tokens(name) # Extract rare keywords only
+    elif m_date in lis_data_map:
+        lis_rows = lis_data_map[m_date]
+        api_dna = get_dna_tokens(name)
+        m['DNA_Tokens'] = api_dna # Store for debug
         
-        # DEBUG DATA
-        m['DNA_Tokens'] = api_dna
-        
-        for block_text in blocks:
-            block_dna = get_dna_tokens(block_text)
-            
-            # THE DNA TEST:
-            # Does the block contain ALL the rare keywords from the API?
-            # Example: API={compensation, retirement}. Block={compensation, retirement, askew}.
-            # {comp, ret} is subset of {comp, ret, askew} -> TRUE.
-            if api_dna.issubset(block_dna):
-                extracted_time = extract_time_from_block(block_text)
-                final_time = extracted_time if extracted_time else "Time Not Listed"
+        for row in lis_rows:
+            # THE DNA TEST
+            # Example: API={labor, commerce, 1}. LIS={labor, commerce, 1, askew}.
+            # Subset = TRUE.
+            if api_dna.issubset(row['dna']):
+                final_time = parse_lis_time(row['raw_time'])
+                # Store match info for debug
+                m['MatchedRow'] = row['raw_name']
                 break
             
     if "Not Listed" in final_time and api_time and "12:00" not in str(api_time) and "TBA" not in str(api_time):
@@ -310,5 +292,9 @@ for i, day in enumerate(days):
                         st.caption("*(No Link)*")
                     
                     if "Not Listed" in time_str:
-                         with st.expander("🧬 DNA Mismatch"):
+                         with st.expander("🧬 Match Info"):
                              st.write(f"Required DNA: `{m.get('DNA_Tokens', 'None')}`")
+                             if m_date in lis_data_map:
+                                 st.write(f"Scraper found {len(lis_data_map[m_date])} meetings for this day.")
+                             else:
+                                 st.error("Scraper found NO meetings for this day.")
