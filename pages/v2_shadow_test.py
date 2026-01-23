@@ -9,16 +9,22 @@ import concurrent.futures
 API_KEY = "81D70A54-FCDC-4023-A00B-A3FD114D5984" 
 SESSION_CODE = "20261" 
 
-st.set_page_config(page_title="v59 LIS Raw Text", page_icon="📜", layout="wide")
-st.title("📜 v59: The 'LIS Raw Text' Strategy")
+st.set_page_config(page_title="v60 Connection Doctor", page_icon="🩺", layout="wide")
+st.title("🩺 v60: The 'Connection Doctor' (Anti-Block)")
 
 # --- SPEED ENGINE ---
 session = requests.Session()
 adapter = requests.adapters.HTTPAdapter(pool_connections=20, pool_maxsize=20)
 session.mount('https://', adapter)
 
-# --- GLOBAL STORAGE ---
-if 'lis_raw_text' not in st.session_state: st.session_state.lis_raw_text = ""
+# --- GLOBAL DEBUG DATA ---
+if 'debug_response' not in st.session_state:
+    st.session_state.debug_response = {
+        "status": "Not Run",
+        "title": "N/A",
+        "length": 0,
+        "content": ""
+    }
 
 # --- HELPER: TEXT CLEANING ---
 def get_clean_tokens(text):
@@ -27,8 +33,7 @@ def get_clean_tokens(text):
     lower = lower.replace(".ics", "").replace("view agenda", "")
     lower = re.sub(r'[^a-z0-9\s#]', '', lower)
     tokens = set(lower.split())
-    
-    # Filter generic noise but KEEP important identifiers
+    # Keep identifiers like "Committee", "House", "Senate"
     generic_noise = {
         "room", "building", "meeting", "the", "of", "and", "a", "an", 
         "agenda", "view", "video", "public", "testimony", "bill", 
@@ -37,37 +42,45 @@ def get_clean_tokens(text):
     return tokens - generic_noise
 
 def extract_relative_time(text):
-    """
-    Catches "Upon adjournment", "Immediately", etc.
-    """
     lower = text.lower()
     keywords = ["adjournment", "adjourn", "upon", "immediate", "rise of", "recess", "after"]
-    
-    # If the text is short (like a table cell), check the whole thing
     if any(k in lower for k in keywords):
         return text.strip()
-            
-    # Fallback to clock time
     match = re.search(r'(\d{1,2}:\d{2}\s*[aA|pP]\.?[mM]\.?)', text)
     if match: return match.group(1).upper()
     return None
 
-# --- SCRAPER (Source C: LIS MASTER) ---
+# --- SCRAPER: LIS MASTER FEED (With Anti-Block Headers) ---
 @st.cache_data(ttl=300)
 def fetch_lis_data():
     schedule_map = {} 
     
-    # "ALL" = All meetings, one page, raw HTML
     url = "https://lis.virginia.gov/cgi-bin/legp604.exe?261+sbh+ALL"
-    headers = {'User-Agent': 'Mozilla/5.0'}
+    
+    # 1. BROWSER MIMIC HEADERS
+    # Old CGI scripts often check Referer to prevent hotlinking
+    headers = {
+        'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8',
+        'Accept-Language': 'en-US,en;q=0.5',
+        'Referer': 'https://lis.virginia.gov/cgi-bin/legp604.exe?261+men+BIL' # Pretend we came from the menu
+    }
     
     try:
-        resp = session.get(url, headers=headers, timeout=5)
-        st.session_state.lis_raw_text = resp.text # Save for Inspector
+        resp = session.get(url, headers=headers, timeout=10)
         
+        # DEBUG: Capture Vitals
         soup = BeautifulSoup(resp.text, 'html.parser')
+        page_title = soup.title.string if soup.title else "No Title Found"
         
-        # LIS is a table-based layout. We need <tr>
+        st.session_state.debug_response = {
+            "status": resp.status_code,
+            "title": page_title.strip(),
+            "length": len(resp.text),
+            "content": resp.text
+        }
+        
+        # PARSING LOGIC
         rows = soup.find_all('tr')
         current_date = None
         
@@ -75,7 +88,7 @@ def fetch_lis_data():
             text = row.get_text(" ", strip=True)
             if not text: continue
             
-            # 1. DATE HEADER
+            # Date Header
             if any(day in text for day in ["Monday,", "Tuesday,", "Wednesday,", "Thursday,", "Friday,"]):
                 match = re.search(r'(Monday|Tuesday|Wednesday|Thursday|Friday),\s+([A-Za-z]+)\s+(\d{1,2})', text)
                 if match:
@@ -87,16 +100,12 @@ def fetch_lis_data():
             
             if not current_date: continue
             
-            # 2. MEETING ROW
-            # LIS rows usually have 2 or 3 columns.
-            # Col 1: Time (e.g. 7:00 AM or Upon Adjournment)
-            # Col 2: Name (e.g. House Appropriations)
+            # Meeting Rows
             cells = row.find_all('td')
             if len(cells) >= 2:
                 time_col = cells[0].get_text(" ", strip=True)
                 name_col = cells[1].get_text(" ", strip=True)
                 
-                # Verify it looks like a meeting (Time has digits or keywords)
                 low_time = time_col.lower()
                 is_time = any(x in low_time for x in ['am', 'pm', 'noon', 'adj', 'upon', 'after', 'immediate']) or any(c.isdigit() for c in time_col)
                 
@@ -104,12 +113,11 @@ def fetch_lis_data():
                     if current_date not in schedule_map: schedule_map[current_date] = []
                     schedule_map[current_date].append({
                         "raw_time": time_col,
-                        "raw_name": name_col,
-                        "full_text": f"{time_col} {name_col}"
+                        "raw_name": name_col
                     })
                     
     except Exception as e:
-        st.session_state.lis_raw_text = f"Error: {str(e)}"
+        st.session_state.debug_response["status"] = f"ERROR: {str(e)}"
             
     return schedule_map
 
@@ -173,25 +181,34 @@ def parse_committee_name(full_name):
 
 # --- MAIN UI ---
 
-with st.spinner("Fetching LIS Master Feed..."):
+with st.spinner("Diagnosing Connection..."):
     all_meetings = get_full_schedule()
     lis_data_map = fetch_lis_data()
 
-# --- RAW TEXT INSPECTOR ---
-st.sidebar.header("📜 LIS Raw Text Inspector")
-st.sidebar.info("Search the raw HTML downloaded from LIS.")
-query = st.sidebar.text_input("Search Raw Text (e.g. 'Compensation')")
+# --- SIDEBAR: CONNECTION DOCTOR ---
+st.sidebar.header("🩺 Connection Doctor")
+debug = st.session_state.debug_response
 
-if query:
-    if query.lower() in st.session_state.lis_raw_text.lower():
-        st.sidebar.success("✅ Found in LIS Source!")
-        # Show context
-        lines = st.session_state.lis_raw_text.splitlines()
-        for i, line in enumerate(lines):
-            if query.lower() in line.lower():
-                st.sidebar.code(f"Line {i}: {line.strip()[:200]}")
+# 1. Connection Vitals
+st.sidebar.markdown(f"**Status Code:** `{debug['status']}`")
+st.sidebar.markdown(f"**Page Title:** `{debug['title']}`")
+st.sidebar.markdown(f"**Data Size:** `{debug['length']} chars`")
+
+if "Timeout" in debug['title'] or "Error" in debug['title']:
+    st.sidebar.error("🚨 BLOCKED: The server returned an error page, not the schedule.")
+elif debug['length'] < 5000:
+    st.sidebar.warning("⚠️ SUSPICIOUS: Page is very small. Likely a generic landing page.")
+else:
+    st.sidebar.success("✅ LOOKS GOOD: We likely have the full schedule.")
+
+# 2. Probe
+st.sidebar.markdown("---")
+probe = st.sidebar.text_input("Probe Content (e.g. 'Finance')")
+if probe:
+    if probe.lower() in debug['content'].lower():
+        st.sidebar.success(f"Found '{probe}' in content!")
     else:
-        st.sidebar.error("❌ NOT FOUND in LIS Source. (LIS might be blocking us)")
+        st.sidebar.error(f"'{probe}' NOT found in content.")
 
 # --- CALENDAR LOGIC ---
 today = datetime.now().date()
@@ -218,15 +235,13 @@ for m in all_meetings:
     if "adjourn" in api_comments.lower() or "upon" in api_comments.lower():
         final_time = api_comments
         
-    # 2. LIS MATCH (Checklist Logic)
+    # 2. LIS MATCH
     elif m_date in lis_data_map:
         lis_rows = lis_data_map[m_date]
         api_tokens = get_clean_tokens(name)
         
         for row in lis_rows:
             row_tokens = get_clean_tokens(row['raw_name'])
-            
-            # CHECKLIST: Do all API tokens exist in the LIS row?
             if api_tokens and api_tokens.issubset(row_tokens):
                 t = extract_relative_time(row['raw_time'])
                 if t: 
