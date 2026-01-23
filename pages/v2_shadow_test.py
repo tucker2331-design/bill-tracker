@@ -9,8 +9,8 @@ import concurrent.futures
 API_KEY = "81D70A54-FCDC-4023-A00B-A3FD114D5984" 
 SESSION_CODE = "20261" 
 
-st.set_page_config(page_title="v56 Relative Reader", page_icon="📖", layout="wide")
-st.title("📖 v56: The 'Relative Time' Reader")
+st.set_page_config(page_title="v57 Table-Aware", page_icon="🏗️", layout="wide")
+st.title("🏗️ v57: The 'Table-Aware' Scraper")
 
 # --- SPEED ENGINE ---
 session = requests.Session()
@@ -22,14 +22,14 @@ def get_clean_tokens(text):
     if not text: return set()
     lower = text.lower()
     
-    # Clean noise but KEEP numbers and letters
+    # Clean noise but KEEP numbers and letters and #
     lower = lower.replace(".ics", "").replace("view agenda", "")
     lower = re.sub(r'[^a-z0-9\s#]', '', lower)
     
     tokens = set(lower.split())
     
-    # Filter out extremely common words, but KEEP "Committee" identifiers
-    # We want to match "Labor" and "Commerce" and "Subcommittee" and "1"
+    # Filter out generic noise
+    # We KEEP "committee", "subcommittee", "house", "senate" to ensure correct entity match
     generic_noise = {
         "room", "building", "meeting", "the", "of", "and", "a", "an", 
         "agenda", "view", "video", "public", "testimony", "bill", 
@@ -39,40 +39,35 @@ def get_clean_tokens(text):
 
 def extract_relative_time(block_text):
     """
-    Specifically designed to catch "Upon adjournment", "15 mins after", etc.
-    Prioritizes these strings OVER digits.
+    Catches "Upon adjournment" patterns first, then clock times.
     """
     lower = block_text.lower()
     
-    # 1. Immediate / Adjournment / Rise Patterns
-    # We grab the whole line if it contains these keywords
-    keywords = ["adjournment", "adjourn", "upon", "immediate", "rise of", "recess"]
-    
+    # 1. Relative Patterns (High Priority)
+    keywords = ["adjournment", "adjourn", "upon", "immediate", "rise of", "recess", "after"]
     lines = block_text.split('\n')
     for line in lines:
         l_low = line.lower()
         if any(k in l_low for k in keywords):
-            # Clean it up slightly but keep the info
             return line.strip()
             
-    # 2. Standard Time (Fallback)
+    # 2. Clock Time (Fallback)
     match = re.search(r'(\d{1,2}:\d{2}\s*[aA|pP]\.?[mM]\.?)', block_text)
     if match: return match.group(1).upper()
     
     return None
 
-# --- SCRAPER: HOUSE SCHEDULE (Source B) ---
+# --- SCRAPER: HOUSE SCHEDULE ---
 @st.cache_data(ttl=300)
 def fetch_house_schedule():
     schedule_map = {} 
     
     today = datetime.now().date()
-    # Calculate Next Monday
     days_ahead = 0 - today.weekday() if today.weekday() > 0 else 0 
     if days_ahead <= 0: days_ahead += 7
     next_monday = today + timedelta(days=days_ahead)
     
-    # We fetch both weeks
+    # Fetch Current + Next Week
     urls = [
         ("Current", "https://house.vga.virginia.gov/schedule/meetings"),
         ("Next", f"https://house.vga.virginia.gov/schedule/meetings?date={next_monday.strftime('%m/%d/%Y')}")
@@ -85,7 +80,10 @@ def fetch_house_schedule():
             resp = session.get(url, headers=headers, timeout=5)
             soup = BeautifulSoup(resp.text, 'html.parser')
             
-            all_tags = soup.find_all(['div', 'span', 'p', 'h4', 'h5', 'a', 'li'])
+            # CRITICAL FIX: Added 'td', 'tr', 'tbody' to the search list
+            # This ensures we see text inside tables.
+            all_tags = soup.find_all(['div', 'span', 'p', 'h4', 'h5', 'a', 'li', 'td', 'tr'])
+            
             current_date = None
             current_block = []
             
@@ -93,10 +91,11 @@ def fetch_house_schedule():
                 text = tag.get_text(" ", strip=True)
                 if not text: continue
                 
-                # DATE HEADER
+                # DATE HEADER DETECTION
                 if any(day in text for day in ["Monday,", "Tuesday,", "Wednesday,", "Thursday,", "Friday,"]):
                     d_match = re.search(r'(Monday|Tuesday|Wednesday|Thursday|Friday),\s+([A-Za-z]+)\s+(\d{1,2})', text)
                     if d_match:
+                        # Flush previous
                         if current_date and current_block:
                             if current_date not in schedule_map: schedule_map[current_date] = []
                             schedule_map[current_date].append("\n".join(current_block))
@@ -110,7 +109,7 @@ def fetch_house_schedule():
                 
                 if not current_date: continue
                 
-                # BLOCK DELIMITERS (Fixed for House Convenes)
+                # BLOCK DELIMITERS
                 low = text.lower()
                 
                 # Start new block on "Convenes" or "Session"
@@ -129,6 +128,7 @@ def fetch_house_schedule():
                         schedule_map[current_date].append("\n".join(current_block))
                         current_block = []
                         
+            # Flush final
             if current_date and current_block:
                 if current_date not in schedule_map: schedule_map[current_date] = []
                 schedule_map[current_date].append("\n".join(current_block))
@@ -197,7 +197,7 @@ def parse_committee_name(full_name):
 
 # --- MAIN UI ---
 
-with st.spinner("Processing Schedule..."):
+with st.spinner("Processing..."):
     all_meetings = get_full_schedule()
     house_blocks_map = fetch_house_schedule()
 
@@ -205,6 +205,7 @@ today = datetime.now().date()
 week_map = {}
 for i in range(8): week_map[today + timedelta(days=i)] = []
 
+# Sort: Long names first (Specific Subcommittees) to avoid matching generic parents
 all_meetings.sort(key=lambda x: len(x.get("OwnerName", "")), reverse=True)
 
 for m in all_meetings:
@@ -220,46 +221,29 @@ for m in all_meetings:
     api_time = m.get("ScheduleTime")
     api_comments = m.get("Comments") or ""
     final_time = "⚠️ Not Listed on Schedule"
+    match_source = "None"
     
-    # 1. API COMMENTS (Highest Trust)
+    # 1. API COMMENTS
     if "adjourn" in api_comments.lower() or "upon" in api_comments.lower():
         final_time = api_comments
+        match_source = "API"
         
-    # 2. HOUSE SCRAPER (Fuzzy Match + Relative Time)
+    # 2. HOUSE SCRAPER (Checklist Logic)
     elif m_date in house_blocks_map:
         blocks = house_blocks_map[m_date]
         api_tokens = get_clean_tokens(name)
         
-        best_block = None
-        best_score = 0.0
-        
         for block_text in blocks:
             block_tokens = get_clean_tokens(block_text)
             
-            # CONFIDENCE MATCHING
-            # We don't need 100% subset anymore. We need "Good Enough"
-            # Calculate how many API tokens are found in the Block
-            if not api_tokens: continue
-            
-            intersection = api_tokens.intersection(block_tokens)
-            score = len(intersection) / len(api_tokens)
-            
-            # Boost for explicit numbers (e.g. #1, #2)
-            if re.search(r'#\d+', name) and re.search(r'#\d+', block_text):
-                if re.findall(r'#\d+', name)[0] == re.findall(r'#\d+', block_text)[0]:
-                    score += 0.3
-            
-            # Threshold: 0.75 means 75% of the important words matched
-            # This handles "Subcommittee Askew" noise
-            if score > best_score and score > 0.75:
-                best_score = score
-                best_block = block_text
-        
-        if best_block:
-            # EXTRACT RELATIVE TIME
-            t = extract_relative_time(best_block)
-            if t: final_time = t
-            else: final_time = "Time Not Listed"
+            # CHECKLIST: ALL API tokens must exist in the block tokens
+            # This allows the block to have extra words (like Chair name)
+            if api_tokens and api_tokens.issubset(block_tokens):
+                t = extract_relative_time(block_text)
+                if t: 
+                    final_time = t
+                    match_source = "Scraper (Table)"
+                    break
 
     # FALLBACK
     if "Not Listed" in final_time and api_time and "12:00" not in str(api_time) and "TBA" not in str(api_time):
