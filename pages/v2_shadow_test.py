@@ -9,8 +9,8 @@ import concurrent.futures
 API_KEY = "81D70A54-FCDC-4023-A00B-A3FD114D5984" 
 SESSION_CODE = "20261" 
 
-st.set_page_config(page_title="v58 Global DOM Search", page_icon="🌍", layout="wide")
-st.title("🌍 v58: The 'Global DOM Search' (The Ultimate Truth)")
+st.set_page_config(page_title="v59 LIS Raw Text", page_icon="📜", layout="wide")
+st.title("📜 v59: The 'LIS Raw Text' Strategy")
 
 # --- SPEED ENGINE ---
 session = requests.Session()
@@ -18,7 +18,7 @@ adapter = requests.adapters.HTTPAdapter(pool_connections=20, pool_maxsize=20)
 session.mount('https://', adapter)
 
 # --- GLOBAL STORAGE ---
-if 'html_snapshots' not in st.session_state: st.session_state.html_snapshots = {}
+if 'lis_raw_text' not in st.session_state: st.session_state.lis_raw_text = ""
 
 # --- HELPER: TEXT CLEANING ---
 def get_clean_tokens(text):
@@ -27,6 +27,8 @@ def get_clean_tokens(text):
     lower = lower.replace(".ics", "").replace("view agenda", "")
     lower = re.sub(r'[^a-z0-9\s#]', '', lower)
     tokens = set(lower.split())
+    
+    # Filter generic noise but KEEP important identifiers
     generic_noise = {
         "room", "building", "meeting", "the", "of", "and", "a", "an", 
         "agenda", "view", "video", "public", "testimony", "bill", 
@@ -34,90 +36,80 @@ def get_clean_tokens(text):
     }
     return tokens - generic_noise
 
-def extract_relative_time(block_text):
-    lower = block_text.lower()
+def extract_relative_time(text):
+    """
+    Catches "Upon adjournment", "Immediately", etc.
+    """
+    lower = text.lower()
     keywords = ["adjournment", "adjourn", "upon", "immediate", "rise of", "recess", "after"]
-    lines = block_text.split('\n')
-    for line in lines:
-        l_low = line.lower()
-        if any(k in l_low for k in keywords):
-            return line.strip()
-    match = re.search(r'(\d{1,2}:\d{2}\s*[aA|pP]\.?[mM]\.?)', block_text)
+    
+    # If the text is short (like a table cell), check the whole thing
+    if any(k in lower for k in keywords):
+        return text.strip()
+            
+    # Fallback to clock time
+    match = re.search(r'(\d{1,2}:\d{2}\s*[aA|pP]\.?[mM]\.?)', text)
     if match: return match.group(1).upper()
     return None
 
-# --- SCRAPER (Source B) ---
+# --- SCRAPER (Source C: LIS MASTER) ---
 @st.cache_data(ttl=300)
-def fetch_house_schedule():
+def fetch_lis_data():
     schedule_map = {} 
     
-    today = datetime.now().date()
-    days_ahead = 0 - today.weekday() if today.weekday() > 0 else 0 
-    if days_ahead <= 0: days_ahead += 7
-    next_monday = today + timedelta(days=days_ahead)
-    
-    urls = [
-        ("Current", "https://house.vga.virginia.gov/schedule/meetings"),
-        ("Next", f"https://house.vga.virginia.gov/schedule/meetings?date={next_monday.strftime('%m/%d/%Y')}")
-    ]
-    
+    # "ALL" = All meetings, one page, raw HTML
+    url = "https://lis.virginia.gov/cgi-bin/legp604.exe?261+sbh+ALL"
     headers = {'User-Agent': 'Mozilla/5.0'}
     
-    for label, url in urls:
-        try:
-            resp = session.get(url, headers=headers, timeout=5)
-            # SNAPSHOT THE RAW HTML FOR DEBUGGING
-            st.session_state.html_snapshots[label] = resp.text
+    try:
+        resp = session.get(url, headers=headers, timeout=5)
+        st.session_state.lis_raw_text = resp.text # Save for Inspector
+        
+        soup = BeautifulSoup(resp.text, 'html.parser')
+        
+        # LIS is a table-based layout. We need <tr>
+        rows = soup.find_all('tr')
+        current_date = None
+        
+        for row in rows:
+            text = row.get_text(" ", strip=True)
+            if not text: continue
             
-            soup = BeautifulSoup(resp.text, 'html.parser')
+            # 1. DATE HEADER
+            if any(day in text for day in ["Monday,", "Tuesday,", "Wednesday,", "Thursday,", "Friday,"]):
+                match = re.search(r'(Monday|Tuesday|Wednesday|Thursday|Friday),\s+([A-Za-z]+)\s+(\d{1,2})', text)
+                if match:
+                    try:
+                        raw_s = f"{match.group(0)} 2026"
+                        current_date = datetime.strptime(raw_s, "%A, %B %d %Y").date()
+                    except: pass
+                continue
             
-            # EXPANDED TAG SEARCH (Includes Table Tags)
-            all_tags = soup.find_all(['div', 'span', 'p', 'h4', 'h5', 'a', 'li', 'td', 'tr'])
+            if not current_date: continue
             
-            current_date = None
-            current_block = []
-            
-            for tag in all_tags:
-                text = tag.get_text(" ", strip=True)
-                if not text: continue
+            # 2. MEETING ROW
+            # LIS rows usually have 2 or 3 columns.
+            # Col 1: Time (e.g. 7:00 AM or Upon Adjournment)
+            # Col 2: Name (e.g. House Appropriations)
+            cells = row.find_all('td')
+            if len(cells) >= 2:
+                time_col = cells[0].get_text(" ", strip=True)
+                name_col = cells[1].get_text(" ", strip=True)
                 
-                # DATE HEADER
-                if any(day in text for day in ["Monday,", "Tuesday,", "Wednesday,", "Thursday,", "Friday,"]):
-                    d_match = re.search(r'(Monday|Tuesday|Wednesday|Thursday|Friday),\s+([A-Za-z]+)\s+(\d{1,2})', text)
-                    if d_match:
-                        if current_date and current_block:
-                            if current_date not in schedule_map: schedule_map[current_date] = []
-                            schedule_map[current_date].append("\n".join(current_block))
-                            current_block = []
-                        
-                        try:
-                            raw_s = f"{d_match.group(0)} 2026"
-                            current_date = datetime.strptime(raw_s, "%A, %B %d %Y").date()
-                        except: pass
-                        continue
+                # Verify it looks like a meeting (Time has digits or keywords)
+                low_time = time_col.lower()
+                is_time = any(x in low_time for x in ['am', 'pm', 'noon', 'adj', 'upon', 'after', 'immediate']) or any(c.isdigit() for c in time_col)
                 
-                if not current_date: continue
-                
-                low = text.lower()
-                if "convenes" in low or "session" in low:
-                    if current_block:
-                        if current_date not in schedule_map: schedule_map[current_date] = []
-                        schedule_map[current_date].append("\n".join(current_block))
-                        current_block = []
-                
-                current_block.append(text)
-                
-                if ".ics" in low or "archived" in low:
-                    if current_block:
-                        if current_date not in schedule_map: schedule_map[current_date] = []
-                        schedule_map[current_date].append("\n".join(current_block))
-                        current_block = []
-                        
-            if current_date and current_block:
-                if current_date not in schedule_map: schedule_map[current_date] = []
-                schedule_map[current_date].append("\n".join(current_block))
-                
-        except: pass
+                if is_time:
+                    if current_date not in schedule_map: schedule_map[current_date] = []
+                    schedule_map[current_date].append({
+                        "raw_time": time_col,
+                        "raw_name": name_col,
+                        "full_text": f"{time_col} {name_col}"
+                    })
+                    
+    except Exception as e:
+        st.session_state.lis_raw_text = f"Error: {str(e)}"
             
     return schedule_map
 
@@ -181,35 +173,25 @@ def parse_committee_name(full_name):
 
 # --- MAIN UI ---
 
-with st.spinner("Processing Schedule..."):
+with st.spinner("Fetching LIS Master Feed..."):
     all_meetings = get_full_schedule()
-    house_blocks_map = fetch_house_schedule()
+    lis_data_map = fetch_lis_data()
 
-# --- GLOBAL DOM SEARCH TOOL ---
-st.sidebar.header("🌍 Global DOM Search")
-st.sidebar.info("Search the RAW HTML. This proves if the data is even there.")
-search_q = st.sidebar.text_input("Enter Committee Name (e.g. 'Compensation')")
+# --- RAW TEXT INSPECTOR ---
+st.sidebar.header("📜 LIS Raw Text Inspector")
+st.sidebar.info("Search the raw HTML downloaded from LIS.")
+query = st.sidebar.text_input("Search Raw Text (e.g. 'Compensation')")
 
-if search_q:
-    st.sidebar.markdown("---")
-    st.sidebar.write(f"**Searching for:** `{search_q}`")
-    
-    found_any = False
-    for source_label, html_content in st.session_state.html_snapshots.items():
-        if search_q.lower() in html_content.lower():
-            found_any = True
-            st.sidebar.success(f"✅ Found in {source_label}!")
-            
-            # Find the specific lines
-            lines = html_content.split('\n')
-            for i, line in enumerate(lines):
-                if search_q.lower() in line.lower():
-                    st.sidebar.code(f"Line {i}: {line.strip()[:100]}...", language="html")
-        else:
-            st.sidebar.error(f"❌ NOT FOUND in {source_label}")
-            
-    if not found_any:
-        st.sidebar.warning("This text does not exist in the source HTML. It is likely JavaScript-rendered.")
+if query:
+    if query.lower() in st.session_state.lis_raw_text.lower():
+        st.sidebar.success("✅ Found in LIS Source!")
+        # Show context
+        lines = st.session_state.lis_raw_text.splitlines()
+        for i, line in enumerate(lines):
+            if query.lower() in line.lower():
+                st.sidebar.code(f"Line {i}: {line.strip()[:200]}")
+    else:
+        st.sidebar.error("❌ NOT FOUND in LIS Source. (LIS might be blocking us)")
 
 # --- CALENDAR LOGIC ---
 today = datetime.now().date()
@@ -236,15 +218,17 @@ for m in all_meetings:
     if "adjourn" in api_comments.lower() or "upon" in api_comments.lower():
         final_time = api_comments
         
-    # 2. HOUSE SCRAPER (Checklist Logic)
-    elif m_date in house_blocks_map:
-        blocks = house_blocks_map[m_date]
+    # 2. LIS MATCH (Checklist Logic)
+    elif m_date in lis_data_map:
+        lis_rows = lis_data_map[m_date]
         api_tokens = get_clean_tokens(name)
         
-        for block_text in blocks:
-            block_tokens = get_clean_tokens(block_text)
-            if api_tokens and api_tokens.issubset(block_tokens):
-                t = extract_relative_time(block_text)
+        for row in lis_rows:
+            row_tokens = get_clean_tokens(row['raw_name'])
+            
+            # CHECKLIST: Do all API tokens exist in the LIS row?
+            if api_tokens and api_tokens.issubset(row_tokens):
+                t = extract_relative_time(row['raw_time'])
                 if t: 
                     final_time = t
                     break
