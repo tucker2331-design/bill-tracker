@@ -9,27 +9,24 @@ import concurrent.futures
 API_KEY = "81D70A54-FCDC-4023-A00B-A3FD114D5984" 
 SESSION_CODE = "20261" 
 
-st.set_page_config(page_title="v57 Table-Aware", page_icon="🏗️", layout="wide")
-st.title("🏗️ v57: The 'Table-Aware' Scraper")
+st.set_page_config(page_title="v58 Global DOM Search", page_icon="🌍", layout="wide")
+st.title("🌍 v58: The 'Global DOM Search' (The Ultimate Truth)")
 
 # --- SPEED ENGINE ---
 session = requests.Session()
 adapter = requests.adapters.HTTPAdapter(pool_connections=20, pool_maxsize=20)
 session.mount('https://', adapter)
 
+# --- GLOBAL STORAGE ---
+if 'html_snapshots' not in st.session_state: st.session_state.html_snapshots = {}
+
 # --- HELPER: TEXT CLEANING ---
 def get_clean_tokens(text):
     if not text: return set()
     lower = text.lower()
-    
-    # Clean noise but KEEP numbers and letters and #
     lower = lower.replace(".ics", "").replace("view agenda", "")
     lower = re.sub(r'[^a-z0-9\s#]', '', lower)
-    
     tokens = set(lower.split())
-    
-    # Filter out generic noise
-    # We KEEP "committee", "subcommittee", "house", "senate" to ensure correct entity match
     generic_noise = {
         "room", "building", "meeting", "the", "of", "and", "a", "an", 
         "agenda", "view", "video", "public", "testimony", "bill", 
@@ -38,26 +35,18 @@ def get_clean_tokens(text):
     return tokens - generic_noise
 
 def extract_relative_time(block_text):
-    """
-    Catches "Upon adjournment" patterns first, then clock times.
-    """
     lower = block_text.lower()
-    
-    # 1. Relative Patterns (High Priority)
     keywords = ["adjournment", "adjourn", "upon", "immediate", "rise of", "recess", "after"]
     lines = block_text.split('\n')
     for line in lines:
         l_low = line.lower()
         if any(k in l_low for k in keywords):
             return line.strip()
-            
-    # 2. Clock Time (Fallback)
     match = re.search(r'(\d{1,2}:\d{2}\s*[aA|pP]\.?[mM]\.?)', block_text)
     if match: return match.group(1).upper()
-    
     return None
 
-# --- SCRAPER: HOUSE SCHEDULE ---
+# --- SCRAPER (Source B) ---
 @st.cache_data(ttl=300)
 def fetch_house_schedule():
     schedule_map = {} 
@@ -67,7 +56,6 @@ def fetch_house_schedule():
     if days_ahead <= 0: days_ahead += 7
     next_monday = today + timedelta(days=days_ahead)
     
-    # Fetch Current + Next Week
     urls = [
         ("Current", "https://house.vga.virginia.gov/schedule/meetings"),
         ("Next", f"https://house.vga.virginia.gov/schedule/meetings?date={next_monday.strftime('%m/%d/%Y')}")
@@ -78,10 +66,12 @@ def fetch_house_schedule():
     for label, url in urls:
         try:
             resp = session.get(url, headers=headers, timeout=5)
+            # SNAPSHOT THE RAW HTML FOR DEBUGGING
+            st.session_state.html_snapshots[label] = resp.text
+            
             soup = BeautifulSoup(resp.text, 'html.parser')
             
-            # CRITICAL FIX: Added 'td', 'tr', 'tbody' to the search list
-            # This ensures we see text inside tables.
+            # EXPANDED TAG SEARCH (Includes Table Tags)
             all_tags = soup.find_all(['div', 'span', 'p', 'h4', 'h5', 'a', 'li', 'td', 'tr'])
             
             current_date = None
@@ -91,11 +81,10 @@ def fetch_house_schedule():
                 text = tag.get_text(" ", strip=True)
                 if not text: continue
                 
-                # DATE HEADER DETECTION
+                # DATE HEADER
                 if any(day in text for day in ["Monday,", "Tuesday,", "Wednesday,", "Thursday,", "Friday,"]):
                     d_match = re.search(r'(Monday|Tuesday|Wednesday|Thursday|Friday),\s+([A-Za-z]+)\s+(\d{1,2})', text)
                     if d_match:
-                        # Flush previous
                         if current_date and current_block:
                             if current_date not in schedule_map: schedule_map[current_date] = []
                             schedule_map[current_date].append("\n".join(current_block))
@@ -109,10 +98,7 @@ def fetch_house_schedule():
                 
                 if not current_date: continue
                 
-                # BLOCK DELIMITERS
                 low = text.lower()
-                
-                # Start new block on "Convenes" or "Session"
                 if "convenes" in low or "session" in low:
                     if current_block:
                         if current_date not in schedule_map: schedule_map[current_date] = []
@@ -121,14 +107,12 @@ def fetch_house_schedule():
                 
                 current_block.append(text)
                 
-                # End block on .ics
                 if ".ics" in low or "archived" in low:
                     if current_block:
                         if current_date not in schedule_map: schedule_map[current_date] = []
                         schedule_map[current_date].append("\n".join(current_block))
                         current_block = []
                         
-            # Flush final
             if current_date and current_block:
                 if current_date not in schedule_map: schedule_map[current_date] = []
                 schedule_map[current_date].append("\n".join(current_block))
@@ -197,15 +181,41 @@ def parse_committee_name(full_name):
 
 # --- MAIN UI ---
 
-with st.spinner("Processing..."):
+with st.spinner("Processing Schedule..."):
     all_meetings = get_full_schedule()
     house_blocks_map = fetch_house_schedule()
 
+# --- GLOBAL DOM SEARCH TOOL ---
+st.sidebar.header("🌍 Global DOM Search")
+st.sidebar.info("Search the RAW HTML. This proves if the data is even there.")
+search_q = st.sidebar.text_input("Enter Committee Name (e.g. 'Compensation')")
+
+if search_q:
+    st.sidebar.markdown("---")
+    st.sidebar.write(f"**Searching for:** `{search_q}`")
+    
+    found_any = False
+    for source_label, html_content in st.session_state.html_snapshots.items():
+        if search_q.lower() in html_content.lower():
+            found_any = True
+            st.sidebar.success(f"✅ Found in {source_label}!")
+            
+            # Find the specific lines
+            lines = html_content.split('\n')
+            for i, line in enumerate(lines):
+                if search_q.lower() in line.lower():
+                    st.sidebar.code(f"Line {i}: {line.strip()[:100]}...", language="html")
+        else:
+            st.sidebar.error(f"❌ NOT FOUND in {source_label}")
+            
+    if not found_any:
+        st.sidebar.warning("This text does not exist in the source HTML. It is likely JavaScript-rendered.")
+
+# --- CALENDAR LOGIC ---
 today = datetime.now().date()
 week_map = {}
 for i in range(8): week_map[today + timedelta(days=i)] = []
 
-# Sort: Long names first (Specific Subcommittees) to avoid matching generic parents
 all_meetings.sort(key=lambda x: len(x.get("OwnerName", "")), reverse=True)
 
 for m in all_meetings:
@@ -221,12 +231,10 @@ for m in all_meetings:
     api_time = m.get("ScheduleTime")
     api_comments = m.get("Comments") or ""
     final_time = "⚠️ Not Listed on Schedule"
-    match_source = "None"
     
     # 1. API COMMENTS
     if "adjourn" in api_comments.lower() or "upon" in api_comments.lower():
         final_time = api_comments
-        match_source = "API"
         
     # 2. HOUSE SCRAPER (Checklist Logic)
     elif m_date in house_blocks_map:
@@ -235,14 +243,10 @@ for m in all_meetings:
         
         for block_text in blocks:
             block_tokens = get_clean_tokens(block_text)
-            
-            # CHECKLIST: ALL API tokens must exist in the block tokens
-            # This allows the block to have extra words (like Chair name)
             if api_tokens and api_tokens.issubset(block_tokens):
                 t = extract_relative_time(block_text)
                 if t: 
                     final_time = t
-                    match_source = "Scraper (Table)"
                     break
 
     # FALLBACK
