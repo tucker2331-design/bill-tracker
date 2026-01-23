@@ -9,88 +9,70 @@ import concurrent.futures
 API_KEY = "81D70A54-FCDC-4023-A00B-A3FD114D5984" 
 SESSION_CODE = "20261" 
 
-st.set_page_config(page_title="v55 Agenda Sniper", page_icon="🎯", layout="wide")
-st.title("🎯 v55: The 'Agenda Sniper'")
+st.set_page_config(page_title="v56 Relative Reader", page_icon="📖", layout="wide")
+st.title("📖 v56: The 'Relative Time' Reader")
 
 # --- SPEED ENGINE ---
 session = requests.Session()
-adapter = requests.adapters.HTTPAdapter(pool_connections=50, pool_maxsize=50)
+adapter = requests.adapters.HTTPAdapter(pool_connections=20, pool_maxsize=20)
 session.mount('https://', adapter)
 
-# --- HELPER: DNA & TIME ---
-def get_dna_tokens(text):
+# --- HELPER: TEXT CLEANING ---
+def get_clean_tokens(text):
     if not text: return set()
     lower = text.lower()
+    
+    # Clean noise but KEEP numbers and letters
     lower = lower.replace(".ics", "").replace("view agenda", "")
     lower = re.sub(r'[^a-z0-9\s#]', '', lower)
+    
     tokens = set(lower.split())
     
-    # CRITICAL FIX: If the name is very short (e.g. "House Convenes"), 
-    # DO NOT filter generic words. We need them.
-    if len(tokens) <= 3:
-        return tokens
-        
-    generic_dna = {
-        "committee", "subcommittee", "room", "building", 
-        "meeting", "the", "of", "and", "a", "an", "agenda", "view", 
-        "video", "public", "testimony", "bill", "caucus", "general", 
-        "assembly", "commonwealth", "adjourned"
-        # "House", "Senate", "Session", "Convenes" REMOVED from filter to fix regression
+    # Filter out extremely common words, but KEEP "Committee" identifiers
+    # We want to match "Labor" and "Commerce" and "Subcommittee" and "1"
+    generic_noise = {
+        "room", "building", "meeting", "the", "of", "and", "a", "an", 
+        "agenda", "view", "video", "public", "testimony", "bill", 
+        "caucus", "general", "assembly", "commonwealth", "session"
     }
-    return tokens - generic_dna
+    return tokens - generic_noise
 
-def parse_time_string(text):
-    if not text: return None
-    clean = text.lower().strip()
-    if "cancel" in clean: return "❌ Cancelled"
-    if "noon" in clean: return "12:00 PM"
+def extract_relative_time(block_text):
+    """
+    Specifically designed to catch "Upon adjournment", "15 mins after", etc.
+    Prioritizes these strings OVER digits.
+    """
+    lower = block_text.lower()
     
-    if "adj" in clean or "convenes" in clean:
-        return text.strip()
-        
-    match = re.search(r'(\d{1,2}:\d{2}\s*[aA|pP]\.?[mM]\.?)', text)
+    # 1. Immediate / Adjournment / Rise Patterns
+    # We grab the whole line if it contains these keywords
+    keywords = ["adjournment", "adjourn", "upon", "immediate", "rise of", "recess"]
+    
+    lines = block_text.split('\n')
+    for line in lines:
+        l_low = line.lower()
+        if any(k in l_low for k in keywords):
+            # Clean it up slightly but keep the info
+            return line.strip()
+            
+    # 2. Standard Time (Fallback)
+    match = re.search(r'(\d{1,2}:\d{2}\s*[aA|pP]\.?[mM]\.?)', block_text)
     if match: return match.group(1).upper()
+    
     return None
 
-# --- SOURCE 1: AGENDA SNIPER (The Fix) ---
-def scrape_agenda_for_time(agenda_url):
-    """
-    Visits the agenda page directly to find the time.
-    """
-    if not agenda_url: return None
-    try:
-        # Fast timeout - if it's slow, skip it
-        resp = session.get(agenda_url, timeout=2)
-        if resp.status_code != 200: return None
-        
-        soup = BeautifulSoup(resp.text, 'html.parser')
-        text = soup.get_text(" ", strip=True)
-        
-        # Regex for "Time: 9:00 AM" or "Meeting Time: 9:00 AM"
-        # Most Virginia agendas have this at the top
-        match = re.search(r'(?:Time|Start|Convening):\s*(\d{1,2}:\d{2}\s*[aA|pP]?[mM]?)', text, re.IGNORECASE)
-        if match: 
-            return match.group(1).upper()
-            
-        # Fallback: Look for just a standalone time at the very top
-        header_text = text[:300]
-        t = parse_time_string(header_text)
-        if t and "Listed" not in t: return t
-        
-        return None
-    except: return None
-
-# --- SOURCE 2: HOUSE SCHEDULE SCRAPER ---
+# --- SCRAPER: HOUSE SCHEDULE (Source B) ---
 @st.cache_data(ttl=300)
 def fetch_house_schedule():
     schedule_map = {} 
     
     today = datetime.now().date()
+    # Calculate Next Monday
     days_ahead = 0 - today.weekday() if today.weekday() > 0 else 0 
     if days_ahead <= 0: days_ahead += 7
     next_monday = today + timedelta(days=days_ahead)
     
-    # We know this works now based on the logs
+    # We fetch both weeks
     urls = [
         ("Current", "https://house.vga.virginia.gov/schedule/meetings"),
         ("Next", f"https://house.vga.virginia.gov/schedule/meetings?date={next_monday.strftime('%m/%d/%Y')}")
@@ -111,7 +93,7 @@ def fetch_house_schedule():
                 text = tag.get_text(" ", strip=True)
                 if not text: continue
                 
-                # Date Header
+                # DATE HEADER
                 if any(day in text for day in ["Monday,", "Tuesday,", "Wednesday,", "Thursday,", "Friday,"]):
                     d_match = re.search(r'(Monday|Tuesday|Wednesday|Thursday|Friday),\s+([A-Za-z]+)\s+(\d{1,2})', text)
                     if d_match:
@@ -128,16 +110,24 @@ def fetch_house_schedule():
                 
                 if not current_date: continue
                 
-                # Parsing Blocks - Less aggressive splitting
+                # BLOCK DELIMITERS (Fixed for House Convenes)
                 low = text.lower()
-                is_end = ".ics" in low or "archived" in low
+                
+                # Start new block on "Convenes" or "Session"
+                if "convenes" in low or "session" in low:
+                    if current_block:
+                        if current_date not in schedule_map: schedule_map[current_date] = []
+                        schedule_map[current_date].append("\n".join(current_block))
+                        current_block = []
                 
                 current_block.append(text)
                 
-                if is_end:
-                    if current_date not in schedule_map: schedule_map[current_date] = []
-                    schedule_map[current_date].append("\n".join(current_block))
-                    current_block = []
+                # End block on .ics
+                if ".ics" in low or "archived" in low:
+                    if current_block:
+                        if current_date not in schedule_map: schedule_map[current_date] = []
+                        schedule_map[current_date].append("\n".join(current_block))
+                        current_block = []
                         
             if current_date and current_block:
                 if current_date not in schedule_map: schedule_map[current_date] = []
@@ -207,7 +197,7 @@ def parse_committee_name(full_name):
 
 # --- MAIN UI ---
 
-with st.spinner("Fetching Schedule..."):
+with st.spinner("Processing Schedule..."):
     all_meetings = get_full_schedule()
     house_blocks_map = fetch_house_schedule()
 
@@ -217,35 +207,6 @@ for i in range(8): week_map[today + timedelta(days=i)] = []
 
 all_meetings.sort(key=lambda x: len(x.get("OwnerName", "")), reverse=True)
 
-# 1. PRE-PROCESS: Identify which meetings need the "Agenda Sniper"
-# This avoids doing it one-by-one in the loop
-sniper_tasks = []
-for m in all_meetings:
-    raw = m.get("ScheduleDate", "").split("T")[0]
-    if not raw: continue
-    m_date = datetime.strptime(raw, "%Y-%m-%d").date()
-    
-    if m_date not in week_map: continue
-    
-    api_time = m.get("ScheduleTime")
-    agenda_link = extract_agenda_link(m.get("Description"))
-    
-    # If API time is missing/generic AND we have a link -> Add to Sniper Queue
-    if (not api_time or "12:00" in str(api_time) or "TBA" in str(api_time)) and agenda_link:
-        sniper_tasks.append((m['ScheduleID'], agenda_link))
-
-# 2. EXECUTE SNIPER (Parallel Fetch)
-sniper_results = {}
-if sniper_tasks:
-    with st.spinner(f"🎯 Sniping {len(sniper_tasks)} Agendas for exact times..."):
-        with concurrent.futures.ThreadPoolExecutor(max_workers=20) as executor:
-            future_to_id = {executor.submit(scrape_agenda_for_time, url): mid for mid, url in sniper_tasks}
-            for future in concurrent.futures.as_completed(future_to_id):
-                mid = future_to_id[future]
-                try: sniper_results[mid] = future.result()
-                except: sniper_results[mid] = None
-
-# 3. BUILD DISPLAY
 for m in all_meetings:
     raw = m.get("ScheduleDate", "").split("T")[0]
     if not raw: continue
@@ -260,28 +221,46 @@ for m in all_meetings:
     api_comments = m.get("Comments") or ""
     final_time = "⚠️ Not Listed on Schedule"
     
-    # PRIORITY 1: API COMMENTS
+    # 1. API COMMENTS (Highest Trust)
     if "adjourn" in api_comments.lower() or "upon" in api_comments.lower():
         final_time = api_comments
         
-    # PRIORITY 2: AGENDA SNIPER (The New Fix)
-    elif m['ScheduleID'] in sniper_results and sniper_results[m['ScheduleID']]:
-        final_time = sniper_results[m['ScheduleID']]
-        
-    # PRIORITY 3: HOUSE SCRAPER (Fallback)
+    # 2. HOUSE SCRAPER (Fuzzy Match + Relative Time)
     elif m_date in house_blocks_map:
         blocks = house_blocks_map[m_date]
-        api_dna = get_dna_tokens(name)
+        api_tokens = get_clean_tokens(name)
+        
+        best_block = None
+        best_score = 0.0
         
         for block_text in blocks:
-            block_dna = get_dna_tokens(block_text)
-            # DNA Match
-            if api_dna.issubset(block_dna):
-                t = parse_time_string(block_text)
-                if t: 
-                    final_time = t
-                    break
-    
+            block_tokens = get_clean_tokens(block_text)
+            
+            # CONFIDENCE MATCHING
+            # We don't need 100% subset anymore. We need "Good Enough"
+            # Calculate how many API tokens are found in the Block
+            if not api_tokens: continue
+            
+            intersection = api_tokens.intersection(block_tokens)
+            score = len(intersection) / len(api_tokens)
+            
+            # Boost for explicit numbers (e.g. #1, #2)
+            if re.search(r'#\d+', name) and re.search(r'#\d+', block_text):
+                if re.findall(r'#\d+', name)[0] == re.findall(r'#\d+', block_text)[0]:
+                    score += 0.3
+            
+            # Threshold: 0.75 means 75% of the important words matched
+            # This handles "Subcommittee Askew" noise
+            if score > best_score and score > 0.75:
+                best_score = score
+                best_block = block_text
+        
+        if best_block:
+            # EXTRACT RELATIVE TIME
+            t = extract_relative_time(best_block)
+            if t: final_time = t
+            else: final_time = "Time Not Listed"
+
     # FALLBACK
     if "Not Listed" in final_time and api_time and "12:00" not in str(api_time) and "TBA" not in str(api_time):
         final_time = api_time 
