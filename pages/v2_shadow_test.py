@@ -9,8 +9,8 @@ import concurrent.futures
 API_KEY = "81D70A54-FCDC-4023-A00B-A3FD114D5984" 
 SESSION_CODE = "20261" 
 
-st.set_page_config(page_title="v61 Agenda Reader", page_icon="📖", layout="wide")
-st.title("📖 v61: The 'Agenda Reader' (Relative Time Fix)")
+st.set_page_config(page_title="v62 Agenda Inspector", page_icon="🕵️", layout="wide")
+st.title("🕵️ v62: The 'Agenda Inspector'")
 
 # --- SPEED ENGINE ---
 session = requests.Session()
@@ -19,71 +19,86 @@ session.mount('https://', adapter)
 
 # --- HELPER: TEXT CLEANING ---
 def extract_time_from_text(text):
-    """
-    Parses text to find either clock times OR relative phrases.
-    """
     if not text: return None
     clean = text.strip()
     lower = clean.lower()
     
-    # 1. PRIORITY: Relative Phrases (The Fix for 'Yellow' meetings)
-    # Catches: "Immediately upon adjournment", "15 mins after", "Upon recess"
+    # 1. PRIORITY: Relative Phrases
     relative_keywords = [
         "adjournment", "adjourn", "upon", "immediate", "rise of", 
         "recess", "after the", "completion of"
     ]
     
-    # If the text block is short (like a header), check the whole thing
-    if len(clean) < 150:
+    # Check Header area
+    if len(clean) < 500:
         if any(k in lower for k in relative_keywords):
             return clean.strip()
             
-    # If text is long, scan line by line
+    # Scan lines
     for line in clean.splitlines():
         l_low = line.lower()
         if any(k in l_low for k in relative_keywords):
             return line.strip()
 
-    # 2. FALLBACK: Clock Times (e.g. 9:00 AM)
+    # 2. FALLBACK: Clock Times
     match = re.search(r'(\d{1,2}:\d{2}\s*[aA|pP]\.?[mM]\.?)', clean)
     if match: return match.group(1).upper()
     
     return None
 
-# --- SOURCE 1: AGENDA READER ---
-def scrape_agenda(url):
+# --- SOURCE 1: AGENDA SCRAPER (With Debug Output) ---
+def scrape_agenda_debug(url):
     """
-    Visits the specific agenda URL provided by the API.
+    Returns a dict with debug info + the result
     """
-    if not url: return None
+    debug_info = {
+        "url": url,
+        "status": "Not Run",
+        "content_type": "Unknown",
+        "snippet": "",
+        "found_time": None,
+        "error": None
+    }
+    
+    if not url: 
+        debug_info["error"] = "No URL provided"
+        return debug_info
+        
     try:
-        # Fast timeout. If it hangs, we skip.
-        resp = session.get(url, timeout=3)
-        if resp.status_code != 200: return None
+        resp = session.get(url, timeout=4)
+        debug_info["status"] = resp.status_code
+        debug_info["content_type"] = resp.headers.get('Content-Type', 'Unknown')
+        
+        if resp.status_code != 200:
+            debug_info["error"] = f"Bad Status: {resp.status_code}"
+            return debug_info
+
+        # PDF CHECK
+        if 'pdf' in debug_info["content_type"].lower():
+             debug_info["error"] = "⚠️ URL is a PDF file (Cannot read text yet)"
+             return debug_info
         
         soup = BeautifulSoup(resp.text, 'html.parser')
-        
-        # Strategy: Look for the Header section where time is usually listed
-        # This is often in the first 500 characters of text
         full_text = soup.get_text(" ", strip=True)
-        header_text = full_text[:1000] # Scan first 1000 chars
+        debug_info["snippet"] = full_text[:500] # Show first 500 chars
         
-        # 1. Look for explicit labels "Time: ..."
+        # SEARCH
+        header_text = full_text[:1000]
+        
+        # Explicit Label Search
         match = re.search(r'(?:Time|Start|Convening):\s*(.*?)(?:Place|Location|$)', header_text, re.IGNORECASE)
         if match:
-            # We found a label! Now extract the time/phrase from it.
-            raw_time_str = match.group(1)
-            parsed = extract_time_from_text(raw_time_str)
-            if parsed: return parsed
+            debug_info["found_time"] = extract_time_from_text(match.group(1))
             
-        # 2. Loose Scan of the header
-        # If no "Time:" label, just look for the phrases anywhere in the top section
-        parsed = extract_time_from_text(header_text)
-        if parsed: return parsed
+        # Fallback Search
+        if not debug_info["found_time"]:
+            debug_info["found_time"] = extract_time_from_text(header_text)
+            
+        return debug_info
         
-        return None
-        
-    except: return None
+    except Exception as e:
+        debug_info["error"] = str(e)
+        return debug_info
 
 # --- API FETCH ---
 @st.cache_data(ttl=600) 
@@ -154,8 +169,11 @@ for i in range(8): week_map[today + timedelta(days=i)] = []
 
 all_meetings.sort(key=lambda x: len(x.get("OwnerName", "")), reverse=True)
 
-# 1. IDENTIFY MISSING TIMES (The "Yellow" Ones)
-# We only want to scrape agendas for meetings that DON'T have a time.
+# 1. IDENTIFY TASKS (No Pre-Fetch in this version to allow Debug)
+# We will run the fetch ON DEMAND inside the card if needed, 
+# OR we can run it here. For the "Inspector" to work best, let's run it here 
+# but save the FULL result object.
+
 tasks = []
 for m in all_meetings:
     raw = m.get("ScheduleDate", "").split("T")[0]
@@ -167,20 +185,18 @@ for m in all_meetings:
     api_time = m.get("ScheduleTime")
     agenda_link = extract_agenda_link(m.get("Description"))
     
-    # If time is missing/generic AND we have a link -> Add to Queue
     if (not api_time or "12:00" in str(api_time) or "TBA" in str(api_time)) and agenda_link:
         tasks.append((m['ScheduleID'], agenda_link))
 
-# 2. BATCH PROCESS (Parallel Fetching)
-agenda_results = {}
+agenda_debug_results = {}
 if tasks:
-    st.toast(f"Reading {len(tasks)} agendas to find missing times...", icon="📖")
+    st.toast(f"Scanning {len(tasks)} Agendas...", icon="🕵️")
     with concurrent.futures.ThreadPoolExecutor(max_workers=20) as executor:
-        future_to_id = {executor.submit(scrape_agenda, url): mid for mid, url in tasks}
+        future_to_id = {executor.submit(scrape_agenda_debug, url): mid for mid, url in tasks}
         for future in concurrent.futures.as_completed(future_to_id):
             mid = future_to_id[future]
-            try: agenda_results[mid] = future.result()
-            except: agenda_results[mid] = None
+            try: agenda_debug_results[mid] = future.result()
+            except: agenda_debug_results[mid] = {"error": "Crash"}
 
 # 3. RENDER
 for m in all_meetings:
@@ -197,20 +213,25 @@ for m in all_meetings:
     api_comments = m.get("Comments") or ""
     final_time = "⚠️ Not Listed on Schedule"
     
+    debug_data = None
+    
     # Priority 1: API Comments
     if "adjourn" in api_comments.lower() or "upon" in api_comments.lower():
         final_time = api_comments
     
-    # Priority 2: Agenda Reader (New Fix)
-    elif m['ScheduleID'] in agenda_results and agenda_results[m['ScheduleID']]:
-        final_time = agenda_results[m['ScheduleID']]
-        
-    # Priority 3: API Time (The Working 2/3rds)
+    # Priority 2: Agenda Reader
+    elif m['ScheduleID'] in agenda_debug_results:
+        debug_data = agenda_debug_results[m['ScheduleID']]
+        if debug_data.get("found_time"):
+            final_time = debug_data["found_time"]
+            
+    # Priority 3: API Time
     elif api_time and "12:00" not in str(api_time) and "TBA" not in str(api_time):
         final_time = api_time 
 
     m['DisplayTime'] = final_time
     m['AgendaLink'] = extract_agenda_link(m.get("Description"))
+    m['DebugData'] = debug_data
     
     week_map[m_date].append(m)
 
@@ -249,3 +270,17 @@ for i, day in enumerate(days):
                         st.link_button("View Agenda", m['AgendaLink'])
                     else:
                         st.caption("*(No Link)*")
+                    
+                    # THE DEBUGGER
+                    if "Not Listed" in time_str and m.get('DebugData'):
+                        data = m['DebugData']
+                        with st.expander("🕵️ Inspect Scraper"):
+                            st.caption(f"URL: {data.get('url')}")
+                            st.caption(f"Status: {data.get('status')}")
+                            st.caption(f"Type: {data.get('content_type')}")
+                            
+                            if data.get("error"):
+                                st.error(data.get("error"))
+                            
+                            st.markdown("**Raw Text Seen:**")
+                            st.code(data.get("snippet", "No text found"))
