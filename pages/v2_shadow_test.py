@@ -9,12 +9,12 @@ import concurrent.futures
 API_KEY = "81D70A54-FCDC-4023-A00B-A3FD114D5984" 
 SESSION_CODE = "20261" 
 
-st.set_page_config(page_title="v74 Floor Session Fix", page_icon="🏛️", layout="wide")
-st.title("🏛️ v74: The 'Floor Session' Fix & Data X-Ray")
+st.set_page_config(page_title="v76 Session Probe", page_icon="🔬", layout="wide")
+st.title("🔬 v76: The 'Session Time Probe'")
 
 # --- SPEED ENGINE ---
 session = requests.Session()
-adapter = requests.adapters.HTTPAdapter(pool_connections=50, pool_maxsize=50)
+adapter = requests.adapters.HTTPAdapter(pool_connections=20, pool_maxsize=20)
 session.mount('https://', adapter)
 
 # --- HELPER: TEXT CLEANING ---
@@ -23,93 +23,38 @@ def clean_html(text):
     text = text.replace("<br>", " ").replace("</br>", " ")
     return re.sub('<[^<]+?>', '', text).strip()
 
-def extract_complex_time(text):
-    if not text: return None
-    clean = clean_html(text)
-    lower = clean.lower()
-    
-    if "cancel" in lower or "postpone" in lower: return "❌ Cancelled"
-
-    # Priority Phrases
-    keywords = [
-        "adjournment", "adjourn", "upon", "immediate", "rise of", 
-        "recess", "after the", "completion of", "conclusion of",
-        "commence", "convening", "15 minutes", "30 minutes",
-        "1/2 hr", "half hour"
-    ]
-    
-    if len(clean) < 300 and any(k in lower for k in keywords):
-        return clean.strip()
-
-    for part in re.split(r'[\.\n\r]', clean):
-        if any(k in part.lower() for k in keywords):
-            return part.strip()
-
-    match = re.search(r'(\d{1,2}:\d{2}\s*[aA|pP]\.?[mM]\.?)', clean)
-    if match: return match.group(1).upper()
-    
-    return None
-
-# --- SOURCE: LIS FLOOR CALENDAR (The Missing Link) ---
-@st.cache_data(ttl=300)
-def fetch_floor_session_time(chamber, date_obj):
+# --- PROBE TOOLS ---
+def test_lis_url(url_pattern, date_obj, chamber):
     """
-    Scrapes the LIS Floor Calendar for the start time.
-    URL Format: http://lis.virginia.gov/cgi-bin/legp604.exe?261+cal+H0126
+    Tests a specific LIS URL pattern to see if it returns valid data.
     """
-    # MMDD format for LIS URL
-    date_code = date_obj.strftime("%m%d") 
-    chamber_code = "H" if chamber == "House" else "S"
+    # Generate Date Strings
+    mmdd = date_obj.strftime("%m%d")
+    yyyymmdd = date_obj.strftime("%Y%m%d")
+    c_code = "H" if chamber == "House" else "S"
     
-    # Try multiple URL patterns LIS uses for calendars
-    urls = [
-        f"https://lis.virginia.gov/cgi-bin/legp604.exe?{SESSION_CODE}+cal+{chamber_code}{date_code}",
-        f"https://lis.virginia.gov/cgi-bin/legp604.exe?{SESSION_CODE}+doc+{chamber_code}{date_code}"
-    ]
+    # Replace placeholders
+    url = url_pattern.replace("{SESSION}", SESSION_CODE)
+    url = url.replace("{CHAMBER}", c_code)
+    url = url.replace("{MMDD}", mmdd)
+    url = url.replace("{YYYYMMDD}", yyyymmdd)
     
-    debug_text = ""
-    
-    for url in urls:
-        try:
-            resp = session.get(url, timeout=3)
-            soup = BeautifulSoup(resp.text, 'html.parser')
-            text = soup.get_text(" ", strip=True)
-            debug_text += f"\n--- Source: {url} ---\n{text[:500]}" # Capture header
-            
-            # Look for "Meets at X" or "Convening at X" or just "X AM" at the top
-            header = text[:300].lower()
-            
-            # 1. "Meets at 10:00 A.M." pattern
-            match = re.search(r'(?:meet|conven|session)\s+(?:at|@)\s*(\d{1,2}:\d{2}\s*[aA|pP]\.?[mM]\.?)', header)
-            if match: return match.group(1).upper(), debug_text
-
-            # 2. "Monday, January 26, 2026 12:00 P.M." pattern
-            match = re.search(r'\d{4}\s+(\d{1,2}:\d{2}\s*[aA|pP]\.?[mM]\.?)', header)
-            if match: return match.group(1).upper(), debug_text
-
-        except: pass
+    try:
+        resp = session.get(url, timeout=3)
+        status = resp.status_code
         
-    return None, debug_text
-
-# --- SOURCE: LIS DAILY SCHEDULE (DCO) ---
-@st.cache_data(ttl=300)
-def fetch_lis_daily_schedule(date_obj):
-    date_str = date_obj.strftime("%Y%m%d")
-    url = f"https://lis.virginia.gov/cgi-bin/legp604.exe?{SESSION_CODE}+dco+{date_str}"
-    try:
-        resp = session.get(url, timeout=3)
+        # Check for LIS specific error text even if status is 200
+        if "query could not be properly interpreted" in resp.text:
+            return {"status": "Error (LIS Query)", "url": url, "snippet": "LIS Database rejected the query format."}
+        if "not available" in resp.text.lower():
+            return {"status": "Empty (Not Pub)", "url": url, "snippet": "Page says 'Not Available'."}
+            
         soup = BeautifulSoup(resp.text, 'html.parser')
-        return soup.get_text(" ", strip=True)
-    except: return ""
-
-# --- SOURCE: PARENT PAGE ---
-@st.cache_data(ttl=300)
-def fetch_committee_page_raw(url):
-    try:
-        resp = session.get(url, timeout=3)
-        soup = BeautifulSoup(resp.text, 'html.parser')
-        return soup.get_text(" ", strip=True)
-    except: return ""
+        text = soup.get_text(" ", strip=True)[:200]
+        
+        return {"status": status, "url": url, "snippet": text}
+    except Exception as e:
+        return {"status": "Connection Fail", "url": url, "snippet": str(e)}
 
 # --- API FETCH ---
 @st.cache_data(ttl=600) 
@@ -118,16 +63,15 @@ def get_full_schedule():
     headers = {"WebAPIKey": API_KEY, "Accept": "application/json"}
     try:
         with concurrent.futures.ThreadPoolExecutor(max_workers=2) as executor:
-            h_future = executor.submit(session.get, url, headers=headers, params={"sessionCode": SESSION_CODE, "chamberCode": "H"}, timeout=5)
-            s_future = executor.submit(session.get, url, headers=headers, params={"sessionCode": SESSION_CODE, "chamberCode": "S"}, timeout=5)
-            
-            raw_items = []
-            if h_future.result().status_code == 200: raw_items.extend(h_future.result().json().get("Schedules", []))
-            if s_future.result().status_code == 200: raw_items.extend(s_future.result().json().get("Schedules", []))
+            h = executor.submit(session.get, url, headers=headers, params={"sessionCode": SESSION_CODE, "chamberCode": "H"}, timeout=5)
+            s = executor.submit(session.get, url, headers=headers, params={"sessionCode": SESSION_CODE, "chamberCode": "S"}, timeout=5)
+            raw = []
+            if h.result().status_code == 200: raw.extend(h.result().json().get("Schedules", []))
+            if s.result().status_code == 200: raw.extend(s.result().json().get("Schedules", []))
             
         unique = []
         seen = set()
-        for m in raw_items:
+        for m in raw:
             sig = (m.get('ScheduleDate'), m.get('ScheduleTime'), m.get('OwnerName'))
             if sig not in seen:
                 seen.add(sig)
@@ -135,36 +79,9 @@ def get_full_schedule():
         return unique
     except: return []
 
-def extract_agenda_link(html_string):
-    if not html_string: return None
-    soup = BeautifulSoup(html_string, 'html.parser')
-    for link in soup.find_all('a'):
-        href = link.get('href')
-        if any(x in link.get_text().lower() for x in ["agenda", "committee info", "docket"]):
-            return f"https://house.vga.virginia.gov{href}" if href.startswith("/") else href
-    return None
-
-def parse_time_rank(time_str):
-    if "Not" in time_str or "Cancelled" in time_str: return 9998
-    if "TBD" in time_str: return 9999
-    clean = time_str.lower().replace(".", "").strip()
-    if any(x in clean for x in ["adjourn", "upon", "after", "conclusion"]): return 960 
-    try:
-        dt = datetime.strptime(clean, "%I:%M %p")
-        return dt.hour * 60 + dt.minute
-    except: return 9999 
-
-def parse_committee_name(full_name):
-    if " - " in full_name:
-        parts = full_name.split(" - ", 1)
-        return parts[0], parts[1]
-    elif "Subcommittee" in full_name:
-        return full_name, None
-    return full_name, None
-
 # --- MAIN UI ---
 
-with st.spinner("Fetching API..."):
+with st.spinner("Loading..."):
     all_meetings = get_full_schedule()
 
 today = datetime.now().date()
@@ -173,177 +90,68 @@ for i in range(8): week_map[today + timedelta(days=i)] = []
 
 all_meetings.sort(key=lambda x: len(x.get("OwnerName", "")), reverse=True)
 
-# --- SIDEBAR X-RAY TOOL ---
-st.sidebar.header("🔍 Data X-Ray")
-xray_date = st.sidebar.date_input("Check Floor Session For:", today)
-xray_chamber = st.sidebar.selectbox("Chamber", ["House", "Senate"])
+# --- SIDEBAR: SESSION PROBE ---
+st.sidebar.header("🔬 Session Time Probe")
+st.sidebar.info("Use this to find the correct URL for the Floor Calendar.")
 
-if st.sidebar.button("Run X-Ray Scan"):
-    time_found, debug_log = fetch_floor_session_time(xray_chamber, xray_date)
-    st.sidebar.markdown(f"**Result:** `{time_found if time_found else 'Not Found'}`")
+probe_date = st.sidebar.date_input("Target Date", today)
+probe_chamber = st.sidebar.selectbox("Chamber", ["House", "Senate"])
+
+# PATTERNS TO TEST
+patterns = [
+    ("Standard Calendar (MMDD)", "https://lis.virginia.gov/cgi-bin/legp604.exe?{SESSION}+cal+{CHAMBER}{MMDD}"),
+    ("Full Date Calendar (YYYYMMDD)", "https://lis.virginia.gov/cgi-bin/legp604.exe?{SESSION}+cal+{CHAMBER}{YYYYMMDD}"),
+    ("Docket (MMDD)", "https://lis.virginia.gov/cgi-bin/legp604.exe?{SESSION}+doc+{CHAMBER}{MMDD}"),
+    ("Daily Schedule (DCO)", "https://lis.virginia.gov/cgi-bin/legp604.exe?{SESSION}+dco+{YYYYMMDD}"),
+    ("Chamber Home", "https://house.virginia.gov/" if probe_chamber == "House" else "https://apps.senate.virginia.gov/")
+]
+
+if st.sidebar.button("🚀 Launch Probe"):
     st.sidebar.markdown("---")
-    st.sidebar.markdown("**Raw Text Seen:**")
-    st.sidebar.text(debug_log)
-
-
-# --- FAST PRE-FETCH ---
-tasks = []
-needed_days = set()
-needed_urls = set()
-needed_floor_checks = set()
-
-COMMITTEE_URLS = {
-    "Appropriations": "https://house.vga.virginia.gov/committees/H02",
-    "Finance": "https://house.vga.virginia.gov/committees/H09",
-    "Courts": "https://house.vga.virginia.gov/committees/H08",
-    "Commerce": "https://house.vga.virginia.gov/committees/H11",
-    "Education": "https://house.vga.virginia.gov/committees/H07",
-    "General": "https://house.vga.virginia.gov/committees/H10",
-    "Health": "https://house.vga.virginia.gov/committees/H13",
-    "Transportation": "https://house.vga.virginia.gov/committees/H22",
-    "Safety": "https://house.vga.virginia.gov/committees/H18",
-}
-
-for m in all_meetings:
-    raw = m.get("ScheduleDate", "").split("T")[0]
-    if raw: 
-        m_date = datetime.strptime(raw, "%Y-%m-%d").date()
-        if m_date in week_map:
-            needed_days.add(m_date)
-            # Identify Floor Sessions to fetch
-            if "Convene" in m.get("OwnerName", "") or "Session" in m.get("OwnerName", ""):
-                chamber = "House" if "House" in m.get("OwnerName", "") else "Senate"
-                needed_floor_checks.add((chamber, m_date))
+    for name, pattern in patterns:
+        res = test_lis_url(pattern, probe_date, probe_chamber)
+        
+        if res['status'] == 200 and "Error" not in str(res['status']):
+            st.sidebar.success(f"✅ {name}")
+        else:
+            st.sidebar.error(f"❌ {name}")
             
-    name = m.get("OwnerName", "")
-    for key, url in COMMITTEE_URLS.items():
-        if key.lower() in name.lower(): needed_urls.add(url)
+        with st.sidebar.expander("Details"):
+            st.write(f"**URL:** `{res['url']}`")
+            st.write(f"**Status:** {res['status']}")
+            st.write(f"**Seen:** {res['snippet']}")
 
-lis_daily_cache = {}
-parent_cache = {}
-floor_session_cache = {}
 
-if needed_days or needed_urls:
-    with st.spinner("Scraping LIS..."):
-        with concurrent.futures.ThreadPoolExecutor(max_workers=20) as executor:
-            future_to_day = {executor.submit(fetch_lis_daily_schedule, day): day for day in needed_days}
-            future_to_url = {executor.submit(fetch_committee_page_raw, url): url for url in needed_urls}
-            future_to_floor = {executor.submit(fetch_floor_session_time, c, d): (c,d) for c,d in needed_floor_checks}
-            
-            for future in concurrent.futures.as_completed(future_to_day):
-                day = future_to_day[future]
-                try: lis_daily_cache[day] = future.result()
-                except: pass
-                
-            for future in concurrent.futures.as_completed(future_to_url):
-                url = future_to_url[future]
-                try: parent_cache[url] = future.result()
-                except: pass
-                
-            for future in concurrent.futures.as_completed(future_to_floor):
-                key = future_to_floor[future]
-                try: floor_session_cache[key] = future.result()[0] # Get time only
-                except: pass
-
-# --- PROCESS MEETINGS ---
+# --- MAIN LIST (SAFE MODE) ---
 for m in all_meetings:
     raw = m.get("ScheduleDate", "").split("T")[0]
     if not raw: continue
     m_date = datetime.strptime(raw, "%Y-%m-%d").date()
-    
     if m_date not in week_map: continue
     
-    name = m.get("OwnerName", "")
-    if "Caucus" in name or "Press" in name: continue
-    
     api_time = m.get("ScheduleTime")
-    api_comments = m.get("Comments") or ""
-    description_html = m.get("Description") or ""
+    name = m.get("OwnerName", "")
     
-    final_time = "TBD"
-    status_label = "Active"
-    decision_log = [] 
+    # Default display
+    display_time = "TBD"
+    status_color = "warning" # Yellow
     
-    # 1. API STANDARD CHECK
+    # 1. API Time
     if api_time and "12:00" not in str(api_time) and "TBA" not in str(api_time):
-        final_time = api_time
-        decision_log.append("✅ Found in API 'ScheduleTime'")
-
-    # 2. FLOOR SESSION FIX (The New Logic)
-    if final_time == "TBD" and ("Convene" in name or "Session" in name):
-        chamber = "House" if "House" in name else "Senate"
-        key = (chamber, m_date)
+        display_time = api_time
+        status_color = "success"
         
-        # Check Scraper
-        if key in floor_session_cache and floor_session_cache[key]:
-            final_time = floor_session_cache[key]
-            decision_log.append(f"✅ Found in LIS Floor Calendar ({chamber})")
-        else:
-            # Fallback
-            final_time = "12:00 PM (Est.)"
-            decision_log.append("⚠️ Not in Calendar, using Default (12pm)")
-        
-        status_label = "Active" # Always active
+    # 2. Check Description for "Cancelled" (Safe check only)
+    desc = m.get("Description") or ""
+    if "cancel" in desc.lower():
+        display_time = "❌ Cancelled"
+        status_color = "error"
 
-    # 3. API COMMENTS MINING
-    if final_time == "TBD":
-        t = extract_complex_time(api_comments)
-        if t: 
-            final_time = t
-            decision_log.append("✅ Found in API 'Comments'")
-
-    # 4. DESCRIPTION MINING
-    if final_time == "TBD":
-        t = extract_complex_time(description_html)
-        if t: 
-            final_time = t
-            decision_log.append("✅ Found in API 'Description'")
-
-    # 5. CROSS-REFERENCE VALIDATOR
-    if final_time == "TBD":
-        if m_date in lis_daily_cache:
-            official_text = lis_daily_cache[m_date]
-            tokens = set(name.replace("-", " ").lower().split())
-            tokens -= {"house", "senate", "committee", "subcommittee"}
-            
-            if tokens:
-                found_in_official = False
-                for t in tokens:
-                    if len(t) > 3 and t in official_text.lower():
-                        found_in_official = True
-                        break
-                
-                if not found_in_official:
-                    final_time = "❌ Not on Daily Schedule"
-                    status_label = "Cancelled"
-                    decision_log.append(f"🧟 Zombie Detected: Not in LIS DCO")
-                else:
-                    decision_log.append("ℹ️ Verified in Official Schedule")
-
-    # 6. GHOST PROTOCOL
-    agenda_link = extract_agenda_link(description_html)
-    
-    if "Cancel" in str(final_time) or "Not on" in str(final_time):
-        status_label = "Cancelled"
-    
-    elif final_time == "TBD":
-        if not agenda_link:
-            final_time = "❌ Not Meeting"
-            status_label = "Cancelled" 
-            decision_log.append("👻 Ghost Protocol: No Link + No Time")
-        else:
-            final_time = "⚠️ Time Not Listed"
-            status_label = "Warning"
-            decision_log.append("⚠️ Time missing from all sources")
-
-    m['DisplayTime'] = final_time
-    m['AgendaLink'] = agenda_link
-    m['Status'] = status_label
-    m['Log'] = decision_log
-    
+    m['DisplayTime'] = display_time
+    m['Color'] = status_color
     week_map[m_date].append(m)
 
-# --- DISPLAY ---
+# DISPLAY
 cols = st.columns(len(week_map)) 
 days = sorted(week_map.keys())
 
@@ -352,38 +160,23 @@ for i, day in enumerate(days):
         st.markdown(f"### {day.strftime('%a')}")
         st.caption(day.strftime('%b %d'))
         st.divider()
-        daily_meetings = week_map[day]
-        daily_meetings.sort(key=lambda x: parse_time_rank(x.get("DisplayTime")))
         
-        if not daily_meetings:
-            st.info("No Committees")
-        else:
-            for m in daily_meetings:
-                full_name = m.get("OwnerName", "")
-                parent_name, sub_name = parse_committee_name(full_name)
-                time_str = m['DisplayTime']
-                status = m['Status']
+        for m in week_map[day]:
+            t = m['DisplayTime']
+            c = m['Color']
+            
+            with st.container(border=True):
+                if c == "error": st.error(f"{t}")
+                elif c == "warning": st.warning(f"⚠️ {t}")
+                else: st.markdown(f"**{t}**")
                 
-                # Visual logic
-                if status == "Cancelled":
-                    st.error(f"{time_str}: {full_name}")
-                elif status == "Inactive":
-                    st.caption(f"{full_name} (Inactive)")
-                else:
-                    with st.container(border=True):
-                        if status == "Warning": st.warning(time_str)
-                        else: 
-                            if len(str(time_str)) > 25: st.markdown(f"**{time_str}**")
-                            else: st.markdown(f"### {time_str}")
-                        
-                        st.markdown(f"**{parent_name}**")
-                        if sub_name: st.caption(f"↳ *{sub_name}*")
-                                
-                        if m['AgendaLink']:
-                            st.link_button("View Agenda", m['AgendaLink'])
-                        else:
-                            if "Convene" not in full_name: st.caption("*(No Link)*")
-                            
-                        with st.expander("🔍 Why?"):
-                            for log in m['Log']:
-                                st.caption(log)
+                st.markdown(f"**{m['OwnerName']}**")
+                
+                # Check link
+                soup = BeautifulSoup(m.get("Description") or "", 'html.parser')
+                link = None
+                for a in soup.find_all('a'):
+                    if "agenda" in a.get_text().lower(): link = f"https://house.vga.virginia.gov{a['href']}" if a['href'].startswith("/") else a['href']
+                
+                if link: st.link_button("View Agenda", link)
+                else: st.caption("(No Link)")
