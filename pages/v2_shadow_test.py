@@ -9,109 +9,66 @@ import concurrent.futures
 API_KEY = "81D70A54-FCDC-4023-A00B-A3FD114D5984" 
 SESSION_CODE = "20261" 
 
-st.set_page_config(page_title="v79 Honest Mode", page_icon="⚖️", layout="wide")
-st.title("⚖️ v79: The 'No-Lies' Policy (Honest Mode)")
+st.set_page_config(page_title="v80 Visual Match", page_icon="👁️", layout="wide")
+st.title("👁️ v80: The 'Visual Match' Engine")
 
 # --- SPEED ENGINE ---
 session = requests.Session()
 adapter = requests.adapters.HTTPAdapter(pool_connections=20, pool_maxsize=20)
 session.mount('https://', adapter)
 
-# --- COMMITTEE MAPPING ---
-COMMITTEE_URLS = {
-    "Appropriations": "https://house.vga.virginia.gov/committees/H02",
-    "Finance": "https://house.vga.virginia.gov/committees/H09",
-    "Courts": "https://house.vga.virginia.gov/committees/H08",
-    "Commerce": "https://house.vga.virginia.gov/committees/H11",
-    "Education": "https://house.vga.virginia.gov/committees/H07",
-    "General": "https://house.vga.virginia.gov/committees/H10",
-    "Health": "https://house.vga.virginia.gov/committees/H13",
-    "Transportation": "https://house.vga.virginia.gov/committees/H22",
-    "Safety": "https://house.vga.virginia.gov/committees/H18",
-}
-
 # --- HELPER: TEXT CLEANING ---
 def clean_html(text):
     if not text: return ""
-    text = text.replace("<br>", " ").replace("</br>", " ")
+    text = text.replace("&nbsp;", " ").replace("<br>", " ").replace("</br>", " ")
     return re.sub('<[^<]+?>', '', text).strip()
 
-def extract_complex_time(text):
-    if not text: return None
-    clean = clean_html(text)
+def extract_time_from_line(line):
+    """
+    Extracts time (12:00 PM) or phrases (Upon Adjournment) from a text line.
+    """
+    clean = clean_html(line).strip()
     lower = clean.lower()
     
-    if "cancel" in lower or "postpone" in lower: return "❌ Cancelled"
-
-    keywords = [
-        "adjournment", "adjourn", "upon", "immediate", "rise of", 
-        "recess", "after the", "completion of", "conclusion of",
-        "commence", "convening", "15 minutes", "30 minutes",
-        "1/2 hr", "half hour"
-    ]
+    if "cancel" in lower: return "❌ Cancelled"
     
-    if len(clean) < 300 and any(k in lower for k in keywords):
-        return clean.strip()
-
-    for part in re.split(r'[\.\n\r]', clean):
-        if any(k in part.lower() for k in keywords):
-            return part.strip()
-
-    match = re.search(r'(\d{1,2}:\d{2}\s*[aA|pP]\.?[mM]\.?)', clean)
+    # 1. Look for explicit times (e.g. 12:00 PM) at the START of the line
+    # The Visual Schedule usually puts time first: "12:00 PM House Convenes"
+    match = re.match(r'^(\d{1,2}:\d{2}\s*[aA|pP]\.?[mM]\.?)', clean)
     if match: return match.group(1).upper()
     
+    # 2. Look for keywords anywhere
+    keywords = [
+        "immediately upon", "upon adjournment", "1/2 hour after", 
+        "15 minutes after", "after adjournment", "rise of the"
+    ]
+    for k in keywords:
+        if k in lower:
+            # Return a readable snippet
+            return "Upon Adjournment/Recess" # Simplify for card title, details in expander
+            
     return None
 
-# --- SOURCE: CHAMBER HOMEPAGES (The Front Door) ---
+# --- SOURCE: VISUAL SCHEDULE SCRAPER ---
 @st.cache_data(ttl=300)
-def fetch_chamber_homepage_time(chamber):
+def fetch_visual_schedule(date_obj):
     """
-    Scrapes the main House/Senate homepage for the next session time.
+    Fetches the 'dys' (Daily Schedule) page which matches the user's visual screenshot.
     """
-    url = "https://house.virginia.gov/" if chamber == "House" else "https://apps.senate.virginia.gov/"
+    date_str = date_obj.strftime("%Y%m%d")
+    # This URL is the text-list version of the visual schedule
+    url = f"https://lis.virginia.gov/cgi-bin/legp604.exe?{SESSION_CODE}+dys+{date_str}"
     
     try:
-        # Use simple headers to look like a browser
-        headers = {'User-Agent': 'Mozilla/5.0'}
-        resp = session.get(url, headers=headers, timeout=5)
-        
+        resp = session.get(url, timeout=4)
         soup = BeautifulSoup(resp.text, 'html.parser')
-        text = soup.get_text(" ", strip=True)
         
-        # Limit search to top of page
-        header = text[:3000]
-        
-        # Regex for "Convenes at 12:00 PM" or similar
-        # We look for "Convene", "Session", "Meet" followed by a time
-        match = re.search(r'(?:convenes|session|meets|schedule)\s*(?:is)?\s*(?:at|@|:)?\s*(\d{1,2}:\d{2}\s*[aA|pP]\.?[mM]\.?)', header, re.IGNORECASE)
-        
-        if match:
-            return match.group(1).upper(), f"Found on Homepage ({url})"
-            
-        return None, f"Checked Homepage ({url}) - No time found"
-        
-    except Exception as e:
-        return None, f"Homepage Error: {str(e)}"
-
-# --- SOURCE: LIS DAILY SCHEDULE (DCO) ---
-@st.cache_data(ttl=300)
-def fetch_lis_daily_schedule(date_obj):
-    date_str = date_obj.strftime("%Y%m%d")
-    url = f"https://lis.virginia.gov/cgi-bin/legp604.exe?{SESSION_CODE}+dco+{date_str}"
-    try:
-        resp = session.get(url, timeout=3)
-        soup = BeautifulSoup(resp.text, 'html.parser')
-        return soup.get_text(" ", strip=True)
-    except: return ""
-
-# --- SOURCE: PARENT PAGE ---
-@st.cache_data(ttl=300)
-def fetch_committee_page_raw(url):
-    try:
-        resp = session.get(url, timeout=3)
-        soup = BeautifulSoup(resp.text, 'html.parser')
-        return soup.get_text(" ", strip=True)
-    except: return ""
+        # The page is usually a list of lines. We grab them all.
+        # We store them as a list of cleaned strings.
+        lines = [clean_html(line) for line in soup.get_text().splitlines() if line.strip()]
+        return lines
+    except:
+        return []
 
 # --- API FETCH ---
 @st.cache_data(ttl=600) 
@@ -166,7 +123,7 @@ def parse_committee_name(full_name):
 
 # --- MAIN UI ---
 
-with st.spinner("Fetching API..."):
+with st.spinner("Syncing Schedule..."):
     all_meetings = get_full_schedule()
 
 today = datetime.now().date()
@@ -175,48 +132,22 @@ for i in range(8): week_map[today + timedelta(days=i)] = []
 
 all_meetings.sort(key=lambda x: len(x.get("OwnerName", "")), reverse=True)
 
-# --- FAST PRE-FETCH ---
+# 1. PRE-FETCH VISUAL SCHEDULES
 needed_days = set()
-needed_urls = set()
-needed_homepage_checks = set() 
-
 for m in all_meetings:
     raw = m.get("ScheduleDate", "").split("T")[0]
-    if raw: 
-        m_date = datetime.strptime(raw, "%Y-%m-%d").date()
-        if m_date in week_map:
-            needed_days.add(m_date)
-            
-            if "Convene" in m.get("OwnerName", "") or "Session" in m.get("OwnerName", ""):
-                chamber = "House" if "House" in m.get("OwnerName", "") else "Senate"
-                needed_homepage_checks.add(chamber)
-            
-    name = m.get("OwnerName", "")
-    for key, url in COMMITTEE_URLS.items():
-        if key.lower() in name.lower(): needed_urls.add(url)
+    if raw:
+        d = datetime.strptime(raw, "%Y-%m-%d").date()
+        if d in week_map: needed_days.add(d)
 
-lis_daily_cache = {}
-parent_cache = {}
-homepage_time_cache = {}
+visual_schedule_cache = {}
+if needed_days:
+    with concurrent.futures.ThreadPoolExecutor(max_workers=10) as executor:
+        f_map = {executor.submit(fetch_visual_schedule, d): d for d in needed_days}
+        for f in concurrent.futures.as_completed(f_map):
+            visual_schedule_cache[f_map[f]] = f.result()
 
-if needed_days or needed_urls:
-    with st.spinner("Checking Sources..."):
-        with concurrent.futures.ThreadPoolExecutor(max_workers=20) as executor:
-            f_day = {executor.submit(fetch_lis_daily_schedule, day): day for day in needed_days}
-            f_url = {executor.submit(fetch_committee_page_raw, url): url for url in needed_urls}
-            f_home = {executor.submit(fetch_chamber_homepage_time, c): c for c in needed_homepage_checks}
-            
-            for f in concurrent.futures.as_completed(f_day):
-                try: lis_daily_cache[f_day[f]] = f.result()
-                except: pass
-            for f in concurrent.futures.as_completed(f_url):
-                try: parent_cache[f_url[f]] = f.result()
-                except: pass
-            for f in concurrent.futures.as_completed(f_home):
-                try: homepage_time_cache[f_home[f]] = f.result()
-                except: pass
-
-# --- PROCESS MEETINGS ---
+# 2. PROCESS MEETINGS
 for m in all_meetings:
     raw = m.get("ScheduleDate", "").split("T")[0]
     if not raw: continue
@@ -225,94 +156,73 @@ for m in all_meetings:
     if m_date not in week_map: continue
     
     name = m.get("OwnerName", "")
-    if "Caucus" in name or "Press" in name: continue
-    
     api_time = m.get("ScheduleTime")
-    api_comments = m.get("Comments") or ""
-    description_html = m.get("Description") or ""
+    desc = m.get("Description") or ""
     
     final_time = "TBD"
     status_label = "Active"
-    decision_log = [] 
+    source_log = []
     
-    # 1. API STANDARD CHECK
+    # A. API FIRST (The Easy Ones)
     if api_time and "12:00" not in str(api_time) and "TBA" not in str(api_time):
         final_time = api_time
-        decision_log.append("✅ Found in API 'ScheduleTime'")
-
-    # 2. FLOOR SESSION FIX (The Front Door Strategy)
-    if final_time == "TBD" and ("Convene" in name or "Session" in name):
-        chamber = "House" if "House" in name else "Senate"
-        
-        # Check if we found a time on the homepage
-        if chamber in homepage_time_cache:
-            time_found, source_log = homepage_time_cache[chamber]
-            if time_found:
-                final_time = time_found
-                decision_log.append(f"✅ {source_log}")
-            else:
-                # NO DEFAULTS HERE. If scraping fails, we admit defeat.
-                decision_log.append(f"⚠️ {source_log}")
-        else:
-            decision_log.append("⚠️ Homepage fetch failed")
-        
-        status_label = "Active" 
-
-    # 3. API COMMENTS MINING
-    if final_time == "TBD":
-        t = extract_complex_time(api_comments)
-        if t: 
-            final_time = t
-            decision_log.append("✅ Found in API 'Comments'")
-
-    # 4. DESCRIPTION MINING
-    if final_time == "TBD":
-        t = extract_complex_time(description_html)
-        if t: 
-            final_time = t
-            decision_log.append("✅ Found in API 'Description'")
-
-    # 5. CROSS-REFERENCE VALIDATOR (Zombie Check)
-    if final_time == "TBD":
-        if m_date in lis_daily_cache:
-            official_text = lis_daily_cache[m_date]
-            tokens = set(name.replace("-", " ").lower().split())
-            tokens -= {"house", "senate", "committee", "subcommittee"}
+        source_log.append("✅ Found in API")
+    
+    # B. VISUAL MATCH (The "Missing Link" Fix)
+    if final_time == "TBD" or "Convene" in name:
+        if m_date in visual_schedule_cache:
+            schedule_lines = visual_schedule_cache[m_date]
             
-            if tokens:
-                found_in_official = False
-                for t in tokens:
-                    if len(t) > 3 and t in official_text.lower():
-                        found_in_official = True
+            # Create tokens for the meeting name (e.g. "House Finance" -> {House, Finance})
+            # Remove generic words to avoid false matches
+            name_tokens = set(name.replace("-", " ").lower().split())
+            name_tokens -= {"house", "senate", "committee", "subcommittee", "room", "building"}
+            
+            best_match_line = None
+            
+            # Scan lines in the daily schedule
+            for line in schedule_lines:
+                line_lower = line.lower()
+                # Check if ALL unique tokens are in the line (Strict but Fuzzy)
+                # e.g. "Finance" matches "House Finance - Subcommittee #1"
+                if name_tokens and name_tokens.issubset(set(line_lower.split())):
+                    
+                    # Special check for "Cancelled" lines
+                    if "cancel" in line_lower:
+                        final_time = "❌ Cancelled"
+                        status_label = "Cancelled"
+                        source_log.append(f"✅ Matched 'Cancelled' in Schedule: '{line[:30]}...'")
                         break
-                
-                if not found_in_official:
-                    final_time = "❌ Not on Daily Schedule"
-                    status_label = "Cancelled"
-                    decision_log.append(f"🧟 Zombie Detected: Not in LIS DCO")
-                else:
-                    decision_log.append("ℹ️ Verified in Official Schedule")
-
-    # 6. GHOST PROTOCOL
-    agenda_link = extract_agenda_link(description_html)
+                    
+                    # Extract time from this line
+                    extracted = extract_time_from_line(line)
+                    if extracted:
+                        final_time = extracted
+                        source_log.append(f"✅ Matched Visual Schedule: '{line[:30]}...'")
+                        break
     
-    if "Cancel" in str(final_time) or "Not on" in str(final_time):
-        status_label = "Cancelled"
-    
-    elif final_time == "TBD":
-        if not agenda_link:
-            final_time = "❌ Not Meeting"
-            status_label = "Cancelled" 
-            decision_log.append("👻 Ghost Protocol: No Link + No Time")
+    # C. GHOST PROTOCOL (Cleanup)
+    if final_time == "TBD":
+        # Check description for hidden gems
+        if "cancel" in desc.lower():
+            final_time = "❌ Cancelled"
+            status_label = "Cancelled"
+        elif "adjourn" in desc.lower():
+            final_time = "Upon Adjournment"
         else:
-            final_time = "⚠️ Time Not Listed"
-            status_label = "Warning"
-            decision_log.append("⚠️ Time missing from all sources")
+            # If still TBD:
+            agenda_link = extract_agenda_link(desc)
+            if not agenda_link and "Convene" not in name:
+                final_time = "❌ Not Meeting"
+                status_label = "Cancelled"
+            else:
+                final_time = "⚠️ Time Not Listed"
+                status_label = "Warning"
 
     m['DisplayTime'] = final_time
-    m['AgendaLink'] = agenda_link
+    m['AgendaLink'] = extract_agenda_link(desc)
     m['Status'] = status_label
-    m['Log'] = decision_log
+    m['Log'] = source_log
     
     week_map[m_date].append(m)
 
@@ -337,15 +247,13 @@ for i, day in enumerate(days):
                 time_str = m['DisplayTime']
                 status = m['Status']
                 
-                # Visual logic
                 if status == "Cancelled":
                     st.error(f"{time_str}: {full_name}")
-                elif status == "Inactive":
-                    st.caption(f"{full_name} (Inactive)")
                 else:
                     with st.container(border=True):
                         if status == "Warning": st.warning(time_str)
                         else: 
+                            # Handle long relative times
                             if len(str(time_str)) > 25: st.markdown(f"**{time_str}**")
                             else: st.markdown(f"### {time_str}")
                         
@@ -355,11 +263,9 @@ for i, day in enumerate(days):
                         if m['AgendaLink']:
                             st.link_button("View Agenda", m['AgendaLink'])
                         else:
-                            # Only show 'No Link' if it's not a floor session
-                            # (Floor sessions rarely have agenda links)
-                            if "Convene" not in full_name:
-                                st.caption("*(No Link)*")
+                            if "Convene" not in full_name: st.caption("*(No Link)*")
                             
-                        with st.expander("🔍 Why?"):
-                            for log in m['Log']:
-                                st.caption(log)
+                        # Debug info for transparency
+                        if status == "Warning" or "Convene" in full_name:
+                             with st.expander("Src"):
+                                 for l in m['Log']: st.caption(l)
