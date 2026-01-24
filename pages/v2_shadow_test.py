@@ -9,21 +9,13 @@ import concurrent.futures
 API_KEY = "81D70A54-FCDC-4023-A00B-A3FD114D5984" 
 SESSION_CODE = "20261" 
 
-st.set_page_config(page_title="v78 Front Door Scraper", page_icon="🚪", layout="wide")
-st.title("🚪 v78: The 'Front Door' Scraper")
+st.set_page_config(page_title="v79 Honest Mode", page_icon="⚖️", layout="wide")
+st.title("⚖️ v79: The 'No-Lies' Policy (Honest Mode)")
 
 # --- SPEED ENGINE ---
 session = requests.Session()
 adapter = requests.adapters.HTTPAdapter(pool_connections=20, pool_maxsize=20)
 session.mount('https://', adapter)
-
-# --- HARDCODED DEFAULTS ---
-DEFAULT_TIMES = {
-    "House Convenes": "12:00 PM (Est.)",
-    "Senate Convenes": "12:00 PM (Est.)",
-    "House Session": "12:00 PM (Est.)",
-    "Senate Session": "12:00 PM (Est.)"
-}
 
 # --- COMMITTEE MAPPING ---
 COMMITTEE_URLS = {
@@ -86,12 +78,12 @@ def fetch_chamber_homepage_time(chamber):
         soup = BeautifulSoup(resp.text, 'html.parser')
         text = soup.get_text(" ", strip=True)
         
-        # Look for "Convenes: 12:00 PM" or "Session: 12:00 PM"
-        # We limit the search to the first 2000 chars as this info is usually at the top
-        header = text[:2000]
+        # Limit search to top of page
+        header = text[:3000]
         
         # Regex for "Convenes at 12:00 PM" or similar
-        match = re.search(r'(?:convenes|session|meets)\s*(?:at|@|:)?\s*(\d{1,2}:\d{2}\s*[aA|pP]\.?[mM]\.?)', header, re.IGNORECASE)
+        # We look for "Convene", "Session", "Meet" followed by a time
+        match = re.search(r'(?:convenes|session|meets|schedule)\s*(?:is)?\s*(?:at|@|:)?\s*(\d{1,2}:\d{2}\s*[aA|pP]\.?[mM]\.?)', header, re.IGNORECASE)
         
         if match:
             return match.group(1).upper(), f"Found on Homepage ({url})"
@@ -186,7 +178,7 @@ all_meetings.sort(key=lambda x: len(x.get("OwnerName", "")), reverse=True)
 # --- FAST PRE-FETCH ---
 needed_days = set()
 needed_urls = set()
-needed_homepage_checks = set() # New set for homepage checks
+needed_homepage_checks = set() 
 
 for m in all_meetings:
     raw = m.get("ScheduleDate", "").split("T")[0]
@@ -195,7 +187,6 @@ for m in all_meetings:
         if m_date in week_map:
             needed_days.add(m_date)
             
-            # If it's a Floor Session, we need to check the Homepage
             if "Convene" in m.get("OwnerName", "") or "Session" in m.get("OwnerName", ""):
                 chamber = "House" if "House" in m.get("OwnerName", "") else "Senate"
                 needed_homepage_checks.add(chamber)
@@ -206,16 +197,13 @@ for m in all_meetings:
 
 lis_daily_cache = {}
 parent_cache = {}
-homepage_time_cache = {} # Store homepage times
+homepage_time_cache = {}
 
 if needed_days or needed_urls:
     with st.spinner("Checking Sources..."):
         with concurrent.futures.ThreadPoolExecutor(max_workers=20) as executor:
-            # 1. Daily Schedule (Zombie Check)
             f_day = {executor.submit(fetch_lis_daily_schedule, day): day for day in needed_days}
-            # 2. Committee Pages (Appropriations Fix)
             f_url = {executor.submit(fetch_committee_page_raw, url): url for url in needed_urls}
-            # 3. Homepage Scraper (Floor Session Fix)
             f_home = {executor.submit(fetch_chamber_homepage_time, c): c for c in needed_homepage_checks}
             
             for f in concurrent.futures.as_completed(f_day):
@@ -263,11 +251,10 @@ for m in all_meetings:
                 final_time = time_found
                 decision_log.append(f"✅ {source_log}")
             else:
-                final_time = "12:00 PM (Est.)"
-                decision_log.append(f"⚠️ {source_log} -> Using Default")
+                # NO DEFAULTS HERE. If scraping fails, we admit defeat.
+                decision_log.append(f"⚠️ {source_log}")
         else:
-            final_time = "12:00 PM (Est.)"
-            decision_log.append("⚠️ Homepage fetch failed -> Using Default")
+            decision_log.append("⚠️ Homepage fetch failed")
         
         status_label = "Active" 
 
@@ -368,7 +355,10 @@ for i, day in enumerate(days):
                         if m['AgendaLink']:
                             st.link_button("View Agenda", m['AgendaLink'])
                         else:
-                            if "Convene" not in full_name: st.caption("*(No Link)*")
+                            # Only show 'No Link' if it's not a floor session
+                            # (Floor sessions rarely have agenda links)
+                            if "Convene" not in full_name:
+                                st.caption("*(No Link)*")
                             
                         with st.expander("🔍 Why?"):
                             for log in m['Log']:
