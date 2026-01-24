@@ -9,8 +9,8 @@ import concurrent.futures
 API_KEY = "81D70A54-FCDC-4023-A00B-A3FD114D5984" 
 SESSION_CODE = "20261" 
 
-st.set_page_config(page_title="v68 Cancellation Detector", page_icon="🛑", layout="wide")
-st.title("🛑 v68: The 'Cancellation Detector'")
+st.set_page_config(page_title="v69 Session Fix", page_icon="🏛️", layout="wide")
+st.title("🏛️ v69: Session Defaults & Cancellation Verification")
 
 # --- SPEED ENGINE ---
 session = requests.Session()
@@ -41,8 +41,7 @@ def extract_complex_time(text):
     clean = clean_html(text)
     lower = clean.lower()
     
-    # Check for cancellation explicitly
-    if "cancel" in lower: return "❌ Cancelled"
+    if "cancel" in lower or "postpone" in lower: return "❌ Cancelled"
 
     keywords = [
         "adjournment", "adjourn", "upon", "immediate", "rise of", 
@@ -177,23 +176,24 @@ for m in all_meetings:
     final_time = "TBD"
     status_label = "Active"
     
-    # 0. FLOOR SESSION DEFAULTS
-    if "Convene" in name:
+    # 1. FLOOR SESSION DEFAULT (Fix for "Inactive" issue)
+    if "Convene" in name or "Session" in name:
         if "12:00" not in str(api_time):
              final_time = "12:00 PM (Est.)"
+             status_label = "Active" # Force Active
 
-    # 1. API COMMENTS
+    # 2. API COMMENTS
     if final_time == "TBD":
         t = extract_complex_time(api_comments)
         if t: final_time = t
 
-    # 2. DESCRIPTION MINING
+    # 3. DESCRIPTION MINING
     if final_time == "TBD":
         t = extract_complex_time(description_html)
         if t: final_time = t
 
-    # 3. PARENT PAGE BACKDOOR
-    if final_time == "TBD":
+    # 4. PARENT PAGE CHECK (Looking for Cancellation)
+    if final_time == "TBD" or "Cancel" in final_time:
         target_url = None
         for key, url in COMMITTEE_URLS.items():
             if key.lower() in name.lower():
@@ -202,26 +202,32 @@ for m in all_meetings:
         
         if target_url and target_url in parent_cache:
             page_text = parent_cache[target_url]
-            # Simple check: Is this specific subcommittee mentioned near a time?
-            # This is hard to do precisely without false positives, so we keep it simple:
-            # If the page mentions "Cancelled", we assume the worst.
-            pass
+            # Simple heuristic: If "Cancelled" appears near the date/subcommittee name
+            # This is broad but safer than "Inactive"
+            if "cancel" in page_text.lower():
+                final_time = "❌ Likely Cancelled"
+                status_label = "Cancelled"
 
-    # 4. API STANDARD
+    # 5. API STANDARD
     if final_time == "TBD" and api_time and "12:00" not in str(api_time) and "TBA" not in str(api_time):
         final_time = api_time 
 
-    # 5. FINAL STATUS CHECK (The "Zombie" Filter)
+    # 6. FINAL STATUS LOGIC
     agenda_link = extract_agenda_link(description_html)
     
     if "Cancel" in final_time or "Cancel" in api_comments:
         final_time = "❌ Cancelled"
         status_label = "Cancelled"
+    
     elif final_time == "TBD":
-        # If no time AND no agenda link, assume inactive
-        if not agenda_link:
+        # If it's a Floor Session, we already set it to Active + 12:00 PM above.
+        # If it's a Committee with NO time and NO link, it's likely dead.
+        if not agenda_link and "Convene" not in name:
             final_time = "Start Time TBD / Inactive"
             status_label = "Inactive"
+        elif not agenda_link:
+             # It's a convened session with no link (normal)
+             pass 
         else:
             final_time = "⚠️ Time Not Listed"
             status_label = "Warning"
@@ -257,13 +263,13 @@ for i, day in enumerate(days):
                 if status == "Cancelled":
                     st.error(f"❌ Cancelled: {full_name}")
                 elif status == "Inactive":
-                    # Gray / Quiet card
+                    # Gray / Quiet card for ghost meetings
                     with st.container(border=True):
                         st.caption(f"{time_str}")
                         st.markdown(f"**{parent_name}**")
                         if sub_name: st.caption(f"↳ *{sub_name}*")
                 else:
-                    # Normal Active Card
+                    # Normal Active Card (Includes Floor Sessions)
                     with st.container(border=True):
                         if status == "Warning": st.warning(time_str)
                         else: 
@@ -276,4 +282,6 @@ for i, day in enumerate(days):
                         if m['AgendaLink']:
                             st.link_button("View Agenda", m['AgendaLink'])
                         else:
-                            st.caption("*(No Link)*")
+                            # Hide "No Link" text for Floor Sessions to look cleaner
+                            if "Convene" not in full_name:
+                                st.caption("*(No Link)*")
