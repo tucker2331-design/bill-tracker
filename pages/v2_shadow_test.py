@@ -9,12 +9,12 @@ import concurrent.futures
 API_KEY = "81D70A54-FCDC-4023-A00B-A3FD114D5984" 
 SESSION_CODE = "20261" 
 
-st.set_page_config(page_title="v72 Cross-Reference Validator", page_icon="✅", layout="wide")
-st.title("✅ v72: The 'Cross-Reference' Validator")
+st.set_page_config(page_title="v73 Speedmaster", page_icon="⚡", layout="wide")
+st.title("⚡ v73: The 'Speedmaster' & Logic Fix")
 
 # --- SPEED ENGINE ---
 session = requests.Session()
-adapter = requests.adapters.HTTPAdapter(pool_connections=20, pool_maxsize=20)
+adapter = requests.adapters.HTTPAdapter(pool_connections=50, pool_maxsize=50)
 session.mount('https://', adapter)
 
 # --- HARDCODED DEFAULTS ---
@@ -75,7 +75,6 @@ def extract_complex_time(text):
 def fetch_lis_daily_schedule(date_obj):
     """
     Fetches the Official Daily Committee Operations (DCO) page.
-    This is the 'Printed Calendar' source of truth.
     """
     date_str = date_obj.strftime("%Y%m%d")
     url = f"https://lis.virginia.gov/cgi-bin/legp604.exe?{SESSION_CODE}+dco+{date_str}"
@@ -83,12 +82,20 @@ def fetch_lis_daily_schedule(date_obj):
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
     }
     try:
-        resp = session.get(url, headers=headers, timeout=5)
+        resp = session.get(url, headers=headers, timeout=3)
         soup = BeautifulSoup(resp.text, 'html.parser')
-        # Return the full text of the page to search against
         return soup.get_text(" ", strip=True)
     except:
         return ""
+
+# --- SOURCE: PARENT PAGE ---
+@st.cache_data(ttl=300)
+def fetch_committee_page_raw(url):
+    try:
+        resp = session.get(url, timeout=3)
+        soup = BeautifulSoup(resp.text, 'html.parser')
+        return soup.get_text(" ", strip=True)
+    except: return ""
 
 # --- API FETCH ---
 @st.cache_data(ttl=600) 
@@ -96,13 +103,15 @@ def get_full_schedule():
     url = "https://lis.virginia.gov/Schedule/api/getschedulelistasync"
     headers = {"WebAPIKey": API_KEY, "Accept": "application/json"}
     try:
-        h_resp = session.get(url, headers=headers, params={"sessionCode": SESSION_CODE, "chamberCode": "H"}, timeout=5)
-        s_resp = session.get(url, headers=headers, params={"sessionCode": SESSION_CODE, "chamberCode": "S"}, timeout=5)
-        
-        raw_items = []
-        if h_resp.status_code == 200: raw_items.extend(h_resp.json().get("Schedules", []))
-        if s_resp.status_code == 200: raw_items.extend(s_resp.json().get("Schedules", []))
-        
+        # Use concurrent requests for speed
+        with concurrent.futures.ThreadPoolExecutor(max_workers=2) as executor:
+            h_future = executor.submit(session.get, url, headers=headers, params={"sessionCode": SESSION_CODE, "chamberCode": "H"}, timeout=5)
+            s_future = executor.submit(session.get, url, headers=headers, params={"sessionCode": SESSION_CODE, "chamberCode": "S"}, timeout=5)
+            
+            raw_items = []
+            if h_future.result().status_code == 200: raw_items.extend(h_future.result().json().get("Schedules", []))
+            if s_future.result().status_code == 200: raw_items.extend(s_future.result().json().get("Schedules", []))
+            
         unique = []
         seen = set()
         for m in raw_items:
@@ -142,7 +151,7 @@ def parse_committee_name(full_name):
 
 # --- MAIN UI ---
 
-with st.spinner("Fetching Schedule..."):
+with st.spinner("Fetching API..."):
     all_meetings = get_full_schedule()
 
 today = datetime.now().date()
@@ -151,22 +160,47 @@ for i in range(8): week_map[today + timedelta(days=i)] = []
 
 all_meetings.sort(key=lambda x: len(x.get("OwnerName", "")), reverse=True)
 
-# PRE-FETCH LIS DAILY SCHEDULES
+# --- FAST PRE-FETCH (PARALLEL) ---
+# We fetch ALL needed external pages (Daily Schedules + Committee Pages) in one go
+tasks = []
 needed_days = set()
+needed_urls = set()
+
 for m in all_meetings:
     raw = m.get("ScheduleDate", "").split("T")[0]
-    if raw: needed_days.add(datetime.strptime(raw, "%Y-%m-%d").date())
+    if raw: 
+        m_date = datetime.strptime(raw, "%Y-%m-%d").date()
+        if m_date in week_map:
+            needed_days.add(m_date)
+            
+    name = m.get("OwnerName", "")
+    for key, url in COMMITTEE_URLS.items():
+        if key.lower() in name.lower(): needed_urls.add(url)
 
 lis_daily_cache = {}
-if needed_days:
-    with concurrent.futures.ThreadPoolExecutor(max_workers=5) as executor:
-        future_to_day = {executor.submit(fetch_lis_daily_schedule, day): day for day in needed_days}
-        for future in concurrent.futures.as_completed(future_to_day):
-            day = future_to_day[future]
-            try: lis_daily_cache[day] = future.result()
-            except: pass
+parent_cache = {}
 
-# PROCESS MEETINGS
+if needed_days or needed_urls:
+    with st.spinner("Verifying Schedules..."):
+        with concurrent.futures.ThreadPoolExecutor(max_workers=20) as executor:
+            # Task 1: Fetch Daily Schedules (DCO)
+            future_to_day = {executor.submit(fetch_lis_daily_schedule, day): day for day in needed_days}
+            # Task 2: Fetch Committee Homepages
+            future_to_url = {executor.submit(fetch_committee_page_raw, url): url for url in needed_urls}
+            
+            # Collect DCO Results
+            for future in concurrent.futures.as_completed(future_to_day):
+                day = future_to_day[future]
+                try: lis_daily_cache[day] = future.result()
+                except: pass
+                
+            # Collect Parent Page Results
+            for future in concurrent.futures.as_completed(future_to_url):
+                url = future_to_url[future]
+                try: parent_cache[url] = future.result()
+                except: pass
+
+# --- PROCESS MEETINGS ---
 for m in all_meetings:
     raw = m.get("ScheduleDate", "").split("T")[0]
     if not raw: continue
@@ -214,42 +248,37 @@ for m in all_meetings:
             decision_log.append("✅ Found in API 'Description'")
 
     # 5. CROSS-REFERENCE VALIDATOR (The Zombie Check)
-    # If we still have no time, verify if it's even on the Official Schedule
     if final_time == "TBD":
         if m_date in lis_daily_cache:
             official_text = lis_daily_cache[m_date]
             
-            # Create a unique token set for the subcommittee name
-            # e.g. "Appropriations - General Government" -> {"general", "government"}
-            # We exclude "House", "Committee", "Appropriations" to be specific
+            # LOGIC FIX: Don't exclude "Appropriations" anymore!
             tokens = set(name.replace("-", " ").lower().split())
-            tokens -= {"house", "senate", "committee", "subcommittee", "appropriations", "finance", "courts", "justice"}
+            tokens -= {"house", "senate", "committee", "subcommittee"}
+            # We used to remove "appropriations", "finance", etc. here. NOT ANYMORE.
             
-            # Check if these tokens appear together in the official text
-            # We require at least one specific token (like "Government") to exist
             if tokens:
                 found_in_official = False
-                # Simple check: do the tokens appear in the text?
-                # This is a fuzzy check. If "General Government" is in the text, we assume it's valid.
+                # Check if ANY of the specific tokens exist in the official text
                 for t in tokens:
-                    if t in official_text.lower():
+                    if len(t) > 3 and t in official_text.lower():
                         found_in_official = True
                         break
                 
                 if not found_in_official:
                     final_time = "❌ Not on Daily Schedule"
                     status_label = "Cancelled"
-                    decision_log.append("🧟 Zombie Detected: Not found in Official LIS Daily Schedule")
+                    decision_log.append(f"🧟 Zombie Detected: '{list(tokens)}' not found in LIS DCO")
                 else:
-                    decision_log.append("ℹ️ Verified: Found in Official Schedule (but no time listed)")
+                    decision_log.append("ℹ️ Verified: Found in Official Schedule")
             else:
-                 decision_log.append("⚠️ Name too generic to verify in Official Schedule")
+                 decision_log.append("⚠️ Name tokens too generic to verify")
 
-    # 6. GHOST PROTOCOL (Empty API + No Link)
+    # 6. GHOST PROTOCOL
     agenda_link = extract_agenda_link(description_html)
     
     if "Cancel" in str(final_time) or "Not on" in str(final_time):
-        status_label = "Cancelled" # Ensure label matches text
+        status_label = "Cancelled"
     
     elif final_time == "TBD":
         if not agenda_link:
