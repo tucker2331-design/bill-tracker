@@ -9,117 +9,81 @@ import concurrent.futures
 API_KEY = "81D70A54-FCDC-4023-A00B-A3FD114D5984" 
 SESSION_CODE = "20261" 
 
-st.set_page_config(page_title="v60 Connection Doctor", page_icon="🩺", layout="wide")
-st.title("🩺 v60: The 'Connection Doctor' (Anti-Block)")
+st.set_page_config(page_title="v61 Agenda Reader", page_icon="📖", layout="wide")
+st.title("📖 v61: The 'Agenda Reader' (Relative Time Fix)")
 
 # --- SPEED ENGINE ---
 session = requests.Session()
-adapter = requests.adapters.HTTPAdapter(pool_connections=20, pool_maxsize=20)
+adapter = requests.adapters.HTTPAdapter(pool_connections=50, pool_maxsize=50)
 session.mount('https://', adapter)
 
-# --- GLOBAL DEBUG DATA ---
-if 'debug_response' not in st.session_state:
-    st.session_state.debug_response = {
-        "status": "Not Run",
-        "title": "N/A",
-        "length": 0,
-        "content": ""
-    }
-
 # --- HELPER: TEXT CLEANING ---
-def get_clean_tokens(text):
-    if not text: return set()
-    lower = text.lower()
-    lower = lower.replace(".ics", "").replace("view agenda", "")
-    lower = re.sub(r'[^a-z0-9\s#]', '', lower)
-    tokens = set(lower.split())
-    # Keep identifiers like "Committee", "House", "Senate"
-    generic_noise = {
-        "room", "building", "meeting", "the", "of", "and", "a", "an", 
-        "agenda", "view", "video", "public", "testimony", "bill", 
-        "caucus", "general", "assembly", "commonwealth", "session"
-    }
-    return tokens - generic_noise
+def extract_time_from_text(text):
+    """
+    Parses text to find either clock times OR relative phrases.
+    """
+    if not text: return None
+    clean = text.strip()
+    lower = clean.lower()
+    
+    # 1. PRIORITY: Relative Phrases (The Fix for 'Yellow' meetings)
+    # Catches: "Immediately upon adjournment", "15 mins after", "Upon recess"
+    relative_keywords = [
+        "adjournment", "adjourn", "upon", "immediate", "rise of", 
+        "recess", "after the", "completion of"
+    ]
+    
+    # If the text block is short (like a header), check the whole thing
+    if len(clean) < 150:
+        if any(k in lower for k in relative_keywords):
+            return clean.strip()
+            
+    # If text is long, scan line by line
+    for line in clean.splitlines():
+        l_low = line.lower()
+        if any(k in l_low for k in relative_keywords):
+            return line.strip()
 
-def extract_relative_time(text):
-    lower = text.lower()
-    keywords = ["adjournment", "adjourn", "upon", "immediate", "rise of", "recess", "after"]
-    if any(k in lower for k in keywords):
-        return text.strip()
-    match = re.search(r'(\d{1,2}:\d{2}\s*[aA|pP]\.?[mM]\.?)', text)
+    # 2. FALLBACK: Clock Times (e.g. 9:00 AM)
+    match = re.search(r'(\d{1,2}:\d{2}\s*[aA|pP]\.?[mM]\.?)', clean)
     if match: return match.group(1).upper()
+    
     return None
 
-# --- SCRAPER: LIS MASTER FEED (With Anti-Block Headers) ---
-@st.cache_data(ttl=300)
-def fetch_lis_data():
-    schedule_map = {} 
-    
-    url = "https://lis.virginia.gov/cgi-bin/legp604.exe?261+sbh+ALL"
-    
-    # 1. BROWSER MIMIC HEADERS
-    # Old CGI scripts often check Referer to prevent hotlinking
-    headers = {
-        'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8',
-        'Accept-Language': 'en-US,en;q=0.5',
-        'Referer': 'https://lis.virginia.gov/cgi-bin/legp604.exe?261+men+BIL' # Pretend we came from the menu
-    }
-    
+# --- SOURCE 1: AGENDA READER ---
+def scrape_agenda(url):
+    """
+    Visits the specific agenda URL provided by the API.
+    """
+    if not url: return None
     try:
-        resp = session.get(url, headers=headers, timeout=10)
+        # Fast timeout. If it hangs, we skip.
+        resp = session.get(url, timeout=3)
+        if resp.status_code != 200: return None
         
-        # DEBUG: Capture Vitals
         soup = BeautifulSoup(resp.text, 'html.parser')
-        page_title = soup.title.string if soup.title else "No Title Found"
         
-        st.session_state.debug_response = {
-            "status": resp.status_code,
-            "title": page_title.strip(),
-            "length": len(resp.text),
-            "content": resp.text
-        }
+        # Strategy: Look for the Header section where time is usually listed
+        # This is often in the first 500 characters of text
+        full_text = soup.get_text(" ", strip=True)
+        header_text = full_text[:1000] # Scan first 1000 chars
         
-        # PARSING LOGIC
-        rows = soup.find_all('tr')
-        current_date = None
+        # 1. Look for explicit labels "Time: ..."
+        match = re.search(r'(?:Time|Start|Convening):\s*(.*?)(?:Place|Location|$)', header_text, re.IGNORECASE)
+        if match:
+            # We found a label! Now extract the time/phrase from it.
+            raw_time_str = match.group(1)
+            parsed = extract_time_from_text(raw_time_str)
+            if parsed: return parsed
+            
+        # 2. Loose Scan of the header
+        # If no "Time:" label, just look for the phrases anywhere in the top section
+        parsed = extract_time_from_text(header_text)
+        if parsed: return parsed
         
-        for row in rows:
-            text = row.get_text(" ", strip=True)
-            if not text: continue
-            
-            # Date Header
-            if any(day in text for day in ["Monday,", "Tuesday,", "Wednesday,", "Thursday,", "Friday,"]):
-                match = re.search(r'(Monday|Tuesday|Wednesday|Thursday|Friday),\s+([A-Za-z]+)\s+(\d{1,2})', text)
-                if match:
-                    try:
-                        raw_s = f"{match.group(0)} 2026"
-                        current_date = datetime.strptime(raw_s, "%A, %B %d %Y").date()
-                    except: pass
-                continue
-            
-            if not current_date: continue
-            
-            # Meeting Rows
-            cells = row.find_all('td')
-            if len(cells) >= 2:
-                time_col = cells[0].get_text(" ", strip=True)
-                name_col = cells[1].get_text(" ", strip=True)
-                
-                low_time = time_col.lower()
-                is_time = any(x in low_time for x in ['am', 'pm', 'noon', 'adj', 'upon', 'after', 'immediate']) or any(c.isdigit() for c in time_col)
-                
-                if is_time:
-                    if current_date not in schedule_map: schedule_map[current_date] = []
-                    schedule_map[current_date].append({
-                        "raw_time": time_col,
-                        "raw_name": name_col
-                    })
-                    
-    except Exception as e:
-        st.session_state.debug_response["status"] = f"ERROR: {str(e)}"
-            
-    return schedule_map
+        return None
+        
+    except: return None
 
 # --- API FETCH ---
 @st.cache_data(ttl=600) 
@@ -181,42 +145,44 @@ def parse_committee_name(full_name):
 
 # --- MAIN UI ---
 
-with st.spinner("Diagnosing Connection..."):
+with st.spinner("Fetching Schedule..."):
     all_meetings = get_full_schedule()
-    lis_data_map = fetch_lis_data()
 
-# --- SIDEBAR: CONNECTION DOCTOR ---
-st.sidebar.header("🩺 Connection Doctor")
-debug = st.session_state.debug_response
-
-# 1. Connection Vitals
-st.sidebar.markdown(f"**Status Code:** `{debug['status']}`")
-st.sidebar.markdown(f"**Page Title:** `{debug['title']}`")
-st.sidebar.markdown(f"**Data Size:** `{debug['length']} chars`")
-
-if "Timeout" in debug['title'] or "Error" in debug['title']:
-    st.sidebar.error("🚨 BLOCKED: The server returned an error page, not the schedule.")
-elif debug['length'] < 5000:
-    st.sidebar.warning("⚠️ SUSPICIOUS: Page is very small. Likely a generic landing page.")
-else:
-    st.sidebar.success("✅ LOOKS GOOD: We likely have the full schedule.")
-
-# 2. Probe
-st.sidebar.markdown("---")
-probe = st.sidebar.text_input("Probe Content (e.g. 'Finance')")
-if probe:
-    if probe.lower() in debug['content'].lower():
-        st.sidebar.success(f"Found '{probe}' in content!")
-    else:
-        st.sidebar.error(f"'{probe}' NOT found in content.")
-
-# --- CALENDAR LOGIC ---
 today = datetime.now().date()
 week_map = {}
 for i in range(8): week_map[today + timedelta(days=i)] = []
 
 all_meetings.sort(key=lambda x: len(x.get("OwnerName", "")), reverse=True)
 
+# 1. IDENTIFY MISSING TIMES (The "Yellow" Ones)
+# We only want to scrape agendas for meetings that DON'T have a time.
+tasks = []
+for m in all_meetings:
+    raw = m.get("ScheduleDate", "").split("T")[0]
+    if not raw: continue
+    m_date = datetime.strptime(raw, "%Y-%m-%d").date()
+    
+    if m_date not in week_map: continue
+    
+    api_time = m.get("ScheduleTime")
+    agenda_link = extract_agenda_link(m.get("Description"))
+    
+    # If time is missing/generic AND we have a link -> Add to Queue
+    if (not api_time or "12:00" in str(api_time) or "TBA" in str(api_time)) and agenda_link:
+        tasks.append((m['ScheduleID'], agenda_link))
+
+# 2. BATCH PROCESS (Parallel Fetching)
+agenda_results = {}
+if tasks:
+    st.toast(f"Reading {len(tasks)} agendas to find missing times...", icon="📖")
+    with concurrent.futures.ThreadPoolExecutor(max_workers=20) as executor:
+        future_to_id = {executor.submit(scrape_agenda, url): mid for mid, url in tasks}
+        for future in concurrent.futures.as_completed(future_to_id):
+            mid = future_to_id[future]
+            try: agenda_results[mid] = future.result()
+            except: agenda_results[mid] = None
+
+# 3. RENDER
 for m in all_meetings:
     raw = m.get("ScheduleDate", "").split("T")[0]
     if not raw: continue
@@ -231,25 +197,16 @@ for m in all_meetings:
     api_comments = m.get("Comments") or ""
     final_time = "⚠️ Not Listed on Schedule"
     
-    # 1. API COMMENTS
+    # Priority 1: API Comments
     if "adjourn" in api_comments.lower() or "upon" in api_comments.lower():
         final_time = api_comments
+    
+    # Priority 2: Agenda Reader (New Fix)
+    elif m['ScheduleID'] in agenda_results and agenda_results[m['ScheduleID']]:
+        final_time = agenda_results[m['ScheduleID']]
         
-    # 2. LIS MATCH
-    elif m_date in lis_data_map:
-        lis_rows = lis_data_map[m_date]
-        api_tokens = get_clean_tokens(name)
-        
-        for row in lis_rows:
-            row_tokens = get_clean_tokens(row['raw_name'])
-            if api_tokens and api_tokens.issubset(row_tokens):
-                t = extract_relative_time(row['raw_time'])
-                if t: 
-                    final_time = t
-                    break
-
-    # FALLBACK
-    if "Not Listed" in final_time and api_time and "12:00" not in str(api_time) and "TBA" not in str(api_time):
+    # Priority 3: API Time (The Working 2/3rds)
+    elif api_time and "12:00" not in str(api_time) and "TBA" not in str(api_time):
         final_time = api_time 
 
     m['DisplayTime'] = final_time
@@ -257,7 +214,7 @@ for m in all_meetings:
     
     week_map[m_date].append(m)
 
-# --- RENDER ---
+# --- DISPLAY ---
 cols = st.columns(len(week_map)) 
 days = sorted(week_map.keys())
 
