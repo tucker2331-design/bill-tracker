@@ -9,8 +9,8 @@ import concurrent.futures
 API_KEY = "81D70A54-FCDC-4023-A00B-A3FD114D5984" 
 SESSION_CODE = "20261" 
 
-st.set_page_config(page_title="v64 Description Miner", page_icon="⛏️", layout="wide")
-st.title("⛏️ v64: The 'Description Miner' & Legacy Override")
+st.set_page_config(page_title="v65 Unhidden Reader", page_icon="👁️", layout="wide")
+st.title("👁️ v65: The 'Unhidden' Reader")
 
 # --- SPEED ENGINE ---
 session = requests.Session()
@@ -20,64 +20,43 @@ session.mount('https://', adapter)
 # --- HELPER: TEXT CLEANING ---
 def clean_html(text):
     if not text: return ""
-    return re.sub('<[^<]+?>', ' ', text).strip() # Strip HTML tags
+    # Replace <br> with spaces to prevent merging words
+    text = text.replace("<br>", " ").replace("</br>", " ")
+    return re.sub('<[^<]+?>', '', text).strip()
 
-def extract_time_from_text(text):
+def extract_complex_time(text):
+    """
+    Hunts for relative time sentences in unstructured text.
+    """
     if not text: return None
     clean = clean_html(text)
     lower = clean.lower()
     
-    # 1. PRIORITY: Relative Phrases
-    # We look for these SPECIFICALLY because these are the ones missing from the API Time field
-    relative_keywords = [
+    # EXPANDED KEYWORDS (The Fix)
+    keywords = [
         "adjournment", "adjourn", "upon", "immediate", "rise of", 
-        "recess", "after the", "completion of", "15 minutes after"
+        "recess", "after the", "completion of", "conclusion of",
+        "commence", "convening", "15 minutes", "30 minutes",
+        "1/2 hr", "half hour"
     ]
     
-    # Scan the text for these phrases
-    for phrase in relative_keywords:
-        if phrase in lower:
-            # Return the sentence containing the phrase
-            # We split by '.' to get the sentence, or just return the snippet
-            idx = lower.find(phrase)
-            start = max(0, idx - 10)
-            end = min(len(clean), idx + 60)
-            return clean[start:end].strip() + "..."
+    # 1. Check if the whole text is short and contains a keyword
+    if len(clean) < 200 and any(k in lower for k in keywords):
+        return clean
 
-    # 2. FALLBACK: Clock Times
+    # 2. Scan line by line (for longer descriptions)
+    # We split by delimiters that might separate the time from other info
+    parts = re.split(r'[\.\n\r]', clean)
+    for part in parts:
+        part_low = part.lower()
+        if any(k in part_low for k in keywords):
+            return part.strip()
+
+    # 3. Fallback to standard clock time
     match = re.search(r'(\d{1,2}:\d{2}\s*[aA|pP]\.?[mM]\.?)', clean)
     if match: return match.group(1).upper()
     
     return None
-
-# --- SOURCE: LEGACY LIS "DCO" (Daily Committee Operations) ---
-@st.cache_data(ttl=300)
-def fetch_legacy_dco(date_obj):
-    """
-    Fetches the specific LIS daily schedule page (text-only).
-    Format: http://lis.virginia.gov/cgi-bin/legp604.exe?261+dco+20260126
-    """
-    date_str = date_obj.strftime("%Y%m%d")
-    url = f"https://lis.virginia.gov/cgi-bin/legp604.exe?{SESSION_CODE}+dco+{date_str}"
-    
-    headers = {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-        'Referer': 'https://lis.virginia.gov/'
-    }
-    
-    schedule_map = []
-    
-    try:
-        resp = session.get(url, headers=headers, timeout=5)
-        soup = BeautifulSoup(resp.text, 'html.parser')
-        
-        # This page is usually a simple list or table
-        # We grab all text lines to scan them
-        text_lines = [line.strip() for line in soup.get_text().splitlines() if line.strip()]
-        
-        return text_lines # Return raw lines to be searched
-    except:
-        return []
 
 # --- API FETCH ---
 @st.cache_data(ttl=600) 
@@ -123,7 +102,8 @@ def parse_time_rank(time_str):
     if not time_str or "Not Listed" in time_str or "TBA" in time_str: return 9999
     if "Cancelled" in time_str: return 9998
     clean = time_str.lower().replace(".", "").strip()
-    if "adjourn" in clean or "recess" in clean or "upon" in clean or "after" in clean: return 960 
+    # Rank "Adjournment" times late in the day (e.g. 4pm equivalent)
+    if any(x in clean for x in ["adjourn", "upon", "after", "conclusion"]): return 960 
     try:
         dt = datetime.strptime(clean, "%I:%M %p")
         return dt.hour * 60 + dt.minute
@@ -148,21 +128,6 @@ for i in range(8): week_map[today + timedelta(days=i)] = []
 
 all_meetings.sort(key=lambda x: len(x.get("OwnerName", "")), reverse=True)
 
-# 1. PRE-FETCH LEGACY DATA (Only for needed days)
-# We identify which days have meetings and fetch the DCO page for those days
-needed_days = set()
-for m in all_meetings:
-    raw = m.get("ScheduleDate", "").split("T")[0]
-    if raw: needed_days.add(datetime.strptime(raw, "%Y-%m-%d").date())
-
-legacy_data_cache = {}
-with st.spinner("Mining Legacy LIS Data..."):
-    for day in needed_days:
-        if day in week_map: # Only fetch if it's in our display window
-            legacy_data_cache[day] = fetch_legacy_dco(day)
-
-
-# 2. PROCESS MEETINGS
 for m in all_meetings:
     raw = m.get("ScheduleDate", "").split("T")[0]
     if not raw: continue
@@ -173,53 +138,36 @@ for m in all_meetings:
     name = m.get("OwnerName", "")
     if "Caucus" in name or "Press" in name: continue
     
+    # DATA EXTRACTION
     api_time = m.get("ScheduleTime")
     api_comments = m.get("Comments") or ""
-    description = m.get("Description") or ""
+    description_html = m.get("Description") or ""
     
     final_time = "⚠️ Not Listed on Schedule"
-    source = "None"
+    source_label = "None"
     
-    # Priority 1: API Comments (Often holds 'Upon Adjournment')
-    if "adjourn" in api_comments.lower() or "upon" in api_comments.lower():
-        final_time = api_comments
-        source = "API Comments"
+    # 1. API COMMENTS (Highest Priority for Relative Times)
+    t = extract_complex_time(api_comments)
+    if t:
+        final_time = t
+        source_label = "Comments"
 
-    # Priority 2: Description Mining (NEW)
-    # Check if the "Description" field itself contains the time text
-    elif "adjourn" in description.lower() or "upon" in description.lower():
-        extracted = extract_time_from_text(description)
-        if extracted:
-            final_time = extracted
-            source = "API Description"
-            
-    # Priority 3: Legacy DCO Scraper (NEW)
-    elif m_date in legacy_data_cache:
-        dco_lines = legacy_data_cache[m_date]
-        # Simple fuzzy search in the raw lines
-        # Split Committee name to find a unique keyword (e.g. "Compensation")
-        tokens = name.split()
-        unique_tokens = [t for t in tokens if len(t) > 4 and t.lower() not in ["house", "senate", "committee", "subcommittee"]]
-        
-        if unique_tokens:
-            target_word = unique_tokens[0] # Try the first unique word
-            for line in dco_lines:
-                if target_word.lower() in line.lower():
-                    # If we found the committee name, scan the line for time
-                    t = extract_time_from_text(line)
-                    if t:
-                        final_time = t
-                        source = "Legacy LIS"
-                        break
-            
-    # Priority 4: API Time (Standard)
+    # 2. DESCRIPTION MINING (If comments failed)
+    if "Not Listed" in final_time:
+        t = extract_complex_time(description_html)
+        if t:
+            final_time = t
+            source_label = "Description"
+
+    # 3. STANDARD API TIME (If explicit time exists)
+    # We prefer the specific "Relative" time over a generic "TBA" if both exist
     if "Not Listed" in final_time and api_time and "12:00" not in str(api_time) and "TBA" not in str(api_time):
         final_time = api_time 
-        source = "API Standard"
+        source_label = "API Standard"
 
     m['DisplayTime'] = final_time
-    m['AgendaLink'] = extract_agenda_link(m.get("Description"))
-    m['Source'] = source
+    m['AgendaLink'] = extract_agenda_link(description_html)
+    m['Source'] = source_label
     
     week_map[m_date].append(m)
 
@@ -242,14 +190,21 @@ for i, day in enumerate(days):
                 full_name = m.get("OwnerName", "")
                 parent_name, sub_name = parse_committee_name(full_name)
                 time_str = m['DisplayTime']
-                if len(time_str) > 60: time_str = "See Details"
+                
+                # UNHIDDEN: Show the full text even if it's long
                 
                 with st.container(border=True):
-                    if "Not Listed" in time_str: st.warning(f"{time_str}")
-                    elif "Time Not Listed" in time_str: st.info(f"{time_str}")
-                    elif "Cancelled" in time_str: st.error(f"{time_str}")
-                    elif len(time_str) > 15: st.caption(f"🕒 *{time_str}*") 
-                    else: st.markdown(f"**{time_str}**")
+                    # Time Display Logic
+                    if "Not Listed" in time_str: 
+                        st.warning(f"{time_str}")
+                    elif "Cancelled" in time_str: 
+                        st.error(f"{time_str}")
+                    else:
+                        # If it's a long relative string, just print it bold
+                        if len(time_str) > 20:
+                             st.markdown(f"**{time_str}**")
+                        else:
+                             st.markdown(f"### {time_str}")
                     
                     st.markdown(f"**{parent_name}**")
                     if sub_name: st.caption(f"↳ *{sub_name}*")
@@ -258,9 +213,11 @@ for i, day in enumerate(days):
                         st.link_button("View Agenda", m['AgendaLink'])
                     else:
                         st.caption("*(No Link)*")
-                    
+                        
+                    # THE RAW DATA INSPECTOR (For Yellow Cards)
                     if "Not Listed" in time_str:
-                        st.caption(f"Src: {m['Source']}")
-                        # Last Resort Link
-                        dco_url = f"https://lis.virginia.gov/cgi-bin/legp604.exe?{SESSION_CODE}+dco+{day.strftime('%Y%m%d')}"
-                        st.markdown(f"[Check Official Schedule]({dco_url})")
+                        with st.expander("🔍 Show Raw API Data"):
+                            st.write("**API Time:**", m.get("ScheduleTime"))
+                            st.write("**Comments:**", m.get("Comments"))
+                            st.write("**Description HTML:**")
+                            st.code(m.get("Description"))
