@@ -9,8 +9,8 @@ import concurrent.futures
 API_KEY = "81D70A54-FCDC-4023-A00B-A3FD114D5984" 
 SESSION_CODE = "20261" 
 
-st.set_page_config(page_title="v71 Ghost Protocol", page_icon="👻", layout="wide")
-st.title("👻 v71: The 'Ghost Protocol' (Empty = Cancelled)")
+st.set_page_config(page_title="v72 Cross-Reference Validator", page_icon="✅", layout="wide")
+st.title("✅ v72: The 'Cross-Reference' Validator")
 
 # --- SPEED ENGINE ---
 session = requests.Session()
@@ -70,18 +70,25 @@ def extract_complex_time(text):
     
     return None
 
-# --- SOURCE: PARENT PAGE SCRAPER ---
+# --- SOURCE: LIS DAILY SCHEDULE (DCO) ---
 @st.cache_data(ttl=300)
-def fetch_committee_page_raw(url):
+def fetch_lis_daily_schedule(date_obj):
+    """
+    Fetches the Official Daily Committee Operations (DCO) page.
+    This is the 'Printed Calendar' source of truth.
+    """
+    date_str = date_obj.strftime("%Y%m%d")
+    url = f"https://lis.virginia.gov/cgi-bin/legp604.exe?{SESSION_CODE}+dco+{date_str}"
     headers = {
-        'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
     }
     try:
         resp = session.get(url, headers=headers, timeout=5)
-        if resp.status_code != 200: return f"ERROR: Status {resp.status_code}"
         soup = BeautifulSoup(resp.text, 'html.parser')
+        # Return the full text of the page to search against
         return soup.get_text(" ", strip=True)
-    except Exception as e: return f"ERROR: {str(e)}"
+    except:
+        return ""
 
 # --- API FETCH ---
 @st.cache_data(ttl=600) 
@@ -116,7 +123,7 @@ def extract_agenda_link(html_string):
     return None
 
 def parse_time_rank(time_str):
-    if "Not Meeting" in time_str or "Cancelled" in time_str: return 9998
+    if "Not" in time_str or "Cancelled" in time_str: return 9998
     if "TBD" in time_str: return 9999
     clean = time_str.lower().replace(".", "").strip()
     if any(x in clean for x in ["adjourn", "upon", "after", "conclusion"]): return 960 
@@ -135,7 +142,7 @@ def parse_committee_name(full_name):
 
 # --- MAIN UI ---
 
-with st.spinner("Processing Schedule..."):
+with st.spinner("Fetching Schedule..."):
     all_meetings = get_full_schedule()
 
 today = datetime.now().date()
@@ -144,20 +151,19 @@ for i in range(8): week_map[today + timedelta(days=i)] = []
 
 all_meetings.sort(key=lambda x: len(x.get("OwnerName", "")), reverse=True)
 
-# PRE-FETCH PARENT PAGES
-needed_urls = set()
+# PRE-FETCH LIS DAILY SCHEDULES
+needed_days = set()
 for m in all_meetings:
-    name = m.get("OwnerName", "")
-    for key, url in COMMITTEE_URLS.items():
-        if key.lower() in name.lower(): needed_urls.add(url)
+    raw = m.get("ScheduleDate", "").split("T")[0]
+    if raw: needed_days.add(datetime.strptime(raw, "%Y-%m-%d").date())
 
-parent_cache = {}
-if needed_urls:
-    with concurrent.futures.ThreadPoolExecutor(max_workers=10) as executor:
-        future_to_url = {executor.submit(fetch_committee_page_raw, url): url for url in needed_urls}
-        for future in concurrent.futures.as_completed(future_to_url):
-            url = future_to_url[future]
-            try: parent_cache[url] = future.result()
+lis_daily_cache = {}
+if needed_days:
+    with concurrent.futures.ThreadPoolExecutor(max_workers=5) as executor:
+        future_to_day = {executor.submit(fetch_lis_daily_schedule, day): day for day in needed_days}
+        for future in concurrent.futures.as_completed(future_to_day):
+            day = future_to_day[future]
+            try: lis_daily_cache[day] = future.result()
             except: pass
 
 # PROCESS MEETINGS
@@ -207,33 +213,53 @@ for m in all_meetings:
             final_time = t
             decision_log.append("✅ Found in API 'Description'")
 
-    # 5. PARENT PAGE CHECK
-    if final_time == "TBD" or "Cancel" in final_time:
-        target_url = None
-        for key, url in COMMITTEE_URLS.items():
-            if key.lower() in name.lower():
-                target_url = url
-                break
-        if target_url and target_url in parent_cache and "cancel" in parent_cache[target_url].lower():
-            decision_log.append("⚠️ Parent page mentions 'Cancelled'")
+    # 5. CROSS-REFERENCE VALIDATOR (The Zombie Check)
+    # If we still have no time, verify if it's even on the Official Schedule
+    if final_time == "TBD":
+        if m_date in lis_daily_cache:
+            official_text = lis_daily_cache[m_date]
+            
+            # Create a unique token set for the subcommittee name
+            # e.g. "Appropriations - General Government" -> {"general", "government"}
+            # We exclude "House", "Committee", "Appropriations" to be specific
+            tokens = set(name.replace("-", " ").lower().split())
+            tokens -= {"house", "senate", "committee", "subcommittee", "appropriations", "finance", "courts", "justice"}
+            
+            # Check if these tokens appear together in the official text
+            # We require at least one specific token (like "Government") to exist
+            if tokens:
+                found_in_official = False
+                # Simple check: do the tokens appear in the text?
+                # This is a fuzzy check. If "General Government" is in the text, we assume it's valid.
+                for t in tokens:
+                    if t in official_text.lower():
+                        found_in_official = True
+                        break
+                
+                if not found_in_official:
+                    final_time = "❌ Not on Daily Schedule"
+                    status_label = "Cancelled"
+                    decision_log.append("🧟 Zombie Detected: Not found in Official LIS Daily Schedule")
+                else:
+                    decision_log.append("ℹ️ Verified: Found in Official Schedule (but no time listed)")
+            else:
+                 decision_log.append("⚠️ Name too generic to verify in Official Schedule")
 
-    # 6. FINAL STATUS (The Ghost Protocol)
+    # 6. GHOST PROTOCOL (Empty API + No Link)
     agenda_link = extract_agenda_link(description_html)
     
-    if "Cancel" in str(final_time) or "Cancel" in api_comments:
-        final_time = "❌ Cancelled"
-        status_label = "Cancelled"
+    if "Cancel" in str(final_time) or "Not on" in str(final_time):
+        status_label = "Cancelled" # Ensure label matches text
     
     elif final_time == "TBD":
         if not agenda_link:
-            # GHOST PROTOCOL: Empty API + No Link = Not Meeting
             final_time = "❌ Not Meeting"
             status_label = "Cancelled" 
-            decision_log.append("👻 Ghost Protocol: No Link + No Time = Not Meeting")
+            decision_log.append("👻 Ghost Protocol: No Link + No Time")
         else:
             final_time = "⚠️ Time Not Listed"
             status_label = "Warning"
-            decision_log.append("⚠️ Link Exists but Time Missing")
+            decision_log.append("⚠️ Link Exists, Verified in Schedule, but Time Missing")
 
     m['DisplayTime'] = final_time
     m['AgendaLink'] = agenda_link
@@ -267,7 +293,6 @@ for i, day in enumerate(days):
                 if status == "Cancelled":
                     st.error(f"{time_str}: {full_name}")
                 elif status == "Inactive":
-                    # We shouldn't see this anymore, merged into Cancelled
                     st.caption(f"{full_name} (Inactive)")
                 else:
                     with st.container(border=True):
@@ -282,7 +307,7 @@ for i, day in enumerate(days):
                         if m['AgendaLink']:
                             st.link_button("View Agenda", m['AgendaLink'])
                         else:
-                            st.caption("*(No Link)*")
+                            if "Convene" not in full_name: st.caption("*(No Link)*")
                             
                         with st.expander("🔍 Why?"):
                             for log in m['Log']:
