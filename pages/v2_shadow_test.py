@@ -9,15 +9,15 @@ import concurrent.futures
 API_KEY = "81D70A54-FCDC-4023-A00B-A3FD114D5984" 
 SESSION_CODE = "20261" 
 
-st.set_page_config(page_title="v70 Transparency Engine", page_icon="🔍", layout="wide")
-st.title("🔍 v70: The 'Transparency Engine'")
+st.set_page_config(page_title="v71 Ghost Protocol", page_icon="👻", layout="wide")
+st.title("👻 v71: The 'Ghost Protocol' (Empty = Cancelled)")
 
 # --- SPEED ENGINE ---
 session = requests.Session()
 adapter = requests.adapters.HTTPAdapter(pool_connections=20, pool_maxsize=20)
 session.mount('https://', adapter)
 
-# --- HARDCODED DEFAULTS (The "Safety Net") ---
+# --- HARDCODED DEFAULTS ---
 DEFAULT_TIMES = {
     "House Convenes": "12:00 PM (Est.)",
     "Senate Convenes": "12:00 PM (Est.)",
@@ -75,16 +75,13 @@ def extract_complex_time(text):
 def fetch_committee_page_raw(url):
     headers = {
         'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8',
     }
     try:
         resp = session.get(url, headers=headers, timeout=5)
-        if resp.status_code != 200:
-            return f"ERROR: Status {resp.status_code}"
+        if resp.status_code != 200: return f"ERROR: Status {resp.status_code}"
         soup = BeautifulSoup(resp.text, 'html.parser')
         return soup.get_text(" ", strip=True)
-    except Exception as e:
-        return f"ERROR: {str(e)}"
+    except Exception as e: return f"ERROR: {str(e)}"
 
 # --- API FETCH ---
 @st.cache_data(ttl=600) 
@@ -92,7 +89,6 @@ def get_full_schedule():
     url = "https://lis.virginia.gov/Schedule/api/getschedulelistasync"
     headers = {"WebAPIKey": API_KEY, "Accept": "application/json"}
     try:
-        # Fetch both chambers
         h_resp = session.get(url, headers=headers, params={"sessionCode": SESSION_CODE, "chamberCode": "H"}, timeout=5)
         s_resp = session.get(url, headers=headers, params={"sessionCode": SESSION_CODE, "chamberCode": "S"}, timeout=5)
         
@@ -100,7 +96,6 @@ def get_full_schedule():
         if h_resp.status_code == 200: raw_items.extend(h_resp.json().get("Schedules", []))
         if s_resp.status_code == 200: raw_items.extend(s_resp.json().get("Schedules", []))
         
-        # Deduplicate
         unique = []
         seen = set()
         for m in raw_items:
@@ -121,8 +116,8 @@ def extract_agenda_link(html_string):
     return None
 
 def parse_time_rank(time_str):
-    if "Cancelled" in time_str: return 9998
-    if "Inactive" in time_str or "TBD" in time_str: return 9999
+    if "Not Meeting" in time_str or "Cancelled" in time_str: return 9998
+    if "TBD" in time_str: return 9999
     clean = time_str.lower().replace(".", "").strip()
     if any(x in clean for x in ["adjourn", "upon", "after", "conclusion"]): return 960 
     try:
@@ -154,8 +149,7 @@ needed_urls = set()
 for m in all_meetings:
     name = m.get("OwnerName", "")
     for key, url in COMMITTEE_URLS.items():
-        if key.lower() in name.lower():
-            needed_urls.add(url)
+        if key.lower() in name.lower(): needed_urls.add(url)
 
 parent_cache = {}
 if needed_urls:
@@ -181,24 +175,21 @@ for m in all_meetings:
     api_comments = m.get("Comments") or ""
     description_html = m.get("Description") or ""
     
-    # --- DECISION LOGIC ---
     final_time = "TBD"
     status_label = "Active"
-    decision_log = [] # Stores "Why" we made this choice
+    decision_log = [] 
     
     # 1. API STANDARD CHECK
     if api_time and "12:00" not in str(api_time) and "TBA" not in str(api_time):
         final_time = api_time
         decision_log.append("✅ Found in API 'ScheduleTime'")
-    else:
-        decision_log.append("❌ API 'ScheduleTime' was empty/TBA")
 
-    # 2. FLOOR SESSION DEFAULTS (Force Override)
+    # 2. FLOOR SESSION DEFAULTS
     if final_time == "TBD":
         for key, default_time in DEFAULT_TIMES.items():
             if key.lower() in name.lower():
                 final_time = default_time
-                status_label = "Active" # Force Active
+                status_label = "Active"
                 decision_log.append(f"✅ Applied Default Time for '{key}'")
                 break
 
@@ -208,8 +199,6 @@ for m in all_meetings:
         if t: 
             final_time = t
             decision_log.append("✅ Found in API 'Comments'")
-        else:
-            decision_log.append("❌ No time keywords in 'Comments'")
 
     # 4. DESCRIPTION MINING
     if final_time == "TBD":
@@ -217,8 +206,6 @@ for m in all_meetings:
         if t: 
             final_time = t
             decision_log.append("✅ Found in API 'Description'")
-        else:
-            decision_log.append("❌ No time keywords in 'Description'")
 
     # 5. PARENT PAGE CHECK
     if final_time == "TBD" or "Cancel" in final_time:
@@ -227,23 +214,10 @@ for m in all_meetings:
             if key.lower() in name.lower():
                 target_url = url
                 break
-        
-        if target_url:
-            if target_url in parent_cache:
-                page_text = parent_cache[target_url]
-                if "ERROR" in page_text:
-                    decision_log.append(f"❌ Parent Page Scraper Blocked ({page_text})")
-                elif "cancel" in page_text.lower():
-                    # Very loose check: if parent page says cancel, warn the user
-                    decision_log.append("⚠️ Parent page mentions 'Cancelled'")
-                else:
-                    decision_log.append("ℹ️ Parent Page read successfully (No time found)")
-            else:
-                decision_log.append("❌ Parent Page fetch failed")
-        else:
-            decision_log.append("ℹ️ No Parent Page mapped for this committee")
+        if target_url and target_url in parent_cache and "cancel" in parent_cache[target_url].lower():
+            decision_log.append("⚠️ Parent page mentions 'Cancelled'")
 
-    # 6. FINAL STATUS ASSIGNMENT
+    # 6. FINAL STATUS (The Ghost Protocol)
     agenda_link = extract_agenda_link(description_html)
     
     if "Cancel" in str(final_time) or "Cancel" in api_comments:
@@ -252,15 +226,14 @@ for m in all_meetings:
     
     elif final_time == "TBD":
         if not agenda_link:
-            # If it's a Floor Session, we handled it in Step 2.
-            # If it's here, it's a ghost committee.
-            final_time = "Start Time TBD / Inactive"
-            status_label = "Inactive"
-            decision_log.append("🏁 Conclusion: No Link + No Time = Inactive")
+            # GHOST PROTOCOL: Empty API + No Link = Not Meeting
+            final_time = "❌ Not Meeting"
+            status_label = "Cancelled" 
+            decision_log.append("👻 Ghost Protocol: No Link + No Time = Not Meeting")
         else:
             final_time = "⚠️ Time Not Listed"
             status_label = "Warning"
-            decision_log.append("🏁 Conclusion: Link Exists but Time Missing")
+            decision_log.append("⚠️ Link Exists but Time Missing")
 
     m['DisplayTime'] = final_time
     m['AgendaLink'] = agenda_link
@@ -292,12 +265,10 @@ for i, day in enumerate(days):
                 
                 # Visual logic
                 if status == "Cancelled":
-                    st.error(f"❌ Cancelled: {full_name}")
+                    st.error(f"{time_str}: {full_name}")
                 elif status == "Inactive":
-                    with st.container(border=True):
-                        st.caption(f"{time_str}")
-                        st.markdown(f"**{parent_name}**")
-                        if sub_name: st.caption(f"↳ *{sub_name}*")
+                    # We shouldn't see this anymore, merged into Cancelled
+                    st.caption(f"{full_name} (Inactive)")
                 else:
                     with st.container(border=True):
                         if status == "Warning": st.warning(time_str)
@@ -313,7 +284,6 @@ for i, day in enumerate(days):
                         else:
                             st.caption("*(No Link)*")
                             
-                        # THE DECISION INSPECTOR
-                        with st.expander("🔍 Why this status?"):
+                        with st.expander("🔍 Why?"):
                             for log in m['Log']:
                                 st.caption(log)
