@@ -9,34 +9,13 @@ import concurrent.futures
 API_KEY = "81D70A54-FCDC-4023-A00B-A3FD114D5984" 
 SESSION_CODE = "20261" 
 
-st.set_page_config(page_title="v73 Speedmaster", page_icon="⚡", layout="wide")
-st.title("⚡ v73: The 'Speedmaster' & Logic Fix")
+st.set_page_config(page_title="v74 Floor Session Fix", page_icon="🏛️", layout="wide")
+st.title("🏛️ v74: The 'Floor Session' Fix & Data X-Ray")
 
 # --- SPEED ENGINE ---
 session = requests.Session()
 adapter = requests.adapters.HTTPAdapter(pool_connections=50, pool_maxsize=50)
 session.mount('https://', adapter)
-
-# --- HARDCODED DEFAULTS ---
-DEFAULT_TIMES = {
-    "House Convenes": "12:00 PM (Est.)",
-    "Senate Convenes": "12:00 PM (Est.)",
-    "House Session": "12:00 PM (Est.)",
-    "Senate Session": "12:00 PM (Est.)"
-}
-
-# --- COMMITTEE MAPPING ---
-COMMITTEE_URLS = {
-    "Appropriations": "https://house.vga.virginia.gov/committees/H02",
-    "Finance": "https://house.vga.virginia.gov/committees/H09",
-    "Courts": "https://house.vga.virginia.gov/committees/H08",
-    "Commerce": "https://house.vga.virginia.gov/committees/H11",
-    "Education": "https://house.vga.virginia.gov/committees/H07",
-    "General": "https://house.vga.virginia.gov/committees/H10",
-    "Health": "https://house.vga.virginia.gov/committees/H13",
-    "Transportation": "https://house.vga.virginia.gov/committees/H22",
-    "Safety": "https://house.vga.virginia.gov/committees/H18",
-}
 
 # --- HELPER: TEXT CLEANING ---
 def clean_html(text):
@@ -51,6 +30,7 @@ def extract_complex_time(text):
     
     if "cancel" in lower or "postpone" in lower: return "❌ Cancelled"
 
+    # Priority Phrases
     keywords = [
         "adjournment", "adjourn", "upon", "immediate", "rise of", 
         "recess", "after the", "completion of", "conclusion of",
@@ -70,23 +50,57 @@ def extract_complex_time(text):
     
     return None
 
+# --- SOURCE: LIS FLOOR CALENDAR (The Missing Link) ---
+@st.cache_data(ttl=300)
+def fetch_floor_session_time(chamber, date_obj):
+    """
+    Scrapes the LIS Floor Calendar for the start time.
+    URL Format: http://lis.virginia.gov/cgi-bin/legp604.exe?261+cal+H0126
+    """
+    # MMDD format for LIS URL
+    date_code = date_obj.strftime("%m%d") 
+    chamber_code = "H" if chamber == "House" else "S"
+    
+    # Try multiple URL patterns LIS uses for calendars
+    urls = [
+        f"https://lis.virginia.gov/cgi-bin/legp604.exe?{SESSION_CODE}+cal+{chamber_code}{date_code}",
+        f"https://lis.virginia.gov/cgi-bin/legp604.exe?{SESSION_CODE}+doc+{chamber_code}{date_code}"
+    ]
+    
+    debug_text = ""
+    
+    for url in urls:
+        try:
+            resp = session.get(url, timeout=3)
+            soup = BeautifulSoup(resp.text, 'html.parser')
+            text = soup.get_text(" ", strip=True)
+            debug_text += f"\n--- Source: {url} ---\n{text[:500]}" # Capture header
+            
+            # Look for "Meets at X" or "Convening at X" or just "X AM" at the top
+            header = text[:300].lower()
+            
+            # 1. "Meets at 10:00 A.M." pattern
+            match = re.search(r'(?:meet|conven|session)\s+(?:at|@)\s*(\d{1,2}:\d{2}\s*[aA|pP]\.?[mM]\.?)', header)
+            if match: return match.group(1).upper(), debug_text
+
+            # 2. "Monday, January 26, 2026 12:00 P.M." pattern
+            match = re.search(r'\d{4}\s+(\d{1,2}:\d{2}\s*[aA|pP]\.?[mM]\.?)', header)
+            if match: return match.group(1).upper(), debug_text
+
+        except: pass
+        
+    return None, debug_text
+
 # --- SOURCE: LIS DAILY SCHEDULE (DCO) ---
 @st.cache_data(ttl=300)
 def fetch_lis_daily_schedule(date_obj):
-    """
-    Fetches the Official Daily Committee Operations (DCO) page.
-    """
     date_str = date_obj.strftime("%Y%m%d")
     url = f"https://lis.virginia.gov/cgi-bin/legp604.exe?{SESSION_CODE}+dco+{date_str}"
-    headers = {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-    }
     try:
-        resp = session.get(url, headers=headers, timeout=3)
+        resp = session.get(url, timeout=3)
         soup = BeautifulSoup(resp.text, 'html.parser')
         return soup.get_text(" ", strip=True)
-    except:
-        return ""
+    except: return ""
 
 # --- SOURCE: PARENT PAGE ---
 @st.cache_data(ttl=300)
@@ -103,7 +117,6 @@ def get_full_schedule():
     url = "https://lis.virginia.gov/Schedule/api/getschedulelistasync"
     headers = {"WebAPIKey": API_KEY, "Accept": "application/json"}
     try:
-        # Use concurrent requests for speed
         with concurrent.futures.ThreadPoolExecutor(max_workers=2) as executor:
             h_future = executor.submit(session.get, url, headers=headers, params={"sessionCode": SESSION_CODE, "chamberCode": "H"}, timeout=5)
             s_future = executor.submit(session.get, url, headers=headers, params={"sessionCode": SESSION_CODE, "chamberCode": "S"}, timeout=5)
@@ -160,11 +173,36 @@ for i in range(8): week_map[today + timedelta(days=i)] = []
 
 all_meetings.sort(key=lambda x: len(x.get("OwnerName", "")), reverse=True)
 
-# --- FAST PRE-FETCH (PARALLEL) ---
-# We fetch ALL needed external pages (Daily Schedules + Committee Pages) in one go
+# --- SIDEBAR X-RAY TOOL ---
+st.sidebar.header("🔍 Data X-Ray")
+xray_date = st.sidebar.date_input("Check Floor Session For:", today)
+xray_chamber = st.sidebar.selectbox("Chamber", ["House", "Senate"])
+
+if st.sidebar.button("Run X-Ray Scan"):
+    time_found, debug_log = fetch_floor_session_time(xray_chamber, xray_date)
+    st.sidebar.markdown(f"**Result:** `{time_found if time_found else 'Not Found'}`")
+    st.sidebar.markdown("---")
+    st.sidebar.markdown("**Raw Text Seen:**")
+    st.sidebar.text(debug_log)
+
+
+# --- FAST PRE-FETCH ---
 tasks = []
 needed_days = set()
 needed_urls = set()
+needed_floor_checks = set()
+
+COMMITTEE_URLS = {
+    "Appropriations": "https://house.vga.virginia.gov/committees/H02",
+    "Finance": "https://house.vga.virginia.gov/committees/H09",
+    "Courts": "https://house.vga.virginia.gov/committees/H08",
+    "Commerce": "https://house.vga.virginia.gov/committees/H11",
+    "Education": "https://house.vga.virginia.gov/committees/H07",
+    "General": "https://house.vga.virginia.gov/committees/H10",
+    "Health": "https://house.vga.virginia.gov/committees/H13",
+    "Transportation": "https://house.vga.virginia.gov/committees/H22",
+    "Safety": "https://house.vga.virginia.gov/committees/H18",
+}
 
 for m in all_meetings:
     raw = m.get("ScheduleDate", "").split("T")[0]
@@ -172,6 +210,10 @@ for m in all_meetings:
         m_date = datetime.strptime(raw, "%Y-%m-%d").date()
         if m_date in week_map:
             needed_days.add(m_date)
+            # Identify Floor Sessions to fetch
+            if "Convene" in m.get("OwnerName", "") or "Session" in m.get("OwnerName", ""):
+                chamber = "House" if "House" in m.get("OwnerName", "") else "Senate"
+                needed_floor_checks.add((chamber, m_date))
             
     name = m.get("OwnerName", "")
     for key, url in COMMITTEE_URLS.items():
@@ -179,25 +221,28 @@ for m in all_meetings:
 
 lis_daily_cache = {}
 parent_cache = {}
+floor_session_cache = {}
 
 if needed_days or needed_urls:
-    with st.spinner("Verifying Schedules..."):
+    with st.spinner("Scraping LIS..."):
         with concurrent.futures.ThreadPoolExecutor(max_workers=20) as executor:
-            # Task 1: Fetch Daily Schedules (DCO)
             future_to_day = {executor.submit(fetch_lis_daily_schedule, day): day for day in needed_days}
-            # Task 2: Fetch Committee Homepages
             future_to_url = {executor.submit(fetch_committee_page_raw, url): url for url in needed_urls}
+            future_to_floor = {executor.submit(fetch_floor_session_time, c, d): (c,d) for c,d in needed_floor_checks}
             
-            # Collect DCO Results
             for future in concurrent.futures.as_completed(future_to_day):
                 day = future_to_day[future]
                 try: lis_daily_cache[day] = future.result()
                 except: pass
                 
-            # Collect Parent Page Results
             for future in concurrent.futures.as_completed(future_to_url):
                 url = future_to_url[future]
                 try: parent_cache[url] = future.result()
+                except: pass
+                
+            for future in concurrent.futures.as_completed(future_to_floor):
+                key = future_to_floor[future]
+                try: floor_session_cache[key] = future.result()[0] # Get time only
                 except: pass
 
 # --- PROCESS MEETINGS ---
@@ -224,14 +269,21 @@ for m in all_meetings:
         final_time = api_time
         decision_log.append("✅ Found in API 'ScheduleTime'")
 
-    # 2. FLOOR SESSION DEFAULTS
-    if final_time == "TBD":
-        for key, default_time in DEFAULT_TIMES.items():
-            if key.lower() in name.lower():
-                final_time = default_time
-                status_label = "Active"
-                decision_log.append(f"✅ Applied Default Time for '{key}'")
-                break
+    # 2. FLOOR SESSION FIX (The New Logic)
+    if final_time == "TBD" and ("Convene" in name or "Session" in name):
+        chamber = "House" if "House" in name else "Senate"
+        key = (chamber, m_date)
+        
+        # Check Scraper
+        if key in floor_session_cache and floor_session_cache[key]:
+            final_time = floor_session_cache[key]
+            decision_log.append(f"✅ Found in LIS Floor Calendar ({chamber})")
+        else:
+            # Fallback
+            final_time = "12:00 PM (Est.)"
+            decision_log.append("⚠️ Not in Calendar, using Default (12pm)")
+        
+        status_label = "Active" # Always active
 
     # 3. API COMMENTS MINING
     if final_time == "TBD":
@@ -247,19 +299,15 @@ for m in all_meetings:
             final_time = t
             decision_log.append("✅ Found in API 'Description'")
 
-    # 5. CROSS-REFERENCE VALIDATOR (The Zombie Check)
+    # 5. CROSS-REFERENCE VALIDATOR
     if final_time == "TBD":
         if m_date in lis_daily_cache:
             official_text = lis_daily_cache[m_date]
-            
-            # LOGIC FIX: Don't exclude "Appropriations" anymore!
             tokens = set(name.replace("-", " ").lower().split())
             tokens -= {"house", "senate", "committee", "subcommittee"}
-            # We used to remove "appropriations", "finance", etc. here. NOT ANYMORE.
             
             if tokens:
                 found_in_official = False
-                # Check if ANY of the specific tokens exist in the official text
                 for t in tokens:
                     if len(t) > 3 and t in official_text.lower():
                         found_in_official = True
@@ -268,11 +316,9 @@ for m in all_meetings:
                 if not found_in_official:
                     final_time = "❌ Not on Daily Schedule"
                     status_label = "Cancelled"
-                    decision_log.append(f"🧟 Zombie Detected: '{list(tokens)}' not found in LIS DCO")
+                    decision_log.append(f"🧟 Zombie Detected: Not in LIS DCO")
                 else:
-                    decision_log.append("ℹ️ Verified: Found in Official Schedule")
-            else:
-                 decision_log.append("⚠️ Name tokens too generic to verify")
+                    decision_log.append("ℹ️ Verified in Official Schedule")
 
     # 6. GHOST PROTOCOL
     agenda_link = extract_agenda_link(description_html)
@@ -288,7 +334,7 @@ for m in all_meetings:
         else:
             final_time = "⚠️ Time Not Listed"
             status_label = "Warning"
-            decision_log.append("⚠️ Link Exists, Verified in Schedule, but Time Missing")
+            decision_log.append("⚠️ Time missing from all sources")
 
     m['DisplayTime'] = final_time
     m['AgendaLink'] = agenda_link
