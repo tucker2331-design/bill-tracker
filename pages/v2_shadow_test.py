@@ -9,96 +9,77 @@ import concurrent.futures
 API_KEY = "81D70A54-FCDC-4023-A00B-A3FD114D5984" 
 SESSION_CODE = "20261" 
 
-st.set_page_config(page_title="v62 Agenda Inspector", page_icon="🕵️", layout="wide")
-st.title("🕵️ v62: The 'Agenda Inspector'")
+st.set_page_config(page_title="v63 API Hunter", page_icon="🔓", layout="wide")
+st.title("🔓 v63: The 'API Hunter' (Backdoor Access)")
 
 # --- SPEED ENGINE ---
 session = requests.Session()
 adapter = requests.adapters.HTTPAdapter(pool_connections=50, pool_maxsize=50)
 session.mount('https://', adapter)
 
-# --- HELPER: TEXT CLEANING ---
-def extract_time_from_text(text):
-    if not text: return None
-    clean = text.strip()
-    lower = clean.lower()
+# --- HELPER: TIME PARSING ---
+def extract_time_from_json(data):
+    """
+    Scans a JSON object for time-related keys.
+    """
+    if not data: return None
     
-    # 1. PRIORITY: Relative Phrases
-    relative_keywords = [
-        "adjournment", "adjourn", "upon", "immediate", "rise of", 
-        "recess", "after the", "completion of"
-    ]
+    # Common keys in JSON APIs
+    keys_to_check = ['Time', 'DisplayTime', 'MeetingTime', 'Description', 'Comments']
     
-    # Check Header area
-    if len(clean) < 500:
-        if any(k in lower for k in relative_keywords):
-            return clean.strip()
+    # 1. Check Top Level
+    for k in keys_to_check:
+        if k in data and data[k]:
+            t = str(data[k])
+            # Check for relative phrases or clock time
+            if any(x in t.lower() for x in ['adj', 'upon', 'immediate']): return t
+            if re.search(r'\d{1,2}:\d{2}', t): return t
             
-    # Scan lines
-    for line in clean.splitlines():
-        l_low = line.lower()
-        if any(k in l_low for k in relative_keywords):
-            return line.strip()
-
-    # 2. FALLBACK: Clock Times
-    match = re.search(r'(\d{1,2}:\d{2}\s*[aA|pP]\.?[mM]\.?)', clean)
-    if match: return match.group(1).upper()
-    
     return None
 
-# --- SOURCE 1: AGENDA SCRAPER (With Debug Output) ---
-def scrape_agenda_debug(url):
+# --- SOURCE 1: API HUNTER ---
+def hunt_agenda_api(agenda_url):
     """
-    Returns a dict with debug info + the result
+    Extracts the ID from the URL and probes hidden API endpoints.
     """
-    debug_info = {
-        "url": url,
-        "status": "Not Run",
-        "content_type": "Unknown",
-        "snippet": "",
-        "found_time": None,
-        "error": None
-    }
+    debug_log = []
     
-    if not url: 
-        debug_info["error"] = "No URL provided"
-        return debug_info
-        
-    try:
-        resp = session.get(url, timeout=4)
-        debug_info["status"] = resp.status_code
-        debug_info["content_type"] = resp.headers.get('Content-Type', 'Unknown')
-        
-        if resp.status_code != 200:
-            debug_info["error"] = f"Bad Status: {resp.status_code}"
-            return debug_info
-
-        # PDF CHECK
-        if 'pdf' in debug_info["content_type"].lower():
-             debug_info["error"] = "⚠️ URL is a PDF file (Cannot read text yet)"
-             return debug_info
-        
-        soup = BeautifulSoup(resp.text, 'html.parser')
-        full_text = soup.get_text(" ", strip=True)
-        debug_info["snippet"] = full_text[:500] # Show first 500 chars
-        
-        # SEARCH
-        header_text = full_text[:1000]
-        
-        # Explicit Label Search
-        match = re.search(r'(?:Time|Start|Convening):\s*(.*?)(?:Place|Location|$)', header_text, re.IGNORECASE)
-        if match:
-            debug_info["found_time"] = extract_time_from_text(match.group(1))
+    # 1. Extract ID (e.g. 5229 from .../agendas/5229)
+    match = re.search(r'/agendas/(\d+)', agenda_url)
+    if not match: 
+        return {"error": "Could not parse Agenda ID", "log": debug_log}
+    
+    agenda_id = match.group(1)
+    
+    # 2. PROBE COMMON PATTERNS
+    # Based on standard .NET / Modern Web API structures
+    patterns = [
+        f"https://house.vga.virginia.gov/api/agendas/{agenda_id}",
+        f"https://house.vga.virginia.gov/api/committeeagendas/{agenda_id}",
+        f"https://house.vga.virginia.gov/agendas/api/{agenda_id}"
+    ]
+    
+    for api_url in patterns:
+        try:
+            resp = session.get(api_url, timeout=3)
+            debug_log.append(f"Tried {api_url} -> {resp.status_code}")
             
-        # Fallback Search
-        if not debug_info["found_time"]:
-            debug_info["found_time"] = extract_time_from_text(header_text)
-            
-        return debug_info
+            if resp.status_code == 200:
+                try:
+                    json_data = resp.json()
+                    # We found JSON!
+                    time_found = extract_time_from_json(json_data)
+                    return {
+                        "success": True,
+                        "found_time": time_found,
+                        "json_dump": json_data,
+                        "used_url": api_url
+                    }
+                except:
+                    pass # Not JSON
+        except: pass
         
-    except Exception as e:
-        debug_info["error"] = str(e)
-        return debug_info
+    return {"success": False, "log": debug_log}
 
 # --- API FETCH ---
 @st.cache_data(ttl=600) 
@@ -169,11 +150,7 @@ for i in range(8): week_map[today + timedelta(days=i)] = []
 
 all_meetings.sort(key=lambda x: len(x.get("OwnerName", "")), reverse=True)
 
-# 1. IDENTIFY TASKS (No Pre-Fetch in this version to allow Debug)
-# We will run the fetch ON DEMAND inside the card if needed, 
-# OR we can run it here. For the "Inspector" to work best, let's run it here 
-# but save the FULL result object.
-
+# 1. IDENTIFY TASKS (API HUNTER)
 tasks = []
 for m in all_meetings:
     raw = m.get("ScheduleDate", "").split("T")[0]
@@ -188,15 +165,16 @@ for m in all_meetings:
     if (not api_time or "12:00" in str(api_time) or "TBA" in str(api_time)) and agenda_link:
         tasks.append((m['ScheduleID'], agenda_link))
 
-agenda_debug_results = {}
+# 2. EXECUTE HUNTER
+hunter_results = {}
 if tasks:
-    st.toast(f"Scanning {len(tasks)} Agendas...", icon="🕵️")
+    st.toast(f"Hunting APIs for {len(tasks)} agendas...", icon="🔓")
     with concurrent.futures.ThreadPoolExecutor(max_workers=20) as executor:
-        future_to_id = {executor.submit(scrape_agenda_debug, url): mid for mid, url in tasks}
+        future_to_id = {executor.submit(hunt_agenda_api, url): mid for mid, url in tasks}
         for future in concurrent.futures.as_completed(future_to_id):
             mid = future_to_id[future]
-            try: agenda_debug_results[mid] = future.result()
-            except: agenda_debug_results[mid] = {"error": "Crash"}
+            try: hunter_results[mid] = future.result()
+            except: hunter_results[mid] = None
 
 # 3. RENDER
 for m in all_meetings:
@@ -213,17 +191,18 @@ for m in all_meetings:
     api_comments = m.get("Comments") or ""
     final_time = "⚠️ Not Listed on Schedule"
     
-    debug_data = None
+    debug_info = None
     
     # Priority 1: API Comments
     if "adjourn" in api_comments.lower() or "upon" in api_comments.lower():
         final_time = api_comments
     
-    # Priority 2: Agenda Reader
-    elif m['ScheduleID'] in agenda_debug_results:
-        debug_data = agenda_debug_results[m['ScheduleID']]
-        if debug_data.get("found_time"):
-            final_time = debug_data["found_time"]
+    # Priority 2: API Hunter (New Fix)
+    elif m['ScheduleID'] in hunter_results:
+        res = hunter_results[m['ScheduleID']]
+        debug_info = res # Store for inspector
+        if res and res.get("success") and res.get("found_time"):
+             final_time = res["found_time"]
             
     # Priority 3: API Time
     elif api_time and "12:00" not in str(api_time) and "TBA" not in str(api_time):
@@ -231,7 +210,7 @@ for m in all_meetings:
 
     m['DisplayTime'] = final_time
     m['AgendaLink'] = extract_agenda_link(m.get("Description"))
-    m['DebugData'] = debug_data
+    m['DebugInfo'] = debug_info
     
     week_map[m_date].append(m)
 
@@ -271,16 +250,14 @@ for i, day in enumerate(days):
                     else:
                         st.caption("*(No Link)*")
                     
-                    # THE DEBUGGER
-                    if "Not Listed" in time_str and m.get('DebugData'):
-                        data = m['DebugData']
-                        with st.expander("🕵️ Inspect Scraper"):
-                            st.caption(f"URL: {data.get('url')}")
-                            st.caption(f"Status: {data.get('status')}")
-                            st.caption(f"Type: {data.get('content_type')}")
-                            
-                            if data.get("error"):
-                                st.error(data.get("error"))
-                            
-                            st.markdown("**Raw Text Seen:**")
-                            st.code(data.get("snippet", "No text found"))
+                    # INSPECTOR
+                    if "Not Listed" in time_str and m.get('DebugInfo'):
+                        d = m['DebugInfo']
+                        with st.expander("🔓 API Probe"):
+                            if d.get("success"):
+                                st.success(f"JSON Found! ({d['used_url']})")
+                                st.json(d['json_dump'])
+                            else:
+                                st.error("No JSON Endpoint Found.")
+                                for line in d.get("log", []):
+                                    st.caption(line)
