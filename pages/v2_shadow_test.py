@@ -9,77 +9,75 @@ import concurrent.futures
 API_KEY = "81D70A54-FCDC-4023-A00B-A3FD114D5984" 
 SESSION_CODE = "20261" 
 
-st.set_page_config(page_title="v63 API Hunter", page_icon="🔓", layout="wide")
-st.title("🔓 v63: The 'API Hunter' (Backdoor Access)")
+st.set_page_config(page_title="v64 Description Miner", page_icon="⛏️", layout="wide")
+st.title("⛏️ v64: The 'Description Miner' & Legacy Override")
 
 # --- SPEED ENGINE ---
 session = requests.Session()
-adapter = requests.adapters.HTTPAdapter(pool_connections=50, pool_maxsize=50)
+adapter = requests.adapters.HTTPAdapter(pool_connections=20, pool_maxsize=20)
 session.mount('https://', adapter)
 
-# --- HELPER: TIME PARSING ---
-def extract_time_from_json(data):
-    """
-    Scans a JSON object for time-related keys.
-    """
-    if not data: return None
-    
-    # Common keys in JSON APIs
-    keys_to_check = ['Time', 'DisplayTime', 'MeetingTime', 'Description', 'Comments']
-    
-    # 1. Check Top Level
-    for k in keys_to_check:
-        if k in data and data[k]:
-            t = str(data[k])
-            # Check for relative phrases or clock time
-            if any(x in t.lower() for x in ['adj', 'upon', 'immediate']): return t
-            if re.search(r'\d{1,2}:\d{2}', t): return t
-            
-    return None
+# --- HELPER: TEXT CLEANING ---
+def clean_html(text):
+    if not text: return ""
+    return re.sub('<[^<]+?>', ' ', text).strip() # Strip HTML tags
 
-# --- SOURCE 1: API HUNTER ---
-def hunt_agenda_api(agenda_url):
-    """
-    Extracts the ID from the URL and probes hidden API endpoints.
-    """
-    debug_log = []
+def extract_time_from_text(text):
+    if not text: return None
+    clean = clean_html(text)
+    lower = clean.lower()
     
-    # 1. Extract ID (e.g. 5229 from .../agendas/5229)
-    match = re.search(r'/agendas/(\d+)', agenda_url)
-    if not match: 
-        return {"error": "Could not parse Agenda ID", "log": debug_log}
-    
-    agenda_id = match.group(1)
-    
-    # 2. PROBE COMMON PATTERNS
-    # Based on standard .NET / Modern Web API structures
-    patterns = [
-        f"https://house.vga.virginia.gov/api/agendas/{agenda_id}",
-        f"https://house.vga.virginia.gov/api/committeeagendas/{agenda_id}",
-        f"https://house.vga.virginia.gov/agendas/api/{agenda_id}"
+    # 1. PRIORITY: Relative Phrases
+    # We look for these SPECIFICALLY because these are the ones missing from the API Time field
+    relative_keywords = [
+        "adjournment", "adjourn", "upon", "immediate", "rise of", 
+        "recess", "after the", "completion of", "15 minutes after"
     ]
     
-    for api_url in patterns:
-        try:
-            resp = session.get(api_url, timeout=3)
-            debug_log.append(f"Tried {api_url} -> {resp.status_code}")
-            
-            if resp.status_code == 200:
-                try:
-                    json_data = resp.json()
-                    # We found JSON!
-                    time_found = extract_time_from_json(json_data)
-                    return {
-                        "success": True,
-                        "found_time": time_found,
-                        "json_dump": json_data,
-                        "used_url": api_url
-                    }
-                except:
-                    pass # Not JSON
-        except: pass
+    # Scan the text for these phrases
+    for phrase in relative_keywords:
+        if phrase in lower:
+            # Return the sentence containing the phrase
+            # We split by '.' to get the sentence, or just return the snippet
+            idx = lower.find(phrase)
+            start = max(0, idx - 10)
+            end = min(len(clean), idx + 60)
+            return clean[start:end].strip() + "..."
+
+    # 2. FALLBACK: Clock Times
+    match = re.search(r'(\d{1,2}:\d{2}\s*[aA|pP]\.?[mM]\.?)', clean)
+    if match: return match.group(1).upper()
+    
+    return None
+
+# --- SOURCE: LEGACY LIS "DCO" (Daily Committee Operations) ---
+@st.cache_data(ttl=300)
+def fetch_legacy_dco(date_obj):
+    """
+    Fetches the specific LIS daily schedule page (text-only).
+    Format: http://lis.virginia.gov/cgi-bin/legp604.exe?261+dco+20260126
+    """
+    date_str = date_obj.strftime("%Y%m%d")
+    url = f"https://lis.virginia.gov/cgi-bin/legp604.exe?{SESSION_CODE}+dco+{date_str}"
+    
+    headers = {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+        'Referer': 'https://lis.virginia.gov/'
+    }
+    
+    schedule_map = []
+    
+    try:
+        resp = session.get(url, headers=headers, timeout=5)
+        soup = BeautifulSoup(resp.text, 'html.parser')
         
-    return {"success": False, "log": debug_log}
+        # This page is usually a simple list or table
+        # We grab all text lines to scan them
+        text_lines = [line.strip() for line in soup.get_text().splitlines() if line.strip()]
+        
+        return text_lines # Return raw lines to be searched
+    except:
+        return []
 
 # --- API FETCH ---
 @st.cache_data(ttl=600) 
@@ -150,33 +148,21 @@ for i in range(8): week_map[today + timedelta(days=i)] = []
 
 all_meetings.sort(key=lambda x: len(x.get("OwnerName", "")), reverse=True)
 
-# 1. IDENTIFY TASKS (API HUNTER)
-tasks = []
+# 1. PRE-FETCH LEGACY DATA (Only for needed days)
+# We identify which days have meetings and fetch the DCO page for those days
+needed_days = set()
 for m in all_meetings:
     raw = m.get("ScheduleDate", "").split("T")[0]
-    if not raw: continue
-    m_date = datetime.strptime(raw, "%Y-%m-%d").date()
-    
-    if m_date not in week_map: continue
-    
-    api_time = m.get("ScheduleTime")
-    agenda_link = extract_agenda_link(m.get("Description"))
-    
-    if (not api_time or "12:00" in str(api_time) or "TBA" in str(api_time)) and agenda_link:
-        tasks.append((m['ScheduleID'], agenda_link))
+    if raw: needed_days.add(datetime.strptime(raw, "%Y-%m-%d").date())
 
-# 2. EXECUTE HUNTER
-hunter_results = {}
-if tasks:
-    st.toast(f"Hunting APIs for {len(tasks)} agendas...", icon="🔓")
-    with concurrent.futures.ThreadPoolExecutor(max_workers=20) as executor:
-        future_to_id = {executor.submit(hunt_agenda_api, url): mid for mid, url in tasks}
-        for future in concurrent.futures.as_completed(future_to_id):
-            mid = future_to_id[future]
-            try: hunter_results[mid] = future.result()
-            except: hunter_results[mid] = None
+legacy_data_cache = {}
+with st.spinner("Mining Legacy LIS Data..."):
+    for day in needed_days:
+        if day in week_map: # Only fetch if it's in our display window
+            legacy_data_cache[day] = fetch_legacy_dco(day)
 
-# 3. RENDER
+
+# 2. PROCESS MEETINGS
 for m in all_meetings:
     raw = m.get("ScheduleDate", "").split("T")[0]
     if not raw: continue
@@ -189,28 +175,51 @@ for m in all_meetings:
     
     api_time = m.get("ScheduleTime")
     api_comments = m.get("Comments") or ""
+    description = m.get("Description") or ""
+    
     final_time = "⚠️ Not Listed on Schedule"
+    source = "None"
     
-    debug_info = None
-    
-    # Priority 1: API Comments
+    # Priority 1: API Comments (Often holds 'Upon Adjournment')
     if "adjourn" in api_comments.lower() or "upon" in api_comments.lower():
         final_time = api_comments
-    
-    # Priority 2: API Hunter (New Fix)
-    elif m['ScheduleID'] in hunter_results:
-        res = hunter_results[m['ScheduleID']]
-        debug_info = res # Store for inspector
-        if res and res.get("success") and res.get("found_time"):
-             final_time = res["found_time"]
+        source = "API Comments"
+
+    # Priority 2: Description Mining (NEW)
+    # Check if the "Description" field itself contains the time text
+    elif "adjourn" in description.lower() or "upon" in description.lower():
+        extracted = extract_time_from_text(description)
+        if extracted:
+            final_time = extracted
+            source = "API Description"
             
-    # Priority 3: API Time
-    elif api_time and "12:00" not in str(api_time) and "TBA" not in str(api_time):
+    # Priority 3: Legacy DCO Scraper (NEW)
+    elif m_date in legacy_data_cache:
+        dco_lines = legacy_data_cache[m_date]
+        # Simple fuzzy search in the raw lines
+        # Split Committee name to find a unique keyword (e.g. "Compensation")
+        tokens = name.split()
+        unique_tokens = [t for t in tokens if len(t) > 4 and t.lower() not in ["house", "senate", "committee", "subcommittee"]]
+        
+        if unique_tokens:
+            target_word = unique_tokens[0] # Try the first unique word
+            for line in dco_lines:
+                if target_word.lower() in line.lower():
+                    # If we found the committee name, scan the line for time
+                    t = extract_time_from_text(line)
+                    if t:
+                        final_time = t
+                        source = "Legacy LIS"
+                        break
+            
+    # Priority 4: API Time (Standard)
+    if "Not Listed" in final_time and api_time and "12:00" not in str(api_time) and "TBA" not in str(api_time):
         final_time = api_time 
+        source = "API Standard"
 
     m['DisplayTime'] = final_time
     m['AgendaLink'] = extract_agenda_link(m.get("Description"))
-    m['DebugInfo'] = debug_info
+    m['Source'] = source
     
     week_map[m_date].append(m)
 
@@ -250,14 +259,8 @@ for i, day in enumerate(days):
                     else:
                         st.caption("*(No Link)*")
                     
-                    # INSPECTOR
-                    if "Not Listed" in time_str and m.get('DebugInfo'):
-                        d = m['DebugInfo']
-                        with st.expander("🔓 API Probe"):
-                            if d.get("success"):
-                                st.success(f"JSON Found! ({d['used_url']})")
-                                st.json(d['json_dump'])
-                            else:
-                                st.error("No JSON Endpoint Found.")
-                                for line in d.get("log", []):
-                                    st.caption(line)
+                    if "Not Listed" in time_str:
+                        st.caption(f"Src: {m['Source']}")
+                        # Last Resort Link
+                        dco_url = f"https://lis.virginia.gov/cgi-bin/legp604.exe?{SESSION_CODE}+dco+{day.strftime('%Y%m%d')}"
+                        st.markdown(f"[Check Official Schedule]({dco_url})")
