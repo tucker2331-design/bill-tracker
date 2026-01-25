@@ -1,7 +1,6 @@
 import streamlit as st
 import requests
 import re
-from bs4 import BeautifulSoup
 from datetime import datetime, timedelta
 import concurrent.futures
 
@@ -9,12 +8,12 @@ import concurrent.futures
 API_KEY = "81D70A54-FCDC-4023-A00B-A3FD114D5984" 
 SESSION_CODE = "20261" 
 
-st.set_page_config(page_title="v82 Stable + Homepage Fix", page_icon="🏛️", layout="wide")
-st.title("🏛️ v82: Stable Core + Homepage Fix")
+st.set_page_config(page_title="v89 Chrono-Sort", page_icon="📆", layout="wide")
+st.title("📆 v89: Chronological Calendar (Session Integrated)")
 
 # --- SPEED ENGINE ---
 session = requests.Session()
-adapter = requests.adapters.HTTPAdapter(pool_connections=50, pool_maxsize=50)
+adapter = requests.adapters.HTTPAdapter(pool_connections=20, pool_maxsize=20)
 session.mount('https://', adapter)
 
 # --- HELPER: TEXT CLEANING ---
@@ -23,12 +22,14 @@ def clean_html(text):
     text = text.replace("<br>", " ").replace("</br>", " ")
     return re.sub('<[^<]+?>', '', text).strip()
 
+# --- HELPER: COMPLEX TIME EXTRACTOR ---
 def extract_complex_time(text):
     if not text: return None
     clean = clean_html(text)
     lower = clean.lower()
     
-    if "cancel" in lower or "postpone" in lower: return "❌ Cancelled"
+    # Explicit cancellation check
+    if "cancel" in lower or "postpone" in lower: return "CANCELLED"
 
     keywords = [
         "adjournment", "adjourn", "upon", "immediate", "rise of", 
@@ -37,92 +38,52 @@ def extract_complex_time(text):
         "1/2 hr", "half hour"
     ]
     
-    if len(clean) < 300 and any(k in lower for k in keywords):
+    # If the text is short and contains a keyword, return the whole text
+    if len(clean) < 150 and any(k in lower for k in keywords):
         return clean.strip()
 
-    for part in re.split(r'[\.\n\r]', clean):
-        if any(k in part.lower() for k in keywords):
-            return part.strip()
-
+    # Otherwise, look for standard time formats embedded in text
     match = re.search(r'(\d{1,2}:\d{2}\s*[aA|pP]\.?[mM]\.?)', clean)
     if match: return match.group(1).upper()
     
     return None
 
-# --- SOURCE: HOMEPAGE FALLBACK (NEW FIX) ---
-def fetch_homepage_time(chamber):
-    """
-    Fallback: Scrapes house.virginia.gov if LIS fails.
-    """
-    url = "https://house.virginia.gov/" if chamber == "House" else "https://apps.senate.virginia.gov/"
-    try:
-        resp = session.get(url, headers={'User-Agent': 'Mozilla/5.0'}, timeout=3)
-        soup = BeautifulSoup(resp.text, 'html.parser')
-        text = soup.get_text(" ", strip=True)[:2000] # Top of page
-        
-        # Look for "Convenes at 12:00 PM"
-        match = re.search(r'(?:convenes|session)\s*(?:at|@|:)?\s*(\d{1,2}:\d{2}\s*[aA|pP]\.?[mM]\.?)', text, re.IGNORECASE)
-        if match: return match.group(1).upper(), f"Found on Homepage ({url})"
-        return None, "Not found on homepage"
-    except: return None, "Homepage connection failed"
+def extract_agenda_link(description_html):
+    if not description_html: return None
+    match = re.search(r'href=[\'"]?([^\'" >]+)', description_html)
+    if match:
+        url = match.group(1)
+        if url.startswith("/"): return f"https://house.vga.virginia.gov{url}"
+        return url
+    return None
 
-# --- SOURCE: LIS FLOOR CALENDAR ---
-@st.cache_data(ttl=300)
-def fetch_floor_session_time(chamber, date_obj):
-    """
-    Primary: LIS Calendar. Secondary: Homepage.
-    """
-    # 1. Try LIS Calendar URLs first
-    date_code = date_obj.strftime("%m%d") 
-    chamber_code = "H" if chamber == "House" else "S"
-    urls = [
-        f"https://lis.virginia.gov/cgi-bin/legp604.exe?{SESSION_CODE}+cal+{chamber_code}{date_code}",
-        f"https://lis.virginia.gov/cgi-bin/legp604.exe?{SESSION_CODE}+doc+{chamber_code}{date_code}"
-    ]
+# --- SORTING LOGIC ---
+def parse_time_rank(time_str):
+    # Logic:
+    # 0-1440: Specific Time (e.g. 8:00 AM = 480)
+    # 2000: "Upon Adjournment" (Always after fixed times)
+    # 8888: Cancelled (Bottom)
+    # 9999: Unknown/TBA (Bottom)
     
-    debug_text = ""
-    for url in urls:
-        try:
-            resp = session.get(url, timeout=3)
-            # If LIS errors out (like in your screenshot), skip immediately
-            if "could not be properly interpreted" in resp.text:
-                debug_text += f"\nLIS Error at {url}"
-                continue
-                
-            soup = BeautifulSoup(resp.text, 'html.parser')
-            text = soup.get_text(" ", strip=True)
-            header = text[:300].lower()
-            
-            match = re.search(r'(?:meet|conven|session)\s+(?:at|@)\s*(\d{1,2}:\d{2}\s*[aA|pP]\.?[mM]\.?)', header)
-            if match: return match.group(1).upper(), "Found in LIS Calendar"
-        except: pass
-        
-    # 2. Fallback to Homepage (The Fix)
-    debug_text += "\nTrying Homepage Fallback..."
-    home_time, home_msg = fetch_homepage_time(chamber)
-    if home_time: return home_time, home_msg
+    if not time_str: return 9999
+    t_upper = time_str.upper()
     
-    return None, debug_text
-
-# --- SOURCE: LIS DAILY SCHEDULE (DCO) ---
-@st.cache_data(ttl=300)
-def fetch_lis_daily_schedule(date_obj):
-    date_str = date_obj.strftime("%Y%m%d")
-    url = f"https://lis.virginia.gov/cgi-bin/legp604.exe?{SESSION_CODE}+dco+{date_str}"
+    if "CANCEL" in t_upper: return 8888
+    if "TBA" in t_upper: return 9999
+    
+    # "Upon Adjournment" logic - push to end of day
+    if "ADJOURN" in t_upper or "UPON" in t_upper or "RISE" in t_upper or "AFTER" in t_upper:
+        return 2000 
+    
     try:
-        resp = session.get(url, timeout=3)
-        soup = BeautifulSoup(resp.text, 'html.parser')
-        return soup.get_text(" ", strip=True)
-    except: return ""
-
-# --- SOURCE: PARENT PAGE ---
-@st.cache_data(ttl=300)
-def fetch_committee_page_raw(url):
-    try:
-        resp = session.get(url, timeout=3)
-        soup = BeautifulSoup(resp.text, 'html.parser')
-        return soup.get_text(" ", strip=True)
-    except: return ""
+        # Extract purely the time part (e.g. "12:00 PM")
+        match = re.search(r'(\d{1,2}:\d{2}\s*[AP]M)', t_upper)
+        if match:
+            dt = datetime.strptime(match.group(1), "%I:%M %p")
+            return dt.hour * 60 + dt.minute
+    except: pass
+    
+    return 9999
 
 # --- API FETCH ---
 @st.cache_data(ttl=600) 
@@ -131,272 +92,142 @@ def get_full_schedule():
     headers = {"WebAPIKey": API_KEY, "Accept": "application/json"}
     try:
         with concurrent.futures.ThreadPoolExecutor(max_workers=2) as executor:
-            h_future = executor.submit(session.get, url, headers=headers, params={"sessionCode": SESSION_CODE, "chamberCode": "H"}, timeout=5)
-            s_future = executor.submit(session.get, url, headers=headers, params={"sessionCode": SESSION_CODE, "chamberCode": "S"}, timeout=5)
+            h = executor.submit(session.get, url, headers=headers, params={"sessionCode": SESSION_CODE, "chamberCode": "H"}, timeout=5)
+            s = executor.submit(session.get, url, headers=headers, params={"sessionCode": SESSION_CODE, "chamberCode": "S"}, timeout=5)
             
             raw_items = []
-            if h_future.result().status_code == 200: raw_items.extend(h_future.result().json().get("Schedules", []))
-            if s_future.result().status_code == 200: raw_items.extend(s_future.result().json().get("Schedules", []))
+            if h.result().status_code == 200: raw_items.extend(h.result().json().get("Schedules", []))
+            if s.result().status_code == 200: raw_items.extend(s.result().json().get("Schedules", []))
             
-        unique = []
-        seen = set()
-        for m in raw_items:
-            sig = (m.get('ScheduleDate'), m.get('ScheduleTime'), m.get('OwnerName'))
-            if sig not in seen:
-                seen.add(sig)
-                unique.append(m)
-        return unique
-    except: return []
+        return raw_items
+    except Exception as e:
+        st.error(f"API Error: {e}")
+        return []
 
-def extract_agenda_link(html_string):
-    if not html_string: return None
-    soup = BeautifulSoup(html_string, 'html.parser')
-    for link in soup.find_all('a'):
-        href = link.get('href')
-        if any(x in link.get_text().lower() for x in ["agenda", "committee info", "docket"]):
-            return f"https://house.vga.virginia.gov{href}" if href.startswith("/") else href
-    return None
+# --- MAIN APP LOGIC ---
 
-def parse_time_rank(time_str):
-    if "Not" in time_str or "Cancelled" in time_str: return 9998
-    if "TBD" in time_str: return 9999
-    clean = time_str.lower().replace(".", "").strip()
-    if any(x in clean for x in ["adjourn", "upon", "after", "conclusion"]): return 960 
-    try:
-        dt = datetime.strptime(clean, "%I:%M %p")
-        return dt.hour * 60 + dt.minute
-    except: return 9999 
+with st.spinner("Syncing Official Schedule..."):
+    all_raw_items = get_full_schedule()
 
-def parse_committee_name(full_name):
-    if " - " in full_name:
-        parts = full_name.split(" - ", 1)
-        return parts[0], parts[1]
-    elif "Subcommittee" in full_name:
-        return full_name, None
-    return full_name, None
+processed_events = []
+seen_sigs = set()
 
-# --- MAIN UI ---
-
-with st.spinner("Fetching API..."):
-    all_meetings = get_full_schedule()
-
-today = datetime.now().date()
-week_map = {}
-for i in range(8): week_map[today + timedelta(days=i)] = []
-
-all_meetings.sort(key=lambda x: len(x.get("OwnerName", "")), reverse=True)
-
-# --- SIDEBAR X-RAY TOOL ---
-st.sidebar.header("🔍 Data X-Ray")
-xray_date = st.sidebar.date_input("Check Floor Session For:", today)
-xray_chamber = st.sidebar.selectbox("Chamber", ["House", "Senate"])
-
-if st.sidebar.button("Run X-Ray Scan"):
-    time_found, debug_log = fetch_floor_session_time(xray_chamber, xray_date)
-    st.sidebar.markdown(f"**Result:** `{time_found if time_found else 'Not Found'}`")
-    st.sidebar.caption(debug_log)
-
-
-# --- FAST PRE-FETCH ---
-needed_days = set()
-needed_urls = set()
-needed_floor_checks = set()
-
-COMMITTEE_URLS = {
-    "Appropriations": "https://house.vga.virginia.gov/committees/H02",
-    "Finance": "https://house.vga.virginia.gov/committees/H09",
-    "Courts": "https://house.vga.virginia.gov/committees/H08",
-    "Commerce": "https://house.vga.virginia.gov/committees/H11",
-    "Education": "https://house.vga.virginia.gov/committees/H07",
-    "General": "https://house.vga.virginia.gov/committees/H10",
-    "Health": "https://house.vga.virginia.gov/committees/H13",
-    "Transportation": "https://house.vga.virginia.gov/committees/H22",
-    "Safety": "https://house.vga.virginia.gov/committees/H18",
-}
-
-for m in all_meetings:
-    raw = m.get("ScheduleDate", "").split("T")[0]
-    if raw: 
-        m_date = datetime.strptime(raw, "%Y-%m-%d").date()
-        if m_date in week_map:
-            needed_days.add(m_date)
-            # Identify Floor Sessions to fetch
-            if "Convene" in m.get("OwnerName", "") or "Session" in m.get("OwnerName", ""):
-                chamber = "House" if "House" in m.get("OwnerName", "") else "Senate"
-                needed_floor_checks.add((chamber, m_date))
-            
-    name = m.get("OwnerName", "")
-    for key, url in COMMITTEE_URLS.items():
-        if key.lower() in name.lower(): needed_urls.add(url)
-
-lis_daily_cache = {}
-parent_cache = {}
-floor_session_cache = {}
-
-if needed_days or needed_urls:
-    with st.spinner("Scraping LIS..."):
-        with concurrent.futures.ThreadPoolExecutor(max_workers=20) as executor:
-            future_to_day = {executor.submit(fetch_lis_daily_schedule, day): day for day in needed_days}
-            future_to_url = {executor.submit(fetch_committee_page_raw, url): url for url in needed_urls}
-            future_to_floor = {executor.submit(fetch_floor_session_time, c, d): (c,d) for c,d in needed_floor_checks}
-            
-            for future in concurrent.futures.as_completed(future_to_day):
-                day = future_to_day[future]
-                try: lis_daily_cache[day] = future.result()
-                except: pass
-                
-            for future in concurrent.futures.as_completed(future_to_url):
-                url = future_to_url[future]
-                try: parent_cache[url] = future.result()
-                except: pass
-                
-            for future in concurrent.futures.as_completed(future_to_floor):
-                key = future_to_floor[future]
-                try: floor_session_cache[key] = future.result()[0] # Get time only
-                except: pass
-
-# --- PROCESS MEETINGS ---
-for m in all_meetings:
-    raw = m.get("ScheduleDate", "").split("T")[0]
-    if not raw: continue
-    m_date = datetime.strptime(raw, "%Y-%m-%d").date()
+for m in all_raw_items:
+    # 1. Clean Data
+    raw_date = m.get("ScheduleDate", "").split("T")[0]
+    if not raw_date: continue
     
-    if m_date not in week_map: continue
+    # Deduplicate
+    sig = (raw_date, m.get('ScheduleTime'), m.get('OwnerName'))
+    if sig in seen_sigs: continue
+    seen_sigs.add(sig)
+
+    m['DateObj'] = datetime.strptime(raw_date, "%Y-%m-%d").date()
+    m['AgendaLink'] = extract_agenda_link(m.get("Description", ""))
     
     name = m.get("OwnerName", "")
-    if "Caucus" in name or "Press" in name: continue
+    is_floor = "Convene" in name or "Session" in name or name in ["House", "Senate"]
     
+    # 2. Determine Time & Status
     api_time = m.get("ScheduleTime")
-    api_comments = m.get("Comments") or ""
-    description_html = m.get("Description") or ""
     
-    final_time = "TBD"
-    status_label = "Active"
-    decision_log = [] 
+    # If API time is empty, check text for "Upon Adjournment"
+    final_time = api_time
+    if not final_time:
+        final_time = extract_complex_time(m.get("Comments"))
+    if not final_time:
+        final_time = extract_complex_time(m.get("Description"))
     
-    # 1. API STANDARD CHECK
-    if api_time and "12:00" not in str(api_time) and "TBA" not in str(api_time):
-        final_time = api_time
-        decision_log.append("✅ Found in API 'ScheduleTime'")
-
-    # 2. FLOOR SESSION FIX (Updated with Fallback)
-    if final_time == "TBD" and ("Convene" in name or "Session" in name):
-        chamber = "House" if "House" in name else "Senate"
-        key = (chamber, m_date)
-        
-        # Check Scraper (Now includes Homepage Fallback)
-        if key in floor_session_cache and floor_session_cache[key]:
-            final_time = floor_session_cache[key]
-            decision_log.append(f"✅ Found in LIS/Homepage ({chamber})")
+    # 3. Apply "TBA = Cancelled" Logic (User Request)
+    # If we STILL have no time, and it's not a Floor Session (which might just be pending),
+    # mark it as Cancelled/Not Listed.
+    if not final_time:
+        if is_floor:
+            final_time = "Time TBA" # Floor sessions might just be late to update
         else:
-            final_time = "TBD"
-            decision_log.append("⚠️ Not found in LIS or Homepage")
-        
-        status_label = "Active" # Always active
-
-    # 3. API COMMENTS MINING
-    if final_time == "TBD":
-        t = extract_complex_time(api_comments)
-        if t: 
-            final_time = t
-            decision_log.append("✅ Found in API 'Comments'")
-
-    # 4. DESCRIPTION MINING
-    if final_time == "TBD":
-        t = extract_complex_time(description_html)
-        if t: 
-            final_time = t
-            decision_log.append("✅ Found in API 'Description'")
-
-    # 5. CROSS-REFERENCE VALIDATOR (Relaxed Matching)
-    if final_time == "TBD":
-        if m_date in lis_daily_cache:
-            official_text = lis_daily_cache[m_date]
+            final_time = "CANCELLED" # Committees with no info are assumed cancelled
             
-            # Use strict tokens but require fewer matches
-            tokens = set(name.replace("-", " ").lower().split())
-            tokens -= {"house", "senate", "committee", "subcommittee"}
-            
-            if tokens:
-                found_in_official = False
-                # If ANY valid token (length > 4) is found, we assume it's on the schedule
-                # This fixes "House Courts of Justice" vs "Courts of Justice-Civil" mismatch
-                for t in tokens:
-                    if len(t) > 4 and t in official_text.lower():
-                        found_in_official = True
-                        break
-                
-                if not found_in_official:
-                    final_time = "❌ Not on Daily Schedule"
-                    status_label = "Cancelled"
-                    decision_log.append(f"🧟 Zombie Detected: Not in LIS DCO")
-                else:
-                    decision_log.append("ℹ️ Verified in Official Schedule")
-
-    # 6. GHOST PROTOCOL
-    agenda_link = extract_agenda_link(description_html)
-    
-    if "Cancel" in str(final_time) or "Not on" in str(final_time):
-        status_label = "Cancelled"
-    
-    elif final_time == "TBD":
-        if not agenda_link:
-            final_time = "❌ Not Meeting"
-            status_label = "Cancelled" 
-            decision_log.append("👻 Ghost Protocol: No Link + No Time")
-        else:
-            final_time = "⚠️ Time Not Listed"
-            status_label = "Warning"
-            decision_log.append("⚠️ Time missing from all sources")
-
     m['DisplayTime'] = final_time
-    m['AgendaLink'] = agenda_link
-    m['Status'] = status_label
-    m['Log'] = decision_log
+    m['IsFloor'] = is_floor
     
-    week_map[m_date].append(m)
+    processed_events.append(m)
 
-# --- DISPLAY ---
-cols = st.columns(len(week_map)) 
-days = sorted(week_map.keys())
+# 4. Filter Future
+today = datetime.now().date()
+upcoming_events = [e for e in processed_events if e['DateObj'] >= today]
 
-for i, day in enumerate(days):
-    with cols[i]:
-        st.markdown(f"### {day.strftime('%a')}")
-        st.caption(day.strftime('%b %d'))
-        st.divider()
-        daily_meetings = week_map[day]
-        daily_meetings.sort(key=lambda x: parse_time_rank(x.get("DisplayTime")))
-        
-        if not daily_meetings:
-            st.info("No Committees")
-        else:
-            for m in daily_meetings:
-                full_name = m.get("OwnerName", "")
-                parent_name, sub_name = parse_committee_name(full_name)
-                time_str = m['DisplayTime']
-                status = m['Status']
+# 5. Build Display Map
+display_map = {}
+for e in upcoming_events:
+    d = e['DateObj']
+    if d not in display_map: display_map[d] = []
+    display_map[d].append(e)
+
+# --- RENDER UI ---
+if not display_map:
+    st.info("No upcoming events found in API.")
+else:
+    # Get next 7 available dates
+    sorted_dates = sorted(display_map.keys())[:7]
+    cols = st.columns(len(sorted_dates))
+    
+    for i, date_val in enumerate(sorted_dates):
+        with cols[i]:
+            st.markdown(f"### {date_val.strftime('%a')}")
+            st.caption(date_val.strftime('%b %d'))
+            st.divider()
+            
+            day_events = display_map[date_val]
+            
+            # SORT: Chronological (Time -> Adjournment -> TBA/Cancelled)
+            day_events.sort(key=lambda x: parse_time_rank(x.get("DisplayTime")))
+            
+            for event in day_events:
+                name = event.get("OwnerName").replace("Virginia ", "").replace(" of Delegates", "")
+                time_display = event.get("DisplayTime")
+                agenda_link = event.get("AgendaLink")
+                is_floor = event.get("IsFloor")
                 
-                # Visual logic
-                if status == "Cancelled":
-                    st.error(f"{time_str}: {full_name}")
-                elif status == "Inactive":
-                    st.caption(f"{full_name} (Inactive)")
-                else:
+                # Visual Handling
+                is_cancelled = "CANCEL" in str(time_display).upper()
+                
+                if is_cancelled:
+                    st.error(f"❌ **{name}**")
+                    st.caption("Time Not Listed / Cancelled")
+                
+                elif is_floor:
+                    # FLOOR CARD (Highlighted)
                     with st.container(border=True):
-                        if status == "Warning": st.warning(time_str)
-                        else: 
-                            if len(str(time_str)) > 25: st.markdown(f"**{time_str}**")
-                            else: st.markdown(f"### {time_str}")
+                        st.markdown(f"**🏛️ {name}**")
                         
-                        st.markdown(f"**{parent_name}**")
-                        if sub_name: st.caption(f"↳ *{sub_name}*")
-                                
-                        if m['AgendaLink']:
-                            st.link_button("View Agenda", m['AgendaLink'])
+                        if "TBA" in str(time_display):
+                            st.warning("Time TBA")
+                            st.caption("*Pending Motion*")
                         else:
-                            if "Convene" not in full_name: st.caption("*(No Link)*")
+                            st.success(f"⏰ {time_display}")
                             
-                        with st.expander("🔍 Why?"):
-                            for log in m['Log']:
-                                st.caption(log)
+                        if agenda_link: st.link_button("View Calendar", agenda_link)
+                
+                else:
+                    # COMMITTEE CARD
+                    with st.container():
+                        # Time
+                        if "TBA" in str(time_display):
+                            st.caption("Time TBA")
+                        elif len(str(time_display)) > 15:
+                            # Long text like "Upon Adjournment"
+                            st.markdown(f"**{time_display}**")
+                        else:
+                            st.markdown(f"**⏰ {time_display}**")
+                            
+                        # Name
+                        clean_name = name.replace("Committee", "").strip()
+                        st.markdown(f"{clean_name}")
+                        if "Subcommittee" in clean_name: st.caption("↳ Subcommittee")
+
+                        if agenda_link:
+                            st.link_button("Agenda", agenda_link)
+                        else:
+                            st.caption("*(No Link)*")
+                        
+                        st.divider()
