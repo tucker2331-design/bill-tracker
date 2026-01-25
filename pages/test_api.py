@@ -8,8 +8,8 @@ import concurrent.futures
 API_KEY = "81D70A54-FCDC-4023-A00B-A3FD114D5984" 
 SESSION_CODE = "20261" 
 
-st.set_page_config(page_title="v89 Chrono-Sort", page_icon="📆", layout="wide")
-st.title("📆 v89: Chronological Calendar (Session Integrated)")
+st.set_page_config(page_title="v90 Agenda View", page_icon="📜", layout="wide")
+st.title("📆 v90: The Master Calendar (With Agendas)")
 
 # --- SPEED ENGINE ---
 session = requests.Session()
@@ -22,13 +22,40 @@ def clean_html(text):
     text = text.replace("<br>", " ").replace("</br>", " ")
     return re.sub('<[^<]+?>', '', text).strip()
 
+# --- HELPER: BILL SCANNER (NEW) ---
+def extract_bills_from_text(text):
+    """
+    Scans text for bill patterns like 'HB123', 'S.B. 45', 'H.R. 10'
+    Returns a sorted list of unique bills.
+    """
+    if not text: return []
+    
+    # Regex looks for:
+    # 1. Start of word boundary
+    # 2. H, S (House/Senate)
+    # 3. B, J, R (Bill, Joint Res, Res)
+    # 4. Optional dots/spaces
+    # 5. Digits
+    pattern = r'\b([HS][BJR]\.?\s*\d+)\b'
+    
+    matches = re.findall(pattern, text, re.IGNORECASE)
+    
+    # Clean up formatting (e.g. "h.b. 100" -> "HB 100")
+    clean_bills = []
+    for m in matches:
+        clean = m.upper().replace(".", "").replace(" ", "")
+        # Insert space before number for readability (HB100 -> HB 100)
+        formatted = re.sub(r'([A-Z]+)(\d+)', r'\1 \2', clean)
+        clean_bills.append(formatted)
+        
+    return sorted(list(set(clean_bills)))
+
 # --- HELPER: COMPLEX TIME EXTRACTOR ---
 def extract_complex_time(text):
     if not text: return None
     clean = clean_html(text)
     lower = clean.lower()
     
-    # Explicit cancellation check
     if "cancel" in lower or "postpone" in lower: return "CANCELLED"
 
     keywords = [
@@ -38,11 +65,9 @@ def extract_complex_time(text):
         "1/2 hr", "half hour"
     ]
     
-    # If the text is short and contains a keyword, return the whole text
     if len(clean) < 150 and any(k in lower for k in keywords):
         return clean.strip()
 
-    # Otherwise, look for standard time formats embedded in text
     match = re.search(r'(\d{1,2}:\d{2}\s*[aA|pP]\.?[mM]\.?)', clean)
     if match: return match.group(1).upper()
     
@@ -59,30 +84,17 @@ def extract_agenda_link(description_html):
 
 # --- SORTING LOGIC ---
 def parse_time_rank(time_str):
-    # Logic:
-    # 0-1440: Specific Time (e.g. 8:00 AM = 480)
-    # 2000: "Upon Adjournment" (Always after fixed times)
-    # 8888: Cancelled (Bottom)
-    # 9999: Unknown/TBA (Bottom)
-    
     if not time_str: return 9999
     t_upper = time_str.upper()
-    
     if "CANCEL" in t_upper: return 8888
     if "TBA" in t_upper: return 9999
-    
-    # "Upon Adjournment" logic - push to end of day
-    if "ADJOURN" in t_upper or "UPON" in t_upper or "RISE" in t_upper or "AFTER" in t_upper:
-        return 2000 
-    
+    if "ADJOURN" in t_upper or "UPON" in t_upper or "RISE" in t_upper: return 2000 
     try:
-        # Extract purely the time part (e.g. "12:00 PM")
         match = re.search(r'(\d{1,2}:\d{2}\s*[AP]M)', t_upper)
         if match:
             dt = datetime.strptime(match.group(1), "%I:%M %p")
             return dt.hour * 60 + dt.minute
     except: pass
-    
     return 9999
 
 # --- API FETCH ---
@@ -113,50 +125,45 @@ processed_events = []
 seen_sigs = set()
 
 for m in all_raw_items:
-    # 1. Clean Data
     raw_date = m.get("ScheduleDate", "").split("T")[0]
     if not raw_date: continue
     
-    # Deduplicate
     sig = (raw_date, m.get('ScheduleTime'), m.get('OwnerName'))
     if sig in seen_sigs: continue
     seen_sigs.add(sig)
 
     m['DateObj'] = datetime.strptime(raw_date, "%Y-%m-%d").date()
-    m['AgendaLink'] = extract_agenda_link(m.get("Description", ""))
+    
+    # Text Processing
+    desc_text = m.get("Description", "")
+    comm_text = m.get("Comments", "")
+    full_text = f"{desc_text} {comm_text}"
+    
+    m['AgendaLink'] = extract_agenda_link(desc_text)
+    m['DetectedBills'] = extract_bills_from_text(full_text) # SCAN FOR BILLS
     
     name = m.get("OwnerName", "")
     is_floor = "Convene" in name or "Session" in name or name in ["House", "Senate"]
     
-    # 2. Determine Time & Status
     api_time = m.get("ScheduleTime")
-    
-    # If API time is empty, check text for "Upon Adjournment"
     final_time = api_time
-    if not final_time:
-        final_time = extract_complex_time(m.get("Comments"))
-    if not final_time:
-        final_time = extract_complex_time(m.get("Description"))
+    if not final_time: final_time = extract_complex_time(comm_text)
+    if not final_time: final_time = extract_complex_time(desc_text)
     
-    # 3. Apply "TBA = Cancelled" Logic (User Request)
-    # If we STILL have no time, and it's not a Floor Session (which might just be pending),
-    # mark it as Cancelled/Not Listed.
     if not final_time:
-        if is_floor:
-            final_time = "Time TBA" # Floor sessions might just be late to update
-        else:
-            final_time = "CANCELLED" # Committees with no info are assumed cancelled
+        if is_floor: final_time = "Time TBA" 
+        else: final_time = "CANCELLED"
             
     m['DisplayTime'] = final_time
     m['IsFloor'] = is_floor
     
     processed_events.append(m)
 
-# 4. Filter Future
+# Filter Future
 today = datetime.now().date()
 upcoming_events = [e for e in processed_events if e['DateObj'] >= today]
 
-# 5. Build Display Map
+# Build Display Map
 display_map = {}
 for e in upcoming_events:
     d = e['DateObj']
@@ -167,7 +174,6 @@ for e in upcoming_events:
 if not display_map:
     st.info("No upcoming events found in API.")
 else:
-    # Get next 7 available dates
     sorted_dates = sorted(display_map.keys())[:7]
     cols = st.columns(len(sorted_dates))
     
@@ -178,8 +184,6 @@ else:
             st.divider()
             
             day_events = display_map[date_val]
-            
-            # SORT: Chronological (Time -> Adjournment -> TBA/Cancelled)
             day_events.sort(key=lambda x: parse_time_rank(x.get("DisplayTime")))
             
             for event in day_events:
@@ -187,8 +191,8 @@ else:
                 time_display = event.get("DisplayTime")
                 agenda_link = event.get("AgendaLink")
                 is_floor = event.get("IsFloor")
+                bills = event.get("DetectedBills", [])
                 
-                # Visual Handling
                 is_cancelled = "CANCEL" in str(time_display).upper()
                 
                 if is_cancelled:
@@ -196,38 +200,44 @@ else:
                     st.caption("Time Not Listed / Cancelled")
                 
                 elif is_floor:
-                    # FLOOR CARD (Highlighted)
                     with st.container(border=True):
                         st.markdown(f"**🏛️ {name}**")
-                        
                         if "TBA" in str(time_display):
                             st.warning("Time TBA")
                             st.caption("*Pending Motion*")
                         else:
                             st.success(f"⏰ {time_display}")
-                            
                         if agenda_link: st.link_button("View Calendar", agenda_link)
                 
                 else:
                     # COMMITTEE CARD
                     with st.container():
-                        # Time
-                        if "TBA" in str(time_display):
-                            st.caption("Time TBA")
-                        elif len(str(time_display)) > 15:
-                            # Long text like "Upon Adjournment"
-                            st.markdown(f"**{time_display}**")
-                        else:
-                            st.markdown(f"**⏰ {time_display}**")
+                        if "TBA" in str(time_display): st.caption("Time TBA")
+                        elif len(str(time_display)) > 15: st.markdown(f"**{time_display}**")
+                        else: st.markdown(f"**⏰ {time_display}**")
                             
-                        # Name
                         clean_name = name.replace("Committee", "").strip()
                         st.markdown(f"{clean_name}")
                         if "Subcommittee" in clean_name: st.caption("↳ Subcommittee")
 
-                        if agenda_link:
-                            st.link_button("Agenda", agenda_link)
+                        # --- THE AGENDA DROPDOWN (v90 Feature) ---
+                        # Logic: Show dropdown if bills exist OR if a link exists
+                        has_content = len(bills) > 0 or agenda_link is not None
+                        
+                        if has_content:
+                            label = f"📜 Agenda ({len(bills)})" if bills else "📜 Agenda"
+                            with st.expander(label):
+                                if bills:
+                                    for b in bills:
+                                        st.markdown(f"- **{b}**")
+                                        
+                                if agenda_link:
+                                    st.markdown("---")
+                                    st.link_button("🔗 View Official Doc", agenda_link)
+                                elif not bills:
+                                    st.caption("No specific bills listed in API feed.")
                         else:
-                            st.caption("*(No Link)*")
+                            # If no bills and no link, show nothing (cleaner)
+                            st.caption("*(No Agenda Uploaded)*")
                         
                         st.divider()
