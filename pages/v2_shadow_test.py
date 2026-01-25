@@ -9,8 +9,8 @@ import concurrent.futures
 API_KEY = "81D70A54-FCDC-4023-A00B-A3FD114D5984" 
 SESSION_CODE = "20261" 
 
-st.set_page_config(page_title="v82 Translator Fix", page_icon="🖨️", layout="wide")
-st.title("⚖️ v82: The 'Printer's List' (Translator Fix)")
+st.set_page_config(page_title="v83 Scraper Repair", page_icon="🔧", layout="wide")
+st.title("⚖️ v83: Back to Basics (Scraper Repair)")
 
 # --- SPEED ENGINE ---
 session = requests.Session()
@@ -62,34 +62,30 @@ def extract_complex_time(text):
     
     return None
 
-# --- SOURCE: LIS DAILY SCHEDULE (THE PRINTER'S LIST) ---
-# FIX: Translates 20261 -> 261 for the legacy script
+# --- SOURCE: HOUSE SCHEDULE (Original Method) ---
 @st.cache_data(ttl=300)
-def fetch_lis_daily_schedule(date_obj):
-    date_str = date_obj.strftime("%Y%m%d")
-    
-    # TRANSLATION LAYER: 
-    # API expects "20261", but CGI Script expects "261"
-    if len(SESSION_CODE) == 5:
-        short_code = SESSION_CODE[2:] # Takes last 3 digits (261)
-    else:
-        short_code = SESSION_CODE
-        
-    url = f"https://lis.virginia.gov/cgi-bin/legp604.exe?{short_code}+dco+{date_str}"
+def fetch_house_schedule_text():
+    # This URL was in your original code
+    url = "https://house.vga.virginia.gov/schedule/meetings"
     try:
-        resp = session.get(url, timeout=3)
+        resp = session.get(url, headers={'User-Agent': 'Mozilla/5.0'}, timeout=5)
         soup = BeautifulSoup(resp.text, 'html.parser')
-        return soup.get_text(" ", strip=True)
-    except: return ""
+        # Get all text, preserving structure slightly
+        return soup.get_text("\n", strip=True)
+    except Exception as e:
+        return f"Error: {e}"
 
-# --- SOURCE: PARENT PAGE ---
+# --- SOURCE: SENATE SCHEDULE (Original Method) ---
 @st.cache_data(ttl=300)
-def fetch_committee_page_raw(url):
+def fetch_senate_schedule_text():
+    # This URL was in your original code
+    url = "https://apps.senate.virginia.gov/Senator/ComMeetings.php"
     try:
-        resp = session.get(url, timeout=3)
+        resp = session.get(url, headers={'User-Agent': 'Mozilla/5.0'}, timeout=5)
         soup = BeautifulSoup(resp.text, 'html.parser')
-        return soup.get_text(" ", strip=True)
-    except: return ""
+        return soup.get_text("\n", strip=True)
+    except Exception as e:
+        return f"Error: {e}"
 
 # --- API FETCH ---
 @st.cache_data(ttl=600) 
@@ -153,49 +149,35 @@ for i in range(8): week_map[today + timedelta(days=i)] = []
 
 all_meetings.sort(key=lambda x: len(x.get("OwnerName", "")), reverse=True)
 
-# --- FAST PRE-FETCH ---
-needed_days = set()
-needed_urls = set()
+# --- PRE-FETCH SCRAPERS ---
+house_text_cache = ""
+senate_text_cache = ""
 
-for m in all_meetings:
-    raw = m.get("ScheduleDate", "").split("T")[0]
-    if raw: 
-        m_date = datetime.strptime(raw, "%Y-%m-%d").date()
-        if m_date in week_map:
-            needed_days.add(m_date)
-            
-    name = m.get("OwnerName", "")
-    for key, url in COMMITTEE_URLS.items():
-        if key.lower() in name.lower(): needed_urls.add(url)
+# Only fetch if we actually have floor sessions to check
+needs_check = any("Convene" in m.get("OwnerName", "") or "Session" in m.get("OwnerName", "") for m in all_meetings)
 
-lis_daily_cache = {}
-parent_cache = {}
-
-if needed_days or needed_urls:
-    with st.spinner("Reading 'Printer's List' (LIS DCO)..."):
-        with concurrent.futures.ThreadPoolExecutor(max_workers=20) as executor:
-            f_day = {executor.submit(fetch_lis_daily_schedule, day): day for day in needed_days}
-            f_url = {executor.submit(fetch_committee_page_raw, url): url for url in needed_urls}
-            
-            for f in concurrent.futures.as_completed(f_day):
-                try: lis_daily_cache[f_day[f]] = f.result()
-                except: pass
-            for f in concurrent.futures.as_completed(f_url):
-                try: parent_cache[f_url[f]] = f.result()
-                except: pass
+if needs_check:
+    with st.spinner("Scanning Official Websites..."):
+        with concurrent.futures.ThreadPoolExecutor(max_workers=2) as executor:
+            h_fut = executor.submit(fetch_house_schedule_text)
+            s_fut = executor.submit(fetch_senate_schedule_text)
+            house_text_cache = h_fut.result()
+            senate_text_cache = s_fut.result()
 
 # --- DEVELOPER DEBUG SIDEBAR ---
 with st.sidebar:
-    st.header("🕵️‍♂️ Printer's List Debug")
+    st.header("🕵️‍♂️ X-Ray Vision")
     
-    st.info("This version ignores the website and reads the official 'Daily Committee Operations' (DCO) file directly.")
+    st.info("Look below. Do you see the time listed in the raw text?")
     
-    if lis_daily_cache:
-        # Show what the DCO file looks like for today/tomorrow
-        first_day = sorted(lis_daily_cache.keys())[0] if lis_daily_cache else None
-        if first_day:
-            with st.expander(f"Raw DCO File: {first_day}"):
-                st.code(lis_daily_cache[first_day], language="text")
+    with st.expander("Raw Text: House Website"):
+        # We only show lines containing "Floor" or "Convene" to keep it readable
+        lines = [l for l in house_text_cache.split('\n') if any(x in l for x in ["Floor", "Convene", "Session", "PM", "AM"])]
+        st.code("\n".join(lines[:20]), language="text")
+
+    with st.expander("Raw Text: Senate Website"):
+         lines = [l for l in senate_text_cache.split('\n') if any(x in l for x in ["Floor", "Convene", "Session", "PM", "AM"])]
+         st.code("\n".join(lines[:20]), language="text")
 
 # --- PROCESS MEETINGS ---
 for m in all_meetings:
@@ -210,6 +192,7 @@ for m in all_meetings:
     
     # 0. IDENTIFY FLOOR SESSIONS
     is_floor_session = "Convene" in name or "Session" in name or "House of Delegates" == name or "Senate" == name
+    chamber = "House" if "House" in name else "Senate"
     
     api_time = m.get("ScheduleTime")
     api_comments = m.get("Comments") or ""
@@ -224,28 +207,27 @@ for m in all_meetings:
         final_time = api_time
         decision_log.append("✅ Found in API 'ScheduleTime'")
 
-    # 2. PRINTER'S LIST FIX (The Reliable Method)
-    # If API is TBD, we look at the official text file (LIS DCO)
-    if final_time == "TBD":
-        if m_date in lis_daily_cache:
-            dco_text = lis_daily_cache[m_date]
-            
-            # STRATEGY: Look for the time immediately preceding the name
-            # Pattern: "09:00 AM Senate Convenes"
-            
-            chamber = "House" if "House" in name else "Senate"
-            if is_floor_session:
-                # Regex for "12:00 PM Senate Convenes"
-                # We allow flexible spacing between time and Name
-                pattern = r'(\d{1,2}:\d{2}\s*[AP]M)\s+' + chamber + r'\s+Convenes'
-                match = re.search(pattern, dco_text, re.IGNORECASE)
-                if match:
-                    final_time = match.group(1).upper()
-                    decision_log.append(f"✅ Found in Printer's List (DCO)")
-                else:
-                    decision_log.append(f"⚠️ Checked Printer's List - No '{chamber} Convenes' entry found")
-            else:
-                pass
+    # 2. SCRAPER FIX (v83)
+    if final_time == "TBD" and is_floor_session:
+        # Select the text cache
+        raw_text = house_text_cache if chamber == "House" else senate_text_cache
+        
+        # 1. Try finding "12:00 PM House Convenes" (Official style)
+        match = re.search(r'(\d{1,2}:\d{2}\s*[AP]M)\s+(?:House|Senate)?\s*Convenes', raw_text, re.IGNORECASE)
+        if match:
+            final_time = match.group(1).upper()
+            decision_log.append(f"✅ Found in Website Text (Pattern A)")
+        
+        # 2. Try finding "Floor Session... 12:00 PM"
+        if final_time == "TBD":
+            # Look for lines that have both "Floor" and a Time
+            for line in raw_text.split('\n'):
+                if "Floor" in line or "Session" in line or "Convene" in line:
+                    t_match = re.search(r'(\d{1,2}:\d{2}\s*[AP]M)', line)
+                    if t_match:
+                        final_time = t_match.group(1).upper()
+                        decision_log.append(f"✅ Found in Website Text (Pattern B)")
+                        break
 
     # 3. API COMMENTS MINING
     if final_time == "TBD":
@@ -262,26 +244,8 @@ for m in all_meetings:
             decision_log.append("✅ Found in API 'Description'")
 
     # 5. CROSS-REFERENCE VALIDATOR (Zombie Check)
-    if final_time == "TBD" and not is_floor_session:
-        if m_date in lis_daily_cache:
-            official_text = lis_daily_cache[m_date]
-            tokens = set(name.replace("-", " ").lower().split())
-            tokens -= {"house", "senate", "committee", "subcommittee"}
-            
-            if tokens:
-                found_in_official = False
-                for t in tokens:
-                    if len(t) > 3 and t in official_text.lower():
-                        found_in_official = True
-                        break
-                
-                if not found_in_official:
-                    final_time = "❌ Not on Daily Schedule"
-                    status_label = "Cancelled"
-                    decision_log.append(f"🧟 Zombie Detected: Not in Printer's List")
-                else:
-                    decision_log.append("ℹ️ Verified in Printer's List")
-
+    # Skipped for floor sessions
+    
     # 6. GHOST PROTOCOL
     agenda_link = extract_agenda_link(description_html)
     
