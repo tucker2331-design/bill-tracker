@@ -1,71 +1,73 @@
 import streamlit as st
 import requests
-import json
-from datetime import datetime
+import concurrent.futures
+from datetime import datetime, timedelta
 
 # --- CONFIGURATION ---
 API_KEY = "81D70A54-FCDC-4023-A00B-A3FD114D5984" 
 SESSION_CODE = "20261" 
-BASE_URL = "https://lis.virginia.gov"
 
-st.set_page_config(page_title="API Method Hunter", layout="wide")
-st.title("🕵️‍♂️ API Method Hunter")
-st.markdown("This tool ignores the 'Schedule' and hunts for the **Session Time** in the other services.")
+st.set_page_config(page_title="v84 Simple Tracker", page_icon="🏛️", layout="wide")
+st.title("🏛️ v84: The Simple Tracker")
+st.markdown("No scrapers. No filters. Just the raw data from the API.")
 
-# List of likely candidates based on LIS naming conventions
-candidates = [
-    # TARGET 1: The "Session" Service (Most Likely for times)
-    {"service": "Session", "method": "getsessionlist", "desc": "List of all session days"},
-    {"service": "Session", "method": "getsessioninfo", "desc": "Metadata about the session"},
-    {"service": "Session", "method": "getdays", "desc": "List of legislative days"},
-    
-    # TARGET 2: The "Calendar" Service (Secondary target)
-    {"service": "Calendar", "method": "getcalendarlist", "desc": "List of daily calendars"},
-    {"service": "Calendar", "method": "getdailycalendar", "desc": "The specific agenda for today"},
+# --- API FETCH ---
+@st.cache_data(ttl=600) 
+def get_raw_schedule():
+    # We use the method we KNOW works
+    url = "https://lis.virginia.gov/Schedule/api/getschedulelistasync"
+    headers = {"WebAPIKey": API_KEY, "Accept": "application/json"}
+    try:
+        session = requests.Session()
+        with concurrent.futures.ThreadPoolExecutor(max_workers=2) as executor:
+            h = executor.submit(session.get, url, headers=headers, params={"sessionCode": SESSION_CODE, "chamberCode": "H"}, timeout=5)
+            s = executor.submit(session.get, url, headers=headers, params={"sessionCode": SESSION_CODE, "chamberCode": "S"}, timeout=5)
+            
+            raw_items = []
+            if h.result().status_code == 200: raw_items.extend(h.result().json().get("Schedules", []))
+            if s.result().status_code == 200: raw_items.extend(s.result().json().get("Schedules", []))
+            
+        return raw_items
+    except Exception as e:
+        st.error(f"API Error: {e}")
+        return []
+
+# --- MAIN APP ---
+meetings = get_raw_schedule()
+
+# Filter for just House/Senate Sessions (The "Convening" events)
+sessions = [
+    m for m in meetings 
+    if "Convene" in m.get("OwnerName", "") 
+    or "Session" in m.get("OwnerName", "") 
+    or m.get("OwnerName") in ["House", "Senate"]
 ]
 
-if st.button("🚀 Start Hunt"):
-    headers = {"WebAPIKey": API_KEY, "Accept": "application/json"}
-    found_something = False
-    
-    for c in candidates:
-        url = f"{BASE_URL}/{c['service']}/api/{c['method']}"
-        
-        # We try both chambers
-        for chamber in ["H", "S"]:
-            params = {"sessionCode": SESSION_CODE, "chamberCode": chamber}
-            
-            try:
-                resp = requests.get(url, headers=headers, params=params, timeout=5)
-                
-                if resp.status_code == 200:
-                    data = resp.json()
-                    
-                    # We only care if it's a LIST or has DATA
-                    # Check if it's just an empty error message
-                    is_valid = False
-                    if isinstance(data, list) and len(data) > 0: is_valid = True
-                    if isinstance(data, dict) and len(data.keys()) > 0: is_valid = True
-                    
-                    if is_valid:
-                        found_something = True
-                        st.success(f"✅ HIT! [{c['service']}] {c['method']} ({chamber})")
-                        
-                        # SEARCH FOR TIME
-                        # Convert to string to search for "Time" or "Convene"
-                        dump = json.dumps(data).lower()
-                        if "time" in dump or "convene" in dump or "start" in dump:
-                            st.balloons()
-                            st.markdown(f"### 🎯 JACKPOT: Found 'Time' data in `{c['method']}`")
-                            st.json(data) # Show the user the gold
-                            st.stop() # Stop looking, we found it
-                        else:
-                            with st.expander(f"Data found in {c['method']}, but no obvious time..."):
-                                st.json(data)
-                                
-            except Exception as e:
-                pass # method didn't work, keep moving
+if not sessions:
+    st.warning("No 'Session' or 'Convene' events found in the API feed.")
+else:
+    # Sort by date
+    sessions.sort(key=lambda x: x.get("ScheduleDate", ""))
 
-    if not found_something:
-        st.error("❌ No luck. The method names might be non-standard.")
-        st.info("Please click the 'Session' and 'Calendar' links in your documentation screenshot and tell me the method names listed there.")
+    st.subheader(f"Found {len(sessions)} Floor Sessions")
+    
+    # Display them simply
+    cols = st.columns(4)
+    for i, s in enumerate(sessions):
+        date_str = s.get("ScheduleDate", "").split("T")[0]
+        name = s.get("OwnerName")
+        raw_time = s.get("ScheduleTime") # THE RAW TIME
+        
+        # CARD DISPLAY
+        with cols[i % 4]:
+            with st.container(border=True):
+                st.caption(date_str)
+                st.markdown(f"**{name}**")
+                
+                if raw_time:
+                    st.success(f"⏰ {raw_time}")
+                else:
+                    st.error("Time is blank in API")
+                
+                with st.expander("Raw Data"):
+                    st.json(s)
