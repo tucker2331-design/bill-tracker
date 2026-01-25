@@ -8,8 +8,8 @@ import concurrent.futures
 API_KEY = "81D70A54-FCDC-4023-A00B-A3FD114D5984" 
 SESSION_CODE = "20261" 
 
-st.set_page_config(page_title="v90 Agenda View", page_icon="📜", layout="wide")
-st.title("📆 v90: The Master Calendar (With Agendas)")
+st.set_page_config(page_title="v91 Smart Links", page_icon="🔗", layout="wide")
+st.title("📆 v91: The Master Calendar (Smart Links)")
 
 # --- SPEED ENGINE ---
 session = requests.Session()
@@ -22,35 +22,22 @@ def clean_html(text):
     text = text.replace("<br>", " ").replace("</br>", " ")
     return re.sub('<[^<]+?>', '', text).strip()
 
-# --- HELPER: BILL SCANNER (NEW) ---
+# --- HELPER: BILL SCANNER ---
 def extract_bills_from_text(text):
-    """
-    Scans text for bill patterns like 'HB123', 'S.B. 45', 'H.R. 10'
-    Returns a sorted list of unique bills.
-    """
     if not text: return []
-    
-    # Regex looks for:
-    # 1. Start of word boundary
-    # 2. H, S (House/Senate)
-    # 3. B, J, R (Bill, Joint Res, Res)
-    # 4. Optional dots/spaces
-    # 5. Digits
+    # Regex for "HB 123", "S.B. 45", "H.R. 10"
     pattern = r'\b([HS][BJR]\.?\s*\d+)\b'
-    
     matches = re.findall(pattern, text, re.IGNORECASE)
     
-    # Clean up formatting (e.g. "h.b. 100" -> "HB 100")
     clean_bills = []
     for m in matches:
         clean = m.upper().replace(".", "").replace(" ", "")
-        # Insert space before number for readability (HB100 -> HB 100)
         formatted = re.sub(r'([A-Z]+)(\d+)', r'\1 \2', clean)
         clean_bills.append(formatted)
         
     return sorted(list(set(clean_bills)))
 
-# --- HELPER: COMPLEX TIME EXTRACTOR ---
+# --- HELPER: TIME EXTRACTOR ---
 def extract_complex_time(text):
     if not text: return None
     clean = clean_html(text)
@@ -73,13 +60,55 @@ def extract_complex_time(text):
     
     return None
 
-def extract_agenda_link(description_html):
+# --- HELPER: SMART LINK EXTRACTOR (v91 UPGRADE) ---
+def extract_agenda_link(description_html, is_floor=False, chamber=None, date_obj=None):
+    """
+    1. Floor Sessions: Auto-construct the official LIS Calendar URL.
+    2. Committees: Hunt for 'docket' links, avoid generic 'committee' links.
+    """
+    # STRATEGY 1: Construct Official Floor Calendar Link (100% Reliable)
+    if is_floor and date_obj and chamber:
+        # Convert API Session (20261) -> Legacy Code (261)
+        legacy_sess = SESSION_CODE[2:] if len(SESSION_CODE) == 5 else SESSION_CODE
+        # Format: H or S
+        ch_code = "H" if chamber == "House" else "S"
+        # Format: MMDD (e.g. 0127)
+        date_code = date_obj.strftime("%m%d")
+        
+        return f"https://lis.virginia.gov/cgi-bin/legp604.exe?{legacy_sess}+cal+{ch_code}{date_code}"
+
+    # STRATEGY 2: Scan HTML for Deep Links
     if not description_html: return None
-    match = re.search(r'href=[\'"]?([^\'" >]+)', description_html)
-    if match:
-        url = match.group(1)
-        if url.startswith("/"): return f"https://house.vga.virginia.gov{url}"
-        return url
+    
+    # Find ALL links
+    links = re.findall(r'href=[\'"]?([^\'" >]+)', description_html)
+    if not links: return None
+    
+    # Score the links to find the "Agenda"
+    best_link = None
+    best_score = 0
+    
+    for url in links:
+        score = 1
+        low_url = url.lower()
+        
+        # High value keywords (Actual Dockets)
+        if "docket" in low_url: score += 10
+        if "agenda" in low_url: score += 10
+        if "meet" in low_url: score += 5
+        
+        # Low value keywords (Generic Pages)
+        if low_url.endswith("/committees/h01"): score -= 5 # Main committee page
+        if low_url.count("/") < 3: score -= 2 # Root pages
+        
+        if score > best_score:
+            best_score = score
+            best_link = url
+            
+    if best_link:
+        if best_link.startswith("/"): return f"https://house.vga.virginia.gov{best_link}"
+        return best_link
+        
     return None
 
 # --- SORTING LOGIC ---
@@ -139,11 +168,13 @@ for m in all_raw_items:
     comm_text = m.get("Comments", "")
     full_text = f"{desc_text} {comm_text}"
     
-    m['AgendaLink'] = extract_agenda_link(desc_text)
-    m['DetectedBills'] = extract_bills_from_text(full_text) # SCAN FOR BILLS
-    
     name = m.get("OwnerName", "")
+    chamber = "House" if "House" in name else "Senate"
     is_floor = "Convene" in name or "Session" in name or name in ["House", "Senate"]
+    
+    # Smart Link Extraction
+    m['AgendaLink'] = extract_agenda_link(desc_text, is_floor, chamber, m['DateObj'])
+    m['DetectedBills'] = extract_bills_from_text(full_text)
     
     api_time = m.get("ScheduleTime")
     final_time = api_time
@@ -207,10 +238,10 @@ else:
                             st.caption("*Pending Motion*")
                         else:
                             st.success(f"⏰ {time_display}")
+                        # This button now uses the CONSTRUCTED official link
                         if agenda_link: st.link_button("View Calendar", agenda_link)
                 
                 else:
-                    # COMMITTEE CARD
                     with st.container():
                         if "TBA" in str(time_display): st.caption("Time TBA")
                         elif len(str(time_display)) > 15: st.markdown(f"**{time_display}**")
@@ -220,8 +251,6 @@ else:
                         st.markdown(f"{clean_name}")
                         if "Subcommittee" in clean_name: st.caption("↳ Subcommittee")
 
-                        # --- THE AGENDA DROPDOWN (v90 Feature) ---
-                        # Logic: Show dropdown if bills exist OR if a link exists
                         has_content = len(bills) > 0 or agenda_link is not None
                         
                         if has_content:
@@ -233,11 +262,11 @@ else:
                                         
                                 if agenda_link:
                                     st.markdown("---")
+                                    # This button now uses the SMART extracted link
                                     st.link_button("🔗 View Official Doc", agenda_link)
                                 elif not bills:
                                     st.caption("No specific bills listed in API feed.")
                         else:
-                            # If no bills and no link, show nothing (cleaner)
                             st.caption("*(No Agenda Uploaded)*")
                         
                         st.divider()
