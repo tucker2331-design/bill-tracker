@@ -9,8 +9,8 @@ import concurrent.futures
 API_KEY = "81D70A54-FCDC-4023-A00B-A3FD114D5984" 
 SESSION_CODE = "20261" 
 
-st.set_page_config(page_title="v84 Legislative Command Center", page_icon="🏛️", layout="wide")
-st.title("🏛️ v84: Legislative Command Center (Schedule + Bills)")
+st.set_page_config(page_title="v85 Visual Override", page_icon="🏛️", layout="wide")
+st.title("🏛️ v85: The 'Visual Override' (Trusting the Schedule)")
 
 # --- SPEED ENGINE ---
 session = requests.Session()
@@ -25,48 +25,41 @@ def clean_html(text):
 
 def normalize_name(name):
     if not name: return ""
+    # Simplify name for fuzzy matching (remove generic words)
     clean = name.lower().replace("-", " ")
     for word in ["house", "senate", "committee", "subcommittee", "room", "building", "capitol", "of", "and", "&"]:
         clean = clean.replace(word, "")
     return " ".join(clean.split())
 
-# --- SOURCE 1: VISUAL SCHEDULE (Time/Status Truth) ---
+# --- SOURCE 1: VISUAL SCHEDULE (The Supreme Court) ---
 @st.cache_data(ttl=300)
 def fetch_visual_schedule(date_obj):
+    """
+    Fetches the Daily Schedule (dys) text lines.
+    """
     date_str = date_obj.strftime("%Y%m%d")
     url = f"https://lis.virginia.gov/cgi-bin/legp604.exe?{SESSION_CODE}+dys+{date_str}"
     try:
         resp = session.get(url, timeout=4)
         soup = BeautifulSoup(resp.text, 'html.parser')
         text = soup.get_text("\n", strip=True)
+        # Store as lines for context checking
         lines = [clean_html(line) for line in text.splitlines() if line.strip()]
         return lines
     except: return []
 
-# --- SOURCE 2: AGENDA BILL SCRAPER (The "Meld") ---
+# --- SOURCE 2: BILL SCRAPER ---
 @st.cache_data(ttl=600)
 def fetch_bills_from_agenda(url):
-    """
-    Visits the agenda URL and extracts bill numbers (HB1234, SB50).
-    """
     if not url: return []
     try:
         resp = session.get(url, timeout=4)
         soup = BeautifulSoup(resp.text, 'html.parser')
         text = soup.get_text(" ", strip=True)
-        
-        # Regex for House/Senate Bills/Resolutions
-        # Matches: HB 1234, S.B. 50, HJ 100, etc.
         pattern = r'\b([H|S][B|J|R]\s*\.?\s*\d+)\b'
         matches = re.findall(pattern, text, re.IGNORECASE)
-        
-        # Clean up and deduplicate (e.g. "HB 1234" -> "HB1234")
-        cleaned_bills = set()
-        for m in matches:
-            clean = m.upper().replace(" ", "").replace(".", "")
-            cleaned_bills.add(clean)
-            
-        return sorted(list(cleaned_bills))
+        cleaned = sorted(list(set(m.upper().replace(" ", "").replace(".", "") for m in matches)))
+        return cleaned
     except: return []
 
 # --- API FETCH ---
@@ -131,7 +124,7 @@ for i in range(8): week_map[today + timedelta(days=i)] = []
 
 all_meetings.sort(key=lambda x: len(x.get("OwnerName", "")), reverse=True)
 
-# 1. PARALLEL PROCESSING (Schedule + Bills)
+# 1. PARALLEL PROCESSING
 needed_days = set()
 tasks_bills = []
 
@@ -141,29 +134,20 @@ for m in all_meetings:
         d = datetime.strptime(raw, "%Y-%m-%d").date()
         if d in week_map: needed_days.add(d)
     
-    # Check if we need to scrape bills
     link = extract_agenda_link(m.get("Description"))
-    if link:
-        tasks_bills.append(link)
+    if link: tasks_bills.append(link)
 
 schedule_cache = {}
 bill_cache = {}
 
 if needed_days or tasks_bills:
-    # We use a larger pool to handle bill scraping concurrently with schedule syncing
-    with st.spinner("Reading Agendas & Visual Schedules..."):
+    with st.spinner("Verifying with Official Schedule..."):
         with concurrent.futures.ThreadPoolExecutor(max_workers=25) as executor:
-            # Task A: Fetch Visual Schedules (Time Truth)
             f_sched = {executor.submit(fetch_visual_schedule, d): d for d in needed_days}
-            
-            # Task B: Fetch Bills from Agendas (Content Truth)
             f_bills = {executor.submit(fetch_bills_from_agenda, url): url for url in tasks_bills}
             
-            # Collect Schedule Results
             for f in concurrent.futures.as_completed(f_sched):
                 schedule_cache[f_sched[f]] = f.result()
-            
-            # Collect Bill Results
             for f in concurrent.futures.as_completed(f_bills):
                 try: bill_cache[f_bills[f]] = f.result()
                 except: pass
@@ -183,12 +167,16 @@ for m in all_meetings:
     final_time = "TBD"
     status_label = "Active"
     
-    # A. API FIRST
+    # A. INITIAL TIME (From API)
+    # We take the API time as a placeholder, but we DO NOT trust it yet.
     if api_time and "12:00" not in str(api_time) and "TBA" not in str(api_time):
         final_time = api_time
     
-    # B. VISUAL SCHEDULE MATCHING (The Fix for Session/Cancelled)
-    if final_time == "TBD" and m_date in schedule_cache:
+    # B. VISUAL OVERRIDE (The Fix)
+    # We ALWAYS check the Visual Schedule to catch cancellations that the API missed.
+    is_verified = False
+    
+    if m_date in schedule_cache:
         lines = schedule_cache[m_date]
         my_tokens = set(normalize_name(name).split())
         
@@ -196,42 +184,56 @@ for m in all_meetings:
             line_lower = line.lower()
             line_tokens = set(normalize_name(line).split())
             
+            # Check if this schedule line matches our meeting
             if my_tokens and my_tokens.issubset(line_tokens):
-                prev_line = lines[i-1].lower() if i > 0 else ""
+                is_verified = True
                 
-                # Check Cancellation
-                if "cancel" in line_lower or "cancel" in prev_line:
+                # 1. CHECK CANCELLATION (Priority 1)
+                # Look at this line and the TWO lines before it (sometimes "CANCELLED" is a header)
+                context = line_lower
+                if i > 0: context += " " + lines[i-1].lower()
+                if i > 1: context += " " + lines[i-2].lower()
+                
+                if "cancel" in context:
                     final_time = "❌ Cancelled"
                     status_label = "Cancelled"
                     break
                 
-                # Check Time
+                # 2. CHECK TIME UPDATE
+                # If the schedule lists a specific time, update our TBD
+                # Matches "12:00 PM House Convenes"
                 time_match = re.search(r'(\d{1,2}:\d{2}\s*[aA|pP]\.?[mM]\.?)', line)
                 if time_match:
                     final_time = time_match.group(1).upper()
-                    break
-                    
-                # Check Relative Time
-                if "adjourn" in line_lower or "upon" in line_lower or "adjourn" in prev_line:
+                
+                # 3. CHECK RELATIVE TIME
+                if "adjourn" in context or "upon" in context:
                     final_time = "Upon Adjournment"
-                    break
+                
+                break # We found the meeting, stop scanning
+    
+    # C. ZOMBIE LOGIC
+    # If the API has a time (e.g. 7:00 AM) but we didn't find it in the schedule...
+    # ...it is likely a "Ghost" meeting (like House Privileges in your screenshot).
+    if not is_verified and final_time != "TBD" and "Convene" not in name:
+        final_time = "⚠️ Not on Daily Schedule"
+        status_label = "Cancelled" # Mark red so user sees the discrepancy
 
-    # C. FALLBACK CLEANUP
+    # D. FALLBACK CLEANUP
     agenda_link = extract_agenda_link(desc)
     
+    # If still TBD and verified (or no link), infer status
     if final_time == "TBD":
-        if "cancel" in desc.lower():
-            final_time = "❌ Cancelled"
+        if not agenda_link and "Convene" not in name:
+            final_time = "❌ Not Meeting"
             status_label = "Cancelled"
-        elif "adjourn" in desc.lower():
-            final_time = "Upon Adjournment"
+        elif "Convene" in name and not is_verified:
+             # If Floor Session isn't on schedule, it might just be missing data
+             # Keep TBD but don't cancel
+             pass
         else:
-            if not agenda_link and "Convene" not in name:
-                final_time = "❌ Not Meeting"
-                status_label = "Cancelled"
-            else:
-                final_time = "⚠️ Time Not Listed"
-                status_label = "Warning"
+            final_time = "⚠️ Time Not Listed"
+            status_label = "Warning"
 
     m['DisplayTime'] = final_time
     m['AgendaLink'] = agenda_link
@@ -274,7 +276,6 @@ for i, day in enumerate(days):
                         st.markdown(f"**{parent_name}**")
                         if sub_name: st.caption(f"↳ *{sub_name}*")
                         
-                        # BILL LISTING LOGIC
                         if bills:
                             with st.expander(f"📜 View {len(bills)} Bills"):
                                 st.write(", ".join(bills))
