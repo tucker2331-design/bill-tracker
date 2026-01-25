@@ -1,22 +1,52 @@
 import streamlit as st
 import requests
+import re
+from datetime import datetime, timedelta
 import concurrent.futures
-from datetime import datetime
 
 # --- CONFIGURATION ---
 API_KEY = "81D70A54-FCDC-4023-A00B-A3FD114D5984" 
 SESSION_CODE = "20261" 
 
-st.set_page_config(page_title="v86 Official Calendar", page_icon="📆", layout="wide")
-st.title("📆 v86: Official Session Calendar")
+st.set_page_config(page_title="v87 Master Calendar", page_icon="📆", layout="wide")
+st.title("📆 v87: The Master Calendar (API Logic)")
 
-# --- API FETCH ---
+# --- SPEED ENGINE ---
+session = requests.Session()
+adapter = requests.adapters.HTTPAdapter(pool_connections=20, pool_maxsize=20)
+session.mount('https://', adapter)
+
+# --- HELPER FUNCTIONS ---
+def clean_html(text):
+    if not text: return ""
+    text = text.replace("<br>", " ").replace("</br>", " ")
+    return re.sub('<[^<]+?>', '', text).strip()
+
+def extract_agenda_link(description_html):
+    if not description_html: return None
+    # Simple regex to find the first link in the description
+    match = re.search(r'href=[\'"]?([^\'" >]+)', description_html)
+    if match:
+        url = match.group(1)
+        if url.startswith("/"): return f"https://house.vga.virginia.gov{url}"
+        return url
+    return None
+
+def parse_time_rank(time_str):
+    # Sorts events: Floor (Priority -1), Morning, Afternoon, Evening, TBA (Last)
+    if not time_str or "TBA" in time_str: return 9999
+    try:
+        # Standardize "10:00 AM" -> datetime object for sorting
+        dt = datetime.strptime(time_str, "%I:%M %p")
+        return dt.hour * 60 + dt.minute
+    except: return 9999
+
+# --- API FETCH (The v86 Success Logic) ---
 @st.cache_data(ttl=600) 
-def get_raw_schedule():
+def get_full_schedule():
     url = "https://lis.virginia.gov/Schedule/api/getschedulelistasync"
     headers = {"WebAPIKey": API_KEY, "Accept": "application/json"}
     try:
-        session = requests.Session()
         with concurrent.futures.ThreadPoolExecutor(max_workers=2) as executor:
             h = executor.submit(session.get, url, headers=headers, params={"sessionCode": SESSION_CODE, "chamberCode": "H"}, timeout=5)
             s = executor.submit(session.get, url, headers=headers, params={"sessionCode": SESSION_CODE, "chamberCode": "S"}, timeout=5)
@@ -30,68 +60,131 @@ def get_raw_schedule():
         st.error(f"API Error: {e}")
         return []
 
-# --- MAIN LOGIC ---
-all_events = get_raw_schedule()
+# --- MAIN APP LOGIC ---
 
-# 1. FILTER: Only "Session" Events
-sessions = [
-    m for m in all_events 
-    if "Convene" in m.get("OwnerName", "") 
-    or "Session" in m.get("OwnerName", "") 
-    or m.get("OwnerName") in ["House", "Senate"]
-]
+with st.spinner("Syncing Official Schedule..."):
+    all_raw_items = get_full_schedule()
 
-# 2. DEDUPLICATE (New in v86)
-# Removes double-entries caused by querying both chambers
-unique_sessions = []
-seen_signatures = set()
+# 1. SEPARATE & DEDUPLICATE
+# We split the data into "Floor Sessions" (Priority) and "Committees" (Standard)
+floor_sessions = []
+committees = []
+seen_sigs = set() # Signature to prevent duplicates (Date + Time + Name)
 
-for s in sessions:
-    # Create a unique ID based on Date + Time + Name
-    sig = (s.get("ScheduleDate"), s.get("ScheduleTime"), s.get("OwnerName"))
-    if sig not in seen_signatures:
-        seen_signatures.add(sig)
-        unique_sessions.append(s)
+for m in all_raw_items:
+    # Create a unique signature for this event
+    sig = (m.get('ScheduleDate'), m.get('ScheduleTime'), m.get('OwnerName'))
+    if sig in seen_sigs:
+        continue # Skip duplicate
+    seen_sigs.add(sig)
 
-# 3. FILTER: Only Future Dates
+    name = m.get("OwnerName", "")
+    
+    # Logic: Identify if this is a Floor Session
+    is_floor = "Convene" in name or "Session" in name or name in ["House", "Senate"]
+    
+    # Clean up the Date
+    raw_date = m.get("ScheduleDate", "").split("T")[0]
+    if not raw_date: continue
+    
+    m['DateObj'] = datetime.strptime(raw_date, "%Y-%m-%d").date()
+    
+    # Extract Link early
+    m['AgendaLink'] = extract_agenda_link(m.get("Description", ""))
+
+    if is_floor:
+        floor_sessions.append(m)
+    else:
+        committees.append(m)
+
+# 2. FILTER: FUTURE ONLY
 today = datetime.now().date()
-upcoming_sessions = []
+upcoming_floor = [f for f in floor_sessions if f['DateObj'] >= today]
+upcoming_comm = [c for c in committees if c['DateObj'] >= today]
 
-for s in unique_sessions:
-    raw_date = s.get("ScheduleDate", "").split("T")[0]
-    if raw_date:
-        s_date = datetime.strptime(raw_date, "%Y-%m-%d").date()
-        if s_date >= today:
-            s['DateObj'] = s_date
-            upcoming_sessions.append(s)
+# 3. BUILD THE DISPLAY MAP
+# Dictionary: Date -> [List of Events]
+display_map = {}
 
-# Sort by date
-upcoming_sessions.sort(key=lambda x: x['DateObj'])
+# Add Floor Sessions First (Priority)
+for f in upcoming_floor:
+    d = f['DateObj']
+    if d not in display_map: display_map[d] = []
+    f['Type'] = 'Floor'
+    display_map[d].append(f)
 
-# --- DISPLAY ---
-if not upcoming_sessions:
-    st.info("No upcoming sessions posted yet. (Check back later!)")
+# Add Committees Second
+for c in upcoming_comm:
+    d = c['DateObj']
+    if d not in display_map: display_map[d] = []
+    c['Type'] = 'Committee'
+    display_map[d].append(c)
+
+# --- DISPLAY UI ---
+if not display_map:
+    st.info("No upcoming events found in API.")
 else:
-    dates = sorted(list(set(s['DateObj'] for s in upcoming_sessions)))
+    # Get next 7 available dates
+    sorted_dates = sorted(display_map.keys())[:7]
+    cols = st.columns(len(sorted_dates))
     
-    # Show next 7 available dates
-    cols = st.columns(min(len(dates), 7))
-    
-    for i, date_val in enumerate(dates[:7]):
+    for i, date_val in enumerate(sorted_dates):
         with cols[i]:
             st.markdown(f"### {date_val.strftime('%a')}")
             st.caption(date_val.strftime('%b %d'))
             st.divider()
             
-            day_events = [s for s in upcoming_sessions if s['DateObj'] == date_val]
+            day_events = display_map[date_val]
+            
+            # Sort: Floor first, then committees by time
+            def sort_key(x):
+                # Floor sessions get rank -1 to always float to top
+                if x['Type'] == 'Floor': return -1
+                return parse_time_rank(x.get("ScheduleTime"))
+            
+            day_events.sort(key=sort_key)
             
             for event in day_events:
                 name = event.get("OwnerName").replace("Virginia ", "").replace(" of Delegates", "")
                 time_val = event.get("ScheduleTime")
+                agenda_link = event.get("AgendaLink")
                 
-                with st.container(border=True):
-                    st.markdown(f"**{name}**")
-                    if time_val:
-                        st.success(f"⏰ {time_val}")
-                    else:
-                        st.warning("Time TBA")
+                # --- RENDER CARD ---
+                if event['Type'] == 'Floor':
+                    # FLOOR SESSION CARD (Special Styling)
+                    with st.container(border=True):
+                        st.markdown(f"**🏛️ {name}**")
+                        
+                        if time_val:
+                            st.success(f"⏰ {time_val}")
+                        else:
+                            # THE TBA LOGIC YOU REQUESTED
+                            st.warning("Time TBA")
+                            st.caption("*Pending Motion to Adjourn*")
+                            
+                        if agenda_link:
+                             st.link_button("View Calendar", agenda_link)
+                
+                else:
+                    # COMMITTEE CARD (Standard Styling)
+                    with st.container():
+                        # Time Handling
+                        if time_val:
+                            st.markdown(f"**{time_val}**")
+                        else:
+                            st.caption("Time TBA")
+                            
+                        # Name Handling (Clean up "Committee")
+                        clean_name = name.replace("Committee", "").strip()
+                        st.markdown(f"{clean_name}")
+                        
+                        # Sub-committee Handling
+                        if "Subcommittee" in clean_name:
+                            st.caption("↳ Subcommittee")
+
+                        if agenda_link:
+                            st.link_button("Agenda", agenda_link)
+                        else:
+                            st.caption("*(No Link)*")
+                        
+                        st.divider()
