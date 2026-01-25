@@ -67,11 +67,12 @@ def extract_complex_time(text):
 def fetch_chamber_homepage_time(chamber):
     """
     Scrapes the main House/Senate homepage for the next session time.
-    Returns: (TimeFound, LogMessage, RawTextSnippet)
+    Returns: (TimeFound, LogMessage, RawTextPreview)
     """
     url = "https://house.virginia.gov/" if chamber == "House" else "https://apps.senate.virginia.gov/"
     
     try:
+        # Use simple headers to look like a browser
         headers = {'User-Agent': 'Mozilla/5.0'}
         resp = session.get(url, headers=headers, timeout=5)
         
@@ -81,7 +82,8 @@ def fetch_chamber_homepage_time(chamber):
         # Capture the first 1000 chars for the Debugger
         raw_preview = text[:1000]
         
-        # Regex looking for "Convenes at X", "Meets at X", "Session at X"
+        # Regex looking for "Convenes at 12:00 PM" or similar
+        # We look for "Convene", "Session", "Meet" followed by a time
         match = re.search(r'(?:convenes|session|meets|schedule)\s*(?:is)?\s*(?:at|@|:)?\s*(\d{1,2}:\d{2}\s*[aA|pP]\.?[mM]\.?)', raw_preview, re.IGNORECASE)
         
         if match:
