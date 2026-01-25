@@ -9,8 +9,8 @@ import concurrent.futures
 API_KEY = "81D70A54-FCDC-4023-A00B-A3FD114D5984" 
 SESSION_CODE = "20261" 
 
-st.set_page_config(page_title="v79 Debug Mode", page_icon="🐞", layout="wide")
-st.title("⚖️ v79: The 'No-Lies' Policy (Fixed Target Mode)")
+st.set_page_config(page_title="v80 Final Fix", page_icon="⚖️", layout="wide")
+st.title("⚖️ v80: The 'No-Lies' Policy (Final Fix)")
 
 # --- SPEED ENGINE ---
 session = requests.Session()
@@ -69,10 +69,10 @@ def fetch_chamber_homepage_time(chamber):
     Scrapes the SPECIFIC schedule pages where session times are listed.
     """
     if chamber == "House":
-        # The House has a dedicated schedule page
+        # UPDATED: The House has a dedicated schedule page (The Bulletin Board)
         url = "https://house.vga.virginia.gov/schedule/meetings"
     else:
-        # The Senate time is most reliably found on the LIS homepage
+        # UPDATED: The Senate time is most reliably found on the LIS homepage
         url = "https://lis.virginia.gov/"
     
     try:
@@ -237,6 +237,7 @@ if needed_days or needed_urls:
 # --- DEVELOPER DEBUG SIDEBAR ---
 with st.sidebar:
     st.header("🕵️‍♂️ Developer Probe")
+    st.success("v80: Loaded Correctly")
     st.info("The Scraper is now looking at the OFFICIAL schedules, not the tourist homepage.")
     
     if debug_raw_pages:
