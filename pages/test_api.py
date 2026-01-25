@@ -7,14 +7,13 @@ from datetime import datetime, timedelta
 API_KEY = "81D70A54-FCDC-4023-A00B-A3FD114D5984" 
 SESSION_CODE = "20261" 
 
-st.set_page_config(page_title="v84 Simple Tracker", page_icon="🏛️", layout="wide")
-st.title("🏛️ v84: The Simple Tracker")
-st.markdown("No scrapers. No filters. Just the raw data from the API.")
+st.set_page_config(page_title="v85 Clean Calendar", page_icon="📆", layout="wide")
+st.title("📆 v85: Official Session Calendar")
 
 # --- API FETCH ---
 @st.cache_data(ttl=600) 
 def get_raw_schedule():
-    # We use the method we KNOW works
+    # This is the endpoint that SUCCEEDED in v84
     url = "https://lis.virginia.gov/Schedule/api/getschedulelistasync"
     headers = {"WebAPIKey": API_KEY, "Accept": "application/json"}
     try:
@@ -32,42 +31,60 @@ def get_raw_schedule():
         st.error(f"API Error: {e}")
         return []
 
-# --- MAIN APP ---
-meetings = get_raw_schedule()
+# --- MAIN LOGIC ---
+all_events = get_raw_schedule()
 
-# Filter for just House/Senate Sessions (The "Convening" events)
+# 1. FILTER: Only "Session" Events (The Big Floor Meetings)
+# We look for "Convene" or "Session" or just "House"/"Senate" as the owner
 sessions = [
-    m for m in meetings 
+    m for m in all_events 
     if "Convene" in m.get("OwnerName", "") 
     or "Session" in m.get("OwnerName", "") 
     or m.get("OwnerName") in ["House", "Senate"]
 ]
 
-if not sessions:
-    st.warning("No 'Session' or 'Convene' events found in the API feed.")
-else:
-    # Sort by date
-    sessions.sort(key=lambda x: x.get("ScheduleDate", ""))
+# 2. FILTER: Only Future Dates (No history)
+today = datetime.now().date()
+upcoming_sessions = []
 
-    st.subheader(f"Found {len(sessions)} Floor Sessions")
+for s in sessions:
+    raw_date = s.get("ScheduleDate", "").split("T")[0]
+    if raw_date:
+        s_date = datetime.strptime(raw_date, "%Y-%m-%d").date()
+        if s_date >= today:
+            s['DateObj'] = s_date
+            upcoming_sessions.append(s)
+
+# Sort by date
+upcoming_sessions.sort(key=lambda x: x['DateObj'])
+
+# --- DISPLAY ---
+if not upcoming_sessions:
+    st.info("No upcoming sessions found.")
+else:
+    # Group by Date for a cleaner view
+    dates = sorted(list(set(s['DateObj'] for s in upcoming_sessions)))
     
-    # Display them simply
-    cols = st.columns(4)
-    for i, s in enumerate(sessions):
-        date_str = s.get("ScheduleDate", "").split("T")[0]
-        name = s.get("OwnerName")
-        raw_time = s.get("ScheduleTime") # THE RAW TIME
-        
-        # CARD DISPLAY
-        with cols[i % 4]:
-            with st.container(border=True):
-                st.caption(date_str)
-                st.markdown(f"**{name}**")
+    # Show next 7 available dates
+    cols = st.columns(min(len(dates), 7))
+    
+    for i, date_val in enumerate(dates[:7]):
+        with cols[i]:
+            st.markdown(f"### {date_val.strftime('%a')}")
+            st.caption(date_val.strftime('%b %d'))
+            st.divider()
+            
+            # Find events for this specific day
+            day_events = [s for s in upcoming_sessions if s['DateObj'] == date_val]
+            
+            for event in day_events:
+                name = event.get("OwnerName").replace("Virginia ", "").replace(" of Delegates", "")
+                time_val = event.get("ScheduleTime")
                 
-                if raw_time:
-                    st.success(f"⏰ {raw_time}")
-                else:
-                    st.error("Time is blank in API")
-                
-                with st.expander("Raw Data"):
-                    st.json(s)
+                # CLEAN DISPLAY CARD
+                with st.container(border=True):
+                    st.markdown(f"**{name}**")
+                    if time_val:
+                        st.success(f"⏰ {time_val}")
+                    else:
+                        st.warning("Time TBA")
