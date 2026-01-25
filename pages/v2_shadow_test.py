@@ -9,8 +9,8 @@ import concurrent.futures
 API_KEY = "81D70A54-FCDC-4023-A00B-A3FD114D5984" 
 SESSION_CODE = "20261" 
 
-st.set_page_config(page_title="v79 Honest Mode", page_icon="⚖️", layout="wide")
-st.title("⚖️ v79: The 'No-Lies' Policy (Honest Mode)")
+st.set_page_config(page_title="v79 Debug Mode", page_icon="🐞", layout="wide")
+st.title("⚖️ v79: The 'No-Lies' Policy (Debug Mode)")
 
 # --- SPEED ENGINE ---
 session = requests.Session()
@@ -67,31 +67,30 @@ def extract_complex_time(text):
 def fetch_chamber_homepage_time(chamber):
     """
     Scrapes the main House/Senate homepage for the next session time.
+    Returns: (TimeFound, LogMessage, RawTextSnippet)
     """
     url = "https://house.virginia.gov/" if chamber == "House" else "https://apps.senate.virginia.gov/"
     
     try:
-        # Use simple headers to look like a browser
         headers = {'User-Agent': 'Mozilla/5.0'}
         resp = session.get(url, headers=headers, timeout=5)
         
         soup = BeautifulSoup(resp.text, 'html.parser')
         text = soup.get_text(" ", strip=True)
         
-        # Limit search to top of page
-        header = text[:3000]
+        # Capture the first 1000 chars for the Debugger
+        raw_preview = text[:1000]
         
-        # Regex for "Convenes at 12:00 PM" or similar
-        # We look for "Convene", "Session", "Meet" followed by a time
-        match = re.search(r'(?:convenes|session|meets|schedule)\s*(?:is)?\s*(?:at|@|:)?\s*(\d{1,2}:\d{2}\s*[aA|pP]\.?[mM]\.?)', header, re.IGNORECASE)
+        # Regex looking for "Convenes at X", "Meets at X", "Session at X"
+        match = re.search(r'(?:convenes|session|meets|schedule)\s*(?:is)?\s*(?:at|@|:)?\s*(\d{1,2}:\d{2}\s*[aA|pP]\.?[mM]\.?)', raw_preview, re.IGNORECASE)
         
         if match:
-            return match.group(1).upper(), f"Found on Homepage ({url})"
+            return match.group(1).upper(), f"Found on Homepage ({url})", raw_preview
             
-        return None, f"Checked Homepage ({url}) - No time found"
+        return None, f"Checked Homepage ({url}) - No time found", raw_preview
         
     except Exception as e:
-        return None, f"Homepage Error: {str(e)}"
+        return None, f"Homepage Error: {str(e)}", f"Error: {str(e)}"
 
 # --- SOURCE: LIS DAILY SCHEDULE (DCO) ---
 @st.cache_data(ttl=300)
@@ -186,11 +185,10 @@ for m in all_meetings:
         m_date = datetime.strptime(raw, "%Y-%m-%d").date()
         if m_date in week_map:
             needed_days.add(m_date)
-            
             if "Convene" in m.get("OwnerName", "") or "Session" in m.get("OwnerName", "") or "House" == m.get("OwnerName", "") or "Senate" == m.get("OwnerName", ""):
                 chamber = "House" if "House" in m.get("OwnerName", "") else "Senate"
                 needed_homepage_checks.add(chamber)
-            
+
     name = m.get("OwnerName", "")
     for key, url in COMMITTEE_URLS.items():
         if key.lower() in name.lower(): needed_urls.add(url)
@@ -198,6 +196,8 @@ for m in all_meetings:
 lis_daily_cache = {}
 parent_cache = {}
 homepage_time_cache = {}
+# Debug storage
+debug_raw_pages = {}
 
 if needed_days or needed_urls:
     with st.spinner("Checking Sources..."):
@@ -213,10 +213,40 @@ if needed_days or needed_urls:
                 try: parent_cache[f_url[f]] = f.result()
                 except: pass
             for f in concurrent.futures.as_completed(f_home):
-                try: homepage_time_cache[f_home[f]] = f.result()
+                try: 
+                    # Capture all 3 return values: Time, Log, RawPreview
+                    res = f.result()
+                    homepage_time_cache[f_home[f]] = (res[0], res[1]) 
+                    debug_raw_pages[f_home[f]] = res[2]
                 except: pass
 
-# --- PROCESS MEETINGS (HONEST MODE) ---
+# --- DEVELOPER DEBUG SIDEBAR ---
+with st.sidebar:
+    st.header("🕵️‍♂️ Developer Probe")
+    
+    st.info("Use this to verify if the Scraper is blind or if the time is actually missing.")
+    
+    if debug_raw_pages:
+        st.subheader("🌐 Homepage Scraper Data")
+        for chamber, raw_text in debug_raw_pages.items():
+            with st.expander(f"Raw Text: {chamber} Homepage"):
+                st.caption("The code sees this text. Look for the time here:")
+                st.code(raw_text, language="text")
+                st.caption(f"Status: {homepage_time_cache[chamber][1]}")
+
+    st.divider()
+    st.subheader("📡 Raw API Floor Session")
+    
+    # Find the floor sessions in the API data to display raw JSON
+    floor_sessions = [m for m in all_meetings if "Convene" in m.get("OwnerName", "") or "Session" in m.get("OwnerName", "")]
+    if floor_sessions:
+        for s in floor_sessions:
+            with st.expander(f"API JSON: {s.get('OwnerName')}"):
+                st.json(s)
+    else:
+        st.warning("No Floor Sessions found in API feed.")
+
+# --- PROCESS MEETINGS ---
 for m in all_meetings:
     raw = m.get("ScheduleDate", "").split("T")[0]
     if not raw: continue
