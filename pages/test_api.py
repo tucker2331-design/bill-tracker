@@ -1,6 +1,7 @@
 import streamlit as st
 import requests
 import re
+import time
 from bs4 import BeautifulSoup
 from datetime import datetime, timedelta
 import concurrent.futures
@@ -9,13 +10,19 @@ import concurrent.futures
 API_KEY = "81D70A54-FCDC-4023-A00B-A3FD114D5984" 
 SESSION_CODE = "20261" 
 
-st.set_page_config(page_title="v87 Safe-Load", page_icon="🛡️", layout="wide")
-st.title("🛡️ v87: Safe-Load Calendar")
+st.set_page_config(page_title="v88 Safe-Load", page_icon="🛡️", layout="wide")
+st.title("🛡️ v88: Safe-Load Calendar (Crash-Proof)")
 
-# --- SPEED ENGINE ---
+# --- NETWORK ENGINE (SAFE MODE) ---
 session = requests.Session()
-adapter = requests.adapters.HTTPAdapter(pool_connections=10, pool_maxsize=10) # Reduced pool size for safety
+# CRITICAL FIX: Limit connection pool to prevent "Too many open files"
+adapter = requests.adapters.HTTPAdapter(pool_connections=5, pool_maxsize=5)
 session.mount('https://', adapter)
+
+# Headers to look like a real browser (Anti-Ban)
+HEADERS = {
+    'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+}
 
 # --- HELPER FUNCTIONS ---
 def clean_html(text):
@@ -65,21 +72,24 @@ def parse_time_rank(time_str):
     except: pass
     return 9999
 
-# --- HEAVY SCRAPERS (ONLY RUN ON DEMAND) ---
+# --- SCRAPERS (THROTTLED) ---
 def fetch_visual_schedule_lines(date_obj):
+    # Add delay to prevent rate limiting
+    time.sleep(0.1) 
     date_str = date_obj.strftime("%Y%m%d")
     url = f"https://lis.virginia.gov/cgi-bin/legp604.exe?{SESSION_CODE}+dys+{date_str}"
     try:
-        resp = session.get(url, timeout=3)
+        resp = session.get(url, headers=HEADERS, timeout=5)
         soup = BeautifulSoup(resp.text, 'html.parser')
         text = soup.get_text("\n", strip=True)
         return [clean_html(line) for line in text.splitlines() if line.strip()]
     except: return []
 
 def fetch_bills_from_agenda(url):
+    time.sleep(0.1)
     if not url: return []
     try:
-        resp = session.get(url, timeout=3)
+        resp = session.get(url, headers=HEADERS, timeout=5)
         soup = BeautifulSoup(resp.text, 'html.parser')
         text = soup.get_text(" ", strip=True)
         pattern = r'\b([H|S][B|J|R]\s*\.?\s*\d+)\b'
@@ -94,7 +104,7 @@ def get_basic_schedule():
     url = "https://lis.virginia.gov/Schedule/api/getschedulelistasync"
     headers = {"WebAPIKey": API_KEY, "Accept": "application/json"}
     try:
-        # Use simple sequential requests to avoid connection overload
+        # Sequential fetch is safer for startup
         h = session.get(url, headers=headers, params={"sessionCode": SESSION_CODE, "chamberCode": "H"}, timeout=5)
         s = session.get(url, headers=headers, params={"sessionCode": SESSION_CODE, "chamberCode": "S"}, timeout=5)
         
@@ -106,7 +116,7 @@ def get_basic_schedule():
 
 # --- MAIN LOGIC ---
 
-# 1. Load Basic Data (Fast)
+# 1. Load Basic Data (Instant)
 if 'enhanced_data' not in st.session_state:
     st.session_state.enhanced_data = {}
 
@@ -152,29 +162,28 @@ for m in all_raw_items:
 # 2. Render Control Panel
 col1, col2 = st.columns([3, 1])
 with col1:
-    st.caption(f"Loaded {len(future_items)} upcoming events. Click Sync to check cancellations & bills.")
+    st.info(f"Loaded {len(future_items)} upcoming events. Click Sync to check cancellations & bills.")
 with col2:
-    # THE MAGIC BUTTON
+    # THE SAFETY BUTTON
     if st.button("🔄 Sync Status & Bills", type="primary"):
-        with st.status("Scanning LIS (Safe Mode)...", expanded=True) as status:
+        with st.status("Scanning LIS (Low & Slow Mode)...", expanded=True) as status:
             
             # Identify work for the next 7 days ONLY
             target_days = sorted(list(set(item['DateObj'] for item in future_items)))[:7]
             target_links = [item['AgendaLink'] for item in future_items if item['AgendaLink'] and item['DateObj'] in target_days]
             
-            # Heavy Lifting (SLOW & SAFE)
-            # max_workers=5 prevents "Too many open files" error
+            # MAX_WORKERS = 4 (Very Safe)
             
-            st.write("Checking Visual Schedule...")
+            st.write("Verifying Schedule...")
             sched_cache = {}
-            with concurrent.futures.ThreadPoolExecutor(max_workers=5) as executor:
+            with concurrent.futures.ThreadPoolExecutor(max_workers=4) as executor:
                 f_sched = {executor.submit(fetch_visual_schedule_lines, d): d for d in target_days}
                 for f in concurrent.futures.as_completed(f_sched):
                     sched_cache[f_sched[f]] = f.result()
             
-            st.write(f"Scraping {len(target_links)} Agendas...")
+            st.write(f"Reading {len(target_links)} Agendas...")
             bill_cache = {}
-            with concurrent.futures.ThreadPoolExecutor(max_workers=5) as executor:
+            with concurrent.futures.ThreadPoolExecutor(max_workers=4) as executor:
                 f_bills = {executor.submit(fetch_bills_from_agenda, url): url for url in target_links}
                 for f in concurrent.futures.as_completed(f_bills):
                     try: bill_cache[f_bills[f]] = f.result()
