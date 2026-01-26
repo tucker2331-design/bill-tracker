@@ -1,9 +1,6 @@
 import streamlit as st
 import requests
 import re
-import time
-import random
-from bs4 import BeautifulSoup
 from datetime import datetime, timedelta
 import concurrent.futures
 
@@ -11,8 +8,8 @@ import concurrent.futures
 API_KEY = "81D70A54-FCDC-4023-A00B-A3FD114D5984" 
 SESSION_CODE = "20261" 
 
-st.set_page_config(page_title="v96 Spatial", page_icon="📍", layout="wide")
-st.title("📍 v96: Spatial Awareness (Context Hunter)")
+st.set_page_config(page_title="v98 API Explorer", page_icon="🕵️", layout="wide")
+st.title("🕵️ v98: API Explorer (Finding the Missing Links)")
 
 # --- NETWORK ENGINE ---
 session = requests.Session()
@@ -21,17 +18,12 @@ session.mount('https://', adapter)
 
 HEADERS = {
     'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-    'Connection': 'keep-alive'
 }
 
 # --- HELPER FUNCTIONS ---
-def clean_html(text):
-    if not text: return ""
-    text = text.replace("&nbsp;", " ").replace("<br>", " ").replace("</br>", " ")
-    return re.sub('<[^<]+?>', '', text).strip()
-
 def normalize_name(name):
     if not name: return ""
+    # Strict normalization to match "Schedule" names to "Committee" names
     clean = name.lower().replace("-", " ")
     for word in ["house", "senate", "committee", "subcommittee", "room", "building", "capitol", "of", "and", "&", "the"]:
         clean = clean.replace(word, "")
@@ -51,80 +43,42 @@ def parse_time_rank(time_str):
     except: pass
     return 9999
 
-# --- 1. SPATIAL SCRAPER (The New Core) ---
-def fetch_visual_schedule_context(date_obj):
+# --- 1. THE NEW PROBE (Committee API) ---
+@st.cache_data(ttl=600)
+def fetch_committee_metadata():
     """
-    Scrapes the LIS page as a list of lines with metadata.
-    Returns: List of dicts {text, link, is_cancelled_marker}
+    Hits the 'Committee' endpoint to find permanent links.
     """
-    time.sleep(random.uniform(0.1, 0.3))
-    date_str = date_obj.strftime("%Y%m%d")
-    url = f"https://lis.virginia.gov/cgi-bin/legp604.exe?{SESSION_CODE}+dys+{date_str}"
+    base_url = "https://lis.virginia.gov/Committee/api/getcommitteelist"
+    headers = {"WebAPIKey": API_KEY, "Accept": "application/json"}
+    
+    metadata_map = {}
     
     try:
-        resp = session.get(url, headers=HEADERS, timeout=5)
-        soup = BeautifulSoup(resp.text, 'html.parser')
-        
-        # Flatten the HTML into a clean list of lines
-        # We look for ANY text block that might be a line item
-        lines = []
-        
-        # Iterate over all structural elements
-        for elem in soup.find_all(['tr', 'p', 'div', 'li']):
-            text = clean_html(elem.get_text(" ", strip=True))
-            if len(text) < 3: continue
-            
-            # Extract high-quality links (Dockets/Agendas)
-            best_link = None
-            for a in elem.find_all('a', href=True):
-                href = a['href']
-                if href.startswith("/"): href = f"https://lis.virginia.gov{href}"
-                link_text = a.get_text().lower()
+        # Fetch both chambers
+        for chamber in ["H", "S"]:
+            resp = session.get(base_url, headers=headers, params={"sessionCode": SESSION_CODE, "chamberCode": chamber}, timeout=5)
+            if resp.status_code == 200:
+                items = resp.json() if isinstance(resp.json(), list) else resp.json().get("Committees", [])
                 
-                # LINK QUALITY CONTROL
-                # Only grab links that look like agendas/dockets
-                if "docket" in link_text or "agenda" in link_text or "bill" in link_text or "list" in link_text:
-                    best_link = href
-                    break 
-            
-            lines.append({
-                "text": text,
-                "clean": normalize_name(text),
-                "link": best_link,
-                "is_cancelled": "cancel" in text.lower()
-            })
-            
-        return lines
+                for item in items:
+                    # We store data keyed by a normalized name for easy matching later
+                    raw_name = item.get("CommitteeName", "")
+                    norm_name = normalize_name(raw_name)
+                    metadata_map[norm_name] = item
+                    
     except Exception as e:
-        return []
-
-# --- 2. BILL SCRAPER ---
-def scan_agenda_page(url):
-    time.sleep(random.uniform(0.1, 0.3))
-    if not url: return []
-    try:
-        resp = session.get(url, headers=HEADERS, timeout=5)
-        soup = BeautifulSoup(resp.text, 'html.parser')
-        text = soup.get_text(" ", strip=True)
-        bills = re.findall(r'\b(H\.?B\.?|S\.?B\.?|H\.?J\.?|S\.?J\.?)\s*(\d+)', text, re.IGNORECASE)
-        clean = set()
-        for p, n in bills:
-            clean.add(f"{p.upper().replace('.','').strip()}{n}")
+        st.error(f"Probe Error: {e}")
         
-        def n_sort(s):
-            parts = re.match(r"([A-Za-z]+)(\d+)", s)
-            if parts: return parts.group(1), int(parts.group(2))
-            return s, 0
-        return sorted(list(clean), key=n_sort)
-    except: return []
+    return metadata_map
 
-# --- 3. API FETCH ---
+# --- 2. EXISTING SCHEDULE API (The Base) ---
 @st.cache_data(ttl=600) 
 def get_full_schedule():
     url = "https://lis.virginia.gov/Schedule/api/getschedulelistasync"
     headers = {"WebAPIKey": API_KEY, "Accept": "application/json"}
     try:
-        with concurrent.futures.ThreadPoolExecutor(max_workers=5) as executor:
+        with concurrent.futures.ThreadPoolExecutor(max_workers=2) as executor:
             h = executor.submit(session.get, url, headers=headers, params={"sessionCode": SESSION_CODE, "chamberCode": "H"}, timeout=5)
             s = executor.submit(session.get, url, headers=headers, params={"sessionCode": SESSION_CODE, "chamberCode": "S"}, timeout=5)
             
@@ -136,13 +90,15 @@ def get_full_schedule():
 
 # --- MAIN LOGIC ---
 
-with st.spinner("Initializing..."):
+with st.spinner("Initializing Schedule..."):
     all_raw_items = get_full_schedule()
 
+with st.spinner("Probing Committee Database..."):
+    # This is the NEW call
+    committee_db = fetch_committee_metadata()
+
 today = datetime.now().date()
-tasks_bills = []
-needed_days = set()
-processed_events = []
+display_map = {}
 seen_sigs = set()
 
 for m in all_raw_items:
@@ -155,126 +111,40 @@ for m in all_raw_items:
     if sig in seen_sigs: continue
     seen_sigs.add(sig)
 
+    # --- THE MATCHMAKER ---
+    # Try to find this schedule item in our new Committee Database
+    owner = m.get("OwnerName", "")
+    norm_owner = normalize_name(owner)
+    
+    # Fuzzy-ish lookup in the dictionary
+    matched_metadata = {}
+    
+    # 1. Direct Match
+    if norm_owner in committee_db:
+        matched_metadata = committee_db[norm_owner]
+    else:
+        # 2. Partial Match (e.g. "Senate Commerce and Labor" vs "Commerce and Labor")
+        for db_name, db_data in committee_db.items():
+            if db_name in norm_owner or norm_owner in db_name:
+                matched_metadata = db_data
+                break
+    
+    # Store the probe results in the event object
+    m['ProbeData'] = matched_metadata
     m['DateObj'] = d
-    m['AgendaLink'] = None # Default
-    if not m.get("OwnerName"): m["OwnerName"] = "Unknown Committee"
     
-    needed_days.add(d)
-    processed_events.append(m)
-
-# Parallel Fetch
-schedule_cache = {}
-bill_cache = {}
-
-if needed_days:
-    with st.spinner(f"Scanning Schedules..."):
-        with concurrent.futures.ThreadPoolExecutor(max_workers=10) as executor:
-            f_sched = {executor.submit(fetch_visual_schedule_context, d): d for d in needed_days}
-            for f in concurrent.futures.as_completed(f_sched):
-                schedule_cache[f_sched[f]] = f.result()
-
-# --- MERGE & MATCH ---
-display_map = {}
-debug_log = {}
-
-for m in processed_events:
-    name = m.get("OwnerName", "Unknown")
+    # Clean up Time (Base Logic)
     api_time = m.get("ScheduleTime")
-    d = m['DateObj']
-    
     final_time = api_time
-    source_label = "API"
-    
-    m_debug = {
-        "api_name": name,
-        "visual_lines_found": 0,
-        "best_match_index": -1,
-        "neighborhood": []
-    }
-    
-    # VISUAL OVERRIDE (SPATIAL)
-    if d in schedule_cache:
-        lines = schedule_cache[d]
-        m_debug["visual_lines_found"] = len(lines)
-        my_tokens = set(normalize_name(name).split())
-        
-        # 1. Find the Committee Name in the list
-        match_index = -1
-        best_score = 0
-        
-        for i, line in enumerate(lines):
-            line_tokens = set(line['clean'].split())
-            if not my_tokens: break
-            
-            intersection = my_tokens.intersection(line_tokens)
-            score = len(intersection) / len(my_tokens)
-            
-            # Require 75% match
-            if score > 0.75 and score > best_score:
-                best_score = score
-                match_index = i
-        
-        if match_index != -1:
-            m_debug["best_match_index"] = match_index
-            
-            # 2. Look at Neighborhood (-1, 0, +1)
-            # Check for "CANCELLED" in current or previous line
-            is_cancelled = False
-            start_scan = max(0, match_index - 1)
-            end_scan = min(len(lines), match_index + 2)
-            
-            for i in range(start_scan, end_scan):
-                row = lines[i]
-                m_debug["neighborhood"].append(row['text'])
-                
-                if row['is_cancelled']:
-                    is_cancelled = True
-                
-                # Snatch Link if we don't have one
-                if not m['AgendaLink'] and row['link']:
-                    m['AgendaLink'] = row['link']
-                    source_label = "Link Snatched"
-                    
-                # Time Correction
-                time_match = re.search(r'(\d{1,2}:\d{2}\s*[aA|pP]\.?[mM]\.?)', row['text'])
-                if time_match and not is_cancelled:
-                    final_time = time_match.group(1).upper()
-                    if source_label == "API": source_label = "Sched (Time)"
-
-            if is_cancelled:
-                final_time = "CANCELLED"
-                source_label = "Sched (Cancelled)"
-
-    # Queue Bill Scan if we found a link
-    if m['AgendaLink'] and m['AgendaLink'] not in bill_cache:
-        # Lazy fetch (in main loop for safety, usually bad but okay for small N)
-        bill_cache[m['AgendaLink']] = scan_agenda_page(m['AgendaLink'])
-
-    if not final_time or final_time == "TBA":
-        if "Convene" in name: final_time = "Time TBA"
-        else: final_time = "Time Not Listed"
-
+    if not final_time:
+        if "Convene" in owner: final_time = "TBA"
+        else: final_time = "Not Listed"
     m['DisplayTime'] = final_time
-    m['Bills'] = bill_cache.get(m['AgendaLink'], [])
-    m['Source'] = source_label
-    
-    debug_log[f"{name} ({d.strftime('%m/%d')})"] = m_debug
     
     if d not in display_map: display_map[d] = []
     display_map[d].append(m)
 
-# --- RENDER ---
-# SIDEBAR DEV TOOL
-st.sidebar.header("🛠️ X-Ray")
-selected_debug = st.sidebar.selectbox("Inspect Committee:", options=list(debug_log.keys()))
-if selected_debug:
-    data = debug_log[selected_debug]
-    st.sidebar.write(f"**Lines Scanned:** {data['visual_lines_found']}")
-    st.sidebar.write(f"**Match Index:** {data['best_match_index']}")
-    st.sidebar.write("**Neighborhood (Surrounding Text):**")
-    for line in data['neighborhood']:
-        st.sidebar.caption(f"- {line}")
-
+# --- RENDER UI ---
 if not display_map:
     st.info("No upcoming events found.")
 else:
@@ -291,40 +161,38 @@ else:
             day_events.sort(key=lambda x: parse_time_rank(x.get("DisplayTime")))
             
             for event in day_events:
-                raw_name = event.get("OwnerName") or "Unknown"
-                name = raw_name.replace("Virginia ", "").replace(" of Delegates", "")
+                name = event.get("OwnerName", "Unknown")
+                clean_name = name.replace("Committee", "").strip()
+                time_disp = event.get("DisplayTime")
                 
-                time_display = event.get("DisplayTime")
-                agenda_link = event.get("AgendaLink")
-                bills = event.get("Bills", [])
+                # Check PROBE DATA for links
+                probe = event.get('ProbeData', {})
+                # Look for ANYTHING that looks like a URL in the probe result
+                found_url = probe.get("LinkUrl") or probe.get("CommitteeUrl") or probe.get("DocketUrl")
                 
-                is_cancelled = "CANCEL" in str(time_display).upper()
-                
-                if is_cancelled:
-                    st.error(f"❌ **{name}**")
-                    st.caption("Cancelled")
-                else:
-                    with st.container(border=True):
-                        # TIME
-                        if "TBA" in str(time_display) or "Not Listed" in str(time_display):
-                            st.caption(f"⚠️ {time_display}")
-                        elif len(str(time_display)) > 15:
-                            st.markdown(f"**{time_display}**")
-                        else:
-                            st.markdown(f"**⏰ {time_display}**")
-                        
-                        # NAME
-                        clean_name = name.replace("Committee", "").strip()
-                        st.markdown(f"{clean_name}")
-                        if "Subcommittee" in clean_name: st.caption("↳ Subcommittee")
+                # Render Card
+                with st.container(border=True):
+                    # Time
+                    if "TBA" in str(time_disp) or "Not Listed" in str(time_disp):
+                        st.warning(f"⚠️ {time_disp}")
+                    else:
+                        st.markdown(f"**⏰ {time_disp}**")
+                    
+                    st.markdown(f"**{clean_name}**")
+                    
+                    # Primary Link Button
+                    if found_url:
+                        st.link_button("View Info (API Found)", found_url)
+                    elif event.get("Description") and "href" in event.get("Description"):
+                         st.caption("*(Has Desc Link)*")
+                    else:
+                         st.caption("*(No Link)*")
 
-                        # BILLS
-                        if bills:
-                            st.success(f"**{len(bills)} Bills Listed**")
-                            with st.expander("View List"):
-                                st.write(", ".join(bills))
-                                if agenda_link: st.link_button("Docket/Agenda", agenda_link)
-                        elif agenda_link:
-                            st.link_button("Docket/Agenda", agenda_link)
+                    # THE PROBE EXPANDER
+                    with st.expander("🕵️ Probe API"):
+                        if probe:
+                            st.success("Match Found!")
+                            st.json(probe) # Show the RAW JSON so we can see the field names
                         else:
-                            st.caption("*(No Link)*")
+                            st.error("No API Match")
+                            st.write(f"Searched for: `{normalize_name(name)}`")
