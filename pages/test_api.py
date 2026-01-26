@@ -1,36 +1,23 @@
 import streamlit as st
 import requests
 import re
-import time
-import random
 from bs4 import BeautifulSoup
 from datetime import datetime, timedelta
+import concurrent.futures
 
 # --- CONFIGURATION ---
 API_KEY = "81D70A54-FCDC-4023-A00B-A3FD114D5984" 
 SESSION_CODE = "20261" 
 
-st.set_page_config(page_title="v90 Stealth", page_icon="🕵️", layout="wide")
-st.title("🕵️ v90: Stealth Calendar (Anti-Block)")
+st.set_page_config(page_title="v91 Best of Both", page_icon="🏛️", layout="wide")
+st.title("🏛️ v91: Schedule Truth + Bill Scraper")
 
-# --- NETWORK ENGINE (STEALTH) ---
-def get_session():
-    s = requests.Session()
-    # Retry logic for stability
-    a = requests.adapters.HTTPAdapter(max_retries=2)
-    s.mount('https://', a)
-    return s
+# --- SPEED ENGINE ---
+session = requests.Session()
+adapter = requests.adapters.HTTPAdapter(pool_connections=20, pool_maxsize=20)
+session.mount('https://', adapter)
 
-# Headers to look like a real human user
-HEADERS = {
-    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-    'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
-    'Accept-Language': 'en-US,en;q=0.5',
-    'Connection': 'keep-alive',
-    'Upgrade-Insecure-Requests': '1',
-}
-
-# --- HELPER FUNCTIONS ---
+# --- HELPER: TEXT CLEANING ---
 def clean_html(text):
     if not text: return ""
     text = text.replace("&nbsp;", " ").replace("<br>", " ").replace("</br>", " ")
@@ -43,25 +30,74 @@ def normalize_name(name):
         clean = clean.replace(word, "")
     return " ".join(clean.split())
 
-def extract_agenda_link(description_html):
-    if not description_html: return None
-    match = re.search(r'href=[\'"]?([^\'" >]+)', description_html)
-    if match:
-        url = match.group(1)
-        if url.startswith("/"): return f"https://house.vga.virginia.gov{url}"
-        return url
-    return None
+# --- COMPONENT 1: VISUAL SCHEDULE SCRAPER (The Time/Status Fix) ---
+@st.cache_data(ttl=300)
+def fetch_visual_schedule_lines(date_obj):
+    """
+    Fetches the 'dys' text lines. Matches the user's screenshot source.
+    """
+    date_str = date_obj.strftime("%Y%m%d")
+    url = f"https://lis.virginia.gov/cgi-bin/legp604.exe?{SESSION_CODE}+dys+{date_str}"
+    try:
+        resp = session.get(url, timeout=4)
+        soup = BeautifulSoup(resp.text, 'html.parser')
+        text = soup.get_text("\n", strip=True)
+        return [clean_html(line) for line in text.splitlines() if line.strip()]
+    except: return []
 
-def extract_complex_time(text):
-    if not text: return None
-    clean = clean_html(text)
-    lower = clean.lower()
-    if "cancel" in lower: return "CANCELLED"
-    keywords = ["adjournment", "adjourn", "upon", "immediate", "rise of", "recess", "after the"]
-    if len(clean) < 150 and any(k in lower for k in keywords):
-        return clean.strip()
-    match = re.search(r'(\d{1,2}:\d{2}\s*[aA|pP]\.?[mM]\.?)', clean)
-    if match: return match.group(1).upper()
+# --- COMPONENT 2: BILL SCRAPER (From v30) ---
+@st.cache_data(ttl=600)
+def scan_agenda_page(url):
+    """
+    Uses v30 Regex logic to find bills in the agenda.
+    """
+    if not url: return []
+    try:
+        headers = {'User-Agent': 'Mozilla/5.0'}
+        resp = session.get(url, headers=headers, timeout=5)
+        soup = BeautifulSoup(resp.text, 'html.parser')
+        text = soup.get_text()
+        
+        # v30 Regex Pattern
+        bills = re.findall(r'\b(H\.?B\.?|S\.?B\.?|H\.?J\.?|S\.?J\.?)\s*(\d+)', text, re.IGNORECASE)
+        
+        clean = set()
+        for p, n in bills:
+            # Normalize HB 100 -> HB100
+            clean.add(f"{p.upper().replace('.','').strip()}{n}")
+            
+        def n_sort(s):
+            parts = re.match(r"([A-Za-z]+)(\d+)", s)
+            if parts: return parts.group(1), int(parts.group(2))
+            return s, 0
+            
+        return sorted(list(clean), key=n_sort)
+    except: return []
+
+# --- API FETCH (CORE) ---
+@st.cache_data(ttl=600) 
+def get_full_schedule():
+    url = "https://lis.virginia.gov/Schedule/api/getschedulelistasync"
+    headers = {"WebAPIKey": API_KEY, "Accept": "application/json"}
+    try:
+        with concurrent.futures.ThreadPoolExecutor(max_workers=2) as executor:
+            h = executor.submit(session.get, url, headers=headers, params={"sessionCode": SESSION_CODE, "chamberCode": "H"}, timeout=5)
+            s = executor.submit(session.get, url, headers=headers, params={"sessionCode": SESSION_CODE, "chamberCode": "S"}, timeout=5)
+            
+            raw_items = []
+            if h.result().status_code == 200: raw_items.extend(h.result().json().get("Schedules", []))
+            if s.result().status_code == 200: raw_items.extend(s.result().json().get("Schedules", []))
+            
+        return raw_items
+    except: return []
+
+def extract_agenda_link(html_string):
+    if not html_string: return None
+    soup = BeautifulSoup(html_string, 'html.parser')
+    for link in soup.find_all('a'):
+        href = link.get('href')
+        if any(x in link.get_text().lower() for x in ["agenda", "committee info", "docket"]):
+            return f"https://house.vga.virginia.gov{href}" if href.startswith("/") else href
     return None
 
 def parse_time_rank(time_str):
@@ -78,175 +114,120 @@ def parse_time_rank(time_str):
     except: pass
     return 9999
 
-# --- SCRAPERS (STEALTH MODE) ---
-def fetch_visual_schedule_lines(session, date_obj):
-    # Random sleep to mimic human behavior
-    time.sleep(random.uniform(0.5, 1.5))
-    
-    date_str = date_obj.strftime("%Y%m%d")
-    url = f"https://lis.virginia.gov/cgi-bin/legp604.exe?{SESSION_CODE}+dys+{date_str}"
-    try:
-        resp = session.get(url, headers=HEADERS, timeout=5)
-        if resp.status_code != 200: return []
-        
-        soup = BeautifulSoup(resp.text, 'html.parser')
-        text = soup.get_text("\n", strip=True)
-        return [clean_html(line) for line in text.splitlines() if line.strip()]
-    except: return []
+# --- MAIN APP LOGIC ---
 
-def fetch_bills_from_agenda(session, url):
-    # Random sleep to mimic human behavior
-    time.sleep(random.uniform(0.5, 1.5))
-    
-    if not url: return []
-    try:
-        resp = session.get(url, headers=HEADERS, timeout=5)
-        if resp.status_code != 200: return []
-        
-        soup = BeautifulSoup(resp.text, 'html.parser')
-        text = soup.get_text(" ", strip=True)
-        pattern = r'\b([H|S][B|J|R]\s*\.?\s*\d+)\b'
-        matches = re.findall(pattern, text, re.IGNORECASE)
-        cleaned = sorted(list(set(m.upper().replace(" ", "").replace(".", "") for m in matches)))
-        return cleaned
-    except: return []
+with st.spinner("Syncing Schedule & Scanning Bills..."):
+    all_raw_items = get_full_schedule()
 
-# --- API FETCH (CORE) ---
-@st.cache_data(ttl=600) 
-def get_basic_schedule():
-    s = get_session()
-    url = "https://lis.virginia.gov/Schedule/api/getschedulelistasync"
-    headers = {"WebAPIKey": API_KEY, "Accept": "application/json"}
-    try:
-        # Sequential fetch
-        h = s.get(url, headers=headers, params={"sessionCode": SESSION_CODE, "chamberCode": "H"}, timeout=5)
-        s_resp = s.get(url, headers=headers, params={"sessionCode": SESSION_CODE, "chamberCode": "S"}, timeout=5)
-        
-        raw_items = []
-        if h.status_code == 200: raw_items.extend(h.json().get("Schedules", []))
-        if s_resp.status_code == 200: raw_items.extend(s_resp.json().get("Schedules", []))
-        return raw_items
-    except: return []
-
-# --- MAIN LOGIC ---
-
-# 1. Load Basic Data (Instant)
-if 'enhanced_data' not in st.session_state:
-    st.session_state.enhanced_data = {}
-
-all_raw_items = get_basic_schedule()
-
+# 1. PRE-PROCESS & IDENTIFY TASKS
 today = datetime.now().date()
-display_map = {}
-future_items = []
+tasks_bills = []
+needed_days = set()
+processed_events = []
 seen_sigs = set()
 
+# Optimization: Only look at future events
+future_raw = []
 for m in all_raw_items:
     raw_date = m.get("ScheduleDate", "").split("T")[0]
-    if not raw_date: continue
-    
-    d = datetime.strptime(raw_date, "%Y-%m-%d").date()
-    if d < today: continue 
-    
-    sig = (raw_date, m.get('ScheduleTime'), m.get('OwnerName'))
+    if raw_date:
+        d = datetime.strptime(raw_date, "%Y-%m-%d").date()
+        if d >= today:
+            future_raw.append((d, m))
+
+for d, m in future_raw:
+    sig = (m.get("ScheduleDate"), m.get('ScheduleTime'), m.get('OwnerName'))
     if sig in seen_sigs: continue
     seen_sigs.add(sig)
-    
+
     m['DateObj'] = d
     m['AgendaLink'] = extract_agenda_link(m.get("Description", ""))
     
-    api_time = m.get("ScheduleTime")
-    final_time = api_time
-    if not final_time: final_time = extract_complex_time(m.get("Comments"))
-    if not final_time: final_time = extract_complex_time(m.get("Description"))
+    needed_days.add(d)
+    if m['AgendaLink']:
+        tasks_bills.append(m['AgendaLink'])
     
-    if not final_time:
-        if "Convene" in m.get("OwnerName", ""): final_time = "Time TBA"
-        else: final_time = "Time Not Listed"
-            
-    m['DisplayTime'] = final_time
-    m['Bills'] = []
-    m['Source'] = "API"
-    
-    future_items.append(m)
+    processed_events.append(m)
 
-# 2. Control Panel
-col1, col2 = st.columns([3, 1])
-with col1:
-    st.info(f"Loaded {len(future_items)} events.")
-with col2:
-    if st.button("🔄 Sync (Anti-Block Mode)", type="primary"):
-        s = get_session()
+# 2. PARALLEL EXECUTION (Schedule + Bills)
+schedule_cache = {}
+bill_cache = {}
+
+if needed_days or tasks_bills:
+    # We use 10 workers to be safe but fast
+    with concurrent.futures.ThreadPoolExecutor(max_workers=10) as executor:
+        # Task A: Fetch Visual Schedules (Time Truth)
+        f_sched = {executor.submit(fetch_visual_schedule_lines, d): d for d in needed_days}
+        # Task B: Fetch Bills (Content Truth)
+        f_bills = {executor.submit(scan_agenda_page, url): url for url in tasks_bills}
         
-        # Limit scope to prevent bans
-        target_days = sorted(list(set(item['DateObj'] for item in future_items)))[:5] # Only next 5 active days
-        target_links = [item['AgendaLink'] for item in future_items if item['AgendaLink'] and item['DateObj'] in target_days]
-        
-        # 1. Schedules
-        sched_cache = {}
-        progress_text = "Checking Schedules (Slowly)..."
-        my_bar = st.progress(0, text=progress_text)
-        
-        for i, d in enumerate(target_days):
-            sched_cache[d] = fetch_visual_schedule_lines(s, d)
-            percent = int((i + 1) / len(target_days) * 30)
-            my_bar.progress(percent, text=f"Checked {d.strftime('%m/%d')}")
+        for f in concurrent.futures.as_completed(f_sched):
+            schedule_cache[f_sched[f]] = f.result()
             
-        # 2. Bills
-        bill_cache = {}
-        total_links = len(target_links)
-        for i, url in enumerate(target_links):
-            # Graceful failure: if one fails, just skip it
-            try:
-                bill_cache[url] = fetch_bills_from_agenda(s, url)
+        for f in concurrent.futures.as_completed(f_bills):
+            try: bill_cache[f_bills[f]] = f.result()
             except: pass
-            
-            percent = 30 + int((i + 1) / total_links * 70)
-            my_bar.progress(percent, text=f"Scanning Agenda {i+1}/{total_links}")
-            
-        my_bar.empty()
-        st.session_state.enhanced_data = {'sched': sched_cache, 'bills': bill_cache}
-        st.success("Sync Complete!")
 
-# 3. Apply Data
-sched_cache = st.session_state.enhanced_data.get('sched', {})
-bill_cache = st.session_state.enhanced_data.get('bills', {})
+# 3. MERGE LOGIC
+display_map = {}
 
-for m in future_items:
+for m in processed_events:
+    name = m.get("OwnerName", "")
+    api_time = m.get("ScheduleTime")
     d = m['DateObj']
-    name = m['OwnerName']
     
-    if m['AgendaLink'] in bill_cache:
-        m['Bills'] = bill_cache[m['AgendaLink']]
+    final_time = api_time
+    source_label = "API"
     
-    if d in sched_cache:
-        lines = sched_cache[d]
+    # --- VISUAL OVERRIDE (Fixes Times & Cancellations) ---
+    if d in schedule_cache:
+        lines = schedule_cache[d]
         my_tokens = set(normalize_name(name).split())
+        
         for i, line in enumerate(lines):
             line_lower = line.lower()
-            if my_tokens and my_tokens.issubset(set(normalize_name(line).split())):
+            line_tokens = set(normalize_name(line).split())
+            
+            # Fuzzy Match
+            if my_tokens and my_tokens.issubset(line_tokens):
                 prev_line = lines[i-1].lower() if i > 0 else ""
+                
+                # Check Cancellation
                 if "cancel" in line_lower or "cancel" in prev_line:
-                    m['DisplayTime'] = "❌ CANCELLED"
-                    m['Source'] = "Visual Schedule"
+                    final_time = "CANCELLED"
+                    source_label = "Visual Sched"
                     break
+                
+                # Check Time (e.g. 12:00 PM)
                 time_match = re.search(r'(\d{1,2}:\d{2}\s*[aA|pP]\.?[mM]\.?)', line)
                 if time_match:
-                    m['DisplayTime'] = time_match.group(1).upper()
-                    m['Source'] = "Visual Schedule"
+                    final_time = time_match.group(1).upper()
+                    source_label = "Visual Sched"
                     break
+                
+                # Check Relative
                 if "adjourn" in line_lower or "upon" in line_lower:
-                    m['DisplayTime'] = "Upon Adjournment"
-                    m['Source'] = "Visual Schedule"
+                    final_time = "Upon Adjournment"
+                    source_label = "Visual Sched"
                     break
 
+    # Fallback Defaults
+    if not final_time:
+        if "Convene" in name: final_time = "Time TBA"
+        else: final_time = "Time Not Listed"
+
+    m['DisplayTime'] = final_time
+    m['Bills'] = bill_cache.get(m['AgendaLink'], [])
+    m['Source'] = source_label
+    
     if d not in display_map: display_map[d] = []
     display_map[d].append(m)
 
-# 4. Render UI
+# --- RENDER UI ---
 if not display_map:
-    st.warning("No events found.")
+    st.info("No upcoming events found.")
 else:
+    # Sort dates and limit to next 7 days for cleanliness
     sorted_dates = sorted(display_map.keys())[:7]
     cols = st.columns(len(sorted_dates))
     
@@ -263,42 +244,40 @@ else:
                 name = event.get("OwnerName").replace("Virginia ", "").replace(" of Delegates", "")
                 time_display = event.get("DisplayTime")
                 agenda_link = event.get("AgendaLink")
-                bills = event.get("Bills")
-                source = event.get("Source")
+                bills = event.get("Bills", [])
                 
                 is_cancelled = "CANCEL" in str(time_display).upper()
                 
                 if is_cancelled:
                     st.error(f"❌ **{name}**")
                     st.caption("Cancelled")
+                
                 else:
-                    if "Convene" in name:
-                        with st.container(border=True):
-                            st.markdown(f"**🏛️ {name}**")
-                            if "TBA" in str(time_display): st.warning("Time TBA")
-                            else: st.success(f"⏰ {time_display}")
-                            if agenda_link: st.link_button("Calendar", agenda_link)
-                    else:
-                        with st.container():
-                            if "TBA" in str(time_display) or "Not Listed" in str(time_display):
-                                st.caption(f"⚠️ {time_display}")
-                            elif len(str(time_display)) > 15:
-                                st.markdown(f"**{time_display}**")
-                            else:
-                                st.markdown(f"**⏰ {time_display}**")
-                            
-                            clean_name = name.replace("Committee", "").strip()
-                            st.markdown(f"{clean_name}")
-                            if "Subcommittee" in clean_name: st.caption("↳ Subcommittee")
+                    with st.container(border=True):
+                        # TIME HEADER
+                        if "TBA" in str(time_display) or "Not Listed" in str(time_display):
+                            st.caption(f"⚠️ {time_display}")
+                        elif len(str(time_display)) > 15:
+                            st.markdown(f"**{time_display}**")
+                        else:
+                            st.markdown(f"**⏰ {time_display}**")
+                        
+                        # NAME
+                        clean_name = name.replace("Committee", "").strip()
+                        st.markdown(f"{clean_name}")
+                        if "Subcommittee" in clean_name: st.caption("↳ Subcommittee")
 
-                            if bills:
-                                with st.expander(f"📜 {len(bills)} Bills"):
-                                    st.write(", ".join(bills))
-                                    if agenda_link: st.link_button("Full Agenda", agenda_link)
-                            elif agenda_link:
-                                st.link_button("Agenda", agenda_link)
-                            else:
-                                st.caption("*(No Link)*")
-                            
-                            if source != "API": st.caption(f"ℹ️ {source}")
-                            st.divider()
+                        # BILL DISPLAY (v30 Style)
+                        if bills:
+                            st.success(f"**{len(bills)} Bills Listed**")
+                            with st.expander("View Bills"):
+                                st.write(", ".join(bills))
+                                if agenda_link:
+                                    st.link_button("Full Agenda", agenda_link)
+                        elif agenda_link:
+                            st.link_button("Agenda", agenda_link)
+                        else:
+                            st.caption("*(No Link)*")
+                        
+                        # Debug Footer (Optional)
+                        # st.caption(f"Src: {event['Source']}")
