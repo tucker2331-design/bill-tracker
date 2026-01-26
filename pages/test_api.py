@@ -1,4 +1,4 @@
- import streamlit as st
+import streamlit as st
 import requests
 import re
 import time
@@ -11,11 +11,8 @@ import concurrent.futures
 API_KEY = "81D70A54-FCDC-4023-A00B-A3FD114D5984" 
 SESSION_CODE = "20261" 
 
-st.set_page_config(page_title="v94 Link Snatch", page_icon="🔬", layout="wide")
-st.title("🔬 v94: The 'Link Snatch' (Visual Schedule Fallback)")
-
-# --- DEBUG MODE ---
-debug_mode = st.sidebar.checkbox("🐞 Enable X-Ray Mode", value=True)
+st.set_page_config(page_title="v95 Glass Box", page_icon="🔍", layout="wide")
+st.title("🔍 v95: The 'Glass Box' (Fixes + Dev Tool)")
 
 # --- NETWORK ENGINE ---
 session = requests.Session()
@@ -35,8 +32,9 @@ def clean_html(text):
 
 def normalize_name(name):
     if not name: return ""
+    # Remove generic words to focus on unique identifiers (Commerce, Labor, Courts, Justice)
     clean = name.lower().replace("-", " ")
-    for word in ["house", "senate", "committee", "subcommittee", "room", "building", "capitol", "of", "and", "&"]:
+    for word in ["house", "senate", "committee", "subcommittee", "room", "building", "capitol", "of", "and", "&", "the"]:
         clean = clean.replace(word, "")
     return " ".join(clean.split())
 
@@ -54,11 +52,11 @@ def parse_time_rank(time_str):
     except: pass
     return 9999
 
-# --- THE UPGRADED VISUAL SCRAPER (Text + Links) ---
+# --- 1. VISUAL SCRAPER (Row-Based) ---
 def fetch_visual_schedule_data(date_obj):
     """
-    Scrapes the LIS Daily Schedule (dys).
-    Returns a LIST of DICTIONARIES containing text AND links.
+    Scrapes the LIS Daily Schedule (dys) by ROW to keep links attached to text.
+    Returns: List of dicts {text, link, tokens}
     """
     time.sleep(random.uniform(0.1, 0.3))
     date_str = date_obj.strftime("%Y%m%d")
@@ -69,38 +67,35 @@ def fetch_visual_schedule_data(date_obj):
         resp = session.get(url, headers=HEADERS, timeout=5)
         soup = BeautifulSoup(resp.text, 'html.parser')
         
-        # We look for rows or paragraphs depending on LIS formatting
-        # LIS 'dys' pages often use simple formatting. We iterate lines.
-        # But to capture links, we need to process the HTML structure.
-        
-        # Strategy: Iterate through all text-containing elements
-        # This is a 'flat' scrape to find the line match and any nearby link
-        
-        for line_elem in soup.find_all(['p', 'div', 'tr', 'li']):
-            text = clean_html(line_elem.get_text(" ", strip=True))
-            if not text: continue
+        # LIS schedule usually uses <ul> or <table>. We scan all block elements.
+        # We grab the text and ANY link found inside that block.
+        for elem in soup.find_all(['li', 'tr', 'p', 'div']):
+            text = clean_html(elem.get_text(" ", strip=True))
+            if len(text) < 5: continue # Skip empty noise
             
-            # Find any link inside this element
+            # Find Best Link in this row
             link = None
-            a_tag = line_elem.find('a', href=True)
-            if a_tag:
-                href = a_tag['href']
+            for a in elem.find_all('a', href=True):
+                href = a['href']
                 if href.startswith("/"): href = f"https://lis.virginia.gov{href}"
-                # Prioritize Docket/Committee Info
-                if "docket" in a_tag.text.lower() or "info" in a_tag.text.lower():
+                
+                # We specifically want Docket or Committee Info
+                a_text = a.get_text().lower()
+                if "docket" in a_text or "info" in a_text:
                     link = href
+                    break # Found the gold, stop looking in this row
             
             results.append({
                 "text": text,
                 "clean_tokens": set(normalize_name(text).split()),
-                "extracted_link": link,
-                "raw_html": str(line_elem)[:100] # For debug
+                "extracted_link": link
             })
             
         return results
     except Exception as e:
         return [{"error": str(e)}]
 
+# --- 2. BILL SCRAPER ---
 def scan_agenda_page(url):
     time.sleep(random.uniform(0.1, 0.3))
     if not url: return []
@@ -108,6 +103,8 @@ def scan_agenda_page(url):
         resp = session.get(url, headers=HEADERS, timeout=5)
         soup = BeautifulSoup(resp.text, 'html.parser')
         text = soup.get_text(" ", strip=True)
+        
+        # Regex for bills (matches HB100, S.B. 50, etc.)
         bills = re.findall(r'\b(H\.?B\.?|S\.?B\.?|H\.?J\.?|S\.?J\.?)\s*(\d+)', text, re.IGNORECASE)
         clean = set()
         for p, n in bills:
@@ -120,7 +117,7 @@ def scan_agenda_page(url):
         return sorted(list(clean), key=n_sort)
     except: return []
 
-# --- API FETCH ---
+# --- 3. API FETCH ---
 @st.cache_data(ttl=600) 
 def get_full_schedule():
     url = "https://lis.virginia.gov/Schedule/api/getschedulelistasync"
@@ -147,11 +144,10 @@ needed_days = set()
 processed_events = []
 seen_sigs = set()
 
-# 1. PRE-PROCESS
+# Pre-Process
 for m in all_raw_items:
     raw_date = m.get("ScheduleDate", "").split("T")[0]
     if not raw_date: continue
-    
     d = datetime.strptime(raw_date, "%Y-%m-%d").date()
     if d < today: continue 
     
@@ -160,28 +156,25 @@ for m in all_raw_items:
     seen_sigs.add(sig)
 
     m['DateObj'] = d
+    m['AgendaLink'] = None # Default
     
-    # Try API Description First
+    # Check API Description for a link
     desc_html = m.get("Description", "")
-    api_link = None
     if desc_html:
         soup = BeautifulSoup(desc_html, 'html.parser')
         a_tag = soup.find('a', href=True)
         if a_tag: 
-            api_link = a_tag['href']
-            if api_link.startswith("/"): api_link = f"https://house.vga.virginia.gov{api_link}"
-    
-    m['AgendaLink'] = api_link # Might be None
+            href = a_tag['href']
+            if href.startswith("/"): href = f"https://house.vga.virginia.gov{href}"
+            m['AgendaLink'] = href
     
     if not m.get("OwnerName"): m["OwnerName"] = "Unknown Committee"
     
     needed_days.add(d)
-    if m['AgendaLink']:
-        tasks_bills.append(m['AgendaLink'])
-    
+    if m['AgendaLink']: tasks_bills.append(m['AgendaLink'])
     processed_events.append(m)
 
-# 2. PARALLEL EXECUTION
+# Parallel Fetch
 schedule_cache = {}
 bill_cache = {}
 
@@ -199,8 +192,10 @@ if needed_days or tasks_bills:
                 try: bill_cache[f_bills[f]] = f.result()
                 except: pass
 
-# 3. MERGE & DISPLAY
+# --- MERGE & MATCH LOGIC ---
 display_map = {}
+# For the Developer Tool
+debug_log = {} 
 
 for m in processed_events:
     name = m.get("OwnerName", "Unknown")
@@ -209,44 +204,67 @@ for m in processed_events:
     
     final_time = api_time
     source_label = "API"
-    debug_match_data = "No match found in Visual Schedule"
     
-    # VISUAL OVERRIDE (Link Snatching)
+    # Store debug info for this committee
+    m_debug = {
+        "api_name": name,
+        "api_tokens": normalize_name(name).split(),
+        "visual_rows_scanned": 0,
+        "best_match_score": 0,
+        "matched_row_text": None,
+        "link_action": "None"
+    }
+    
+    # VISUAL OVERRIDE
     if d in schedule_cache:
         rows = schedule_cache[d]
         my_tokens = set(normalize_name(name).split())
+        m_debug["visual_rows_scanned"] = len(rows)
         
         for i, row in enumerate(rows):
-            # Strict Fuzzy Match
-            if my_tokens and my_tokens.issubset(row['clean_tokens']):
-                debug_match_data = f"Matched: {row['text'][:50]}..."
-                
-                # 1. SNATCH LINK (The Fix for Senate Commerce)
-                # If API didn't give us a link, but Visual Schedule has one, TAKE IT.
+            row_tokens = row['clean_tokens']
+            
+            # SCORE MATCHING (Fix for Cancelled)
+            # We calculate intersection score instead of strict subset
+            if not my_tokens: break
+            
+            intersection = my_tokens.intersection(row_tokens)
+            score = len(intersection) / len(my_tokens)
+            
+            if score > m_debug["best_match_score"]:
+                m_debug["best_match_score"] = score
+                m_debug["matched_row_text"] = row['text']
+            
+            # Threshold: 60% match required
+            if score > 0.6:
+                # 1. LINK SNATCH (Fix for Senate Commerce)
                 if not m['AgendaLink'] and row['extracted_link']:
                     m['AgendaLink'] = row['extracted_link']
-                    # Queue this new link for bill scanning? (In a real app, yes. Here, we just display it)
-                    source_label = "Link Snatched from LIS"
-                
-                # 2. CHECK CANCELLATION
+                    m_debug["link_action"] = f"Snatched: {row['extracted_link']}"
+                    source_label = "Link Snatched"
+                    # Add to bill cache on the fly (won't populate this run, but link works)
+                    
+                # 2. CANCELLED CHECK (Fix for House Finance)
+                # Check current row AND previous row
                 prev_text = rows[i-1]['text'].lower() if i > 0 else ""
                 row_text = row['text'].lower()
                 
                 if "cancel" in row_text or "cancel" in prev_text:
                     final_time = "CANCELLED"
                     source_label = "Sched (Cancelled)"
+                    m_debug["status_action"] = "Marked Cancelled"
                     break
                 
-                # 3. CHECK TIME
+                # 3. TIME CHECK
                 time_match = re.search(r'(\d{1,2}:\d{2}\s*[aA|pP]\.?[mM]\.?)', row['text'])
                 if time_match:
                     final_time = time_match.group(1).upper()
-                    if source_label == "API": source_label = "Sched (Time Corrected)"
+                    if source_label == "API": source_label = "Sched (Time)"
                     break
                 
                 if "adjourn" in row_text or "upon" in row_text:
                     final_time = "Upon Adjournment"
-                    if source_label == "API": source_label = "Sched (Time Corrected)"
+                    if source_label == "API": source_label = "Sched (Time)"
                     break
 
     if not final_time or final_time == "TBA":
@@ -254,15 +272,32 @@ for m in processed_events:
         else: final_time = "Time Not Listed"
 
     m['DisplayTime'] = final_time
-    # If we snatched a link late, we won't have bills yet, but the link will work.
     m['Bills'] = bill_cache.get(m['AgendaLink'], [])
     m['Source'] = source_label
-    m['DebugData'] = debug_match_data
+    
+    # Add to debug log
+    debug_log[f"{name} ({d.strftime('%m/%d')})"] = m_debug
     
     if d not in display_map: display_map[d] = []
     display_map[d].append(m)
 
 # --- RENDER ---
+# SIDEBAR DEV TOOL
+st.sidebar.header("🛠️ Developer X-Ray")
+st.sidebar.write("Inspect what the code sees for a specific committee.")
+selected_debug = st.sidebar.selectbox("Select Committee:", options=list(debug_log.keys()))
+
+if selected_debug:
+    data = debug_log[selected_debug]
+    st.sidebar.markdown("---")
+    st.sidebar.markdown(f"**Committee:** `{data['api_name']}`")
+    st.sidebar.markdown(f"**Match Score:** `{data['best_match_score']:.2f}` (Needs > 0.6)")
+    st.sidebar.markdown(f"**Matched Line:**")
+    st.sidebar.caption(f"{data['matched_row_text']}")
+    st.sidebar.markdown(f"**Link Action:** `{data['link_action']}`")
+    st.sidebar.markdown("---")
+
+
 if not display_map:
     st.info("No upcoming events found.")
 else:
@@ -293,6 +328,7 @@ else:
                     st.caption("Cancelled")
                 else:
                     with st.container(border=True):
+                        # TIME
                         if "TBA" in str(time_display) or "Not Listed" in str(time_display):
                             st.caption(f"⚠️ {time_display}")
                         elif len(str(time_display)) > 15:
@@ -300,10 +336,12 @@ else:
                         else:
                             st.markdown(f"**⏰ {time_display}**")
                         
+                        # NAME
                         clean_name = name.replace("Committee", "").strip()
                         st.markdown(f"{clean_name}")
                         if "Subcommittee" in clean_name: st.caption("↳ Subcommittee")
 
+                        # BILLS
                         if bills:
                             st.success(f"**{len(bills)} Bills Listed**")
                             with st.expander("View List"):
@@ -313,12 +351,3 @@ else:
                             st.link_button("View Docket/Agenda", agenda_link)
                         else:
                             st.caption("*(No Link)*")
-                        
-                        # THE DEVELOPER BOX (For Verification)
-                        if debug_mode:
-                            with st.expander("🔬 X-Ray"):
-                                st.write(f"**API Source:** {event['Source']}")
-                                st.write(f"**Final Link:** {agenda_link}")
-                                st.write(f"**Visual Match:** {event['DebugData']}")
-                                if not agenda_link and "Commerce" in name:
-                                    st.error("Still no link found. Check Visual Match above.")
