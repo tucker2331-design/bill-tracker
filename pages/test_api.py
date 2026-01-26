@@ -1,101 +1,89 @@
 import streamlit as st
 import requests
+import json
 import pandas as pd
-from datetime import datetime
 
 # --- CONFIGURATION ---
 API_KEY = "81D70A54-FCDC-4023-A00B-A3FD114D5984" 
-SESSION_CODE = "20261" # 2026 Regular Session
+SESSION_CODE = "20261" 
 
-st.set_page_config(page_title="v101 API Autopsy", page_icon="🧪", layout="wide")
-st.title("🧪 v101: API Autopsy")
-st.markdown("We are probing the endpoints to see exactly which one contains the **Bill-to-Committee** link.")
+st.set_page_config(page_title="v102 Anatomy", page_icon="🧬", layout="wide")
+st.title("🧬 v102: Schedule Anatomy (Raw Data Inspection)")
+st.markdown("Inspecting the **Schedules** object from the successful API call to find hidden fields.")
 
 # --- NETWORK ENGINE ---
 session = requests.Session()
 adapter = requests.adapters.HTTPAdapter(pool_connections=10, pool_maxsize=10, max_retries=2)
 session.mount('https://', adapter)
 
-headers = {"WebAPIKey": API_KEY, "Accept": "application/json"}
+HEADERS = {"WebAPIKey": API_KEY, "Accept": "application/json"}
 
-def probe_endpoint(name, url, params):
-    st.header(f"📡 Probe: {name}")
-    st.markdown(f"`{url}`")
+# --- FETCH FUNCTION ---
+@st.cache_data(ttl=600)
+def fetch_raw_schedule_sample():
+    url = "https://lis.virginia.gov/Schedule/api/getschedulelistasync"
+    params = {"sessionCode": SESSION_CODE, "chamberCode": "H"} 
     
     try:
-        resp = session.get(url, headers=headers, params=params, timeout=10)
-        st.write(f"**Status:** `{resp.status_code}`")
+        st.write(f"📡 Requesting: `{url}`")
+        resp = session.get(url, headers=HEADERS, params=params, timeout=10)
         
         if resp.status_code == 200:
-            try:
-                data = resp.json()
-                
-                # Try to find the list inside the response
-                items = []
-                if isinstance(data, list):
-                    items = data
-                elif isinstance(data, dict):
-                    # Look for keys that might contain lists
-                    keys = list(data.keys())
-                    st.write(f"**Root Keys:** {keys}")
-                    for k in keys:
-                        if isinstance(data[k], list):
-                            items = data[k]
-                            st.success(f"✅ Found {len(items)} items in key `'{k}'`")
-                            break
-                
-                if items:
-                    # Show the first item in full so we can see the fields
-                    st.json(items[0], expanded=False)
-                    
-                    # If Probe C, check for Bill Numbers
-                    if "Legislation" in name or "Referral" in name:
-                        df = pd.DataFrame(items)
-                        st.dataframe(df.head(5))
-                else:
-                    st.warning("⚠️ Response was valid JSON but empty.")
-                    st.json(data)
-                    
-            except Exception as e:
-                st.error(f"JSON Parse Error: {e}")
-                st.text(resp.text[:500])
+            data = resp.json()
+            items = data.get("Schedules", [])
+            st.success(f"✅ Success! Received {len(items)} items.")
+            return items
         else:
-            st.error("Request Failed")
+            st.error(f"❌ Failed: {resp.status_code}")
             st.text(resp.text)
-            
+            return []
     except Exception as e:
-        st.error(f"Connection Error: {e}")
+        st.error(f"❌ Connection Error: {e}")
+        return []
+
+# --- MAIN DISPLAY ---
+
+items = fetch_raw_schedule_sample()
+
+if items:
+    st.divider()
+    
+    # 1. SUMMARY TABLE (First 10 items)
+    st.subheader("1. Data Overview (First 5 Items)")
+    df = pd.DataFrame(items[:5])
+    st.dataframe(df)
     
     st.divider()
 
-# --- EXECUTE PROBES ---
+    # 2. DEEP DIVE (Raw JSON)
+    st.subheader("2. Deep Dive: Item Anatomy")
+    st.info("Look closely at these fields. Do you see a 'CommitteeID' or 'Link'?")
+    
+    col1, col2 = st.columns(2)
+    
+    with col1:
+        st.markdown("### Sample A (Item 0)")
+        if len(items) > 0:
+            st.json(items[0], expanded=True)
+            
+    with col2:
+        st.markdown("### Sample B (Item 5)")
+        if len(items) > 5:
+            st.json(items[5], expanded=True)
 
-# 1. PROBE A: Why did v99 fail?
-# Maybe "chamberCode" needs to be excluded to get all?
-probe_endpoint(
-    "Committee List (getcommitteelist)",
-    "https://lis.virginia.gov/Committee/api/getcommitteelist",
-    {"sessionCode": SESSION_CODE, "chamberCode": "H"} 
-)
-
-# 2. PROBE B: Legislation
-probe_endpoint(
-    "Legislation List (getlegislationlist)",
-    "https://lis.virginia.gov/Legislation/api/getlegislationlist",
-    {"sessionCode": SESSION_CODE} 
-)
-
-# 3. PROBE C: The Potential Gold Mine
-# Does this link Committees to Bills directly?
-probe_endpoint(
-    "Committee Referral (getcommitteelegislationreferrallist)",
-    "https://lis.virginia.gov/CommitteeLegislationReferral/api/getcommitteelegislationreferrallist",
-    {"sessionCode": SESSION_CODE, "chamberCode": "H"}
-)
-
-# 4. PROBE D: Schedule (Control)
-probe_endpoint(
-    "Schedule (getschedulelist)",
-    "https://lis.virginia.gov/Schedule/api/getschedulelistasync",
-    {"sessionCode": SESSION_CODE, "chamberCode": "H"}
-)
+    # 3. LINK CHECKER
+    st.divider()
+    st.subheader("3. Hidden Links Check")
+    st.markdown("Scanning all items for 'http' in the `Description` field...")
+    
+    count = 0
+    for i, item in enumerate(items):
+        desc = item.get("Description", "")
+        if desc and "http" in str(desc):
+            st.markdown(f"**Found in Item {i} ({item.get('OwnerName')}):**")
+            st.code(desc, language="html")
+            count += 1
+            if count >= 5: break
+    
+    if count == 0:
+        st.warning("No 'http' links found in Descriptions.")
