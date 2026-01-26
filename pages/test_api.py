@@ -8,8 +8,8 @@ import concurrent.futures
 API_KEY = "81D70A54-FCDC-4023-A00B-A3FD114D5984" 
 SESSION_CODE = "20261" 
 
-st.set_page_config(page_title="v98 API Explorer", page_icon="🕵️", layout="wide")
-st.title("🕵️ v98: API Explorer (The 'Missing Link' Fix)")
+st.set_page_config(page_title="v99 Fuzzy Linker", page_icon="🔗", layout="wide")
+st.title("🔗 v99: The 'Fuzzy Linker' (Token Matching)")
 
 # --- NETWORK ENGINE ---
 session = requests.Session()
@@ -19,11 +19,27 @@ session.mount('https://', adapter)
 # --- HELPER FUNCTIONS ---
 def normalize_name(name):
     if not name: return ""
-    # Remove generic words to match "Senate Commerce and Labor" with "Senate Committee on Commerce and Labor"
+    # Remove generic words to leave only the unique identifiers
     clean = name.lower().replace("-", " ")
     for word in ["house", "senate", "committee", "subcommittee", "room", "building", "capitol", "of", "and", "&", "the", "on"]:
         clean = clean.replace(word, "")
+    # Remove extra spaces
     return " ".join(clean.split())
+
+def calculate_similarity(name1, name2):
+    """
+    Calculates Jaccard Similarity (Token Overlap)
+    Returns score between 0.0 and 1.0
+    """
+    set1 = set(normalize_name(name1).split())
+    set2 = set(normalize_name(name2).split())
+    
+    if not set1 or not set2: return 0.0
+    
+    intersection = len(set1.intersection(set2))
+    union = len(set1.union(set2))
+    
+    return intersection / union
 
 def parse_time_rank(time_str):
     if not time_str: return 9999
@@ -39,38 +55,30 @@ def parse_time_rank(time_str):
     except: pass
     return 9999
 
-# --- 1. NEW: COMMITTEE API FETCH (The Fix) ---
+# --- 1. COMMITTEE DB FETCH (The Source of Truth for Links) ---
 @st.cache_data(ttl=600)
 def fetch_committee_database():
     """
-    Hits the 'Committee' API endpoint to find permanent links.
+    Hits the 'getcommitteelist' endpoint.
     """
     url = "https://lis.virginia.gov/Committee/api/getcommitteelist"
     headers = {"WebAPIKey": API_KEY, "Accept": "application/json"}
     
-    committee_map = {}
+    committee_list = []
     
     try:
-        # Fetch House and Senate Committees
         for chamber in ["H", "S"]:
             resp = session.get(url, headers=headers, params={"sessionCode": SESSION_CODE, "chamberCode": chamber}, timeout=5)
             if resp.status_code == 200:
                 data = resp.json()
-                # Handle API weirdness (sometimes returns list, sometimes dict)
                 items = data if isinstance(data, list) else data.get("Committees", [])
-                
-                for item in items:
-                    # Key by Normalized Name for fuzzy matching
-                    raw_name = item.get("CommitteeName", "")
-                    norm_name = normalize_name(raw_name)
-                    committee_map[norm_name] = item
-                    
+                committee_list.extend(items)
     except Exception as e:
         st.error(f"Committee API Error: {e}")
         
-    return committee_map
+    return committee_list
 
-# --- 2. EXISTING: SCHEDULE API FETCH ---
+# --- 2. SCHEDULE FETCH ---
 @st.cache_data(ttl=600) 
 def get_full_schedule():
     url = "https://lis.virginia.gov/Schedule/api/getschedulelistasync"
@@ -88,7 +96,7 @@ def get_full_schedule():
 
 # --- MAIN LOGIC ---
 
-with st.spinner("Fetching Schedule & Committee Database..."):
+with st.spinner("Syncing LIS Databases..."):
     all_raw_items = get_full_schedule()
     committee_db = fetch_committee_database()
 
@@ -96,59 +104,75 @@ today = datetime.now().date()
 display_map = {}
 seen_sigs = set()
 
-# Process Events
+# Debug Info
+st.sidebar.info(f"Loaded {len(committee_db)} Committees from DB")
+
 for m in all_raw_items:
     raw_date = m.get("ScheduleDate", "").split("T")[0]
     if not raw_date: continue
     d = datetime.strptime(raw_date, "%Y-%m-%d").date()
     if d < today: continue 
     
-    # Deduplicate
     sig = (raw_date, m.get('ScheduleTime'), m.get('OwnerName'))
     if sig in seen_sigs: continue
     seen_sigs.add(sig)
 
-    # --- THE LINK FIX ---
-    # 1. Start with what the Schedule API gave us
-    schedule_link = None
-    if m.get("Description") and "href" in m.get("Description"):
-        # Quick extract if exists
-        soup_desc = re.search(r'href=[\'"]?([^\'" >]+)', m["Description"])
-        if soup_desc: schedule_link = soup_desc.group(1)
-    
-    # 2. PROBE: Look up in Committee DB
+    # --- FUZZY LINK MATCHING ---
     owner_name = m.get("OwnerName", "Unknown")
-    norm_owner = normalize_name(owner_name)
     
-    # Try to find a match in the DB
-    probe_match = {}
-    found_db_link = None
+    best_match = None
+    best_score = 0.0
+    match_type = "None"
     
-    # A. Exact Match
-    if norm_owner in committee_db:
-        probe_match = committee_db[norm_owner]
-    else:
-        # B. Partial Match (e.g. "Commerce Labor" in "Senate Commerce and Labor")
-        for db_key, db_val in committee_db.items():
-            if norm_owner in db_key or db_key in norm_owner:
-                probe_match = db_val
-                break
-    
-    # 3. EXTRACT LINK FROM PROBE
-    if probe_match:
-        # Prioritize LinkUrl (usually Docket) -> CommitteeUrl (Homepage)
-        found_db_link = probe_match.get("LinkUrl")
-        if not found_db_link: found_db_link = probe_match.get("CommitteeUrl")
+    # 1. Try Direct Fuzzy Match
+    for db_item in committee_db:
+        db_name = db_item.get("CommitteeName", "")
+        score = calculate_similarity(owner_name, db_name)
         
-        # FIX: Ensure full URL
-        if found_db_link and found_db_link.startswith("/"):
-            found_db_link = f"https://lis.virginia.gov{found_db_link}"
+        if score > best_score:
+            best_score = score
+            best_match = db_item
+            match_type = "Direct Fuzzy"
 
-    # 4. DECISION TIME
-    # Use DB link if Schedule link is missing
-    final_link = schedule_link if schedule_link else found_db_link
+    # 2. Parent Fallback (if score is low)
+    if best_score < 0.6 and "Subcommittee" in owner_name:
+        # Strip "Subcommittee" and try again
+        parent_name_guess = owner_name.split("-")[0].strip() # "Senate Finance - Resources" -> "Senate Finance"
+        if "Subcommittee" in parent_name_guess: 
+             parent_name_guess = parent_name_guess.replace("Subcommittee", "")
+        
+        for db_item in committee_db:
+            db_name = db_item.get("CommitteeName", "")
+            # Boost score for parent match
+            score = calculate_similarity(parent_name_guess, db_name)
+            
+            if score > best_score:
+                best_score = score
+                best_match = db_item
+                match_type = "Parent Fallback"
+
+    # 3. EXTRACT LINK
+    final_link = None
+    if best_score > 0.5: # Acceptance Threshold
+        # Prefer LinkUrl (Docket) -> CommitteeUrl (Home)
+        raw_link = best_match.get("LinkUrl") or best_match.get("CommitteeUrl")
+        if raw_link:
+            if raw_link.startswith("/"): raw_link = f"https://lis.virginia.gov{raw_link}"
+            final_link = raw_link
+            
+    # Fallback to Description Link if Probe failed
+    if not final_link and m.get("Description"):
+        soup_desc = re.search(r'href=[\'"]?([^\'" >]+)', m["Description"])
+        if soup_desc: 
+            final_link = soup_desc.group(1)
+            match_type = "Description Link"
+
     m["FinalLink"] = final_link
-    m["ProbeData"] = probe_match # Save for the X-Ray
+    m["DebugMatch"] = {
+        "score": best_score, 
+        "matched_name": best_match.get("CommitteeName") if best_match else "None",
+        "type": match_type
+    }
     
     # Time Logic
     api_time = m.get("ScheduleTime")
@@ -182,7 +206,7 @@ else:
                 clean_name = name.replace("Committee", "").strip()
                 time_disp = event.get("DisplayTime")
                 link = event.get("FinalLink")
-                probe = event.get("ProbeData")
+                debug = event.get("DebugMatch")
                 
                 with st.container(border=True):
                     # Time
@@ -199,11 +223,9 @@ else:
                     else:
                         st.caption("*(No Link)*")
                     
-                    # THE X-RAY (Verify the API Match)
-                    with st.expander("🕵️ Probe"):
-                        if probe:
-                            st.success(f"Matched: {probe.get('CommitteeName')}")
-                            st.caption(f"DB Link: {probe.get('LinkUrl')}")
-                        else:
-                            st.error("No API Match")
-                            st.caption(f"Searched: {normalize_name(name)}")
+                    # DEBUG EXPANDER
+                    with st.expander("🕵️ Probe Data"):
+                        st.write(f"**Method:** {debug['type']}")
+                        st.write(f"**Match:** `{debug['matched_name']}`")
+                        st.write(f"**Score:** `{debug['score']:.2f}`")
+                        if link: st.caption(f"🔗 {link}")
