@@ -1,231 +1,111 @@
 import streamlit as st
 import requests
 import re
-from datetime import datetime, timedelta
 import concurrent.futures
+from bs4 import BeautifulSoup
+
+st.set_page_config(page_title="v100 Bill Hunter", page_icon="📜", layout="wide")
+st.title("📜 v100: Standalone Bill Hunter")
 
 # --- CONFIGURATION ---
-API_KEY = "81D70A54-FCDC-4023-A00B-A3FD114D5984" 
-SESSION_CODE = "20261" 
+# We bypass the "Search" entirely by knowing where to look.
+# These are the permanent IDs for major committees.
+COMMITTEES = [
+    # HOUSE
+    {"name": "House Appropriations", "url": "https://house.vga.virginia.gov/committees/H02"},
+    {"name": "House Finance", "url": "https://house.vga.virginia.gov/committees/H09"},
+    {"name": "House Courts of Justice", "url": "https://house.vga.virginia.gov/committees/H08"},
+    {"name": "House Commerce & Energy", "url": "https://house.vga.virginia.gov/committees/H11"},
+    {"name": "House Education", "url": "https://house.vga.virginia.gov/committees/H07"},
+    {"name": "House Health & Human Services", "url": "https://house.vga.virginia.gov/committees/H13"},
+    {"name": "House Public Safety", "url": "https://house.vga.virginia.gov/committees/H18"},
+    # SENATE (Note: Senate URLs are often different/older, using LIS direct links if possible)
+    {"name": "Senate Commerce & Labor", "url": "https://lis.virginia.gov/cgi-bin/legp604.exe?261+com+S03"},
+    {"name": "Senate Courts of Justice", "url": "https://lis.virginia.gov/cgi-bin/legp604.exe?261+com+S04"},
+    {"name": "Senate Finance & Appropriations", "url": "https://lis.virginia.gov/cgi-bin/legp604.exe?261+com+S05"},
+    {"name": "Senate Education & Health", "url": "https://lis.virginia.gov/cgi-bin/legp604.exe?261+com+S02"},
+]
 
-st.set_page_config(page_title="v99 Fuzzy Linker", page_icon="🔗", layout="wide")
-st.title("🔗 v99: The 'Fuzzy Linker' (Token Matching)")
+HEADERS = {
+    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+}
 
-# --- NETWORK ENGINE ---
-session = requests.Session()
-adapter = requests.adapters.HTTPAdapter(pool_connections=10, pool_maxsize=10, max_retries=2)
-session.mount('https://', adapter)
-
-# --- HELPER FUNCTIONS ---
-def normalize_name(name):
-    if not name: return ""
-    # Remove generic words to leave only the unique identifiers
-    clean = name.lower().replace("-", " ")
-    for word in ["house", "senate", "committee", "subcommittee", "room", "building", "capitol", "of", "and", "&", "the", "on"]:
-        clean = clean.replace(word, "")
-    # Remove extra spaces
-    return " ".join(clean.split())
-
-def calculate_similarity(name1, name2):
+def get_bills_from_url(url):
     """
-    Calculates Jaccard Similarity (Token Overlap)
-    Returns score between 0.0 and 1.0
+    Visits the URL and regex-scrapes for bill numbers.
     """
-    set1 = set(normalize_name(name1).split())
-    set2 = set(normalize_name(name2).split())
-    
-    if not set1 or not set2: return 0.0
-    
-    intersection = len(set1.intersection(set2))
-    union = len(set1.union(set2))
-    
-    return intersection / union
-
-def parse_time_rank(time_str):
-    if not time_str: return 9999
-    t_upper = str(time_str).upper()
-    if "CANCEL" in t_upper: return 8888
-    if "TBA" in t_upper: return 9999
-    if "ADJOURN" in t_upper or "UPON" in t_upper: return 2000 
     try:
-        match = re.search(r'(\d{1,2}:\d{2}\s*[AP]M)', t_upper)
-        if match:
-            dt = datetime.strptime(match.group(1), "%I:%M %p")
-            return dt.hour * 60 + dt.minute
-    except: pass
-    return 9999
-
-# --- 1. COMMITTEE DB FETCH (The Source of Truth for Links) ---
-@st.cache_data(ttl=600)
-def fetch_committee_database():
-    """
-    Hits the 'getcommitteelist' endpoint.
-    """
-    url = "https://lis.virginia.gov/Committee/api/getcommitteelist"
-    headers = {"WebAPIKey": API_KEY, "Accept": "application/json"}
-    
-    committee_list = []
-    
-    try:
-        for chamber in ["H", "S"]:
-            resp = session.get(url, headers=headers, params={"sessionCode": SESSION_CODE, "chamberCode": chamber}, timeout=5)
-            if resp.status_code == 200:
-                data = resp.json()
-                items = data if isinstance(data, list) else data.get("Committees", [])
-                committee_list.extend(items)
+        resp = requests.get(url, headers=HEADERS, timeout=5)
+        soup = BeautifulSoup(resp.text, 'html.parser')
+        text = soup.get_text(" ", strip=True)
+        
+        # Regex to find HB1234, SB50, etc.
+        # Matches "HB" or "S.B." followed optionally by dots/spaces, then numbers
+        pattern = r'\b([H|S]\.?[B|J|R]\.?)\s*(\d+)\b'
+        matches = re.findall(pattern, text, re.IGNORECASE)
+        
+        # Clean and sort
+        bills = set()
+        for p, n in matches:
+            prefix = p.upper().replace(".", "").strip()
+            bills.add(f"{prefix}{n}")
+            
+        # Sort nicely (HB1 before HB100)
+        def sort_key(b):
+            # Split letters and numbers
+            match = re.match(r"([A-Z]+)(\d+)", b)
+            if match: return match.group(1), int(match.group(2))
+            return b, 0
+            
+        return sorted(list(bills), key=sort_key)
     except Exception as e:
-        st.error(f"Committee API Error: {e}")
-        
-    return committee_list
+        return []
 
-# --- 2. SCHEDULE FETCH ---
-@st.cache_data(ttl=600) 
-def get_full_schedule():
-    url = "https://lis.virginia.gov/Schedule/api/getschedulelistasync"
-    headers = {"WebAPIKey": API_KEY, "Accept": "application/json"}
-    try:
-        with concurrent.futures.ThreadPoolExecutor(max_workers=2) as executor:
-            h = executor.submit(session.get, url, headers=headers, params={"sessionCode": SESSION_CODE, "chamberCode": "H"}, timeout=5)
-            s = executor.submit(session.get, url, headers=headers, params={"sessionCode": SESSION_CODE, "chamberCode": "S"}, timeout=5)
+# --- MAIN APP ---
+
+if st.button("🔄 Scan All Committees", type="primary"):
+    
+    results = {}
+    
+    # Run in parallel for speed
+    with st.status("Scanning Committee Dockets...", expanded=True) as status:
+        with concurrent.futures.ThreadPoolExecutor(max_workers=5) as executor:
+            future_to_name = {executor.submit(get_bills_from_url, c['url']): c['name'] for c in COMMITTEES}
             
-            raw_items = []
-            if h.result().status_code == 200: raw_items.extend(h.result().json().get("Schedules", []))
-            if s.result().status_code == 200: raw_items.extend(s.result().json().get("Schedules", []))
-            return raw_items
-    except: return []
+            for future in concurrent.futures.as_completed(future_to_name):
+                name = future_to_name[future]
+                try:
+                    bills = future.result()
+                    results[name] = bills
+                    st.write(f"✅ Scanned {name}")
+                except:
+                    results[name] = []
+                    
+        status.update(label="Scan Complete", state="complete", expanded=False)
 
-# --- MAIN LOGIC ---
-
-with st.spinner("Syncing LIS Databases..."):
-    all_raw_items = get_full_schedule()
-    committee_db = fetch_committee_database()
-
-today = datetime.now().date()
-display_map = {}
-seen_sigs = set()
-
-# Debug Info
-st.sidebar.info(f"Loaded {len(committee_db)} Committees from DB")
-
-for m in all_raw_items:
-    raw_date = m.get("ScheduleDate", "").split("T")[0]
-    if not raw_date: continue
-    d = datetime.strptime(raw_date, "%Y-%m-%d").date()
-    if d < today: continue 
+    # --- DISPLAY ---
+    st.divider()
     
-    sig = (raw_date, m.get('ScheduleTime'), m.get('OwnerName'))
-    if sig in seen_sigs: continue
-    seen_sigs.add(sig)
-
-    # --- FUZZY LINK MATCHING ---
-    owner_name = m.get("OwnerName", "Unknown")
+    # Create columns for layout
+    cols = st.columns(3)
     
-    best_match = None
-    best_score = 0.0
-    match_type = "None"
-    
-    # 1. Try Direct Fuzzy Match
-    for db_item in committee_db:
-        db_name = db_item.get("CommitteeName", "")
-        score = calculate_similarity(owner_name, db_name)
-        
-        if score > best_score:
-            best_score = score
-            best_match = db_item
-            match_type = "Direct Fuzzy"
-
-    # 2. Parent Fallback (if score is low)
-    if best_score < 0.6 and "Subcommittee" in owner_name:
-        # Strip "Subcommittee" and try again
-        parent_name_guess = owner_name.split("-")[0].strip() # "Senate Finance - Resources" -> "Senate Finance"
-        if "Subcommittee" in parent_name_guess: 
-             parent_name_guess = parent_name_guess.replace("Subcommittee", "")
-        
-        for db_item in committee_db:
-            db_name = db_item.get("CommitteeName", "")
-            # Boost score for parent match
-            score = calculate_similarity(parent_name_guess, db_name)
-            
-            if score > best_score:
-                best_score = score
-                best_match = db_item
-                match_type = "Parent Fallback"
-
-    # 3. EXTRACT LINK
-    final_link = None
-    if best_score > 0.5: # Acceptance Threshold
-        # Prefer LinkUrl (Docket) -> CommitteeUrl (Home)
-        raw_link = best_match.get("LinkUrl") or best_match.get("CommitteeUrl")
-        if raw_link:
-            if raw_link.startswith("/"): raw_link = f"https://lis.virginia.gov{raw_link}"
-            final_link = raw_link
-            
-    # Fallback to Description Link if Probe failed
-    if not final_link and m.get("Description"):
-        soup_desc = re.search(r'href=[\'"]?([^\'" >]+)', m["Description"])
-        if soup_desc: 
-            final_link = soup_desc.group(1)
-            match_type = "Description Link"
-
-    m["FinalLink"] = final_link
-    m["DebugMatch"] = {
-        "score": best_score, 
-        "matched_name": best_match.get("CommitteeName") if best_match else "None",
-        "type": match_type
-    }
-    
-    # Time Logic
-    api_time = m.get("ScheduleTime")
-    final_time = api_time
-    if not final_time:
-        if "Convene" in owner_name: final_time = "TBA"
-        else: final_time = "Not Listed"
-    m['DisplayTime'] = final_time
-    
-    if d not in display_map: display_map[d] = []
-    display_map[d].append(m)
-
-# --- RENDER UI ---
-if not display_map:
-    st.info("No upcoming events found.")
-else:
-    sorted_dates = sorted(display_map.keys())[:7]
-    cols = st.columns(len(sorted_dates))
-    
-    for i, date_val in enumerate(sorted_dates):
-        with cols[i]:
-            st.markdown(f"### {date_val.strftime('%a')}")
-            st.caption(date_val.strftime('%b %d'))
-            st.divider()
-            
-            day_events = display_map[date_val]
-            day_events.sort(key=lambda x: parse_time_rank(x.get("DisplayTime")))
-            
-            for event in day_events:
-                name = event.get("OwnerName", "Unknown")
-                clean_name = name.replace("Committee", "").strip()
-                time_disp = event.get("DisplayTime")
-                link = event.get("FinalLink")
-                debug = event.get("DebugMatch")
+    # Distribute results across columns
+    for i, (name, bills) in enumerate(results.items()):
+        col = cols[i % 3]
+        with col:
+            with st.container(border=True):
+                st.markdown(f"### {name}")
                 
-                with st.container(border=True):
-                    # Time
-                    if "TBA" in str(time_disp) or "Not Listed" in str(time_disp):
-                        st.warning(f"⚠️ {time_disp}")
-                    else:
-                        st.markdown(f"**⏰ {time_disp}**")
-                    
-                    st.markdown(f"**{clean_name}**")
-                    
-                    # Link Button
-                    if link:
-                        st.link_button("View Docket/Agenda", link)
-                    else:
-                        st.caption("*(No Link)*")
-                    
-                    # DEBUG EXPANDER
-                    with st.expander("🕵️ Probe Data"):
-                        st.write(f"**Method:** {debug['type']}")
-                        st.write(f"**Match:** `{debug['matched_name']}`")
-                        st.write(f"**Score:** `{debug['score']:.2f}`")
-                        if link: st.caption(f"🔗 {link}")
+                # Find the URL for the button
+                url = next(c['url'] for c in COMMITTEES if c['name'] == name)
+                
+                if bills:
+                    st.success(f"**{len(bills)} Bills Found**")
+                    st.markdown(", ".join(bills))
+                else:
+                    st.caption("No bills listed on docket.")
+                
+                st.link_button("View Docket", url)
+
+else:
+    st.info("Click the button to scan major committees for active bills.")
