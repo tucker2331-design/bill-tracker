@@ -9,23 +9,19 @@ API_KEY = "81D70A54-FCDC-4023-A00B-A3FD114D5984"
 SESSION_CODE = "20261" 
 
 st.set_page_config(page_title="v98 API Explorer", page_icon="🕵️", layout="wide")
-st.title("🕵️ v98: API Explorer (Finding the Missing Links)")
+st.title("🕵️ v98: API Explorer (The 'Missing Link' Fix)")
 
 # --- NETWORK ENGINE ---
 session = requests.Session()
 adapter = requests.adapters.HTTPAdapter(pool_connections=10, pool_maxsize=10, max_retries=2)
 session.mount('https://', adapter)
 
-HEADERS = {
-    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-}
-
 # --- HELPER FUNCTIONS ---
 def normalize_name(name):
     if not name: return ""
-    # Strict normalization to match "Schedule" names to "Committee" names
+    # Remove generic words to match "Senate Commerce and Labor" with "Senate Committee on Commerce and Labor"
     clean = name.lower().replace("-", " ")
-    for word in ["house", "senate", "committee", "subcommittee", "room", "building", "capitol", "of", "and", "&", "the"]:
+    for word in ["house", "senate", "committee", "subcommittee", "room", "building", "capitol", "of", "and", "&", "the", "on"]:
         clean = clean.replace(word, "")
     return " ".join(clean.split())
 
@@ -43,36 +39,38 @@ def parse_time_rank(time_str):
     except: pass
     return 9999
 
-# --- 1. THE NEW PROBE (Committee API) ---
+# --- 1. NEW: COMMITTEE API FETCH (The Fix) ---
 @st.cache_data(ttl=600)
-def fetch_committee_metadata():
+def fetch_committee_database():
     """
-    Hits the 'Committee' endpoint to find permanent links.
+    Hits the 'Committee' API endpoint to find permanent links.
     """
-    base_url = "https://lis.virginia.gov/Committee/api/getcommitteelist"
+    url = "https://lis.virginia.gov/Committee/api/getcommitteelist"
     headers = {"WebAPIKey": API_KEY, "Accept": "application/json"}
     
-    metadata_map = {}
+    committee_map = {}
     
     try:
-        # Fetch both chambers
+        # Fetch House and Senate Committees
         for chamber in ["H", "S"]:
-            resp = session.get(base_url, headers=headers, params={"sessionCode": SESSION_CODE, "chamberCode": chamber}, timeout=5)
+            resp = session.get(url, headers=headers, params={"sessionCode": SESSION_CODE, "chamberCode": chamber}, timeout=5)
             if resp.status_code == 200:
-                items = resp.json() if isinstance(resp.json(), list) else resp.json().get("Committees", [])
+                data = resp.json()
+                # Handle API weirdness (sometimes returns list, sometimes dict)
+                items = data if isinstance(data, list) else data.get("Committees", [])
                 
                 for item in items:
-                    # We store data keyed by a normalized name for easy matching later
+                    # Key by Normalized Name for fuzzy matching
                     raw_name = item.get("CommitteeName", "")
                     norm_name = normalize_name(raw_name)
-                    metadata_map[norm_name] = item
+                    committee_map[norm_name] = item
                     
     except Exception as e:
-        st.error(f"Probe Error: {e}")
+        st.error(f"Committee API Error: {e}")
         
-    return metadata_map
+    return committee_map
 
-# --- 2. EXISTING SCHEDULE API (The Base) ---
+# --- 2. EXISTING: SCHEDULE API FETCH ---
 @st.cache_data(ttl=600) 
 def get_full_schedule():
     url = "https://lis.virginia.gov/Schedule/api/getschedulelistasync"
@@ -90,54 +88,73 @@ def get_full_schedule():
 
 # --- MAIN LOGIC ---
 
-with st.spinner("Initializing Schedule..."):
+with st.spinner("Fetching Schedule & Committee Database..."):
     all_raw_items = get_full_schedule()
-
-with st.spinner("Probing Committee Database..."):
-    # This is the NEW call
-    committee_db = fetch_committee_metadata()
+    committee_db = fetch_committee_database()
 
 today = datetime.now().date()
 display_map = {}
 seen_sigs = set()
 
+# Process Events
 for m in all_raw_items:
     raw_date = m.get("ScheduleDate", "").split("T")[0]
     if not raw_date: continue
     d = datetime.strptime(raw_date, "%Y-%m-%d").date()
     if d < today: continue 
     
+    # Deduplicate
     sig = (raw_date, m.get('ScheduleTime'), m.get('OwnerName'))
     if sig in seen_sigs: continue
     seen_sigs.add(sig)
 
-    # --- THE MATCHMAKER ---
-    # Try to find this schedule item in our new Committee Database
-    owner = m.get("OwnerName", "")
-    norm_owner = normalize_name(owner)
+    # --- THE LINK FIX ---
+    # 1. Start with what the Schedule API gave us
+    schedule_link = None
+    if m.get("Description") and "href" in m.get("Description"):
+        # Quick extract if exists
+        soup_desc = re.search(r'href=[\'"]?([^\'" >]+)', m["Description"])
+        if soup_desc: schedule_link = soup_desc.group(1)
     
-    # Fuzzy-ish lookup in the dictionary
-    matched_metadata = {}
+    # 2. PROBE: Look up in Committee DB
+    owner_name = m.get("OwnerName", "Unknown")
+    norm_owner = normalize_name(owner_name)
     
-    # 1. Direct Match
+    # Try to find a match in the DB
+    probe_match = {}
+    found_db_link = None
+    
+    # A. Exact Match
     if norm_owner in committee_db:
-        matched_metadata = committee_db[norm_owner]
+        probe_match = committee_db[norm_owner]
     else:
-        # 2. Partial Match (e.g. "Senate Commerce and Labor" vs "Commerce and Labor")
-        for db_name, db_data in committee_db.items():
-            if db_name in norm_owner or norm_owner in db_name:
-                matched_metadata = db_data
+        # B. Partial Match (e.g. "Commerce Labor" in "Senate Commerce and Labor")
+        for db_key, db_val in committee_db.items():
+            if norm_owner in db_key or db_key in norm_owner:
+                probe_match = db_val
                 break
     
-    # Store the probe results in the event object
-    m['ProbeData'] = matched_metadata
-    m['DateObj'] = d
+    # 3. EXTRACT LINK FROM PROBE
+    if probe_match:
+        # Prioritize LinkUrl (usually Docket) -> CommitteeUrl (Homepage)
+        found_db_link = probe_match.get("LinkUrl")
+        if not found_db_link: found_db_link = probe_match.get("CommitteeUrl")
+        
+        # FIX: Ensure full URL
+        if found_db_link and found_db_link.startswith("/"):
+            found_db_link = f"https://lis.virginia.gov{found_db_link}"
+
+    # 4. DECISION TIME
+    # Use DB link if Schedule link is missing
+    final_link = schedule_link if schedule_link else found_db_link
+    m["FinalLink"] = final_link
+    m["ProbeData"] = probe_match # Save for the X-Ray
     
-    # Clean up Time (Base Logic)
+    # Time Logic
     api_time = m.get("ScheduleTime")
     final_time = api_time
     if not final_time:
-        if "Convene" in owner: final_time = "TBA"
+        if "Convene" in owner_name: final_time = "TBA"
         else: final_time = "Not Listed"
     m['DisplayTime'] = final_time
     
@@ -164,13 +181,9 @@ else:
                 name = event.get("OwnerName", "Unknown")
                 clean_name = name.replace("Committee", "").strip()
                 time_disp = event.get("DisplayTime")
+                link = event.get("FinalLink")
+                probe = event.get("ProbeData")
                 
-                # Check PROBE DATA for links
-                probe = event.get('ProbeData', {})
-                # Look for ANYTHING that looks like a URL in the probe result
-                found_url = probe.get("LinkUrl") or probe.get("CommitteeUrl") or probe.get("DocketUrl")
-                
-                # Render Card
                 with st.container(border=True):
                     # Time
                     if "TBA" in str(time_disp) or "Not Listed" in str(time_disp):
@@ -180,19 +193,17 @@ else:
                     
                     st.markdown(f"**{clean_name}**")
                     
-                    # Primary Link Button
-                    if found_url:
-                        st.link_button("View Info (API Found)", found_url)
-                    elif event.get("Description") and "href" in event.get("Description"):
-                         st.caption("*(Has Desc Link)*")
+                    # Link Button
+                    if link:
+                        st.link_button("View Docket/Agenda", link)
                     else:
-                         st.caption("*(No Link)*")
-
-                    # THE PROBE EXPANDER
-                    with st.expander("🕵️ Probe API"):
+                        st.caption("*(No Link)*")
+                    
+                    # THE X-RAY (Verify the API Match)
+                    with st.expander("🕵️ Probe"):
                         if probe:
-                            st.success("Match Found!")
-                            st.json(probe) # Show the RAW JSON so we can see the field names
+                            st.success(f"Matched: {probe.get('CommitteeName')}")
+                            st.caption(f"DB Link: {probe.get('LinkUrl')}")
                         else:
                             st.error("No API Match")
-                            st.write(f"Searched for: `{normalize_name(name)}`")
+                            st.caption(f"Searched: {normalize_name(name)}")
