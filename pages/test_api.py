@@ -2,6 +2,7 @@ import streamlit as st
 import requests
 import re
 import time
+import random
 from bs4 import BeautifulSoup
 from datetime import datetime, timedelta
 
@@ -9,19 +10,24 @@ from datetime import datetime, timedelta
 API_KEY = "81D70A54-FCDC-4023-A00B-A3FD114D5984" 
 SESSION_CODE = "20261" 
 
-st.set_page_config(page_title="v89 Bulletproof", page_icon="🛡️", layout="wide")
-st.title("🛡️ v89: Bulletproof Calendar (Sequential)")
+st.set_page_config(page_title="v90 Stealth", page_icon="🕵️", layout="wide")
+st.title("🕵️ v90: Stealth Calendar (Anti-Block)")
 
-# --- NETWORK ENGINE (SINGLE THREAD) ---
-# We recreate the session for every batch to ensure no "stale" connections hang
+# --- NETWORK ENGINE (STEALTH) ---
 def get_session():
     s = requests.Session()
-    a = requests.adapters.HTTPAdapter(max_retries=1)
+    # Retry logic for stability
+    a = requests.adapters.HTTPAdapter(max_retries=2)
     s.mount('https://', a)
     return s
 
+# Headers to look like a real human user
 HEADERS = {
-    'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+    'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
+    'Accept-Language': 'en-US,en;q=0.5',
+    'Connection': 'keep-alive',
+    'Upgrade-Insecure-Requests': '1',
 }
 
 # --- HELPER FUNCTIONS ---
@@ -72,22 +78,31 @@ def parse_time_rank(time_str):
     except: pass
     return 9999
 
-# --- SCRAPERS (SEQUENTIAL) ---
+# --- SCRAPERS (STEALTH MODE) ---
 def fetch_visual_schedule_lines(session, date_obj):
+    # Random sleep to mimic human behavior
+    time.sleep(random.uniform(0.5, 1.5))
+    
     date_str = date_obj.strftime("%Y%m%d")
     url = f"https://lis.virginia.gov/cgi-bin/legp604.exe?{SESSION_CODE}+dys+{date_str}"
     try:
-        # Aggressive timeout (2s)
-        resp = session.get(url, headers=HEADERS, timeout=2)
+        resp = session.get(url, headers=HEADERS, timeout=5)
+        if resp.status_code != 200: return []
+        
         soup = BeautifulSoup(resp.text, 'html.parser')
         text = soup.get_text("\n", strip=True)
         return [clean_html(line) for line in text.splitlines() if line.strip()]
     except: return []
 
 def fetch_bills_from_agenda(session, url):
+    # Random sleep to mimic human behavior
+    time.sleep(random.uniform(0.5, 1.5))
+    
     if not url: return []
     try:
-        resp = session.get(url, headers=HEADERS, timeout=2)
+        resp = session.get(url, headers=HEADERS, timeout=5)
+        if resp.status_code != 200: return []
+        
         soup = BeautifulSoup(resp.text, 'html.parser')
         text = soup.get_text(" ", strip=True)
         pattern = r'\b([H|S][B|J|R]\s*\.?\s*\d+)\b'
@@ -103,7 +118,7 @@ def get_basic_schedule():
     url = "https://lis.virginia.gov/Schedule/api/getschedulelistasync"
     headers = {"WebAPIKey": API_KEY, "Accept": "application/json"}
     try:
-        # Fetch H then S sequentially
+        # Sequential fetch
         h = s.get(url, headers=headers, params={"sessionCode": SESSION_CODE, "chamberCode": "H"}, timeout=5)
         s_resp = s.get(url, headers=headers, params={"sessionCode": SESSION_CODE, "chamberCode": "S"}, timeout=5)
         
@@ -158,32 +173,36 @@ for m in all_raw_items:
 # 2. Control Panel
 col1, col2 = st.columns([3, 1])
 with col1:
-    st.info(f"Loaded {len(future_items)} events. Sync to check bills.")
+    st.info(f"Loaded {len(future_items)} events.")
 with col2:
-    if st.button("🔄 Sync (Safe Mode)", type="primary"):
-        # SEQUENTIAL PROCESSING LOOP
-        s = get_session() # Fresh connection
+    if st.button("🔄 Sync (Anti-Block Mode)", type="primary"):
+        s = get_session()
         
-        target_days = sorted(list(set(item['DateObj'] for item in future_items)))[:7]
+        # Limit scope to prevent bans
+        target_days = sorted(list(set(item['DateObj'] for item in future_items)))[:5] # Only next 5 active days
         target_links = [item['AgendaLink'] for item in future_items if item['AgendaLink'] and item['DateObj'] in target_days]
         
         # 1. Schedules
         sched_cache = {}
-        progress_text = "Checking Daily Schedules..."
+        progress_text = "Checking Schedules (Slowly)..."
         my_bar = st.progress(0, text=progress_text)
         
         for i, d in enumerate(target_days):
             sched_cache[d] = fetch_visual_schedule_lines(s, d)
-            percent = int((i + 1) / len(target_days) * 30) # First 30%
+            percent = int((i + 1) / len(target_days) * 30)
             my_bar.progress(percent, text=f"Checked {d.strftime('%m/%d')}")
             
         # 2. Bills
         bill_cache = {}
         total_links = len(target_links)
         for i, url in enumerate(target_links):
-            bill_cache[url] = fetch_bills_from_agenda(s, url)
-            percent = 30 + int((i + 1) / total_links * 70) # Remaining 70%
-            my_bar.progress(percent, text=f"Scraping Agenda {i+1}/{total_links}")
+            # Graceful failure: if one fails, just skip it
+            try:
+                bill_cache[url] = fetch_bills_from_agenda(s, url)
+            except: pass
+            
+            percent = 30 + int((i + 1) / total_links * 70)
+            my_bar.progress(percent, text=f"Scanning Agenda {i+1}/{total_links}")
             
         my_bar.empty()
         st.session_state.enhanced_data = {'sched': sched_cache, 'bills': bill_cache}
