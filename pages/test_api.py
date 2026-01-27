@@ -1,365 +1,102 @@
 import streamlit as st
 import requests
-import re
 import concurrent.futures
-from datetime import datetime
 from bs4 import BeautifulSoup
 
 # --- CONFIGURATION ---
-API_KEY = "81D70A54-FCDC-4023-A00B-A3FD114D5984" 
 SESSION_CODE = "20261" 
-LIS_SESSION_ID = "261"
+BASE_URL = "https://lis.virginia.gov/session-details"
 
-st.set_page_config(page_title="v114 Universal Modernizer", page_icon="🏛️", layout="wide")
-st.title("🏛️ v114: The Universal Modernizer (Bypassing House Site)")
+st.set_page_config(page_title="v115 Calibration", page_icon="🎛️", layout="wide")
+st.title("🎛️ v115: The Calibration Tool")
+st.markdown("""
+**The Problem:** The "Room Numbers" (IDs) for committees have changed.  
+**The Fix:** This tool pings every room number (H01-H25, S01-S15) to see who is inside.
+""")
 
 # --- NETWORK ENGINE ---
 session = requests.Session()
-adapter = requests.adapters.HTTPAdapter(pool_connections=10, pool_maxsize=10, max_retries=2)
+adapter = requests.adapters.HTTPAdapter(pool_connections=20, pool_maxsize=20, max_retries=2)
 session.mount('https://', adapter)
 
 HEADERS = {
     'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
 }
 
-# --- 1. UNIVERSAL ROUTER (LIS Source of Truth) ---
-COMMITTEE_MAP = {
-    # HOUSE (Standard LIS IDs)
-    "privileges": "H01", "appropriations": "H02", "education": "H03", # H03 is standard for Ed? Checking map...
-    "finance": "H09", "courts": "H08", "commerce": "H11", "labor": "H11", 
-    "health": "H13", "agriculture": "H14", "transportation": "H15", 
-    "communications": "H16", "counties": "H17", "public safety": "H18", "rules": "H19", 
-    "general laws": "H10",
-    
-    # SENATE (Standard LIS IDs)
-    "senate agriculture": "S01", "senate education": "S02", 
-    "senate commerce": "S03", "senate courts": "S04", "senate finance": "S05", 
-    "senate general laws": "S06", "senate local": "S07", "senate privileges": "S08", 
-    "senate rehab": "S09", "senate transportation": "S10", "senate rules": "S11"
-}
-
-def construct_modern_link(owner_name):
+def scan_committee_id(chamber, num):
     """
-    Routes ALL committees to the Modern LIS 2026 portal.
-    Bypasses house.vga.virginia.gov which has ID rot.
+    Pings a specific ID (e.g., H01) and scrapes the Committee Name.
     """
-    if not owner_name: return None
-    name = owner_name.lower()
-    cid = None
+    id_str = f"{chamber}{num:02d}"
+    url = f"{BASE_URL}/{SESSION_CODE}/committee-information/{id_str}/committee-details"
     
-    # Fuzzy Match ID
-    for k, v in COMMITTEE_MAP.items():
-        if k in name:
-            cid = v
-            if "senate" in name and cid.startswith("S"): break
-            if "house" in name and cid.startswith("H"): break
-    
-    if not cid: return None
-    
-    # Universal Pattern
-    return f"https://lis.virginia.gov/session-details/{SESSION_CODE}/committee-information/{cid}/committee-details"
-
-# --- 2. SFAC SAFE SCRAPER ---
-def scrape_sfac_site(url, target_date_obj, target_name):
-    logs = [f"SFAC Scrape: {url}"]
     try:
         resp = session.get(url, headers=HEADERS, timeout=3)
-        soup = BeautifulSoup(resp.text, 'html.parser')
-        
-        target_str = target_date_obj.strftime("%B %-d, %Y")
-        if "%-" in target_str: target_str = target_date_obj.strftime("%B %d, %Y").replace(" 0", " ")
-        logs.append(f"Searching date: {target_str}")
-
-        for row in soup.find_all('tr'):
-            cols = row.find_all('td')
-            if len(cols) < 4: continue
+        if resp.status_code == 200:
+            soup = BeautifulSoup(resp.text, 'html.parser')
             
-            meeting_name = cols[0].get_text(" ", strip=True).lower()
-            meeting_date = cols[1].get_text(" ", strip=True)
+            # LIS usually puts the name in a specific <h3> or <h4> tag, or the <title>
+            # Method 1: Check Page Title (cleanest)
+            page_title = soup.title.string if soup.title else ""
             
-            if target_str not in meeting_date: continue
+            # Method 2: Look for the big header inside the page
+            header = soup.find('h3') # LIS uses H3 for committee names often
+            header_text = header.get_text(strip=True) if header else ""
             
-            # Match Sub/Full
-            api_sub = "subcommittee" in target_name.lower()
-            row_sub = "subcommittee" in meeting_name
-            if api_sub != row_sub: continue
+            # Cleanup Name
+            name = header_text if header_text else page_title
+            name = name.replace(" - 2026 Regular Session - Virginia LIS", "")
+            name = name.replace("Membership", "").strip()
             
-            # Time
-            raw_time = cols[2].get_text(" ", strip=True)
-            time_clean = re.search(r'(\d{1,2}:\d{2}\s*[aA|pP]\.?[mM]\.?)', raw_time)
-            final_time = time_clean.group(1).upper() if time_clean else raw_time
-            
-            # Link
-            agenda_link = None
-            for a in cols[3].find_all('a', href=True):
-                if "agenda" in a.get_text().lower():
-                    agenda_link = a['href']
-                    if not agenda_link.startswith("http"):
-                        agenda_link = f"https://sfac.virginia.gov{agenda_link}"
-                    break
-            
-            logs.append(f"Match Found: {final_time}")
-            return {"Time": final_time, "Link": agenda_link}, logs
-    except Exception as e:
-        logs.append(f"Error: {e}")
-        return None, logs
-    return None, logs
+            if name and "Error" not in name:
+                return (id_str, name, url)
+    except:
+        pass
+    return None
 
-# --- 3. LINK EXTRACTOR (Gatekeeper) ---
-def extract_best_link(desc_text):
-    if not desc_text: return None, "No Desc"
-    all_links = re.findall(r'href=[\'"]?(https?://[^\'" >]+)', desc_text)
-    if not all_links: return None, "No Hrefs"
-    
-    best_link = None
-    best_score = -1
-    reason = "None"
-    
-    for url in all_links:
-        score = 0
-        u = url.lower()
-        
-        # 🗑️ TRASH
-        if "granicus" in u or "now_playing" in u or "broadcast" in u or "video" in u: 
-            continue 
-        
-        # 🥇 GOLD
-        if "agenda" in u or "docket" in u or ".pdf" in u: score = 10
-        # 🥈 SILVER (Deep LIS)
-        elif "/committees/" in u or "session-details" in u: score = 5
-        # 🥉 BRONZE
-        else: score = 1
-        
-        if score > best_score:
-            best_score = score
-            best_link = url
-            reason = f"Score {score}"
-            
-    return best_link, reason
+# --- MAIN UI ---
+st.sidebar.header("Calibration Controls")
 
-# --- 4. BILL SCRAPER (Deep Diver) ---
-def get_bills_deep_dive(url):
-    logs = [f"Visiting: {url}"]
-    if not url: return [], logs
+if st.sidebar.button("🔴 Run Calibration Scan"):
+    found_committees = []
     
-    try:
-        resp = session.get(url, headers=HEADERS, timeout=5)
-        soup = BeautifulSoup(resp.text, 'html.parser')
-        
-        def scrape_text(s):
-            text = s.get_text(" ", strip=True)
-            matches = re.findall(r'\b([H|S]\.?[B|J|R]\.?)\s*(\d+)\b', text, re.IGNORECASE)
-            bills = set()
-            for p, n in matches:
-                bills.add(f"{p.upper().replace('.','').strip()}{n}")
-            return sorted(list(bills))
-
-        # 1. Surface
-        bills = scrape_text(soup)
-        logs.append(f"Surface: {len(bills)} bills")
-        if bills: return bills, logs
-        
-        # 2. Dive (Agenda/Docket)
-        target = None
-        for a in soup.find_all('a', href=True):
-            txt = a.get_text().lower()
-            if "agenda" in txt or "docket" in txt:
-                target = a['href']
-                if target.startswith("/"):
-                    base = "https://house.vga.virginia.gov" if "house.vga" in url else "https://lis.virginia.gov"
-                    target = f"{base}{target}"
-                break
-        
-        if target:
-            logs.append(f"Diving: {target}")
-            resp2 = session.get(target, headers=HEADERS, timeout=5)
-            bills = scrape_text(BeautifulSoup(resp2.text, 'html.parser'))
-            logs.append(f"Deep: {len(bills)} bills")
-            return bills, logs
-            
-        return [], logs
-    except Exception as e:
-        logs.append(f"Error: {e}")
-        return [], logs
-
-# --- 5. API FETCH ---
-@st.cache_data(ttl=600)
-def fetch_api_schedule():
-    url = "https://lis.virginia.gov/Schedule/api/getschedulelistasync"
-    headers = {"WebAPIKey": API_KEY, "Accept": "application/json"}
-    events = []
-    try:
-        with concurrent.futures.ThreadPoolExecutor(max_workers=2) as executor:
-            h = executor.submit(session.get, url, headers=headers, params={"sessionCode": SESSION_CODE, "chamberCode": "H"}, timeout=5)
-            s = executor.submit(session.get, url, headers=headers, params={"sessionCode": SESSION_CODE, "chamberCode": "S"}, timeout=5)
-            for f in [h, s]:
-                if f.result().status_code == 200:
-                    events.extend(f.result().json().get("Schedules", []))
-    except: pass
-    return events
-
-def parse_time_rank(time_str):
-    if not time_str or "TBA" in str(time_str): return 9999
-    t_upper = str(time_str).upper()
-    if "CANCEL" in t_upper: return 8888
-    try:
-        match = re.search(r'(\d{1,2}:\d{2}\s*[AP]M)', t_upper)
-        if match:
-            dt = datetime.strptime(match.group(1), "%I:%M %p")
-            return dt.hour * 60 + dt.minute
-    except: pass
-    return 9999
-
-# --- MAIN LOGIC ---
-
-with st.spinner("Processing..."):
-    raw_events = fetch_api_schedule()
-
-today = datetime.now().date()
-processed_events = []
-links_to_scan = []
-committee_map_for_probe = {}
-
-for m in raw_events:
-    if not m: continue
-    raw_date = m.get("ScheduleDate", "").split("T")[0]
-    if not raw_date: continue
-    d = datetime.strptime(raw_date, "%Y-%m-%d").date()
-    if d < today: continue
-    
-    m['DateObj'] = d
-    flight_log = []
-    
-    # Time
-    api_time = m.get("ScheduleTime")
-    m['DisplayTime'] = api_time if api_time else "Time TBA"
-    if m.get("IsCancelled") is True: m['DisplayTime'] = "CANCELLED"
-    
-    # Link
-    api_link, reason = extract_best_link(m.get("Description"))
-    flight_log.append(f"API Logic: {reason} -> {api_link}")
-    
-    if api_link and "sfac.virginia.gov" in api_link:
-        sfac, slogs = scrape_sfac_site(api_link, d, m.get("OwnerName", ""))
-        flight_log.extend(slogs)
-        if sfac:
-            if sfac['Time']: m['DisplayTime'] = sfac['Time']
-            if sfac['Link']: api_link = sfac['Link']
-            if "CANCEL" in str(sfac['Time']).upper(): m['DisplayTime'] = "CANCELLED"
-            
-    router_link = construct_modern_link(m.get("OwnerName"))
-    flight_log.append(f"Universal Router: {router_link}")
-    
-    final_link = api_link if api_link else router_link
-    m['Link'] = final_link
-    m['Source'] = "API-Extract" if api_link else "Router (LIS)"
-    m['FlightLog'] = flight_log
-    
-    if final_link: links_to_scan.append(final_link)
-    processed_events.append(m)
-    
-    key_name = f"{m.get('OwnerName')} ({d.strftime('%m/%d')})"
-    committee_map_for_probe[key_name] = m
-
-# Bills
-bill_cache = {}
-bill_logs = {}
-if links_to_scan:
-    unique = list(set(links_to_scan))
-    with st.spinner(f"Deep Scanning {len(unique)} Links..."):
+    # SCANNING HOUSE (H01 - H25)
+    with st.status("Scanning House Committees (H01-H25)..."):
         with concurrent.futures.ThreadPoolExecutor(max_workers=10) as executor:
-            fut = {executor.submit(get_bills_deep_dive, u): u for u in unique}
-            for f in concurrent.futures.as_completed(fut):
-                url = fut[f]
-                try: 
-                    res, logs = f.result()
-                    bill_cache[url] = res
-                    bill_logs[url] = logs
-                except Exception as e: 
-                    bill_cache[url] = []
-                    bill_logs[url] = [str(e)]
-
-# --- SIDEBAR LIVE PROBE ---
-st.sidebar.header("🔴 Live Probe")
-selected_c = st.sidebar.selectbox("Select Committee:", options=list(committee_map_for_probe.keys()))
-
-if selected_c:
-    evt = committee_map_for_probe[selected_c]
-    target_url = evt['Link']
+            futures = [executor.submit(scan_committee_id, "H", i) for i in range(1, 26)]
+            for f in concurrent.futures.as_completed(futures):
+                res = f.result()
+                if res: found_committees.append(res)
     
-    st.sidebar.write(f"**Target:** {target_url}")
-    
-    if st.sidebar.button("Ping URL"):
-        with st.sidebar.status("Pinging..."):
-            try:
-                r = requests.get(target_url, headers=HEADERS, timeout=5)
-                st.write(f"**Status:** `{r.status_code}`")
-                st.write(f"**Final:** `{r.url}`")
-                if "agenda" in r.text.lower() or "docket" in r.text.lower():
-                    st.success("✅ 'Agenda/Docket' found.")
-                else:
-                    st.warning("⚠️ Content Check Failed.")
-            except Exception as e:
-                st.error(f"Error: {e}")
+    # SCANNING SENATE (S01 - S15)
+    with st.status("Scanning Senate Committees (S01-S15)..."):
+        with concurrent.futures.ThreadPoolExecutor(max_workers=10) as executor:
+            futures = [executor.submit(scan_committee_id, "S", i) for i in range(1, 16)]
+            for f in concurrent.futures.as_completed(futures):
+                res = f.result()
+                if res: found_committees.append(res)
                 
-    st.sidebar.divider()
-    with st.sidebar.expander("Flight Log"):
-        for l in evt['FlightLog']: st.write(l)
-        st.write("--- Scraper ---")
-        if target_url in bill_logs:
-            for l in bill_logs[target_url]: st.write(l)
+    # DISPLAY RESULTS
+    st.success(f"Scan Complete! Found {len(found_committees)} active committees.")
+    
+    # Sort by ID
+    found_committees.sort(key=lambda x: x[0])
+    
+    st.divider()
+    st.subheader("📋 The Truth Table")
+    st.markdown("Please copy/paste this list back to me so I can update the Master Map.")
+    
+    # Create clean Dictionary text for copy-paste
+    code_block = "NEW_COMMITTEE_MAP = {\n"
+    for cid, name, url in found_committees:
+        clean_name = name.replace('"', '').strip()
+        code_block += f'    "{cid}": "{clean_name}",\n'
+    code_block += "}"
+    
+    st.code(code_block, language="python")
+    
+    # Visual Table
+    st.table([{"ID": c[0], "Name": c[1]} for c in found_committees])
 
-# --- DISPLAY ---
-display_map = {}
-for m in processed_events:
-    d = m['DateObj']
-    if d not in display_map: display_map[d] = []
-    display_map[d].append(m)
-
-if not display_map:
-    st.info("No upcoming events.")
 else:
-    dates = sorted(display_map.keys())[:7]
-    cols = st.columns(len(dates))
-    
-    for i, dv in enumerate(dates):
-        with cols[i]:
-            st.markdown(f"### {dv.strftime('%a')}")
-            st.caption(dv.strftime('%b %d'))
-            st.divider()
-            
-            day_events = display_map[dv]
-            try: day_events.sort(key=lambda x: parse_time_rank(x.get("DisplayTime")))
-            except: pass
-            
-            for e in day_events:
-                if not e: continue
-                name = e.get("OwnerName", "Unknown").replace("Committee", "").replace("Virginia", "").strip()
-                time_s = e.get("DisplayTime")
-                link = e.get("Link")
-                src = e.get("Source")
-                bills = bill_cache.get(link, [])
-                
-                is_cancelled = "CANCEL" in str(time_s).upper()
-                
-                if is_cancelled:
-                    st.error(f"❌ **{name}**")
-                    st.caption("Cancelled")
-                else:
-                    with st.container(border=True):
-                        if "TBA" in str(time_s): st.warning(f"⚠️ {time_s}")
-                        else: st.markdown(f"**⏰ {time_s}**")
-                        
-                        st.markdown(f"**{name}**")
-                        
-                        if bills:
-                            st.success(f"**{len(bills)} Bills Listed**")
-                            with st.expander("List"):
-                                st.write(", ".join(bills))
-                                if link: st.link_button("View Docket", link)
-                        elif link:
-                            st.link_button("View Docket", link)
-                        else:
-                            st.caption("*(No Link)*")
-                        
-                        st.caption(f"Src: {src}")
+    st.info("Click the button in the sidebar to start the discovery process.")
