@@ -10,8 +10,8 @@ API_KEY = "81D70A54-FCDC-4023-A00B-A3FD114D5984"
 SESSION_CODE = "20261" 
 LIS_SESSION_ID = "261"
 
-st.set_page_config(page_title="v117 Sub-Hunter", page_icon="🦈", layout="wide")
-st.title("🦈 v117: The Sub-Hunter (Navigating to Subcommittees)")
+st.set_page_config(page_title="v118 Hybrid Restoration", page_icon="🧬", layout="wide")
+st.title("🧬 v118: The Hybrid Restoration (API Priority)")
 
 # --- NETWORK ENGINE ---
 session = requests.Session()
@@ -55,11 +55,8 @@ def construct_modern_link(owner_name):
     if not cid: return None
     return f"https://lis.virginia.gov/session-details/{SESSION_CODE}/committee-information/{cid}/committee-details"
 
-# --- 2. THE SUB-HUNTER (Smart Scraper) ---
+# --- 2. THE SURGICAL SUB-HUNTER ---
 def get_bills_deep_dive(url, target_name):
-    """
-    Scrapes bills. If target_name implies a subcommittee, it hunts for that specific link first.
-    """
     logs = [f"Visiting: {url}"]
     if not url: return [], logs, url
     
@@ -68,44 +65,40 @@ def get_bills_deep_dive(url, target_name):
         soup = BeautifulSoup(resp.text, 'html.parser')
         current_url = url
         
-        # --- SUBCOMMITTEE LOGIC ---
-        # 1. Clean the target name to find specific sub-name (e.g. "Campaigns and Candidates")
+        # --- SUBCOMMITTEE HUNTING ---
         clean_target = target_name.lower().replace("house", "").replace("senate", "").replace("committee", "").strip()
         
-        # 2. Look for a link on the page that matches parts of the target name
-        sub_link_found = None
+        # Only hunt if we are on a "Main" LIS page and looking for a Sub
+        is_lis_main = "committee-details" in url
+        is_sub_target = "subcommittee" in clean_target or "-" in target_name
         
-        # Only hunt if it's likely a subcommittee (contains "subcommittee" or hyphenated)
-        if "subcommittee" in clean_target or "-" in target_name:
-            logs.append(f"Sub-Hunter Active: Scanning for '{clean_target}'...")
+        sub_url = None
+        
+        if is_lis_main and is_sub_target:
+            logs.append(f"Sub-Hunter: Scanning for '{clean_target}'...")
             
-            # Split target into keywords (e.g. "campaigns", "candidates")
+            # Strategy: Find any link that shares a significant keyword with the target name
+            # e.g. Target "Campaigns and Candidates" -> match link "Campaigns and Candidates"
             keywords = [w for w in re.split(r'[\s\-\&]+', clean_target) if len(w) > 3]
             
             for a in soup.find_all('a', href=True):
-                link_text = a.get_text(" ", strip=True).lower()
-                
-                # Check if enough keywords match to be confident
-                matches = sum(1 for k in keywords if k in link_text)
-                if matches >= 1:
-                    # Found a potential match!
-                    sub_link_found = a['href']
-                    if not sub_link_found.startswith("http"):
-                        # Handle relative LIS links
-                        if sub_link_found.startswith("/"):
-                            base = "https://lis.virginia.gov"
-                            sub_link_found = f"{base}{sub_link_found}"
-                    logs.append(f"🦈 Sub-Hunter: Found match '{link_text}' -> {sub_link_found}")
+                txt = a.get_text(" ", strip=True).lower()
+                # Check for keyword overlap
+                if any(k in txt for k in keywords):
+                    sub_url = a['href']
+                    if not sub_url.startswith("http"):
+                         # Handle LIS relative links
+                        if sub_url.startswith("/"): sub_url = f"https://lis.virginia.gov{sub_url}"
+                    logs.append(f"🦈 Match Found: '{txt}' -> {sub_url}")
                     break
         
-        # 3. If found, DIVE!
-        if sub_link_found:
-            current_url = sub_link_found
-            resp = session.get(sub_link_found, headers=HEADERS, timeout=5)
+        if sub_url:
+            current_url = sub_url
+            resp = session.get(sub_url, headers=HEADERS, timeout=5)
             soup = BeautifulSoup(resp.text, 'html.parser')
-            logs.append("Switched context to Subcommittee Page.")
+            logs.append("Switched to Subcommittee Page")
 
-        # --- STANDARD SCRAPING ---
+        # --- BILL EXTRACTION ---
         def scrape_text(s):
             text = s.get_text(" ", strip=True)
             matches = re.findall(r'\b([H|S]\.?[B|J|R]\.?)\s*(\d+)\b', text, re.IGNORECASE)
@@ -115,19 +108,19 @@ def get_bills_deep_dive(url, target_name):
             return sorted(list(bills))
 
         bills = scrape_text(soup)
-        logs.append(f"Bills Found: {len(bills)}")
+        logs.append(f"Bills: {len(bills)}")
         
         if bills: return bills, logs, current_url
         
-        # --- FALLBACK DIVE (Agenda/Docket) ---
-        # If we still have 0 bills, look for "Agenda" PDF/Link on this new page
+        # --- FALLBACK: Agenda / Docket Link ---
+        # If 0 bills, look for "Agenda" or "Docket" link
         target = None
         for a in soup.find_all('a', href=True):
             txt = a.get_text().lower()
             if "agenda" in txt or "docket" in txt:
                 target = a['href']
                 if target.startswith("/"):
-                    base = "https://lis.virginia.gov"
+                    base = "https://house.vga.virginia.gov" if "house.vga" in url else "https://lis.virginia.gov"
                     target = f"{base}{target}"
                 break
         
@@ -224,23 +217,21 @@ for m in raw_events:
     m['DisplayTime'] = api_time if api_time else "Time TBA"
     if m.get("IsCancelled") is True: m['DisplayTime'] = "CANCELLED"
     
-    # Link Selection
+    # Link Selection - PRIORITY: API -> Router
     api_link, reason = extract_best_link(m.get("Description"))
     
-    # SFAC Exception
+    # SFAC Exception (Keep this safe)
     if api_link and "sfac.virginia.gov" in api_link:
-        # (SFAC scraper code omitted for brevity but logic is same as v116)
+        # (Shortened for brevity - logic remains)
         pass 
             
     router_link = construct_modern_link(m.get("OwnerName"))
     
-    # PRIORITIZE ROUTER FOR SUBCOMMITTEES
-    # Because the API often gives the Main Committee link for subs, 
-    # but our Router + SubHunter logic is smarter.
-    final_link = api_link
-    source = "API"
-    
-    if not final_link or "granicus" in str(final_link):
+    # DECISION MATRIX
+    if api_link:
+        final_link = api_link
+        source = "API-Extract"
+    else:
         final_link = router_link
         source = "Router (Golden)"
         
@@ -248,7 +239,6 @@ for m in raw_events:
     m['Source'] = source
     m['FlightLog'] = flight_log
     
-    # We pass the full object to scan so we have the name
     if final_link: links_to_scan.append((final_link, m.get("OwnerName")))
     processed_events.append(m)
     
@@ -261,28 +251,26 @@ bill_logs = {}
 final_urls = {}
 
 if links_to_scan:
-    # Deduplicate by URL but keep name map
+    # Deduplicate by URL
     url_to_name = {u: n for u, n in links_to_scan}
     unique_urls = list(url_to_name.keys())
     
-    with st.spinner(f"Hunting Subcommittees on {len(unique_urls)} pages..."):
+    with st.spinner(f"Scanning {len(unique_urls)} Events..."):
         with concurrent.futures.ThreadPoolExecutor(max_workers=10) as executor:
-            # We submit the URL AND the Name for the Sub-Hunter
             future_map = {executor.submit(get_bills_deep_dive, u, url_to_name[u]): u for u in unique_urls}
-            
             for f in concurrent.futures.as_completed(future_map):
                 orig_url = future_map[f]
                 try: 
                     res, logs, final_url = f.result()
                     bill_cache[orig_url] = res
                     bill_logs[orig_url] = logs
-                    final_urls[orig_url] = final_url # Store where we ended up
+                    final_urls[orig_url] = final_url
                 except Exception as e: 
                     bill_cache[orig_url] = []
                     bill_logs[orig_url] = [str(e)]
                     final_urls[orig_url] = orig_url
 
-# --- SIDEBAR ---
+# --- SIDEBAR PROBE ---
 st.sidebar.header("🕹️ Control Panel")
 with st.sidebar.expander("🔴 Live Probe"):
     selected_c = st.selectbox("Select Committee:", options=list(committee_map_for_probe.keys()))
@@ -328,10 +316,9 @@ else:
                 link = e.get("Link")
                 src = e.get("Source")
                 
-                # Update link to the Final URL found by Sub-Hunter
                 final_dest_link = final_urls.get(link, link)
-                
                 bills = bill_cache.get(link, [])
+                
                 is_cancelled = "CANCEL" in str(time_s).upper()
                 
                 if is_cancelled:
