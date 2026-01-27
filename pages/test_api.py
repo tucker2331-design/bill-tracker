@@ -10,8 +10,8 @@ API_KEY = "81D70A54-FCDC-4023-A00B-A3FD114D5984"
 SESSION_CODE = "20261" 
 LIS_SESSION_ID = "261"
 
-st.set_page_config(page_title="v112 Flight Recorder", page_icon="📼", layout="wide")
-st.title("📼 v112: The Flight Recorder (Debug Sidebar)")
+st.set_page_config(page_title="v113 Modernizer", page_icon="📡", layout="wide")
+st.title("📡 v113: The Modernizer (Live Probe + New Links)")
 
 # --- NETWORK ENGINE ---
 session = requests.Session()
@@ -22,85 +22,7 @@ HEADERS = {
     'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
 }
 
-# --- 1. LOGGING WRAPPERS ---
-# These functions now return (Result, LogList)
-
-def scrape_sfac_site(url, target_date_obj, target_name):
-    logs = [f"Starting SFAC Scrape on {url}"]
-    try:
-        resp = session.get(url, headers=HEADERS, timeout=3)
-        soup = BeautifulSoup(resp.text, 'html.parser')
-        
-        target_str = target_date_obj.strftime("%B %-d, %Y")
-        if "%-" in target_str: target_str = target_date_obj.strftime("%B %d, %Y").replace(" 0", " ")
-        logs.append(f"Looking for date string: '{target_str}'")
-
-        found_date = False
-        for row in soup.find_all('tr'):
-            cols = row.find_all('td')
-            if len(cols) < 4: continue
-            
-            meeting_name = cols[0].get_text(" ", strip=True).lower()
-            meeting_date = cols[1].get_text(" ", strip=True)
-            
-            if target_str not in meeting_date: continue
-            found_date = True
-            
-            api_sub = "subcommittee" in target_name.lower()
-            row_sub = "subcommittee" in meeting_name
-            if api_sub != row_sub:
-                logs.append(f"Skipped row '{meeting_name}': Sub/Full mismatch")
-                continue
-            
-            # Found Match
-            raw_time = cols[2].get_text(" ", strip=True)
-            time_clean = re.search(r'(\d{1,2}:\d{2}\s*[aA|pP]\.?[mM]\.?)', raw_time)
-            final_time = time_clean.group(1).upper() if time_clean else raw_time
-            
-            agenda_link = None
-            for a in cols[3].find_all('a', href=True):
-                if "agenda" in a.get_text().lower():
-                    agenda_link = a['href']
-                    if not agenda_link.startswith("http"):
-                        agenda_link = f"https://sfac.virginia.gov{agenda_link}"
-                    break
-            
-            logs.append(f"✅ Success: Found Time '{final_time}'")
-            return {"Time": final_time, "Link": agenda_link}, logs
-        
-        if not found_date: logs.append("❌ Failed: Date not found in any row.")
-        else: logs.append("❌ Failed: Date found but no matching committee name.")
-            
-    except Exception as e:
-        logs.append(f"⚠️ Crash: {str(e)}")
-        return None, logs
-    return None, logs
-
-def extract_best_link(desc_text):
-    if not desc_text: return None, "No Description"
-    all_links = re.findall(r'href=[\'"]?(https?://[^\'" >]+)', desc_text)
-    if not all_links: return None, "No Hrefs found"
-    
-    best_link = None
-    best_score = -1
-    reason = "No valid links"
-    
-    for url in all_links:
-        score = 0
-        u = url.lower()
-        if "granicus" in u or "video" in u: continue 
-        
-        if "agenda" in u or "docket" in u or ".pdf" in u: score = 10
-        elif "/committees/" in u or "legp604" in u: score = 5
-        else: score = 1
-        
-        if score > best_score:
-            best_score = score
-            best_link = url
-            reason = f"Winner (Score {score})"
-            
-    return best_link, reason
-
+# --- 1. MODERN ROUTER (The Fix for Dead Links) ---
 COMMITTEE_MAP = {
     "appropriations": "H02", "finance": "H09", "courts": "H08",
     "commerce": "H11", "labor": "H11", "education": "H07", 
@@ -113,7 +35,11 @@ COMMITTEE_MAP = {
     "senate rehab": "S09", "senate transportation": "S10", "senate rules": "S11"
 }
 
-def construct_router_link(owner_name):
+def construct_modern_link(owner_name):
+    """
+    Builds the new 2026 LIS URL pattern.
+    Ref: https://lis.virginia.gov/session-details/20261/committee-information/{ID}/committee-details
+    """
     if not owner_name: return None
     name = owner_name.lower()
     cid = None
@@ -122,10 +48,92 @@ def construct_router_link(owner_name):
             cid = v
             if "senate" in name and cid.startswith("S"): break
             if "house" in name and cid.startswith("H"): break
+    
     if not cid: return None
-    if cid.startswith("H"): return f"https://house.vga.virginia.gov/committees/{cid}"
-    return f"https://lis.virginia.gov/cgi-bin/legp604.exe?{LIS_SESSION_ID}+com+{cid}"
+    
+    # House still uses the vga subdomain effectively
+    if cid.startswith("H"): 
+        return f"https://house.vga.virginia.gov/committees/{cid}"
+    
+    # Senate now uses the Modern LIS pattern
+    return f"https://lis.virginia.gov/session-details/{SESSION_CODE}/committee-information/{cid}/committee-details"
 
+# --- 2. SFAC SCRAPER (Safe Mode) ---
+def scrape_sfac_site(url, target_date_obj, target_name):
+    logs = [f"SFAC Scrape: {url}"]
+    try:
+        resp = session.get(url, headers=HEADERS, timeout=3)
+        soup = BeautifulSoup(resp.text, 'html.parser')
+        
+        target_str = target_date_obj.strftime("%B %-d, %Y")
+        if "%-" in target_str: target_str = target_date_obj.strftime("%B %d, %Y").replace(" 0", " ")
+        logs.append(f"Searching for date: {target_str}")
+
+        for row in soup.find_all('tr'):
+            cols = row.find_all('td')
+            if len(cols) < 4: continue
+            
+            meeting_name = cols[0].get_text(" ", strip=True).lower()
+            meeting_date = cols[1].get_text(" ", strip=True)
+            
+            if target_str not in meeting_date: continue
+            
+            api_sub = "subcommittee" in target_name.lower()
+            row_sub = "subcommittee" in meeting_name
+            if api_sub != row_sub: continue
+            
+            raw_time = cols[2].get_text(" ", strip=True)
+            time_clean = re.search(r'(\d{1,2}:\d{2}\s*[aA|pP]\.?[mM]\.?)', raw_time)
+            final_time = time_clean.group(1).upper() if time_clean else raw_time
+            
+            agenda_link = None
+            for a in cols[3].find_all('a', href=True):
+                if "agenda" in a.get_text().lower():
+                    agenda_link = a['href']
+                    if not agenda_link.startswith("http"):
+                        agenda_link = f"https://sfac.virginia.gov{agenda_link}"
+                    break
+            
+            logs.append(f"Found match! Time: {final_time}")
+            return {"Time": final_time, "Link": agenda_link}, logs
+    except Exception as e:
+        logs.append(f"Error: {e}")
+        return None, logs
+    return None, logs
+
+# --- 3. LINK EXTRACTOR (With Trash Filter) ---
+def extract_best_link(desc_text):
+    if not desc_text: return None, "No Desc"
+    all_links = re.findall(r'href=[\'"]?(https?://[^\'" >]+)', desc_text)
+    if not all_links: return None, "No Hrefs"
+    
+    best_link = None
+    best_score = -1
+    reason = "None"
+    
+    for url in all_links:
+        score = 0
+        u = url.lower()
+        
+        # 🗑️ TRASH FILTER
+        if "granicus" in u or "now_playing" in u or "broadcast" in u or "video" in u: 
+            continue 
+        
+        # 🥇 GOLD
+        if "agenda" in u or "docket" in u or ".pdf" in u: score = 10
+        # 🥈 SILVER (Deep LIS)
+        elif "/committees/" in u or "session-details" in u: score = 5
+        # 🥉 BRONZE
+        else: score = 1
+        
+        if score > best_score:
+            best_score = score
+            best_link = url
+            reason = f"Score {score}"
+            
+    return best_link, reason
+
+# --- 4. BILL SCRAPER ---
 def get_bills_deep_dive(url):
     logs = [f"Visiting: {url}"]
     if not url: return [], logs
@@ -142,13 +150,11 @@ def get_bills_deep_dive(url):
                 bills.add(f"{p.upper().replace('.','').strip()}{n}")
             return sorted(list(bills))
 
-        # 1. Surface Scrape
         bills = scrape_text(soup)
-        logs.append(f"Surface Scrape: Found {len(bills)} bills.")
-        
+        logs.append(f"Surface: {len(bills)} bills")
         if bills: return bills, logs
         
-        # 2. Dive Logic
+        # Dive
         target = None
         for a in soup.find_all('a', href=True):
             txt = a.get_text().lower()
@@ -160,20 +166,18 @@ def get_bills_deep_dive(url):
                 break
         
         if target:
-            logs.append(f"Dive Triggered: Jumping to {target}")
+            logs.append(f"Diving to: {target}")
             resp2 = session.get(target, headers=HEADERS, timeout=5)
             bills = scrape_text(BeautifulSoup(resp2.text, 'html.parser'))
-            logs.append(f"Deep Scrape: Found {len(bills)} bills.")
+            logs.append(f"Deep: {len(bills)} bills")
             return bills, logs
-        else:
-            logs.append("Dive Skipped: No 'Agenda' or 'Docket' link found on page.")
             
         return [], logs
     except Exception as e:
-        logs.append(f"⚠️ Error: {str(e)}")
+        logs.append(f"Error: {e}")
         return [], logs
 
-# --- 2. API FETCH ---
+# --- 5. API FETCH ---
 @st.cache_data(ttl=600)
 def fetch_api_schedule():
     url = "https://lis.virginia.gov/Schedule/api/getschedulelistasync"
@@ -209,60 +213,53 @@ with st.spinner("Processing..."):
 today = datetime.now().date()
 processed_events = []
 links_to_scan = []
-debug_registry = {} # Stores logs for sidebar
+committee_map_for_probe = {} # For sidebar
 
 for m in raw_events:
     if not m: continue
-    
-    # Init Flight Log for this committee
-    flight_log = []
-    
     raw_date = m.get("ScheduleDate", "").split("T")[0]
     if not raw_date: continue
     d = datetime.strptime(raw_date, "%Y-%m-%d").date()
     if d < today: continue
     
     m['DateObj'] = d
-    name = m.get("OwnerName", "Unknown")
+    flight_log = []
     
-    # TIME LOGIC
+    # Time
     api_time = m.get("ScheduleTime")
-    flight_log.append(f"Raw API Time: {api_time}")
-    
     m['DisplayTime'] = api_time if api_time else "Time TBA"
     if m.get("IsCancelled") is True: m['DisplayTime'] = "CANCELLED"
     
-    # LINK LOGIC
-    api_link, link_reason = extract_best_link(m.get("Description"))
-    flight_log.append(f"API Link Extraction: {link_reason} -> {api_link}")
+    # Link
+    api_link, reason = extract_best_link(m.get("Description"))
+    flight_log.append(f"API Link Logic: {reason} -> {api_link}")
     
-    # SFAC Handler
     if api_link and "sfac.virginia.gov" in api_link:
-        sfac, sfac_logs = scrape_sfac_site(api_link, d, name)
-        flight_log.extend(sfac_logs)
+        sfac, slogs = scrape_sfac_site(api_link, d, m.get("OwnerName", ""))
+        flight_log.extend(slogs)
         if sfac:
             if sfac['Time']: m['DisplayTime'] = sfac['Time']
             if sfac['Link']: api_link = sfac['Link']
             if "CANCEL" in str(sfac['Time']).upper(): m['DisplayTime'] = "CANCELLED"
             
-    # Router Fallback
-    router_link = construct_router_link(name)
-    flight_log.append(f"Router Backup Link: {router_link}")
+    router_link = construct_modern_link(m.get("OwnerName"))
+    flight_log.append(f"Modern Router Link: {router_link}")
     
     final_link = api_link if api_link else router_link
     m['Link'] = final_link
     m['Source'] = "API-Extract" if api_link else "Router"
-    
-    # Store logs temporarily
     m['FlightLog'] = flight_log
     
     if final_link: links_to_scan.append(final_link)
     processed_events.append(m)
+    
+    # Map for sidebar probe
+    key_name = f"{m.get('OwnerName')} ({d.strftime('%m/%d')})"
+    committee_map_for_probe[key_name] = m
 
-# Bill Scanning
+# Bills
 bill_cache = {}
-bill_logs_cache = {}
-
+bill_logs = {}
 if links_to_scan:
     unique = list(set(links_to_scan))
     with st.spinner(f"Scanning {len(unique)} Dockets..."):
@@ -270,44 +267,45 @@ if links_to_scan:
             fut = {executor.submit(get_bills_deep_dive, u): u for u in unique}
             for f in concurrent.futures.as_completed(fut):
                 url = fut[f]
-                try:
+                try: 
                     res, logs = f.result()
                     bill_cache[url] = res
-                    bill_logs_cache[url] = logs
-                except Exception as e:
+                    bill_logs[url] = logs
+                except Exception as e: 
                     bill_cache[url] = []
-                    bill_logs_cache[url] = [f"Thread Error: {e}"]
+                    bill_logs[url] = [str(e)]
 
-# --- SIDEBAR LOGIC ---
-st.sidebar.header("📼 Flight Recorder")
-st.sidebar.caption("Inspect 'Problem Children' (TBA or No Bills)")
+# --- SIDEBAR LIVE PROBE ---
+st.sidebar.header("🔴 Live Probe")
+selected_c = st.sidebar.selectbox("Select Committee to Ping:", options=list(committee_map_for_probe.keys()))
 
-problem_children = {}
-
-for m in processed_events:
-    name = m.get("OwnerName", "Unknown")
-    time_disp = m.get("DisplayTime", "")
-    link = m.get("Link")
-    bills = bill_cache.get(link, [])
+if selected_c:
+    evt = committee_map_for_probe[selected_c]
+    target_url = evt['Link']
     
-    # Criteria for Problem Child
-    is_tba = "TBA" in time_disp or "Not Listed" in time_disp
-    is_empty = link and not bills
+    st.sidebar.write(f"**Target:** {target_url}")
     
-    if is_tba or is_empty:
-        key = f"{name} ({m['DateObj'].strftime('%m/%d')})"
-        # Merge logs
-        full_log = m['FlightLog'] + ["--- Bill Scraper ---"] + bill_logs_cache.get(link, ["No Link Scanned"])
-        problem_children[key] = full_log
-
-if problem_children:
-    selected_problem = st.sidebar.selectbox("Select Committee:", options=list(problem_children.keys()))
-    if selected_problem:
-        st.sidebar.markdown("---")
-        for log_line in problem_children[selected_problem]:
-            st.sidebar.text(log_line)
-else:
-    st.sidebar.success("No problem committees detected!")
+    if st.sidebar.button("Run Live Probe"):
+        with st.sidebar.status("Pinging URL..."):
+            try:
+                r = requests.get(target_url, headers=HEADERS, timeout=5)
+                st.write(f"**Status:** `{r.status_code}`")
+                st.write(f"**Final URL:** `{r.url}`")
+                if "agenda" in r.text.lower() or "docket" in r.text.lower():
+                    st.success("✅ Content Found: 'Agenda/Docket' detected in HTML.")
+                else:
+                    st.warning("⚠️ Warning: No 'Agenda/Docket' text found.")
+                st.text(r.text[:500])
+            except Exception as e:
+                st.error(f"Probe Failed: {e}")
+                
+    st.sidebar.divider()
+    with st.sidebar.expander("View Flight Log"):
+        for l in evt['FlightLog']:
+            st.write(l)
+        st.write("--- Scraper Log ---")
+        if target_url in bill_logs:
+            for l in bill_logs[target_url]: st.write(l)
 
 # --- DISPLAY ---
 display_map = {}
