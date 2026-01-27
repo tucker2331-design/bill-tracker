@@ -10,8 +10,8 @@ API_KEY = "81D70A54-FCDC-4023-A00B-A3FD114D5984"
 SESSION_CODE = "20261" 
 LIS_SESSION_ID = "261"
 
-st.set_page_config(page_title="v110 Smart Selector", page_icon="🛡️", layout="wide")
-st.title("🛡️ v110: The Smart Selector (Link Ranking)")
+st.set_page_config(page_title="v111 Bulletproof", page_icon="🛡️", layout="wide")
+st.title("🛡️ v111: The Bulletproof Engine (Crash Fix + SFAC)")
 
 # --- NETWORK ENGINE ---
 session = requests.Session()
@@ -22,49 +22,76 @@ HEADERS = {
     'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
 }
 
-# --- 1. THE SMART EXTRACTOR (Ranking System) ---
+# --- 1. SFAC SCRAPER (Restored & Isolated) ---
+def scrape_sfac_site(url, target_date_obj, target_name):
+    """
+    Scrapes sfac.virginia.gov for late-breaking time changes.
+    Returns dict or None. Wrapped in try/except for safety.
+    """
+    try:
+        resp = session.get(url, headers=HEADERS, timeout=3) # Short timeout
+        soup = BeautifulSoup(resp.text, 'html.parser')
+        
+        target_str = target_date_obj.strftime("%B %-d, %Y")
+        if "%-" in target_str: target_str = target_date_obj.strftime("%B %d, %Y").replace(" 0", " ")
+
+        for row in soup.find_all('tr'):
+            cols = row.find_all('td')
+            if len(cols) < 4: continue
+            
+            meeting_name = cols[0].get_text(" ", strip=True).lower()
+            meeting_date = cols[1].get_text(" ", strip=True)
+            
+            if target_str not in meeting_date: continue
+            
+            # Sub vs Full Match
+            api_sub = "subcommittee" in target_name.lower()
+            row_sub = "subcommittee" in meeting_name
+            if api_sub != row_sub: continue
+            
+            # Time Extract
+            raw_time = cols[2].get_text(" ", strip=True)
+            time_clean = re.search(r'(\d{1,2}:\d{2}\s*[aA|pP]\.?[mM]\.?)', raw_time)
+            final_time = time_clean.group(1).upper() if time_clean else raw_time
+            
+            # Link Extract
+            agenda_link = None
+            for a in cols[3].find_all('a', href=True):
+                if "agenda" in a.get_text().lower():
+                    agenda_link = a['href']
+                    if not agenda_link.startswith("http"):
+                        agenda_link = f"https://sfac.virginia.gov{agenda_link}"
+                    break
+            
+            return {"Time": final_time, "Link": agenda_link}
+    except Exception:
+        return None # Fail silently, fallback to API
+    return None
+
+# --- 2. LINK EXTRACTOR (Ranked) ---
 def extract_best_link(desc_text):
-    """
-    Parses HTML description and picks the BEST link, avoiding videos.
-    """
     if not desc_text: return None
-    
-    # Find ALL hrefs
     all_links = re.findall(r'href=[\'"]?(https?://[^\'" >]+)', desc_text)
     if not all_links: return None
     
-    # RANKING LOGIC
     best_link = None
     best_score = -1
     
     for url in all_links:
         score = 0
         u = url.lower()
+        if "granicus" in u or "video" in u: continue # Trash
         
-        # 🗑️ TRASH (Exclude)
-        if "granicus" in u or "video" in u or "stream" in u:
-            continue
-            
-        # 🥇 GOLD (Explicit Data)
-        if "agenda" in u or "docket" in u or ".pdf" in u or "bill" in u:
-            score = 10
-            
-        # 🥈 SILVER (Deep LIS Paths)
-        elif "/committees/" in u or "legp604" in u:
-            score = 5
-            
-        # 🥉 BRONZE (Generic but safe)
-        else:
-            score = 1
-            
-        # Update Winner
+        if "agenda" in u or "docket" in u or ".pdf" in u: score = 10 # Gold
+        elif "/committees/" in u or "legp604" in u: score = 5 # Silver
+        else: score = 1 # Bronze
+        
         if score > best_score:
             best_score = score
             best_link = url
-            
     return best_link
 
-# --- 2. THE ROUTER (Backup System) ---
+# --- 3. ROUTER (Backup) ---
 COMMITTEE_MAP = {
     "appropriations": "H02", "finance": "H09", "courts": "H08",
     "commerce": "H11", "labor": "H11", "education": "H07", 
@@ -76,7 +103,6 @@ COMMITTEE_MAP = {
     "senate general laws": "S06", "senate local": "S07", "senate privileges": "S08", 
     "senate rehab": "S09", "senate transportation": "S10", "senate rules": "S11"
 }
-
 def construct_router_link(owner_name):
     if not owner_name: return None
     name = owner_name.lower()
@@ -86,12 +112,11 @@ def construct_router_link(owner_name):
             cid = v
             if "senate" in name and cid.startswith("S"): break
             if "house" in name and cid.startswith("H"): break
-    
     if not cid: return None
     if cid.startswith("H"): return f"https://house.vga.virginia.gov/committees/{cid}"
     return f"https://lis.virginia.gov/cgi-bin/legp604.exe?{LIS_SESSION_ID}+com+{cid}"
 
-# --- 3. THE DEEP DIVER (Bill Scraper) ---
+# --- 4. BILL SCRAPER ---
 def get_bills_deep_dive(url):
     if not url: return []
     try:
@@ -109,11 +134,10 @@ def get_bills_deep_dive(url):
                 return (m.group(1), int(m.group(2))) if m else (b, 0)
             return sorted(list(bills), key=sk)
 
-        # 1. Scrape Surface
         bills = scrape_text(soup)
         if bills: return bills
         
-        # 2. Dive 1 Level (Find Agenda/Docket Link)
+        # Dive Logic
         target = None
         for a in soup.find_all('a', href=True):
             txt = a.get_text().lower()
@@ -131,7 +155,7 @@ def get_bills_deep_dive(url):
         return []
     except: return []
 
-# --- 4. API FETCH & TIME PARSE ---
+# --- 5. API FETCH ---
 @st.cache_data(ttl=600)
 def fetch_api_schedule():
     url = "https://lis.virginia.gov/Schedule/api/getschedulelistasync"
@@ -161,7 +185,7 @@ def parse_time_rank(time_str):
 
 # --- MAIN LOGIC ---
 
-with st.spinner("Processing Schedule..."):
+with st.spinner("Initializing Bulletproof Engine..."):
     raw_events = fetch_api_schedule()
 
 today = datetime.now().date()
@@ -169,6 +193,8 @@ processed_events = []
 links_to_scan = []
 
 for m in raw_events:
+    if not m: continue # Safety Check 1
+    
     raw_date = m.get("ScheduleDate", "").split("T")[0]
     if not raw_date: continue
     d = datetime.strptime(raw_date, "%Y-%m-%d").date()
@@ -176,30 +202,31 @@ for m in raw_events:
     
     m['DateObj'] = d
     
-    # Time Logic (Reverted to Safe)
+    # --- TIME LOGIC (API TRUST) ---
     api_time = m.get("ScheduleTime")
-    m['DisplayTime'] = api_time if (api_time and str(api_time).strip()) else "Time TBA"
+    # If API gives empty string, mark TBA. If None, TBA. If valid, use it.
+    m['DisplayTime'] = api_time if api_time else "Time TBA"
+    
     if m.get("IsCancelled") is True: m['DisplayTime'] = "CANCELLED"
     
-    # --- LINK SELECTION ---
-    # 1. Try to extract a "Gold/Silver" link from API description
-    best_api_link = extract_best_link(m.get("Description"))
+    # --- LINK LOGIC ---
+    api_link = extract_best_link(m.get("Description"))
     
-    final_link = None
-    source_label = "None"
-    
-    if best_api_link:
-        final_link = best_api_link
-        source_label = "API-Extract"
-    else:
-        # 2. Fallback to Router
-        router_link = construct_router_link(m.get("OwnerName"))
-        if router_link:
-            final_link = router_link
-            source_label = "Router"
+    # Special: SFAC Handler
+    if api_link and "sfac.virginia.gov" in api_link:
+        sfac = scrape_sfac_site(api_link, d, m.get("OwnerName", ""))
+        if sfac:
+            # Override if SFAC site has data
+            if sfac['Time']: m['DisplayTime'] = sfac['Time']
+            if sfac['Link']: api_link = sfac['Link']
+            if "CANCEL" in str(sfac['Time']).upper(): m['DisplayTime'] = "CANCELLED"
             
+    # Router Fallback
+    router_link = construct_router_link(m.get("OwnerName"))
+    
+    final_link = api_link if api_link else router_link
     m['Link'] = final_link
-    m['Source'] = source_label
+    m['Source'] = "API-Extract" if api_link else "Router"
     
     if final_link: links_to_scan.append(final_link)
     processed_events.append(m)
@@ -235,9 +262,13 @@ else:
             st.divider()
             
             day_events = display_map[dv]
-            day_events.sort(key=lambda x: parse_time_rank(x.get("DisplayTime")))
+            try:
+                day_events.sort(key=lambda x: parse_time_rank(x.get("DisplayTime")))
+            except Exception: pass # Sorting failsafe
             
             for e in day_events:
+                if not e: continue # Safety Check 2
+                
                 name = e.get("OwnerName", "Unknown").replace("Committee", "").replace("Virginia", "").strip()
                 time_s = e.get("DisplayTime")
                 link = e.get("Link")
