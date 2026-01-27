@@ -4,14 +4,15 @@ import re
 import concurrent.futures
 from datetime import datetime
 from bs4 import BeautifulSoup
+from difflib import SequenceMatcher
 
 # --- CONFIGURATION ---
 API_KEY = "81D70A54-FCDC-4023-A00B-A3FD114D5984" 
 SESSION_CODE = "20261" 
 LIS_SESSION_ID = "261"
 
-st.set_page_config(page_title="v118 Hybrid Restoration", page_icon="🧬", layout="wide")
-st.title("🧬 v118: The Hybrid Restoration (API Priority)")
+st.set_page_config(page_title="v119 Section Scanner", page_icon="🧬", layout="wide")
+st.title("🧬 v119: The Section Scanner (Targeted Sub-Hunting)")
 
 # --- NETWORK ENGINE ---
 session = requests.Session()
@@ -55,7 +56,10 @@ def construct_modern_link(owner_name):
     if not cid: return None
     return f"https://lis.virginia.gov/session-details/{SESSION_CODE}/committee-information/{cid}/committee-details"
 
-# --- 2. THE SURGICAL SUB-HUNTER ---
+# --- 2. THE SECTION SCANNER (Targeted Sub-Hunter) ---
+def similarity(a, b):
+    return SequenceMatcher(None, a, b).ratio()
+
 def get_bills_deep_dive(url, target_name):
     logs = [f"Visiting: {url}"]
     if not url: return [], logs, url
@@ -65,40 +69,77 @@ def get_bills_deep_dive(url, target_name):
         soup = BeautifulSoup(resp.text, 'html.parser')
         current_url = url
         
-        # --- SUBCOMMITTEE HUNTING ---
+        # --- PHASE 1: SUBCOMMITTEE SECTION SCAN ---
         clean_target = target_name.lower().replace("house", "").replace("senate", "").replace("committee", "").strip()
-        
-        # Only hunt if we are on a "Main" LIS page and looking for a Sub
-        is_lis_main = "committee-details" in url
         is_sub_target = "subcommittee" in clean_target or "-" in target_name
         
-        sub_url = None
-        
-        if is_lis_main and is_sub_target:
-            logs.append(f"Sub-Hunter: Scanning for '{clean_target}'...")
+        # Only hunt if we suspect this is a subcommittee event
+        if is_sub_target and "committee-details" in url:
+            logs.append(f"Sub-Hunter: Active for '{clean_target}'")
             
-            # Strategy: Find any link that shares a significant keyword with the target name
-            # e.g. Target "Campaigns and Candidates" -> match link "Campaigns and Candidates"
-            keywords = [w for w in re.split(r'[\s\-\&]+', clean_target) if len(w) > 3]
+            # Find "Subcommittees" Header
+            sub_header = soup.find(string=re.compile("Subcommittees", re.IGNORECASE))
             
-            for a in soup.find_all('a', href=True):
-                txt = a.get_text(" ", strip=True).lower()
-                # Check for keyword overlap
-                if any(k in txt for k in keywords):
-                    sub_url = a['href']
-                    if not sub_url.startswith("http"):
-                         # Handle LIS relative links
-                        if sub_url.startswith("/"): sub_url = f"https://lis.virginia.gov{sub_url}"
-                    logs.append(f"🦈 Match Found: '{txt}' -> {sub_url}")
-                    break
-        
-        if sub_url:
-            current_url = sub_url
-            resp = session.get(sub_url, headers=HEADERS, timeout=5)
-            soup = BeautifulSoup(resp.text, 'html.parser')
-            logs.append("Switched to Subcommittee Page")
+            candidate_links = []
+            
+            if sub_header:
+                # Look in the container/list immediately following the header
+                # We search the parent's siblings or children
+                container = sub_header.find_parent()
+                if container:
+                    # Expand search to nearby elements (parent's parent) to catch the list
+                    search_area = container.find_parent() 
+                    if search_area:
+                        for a in search_area.find_all('a', href=True):
+                            link_text = a.get_text(" ", strip=True)
+                            candidate_links.append((link_text, a['href']))
+            
+            # If no header found, just scan ALL links on page as fallback
+            if not candidate_links:
+                logs.append("⚠️ 'Subcommittees' header not found. Scanning all links.")
+                for a in soup.find_all('a', href=True):
+                    candidate_links.append((a.get_text(" ", strip=True), a['href']))
+            
+            # LOG CANDIDATES (For Debugging)
+            logs.append(f"Candidates found: {[c[0] for c in candidate_links[:5]]}...")
 
-        # --- BILL EXTRACTION ---
+            # FUZZY MATCHING
+            best_match = None
+            best_score = 0
+            
+            # Split target into key words (e.g. "Campaigns", "Candidates")
+            target_words = [w for w in re.split(r'[\s\-\&]+', clean_target) if len(w) > 3]
+            
+            for txt, href in candidate_links:
+                txt_lower = txt.lower()
+                
+                # Score 1: Keyword overlap
+                matches = sum(1 for w in target_words if w in txt_lower)
+                
+                # Score 2: Sequence Similarity (0.0 - 1.0)
+                sim = similarity(clean_target, txt_lower)
+                
+                # Decision
+                if matches >= 1 and sim > best_score:
+                    best_score = sim
+                    best_match = href
+            
+            if best_match and best_score > 0.3: # Threshold
+                logs.append(f"🦈 Match Found (Score {best_match}): {best_match}")
+                
+                # Fix Relative URL
+                if not best_match.startswith("http"):
+                    if best_match.startswith("/"): best_match = f"https://lis.virginia.gov{best_match}"
+                
+                # DIVE!
+                current_url = best_match
+                resp = session.get(best_match, headers=HEADERS, timeout=5)
+                soup = BeautifulSoup(resp.text, 'html.parser')
+                logs.append("Switched context to Subcommittee Page.")
+            else:
+                logs.append("❌ No matching subcommittee link found.")
+
+        # --- PHASE 2: BILL SCRAPING ---
         def scrape_text(s):
             text = s.get_text(" ", strip=True)
             matches = re.findall(r'\b([H|S]\.?[B|J|R]\.?)\s*(\d+)\b', text, re.IGNORECASE)
@@ -108,12 +149,12 @@ def get_bills_deep_dive(url, target_name):
             return sorted(list(bills))
 
         bills = scrape_text(soup)
-        logs.append(f"Bills: {len(bills)}")
+        logs.append(f"Bills on page: {len(bills)}")
         
         if bills: return bills, logs, current_url
         
-        # --- FALLBACK: Agenda / Docket Link ---
-        # If 0 bills, look for "Agenda" or "Docket" link
+        # --- PHASE 3: DOCKET FALLBACK ---
+        # If 0 bills, look for 'Agenda' link on this specific page
         target = None
         for a in soup.find_all('a', href=True):
             txt = a.get_text().lower()
@@ -217,17 +258,10 @@ for m in raw_events:
     m['DisplayTime'] = api_time if api_time else "Time TBA"
     if m.get("IsCancelled") is True: m['DisplayTime'] = "CANCELLED"
     
-    # Link Selection - PRIORITY: API -> Router
+    # Link Priority: API -> Router
     api_link, reason = extract_best_link(m.get("Description"))
-    
-    # SFAC Exception (Keep this safe)
-    if api_link and "sfac.virginia.gov" in api_link:
-        # (Shortened for brevity - logic remains)
-        pass 
-            
     router_link = construct_modern_link(m.get("OwnerName"))
     
-    # DECISION MATRIX
     if api_link:
         final_link = api_link
         source = "API-Extract"
@@ -251,7 +285,6 @@ bill_logs = {}
 final_urls = {}
 
 if links_to_scan:
-    # Deduplicate by URL
     url_to_name = {u: n for u, n in links_to_scan}
     unique_urls = list(url_to_name.keys())
     
