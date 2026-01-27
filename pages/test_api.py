@@ -11,8 +11,8 @@ API_KEY = "81D70A54-FCDC-4023-A00B-A3FD114D5984"
 SESSION_CODE = "20261" 
 LIS_SESSION_ID = "261"
 
-st.set_page_config(page_title="v120 Searchlight", page_icon="🔦", layout="wide")
-st.title("🔦 v120: The Searchlight (Link Debugger)")
+st.set_page_config(page_title="v121 Raw Truth", page_icon="🧪", layout="wide")
+st.title("🧪 v121: The Raw Truth (Ghost Content Detector)")
 
 # --- NETWORK ENGINE ---
 session = requests.Session()
@@ -56,13 +56,13 @@ def construct_modern_link(owner_name):
     if not cid: return None
     return f"https://lis.virginia.gov/session-details/{SESSION_CODE}/committee-information/{cid}/committee-details"
 
-# --- 2. THE SECTION SCANNER (Targeted Sub-Hunter) ---
+# --- 2. THE BRUTE FORCE SCANNER ---
 def similarity(a, b):
     return SequenceMatcher(None, a, b).ratio()
 
 def get_bills_deep_dive(url, target_name):
     logs = [f"Visiting: {url}"]
-    found_sub_links = [] # For debugging sidebar
+    found_sub_links = [] 
     if not url: return [], logs, url, []
     
     try:
@@ -70,41 +70,30 @@ def get_bills_deep_dive(url, target_name):
         soup = BeautifulSoup(resp.text, 'html.parser')
         current_url = url
         
-        # --- PHASE 1: SUBCOMMITTEE SECTION SCAN ---
+        # --- PHASE 1: SUBCOMMITTEE HUNT (Brute Force) ---
         clean_target = target_name.lower().replace("house", "").replace("senate", "").replace("committee", "").strip()
         is_sub_target = "subcommittee" in clean_target or "-" in target_name
         
         if is_sub_target and "committee-details" in url:
             logs.append(f"Sub-Hunter: Active for '{clean_target}'")
             
-            # Find "Subcommittees" Header
-            sub_header = soup.find(string=re.compile("Subcommittees", re.IGNORECASE))
-            candidate_links = []
-            
-            if sub_header:
-                container = sub_header.find_parent()
-                if container:
-                    search_area = container.find_parent() 
-                    if search_area:
-                        for a in search_area.find_all('a', href=True):
-                            link_text = a.get_text(" ", strip=True)
-                            candidate_links.append((link_text, a['href']))
-            
-            # Fallback: Scan all
-            if not candidate_links:
-                logs.append("⚠️ 'Subcommittees' header not found. Scanning all links.")
-                for a in soup.find_all('a', href=True):
-                    candidate_links.append((a.get_text(" ", strip=True), a['href']))
+            # BRUTE FORCE: Ignore sections/headers. Just check EVERY link.
+            all_links = []
+            for a in soup.find_all('a', href=True):
+                txt = a.get_text(" ", strip=True)
+                if len(txt) > 3: # Ignore tiny links
+                    all_links.append((txt, a['href']))
             
             # Store for sidebar
-            found_sub_links = [f"{txt} -> {href}" for txt, href in candidate_links]
+            found_sub_links = [f"{txt}" for txt, href in all_links[:20]] # Just show first 20 for sanity
+            if len(all_links) > 20: found_sub_links.append(f"...and {len(all_links)-20} more.")
 
             # Matching Logic
             best_match = None
             best_score = 0
             target_words = [w for w in re.split(r'[\s\-\&]+', clean_target) if len(w) > 3]
             
-            for txt, href in candidate_links:
+            for txt, href in all_links:
                 txt_lower = txt.lower()
                 matches = sum(1 for w in target_words if w in txt_lower)
                 sim = similarity(clean_target, txt_lower)
@@ -123,7 +112,7 @@ def get_bills_deep_dive(url, target_name):
                 soup = BeautifulSoup(resp.text, 'html.parser')
                 logs.append("Switched context to Subcommittee Page.")
             else:
-                logs.append("❌ No matching subcommittee link found.")
+                logs.append("❌ No matching subcommittee link found (Brute Force).")
 
         # --- PHASE 2: BILL SCRAPING ---
         def scrape_text(s):
@@ -220,7 +209,7 @@ def parse_time_rank(time_str):
 
 # --- MAIN LOGIC ---
 
-with st.spinner("Processing Schedule..."):
+with st.spinner("Processing..."):
     raw_events = fetch_api_schedule()
 
 today = datetime.now().date()
@@ -243,7 +232,7 @@ for m in raw_events:
     m['DisplayTime'] = api_time if api_time else "Time TBA"
     if m.get("IsCancelled") is True: m['DisplayTime'] = "CANCELLED"
     
-    # Link Priority: API -> Router
+    # Link
     api_link, reason = extract_best_link(m.get("Description"))
     router_link = construct_modern_link(m.get("OwnerName"))
     
@@ -268,7 +257,7 @@ for m in raw_events:
 bill_cache = {}
 bill_logs = {}
 final_urls = {}
-sub_links_debug = {} # Store discovered links for sidebar
+sub_links_debug = {} 
 
 if links_to_scan:
     url_to_name = {u: n for u, n in links_to_scan}
@@ -299,78 +288,28 @@ with st.sidebar.expander("🔴 Live Probe"):
         evt = committee_map_for_probe[selected_c]
         orig_url = evt['Link']
         st.write(f"**Start:** {orig_url}")
-        if orig_url in final_urls:
-            st.write(f"**End:** {final_urls[orig_url]}")
-            
-        st.write("**Flight Log:**")
-        for l in evt['FlightLog']: st.write(f"- {l}")
         
-        st.divider()
-        st.write("**🔍 Searchlight (Sub-Links Found):**")
-        if orig_url in sub_links_debug:
-            if not sub_links_debug[orig_url]:
-                st.warning("No subcommittee links found on page.")
-            for l in sub_links_debug[orig_url]:
-                st.code(l)
-        
-        st.divider()
-        st.write("**Scraper Log:**")
-        if orig_url in bill_logs:
-            for l in bill_logs[orig_url]: st.write(f"- {l}")
-
-# --- DISPLAY ---
-display_map = {}
-for m in processed_events:
-    d = m['DateObj']
-    if d not in display_map: display_map[d] = []
-    display_map[d].append(m)
-
-if not display_map:
-    st.info("No upcoming events.")
-else:
-    dates = sorted(display_map.keys())[:7]
-    cols = st.columns(len(dates))
-    
-    for i, dv in enumerate(dates):
-        with cols[i]:
-            st.markdown(f"### {dv.strftime('%a')}")
-            st.caption(dv.strftime('%b %d'))
-            st.divider()
-            
-            day_events = display_map[dv]
-            try: day_events.sort(key=lambda x: parse_time_rank(x.get("DisplayTime")))
-            except: pass
-            
-            for e in day_events:
-                if not e: continue
-                name = e.get("OwnerName", "Unknown").replace("Committee", "").replace("Virginia", "").strip()
-                time_s = e.get("DisplayTime")
-                link = e.get("Link")
-                src = e.get("Source")
+        if st.button("Ping URL"):
+            try:
+                r = requests.get(orig_url, headers=HEADERS, timeout=5)
+                st.write(f"**Status:** `{r.status_code}`")
                 
-                final_dest_link = final_urls.get(link, link)
-                bills = bill_cache.get(link, [])
+                # THE RAW TRUTH CHECK
+                target_name = evt.get("OwnerName", "").replace("House", "").replace("Senate", "").replace("Committee", "").strip()
+                # Split and take first big word (e.g. "Campaigns")
+                keyword = "Campaigns" if "Campaigns" in target_name else target_name.split()[0]
                 
-                is_cancelled = "CANCEL" in str(time_s).upper()
-                
-                if is_cancelled:
-                    st.error(f"❌ **{name}**")
-                    st.caption("Cancelled")
+                if keyword in r.text:
+                    st.success(f"✅ Raw Text Check: Found '{keyword}' in HTML source.")
                 else:
-                    with st.container(border=True):
-                        if "TBA" in str(time_s): st.warning(f"⚠️ {time_s}")
-                        else: st.markdown(f"**⏰ {time_s}**")
-                        
-                        st.markdown(f"**{name}**")
-                        
-                        if bills:
-                            st.success(f"**{len(bills)} Bills Listed**")
-                            with st.expander("List"):
-                                st.write(", ".join(bills))
-                                if final_dest_link: st.link_button("View Docket", final_dest_link)
-                        elif final_dest_link:
-                            st.link_button("View Docket", final_dest_link)
-                        else:
-                            st.caption("*(No Link)*")
-                        
-                        st.caption(f"Src: {src}")
+                    st.error(f"❌ Raw Text Check: '{keyword}' NOT FOUND in HTML.")
+                    st.info("Diagnosis: This content is likely loaded via JavaScript.")
+                    
+                st.text_area("Snippet", r.text[:1000], height=200)
+            except Exception as e:
+                st.error(f"Error: {e}")
+
+        st.divider()
+        st.write("**🔍 Searchlight (All Links Found):**")
+        if orig_url in sub_links_debug:
+            for l in sub_links_debug[orig_url]: st.code(l)
