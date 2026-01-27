@@ -2,15 +2,16 @@ import streamlit as st
 import requests
 import re
 import concurrent.futures
-from datetime import datetime, timedelta
+from datetime import datetime
 from bs4 import BeautifulSoup
 
 # --- CONFIGURATION ---
 API_KEY = "81D70A54-FCDC-4023-A00B-A3FD114D5984" 
-SESSION_CODE = "20261" 
+SESSION_CODE = "20261" # API uses this
+LIS_URL_SESSION = "261" # LIS URLs use this (261 = 2026 Regular)
 
-st.set_page_config(page_title="v104 Link Router", page_icon="🔀", layout="wide")
-st.title("🔀 v104: The 'Link Router' (Fixing Generic Buttons)")
+st.set_page_config(page_title="v105 Hardcoded Router", page_icon="🗺️", layout="wide")
+st.title("🗺️ v105: The 'Hardcoded Truth' Router")
 
 # --- NETWORK ENGINE ---
 session = requests.Session()
@@ -21,37 +22,73 @@ HEADERS = {
     'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
 }
 
-# --- THE LINK ROUTER (The Fix) ---
-# Maps generic "Marketing URLs" to data-rich "LIS URLs"
-LINK_MAP = {
-    # HOUSE COMMITTEES (Marketing -> LIS ID)
-    "hac.virginia.gov": "https://house.vga.virginia.gov/committees/H02", # Appropriations
-    "house.virginia.gov": "https://house.vga.virginia.gov/committees/H09", # Finance (Generic Fallback)
+# --- THE ROSETTA STONE (Manual ID Mapping) ---
+# Maps partial committee names to their PERMANENT LIS IDs
+# Sources: LIS Website & House Clerk's Office
+COMMITTEE_MAP = {
+    # --- SENATE (Sxx) ---
+    "agriculture": "S01",
+    "commerce": "S03",
+    "courts": "S04",
+    "education": "S02", # Education & Health
+    "finance": "S05", # Finance & Appropriations
+    "general laws": "S06",
+    "local gov": "S07",
+    "privileges": "S08",
+    "rehabilitation": "S09",
+    "transportation": "S10",
+    "rules": "S11",
     
-    # SENATE COMMITTEES (Marketing -> LIS ID)
-    "sfac.virginia.gov": "https://lis.virginia.gov/cgi-bin/legp604.exe?261+com+S05", # Finance
-    "commerce.senate.virginia.gov": "https://lis.virginia.gov/cgi-bin/legp604.exe?261+com+S03", # Commerce
-    "courts.senate.virginia.gov": "https://lis.virginia.gov/cgi-bin/legp604.exe?261+com+S04", # Courts
-    "education.senate.virginia.gov": "https://lis.virginia.gov/cgi-bin/legp604.exe?261+com+S02", # Ed & Health
-    "general.senate.virginia.gov": "https://lis.virginia.gov/cgi-bin/legp604.exe?261+com+S06", # General Laws
-    "local.senate.virginia.gov": "https://lis.virginia.gov/cgi-bin/legp604.exe?261+com+S07", # Local Gov
-    "privileges.senate.virginia.gov": "https://lis.virginia.gov/cgi-bin/legp604.exe?261+com+S08", # Privileges
-    "rehab.senate.virginia.gov": "https://lis.virginia.gov/cgi-bin/legp604.exe?261+com+S09", # Rehab
-    "transportation.senate.virginia.gov": "https://lis.virginia.gov/cgi-bin/legp604.exe?261+com+S10", # Transportation
+    # --- HOUSE (Hxx) ---
+    "privileges": "H01",
+    "appropriations": "H02",
+    "education": "H07",
+    "courts": "H08",
+    "finance": "H09",
+    "general laws": "H10",
+    "labor": "H11", # Labor & Commerce
+    "commerce": "H11", # Commerce & Energy
+    "health": "H13",
+    "agriculture": "H14", # Ag / Chesapeake
+    "transportation": "H15",
+    "communications": "H16",
+    "counties": "H17",
+    "public safety": "H18",
+    "rules": "H19",
 }
 
-def route_link(original_link):
+def construct_lis_link(owner_name):
     """
-    Swaps generic links for specific ones using the map.
+    Takes a name like 'Senate Commerce and Labor' and builds the trusted LIS URL.
     """
-    if not original_link: return None, "None"
+    if not owner_name: return None, "None"
     
-    # Check if any key is in the URL
-    for marketing_key, deep_url in LINK_MAP.items():
-        if marketing_key in original_link.lower():
-            return deep_url, "Swapped"
+    name_lower = owner_name.lower()
+    is_senate = "senate" in name_lower
+    is_house = "house" in name_lower
+    
+    # Find the ID
+    committee_id = None
+    for key, cid in COMMITTEE_MAP.items():
+        if key in name_lower:
+            committee_id = cid
+            # If we found a match, check chamber alignment to be safe
+            if is_senate and cid.startswith("S"): break
+            if is_house and cid.startswith("H"): break
             
-    return original_link, "Original"
+    if not committee_id:
+        return None, "No ID Match"
+        
+    # Construct the URL
+    if committee_id.startswith("S"):
+        # Senate Pattern: lis.virginia.gov/cgi-bin/legp604.exe?261+com+S03
+        return f"https://lis.virginia.gov/cgi-bin/legp604.exe?{LIS_URL_SESSION}+com+{committee_id}", "Constructed (Senate)"
+    
+    if committee_id.startswith("H"):
+        # House Pattern: house.vga.virginia.gov/committees/H02
+        return f"https://house.vga.virginia.gov/committees/{committee_id}", "Constructed (House)"
+        
+    return None, "Unknown Chamber"
 
 # --- HELPER FUNCTIONS ---
 def parse_time_rank(time_str):
@@ -67,26 +104,24 @@ def parse_time_rank(time_str):
     except: pass
     return 9999
 
-def extract_link_from_description(desc_text):
-    if not desc_text: return None
-    match = re.search(r'href=[\'"]?(https?://[^\'" >]+)', desc_text)
-    if match: return match.group(1)
-    raw_match = re.search(r'(https?://house.vga.virginia.gov[^\s]+)', desc_text)
-    if raw_match: return raw_match.group(1)
-    return None
-
 def get_bills_from_url(url):
+    """
+    Scrapes bills. Now running on TRUSTED URLs.
+    """
     if not url: return []
     try:
         resp = requests.get(url, headers=HEADERS, timeout=5)
         soup = BeautifulSoup(resp.text, 'html.parser')
         text = soup.get_text(" ", strip=True)
+        
         pattern = r'\b([H|S]\.?[B|J|R]\.?)\s*(\d+)\b'
         matches = re.findall(pattern, text, re.IGNORECASE)
+        
         bills = set()
         for p, n in matches:
             prefix = p.upper().replace(".", "").strip()
             bills.add(f"{prefix}{n}")
+            
         def sort_key(b):
             match = re.match(r"([A-Z]+)(\d+)", b)
             if match: return match.group(1), int(match.group(2))
@@ -112,14 +147,13 @@ def fetch_api_schedule():
 
 # --- MAIN LOGIC ---
 
-with st.spinner("Fetching Schedule & Routing Links..."):
+with st.spinner("Building Schedule..."):
     raw_events = fetch_api_schedule()
 
 today = datetime.now().date()
 processed_events = []
 links_to_scan = []
 
-# Process
 for m in raw_events:
     raw_date = m.get("ScheduleDate", "").split("T")[0]
     if not raw_date: continue
@@ -129,29 +163,27 @@ for m in raw_events:
     m['DateObj'] = d
     m['DisplayTime'] = m.get("ScheduleTime", "TBA")
     
+    # Check Cancellation (API Field)
     if m.get("IsCancelled") is True:
         m['DisplayTime'] = "CANCELLED"
     
-    # 1. Extract Raw Link
-    raw_link = extract_link_from_description(m.get("Description"))
+    # --- THE ROUTER ---
+    # Ignore the API link. Build our own.
+    constructed_link, link_source = construct_lis_link(m.get("OwnerName"))
     
-    # 2. ROUTE LINK (The Middleware)
-    final_link, link_status = route_link(raw_link)
-    
-    m['Link'] = final_link
-    m['LinkStatus'] = link_status
-    m['RawLink'] = raw_link
+    m['Link'] = constructed_link
+    m['LinkSource'] = link_source
     
     if m['Link']:
         links_to_scan.append(m['Link'])
         
     processed_events.append(m)
 
-# Scan Bills
+# Scan Bills (on the Trusted Links)
 bill_cache = {}
 if links_to_scan:
     unique_links = list(set(links_to_scan))
-    with st.spinner(f"Scanning {len(unique_links)} Dockets..."):
+    with st.spinner(f"Scanning {len(unique_links)} Trusted Dockets..."):
         with concurrent.futures.ThreadPoolExecutor(max_workers=8) as executor:
             future_to_url = {executor.submit(get_bills_from_url, url): url for url in unique_links}
             for future in concurrent.futures.as_completed(future_to_url):
@@ -186,7 +218,7 @@ else:
                 clean_name = name.replace("Committee", "").replace("Virginia", "").strip()
                 time_disp = event.get("DisplayTime")
                 link = event.get("Link")
-                status = event.get("LinkStatus")
+                source = event.get("LinkSource")
                 bills = bill_cache.get(link, [])
                 
                 is_cancelled = "CANCEL" in str(time_disp).upper()
@@ -196,6 +228,7 @@ else:
                     st.caption("Cancelled")
                 else:
                     with st.container(border=True):
+                        # Time
                         if "TBA" in str(time_disp) or "Not Listed" in str(time_disp):
                             st.warning(f"⚠️ {time_disp}")
                         else:
@@ -203,16 +236,18 @@ else:
                         
                         st.markdown(f"**{clean_name}**")
                         
+                        # Bills
                         if bills:
                             st.success(f"**{len(bills)} Bills Listed**")
                             with st.expander("View List"):
                                 st.write(", ".join(bills))
                                 if link: st.link_button("View Docket", link)
                         elif link:
-                            label = "📄 View Docket" if status == "Swapped" else "🔗 View Link"
-                            st.link_button(label, link)
+                            # If it's a subcommittee, warn them
+                            btn_label = "View Parent Docket" if "Subcommittee" in name else "View Docket"
+                            st.link_button(btn_label, link)
                         else:
-                            st.caption("*(No Link)*")
-                        
-                        if status == "Swapped":
-                            st.caption("ℹ️ Link Auto-Corrected")
+                            st.caption("*(No ID Match)*")
+                            
+                        # Debug info to prove we swapped it
+                        # st.caption(f"Src: {source}")
