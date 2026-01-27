@@ -11,8 +11,8 @@ API_KEY = "81D70A54-FCDC-4023-A00B-A3FD114D5984"
 SESSION_CODE = "20261" 
 LIS_SESSION_ID = "261"
 
-st.set_page_config(page_title="v119 Section Scanner", page_icon="🧬", layout="wide")
-st.title("🧬 v119: The Section Scanner (Targeted Sub-Hunting)")
+st.set_page_config(page_title="v120 Searchlight", page_icon="🔦", layout="wide")
+st.title("🔦 v120: The Searchlight (Link Debugger)")
 
 # --- NETWORK ENGINE ---
 session = requests.Session()
@@ -23,7 +23,7 @@ HEADERS = {
     'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
 }
 
-# --- 1. THE GOLDEN MAP (Confirmed IDs) ---
+# --- 1. THE GOLDEN MAP ---
 HOUSE_MAP = {
     "agriculture": "H01", "chesapeake": "H01", "appropriations": "H02",
     "counties": "H07", "cities": "H07", "courts": "H08", "education": "H09",
@@ -62,7 +62,8 @@ def similarity(a, b):
 
 def get_bills_deep_dive(url, target_name):
     logs = [f"Visiting: {url}"]
-    if not url: return [], logs, url
+    found_sub_links = [] # For debugging sidebar
+    if not url: return [], logs, url, []
     
     try:
         resp = session.get(url, headers=HEADERS, timeout=5)
@@ -73,65 +74,50 @@ def get_bills_deep_dive(url, target_name):
         clean_target = target_name.lower().replace("house", "").replace("senate", "").replace("committee", "").strip()
         is_sub_target = "subcommittee" in clean_target or "-" in target_name
         
-        # Only hunt if we suspect this is a subcommittee event
         if is_sub_target and "committee-details" in url:
             logs.append(f"Sub-Hunter: Active for '{clean_target}'")
             
             # Find "Subcommittees" Header
             sub_header = soup.find(string=re.compile("Subcommittees", re.IGNORECASE))
-            
             candidate_links = []
             
             if sub_header:
-                # Look in the container/list immediately following the header
-                # We search the parent's siblings or children
                 container = sub_header.find_parent()
                 if container:
-                    # Expand search to nearby elements (parent's parent) to catch the list
                     search_area = container.find_parent() 
                     if search_area:
                         for a in search_area.find_all('a', href=True):
                             link_text = a.get_text(" ", strip=True)
                             candidate_links.append((link_text, a['href']))
             
-            # If no header found, just scan ALL links on page as fallback
+            # Fallback: Scan all
             if not candidate_links:
                 logs.append("⚠️ 'Subcommittees' header not found. Scanning all links.")
                 for a in soup.find_all('a', href=True):
                     candidate_links.append((a.get_text(" ", strip=True), a['href']))
             
-            # LOG CANDIDATES (For Debugging)
-            logs.append(f"Candidates found: {[c[0] for c in candidate_links[:5]]}...")
+            # Store for sidebar
+            found_sub_links = [f"{txt} -> {href}" for txt, href in candidate_links]
 
-            # FUZZY MATCHING
+            # Matching Logic
             best_match = None
             best_score = 0
-            
-            # Split target into key words (e.g. "Campaigns", "Candidates")
             target_words = [w for w in re.split(r'[\s\-\&]+', clean_target) if len(w) > 3]
             
             for txt, href in candidate_links:
                 txt_lower = txt.lower()
-                
-                # Score 1: Keyword overlap
                 matches = sum(1 for w in target_words if w in txt_lower)
-                
-                # Score 2: Sequence Similarity (0.0 - 1.0)
                 sim = similarity(clean_target, txt_lower)
                 
-                # Decision
                 if matches >= 1 and sim > best_score:
                     best_score = sim
                     best_match = href
             
-            if best_match and best_score > 0.3: # Threshold
-                logs.append(f"🦈 Match Found (Score {best_match}): {best_match}")
-                
-                # Fix Relative URL
+            if best_match and best_score > 0.3:
+                logs.append(f"🦈 Match (Score {best_score:.2f}): {best_match}")
                 if not best_match.startswith("http"):
                     if best_match.startswith("/"): best_match = f"https://lis.virginia.gov{best_match}"
                 
-                # DIVE!
                 current_url = best_match
                 resp = session.get(best_match, headers=HEADERS, timeout=5)
                 soup = BeautifulSoup(resp.text, 'html.parser')
@@ -151,10 +137,9 @@ def get_bills_deep_dive(url, target_name):
         bills = scrape_text(soup)
         logs.append(f"Bills on page: {len(bills)}")
         
-        if bills: return bills, logs, current_url
+        if bills: return bills, logs, current_url, found_sub_links
         
         # --- PHASE 3: DOCKET FALLBACK ---
-        # If 0 bills, look for 'Agenda' link on this specific page
         target = None
         for a in soup.find_all('a', href=True):
             txt = a.get_text().lower()
@@ -171,13 +156,13 @@ def get_bills_deep_dive(url, target_name):
             resp2 = session.get(target, headers=HEADERS, timeout=5)
             bills = scrape_text(BeautifulSoup(resp2.text, 'html.parser'))
             logs.append(f"Deep Bills: {len(bills)}")
-            return bills, logs, current_url
+            return bills, logs, current_url, found_sub_links
             
-        return [], logs, current_url
+        return [], logs, current_url, found_sub_links
         
     except Exception as e:
         logs.append(f"Error: {e}")
-        return [], logs, url
+        return [], logs, url, found_sub_links
 
 # --- 3. LINK EXTRACTOR ---
 def extract_best_link(desc_text):
@@ -283,6 +268,7 @@ for m in raw_events:
 bill_cache = {}
 bill_logs = {}
 final_urls = {}
+sub_links_debug = {} # Store discovered links for sidebar
 
 if links_to_scan:
     url_to_name = {u: n for u, n in links_to_scan}
@@ -294,14 +280,16 @@ if links_to_scan:
             for f in concurrent.futures.as_completed(future_map):
                 orig_url = future_map[f]
                 try: 
-                    res, logs, final_url = f.result()
+                    res, logs, final_url, sub_links = f.result()
                     bill_cache[orig_url] = res
                     bill_logs[orig_url] = logs
                     final_urls[orig_url] = final_url
+                    sub_links_debug[orig_url] = sub_links
                 except Exception as e: 
                     bill_cache[orig_url] = []
                     bill_logs[orig_url] = [str(e)]
                     final_urls[orig_url] = orig_url
+                    sub_links_debug[orig_url] = []
 
 # --- SIDEBAR PROBE ---
 st.sidebar.header("🕹️ Control Panel")
@@ -314,8 +302,19 @@ with st.sidebar.expander("🔴 Live Probe"):
         if orig_url in final_urls:
             st.write(f"**End:** {final_urls[orig_url]}")
             
-        st.write("**Logs:**")
+        st.write("**Flight Log:**")
         for l in evt['FlightLog']: st.write(f"- {l}")
+        
+        st.divider()
+        st.write("**🔍 Searchlight (Sub-Links Found):**")
+        if orig_url in sub_links_debug:
+            if not sub_links_debug[orig_url]:
+                st.warning("No subcommittee links found on page.")
+            for l in sub_links_debug[orig_url]:
+                st.code(l)
+        
+        st.divider()
+        st.write("**Scraper Log:**")
         if orig_url in bill_logs:
             for l in bill_logs[orig_url]: st.write(f"- {l}")
 
