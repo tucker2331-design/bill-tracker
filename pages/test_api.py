@@ -10,8 +10,8 @@ API_KEY = "81D70A54-FCDC-4023-A00B-A3FD114D5984"
 SESSION_CODE = "20261" 
 LIS_SESSION_ID = "261"
 
-st.set_page_config(page_title="v107 Marketing Reader", page_icon="📰", layout="wide")
-st.title("📰 v107: The 'Marketing' Reader (SFAC Fix)")
+st.set_page_config(page_title="v108 Precision Reader", page_icon="🎯", layout="wide")
+st.title("🎯 v108: The 'Precision' Reader (SFAC Fix)")
 
 # --- NETWORK ENGINE ---
 session = requests.Session()
@@ -22,95 +22,120 @@ HEADERS = {
     'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
 }
 
-# --- 1. SPECIAL HANDLERS (The Fix for SFAC) ---
-def scrape_sfac_site(url, target_date_obj):
+# --- 1. PRECISE SFAC SCRAPER ---
+def scrape_sfac_site(url, target_date_obj, target_name):
     """
-    Scrapes the sfac.virginia.gov table for specific dates.
-    Returns: {time, link, note}
+    Scrapes sfac.virginia.gov.
+    CRITICAL CHANGE: Checks the 'Meeting' column to distinguish Full Committee from Subcommittees.
     """
     try:
         resp = session.get(url, headers=HEADERS, timeout=5)
         soup = BeautifulSoup(resp.text, 'html.parser')
         
-        # Format target date to match site (e.g., "January 26, 2026")
-        target_str = target_date_obj.strftime("%B %-d, %Y") # Linux/Mac
-        # Fallback for Windows strftime if needed
-        if "%-" in target_str: target_str = target_date_obj.strftime("%B %d, %Y").replace(" 0", " ")
+        # Format date (e.g., "January 27, 2026")
+        target_date_str = target_date_obj.strftime("%B %-d, %Y")
+        if "%-" in target_date_str: target_date_str = target_date_obj.strftime("%B %d, %Y").replace(" 0", " ")
 
-        # Find the table row with this date
-        # Strategy: Search all 'td' for the date, then look at siblings
-        date_cell = soup.find(string=re.compile(target_str))
-        
-        if date_cell:
-            row = date_cell.find_parent('tr')
+        # Iterate ALL rows to find the specific match
+        # Table structure: [Meeting Name] [Date] [Time] [Materials]
+        for row in soup.find_all('tr'):
             cols = row.find_all('td')
+            if len(cols) < 4: continue
             
-            # Column mapping (approximate based on screenshot)
-            # Col 0: Meeting Name, Col 1: Date, Col 2: Time, Col 3: Materials
+            meeting_name = cols[0].get_text(" ", strip=True).lower()
+            meeting_date = cols[1].get_text(" ", strip=True)
             
-            # 1. Grab Time
+            # 1. Date Match
+            if target_date_str not in meeting_date: continue
+            
+            # 2. Name Match (The Fix)
+            # If API says "Senate Finance and Appropriations", we want the row that says "Senate Finance & Appropriations Committee"
+            # We avoid rows that say "Subcommittee" unless the API asked for one.
+            api_is_sub = "subcommittee" in target_name.lower()
+            row_is_sub = "subcommittee" in meeting_name
+            
+            # Skip if mismatch (e.g. API wants Full, Row is Sub)
+            if api_is_sub != row_is_sub: continue
+            
+            # If we are here, we have the RIGHT row.
+            
+            # 3. Extract Time
             raw_time = cols[2].get_text(" ", strip=True)
-            # Clean "Time Change: 9:30 a.m." -> "9:30 AM"
+            # Handle "Time Change: 9:30 a.m."
             time_clean = re.search(r'(\d{1,2}:\d{2}\s*[aA|pP]\.?[mM]\.?)', raw_time)
             final_time = time_clean.group(1).upper() if time_clean else raw_time
             
-            # 2. Grab Agenda Link
+            # 4. Extract Agenda Link
             agenda_link = None
-            materials_col = cols[3]
-            for a in materials_col.find_all('a', href=True):
-                txt = a.get_text().lower()
-                if "agenda" in txt:
+            for a in cols[3].find_all('a', href=True):
+                if "agenda" in a.get_text().lower():
                     agenda_link = a['href']
-                    if not agenda_link.startswith("http"): 
+                    if not agenda_link.startswith("http"):
                         agenda_link = f"https://sfac.virginia.gov{agenda_link}"
                     break
             
             return {
                 "Time": final_time,
                 "Link": agenda_link,
-                "Source": "SFAC Site"
+                "Source": "SFAC Site (Precise Match)"
             }
-            
+
     except: pass
     return None
 
 # --- 2. BILL SCRAPER (Deep Diver) ---
 def get_bills_deep_dive(url):
     if not url: return []
-    if "granicus" in url: return [] # Skip video streams
+    if "granicus" in url: return [] 
     
     try:
         resp = session.get(url, headers=HEADERS, timeout=5)
         soup = BeautifulSoup(resp.text, 'html.parser')
-        text = soup.get_text(" ", strip=True)
         
-        # Regex for bills
-        pattern = r'\b([H|S]\.?[B|J|R]\.?)\s*(\d+)\b'
-        matches = re.findall(pattern, text, re.IGNORECASE)
+        # Scrape Function
+        def scrape_soup(s):
+            text = s.get_text(" ", strip=True)
+            matches = re.findall(r'\b([H|S]\.?[B|J|R]\.?)\s*(\d+)\b', text, re.IGNORECASE)
+            bills = set()
+            for p, n in matches:
+                bills.add(f"{p.upper().replace('.','').strip()}{n}")
+            def sk(b):
+                m = re.match(r"([A-Z]+)(\d+)", b)
+                return (m.group(1), int(m.group(2))) if m else (b, 0)
+            return sorted(list(bills), key=sk)
+
+        # Attempt 1
+        bills = scrape_soup(soup)
+        if bills: return bills
         
-        bills = set()
-        for p, n in matches:
-            prefix = p.upper().replace(".", "").strip()
-            bills.add(f"{prefix}{n}")
+        # Attempt 2 (Dive)
+        target = None
+        for a in soup.find_all('a', href=True):
+            txt = a.get_text().lower()
+            if "agenda" in txt or "docket" in txt or "meeting info" in txt:
+                target = a['href']
+                if target.startswith("/"):
+                    base = "https://house.vga.virginia.gov" if "house.vga" in url else "https://lis.virginia.gov"
+                    target = f"{base}{target}"
+                break
+        
+        if target:
+            resp2 = session.get(target, headers=HEADERS, timeout=5)
+            return scrape_soup(BeautifulSoup(resp2.text, 'html.parser'))
             
-        def sort_key(b):
-            match = re.match(r"([A-Z]+)(\d+)", b)
-            if match: return match.group(1), int(match.group(2))
-            return b, 0
-        return sorted(list(bills), key=sort_key)
+        return []
     except: return []
 
-# --- 3. HARDCODED MAP (Backup) ---
+# --- 3. HARDCODED MAP ---
 COMMITTEE_MAP = {
-    # HOUSE (Committees/Hxx)
+    # HOUSE
     "appropriations": "H02", "finance": "H09", "courts": "H08",
     "commerce": "H11", "labor": "H11", "energy": "H11",
     "education": "H07", "health": "H13", "public safety": "H18",
     "transportation": "H15", "general laws": "H10",
     "counties": "H17", "rules": "H19", "agriculture": "H14",
     "communications": "H16", "privileges": "H01",
-    
-    # SENATE (com+Sxx)
+    # SENATE
     "agriculture": "S01", "education": "S02", "commerce": "S03",
     "courts": "S04", "finance": "S05", "general laws": "S06",
     "local gov": "S07", "privileges": "S08", "rehab": "S09",
@@ -119,20 +144,18 @@ COMMITTEE_MAP = {
 
 def construct_backup_link(owner_name):
     if not owner_name: return None
-    name_lower = owner_name.lower()
+    name = owner_name.lower()
     cid = None
-    for key, id_val in COMMITTEE_MAP.items():
-        if key in name_lower:
-            cid = id_val
-            if "senate" in name_lower and cid.startswith("S"): break
-            if "house" in name_lower and cid.startswith("H"): break
-    
+    for k, v in COMMITTEE_MAP.items():
+        if k in name:
+            cid = v
+            if "senate" in name and cid.startswith("S"): break
+            if "house" in name and cid.startswith("H"): break
     if not cid: return None
     if cid.startswith("H"): return f"https://house.vga.virginia.gov/committees/{cid}"
-    if cid.startswith("S"): return f"https://lis.virginia.gov/cgi-bin/legp604.exe?{LIS_SESSION_ID}+com+{cid}"
-    return None
+    return f"https://lis.virginia.gov/cgi-bin/legp604.exe?{LIS_SESSION_ID}+com+{cid}"
 
-# --- 4. API FETCH ---
+# --- 4. DATA FETCH ---
 @st.cache_data(ttl=600)
 def fetch_api_schedule():
     url = "https://lis.virginia.gov/Schedule/api/getschedulelistasync"
@@ -148,18 +171,15 @@ def fetch_api_schedule():
     except: pass
     return events
 
-# --- 5. EXTRACT API LINK ---
 def extract_api_link(desc_text):
     if not desc_text: return None
     match = re.search(r'href=[\'"]?(https?://[^\'" >]+)', desc_text)
-    if match: return match.group(1)
-    return None
+    return match.group(1) if match else None
 
 def parse_time_rank(time_str):
-    if not time_str: return 9999
+    if not time_str or "TBA" in str(time_str): return 9999
     t_upper = str(time_str).upper()
     if "CANCEL" in t_upper: return 8888
-    if "TBA" in t_upper: return 9999
     try:
         match = re.search(r'(\d{1,2}:\d{2}\s*[AP]M)', t_upper)
         if match:
@@ -177,7 +197,6 @@ today = datetime.now().date()
 processed_events = []
 links_to_scan = []
 
-# Process
 for m in raw_events:
     raw_date = m.get("ScheduleDate", "").split("T")[0]
     if not raw_date: continue
@@ -185,49 +204,48 @@ for m in raw_events:
     if d < today: continue
     
     m['DateObj'] = d
-    m['DisplayTime'] = m.get("ScheduleTime", "TBA")
-    if m.get("IsCancelled") is True: m['DisplayTime'] = "CANCELLED"
     
-    # 1. LINK LOGIC
+    # 1. TIME HANDLING (Robust)
+    raw_time = m.get("ScheduleTime")
+    if not raw_time or not str(raw_time).strip():
+        m['DisplayTime'] = "Time TBA" # Fallback for empty API strings
+    else:
+        m['DisplayTime'] = raw_time
+        
+    if m.get("IsCancelled") is True: 
+        m['DisplayTime'] = "CANCELLED"
+    
+    # 2. LINK HANDLING
     api_link = extract_api_link(m.get("Description"))
     
-    # SPECIAL HANDLER: SFAC
-    # If the API link is the generic "sfac.virginia.gov", we must scrape it for the REAL info
+    # SFAC Handler
     if api_link and "sfac.virginia.gov" in api_link:
-        # Run the specialized scraper
-        sfac_data = scrape_sfac_site(api_link, d)
-        if sfac_data:
-            # Override with fresh data
-            m['DisplayTime'] = sfac_data['Time']
-            if sfac_data['Link']: api_link = sfac_data['Link']
-            # If time says cancelled on site, honor it
-            if "CANCEL" in sfac_data['Time'].upper(): m['DisplayTime'] = "CANCELLED"
-    
-    # Fallback to Hardcoded LIS link if no API link
+        sfac = scrape_sfac_site(api_link, d, m.get("OwnerName", ""))
+        if sfac:
+            m['DisplayTime'] = sfac['Time'] # Overwrite with site time
+            if sfac['Link']: api_link = sfac['Link']
+            if "CANCEL" in sfac['Time'].upper(): m['DisplayTime'] = "CANCELLED"
+            
     backup_link = construct_backup_link(m.get("OwnerName"))
-    
     final_link = api_link if api_link else backup_link
-    m['Link'] = final_link
-    m['LinkSource'] = "API/Site" if api_link else "Backup"
     
-    if final_link:
-        links_to_scan.append(final_link)
-        
+    m['Link'] = final_link
+    if final_link: links_to_scan.append(final_link)
+    
     processed_events.append(m)
 
-# Auto-Scan Bills
+# Bill Scanning
 bill_cache = {}
 if links_to_scan:
-    unique_links = list(set(links_to_scan))
-    with st.spinner(f"Diving {len(unique_links)} Dockets..."):
+    unique = list(set(links_to_scan))
+    with st.spinner(f"Scanning {len(unique)} Dockets..."):
         with concurrent.futures.ThreadPoolExecutor(max_workers=10) as executor:
-            future_to_url = {executor.submit(get_bills_deep_dive, url): url for url in unique_links}
-            for future in concurrent.futures.as_completed(future_to_url):
-                url = future_to_url[future]
-                try: bill_cache[url] = future.result()
-                except: bill_cache[url] = []
+            fut = {executor.submit(get_bills_deep_dive, u): u for u in unique}
+            for f in concurrent.futures.as_completed(fut):
+                try: bill_cache[fut[f]] = f.result()
+                except: bill_cache[fut[f]] = []
 
-# Display
+# Render
 display_map = {}
 for m in processed_events:
     d = m['DateObj']
@@ -235,44 +253,41 @@ for m in processed_events:
     display_map[d].append(m)
 
 if not display_map:
-    st.info("No upcoming events found.")
+    st.info("No upcoming events.")
 else:
-    sorted_dates = sorted(display_map.keys())[:7]
-    cols = st.columns(len(sorted_dates))
+    dates = sorted(display_map.keys())[:7]
+    cols = st.columns(len(dates))
     
-    for i, date_val in enumerate(sorted_dates):
+    for i, dv in enumerate(dates):
         with cols[i]:
-            st.markdown(f"### {date_val.strftime('%a')}")
-            st.caption(date_val.strftime('%b %d'))
+            st.markdown(f"### {dv.strftime('%a')}")
+            st.caption(dv.strftime('%b %d'))
             st.divider()
             
-            day_events = display_map[date_val]
+            day_events = display_map[dv]
             day_events.sort(key=lambda x: parse_time_rank(x.get("DisplayTime")))
             
-            for event in day_events:
-                name = event.get("OwnerName", "Unknown")
-                clean_name = name.replace("Committee", "").replace("Virginia", "").strip()
-                time_disp = event.get("DisplayTime")
-                link = event.get("Link")
+            for e in day_events:
+                name = e.get("OwnerName", "Unknown").replace("Committee", "").replace("Virginia", "").strip()
+                time_s = e.get("DisplayTime")
+                link = e.get("Link")
                 bills = bill_cache.get(link, [])
                 
-                is_cancelled = "CANCEL" in str(time_disp).upper()
+                is_cancelled = "CANCEL" in str(time_s).upper()
                 
                 if is_cancelled:
-                    st.error(f"❌ **{clean_name}**")
+                    st.error(f"❌ **{name}**")
                     st.caption("Cancelled")
                 else:
                     with st.container(border=True):
-                        if "TBA" in str(time_disp) or "Not Listed" in str(time_disp):
-                            st.warning(f"⚠️ {time_disp}")
-                        else:
-                            st.markdown(f"**⏰ {time_disp}**")
+                        if "TBA" in str(time_s): st.warning(f"⚠️ {time_s}")
+                        else: st.markdown(f"**⏰ {time_s}**")
                         
-                        st.markdown(f"**{clean_name}**")
+                        st.markdown(f"**{name}**")
                         
                         if bills:
                             st.success(f"**{len(bills)} Bills Listed**")
-                            with st.expander("View List"):
+                            with st.expander("List"):
                                 st.write(", ".join(bills))
                                 if link: st.link_button("View Docket", link)
                         elif link:
