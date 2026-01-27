@@ -1,18 +1,14 @@
 import streamlit as st
 import requests
-import re
-import concurrent.futures
+import json
 from datetime import datetime
-from bs4 import BeautifulSoup
-from difflib import SequenceMatcher
 
 # --- CONFIGURATION ---
 API_KEY = "81D70A54-FCDC-4023-A00B-A3FD114D5984" 
 SESSION_CODE = "20261" 
-LIS_SESSION_ID = "261"
 
-st.set_page_config(page_title="v121 Raw Truth", page_icon="🧪", layout="wide")
-st.title("🧪 v121: The Raw Truth (Ghost Content Detector)")
+st.set_page_config(page_title="v123 API Breaker", page_icon="🔓", layout="wide")
+st.title("🔓 v123: The API Breaker")
 
 # --- NETWORK ENGINE ---
 session = requests.Session()
@@ -21,295 +17,77 @@ session.mount('https://', adapter)
 
 HEADERS = {
     'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+    'Accept': 'application/json' # Critical for API calls
 }
 
-# --- 1. THE GOLDEN MAP ---
-HOUSE_MAP = {
-    "agriculture": "H01", "chesapeake": "H01", "appropriations": "H02",
-    "counties": "H07", "cities": "H07", "courts": "H08", "education": "H09",
-    "finance": "H10", "general laws": "H11", "labor": "H14", "commerce": "H14",
-    "energy": "H14", "public safety": "H15", "privileges": "H18", "elections": "H18",
-    "transportation": "H19", "rules": "H20", "communications": "H21", "technology": "H21",
-    "health": "H24", "human services": "H24",
-}
-
-SENATE_MAP = {
-    "agriculture": "S01", "commerce": "S02", "labor": "S02", "education": "S04",
-    "health": "S04", "finance": "S05", "appropriations": "S05", "local": "S07",
-    "privileges": "S08", "elections": "S08", "rehabilitation": "S09", "social": "S09",
-    "rules": "S10", "transportation": "S11", "general laws": "S12", "courts": "S13",
-    "justice": "S13",
-}
-
-def construct_modern_link(owner_name):
-    if not owner_name: return None
-    name_lower = owner_name.lower()
-    cid = None
-    is_senate = "senate" in name_lower
-    target_map = SENATE_MAP if is_senate else HOUSE_MAP
+# --- THE HIDDEN API PROBE ---
+def probe_hidden_api(committee_id):
+    """
+    Attempts to hit the internal API discovered in the Network tab.
+    Endpoint: https://lis.virginia.gov/Committee/api/getCommitteeByIdAsync
+    """
+    url = "https://lis.virginia.gov/Committee/api/getCommitteeByIdAsync"
+    params = {
+        "sessionCode": SESSION_CODE,
+        "committeeId": committee_id
+    }
     
-    for keyword, id_val in target_map.items():
-        if keyword in name_lower:
-            cid = id_val
-            break
-            
-    if not cid: return None
-    return f"https://lis.virginia.gov/session-details/{SESSION_CODE}/committee-information/{cid}/committee-details"
-
-# --- 2. THE BRUTE FORCE SCANNER ---
-def similarity(a, b):
-    return SequenceMatcher(None, a, b).ratio()
-
-def get_bills_deep_dive(url, target_name):
-    logs = [f"Visiting: {url}"]
-    found_sub_links = [] 
-    if not url: return [], logs, url, []
+    st.write(f"**Attempting to breach:** `{url}`")
+    st.write(f"**Payload:** `{params}`")
     
     try:
-        resp = session.get(url, headers=HEADERS, timeout=5)
-        soup = BeautifulSoup(resp.text, 'html.parser')
-        current_url = url
+        resp = session.get(url, headers=HEADERS, params=params, timeout=5)
+        st.write(f"**Status Code:** `{resp.status_code}`")
         
-        # --- PHASE 1: SUBCOMMITTEE HUNT (Brute Force) ---
-        clean_target = target_name.lower().replace("house", "").replace("senate", "").replace("committee", "").strip()
-        is_sub_target = "subcommittee" in clean_target or "-" in target_name
-        
-        if is_sub_target and "committee-details" in url:
-            logs.append(f"Sub-Hunter: Active for '{clean_target}'")
-            
-            # BRUTE FORCE: Ignore sections/headers. Just check EVERY link.
-            all_links = []
-            for a in soup.find_all('a', href=True):
-                txt = a.get_text(" ", strip=True)
-                if len(txt) > 3: # Ignore tiny links
-                    all_links.append((txt, a['href']))
-            
-            # Store for sidebar
-            found_sub_links = [f"{txt}" for txt, href in all_links[:20]] # Just show first 20 for sanity
-            if len(all_links) > 20: found_sub_links.append(f"...and {len(all_links)-20} more.")
-
-            # Matching Logic
-            best_match = None
-            best_score = 0
-            target_words = [w for w in re.split(r'[\s\-\&]+', clean_target) if len(w) > 3]
-            
-            for txt, href in all_links:
-                txt_lower = txt.lower()
-                matches = sum(1 for w in target_words if w in txt_lower)
-                sim = similarity(clean_target, txt_lower)
-                
-                if matches >= 1 and sim > best_score:
-                    best_score = sim
-                    best_match = href
-            
-            if best_match and best_score > 0.3:
-                logs.append(f"🦈 Match (Score {best_score:.2f}): {best_match}")
-                if not best_match.startswith("http"):
-                    if best_match.startswith("/"): best_match = f"https://lis.virginia.gov{best_match}"
-                
-                current_url = best_match
-                resp = session.get(best_match, headers=HEADERS, timeout=5)
-                soup = BeautifulSoup(resp.text, 'html.parser')
-                logs.append("Switched context to Subcommittee Page.")
-            else:
-                logs.append("❌ No matching subcommittee link found (Brute Force).")
-
-        # --- PHASE 2: BILL SCRAPING ---
-        def scrape_text(s):
-            text = s.get_text(" ", strip=True)
-            matches = re.findall(r'\b([H|S]\.?[B|J|R]\.?)\s*(\d+)\b', text, re.IGNORECASE)
-            bills = set()
-            for p, n in matches:
-                bills.add(f"{p.upper().replace('.','').strip()}{n}")
-            return sorted(list(bills))
-
-        bills = scrape_text(soup)
-        logs.append(f"Bills on page: {len(bills)}")
-        
-        if bills: return bills, logs, current_url, found_sub_links
-        
-        # --- PHASE 3: DOCKET FALLBACK ---
-        target = None
-        for a in soup.find_all('a', href=True):
-            txt = a.get_text().lower()
-            if "agenda" in txt or "docket" in txt:
-                target = a['href']
-                if target.startswith("/"):
-                    base = "https://house.vga.virginia.gov" if "house.vga" in url else "https://lis.virginia.gov"
-                    target = f"{base}{target}"
-                break
-        
-        if target:
-            logs.append(f"Diving to Docket: {target}")
-            current_url = target
-            resp2 = session.get(target, headers=HEADERS, timeout=5)
-            bills = scrape_text(BeautifulSoup(resp2.text, 'html.parser'))
-            logs.append(f"Deep Bills: {len(bills)}")
-            return bills, logs, current_url, found_sub_links
-            
-        return [], logs, current_url, found_sub_links
-        
-    except Exception as e:
-        logs.append(f"Error: {e}")
-        return [], logs, url, found_sub_links
-
-# --- 3. LINK EXTRACTOR ---
-def extract_best_link(desc_text):
-    if not desc_text: return None, "No Desc"
-    all_links = re.findall(r'href=[\'"]?(https?://[^\'" >]+)', desc_text)
-    if not all_links: return None, "No Hrefs"
-    
-    best_link = None
-    best_score = -1
-    reason = "None"
-    
-    for url in all_links:
-        score = 0
-        u = url.lower()
-        if "granicus" in u or "now_playing" in u or "broadcast" in u or "video" in u: continue 
-        
-        if "agenda" in u or "docket" in u or ".pdf" in u: score = 10
-        elif "/committees/" in u or "session-details" in u: score = 5
-        else: score = 1
-        
-        if score > best_score:
-            best_score = score
-            best_link = url
-            reason = f"Score {score}"
-            
-    return best_link, reason
-
-# --- 4. API FETCH ---
-@st.cache_data(ttl=600)
-def fetch_api_schedule():
-    url = "https://lis.virginia.gov/Schedule/api/getschedulelistasync"
-    headers = {"WebAPIKey": API_KEY, "Accept": "application/json"}
-    events = []
-    try:
-        with concurrent.futures.ThreadPoolExecutor(max_workers=2) as executor:
-            h = executor.submit(session.get, url, headers=headers, params={"sessionCode": SESSION_CODE, "chamberCode": "H"}, timeout=5)
-            s = executor.submit(session.get, url, headers=headers, params={"sessionCode": SESSION_CODE, "chamberCode": "S"}, timeout=5)
-            for f in [h, s]:
-                if f.result().status_code == 200:
-                    events.extend(f.result().json().get("Schedules", []))
-    except: pass
-    return events
-
-def parse_time_rank(time_str):
-    if not time_str or "TBA" in str(time_str): return 9999
-    t_upper = str(time_str).upper()
-    if "CANCEL" in t_upper: return 8888
-    try:
-        match = re.search(r'(\d{1,2}:\d{2}\s*[AP]M)', t_upper)
-        if match:
-            dt = datetime.strptime(match.group(1), "%I:%M %p")
-            return dt.hour * 60 + dt.minute
-    except: pass
-    return 9999
-
-# --- MAIN LOGIC ---
-
-with st.spinner("Processing..."):
-    raw_events = fetch_api_schedule()
-
-today = datetime.now().date()
-processed_events = []
-links_to_scan = []
-committee_map_for_probe = {}
-
-for m in raw_events:
-    if not m: continue
-    raw_date = m.get("ScheduleDate", "").split("T")[0]
-    if not raw_date: continue
-    d = datetime.strptime(raw_date, "%Y-%m-%d").date()
-    if d < today: continue
-    
-    m['DateObj'] = d
-    flight_log = []
-    
-    # Time
-    api_time = m.get("ScheduleTime")
-    m['DisplayTime'] = api_time if api_time else "Time TBA"
-    if m.get("IsCancelled") is True: m['DisplayTime'] = "CANCELLED"
-    
-    # Link
-    api_link, reason = extract_best_link(m.get("Description"))
-    router_link = construct_modern_link(m.get("OwnerName"))
-    
-    if api_link:
-        final_link = api_link
-        source = "API-Extract"
-    else:
-        final_link = router_link
-        source = "Router (Golden)"
-        
-    m['Link'] = final_link
-    m['Source'] = source
-    m['FlightLog'] = flight_log
-    
-    if final_link: links_to_scan.append((final_link, m.get("OwnerName")))
-    processed_events.append(m)
-    
-    key_name = f"{m.get('OwnerName')} ({d.strftime('%m/%d')})"
-    committee_map_for_probe[key_name] = m
-
-# Bills Scanning
-bill_cache = {}
-bill_logs = {}
-final_urls = {}
-sub_links_debug = {} 
-
-if links_to_scan:
-    url_to_name = {u: n for u, n in links_to_scan}
-    unique_urls = list(url_to_name.keys())
-    
-    with st.spinner(f"Scanning {len(unique_urls)} Events..."):
-        with concurrent.futures.ThreadPoolExecutor(max_workers=10) as executor:
-            future_map = {executor.submit(get_bills_deep_dive, u, url_to_name[u]): u for u in unique_urls}
-            for f in concurrent.futures.as_completed(future_map):
-                orig_url = future_map[f]
-                try: 
-                    res, logs, final_url, sub_links = f.result()
-                    bill_cache[orig_url] = res
-                    bill_logs[orig_url] = logs
-                    final_urls[orig_url] = final_url
-                    sub_links_debug[orig_url] = sub_links
-                except Exception as e: 
-                    bill_cache[orig_url] = []
-                    bill_logs[orig_url] = [str(e)]
-                    final_urls[orig_url] = orig_url
-                    sub_links_debug[orig_url] = []
-
-# --- SIDEBAR PROBE ---
-st.sidebar.header("🕹️ Control Panel")
-with st.sidebar.expander("🔴 Live Probe"):
-    selected_c = st.selectbox("Select Committee:", options=list(committee_map_for_probe.keys()))
-    if selected_c:
-        evt = committee_map_for_probe[selected_c]
-        orig_url = evt['Link']
-        st.write(f"**Start:** {orig_url}")
-        
-        if st.button("Ping URL"):
+        if resp.status_code == 200:
             try:
-                r = requests.get(orig_url, headers=HEADERS, timeout=5)
-                st.write(f"**Status:** `{r.status_code}`")
+                data = resp.json()
+                st.success("✅ BREACH SUCCESSFUL: JSON Data Retrieved!")
                 
-                # THE RAW TRUTH CHECK
-                target_name = evt.get("OwnerName", "").replace("House", "").replace("Senate", "").replace("Committee", "").strip()
-                # Split and take first big word (e.g. "Campaigns")
-                keyword = "Campaigns" if "Campaigns" in target_name else target_name.split()[0]
-                
-                if keyword in r.text:
-                    st.success(f"✅ Raw Text Check: Found '{keyword}' in HTML source.")
-                else:
-                    st.error(f"❌ Raw Text Check: '{keyword}' NOT FOUND in HTML.")
-                    st.info("Diagnosis: This content is likely loaded via JavaScript.")
+                # Inspect for Subcommittees
+                if "SubCommittees" in data:
+                    subs = data["SubCommittees"]
+                    st.write(f"**Found {len(subs)} Subcommittees:**")
                     
-                st.text_area("Snippet", r.text[:1000], height=200)
-            except Exception as e:
-                st.error(f"Error: {e}")
+                    # Formatting for readability
+                    clean_list = []
+                    for sub in subs:
+                        clean_list.append({
+                            "Name": sub.get("Name"),
+                            "CommitteeId": sub.get("CommitteeId"), # This is the secret ID!
+                            "ParentId": sub.get("ParentCommitteeId")
+                        })
+                    st.table(clean_list)
+                    return data
+                else:
+                    st.warning("JSON received, but 'SubCommittees' key is missing.")
+                    st.json(data)
+            except:
+                st.error("❌ Failed to parse JSON. Response might be raw HTML.")
+                st.text(resp.text[:1000])
+        else:
+            st.error(f"❌ Request Failed: {resp.status_code}")
+            
+    except Exception as e:
+        st.error(f"❌ Connection Error: {e}")
 
-        st.divider()
-        st.write("**🔍 Searchlight (All Links Found):**")
-        if orig_url in sub_links_debug:
-            for l in sub_links_debug[orig_url]: st.code(l)
+# --- UI ---
+st.sidebar.header("🔓 API Breaker Tool")
+st.sidebar.info("This tool tests if we can bypass the website and talk directly to the database.")
+
+target_id = st.sidebar.text_input("Target Committee ID:", value="H18") # H18 is Privileges
+
+if st.sidebar.button("🔴 Test Hidden API"):
+    with st.spinner("Sending Probe..."):
+        probe_hidden_api(target_id)
+
+st.divider()
+st.markdown("""
+### What are we looking for?
+If this works, we will see a list like this:
+* **Name:** Subcommittee on Campaigns and Candidates
+* **CommitteeId:** `H18003` (The "Ghost ID")
+
+Once we have that ID, we can construct the perfect link:  
+`.../committee-information/H18003/committee-details`
+""")
