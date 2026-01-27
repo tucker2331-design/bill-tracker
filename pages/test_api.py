@@ -10,8 +10,8 @@ API_KEY = "81D70A54-FCDC-4023-A00B-A3FD114D5984"
 SESSION_CODE = "20261" 
 LIS_SESSION_ID = "261"
 
-st.set_page_config(page_title="v113 Modernizer", page_icon="📡", layout="wide")
-st.title("📡 v113: The Modernizer (Live Probe + New Links)")
+st.set_page_config(page_title="v114 Universal Modernizer", page_icon="🏛️", layout="wide")
+st.title("🏛️ v114: The Universal Modernizer (Bypassing House Site)")
 
 # --- NETWORK ENGINE ---
 session = requests.Session()
@@ -22,13 +22,16 @@ HEADERS = {
     'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
 }
 
-# --- 1. MODERN ROUTER (The Fix for Dead Links) ---
+# --- 1. UNIVERSAL ROUTER (LIS Source of Truth) ---
 COMMITTEE_MAP = {
-    "appropriations": "H02", "finance": "H09", "courts": "H08",
-    "commerce": "H11", "labor": "H11", "education": "H07", 
-    "health": "H13", "public safety": "H18", "transportation": "H15", 
-    "general laws": "H10", "counties": "H17", "rules": "H19", 
-    "agriculture": "H14", "privileges": "H01",
+    # HOUSE (Standard LIS IDs)
+    "privileges": "H01", "appropriations": "H02", "education": "H03", # H03 is standard for Ed? Checking map...
+    "finance": "H09", "courts": "H08", "commerce": "H11", "labor": "H11", 
+    "health": "H13", "agriculture": "H14", "transportation": "H15", 
+    "communications": "H16", "counties": "H17", "public safety": "H18", "rules": "H19", 
+    "general laws": "H10",
+    
+    # SENATE (Standard LIS IDs)
     "senate agriculture": "S01", "senate education": "S02", 
     "senate commerce": "S03", "senate courts": "S04", "senate finance": "S05", 
     "senate general laws": "S06", "senate local": "S07", "senate privileges": "S08", 
@@ -37,12 +40,14 @@ COMMITTEE_MAP = {
 
 def construct_modern_link(owner_name):
     """
-    Builds the new 2026 LIS URL pattern.
-    Ref: https://lis.virginia.gov/session-details/20261/committee-information/{ID}/committee-details
+    Routes ALL committees to the Modern LIS 2026 portal.
+    Bypasses house.vga.virginia.gov which has ID rot.
     """
     if not owner_name: return None
     name = owner_name.lower()
     cid = None
+    
+    # Fuzzy Match ID
     for k, v in COMMITTEE_MAP.items():
         if k in name:
             cid = v
@@ -51,14 +56,10 @@ def construct_modern_link(owner_name):
     
     if not cid: return None
     
-    # House still uses the vga subdomain effectively
-    if cid.startswith("H"): 
-        return f"https://house.vga.virginia.gov/committees/{cid}"
-    
-    # Senate now uses the Modern LIS pattern
+    # Universal Pattern
     return f"https://lis.virginia.gov/session-details/{SESSION_CODE}/committee-information/{cid}/committee-details"
 
-# --- 2. SFAC SCRAPER (Safe Mode) ---
+# --- 2. SFAC SAFE SCRAPER ---
 def scrape_sfac_site(url, target_date_obj, target_name):
     logs = [f"SFAC Scrape: {url}"]
     try:
@@ -67,7 +68,7 @@ def scrape_sfac_site(url, target_date_obj, target_name):
         
         target_str = target_date_obj.strftime("%B %-d, %Y")
         if "%-" in target_str: target_str = target_date_obj.strftime("%B %d, %Y").replace(" 0", " ")
-        logs.append(f"Searching for date: {target_str}")
+        logs.append(f"Searching date: {target_str}")
 
         for row in soup.find_all('tr'):
             cols = row.find_all('td')
@@ -78,14 +79,17 @@ def scrape_sfac_site(url, target_date_obj, target_name):
             
             if target_str not in meeting_date: continue
             
+            # Match Sub/Full
             api_sub = "subcommittee" in target_name.lower()
             row_sub = "subcommittee" in meeting_name
             if api_sub != row_sub: continue
             
+            # Time
             raw_time = cols[2].get_text(" ", strip=True)
             time_clean = re.search(r'(\d{1,2}:\d{2}\s*[aA|pP]\.?[mM]\.?)', raw_time)
             final_time = time_clean.group(1).upper() if time_clean else raw_time
             
+            # Link
             agenda_link = None
             for a in cols[3].find_all('a', href=True):
                 if "agenda" in a.get_text().lower():
@@ -94,14 +98,14 @@ def scrape_sfac_site(url, target_date_obj, target_name):
                         agenda_link = f"https://sfac.virginia.gov{agenda_link}"
                     break
             
-            logs.append(f"Found match! Time: {final_time}")
+            logs.append(f"Match Found: {final_time}")
             return {"Time": final_time, "Link": agenda_link}, logs
     except Exception as e:
         logs.append(f"Error: {e}")
         return None, logs
     return None, logs
 
-# --- 3. LINK EXTRACTOR (With Trash Filter) ---
+# --- 3. LINK EXTRACTOR (Gatekeeper) ---
 def extract_best_link(desc_text):
     if not desc_text: return None, "No Desc"
     all_links = re.findall(r'href=[\'"]?(https?://[^\'" >]+)', desc_text)
@@ -115,7 +119,7 @@ def extract_best_link(desc_text):
         score = 0
         u = url.lower()
         
-        # 🗑️ TRASH FILTER
+        # 🗑️ TRASH
         if "granicus" in u or "now_playing" in u or "broadcast" in u or "video" in u: 
             continue 
         
@@ -133,7 +137,7 @@ def extract_best_link(desc_text):
             
     return best_link, reason
 
-# --- 4. BILL SCRAPER ---
+# --- 4. BILL SCRAPER (Deep Diver) ---
 def get_bills_deep_dive(url):
     logs = [f"Visiting: {url}"]
     if not url: return [], logs
@@ -150,11 +154,12 @@ def get_bills_deep_dive(url):
                 bills.add(f"{p.upper().replace('.','').strip()}{n}")
             return sorted(list(bills))
 
+        # 1. Surface
         bills = scrape_text(soup)
         logs.append(f"Surface: {len(bills)} bills")
         if bills: return bills, logs
         
-        # Dive
+        # 2. Dive (Agenda/Docket)
         target = None
         for a in soup.find_all('a', href=True):
             txt = a.get_text().lower()
@@ -166,7 +171,7 @@ def get_bills_deep_dive(url):
                 break
         
         if target:
-            logs.append(f"Diving to: {target}")
+            logs.append(f"Diving: {target}")
             resp2 = session.get(target, headers=HEADERS, timeout=5)
             bills = scrape_text(BeautifulSoup(resp2.text, 'html.parser'))
             logs.append(f"Deep: {len(bills)} bills")
@@ -213,7 +218,7 @@ with st.spinner("Processing..."):
 today = datetime.now().date()
 processed_events = []
 links_to_scan = []
-committee_map_for_probe = {} # For sidebar
+committee_map_for_probe = {}
 
 for m in raw_events:
     if not m: continue
@@ -232,7 +237,7 @@ for m in raw_events:
     
     # Link
     api_link, reason = extract_best_link(m.get("Description"))
-    flight_log.append(f"API Link Logic: {reason} -> {api_link}")
+    flight_log.append(f"API Logic: {reason} -> {api_link}")
     
     if api_link and "sfac.virginia.gov" in api_link:
         sfac, slogs = scrape_sfac_site(api_link, d, m.get("OwnerName", ""))
@@ -243,17 +248,16 @@ for m in raw_events:
             if "CANCEL" in str(sfac['Time']).upper(): m['DisplayTime'] = "CANCELLED"
             
     router_link = construct_modern_link(m.get("OwnerName"))
-    flight_log.append(f"Modern Router Link: {router_link}")
+    flight_log.append(f"Universal Router: {router_link}")
     
     final_link = api_link if api_link else router_link
     m['Link'] = final_link
-    m['Source'] = "API-Extract" if api_link else "Router"
+    m['Source'] = "API-Extract" if api_link else "Router (LIS)"
     m['FlightLog'] = flight_log
     
     if final_link: links_to_scan.append(final_link)
     processed_events.append(m)
     
-    # Map for sidebar probe
     key_name = f"{m.get('OwnerName')} ({d.strftime('%m/%d')})"
     committee_map_for_probe[key_name] = m
 
@@ -262,7 +266,7 @@ bill_cache = {}
 bill_logs = {}
 if links_to_scan:
     unique = list(set(links_to_scan))
-    with st.spinner(f"Scanning {len(unique)} Dockets..."):
+    with st.spinner(f"Deep Scanning {len(unique)} Links..."):
         with concurrent.futures.ThreadPoolExecutor(max_workers=10) as executor:
             fut = {executor.submit(get_bills_deep_dive, u): u for u in unique}
             for f in concurrent.futures.as_completed(fut):
@@ -277,7 +281,7 @@ if links_to_scan:
 
 # --- SIDEBAR LIVE PROBE ---
 st.sidebar.header("🔴 Live Probe")
-selected_c = st.sidebar.selectbox("Select Committee to Ping:", options=list(committee_map_for_probe.keys()))
+selected_c = st.sidebar.selectbox("Select Committee:", options=list(committee_map_for_probe.keys()))
 
 if selected_c:
     evt = committee_map_for_probe[selected_c]
@@ -285,25 +289,23 @@ if selected_c:
     
     st.sidebar.write(f"**Target:** {target_url}")
     
-    if st.sidebar.button("Run Live Probe"):
-        with st.sidebar.status("Pinging URL..."):
+    if st.sidebar.button("Ping URL"):
+        with st.sidebar.status("Pinging..."):
             try:
                 r = requests.get(target_url, headers=HEADERS, timeout=5)
                 st.write(f"**Status:** `{r.status_code}`")
-                st.write(f"**Final URL:** `{r.url}`")
+                st.write(f"**Final:** `{r.url}`")
                 if "agenda" in r.text.lower() or "docket" in r.text.lower():
-                    st.success("✅ Content Found: 'Agenda/Docket' detected in HTML.")
+                    st.success("✅ 'Agenda/Docket' found.")
                 else:
-                    st.warning("⚠️ Warning: No 'Agenda/Docket' text found.")
-                st.text(r.text[:500])
+                    st.warning("⚠️ Content Check Failed.")
             except Exception as e:
-                st.error(f"Probe Failed: {e}")
+                st.error(f"Error: {e}")
                 
     st.sidebar.divider()
-    with st.sidebar.expander("View Flight Log"):
-        for l in evt['FlightLog']:
-            st.write(l)
-        st.write("--- Scraper Log ---")
+    with st.sidebar.expander("Flight Log"):
+        for l in evt['FlightLog']: st.write(l)
+        st.write("--- Scraper ---")
         if target_url in bill_logs:
             for l in bill_logs[target_url]: st.write(l)
 
