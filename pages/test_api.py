@@ -9,7 +9,7 @@ from bs4 import BeautifulSoup
 API_KEY = "81D70A54-FCDC-4023-A00B-A3FD114D5984" 
 SESSION_CODE = "20261" 
 
-st.set_page_config(page_title="VA Bill Tracker v202", page_icon="🏛️", layout="wide")
+st.set_page_config(page_title="VA Bill Tracker v203", page_icon="🏛️", layout="wide")
 st.title("🏛️ Virginia General Assembly Bill Tracker")
 
 # --- NETWORK ENGINE ---
@@ -23,7 +23,6 @@ HEADERS = {
 
 # --- MASTER MAP (Codes) ---
 MASTER_COMMITTEE_MAP = {
-    # HOUSE
     "Agriculture, Chesapeake and Natural Resources": "H01",
     "Appropriations": "H02",
     "Counties, Cities and Towns": "H07",
@@ -75,7 +74,7 @@ MASTER_COMMITTEE_MAP = {
     "Senate Rules": "S10"
 }
 
-# --- 1. INTELLIGENT ROUTER (Lobby Link) ---
+# --- 1. INTELLIGENT ROUTER ---
 def get_committee_lobby_link(owner_name):
     if not owner_name: return None
     clean_name = owner_name.replace("House Committee on", "").replace("House", "").replace("Committee", "").strip()
@@ -91,56 +90,61 @@ def get_committee_lobby_link(owner_name):
             return f"https://lis.virginia.gov/session-details/{SESSION_CODE}/committee-information/{code}/committee-details"
     return None
 
-# --- 2. THE DOCKET HUNTER (Deep Linker) ---
+# --- 2. THE DOCKET HUNTER (V2 - Aggressive) ---
 def find_docket_for_date(committee_url, meeting_date):
     """
-    Visits the Committee Lobby, looks for the specific date, finds the 'Docket' link.
+    Scrapes the Lobby page. Tries to find the exact date row. 
+    If failing that, grabs the first 'Docket' link available.
     """
-    if not committee_url: return None, []
+    if not committee_url: return None, [], "No URL"
     
     try:
-        resp = session.get(committee_url, headers=HEADERS, timeout=3)
+        resp = session.get(committee_url, headers=HEADERS, timeout=5)
         soup = BeautifulSoup(resp.text, 'html.parser')
         
-        # Format date to match LIS: "January 29, 2026"
-        # We strip leading zero from day just in case (e.g. Jan 1 instead of Jan 01)
-        date_str = meeting_date.strftime("%B %d, %Y").replace(" 0", " ")
+        # Strategy 1: Find Exact Date (e.g. "January 29")
+        # We assume the user wants the docket for the meeting date
+        target_str = meeting_date.strftime("%B %d").replace(" 0", " ") # "January 29"
         
-        # 1. Find the date in the text
-        # LIS usually lists meetings in a table or list
-        target_node = soup.find(string=re.compile(date_str))
+        # Find all links that say "Docket" or "Agenda"
+        docket_links = soup.find_all('a', href=True, string=re.compile(r'(Docket|Agenda)', re.IGNORECASE))
         
-        docket_url = None
+        best_link = None
+        match_type = "Fallback"
         
-        if target_node:
-            # Look for a "Docket" or "Agenda" link in the same container/row
-            parent = target_node.find_parent()
-            # Expand search radius slightly (parent's siblings)
-            container = parent.find_parent() if parent else soup
+        # Check if any docket link is near our date
+        for link in docket_links:
+            # Look at the text surrounding this link (parent row or container)
+            row_text = link.find_parent().find_parent().get_text() 
+            if target_str in row_text:
+                best_link = link['href']
+                match_type = "Exact Date"
+                break
+        
+        # Strategy 2: If no date match, grab the FIRST docket link (usually the upcoming one)
+        if not best_link and docket_links:
+            best_link = docket_links[0]['href']
+            match_type = "First Available"
             
-            for a in container.find_all('a', href=True):
-                link_text = a.get_text().lower()
-                if "docket" in link_text or "agenda" in link_text:
-                    docket_url = a['href']
-                    if not docket_url.startswith("http"):
-                        docket_url = f"https://lis.virginia.gov{docket_url}"
-                    break
-        
-        # If we found a docket, scrape the bills from IT
-        if docket_url:
-            return docket_url, scrape_bills(docket_url)
+        if best_link:
+            if not best_link.startswith("http"):
+                best_link = f"https://lis.virginia.gov{best_link}"
             
-        # Fallback: If no date match, scrape the Lobby page itself (sometimes bills are there)
-        return committee_url, scrape_bills(committee_url)
+            # Now scrape the bills from that docket
+            bills = scrape_bills(best_link)
+            return best_link, bills, match_type
+            
+        return committee_url, [], "Lobby Only"
         
-    except:
-        return committee_url, []
+    except Exception as e:
+        return committee_url, [], f"Error: {str(e)}"
 
 def scrape_bills(url):
     try:
         resp = session.get(url, headers=HEADERS, timeout=3)
         soup = BeautifulSoup(resp.text, 'html.parser')
         text = soup.get_text(" ", strip=True)
+        # Regex for bills (HB1234, SB50, etc)
         matches = re.findall(r'\b([H|S]\.?[B|J|R]\.?)\s*(\d+)\b', text, re.IGNORECASE)
         bills = set()
         for p, n in matches:
@@ -168,7 +172,7 @@ def fetch_schedule():
 # --- MAIN LOGIC ---
 st.markdown("### 📅 Legislative Schedule")
 
-with st.spinner("Syncing Schedule & Hunting Dockets..."):
+with st.spinner("Hunting for Dockets..."):
     raw_events = fetch_schedule()
 
 today = datetime.now().date()
@@ -193,20 +197,20 @@ for m in raw_events:
     
     final_events.append(m)
 
-# --- CONCURRENT DOCKET HUNTING ---
-# We need to run the "Docket Hunter" on every event in parallel so it's fast
+# --- CONCURRENT ENRICHMENT ---
 def enrich_event(evt):
     if evt['LobbyLink'] and evt['DisplayTime'] != "CANCELLED":
-        deep_link, bills = find_docket_for_date(evt['LobbyLink'], evt['DateObj'])
+        deep_link, bills, status = find_docket_for_date(evt['LobbyLink'], evt['DateObj'])
         evt['DeepLink'] = deep_link
         evt['Bills'] = bills
+        evt['Status'] = status
     else:
         evt['DeepLink'] = evt.get('LobbyLink')
         evt['Bills'] = []
+        evt['Status'] = "No Link"
     return evt
 
 with concurrent.futures.ThreadPoolExecutor(max_workers=10) as executor:
-    # Map the enrichment function to all events
     final_events = list(executor.map(enrich_event, final_events))
 
 # --- DISPLAY ---
@@ -236,6 +240,7 @@ else:
                 time_s = e['DisplayTime']
                 link = e.get('DeepLink')
                 bills = e.get('Bills', [])
+                status = e.get('Status', '')
                 
                 if "CANCEL" in str(time_s).upper():
                     st.error(f"❌ **{name}**")
@@ -244,6 +249,12 @@ else:
                         st.markdown(f"**⏰ {time_s}**")
                         st.markdown(f"**{name}**")
                         
+                        # Debug Status (Tiny text)
+                        if "Lobby" in status:
+                            st.caption(f"⚠️ {status}")
+                        else:
+                            st.caption(f"✓ {status}")
+
                         if bills:
                             st.success(f"**{len(bills)} Bills Found**")
                             with st.expander("Show Bills"):
