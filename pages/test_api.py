@@ -9,7 +9,7 @@ from bs4 import BeautifulSoup
 API_KEY = "81D70A54-FCDC-4023-A00B-A3FD114D5984" 
 SESSION_CODE = "20261" 
 
-st.set_page_config(page_title="VA Bill Tracker v200", page_icon="🏛️", layout="wide")
+st.set_page_config(page_title="VA Bill Tracker v201", page_icon="🏛️", layout="wide")
 st.title("🏛️ Virginia General Assembly Bill Tracker")
 
 # --- NETWORK ENGINE ---
@@ -21,86 +21,90 @@ HEADERS = {
     'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
 }
 
-# --- 💎 THE MASTER MAP (Hardcoded from your JSON) ---
-# This maps every committee name to its INTERNAL INTEGER ID.
-# No more scraping needed.
+# --- 💎 THE CORRECTED MASTER MAP (Using CODES, not IDs) ---
+# We use the "CommitteeNumber" from the JSON (e.g., H18003) because that is what the WEBSITE needs.
 MASTER_COMMITTEE_MAP = {
     # --- HOUSE PARENTS ---
-    "Agriculture, Chesapeake and Natural Resources": "1",
-    "Appropriations": "2",
-    "Counties, Cities and Towns": "7",
-    "Courts of Justice": "8",
-    "Education": "9",
-    "Finance": "10",
-    "General Laws": "11",
-    "Labor and Commerce": "14",
-    "Public Safety": "15",
-    "Privileges and Elections": "18",
-    "Transportation": "19",
-    "Rules": "20",
-    "Communications, Technology and Innovation": "21",
-    "Health and Human Services": "197",
+    "Agriculture, Chesapeake and Natural Resources": "H01",
+    "Appropriations": "H02",
+    "Counties, Cities and Towns": "H07",
+    "Courts of Justice": "H08",
+    "Education": "H09",
+    "Finance": "H10",
+    "General Laws": "H11",
+    "Labor and Commerce": "H14",
+    "Public Safety": "H15",
+    "Privileges and Elections": "H18",
+    "Transportation": "H19",
+    "Rules": "H20",
+    "Communications, Technology and Innovation": "H21",
+    "Health and Human Services": "H24",
     
-    # --- HOUSE SUBCOMMITTEES (The "Ghost" IDs) ---
-    "Campaigns and Candidates": "106",
-    "Voting Rights": "78",
-    "Election Administration": "48",
-    "Gubernatorial Appointments": "132",
-    "Higher Education": "72", # Education Sub
-    "K-12 Subcommittee": "42",
-    "Early Childhood and Innovation": "100",
-    "Criminal": "41", # Courts Sub
-    "Civil": "71",
-    "Firearms": "47", # Public Safety Sub
-    "ABC/Gaming": "102",
-    "Housing/Consumer Protection": "74",
-    "Health": "198",
-    "Behavioral Health": "200",
-    "Social Services": "201",
-    "Health Professions": "199",
-    "Transportation Infrastructure and Funding": "79",
-    "Department of Motor Vehicles": "51",
+    # --- HOUSE SUBCOMMITTEES (The "Ghost" Codes) ---
+    "Campaigns and Candidates": "H18003",
+    "Voting Rights": "H18002",
+    "Election Administration": "H18001",
+    "Gubernatorial Appointments": "H18004",
+    "Higher Education": "H09002",
+    "K-12 Subcommittee": "H09001",
+    "Early Childhood and Innovation": "H09003",
+    "Criminal": "H08001",
+    "Civil": "H08002",
+    "Firearms": "H15001",
+    "ABC/Gaming": "H11003",
+    "Housing/Consumer Protection": "H11002",
+    "Health": "H24001",
+    "Behavioral Health": "H24003",
+    "Social Services": "H24004",
+    "Health Professions": "H24002",
+    "Transportation Infrastructure and Funding": "H19002",
+    "Department of Motor Vehicles": "H19001",
     
+    # --- FINANCE SUBS ---
+    "Subcommittee #1": "H10001",
+    "Subcommittee #2": "H10002",
+    "Subcommittee #3": "H10003",
+
     # --- SENATE PARENTS ---
-    "Senate Agriculture, Conservation and Natural Resources": "22",
-    "Senate Commerce and Labor": "23",
-    "Senate Education and Health": "25",
-    "Senate Finance and Appropriations": "26",
-    "Senate Courts of Justice": "202",
-    "Senate General Laws and Technology": "33",
-    "Senate Local Government": "28",
-    "Senate Privileges and Elections": "29",
-    "Senate Rehabilitation and Social Services": "30",
-    "Senate Transportation": "32",
-    "Senate Rules": "31"
+    "Senate Agriculture, Conservation and Natural Resources": "S01",
+    "Senate Commerce and Labor": "S02",
+    "Senate Education and Health": "S04",
+    "Senate Finance and Appropriations": "S05",
+    "Senate Courts of Justice": "S13", # Note: Senate Courts is S13
+    "Senate General Laws and Technology": "S12",
+    "Senate Local Government": "S07",
+    "Senate Privileges and Elections": "S08",
+    "Senate Rehabilitation and Social Services": "S09",
+    "Senate Transportation": "S11",
+    "Senate Rules": "S10"
 }
 
 # --- 1. INTELLIGENT ROUTER ---
 def get_perfect_link(owner_name):
     """
-    Matches the API Owner Name to our Master Map to generate a direct Integer ID link.
+    Matches the API Owner Name to our Master Map (Codes) to generate a working LIS link.
     """
     if not owner_name: return None
     
-    # Normalize name (remove "House", "Committee", etc to match our keys)
+    # Normalize name
     clean_name = owner_name.replace("House Committee on", "").replace("House", "").replace("Committee", "").strip()
     
     # 1. Exact Match
     if clean_name in MASTER_COMMITTEE_MAP:
-        cid = MASTER_COMMITTEE_MAP[clean_name]
-        return f"https://lis.virginia.gov/session-details/{SESSION_CODE}/committee-information/{cid}/committee-details"
+        code = MASTER_COMMITTEE_MAP[clean_name]
+        return f"https://lis.virginia.gov/session-details/{SESSION_CODE}/committee-information/{code}/committee-details"
     
-    # 2. Sub-Match (e.g. "Privileges and Elections - Campaigns")
-    for key, cid in MASTER_COMMITTEE_MAP.items():
+    # 2. Sub-Match
+    for key, code in MASTER_COMMITTEE_MAP.items():
         if key in clean_name:
-            return f"https://lis.virginia.gov/session-details/{SESSION_CODE}/committee-information/{cid}/committee-details"
+            return f"https://lis.virginia.gov/session-details/{SESSION_CODE}/committee-information/{code}/committee-details"
             
     return None
 
-# --- 2. BILL SCRAPER ---
+# --- 2. BILL SCRAPER (Now that links work, this will work) ---
 def get_bills_from_url(url):
     try:
-        resp = session.get(url, headers=HEADERS, timeout=5)
+        resp = session.get(url, headers=HEADERS, timeout=3)
         soup = BeautifulSoup(resp.text, 'html.parser')
         text = soup.get_text(" ", strip=True)
         # Regex for bills (HB1234, SB50, etc)
@@ -143,18 +147,21 @@ for m in raw_events:
     raw_date = m.get("ScheduleDate", "").split("T")[0]
     if not raw_date: continue
     d = datetime.strptime(raw_date, "%Y-%m-%d").date()
-    if d < today: continue # Skip past events
+    if d < today: continue 
     
     if d not in display_map: display_map[d] = []
     
-    # DATA ENRICHMENT
-    # 1. Use the Master Map to get the link
+    # LINK GEN
     m['Link'] = get_perfect_link(m.get("OwnerName"))
     
-    # 2. Format Time
-    t_str = m.get("ScheduleTime", "TBA")
-    if m.get("IsCancelled"): t_str = "CANCELLED"
-    m['DisplayTime'] = t_str
+    # TIME FORMATTING (Safe)
+    t_str = m.get("ScheduleTime")
+    if m.get("IsCancelled"): 
+        m['DisplayTime'] = "CANCELLED"
+    elif t_str:
+        m['DisplayTime'] = t_str
+    else:
+        m['DisplayTime'] = "Time TBA"
     
     display_map[d].append(m)
 
@@ -162,7 +169,7 @@ for m in raw_events:
 if not display_map:
     st.info("No upcoming meetings found.")
 else:
-    dates = sorted(display_map.keys())[:7] # Next 7 days
+    dates = sorted(display_map.keys())[:7]
     cols = st.columns(len(dates))
     
     for i, dv in enumerate(dates):
@@ -172,7 +179,6 @@ else:
             st.divider()
             
             day_events = display_map[dv]
-            # Simple Sort by Time
             day_events.sort(key=lambda x: x['DisplayTime'])
             
             for e in day_events:
@@ -188,9 +194,11 @@ else:
                         st.markdown(f"**{name}**")
                         
                         if link:
-                            st.link_button("View Docket", link)
-                            # Optional: Preview Bill Count
+                            # Now that link works, we can optionally scrape count
+                            # (Commented out to keep it fast, uncomment if you want auto-counts)
                             # bills = get_bills_from_url(link)
                             # if bills: st.caption(f"{len(bills)} Bills Listed")
+                            
+                            st.link_button("View Docket", link)
                         else:
                             st.caption("*(No Link Available)*")
