@@ -3,94 +3,98 @@ import requests
 import pandas as pd
 
 # --- CONFIGURATION ---
-BASE_URL = "https://lis.virginia.gov"
-API_URL = "https://lis.virginia.gov/Committee/api/getCommitteesAsync"
+# The endpoint we discovered
+API_URL = "https://lis.virginia.gov/Committee/api/getCommitteeByIdAsync"
 SESSION_CODE = "20261" 
 
-st.set_page_config(page_title="v128 Cookie Jar", page_icon="🍪", layout="wide")
-st.title("🍪 v128: The Cookie Jar (Session Priming)")
+# THE MASTER KEY (Found in your screenshot)
+WEB_API_KEY = "FCE351B6-9BD8-46E0-B18F-5572F4CCA5B9"
+
+st.set_page_config(page_title="v132 Master Key", page_icon="🗝️", layout="wide")
+st.title("🗝️ v132: The Master Key (API Authorization)")
 
 # --- NETWORK ENGINE ---
 session = requests.Session()
 adapter = requests.adapters.HTTPAdapter(pool_connections=10, pool_maxsize=10, max_retries=2)
 session.mount('https://', adapter)
 
+# HEADERS (Now including the Webapikey)
 HEADERS = {
     'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
     'Accept': 'application/json, text/javascript, */*; q=0.01',
     'X-Requested-With': 'XMLHttpRequest',
-    'Referer': 'https://lis.virginia.gov/session-details/20261/committee-information/H18/committee-details'
+    'Referer': 'https://lis.virginia.gov/',
+    'Webapikey': WEB_API_KEY # <--- THE MISSING LINK
 }
 
-def fetch_master_list():
-    status_log = st.empty()
+def unlock_api(target_id_list):
+    st.write(f"🔐 **Authenticating with Key:** `{WEB_API_KEY}`")
     
-    # STEP 1: VISIT FRONT DESK (Get Cookies)
-    status_log.info("🍪 Step 1: Visiting Homepage to get Cookies...")
-    try:
-        # We visit the actual page a human would start at
-        front_desk = f"{BASE_URL}/session-details/{SESSION_CODE}/committee-information/H18/committee-details"
-        session.get(front_desk, headers=HEADERS, timeout=5)
-        cookies = session.cookies.get_dict()
-        if cookies:
-            st.success(f"✅ Got {len(cookies)} Cookies!")
-        else:
-            st.warning("⚠️ No cookies received (might still work).")
-            
-    except Exception as e:
-        st.error(f"Front Desk Error: {e}")
-        return
-
-    # STEP 2: REQUEST MASTER LIST
-    status_log.info("📂 Step 2: Downloading Master Committee List...")
-    params = {"sessionCode": SESSION_CODE}
+    found_subs = []
     
-    try:
-        resp = session.get(API_URL, headers=HEADERS, params=params, cookies=session.cookies, timeout=5)
+    # We'll scan a small range around H18's likely ID just in case
+    # H01 is usually 1, so H18 is likely ~18-25 or ~40-50 depending on how they count Senate
+    # Let's try your specific integer hunt target first (45)
+    
+    for test_id in target_id_list:
+        url = API_URL
+        params = {"sessionCode": SESSION_CODE, "id": str(test_id)}
         
-        if resp.status_code == 200:
-            status_log.success("✅ ACCESS GRANTED!")
-            data = resp.json()
+        try:
+            resp = session.get(url, headers=HEADERS, params=params, timeout=3)
             
-            # PARSE RESULTS
-            committee_list = []
-            for item in data:
-                # We are looking for the PARENT committees (Chambers) to find the ID
-                committee_list.append({
-                    "Name": item.get("Name"),
-                    "Integer ID": item.get("CommitteeId"), # THIS IS IT
-                    "Code": item.get("CommitteeCode"), # e.g. H18
-                    "Chamber": item.get("ChamberCode")
-                })
-            
-            # DISPLAY
-            df = pd.DataFrame(committee_list)
-            
-            # Highlight our target
-            st.subheader("🎯 Target Identified:")
-            target = df[df["Name"].str.contains("Privileges", case=False, na=False)]
-            if not target.empty:
-                st.dataframe(target, use_container_width=True)
-                st.success(f"The Secret ID for Privileges & Elections is: **{target.iloc[0]['Integer ID']}**")
+            if resp.status_code == 200:
+                data = resp.json()
+                name = data.get("Name", "Unknown")
                 
-                st.divider()
-                st.write("**Next Step:**")
-                st.write(f"Go back to the 'Integer Hunt' tool and enter **{target.iloc[0]['Integer ID']}** to see the subcommittees!")
+                if name:
+                    st.success(f"✅ **Connected to ID {test_id}:** {name}")
+                    
+                    if "SubCommittees" in data:
+                        subs = data["SubCommittees"]
+                        if subs:
+                            st.write(f"   -> Found {len(subs)} Subcommittees")
+                            for s in subs:
+                                found_subs.append({
+                                    "Parent": name,
+                                    "Subcommittee": s.get("Name"),
+                                    "GHOST ID": s.get("CommitteeId")
+                                })
+                        else:
+                            st.caption("   -> No subcommittees.")
+            elif resp.status_code == 401:
+                st.error("❌ 401 Unauthorized. Key might be session-specific.")
+                return
             else:
-                st.warning("Could not find 'Privileges' in the list. Search below:")
-            
-            with st.expander("View Full Master List"):
-                st.dataframe(df)
+                st.warning(f"⚠️ ID {test_id}: Status {resp.status_code}")
                 
-        elif resp.status_code == 401:
-            status_log.error("❌ 401 Unauthorized. The cookies didn't stick.")
-        else:
-            status_log.error(f"❌ Error {resp.status_code}")
+        except Exception as e:
+            st.error(f"Error: {e}")
             
-    except Exception as e:
-        st.error(f"API Error: {e}")
+    # RESULTS
+    if found_subs:
+        st.divider()
+        st.subheader("🎉 The Treasure Map")
+        st.table(found_subs)
+        
+        # PYTHON MAP
+        st.markdown("### 📋 Copy this for the Final Fix:")
+        code_block = "SUBCOMMITTEE_MAP = {\n"
+        for item in found_subs:
+            # Clean name: "Subcommittee on X" -> "X"
+            safe_name = item['Subcommittee'].replace("Subcommittee", "").replace("on", "").strip()
+            code_block += f'    "{safe_name}": "{item["GHOST ID"]}",\n'
+        code_block += "}"
+        st.code(code_block)
 
 # --- UI ---
-st.sidebar.header("🍪 Cookie Jar")
-if st.sidebar.button("🔴 Fetch Master List"):
-    fetch_master_list()
+st.sidebar.header("🗝️ Master Key Tool")
+st.sidebar.info("Using the Webapikey found in your headers.")
+
+# We will test a range of IDs to be safe. 
+# Privileges & Elections is often ID 45 or 46 in the database.
+scan_range = st.sidebar.text_input("IDs to Scan (comma separated):", value="44,45,46,47,48")
+
+if st.sidebar.button("🔴 Unlock with Master Key"):
+    ids = [x.strip() for x in scan_range.split(',')]
+    unlock_api(ids)
