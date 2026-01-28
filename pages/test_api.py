@@ -9,7 +9,7 @@ from bs4 import BeautifulSoup
 API_KEY = "81D70A54-FCDC-4023-A00B-A3FD114D5984" 
 SESSION_CODE = "20261" 
 
-st.set_page_config(page_title="VA Bill Tracker v201", page_icon="🏛️", layout="wide")
+st.set_page_config(page_title="VA Bill Tracker v202", page_icon="🏛️", layout="wide")
 st.title("🏛️ Virginia General Assembly Bill Tracker")
 
 # --- NETWORK ENGINE ---
@@ -21,10 +21,9 @@ HEADERS = {
     'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
 }
 
-# --- 💎 THE CORRECTED MASTER MAP (Using CODES, not IDs) ---
-# We use the "CommitteeNumber" from the JSON (e.g., H18003) because that is what the WEBSITE needs.
+# --- MASTER MAP (Codes) ---
 MASTER_COMMITTEE_MAP = {
-    # --- HOUSE PARENTS ---
+    # HOUSE
     "Agriculture, Chesapeake and Natural Resources": "H01",
     "Appropriations": "H02",
     "Counties, Cities and Towns": "H07",
@@ -39,8 +38,7 @@ MASTER_COMMITTEE_MAP = {
     "Rules": "H20",
     "Communications, Technology and Innovation": "H21",
     "Health and Human Services": "H24",
-    
-    # --- HOUSE SUBCOMMITTEES (The "Ghost" Codes) ---
+    # HOUSE SUBS
     "Campaigns and Candidates": "H18003",
     "Voting Rights": "H18002",
     "Election Administration": "H18001",
@@ -59,18 +57,16 @@ MASTER_COMMITTEE_MAP = {
     "Health Professions": "H24002",
     "Transportation Infrastructure and Funding": "H19002",
     "Department of Motor Vehicles": "H19001",
-    
-    # --- FINANCE SUBS ---
+    "Highway Safety and Policy": "H19004",
     "Subcommittee #1": "H10001",
     "Subcommittee #2": "H10002",
     "Subcommittee #3": "H10003",
-
-    # --- SENATE PARENTS ---
+    # SENATE
     "Senate Agriculture, Conservation and Natural Resources": "S01",
     "Senate Commerce and Labor": "S02",
     "Senate Education and Health": "S04",
     "Senate Finance and Appropriations": "S05",
-    "Senate Courts of Justice": "S13", # Note: Senate Courts is S13
+    "Senate Courts of Justice": "S13",
     "Senate General Laws and Technology": "S12",
     "Senate Local Government": "S07",
     "Senate Privileges and Elections": "S08",
@@ -79,35 +75,72 @@ MASTER_COMMITTEE_MAP = {
     "Senate Rules": "S10"
 }
 
-# --- 1. INTELLIGENT ROUTER ---
-def get_perfect_link(owner_name):
-    """
-    Matches the API Owner Name to our Master Map (Codes) to generate a working LIS link.
-    """
+# --- 1. INTELLIGENT ROUTER (Lobby Link) ---
+def get_committee_lobby_link(owner_name):
     if not owner_name: return None
-    
-    # Normalize name
     clean_name = owner_name.replace("House Committee on", "").replace("House", "").replace("Committee", "").strip()
     
-    # 1. Exact Match
+    # Exact Match
     if clean_name in MASTER_COMMITTEE_MAP:
         code = MASTER_COMMITTEE_MAP[clean_name]
         return f"https://lis.virginia.gov/session-details/{SESSION_CODE}/committee-information/{code}/committee-details"
     
-    # 2. Sub-Match
+    # Partial Match
     for key, code in MASTER_COMMITTEE_MAP.items():
         if key in clean_name:
             return f"https://lis.virginia.gov/session-details/{SESSION_CODE}/committee-information/{code}/committee-details"
-            
     return None
 
-# --- 2. BILL SCRAPER (Now that links work, this will work) ---
-def get_bills_from_url(url):
+# --- 2. THE DOCKET HUNTER (Deep Linker) ---
+def find_docket_for_date(committee_url, meeting_date):
+    """
+    Visits the Committee Lobby, looks for the specific date, finds the 'Docket' link.
+    """
+    if not committee_url: return None, []
+    
+    try:
+        resp = session.get(committee_url, headers=HEADERS, timeout=3)
+        soup = BeautifulSoup(resp.text, 'html.parser')
+        
+        # Format date to match LIS: "January 29, 2026"
+        # We strip leading zero from day just in case (e.g. Jan 1 instead of Jan 01)
+        date_str = meeting_date.strftime("%B %d, %Y").replace(" 0", " ")
+        
+        # 1. Find the date in the text
+        # LIS usually lists meetings in a table or list
+        target_node = soup.find(string=re.compile(date_str))
+        
+        docket_url = None
+        
+        if target_node:
+            # Look for a "Docket" or "Agenda" link in the same container/row
+            parent = target_node.find_parent()
+            # Expand search radius slightly (parent's siblings)
+            container = parent.find_parent() if parent else soup
+            
+            for a in container.find_all('a', href=True):
+                link_text = a.get_text().lower()
+                if "docket" in link_text or "agenda" in link_text:
+                    docket_url = a['href']
+                    if not docket_url.startswith("http"):
+                        docket_url = f"https://lis.virginia.gov{docket_url}"
+                    break
+        
+        # If we found a docket, scrape the bills from IT
+        if docket_url:
+            return docket_url, scrape_bills(docket_url)
+            
+        # Fallback: If no date match, scrape the Lobby page itself (sometimes bills are there)
+        return committee_url, scrape_bills(committee_url)
+        
+    except:
+        return committee_url, []
+
+def scrape_bills(url):
     try:
         resp = session.get(url, headers=HEADERS, timeout=3)
         soup = BeautifulSoup(resp.text, 'html.parser')
         text = soup.get_text(" ", strip=True)
-        # Regex for bills (HB1234, SB50, etc)
         matches = re.findall(r'\b([H|S]\.?[B|J|R]\.?)\s*(\d+)\b', text, re.IGNORECASE)
         bills = set()
         for p, n in matches:
@@ -116,7 +149,7 @@ def get_bills_from_url(url):
     except:
         return []
 
-# --- 3. API FETCH ---
+# --- 3. SCHEDULE FETCH ---
 @st.cache_data(ttl=300)
 def fetch_schedule():
     url = "https://lis.virginia.gov/Schedule/api/getschedulelistasync"
@@ -132,40 +165,57 @@ def fetch_schedule():
     except: pass
     return events
 
-# --- MAIN APP LOGIC ---
+# --- MAIN LOGIC ---
 st.markdown("### 📅 Legislative Schedule")
 
-with st.spinner("Syncing with LIS..."):
+with st.spinner("Syncing Schedule & Hunting Dockets..."):
     raw_events = fetch_schedule()
 
 today = datetime.now().date()
-display_map = {}
+final_events = []
 
-# Process Events
+# Filter & Prep
 for m in raw_events:
     if not m: continue
     raw_date = m.get("ScheduleDate", "").split("T")[0]
     if not raw_date: continue
     d = datetime.strptime(raw_date, "%Y-%m-%d").date()
-    if d < today: continue 
+    if d < today: continue
     
-    if d not in display_map: display_map[d] = []
+    m['DateObj'] = d
+    m['LobbyLink'] = get_committee_lobby_link(m.get("OwnerName"))
     
-    # LINK GEN
-    m['Link'] = get_perfect_link(m.get("OwnerName"))
-    
-    # TIME FORMATTING (Safe)
+    # Format Time
     t_str = m.get("ScheduleTime")
-    if m.get("IsCancelled"): 
-        m['DisplayTime'] = "CANCELLED"
-    elif t_str:
-        m['DisplayTime'] = t_str
-    else:
-        m['DisplayTime'] = "Time TBA"
+    if m.get("IsCancelled"): m['DisplayTime'] = "CANCELLED"
+    elif t_str: m['DisplayTime'] = t_str
+    else: m['DisplayTime'] = "Time TBA"
     
+    final_events.append(m)
+
+# --- CONCURRENT DOCKET HUNTING ---
+# We need to run the "Docket Hunter" on every event in parallel so it's fast
+def enrich_event(evt):
+    if evt['LobbyLink'] and evt['DisplayTime'] != "CANCELLED":
+        deep_link, bills = find_docket_for_date(evt['LobbyLink'], evt['DateObj'])
+        evt['DeepLink'] = deep_link
+        evt['Bills'] = bills
+    else:
+        evt['DeepLink'] = evt.get('LobbyLink')
+        evt['Bills'] = []
+    return evt
+
+with concurrent.futures.ThreadPoolExecutor(max_workers=10) as executor:
+    # Map the enrichment function to all events
+    final_events = list(executor.map(enrich_event, final_events))
+
+# --- DISPLAY ---
+display_map = {}
+for m in final_events:
+    d = m['DateObj']
+    if d not in display_map: display_map[d] = []
     display_map[d].append(m)
 
-# DISPLAY
 if not display_map:
     st.info("No upcoming meetings found.")
 else:
@@ -184,7 +234,8 @@ else:
             for e in day_events:
                 name = e.get("OwnerName", "Unknown").replace("Committee", "").strip()
                 time_s = e['DisplayTime']
-                link = e['Link']
+                link = e.get('DeepLink')
+                bills = e.get('Bills', [])
                 
                 if "CANCEL" in str(time_s).upper():
                     st.error(f"❌ **{name}**")
@@ -193,12 +244,12 @@ else:
                         st.markdown(f"**⏰ {time_s}**")
                         st.markdown(f"**{name}**")
                         
-                        if link:
-                            # Now that link works, we can optionally scrape count
-                            # (Commented out to keep it fast, uncomment if you want auto-counts)
-                            # bills = get_bills_from_url(link)
-                            # if bills: st.caption(f"{len(bills)} Bills Listed")
-                            
+                        if bills:
+                            st.success(f"**{len(bills)} Bills Found**")
+                            with st.expander("Show Bills"):
+                                st.write(", ".join(bills))
+                                if link: st.link_button("Go to Docket", link)
+                        elif link:
                             st.link_button("View Docket", link)
                         else:
-                            st.caption("*(No Link Available)*")
+                            st.caption("*(No Link)*")
