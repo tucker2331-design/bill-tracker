@@ -1,67 +1,61 @@
 import streamlit as st
 import requests
-import re
-from bs4 import BeautifulSoup
 
 # --- CONFIGURATION ---
 BASE_URL = "https://lis.virginia.gov"
-HEADERS = {
-    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-}
+SESSION_CODE = "20261" 
+COMMITTEE_ID = "18" # Internal ID for Privileges & Elections
+WEB_API_KEY = "FCE351B6-9BD8-46E0-B18F-5572F4CCA5B9"
 
-st.set_page_config(page_title="v305 Suspect Lineup", page_icon="🕵️‍♂️", layout="wide")
-st.title("🕵️‍♂️ v305: The Suspect Lineup")
+st.set_page_config(page_title="v400 The Paydirt", page_icon="🏆", layout="wide")
+st.title("🏆 v400: The Paydirt")
 
 session = requests.Session()
+headers = {
+    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+    'Accept': 'application/json',
+    'X-Requested-With': 'XMLHttpRequest',
+    'Webapikey': WEB_API_KEY
+}
 
-def run_filter():
-    st.write("📡 Scanning JavaScript for high-value targets...")
+def probe(service, action, params):
+    url = f"{BASE_URL}/{service}/api/{action}"
+    st.write(f"🚀 Launching probe at: `{service}/{action}`")
+    
     try:
-        # 1. Get JS URL
-        resp = session.get(f"{BASE_URL}/session-details/20261/committee-information/H18/committee-details", headers=HEADERS, timeout=5)
-        soup = BeautifulSoup(resp.text, 'html.parser')
+        resp = session.get(url, headers=headers, params=params, timeout=5)
         
-        scripts = [s.get('src') for s in soup.find_all('script') if s.get('src') and "static/js/" in s.get('src')]
-        
-        if not scripts:
-            st.error("❌ No scripts found.")
-            return
-
-        # 2. Download & Filter
-        suspects = []
-        keywords = ["Docket", "Agenda", "Event", "Meeting", "Collection", "Bill", "Legislation"]
-        
-        for script_url in scripts:
-            full_url = f"{BASE_URL}{script_url}"
-            js_resp = session.get(full_url, headers=HEADERS, timeout=10)
-            
-            if js_resp.status_code == 200:
-                content = js_resp.text
-                # Find all API calls: Service/api/Action
-                matches = re.findall(r'([a-zA-Z0-9_]+)/api/([a-zA-Z0-9_]+)', content)
-                
-                for service, action in matches:
-                    # FILTER: Only keep it if it sounds interesting
-                    if any(k in action for k in keywords) or any(k in service for k in keywords):
-                        suspects.append(f"{service}/api/{action}")
-        
-        # 3. Display
-        st.divider()
-        if suspects:
-            st.success(f"🎯 Found {len(suspects)} High-Value Candidates:")
-            
-            # Remove duplicates and sort
-            unique_suspects = sorted(list(set(suspects)))
-            
-            for s in unique_suspects:
-                st.code(s, language="text")
-                
-            st.info("👆 The 'Golden Endpoint' is likely in this list. Tell me which one looks like 'GetDocket'!")
+        if resp.status_code == 200:
+            data = resp.json()
+            if data:
+                st.success("✅ **CONFIRMED HIT!** Payload Received:")
+                st.json(data)
+                return True
+            else:
+                st.warning("⚠️ Status 200, but data is empty.")
+        elif resp.status_code == 404:
+            st.error("❌ 404 Not Found")
         else:
-            st.warning("⚠️ No endpoints matched our keywords.")
-
+            st.error(f"❌ Status {resp.status_code}")
+            
     except Exception as e:
         st.error(f"Error: {e}")
+    return False
 
-if st.button("🔴 Identify Suspects"):
-    run_filter()
+if st.button("🔴 Probe Golden Targets"):
+    
+    st.subheader("Target 1: The Calendar Service")
+    # This is the most likely winner based on the name
+    probe("Calendar", "GetDocketListAsync", {
+        "sessionCode": SESSION_CODE, 
+        "committeeId": COMMITTEE_ID
+    })
+
+    st.divider()
+
+    st.subheader("Target 2: The LegislationEvent Service")
+    # Meetings are 'Events', so bills might be listed here
+    probe("LegislationEvent", "GetLegislationEventListAsync", {
+        "sessionCode": SESSION_CODE, 
+        "committeeId": COMMITTEE_ID
+    })
