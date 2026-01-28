@@ -7,8 +7,8 @@ API_URL = "https://lis.virginia.gov/Committee/api/getCommitteesAsync"
 SESSION_CODE = "20261" 
 WEB_API_KEY = "FCE351B6-9BD8-46E0-B18F-5572F4CCA5B9"
 
-st.set_page_config(page_title="v133 Directory Heist", page_icon="📂", layout="wide")
-st.title("📂 v133: The Directory Heist")
+st.set_page_config(page_title="v134 JSON X-Ray", page_icon="🩻", layout="wide")
+st.title("🩻 v134: The JSON X-Ray")
 
 # --- NETWORK ENGINE ---
 session = requests.Session()
@@ -20,11 +20,11 @@ HEADERS = {
     'Accept': 'application/json',
     'X-Requested-With': 'XMLHttpRequest',
     'Referer': 'https://lis.virginia.gov/',
-    'Webapikey': WEB_API_KEY # The key you found
+    'Webapikey': WEB_API_KEY
 }
 
-def fetch_directory():
-    st.write(f"🔐 **Authenticating with Master Key...**")
+def xray_response():
+    st.write(f"🔐 **Authenticating...**")
     
     params = {"sessionCode": SESSION_CODE}
     
@@ -33,63 +33,24 @@ def fetch_directory():
         
         if resp.status_code == 200:
             data = resp.json()
-            st.success(f"✅ **ACCESS GRANTED!** Retrieved {len(data)} committees.")
+            st.success("✅ **ACCESS GRANTED!** Payload Received.")
             
-            # PARSE
-            committee_list = []
-            for item in data:
-                committee_list.append({
-                    "Name": item.get("Name"),
-                    "Integer ID": item.get("CommitteeId"), # THIS IS THE KEY
-                    "Code": item.get("CommitteeCode"),     # e.g. H18
-                    "Chamber": item.get("ChamberCode")
-                })
-            
-            df = pd.DataFrame(committee_list)
-            
-            # 1. FIND PRIVILEGES
+            # --- DEBUGGING THE STRUCTURE ---
             st.divider()
-            st.subheader("🎯 Target: Privileges & Elections")
-            target = df[df["Name"].str.contains("Privileges", case=False, na=False)]
+            st.subheader("🔍 X-Ray Results (Raw Data structure)")
             
-            if not target.empty:
-                st.dataframe(target, use_container_width=True)
-                
-                # AUTOMATED SUBCOMMITTEE FETCH
-                for index, row in target.iterrows():
-                    secret_id = row['Integer ID']
-                    name = row['Name']
-                    
-                    st.write(f"🔎 **Scanning Subcommittees for {name} (ID: {secret_id})...**")
-                    
-                    sub_url = "https://lis.virginia.gov/Committee/api/getCommitteeByIdAsync"
-                    sub_params = {"sessionCode": SESSION_CODE, "id": str(secret_id)}
-                    
-                    sub_resp = session.get(sub_url, headers=HEADERS, params=sub_params)
-                    if sub_resp.status_code == 200:
-                        sub_data = sub_resp.json()
-                        subs = sub_data.get("SubCommittees", [])
-                        
-                        if subs:
-                            st.success(f"   -> Found {len(subs)} Subcommittees!")
-                            
-                            # GENERATE THE MAP
-                            st.markdown("### 📋 FINAL COPY-PASTE MAP:")
-                            code_block = "SUBCOMMITTEE_MAP = {\n"
-                            for s in subs:
-                                safe_name = s['Name'].replace("Subcommittee", "").replace("on", "").strip()
-                                code_block += f'    "{safe_name}": "{s["CommitteeId"]}",\n'
-                            code_block += "}"
-                            st.code(code_block)
-                            
-                        else:
-                            st.warning("   -> No subcommittees found.")
+            if isinstance(data, list):
+                st.info(f"Type: LIST (Length: {len(data)})")
+                if len(data) > 0:
+                    st.write("**First Item Type:**", type(data[0]))
+                    st.write("**First Item Preview:**", data[0])
+            elif isinstance(data, dict):
+                st.info(f"Type: DICTIONARY (Keys: {list(data.keys())})")
+                st.json(data) # SHOW THE FULL JSON TO THE USER
             else:
-                st.error("Could not find 'Privileges' in the directory.")
-                
-            with st.expander("View Full Directory"):
-                st.dataframe(df)
-                
+                st.error(f"Unknown Type: {type(data)}")
+                st.write(data)
+
         else:
             st.error(f"❌ Failed ({resp.status_code})")
             
@@ -97,6 +58,6 @@ def fetch_directory():
         st.error(f"Error: {e}")
 
 # --- UI ---
-st.sidebar.header("📂 Directory Heist")
-if st.sidebar.button("🔴 Download Master Directory"):
-    fetch_directory()
+st.sidebar.header("🩻 X-Ray Tool")
+if st.sidebar.button("🔴 X-Ray API Response"):
+    xray_response()
