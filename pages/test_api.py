@@ -1,63 +1,99 @@
 import streamlit as st
 import requests
 import pandas as pd
+from datetime import datetime
 
 # --- CONFIGURATION ---
-API_URL = "https://lis.virginia.gov/Committee/api/getCommitteesAsync"
+API_KEY = "81D70A54-FCDC-4023-A00B-A3FD114D5984" 
 SESSION_CODE = "20261" 
-WEB_API_KEY = "FCE351B6-9BD8-46E0-B18F-5572F4CCA5B9"
 
-st.set_page_config(page_title="v134 JSON X-Ray", page_icon="🩻", layout="wide")
-st.title("🩻 v134: The JSON X-Ray")
+st.set_page_config(page_title="v135 Final Map", page_icon="🗺️", layout="wide")
+st.title("🗺️ v135: The Final Map (Hardcoded Success)")
 
-# --- NETWORK ENGINE ---
-session = requests.Session()
-adapter = requests.adapters.HTTPAdapter(pool_connections=10, pool_maxsize=10, max_retries=2)
-session.mount('https://', adapter)
-
-HEADERS = {
-    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-    'Accept': 'application/json',
-    'X-Requested-With': 'XMLHttpRequest',
-    'Referer': 'https://lis.virginia.gov/',
-    'Webapikey': WEB_API_KEY
+# --- THE MASTER MAP (Derived from your JSON) ---
+COMMITTEE_MAP = {
+    "Privileges and Elections": "18",
+    "P&E - Campaigns and Candidates": "106",
+    "P&E - Voting Rights": "78",
+    "P&E - Election Administration": "48",
+    "P&E - Gubernatorial Appointments": "132",
+    "Finance": "10",
+    "Finance - Sub #1": "43",
+    "Finance - Sub #2": "73",
+    "Finance - Sub #3": "101",
+    "Education": "9",
+    "Education - K-12": "42",
+    "Education - Higher Ed": "73",
+    "Education - Early Childhood": "100",
+    "Courts of Justice": "8",
+    "Courts - Criminal": "41",
+    "Courts - Civil": "71",
+    "General Laws": "11",
+    "General Laws - ABC/Gaming": "102",
+    "General Laws - Housing": "74",
+    "Health & Human Services": "197",
+    "HHS - Health": "198",
+    "HHS - Health Professions": "199",
+    "HHS - Behavioral Health": "200",
+    "HHS - Social Services": "201",
+    "Transportation": "19",
+    "Transportation - DMV": "51",
+    "Transportation - Infrastructure": "79",
+    "Public Safety": "15",
+    "Public Safety - Firearms": "47",
+    "Appropriations": "2",
+    "Agriculture, Chesapeake": "1",
+    "Counties, Cities, Towns": "7",
+    "Labor and Commerce": "14",
+    "Communications & Tech": "21",
+    "Rules": "20"
 }
 
-def xray_response():
-    st.write(f"🔐 **Authenticating...**")
-    
-    params = {"sessionCode": SESSION_CODE}
-    
-    try:
-        resp = session.get(API_URL, headers=HEADERS, params=params, timeout=5)
-        
-        if resp.status_code == 200:
-            data = resp.json()
-            st.success("✅ **ACCESS GRANTED!** Payload Received.")
-            
-            # --- DEBUGGING THE STRUCTURE ---
-            st.divider()
-            st.subheader("🔍 X-Ray Results (Raw Data structure)")
-            
-            if isinstance(data, list):
-                st.info(f"Type: LIST (Length: {len(data)})")
-                if len(data) > 0:
-                    st.write("**First Item Type:**", type(data[0]))
-                    st.write("**First Item Preview:**", data[0])
-            elif isinstance(data, dict):
-                st.info(f"Type: DICTIONARY (Keys: {list(data.keys())})")
-                st.json(data) # SHOW THE FULL JSON TO THE USER
-            else:
-                st.error(f"Unknown Type: {type(data)}")
-                st.write(data)
-
-        else:
-            st.error(f"❌ Failed ({resp.status_code})")
-            
-    except Exception as e:
-        st.error(f"Error: {e}")
+# --- HELPER FUNCTIONS ---
+def get_lis_link(cid):
+    return f"https://lis.virginia.gov/session-details/{SESSION_CODE}/committee-information/{cid}/committee-details"
 
 # --- UI ---
-st.sidebar.header("🩻 X-Ray Tool")
-if st.sidebar.button("🔴 X-Ray API Response"):
-    xray_response()
+st.sidebar.header("🚀 Quick Launch")
+
+selected = st.sidebar.selectbox("Select Committee:", list(COMMITTEE_MAP.keys()))
+cid = COMMITTEE_MAP[selected]
+link = get_lis_link(cid)
+
+st.sidebar.markdown(f"**Target ID:** `{cid}`")
+st.sidebar.link_button(f"🔗 Go to {selected}", link)
+
+# --- MAIN DISPLAY ---
+st.header(f"🏛️ {selected}")
+st.markdown(f"**Official LIS Link:** [{link}]({link})")
+
+# Verify connection
+try:
+    r = requests.get(link, timeout=5)
+    if r.status_code == 200:
+        st.success("✅ Link is Valid and Active")
+        
+        # Determine likely chamber code for display
+        chamber = "H" if int(cid) < 202 else "S" # Rough heuristic from your data
+        
+        # Use the "Ghost ID" API to fetch bills if possible
+        api_url = "https://lis.virginia.gov/Committee/api/getCommitteeByIdAsync"
+        api_params = {"sessionCode": SESSION_CODE, "id": cid}
+        # Note: We can't use the API without the Key/Cookies we found, 
+        # so for now we just provide the perfect link for the user to click.
+        
+    else:
+        st.warning(f"⚠️ Link returned status {r.status_code}")
+except Exception as e:
+    st.error(f"Connection Error: {e}")
+
+st.divider()
+st.markdown("""
+### 🎯 How we fixed it:
+1.  We found the **Hidden API** (`getCommitteesAsync`).
+2.  We found the **Master Key** (`Webapikey`).
+3.  We downloaded the **Full Directory** (User Provided).
+4.  We mapped the "Ghost IDs" (e.g., `106` for Campaigns) to the names.
+
+Now, instead of scraping empty pages, we generate the **exact integer link** the database expects.
+""")
