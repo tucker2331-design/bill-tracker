@@ -1,30 +1,29 @@
 import streamlit as st
 import requests
-import pandas as pd
 from datetime import datetime
 
 # --- CONFIGURATION ---
 API_BASE = "https://lis.virginia.gov"
 SESSION_CODE = "20261" 
-API_KEY = "81D70A54-FCDC-4023-A00B-A3FD114D5984" # The Key you provided
+# The Key we confirmed works (gave us 204, not 401)
+API_KEY = "81D70A54-FCDC-4023-A00B-A3FD114D5984" 
 
-st.set_page_config(page_title="v502 Logic Probe", page_icon="🧬", layout="wide")
-st.title("🧬 v502: The Logic Probe (Calendar → Bill Bridge)")
+st.set_page_config(page_title="v503 Future Logic", page_icon="🔮", layout="wide")
+st.title("🔮 v503: The Future-Only Logic Probe")
 
-# --- NETWORK SETUP ---
 session = requests.Session()
 headers = {
     'User-Agent': 'Mozilla/5.0',
     'Accept': 'application/json',
-    'WebAPIKey': API_KEY # Using the confirmed key
+    'WebAPIKey': API_KEY
 }
 
-def probe_bridge():
-    st.subheader("Step 1: Fetching the 'Master Schedule'...")
+def probe_future_logic():
+    st.subheader("Step 1: Finding a Valid 2026 Meeting...")
     
-    # 1. Get the Schedule
+    # We use the Schedule API because we know it works (Status 200)
     url = f"{API_BASE}/Schedule/api/getschedulelistasync"
-    params = {"sessionCode": SESSION_CODE, "chamberCode": "H"} # Start with House
+    params = {"sessionCode": SESSION_CODE, "chamberCode": "H"} 
     
     try:
         resp = session.get(url, headers=headers, params=params, timeout=5)
@@ -35,75 +34,69 @@ def probe_bridge():
         data = resp.json()
         events = data.get("Schedules", [])
         
-        # Filter for a "Real" meeting (Not cancelled, has a Committee)
-        upcoming = [e for e in events if not e.get("IsCancelled") and "Committee" in e.get("OwnerName", "")]
+        # --- THE LOGIC FILTER ---
+        # We strictly filter for FUTURE dates to ensure the IDs are active/valid.
+        today_str = datetime.now().strftime("%Y-%m-%d")
+        future_events = []
         
-        if not upcoming:
-            st.warning("⚠️ No active committee meetings found in schedule.")
+        for e in events:
+            s_date = e.get("ScheduleDate", "")
+            # Must be in the future AND not cancelled
+            if s_date >= today_str and not e.get("IsCancelled"):
+                future_events.append(e)
+        
+        if not future_events:
+            st.warning("⚠️ No future meetings found in House schedule. (Are we out of session?)")
             return
 
-        # PICK THE FIRST TARGET
-        target = upcoming[0]
-        st.success(f"✅ Locked on Target: **{target.get('OwnerName')}** ({target.get('ScheduleDate')})")
+        # Sort to get the VERY NEXT meeting
+        future_events.sort(key=lambda x: x.get("ScheduleDate"))
+        target = future_events[0]
         
-        # --- STEP 2: DUMP THE IDS (THE DEVELOPER WINDOW) ---
+        st.success(f"✅ Locked on Active Target: **{target.get('OwnerName')}**")
+        st.info(f"📅 Date: {target.get('ScheduleDate')} (2026 confirmed)")
+        
+        # --- STEP 2: VERIFY THE KEYS ---
         st.divider()
-        st.subheader("🔎 Extracted IDs (The Keys)")
+        st.subheader("🔎 IDs for this Meeting")
         
         ids = {
             "ScheduleId": target.get("ScheduleId"),
-            "CommitteeId": target.get("CommitteeId"), # Usually internal integer
-            "MeetingId": target.get("MeetingId"), # Might be null
-            "OwnerId": target.get("OwnerId"),
-            "EventId": target.get("EventId"), # The "Event" theory
-            "Link": target.get("LinkUrl") # Sometimes the link IS the data
+            "CommitteeId": target.get("CommitteeId"),
+            "MeetingId": target.get("MeetingId")
         }
         st.json(ids)
         
-        # --- STEP 3: FIRE THE PROBES ---
+        if not ids['ScheduleId']:
+            st.error("🛑 CRITICAL: ScheduleId is still NULL. The API might not be providing IDs for this meeting type.")
+            return
+
+        # --- STEP 3: THE BRIDGE TEST ---
         st.divider()
-        st.subheader("🧪 API Probe Results")
-        st.write("Attempting to fetch bills using these IDs...")
-
-        # Probe A: Calendar Docket (The obvious one)
-        # Try with ScheduleId and CommitteeId
-        if ids['CommitteeId']:
-            try_endpoint("Calendar/api/GetDocketListAsync", {"sessionCode": SESSION_CODE, "committeeId": ids['CommitteeId']}, "Docket by CommID")
+        st.subheader("🧪 Testing the Bridge (Calendar Service)")
+        st.write("Targeting `Calendar/api/GetDocketListAsync` with the valid ID...")
         
-        if ids['ScheduleId']:
-            try_endpoint("Calendar/api/GetDocketListAsync", {"sessionCode": SESSION_CODE, "scheduleId": ids['ScheduleId']}, "Docket by ScheduleID")
-
-        # Probe B: Legislation Event (The strong candidate)
-        # If meetings are "LegislationEvents", maybe we can list them?
-        if ids['CommitteeId']:
-            try_endpoint("LegislationEvent/api/GetLegislationEventListAsync", {"sessionCode": SESSION_CODE, "committeeId": ids['CommitteeId']}, "Events by CommID")
-
-        # Probe C: Committee Legislation (The Direct Inventory)
-        if ids['CommitteeId']:
-             try_endpoint("CommitteeLegislation/api/GetCommitteeLegislationListAsync", {"sessionCode": SESSION_CODE, "committeeId": ids['CommitteeId']}, "Legislation by CommID")
-
-    except Exception as e:
-        st.error(f"Critical Error: {e}")
-
-def try_endpoint(path, params, label):
-    url = f"{API_BASE}/{path}"
-    st.markdown(f"**🔫 Firing: {label}** (`{path}`)")
-    try:
-        r = session.get(url, headers=headers, params=params, timeout=3)
+        # We fire the probe using the ScheduleID we just found
+        docket_url = f"{API_BASE}/Calendar/api/GetDocketListAsync"
+        docket_params = {"sessionCode": SESSION_CODE, "scheduleId": ids['ScheduleId']}
+        
+        r = session.get(docket_url, headers=headers, params=docket_params, timeout=5)
+        
         if r.status_code == 200:
-            data = r.json()
-            if data:
-                st.success(f"🎉 **SUCCESS!** ({len(data)} items found)")
-                with st.expander("View Data Payload"):
-                    st.json(data)
+            d_data = r.json()
+            if d_data:
+                st.success(f"🎉 **PROOF OF LOGIC ACHIEVED!** Found {len(d_data)} items on the docket.")
+                st.json(d_data)
+                st.balloons()
             else:
-                st.warning(f"⚠️ 200 OK (Empty List)")
+                st.warning("⚠️ Status 200 (OK), but the list is empty. (Maybe no bills assigned yet?)")
         elif r.status_code == 204:
-            st.info("⚪ 204 No Content")
+            st.info("⚪ Status 204: Valid ID, but server says 'No Content' (Empty Docket).")
         else:
             st.error(f"❌ Status {r.status_code}")
+
     except Exception as e:
         st.error(f"Error: {e}")
 
-if st.button("🔴 Run Logic Probe"):
-    probe_bridge()
+if st.button("🔴 Run Future Probe"):
+    probe_future_logic()
