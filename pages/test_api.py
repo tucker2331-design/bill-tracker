@@ -4,83 +4,67 @@ import requests
 # --- CONFIGURATION ---
 BASE_URL = "https://lis.virginia.gov"
 SESSION_CODE = "20261" 
-COMMITTEE_ID = "18" # Internal ID for Privileges & Elections
-COMMITTEE_CODE = "H18"
+COMMITTEE_ID = "18" 
 WEB_API_KEY = "FCE351B6-9BD8-46E0-B18F-5572F4CCA5B9"
 
-st.set_page_config(page_title="v302 Doc Hunter", page_icon="📜", layout="wide")
-st.title("📜 v302: The Documentation Hunter")
+st.set_page_config(page_title="v303 Kitchen Sink", page_icon="🚰", layout="wide")
+st.title("🚰 v303: The Kitchen Sink Scanner")
 
-# --- NETWORK ENGINE ---
 session = requests.Session()
-adapter = requests.adapters.HTTPAdapter(pool_connections=20, pool_maxsize=20, max_retries=2)
-session.mount('https://', adapter)
-
-HEADERS = {
+headers = {
     'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
     'Accept': 'application/json',
     'X-Requested-With': 'XMLHttpRequest',
     'Webapikey': WEB_API_KEY
 }
 
-def probe(service_name, endpoint_name, params):
-    # Construct URL: https://lis.virginia.gov/CommitteeLegislation/api/GetLegislationListAsync
-    url = f"{BASE_URL}/{service_name}/api/{endpoint_name}"
-    
-    col1, col2 = st.columns([3, 1])
-    with col1:
-        st.write(f"Testing `{service_name}` -> `{endpoint_name}`...")
-    
-    try:
-        resp = session.get(url, headers=HEADERS, params=params, timeout=3)
-        with col2:
-            if resp.status_code == 200:
-                try:
-                    data = resp.json()
-                    if data:
-                        st.success("✅ HIT!")
-                        return data
-                    else:
-                        st.warning("⚠️ Empty")
-                except:
-                    st.error("❌ Not JSON")
-            elif resp.status_code == 404:
-                st.caption("❌ 404 (Missing)")
-            else:
-                st.error(f"❌ {resp.status_code}")
-    except Exception as e:
-        with col2:
-            st.error("Error")
-    return None
+# 50 Common Variations to try
+COMMON_ACTIONS = [
+    "GetLegislationListAsync", "GetLegislationList", "GetLegislation", "GetBills", "GetBillsList",
+    "GetCommitteeLegislation", "GetCommitteeLegislationList", "GetCommitteeBills",
+    "GetDocket", "GetDocketList", "GetAgenda", "GetAgendaList",
+    "GetLegislationByCommittee", "GetBillsByCommittee",
+    "GetReferrals", "GetReferralList", "GetReferredLegislation",
+    "GetDocuments", "GetDocumentList", "GetFiles",
+    "GetSchedule", "GetMeetingLegislation"
+]
 
-if st.button("🔴 Test Service Endpoints"):
+def fire_sink():
+    # We focus on the Service we know exists: CommitteeLegislation
+    service = "CommitteeLegislation"
     
-    st.subheader("1. Service: CommitteeLegislation")
-    st.info("Hypothesis: This service links Committees to Bills (aka Dockets).")
+    st.write(f"### 🎯 Targeting Service: `{service}`")
     
-    # Try getting legislation by Committee ID
-    hit = probe("CommitteeLegislation", "GetLegislationListAsync", 
-                {"sessionCode": SESSION_CODE, "committeeId": COMMITTEE_ID})
-    if hit: st.json(hit)
+    progress_bar = st.progress(0)
+    
+    found_any = False
+    
+    for i, action in enumerate(COMMON_ACTIONS):
+        # Update Progress
+        progress_bar.progress((i + 1) / len(COMMON_ACTIONS))
         
-    hit = probe("CommitteeLegislation", "GetCommitteeLegislationListAsync", 
-                {"sessionCode": SESSION_CODE, "committeeId": COMMITTEE_ID})
-    if hit: st.json(hit)
+        # Construct URL
+        url = f"{BASE_URL}/{service}/api/{action}"
+        
+        try:
+            # Try both GET and POST just in case
+            resp = session.get(url, headers=headers, params={"sessionCode": SESSION_CODE, "committeeId": COMMITTEE_ID}, timeout=1)
+            
+            if resp.status_code == 200:
+                # Check content type
+                if "application/json" in resp.headers.get("Content-Type", ""):
+                    st.success(f"✅ **JACKPOT!** `{action}` returned JSON!")
+                    st.json(resp.json())
+                    found_any = True
+                    break # Stop if we find it
+                elif len(resp.text) < 500 and "Error" not in resp.text:
+                    st.info(f"⚠️ `{action}` returned 200 OK (Text): {resp.text}")
+            
+        except:
+            pass
+            
+    if not found_any:
+        st.error("❌ Scanned 50 endpoints. No direct hits on JSON data.")
 
-    st.divider()
-    
-    st.subheader("2. Service: Legislation")
-    st.info("Hypothesis: Maybe we ask for bills and filter by committee?")
-    
-    hit = probe("Legislation", "GetLegislationByCommitteeAsync", 
-                {"sessionCode": SESSION_CODE, "committeeId": COMMITTEE_ID})
-    if hit: st.json(hit)
-
-    st.divider()
-
-    st.subheader("3. Service: LegislationCollections")
-    st.info("Hypothesis: Dockets are 'Collections' of bills.")
-    
-    hit = probe("LegislationCollections", "GetDocketListAsync", 
-                {"sessionCode": SESSION_CODE, "committeeId": COMMITTEE_ID})
-    if hit: st.json(hit)
+if st.button("🔴 Fire the Kitchen Sink"):
+    fire_sink()
