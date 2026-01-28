@@ -1,4 +1,4 @@
-ximport streamlit as st
+import streamlit as st
 import requests
 from datetime import datetime
 
@@ -7,8 +7,8 @@ API_BASE = "https://lis.virginia.gov"
 SESSION_CODE = "20261" 
 API_KEY = "81D70A54-FCDC-4023-A00B-A3FD114D5984" 
 
-st.set_page_config(page_title="v504 Real Committee Hunter", page_icon="🦁", layout="wide")
-st.title("🦁 v504: The 'Real Committee' Hunter")
+st.set_page_config(page_title="v505 Real Committee Hunter", page_icon="🦁", layout="wide")
+st.title("🦁 v505: The 'Real Committee' Hunter")
 
 session = requests.Session()
 headers = {
@@ -21,12 +21,11 @@ def probe_real_committees():
     st.subheader("Step 1: Scanning Schedule for VALID Committees...")
     
     url = f"{API_BASE}/Schedule/api/getschedulelistasync"
-    # We check both chambers to ensure we find a valid target
     
     valid_targets = []
     
     try:
-        # Check House & Senate
+        # Check House & Senate to ensure we find a valid target
         for chamber in ["H", "S"]:
             params = {"sessionCode": SESSION_CODE, "chamberCode": chamber}
             resp = session.get(url, headers=headers, params=params, timeout=5)
@@ -35,11 +34,11 @@ def probe_real_committees():
                 today_str = datetime.now().strftime("%Y-%m-%d")
                 
                 for e in events:
-                    # FILTER 1: Must be in the future
+                    # FILTER 1: Must be in the future (or today)
                     if e.get("ScheduleDate", "") < today_str: continue
                     # FILTER 2: Must NOT be cancelled
                     if e.get("IsCancelled"): continue
-                    # FILTER 3 (THE FIX): Must have a valid CommitteeId (Not a Caucus)
+                    # FILTER 3 (CRITICAL): Must have a valid CommitteeId (Skips Caucuses)
                     if not e.get("CommitteeId"): continue
                     
                     valid_targets.append(e)
