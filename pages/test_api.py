@@ -6,8 +6,8 @@ API_BASE = "https://lis.virginia.gov"
 SESSION_CODE = "20261" 
 API_KEY = "81D70A54-FCDC-4023-A00B-A3FD114D5984" 
 
-st.set_page_config(page_title="v601 Data Un-Wrapper", page_icon="🎁", layout="wide")
-st.title("🎁 v601: The Data Un-Wrapper")
+st.set_page_config(page_title="v602 Case Sensitive Fix", page_icon="🔑", layout="wide")
+st.title("🔑 v602: The Case-Sensitive Fix")
 
 session = requests.Session()
 headers = {
@@ -16,7 +16,7 @@ headers = {
     'WebAPIKey': API_KEY
 }
 
-def run_inventory_fix():
+def run_inventory_v602():
     st.subheader("Step 1: Fetching Official Committee List...")
     
     url = f"{API_BASE}/Committee/api/GetCommitteeListAsync"
@@ -27,77 +27,83 @@ def run_inventory_fix():
         
         if resp.status_code == 200:
             raw_data = resp.json()
-            
-            # --- THE FIX: Handle Wrappers ---
             committees = []
-            if isinstance(raw_data, list):
-                committees = raw_data
-            elif isinstance(raw_data, dict):
-                # Try to find the list inside the dict
-                keys = list(raw_data.keys())
-                st.info(f"📦 Response is a Wrapper. Keys found: {keys}")
-                
-                # Guess common wrapper names based on previous patterns
-                if "Committees" in raw_data: committees = raw_data["Committees"]
-                elif "Items" in raw_data: committees = raw_data["Items"]
-                elif "Data" in raw_data: committees = raw_data["Data"]
-                else:
-                    # Fallback: Grab the first value if it's a list
-                    for k in keys:
-                        if isinstance(raw_data[k], list):
-                            committees = raw_data[k]
-                            break
+            
+            # UNWRAP (As seen in your screenshot)
+            if isinstance(raw_data, dict) and "Committees" in raw_data:
+                committees = raw_data["Committees"]
             
             if committees:
-                st.success(f"✅ Unwrap Successful! Found {len(committees)} Committees.")
-                
-                # Show the first valid committee to verify IDs
-                target = committees[0]
-                st.write("🔎 **Committee Data Structure:**")
-                st.json(target)
+                st.success(f"✅ Found {len(committees)} Committees.")
                 
                 # --- STEP 2: INVENTORY ---
-                # Now we grab the REAL ID from this verified object
-                # It might be 'CommitteeId', 'Id', 'Code', etc.
-                c_id = target.get("CommitteeId") or target.get("Id")
-                c_name = target.get("CommitteeName") or target.get("Name")
+                target = committees[0]
+                
+                # THE FIX: Use "CommitteeID" (capital D) as seen in screenshot
+                c_id = target.get("CommitteeID") 
+                c_name = target.get("Name")
+                
+                st.info(f"🎯 Target: **{c_name}** | Internal ID: `{c_id}`")
                 
                 if c_id:
                     st.divider()
-                    st.subheader(f"Step 2: Checking Bills for '{c_name}' (ID: {c_id})")
+                    st.subheader(f"Step 2: Fetching Bills for Committee {c_id}")
                     
+                    # We try the endpoint from your valid list:
+                    # Legislation/api/GetLegislationByCommitteeAsync
                     bill_url = f"{API_BASE}/Legislation/api/GetLegislationByCommitteeAsync"
+                    
+                    # We send the ID as "committeeId" (standard param casing)
                     bill_params = {"sessionCode": SESSION_CODE, "committeeId": c_id}
                     
+                    st.write(f"🚀 Requesting: `{bill_url}` with ID `{c_id}`")
                     r2 = session.get(bill_url, headers=headers, params=bill_params, timeout=5)
                     
                     if r2.status_code == 200:
-                        bills = r2.json()
-                        # Handle Wrapper for Bills too just in case
-                        if isinstance(bills, dict):
-                            st.info(f"📦 Bill Response Keys: {list(bills.keys())}")
-                            # Try to extract list
-                            if "Legislation" in bills: bills = bills["Legislation"]
-                            elif "Items" in bills: bills = bills["Items"]
+                        bill_data = r2.json()
                         
-                        if bills:
-                            st.success(f"🎉 **PAYDIRT!** Found {len(bills)} bills!")
-                            st.dataframe(bills) # Show the data
+                        # Handle Wrapper (likely "Legislation" or "Items")
+                        real_bills = []
+                        if isinstance(bill_data, list):
+                            real_bills = bill_data
+                        elif isinstance(bill_data, dict):
+                             # Dump keys to help debug if wrapper name is weird
+                            st.caption(f"📦 Wrapper Keys: {list(bill_data.keys())}")
+                            if "Legislation" in bill_data: real_bills = bill_data["Legislation"]
+                            elif "Items" in bill_data: real_bills = bill_data["Items"]
+                            elif "Committees" in bill_data: real_bills = bill_data["Committees"] # Unlikely but possible copy/paste
+                        
+                        if real_bills:
+                            st.success(f"🎉 **PROOF OF LOGIC!** Found {len(real_bills)} bills!")
+                            st.dataframe(real_bills[:10]) # Show first 10
+                            st.balloons()
                         else:
-                            st.warning("⚠️ 200 OK (Empty Bill List)")
+                            st.warning("⚠️ 200 OK (Empty List). Committee exists, but has no bills assigned yet?")
+                            st.json(bill_data) # Show raw just in case
+                            
+                    elif r2.status_code == 404:
+                         # Fallback: Maybe the endpoint name is slightly different?
+                         st.error("❌ 404 Not Found. Trying Backup Endpoint...")
+                         backup_url = f"{API_BASE}/CommitteeLegislation/api/GetCommitteeLegislationListAsync"
+                         r3 = session.get(backup_url, headers=headers, params=bill_params, timeout=5)
+                         if r3.status_code == 200:
+                             st.success("✅ BACKUP WORKED!")
+                             st.json(r3.json())
+                         else:
+                             st.error(f"❌ Backup Failed: {r3.status_code}")
                     else:
                         st.error(f"❌ Bill Fetch Failed: {r2.status_code}")
                 else:
-                    st.error("❌ Could not find an 'ID' field in the committee object.")
+                    st.error("❌ Still can't find ID. Check JSON below:")
+                    st.json(target)
             else:
-                st.error("❌ Failed to extract a list from the response.")
-                st.write("Raw Dump:", raw_data)
+                st.error("❌ Failed to unwrap 'Committees' list.")
                 
         else:
-            st.error(f"❌ API Failed: {resp.status_code}")
+            st.error(f"❌ Committee API Failed: {resp.status_code}")
             
     except Exception as e:
         st.error(f"Error: {e}")
 
-if st.button("🔴 Run Un-Wrapper"):
-    run_inventory_fix()
+if st.button("🔴 Run v602"):
+    run_inventory_v602()
