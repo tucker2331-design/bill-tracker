@@ -1,14 +1,14 @@
 import streamlit as st
 import requests
-from datetime import datetime
+from datetime import datetime, timedelta
 
 # --- CONFIGURATION ---
 API_BASE = "https://lis.virginia.gov"
 SESSION_CODE = "20261" 
 API_KEY = "81D70A54-FCDC-4023-A00B-A3FD114D5984" 
 
-st.set_page_config(page_title="v505 Real Committee Hunter", page_icon="🦁", layout="wide")
-st.title("🦁 v505: The 'Real Committee' Hunter")
+st.set_page_config(page_title="v506 Wide Net", page_icon="🕸️", layout="wide")
+st.title("🕸️ v506: The 'Wide Net' Scanner")
 
 session = requests.Session()
 headers = {
@@ -17,85 +17,78 @@ headers = {
     'WebAPIKey': API_KEY
 }
 
-def probe_real_committees():
-    st.subheader("Step 1: Scanning Schedule for VALID Committees...")
+def scan_wide_net():
+    st.subheader("Scanning Next 7 Days (No Filters)...")
     
     url = f"{API_BASE}/Schedule/api/getschedulelistasync"
+    found_events = []
     
-    valid_targets = []
+    today_str = datetime.now().strftime("%Y-%m-%d")
     
     try:
-        # Check House & Senate to ensure we find a valid target
+        # Check BOTH Chambers
         for chamber in ["H", "S"]:
             params = {"sessionCode": SESSION_CODE, "chamberCode": chamber}
             resp = session.get(url, headers=headers, params=params, timeout=5)
+            
             if resp.status_code == 200:
                 events = resp.json().get("Schedules", [])
-                today_str = datetime.now().strftime("%Y-%m-%d")
-                
                 for e in events:
-                    # FILTER 1: Must be in the future (or today)
-                    if e.get("ScheduleDate", "") < today_str: continue
-                    # FILTER 2: Must NOT be cancelled
-                    if e.get("IsCancelled"): continue
-                    # FILTER 3 (CRITICAL): Must have a valid CommitteeId (Skips Caucuses)
-                    if not e.get("CommitteeId"): continue
-                    
-                    valid_targets.append(e)
-
-        if not valid_targets:
-            st.error("❌ No valid standing committee meetings found in the near future.")
+                    # ONLY Filter: Must be in the future (or today)
+                    if e.get("ScheduleDate", "") >= today_str:
+                        e['Chamber'] = chamber
+                        found_events.append(e)
+    
+        if not found_events:
+            st.error("❌ No events found at all. (Check Session Code?)")
             return
 
-        # Sort by date
-        valid_targets.sort(key=lambda x: x.get("ScheduleDate"))
+        # Sort by Date
+        found_events.sort(key=lambda x: (x.get("ScheduleDate"), x.get("ScheduleTime")))
         
-        # Pick the best candidate
-        target = valid_targets[0]
+        st.success(f"✅ Found {len(found_events)} Upcoming Events")
+        st.write("Inspecting the first 5 events to find a valid ID...")
         
-        st.success(f"✅ Locked on LEGISLATIVE Target: **{target.get('OwnerName')}**")
-        st.info(f"📅 Date: {target.get('ScheduleDate')} | 🆔 CommitteeId: {target.get('CommitteeId')}")
-        
-        # --- STEP 2: THE BRIDGE TEST ---
-        st.divider()
-        st.subheader("🧪 Testing the Bridge")
-        
-        # Now we use the ID we KNOW exists
-        schedule_id = target.get("ScheduleId")
-        committee_id = target.get("CommitteeId")
-        
-        st.write(f"Attempting to fetch docket for **Schedule ID: {schedule_id}**...")
-        
-        docket_url = f"{API_BASE}/Calendar/api/GetDocketListAsync"
-        
-        # Try Strategy A: Schedule ID
-        r = session.get(docket_url, headers=headers, params={"sessionCode": SESSION_CODE, "scheduleId": schedule_id}, timeout=5)
-        
-        if r.status_code == 200:
-            data = r.json()
-            if data:
-                st.success(f"🎉 **PAYDIRT!** Found {len(data)} bills on the docket!")
-                st.dataframe(data) # Show the actual data structure
-                st.balloons()
-            else:
-                st.warning("⚠️ Status 200 (Empty List). The meeting is valid, but no bills are listed yet.")
+        # Display the first 10 events
+        for i, e in enumerate(found_events[:10]):
+            with st.container(border=True):
+                c1, c2 = st.columns([3, 1])
+                with c1:
+                    st.markdown(f"**{e.get('OwnerName')}**")
+                    st.caption(f"📅 {e.get('ScheduleDate')} | ⏰ {e.get('ScheduleTime')} | 🏛️ {e.get('Chamber')}")
                 
-        elif r.status_code == 204:
-            st.info("⚪ Status 204: Valid meeting, but docket is currently empty.")
-            
-            # Fallback: Try Committee ID inventory
-            st.write("Trying backup: Fetching full Committee Inventory...")
-            inv_url = f"{API_BASE}/Legislation/api/GetLegislationByCommitteeAsync"
-            r2 = session.get(inv_url, headers=headers, params={"sessionCode": SESSION_CODE, "committeeId": committee_id}, timeout=5)
-            if r2.status_code == 200 and r2.json():
-                st.success(f"✅ Backup Successful: Found {len(r2.json())} bills in this committee.")
-                st.json(r2.json()[:3]) # Show first 3
-            
-        else:
-            st.error(f"❌ Status {r.status_code}")
+                with c2:
+                    # SHOW THE RAW IDS
+                    s_id = e.get("ScheduleId")
+                    c_id = e.get("CommitteeId")
+                    
+                    if s_id: 
+                        st.success(f"🆔 S-ID: {s_id}")
+                        # If we find a valid ID, let's test it immediately!
+                        if st.button(f"🚀 Test S-ID {s_id}", key=f"btn_{i}"):
+                            test_docket(s_id)
+                    elif c_id:
+                        st.info(f"🆔 C-ID: {c_id}")
+                    else:
+                        st.error("❌ NULL IDs")
 
     except Exception as e:
         st.error(f"Error: {e}")
 
-if st.button("🔴 Run Hunter"):
-    probe_real_committees()
+def test_docket(s_id):
+    st.write(f"Testing Docket for ScheduleID {s_id}...")
+    url = f"{API_BASE}/Calendar/api/GetDocketListAsync"
+    try:
+        r = session.get(url, headers=headers, params={"sessionCode": SESSION_CODE, "scheduleId": s_id}, timeout=3)
+        if r.status_code == 200 and r.json():
+            st.success("🎉 JACKPOT! Bills Found:")
+            st.json(r.json())
+        elif r.status_code == 204:
+            st.warning("⚠️ 204 No Content (Empty Docket)")
+        else:
+            st.error(f"❌ Status {r.status_code}")
+    except:
+        st.error("Connection Error")
+
+if st.button("🔴 Cast Wide Net"):
+    scan_wide_net()
