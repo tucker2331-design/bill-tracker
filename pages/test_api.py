@@ -6,77 +6,68 @@ API_BASE = "https://lis.virginia.gov"
 SESSION_CODE = "20261" 
 API_KEY = "81D70A54-FCDC-4023-A00B-A3FD114D5984" 
 
-st.set_page_config(page_title="v603 Protocol Shift", page_icon="📡", layout="wide")
-st.title("📡 v603: The Protocol Shift (POST vs GET)")
+st.set_page_config(page_title="v604 Pre-Flight Check", page_icon="✈️", layout="wide")
+st.title("✈️ v604: The 'Pre-Flight' Check (Headers)")
 
 session = requests.Session()
+# MIMIC THE BROWSER EXACTLY
 headers = {
-    'User-Agent': 'Mozilla/5.0',
-    'Accept': 'application/json',
-    'Content-Type': 'application/json', # Critical for POST
-    'WebAPIKey': API_KEY
+    'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+    'Accept': 'application/json, text/plain, */*',
+    'WebAPIKey': API_KEY,
+    'Referer': 'https://lis.virginia.gov/committee/committee-legislation/H01', # Claim we are on the page
+    'Origin': 'https://lis.virginia.gov',
+    'X-Requested-With': 'XMLHttpRequest'
 }
 
-def run_post_fix():
-    st.subheader("Step 1: Fetching Committee 'Agriculture' (ID: 1)...")
+def run_header_fix():
+    st.subheader("Step 1: Testing with Browser Headers...")
     
-    # We hardcode ID 1 because we proved it exists in v602
-    target_id = 1
-    target_name = "Agriculture, Chesapeake and Natural Resources"
-    
-    st.info(f"🎯 Target: **{target_name}** | Internal ID: `{target_id}`")
-    
-    st.divider()
-    st.subheader("Step 2: Firing POST Request")
-    
-    # The endpoint that gave us 200 (but HTML) last time
+    # We go back to the endpoint that "worked" (gave 200 OK) but failed content
     url = f"{API_BASE}/CommitteeLegislation/api/GetCommitteeLegislationListAsync"
     
-    # PAYLOAD: Send as JSON body, not URL params
-    payload = {
+    # We try GET first (Standard for lists)
+    params = {
         "sessionCode": SESSION_CODE,
-        "committeeId": target_id
+        "committeeId": 1 # Agriculture (Confirmed ID)
     }
     
-    st.write(f"🚀 POSTing to: `{url}`")
-    st.caption(f"📦 Body: {payload}")
+    st.write(f"🚀 GET Request to: `{url}`")
     
     try:
-        # SWITCH TO POST
-        resp = session.post(url, headers=headers, json=payload, timeout=5)
+        resp = session.get(url, headers=headers, params=params, timeout=5)
         
         if resp.status_code == 200:
-            try:
+            # CHECK CONTENT TYPE BEFORE PARSING
+            c_type = resp.headers.get("Content-Type", "")
+            st.caption(f"📡 Response Type: `{c_type}`")
+            
+            if "json" in c_type:
                 data = resp.json()
+                st.success("🎉 **VICTORY!** JSON Received!")
                 
-                # Check if it's the wrapper again
-                real_bills = []
+                # Unwrap logic
+                bills = []
                 if isinstance(data, dict):
-                    if "Legislation" in data: real_bills = data["Legislation"]
-                    elif "Items" in data: real_bills = data["Items"]
-                    else:
-                        st.warning("⚠️ Unknown Wrapper Format:")
-                        st.json(data)
+                     st.write(f"Keys: {list(data.keys())}")
+                     if "Legislation" in data: bills = data["Legislation"]
+                     elif "Items" in data: bills = data["Items"]
                 elif isinstance(data, list):
-                    real_bills = data
-                
-                if real_bills:
-                    st.success(f"🎉 **VICTORY!** Found {len(real_bills)} bills!")
-                    st.dataframe(real_bills[:10]) # Show first 10
-                    st.balloons()
-                else:
-                    st.warning("⚠️ 200 OK (Empty List). Try another committee?")
+                    bills = data
                     
-            except Exception as e:
-                st.error(f"❌ JSON Decode Failed Again: {e}")
-                st.text("Raw Response Preview (First 500 chars):")
-                st.code(resp.text[:500])
-                
+                if bills:
+                    st.dataframe(bills[:5])
+                else:
+                    st.warning("⚠️ Empty List (but valid JSON!)")
+            else:
+                st.error("❌ Still receiving HTML (The website detected us).")
+                st.text("Preview:")
+                st.code(resp.text[:200])
         else:
             st.error(f"❌ Status {resp.status_code}")
-            
+
     except Exception as e:
         st.error(f"Error: {e}")
 
-if st.button("🔴 Run POST Fix"):
-    run_post_fix()
+if st.button("🔴 Run Header Fix"):
+    run_header_fix()
