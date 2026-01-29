@@ -1,14 +1,12 @@
 import streamlit as st
 import requests
-import traceback
 
 # --- CONFIGURATION ---
 API_BASE = "https://lis.virginia.gov"
-DEFAULT_SESSION = "20261" 
 API_KEY = "81D70A54-FCDC-4023-A00B-A3FD114D5984" 
 
-st.set_page_config(page_title="v800 HB1 Rosetta Stone", page_icon="🗿", layout="wide")
-st.title("🗿 v800: The 'HB1' Rosetta Stone")
+st.set_page_config(page_title="v802 Chain of Custody", page_icon="🔗", layout="wide")
+st.title("🔗 v802: The Chain of Custody (ID 59)")
 
 session = requests.Session()
 headers = {
@@ -20,83 +18,79 @@ headers = {
     'Referer': 'https://lis.virginia.gov/'
 }
 
-def run_rosetta_stone():
-    st.subheader("Step 1: Diagnosing the 'Session Check' Error...")
+def run_chain_of_custody():
+    st.subheader("Step 1: Finding Session #59...")
     
-    # 1. Debugging the Session Endpoint
-    s_url = f"{API_BASE}/Session/api/GetSessionListAsync"
+    url = f"{API_BASE}/Session/api/GetSessionListAsync"
+    target_code = None
+    
     try:
-        r = session.get(s_url, headers=headers, timeout=5)
-        st.write(f"📡 Session Endpoint Status: `{r.status_code}`")
-        if r.status_code == 200:
-            st.success("✅ Session List Downloaded!")
-            data = r.json()
-            # Show the first session to verify format
-            if isinstance(data, list) and data:
-                st.json(data[0])
-            elif isinstance(data, dict):
-                st.json(data)
-    except Exception:
-        st.error("❌ Connection Failed. Traceback:")
-        st.code(traceback.format_exc())
-
-    # --- STEP 2: HUNTING FOR HB1 ---
-    st.divider()
-    st.subheader("Step 2: Hunting for Bill 'HB1'...")
-    
-    # We will try 3 different endpoints from your Heist list
-    
-    targets = [
-        # Target A: LegislationVersion Service
-        {
-            "url": f"{API_BASE}/LegislationVersion/api/GetLegislationVersionByBillNumberAsync",
-            "params": {"sessionCode": DEFAULT_SESSION, "billNumber": "HB1"},
-            "method": "GET"
-        },
-        # Target B: Legislation Service (GetLegislationById is unlikely to take HB1, but maybe)
-        # Better candidate: LegislationText
-        {
-            "url": f"{API_BASE}/LegislationText/api/GetLegislationTextByIDAsync",
-            "params": {"sessionCode": DEFAULT_SESSION, "billNumber": "HB1"}, # Guessing param name
-            "method": "GET"
-        },
-        # Target C: Advanced Search (POST) - Asking specifically for HB1
-        {
-            "url": f"{API_BASE}/AdvancedLegislationSearch/api/GetLegislationListAsync",
-            "json": {
-                "SessionCode": DEFAULT_SESSION,
-                "BillNumber": "HB1", 
-                "ChamberCode": "H"
-            },
-            "method": "POST"
-        }
-    ]
-    
-    for i, t in enumerate(targets):
-        label = t['url'].split("/api/")[1]
-        st.markdown(f"**🔫 Attempt {i+1}:** `{label}`")
-        
-        try:
-            if t['method'] == "GET":
-                resp = session.get(t['url'], headers=headers, params=t.get('params'), timeout=5)
-            else:
-                resp = session.post(t['url'], headers=headers, json=t.get('json'), timeout=5)
+        resp = session.get(url, headers=headers, timeout=5)
+        if resp.status_code == 200:
+            all_sessions = resp.json()
             
-            if resp.status_code == 200:
-                data = resp.json()
-                if data:
-                    st.success(f"🎉 **ROSETTA STONE FOUND!** Data received from {label}")
-                    st.json(data)
-                    return # Stop if we find it
-                else:
-                    st.warning("⚠️ 200 OK (Empty Result)")
-            elif resp.status_code == 204:
-                st.caption("⚪ 204 No Content (Bill not found or params wrong)")
+            # --- THE SEARCH ---
+            # We are looking for SessionID == 59 (from your HB1 screenshot)
+            target = next((s for s in all_sessions if s.get("SessionID") == 59), None)
+            
+            if target:
+                target_code = target.get("SessionCode")
+                desc = target.get("Description") or target.get("DisplayName")
+                st.success(f"✅ FOUND IT! Session 59 is **'{desc}'**")
+                st.info(f"🔑 The Magic Code is: `{target_code}`")
+                st.json(target)
             else:
-                st.error(f"❌ Status {resp.status_code}")
-                
-        except Exception as e:
-            st.error(f"Error: {e}")
+                st.error("❌ Session 59 not found in the master list. (Is the list incomplete?)")
+                # Fallback: Print the last 3 sessions just in case
+                st.write("Last 3 Sessions on file:", all_sessions[-3:])
+                return
+        else:
+            st.error(f"❌ Session API Failed: {resp.status_code}")
+            return
 
-if st.button("🔴 Run Rosetta Stone"):
-    run_rosetta_stone()
+        # --- STEP 2: USE THE CODE ---
+        if target_code:
+            st.divider()
+            st.subheader(f"Step 2: Unlocking Committee 1 with Code `{target_code}`")
+            
+            search_url = f"{API_BASE}/AdvancedLegislationSearch/api/GetLegislationListAsync"
+            
+            payload = {
+                "SessionCode": target_code,
+                "CommitteeId": 1, # Agriculture (Confirmed ID)
+                "ChamberCode": "H"
+            }
+            
+            st.write(f"🚀 POSTing payload...", payload)
+            
+            r2 = session.post(search_url, headers=headers, json=payload, timeout=5)
+            
+            if r2.status_code == 200:
+                data = r2.json()
+                
+                # Unwrap
+                bills = []
+                if isinstance(data, dict):
+                     if "Legislation" in data: bills = data["Legislation"]
+                     elif "Items" in data: bills = data["Items"]
+                     elif "Results" in data: bills = data["Results"]
+                elif isinstance(data, list):
+                    bills = data
+                
+                if bills:
+                    st.success(f"🎉 **PAYDIRT!** Found {len(bills)} bills!")
+                    st.dataframe(bills[:15])
+                    st.balloons()
+                else:
+                    st.warning("⚠️ 200 OK (Empty List). Session is valid, but maybe Committee 1 is empty?")
+                    st.write("Raw Response:", data)
+                    
+            else:
+                st.error(f"❌ Search Failed: {r2.status_code}")
+                st.text(r2.text[:500])
+
+    except Exception as e:
+        st.error(f"Error: {e}")
+
+if st.button("🔴 Run Chain of Custody"):
+    run_chain_of_custody()
