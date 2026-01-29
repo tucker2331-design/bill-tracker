@@ -3,10 +3,12 @@ import requests
 
 # --- CONFIGURATION ---
 API_BASE = "https://lis.virginia.gov"
+# We confirmed this in v803
+SESSION_CODE = "20261" 
 API_KEY = "81D70A54-FCDC-4023-A00B-A3FD114D5984" 
 
-st.set_page_config(page_title="v803 Iteration Fix", page_icon="🛠️", layout="wide")
-st.title("🛠️ v803: The Iteration Fix (Session 59)")
+st.set_page_config(page_title="v900 Reverse Engineer", page_icon="🔭", layout="wide")
+st.title("🔭 v900: The Reverse-Engineer (Wide Search)")
 
 session = requests.Session()
 headers = {
@@ -18,90 +20,70 @@ headers = {
     'Referer': 'https://lis.virginia.gov/'
 }
 
-def run_fix():
-    st.subheader("Step 1: Finding Session #59 (Correctly)...")
+def run_reverse_engineer():
+    st.subheader(f"Step 1: Fetching ALL House Bills for Session {SESSION_CODE}...")
+    st.info("Removing Committee filters to see what raw data looks like.")
     
-    url = f"{API_BASE}/Session/api/GetSessionListAsync"
-    target_code = None
+    search_url = f"{API_BASE}/AdvancedLegislationSearch/api/GetLegislationListAsync"
+    
+    # PAYLOAD: Broadest possible search (Just Session + Chamber)
+    payload = {
+        "SessionCode": SESSION_CODE,
+        "ChamberCode": "H"
+        # "CommitteeId": REMOVED - Let's see everything
+    }
+    
+    st.write(f"🚀 POSTing Broad Search...", payload)
     
     try:
-        resp = session.get(url, headers=headers, timeout=5)
+        resp = session.post(search_url, headers=headers, json=payload, timeout=10)
+        
         if resp.status_code == 200:
-            raw_data = resp.json()
+            data = resp.json()
             
-            # --- THE FIX: UNWRAP CORRECTLY ---
-            # If it's a dict like {"Sessions": [...]}, get the list inside.
-            all_sessions = []
-            if isinstance(raw_data, dict):
-                all_sessions = raw_data.get("Sessions", [])
-            elif isinstance(raw_data, list):
-                all_sessions = raw_data
+            # Unwrap Logic
+            bills = []
+            if isinstance(data, dict):
+                 if "Legislation" in data: bills = data["Legislation"]
+                 elif "Items" in data: bills = data["Items"]
+                 elif "Results" in data: bills = data["Results"]
+            elif isinstance(data, list):
+                bills = data
+            
+            if bills:
+                st.success(f"🎉 **SUCCESS!** Downloaded {len(bills)} House Bills.")
                 
-            if not all_sessions:
-                st.error("❌ Unwrapped list is empty.")
-                st.write("Raw Data:", raw_data)
-                return
-
-            # Now we can safely search for ID 59
-            target = next((s for s in all_sessions if s.get("SessionID") == 59), None)
-            
-            if target:
-                target_code = target.get("SessionCode")
-                desc = target.get("Description") or target.get("DisplayName")
-                st.success(f"✅ FOUND IT! Session 59 is **'{desc}'**")
-                st.info(f"🔑 The Magic Code is: `{target_code}`")
+                # --- STEP 2: INSPECT THE COMMITTEE FORMAT ---
+                st.divider()
+                st.subheader("Step 2: Inspecting Committee Data")
+                st.write("We need to see how the API *actually* stores committee info.")
                 
-                # Show the object to verify we have the right one
-                with st.expander("View Session Details"):
-                    st.json(target)
-            else:
-                st.error("❌ Session 59 not found in the list.")
-                return
-        else:
-            st.error(f"❌ Session API Failed: {resp.status_code}")
-            return
-
-        # --- STEP 2: USE THE CODE ---
-        if target_code:
-            st.divider()
-            st.subheader(f"Step 2: Unlocking Committee 1 with Code `{target_code}`")
-            
-            search_url = f"{API_BASE}/AdvancedLegislationSearch/api/GetLegislationListAsync"
-            
-            payload = {
-                "SessionCode": target_code,
-                "CommitteeId": 1, # Agriculture (Confirmed ID)
-                "ChamberCode": "H"
-            }
-            
-            st.write(f"🚀 POSTing payload...", payload)
-            
-            r2 = session.post(search_url, headers=headers, json=payload, timeout=5)
-            
-            if r2.status_code == 200:
-                data = r2.json()
+                # Find a bill that is actually IN a committee
+                assigned_bill = next((b for b in bills if b.get("CommitteeId") or b.get("CommitteeName")), None)
                 
-                # Unwrap Logic again just to be safe
-                bills = []
-                if isinstance(data, dict):
-                     if "Legislation" in data: bills = data["Legislation"]
-                     elif "Items" in data: bills = data["Items"]
-                     elif "Results" in data: bills = data["Results"]
-                elif isinstance(data, list):
-                    bills = data
-                
-                if bills:
-                    st.success(f"🎉 **PAYDIRT!** Found {len(bills)} bills!")
-                    st.dataframe(bills[:15])
-                    st.balloons()
+                if assigned_bill:
+                    st.write(f"found Bill: **{assigned_bill.get('LegislationNumber')}**")
+                    st.json(assigned_bill)
+                    
+                    # Highlight the keys we care about
+                    c_id = assigned_bill.get("CommitteeId")
+                    c_num = assigned_bill.get("CommitteeNumber")
+                    c_name = assigned_bill.get("CommitteeName")
+                    
+                    st.info(f"💡 **THE ANSWER KEY:**")
+                    st.code(f"CommitteeId: {c_id} (Type: {type(c_id)})\nCommitteeNumber: {c_num}\nCommitteeName: {c_name}")
                 else:
-                    st.warning("⚠️ 200 OK (Empty List).")
-                    st.write("Raw Response:", data)
+                    st.warning("Found bills, but none seem to have committee assignments yet? (Maybe they are all 'Introduced')")
+                    st.json(bills[:3])
             else:
-                st.error(f"❌ Search Failed: {r2.status_code}")
+                st.warning("⚠️ 200 OK (Empty List). Session 20261 might be valid but have no House bills yet?")
+                
+        else:
+            st.error(f"❌ Search Failed: {resp.status_code}")
+            st.text(resp.text[:500])
 
     except Exception as e:
         st.error(f"Error: {e}")
 
-if st.button("🔴 Run Fix"):
-    run_fix()
+if st.button("🔴 Run Reverse Engineer"):
+    run_reverse_engineer()
