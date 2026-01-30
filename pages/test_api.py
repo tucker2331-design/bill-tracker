@@ -5,8 +5,12 @@ import requests
 API_BASE = "https://lis.virginia.gov"
 API_KEY = "81D70A54-FCDC-4023-A00B-A3FD114D5984" 
 
-st.set_page_config(page_title="v1400 Control Group", page_icon="⚖️", layout="wide")
-st.title("⚖️ v1400: The 'Control Group' Test")
+# ID from your v1400 Screenshot for 2024 HB1
+HB1_2024_ID = 91072 
+HB1_2026_ID = 98525
+
+st.set_page_config(page_title="v1500 History Control", page_icon="📜", layout="wide")
+st.title("📜 v1500: The History Control Test")
 
 session = requests.Session()
 headers = {
@@ -18,56 +22,57 @@ headers = {
     'Referer': 'https://lis.virginia.gov/'
 }
 
-def fetch_bill_version(session_code, bill_number, label):
-    url = f"{API_BASE}/LegislationVersion/api/GetLegislationVersionByBillNumberAsync"
-    params = {"sessionCode": session_code, "billNumber": bill_number}
+def check_history(bill_id, label, session_code):
+    url = f"{API_BASE}/Legislation/api/GetLegislationStatusHistoryByLegislationIDAsync"
     
-    st.write(f"🔎 **Fetching {label}** ({bill_number} / {session_code})...")
+    st.subheader(f"Testing {label} (ID: {bill_id})...")
+    
+    # We use the standard POST payload that usually works for .NET
+    # Trying PascalCase first as per standard
+    payload = {
+        "LegislationId": bill_id,
+        "SessionCode": session_code
+    }
     
     try:
-        r = session.get(url, headers=headers, params=params, timeout=5)
+        r = session.post(url, headers=headers, json=payload, timeout=5)
+        
         if r.status_code == 200:
             data = r.json()
             # Unwrap
             items = []
-            if isinstance(data, dict): items = data.get("LegislationsVersion", [])
+            if isinstance(data, dict): items = data.get("LegislationHistory") or data.get("Items") or []
             elif isinstance(data, list): items = data
             
             if items:
-                # Get the most recent version (usually the last in the list, or we sort)
-                # actually usually the first one returned is the latest draft
-                top = items[0]
+                st.success(f"✅ {label}: History Found! ({len(items)} events)")
+                st.dataframe(items)
                 
-                st.success(f"✅ {label}: Found ID {top.get('LegislationID')}")
-                
-                # DISPLAY KEY DATA
-                c1, c2 = st.columns(2)
-                with c1:
-                    st.info(f"📜 **Status:** {top.get('Version')}")
-                    st.caption(f"Description: {top.get('Description')}")
-                with c2:
-                    st.write(f"Draft Date: {top.get('DraftDate')}")
-                    # Does the version object contain committee hints?
-                    # We print the whole thing to check
-                    with st.expander("Inspect JSON"):
-                        st.json(top)
+                # Check for "Referred" event
+                referred = next((x for x in items if "referred" in str(x.get("Description", "")).lower()), None)
+                if referred:
+                    st.info(f"📍 **Committee Found in History:** {referred.get('Description')}")
+                else:
+                    st.warning("History found, but no 'Referred' event (yet).")
             else:
                 st.warning(f"⚠️ {label}: 200 OK (Empty List)")
+                
+        elif r.status_code == 204:
+            st.warning(f"⚪ {label}: 204 No Content (Valid request, no history exists)")
         else:
             st.error(f"❌ {label}: Failed {r.status_code}")
+            
     except Exception as e:
         st.error(f"Error: {e}")
 
-def run_control_group():
-    # TEST 1: The "Ghost" (2026 HB1)
-    # Session 20261 (Regular Session 2026)
-    fetch_bill_version("20261", "HB1", "The Ghost (2026)")
+def run_history_control():
+    # TEST 1: The Control (2024 HB1) - SHOULD HAVE HISTORY
+    check_history(HB1_2024_ID, "2024 HB1 (Control)", "20241")
     
     st.divider()
     
-    # TEST 2: The "Control" (2024 HB1)
-    # Session 20241 (Regular Session 2024) - A known historic session
-    fetch_bill_version("20241", "HB1", "The Control (2024)")
+    # TEST 2: The Ghost (2026 HB1) - MIGHT BE EMPTY
+    check_history(HB1_2026_ID, "2026 HB1 (Ghost)", "20261")
 
-if st.button("🔴 Run Control Test"):
-    run_control_group()
+if st.button("🔴 Run History Control"):
+    run_history_control()
