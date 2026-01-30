@@ -4,11 +4,11 @@ import requests
 # --- CONFIGURATION ---
 API_BASE = "https://lis.virginia.gov"
 API_KEY = "81D70A54-FCDC-4023-A00B-A3FD114D5984" 
-SESSION_CODE = "20261" 
-HB1_ID = 98525 # From your v800 screenshot
+SESSION_CODE = "20261"
+HB1_ID = 98525 # Known ID for HB1
 
-st.set_page_config(page_title="v1000 Ghostbuster", page_icon="🚫", layout="wide")
-st.title("🚫 v1000: The 'Ghostbuster' Protocol")
+st.set_page_config(page_title="v1001 Version Crawler", page_icon="🕷️", layout="wide")
+st.title("🕷️ v1001: The 'Version' Crawler & POST Fix")
 
 session = requests.Session()
 headers = {
@@ -20,80 +20,81 @@ headers = {
     'Referer': 'https://lis.virginia.gov/'
 }
 
-def run_ghostbuster():
-    # --- PROBE 1: HB1 HISTORY ---
-    st.subheader(f"Step 1: Checking History for HB1 (ID: {HB1_ID})...")
-    # Endpoint from Heist list
+def run_crawler():
+    # --- PART 1: FIXING THE HISTORY PROBE (POST) ---
+    st.subheader(f"Step 1: History Check for HB1 (ID: {HB1_ID})...")
     hist_url = f"{API_BASE}/Legislation/api/GetLegislationStatusHistoryByLegislationIDAsync"
     
+    # FIX: Send as POST with JSON body
+    payload = {"LegislationId": HB1_ID, "SessionCode": SESSION_CODE}
+    
     try:
-        # Try GET
-        r = session.get(hist_url, headers=headers, params={"legislationId": HB1_ID}, timeout=5)
+        r = session.post(hist_url, headers=headers, json=payload, timeout=5)
+        
         if r.status_code == 200:
             history = r.json()
             if history:
-                st.success(f"✅ HB1 History Found! ({len(history)} items)")
+                st.success(f"✅ History Unlocked! ({len(history)} items)")
                 st.dataframe(history)
-                # Check for Committee keywords
-                for h in history:
-                    desc = h.get("Description", "").lower()
-                    if "referred" in desc or "committee" in desc:
-                        st.info(f"📍 Clue: {h.get('Description')}")
             else:
-                st.warning("⚠️ HB1 exists, but History is empty.")
+                st.warning("⚠️ 200 OK (Empty History).")
         else:
-            st.error(f"❌ History Failed: {r.status_code}")
+            # Try 'legislationId' lowercase key if TitleCase fails
+            r2 = session.post(hist_url, headers=headers, json={"legislationId": HB1_ID, "sessionCode": SESSION_CODE}, timeout=5)
+            if r2.status_code == 200:
+                 st.success("✅ History Unlocked (Lowercase Params)!")
+                 st.dataframe(r2.json())
+            else:
+                 st.error(f"❌ History Failed: {r.status_code} / {r2.status_code}")
     except Exception as e:
         st.error(f"Error: {e}")
 
-    # --- PROBE 2: THE "SESSION LIST" ---
+    # --- PART 2: THE BILL CRAWLER (HB1 - HB10) ---
     st.divider()
-    st.subheader("Step 2: Trying 'getLegislationSessionListAsync'...")
-    # Note the lowercase 'g' from screenshot
-    list_url = f"{API_BASE}/Legislation/api/getLegislationSessionListAsync"
+    st.subheader("Step 2: Crawling HB1 - HB10...")
     
-    try:
-        # Try GET with sessionCode
-        r2 = session.get(list_url, headers=headers, params={"sessionCode": SESSION_CODE}, timeout=10)
+    # We use the endpoint PROVEN to work in v801
+    ver_url = f"{API_BASE}/LegislationVersion/api/GetLegislationVersionByBillNumberAsync"
+    
+    found_bills = []
+    
+    # Scan first 5 bills
+    progress_bar = st.progress(0)
+    
+    for i in range(1, 6): # HB1 to HB5
+        b_num = f"HB{i}"
         
-        if r2.status_code == 200:
-            data = r2.json()
-            # Unwrap
-            bills = []
-            if isinstance(data, list): bills = data
-            elif isinstance(data, dict):
-                bills = data.get("Legislation") or data.get("Items") or []
-            
-            if bills:
-                st.success(f"🎉 **JACKPOT!** Found {len(bills)} bills for the session!")
-                st.dataframe(bills[:10])
-                st.balloons()
-            else:
-                st.warning("⚠️ 200 OK (Empty List). Endpoint works, but returned nothing.")
-        else:
-            st.error(f"❌ List Failed: {r2.status_code}")
-            
-    except Exception as e:
-        st.error(f"Error: {e}")
+        # This endpoint uses GET params (proven in screenshot)
+        params = {"sessionCode": SESSION_CODE, "billNumber": b_num}
+        
+        try:
+            r = session.get(ver_url, headers=headers, params=params, timeout=2)
+            if r.status_code == 200:
+                data = r.json()
+                # Unwrap list
+                if isinstance(data, dict) and "LegislationsVersion" in data: items = data["LegislationsVersion"]
+                elif isinstance(data, list): items = data
+                else: items = []
+                
+                if items:
+                    # Get the most recent version
+                    latest = items[0]
+                    found_bills.append({
+                        "Bill": b_num,
+                        "ID": latest.get("LegislationID"),
+                        "Title": latest.get("Description"),
+                        "Status": latest.get("Version")
+                    })
+        except:
+            pass
+        progress_bar.progress(i * 20)
+        
+    if found_bills:
+        st.success(f"🎉 **CRAWLER SUCCESS!** Found {len(found_bills)} bills.")
+        st.table(found_bills)
+        st.info("💡 If this works, we don't need the 'Master List'. We can just crawl the numbers.")
+    else:
+        st.error("❌ Crawler found nothing. (Are the params exactly matching v801?)")
 
-    # --- PROBE 3: THE "ID LIST" (BACKUP) ---
-    st.divider()
-    st.subheader("Step 3: Trying 'GetLegislationIdsListAsync'...")
-    id_url = f"{API_BASE}/Legislation/api/GetLegislationIdsListAsync"
-    
-    try:
-        r3 = session.get(id_url, headers=headers, params={"sessionCode": SESSION_CODE}, timeout=10)
-        if r3.status_code == 200:
-            ids = r3.json()
-            if ids:
-                st.success(f"✅ Found {len(ids)} Bill IDs!")
-                st.write("First 10 IDs:", ids[:10])
-            else:
-                st.warning("⚠️ 200 OK (Empty ID List).")
-        else:
-            st.error(f"❌ ID List Failed: {r3.status_code}")
-    except Exception as e:
-        st.error(f"Error: {e}")
-
-if st.button("🔴 Run Ghostbuster"):
-    run_ghostbuster()
+if st.button("🔴 Run Crawler"):
+    run_crawler()
