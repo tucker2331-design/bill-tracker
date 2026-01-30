@@ -5,16 +5,12 @@ import requests
 API_BASE = "https://lis.virginia.gov"
 API_KEY = "81D70A54-FCDC-4023-A00B-A3FD114D5984" 
 
-# WE KNOW THIS BILL HAS HISTORY (2024 HB1)
-CONTROL_ID = 91072 
+# Control Bill (2024 HB1)
 CONTROL_SESSION = "20241"
+CONTROL_BILL = "HB1"
 
-# THE GOAL (2026 HB1)
-TARGET_ID = 98525
-TARGET_SESSION = "20261"
-
-st.set_page_config(page_title="v1600 Calibration", page_icon="🎛️", layout="wide")
-st.title("🎛️ v1600: The 'Control Bill' Calibration")
+st.set_page_config(page_title="v1700 Manual & Cheat Code", page_icon="📖", layout="wide")
+st.title("📖 v1700: The 'Manual' & The 'Cheat Code'")
 
 session = requests.Session()
 headers = {
@@ -26,95 +22,108 @@ headers = {
     'Referer': 'https://lis.virginia.gov/'
 }
 
-def run_calibration():
-    url = f"{API_BASE}/Legislation/api/GetLegislationStatusHistoryByLegislationIDAsync"
-    st.subheader(f"Step 1: Brute-Forcing the Key on 2024 HB1...")
+def run_manual_check():
+    # --- STEP 1: THE CHEAT CODE (SWAGGER/DOCS) ---
+    st.subheader("Step 1: Attempting to Download API Schema...")
     
-    # PERMUTATIONS TO TEST
-    tests = [
-        # 1. camelCase (Standard JSON)
-        {"label": "camelCase", "payload": {"legislationId": CONTROL_ID, "sessionCode": CONTROL_SESSION}},
-        
-        # 2. PascalCase (Standard .NET)
-        {"label": "PascalCase", "payload": {"LegislationId": CONTROL_ID, "SessionCode": CONTROL_SESSION}},
-        
-        # 3. ID Capitalized (Common LIS quirk)
-        {"label": "ID Capitalized", "payload": {"LegislationID": CONTROL_ID, "SessionCode": CONTROL_SESSION}},
-        
-        # 4. No Session (Maybe ID is enough?)
-        {"label": "ID Only", "payload": {"legislationId": CONTROL_ID}}
+    # Common locations for Swagger/OpenAPI specs
+    swagger_urls = [
+        f"{API_BASE}/swagger/docs/v1",
+        f"{API_BASE}/swagger/v1/swagger.json",
+        f"{API_BASE}/openapi.json",
+        f"{API_BASE}/api/docs"
     ]
     
-    winning_payload_type = None
+    found_schema = False
     
-    for t in tests:
-        st.write(f"🔫 Testing **{t['label']}**...")
+    for url in swagger_urls:
         try:
-            r = session.post(url, headers=headers, json=t['payload'], timeout=5)
-            
+            r = session.get(url, headers=headers, timeout=2)
             if r.status_code == 200:
+                st.success(f"🎉 **FOUND THE MANUAL!** ({url})")
                 data = r.json()
-                # Check if actually empty
-                items = []
-                if isinstance(data, dict): items = data.get("LegislationHistory") or data.get("Items") or []
-                elif isinstance(data, list): items = data
                 
-                if items:
-                    st.success(f"🎉 **WINNER FOUND:** {t['label']} worked!")
-                    winning_payload_type = t['label']
-                    st.json(items[:1]) # Show first item proof
-                    break # Stop, we found the key
-                else:
-                    st.warning(f"⚠️ {t['label']}: 200 OK but Empty List")
-            elif r.status_code == 204:
-                st.warning(f"⚪ {t['label']}: 204 No Content")
-            else:
-                st.error(f"❌ {t['label']}: Status {r.status_code}")
-        except Exception as e:
-            st.error(f"Error: {e}")
-
-    # --- STEP 2: APPLY TO 2026 ---
-    if winning_payload_type:
-        st.divider()
-        st.subheader(f"Step 2: Applying '{winning_payload_type}' to 2026 HB1...")
-        
-        # Construct the 2026 payload based on the winner
-        target_payload = {}
-        if winning_payload_type == "camelCase":
-            target_payload = {"legislationId": TARGET_ID, "sessionCode": TARGET_SESSION}
-        elif winning_payload_type == "PascalCase":
-            target_payload = {"LegislationId": TARGET_ID, "SessionCode": TARGET_SESSION}
-        elif winning_payload_type == "ID Capitalized":
-            target_payload = {"LegislationID": TARGET_ID, "SessionCode": TARGET_SESSION}
-        elif winning_payload_type == "ID Only":
-            target_payload = {"legislationId": TARGET_ID}
+                # Try to find the History Endpoint Definition
+                paths = data.get("paths", {})
+                hist_path = "/Legislation/api/GetLegislationStatusHistoryByLegislationIDAsync"
+                
+                if hist_path in paths:
+                    st.info("💡 **History Endpoint Definition:**")
+                    # Check POST parameters
+                    post_op = paths[hist_path].get("post")
+                    if post_op:
+                        params = post_op.get("parameters", [])
+                        st.json(params)
+                        # Check body schema
+                        if "requestBody" in post_op:
+                             st.write("Request Body Schema:")
+                             st.json(post_op["requestBody"])
+                
+                found_schema = True
+                break
+        except:
+            pass
             
-        st.write("🚀 Sending Payload:", target_payload)
-        
-        try:
-            r2 = session.post(url, headers=headers, json=target_payload, timeout=5)
-            if r2.status_code == 200:
-                data2 = r2.json()
-                items2 = []
-                if isinstance(data2, dict): items2 = data2.get("LegislationHistory") or data2.get("Items") or []
-                elif isinstance(data2, list): items2 = data2
-                
-                if items2:
-                    st.success(f"🎉 **JACKPOT!** Found {len(items2)} history events for 2026!")
-                    st.dataframe(items2)
-                    
-                    # HUNT FOR COMMITTEE
-                    ref = next((x for x in items2 if "Referred" in str(x.get("Description"))), None)
-                    if ref:
-                        st.info(f"📍 **COMMITTEE:** {ref.get('Description')}")
-                else:
-                    st.warning("⚠️ 200 OK (Empty List). Code is correct, but 2026 history is truly empty.")
-            else:
-                st.error(f"❌ 2026 Fetch Failed: {r2.status_code}")
-        except Exception as e:
-            st.error(f"Error: {e}")
-    else:
-        st.error("❌ All permutations failed on the Control Bill. The API requires a structure we haven't guessed yet.")
+    if not found_schema:
+        st.warning("⚠️ Could not auto-fetch Swagger JSON. (We rely on Step 2).")
 
-if st.button("🔴 Run Calibration"):
-    run_calibration()
+    # --- STEP 2: THE ID SWEEP (2024 CONTROL) ---
+    st.divider()
+    st.subheader("Step 2: The ID Sweep (2024 HB1)")
+    st.write("Fetching ALL versions of 2024 HB1 to find the 'Master' ID...")
+    
+    # 1. Get all versions
+    ver_url = f"{API_BASE}/LegislationVersion/api/GetLegislationVersionByBillNumberAsync"
+    try:
+        r = session.get(ver_url, headers=headers, params={"sessionCode": CONTROL_SESSION, "billNumber": CONTROL_BILL}, timeout=5)
+        if r.status_code == 200:
+            versions = r.json()
+            # Unwrap
+            if isinstance(versions, dict): versions = versions.get("LegislationsVersion", [])
+            elif isinstance(versions, list): versions = versions
+            
+            st.write(f"Found {len(versions)} versions of 2024 HB1.")
+            
+            # 2. Test History for EVERY ID
+            hist_url = f"{API_BASE}/Legislation/api/GetLegislationStatusHistoryByLegislationIDAsync"
+            
+            for v in versions:
+                l_id = v.get("LegislationID")
+                desc = v.get("Description")
+                
+                # Test Payload (camelCase standard)
+                payload = {"legislationId": l_id, "sessionCode": CONTROL_SESSION}
+                
+                try:
+                    h_r = session.post(hist_url, headers=headers, json=payload, timeout=2)
+                    
+                    if h_r.status_code == 200:
+                        h_data = h_r.json()
+                        h_items = []
+                        if isinstance(h_data, dict): h_items = h_data.get("LegislationHistory", [])
+                        elif isinstance(h_data, list): h_items = h_data
+                        
+                        if h_items:
+                            st.success(f"🎉 **JACKPOT!** ID `{l_id}` ({desc}) unlocked the History!")
+                            st.dataframe(h_items)
+                            
+                            # CHECK FOR COMMITTEE
+                            ref = next((x for x in h_items if "Referred" in str(x.get("Description"))), None)
+                            if ref:
+                                st.info(f"📍 **COMMITTEE:** {ref.get('Description')}")
+                            return # Stop, we found the pattern
+                        else:
+                            st.caption(f"⚪ ID {l_id} ({desc}): Empty History")
+                    else:
+                        st.caption(f"❌ ID {l_id}: Status {h_r.status_code}")
+                        
+                except Exception:
+                    pass
+        else:
+            st.error("❌ Failed to fetch versions.")
+            
+    except Exception as e:
+        st.error(f"Error: {e}")
+
+if st.button("🔴 Run Manual & Sweep"):
+    run_manual_check()
