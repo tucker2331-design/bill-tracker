@@ -1,87 +1,140 @@
 import streamlit as st
 import requests
+import re
 
 # --- CONFIGURATION ---
 API_BASE = "https://lis.virginia.gov"
+CGI_BASE = "https://lis.virginia.gov/cgi-bin/legp604.exe"
+SESSION_CODE = "20261" # For API
+SESSION_CGI = "261"    # For Website (2026 Regular)
 API_KEY = "81D70A54-FCDC-4023-A00B-A3FD114D5984" 
-SESSION_CODE = "20261" # 2026 Regular
-COMMITTEE_ID = 1      # Agriculture
 
-st.set_page_config(page_title="v2100 GET Bypass", page_icon="↩️", layout="wide")
-st.title("↩️ v2100: The 'GET' Bypass")
+st.set_page_config(page_title="v2200 Hybrid Tracker", page_icon="🧬", layout="wide")
+st.title("🧬 v2200: The 'Hybrid' Tracker")
 
 session = requests.Session()
 headers = {
     'User-Agent': 'Mozilla/5.0',
     'Accept': 'application/json',
-    'Content-Type': 'application/json',
-    'WebAPIKey': API_KEY,
-    'Origin': 'https://lis.virginia.gov',
-    'Referer': 'https://lis.virginia.gov/'
+    'WebAPIKey': API_KEY
 }
 
-def run_get_bypass():
-    # We are retrying the "Advanced Search" endpoint, but with GET
-    url = f"{API_BASE}/AdvancedLegislationSearch/api/GetLegislationListAsync"
-    
-    st.subheader(f"Targeting: `{url}` (Method: GET)")
-    
-    # CONVERT PAYLOAD TO QUERY PARAMS
-    # Note: trying both PascalCase and camelCase keys just to be safe
-    params = {
-        "sessionCode": SESSION_CODE,
-        "committeeId": COMMITTEE_ID,
-        "chamberCode": "H"
-    }
-    
-    st.write("🚀 Sending GET Params:", params)
+# --- PART 1: THE WORKING API (METADATA) ---
+def fetch_bill_metadata(bill_num):
+    url = f"{API_BASE}/LegislationVersion/api/GetLegislationVersionByBillNumberAsync"
+    params = {"sessionCode": SESSION_CODE, "billNumber": bill_num}
     
     try:
-        r = session.get(url, headers=headers, params=params, timeout=10)
-        
+        r = session.get(url, headers=headers, params=params, timeout=2)
         if r.status_code == 200:
             data = r.json()
+            items = []
+            if isinstance(data, dict): items = data.get("LegislationsVersion", [])
+            elif isinstance(data, list): items = data
             
-            # Unwrap
-            bills = []
-            if isinstance(data, dict):
-                 if "Legislation" in data: bills = data["Legislation"]
-                 elif "Items" in data: bills = data["Items"]
-                 elif "Results" in data: bills = data["Results"]
-            elif isinstance(data, list):
-                bills = data
-            
-            if bills:
-                st.success(f"🎉 **BYPASS SUCCESS!** Found {len(bills)} bills using GET!")
-                st.dataframe(bills[:10])
-                st.balloons()
-            else:
-                st.warning("⚠️ 200 OK (Empty List) - GET worked, but returned no data.")
-                
-        elif r.status_code == 405:
-            st.error("❌ 405 Method Not Allowed (The server specifically forbids GET on this endpoint).")
-        else:
-            st.error(f"❌ Failed: {r.status_code}")
-            
-    except Exception as e:
-        st.error(f"Error: {e}")
-
-    # --- TEST 2: HISTORY BYPASS ---
-    st.divider()
-    st.subheader("Test 2: History GET Bypass (2024 Control Bill)")
-    # We try to get history for the 2024 Control Bill (ID 91072) using GET
-    hist_url = f"{API_BASE}/Legislation/api/GetLegislationStatusHistoryByLegislationIDAsync"
-    hist_params = {"legislationId": 91072, "sessionCode": "20241"}
-    
-    try:
-        r2 = session.get(hist_url, headers=headers, params=hist_params, timeout=5)
-        if r2.status_code == 200:
-             st.success("🎉 **HISTORY UNLOCKED via GET!**")
-             st.json(r2.json())
-        else:
-             st.error(f"❌ History GET Failed: {r2.status_code}")
+            if items:
+                # Return the most recent version info
+                latest = items[0]
+                return {
+                    "Bill": bill_num,
+                    "ID": latest.get("LegislationID"),
+                    "Title": latest.get("Description"), # Usually "Introduced"
+                    "Date": latest.get("DraftDate"),
+                    "Found": True
+                }
     except:
         pass
+    return None
 
-if st.button("🔴 Run GET Bypass"):
-    run_get_bypass()
+# --- PART 2: THE WEBSITE SCRAPER (COMMITTEE) ---
+def fetch_bill_committee_html(bill_num):
+    # Construct the URL for the Bill Summary Page
+    # Format: ?261+sum+HB1
+    url = f"{CGI_BASE}?{SESSION_CGI}+sum+{bill_num}"
+    
+    try:
+        # We need standard browser headers for the CGI to talk to us
+        scrape_headers = {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+            'Accept': 'text/html'
+        }
+        r = session.get(url, headers=scrape_headers, timeout=3)
+        
+        if r.status_code == 200:
+            html = r.text
+            
+            # 1. Look for "Referred to Committee" pattern
+            # The site usually says: "Referred to Committee on [Name]"
+            match = re.search(r"Referred to Committee on ([A-Za-z\s]+)", html)
+            if match:
+                return match.group(1).strip()
+            
+            # 2. Look for "Referred to Committee" (Generic)
+            if "Referred to Committee" in html:
+                # Try to grab the text after it
+                clean_text = re.sub(r'<[^>]+>', '', html) # Strip HTML tags
+                idx = clean_text.find("Referred to Committee on")
+                if idx != -1:
+                    return clean_text[idx:idx+50] # Return snippet
+                
+            return "Not yet referred"
+        else:
+            return "HTML Fetch Failed"
+    except Exception as e:
+        return f"Error: {str(e)}"
+
+# --- MAIN CONTROLLER ---
+def run_hybrid_tracker():
+    st.subheader(f"Step 1: Tracking HB1 - HB10 (Session {SESSION_CODE})")
+    
+    results = []
+    
+    # Create a progress bar
+    progress = st.progress(0)
+    status_text = st.empty()
+    
+    for i in range(1, 11): # Check first 10 bills
+        b_num = f"HB{i}"
+        status_text.text(f"Scanning {b_num}...")
+        
+        # 1. API CALL (Fast, clean)
+        meta = fetch_bill_metadata(b_num)
+        
+        if meta:
+            # 2. SCRAPE CALL (Slower, but has the data)
+            committee = fetch_bill_committee_html(b_num)
+            
+            # Combine
+            meta["Committee (Scraped)"] = committee
+            results.append(meta)
+            
+        progress.progress(i * 10)
+        
+    status_text.text("Scan Complete.")
+    
+    if results:
+        st.success(f"🎉 **SUCCESS!** Tracked {len(results)} bills.")
+        
+        # Display as a clean table
+        st.dataframe(results, column_order=["Bill", "Committee (Scraped)", "Title", "Date", "ID"])
+        
+        # Transparency: Show the raw source for HB1
+        st.divider()
+        st.subheader("🔎 Transparency: Source Data for HB1")
+        
+        c1, c2 = st.columns(2)
+        with c1:
+            st.info("API (JSON) Return")
+            st.json(fetch_bill_metadata("HB1"))
+        with c2:
+            st.warning("Website (HTML) Scrape")
+            url = f"{CGI_BASE}?{SESSION_CGI}+sum+HB1"
+            st.write(f"Scraped URL: `{url}`")
+            comm = fetch_bill_committee_html("HB1")
+            st.metric("Extracted Committee", comm)
+
+    else:
+        st.error("❌ No bills found via API. (Is the Session Code correct?)")
+
+if st.button("🔴 Run Hybrid Tracker"):
+    run_hybrid_tracker()
