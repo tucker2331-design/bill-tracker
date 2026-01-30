@@ -5,74 +5,93 @@ import requests
 API_BASE = "https://lis.virginia.gov"
 API_KEY = "81D70A54-FCDC-4023-A00B-A3FD114D5984" 
 
-# WE TEST TWO "KNOWN GOOD" ERAS
-TESTS = [
-    {"label": "2025 Regular Session", "code": "20251", "comm_id": 1},
-    {"label": "2024 Regular Session", "code": "20241", "comm_id": 1}
-]
+# CONTROL GROUP (2025 Regular Session - Known Data)
+TEST_SESSION = "20251" 
+TEST_COMMITTEE = 1 # Agriculture
 
-st.set_page_config(page_title="v1900 Time Machine Proof", page_icon="⏳", layout="wide")
-st.title("⏳ v1900: The 'Time Machine' Proof")
+st.set_page_config(page_title="v2000 Handshake Protocol", page_icon="🤝", layout="wide")
+st.title("🤝 v2000: The 'Handshake' Protocol")
 
+# 1. INITIALIZE SESSION WITH BROWSER HEADERS
 session = requests.Session()
-headers = {
-    'User-Agent': 'Mozilla/5.0',
-    'Accept': 'application/json',
-    'Content-Type': 'application/json',
-    'WebAPIKey': API_KEY,
+session.headers.update({
+    'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+    'Accept': 'text/html,application/xhtml+xml,application/json;q=0.9,*/*;q=0.8',
+    'Accept-Language': 'en-US,en;q=0.9',
+    'WebAPIKey': API_KEY, # Keep our key
     'Origin': 'https://lis.virginia.gov',
     'Referer': 'https://lis.virginia.gov/'
-}
+})
 
-def run_time_machine():
-    url = f"{API_BASE}/AdvancedLegislationSearch/api/GetLegislationListAsync"
+def run_handshake():
+    st.subheader("Step 1: Establishing Session State (The Handshake)...")
     
-    for t in TESTS:
-        st.subheader(f"Testing {t['label']} (Code: {t['code']})...")
+    # A. Hit the Home Page
+    try:
+        r1 = session.get("https://lis.virginia.gov/")
+        st.write(f"🏠 Home Page: Status {r1.status_code}")
+    except:
+        st.warning("Failed to hit home page")
+
+    # B. Hit a CGI Page (Forces ASP.NET Session generation)
+    # This is the "Bills" menu page for 2026
+    try:
+        r2 = session.get("https://lis.virginia.gov/cgi-bin/legp604.exe?261+men+BIL")
+        st.write(f"📜 CGI Portal: Status {r2.status_code}")
+    except:
+        st.warning("Failed to hit CGI portal")
         
-        # We use the payload that works for Advanced Search (POST)
-        payload = {
-            "SessionCode": t['code'],
-            "CommitteeId": t['comm_id'],
-            "ChamberCode": "H"
-        }
+    # C. CHECK COOKIES
+    cookies = session.cookies.get_dict()
+    if cookies:
+        st.success("✅ Cookies Acquired!")
+        st.json(cookies)
+    else:
+        st.warning("⚠️ No cookies received. Server might be stateless (unlikely).")
+
+    # --- STEP 2: RETRY THE SEARCH (WITH COOKIES) ---
+    st.divider()
+    st.subheader(f"Step 2: Retrying 2025 Search (Session {TEST_SESSION})...")
+    
+    search_url = f"{API_BASE}/AdvancedLegislationSearch/api/GetLegislationListAsync"
+    
+    payload = {
+        "SessionCode": TEST_SESSION,
+        "CommitteeId": TEST_COMMITTEE,
+        "ChamberCode": "H"
+    }
+    
+    try:
+        # We perform the same POST request as v1900, but now we have cookies
+        r = session.post(search_url, json=payload, timeout=10)
         
-        try:
-            r = session.post(url, headers=headers, json=payload, timeout=8)
+        if r.status_code == 200:
+            data = r.json()
             
-            if r.status_code == 200:
-                data = r.json()
-                
-                # Unwrap
-                bills = []
-                if isinstance(data, dict):
-                     if "Legislation" in data: bills = data["Legislation"]
-                     elif "Items" in data: bills = data["Items"]
-                     elif "Results" in data: bills = data["Results"]
-                elif isinstance(data, list):
-                    bills = data
-                
-                if bills:
-                    st.success(f"🎉 **PROOF!** Found {len(bills)} bills in {t['label']}!")
-                    st.dataframe(bills[:5]) # Show first 5
-                    
-                    # Verify they are actually in committee
-                    sample = bills[0]
-                    st.caption(f"Sample Bill: {sample.get('LegislationNumber')} | Status: {sample.get('Status')}")
-                else:
-                    st.warning(f"⚠️ {t['label']}: 200 OK (Empty List).")
-                    
-            elif r.status_code == 404:
-                st.error(f"❌ {t['label']}: 404 Not Found")
+            # Unwrap
+            bills = []
+            if isinstance(data, dict):
+                 if "Legislation" in data: bills = data["Legislation"]
+                 elif "Items" in data: bills = data["Items"]
+                 elif "Results" in data: bills = data["Results"]
+            elif isinstance(data, list):
+                bills = data
+            
+            if bills:
+                st.success(f"🎉 **HANDSHAKE SUCCESS!** Found {len(bills)} bills!")
+                st.dataframe(bills[:5])
+                st.balloons()
             else:
-                st.error(f"❌ {t['label']}: Failed {r.status_code}")
+                st.warning("⚠️ 200 OK (Empty List) - Cookies didn't fix it.")
+                st.write("Response:", data)
                 
-        except Exception as e:
-            st.error(f"Error: {e}")
-        
-        st.divider()
+        elif r.status_code == 204:
+            st.error("❌ Still 204 No Content.")
+        else:
+            st.error(f"❌ Failed: {r.status_code}")
+            
+    except Exception as e:
+        st.error(f"Error: {e}")
 
-    st.info("💡 **CONCLUSION:** If these lists populate, your code works. 2026 is just empty because bills haven't been referred yet.")
-
-if st.button("🔴 Run Time Machine"):
-    run_time_machine()
+if st.button("🔴 Run Handshake"):
+    run_handshake()
