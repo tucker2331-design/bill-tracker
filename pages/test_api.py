@@ -5,10 +5,10 @@ import requests
 API_BASE = "https://lis.virginia.gov"
 API_KEY = "81D70A54-FCDC-4023-A00B-A3FD114D5984" 
 SESSION_CODE = "20261"
-HB1_ID = 98525 # Known ID for HB1
+HB1_ID = 98525 # Confirmed correct
 
-st.set_page_config(page_title="v1100 Full Detail Probe", page_icon="🔬", layout="wide")
-st.title("🔬 v1100: The 'Full Detail' Probe")
+st.set_page_config(page_title="v1101 Plural Correction", page_icon="🧩", layout="wide")
+st.title("🧩 v1101: The Plural Correction")
 
 session = requests.Session()
 headers = {
@@ -20,53 +20,64 @@ headers = {
     'Referer': 'https://lis.virginia.gov/'
 }
 
-def run_detail_probe():
-    st.subheader(f"Step 1: Fetching Master Object for HB1 (ID: {HB1_ID})...")
+def run_plural_fix():
+    st.subheader(f"Step 1: Fetching HB1 Master Record (ID: {HB1_ID})...")
     
-    # We try the "Main Object" endpoint from your Heist list
-    # This is different from "Version" or "History"
-    url = f"{API_BASE}/Legislation/api/GetLegislationByLegislationIDAsync"
+    # CORRECT ENDPOINT (From Heist Screenshot 5.35.52 PM)
+    # Note the 's' in IDs
+    url = f"{API_BASE}/Legislation/api/GetLegislationByLegislationIDsAsync"
     
-    # Try GET first (Standard for ID fetch)
-    params = {"legislationId": HB1_ID, "sessionCode": SESSION_CODE}
+    # Payload: The API likely expects a list of integers
+    # We try two common formats for list payloads
+    payload_A = {"legislationIds": [HB1_ID], "sessionCode": SESSION_CODE}
+    payload_B = [HB1_ID] # Sometimes it just wants the raw list
+    
+    st.write(f"🚀 POSTing to `{url}`")
     
     try:
-        r = session.get(url, headers=headers, params=params, timeout=5)
+        # Attempt A (Named Parameter)
+        r = session.post(url, headers=headers, json=payload_A, timeout=5)
         
         if r.status_code == 200:
             data = r.json()
-            if data:
-                st.success("✅ Master Object Retrieved!")
+            # Unwrap
+            if isinstance(data, dict):
+                 items = data.get("Legislation") or data.get("Items") or []
+            elif isinstance(data, list):
+                items = data
+            else: items = []
+
+            if items:
+                target = items[0]
+                st.success("🎉 **MASTER RECORD FOUND!**")
                 
-                # EXTRACT CRITICAL INFO
-                c_id = data.get("CommitteeId")
-                c_name = data.get("CommitteeName")
-                status = data.get("Status")
+                # EXTRACT THE GOLD
+                c_name = target.get("CommitteeName")
+                c_id = target.get("CommitteeId")
+                status = target.get("Status")
                 
-                st.info(f"📍 **Committee Info:** ID `{c_id}` | Name: `{c_name}`")
-                st.info(f"🔄 **Current Status:** `{status}`")
+                st.info(f"📍 **Committee:** `{c_name}` (ID: {c_id})")
+                st.info(f"🔄 **Status:** {status}")
                 
-                with st.expander("View Full JSON Payload"):
-                    st.json(data)
+                with st.expander("Full Data Payload"):
+                    st.json(target)
             else:
-                st.warning("⚠️ 200 OK (Empty Result)")
-        
-        elif r.status_code == 405:
-            st.error("❌ 405 Method Not Allowed. Switching to POST...")
-            # Retry with POST
-            r2 = session.post(url, headers=headers, json=params, timeout=5)
-            if r2.status_code == 200:
-                data = r2.json()
-                st.success("✅ POST Worked!")
-                st.json(data)
-            else:
-                st.error(f"❌ POST Failed: {r2.status_code}")
+                st.warning("⚠️ 200 OK but Empty List (Payload A)")
                 
         else:
-            st.error(f"❌ Status {r.status_code}")
+            st.error(f"❌ Attempt A Failed: {r.status_code}")
+            
+            # Backup: Try Attempt B (Raw List)
+            st.write("Trying Payload B (Raw List)...")
+            r2 = session.post(url, headers=headers, json=payload_B, timeout=5)
+            if r2.status_code == 200:
+                 st.success("✅ Payload B Worked!")
+                 st.json(r2.json())
+            else:
+                 st.error(f"❌ Attempt B Failed: {r2.status_code}")
 
     except Exception as e:
         st.error(f"Error: {e}")
 
-if st.button("🔴 Run Detail Probe"):
-    run_detail_probe()
+if st.button("🔴 Run Plural Fix"):
+    run_plural_fix()
