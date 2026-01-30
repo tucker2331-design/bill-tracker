@@ -4,66 +4,40 @@ import requests
 # --- CONFIGURATION ---
 API_BASE = "https://lis.virginia.gov"
 API_KEY = "81D70A54-FCDC-4023-A00B-A3FD114D5984" 
+SESSION_CODE = "20261" # 2026 Regular
+COMMITTEE_ID = 1      # Agriculture
 
-# CONTROL GROUP (2025 Regular Session - Known Data)
-TEST_SESSION = "20251" 
-TEST_COMMITTEE = 1 # Agriculture
+st.set_page_config(page_title="v2100 GET Bypass", page_icon="↩️", layout="wide")
+st.title("↩️ v2100: The 'GET' Bypass")
 
-st.set_page_config(page_title="v2000 Handshake Protocol", page_icon="🤝", layout="wide")
-st.title("🤝 v2000: The 'Handshake' Protocol")
-
-# 1. INITIALIZE SESSION WITH BROWSER HEADERS
 session = requests.Session()
-session.headers.update({
-    'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-    'Accept': 'text/html,application/xhtml+xml,application/json;q=0.9,*/*;q=0.8',
-    'Accept-Language': 'en-US,en;q=0.9',
-    'WebAPIKey': API_KEY, # Keep our key
+headers = {
+    'User-Agent': 'Mozilla/5.0',
+    'Accept': 'application/json',
+    'Content-Type': 'application/json',
+    'WebAPIKey': API_KEY,
     'Origin': 'https://lis.virginia.gov',
     'Referer': 'https://lis.virginia.gov/'
-})
+}
 
-def run_handshake():
-    st.subheader("Step 1: Establishing Session State (The Handshake)...")
+def run_get_bypass():
+    # We are retrying the "Advanced Search" endpoint, but with GET
+    url = f"{API_BASE}/AdvancedLegislationSearch/api/GetLegislationListAsync"
     
-    # A. Hit the Home Page
-    try:
-        r1 = session.get("https://lis.virginia.gov/")
-        st.write(f"🏠 Home Page: Status {r1.status_code}")
-    except:
-        st.warning("Failed to hit home page")
-
-    # B. Hit a CGI Page (Forces ASP.NET Session generation)
-    # This is the "Bills" menu page for 2026
-    try:
-        r2 = session.get("https://lis.virginia.gov/cgi-bin/legp604.exe?261+men+BIL")
-        st.write(f"📜 CGI Portal: Status {r2.status_code}")
-    except:
-        st.warning("Failed to hit CGI portal")
-        
-    # C. CHECK COOKIES
-    cookies = session.cookies.get_dict()
-    if cookies:
-        st.success("✅ Cookies Acquired!")
-        st.json(cookies)
-    else:
-        st.warning("⚠️ No cookies received. Server might be stateless (unlikely).")
-
-    # --- STEP 2: RETRY THE SEARCH (WITH COOKIES) ---
-    st.divider()
-    st.subheader(f"Step 2: Retrying 2025 Search (Session {TEST_SESSION})...")
+    st.subheader(f"Targeting: `{url}` (Method: GET)")
     
-    search_url = f"{API_BASE}/AdvancedLegislationSearch/api/GetLegislationListAsync"
-    
-    payload = {
-        "SessionCode": TEST_SESSION,
-        "CommitteeId": TEST_COMMITTEE,
-        "ChamberCode": "H"
+    # CONVERT PAYLOAD TO QUERY PARAMS
+    # Note: trying both PascalCase and camelCase keys just to be safe
+    params = {
+        "sessionCode": SESSION_CODE,
+        "committeeId": COMMITTEE_ID,
+        "chamberCode": "H"
     }
     
+    st.write("🚀 Sending GET Params:", params)
+    
     try:
-        # We perform the same POST request as v1900, but now we have cookies
-        r = session.post(search_url, json=payload, timeout=10)
+        r = session.get(url, headers=headers, params=params, timeout=10)
         
         if r.status_code == 200:
             data = r.json()
@@ -78,20 +52,36 @@ def run_handshake():
                 bills = data
             
             if bills:
-                st.success(f"🎉 **HANDSHAKE SUCCESS!** Found {len(bills)} bills!")
-                st.dataframe(bills[:5])
+                st.success(f"🎉 **BYPASS SUCCESS!** Found {len(bills)} bills using GET!")
+                st.dataframe(bills[:10])
                 st.balloons()
             else:
-                st.warning("⚠️ 200 OK (Empty List) - Cookies didn't fix it.")
-                st.write("Response:", data)
+                st.warning("⚠️ 200 OK (Empty List) - GET worked, but returned no data.")
                 
-        elif r.status_code == 204:
-            st.error("❌ Still 204 No Content.")
+        elif r.status_code == 405:
+            st.error("❌ 405 Method Not Allowed (The server specifically forbids GET on this endpoint).")
         else:
             st.error(f"❌ Failed: {r.status_code}")
             
     except Exception as e:
         st.error(f"Error: {e}")
 
-if st.button("🔴 Run Handshake"):
-    run_handshake()
+    # --- TEST 2: HISTORY BYPASS ---
+    st.divider()
+    st.subheader("Test 2: History GET Bypass (2024 Control Bill)")
+    # We try to get history for the 2024 Control Bill (ID 91072) using GET
+    hist_url = f"{API_BASE}/Legislation/api/GetLegislationStatusHistoryByLegislationIDAsync"
+    hist_params = {"legislationId": 91072, "sessionCode": "20241"}
+    
+    try:
+        r2 = session.get(hist_url, headers=headers, params=hist_params, timeout=5)
+        if r2.status_code == 200:
+             st.success("🎉 **HISTORY UNLOCKED via GET!**")
+             st.json(r2.json())
+        else:
+             st.error(f"❌ History GET Failed: {r2.status_code}")
+    except:
+        pass
+
+if st.button("🔴 Run GET Bypass"):
+    run_get_bypass()
