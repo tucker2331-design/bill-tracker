@@ -28,7 +28,7 @@ COMMITTEE_MAP = {
     "H07": "House Appropriations", "H08": "House Counties, Cities and Towns", 
     "H10": "House Health, Welfare and Institutions", "H11": "House Conservation and Natural Resources",
     "H12": "House Agriculture", "H13": "House Militia, Police and Public Safety", 
-    "H14": "House Labor and Commerce", # <--- FIXED: Correct committee for HB1
+    "H14": "House Labor and Commerce",
     "H15": "House Chesapeake and Its Tributaries", "H16": "House Mining and Mineral Resources",
     "H17": "House Corporations, Insurance and Banking", "H18": "House Rules", "H19": "House Nominations and Confirmations",
     "H20": "House Interstate Cooperation", "H21": "House Science and Technology", "H22": "House Courts of Justice",
@@ -147,11 +147,7 @@ def determine_lifecycle(status_text, committee_name, bill_id="", history_text=""
     if any(x in status for x in ["enrolled", "communicated to governor", "bill text as passed"]): return "✍️ Awaiting Signature"
 
     # 2. FAILED / DEAD
-    # We check status AND history. 
-    # note: We use "laying on the table" specifically to avoid matching 'Equitable' or 'Vegetable'.
     dead_keywords_status = ["tabled", "failed", "stricken", "passed by indefinitely", "left in", "defeated", "no action taken", "incorporated into", "laying on the table", "lay on the table"]
-    
-    # For history, we are more specific to avoid false positives like "Amendment failed"
     dead_keywords_history = ["failed to report", "passed by indefinitely", "stricken from", "left in ", "laying on the table", "lay on the table", "defeated"]
 
     if any(x in status for x in dead_keywords_status): return "❌ Dead / Tabled"
@@ -167,16 +163,14 @@ def determine_lifecycle(status_text, committee_name, bill_id="", history_text=""
     return "📥 In Committee"
 
 def clean_committee_name(name):
-    """Standardizes committee names, now LESS aggressive to preserve Subcommittee info."""
+    """Standardizes committee names."""
     if not name or str(name).lower() == 'nan': return ""
     name = str(name).strip()
     if name in COMMITTEE_MAP: return COMMITTEE_MAP[name]
     if name.startswith("H-") or name.startswith("S-") or name.startswith("h-") or name.startswith("s-"): name = name[2:]
     
-    # Remove specific politician names but KEEP "Subcommittee" and numbers
     name = re.sub(r'\b(Simon|Rasoul|Willett|Helmer|Lucas|Surovell|Locke|Deeds|Favola|Marsden|Ebbin|McPike|Hayes|Carroll Foy)\b.*', '', name, flags=re.IGNORECASE)
     
-    # Clean up standard artifacts
     name = name.replace("Committee For", "").replace("Committee On", "").replace("Committee", "").strip()
     return name.title()
 
@@ -323,6 +317,24 @@ def get_bill_data_batch(bill_numbers, lis_data_dict):
                         try: curr_sub = desc_lower.split("sub:")[1].strip().title()
                         except: pass
         
+        # --- DATA LAG PATCH START ---
+        # If Status (Current) is NOT in History (Log), force inject it to keep UI consistent
+        current_status_clean = str(status).strip()
+        should_inject = False
+        
+        if not history_data:
+             if current_status_clean and current_status_clean.lower() != "introduced": should_inject = True
+        else:
+             # Check against the most recent history item (last in list before reversal)
+             last_hist_text = history_data[-1]['Action'].strip()
+             if current_status_clean.lower() not in last_hist_text.lower():
+                 should_inject = True
+        
+        if should_inject and current_status_clean:
+             # We add a pin 📍 to indicate this is the live status pushed into history
+             history_data.append({"Date": date_val, "Action": f"📍 {current_status_clean}"})
+        # --- DATA LAG PATCH END ---
+
         if curr_comm == "-":
             val = item.get('last_house_committee')
             if not val or str(val) == 'nan':
