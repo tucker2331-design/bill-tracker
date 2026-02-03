@@ -327,11 +327,11 @@ def get_bill_data_batch(bill_numbers, lis_data_dict):
                         except: pass
         
         # --- SMART STATUS SWAP ---
-        # If the LIS Status is boring noise (e.g. Fiscal Impact), overwrite it with the meaningful History item
+        # If the LIS Status is boring noise (e.g. Fiscal Impact, Substitute Offered), overwrite it with the meaningful History item
         # This ensures the bill gets sorted correctly into Passed/Failed instead of 'In Committee'
         
         current_status_clean = str(status).strip()
-        noise_phrases = ["fiscal impact statement", "impact statement from", "vote detail pending", "statement from department"]
+        noise_phrases = ["fiscal impact statement", "impact statement from", "vote detail pending", "statement from department", "substitute offered", "committee offered", "amendment offered"]
         is_noise = any(n in current_status_clean.lower() for n in noise_phrases)
         
         if is_noise and history_data:
