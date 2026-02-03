@@ -125,7 +125,7 @@ def clean_bill_id(bill_text):
     return clean
 
 def determine_lifecycle(status_text, committee_name, bill_id="", history_text=""):
-    """Updated to strictly check History for failure and handle 'laying on the table'."""
+    """Updated to exclude subcommittee recommendations from killing the bill."""
     status = str(status_text).lower()
     comm = str(committee_name).strip()
     b_id = str(bill_id).upper()
@@ -150,8 +150,17 @@ def determine_lifecycle(status_text, committee_name, bill_id="", history_text=""
     dead_keywords_status = ["tabled", "failed", "stricken", "passed by indefinitely", "left in", "defeated", "no action taken", "incorporated into", "laying on the table", "lay on the table"]
     dead_keywords_history = ["failed to report", "passed by indefinitely", "stricken from", "left in ", "laying on the table", "lay on the table", "defeated"]
 
-    if any(x in status for x in dead_keywords_status): return "❌ Dead / Tabled"
-    if any(x in hist for x in dead_keywords_history): return "❌ Dead / Tabled"
+    # Check Status for Death (with safeguard for Recommendations)
+    if any(x in status for x in dead_keywords_status):
+        # A recommendation is NOT a final action
+        if "recommend" not in status: 
+            return "❌ Dead / Tabled"
+            
+    # Check History for Death (History is usually final actions)
+    if any(x in hist for x in dead_keywords_history): 
+        # Double check it wasn't a "failed amendment" or "recommendation"
+        if "amendment" not in hist and "recommend" not in hist:
+            return "❌ Dead / Tabled"
     
     # 3. OUT OF COMMITTEE
     out_keywords = ["reported", "passed", "agreed", "engrossed", "communicated", "reading waived", "read second", "read third"]
@@ -317,23 +326,36 @@ def get_bill_data_batch(bill_numbers, lis_data_dict):
                         try: curr_sub = desc_lower.split("sub:")[1].strip().title()
                         except: pass
         
-        # --- DATA LAG PATCH START ---
-        # If Status (Current) is NOT in History (Log), force inject it to keep UI consistent
-        current_status_clean = str(status).strip()
-        should_inject = False
+        # --- SMART STATUS SWAP ---
+        # If the LIS Status is boring noise (e.g. Fiscal Impact), overwrite it with the meaningful History item
+        # This ensures the bill gets sorted correctly into Passed/Failed instead of 'In Committee'
         
-        if not history_data:
-             if current_status_clean and current_status_clean.lower() != "introduced": should_inject = True
-        else:
-             # Check against the most recent history item (last in list before reversal)
-             last_hist_text = history_data[-1]['Action'].strip()
-             if current_status_clean.lower() not in last_hist_text.lower():
-                 should_inject = True
+        current_status_clean = str(status).strip()
+        noise_phrases = ["fiscal impact statement", "impact statement from", "vote detail pending", "statement from department"]
+        is_noise = any(n in current_status_clean.lower() for n in noise_phrases)
+        
+        if is_noise and history_data:
+             # Look at the most recent history item (last in the list)
+             latest_history = history_data[-1]['Action'].strip()
+             # If the history item is MEANINGFUL, swap it in as the status
+             meaningful_keywords = ["failed", "passed", "reported", "tabled", "defeated", "agreed", "engrossed"]
+             if any(m in latest_history.lower() for m in meaningful_keywords):
+                 status = latest_history # <--- THE SWAP
+                 current_status_clean = latest_history
+
+        # Only inject pin if the status is NOT in history AND not noise
+        should_inject = False
+        if not is_noise:
+            if not history_data:
+                 if current_status_clean and current_status_clean.lower() != "introduced": should_inject = True
+            else:
+                 last_hist_text = history_data[-1]['Action'].strip()
+                 if current_status_clean.lower() not in last_hist_text.lower():
+                     should_inject = True
         
         if should_inject and current_status_clean:
-             # We add a pin 📍 to indicate this is the live status pushed into history
              history_data.append({"Date": date_val, "Action": f"📍 {current_status_clean}"})
-        # --- DATA LAG PATCH END ---
+        # --- END PATCH ---
 
         if curr_comm == "-":
             val = item.get('last_house_committee')
@@ -430,6 +452,16 @@ def render_bill_card(row, show_youth_tag=False):
         b_num_display = f"👶 {b_num_display}"
     
     st.markdown(f"**{b_num_display}**")
+    
+    # NEW: Display Lifecycle State Promptly
+    lifecycle = str(row.get('Lifecycle', ''))
+    if "Dead" in lifecycle or "Vetoed" in lifecycle:
+        st.error(f"💀 {lifecycle}")
+    elif "Passed" in lifecycle or "Signed" in lifecycle:
+        st.success(f"🎉 {lifecycle}")
+    elif "Out of Committee" in lifecycle:
+        st.warning(f"📣 {lifecycle}")
+
     my_status = str(row.get('My Status', '')).strip()
     if my_status and my_status != 'nan' and my_status != '-': st.info(f"🏷️ **Status:** {my_status}")
     st.caption(f"{title}"); st.caption(f"_{clean_status_text(row.get('Status'))}_")
