@@ -326,36 +326,51 @@ def get_bill_data_batch(bill_numbers, lis_data_dict):
                         try: curr_sub = desc_lower.split("sub:")[1].strip().title()
                         except: pass
         
-        # --- SMART STATUS SWAP ---
-        # If the LIS Status is boring noise (e.g. Fiscal Impact, Substitute Offered), overwrite it with the meaningful History item
-        # This ensures the bill gets sorted correctly into Passed/Failed instead of 'In Committee'
-        
-        current_status_clean = str(status).strip()
-        noise_phrases = ["fiscal impact statement", "impact statement from", "vote detail pending", "statement from department", "substitute offered", "committee offered", "amendment offered"]
-        is_noise = any(n in current_status_clean.lower() for n in noise_phrases)
-        
-        if is_noise and history_data:
-             # Look at the most recent history item (last in the list)
-             latest_history = history_data[-1]['Action'].strip()
-             # If the history item is MEANINGFUL, swap it in as the status
-             meaningful_keywords = ["failed", "passed", "reported", "tabled", "defeated", "agreed", "engrossed"]
-             if any(m in latest_history.lower() for m in meaningful_keywords):
-                 status = latest_history # <--- THE SWAP
-                 current_status_clean = latest_history
+        # --- GROUND UP PIN LOGIC (REPLACES OLD DATA LAG PATCH) ---
+        # Logic: 
+        # 1. Compare Dates: If History is NEWER than Status -> TRUST HISTORY (Don't pin).
+        # 2. Check Redundancy: If Status is already in History -> TRUST HISTORY (Don't pin).
+        # 3. Check Junk: If Status is "Fiscal Impact", etc. -> IGNORE (Don't pin).
+        # 4. Only Pin if it survives all checks.
 
-        # Only inject pin if the status is NOT in history AND not noise
-        should_inject = False
-        if not is_noise:
-            if not history_data:
-                 if current_status_clean and current_status_clean.lower() != "introduced": should_inject = True
-            else:
-                 last_hist_text = history_data[-1]['Action'].strip()
-                 if current_status_clean.lower() not in last_hist_text.lower():
-                     should_inject = True
-        
-        if should_inject and current_status_clean:
-             history_data.append({"Date": date_val, "Action": f"📍 {current_status_clean}"})
-        # --- END PATCH ---
+        # 1. Identify Dates
+        status_date_obj = None
+        try: status_date_obj = datetime.strptime(str(date_val), "%Y-%m-%d").date()
+        except: pass
+
+        latest_hist_date_obj = None
+        if history_data:
+            # Find the latest date in the history list (list order might be unreliable)
+            dates = []
+            for h in history_data:
+                try: dates.append(datetime.strptime(str(h['Date']), "%Y-%m-%d").date())
+                except: pass
+            if dates: latest_hist_date_obj = max(dates)
+
+        # 2. Determine "Freshness"
+        # If History has a date LATER than the Status date, the Status is stale.
+        is_status_stale = False
+        if status_date_obj and latest_hist_date_obj:
+            if status_date_obj < latest_hist_date_obj:
+                is_status_stale = True
+
+        # 3. Check for Content Duplication (fuzzy match)
+        status_text_clean = str(status).strip().lower()
+        is_in_history = any(status_text_clean in str(h['Action']).lower() for h in history_data)
+
+        # 4. Check for Low-Value "Junk" (Specific administrative exclusions)
+        junk_triggers = ["fiscal impact", "statement from", "vote detail", "introduced"]
+        is_junk = any(j in status_text_clean for j in junk_triggers)
+
+        # 5. EXECUTE PIN
+        should_pin = False
+        if not is_status_stale and not is_in_history and not is_junk:
+            # Only if it's NOT stale, NOT already there, and NOT junk.
+            should_pin = True
+
+        if should_pin:
+             history_data.append({"Date": date_val, "Action": f"📍 {str(status).strip()}"})
+        # --- END GROUND UP LOGIC ---
 
         if curr_comm == "-":
             val = item.get('last_house_committee')
