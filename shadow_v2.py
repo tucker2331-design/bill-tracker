@@ -44,7 +44,7 @@ COMMITTEE_MAP = {
 # --- KEYWORD DEFINITIONS ---
 YOUTH_KEYWORDS = ["child", "youth", "juvenile", "minor", "student", "school", "parental", "infant", "baby", "child custody", "foster", "adoption", "delinquen"]
 
-# UPDATED: Added Plurals (firearms) and Compound Words (groundwater)
+# UPDATED: Added Veterans Category & Plurals for Safety
 TOPIC_KEYWORDS = {
     "🗳️ Elections & Democracy": ["election", "vote", "ballot", "campaign", "poll", "voter", "registrar", "districting", "suffrage", "voting"],
     "🏗️ Housing & Property": ["rent", "landlord", "tenant", "housing", "lease", "property", "zoning", "eviction", "homeowner", "residential", "condo", "building code"],
@@ -52,6 +52,7 @@ TOPIC_KEYWORDS = {
     "✊ Labor & Workers Rights": ["wage", "salary", "worker", "employment", "labor", "union", "bargaining", "leave", "compensation", "workplace", "employee", "minimum", "overtime"],
     "💰 Economy & Business": ["tax", "commerce", "business", "market", "consumer", "corporation", "finance", "budget", "economic", "trade", "gaming", "casino", "abc", "alcohol"],
     "🎓 Education": ["school", "student", "education", "university", "college", "teacher", "curriculum", "scholarship", "tuition", "board of education", "higher education", "academic", "instruction", "learning", "literacy", "principal", "superintendent"],
+    "🪖 Veterans & Military Affairs": ["veteran", "military", "armed forces", "national guard", "service member", "deployment", "civilian life"],
     "🚓 Public Safety": ["firearm", "firearms", "gun", "guns", "police", "crime", "penalty", "enforcement", "prison", "arrest", "criminal", "weapon", "weapons", "ammo", "magazine", "correctional", "facility", "incarcerat", "jail"],
     "⚖️ Criminal Justice & Courts": ["court", "judge", "attorney", "civil", "suit", "liability", "damages", "evidence", "jury", "appeal", "justice", "lawyer", "bar", "probation", "parole", "sentence", "sentencing", "custody", "divorce", "domestic", "violence", "abuse", "victim", "protective order"],
     "🏥 Health & Healthcare": ["health", "medical", "hospital", "patient", "doctor", "insurance", "care", "mental", "pharmacy", "drug", "medicaid", "nurse"],
@@ -75,31 +76,35 @@ def get_smart_subject(row):
     title_lower = title.lower()
     comm = str(row.get('Current_Committee', '')).strip()
     
-    if "Education" in comm and "Health" not in comm: return "🎓 Education"
-    if "Agriculture" in comm or "Chesapeake" in comm or "Conservation" in comm: return "🌳 Environment & Energy"
-    if "Transportation" in comm: return "🚗 Transportation"
-    if "Communications" in comm or "Technology" in comm: return "💻 Tech & Utilities"
-    if "Privileges" in comm and "Elections" in comm: return "🗳️ Elections & Democracy"
-    if "Finance" in comm or "Appropriations" in comm: return "💰 Economy & Business"
-    if "Commerce" in comm and "Labor" in comm: return "💰 Economy & Business"
+    # CASE INSENSITIVE COMMITTEE MATCHING (Fixes "Courts Of Justice" bug)
+    comm_lower = comm.lower()
     
-    if "Counties" in comm or "Local Government" in comm:
+    if "education" in comm_lower and "health" not in comm_lower: return "🎓 Education"
+    if "agriculture" in comm_lower or "chesapeake" in comm_lower or "conservation" in comm_lower: return "🌳 Environment & Energy"
+    if "transportation" in comm_lower: return "🚗 Transportation"
+    if "communications" in comm_lower or "technology" in comm_lower: return "💻 Tech & Utilities"
+    if "privileges" in comm_lower and "elections" in comm_lower: return "🗳️ Elections & Democracy"
+    if "finance" in comm_lower or "appropriations" in comm_lower: return "💰 Economy & Business"
+    if "commerce" in comm_lower and "labor" in comm_lower: return "💰 Economy & Business"
+    
+    if "counties" in comm_lower or "local government" in comm_lower:
         if any(x in title_lower for x in ["zoning", "rent", "housing", "tenant", "landlord", "eviction", "lease", "property", "condo"]): return "🏗️ Housing & Property"
         return "🏛️ Local Government" 
 
-    if "Courts of Justice" in comm:
+    # FIXED: Now catches "Courts Of Justice" (capital O) by checking lowercase
+    if "courts of justice" in comm_lower:
         if any(x in title_lower for x in ["firearm", "gun", "weapon", "ammunition", "concealed", "magazine", "carry"]): return "🚓 Public Safety"
         return "⚖️ Criminal Justice & Courts"
 
-    if "Public Safety" in comm: return "🚓 Public Safety"
+    if "public safety" in comm_lower: return "🚓 Public Safety"
 
-    if "Education" in comm and "Health" in comm:
+    if "education" in comm_lower and "health" in comm_lower:
         if any(x in title_lower for x in ["health", "medical", "nursing", "doctor", "patient", "hospital", "professions"]): return "🏥 Health & Healthcare"
         return "🎓 Education" 
 
-    if "Health" in comm and "Education" not in comm: return "🏥 Health & Healthcare"
+    if "health" in comm_lower and "education" not in comm_lower: return "🏥 Health & Healthcare"
     
-    if "General Laws" in comm:
+    if "general laws" in comm_lower:
         if any(x in title_lower for x in ["housing", "real estate", "property", "landlord"]): return "🏗️ Housing & Property"
         if any(x in title_lower for x in ["gaming", "alcohol", "abc", "casino"]): return "💰 Economy & Business"
 
