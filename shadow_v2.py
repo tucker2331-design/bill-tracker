@@ -44,7 +44,7 @@ COMMITTEE_MAP = {
 # --- KEYWORD DEFINITIONS ---
 YOUTH_KEYWORDS = ["child", "youth", "juvenile", "minor", "student", "school", "parental", "infant", "baby", "child custody", "foster", "adoption", "delinquen"]
 
-# UPDATED: Added Veterans Category. Regex logic handles plurals automatically now.
+# UPDATED: Added irregular plurals. Standard plurals (s/es) are now handled by logic.
 TOPIC_KEYWORDS = {
     "🗳️ Elections & Democracy": ["election", "vote", "ballot", "campaign", "poll", "voter", "registrar", "districting", "suffrage", "voting", "democracy"],
     "🏗️ Housing & Property": ["rent", "landlord", "tenant", "housing", "lease", "property", "zoning", "eviction", "homeowner", "residential", "condo", "building code"],
@@ -63,13 +63,8 @@ TOPIC_KEYWORDS = {
 }
 
 def match_whole_word(text, keyword_list):
-    """
-    Returns True if a keyword matches. 
-    UPDATED: Now automatically handles plurals (adds optional 's' or 'es' to pattern).
-    Example: 'veteran' now matches 'veterans'; 'tax' matches 'taxes'.
-    """
+    """Returns True if a keyword matches (Singular OR Plural)."""
     for k in keyword_list:
-        # The pattern \b(key)(?:es|s)?\b matches the word plus optional 's' or 'es' suffix
         pattern = r'\b' + re.escape(k) + r'(?:es|s)?\b'
         if re.search(pattern, text, re.IGNORECASE):
             return True
@@ -80,8 +75,6 @@ def get_smart_subject(row):
     title = str(row.get('Official Title', '')) + " " + str(row.get('My Title', ''))
     title_lower = title.lower()
     comm = str(row.get('Current_Committee', '')).strip()
-    
-    # CASE INSENSITIVE COMMITTEE MATCHING (Fixes "Courts Of Justice" bug)
     comm_lower = comm.lower()
     
     if "education" in comm_lower and "health" not in comm_lower: return "🎓 Education"
@@ -96,7 +89,6 @@ def get_smart_subject(row):
         if any(x in title_lower for x in ["zoning", "rent", "housing", "tenant", "landlord", "eviction", "lease", "property", "condo"]): return "🏗️ Housing & Property"
         return "🏛️ Local Government" 
 
-    # FIXED: Now catches "Courts Of Justice" (capital O) by checking lowercase
     if "courts of justice" in comm_lower:
         if any(x in title_lower for x in ["firearm", "gun", "weapon", "ammunition", "concealed", "magazine", "carry"]): return "🚓 Public Safety"
         return "⚖️ Criminal Justice & Courts"
@@ -151,13 +143,12 @@ def clean_bill_id(bill_text):
     return clean
 
 def determine_lifecycle(status_text, committee_name, bill_id="", history_text=""):
-    """Updated to exclude subcommittee recommendations from killing the bill."""
+    """Determines bill status based on text and history."""
     status = str(status_text).lower()
     comm = str(committee_name).strip()
     b_id = str(bill_id).upper()
     hist = str(history_text).lower()
     
-    # 1. PASSED / ENACTED
     if any(x in status for x in ["signed by governor", "enacted", "approved by governor", "chapter"]): return "✅ Signed & Enacted"
     if "vetoed" in status: return "❌ Vetoed"
     
@@ -172,32 +163,20 @@ def determine_lifecycle(status_text, committee_name, bill_id="", history_text=""
 
     if any(x in status for x in ["enrolled", "communicated to governor", "bill text as passed"]): return "✍️ Awaiting Signature"
 
-    # 2. FAILED / DEAD
     dead_keywords_status = ["tabled", "failed", "stricken", "passed by indefinitely", "left in", "defeated", "no action taken", "incorporated into", "laying on the table", "lay on the table"]
     dead_keywords_history = ["failed to report", "passed by indefinitely", "stricken from", "left in ", "laying on the table", "lay on the table", "defeated"]
 
-    # Check Status for Death (with safeguard for Recommendations)
     if any(x in status for x in dead_keywords_status):
-        # A recommendation is NOT a final action
-        if "recommend" not in status: 
-            return "❌ Dead / Tabled"
+        if "recommend" not in status: return "❌ Dead / Tabled"
             
-    # Check History for Death (History is usually final actions)
     if any(x in hist for x in dead_keywords_history): 
-        # Double check it wasn't a "failed amendment" or "recommendation"
-        if "amendment" not in hist and "recommend" not in hist:
-            return "❌ Dead / Tabled"
+        if "amendment" not in hist and "recommend" not in hist: return "❌ Dead / Tabled"
     
-    # 3. PRIORITY CHECK: REFERRED (Force In Committee)
-    # CRITICAL FIX: Ensure 'Referred' forces 'In Committee' UNLESS it is referring to the Governor
-    if "referred to" in status and "governor" not in status: 
-        return "📥 In Committee"
+    if "referred to" in status and "governor" not in status: return "📥 In Committee"
 
-    # 4. OUT OF COMMITTEE
     out_keywords = ["reported", "passed", "agreed", "engrossed", "communicated", "reading waived", "read second", "read third"]
     if any(x in status for x in out_keywords): return "📣 Out of Committee"
     
-    # 5. IN COMMITTEE (Default Fallback)
     if "pending" in status or "prefiled" in status: return "📥 In Committee"
     if comm not in ["-", "nan", "None", "", "Unassigned"] and len(comm) > 2: return "📥 In Committee"
     return "📥 In Committee"
@@ -207,11 +186,17 @@ def clean_committee_name(name):
     if not name or str(name).lower() == 'nan': return ""
     name = str(name).strip()
     if name in COMMITTEE_MAP: return COMMITTEE_MAP[name]
-    if name.startswith("H-") or name.startswith("S-") or name.startswith("h-") or name.startswith("s-"): name = name[2:]
     
     name = re.sub(r'\b(Simon|Rasoul|Willett|Helmer|Lucas|Surovell|Locke|Deeds|Favola|Marsden|Ebbin|McPike|Hayes|Carroll Foy)\b.*', '', name, flags=re.IGNORECASE)
     
+    # Strip (Subcommittee: X) pattern from main name
+    name = re.sub(r'\(?Subcommittee:.*?\)?', '', name, flags=re.IGNORECASE)
     name = name.replace("Committee For", "").replace("Committee On", "").replace("Committee", "").strip()
+    
+    # Add Space between House/Senate and Committee Name if missing
+    if name.startswith("H") and name[1].isupper() and not name.startswith("House"): name = "House " + name[1:]
+    if name.startswith("S") and name[1].isupper() and not name.startswith("Senate"): name = "Senate " + name[1:]
+    
     return name.title()
 
 def clean_status_text(text):
@@ -330,21 +315,17 @@ def get_bill_data_batch(bill_numbers, lis_data_dict):
         item = lis_lookup.get(bill_num)
         title = "Unknown"; status = "Not Found"; date_val = ""; curr_comm = "-"; curr_sub = "-"; history_data = []
         
-        # --- NEW LOGIC: ROBUST LATEST DATE WINS ---
         if item:
             title = item.get('bill_description', 'No Title')
             
-            # 1. Extract House Data
             h_act = str(item.get('last_house_action', ''))
             h_date = parse_any_date(item.get('last_house_action_date', ''))
             h_date_str = str(item.get('last_house_action_date', ''))
 
-            # 2. Extract Senate Data
             s_act = str(item.get('last_senate_action', ''))
             s_date = parse_any_date(item.get('last_senate_action_date', ''))
             s_date_str = str(item.get('last_senate_action_date', ''))
 
-            # 3. Compare and Select the Winner
             if s_date > h_date:
                 status = s_act
                 date_val = s_date_str
@@ -352,7 +333,6 @@ def get_bill_data_batch(bill_numbers, lis_data_dict):
                 status = h_act
                 date_val = h_date_str
             else:
-                # Dates are equal or both min: default logic
                 if not h_act and s_act:
                     status = s_act
                     date_val = s_date_str
@@ -362,8 +342,6 @@ def get_bill_data_batch(bill_numbers, lis_data_dict):
             
             if not status or status == 'nan':
                 status = "Introduced"
-
-        # --- END NEW LOGIC ---
 
         raw_history = history_lookup.get(bill_num, [])
         history_blob = ""
@@ -379,16 +357,12 @@ def get_bill_data_batch(bill_numbers, lis_data_dict):
                     history_blob += desc.lower() + " "
                     desc_lower = desc.lower()
                     if "referred to" in desc_lower:
-                        # UPDATED REGEX: To handle "committee for" and other variations
                         match = re.search(r'referred to (?:committee on|the committee on|committee for)?\s?([a-z\s&,-]+)', desc_lower)
                         if match: found = match.group(1).strip().title(); curr_comm = found if len(found) > 3 else curr_comm
                     if "sub:" in desc_lower:
                         try: curr_sub = desc_lower.split("sub:")[1].strip().title()
                         except: pass
         
-        # --- GROUND UP PIN LOGIC & STALE STATUS OVERWRITE ---
-        
-        # 1. Identify Dates using ROBUST Parser
         status_date_obj = parse_any_date(date_val)
 
         latest_hist_date_obj = None
@@ -400,14 +374,11 @@ def get_bill_data_batch(bill_numbers, lis_data_dict):
                     dates.append(d)
             if dates: latest_hist_date_obj = max(dates)
 
-        # 2. Determine "Freshness"
-        # If History has a date LATER than the Status date, the Status is stale.
         is_status_stale = False
         if status_date_obj and latest_hist_date_obj:
             if status_date_obj < latest_hist_date_obj:
                 is_status_stale = True
 
-        # --- CRITICAL FIX: OVERWRITE STALE STATUS ---
         if is_status_stale and history_data:
              latest_history_item = history_data[-1] 
              status = latest_history_item['Action']
@@ -415,20 +386,16 @@ def get_bill_data_batch(bill_numbers, lis_data_dict):
              status_date_obj = latest_hist_date_obj 
              is_status_stale = False
 
-        # 3. Check for Content Duplication (fuzzy match)
         status_text_clean = str(status).strip().lower()
         is_in_history = any(status_text_clean in str(h['Action']).lower() for h in history_data)
 
-        # 4. Check for Low-Value "Junk"
         junk_triggers = ["fiscal impact", "statement from", "vote detail", "introduced", "assigned", "placed on", "offered"]
         is_junk = any(j in status_text_clean for j in junk_triggers)
         
-        # --- SMART SWAP FIX: DEEP SEARCH FOR MEANING (Fixes SB6) ---
         if is_junk and history_data:
              meaningful_keywords = ["failed", "passed", "reported", "tabled", "defeated", "agreed", "engrossed", "approved", "enacted", "signed", "vetoed", "chapter"]
              found_meaningful = None
              
-             # history_data is chronological (oldest -> newest), so iterate backwards
              for h in reversed(history_data):
                  act = str(h['Action']).strip()
                  if any(m in act.lower() for m in meaningful_keywords):
@@ -438,9 +405,8 @@ def get_bill_data_batch(bill_numbers, lis_data_dict):
              if found_meaningful:
                  status = found_meaningful
                  current_status_clean = found_meaningful
-                 is_junk = False # It is now meaningful
+                 is_junk = False 
 
-        # 5. EXECUTE PIN
         should_pin = False
         is_status_newer = False
         if status_date_obj and latest_hist_date_obj:
@@ -455,7 +421,6 @@ def get_bill_data_batch(bill_numbers, lis_data_dict):
 
         if should_pin:
              history_data.append({"Date": date_val, "Action": f"📍 {str(status).strip()}"})
-        # --- END GROUND UP LOGIC ---
 
         if curr_comm == "-":
             val = item.get('last_house_committee')
@@ -553,7 +518,6 @@ def render_bill_card(row, show_youth_tag=False):
     
     st.markdown(f"**{b_num_display}**")
     
-    # NEW: Display Lifecycle State Promptly
     lifecycle = str(row.get('Lifecycle', ''))
     if "Dead" in lifecycle or "Vetoed" in lifecycle:
         st.error(f"💀 {lifecycle}")
@@ -573,27 +537,70 @@ def render_bill_card(row, show_youth_tag=False):
 
 def render_grouped_list_item(df):
     if df.empty: st.caption("No bills."); return
-    def rename_unassigned(name):
+    
+    # 1. HELPER TO MERGE & SORT
+    def clean_and_merge_names(name):
         name = str(name).strip()
         if name in ['-', 'nan', 'None', '', '0', 'Unassigned']: return "Unassigned"
-        if name == "House -": return "House - Unassigned"
-        if name == "Senate -": return "Senate - Unassigned"
-        if name.endswith("-"): return name + " Unassigned"
-        return name
-    df['Display_Comm_Group'] = df['Current_Committee'].fillna('-').apply(rename_unassigned)
+        
+        # Remove "House" and "Senate" ONLY if the name matches a shared committee
+        # List of shared committees that should be merged
+        shared_committees = ["Agriculture", "Appropriations", "Finance", "Education", "Transportation", "Commerce and Labor", "General Laws", "Privileges and Elections", "Rules", "Courts of Justice"]
+        
+        name_lower = name.lower()
+        for shared in shared_committees:
+            if shared.lower() in name_lower:
+                return shared # Return the clean, shared name (e.g., "Agriculture")
+        
+        return name # Return original if unique (e.g., "House Militia...")
+
+    df['Display_Comm_Group'] = df['Current_Committee'].fillna('-').apply(clean_and_merge_names)
     df['Current_Sub'] = df['Current_Sub'].fillna('-')
-    def sort_key(name): return ("Unassigned" in name, name)
-    unique_committees = sorted(df['Display_Comm_Group'].unique(), key=sort_key)
+    
+    # 2. HELPER TO DISPLAY BADGES
+    def get_chamber_badge(bill_num):
+        if str(bill_num).upper().startswith('H'): return "🏛️ [H]"
+        if str(bill_num).upper().startswith('S'): return "🏛️ [S]"
+        return ""
+
+    unique_committees = sorted(df['Display_Comm_Group'].unique())
+    
     for comm_name in unique_committees:
-        if "Unassigned" in comm_name: st.markdown(f"##### 📂 {comm_name}")
+        if comm_name == "Unassigned": st.markdown(f"##### 📂 {comm_name}")
         else: st.markdown(f"##### 🏛️ {comm_name}")
+        
         comm_df = df[df['Display_Comm_Group'] == comm_name]
+        
+        # Merge identical subcommittees
         unique_subs = sorted([s for s in comm_df['Current_Sub'].unique() if s != '-'])
         if '-' in comm_df['Current_Sub'].unique(): unique_subs.insert(0, '-')
+        
         for sub_name in unique_subs:
-            if sub_name != '-': st.markdown(f"**↳ {sub_name}**") 
+            if sub_name != '-': st.markdown(f"**↳ Subcommittee: {sub_name}**") 
             sub_df = comm_df[comm_df['Current_Sub'] == sub_name]
-            for i, row in sub_df.iterrows(): _render_single_bill_row(row)
+            
+            for i, row in sub_df.iterrows(): 
+                # Custom renderer to include badge
+                title = row.get('Official Title', 'No Title')
+                if title in ["Unknown", "Error", None]: title = row.get('My Title', 'No Title')
+                my_status = str(row.get('My Status', '')).strip()
+                badge = get_chamber_badge(row['Bill Number'])
+                label_text = f"{badge} {row['Bill Number']}"
+                if my_status and my_status != 'nan' and my_status != '-': label_text += f" - {my_status}"
+                if title: label_text += f" - {title}"
+                
+                with st.expander(label_text):
+                    st.markdown(f"**🏛️ Current Status:** {row.get('Display_Committee', '-')}")
+                    if row.get('Current_Sub') and row.get('Current_Sub') != '-': st.markdown(f"**↳ Subcommittee:** {row.get('Current_Sub')}")
+                    st.markdown(f"**📌 Designated Title:** {row.get('My Title', '-')}")
+                    st.markdown(f"**📜 Official Title:** {row.get('Official Title', '-')}")
+                    st.markdown(f"**🔄 Status:** {clean_status_text(row.get('Status', '-'))}")
+                    hist_data = row.get('History_Data', [])
+                    if isinstance(hist_data, list) and hist_data:
+                        st.markdown("**📜 History:**"); st.dataframe(pd.DataFrame(hist_data), hide_index=True, use_container_width=True)
+                    else: st.caption(f"Date: {row.get('Date', '-')}")
+                    lis_link = f"https://lis.virginia.gov/bill-details/20261/{row['Bill Number']}"
+                    st.markdown(f"🔗 [View Official Bill on LIS]({lis_link})")
 
 def render_passed_grouped_list_item(df):
     if df.empty: st.caption("No bills."); return
