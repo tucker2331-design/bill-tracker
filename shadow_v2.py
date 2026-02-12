@@ -180,7 +180,6 @@ def clean_committee_name(name):
     name = str(name).strip()
     if name in COMMITTEE_MAP: return COMMITTEE_MAP[name]
     
-    # AGGRESSIVE CLEANING OF POLITICIAN NAMES
     name = re.sub(r'\b(Simon|Rasoul|Willett|Helmer|Lucas|Surovell|Locke|Deeds|Favola|Marsden|Ebbin|McPike|Hayes|Carroll Foy)\b.*', '', name, flags=re.IGNORECASE)
     
     name = re.sub(r'\(?Subcommittee:.*?\)?', '', name, flags=re.IGNORECASE)
@@ -510,7 +509,6 @@ def render_bill_card(row, show_youth_tag=False):
     
     st.markdown(f"**{b_num_display}**")
     
-    # NEW: Display Lifecycle State Promptly
     lifecycle = str(row.get('Lifecycle', ''))
     if "Dead" in lifecycle or "Vetoed" in lifecycle:
         st.error(f"💀 {lifecycle}")
@@ -531,20 +529,18 @@ def render_bill_card(row, show_youth_tag=False):
 def render_grouped_list_item(df):
     if df.empty: st.caption("No bills."); return
     
-    # 1. FIX SUBCOMMITTEE NAMES (PERSISTENTLY)
-    # This must run before grouping to fix the "Subcommittee #2" -> "House Subcommittee #2" issue
     def fix_sub_names(row):
         sub = str(row.get('Current_Sub', '-')).strip()
-        if "Subcommittee #" in sub: 
+        # Use REGEX to robustly match "Subcommittee" followed by space and # and digit
+        # Case insensitive match for "subcommittee"
+        if re.search(r'subcommittee\s*#?\s*\d', sub, re.IGNORECASE):
             b_num = str(row.get('Bill Number', '')).upper()
             if b_num.startswith('H'): return f"House {sub}"
             if b_num.startswith('S'): return f"Senate {sub}"
         return sub
     
-    # Explicitly overwrite the column so the grouper below sees the new names
     df['Current_Sub'] = df.apply(fix_sub_names, axis=1)
 
-    # 2. CLEAN AND MERGE MAIN COMMITTEES
     def clean_and_merge_names(name):
         name = str(name).strip()
         if name in ['-', 'nan', 'None', '', '0', 'Unassigned']: return "Unassigned"
@@ -567,13 +563,11 @@ def render_grouped_list_item(df):
         else: st.markdown(f"##### 🏛️ {comm_name}")
         
         comm_df = df[df['Display_Comm_Group'] == comm_name]
-        
-        # Now filtering by the FIXED sub names
         unique_subs = sorted([s for s in comm_df['Current_Sub'].unique() if s != '-'])
         if '-' in comm_df['Current_Sub'].unique(): unique_subs.insert(0, '-')
         
         for sub_name in unique_subs:
-            if sub_name != '-': st.markdown(f"**↳ {sub_name}**") 
+            if sub_name != '-': st.markdown(f"**↳ Subcommittee: {sub_name}**") 
             sub_df = comm_df[comm_df['Current_Sub'] == sub_name]
             
             for i, row in sub_df.iterrows(): 
@@ -852,20 +846,14 @@ if bills_to_track:
                         if isinstance(hist_data, list):
                             for h in hist_data:
                                 h_date_str = str(h.get('Date', ''))
-                                try:
-                                    if "/" in h_date_str: h_dt = datetime.strptime(h_date_str, "%m/%d/%Y").date()
-                                    else: h_dt = datetime.strptime(h_date_str, "%Y-%m-%d").date()
-                                    if h_dt == target_date: happened_today = True
-                                except: pass
+                                d = parse_any_date(h_date_str)
+                                if d == target_date: happened_today = True
                         
                         # 2. Check Date Column
                         if not happened_today:
                             last_date = str(row.get('Date', ''))
-                            try:
-                                if "/" in last_date: lis_dt = datetime.strptime(last_date, "%m/%d/%Y").date()
-                                else: lis_dt = datetime.strptime(last_date, "%Y-%m-%d").date()
-                                if lis_dt == target_date: happened_today = True
-                            except: pass
+                            d = parse_any_date(last_date)
+                            if d == target_date: happened_today = True
 
                         # 3. Check Status Text for Date (Walk-on Failsafe Part 1)
                         if not happened_today:
@@ -950,4 +938,5 @@ with st.sidebar:
         else:
              st.write(f"**Docket File:** 🔴 Not Found")
         st.write("**Scraper Log (First 10):**")
-        st.text("\n".join(scrape_log[:10]))\n".join(scrape_log[:10]))
+        if scrape_log:
+            st.text("\n".join(scrape_log[:10]))
