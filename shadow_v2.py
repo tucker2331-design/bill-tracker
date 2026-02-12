@@ -44,28 +44,33 @@ COMMITTEE_MAP = {
 # --- KEYWORD DEFINITIONS ---
 YOUTH_KEYWORDS = ["child", "youth", "juvenile", "minor", "student", "school", "parental", "infant", "baby", "child custody", "foster", "adoption", "delinquen"]
 
-# UPDATED: Added Veterans Category & Plurals for Safety
+# UPDATED: Added irregular plurals. Standard plurals (s/es) are now handled by logic.
 TOPIC_KEYWORDS = {
-    "🗳️ Elections & Democracy": ["election", "vote", "ballot", "campaign", "poll", "voter", "registrar", "districting", "suffrage", "voting"],
+    "🗳️ Elections & Democracy": ["election", "vote", "ballot", "campaign", "poll", "voter", "registrar", "districting", "suffrage", "voting", "democracy"],
     "🏗️ Housing & Property": ["rent", "landlord", "tenant", "housing", "lease", "property", "zoning", "eviction", "homeowner", "residential", "condo", "building code"],
-    "🏛️ Local Government": ["charter", "ordinance", "locality", "county", "city", "town", "annexation", "sovereign", "immunity"],
+    "🏛️ Local Government": ["charter", "ordinance", "locality", "localities", "county", "counties", "city", "cities", "town", "annexation", "sovereign", "immunity", "municipal"],
     "✊ Labor & Workers Rights": ["wage", "salary", "worker", "employment", "labor", "union", "bargaining", "leave", "compensation", "workplace", "employee", "minimum", "overtime"],
     "💰 Economy & Business": ["tax", "commerce", "business", "market", "consumer", "corporation", "finance", "budget", "economic", "trade", "gaming", "casino", "abc", "alcohol"],
     "🎓 Education": ["school", "student", "education", "university", "college", "teacher", "curriculum", "scholarship", "tuition", "board of education", "higher education", "academic", "instruction", "learning", "literacy", "principal", "superintendent"],
-    "🪖 Veterans & Military Affairs": ["veteran", "military", "armed forces", "national guard", "service member", "deployment", "civilian life"],
-    "🚓 Public Safety": ["firearm", "firearms", "gun", "guns", "police", "crime", "penalty", "enforcement", "prison", "arrest", "criminal", "weapon", "weapons", "ammo", "magazine", "correctional", "facility", "incarcerat", "jail"],
+    "🪖 Veterans & Military Affairs": ["veteran", "military", "armed forces", "national guard", "service member", "deployment", "civilian life", "defense"],
+    "🚓 Public Safety": ["firearm", "gun", "police", "crime", "penalty", "enforcement", "prison", "arrest", "criminal", "weapon", "ammo", "magazine", "correctional", "facility", "incarcerat", "jail", "sheriff"],
     "⚖️ Criminal Justice & Courts": ["court", "judge", "attorney", "civil", "suit", "liability", "damages", "evidence", "jury", "appeal", "justice", "lawyer", "bar", "probation", "parole", "sentence", "sentencing", "custody", "divorce", "domestic", "violence", "abuse", "victim", "protective order"],
     "🏥 Health & Healthcare": ["health", "medical", "hospital", "patient", "doctor", "insurance", "care", "mental", "pharmacy", "drug", "medicaid", "nurse"],
     "🌳 Environment & Energy": ["energy", "water", "groundwater", "wastewater", "stormwater", "pollution", "environment", "climate", "solar", "conservation", "waste", "carbon", "natural resources", "wind", "power", "electricity", "hydroelectric", "nuclear", "chesapeake", "bay", "river", "watershed"],
     "🚗 Transportation": ["road", "highway", "vehicle", "driver", "license", "transit", "traffic", "transportation", "motor"],
-    "💻 Tech & Utilities": ["internet", "broadband", "data", "privacy", "utility", "cyber", "technology", "telecom", "artificial intelligence"],
-    "⚖️ Civil Rights": ["discrimination", "rights", "equity", "minority", "gender", "religious", "freedom", "speech"],
+    "💻 Tech & Utilities": ["internet", "broadband", "data", "privacy", "utility", "utilities", "cyber", "technology", "telecom", "artificial intelligence"],
+    "⚖️ Civil Rights": ["discrimination", "rights", "equity", "minority", "minorities", "gender", "religious", "freedom", "speech"],
 }
 
 def match_whole_word(text, keyword_list):
-    """Returns True only if a whole word matches, avoiding partials like 'parent' -> 'rent'"""
+    """
+    Returns True if a keyword matches. 
+    UPDATED: Now automatically handles plurals (adds optional 's' or 'es' to pattern).
+    Example: 'veteran' now matches 'veterans'; 'tax' matches 'taxes'.
+    """
     for k in keyword_list:
-        pattern = r'\b' + re.escape(k) + r'\b'
+        # The pattern \b(key)(?:es|s)?\b matches the word plus optional 's' or 'es' suffix
+        pattern = r'\b' + re.escape(k) + r'(?:es|s)?\b'
         if re.search(pattern, text, re.IGNORECASE):
             return True
     return False
@@ -76,7 +81,7 @@ def get_smart_subject(row):
     title_lower = title.lower()
     comm = str(row.get('Current_Committee', '')).strip()
     
-    # CASE INSENSITIVE COMMITTEE MATCHING (Fixes "Courts Of Justice" bug)
+    # CASE INSENSITIVE COMMITTEE MATCHING
     comm_lower = comm.lower()
     
     if "education" in comm_lower and "health" not in comm_lower: return "🎓 Education"
@@ -91,7 +96,6 @@ def get_smart_subject(row):
         if any(x in title_lower for x in ["zoning", "rent", "housing", "tenant", "landlord", "eviction", "lease", "property", "condo"]): return "🏗️ Housing & Property"
         return "🏛️ Local Government" 
 
-    # FIXED: Now catches "Courts Of Justice" (capital O) by checking lowercase
     if "courts of justice" in comm_lower:
         if any(x in title_lower for x in ["firearm", "gun", "weapon", "ammunition", "concealed", "magazine", "carry"]): return "🚓 Public Safety"
         return "⚖️ Criminal Justice & Courts"
@@ -852,113 +856,3 @@ if bills_to_track:
                     
                     for _, row in final_df.iterrows():
                         is_dup = False
-                        if target_date_str in calendar_map:
-                            for c_list in calendar_map[target_date_str].values():
-                                if row['Bill Number'] in [r['Bill Number'] for r in c_list]: is_dup = True
-                        if is_dup: continue
-
-                        happened_today = False
-                        # 1. Check History List
-                        hist_data = row.get('History_Data', [])
-                        if isinstance(hist_data, list):
-                            for h in hist_data:
-                                h_date_str = str(h.get('Date', ''))
-                                try:
-                                    if "/" in h_date_str: h_dt = datetime.strptime(h_date_str, "%m/%d/%Y").date()
-                                    else: h_dt = datetime.strptime(h_date_str, "%Y-%m-%d").date()
-                                    if h_dt == target_date: happened_today = True
-                                except: pass
-                        
-                        # 2. Check Date Column
-                        if not happened_today:
-                            last_date = str(row.get('Date', ''))
-                            try:
-                                if "/" in last_date: lis_dt = datetime.strptime(last_date, "%m/%d/%Y").date()
-                                else: lis_dt = datetime.strptime(last_date, "%Y-%m-%d").date()
-                                if lis_dt == target_date: happened_today = True
-                            except: pass
-
-                        # 3. Check Status Text for Date (Walk-on Failsafe Part 1)
-                        if not happened_today:
-                            status_txt = str(row.get('Status', ''))
-                            d_check_1 = target_date.strftime("%-m/%-d/%Y")
-                            d_check_2 = target_date.strftime("%m/%d/%Y")
-                            if d_check_1 in status_txt or d_check_2 in status_txt:
-                                happened_today = True
-
-                        if happened_today:
-                            status_lower = str(row.get('Status', '')).lower()
-                            
-                            # --- FAILSAFE PART 2: KEYWORD MATCHING ---
-                            has_vote = bool(re.search(r'\d{1,3}-y', status_lower))
-                            
-                            # Important: Shows Action taken (even if docket missed it)
-                            important_keywords = [
-                                "passed", "report", "agreed", "engross", "read", "vote", 
-                                "tabled", "failed", "defeat", "stricken", "indefinitely", 
-                                "left in", "incorporated", "no action", "continued",
-                                "withdrawn", "recommitted", "rereferred", "carried over", "approved"
-                            ]
-                            
-                            # Noise: Administrative only
-                            noise_keywords = [
-                                "fiscal impact", "statement from", "note filed",
-                                "assigned", "referred", "docketed"
-                            ]
-                            
-                            is_important = any(x in status_lower for x in important_keywords) or has_vote
-                            is_noise = any(x in status_lower for x in noise_keywords)
-
-                            if is_important: pass 
-                            elif is_noise: continue 
-                            else: continue 
-                            
-                            group_key = row.get('Display_Committee', 'Other Actions')
-                            if group_key == "On Floor / Reported" or "Chamber" in group_key:
-                                if row['Bill Number'].startswith('H'): group_key = "House Floor / General Orders"
-                                else: group_key = "Senate Floor / General Orders"
-                            
-                            if group_key not in completed_map: completed_map[group_key] = []
-                            completed_map[group_key].append(row)
-
-                    if completed_map:
-                        st.success("✅ **Completed Today**")
-                        
-                        # Sort using the main committee map (best guess for time)
-                        sorted_completed = sorted(completed_map.items(), key=lambda x: comm_time_map.get(x[0], {}).get('rank', 12.0))
-                        
-                        for comm_key, bills in sorted_completed:
-                            st.markdown(f"**{comm_key}**")
-                            for row in bills:
-                                my_status = str(row.get('My Status', '')).strip() 
-                                vote_str = extract_vote_info(row.get('Status', ''))
-                                label_text = f"{row['Bill Number']}"
-                                if vote_str: label_text += f" **PASSED {vote_str}**"
-                                elif my_status != '-' and my_status != 'nan': label_text += f" - {my_status}"
-                                
-                                with st.expander(label_text):
-                                    st.markdown(f"**🔄 Outcome:** {clean_status_text(row.get('Status', '-'))}")
-                                    st.caption(f"📌 {row.get('My Title', '-')}")
-                                    lis_link = f"https://lis.virginia.gov/bill-details/20261/{row['Bill Number']}"
-                                    st.markdown(f"🔗 [View on LIS]({lis_link})")
-                            st.divider()
-
-                # --- C. EMPTY STATE ---
-                has_schedule = (target_date_str in calendar_map)
-                has_completed = (i == 0 and len(completed_map) > 0) if 'completed_map' in locals() else False
-                
-                if not has_schedule and not has_completed:
-                     if i != 0: st.caption("-")
-                     elif i == 0: st.info("No hearings or updates yet today.")
-
-# --- DEV DEBUGGER ---
-with st.sidebar:
-    st.divider()
-    with st.expander("👨‍💻 Developer Debugger", expanded=True):
-        st.write("System Status:")
-        if 'docket' in lis_data and not lis_data['docket'].empty:
-             st.write(f"**Docket File:** 🟢 Loaded ({len(lis_data['docket'])} rows)")
-        else:
-             st.write(f"**Docket File:** 🔴 Not Found")
-        st.write("**Scraper Log (First 10):**")
-        st.text("\n".join(scrape_log[:10]))
