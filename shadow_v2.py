@@ -44,7 +44,6 @@ COMMITTEE_MAP = {
 # --- KEYWORD DEFINITIONS ---
 YOUTH_KEYWORDS = ["child", "youth", "juvenile", "minor", "student", "school", "parental", "infant", "baby", "child custody", "foster", "adoption", "delinquen"]
 
-# UPDATED: Added irregular plurals. Standard plurals (s/es) are now handled by logic.
 TOPIC_KEYWORDS = {
     "🗳️ Elections & Democracy": ["election", "vote", "ballot", "campaign", "poll", "voter", "registrar", "districting", "suffrage", "voting", "democracy"],
     "🏗️ Housing & Property": ["rent", "landlord", "tenant", "housing", "lease", "property", "zoning", "eviction", "homeowner", "residential", "condo", "building code"],
@@ -63,7 +62,6 @@ TOPIC_KEYWORDS = {
 }
 
 def match_whole_word(text, keyword_list):
-    """Returns True if a keyword matches (Singular OR Plural)."""
     for k in keyword_list:
         pattern = r'\b' + re.escape(k) + r'(?:es|s)?\b'
         if re.search(pattern, text, re.IGNORECASE):
@@ -71,7 +69,6 @@ def match_whole_word(text, keyword_list):
     return False
 
 def get_smart_subject(row):
-    """Sorts bills: Committee First -> Context -> Keywords."""
     title = str(row.get('Official Title', '')) + " " + str(row.get('My Title', ''))
     title_lower = title.lower()
     comm = str(row.get('Current_Committee', '')).strip()
@@ -111,7 +108,6 @@ def get_smart_subject(row):
     return "📂 Unassigned / General"
 
 def check_youth_flag(row):
-    """Returns True if bill relates to youth (independent of category) with EXCLUSIONS"""
     title = str(row.get('Official Title', '')) + " " + str(row.get('My Title', ''))
     title_lower = title.lower()
     exclusions = ["child care", "teacher", "training", "employee", "adult correctional"]
@@ -122,7 +118,6 @@ def check_youth_flag(row):
 # --- HELPER FUNCTIONS ---
 
 def parse_any_date(date_str):
-    """Robust date parser that handles multiple formats (YYYY-MM-DD and MM/DD/YYYY)."""
     if pd.isna(date_str) or not date_str or str(date_str).lower() == 'nan':
         return datetime.min.date()
     
@@ -143,7 +138,6 @@ def clean_bill_id(bill_text):
     return clean
 
 def determine_lifecycle(status_text, committee_name, bill_id="", history_text=""):
-    """Determines bill status based on text and history."""
     status = str(status_text).lower()
     comm = str(committee_name).strip()
     b_id = str(bill_id).upper()
@@ -182,18 +176,15 @@ def determine_lifecycle(status_text, committee_name, bill_id="", history_text=""
     return "📥 In Committee"
 
 def clean_committee_name(name):
-    """Standardizes committee names."""
     if not name or str(name).lower() == 'nan': return ""
     name = str(name).strip()
     if name in COMMITTEE_MAP: return COMMITTEE_MAP[name]
     
     name = re.sub(r'\b(Simon|Rasoul|Willett|Helmer|Lucas|Surovell|Locke|Deeds|Favola|Marsden|Ebbin|McPike|Hayes|Carroll Foy)\b.*', '', name, flags=re.IGNORECASE)
     
-    # Strip (Subcommittee: X) pattern from main name
     name = re.sub(r'\(?Subcommittee:.*?\)?', '', name, flags=re.IGNORECASE)
     name = name.replace("Committee For", "").replace("Committee On", "").replace("Committee", "").strip()
     
-    # Add Space between House/Senate and Committee Name if missing
     if name.startswith("H") and name[1].isupper() and not name.startswith("House"): name = "House " + name[1:]
     if name.startswith("S") and name[1].isupper() and not name.startswith("Senate"): name = "Senate " + name[1:]
     
@@ -538,31 +529,31 @@ def render_bill_card(row, show_youth_tag=False):
 def render_grouped_list_item(df):
     if df.empty: st.caption("No bills."); return
     
-    # 1. HELPER TO MERGE & SORT
-    def clean_and_merge_names(name):
-        name = str(name).strip()
+    def clean_and_merge_names(row):
+        name = str(row.get('Current_Committee', '-')).strip()
+        sub = str(row.get('Current_Sub', '-')).strip()
+        
+        # 1. Handle Numbered Subcommittees explicitly
+        if "Subcommittee #" in sub:
+            b_num = str(row['Bill Number']).upper()
+            prefix = "House" if b_num.startswith('H') else "Senate"
+            row['Current_Sub'] = f"{prefix} {sub}" 
+            
         if name in ['-', 'nan', 'None', '', '0', 'Unassigned']: return "Unassigned"
         
-        # Remove "House" and "Senate" ONLY if the name matches a shared committee
-        # List of shared committees that should be merged
         shared_committees = ["Agriculture", "Appropriations", "Finance", "Education", "Transportation", "Commerce and Labor", "General Laws", "Privileges and Elections", "Rules", "Courts of Justice"]
         
         name_lower = name.lower()
         for shared in shared_committees:
             if shared.lower() in name_lower:
-                return shared # Return the clean, shared name (e.g., "Agriculture")
+                return shared 
         
-        return name # Return original if unique (e.g., "House Militia...")
+        return name
 
-    df['Display_Comm_Group'] = df['Current_Committee'].fillna('-').apply(clean_and_merge_names)
-    df['Current_Sub'] = df['Current_Sub'].fillna('-')
+    # Apply the cleaning logic row by row
+    df['Display_Comm_Group'] = df.apply(lambda r: clean_and_merge_names(r), axis=1)
+    # Note: 'Current_Sub' was modified in place inside the lambda for numbered subs
     
-    # 2. HELPER TO DISPLAY BADGES
-    def get_chamber_badge(bill_num):
-        if str(bill_num).upper().startswith('H'): return "🏛️ [H]"
-        if str(bill_num).upper().startswith('S'): return "🏛️ [S]"
-        return ""
-
     unique_committees = sorted(df['Display_Comm_Group'].unique())
     
     for comm_name in unique_committees:
@@ -570,37 +561,15 @@ def render_grouped_list_item(df):
         else: st.markdown(f"##### 🏛️ {comm_name}")
         
         comm_df = df[df['Display_Comm_Group'] == comm_name]
-        
-        # Merge identical subcommittees
         unique_subs = sorted([s for s in comm_df['Current_Sub'].unique() if s != '-'])
         if '-' in comm_df['Current_Sub'].unique(): unique_subs.insert(0, '-')
         
         for sub_name in unique_subs:
-            if sub_name != '-': st.markdown(f"**↳ Subcommittee: {sub_name}**") 
+            if sub_name != '-': st.markdown(f"**↳ {sub_name}**") 
             sub_df = comm_df[comm_df['Current_Sub'] == sub_name]
             
             for i, row in sub_df.iterrows(): 
-                # Custom renderer to include badge
-                title = row.get('Official Title', 'No Title')
-                if title in ["Unknown", "Error", None]: title = row.get('My Title', 'No Title')
-                my_status = str(row.get('My Status', '')).strip()
-                badge = get_chamber_badge(row['Bill Number'])
-                label_text = f"{badge} {row['Bill Number']}"
-                if my_status and my_status != 'nan' and my_status != '-': label_text += f" - {my_status}"
-                if title: label_text += f" - {title}"
-                
-                with st.expander(label_text):
-                    st.markdown(f"**🏛️ Current Status:** {row.get('Display_Committee', '-')}")
-                    if row.get('Current_Sub') and row.get('Current_Sub') != '-': st.markdown(f"**↳ Subcommittee:** {row.get('Current_Sub')}")
-                    st.markdown(f"**📌 Designated Title:** {row.get('My Title', '-')}")
-                    st.markdown(f"**📜 Official Title:** {row.get('Official Title', '-')}")
-                    st.markdown(f"**🔄 Status:** {clean_status_text(row.get('Status', '-'))}")
-                    hist_data = row.get('History_Data', [])
-                    if isinstance(hist_data, list) and hist_data:
-                        st.markdown("**📜 History:**"); st.dataframe(pd.DataFrame(hist_data), hide_index=True, use_container_width=True)
-                    else: st.caption(f"Date: {row.get('Date', '-')}")
-                    lis_link = f"https://lis.virginia.gov/bill-details/20261/{row['Bill Number']}"
-                    st.markdown(f"🔗 [View Official Bill on LIS]({lis_link})")
+                _render_single_bill_row(row)
 
 def render_passed_grouped_list_item(df):
     if df.empty: st.caption("No bills."); return
