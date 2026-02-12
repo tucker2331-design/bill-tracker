@@ -180,6 +180,7 @@ def clean_committee_name(name):
     name = str(name).strip()
     if name in COMMITTEE_MAP: return COMMITTEE_MAP[name]
     
+    # AGGRESSIVE CLEANING OF POLITICIAN NAMES
     name = re.sub(r'\b(Simon|Rasoul|Willett|Helmer|Lucas|Surovell|Locke|Deeds|Favola|Marsden|Ebbin|McPike|Hayes|Carroll Foy)\b.*', '', name, flags=re.IGNORECASE)
     
     name = re.sub(r'\(?Subcommittee:.*?\)?', '', name, flags=re.IGNORECASE)
@@ -509,6 +510,7 @@ def render_bill_card(row, show_youth_tag=False):
     
     st.markdown(f"**{b_num_display}**")
     
+    # NEW: Display Lifecycle State Promptly
     lifecycle = str(row.get('Lifecycle', ''))
     if "Dead" in lifecycle or "Vetoed" in lifecycle:
         st.error(f"💀 {lifecycle}")
@@ -529,16 +531,22 @@ def render_bill_card(row, show_youth_tag=False):
 def render_grouped_list_item(df):
     if df.empty: st.caption("No bills."); return
     
-    def clean_and_merge_names(row):
-        name = str(row.get('Current_Committee', '-')).strip()
+    # 1. FIX SUBCOMMITTEE NAMES (PERSISTENTLY)
+    # This must run before grouping to fix the "Subcommittee #2" -> "House Subcommittee #2" issue
+    def fix_sub_names(row):
         sub = str(row.get('Current_Sub', '-')).strip()
-        
-        # 1. Handle Numbered Subcommittees explicitly
-        if "Subcommittee #" in sub:
-            b_num = str(row['Bill Number']).upper()
-            prefix = "House" if b_num.startswith('H') else "Senate"
-            row['Current_Sub'] = f"{prefix} {sub}" 
-            
+        if "Subcommittee #" in sub: 
+            b_num = str(row.get('Bill Number', '')).upper()
+            if b_num.startswith('H'): return f"House {sub}"
+            if b_num.startswith('S'): return f"Senate {sub}"
+        return sub
+    
+    # Explicitly overwrite the column so the grouper below sees the new names
+    df['Current_Sub'] = df.apply(fix_sub_names, axis=1)
+
+    # 2. CLEAN AND MERGE MAIN COMMITTEES
+    def clean_and_merge_names(name):
+        name = str(name).strip()
         if name in ['-', 'nan', 'None', '', '0', 'Unassigned']: return "Unassigned"
         
         shared_committees = ["Agriculture", "Appropriations", "Finance", "Education", "Transportation", "Commerce and Labor", "General Laws", "Privileges and Elections", "Rules", "Courts of Justice"]
@@ -550,9 +558,7 @@ def render_grouped_list_item(df):
         
         return name
 
-    # Apply the cleaning logic row by row
-    df['Display_Comm_Group'] = df.apply(lambda r: clean_and_merge_names(r), axis=1)
-    # Note: 'Current_Sub' was modified in place inside the lambda for numbered subs
+    df['Display_Comm_Group'] = df['Current_Committee'].fillna('-').apply(clean_and_merge_names)
     
     unique_committees = sorted(df['Display_Comm_Group'].unique())
     
@@ -561,6 +567,8 @@ def render_grouped_list_item(df):
         else: st.markdown(f"##### 🏛️ {comm_name}")
         
         comm_df = df[df['Display_Comm_Group'] == comm_name]
+        
+        # Now filtering by the FIXED sub names
         unique_subs = sorted([s for s in comm_df['Current_Sub'].unique() if s != '-'])
         if '-' in comm_df['Current_Sub'].unique(): unique_subs.insert(0, '-')
         
@@ -942,4 +950,4 @@ with st.sidebar:
         else:
              st.write(f"**Docket File:** 🔴 Not Found")
         st.write("**Scraper Log (First 10):**")
-        st.text("\n".join(scrape_log[:10]))
+        st.text("\n".join(scrape_log[:10]))\n".join(scrape_log[:10]))
