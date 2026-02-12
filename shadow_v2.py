@@ -179,7 +179,6 @@ def determine_lifecycle(status_text, committee_name, bill_id="", history_text=""
     
     # 3. PRIORITY CHECK: REFERRED (Force In Committee)
     # CRITICAL FIX: Ensure 'Referred' forces 'In Committee' UNLESS it is referring to the Governor
-    # This prevents 'Reported and Referred' from being classified as Out of Committee.
     if "referred to" in status and "governor" not in status: 
         return "📥 In Committee"
 
@@ -412,13 +411,21 @@ def get_bill_data_batch(bill_numbers, lis_data_dict):
         junk_triggers = ["fiscal impact", "statement from", "vote detail", "introduced", "assigned", "placed on", "offered"]
         is_junk = any(j in status_text_clean for j in junk_triggers)
         
-        # --- SMART SWAP FIX: ADDED MISSING KEYWORDS (Fixes SB6) ---
+        # --- SMART SWAP FIX: DEEP SEARCH FOR MEANING (Fixes SB6) ---
         if is_junk and history_data:
-             latest_history = history_data[-1]['Action'].strip()
              meaningful_keywords = ["failed", "passed", "reported", "tabled", "defeated", "agreed", "engrossed", "approved", "enacted", "signed", "vetoed", "chapter"]
-             if any(m in latest_history.lower() for m in meaningful_keywords):
-                 status = latest_history
-                 current_status_clean = latest_history
+             found_meaningful = None
+             
+             # history_data is chronological (oldest -> newest), so iterate backwards
+             for h in reversed(history_data):
+                 act = str(h['Action']).strip()
+                 if any(m in act.lower() for m in meaningful_keywords):
+                     found_meaningful = act
+                     break
+            
+             if found_meaningful:
+                 status = found_meaningful
+                 current_status_clean = found_meaningful
                  is_junk = False # It is now meaningful
 
         # 5. EXECUTE PIN
