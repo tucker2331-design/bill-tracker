@@ -118,6 +118,21 @@ def check_youth_flag(row):
 
 # --- HELPER FUNCTIONS ---
 
+def parse_any_date(date_str):
+    """Robust date parser that handles multiple formats (YYYY-MM-DD and MM/DD/YYYY)."""
+    if pd.isna(date_str) or not date_str or str(date_str).lower() == 'nan':
+        return datetime.min.date()
+    
+    date_str = str(date_str).strip()
+    formats = ["%Y-%m-%d", "%m/%d/%Y", "%m-%d-%Y", "%Y/%m/%d"]
+    
+    for fmt in formats:
+        try:
+            return datetime.strptime(date_str, fmt).date()
+        except ValueError:
+            continue
+    return datetime.min.date()
+
 def clean_bill_id(bill_text):
     if pd.isna(bill_text): return ""
     clean = str(bill_text).upper().replace(" ", "").strip()
@@ -299,24 +314,19 @@ def get_bill_data_batch(bill_numbers, lis_data_dict):
         item = lis_lookup.get(bill_num)
         title = "Unknown"; status = "Not Found"; date_val = ""; curr_comm = "-"; curr_sub = "-"; history_data = []
         
-        # --- NEW LOGIC: LATEST DATE WINS ---
-        # Instead of prioritizing House/Senate based on bill type, we check dates.
+        # --- NEW LOGIC: ROBUST LATEST DATE WINS ---
         if item:
             title = item.get('bill_description', 'No Title')
             
             # 1. Extract House Data
             h_act = str(item.get('last_house_action', ''))
+            h_date = parse_any_date(item.get('last_house_action_date', ''))
             h_date_str = str(item.get('last_house_action_date', ''))
-            h_date = datetime.min.date()
-            try: h_date = datetime.strptime(h_date_str, "%Y-%m-%d").date()
-            except: pass
 
             # 2. Extract Senate Data
             s_act = str(item.get('last_senate_action', ''))
+            s_date = parse_any_date(item.get('last_senate_action_date', ''))
             s_date_str = str(item.get('last_senate_action_date', ''))
-            s_date = datetime.min.date()
-            try: s_date = datetime.strptime(s_date_str, "%Y-%m-%d").date()
-            except: pass
 
             # 3. Compare and Select the Winner
             if s_date > h_date:
@@ -326,7 +336,7 @@ def get_bill_data_batch(bill_numbers, lis_data_dict):
                 status = h_act
                 date_val = h_date_str
             else:
-                # Dates are equal: Use the one that isn't empty, or default to House if both exist
+                # Dates are equal or both min: default logic
                 if not h_act and s_act:
                     status = s_act
                     date_val = s_date_str
@@ -334,7 +344,6 @@ def get_bill_data_batch(bill_numbers, lis_data_dict):
                     status = h_act
                     date_val = h_date_str
             
-            # Fallback if both empty
             if not status or status == 'nan':
                 status = "Introduced"
 
@@ -360,41 +369,61 @@ def get_bill_data_batch(bill_numbers, lis_data_dict):
                         try: curr_sub = desc_lower.split("sub:")[1].strip().title()
                         except: pass
         
-        # --- GROUND UP PIN LOGIC ---
-        # Now that 'status' and 'date_val' are guaranteed to be the LATEST action,
-        # we can verify against history to see if the history file is lagging.
+        # --- GROUND UP PIN LOGIC & STALE STATUS OVERWRITE ---
         
-        # 1. Identify Dates
-        status_date_obj = None
-        try: status_date_obj = datetime.strptime(str(date_val), "%Y-%m-%d").date()
-        except: pass
+        # 1. Identify Dates using ROBUST Parser
+        status_date_obj = parse_any_date(date_val)
 
         latest_hist_date_obj = None
         if history_data:
             dates = []
             for h in history_data:
-                try: dates.append(datetime.strptime(str(h['Date']), "%Y-%m-%d").date())
-                except: pass
+                d = parse_any_date(h.get('Date', ''))
+                if d != datetime.min.date():
+                    dates.append(d)
             if dates: latest_hist_date_obj = max(dates)
 
-        # 2. Check for Content Duplication (fuzzy match)
+        # 2. Determine "Freshness"
+        # If History has a date LATER than the Status date, the Status is stale.
+        is_status_stale = False
+        if status_date_obj and latest_hist_date_obj:
+            if status_date_obj < latest_hist_date_obj:
+                is_status_stale = True
+
+        # --- CRITICAL FIX: OVERWRITE STALE STATUS ---
+        if is_status_stale and history_data:
+             # If status is stale, we TRUST the history. 
+             # We take the most recent history item and make it the status.
+             latest_history_item = history_data[-1] 
+             status = latest_history_item['Action']
+             date_val = latest_history_item['Date']
+             # Update for downstream checks
+             status_date_obj = latest_hist_date_obj 
+             is_status_stale = False
+
+        # 3. Check for Content Duplication (fuzzy match)
         status_text_clean = str(status).strip().lower()
         is_in_history = any(status_text_clean in str(h['Action']).lower() for h in history_data)
 
-        # 3. Check for Low-Value "Junk"
+        # 4. Check for Low-Value "Junk"
         junk_triggers = ["fiscal impact", "statement from", "vote detail", "introduced", "assigned", "placed on", "offered"]
         is_junk = any(j in status_text_clean for j in junk_triggers)
 
-        # 4. EXECUTE PIN
+        # 5. EXECUTE PIN
         should_pin = False
-        # Only pin if Status date is NEWER than history, or equal but text is missing
+        
+        # Check if status date is explicitly newer than history
         is_status_newer = False
         if status_date_obj and latest_hist_date_obj:
-            if status_date_obj >= latest_hist_date_obj: is_status_newer = True
+            if status_date_obj > latest_hist_date_obj: is_status_newer = True
         elif status_date_obj and not latest_hist_date_obj:
             is_status_newer = True
 
-        if is_status_newer and not is_in_history and not is_junk:
+        # If it's newer, definitely pin (unless junk)
+        # If it's same date but not in history, pin
+        if is_status_newer and not is_junk:
+            should_pin = True
+        elif status_date_obj == latest_hist_date_obj and not is_in_history and not is_junk:
             should_pin = True
 
         if should_pin:
