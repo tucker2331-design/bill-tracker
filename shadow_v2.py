@@ -177,11 +177,17 @@ def determine_lifecycle(status_text, committee_name, bill_id="", history_text=""
         if "amendment" not in hist and "recommend" not in hist:
             return "❌ Dead / Tabled"
     
-    # 3. OUT OF COMMITTEE
+    # 3. PRIORITY CHECK: REFERRED (Force In Committee)
+    # CRITICAL FIX: Ensure 'Referred' forces 'In Committee' UNLESS it is referring to the Governor
+    # This prevents 'Reported and Referred' from being classified as Out of Committee.
+    if "referred to" in status and "governor" not in status: 
+        return "📥 In Committee"
+
+    # 4. OUT OF COMMITTEE
     out_keywords = ["reported", "passed", "agreed", "engrossed", "communicated", "reading waived", "read second", "read third"]
     if any(x in status for x in out_keywords): return "📣 Out of Committee"
     
-    # 4. IN COMMITTEE
+    # 5. IN COMMITTEE (Default Fallback)
     if "pending" in status or "prefiled" in status: return "📥 In Committee"
     if comm not in ["-", "nan", "None", "", "Unassigned"] and len(comm) > 2: return "📥 In Committee"
     return "📥 In Committee"
@@ -392,12 +398,9 @@ def get_bill_data_batch(bill_numbers, lis_data_dict):
 
         # --- CRITICAL FIX: OVERWRITE STALE STATUS ---
         if is_status_stale and history_data:
-             # If status is stale, we TRUST the history. 
-             # We take the most recent history item and make it the status.
              latest_history_item = history_data[-1] 
              status = latest_history_item['Action']
              date_val = latest_history_item['Date']
-             # Update for downstream checks
              status_date_obj = latest_hist_date_obj 
              is_status_stale = False
 
@@ -408,19 +411,24 @@ def get_bill_data_batch(bill_numbers, lis_data_dict):
         # 4. Check for Low-Value "Junk"
         junk_triggers = ["fiscal impact", "statement from", "vote detail", "introduced", "assigned", "placed on", "offered"]
         is_junk = any(j in status_text_clean for j in junk_triggers)
+        
+        # --- SMART SWAP FIX: ADDED MISSING KEYWORDS (Fixes SB6) ---
+        if is_junk and history_data:
+             latest_history = history_data[-1]['Action'].strip()
+             meaningful_keywords = ["failed", "passed", "reported", "tabled", "defeated", "agreed", "engrossed", "approved", "enacted", "signed", "vetoed", "chapter"]
+             if any(m in latest_history.lower() for m in meaningful_keywords):
+                 status = latest_history
+                 current_status_clean = latest_history
+                 is_junk = False # It is now meaningful
 
         # 5. EXECUTE PIN
         should_pin = False
-        
-        # Check if status date is explicitly newer than history
         is_status_newer = False
         if status_date_obj and latest_hist_date_obj:
             if status_date_obj > latest_hist_date_obj: is_status_newer = True
         elif status_date_obj and not latest_hist_date_obj:
             is_status_newer = True
 
-        # If it's newer, definitely pin (unless junk)
-        # If it's same date but not in history, pin
         if is_status_newer and not is_junk:
             should_pin = True
         elif status_date_obj == latest_hist_date_obj and not is_in_history and not is_junk:
@@ -571,7 +579,6 @@ def render_grouped_list_item(df):
 def render_passed_grouped_list_item(df):
     if df.empty: st.caption("No bills."); return
     g_signed = df[df['Lifecycle'] == "✅ Signed & Enacted"]
-    g_vetoed = df[df['Lifecycle'] == "❌ Vetoed"]
     g_res = df[df['Lifecycle'] == "✅ Passed (Resolution)"]
     g_awaiting = df[df['Lifecycle'] == "✍️ Awaiting Signature"]
     if not g_signed.empty: 
@@ -583,9 +590,18 @@ def render_passed_grouped_list_item(df):
     if not g_res.empty:
         st.markdown("##### 📜 Resolution / Amendment (Passed)")
         for i, r in g_res.iterrows(): _render_single_bill_row(r)
+
+def render_failed_grouped_list_item(df):
+    if df.empty: st.caption("No bills."); return
+    g_vetoed = df[df['Lifecycle'] == "❌ Vetoed"]
+    g_dead = df[df['Lifecycle'] == "❌ Dead / Tabled"]
+    
     if not g_vetoed.empty:
-        st.markdown("##### ❌ Vetoed")
+        st.markdown("##### 🏛️ Vetoed by Governor")
         for i, r in g_vetoed.iterrows(): _render_single_bill_row(r)
+    if not g_dead.empty:
+        st.markdown("##### ❌ Dead / Tabled")
+        for i, r in g_dead.iterrows(): _render_single_bill_row(r)
 
 def render_simple_list_item(df):
     if df.empty: st.caption("No bills."); return
@@ -720,14 +736,14 @@ if bills_to_track:
             
             in_comm = subset[subset['Lifecycle'] == "📥 In Committee"]
             out_comm = subset[subset['Lifecycle'] == "📣 Out of Committee"]
-            passed = subset[subset['Lifecycle'].isin(["✅ Signed & Enacted", "✍️ Awaiting Signature", "✅ Passed (Resolution)", "❌ Vetoed"])]
-            failed = subset[subset['Lifecycle'] == "❌ Dead / Tabled"]
+            passed = subset[subset['Lifecycle'].isin(["✅ Signed & Enacted", "✍️ Awaiting Signature", "✅ Passed (Resolution)"])]
+            failed = subset[subset['Lifecycle'].isin(["❌ Dead / Tabled", "❌ Vetoed"])]
             
             m1, m2, m3, m4 = st.columns(4)
             with m1: st.markdown("#### 📥 In Committee"); render_grouped_list_item(in_comm)
             with m2: st.markdown("#### 📣 Out of Committee"); render_simple_list_item(out_comm)
             with m3: st.markdown("#### 🎉 Passed"); render_passed_grouped_list_item(passed)
-            with m4: st.markdown("#### ❌ Failed"); render_simple_list_item(failed)
+            with m4: st.markdown("#### ❌ Failed"); render_failed_grouped_list_item(failed)
 
     # --- TAB 3: CALENDAR (Sorted, Grouped & "Failsafe" Aware) ---
     with tab_upcoming:
