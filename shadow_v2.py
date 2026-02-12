@@ -326,13 +326,7 @@ def get_bill_data_batch(bill_numbers, lis_data_dict):
                         try: curr_sub = desc_lower.split("sub:")[1].strip().title()
                         except: pass
         
-        # --- GROUND UP PIN LOGIC (REPLACES OLD DATA LAG PATCH) ---
-        # Logic: 
-        # 1. Compare Dates: If History is NEWER than Status -> TRUST HISTORY (Don't pin).
-        # 2. Check Redundancy: If Status is already in History -> TRUST HISTORY (Don't pin).
-        # 3. Check Junk: If Status is "Fiscal Impact", etc. -> IGNORE (Don't pin).
-        # 4. Only Pin if it survives all checks.
-
+        # --- GROUND UP PIN LOGIC & STALE STATUS OVERWRITE ---
         # 1. Identify Dates
         status_date_obj = None
         try: status_date_obj = datetime.strptime(str(date_val), "%Y-%m-%d").date()
@@ -340,7 +334,6 @@ def get_bill_data_batch(bill_numbers, lis_data_dict):
 
         latest_hist_date_obj = None
         if history_data:
-            # Find the latest date in the history list (list order might be unreliable)
             dates = []
             for h in history_data:
                 try: dates.append(datetime.strptime(str(h['Date']), "%Y-%m-%d").date())
@@ -354,6 +347,18 @@ def get_bill_data_batch(bill_numbers, lis_data_dict):
             if status_date_obj < latest_hist_date_obj:
                 is_status_stale = True
 
+        # --- CRITICAL FIX: OVERWRITE STALE STATUS ---
+        if is_status_stale and history_data:
+             # If status is stale, we TRUST the history. 
+             # We take the most recent history item and make it the status.
+             # This fixes HB288 showing "Passed" when it's actually "Referred" in the Senate.
+             latest_history_item = history_data[-1] # List is appended chronologically
+             status = latest_history_item['Action']
+             date_val = latest_history_item['Date']
+             # Update for downstream checks
+             status_date_obj = latest_hist_date_obj 
+             is_status_stale = False # It is now fresh
+
         # 3. Check for Content Duplication (fuzzy match)
         status_text_clean = str(status).strip().lower()
         is_in_history = any(status_text_clean in str(h['Action']).lower() for h in history_data)
@@ -365,7 +370,6 @@ def get_bill_data_batch(bill_numbers, lis_data_dict):
         # 5. EXECUTE PIN
         should_pin = False
         if not is_status_stale and not is_in_history and not is_junk:
-            # Only if it's NOT stale, NOT already there, and NOT junk.
             should_pin = True
 
         if should_pin:
