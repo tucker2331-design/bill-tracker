@@ -1,4 +1,4 @@
-import streamlit as st
+]import streamlit as st
 import pandas as pd
 import requests
 import re
@@ -168,7 +168,8 @@ def determine_lifecycle(status_text, committee_name, bill_id="", history_text=""
     
     if "referred to" in status and "governor" not in status: return "📥 In Committee"
 
-    out_keywords = ["reported", "passed", "agreed", "engrossed", "communicated", "reading waived", "read second", "read third"]
+    # CRITICAL FIX: "Read" status means it's on the floor, not in committee
+    out_keywords = ["reported", "passed", "agreed", "engrossed", "communicated", "reading waived", "read second", "read third", "read first"]
     if any(x in status for x in out_keywords): return "📣 Out of Committee"
     
     if "pending" in status or "prefiled" in status: return "📥 In Committee"
@@ -341,14 +342,12 @@ def get_bill_data_batch(bill_numbers, lis_data_dict):
 
         raw_history = history_lookup.get(bill_num, [])
         
-        # --- CRITICAL FIX: SORT HISTORY CHRONOLOGICALLY (Oldest -> Newest) ---
         def get_sort_date(r):
             for col in ['history_date', 'date', 'action_date']:
                 if col in r and pd.notna(r[col]): return parse_any_date(str(r[col]))
             return datetime.min.date()
             
         raw_history.sort(key=get_sort_date)
-        # ---------------------------------------------------------------------
 
         history_blob = ""
         if raw_history:
@@ -360,20 +359,27 @@ def get_bill_data_batch(bill_numbers, lis_data_dict):
                     if col in h_row and pd.notna(h_row[col]): date_h = str(h_row[col]); break
                 
                 if desc:
-                    # DETECT CHAMBER SWITCH
+                    desc_lower = desc.lower()
+                    
                     if desc.startswith("H ") and current_chamber_context == "Senate":
                         current_chamber_context = "House"
+                        curr_comm = "House - Unassigned"
                         curr_sub = "-"
                     
                     if desc.startswith("S ") and current_chamber_context == "House":
                         current_chamber_context = "Senate"
+                        curr_comm = "Senate - Unassigned"
                         curr_sub = "-"
                             
                     history_data.append({"Date": date_h, "Action": desc})
-                    history_blob += desc.lower() + " "
-                    desc_lower = desc.lower()
+                    history_blob += desc_lower + " "
                     
+                    # --- CLEAN SLATE PROTOCOL ---
+                    if any(x in desc_lower for x in ["reported", "passed", "failed", "stricken", "defeated"]):
+                        curr_sub = "-"
+
                     if "referred to" in desc_lower:
+                        curr_sub = "-"
                         match = re.search(r'referred to (?:committee on|the committee on|committee for)?\s?([a-z\s&,-]+)', desc_lower)
                         if match: 
                             found = match.group(1).strip().title()
@@ -558,7 +564,6 @@ def render_grouped_list_item(df):
     
     def fix_sub_names(row):
         sub = str(row.get('Current_Sub', '-')).strip()
-        # Use REGEX to robustly match "Subcommittee" followed by space and # and digit
         if re.search(r'subcommittee\s*#?\s*\d', sub, re.IGNORECASE):
             b_num = str(row.get('Bill Number', '')).upper()
             if b_num.startswith('H'): return f"House {sub}"
