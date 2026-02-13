@@ -334,7 +334,22 @@ def get_bill_data_batch(bill_numbers, lis_data_dict):
             if not status or status == 'nan':
                 status = "Introduced"
 
+        # --- SYMMETRICAL HISTORY PARSING ---
+        current_chamber_context = "Unknown" 
+        if str(bill_num).startswith("H"): current_chamber_context = "House"
+        if str(bill_num).startswith("S"): current_chamber_context = "Senate"
+
         raw_history = history_lookup.get(bill_num, [])
+        
+        # --- CRITICAL FIX: SORT HISTORY CHRONOLOGICALLY (Oldest -> Newest) ---
+        def get_sort_date(r):
+            for col in ['history_date', 'date', 'action_date']:
+                if col in r and pd.notna(r[col]): return parse_any_date(str(r[col]))
+            return datetime.min.date()
+            
+        raw_history.sort(key=get_sort_date)
+        # ---------------------------------------------------------------------
+
         history_blob = ""
         if raw_history:
             for h_row in raw_history:
@@ -343,13 +358,29 @@ def get_bill_data_batch(bill_numbers, lis_data_dict):
                     if col in h_row and pd.notna(h_row[col]): desc = str(h_row[col]); break
                 for col in ['history_date', 'date', 'action_date']:
                     if col in h_row and pd.notna(h_row[col]): date_h = str(h_row[col]); break
+                
                 if desc:
+                    # DETECT CHAMBER SWITCH
+                    if desc.startswith("H ") and current_chamber_context == "Senate":
+                        current_chamber_context = "House"
+                        curr_sub = "-"
+                    
+                    if desc.startswith("S ") and current_chamber_context == "House":
+                        current_chamber_context = "Senate"
+                        curr_sub = "-"
+                            
                     history_data.append({"Date": date_h, "Action": desc})
                     history_blob += desc.lower() + " "
                     desc_lower = desc.lower()
+                    
                     if "referred to" in desc_lower:
                         match = re.search(r'referred to (?:committee on|the committee on|committee for)?\s?([a-z\s&,-]+)', desc_lower)
-                        if match: found = match.group(1).strip().title(); curr_comm = found if len(found) > 3 else curr_comm
+                        if match: 
+                            found = match.group(1).strip().title()
+                            if desc.startswith("H ") and not found.startswith("House"): found = "House " + found
+                            if desc.startswith("S ") and not found.startswith("Senate"): found = "Senate " + found
+                            curr_comm = found 
+                            
                     if "sub:" in desc_lower:
                         try: curr_sub = desc_lower.split("sub:")[1].strip().title()
                         except: pass
@@ -414,22 +445,18 @@ def get_bill_data_batch(bill_numbers, lis_data_dict):
              history_data.append({"Date": date_val, "Action": f"📍 {str(status).strip()}"})
 
         if curr_comm == "-":
-            val = item.get('last_house_committee')
-            if not val or str(val) == 'nan':
-                act_id = str(item.get('last_actid', ''))
-                if len(act_id) >= 3:
-                    code = act_id[:3]
-                    if code in COMMITTEE_MAP: curr_comm = COMMITTEE_MAP[code]
-            elif str(val) in COMMITTEE_MAP:
-                curr_comm = COMMITTEE_MAP[str(val)]
-        
+            val_h = item.get('last_house_committee')
+            val_s = item.get('last_senate_committee')
+            
+            if current_chamber_context == "House" and val_h and str(val_h) != 'nan':
+               if str(val_h) in COMMITTEE_MAP: curr_comm = COMMITTEE_MAP[str(val_h)]
+            elif current_chamber_context == "Senate" and val_s and str(val_s) != 'nan':
+               if str(val_s) in COMMITTEE_MAP: curr_comm = COMMITTEE_MAP[str(val_s)]
+
         if "pending" in str(status).lower() or "prefiled" in str(status).lower():
             if "referred" not in str(status).lower(): 
                 curr_comm = "Unassigned"
         
-        if "Courts" in str(curr_comm) and "referred" not in history_blob and "referred" not in str(status).lower():
-            curr_comm = "Unassigned"
-
         curr_comm = clean_committee_name(curr_comm)
         lifecycle = determine_lifecycle(str(status), str(curr_comm), bill_num, history_blob)
         display_comm = curr_comm
@@ -532,7 +559,6 @@ def render_grouped_list_item(df):
     def fix_sub_names(row):
         sub = str(row.get('Current_Sub', '-')).strip()
         # Use REGEX to robustly match "Subcommittee" followed by space and # and digit
-        # Case insensitive match for "subcommittee"
         if re.search(r'subcommittee\s*#?\s*\d', sub, re.IGNORECASE):
             b_num = str(row.get('Bill Number', '')).upper()
             if b_num.startswith('H'): return f"House {sub}"
@@ -567,7 +593,7 @@ def render_grouped_list_item(df):
         if '-' in comm_df['Current_Sub'].unique(): unique_subs.insert(0, '-')
         
         for sub_name in unique_subs:
-            if sub_name != '-': st.markdown(f"**↳ Subcommittee: {sub_name}**") 
+            if sub_name != '-': st.markdown(f"**↳ {sub_name}**") 
             sub_df = comm_df[comm_df['Current_Sub'] == sub_name]
             
             for i, row in sub_df.iterrows(): 
@@ -846,14 +872,20 @@ if bills_to_track:
                         if isinstance(hist_data, list):
                             for h in hist_data:
                                 h_date_str = str(h.get('Date', ''))
-                                d = parse_any_date(h_date_str)
-                                if d == target_date: happened_today = True
+                                try:
+                                    if "/" in h_date_str: h_dt = datetime.strptime(h_date_str, "%m/%d/%Y").date()
+                                    else: h_dt = datetime.strptime(h_date_str, "%Y-%m-%d").date()
+                                    if h_dt == target_date: happened_today = True
+                                except: pass
                         
                         # 2. Check Date Column
                         if not happened_today:
                             last_date = str(row.get('Date', ''))
-                            d = parse_any_date(last_date)
-                            if d == target_date: happened_today = True
+                            try:
+                                if "/" in last_date: lis_dt = datetime.strptime(last_date, "%m/%d/%Y").date()
+                                else: lis_dt = datetime.strptime(last_date, "%Y-%m-%d").date()
+                                if lis_dt == target_date: happened_today = True
+                            except: pass
 
                         # 3. Check Status Text for Date (Walk-on Failsafe Part 1)
                         if not happened_today:
