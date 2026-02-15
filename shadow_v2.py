@@ -1,4 +1,4 @@
-]import streamlit as st
+import streamlit as st
 import pandas as pd
 import requests
 import re
@@ -168,7 +168,7 @@ def determine_lifecycle(status_text, committee_name, bill_id="", history_text=""
     
     if "referred to" in status and "governor" not in status: return "📥 In Committee"
 
-    # CRITICAL FIX: "Read" status means it's on the floor, not in committee
+    # CRITICAL: "Read" means on the floor = Out of Committee
     out_keywords = ["reported", "passed", "agreed", "engrossed", "communicated", "reading waived", "read second", "read third", "read first"]
     if any(x in status for x in out_keywords): return "📣 Out of Committee"
     
@@ -342,6 +342,7 @@ def get_bill_data_batch(bill_numbers, lis_data_dict):
 
         raw_history = history_lookup.get(bill_num, [])
         
+        # Sort Chronologically (Oldest -> Newest)
         def get_sort_date(r):
             for col in ['history_date', 'date', 'action_date']:
                 if col in r and pd.notna(r[col]): return parse_any_date(str(r[col]))
@@ -375,9 +376,11 @@ def get_bill_data_batch(bill_numbers, lis_data_dict):
                     history_blob += desc_lower + " "
                     
                     # --- CLEAN SLATE PROTOCOL ---
-                    if any(x in desc_lower for x in ["reported", "passed", "failed", "stricken", "defeated"]):
+                    # 1. Floor/Exit Actions -> WIPE SUBCOMMITTEE
+                    if any(x in desc_lower for x in ["reported", "passed", "failed", "stricken", "defeated", "read first", "read second", "read third"]):
                         curr_sub = "-"
 
+                    # 2. Referred Actions -> WIPE SUBCOMMITTEE & UPDATE COMMITTEE
                     if "referred to" in desc_lower:
                         curr_sub = "-"
                         match = re.search(r'referred to (?:committee on|the committee on|committee for)?\s?([a-z\s&,-]+)', desc_lower)
