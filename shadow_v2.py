@@ -138,19 +138,15 @@ def clean_bill_id(bill_text):
     return clean
 
 def determine_lifecycle(status_text, committee_name, bill_id="", history_text=""):
-    """
-    Robust Lifecycle Logic
-    """
     status = str(status_text).lower()
     comm = str(committee_name).strip()
     b_id = str(bill_id).upper()
     hist = str(history_text).lower()
     
-    # 1. ENACTED / VETOED
+    # 1. PASSED / ENACTED
     if any(x in status for x in ["signed by governor", "enacted", "approved by governor", "chapter"]): return "✅ Signed & Enacted"
     if "vetoed" in status: return "❌ Vetoed"
     
-    # 2. RESOLUTIONS PASSED
     is_resolution = any(prefix in b_id for prefix in ["HJ", "SJ", "HR", "SR"])
     if is_resolution:
         if b_id.startswith("HR") or b_id.startswith("SR"):
@@ -162,7 +158,7 @@ def determine_lifecycle(status_text, committee_name, bill_id="", history_text=""
 
     if any(x in status for x in ["enrolled", "communicated to governor", "bill text as passed"]): return "✍️ Awaiting Signature"
 
-    # 3. DEAD / FAILED (Strict Keywords)
+    # 2. DEAD / FAILED
     dead_keywords_status = ["tabled", "failed", "stricken", "passed by indefinitely", "left in", "defeated", "no action taken", "incorporated into", "continued to next session"]
     dead_keywords_history = ["failed to report", "passed by indefinitely", "stricken from", "left in ", "laying on the table", "lay on the table", "defeated", "incorporated into", "continued to next session"]
 
@@ -172,18 +168,15 @@ def determine_lifecycle(status_text, committee_name, bill_id="", history_text=""
     if any(x in hist for x in dead_keywords_history): 
         if "amendment" not in hist and "recommend" not in hist: return "❌ Dead / Tabled"
     
-    # 4. OUT OF COMMITTEE (Floor)
+    # 3. OUT OF COMMITTEE (Floor)
     out_keywords = ["reported", "passed", "agreed", "engrossed", "communicated", "reading waived", "read second", "read third", "read first"]
-    
     if any(x in status for x in out_keywords):
-        if "recommends reporting" not in status: 
-            return "📣 Out of Committee"
+        if "recommends reporting" not in status: return "📣 Out of Committee"
     
-    # 5. IN COMMITTEE (Default)
+    # 4. IN COMMITTEE (Default)
     if "referred to" in status and "governor" not in status: return "📥 In Committee"
     if "pending" in status or "prefiled" in status: return "📥 In Committee"
     if comm not in ["-", "nan", "None", "", "Unassigned"] and len(comm) > 2: return "📥 In Committee"
-    
     return "📥 In Committee"
 
 def clean_committee_name(name):
@@ -316,6 +309,14 @@ def get_bill_data_batch(bill_numbers, lis_data_dict):
         item = lis_lookup.get(bill_num)
         title = "Unknown"; status = "Not Found"; date_val = ""; curr_comm = "-"; curr_sub = "-"; history_data = []
         
+        # --- INITIAL DATA & ANCHORING ---
+        # PRIMARY SOURCE OF TRUTH: Bill ID determines initial chamber
+        b_num_str = str(bill_num).upper()
+        if b_num_str.startswith("H"):
+            current_chamber_context = "House"
+        else:
+            current_chamber_context = "Senate"
+
         if item:
             title = item.get('bill_description', 'No Title')
             h_act = str(item.get('last_house_action', ''))
@@ -323,18 +324,13 @@ def get_bill_data_batch(bill_numbers, lis_data_dict):
             status = h_act if h_act else s_act
             if not status or status == 'nan': status = "Introduced"
 
-        # --- SYMMETRICAL HISTORY PARSING ---
-        current_chamber_context = "Unknown" 
-        if str(bill_num).startswith("H"): current_chamber_context = "House"
-        if str(bill_num).startswith("S"): current_chamber_context = "Senate"
-
         raw_history = history_lookup.get(bill_num, [])
         
+        # Sort Chronologically
         def get_sort_date(r):
             for col in ['history_date', 'date', 'action_date']:
                 if col in r and pd.notna(r[col]): return parse_any_date(str(r[col]))
             return datetime.min.date()
-            
         raw_history.sort(key=get_sort_date)
 
         history_blob = ""
@@ -351,14 +347,22 @@ def get_bill_data_batch(bill_numbers, lis_data_dict):
                 if desc:
                     desc_lower = desc.lower()
                     
-                    if any(k in desc_lower for k in ["reported", "passed", "defeated", "failed", "stricken", "continued to next session", "incorporated into"]):
+                    # Track Major Actions including TERMINAL STATES
+                    if any(k in desc_lower for k in ["reported", "passed", "defeated", "failed", "stricken", "continued to next session", "incorporated into", "approved", "enacted", "vetoed"]):
                         last_major_action = desc
                         date_val = date_h 
 
-                    if desc.startswith("H ") and current_chamber_context == "Senate":
-                        current_chamber_context = "House"; curr_comm = "House - Unassigned"; curr_sub = "-"
-                    if desc.startswith("S ") and current_chamber_context == "House":
-                        current_chamber_context = "Senate"; curr_comm = "Senate - Unassigned"; curr_sub = "-"
+                    # --- CHAMBER SWITCHING (WITH STRICT IGNORE LIST) ---
+                    # We IGNORE clerical actions when deciding to switch chambers.
+                    ignore_switch = ["fiscal impact", "statement from", "note filed", "substitute printed", "communication from", "impact statement"]
+                    is_clerical = any(ign in desc_lower for ign in ignore_switch)
+
+                    if not is_clerical:
+                        # Only switch if it's a real parliamentary move
+                        if desc.startswith("H ") and current_chamber_context == "Senate":
+                            current_chamber_context = "House"; curr_comm = "House - Unassigned"; curr_sub = "-"
+                        if desc.startswith("S ") and current_chamber_context == "House":
+                            current_chamber_context = "Senate"; curr_comm = "Senate - Unassigned"; curr_sub = "-"
                             
                     history_data.append({"Date": date_h, "Action": desc})
                     history_blob += desc_lower + " "
@@ -381,7 +385,7 @@ def get_bill_data_batch(bill_numbers, lis_data_dict):
                         except: pass
         
         # --- OVERRIDE STATUS ---
-        clerical_keywords = ["printed", "fiscal", "statement", "assigned", "docketed", "prefiled", "recommend"]
+        clerical_keywords = ["printed", "fiscal", "statement", "assigned", "docketed", "prefiled", "recommend", "introduced"]
         current_status_lower = str(status).lower()
         if last_major_action:
             if any(c in current_status_lower for c in clerical_keywords):
@@ -461,7 +465,8 @@ def render_bill_card(row, show_youth_tag=False):
     if title in ["Unknown", "Error", None]: title = row.get('My Title', 'No Title')
     
     b_num_display = row['Bill Number']
-    # RESTORED: Add badge AFTER the bill number
+    
+    # BADGE RESTORED: AFTER the bill number
     badge = ""
     if str(b_num_display).upper().startswith("H"): badge = "[H]"
     elif str(b_num_display).upper().startswith("S"): badge = "[S]"
