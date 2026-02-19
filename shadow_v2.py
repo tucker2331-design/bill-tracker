@@ -139,15 +139,14 @@ def clean_bill_id(bill_text):
 
 def determine_lifecycle(status_text, committee_name, bill_id="", history_text=""):
     """
-    Decoupled Logic: Uses filtered lifecycle_status for sorting.
-    Also implements Cross-Chamber Completion Check.
+    Location-First Architecture: Validates anchors before testing keywords.
     """
     status = str(status_text).lower()
     comm = str(committee_name).strip()
     b_id = str(bill_id).upper()
     hist = str(history_text).lower()
     
-    # 1. ENACTED / VETOED
+    # 1. TERMINAL STATES (Enacted, Vetoed)
     if any(x in status for x in ["signed by governor", "enacted", "approved by governor", "chapter"]): return "✅ Signed & Enacted"
     if "vetoed" in status: return "❌ Vetoed"
     
@@ -175,33 +174,21 @@ def determine_lifecycle(status_text, committee_name, bill_id="", history_text=""
     dead_keywords_status = ["tabled", "failed", "stricken", "passed by indefinitely", "left in", "defeated", "no action taken", "incorporated into", "continued to next session", "pbi", "failed to report"]
     dead_keywords_history = ["failed to report", "passed by indefinitely", "stricken from", "left in ", "laying on the table", "lay on the table", "defeated", "incorporated into", "continued to next session", "pbi"]
 
-    if any(x in status for x in dead_keywords_status):
-        if "recommend" not in status: return "❌ Dead / Tabled"
-            
-    if any(x in hist for x in dead_keywords_history): 
-        if "amendment" not in hist and "recommend" not in hist: return "❌ Dead / Tabled"
-    
-    # 5. OUT OF COMMITTEE (EXPLICIT)
-    # Only "Reported" or reading status counts as active floor work here.
-    # We delay the "Passed" check until after we check for Committee assignment.
-    floor_keywords = ["reported", "reading waived", "read second", "read third", "read first"]
-    if any(x in status for x in floor_keywords):
-        if "recommends reporting" not in status: 
-            return "📣 Out of Committee"
+    if any(x in status for x in dead_keywords_status) and "recommend" not in status: 
+        return "❌ Dead / Tabled"
+    if any(x in hist for x in dead_keywords_history) and "amendment" not in hist and "recommend" not in hist: 
+        return "❌ Dead / Tabled"
 
-    # 6. IN COMMITTEE (AUTHORITY CHECK)
-    # If a Committee Name exists, it TRUMPS "Passed" status (crossover bills).
+    # 5. IN COMMITTEE (AUTHORITY CHECK)
+    # If the history loop determined a valid anchor exists, it is explicitly IN COMMITTEE.
+    # This guarantees crossover bills aren't marked as "Passed" while in their second committee.
     if comm not in ["-", "nan", "None", "", "Unassigned"] and len(comm) > 2: return "📥 In Committee"
     if "referred to" in status and "governor" not in status: return "📥 In Committee"
     if "pending" in status or "prefiled" in status: return "📥 In Committee"
 
-    # 7. OUT OF COMMITTEE (TRANSIT / PASSED)
-    # If we are here, it's not in a committee, so "Passed" means Transit.
-    transit_keywords = ["passed", "agreed", "engrossed", "communicated", "received from"]
-    if any(x in status for x in transit_keywords):
-        return "📣 Out of Committee"
-    
-    return "📥 In Committee"
+    # 6. OUT OF COMMITTEE (Transit / Floor)
+    # If we fall through the gauntlet, the bill has no committee anchor and is active.
+    return "📣 Out of Committee"
 
 def clean_committee_name(name):
     if not name or str(name).lower() == 'nan': return ""
@@ -329,28 +316,21 @@ def get_bill_data_batch(bill_numbers, lis_data_dict):
         for b_id, group in docket_df.groupby('bill_clean'):
             docket_lookup[b_id] = group.to_dict('records')
 
-    # --- DECOUPLED LOGIC SETTINGS ---
+    # Words completely ignored for sorting overrides
     IGNORE_FOR_LIFECYCLE = ["fiscal", "statement", "printed", "reprint", "docketed", "emergency", "note filed"]
 
     for bill_num in clean_bills:
         item = lis_lookup.get(bill_num)
         title = "Unknown"; 
         
-        # Initialize status variables
         raw_status = "Introduced"
-        
-        # --- INITIAL DATA & ANCHORING ---
         b_num_str = str(bill_num).upper()
-        if b_num_str.startswith("H"):
-            current_chamber_context = "House"
-        else:
-            current_chamber_context = "Senate"
+        current_chamber_context = "House" if b_num_str.startswith("H") else "Senate"
 
         if item:
             title = item.get('bill_description', 'No Title')
             h_act = str(item.get('last_house_action', ''))
             s_act = str(item.get('last_senate_action', ''))
-            # We default to the most generic available if both are empty
             if h_act and h_act != 'nan': raw_status = h_act
             elif s_act and s_act != 'nan': raw_status = s_act
 
@@ -380,13 +360,12 @@ def get_bill_data_batch(bill_numbers, lis_data_dict):
                 if desc:
                     desc_lower = desc.lower()
                     
-                    # Track Major Actions
-                    check_keywords = ["reported", "passed", "defeated", "failed", "stricken", "continued", "incorporated", "approved", "enacted", "vetoed", "referred", "assigned", "recommended", "read"]
+                    # Track latest major valid status (replaces default if chronologically newer)
+                    check_keywords = ["reported", "passed", "defeated", "failed", "stricken", "continued", "incorporated", "approved", "enacted", "vetoed", "referred", "assigned", "recommended", "read", "agreed"]
                     is_noise = any(x in desc_lower for x in IGNORE_FOR_LIFECYCLE)
                     
                     if any(k in desc_lower for k in check_keywords) and not is_noise:
                         last_major_action_text = desc
-                        # Track date
                         try:
                             d_obj = parse_any_date(date_h)
                             if d_obj >= latest_history_date: 
@@ -405,36 +384,39 @@ def get_bill_data_batch(bill_numbers, lis_data_dict):
                     history_data.append({"Date": date_h, "Action": desc})
                     history_blob += desc_lower + " "
                     
-                    # --- CLEAN SLATE PROTOCOL ---
-                    if any(x in desc_lower for x in ["reported", "passed", "failed", "stricken", "defeated", "read first", "read second", "read third", "continued to next session"]):
+                    # --- LOCATION-FIRST ANCHOR MANAGEMENT ---
+                    
+                    # 1. Build the Anchor
+                    if any(x in desc_lower for x in ["referred to", "rereferred to", "re-referred to", "recommitted to"]):
                         curr_sub = "-"
-
-                    if "referred to" in desc_lower:
-                        curr_sub = "-"
-                        match = re.search(r'referred to (?:committee on|the committee on|committee for)?\s?([a-z\s&,-]+)', desc_lower)
+                        match = re.search(r'(?:referred|rereferred|re-referred|recommitted) to (?:committee on|the committee on|committee for)?\s?([a-z\s&,-]+)', desc_lower)
                         if match: 
                             found = match.group(1).strip().title()
                             if desc.startswith("H ") and not found.startswith("House"): found = "House " + found
                             if desc.startswith("S ") and not found.startswith("Senate"): found = "Senate " + found
                             curr_comm = found 
                             
+                    # 2. Build Subcommittee Anchor
                     if "sub:" in desc_lower:
                         try: curr_sub = desc_lower.split("sub:")[1].strip().title()
                         except: pass
+                        
+                    # 3. Destroy the Anchor (The Clean Slate Protocol)
+                    # Erases committee location if a definitive exit action happens. 
+                    if ("reported" in desc_lower or "passed house" in desc_lower or "passed senate" in desc_lower or "engrossed" in desc_lower or "agreed to by" in desc_lower):
+                        # Ensure it's not a subcommittee fake-out or a death state
+                        if "recommends" not in desc_lower and "failed to" not in desc_lower:
+                            curr_comm = "Unassigned"
+                            curr_sub = "-"
         
-        # --- HYBRID STATUS LOGIC (Decoupled) ---
+        # --- STATUS OVERRIDE LOGIC ---
         final_display_status = raw_status
         final_lifecycle_status = raw_status
         
-        # Noise Check
-        is_status_noise = any(x in str(raw_status).lower() for x in IGNORE_FOR_LIFECYCLE)
-        
-        if is_status_noise:
+        if any(x in str(raw_status).lower() for x in IGNORE_FOR_LIFECYCLE):
             if last_major_action_text: final_lifecycle_status = last_major_action_text
         else:
              final_lifecycle_status = raw_status
-             
-        final_display_status = raw_status
 
         # --- PIN POLICY ---
         should_pin = False
@@ -448,11 +430,11 @@ def get_bill_data_batch(bill_numbers, lis_data_dict):
         
         curr_comm = clean_committee_name(curr_comm)
         
-        # Pass FILTERED status to lifecycle
+        # Determine sorting based on filtered status and active Anchor
         lifecycle = determine_lifecycle(str(final_lifecycle_status), str(curr_comm), bill_num, history_blob)
         
+        # --- DYNAMIC LOCATION LABELING ---
         display_comm = curr_comm
-        # FORCE "On Floor" label if Lifecycle is Out of Committee (or Passed)
         if "Out of Committee" in lifecycle or "Passed" in lifecycle or "Signed" in lifecycle or "Awaiting" in lifecycle:
              if "engross" in str(final_display_status).lower(): display_comm = "🏛️ Engrossed (Passed Chamber)"
              elif "read" in str(final_display_status).lower(): display_comm = "📜 On Floor (Read/Reported)"
@@ -528,7 +510,6 @@ def render_bill_card(row, show_youth_tag=False):
     
     b_num_display = row['Bill Number']
     
-    # BADGE RESTORED: AFTER the bill number
     badge = ""
     if str(b_num_display).upper().startswith("H"): badge = "[H]"
     elif str(b_num_display).upper().startswith("S"): badge = "[S]"
@@ -661,8 +642,6 @@ def render_simple_list_item(df):
     if df.empty: st.caption("No bills."); return
     
     # 3 BUCKETS LOGIC FOR "OUT OF COMMITTEE"
-    # Order: A (Received/Inbox) -> C (On Floor/Active) -> B (Passed/Transit)
-    
     def get_bucket(row):
         status_lower = str(row.get('Status', '')).lower()
         if "received from" in status_lower: return "1_Inbox"
@@ -671,7 +650,6 @@ def render_simple_list_item(df):
 
     df['Bucket'] = df.apply(get_bucket, axis=1)
     
-    # Render in A -> C -> B order
     bucket_map = {
         "1_Inbox": "📥 Received / Awaiting Referral",
         "2_Floor": "📜 On Floor",
@@ -828,12 +806,10 @@ if bills_to_track:
         today = datetime.now(est).date()
         cols = st.columns(7)
         
-        # --- HELPER: TIME PARSING FOR SORTING ---
         def parse_time_rank(time_str):
-            """Returns a float 0-24 for sorting. AM/PM supported. 'After Adj' = 12.5 (Mid-day)."""
-            if not time_str or "TBA" in time_str: return 23.9 # End of day
+            if not time_str or "TBA" in time_str: return 23.9 
             t_lower = time_str.lower()
-            if "adjournment" in t_lower or "recess" in t_lower: return 12.5 # Approximate "After Floor" slot
+            if "adjournment" in t_lower or "recess" in t_lower: return 12.5 
             match = re.search(r'(\d{1,2}):(\d{2})', time_str)
             if match:
                 h = int(match.group(1))
@@ -843,7 +819,6 @@ if bills_to_track:
                 return h + (m / 60.0)
             return 23.9
 
-        # 1. PRE-CALCULATE DOCKET
         calendar_map = {}
         for _, row in final_df.iterrows():
             meetings = row.get('Upcoming_Meetings', [])
@@ -866,7 +841,6 @@ if bills_to_track:
                         calendar_map[formatted_date][clean_name].append(row)
                     except: pass
 
-        # 2. RENDER THE 7-DAY VIEW
         for i in range(7):
             target_date = today + timedelta(days=i)
             target_date_str = target_date.strftime('%Y-%m-%d')
@@ -876,7 +850,6 @@ if bills_to_track:
                 st.markdown(f"**{display_date_str}**")
                 st.divider()
                 
-                # --- SORTING PREPARATION ---
                 comm_time_map = {} 
                 if target_date_str in calendar_map:
                     for comm_name in calendar_map[target_date_str].keys():
@@ -899,7 +872,6 @@ if bills_to_track:
                                         break
                         comm_time_map[comm_name] = {"display": t_found, "rank": t_rank}
 
-                # --- A. SCHEDULED MEETINGS (SORTED) ---
                 if target_date_str in calendar_map:
                     sorted_comms = sorted(calendar_map[target_date_str].items(), key=lambda x: comm_time_map.get(x[0], {}).get('rank', 23.9))
                     for comm_name, bills in sorted_comms:
@@ -909,7 +881,6 @@ if bills_to_track:
                         for row in bills: _render_single_bill_row(row)
                         st.divider()
 
-                # --- B. COMPLETED / ACTED ON (FAILSAFE & SORTED) ---
                 if i == 0: 
                     completed_map = {}
                     
@@ -921,7 +892,6 @@ if bills_to_track:
                         if is_dup: continue
 
                         happened_today = False
-                        # 1. Check History List
                         hist_data = row.get('History_Data', [])
                         if isinstance(hist_data, list):
                             for h in hist_data:
@@ -932,7 +902,6 @@ if bills_to_track:
                                     if h_dt == target_date: happened_today = True
                                 except: pass
                         
-                        # 2. Check Date Column
                         if not happened_today:
                             last_date = str(row.get('Date', ''))
                             try:
@@ -941,7 +910,6 @@ if bills_to_track:
                                 if lis_dt == target_date: happened_today = True
                             except: pass
 
-                        # 3. Check Status Text for Date (Walk-on Failsafe Part 1)
                         if not happened_today:
                             status_txt = str(row.get('Status', ''))
                             d_check_1 = target_date.strftime("%-m/%-d/%Y")
@@ -952,10 +920,8 @@ if bills_to_track:
                         if happened_today:
                             status_lower = str(row.get('Status', '')).lower()
                             
-                            # --- FAILSAFE PART 2: KEYWORD MATCHING ---
                             has_vote = bool(re.search(r'\d{1,3}-y', status_lower))
                             
-                            # Important: Shows Action taken (even if docket missed it)
                             important_keywords = [
                                 "passed", "report", "agreed", "engross", "read", "vote", 
                                 "tabled", "failed", "defeat", "stricken", "indefinitely", 
@@ -963,7 +929,6 @@ if bills_to_track:
                                 "withdrawn", "recommitted", "rereferred", "carried over", "approved"
                             ]
                             
-                            # Noise: Administrative only
                             noise_keywords = [
                                 "fiscal impact", "statement from", "note filed",
                                 "assigned", "referred", "docketed"
@@ -987,7 +952,6 @@ if bills_to_track:
                     if completed_map:
                         st.success("✅ **Completed Today**")
                         
-                        # Sort using the main committee map (best guess for time)
                         sorted_completed = sorted(completed_map.items(), key=lambda x: comm_time_map.get(x[0], {}).get('rank', 12.0))
                         
                         for comm_key, bills in sorted_completed:
@@ -1006,7 +970,6 @@ if bills_to_track:
                                     st.markdown(f"🔗 [View on LIS]({lis_link})")
                             st.divider()
 
-                # --- C. EMPTY STATE ---
                 has_schedule = (target_date_str in calendar_map)
                 has_completed = (i == 0 and len(completed_map) > 0) if 'completed_map' in locals() else False
                 
