@@ -140,6 +140,7 @@ def clean_bill_id(bill_text):
 def determine_lifecycle(status_text, committee_name, bill_id="", history_text=""):
     """
     Decoupled Logic: Uses filtered lifecycle_status for sorting.
+    Also implements Cross-Chamber Completion Check.
     """
     status = str(status_text).lower()
     comm = str(committee_name).strip()
@@ -160,10 +161,17 @@ def determine_lifecycle(status_text, committee_name, bill_id="", history_text=""
         elif b_id.startswith("SJ"):
             if "agreed to by house" in hist or "passed house" in hist: return "✅ Passed (Resolution)"
 
+    # 3. PASSED LEGISLATURE (Awaiting Sig)
     if any(x in status for x in ["enrolled", "communicated to governor", "bill text as passed"]): return "✍️ Awaiting Signature"
+    
+    if b_id.startswith("H"):
+        if "passed senate" in status or "passed senate" in hist: return "✍️ Awaiting Signature"
+        if "agreed to by senate" in status or "agreed to by senate" in hist: return "✍️ Awaiting Signature"
+    elif b_id.startswith("S"):
+        if "passed house" in status or "passed house" in hist: return "✍️ Awaiting Signature"
+        if "agreed to by house" in status or "agreed to by house" in hist: return "✍️ Awaiting Signature"
 
-    # 3. DEAD / FAILED (The Reaper)
-    # Added pbi and failed to report
+    # 4. DEAD / FAILED (The Reaper)
     dead_keywords_status = ["tabled", "failed", "stricken", "passed by indefinitely", "left in", "defeated", "no action taken", "incorporated into", "continued to next session", "pbi", "failed to report"]
     dead_keywords_history = ["failed to report", "passed by indefinitely", "stricken from", "left in ", "laying on the table", "lay on the table", "defeated", "incorporated into", "continued to next session", "pbi"]
 
@@ -173,18 +181,25 @@ def determine_lifecycle(status_text, committee_name, bill_id="", history_text=""
     if any(x in hist for x in dead_keywords_history): 
         if "amendment" not in hist and "recommend" not in hist: return "❌ Dead / Tabled"
     
-    # 4. OUT OF COMMITTEE
-    # Added "Received" to capture crossover bills
-    out_keywords = ["reported", "passed", "agreed", "engrossed", "communicated", "reading waived", "read second", "read third", "read first", "received from"]
-    
-    if any(x in status for x in out_keywords):
+    # 5. OUT OF COMMITTEE (EXPLICIT)
+    # Only "Reported" or reading status counts as active floor work here.
+    # We delay the "Passed" check until after we check for Committee assignment.
+    floor_keywords = ["reported", "reading waived", "read second", "read third", "read first"]
+    if any(x in status for x in floor_keywords):
         if "recommends reporting" not in status: 
             return "📣 Out of Committee"
-    
-    # 5. IN COMMITTEE (Default)
+
+    # 6. IN COMMITTEE (AUTHORITY CHECK)
+    # If a Committee Name exists, it TRUMPS "Passed" status (crossover bills).
+    if comm not in ["-", "nan", "None", "", "Unassigned"] and len(comm) > 2: return "📥 In Committee"
     if "referred to" in status and "governor" not in status: return "📥 In Committee"
     if "pending" in status or "prefiled" in status: return "📥 In Committee"
-    if comm not in ["-", "nan", "None", "", "Unassigned"] and len(comm) > 2: return "📥 In Committee"
+
+    # 7. OUT OF COMMITTEE (TRANSIT / PASSED)
+    # If we are here, it's not in a committee, so "Passed" means Transit.
+    transit_keywords = ["passed", "agreed", "engrossed", "communicated", "received from"]
+    if any(x in status for x in transit_keywords):
+        return "📣 Out of Committee"
     
     return "📥 In Committee"
 
@@ -315,17 +330,13 @@ def get_bill_data_batch(bill_numbers, lis_data_dict):
             docket_lookup[b_id] = group.to_dict('records')
 
     # --- DECOUPLED LOGIC SETTINGS ---
-    # Words to ignore for Sorting/Lifecycle, but allow for Display.
-    # "Assigned" is explicitly EXCLUDED (it is Major).
     IGNORE_FOR_LIFECYCLE = ["fiscal", "statement", "printed", "reprint", "docketed", "emergency", "note filed"]
 
     for bill_num in clean_bills:
         item = lis_lookup.get(bill_num)
         title = "Unknown"; 
         
-        # We need two status variables:
-        # display_status = The "News" (User Facing)
-        # lifecycle_status = The "State" (Logic Facing)
+        # Initialize status variables
         raw_status = "Introduced"
         
         # --- INITIAL DATA & ANCHORING ---
@@ -339,10 +350,11 @@ def get_bill_data_batch(bill_numbers, lis_data_dict):
             title = item.get('bill_description', 'No Title')
             h_act = str(item.get('last_house_action', ''))
             s_act = str(item.get('last_senate_action', ''))
-            temp = h_act if h_act else s_act
-            if temp and temp != 'nan': raw_status = temp
+            # We default to the most generic available if both are empty
+            if h_act and h_act != 'nan': raw_status = h_act
+            elif s_act and s_act != 'nan': raw_status = s_act
 
-        date_val = "" # Will track date of last major action
+        date_val = "" 
         curr_comm = "-"; curr_sub = "-"; history_data = []
 
         raw_history = history_lookup.get(bill_num, [])
@@ -368,9 +380,7 @@ def get_bill_data_batch(bill_numbers, lis_data_dict):
                 if desc:
                     desc_lower = desc.lower()
                     
-                    # Track Major Actions (including Assigned, Referred, etc)
-                    # Used to populate History > Status overrides
-                    # We track the TEXT of the last major action to use as fallback
+                    # Track Major Actions
                     check_keywords = ["reported", "passed", "defeated", "failed", "stricken", "continued", "incorporated", "approved", "enacted", "vetoed", "referred", "assigned", "recommended", "read"]
                     is_noise = any(x in desc_lower for x in IGNORE_FOR_LIFECYCLE)
                     
@@ -379,12 +389,13 @@ def get_bill_data_batch(bill_numbers, lis_data_dict):
                         # Track date
                         try:
                             d_obj = parse_any_date(date_h)
-                            if d_obj > latest_history_date: latest_history_date = d_obj
-                            date_val = date_h
+                            if d_obj >= latest_history_date: 
+                                latest_history_date = d_obj
+                                date_val = date_h
+                                raw_status = desc 
                         except: pass
 
                     # --- CHAMBER SWITCHING ---
-                    # Ignore clerical when switching context
                     if not is_noise:
                         if desc.startswith("H ") and current_chamber_context == "Senate":
                             current_chamber_context = "House"; curr_comm = "House - Unassigned"; curr_sub = "-"
@@ -415,56 +426,18 @@ def get_bill_data_batch(bill_numbers, lis_data_dict):
         final_display_status = raw_status
         final_lifecycle_status = raw_status
         
-        # Date of the raw status (usually from 'last_action_date' in bills.csv, but we used generic anchoring)
-        # In this script structure, date_val is coming from history loop. 
-        # We need to trust the Latest History Date we calculated.
-        
-        # 1. Determine Display Status (Time Priority)
-        # If History is Strictly Newer -> History Wins
-        # Else -> Status Wins
-        # Note: LIS Bills CSV "last_house_action" sometimes lags history or vice versa.
-        # We assume raw_status corresponds to "today" if we don't have a specific date for it from the item.
-        # Ideally we'd parse the date from the bill item, but we rely on the history loop for dates.
-        
-        # Fix for Stale Status (HB288):
-        # If the text in raw_status differs from last_major_action_text, and latest_history_date is recent...
-        # We use the Hybrid Rules.
-        
+        # Noise Check
         is_status_noise = any(x in str(raw_status).lower() for x in IGNORE_FOR_LIFECYCLE)
         
-        # Logic 1: Lifecycle (Sorting)
-        # If status is noise -> Use History
-        # If History is newer -> Use History
-        # Else -> Use Status
         if is_status_noise:
             if last_major_action_text: final_lifecycle_status = last_major_action_text
-        # We can't strictly compare dates because raw_status date isn't explicitly in 'item' reliably.
-        # We assume if last_major_action_text exists, it is the most accurate source for Lifecycle.
-        elif last_major_action_text:
-             # If raw_status contains "Passed" and history contains "Passed", they are same.
-             # If raw_status is "Passed" (new) and history is "Read" (old), we want Status.
-             # Since we can't verify raw_status date easily, we trust raw_status UNLESS it is noise.
+        else:
              final_lifecycle_status = raw_status
              
-        # Logic 2: Display (User)
-        # Always show raw_status unless we know for a fact history is newer/better.
-        # Given LIS constraints, raw_status is usually the "News". 
         final_display_status = raw_status
-
-        # Override for Stale Status (HB288 Fix attempt)
-        # If raw_status is "Read 3rd" but history says "Referred", History is newer.
-        # We assume history order is correct. If the last history item is different from status?
-        if history_data:
-            last_hist = history_data[-1]['Action'] # Most recent
-            # If Raw Status matches the *previous* history item, then Raw is stale.
-            # This is hard to prove without dates. 
-            # We will rely on the fact that if raw_status is NOT noise, we show it.
-            pass
 
         # --- PIN POLICY ---
         should_pin = False
-        # If we are displaying the raw status, check if it's missing from history blob
-        # This catches "Same Day Updates"
         if final_display_status == raw_status:
              clean_check = str(raw_status).lower().strip()
              if clean_check not in history_blob:
@@ -479,10 +452,12 @@ def get_bill_data_batch(bill_numbers, lis_data_dict):
         lifecycle = determine_lifecycle(str(final_lifecycle_status), str(curr_comm), bill_num, history_blob)
         
         display_comm = curr_comm
-        if "Passed" in lifecycle or "Signed" in lifecycle or "Awaiting" in lifecycle:
+        # FORCE "On Floor" label if Lifecycle is Out of Committee (or Passed)
+        if "Out of Committee" in lifecycle or "Passed" in lifecycle or "Signed" in lifecycle or "Awaiting" in lifecycle:
              if "engross" in str(final_display_status).lower(): display_comm = "🏛️ Engrossed (Passed Chamber)"
              elif "read" in str(final_display_status).lower(): display_comm = "📜 On Floor (Read/Reported)"
              elif "passed" in str(final_display_status).lower(): display_comm = "🎉 Passed Chamber"
+             elif "Out of Committee" in lifecycle: display_comm = "📜 On Floor / Reported" 
              else: display_comm = "On Floor / Reported"
 
         upcoming_meetings = []
@@ -503,7 +478,7 @@ def get_bill_data_batch(bill_numbers, lis_data_dict):
 
         results.append({
             "Bill Number": bill_num, "Official Title": title, 
-            "Status": str(final_display_status), # UI gets RAW/News
+            "Status": str(final_display_status), 
             "Date": date_val, 
             "Lifecycle": lifecycle, "History_Data": history_data[::-1], 
             "Current_Committee": str(curr_comm).strip(), "Display_Committee": str(display_comm).strip(), 
