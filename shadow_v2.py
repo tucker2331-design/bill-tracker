@@ -139,7 +139,7 @@ def clean_bill_id(bill_text):
 
 def determine_lifecycle(status_text, committee_name, bill_id="", history_text=""):
     """
-    Location-First Architecture: Validates anchors before testing keywords.
+    Location-First Architecture: Strictly ordered to prevent cross-chamber traps.
     """
     status = str(status_text).lower()
     comm = str(committee_name).strip()
@@ -160,20 +160,14 @@ def determine_lifecycle(status_text, committee_name, bill_id="", history_text=""
         elif b_id.startswith("SJ"):
             if "agreed to by house" in hist or "passed house" in hist: return "✅ Passed (Resolution)"
 
-    # 3. PASSED LEGISLATURE (Awaiting Sig)
-    if any(x in status for x in ["enrolled", "communicated to governor", "bill text as passed"]): return "✍️ Awaiting Signature"
-    
-    if b_id.startswith("H"):
-        if "passed senate" in status or "passed senate" in hist: return "✍️ Awaiting Signature"
-        if "agreed to by senate" in status or "agreed to by senate" in hist: return "✍️ Awaiting Signature"
-    elif b_id.startswith("S"):
-        if "passed house" in status or "passed house" in hist: return "✍️ Awaiting Signature"
-        if "agreed to by house" in status or "agreed to by house" in hist: return "✍️ Awaiting Signature"
+    # 3. PASSED LEGISLATURE (Awaiting Sig) VIP Room
+    # Explicitly removed the cross-chamber history blob checks here to prevent SB27 bug.
+    vip_keywords = ["enrolled", "communicated to governor", "bill text as passed senate and house", "bill text as passed house and senate"]
+    if any(x in status for x in vip_keywords): 
+        return "✍️ Awaiting Signature"
 
-    # 4. DEAD / FAILED (The Reaper - History Fallback removed to prevent false immunity)
+    # 4. DEAD / FAILED (The Reaper)
     dead_keywords_status = ["tabled", "failed to report", "failed to pass", "passed by indefinitely", "left in", "defeated", "no action taken", "incorporated into", "continued to next session", "pbi", "stricken"]
-
-    # Check status directly. Ignore if it's just a subcommittee recommendation.
     if any(x in status for x in dead_keywords_status) and "recommend" not in status: 
         return "❌ Dead / Tabled"
 
@@ -343,6 +337,7 @@ def get_bill_data_batch(bill_numbers, lis_data_dict):
 
         raw_history = history_lookup.get(bill_num, [])
         
+        # Sort using Python's stable sort. Ties (same date) remain in their natural LIS order.
         def get_sort_date(r):
             for col in ['history_date', 'date', 'action_date']:
                 if col in r and pd.notna(r[col]): return parse_any_date(str(r[col]))
@@ -351,7 +346,6 @@ def get_bill_data_batch(bill_numbers, lis_data_dict):
 
         history_blob = ""
         last_major_action_text = None 
-        latest_history_date = datetime.min.date()
         
         if raw_history:
             for h_row in raw_history:
@@ -364,19 +358,15 @@ def get_bill_data_batch(bill_numbers, lis_data_dict):
                 if desc:
                     desc_lower = desc.lower()
                     
-                    # UPDATED SCANNER DICTIONARY
-                    check_keywords = ["reported", "passed", "defeated", "failed", "stricken", "continued", "incorporated", "approved", "enacted", "vetoed", "referred", "assigned", "recommended", "read", "agreed", "left", "tabled", "indefinitely", "pbi", "chapter", "signed"]
+                    # UPDATED SCANNER DICTIONARY: Added 'communicated' and 'enrolled' to catch VIP statuses.
+                    check_keywords = ["reported", "passed", "defeated", "failed", "stricken", "continued", "incorporated", "approved", "enacted", "vetoed", "referred", "assigned", "recommended", "read", "agreed", "left", "tabled", "indefinitely", "pbi", "chapter", "signed", "communicated", "enrolled"]
                     is_noise = any(x in desc_lower for x in IGNORE_FOR_LIFECYCLE)
                     
+                    # Natural Order Processing: Updates status as it loops, naturally settling on the final event.
                     if any(k in desc_lower for k in check_keywords) and not is_noise:
                         last_major_action_text = desc
-                        try:
-                            d_obj = parse_any_date(date_h)
-                            if d_obj >= latest_history_date: 
-                                latest_history_date = d_obj
-                                date_val = date_h
-                                raw_status = desc 
-                        except: pass
+                        date_val = date_h
+                        raw_status = desc 
 
                     # --- CHAMBER SWITCHING ---
                     if not is_noise:
@@ -406,7 +396,8 @@ def get_bill_data_batch(bill_numbers, lis_data_dict):
                         except: pass
                         
                     # 3. Destroy the Anchor (The Clean Slate Protocol)
-                    if ("reported" in desc_lower or "passed house" in desc_lower or "passed senate" in desc_lower or "engrossed" in desc_lower or "agreed to by" in desc_lower):
+                    # Added 'communicated to governor' and 'enrolled' to ensure they wipe any lingering committees
+                    if ("reported" in desc_lower or "passed house" in desc_lower or "passed senate" in desc_lower or "engrossed" in desc_lower or "agreed to by" in desc_lower or "communicated to" in desc_lower or "enrolled" in desc_lower):
                         if "recommends" not in desc_lower and "failed to" not in desc_lower:
                             curr_comm = "Unassigned"
                             curr_sub = "-"
