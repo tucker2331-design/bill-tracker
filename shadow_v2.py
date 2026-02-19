@@ -170,25 +170,30 @@ def determine_lifecycle(status_text, committee_name, bill_id="", history_text=""
         if "passed house" in status or "passed house" in hist: return "✍️ Awaiting Signature"
         if "agreed to by house" in status or "agreed to by house" in hist: return "✍️ Awaiting Signature"
 
-    # 4. DEAD / FAILED (The Reaper)
-    dead_keywords_status = ["tabled", "failed", "stricken", "passed by indefinitely", "left in", "defeated", "no action taken", "incorporated into", "continued to next session", "pbi", "failed to report"]
-    dead_keywords_history = ["failed to report", "passed by indefinitely", "stricken from", "left in ", "laying on the table", "lay on the table", "defeated", "incorporated into", "continued to next session", "pbi"]
+    # 4. DEAD / FAILED (The Reaper - History Fallback removed to prevent false immunity)
+    dead_keywords_status = ["tabled", "failed to report", "failed to pass", "passed by indefinitely", "left in", "defeated", "no action taken", "incorporated into", "continued to next session", "pbi", "stricken"]
 
+    # Check status directly. Ignore if it's just a subcommittee recommendation.
     if any(x in status for x in dead_keywords_status) and "recommend" not in status: 
         return "❌ Dead / Tabled"
-    if any(x in hist for x in dead_keywords_history) and "amendment" not in hist and "recommend" not in hist: 
-        return "❌ Dead / Tabled"
 
-    # 5. IN COMMITTEE (AUTHORITY CHECK)
-    # If the history loop determined a valid anchor exists, it is explicitly IN COMMITTEE.
-    # This guarantees crossover bills aren't marked as "Passed" while in their second committee.
+    # 5. OUT OF COMMITTEE (EXPLICIT / ACTIVE)
+    floor_keywords = ["reported", "reading waived", "read second", "read third", "read first"]
+    if any(x in status for x in floor_keywords):
+        if "recommends reporting" not in status: 
+            return "📣 Out of Committee"
+
+    # 6. IN COMMITTEE (AUTHORITY CHECK)
     if comm not in ["-", "nan", "None", "", "Unassigned"] and len(comm) > 2: return "📥 In Committee"
     if "referred to" in status and "governor" not in status: return "📥 In Committee"
     if "pending" in status or "prefiled" in status: return "📥 In Committee"
 
-    # 6. OUT OF COMMITTEE (Transit / Floor)
-    # If we fall through the gauntlet, the bill has no committee anchor and is active.
-    return "📣 Out of Committee"
+    # 7. OUT OF COMMITTEE (Transit / Floor)
+    transit_keywords = ["passed", "agreed", "engrossed", "communicated", "received from"]
+    if any(x in status for x in transit_keywords):
+        return "📣 Out of Committee"
+    
+    return "📥 In Committee"
 
 def clean_committee_name(name):
     if not name or str(name).lower() == 'nan': return ""
@@ -316,7 +321,6 @@ def get_bill_data_batch(bill_numbers, lis_data_dict):
         for b_id, group in docket_df.groupby('bill_clean'):
             docket_lookup[b_id] = group.to_dict('records')
 
-    # Words completely ignored for sorting overrides
     IGNORE_FOR_LIFECYCLE = ["fiscal", "statement", "printed", "reprint", "docketed", "emergency", "note filed"]
 
     for bill_num in clean_bills:
@@ -360,8 +364,8 @@ def get_bill_data_batch(bill_numbers, lis_data_dict):
                 if desc:
                     desc_lower = desc.lower()
                     
-                    # Track latest major valid status (replaces default if chronologically newer)
-                    check_keywords = ["reported", "passed", "defeated", "failed", "stricken", "continued", "incorporated", "approved", "enacted", "vetoed", "referred", "assigned", "recommended", "read", "agreed"]
+                    # UPDATED SCANNER DICTIONARY
+                    check_keywords = ["reported", "passed", "defeated", "failed", "stricken", "continued", "incorporated", "approved", "enacted", "vetoed", "referred", "assigned", "recommended", "read", "agreed", "left", "tabled", "indefinitely", "pbi", "chapter", "signed"]
                     is_noise = any(x in desc_lower for x in IGNORE_FOR_LIFECYCLE)
                     
                     if any(k in desc_lower for k in check_keywords) and not is_noise:
@@ -402,9 +406,7 @@ def get_bill_data_batch(bill_numbers, lis_data_dict):
                         except: pass
                         
                     # 3. Destroy the Anchor (The Clean Slate Protocol)
-                    # Erases committee location if a definitive exit action happens. 
                     if ("reported" in desc_lower or "passed house" in desc_lower or "passed senate" in desc_lower or "engrossed" in desc_lower or "agreed to by" in desc_lower):
-                        # Ensure it's not a subcommittee fake-out or a death state
                         if "recommends" not in desc_lower and "failed to" not in desc_lower:
                             curr_comm = "Unassigned"
                             curr_sub = "-"
