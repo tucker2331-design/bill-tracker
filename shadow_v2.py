@@ -166,9 +166,10 @@ def determine_lifecycle(status_text, committee_name, bill_id="", history_text=""
     if any(x in status for x in vip_keywords): 
         return "✍️ Awaiting Signature"
 
-    # 4. DEAD / FAILED (The Reaper)
-    dead_keywords_status = ["tabled", "failed to report", "failed to pass", "passed by indefinitely", "left in", "defeated", "no action taken", "incorporated into", "continued to next session", "pbi", "stricken"]
-    if any(x in status for x in dead_keywords_status) and "recommend" not in status: 
+    # 4. DEAD / FAILED (The Aggressive Reaper)
+    # Shield removed. Catches abbreviated syntax like "incorporated" and "carry over".
+    dead_keywords_status = ["tabled", "failed to report", "failed to pass", "passed by indefinitely", "left in", "defeated", "no action taken", "incorporated", "continued", "carry over", "pbi", "stricken"]
+    if any(x in status for x in dead_keywords_status): 
         return "❌ Dead / Tabled"
 
     # 5. OUT OF COMMITTEE (EXPLICIT / ACTIVE)
@@ -358,8 +359,13 @@ def get_bill_data_batch(bill_numbers, lis_data_dict):
                 if desc:
                     desc_lower = desc.lower()
                     
-                    # UPDATED SCANNER DICTIONARY: Added 'communicated' and 'enrolled' to catch VIP statuses.
-                    check_keywords = ["reported", "passed", "defeated", "failed", "stricken", "continued", "incorporated", "approved", "enacted", "vetoed", "referred", "assigned", "recommended", "read", "agreed", "left", "tabled", "indefinitely", "pbi", "chapter", "signed", "communicated", "enrolled"]
+                    # UPDATED SCANNER DICTIONARY
+                    check_keywords = [
+                        "reported", "passed", "defeated", "failed", "stricken", "continued", "incorporated", 
+                        "approved", "enacted", "vetoed", "referred", "assigned", "recommended", "read", "agreed", 
+                        "left", "tabled", "indefinitely", "pbi", "chapter", "signed", "communicated", "enrolled",
+                        "reconsidered", "taken", "concurred", "reenrolled", "recommendation"
+                    ]
                     is_noise = any(x in desc_lower for x in IGNORE_FOR_LIFECYCLE)
                     
                     # Natural Order Processing: Updates status as it loops, naturally settling on the final event.
