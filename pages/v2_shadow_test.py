@@ -11,13 +11,24 @@ API_KEY = "81D70A54-FCDC-4023-A00B-A3FD114D5984"
 SESSION_CODE = "20261"
 MAX_CONCURRENT_SCRAPES = 3  # Protect against LIS Azure 503 Ban Hammer
 
-st.set_page_config(page_title="v90 Hybrid API Calendar", page_icon="📆", layout="wide")
-st.title("📆 v90: Global API Calendar (Hybrid Engine)")
+st.set_page_config(page_title="v90.1 Hybrid API Calendar", page_icon="📆", layout="wide")
+st.title("📆 v90.1: Global API Calendar (Patched Engine)")
 
 # --- SPEED ENGINE ---
 session = requests.Session()
 adapter = requests.adapters.HTTPAdapter(pool_connections=10, pool_maxsize=10)
 session.mount('https://', adapter)
+
+# --- HELPER: V89 PROVEN LINK EXTRACTOR ---
+def extract_agenda_link(description_html):
+    """Extracts hidden URLs from the Description field, a known quirk of the LIS API."""
+    if not description_html: return None
+    match = re.search(r'href=[\'"]?([^\'" >]+)', description_html)
+    if match:
+        url = match.group(1)
+        if url.startswith("/"): return f"https://house.vga.virginia.gov{url}"
+        return url
+    return None
 
 # --- HELPER: REGEX DOCKET SCRAPER ---
 def scrape_docket_for_bills(link_url):
@@ -25,17 +36,13 @@ def scrape_docket_for_bills(link_url):
     Safely fetches the HTML from the LinkURL and runs a strict regex 
     to extract Virginia bill numbers (e.g., HB100, SB20).
     """
-    if not link_url:
-        return []
-    
-    if str(link_url).lower().endswith(".pdf"):
-        return ["PDF_AGENDA_DETECTED"]
+    if not link_url: return []
+    if str(link_url).lower().endswith(".pdf"): return ["PDF_AGENDA_DETECTED"]
         
     try:
         time.sleep(0.1) # Micro-stagger to avoid Azure WAF triggering
         resp = session.get(link_url, timeout=5)
-        if resp.status_code != 200:
-            return []
+        if resp.status_code != 200: return []
             
         soup = BeautifulSoup(resp.text, 'html.parser')
         text_content = soup.get_text(" ", strip=True)
@@ -52,7 +59,6 @@ def scrape_docket_for_bills(link_url):
                 clean_bills.append(clean_b)
                 
         return clean_bills
-        
     except Exception as e:
         return []
 
@@ -61,32 +67,24 @@ def scrape_docket_for_bills(link_url):
 def get_global_schedule_grid():
     """
     Step 1 of Hybrid Engine: Fetch the absolute truth of the schedule grid.
+    Reverted to v89 parameter structure to bypass the 400 Bad Request error.
     """
     url = "https://lis.virginia.gov/Schedule/api/getschedulelistasync"
     headers = {"WebAPIKey": API_KEY, "Accept": "application/json"}
     
-    today_str = datetime.now().strftime("%Y-%m-%d")
-    next_week_str = (datetime.now() + timedelta(days=7)).strftime("%Y-%m-%d")
-    
-    # Passing startDate and endDate natively to the API
-    params = {
-        "sessionCode": SESSION_CODE,
-        "startDate": today_str,
-        "endDate": next_week_str
-    }
-    
     try:
         with concurrent.futures.ThreadPoolExecutor(max_workers=2) as executor:
-            # Fetch for both House and Senate concurrently
-            h_params = params.copy(); h_params["chamberCode"] = "H"
-            s_params = params.copy(); s_params["chamberCode"] = "S"
-            
-            h_future = executor.submit(session.get, url, headers=headers, params=h_params, timeout=5)
-            s_future = executor.submit(session.get, url, headers=headers, params=s_params, timeout=5)
+            h = executor.submit(session.get, url, headers=headers, params={"sessionCode": SESSION_CODE, "chamberCode": "H"}, timeout=5)
+            s = executor.submit(session.get, url, headers=headers, params={"sessionCode": SESSION_CODE, "chamberCode": "S"}, timeout=5)
             
             raw_items = []
-            if h_future.result().status_code == 200: raw_items.extend(h_future.result().json().get("ListItems", []))
-            if s_future.result().status_code == 200: raw_items.extend(s_future.result().json().get("ListItems", []))
+            # V89 Patch: The live API returns "Schedules", NOT "ListItems" as the docs claim.
+            if h.result().status_code == 200: 
+                h_data = h.result().json()
+                raw_items.extend(h_data.get("Schedules", h_data.get("ListItems", [])))
+            if s.result().status_code == 200: 
+                s_data = s.result().json()
+                raw_items.extend(s_data.get("Schedules", s_data.get("ListItems", [])))
             
         return raw_items
     except Exception as e:
@@ -131,8 +129,12 @@ for m in all_raw_items:
     is_floor = "Convene" in name or "Session" in name or name in ["House", "Senate"]
     m['IsFloor'] = is_floor
     
-    # Official API Cancellation Truth
-    if m.get("IsCancelled") is True:
+    # V89 Patch: Extracting Link and Cancellation status natively from text payloads
+    extracted_link = extract_agenda_link(m.get("Description", ""))
+    m['LinkURL'] = extracted_link if extracted_link else m.get("LinkURL")
+    
+    is_cancelled_text = "CANCEL" in str(m.get("Comments", "")).upper() or "CANCEL" in str(m.get("Description", "")).upper()
+    if m.get("IsCancelled") is True or is_cancelled_text:
         m['DisplayTime'] = "CANCELLED"
         
     m['ScrapedBills'] = []
@@ -146,7 +148,7 @@ with st.spinner("Step 2: Scraping Official Dockets via Regex..."):
     scrape_tasks = []
     for e in upcoming_events:
         link = e.get("LinkURL")
-        is_cancelled = e.get("IsCancelled") is True
+        is_cancelled = "CANCEL" in str(e.get("DisplayTime", "")).upper()
         
         # Bypass scraping if it's a Floor Session, Cancelled, or has no Link
         if link and not e['IsFloor'] and not is_cancelled:
@@ -190,7 +192,7 @@ else:
                 time_display = event.get("DisplayTime")
                 agenda_link = event.get("LinkURL")
                 is_floor = event.get("IsFloor")
-                is_cancelled = event.get("IsCancelled") is True
+                is_cancelled = "CANCEL" in str(time_display).upper()
                 scraped_bills = event.get("ScrapedBills", [])
                 
                 if is_cancelled:
