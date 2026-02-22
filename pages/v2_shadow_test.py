@@ -12,8 +12,8 @@ API_KEY = "81D70A54-FCDC-4023-A00B-A3FD114D5984"
 SESSION_CODE = "20261"
 MAX_CONCURRENT_SCRAPES = 3 
 
-st.set_page_config(page_title="v92 Chrono Calendar", page_icon="📆", layout="wide")
-st.title("📆 v92: Global API Calendar (Chrono Patch)")
+st.set_page_config(page_title="v93 Chrono Calendar", page_icon="📆", layout="wide")
+st.title("📆 v93: Global API Calendar (Restored Fetch)")
 
 est = pytz.timezone('US/Eastern')
 if st.sidebar.button("🔄 Clear Cache & Refresh Live"):
@@ -24,16 +24,14 @@ session = requests.Session()
 adapter = requests.adapters.HTTPAdapter(pool_connections=20, pool_maxsize=20)
 session.mount('https://', adapter)
 
-# --- HELPER: CLEAN URL EXTRACTOR (Reverted to v89 stability) ---
+# --- HELPER: V90.1 PROVEN LINK EXTRACTOR ---
 def extract_agenda_link(description_html):
+    """Restored to the v90.1 logic that successfully pulled Senate URLs."""
     if not description_html: return None
     match = re.search(r'href=[\'"]?([^\'" >]+)', description_html)
     if match:
         url = match.group(1)
-        if url.startswith("/"):
-            # Safe domain routing
-            if "senate" in description_html.lower(): return f"https://apps.senate.virginia.gov{url}"
-            return f"https://house.vga.virginia.gov{url}"
+        if url.startswith("/"): return f"https://house.vga.virginia.gov{url}"
         return url
     return None
 
@@ -75,30 +73,32 @@ def scrape_docket_for_bills(link_url):
     except Exception:
         return []
 
-# --- API FETCH: 8-DAY SYNCHRONOUS LOOP ---
+# --- API FETCH: RESTORED V90.1 MASS FETCH ---
 @st.cache_data(ttl=600)
 def get_global_schedule_grid():
-    """Loops day-by-day to guarantee we get all 7 days without hitting pagination limits."""
+    """Restored to massive one-time fetch, bypassing broken LIS date filters."""
     url = "https://lis.virginia.gov/Schedule/api/getschedulelistasync"
     headers = {"WebAPIKey": API_KEY, "Accept": "application/json"}
-    today = datetime.now(est).date()
-    raw_items = []
     
-    for i in range(8):
-        target_date = (today + timedelta(days=i)).strftime("%Y-%m-%d")
-        for chamber in ["H", "S"]:
-            params = {"sessionCode": SESSION_CODE, "chamberCode": chamber, "startDate": target_date, "endDate": target_date}
-            try:
-                resp = session.get(url, headers=headers, params=params, timeout=5)
-                if resp.status_code == 200:
-                    data = resp.json()
-                    raw_items.extend(data.get("Schedules", data.get("ListItems", [])))
-            except Exception:
-                pass
-                
-    return raw_items
+    try:
+        with concurrent.futures.ThreadPoolExecutor(max_workers=2) as executor:
+            h = executor.submit(session.get, url, headers=headers, params={"sessionCode": SESSION_CODE, "chamberCode": "H"}, timeout=5)
+            s = executor.submit(session.get, url, headers=headers, params={"sessionCode": SESSION_CODE, "chamberCode": "S"}, timeout=5)
+            
+            raw_items = []
+            if h.result().status_code == 200: 
+                h_data = h.result().json()
+                raw_items.extend(h_data.get("Schedules", h_data.get("ListItems", [])))
+            if s.result().status_code == 200: 
+                s_data = s.result().json()
+                raw_items.extend(s_data.get("Schedules", s_data.get("ListItems", [])))
+            
+        return raw_items
+    except Exception as e:
+        st.error(f"API Connection Error: {e}")
+        return []
 
-# --- SORTING LOGIC ---
+# --- SORTING LOGIC (V92 FORMATTING) ---
 def parse_time_rank(time_str):
     if not time_str: return 9999
     t_upper = str(time_str).upper().replace(".", "")
@@ -129,12 +129,13 @@ for m in all_raw_items:
     raw_date = m.get("ScheduleDate", "").split("T")[0]
     if not raw_date: continue
     date_obj = datetime.strptime(raw_date, "%Y-%m-%d").date()
-    if date_obj < datetime.now(est).date(): continue
+    if date_obj < datetime.now(est).date(): continue # Drop past days
+    if date_obj > datetime.now(est).date() + timedelta(days=7): continue # Cap at 7 days out
     
     name = str(m.get("OwnerName", "")).strip()
     sched_time = str(m.get("ScheduleTime", "")).strip()
     
-    # 1. Deduplication (Reverted to stable composite signature)
+    # Deduplication
     sig = (raw_date, sched_time, name)
     if sig in seen_sigs: continue
     seen_sigs.add(sig)
@@ -144,7 +145,7 @@ for m in all_raw_items:
     m['IsFloor'] = bool(re.match(r'^(House|Senate)(?:\s+Convenes|\s+Session)?$', clean_name, re.IGNORECASE))
     m['IsCaucus'] = any(x in clean_name.upper() for x in ["CAUCUS", "DELEGATION", "PRAYER", "BIBLE STUDY"])
     
-    # 2. Relational Time & HTML Vomit Fix
+    # Relational Time & Clean HTML Format
     comm = str(m.get("Comments", "")).strip()
     desc = str(m.get("Description", "")).strip()
     
@@ -157,7 +158,7 @@ for m in all_raw_items:
     else: 
         m['DisplayTime'] = "Time TBA"
         
-    # 3. Cancellation Fix (Strict constraints)
+    # Cancellation Logic
     is_cancelled_db = m.get("IsCancelled") is True
     is_will_not_meet = "WILL NOT MEET" in comm.upper() or "WILL NOT MEET" in desc.upper()
     if is_cancelled_db or is_will_not_meet:
@@ -198,7 +199,7 @@ for e in processed_events:
 if not display_map:
     st.info("No upcoming events found.")
 else:
-    sorted_dates = sorted(display_map.keys())[:8] # Ensure we show all fetched days
+    sorted_dates = sorted(display_map.keys())[:7] 
     cols = st.columns(len(sorted_dates))
     
     for i, date_val in enumerate(sorted_dates):
@@ -208,7 +209,6 @@ else:
             st.divider()
             
             day_events = display_map[date_val]
-            # Ensure strict chronological sorting
             day_events.sort(key=lambda x: parse_time_rank(x.get("DisplayTime")))
             
             for event in day_events:
