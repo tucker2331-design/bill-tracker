@@ -1,48 +1,40 @@
 import streamlit as st
 import requests
 import re
-from datetime import datetime, timedelta
 
 # --- CONFIGURATION ---
 API_KEY = "81D70A54-FCDC-4023-A00B-A3FD114D5984"
 SESSION_CODE = "20261"
 URL = "https://lis.virginia.gov/Schedule/api/getschedulelistasync"
 
-st.set_page_config(page_title="LIS API Debugger", layout="wide")
-st.title("🛠️ LIS API Raw Data Debugger")
-st.markdown("This tool pulls the raw, unfiltered data directly from the Virginia LIS database to map exact URL structures.")
+st.set_page_config(page_title="LIS API Debugger v2", layout="wide")
+st.title("🛠️ LIS API Raw Data Debugger (Unfiltered)")
 
 @st.cache_data(ttl=60)
 def fetch_debug_data():
     headers = {"WebAPIKey": API_KEY, "Accept": "application/json"}
     raw_data = []
     
-    # Fetch today + the next 2 days to ensure we have a good sample of data
-    for i in range(3):
-        target_date = (datetime.now() + timedelta(days=i)).strftime("%Y-%m-%d")
-        
-        for chamber in ["H", "S"]:
-            params = {
-                "sessionCode": SESSION_CODE, 
-                "chamberCode": chamber, 
-                "startDate": target_date, 
-                "endDate": target_date
-            }
-            try:
-                resp = requests.get(URL, headers=headers, params=params, timeout=10)
-                if resp.status_code == 200:
-                    data = resp.json()
-                    items = data.get("Schedules", data.get("ListItems", []))
-                    for item in items:
-                        item["_Chamber"] = "House" if chamber == "H" else "Senate"
-                        item["_TargetDate"] = target_date
-                        raw_data.append(item)
-            except Exception as e:
-                st.error(f"Error fetching {chamber} on {target_date}: {e}")
+    # We must NOT use startDate/endDate because it breaks the API
+    for chamber in ["H", "S"]:
+        params = {
+            "sessionCode": SESSION_CODE, 
+            "chamberCode": chamber 
+        }
+        try:
+            resp = requests.get(URL, headers=headers, params=params, timeout=10)
+            if resp.status_code == 200:
+                data = resp.json()
+                items = data.get("Schedules", data.get("ListItems", []))
+                for item in items:
+                    item["_Chamber"] = "House" if chamber == "H" else "Senate"
+                    raw_data.append(item)
+        except Exception as e:
+            st.error(f"Error fetching {chamber}: {e}")
                 
     return raw_data
 
-with st.spinner("Pulling raw database records..."):
+with st.spinner("Pulling massive unfiltered database records..."):
     raw_items = fetch_debug_data()
 
 if not raw_items:
@@ -66,7 +58,7 @@ else:
         all_found_links = list(set(html_links + raw_urls + js_links))
 
         debug_list.append({
-            "Date": item.get("_TargetDate"),
+            "Date": item.get("ScheduleDate", "").split("T")[0],
             "Chamber": item.get("_Chamber"),
             "Committee": item.get("OwnerName"),
             "Native_LinkURL": item.get("LinkURL"),
