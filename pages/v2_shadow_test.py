@@ -13,8 +13,6 @@ API_KEY = "81D70A54-FCDC-4023-A00B-A3FD114D5984"
 HEADERS = {"WebAPIKey": API_KEY, "Accept": "application/json"}
 TARGET_URL = "https://lis.virginia.gov/Legislation/api/getlegislationsessionlistasync"
 
-LIS_BASE_URL = "https://lis.virginia.gov/blob.core.windows.net/lisfiles/20261/"
-# Note: Reverted to standard LIS urls for the test just in case the blob url changed
 LIS_HISTORY_CSV = "https://lis.virginia.gov/cgi-bin/legp604.exe?261+oth+CSV+HISTORY"
 LIS_DOCKET_CSV = "https://lis.virginia.gov/cgi-bin/legp604.exe?261+oth+CSV+DOCKET"
 
@@ -26,7 +24,6 @@ COMMITTEE_MAP = {
     "H10": "House Health, Welfare and Institutions", "H11": "House Conservation and Natural Resources",
     "H12": "House Agriculture", "H13": "House Militia, Police and Public Safety", 
     "H14": "House Labor and Commerce", "S03": "Senate Courts of Justice", "S05": "Senate Finance and Appropriations"
-    # (Truncated map for the test, will include full in final)
 }
 
 YOUTH_KEYWORDS = ["child", "youth", "juvenile", "minor", "student", "school", "parental", "infant", "baby", "child custody", "foster", "adoption", "delinquen"]
@@ -82,18 +79,18 @@ if st.button("🧪 Run HB1 Logic Test"):
         # 1. Pull API (Master List)
         api_data = requests.get(TARGET_URL, headers=HEADERS, params={"sessionCode": "20261"}).json()
         bills_list = api_data.get("Legislations", [])
-        
-        # Find HB1
         hb1_data = next((b for b in bills_list if b.get("LegislationNumber") == "HB1"), None)
         
-        # 2. Pull CSV Blobs
+        # 2. Pull CSV Blobs (With your v94 failsafe logic restored!)
         hist_df = pd.read_csv(LIS_HISTORY_CSV, encoding='ISO-8859-1', on_bad_lines='skip')
         hist_df.columns = hist_df.columns.str.strip().str.lower().str.replace(' ', '_')
-        hb1_history = hist_df[hist_df['bill_number'] == 'HB1'].to_dict('records')
+        hist_col = next((c for c in hist_df.columns if c in ['bill_number','bill_id','bill_no']), None)
+        hb1_history = hist_df[hist_df[hist_col] == 'HB1'].to_dict('records') if hist_col else []
 
         doc_df = pd.read_csv(LIS_DOCKET_CSV, encoding='ISO-8859-1', on_bad_lines='skip')
         doc_df.columns = doc_df.columns.str.strip().str.lower().str.replace(' ', '_')
-        hb1_docket = doc_df[doc_df['bill_no'] == 'HB1'].to_dict('records') if 'bill_no' in doc_df.columns else []
+        doc_col = next((c for c in doc_df.columns if c in ['bill_number','bill_id','bill_no']), None)
+        hb1_docket = doc_df[doc_df[doc_col] == 'HB1'].to_dict('records') if doc_col else []
 
         # --- THE PROCESSING ENGINE ---
         bill_num = "HB1"
@@ -102,14 +99,18 @@ if st.button("🧪 Run HB1 Logic Test"):
         
         curr_comm = "-"; curr_sub = "-"; history_data = []; history_blob = ""; date_val = ""
         
-        # Parse History
+        # Parse History (With v94 fallback column names)
         for h_row in hb1_history:
-            desc = str(h_row.get('history_description', ''))
-            date_h = str(h_row.get('history_date', ''))
+            desc = ""; date_h = ""
+            for col in ['history_description', 'description', 'action', 'history']:
+                if col in h_row and pd.notna(h_row[col]): desc = str(h_row[col]); break
+            for col in ['history_date', 'date', 'action_date']:
+                if col in h_row and pd.notna(h_row[col]): date_h = str(h_row[col]); break
+
             if desc:
                 history_data.append({"Date": date_h, "Action": desc})
                 history_blob += desc.lower() + " "
-                date_val = date_h # Captures last date naturally
+                date_val = date_h 
                 
                 # Anchor Logic
                 if any(x in desc.lower() for x in ["referred to"]):
@@ -143,8 +144,8 @@ if st.button("🧪 Run HB1 Logic Test"):
             "Current_Committee": curr_comm,
             "Display_Committee": display_comm,
             "Current_Sub": curr_sub,
-            "History_Data": json.dumps(history_data), # Stringified for Sheets!
-            "Upcoming_Meetings": json.dumps([]) # Empty for HB1 dry run
+            "History_Data": json.dumps(history_data),
+            "Upcoming_Meetings": json.dumps([]) 
         }
 
         st.success("✅ Engine Processing Complete!")
