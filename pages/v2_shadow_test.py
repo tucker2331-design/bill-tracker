@@ -13,21 +13,15 @@ HEADERS = {
 }
 TARGET_URL = "https://lis.virginia.gov/Legislation/api/getlegislationsessionlistasync"
 
-# ⚠️ Architect: Paste your exact Google Sheet ID here:
+# ⚠️ Architect: Your Google Sheet ID is locked in!
 SPREADSHEET_ID = "1566pCv70iQ7YkTQK71RfYerciK-ukW-QdblTu2-Prfw"
 
-st.markdown("This script pulls the universal JSON data and uses the `tracker-bot` Service Account to write it directly into your private Google Sheet.")
+st.markdown("This script pulls the universal JSON data, unpacks the batches, and uses the `tracker-bot` to write it directly to your Sheet.")
 
 if st.button("🔥 Execute Database Bridge (Write to Sheets)"):
-    if SPREADSHEET_ID == "INSERT_YOUR_SPREADSHEET_ID_HERE":
-        st.error("🛑 Hold up! You need to paste your Spreadsheet ID into Line 16 of the code first.")
-        st.stop()
-
     with st.spinner("1. Authenticating with Google Cloud Vault..."):
         try:
-            # Wake up the bot using the secrets you pasted into Streamlit Cloud
             gc = gspread.service_account_from_dict(st.secrets["gcp_service_account"])
-            # Open the specific spreadsheet
             sh = gc.open_by_key(SPREADSHEET_ID)
             worksheet = sh.sheet1
             st.success("✅ Google Cloud Auth successful! Bot is ready.")
@@ -43,24 +37,32 @@ if st.button("🔥 Execute Database Bridge (Write to Sheets)"):
                 st.stop()
             
             data = response.json()
-            items = data.get("ListItems", data) if isinstance(data, dict) else data
-            st.success(f"✅ LIS Payload received! Found {len(items)} bills.")
+            
+            # --- THE FIX: Unpacking the batches ---
+            legislations_dict = data.get("Legislations", {})
+            all_bills = []
+            
+            # Loop through the "[ 0 - 100 ]" batches and combine them into one flat list
+            for batch_key, batch_list in legislations_dict.items():
+                if isinstance(batch_list, list):
+                    all_bills.extend(batch_list)
+                    
+            st.success(f"✅ LIS Payload received! Unpacked {len(all_bills)} bills from the batches.")
         except Exception as e:
             st.error(f"❌ LIS API Crash: {e}")
             st.stop()
 
     with st.spinner("3. Blasting data into Google Sheets..."):
         try:
-            # We will format the first 50 bills just to test the bridge without hitting any timeout limits
-            sheet_data = [["Bill Number", "Title", "Current Status"]] # These are the column headers
+            sheet_data = [["Bill Number", "Title", "Current Status"]] 
             
-            for item in items[:50]:
+            # Now we can safely slice the first 50 bills!
+            for item in all_bills[:50]:
                 bill_number = item.get("LegislationNumber", "Unknown")
                 title = item.get("Description", "No Title")
                 status = item.get("CurrentStatus", "Unknown")
                 sheet_data.append([bill_number, title, status])
             
-            # Wipe the sheet clean, then write the new data block instantly
             worksheet.clear()
             worksheet.update(values=sheet_data, range_name="A1")
             
