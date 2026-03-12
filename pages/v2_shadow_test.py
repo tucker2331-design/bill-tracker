@@ -37,12 +37,14 @@ if st.button("🔥 Execute Database Bridge (Write to Sheets)"):
                 st.stop()
             
             data = response.json()
-            
-            # --- THE REAL FIX ---
-            # The data is already a flat list. No unpacking loop needed.
             all_bills = data.get("Legislations", [])
-            
             st.success(f"✅ LIS Payload received! Found {len(all_bills)} bills.")
+            
+            # --- DEBUG BLOCK: Find the missing Status Key ---
+            if all_bills:
+                st.info("🔍 DEBUG: Here is the raw schema for HB1. Look for the key that holds the status!")
+                st.json(all_bills[0])
+                
         except Exception as e:
             st.error(f"❌ LIS API Crash: {e}")
             st.stop()
@@ -51,17 +53,19 @@ if st.button("🔥 Execute Database Bridge (Write to Sheets)"):
         try:
             sheet_data = [["Bill Number", "Title", "Current Status"]] 
             
-            for item in all_bills[:50]:
+            # --- TRAINING WHEELS OFF: Loading all 3,500+ bills ---
+            for item in all_bills:
                 bill_number = item.get("LegislationNumber", "Unknown")
                 title = item.get("Description", "No Title")
-                status = item.get("CurrentStatus", "Unknown")
+                # We will fix this key once we see your screenshot!
+                status = item.get("CurrentStatus", "Unknown") 
                 sheet_data.append([bill_number, title, status])
             
             worksheet.clear()
             worksheet.update(values=sheet_data, range_name="A1")
             
             st.balloons()
-            st.success("🎉 DATABASE BRIDGE COMPLETE! Go look at your Google Sheet!")
+            st.success("🎉 ALL 3,500+ BILLS LOADED! Go look at your Google Sheet!")
             
         except Exception as e:
             st.error(f"❌ Write to Google Sheets Failed: {e}")
