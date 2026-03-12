@@ -28,9 +28,28 @@ COMMITTEE_MAP = {
 
 YOUTH_KEYWORDS = ["child", "youth", "juvenile", "minor", "student", "school", "parental", "infant", "baby", "child custody", "foster", "adoption", "delinquen"]
 TOPIC_KEYWORDS = {
+    "🗳️ Elections & Democracy": ["election", "vote", "ballot", "campaign", "poll", "voter", "registrar", "districting", "suffrage", "voting", "democracy"],
+    "🏗️ Housing & Property": ["rent", "landlord", "tenant", "housing", "lease", "property", "zoning", "eviction", "homeowner", "residential", "condo", "building code"],
+    "🏛️ Local Government": ["charter", "ordinance", "locality", "localities", "county", "counties", "city", "cities", "town", "annexation", "sovereign", "immunity", "municipal"],
+    "✊ Labor & Workers Rights": ["wage", "salary", "worker", "employment", "labor", "union", "bargaining", "leave", "compensation", "workplace", "employee", "minimum", "overtime"],
     "💰 Economy & Business": ["tax", "commerce", "business", "market", "consumer", "corporation", "finance", "budget", "economic", "trade", "gaming", "casino", "abc", "alcohol"],
+    "🎓 Education": ["school", "student", "education", "university", "college", "teacher", "curriculum", "scholarship", "tuition", "board of education", "higher education", "academic", "instruction", "learning", "literacy", "principal", "superintendent"],
+    "🪖 Veterans & Military Affairs": ["veteran", "military", "armed forces", "national guard", "service member", "deployment", "civilian life", "defense"],
+    "🚓 Public Safety": ["firearm", "gun", "police", "crime", "penalty", "enforcement", "prison", "arrest", "criminal", "weapon", "ammo", "magazine", "correctional", "facility", "incarcerat", "jail", "sheriff"],
     "⚖️ Criminal Justice & Courts": ["court", "judge", "attorney", "civil", "suit", "liability", "damages", "evidence", "jury", "appeal", "justice", "lawyer", "bar", "probation", "parole", "sentence", "sentencing", "custody", "divorce", "domestic", "violence", "abuse", "victim", "protective order"],
+    "🏥 Health & Healthcare": ["health", "medical", "hospital", "patient", "doctor", "insurance", "care", "mental", "pharmacy", "drug", "medicaid", "nurse"],
+    "🌳 Environment & Energy": ["energy", "water", "groundwater", "wastewater", "stormwater", "pollution", "environment", "climate", "solar", "conservation", "waste", "carbon", "natural resources", "wind", "power", "electricity", "hydroelectric", "nuclear", "chesapeake", "bay", "river", "watershed"],
+    "🚗 Transportation": ["road", "highway", "vehicle", "driver", "license", "transit", "traffic", "transportation", "motor"],
+    "💻 Tech & Utilities": ["internet", "broadband", "data", "privacy", "utility", "utilities", "cyber", "technology", "telecom", "artificial intelligence"],
+    "⚖️ Civil Rights": ["discrimination", "rights", "equity", "minority", "minorities", "gender", "religious", "freedom", "speech"],
 }
+
+# --- THE MISSING FAILSAFE ---
+def clean_bill_id(bill_text):
+    if pd.isna(bill_text): return ""
+    clean = str(bill_text).upper().replace(" ", "").strip()
+    clean = re.sub(r'^([A-Z]+)0+(\d+)$', r'\1\2', clean)
+    return clean
 
 def clean_committee_name(name):
     if not name or str(name).lower() == 'nan': return ""
@@ -81,16 +100,28 @@ if st.button("🧪 Run HB1 Logic Test"):
         bills_list = api_data.get("Legislations", [])
         hb1_data = next((b for b in bills_list if b.get("LegislationNumber") == "HB1"), None)
         
-        # 2. Pull CSV Blobs (With your v94 failsafe logic restored!)
+        # 2. Pull CSV Blobs
         hist_df = pd.read_csv(LIS_HISTORY_CSV, encoding='ISO-8859-1', on_bad_lines='skip')
         hist_df.columns = hist_df.columns.str.strip().str.lower().str.replace(' ', '_')
         hist_col = next((c for c in hist_df.columns if c in ['bill_number','bill_id','bill_no']), None)
-        hb1_history = hist_df[hist_df[hist_col] == 'HB1'].to_dict('records') if hist_col else []
+        
+        # Applying the clean_bill_id failsafe!
+        if hist_col:
+            hist_df['bill_clean'] = hist_df[hist_col].astype(str).apply(clean_bill_id)
+            hb1_history = hist_df[hist_df['bill_clean'] == 'HB1'].to_dict('records')
+        else:
+            hb1_history = []
 
         doc_df = pd.read_csv(LIS_DOCKET_CSV, encoding='ISO-8859-1', on_bad_lines='skip')
         doc_df.columns = doc_df.columns.str.strip().str.lower().str.replace(' ', '_')
         doc_col = next((c for c in doc_df.columns if c in ['bill_number','bill_id','bill_no']), None)
-        hb1_docket = doc_df[doc_df[doc_col] == 'HB1'].to_dict('records') if doc_col else []
+        
+        # Applying the clean_bill_id failsafe!
+        if doc_col:
+            doc_df['bill_clean'] = doc_df[doc_col].astype(str).apply(clean_bill_id)
+            hb1_docket = doc_df[doc_df['bill_clean'] == 'HB1'].to_dict('records')
+        else:
+            hb1_docket = []
 
         # --- THE PROCESSING ENGINE ---
         bill_num = "HB1"
@@ -99,7 +130,7 @@ if st.button("🧪 Run HB1 Logic Test"):
         
         curr_comm = "-"; curr_sub = "-"; history_data = []; history_blob = ""; date_val = ""
         
-        # Parse History (With v94 fallback column names)
+        # Parse History
         for h_row in hb1_history:
             desc = ""; date_h = ""
             for col in ['history_description', 'description', 'action', 'history']:
