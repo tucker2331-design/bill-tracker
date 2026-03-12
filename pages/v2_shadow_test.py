@@ -16,7 +16,7 @@ TARGET_URL = "https://lis.virginia.gov/Legislation/api/getlegislationsessionlist
 # ⚠️ Architect: Your Google Sheet ID is locked in!
 SPREADSHEET_ID = "1566pCv70iQ7YkTQK71RfYerciK-ukW-QdblTu2-Prfw"
 
-st.markdown("This script pulls the universal JSON data, unpacks the batches, and uses the `tracker-bot` to write it directly to your Sheet.")
+st.markdown("This script pulls the universal JSON data, grabs the raw list, and uses the `tracker-bot` to write it directly to your Sheet.")
 
 if st.button("🔥 Execute Database Bridge (Write to Sheets)"):
     with st.spinner("1. Authenticating with Google Cloud Vault..."):
@@ -26,7 +26,7 @@ if st.button("🔥 Execute Database Bridge (Write to Sheets)"):
             worksheet = sh.sheet1
             st.success("✅ Google Cloud Auth successful! Bot is ready.")
         except Exception as e:
-            st.error(f"❌ Google Auth Failed. Did you share the sheet with the bot's email? Error: {e}")
+            st.error(f"❌ Google Auth Failed: {e}")
             st.stop()
 
     with st.spinner("2. Pinging Virginia Master REST API..."):
@@ -38,16 +38,11 @@ if st.button("🔥 Execute Database Bridge (Write to Sheets)"):
             
             data = response.json()
             
-            # --- THE FIX: Unpacking the batches ---
-            legislations_dict = data.get("Legislations", {})
-            all_bills = []
+            # --- THE REAL FIX ---
+            # The data is already a flat list. No unpacking loop needed.
+            all_bills = data.get("Legislations", [])
             
-            # Loop through the "[ 0 - 100 ]" batches and combine them into one flat list
-            for batch_key, batch_list in legislations_dict.items():
-                if isinstance(batch_list, list):
-                    all_bills.extend(batch_list)
-                    
-            st.success(f"✅ LIS Payload received! Unpacked {len(all_bills)} bills from the batches.")
+            st.success(f"✅ LIS Payload received! Found {len(all_bills)} bills.")
         except Exception as e:
             st.error(f"❌ LIS API Crash: {e}")
             st.stop()
@@ -56,7 +51,6 @@ if st.button("🔥 Execute Database Bridge (Write to Sheets)"):
         try:
             sheet_data = [["Bill Number", "Title", "Current Status"]] 
             
-            # Now we can safely slice the first 50 bills!
             for item in all_bills[:50]:
                 bill_number = item.get("LegislationNumber", "Unknown")
                 title = item.get("Description", "No Title")
