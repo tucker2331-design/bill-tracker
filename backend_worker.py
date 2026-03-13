@@ -105,7 +105,7 @@ def determine_lifecycle(status_text, committee_name, bill_id, history_text):
     if comm not in ["-", "nan", "None", "", "Unassigned"] and len(comm) > 2: return "📥 In Committee"
     
     # Prefiled and Recommitted safely caught here
-    if any(x in status for x in ["referred to", "in committee", "prefiled", "recommitted"]) and "governor" not in status: return "📥 In Committee"
+    if any(x in status for x in ["referred to", "in committee", "prefiled", "recommitted", "introduced"]) and "governor" not in status: return "📥 In Committee"
     
     transit_keywords = ["passed", "agreed", "engrossed", "communicated", "received from", "in conference", "in senate", "in house"]
     if any(x in status for x in transit_keywords): return "📣 Out of Committee"
