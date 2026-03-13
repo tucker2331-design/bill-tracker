@@ -58,7 +58,6 @@ def clean_committee_name(name):
     name = str(name).strip()
     if name in COMMITTEE_MAP: return COMMITTEE_MAP[name]
     
-    # Clean up standard formatting without nuking subcommittees
     name = name.replace("Committee For", "").replace("Committee On", "").replace("Committee", "").strip()
     if name.startswith("H") and name[1].isupper() and not name.startswith("House"): name = "House " + name[1:]
     if name.startswith("S") and name[1].isupper() and not name.startswith("Senate"): name = "Senate " + name[1:]
@@ -79,18 +78,24 @@ def determine_lifecycle(status_text, committee_name, bill_id, history_text):
     status = str(status_text).lower()
     comm = str(committee_name).strip()
     
-    if any(x in status for x in ["signed by governor", "enacted", "approved by governor", "chapter"]): return "✅ Signed & Enacted"
+    # Fully Restored Dictionary
+    if any(x in status for x in ["signed by governor", "enacted", "approved", "chapter"]): return "✅ Signed & Enacted"
     if "vetoed" in status: return "❌ Vetoed"
     
     vip_keywords = [
         "pending governor's action", "pending action by governor", "awaiting signature", 
         "enrolled", "communicated to governor", "communicated to the governor", 
         "bill text as passed senate and house", "bill text as passed house and senate",
-        "pending governor's communication", "awaiting governor's action"
+        "pending governor's communication", "awaiting governor's action",
+        "signed by speaker", "signed by president", "governor's recommendation"
     ]
     if any(x in status for x in vip_keywords): return "✍️ Awaiting Signature"
     
-    dead_keywords_status = ["tabled", "failed to report", "failed to pass", "passed by indefinitely", "left in", "defeated", "no action taken", "incorporated", "continued", "carry over", "pbi", "stricken"]
+    dead_keywords_status = [
+        "tabled", "failed", "passed by indefinitely", "left in", "defeated", 
+        "no action taken", "incorporated", "continued", "carry over", "pbi", 
+        "stricken", "withdrawn"
+    ]
     if any(x in status for x in dead_keywords_status): return "❌ Dead / Tabled"
     
     floor_keywords = ["reported", "reading waived", "read second", "read third", "read first"]
@@ -98,9 +103,10 @@ def determine_lifecycle(status_text, committee_name, bill_id, history_text):
         if "recommends reporting" not in status: return "📣 Out of Committee"
         
     if comm not in ["-", "nan", "None", "", "Unassigned"] and len(comm) > 2: return "📥 In Committee"
-    if "referred to" in status and "governor" not in status: return "📥 In Committee"
     
-    transit_keywords = ["passed", "agreed", "engrossed", "communicated", "received from", "in conference"]
+    if any(x in status for x in ["referred to", "in committee", "prefiled", "recommitted", "introduced"]) and "governor" not in status: return "📥 In Committee"
+    
+    transit_keywords = ["passed", "agreed", "engrossed", "communicated", "received from", "in conference", "in senate", "in house"]
     if any(x in status for x in transit_keywords): return "📣 Out of Committee"
     
     return "📣 Out of Committee (⚠️ Unrecognized)"
@@ -137,7 +143,6 @@ def run_update():
     else: docket_lookup = {}
 
     print(f"⚙️ Processing {len(bills_list)} bills...")
-    # NOTE: Added 'Latest_Vote' as the 11th column
     sheet_data = [["Bill Number", "Official Title", "Status", "Date", "Lifecycle", "Auto_Folder", "Is_Youth", "Current_Committee", "Display_Committee", "Current_Sub", "Latest_Vote", "History_Data", "Upcoming_Meetings"]]
     
     for item in bills_list:
@@ -160,17 +165,14 @@ def run_update():
                 history_blob += desc.lower() + " "
                 date_val = date_h 
                 
-                # POSITIVE EXTRACTION: Subcommittees
                 sub_match = re.search(r'(Subcommittee[^)]*)', desc, re.IGNORECASE)
                 if sub_match:
                     curr_sub = sub_match.group(1).strip()
                     
-                # POSITIVE EXTRACTION: Vote Tally
                 vote_match = re.search(r'\(\s*(\d+-Y\s+\d+-N.*?)\s*\)', desc, re.IGNORECASE)
                 if vote_match:
                     latest_vote = vote_match.group(1).strip()
                 
-                # Base Committee Routing
                 if any(x in desc.lower() for x in ["referred to"]):
                     match = re.search(r'referred to\s?([a-z\s&,-]+)', desc.lower())
                     if match: curr_comm = "House " + match.group(1).split('(')[0].strip().title() if desc.startswith("H ") else "Senate " + match.group(1).split('(')[0].strip().title()
