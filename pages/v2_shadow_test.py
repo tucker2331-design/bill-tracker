@@ -1,74 +1,58 @@
 import streamlit as st
 import pandas as pd
-import requests
-import re
-from datetime import datetime
 import json
-import gspread
 
-st.set_page_config(page_title="Integration Test", layout="wide")
-st.title("🔌 Step 3.5: HB1 Database Integration Test")
+st.set_page_config(page_title="V3 UI Test", layout="wide")
+st.title("⚡ V3 Mastermind UI (Shadow Test)")
+st.info("Reading directly from the Ghost Worker's Mastermind Database. Live app.py is untouched.")
 
-# --- CONFIGURATION ---
-API_KEY = "81D70A54-FCDC-4023-A00B-A3FD114D5984"
-HEADERS = {"WebAPIKey": API_KEY, "Accept": "application/json"}
-TARGET_URL = "https://lis.virginia.gov/Legislation/api/getlegislationsessionlistasync"
-LIS_HISTORY_CSV = "https://lis.blob.core.windows.net/lisfiles/20261/HISTORY.CSV"
-LIS_DOCKET_CSV = "https://lis.blob.core.windows.net/lisfiles/20261/DOCKET.CSV"
-SPREADSHEET_ID = "1566pCv70iQ7YkTQK71RfYerciK-ukW-QdblTu2-Prfw"
+# --- THE DATABASE CONNECTION ---
+# This is the direct CSV export link to your new Mastermind Google Sheet
+SHEET_ID = "1566pCv70iQ7YkTQK71RfYerciK-ukW-QdblTu2-Prfw"
+DB_URL = f"https://docs.google.com/spreadsheets/d/{SHEET_ID}/gviz/tq?tqx=out:csv&sheet=Sheet1"
 
-# --- REQUIRED ENGINE FUNCTIONS ---
-def clean_bill_id(bill_text):
-    if pd.isna(bill_text): return ""
-    clean = str(bill_text).upper().replace(" ", "").strip()
-    return re.sub(r'^([A-Z]+)0+(\d+)$', r'\1\2', clean)
-
-if st.button("🚀 Write HB1 to Google Sheets"):
-    with st.spinner("1. Authenticating..."):
-        try:
-            gc = gspread.service_account_from_dict(st.secrets["gcp_service_account"])
-            worksheet = gc.open_by_key(SPREADSHEET_ID).sheet1
-        except Exception as e:
-            st.error(f"❌ Auth Failed: {e}"); st.stop()
-
-    with st.spinner("2. Processing HB1 Data..."):
-        # API & CSV Pull
-        api_data = requests.get(TARGET_URL, headers=HEADERS, params={"sessionCode": "20261"}).json()
-        hb1_data = next((b for b in api_data.get("Legislations", []) if b.get("LegislationNumber") == "HB1"), None)
+@st.cache_data(ttl=60)
+def load_mastermind_db():
+    try:
+        # 1. Download the flat database
+        df = pd.read_csv(DB_URL)
         
-        hist_df = pd.read_csv(LIS_HISTORY_CSV, encoding='ISO-8859-1', on_bad_lines='skip')
-        hist_df.columns = hist_df.columns.str.strip().str.lower().str.replace(' ', '_')
-        hist_col = next((c for c in hist_df.columns if c in ['bill_number','bill_id','bill_no']), None)
-        hist_df['bill_clean'] = hist_df[hist_col].astype(str).apply(clean_bill_id) if hist_col else ""
-        hb1_history = hist_df[hist_df['bill_clean'] == 'HB1'].to_dict('records')
+        # 2. The Magic Unpack: Convert the text strings back into Python lists
+        df['History_Data'] = df['History_Data'].apply(lambda x: json.loads(x) if pd.notna(x) else [])
+        df['Upcoming_Meetings'] = df['Upcoming_Meetings'].apply(lambda x: json.loads(x) if pd.notna(x) else [])
+        
+        return df
+    except Exception as e:
+        st.error(f"Failed to load database: {e}")
+        return pd.DataFrame()
 
-        # Formatting History
-        history_data = []
-        for h_row in hb1_history:
-            desc = next((str(h_row[c]) for c in ['history_description', 'description', 'action'] if c in h_row and pd.notna(h_row[c])), "")
-            date_h = next((str(h_row[c]) for c in ['history_date', 'date'] if c in h_row and pd.notna(h_row[c])), "")
-            if desc: history_data.append({"Date": date_h, "Action": desc})
+# --- LOAD AND DISPLAY ---
+with st.spinner("Fetching pre-processed database..."):
+    db_df = load_mastermind_db()
 
-        # The 12-Column Payload (Hardcoded logic variables for the quick test)
-        sheet_data = [
-            ["Bill Number", "Official Title", "Status", "Date", "Lifecycle", "Auto_Folder", "Is_Youth", "Current_Committee", "Display_Committee", "Current_Sub", "History_Data", "Upcoming_Meetings"],
-            [
-                "HB1", 
-                hb1_data.get("Description", "No Title"), 
-                hb1_data.get("LegislationStatus", "Unknown"), 
-                "3/11/2026", 
-                "✍️ Awaiting Signature", 
-                "✊ Labor & Workers Rights", 
-                "FALSE", 
-                "Unassigned", 
-                "📜 On Floor / Chamber Action", 
-                "-", 
-                json.dumps(history_data), # Testing the Stringification!
-                "[]"
-            ]
-        ]
+if not db_df.empty:
+    st.success(f"✅ Successfully loaded {len(db_df)} bills in record time!")
+    
+    # Let's do a quick test render of HB1 to prove the UI can read the unpacked history
+    st.subheader("🔍 Integration Proof: HB1 Render Test")
+    
+    hb1_row = db_df[db_df['Bill Number'] == 'HB1'].iloc[0] if not db_df[db_df['Bill Number'] == 'HB1'].empty else None
+    
+    if hb1_row is not None:
+        with st.expander(f"**{hb1_row['Bill Number']}** - {hb1_row['Official Title']}", expanded=True):
+            st.markdown(f"**Folder:** {hb1_row['Auto_Folder']} | **Lifecycle:** {hb1_row['Lifecycle']}")
+            st.markdown(f"**Current Location:** {hb1_row['Display_Committee']}")
+            st.markdown(f"**Status:** {hb1_row['Status']}")
+            
+            st.markdown("**📜 Unpacked History Timeline:**")
+            # Because we unpacked the JSON, Streamlit can instantly render it as a dataframe!
+            if hb1_row['History_Data']:
+                st.dataframe(pd.DataFrame(hb1_row['History_Data']), hide_index=True, use_container_width=True)
+            else:
+                st.caption("No history found.")
+    else:
+        st.warning("HB1 not found in database yet. Did the Ghost Worker finish running?")
 
-    with st.spinner("3. Blasting to Database..."):
-        worksheet.clear()
-        worksheet.update(values=sheet_data, range_name="A1")
-        st.success("✅ HB1 Integration Test Complete! Go check your Google Sheet!")
+    st.divider()
+    st.subheader("Raw Database View")
+    st.dataframe(db_df.head(50), use_container_width=True)
