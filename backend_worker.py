@@ -58,9 +58,7 @@ def clean_committee_name(name):
     name = str(name).strip()
     if name in COMMITTEE_MAP: return COMMITTEE_MAP[name]
     
-    # NEW: Dynamically strip anything inside parentheses (e.g., politicians' names)
-    name = re.sub(r'\(.*?\)', '', name).strip()
-    
+    # Clean up standard formatting without nuking subcommittees
     name = name.replace("Committee For", "").replace("Committee On", "").replace("Committee", "").strip()
     if name.startswith("H") and name[1].isupper() and not name.startswith("House"): name = "House " + name[1:]
     if name.startswith("S") and name[1].isupper() and not name.startswith("Senate"): name = "Senate " + name[1:]
@@ -84,8 +82,12 @@ def determine_lifecycle(status_text, committee_name, bill_id, history_text):
     if any(x in status for x in ["signed by governor", "enacted", "approved by governor", "chapter"]): return "✅ Signed & Enacted"
     if "vetoed" in status: return "❌ Vetoed"
     
-    # NEW: Expanded VIP phrases
-    vip_keywords = ["pending governor's action", "pending action by governor", "awaiting signature", "enrolled", "communicated to governor", "communicated to the governor", "bill text as passed senate and house", "bill text as passed house and senate"]
+    vip_keywords = [
+        "pending governor's action", "pending action by governor", "awaiting signature", 
+        "enrolled", "communicated to governor", "communicated to the governor", 
+        "bill text as passed senate and house", "bill text as passed house and senate",
+        "pending governor's communication", "awaiting governor's action"
+    ]
     if any(x in status for x in vip_keywords): return "✍️ Awaiting Signature"
     
     dead_keywords_status = ["tabled", "failed to report", "failed to pass", "passed by indefinitely", "left in", "defeated", "no action taken", "incorporated", "continued", "carry over", "pbi", "stricken"]
@@ -98,11 +100,10 @@ def determine_lifecycle(status_text, committee_name, bill_id, history_text):
     if comm not in ["-", "nan", "None", "", "Unassigned"] and len(comm) > 2: return "📥 In Committee"
     if "referred to" in status and "governor" not in status: return "📥 In Committee"
     
-    transit_keywords = ["passed", "agreed", "engrossed", "communicated", "received from"]
+    transit_keywords = ["passed", "agreed", "engrossed", "communicated", "received from", "in conference"]
     if any(x in status for x in transit_keywords): return "📣 Out of Committee"
     
-    # NEW: The Loud Alarm Fallback
-    return "⚠️ Status Unrecognized"
+    return "📣 Out of Committee (⚠️ Unrecognized)"
 
 def run_update():
     print("🔐 Authenticating with Google Cloud...")
@@ -136,14 +137,15 @@ def run_update():
     else: docket_lookup = {}
 
     print(f"⚙️ Processing {len(bills_list)} bills...")
-    sheet_data = [["Bill Number", "Official Title", "Status", "Date", "Lifecycle", "Auto_Folder", "Is_Youth", "Current_Committee", "Display_Committee", "Current_Sub", "History_Data", "Upcoming_Meetings"]]
+    # NOTE: Added 'Latest_Vote' as the 11th column
+    sheet_data = [["Bill Number", "Official Title", "Status", "Date", "Lifecycle", "Auto_Folder", "Is_Youth", "Current_Committee", "Display_Committee", "Current_Sub", "Latest_Vote", "History_Data", "Upcoming_Meetings"]]
     
     for item in bills_list:
         bill_num = item.get("LegislationNumber", "Unknown")
         title = item.get("Description", "No Title")
         raw_status = item.get("LegislationStatus", "Unknown")
         
-        curr_comm = "-"; curr_sub = "-"; history_data = []; history_blob = ""; date_val = ""
+        curr_comm = "-"; curr_sub = "-"; latest_vote = "-"; history_data = []; history_blob = ""; date_val = ""
         raw_history = history_lookup.get(bill_num, [])
         
         for h_row in raw_history:
@@ -158,12 +160,20 @@ def run_update():
                 history_blob += desc.lower() + " "
                 date_val = date_h 
                 
+                # POSITIVE EXTRACTION: Subcommittees
+                sub_match = re.search(r'(Subcommittee[^)]*)', desc, re.IGNORECASE)
+                if sub_match:
+                    curr_sub = sub_match.group(1).strip()
+                    
+                # POSITIVE EXTRACTION: Vote Tally
+                vote_match = re.search(r'\(\s*(\d+-Y\s+\d+-N.*?)\s*\)', desc, re.IGNORECASE)
+                if vote_match:
+                    latest_vote = vote_match.group(1).strip()
+                
+                # Base Committee Routing
                 if any(x in desc.lower() for x in ["referred to"]):
                     match = re.search(r'referred to\s?([a-z\s&,-]+)', desc.lower())
-                    if match: curr_comm = "House " + match.group(1).strip().title() if desc.startswith("H ") else "Senate " + match.group(1).strip().title()
-                if "sub:" in desc.lower():
-                    try: curr_sub = desc.lower().split("sub:")[1].strip().title()
-                    except: pass
+                    if match: curr_comm = "House " + match.group(1).split('(')[0].strip().title() if desc.startswith("H ") else "Senate " + match.group(1).split('(')[0].strip().title()
                 if "reported" in desc.lower() or "passed house" in desc.lower() or "passed senate" in desc.lower():
                     if "recommends" not in desc.lower() and "failed" not in desc.lower():
                         curr_comm = "Unassigned"; curr_sub = "-"
@@ -191,10 +201,10 @@ def run_update():
 
         sheet_data.append([
             bill_num, title, raw_status, date_val, lifecycle, auto_folder, str(is_youth),
-            curr_comm, display_comm, curr_sub, json.dumps(history_data), json.dumps(upcoming_meetings)
+            curr_comm, display_comm, curr_sub, latest_vote, json.dumps(history_data), json.dumps(upcoming_meetings)
         ])
 
-    print("📝 Wiping old data and writing 12 columns to Sheets...")
+    print("📝 Wiping old data and writing 13 columns to Sheets...")
     worksheet.clear()
     worksheet.update(values=sheet_data, range_name="A1")
     print("🎉 MASTERMIND DATABASE UPDATED SUCCESSFULLY!")
