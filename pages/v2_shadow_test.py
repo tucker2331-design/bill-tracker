@@ -2,6 +2,8 @@ import streamlit as st
 import pandas as pd
 import json
 import re
+import requests
+import time
 
 st.set_page_config(page_title="V4 Mastermind UI", layout="wide")
 st.title("🧬 Phase 3: The Unified UI (Shadow Test)")
@@ -85,7 +87,6 @@ if not df_master.empty:
     with tab_tracked:
         st.subheader("👀 Watching")
         if not df_tracked[df_tracked['Type'] == 'Watching'].empty:
-            # Displaying the merged data, now including Latest_Vote
             st.dataframe(df_tracked[df_tracked['Type'] == 'Watching'][['Bill Number', 'My Title', 'Official Title', 'Status', 'Latest_Vote', 'Lifecycle', 'Display_Committee']], use_container_width=True)
         else:
             st.caption("No 'Watching' bills found in your manual sheet.")
@@ -119,16 +120,46 @@ if not df_master.empty:
             else:
                 st.caption("No history found.")
 
-    # --- SIDEBAR: DEVELOPER CONSOLE ---
+    # --- SIDEBAR: DEVELOPER CONSOLE & SYNC ---
     with st.sidebar:
-        st.header("👨‍💻 Developer Console")
-        if st.button("🔄 Force Refresh Cache"):
-            st.cache_data.clear()
-            st.rerun()
+        st.header("⚙️ Data Controls")
+        
+        # 1. THE GOD BUTTON
+        if st.button("🚀 Sync Latest State Data", type="primary", use_container_width=True):
+            GITHUB_OWNER = "tucker2331-design" 
+            GITHUB_REPO = "bill-tracker" 
+            # Make sure this matches the actual file name of your workflow in the .github/workflows folder!
+            WORKFLOW_FILENAME = "backend_worker.yml" 
+            
+            try:
+                GITHUB_TOKEN = st.secrets["GITHUB_TOKEN"]
+            except:
+                st.error("Missing GITHUB_TOKEN in Streamlit secrets.")
+                st.stop()
+                
+            url = f"https://api.github.com/repos/{GITHUB_OWNER}/{GITHUB_REPO}/actions/workflows/{WORKFLOW_FILENAME}/dispatches"
+            headers = {
+                "Authorization": f"Bearer {GITHUB_TOKEN}",
+                "Accept": "application/vnd.github.v3+json"
+            }
+            data = {"ref": "main"}
+            
+            with st.spinner("Waking up Ghost Worker... This takes about 45 seconds."):
+                response = requests.post(url, headers=headers, json=data)
+                
+                if response.status_code == 204:
+                    time.sleep(45) 
+                    st.cache_data.clear()
+                    st.success("✅ Database synced! Page refreshing...")
+                    time.sleep(2)
+                    st.rerun()
+                else:
+                    st.error(f"Failed to trigger sync: {response.status_code} - {response.text}")
+            
         st.divider()
         
+        # 2. LOGIC MONITORING
         st.subheader("🚨 Logic Monitoring")
-        # Monitor the FULL database for the new warning flag
         errors = df_master[df_master['Lifecycle'].str.contains('⚠️ Unrecognized', na=False)]
         
         if not errors.empty:
