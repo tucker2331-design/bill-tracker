@@ -129,7 +129,7 @@ if not df_master.empty:
             GITHUB_OWNER = "tucker2331-design" 
             GITHUB_REPO = "bill-tracker" 
             # Make sure this matches the actual file name of your workflow in the .github/workflows folder!
-            WORKFLOW_FILENAME = "backend_worker.yml" 
+            WORKFLOW_FILENAME = "update_database.yml" 
             
             try:
                 GITHUB_TOKEN = st.secrets["GITHUB_TOKEN"]
