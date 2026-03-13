@@ -10,31 +10,44 @@ st.info("Reading directly from the Ghost Worker's Mastermind Database. Live app.
 SHEET_ID = "1566pCv70iQ7YkTQK71RfYerciK-ukW-QdblTu2-Prfw"
 DB_URL = f"https://docs.google.com/spreadsheets/d/{SHEET_ID}/gviz/tq?tqx=out:csv&sheet=Sheet1"
 
-if st.button("🔄 Force Refresh Cache"):
-    st.cache_data.clear()
-    st.rerun()
-
 @st.cache_data(ttl=60)
 def load_mastermind_db():
     try:
         df = pd.read_csv(DB_URL)
-        
-        # SAFETY CHECK: Only unpack if the columns actually exist
         if 'History_Data' in df.columns and 'Upcoming_Meetings' in df.columns:
             df['History_Data'] = df['History_Data'].apply(lambda x: json.loads(x) if pd.notna(x) else [])
             df['Upcoming_Meetings'] = df['Upcoming_Meetings'].apply(lambda x: json.loads(x) if pd.notna(x) else [])
-        else:
-            st.warning(f"⚠️ Missing Expected Columns! Found these instead: {df.columns.tolist()}")
-            
         return df
     except Exception as e:
         st.error(f"Failed to load database: {e}")
         return pd.DataFrame()
 
-# --- LOAD AND DISPLAY ---
+# --- LOAD DATA ---
 with st.spinner("Fetching pre-processed database..."):
     db_df = load_mastermind_db()
 
+# --- THE NEW DEVELOPER CONSOLE (SIDEBAR) ---
+if not db_df.empty:
+    with st.sidebar:
+        st.header("👨‍💻 Developer Console")
+        if st.button("🔄 Force Refresh Cache"):
+            st.cache_data.clear()
+            st.rerun()
+            
+        st.divider()
+        st.subheader("🚨 Logic Monitoring")
+        
+        # Scan for the new Loud Alarm fallback
+        errors = db_df[db_df['Lifecycle'] == '⚠️ Status Unrecognized']
+        
+        if not errors.empty:
+            st.error(f"Found {len(errors)} unrecognized status(es)!")
+            st.write("Update your `vip_keywords` or logic maps in the backend script to fix these.")
+            st.dataframe(errors[['Bill Number', 'Status']], hide_index=True)
+        else:
+            st.success("Zero logic errors. The backend engine is mapping all data perfectly.")
+
+# --- DISPLAY ---
 if not db_df.empty and 'History_Data' in db_df.columns:
     st.success(f"✅ Successfully loaded {len(db_df)} bills in record time!")
     
