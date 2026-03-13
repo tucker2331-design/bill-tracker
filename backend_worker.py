@@ -57,8 +57,10 @@ def clean_committee_name(name):
     if not name or str(name).lower() == 'nan': return ""
     name = str(name).strip()
     if name in COMMITTEE_MAP: return COMMITTEE_MAP[name]
-    name = re.sub(r'\b(Simon|Rasoul|Willett|Helmer|Lucas|Surovell|Locke|Deeds|Favola|Marsden|Ebbin|McPike|Hayes|Carroll Foy)\b.*', '', name, flags=re.IGNORECASE)
-    name = re.sub(r'\(?Subcommittee:.*?\)?', '', name, flags=re.IGNORECASE)
+    
+    # NEW: Dynamically strip anything inside parentheses (e.g., politicians' names)
+    name = re.sub(r'\(.*?\)', '', name).strip()
+    
     name = name.replace("Committee For", "").replace("Committee On", "").replace("Committee", "").strip()
     if name.startswith("H") and name[1].isupper() and not name.startswith("House"): name = "House " + name[1:]
     if name.startswith("S") and name[1].isupper() and not name.startswith("Senate"): name = "Senate " + name[1:]
@@ -82,7 +84,8 @@ def determine_lifecycle(status_text, committee_name, bill_id, history_text):
     if any(x in status for x in ["signed by governor", "enacted", "approved by governor", "chapter"]): return "✅ Signed & Enacted"
     if "vetoed" in status: return "❌ Vetoed"
     
-    vip_keywords = ["awaiting signature", "enrolled", "communicated to governor", "bill text as passed senate and house", "bill text as passed house and senate"]
+    # NEW: Expanded VIP phrases
+    vip_keywords = ["pending governor's action", "pending action by governor", "awaiting signature", "enrolled", "communicated to governor", "communicated to the governor", "bill text as passed senate and house", "bill text as passed house and senate"]
     if any(x in status for x in vip_keywords): return "✍️ Awaiting Signature"
     
     dead_keywords_status = ["tabled", "failed to report", "failed to pass", "passed by indefinitely", "left in", "defeated", "no action taken", "incorporated", "continued", "carry over", "pbi", "stricken"]
@@ -98,7 +101,8 @@ def determine_lifecycle(status_text, committee_name, bill_id, history_text):
     transit_keywords = ["passed", "agreed", "engrossed", "communicated", "received from"]
     if any(x in status for x in transit_keywords): return "📣 Out of Committee"
     
-    return "📥 In Committee"
+    # NEW: The Loud Alarm Fallback
+    return "⚠️ Status Unrecognized"
 
 def run_update():
     print("🔐 Authenticating with Google Cloud...")
