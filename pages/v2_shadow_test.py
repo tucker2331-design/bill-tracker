@@ -1,73 +1,49 @@
 import streamlit as st
-import pandas as pd
-import json
+import re
 
-st.set_page_config(page_title="V3 UI Test", layout="wide")
-st.title("⚡ V3 Mastermind UI (Shadow Test)")
-st.info("Reading directly from the Ghost Worker's Mastermind Database. Live app.py is untouched.")
+st.set_page_config(page_title="Regex Test")
+st.title("🧪 Regex Extraction Unit Test")
+st.info("Testing Positive Extraction logic before putting it in the Ghost Worker.")
 
-# --- THE DATABASE CONNECTION ---
-SHEET_ID = "1566pCv70iQ7YkTQK71RfYerciK-ukW-QdblTu2-Prfw"
-DB_URL = f"https://docs.google.com/spreadsheets/d/{SHEET_ID}/gviz/tq?tqx=out:csv&sheet=Sheet1"
-
-@st.cache_data(ttl=60)
-def load_mastermind_db():
-    try:
-        df = pd.read_csv(DB_URL)
-        if 'History_Data' in df.columns and 'Upcoming_Meetings' in df.columns:
-            df['History_Data'] = df['History_Data'].apply(lambda x: json.loads(x) if pd.notna(x) else [])
-            df['Upcoming_Meetings'] = df['Upcoming_Meetings'].apply(lambda x: json.loads(x) if pd.notna(x) else [])
-        return df
-    except Exception as e:
-        st.error(f"Failed to load database: {e}")
-        return pd.DataFrame()
-
-# --- LOAD DATA ---
-with st.spinner("Fetching pre-processed database..."):
-    db_df = load_mastermind_db()
-
-# --- THE NEW DEVELOPER CONSOLE (SIDEBAR) ---
-if not db_df.empty:
-    with st.sidebar:
-        st.header("👨‍💻 Developer Console")
-        if st.button("🔄 Force Refresh Cache"):
-            st.cache_data.clear()
-            st.rerun()
-            
-        st.divider()
-        st.subheader("🚨 Logic Monitoring")
-        
-        # Scan for the new Loud Alarm fallback
-        errors = db_df[db_df['Lifecycle'] == '⚠️ Status Unrecognized']
-        
-        if not errors.empty:
-            st.error(f"Found {len(errors)} unrecognized status(es)!")
-            st.write("Update your `vip_keywords` or logic maps in the backend script to fix these.")
-            st.dataframe(errors[['Bill Number', 'Status']], hide_index=True)
-        else:
-            st.success("Zero logic errors. The backend engine is mapping all data perfectly.")
-
-# --- DISPLAY ---
-if not db_df.empty and 'History_Data' in db_df.columns:
-    st.success(f"✅ Successfully loaded {len(db_df)} bills in record time!")
+# 1. The Function We Are Testing
+def parse_history_action(action_text):
+    parent_comm = "-"
+    sub_comm = "-"
+    vote_count = "-"
     
-    st.subheader("🔍 Integration Proof: HB1 Render Test")
-    hb1_row = db_df[db_df['Bill Number'] == 'HB1'].iloc[0] if not db_df[db_df['Bill Number'] == 'HB1'].empty else None
-    
-    if hb1_row is not None:
-        with st.expander(f"**{hb1_row['Bill Number']}** - {hb1_row['Official Title']}", expanded=True):
-            st.markdown(f"**Folder:** {hb1_row['Auto_Folder']} | **Lifecycle:** {hb1_row['Lifecycle']}")
-            st.markdown(f"**Current Location:** {hb1_row['Display_Committee']}")
-            st.markdown(f"**Status:** {hb1_row['Status']}")
+    # Extract Vote Tally
+    vote_match = re.search(r'\(\s*(\d+-Y\s+\d+-N.*?)\s*\)', action_text, re.IGNORECASE)
+    if vote_match:
+        vote_count = vote_match.group(1).strip()
+        
+    # Extract Subcommittee
+    sub_match = re.search(r'(Subcommittee[^)]*)', action_text, re.IGNORECASE)
+    if sub_match:
+        sub_comm = sub_match.group(1).strip()
+        
+    # Extract Parent Committee (Basic extraction for the test)
+    if "referred to" in action_text.lower():
+        match = re.search(r'referred to\s?([a-z\s&,-]+)', action_text.lower())
+        if match:
+            raw_comm = match.group(1).split('(')[0].strip().title()
+            parent_comm = "House " + raw_comm if action_text.startswith("H ") else "Senate " + raw_comm
             
-            st.markdown("**📜 Unpacked History Timeline:**")
-            if hb1_row['History_Data']:
-                st.dataframe(pd.DataFrame(hb1_row['History_Data']), hide_index=True, use_container_width=True)
-            else:
-                st.caption("No history found.")
-    else:
-        st.warning("HB1 not found in database yet.")
+    return parent_comm, sub_comm, vote_count
 
+# 2. The Stress Test Data
+test_strings = [
+    "H Referred to Committee on Finance (Rasoul)",
+    "H Reported from General Laws (Subcommittee #1) (Simon) (15-Y 7-N)",
+    "S Passed Senate (21-Y 19-N)",
+    "H Referred to Health, Welfare and Institutions (Subcommittee on Health)",
+    "H Engrossed by House - committee substitute HB1H1"
+]
+
+# 3. The Execution
+for text in test_strings:
+    parent, sub, vote = parse_history_action(text)
+    st.markdown(f"**RAW STRING:** `{text}`")
+    st.markdown(f"👉 **PARENT:** {parent}")
+    st.markdown(f"👉 **SUBCOMM:** {sub}")
+    st.markdown(f"👉 **VOTE:** {vote}")
     st.divider()
-    st.subheader("Raw Database View")
-    st.dataframe(db_df.head(50), use_container_width=True)
