@@ -1,49 +1,138 @@
 import streamlit as st
+import pandas as pd
+import json
 import re
 
-st.set_page_config(page_title="Regex Test")
-st.title("🧪 Regex Extraction Unit Test")
-st.info("Testing Positive Extraction logic before putting it in the Ghost Worker.")
+st.set_page_config(page_title="V4 Mastermind UI", layout="wide")
+st.title("🧬 Phase 3: The Unified UI (Shadow Test)")
+st.info("Testing the dual-view UI: Tracked Bills vs. Full State Backup. Live app.py is untouched.")
 
-# 1. The Function We Are Testing
-def parse_history_action(action_text):
-    parent_comm = "-"
-    sub_comm = "-"
-    vote_count = "-"
-    
-    # Extract Vote Tally
-    vote_match = re.search(r'\(\s*(\d+-Y\s+\d+-N.*?)\s*\)', action_text, re.IGNORECASE)
-    if vote_match:
-        vote_count = vote_match.group(1).strip()
+# --- URLS ---
+MASTERMIND_URL = "https://docs.google.com/spreadsheets/d/1566pCv70iQ7YkTQK71RfYerciK-ukW-QdblTu2-Prfw/gviz/tq?tqx=out:csv&sheet=Sheet1"
+MANUAL_TRACKER_URL = "https://docs.google.com/spreadsheets/d/18m752GcvGIPPpqUn_gB0DfA3e4z2UGD0ki0dUZh2Qek/gviz/tq?tqx=out:csv&sheet=Bills"
+
+def clean_bill_id(bill_text):
+    if pd.isna(bill_text): return ""
+    clean = str(bill_text).upper().replace(" ", "").strip()
+    clean = re.sub(r'^([A-Z]+)0+(\d+)$', r'\1\2', clean)
+    return clean
+
+@st.cache_data(ttl=60)
+def load_databases():
+    try:
+        # 1. Load Mastermind (All 3600+ Bills)
+        df_master = pd.read_csv(MASTERMIND_URL)
+        if 'History_Data' in df_master.columns:
+            df_master['History_Data'] = df_master['History_Data'].apply(lambda x: json.loads(x) if pd.notna(x) else [])
+            df_master['Upcoming_Meetings'] = df_master['Upcoming_Meetings'].apply(lambda x: json.loads(x) if pd.notna(x) else [])
+
+        # 2. Load Manual Tracker (Team Input)
+        raw_manual = pd.read_csv(MANUAL_TRACKER_URL)
+        raw_manual.columns = raw_manual.columns.str.strip()
         
-    # Extract Subcommittee
-    sub_match = re.search(r'(Subcommittee[^)]*)', action_text, re.IGNORECASE)
-    if sub_match:
-        sub_comm = sub_match.group(1).strip()
-        
-    # Extract Parent Committee (Basic extraction for the test)
-    if "referred to" in action_text.lower():
-        match = re.search(r'referred to\s?([a-z\s&,-]+)', action_text.lower())
-        if match:
-            raw_comm = match.group(1).split('(')[0].strip().title()
-            parent_comm = "House " + raw_comm if action_text.startswith("H ") else "Senate " + raw_comm
+        # Extract 'Watching' bills
+        cols_w = ['Bills Watching', 'Title (Watching)']
+        if 'Status (Watching)' in raw_manual.columns: cols_w.append('Status (Watching)')
+        df_w = raw_manual[cols_w].copy().dropna(subset=['Bills Watching'])
+        df_w.columns = ['Bill Number', 'My Title'] + (['My Status'] if 'Status (Watching)' in raw_manual.columns else [])
+        df_w['Type'] = 'Watching'
+
+        # Extract 'Involved' bills
+        w_col_name = next((c for c in raw_manual.columns if "Working On" in c and "Title" not in c and "Status" not in c), None)
+        df_i = pd.DataFrame()
+        if w_col_name:
+            cols_i = [w_col_name]
+            title_work_col = next((c for c in raw_manual.columns if "Title (Working)" in c), None)
+            if title_work_col: cols_i.append(title_work_col)
+            status_work_col = next((c for c in raw_manual.columns if "Status (Working)" in c), None)
+            if status_work_col: cols_i.append(status_work_col)
             
-    return parent_comm, sub_comm, vote_count
+            df_i = raw_manual[cols_i].copy().dropna(subset=[w_col_name])
+            i_new_cols = ['Bill Number']
+            if title_work_col: i_new_cols.append('My Title')
+            if status_work_col: i_new_cols.append('My Status')
+            df_i.columns = i_new_cols
+            df_i['Type'] = 'Involved'
+        
+        # Combine team tracker
+        df_team = pd.concat([df_w, df_i], ignore_index=True)
+        df_team['Bill Number'] = df_team['Bill Number'].apply(clean_bill_id)
+        df_team = df_team.drop_duplicates(subset=['Bill Number'])
+        if 'My Title' not in df_team.columns: df_team['My Title'] = "-"
+        if 'My Status' not in df_team.columns: df_team['My Status'] = "-"
+        df_team['My Title'] = df_team['My Title'].fillna("-")
+        df_team['My Status'] = df_team['My Status'].fillna("-")
 
-# 2. The Stress Test Data
-test_strings = [
-    "H Referred to Committee on Finance (Rasoul)",
-    "H Reported from General Laws (Subcommittee #1) (Simon) (15-Y 7-N)",
-    "S Passed Senate (21-Y 19-N)",
-    "H Referred to Health, Welfare and Institutions (Subcommittee on Health)",
-    "H Engrossed by House - committee substitute HB1H1"
-]
+        # 3. Merge for the Tracked View
+        df_tracked = pd.merge(df_team, df_master, on="Bill Number", how="left")
+        
+        return df_master, df_tracked
 
-# 3. The Execution
-for text in test_strings:
-    parent, sub, vote = parse_history_action(text)
-    st.markdown(f"**RAW STRING:** `{text}`")
-    st.markdown(f"👉 **PARENT:** {parent}")
-    st.markdown(f"👉 **SUBCOMM:** {sub}")
-    st.markdown(f"👉 **VOTE:** {vote}")
-    st.divider()
+    except Exception as e:
+        st.error(f"Data Load Error: {e}")
+        return pd.DataFrame(), pd.DataFrame()
+
+# --- FETCH DATA ---
+with st.spinner("Downloading and merging state data..."):
+    df_master, df_tracked = load_databases()
+
+if not df_master.empty:
+    
+    # --- UI TOGGLE (TABS) ---
+    tab_tracked, tab_master = st.tabs(["🎯 My Tracked Bills", "🏛️ Master State Database (LIS Backup)"])
+    
+    # TAB 1: Team's Merged View
+    with tab_tracked:
+        st.subheader("👀 Watching")
+        if not df_tracked[df_tracked['Type'] == 'Watching'].empty:
+            # Displaying the merged data, now including Latest_Vote
+            st.dataframe(df_tracked[df_tracked['Type'] == 'Watching'][['Bill Number', 'My Title', 'Official Title', 'Status', 'Latest_Vote', 'Lifecycle', 'Display_Committee']], use_container_width=True)
+        else:
+            st.caption("No 'Watching' bills found in your manual sheet.")
+            
+        st.subheader("🚀 Directly Involved")
+        if not df_tracked[df_tracked['Type'] == 'Involved'].empty:
+            st.dataframe(df_tracked[df_tracked['Type'] == 'Involved'][['Bill Number', 'My Title', 'Official Title', 'Status', 'Latest_Vote', 'Lifecycle', 'Display_Committee']], use_container_width=True)
+        else:
+            st.caption("No 'Involved' bills found in your manual sheet.")
+            
+    # TAB 2: All 3,600+ Bills (QA & Backup)
+    with tab_master:
+        st.subheader(f"Total Bills Indexed: {len(df_master)}")
+        st.markdown("This view acts as an independent backup of the LIS system. Expand a bill below to see its full history.")
+        
+        # Display the full, unfiltered database
+        st.dataframe(
+            df_master[['Bill Number', 'Official Title', 'Status', 'Latest_Vote', 'Lifecycle', 'Auto_Folder', 'Current_Committee']], 
+            use_container_width=True,
+            height=600
+        )
+        
+        st.divider()
+        st.subheader("🔍 Deep Dive: Bill History Inspector")
+        inspect_bill = st.selectbox("Select a bill to view full history timeline:", df_master['Bill Number'].tolist())
+        if inspect_bill:
+            bill_row = df_master[df_master['Bill Number'] == inspect_bill].iloc[0]
+            st.markdown(f"**{bill_row['Bill Number']}** - {bill_row['Official Title']}")
+            if bill_row['History_Data']:
+                st.dataframe(pd.DataFrame(bill_row['History_Data']), hide_index=True, use_container_width=True)
+            else:
+                st.caption("No history found.")
+
+    # --- SIDEBAR: DEVELOPER CONSOLE ---
+    with st.sidebar:
+        st.header("👨‍💻 Developer Console")
+        if st.button("🔄 Force Refresh Cache"):
+            st.cache_data.clear()
+            st.rerun()
+        st.divider()
+        
+        st.subheader("🚨 Logic Monitoring")
+        # Monitor the FULL database for the new warning flag
+        errors = df_master[df_master['Lifecycle'].str.contains('⚠️ Unrecognized', na=False)]
+        
+        if not errors.empty:
+            st.error(f"Found {len(errors)} unrecognized status(es) in the state database!")
+            st.dataframe(errors[['Bill Number', 'Status']], hide_index=True)
+        else:
+            st.success("Zero logic errors. All 3,600+ bills mapped perfectly.")
