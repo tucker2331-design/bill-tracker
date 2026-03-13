@@ -79,23 +79,18 @@ def determine_lifecycle(status_text, committee_name, bill_id, history_text):
     status = str(status_text).lower()
     comm = str(committee_name).strip()
     
-    if any(x in status for x in ["signed by governor", "enacted", "approved", "chapter"]): return "✅ Signed & Enacted"
+    if any(x in status for x in ["signed by governor", "enacted", "approved by governor", "chapter"]): return "✅ Signed & Enacted"
     if "vetoed" in status: return "❌ Vetoed"
     
     vip_keywords = [
         "pending governor's action", "pending action by governor", "awaiting signature", 
         "enrolled", "communicated to governor", "communicated to the governor", 
         "bill text as passed senate and house", "bill text as passed house and senate",
-        "pending governor's communication", "awaiting governor's action",
-        "signed by speaker", "signed by president", "governor's recommendation"
+        "pending governor's communication", "awaiting governor's action"
     ]
     if any(x in status for x in vip_keywords): return "✍️ Awaiting Signature"
     
-    dead_keywords_status = [
-        "tabled", "failed", "passed by indefinitely", "left in", "defeated", 
-        "no action taken", "incorporated", "continued", "carry over", "pbi", 
-        "stricken", "withdrawn"
-    ]
+    dead_keywords_status = ["tabled", "failed to report", "failed to pass", "passed by indefinitely", "left in", "defeated", "no action taken", "incorporated", "continued", "carry over", "pbi", "stricken"]
     if any(x in status for x in dead_keywords_status): return "❌ Dead / Tabled"
     
     floor_keywords = ["reported", "reading waived", "read second", "read third", "read first"]
@@ -103,11 +98,9 @@ def determine_lifecycle(status_text, committee_name, bill_id, history_text):
         if "recommends reporting" not in status: return "📣 Out of Committee"
         
     if comm not in ["-", "nan", "None", "", "Unassigned"] and len(comm) > 2: return "📥 In Committee"
+    if "referred to" in status and "governor" not in status: return "📥 In Committee"
     
-    # Prefiled and Recommitted safely caught here
-    if any(x in status for x in ["referred to", "in committee", "prefiled", "recommitted", "introduced"]) and "governor" not in status: return "📥 In Committee"
-    
-    transit_keywords = ["passed", "agreed", "engrossed", "communicated", "received from", "in conference", "in senate", "in house"]
+    transit_keywords = ["passed", "agreed", "engrossed", "communicated", "received from", "in conference"]
     if any(x in status for x in transit_keywords): return "📣 Out of Committee"
     
     return "📣 Out of Committee (⚠️ Unrecognized)"
