@@ -1,169 +1,119 @@
 import streamlit as st
 import pandas as pd
 import json
-import re
-import requests
-import time
+import gspread
+from google.oauth2.service_account import Credentials
+from datetime import datetime
+import os
 
-st.set_page_config(page_title="V4 Mastermind UI", layout="wide")
-st.title("🧬 Phase 3: The Unified UI (Shadow Test)")
-st.info("Testing the dual-view UI: Tracked Bills vs. Full State Backup. Live app.py is untouched.")
+st.set_page_config(page_title="Bug Logger Sandbox", layout="wide")
+st.title("🧪 Phase 5 Shadow Test: Permanent Bug Logging")
+st.info("Testing robust Anti-Duplication logic for writing bugs to the new Google Sheet tab.")
 
-# --- URLS ---
-MASTERMIND_URL = "https://docs.google.com/spreadsheets/d/1566pCv70iQ7YkTQK71RfYerciK-ukW-QdblTu2-Prfw/gviz/tq?tqx=out:csv&sheet=Sheet1"
-MANUAL_TRACKER_URL = "https://docs.google.com/spreadsheets/d/18m752GcvGIPPpqUn_gB0DfA3e4z2UGD0ki0dUZh2Qek/gviz/tq?tqx=out:csv&sheet=Bills"
+# --- CONFIGURATION ---
+SPREADSHEET_ID = "1566pCv70iQ7YkTQK71RfYerciK-ukW-QdblTu2-Prfw"
+MASTERMIND_URL = f"https://docs.google.com/spreadsheets/d/{SPREADSHEET_ID}/gviz/tq?tqx=out:csv&sheet=Sheet1"
 
-def clean_bill_id(bill_text):
-    if pd.isna(bill_text): return ""
-    clean = str(bill_text).upper().replace(" ", "").strip()
-    clean = re.sub(r'^([A-Z]+)0+(\d+)$', r'\1\2', clean)
-    return clean
-
-@st.cache_data(ttl=60)
-def load_databases():
+# --- AUTHENTICATION ---
+@st.cache_resource
+def get_gspread_client():
     try:
-        # 1. Load Mastermind (All 3600+ Bills)
-        df_master = pd.read_csv(MASTERMIND_URL)
-        if 'History_Data' in df_master.columns:
-            df_master['History_Data'] = df_master['History_Data'].apply(lambda x: json.loads(x) if pd.notna(x) else [])
-            df_master['Upcoming_Meetings'] = df_master['Upcoming_Meetings'].apply(lambda x: json.loads(x) if pd.notna(x) else [])
-
-        # 2. Load Manual Tracker (Team Input)
-        raw_manual = pd.read_csv(MANUAL_TRACKER_URL)
-        raw_manual.columns = raw_manual.columns.str.strip()
-        
-        # Extract 'Watching' bills
-        cols_w = ['Bills Watching', 'Title (Watching)']
-        if 'Status (Watching)' in raw_manual.columns: cols_w.append('Status (Watching)')
-        df_w = raw_manual[cols_w].copy().dropna(subset=['Bills Watching'])
-        df_w.columns = ['Bill Number', 'My Title'] + (['My Status'] if 'Status (Watching)' in raw_manual.columns else [])
-        df_w['Type'] = 'Watching'
-
-        # Extract 'Involved' bills
-        w_col_name = next((c for c in raw_manual.columns if "Working On" in c and "Title" not in c and "Status" not in c), None)
-        df_i = pd.DataFrame()
-        if w_col_name:
-            cols_i = [w_col_name]
-            title_work_col = next((c for c in raw_manual.columns if "Title (Working)" in c), None)
-            if title_work_col: cols_i.append(title_work_col)
-            status_work_col = next((c for c in raw_manual.columns if "Status (Working)" in c), None)
-            if status_work_col: cols_i.append(status_work_col)
-            
-            df_i = raw_manual[cols_i].copy().dropna(subset=[w_col_name])
-            i_new_cols = ['Bill Number']
-            if title_work_col: i_new_cols.append('My Title')
-            if status_work_col: i_new_cols.append('My Status')
-            df_i.columns = i_new_cols
-            df_i['Type'] = 'Involved'
-        
-        # Combine team tracker
-        df_team = pd.concat([df_w, df_i], ignore_index=True)
-        df_team['Bill Number'] = df_team['Bill Number'].apply(clean_bill_id)
-        df_team = df_team.drop_duplicates(subset=['Bill Number'])
-        if 'My Title' not in df_team.columns: df_team['My Title'] = "-"
-        if 'My Status' not in df_team.columns: df_team['My Status'] = "-"
-        df_team['My Title'] = df_team['My Title'].fillna("-")
-        df_team['My Status'] = df_team['My Status'].fillna("-")
-
-        # 3. Merge for the Tracked View
-        df_tracked = pd.merge(df_team, df_master, on="Bill Number", how="left")
-        
-        return df_master, df_tracked
-
+        creds_dict = dict(st.secrets["gcp_service_account"])
+        credentials = Credentials.from_service_account_info(creds_dict, scopes=["https://www.googleapis.com/auth/spreadsheets"])
+        return gspread.authorize(credentials)
     except Exception as e:
-        st.error(f"Data Load Error: {e}")
-        return pd.DataFrame(), pd.DataFrame()
+        st.error(f"Failed to authenticate with Google: {e}")
+        return None
 
-# --- FETCH DATA ---
-with st.spinner("Downloading and merging state data..."):
-    df_master, df_tracked = load_databases()
+def run_bug_scanner():
+    gc = get_gspread_client()
+    if not gc: return
+    
+    with st.spinner("Scanning database and checking logs..."):
+        try:
+            # 1. Download current bills to find active bugs
+            df_master = pd.read_csv(MASTERMIND_URL)
+            
+            # 2. Connect to the new Bug_Logs tab
+            sheet = gc.open_by_key(SPREADSHEET_ID)
+            bug_worksheet = sheet.worksheet("Bug_Logs")
+            existing_logs = bug_worksheet.get_all_records()
+            df_logs = pd.DataFrame(existing_logs) if existing_logs else pd.DataFrame(columns=["Date_Found", "Bill_Number", "Bug_Type", "Details", "Status"])
+            
+            # Ensure columns exist in the DataFrame to prevent KeyError if sheet is totally empty
+            for col in ["Date_Found", "Bill_Number", "Bug_Type", "Details", "Status"]:
+                if col not in df_logs.columns:
+                    df_logs[col] = ""
 
-if not df_master.empty:
-    
-    # --- UI TOGGLE (TABS) ---
-    tab_tracked, tab_master = st.tabs(["🎯 My Tracked Bills", "🏛️ Master State Database (LIS Backup)"])
-    
-    # TAB 1: Team's Merged View
-    with tab_tracked:
-        st.subheader("👀 Watching")
-        if not df_tracked[df_tracked['Type'] == 'Watching'].empty:
-            st.dataframe(df_tracked[df_tracked['Type'] == 'Watching'][['Bill Number', 'My Title', 'Official Title', 'Status', 'Latest_Vote', 'Lifecycle', 'Display_Committee']], use_container_width=True)
-        else:
-            st.caption("No 'Watching' bills found in your manual sheet.")
+            new_bugs_to_log = []
+            today_str = datetime.now().strftime("%Y-%m-%d %H:%M")
+
+            # --- BUG DETECTION & ANTI-DUPLICATION LOGIC ---
             
-        st.subheader("🚀 Directly Involved")
-        if not df_tracked[df_tracked['Type'] == 'Involved'].empty:
-            st.dataframe(df_tracked[df_tracked['Type'] == 'Involved'][['Bill Number', 'My Title', 'Official Title', 'Status', 'Latest_Vote', 'Lifecycle', 'Display_Committee']], use_container_width=True)
-        else:
-            st.caption("No 'Involved' bills found in your manual sheet.")
-            
-    # TAB 2: All 3,600+ Bills (QA & Backup)
-    with tab_master:
-        st.subheader(f"Total Bills Indexed: {len(df_master)}")
-        st.markdown("This view acts as an independent backup of the LIS system. Expand a bill below to see its full history.")
-        
-        # Display the full, unfiltered database
-        st.dataframe(
-            df_master[['Bill Number', 'Official Title', 'Status', 'Latest_Vote', 'Lifecycle', 'Auto_Folder', 'Current_Committee']], 
-            use_container_width=True,
-            height=600
-        )
-        
-        st.divider()
-        st.subheader("🔍 Deep Dive: Bill History Inspector")
-        inspect_bill = st.selectbox("Select a bill to view full history timeline:", df_master['Bill Number'].tolist())
-        if inspect_bill:
-            bill_row = df_master[df_master['Bill Number'] == inspect_bill].iloc[0]
-            st.markdown(f"**{bill_row['Bill Number']}** - {bill_row['Official Title']}")
-            if bill_row['History_Data']:
-                st.dataframe(pd.DataFrame(bill_row['History_Data']), hide_index=True, use_container_width=True)
+            # A. Find Vocabulary Bugs
+            vocab_bugs = df_master[df_master['Lifecycle'].str.contains('⚠️ Unrecognized', na=False)]
+            for _, row in vocab_bugs.iterrows():
+                bill = str(row['Bill Number'])
+                status = str(row['Status'])
+                
+                # Check for exact Bill + exact Bug Type + currently Open
+                is_duplicate = not df_logs[
+                    (df_logs['Bill_Number'].astype(str) == bill) & 
+                    (df_logs['Bug_Type'] == "Vocabulary") & 
+                    (df_logs['Status'] == "🚨 Open")
+                ].empty
+                
+                if not is_duplicate:
+                    new_bugs_to_log.append([today_str, bill, "Vocabulary", status, "🚨 Open"])
+
+            # B. Find Routing Bugs
+            routing_bugs = df_master[(df_master['Lifecycle'] == '📥 In Committee') & (df_master['Display_Committee'] == 'Unassigned')]
+            for _, row in routing_bugs.iterrows():
+                bill = str(row['Bill Number'])
+                status = str(row['Status'])
+                
+                is_duplicate = not df_logs[
+                    (df_logs['Bill_Number'].astype(str) == bill) & 
+                    (df_logs['Bug_Type'] == "Routing") & 
+                    (df_logs['Status'] == "🚨 Open")
+                ].empty
+                
+                if not is_duplicate:
+                    new_bugs_to_log.append([today_str, bill, "Routing", status, "🚨 Open"])
+
+            # C. Find Sorting Bugs
+            sorting_bugs = df_master[df_master['Auto_Folder'] == '📂 Unassigned / General']
+            for _, row in sorting_bugs.iterrows():
+                bill = str(row['Bill Number'])
+                title = str(row['Official Title'])
+                
+                is_duplicate = not df_logs[
+                    (df_logs['Bill_Number'].astype(str) == bill) & 
+                    (df_logs['Bug_Type'] == "Sorting") & 
+                    (df_logs['Status'] == "🚨 Open")
+                ].empty
+                
+                if not is_duplicate:
+                    new_bugs_to_log.append([today_str, bill, "Sorting", title, "🚨 Open"])
+
+            # --- WRITE TO SHEET ---
+            if new_bugs_to_log:
+                bug_worksheet.append_rows(new_bugs_to_log)
+                st.success(f"✅ Successfully appended {len(new_bugs_to_log)} NEW bugs to the permanent log!")
+                st.dataframe(pd.DataFrame(new_bugs_to_log, columns=["Date_Found", "Bill_Number", "Bug_Type", "Details", "Status"]))
             else:
-                st.caption("No history found.")
+                st.info("🛡️ Scan complete. 0 new bugs found. (Any existing bugs are already marked '🚨 Open' in the sheet).")
+                
+        except Exception as e:
+            st.error(f"Error during scan: {e}")
 
-    # --- SIDEBAR: DEVELOPER CONSOLE & SYNC ---
-    with st.sidebar:
-        st.header("⚙️ Data Controls")
-        
-        # 1. THE GOD BUTTON
-        if st.button("🚀 Sync Latest State Data", type="primary", use_container_width=True):
-            GITHUB_OWNER = "tucker2331-design" 
-            GITHUB_REPO = "bill-tracker" 
-            # Make sure this matches the actual file name of your workflow in the .github/workflows folder!
-            WORKFLOW_FILENAME = "update_database.yml" 
-            
-            try:
-                GITHUB_TOKEN = st.secrets["GITHUB_TOKEN"]
-            except:
-                st.error("Missing GITHUB_TOKEN in Streamlit secrets.")
-                st.stop()
-                
-            url = f"https://api.github.com/repos/{GITHUB_OWNER}/{GITHUB_REPO}/actions/workflows/{WORKFLOW_FILENAME}/dispatches"
-            headers = {
-                "Authorization": f"Bearer {GITHUB_TOKEN}",
-                "Accept": "application/vnd.github.v3+json"
-            }
-            data = {"ref": "main"}
-            
-            with st.spinner("Waking up Ghost Worker... This takes about 45 seconds."):
-                response = requests.post(url, headers=headers, json=data)
-                
-                if response.status_code == 204:
-                    time.sleep(45) 
-                    st.cache_data.clear()
-                    st.success("✅ Database synced! Page refreshing...")
-                    time.sleep(2)
-                    st.rerun()
-                else:
-                    st.error(f"Failed to trigger sync: {response.status_code} - {response.text}")
-            
-        st.divider()
-        
-        # 2. LOGIC MONITORING
-        st.subheader("🚨 Logic Monitoring")
-        errors = df_master[df_master['Lifecycle'].str.contains('⚠️ Unrecognized', na=False)]
-        
-        if not errors.empty:
-            st.error(f"Found {len(errors)} unrecognized status(es) in the state database!")
-            st.dataframe(errors[['Bill Number', 'Status']], hide_index=True)
-        else:
-            st.success("Zero logic errors. All 3,600+ bills mapped perfectly.")
+# --- UI ---
+st.subheader("Step 1: Run the Scanner")
+st.write("Click the button below to scan the main database. It will evaluate the Composite Key (Bill + Type + Status) and write any net-new bugs to your `Bug_Logs` tab.")
+if st.button("🔍 Run Bug Scanner & Log to Google Sheets", type="primary"):
+    run_bug_scanner()
+
+st.divider()
+
+st.subheader("Step 2: Verify Anti-Duplication")
+st.write("After the first scan succeeds, check your Google Sheet. Then, **click the button a second time.** It should block all duplicates.")
