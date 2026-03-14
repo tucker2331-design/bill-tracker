@@ -7,13 +7,13 @@ from datetime import datetime, timedelta
 
 st.set_page_config(page_title="Phase 6 Sandbox", layout="wide")
 st.title("🧪 Phase 6: The Sniffer & The Watchman")
-st.info("Testing the expanded Auto-Session Sniffer and the decoupled Sync Failure logging.")
+st.info("Testing the 10-Session Auto-Sniffer and the decoupled Sync Failure logging.")
 
 # --- CONFIGURATION ---
 SPREADSHEET_ID = "1566pCv70iQ7YkTQK71RfYerciK-ukW-QdblTu2-Prfw"
 GITHUB_OWNER = "tucker2331-design"
 GITHUB_REPO = "bill-tracker"
-WORKFLOW_FILENAME = "backend_worker.yml"
+WORKFLOW_FILENAME = "update_database.yml"  # <-- FIXED: Matches your GitHub repo exactly
 
 # --- AUTHENTICATION ---
 @st.cache_resource
@@ -38,8 +38,8 @@ def test_session_sniffer():
         found_session = None
         
         for y in years_to_check:
-            # Expanded to check up to 4 special sessions before defaulting to regular (1)
-            for suffix in ["5", "4", "3", "2", "1"]:
+            # Expanded to check up to 10 special sessions before defaulting to regular (1)
+            for suffix in ["10", "9", "8", "7", "6", "5", "4", "3", "2", "1"]:
                 session_code = f"{y}{suffix}"
                 test_url = f"https://lis.blob.core.windows.net/lisfiles/{session_code}/HISTORY.CSV"
                 
@@ -65,7 +65,7 @@ def test_session_sniffer():
         return found_session, log
 
 st.subheader("Step 1: Test the Auto-Session Sniffer")
-st.write("Click below to force the code to dynamically figure out the API code. It now checks for up to 4 special sessions.")
+st.write("Click below to force the code to dynamically figure out the API code. It now checks for up to 10 special sessions.")
 if st.button("🐕 Sniff for Active Session", type="primary"):
     active_session, sniffer_log = test_session_sniffer()
     
@@ -96,7 +96,7 @@ def run_watchman():
         try:
             r_fail = requests.get(fail_url, headers=headers)
             
-            # 🚨 THE NEW DIAGNOSTIC ERROR CATCHER 🚨
+            # Diagnostic Error Catcher
             if r_fail.status_code != 200:
                 st.error(f"GitHub API Error {r_fail.status_code}: {r_fail.text}")
                 return
