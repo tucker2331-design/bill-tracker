@@ -7,7 +7,7 @@ from datetime import datetime, timedelta
 
 st.set_page_config(page_title="Phase 6 Sandbox", layout="wide")
 st.title("🧪 Phase 6: The Sniffer & The Watchman")
-st.info("Testing the Auto-Session Sniffer and the decoupled Sync Failure logging.")
+st.info("Testing the expanded Auto-Session Sniffer and the decoupled Sync Failure logging.")
 
 # --- CONFIGURATION ---
 SPREADSHEET_ID = "1566pCv70iQ7YkTQK71RfYerciK-ukW-QdblTu2-Prfw"
@@ -26,7 +26,7 @@ def get_gspread_client():
         st.error(f"Failed to authenticate with Google: {e}")
         return None
 
-# --- FEATURE 1: AUTO-SESSION SNIFFER ---
+# --- FEATURE 1: BULLETPROOF AUTO-SESSION SNIFFER ---
 def test_session_sniffer():
     with st.spinner("Pinging Virginia LIS servers to find active session..."):
         now = datetime.now()
@@ -38,8 +38,8 @@ def test_session_sniffer():
         found_session = None
         
         for y in years_to_check:
-            # Look for Special Session 3, then 2, then 1, then Regular (1)
-            for suffix in ["3", "2", "1"]:
+            # Expanded to check up to 4 special sessions before defaulting to regular (1)
+            for suffix in ["5", "4", "3", "2", "1"]:
                 session_code = f"{y}{suffix}"
                 test_url = f"https://lis.blob.core.windows.net/lisfiles/{session_code}/HISTORY.CSV"
                 
@@ -65,7 +65,7 @@ def test_session_sniffer():
         return found_session, log
 
 st.subheader("Step 1: Test the Auto-Session Sniffer")
-st.write("Click below to force the code to dynamically figure out the API code without hardcoding.")
+st.write("Click below to force the code to dynamically figure out the API code. It now checks for up to 4 special sessions.")
 if st.button("🐕 Sniff for Active Session", type="primary"):
     active_session, sniffer_log = test_session_sniffer()
     
@@ -95,8 +95,10 @@ def run_watchman():
         
         try:
             r_fail = requests.get(fail_url, headers=headers)
+            
+            # 🚨 THE NEW DIAGNOSTIC ERROR CATCHER 🚨
             if r_fail.status_code != 200:
-                st.error("Failed to reach GitHub API.")
+                st.error(f"GitHub API Error {r_fail.status_code}: {r_fail.text}")
                 return
                 
             runs = r_fail.json().get('workflow_runs', [])
@@ -143,6 +145,6 @@ def run_watchman():
             st.error(f"Watchman Error: {e}")
 
 st.subheader("Step 2: Test the Watchman")
-st.write("Streamlit will ask GitHub if the backend crashed. If it did, Streamlit will write the crash to your `Bug_Logs` tab.")
+st.write("Streamlit will ask GitHub if the backend crashed. If it fails to connect, it will print the exact reason why.")
 if st.button("👀 Run Watchman (Check GitHub)", type="primary"):
     run_watchman()
