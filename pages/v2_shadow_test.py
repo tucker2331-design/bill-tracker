@@ -3,6 +3,7 @@ import pandas as pd
 import requests
 import re
 import json
+import time
 from datetime import datetime, timedelta
 import pytz
 from slack_sdk import WebClient
@@ -49,6 +50,10 @@ SUBS_URL = f"https://docs.google.com/spreadsheets/d/{MANUAL_SHEET_ID}/gviz/tq?tq
 MASTERMIND_SHEET_ID = "1566pCv70iQ7YkTQK71RfYerciK-ukW-QdblTu2-Prfw"
 MASTERMIND_URL = f"https://docs.google.com/spreadsheets/d/{MASTERMIND_SHEET_ID}/gviz/tq?tqx=out:csv&sheet=Sheet1"
 BUG_LOGS_URL = f"https://docs.google.com/spreadsheets/d/{MASTERMIND_SHEET_ID}/gviz/tq?tqx=out:csv&sheet=Bug_Logs"
+
+GITHUB_OWNER = "tucker2331-design"
+GITHUB_REPO = "bill-tracker"
+WORKFLOW_FILENAME = "update_database.yml"
 
 # --- COMMITTEE CODE MAP (Kept strictly for HTML Calendar Scraper) ---
 COMMITTEE_MAP = {
@@ -100,10 +105,19 @@ def extract_vote_info(status_text):
     if match: return match.group(1)
     return None
 
+# 🛠️ FRONTEND SCRUBBER: Cleans up the messy subcommittee names from the backend
+def get_clean_sub_name(raw_sub):
+    sub = str(raw_sub).strip()
+    if sub in ['-', 'nan', 'None', '', 'Unassigned']: return '-'
+    # Strip out voting patterns like (7-Y 3-N)
+    sub = re.sub(r'\(\s*\d+-Y\s+\d+-N.*?\)', '', sub, flags=re.IGNORECASE).strip()
+    # Strip out action verbs that got accidentally captured
+    sub = re.sub(r'(?i)\s+(recommends|reports|failed|assigned|passed|continued).*', '', sub).strip()
+    return sub if sub else '-'
+
 # --- DATA LOADERS (The New Engine) ---
 @st.cache_data(ttl=60)
 def load_databases():
-    # 1. Load Ghost Worker Data (Mastermind)
     try:
         df_master = pd.read_csv(MASTERMIND_URL)
         if 'History_Data' in df_master.columns:
@@ -111,11 +125,9 @@ def load_databases():
         if 'Upcoming_Meetings' in df_master.columns:
             df_master['Upcoming_Meetings'] = df_master['Upcoming_Meetings'].apply(lambda x: json.loads(x) if pd.notna(x) else [])
         
-        # 2. Load Bug Logs
         try: df_bugs = pd.read_csv(BUG_LOGS_URL)
         except: df_bugs = pd.DataFrame()
 
-        # 3. Load Manual User Inputs
         raw_manual = pd.read_csv(BILLS_URL)
         raw_manual.columns = raw_manual.columns.str.strip()
         
@@ -144,10 +156,8 @@ def load_databases():
         df_team['My Title'] = df_team['My Title'].fillna("-")
         if 'My Status' not in df_team.columns: df_team['My Status'] = "-"
 
-        # 4. Merge Engine Data with Manual Inputs
         final_df = pd.merge(df_team, df_master, on="Bill Number", how="left")
         
-        # Provide fallback values if Ghost Worker missed a bill entirely
         final_df['Auto_Folder'] = final_df['Auto_Folder'].fillna("📂 Unassigned / General")
         final_df['Lifecycle'] = final_df['Lifecycle'].fillna("📥 In Committee")
         final_df['Is_Youth'] = final_df['Is_Youth'].fillna("False").astype(str) == "True"
@@ -252,25 +262,19 @@ def render_bill_card(row, show_youth_tag=False):
     if title in ["Unknown", "Error", None]: title = row.get('My Title', 'No Title')
     
     b_num_display = row['Bill Number']
-    
     badge = ""
     if str(b_num_display).upper().startswith("H"): badge = "[H]"
     elif str(b_num_display).upper().startswith("S"): badge = "[S]"
     
     display_header = f"{b_num_display} {badge}"
-    
-    if show_youth_tag and row.get('Is_Youth', False):
-        display_header = f"👶 {display_header}"
+    if show_youth_tag and row.get('Is_Youth', False): display_header = f"👶 {display_header}"
     
     st.markdown(f"**{display_header}**")
     
     lifecycle = str(row.get('Lifecycle', ''))
-    if "Dead" in lifecycle or "Vetoed" in lifecycle:
-        st.error(f"💀 {lifecycle}")
-    elif "Passed" in lifecycle or "Signed" in lifecycle:
-        st.success(f"🎉 {lifecycle}")
-    elif "Out of Committee" in lifecycle:
-        st.warning(f"📣 {lifecycle}")
+    if "Dead" in lifecycle or "Vetoed" in lifecycle: st.error(f"💀 {lifecycle}")
+    elif "Passed" in lifecycle or "Signed" in lifecycle: st.success(f"🎉 {lifecycle}")
+    elif "Out of Committee" in lifecycle: st.warning(f"📣 {lifecycle}")
 
     my_status = str(row.get('My Status', '')).strip()
     if my_status and my_status != 'nan' and my_status != '-': st.info(f"🏷️ **Status:** {my_status}")
@@ -278,14 +282,13 @@ def render_bill_card(row, show_youth_tag=False):
     
     lis_link = f"https://lis.virginia.gov/bill-details/20261/{row['Bill Number']}"
     st.markdown(f"[🔗 View on LIS]({lis_link})")
-    
     st.divider()
 
 def render_grouped_list_item(df):
     if df.empty: st.caption("No bills."); return
     
     def fix_sub_names(row):
-        sub = str(row.get('Current_Sub', '-')).strip()
+        sub = get_clean_sub_name(row.get('Current_Sub', '-'))
         if re.search(r'subcommittee\s*#?\s*\d', sub, re.IGNORECASE):
             b_num = str(row.get('Bill Number', '')).upper()
             if b_num.startswith('H'): return f"House {sub}"
@@ -297,21 +300,15 @@ def render_grouped_list_item(df):
     def clean_and_merge_names(name):
         name = str(name).strip()
         if name in ['-', 'nan', 'None', '', '0', 'Unassigned']: return "Unassigned"
-        
         shared_committees = ["Agriculture", "Appropriations", "Commerce and Labor", "General Laws", "Privileges and Elections", "Rules", "Courts of Justice", "Transportation"]
-        
         name_lower = name.lower()
         for shared in shared_committees:
             clean_check = name.lower().replace("house ", "").replace("senate ", "")
-            if clean_check == shared.lower():
-                return shared 
-        
+            if clean_check == shared.lower(): return shared 
         return name
 
     df['Display_Comm_Group'] = df['Current_Committee'].fillna('-').apply(clean_and_merge_names)
-    
     unique_committees = sorted(df['Display_Comm_Group'].unique())
-    
     shared_lookup = ["Agriculture", "Appropriations", "Commerce and Labor", "General Laws", "Privileges and Elections", "Rules", "Courts of Justice", "Transportation"]
 
     for comm_name in unique_committees:
@@ -323,7 +320,6 @@ def render_grouped_list_item(df):
 
         st.markdown(f"##### 📂 {comm_name}")
         comm_df = df[df['Display_Comm_Group'] == comm_name]
-        
         is_shared = comm_name in shared_lookup
         
         if is_shared:
@@ -384,7 +380,6 @@ def render_failed_grouped_list_item(df):
 def render_simple_list_item(df):
     if df.empty: st.caption("No bills."); return
     
-    # 3 BUCKETS LOGIC FOR "OUT OF COMMITTEE"
     def get_bucket(row):
         status_lower = str(row.get('Status', '')).lower()
         if "received from" in status_lower: return "1_Inbox"
@@ -392,12 +387,7 @@ def render_simple_list_item(df):
         return "2_Floor"
 
     df['Bucket'] = df.apply(get_bucket, axis=1)
-    
-    bucket_map = {
-        "1_Inbox": "📥 Received / Awaiting Referral",
-        "2_Floor": "📜 On Floor",
-        "3_Outbox": "🚀 Passed Chamber / In Transit"
-    }
+    bucket_map = {"1_Inbox": "📥 Received / Awaiting Referral", "2_Floor": "📜 On Floor", "3_Outbox": "🚀 Passed Chamber / In Transit"}
     
     for key in sorted(bucket_map.keys()):
         subset = df[df['Bucket'] == key]
@@ -414,13 +404,16 @@ def _render_single_bill_row(row):
     if title: label_text += f" - {title}"
     with st.expander(label_text):
         st.markdown(f"**🏛️ Current Location:** {row.get('Display_Committee', '-')}")
-        if row.get('Current_Sub') and row.get('Current_Sub') != '-': st.markdown(f"**↳ Subcommittee:** {row.get('Current_Sub')}")
+        clean_sub = get_clean_sub_name(row.get('Current_Sub', '-'))
+        if clean_sub and clean_sub != '-': st.markdown(f"**↳ Subcommittee:** {clean_sub}")
         st.markdown(f"**📌 Designated Title:** {row.get('My Title', '-')}")
         st.markdown(f"**📜 Official Title:** {row.get('Official Title', '-')}")
         st.markdown(f"**🔄 Status:** {clean_status_text(row.get('Status', '-'))}")
         hist_data = row.get('History_Data', [])
         if isinstance(hist_data, list) and hist_data:
-            st.markdown("**📜 History:**"); st.dataframe(pd.DataFrame(hist_data), hide_index=True, use_container_width=True)
+            st.markdown("**📜 History:**")
+            # REVERSED HISTORY LOGIC IMPLEMENTED HERE
+            st.dataframe(pd.DataFrame(hist_data[::-1]), hide_index=True, use_container_width=True)
         else: st.caption(f"Date: {row.get('Date', '-')}")
         lis_link = f"https://lis.virginia.gov/bill-details/20261/{row['Bill Number']}"
         st.markdown(f"🔗 [View Official Bill on LIS]({lis_link})")
@@ -431,14 +424,32 @@ est = pytz.timezone('US/Eastern')
 current_time_est = datetime.now(est).strftime("%I:%M %p EST")
 if 'last_run' not in st.session_state: st.session_state['last_run'] = current_time_est
 
-# --- SIDEBAR ---
-demo_mode = st.sidebar.checkbox("🛠️ Enable Demo Mode", value=False)
-col_btn, col_time = st.columns([1, 6])
-with col_btn:
-    if st.button("🔄 Check for Updates"):
-        st.session_state['last_run'] = datetime.now(est).strftime("%I:%M %p EST")
-        st.cache_data.clear(); st.rerun()
-with col_time: st.markdown(f"**Last Refreshed:** `{st.session_state['last_run']}`")
+# --- SIDEBAR (God Button & Health) ---
+with st.sidebar:
+    st.markdown(f"**Last Refreshed:** `{st.session_state['last_run']}`")
+    
+    # 🚀 THE GOD BUTTON
+    if st.button("🚀 Force Manual Sync", type="primary", use_container_width=True):
+        try:
+            GITHUB_TOKEN = st.secrets["GITHUB_TOKEN"]
+            url = f"https://api.github.com/repos/{GITHUB_OWNER}/{GITHUB_REPO}/actions/workflows/{WORKFLOW_FILENAME}/dispatches"
+            headers = {"Authorization": f"Bearer {GITHUB_TOKEN}", "Accept": "application/vnd.github.v3+json"}
+            data = {"ref": "main"}
+            with st.spinner("Waking up Ghost Worker (Takes ~45s)..."):
+                response = requests.post(url, headers=headers, json=data)
+                if response.status_code == 204:
+                    time.sleep(45) 
+                    st.cache_data.clear()
+                    st.success("✅ Synced! Refreshing...")
+                    time.sleep(2)
+                    st.rerun()
+                else:
+                    st.error(f"Failed: {response.status_code}")
+        except Exception as e:
+            st.error(f"GitHub Error: Missing token or bad connection.")
+
+    st.divider()
+    demo_mode = st.checkbox("🛠️ Enable Demo Mode", value=False)
 
 # 1. LOAD DATABASES
 final_df, df_bugs = load_databases()
@@ -488,7 +499,7 @@ for tab, b_type in [(tab_involved, "Involved"), (tab_watching, "Watching")]:
         with m3: st.markdown("#### 🎉 Passed"); render_passed_grouped_list_item(passed)
         with m4: st.markdown("#### ❌ Failed"); render_failed_grouped_list_item(failed)
 
-# --- TAB 3: CALENDAR (Untouched) ---
+# --- TAB 3: CALENDAR (Untouched HTML Scraper logic) ---
 with tab_upcoming:
     st.subheader("📅 Your Confirmed Agenda")
     today = datetime.now(est).date()
