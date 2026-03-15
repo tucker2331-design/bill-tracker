@@ -402,7 +402,7 @@ else:
             st.markdown("---")
             st.subheader(f"📜 Master List ({b_type})")
             
-            in_comm = subset[subset['Lifecycle'] == "📥 In Committee"]
+            in_comm = subset[subset['Lifecycle'].isin(["📥 In Committee", "📥 Awaiting Referral"])]
             out_comm = subset[subset['Lifecycle'] == "📣 Out of Committee"]
             passed = subset[subset['Lifecycle'].isin(["✅ Signed & Enacted", "✍️ Awaiting Signature", "✅ Passed (Resolution)"])]
             failed = subset[subset['Lifecycle'].isin(["❌ Dead / Tabled", "❌ Vetoed"])]
