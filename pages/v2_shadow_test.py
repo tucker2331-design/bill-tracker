@@ -3,7 +3,6 @@ import pandas as pd
 import requests
 import re
 import json
-import time
 from datetime import datetime, timedelta
 import pytz
 from slack_sdk import WebClient
@@ -62,17 +61,10 @@ COMMITTEE_MAP = {
     "H07": "House Appropriations", "H08": "House Counties, Cities and Towns", 
     "H10": "House Health, Welfare and Institutions", "H11": "House Conservation and Natural Resources",
     "H12": "House Agriculture", "H13": "House Militia, Police and Public Safety", 
-    "H14": "House Labor and Commerce",
-    "H15": "House Chesapeake and Its Tributaries", "H16": "House Mining and Mineral Resources",
-    "H17": "House Corporations, Insurance and Banking", "H18": "House Rules", "H19": "House Nominations and Confirmations",
-    "H20": "House Interstate Cooperation", "H21": "House Science and Technology", "H22": "House Courts of Justice",
-    "H23": "House Education", "H24": "House Education", "H25": "House Health and Human Services",
-    "H26": "House Public Safety", "H27": "House Transportation", "H28": "House Communications, Technology and Innovation",
-    "H29": "House Health and Human Services",
-    "S01": "Senate Agriculture", "S02": "Senate Commerce and Labor", "S03": "Senate Courts of Justice", 
-    "S04": "Senate Education and Health", "S05": "Senate Finance and Appropriations", "S06": "Senate General Laws", 
-    "S07": "Senate Local Government", "S08": "Senate Privileges and Elections", "S09": "Senate Rehab", 
-    "S10": "Senate Transportation", "S11": "Senate Rules"
+    "H14": "House Labor and Commerce", "S01": "Senate Agriculture", "S02": "Senate Commerce and Labor", 
+    "S03": "Senate Courts of Justice", "S04": "Senate Education and Health", "S05": "Senate Finance and Appropriations", 
+    "S06": "Senate General Laws", "S07": "Senate Local Government", "S08": "Senate Privileges and Elections", 
+    "S09": "Senate Rehab", "S10": "Senate Transportation", "S11": "Senate Rules"
 }
 
 def clean_bill_id(bill_text):
@@ -85,14 +77,11 @@ def clean_committee_name(name):
     if not name or str(name).lower() == 'nan': return ""
     name = str(name).strip()
     if name in COMMITTEE_MAP: return COMMITTEE_MAP[name]
-    
     name = re.sub(r'\b(Simon|Rasoul|Willett|Helmer|Lucas|Surovell|Locke|Deeds|Favola|Marsden|Ebbin|McPike|Hayes|Carroll Foy)\b.*', '', name, flags=re.IGNORECASE)
     name = re.sub(r'\(?Subcommittee:.*?\)?', '', name, flags=re.IGNORECASE)
     name = name.replace("Committee For", "").replace("Committee On", "").replace("Committee", "").strip()
-    
     if name.startswith("H") and name[1].isupper() and not name.startswith("House"): name = "House " + name[1:]
     if name.startswith("S") and name[1].isupper() and not name.startswith("Senate"): name = "Senate " + name[1:]
-    
     return name.title()
 
 def clean_status_text(text):
@@ -105,13 +94,10 @@ def extract_vote_info(status_text):
     if match: return match.group(1)
     return None
 
-# 🛠️ FRONTEND SCRUBBER: Cleans up the messy subcommittee names from the backend
 def get_clean_sub_name(raw_sub):
     sub = str(raw_sub).strip()
     if sub in ['-', 'nan', 'None', '', 'Unassigned']: return '-'
-    # Strip out voting patterns like (7-Y 3-N)
     sub = re.sub(r'\(\s*\d+-Y\s+\d+-N.*?\)', '', sub, flags=re.IGNORECASE).strip()
-    # Strip out action verbs that got accidentally captured
     sub = re.sub(r'(?i)\s+(recommends|reports|failed|assigned|passed|continued).*', '', sub).strip()
     return sub if sub else '-'
 
@@ -162,7 +148,7 @@ def load_databases():
         final_df['Lifecycle'] = final_df['Lifecycle'].fillna("📥 In Committee")
         final_df['Is_Youth'] = final_df['Is_Youth'].fillna("False").astype(str) == "True"
         
-        return final_df, df_bugs
+        return final_df, df_master, df_bugs
         
     except pd.errors.EmptyDataError:
         st.warning("🔄 The state database is currently syncing in the background. Auto-refreshing in 10 seconds...")
@@ -171,7 +157,7 @@ def load_databases():
         st.error(f"Data Engine Load Error: {e}")
         st.stop()
 
-# --- WEB SCRAPERS & SLACK BOTS (Kept untouched per directive) ---
+# --- WEB SCRAPERS & SLACK BOTS ---
 @st.cache_data(ttl=600)
 def fetch_html_calendar():
     calendar_times = {'NO_DATE': {}}
@@ -222,20 +208,18 @@ def fetch_html_calendar():
     return calendar_times, []
 
 def check_and_broadcast(df_bills, df_subscribers, demo_mode):
-    st.sidebar.header("🤖 Slack Bot Status")
-    if demo_mode: st.sidebar.warning("🛠️ Demo Mode Active"); return
+    if demo_mode: return
     token = st.secrets.get("SLACK_BOT_TOKEN")
-    if not token: st.sidebar.error("❌ Disconnected (Token Missing)"); return
+    if not token: return
     client = WebClient(token=token)
     try:
         subscriber_list = df_subscribers['Email'].dropna().unique().tolist()
-        if not subscriber_list: st.sidebar.warning("⚠️ No Subscribers Found"); return
+        if not subscriber_list: return
         user_id = client.users_lookupByEmail(email=subscriber_list[0].strip())['user']['id']
         history = client.conversations_history(channel=client.conversations_open(users=[user_id])['channel']['id'], limit=100)
         raw_history_text = "\n".join([m.get('text', '') for m in history['messages']])
         history_text = raw_history_text.replace("&amp;", "&").replace("&lt;", "<").replace("&gt;", ">")
-        st.sidebar.success(f"✅ Connected to Slack")
-    except Exception as e: st.sidebar.error(f"❌ Slack Error: {e}"); return
+    except Exception as e: return
     
     report = f"🏛️ *VA LEGISLATIVE UPDATE* - {datetime.now().strftime('%m/%d')}\n_Latest changes detected:_\n"
     updates_found = False
@@ -249,12 +233,9 @@ def check_and_broadcast(df_bills, df_subscribers, demo_mode):
         report += f"\n⚪ *{b_num}* | {display_name}\n> _{clean_status}_\n"
     
     if updates_found:
-        st.toast(f"📢 Sending updates..."); 
         for email in subscriber_list:
             try: uid = client.users_lookupByEmail(email=email.strip())['user']['id']; client.chat_postMessage(channel=uid, text=report)
             except: pass
-        st.toast("✅ Sent!"); st.sidebar.info("🚀 New Update Sent!")
-    else: st.sidebar.info("💤 No new updates needed.")
 
 # --- UI RENDERERS ---
 def render_bill_card(row, show_youth_tag=False):
@@ -412,7 +393,7 @@ def _render_single_bill_row(row):
         hist_data = row.get('History_Data', [])
         if isinstance(hist_data, list) and hist_data:
             st.markdown("**📜 History:**")
-            # REVERSED HISTORY LOGIC IMPLEMENTED HERE
+            # REVERSED HISTORY LOGIC (Newest at top)
             st.dataframe(pd.DataFrame(hist_data[::-1]), hide_index=True, use_container_width=True)
         else: st.caption(f"Date: {row.get('Date', '-')}")
         lis_link = f"https://lis.virginia.gov/bill-details/20261/{row['Bill Number']}"
@@ -424,35 +405,38 @@ est = pytz.timezone('US/Eastern')
 current_time_est = datetime.now(est).strftime("%I:%M %p EST")
 if 'last_run' not in st.session_state: st.session_state['last_run'] = current_time_est
 
-# --- SIDEBAR (God Button & Health) ---
+# --- SIDEBAR (Global Toggle & God Button) ---
 with st.sidebar:
+    # 🌐 The Global Mastermind Toggle
+    st.markdown("### ⚙️ Dashboard Mode")
+    view_all_mode = st.toggle("🌐 View Entire Mastermind Database", value=False)
+    if view_all_mode:
+        st.caption("Showing all 3,600+ bills from the state database.")
+    
+    st.divider()
     st.markdown(f"**Last Refreshed:** `{st.session_state['last_run']}`")
     
-    # 🚀 THE GOD BUTTON
+    # 🚀 THE GOD BUTTON (No sleep/dimming)
     if st.button("🚀 Force Manual Sync", type="primary", use_container_width=True):
         try:
             GITHUB_TOKEN = st.secrets["GITHUB_TOKEN"]
             url = f"https://api.github.com/repos/{GITHUB_OWNER}/{GITHUB_REPO}/actions/workflows/{WORKFLOW_FILENAME}/dispatches"
             headers = {"Authorization": f"Bearer {GITHUB_TOKEN}", "Accept": "application/vnd.github.v3+json"}
             data = {"ref": "main"}
-            with st.spinner("Waking up Ghost Worker (Takes ~45s)..."):
-                response = requests.post(url, headers=headers, json=data)
-                if response.status_code == 204:
-                    time.sleep(45) 
-                    st.cache_data.clear()
-                    st.success("✅ Synced! Refreshing...")
-                    time.sleep(2)
-                    st.rerun()
-                else:
-                    st.error(f"Failed: {response.status_code}")
+            response = requests.post(url, headers=headers, json=data)
+            if response.status_code == 204:
+                st.toast("✅ Ghost Worker awakened! Data will update automatically in ~60 seconds.")
+                st.session_state['last_run'] = datetime.now(est).strftime("%I:%M %p EST")
+            else:
+                st.error(f"Failed to start worker: {response.status_code}")
         except Exception as e:
-            st.error(f"GitHub Error: Missing token or bad connection.")
+            st.error(f"GitHub Error: Missing token or connection issue.")
 
     st.divider()
     demo_mode = st.checkbox("🛠️ Enable Demo Mode", value=False)
 
 # 1. LOAD DATABASES
-final_df, df_bugs = load_databases()
+final_df, df_master, df_bugs = load_databases()
 try: subs_df = pd.read_csv(SUBS_URL)
 except: subs_df = pd.DataFrame(columns=["Email"])
 
@@ -460,44 +444,71 @@ except: subs_df = pd.DataFrame(columns=["Email"])
 scraped_times, scrape_log = fetch_html_calendar() 
 if not final_df.empty: check_and_broadcast(final_df, subs_df, demo_mode)
 
-# 3. RENDER TABS
-tab_involved, tab_watching, tab_upcoming, tab_bugs = st.tabs(["🚀 Directly Involved", "👀 Watching", "📅 Upcoming Hearings", "🪲 Bug Dashboard"])
-
-for tab, b_type in [(tab_involved, "Involved"), (tab_watching, "Watching")]:
-    with tab:
-        subset = final_df[final_df['Type'] == b_type]
-        st.subheader("🗂️ Browse by Topic")
+# 3. RENDER UI BASED ON TOGGLE MODE
+if view_all_mode:
+    # GLOBAL MODE: Show everything grouped by topic
+    tab_global, tab_upcoming, tab_bugs = st.tabs(["🌐 All State Bills", "📅 Upcoming Hearings", "🪲 Bug Dashboard"])
+    
+    with tab_global:
+        st.subheader("🗂️ Browse All Bills by Topic")
         
-        unique_folders = sorted(subset['Auto_Folder'].unique())
-        has_youth = subset['Is_Youth'].any()
+        # In global mode, we use df_master
+        unique_folders = sorted(df_master['Auto_Folder'].unique())
+        has_youth = df_master['Is_Youth'].any()
         if has_youth: unique_folders.insert(0, "👶 Youth & Children (All)")
         
         cols = st.columns(3)
         for i, folder in enumerate(unique_folders):
             with cols[i % 3]:
                 if folder == "👶 Youth & Children (All)":
-                    bills_in_folder = subset[subset['Is_Youth'] == True]
+                    bills_in_folder = df_master[df_master['Is_Youth'] == True]
                 else:
-                    bills_in_folder = subset[subset['Auto_Folder'] == folder]
+                    bills_in_folder = df_master[df_master['Auto_Folder'] == folder]
                     bills_in_folder = bills_in_folder.sort_values(by='Is_Youth', ascending=False)
 
                 with st.expander(f"{folder} ({len(bills_in_folder)})"):
                     for _, row in bills_in_folder.iterrows(): 
                         render_bill_card(row, show_youth_tag=(folder != "👶 Youth & Children (All)"))
-        
-        st.markdown("---")
-        st.subheader(f"📜 Master List ({b_type})")
-        
-        in_comm = subset[subset['Lifecycle'] == "📥 In Committee"]
-        out_comm = subset[subset['Lifecycle'] == "📣 Out of Committee"]
-        passed = subset[subset['Lifecycle'].isin(["✅ Signed & Enacted", "✍️ Awaiting Signature", "✅ Passed (Resolution)"])]
-        failed = subset[subset['Lifecycle'].isin(["❌ Dead / Tabled", "❌ Vetoed"])]
-        
-        m1, m2, m3, m4 = st.columns(4)
-        with m1: st.markdown("#### 📥 In Committee"); render_grouped_list_item(in_comm)
-        with m2: st.markdown("#### 📣 Out of Committee"); render_simple_list_item(out_comm)
-        with m3: st.markdown("#### 🎉 Passed"); render_passed_grouped_list_item(passed)
-        with m4: st.markdown("#### ❌ Failed"); render_failed_grouped_list_item(failed)
+
+else:
+    # NORMAL MODE: Tracked Bills Only
+    tab_involved, tab_watching, tab_upcoming, tab_bugs = st.tabs(["🚀 Directly Involved", "👀 Watching", "📅 Upcoming Hearings", "🪲 Bug Dashboard"])
+
+    for tab, b_type in [(tab_involved, "Involved"), (tab_watching, "Watching")]:
+        with tab:
+            subset = final_df[final_df['Type'] == b_type]
+            st.subheader("🗂️ Browse by Topic")
+            
+            unique_folders = sorted(subset['Auto_Folder'].unique())
+            has_youth = subset['Is_Youth'].any()
+            if has_youth: unique_folders.insert(0, "👶 Youth & Children (All)")
+            
+            cols = st.columns(3)
+            for i, folder in enumerate(unique_folders):
+                with cols[i % 3]:
+                    if folder == "👶 Youth & Children (All)":
+                        bills_in_folder = subset[subset['Is_Youth'] == True]
+                    else:
+                        bills_in_folder = subset[subset['Auto_Folder'] == folder]
+                        bills_in_folder = bills_in_folder.sort_values(by='Is_Youth', ascending=False)
+
+                    with st.expander(f"{folder} ({len(bills_in_folder)})"):
+                        for _, row in bills_in_folder.iterrows(): 
+                            render_bill_card(row, show_youth_tag=(folder != "👶 Youth & Children (All)"))
+            
+            st.markdown("---")
+            st.subheader(f"📜 Master List ({b_type})")
+            
+            in_comm = subset[subset['Lifecycle'] == "📥 In Committee"]
+            out_comm = subset[subset['Lifecycle'] == "📣 Out of Committee"]
+            passed = subset[subset['Lifecycle'].isin(["✅ Signed & Enacted", "✍️ Awaiting Signature", "✅ Passed (Resolution)"])]
+            failed = subset[subset['Lifecycle'].isin(["❌ Dead / Tabled", "❌ Vetoed"])]
+            
+            m1, m2, m3, m4 = st.columns(4)
+            with m1: st.markdown("#### 📥 In Committee"); render_grouped_list_item(in_comm)
+            with m2: st.markdown("#### 📣 Out of Committee"); render_simple_list_item(out_comm)
+            with m3: st.markdown("#### 🎉 Passed"); render_passed_grouped_list_item(passed)
+            with m4: st.markdown("#### ❌ Failed"); render_failed_grouped_list_item(failed)
 
 # --- TAB 3: CALENDAR (Untouched HTML Scraper logic) ---
 with tab_upcoming:
@@ -712,9 +723,9 @@ with tab_bugs:
 # --- DEV DEBUGGER ---
 with st.sidebar:
     st.divider()
-    with st.expander("👨‍💻 Developer Debugger", expanded=True):
+    with st.expander("👨‍💻 Developer Debugger", expanded=False):
         st.write("System Status:")
-        st.write(f"**Database Size:** {len(final_df)} Total Bills")
+        st.write(f"**Database Size:** {len(df_master)} Total Bills")
         st.write(f"**Total Tracked:** {len(final_df[final_df['Type'].notna()])} Bills")
         st.write("**Scraper Log (First 10):**")
         if scrape_log:
