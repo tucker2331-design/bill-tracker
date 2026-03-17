@@ -16,6 +16,7 @@ st.set_page_config(page_title="VA Bill Tracker 2026", layout="wide")
 # If the JS timer reloaded the page with ?refresh=true, clear the cache and clean the URL
 if "refresh" in st.query_params:
     st.cache_data.clear()
+    st.session_state['waiting_for_sync'] = False
     st.session_state['last_run'] = datetime.now(pytz.timezone('US/Eastern')).strftime("%I:%M %p EST")
     st.query_params.clear()
 
@@ -99,6 +100,7 @@ def get_clean_sub_name(raw_sub):
 def load_databases():
     try:
         # --- THE GOOGLE CACHE BUSTER ---
+        # Attaches a unique timestamp to force Google to skip its 5-minute CDN cache
         cb = int(time.time())
         live_master_url = f"{MASTERMIND_URL}&cb={cb}"
         live_manual_url = f"{BILLS_URL}&cb={cb}"
@@ -354,7 +356,7 @@ with st.sidebar:
     st.divider()
     st.markdown(f"**Last Refreshed:** `{st.session_state['last_run']}`")
     
-    # 🚀 THE "BEST OF BOTH WORLDS" GOD BUTTON
+    # 🚀 THE STATEFUL GOD BUTTON
     if st.button("🚀 Force Manual Sync", type="primary", use_container_width=True):
         try:
             GITHUB_TOKEN = st.secrets["GITHUB_TOKEN"]
@@ -363,19 +365,24 @@ with st.sidebar:
             data = {"ref": "main"}
             response = requests.post(url, headers=headers, json=data)
             if response.status_code == 204:
-                st.success("✅ Triggered! Your screen is free. Page will hard-refresh in exactly 60 seconds.")
-                js_code = """
-                <script>
-                    setTimeout(() => {
-                        window.parent.location.href = window.parent.location.pathname + '?refresh=true';
-                    }, 60000);
-                </script>
-                """
-                components.html(js_code, height=0)
+                st.session_state['waiting_for_sync'] = True
+                st.rerun() # Instantly reruns to drop the button and mount the global timer
             else:
                 st.error(f"Failed to start worker: {response.status_code}")
         except Exception as e:
             st.error("GitHub Error: Missing token or connection issue.")
+
+    # Mount the Sentry Timer globally so it survives user clicks
+    if st.session_state.get('waiting_for_sync'):
+        st.success("✅ Triggered! Page will automatically hard-refresh in 60s.")
+        js_code = """
+        <script>
+            setTimeout(() => {
+                window.parent.location.href = window.parent.location.pathname + '?refresh=true';
+            }, 60000);
+        </script>
+        """
+        components.html(js_code, height=0)
 
     st.divider()
     demo_mode = st.checkbox("🛠️ Enable Demo Mode", value=False)
