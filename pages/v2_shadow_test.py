@@ -8,45 +8,14 @@ from datetime import datetime, timedelta
 import pytz
 from slack_sdk import WebClient
 from bs4 import BeautifulSoup 
-import streamlit.components.v1 as components
+from streamlit_autorefresh import st_autorefresh
 
 st.set_page_config(page_title="VA Bill Tracker 2026", layout="wide")
 
-# --- THE STREAMLIT CACHE NUKE ---
-# If the JS timer reloaded the page with ?refresh=true, clear the cache and clean the URL
-if "refresh" in st.query_params:
-    st.cache_data.clear()
-    st.session_state['waiting_for_sync'] = False
-    st.session_state['last_run'] = datetime.now(pytz.timezone('US/Eastern')).strftime("%I:%M %p EST")
-    st.query_params.clear()
-
-# --- SMART SYNC CLOCK ---
-components.html(
-    """
-    <script>
-        function scheduleSmartRefresh() {
-            const now = new Date();
-            const currentMin = now.getMinutes();
-            const intervals = [2, 17, 32, 47]; 
-            let nextMin = intervals.find(m => m > currentMin);
-            let msUntil;
-            if (nextMin === undefined) {
-                let nextHour = new Date(now.getTime() + 60 * 60 * 1000);
-                nextHour.setMinutes(2);
-                nextHour.setSeconds(0);
-                msUntil = nextHour - now;
-            } else {
-                let target = new Date(now);
-                target.setMinutes(nextMin);
-                target.setSeconds(0);
-                msUntil = target - now;
-            }
-            setTimeout(() => window.parent.location.reload(), msUntil);
-        }
-        scheduleSmartRefresh();
-    </script>
-    """, height=0, width=0
-)
+# --- NATIVE AUTO-REFRESH (The Waiter) ---
+# Silently refreshes the Streamlit app every 5 minutes (300,000 milliseconds)
+# This guarantees lobbyists are never out of sync with the 15-minute Ghost Worker.
+st_autorefresh(interval=300000, limit=None, key="lobbyist_auto_sync")
 
 MANUAL_SHEET_ID = "18m752GcvGIPPpqUn_gB0DfA3e4z2UGD0ki0dUZh2Qek"
 BILLS_URL = f"https://docs.google.com/spreadsheets/d/{MANUAL_SHEET_ID}/gviz/tq?tqx=out:csv&sheet=Bills"
@@ -55,7 +24,9 @@ MASTERMIND_SHEET_ID = "1566pCv70iQ7YkTQK71RfYerciK-ukW-QdblTu2-Prfw"
 MASTERMIND_URL = f"https://docs.google.com/spreadsheets/d/{MASTERMIND_SHEET_ID}/gviz/tq?tqx=out:csv&sheet=Sheet1"
 BUG_LOGS_URL = f"https://docs.google.com/spreadsheets/d/{MASTERMIND_SHEET_ID}/gviz/tq?tqx=out:csv&sheet=Bug_Logs"
 
-GITHUB_OWNER, GITHUB_REPO, WORKFLOW_FILENAME = "tucker2331-design", "bill-tracker", "update_database.yml"
+GITHUB_OWNER = "tucker2331-design"
+GITHUB_REPO = "bill-tracker"
+WORKFLOW_FILENAME = "update_database.yml"
 
 COMMITTEE_MAP = {
     "H01": "House Privileges and Elections", "H02": "House Courts of Justice", "H03": "House Education",
@@ -347,7 +318,7 @@ est = pytz.timezone('US/Eastern')
 current_time_est = datetime.now(est).strftime("%I:%M %p EST")
 if 'last_run' not in st.session_state: st.session_state['last_run'] = current_time_est
 
-# --- SIDEBAR (Global Toggle & Non-Blocking God Button) ---
+# --- SIDEBAR (Global Toggle & God Button) ---
 with st.sidebar:
     st.markdown("### ⚙️ Dashboard Mode")
     view_all_mode = st.toggle("🌐 View Entire Mastermind Database", value=False)
@@ -356,7 +327,7 @@ with st.sidebar:
     st.divider()
     st.markdown(f"**Last Refreshed:** `{st.session_state['last_run']}`")
     
-    # 🚀 THE STATEFUL GOD BUTTON
+    # 🚀 NATIVE PYTHON PROGRESS BAR (Bypasses iframe blocks)
     if st.button("🚀 Force Manual Sync", type="primary", use_container_width=True):
         try:
             GITHUB_TOKEN = st.secrets["GITHUB_TOKEN"]
@@ -364,25 +335,20 @@ with st.sidebar:
             headers = {"Authorization": f"Bearer {GITHUB_TOKEN}", "Accept": "application/vnd.github.v3+json"}
             data = {"ref": "main"}
             response = requests.post(url, headers=headers, json=data)
+            
             if response.status_code == 204:
-                st.session_state['waiting_for_sync'] = True
-                st.rerun() # Instantly reruns to drop the button and mount the global timer
+                progress_bar = st.progress(0, text="📡 Pinging State API...")
+                for percent_complete in range(100):
+                    time.sleep(0.6) 
+                    progress_bar.progress(percent_complete + 1, text=f"⚙️ Ghost Worker syncing data... {60 - int((percent_complete + 1)*0.6)}s")
+                
+                st.cache_data.clear()
+                st.session_state['last_run'] = datetime.now(est).strftime("%I:%M %p EST")
+                st.rerun() 
             else:
                 st.error(f"Failed to start worker: {response.status_code}")
         except Exception as e:
             st.error("GitHub Error: Missing token or connection issue.")
-
-    # Mount the Sentry Timer globally so it survives user clicks
-    if st.session_state.get('waiting_for_sync'):
-        st.success("✅ Triggered! Page will automatically hard-refresh in 60s.")
-        js_code = """
-        <script>
-            setTimeout(() => {
-                window.parent.location.href = window.parent.location.pathname + '?refresh=true';
-            }, 60000);
-        </script>
-        """
-        components.html(js_code, height=0)
 
     st.divider()
     demo_mode = st.checkbox("🛠️ Enable Demo Mode", value=False)
@@ -398,7 +364,7 @@ if not final_df.empty: check_and_broadcast(final_df, subs_df, demo_mode)
 
 # --- 3. UI RENDERER ---
 if view_all_mode:
-    # --- 🌐 LIS SPREADSHEET VIEW (Lightweight & Crash-Proof) ---
+    # --- 🌐 LIS SPREADSHEET VIEW ---
     tab_data, tab_cal, tab_bugs = st.tabs(["🗃️ Master Spreadsheet", "📅 State Committee Calendar", "🪲 Bug Dashboard"])
     
     with tab_data:
@@ -408,7 +374,7 @@ if view_all_mode:
         st.dataframe(df_master[display_cols], use_container_width=True, hide_index=True, height=600)
 
 else:
-    # --- 🚀 NORMAL SQUAD VIEW (Full Detail) ---
+    # --- 🚀 NORMAL SQUAD VIEW ---
     tab_involved, tab_watching, tab_upcoming, tab_bugs = st.tabs(["🚀 Directly Involved", "👀 Watching", "📅 Your Hearings", "🪲 Bug Dashboard"])
 
     for tab, b_type in [(tab_involved, "Involved"), (tab_watching, "Watching")]:
@@ -440,7 +406,7 @@ else:
             with m3: st.markdown("#### 🎉 Passed"); render_passed_grouped_list_item(passed)
             with m4: st.markdown("#### ❌ Failed"); render_failed_grouped_list_item(failed)
 
-# --- THE CALENDAR TAB (Shared by both views) ---
+# --- THE CALENDAR TAB ---
 calendar_tab_target = tab_cal if view_all_mode else tab_upcoming
 with calendar_tab_target:
     st.subheader("📅 Committee Agenda")
