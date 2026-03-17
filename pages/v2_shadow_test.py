@@ -12,6 +12,13 @@ import streamlit.components.v1 as components
 
 st.set_page_config(page_title="VA Bill Tracker 2026", layout="wide")
 
+# --- THE STREAMLIT CACHE NUKE ---
+# If the JS timer reloaded the page with ?refresh=true, clear the cache and clean the URL
+if "refresh" in st.query_params:
+    st.cache_data.clear()
+    st.session_state['last_run'] = datetime.now(pytz.timezone('US/Eastern')).strftime("%I:%M %p EST")
+    st.query_params.clear()
+
 # --- SMART SYNC CLOCK ---
 components.html(
     """
@@ -91,13 +98,20 @@ def get_clean_sub_name(raw_sub):
 @st.cache_data(ttl=60)
 def load_databases():
     try:
-        df_master = pd.read_csv(MASTERMIND_URL)
+        # --- THE GOOGLE CACHE BUSTER ---
+        cb = int(time.time())
+        live_master_url = f"{MASTERMIND_URL}&cb={cb}"
+        live_manual_url = f"{BILLS_URL}&cb={cb}"
+        live_bugs_url = f"{BUG_LOGS_URL}&cb={cb}"
+
+        df_master = pd.read_csv(live_master_url)
         if 'History_Data' in df_master.columns: df_master['History_Data'] = df_master['History_Data'].apply(lambda x: json.loads(x) if pd.notna(x) else [])
         if 'Upcoming_Meetings' in df_master.columns: df_master['Upcoming_Meetings'] = df_master['Upcoming_Meetings'].apply(lambda x: json.loads(x) if pd.notna(x) else [])
-        try: df_bugs = pd.read_csv(BUG_LOGS_URL)
+        
+        try: df_bugs = pd.read_csv(live_bugs_url)
         except: df_bugs = pd.DataFrame()
 
-        raw_manual = pd.read_csv(BILLS_URL)
+        raw_manual = pd.read_csv(live_manual_url)
         raw_manual.columns = raw_manual.columns.str.strip()
         
         cols_w = ['Bills Watching', 'Title (Watching)']
@@ -350,8 +364,14 @@ with st.sidebar:
             response = requests.post(url, headers=headers, json=data)
             if response.status_code == 204:
                 st.success("✅ Triggered! Your screen is free. Page will hard-refresh in exactly 60 seconds.")
-                # This invisible Javascript starts a background timer that forces the page reload
-                components.html("<script>setTimeout(() => window.parent.location.reload(), 60000);</script>", height=0)
+                js_code = """
+                <script>
+                    setTimeout(() => {
+                        window.parent.location.href = window.parent.location.pathname + '?refresh=true';
+                    }, 60000);
+                </script>
+                """
+                components.html(js_code, height=0)
             else:
                 st.error(f"Failed to start worker: {response.status_code}")
         except Exception as e:
