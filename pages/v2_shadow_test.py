@@ -71,7 +71,6 @@ def clean_committee_name(name):
 
 def clean_status_text(text): return str(text).replace("HED", "House Education").replace("sub:", "Subcommittee:") if text else ""
 
-# ENTERPRISE FIX: Protects Abstention Votes (e.g. 50-Y 48-N 2-A)
 def extract_vote_info(status_text):
     match = re.search(r'\(\s*(\d+-Y\s+\d+-N.*?)\s*\)', str(status_text), re.IGNORECASE)
     return match.group(1) if match else None
@@ -211,7 +210,7 @@ def check_and_broadcast(df_bills, df_subscribers, demo_mode):
             try: 
                 uid = client.users_lookupByEmail(email=email.strip())['user']['id']
                 client.chat_postMessage(channel=uid, text=report)
-                time.sleep(1.2) # ENTERPRISE FIX: Slack Rate Limit Defusal
+                time.sleep(1.2)
             except: pass
 
 def render_bill_card(row, show_youth_tag=False):
@@ -224,8 +223,22 @@ def render_bill_card(row, show_youth_tag=False):
     display_header = f"{b_num_display} {badge}"
     if show_youth_tag and row.get('Is_Youth', False): display_header = f"👶 {display_header}"
     
-    st.markdown(f"**{display_header}**")
+    # --- STALE ALERT LOGIC ---
     lifecycle = str(row.get('Lifecycle', ''))
+    if lifecycle == "📥 In Committee":
+        try:
+            date_str = str(row.get('Date', ''))
+            if date_str:
+                last_action = datetime.strptime(date_str, "%m/%d/%Y" if "/" in date_str else "%Y-%m-%d").date()
+                days_stale = (datetime.now().date() - last_action).days
+                stale_threshold = 14 if datetime.now().year % 2 == 0 else 7
+                if days_stale >= stale_threshold:
+                    display_header += f" 🕒 ({days_stale}d ago)"
+        except ValueError:
+            pass
+            
+    st.markdown(f"**{display_header}**")
+    
     if "Dead" in lifecycle or "Vetoed" in lifecycle: st.error(f"💀 {lifecycle}")
     elif "Passed" in lifecycle or "Signed" in lifecycle: st.success(f"🎉 {lifecycle}")
     elif "Out of Committee" in lifecycle: st.warning(f"📣 {lifecycle}")
@@ -250,6 +263,21 @@ def _render_single_bill_row(row):
     my_status = str(row.get('My Status', '')).strip()
     label_text = f"{row['Bill Number']}"
     if my_status and my_status not in ['nan', '-']: label_text += f" - {my_status}"
+    
+    # --- STALE ALERT LOGIC FOR EXPANDER BARS ---
+    lifecycle = str(row.get('Lifecycle', ''))
+    if lifecycle == "📥 In Committee":
+        try:
+            date_str = str(row.get('Date', ''))
+            if date_str:
+                last_action = datetime.strptime(date_str, "%m/%d/%Y" if "/" in date_str else "%Y-%m-%d").date()
+                days_stale = (datetime.now().date() - last_action).days
+                stale_threshold = 14 if datetime.now().year % 2 == 0 else 7
+                if days_stale >= stale_threshold:
+                    label_text += f" 🕒 ({days_stale}d ago)"
+        except ValueError:
+            pass
+
     label_text += f" - {primary_title}"
     
     with st.expander(label_text):
@@ -267,7 +295,6 @@ def _render_single_bill_row(row):
             st.dataframe(pd.DataFrame(hist_data[::-1]), hide_index=True, use_container_width=True)
         else: st.caption(f"Date: {row.get('Date', '-')}")
         st.markdown(f"🔗 [View Official Bill on LIS](https://lis.virginia.gov/bill-details/20261/{row['Bill Number']})")
-
 
 def render_grouped_list_item(df):
     if df.empty: st.caption("No bills."); return
@@ -313,7 +340,6 @@ def render_grouped_list_item(df):
 
 def render_passed_grouped_list_item(df):
     if df.empty: st.caption("No bills."); return
-    # ENTERPRISE FIX: Conference String Render Queue
     for state, title in [("✅ Signed & Enacted", "✅ Signed & Enacted"), ("✍️ Awaiting Signature", "✍️ Awaiting Signature"), ("⚠️ In Reconciliation / Conference", "⚠️ In Conference / Limbo"), ("✅ Passed (Resolution)", "📜 Resolution / Amendment (Passed)")]:
         subset = df[df['Lifecycle'] == state]
         if not subset.empty:
@@ -359,10 +385,8 @@ with st.sidebar:
     if view_all_mode: st.caption("Showing all 3,600+ bills from the state database.")
     
     st.divider()
-    # The Truth Clock
     st.markdown(f"**Last Database Update:** `{true_sync_time}`")
     
-    # THE DIAGNOSTIC SENTRY
     if not final_df.empty:
         test_bills = final_df[final_df['My Title'].str.contains("TEST", case=False, na=False)]
         if not test_bills.empty:
@@ -370,7 +394,6 @@ with st.sidebar:
     
     st.divider()
     
-    # 🚀 ENTERPRISE FIX: GOD BUTTON WITH CONCURRENCY TRAFFIC CONTROL
     if st.button("🚀 Force Manual Sync", type="primary", use_container_width=True):
         try:
             GITHUB_TOKEN = st.secrets["GITHUB_TOKEN"]
@@ -400,6 +423,51 @@ with st.sidebar:
             st.error("GitHub Error: Missing token or connection issue.")
             
     st.caption("⚠️ Note: Lobbyists rely on the automatic 5-minute background refresh. This manual sync button is for Admins only.")
+
+    st.divider()
+    
+    # --- NEW FEATURE: LOBBYIST WATCHLIST (Sidebar Triage) ---
+    st.markdown("### 🚨 Lobbyist Watchlist")
+    
+    # 1. Calculate & Render Stale Bills
+    stale_threshold = 14 if datetime.now().year % 2 == 0 else 7
+    stale_list = []
+    if not final_df.empty:
+        for _, row in final_df[final_df['Lifecycle'] == "📥 In Committee"].iterrows():
+            try:
+                d_str = str(row.get('Date', ''))
+                if d_str:
+                    last_action = datetime.strptime(d_str, "%m/%d/%Y" if "/" in d_str else "%Y-%m-%d").date()
+                    days = (datetime.now().date() - last_action).days
+                    if days >= stale_threshold:
+                        stale_list.append((row['Bill Number'], days, row.get('Display_Committee', '-')))
+            except ValueError: pass
+            
+    if stale_list:
+        with st.expander(f"🕒 Stale Bills ({len(stale_list)})", expanded=True):
+            for b_num, days, comm in sorted(stale_list, key=lambda x: x[1], reverse=True):
+                st.caption(f"**{b_num}** ({days}d) ↳ {comm}")
+    else:
+        st.info("✅ No stale bills.")
+
+    # 2. Calculate & Render Active System Alerts
+    if not df_bugs.empty and 'Status' in df_bugs.columns:
+        open_bugs = df_bugs[df_bugs['Status'] == "🚨 Open"]
+        if not open_bugs.empty:
+            with st.expander(f"⚠️ System Alerts ({len(open_bugs)})", expanded=True):
+                for _, row in open_bugs.iterrows():
+                    # Assign a tiny icon based on the bug type
+                    bug_icon = "🚨" if "Unrecognized" in str(row.get('Bug_Type', '')) else ("🧭" if "Unmapped" in str(row.get('Bug_Type', '')) else "🗂️")
+                    
+                    # Clean up the bug name so it fits nicely in the sidebar
+                    raw_type = str(row.get('Bug_Type', 'Unknown Bug'))
+                    short_diag = raw_type.split(" ", 1)[-1] if " " in raw_type else raw_type
+                    
+                    st.caption(f"{bug_icon} **{row.get('Bill_Number', '?')}**: {short_diag}")
+        else:
+            st.info("✅ No active system alerts.")
+    else:
+        st.info("✅ No active system alerts.")
 
     st.divider()
     demo_mode = st.checkbox("🛠️ Enable Demo Mode", value=False)
@@ -441,17 +509,16 @@ else:
             st.markdown("---")
             st.subheader(f"📜 Master List ({b_type})")
             
-            # ENTERPRISE FIX: Safety Net and Visibility String Routing
             in_comm = subset[subset['Lifecycle'].isin(["📥 In Committee", "📥 Awaiting Referral"])]
             out_comm = subset[subset['Lifecycle'].str.contains("Out of Committee", na=False)]
             passed = subset[subset['Lifecycle'].isin(["✅ Signed & Enacted", "✍️ Awaiting Signature", "✅ Passed (Resolution)", "⚠️ In Reconciliation / Conference"])]
             failed = subset[subset['Lifecycle'].isin(["❌ Dead / Tabled", "❌ Vetoed"])]
             
             m1, m2, m3, m4 = st.columns(4)
-            with m1: st.markdown("#### 📥 In Committee"); render_grouped_list_item(in_comm)
-            with m2: st.markdown("#### 📣 Out of Committee"); render_simple_list_item(out_comm)
-            with m3: st.markdown("#### 🎉 Passed"); render_passed_grouped_list_item(passed)
-            with m4: st.markdown("#### ❌ Failed"); render_failed_grouped_list_item(failed)
+            with m1: st.markdown(f"#### 📥 In Committee ({len(in_comm)})"); render_grouped_list_item(in_comm)
+            with m2: st.markdown(f"#### 📣 Out of Committee ({len(out_comm)})"); render_simple_list_item(out_comm)
+            with m3: st.markdown(f"#### 🎉 Passed ({len(passed)})"); render_passed_grouped_list_item(passed)
+            with m4: st.markdown(f"#### ❌ Failed ({len(failed)})"); render_failed_grouped_list_item(failed)
 
 # --- THE CALENDAR TAB ---
 calendar_tab_target = tab_cal if view_all_mode else tab_upcoming
