@@ -152,23 +152,26 @@ def determine_lifecycle(status_text, comm, in_conference, passed_opposite):
     is_vip = any(x in status for x in ["pending governor", "awaiting governor", "awaiting signature", "enrolled", "communicated to governor", "bill text as passed"])
     
     # ⚠️ RECONCILIATION TRAP
-    if in_conference and not is_vip and "passed" in status:
+    if in_conference and not is_vip and ("passed" in status or "conference" in status):
         return "⚠️ In Reconciliation / Conference"
         
     # ✍️ DUAL-CHAMBER CRYPTOGRAPHIC LOCK
     if is_vip or (status.strip() == "passed" and passed_opposite): 
         return "✍️ Awaiting Signature"
         
-    # ❌ STRICT MACRO KILL-WORDS
-    death_macros = ["passed by indefinitely", "stricken", "left in committee", "defeated", "continued to next", "continued to special", "continued to 20"]
+    # ❌ RESTORED MACRO KILL-WORDS (The Zombie Fix)
+    death_macros = ["passed by indefinitely", "stricken", "left in", "defeated", "failed", "tabled", "incorporated", "no action taken", "withdrawn", "continued to next", "continued to special", "continued to 20"]
     if any(x in status for x in death_macros) or bool(re.search(r'continued to 20\d\d', status)): 
         return "❌ Dead / Tabled"
         
     if any(x in status for x in ["reported", "reading waived", "read second", "read third", "read first"]) and "recommends reporting" not in status: return "📣 Out of Committee"
     if "introduced" in status and comm in ["-", "nan", "None", "", "Unassigned"]: return "📥 Awaiting Referral"
+    
+    # Transit Override: Prevents bills crossing chambers from getting stuck in committee buckets
+    if any(x in status for x in ["passed", "agreed", "engrossed", "communicated", "received from", "in senate", "in house"]): return "📣 Out of Committee"
+    
     if comm not in ["-", "nan", "None", "", "Unassigned"] and len(comm) > 2: return "📥 In Committee"
     if any(x in status for x in ["referred to", "in committee", "prefiled", "recommitted"]) and "governor" not in status: return "📥 In Committee"
-    if any(x in status for x in ["passed", "agreed", "engrossed", "communicated", "received from", "in conference", "in senate", "in house"]): return "📣 Out of Committee"
     
     return "📣 Out of Committee (⚠️ Unrecognized)"
 
