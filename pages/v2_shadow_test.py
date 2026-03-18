@@ -12,9 +12,7 @@ from streamlit_autorefresh import st_autorefresh
 
 st.set_page_config(page_title="VA Bill Tracker 2026", layout="wide")
 
-# --- NATIVE AUTO-REFRESH (The Waiter) ---
-# Silently refreshes the Streamlit app every 5 minutes (300,000 milliseconds)
-# This guarantees lobbyists are never out of sync with the 15-minute Ghost Worker.
+# --- NATIVE AUTO-REFRESH (The 5-Minute Heartbeat) ---
 st_autorefresh(interval=300000, limit=None, key="lobbyist_auto_sync")
 
 MANUAL_SHEET_ID = "18m752GcvGIPPpqUn_gB0DfA3e4z2UGD0ki0dUZh2Qek"
@@ -24,9 +22,7 @@ MASTERMIND_SHEET_ID = "1566pCv70iQ7YkTQK71RfYerciK-ukW-QdblTu2-Prfw"
 MASTERMIND_URL = f"https://docs.google.com/spreadsheets/d/{MASTERMIND_SHEET_ID}/gviz/tq?tqx=out:csv&sheet=Sheet1"
 BUG_LOGS_URL = f"https://docs.google.com/spreadsheets/d/{MASTERMIND_SHEET_ID}/gviz/tq?tqx=out:csv&sheet=Bug_Logs"
 
-GITHUB_OWNER = "tucker2331-design"
-GITHUB_REPO = "bill-tracker"
-WORKFLOW_FILENAME = "update_database.yml"
+GITHUB_OWNER, GITHUB_REPO, WORKFLOW_FILENAME = "tucker2331-design", "bill-tracker", "update_database.yml"
 
 COMMITTEE_MAP = {
     "H01": "House Privileges and Elections", "H02": "House Courts of Justice", "H03": "House Education",
@@ -67,11 +63,14 @@ def get_clean_sub_name(raw_sub):
     sub = re.sub(r'\(\s*\d+-Y\s+\d+-N.*?\)', '', sub, flags=re.IGNORECASE).strip()
     return re.sub(r'(?i)\s+(recommends|reports|failed|assigned|passed|continued).*', '', sub).strip() or '-'
 
-@st.cache_data(ttl=60)
-def load_databases():
+# --- SURGERY: THE MUTATING ARGUMENT CACHE BUSTER ---
+# By passing a changing variable into this function, Streamlit is physically forced to bypass its cache.
+@st.cache_data(ttl=300, show_spinner=False)
+def load_databases(time_block_key):
     try:
-        # --- THE GOOGLE CACHE BUSTER ---
-        # Attaches a unique timestamp to force Google to skip its 5-minute CDN cache
+        # Generate the exact timestamp the data was physically pulled
+        pull_time = datetime.now(pytz.timezone('US/Eastern')).strftime("%I:%M %p EST")
+        
         cb = int(time.time())
         live_master_url = f"{MASTERMIND_URL}&cb={cb}"
         live_manual_url = f"{BILLS_URL}&cb={cb}"
@@ -115,7 +114,7 @@ def load_databases():
         final_df['Lifecycle'] = final_df['Lifecycle'].fillna("📥 In Committee")
         final_df['Is_Youth'] = final_df['Is_Youth'].fillna("False").astype(str) == "True"
         
-        return final_df, df_master, df_bugs
+        return final_df, df_master, df_bugs, pull_time
     except pd.errors.EmptyDataError:
         st.warning("🔄 Background sync in progress. Auto-refreshing soon...")
         st.stop()
@@ -312,20 +311,25 @@ def _render_single_bill_row(row):
         else: st.caption(f"Date: {row.get('Date', '-')}")
         st.markdown(f"🔗 [View Official Bill on LIS](https://lis.virginia.gov/bill-details/20261/{row['Bill Number']})")
 
-# --- MAIN APP ---
+# --- MAIN APP START ---
 st.title("🏛️ Virginia General Assembly Tracker")
 est = pytz.timezone('US/Eastern')
-current_time_est = datetime.now(est).strftime("%I:%M %p EST")
-if 'last_run' not in st.session_state: st.session_state['last_run'] = current_time_est
 
-# --- SIDEBAR (Global Toggle & God Button) ---
+# 1. LOAD DATABASES (Moved up so the sidebar can read the exact pull time)
+# SURGERY: Generate a number that changes exactly every 5 minutes (300 seconds)
+current_time_block = int(time.time() // 300)
+# Pass the mutating number to the function. Streamlit physically cannot cache it now!
+final_df, df_master, df_bugs, last_run_time = load_databases(current_time_block)
+
+# --- SIDEBAR ---
 with st.sidebar:
     st.markdown("### ⚙️ Dashboard Mode")
     view_all_mode = st.toggle("🌐 View Entire Mastermind Database", value=False)
     if view_all_mode: st.caption("Showing all 3,600+ bills from the state database.")
     
     st.divider()
-    st.markdown(f"**Last Refreshed:** `{st.session_state['last_run']}`")
+    # The clock is now mathematically tied to the exact second the data downloaded.
+    st.markdown(f"**Last Refreshed:** `{last_run_time}`")
     
     # 🚀 NATIVE PYTHON PROGRESS BAR (Bypasses iframe blocks)
     if st.button("🚀 Force Manual Sync", type="primary", use_container_width=True):
@@ -343,7 +347,6 @@ with st.sidebar:
                     progress_bar.progress(percent_complete + 1, text=f"⚙️ Ghost Worker syncing data... {60 - int((percent_complete + 1)*0.6)}s")
                 
                 st.cache_data.clear()
-                st.session_state['last_run'] = datetime.now(est).strftime("%I:%M %p EST")
                 st.rerun() 
             else:
                 st.error(f"Failed to start worker: {response.status_code}")
@@ -353,12 +356,9 @@ with st.sidebar:
     st.divider()
     demo_mode = st.checkbox("🛠️ Enable Demo Mode", value=False)
 
-# 1. LOAD DATABASES
-final_df, df_master, df_bugs = load_databases()
+# 2. RUN SCRAPER AND SLACK BOTS
 try: subs_df = pd.read_csv(SUBS_URL)
 except: subs_df = pd.DataFrame(columns=["Email"])
-
-# 2. RUN SCRAPER AND SLACK BOTS
 scraped_times, scrape_log = fetch_html_calendar() 
 if not final_df.empty: check_and_broadcast(final_df, subs_df, demo_mode)
 
