@@ -76,6 +76,7 @@ def clean_committee_name(name):
     if clean_name.startswith("H") and clean_name[1].isupper() and not clean_name.startswith("House"): clean_name = "House " + clean_name[1:]
     if clean_name.startswith("S") and clean_name[1].isupper() and not clean_name.startswith("Senate"): clean_name = "Senate " + clean_name[1:]
     clean_name = clean_name.title()
+    
     best_match, highest_ratio = None, 0.0
     for valid_comm in COMMITTEE_MAP.values():
         ratio = difflib.SequenceMatcher(None, clean_name.lower(), valid_comm.lower()).ratio()
