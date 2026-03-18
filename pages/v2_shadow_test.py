@@ -36,6 +36,26 @@ COMMITTEE_MAP = {
     "S09": "Senate Rehab", "S10": "Senate Transportation", "S11": "Senate Rules"
 }
 
+# --- SURGERY 1: THE TRUTH CLOCK ---
+# Pings the GitHub API to find the exact time the database was actually updated
+@st.cache_data(ttl=60, show_spinner=False)
+def get_last_sync_time():
+    try:
+        token = st.secrets.get("GITHUB_TOKEN")
+        url = f"https://api.github.com/repos/{GITHUB_OWNER}/{GITHUB_REPO}/actions/workflows/{WORKFLOW_FILENAME}/runs?status=success&per_page=1"
+        headers = {"Accept": "application/vnd.github.v3+json"}
+        if token: headers["Authorization"] = f"Bearer {token}"
+        
+        r = requests.get(url, headers=headers, timeout=3)
+        if r.status_code == 200:
+            runs = r.json().get("workflow_runs", [])
+            if runs:
+                # GitHub returns UTC. Convert to EST.
+                utc_time = datetime.strptime(runs[0]["updated_at"], "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=pytz.utc)
+                return utc_time.astimezone(pytz.timezone('US/Eastern')).strftime("%I:%M %p EST")
+    except: pass
+    return "Syncing..."
+
 def clean_bill_id(bill_text):
     if pd.isna(bill_text): return ""
     return re.sub(r'^([A-Z]+)0+(\d+)$', r'\1\2', str(bill_text).upper().replace(" ", "").strip())
@@ -63,14 +83,9 @@ def get_clean_sub_name(raw_sub):
     sub = re.sub(r'\(\s*\d+-Y\s+\d+-N.*?\)', '', sub, flags=re.IGNORECASE).strip()
     return re.sub(r'(?i)\s+(recommends|reports|failed|assigned|passed|continued).*', '', sub).strip() or '-'
 
-# --- SURGERY: THE MUTATING ARGUMENT CACHE BUSTER ---
-# By passing a changing variable into this function, Streamlit is physically forced to bypass its cache.
 @st.cache_data(ttl=300, show_spinner=False)
 def load_databases(time_block_key):
     try:
-        # Generate the exact timestamp the data was physically pulled
-        pull_time = datetime.now(pytz.timezone('US/Eastern')).strftime("%I:%M %p EST")
-        
         cb = int(time.time())
         live_master_url = f"{MASTERMIND_URL}&cb={cb}"
         live_manual_url = f"{BILLS_URL}&cb={cb}"
@@ -114,7 +129,7 @@ def load_databases(time_block_key):
         final_df['Lifecycle'] = final_df['Lifecycle'].fillna("📥 In Committee")
         final_df['Is_Youth'] = final_df['Is_Youth'].fillna("False").astype(str) == "True"
         
-        return final_df, df_master, df_bugs, pull_time
+        return final_df, df_master, df_bugs
     except pd.errors.EmptyDataError:
         st.warning("🔄 Background sync in progress. Auto-refreshing soon...")
         st.stop()
@@ -198,8 +213,10 @@ def check_and_broadcast(df_bills, df_subscribers, demo_mode):
             except: pass
 
 def render_bill_card(row, show_youth_tag=False):
-    title = row.get('Official Title', 'No Title')
-    if title in ["Unknown", "Error", None]: title = row.get('My Title', 'No Title')
+    official_title = str(row.get('Official Title', 'No Title'))
+    my_title = str(row.get('My Title', '-')).strip()
+    primary_title = f"⭐ {my_title}" if my_title and my_title not in ['nan', '-'] else official_title
+    
     b_num_display = row['Bill Number']
     badge = "[H]" if str(b_num_display).upper().startswith("H") else ("[S]" if str(b_num_display).upper().startswith("S") else "")
     display_header = f"{b_num_display} {badge}"
@@ -213,9 +230,42 @@ def render_bill_card(row, show_youth_tag=False):
 
     my_status = str(row.get('My Status', '')).strip()
     if my_status and my_status not in ['nan', '-']: st.info(f"🏷️ **Status:** {my_status}")
-    st.caption(f"{title}"); st.caption(f"_{clean_status_text(row.get('Status'))}_")
+    st.caption(f"{primary_title}"); st.caption(f"_{clean_status_text(row.get('Status'))}_")
     st.markdown(f"[🔗 View on LIS](https://lis.virginia.gov/bill-details/20261/{row['Bill Number']})")
     st.divider()
+
+def _render_single_bill_row(row):
+    official_title = str(row.get('Official Title', 'No Title'))
+    my_title = str(row.get('My Title', '-')).strip()
+    
+    if my_title and my_title not in ['nan', '-']:
+        primary_title = f"⭐ {my_title}"
+        sub_title_display = f"**📜 Official Title:** {official_title}"
+    else:
+        primary_title = official_title
+        sub_title_display = ""
+
+    my_status = str(row.get('My Status', '')).strip()
+    label_text = f"{row['Bill Number']}"
+    if my_status and my_status not in ['nan', '-']: label_text += f" - {my_status}"
+    label_text += f" - {primary_title}"
+    
+    with st.expander(label_text):
+        st.markdown(f"**🏛️ Current Location:** {row.get('Display_Committee', '-')}")
+        clean_sub = get_clean_sub_name(row.get('Current_Sub', '-'))
+        if clean_sub and clean_sub != '-': st.markdown(f"**↳ Subcommittee:** {clean_sub}")
+        
+        if my_title and my_title not in ['nan', '-']: st.markdown(f"**📌 Custom Title:** {my_title}")
+        if sub_title_display: st.markdown(sub_title_display)
+        
+        st.markdown(f"**🔄 Status:** {clean_status_text(row.get('Status', '-'))}")
+        hist_data = row.get('History_Data', [])
+        if isinstance(hist_data, list) and hist_data:
+            st.markdown("**📜 History:**")
+            st.dataframe(pd.DataFrame(hist_data[::-1]), hide_index=True, use_container_width=True)
+        else: st.caption(f"Date: {row.get('Date', '-')}")
+        st.markdown(f"🔗 [View Official Bill on LIS](https://lis.virginia.gov/bill-details/20261/{row['Bill Number']})")
+
 
 def render_grouped_list_item(df):
     if df.empty: st.caption("No bills."); return
@@ -290,36 +340,14 @@ def render_simple_list_item(df):
             st.markdown(f"##### {bucket_map[key]}")
             for i, row in subset.iterrows(): _render_single_bill_row(row)
 
-def _render_single_bill_row(row):
-    title = row.get('Official Title', 'No Title')
-    if title in ["Unknown", "Error", None]: title = row.get('My Title', 'No Title')
-    my_status = str(row.get('My Status', '')).strip()
-    label_text = f"{row['Bill Number']}"
-    if my_status and my_status not in ['nan', '-']: label_text += f" - {my_status}"
-    if title: label_text += f" - {title}"
-    with st.expander(label_text):
-        st.markdown(f"**🏛️ Current Location:** {row.get('Display_Committee', '-')}")
-        clean_sub = get_clean_sub_name(row.get('Current_Sub', '-'))
-        if clean_sub and clean_sub != '-': st.markdown(f"**↳ Subcommittee:** {clean_sub}")
-        st.markdown(f"**📌 Designated Title:** {row.get('My Title', '-')}")
-        st.markdown(f"**📜 Official Title:** {row.get('Official Title', '-')}")
-        st.markdown(f"**🔄 Status:** {clean_status_text(row.get('Status', '-'))}")
-        hist_data = row.get('History_Data', [])
-        if isinstance(hist_data, list) and hist_data:
-            st.markdown("**📜 History:**")
-            st.dataframe(pd.DataFrame(hist_data[::-1]), hide_index=True, use_container_width=True)
-        else: st.caption(f"Date: {row.get('Date', '-')}")
-        st.markdown(f"🔗 [View Official Bill on LIS](https://lis.virginia.gov/bill-details/20261/{row['Bill Number']})")
-
 # --- MAIN APP START ---
 st.title("🏛️ Virginia General Assembly Tracker")
 est = pytz.timezone('US/Eastern')
 
-# 1. LOAD DATABASES (Moved up so the sidebar can read the exact pull time)
-# SURGERY: Generate a number that changes exactly every 5 minutes (300 seconds)
+# 1. LOAD DATABASES
 current_time_block = int(time.time() // 300)
-# Pass the mutating number to the function. Streamlit physically cannot cache it now!
-final_df, df_master, df_bugs, last_run_time = load_databases(current_time_block)
+final_df, df_master, df_bugs = load_databases(current_time_block)
+true_sync_time = get_last_sync_time()
 
 # --- SIDEBAR ---
 with st.sidebar:
@@ -328,10 +356,18 @@ with st.sidebar:
     if view_all_mode: st.caption("Showing all 3,600+ bills from the state database.")
     
     st.divider()
-    # The clock is now mathematically tied to the exact second the data downloaded.
-    st.markdown(f"**Last Refreshed:** `{last_run_time}`")
+    # The Truth Clock
+    st.markdown(f"**Last Database Update:** `{true_sync_time}`")
     
-    # 🚀 NATIVE PYTHON PROGRESS BAR (Bypasses iframe blocks)
+    # THE DIAGNOSTIC SENTRY
+    if not final_df.empty:
+        test_bills = final_df[final_df['My Title'].str.contains("TEST", case=False, na=False)]
+        if not test_bills.empty:
+            st.success(f"🧪 **LIVE DATA VERIFIED:** Found custom title: '{test_bills.iloc[0]['My Title']}'")
+    
+    st.divider()
+    
+    # 🚀 SURGERY 2: THE RESTORED GOD BUTTON (Immediate forced pull)
     if st.button("🚀 Force Manual Sync", type="primary", use_container_width=True):
         try:
             GITHUB_TOKEN = st.secrets["GITHUB_TOKEN"]
@@ -352,6 +388,8 @@ with st.sidebar:
                 st.error(f"Failed to start worker: {response.status_code}")
         except Exception as e:
             st.error("GitHub Error: Missing token or connection issue.")
+            
+    st.caption("⚠️ Note: Lobbyists rely on the automatic 5-minute background refresh. This manual sync button is for Admins only.")
 
     st.divider()
     demo_mode = st.checkbox("🛠️ Enable Demo Mode", value=False)
@@ -364,7 +402,6 @@ if not final_df.empty: check_and_broadcast(final_df, subs_df, demo_mode)
 
 # --- 3. UI RENDERER ---
 if view_all_mode:
-    # --- 🌐 LIS SPREADSHEET VIEW ---
     tab_data, tab_cal, tab_bugs = st.tabs(["🗃️ Master Spreadsheet", "📅 State Committee Calendar", "🪲 Bug Dashboard"])
     
     with tab_data:
@@ -374,7 +411,6 @@ if view_all_mode:
         st.dataframe(df_master[display_cols], use_container_width=True, hide_index=True, height=600)
 
 else:
-    # --- 🚀 NORMAL SQUAD VIEW ---
     tab_involved, tab_watching, tab_upcoming, tab_bugs = st.tabs(["🚀 Directly Involved", "👀 Watching", "📅 Your Hearings", "🪲 Bug Dashboard"])
 
     for tab, b_type in [(tab_involved, "Involved"), (tab_watching, "Watching")]:
