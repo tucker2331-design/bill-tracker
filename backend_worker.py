@@ -135,7 +135,7 @@ def process_history_state_machine(history_data, bill_id):
             curr_sub = "-"
             
     # 2. TERMINAL STATE SCANNER (Newest to Oldest)
-    admin_noise = ["fiscal impact", "assigned", "placed on", "referred to", "prefiled", "printed", "reading dispensed", "engrossed"]
+    admin_noise = ["impact statement", "assigned", "placed on", "referred to", "prefiled", "printed", "reading dispensed", "engrossed", "subcommittee offered", "substitute printed"]
     death_macros = ["passed by indefinitely", "stricken", "left in", "defeated", "failed", "tabled", "incorporated", "recommends passing by indefinitely"]
     continue_macros = ["continued to next", "continued to special", "continued to 20", "carried over"]
 
