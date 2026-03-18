@@ -421,7 +421,7 @@ with st.sidebar:
 
     st.divider()
     
-    # --- NEW FEATURE: LOBBYIST WATCHLIST (Sidebar Triage) ---
+    # --- LOBBYIST WATCHLIST (Sidebar Triage) ---
     st.markdown("### 🚨 Lobbyist Watchlist")
     
     sidebar_df = df_master if view_all_mode else final_df
@@ -451,7 +451,10 @@ with st.sidebar:
     # 2. Calculate & Render Active System Alerts
     if not df_bugs.empty and 'Status' in df_bugs.columns:
         open_bugs = df_bugs[df_bugs['Status'] == "🚨 Open"]
-        sidebar_bugs = open_bugs[open_bugs['Bill_Number'].astype(str).isin(sidebar_bill_nums) | (open_bugs['Bug_Type'] == "🔌 Background Sync Failure")]
+        
+        # ENTERPRISE FIX: Hide "Missing Topic" from Lobbyist Sidebar
+        critical_bugs = open_bugs[open_bugs['Bug_Type'] != "🗂️ Missing Topic Keyword"]
+        sidebar_bugs = critical_bugs[critical_bugs['Bill_Number'].astype(str).isin(sidebar_bill_nums) | (critical_bugs['Bug_Type'] == "🔌 Background Sync Failure")]
         
         if not sidebar_bugs.empty:
             with st.expander(f"⚠️ System Alerts ({len(sidebar_bugs)})", expanded=True):
@@ -513,7 +516,12 @@ else:
             m1, m2, m3, m4 = st.columns(4)
             with m1: st.markdown(f"#### 📥 In Committee ({len(in_comm)})"); render_grouped_list_item(in_comm)
             with m2: st.markdown(f"#### 📣 Out of Committee ({len(out_comm)})"); render_simple_list_item(out_comm)
-            with m3: st.markdown(f"#### 🎉 Passed\n###### (Both Chambers) ({len(passed)})"); render_passed_grouped_list_item(passed)
+            
+            # HTML Injection to control header spacing and font weight
+            with m3: 
+                st.markdown(f"<h4 style='margin-bottom:0px;'>🎉 Passed</h4><div style='font-size:0.9rem; font-weight:bold; margin-bottom:1rem;'>Both Chambers ({len(passed)})</div>", unsafe_allow_html=True)
+                render_passed_grouped_list_item(passed)
+                
             with m4: st.markdown(f"#### ❌ Failed ({len(failed)})"); render_failed_grouped_list_item(failed)
 
 # --- THE CALENDAR TAB ---
