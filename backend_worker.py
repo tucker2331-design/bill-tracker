@@ -56,11 +56,11 @@ TOPIC_KEYWORDS = {
     "🎓 Education": ["school", "student", "education", "university", "college", "teacher", "curriculum", "scholarship", "tuition", "board of education", "higher education", "academic", "instructional material", "learning", "literacy", "principal", "superintendent", "sol assessment", "campus", "sexually explicit content"],
     "🪖 Veterans & Military Affairs": ["veteran", "military", "armed forces", "national guard", "service member", "deployment", "civilian life", "department of veterans services", "military spouse", "active duty"],
     "🚓 Public Safety": ["police", "crime", "penalty", "enforcement", "prison", "arrest", "criminal", "ammo", "magazine", "correctional", "incarcerat", "jail", "sheriff", "handgun", "assault", "felony", "misdemeanor", "law-enforcement officer", "state police", "fire department", "emergency management", "fentanyl", "firearm", "gun", "weapon", "vasap", "alcohol safety"],
-    "⚖️ Criminal Justice & Courts": ["court", "judge", "attorney", "civil action", "suit", "liability", "damages", "evidence", "jury", "appeal", "justice", "lawyer", "probation", "parole", "sentencing", "custody", "divorce", "domestic violence", "protective order", "magistrate", "supreme court of virginia", "juvenile", "mandatory minimum", "child abuse", "delinquency"],
+    "⚖️ Criminal Justice & Courts": ["court", "judge", "attorney", "civil action", "suit", "liability", "damages", "evidence", "jury", "appeal", "justice", "lawyer", "probation", "parole", "sentencing", "custody", "divorce", "domestic violence", "protective order", "magistrate", "supreme court of virginia", "juvenile", "mandatory minimum", "child abuse", "delinquency", "fines"],
     "🏥 Health & Healthcare": ["health", "medical", "hospital", "patient", "doctor", "insurance", "mental health", "pharmacy", "drug", "medicaid", "nurse", "physician", "prescription", "department of health", "board of medicine", "behavioral health", "maternal", "reproductive", "telemedicine", "dental", "ambulatory surgery", "outpatient", "substance abuse", "addiction"],
     "🌳 Environment & Energy": ["energy", "water", "groundwater", "wastewater", "stormwater", "pollution", "environment", "climate", "solar", "conservation", "waste", "carbon", "natural resources", "wind", "electricity", "hydroelectric", "nuclear", "chesapeake bay", "watershed", "department of environmental quality", "recycling", "renewable", "biosolid", "polyfluoroalkyl", "pfas", "fish", "wildlife", "native"],
     "🚗 Transportation": ["road", "highway", "vehicle", "driver", "license", "transit", "traffic", "transportation", "motor", "speed monitoring", "department of motor vehicles", "toll", "bridge", "intersection", "pedestrian", "crosswalk", "aviation", "airport"],
-    "💻 Tech & Utilities": ["internet", "broadband", "data", "privacy", "utility", "utilities", "cyber", "technology", "telecom", "artificial intelligence", "state corporation commission", "broadband authority", "algorithm", "biometric"],
+    "💻 Tech & Utilities": ["internet", "broadband", "data", "privacy", "utility", "utilities", "cyber", "technology", "telecom", "artificial intelligence", "state corporation commission", "broadband authority", "algorithm", "biometric", "time", "daylight"],
     "⚖️ Civil Rights": ["discrimination", "rights", "equity", "minority", "minorities", "gender", "religious freedom", "speech", "hate crime", "human rights", "equal pay", "diversity"],
 }
 
@@ -90,7 +90,6 @@ def get_smart_subject(title, comm, bill_id):
     if "education" in comm_lower and "health" not in comm_lower: return "🎓 Education"
     if "finance" in comm_lower or "appropriations" in comm_lower: return "💰 Economy & Business"
     
-    # REGEX BOUNDARY ENFORCER: Prevents cross-contamination
     for cat, keys in TOPIC_KEYWORDS.items():
         for k in keys:
             if re.search(r'\b' + re.escape(k) + r'(?:es|s)?\b', title_lower, re.IGNORECASE): return cat
@@ -102,73 +101,86 @@ def process_history_state_machine(history_data, bill_id):
     passed_opposite = False
     in_conference = False
     latest_vote = "-"
+    is_dead_from_history = False
+    is_continued_from_history = False
     
     b_id = str(bill_id).upper()
     opp_chamber_pass_phrases = ["passed senate", "agreed to by senate"] if b_id.startswith("H") else ["passed house", "agreed to by house"]
 
-    # Read chronologically (oldest to newest) to trace the bill's path
-    for item in reversed(history_data):
+    # 1. TRACKING PATH (Oldest to Newest)
+    for item in history_data:
         desc = str(item.get("Action", "")).lower()
-        
-        # 1. Vote Extraction
         vote_match = re.search(r'\(\s*(\d+-Y\s+\d+-N.*?)\s*\)', desc, re.IGNORECASE)
         if vote_match: latest_vote = vote_match.group(1).strip()
             
-        # 2. Conference Flags
         if any(x in desc for x in ["conference", "rejected", "insisted"]): in_conference = True
-            
-        # 3. Dual Chamber Verification
         if any(x in desc for x in opp_chamber_pass_phrases): passed_opposite = True
             
-        # 4. Routing: Referrals
         if "referred to" in desc:
             match = re.search(r'referred to\s?([a-z\s&,-]+)', desc)
             if match:
                 raw_c = match.group(1).split('(')[0].strip()
                 curr_comm = "House " + raw_c.title() if desc.startswith("h ") else "Senate " + raw_c.title()
-                curr_sub = "-" # New committee means old sub is erased
+                curr_sub = "-" 
                 
-        # 5. Routing: Subcommittees
         sub_match = re.search(r'(subcommittee[^)]*)', desc, re.IGNORECASE)
         if sub_match: curr_sub = sub_match.group(1).strip()
             
-        # 6. Routing: Committee Action (The "Recommends" Exception)
         if any(x in desc for x in ["reported", "incorporated", "passed by indefinitely", "defeated"]):
-            if "recommends" not in desc: # Crucial exception: Subcommittees recommend, full committees report.
+            if "recommends" not in desc: 
                 curr_sub = "-" 
                 
-        # 7. Routing: Chamber Crossings
         if any(x in desc for x in ["passed house", "passed senate", "agreed to by house", "agreed to by senate"]):
             curr_comm = "Unassigned"
             curr_sub = "-"
             
-    return clean_committee_name(curr_comm), curr_sub, passed_opposite, in_conference, latest_vote
+    # 2. TERMINAL STATE SCANNER (Newest to Oldest)
+    admin_noise = ["fiscal impact", "assigned", "placed on", "referred to", "prefiled", "printed", "reading dispensed", "engrossed"]
+    death_macros = ["passed by indefinitely", "stricken", "left in", "defeated", "failed", "tabled", "incorporated", "recommends passing by indefinitely"]
+    continue_macros = ["continued to next", "continued to special", "continued to 20", "carried over"]
 
-def determine_lifecycle(status_text, comm, in_conference, passed_opposite):
+    for item in reversed(history_data):
+        desc = str(item.get("Action", "")).lower()
+        
+        if any(noise in desc for noise in admin_noise):
+            continue
+            
+        if any(x in desc for x in continue_macros):
+            is_continued_from_history = True
+            break
+            
+        if any(x in desc for x in death_macros):
+            is_dead_from_history = True
+            break
+            
+        break
+
+    return clean_committee_name(curr_comm), curr_sub, passed_opposite, in_conference, latest_vote, is_dead_from_history, is_continued_from_history
+
+def determine_lifecycle(status_text, comm, in_conference, passed_opposite, is_dead_from_history, is_continued_from_history):
     status = str(status_text).lower()
     
     if any(x in status for x in ["signed by governor", "enacted", "approved", "chapter"]): return "✅ Signed & Enacted"
     if "vetoed" in status: return "❌ Vetoed"
     
+    # --- ENTERPRISE OVERRIDE ---
+    if is_dead_from_history or is_continued_from_history: return "❌ Dead / Tabled"
+    
     is_vip = any(x in status for x in ["pending governor", "awaiting governor", "awaiting signature", "enrolled", "communicated to governor", "bill text as passed"])
     
-    # ⚠️ RECONCILIATION TRAP
     if in_conference and not is_vip and ("passed" in status or "conference" in status):
         return "⚠️ In Reconciliation / Conference"
         
-    # ✍️ DUAL-CHAMBER CRYPTOGRAPHIC LOCK
     if is_vip or (status.strip() == "passed" and passed_opposite): 
         return "✍️ Awaiting Signature"
         
-    # ❌ RESTORED MACRO KILL-WORDS (The Zombie Fix)
-    death_macros = ["passed by indefinitely", "stricken", "left in", "defeated", "failed", "tabled", "incorporated", "no action taken", "withdrawn", "continued to next", "continued to special", "continued to 20"]
-    if any(x in status for x in death_macros) or bool(re.search(r'continued to 20\d\d', status)): 
+    death_macros = ["passed by indefinitely", "stricken", "left in", "defeated", "failed", "tabled", "incorporated", "no action taken", "withdrawn"]
+    if any(x in status for x in death_macros): 
         return "❌ Dead / Tabled"
         
     if any(x in status for x in ["reported", "reading waived", "read second", "read third", "read first"]) and "recommends reporting" not in status: return "📣 Out of Committee"
     if "introduced" in status and comm in ["-", "nan", "None", "", "Unassigned"]: return "📥 Awaiting Referral"
     
-    # Transit Override: Prevents bills crossing chambers from getting stuck in committee buckets
     if any(x in status for x in ["passed", "agreed", "engrossed", "communicated", "received from", "in senate", "in house"]): return "📣 Out of Committee"
     
     if comm not in ["-", "nan", "None", "", "Unassigned"] and len(comm) > 2: return "📥 In Committee"
@@ -190,7 +202,6 @@ def run_update():
         api_data = requests.get(TARGET_URL, headers=HEADERS, params={"sessionCode": ACTIVE_SESSION}, timeout=10).json()
         bills_list = api_data.get("Legislations", [])
     except Exception as e:
-        # API Blackout Survival Code
         print(f"🚨 API Offline! Writing to Bug Log: {e}")
         bug_worksheet.append_row([datetime.now().strftime("%Y-%m-%d %H:%M"), "GLOBAL", "🔌 State LIS API Offline", str(e), "🚨 Open"])
         return
@@ -208,16 +219,18 @@ def run_update():
     print(f"⚙️ Processing {len(bills_list)} bills...")
     sheet_data = [["Bill Number", "Official Title", "Status", "Date", "Lifecycle", "Auto_Folder", "Is_Youth", "Current_Committee", "Display_Committee", "Current_Sub", "Latest_Vote", "History_Data", "Upcoming_Meetings"]]
     
+    # --- AUTO-HEALING BUG TRACKER SETUP ---
     existing_logs = bug_worksheet.get_all_records()
     df_logs = pd.DataFrame(existing_logs) if existing_logs else pd.DataFrame(columns=["Date_Found", "Bill_Number", "Bug_Type", "Details", "Status"])
     for col in ["Date_Found", "Bill_Number", "Bug_Type", "Details", "Status"]:
         if col not in df_logs.columns: df_logs[col] = ""
-    new_bugs_to_log = []
+        
+    # We will populate this list during the loop. Only bugs generated during THIS run are considered "active"
+    active_bugs = []
     today_str = datetime.now().strftime("%Y-%m-%d %H:%M")
     
     for item in bills_list:
         try:
-            # ONE BAD APPLE ISOLATION (Survives individual bill corruption)
             bill_num = item.get("LegislationNumber", "Unknown")
             title = item.get("Description", "No Title")
             raw_status = item.get("LegislationStatus", "Unknown")
@@ -230,8 +243,8 @@ def run_update():
                     history_data.append({"Date": date_h, "Action": desc})
                     date_val = date_h
             
-            curr_comm, curr_sub, passed_opposite, in_conference, latest_vote = process_history_state_machine(history_data, bill_num)
-            lifecycle = determine_lifecycle(raw_status, curr_comm, in_conference, passed_opposite)
+            curr_comm, curr_sub, passed_opposite, in_conference, latest_vote, is_dead_hist, is_cont_hist = process_history_state_machine(history_data, bill_num)
+            lifecycle = determine_lifecycle(raw_status, curr_comm, in_conference, passed_opposite, is_dead_hist, is_cont_hist)
             auto_folder = get_smart_subject(title, curr_comm, bill_num)
             
             is_youth = any(re.search(r'\b' + re.escape(k) + r'(?:es|s)?\b', title.lower(), re.IGNORECASE) for k in YOUTH_KEYWORDS)
@@ -243,26 +256,33 @@ def run_update():
                 d_comm_raw = next((str(d[c]) for c in ['committee_name', 'com_des'] if c in d and pd.notna(d[c])), "")
                 if d_date: upcoming_meetings.append({"Date": d_date, "CommitteeRaw": d_comm_raw})
 
-            # BUG LOGGING
-            if "⚠️ Unrecognized" in lifecycle and df_logs[(df_logs['Bill_Number'].astype(str) == bill_num) & (df_logs['Bug_Type'] == "🚨 Unrecognized Status Phrase")].empty:
-                new_bugs_to_log.append([today_str, bill_num, "🚨 Unrecognized Status Phrase", raw_status, "🚨 Open"])
-            if lifecycle == "📥 In Committee" and display_comm == "Unassigned" and df_logs[(df_logs['Bill_Number'].astype(str) == bill_num) & (df_logs['Bug_Type'] == "🧭 Unmapped Committee Name")].empty:
-                new_bugs_to_log.append([today_str, bill_num, "🧭 Unmapped Committee Name", raw_status, "🚨 Open"])
-            if auto_folder == "📂 Unassigned / General" and df_logs[(df_logs['Bill_Number'].astype(str) == bill_num) & (df_logs['Bug_Type'] == "🗂️ Missing Topic Keyword")].empty:
-                new_bugs_to_log.append([today_str, bill_num, "🗂️ Missing Topic Keyword", title, "🚨 Open"])
+            # AUTO-HEALING: Append any triggered bugs to the active list
+            if "⚠️ Unrecognized" in lifecycle:
+                active_bugs.append([today_str, bill_num, "🚨 Unrecognized Status Phrase", raw_status, "🚨 Open"])
+            if lifecycle == "📥 In Committee" and display_comm == "Unassigned":
+                active_bugs.append([today_str, bill_num, "🧭 Unmapped Committee Name", raw_status, "🚨 Open"])
+            if auto_folder == "📂 Unassigned / General":
+                active_bugs.append([today_str, bill_num, "🗂️ Missing Topic Keyword", title, "🚨 Open"])
 
             sheet_data.append([bill_num, title, raw_status, date_val, lifecycle, auto_folder, str(is_youth), curr_comm, display_comm, curr_sub, latest_vote, json.dumps(history_data), json.dumps(upcoming_meetings)])
             
         except Exception as e:
-            # If a single bill's state data is corrupted, catch it, log it, and process the rest!
             print(f"🚨 Error processing {bill_num}: {e}")
-            new_bugs_to_log.append([today_str, bill_num, "🚨 Bill Data Corruption", str(e)[:100], "🚨 Open"])
+            active_bugs.append([today_str, bill_num, "🚨 Bill Data Corruption", str(e)[:100], "🚨 Open"])
             continue
 
     print("📝 Wiping old data and writing main database...")
     worksheet.clear()
     worksheet.update(values=sheet_data, range_name="A1")
-    if new_bugs_to_log: bug_worksheet.append_rows(new_bugs_to_log)
+    
+    print("🧹 Auto-healing bug log...")
+    bug_worksheet.clear()
+    if active_bugs:
+        bug_worksheet.append_row(["Date_Found", "Bill_Number", "Bug_Type", "Details", "Status"])
+        bug_worksheet.append_rows(active_bugs)
+    else:
+        bug_worksheet.append_row(["Date_Found", "Bill_Number", "Bug_Type", "Details", "Status"])
+
     print("🎉 MASTERMIND DATABASE UPDATED SUCCESSFULLY!")
 
 if __name__ == "__main__": run_update()
