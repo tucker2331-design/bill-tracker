@@ -37,7 +37,6 @@ COMMITTEE_MAP = {
 }
 
 # --- SURGERY 1: THE TRUTH CLOCK ---
-# Pings the GitHub API to find the exact time the database was actually updated
 @st.cache_data(ttl=60, show_spinner=False)
 def get_last_sync_time():
     try:
@@ -50,7 +49,6 @@ def get_last_sync_time():
         if r.status_code == 200:
             runs = r.json().get("workflow_runs", [])
             if runs:
-                # GitHub returns UTC. Convert to EST.
                 utc_time = datetime.strptime(runs[0]["updated_at"], "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=pytz.utc)
                 return utc_time.astimezone(pytz.timezone('US/Eastern')).strftime("%I:%M %p EST")
     except: pass
@@ -73,8 +71,9 @@ def clean_committee_name(name):
 
 def clean_status_text(text): return str(text).replace("HED", "House Education").replace("sub:", "Subcommittee:") if text else ""
 
+# ENTERPRISE FIX: Protects Abstention Votes (e.g. 50-Y 48-N 2-A)
 def extract_vote_info(status_text):
-    match = re.search(r'\((\d{1,3}-Y \d{1,3}-N)\)', str(status_text))
+    match = re.search(r'\(\s*(\d+-Y\s+\d+-N.*?)\s*\)', str(status_text), re.IGNORECASE)
     return match.group(1) if match else None
 
 def get_clean_sub_name(raw_sub):
@@ -209,7 +208,10 @@ def check_and_broadcast(df_bills, df_subscribers, demo_mode):
     
     if updates_found:
         for email in subscriber_list:
-            try: uid = client.users_lookupByEmail(email=email.strip())['user']['id']; client.chat_postMessage(channel=uid, text=report)
+            try: 
+                uid = client.users_lookupByEmail(email=email.strip())['user']['id']
+                client.chat_postMessage(channel=uid, text=report)
+                time.sleep(1.2) # ENTERPRISE FIX: Slack Rate Limit Defusal
             except: pass
 
 def render_bill_card(row, show_youth_tag=False):
@@ -311,7 +313,8 @@ def render_grouped_list_item(df):
 
 def render_passed_grouped_list_item(df):
     if df.empty: st.caption("No bills."); return
-    for state, title in [("✅ Signed & Enacted", "✅ Signed & Enacted"), ("✍️ Awaiting Signature", "✍️ Awaiting Signature"), ("✅ Passed (Resolution)", "📜 Resolution / Amendment (Passed)")]:
+    # ENTERPRISE FIX: Conference String Render Queue
+    for state, title in [("✅ Signed & Enacted", "✅ Signed & Enacted"), ("✍️ Awaiting Signature", "✍️ Awaiting Signature"), ("⚠️ In Reconciliation / Conference", "⚠️ In Conference / Limbo"), ("✅ Passed (Resolution)", "📜 Resolution / Amendment (Passed)")]:
         subset = df[df['Lifecycle'] == state]
         if not subset.empty:
             st.markdown(f"##### {title}")
@@ -367,25 +370,32 @@ with st.sidebar:
     
     st.divider()
     
-    # 🚀 SURGERY 2: THE RESTORED GOD BUTTON (Immediate forced pull)
+    # 🚀 ENTERPRISE FIX: GOD BUTTON WITH CONCURRENCY TRAFFIC CONTROL
     if st.button("🚀 Force Manual Sync", type="primary", use_container_width=True):
         try:
             GITHUB_TOKEN = st.secrets["GITHUB_TOKEN"]
-            url = f"https://api.github.com/repos/{GITHUB_OWNER}/{GITHUB_REPO}/actions/workflows/{WORKFLOW_FILENAME}/dispatches"
             headers = {"Authorization": f"Bearer {GITHUB_TOKEN}", "Accept": "application/vnd.github.v3+json"}
-            data = {"ref": "main"}
-            response = requests.post(url, headers=headers, json=data)
             
-            if response.status_code == 204:
-                progress_bar = st.progress(0, text="📡 Pinging State API...")
-                for percent_complete in range(100):
-                    time.sleep(0.6) 
-                    progress_bar.progress(percent_complete + 1, text=f"⚙️ Ghost Worker syncing data... {60 - int((percent_complete + 1)*0.6)}s")
-                
-                st.cache_data.clear()
-                st.rerun() 
+            status_url = f"https://api.github.com/repos/{GITHUB_OWNER}/{GITHUB_REPO}/actions/workflows/{WORKFLOW_FILENAME}/runs?status=in_progress"
+            status_check = requests.get(status_url, headers=headers)
+            
+            if status_check.status_code == 200 and status_check.json().get("total_count", 0) > 0:
+                st.warning("⏳ **Sync already in progress!** The background worker is currently updating the database. The new data will appear on your screen shortly.")
             else:
-                st.error(f"Failed to start worker: {response.status_code}")
+                url = f"https://api.github.com/repos/{GITHUB_OWNER}/{GITHUB_REPO}/actions/workflows/{WORKFLOW_FILENAME}/dispatches"
+                data = {"ref": "main"}
+                response = requests.post(url, headers=headers, json=data)
+                
+                if response.status_code == 204:
+                    progress_bar = st.progress(0, text="📡 Pinging State API...")
+                    for percent_complete in range(100):
+                        time.sleep(0.6) 
+                        progress_bar.progress(percent_complete + 1, text=f"⚙️ Ghost Worker syncing data... {60 - int((percent_complete + 1)*0.6)}s")
+                    
+                    st.cache_data.clear()
+                    st.rerun() 
+                else:
+                    st.error(f"Failed to start worker: {response.status_code}")
         except Exception as e:
             st.error("GitHub Error: Missing token or connection issue.")
             
@@ -431,9 +441,10 @@ else:
             st.markdown("---")
             st.subheader(f"📜 Master List ({b_type})")
             
+            # ENTERPRISE FIX: Safety Net and Visibility String Routing
             in_comm = subset[subset['Lifecycle'].isin(["📥 In Committee", "📥 Awaiting Referral"])]
-            out_comm = subset[subset['Lifecycle'] == "📣 Out of Committee"]
-            passed = subset[subset['Lifecycle'].isin(["✅ Signed & Enacted", "✍️ Awaiting Signature", "✅ Passed (Resolution)"])]
+            out_comm = subset[subset['Lifecycle'].str.contains("Out of Committee", na=False)]
+            passed = subset[subset['Lifecycle'].isin(["✅ Signed & Enacted", "✍️ Awaiting Signature", "✅ Passed (Resolution)", "⚠️ In Reconciliation / Conference"])]
             failed = subset[subset['Lifecycle'].isin(["❌ Dead / Tabled", "❌ Vetoed"])]
             
             m1, m2, m3, m4 = st.columns(4)
