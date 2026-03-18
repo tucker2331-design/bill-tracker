@@ -387,11 +387,6 @@ with st.sidebar:
     st.divider()
     st.markdown(f"**Last Database Update:** `{true_sync_time}`")
     
-    if not final_df.empty:
-        test_bills = final_df[final_df['My Title'].str.contains("TEST", case=False, na=False)]
-        if not test_bills.empty:
-            st.success(f"🧪 **LIVE DATA VERIFIED:** Found custom title: '{test_bills.iloc[0]['My Title']}'")
-    
     st.divider()
     
     if st.button("🚀 Force Manual Sync", type="primary", use_container_width=True):
@@ -429,11 +424,14 @@ with st.sidebar:
     # --- NEW FEATURE: LOBBYIST WATCHLIST (Sidebar Triage) ---
     st.markdown("### 🚨 Lobbyist Watchlist")
     
+    sidebar_df = df_master if view_all_mode else final_df
+    sidebar_bill_nums = sidebar_df['Bill Number'].astype(str).tolist()
+    
     # 1. Calculate & Render Stale Bills
     stale_threshold = 14 if datetime.now().year % 2 == 0 else 7
     stale_list = []
-    if not final_df.empty:
-        for _, row in final_df[final_df['Lifecycle'] == "📥 In Committee"].iterrows():
+    if not sidebar_df.empty:
+        for _, row in sidebar_df[sidebar_df['Lifecycle'] == "📥 In Committee"].iterrows():
             try:
                 d_str = str(row.get('Date', ''))
                 if d_str:
@@ -453,16 +451,14 @@ with st.sidebar:
     # 2. Calculate & Render Active System Alerts
     if not df_bugs.empty and 'Status' in df_bugs.columns:
         open_bugs = df_bugs[df_bugs['Status'] == "🚨 Open"]
-        if not open_bugs.empty:
-            with st.expander(f"⚠️ System Alerts ({len(open_bugs)})", expanded=True):
-                for _, row in open_bugs.iterrows():
-                    # Assign a tiny icon based on the bug type
+        sidebar_bugs = open_bugs[open_bugs['Bill_Number'].astype(str).isin(sidebar_bill_nums) | (open_bugs['Bug_Type'] == "🔌 Background Sync Failure")]
+        
+        if not sidebar_bugs.empty:
+            with st.expander(f"⚠️ System Alerts ({len(sidebar_bugs)})", expanded=True):
+                for _, row in sidebar_bugs.iterrows():
                     bug_icon = "🚨" if "Unrecognized" in str(row.get('Bug_Type', '')) else ("🧭" if "Unmapped" in str(row.get('Bug_Type', '')) else "🗂️")
-                    
-                    # Clean up the bug name so it fits nicely in the sidebar
                     raw_type = str(row.get('Bug_Type', 'Unknown Bug'))
                     short_diag = raw_type.split(" ", 1)[-1] if " " in raw_type else raw_type
-                    
                     st.caption(f"{bug_icon} **{row.get('Bill_Number', '?')}**: {short_diag}")
         else:
             st.info("✅ No active system alerts.")
@@ -517,7 +513,7 @@ else:
             m1, m2, m3, m4 = st.columns(4)
             with m1: st.markdown(f"#### 📥 In Committee ({len(in_comm)})"); render_grouped_list_item(in_comm)
             with m2: st.markdown(f"#### 📣 Out of Committee ({len(out_comm)})"); render_simple_list_item(out_comm)
-            with m3: st.markdown(f"#### 🎉 Passed ({len(passed)})"); render_passed_grouped_list_item(passed)
+            with m3: st.markdown(f"#### 🎉 Passed\n###### (Both Chambers) ({len(passed)})"); render_passed_grouped_list_item(passed)
             with m4: st.markdown(f"#### ❌ Failed ({len(failed)})"); render_failed_grouped_list_item(failed)
 
 # --- THE CALENDAR TAB ---
@@ -660,10 +656,15 @@ with tab_bugs:
                 st.write("**How to fix:** Open `backend_worker.py` and add the exact spelling the state used to the `COMMITTEE_MAP`.")
                 if not routing.empty: st.dataframe(routing[['Bill_Number', 'Details', 'Date_Found']], hide_index=True)
 
-            sorting = open_bugs[open_bugs['Bug_Type'] == "🗂️ Missing Topic Keyword"]
-            with st.expander(f"🗂️ Missing Topic Keyword ({len(sorting)})"):
+            # --- ENTERPRISE FIX: Filter Missing Topics to Tracked Bills Only ---
+            tracked_bill_nums = final_df['Bill Number'].astype(str).tolist()
+            sorting_all = open_bugs[open_bugs['Bug_Type'] == "🗂️ Missing Topic Keyword"]
+            sorting_filtered = sorting_all[sorting_all['Bill_Number'].astype(str).isin(tracked_bill_nums)]
+            
+            with st.expander(f"🗂️ Missing Topic Keyword ({len(sorting_filtered)})"):
                 st.write("**How to fix:** Read the bill's title and add one or two relevant words from it into `TOPIC_KEYWORDS`.")
-                if not sorting.empty: st.dataframe(sorting[['Bill_Number', 'Details', 'Date_Found']], hide_index=True)
+                if not sorting_filtered.empty: st.dataframe(sorting_filtered[['Bill_Number', 'Details', 'Date_Found']], hide_index=True)
+                else: st.success("All your tracked bills are properly sorted!")
 
             sync = open_bugs[open_bugs['Bug_Type'] == "🔌 Background Sync Failure"]
             with st.expander(f"🔌 Background Sync Failures ({len(sync)})"):
