@@ -1,86 +1,69 @@
-import streamlit as st
 import requests
 import json
+import time
 
-st.set_page_config(page_title="LIS API JSON Probe", layout="wide")
+print("🚀 Initiating API Parameter Cracker...")
 
-st.title("🚀 Enterprise LIS API JSON Probe")
-st.markdown("Testing the modern REST endpoints to extract structured Calendar and Schedule data.")
-
-# Your official WebAPIKey from the backend worker
 API_KEY = "81D70A54-FCDC-4023-A00B-A3FD114D5984"
 HEADERS = {"WebAPIKey": API_KEY, "Accept": "application/json"}
+TARGET_URL = "https://lis.virginia.gov/Calendar/api/getdocketlistbycommitteenumberasync"
 
-# 1. Input UI for the specific Postman Endpoint
-st.subheader("1. Target Endpoint")
-st.info("Paste the exact URL from your Postman collection for the Calendar, Schedule, or LegislationEvent endpoint.")
+# The 6 most likely variations based on VA LIS quirks
+test_combinations = [
+    # Test 1: Full Session + H + H02 (Postman Example Format)
+    {"sessionCode": "20261", "chamberCode": "H", "committeeNumber": "H02"},
+    
+    # Test 2: Full Session + H + 02 (Stripped prefix)
+    {"sessionCode": "20261", "chamberCode": "H", "committeeNumber": "02"},
+    
+    # Test 3: Full Session + H + 2 (Raw integer)
+    {"sessionCode": "20261", "chamberCode": "H", "committeeNumber": "2"},
+    
+    # Test 4: Short Session + H + H02 (Matches Schedule API behavior)
+    {"sessionCode": "261", "chamberCode": "H", "committeeNumber": "H02"},
+    
+    # Test 5: Short Session + H + 02
+    {"sessionCode": "261", "chamberCode": "H", "committeeNumber": "02"},
+    
+    # Test 6: Short Session + H + 2
+    {"sessionCode": "261", "chamberCode": "H", "committeeNumber": "2"}
+]
 
-endpoint_url = st.text_input(
-    "API URL:", 
-    value="https://lis.virginia.gov/api/v1/schedule/getscheduleasync",
-    help="Example: https://lis.virginia.gov/api/v1/schedule/getscheduleasync"
-)
+cracked = False
 
-# 2. Parameters UI (To handle the 261 vs 20261 shortcode trap)
-col1, col2 = st.columns(2)
-with col1:
-    session_code = st.text_input("Session Parameter (e.g., sessionCode):", value="261")
-with col2:
-    extra_params = st.text_input("Other Parameters (e.g. committeeId=H01):", value="")
-
-# 3. The Execution Engine
-if st.button("📡 Execute API Call", type="primary"):
-    with st.spinner("Pinging state servers..."):
-        try:
-            # Construct parameters safely
-            params = {}
-            if session_code:
-                params["sessionCode"] = session_code 
+for i, params in enumerate(test_combinations):
+    print(f"\n[Test {i+1}/6] Firing payload: {params}")
+    
+    try:
+        response = requests.get(TARGET_URL, headers=HEADERS, params=params, timeout=5)
+        
+        # Check if the server threw an HTML error page (the trap)
+        if "text/html" in response.headers.get("Content-Type", ""):
+            print(f"❌ FAILED: Server returned HTML trap (Status {response.status_code})")
+        
+        elif response.status_code == 200:
+            print("\n✅ LOCK CRACKED! STATUS 200 OK")
+            print("=" * 50)
+            print(f"WINNING PARAMETERS: {params}")
+            print(f"EXACT URL FIRED: {response.url}")
+            print("=" * 50)
+            print("JSON PAYLOAD PREVIEW:")
             
-            if extra_params:
-                # Basic string parsing for simple testing (key=value)
-                for pair in extra_params.split("&"):
-                    if "=" in pair:
-                        k, v = pair.split("=")
-                        params[k] = v
-
-            # Fire the request
-            response = requests.get(endpoint_url, headers=HEADERS, params=params, timeout=10)
+            data = response.json()
+            # Just print the first 500 characters of the JSON to prove we got it
+            print(json.dumps(data, indent=2)[:500] + "\n... [DATA TRUNCATED]")
             
-            # Check for the HTML Error Trap
-            if "text/html" in response.headers.get("Content-Type", ""):
-                st.error(f"🚨 TRAP TRIGGERED: The server returned an HTML error page instead of JSON. Status Code: {response.status_code}")
-                with st.expander("View Raw HTML Response"):
-                    st.code(response.text[:2000]) # Show first 2000 chars of error
-            else:
-                response.raise_for_status()
-                data = response.json()
-                
-                st.success(f"✅ SUCCESS! Status Code: {response.status_code}")
-                
-                # 4. Payload Visualization
-                st.subheader("2. JSON Payload Map")
-                
-                # Try to find the list of items if it's wrapped in a parent key
-                data_keys = list(data.keys()) if isinstance(data, dict) else []
-                st.write(f"**Root Keys Detected:** `{data_keys}`")
-                
-                # Find the actual array of data to preview it cleanly
-                data_list = []
-                for key in data_keys:
-                    if isinstance(data[key], list):
-                        data_list = data[key]
-                        break
-                
-                if data_list:
-                    st.write(f"**Found {len(data_list)} items in the array.** Here is the first item's structure:")
-                    st.json(data_list[0])
-                else:
-                    st.write("**Raw JSON Structure:**")
-                    st.json(data)
-                
-        except requests.exceptions.RequestException as e:
-            st.error(f"❌ Connection Error: {e}")
-        except json.JSONDecodeError:
-            st.error("❌ Parsing Error: The response was not valid JSON.")
-            st.code(response.text[:2000])
+            cracked = True
+            break # Stop firing, we won
+            
+        else:
+            print(f"❌ FAILED: Status {response.status_code}")
+            
+    except Exception as e:
+        print(f"⚠️ Connection Error: {e}")
+        
+    # Politeness delay to avoid tripping state firewalls
+    time.sleep(1.5)
+
+if not cracked:
+    print("\n💀 ALL TESTS FAILED. The API likely requires the secret 'sessionID' GUID string.")
