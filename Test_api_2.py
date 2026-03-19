@@ -1,113 +1,202 @@
 import streamlit as st
 import pandas as pd
+import requests
 from datetime import datetime, timedelta
+import io
 
-st.set_page_config(page_title="Rolling Legislative Calendar", layout="wide")
-
-st.title("📅 Rolling Legislative Calendar")
-st.markdown("Dynamic 14-day tracking window with sequence-sorted future dockets.")
+st.set_page_config(page_title="Live Data Calendar Test", layout="wide")
+st.title("📡 Live-Fire Legislative Calendar")
+st.markdown("Pulling real data from Virginia LIS Azure Blob and Schedule API.")
 
 # ==========================================
-# 1. DYNAMIC TIME WINDOW CALCULATION
+# 1. CONFIGURATION & PORTFOLIO
 # ==========================================
-TODAY = datetime(2026, 3, 19)
+API_KEY = "81D70A54-FCDC-4023-A00B-A3FD114D5984"
+HEADERS = {"WebAPIKey": API_KEY, "Accept": "application/json"}
+SESSION_BLOB = "20261" # The 5-digit code for the Azure CSVs
+SESSION_API = "261"    # The shortcode for the Schedule API
 
+# The Lobbyist's Portfolio (Filters the massive CSVs down to what matters)
+st.sidebar.header("🎯 Tracked Portfolio")
+portfolio_input = st.sidebar.text_area(
+    "Enter bills to track (comma separated):", 
+    value="HB10, HB863, SB4, HB1204, HB500, HB99"
+)
+TRACKED_BILLS = [b.strip().upper() for b in portfolio_input.split(",") if b.strip()]
+
+# Time Window
+TODAY = datetime(2026, 3, 19) # Hardcoded for testing the specific session end-date
 past_start = TODAY - timedelta(days=7)
 future_end = TODAY + timedelta(days=7)
 
 # ==========================================
-# 2. THE NOISE FILTER (For Past Events Only)
+# 2. THE EXTRACTOR (Pulling the Real Data)
 # ==========================================
-ACTIONABLE_VERBS = ['report', 'continue', 'pass', 'fail', 'incorporate', 'hearing', 'strike', 'stricken', 'veto', 'sign']
+@st.cache_data(ttl=600) # Caches data for 10 mins so we don't spam the state server
+def fetch_live_data():
+    data_payload = {"past": pd.DataFrame(), "future": pd.DataFrame(), "schedule": pd.DataFrame()}
+    
+    with st.spinner("📥 Extracting millions of rows from Virginia Azure Blob..."):
+        try:
+            # A. Fetch Schedule API (For Times and Rooms)
+            sched_url = "https://lis.virginia.gov/Schedule/api/getschedulelistasync"
+            sched_res = requests.get(sched_url, headers=HEADERS, params={"sessionCode": SESSION_API}, timeout=10)
+            if sched_res.status_code == 200:
+                sched_data = sched_res.json()
+                if isinstance(sched_data, dict) and 'Schedules' in sched_data:
+                    data_payload["schedule"] = pd.DataFrame(sched_data['Schedules'])
+                else:
+                    data_payload["schedule"] = pd.DataFrame(sched_data)
 
-def apply_noise_filter(df):
-    if df.empty: return df
-    
-    # We only run the noise filter on PAST events. 
-    # If it's a future event (from the Docket CSV), its mere existence on the docket makes it actionable.
-    past_mask = pd.to_datetime(df['Date']).dt.date < TODAY.date()
-    
-    pattern = '|'.join(ACTIONABLE_VERBS)
-    valid_past = df[past_mask & df['Outcome'].str.contains(pattern, case=False, na=False)]
-    
-    future_events = df[~past_mask] # Keep all future docket items
-    
-    return pd.concat([valid_past, future_events])
-
-# ==========================================
-# 3. TIME-AWARE MOCK DATA
-# ==========================================
-raw_data = [
-    # --- PAST WEEK (From HISTORY.CSV) ---
-    {"Date": "2026-03-12", "Time": "10:00 AM", "Committee": "Courts of Justice", "Bill": "HB10", "Outcome": "Reported out of Courts of Justice (15-Y 0-N)", "AgendaOrder": 0},
-    {"Date": "2026-03-12", "Time": "10:00 AM", "Committee": "Courts of Justice", "Bill": "HB99", "Outcome": "Continued to 2027", "AgendaOrder": 0},
-    {"Date": "2026-03-13", "Time": "08:00 AM", "Committee": "Finance", "Bill": "HB863", "Outcome": "Continued to 2027", "AgendaOrder": 0},
-    {"Date": "2026-03-14", "Time": "09:00 AM", "Committee": "Rules", "Bill": "SB4", "Outcome": "Passed by indefinitely in Rules (12-Y 4-N)", "AgendaOrder": 0},
-    
-    # --- FUTURE WEEK (From DOCKET.CSV) ---
-    # Notice we have 3 bills in the same meeting. The UI must sort them by AgendaOrder.
-    {"Date": "2026-03-24", "Time": "09:00 AM", "Committee": "Joint Commission on Tech", "Bill": "HB500", "Outcome": "Pending Hearing", "AgendaOrder": 4},
-    {"Date": "2026-03-24", "Time": "09:00 AM", "Committee": "Joint Commission on Tech", "Bill": "SB12", "Outcome": "Pending Hearing", "AgendaOrder": 1},
-    {"Date": "2026-03-24", "Time": "09:00 AM", "Committee": "Joint Commission on Tech", "Bill": "HB88", "Outcome": "Pending Hearing", "AgendaOrder": 2},
-]
-
-df = pd.DataFrame(raw_data)
-df['DateTime_Sort'] = pd.to_datetime(df['Date'] + ' ' + df['Time'].replace('TBD', '11:59 PM'), errors='coerce')
-
-clean_df = apply_noise_filter(df)
-
-# ==========================================
-# 4. THE UI RENDER ENGINE
-# ==========================================
-def render_kanban_week(start_date, end_date, data, is_future=False):
-    days_in_window = [(start_date + timedelta(days=i)) for i in range(7)]
-    cols = st.columns(7)
-    
-    for i, current_day in enumerate(days_in_window):
-        date_str = current_day.strftime('%Y-%m-%d')
-        display_date = current_day.strftime('%a, %b %d')
-        
-        with cols[i]:
-            st.markdown(f"**{display_date}**")
-            st.markdown("---")
-            
-            day_events = data[data['Date'] == date_str]
-            
-            if day_events.empty:
-                st.info("No scheduled meetings.")
-            else:
-                day_events = day_events.sort_values(by='DateTime_Sort')
-                grouped_events = day_events.groupby(['Committee', 'Time'], sort=False)
+            # B. Fetch HISTORY.CSV (For Past Outcomes)
+            hist_url = f"https://lis.blob.core.windows.net/lis/{SESSION_BLOB}/HISTORY.CSV"
+            hist_res = requests.get(hist_url, timeout=10)
+            if hist_res.status_code == 200:
+                df_hist = pd.read_csv(io.StringIO(hist_res.text))
+                # Standardize column names dynamically in case they change them
+                col_map = {c: c for c in df_hist.columns}
+                df_hist = df_hist.rename(columns=lambda x: x.strip())
+                data_payload["past"] = df_hist
                 
-                for (committee, time_str), group_df in grouped_events:
-                    with st.container(border=True):
-                        st.markdown(f"🏛️ **{committee}**")
-                        st.markdown(f"🕰️ *{time_str}*")
-                        st.markdown("---")
-                        
-                        # FUTURE TAB LOGIC: Sort bills by their place on the Docket
-                        if is_future:
-                            group_df = group_df.sort_values(by='AgendaOrder')
-                        
-                        for _, row in group_df.iterrows():
-                            st.markdown(f"**{row['Bill']}**")
+            # C. Fetch DOCKET.CSV (For Future Agenda)
+            docket_url = f"https://lis.blob.core.windows.net/lis/{SESSION_BLOB}/DOCKET.CSV"
+            docket_res = requests.get(docket_url, timeout=10)
+            if docket_res.status_code == 200:
+                data_payload["future"] = pd.read_csv(io.StringIO(docket_res.text))
+                
+        except Exception as e:
+            st.error(f"Extraction Failed: {e}")
+            
+    return data_payload
+
+# ==========================================
+# 3. THE TRANSFORMER (Cleaning & Merging)
+# ==========================================
+def process_data(payload):
+    df_past = payload["past"]
+    df_future = payload["future"]
+    df_sched = payload["schedule"]
+    
+    # If the blobs failed, halt.
+    if df_past.empty and df_future.empty:
+        return pd.DataFrame()
+
+    processed_events = []
+
+    # --- PROCESS PAST (HISTORY.CSV) ---
+    if not df_past.empty:
+        # Find the actual column names (LIS is notoriously inconsistent)
+        bill_col = next((c for c in df_past.columns if 'bill' in c.lower()), 'BillNumber')
+        date_col = next((c for c in df_past.columns if 'date' in c.lower()), 'HistoryDate')
+        desc_col = next((c for c in df_past.columns if 'desc' in c.lower() or 'action' in c.lower()), 'Description')
+        
+        # Filter for portfolio
+        df_past = df_past[df_past[bill_col].isin(TRACKED_BILLS)]
+        
+        # Apply Allowlist Noise Filter
+        actionable_verbs = ['report', 'continue', 'pass', 'fail', 'incorporate', 'hearing', 'strike', 'stricken', 'veto', 'sign']
+        pattern = '|'.join(actionable_verbs)
+        df_past = df_past[df_past[desc_col].str.contains(pattern, case=False, na=False)]
+        
+        for _, row in df_past.iterrows():
+            processed_events.append({
+                "Date": pd.to_datetime(row[date_col]).strftime('%Y-%m-%d'),
+                "Time": "TBD", # We will merge this in a second
+                "Committee": "Unknown (History)", # History CSV rarely lists the exact committee cleanly
+                "Bill": row[bill_col],
+                "Outcome": row[desc_col],
+                "AgendaOrder": 0,
+                "IsFuture": False
+            })
+
+    # --- PROCESS FUTURE (DOCKET.CSV) ---
+    if not df_future.empty:
+        bill_col = next((c for c in df_future.columns if 'bill' in c.lower()), 'BillNumber')
+        date_col = next((c for c in df_future.columns if 'date' in c.lower()), 'DocketDate')
+        comm_col = next((c for c in df_future.columns if 'comm' in c.lower()), 'CommitteeName')
+        seq_col = next((c for c in df_future.columns if 'seq' in c.lower() or 'order' in c.lower()), 'Sequence')
+        
+        df_future = df_future[df_future[bill_col].isin(TRACKED_BILLS)]
+        
+        for _, row in df_future.iterrows():
+            processed_events.append({
+                "Date": pd.to_datetime(row[date_col]).strftime('%Y-%m-%d'),
+                "Time": "TBD",
+                "Committee": row[comm_col],
+                "Bill": row[bill_col],
+                "Outcome": "Pending Hearing",
+                "AgendaOrder": row.get(seq_col, 0),
+                "IsFuture": True
+            })
+
+    master_df = pd.DataFrame(processed_events)
+    
+    # --- MERGE SCHEDULE TIMES ---
+    if not master_df.empty and not df_sched.empty:
+        df_sched['MergeDate'] = pd.to_datetime(df_sched['ScheduleDate']).dt.strftime('%Y-%m-%d')
+        # Simple alias handling
+        master_df['MergeComm'] = master_df['Committee'].str.replace('House ', '').str.replace('Senate ', '')
+        df_sched['MergeComm'] = df_sched['OwnerName'].str.replace('House ', '').str.replace('Senate ', '')
+        
+        # Left join to staple times onto the events
+        merged = pd.merge(master_df, df_sched[['MergeDate', 'MergeComm', 'ScheduleTime']], 
+                          left_on=['Date', 'MergeComm'], right_on=['MergeDate', 'MergeComm'], how='left')
+        
+        merged['Time'] = merged['ScheduleTime'].fillna("TBD")
+        master_df = merged.drop(columns=['MergeDate', 'MergeComm', 'ScheduleTime'])
+
+    return master_df
+
+# ==========================================
+# 4. EXECUTE & RENDER
+# ==========================================
+if st.sidebar.button("🚀 Fetch & Render Calendar"):
+    raw_payload = fetch_live_data()
+    final_df = process_data(raw_payload)
+    
+    if final_df.empty:
+        st.warning("No data found for the tracked bills in the selected timeframe.")
+        st.stop()
+        
+    final_df['DateTime_Sort'] = pd.to_datetime(final_df['Date'] + ' ' + final_df['Time'].replace('TBD', '11:59 PM'), errors='coerce')
+
+    # THE UI RENDERING ENGINE (Identical to our prototype)
+    def render_kanban_week(start_date, end_date, data, is_future_tab=False):
+        days = [(start_date + timedelta(days=i)) for i in range(7)]
+        cols = st.columns(7)
+        
+        for i, current_day in enumerate(days):
+            date_str = current_day.strftime('%Y-%m-%d')
+            with cols[i]:
+                st.markdown(f"**{current_day.strftime('%a, %b %d')}**")
+                st.markdown("---")
+                
+                day_events = data[data['Date'] == date_str]
+                # Filter by whether it's supposed to be in the past or future tab based on date
+                if is_future_tab:
+                    day_events = day_events[day_events['IsFuture'] == True]
+                else:
+                    day_events = day_events[day_events['IsFuture'] == False]
+                
+                if day_events.empty:
+                    st.info("No scheduled meetings.")
+                else:
+                    day_events = day_events.sort_values(by='DateTime_Sort')
+                    for (committee, time_str), group_df in day_events.groupby(['Committee', 'Time'], sort=False):
+                        with st.container(border=True):
+                            st.markdown(f"🏛️ **{committee}**\n🕰️ *{time_str}*")
+                            st.markdown("---")
                             
-                            if is_future:
-                                st.caption(f"📑 *Agenda Item #{int(row['AgendaOrder'])}*")
-                            else:
-                                st.caption(f"🔹 *Action:* {row['Outcome']}")
-                            st.write("")
+                            if is_future_tab: group_df = group_df.sort_values(by='AgendaOrder')
+                            
+                            for _, row in group_df.iterrows():
+                                st.markdown(f"**{row['Bill']}**")
+                                if is_future_tab:
+                                    st.caption(f"📑 *Agenda Item #{int(row['AgendaOrder'])}*")
+                                else:
+                                    st.caption(f"🔹 *Action:* {row['Outcome']}")
+                                st.write("")
 
-# ==========================================
-# 5. THE DUAL-PAGE TOGGLE
-# ==========================================
-tab_past, tab_future = st.tabs([
-    f"⏪ Past Week ({past_start.strftime('%b %d')} - {TODAY.strftime('%b %d')})", 
-    f"⏩ Future Week ({(TODAY + timedelta(days=1)).strftime('%b %d')} - {future_end.strftime('%b %d')})"
-])
-
-with tab_past:
-    render_kanban_week(past_start, TODAY - timedelta(days=1), clean_df, is_future=False)
-
-with tab_future:
-    render_kanban_week(TODAY, future_end, clean_df, is_future=True)
+    tab_past, tab_future = st.tabs(["⏪ Past Week", "⏩ Future Week"])
+    with tab_past: render_kanban_week(past_start, TODAY - timedelta(days=1), final_df, False)
+    with tab_future: render_kanban_week(TODAY, future_end, final_df, True)
