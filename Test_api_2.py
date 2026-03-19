@@ -2,81 +2,108 @@ import streamlit as st
 import pandas as pd
 from datetime import datetime, timedelta
 
-# Set page config for a wide, enterprise dashboard feel
-st.set_page_config(page_title="Lobbyist Calendar UI Test", layout="wide", page_icon="📅")
+st.set_page_config(page_title="Rolling Legislative Calendar", layout="wide")
 
-st.title("📅 Legislative Calendar & Outcomes")
-st.markdown("Tracking scheduled hearings and past-week outcomes for active portfolio bills.")
+st.title("📅 Rolling Legislative Calendar")
+st.markdown("Dynamic 14-day tracking window with enterprise noise-filtering.")
 
 # ==========================================
-# 1. GENERATE MOCK PIPELINE DATA
+# 1. DYNAMIC TIME WINDOW CALCULATION
 # ==========================================
-# This exactly mimics the final output of our Hybrid ETL Merge
-mock_data = [
-    {"Date": "2026-03-05", "Time": "10:00 AM", "Committee": "Courts of Justice", "Bill": "HB10", "Outcome": "Reported out of Courts of Justice (15-Y 0-N)", "Room": "House Room C"},
-    {"Date": "2026-03-06", "Time": "2:00 PM", "Committee": "Finance", "Bill": "HB863", "Outcome": "Continued to 2027", "Room": "House Room A"},
-    {"Date": "2026-03-08", "Time": "8:30 AM", "Committee": "Appropriations", "Bill": "HB1204", "Outcome": "Incorporated into HB1100", "Room": "House Room B"},
-    {"Date": "2026-03-10", "Time": "TBD", "Committee": "Rules", "Bill": "SB4", "Outcome": "Passed by indefinitely in Rules (12-Y 4-N)", "Room": None},
-    {"Date": "2026-03-12", "Time": "1:00 PM", "Committee": "Privileges and Elections", "Bill": "HB500", "Outcome": "Hearing Scheduled", "Room": "Senate Room 3"}
+# In production, this is just datetime.today()
+# We hardcode to March 19, 2026, to match the current reality of the Virginia session
+TODAY = datetime(2026, 3, 19)
+
+past_start = TODAY - timedelta(days=7)
+future_end = TODAY + timedelta(days=7)
+
+# ==========================================
+# 2. THE ENTERPRISE NOISE FILTER
+# ==========================================
+ACTIONABLE_VERBS = [
+    'report', 'continue', 'pass', 'fail', 'incorporate', 
+    'hearing', 'strike', 'stricken', 'veto', 'sign'
 ]
 
-df = pd.DataFrame(mock_data)
-
-# Ensure Date is formatted cleanly for the UI
-df['Date'] = pd.to_datetime(df['Date']).dt.strftime('%b %d, %Y')
-# Handle null rooms gracefully
-df['Room'] = df['Room'].fillna("TBD")
-
-# ==========================================
-# 2. UI FILTERS & METRICS (The $50k Dashboard feel)
-# ==========================================
-st.markdown("---")
-col1, col2, col3 = st.columns([1, 1, 2])
-
-with col1:
-    # A quick filter to let lobbyists isolate specific days
-    date_filter = st.selectbox("Filter by Date:", ["All Dates"] + list(df['Date'].unique()))
-with col2:
-    # Isolate specific committees
-    comm_filter = st.selectbox("Filter by Committee:", ["All Committees"] + list(df['Committee'].unique()))
-
-# Apply the UI filters to the dataframe
-if date_filter != "All Dates":
-    df = df[df['Date'] == date_filter]
-if comm_filter != "All Committees":
-    df = df[df['Committee'] == comm_filter]
+def apply_noise_filter(df):
+    """Drops any CSV row that doesn't contain a strict legislative action verb."""
+    if df.empty:
+        return df
+    # Create a regex pattern from our allowlist
+    pattern = '|'.join(ACTIONABLE_VERBS)
+    # Only keep rows where the Outcome matches an actionable verb (case-insensitive)
+    filtered_df = df[df['Outcome'].str.contains(pattern, case=False, na=False)]
+    return filtered_df
 
 # ==========================================
-# 3. THE DATA RENDERING
+# 3. MOCK ETL DATA (Simulating the final merge)
 # ==========================================
-st.subheader(f"📋 Docket & Outcomes ({len(df)} Events)")
+raw_data = [
+    # --- PAST WEEK ---
+    {"Date": "2026-03-12", "Time": "10:00 AM", "Committee": "Courts of Justice", "Bill": "HB10", "Outcome": "Reported out of Courts of Justice (15-Y 0-N)"},
+    {"Date": "2026-03-12", "Time": "10:30 AM", "Committee": "Courts of Justice", "Bill": "HB45", "Outcome": "Fiscal impact statement printed"}, # NOISE - Will be filtered
+    {"Date": "2026-03-13", "Time": "08:00 AM", "Committee": "Finance", "Bill": "HB863", "Outcome": "Continued to 2027"},
+    {"Date": "2026-03-14", "Time": "09:00 AM", "Committee": "Rules", "Bill": "SB4", "Outcome": "Passed by indefinitely in Rules (12-Y 4-N)"},
+    {"Date": "2026-03-14", "Time": "11:00 AM", "Committee": "Appropriations", "Bill": "HB1204", "Outcome": "Incorporated into HB1100"},
+    # --- FUTURE WEEK (Post-Sine Die) ---
+    {"Date": "2026-03-24", "Time": "09:00 AM", "Committee": "Joint Commission", "Bill": "HB500", "Outcome": "Assigned to sub-committee"}, # NOISE - Will be filtered
+    {"Date": "2026-03-25", "Time": "TBD", "Committee": "Governor's Desk", "Bill": "HB10", "Outcome": "Signed by Governor"}
+]
 
-# We use Streamlit's new column_config to make the table look highly professional
-st.dataframe(
-    df,
-    use_container_width=True,
-    hide_index=True,
-    column_config={
-        "Date": st.column_config.TextColumn("Date", width="small"),
-        "Time": st.column_config.TextColumn("Time", width="small"),
-        "Bill": st.column_config.TextColumn("Bill #", width="small", help="The tracked legislation"),
-        "Committee": st.column_config.TextColumn("Committee", width="medium"),
-        "Outcome": st.column_config.TextColumn(
-            "Action / Outcome", 
-            width="large",
-            # We can visually flag bad news like 'Continued' or 'Passed by indefinitely' later with background colors if desired
-        ),
-        "Room": st.column_config.TextColumn("Location", width="small")
-    }
-)
+df = pd.DataFrame(raw_data)
+# Convert time to datetime objects for accurate chronological sorting
+df['DateTime_Sort'] = pd.to_datetime(df['Date'] + ' ' + df['Time'].replace('TBD', '11:59 PM'), errors='coerce')
+
+# Apply the Allowlist Filter!
+clean_df = apply_noise_filter(df)
 
 # ==========================================
-# 4. EXPORT CAPABILITY
+# 4. THE UI RENDER ENGINE (KANBAN LAYOUT)
 # ==========================================
-st.markdown("---")
-st.download_button(
-    label="📥 Download Calendar as CSV",
-    data=df.to_csv(index=False).encode('utf-8'),
-    file_name='weekly_legislative_calendar.csv',
-    mime='text/csv',
-)
+def render_kanban_week(start_date, end_date, data):
+    """Generates the horizontal day columns and vertical event cards."""
+    
+    # Generate a list of the 7 days in this window
+    days_in_window = [(start_date + timedelta(days=i)) for i in range(7)]
+    
+    # Create 7 Streamlit columns
+    cols = st.columns(7)
+    
+    for i, current_day in enumerate(days_in_window):
+        date_str = current_day.strftime('%Y-%m-%d')
+        display_date = current_day.strftime('%a, %b %d')
+        
+        with cols[i]:
+            # Day Header
+            st.markdown(f"**{display_date}**")
+            st.markdown("---")
+            
+            # Filter the master dataframe for just this specific day
+            day_events = data[data['Date'] == date_str]
+            
+            if day_events.empty:
+                st.info("No scheduled meetings.")
+            else:
+                # Sort chronologically
+                day_events = day_events.sort_values(by='DateTime_Sort')
+                
+                # Draw the vertical event cards
+                for _, row in day_events.iterrows():
+                    with st.container(border=True):
+                        st.markdown(f"🕰️ **{row['Time']}** | **{row['Bill']}**")
+                        st.markdown(f"🏛️ *{row['Committee']}*")
+                        st.caption(f"↳ {row['Outcome']}")
+
+# ==========================================
+# 5. THE DUAL-PAGE TOGGLE
+# ==========================================
+tab_past, tab_future = st.tabs([
+    f"⏪ Past Week ({past_start.strftime('%b %d')} - {TODAY.strftime('%b %d')})", 
+    f"⏩ Future Week ({(TODAY + timedelta(days=1)).strftime('%b %d')} - {future_end.strftime('%b %d')})"
+])
+
+with tab_past:
+    render_kanban_week(past_start, TODAY - timedelta(days=1), clean_df)
+
+with tab_future:
+    render_kanban_week(TODAY, future_end, clean_df)
