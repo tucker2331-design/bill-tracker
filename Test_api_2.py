@@ -1,121 +1,82 @@
 import streamlit as st
-import requests
 import pandas as pd
-from datetime import datetime
+from datetime import datetime, timedelta
 
-st.set_page_config(page_title="Enterprise ETL Merge Test", layout="wide")
-st.title("🧬 The Hybrid Data Merge Test")
-st.markdown("Simulating the backend logic: Merging Historical Events with the Schedule API to generate a Past-Week Calendar.")
+# Set page config for a wide, enterprise dashboard feel
+st.set_page_config(page_title="Lobbyist Calendar UI Test", layout="wide", page_icon="📅")
 
-API_KEY = "81D70A54-FCDC-4023-A00B-A3FD114D5984"
-HEADERS = {"WebAPIKey": API_KEY, "Accept": "application/json"}
+st.title("📅 Legislative Calendar & Outcomes")
+st.markdown("Tracking scheduled hearings and past-week outcomes for active portfolio bills.")
 
-# Basic Inputs
-col1, col2 = st.columns(2)
+# ==========================================
+# 1. GENERATE MOCK PIPELINE DATA
+# ==========================================
+# This exactly mimics the final output of our Hybrid ETL Merge
+mock_data = [
+    {"Date": "2026-03-05", "Time": "10:00 AM", "Committee": "Courts of Justice", "Bill": "HB10", "Outcome": "Reported out of Courts of Justice (15-Y 0-N)", "Room": "House Room C"},
+    {"Date": "2026-03-06", "Time": "2:00 PM", "Committee": "Finance", "Bill": "HB863", "Outcome": "Continued to 2027", "Room": "House Room A"},
+    {"Date": "2026-03-08", "Time": "8:30 AM", "Committee": "Appropriations", "Bill": "HB1204", "Outcome": "Incorporated into HB1100", "Room": "House Room B"},
+    {"Date": "2026-03-10", "Time": "TBD", "Committee": "Rules", "Bill": "SB4", "Outcome": "Passed by indefinitely in Rules (12-Y 4-N)", "Room": None},
+    {"Date": "2026-03-12", "Time": "1:00 PM", "Committee": "Privileges and Elections", "Bill": "HB500", "Outcome": "Hearing Scheduled", "Room": "Senate Room 3"}
+]
+
+df = pd.DataFrame(mock_data)
+
+# Ensure Date is formatted cleanly for the UI
+df['Date'] = pd.to_datetime(df['Date']).dt.strftime('%b %d, %Y')
+# Handle null rooms gracefully
+df['Room'] = df['Room'].fillna("TBD")
+
+# ==========================================
+# 2. UI FILTERS & METRICS (The $50k Dashboard feel)
+# ==========================================
+st.markdown("---")
+col1, col2, col3 = st.columns([1, 1, 2])
+
 with col1:
-    test_bill = st.text_input("Enter a Tracked Bill (e.g., HB10, SB1):", value="HB10")
+    # A quick filter to let lobbyists isolate specific days
+    date_filter = st.selectbox("Filter by Date:", ["All Dates"] + list(df['Date'].unique()))
 with col2:
-    session_code = st.text_input("Session Code:", value="261")
+    # Isolate specific committees
+    comm_filter = st.selectbox("Filter by Committee:", ["All Committees"] + list(df['Committee'].unique()))
 
-if st.button("🚀 Execute Hybrid Merge", type="primary"):
-    
-    ext_col, trans_col = st.columns(2)
-    
-    with st.spinner("Executing Data Extraction..."):
-        try:
-            # ==========================================
-            # 1. EXTRACT: Stream A (Bill Events)
-            # ==========================================
-            event_url = "https://lis.virginia.gov/api/v1/legislationevent/getlegislationeventsasync"
-            event_params = {"sessionCode": session_code, "billNumber": test_bill}
-            
-            event_res = requests.get(event_url, headers=HEADERS, params=event_params, timeout=10)
-            
-            events_data = None
-            try:
-                events_data = event_res.json()
-            except Exception:
-                st.warning(f"⚠️ Stream A (Events) Status: {event_res.status_code}. Did not parse as JSON. Here is the exact raw output:")
-                st.code(event_res.text[:1500]) # Force print the raw response
-                
-            # Fallback to mock data just so we can test the merge logic if the API fails
-            if not events_data:
-                st.info("Injecting Mock Event Data to test Pandas Merge logic...")
-                events_data = [
-                    {"BillNumber": test_bill, "EventDate": "2026-03-05T00:00:00", "CommitteeName": "House Courts of Justice", "Description": "Reported out of Courts of Justice (15-Y 0-N)"},
-                    {"BillNumber": test_bill, "EventDate": "2026-03-08T00:00:00", "CommitteeName": "House Finance", "Description": "Continued to 2027"}
-                ]
-            
-            df_events = pd.DataFrame(events_data)
-            date_key = 'ActualDate' if 'ActualDate' in df_events.columns else 'EventDate'
-            if date_key not in df_events.columns: date_key = 'Date'
-                 
-            df_events['MergeDate'] = pd.to_datetime(df_events[date_key], errors='coerce').dt.strftime('%Y-%m-%d')
-            
-            with ext_col:
-                st.subheader("📥 Stream A: Events Extracted")
-                display_cols = [c for c in ['BillNumber', 'MergeDate', 'CommitteeName', 'Description'] if c in df_events.columns]
-                st.dataframe(df_events[display_cols], use_container_width=True)
+# Apply the UI filters to the dataframe
+if date_filter != "All Dates":
+    df = df[df['Date'] == date_filter]
+if comm_filter != "All Committees":
+    df = df[df['Committee'] == comm_filter]
 
-            # ==========================================
-            # 2. EXTRACT: Stream B (The Schedule Times)
-            # ==========================================
-            schedule_url = "https://lis.virginia.gov/Schedule/api/getschedulelistasync"
-            sched_params = {"sessionCode": "261"} # Hardcoding 261 here because we know it works for this endpoint
-            
-            sched_res = requests.get(schedule_url, headers=HEADERS, params=sched_params, timeout=10)
-            sched_data = sched_res.json()
-                
-            # THE FIX: Correctly targeting the 'Schedules' array in the JSON
-            if isinstance(sched_data, dict) and 'Schedules' in sched_data:
-                df_schedule = pd.DataFrame(sched_data['Schedules'])
-            elif isinstance(sched_data, dict) and 'ListItems' in sched_data:
-                df_schedule = pd.DataFrame(sched_data['ListItems'])
-            else:
-                df_schedule = pd.DataFrame(sched_data)
-                
-            df_schedule['MergeDate'] = pd.to_datetime(df_schedule['ScheduleDate'], errors='coerce').dt.strftime('%Y-%m-%d')
-            
-            with ext_col:
-                st.subheader("📥 Stream B: Schedule Extracted")
-                st.write(f"Total Meetings loaded into memory: {len(df_schedule)}")
-                st.dataframe(df_schedule[['OwnerName', 'MergeDate', 'ScheduleTime', 'Description']].head(3), use_container_width=True)
+# ==========================================
+# 3. THE DATA RENDERING
+# ==========================================
+st.subheader(f"📋 Docket & Outcomes ({len(df)} Events)")
 
-            # ==========================================
-            # 3. TRANSFORM: The Pandas Merge
-            # ==========================================
-            st.markdown("---")
-            st.subheader("✅ TRANSFORM: Final Merged Calendar")
-            
-            merged_df = pd.merge(
-                df_events, 
-                df_schedule, 
-                how='left', 
-                left_on=['MergeDate', 'CommitteeName'], 
-                right_on=['MergeDate', 'OwnerName']
-            )
-            
-            final_cols = []
-            rename_dict = {}
-            
-            if 'MergeDate' in merged_df.columns: final_cols.append('MergeDate'); rename_dict['MergeDate'] = 'Date'
-            if 'ScheduleTime' in merged_df.columns: final_cols.append('ScheduleTime'); rename_dict['ScheduleTime'] = 'Time'
-            if 'CommitteeName' in merged_df.columns: final_cols.append('CommitteeName'); rename_dict['CommitteeName'] = 'Committee'
-            if 'BillNumber' in merged_df.columns: final_cols.append('BillNumber'); rename_dict['BillNumber'] = 'Bill'
-            if 'Description_x' in merged_df.columns: final_cols.append('Description_x'); rename_dict['Description_x'] = 'Outcome'
-            if 'Description_y' in merged_df.columns: final_cols.append('Description_y'); rename_dict['Description_y'] = 'Room Notes'
-            
-            final_calendar = merged_df[final_cols].rename(columns=rename_dict)
-            
-            with trans_col:
-                st.dataframe(final_calendar, use_container_width=True)
-                
-                if 'Time' in final_calendar.columns:
-                    missing_times = final_calendar['Time'].isna().sum()
-                    if missing_times > 0:
-                        st.warning(f"⚠️ **{missing_times} events failed to map a time.** This confirms we need a Committee Name Alias Dictionary.")
-                    else:
-                        st.success("🎯 **Flawless Merge!** All events successfully mapped to their scheduled times.")
+# We use Streamlit's new column_config to make the table look highly professional
+st.dataframe(
+    df,
+    use_container_width=True,
+    hide_index=True,
+    column_config={
+        "Date": st.column_config.TextColumn("Date", width="small"),
+        "Time": st.column_config.TextColumn("Time", width="small"),
+        "Bill": st.column_config.TextColumn("Bill #", width="small", help="The tracked legislation"),
+        "Committee": st.column_config.TextColumn("Committee", width="medium"),
+        "Outcome": st.column_config.TextColumn(
+            "Action / Outcome", 
+            width="large",
+            # We can visually flag bad news like 'Continued' or 'Passed by indefinitely' later with background colors if desired
+        ),
+        "Room": st.column_config.TextColumn("Location", width="small")
+    }
+)
 
-        except Exception as e:
-            st.error(f"Pipeline Failure: {e}")
+# ==========================================
+# 4. EXPORT CAPABILITY
+# ==========================================
+st.markdown("---")
+st.download_button(
+    label="📥 Download Calendar as CSV",
+    data=df.to_csv(index=False).encode('utf-8'),
+    file_name='weekly_legislative_calendar.csv',
+    mime='text/csv',
+)
