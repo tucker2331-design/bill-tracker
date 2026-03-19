@@ -35,9 +35,8 @@ if st.button("🚀 Execute Hybrid Merge", type="primary"):
             try:
                 events_data = event_res.json()
             except Exception:
-                st.warning(f"⚠️ Stream A (Events) did not return JSON. Status: {event_res.status_code}")
-                with st.expander("View Raw Server Response (Events)"):
-                    st.code(event_res.text[:1000]) # Print the raw text to see the error
+                st.warning(f"⚠️ Stream A (Events) Status: {event_res.status_code}. Did not parse as JSON. Here is the exact raw output:")
+                st.code(event_res.text[:1500]) # Force print the raw response
                 
             # Fallback to mock data just so we can test the merge logic if the API fails
             if not events_data:
@@ -48,10 +47,8 @@ if st.button("🚀 Execute Hybrid Merge", type="primary"):
                 ]
             
             df_events = pd.DataFrame(events_data)
-            # Standardize date formatting based on whichever key the API/Mock data uses
             date_key = 'ActualDate' if 'ActualDate' in df_events.columns else 'EventDate'
-            if date_key not in df_events.columns:
-                 date_key = 'Date' # Ultimate fallback
+            if date_key not in df_events.columns: date_key = 'Date'
                  
             df_events['MergeDate'] = pd.to_datetime(df_events[date_key], errors='coerce').dt.strftime('%Y-%m-%d')
             
@@ -64,24 +61,18 @@ if st.button("🚀 Execute Hybrid Merge", type="primary"):
             # 2. EXTRACT: Stream B (The Schedule Times)
             # ==========================================
             schedule_url = "https://lis.virginia.gov/Schedule/api/getschedulelistasync"
-            sched_params = {"sessionCode": session_code}
+            sched_params = {"sessionCode": "261"} # Hardcoding 261 here because we know it works for this endpoint
             
             sched_res = requests.get(schedule_url, headers=HEADERS, params=sched_params, timeout=10)
-            
-            sched_data = None
-            try:
-                sched_data = sched_res.json()
-            except Exception:
-                st.error(f"❌ Stream B (Schedule) FATAL ERROR: Did not return JSON. Status: {sched_res.status_code}")
-                with st.expander("View Raw Server Response (Schedule)"):
-                    st.code(sched_res.text[:1000])
-                st.stop() # We cannot merge without the schedule, so we halt here.
+            sched_data = sched_res.json()
                 
-            df_schedule = pd.DataFrame(sched_data)
-            
-            # Navigate the JSON tree if it's nested (e.g., inside 'ListItems')
-            if 'ListItems' in df_schedule.columns:
+            # THE FIX: Correctly targeting the 'Schedules' array in the JSON
+            if isinstance(sched_data, dict) and 'Schedules' in sched_data:
+                df_schedule = pd.DataFrame(sched_data['Schedules'])
+            elif isinstance(sched_data, dict) and 'ListItems' in sched_data:
                 df_schedule = pd.DataFrame(sched_data['ListItems'])
+            else:
+                df_schedule = pd.DataFrame(sched_data)
                 
             df_schedule['MergeDate'] = pd.to_datetime(df_schedule['ScheduleDate'], errors='coerce').dt.strftime('%Y-%m-%d')
             
@@ -96,7 +87,6 @@ if st.button("🚀 Execute Hybrid Merge", type="primary"):
             st.markdown("---")
             st.subheader("✅ TRANSFORM: Final Merged Calendar")
             
-            # The left join
             merged_df = pd.merge(
                 df_events, 
                 df_schedule, 
@@ -105,7 +95,6 @@ if st.button("🚀 Execute Hybrid Merge", type="primary"):
                 right_on=['MergeDate', 'OwnerName']
             )
             
-            # Safe column renaming based on what actually exists after the merge
             final_cols = []
             rename_dict = {}
             
@@ -121,15 +110,12 @@ if st.button("🚀 Execute Hybrid Merge", type="primary"):
             with trans_col:
                 st.dataframe(final_calendar, use_container_width=True)
                 
-                # Evaluation
                 if 'Time' in final_calendar.columns:
                     missing_times = final_calendar['Time'].isna().sum()
                     if missing_times > 0:
-                        st.warning(f"⚠️ **{missing_times} events failed to map a time.** This confirms we need a Committee Name Alias Dictionary (e.g., translating 'House Courts of Justice' to 'Courts of Justice').")
+                        st.warning(f"⚠️ **{missing_times} events failed to map a time.** This confirms we need a Committee Name Alias Dictionary.")
                     else:
                         st.success("🎯 **Flawless Merge!** All events successfully mapped to their scheduled times.")
-                else:
-                    st.error("Merge failed to produce a 'Time' column.")
 
         except Exception as e:
             st.error(f"Pipeline Failure: {e}")
