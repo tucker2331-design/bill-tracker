@@ -7,7 +7,7 @@ import re
 
 st.set_page_config(page_title="Legislative Calendar (Full Mirror Test)", layout="wide")
 st.title("📅 Enterprise Calendar: Full Mirror Test")
-st.markdown("Testing the 'Master Stitcher' to perfectly sync API Schedules with CSV Ledgers.")
+st.markdown("Testing the 'Rosetta Reverse-Lookup' to eliminate junk ledgers and perfectly map the CSV.")
 
 API_KEY = "81D70A54-FCDC-4023-A00B-A3FD114D5984"
 HEADERS = {"WebAPIKey": API_KEY, "Accept": "application/json"}
@@ -79,7 +79,7 @@ past_week_1_start = TODAY - timedelta(days=7)
 future_end = TODAY + timedelta(days=7)
 
 # ==========================================
-# 2. THE EXTRACTOR (The Master Stitcher)
+# 2. THE EXTRACTOR (Reverse-Lookup Engine)
 # ==========================================
 @st.cache_data(ttl=600)
 def build_master_calendar(sessions, tracked_bills, bypass):
@@ -94,7 +94,7 @@ def build_master_calendar(sessions, tracked_bills, bypass):
         except: pass
         return pd.DataFrame()
 
-    with st.spinner("📥 Stitching Live APIs with CSV Ledgers..."):
+    with st.spinner("📥 Reverse-Mapping CSV Ledgers to API Schedules..."):
         for session in sessions:
             api_code = session["api"]
             blob_code = session["blob"]
@@ -112,7 +112,7 @@ def build_master_calendar(sessions, tracked_bills, bypass):
             except Exception as e: print(f"Rosetta failed: {e}")
 
             # --- 2. Build the API Schedule Skeleton ---
-            api_schedule_map = {} # Maps "YYYY-MM-DD_CommitteeName" -> {Time, Status}
+            api_schedule_map = {} 
             try:
                 sched_res = requests.get("https://lis.virginia.gov/Schedule/api/getschedulelistasync", headers=HEADERS, params={"sessionCode": api_code}, timeout=5)
                 if sched_res.status_code == 200:
@@ -130,14 +130,14 @@ def build_master_calendar(sessions, tracked_bills, bypass):
                         time_val = str(meeting.get('ScheduleTime', '')).strip()
                         if not time_val: time_val = desc if desc else "Time TBA"
                         
-                        # Catch Cancelled Meetings
-                        status = "CANCELLED" if "cancel" in desc.lower() else ""
+                        # Brutal Cancellation Check: Look at the entire meeting dictionary payload
+                        status = "CANCELLED" if "cancel" in str(meeting).lower() else ""
                         
                         # Store in map for CSV stitching
                         api_schedule_map[f"{date_str}_{owner_name}"] = {"Time": time_val, "Status": status}
                         
-                        # Handle Caucuses & Sessions directly (no dockets)
-                        if any(k in owner_name.lower() for k in ["caucus", "session", "floor"]):
+                        # Handle Caucuses & Sessions
+                        if any(k in owner_name.lower() for k in ["caucus", "session", "floor", "convenes", "adjourned"]):
                             master_events.append({
                                 "Date": date_str, "Time": time_val, "Status": status,
                                 "Committee": owner_name if owner_name else "Chamber Event",
@@ -169,7 +169,6 @@ def build_master_calendar(sessions, tracked_bills, bypass):
                                             "IsFuture": meeting_date >= pd.to_datetime(TODAY.strftime('%Y-%m-%d')), "Source": "API"
                                         })
                         
-                        # If API docket was wiped/empty, log an empty block so we match the LIS site
                         if not has_docket_bills:
                             master_events.append({
                                 "Date": date_str, "Time": time_val, "Status": status,
@@ -179,7 +178,7 @@ def build_master_calendar(sessions, tracked_bills, bypass):
                             })
             except Exception as e: print(f"Schedule extraction failed: {e}")
 
-            # --- 3. The CSV Ledger Stitching ---
+            # --- 3. The CSV Ledger Stitching (The Enterprise Fix) ---
             df_past = safe_fetch_csv(f"https://lis.blob.core.windows.net/lisfiles/{blob_code}/HISTORY.CSV")
             if not df_past.empty:
                 bill_col = next((c for c in df_past.columns if 'bill' in c.lower()), 'BillNumber')
@@ -193,10 +192,13 @@ def build_master_calendar(sessions, tracked_bills, bypass):
                 mask = (df_past['ParsedDate'] >= pd.to_datetime(past_week_2_start)) & (df_past['ParsedDate'] <= pd.to_datetime(TODAY))
                 df_past = df_past[mask]
                 
-                pattern = '|'.join(['report', 'continue', 'pass', 'fail', 'incorporate', 'hearing', 'strike', 'stricken', 'veto', 'sign'])
+                pattern = '|'.join(['report', 'continue', 'pass', 'fail', 'incorporate', 'hearing', 'strike', 'stricken', 'veto', 'sign', 'agreed', 'read'])
                 df_past = df_past[df_past[desc_col].str.contains(pattern, case=False, na=False)]
                 
                 if not bypass: df_past = df_past[df_past['CleanBill'].str.split(' ').str[0].isin(tracked_bills)]
+                
+                # Sort official committees by length so "Finance and Appropriations" matches before "Finance"
+                official_committees = sorted(rosetta_stone.keys(), key=len, reverse=True)
                 
                 for _, row in df_past.iterrows():
                     outcome_text = str(row[desc_col])
@@ -204,16 +206,26 @@ def build_master_calendar(sessions, tracked_bills, bypass):
                     date_str = row['ParsedDate'].strftime('%Y-%m-%d')
                     chamber_prefix = "House " if str(row['CleanBill']).startswith('H') else "Senate "
                     
-                    # Smart RegEx to extract clean committee name
-                    committee_name = "Floor Action"
-                    match = re.search(r'(?:from|to|out of)\s+([a-zA-Z\s,&]+?)(?:\(|with|by|,|$)', outcome_lower)
-                    if match:
-                        raw_comm = match.group(1).strip().title().replace(" And ", " and ")
-                        committee_name = chamber_prefix + raw_comm
-                    elif any(x in outcome_lower for x in ["passed", "agreed", "engrossed"]):
+                    committee_name = None
+                    
+                    # 1. Floor Actions (High Priority)
+                    floor_keywords = ["passed", "agreed", "engrossed", "read third", "signed", "enrolled", "reconsideration"]
+                    if any(k in outcome_lower for k in floor_keywords) and not any(k in outcome_lower for k in ["reported", "referred"]):
                         committee_name = chamber_prefix + "Floor"
+                    else:
+                        # 2. Rosetta Reverse-Lookup
+                        for off_comm in official_committees:
+                            # Strip prefix to check the base name in the action text
+                            base_name = off_comm.replace("House ", "").replace("Senate ", "").lower()
+                            if base_name in outcome_lower and off_comm.startswith(chamber_prefix):
+                                committee_name = off_comm
+                                break
+                                
+                        # Fallback if no exact official committee is found
+                        if not committee_name:
+                            committee_name = chamber_prefix + "Floor"
 
-                    # Stitcher: Check if API has a schedule for this exact Date + Committee
+                    # 3. Stitch to API Time
                     time_val = "Ledger"
                     status = ""
                     api_key = f"{date_str}_{committee_name}"
@@ -231,7 +243,7 @@ def build_master_calendar(sessions, tracked_bills, bypass):
 
     final_df = pd.DataFrame(master_events)
     if not final_df.empty:
-        # Cleanup: If CSV successfully stitched bills to an API time, drop the "No live docket" placeholder
+        # Drop the empty "No live docket" placeholder if the CSV found bills for it
         final_df = final_df[~((final_df['Bill'] == "📌 No live docket") & 
                               final_df.duplicated(subset=['Date', 'Committee'], keep=False))]
         
@@ -269,19 +281,17 @@ def render_kanban_week(start_date, end_date, data, is_future_tab=False):
             else:
                 day_events = day_events.sort_values(by='DateTime_Sort')
                 for (committee, time_str), group_df in day_events.groupby(['Committee', 'Time'], sort=False):
-                    
                     status = group_df.iloc[0]['Status']
                     is_cancelled = status == "CANCELLED"
                     
                     with st.container(border=True):
                         if is_cancelled:
-                            st.markdown(f"**~~{committee}~~**\n<span style='color:red; font-weight:bold;'>CANCELLED</span>", unsafe_allow_html=True)
+                            st.markdown(f"~~**{committee}**~~\n<br><span style='color:#ff4b4b; font-weight:bold;'>CANCELLED</span>", unsafe_allow_html=True)
                         else:
                             st.markdown(f"**{committee}**\n🕰️ *{time_str}*")
                         
                         if is_future_tab: group_df = group_df.sort_values(by='AgendaOrder')
                         
-                        # Only show bills if not cancelled
                         if not is_cancelled:
                             if len(group_df) == 1 and group_df.iloc[0]['AgendaOrder'] == -1:
                                 st.markdown("---")
