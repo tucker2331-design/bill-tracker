@@ -1,83 +1,3 @@
-import streamlit as st
-import pandas as pd
-import requests
-from datetime import datetime, timedelta
-import io
-import re
-
-st.set_page_config(page_title="Legislative Calendar (Enterprise Mirror)", layout="wide")
-st.title("📅 Enterprise Calendar: Full Mirror Test")
-st.markdown("Testing precise JSON key targeting for Cancellations, Subcommittees, and Dynamic Times.")
-
-API_KEY = "81D70A54-FCDC-4023-A00B-A3FD114D5984"
-HEADERS = {"WebAPIKey": API_KEY, "Accept": "application/json"}
-
-# ==========================================
-# 1. THE AUTO-ROUTER
-# ==========================================
-@st.cache_data(ttl=3600)
-def get_active_session_codes(merge_upcoming=False):
-    url = "https://lis.virginia.gov/Session/api/getsessionlistasync"
-    active_sessions = []
-    try:
-        res = requests.get(url, headers=HEADERS, timeout=5)
-        if res.status_code == 200:
-            sessions = res.json()
-            if isinstance(sessions, list):
-                default_session = next((s for s in sessions if isinstance(s, dict) and s.get('IsDefault')), None)
-                if default_session:
-                    active_sessions.append(default_session)
-                    if merge_upcoming:
-                        current_year = datetime.now().year
-                        for s in sessions:
-                            raw_code = str(s.get('SessionCode', ''))
-                            if len(raw_code) >= 4 and raw_code[:4].isdigit() and int(raw_code[:4]) < (current_year - 1): continue
-                            if raw_code == str(default_session.get('SessionCode')): continue
-                            
-                            events = s.get('SessionEvents', [])
-                            convene_event = next((e for e in events if e.get('DisplayName') == "Convene"), None)
-                            adjourn_event = next((e for e in events if e.get('DisplayName') == "Adjournment"), None)
-                            
-                            if convene_event:
-                                try:
-                                    convene_date = datetime.strptime(convene_event['ActualDate'][:10], '%Y-%m-%d')
-                                    if adjourn_event:
-                                        adjourn_date = datetime.strptime(adjourn_event['ActualDate'][:10], '%Y-%m-%d')
-                                        if datetime.now() <= adjourn_date + timedelta(days=1): active_sessions.append(s)
-                                    else:
-                                        if convene_date.year >= current_year: active_sessions.append(s)
-                                except: pass
-                else:
-                    active_sessions = [s for s in sessions if isinstance(s, dict) and s.get('IsActive')]
-    except Exception as e:
-        st.error(f"Auto-Router Failed: {e}")
-
-    formatted_sessions = []
-    for s in active_sessions:
-        blob_code = str(s['SessionCode'])
-        display_name = s.get('DisplayName', f"Session {blob_code}")
-        formatted_sessions.append({
-            "blob": blob_code, "api": blob_code[2:], "name": display_name,
-            "events": s.get('SessionEvents', []), "is_special": "Special" in display_name or s.get('IsDefault') is False
-        })
-    if not formatted_sessions:
-        current_year = str(datetime.now().year)
-        formatted_sessions = [{"blob": f"{current_year}1", "api": f"{current_year[2:]}1", "name": f"{current_year} Regular Session", "events": [], "is_special": False}]
-    return formatted_sessions
-
-# --- UI Controls ---
-st.sidebar.header("⚙️ System Controls")
-merge_sessions_toggle = st.sidebar.toggle("🌉 Merge Upcoming Transition Sessions", value=False)
-bypass_filter = st.sidebar.toggle("⚠️ Bypass Portfolio (Load All Data)", value=True) 
-
-session_context_list = get_active_session_codes(merge_upcoming=merge_sessions_toggle)
-TRACKED_BILLS = ["HB10", "HB863", "SB4", "HB1204", "HB500"]
-
-TODAY = datetime(2026, 3, 20)
-past_week_2_start = TODAY - timedelta(days=14)
-past_week_1_start = TODAY - timedelta(days=7)
-future_end = TODAY + timedelta(days=7)
-
 # ==========================================
 # 2. THE EXTRACTOR (Enterprise Reverse-Lookup)
 # ==========================================
@@ -94,7 +14,7 @@ def build_master_calendar(sessions, tracked_bills, bypass):
         except: pass
         return pd.DataFrame()
 
-    with st.spinner("📥 Synchronizing JSON Data Keys..."):
+    with st.spinner("📥 Synchronizing JSON Data Keys (3-Week Window)..."):
         for session in sessions:
             api_code = session["api"]
             blob_code = session["blob"]
@@ -121,6 +41,11 @@ def build_master_calendar(sessions, tracked_bills, bypass):
                     
                     for meeting in schedules:
                         meeting_date = pd.to_datetime(meeting.get('ScheduleDate', '1970-01-01'), errors='coerce')
+                        
+                        # SPEED OPTIMIZATION: Only process meetings inside our 3-week test window!
+                        if not (past_week_2_start <= meeting_date <= future_end):
+                            continue
+                            
                         date_str = meeting_date.strftime('%Y-%m-%d')
                         owner_name = str(meeting.get('OwnerName', '')).strip()
                         chamber = meeting.get('ChamberCode')
@@ -163,7 +88,6 @@ def build_master_calendar(sessions, tracked_bills, bypass):
                         committee_id = meeting.get('CommitteeNumber', meeting.get('CommitteeCode'))
                         if not committee_id:
                             committee_id = rosetta_stone.get(owner_name)
-                            # If direct match fails, split the hyphen for subcommittees
                             if not committee_id and "-" in owner_name:
                                 parent_name = owner_name.split('-')[0].strip()
                                 committee_id = rosetta_stone.get(parent_name)
@@ -258,60 +182,3 @@ def build_master_calendar(sessions, tracked_bills, bypass):
         final_df = final_df.drop_duplicates(subset=['Date', 'Committee', 'Bill'], keep='first')
         
     return final_df
-
-# ==========================================
-# 3. UI RENDERING 
-# ==========================================
-final_df = build_master_calendar(session_context_list, TRACKED_BILLS, bypass_filter)
-
-if final_df.empty:
-    st.info("No actionable events found in the current timeframe.")
-    st.stop()
-    
-final_df['DateTime_Sort'] = pd.to_datetime(final_df['Date'] + ' ' + final_df['Time'].replace('Ledger', '11:59 PM').replace('Time TBA', '11:59 PM'), errors='coerce')
-
-def render_kanban_week(start_date, end_date, data, is_future_tab=False):
-    days = [(start_date + timedelta(days=i)) for i in range(7)]
-    cols = st.columns(7)
-    
-    for i, current_day in enumerate(days):
-        date_str = current_day.strftime('%Y-%m-%d')
-        with cols[i]:
-            st.markdown(f"**{current_day.strftime('%a, %b %d')}**")
-            st.markdown("---")
-            
-            day_events = data[data['Date'] == date_str]
-            day_events = day_events[day_events['IsFuture'] == is_future_tab]
-            
-            if day_events.empty:
-                st.info("No meetings.")
-            else:
-                day_events = day_events.sort_values(by='DateTime_Sort')
-                for (committee, time_str), group_df in day_events.groupby(['Committee', 'Time'], sort=False):
-                    status = group_df.iloc[0]['Status']
-                    is_cancelled = status == "CANCELLED"
-                    
-                    with st.container(border=True):
-                        if is_cancelled:
-                            st.markdown(f"~~**{committee}**~~\n<br><span style='color:#ff4b4b; font-weight:bold;'>CANCELLED</span>", unsafe_allow_html=True)
-                        else:
-                            st.markdown(f"**{committee}**\n🕰️ *{time_str}*")
-                        
-                        if is_future_tab: group_df = group_df.sort_values(by='AgendaOrder')
-                        
-                        if not is_cancelled:
-                            if len(group_df) == 1 and group_df.iloc[0]['AgendaOrder'] == -1:
-                                st.markdown("---")
-                                st.markdown(f"*{group_df.iloc[0]['Bill']}*")
-                            else:
-                                with st.expander(f"📜 View Bills ({len(group_df)})"):
-                                    for _, row in group_df.iterrows():
-                                        st.markdown(f"**{row['Bill']}**")
-                                        if is_future_tab: st.caption(f"📑 *Item #{int(row['AgendaOrder'])}*")
-                                        else: st.caption(f"🔹 *{row['Outcome']}*")
-
-tab_past_2, tab_past_1, tab_future = st.tabs(["⏪ Two Weeks Ago", "⏪ Past Week", "⏩ Future Week"])
-
-with tab_past_2: render_kanban_week(past_week_2_start, past_week_1_start - timedelta(days=1), final_df, False)
-with tab_past_1: render_kanban_week(past_week_1_start, TODAY - timedelta(days=1), final_df, False)
-with tab_future: render_kanban_week(TODAY, future_end, final_df, True)
