@@ -13,7 +13,7 @@ HEADERS = {"WebAPIKey": API_KEY, "Accept": "application/json"}
 
 # Sidebar Settings
 st.sidebar.header("⚙️ System Config")
-SESSION_BLOB = st.sidebar.text_input("Azure Blob Session Code:", value="261") # Changed default to 261 to avoid tokenizing error
+SESSION_BLOB = st.sidebar.text_input("Azure Blob Session Code:", value="261") 
 SESSION_API = st.sidebar.text_input("API Session Code:", value="261")
 
 st.sidebar.header("🎯 Tracked Portfolio")
@@ -69,11 +69,12 @@ def fetch_live_data(blob_code, api_code):
                     return df.rename(columns=lambda x: x.strip())
                 return pd.DataFrame()
 
-            data_payload["past"] = safe_fetch_csv(f"https://lis.blob.core.windows.net/lis/{blob_code}/HISTORY.CSV")
+            # THE FIX: Switched from /lis/ to /lisfiles/
+            data_payload["past"] = safe_fetch_csv(f"https://lis.blob.core.windows.net/lisfiles/{blob_code}/HISTORY.CSV")
             
             # Only pull docket if we are actively in session (saves bandwidth and prevents errors)
             if data_payload["session_status"] == "Active":
-                data_payload["future"] = safe_fetch_csv(f"https://lis.blob.core.windows.net/lis/{blob_code}/DOCKET.CSV")
+                data_payload["future"] = safe_fetch_csv(f"https://lis.blob.core.windows.net/lisfiles/{blob_code}/DOCKET.CSV")
                 
         except Exception as e:
             st.error(f"Extraction Pipeline Warning: {e}")
