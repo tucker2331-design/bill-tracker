@@ -14,7 +14,7 @@ HEADERS = {"WebAPIKey": API_KEY, "Accept": "application/json"}
 # ==========================================
 # 1. THE AUTO-ROUTER (The Master Keys)
 # ==========================================
-@st.cache_data(ttl=3600) # Check for a new session once an hour to save bandwidth
+@st.cache_data(ttl=3600) # Check for a new session once an hour
 def get_active_session_codes():
     """Dynamically finds the active session and derives both the Azure and API codes."""
     url = "https://lis.virginia.gov/Session/api/getsessionlistasync"
@@ -22,12 +22,10 @@ def get_active_session_codes():
         res = requests.get(url, headers=HEADERS, timeout=5)
         if res.status_code == 200:
             sessions = res.json()
-            # Find the active session based on API flags
             active_session = next((s for s in sessions if s.get('IsActive') or s.get('IsDefault')), None)
             
             if active_session:
                 blob_code = str(active_session['SessionCode'])
-                # Slice the 5-digit code (20261) into the 3-digit API code (261)
                 api_code = blob_code[2:] 
                 return {
                     "blob": blob_code, 
@@ -38,15 +36,12 @@ def get_active_session_codes():
     except Exception as e:
         st.error(f"Auto-Router Failed to connect to Virginia API: {e}")
     
-    # Absolute Fallback Safety Net (in case the API is down)
     return {"blob": "20261", "api": "261", "name": "2026 Regular Session", "events": []}
 
-# Fetch the autonomous routing keys
 session_context = get_active_session_codes()
 SESSION_BLOB = session_context["blob"]
 SESSION_API = session_context["api"]
 
-# UI Indicators so you know exactly what the Auto-Router is doing
 st.sidebar.success(f"📡 **Active Connection:**\n{session_context['name']}")
 st.sidebar.caption(f"Azure Key: `{SESSION_BLOB}` | API Key: `{SESSION_API}`")
 
@@ -72,14 +67,12 @@ def fetch_live_data(blob_code, api_code, events):
     
     with st.spinner("📥 Extracting Active Data Streams..."):
         try:
-            # Check for Adjournment in the auto-routed session events
             adjourn_event = next((e for e in events if e.get('DisplayName') == "Adjournment"), None)
             if adjourn_event:
                 adjourn_date = datetime.strptime(adjourn_event['ActualDate'][:10], '%Y-%m-%d')
                 if TODAY > adjourn_date:
                     data_payload["session_status"] = "Sine Die (Adjourned)"
 
-            # Fetch Schedule API with 3-digit key
             sched_url = "https://lis.virginia.gov/Schedule/api/getschedulelistasync"
             sched_res = requests.get(sched_url, headers=HEADERS, params={"sessionCode": api_code}, timeout=10)
             if sched_res.status_code == 200:
@@ -89,7 +82,6 @@ def fetch_live_data(blob_code, api_code, events):
                 else:
                     data_payload["schedule"] = pd.DataFrame(sched_data)
 
-            # Fetch CSVs from Azure Blob with 5-digit key
             def safe_fetch_csv(url):
                 res = requests.get(url, timeout=10)
                 if res.status_code == 200 and "<?xml" not in res.text[:20]:
@@ -108,7 +100,7 @@ def fetch_live_data(blob_code, api_code, events):
     return data_payload
 
 # ==========================================
-# 3. TRANSFORMER (Data Merging)
+# 3. TRANSFORMER (Data Merging & Smart Parsing)
 # ==========================================
 def process_data(payload, bypass):
     df_past, df_future, df_sched = payload["past"], payload["future"], payload["schedule"]
@@ -121,7 +113,6 @@ def process_data(payload, bypass):
         
         df_past['CleanBill'] = df_past[bill_col].astype(str).str.replace(' ', '').str.upper()
         
-        # Lock historical data to our visible timeframe
         df_past['ParsedDate'] = pd.to_datetime(df_past[date_col], errors='coerce')
         mask = (df_past['ParsedDate'] >= pd.to_datetime(past_start)) & (df_past['ParsedDate'] <= pd.to_datetime(TODAY))
         df_past = df_past[mask]
@@ -133,10 +124,35 @@ def process_data(payload, bypass):
         if not bypass:
             df_past = df_past[df_past['CleanBill'].isin(TRACKED_BILLS)]
         else:
-            df_past = df_past.tail(150) # Grab the 150 most recent actions
+            df_past = df_past.tail(150)
         
         for _, row in df_past.iterrows():
-            processed_events.append({"Date": row['ParsedDate'].strftime('%Y-%m-%d'), "Time": "TBD", "Committee": "Floor/Unknown", "Bill": row['CleanBill'], "Outcome": row[desc_col], "AgendaOrder": 0, "IsFuture": False})
+            outcome_text = str(row[desc_col])
+            
+            # --- SMART COMMITTEE EXTRACTOR ---
+            committee_name = "Floor Action"
+            outcome_lower = outcome_text.lower()
+            
+            if "reported from" in outcome_lower:
+                committee_name = outcome_text[outcome_lower.find("reported from") + 13:]
+            elif "reported out of" in outcome_lower:
+                committee_name = outcome_text[outcome_lower.find("reported out of") + 15:]
+            elif "referred to" in outcome_lower:
+                committee_name = outcome_text[outcome_lower.find("referred to") + 11:]
+            
+            committee_name = committee_name.split('(')[0].split(' with ')[0].strip()
+            committee_name = committee_name.title() if committee_name else "Floor Action"
+            # ----------------------------------
+
+            processed_events.append({
+                "Date": row['ParsedDate'].strftime('%Y-%m-%d'), 
+                "Time": "Ledger", 
+                "Committee": committee_name, 
+                "Bill": row['CleanBill'], 
+                "Outcome": outcome_text, 
+                "AgendaOrder": 0, 
+                "IsFuture": False
+            })
 
     if not df_future.empty:
         bill_col = next((c for c in df_future.columns if 'bill' in c.lower()), 'BillNumber')
@@ -152,7 +168,15 @@ def process_data(payload, bypass):
             df_future = df_future.head(150)
             
         for _, row in df_future.iterrows():
-            processed_events.append({"Date": pd.to_datetime(row[date_col]).strftime('%Y-%m-%d'), "Time": "TBD", "Committee": row[comm_col], "Bill": row['CleanBill'], "Outcome": "Pending Hearing", "AgendaOrder": row.get(seq_col, 0), "IsFuture": True})
+            processed_events.append({
+                "Date": pd.to_datetime(row[date_col]).strftime('%Y-%m-%d'), 
+                "Time": "TBD", 
+                "Committee": row[comm_col], 
+                "Bill": row['CleanBill'], 
+                "Outcome": "Pending Hearing", 
+                "AgendaOrder": row.get(seq_col, 0), 
+                "IsFuture": True
+            })
 
     master_df = pd.DataFrame(processed_events)
     
@@ -162,7 +186,7 @@ def process_data(payload, bypass):
         df_sched['MergeComm'] = df_sched['OwnerName'].str.replace('House ', '').str.replace('Senate ', '')
         
         merged = pd.merge(master_df, df_sched[['MergeDate', 'MergeComm', 'ScheduleTime']], left_on=['Date', 'MergeComm'], right_on=['MergeDate', 'MergeComm'], how='left')
-        merged['Time'] = merged['ScheduleTime'].fillna("TBD")
+        merged['Time'] = merged['ScheduleTime'].fillna(master_df['Time'])
         master_df = merged.drop(columns=['MergeDate', 'MergeComm', 'ScheduleTime'])
 
     return master_df
@@ -183,7 +207,7 @@ if st.sidebar.button("🚀 Fetch & Render Calendar"):
         st.info("No actionable events found for your portfolio in the current timeframe.")
         st.stop()
         
-    final_df['DateTime_Sort'] = pd.to_datetime(final_df['Date'] + ' ' + final_df['Time'].replace('TBD', '11:59 PM'), errors='coerce')
+    final_df['DateTime_Sort'] = pd.to_datetime(final_df['Date'] + ' ' + final_df['Time'].replace('Ledger', '11:59 PM').replace('TBD', '11:59 PM'), errors='coerce')
 
     def render_kanban_week(start_date, end_date, data, is_future_tab=False):
         days = [(start_date + timedelta(days=i)) for i in range(7)]
