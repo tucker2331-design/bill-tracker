@@ -97,12 +97,34 @@ merge_sessions_toggle = st.sidebar.toggle("🌉 Merge Upcoming Transition Sessio
 
 session_context_list = get_active_session_codes(merge_upcoming=merge_sessions_toggle)
 
+st.sidebar.header("🔍 Special Session Radar")
+special_found = any(s.get('is_special', False) for s in session_context_list)
+if special_found:
+    st.sidebar.success("✅ **Detected:** The state API has officially logged an upcoming Special Session.")
+else:
+    st.sidebar.warning("⏳ **Pending:** No Special Session found in the live API yet. (Waiting on Clerk update).")
+
+# --- RAW API DEBUGGER ---
+st.sidebar.header("🛠️ Raw API Debugger")
+if st.sidebar.checkbox("Dump Live Session API Data"):
+    with st.sidebar.expander("Raw JSON Payload", expanded=True):
+        try:
+            raw_req = requests.get("https://lis.virginia.gov/Session/api/getsessionlistasync", headers=HEADERS, timeout=5)
+            if raw_req.status_code == 200:
+                st.json(raw_req.json())
+            else:
+                st.error(f"Failed to fetch: {raw_req.status_code}")
+        except Exception as e:
+            st.error(f"Request failed: {e}")
+
 # Hardcoded for test environment viewing
 bypass_filter = True 
 TRACKED_BILLS = ["HB10", "HB863", "SB4", "HB1204", "HB500"]
 
 TODAY = datetime(2026, 3, 20)
-past_start = TODAY - timedelta(days=7)
+# Updated timeline to look back 14 days
+past_week_2_start = TODAY - timedelta(days=14)
+past_week_1_start = TODAY - timedelta(days=7)
 future_end = TODAY + timedelta(days=7)
 
 # ==========================================
@@ -182,7 +204,8 @@ def process_data(payload, bypass):
             df_past.loc[df_past['Is_Special'] == True, 'CleanBill'] = df_past['CleanBill'] + " [Special]"
             
         df_past['ParsedDate'] = pd.to_datetime(df_past[date_col], errors='coerce')
-        mask = (df_past['ParsedDate'] >= pd.to_datetime(past_start)) & (df_past['ParsedDate'] <= pd.to_datetime(TODAY))
+        # Updated mask to capture the full 14 day lookback
+        mask = (df_past['ParsedDate'] >= pd.to_datetime(past_week_2_start)) & (df_past['ParsedDate'] <= pd.to_datetime(TODAY))
         df_past = df_past[mask]
         
         actionable_verbs = ['report', 'continue', 'pass', 'fail', 'incorporate', 'hearing', 'strike', 'stricken', 'veto', 'sign']
@@ -371,6 +394,12 @@ def render_kanban_week(start_date, end_date, data, is_future_tab=False):
                                 else: 
                                     st.caption(f"🔹 *{row['Outcome']}*")
 
-tab_past, tab_future = st.tabs(["⏪ Past Week", "⏩ Future Week"])
-with tab_past: render_kanban_week(past_start, TODAY - timedelta(days=1), final_df, False)
-with tab_future: render_kanban_week(TODAY, future_end, final_df, True)
+# 3-Week Setup
+tab_past_2, tab_past_1, tab_future = st.tabs(["⏪ Two Weeks Ago", "⏪ Past Week", "⏩ Future Week"])
+
+with tab_past_2: 
+    render_kanban_week(past_week_2_start, past_week_1_start - timedelta(days=1), final_df, False)
+with tab_past_1: 
+    render_kanban_week(past_week_1_start, TODAY - timedelta(days=1), final_df, False)
+with tab_future: 
+    render_kanban_week(TODAY, future_end, final_df, True)
