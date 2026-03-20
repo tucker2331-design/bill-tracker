@@ -7,7 +7,7 @@ import re
 
 st.set_page_config(page_title="Legislative Calendar (Full Mirror Test)", layout="wide")
 st.title("📅 Enterprise Calendar: Full Mirror Test")
-st.markdown("Testing the 'Rosetta Reverse-Lookup' to eliminate junk ledgers and perfectly map the CSV.")
+st.markdown("Testing the 'Rosetta Reverse-Lookup' and hunting API Time keys.")
 
 API_KEY = "81D70A54-FCDC-4023-A00B-A3FD114D5984"
 HEADERS = {"WebAPIKey": API_KEY, "Accept": "application/json"}
@@ -79,11 +79,12 @@ past_week_1_start = TODAY - timedelta(days=7)
 future_end = TODAY + timedelta(days=7)
 
 # ==========================================
-# 2. THE EXTRACTOR (Reverse-Lookup Engine)
+# 2. THE EXTRACTOR
 # ==========================================
 @st.cache_data(ttl=600)
 def build_master_calendar(sessions, tracked_bills, bypass):
     master_events = []
+    raw_schedules_dump = [] # For debugging
     
     def safe_fetch_csv(url):
         try:
@@ -100,7 +101,7 @@ def build_master_calendar(sessions, tracked_bills, bypass):
             blob_code = session["blob"]
             is_special = session["is_special"]
             
-            # --- 1. Build Chamber-Specific Rosetta Stone ---
+            # --- 1. Rosetta Stone ---
             rosetta_stone = {}
             try:
                 for chamber in ['H', 'S']:
@@ -111,13 +112,15 @@ def build_master_calendar(sessions, tracked_bills, bypass):
                             rosetta_stone[prefix + str(c.get('ComDes')).strip()] = c.get('ComCode')
             except Exception as e: print(f"Rosetta failed: {e}")
 
-            # --- 2. Build the API Schedule Skeleton ---
+            # --- 2. Build Schedule Skeleton ---
             api_schedule_map = {} 
             try:
                 sched_res = requests.get("https://lis.virginia.gov/Schedule/api/getschedulelistasync", headers=HEADERS, params={"sessionCode": api_code}, timeout=5)
                 if sched_res.status_code == 200:
                     schedules = sched_res.json()
                     if isinstance(schedules, dict): schedules = schedules.get('Schedules', [])
+                    
+                    raw_schedules_dump.extend(schedules) # Save for sidebar inspector
                     
                     for meeting in schedules:
                         meeting_date = pd.to_datetime(meeting.get('ScheduleDate', '1970-01-01'), errors='coerce')
@@ -130,13 +133,12 @@ def build_master_calendar(sessions, tracked_bills, bypass):
                         time_val = str(meeting.get('ScheduleTime', '')).strip()
                         if not time_val: time_val = desc if desc else "Time TBA"
                         
-                        # Brutal Cancellation Check: Look at the entire meeting dictionary payload
-                        status = "CANCELLED" if "cancel" in str(meeting).lower() else ""
+                        # SURGICAL FIX: Only look for cancellation in the description or remarks
+                        remarks = str(meeting.get('Remarks', '')).strip()
+                        status = "CANCELLED" if "cancel" in desc.lower() or "cancel" in remarks.lower() else ""
                         
-                        # Store in map for CSV stitching
                         api_schedule_map[f"{date_str}_{owner_name}"] = {"Time": time_val, "Status": status}
                         
-                        # Handle Caucuses & Sessions
                         if any(k in owner_name.lower() for k in ["caucus", "session", "floor", "convenes", "adjourned"]):
                             master_events.append({
                                 "Date": date_str, "Time": time_val, "Status": status,
@@ -147,7 +149,6 @@ def build_master_calendar(sessions, tracked_bills, bypass):
                             })
                             continue
                         
-                        # Try to get Docket
                         committee_id = meeting.get('CommitteeCode') 
                         if not committee_id: committee_id = rosetta_stone.get(owner_name)
                             
@@ -178,7 +179,7 @@ def build_master_calendar(sessions, tracked_bills, bypass):
                             })
             except Exception as e: print(f"Schedule extraction failed: {e}")
 
-            # --- 3. The CSV Ledger Stitching (The Enterprise Fix) ---
+            # --- 3. CSV Stitching ---
             df_past = safe_fetch_csv(f"https://lis.blob.core.windows.net/lisfiles/{blob_code}/HISTORY.CSV")
             if not df_past.empty:
                 bill_col = next((c for c in df_past.columns if 'bill' in c.lower()), 'BillNumber')
@@ -197,7 +198,6 @@ def build_master_calendar(sessions, tracked_bills, bypass):
                 
                 if not bypass: df_past = df_past[df_past['CleanBill'].str.split(' ').str[0].isin(tracked_bills)]
                 
-                # Sort official committees by length so "Finance and Appropriations" matches before "Finance"
                 official_committees = sorted(rosetta_stone.keys(), key=len, reverse=True)
                 
                 for _, row in df_past.iterrows():
@@ -207,25 +207,18 @@ def build_master_calendar(sessions, tracked_bills, bypass):
                     chamber_prefix = "House " if str(row['CleanBill']).startswith('H') else "Senate "
                     
                     committee_name = None
-                    
-                    # 1. Floor Actions (High Priority)
                     floor_keywords = ["passed", "agreed", "engrossed", "read third", "signed", "enrolled", "reconsideration"]
                     if any(k in outcome_lower for k in floor_keywords) and not any(k in outcome_lower for k in ["reported", "referred"]):
                         committee_name = chamber_prefix + "Floor"
                     else:
-                        # 2. Rosetta Reverse-Lookup
                         for off_comm in official_committees:
-                            # Strip prefix to check the base name in the action text
                             base_name = off_comm.replace("House ", "").replace("Senate ", "").lower()
                             if base_name in outcome_lower and off_comm.startswith(chamber_prefix):
                                 committee_name = off_comm
                                 break
-                                
-                        # Fallback if no exact official committee is found
                         if not committee_name:
                             committee_name = chamber_prefix + "Floor"
 
-                    # 3. Stitch to API Time
                     time_val = "Ledger"
                     status = ""
                     api_key = f"{date_str}_{committee_name}"
@@ -243,19 +236,27 @@ def build_master_calendar(sessions, tracked_bills, bypass):
 
     final_df = pd.DataFrame(master_events)
     if not final_df.empty:
-        # Drop the empty "No live docket" placeholder if the CSV found bills for it
         final_df = final_df[~((final_df['Bill'] == "📌 No live docket") & 
                               final_df.duplicated(subset=['Date', 'Committee'], keep=False))]
-        
         final_df = final_df.sort_values(by=['Date', 'Committee', 'Bill', 'Source'])
         final_df = final_df.drop_duplicates(subset=['Date', 'Committee', 'Bill'], keep='first')
         
-    return final_df
+    return final_df, raw_schedules_dump
 
 # ==========================================
-# 3. UI RENDERING 
+# 3. UI RENDERING & INSPECTOR
 # ==========================================
-final_df = build_master_calendar(session_context_list, TRACKED_BILLS, bypass_filter)
+final_df, raw_schedules = build_master_calendar(session_context_list, TRACKED_BILLS, bypass_filter)
+
+# --- DEBUGGER SIDEBAR ---
+st.sidebar.header("🛠️ Raw Data Inspector")
+if st.sidebar.checkbox("Show Raw Schedule API JSON"):
+    if raw_schedules:
+        st.sidebar.write("Inspect keys like `ScheduleTime` and `MeetingStatus` to see exactly what the API is sending us:")
+        # Show first 25 records to prevent browser lag, but give enough to hunt
+        st.sidebar.json(raw_schedules[:25])
+    else:
+        st.sidebar.warning("No API schedule data found for this period.")
 
 if final_df.empty:
     st.info("No actionable events found in the current timeframe.")
