@@ -3,6 +3,7 @@ import pandas as pd
 import requests
 from datetime import datetime, timedelta
 import io
+import re
 
 st.set_page_config(page_title="Legislative Calendar", layout="wide")
 st.title("📅 Auto-Routing Legislative Calendar")
@@ -253,7 +254,7 @@ def process_data(payload, bypass):
                 "IsFuture": True
             })
 
-    # --- THE CAUCUS & FLOOR BYPASS (WITH TIME FIX) ---
+    # --- THE CAUCUS & FLOOR BYPASS (UI FIXED) ---
     if not df_sched.empty:
         for _, row in df_sched.iterrows():
             owner = str(row.get('OwnerName', '')).strip()
@@ -262,7 +263,6 @@ def process_data(payload, bypass):
             if any(k in owner.lower() for k in ["caucus", "session", "floor"]) or "session" in desc.lower():
                 sched_date = pd.to_datetime(row.get('ScheduleDate', '1970-01-01'), errors='coerce')
                 
-                # Time Fix: If ScheduleTime is blank, use the description. Otherwise default to TBD.
                 time_val = str(row.get('ScheduleTime', '')).strip()
                 if not time_val or time_val.lower() in ['nan', 'none']:
                     time_val = desc if desc else "Time TBA"
@@ -270,23 +270,49 @@ def process_data(payload, bypass):
                 processed_events.append({
                     "Date": sched_date.strftime('%Y-%m-%d'), 
                     "Time": time_val, 
-                    "Committee": "🏛️ CHAMBER EVENT", 
-                    "Bill": owner if owner else "General Assembly", 
-                    "Outcome": desc if desc else "Mandatory Attendance", 
+                    "Committee": owner if owner else "Chamber Event", 
+                    "Bill": "📌 " + (desc if desc else "Mandatory Attendance"), 
+                    "Outcome": "", 
                     "AgendaOrder": -1, 
                     "IsFuture": sched_date >= pd.to_datetime(TODAY.strftime('%Y-%m-%d'))
                 })
 
     master_df = pd.DataFrame(processed_events)
     
+    # --- SMART TIME MERGE (Enterprise Regex Normalization) ---
     if not master_df.empty and not df_sched.empty:
-        df_sched['MergeDate'] = pd.to_datetime(df_sched['ScheduleDate']).dt.strftime('%Y-%m-%d')
-        master_df['MergeComm'] = master_df['Committee'].str.replace('House ', '').str.replace('Senate ', '')
-        df_sched['MergeComm'] = df_sched['OwnerName'].str.replace('House ', '').str.replace('Senate ', '')
+        df_sched['MergeDate'] = pd.to_datetime(df_sched['ScheduleDate'], errors='coerce').dt.strftime('%Y-%m-%d')
         
-        merged = pd.merge(master_df, df_sched[['MergeDate', 'MergeComm', 'ScheduleTime']], left_on=['Date', 'MergeComm'], right_on=['MergeDate', 'MergeComm'], how='left')
-        merged['Time'] = merged['ScheduleTime'].fillna(master_df['Time'])
-        master_df = merged.drop(columns=['MergeDate', 'MergeComm', 'ScheduleTime'])
+        # Enterprise Regex Normalization
+        def normalize_comm(name):
+            if pd.isna(name) or not name: return ""
+            n = str(name).lower()
+            n = n.replace('floor', 'session')
+            # Strip stop words safely using word boundaries
+            n = re.sub(r'\b(house|senate|committee|of|the|and|for|on)\b', '', n)
+            # Annihilate all non-alphanumeric characters (spaces, commas, ampersands, dashes)
+            n = re.sub(r'[^a-z0-9]', '', n)
+            return n
+            
+        master_df['MergeComm'] = master_df['Committee'].apply(normalize_comm)
+        df_sched['MergeComm'] = df_sched['OwnerName'].apply(normalize_comm)
+        
+        # Grab the time, but if the API left it blank, pull it from the description
+        df_sched['BestTime'] = df_sched['ScheduleTime'].replace('', pd.NA).fillna(df_sched['ScheduleDesc'])
+        
+        # Deduplicate to prevent Pandas merge multiplication
+        sched_unique = df_sched.dropna(subset=['BestTime']).drop_duplicates(subset=['MergeDate', 'MergeComm'])
+        
+        # Left Join
+        merged = pd.merge(master_df, sched_unique[['MergeDate', 'MergeComm', 'BestTime']], 
+                          left_on=['Date', 'MergeComm'], 
+                          right_on=['MergeDate', 'MergeComm'], 
+                          how='left')
+                          
+        # Overwrite "Ledger" or "TBD" ONLY if the API successfully found a matching time
+        master_df['Time'] = merged['BestTime'].where(merged['BestTime'].notna() & (merged['BestTime'] != ''), master_df['Time'])
+        
+        master_df = master_df.drop(columns=['MergeComm'])
 
     return master_df
 
@@ -328,12 +354,17 @@ def render_kanban_week(start_date, end_date, data, is_future_tab=False):
                         st.markdown(f"**{committee}**\n🕰️ *{time_str}*")
                         st.markdown("---")
                         if is_future_tab: group_df = group_df.sort_values(by='AgendaOrder')
+                        
                         for _, row in group_df.iterrows():
-                            st.markdown(f"**{row['Bill']}**")
-                            if is_future_tab and row['AgendaOrder'] != -1: 
-                                st.caption(f"📑 *Item #{int(row['AgendaOrder'])}*")
-                            else: 
-                                st.caption(f"🔹 *{row['Outcome']}*")
+                            # UI FIX: If it's a Chamber Event, don't render the outcome, just the Bill/Desc
+                            if row['AgendaOrder'] == -1:
+                                st.markdown(f"*{row['Bill']}*")
+                            else:
+                                st.markdown(f"**{row['Bill']}**")
+                                if is_future_tab: 
+                                    st.caption(f"📑 *Item #{int(row['AgendaOrder'])}*")
+                                else: 
+                                    st.caption(f"🔹 *{row['Outcome']}*")
 
 tab_past, tab_future = st.tabs(["⏪ Past Week", "⏩ Future Week"])
 with tab_past: render_kanban_week(past_start, TODAY - timedelta(days=1), final_df, False)
