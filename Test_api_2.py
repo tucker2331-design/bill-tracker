@@ -254,8 +254,13 @@ def process_data(payload, bypass):
                 "IsFuture": True
             })
 
-    # --- THE CAUCUS & FLOOR BYPASS (UI FIXED) ---
+    # --- THE CAUCUS & FLOOR BYPASS (WITH SCHEMA ARMOR) ---
     if not df_sched.empty:
+        # Schema Armor to prevent KeyErrors if columns are missing
+        for col in ['ScheduleDate', 'OwnerName', 'ScheduleTime', 'ScheduleDesc']:
+            if col not in df_sched.columns:
+                df_sched[col] = ''
+                
         for _, row in df_sched.iterrows():
             owner = str(row.get('OwnerName', '')).strip()
             desc = str(row.get('ScheduleDesc', '')).strip()
