@@ -7,7 +7,7 @@ import re
 
 st.set_page_config(page_title="Legislative Calendar (Full Mirror Test)", layout="wide")
 st.title("📅 Enterprise Calendar: Full Mirror Test")
-st.markdown("Loading 100% of session data to verify against the Virginia LIS webpage.")
+st.markdown("Testing the 'Master Stitcher' to perfectly sync API Schedules with CSV Ledgers.")
 
 API_KEY = "81D70A54-FCDC-4023-A00B-A3FD114D5984"
 HEADERS = {"WebAPIKey": API_KEY, "Accept": "application/json"}
@@ -19,27 +19,21 @@ HEADERS = {"WebAPIKey": API_KEY, "Accept": "application/json"}
 def get_active_session_codes(merge_upcoming=False):
     url = "https://lis.virginia.gov/Session/api/getsessionlistasync"
     active_sessions = []
-    
     try:
         res = requests.get(url, headers=HEADERS, timeout=5)
         if res.status_code == 200:
             sessions = res.json()
             if isinstance(sessions, list):
                 default_session = next((s for s in sessions if isinstance(s, dict) and s.get('IsDefault')), None)
-                
                 if default_session:
                     active_sessions.append(default_session)
-                    
                     if merge_upcoming:
-                        current_date = datetime.now()
-                        current_year = current_date.year
-                        
+                        current_year = datetime.now().year
                         for s in sessions:
                             raw_code = str(s.get('SessionCode', ''))
-                            if len(raw_code) >= 4 and raw_code[:4].isdigit():
-                                if int(raw_code[:4]) < (current_year - 1): continue
+                            if len(raw_code) >= 4 and raw_code[:4].isdigit() and int(raw_code[:4]) < (current_year - 1): continue
                             if raw_code == str(default_session.get('SessionCode')): continue
-                                
+                            
                             events = s.get('SessionEvents', [])
                             convene_event = next((e for e in events if e.get('DisplayName') == "Convene"), None)
                             adjourn_event = next((e for e in events if e.get('DisplayName') == "Adjournment"), None)
@@ -49,7 +43,7 @@ def get_active_session_codes(merge_upcoming=False):
                                     convene_date = datetime.strptime(convene_event['ActualDate'][:10], '%Y-%m-%d')
                                     if adjourn_event:
                                         adjourn_date = datetime.strptime(adjourn_event['ActualDate'][:10], '%Y-%m-%d')
-                                        if current_date <= adjourn_date + timedelta(days=1): active_sessions.append(s)
+                                        if datetime.now() <= adjourn_date + timedelta(days=1): active_sessions.append(s)
                                     else:
                                         if convene_date.year >= current_year: active_sessions.append(s)
                                 except: pass
@@ -62,12 +56,10 @@ def get_active_session_codes(merge_upcoming=False):
     for s in active_sessions:
         blob_code = str(s['SessionCode'])
         display_name = s.get('DisplayName', f"Session {blob_code}")
-        is_special = "Special" in display_name or s.get('IsDefault') is False
         formatted_sessions.append({
             "blob": blob_code, "api": blob_code[2:], "name": display_name,
-            "events": s.get('SessionEvents', []), "is_special": is_special
+            "events": s.get('SessionEvents', []), "is_special": "Special" in display_name or s.get('IsDefault') is False
         })
-
     if not formatted_sessions:
         current_year = str(datetime.now().year)
         formatted_sessions = [{"blob": f"{current_year}1", "api": f"{current_year[2:]}1", "name": f"{current_year} Regular Session", "events": [], "is_special": False}]
@@ -76,7 +68,7 @@ def get_active_session_codes(merge_upcoming=False):
 # --- UI Controls ---
 st.sidebar.header("⚙️ System Controls")
 merge_sessions_toggle = st.sidebar.toggle("🌉 Merge Upcoming Transition Sessions", value=False)
-bypass_filter = st.sidebar.toggle("⚠️ Bypass Portfolio (Load All Data)", value=True, help="Turn ON to mirror the entire LIS database.") 
+bypass_filter = st.sidebar.toggle("⚠️ Bypass Portfolio (Load All Data)", value=True) 
 
 session_context_list = get_active_session_codes(merge_upcoming=merge_sessions_toggle)
 TRACKED_BILLS = ["HB10", "HB863", "SB4", "HB1204", "HB500"]
@@ -87,7 +79,7 @@ past_week_1_start = TODAY - timedelta(days=7)
 future_end = TODAY + timedelta(days=7)
 
 # ==========================================
-# 2. THE EXTRACTOR (Pure API + Ledger Fallback)
+# 2. THE EXTRACTOR (The Master Stitcher)
 # ==========================================
 @st.cache_data(ttl=600)
 def build_master_calendar(sessions, tracked_bills, bypass):
@@ -102,91 +94,92 @@ def build_master_calendar(sessions, tracked_bills, bypass):
         except: pass
         return pd.DataFrame()
 
-    with st.spinner("📥 Syncing Live Enterprise APIs (Unrestricted Mode)..."):
+    with st.spinner("📥 Stitching Live APIs with CSV Ledgers..."):
         for session in sessions:
             api_code = session["api"]
             blob_code = session["blob"]
             is_special = session["is_special"]
             
-            # --- STEP 1: Build the Rosetta Stone (Committee ID Bridge) ---
+            # --- 1. Build Chamber-Specific Rosetta Stone ---
             rosetta_stone = {}
             try:
-                comm_url = "https://lis.virginia.gov/Committee/api/getcommitteelistasync"
-                comm_res = requests.get(comm_url, headers=HEADERS, params={"sessionCode": api_code}, timeout=5)
-                if comm_res.status_code == 200:
-                    for c in comm_res.json():
-                        rosetta_stone[str(c.get('ComDes')).strip()] = c.get('ComCode')
-            except Exception as e:
-                print(f"Rosetta Stone failed: {e}")
+                for chamber in ['H', 'S']:
+                    comm_res = requests.get("https://lis.virginia.gov/Committee/api/getcommitteelistasync", headers=HEADERS, params={"sessionCode": api_code, "chamberCode": chamber}, timeout=5)
+                    if comm_res.status_code == 200:
+                        for c in comm_res.json():
+                            prefix = "House " if chamber == 'H' else "Senate "
+                            rosetta_stone[prefix + str(c.get('ComDes')).strip()] = c.get('ComCode')
+            except Exception as e: print(f"Rosetta failed: {e}")
 
-            # --- STEP 2: Fetch the Master Schedule & Agendas ---
+            # --- 2. Build the API Schedule Skeleton ---
+            api_schedule_map = {} # Maps "YYYY-MM-DD_CommitteeName" -> {Time, Status}
             try:
-                sched_url = "https://lis.virginia.gov/Schedule/api/getschedulelistasync"
-                sched_res = requests.get(sched_url, headers=HEADERS, params={"sessionCode": api_code}, timeout=5)
-                
+                sched_res = requests.get("https://lis.virginia.gov/Schedule/api/getschedulelistasync", headers=HEADERS, params={"sessionCode": api_code}, timeout=5)
                 if sched_res.status_code == 200:
                     schedules = sched_res.json()
                     if isinstance(schedules, dict): schedules = schedules.get('Schedules', [])
                     
                     for meeting in schedules:
                         meeting_date = pd.to_datetime(meeting.get('ScheduleDate', '1970-01-01'), errors='coerce')
+                        date_str = meeting_date.strftime('%Y-%m-%d')
                         owner_name = str(meeting.get('OwnerName', '')).strip()
                         chamber = meeting.get('ChamberCode')
                         if not chamber: chamber = 'S' if 'Senate' in owner_name else 'H'
                         
-                        time_val = meeting.get('ScheduleTime', '')
-                        if not time_val: time_val = meeting.get('ScheduleDesc', 'Time TBA')
+                        desc = str(meeting.get('ScheduleDesc', '')).strip()
+                        time_val = str(meeting.get('ScheduleTime', '')).strip()
+                        if not time_val: time_val = desc if desc else "Time TBA"
                         
-                        # Bypass for Caucuses / Floor Sessions
+                        # Catch Cancelled Meetings
+                        status = "CANCELLED" if "cancel" in desc.lower() else ""
+                        
+                        # Store in map for CSV stitching
+                        api_schedule_map[f"{date_str}_{owner_name}"] = {"Time": time_val, "Status": status}
+                        
+                        # Handle Caucuses & Sessions directly (no dockets)
                         if any(k in owner_name.lower() for k in ["caucus", "session", "floor"]):
                             master_events.append({
-                                "Date": meeting_date.strftime('%Y-%m-%d'), "Time": time_val,
+                                "Date": date_str, "Time": time_val, "Status": status,
                                 "Committee": owner_name if owner_name else "Chamber Event",
-                                "Bill": "📌 " + meeting.get('ScheduleDesc', 'Mandatory Attendance'),
+                                "Bill": "📌 " + (desc if desc else "Mandatory Attendance"),
                                 "Outcome": "", "AgendaOrder": -1,
-                                "IsFuture": meeting_date >= pd.to_datetime(TODAY.strftime('%Y-%m-%d')),
-                                "Source": "API"
+                                "IsFuture": meeting_date >= pd.to_datetime(TODAY.strftime('%Y-%m-%d')), "Source": "API"
                             })
                             continue
                         
-                        # Fetch Agenda using Rosetta Stone
+                        # Try to get Docket
                         committee_id = meeting.get('CommitteeCode') 
                         if not committee_id: committee_id = rosetta_stone.get(owner_name)
                             
-                        if committee_id:
-                            docket_url = "https://lis.virginia.gov/Committee/api/getdocketlistasync"
-                            doc_res = requests.get(docket_url, headers=HEADERS, params={"sessionCode": api_code, "chamberCode": chamber, "committeeID": committee_id}, timeout=5)
-                            
-                            if doc_res.status_code == 200:
+                        has_docket_bills = False
+                        if committee_id and status != "CANCELLED":
+                            doc_res = requests.get("https://lis.virginia.gov/Committee/api/getdocketlistasync", headers=HEADERS, params={"sessionCode": api_code, "chamberCode": chamber, "committeeID": committee_id}, timeout=5)
+                            if doc_res.status_code == 200 and doc_res.json():
                                 agendas = doc_res.json()
-                                
-                                # FIX: If committee is scheduled but has no bills, show it anyway
-                                if not agendas:
-                                    master_events.append({
-                                        "Date": meeting_date.strftime('%Y-%m-%d'), "Time": time_val,
-                                        "Committee": owner_name, "Bill": "📌 No bills currently on docket",
-                                        "Outcome": "", "AgendaOrder": -1,
-                                        "IsFuture": meeting_date >= pd.to_datetime(TODAY.strftime('%Y-%m-%d')),
-                                        "Source": "API"
-                                    })
-                                else:
-                                    for item in agendas:
-                                        bill_num = str(item.get('LegislationNumber', '')).replace(' ', '').upper()
-                                        if is_special: bill_num += " [Special]"
-                                        
-                                        if bypass or bill_num.split(' ')[0] in tracked_bills:
-                                            master_events.append({
-                                                "Date": meeting_date.strftime('%Y-%m-%d'), "Time": time_val,
-                                                "Committee": owner_name, "Bill": bill_num,
-                                                "Outcome": item.get('Description', 'Pending Hearing'),
-                                                "AgendaOrder": item.get('Sequence', 0),
-                                                "IsFuture": meeting_date >= pd.to_datetime(TODAY.strftime('%Y-%m-%d')),
-                                                "Source": "API"
-                                            })
-            except Exception as e:
-                print(f"Schedule extraction failed: {e}")
+                                has_docket_bills = True
+                                for item in agendas:
+                                    bill_num = str(item.get('LegislationNumber', '')).replace(' ', '').upper()
+                                    if is_special: bill_num += " [Special]"
+                                    if bypass or bill_num.split(' ')[0] in tracked_bills:
+                                        master_events.append({
+                                            "Date": date_str, "Time": time_val, "Status": status,
+                                            "Committee": owner_name, "Bill": bill_num,
+                                            "Outcome": item.get('Description', 'Pending Hearing'),
+                                            "AgendaOrder": item.get('Sequence', 0),
+                                            "IsFuture": meeting_date >= pd.to_datetime(TODAY.strftime('%Y-%m-%d')), "Source": "API"
+                                        })
+                        
+                        # If API docket was wiped/empty, log an empty block so we match the LIS site
+                        if not has_docket_bills:
+                            master_events.append({
+                                "Date": date_str, "Time": time_val, "Status": status,
+                                "Committee": owner_name, "Bill": "📌 No live docket",
+                                "Outcome": "", "AgendaOrder": -1,
+                                "IsFuture": meeting_date >= pd.to_datetime(TODAY.strftime('%Y-%m-%d')), "Source": "API"
+                            })
+            except Exception as e: print(f"Schedule extraction failed: {e}")
 
-            # --- STEP 3: The Ledger Fallback (For past/impromptu events) ---
+            # --- 3. The CSV Ledger Stitching ---
             df_past = safe_fetch_csv(f"https://lis.blob.core.windows.net/lisfiles/{blob_code}/HISTORY.CSV")
             if not df_past.empty:
                 bill_col = next((c for c in df_past.columns if 'bill' in c.lower()), 'BillNumber')
@@ -208,26 +201,40 @@ def build_master_calendar(sessions, tracked_bills, bypass):
                 for _, row in df_past.iterrows():
                     outcome_text = str(row[desc_col])
                     outcome_lower = outcome_text.lower()
+                    date_str = row['ParsedDate'].strftime('%Y-%m-%d')
+                    chamber_prefix = "House " if str(row['CleanBill']).startswith('H') else "Senate "
                     
+                    # Smart RegEx to extract clean committee name
                     committee_name = "Floor Action"
-                    if "reported from" in outcome_lower: committee_name = outcome_text[outcome_lower.find("reported from") + 13:]
-                    elif "reported out of" in outcome_lower: committee_name = outcome_text[outcome_lower.find("reported out of") + 15:]
-                    elif "referred to" in outcome_lower: committee_name = outcome_text[outcome_lower.find("referred to") + 11:]
+                    match = re.search(r'(?:from|to|out of)\s+([a-zA-Z\s,&]+?)(?:\(|with|by|,|$)', outcome_lower)
+                    if match:
+                        raw_comm = match.group(1).strip().title().replace(" And ", " and ")
+                        committee_name = chamber_prefix + raw_comm
+                    elif any(x in outcome_lower for x in ["passed", "agreed", "engrossed"]):
+                        committee_name = chamber_prefix + "Floor"
+
+                    # Stitcher: Check if API has a schedule for this exact Date + Committee
+                    time_val = "Ledger"
+                    status = ""
+                    api_key = f"{date_str}_{committee_name}"
                     
-                    committee_name = committee_name.split('(')[0].split(' with ')[0].strip().title()
-                    if committee_name == "Floor Action":
-                        committee_name = "House Floor" if str(row['CleanBill']).startswith('H') else "Senate Floor"
+                    if api_key in api_schedule_map:
+                        time_val = api_schedule_map[api_key]["Time"]
+                        status = api_schedule_map[api_key]["Status"]
                         
                     master_events.append({
-                        "Date": row['ParsedDate'].strftime('%Y-%m-%d'), "Time": "Ledger",
+                        "Date": date_str, "Time": time_val, "Status": status,
                         "Committee": committee_name, "Bill": row['CleanBill'],
                         "Outcome": outcome_text, "AgendaOrder": 999,
                         "IsFuture": False, "Source": "CSV"
                     })
 
-    # --- STEP 4: Deduplicate API vs CSV ---
     final_df = pd.DataFrame(master_events)
     if not final_df.empty:
+        # Cleanup: If CSV successfully stitched bills to an API time, drop the "No live docket" placeholder
+        final_df = final_df[~((final_df['Bill'] == "📌 No live docket") & 
+                              final_df.duplicated(subset=['Date', 'Committee'], keep=False))]
+        
         final_df = final_df.sort_values(by=['Date', 'Committee', 'Bill', 'Source'])
         final_df = final_df.drop_duplicates(subset=['Date', 'Committee', 'Bill'], keep='first')
         
@@ -242,7 +249,7 @@ if final_df.empty:
     st.info("No actionable events found in the current timeframe.")
     st.stop()
     
-final_df['DateTime_Sort'] = pd.to_datetime(final_df['Date'] + ' ' + final_df['Time'].replace('Ledger', '11:59 PM').replace('TBD', '11:59 PM'), errors='coerce')
+final_df['DateTime_Sort'] = pd.to_datetime(final_df['Date'] + ' ' + final_df['Time'].replace('Ledger', '11:59 PM').replace('Time TBA', '11:59 PM'), errors='coerce')
 
 def render_kanban_week(start_date, end_date, data, is_future_tab=False):
     days = [(start_date + timedelta(days=i)) for i in range(7)]
@@ -262,23 +269,29 @@ def render_kanban_week(start_date, end_date, data, is_future_tab=False):
             else:
                 day_events = day_events.sort_values(by='DateTime_Sort')
                 for (committee, time_str), group_df in day_events.groupby(['Committee', 'Time'], sort=False):
+                    
+                    status = group_df.iloc[0]['Status']
+                    is_cancelled = status == "CANCELLED"
+                    
                     with st.container(border=True):
-                        st.markdown(f"**{committee}**\n🕰️ *{time_str}*")
+                        if is_cancelled:
+                            st.markdown(f"**~~{committee}~~**\n<span style='color:red; font-weight:bold;'>CANCELLED</span>", unsafe_allow_html=True)
+                        else:
+                            st.markdown(f"**{committee}**\n🕰️ *{time_str}*")
                         
                         if is_future_tab: group_df = group_df.sort_values(by='AgendaOrder')
                         
-                        # --- UI FIX: Dropdowns for Agendas ---
-                        # If it's a Chamber Event (Caucus) or an Empty Docket, just print the description
-                        if len(group_df) == 1 and group_df.iloc[0]['AgendaOrder'] == -1:
-                            st.markdown("---")
-                            st.markdown(f"*{group_df.iloc[0]['Bill']}*")
-                        else:
-                            # If it has actual bills, tuck them into an expander
-                            with st.expander(f"📜 View Bills ({len(group_df)})"):
-                                for _, row in group_df.iterrows():
-                                    st.markdown(f"**{row['Bill']}**")
-                                    if is_future_tab: st.caption(f"📑 *Item #{int(row['AgendaOrder'])}*")
-                                    else: st.caption(f"🔹 *{row['Outcome']}*")
+                        # Only show bills if not cancelled
+                        if not is_cancelled:
+                            if len(group_df) == 1 and group_df.iloc[0]['AgendaOrder'] == -1:
+                                st.markdown("---")
+                                st.markdown(f"*{group_df.iloc[0]['Bill']}*")
+                            else:
+                                with st.expander(f"📜 View Bills ({len(group_df)})"):
+                                    for _, row in group_df.iterrows():
+                                        st.markdown(f"**{row['Bill']}**")
+                                        if is_future_tab: st.caption(f"📑 *Item #{int(row['AgendaOrder'])}*")
+                                        else: st.caption(f"🔹 *{row['Outcome']}*")
 
 tab_past_2, tab_past_1, tab_future = st.tabs(["⏪ Two Weeks Ago", "⏪ Past Week", "⏩ Future Week"])
 
