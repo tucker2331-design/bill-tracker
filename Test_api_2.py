@@ -13,7 +13,7 @@ HEADERS = {"WebAPIKey": API_KEY, "Accept": "application/json"}
 
 # Sidebar Settings
 st.sidebar.header("⚙️ System Config")
-SESSION_BLOB = st.sidebar.text_input("Azure Blob Session Code:", value="261") 
+SESSION_BLOB = st.sidebar.text_input("Azure Blob Session Code:", value="20261") 
 SESSION_API = st.sidebar.text_input("API Session Code:", value="261")
 
 st.sidebar.header("🎯 Tracked Portfolio")
@@ -21,7 +21,12 @@ portfolio_input = st.sidebar.text_area(
     "Enter bills to track (comma separated):", 
     value="HB10, HB863, SB4, HB1204, HB500"
 )
-TRACKED_BILLS = [b.strip().upper() for b in portfolio_input.split(",") if b.strip()]
+# Strip spaces so "HB 10" and "HB10" are treated the same
+TRACKED_BILLS = [b.strip().upper().replace(" ", "") for b in portfolio_input.split(",") if b.strip()]
+
+# THE NEW BYPASS SWITCH
+st.sidebar.markdown("---")
+bypass_filter = st.sidebar.checkbox("⚠️ Bypass Portfolio (Load All Data)", value=False, help="Check this to ignore your tracked bills and load the first 100 events to test if the database is working.")
 
 TODAY = datetime(2026, 3, 19)
 past_start = TODAY - timedelta(days=7)
@@ -36,12 +41,11 @@ def fetch_live_data(blob_code, api_code):
     
     with st.spinner("📥 Checking Session Status & Extracting Data..."):
         try:
-            # A. Ping Session API to check if we are in Off-Season
+            # A. Ping Session API
             session_url = "https://lis.virginia.gov/Session/api/getsessionlistasync"
             session_res = requests.get(session_url, headers=HEADERS, timeout=5)
             if session_res.status_code == 200:
                 sessions = session_res.json()
-                # Find the current session (Looking for 20261)
                 current_session = next((s for s in sessions if str(s.get('SessionCode')) == "20261"), None)
                 if current_session and 'SessionEvents' in current_session:
                     events = current_session['SessionEvents']
@@ -61,18 +65,16 @@ def fetch_live_data(blob_code, api_code):
                 else:
                     data_payload["schedule"] = pd.DataFrame(sched_data)
 
-            # C. Safe CSV Fetcher (Prevents the XML Tokenizing Crash)
+            # C. Safe CSV Fetcher
             def safe_fetch_csv(url):
                 res = requests.get(url, timeout=10)
-                if res.status_code == 200 and "<?xml" not in res.text[:20]: # Check for Azure XML error trap
+                if res.status_code == 200 and "<?xml" not in res.text[:20]:
                     df = pd.read_csv(io.StringIO(res.text))
                     return df.rename(columns=lambda x: x.strip())
                 return pd.DataFrame()
 
-            # THE FIX: Switched from /lis/ to /lisfiles/
             data_payload["past"] = safe_fetch_csv(f"https://lis.blob.core.windows.net/lisfiles/{blob_code}/HISTORY.CSV")
             
-            # Only pull docket if we are actively in session (saves bandwidth and prevents errors)
             if data_payload["session_status"] == "Active":
                 data_payload["future"] = safe_fetch_csv(f"https://lis.blob.core.windows.net/lisfiles/{blob_code}/DOCKET.CSV")
                 
@@ -84,7 +86,7 @@ def fetch_live_data(blob_code, api_code):
 # ==========================================
 # 2. TRANSFORMER (Data Merging)
 # ==========================================
-def process_data(payload):
+def process_data(payload, bypass):
     df_past, df_future, df_sched = payload["past"], payload["future"], payload["schedule"]
     processed_events = []
 
@@ -93,13 +95,20 @@ def process_data(payload):
         date_col = next((c for c in df_past.columns if 'date' in c.lower()), 'HistoryDate')
         desc_col = next((c for c in df_past.columns if 'desc' in c.lower() or 'action' in c.lower()), 'Description')
         
-        df_past = df_past[df_past[bill_col].isin(TRACKED_BILLS)]
+        # Clean the CSV bill names (remove spaces) so they match our input perfectly
+        df_past['CleanBill'] = df_past[bill_col].astype(str).str.replace(' ', '').str.upper()
+        
+        if not bypass:
+            df_past = df_past[df_past['CleanBill'].isin(TRACKED_BILLS)]
+        else:
+            df_past = df_past.head(1000) # Limit to 1000 so we don't crash the browser on bypass
+            
         actionable_verbs = ['report', 'continue', 'pass', 'fail', 'incorporate', 'hearing', 'strike', 'stricken', 'veto', 'sign']
         pattern = '|'.join(actionable_verbs)
         df_past = df_past[df_past[desc_col].str.contains(pattern, case=False, na=False)]
         
         for _, row in df_past.iterrows():
-            processed_events.append({"Date": pd.to_datetime(row[date_col]).strftime('%Y-%m-%d'), "Time": "TBD", "Committee": "Floor/Unknown", "Bill": row[bill_col], "Outcome": row[desc_col], "AgendaOrder": 0, "IsFuture": False})
+            processed_events.append({"Date": pd.to_datetime(row[date_col]).strftime('%Y-%m-%d'), "Time": "TBD", "Committee": "Floor/Unknown", "Bill": row['CleanBill'], "Outcome": row[desc_col], "AgendaOrder": 0, "IsFuture": False})
 
     if not df_future.empty:
         bill_col = next((c for c in df_future.columns if 'bill' in c.lower()), 'BillNumber')
@@ -107,9 +116,15 @@ def process_data(payload):
         comm_col = next((c for c in df_future.columns if 'comm' in c.lower()), 'CommitteeName')
         seq_col = next((c for c in df_future.columns if 'seq' in c.lower() or 'order' in c.lower()), 'Sequence')
         
-        df_future = df_future[df_future[bill_col].isin(TRACKED_BILLS)]
+        df_future['CleanBill'] = df_future[bill_col].astype(str).str.replace(' ', '').str.upper()
+        
+        if not bypass:
+            df_future = df_future[df_future['CleanBill'].isin(TRACKED_BILLS)]
+        else:
+            df_future = df_future.head(1000)
+            
         for _, row in df_future.iterrows():
-            processed_events.append({"Date": pd.to_datetime(row[date_col]).strftime('%Y-%m-%d'), "Time": "TBD", "Committee": row[comm_col], "Bill": row[bill_col], "Outcome": "Pending Hearing", "AgendaOrder": row.get(seq_col, 0), "IsFuture": True})
+            processed_events.append({"Date": pd.to_datetime(row[date_col]).strftime('%Y-%m-%d'), "Time": "TBD", "Committee": row[comm_col], "Bill": row['CleanBill'], "Outcome": "Pending Hearing", "AgendaOrder": row.get(seq_col, 0), "IsFuture": True})
 
     master_df = pd.DataFrame(processed_events)
     
@@ -131,13 +146,19 @@ if st.sidebar.button("🚀 Fetch & Render Calendar"):
     raw_payload = fetch_live_data(SESSION_BLOB, SESSION_API)
     session_state = raw_payload["session_status"]
     
+    # THE X-RAY DIAGNOSTIC PANEL
+    with st.expander("🔍 Pipeline X-Ray Diagnostics", expanded=True):
+        st.write(f"**HISTORY.CSV:** {len(raw_payload['past'])} rows extracted from Azure.")
+        st.write(f"**DOCKET.CSV:** {len(raw_payload['future'])} rows extracted from Azure.")
+        st.write(f"**Schedule API:** {len(raw_payload['schedule'])} rows extracted from JSON API.")
+    
     if session_state == "Sine Die (Adjourned)":
         st.warning("🏛️ **Notice:** The General Assembly has adjourned Sine Die. Expect limited future dockets until Veto Session.")
         
-    final_df = process_data(raw_payload)
+    final_df = process_data(raw_payload, bypass_filter)
     
     if final_df.empty:
-        st.info("No actionable events found for your portfolio in the current data.")
+        st.info("No actionable events found for your portfolio in the current timeframe.")
         st.stop()
         
     final_df['DateTime_Sort'] = pd.to_datetime(final_df['Date'] + ' ' + final_df['Time'].replace('TBD', '11:59 PM'), errors='coerce')
