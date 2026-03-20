@@ -12,42 +12,104 @@ API_KEY = "81D70A54-FCDC-4023-A00B-A3FD114D5984"
 HEADERS = {"WebAPIKey": API_KEY, "Accept": "application/json"}
 
 # ==========================================
-# 1. THE AUTO-ROUTER (The Master Keys)
+# 1. THE AUTO-ROUTER (Enterprise Time-Based)
 # ==========================================
-@st.cache_data(ttl=3600) # Check for a new session once an hour
-def get_active_session_codes():
-    """Dynamically finds the active session and derives both the Azure and API codes."""
+@st.cache_data(ttl=3600)
+def get_active_session_codes(merge_upcoming=False):
+    """Dynamically routes sessions based on actual Convene/Adjourn timestamps."""
     url = "https://lis.virginia.gov/Session/api/getsessionlistasync"
+    active_sessions = []
+    
     try:
         res = requests.get(url, headers=HEADERS, timeout=5)
         if res.status_code == 200:
             sessions = res.json()
-            
-            # SURGERY 1: Validate payload is a list of dictionaries before parsing
-            active_session = None
             if isinstance(sessions, list):
-                active_session = next((s for s in sessions if isinstance(s, dict) and (s.get('IsActive') or s.get('IsDefault'))), None)
-            
-            if active_session:
-                blob_code = str(active_session['SessionCode'])
-                api_code = blob_code[2:] 
-                return {
-                    "blob": blob_code, 
-                    "api": api_code, 
-                    "name": active_session.get('DisplayName', f"Session {blob_code}"),
-                    "events": active_session.get('SessionEvents', [])
-                }
+                
+                # 1. Identify the official Anchor (Default) session
+                default_session = next((s for s in sessions if isinstance(s, dict) and s.get('IsDefault')), None)
+                
+                if default_session:
+                    active_sessions.append(default_session)
+                    
+                    # 2. The Enterprise Time-Based Router (Optimized for Speed)
+                    if merge_upcoming:
+                        current_date = datetime.now()
+                        current_year = current_date.year
+                        
+                        for s in sessions:
+                            raw_code = str(s.get('SessionCode', ''))
+                            
+                            # --- The Time-Horizon Pre-Filter ---
+                            # Fast string check: instantly skip anything older than 1 year
+                            if len(raw_code) >= 4 and raw_code[:4].isdigit():
+                                if int(raw_code[:4]) < (current_year - 1):
+                                    continue
+                            
+                            # Skip the default session we already added
+                            if raw_code == str(default_session.get('SessionCode')):
+                                continue
+                                
+                            events = s.get('SessionEvents', [])
+                            convene_event = next((e for e in events if e.get('DisplayName') == "Convene"), None)
+                            adjourn_event = next((e for e in events if e.get('DisplayName') == "Adjournment"), None)
+                            
+                            if convene_event:
+                                try:
+                                    convene_date = datetime.strptime(convene_event['ActualDate'][:10], '%Y-%m-%d')
+                                    
+                                    if adjourn_event:
+                                        adjourn_date = datetime.strptime(adjourn_event['ActualDate'][:10], '%Y-%m-%d')
+                                        # If it hasn't adjourned yet (with 1 day buffer), it's active/upcoming
+                                        if current_date <= adjourn_date + timedelta(days=1):
+                                            active_sessions.append(s)
+                                    else:
+                                        # No adjourn date yet, check if it's this year or future
+                                        if convene_date.year >= current_year:
+                                            active_sessions.append(s)
+                                except:
+                                    pass
+
+                else:
+                    active_sessions = [s for s in sessions if isinstance(s, dict) and s.get('IsActive')]
+
     except Exception as e:
-        st.error(f"Auto-Router Failed to connect to Virginia API: {e}")
-    
-    return {"blob": "20261", "api": "261", "name": "2026 Regular Session", "events": []}
+        st.error(f"Auto-Router Failed: {e}")
 
-session_context = get_active_session_codes()
-SESSION_BLOB = session_context["blob"]
-SESSION_API = session_context["api"]
+    # Format the payload and add the "Is_Special" flag
+    formatted_sessions = []
+    for s in active_sessions:
+        blob_code = str(s['SessionCode'])
+        display_name = s.get('DisplayName', f"Session {blob_code}")
+        
+        # Tag it so the UI knows to append [Special] to the bills
+        is_special = "Special" in display_name or s.get('IsDefault') is False
+        
+        formatted_sessions.append({
+            "blob": blob_code, 
+            "api": blob_code[2:], 
+            "name": display_name,
+            "events": s.get('SessionEvents', []),
+            "is_special": is_special
+        })
 
-st.sidebar.success(f"📡 **Active Connection:**\n{session_context['name']}")
-st.sidebar.caption(f"Azure Key: `{SESSION_BLOB}` | API Key: `{SESSION_API}`")
+    # Absolute worst-case fallback
+    if not formatted_sessions:
+        current_year = str(datetime.now().year)
+        formatted_sessions = [{"blob": f"{current_year}1", "api": f"{current_year[2:]}1", "name": f"{current_year} Regular Session", "events": [], "is_special": False}]
+
+    return formatted_sessions
+
+# --- UI Toggles for Sidebar ---
+st.sidebar.header("⚙️ System Controls")
+bypass_filter = st.sidebar.checkbox("⚠️ Bypass Portfolio (Load All Data)", value=False)
+merge_sessions_toggle = st.sidebar.toggle("🌉 Merge Upcoming Transition Sessions", value=False, help="Enable this during the window between a Regular Session ending and a Special Session beginning to view both calendars simultaneously.")
+
+session_context_list = get_active_session_codes(merge_upcoming=merge_sessions_toggle)
+
+st.sidebar.success(f"📡 **Active Connections ({len(session_context_list)}):**")
+for s in session_context_list:
+    st.sidebar.caption(f"**{s['name']}**\nKeys: `{s['blob']}` / `{s['api']}`")
 
 st.sidebar.header("🎯 Tracked Portfolio")
 portfolio_input = st.sidebar.text_area(
@@ -56,52 +118,68 @@ portfolio_input = st.sidebar.text_area(
 )
 TRACKED_BILLS = [b.strip().upper().replace(" ", "") for b in portfolio_input.split(",") if b.strip()]
 
-bypass_filter = st.sidebar.checkbox("⚠️ Bypass Portfolio (Load All Data)", value=False)
-
-TODAY = datetime(2026, 3, 19)
+TODAY = datetime(2026, 3, 20)
 past_start = TODAY - timedelta(days=7)
 future_end = TODAY + timedelta(days=7)
 
 # ==========================================
-# 2. THE EXTRACTOR (Using the Auto-Routed Keys)
+# 2. THE EXTRACTOR (Multi-Stream)
 # ==========================================
 @st.cache_data(ttl=600)
-def fetch_live_data(blob_code, api_code, events):
-    data_payload = {"past": pd.DataFrame(), "future": pd.DataFrame(), "schedule": pd.DataFrame(), "session_status": "Active"}
+def fetch_live_data(sessions):
+    master_payload = {
+        "past": pd.DataFrame(), 
+        "future": pd.DataFrame(), 
+        "schedule": pd.DataFrame(), 
+        "status_flags": []
+    }
     
-    with st.spinner("📥 Extracting Active Data Streams..."):
+    def safe_fetch_csv(url):
         try:
-            adjourn_event = next((e for e in events if e.get('DisplayName') == "Adjournment"), None)
-            if adjourn_event:
-                adjourn_date = datetime.strptime(adjourn_event['ActualDate'][:10], '%Y-%m-%d')
-                if TODAY > adjourn_date:
-                    data_payload["session_status"] = "Sine Die (Adjourned)"
+            res = requests.get(url, timeout=5)
+            if res.status_code == 200 and "<?xml" not in res.text[:20]:
+                df = pd.read_csv(io.StringIO(res.text))
+                return df.rename(columns=lambda x: x.strip())
+        except: pass
+        return pd.DataFrame()
 
+    with st.spinner(f"📥 Extracting Data Streams from {len(sessions)} session(s)..."):
+        for session in sessions:
+            blob_code, api_code = session["blob"], session["api"]
+            
+            # 1. Schedule API
             sched_url = "https://lis.virginia.gov/Schedule/api/getschedulelistasync"
-            sched_res = requests.get(sched_url, headers=HEADERS, params={"sessionCode": api_code}, timeout=10)
-            if sched_res.status_code == 200:
-                sched_data = sched_res.json()
-                if isinstance(sched_data, dict) and 'Schedules' in sched_data:
-                    data_payload["schedule"] = pd.DataFrame(sched_data['Schedules'])
-                else:
-                    data_payload["schedule"] = pd.DataFrame(sched_data)
+            try:
+                sched_res = requests.get(sched_url, headers=HEADERS, params={"sessionCode": api_code}, timeout=5)
+                if sched_res.status_code == 200:
+                    sched_data = sched_res.json()
+                    new_sched = pd.DataFrame(sched_data.get('Schedules', sched_data))
+                    if not new_sched.empty:
+                        master_payload["schedule"] = pd.concat([master_payload["schedule"], new_sched] if not master_payload["schedule"].empty else [new_sched], ignore_index=True)
+            except: pass
 
-            def safe_fetch_csv(url):
-                res = requests.get(url, timeout=10)
-                if res.status_code == 200 and "<?xml" not in res.text[:20]:
-                    df = pd.read_csv(io.StringIO(res.text))
-                    return df.rename(columns=lambda x: x.strip())
-                return pd.DataFrame()
+            # 2. History CSV
+            new_past = safe_fetch_csv(f"https://lis.blob.core.windows.net/lisfiles/{blob_code}/HISTORY.CSV")
+            if not new_past.empty:
+                new_past['Is_Special'] = session['is_special']
+                master_payload["past"] = pd.concat([master_payload["past"], new_past] if not master_payload["past"].empty else [new_past], ignore_index=True)
 
-            data_payload["past"] = safe_fetch_csv(f"https://lis.blob.core.windows.net/lisfiles/{blob_code}/HISTORY.CSV")
-            
-            if data_payload["session_status"] == "Active":
-                data_payload["future"] = safe_fetch_csv(f"https://lis.blob.core.windows.net/lisfiles/{blob_code}/DOCKET.CSV")
-                
-        except Exception as e:
-            st.error(f"Extraction Pipeline Warning: {e}")
-            
-    return data_payload
+            # 3. Check for Adjournment
+            is_sine_die = False
+            adjourn_event = next((e for e in session.get('events', []) if e.get('DisplayName') == "Adjournment"), None)
+            if adjourn_event:
+                if TODAY > datetime.strptime(adjourn_event['ActualDate'][:10], '%Y-%m-%d'):
+                    is_sine_die = True
+                    master_payload["status_flags"].append(f"{session['name']} adjourned Sine Die.")
+
+            # 4. Docket CSV
+            if not is_sine_die:
+                new_future = safe_fetch_csv(f"https://lis.blob.core.windows.net/lisfiles/{blob_code}/DOCKET.CSV")
+                if not new_future.empty:
+                    new_future['Is_Special'] = session['is_special']
+                    master_payload["future"] = pd.concat([master_payload["future"], new_future] if not master_payload["future"].empty else [new_future], ignore_index=True)
+
+    return master_payload
 
 # ==========================================
 # 3. TRANSFORMER (Data Merging & Smart Parsing)
@@ -117,6 +195,10 @@ def process_data(payload, bypass):
         
         df_past['CleanBill'] = df_past[bill_col].astype(str).str.replace(' ', '').str.upper()
         
+        # --- THE SPECIAL SESSION TAGGER ---
+        if 'Is_Special' in df_past.columns:
+            df_past.loc[df_past['Is_Special'] == True, 'CleanBill'] = df_past['CleanBill'] + " [Special]"
+            
         df_past['ParsedDate'] = pd.to_datetime(df_past[date_col], errors='coerce')
         mask = (df_past['ParsedDate'] >= pd.to_datetime(past_start)) & (df_past['ParsedDate'] <= pd.to_datetime(TODAY))
         df_past = df_past[mask]
@@ -126,14 +208,14 @@ def process_data(payload, bypass):
         df_past = df_past[df_past[desc_col].str.contains(pattern, case=False, na=False)]
 
         if not bypass:
-            df_past = df_past[df_past['CleanBill'].isin(TRACKED_BILLS)]
+            # Clean split to ensure tracked bills match even if they have [Special] attached
+            df_past = df_past[df_past['CleanBill'].str.split(' ').str[0].isin(TRACKED_BILLS)]
         else:
             df_past = df_past.tail(150)
         
         for _, row in df_past.iterrows():
             outcome_text = str(row[desc_col])
             
-            # --- SMART COMMITTEE EXTRACTOR ---
             committee_name = "Floor Action"
             outcome_lower = outcome_text.lower()
             
@@ -146,7 +228,6 @@ def process_data(payload, bypass):
             
             committee_name = committee_name.split('(')[0].split(' with ')[0].strip()
             committee_name = committee_name.title() if committee_name else "Floor Action"
-            # ----------------------------------
 
             processed_events.append({
                 "Date": row['ParsedDate'].strftime('%Y-%m-%d'), 
@@ -161,16 +242,17 @@ def process_data(payload, bypass):
     if not df_future.empty:
         bill_col = next((c for c in df_future.columns if 'bill' in c.lower()), 'BillNumber')
         date_col = next((c for c in df_future.columns if 'date' in c.lower()), 'DocketDate')
-        
-        # SURGERY 2: Change 'comm' to 'com' to catch 'ComDes'
         comm_col = next((c for c in df_future.columns if 'com' in c.lower()), None)
-        
         seq_col = next((c for c in df_future.columns if 'seq' in c.lower() or 'order' in c.lower()), 'Sequence')
         
         df_future['CleanBill'] = df_future[bill_col].astype(str).str.replace(' ', '').str.upper()
         
+        # --- THE SPECIAL SESSION TAGGER ---
+        if 'Is_Special' in df_future.columns:
+            df_future.loc[df_future['Is_Special'] == True, 'CleanBill'] = df_future['CleanBill'] + " [Special]"
+        
         if not bypass:
-            df_future = df_future[df_future['CleanBill'].isin(TRACKED_BILLS)]
+            df_future = df_future[df_future['CleanBill'].str.split(' ').str[0].isin(TRACKED_BILLS)]
         else:
             df_future = df_future.head(150)
             
@@ -178,13 +260,32 @@ def process_data(payload, bypass):
             processed_events.append({
                 "Date": pd.to_datetime(row[date_col]).strftime('%Y-%m-%d'), 
                 "Time": "TBD", 
-                # Use .get() to prevent hard crashes if column is missing
                 "Committee": row.get(comm_col, "Unknown Committee") if comm_col else "Unknown Committee", 
                 "Bill": row['CleanBill'], 
                 "Outcome": "Pending Hearing", 
                 "AgendaOrder": row.get(seq_col, 0), 
                 "IsFuture": True
             })
+
+    # --- THE CAUCUS & FLOOR BYPASS ---
+    if not df_sched.empty:
+        for _, row in df_sched.iterrows():
+            owner = str(row.get('OwnerName', '')).lower()
+            desc = str(row.get('ScheduleDesc', '')).lower()
+            
+            # Keywords that trigger a "Schedule-Centric" override
+            if any(k in owner for k in ["caucus", "session", "floor"]) or "session" in desc:
+                sched_date = pd.to_datetime(row.get('ScheduleDate', '1970-01-01'), errors='coerce')
+                
+                processed_events.append({
+                    "Date": sched_date.strftime('%Y-%m-%d'), 
+                    "Time": row.get('ScheduleTime', 'TBD'), 
+                    "Committee": row.get('OwnerName', 'General Assembly'), 
+                    "Bill": "🏛️ CHAMBER EVENT", 
+                    "Outcome": row.get('ScheduleDesc', 'Mandatory Attendance'), 
+                    "AgendaOrder": -1, # Forces it to the very top of the UI card
+                    "IsFuture": sched_date >= pd.to_datetime(TODAY.strftime('%Y-%m-%d'))
+                })
 
     master_df = pd.DataFrame(processed_events)
     
@@ -203,11 +304,10 @@ def process_data(payload, bypass):
 # 4. UI RENDERING
 # ==========================================
 if st.sidebar.button("🚀 Fetch & Render Calendar"):
-    raw_payload = fetch_live_data(SESSION_BLOB, SESSION_API, session_context['events'])
-    session_state = raw_payload["session_status"]
+    raw_payload = fetch_live_data(session_context_list)
     
-    if session_state == "Sine Die (Adjourned)":
-        st.warning(f"🏛️ **Notice:** The {session_context['name']} has adjourned Sine Die. Expect limited future dockets until the next session activates.")
+    for flag in raw_payload["status_flags"]:
+        st.warning(f"🏛️ **Notice:** {flag} Expect limited dockets for that session.")
         
     final_df = process_data(raw_payload, bypass_filter)
     
@@ -231,10 +331,7 @@ if st.sidebar.button("🚀 Fetch & Render Calendar"):
                 day_events = day_events[day_events['IsFuture'] == is_future_tab]
                 
                 if day_events.empty:
-                    if is_future_tab and session_state != "Active":
-                        st.caption("Off-Season")
-                    else:
-                        st.info("No meetings.")
+                    st.info("No meetings.")
                 else:
                     day_events = day_events.sort_values(by='DateTime_Sort')
                     for (committee, time_str), group_df in day_events.groupby(['Committee', 'Time'], sort=False):
@@ -244,8 +341,10 @@ if st.sidebar.button("🚀 Fetch & Render Calendar"):
                             if is_future_tab: group_df = group_df.sort_values(by='AgendaOrder')
                             for _, row in group_df.iterrows():
                                 st.markdown(f"**{row['Bill']}**")
-                                if is_future_tab: st.caption(f"📑 *Item #{int(row['AgendaOrder'])}*")
-                                else: st.caption(f"🔹 *{row['Outcome']}*")
+                                if is_future_tab and row['AgendaOrder'] != -1: 
+                                    st.caption(f"📑 *Item #{int(row['AgendaOrder'])}*")
+                                else: 
+                                    st.caption(f"🔹 *{row['Outcome']}*")
 
     tab_past, tab_future = st.tabs(["⏪ Past Week", "⏩ Future Week"])
     with tab_past: render_kanban_week(past_start, TODAY - timedelta(days=1), final_df, False)
