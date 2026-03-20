@@ -1,198 +1,71 @@
 import streamlit as st
-import pandas as pd
 import requests
-from datetime import datetime, timedelta
-import io
 
-st.set_page_config(page_title="Season-Aware Calendar", layout="wide")
-st.title("📡 Live-Fire Legislative Calendar")
-st.markdown("Season-aware tracking using the Virginia LIS Session API & Azure Blobs.")
+st.set_page_config(page_title="Naked API Diagnostic")
+st.title("🔍 Naked URL Diagnostic")
+st.markdown("Pinging the Virginia servers directly to find the exact endpoints.")
 
 API_KEY = "81D70A54-FCDC-4023-A00B-A3FD114D5984"
 HEADERS = {"WebAPIKey": API_KEY, "Accept": "application/json"}
 
-# Sidebar Settings
-st.sidebar.header("⚙️ System Config")
-SESSION_BLOB = st.sidebar.text_input("Azure Blob Session Code:", value="20261") 
-SESSION_API = st.sidebar.text_input("API Session Code:", value="261")
-
-st.sidebar.header("🎯 Tracked Portfolio")
-portfolio_input = st.sidebar.text_area(
-    "Enter bills to track (comma separated):", 
-    value="HB10, HB863, SB4, HB1204, HB500"
-)
-# Strip spaces so "HB 10" and "HB10" are treated the same
-TRACKED_BILLS = [b.strip().upper().replace(" ", "") for b in portfolio_input.split(",") if b.strip()]
-
-# THE NEW BYPASS SWITCH
-st.sidebar.markdown("---")
-bypass_filter = st.sidebar.checkbox("⚠️ Bypass Portfolio (Load All Data)", value=False, help="Check this to ignore your tracked bills and load the first 100 events to test if the database is working.")
-
-TODAY = datetime(2026, 3, 19)
-past_start = TODAY - timedelta(days=7)
-future_end = TODAY + timedelta(days=7)
-
-# ==========================================
-# 1. EXTRACTOR: Season-Aware Data Pull
-# ==========================================
-@st.cache_data(ttl=600)
-def fetch_live_data(blob_code, api_code):
-    data_payload = {"past": pd.DataFrame(), "future": pd.DataFrame(), "schedule": pd.DataFrame(), "session_status": "Active"}
+if st.button("🚀 Fire Diagnostic Probes"):
     
-    with st.spinner("📥 Checking Session Status & Extracting Data..."):
-        try:
-            # A. Ping Session API
-            session_url = "https://lis.virginia.gov/Session/api/getsessionlistasync"
-            session_res = requests.get(session_url, headers=HEADERS, timeout=5)
-            if session_res.status_code == 200:
-                sessions = session_res.json()
-                current_session = next((s for s in sessions if str(s.get('SessionCode')) == "20261"), None)
-                if current_session and 'SessionEvents' in current_session:
-                    events = current_session['SessionEvents']
-                    adjourn_event = next((e for e in events if e.get('DisplayName') == "Adjournment"), None)
-                    if adjourn_event:
-                        adjourn_date = datetime.strptime(adjourn_event['ActualDate'][:10], '%Y-%m-%d')
-                        if TODAY > adjourn_date:
-                            data_payload["session_status"] = "Sine Die (Adjourned)"
-
-            # B. Fetch Schedule API
-            sched_url = "https://lis.virginia.gov/Schedule/api/getschedulelistasync"
-            sched_res = requests.get(sched_url, headers=HEADERS, params={"sessionCode": api_code}, timeout=10)
-            if sched_res.status_code == 200:
-                sched_data = sched_res.json()
-                if isinstance(sched_data, dict) and 'Schedules' in sched_data:
-                    data_payload["schedule"] = pd.DataFrame(sched_data['Schedules'])
-                else:
-                    data_payload["schedule"] = pd.DataFrame(sched_data)
-
-            # C. Safe CSV Fetcher
-            def safe_fetch_csv(url):
-                res = requests.get(url, timeout=10)
-                if res.status_code == 200 and "<?xml" not in res.text[:20]:
-                    df = pd.read_csv(io.StringIO(res.text))
-                    return df.rename(columns=lambda x: x.strip())
-                return pd.DataFrame()
-
-            data_payload["past"] = safe_fetch_csv(f"https://lis.blob.core.windows.net/lisfiles/{blob_code}/HISTORY.CSV")
-            
-            if data_payload["session_status"] == "Active":
-                data_payload["future"] = safe_fetch_csv(f"https://lis.blob.core.windows.net/lisfiles/{blob_code}/DOCKET.CSV")
-                
-        except Exception as e:
-            st.error(f"Extraction Pipeline Warning: {e}")
-            
-    return data_payload
-
-# ==========================================
-# 2. TRANSFORMER (Data Merging)
-# ==========================================
-def process_data(payload, bypass):
-    df_past, df_future, df_sched = payload["past"], payload["future"], payload["schedule"]
-    processed_events = []
-
-    if not df_past.empty:
-        bill_col = next((c for c in df_past.columns if 'bill' in c.lower()), 'BillNumber')
-        date_col = next((c for c in df_past.columns if 'date' in c.lower()), 'HistoryDate')
-        desc_col = next((c for c in df_past.columns if 'desc' in c.lower() or 'action' in c.lower()), 'Description')
+    col1, col2 = st.columns(2)
+    
+    with col1:
+        st.subheader("1. Testing Azure Blob CSVs")
         
-        # Clean the CSV bill names (remove spaces) so they match our input perfectly
-        df_past['CleanBill'] = df_past[bill_col].astype(str).str.replace(' ', '').str.upper()
-        
-        if not bypass:
-            df_past = df_past[df_past['CleanBill'].isin(TRACKED_BILLS)]
+        # Test 1: The lisfiles container with 20261
+        url1 = "https://lis.blob.core.windows.net/lisfiles/20261/HISTORY.CSV"
+        res1 = requests.get(url1)
+        st.write(f"URL: `.../lisfiles/20261/HISTORY.CSV`")
+        if res1.status_code == 200 and "<?xml" not in res1.text[:20]:
+            st.success("✅ 200 OK (Valid CSV Data)")
         else:
-            df_past = df_past.head(1000) # Limit to 1000 so we don't crash the browser on bypass
-            
-        actionable_verbs = ['report', 'continue', 'pass', 'fail', 'incorporate', 'hearing', 'strike', 'stricken', 'veto', 'sign']
-        pattern = '|'.join(actionable_verbs)
-        df_past = df_past[df_past[desc_col].str.contains(pattern, case=False, na=False)]
-        
-        for _, row in df_past.iterrows():
-            processed_events.append({"Date": pd.to_datetime(row[date_col]).strftime('%Y-%m-%d'), "Time": "TBD", "Committee": "Floor/Unknown", "Bill": row['CleanBill'], "Outcome": row[desc_col], "AgendaOrder": 0, "IsFuture": False})
+            st.error(f"❌ Failed (Status: {res1.status_code} or XML Error)")
 
-    if not df_future.empty:
-        bill_col = next((c for c in df_future.columns if 'bill' in c.lower()), 'BillNumber')
-        date_col = next((c for c in df_future.columns if 'date' in c.lower()), 'DocketDate')
-        comm_col = next((c for c in df_future.columns if 'comm' in c.lower()), 'CommitteeName')
-        seq_col = next((c for c in df_future.columns if 'seq' in c.lower() or 'order' in c.lower()), 'Sequence')
-        
-        df_future['CleanBill'] = df_future[bill_col].astype(str).str.replace(' ', '').str.upper()
-        
-        if not bypass:
-            df_future = df_future[df_future['CleanBill'].isin(TRACKED_BILLS)]
+        # Test 2: The lisfiles container with 261
+        url2 = "https://lis.blob.core.windows.net/lisfiles/261/HISTORY.CSV"
+        res2 = requests.get(url2)
+        st.write(f"URL: `.../lisfiles/261/HISTORY.CSV`")
+        if res2.status_code == 200 and "<?xml" not in res2.text[:20]:
+            st.success("✅ 200 OK (Valid CSV Data)")
         else:
-            df_future = df_future.head(1000)
+            st.error(f"❌ Failed (Status: {res2.status_code} or XML Error)")
             
-        for _, row in df_future.iterrows():
-            processed_events.append({"Date": pd.to_datetime(row[date_col]).strftime('%Y-%m-%d'), "Time": "TBD", "Committee": row[comm_col], "Bill": row['CleanBill'], "Outcome": "Pending Hearing", "AgendaOrder": row.get(seq_col, 0), "IsFuture": True})
-
-    master_df = pd.DataFrame(processed_events)
-    
-    if not master_df.empty and not df_sched.empty:
-        df_sched['MergeDate'] = pd.to_datetime(df_sched['ScheduleDate']).dt.strftime('%Y-%m-%d')
-        master_df['MergeComm'] = master_df['Committee'].str.replace('House ', '').str.replace('Senate ', '')
-        df_sched['MergeComm'] = df_sched['OwnerName'].str.replace('House ', '').str.replace('Senate ', '')
+    with col2:
+        st.subheader("2. Testing Schedule JSON API")
         
-        merged = pd.merge(master_df, df_sched[['MergeDate', 'MergeComm', 'ScheduleTime']], left_on=['Date', 'MergeComm'], right_on=['MergeDate', 'MergeComm'], how='left')
-        merged['Time'] = merged['ScheduleTime'].fillna("TBD")
-        master_df = merged.drop(columns=['MergeDate', 'MergeComm', 'ScheduleTime'])
+        # Test 3: API with 261
+        url3 = "https://lis.virginia.gov/Schedule/api/getschedulelistasync"
+        res3 = requests.get(url3, headers=HEADERS, params={"sessionCode": "261"})
+        st.write(f"URL: `Schedule API + sessionCode=261`")
+        if res3.status_code == 200 and len(res3.text) > 50:
+            st.success("✅ 200 OK (Valid JSON Data)")
+        else:
+            st.error(f"❌ Failed (Status: {res3.status_code})")
 
-    return master_df
-
-# ==========================================
-# 3. UI RENDERING
-# ==========================================
-if st.sidebar.button("🚀 Fetch & Render Calendar"):
-    raw_payload = fetch_live_data(SESSION_BLOB, SESSION_API)
-    session_state = raw_payload["session_status"]
-    
-    # THE X-RAY DIAGNOSTIC PANEL
-    with st.expander("🔍 Pipeline X-Ray Diagnostics", expanded=True):
-        st.write(f"**HISTORY.CSV:** {len(raw_payload['past'])} rows extracted from Azure.")
-        st.write(f"**DOCKET.CSV:** {len(raw_payload['future'])} rows extracted from Azure.")
-        st.write(f"**Schedule API:** {len(raw_payload['schedule'])} rows extracted from JSON API.")
-    
-    if session_state == "Sine Die (Adjourned)":
-        st.warning("🏛️ **Notice:** The General Assembly has adjourned Sine Die. Expect limited future dockets until Veto Session.")
-        
-    final_df = process_data(raw_payload, bypass_filter)
-    
-    if final_df.empty:
-        st.info("No actionable events found for your portfolio in the current timeframe.")
-        st.stop()
-        
-    final_df['DateTime_Sort'] = pd.to_datetime(final_df['Date'] + ' ' + final_df['Time'].replace('TBD', '11:59 PM'), errors='coerce')
-
-    def render_kanban_week(start_date, end_date, data, is_future_tab=False):
-        days = [(start_date + timedelta(days=i)) for i in range(7)]
-        cols = st.columns(7)
-        
-        for i, current_day in enumerate(days):
-            date_str = current_day.strftime('%Y-%m-%d')
-            with cols[i]:
-                st.markdown(f"**{current_day.strftime('%a, %b %d')}**")
-                st.markdown("---")
-                
-                day_events = data[data['Date'] == date_str]
-                day_events = day_events[day_events['IsFuture'] == is_future_tab]
-                
-                if day_events.empty:
-                    if is_future_tab and session_state != "Active":
-                        st.caption("Off-Season")
-                    else:
-                        st.info("No meetings.")
-                else:
-                    day_events = day_events.sort_values(by='DateTime_Sort')
-                    for (committee, time_str), group_df in day_events.groupby(['Committee', 'Time'], sort=False):
-                        with st.container(border=True):
-                            st.markdown(f"🏛️ **{committee}**\n🕰️ *{time_str}*")
-                            st.markdown("---")
-                            if is_future_tab: group_df = group_df.sort_values(by='AgendaOrder')
-                            for _, row in group_df.iterrows():
-                                st.markdown(f"**{row['Bill']}**")
-                                if is_future_tab: st.caption(f"📑 *Item #{int(row['AgendaOrder'])}*")
-                                else: st.caption(f"🔹 *{row['Outcome']}*")
-
-    tab_past, tab_future = st.tabs(["⏪ Past Week", "⏩ Future Week"])
-    with tab_past: render_kanban_week(past_start, TODAY - timedelta(days=1), final_df, False)
-    with tab_future: render_kanban_week(TODAY, future_end, final_df, True)
+        # Test 4: API with 20261
+        url4 = "https://lis.virginia.gov/Schedule/api/getschedulelistasync"
+        res4 = requests.get(url4, headers=HEADERS, params={"sessionCode": "20261"})
+        st.write(f"URL: `Schedule API + sessionCode=20261`")
+        if res4.status_code == 200 and len(res4.text) > 50:
+            st.success("✅ 200 OK (Valid JSON Data)")
+        else:
+            st.error(f"❌ Failed (Status: {res4.status_code})")
+            
+        # Test 5: The Session API (To find the future session codes)
+        st.markdown("---")
+        st.subheader("3. Session Bucket API")
+        url5 = "https://lis.virginia.gov/Session/api/getsessionlistasync"
+        res5 = requests.get(url5, headers=HEADERS)
+        st.write(f"URL: `Session API`")
+        if res5.status_code == 200:
+            st.success("✅ 200 OK")
+            sessions = res5.json()
+            st.write("Available Session Codes found on the server right now:")
+            for s in sessions:
+                # Print the display name and the code we need to use
+                st.code(f"Name: {s.get('DisplayName')} | Code: {s.get('SessionCode')}")
+        else:
+            st.error(f"❌ Failed (Status: {res5.status_code})")
