@@ -264,16 +264,21 @@ def render_kanban_week(start_date, end_date, data, is_future_tab=False):
                 for (committee, time_str), group_df in day_events.groupby(['Committee', 'Time'], sort=False):
                     with st.container(border=True):
                         st.markdown(f"**{committee}**\n🕰️ *{time_str}*")
-                        st.markdown("---")
+                        
                         if is_future_tab: group_df = group_df.sort_values(by='AgendaOrder')
                         
-                        for _, row in group_df.iterrows():
-                            if row['AgendaOrder'] == -1:
-                                st.markdown(f"*{row['Bill']}*")
-                            else:
-                                st.markdown(f"**{row['Bill']}**")
-                                if is_future_tab: st.caption(f"📑 *Item #{int(row['AgendaOrder'])}*")
-                                else: st.caption(f"🔹 *{row['Outcome']}*")
+                        # --- UI FIX: Dropdowns for Agendas ---
+                        # If it's a Chamber Event (Caucus) or an Empty Docket, just print the description
+                        if len(group_df) == 1 and group_df.iloc[0]['AgendaOrder'] == -1:
+                            st.markdown("---")
+                            st.markdown(f"*{group_df.iloc[0]['Bill']}*")
+                        else:
+                            # If it has actual bills, tuck them into an expander
+                            with st.expander(f"📜 View Bills ({len(group_df)})"):
+                                for _, row in group_df.iterrows():
+                                    st.markdown(f"**{row['Bill']}**")
+                                    if is_future_tab: st.caption(f"📑 *Item #{int(row['AgendaOrder'])}*")
+                                    else: st.caption(f"🔹 *{row['Outcome']}*")
 
 tab_past_2, tab_past_1, tab_future = st.tabs(["⏪ Two Weeks Ago", "⏪ Past Week", "⏩ Future Week"])
 
