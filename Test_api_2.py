@@ -26,13 +26,11 @@ def get_active_session_codes(merge_upcoming=False):
             sessions = res.json()
             if isinstance(sessions, list):
                 
-                # 1. Identify the official Anchor (Default) session
                 default_session = next((s for s in sessions if isinstance(s, dict) and s.get('IsDefault')), None)
                 
                 if default_session:
                     active_sessions.append(default_session)
                     
-                    # 2. The Enterprise Time-Based Router (Optimized for Speed)
                     if merge_upcoming:
                         current_date = datetime.now()
                         current_year = current_date.year
@@ -40,13 +38,11 @@ def get_active_session_codes(merge_upcoming=False):
                         for s in sessions:
                             raw_code = str(s.get('SessionCode', ''))
                             
-                            # --- The Time-Horizon Pre-Filter ---
                             # Fast string check: instantly skip anything older than 1 year
                             if len(raw_code) >= 4 and raw_code[:4].isdigit():
                                 if int(raw_code[:4]) < (current_year - 1):
                                     continue
                             
-                            # Skip the default session we already added
                             if raw_code == str(default_session.get('SessionCode')):
                                 continue
                                 
@@ -60,11 +56,9 @@ def get_active_session_codes(merge_upcoming=False):
                                     
                                     if adjourn_event:
                                         adjourn_date = datetime.strptime(adjourn_event['ActualDate'][:10], '%Y-%m-%d')
-                                        # If it hasn't adjourned yet (with 1 day buffer), it's active/upcoming
                                         if current_date <= adjourn_date + timedelta(days=1):
                                             active_sessions.append(s)
                                     else:
-                                        # No adjourn date yet, check if it's this year or future
                                         if convene_date.year >= current_year:
                                             active_sessions.append(s)
                                 except:
@@ -76,13 +70,10 @@ def get_active_session_codes(merge_upcoming=False):
     except Exception as e:
         st.error(f"Auto-Router Failed: {e}")
 
-    # Format the payload and add the "Is_Special" flag
     formatted_sessions = []
     for s in active_sessions:
         blob_code = str(s['SessionCode'])
         display_name = s.get('DisplayName', f"Session {blob_code}")
-        
-        # Tag it so the UI knows to append [Special] to the bills
         is_special = "Special" in display_name or s.get('IsDefault') is False
         
         formatted_sessions.append({
@@ -93,7 +84,6 @@ def get_active_session_codes(merge_upcoming=False):
             "is_special": is_special
         })
 
-    # Absolute worst-case fallback
     if not formatted_sessions:
         current_year = str(datetime.now().year)
         formatted_sessions = [{"blob": f"{current_year}1", "api": f"{current_year[2:]}1", "name": f"{current_year} Regular Session", "events": [], "is_special": False}]
@@ -102,21 +92,13 @@ def get_active_session_codes(merge_upcoming=False):
 
 # --- UI Toggles for Sidebar ---
 st.sidebar.header("⚙️ System Controls")
-bypass_filter = st.sidebar.checkbox("⚠️ Bypass Portfolio (Load All Data)", value=False)
 merge_sessions_toggle = st.sidebar.toggle("🌉 Merge Upcoming Transition Sessions", value=False, help="Enable this during the window between a Regular Session ending and a Special Session beginning to view both calendars simultaneously.")
 
 session_context_list = get_active_session_codes(merge_upcoming=merge_sessions_toggle)
 
-st.sidebar.success(f"📡 **Active Connections ({len(session_context_list)}):**")
-for s in session_context_list:
-    st.sidebar.caption(f"**{s['name']}**\nKeys: `{s['blob']}` / `{s['api']}`")
-
-st.sidebar.header("🎯 Tracked Portfolio")
-portfolio_input = st.sidebar.text_area(
-    "Enter bills to track (comma separated):", 
-    value="HB10, HB863, SB4, HB1204, HB500"
-)
-TRACKED_BILLS = [b.strip().upper().replace(" ", "") for b in portfolio_input.split(",") if b.strip()]
+# Hardcoded for test environment viewing
+bypass_filter = True 
+TRACKED_BILLS = ["HB10", "HB863", "SB4", "HB1204", "HB500"]
 
 TODAY = datetime(2026, 3, 20)
 past_start = TODAY - timedelta(days=7)
@@ -195,7 +177,6 @@ def process_data(payload, bypass):
         
         df_past['CleanBill'] = df_past[bill_col].astype(str).str.replace(' ', '').str.upper()
         
-        # --- THE SPECIAL SESSION TAGGER ---
         if 'Is_Special' in df_past.columns:
             df_past.loc[df_past['Is_Special'] == True, 'CleanBill'] = df_past['CleanBill'] + " [Special]"
             
@@ -208,7 +189,6 @@ def process_data(payload, bypass):
         df_past = df_past[df_past[desc_col].str.contains(pattern, case=False, na=False)]
 
         if not bypass:
-            # Clean split to ensure tracked bills match even if they have [Special] attached
             df_past = df_past[df_past['CleanBill'].str.split(' ').str[0].isin(TRACKED_BILLS)]
         else:
             df_past = df_past.tail(150)
@@ -228,6 +208,13 @@ def process_data(payload, bypass):
             
             committee_name = committee_name.split('(')[0].split(' with ')[0].strip()
             committee_name = committee_name.title() if committee_name else "Floor Action"
+            
+            # --- HOUSE VS SENATE FLOOR SPLIT ---
+            if committee_name == "Floor Action":
+                if str(row['CleanBill']).startswith('H'):
+                    committee_name = "House Floor"
+                elif str(row['CleanBill']).startswith('S'):
+                    committee_name = "Senate Floor"
 
             processed_events.append({
                 "Date": row['ParsedDate'].strftime('%Y-%m-%d'), 
@@ -247,7 +234,6 @@ def process_data(payload, bypass):
         
         df_future['CleanBill'] = df_future[bill_col].astype(str).str.replace(' ', '').str.upper()
         
-        # --- THE SPECIAL SESSION TAGGER ---
         if 'Is_Special' in df_future.columns:
             df_future.loc[df_future['Is_Special'] == True, 'CleanBill'] = df_future['CleanBill'] + " [Special]"
         
@@ -267,23 +253,27 @@ def process_data(payload, bypass):
                 "IsFuture": True
             })
 
-    # --- THE CAUCUS & FLOOR BYPASS ---
+    # --- THE CAUCUS & FLOOR BYPASS (WITH TIME FIX) ---
     if not df_sched.empty:
         for _, row in df_sched.iterrows():
-            owner = str(row.get('OwnerName', '')).lower()
-            desc = str(row.get('ScheduleDesc', '')).lower()
+            owner = str(row.get('OwnerName', '')).strip()
+            desc = str(row.get('ScheduleDesc', '')).strip()
             
-            # Keywords that trigger a "Schedule-Centric" override
-            if any(k in owner for k in ["caucus", "session", "floor"]) or "session" in desc:
+            if any(k in owner.lower() for k in ["caucus", "session", "floor"]) or "session" in desc.lower():
                 sched_date = pd.to_datetime(row.get('ScheduleDate', '1970-01-01'), errors='coerce')
+                
+                # Time Fix: If ScheduleTime is blank, use the description. Otherwise default to TBD.
+                time_val = str(row.get('ScheduleTime', '')).strip()
+                if not time_val or time_val.lower() in ['nan', 'none']:
+                    time_val = desc if desc else "Time TBA"
                 
                 processed_events.append({
                     "Date": sched_date.strftime('%Y-%m-%d'), 
-                    "Time": row.get('ScheduleTime', 'TBD'), 
-                    "Committee": row.get('OwnerName', 'General Assembly'), 
-                    "Bill": "🏛️ CHAMBER EVENT", 
-                    "Outcome": row.get('ScheduleDesc', 'Mandatory Attendance'), 
-                    "AgendaOrder": -1, # Forces it to the very top of the UI card
+                    "Time": time_val, 
+                    "Committee": "🏛️ CHAMBER EVENT", 
+                    "Bill": owner if owner else "General Assembly", 
+                    "Outcome": desc if desc else "Mandatory Attendance", 
+                    "AgendaOrder": -1, 
                     "IsFuture": sched_date >= pd.to_datetime(TODAY.strftime('%Y-%m-%d'))
                 })
 
@@ -301,51 +291,50 @@ def process_data(payload, bypass):
     return master_df
 
 # ==========================================
-# 4. UI RENDERING
+# 4. UI RENDERING (Automated)
 # ==========================================
-if st.sidebar.button("🚀 Fetch & Render Calendar"):
-    raw_payload = fetch_live_data(session_context_list)
-    
-    for flag in raw_payload["status_flags"]:
-        st.warning(f"🏛️ **Notice:** {flag} Expect limited dockets for that session.")
-        
-    final_df = process_data(raw_payload, bypass_filter)
-    
-    if final_df.empty:
-        st.info("No actionable events found for your portfolio in the current timeframe.")
-        st.stop()
-        
-    final_df['DateTime_Sort'] = pd.to_datetime(final_df['Date'] + ' ' + final_df['Time'].replace('Ledger', '11:59 PM').replace('TBD', '11:59 PM'), errors='coerce')
+raw_payload = fetch_live_data(session_context_list)
 
-    def render_kanban_week(start_date, end_date, data, is_future_tab=False):
-        days = [(start_date + timedelta(days=i)) for i in range(7)]
-        cols = st.columns(7)
-        
-        for i, current_day in enumerate(days):
-            date_str = current_day.strftime('%Y-%m-%d')
-            with cols[i]:
-                st.markdown(f"**{current_day.strftime('%a, %b %d')}**")
-                st.markdown("---")
-                
-                day_events = data[data['Date'] == date_str]
-                day_events = day_events[day_events['IsFuture'] == is_future_tab]
-                
-                if day_events.empty:
-                    st.info("No meetings.")
-                else:
-                    day_events = day_events.sort_values(by='DateTime_Sort')
-                    for (committee, time_str), group_df in day_events.groupby(['Committee', 'Time'], sort=False):
-                        with st.container(border=True):
-                            st.markdown(f"🏛️ **{committee}**\n🕰️ *{time_str}*")
-                            st.markdown("---")
-                            if is_future_tab: group_df = group_df.sort_values(by='AgendaOrder')
-                            for _, row in group_df.iterrows():
-                                st.markdown(f"**{row['Bill']}**")
-                                if is_future_tab and row['AgendaOrder'] != -1: 
-                                    st.caption(f"📑 *Item #{int(row['AgendaOrder'])}*")
-                                else: 
-                                    st.caption(f"🔹 *{row['Outcome']}*")
+for flag in raw_payload["status_flags"]:
+    st.warning(f"🏛️ **Notice:** {flag} Expect limited dockets for that session.")
+    
+final_df = process_data(raw_payload, bypass_filter)
 
-    tab_past, tab_future = st.tabs(["⏪ Past Week", "⏩ Future Week"])
-    with tab_past: render_kanban_week(past_start, TODAY - timedelta(days=1), final_df, False)
-    with tab_future: render_kanban_week(TODAY, future_end, final_df, True)
+if final_df.empty:
+    st.info("No actionable events found for your portfolio in the current timeframe.")
+    st.stop()
+    
+final_df['DateTime_Sort'] = pd.to_datetime(final_df['Date'] + ' ' + final_df['Time'].replace('Ledger', '11:59 PM').replace('TBD', '11:59 PM'), errors='coerce')
+
+def render_kanban_week(start_date, end_date, data, is_future_tab=False):
+    days = [(start_date + timedelta(days=i)) for i in range(7)]
+    cols = st.columns(7)
+    
+    for i, current_day in enumerate(days):
+        date_str = current_day.strftime('%Y-%m-%d')
+        with cols[i]:
+            st.markdown(f"**{current_day.strftime('%a, %b %d')}**")
+            st.markdown("---")
+            
+            day_events = data[data['Date'] == date_str]
+            day_events = day_events[day_events['IsFuture'] == is_future_tab]
+            
+            if day_events.empty:
+                st.info("No meetings.")
+            else:
+                day_events = day_events.sort_values(by='DateTime_Sort')
+                for (committee, time_str), group_df in day_events.groupby(['Committee', 'Time'], sort=False):
+                    with st.container(border=True):
+                        st.markdown(f"**{committee}**\n🕰️ *{time_str}*")
+                        st.markdown("---")
+                        if is_future_tab: group_df = group_df.sort_values(by='AgendaOrder')
+                        for _, row in group_df.iterrows():
+                            st.markdown(f"**{row['Bill']}**")
+                            if is_future_tab and row['AgendaOrder'] != -1: 
+                                st.caption(f"📑 *Item #{int(row['AgendaOrder'])}*")
+                            else: 
+                                st.caption(f"🔹 *{row['Outcome']}*")
+
+tab_past, tab_future = st.tabs(["⏪ Past Week", "⏩ Future Week"])
+with tab_past: render_kanban_week(past_start, TODAY - timedelta(days=1), final_df, False)
+with tab_future: render_kanban_week(TODAY, future_end, final_df, True)
