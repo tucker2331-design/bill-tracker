@@ -5,9 +5,9 @@ from datetime import datetime, timedelta
 import io
 import re
 
-st.set_page_config(page_title="Legislative Calendar (Full Mirror Test)", layout="wide")
+st.set_page_config(page_title="Legislative Calendar (Enterprise Mirror)", layout="wide")
 st.title("📅 Enterprise Calendar: Full Mirror Test")
-st.markdown("Testing the 'Rosetta Reverse-Lookup' and hunting API Time keys.")
+st.markdown("Testing precise JSON key targeting for Cancellations, Subcommittees, and Dynamic Times.")
 
 API_KEY = "81D70A54-FCDC-4023-A00B-A3FD114D5984"
 HEADERS = {"WebAPIKey": API_KEY, "Accept": "application/json"}
@@ -79,12 +79,11 @@ past_week_1_start = TODAY - timedelta(days=7)
 future_end = TODAY + timedelta(days=7)
 
 # ==========================================
-# 2. THE EXTRACTOR
+# 2. THE EXTRACTOR (Enterprise Reverse-Lookup)
 # ==========================================
 @st.cache_data(ttl=600)
 def build_master_calendar(sessions, tracked_bills, bypass):
     master_events = []
-    raw_schedules_dump = [] # For debugging
     
     def safe_fetch_csv(url):
         try:
@@ -95,7 +94,7 @@ def build_master_calendar(sessions, tracked_bills, bypass):
         except: pass
         return pd.DataFrame()
 
-    with st.spinner("📥 Reverse-Mapping CSV Ledgers to API Schedules..."):
+    with st.spinner("📥 Synchronizing JSON Data Keys..."):
         for session in sessions:
             api_code = session["api"]
             blob_code = session["blob"]
@@ -120,8 +119,6 @@ def build_master_calendar(sessions, tracked_bills, bypass):
                     schedules = sched_res.json()
                     if isinstance(schedules, dict): schedules = schedules.get('Schedules', [])
                     
-                    raw_schedules_dump.extend(schedules) # Save for sidebar inspector
-                    
                     for meeting in schedules:
                         meeting_date = pd.to_datetime(meeting.get('ScheduleDate', '1970-01-01'), errors='coerce')
                         date_str = meeting_date.strftime('%Y-%m-%d')
@@ -129,31 +126,50 @@ def build_master_calendar(sessions, tracked_bills, bypass):
                         chamber = meeting.get('ChamberCode')
                         if not chamber: chamber = 'S' if 'Senate' in owner_name else 'H'
                         
-                        desc = str(meeting.get('ScheduleDesc', '')).strip()
-                        time_val = str(meeting.get('ScheduleTime', '')).strip()
-                        if not time_val: time_val = desc if desc else "Time TBA"
+                        # Fix 1: True Boolean Cancellation Check
+                        is_cancelled = meeting.get('IsCancelled', False)
+                        status = "CANCELLED" if is_cancelled else ""
                         
-                        # SURGICAL FIX: Only look for cancellation in the description or remarks
-                        remarks = str(meeting.get('Remarks', '')).strip()
-                        status = "CANCELLED" if "cancel" in desc.lower() or "cancel" in remarks.lower() else ""
+                        # Fix 2: Dynamic Time Extraction
+                        raw_time = str(meeting.get('ScheduleTime', '')).strip()
+                        raw_desc = str(meeting.get('Description', meeting.get('ScheduleDesc', ''))).strip()
+                        clean_desc = re.sub(r'<[^>]+>', '', raw_desc).strip() # Strip HTML tags
+                        
+                        time_val = raw_time
+                        dynamic_markers = ["upon adjournment", "minutes after", "to be determined", "tba"]
+                        
+                        if any(marker in clean_desc.lower() for marker in dynamic_markers):
+                            parts = clean_desc.split(';')
+                            for part in parts:
+                                if any(marker in part.lower() for marker in dynamic_markers):
+                                    time_val = part.strip()
+                                    break
+                        if not time_val: time_val = "Time TBA"
                         
                         api_schedule_map[f"{date_str}_{owner_name}"] = {"Time": time_val, "Status": status}
                         
+                        # Caucuses & Sessions bypass
                         if any(k in owner_name.lower() for k in ["caucus", "session", "floor", "convenes", "adjourned"]):
                             master_events.append({
                                 "Date": date_str, "Time": time_val, "Status": status,
                                 "Committee": owner_name if owner_name else "Chamber Event",
-                                "Bill": "📌 " + (desc if desc else "Mandatory Attendance"),
+                                "Bill": "📌 " + clean_desc,
                                 "Outcome": "", "AgendaOrder": -1,
                                 "IsFuture": meeting_date >= pd.to_datetime(TODAY.strftime('%Y-%m-%d')), "Source": "API"
                             })
                             continue
                         
-                        committee_id = meeting.get('CommitteeCode') 
-                        if not committee_id: committee_id = rosetta_stone.get(owner_name)
+                        # Fix 3: Subcommittee Bridge
+                        committee_id = meeting.get('CommitteeNumber', meeting.get('CommitteeCode'))
+                        if not committee_id:
+                            committee_id = rosetta_stone.get(owner_name)
+                            # If direct match fails, split the hyphen for subcommittees
+                            if not committee_id and "-" in owner_name:
+                                parent_name = owner_name.split('-')[0].strip()
+                                committee_id = rosetta_stone.get(parent_name)
                             
                         has_docket_bills = False
-                        if committee_id and status != "CANCELLED":
+                        if committee_id and not is_cancelled:
                             doc_res = requests.get("https://lis.virginia.gov/Committee/api/getdocketlistasync", headers=HEADERS, params={"sessionCode": api_code, "chamberCode": chamber, "committeeID": committee_id}, timeout=5)
                             if doc_res.status_code == 200 and doc_res.json():
                                 agendas = doc_res.json()
@@ -179,7 +195,7 @@ def build_master_calendar(sessions, tracked_bills, bypass):
                             })
             except Exception as e: print(f"Schedule extraction failed: {e}")
 
-            # --- 3. CSV Stitching ---
+            # --- 3. CSV Stitching (Historical Fallback) ---
             df_past = safe_fetch_csv(f"https://lis.blob.core.windows.net/lisfiles/{blob_code}/HISTORY.CSV")
             if not df_past.empty:
                 bill_col = next((c for c in df_past.columns if 'bill' in c.lower()), 'BillNumber')
@@ -241,22 +257,12 @@ def build_master_calendar(sessions, tracked_bills, bypass):
         final_df = final_df.sort_values(by=['Date', 'Committee', 'Bill', 'Source'])
         final_df = final_df.drop_duplicates(subset=['Date', 'Committee', 'Bill'], keep='first')
         
-    return final_df, raw_schedules_dump
+    return final_df
 
 # ==========================================
-# 3. UI RENDERING & INSPECTOR
+# 3. UI RENDERING 
 # ==========================================
-final_df, raw_schedules = build_master_calendar(session_context_list, TRACKED_BILLS, bypass_filter)
-
-# --- DEBUGGER SIDEBAR ---
-st.sidebar.header("🛠️ Raw Data Inspector")
-if st.sidebar.checkbox("Show Raw Schedule API JSON"):
-    if raw_schedules:
-        st.sidebar.write("Inspect keys like `ScheduleTime` and `MeetingStatus` to see exactly what the API is sending us:")
-        # Show first 25 records to prevent browser lag, but give enough to hunt
-        st.sidebar.json(raw_schedules[:25])
-    else:
-        st.sidebar.warning("No API schedule data found for this period.")
+final_df = build_master_calendar(session_context_list, TRACKED_BILLS, bypass_filter)
 
 if final_df.empty:
     st.info("No actionable events found in the current timeframe.")
