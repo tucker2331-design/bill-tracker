@@ -5,9 +5,9 @@ from datetime import datetime, timedelta
 import io
 import re
 
-st.set_page_config(page_title="Legislative Calendar (Pure API Sandbox)", layout="wide")
-st.title("📅 Enterprise Calendar: Pure API Sandbox")
-st.markdown("Testing the Rosetta Stone ID Bridge for flawless Senate & House Agenda extraction.")
+st.set_page_config(page_title="Legislative Calendar (Full Mirror Test)", layout="wide")
+st.title("📅 Enterprise Calendar: Full Mirror Test")
+st.markdown("Loading 100% of session data to verify against the Virginia LIS webpage.")
 
 API_KEY = "81D70A54-FCDC-4023-A00B-A3FD114D5984"
 HEADERS = {"WebAPIKey": API_KEY, "Accept": "application/json"}
@@ -17,7 +17,6 @@ HEADERS = {"WebAPIKey": API_KEY, "Accept": "application/json"}
 # ==========================================
 @st.cache_data(ttl=3600)
 def get_active_session_codes(merge_upcoming=False):
-    """Dynamically routes sessions based on actual Convene/Adjourn timestamps."""
     url = "https://lis.virginia.gov/Session/api/getsessionlistasync"
     active_sessions = []
     
@@ -77,7 +76,7 @@ def get_active_session_codes(merge_upcoming=False):
 # --- UI Controls ---
 st.sidebar.header("⚙️ System Controls")
 merge_sessions_toggle = st.sidebar.toggle("🌉 Merge Upcoming Transition Sessions", value=False)
-bypass_filter = st.sidebar.toggle("⚠️ Bypass Portfolio (Load All Data)", value=True) 
+bypass_filter = st.sidebar.toggle("⚠️ Bypass Portfolio (Load All Data)", value=True, help="Turn ON to mirror the entire LIS database.") 
 
 session_context_list = get_active_session_codes(merge_upcoming=merge_sessions_toggle)
 TRACKED_BILLS = ["HB10", "HB863", "SB4", "HB1204", "HB500"]
@@ -103,7 +102,7 @@ def build_master_calendar(sessions, tracked_bills, bypass):
         except: pass
         return pd.DataFrame()
 
-    with st.spinner("📥 Syncing Live Enterprise APIs (Building Rosetta Stone)..."):
+    with st.spinner("📥 Syncing Live Enterprise APIs (Unrestricted Mode)..."):
         for session in sessions:
             api_code = session["api"]
             blob_code = session["blob"]
@@ -160,19 +159,30 @@ def build_master_calendar(sessions, tracked_bills, bypass):
                             
                             if doc_res.status_code == 200:
                                 agendas = doc_res.json()
-                                for item in agendas:
-                                    bill_num = str(item.get('LegislationNumber', '')).replace(' ', '').upper()
-                                    if is_special: bill_num += " [Special]"
-                                    
-                                    if bypass or bill_num.split(' ')[0] in tracked_bills:
-                                        master_events.append({
-                                            "Date": meeting_date.strftime('%Y-%m-%d'), "Time": time_val,
-                                            "Committee": owner_name, "Bill": bill_num,
-                                            "Outcome": item.get('Description', 'Pending Hearing'),
-                                            "AgendaOrder": item.get('Sequence', 0),
-                                            "IsFuture": meeting_date >= pd.to_datetime(TODAY.strftime('%Y-%m-%d')),
-                                            "Source": "API"
-                                        })
+                                
+                                # FIX: If committee is scheduled but has no bills, show it anyway
+                                if not agendas:
+                                    master_events.append({
+                                        "Date": meeting_date.strftime('%Y-%m-%d'), "Time": time_val,
+                                        "Committee": owner_name, "Bill": "📌 No bills currently on docket",
+                                        "Outcome": "", "AgendaOrder": -1,
+                                        "IsFuture": meeting_date >= pd.to_datetime(TODAY.strftime('%Y-%m-%d')),
+                                        "Source": "API"
+                                    })
+                                else:
+                                    for item in agendas:
+                                        bill_num = str(item.get('LegislationNumber', '')).replace(' ', '').upper()
+                                        if is_special: bill_num += " [Special]"
+                                        
+                                        if bypass or bill_num.split(' ')[0] in tracked_bills:
+                                            master_events.append({
+                                                "Date": meeting_date.strftime('%Y-%m-%d'), "Time": time_val,
+                                                "Committee": owner_name, "Bill": bill_num,
+                                                "Outcome": item.get('Description', 'Pending Hearing'),
+                                                "AgendaOrder": item.get('Sequence', 0),
+                                                "IsFuture": meeting_date >= pd.to_datetime(TODAY.strftime('%Y-%m-%d')),
+                                                "Source": "API"
+                                            })
             except Exception as e:
                 print(f"Schedule extraction failed: {e}")
 
@@ -194,7 +204,6 @@ def build_master_calendar(sessions, tracked_bills, bypass):
                 df_past = df_past[df_past[desc_col].str.contains(pattern, case=False, na=False)]
                 
                 if not bypass: df_past = df_past[df_past['CleanBill'].str.split(' ').str[0].isin(tracked_bills)]
-                else: df_past = df_past.tail(150)
                 
                 for _, row in df_past.iterrows():
                     outcome_text = str(row[desc_col])
@@ -217,10 +226,8 @@ def build_master_calendar(sessions, tracked_bills, bypass):
                     })
 
     # --- STEP 4: Deduplicate API vs CSV ---
-    # If the API already captured a meeting for a specific date/committee, drop the "Ledger" duplicates to keep the UI clean.
     final_df = pd.DataFrame(master_events)
     if not final_df.empty:
-        # Sort so API records (which have exact times) are prioritized over CSV "Ledger" records
         final_df = final_df.sort_values(by=['Date', 'Committee', 'Bill', 'Source'])
         final_df = final_df.drop_duplicates(subset=['Date', 'Committee', 'Bill'], keep='first')
         
@@ -232,7 +239,7 @@ def build_master_calendar(sessions, tracked_bills, bypass):
 final_df = build_master_calendar(session_context_list, TRACKED_BILLS, bypass_filter)
 
 if final_df.empty:
-    st.info("No actionable events found for your portfolio in the current timeframe.")
+    st.info("No actionable events found in the current timeframe.")
     st.stop()
     
 final_df['DateTime_Sort'] = pd.to_datetime(final_df['Date'] + ' ' + final_df['Time'].replace('Ledger', '11:59 PM').replace('TBD', '11:59 PM'), errors='coerce')
