@@ -6,8 +6,8 @@ import io
 import re
 
 st.set_page_config(page_title="Legislative Calendar (Enterprise Pipeline)", layout="wide")
-st.title("📅 Enterprise Calendar: Final Matrix Validation")
-st.markdown("Testing Strict Phrase Matching and Explicit Floor Routing.")
+st.title("📅 Enterprise Calendar: State Machine Validation")
+st.markdown("Testing Chronological State Tracking to eliminate keyword guessing.")
 
 API_KEY = "81D70A54-FCDC-4023-A00B-A3FD114D5984"
 HEADERS = {"WebAPIKey": API_KEY, "Accept": "application/json"}
@@ -48,15 +48,14 @@ st.sidebar.header("⚙️ System Controls")
 bypass_filter = st.sidebar.toggle("⚠️ Bypass Portfolio (Load All Data)", value=True) 
 TRACKED_BILLS = ["HB10", "HB863", "SB4", "HB1204", "HB500"]
 
-# 7-Day Target Window
 test_start_date = datetime(2026, 3, 4)
 test_end_date = datetime(2026, 3, 10)
 
 # ==========================================
-# 2. THE EXTRACTOR (Strict Phrase Matching)
+# 2. THE EXTRACTOR (State Machine Engine)
 # ==========================================
 @st.cache_data(ttl=600)
-def build_enterprise_calendar(tracked_bills, bypass):
+def build_state_machine_calendar(tracked_bills, bypass):
     master_events = []
     convene_times = {} 
     
@@ -70,7 +69,7 @@ def build_enterprise_calendar(tracked_bills, bypass):
         except: pass
         return pd.DataFrame()
 
-    with st.spinner("📥 Compiling Matrix with Strict Action Parsing..."):
+    with st.spinner("📥 Processing Chronological State Machine..."):
         api_code = "261"
         blob_code = "20261"
         
@@ -88,7 +87,7 @@ def build_enterprise_calendar(tracked_bills, bypass):
                             com_des = str(c.get('ComDes', '')).strip().lower()
                             if com_des and len(com_des) > 3 and com_des not in ["house", "senate", "floor"]:
                                 if official_name not in rosetta_stone: rosetta_stone[official_name] = [com_des]
-        except Exception as e: print(f"API Dictionary unreachable. Using Lexicon. Error: {e}")
+        except Exception as e: print(f"API Dictionary unreachable.")
 
         api_schedule_map = {} 
         try:
@@ -145,8 +144,9 @@ def build_enterprise_calendar(tracked_bills, bypass):
                         "Committee": owner_name, "Bill": "📌 No live docket",
                         "Outcome": "", "AgendaOrder": -1, "Source": "API_Skeleton"
                     })
-        except Exception as e: print(f"Schedule extraction failed: {e}")
+        except Exception as e: print(f"Schedule extraction failed.")
 
+        # --- 3. CSV Stitching (The State Machine) ---
         df_past = safe_fetch_csv(f"https://lis.blob.core.windows.net/lisfiles/{blob_code}/HISTORY.CSV")
         if not df_past.empty:
             bill_col = next((c for c in df_past.columns if 'bill' in c.lower()), 'BillNumber')
@@ -156,92 +156,85 @@ def build_enterprise_calendar(tracked_bills, bypass):
             df_past['CleanBill'] = df_past[bill_col].astype(str).str.replace(' ', '').str.upper()
             df_past['ParsedDate'] = pd.to_datetime(df_past[date_col], errors='coerce')
             
-            mask = (df_past['ParsedDate'] >= test_start_date) & (df_past['ParsedDate'] <= test_end_date)
-            df_past = df_past[mask]
-            
-            # Action Filter
-            pattern = '|'.join(['report', 'continue', 'pass', 'fail', 'incorporate', 'hearing', 'strike', 'stricken', 'veto', 'sign', 'agreed', 'read', 'refer', 'waive', 'recommend', 'receive', 'release'])
-            df_past = df_past[df_past[desc_col].str.contains(pattern, case=False, na=False)]
-            
             if not bypass: df_past = df_past[df_past['CleanBill'].str.split(' ').str[0].isin(tracked_bills)]
             
-            # ==================================================
-            # STRICT ENTERPRISE PARSING PROTOCOL
-            # ==================================================
+            # MUST sort chronologically from the very beginning of the session to build the state
+            df_past = df_past.sort_values(by=['ParsedDate'])
             
-            # 1. Exact Phrase Floor Triggers (NO loose words)
-            explicit_floor_phrases = [
-                "read first time", "read second time", "read third time",
-                "passed house", "passed senate", "engrossed by", "enrolled",
-                "signed by", "rules suspended", "reading dispensed", "reading of substitute waived",
-                "governor's recommendation", "conference report",
-                "amendments agreed to", "substitute agreed to", "substitute rejected",
-                "acceded to request", "concurred in", "conferees appointed"
-            ]
+            # The running memory of where every bill currently lives
+            bill_locations = {}
 
             for _, row in df_past.iterrows():
+                bill_num = row['CleanBill']
                 outcome_text = str(row[desc_col]).strip()
                 outcome_lower = outcome_text.lower()
-                date_str = row['ParsedDate'].strftime('%Y-%m-%d')
+                date_val = row['ParsedDate']
+                date_str = date_val.strftime('%Y-%m-%d')
                 
+                # Determine Active Chamber
                 if outcome_text.startswith('H '): chamber_prefix = "House "
                 elif outcome_text.startswith('S '): chamber_prefix = "Senate "
-                else: chamber_prefix = "House " if str(row['CleanBill']).startswith('H') else "Senate "
+                else: chamber_prefix = "House " if bill_num.startswith('H') else "Senate "
                 
-                committee_name = None
-                
-                # TIER 1: Committee Mapping (Lexicon check FIRST)
-                procedural_verbs = ["reported", "referred", "assigned", "continued", "passed by indefinitely", "passed by in"]
-                if any(verb in outcome_lower for verb in procedural_verbs):
-                    matched_key = None
-                    for lex_key, lex_aliases in rosetta_stone.items():
-                        if lex_key.startswith(chamber_prefix):
-                            for alias in lex_aliases:
-                                if alias and alias in outcome_lower:
-                                    matched_key = lex_key
-                                    break
-                        if matched_key: break
-                    if matched_key:
-                        committee_name = matched_key
+                # Initialize bill state if we've never seen it
+                if bill_num not in bill_locations:
+                    bill_locations[bill_num] = chamber_prefix + "Floor"
 
-                # TIER 2: Explicit Floor/Chamber Actions
-                if not committee_name:
-                    if any(phrase in outcome_lower for phrase in explicit_floor_phrases):
-                        committee_name = chamber_prefix + "Floor"
+                # Update the State based ONLY on strict routing verbs
+                if "referred to" in outcome_lower or "assigned to" in outcome_lower:
+                    for lex_key, aliases in rosetta_stone.items():
+                        if lex_key.startswith(chamber_prefix) and any(a in outcome_lower for a in aliases if a):
+                            bill_locations[bill_num] = lex_key
+                            break
+                            
+                elif "reported from" in outcome_lower or "discharged from" in outcome_lower:
+                    # Check if it was immediately re-referred in the same sentence
+                    referred_elsewhere = False
+                    if "referred to" in outcome_lower:
+                        for lex_key, aliases in rosetta_stone.items():
+                            if lex_key.startswith(chamber_prefix) and any(a in outcome_lower for a in aliases if a):
+                                bill_locations[bill_num] = lex_key
+                                referred_elsewhere = True
+                                break
+                    if not referred_elsewhere:
+                        bill_locations[bill_num] = chamber_prefix + "Floor"
 
-                # TIER 3: Unmapped Subcommittees (Preventing Floor Bleed)
-                if not committee_name and "subcommittee recommends" in outcome_lower:
-                    committee_name = f"⚠️ [Unmapped Subcommittee] {chamber_prefix}Ledger"
-                
-                # TIER 4: Absolute Orphan (Safety Net)
-                if not committee_name:
-                    committee_name = f"⚠️ [Orphan] {chamber_prefix}Ledger"
+                # Capture the current location for this specific action
+                current_committee = bill_locations[bill_num]
 
-                time_val = "Ledger"
-                status = ""
-                
-                api_key = f"{date_str}_{committee_name}"
-                if api_key in api_schedule_map:
-                    time_val = api_schedule_map[api_key]["Time"]
-                    status = api_schedule_map[api_key]["Status"]
-                
-                # Floor Anchor Hijack
-                if committee_name == "House Floor":
-                    anchor = convene_times.get(date_str, {}).get("House")
-                    if anchor:
-                        time_val = anchor["Time"]
-                        committee_name = anchor["Name"] 
-                elif committee_name == "Senate Floor":
-                    anchor = convene_times.get(date_str, {}).get("Senate")
-                    if anchor:
-                        time_val = anchor["Time"]
-                        committee_name = anchor["Name"] 
+                # ONLY add the event to the UI if it falls in our requested time window
+                if test_start_date <= date_val <= test_end_date:
                     
-                master_events.append({
-                    "Date": date_str, "Time": time_val, "Status": status,
-                    "Committee": committee_name, "Bill": row['CleanBill'],
-                    "Outcome": outcome_text, "AgendaOrder": 999, "Source": "CSV"
-                })
+                    # Filter out minor administrative noise if desired, but capture all major actions
+                    noise_words = ["impact statement", "substitute printed", "laid on speaker's table", "laid on clerk's desk"]
+                    if any(n in outcome_lower for n in noise_words): continue
+                    
+                    time_val = "Ledger"
+                    status = ""
+                    
+                    # Align with API API_Schedule
+                    api_key = f"{date_str}_{current_committee}"
+                    if api_key in api_schedule_map:
+                        time_val = api_schedule_map[api_key]["Time"]
+                        status = api_schedule_map[api_key]["Status"]
+                    
+                    # Time-Anchor Merging for Floor items
+                    if current_committee == "House Floor":
+                        anchor = convene_times.get(date_str, {}).get("House")
+                        if anchor:
+                            time_val = anchor["Time"]
+                            current_committee = anchor["Name"] 
+                    elif current_committee == "Senate Floor":
+                        anchor = convene_times.get(date_str, {}).get("Senate")
+                        if anchor:
+                            time_val = anchor["Time"]
+                            current_committee = anchor["Name"] 
+                        
+                    master_events.append({
+                        "Date": date_str, "Time": time_val, "Status": status,
+                        "Committee": current_committee, "Bill": bill_num,
+                        "Outcome": outcome_text, "AgendaOrder": 999, "Source": "CSV"
+                    })
 
     final_df = pd.DataFrame(master_events)
     if not final_df.empty:
@@ -255,8 +248,7 @@ def build_enterprise_calendar(tracked_bills, bypass):
 # ==========================================
 # 3. UI RENDERING 
 # ==========================================
-# Renamed function again just to be absolutely sure the cache breaks
-final_df = build_enterprise_calendar(TRACKED_BILLS, bypass_filter)
+final_df = build_state_machine_calendar(TRACKED_BILLS, bypass_filter)
 
 if final_df.empty:
     st.info("No actionable events found in the 7-day window.")
@@ -288,10 +280,7 @@ def render_kanban_week(start_date, data):
                         if is_cancelled:
                             st.markdown(f"~~**{committee}**~~<br><span style='color:#ff4b4b; font-weight:bold;'>CANCELLED</span>", unsafe_allow_html=True)
                         else:
-                            if "⚠️" in committee:
-                                st.markdown(f"<span style='color:#ffa500; font-weight:bold;'>{committee}</span><br><span style='color:#888888; font-style:italic;'>{time_str}</span>", unsafe_allow_html=True)
-                            else:
-                                st.markdown(f"**{committee}**<br><span style='color:#888888; font-style:italic;'>{time_str}</span>", unsafe_allow_html=True)
+                            st.markdown(f"**{committee}**<br><span style='color:#888888; font-style:italic;'>{time_str}</span>", unsafe_allow_html=True)
                         
                         if not is_cancelled:
                             skeleton_items = group_df[group_df['Source'].str.startswith('API')]
@@ -299,8 +288,7 @@ def render_kanban_week(start_date, data):
                             
                             if not skeleton_items.empty:
                                 for _, s_row in skeleton_items.iterrows():
-                                    if s_row['Bill'] == "📌 No live docket" and not bill_items.empty:
-                                        continue 
+                                    if s_row['Bill'] == "📌 No live docket" and not bill_items.empty: continue 
                                     st.markdown("---")
                                     st.markdown(f"*{s_row['Bill']}*")
                                     
