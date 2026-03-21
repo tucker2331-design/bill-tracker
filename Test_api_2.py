@@ -7,7 +7,7 @@ import re
 
 st.set_page_config(page_title="Legislative Calendar (Enterprise Pipeline)", layout="wide")
 st.title("📅 Enterprise Calendar: State Machine Validation")
-st.markdown("Testing Chronological State Tracking to eliminate keyword guessing.")
+st.markdown("Testing Chronological State Tracking with strict Present/Future decoupling.")
 
 API_KEY = "81D70A54-FCDC-4023-A00B-A3FD114D5984"
 HEADERS = {"WebAPIKey": API_KEY, "Accept": "application/json"}
@@ -52,7 +52,7 @@ test_start_date = datetime(2026, 3, 4)
 test_end_date = datetime(2026, 3, 10)
 
 # ==========================================
-# 2. THE EXTRACTOR (State Machine Engine)
+# 2. THE EXTRACTOR (Decoupled State Machine)
 # ==========================================
 @st.cache_data(ttl=600)
 def build_state_machine_calendar(tracked_bills, bypass):
@@ -69,7 +69,7 @@ def build_state_machine_calendar(tracked_bills, bypass):
         except: pass
         return pd.DataFrame()
 
-    with st.spinner("📥 Processing Chronological State Machine..."):
+    with st.spinner("📥 Processing Decoupled State Machine..."):
         api_code = "261"
         blob_code = "20261"
         
@@ -146,7 +146,7 @@ def build_state_machine_calendar(tracked_bills, bypass):
                     })
         except Exception as e: print(f"Schedule extraction failed.")
 
-        # --- 3. CSV Stitching (The State Machine) ---
+        # --- 3. CSV Stitching ---
         df_past = safe_fetch_csv(f"https://lis.blob.core.windows.net/lisfiles/{blob_code}/HISTORY.CSV")
         if not df_past.empty:
             bill_col = next((c for c in df_past.columns if 'bill' in c.lower()), 'BillNumber')
@@ -158,10 +158,7 @@ def build_state_machine_calendar(tracked_bills, bypass):
             
             if not bypass: df_past = df_past[df_past['CleanBill'].str.split(' ').str[0].isin(tracked_bills)]
             
-            # MUST sort chronologically from the very beginning of the session to build the state
             df_past = df_past.sort_values(by=['ParsedDate'])
-            
-            # The running memory of where every bill currently lives
             bill_locations = {}
 
             for _, row in df_past.iterrows():
@@ -171,68 +168,83 @@ def build_state_machine_calendar(tracked_bills, bypass):
                 date_val = row['ParsedDate']
                 date_str = date_val.strftime('%Y-%m-%d')
                 
-                # Determine Active Chamber
                 if outcome_text.startswith('H '): chamber_prefix = "House "
                 elif outcome_text.startswith('S '): chamber_prefix = "Senate "
                 else: chamber_prefix = "House " if bill_num.startswith('H') else "Senate "
                 
-                # Initialize bill state if we've never seen it
                 if bill_num not in bill_locations:
                     bill_locations[bill_num] = chamber_prefix + "Floor"
 
-                # Update the State based ONLY on strict routing verbs
+                # ==================================================
+                # STEP A: DETERMINE EVENT LOCATION (Present Action)
+                # ==================================================
+                event_location = bill_locations[bill_num] 
+                
+                matched_committee = None
+                for lex_key, aliases in rosetta_stone.items():
+                    if lex_key.startswith(chamber_prefix) and any(a in outcome_lower for a in aliases if a):
+                        matched_committee = lex_key
+                        break
+                        
+                committee_verbs = ["reported", "referred", "assigned", "continued", "passed by indefinitely", "passed by in", "recommend", "incorporate", "failed to", "stricken"]
+                if matched_committee and any(v in outcome_lower for v in committee_verbs):
+                    event_location = matched_committee
+
+                explicit_floor_phrases = [
+                    "read first", "read second", "read third",
+                    "passed house", "passed senate", "engrossed", "enrolled",
+                    "signed by", "rules suspended", "reading dispensed", "substitute waived",
+                    "recommendation received", "conference report",
+                    "amendment agreed", "amendments agreed", "substitute agreed", "substitute rejected",
+                    "acceded to", "concurred in", "conferees appointed",
+                    "passed by for the day", "agreed to by", "received", "taken up for",
+                    "amendment rejected", "substitute defeated"
+                ]
+                if any(phrase in outcome_lower for phrase in explicit_floor_phrases):
+                    event_location = chamber_prefix + "Floor"
+                    
+                if "subcommittee recommends" in outcome_lower and not matched_committee:
+                    event_location = f"⚠️ [Unmapped Subcommittee] {chamber_prefix}Ledger"
+
+                # ==================================================
+                # STEP B: UPDATE STATE MEMORY (Future Actions)
+                # ==================================================
                 if "referred to" in outcome_lower or "assigned to" in outcome_lower:
-                    for lex_key, aliases in rosetta_stone.items():
-                        if lex_key.startswith(chamber_prefix) and any(a in outcome_lower for a in aliases if a):
-                            bill_locations[bill_num] = lex_key
-                            break
-                            
+                    if matched_committee:
+                        bill_locations[bill_num] = matched_committee
                 elif "reported from" in outcome_lower or "discharged from" in outcome_lower:
-                    # Check if it was immediately re-referred in the same sentence
-                    referred_elsewhere = False
-                    if "referred to" in outcome_lower:
-                        for lex_key, aliases in rosetta_stone.items():
-                            if lex_key.startswith(chamber_prefix) and any(a in outcome_lower for a in aliases if a):
-                                bill_locations[bill_num] = lex_key
-                                referred_elsewhere = True
-                                break
-                    if not referred_elsewhere:
+                    if "referred to" not in outcome_lower: 
                         bill_locations[bill_num] = chamber_prefix + "Floor"
 
-                # Capture the current location for this specific action
-                current_committee = bill_locations[bill_num]
-
-                # ONLY add the event to the UI if it falls in our requested time window
+                # ==================================================
+                # STEP C: RENDER TO UI
+                # ==================================================
                 if test_start_date <= date_val <= test_end_date:
-                    
-                    # Filter out minor administrative noise if desired, but capture all major actions
                     noise_words = ["impact statement", "substitute printed", "laid on speaker's table", "laid on clerk's desk"]
                     if any(n in outcome_lower for n in noise_words): continue
                     
                     time_val = "Ledger"
                     status = ""
                     
-                    # Align with API API_Schedule
-                    api_key = f"{date_str}_{current_committee}"
+                    api_key = f"{date_str}_{event_location}"
                     if api_key in api_schedule_map:
                         time_val = api_schedule_map[api_key]["Time"]
                         status = api_schedule_map[api_key]["Status"]
                     
-                    # Time-Anchor Merging for Floor items
-                    if current_committee == "House Floor":
+                    if event_location == "House Floor":
                         anchor = convene_times.get(date_str, {}).get("House")
                         if anchor:
                             time_val = anchor["Time"]
-                            current_committee = anchor["Name"] 
-                    elif current_committee == "Senate Floor":
+                            event_location = anchor["Name"] 
+                    elif event_location == "Senate Floor":
                         anchor = convene_times.get(date_str, {}).get("Senate")
                         if anchor:
                             time_val = anchor["Time"]
-                            current_committee = anchor["Name"] 
+                            event_location = anchor["Name"] 
                         
                     master_events.append({
                         "Date": date_str, "Time": time_val, "Status": status,
-                        "Committee": current_committee, "Bill": bill_num,
+                        "Committee": event_location, "Bill": bill_num,
                         "Outcome": outcome_text, "AgendaOrder": 999, "Source": "CSV"
                     })
 
