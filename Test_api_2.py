@@ -7,7 +7,7 @@ import re
 
 st.set_page_config(page_title="Legislative Calendar (Enterprise Pipeline)", layout="wide")
 st.title("📅 Enterprise Calendar: Final Matrix Validation")
-st.markdown("Testing the Expanded Lexicon, Floor Anchoring, and UI Polish.")
+st.markdown("Testing Strict Phrase Matching and Explicit Floor Routing.")
 
 API_KEY = "81D70A54-FCDC-4023-A00B-A3FD114D5984"
 HEADERS = {"WebAPIKey": API_KEY, "Accept": "application/json"}
@@ -53,12 +53,12 @@ test_start_date = datetime(2026, 3, 4)
 test_end_date = datetime(2026, 3, 10)
 
 # ==========================================
-# 2. THE EXTRACTOR (Cache-Busted)
+# 2. THE EXTRACTOR (Strict Phrase Matching)
 # ==========================================
 @st.cache_data(ttl=600)
 def build_enterprise_calendar(tracked_bills, bypass):
     master_events = []
-    convene_times = {} # THE TIME-ANCHOR VAULT
+    convene_times = {} 
     
     def safe_fetch_csv(url):
         try:
@@ -70,31 +70,26 @@ def build_enterprise_calendar(tracked_bills, bypass):
         except: pass
         return pd.DataFrame()
 
-    with st.spinner("📥 Compiling Matrix, Merging Sessions, and Catching Orphans..."):
+    with st.spinner("📥 Compiling Matrix with Strict Action Parsing..."):
         api_code = "261"
         blob_code = "20261"
         
-        # --- 1. Hybrid Rosetta Stone ---
         rosetta_stone = LOCAL_LEXICON.copy()
         try:
             for chamber in ['H', 'S']:
                 comm_res = requests.get("https://lis.virginia.gov/Committee/api/getcommitteelistasync", headers=HEADERS, params={"sessionCode": api_code, "chamberCode": chamber}, timeout=3)
                 if comm_res.status_code == 200:
                     c_data = comm_res.json()
-                    if isinstance(c_data, dict):
-                        c_data = next((v for v in c_data.values() if isinstance(v, list)), [])
+                    if isinstance(c_data, dict): c_data = next((v for v in c_data.values() if isinstance(v, list)), [])
                     for c in c_data:
                         if isinstance(c, dict):
                             prefix = "House " if chamber == 'H' else "Senate "
                             official_name = prefix + str(c.get('ComDes', '')).strip()
                             com_des = str(c.get('ComDes', '')).strip().lower()
-                            
                             if com_des and len(com_des) > 3 and com_des not in ["house", "senate", "floor"]:
-                                if official_name not in rosetta_stone:
-                                    rosetta_stone[official_name] = [com_des]
+                                if official_name not in rosetta_stone: rosetta_stone[official_name] = [com_des]
         except Exception as e: print(f"API Dictionary unreachable. Using Lexicon. Error: {e}")
 
-        # --- 2. API Schedule Skeleton ---
         api_schedule_map = {} 
         try:
             sched_res = requests.get("https://lis.virginia.gov/Schedule/api/getschedulelistasync", headers=HEADERS, params={"sessionCode": api_code}, timeout=5)
@@ -124,7 +119,6 @@ def build_enterprise_calendar(tracked_bills, bypass):
                                 break
                     if not time_val: time_val = "Time TBA"
                     
-                    # EXTRACT CONVENE TIMES AND NAMES FOR ANCHOR MERGING
                     owner_lower = owner_name.lower()
                     if "house convenes" in owner_lower or "house chamber" in owner_lower:
                         if date_str not in convene_times: convene_times[date_str] = {}
@@ -133,7 +127,6 @@ def build_enterprise_calendar(tracked_bills, bypass):
                         if date_str not in convene_times: convene_times[date_str] = {}
                         convene_times[date_str]["Senate"] = {"Time": time_val, "Name": owner_name}
                     
-                    # THE TIME-SPLIT LOCK
                     map_key = f"{date_str}_{owner_name}"
                     if map_key not in api_schedule_map:
                         api_schedule_map[map_key] = {"Time": time_val, "Status": status}
@@ -154,7 +147,6 @@ def build_enterprise_calendar(tracked_bills, bypass):
                     })
         except Exception as e: print(f"Schedule extraction failed: {e}")
 
-        # --- 3. CSV Stitching (Inside-Out Parsing) ---
         df_past = safe_fetch_csv(f"https://lis.blob.core.windows.net/lisfiles/{blob_code}/HISTORY.CSV")
         if not df_past.empty:
             bill_col = next((c for c in df_past.columns if 'bill' in c.lower()), 'BillNumber')
@@ -167,25 +159,39 @@ def build_enterprise_calendar(tracked_bills, bypass):
             mask = (df_past['ParsedDate'] >= test_start_date) & (df_past['ParsedDate'] <= test_end_date)
             df_past = df_past[mask]
             
-            pattern = '|'.join(['report', 'continue', 'pass', 'fail', 'incorporate', 'hearing', 'strike', 'stricken', 'veto', 'sign', 'agreed', 'read', 'refer', 'waive', 'recommend'])
+            # Action Filter
+            pattern = '|'.join(['report', 'continue', 'pass', 'fail', 'incorporate', 'hearing', 'strike', 'stricken', 'veto', 'sign', 'agreed', 'read', 'refer', 'waive', 'recommend', 'receive', 'release'])
             df_past = df_past[df_past[desc_col].str.contains(pattern, case=False, na=False)]
             
             if not bypass: df_past = df_past[df_past['CleanBill'].str.split(' ').str[0].isin(tracked_bills)]
             
+            # ==================================================
+            # STRICT ENTERPRISE PARSING PROTOCOL
+            # ==================================================
+            
+            # 1. Exact Phrase Floor Triggers (NO loose words)
+            explicit_floor_phrases = [
+                "read first time", "read second time", "read third time",
+                "passed house", "passed senate", "engrossed by", "enrolled",
+                "signed by", "rules suspended", "reading dispensed", "reading of substitute waived",
+                "governor's recommendation", "conference report",
+                "amendments agreed to", "substitute agreed to", "substitute rejected",
+                "acceded to request", "concurred in", "conferees appointed"
+            ]
+
             for _, row in df_past.iterrows():
                 outcome_text = str(row[desc_col]).strip()
                 outcome_lower = outcome_text.lower()
                 date_str = row['ParsedDate'].strftime('%Y-%m-%d')
                 
-                # Crossover Anchor Lock
                 if outcome_text.startswith('H '): chamber_prefix = "House "
                 elif outcome_text.startswith('S '): chamber_prefix = "Senate "
                 else: chamber_prefix = "House " if str(row['CleanBill']).startswith('H') else "Senate "
                 
                 committee_name = None
                 
-                # Inside-Out Matrix Parser
-                procedural_verbs = ["reported", "referred", "assigned", "continued", "passed by"]
+                # TIER 1: Committee Mapping (Lexicon check FIRST)
+                procedural_verbs = ["reported", "referred", "assigned", "continued", "passed by indefinitely", "passed by in"]
                 if any(verb in outcome_lower for verb in procedural_verbs):
                     matched_key = None
                     for lex_key, lex_aliases in rosetta_stone.items():
@@ -195,41 +201,41 @@ def build_enterprise_calendar(tracked_bills, bypass):
                                     matched_key = lex_key
                                     break
                         if matched_key: break
-                    
                     if matched_key:
                         committee_name = matched_key
 
-                # Floor Routing (Expanded with User's Orphan Catches)
-                floor_keywords = ["passed", "agreed", "engrossed", "read third", "signed", "enrolled", "reconsideration", "suspended", "dispensed", "acceded", "concurred", "amendments", "waived", "read second", "read first", "recommends"]
-                if not committee_name and any(k in outcome_lower for k in floor_keywords):
-                    committee_name = chamber_prefix + "Floor"
+                # TIER 2: Explicit Floor/Chamber Actions
+                if not committee_name:
+                    if any(phrase in outcome_lower for phrase in explicit_floor_phrases):
+                        committee_name = chamber_prefix + "Floor"
+
+                # TIER 3: Unmapped Subcommittees (Preventing Floor Bleed)
+                if not committee_name and "subcommittee recommends" in outcome_lower:
+                    committee_name = f"⚠️ [Unmapped Subcommittee] {chamber_prefix}Ledger"
                 
+                # TIER 4: Absolute Orphan (Safety Net)
                 if not committee_name:
                     committee_name = f"⚠️ [Orphan] {chamber_prefix}Ledger"
 
                 time_val = "Ledger"
                 status = ""
                 
-                # Retrieve Standard API Times
                 api_key = f"{date_str}_{committee_name}"
                 if api_key in api_schedule_map:
                     time_val = api_schedule_map[api_key]["Time"]
                     status = api_schedule_map[api_key]["Status"]
                 
-                # ==================================================
-                # SURGICAL TIME-ANCHOR MERGE FOR FLOOR ACTIONS
-                # Hijacks both the Time AND the Name to force the boxes to merge
-                # ==================================================
+                # Floor Anchor Hijack
                 if committee_name == "House Floor":
                     anchor = convene_times.get(date_str, {}).get("House")
                     if anchor:
                         time_val = anchor["Time"]
-                        committee_name = anchor["Name"] # Forces the UI to merge them
+                        committee_name = anchor["Name"] 
                 elif committee_name == "Senate Floor":
                     anchor = convene_times.get(date_str, {}).get("Senate")
                     if anchor:
                         time_val = anchor["Time"]
-                        committee_name = anchor["Name"] # Forces the UI to merge them
+                        committee_name = anchor["Name"] 
                     
                 master_events.append({
                     "Date": date_str, "Time": time_val, "Status": status,
@@ -247,8 +253,9 @@ def build_enterprise_calendar(tracked_bills, bypass):
     return final_df
 
 # ==========================================
-# 3. UI RENDERING (Merged Polish)
+# 3. UI RENDERING 
 # ==========================================
+# Renamed function again just to be absolutely sure the cache breaks
 final_df = build_enterprise_calendar(TRACKED_BILLS, bypass_filter)
 
 if final_df.empty:
@@ -278,24 +285,22 @@ def render_kanban_week(start_date, data):
                     is_cancelled = status == "CANCELLED"
                     
                     with st.container(border=True):
-                        # UI POLISH: No emojis, time drops cleanly below
                         if is_cancelled:
                             st.markdown(f"~~**{committee}**~~<br><span style='color:#ff4b4b; font-weight:bold;'>CANCELLED</span>", unsafe_allow_html=True)
                         else:
-                            if "⚠️ [Orphan]" in committee:
+                            if "⚠️" in committee:
                                 st.markdown(f"<span style='color:#ffa500; font-weight:bold;'>{committee}</span><br><span style='color:#888888; font-style:italic;'>{time_str}</span>", unsafe_allow_html=True)
                             else:
                                 st.markdown(f"**{committee}**<br><span style='color:#888888; font-style:italic;'>{time_str}</span>", unsafe_allow_html=True)
                         
                         if not is_cancelled:
-                            # Smart Rendering: Separate API Notes from CSV Bills so they format cleanly inside the merged box
                             skeleton_items = group_df[group_df['Source'].str.startswith('API')]
                             bill_items = group_df[group_df['Source'] == 'CSV']
                             
                             if not skeleton_items.empty:
                                 for _, s_row in skeleton_items.iterrows():
                                     if s_row['Bill'] == "📌 No live docket" and not bill_items.empty:
-                                        continue # Don't print "No live docket" if we have bills to show
+                                        continue 
                                     st.markdown("---")
                                     st.markdown(f"*{s_row['Bill']}*")
                                     
