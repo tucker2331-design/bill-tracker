@@ -7,7 +7,7 @@ import re
 
 st.set_page_config(page_title="Legislative Calendar (Enterprise Pipeline)", layout="wide")
 st.title("📅 Enterprise Calendar: State Machine Validation")
-st.markdown("Testing Chronological State Tracking with strict Present/Future decoupling.")
+st.markdown("Testing Chamber Shift Overrides and Strict Parser Expansion.")
 
 API_KEY = "81D70A54-FCDC-4023-A00B-A3FD114D5984"
 HEADERS = {"WebAPIKey": API_KEY, "Accept": "application/json"}
@@ -52,7 +52,7 @@ test_start_date = datetime(2026, 3, 4)
 test_end_date = datetime(2026, 3, 10)
 
 # ==========================================
-# 2. THE EXTRACTOR (Decoupled State Machine)
+# 2. THE EXTRACTOR (Hardened State Machine)
 # ==========================================
 @st.cache_data(ttl=600)
 def build_state_machine_calendar(tracked_bills, bypass):
@@ -69,7 +69,7 @@ def build_state_machine_calendar(tracked_bills, bypass):
         except: pass
         return pd.DataFrame()
 
-    with st.spinner("📥 Processing Decoupled State Machine..."):
+    with st.spinner("📥 Processing Chamber Overrides..."):
         api_code = "261"
         blob_code = "20261"
         
@@ -176,6 +176,13 @@ def build_state_machine_calendar(tracked_bills, bypass):
                     bill_locations[bill_num] = chamber_prefix + "Floor"
 
                 # ==================================================
+                # CHAMBER SHIFT OVERRIDE 
+                # Prevents "Cross-Chamber Contamination" by forcing a memory update
+                # ==================================================
+                if not bill_locations[bill_num].startswith(chamber_prefix):
+                    bill_locations[bill_num] = chamber_prefix + "Floor"
+
+                # ==================================================
                 # STEP A: DETERMINE EVENT LOCATION (Present Action)
                 # ==================================================
                 event_location = bill_locations[bill_num] 
@@ -186,7 +193,7 @@ def build_state_machine_calendar(tracked_bills, bypass):
                         matched_committee = lex_key
                         break
                         
-                committee_verbs = ["reported", "referred", "assigned", "continued", "passed by indefinitely", "passed by in", "recommend", "incorporate", "failed to", "stricken"]
+                committee_verbs = ["reported", "referred", "assigned", "continued", "passed by indefinitely", "passed by in", "recommend", "incorporate", "failed to", "stricken", "placed on"]
                 if matched_committee and any(v in outcome_lower for v in committee_verbs):
                     event_location = matched_committee
 
@@ -194,11 +201,11 @@ def build_state_machine_calendar(tracked_bills, bypass):
                     "read first", "read second", "read third",
                     "passed house", "passed senate", "engrossed", "enrolled",
                     "signed by", "rules suspended", "reading dispensed", "substitute waived",
-                    "recommendation received", "conference report",
+                    "recommendation received", "governor's recommendation", "conference report",
                     "amendment agreed", "amendments agreed", "substitute agreed", "substitute rejected",
-                    "acceded to", "concurred in", "conferees appointed",
+                    "acceded to", "concurred in", "conferees appointed", "conferees:",
                     "passed by for the day", "agreed to by", "received", "taken up for",
-                    "amendment rejected", "substitute defeated"
+                    "amendment rejected", "substitute defeated", "calendar", "committee offered", "floor offered"
                 ]
                 if any(phrase in outcome_lower for phrase in explicit_floor_phrases):
                     event_location = chamber_prefix + "Floor"
@@ -209,11 +216,11 @@ def build_state_machine_calendar(tracked_bills, bypass):
                 # ==================================================
                 # STEP B: UPDATE STATE MEMORY (Future Actions)
                 # ==================================================
-                if "referred to" in outcome_lower or "assigned to" in outcome_lower:
+                if "referred to" in outcome_lower or "assigned to" in outcome_lower or "placed on" in outcome_lower:
                     if matched_committee:
                         bill_locations[bill_num] = matched_committee
                 elif "reported from" in outcome_lower or "discharged from" in outcome_lower:
-                    if "referred to" not in outcome_lower: 
+                    if "referred to" not in outcome_lower and "assigned to" not in outcome_lower: 
                         bill_locations[bill_num] = chamber_prefix + "Floor"
 
                 # ==================================================
