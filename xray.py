@@ -6,17 +6,18 @@ import io
 st.set_page_config(page_title="CSV X-Ray", layout="wide")
 st.title("🔍 Raw CSV Ledger X-Ray (March 6th)")
 
-# Using '261' as the standard blob code for the 2026 Regular Session
-BLOB_CODE = "261"
+# The Blob Code requires the full 4-digit year + session type (20261)
+BLOB_CODE = "20261"
 URL = f"https://lis.blob.core.windows.net/lisfiles/{BLOB_CODE}/HISTORY.CSV"
 
 st.write(f"📡 Fetching raw ledger from: `{URL}`")
 
 try:
-    res = requests.get(URL, timeout=5)
+    res = requests.get(URL, timeout=10)
     if res.status_code == 200:
-        # Read the raw CSV
-        df = pd.read_csv(io.StringIO(res.text))
+        # Decode using ISO-8859-1 to handle Virginia government server encoding
+        raw_text = res.content.decode('iso-8859-1')
+        df = pd.read_csv(io.StringIO(raw_text))
         df = df.rename(columns=lambda x: x.strip())
         
         # Find the date column and filter for March 6th
