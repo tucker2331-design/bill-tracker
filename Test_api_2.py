@@ -7,7 +7,7 @@ import re
 
 st.set_page_config(page_title="Legislative Calendar (Enterprise Mirror)", layout="wide")
 st.title("📅 Enterprise Calendar: Full Mirror Test")
-st.markdown("Testing precise JSON key targeting for Cancellations, Subcommittees, and Dynamic Times.")
+st.markdown("Testing the Enterprise Alias Matrix & Anchor Parsing to eliminate black holes.")
 
 API_KEY = "81D70A54-FCDC-4023-A00B-A3FD114D5984"
 HEADERS = {"WebAPIKey": API_KEY, "Accept": "application/json"}
@@ -79,8 +79,36 @@ past_week_1_start = TODAY - timedelta(days=7)
 future_end = TODAY + timedelta(days=7)
 
 # ==========================================
-# 2. THE EXTRACTOR (Enterprise Reverse-Lookup)
+# 2. THE EXTRACTOR (Enterprise Alias Matrix Engine)
 # ==========================================
+def get_best_committee_match(extracted_text, chamber_prefix, rosetta_keys):
+    """The Alias Matrix: Normalizes dirty CSV text and strictly maps to official IDs."""
+    if not extracted_text: return None
+    
+    # Normalize the human text
+    ext_clean = extracted_text.lower().replace('&', 'and').replace('committee', '').strip()
+    
+    # 1. Exact Match Check
+    for r_key in rosetta_keys:
+        r_clean = r_key.lower().replace('&', 'and').replace('committee', '').strip()
+        if ext_clean == r_clean or f"{chamber_prefix.lower()}{ext_clean}" == r_clean:
+            return r_key
+            
+    # 2. Strong Substring Check (Longest names first to prevent partial grabs)
+    for r_key in sorted(rosetta_keys, key=len, reverse=True):
+        # THE SHIELD: Explicitly block generic Black Hole IDs
+        if r_key.lower().strip() in ["house", "senate", "house floor", "senate floor"]: 
+            continue
+            
+        r_clean = r_key.replace(chamber_prefix, '').lower().replace('&', 'and').replace('committee', '').strip()
+        
+        # If the cleaned extracted text is a strong match for the official base name
+        if r_clean and (r_clean in ext_clean or ext_clean in r_clean):
+            if r_key.startswith(chamber_prefix):
+                return r_key
+                
+    return None
+
 @st.cache_data(ttl=600)
 def build_master_calendar(sessions, tracked_bills, bypass):
     master_events = []
@@ -95,7 +123,7 @@ def build_master_calendar(sessions, tracked_bills, bypass):
         except: pass
         return pd.DataFrame()
 
-    with st.spinner("📥 Synchronizing JSON Data Keys..."):
+    with st.spinner("📥 Routing Bills via Enterprise Alias Matrix..."):
         for session in sessions:
             api_code = session["api"]
             blob_code = session["blob"]
@@ -108,12 +136,10 @@ def build_master_calendar(sessions, tracked_bills, bypass):
                     comm_res = requests.get("https://lis.virginia.gov/Committee/api/getcommitteelistasync", headers=HEADERS, params={"sessionCode": api_code, "chamberCode": chamber}, timeout=5)
                     if comm_res.status_code == 200:
                         c_data = comm_res.json()
-                        # Unpack the dictionary if the API randomly wraps the list
                         if isinstance(c_data, dict):
                             c_data = next((v for v in c_data.values() if isinstance(v, list)), [])
-                            
                         for c in c_data:
-                            if isinstance(c, dict): # Ensure we are grabbing a data block, not a string
+                            if isinstance(c, dict):
                                 prefix = "House " if chamber == 'H' else "Senate "
                                 rosetta_stone[prefix + str(c.get('ComDes', '')).strip()] = c.get('ComCode', '')
             except Exception as e: print(f"Rosetta failed: {e}")
@@ -125,33 +151,28 @@ def build_master_calendar(sessions, tracked_bills, bypass):
                 if sched_res.status_code == 200:
                     schedules = sched_res.json()
                     if isinstance(schedules, dict): schedules = schedules.get('Schedules', [])
-                    
                     raw_schedules_dump.extend(schedules)
                     
                     for meeting in schedules:
                         meeting_date = pd.to_datetime(meeting.get('ScheduleDate', '1970-01-01'), errors='coerce')
                         
                         # Speed filter
-                        if not (past_week_2_start <= meeting_date <= future_end):
-                            continue
+                        if not (past_week_2_start <= meeting_date <= future_end): continue
                             
                         date_str = meeting_date.strftime('%Y-%m-%d')
                         owner_name = str(meeting.get('OwnerName', '')).strip()
                         chamber = meeting.get('ChamberCode')
                         if not chamber: chamber = 'S' if 'Senate' in owner_name else 'H'
                         
-                        # Fix 1: True Boolean Cancellation Check
                         is_cancelled = meeting.get('IsCancelled', False)
                         status = "CANCELLED" if is_cancelled else ""
                         
-                        # Fix 2: Dynamic Time Extraction
                         raw_time = str(meeting.get('ScheduleTime', '')).strip()
                         raw_desc = str(meeting.get('Description', meeting.get('ScheduleDesc', ''))).strip()
                         clean_desc = re.sub(r'<[^>]+>', '', raw_desc).strip()
                         
                         time_val = raw_time
                         dynamic_markers = ["upon adjournment", "minutes after", "to be determined", "tba"]
-                        
                         if any(marker in clean_desc.lower() for marker in dynamic_markers):
                             parts = clean_desc.split(';')
                             for part in parts:
@@ -162,7 +183,6 @@ def build_master_calendar(sessions, tracked_bills, bypass):
                         
                         api_schedule_map[f"{date_str}_{owner_name}"] = {"Time": time_val, "Status": status}
                         
-                        # Caucuses & Sessions bypass
                         if any(k in owner_name.lower() for k in ["caucus", "session", "floor", "convenes", "adjourned"]):
                             master_events.append({
                                 "Date": date_str, "Time": time_val, "Status": status,
@@ -173,7 +193,6 @@ def build_master_calendar(sessions, tracked_bills, bypass):
                             })
                             continue
                         
-                        # Fix 3: Subcommittee Bridge
                         committee_id = meeting.get('CommitteeNumber', meeting.get('CommitteeCode'))
                         if not committee_id:
                             committee_id = rosetta_stone.get(owner_name)
@@ -208,7 +227,7 @@ def build_master_calendar(sessions, tracked_bills, bypass):
                             })
             except Exception as e: print(f"Schedule extraction failed: {e}")
 
-            # --- 3. CSV Stitching (Historical Fallback) ---
+            # --- 3. CSV Stitching (Anchor Extraction) ---
             df_past = safe_fetch_csv(f"https://lis.blob.core.windows.net/lisfiles/{blob_code}/HISTORY.CSV")
             if not df_past.empty:
                 bill_col = next((c for c in df_past.columns if 'bill' in c.lower()), 'BillNumber')
@@ -227,8 +246,6 @@ def build_master_calendar(sessions, tracked_bills, bypass):
                 
                 if not bypass: df_past = df_past[df_past['CleanBill'].str.split(' ').str[0].isin(tracked_bills)]
                 
-                official_committees = sorted(rosetta_stone.keys(), key=len, reverse=True)
-                
                 for _, row in df_past.iterrows():
                     outcome_text = str(row[desc_col])
                     outcome_lower = outcome_text.lower()
@@ -236,17 +253,26 @@ def build_master_calendar(sessions, tracked_bills, bypass):
                     chamber_prefix = "House " if str(row['CleanBill']).startswith('H') else "Senate "
                     
                     committee_name = None
+                    
+                    # 1. THE SCALPEL: Anchor Regex Parsing
+                    # Looks only for the proper noun immediately following procedural verbs
+                    anchor_pattern = r'(?:reported from|referred to|rereferred to|re-referred to|discharged from|assigned to)\s+([a-zA-Z\s,&]+?)(?:\(|with|by|,|$)'
+                    match = re.search(anchor_pattern, outcome_lower)
+                    
+                    if match:
+                        raw_extracted = match.group(1).strip()
+                        matched_committee = get_best_committee_match(raw_extracted, chamber_prefix, rosetta_stone.keys())
+                        if matched_committee:
+                            committee_name = matched_committee
+
+                    # 2. Floor Action Catch-All
                     floor_keywords = ["passed", "agreed", "engrossed", "read third", "signed", "enrolled", "reconsideration"]
-                    if any(k in outcome_lower for k in floor_keywords) and not any(k in outcome_lower for k in ["reported", "referred"]):
+                    if not committee_name and any(k in outcome_lower for k in floor_keywords):
                         committee_name = chamber_prefix + "Floor"
-                    else:
-                        for off_comm in official_committees:
-                            base_name = off_comm.replace("House ", "").replace("Senate ", "").lower()
-                            if base_name in outcome_lower and off_comm.startswith(chamber_prefix):
-                                committee_name = off_comm
-                                break
-                        if not committee_name:
-                            committee_name = chamber_prefix + "Floor"
+                    
+                    # 3. Ultimate Fallback
+                    if not committee_name:
+                        committee_name = chamber_prefix + "Floor" # Default routing if deeply mangled
 
                     time_val = "Ledger"
                     status = ""
