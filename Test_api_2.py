@@ -53,10 +53,10 @@ test_start_date = datetime(2026, 3, 4)
 test_end_date = datetime(2026, 3, 10)
 
 # ==========================================
-# 2. THE EXTRACTOR 
+# 2. THE EXTRACTOR (Cache-Busted)
 # ==========================================
 @st.cache_data(ttl=600)
-def build_master_calendar(tracked_bills, bypass):
+def build_enterprise_calendar(tracked_bills, bypass):
     master_events = []
     convene_times = {} # THE TIME-ANCHOR VAULT
     
@@ -70,7 +70,7 @@ def build_master_calendar(tracked_bills, bypass):
         except: pass
         return pd.DataFrame()
 
-    with st.spinner("📥 Compiling Matrix and Merging Floor Sessions..."):
+    with st.spinner("📥 Compiling Matrix, Merging Sessions, and Catching Orphans..."):
         api_code = "261"
         blob_code = "20261"
         
@@ -167,7 +167,7 @@ def build_master_calendar(tracked_bills, bypass):
             mask = (df_past['ParsedDate'] >= test_start_date) & (df_past['ParsedDate'] <= test_end_date)
             df_past = df_past[mask]
             
-            pattern = '|'.join(['report', 'continue', 'pass', 'fail', 'incorporate', 'hearing', 'strike', 'stricken', 'veto', 'sign', 'agreed', 'read', 'refer'])
+            pattern = '|'.join(['report', 'continue', 'pass', 'fail', 'incorporate', 'hearing', 'strike', 'stricken', 'veto', 'sign', 'agreed', 'read', 'refer', 'waive', 'recommend'])
             df_past = df_past[df_past[desc_col].str.contains(pattern, case=False, na=False)]
             
             if not bypass: df_past = df_past[df_past['CleanBill'].str.split(' ').str[0].isin(tracked_bills)]
@@ -199,8 +199,8 @@ def build_master_calendar(tracked_bills, bypass):
                     if matched_key:
                         committee_name = matched_key
 
-                # Floor Routing 
-                floor_keywords = ["passed", "agreed", "engrossed", "read third", "signed", "enrolled", "reconsideration", "suspended", "dispensed", "acceded", "concurred", "amendments"]
+                # Floor Routing (Expanded with User's Orphan Catches)
+                floor_keywords = ["passed", "agreed", "engrossed", "read third", "signed", "enrolled", "reconsideration", "suspended", "dispensed", "acceded", "concurred", "amendments", "waived", "read second", "read first", "recommends"]
                 if not committee_name and any(k in outcome_lower for k in floor_keywords):
                     committee_name = chamber_prefix + "Floor"
                 
@@ -249,7 +249,7 @@ def build_master_calendar(tracked_bills, bypass):
 # ==========================================
 # 3. UI RENDERING (Merged Polish)
 # ==========================================
-final_df = build_master_calendar(TRACKED_BILLS, bypass_filter)
+final_df = build_enterprise_calendar(TRACKED_BILLS, bypass_filter)
 
 if final_df.empty:
     st.info("No actionable events found in the 7-day window.")
