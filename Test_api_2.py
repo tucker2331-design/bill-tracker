@@ -6,16 +6,15 @@ import io
 import re
 
 st.set_page_config(page_title="Legislative Calendar (Enterprise Pipeline)", layout="wide")
-st.title("📅 Enterprise Calendar: Full Spectrum 7-Day Test")
-st.markdown("Testing the Local Lexicon, Inside-Out Parsing, and the Orphan Safety Net.")
+st.title("📅 Enterprise Calendar: Final Matrix Validation")
+st.markdown("Testing the Expanded Lexicon, Black-Hole Filter, and Time-Split Lock.")
 
 API_KEY = "81D70A54-FCDC-4023-A00B-A3FD114D5984"
 HEADERS = {"WebAPIKey": API_KEY, "Accept": "application/json"}
 
 # ==========================================
-# 1. THE ENTERPRISE LOCAL LEXICON
+# 1. THE ENTERPRISE LOCAL LEXICON (Fully Expanded)
 # ==========================================
-# Hardcoded safety net to prevent 404 API crashes from destroying the pipeline
 LOCAL_LEXICON = {
     "House Appropriations": ["appropriations"],
     "House Courts of Justice": ["courts of justice"],
@@ -27,20 +26,26 @@ LOCAL_LEXICON = {
     "House Communications, Technology and Innovation": ["communications", "technology"],
     "House Education": ["education"],
     "House Agriculture, Chesapeake and Natural Resources": ["agriculture", "natural resources"],
+    "House General Laws": ["general laws"],
+    "House Transportation": ["transportation"],
+    "House Labor and Commerce": ["labor and commerce", "labor"],
+    "House Health and Human Services": ["health and human services", "health"],
     "Senate Finance and Appropriations": ["finance and appropriations", "finance"],
     "Senate Courts of Justice": ["courts of justice"],
     "Senate Rules": ["rules"],
     "Senate Rehabilitation and Social Services": ["rehabilitation and social services", "rehabilitation"],
     "Senate Local Government": ["local government"],
     "Senate Privileges and Elections": ["privileges and elections"],
-    "Senate Education and Health": ["education and health"],
-    "Senate Commerce and Labor": ["commerce and labor"]
+    "Senate Education and Health": ["education and health", "education", "health"],
+    "Senate Commerce and Labor": ["commerce and labor", "commerce"],
+    "Senate General Laws and Technology": ["general laws and technology", "general laws"],
+    "Senate Transportation": ["transportation"],
+    "Senate Agriculture, Conservation and Natural Resources": ["agriculture", "conservation", "natural resources"]
 }
 
-# --- UI Controls & 7-Day Window ---
+# --- UI Controls ---
 st.sidebar.header("⚙️ System Controls")
 bypass_filter = st.sidebar.toggle("⚠️ Bypass Portfolio (Load All Data)", value=True) 
-
 TRACKED_BILLS = ["HB10", "HB863", "SB4", "HB1204", "HB500"]
 
 # 7-Day Target Window
@@ -48,7 +53,7 @@ test_start_date = datetime(2026, 3, 4)
 test_end_date = datetime(2026, 3, 10)
 
 # ==========================================
-# 2. THE EXTRACTOR (Live Overlay Engine)
+# 2. THE EXTRACTOR 
 # ==========================================
 @st.cache_data(ttl=600)
 def build_master_calendar(tracked_bills, bypass):
@@ -64,7 +69,7 @@ def build_master_calendar(tracked_bills, bypass):
         except: pass
         return pd.DataFrame()
 
-    with st.spinner("📥 Booting Live Overlay & Inside-Out Parser..."):
+    with st.spinner("📥 Compiling Final Matrix and Locking Time-Splits..."):
         api_code = "261"
         blob_code = "20261"
         
@@ -81,12 +86,15 @@ def build_master_calendar(tracked_bills, bypass):
                         if isinstance(c, dict):
                             prefix = "House " if chamber == 'H' else "Senate "
                             official_name = prefix + str(c.get('ComDes', '')).strip()
-                            if official_name not in rosetta_stone:
-                                rosetta_stone[official_name] = [str(c.get('ComDes', '')).strip().lower()]
-        except Exception as e:
-            print(f"API Dictionary unreachable. Falling back to Local Lexicon. Error: {e}")
+                            com_des = str(c.get('ComDes', '')).strip().lower()
+                            
+                            # THE BLACK-HOLE FILTER: Purge blanks and generic chamber nodes
+                            if com_des and len(com_des) > 3 and com_des not in ["house", "senate", "floor"]:
+                                if official_name not in rosetta_stone:
+                                    rosetta_stone[official_name] = [com_des]
+        except Exception as e: print(f"API Dictionary unreachable. Using Lexicon. Error: {e}")
 
-        # --- 2. API Schedule Skeleton (The Frame) ---
+        # --- 2. API Schedule Skeleton ---
         api_schedule_map = {} 
         try:
             sched_res = requests.get("https://lis.virginia.gov/Schedule/api/getschedulelistasync", headers=HEADERS, params={"sessionCode": api_code}, timeout=5)
@@ -96,7 +104,6 @@ def build_master_calendar(tracked_bills, bypass):
                 
                 for meeting in schedules:
                     meeting_date = pd.to_datetime(meeting.get('ScheduleDate', '1970-01-01'), errors='coerce')
-                    
                     if not (test_start_date <= meeting_date <= test_end_date): continue
                         
                     date_str = meeting_date.strftime('%Y-%m-%d')
@@ -108,7 +115,7 @@ def build_master_calendar(tracked_bills, bypass):
                     clean_desc = re.sub(r'<[^>]+>', '', str(meeting.get('Description', ''))).strip()
                     
                     time_val = raw_time
-                    dynamic_markers = ["upon adjournment", "minutes after", "to be determined", "tba"]
+                    dynamic_markers = ["upon adjournment", "minutes after", "to be determined", "tba", "recess"]
                     if any(marker in clean_desc.lower() for marker in dynamic_markers):
                         parts = clean_desc.split(';')
                         for part in parts:
@@ -117,7 +124,10 @@ def build_master_calendar(tracked_bills, bypass):
                                 break
                     if not time_val: time_val = "Time TBA"
                     
-                    api_schedule_map[f"{date_str}_{owner_name}"] = {"Time": time_val, "Status": status}
+                    # THE TIME-SPLIT LOCK: Only map the FIRST meeting of the day to prevent overwrite
+                    map_key = f"{date_str}_{owner_name}"
+                    if map_key not in api_schedule_map:
+                        api_schedule_map[map_key] = {"Time": time_val, "Status": status}
                     
                     if any(k in owner_name.lower() for k in ["caucus", "session", "floor", "convenes", "adjourned"]):
                         master_events.append({
@@ -135,7 +145,7 @@ def build_master_calendar(tracked_bills, bypass):
                     })
         except Exception as e: print(f"Schedule extraction failed: {e}")
 
-        # --- 3. CSV Stitching (Inside-Out Parsing & Orphan Net) ---
+        # --- 3. CSV Stitching (Inside-Out Parsing) ---
         df_past = safe_fetch_csv(f"https://lis.blob.core.windows.net/lisfiles/{blob_code}/HISTORY.CSV")
         if not df_past.empty:
             bill_col = next((c for c in df_past.columns if 'bill' in c.lower()), 'BillNumber')
@@ -165,15 +175,15 @@ def build_master_calendar(tracked_bills, bypass):
                 
                 committee_name = None
                 
-                # THE INSIDE-OUT PARSER
+                # Inside-Out Matrix Parser
                 procedural_verbs = ["reported", "referred", "assigned", "continued", "passed by"]
                 if any(verb in outcome_lower for verb in procedural_verbs):
                     matched_key = None
-                    # Search inside the messy string for any known Lexicon alias
                     for lex_key, lex_aliases in rosetta_stone.items():
                         if lex_key.startswith(chamber_prefix):
                             for alias in lex_aliases:
-                                if alias in outcome_lower:
+                                # The Black Hole Safeguard Check
+                                if alias and alias in outcome_lower:
                                     matched_key = lex_key
                                     break
                         if matched_key: break
@@ -181,12 +191,11 @@ def build_master_calendar(tracked_bills, bypass):
                     if matched_key:
                         committee_name = matched_key
 
-                # Floor Routing
-                floor_keywords = ["passed", "agreed", "engrossed", "read third", "signed", "enrolled", "reconsideration"]
+                # Floor Routing (Expanded for rules suspensions and procedural amendments)
+                floor_keywords = ["passed", "agreed", "engrossed", "read third", "signed", "enrolled", "reconsideration", "suspended", "dispensed", "acceded", "concurred", "amendments"]
                 if not committee_name and any(k in outcome_lower for k in floor_keywords):
                     committee_name = chamber_prefix + "Floor"
                 
-                # THE ORPHAN SAFETY NET
                 if not committee_name:
                     committee_name = f"⚠️ [Orphan] {chamber_prefix}Ledger"
 
@@ -206,7 +215,6 @@ def build_master_calendar(tracked_bills, bypass):
 
     final_df = pd.DataFrame(master_events)
     if not final_df.empty:
-        # Clear out "No live docket" placeholders if a bill successfully routed to that committee
         final_df = final_df[~((final_df['Bill'] == "📌 No live docket") & 
                               final_df.duplicated(subset=['Date', 'Committee'], keep=False))]
         final_df = final_df.sort_values(by=['Date', 'Committee', 'Bill', 'Source'])
@@ -249,7 +257,6 @@ def render_kanban_week(start_date, data):
                         if is_cancelled:
                             st.markdown(f"~~**{committee}**~~\n<br><span style='color:#ff4b4b; font-weight:bold;'>CANCELLED</span>", unsafe_allow_html=True)
                         else:
-                            # Highlight Orphans in orange
                             if "⚠️ [Orphan]" in committee:
                                 st.markdown(f"<span style='color:#ffa500; font-weight:bold;'>{committee}</span>\n🕰️ *{time_str}*", unsafe_allow_html=True)
                             else:
