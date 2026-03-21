@@ -70,7 +70,7 @@ def build_master_calendar(tracked_bills, bypass):
         except: pass
         return pd.DataFrame()
 
-    with st.spinner("📥 Compiling Matrix and Anchoring Floor Sessions..."):
+    with st.spinner("📥 Compiling Matrix and Merging Floor Sessions..."):
         api_code = "261"
         blob_code = "20261"
         
@@ -124,14 +124,14 @@ def build_master_calendar(tracked_bills, bypass):
                                 break
                     if not time_val: time_val = "Time TBA"
                     
-                    # EXTRACT CONVENE TIMES FOR ANCHORING
+                    # EXTRACT CONVENE TIMES AND NAMES FOR ANCHOR MERGING
                     owner_lower = owner_name.lower()
                     if "house convenes" in owner_lower or "house chamber" in owner_lower:
                         if date_str not in convene_times: convene_times[date_str] = {}
-                        convene_times[date_str]["House"] = time_val
+                        convene_times[date_str]["House"] = {"Time": time_val, "Name": owner_name}
                     elif "senate convenes" in owner_lower or "senate chamber" in owner_lower:
                         if date_str not in convene_times: convene_times[date_str] = {}
-                        convene_times[date_str]["Senate"] = time_val
+                        convene_times[date_str]["Senate"] = {"Time": time_val, "Name": owner_name}
                     
                     # THE TIME-SPLIT LOCK
                     map_key = f"{date_str}_{owner_name}"
@@ -199,7 +199,7 @@ def build_master_calendar(tracked_bills, bypass):
                     if matched_key:
                         committee_name = matched_key
 
-                # Floor Routing
+                # Floor Routing 
                 floor_keywords = ["passed", "agreed", "engrossed", "read third", "signed", "enrolled", "reconsideration", "suspended", "dispensed", "acceded", "concurred", "amendments"]
                 if not committee_name and any(k in outcome_lower for k in floor_keywords):
                     committee_name = chamber_prefix + "Floor"
@@ -217,13 +217,19 @@ def build_master_calendar(tracked_bills, bypass):
                     status = api_schedule_map[api_key]["Status"]
                 
                 # ==================================================
-                # SURGICAL TIME-ANCHOR FOR FLOOR ACTIONS
-                # Intercepts the "Ledger" time and injects the Convenes time
+                # SURGICAL TIME-ANCHOR MERGE FOR FLOOR ACTIONS
+                # Hijacks both the Time AND the Name to force the boxes to merge
                 # ==================================================
                 if committee_name == "House Floor":
-                    time_val = convene_times.get(date_str, {}).get("House", "Ledger")
+                    anchor = convene_times.get(date_str, {}).get("House")
+                    if anchor:
+                        time_val = anchor["Time"]
+                        committee_name = anchor["Name"] # Forces the UI to merge them
                 elif committee_name == "Senate Floor":
-                    time_val = convene_times.get(date_str, {}).get("Senate", "Ledger")
+                    anchor = convene_times.get(date_str, {}).get("Senate")
+                    if anchor:
+                        time_val = anchor["Time"]
+                        committee_name = anchor["Name"] # Forces the UI to merge them
                     
                 master_events.append({
                     "Date": date_str, "Time": time_val, "Status": status,
@@ -241,7 +247,7 @@ def build_master_calendar(tracked_bills, bypass):
     return final_df
 
 # ==========================================
-# 3. UI RENDERING (Polished)
+# 3. UI RENDERING (Merged Polish)
 # ==========================================
 final_df = build_master_calendar(TRACKED_BILLS, bypass_filter)
 
@@ -272,7 +278,7 @@ def render_kanban_week(start_date, data):
                     is_cancelled = status == "CANCELLED"
                     
                     with st.container(border=True):
-                        # UI POLISH: No emojis, time drops cleanly below using raw HTML
+                        # UI POLISH: No emojis, time drops cleanly below
                         if is_cancelled:
                             st.markdown(f"~~**{committee}**~~<br><span style='color:#ff4b4b; font-weight:bold;'>CANCELLED</span>", unsafe_allow_html=True)
                         else:
@@ -282,12 +288,20 @@ def render_kanban_week(start_date, data):
                                 st.markdown(f"**{committee}**<br><span style='color:#888888; font-style:italic;'>{time_str}</span>", unsafe_allow_html=True)
                         
                         if not is_cancelled:
-                            if len(group_df) == 1 and group_df.iloc[0]['AgendaOrder'] == -1:
-                                st.markdown("---")
-                                st.markdown(f"*{group_df.iloc[0]['Bill']}*")
-                            else:
-                                with st.expander(f"📜 View Bills ({len(group_df)})"):
-                                    for _, row in group_df.iterrows():
+                            # Smart Rendering: Separate API Notes from CSV Bills so they format cleanly inside the merged box
+                            skeleton_items = group_df[group_df['Source'].str.startswith('API')]
+                            bill_items = group_df[group_df['Source'] == 'CSV']
+                            
+                            if not skeleton_items.empty:
+                                for _, s_row in skeleton_items.iterrows():
+                                    if s_row['Bill'] == "📌 No live docket" and not bill_items.empty:
+                                        continue # Don't print "No live docket" if we have bills to show
+                                    st.markdown("---")
+                                    st.markdown(f"*{s_row['Bill']}*")
+                                    
+                            if not bill_items.empty:
+                                with st.expander(f"📜 View Bills ({len(bill_items)})"):
+                                    for _, row in bill_items.iterrows():
                                         st.markdown(f"**{row['Bill']}**")
                                         st.caption(f"🔹 *{row['Outcome']}*")
 
