@@ -7,13 +7,13 @@ import re
 
 st.set_page_config(page_title="Legislative Calendar (Enterprise Pipeline)", layout="wide")
 st.title("📅 Enterprise Calendar: Final Matrix Validation")
-st.markdown("Testing the Expanded Lexicon, Black-Hole Filter, and Time-Split Lock.")
+st.markdown("Testing the Expanded Lexicon, Floor Anchoring, and UI Polish.")
 
 API_KEY = "81D70A54-FCDC-4023-A00B-A3FD114D5984"
 HEADERS = {"WebAPIKey": API_KEY, "Accept": "application/json"}
 
 # ==========================================
-# 1. THE ENTERPRISE LOCAL LEXICON (Fully Expanded)
+# 1. THE ENTERPRISE LOCAL LEXICON
 # ==========================================
 LOCAL_LEXICON = {
     "House Appropriations": ["appropriations"],
@@ -58,6 +58,7 @@ test_end_date = datetime(2026, 3, 10)
 @st.cache_data(ttl=600)
 def build_master_calendar(tracked_bills, bypass):
     master_events = []
+    convene_times = {} # THE TIME-ANCHOR VAULT
     
     def safe_fetch_csv(url):
         try:
@@ -69,7 +70,7 @@ def build_master_calendar(tracked_bills, bypass):
         except: pass
         return pd.DataFrame()
 
-    with st.spinner("📥 Compiling Final Matrix and Locking Time-Splits..."):
+    with st.spinner("📥 Compiling Matrix and Anchoring Floor Sessions..."):
         api_code = "261"
         blob_code = "20261"
         
@@ -88,7 +89,6 @@ def build_master_calendar(tracked_bills, bypass):
                             official_name = prefix + str(c.get('ComDes', '')).strip()
                             com_des = str(c.get('ComDes', '')).strip().lower()
                             
-                            # THE BLACK-HOLE FILTER: Purge blanks and generic chamber nodes
                             if com_des and len(com_des) > 3 and com_des not in ["house", "senate", "floor"]:
                                 if official_name not in rosetta_stone:
                                     rosetta_stone[official_name] = [com_des]
@@ -124,7 +124,16 @@ def build_master_calendar(tracked_bills, bypass):
                                 break
                     if not time_val: time_val = "Time TBA"
                     
-                    # THE TIME-SPLIT LOCK: Only map the FIRST meeting of the day to prevent overwrite
+                    # EXTRACT CONVENE TIMES FOR ANCHORING
+                    owner_lower = owner_name.lower()
+                    if "house convenes" in owner_lower or "house chamber" in owner_lower:
+                        if date_str not in convene_times: convene_times[date_str] = {}
+                        convene_times[date_str]["House"] = time_val
+                    elif "senate convenes" in owner_lower or "senate chamber" in owner_lower:
+                        if date_str not in convene_times: convene_times[date_str] = {}
+                        convene_times[date_str]["Senate"] = time_val
+                    
+                    # THE TIME-SPLIT LOCK
                     map_key = f"{date_str}_{owner_name}"
                     if map_key not in api_schedule_map:
                         api_schedule_map[map_key] = {"Time": time_val, "Status": status}
@@ -182,7 +191,6 @@ def build_master_calendar(tracked_bills, bypass):
                     for lex_key, lex_aliases in rosetta_stone.items():
                         if lex_key.startswith(chamber_prefix):
                             for alias in lex_aliases:
-                                # The Black Hole Safeguard Check
                                 if alias and alias in outcome_lower:
                                     matched_key = lex_key
                                     break
@@ -191,7 +199,7 @@ def build_master_calendar(tracked_bills, bypass):
                     if matched_key:
                         committee_name = matched_key
 
-                # Floor Routing (Expanded for rules suspensions and procedural amendments)
+                # Floor Routing
                 floor_keywords = ["passed", "agreed", "engrossed", "read third", "signed", "enrolled", "reconsideration", "suspended", "dispensed", "acceded", "concurred", "amendments"]
                 if not committee_name and any(k in outcome_lower for k in floor_keywords):
                     committee_name = chamber_prefix + "Floor"
@@ -201,11 +209,21 @@ def build_master_calendar(tracked_bills, bypass):
 
                 time_val = "Ledger"
                 status = ""
-                api_key = f"{date_str}_{committee_name}"
                 
+                # Retrieve Standard API Times
+                api_key = f"{date_str}_{committee_name}"
                 if api_key in api_schedule_map:
                     time_val = api_schedule_map[api_key]["Time"]
                     status = api_schedule_map[api_key]["Status"]
+                
+                # ==================================================
+                # SURGICAL TIME-ANCHOR FOR FLOOR ACTIONS
+                # Intercepts the "Ledger" time and injects the Convenes time
+                # ==================================================
+                if committee_name == "House Floor":
+                    time_val = convene_times.get(date_str, {}).get("House", "Ledger")
+                elif committee_name == "Senate Floor":
+                    time_val = convene_times.get(date_str, {}).get("Senate", "Ledger")
                     
                 master_events.append({
                     "Date": date_str, "Time": time_val, "Status": status,
@@ -223,7 +241,7 @@ def build_master_calendar(tracked_bills, bypass):
     return final_df
 
 # ==========================================
-# 3. UI RENDERING 
+# 3. UI RENDERING (Polished)
 # ==========================================
 final_df = build_master_calendar(TRACKED_BILLS, bypass_filter)
 
@@ -254,13 +272,14 @@ def render_kanban_week(start_date, data):
                     is_cancelled = status == "CANCELLED"
                     
                     with st.container(border=True):
+                        # UI POLISH: No emojis, time drops cleanly below using raw HTML
                         if is_cancelled:
-                            st.markdown(f"~~**{committee}**~~\n<br><span style='color:#ff4b4b; font-weight:bold;'>CANCELLED</span>", unsafe_allow_html=True)
+                            st.markdown(f"~~**{committee}**~~<br><span style='color:#ff4b4b; font-weight:bold;'>CANCELLED</span>", unsafe_allow_html=True)
                         else:
                             if "⚠️ [Orphan]" in committee:
-                                st.markdown(f"<span style='color:#ffa500; font-weight:bold;'>{committee}</span>\n🕰️ *{time_str}*", unsafe_allow_html=True)
+                                st.markdown(f"<span style='color:#ffa500; font-weight:bold;'>{committee}</span><br><span style='color:#888888; font-style:italic;'>{time_str}</span>", unsafe_allow_html=True)
                             else:
-                                st.markdown(f"**{committee}**\n🕰️ *{time_str}*")
+                                st.markdown(f"**{committee}**<br><span style='color:#888888; font-style:italic;'>{time_str}</span>", unsafe_allow_html=True)
                         
                         if not is_cancelled:
                             if len(group_df) == 1 and group_df.iloc[0]['AgendaOrder'] == -1:
