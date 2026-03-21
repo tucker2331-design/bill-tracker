@@ -5,9 +5,9 @@ from datetime import datetime, timedelta
 import io
 import re
 
-st.set_page_config(page_title="Legislative Calendar (Enterprise Mirror)", layout="wide")
-st.title("📅 Enterprise Calendar: Full Mirror Test")
-st.markdown("Testing the Enterprise Alias Matrix & Anchor Parsing to eliminate black holes.")
+st.set_page_config(page_title="Legislative Calendar (Crossover Test)", layout="wide")
+st.title("📅 Enterprise Calendar: Crossover Isolation Test")
+st.markdown("Testing the Action-Prefix routing to fix the Crossover 'Floor Bloat' bug on March 6th.")
 
 API_KEY = "81D70A54-FCDC-4023-A00B-A3FD114D5984"
 HEADERS = {"WebAPIKey": API_KEY, "Accept": "application/json"}
@@ -74,9 +74,11 @@ session_context_list = get_active_session_codes(merge_upcoming=merge_sessions_to
 TRACKED_BILLS = ["HB10", "HB863", "SB4", "HB1204", "HB500"]
 
 TODAY = datetime(2026, 3, 20)
-past_week_2_start = TODAY - timedelta(days=14)
-past_week_1_start = TODAY - timedelta(days=7)
-future_end = TODAY + timedelta(days=7)
+# Overriding the date variables to strictly show our target window
+test_date = datetime(2026, 3, 6)
+past_week_2_start = test_date
+past_week_1_start = test_date + timedelta(days=7)
+future_end = test_date + timedelta(days=14)
 
 # ==========================================
 # 2. THE EXTRACTOR (Enterprise Alias Matrix Engine)
@@ -85,7 +87,6 @@ def get_best_committee_match(extracted_text, chamber_prefix, rosetta_keys):
     """The Alias Matrix: Normalizes dirty CSV text and strictly maps to official IDs."""
     if not extracted_text: return None
     
-    # Normalize the human text
     ext_clean = extracted_text.lower().replace('&', 'and').replace('committee', '').strip()
     
     # 1. Exact Match Check
@@ -94,15 +95,13 @@ def get_best_committee_match(extracted_text, chamber_prefix, rosetta_keys):
         if ext_clean == r_clean or f"{chamber_prefix.lower()}{ext_clean}" == r_clean:
             return r_key
             
-    # 2. Strong Substring Check (Longest names first to prevent partial grabs)
+    # 2. Strong Substring Check
     for r_key in sorted(rosetta_keys, key=len, reverse=True):
-        # THE SHIELD: Explicitly block generic Black Hole IDs
         if r_key.lower().strip() in ["house", "senate", "house floor", "senate floor"]: 
             continue
             
         r_clean = r_key.replace(chamber_prefix, '').lower().replace('&', 'and').replace('committee', '').strip()
         
-        # If the cleaned extracted text is a strong match for the official base name
         if r_clean and (r_clean in ext_clean or ext_clean in r_clean):
             if r_key.startswith(chamber_prefix):
                 return r_key
@@ -112,7 +111,6 @@ def get_best_committee_match(extracted_text, chamber_prefix, rosetta_keys):
 @st.cache_data(ttl=600)
 def build_master_calendar(sessions, tracked_bills, bypass):
     master_events = []
-    raw_schedules_dump = []
     
     def safe_fetch_csv(url):
         try:
@@ -123,13 +121,13 @@ def build_master_calendar(sessions, tracked_bills, bypass):
         except: pass
         return pd.DataFrame()
 
-    with st.spinner("📥 Routing Bills via Enterprise Alias Matrix..."):
+    with st.spinner("📥 Isolating March 6th Crossover Data..."):
         for session in sessions:
             api_code = session["api"]
             blob_code = session["blob"]
             is_special = session["is_special"]
             
-            # --- 1. Rosetta Stone (Bulletproofed) ---
+            # --- 1. Rosetta Stone ---
             rosetta_stone = {}
             try:
                 for chamber in ['H', 'S']:
@@ -151,13 +149,12 @@ def build_master_calendar(sessions, tracked_bills, bypass):
                 if sched_res.status_code == 200:
                     schedules = sched_res.json()
                     if isinstance(schedules, dict): schedules = schedules.get('Schedules', [])
-                    raw_schedules_dump.extend(schedules)
                     
                     for meeting in schedules:
                         meeting_date = pd.to_datetime(meeting.get('ScheduleDate', '1970-01-01'), errors='coerce')
                         
-                        # Speed filter
-                        if not (past_week_2_start <= meeting_date <= future_end): continue
+                        # LASER FOCUS: Only process meetings for Friday, March 6th!
+                        if meeting_date.strftime('%Y-%m-%d') != '2026-03-06': continue
                             
                         date_str = meeting_date.strftime('%Y-%m-%d')
                         owner_name = str(meeting.get('OwnerName', '')).strip()
@@ -227,7 +224,7 @@ def build_master_calendar(sessions, tracked_bills, bypass):
                             })
             except Exception as e: print(f"Schedule extraction failed: {e}")
 
-            # --- 3. CSV Stitching (Anchor Extraction) ---
+            # --- 3. CSV Stitching (Crossover Fix & Anchor Extraction) ---
             df_past = safe_fetch_csv(f"https://lis.blob.core.windows.net/lisfiles/{blob_code}/HISTORY.CSV")
             if not df_past.empty:
                 bill_col = next((c for c in df_past.columns if 'bill' in c.lower()), 'BillNumber')
@@ -238,7 +235,9 @@ def build_master_calendar(sessions, tracked_bills, bypass):
                 if is_special: df_past['CleanBill'] = df_past['CleanBill'] + " [Special]"
                 
                 df_past['ParsedDate'] = pd.to_datetime(df_past[date_col], errors='coerce')
-                mask = (df_past['ParsedDate'] >= pd.to_datetime(past_week_2_start)) & (df_past['ParsedDate'] <= pd.to_datetime(TODAY))
+                
+                # LASER FOCUS: Only process CSV actions for Friday, March 6th!
+                mask = (df_past['ParsedDate'].dt.strftime('%Y-%m-%d') == '2026-03-06')
                 df_past = df_past[mask]
                 
                 pattern = '|'.join(['report', 'continue', 'pass', 'fail', 'incorporate', 'hearing', 'strike', 'stricken', 'veto', 'sign', 'agreed', 'read'])
@@ -247,15 +246,23 @@ def build_master_calendar(sessions, tracked_bills, bypass):
                 if not bypass: df_past = df_past[df_past['CleanBill'].str.split(' ').str[0].isin(tracked_bills)]
                 
                 for _, row in df_past.iterrows():
-                    outcome_text = str(row[desc_col])
+                    outcome_text = str(row[desc_col]).strip()
                     outcome_lower = outcome_text.lower()
                     date_str = row['ParsedDate'].strftime('%Y-%m-%d')
-                    chamber_prefix = "House " if str(row['CleanBill']).startswith('H') else "Senate "
+                    
+                    # ENTERPRISE FIX: Crossover Tracking
+                    # Read the action prefix ('H ' or 'S ') to determine the acting chamber
+                    if outcome_text.startswith('H '):
+                        chamber_prefix = "House "
+                    elif outcome_text.startswith('S '):
+                        chamber_prefix = "Senate "
+                    else:
+                        # Fallback to the bill prefix if the clerk forgot the action prefix
+                        chamber_prefix = "House " if str(row['CleanBill']).startswith('H') else "Senate "
                     
                     committee_name = None
                     
                     # 1. THE SCALPEL: Anchor Regex Parsing
-                    # Looks only for the proper noun immediately following procedural verbs
                     anchor_pattern = r'(?:reported from|referred to|rereferred to|re-referred to|discharged from|assigned to)\s+([a-zA-Z\s,&]+?)(?:\(|with|by|,|$)'
                     match = re.search(anchor_pattern, outcome_lower)
                     
@@ -272,7 +279,7 @@ def build_master_calendar(sessions, tracked_bills, bypass):
                     
                     # 3. Ultimate Fallback
                     if not committee_name:
-                        committee_name = chamber_prefix + "Floor" # Default routing if deeply mangled
+                        committee_name = chamber_prefix + "Floor"
 
                     time_val = "Ledger"
                     status = ""
@@ -296,24 +303,15 @@ def build_master_calendar(sessions, tracked_bills, bypass):
         final_df = final_df.sort_values(by=['Date', 'Committee', 'Bill', 'Source'])
         final_df = final_df.drop_duplicates(subset=['Date', 'Committee', 'Bill'], keep='first')
         
-    return final_df, raw_schedules_dump
+    return final_df
 
 # ==========================================
-# 3. UI RENDERING & INSPECTOR
+# 3. UI RENDERING 
 # ==========================================
-final_df, raw_schedules = build_master_calendar(session_context_list, TRACKED_BILLS, bypass_filter)
-
-# --- DEBUGGER SIDEBAR ---
-st.sidebar.header("🛠️ Raw Data Inspector")
-if st.sidebar.checkbox("Show Raw Schedule API JSON"):
-    if raw_schedules:
-        st.sidebar.write("Inspect keys like `ScheduleTime` and `IsCancelled`:")
-        st.sidebar.json(raw_schedules[:25])
-    else:
-        st.sidebar.warning("No API schedule data found for this period.")
+final_df = build_master_calendar(session_context_list, TRACKED_BILLS, bypass_filter)
 
 if final_df.empty:
-    st.info("No actionable events found in the current timeframe.")
+    st.info("No actionable events found for March 6th.")
     st.stop()
     
 final_df['DateTime_Sort'] = pd.to_datetime(final_df['Date'] + ' ' + final_df['Time'].replace('Ledger', '11:59 PM').replace('Time TBA', '11:59 PM'), errors='coerce')
@@ -358,8 +356,8 @@ def render_kanban_week(start_date, end_date, data, is_future_tab=False):
                                         if is_future_tab: st.caption(f"📑 *Item #{int(row['AgendaOrder'])}*")
                                         else: st.caption(f"🔹 *{row['Outcome']}*")
 
-tab_past_2, tab_past_1, tab_future = st.tabs(["⏪ Two Weeks Ago", "⏪ Past Week", "⏩ Future Week"])
+tab_past_2, tab_past_1, tab_future = st.tabs(["⏪ Target Week (Mar 6)", "⏪ Off", "⏩ Off"])
 
-with tab_past_2: render_kanban_week(past_week_2_start, past_week_1_start - timedelta(days=1), final_df, False)
-with tab_past_1: render_kanban_week(past_week_1_start, TODAY - timedelta(days=1), final_df, False)
-with tab_future: render_kanban_week(TODAY, future_end, final_df, True)
+with tab_past_2: render_kanban_week(test_date, test_date + timedelta(days=6), final_df, False)
+with tab_past_1: st.info("Window isolated to March 6th for testing.")
+with tab_future: st.info("Window isolated to March 6th for testing.")
