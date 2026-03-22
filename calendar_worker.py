@@ -81,15 +81,18 @@ def run_calendar_update():
     master_events = []
     convene_times = {}
     api_schedule_map = {}
-    docket_memory = {} 
+    docket_memory = {} # THE RELATIONAL CACHE
 
+    # Target window: Typically today +/- a few days. For testing parity, we keep the 7-day window.
     test_start_date = datetime(2026, 3, 4)
     test_end_date = datetime(2026, 3, 10)
 
     print("📡 Downloading DOCKET.CSV (Building Relational Cache)...")
     df_docket = safe_fetch_csv(f"https://lis.blob.core.windows.net/lisfiles/{blob_code}/DOCKET.CSV")
     if not df_docket.empty:
+        # THE FIX: Aggressively scrub the CSV headers
         df_docket.columns = df_docket.columns.str.strip().str.lower().str.replace(' ', '_')
+        
         bill_col = next((c for c in df_docket.columns if 'bill' in c), None)
         date_col = next((c for c in df_docket.columns if 'date' in c), None)
         comm_col = next((c for c in df_docket.columns if 'comm' in c or 'des' in c), None)
@@ -103,21 +106,27 @@ def run_calendar_update():
                     date_str = m_date.strftime('%Y-%m-%d')
                     if date_str not in docket_memory: docket_memory[date_str] = {}
                     docket_memory[date_str][b_num] = c_name
+        else:
+            print("⚠️ DOCKET format unrecognized. Skipping relational cache.")
 
     print("📡 Downloading Live API Schedule...")
     try:
         sched_res = requests.get("https://lis.virginia.gov/Schedule/api/getschedulelistasync", headers=HEADERS, params={"sessionCode": ACTIVE_SESSION}, timeout=10)
         if sched_res.status_code == 200:
             schedules = sched_res.json().get('Schedules', []) if isinstance(sched_res.json(), dict) else sched_res.json()
+            
             for meeting in schedules:
                 meeting_date = pd.to_datetime(meeting.get('ScheduleDate', '1970-01-01'), errors='coerce')
                 if not (test_start_date <= meeting_date <= test_end_date): continue
+                    
                 date_str = meeting_date.strftime('%Y-%m-%d')
                 owner_name = str(meeting.get('OwnerName', '')).strip()
                 is_cancelled = meeting.get('IsCancelled', False)
                 status = "CANCELLED" if is_cancelled else ""
+                
                 raw_time = str(meeting.get('ScheduleTime', '')).strip()
                 clean_desc = re.sub(r'<[^>]+>', '', str(meeting.get('Description', ''))).strip()
+                
                 time_val = raw_time
                 dynamic_markers = ["upon adjournment", "minutes after", "to be determined", "tba", "recess"]
                 if any(m in clean_desc.lower() for m in dynamic_markers):
@@ -126,6 +135,7 @@ def run_calendar_update():
                             time_val = part.strip()
                             break
                 if not time_val: time_val = "Time TBA"
+                
                 owner_lower = owner_name.lower()
                 if "house convenes" in owner_lower or "house chamber" in owner_lower:
                     if date_str not in convene_times: convene_times[date_str] = {}
@@ -133,8 +143,10 @@ def run_calendar_update():
                 elif "senate convenes" in owner_lower or "senate chamber" in owner_lower:
                     if date_str not in convene_times: convene_times[date_str] = {}
                     convene_times[date_str]["Senate"] = {"Time": time_val, "Name": owner_name}
+                
                 map_key = f"{date_str}_{owner_name}"
                 if map_key not in api_schedule_map: api_schedule_map[map_key] = {"Time": time_val, "Status": status}
+                
                 if any(k in owner_lower for k in ["caucus", "session", "floor", "convenes", "adjourned"]):
                     master_events.append({"Date": date_str, "Time": time_val, "Status": status, "Committee": owner_name if owner_name else "Chamber Event", "Bill": "📌 " + clean_desc, "Outcome": "", "AgendaOrder": -1, "Source": "API"})
                     continue
@@ -147,25 +159,33 @@ def run_calendar_update():
         bill_col = next((c for c in df_past.columns if 'bill' in c.lower()), 'BillNumber')
         date_col = next((c for c in df_past.columns if 'date' in c.lower()), 'HistoryDate')
         desc_col = next((c for c in df_past.columns if 'desc' in c.lower() or 'action' in c.lower()), 'Description')
+        
         df_past['CleanBill'] = df_past[bill_col].astype(str).str.replace(' ', '').str.upper()
         df_past['ParsedDate'] = pd.to_datetime(df_past[date_col], errors='coerce')
         df_past = df_past[(df_past['ParsedDate'] >= test_start_date) & (df_past['ParsedDate'] <= test_end_date)]
+        
         pattern = '|'.join(['report', 'continue', 'pass', 'fail', 'incorporate', 'hearing', 'strike', 'stricken', 'veto', 'sign', 'agreed', 'read', 'refer', 'waive', 'recommend', 'receive', 'release', 'take', 'conferee', 'amendment', 'substitute'])
         df_past = df_past[df_past[desc_col].str.contains(pattern, case=False, na=False)]
         df_past = df_past.sort_values(by=['ParsedDate'])
+        
         bill_locations = {}
+
         for _, row in df_past.iterrows():
             bill_num = row['CleanBill']
             outcome_text = str(row[desc_col]).strip()
             outcome_lower = outcome_text.lower()
             date_val = row['ParsedDate']
             date_str = date_val.strftime('%Y-%m-%d')
+            
             if outcome_text.startswith('H '): acting_chamber, chamber_prefix = "House", "House "
             elif outcome_text.startswith('S '): acting_chamber, chamber_prefix = "Senate", "Senate "
             else: acting_chamber = "House" if bill_num.startswith('H') else "Senate"; chamber_prefix = f"{acting_chamber} "
+            
             if bill_num not in bill_locations: bill_locations[bill_num] = chamber_prefix + "Floor"
             if not bill_locations[bill_num].startswith(chamber_prefix): bill_locations[bill_num] = chamber_prefix + "Floor"
+
             event_location = bill_locations[bill_num] 
+            
             matched_committee = None
             for lex_key, aliases in LOCAL_LEXICON.items():
                 if lex_key.startswith(chamber_prefix):
@@ -174,36 +194,46 @@ def run_calendar_update():
                             matched_committee = lex_key
                             break
                 if matched_committee: break
+                    
             committee_verbs = ["reported", "referred", "assigned", "continued", "passed by indefinitely", "recommend", "incorporate", "stricken", "placed on"]
             if matched_committee and any(v in outcome_lower for v in committee_verbs):
                 event_location = matched_committee
+
+            # DATA FUSION INTERCEPT: Cross-reference Docket Cache for vague subcommittee actions
             if "subcommittee recommends" in outcome_lower and not matched_committee:
                 cached_comm = docket_memory.get(date_str, {}).get(bill_num)
                 if cached_comm:
                     event_location = chamber_prefix + cached_comm if not cached_comm.startswith(chamber_prefix) else cached_comm
                 else:
                     event_location = f"⚠️ [Unmapped Subcommittee] {chamber_prefix}Ledger"
+
             floor_reset_phrases = ["read first", "read second", "read third", "passed house", "passed senate", "agreed to", "rejected", "signed by", "presented", "received", "enrolled", "engrossed", "conferees:"]
             if any(p in outcome_lower for p in floor_reset_phrases):
                 event_location = chamber_prefix + "Floor"
+
             if "referred to" in outcome_lower or "assigned to" in outcome_lower or "placed on" in outcome_lower:
                 if matched_committee: bill_locations[bill_num] = matched_committee
             elif "reported from" in outcome_lower or "discharged from" in outcome_lower:
                 bill_locations[bill_num] = chamber_prefix + "Floor"
+
             noise_words = ["impact statement", "substitute printed", "laid on speaker's table", "laid on clerk's desk", "presented", "reprinted", "engrossed by senate - committee substitute", "engrossed by house - committee substitute"]
             if any(n in outcome_lower for n in noise_words): continue
+            
             time_val = "Ledger"
             status = ""
+            
             api_key = f"{date_str}_{event_location}"
             if api_key in api_schedule_map:
                 time_val = api_schedule_map[api_key]["Time"]
                 status = api_schedule_map[api_key]["Status"]
+            
             if event_location == "House Floor":
                 anchor = convene_times.get(date_str, {}).get("House")
                 if anchor: time_val, event_location = anchor["Time"], anchor["Name"]
             elif event_location == "Senate Floor":
                 anchor = convene_times.get(date_str, {}).get("Senate")
                 if anchor: time_val, event_location = anchor["Time"], anchor["Name"]
+                
             master_events.append({"Date": date_str, "Time": time_val, "Status": status, "Committee": event_location, "Bill": bill_num, "Outcome": outcome_text, "AgendaOrder": 999, "Source": "CSV"})
 
     print("🧹 Cleaning Data...")
@@ -212,8 +242,11 @@ def run_calendar_update():
         final_df = final_df[~((final_df['Bill'] == "📌 No live docket") & final_df.duplicated(subset=['Date', 'Committee'], keep=False))]
         final_df = final_df.sort_values(by=['Date', 'Committee', 'Bill', 'Source'])
         final_df = final_df.drop_duplicates(subset=['Date', 'Committee', 'Bill'], keep='last')
+        
+        # Convert to list of lists for Google Sheets
         final_df = final_df.fillna("")
         sheet_data = [final_df.columns.values.tolist()] + final_df.values.tolist()
+        
         print("💾 Writing to Enterprise Database...")
         worksheet.clear()
         worksheet.update(values=sheet_data, range_name="A1")
