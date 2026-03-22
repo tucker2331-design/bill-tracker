@@ -6,19 +6,19 @@ import pandas as pd
 import re
 import io
 import tempfile
+import urllib.parse
 from datetime import datetime, timedelta
 from google.oauth2.service_account import Credentials
 from bs4 import BeautifulSoup
 import pdfplumber
 
-print("🚀 Waking up Enterprise Calendar Worker (State Machine + Smart Fiefdom Extractor)...")
+print("🚀 Waking up Enterprise Calendar Worker (Armored Edition)...")
 
 # --- CONFIGURATION ---
 SPREADSHEET_ID = "1PQDtaTTUeYv781bx4_ZiehcvbEmUt8t7jFmZYJoJGKM"
 API_KEY = "81D70A54-FCDC-4023-A00B-A3FD114D5984"
 HEADERS = {"WebAPIKey": API_KEY, "Accept": "application/json"}
 
-# --- ENTERPRISE LEXICON ---
 LOCAL_LEXICON = {
     "House Appropriations": ["appropriations"], "House Courts of Justice": ["courts of justice"],
     "House Rules": ["rules"], "House Finance": ["finance"],
@@ -66,20 +66,31 @@ def safe_fetch_csv(url):
     except: pass
     return pd.DataFrame()
 
-# --- THE SMART FIEFDOM EXTRACTION ENGINE ---
-def extract_rogue_agenda(url, target_date_str=None, depth=0):
-    """Downloads agendas, extracts bills, and smartly bypasses HTML landing pages by Date."""
-    if depth > 1: return [] # Prevents infinite loops
+def generate_date_variants(dt):
+    """Generates every possible way a clerk might type the date."""
+    m = str(dt.month); d = str(dt.day); y = str(dt.year)
+    m_pad = f"{dt.month:02d}"; d_pad = f"{dt.day:02d}"; y_short = y[-2:]
+    month_full = dt.strftime('%B'); month_short = dt.strftime('%b')
+    return [
+        f"{m_pad}/{d_pad}/{y}", f"{m}/{d}/{y}", f"{m_pad}/{d_pad}/{y_short}", f"{m}/{d}/{y_short}",
+        f"{month_full} {d}", f"{month_short} {d}", f"{month_full} {d_pad}", f"{month_short} {d_pad}"
+    ]
+
+# --- THE ARMORED FIEFDOM EXTRACTION ENGINE ---
+def extract_rogue_agenda(url, target_date_dt=None, depth=0):
+    if depth > 1: return [] 
     
     found_bills = set()
-    regex_pattern = r'\b[HS][A-Za-z]{0,2}\s*\d+\b'
+    # TRAP 2 FIX: Relaxed Regex to catch joined typos like "HB173Anthony"
+    regex_pattern = r'\b([HS][A-Za-z]{0,2}\s*\d+)'
+    
     if url.startswith('/'): url = f"https://lis.virginia.gov{url}"
         
     try:
         res = requests.get(url, timeout=15)
         if res.status_code != 200: return []
         
-        # 1. If it's a PDF, extract the text
+        # 1. PDF Handling
         if '.pdf' in url.lower() or b'%PDF' in res.content[:5]:
             print(f"📄 Extracting PDF: {url}")
             with tempfile.NamedTemporaryFile(delete=False, suffix='.pdf') as temp_pdf:
@@ -93,39 +104,37 @@ def extract_rogue_agenda(url, target_date_str=None, depth=0):
                         found_bills.update([m.replace(" ", "").upper() for m in matches])
             os.remove(temp_pdf_path)
             
-        # 2. If it's HTML, check for a "Wrapper" logically
+        # 2. HTML Wrapper Handling
         else:
             soup = BeautifulSoup(res.text, 'html.parser')
             target_href = None
             
-            # SMART CLICK: If we have a target date, find the specific table row for it
-            if target_date_str:
-                date_alt = target_date_str.replace('/0', '/') # Handles 03/04 vs 3/4
-                for row in soup.find_all(['tr', 'li', 'div']): 
+            # TRAP 1 FIX: Dynamic Date Matrix
+            if target_date_dt:
+                date_matrix = generate_date_variants(target_date_dt)
+                for row in soup.find_all(['tr', 'li', 'div', 'p']): 
                     row_text = row.get_text()
-                    if target_date_str in row_text or date_alt in row_text:
-                        link = row.find('a', string=re.compile(r'Agenda', re.I)) or row.find('a', href=re.compile(r'\.pdf$', re.I))
+                    if any(variant in row_text for variant in date_matrix):
+                        link = row.find('a', string=re.compile(r'Agenda|Docket', re.I)) or row.find('a', href=re.compile(r'\.pdf$', re.I))
                         if link:
                             target_href = link.get('href')
                             break
             
-            # Fallback if no specific date match found
+            # Fallback if Matrix fails
             if not target_href:
                 agenda_links = soup.find_all('a', href=re.compile(r'\.pdf$', re.I))
                 if not agenda_links:
-                    agenda_links = soup.find_all('a', string=re.compile(r'Agenda', re.I))
+                    agenda_links = soup.find_all('a', string=re.compile(r'Agenda|Docket', re.I))
                 if agenda_links:
                     target_href = agenda_links[0].get('href')
                     
             if target_href:
-                # Fix relative links from Senate Finance
-                if target_href.startswith('/'):
-                    base_url = "/".join(url.split("/")[:3]) 
-                    target_href = base_url + target_href
-                print(f"🔗 Smart Bypass Triggered for {target_date_str}! Hopping to: {target_href}")
-                return extract_rogue_agenda(target_href, target_date_str, depth + 1)
+                # TRAP 3 FIX: Flawless URL joining
+                absolute_url = urllib.parse.urljoin(url, target_href)
+                print(f"🔗 Smart Bypass Triggered! Hopping to: {absolute_url}")
+                return extract_rogue_agenda(absolute_url, target_date_dt, depth + 1)
             
-            # If no wrapper links, just rip the raw HTML text
+            # Direct HTML Text Extraction
             text = soup.get_text(separator=' ')
             matches = re.findall(regex_pattern, text)
             found_bills.update([m.replace(" ", "").upper() for m in matches])
@@ -193,7 +202,7 @@ def run_calendar_update():
                 
                 agenda_url = None
                 link_match = re.search(r'href=[\'"]?([^\'" >]+)', raw_desc)
-                if link_match and ("agenda" in raw_desc.lower() or "docket" in raw_desc.lower() or "info" in raw_desc.lower()):
+                if link_match and any(x in raw_desc.lower() for x in ["agenda", "docket", "info"]):
                     agenda_url = link_match.group(1)
                 
                 time_val = raw_time
@@ -220,28 +229,31 @@ def run_calendar_update():
                     master_events.append({"Date": date_str, "Time": time_val, "Status": status, "Committee": owner_name if owner_name else "Chamber Event", "Bill": "📌 " + clean_desc, "Outcome": "", "AgendaOrder": -1, "Source": "API"})
                     continue
                 
-                # --- NEW PRIORITY LOGIC: REGEX > DOCKET ---
                 has_docket = False
                 combined_bills = set()
                 
-                # Step 1: Always check for a predictive Agenda Link first
+                # Step 1: Extract Predictive Agenda
                 if agenda_url and not is_cancelled:
-                    target_date_formatted = meeting_date.strftime('%m/%d/%Y') # Format for smart clicking
-                    print(f"🕵️‍♂️ Scanning Predictive Agenda for {target_date_formatted}: {agenda_url}")
-                    extracted_bills = extract_rogue_agenda(agenda_url, target_date_formatted)
+                    print(f"🕵️‍♂️ Scanning Predictive Agenda: {agenda_url}")
+                    extracted_bills = extract_rogue_agenda(agenda_url, meeting_date)
                     combined_bills.update(extracted_bills)
                 
-                # Step 2: Merge with the central CSV backup
+                # Step 2: Merge CSV Backup
                 if date_str in docket_memory:
                     for b_num, comm in docket_memory[date_str].items():
                         if comm.lower().strip() == owner_name.lower().strip():
                             combined_bills.add(b_num)
                             
-                # Step 3: Map the combined priority bills to the UI
+                # Step 3: Map Bills & Execute "Polite Merge"
                 if combined_bills:
                     for bill in sorted(list(combined_bills)):
                         master_events.append({"Date": date_str, "Time": time_val, "Status": status, "Committee": owner_name, "Bill": bill, "Outcome": "Scheduled", "AgendaOrder": 1, "Source": "DOCKET"})
-                        # QUARANTINE: Do NOT overwrite docket_memory. Keeps CSV pure.
+                        
+                        # TRAP 4 FIX: The Polite Memory Merge (No Overwriting)
+                        if date_str not in docket_memory: docket_memory[date_str] = {}
+                        if bill not in docket_memory[date_str]: 
+                            docket_memory[date_str][bill] = owner_name 
+                            
                     has_docket = True
 
                 if not has_docket:
@@ -337,7 +349,7 @@ def run_calendar_update():
         print("💾 Writing to Enterprise Database...")
         worksheet.clear()
         worksheet.update(values=sheet_data, range_name="A1")
-        print("✅ SUCCESS: Full Fusion Pipeline complete.")
+        print("✅ SUCCESS: Armored Fusion Pipeline complete.")
     else:
         print("⚠️ No data generated for the window.")
 
