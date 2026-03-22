@@ -1,96 +1,68 @@
-import streamlit as st
 import requests
-from bs4 import BeautifulSoup
-import re
-from datetime import datetime, timedelta
+from requests.adapters import HTTPAdapter
+from urllib3.util.retry import Retry
+import time
 
-st.set_page_config(page_title="Architecture Sandbox", layout="wide")
-st.title("🧪 Enterprise Architecture Sandbox")
+print("\n--- TESTING NETWORK ARMOR & DEAD LETTER QUEUE ---")
 
-# --- TEST 1: TIME PARSER ---
-st.header("Test 1: 24-Hour Time Enforcer")
-
-def test_time_parser(raw_time, parent_time_24h=None):
-    time_val = raw_time.strip().replace('.', '').upper()
+# --- 1. The Network Armor (Smart Retry, No Blind Sleeping) ---
+def get_armored_session():
+    session = requests.Session()
+    # Spoofing a real browser so the state firewall doesn't block "python-requests"
+    session.headers.update({'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/120.0.0.0 Safari/537.36'})
     
-    # 1. Handle Adjournment Math
-    if any(m in time_val.lower() for m in ["after", "upon"]):
-        if parent_time_24h:
-            try:
-                pt = datetime.strptime(parent_time_24h, '%H:%M')
-                pt = pt + timedelta(minutes=1)
-                return pt.strftime('%H:%M')
-            except: 
-                return "06:00" # Fallback
-        return "06:00" # Fallback
-        
-    # 2. Handle standard AM/PM parsing into 24-hour time
-    try:
-        parsed = datetime.strptime(time_val, '%I:%M %p')
-        return parsed.strftime('%H:%M')
-    except:
-        pass
-        
-    return "23:59" # TBA Fallback
+    # Smart Retries: Only pauses IF the server throws a 429 (Too Many Requests) or a 500-level server crash.
+    # It does NOT slow down normal, successful requests.
+    retries = Retry(
+        total=3, 
+        backoff_factor=0.5, 
+        status_forcelist=[429, 500, 502, 503, 504]
+    )
+    adapter = HTTPAdapter(max_retries=retries)
+    session.mount('http://', adapter)
+    session.mount('https://', adapter)
+    return session
 
-col1, col2 = st.columns(2)
-with col1:
-    st.write("**Inputs (What the API gives us):**")
-    st.write("1. `9:30 a.m.`")
-    st.write("2. `2:00 p.m.`")
-    st.write("3. `15 minutes after adjournment` (Parent: 14:00)")
-    st.write("4. `Upon adjournment` (No Parent)")
-    st.write("5. `Time TBA`")
+# --- 2. The Dead Letter Queue (DLQ) Routing ---
+def route_vote(csv_committee_name, is_pdf_corrupt=False):
+    # Simulated strictly-mapped Lexicon
+    LEXICON = {
+        "House Committee on Transportation": ["transportation"],
+        "Senate Committee on Finance and Appropriations": ["finance and appropriations", "finance"]
+    }
+    
+    # DLQ Trigger 1: The Scraper crashes on a bad/scanned PDF
+    if is_pdf_corrupt:
+        return "⚠️ [Agenda unreadable - Manual check required]"
 
-with col2:
-    st.write("**Outputs (Strict 24H SortTime):**")
-    st.code(f"""
-1. {test_time_parser("9:30 a.m.")}
-2. {test_time_parser("2:00 p.m.")}
-3. {test_time_parser("15 minutes after adjournment", "14:00")}
-4. {test_time_parser("Upon adjournment", None)}
-5. {test_time_parser("Time TBA")}
-    """)
-
-
-# --- TEST 2: HOUSE JS BYPASS ---
-st.header("Test 2: House JavaScript Bypass")
-target_url = "https://house.vga.virginia.gov/subcommittees/H24001/agendas/5606"
-st.write(f"**Targeting:** `{target_url}`")
-
-def test_house_js_bypass(url):
-    headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'}
-    try:
-        res = requests.get(url, headers=headers, timeout=10)
-        if res.status_code != 200:
-            return st.error(f"Failed to connect. Status: {res.status_code}")
+    outcome_lower = csv_committee_name.lower()
+    matched = None
+    
+    # Attempt strict match
+    for api_name, aliases in LEXICON.items():
+        if any(alias in outcome_lower for alias in aliases):
+            matched = api_name
+            break
             
-        soup = BeautifulSoup(res.text, 'html.parser')
-        script_tags = soup.find_all('script')
-        found_bills = set()
+    # DLQ Trigger 2: The Rogue Clerk (Unmapped Name)
+    if not matched:
+        # Instead of generic Ledger, it flags the exact weird name the clerk typed
+        return f"⚠️ [Unmapped] {csv_committee_name} (Ledger)"
         
-        # Hunt in the JS scripts
-        for script in script_tags:
-            if script.string and ('{"' in script.string or 'SB' in script.string or 'HB' in script.string):
-                matches = re.findall(r'\b([HS][A-Za-z]{0,2}\s*\d+)', script.string)
-                found_bills.update([m.replace(" ", "").upper() for m in matches])
-                
-        # Hunt in the raw HTML text fallback
-        text = soup.get_text(separator=' ')
-        matches = re.findall(r'\b([HS][A-Za-z]{0,2}\s*\d+)', text)
-        found_bills.update([m.replace(" ", "").upper() for m in matches])
-        
-        extracted_list = sorted(list(found_bills))
-        st.write(f"**Bills Extracted:** {extracted_list}")
-        
-        if "SB53" in extracted_list:
-            st.success("✅ SUCCESS: Bypassed JS and found the target bills.")
-        elif len(extracted_list) > 0:
-            st.warning("⚠️ PARTIAL: Found some bills, but missed SB53.")
-        else:
-            st.error("❌ FAILED: Found 0 bills. The data is locked behind a strict JSON API endpoint.")
-            
-    except Exception as e:
-        st.error(f"Crash: {e}")
+    return matched
 
-test_house_js_bypass(target_url)
+# --- EXECUTE TESTS ---
+print("Test A: Armored Network Request (Target: house.vga.virginia.gov)")
+try:
+    http = get_armored_session()
+    start = time.time()
+    # Enforcing a strict 5-second timeout so a dead server never hangs your GitHub Action
+    res = http.get("https://house.vga.virginia.gov", timeout=5) 
+    print(f"✅ Success! Status: {res.status_code}. Time taken: {round(time.time() - start, 2)}s")
+except Exception as e:
+    print(f"❌ Failed gracefully (Timeout or Blocked): {e}")
+
+print("\nTest B: Dead Letter Queue (DLQ) Routing")
+print(f"Scenario 1 (Perfect Match): 'Reported from Transportation' -> {route_vote('Reported from Transportation')}")
+print(f"Scenario 2 (Rogue Clerk): 'Reported from Ad-Hoc AI Sub' -> {route_vote('Reported from Ad-Hoc AI Sub')}")
+print(f"Scenario 3 (Corrupt PDF): 'House Transportation' -> {route_vote('House Transportation', is_pdf_corrupt=True)}")
