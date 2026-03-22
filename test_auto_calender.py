@@ -41,9 +41,9 @@ if not bypass_filter:
         st.warning("No tracked bills found for this window.")
         st.stop()
 
-# Sorting Logic
+# Sorting Logic (Uses new hidden SortTime column to perfectly stack subcommittees)
 final_df['DateTime_Sort'] = pd.to_datetime(
-    final_df['Date'] + ' ' + final_df['Time'].replace('Ledger', '11:59 PM').replace('Time TBA', '11:59 PM'), 
+    final_df['Date'] + ' ' + final_df.get('SortTime', final_df['Time']).replace('Ledger', '11:59 PM').replace('Time TBA', '11:59 PM'), 
     errors='coerce'
 )
 
