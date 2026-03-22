@@ -257,21 +257,41 @@ def run_calendar_update():
                 sort_time_24h = parse_24h_time(raw_time)
                 
                 dynamic_markers = ["upon adjournment", "minutes after", "to be determined", "tba", "recess"]
-                if any(m in clean_desc.lower() for m in dynamic_markers):
-                    for part in clean_desc.split(';'):
-                        if any(m in part.lower() for m in dynamic_markers):
+                
+                # THE STITCH: Combine Time and Description with a mandatory space
+                stitched_text = f"{raw_time} {clean_desc}"
+                stitched_lower = stitched_text.lower()
+                
+                if any(m in stitched_lower for m in dynamic_markers):
+                    for part in stitched_text.split(';'):
+                        part_lower = part.lower()
+                        if any(m in part_lower for m in dynamic_markers):
                             time_val = part.strip()
                             found_parent_24h = None
-                            desc_lower = clean_desc.lower()
                             
                             chamber_prefix = "House " if "house" in owner_name.lower() else "Senate " if "senate" in owner_name.lower() else ""
                             
                             # --- TIER 1: THE ORIGINAL PROVEN LOGIC ---
-                            # This handles 99% of meetings safely, exactly as it did before.
                             for p_name, p_time_24h in parent_time_map.items():
-                                if len(p_name) > 5 and p_name in desc_lower:
+                                if len(p_name) > 5 and p_name in part_lower:
                                     found_parent_24h = p_time_24h
                                     break
+                                    
+                            # --- TIER 2: THE TARGETED OVERRIDE ---
+                            if not found_parent_24h:
+                                if any(x in part_lower for x in ["senate adjourns", "adjournment of the senate"]):
+                                    found_parent_24h = parent_time_map.get("senate convenes") or parent_time_map.get("senate chamber")
+                                elif any(x in part_lower for x in ["house adjourns", "adjournment of the house"]):
+                                    found_parent_24h = parent_time_map.get("house convenes") or parent_time_map.get("house chamber")
+                                elif chamber_prefix:
+                                    for api_name, aliases in LOCAL_LEXICON.items():
+                                        if api_name.startswith(chamber_prefix):
+                                            if any(alias in part_lower for alias in aliases):
+                                                found_parent_24h = parent_time_map.get(api_name.lower())
+                                                if found_parent_24h: break
+                                                
+                            sort_time_24h = parse_24h_time(time_val, found_parent_24h)
+                            break
                                     
                             # --- TIER 2: THE TARGETED OVERRIDE ---
                             # Only runs if Tier 1 failed (e.g., "Public Safety Committee" or "Senate adjourns")
