@@ -4,16 +4,43 @@ import requests
 import gspread
 import pandas as pd
 import re
-import difflib
-from datetime import datetime
+import io
+import tempfile
+import urllib.parse
+from datetime import datetime, timedelta
 from google.oauth2.service_account import Credentials
+from bs4 import BeautifulSoup
+import pdfplumber
 
-print("🚀 Waking up Enterprise Ghost Worker...")
+print("🚀 Waking up Enterprise Calendar Worker (Final Production Build)...")
 
-# --- CONFIGURATION ---
-SPREADSHEET_ID = "1566pCv70iQ7YkTQK71RfYerciK-ukW-QdblTu2-Prfw"
+SPREADSHEET_ID = "1PQDtaTTUeYv781bx4_ZiehcvbEmUt8t7jFmZYJoJGKM"
 API_KEY = "81D70A54-FCDC-4023-A00B-A3FD114D5984"
 HEADERS = {"WebAPIKey": API_KEY, "Accept": "application/json"}
+
+LOCAL_LEXICON = {
+    "House Appropriations": ["appropriations"], "House Courts of Justice": ["courts of justice"],
+    "House Rules": ["rules"], "House Finance": ["finance"],
+    "House Counties, Cities and Towns": ["counties, cities and towns"],
+    "House Privileges and Elections": ["privileges and elections"],
+    "House Public Safety": ["public safety"],
+    "House Communications, Technology and Innovation": ["communications", "technology"],
+    "House Education": ["education"],
+    "House Agriculture, Chesapeake and Natural Resources": ["agriculture", "natural resources"],
+    "House General Laws": ["general laws"], "House Transportation": ["transportation"],
+    "House Labor and Commerce": ["labor and commerce", "labor"],
+    "House Health and Human Services": ["health and human services", "health"],
+    "Senate Finance and Appropriations": ["finance and appropriations", "finance"],
+    "Senate Courts of Justice": ["courts of justice"], "Senate Rules": ["rules"],
+    "Senate Rehabilitation and Social Services": ["rehabilitation and social services", "rehabilitation"],
+    "Senate Local Government": ["local government"],
+    "Senate Privileges and Elections": ["privileges and elections"],
+    "Senate Education and Health": ["education and health", "education", "health"],
+    "Senate Commerce and Labor": ["commerce and labor", "commerce"],
+    "Senate General Laws and Technology": ["general laws and technology", "general laws"],
+    "Senate Transportation": ["transportation"],
+    "Senate Agriculture, Conservation and Natural Resources": ["agriculture", "conservation", "natural resources"]
+}
 
 def get_active_session():
     now = datetime.now()
@@ -28,261 +55,325 @@ def get_active_session():
             except: pass
     return f"{year}1"
 
-ACTIVE_SESSION = get_active_session()
-TARGET_URL = "https://lis.virginia.gov/Legislation/api/getlegislationsessionlistasync"
-LIS_HISTORY_CSV = f"https://lis.blob.core.windows.net/lisfiles/{ACTIVE_SESSION}/HISTORY.CSV"
-LIS_DOCKET_CSV = f"https://lis.blob.core.windows.net/lisfiles/{ACTIVE_SESSION}/DOCKET.CSV"
+def safe_fetch_csv(url):
+    try:
+        res = requests.get(url, timeout=10)
+        if res.status_code == 200:
+            raw_text = res.content.decode('iso-8859-1')
+            df = pd.read_csv(io.StringIO(raw_text))
+            return df.rename(columns=lambda x: x.strip())
+    except: pass
+    return pd.DataFrame()
 
-COMMITTEE_MAP = {
-    "H01": "House Privileges and Elections", "H02": "House Courts of Justice", "H03": "House Education",
-    "H04": "House General Laws", "H05": "House Roads and Internal Navigation", "H06": "House Finance",
-    "H07": "House Appropriations", "H08": "House Counties, Cities and Towns", 
-    "H10": "House Health, Welfare and Institutions", "H11": "House Conservation and Natural Resources",
-    "H12": "House Agriculture", "H13": "House Militia, Police and Public Safety", 
-    "H14": "House Labor and Commerce", "S01": "Senate Agriculture", "S02": "Senate Commerce and Labor", 
-    "S03": "Senate Courts of Justice", "S04": "Senate Education and Health", "S05": "Senate Finance and Appropriations", 
-    "S06": "Senate General Laws", "S07": "Senate Local Government", "S08": "Senate Privileges and Elections", 
-    "S09": "Senate Rehab", "S10": "Senate Transportation", "S11": "Senate Rules"
-}
+def generate_date_variants(dt):
+    m = str(dt.month); d = str(dt.day); y = str(dt.year)
+    m_pad = f"{dt.month:02d}"; d_pad = f"{dt.day:02d}"; y_short = y[-2:]
+    month_full = dt.strftime('%B'); month_short = dt.strftime('%b')
+    return [
+        f"{m_pad}/{d_pad}/{y}", f"{m}/{d}/{y}", f"{m_pad}/{d_pad}/{y_short}", f"{m}/{d}/{y_short}",
+        f"{month_full} {d}", f"{month_short} {d}", f"{month_full} {d_pad}", f"{month_short} {d_pad}"
+    ]
 
-YOUTH_KEYWORDS = ["child", "youth", "juvenile", "minor", "student", "school", "parental", "infant", "baby", "child custody", "foster", "adoption", "delinquency", "delinquent"]
-TOPIC_KEYWORDS = {
-    "🎖️ Commendations & Memorials": ["commend", "celebrat", "memorial", "confirming appointments", "congratulat", "recognizing", "honoring", "in memory of"],
-    "🗳️ Elections & Democracy": ["election", "vote", "ballot", "campaign finance", "poll", "voter", "registrar", "districting", "suffrage", "voting", "democracy", "electoral board", "department of elections", "absentee"],
-    "🏗️ Housing & Property": ["rent", "landlord", "tenant", "housing", "lease", "property", "zoning", "eviction", "homeowner", "residential", "condo", "building code", "real estate", "foreclosure", "short-term rental", "uniform statewide building code"],
-    "🏛️ Local Government": ["charter", "ordinance", "locality", "localities", "county", "counties", "city", "cities", "town", "annexation", "sovereign immunity", "municipal", "board of supervisors", "city council", "comprehensive plan", "planning commission"],
-    "✊ Labor & Workers Rights": ["wage", "salary", "worker", "employment", "labor", "union", "collective bargaining", "leave", "compensation", "workplace", "employee", "overtime", "occupational safety", "workers' compensation", "prevailing wage", "apprenticeship"],
-    "💰 Economy & Business": ["tax", "commerce", "business", "consumer", "corporation", "finance", "budget", "economic", "trade", "gaming", "casino", "alcoholic beverage control", "retail franchise", "sales and use tax", "income tax", "procurement", "cryptocurrency"],
-    "🎓 Education": ["school", "student", "education", "university", "college", "teacher", "curriculum", "scholarship", "tuition", "board of education", "higher education", "academic", "instructional material", "learning", "literacy", "principal", "superintendent", "sol assessment", "campus", "sexually explicit content"],
-    "🪖 Veterans & Military Affairs": ["veteran", "military", "armed forces", "national guard", "service member", "deployment", "civilian life", "department of veterans services", "military spouse", "active duty"],
-    "🚓 Public Safety": ["police", "crime", "penalty", "enforcement", "prison", "arrest", "criminal", "ammo", "magazine", "correctional", "incarcerat", "jail", "sheriff", "handgun", "assault", "felony", "misdemeanor", "law-enforcement officer", "state police", "fire department", "emergency management", "fentanyl", "firearm", "gun", "weapon", "vasap", "alcohol safety"],
-    "⚖️ Criminal Justice & Courts": ["court", "judge", "attorney", "civil action", "suit", "liability", "damages", "evidence", "jury", "appeal", "justice", "lawyer", "probation", "parole", "sentencing", "custody", "divorce", "domestic violence", "protective order", "magistrate", "supreme court of virginia", "juvenile", "mandatory minimum", "child abuse", "delinquency", "fines"],
-    "🏥 Health & Healthcare": ["health", "medical", "hospital", "patient", "doctor", "insurance", "mental health", "pharmacy", "drug", "medicaid", "nurse", "physician", "prescription", "department of health", "board of medicine", "behavioral health", "maternal", "reproductive", "telemedicine", "dental", "ambulatory surgery", "outpatient", "substance abuse", "addiction"],
-    "🌳 Environment & Energy": ["energy", "water", "groundwater", "wastewater", "stormwater", "pollution", "environment", "climate", "solar", "conservation", "waste", "carbon", "natural resources", "wind", "electricity", "hydroelectric", "nuclear", "chesapeake bay", "watershed", "department of environmental quality", "recycling", "renewable", "biosolid", "polyfluoroalkyl", "pfas", "fish", "wildlife", "native"],
-    "🚗 Transportation": ["road", "highway", "vehicle", "driver", "license", "transit", "traffic", "transportation", "motor", "speed monitoring", "department of motor vehicles", "toll", "bridge", "intersection", "pedestrian", "crosswalk", "aviation", "airport"],
-    "💻 Tech & Utilities": ["internet", "broadband", "data", "privacy", "utility", "utilities", "cyber", "technology", "telecom", "artificial intelligence", "state corporation commission", "broadband authority", "algorithm", "biometric", "time", "daylight"],
-    "⚖️ Civil Rights": ["discrimination", "rights", "equity", "minority", "minorities", "gender", "religious freedom", "speech", "hate crime", "human rights", "equal pay", "diversity"],
-}
-
-def clean_bill_id(bill_text):
-    if pd.isna(bill_text): return ""
-    return re.sub(r'^([A-Z]+)0+(\d+)$', r'\1\2', str(bill_text).upper().replace(" ", "").strip())
-
-def clean_committee_name(name):
-    if not name or str(name).lower() == 'nan': return "Unassigned"
-    name = str(name).strip()
-    if name in COMMITTEE_MAP: return COMMITTEE_MAP[name]
-    clean_name = name.replace("Committee For", "").replace("Committee On", "").replace("Committee", "").strip()
-    if clean_name.startswith("H") and clean_name[1].isupper() and not clean_name.startswith("House"): clean_name = "House " + clean_name[1:]
-    if clean_name.startswith("S") and clean_name[1].isupper() and not clean_name.startswith("Senate"): clean_name = "Senate " + clean_name[1:]
-    clean_name = clean_name.title()
-    
-    best_match, highest_ratio = None, 0.0
-    for valid_comm in COMMITTEE_MAP.values():
-        ratio = difflib.SequenceMatcher(None, clean_name.lower(), valid_comm.lower()).ratio()
-        if ratio > highest_ratio: highest_ratio, best_match = ratio, valid_comm
-    return best_match if highest_ratio >= 0.95 else clean_name
-
-def get_smart_subject(title, comm, bill_id):
-    title_lower, comm_lower, b_id_upper = str(title).lower(), str(comm).lower(), str(bill_id).upper()
-    if any(b_id_upper.startswith(prefix) for prefix in ["HJ", "HR", "SJ", "SR"]) and any(x in title_lower for x in ["commend", "celebrat", "memorial", "confirming appointments"]):
-        return "🎖️ Commendations & Memorials"
-    if "education" in comm_lower and "health" not in comm_lower: return "🎓 Education"
-    if "finance" in comm_lower or "appropriations" in comm_lower: return "💰 Economy & Business"
-    
-    for cat, keys in TOPIC_KEYWORDS.items():
-        for k in keys:
-            if re.search(r'\b' + re.escape(k) + r'(?:es|s)?\b', title_lower, re.IGNORECASE): return cat
-    return "📂 Unassigned / General"
-
-def process_history_state_machine(history_data, bill_id):
-    curr_comm = "Unassigned"
-    curr_sub = "-"
-    passed_opposite = False
-    in_conference = False
-    latest_vote = "-"
-    is_dead_from_history = False
-    is_continued_from_history = False
-    
-    b_id = str(bill_id).upper()
-    opp_chamber_pass_phrases = ["passed senate", "agreed to by senate"] if b_id.startswith("H") else ["passed house", "agreed to by house"]
-
-    # 1. TRACKING PATH (Oldest to Newest)
-    for item in history_data:
-        desc = str(item.get("Action", "")).lower()
-        vote_match = re.search(r'\(\s*(\d+-Y\s+\d+-N.*?)\s*\)', desc, re.IGNORECASE)
-        if vote_match: latest_vote = vote_match.group(1).strip()
-            
-        if any(x in desc for x in ["conference", "rejected", "insisted"]): in_conference = True
-        if any(x in desc for x in opp_chamber_pass_phrases): passed_opposite = True
-            
-        if "referred to" in desc:
-            match = re.search(r'referred to\s?([a-z\s&,-]+)', desc)
-            if match:
-                raw_c = match.group(1).split('(')[0].strip()
-                curr_comm = "House " + raw_c.title() if desc.startswith("h ") else "Senate " + raw_c.title()
-                curr_sub = "-" 
-                
-        sub_match = re.search(r'(subcommittee[^)]*)', desc, re.IGNORECASE)
-        if sub_match: curr_sub = sub_match.group(1).strip()
-            
-        if any(x in desc for x in ["reported", "incorporated", "passed by indefinitely", "defeated"]):
-            if "recommends" not in desc: 
-                curr_sub = "-" 
-                
-        if any(x in desc for x in ["passed house", "passed senate", "agreed to by house", "agreed to by senate"]):
-            curr_comm = "Unassigned"
-            curr_sub = "-"
-            
-    # 2. TERMINAL STATE SCANNER (Newest to Oldest)
-    admin_noise = ["impact statement", "assigned", "placed on", "referred to", "prefiled", "printed", "reading dispensed", "engrossed", "subcommittee offered", "substitute printed"]
-    death_macros = ["passed by indefinitely", "stricken", "left in", "defeated", "failed", "tabled", "incorporated", "recommends passing by indefinitely"]
-    continue_macros = ["continued to next", "continued to special", "continued to 20", "carried over"]
-
-    for item in reversed(history_data):
-        desc = str(item.get("Action", "")).lower()
+def extract_rogue_agenda(url, target_date_dt=None, depth=0):
+    if depth > 1: return [] 
+    found_bills = set()
+    regex_pattern = r'\b([HS][A-Za-z]{0,2}\s*\d+)'
+    if url.startswith('/'): url = f"https://lis.virginia.gov{url}"
         
-        if any(noise in desc for noise in admin_noise):
-            continue
-            
-        if any(x in desc for x in continue_macros):
-            is_continued_from_history = True
-            break
-            
-        if any(x in desc for x in death_macros):
-            is_dead_from_history = True
-            break
-            
-        break
-
-    return clean_committee_name(curr_comm), curr_sub, passed_opposite, in_conference, latest_vote, is_dead_from_history, is_continued_from_history
-
-def determine_lifecycle(status_text, comm, in_conference, passed_opposite, is_dead_from_history, is_continued_from_history):
-    status = str(status_text).lower()
-    
-    if any(x in status for x in ["signed by governor", "enacted", "approved", "chapter"]): return "✅ Signed & Enacted"
-    if "vetoed" in status: return "❌ Vetoed"
-    
-    # --- ENTERPRISE OVERRIDE ---
-    if is_dead_from_history or is_continued_from_history: return "❌ Dead / Tabled"
-    
-    is_vip = any(x in status for x in ["pending governor", "awaiting governor", "awaiting signature", "enrolled", "communicated to governor", "bill text as passed"])
-    
-    if in_conference and not is_vip and ("passed" in status or "conference" in status):
-        return "⚠️ In Reconciliation / Conference"
+    try:
+        res = requests.get(url, timeout=15)
+        if res.status_code != 200: return []
         
-    if is_vip or (status.strip() == "passed" and passed_opposite): 
-        return "✍️ Awaiting Signature"
-        
-    death_macros = ["passed by indefinitely", "stricken", "left in", "defeated", "failed", "tabled", "incorporated", "no action taken", "withdrawn"]
-    if any(x in status for x in death_macros): 
-        return "❌ Dead / Tabled"
-        
-    if any(x in status for x in ["reported", "reading waived", "read second", "read third", "read first"]) and "recommends reporting" not in status: return "📣 Out of Committee"
-    if "introduced" in status and comm in ["-", "nan", "None", "", "Unassigned"]: return "📥 Awaiting Referral"
-    
-    if any(x in status for x in ["passed", "agreed", "engrossed", "communicated", "received from", "in senate", "in house"]): return "📣 Out of Committee"
-    
-    if comm not in ["-", "nan", "None", "", "Unassigned"] and len(comm) > 2: return "📥 In Committee"
-    if any(x in status for x in ["referred to", "in committee", "prefiled", "recommitted"]) and "governor" not in status: return "📥 In Committee"
-    
-    return "📣 Out of Committee (⚠️ Unrecognized)"
+        # 1. PDF Handling
+        if '.pdf' in url.lower() or b'%PDF' in res.content[:5]:
+            with tempfile.NamedTemporaryFile(delete=False, suffix='.pdf') as temp_pdf:
+                temp_pdf.write(res.content)
+                temp_pdf_path = temp_pdf.name
+            with pdfplumber.open(temp_pdf_path) as pdf:
+                for page in pdf.pages:
+                    text = page.extract_text()
+                    if text:
+                        matches = re.findall(regex_pattern, text)
+                        found_bills.update([m.replace(" ", "").upper() for m in matches])
+            os.remove(temp_pdf_path)
+            
+        # 2. HTML Handling (Deep vs Shallow Routing)
+        else:
+            soup = BeautifulSoup(res.text, 'html.parser')
+            target_href = None
+            
+            is_deep_link = "house.vga.virginia.gov" in url.lower() or "h24001" in url.lower()
+            
+            if not is_deep_link and target_date_dt:
+                date_matrix = generate_date_variants(target_date_dt)
+                for row in soup.find_all(['tr', 'li', 'div', 'p']): 
+                    row_text = row.get_text()
+                    if any(variant in row_text for variant in date_matrix):
+                        link = row.find('a', string=re.compile(r'Agenda|Docket', re.I)) or row.find('a', href=re.compile(r'\.pdf$', re.I))
+                        if link:
+                            target_href = link.get('href')
+                            break
+                            
+            if not target_href and not is_deep_link:
+                agenda_links = soup.find_all('a', href=re.compile(r'\.pdf$', re.I))
+                if not agenda_links:
+                    agenda_links = soup.find_all('a', string=re.compile(r'Agenda|Docket', re.I))
+                if agenda_links:
+                    target_href = agenda_links[0].get('href')
+                    
+            if target_href:
+                absolute_url = urllib.parse.urljoin(url, target_href)
+                return extract_rogue_agenda(absolute_url, target_date_dt, depth + 1)
+            
+            text = soup.get_text(separator=' ')
+            matches = re.findall(regex_pattern, text)
+            found_bills.update([m.replace(" ", "").upper() for m in matches])
+            
+    except Exception as e: pass
+    return sorted(list(found_bills))
 
-def run_update():
+def run_calendar_update():
     print("🔐 Authenticating with Google Cloud...")
     creds_json = os.environ.get("GCP_CREDENTIALS")
     if not creds_json: return
+        
     gc = gspread.authorize(Credentials.from_service_account_info(json.loads(creds_json), scopes=["https://www.googleapis.com/auth/spreadsheets"]))
     sheet = gc.open_by_key(SPREADSHEET_ID)
     worksheet = sheet.worksheet("Sheet1")
-    bug_worksheet = sheet.worksheet("Bug_Logs")
 
-    print("📡 Pulling State API and CSVs...")
-    try:
-        api_data = requests.get(TARGET_URL, headers=HEADERS, params={"sessionCode": ACTIVE_SESSION}, timeout=10).json()
-        bills_list = api_data.get("Legislations", [])
-    except Exception as e:
-        print(f"🚨 API Offline! Writing to Bug Log: {e}")
-        bug_worksheet.append_row([datetime.now().strftime("%Y-%m-%d %H:%M"), "GLOBAL", "🔌 State LIS API Offline", str(e), "🚨 Open"])
-        return
+    ACTIVE_SESSION = get_active_session()
+    blob_code = f"20{ACTIVE_SESSION}" if len(ACTIVE_SESSION) == 3 else ACTIVE_SESSION
 
-    hist_df = pd.read_csv(LIS_HISTORY_CSV, encoding='ISO-8859-1', on_bad_lines='skip')
-    hist_df.columns = hist_df.columns.str.strip().str.lower().str.replace(' ', '_')
-    hist_col = next((c for c in hist_df.columns if c in ['bill_number','bill_id','bill_no']), None)
-    history_lookup = {b_id: group.to_dict('records') for b_id, group in hist_df.assign(bill_clean=hist_df[hist_col].astype(str).apply(clean_bill_id)).groupby('bill_clean')} if hist_col else {}
-
-    doc_df = pd.read_csv(LIS_DOCKET_CSV, encoding='ISO-8859-1', on_bad_lines='skip')
-    doc_df.columns = doc_df.columns.str.strip().str.lower().str.replace(' ', '_')
-    doc_col = next((c for c in doc_df.columns if c in ['bill_number','bill_id','bill_no']), None)
-    docket_lookup = {b_id: group.to_dict('records') for b_id, group in doc_df.assign(bill_clean=doc_df[doc_col].astype(str).apply(clean_bill_id)).groupby('bill_clean')} if doc_col else {}
-
-    print(f"⚙️ Processing {len(bills_list)} bills...")
-    sheet_data = [["Bill Number", "Official Title", "Status", "Date", "Lifecycle", "Auto_Folder", "Is_Youth", "Current_Committee", "Display_Committee", "Current_Sub", "Latest_Vote", "History_Data", "Upcoming_Meetings"]]
+    master_events = []
+    convene_times = {}
+    api_schedule_map = {}
+    docket_memory = {} 
     
-    # --- AUTO-HEALING BUG TRACKER SETUP ---
-    existing_logs = bug_worksheet.get_all_records()
-    df_logs = pd.DataFrame(existing_logs) if existing_logs else pd.DataFrame(columns=["Date_Found", "Bill_Number", "Bug_Type", "Details", "Status"])
-    for col in ["Date_Found", "Bill_Number", "Bug_Type", "Details", "Status"]:
-        if col not in df_logs.columns: df_logs[col] = ""
+    # The Parent Dictionary for Chronological Stacking
+    parent_time_map = {} 
+
+    test_start_date = datetime(2026, 3, 4)
+    test_end_date = datetime(2026, 3, 10)
+
+    print("📡 Downloading Official DOCKET.CSV...")
+    df_docket = safe_fetch_csv(f"https://lis.blob.core.windows.net/lisfiles/{blob_code}/DOCKET.CSV")
+    if not df_docket.empty:
+        df_docket.columns = df_docket.columns.str.strip().str.lower().str.replace(' ', '_')
+        bill_col = next((c for c in df_docket.columns if 'bill' in c), None)
+        date_col = next((c for c in df_docket.columns if 'date' in c), None)
+        comm_col = next((c for c in df_docket.columns if 'comm' in c or 'des' in c), None)
         
-    # We will populate this list during the loop. Only bugs generated during THIS run are considered "active"
-    active_bugs = []
-    today_str = datetime.now().strftime("%Y-%m-%d %H:%M")
-    
-    for item in bills_list:
-        try:
-            bill_num = item.get("LegislationNumber", "Unknown")
-            title = item.get("Description", "No Title")
-            raw_status = item.get("LegislationStatus", "Unknown")
+        if bill_col and date_col and comm_col:
+            for _, row in df_docket.iterrows():
+                b_num = str(row[bill_col]).replace(" ", "").upper()
+                m_date = pd.to_datetime(row[date_col], errors='coerce')
+                c_name = str(row[comm_col]).strip()
+                if pd.notna(m_date) and b_num and c_name and c_name.lower() != 'nan':
+                    date_str = m_date.strftime('%Y-%m-%d')
+                    if date_str not in docket_memory: docket_memory[date_str] = {}
+                    if b_num not in docket_memory[date_str]: docket_memory[date_str][b_num] = []
+                    docket_memory[date_str][b_num].append(c_name)
+
+    print("📡 Downloading Live API Schedule & Agendas...")
+    try:
+        sched_res = requests.get("https://lis.virginia.gov/Schedule/api/getschedulelistasync", headers=HEADERS, params={"sessionCode": ACTIVE_SESSION}, timeout=10)
+        if sched_res.status_code == 200:
+            schedules = sched_res.json().get('Schedules', []) if isinstance(sched_res.json(), dict) else sched_res.json()
             
-            history_data = []; date_val = ""
-            for h_row in history_lookup.get(bill_num, []):
-                desc = next((str(h_row[c]) for c in ['history_description', 'description', 'action', 'history'] if c in h_row and pd.notna(h_row[c])), "")
-                date_h = next((str(h_row[c]) for c in ['history_date', 'date', 'action_date'] if c in h_row and pd.notna(h_row[c])), "")
-                if desc:
-                    history_data.append({"Date": date_h, "Action": desc})
-                    date_val = date_h
+            # Pre-Pass: Build the Time Dictionary for Parent Mapping
+            for m in schedules:
+                p_name = str(m.get('OwnerName', '')).strip().lower()
+                p_time = str(m.get('ScheduleTime', '')).strip().replace('.', '').upper()
+                if p_name and p_time: parent_time_map[p_name] = p_time
             
-            curr_comm, curr_sub, passed_opposite, in_conference, latest_vote, is_dead_hist, is_cont_hist = process_history_state_machine(history_data, bill_num)
-            lifecycle = determine_lifecycle(raw_status, curr_comm, in_conference, passed_opposite, is_dead_hist, is_cont_hist)
-            auto_folder = get_smart_subject(title, curr_comm, bill_num)
-            
-            is_youth = any(re.search(r'\b' + re.escape(k) + r'(?:es|s)?\b', title.lower(), re.IGNORECASE) for k in YOUTH_KEYWORDS)
-            display_comm = "📜 On Floor / Chamber Action" if any(x in lifecycle for x in ["Out of Committee", "Passed", "Signed", "Awaiting"]) else curr_comm
+            for meeting in schedules:
+                meeting_date = pd.to_datetime(meeting.get('ScheduleDate', '1970-01-01'), errors='coerce')
+                if not (test_start_date <= meeting_date <= test_end_date): continue
+                date_str = meeting_date.strftime('%Y-%m-%d')
+                owner_name = str(meeting.get('OwnerName', '')).strip()
+                is_cancelled = meeting.get('IsCancelled', False)
+                status = "CANCELLED" if is_cancelled else ""
                 
-            upcoming_meetings = []
-            for d in docket_lookup.get(bill_num, []):
-                d_date = next((str(d[c]) for c in ['meeting_date', 'doc_date', 'date'] if c in d and pd.notna(d[c])), "")
-                d_comm_raw = next((str(d[c]) for c in ['committee_name', 'com_des'] if c in d and pd.notna(d[c])), "")
-                if d_date: upcoming_meetings.append({"Date": d_date, "CommitteeRaw": d_comm_raw})
+                # Clean a.m. to AM for Pandas
+                raw_time = str(meeting.get('ScheduleTime', '')).strip().replace('.', '').upper() 
+                raw_desc = str(meeting.get('Description', ''))
+                clean_desc = re.sub(r'<[^>]+>', '', raw_desc).strip()
+                
+                agenda_url = None
+                link_match = re.search(r'href=[\'"]?([^\'" >]+)', raw_desc)
+                if link_match and any(x in raw_desc.lower() for x in ["agenda", "docket", "info", "report"]):
+                    agenda_url = link_match.group(1)
+                
+                time_val = raw_time
+                sort_time = raw_time 
+                
+                dynamic_markers = ["upon adjournment", "minutes after", "to be determined", "tba", "recess"]
+                if any(m in clean_desc.lower() for m in dynamic_markers):
+                    for part in clean_desc.split(';'):
+                        if any(m in part.lower() for m in dynamic_markers):
+                            time_val = part.strip()
+                            break
+                            
+                # APPLY PARENT-MAPPING CHRONOLOGY FIX
+                if any(m in time_val.lower() for m in ["after", "upon"]):
+                    found_parent_time = None
+                    # Search the dictionary for the parent's name in the description
+                    for p_name, p_time in parent_time_map.items():
+                        if len(p_name) > 5 and p_name in clean_desc.lower():
+                            found_parent_time = p_time
+                            break
+                    
+                    if found_parent_time:
+                        try:
+                            # Parse parent time, add 1 min
+                            pt = datetime.strptime(found_parent_time, '%I:%M %p')
+                            pt = pt + timedelta(minutes=1)
+                            sort_time = pt.strftime('%I:%M %p')
+                        except: sort_time = "06:00 AM" # Fallback if time format is weird
+                    else:
+                        sort_time = "06:00 AM" # The 6:00 AM Lobbyist Override
+                
+                if not time_val: 
+                    time_val = "Time TBA"
+                    sort_time = "11:59 PM"
+                
+                owner_lower = owner_name.lower()
+                if "house convenes" in owner_lower or "house chamber" in owner_lower:
+                    if date_str not in convene_times: convene_times[date_str] = {}
+                    convene_times[date_str]["House"] = {"Time": time_val, "SortTime": sort_time, "Name": owner_name}
+                elif "senate convenes" in owner_lower or "senate chamber" in owner_lower:
+                    if date_str not in convene_times: convene_times[date_str] = {}
+                    convene_times[date_str]["Senate"] = {"Time": time_val, "SortTime": sort_time, "Name": owner_name}
+                
+                map_key = f"{date_str}_{owner_name}"
+                if map_key not in api_schedule_map: api_schedule_map[map_key] = {"Time": time_val, "SortTime": sort_time, "Status": status}
+                
+                if any(k in owner_lower for k in ["caucus", "session", "floor", "convenes", "adjourned"]):
+                    master_events.append({"Date": date_str, "Time": time_val, "SortTime": sort_time, "Status": status, "Committee": owner_name if owner_name else "Chamber Event", "Bill": clean_desc, "Outcome": "", "AgendaOrder": -1, "Source": "API"})
+                    continue
+                
+                has_docket = False
+                combined_bills = set()
+                
+                if agenda_url and not is_cancelled:
+                    extracted_bills = extract_rogue_agenda(agenda_url, meeting_date)
+                    combined_bills.update(extracted_bills)
+                
+                if date_str in docket_memory:
+                    for b_num, comm_list in docket_memory[date_str].items():
+                        if any(owner_name.lower().strip() == c.lower().strip() for c in comm_list):
+                            combined_bills.add(b_num)
+                            
+                if combined_bills:
+                    for bill in sorted(list(combined_bills)):
+                        master_events.append({"Date": date_str, "Time": time_val, "SortTime": sort_time, "Status": status, "Committee": owner_name, "Bill": bill, "Outcome": "Scheduled", "AgendaOrder": 1, "Source": "DOCKET"})
+                        if date_str not in docket_memory: docket_memory[date_str] = {}
+                        if bill not in docket_memory[date_str]: docket_memory[date_str][bill] = []
+                        if owner_name not in docket_memory[date_str][bill]: docket_memory[date_str][bill].append(owner_name)
+                    has_docket = True
 
-            # AUTO-HEALING: Append any triggered bugs to the active list
-            if "⚠️ Unrecognized" in lifecycle:
-                active_bugs.append([today_str, bill_num, "🚨 Unrecognized Status Phrase", raw_status, "🚨 Open"])
-            if lifecycle == "📥 In Committee" and display_comm == "Unassigned":
-                active_bugs.append([today_str, bill_num, "🧭 Unmapped Committee Name", raw_status, "🚨 Open"])
-            if auto_folder == "📂 Unassigned / General":
-                active_bugs.append([today_str, bill_num, "🗂️ Missing Topic Keyword", title, "🚨 Open"])
+                if not has_docket:
+                    master_events.append({"Date": date_str, "Time": time_val, "SortTime": sort_time, "Status": status, "Committee": owner_name, "Bill": clean_desc, "Outcome": "", "AgendaOrder": -1, "Source": "API_Skeleton"})
+                    
+    except Exception as e: print(f"🚨 API Schedule failed: {e}")
 
-            sheet_data.append([bill_num, title, raw_status, date_val, lifecycle, auto_folder, str(is_youth), curr_comm, display_comm, curr_sub, latest_vote, json.dumps(history_data), json.dumps(upcoming_meetings)])
+    print("📡 Processing HISTORY.CSV via State Machine...")
+    df_past = safe_fetch_csv(f"https://blob.lis.virginia.gov/lisfiles/{blob_code}/HISTORY.CSV")
+    if df_past.empty:
+        df_past = safe_fetch_csv(f"https://lis.blob.core.windows.net/lisfiles/{blob_code}/HISTORY.CSV")
+        
+    if not df_past.empty:
+        bill_col = next((c for c in df_past.columns if 'bill' in c.lower()), 'BillNumber')
+        date_col = next((c for c in df_past.columns if 'date' in c.lower()), 'HistoryDate')
+        desc_col = next((c for c in df_past.columns if 'desc' in c.lower() or 'action' in c.lower()), 'Description')
+        df_past['CleanBill'] = df_past[bill_col].astype(str).str.replace(' ', '').str.upper()
+        df_past['ParsedDate'] = pd.to_datetime(df_past[date_col], errors='coerce')
+        df_past = df_past[(df_past['ParsedDate'] >= test_start_date) & (df_past['ParsedDate'] <= test_end_date)]
+        pattern = '|'.join(['report', 'continue', 'pass', 'fail', 'incorporate', 'hearing', 'strike', 'stricken', 'veto', 'sign', 'agreed', 'read', 'refer', 'waive', 'recommend', 'receive', 'release', 'take', 'conferee', 'amendment', 'substitute'])
+        df_past = df_past[df_past[desc_col].str.contains(pattern, case=False, na=False)]
+        df_past = df_past.sort_values(by=['ParsedDate'])
+        bill_locations = {}
+        
+        for _, row in df_past.iterrows():
+            bill_num = row['CleanBill']
+            outcome_text = str(row[desc_col]).strip()
+            outcome_lower = outcome_text.lower()
+            date_val = row['ParsedDate']
+            date_str = date_val.strftime('%Y-%m-%d')
             
-        except Exception as e:
-            print(f"🚨 Error processing {bill_num}: {e}")
-            active_bugs.append([today_str, bill_num, "🚨 Bill Data Corruption", str(e)[:100], "🚨 Open"])
-            continue
+            if outcome_text.startswith('H '): acting_chamber, chamber_prefix = "House", "House "
+            elif outcome_text.startswith('S '): acting_chamber, chamber_prefix = "Senate", "Senate "
+            else: acting_chamber = "House" if bill_num.startswith('H') else "Senate"; chamber_prefix = f"{acting_chamber} "
+            
+            if bill_num not in bill_locations: bill_locations[bill_num] = chamber_prefix + "Floor"
+            if not bill_locations[bill_num].startswith(chamber_prefix): bill_locations[bill_num] = chamber_prefix + "Floor"
+            event_location = bill_locations[bill_num] 
+            
+            matched_committee = None
+            for lex_key, aliases in LOCAL_LEXICON.items():
+                if lex_key.startswith(chamber_prefix):
+                    for alias in aliases:
+                        if alias and alias in outcome_lower:
+                            matched_committee = lex_key
+                            break
+                if matched_committee: break
 
-    print("📝 Wiping old data and writing main database...")
-    worksheet.clear()
-    worksheet.update(values=sheet_data, range_name="A1")
-    
-    print("🧹 Auto-healing bug log...")
-    bug_worksheet.clear()
-    if active_bugs:
-        bug_worksheet.append_row(["Date_Found", "Bill_Number", "Bug_Type", "Details", "Status"])
-        bug_worksheet.append_rows(active_bugs)
+            committee_verbs = ["reported", "referred", "assigned", "continued", "passed by indefinitely", "recommend", "incorporate", "stricken", "placed on"]
+            if matched_committee and any(v in outcome_lower for v in committee_verbs):
+                event_location = matched_committee
+
+            # THE LEDGER CURE: Apply the Composite Key Validation
+            allowed_rooms = docket_memory.get(date_str, {}).get(bill_num, [])
+            if allowed_rooms and matched_committee:
+                for room in allowed_rooms:
+                    if matched_committee.lower() in room.lower():
+                        event_location = room 
+                        break
+
+            floor_reset_phrases = ["read first", "read second", "read third", "passed house", "passed senate", "agreed to", "rejected", "signed by", "presented", "received", "enrolled", "engrossed", "conferees:"]
+            if any(p in outcome_lower for p in floor_reset_phrases):
+                event_location = chamber_prefix + "Floor"
+
+            if "referred to" in outcome_lower or "assigned to" in outcome_lower or "placed on" in outcome_lower:
+                if matched_committee: bill_locations[bill_num] = matched_committee
+            elif "reported from" in outcome_lower or "discharged from" in outcome_lower:
+                bill_locations[bill_num] = chamber_prefix + "Floor"
+
+            noise_words = ["impact statement", "substitute printed", "laid on speaker's table", "laid on clerk's desk", "presented", "reprinted", "engrossed by senate - committee substitute", "engrossed by house - committee substitute"]
+            if any(n in outcome_lower for n in noise_words): continue
+            
+            time_val = "Ledger"
+            sort_time = "11:59 PM"
+            status = ""
+            api_key = f"{date_str}_{event_location}"
+            
+            if api_key in api_schedule_map:
+                time_val = api_schedule_map[api_key]["Time"]
+                sort_time = api_schedule_map[api_key]["SortTime"]
+                status = api_schedule_map[api_key]["Status"]
+            
+            if event_location == "House Floor":
+                anchor = convene_times.get(date_str, {}).get("House")
+                if anchor: time_val, sort_time, event_location = anchor["Time"], anchor["SortTime"], anchor["Name"]
+            elif event_location == "Senate Floor":
+                anchor = convene_times.get(date_str, {}).get("Senate")
+                if anchor: time_val, sort_time, event_location = anchor["Time"], anchor["SortTime"], anchor["Name"]
+                
+            master_events.append({"Date": date_str, "Time": time_val, "SortTime": sort_time, "Status": status, "Committee": event_location, "Bill": bill_num, "Outcome": outcome_text, "AgendaOrder": 999, "Source": "CSV"})
+
+    print("🧹 Cleaning Data...")
+    final_df = pd.DataFrame(master_events)
+    if not final_df.empty:
+        final_df = final_df.sort_values(by=['Date', 'Committee', 'Bill', 'Source'])
+        final_df = final_df.drop_duplicates(subset=['Date', 'Committee', 'Bill'], keep='last')
+        final_df = final_df.fillna("")
+        sheet_data = [final_df.columns.values.tolist()] + final_df.values.tolist()
+        print("💾 Writing to Enterprise Database...")
+        worksheet.clear()
+        worksheet.update(values=sheet_data, range_name="A1")
+        print("✅ SUCCESS: The Final Mastermind Build is complete.")
     else:
-        bug_worksheet.append_row(["Date_Found", "Bill_Number", "Bug_Type", "Details", "Status"])
+        print("⚠️ No data generated for the window.")
 
-    print("🎉 MASTERMIND DATABASE UPDATED SUCCESSFULLY!")
-
-if __name__ == "__main__": run_update()
+if __name__ == "__main__": 
+    run_calendar_update()
