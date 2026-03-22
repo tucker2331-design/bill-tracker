@@ -2,14 +2,22 @@ import streamlit as st
 import pandas as pd
 from datetime import datetime, timedelta
 
-st.set_page_config(page_title="Legislative Calendar", layout="wide")
+st.set_page_config(page_title="Legislative Calendar (Enterprise Pipeline)", layout="wide")
 st.title("📅 Enterprise Calendar: Live Production")
+st.markdown("Reading pre-compiled State Machine data directly from the backend worker.")
 
-# Read directly from your new Mastermind Google Sheet
+# --- UI Controls ---
+st.sidebar.header("⚙️ System Controls")
+bypass_filter = st.sidebar.toggle("⚠️ Bypass Portfolio (Load All Data)", value=True) 
+TRACKED_BILLS = ["HB10", "HB863", "SB4", "HB1204", "HB500"]
+
+test_start_date = datetime(2026, 3, 4)
+
+# --- DATA CONNECTION ---
 SHEET_ID = "1PQDtaTTUeYv781bx4_ZiehcvbEmUt8t7jFmZYJoJGKM"
 SHEET_URL = f"https://docs.google.com/spreadsheets/d/{SHEET_ID}/gviz/tq?tqx=out:csv&sheet=Sheet1"
 
-@st.cache_data(ttl=300) # Caches for 5 minutes, making load times lightning fast
+@st.cache_data(ttl=60) # Caches for 60 seconds for lightning-fast loads
 def load_calendar_data():
     try:
         df = pd.read_csv(SHEET_URL)
@@ -24,13 +32,17 @@ if final_df.empty:
     st.info("No actionable events found or Database empty.")
     st.stop()
 
+# Apply the Portfolio Filter (Restored from your previous UI)
+if not bypass_filter:
+    final_df = final_df[final_df['Bill'].str.split(' ').str[0].isin(TRACKED_BILLS)]
+    if final_df.empty:
+        st.info("No tracked bills found in the current window.")
+        st.stop()
+
 # Sort for the UI
 final_df['DateTime_Sort'] = pd.to_datetime(final_df['Date'] + ' ' + final_df['Time'].replace('Ledger', '11:59 PM').replace('Time TBA', '11:59 PM'), errors='coerce')
 
-# UI Controls
-st.sidebar.header("⚙️ System Controls")
-test_start_date = datetime(2026, 3, 4)
-
+# --- 100% PRESERVED KANBAN UI ---
 def render_kanban_week(start_date, data):
     days = [(start_date + timedelta(days=i)) for i in range(7)]
     cols = st.columns(7)
