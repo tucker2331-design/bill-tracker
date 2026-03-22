@@ -66,9 +66,11 @@ def safe_fetch_csv(url):
     except: pass
     return pd.DataFrame()
 
-# --- THE FIEFDOM EXTRACTION ENGINE ---
-def extract_rogue_agenda(url):
-    """Downloads HTML or PDF agendas and extracts bill numbers using Regex."""
+# --- THE FIEFDOM EXTRACTION ENGINE (WITH TWO-HOP BYPASS) ---
+def extract_rogue_agenda(url, depth=0):
+    """Downloads agendas, extracts bills, and bypasses HTML landing pages."""
+    if depth > 1: return [] # Prevents infinite loops
+    
     found_bills = set()
     regex_pattern = r'\b[HS][A-Za-z]{0,2}\s*\d+\b'
     if url.startswith('/'): url = f"https://lis.virginia.gov{url}"
@@ -76,7 +78,10 @@ def extract_rogue_agenda(url):
     try:
         res = requests.get(url, timeout=15)
         if res.status_code != 200: return []
+        
+        # 1. If it's a PDF, extract the text
         if '.pdf' in url.lower() or b'%PDF' in res.content[:5]:
+            print(f"📄 Extracting PDF: {url}")
             with tempfile.NamedTemporaryFile(delete=False, suffix='.pdf') as temp_pdf:
                 temp_pdf.write(res.content)
                 temp_pdf_path = temp_pdf.name
@@ -87,11 +92,31 @@ def extract_rogue_agenda(url):
                         matches = re.findall(regex_pattern, text)
                         found_bills.update([m.replace(" ", "").upper() for m in matches])
             os.remove(temp_pdf_path)
+            
+        # 2. If it's HTML, check for a "Wrapper" or extract directly
         else:
             soup = BeautifulSoup(res.text, 'html.parser')
+            
+            # WRAPPER BYPASS: Look for links to PDFs or links containing "Agenda"
+            agenda_links = soup.find_all('a', href=re.compile(r'\.pdf$', re.I))
+            if not agenda_links:
+                agenda_links = soup.find_all('a', string=re.compile(r'Agenda', re.I))
+                
+            if agenda_links:
+                target_href = agenda_links[0].get('href')
+                if target_href:
+                    # Fix relative links from Senate Finance (e.g., /pdf/...)
+                    if target_href.startswith('/'):
+                        base_url = "/".join(url.split("/")[:3]) # Gets https://sfac.virginia.gov
+                        target_href = base_url + target_href
+                    print(f"🔗 Wrapper Bypass Triggered! Hopping to: {target_href}")
+                    return extract_rogue_agenda(target_href, depth + 1) # Recursive Hop
+            
+            # If no wrapper links, just extract the HTML text (House Subcommittees)
             text = soup.get_text(separator=' ')
             matches = re.findall(regex_pattern, text)
             found_bills.update([m.replace(" ", "").upper() for m in matches])
+            
     except Exception as e:
         print(f"⚠️ Extraction Failed for {url}: {e}")
     return sorted(list(found_bills))
@@ -182,22 +207,29 @@ def run_calendar_update():
                     master_events.append({"Date": date_str, "Time": time_val, "Status": status, "Committee": owner_name if owner_name else "Chamber Event", "Bill": "📌 " + clean_desc, "Outcome": "", "AgendaOrder": -1, "Source": "API"})
                     continue
                 
-                # Check Docket Memory
+                # --- NEW PRIORITY LOGIC: REGEX > DOCKET ---
                 has_docket = False
+                combined_bills = set()
+                
+                # Step 1: Always check for a predictive Agenda Link first
+                if agenda_url and not is_cancelled:
+                    print(f"🕵️‍♂️ Scanning Predictive Agenda: {agenda_url}")
+                    extracted_bills = extract_rogue_agenda(agenda_url)
+                    combined_bills.update(extracted_bills)
+                
+                # Step 2: Merge with the central CSV backup
                 if date_str in docket_memory:
                     for b_num, comm in docket_memory[date_str].items():
                         if comm.lower().strip() == owner_name.lower().strip():
-                            has_docket = True
-                            break
-                
-                if not has_docket and agenda_url and not is_cancelled:
-                    print(f"🕵️‍♂️ Deploying Extractor to: {agenda_url}")
-                    extracted_bills = extract_rogue_agenda(agenda_url)
-                    for bill in extracted_bills:
-                        master_events.append({"Date": date_str, "Time": time_val, "Status": status, "Committee": owner_name, "Bill": bill, "Outcome": "Extracted Agenda", "AgendaOrder": 1, "Source": "DOCKET"})
+                            combined_bills.add(b_num)
+                            
+                # Step 3: Map the combined priority bills to the UI
+                if combined_bills:
+                    for bill in sorted(list(combined_bills)):
+                        master_events.append({"Date": date_str, "Time": time_val, "Status": status, "Committee": owner_name, "Bill": bill, "Outcome": "Scheduled", "AgendaOrder": 1, "Source": "DOCKET"})
                         if date_str not in docket_memory: docket_memory[date_str] = {}
-                        docket_memory[date_str][bill] = owner_name
-                        has_docket = True
+                        docket_memory[date_str][bill] = owner_name # Update memory for State Machine
+                    has_docket = True
 
                 if not has_docket:
                     master_events.append({"Date": date_str, "Time": time_val, "Status": status, "Committee": owner_name, "Bill": "📌 No live docket", "Outcome": "", "AgendaOrder": -1, "Source": "API_Skeleton"})
