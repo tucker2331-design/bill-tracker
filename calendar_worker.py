@@ -1,5 +1,6 @@
 import os
 import json
+import time
 import requests
 import gspread
 import pandas as pd
@@ -8,39 +9,56 @@ import io
 import tempfile
 import urllib.parse
 from datetime import datetime, timedelta
+from requests.adapters import HTTPAdapter
+from urllib3.util.retry import Retry
 from google.oauth2.service_account import Credentials
 from bs4 import BeautifulSoup
 import pdfplumber
 
-print("🚀 Waking up Enterprise Calendar Worker (Final Polish Edition)...")
+print("🚀 Waking up Enterprise Calendar Worker (Flawless Integration Build)...")
 
 SPREADSHEET_ID = "1PQDtaTTUeYv781bx4_ZiehcvbEmUt8t7jFmZYJoJGKM"
 API_KEY = "81D70A54-FCDC-4023-A00B-A3FD114D5984"
 HEADERS = {"WebAPIKey": API_KEY, "Accept": "application/json"}
 
+# --- THE UPGRADED 3-WAY LEXICON BRIDGE ---
 LOCAL_LEXICON = {
-    "House Appropriations": ["appropriations"], "House Courts of Justice": ["courts of justice"],
-    "House Rules": ["rules"], "House Finance": ["finance"],
-    "House Counties, Cities and Towns": ["counties, cities and towns"],
-    "House Privileges and Elections": ["privileges and elections"],
-    "House Public Safety": ["public safety"],
-    "House Communications, Technology and Innovation": ["communications", "technology"],
-    "House Education": ["education"],
-    "House Agriculture, Chesapeake and Natural Resources": ["agriculture", "natural resources"],
-    "House General Laws": ["general laws"], "House Transportation": ["transportation"],
-    "House Labor and Commerce": ["labor and commerce", "labor"],
-    "House Health and Human Services": ["health and human services", "health"],
-    "Senate Finance and Appropriations": ["finance and appropriations", "finance"],
-    "Senate Courts of Justice": ["courts of justice"], "Senate Rules": ["rules"],
-    "Senate Rehabilitation and Social Services": ["rehabilitation and social services", "rehabilitation"],
-    "Senate Local Government": ["local government"],
-    "Senate Privileges and Elections": ["privileges and elections"],
-    "Senate Education and Health": ["education and health", "education", "health"],
-    "Senate Commerce and Labor": ["commerce and labor", "commerce"],
-    "Senate General Laws and Technology": ["general laws and technology", "general laws"],
-    "Senate Transportation": ["transportation"],
-    "Senate Agriculture, Conservation and Natural Resources": ["agriculture", "conservation", "natural resources"]
+    "House Committee on Appropriations": ["appropriations"],
+    "House Committee for Courts of Justice": ["courts of justice"],
+    "House Committee on Rules": ["rules"], 
+    "House Committee on Finance": ["finance"],
+    "House Committee on Counties, Cities and Towns": ["counties, cities and towns"],
+    "House Committee on Privileges and Elections": ["privileges and elections"],
+    "House Committee on Public Safety": ["public safety"],
+    "House Committee on Communications, Technology and Innovation": ["communications", "technology", "innovation"],
+    "House Committee on Education": ["education"],
+    "House Committee on Agriculture, Chesapeake and Natural Resources": ["agriculture", "natural resources"],
+    "House Committee on General Laws": ["general laws"], 
+    "House Committee on Transportation": ["transportation"],
+    "House Committee on Labor and Commerce": ["labor and commerce", "labor"],
+    "House Committee on Health and Human Services": ["health and human services", "health"],
+    "Senate Committee on Finance and Appropriations": ["finance and appropriations", "finance"],
+    "Senate Committee for Courts of Justice": ["courts of justice"], 
+    "Senate Committee on Rules": ["rules"],
+    "Senate Committee on Rehabilitation and Social Services": ["rehabilitation and social services", "rehabilitation"],
+    "Senate Committee on Local Government": ["local government"],
+    "Senate Committee on Privileges and Elections": ["privileges and elections"],
+    "Senate Committee on Education and Health": ["education and health", "education", "health"],
+    "Senate Committee on Commerce and Labor": ["commerce and labor", "commerce"],
+    "Senate Committee on General Laws and Technology": ["general laws and technology", "general laws"],
+    "Senate Committee on Transportation": ["transportation"],
+    "Senate Committee on Agriculture, Conservation and Natural Resources": ["agriculture", "conservation", "natural resources"]
 }
+
+# --- NETWORK ARMOR ---
+def get_armored_session():
+    session = requests.Session()
+    session.headers.update({'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/120.0.0.0 Safari/537.36'})
+    retries = Retry(total=3, backoff_factor=3, status_forcelist=[429, 500, 502, 503, 504])
+    adapter = HTTPAdapter(max_retries=retries)
+    session.mount('http://', adapter)
+    session.mount('https://', adapter)
+    return session
 
 def get_active_session():
     now = datetime.now()
@@ -65,6 +83,7 @@ def safe_fetch_csv(url):
     except: pass
     return pd.DataFrame()
 
+# --- PRESERVED DATE VARIANTS ---
 def generate_date_variants(dt):
     m = str(dt.month); d = str(dt.day); y = str(dt.year)
     m_pad = f"{dt.month:02d}"; d_pad = f"{dt.day:02d}"; y_short = y[-2:]
@@ -74,29 +93,54 @@ def generate_date_variants(dt):
         f"{month_full} {d}", f"{month_short} {d}", f"{month_full} {d_pad}", f"{month_short} {d_pad}"
     ]
 
-def extract_rogue_agenda(url, target_date_dt=None, depth=0):
-    if depth > 1: return [] 
+# --- 24-HOUR TIME ENFORCER ---
+def parse_24h_time(raw_time, parent_time_24h=None):
+    time_val = raw_time.strip().replace('.', '').upper()
+    if any(m in time_val.lower() for m in ["after", "upon"]):
+        if parent_time_24h:
+            try:
+                pt = datetime.strptime(parent_time_24h, '%H:%M')
+                pt = pt + timedelta(minutes=1)
+                return pt.strftime('%H:%M')
+            except: return "06:00" 
+        return "06:00" 
+    try:
+        parsed = datetime.strptime(time_val, '%I:%M %p')
+        return parsed.strftime('%H:%M')
+    except: pass
+    return "23:59"
+
+# --- MERGED SCRAPER (Date Routing + JS Bypass) ---
+def extract_rogue_agenda(url, session, target_date_dt=None, depth=0):
+    if depth > 1: return [], False 
     found_bills = set()
-    regex_pattern = r'\b([HS][A-Za-z]{0,2}\s*\d+)'
+    regex_pattern = r'\b([HS][BJR]\s*\d+)'
     if url.startswith('/'): url = f"https://lis.virginia.gov{url}"
         
     try:
-        res = requests.get(url, timeout=15)
-        if res.status_code != 200: return []
+        time.sleep(0.25) # Micro-throttle
+        res = session.get(url, timeout=15)
+        if res.status_code != 200: return [], False
+        
         if '.pdf' in url.lower() or b'%PDF' in res.content[:5]:
-            with tempfile.NamedTemporaryFile(delete=False, suffix='.pdf') as temp_pdf:
-                temp_pdf.write(res.content)
-                temp_pdf_path = temp_pdf.name
-            with pdfplumber.open(temp_pdf_path) as pdf:
-                for page in pdf.pages:
-                    text = page.extract_text()
-                    if text:
-                        matches = re.findall(regex_pattern, text)
-                        found_bills.update([m.replace(" ", "").upper() for m in matches])
-            os.remove(temp_pdf_path)
+            try:
+                with tempfile.NamedTemporaryFile(delete=False, suffix='.pdf') as temp_pdf:
+                    temp_pdf.write(res.content)
+                    temp_pdf_path = temp_pdf.name
+                with pdfplumber.open(temp_pdf_path) as pdf:
+                    for page in pdf.pages:
+                        text = page.extract_text()
+                        if text:
+                            matches = re.findall(regex_pattern, text.replace(" ", ""))
+                            found_bills.update([m.upper() for m in matches])
+                os.remove(temp_pdf_path)
+            except Exception:
+                return [], True # is_pdf_corrupt = True
         else:
             soup = BeautifulSoup(res.text, 'html.parser')
             target_href = None
+            
+            # PRESERVED: Deep Link Navigation for Senate
             if target_date_dt:
                 date_matrix = generate_date_variants(target_date_dt)
                 for row in soup.find_all(['tr', 'li', 'div', 'p']): 
@@ -115,13 +159,20 @@ def extract_rogue_agenda(url, target_date_dt=None, depth=0):
                     
             if target_href:
                 absolute_url = urllib.parse.urljoin(url, target_href)
-                return extract_rogue_agenda(absolute_url, target_date_dt, depth + 1)
+                return extract_rogue_agenda(absolute_url, session, target_date_dt, depth + 1)
+            
+            # THE UPGRADE: JS Bypass if it's an end-page (like House HTML)
+            for script in soup.find_all('script'):
+                if script.string and any(x in script.string for x in ['HB', 'SB', 'HJ', 'SJ']):
+                    matches = re.findall(regex_pattern, script.string.replace(" ", ""))
+                    found_bills.update([m.upper() for m in matches])
             
             text = soup.get_text(separator=' ')
-            matches = re.findall(regex_pattern, text)
-            found_bills.update([m.replace(" ", "").upper() for m in matches])
+            matches = re.findall(regex_pattern, text.replace(" ", ""))
+            found_bills.update([m.upper() for m in matches])
+            
     except Exception as e: pass
-    return sorted(list(found_bills))
+    return sorted(list(found_bills)), False
 
 def run_calendar_update():
     print("🔐 Authenticating with Google Cloud...")
@@ -138,7 +189,9 @@ def run_calendar_update():
     master_events = []
     convene_times = {}
     api_schedule_map = {}
-    docket_memory = {} # The Composite Key Guest List
+    docket_memory = {} 
+    parent_time_map = {}
+    http_session = get_armored_session()
 
     test_start_date = datetime(2026, 3, 4)
     test_end_date = datetime(2026, 3, 10)
@@ -164,12 +217,15 @@ def run_calendar_update():
 
     print("📡 Downloading Live API Schedule & Agendas...")
     try:
-        sched_res = requests.get("https://lis.virginia.gov/Schedule/api/getschedulelistasync", headers=HEADERS, params={"sessionCode": ACTIVE_SESSION}, timeout=10)
+        sched_res = http_session.get("https://lis.virginia.gov/Schedule/api/getschedulelistasync", headers=HEADERS, params={"sessionCode": ACTIVE_SESSION}, timeout=10)
         if sched_res.status_code == 200:
             schedules = sched_res.json().get('Schedules', []) if isinstance(sched_res.json(), dict) else sched_res.json()
             
-            # Counter for micro-stacking adjournment meetings
-            adj_counter = 1 
+            # Pre-Pass: Build 24H Parent Mapping
+            for m in schedules:
+                p_name = str(m.get('OwnerName', '')).strip().lower()
+                p_time = str(m.get('ScheduleTime', '')).strip()
+                if p_name and p_time: parent_time_map[p_name] = parse_24h_time(p_time)
             
             for meeting in schedules:
                 meeting_date = pd.to_datetime(meeting.get('ScheduleDate', '1970-01-01'), errors='coerce')
@@ -189,44 +245,48 @@ def run_calendar_update():
                     agenda_url = link_match.group(1)
                 
                 time_val = raw_time
-                sort_time = raw_time # Hidden UI value
+                sort_time_24h = parse_24h_time(raw_time)
                 
                 dynamic_markers = ["upon adjournment", "minutes after", "to be determined", "tba", "recess"]
                 if any(m in clean_desc.lower() for m in dynamic_markers):
                     for part in clean_desc.split(';'):
                         if any(m in part.lower() for m in dynamic_markers):
                             time_val = part.strip()
+                            found_parent_24h = None
+                            for p_name, p_time_24h in parent_time_map.items():
+                                if len(p_name) > 5 and p_name in clean_desc.lower():
+                                    found_parent_24h = p_time_24h
+                                    break
+                            sort_time_24h = parse_24h_time(time_val, found_parent_24h)
                             break
                             
-                # APPLY MICRO-STACKING FIX
-                if any(m in time_val.lower() for m in ["after", "upon"]):
-                    sort_time = f"04:{adj_counter:02d} PM"
-                    adj_counter += 1
                 if not time_val: 
                     time_val = "Time TBA"
-                    sort_time = "11:59 PM"
+                    sort_time_24h = "23:59"
                 
                 owner_lower = owner_name.lower()
                 if "house convenes" in owner_lower or "house chamber" in owner_lower:
                     if date_str not in convene_times: convene_times[date_str] = {}
-                    convene_times[date_str]["House"] = {"Time": time_val, "SortTime": sort_time, "Name": owner_name}
+                    convene_times[date_str]["House"] = {"Time": time_val, "SortTime": sort_time_24h, "Name": owner_name}
                 elif "senate convenes" in owner_lower or "senate chamber" in owner_lower:
                     if date_str not in convene_times: convene_times[date_str] = {}
-                    convene_times[date_str]["Senate"] = {"Time": time_val, "SortTime": sort_time, "Name": owner_name}
+                    convene_times[date_str]["Senate"] = {"Time": time_val, "SortTime": sort_time_24h, "Name": owner_name}
                 
                 map_key = f"{date_str}_{owner_name}"
-                if map_key not in api_schedule_map: api_schedule_map[map_key] = {"Time": time_val, "SortTime": sort_time, "Status": status}
+                if map_key not in api_schedule_map: api_schedule_map[map_key] = {"Time": time_val, "SortTime": sort_time_24h, "Status": status}
                 
                 if any(k in owner_lower for k in ["caucus", "session", "floor", "convenes", "adjourned"]):
-                    master_events.append({"Date": date_str, "Time": time_val, "SortTime": sort_time, "Status": status, "Committee": owner_name if owner_name else "Chamber Event", "Bill": clean_desc, "Outcome": "", "AgendaOrder": -1, "Source": "API"})
+                    master_events.append({"Date": date_str, "Time": time_val, "SortTime": sort_time_24h, "Status": status, "Committee": owner_name if owner_name else "Chamber Event", "Bill": clean_desc, "Outcome": "", "AgendaOrder": -1, "Source": "API"})
                     continue
                 
                 has_docket = False
                 combined_bills = set()
+                dlq_flag = ""
                 
                 if agenda_url and not is_cancelled:
-                    extracted_bills = extract_rogue_agenda(agenda_url, meeting_date)
+                    extracted_bills, is_corrupt = extract_rogue_agenda(agenda_url, http_session, meeting_date)
                     combined_bills.update(extracted_bills)
+                    if is_corrupt: dlq_flag = "⚠️ [Agenda unreadable - Manual check required]"
                 
                 if date_str in docket_memory:
                     for b_num, comm_list in docket_memory[date_str].items():
@@ -235,15 +295,20 @@ def run_calendar_update():
                             
                 if combined_bills:
                     for bill in sorted(list(combined_bills)):
-                        master_events.append({"Date": date_str, "Time": time_val, "SortTime": sort_time, "Status": status, "Committee": owner_name, "Bill": bill, "Outcome": "Scheduled", "AgendaOrder": 1, "Source": "DOCKET"})
+                        master_events.append({"Date": date_str, "Time": time_val, "SortTime": sort_time_24h, "Status": status, "Committee": owner_name, "Bill": bill, "Outcome": "Scheduled", "AgendaOrder": 1, "Source": "DOCKET"})
                         if date_str not in docket_memory: docket_memory[date_str] = {}
                         if bill not in docket_memory[date_str]: docket_memory[date_str][bill] = []
                         if owner_name not in docket_memory[date_str][bill]: docket_memory[date_str][bill].append(owner_name)
                     has_docket = True
 
+                if dlq_flag:
+                    master_events.append({"Date": date_str, "Time": time_val, "SortTime": sort_time_24h, "Status": status, "Committee": owner_name, "Bill": dlq_flag, "Outcome": "", "AgendaOrder": 0, "Source": "API_Skeleton"})
+                    has_docket = True
+
                 if not has_docket:
-                    # COSMETIC PURGE
-                    master_events.append({"Date": date_str, "Time": time_val, "SortTime": sort_time, "Status": status, "Committee": owner_name, "Bill": "No agenda listed.", "Outcome": "", "AgendaOrder": -1, "Source": "API_Skeleton"})
+                    if sort_time_24h == "06:00" and "after" in time_val.lower():
+                        clean_desc = f"⚠️ Time Unverified (Check Parent) - {clean_desc}"
+                    master_events.append({"Date": date_str, "Time": time_val, "SortTime": sort_time_24h, "Status": status, "Committee": owner_name, "Bill": clean_desc if clean_desc else "No agenda listed.", "Outcome": "", "AgendaOrder": -1, "Source": "API_Skeleton"})
                     
     except Exception as e: print(f"🚨 API Schedule failed: {e}")
 
@@ -280,11 +345,11 @@ def run_calendar_update():
             event_location = bill_locations[bill_num] 
             
             matched_committee = None
-            for lex_key, aliases in LOCAL_LEXICON.items():
-                if lex_key.startswith(chamber_prefix):
+            for api_name, aliases in LOCAL_LEXICON.items():
+                if api_name.startswith(chamber_prefix):
                     for alias in aliases:
                         if alias and alias in outcome_lower:
-                            matched_committee = lex_key
+                            matched_committee = api_name
                             break
                 if matched_committee: break
 
@@ -292,13 +357,17 @@ def run_calendar_update():
             if matched_committee and any(v in outcome_lower for v in committee_verbs):
                 event_location = matched_committee
 
-            # THE LEDGER CURE: Apply the Composite Key Validation
+            # PRESERVED: THE LEDGER CURE (Composite Key Validation)
             allowed_rooms = docket_memory.get(date_str, {}).get(bill_num, [])
             if allowed_rooms and matched_committee:
                 for room in allowed_rooms:
                     if matched_committee.lower() in room.lower():
-                        event_location = room # Instantly cures Ledger orphans!
+                        event_location = room 
                         break
+
+            # DLQ: Flag Unmapped committees
+            if any(v in outcome_lower for v in committee_verbs) and not matched_committee and "floor" not in outcome_lower:
+                event_location = f"⚠️ [Unmapped] {outcome_text.split(' from ')[-1].split(' to ')[-1]} (Ledger)"
 
             floor_reset_phrases = ["read first", "read second", "read third", "passed house", "passed senate", "agreed to", "rejected", "signed by", "presented", "received", "enrolled", "engrossed", "conferees:"]
             if any(p in outcome_lower for p in floor_reset_phrases):
@@ -313,27 +382,25 @@ def run_calendar_update():
             if any(n in outcome_lower for n in noise_words): continue
             
             time_val = "Ledger"
-            sort_time = "11:59 PM"
+            sort_time_24h = "23:59"
             status = ""
             api_key = f"{date_str}_{event_location}"
             
             if api_key in api_schedule_map:
                 time_val = api_schedule_map[api_key]["Time"]
-                sort_time = api_schedule_map[api_key]["SortTime"]
+                sort_time_24h = api_schedule_map[api_key]["SortTime"]
                 status = api_schedule_map[api_key]["Status"]
             
-            if event_location == "House Floor":
-                anchor = convene_times.get(date_str, {}).get("House")
-                if anchor: time_val, sort_time, event_location = anchor["Time"], anchor["SortTime"], anchor["Name"]
-            elif event_location == "Senate Floor":
-                anchor = convene_times.get(date_str, {}).get("Senate")
-                if anchor: time_val, sort_time, event_location = anchor["Time"], anchor["SortTime"], anchor["Name"]
+            if "Floor" in event_location:
+                anchor = convene_times.get(date_str, {}).get(chamber_prefix.strip())
+                if anchor: time_val, sort_time_24h, event_location = anchor["Time"], anchor["SortTime"], anchor["Name"]
                 
-            master_events.append({"Date": date_str, "Time": time_val, "SortTime": sort_time, "Status": status, "Committee": event_location, "Bill": bill_num, "Outcome": outcome_text, "AgendaOrder": 999, "Source": "CSV"})
+            master_events.append({"Date": date_str, "Time": time_val, "SortTime": sort_time_24h, "Status": status, "Committee": event_location, "Bill": bill_num, "Outcome": outcome_text, "AgendaOrder": 999, "Source": "CSV"})
 
     print("🧹 Cleaning Data...")
     final_df = pd.DataFrame(master_events)
     if not final_df.empty:
+        # PRESERVED: Cosmetic Purge Cleanup
         final_df = final_df[~((final_df['Bill'] == "No agenda listed.") & final_df.duplicated(subset=['Date', 'Committee'], keep=False))]
         final_df = final_df.sort_values(by=['Date', 'Committee', 'Bill', 'Source'])
         final_df = final_df.drop_duplicates(subset=['Date', 'Committee', 'Bill'], keep='last')
