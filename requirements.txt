@@ -3,7 +3,7 @@ pandas
 requests
 slack_sdk
 beautifulsoup4
-pypdf
+pdfplumber
 gspread
 streamlit-autorefresh
 beautifulsoup4==4.12.3
