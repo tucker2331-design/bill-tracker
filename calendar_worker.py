@@ -12,9 +12,8 @@ from google.oauth2.service_account import Credentials
 from bs4 import BeautifulSoup
 import pdfplumber
 
-print("🚀 Waking up Enterprise Calendar Worker (Armored Edition)...")
+print("🚀 Waking up Enterprise Calendar Worker (Final Polish Edition)...")
 
-# --- CONFIGURATION ---
 SPREADSHEET_ID = "1PQDtaTTUeYv781bx4_ZiehcvbEmUt8t7jFmZYJoJGKM"
 API_KEY = "81D70A54-FCDC-4023-A00B-A3FD114D5984"
 HEADERS = {"WebAPIKey": API_KEY, "Accept": "application/json"}
@@ -67,7 +66,6 @@ def safe_fetch_csv(url):
     return pd.DataFrame()
 
 def generate_date_variants(dt):
-    """Generates every possible way a clerk might type the date."""
     m = str(dt.month); d = str(dt.day); y = str(dt.year)
     m_pad = f"{dt.month:02d}"; d_pad = f"{dt.day:02d}"; y_short = y[-2:]
     month_full = dt.strftime('%B'); month_short = dt.strftime('%b')
@@ -76,23 +74,16 @@ def generate_date_variants(dt):
         f"{month_full} {d}", f"{month_short} {d}", f"{month_full} {d_pad}", f"{month_short} {d_pad}"
     ]
 
-# --- THE ARMORED FIEFDOM EXTRACTION ENGINE ---
 def extract_rogue_agenda(url, target_date_dt=None, depth=0):
     if depth > 1: return [] 
-    
     found_bills = set()
-    # TRAP 2 FIX: Relaxed Regex to catch joined typos like "HB173Anthony"
     regex_pattern = r'\b([HS][A-Za-z]{0,2}\s*\d+)'
-    
     if url.startswith('/'): url = f"https://lis.virginia.gov{url}"
         
     try:
         res = requests.get(url, timeout=15)
         if res.status_code != 200: return []
-        
-        # 1. PDF Handling
         if '.pdf' in url.lower() or b'%PDF' in res.content[:5]:
-            print(f"📄 Extracting PDF: {url}")
             with tempfile.NamedTemporaryFile(delete=False, suffix='.pdf') as temp_pdf:
                 temp_pdf.write(res.content)
                 temp_pdf_path = temp_pdf.name
@@ -103,13 +94,9 @@ def extract_rogue_agenda(url, target_date_dt=None, depth=0):
                         matches = re.findall(regex_pattern, text)
                         found_bills.update([m.replace(" ", "").upper() for m in matches])
             os.remove(temp_pdf_path)
-            
-        # 2. HTML Wrapper Handling
         else:
             soup = BeautifulSoup(res.text, 'html.parser')
             target_href = None
-            
-            # TRAP 1 FIX: Dynamic Date Matrix
             if target_date_dt:
                 date_matrix = generate_date_variants(target_date_dt)
                 for row in soup.find_all(['tr', 'li', 'div', 'p']): 
@@ -119,8 +106,6 @@ def extract_rogue_agenda(url, target_date_dt=None, depth=0):
                         if link:
                             target_href = link.get('href')
                             break
-            
-            # Fallback if Matrix fails
             if not target_href:
                 agenda_links = soup.find_all('a', href=re.compile(r'\.pdf$', re.I))
                 if not agenda_links:
@@ -129,26 +114,19 @@ def extract_rogue_agenda(url, target_date_dt=None, depth=0):
                     target_href = agenda_links[0].get('href')
                     
             if target_href:
-                # TRAP 3 FIX: Flawless URL joining
                 absolute_url = urllib.parse.urljoin(url, target_href)
-                print(f"🔗 Smart Bypass Triggered! Hopping to: {absolute_url}")
                 return extract_rogue_agenda(absolute_url, target_date_dt, depth + 1)
             
-            # Direct HTML Text Extraction
             text = soup.get_text(separator=' ')
             matches = re.findall(regex_pattern, text)
             found_bills.update([m.replace(" ", "").upper() for m in matches])
-            
-    except Exception as e:
-        print(f"⚠️ Extraction Failed for {url}: {e}")
+    except Exception as e: pass
     return sorted(list(found_bills))
 
 def run_calendar_update():
     print("🔐 Authenticating with Google Cloud...")
     creds_json = os.environ.get("GCP_CREDENTIALS")
-    if not creds_json: 
-        print("🚨 CRITICAL: No GCP Credentials found.")
-        return
+    if not creds_json: return
         
     gc = gspread.authorize(Credentials.from_service_account_info(json.loads(creds_json), scopes=["https://www.googleapis.com/auth/spreadsheets"]))
     sheet = gc.open_by_key(SPREADSHEET_ID)
@@ -160,12 +138,12 @@ def run_calendar_update():
     master_events = []
     convene_times = {}
     api_schedule_map = {}
-    docket_memory = {} 
+    docket_memory = {} # The Composite Key Guest List
 
     test_start_date = datetime(2026, 3, 4)
     test_end_date = datetime(2026, 3, 10)
 
-    print("📡 Downloading DOCKET.CSV (Building Relational Cache)...")
+    print("📡 Downloading Official DOCKET.CSV...")
     df_docket = safe_fetch_csv(f"https://lis.blob.core.windows.net/lisfiles/{blob_code}/DOCKET.CSV")
     if not df_docket.empty:
         df_docket.columns = df_docket.columns.str.strip().str.lower().str.replace(' ', '_')
@@ -181,13 +159,18 @@ def run_calendar_update():
                 if pd.notna(m_date) and b_num and c_name and c_name.lower() != 'nan':
                     date_str = m_date.strftime('%Y-%m-%d')
                     if date_str not in docket_memory: docket_memory[date_str] = {}
-                    docket_memory[date_str][b_num] = c_name
+                    if b_num not in docket_memory[date_str]: docket_memory[date_str][b_num] = []
+                    docket_memory[date_str][b_num].append(c_name)
 
-    print("📡 Downloading Live API Schedule & Hunting Agendas...")
+    print("📡 Downloading Live API Schedule & Agendas...")
     try:
         sched_res = requests.get("https://lis.virginia.gov/Schedule/api/getschedulelistasync", headers=HEADERS, params={"sessionCode": ACTIVE_SESSION}, timeout=10)
         if sched_res.status_code == 200:
             schedules = sched_res.json().get('Schedules', []) if isinstance(sched_res.json(), dict) else sched_res.json()
+            
+            # Counter for micro-stacking adjournment meetings
+            adj_counter = 1 
+            
             for meeting in schedules:
                 meeting_date = pd.to_datetime(meeting.get('ScheduleDate', '1970-01-01'), errors='coerce')
                 if not (test_start_date <= meeting_date <= test_end_date): continue
@@ -206,63 +189,69 @@ def run_calendar_update():
                     agenda_url = link_match.group(1)
                 
                 time_val = raw_time
+                sort_time = raw_time # Hidden UI value
+                
                 dynamic_markers = ["upon adjournment", "minutes after", "to be determined", "tba", "recess"]
                 if any(m in clean_desc.lower() for m in dynamic_markers):
                     for part in clean_desc.split(';'):
                         if any(m in part.lower() for m in dynamic_markers):
                             time_val = part.strip()
                             break
-                if not time_val: time_val = "Time TBA"
+                            
+                # APPLY MICRO-STACKING FIX
+                if any(m in time_val.lower() for m in ["after", "upon"]):
+                    sort_time = f"04:{adj_counter:02d} PM"
+                    adj_counter += 1
+                if not time_val: 
+                    time_val = "Time TBA"
+                    sort_time = "11:59 PM"
                 
                 owner_lower = owner_name.lower()
                 if "house convenes" in owner_lower or "house chamber" in owner_lower:
                     if date_str not in convene_times: convene_times[date_str] = {}
-                    convene_times[date_str]["House"] = {"Time": time_val, "Name": owner_name}
+                    convene_times[date_str]["House"] = {"Time": time_val, "SortTime": sort_time, "Name": owner_name}
                 elif "senate convenes" in owner_lower or "senate chamber" in owner_lower:
                     if date_str not in convene_times: convene_times[date_str] = {}
-                    convene_times[date_str]["Senate"] = {"Time": time_val, "Name": owner_name}
+                    convene_times[date_str]["Senate"] = {"Time": time_val, "SortTime": sort_time, "Name": owner_name}
                 
                 map_key = f"{date_str}_{owner_name}"
-                if map_key not in api_schedule_map: api_schedule_map[map_key] = {"Time": time_val, "Status": status}
+                if map_key not in api_schedule_map: api_schedule_map[map_key] = {"Time": time_val, "SortTime": sort_time, "Status": status}
                 
                 if any(k in owner_lower for k in ["caucus", "session", "floor", "convenes", "adjourned"]):
-                    master_events.append({"Date": date_str, "Time": time_val, "Status": status, "Committee": owner_name if owner_name else "Chamber Event", "Bill": "📌 " + clean_desc, "Outcome": "", "AgendaOrder": -1, "Source": "API"})
+                    master_events.append({"Date": date_str, "Time": time_val, "SortTime": sort_time, "Status": status, "Committee": owner_name if owner_name else "Chamber Event", "Bill": clean_desc, "Outcome": "", "AgendaOrder": -1, "Source": "API"})
                     continue
                 
                 has_docket = False
                 combined_bills = set()
                 
-                # Step 1: Extract Predictive Agenda
                 if agenda_url and not is_cancelled:
-                    print(f"🕵️‍♂️ Scanning Predictive Agenda: {agenda_url}")
                     extracted_bills = extract_rogue_agenda(agenda_url, meeting_date)
                     combined_bills.update(extracted_bills)
                 
-                # Step 2: Merge CSV Backup
                 if date_str in docket_memory:
-                    for b_num, comm in docket_memory[date_str].items():
-                        if comm.lower().strip() == owner_name.lower().strip():
+                    for b_num, comm_list in docket_memory[date_str].items():
+                        if any(owner_name.lower().strip() == c.lower().strip() for c in comm_list):
                             combined_bills.add(b_num)
                             
-                # Step 3: Map Bills & Execute "Polite Merge"
                 if combined_bills:
                     for bill in sorted(list(combined_bills)):
-                        master_events.append({"Date": date_str, "Time": time_val, "Status": status, "Committee": owner_name, "Bill": bill, "Outcome": "Scheduled", "AgendaOrder": 1, "Source": "DOCKET"})
-                        
-                        # TRAP 4 FIX: The Polite Memory Merge (No Overwriting)
+                        master_events.append({"Date": date_str, "Time": time_val, "SortTime": sort_time, "Status": status, "Committee": owner_name, "Bill": bill, "Outcome": "Scheduled", "AgendaOrder": 1, "Source": "DOCKET"})
                         if date_str not in docket_memory: docket_memory[date_str] = {}
-                        if bill not in docket_memory[date_str]: 
-                            docket_memory[date_str][bill] = owner_name 
-                            
+                        if bill not in docket_memory[date_str]: docket_memory[date_str][bill] = []
+                        if owner_name not in docket_memory[date_str][bill]: docket_memory[date_str][bill].append(owner_name)
                     has_docket = True
 
                 if not has_docket:
-                    master_events.append({"Date": date_str, "Time": time_val, "Status": status, "Committee": owner_name, "Bill": "📌 No live docket", "Outcome": "", "AgendaOrder": -1, "Source": "API_Skeleton"})
+                    # COSMETIC PURGE
+                    master_events.append({"Date": date_str, "Time": time_val, "SortTime": sort_time, "Status": status, "Committee": owner_name, "Bill": "No agenda listed.", "Outcome": "", "AgendaOrder": -1, "Source": "API_Skeleton"})
                     
     except Exception as e: print(f"🚨 API Schedule failed: {e}")
 
     print("📡 Processing HISTORY.CSV via State Machine...")
-    df_past = safe_fetch_csv(f"https://lis.blob.core.windows.net/lisfiles/{blob_code}/HISTORY.CSV")
+    df_past = safe_fetch_csv(f"https://blob.lis.virginia.gov/lisfiles/{blob_code}/HISTORY.CSV")
+    if df_past.empty:
+        df_past = safe_fetch_csv(f"https://lis.blob.core.windows.net/lisfiles/{blob_code}/HISTORY.CSV")
+        
     if not df_past.empty:
         bill_col = next((c for c in df_past.columns if 'bill' in c.lower()), 'BillNumber')
         date_col = next((c for c in df_past.columns if 'date' in c.lower()), 'HistoryDate')
@@ -298,17 +287,18 @@ def run_calendar_update():
                             matched_committee = lex_key
                             break
                 if matched_committee: break
-                    
+
             committee_verbs = ["reported", "referred", "assigned", "continued", "passed by indefinitely", "recommend", "incorporate", "stricken", "placed on"]
             if matched_committee and any(v in outcome_lower for v in committee_verbs):
                 event_location = matched_committee
 
-            if "subcommittee recommends" in outcome_lower and not matched_committee:
-                cached_comm = docket_memory.get(date_str, {}).get(bill_num)
-                if cached_comm:
-                    event_location = chamber_prefix + cached_comm if not cached_comm.startswith(chamber_prefix) else cached_comm
-                else:
-                    event_location = f"⚠️ [Unmapped Subcommittee] {chamber_prefix}Ledger"
+            # THE LEDGER CURE: Apply the Composite Key Validation
+            allowed_rooms = docket_memory.get(date_str, {}).get(bill_num, [])
+            if allowed_rooms and matched_committee:
+                for room in allowed_rooms:
+                    if matched_committee.lower() in room.lower():
+                        event_location = room # Instantly cures Ledger orphans!
+                        break
 
             floor_reset_phrases = ["read first", "read second", "read third", "passed house", "passed senate", "agreed to", "rejected", "signed by", "presented", "received", "enrolled", "engrossed", "conferees:"]
             if any(p in outcome_lower for p in floor_reset_phrases):
@@ -323,25 +313,28 @@ def run_calendar_update():
             if any(n in outcome_lower for n in noise_words): continue
             
             time_val = "Ledger"
+            sort_time = "11:59 PM"
             status = ""
             api_key = f"{date_str}_{event_location}"
+            
             if api_key in api_schedule_map:
                 time_val = api_schedule_map[api_key]["Time"]
+                sort_time = api_schedule_map[api_key]["SortTime"]
                 status = api_schedule_map[api_key]["Status"]
             
             if event_location == "House Floor":
                 anchor = convene_times.get(date_str, {}).get("House")
-                if anchor: time_val, event_location = anchor["Time"], anchor["Name"]
+                if anchor: time_val, sort_time, event_location = anchor["Time"], anchor["SortTime"], anchor["Name"]
             elif event_location == "Senate Floor":
                 anchor = convene_times.get(date_str, {}).get("Senate")
-                if anchor: time_val, event_location = anchor["Time"], anchor["Name"]
+                if anchor: time_val, sort_time, event_location = anchor["Time"], anchor["SortTime"], anchor["Name"]
                 
-            master_events.append({"Date": date_str, "Time": time_val, "Status": status, "Committee": event_location, "Bill": bill_num, "Outcome": outcome_text, "AgendaOrder": 999, "Source": "CSV"})
+            master_events.append({"Date": date_str, "Time": time_val, "SortTime": sort_time, "Status": status, "Committee": event_location, "Bill": bill_num, "Outcome": outcome_text, "AgendaOrder": 999, "Source": "CSV"})
 
     print("🧹 Cleaning Data...")
     final_df = pd.DataFrame(master_events)
     if not final_df.empty:
-        final_df = final_df[~((final_df['Bill'] == "📌 No live docket") & final_df.duplicated(subset=['Date', 'Committee'], keep=False))]
+        final_df = final_df[~((final_df['Bill'] == "No agenda listed.") & final_df.duplicated(subset=['Date', 'Committee'], keep=False))]
         final_df = final_df.sort_values(by=['Date', 'Committee', 'Bill', 'Source'])
         final_df = final_df.drop_duplicates(subset=['Date', 'Committee', 'Bill'], keep='last')
         final_df = final_df.fillna("")
@@ -349,7 +342,7 @@ def run_calendar_update():
         print("💾 Writing to Enterprise Database...")
         worksheet.clear()
         worksheet.update(values=sheet_data, range_name="A1")
-        print("✅ SUCCESS: Armored Fusion Pipeline complete.")
+        print("✅ SUCCESS: The Final Mastermind Build is complete.")
     else:
         print("⚠️ No data generated for the window.")
 
