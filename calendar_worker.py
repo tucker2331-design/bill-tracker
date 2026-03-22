@@ -256,7 +256,7 @@ def run_calendar_update():
                 time_val = raw_time
                 sort_time_24h = parse_24h_time(raw_time)
                 
-                dynamic_markers = ["upon adjournment", "minutes after", "to be determined", "tba", "recess"]
+                dynamic_markers = ["upon adjournment", "minutes after", "to be determined", "tba", "recess", "hour after"]
                 
                 # THE STITCH: Combine Time and Description with a mandatory space
                 stitched_text = f"{raw_time} {clean_desc}"
