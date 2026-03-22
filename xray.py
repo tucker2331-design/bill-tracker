@@ -1,37 +1,41 @@
-import streamlit as st
-import pandas as pd
 import requests
-import io
+from bs4 import BeautifulSoup
+import re
+import json
 
-st.set_page_config(page_title="CSV X-Ray", layout="wide")
-st.title("🔍 Raw CSV Ledger X-Ray (March 6th)")
-
-BLOB_CODE = "20261"
-URL = f"https://lis.blob.core.windows.net/lisfiles/{BLOB_CODE}/HISTORY.CSV"
-
-st.write(f"📡 Fetching raw ledger from: `{URL}`")
-
-try:
-    res = requests.get(URL, timeout=10)
-    if res.status_code == 200:
-        # Decode using ISO-8859-1 to handle Virginia government server encoding
-        raw_text = res.content.decode('iso-8859-1')
-        df = pd.read_csv(io.StringIO(raw_text))
-        df = df.rename(columns=lambda x: x.strip())
+def test_house_js_bypass(url):
+    print(f"\n--- TESTING HOUSE JS BYPASS ---")
+    print(f"Targeting: {url}")
+    
+    headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'}
+    res = requests.get(url, headers=headers)
+    
+    if res.status_code != 200:
+        print(f"Failed to connect. Status: {res.status_code}")
+        return
         
-        # Find the date column dynamically
-        date_col = next((c for c in df.columns if 'date' in c.lower()), 'HistoryDate')
-        
-        # Filter for March 6th
-        df['ParsedDate'] = pd.to_datetime(df[date_col], errors='coerce')
-        df_march_6 = df[df['ParsedDate'].dt.strftime('%Y-%m-%d') == '2026-03-06']
-        
-        st.success(f"✅ Extracted {len(df_march_6)} raw actions for March 6th.")
-        
-        # FOOLPROOF FIX: Dump the entire raw dataframe. No strict column names to crash it.
-        st.dataframe(df_march_6, use_container_width=True)
-        
+    soup = BeautifulSoup(res.text, 'html.parser')
+    
+    # TACTIC 1: Look for embedded JSON state (Common in Next.js / Nuxt.js)
+    script_tags = soup.find_all('script')
+    found_bills = set()
+    
+    for script in script_tags:
+        if script.string and ('{"' in script.string or 'SB' in script.string or 'HB' in script.string):
+            # Use Regex to rip out anything that looks like a bill number from the raw script payload
+            matches = re.findall(r'\b([HS][A-Za-z]{0,2}\s*\d+)', script.string)
+            found_bills.update([m.replace(" ", "").upper() for m in matches])
+            
+    # TACTIC 2: Raw text fallback (in case they server-side rendered parts of it)
+    text = soup.get_text(separator=' ')
+    matches = re.findall(r'\b([HS][A-Za-z]{0,2}\s*\d+)', text)
+    found_bills.update([m.replace(" ", "").upper() for m in matches])
+    
+    print(f"Bills Extracted: {sorted(list(found_bills))}")
+    if "SB53" in found_bills:
+        print("✅ SUCCESS: Bypassed JS and found the target bills.")
     else:
-        st.error(f"Failed to fetch CSV. State server returned: {res.status_code}")
-except Exception as e:
-    st.error(f"Extraction failed: {e}")
+        print("❌ FAILED: The bills are locked behind an API endpoint.")
+
+# Testing the URL from your screenshot
+test_house_js_bypass("https://house.vga.virginia.gov/subcommittees/H24001/agendas/5606")
