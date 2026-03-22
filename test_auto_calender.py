@@ -41,11 +41,15 @@ if not bypass_filter:
         st.warning("No tracked bills found for this window.")
         st.stop()
 
-# Sorting Logic (Uses new hidden SortTime column to perfectly stack subcommittees)
-final_df['DateTime_Sort'] = pd.to_datetime(
-    final_df['Date'] + ' ' + final_df.get('SortTime', final_df['Time']).replace('Ledger', '11:59 PM').replace('Time TBA', '11:59 PM'), 
-    errors='coerce'
-)
+# --- ROBUST SORTING LOGIC ---
+# Fallback to standard Time if the backend hasn't updated the sheet with SortTime yet
+if 'SortTime' not in final_df.columns:
+    final_df['SortTime'] = final_df['Time']
+
+# Clean string times for perfect pandas datetime conversion
+clean_time_series = final_df['SortTime'].replace({'Ledger': '11:59 PM', 'Time TBA': '11:59 PM'})
+final_df['DateTime_Sort'] = pd.to_datetime(final_df['Date'] + ' ' + clean_time_series, errors='coerce')
+
 
 # --- THE KANBAN UI ---
 def render_kanban_week(start_date, data):
@@ -84,10 +88,11 @@ def render_kanban_week(start_date, data):
                             skeleton_items = group_df[group_df['Source'].astype(str).str.contains('API')]
                             bill_items = group_df[group_df['Source'].isin(['CSV', 'DOCKET'])]
                             
-                            # Show Meeting Notes (Devotionals, Caucuses, etc)
+                            # Show Meeting Notes (Devotionals, Caucuses, etc) filtering out the backend skeleton text
                             for _, s_row in skeleton_items.iterrows():
-                                if "📌" in str(s_row['Bill']) and s_row['Bill'] != "📌 No live docket":
-                                    st.markdown(f"<small>{s_row['Bill']}</small>", unsafe_allow_html=True)
+                                bill_text = str(s_row['Bill']).strip()
+                                if bill_text and bill_text != "No agenda listed.":
+                                    st.markdown(f"<small>{bill_text}</small>", unsafe_allow_html=True)
                                     
                             # Show the Bills list
                             if not bill_items.empty:
