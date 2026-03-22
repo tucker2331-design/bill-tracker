@@ -11,7 +11,7 @@ from google.oauth2.service_account import Credentials
 from bs4 import BeautifulSoup
 import pdfplumber
 
-print("🚀 Waking up Enterprise Calendar Worker (State Machine + Fiefdom Extractor)...")
+print("🚀 Waking up Enterprise Calendar Worker (State Machine + Smart Fiefdom Extractor)...")
 
 # --- CONFIGURATION ---
 SPREADSHEET_ID = "1PQDtaTTUeYv781bx4_ZiehcvbEmUt8t7jFmZYJoJGKM"
@@ -66,9 +66,9 @@ def safe_fetch_csv(url):
     except: pass
     return pd.DataFrame()
 
-# --- THE FIEFDOM EXTRACTION ENGINE (WITH TWO-HOP BYPASS) ---
-def extract_rogue_agenda(url, depth=0):
-    """Downloads agendas, extracts bills, and bypasses HTML landing pages."""
+# --- THE SMART FIEFDOM EXTRACTION ENGINE ---
+def extract_rogue_agenda(url, target_date_str=None, depth=0):
+    """Downloads agendas, extracts bills, and smartly bypasses HTML landing pages by Date."""
     if depth > 1: return [] # Prevents infinite loops
     
     found_bills = set()
@@ -93,26 +93,39 @@ def extract_rogue_agenda(url, depth=0):
                         found_bills.update([m.replace(" ", "").upper() for m in matches])
             os.remove(temp_pdf_path)
             
-        # 2. If it's HTML, check for a "Wrapper" or extract directly
+        # 2. If it's HTML, check for a "Wrapper" logically
         else:
             soup = BeautifulSoup(res.text, 'html.parser')
+            target_href = None
             
-            # WRAPPER BYPASS: Look for links to PDFs or links containing "Agenda"
-            agenda_links = soup.find_all('a', href=re.compile(r'\.pdf$', re.I))
-            if not agenda_links:
-                agenda_links = soup.find_all('a', string=re.compile(r'Agenda', re.I))
-                
-            if agenda_links:
-                target_href = agenda_links[0].get('href')
-                if target_href:
-                    # Fix relative links from Senate Finance (e.g., /pdf/...)
-                    if target_href.startswith('/'):
-                        base_url = "/".join(url.split("/")[:3]) # Gets https://sfac.virginia.gov
-                        target_href = base_url + target_href
-                    print(f"🔗 Wrapper Bypass Triggered! Hopping to: {target_href}")
-                    return extract_rogue_agenda(target_href, depth + 1) # Recursive Hop
+            # SMART CLICK: If we have a target date, find the specific table row for it
+            if target_date_str:
+                date_alt = target_date_str.replace('/0', '/') # Handles 03/04 vs 3/4
+                for row in soup.find_all(['tr', 'li', 'div']): 
+                    row_text = row.get_text()
+                    if target_date_str in row_text or date_alt in row_text:
+                        link = row.find('a', string=re.compile(r'Agenda', re.I)) or row.find('a', href=re.compile(r'\.pdf$', re.I))
+                        if link:
+                            target_href = link.get('href')
+                            break
             
-            # If no wrapper links, just extract the HTML text (House Subcommittees)
+            # Fallback if no specific date match found
+            if not target_href:
+                agenda_links = soup.find_all('a', href=re.compile(r'\.pdf$', re.I))
+                if not agenda_links:
+                    agenda_links = soup.find_all('a', string=re.compile(r'Agenda', re.I))
+                if agenda_links:
+                    target_href = agenda_links[0].get('href')
+                    
+            if target_href:
+                # Fix relative links from Senate Finance
+                if target_href.startswith('/'):
+                    base_url = "/".join(url.split("/")[:3]) 
+                    target_href = base_url + target_href
+                print(f"🔗 Smart Bypass Triggered for {target_date_str}! Hopping to: {target_href}")
+                return extract_rogue_agenda(target_href, target_date_str, depth + 1)
+            
+            # If no wrapper links, just rip the raw HTML text
             text = soup.get_text(separator=' ')
             matches = re.findall(regex_pattern, text)
             found_bills.update([m.replace(" ", "").upper() for m in matches])
@@ -213,8 +226,9 @@ def run_calendar_update():
                 
                 # Step 1: Always check for a predictive Agenda Link first
                 if agenda_url and not is_cancelled:
-                    print(f"🕵️‍♂️ Scanning Predictive Agenda: {agenda_url}")
-                    extracted_bills = extract_rogue_agenda(agenda_url)
+                    target_date_formatted = meeting_date.strftime('%m/%d/%Y') # Format for smart clicking
+                    print(f"🕵️‍♂️ Scanning Predictive Agenda for {target_date_formatted}: {agenda_url}")
+                    extracted_bills = extract_rogue_agenda(agenda_url, target_date_formatted)
                     combined_bills.update(extracted_bills)
                 
                 # Step 2: Merge with the central CSV backup
@@ -227,8 +241,7 @@ def run_calendar_update():
                 if combined_bills:
                     for bill in sorted(list(combined_bills)):
                         master_events.append({"Date": date_str, "Time": time_val, "Status": status, "Committee": owner_name, "Bill": bill, "Outcome": "Scheduled", "AgendaOrder": 1, "Source": "DOCKET"})
-                        if date_str not in docket_memory: docket_memory[date_str] = {}
-                        docket_memory[date_str][bill] = owner_name # Update memory for State Machine
+                        # QUARANTINE: Do NOT overwrite docket_memory. Keeps CSV pure.
                     has_docket = True
 
                 if not has_docket:
