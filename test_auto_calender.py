@@ -42,7 +42,8 @@ if not bypass_filter:
 if 'SortTime' not in final_df.columns:
     final_df['SortTime'] = final_df['Time']
 
-clean_time_series = final_df['SortTime'].replace({'Ledger': '11:59 PM', 'Time TBA': '11:59 PM'})
+# The new backend outputs strict 24H times (e.g., 23:59), making this perfectly seamless
+clean_time_series = final_df['SortTime'].replace({'Ledger': '23:59', 'Time TBA': '23:59'})
 final_df['DateTime_Sort'] = pd.to_datetime(final_df['Date'] + ' ' + clean_time_series, errors='coerce')
 
 # --- THE KANBAN UI ---
@@ -67,29 +68,34 @@ def render_kanban_week(start_date, data):
                     is_cancelled = str(status).upper() == "CANCELLED"
                     
                     with st.container(border=True):
-                        # Header
+                        # --- HEADER RENDERING ---
                         if is_cancelled:
                             st.markdown(f"~~**{committee}**~~<br><span style='color:#ff4b4b; font-weight:bold;'>CANCELLED</span>", unsafe_allow_html=True)
+                        elif "⚠️" in committee:
+                            # DLQ Alert: Highlights unmapped ledger committees in bright orange
+                            st.markdown(f"<span style='color:#ff9900; font-weight:bold;'>{committee}</span><br><span style='color:#888888; font-style:italic;'>{time_str}</span>", unsafe_allow_html=True)
                         else:
                             st.markdown(f"**{committee}**<br><span style='color:#888888; font-style:italic;'>{time_str}</span>", unsafe_allow_html=True)
                         
-                        # Content
+                        # --- CONTENT RENDERING ---
                         if not is_cancelled:
                             skeleton_items = group_df[group_df['Source'].astype(str).str.contains('API')]
                             bill_items = group_df[group_df['Source'].isin(['CSV', 'DOCKET'])]
                             
-                            # Determine text for empty API boxes
+                            # Print Meeting Notes / Skeleton Agendas
                             for _, s_row in skeleton_items.iterrows():
                                 text = str(s_row['Bill']).strip()
                                 generic_phrases = ["(View Meeting)", "(Agenda)", "(Agenda) (View Meeting)", "nan", "None", ""]
                                 
-                                # If it's empty, generic text, or just the old placeholder -> Standardize it
                                 if text in generic_phrases or "📌" in text:
                                     st.markdown("<small>No agenda listed.</small>", unsafe_allow_html=True)
+                                elif "⚠️" in text:
+                                    # DLQ Alert: Uses Streamlit's native warning box for corrupt PDFs and unverified times
+                                    st.warning(text, icon="⚠️")
                                 else:
-                                    # If the clerk wrote a custom note (like "Press Conference"), print it
                                     st.markdown(f"<small>{text}</small>", unsafe_allow_html=True)
                                     
+                            # Print Tracked Bills
                             if not bill_items.empty:
                                 with st.expander(f"📜 View Bills ({len(bill_items)})"):
                                     for _, row in bill_items.iterrows():
