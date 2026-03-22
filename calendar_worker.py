@@ -225,7 +225,16 @@ def run_calendar_update():
             for m in schedules:
                 p_name = str(m.get('OwnerName', '')).strip().lower()
                 p_time = str(m.get('ScheduleTime', '')).strip()
-                if p_name and p_time: parent_time_map[p_name] = parse_24h_time(p_time)
+                if p_name and p_time: 
+                    parent_time_map[p_name] = parse_24h_time(p_time)
+                    
+                    # --- THE FLOOR ALIAS UPGRADE ---
+                    if "house convenes" in p_name or "house chamber" in p_name:
+                        parent_time_map["house"] = parse_24h_time(p_time)
+                        parent_time_map["the house"] = parse_24h_time(p_time)
+                    if "senate convenes" in p_name or "senate chamber" in p_name:
+                        parent_time_map["senate"] = parse_24h_time(p_time)
+                        parent_time_map["the senate"] = parse_24h_time(p_time)
             
             for meeting in schedules:
                 meeting_date = pd.to_datetime(meeting.get('ScheduleDate', '1970-01-01'), errors='coerce')
@@ -353,7 +362,7 @@ def run_calendar_update():
                             break
                 if matched_committee: break
 
-            committee_verbs = ["reported", "referred", "assigned", "continued", "passed by indefinitely", "recommend", "incorporate", "stricken", "placed on"]
+            committee_verbs = ["reported from", "referred to", "assigned to", "re-referred to", "continued in", "passed by indefinitely in", "discharged from"]
             if matched_committee and any(v in outcome_lower for v in committee_verbs):
                 event_location = matched_committee
 
