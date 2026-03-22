@@ -4,6 +4,7 @@ import requests
 import gspread
 import pandas as pd
 import re
+import io
 from datetime import datetime, timedelta
 from google.oauth2.service_account import Credentials
 
