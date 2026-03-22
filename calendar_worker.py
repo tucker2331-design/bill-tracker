@@ -21,33 +21,33 @@ SPREADSHEET_ID = "1PQDtaTTUeYv781bx4_ZiehcvbEmUt8t7jFmZYJoJGKM"
 API_KEY = "81D70A54-FCDC-4023-A00B-A3FD114D5984"
 HEADERS = {"WebAPIKey": API_KEY, "Accept": "application/json"}
 
-# --- THE UPGRADED 3-WAY LEXICON BRIDGE ---
+# --- THE CORRECTED 3-WAY LEXICON BRIDGE (Exact API Matching) ---
 LOCAL_LEXICON = {
-    "House Committee on Appropriations": ["appropriations"],
-    "House Committee for Courts of Justice": ["courts of justice"],
-    "House Committee on Rules": ["rules"], 
-    "House Committee on Finance": ["finance"],
-    "House Committee on Counties, Cities and Towns": ["counties, cities and towns"],
-    "House Committee on Privileges and Elections": ["privileges and elections"],
-    "House Committee on Public Safety": ["public safety"],
-    "House Committee on Communications, Technology and Innovation": ["communications", "technology", "innovation"],
-    "House Committee on Education": ["education"],
-    "House Committee on Agriculture, Chesapeake and Natural Resources": ["agriculture", "natural resources"],
-    "House Committee on General Laws": ["general laws"], 
-    "House Committee on Transportation": ["transportation"],
-    "House Committee on Labor and Commerce": ["labor and commerce", "labor"],
-    "House Committee on Health and Human Services": ["health and human services", "health"],
-    "Senate Committee on Finance and Appropriations": ["finance and appropriations", "finance"],
-    "Senate Committee for Courts of Justice": ["courts of justice"], 
-    "Senate Committee on Rules": ["rules"],
-    "Senate Committee on Rehabilitation and Social Services": ["rehabilitation and social services", "rehabilitation"],
-    "Senate Committee on Local Government": ["local government"],
-    "Senate Committee on Privileges and Elections": ["privileges and elections"],
-    "Senate Committee on Education and Health": ["education and health", "education", "health"],
-    "Senate Committee on Commerce and Labor": ["commerce and labor", "commerce"],
-    "Senate Committee on General Laws and Technology": ["general laws and technology", "general laws"],
-    "Senate Committee on Transportation": ["transportation"],
-    "Senate Committee on Agriculture, Conservation and Natural Resources": ["agriculture", "conservation", "natural resources"]
+    "House Appropriations": ["appropriations"],
+    "House Courts of Justice": ["courts of justice"],
+    "House Rules": ["rules"], 
+    "House Finance": ["finance"],
+    "House Counties, Cities and Towns": ["counties, cities and towns"],
+    "House Privileges and Elections": ["privileges and elections"],
+    "House Public Safety": ["public safety"],
+    "House Communications, Technology and Innovation": ["communications", "technology", "innovation"],
+    "House Education": ["education"],
+    "House Agriculture, Chesapeake and Natural Resources": ["agriculture", "natural resources"],
+    "House General Laws": ["general laws"], 
+    "House Transportation": ["transportation"],
+    "House Labor and Commerce": ["labor and commerce", "labor"],
+    "House Health and Human Services": ["health and human services", "health"],
+    "Senate Finance and Appropriations": ["finance and appropriations", "finance"],
+    "Senate Courts of Justice": ["courts of justice"], 
+    "Senate Rules": ["rules"],
+    "Senate Rehabilitation and Social Services": ["rehabilitation and social services", "rehabilitation"],
+    "Senate Local Government": ["local government"],
+    "Senate Privileges and Elections": ["privileges and elections"],
+    "Senate Education and Health": ["education and health", "education", "health"],
+    "Senate Commerce and Labor": ["commerce and labor", "commerce"],
+    "Senate General Laws and Technology": ["general laws and technology", "general laws"],
+    "Senate Transportation": ["transportation"],
+    "Senate Agriculture, Conservation and Natural Resources": ["agriculture", "conservation", "natural resources"]
 }
 
 # --- NETWORK ARMOR ---
