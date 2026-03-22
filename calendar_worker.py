@@ -262,10 +262,34 @@ def run_calendar_update():
                         if any(m in part.lower() for m in dynamic_markers):
                             time_val = part.strip()
                             found_parent_24h = None
+                            desc_lower = clean_desc.lower()
+                            
+                            chamber_prefix = "House " if "house" in owner_name.lower() else "Senate " if "senate" in owner_name.lower() else ""
+                            
+                            # --- TIER 1: THE ORIGINAL PROVEN LOGIC ---
+                            # This handles 99% of meetings safely, exactly as it did before.
                             for p_name, p_time_24h in parent_time_map.items():
-                                if len(p_name) > 5 and p_name in clean_desc.lower():
+                                if len(p_name) > 5 and p_name in desc_lower:
                                     found_parent_24h = p_time_24h
                                     break
+                                    
+                            # --- TIER 2: THE TARGETED OVERRIDE ---
+                            # Only runs if Tier 1 failed (e.g., "Public Safety Committee" or "Senate adjourns")
+                            if not found_parent_24h:
+                                # Catch the Floor Adjournments
+                                if any(x in desc_lower for x in ["senate adjourns", "adjournment of the senate"]):
+                                    found_parent_24h = parent_time_map.get("senate convenes") or parent_time_map.get("senate chamber")
+                                elif any(x in desc_lower for x in ["house adjourns", "adjournment of the house"]):
+                                    found_parent_24h = parent_time_map.get("house convenes") or parent_time_map.get("house chamber")
+                                
+                                # Catch the missing words (Chamber-Locked Lexicon)
+                                elif chamber_prefix:
+                                    for api_name, aliases in LOCAL_LEXICON.items():
+                                        if api_name.startswith(chamber_prefix):
+                                            if any(alias in desc_lower for alias in aliases):
+                                                found_parent_24h = parent_time_map.get(api_name.lower())
+                                                if found_parent_24h: break
+                                                
                             sort_time_24h = parse_24h_time(time_val, found_parent_24h)
                             break
                             
