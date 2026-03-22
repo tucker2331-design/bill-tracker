@@ -90,18 +90,24 @@ def run_calendar_update():
     print("📡 Downloading DOCKET.CSV (Building Relational Cache)...")
     df_docket = safe_fetch_csv(f"https://lis.blob.core.windows.net/lisfiles/{blob_code}/DOCKET.CSV")
     if not df_docket.empty:
-        bill_col = next((c for c in df_docket.columns if 'bill' in c.lower()), 'BillNumber')
-        date_col = next((c for c in df_docket.columns if 'date' in c.lower()), 'MeetingDate')
-        comm_col = next((c for c in df_docket.columns if 'committee' in c.lower() or 'comdes' in c.lower()), 'CommitteeName')
+        # THE FIX: Aggressively scrub the CSV headers
+        df_docket.columns = df_docket.columns.str.strip().str.lower().str.replace(' ', '_')
         
-        for _, row in df_docket.iterrows():
-            b_num = str(row[bill_col]).replace(" ", "").upper()
-            m_date = pd.to_datetime(row[date_col], errors='coerce')
-            c_name = str(row[comm_col]).strip()
-            if pd.notna(m_date) and b_num and c_name:
-                date_str = m_date.strftime('%Y-%m-%d')
-                if date_str not in docket_memory: docket_memory[date_str] = {}
-                docket_memory[date_str][b_num] = c_name
+        bill_col = next((c for c in df_docket.columns if 'bill' in c), None)
+        date_col = next((c for c in df_docket.columns if 'date' in c), None)
+        comm_col = next((c for c in df_docket.columns if 'comm' in c or 'des' in c), None)
+        
+        if bill_col and date_col and comm_col:
+            for _, row in df_docket.iterrows():
+                b_num = str(row[bill_col]).replace(" ", "").upper()
+                m_date = pd.to_datetime(row[date_col], errors='coerce')
+                c_name = str(row[comm_col]).strip()
+                if pd.notna(m_date) and b_num and c_name and c_name.lower() != 'nan':
+                    date_str = m_date.strftime('%Y-%m-%d')
+                    if date_str not in docket_memory: docket_memory[date_str] = {}
+                    docket_memory[date_str][b_num] = c_name
+        else:
+            print("⚠️ DOCKET format unrecognized. Skipping relational cache.")
 
     print("📡 Downloading Live API Schedule...")
     try:
