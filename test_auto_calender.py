@@ -8,8 +8,7 @@ st.title("📅 Enterprise Calendar: Live Production")
 
 # --- UI CONTROLS ---
 st.sidebar.header("⚙️ System Controls")
-bypass_filter = st.sidebar.toggle("⚠️ Bypass Portfolio (Load All Data)", value=True) 
-TRACKED_BILLS = ["HB10", "HB863", "SB4", "HB1204", "HB500"]
+st.sidebar.info("🔥 Firehose Mode Active: Displaying all tracked legislative data.")
 
 test_start_date = datetime(2026, 3, 4)
 
@@ -31,12 +30,6 @@ final_df = load_calendar_data()
 if final_df.empty:
     st.info("Waiting for data... Ensure the GitHub Back End has finished its run.")
     st.stop()
-
-if not bypass_filter:
-    final_df = final_df[final_df['Bill'].str.split(' ').str[0].isin(TRACKED_BILLS)]
-    if final_df.empty:
-        st.warning("No tracked bills found for this window.")
-        st.stop()
 
 # --- ROBUST SORTING LOGIC ---
 if 'SortTime' not in final_df.columns:
@@ -85,15 +78,18 @@ def render_kanban_week(start_date, data):
                             # Print Meeting Notes / Skeleton Agendas
                             for _, s_row in skeleton_items.iterrows():
                                 text = str(s_row['Bill']).strip()
-                                generic_phrases = ["(View Meeting)", "(Agenda)", "(Agenda) (View Meeting)", "nan", "None", ""]
                                 
-                                if text in generic_phrases or "📌" in text:
+                                # --- THE COSMETIC FIX ---
+                                # Strips out the ugly API tags, leaving only the human-written notes
+                                clean_text = text.replace("(Agenda)", "").replace("(View Meeting)", "").strip()
+                                
+                                if not clean_text or clean_text == "nan" or clean_text == "None" or "📌" in clean_text:
                                     st.markdown("<small>No agenda listed.</small>", unsafe_allow_html=True)
-                                elif "⚠️" in text:
+                                elif "⚠️" in clean_text:
                                     # DLQ Alert: Uses Streamlit's native warning box for corrupt PDFs and unverified times
-                                    st.warning(text, icon="⚠️")
+                                    st.warning(clean_text, icon="⚠️")
                                 else:
-                                    st.markdown(f"<small>{text}</small>", unsafe_allow_html=True)
+                                    st.markdown(f"<small>{clean_text}</small>", unsafe_allow_html=True)
                                     
                             # Print Tracked Bills
                             if not bill_items.empty:
