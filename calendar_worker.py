@@ -393,15 +393,19 @@ def run_calendar_update():
                             break
                 if matched_committee: break
 
-            committee_verbs = ["reported from", "referred to", "assigned to", "re-referred to", "continued in", "passed by indefinitely in", "discharged from"]
+            # --- THE SPLIT BRAIN UPGRADE ---
+            # Verbs that dictate where the action PHYSICALLY HAPPENED (Display)
+            display_verbs = ["reported from", "continued in", "passed by indefinitely in", "discharged from"]
             
-            # Action natively specifies a committee
-            if matched_committee and any(v in outcome_lower for v in committee_verbs):
+            if matched_committee and any(v in outcome_lower for v in display_verbs):
                 event_location = matched_committee
 
-            # Chain of Custody Location Memory Updater
-            if "referred to" in outcome_lower or "assigned to" in outcome_lower or "placed on" in outcome_lower:
-                if matched_committee: bill_locations[bill_num] = matched_committee
+            # Verbs that dictate where the bill is GOING (Memory)
+            routing_verbs = ["referred to", "re-referred to", "assigned to", "placed on"]
+            
+            if any(v in outcome_lower for v in routing_verbs):
+                if matched_committee: 
+                    bill_locations[bill_num] = matched_committee
             elif "reported from" in outcome_lower or "discharged from" in outcome_lower:
                 bill_locations[bill_num] = chamber_prefix + "Floor"
 
@@ -420,7 +424,8 @@ def run_calendar_update():
                         break
 
             # DLQ: Flag Unmapped committees
-            if any(v in outcome_lower for v in committee_verbs) and not matched_committee and "floor" not in outcome_lower:
+            all_committee_verbs = display_verbs + routing_verbs
+            if any(v in outcome_lower for v in all_committee_verbs) and not matched_committee and "floor" not in outcome_lower:
                 event_location = f"⚠️ [Unmapped] {outcome_text.split(' from ')[-1].split(' to ')[-1]} (Ledger)"
 
             noise_words = ["impact statement", "substitute printed", "laid on speaker's table", "laid on clerk's desk", "presented", "reprinted", "engrossed by senate - committee substitute", "engrossed by house - committee substitute"]
