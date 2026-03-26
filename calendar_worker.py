@@ -357,9 +357,13 @@ def run_calendar_update():
         df_past['CleanBill'] = df_past[bill_col].astype(str).str.replace(' ', '').str.upper()
         df_past['ParsedDate'] = pd.to_datetime(df_past[date_col], errors='coerce')
         df_past = df_past[(df_past['ParsedDate'] >= test_start_date) & (df_past['ParsedDate'] <= test_end_date)]
+        
+        # PRIORITY 1: The Stable Sort (Preventing Same-Day Overlaps from shuffling backwards)
+        df_past['OriginalOrder'] = range(len(df_past))
+        df_past = df_past.sort_values(by=['ParsedDate', 'OriginalOrder'])
+        
         pattern = '|'.join(['report', 'continue', 'pass', 'fail', 'incorporate', 'hearing', 'strike', 'stricken', 'veto', 'sign', 'agreed', 'read', 'refer', 'waive', 'recommend', 'receive', 'release', 'take', 'conferee', 'amendment', 'substitute'])
         df_past = df_past[df_past[desc_col].str.contains(pattern, case=False, na=False)]
-        df_past = df_past.sort_values(by=['ParsedDate'])
         bill_locations = {}
         
         for _, row in df_past.iterrows():
@@ -373,8 +377,11 @@ def run_calendar_update():
             elif outcome_text.startswith('S '): acting_chamber, chamber_prefix = "Senate", "Senate "
             else: acting_chamber = "House" if bill_num.startswith('H') else "Senate"; chamber_prefix = f"{acting_chamber} "
             
+            # Default location is the Floor unless the Chain of Custody says otherwise
             if bill_num not in bill_locations: bill_locations[bill_num] = chamber_prefix + "Floor"
             if not bill_locations[bill_num].startswith(chamber_prefix): bill_locations[bill_num] = chamber_prefix + "Floor"
+            
+            # PRIORITY 2: Chain of Custody baseline execution
             event_location = bill_locations[bill_num] 
             
             matched_committee = None
@@ -387,8 +394,22 @@ def run_calendar_update():
                 if matched_committee: break
 
             committee_verbs = ["reported from", "referred to", "assigned to", "re-referred to", "continued in", "passed by indefinitely in", "discharged from"]
+            
+            # Action natively specifies a committee
             if matched_committee and any(v in outcome_lower for v in committee_verbs):
                 event_location = matched_committee
+
+            # Chain of Custody Location Memory Updater
+            if "referred to" in outcome_lower or "assigned to" in outcome_lower or "placed on" in outcome_lower:
+                if matched_committee: bill_locations[bill_num] = matched_committee
+            elif "reported from" in outcome_lower or "discharged from" in outcome_lower:
+                bill_locations[bill_num] = chamber_prefix + "Floor"
+
+            # Floor Resets
+            floor_reset_phrases = ["read first", "read second", "read third", "passed house", "passed senate", "agreed to", "rejected", "signed by", "presented", "received", "enrolled", "engrossed", "conferees:"]
+            if any(p in outcome_lower for p in floor_reset_phrases):
+                event_location = chamber_prefix + "Floor"
+                bill_locations[bill_num] = chamber_prefix + "Floor"
 
             # PRESERVED: THE LEDGER CURE (Composite Key Validation)
             allowed_rooms = docket_memory.get(date_str, {}).get(bill_num, [])
@@ -402,15 +423,6 @@ def run_calendar_update():
             if any(v in outcome_lower for v in committee_verbs) and not matched_committee and "floor" not in outcome_lower:
                 event_location = f"⚠️ [Unmapped] {outcome_text.split(' from ')[-1].split(' to ')[-1]} (Ledger)"
 
-            floor_reset_phrases = ["read first", "read second", "read third", "passed house", "passed senate", "agreed to", "rejected", "signed by", "presented", "received", "enrolled", "engrossed", "conferees:"]
-            if any(p in outcome_lower for p in floor_reset_phrases):
-                event_location = chamber_prefix + "Floor"
-
-            if "referred to" in outcome_lower or "assigned to" in outcome_lower or "placed on" in outcome_lower:
-                if matched_committee: bill_locations[bill_num] = matched_committee
-            elif "reported from" in outcome_lower or "discharged from" in outcome_lower:
-                bill_locations[bill_num] = chamber_prefix + "Floor"
-
             noise_words = ["impact statement", "substitute printed", "laid on speaker's table", "laid on clerk's desk", "presented", "reprinted", "engrossed by senate - committee substitute", "engrossed by house - committee substitute"]
             if any(n in outcome_lower for n in noise_words): continue
             
@@ -420,7 +432,6 @@ def run_calendar_update():
             api_key = f"{date_str}_{event_location}"
             
             # --- THE "COMMITTEE" SYNONYM BRIDGE (Zero Overlap Ledger Fix) ---
-            # If the exact room name isn't in the schedule, check if the API appended the word "Committee"
             if api_key not in api_schedule_map:
                 alt_key_1 = f"{api_key} Committee"
                 alt_key_2 = api_key.replace(" Committee", "")
@@ -435,6 +446,11 @@ def run_calendar_update():
                 time_val = api_schedule_map[api_key]["Time"]
                 sort_time_24h = api_schedule_map[api_key]["SortTime"]
                 status = api_schedule_map[api_key]["Status"]
+            else:
+                # PRIORITY 3: The "Passed By" Loud Failure.
+                # If we couldn't match the event to a known schedule and it was an ambiguous action, sound the alarm.
+                if "passed by" in outcome_lower and "Floor" not in event_location:
+                    event_location = f"⚠️ [Location Unknown] Passed by for the day (Ledger)"
             
             if "Floor" in event_location:
                 anchor = convene_times.get(date_str, {}).get(chamber_prefix.strip())
