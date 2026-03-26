@@ -80,7 +80,7 @@ def render_kanban_week(start_date, data):
                                 text = str(s_row['Bill']).strip()
                                 
                                 # --- THE COSMETIC FIX ---
-                                # Strips out the ugly API tags, leaving only the human-written notes
+                                # Dynamically strips out the ugly API tags, leaving only the human-written notes
                                 clean_text = text.replace("(Agenda)", "").replace("(View Meeting)", "").strip()
                                 
                                 if not clean_text or clean_text == "nan" or clean_text == "None" or "📌" in clean_text:
