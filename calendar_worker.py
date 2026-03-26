@@ -15,13 +15,13 @@ from google.oauth2.service_account import Credentials
 from bs4 import BeautifulSoup
 import pdfplumber
 
-print("🚀 Waking up Enterprise Calendar Worker (Flawless Integration Build)...")
+print("🚀 Waking up Enterprise Calendar Worker (The Master Build)...")
 
 SPREADSHEET_ID = "1PQDtaTTUeYv781bx4_ZiehcvbEmUt8t7jFmZYJoJGKM"
 API_KEY = "81D70A54-FCDC-4023-A00B-A3FD114D5984"
 HEADERS = {"WebAPIKey": API_KEY, "Accept": "application/json"}
 
-# --- THE CORRECTED 3-WAY LEXICON BRIDGE (Exact API Matching) ---
+# --- THE PROVEN 3-WAY LEXICON BRIDGE (Zero Overlap) ---
 LOCAL_LEXICON = {
     "House Appropriations": ["appropriations"],
     "House Courts of Justice": ["courts of justice"],
@@ -140,7 +140,7 @@ def extract_rogue_agenda(url, session, target_date_dt=None, depth=0):
             soup = BeautifulSoup(res.text, 'html.parser')
             target_href = None
             
-            # PRESERVED: Deep Link Navigation for Senate
+            # Deep Link Navigation for Senate
             if target_date_dt:
                 date_matrix = generate_date_variants(target_date_dt)
                 for row in soup.find_all(['tr', 'li', 'div', 'p']): 
@@ -161,7 +161,7 @@ def extract_rogue_agenda(url, session, target_date_dt=None, depth=0):
                 absolute_url = urllib.parse.urljoin(url, target_href)
                 return extract_rogue_agenda(absolute_url, session, target_date_dt, depth + 1)
             
-            # THE UPGRADE: JS Bypass if it's an end-page (like House HTML)
+            # JS Bypass if it's an end-page (like House HTML)
             for script in soup.find_all('script'):
                 if script.string and any(x in script.string for x in ['HB', 'SB', 'HJ', 'SJ']):
                     matches = re.findall(regex_pattern, script.string.replace(" ", ""))
@@ -287,26 +287,6 @@ def run_calendar_update():
                                     for api_name, aliases in LOCAL_LEXICON.items():
                                         if api_name.startswith(chamber_prefix):
                                             if any(alias in part_lower for alias in aliases):
-                                                found_parent_24h = parent_time_map.get(api_name.lower())
-                                                if found_parent_24h: break
-                                                
-                            sort_time_24h = parse_24h_time(time_val, found_parent_24h)
-                            break
-                                    
-                            # --- TIER 2: THE TARGETED OVERRIDE ---
-                            # Only runs if Tier 1 failed (e.g., "Public Safety Committee" or "Senate adjourns")
-                            if not found_parent_24h:
-                                # Catch the Floor Adjournments
-                                if any(x in desc_lower for x in ["senate adjourns", "adjournment of the senate"]):
-                                    found_parent_24h = parent_time_map.get("senate convenes") or parent_time_map.get("senate chamber")
-                                elif any(x in desc_lower for x in ["house adjourns", "adjournment of the house"]):
-                                    found_parent_24h = parent_time_map.get("house convenes") or parent_time_map.get("house chamber")
-                                
-                                # Catch the missing words (Chamber-Locked Lexicon)
-                                elif chamber_prefix:
-                                    for api_name, aliases in LOCAL_LEXICON.items():
-                                        if api_name.startswith(chamber_prefix):
-                                            if any(alias in desc_lower for alias in aliases):
                                                 found_parent_24h = parent_time_map.get(api_name.lower())
                                                 if found_parent_24h: break
                                                 
@@ -438,6 +418,18 @@ def run_calendar_update():
             sort_time_24h = "23:59"
             status = ""
             api_key = f"{date_str}_{event_location}"
+            
+            # --- THE "COMMITTEE" SYNONYM BRIDGE (Zero Overlap Ledger Fix) ---
+            # If the exact room name isn't in the schedule, check if the API appended the word "Committee"
+            if api_key not in api_schedule_map:
+                alt_key_1 = f"{api_key} Committee"
+                alt_key_2 = api_key.replace(" Committee", "")
+                if alt_key_1 in api_schedule_map:
+                    api_key = alt_key_1
+                    event_location = f"{event_location} Committee"
+                elif alt_key_2 in api_schedule_map:
+                    api_key = alt_key_2
+                    event_location = event_location.replace(" Committee", "")
             
             if api_key in api_schedule_map:
                 time_val = api_schedule_map[api_key]["Time"]
