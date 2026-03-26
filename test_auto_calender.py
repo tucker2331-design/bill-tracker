@@ -79,17 +79,28 @@ def render_kanban_week(start_date, data):
                             for _, s_row in skeleton_items.iterrows():
                                 text = str(s_row['Bill']).strip()
                                 
-                                # --- THE COSMETIC FIX ---
-                                # Dynamically strips out the ugly API tags, leaving only the human-written notes
+                                # PRIORITY 1: The "Hidden Alert" Prevention
+                                # If the backend sent a literal warning, render it immediately and skip the garbage collector
+                                if "⚠️" in text:
+                                    st.warning(text, icon="⚠️")
+                                    continue
+                                
+                                # PRIORITY 2: The Garbage Collector
+                                # Strip out the useless API tags, leaving only human-written notes
                                 clean_text = text.replace("(Agenda)", "").replace("(View Meeting)", "").strip()
                                 
-                                if not clean_text or clean_text == "nan" or clean_text == "None" or "📌" in clean_text:
-                                    st.markdown("<small>No agenda listed.</small>", unsafe_allow_html=True)
-                                elif "⚠️" in clean_text:
-                                    # DLQ Alert: Uses Streamlit's native warning box for corrupt PDFs and unverified times
-                                    st.warning(clean_text, icon="⚠️")
+                                # PRIORITY 3: The Binary UX Rule
+                                if not bill_items.empty:
+                                    # If bills exist, ONLY print the text if it contains custom clerk notes (like room changes)
+                                    if clean_text and clean_text not in ["nan", "None", ""] and "📌" not in clean_text:
+                                        st.markdown(f"<small>{clean_text}</small>", unsafe_allow_html=True)
                                 else:
-                                    st.markdown(f"<small>{clean_text}</small>", unsafe_allow_html=True)
+                                    # If NO bills exist, we must provide a clear status
+                                    if not clean_text or clean_text in ["nan", "None", ""] or "📌" in clean_text:
+                                        st.markdown("<small>No agenda listed.</small>", unsafe_allow_html=True)
+                                    else:
+                                        # Print the custom note (e.g., "Meeting cancelled")
+                                        st.markdown(f"<small>{clean_text}</small>", unsafe_allow_html=True)
                                     
                             # Print Tracked Bills
                             if not bill_items.empty:
