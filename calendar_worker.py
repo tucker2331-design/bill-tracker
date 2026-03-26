@@ -1,4 +1,5 @@
 import os
+import sys
 import json
 import time
 import requests
@@ -65,35 +66,52 @@ def get_active_session_info(http_session):
     try:
         res = http_session.get("https://lis.virginia.gov/Session/api/GetSessionListAsync", headers=HEADERS, timeout=10)
         if res.status_code == 200:
-            sessions = res.json()
+            raw_json = res.json()
+            # Safely extract the array whether it's wrapped in a dict or not
+            sessions = raw_json.get('Sessions', []) if isinstance(raw_json, dict) else raw_json
+            
+            if not isinstance(sessions, list) or len(sessions) == 0:
+                print("🚨 API returned empty or malformed session list.")
+                return None
+
             now = datetime.now()
             
-            # Pass 1: Look for the explicitly flagged current session
+            # Helper to safely parse dates and avoid NaT crashes
+            def safe_date(date_str, default_date):
+                try:
+                    return pd.to_datetime(date_str).replace(tzinfo=None)
+                except:
+                    return default_date
+
+            # Pass 1: Explicit 'Current' Flag
             for s in sessions:
                 if s.get('IsCurrentSession') or s.get('IsCurrent'):
-                    start = pd.to_datetime(s.get('StartDate')).replace(tzinfo=None)
-                    end = pd.to_datetime(s.get('EndDate')).replace(tzinfo=None) + timedelta(days=14) # Buffer for veto session actions
+                    start = safe_date(s.get('StartDate'), now)
+                    end = safe_date(s.get('EndDate'), now) + timedelta(days=14)
                     code = str(s.get('SessionCode'))
                     print(f"🎯 Target Locked: Session {code} ({start.strftime('%b %d')} - {end.strftime('%b %d')})")
                     return {"code": code, "start": start, "end": end}
 
-            # Pass 2: Fallback to Date Overlap
+            # Pass 2: Date Overlap
             for s in sessions:
-                start = pd.to_datetime(s.get('StartDate')).replace(tzinfo=None)
-                end = pd.to_datetime(s.get('EndDate')).replace(tzinfo=None)
+                start = safe_date(s.get('StartDate'), now - timedelta(days=365))
+                end = safe_date(s.get('EndDate'), now - timedelta(days=365))
                 if start <= now <= end:
                     code = str(s.get('SessionCode'))
                     print(f"🎯 Target Locked via Date Match: Session {code}")
                     return {"code": code, "start": start, "end": end + timedelta(days=14)}
 
-            # Pass 3: If between sessions, grab the most recent one to keep dashboard alive
+            # Pass 3: Historical Fallback
             if sessions:
-                s = sorted(sessions, key=lambda x: pd.to_datetime(x.get('StartDate')), reverse=True)[0]
-                start = pd.to_datetime(s.get('StartDate')).replace(tzinfo=None)
-                end = pd.to_datetime(s.get('EndDate')).replace(tzinfo=None)
-                code = str(s.get('SessionCode'))
-                print(f"🎯 Target Locked via Historical Fallback: Session {code}")
-                return {"code": code, "start": start, "end": end + timedelta(days=14)}
+                # Filter out sessions with missing dates before sorting
+                valid_sessions = [s for s in sessions if s.get('StartDate')]
+                if valid_sessions:
+                    s = sorted(valid_sessions, key=lambda x: pd.to_datetime(x.get('StartDate')), reverse=True)[0]
+                    start = safe_date(s.get('StartDate'), now)
+                    end = safe_date(s.get('EndDate'), now)
+                    code = str(s.get('SessionCode'))
+                    print(f"🎯 Target Locked via Historical Fallback: Session {code}")
+                    return {"code": code, "start": start, "end": end + timedelta(days=14)}
     except Exception as e:
         print(f"🚨 Master API Ping Failed: {e}")
     return None
@@ -255,12 +273,12 @@ def extract_rogue_agenda(url, session, target_date_dt=None, depth=0):
 def run_calendar_update():
     http_session = get_armored_session()
     
-    # --- PHASE 1: SESSION TARGETING & FAIL EARLY PROTOCOL ---
+    # --- PHASE 1: SESSION TARGETING & FAIL LOUD PROTOCOL ---
     session_data = get_active_session_info(http_session)
     if not session_data:
         print("🚨 CRITICAL: Failed to retrieve active session from State API.")
         print("🛡️ Safety Triggered: Aborting run to protect Google Sheet from data wipe.")
-        return # FAILS EARLY, PROTECTS DATABASE
+        sys.exit(1) # <--- THIS FORCES GITHUB TO SHOW A RED 'X'
         
     ACTIVE_SESSION = session_data["code"]
     test_start_date = session_data["start"]
@@ -270,7 +288,7 @@ def run_calendar_update():
     creds_json = os.environ.get("GCP_CREDENTIALS")
     if not creds_json: 
         print("🚨 CRITICAL: GCP Credentials missing.")
-        return
+        sys.exit(1)
         
     gc = gspread.authorize(Credentials.from_service_account_info(json.loads(creds_json), scopes=["https://www.googleapis.com/auth/spreadsheets"]))
     sheet = gc.open_by_key(SPREADSHEET_ID)
