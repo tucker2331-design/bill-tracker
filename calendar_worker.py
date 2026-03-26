@@ -15,13 +15,12 @@ from google.oauth2.service_account import Credentials
 from bs4 import BeautifulSoup
 import pdfplumber
 
-print("🚀 Waking up Enterprise Calendar Worker (The Master Build)...")
+print("🚀 Waking up Enterprise Calendar Worker (Session-Aware Master Build)...")
 
 SPREADSHEET_ID = "1PQDtaTTUeYv781bx4_ZiehcvbEmUt8t7jFmZYJoJGKM"
 API_KEY = "81D70A54-FCDC-4023-A00B-A3FD114D5984"
 HEADERS = {"WebAPIKey": API_KEY, "Accept": "application/json"}
 
-# --- THE PROVEN 3-WAY LEXICON BRIDGE (Zero Overlap) ---
 LOCAL_LEXICON = {
     "House Appropriations": ["appropriations"],
     "House Courts of Justice": ["courts of justice"],
@@ -54,24 +53,50 @@ LOCAL_LEXICON = {
 def get_armored_session():
     session = requests.Session()
     session.headers.update({'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/120.0.0.0 Safari/537.36'})
-    retries = Retry(total=3, backoff_factor=3, status_forcelist=[429, 500, 502, 503, 504])
+    retries = Retry(total=4, backoff_factor=2, status_forcelist=[429, 500, 502, 503, 504])
     adapter = HTTPAdapter(max_retries=retries)
     session.mount('http://', adapter)
     session.mount('https://', adapter)
     return session
 
-def get_active_session():
-    now = datetime.now()
-    year = now.year
-    years_to_check = [year + 1, year] if now.month >= 11 else [year]
-    for y in years_to_check:
-        for suffix in ["10", "9", "8", "7", "6", "5", "4", "3", "2", "1"]:
-            session_code = f"{y}{suffix}"
-            test_url = f"https://lis.blob.core.windows.net/lisfiles/{session_code}/HISTORY.CSV"
-            try:
-                if requests.head(test_url, timeout=3).status_code == 200: return session_code
-            except: pass
-    return f"{year}1"
+# --- SESSION INTELLIGENCE (The Master Ping) ---
+def get_active_session_info(http_session):
+    print("📡 Pinging Master API for Session Intelligence...")
+    try:
+        res = http_session.get("https://lis.virginia.gov/Session/api/GetSessionListAsync", headers=HEADERS, timeout=10)
+        if res.status_code == 200:
+            sessions = res.json()
+            now = datetime.now()
+            
+            # Pass 1: Look for the explicitly flagged current session
+            for s in sessions:
+                if s.get('IsCurrentSession') or s.get('IsCurrent'):
+                    start = pd.to_datetime(s.get('StartDate')).replace(tzinfo=None)
+                    end = pd.to_datetime(s.get('EndDate')).replace(tzinfo=None) + timedelta(days=14) # Buffer for veto session actions
+                    code = str(s.get('SessionCode'))
+                    print(f"🎯 Target Locked: Session {code} ({start.strftime('%b %d')} - {end.strftime('%b %d')})")
+                    return {"code": code, "start": start, "end": end}
+
+            # Pass 2: Fallback to Date Overlap
+            for s in sessions:
+                start = pd.to_datetime(s.get('StartDate')).replace(tzinfo=None)
+                end = pd.to_datetime(s.get('EndDate')).replace(tzinfo=None)
+                if start <= now <= end:
+                    code = str(s.get('SessionCode'))
+                    print(f"🎯 Target Locked via Date Match: Session {code}")
+                    return {"code": code, "start": start, "end": end + timedelta(days=14)}
+
+            # Pass 3: If between sessions, grab the most recent one to keep dashboard alive
+            if sessions:
+                s = sorted(sessions, key=lambda x: pd.to_datetime(x.get('StartDate')), reverse=True)[0]
+                start = pd.to_datetime(s.get('StartDate')).replace(tzinfo=None)
+                end = pd.to_datetime(s.get('EndDate')).replace(tzinfo=None)
+                code = str(s.get('SessionCode'))
+                print(f"🎯 Target Locked via Historical Fallback: Session {code}")
+                return {"code": code, "start": start, "end": end + timedelta(days=14)}
+    except Exception as e:
+        print(f"🚨 Master API Ping Failed: {e}")
+    return None
 
 def safe_fetch_csv(url):
     try:
@@ -83,7 +108,6 @@ def safe_fetch_csv(url):
     except: pass
     return pd.DataFrame()
 
-# --- PRESERVED DATE VARIANTS ---
 def generate_date_variants(dt):
     m = str(dt.month); d = str(dt.day); y = str(dt.year)
     m_pad = f"{dt.month:02d}"; d_pad = f"{dt.day:02d}"; y_short = y[-2:]
@@ -93,11 +117,11 @@ def generate_date_variants(dt):
         f"{month_full} {d}", f"{month_short} {d}", f"{month_full} {d_pad}", f"{month_short} {d_pad}"
     ]
 
-# --- 24-HOUR TIME ENFORCER ---
+# --- RECURSIVE DEPENDENCY GRAPH (TIME RESOLUTION) ---
 def parse_24h_time(raw_time, parent_time_24h=None):
     time_val = raw_time.strip().replace('.', '').upper()
     if any(m in time_val.lower() for m in ["after", "upon"]):
-        if parent_time_24h:
+        if parent_time_24h and parent_time_24h != "06:00":
             try:
                 pt = datetime.strptime(parent_time_24h, '%H:%M')
                 pt = pt + timedelta(minutes=1)
@@ -110,7 +134,70 @@ def parse_24h_time(raw_time, parent_time_24h=None):
     except: pass
     return "23:59"
 
-# --- MERGED SCRAPER (Date Routing + JS Bypass) ---
+def build_time_graph(schedules):
+    raw_times = {}
+    for m in schedules:
+        name = str(m.get('OwnerName', '')).strip().lower()
+        t_val = str(m.get('ScheduleTime', '')).strip()
+        desc = re.sub(r'<[^>]+>', '', str(m.get('Description', ''))).strip()
+        stitched = f"{t_val} {desc}".lower()
+        raw_times[name] = t_val if not any(x in stitched for x in ["upon adjournment", "minutes after", "hour after", "recess"]) else stitched
+
+    floor_keys = {}
+    for k, v in raw_times.items():
+        if "house convenes" in k or "house chamber" in k:
+            floor_keys["house"] = v; floor_keys["the house"] = v
+        if "senate convenes" in k or "senate chamber" in k:
+            floor_keys["senate"] = v; floor_keys["the senate"] = v
+    raw_times.update(floor_keys)
+
+    resolved_times = {}
+    
+    def resolve_node(name_key, visited=None):
+        if visited is None: visited = set()
+        if name_key in resolved_times: return resolved_times[name_key]
+        if name_key in visited: return "06:00" 
+        
+        visited.add(name_key)
+        raw_str = raw_times.get(name_key, "")
+        if not raw_str: return "23:59"
+
+        dynamic_markers = ["upon adjournment", "minutes after", "hour after", "recess"]
+        if any(m in raw_str.lower() for m in dynamic_markers):
+            found_parent_key = None
+            
+            for p_name in raw_times.keys():
+                if len(p_name) > 5 and p_name in raw_str.lower():
+                    found_parent_key = p_name
+                    break
+            
+            if not found_parent_key:
+                raw_lower = raw_str.lower()
+                if "senate adjourns" in raw_lower or "adjournment of the senate" in raw_lower:
+                    found_parent_key = "senate convenes"
+                elif "house adjourns" in raw_lower or "adjournment of the house" in raw_lower:
+                    found_parent_key = "house convenes"
+                elif "recess" in raw_lower and "house" in raw_lower:
+                    for k, v in raw_times.items():
+                        if "recess" in v.lower() and "house" in k.lower(): found_parent_key = k; break
+                elif "recess" in raw_lower and "senate" in raw_lower:
+                    for k, v in raw_times.items():
+                        if "recess" in v.lower() and "senate" in k.lower(): found_parent_key = k; break
+
+            if found_parent_key:
+                parent_24h = resolve_node(found_parent_key, visited)
+                res = parse_24h_time(raw_str, parent_24h)
+                resolved_times[name_key] = res
+                return res
+            return "06:00"
+
+        res = parse_24h_time(raw_str)
+        resolved_times[name_key] = res
+        return res
+
+    for name in raw_times.keys(): resolve_node(name)
+    return resolved_times
+
 def extract_rogue_agenda(url, session, target_date_dt=None, depth=0):
     if depth > 1: return [], False 
     found_bills = set()
@@ -118,7 +205,7 @@ def extract_rogue_agenda(url, session, target_date_dt=None, depth=0):
     if url.startswith('/'): url = f"https://lis.virginia.gov{url}"
         
     try:
-        time.sleep(0.25) # Micro-throttle
+        time.sleep(0.25)
         res = session.get(url, timeout=15)
         if res.status_code != 200: return [], False
         
@@ -134,34 +221,25 @@ def extract_rogue_agenda(url, session, target_date_dt=None, depth=0):
                             matches = re.findall(regex_pattern, text.replace(" ", ""))
                             found_bills.update([m.upper() for m in matches])
                 os.remove(temp_pdf_path)
-            except Exception:
-                return [], True # is_pdf_corrupt = True
+            except Exception: return [], True
         else:
             soup = BeautifulSoup(res.text, 'html.parser')
             target_href = None
-            
-            # Deep Link Navigation for Senate
             if target_date_dt:
                 date_matrix = generate_date_variants(target_date_dt)
                 for row in soup.find_all(['tr', 'li', 'div', 'p']): 
                     row_text = row.get_text()
                     if any(variant in row_text for variant in date_matrix):
                         link = row.find('a', string=re.compile(r'Agenda|Docket', re.I)) or row.find('a', href=re.compile(r'\.pdf$', re.I))
-                        if link:
-                            target_href = link.get('href')
-                            break
+                        if link: target_href = link.get('href'); break
             if not target_href:
-                agenda_links = soup.find_all('a', href=re.compile(r'\.pdf$', re.I))
-                if not agenda_links:
-                    agenda_links = soup.find_all('a', string=re.compile(r'Agenda|Docket', re.I))
-                if agenda_links:
-                    target_href = agenda_links[0].get('href')
+                agenda_links = soup.find_all('a', href=re.compile(r'\.pdf$', re.I)) or soup.find_all('a', string=re.compile(r'Agenda|Docket', re.I))
+                if agenda_links: target_href = agenda_links[0].get('href')
                     
             if target_href:
                 absolute_url = urllib.parse.urljoin(url, target_href)
                 return extract_rogue_agenda(absolute_url, session, target_date_dt, depth + 1)
             
-            # JS Bypass if it's an end-page (like House HTML)
             for script in soup.find_all('script'):
                 if script.string and any(x in script.string for x in ['HB', 'SB', 'HJ', 'SJ']):
                     matches = re.findall(regex_pattern, script.string.replace(" ", ""))
@@ -171,30 +249,39 @@ def extract_rogue_agenda(url, session, target_date_dt=None, depth=0):
             matches = re.findall(regex_pattern, text.replace(" ", ""))
             found_bills.update([m.upper() for m in matches])
             
-    except Exception as e: pass
+    except Exception: pass
     return sorted(list(found_bills)), False
 
 def run_calendar_update():
+    http_session = get_armored_session()
+    
+    # --- PHASE 1: SESSION TARGETING & FAIL EARLY PROTOCOL ---
+    session_data = get_active_session_info(http_session)
+    if not session_data:
+        print("🚨 CRITICAL: Failed to retrieve active session from State API.")
+        print("🛡️ Safety Triggered: Aborting run to protect Google Sheet from data wipe.")
+        return # FAILS EARLY, PROTECTS DATABASE
+        
+    ACTIVE_SESSION = session_data["code"]
+    test_start_date = session_data["start"]
+    test_end_date = session_data["end"]
+
     print("🔐 Authenticating with Google Cloud...")
     creds_json = os.environ.get("GCP_CREDENTIALS")
-    if not creds_json: return
+    if not creds_json: 
+        print("🚨 CRITICAL: GCP Credentials missing.")
+        return
         
     gc = gspread.authorize(Credentials.from_service_account_info(json.loads(creds_json), scopes=["https://www.googleapis.com/auth/spreadsheets"]))
     sheet = gc.open_by_key(SPREADSHEET_ID)
     worksheet = sheet.worksheet("Sheet1")
 
-    ACTIVE_SESSION = get_active_session()
     blob_code = f"20{ACTIVE_SESSION}" if len(ACTIVE_SESSION) == 3 else ACTIVE_SESSION
 
     master_events = []
     convene_times = {}
     api_schedule_map = {}
     docket_memory = {} 
-    parent_time_map = {}
-    http_session = get_armored_session()
-
-    test_start_date = datetime(2026, 3, 4)
-    test_end_date = datetime(2026, 3, 10)
 
     print("📡 Downloading Official DOCKET.CSV...")
     df_docket = safe_fetch_csv(f"https://lis.blob.core.windows.net/lisfiles/{blob_code}/DOCKET.CSV")
@@ -220,27 +307,14 @@ def run_calendar_update():
         sched_res = http_session.get("https://lis.virginia.gov/Schedule/api/getschedulelistasync", headers=HEADERS, params={"sessionCode": ACTIVE_SESSION}, timeout=10)
         if sched_res.status_code == 200:
             schedules = sched_res.json().get('Schedules', []) if isinstance(sched_res.json(), dict) else sched_res.json()
-            
-            # Pre-Pass: Build 24H Parent Mapping
-            for m in schedules:
-                p_name = str(m.get('OwnerName', '')).strip().lower()
-                p_time = str(m.get('ScheduleTime', '')).strip()
-                if p_name and p_time: 
-                    parent_time_map[p_name] = parse_24h_time(p_time)
-                    
-                    # --- THE FLOOR ALIAS UPGRADE ---
-                    if "house convenes" in p_name or "house chamber" in p_name:
-                        parent_time_map["house"] = parse_24h_time(p_time)
-                        parent_time_map["the house"] = parse_24h_time(p_time)
-                    if "senate convenes" in p_name or "senate chamber" in p_name:
-                        parent_time_map["senate"] = parse_24h_time(p_time)
-                        parent_time_map["the senate"] = parse_24h_time(p_time)
+            resolved_parent_map = build_time_graph(schedules)
             
             for meeting in schedules:
                 meeting_date = pd.to_datetime(meeting.get('ScheduleDate', '1970-01-01'), errors='coerce')
                 if not (test_start_date <= meeting_date <= test_end_date): continue
                 date_str = meeting_date.strftime('%Y-%m-%d')
-                owner_name = str(meeting.get('OwnerName', '')).strip()
+                raw_owner_name = str(meeting.get('OwnerName', '')).strip()
+                owner_lower = raw_owner_name.lower()
                 is_cancelled = meeting.get('IsCancelled', False)
                 status = "CANCELLED" if is_cancelled else ""
                 
@@ -253,63 +327,37 @@ def run_calendar_update():
                 if link_match and any(x in raw_desc.lower() for x in ["agenda", "docket", "info"]):
                     agenda_url = link_match.group(1)
                 
+                sort_time_24h = resolved_parent_map.get(owner_lower, "23:59")
                 time_val = raw_time
-                sort_time_24h = parse_24h_time(raw_time)
-                
-                dynamic_markers = ["upon adjournment", "minutes after", "to be determined", "tba", "recess", "hour after"]
-                
-                # THE STITCH: Combine Time and Description with a mandatory space
+                dynamic_markers = ["upon adjournment", "minutes after", "hour after", "recess"]
                 stitched_text = f"{raw_time} {clean_desc}"
-                stitched_lower = stitched_text.lower()
-                
-                if any(m in stitched_lower for m in dynamic_markers):
+                if any(m in stitched_text.lower() for m in dynamic_markers):
                     for part in stitched_text.split(';'):
-                        part_lower = part.lower()
-                        if any(m in part_lower for m in dynamic_markers):
-                            time_val = part.strip()
-                            found_parent_24h = None
+                        if any(m in part.lower() for m in dynamic_markers):
+                            time_val = part.strip(); break
                             
-                            chamber_prefix = "House " if "house" in owner_name.lower() else "Senate " if "senate" in owner_name.lower() else ""
-                            
-                            # --- TIER 1: THE ORIGINAL PROVEN LOGIC ---
-                            for p_name, p_time_24h in parent_time_map.items():
-                                if len(p_name) > 5 and p_name in part_lower:
-                                    found_parent_24h = p_time_24h
-                                    break
-                                    
-                            # --- TIER 2: THE TARGETED OVERRIDE ---
-                            if not found_parent_24h:
-                                if any(x in part_lower for x in ["senate adjourns", "adjournment of the senate"]):
-                                    found_parent_24h = parent_time_map.get("senate convenes") or parent_time_map.get("senate chamber")
-                                elif any(x in part_lower for x in ["house adjourns", "adjournment of the house"]):
-                                    found_parent_24h = parent_time_map.get("house convenes") or parent_time_map.get("house chamber")
-                                elif chamber_prefix:
-                                    for api_name, aliases in LOCAL_LEXICON.items():
-                                        if api_name.startswith(chamber_prefix):
-                                            if any(alias in part_lower for alias in aliases):
-                                                found_parent_24h = parent_time_map.get(api_name.lower())
-                                                if found_parent_24h: break
-                                                
-                            sort_time_24h = parse_24h_time(time_val, found_parent_24h)
-                            break
-                            
-                if not time_val: 
-                    time_val = "Time TBA"
-                    sort_time_24h = "23:59"
+                if not time_val: time_val = "Time TBA"
                 
-                owner_lower = owner_name.lower()
+                # LEXICON NORMALIZATION 
+                normalized_name = raw_owner_name
+                chamber_prefix = "House " if "house" in owner_lower else "Senate " if "senate" in owner_lower else ""
+                for api_name, aliases in LOCAL_LEXICON.items():
+                    if api_name.startswith(chamber_prefix):
+                        if any(alias in owner_lower for alias in aliases):
+                            normalized_name = api_name; break
+
                 if "house convenes" in owner_lower or "house chamber" in owner_lower:
                     if date_str not in convene_times: convene_times[date_str] = {}
-                    convene_times[date_str]["House"] = {"Time": time_val, "SortTime": sort_time_24h, "Name": owner_name}
+                    convene_times[date_str]["House"] = {"Time": time_val, "SortTime": sort_time_24h, "Name": normalized_name}
                 elif "senate convenes" in owner_lower or "senate chamber" in owner_lower:
                     if date_str not in convene_times: convene_times[date_str] = {}
-                    convene_times[date_str]["Senate"] = {"Time": time_val, "SortTime": sort_time_24h, "Name": owner_name}
+                    convene_times[date_str]["Senate"] = {"Time": time_val, "SortTime": sort_time_24h, "Name": normalized_name}
                 
-                map_key = f"{date_str}_{owner_name}"
+                map_key = f"{date_str}_{normalized_name}"
                 if map_key not in api_schedule_map: api_schedule_map[map_key] = {"Time": time_val, "SortTime": sort_time_24h, "Status": status}
                 
                 if any(k in owner_lower for k in ["caucus", "session", "floor", "convenes", "adjourned"]):
-                    master_events.append({"Date": date_str, "Time": time_val, "SortTime": sort_time_24h, "Status": status, "Committee": owner_name if owner_name else "Chamber Event", "Bill": clean_desc, "Outcome": "", "AgendaOrder": -1, "Source": "API"})
+                    master_events.append({"Date": date_str, "Time": time_val, "SortTime": sort_time_24h, "Status": status, "Committee": normalized_name if normalized_name else "Chamber Event", "Bill": clean_desc, "Outcome": "", "AgendaOrder": -1, "Source": "API"})
                     continue
                 
                 has_docket = False
@@ -323,29 +371,29 @@ def run_calendar_update():
                 
                 if date_str in docket_memory:
                     for b_num, comm_list in docket_memory[date_str].items():
-                        if any(owner_name.lower().strip() == c.lower().strip() for c in comm_list):
+                        if any(normalized_name.lower().strip() == c.lower().strip() for c in comm_list):
                             combined_bills.add(b_num)
                             
                 if combined_bills:
                     for bill in sorted(list(combined_bills)):
-                        master_events.append({"Date": date_str, "Time": time_val, "SortTime": sort_time_24h, "Status": status, "Committee": owner_name, "Bill": bill, "Outcome": "Scheduled", "AgendaOrder": 1, "Source": "DOCKET"})
+                        master_events.append({"Date": date_str, "Time": time_val, "SortTime": sort_time_24h, "Status": status, "Committee": normalized_name, "Bill": bill, "Outcome": "Scheduled", "AgendaOrder": 1, "Source": "DOCKET"})
                         if date_str not in docket_memory: docket_memory[date_str] = {}
                         if bill not in docket_memory[date_str]: docket_memory[date_str][bill] = []
-                        if owner_name not in docket_memory[date_str][bill]: docket_memory[date_str][bill].append(owner_name)
+                        if normalized_name not in docket_memory[date_str][bill]: docket_memory[date_str][bill].append(normalized_name)
                     has_docket = True
 
                 if dlq_flag:
-                    master_events.append({"Date": date_str, "Time": time_val, "SortTime": sort_time_24h, "Status": status, "Committee": owner_name, "Bill": dlq_flag, "Outcome": "", "AgendaOrder": 0, "Source": "API_Skeleton"})
+                    master_events.append({"Date": date_str, "Time": time_val, "SortTime": sort_time_24h, "Status": status, "Committee": normalized_name, "Bill": dlq_flag, "Outcome": "", "AgendaOrder": 0, "Source": "API_Skeleton"})
                     has_docket = True
 
                 if not has_docket:
                     if sort_time_24h == "06:00" and "after" in time_val.lower():
                         clean_desc = f"⚠️ Time Unverified (Check Parent) - {clean_desc}"
-                    master_events.append({"Date": date_str, "Time": time_val, "SortTime": sort_time_24h, "Status": status, "Committee": owner_name, "Bill": clean_desc if clean_desc else "No agenda listed.", "Outcome": "", "AgendaOrder": -1, "Source": "API_Skeleton"})
+                    master_events.append({"Date": date_str, "Time": time_val, "SortTime": sort_time_24h, "Status": status, "Committee": normalized_name, "Bill": clean_desc if clean_desc else "No agenda listed.", "Outcome": "", "AgendaOrder": -1, "Source": "API_Skeleton"})
                     
     except Exception as e: print(f"🚨 API Schedule failed: {e}")
 
-    print("📡 Processing HISTORY.CSV via State Machine...")
+    print("📡 Processing HISTORY.CSV via Chain of Custody...")
     df_past = safe_fetch_csv(f"https://blob.lis.virginia.gov/lisfiles/{blob_code}/HISTORY.CSV")
     if df_past.empty:
         df_past = safe_fetch_csv(f"https://lis.blob.core.windows.net/lisfiles/{blob_code}/HISTORY.CSV")
@@ -358,7 +406,6 @@ def run_calendar_update():
         df_past['ParsedDate'] = pd.to_datetime(df_past[date_col], errors='coerce')
         df_past = df_past[(df_past['ParsedDate'] >= test_start_date) & (df_past['ParsedDate'] <= test_end_date)]
         
-        # PRIORITY 1: The Stable Sort (Preventing Same-Day Overlaps from shuffling backwards)
         df_past['OriginalOrder'] = range(len(df_past))
         df_past = df_past.sort_values(by=['ParsedDate', 'OriginalOrder'])
         
@@ -377,11 +424,9 @@ def run_calendar_update():
             elif outcome_text.startswith('S '): acting_chamber, chamber_prefix = "Senate", "Senate "
             else: acting_chamber = "House" if bill_num.startswith('H') else "Senate"; chamber_prefix = f"{acting_chamber} "
             
-            # Default location is the Floor unless the Chain of Custody says otherwise
             if bill_num not in bill_locations: bill_locations[bill_num] = chamber_prefix + "Floor"
             if not bill_locations[bill_num].startswith(chamber_prefix): bill_locations[bill_num] = chamber_prefix + "Floor"
             
-            # PRIORITY 2: Chain of Custody baseline execution
             event_location = bill_locations[bill_num] 
             
             matched_committee = None
@@ -389,41 +434,30 @@ def run_calendar_update():
                 if api_name.startswith(chamber_prefix):
                     for alias in aliases:
                         if alias and alias in outcome_lower:
-                            matched_committee = api_name
-                            break
+                            matched_committee = api_name; break
                 if matched_committee: break
 
-            # --- THE SPLIT BRAIN UPGRADE ---
-            # Verbs that dictate where the action PHYSICALLY HAPPENED (Display)
             display_verbs = ["reported from", "continued in", "passed by indefinitely in", "discharged from"]
-            
             if matched_committee and any(v in outcome_lower for v in display_verbs):
                 event_location = matched_committee
 
-            # Verbs that dictate where the bill is GOING (Memory)
             routing_verbs = ["referred to", "re-referred to", "assigned to", "placed on"]
-            
             if any(v in outcome_lower for v in routing_verbs):
-                if matched_committee: 
-                    bill_locations[bill_num] = matched_committee
+                if matched_committee: bill_locations[bill_num] = matched_committee
             elif "reported from" in outcome_lower or "discharged from" in outcome_lower:
                 bill_locations[bill_num] = chamber_prefix + "Floor"
 
-            # Floor Resets
             floor_reset_phrases = ["read first", "read second", "read third", "passed house", "passed senate", "agreed to", "rejected", "signed by", "presented", "received", "enrolled", "engrossed", "conferees:"]
             if any(p in outcome_lower for p in floor_reset_phrases):
                 event_location = chamber_prefix + "Floor"
                 bill_locations[bill_num] = chamber_prefix + "Floor"
 
-            # PRESERVED: THE LEDGER CURE (Composite Key Validation)
             allowed_rooms = docket_memory.get(date_str, {}).get(bill_num, [])
             if allowed_rooms and matched_committee:
                 for room in allowed_rooms:
                     if matched_committee.lower() in room.lower():
-                        event_location = room 
-                        break
+                        event_location = room; break
 
-            # DLQ: Flag Unmapped committees
             all_committee_verbs = display_verbs + routing_verbs
             if any(v in outcome_lower for v in all_committee_verbs) and not matched_committee and "floor" not in outcome_lower:
                 event_location = f"⚠️ [Unmapped] {outcome_text.split(' from ')[-1].split(' to ')[-1]} (Ledger)"
@@ -436,24 +470,19 @@ def run_calendar_update():
             status = ""
             api_key = f"{date_str}_{event_location}"
             
-            # --- THE "COMMITTEE" SYNONYM BRIDGE (Zero Overlap Ledger Fix) ---
             if api_key not in api_schedule_map:
                 alt_key_1 = f"{api_key} Committee"
                 alt_key_2 = api_key.replace(" Committee", "")
                 if alt_key_1 in api_schedule_map:
-                    api_key = alt_key_1
-                    event_location = f"{event_location} Committee"
+                    api_key = alt_key_1; event_location = f"{event_location} Committee"
                 elif alt_key_2 in api_schedule_map:
-                    api_key = alt_key_2
-                    event_location = event_location.replace(" Committee", "")
+                    api_key = alt_key_2; event_location = event_location.replace(" Committee", "")
             
             if api_key in api_schedule_map:
                 time_val = api_schedule_map[api_key]["Time"]
                 sort_time_24h = api_schedule_map[api_key]["SortTime"]
                 status = api_schedule_map[api_key]["Status"]
             else:
-                # PRIORITY 3: The "Passed By" Loud Failure.
-                # If we couldn't match the event to a known schedule and it was an ambiguous action, sound the alarm.
                 if "passed by" in outcome_lower and "Floor" not in event_location:
                     event_location = f"⚠️ [Location Unknown] Passed by for the day (Ledger)"
             
@@ -466,8 +495,7 @@ def run_calendar_update():
     print("🧹 Cleaning Data...")
     final_df = pd.DataFrame(master_events)
     if not final_df.empty:
-        # PRESERVED: Cosmetic Purge Cleanup
-        final_df = final_df[~((final_df['Bill'] == "No agenda listed.") & final_df.duplicated(subset=['Date', 'Committee'], keep=False))]
+        final_df = final_df[~((final_df['Bill'] == "No agenda listed.") & final_df.duplicated(subset=['Date', 'Committee', 'Time'], keep=False))]
         final_df = final_df.sort_values(by=['Date', 'Committee', 'Bill', 'Source'])
         final_df = final_df.drop_duplicates(subset=['Date', 'Committee', 'Bill'], keep='last')
         final_df = final_df.fillna("")
