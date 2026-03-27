@@ -1,37 +1,64 @@
-import requests
-import json
+import re
 
-print("🚀 Waking up Naked Diagnostic Probe...")
+# Our exact Lexicon from the master build
+LOCAL_LEXICON = {
+    "House General Laws": ["general laws"], 
+    "House Finance": ["finance"],
+    "Senate Finance and Appropriations": ["finance and appropriations", "finance"],
+    "Senate Courts of Justice": ["courts of justice"]
+}
 
-API_KEY = "81D70A54-FCDC-4023-A00B-A3FD114D5984"
-HEADERS = {"WebAPIKey": API_KEY, "Accept": "application/json"}
-URL = "https://lis.virginia.gov/Session/api/GetSessionListAsync"
+IGNORE_WORDS = {"committee", "on", "the", "of", "and", "for", "meeting", "joint", "to", "referred", "assigned", "re-referred"}
 
-print(f"📡 Pinging {URL}...")
-
-try:
-    session = requests.Session()
-    session.headers.update({'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/120.0.0.0 Safari/537.36'})
+def test_delta_check(chamber_prefix, raw_csv_string):
+    outcome_lower = raw_csv_string.lower()
     
-    res = session.get(URL, headers=HEADERS, timeout=15)
+    # 1. Standard Lexicon Match
+    matched_committee = None
+    for api_name, aliases in LOCAL_LEXICON.items():
+        if api_name.startswith(chamber_prefix):
+            for alias in aliases:
+                if alias in outcome_lower:
+                    matched_committee = api_name
+                    break
+        if matched_committee: break
+
+    if not matched_committee:
+        return f"⚠️ [Unmapped] No Lexicon Match for: {raw_csv_string}"
+
+    # 2. The Delta Check (Zero Data Loss Protocol)
+    # Extract only the destination part of the string
+    target_string = outcome_lower
+    for verb in ["referred to ", "assigned to ", "re-referred to "]:
+        if verb in target_string:
+            target_string = target_string.split(verb)[-1]
+            break
+
+    # Convert strings to sets of words, stripping punctuation
+    original_words = set(re.findall(r'\b\w+\b', target_string))
+    lexicon_words = set(re.findall(r'\b\w+\b', matched_committee.lower()))
     
-    print(f"HTTP Status Code: {res.status_code}")
-    
-    if res.status_code == 200:
-        print("✅ Connection Successful. Parsing Raw JSON Payload:")
-        try:
-            data = res.json()
-            # Print the entire JSON structure beautifully so we can read the exact keys
-            print(json.dumps(data, indent=2))
-        except Exception as json_err:
-            print(f"❌ Failed to parse JSON. Raw text returned by state:")
-            print(res.text)
+    # What is left over after we remove the Lexicon words AND the safe Noise words?
+    leftover_words = original_words - lexicon_words - IGNORE_WORDS
+
+    if leftover_words:
+        return f"⚠️ [Unmapped Sub-Entity] {raw_csv_string} \n   -> (Blocked from becoming '{matched_committee}' because of leftovers: {leftover_words})"
     else:
-        print(f"❌ Connection Failed. State server returned: {res.status_code}")
-        print("Raw Response Headers:")
-        print(res.headers)
-        print("Raw Response Text:")
-        print(res.text)
+        return f"✅ [SAFE MERGE] '{raw_csv_string}' -> perfectly maps to '{matched_committee}'"
 
-except Exception as e:
-    print(f"🚨 Fatal Network Exception: {e}")
+
+# --- THE STRESS TEST BATCH ---
+test_cases = [
+    ("House ", "Referred to the Committee on General Laws"),             # Standard (Should Pass)
+    ("Senate ", "Re-referred to Finance and Appropriations"),            # Standard (Should Pass)
+    ("House ", "Referred to Finance"),                                   # Standard short-hand (Should Pass)
+    ("House ", "Assigned to Finance - Subgrp A"),                        # Weird Sub (Should FAIL & Flag)
+    ("Senate ", "Referred to Courts of Justice (Criminal Workgroup)"),   # Weird Sub (Should FAIL & Flag)
+    ("Senate ", "Referred to Finance Committee"),                        # Standard with "Committee" (Should Pass)
+]
+
+print("🧪 RUNNING ISOLATED DELTA CHECK STRESS TEST...\n")
+for chamber, text in test_cases:
+    result = test_delta_check(chamber, text)
+    print(result)
+    print("-" * 60)
