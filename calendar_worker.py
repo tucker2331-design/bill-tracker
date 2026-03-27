@@ -50,6 +50,9 @@ LOCAL_LEXICON = {
     "Senate Agriculture, Conservation and Natural Resources": ["agriculture", "conservation", "natural resources"]
 }
 
+# --- UPGRADE: The Noise Filter for the Delta Check ---
+IGNORE_WORDS = {"committee", "on", "the", "of", "and", "for", "meeting", "joint", "to", "referred", "assigned", "re-referred", "substitute", "placed"}
+
 def get_armored_session():
     session = requests.Session()
     session.headers.update({'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/120.0.0.0 Safari/537.36'})
@@ -59,7 +62,7 @@ def get_armored_session():
     session.mount('https://', adapter)
     return session
 
-# --- TARGET LOCKED: TRUE JSON SCHEMA APPLIED ---
+# --- UPGRADE: TRUE JSON SCHEMA APPLIED ---
 def get_active_session_info(http_session):
     print("📡 Pinging Master API for Session Intelligence...")
     try:
@@ -88,7 +91,7 @@ def get_active_session_info(http_session):
                     return min(valid_dates), max(valid_dates)
                 return now, now 
 
-            # Pass 1: Explicit 'IsActive' Flag (Confirmed via JSON)
+            # Pass 1: Explicit 'IsActive' Flag
             for s in sessions:
                 if s.get('IsActive') or s.get('IsDefault'):
                     start, end = extract_dates(s)
@@ -275,6 +278,11 @@ def run_calendar_update():
     test_start_date = session_data["start"]
     test_end_date = session_data["end"]
 
+    # --- UPGRADE: The Rolling Scraper Window ---
+    now = datetime.now()
+    scrape_start = now - timedelta(days=14)
+    scrape_end = now + timedelta(days=7)
+
     print("🔐 Authenticating with Google Cloud...")
     creds_json = os.environ.get("GCP_CREDENTIALS")
     if not creds_json: 
@@ -347,12 +355,31 @@ def run_calendar_update():
                             
                 if not time_val: time_val = "Time TBA"
                 
+                # --- UPGRADE: Joint Chamber Override ---
                 normalized_name = raw_owner_name
-                chamber_prefix = "House " if "house" in owner_lower else "Senate " if "senate" in owner_lower else ""
-                for api_name, aliases in LOCAL_LEXICON.items():
-                    if api_name.startswith(chamber_prefix):
-                        if any(alias in owner_lower for alias in aliases):
-                            normalized_name = api_name; break
+                if "joint" in owner_lower or ("house" in owner_lower and "senate" in owner_lower):
+                    chamber_prefix = "Joint "
+                elif "house" in owner_lower:
+                    chamber_prefix = "House "
+                elif "senate" in owner_lower:
+                    chamber_prefix = "Senate "
+                else:
+                    chamber_prefix = ""
+
+                # --- UPGRADE: Delta Check & Regex Shield for API Schedule ---
+                sub_regex = re.compile(r'\bsubcommittee\b|\bsub-committee\b|\bsub\.\b|\bsub #\b')
+                is_explicit_sub = bool(sub_regex.search(owner_lower))
+
+                if not is_explicit_sub:
+                    for api_name, aliases in LOCAL_LEXICON.items():
+                        if api_name.startswith(chamber_prefix):
+                            if any(alias in owner_lower for alias in aliases):
+                                original_words = set(re.findall(r'\b\w+\b', owner_lower))
+                                lexicon_words = set(re.findall(r'\b\w+\b', api_name.lower()))
+                                leftovers = original_words - lexicon_words - IGNORE_WORDS
+                                if not leftovers:
+                                    normalized_name = api_name
+                                break
 
                 if "house convenes" in owner_lower or "house chamber" in owner_lower:
                     if date_str not in convene_times: convene_times[date_str] = {}
@@ -372,7 +399,8 @@ def run_calendar_update():
                 combined_bills = set()
                 dlq_flag = ""
                 
-                if agenda_url and not is_cancelled:
+                # --- APPLY: The Rolling Scraper Constraint ---
+                if agenda_url and not is_cancelled and (scrape_start <= meeting_date <= scrape_end):
                     extracted_bills, is_corrupt = extract_rogue_agenda(agenda_url, http_session, meeting_date)
                     combined_bills.update(extracted_bills)
                     if is_corrupt: dlq_flag = "⚠️ [Agenda unreadable - Manual check required]"
@@ -437,38 +465,68 @@ def run_calendar_update():
             
             event_location = bill_locations[bill_num] 
             
-            matched_committee = None
-            for api_name, aliases in LOCAL_LEXICON.items():
-                if api_name.startswith(chamber_prefix):
-                    for alias in aliases:
-                        if alias and alias in outcome_lower:
-                            matched_committee = api_name; break
-                if matched_committee: break
+            # --- UPGRADE: Executive and Conference Routers ---
+            exec_verbs = ["approved by governor", "vetoed by governor", "governor's substitute", "governor's recommendation", "governor:"]
+            is_exec = any(ev in outcome_lower for ev in exec_verbs) and not (outcome_text.startswith('H ') or outcome_text.startswith('S '))
+            is_conf = "conferee" in outcome_lower or "conference report" in outcome_lower
 
-            display_verbs = ["reported from", "continued in", "passed by indefinitely in", "discharged from"]
-            if matched_committee and any(v in outcome_lower for v in display_verbs):
-                event_location = matched_committee
+            if is_exec:
+                event_location = "Executive Action"
+            elif is_conf:
+                event_location = "Conference Committee"
+            else:
+                # Apply normal legislative logic
+                if "joint" in outcome_lower or ("house" in outcome_lower and "senate" in outcome_lower): 
+                    chamber_prefix = "Joint "
 
-            routing_verbs = ["referred to", "re-referred to", "assigned to", "placed on"]
-            if any(v in outcome_lower for v in routing_verbs):
-                if matched_committee: bill_locations[bill_num] = matched_committee
-            elif "reported from" in outcome_lower or "discharged from" in outcome_lower:
-                bill_locations[bill_num] = chamber_prefix + "Floor"
+                matched_committee = None
+                for api_name, aliases in LOCAL_LEXICON.items():
+                    if api_name.startswith(chamber_prefix):
+                        for alias in aliases:
+                            if alias and alias in outcome_lower:
+                                matched_committee = api_name; break
+                    if matched_committee: break
 
-            floor_reset_phrases = ["read first", "read second", "read third", "passed house", "passed senate", "agreed to", "rejected", "signed by", "presented", "received", "enrolled", "engrossed", "conferees:"]
-            if any(p in outcome_lower for p in floor_reset_phrases):
-                event_location = chamber_prefix + "Floor"
-                bill_locations[bill_num] = chamber_prefix + "Floor"
+                display_verbs = ["reported from", "continued in", "passed by indefinitely in", "discharged from"]
+                if matched_committee and any(v in outcome_lower for v in display_verbs):
+                    event_location = matched_committee
 
-            allowed_rooms = docket_memory.get(date_str, {}).get(bill_num, [])
-            if allowed_rooms and matched_committee:
-                for room in allowed_rooms:
-                    if matched_committee.lower() in room.lower():
-                        event_location = room; break
+                routing_verbs = ["referred to", "re-referred to", "assigned to", "placed on"]
+                
+                # --- UPGRADE: Delta Check for CSV Routing ---
+                leftovers = set()
+                if matched_committee and any(v in outcome_lower for v in routing_verbs):
+                    target_str = outcome_lower
+                    for v in routing_verbs:
+                        if v + " " in target_str: 
+                            target_str = target_str.split(v + " ")[-1]
+                            break
+                    leftovers = set(re.findall(r'\b\w+\b', target_str)) - set(re.findall(r'\b\w+\b', matched_committee.lower())) - IGNORE_WORDS
 
-            all_committee_verbs = display_verbs + routing_verbs
-            if any(v in outcome_lower for v in all_committee_verbs) and not matched_committee and "floor" not in outcome_lower:
-                event_location = f"⚠️ [Unmapped] {outcome_text.split(' from ')[-1].split(' to ')[-1]} (Ledger)"
+                if any(v in outcome_lower for v in routing_verbs):
+                    if matched_committee and not leftovers: 
+                        bill_locations[bill_num] = matched_committee
+                        event_location = matched_committee
+                    elif matched_committee and leftovers:
+                        event_location = f"⚠️ [Unmapped Target] {outcome_text.split(' from ')[-1].split(' to ')[-1]}"
+                        
+                elif "reported from" in outcome_lower or "discharged from" in outcome_lower:
+                    bill_locations[bill_num] = chamber_prefix + "Floor"
+
+                floor_reset_phrases = ["read first", "read second", "read third", "passed house", "passed senate", "agreed to", "rejected", "signed by", "presented", "received", "enrolled", "engrossed", "conferees:"]
+                if any(p in outcome_lower for p in floor_reset_phrases):
+                    event_location = chamber_prefix + "Floor"
+                    bill_locations[bill_num] = chamber_prefix + "Floor"
+
+                allowed_rooms = docket_memory.get(date_str, {}).get(bill_num, [])
+                if allowed_rooms and matched_committee:
+                    for room in allowed_rooms:
+                        if matched_committee.lower() in room.lower():
+                            event_location = room; break
+
+                all_committee_verbs = display_verbs + routing_verbs
+                if any(v in outcome_lower for v in all_committee_verbs) and not matched_committee and "floor" not in outcome_lower:
+                    event_location = f"⚠️ [Unmapped] {outcome_text.split(' from ')[-1].split(' to ')[-1]} (Ledger)"
 
             noise_words = ["impact statement", "substitute printed", "laid on speaker's table", "laid on clerk's desk", "presented", "reprinted", "engrossed by senate - committee substitute", "engrossed by house - committee substitute"]
             if any(n in outcome_lower for n in noise_words): continue
