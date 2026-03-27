@@ -16,7 +16,7 @@ from google.oauth2.service_account import Credentials
 from bs4 import BeautifulSoup
 import pdfplumber
 
-print("🚀 Waking up Enterprise Calendar Worker (Session-Aware Master Build)...")
+print("🚀 Waking up Enterprise Calendar Worker (Regression Test Build)...")
 
 SPREADSHEET_ID = "1PQDtaTTUeYv781bx4_ZiehcvbEmUt8t7jFmZYJoJGKM"
 API_KEY = "81D70A54-FCDC-4023-A00B-A3FD114D5984"
@@ -50,8 +50,7 @@ LOCAL_LEXICON = {
     "Senate Agriculture, Conservation and Natural Resources": ["agriculture", "conservation", "natural resources"]
 }
 
-# --- UPGRADE: The Noise Filter for the Delta Check ---
-IGNORE_WORDS = {"committee", "on", "the", "of", "and", "for", "meeting", "joint", "to", "referred", "assigned", "re-referred", "substitute", "placed"}
+IGNORE_WORDS = {"committee", "on", "the", "of", "and", "for", "meeting", "joint", "to", "referred", "assigned", "re-referred", "substitute", "placed", "with", "amendment", "amendments", "a", "an", "by", "recommendation"}
 
 def get_armored_session():
     session = requests.Session()
@@ -62,7 +61,6 @@ def get_armored_session():
     session.mount('https://', adapter)
     return session
 
-# --- UPGRADE: TRUE JSON SCHEMA APPLIED ---
 def get_active_session_info(http_session):
     print("📡 Pinging Master API for Session Intelligence...")
     try:
@@ -77,21 +75,17 @@ def get_active_session_info(http_session):
 
             now = datetime.now()
             
-            # Extracts absolute bounds from the nested SessionEvents array
             def extract_dates(session_obj):
                 events = session_obj.get('SessionEvents', [])
                 valid_dates = []
                 for e in events:
                     d = e.get('ActualDate') or e.get('ProjectedDate')
                     if d:
-                        try:
-                            valid_dates.append(pd.to_datetime(d).replace(tzinfo=None))
+                        try: valid_dates.append(pd.to_datetime(d).replace(tzinfo=None))
                         except: pass
-                if valid_dates:
-                    return min(valid_dates), max(valid_dates)
+                if valid_dates: return min(valid_dates), max(valid_dates)
                 return now, now 
 
-            # Pass 1: Explicit 'IsActive' Flag
             for s in sessions:
                 if s.get('IsActive') or s.get('IsDefault'):
                     start, end = extract_dates(s)
@@ -99,7 +93,6 @@ def get_active_session_info(http_session):
                     print(f"🎯 Target Locked: Session {code} ({start.strftime('%b %d')} - {end.strftime('%b %d')})")
                     return {"code": code, "start": start, "end": end + timedelta(days=14)}
 
-            # Pass 2: Fallback to Current Year
             current_year = now.year
             for s in sessions:
                 if str(s.get('SessionYear')) == str(current_year):
@@ -158,10 +151,8 @@ def build_time_graph(schedules):
 
     floor_keys = {}
     for k, v in raw_times.items():
-        if "house convenes" in k or "house chamber" in k:
-            floor_keys["house"] = v; floor_keys["the house"] = v
-        if "senate convenes" in k or "senate chamber" in k:
-            floor_keys["senate"] = v; floor_keys["the senate"] = v
+        if "house convenes" in k or "house chamber" in k: floor_keys["house"] = v; floor_keys["the house"] = v
+        if "senate convenes" in k or "senate chamber" in k: floor_keys["senate"] = v; floor_keys["the senate"] = v
     raw_times.update(floor_keys)
 
     resolved_times = {}
@@ -178,18 +169,14 @@ def build_time_graph(schedules):
         dynamic_markers = ["upon adjournment", "minutes after", "hour after", "recess"]
         if any(m in raw_str.lower() for m in dynamic_markers):
             found_parent_key = None
-            
             for p_name in raw_times.keys():
                 if len(p_name) > 5 and p_name in raw_str.lower():
-                    found_parent_key = p_name
-                    break
+                    found_parent_key = p_name; break
             
             if not found_parent_key:
                 raw_lower = raw_str.lower()
-                if "senate adjourns" in raw_lower or "adjournment of the senate" in raw_lower:
-                    found_parent_key = "senate convenes"
-                elif "house adjourns" in raw_lower or "adjournment of the house" in raw_lower:
-                    found_parent_key = "house convenes"
+                if "senate adjourns" in raw_lower or "adjournment of the senate" in raw_lower: found_parent_key = "senate convenes"
+                elif "house adjourns" in raw_lower or "adjournment of the house" in raw_lower: found_parent_key = "house convenes"
                 elif "recess" in raw_lower and "house" in raw_lower:
                     for k, v in raw_times.items():
                         if "recess" in v.lower() and "house" in k.lower(): found_parent_key = k; break
@@ -278,9 +265,10 @@ def run_calendar_update():
     test_start_date = session_data["start"]
     test_end_date = session_data["end"]
 
-    # --- UPGRADE: The Rolling Scraper Window ---
     now = datetime.now()
-    scrape_start = now - timedelta(days=14)
+    # --- REGRESSION TEST WINDOW ---
+    # We are opening the viewport from our original testing ground (March 1) up to today
+    scrape_start = datetime(2026, 3, 1)
     scrape_end = now + timedelta(days=7)
 
     print("🔐 Authenticating with Google Cloud...")
@@ -355,7 +343,6 @@ def run_calendar_update():
                             
                 if not time_val: time_val = "Time TBA"
                 
-                # --- UPGRADE: Joint Chamber Override ---
                 normalized_name = raw_owner_name
                 if "joint" in owner_lower or ("house" in owner_lower and "senate" in owner_lower):
                     chamber_prefix = "Joint "
@@ -366,7 +353,6 @@ def run_calendar_update():
                 else:
                     chamber_prefix = ""
 
-                # --- UPGRADE: Delta Check & Regex Shield for API Schedule ---
                 sub_regex = re.compile(r'\bsubcommittee\b|\bsub-committee\b|\bsub\.\b|\bsub #\b')
                 is_explicit_sub = bool(sub_regex.search(owner_lower))
 
@@ -399,7 +385,6 @@ def run_calendar_update():
                 combined_bills = set()
                 dlq_flag = ""
                 
-                # --- APPLY: The Rolling Scraper Constraint ---
                 if agenda_url and not is_cancelled and (scrape_start <= meeting_date <= scrape_end):
                     extracted_bills, is_corrupt = extract_rogue_agenda(agenda_url, http_session, meeting_date)
                     combined_bills.update(extracted_bills)
@@ -456,16 +441,15 @@ def run_calendar_update():
             date_val = row['ParsedDate']
             date_str = date_val.strftime('%Y-%m-%d')
             
-            if outcome_text.startswith('H '): acting_chamber, chamber_prefix = "House", "House "
-            elif outcome_text.startswith('S '): acting_chamber, chamber_prefix = "Senate", "Senate "
-            else: acting_chamber = "House" if bill_num.startswith('H') else "Senate"; chamber_prefix = f"{acting_chamber} "
+            if outcome_text.startswith('H '): acting_chamber_prefix = "House "
+            elif outcome_text.startswith('S '): acting_chamber_prefix = "Senate "
+            else: acting_chamber_prefix = "House " if bill_num.startswith('H') else "Senate "
             
-            if bill_num not in bill_locations: bill_locations[bill_num] = chamber_prefix + "Floor"
-            if not bill_locations[bill_num].startswith(chamber_prefix): bill_locations[bill_num] = chamber_prefix + "Floor"
+            if bill_num not in bill_locations: bill_locations[bill_num] = acting_chamber_prefix + "Floor"
+            if not bill_locations[bill_num].startswith(acting_chamber_prefix): bill_locations[bill_num] = acting_chamber_prefix + "Floor"
             
             event_location = bill_locations[bill_num] 
             
-            # --- UPGRADE: Executive and Conference Routers ---
             exec_verbs = ["approved by governor", "vetoed by governor", "governor's substitute", "governor's recommendation", "governor:"]
             is_exec = any(ev in outcome_lower for ev in exec_verbs) and not (outcome_text.startswith('H ') or outcome_text.startswith('S '))
             is_conf = "conferee" in outcome_lower or "conference report" in outcome_lower
@@ -475,48 +459,48 @@ def run_calendar_update():
             elif is_conf:
                 event_location = "Conference Committee"
             else:
-                # Apply normal legislative logic
                 if "joint" in outcome_lower or ("house" in outcome_lower and "senate" in outcome_lower): 
-                    chamber_prefix = "Joint "
+                    committee_search_prefix = "Joint "
+                else:
+                    committee_search_prefix = acting_chamber_prefix
 
                 matched_committee = None
                 for api_name, aliases in LOCAL_LEXICON.items():
-                    if api_name.startswith(chamber_prefix):
+                    if api_name.startswith(committee_search_prefix):
                         for alias in aliases:
                             if alias and alias in outcome_lower:
                                 matched_committee = api_name; break
                     if matched_committee: break
 
-                display_verbs = ["reported from", "continued in", "passed by indefinitely in", "discharged from"]
-                if matched_committee and any(v in outcome_lower for v in display_verbs):
-                    event_location = matched_committee
+                display_verbs = ["continued in", "passed by indefinitely in", "discharged from"]
+                routing_verbs = ["referred to", "re-referred to", "assigned to", "placed on", "reported from"]
+                action_verbs = display_verbs + routing_verbs
 
-                routing_verbs = ["referred to", "re-referred to", "assigned to", "placed on"]
-                
-                # --- UPGRADE: Delta Check for CSV Routing ---
                 leftovers = set()
-                if matched_committee and any(v in outcome_lower for v in routing_verbs):
+                if matched_committee and any(v in outcome_lower for v in action_verbs):
                     target_str = outcome_lower
-                    for v in routing_verbs:
+                    target_str = re.sub(r'\(\d+-y[^)]*\)', '', target_str)
+                    
+                    for v in action_verbs:
                         if v + " " in target_str: 
                             target_str = target_str.split(v + " ")[-1]
                             break
                     leftovers = set(re.findall(r'\b\w+\b', target_str)) - set(re.findall(r'\b\w+\b', matched_committee.lower())) - IGNORE_WORDS
 
-                if any(v in outcome_lower for v in routing_verbs):
+                if any(v in outcome_lower for v in action_verbs):
                     if matched_committee and not leftovers: 
                         bill_locations[bill_num] = matched_committee
                         event_location = matched_committee
                     elif matched_committee and leftovers:
-                        event_location = f"⚠️ [Unmapped Target] {outcome_text.split(' from ')[-1].split(' to ')[-1]}"
+                        event_location = f"⚠️ [Unmapped Target] {outcome_text.split(' from ')[-1].split(' to ')[-1].split(' in ')[-1]}"
                         
-                elif "reported from" in outcome_lower or "discharged from" in outcome_lower:
-                    bill_locations[bill_num] = chamber_prefix + "Floor"
+                elif "discharged from" in outcome_lower:
+                    bill_locations[bill_num] = acting_chamber_prefix + "Floor"
 
                 floor_reset_phrases = ["read first", "read second", "read third", "passed house", "passed senate", "agreed to", "rejected", "signed by", "presented", "received", "enrolled", "engrossed", "conferees:"]
                 if any(p in outcome_lower for p in floor_reset_phrases):
-                    event_location = chamber_prefix + "Floor"
-                    bill_locations[bill_num] = chamber_prefix + "Floor"
+                    event_location = acting_chamber_prefix + "Floor"
+                    bill_locations[bill_num] = acting_chamber_prefix + "Floor"
 
                 allowed_rooms = docket_memory.get(date_str, {}).get(bill_num, [])
                 if allowed_rooms and matched_committee:
@@ -524,9 +508,8 @@ def run_calendar_update():
                         if matched_committee.lower() in room.lower():
                             event_location = room; break
 
-                all_committee_verbs = display_verbs + routing_verbs
-                if any(v in outcome_lower for v in all_committee_verbs) and not matched_committee and "floor" not in outcome_lower:
-                    event_location = f"⚠️ [Unmapped] {outcome_text.split(' from ')[-1].split(' to ')[-1]} (Ledger)"
+                if any(v in outcome_lower for v in action_verbs) and not matched_committee and "floor" not in outcome_lower:
+                    event_location = f"⚠️ [Unmapped] {outcome_text.split(' from ')[-1].split(' to ')[-1].split(' in ')[-1]} (Ledger)"
 
             noise_words = ["impact statement", "substitute printed", "laid on speaker's table", "laid on clerk's desk", "presented", "reprinted", "engrossed by senate - committee substitute", "engrossed by house - committee substitute"]
             if any(n in outcome_lower for n in noise_words): continue
@@ -549,27 +532,38 @@ def run_calendar_update():
                 sort_time_24h = api_schedule_map[api_key]["SortTime"]
                 status = api_schedule_map[api_key]["Status"]
             else:
-                if "passed by" in outcome_lower and "Floor" not in event_location:
+                if "passed by" in outcome_lower and "Floor" not in event_location and not matched_committee:
                     event_location = f"⚠️ [Location Unknown] Passed by for the day (Ledger)"
             
             if "Floor" in event_location:
-                anchor = convene_times.get(date_str, {}).get(chamber_prefix.strip())
+                anchor = convene_times.get(date_str, {}).get(acting_chamber_prefix.strip())
                 if anchor: time_val, sort_time_24h, event_location = anchor["Time"], anchor["SortTime"], anchor["Name"]
                 
             master_events.append({"Date": date_str, "Time": time_val, "SortTime": sort_time_24h, "Status": status, "Committee": event_location, "Bill": bill_num, "Outcome": outcome_text, "AgendaOrder": 999, "Source": "CSV"})
 
-    print("🧹 Cleaning Data...")
+    print("🧹 Cleaning Data & Slicing Viewport...")
     final_df = pd.DataFrame(master_events)
     if not final_df.empty:
         final_df = final_df[~((final_df['Bill'] == "No agenda listed.") & final_df.duplicated(subset=['Date', 'Committee', 'Time'], keep=False))]
         final_df = final_df.sort_values(by=['Date', 'Committee', 'Bill', 'Source'])
         final_df = final_df.drop_duplicates(subset=['Date', 'Committee', 'Bill'], keep='last')
         final_df = final_df.fillna("")
-        sheet_data = [final_df.columns.values.tolist()] + final_df.values.tolist()
-        print("💾 Writing to Enterprise Database...")
-        worksheet.clear()
-        worksheet.update(values=sheet_data, range_name="A1")
-        print("✅ SUCCESS: The Final Mastermind Build is complete.")
+
+        # --- REGRESSION TEST VIEWPORT SLICE ---
+        scrape_start_str = scrape_start.strftime('%Y-%m-%d')
+        scrape_end_str = scrape_end.strftime('%Y-%m-%d')
+        final_df = final_df[(final_df['Date'] >= scrape_start_str) & (final_df['Date'] <= scrape_end_str)]
+
+        if not final_df.empty:
+            sheet_data = [final_df.columns.values.tolist()] + final_df.values.tolist()
+            print("💾 Writing to Enterprise Database...")
+            worksheet.clear()
+            worksheet.update(values=sheet_data, range_name="A1")
+            print("✅ SUCCESS: Regression Test Build is complete.")
+        else:
+            print("⚠️ Viewport slice resulted in an empty dataframe.")
+            worksheet.clear()
+            worksheet.update(values=[["Date", "Time", "SortTime", "Status", "Committee", "Bill", "Outcome", "AgendaOrder", "Source"]], range_name="A1")
     else:
         print("⚠️ No data generated for the window.")
 
