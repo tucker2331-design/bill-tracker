@@ -10,13 +10,14 @@ import io
 import tempfile
 import urllib.parse
 from datetime import datetime, timedelta
+import pytz # ENTERPRISE FIX: Strict Timezone Handling
 from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
 from google.oauth2.service_account import Credentials
 from bs4 import BeautifulSoup
 import pdfplumber
 
-print("🚀 Waking up Enterprise Calendar Worker (Regression + Ghost Anchor Build)...")
+print("🚀 Waking up Enterprise Calendar Worker (Architect Build v3.0)...")
 
 SPREADSHEET_ID = "1PQDtaTTUeYv781bx4_ZiehcvbEmUt8t7jFmZYJoJGKM"
 API_KEY = "81D70A54-FCDC-4023-A00B-A3FD114D5984"
@@ -50,8 +51,7 @@ LOCAL_LEXICON = {
     "Senate Agriculture, Conservation and Natural Resources": ["agriculture", "conservation", "natural resources"]
 }
 
-# --- UPGRADE: Plural forms added to prevent Delta Check crashes ---
-IGNORE_WORDS = {"committee", "on", "the", "of", "and", "for", "meeting", "joint", "to", "referred", "assigned", "re-referred", "substitute", "substitutes", "placed", "with", "amendment", "amendments", "a", "an", "by", "recommendation"}
+IGNORE_WORDS = {"committee", "on", "the", "of", "and", "for", "meeting", "joint", "to", "referred", "assigned", "re-referred", "substitute", "substitutes", "placed", "with", "amendment", "amendments", "a", "an", "by", "recommendation", "recommends", "recommend"}
 
 def get_armored_session():
     session = requests.Session()
@@ -69,11 +69,12 @@ def get_active_session_info(http_session):
         if res.status_code == 200:
             raw_json = res.json()
             sessions = raw_json.get('Sessions', []) if isinstance(raw_json, dict) else raw_json
-            
-            if not isinstance(sessions, list) or len(sessions) == 0:
-                return None, False
+            if not isinstance(sessions, list) or len(sessions) == 0: return None, False
 
-            now = datetime.now()
+            # ENTERPRISE FIX: Daylight Saving Time Immune Clock
+            tz = pytz.timezone('America/New_York')
+            now = datetime.now(tz).replace(tzinfo=None)
+
             def extract_dates(session_obj):
                 events = session_obj.get('SessionEvents', [])
                 valid_dates = []
@@ -102,6 +103,8 @@ def safe_fetch_csv(url):
     try:
         res = requests.get(url, timeout=10)
         if res.status_code == 200:
+            if b'BillNumber' not in res.content and b'HistoryDate' not in res.content and b'Committee' not in res.content:
+                return pd.DataFrame()
             raw_text = res.content.decode('iso-8859-1')
             df = pd.read_csv(io.StringIO(raw_text))
             return df.rename(columns=lambda x: x.strip())
@@ -224,8 +227,12 @@ def run_calendar_update():
     http_session = get_armored_session()
     
     session_data, api_is_online = get_active_session_info(http_session)
+    
+    tz = pytz.timezone('America/New_York')
+    now = datetime.now(tz).replace(tzinfo=None)
+
     if not session_data:
-        print("🚨 CRITICAL: Failed to retrieve active session. Proceeding in OFFLINE mode using fallbacks.")
+        print("🚨 CRITICAL: Failed to retrieve active session. Proceeding in OFFLINE mode.")
         ACTIVE_SESSION = "261" 
         test_start_date = datetime(2026, 1, 14)
         test_end_date = datetime(2026, 5, 1)
@@ -234,16 +241,12 @@ def run_calendar_update():
         test_start_date = session_data["start"]
         test_end_date = session_data["end"]
 
-    now = datetime.now()
-    # REGRESSION VIEWPORT: March 1st up to Today + 7 Days
     scrape_start = datetime(2026, 3, 1)
     scrape_end = now + timedelta(days=7)
 
     print("🔐 Authenticating with Google Cloud...")
     creds_json = os.environ.get("GCP_CREDENTIALS")
-    if not creds_json: 
-        print("🚨 CRITICAL: GCP Credentials missing.")
-        sys.exit(1)
+    if not creds_json: sys.exit(1)
         
     gc = gspread.authorize(Credentials.from_service_account_info(json.loads(creds_json), scopes=["https://www.googleapis.com/auth/spreadsheets"]))
     sheet = gc.open_by_key(SPREADSHEET_ID)
@@ -272,7 +275,7 @@ def run_calendar_update():
                 if d not in convene_times: convene_times[d] = {}
                 convene_times[d][chamber] = {"Time": str(r.get("Time", "")), "SortTime": str(r.get("SortTime", "")), "Name": c}
     except Exception as e:
-        print(f"⚠️ API_Cache tab not found or empty. Proceeding without cold storage. ({e})")
+        print(f"⚠️ Cache tab empty or unreadable. ({e})")
 
     blob_code = f"20{ACTIVE_SESSION}" if len(ACTIVE_SESSION) == 3 else ACTIVE_SESSION
     master_events = []
@@ -353,7 +356,6 @@ def run_calendar_update():
                                 if not leftovers: normalized_name = api_name; break
 
                     map_key = f"{date_str}_{normalized_name}"
-                    
                     api_schedule_map[map_key] = {"Time": time_val, "SortTime": sort_time_24h, "Status": status}
                     
                     if "house convenes" in owner_lower or "house chamber" in owner_lower:
@@ -451,18 +453,16 @@ def run_calendar_update():
                     if api_name.startswith(committee_search_prefix) and any(alias and alias in outcome_lower for alias in aliases):
                         matched_committee = api_name; break
 
-                display_verbs = ["continued in", "passed by indefinitely in", "discharged from"]
-                routing_verbs = ["referred to", "re-referred to", "assigned to", "placed on", "reported from"]
-                action_verbs = display_verbs + routing_verbs
+                routing_verbs = ["referred to", "re-referred to", "assigned to", "placed on"]
+                in_room_verbs = ["reported", "continue", "passed by", "failed", "strike", "stricken", "recommend", "recommends", "incorporate", "defeated", "laid on the table", "tabled", "postponed"]
+                action_verbs = routing_verbs + in_room_verbs
 
                 leftovers = set()
-                # Bypass Delta Check if it's an Incorporation to prevent false flags on Bill Numbers
-                is_incorporation = any(x in outcome_lower for x in ["incorporate", "strike", "stricken"])
+                is_nameless_verb = any(x in outcome_lower for x in in_room_verbs)
 
-                if matched_committee and any(v in outcome_lower for v in action_verbs) and not is_incorporation:
-                    # --- UPGRADE: The (s) Scrubber ---
+                if matched_committee and any(v in outcome_lower for v in action_verbs) and not is_nameless_verb:
                     target_str = outcome_lower.replace("(s)", "s")
-                    target_str = re.sub(r'\(\d+-y[^)]*\)', '', target_str)
+                    target_str = re.sub(r'\(\s*(?:\d+-[YNAyyna][^)]*|voice vote)\s*\)', '', target_str, flags=re.IGNORECASE)
                     for v in action_verbs:
                         if v + " " in target_str: target_str = target_str.split(v + " ")[-1]; break
                     leftovers = set(re.findall(r'\b\w+\b', target_str)) - set(re.findall(r'\b\w+\b', matched_committee.lower())) - IGNORE_WORDS
@@ -473,18 +473,17 @@ def run_calendar_update():
                         if committee_search_prefix.lower() in room.lower() or "joint" in room.lower():
                             matched_committee = room; break
 
-                if any(v in outcome_lower for v in action_verbs) or is_incorporation:
+                if any(v in outcome_lower for v in action_verbs) or is_nameless_verb:
                     if matched_committee and not leftovers: 
                         bill_locations[bill_num] = matched_committee
                         event_location = matched_committee
                     elif matched_committee and leftovers:
                         event_location = f"⚠️ [Unmapped Target] {outcome_text.split(' from ')[-1].split(' to ')[-1].split(' in ')[-1]}"
                     elif not matched_committee:
-                        # --- UPGRADE: The Ghost Action Anchor ---
-                        if any(x in outcome_lower for x in ["passed by", "incorporate", "strike", "continue"]):
+                        if is_nameless_verb:
                             event_location = bill_locations[bill_num]
                         else:
-                            event_location = f"⚠️ [Unmapped] {outcome_text.split(' from ')[-1].split(' to ')[-1].split(' in ')[-1]} (Desk Action)"
+                            event_location = f"⚠️ [Unmapped Routing] {outcome_text.split(' from ')[-1].split(' to ')[-1].split(' in ')[-1]} (Desk Action)"
                         
                 elif "discharged from" in outcome_lower:
                     bill_locations[bill_num] = acting_chamber_prefix + "Floor"
@@ -511,7 +510,7 @@ def run_calendar_update():
                 sort_time_24h = api_schedule_map[api_key]["SortTime"]
                 status = api_schedule_map[api_key]["Status"]
             else:
-                if "passed by" in outcome_lower and "Floor" not in event_location and not matched_committee:
+                if is_nameless_verb and "Floor" not in event_location and not matched_committee:
                     event_location = bill_locations[bill_num] 
             
             if "Floor" in event_location:
@@ -520,8 +519,29 @@ def run_calendar_update():
                 
             master_events.append({"Date": date_str, "Time": time_val, "SortTime": sort_time_24h, "Status": status, "Committee": event_location, "Bill": bill_num, "Outcome": outcome_text, "AgendaOrder": 999, "Source": "CSV"})
 
-    print("🧹 Cleaning Data & Slicing Viewport...")
-    final_df = pd.DataFrame(master_events)
+    print("🧹 Filtering Noise & Slicing Viewport...")
+    filtered_events = []
+    
+    # ENTERPRISE FIX: NLP-Lite Regex for Temporary Actions
+    ephemeral_pattern = re.compile(r'\b(for the day|temporarily|temporarilly|to tomorrow|until tomorrow|till tomorrow|for the week|temporay)\b', re.IGNORECASE)
+    
+    for ev in master_events:
+        if bool(ephemeral_pattern.search(ev["Outcome"])) and ev["Time"] == "Desk Action":
+            if any(x in ev["Committee"] for x in ["Floor", "Convenes", "Chamber", "Executive", "Conference"]):
+                pass 
+            else:
+                was_scheduled = False
+                d_str = ev["Date"]
+                b_num = ev["Bill"]
+                c_name = ev["Committee"]
+                if d_str in docket_memory and b_num in docket_memory[d_str]:
+                    for d_comm in docket_memory[d_str][b_num]:
+                        if d_comm.lower() in c_name.lower() or c_name.lower() in d_comm.lower():
+                            was_scheduled = True; break
+                if not was_scheduled: continue 
+        filtered_events.append(ev)
+
+    final_df = pd.DataFrame(filtered_events)
     if not final_df.empty:
         final_df = final_df[~((final_df['Bill'] == "No agenda listed.") & final_df.duplicated(subset=['Date', 'Committee', 'Time'], keep=False))]
         final_df = final_df.sort_values(by=['Date', 'Committee', 'Bill', 'Source'])
@@ -540,7 +560,11 @@ def run_calendar_update():
             
             if new_cache_entries and cache_sheet:
                 print(f"🗄️ Writing {len(new_cache_entries)} new historic records to API_Cache...")
-                try: cache_sheet.append_rows(new_cache_entries)
+                try: 
+                    existing_keys = {f"{r.get('Date', '')}_{r.get('Committee', '')}" for r in cache_records} if cache_sheet else set()
+                    unique_new_entries = [e for e in new_cache_entries if f"{e[0]}_{e[1]}" not in existing_keys]
+                    if unique_new_entries:
+                        cache_sheet.append_rows(unique_new_entries)
                 except Exception as e: print(f"⚠️ Failed to update Cache tab: {e}")
                 
             print("✅ SUCCESS: Regression Test Build is complete.")
