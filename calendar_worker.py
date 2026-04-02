@@ -10,14 +10,14 @@ import io
 import tempfile
 import urllib.parse
 from datetime import datetime, timedelta
-import pytz # ENTERPRISE FIX: Strict Timezone Handling
+import pytz
 from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
 from google.oauth2.service_account import Credentials
 from bs4 import BeautifulSoup
 import pdfplumber
 
-print("🚀 Waking up Enterprise Calendar Worker (Architect Build v3.0)...")
+print("🚀 Waking up Enterprise Calendar Worker (Turing State Machine v6.0)...")
 
 SPREADSHEET_ID = "1PQDtaTTUeYv781bx4_ZiehcvbEmUt8t7jFmZYJoJGKM"
 API_KEY = "81D70A54-FCDC-4023-A00B-A3FD114D5984"
@@ -51,7 +51,11 @@ LOCAL_LEXICON = {
     "Senate Agriculture, Conservation and Natural Resources": ["agriculture", "conservation", "natural resources"]
 }
 
-IGNORE_WORDS = {"committee", "on", "the", "of", "and", "for", "meeting", "joint", "to", "referred", "assigned", "re-referred", "substitute", "substitutes", "placed", "with", "amendment", "amendments", "a", "an", "by", "recommendation", "recommends", "recommend"}
+IGNORE_WORDS = {"committee", "on", "the", "of", "and", "for", "meeting", "joint", "to", "referred", "assigned", "re-referred", "substitute", "substitutes", "placed", "with", "amendment", "amendments", "a", "an", "by", "recommendation", "recommends", "recommend", "block", "vote", "voice"}
+
+# === ACTION SCOPE VECTORS ===
+ABSOLUTE_FLOOR_VERBS = ["reading dispensed", "read first", "read second", "read third", "engrossed", "enrolled", "passed senate", "passed house", "signed by", "presented", "received", "communicated", "agreed to", "rejected", "conferees:"]
+DYNAMIC_VERBS = ["passed by", "reconsidered", "failed", "defeated", "laid on the table", "tabled", "continued", "strike", "stricken", "incorporate", "recommend", "recommends"]
 
 def get_armored_session():
     session = requests.Session()
@@ -71,7 +75,6 @@ def get_active_session_info(http_session):
             sessions = raw_json.get('Sessions', []) if isinstance(raw_json, dict) else raw_json
             if not isinstance(sessions, list) or len(sessions) == 0: return None, False
 
-            # ENTERPRISE FIX: Daylight Saving Time Immune Clock
             tz = pytz.timezone('America/New_York')
             now = datetime.now(tz).replace(tzinfo=None)
 
@@ -355,21 +358,21 @@ def run_calendar_update():
                                 leftovers = original_words - lexicon_words - IGNORE_WORDS
                                 if not leftovers: normalized_name = api_name; break
 
-                    map_key = f"{date_str}_{normalized_name}"
+                    map_key = f"{date_str}_{normalized_name.strip()}"
                     api_schedule_map[map_key] = {"Time": time_val, "SortTime": sort_time_24h, "Status": status}
                     
                     if "house convenes" in owner_lower or "house chamber" in owner_lower:
                         if date_str not in convene_times: convene_times[date_str] = {}
-                        convene_times[date_str]["House"] = {"Time": time_val, "SortTime": sort_time_24h, "Name": normalized_name}
+                        convene_times[date_str]["House"] = {"Time": time_val, "SortTime": sort_time_24h, "Name": normalized_name.strip()}
                     elif "senate convenes" in owner_lower or "senate chamber" in owner_lower:
                         if date_str not in convene_times: convene_times[date_str] = {}
-                        convene_times[date_str]["Senate"] = {"Time": time_val, "SortTime": sort_time_24h, "Name": normalized_name}
+                        convene_times[date_str]["Senate"] = {"Time": time_val, "SortTime": sort_time_24h, "Name": normalized_name.strip()}
                     
                     if meeting_date <= now:
-                        new_cache_entries.append([date_str, normalized_name, time_val, sort_time_24h, status])
+                        new_cache_entries.append([date_str, normalized_name.strip(), time_val, sort_time_24h, status])
                     
                     if any(k in owner_lower for k in ["caucus", "session", "floor", "convenes", "adjourned"]):
-                        master_events.append({"Date": date_str, "Time": time_val, "SortTime": sort_time_24h, "Status": status, "Committee": normalized_name if normalized_name else "Chamber Event", "Bill": clean_desc, "Outcome": "", "AgendaOrder": -1, "Source": "API"})
+                        master_events.append({"Date": date_str, "Time": time_val, "SortTime": sort_time_24h, "Status": status, "Committee": normalized_name.strip() if normalized_name else "Chamber Event", "Bill": clean_desc, "Outcome": "", "AgendaOrder": -1, "Source": "API"})
                         continue
                     
                     has_docket = False
@@ -388,23 +391,23 @@ def run_calendar_update():
                                 
                     if combined_bills:
                         for bill in sorted(list(combined_bills)):
-                            master_events.append({"Date": date_str, "Time": time_val, "SortTime": sort_time_24h, "Status": status, "Committee": normalized_name, "Bill": bill, "Outcome": "Scheduled", "AgendaOrder": 1, "Source": "DOCKET"})
+                            master_events.append({"Date": date_str, "Time": time_val, "SortTime": sort_time_24h, "Status": status, "Committee": normalized_name.strip(), "Bill": bill, "Outcome": "Scheduled", "AgendaOrder": 1, "Source": "DOCKET"})
                             if date_str not in docket_memory: docket_memory[date_str] = {}
                             if bill not in docket_memory[date_str]: docket_memory[date_str][bill] = []
-                            if normalized_name not in docket_memory[date_str][bill]: docket_memory[date_str][bill].append(normalized_name)
+                            if normalized_name.strip() not in docket_memory[date_str][bill]: docket_memory[date_str][bill].append(normalized_name.strip())
                         has_docket = True
 
                     if dlq_flag:
-                        master_events.append({"Date": date_str, "Time": time_val, "SortTime": sort_time_24h, "Status": status, "Committee": normalized_name, "Bill": dlq_flag, "Outcome": "", "AgendaOrder": 0, "Source": "API_Skeleton"})
+                        master_events.append({"Date": date_str, "Time": time_val, "SortTime": sort_time_24h, "Status": status, "Committee": normalized_name.strip(), "Bill": dlq_flag, "Outcome": "", "AgendaOrder": 0, "Source": "API_Skeleton"})
                         has_docket = True
 
                     if not has_docket:
                         if sort_time_24h == "06:00" and "after" in time_val.lower(): clean_desc = f"⚠️ Time Unverified (Check Parent) - {clean_desc}"
-                        master_events.append({"Date": date_str, "Time": time_val, "SortTime": sort_time_24h, "Status": status, "Committee": normalized_name, "Bill": clean_desc if clean_desc else "No agenda listed.", "Outcome": "", "AgendaOrder": -1, "Source": "API_Skeleton"})
+                        master_events.append({"Date": date_str, "Time": time_val, "SortTime": sort_time_24h, "Status": status, "Committee": normalized_name.strip(), "Bill": clean_desc if clean_desc else "No agenda listed.", "Outcome": "", "AgendaOrder": -1, "Source": "API_Skeleton"})
                         
         except Exception as e: print(f"🚨 API Schedule failed: {e}")
 
-    print("📡 Processing HISTORY.CSV via Chain of Custody...")
+    print("📡 Processing HISTORY.CSV via Sequential Turing Machine...")
     df_past = safe_fetch_csv(f"https://blob.lis.virginia.gov/lisfiles/{blob_code}/HISTORY.CSV")
     if df_past.empty: df_past = safe_fetch_csv(f"https://lis.blob.core.windows.net/lisfiles/{blob_code}/HISTORY.CSV")
         
@@ -419,10 +422,10 @@ def run_calendar_update():
         df_past['OriginalOrder'] = range(len(df_past))
         df_past = df_past.sort_values(by=['ParsedDate', 'OriginalOrder'])
         
-        pattern = '|'.join(['report', 'continue', 'pass', 'fail', 'incorporate', 'hearing', 'strike', 'stricken', 'veto', 'sign', 'agreed', 'read', 'refer', 'waive', 'recommend', 'receive', 'release', 'take', 'conferee', 'amendment', 'substitute'])
-        df_past = df_past[df_past[desc_col].str.contains(pattern, case=False, na=False)]
+        # Enterprise State Memory
         bill_locations = {}
-        
+        last_seen_date = {}
+
         for _, row in df_past.iterrows():
             bill_num = row['CleanBill']
             outcome_text = str(row[desc_col]).strip()
@@ -434,84 +437,92 @@ def run_calendar_update():
             else: acting_chamber_prefix = "House " if bill_num.startswith('H') else "Senate "
             
             if bill_num not in bill_locations: bill_locations[bill_num] = acting_chamber_prefix + "Floor"
-            if not bill_locations[bill_num].startswith(acting_chamber_prefix): bill_locations[bill_num] = acting_chamber_prefix + "Floor"
             
-            event_location = bill_locations[bill_num] 
+            # --- MORNING RECONCILIATION ---
+            if bill_num not in last_seen_date or last_seen_date[bill_num] != date_str:
+                last_seen_date[bill_num] = date_str
+                if date_str in docket_memory and bill_num in docket_memory[date_str]:
+                    scheduled_rooms = docket_memory[date_str][bill_num]
+                    for room in scheduled_rooms:
+                        if acting_chamber_prefix.lower() in room.lower() or "joint" in room.lower():
+                            bill_locations[bill_num] = room # Proactive Docket Heal
+                            break
             
-            exec_verbs = ["approved by governor", "vetoed by governor", "governor's substitute", "governor's recommendation", "governor:"]
-            is_exec = any(ev in outcome_lower for ev in exec_verbs) and not (outcome_text.startswith('H ') or outcome_text.startswith('S '))
+            # --- ACTION SCOPE: ABSOLUTES ---
+            is_exec = any(ev in outcome_lower for ev in ["approved by governor", "vetoed by governor", "governor's substitute", "governor's recommendation", "governor:"]) and not (outcome_text.startswith('H ') or outcome_text.startswith('S '))
             is_conf = "conferee" in outcome_lower or "conference report" in outcome_lower
-
-            if is_exec: event_location = "Executive Action"
-            elif is_conf: event_location = "Conference Committee"
+            is_absolute_floor = any(f in outcome_lower for f in ABSOLUTE_FLOOR_VERBS)
+            
+            if is_exec: 
+                event_location = "Executive Action"
+                bill_locations[bill_num] = "Executive Action"
+            elif is_conf: 
+                event_location = "Conference Committee"
+                bill_locations[bill_num] = "Conference Committee"
+            elif is_absolute_floor:
+                event_location = acting_chamber_prefix + "Floor"
+                bill_locations[bill_num] = event_location # Force heal memory
             else:
-                if "joint" in outcome_lower or ("house" in outcome_lower and "senate" in outcome_lower): committee_search_prefix = "Joint "
-                else: committee_search_prefix = acting_chamber_prefix
+                # --- ACTION SCOPE: DYNAMIC & EXPLICIT ROOM MATCH ---
+                committee_search_prefix = "Joint " if "joint" in outcome_lower or ("house" in outcome_lower and "senate" in outcome_lower) else acting_chamber_prefix
 
                 matched_committee = None
                 for api_name, aliases in LOCAL_LEXICON.items():
                     if api_name.startswith(committee_search_prefix) and any(alias and alias in outcome_lower for alias in aliases):
                         matched_committee = api_name; break
 
-                routing_verbs = ["referred to", "re-referred to", "assigned to", "placed on"]
-                in_room_verbs = ["reported", "continue", "passed by", "failed", "strike", "stricken", "recommend", "recommends", "incorporate", "defeated", "laid on the table", "tabled", "postponed"]
-                action_verbs = routing_verbs + in_room_verbs
+                if matched_committee:
+                    is_referral = any(x in outcome_lower for x in ["referred", "assigned"]) and not any(x in outcome_lower for x in ["fail", "defeat", "strike"])
+                    is_report = any(x in outcome_lower for x in ["reported", "discharged"]) and not any(x in outcome_lower for x in ["fail", "defeat"])
 
-                leftovers = set()
-                is_nameless_verb = any(x in outcome_lower for x in in_room_verbs)
+                    # Double-Entry Mismatch Check
+                    memory_room = bill_locations[bill_num]
+                    if "Floor" not in memory_room and matched_committee != memory_room and not is_referral:
+                        outcome_text = f"⚠️ [Mismatch Detected: Origin State was {memory_room}] " + outcome_text
 
-                if matched_committee and any(v in outcome_lower for v in action_verbs) and not is_nameless_verb:
-                    target_str = outcome_lower.replace("(s)", "s")
-                    target_str = re.sub(r'\(\s*(?:\d+-[YNAyyna][^)]*|voice vote)\s*\)', '', target_str, flags=re.IGNORECASE)
-                    for v in action_verbs:
-                        if v + " " in target_str: target_str = target_str.split(v + " ")[-1]; break
-                    leftovers = set(re.findall(r'\b\w+\b', target_str)) - set(re.findall(r'\b\w+\b', matched_committee.lower())) - IGNORE_WORDS
-
-                allowed_rooms = docket_memory.get(date_str, {}).get(bill_num, [])
-                if allowed_rooms and not matched_committee:
-                    for room in allowed_rooms:
-                        if committee_search_prefix.lower() in room.lower() or "joint" in room.lower():
-                            matched_committee = room; break
-
-                if any(v in outcome_lower for v in action_verbs) or is_nameless_verb:
-                    if matched_committee and not leftovers: 
-                        bill_locations[bill_num] = matched_committee
+                    if is_referral and "from" not in outcome_lower:
+                        # Floor to Committee Referral
+                        event_location = bill_locations[bill_num] 
+                        bill_locations[bill_num] = matched_committee # Update target
+                    elif is_report:
+                        event_location = matched_committee # Distributed Checkpoint Heal
+                        bill_locations[bill_num] = acting_chamber_prefix + "Floor" 
+                    else:
                         event_location = matched_committee
-                    elif matched_committee and leftovers:
-                        event_location = f"⚠️ [Unmapped Target] {outcome_text.split(' from ')[-1].split(' to ')[-1].split(' in ')[-1]}"
-                    elif not matched_committee:
-                        if is_nameless_verb:
-                            event_location = bill_locations[bill_num]
-                        else:
-                            event_location = f"⚠️ [Unmapped Routing] {outcome_text.split(' from ')[-1].split(' to ')[-1].split(' in ')[-1]} (Desk Action)"
-                        
-                elif "discharged from" in outcome_lower:
-                    bill_locations[bill_num] = acting_chamber_prefix + "Floor"
+                        bill_locations[bill_num] = matched_committee
+                else:
+                    # Dynamic Nameless (Memory Anchor)
+                    event_location = bill_locations[bill_num]
+                    is_dynamic_verb = any(v in outcome_lower for v in DYNAMIC_VERBS)
+                    if is_dynamic_verb and "Floor" not in event_location:
+                        outcome_text = f"⚙️ [Memory Anchor] " + outcome_text
+                    
+                    # Advance state if it was a nameless report (rare but possible)
+                    if any(x in outcome_lower for x in ["reported", "discharged"]) and not any(x in outcome_lower for x in ["fail"]):
+                        bill_locations[bill_num] = acting_chamber_prefix + "Floor"
 
-                floor_reset_phrases = ["read first", "read second", "read third", "passed house", "passed senate", "agreed to", "rejected", "signed by", "presented", "received", "enrolled", "engrossed", "conferees:"]
-                if any(p in outcome_lower for p in floor_reset_phrases):
-                    event_location = acting_chamber_prefix + "Floor"
-                    bill_locations[bill_num] = acting_chamber_prefix + "Floor"
-
+            # Filter Noise (Executed AFTER memory state updates)
             noise_words = ["impact statement", "substitute printed", "laid on speaker's table", "laid on clerk's desk", "presented", "reprinted", "engrossed by senate - committee substitute", "engrossed by house - committee substitute"]
             if any(n in outcome_lower for n in noise_words): continue
             
-            time_val = "Desk Action"
+            # --- UI RENDERING & FUZZY MATCH ---
+            event_location = event_location.strip()
+            api_key = f"{date_str}_{event_location}"
+            time_val = "Journal Entry"
             sort_time_24h = "23:59"
             status = ""
-            api_key = f"{date_str}_{event_location}"
             
-            if api_key not in api_schedule_map:
-                if f"{api_key} Committee" in api_schedule_map: api_key = f"{api_key} Committee"; event_location = f"{event_location} Committee"
-                elif api_key.replace(" Committee", "") in api_schedule_map: api_key = api_key.replace(" Committee", ""); event_location = event_location.replace(" Committee", "")
+            matched_api_key = None
+            for k in api_schedule_map.keys():
+                k_clean = k.strip().lower().replace(" committee", "")
+                ak_clean = api_key.strip().lower().replace(" committee", "")
+                if k_clean == ak_clean:
+                    matched_api_key = k; break
             
-            if api_key in api_schedule_map:
-                time_val = api_schedule_map[api_key]["Time"]
-                sort_time_24h = api_schedule_map[api_key]["SortTime"]
-                status = api_schedule_map[api_key]["Status"]
-            else:
-                if is_nameless_verb and "Floor" not in event_location and not matched_committee:
-                    event_location = bill_locations[bill_num] 
+            if matched_api_key:
+                time_val = api_schedule_map[matched_api_key]["Time"]
+                sort_time_24h = api_schedule_map[matched_api_key]["SortTime"]
+                status = api_schedule_map[matched_api_key]["Status"]
             
             if "Floor" in event_location:
                 anchor = convene_times.get(date_str, {}).get(acting_chamber_prefix.strip())
@@ -521,12 +532,10 @@ def run_calendar_update():
 
     print("🧹 Filtering Noise & Slicing Viewport...")
     filtered_events = []
-    
-    # ENTERPRISE FIX: NLP-Lite Regex for Temporary Actions
     ephemeral_pattern = re.compile(r'\b(for the day|temporarily|temporarilly|to tomorrow|until tomorrow|till tomorrow|for the week|temporay)\b', re.IGNORECASE)
     
     for ev in master_events:
-        if bool(ephemeral_pattern.search(ev["Outcome"])) and ev["Time"] == "Desk Action":
+        if bool(ephemeral_pattern.search(ev["Outcome"])) and ev["Time"] == "Journal Entry":
             if any(x in ev["Committee"] for x in ["Floor", "Convenes", "Chamber", "Executive", "Conference"]):
                 pass 
             else:
@@ -561,8 +570,8 @@ def run_calendar_update():
             if new_cache_entries and cache_sheet:
                 print(f"🗄️ Writing {len(new_cache_entries)} new historic records to API_Cache...")
                 try: 
-                    existing_keys = {f"{r.get('Date', '')}_{r.get('Committee', '')}" for r in cache_records} if cache_sheet else set()
-                    unique_new_entries = [e for e in new_cache_entries if f"{e[0]}_{e[1]}" not in existing_keys]
+                    existing_keys = {f"{r.get('Date', '')}_{r.get('Committee', '')}".strip().lower() for r in cache_records} if cache_sheet else set()
+                    unique_new_entries = [e for e in new_cache_entries if f"{e[0]}_{e[1]}".strip().lower() not in existing_keys]
                     if unique_new_entries:
                         cache_sheet.append_rows(unique_new_entries)
                 except Exception as e: print(f"⚠️ Failed to update Cache tab: {e}")
