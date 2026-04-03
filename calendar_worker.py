@@ -65,8 +65,6 @@ def normalize_room_key(text):
     for token in ["committee", "on", "for", "the", "of", "and", "subcommittee", "sub", "agenda"]:
         clean = clean.replace(token, " ")
     return " ".join(clean.split())
-
-
 def derive_room_hints(outcome_text, acting_chamber_prefix):
     outcome = str(outcome_text)
     out_lower = outcome.lower()
