@@ -65,7 +65,6 @@ def normalize_room_key(text):
     for token in ["committee", "on", "for", "the", "of", "and", "subcommittee", "sub", "agenda"]:
         clean = clean.replace(token, " ")
     return " ".join(clean.split())
-
 def derive_room_hints(outcome_text, acting_chamber_prefix):
     outcome = str(outcome_text)
     out_lower = outcome.lower()
@@ -275,7 +274,9 @@ def extract_rogue_agenda(url, session, target_date_dt=None, depth=0):
                         text = page.extract_text()
                         if text: found_bills.update([m.upper() for m in re.findall(regex_pattern, text.replace(" ", ""))])
                 os.remove(temp_pdf_path)
-            except: return [], True
+            except Exception as e:
+                print(f"⚠️ Agenda PDF parse failed for {url}: {e}")
+                return [], True
         else:
             soup = BeautifulSoup(res.text, 'html.parser')
             target_href = None
@@ -296,7 +297,8 @@ def extract_rogue_agenda(url, session, target_date_dt=None, depth=0):
                     found_bills.update([m.upper() for m in re.findall(regex_pattern, script.string.replace(" ", ""))])
             
             found_bills.update([m.upper() for m in re.findall(regex_pattern, soup.get_text(separator=' ').replace(" ", ""))])
-    except: pass
+    except Exception as e:
+        print(f"⚠️ Agenda extraction failed for {url}: {e}")
     return sorted(list(found_bills)), False
 
 def run_calendar_update():
@@ -306,9 +308,24 @@ def run_calendar_update():
     
     tz = pytz.timezone('America/New_York')
     now = datetime.now(tz).replace(tzinfo=None)
+    alert_rows = []
+
+    def push_system_alert(message, status="ALERT"):
+        alert_rows.append({
+            "Date": now.strftime("%Y-%m-%d"),
+            "Time": now.strftime("%I:%M %p"),
+            "SortTime": now.strftime("%H:%M"),
+            "Status": status,
+            "Committee": "System Status",
+            "Bill": "SYSTEM_ALERT",
+            "Outcome": message,
+            "AgendaOrder": -99,
+            "Source": "SYSTEM",
+        })
 
     if not session_data:
         print("🚨 CRITICAL: Failed to retrieve active session. Proceeding in OFFLINE mode.")
+        push_system_alert("🚨 LIS Session API unavailable. Running in OFFLINE mode; schedule times may be stale from API_Cache.", status="OFFLINE")
         ACTIVE_SESSION = "261" 
         test_start_date = datetime(2026, 1, 14)
         test_end_date = datetime(2026, 5, 1)
@@ -331,7 +348,8 @@ def run_calendar_update():
     try:
         if api_is_online: worksheet.update_acell("Z1", "ONLINE")
         else: worksheet.update_acell("Z1", "OFFLINE")
-    except: pass
+    except Exception as e:
+        print(f"⚠️ Failed to write API status flag to Sheet1!Z1: {e}")
 
     print("🗄️ Pulling historical schedule from API_Cache...")
     api_schedule_map = {}
@@ -477,8 +495,42 @@ def run_calendar_update():
                     if not has_docket:
                         if sort_time_24h == "06:00" and "after" in time_val.lower(): clean_desc = f"⚠️ Time Unverified (Check Parent) - {clean_desc}"
                         master_events.append({"Date": date_str, "Time": time_val, "SortTime": sort_time_24h, "Status": status, "Committee": normalized_name.strip(), "Bill": clean_desc if clean_desc else "No agenda listed.", "Outcome": "", "AgendaOrder": -1, "Source": "API_Skeleton"})
-                        
-        except Exception as e: print(f"🚨 API Schedule failed: {e}")
+
+                # If LIS provides multiple schedule rows for the same date+committee,
+                # promote any concrete time to sibling API/API_Skeleton rows that are
+                # still placeholder time values.
+                def _is_non_concrete_time(value):
+                    t = str(value or "").strip().lower()
+                    return t in {"", "time tba", "tba", "journal entry", "ledger", "none", "nan"}
+
+                best_times = {}
+                for ev in master_events:
+                    if not str(ev.get("Source", "")).startswith("API"):
+                        continue
+                    date_key = str(ev.get("Date", "")).strip()
+                    committee_key = str(ev.get("Committee", "")).strip()
+                    if not date_key or not committee_key:
+                        continue
+                    t_val = str(ev.get("Time", "")).strip()
+                    if _is_non_concrete_time(t_val):
+                        continue
+                    best_times[f"{date_key}_{committee_key}"] = t_val
+
+                if best_times:
+                    for ev in master_events:
+                        if not str(ev.get("Source", "")).startswith("API"):
+                            continue
+                        map_key = f"{str(ev.get('Date', '')).strip()}_{str(ev.get('Committee', '')).strip()}"
+                        if map_key in best_times and _is_non_concrete_time(ev.get("Time", "")):
+                            ev["Time"] = best_times[map_key]
+
+                    for map_key, sched in api_schedule_map.items():
+                        if map_key in best_times and _is_non_concrete_time(sched.get("Time", "")):
+                            sched["Time"] = best_times[map_key]
+
+        except Exception as e:
+            print(f"🚨 API Schedule failed: {e}")
+            push_system_alert(f"🚨 LIS Schedule API failed during run: {e}. Times may be stale or unavailable.", status="OFFLINE")
 
     print("📡 Processing HISTORY.CSV via Sequential Turing Machine...")
     df_past = safe_fetch_csv(f"https://blob.lis.virginia.gov/lisfiles/{blob_code}/HISTORY.CSV")
@@ -622,6 +674,9 @@ def run_calendar_update():
                             was_scheduled = True; break
                 if not was_scheduled: continue 
         filtered_events.append(ev)
+
+    if alert_rows:
+        filtered_events.extend(alert_rows)
 
     final_df = pd.DataFrame(filtered_events)
     if not final_df.empty:
