@@ -57,6 +57,79 @@ IGNORE_WORDS = {"committee", "on", "the", "of", "and", "for", "meeting", "joint"
 ABSOLUTE_FLOOR_VERBS = ["reading dispensed", "read first", "read second", "read third", "engrossed", "enrolled", "passed senate", "passed house", "signed by", "presented", "received", "communicated", "agreed to", "rejected", "conferees:"]
 DYNAMIC_VERBS = ["passed by", "reconsidered", "failed", "defeated", "laid on the table", "tabled", "continued", "strike", "stricken", "incorporate", "recommend", "recommends"]
 
+def normalize_room_key(text):
+    if not text:
+        return ""
+    clean = str(text).lower()
+    clean = re.sub(r'[^a-z0-9\s]', ' ', clean)
+    for token in ["committee", "on", "for", "the", "of", "and", "subcommittee", "sub", "agenda"]:
+        clean = clean.replace(token, " ")
+    return " ".join(clean.split())
+
+def derive_room_hints(outcome_text, acting_chamber_prefix):
+    outcome = str(outcome_text)
+    out_lower = outcome.lower()
+    hints = []
+
+    sub_match = re.search(r'sub:\s*([a-z0-9&,\-\s]+)', out_lower)
+    if sub_match:
+        sub_name = sub_match.group(1).strip()
+        if sub_name:
+            sub_title = re.sub(r'\s+', ' ', sub_name).title()
+            hints.append(f"{acting_chamber_prefix}Appropriations - {sub_title} Subcommittee")
+            hints.append(f"{acting_chamber_prefix}Appropriations {sub_title} Subcommittee")
+
+    agenda_match = re.search(r'placed on\s+([a-z&,\-\s]+?)\s+agenda', out_lower)
+    if agenda_match:
+        agenda_name = re.sub(r'\s+', ' ', agenda_match.group(1)).strip().title()
+        if agenda_name:
+            hints.append(f"{acting_chamber_prefix}{agenda_name}")
+
+    return hints
+
+def find_api_schedule_match(api_schedule_map, date_str, event_location, outcome_text, acting_chamber_prefix):
+    prefix = f"{date_str}_"
+    dated_keys = [k for k in api_schedule_map.keys() if k.startswith(prefix)]
+    if not dated_keys:
+        return None
+
+    def has_concrete_time(key):
+        time_val = str(api_schedule_map.get(key, {}).get("Time", "")).strip().lower()
+        return time_val not in ["", "time tba", "journal entry", "ledger"]
+
+    target_norm = normalize_room_key(event_location)
+    exact_matches = []
+    for k in dated_keys:
+        k_norm = normalize_room_key(k.split("_", 1)[1])
+        if k_norm == target_norm:
+            exact_matches.append(k)
+    for k in exact_matches:
+        if has_concrete_time(k):
+            return k
+
+    hints = derive_room_hints(outcome_text, acting_chamber_prefix)
+    hint_matches = []
+    for hint in hints:
+        hint_norm = normalize_room_key(hint)
+        for k in dated_keys:
+            k_norm = normalize_room_key(k.split("_", 1)[1])
+            if hint_norm and (hint_norm in k_norm or k_norm in hint_norm):
+                hint_matches.append(k)
+    for k in hint_matches:
+        if has_concrete_time(k):
+            return k
+
+    if exact_matches:
+        return exact_matches[0]
+    if hint_matches:
+        return hint_matches[0]
+
+    for k in dated_keys:
+        k_norm = normalize_room_key(k.split("_", 1)[1])
+        if target_norm and (target_norm in k_norm or k_norm in target_norm):
+            return k
+    return None
+
 def get_armored_session():
     session = requests.Session()
     session.headers.update({'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/120.0.0.0 Safari/537.36'})
@@ -507,17 +580,17 @@ def run_calendar_update():
             
             # --- UI RENDERING & FUZZY MATCH ---
             event_location = event_location.strip()
-            api_key = f"{date_str}_{event_location}"
             time_val = "Journal Entry"
             sort_time_24h = "23:59"
             status = ""
             
-            matched_api_key = None
-            for k in api_schedule_map.keys():
-                k_clean = k.strip().lower().replace(" committee", "")
-                ak_clean = api_key.strip().lower().replace(" committee", "")
-                if k_clean == ak_clean:
-                    matched_api_key = k; break
+            matched_api_key = find_api_schedule_match(
+                api_schedule_map=api_schedule_map,
+                date_str=date_str,
+                event_location=event_location,
+                outcome_text=outcome_text,
+                acting_chamber_prefix=acting_chamber_prefix,
+            )
             
             if matched_api_key:
                 time_val = api_schedule_map[matched_api_key]["Time"]
