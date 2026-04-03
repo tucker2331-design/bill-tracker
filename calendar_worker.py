@@ -67,10 +67,6 @@ def normalize_room_key(text):
     return " ".join(clean.split())
 
 
-def is_non_concrete_time(value):
-    t = str(value or "").strip().lower()
-    return t in {"", "time tba", "tba", "journal entry", "ledger", "none", "nan"}
-
 def derive_room_hints(outcome_text, acting_chamber_prefix):
     outcome = str(outcome_text)
     out_lower = outcome.lower()
@@ -505,6 +501,10 @@ def run_calendar_update():
                 # If LIS provides multiple schedule rows for the same date+committee,
                 # promote any concrete time to sibling API/API_Skeleton rows that are
                 # still placeholder time values.
+                def _is_non_concrete_time(value):
+                    t = str(value or "").strip().lower()
+                    return t in {"", "time tba", "tba", "journal entry", "ledger", "none", "nan"}
+
                 best_times = {}
                 for ev in master_events:
                     if not str(ev.get("Source", "")).startswith("API"):
@@ -514,7 +514,7 @@ def run_calendar_update():
                     if not date_key or not committee_key:
                         continue
                     t_val = str(ev.get("Time", "")).strip()
-                    if is_non_concrete_time(t_val):
+                    if _is_non_concrete_time(t_val):
                         continue
                     best_times[f"{date_key}_{committee_key}"] = t_val
 
@@ -523,11 +523,11 @@ def run_calendar_update():
                         if not str(ev.get("Source", "")).startswith("API"):
                             continue
                         map_key = f"{str(ev.get('Date', '')).strip()}_{str(ev.get('Committee', '')).strip()}"
-                        if map_key in best_times and is_non_concrete_time(ev.get("Time", "")):
+                        if map_key in best_times and _is_non_concrete_time(ev.get("Time", "")):
                             ev["Time"] = best_times[map_key]
 
                     for map_key, sched in api_schedule_map.items():
-                        if map_key in best_times and is_non_concrete_time(sched.get("Time", "")):
+                        if map_key in best_times and _is_non_concrete_time(sched.get("Time", "")):
                             sched["Time"] = best_times[map_key]
 
         except Exception as e:
