@@ -57,6 +57,84 @@ IGNORE_WORDS = {"committee", "on", "the", "of", "and", "for", "meeting", "joint"
 ABSOLUTE_FLOOR_VERBS = ["reading dispensed", "read first", "read second", "read third", "engrossed", "enrolled", "passed senate", "passed house", "signed by", "presented", "received", "communicated", "agreed to", "rejected", "conferees:"]
 DYNAMIC_VERBS = ["passed by", "reconsidered", "failed", "defeated", "laid on the table", "tabled", "continued", "strike", "stricken", "incorporate", "recommend", "recommends"]
 
+def normalize_room_key(text):
+    if not text:
+        return ""
+    clean = str(text).lower()
+    clean = re.sub(r'[^a-z0-9\s]', ' ', clean)
+    for token in ["committee", "on", "for", "the", "of", "and", "subcommittee", "sub", "agenda"]:
+        clean = clean.replace(token, " ")
+    return " ".join(clean.split())
+
+
+def is_non_concrete_time(value):
+    t = str(value or "").strip().lower()
+    return t in {"", "time tba", "tba", "journal entry", "ledger", "none", "nan"}
+
+def derive_room_hints(outcome_text, acting_chamber_prefix):
+    outcome = str(outcome_text)
+    out_lower = outcome.lower()
+    hints = []
+
+    sub_match = re.search(r'sub:\s*([a-z0-9&,\-\s]+)', out_lower)
+    if sub_match:
+        sub_name = sub_match.group(1).strip()
+        if sub_name:
+            sub_title = re.sub(r'\s+', ' ', sub_name).title()
+            hints.append(f"{acting_chamber_prefix}Appropriations - {sub_title} Subcommittee")
+            hints.append(f"{acting_chamber_prefix}Appropriations {sub_title} Subcommittee")
+
+    agenda_match = re.search(r'placed on\s+([a-z&,\-\s]+?)\s+agenda', out_lower)
+    if agenda_match:
+        agenda_name = re.sub(r'\s+', ' ', agenda_match.group(1)).strip().title()
+        if agenda_name:
+            hints.append(f"{acting_chamber_prefix}{agenda_name}")
+
+    return hints
+
+def find_api_schedule_match(api_schedule_map, date_str, event_location, outcome_text, acting_chamber_prefix):
+    prefix = f"{date_str}_"
+    dated_keys = [k for k in api_schedule_map.keys() if k.startswith(prefix)]
+    if not dated_keys:
+        return None
+
+    def has_concrete_time(key):
+        time_val = str(api_schedule_map.get(key, {}).get("Time", "")).strip().lower()
+        return time_val not in ["", "time tba", "journal entry", "ledger"]
+
+    target_norm = normalize_room_key(event_location)
+    exact_matches = []
+    for k in dated_keys:
+        k_norm = normalize_room_key(k.split("_", 1)[1])
+        if k_norm == target_norm:
+            exact_matches.append(k)
+    for k in exact_matches:
+        if has_concrete_time(k):
+            return k
+
+    hints = derive_room_hints(outcome_text, acting_chamber_prefix)
+    hint_matches = []
+    for hint in hints:
+        hint_norm = normalize_room_key(hint)
+        for k in dated_keys:
+            k_norm = normalize_room_key(k.split("_", 1)[1])
+            if hint_norm and (hint_norm in k_norm or k_norm in hint_norm):
+                hint_matches.append(k)
+    for k in hint_matches:
+        if has_concrete_time(k):
+            return k
+
+    if exact_matches:
+        return exact_matches[0]
+    if hint_matches:
+        return hint_matches[0]
+
+    for k in dated_keys:
+        k_norm = normalize_room_key(k.split("_", 1)[1])
+        if target_norm and (target_norm in k_norm or k_norm in target_norm):
+            return k
+    return None
+
 def get_armored_session():
     session = requests.Session()
     session.headers.update({'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/120.0.0.0 Safari/537.36'})
@@ -202,7 +280,9 @@ def extract_rogue_agenda(url, session, target_date_dt=None, depth=0):
                         text = page.extract_text()
                         if text: found_bills.update([m.upper() for m in re.findall(regex_pattern, text.replace(" ", ""))])
                 os.remove(temp_pdf_path)
-            except: return [], True
+            except Exception as e:
+                print(f"⚠️ Agenda PDF parse failed for {url}: {e}")
+                return [], True
         else:
             soup = BeautifulSoup(res.text, 'html.parser')
             target_href = None
@@ -223,7 +303,8 @@ def extract_rogue_agenda(url, session, target_date_dt=None, depth=0):
                     found_bills.update([m.upper() for m in re.findall(regex_pattern, script.string.replace(" ", ""))])
             
             found_bills.update([m.upper() for m in re.findall(regex_pattern, soup.get_text(separator=' ').replace(" ", ""))])
-    except: pass
+    except Exception as e:
+        print(f"⚠️ Agenda extraction failed for {url}: {e}")
     return sorted(list(found_bills)), False
 
 def run_calendar_update():
@@ -233,9 +314,24 @@ def run_calendar_update():
     
     tz = pytz.timezone('America/New_York')
     now = datetime.now(tz).replace(tzinfo=None)
+    alert_rows = []
+
+    def push_system_alert(message, status="ALERT"):
+        alert_rows.append({
+            "Date": now.strftime("%Y-%m-%d"),
+            "Time": now.strftime("%I:%M %p"),
+            "SortTime": now.strftime("%H:%M"),
+            "Status": status,
+            "Committee": "System Status",
+            "Bill": "SYSTEM_ALERT",
+            "Outcome": message,
+            "AgendaOrder": -99,
+            "Source": "SYSTEM",
+        })
 
     if not session_data:
         print("🚨 CRITICAL: Failed to retrieve active session. Proceeding in OFFLINE mode.")
+        push_system_alert("🚨 LIS Session API unavailable. Running in OFFLINE mode; schedule times may be stale from API_Cache.", status="OFFLINE")
         ACTIVE_SESSION = "261" 
         test_start_date = datetime(2026, 1, 14)
         test_end_date = datetime(2026, 5, 1)
@@ -258,7 +354,8 @@ def run_calendar_update():
     try:
         if api_is_online: worksheet.update_acell("Z1", "ONLINE")
         else: worksheet.update_acell("Z1", "OFFLINE")
-    except: pass
+    except Exception as e:
+        print(f"⚠️ Failed to write API status flag to Sheet1!Z1: {e}")
 
     print("🗄️ Pulling historical schedule from API_Cache...")
     api_schedule_map = {}
@@ -404,8 +501,38 @@ def run_calendar_update():
                     if not has_docket:
                         if sort_time_24h == "06:00" and "after" in time_val.lower(): clean_desc = f"⚠️ Time Unverified (Check Parent) - {clean_desc}"
                         master_events.append({"Date": date_str, "Time": time_val, "SortTime": sort_time_24h, "Status": status, "Committee": normalized_name.strip(), "Bill": clean_desc if clean_desc else "No agenda listed.", "Outcome": "", "AgendaOrder": -1, "Source": "API_Skeleton"})
-                        
-        except Exception as e: print(f"🚨 API Schedule failed: {e}")
+
+                # If LIS provides multiple schedule rows for the same date+committee,
+                # promote any concrete time to sibling API/API_Skeleton rows that are
+                # still placeholder time values.
+                best_times = {}
+                for ev in master_events:
+                    if not str(ev.get("Source", "")).startswith("API"):
+                        continue
+                    date_key = str(ev.get("Date", "")).strip()
+                    committee_key = str(ev.get("Committee", "")).strip()
+                    if not date_key or not committee_key:
+                        continue
+                    t_val = str(ev.get("Time", "")).strip()
+                    if is_non_concrete_time(t_val):
+                        continue
+                    best_times[f"{date_key}_{committee_key}"] = t_val
+
+                if best_times:
+                    for ev in master_events:
+                        if not str(ev.get("Source", "")).startswith("API"):
+                            continue
+                        map_key = f"{str(ev.get('Date', '')).strip()}_{str(ev.get('Committee', '')).strip()}"
+                        if map_key in best_times and is_non_concrete_time(ev.get("Time", "")):
+                            ev["Time"] = best_times[map_key]
+
+                    for map_key, sched in api_schedule_map.items():
+                        if map_key in best_times and is_non_concrete_time(sched.get("Time", "")):
+                            sched["Time"] = best_times[map_key]
+
+        except Exception as e:
+            print(f"🚨 API Schedule failed: {e}")
+            push_system_alert(f"🚨 LIS Schedule API failed during run: {e}. Times may be stale or unavailable.", status="OFFLINE")
 
     print("📡 Processing HISTORY.CSV via Sequential Turing Machine...")
     df_past = safe_fetch_csv(f"https://blob.lis.virginia.gov/lisfiles/{blob_code}/HISTORY.CSV")
@@ -507,17 +634,17 @@ def run_calendar_update():
             
             # --- UI RENDERING & FUZZY MATCH ---
             event_location = event_location.strip()
-            api_key = f"{date_str}_{event_location}"
             time_val = "Journal Entry"
             sort_time_24h = "23:59"
             status = ""
             
-            matched_api_key = None
-            for k in api_schedule_map.keys():
-                k_clean = k.strip().lower().replace(" committee", "")
-                ak_clean = api_key.strip().lower().replace(" committee", "")
-                if k_clean == ak_clean:
-                    matched_api_key = k; break
+            matched_api_key = find_api_schedule_match(
+                api_schedule_map=api_schedule_map,
+                date_str=date_str,
+                event_location=event_location,
+                outcome_text=outcome_text,
+                acting_chamber_prefix=acting_chamber_prefix,
+            )
             
             if matched_api_key:
                 time_val = api_schedule_map[matched_api_key]["Time"]
@@ -549,6 +676,9 @@ def run_calendar_update():
                             was_scheduled = True; break
                 if not was_scheduled: continue 
         filtered_events.append(ev)
+
+    if alert_rows:
+        filtered_events.extend(alert_rows)
 
     final_df = pd.DataFrame(filtered_events)
     if not final_df.empty:
