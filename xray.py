@@ -11,9 +11,8 @@ from urllib3.util.retry import Retry
 st.set_page_config(page_title="LIS Calendar X-Ray", layout="wide")
 st.title("🩻 LIS Calendar X-Ray")
 st.caption("Diagnostic tool for Sheet1 ↔ LIS schedule parity checks.")
-XRAY_VERSION = "2026-04-03.6"
+XRAY_VERSION = "2026-04-03.4"
 st.caption(f"Build: {XRAY_VERSION}")
-st.caption("Single X-Ray entrypoint (calendar_xray.py removed to prevent duplicate page path conflicts).")
 
 DEFAULT_SHEET_ID = "1PQDtaTTUeYv781bx4_ZiehcvbEmUt8t7jFmZYJoJGKM"
 DEFAULT_SESSION_CODE = "261"
