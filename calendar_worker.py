@@ -57,6 +57,35 @@ LOCAL_LEXICON = dict(_STATIC_LOCAL_LEXICON)  # Will be replaced at runtime by bu
 
 IGNORE_WORDS = {"committee", "on", "the", "of", "and", "for", "meeting", "joint", "to", "referred", "assigned", "re-referred", "substitute", "substitutes", "placed", "with", "amendment", "amendments", "a", "an", "by", "recommendation", "recommends", "recommend", "block", "vote", "voice"}
 
+# === NOISE FILTER CONSTANTS (Positive Identification) ===
+# Enterprise standard: actions are classified as KNOWN_NOISE, KNOWN_EVENT, or UNKNOWN.
+# KNOWN_NOISE is silently filtered. KNOWN_EVENT passes through.
+# UNKNOWN is flagged for human review (surfaced as ❓ tag, not suppressed).
+#
+# Assumption: these lists cover all Virginia action types for session 261.
+# How it could break: new action types introduced in future sessions.
+# Runtime check: UNKNOWN actions are tagged and counted; spike = new action type.
+KNOWN_NOISE_PATTERNS = [
+    "impact statement", "substitute printed", "laid on speaker's table",
+    "laid on clerk's desk", "presented", "reprinted",
+    "engrossed by senate - committee substitute",
+    "engrossed by house - committee substitute",
+    "printed as engrossed", "enrolled", "signed by",
+    "communicated to governor", "effective -",
+    "fiscal impact statement", "acts of assembly chapter",
+]
+KNOWN_EVENT_PATTERNS = [
+    "referred to", "assigned", "reported", "passed", "failed",
+    "defeated", "tabled", "continued", "incorporated",
+    "committee substitute", "floor substitute", "amended",
+    "recommends", "recommend", "rereferred",
+    "discharged", "stricken", "reconsidered", "conferee",
+    "approved by governor", "vetoed", "governor's",
+    "placed on", "block vote", "voice vote", "roll call",
+    "reading dispensed", "read first", "read second", "read third",
+    "agreed to", "rejected",
+]
+
 # === STATIC FALLBACK COMMITTEE CODE MAP ===
 # Validated against session 261 Committee API + 3,868 HISTORY.CSV referrals.
 # Runtime: replaced by build_committee_maps() output from live API.
@@ -95,6 +124,10 @@ COMMITTEE_CODE_MAP = dict(_STATIC_COMMITTEE_CODE_MAP)  # Will be replaced at run
 # Used to validate subcommittee->parent fallback instead of name heuristics.
 PARENT_COMMITTEE_MAP = {}  # Populated at runtime by build_committee_maps()
 
+# === NORMALIZED REVERSE LOOKUP (O(1) name->code) ===
+# Pre-calculated after build_committee_maps() to avoid O(n) scans inside 60k-row loops.
+NORM_TO_CODE = {}  # Populated at runtime by build_committee_maps()
+
 
 def build_committee_maps(http_session, session_code, alert_fn=None):
     """Rebuild COMMITTEE_CODE_MAP, LOCAL_LEXICON, and PARENT_COMMITTEE_MAP from Committee API.
@@ -106,7 +139,7 @@ def build_committee_maps(http_session, session_code, alert_fn=None):
     How it could break: API schema changes, new fields, or endpoint moves.
     Runtime check: Drift detection compares live vs static and alerts on differences.
     """
-    global COMMITTEE_CODE_MAP, LOCAL_LEXICON, PARENT_COMMITTEE_MAP
+    global COMMITTEE_CODE_MAP, LOCAL_LEXICON, PARENT_COMMITTEE_MAP, NORM_TO_CODE
 
     url = f"https://lis.virginia.gov/Committee/api/getcommitteelistasync?sessionCode={session_code}"
     try:
@@ -115,6 +148,7 @@ def build_committee_maps(http_session, session_code, alert_fn=None):
             print(f"⚠️ Committee API returned status {res.status_code}. Using static fallback.")
             if alert_fn:
                 alert_fn(f"⚠️ Committee API returned HTTP {res.status_code}. Using static COMMITTEE_CODE_MAP.", status="WARN")
+            NORM_TO_CODE = {normalize_room_key(v): k for k, v in _STATIC_COMMITTEE_CODE_MAP.items()}
             return dict(_STATIC_COMMITTEE_CODE_MAP), dict(_STATIC_LOCAL_LEXICON), {}, False
 
         raw = res.json()
@@ -123,6 +157,7 @@ def build_committee_maps(http_session, session_code, alert_fn=None):
             print("⚠️ Committee API returned empty list. Using static fallback.")
             if alert_fn:
                 alert_fn("⚠️ Committee API returned 0 committees. Using static COMMITTEE_CODE_MAP.", status="WARN")
+            NORM_TO_CODE = {normalize_room_key(v): k for k, v in _STATIC_COMMITTEE_CODE_MAP.items()}
             return dict(_STATIC_COMMITTEE_CODE_MAP), dict(_STATIC_LOCAL_LEXICON), {}, False
 
         # Build code map from API
@@ -200,6 +235,7 @@ def build_committee_maps(http_session, session_code, alert_fn=None):
         COMMITTEE_CODE_MAP = live_code_map
         LOCAL_LEXICON = live_lexicon
         PARENT_COMMITTEE_MAP = resolved_parent_map
+        NORM_TO_CODE = {normalize_room_key(v): k for k, v in live_code_map.items()}
 
         print(f"✅ Committee maps rebuilt from API: {len(live_code_map)} codes, {len(live_lexicon)} lexicon entries, {len(resolved_parent_map)} parent relationships.")
         return live_code_map, live_lexicon, resolved_parent_map, True
@@ -208,6 +244,7 @@ def build_committee_maps(http_session, session_code, alert_fn=None):
         print(f"⚠️ Committee API call failed: {e}. Using static fallback.")
         if alert_fn:
             alert_fn(f"⚠️ Committee API failed: {e}. Using static COMMITTEE_CODE_MAP.", status="WARN")
+        NORM_TO_CODE = {normalize_room_key(v): k for k, v in _STATIC_COMMITTEE_CODE_MAP.items()}
         return dict(_STATIC_COMMITTEE_CODE_MAP), dict(_STATIC_LOCAL_LEXICON), {}, False
 
 def resolve_committee_from_refid(refid):
@@ -305,12 +342,8 @@ def find_api_schedule_match(api_schedule_map, date_str, event_location, outcome_
     if not exact_matches:
         # Try structural parent lookup first (enterprise-grade: ParentCommitteeID)
         if PARENT_COMMITTEE_MAP:
-            # Find the committee code for event_location (reverse lookup)
-            event_code = None
-            for code, name in COMMITTEE_CODE_MAP.items():
-                if normalize_room_key(name) == target_norm:
-                    event_code = code
-                    break
+            # O(1) reverse lookup via pre-calculated NORM_TO_CODE map
+            event_code = NORM_TO_CODE.get(target_norm)
             if event_code and event_code in PARENT_COMMITTEE_MAP:
                 parent_code = PARENT_COMMITTEE_MAP[event_code]
                 parent_name = COMMITTEE_CODE_MAP.get(parent_code, "")
@@ -584,6 +617,7 @@ def run_calendar_update():
     api_schedule_map = {}
     convene_times = {}
     cache_sheet = None
+    cache_records = []  # Must be initialized before try block to avoid NameError on failure
     try:
         cache_sheet = sheet.worksheet("API_Cache")
         cache_records = cache_sheet.get_all_records()
@@ -892,8 +926,9 @@ def run_calendar_update():
                         # Validated via PARENT_COMMITTEE_MAP when available, name prefix fallback otherwise
                         is_parent_child = False
                         if PARENT_COMMITTEE_MAP:
-                            mem_code = next((c for c, n in COMMITTEE_CODE_MAP.items() if normalize_room_key(n) == mem_norm), None)
-                            match_code = next((c for c, n in COMMITTEE_CODE_MAP.items() if normalize_room_key(n) == match_norm), None)
+                            # O(1) reverse lookup via pre-calculated NORM_TO_CODE map
+                            mem_code = NORM_TO_CODE.get(mem_norm)
+                            match_code = NORM_TO_CODE.get(match_norm)
                             if mem_code and match_code:
                                 is_parent_child = (PARENT_COMMITTEE_MAP.get(mem_code) == match_code or
                                                    PARENT_COMMITTEE_MAP.get(match_code) == mem_code)
@@ -936,34 +971,7 @@ def run_calendar_update():
                     if any(x in outcome_lower for x in ["reported", "discharged"]) and not any(x in outcome_lower for x in ["fail"]):
                         bill_locations[bill_num] = acting_chamber_prefix + "Floor"
 
-            # === NOISE FILTER (Positive Identification) ===
-            # Enterprise standard: actions are classified as KNOWN_NOISE, KNOWN_EVENT, or UNKNOWN.
-            # KNOWN_NOISE is silently filtered. KNOWN_EVENT passes through.
-            # UNKNOWN is flagged for human review (surfaced as ℹ️ tag, not suppressed).
-            #
-            # Assumption: these lists cover all Virginia action types for session 261.
-            # How it could break: new action types introduced in future sessions.
-            # Runtime check: UNKNOWN actions are tagged and counted; spike = new action type.
-            KNOWN_NOISE_PATTERNS = [
-                "impact statement", "substitute printed", "laid on speaker's table",
-                "laid on clerk's desk", "presented", "reprinted",
-                "engrossed by senate - committee substitute",
-                "engrossed by house - committee substitute",
-                "printed as engrossed", "enrolled", "signed by",
-                "communicated to governor", "effective -",
-                "fiscal impact statement", "acts of assembly chapter",
-            ]
-            KNOWN_EVENT_PATTERNS = [
-                "referred to", "assigned", "reported", "passed", "failed",
-                "defeated", "tabled", "continued", "incorporated",
-                "committee substitute", "floor substitute", "amended",
-                "recommends", "recommend", "rereferred",
-                "discharged", "stricken", "reconsidered", "conferee",
-                "approved by governor", "vetoed", "governor's",
-                "placed on", "block vote", "voice vote", "roll call",
-                "reading dispensed", "read first", "read second", "read third",
-                "agreed to", "rejected",
-            ]
+            # === NOISE FILTER (Positive Identification — see module-level constants) ===
             is_known_noise = any(n in outcome_lower for n in KNOWN_NOISE_PATTERNS)
             is_known_event = any(e in outcome_lower for e in KNOWN_EVENT_PATTERNS)
 
@@ -1046,11 +1054,7 @@ def run_calendar_update():
         final_df = final_df[(final_df['Date'] >= scrape_start_str) & (final_df['Date'] <= scrape_end_str)]
 
         if not final_df.empty:
-            sheet_data = [final_df.columns.values.tolist()] + final_df.values.tolist()
-            print("💾 Writing to Enterprise Database...")
-            worksheet.clear()
-            worksheet.update(values=sheet_data, range_name="A1")
-            
+            # Write cache FIRST so any failure alert can be included in Sheet1 output
             if new_cache_entries and cache_sheet:
                 print(f"🗄️ Writing {len(new_cache_entries)} new historic records to API_Cache...")
                 try:
@@ -1061,8 +1065,25 @@ def run_calendar_update():
                         print(f"✅ Wrote {len(unique_new_entries)} new records to API_Cache.")
                 except Exception as e:
                     print(f"🚨 CRITICAL: Failed to update API_Cache: {e}")
-                    push_system_alert(f"🚨 API_Cache write failure: {e}. {len(new_cache_entries)} records lost. Historical data may be incomplete on next offline run.", status="CRITICAL")
-                
+                    # Inject alert directly into final_df so it's visible on Sheet1
+                    cache_alert = pd.DataFrame([{
+                        "Date": now.strftime("%Y-%m-%d"),
+                        "Time": now.strftime("%I:%M %p"),
+                        "SortTime": now.strftime("%H:%M"),
+                        "Status": "CRITICAL",
+                        "Committee": "System Status",
+                        "Bill": "SYSTEM_ALERT",
+                        "Outcome": f"🚨 API_Cache write failure: {e}. {len(new_cache_entries)} records lost. Historical data may be incomplete on next offline run.",
+                        "AgendaOrder": -99,
+                        "Source": "SYSTEM",
+                    }])
+                    final_df = pd.concat([final_df, cache_alert], ignore_index=True)
+
+            sheet_data = [final_df.columns.values.tolist()] + final_df.values.tolist()
+            print("💾 Writing to Enterprise Database...")
+            worksheet.clear()
+            worksheet.update(values=sheet_data, range_name="A1")
+
             print("✅ SUCCESS: Regression Test Build is complete.")
         else:
             print("⚠️ Viewport slice resulted in an empty dataframe.")
