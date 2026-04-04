@@ -53,6 +53,11 @@
 - **How it was caught:** Gemini PR review
 - **Fix:** Moved to module-level constants
 
+### 11. Floor actions classified as KNOWN_NOISE (self-audit catch)
+- **What broke:** `enrolled`, `signed by`, `presented`, `communicated to governor` were in KNOWN_NOISE_PATTERNS. These are real legislative milestones (also in ABSOLUTE_FLOOR_VERBS) that should appear on the calendar. The positive-ID noise filter was silently eating them because they matched KNOWN_NOISE but not KNOWN_EVENT.
+- **How it was caught:** Pre-push audit comparing KNOWN_NOISE against ABSOLUTE_FLOOR_VERBS
+- **Fix:** Moved all ABSOLUTE_FLOOR_VERBS entries into KNOWN_EVENT_PATTERNS. Added `enrolled`, `signed by`, `presented`, `communicated`, `received`, `engrossed` to KNOWN_EVENT.
+
 ### 10. Cache write alert lost (pushed after Sheet1 write)
 - **What broke:** `push_system_alert()` appended to `alert_rows`, but `alert_rows` was already extended into `filtered_events` before the cache write. Any cache failure alert was never written to Sheet1.
 - **How it was caught:** Gemini PR review, execution order analysis

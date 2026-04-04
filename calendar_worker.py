@@ -67,13 +67,16 @@ IGNORE_WORDS = {"committee", "on", "the", "of", "and", "for", "meeting", "joint"
 # Runtime check: UNKNOWN actions are tagged and counted; spike = new action type.
 KNOWN_NOISE_PATTERNS = [
     "impact statement", "substitute printed", "laid on speaker's table",
-    "laid on clerk's desk", "presented", "reprinted",
+    "laid on clerk's desk", "reprinted",
     "engrossed by senate - committee substitute",
     "engrossed by house - committee substitute",
-    "printed as engrossed", "enrolled", "signed by",
-    "communicated to governor", "effective -",
+    "printed as engrossed", "effective -",
     "fiscal impact statement", "acts of assembly chapter",
 ]
+# NOTE: "enrolled", "signed by", "presented", "communicated to governor"
+# were originally in KNOWN_NOISE but they are real legislative milestones
+# (floor actions in ABSOLUTE_FLOOR_VERBS). Moved to KNOWN_EVENT to prevent
+# silent filtering. See docs/failures/assumptions_audit.md #11.
 KNOWN_EVENT_PATTERNS = [
     "referred to", "assigned", "reported", "passed", "failed",
     "defeated", "tabled", "continued", "incorporated",
@@ -84,6 +87,8 @@ KNOWN_EVENT_PATTERNS = [
     "placed on", "block vote", "voice vote", "roll call",
     "reading dispensed", "read first", "read second", "read third",
     "agreed to", "rejected",
+    "enrolled", "signed by", "presented", "communicated",
+    "received", "engrossed",
 ]
 
 # === STATIC FALLBACK COMMITTEE CODE MAP ===
