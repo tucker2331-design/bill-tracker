@@ -173,6 +173,20 @@ def find_api_schedule_match(api_schedule_map, date_str, event_location, outcome_
         if has_concrete_time(k):
             return k
 
+    # --- Subcommittee -> parent committee fallback ---
+    # "House Courts of Justice-Civil" normalizes to "house courts justice civil"
+    # "House Courts of Justice" normalizes to "house courts justice"
+    # If no exact match, try matching a parent (API key is prefix of target).
+    parent_matches = []
+    if not exact_matches:
+        for k in dated_keys:
+            k_norm = normalize_room_key(k.split("_", 1)[1])
+            if k_norm and target_norm.startswith(k_norm) and target_norm != k_norm:
+                parent_matches.append(k)
+        for k in parent_matches:
+            if has_concrete_time(k):
+                return k
+
     hints = derive_room_hints(outcome_text, acting_chamber_prefix)
     hint_matches = []
     for hint in hints:
@@ -187,6 +201,8 @@ def find_api_schedule_match(api_schedule_map, date_str, event_location, outcome_
 
     if exact_matches:
         return exact_matches[0]
+    if parent_matches:
+        return parent_matches[0]
     if hint_matches:
         return hint_matches[0]
 
@@ -721,7 +737,15 @@ def run_calendar_update():
                     # Double-Entry Mismatch Check
                     memory_room = bill_locations[bill_num]
                     if "Floor" not in memory_room and matched_committee != memory_room and not is_referral:
-                        outcome_text = f"⚠️ [Mismatch Detected: Origin State was {memory_room}] " + outcome_text
+                        # Suppress false positives:
+                        # 1) Subcommittee->parent: "SFin - Resources Sub" vs "SFin" is expected workflow
+                        mem_norm = normalize_room_key(memory_room)
+                        match_norm = normalize_room_key(matched_committee)
+                        is_parent_child = mem_norm.startswith(match_norm) or match_norm.startswith(mem_norm)
+                        # 2) "Placed on X Agenda" actions arrive before the referral that moved the bill
+                        is_agenda_placement = "placed on" in outcome_lower and "agenda" in outcome_lower
+                        if not is_parent_child and not is_agenda_placement:
+                            outcome_text = f"⚠️ [Mismatch Detected: Origin State was {memory_room}] " + outcome_text
 
                     if is_referral and "from" not in outcome_lower:
                         # Floor to Committee Referral
@@ -769,6 +793,11 @@ def run_calendar_update():
                 time_val = api_schedule_map[matched_api_key]["Time"]
                 sort_time_24h = api_schedule_map[matched_api_key]["SortTime"]
                 status = api_schedule_map[matched_api_key]["Status"]
+                # Adopt parent committee's canonical name when a subcommittee
+                # matched via parent fallback (e.g. "Courts of Justice-Civil" -> "Courts of Justice")
+                matched_name = matched_api_key.split("_", 1)[1]
+                if normalize_room_key(matched_name) != normalize_room_key(event_location):
+                    event_location = matched_name
             
             if "Floor" in event_location:
                 anchor = convene_times.get(date_str, {}).get(acting_chamber_prefix.strip())
