@@ -10,7 +10,7 @@ st.title("📅 Enterprise Calendar: Live Production")
 st.sidebar.header("⚙️ System Controls")
 st.sidebar.info("🔥 Firehose Mode Active: Displaying all tracked legislative data.")
 
-test_start_date = datetime(2026, 3, 4)
+test_start_date = datetime(2026, 2, 9)
 
 # --- DATA CONNECTION ---
 SHEET_ID = "1PQDtaTTUeYv781bx4_ZiehcvbEmUt8t7jFmZYJoJGKM"

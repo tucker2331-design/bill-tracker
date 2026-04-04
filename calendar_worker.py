@@ -401,7 +401,7 @@ def run_calendar_update():
         test_start_date = session_data["start"]
         test_end_date = session_data["end"]
 
-    scrape_start = datetime(2026, 3, 1)
+    scrape_start = datetime(2026, 2, 9)
     scrape_end = now + timedelta(days=7)
 
     print("🔐 Authenticating with Google Cloud...")
@@ -692,7 +692,12 @@ def run_calendar_update():
                     # If also a rerefer, try to find the destination from text
                     destination_committee = None
                     if is_rerefer:
-                        dest_match = re.search(r'(?:re)?referred to\s+(?:Committee (?:on|for)\s+)?([A-Z][A-Za-z,\s&\-]+?)(?:\s*\(|\s*$)', outcome_text.split("reported")[0] if "reported" not in outcome_text.split("referred")[-1] else outcome_text.split("referred")[-1])
+                        # Find destination after the LAST "referred to" in the full text.
+                        # Previous logic split on "referred" which removed the word itself,
+                        # making the regex unable to match. Fix: use rfind on the full string.
+                        _ref_idx = outcome_text.lower().rfind('referred to')
+                        _dest_search = outcome_text[_ref_idx:] if _ref_idx >= 0 else ''
+                        dest_match = re.search(r'referred to\s+(?:Committee (?:on|for)\s+)?([A-Z][A-Za-z,\s&\-]+?)(?:\s*\(|\s*$)', _dest_search, re.IGNORECASE)
                         if dest_match:
                             dest_name_raw = dest_match.group(1).strip().rstrip(',').strip()
                             # Look up destination in LOCAL_LEXICON
@@ -795,6 +800,15 @@ def run_calendar_update():
         final_df = final_df.sort_values(by=['Date', 'Committee', 'Bill', 'Source'])
         final_df = final_df.drop_duplicates(subset=['Date', 'Committee', 'Bill'], keep='last')
         final_df = final_df.fillna("")
+
+        # === OPTION A: Collapse Journal Entry phantoms into single Ledger Updates block ===
+        # Journal Entry rows are HISTORY.CSV ledger actions (bill readings, impact statements,
+        # engrossments) that have no corresponding LIS Schedule API event. Instead of creating
+        # phantom committee cards, collapse them all into one "Ledger Updates" card per day.
+        journal_mask = final_df['Time'] == 'Journal Entry'
+        if journal_mask.any():
+            final_df.loc[journal_mask, 'Committee'] = '📋 Ledger Updates'
+            print(f"📋 Collapsed {journal_mask.sum()} journal entries into Ledger Updates blocks.")
 
         scrape_start_str = scrape_start.strftime('%Y-%m-%d')
         scrape_end_str = scrape_end.strftime('%Y-%m-%d')
