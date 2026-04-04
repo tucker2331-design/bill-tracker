@@ -23,10 +23,13 @@ SPREADSHEET_ID = "1PQDtaTTUeYv781bx4_ZiehcvbEmUt8t7jFmZYJoJGKM"
 API_KEY = "81D70A54-FCDC-4023-A00B-A3FD114D5984"
 HEADERS = {"WebAPIKey": API_KEY, "Accept": "application/json"}
 
-LOCAL_LEXICON = {
+# === STATIC FALLBACK LEXICON (used only if Committee API is unavailable) ===
+# Validated against session 261 Committee API response on 2026-04-03.
+# Runtime: replaced by build_committee_maps() output from live API.
+_STATIC_LOCAL_LEXICON = {
     "House Appropriations": ["appropriations"],
     "House Courts of Justice": ["courts of justice"],
-    "House Rules": ["rules"], 
+    "House Rules": ["rules"],
     "House Finance": ["finance"],
     "House Counties, Cities and Towns": ["counties, cities and towns"],
     "House Privileges and Elections": ["privileges and elections"],
@@ -34,12 +37,12 @@ LOCAL_LEXICON = {
     "House Communications, Technology and Innovation": ["communications", "technology", "innovation"],
     "House Education": ["education"],
     "House Agriculture, Chesapeake and Natural Resources": ["agriculture", "natural resources"],
-    "House General Laws": ["general laws"], 
+    "House General Laws": ["general laws"],
     "House Transportation": ["transportation"],
     "House Labor and Commerce": ["labor and commerce", "labor"],
     "House Health and Human Services": ["health and human services", "health"],
     "Senate Finance and Appropriations": ["finance and appropriations", "finance"],
-    "Senate Courts of Justice": ["courts of justice"], 
+    "Senate Courts of Justice": ["courts of justice"],
     "Senate Rules": ["rules"],
     "Senate Rehabilitation and Social Services": ["rehabilitation and social services", "rehabilitation"],
     "Senate Local Government": ["local government"],
@@ -50,14 +53,15 @@ LOCAL_LEXICON = {
     "Senate Transportation": ["transportation"],
     "Senate Agriculture, Conservation and Natural Resources": ["agriculture", "conservation", "natural resources"]
 }
+LOCAL_LEXICON = dict(_STATIC_LOCAL_LEXICON)  # Will be replaced at runtime by build_committee_maps()
 
 IGNORE_WORDS = {"committee", "on", "the", "of", "and", "for", "meeting", "joint", "to", "referred", "assigned", "re-referred", "substitute", "substitutes", "placed", "with", "amendment", "amendments", "a", "an", "by", "recommendation", "recommends", "recommend", "block", "vote", "voice"}
 
-# === VERIFIED COMMITTEE CODE MAP ===
-# Built from 3,868 "Referred to Committee" actions in HISTORY.CSV.
-# Each code had 100% agreement across all rows — zero conflicts.
-# This is a primary key lookup, not text interpretation.
-COMMITTEE_CODE_MAP = {
+# === STATIC FALLBACK COMMITTEE CODE MAP ===
+# Validated against session 261 Committee API + 3,868 HISTORY.CSV referrals.
+# Runtime: replaced by build_committee_maps() output from live API.
+# Drift detection: if live API returns different mappings, a COMMITTEE_DRIFT alert fires.
+_STATIC_COMMITTEE_CODE_MAP = {
     "H01": "House Agriculture, Chesapeake and Natural Resources",
     "H02": "House Appropriations",
     "H07": "House Counties, Cities and Towns",
@@ -84,6 +88,127 @@ COMMITTEE_CODE_MAP = {
     "S12": "Senate General Laws and Technology",
     "S13": "Senate Courts of Justice",
 }
+COMMITTEE_CODE_MAP = dict(_STATIC_COMMITTEE_CODE_MAP)  # Will be replaced at runtime
+
+# === PARENT COMMITTEE MAP ===
+# Maps CommitteeNumber -> parent CommitteeNumber (from API ParentCommitteeID).
+# Used to validate subcommittee->parent fallback instead of name heuristics.
+PARENT_COMMITTEE_MAP = {}  # Populated at runtime by build_committee_maps()
+
+
+def build_committee_maps(http_session, session_code, alert_fn=None):
+    """Rebuild COMMITTEE_CODE_MAP, LOCAL_LEXICON, and PARENT_COMMITTEE_MAP from Committee API.
+
+    Returns (code_map, lexicon, parent_map, success).
+    On failure, returns static fallbacks with success=False.
+
+    Assumption: Committee API returns all committees including subcommittees.
+    How it could break: API schema changes, new fields, or endpoint moves.
+    Runtime check: Drift detection compares live vs static and alerts on differences.
+    """
+    global COMMITTEE_CODE_MAP, LOCAL_LEXICON, PARENT_COMMITTEE_MAP
+
+    url = f"https://lis.virginia.gov/Committee/api/getcommitteelistasync?sessionCode={session_code}"
+    try:
+        res = http_session.get(url, headers=HEADERS, timeout=10)
+        if res.status_code != 200:
+            print(f"⚠️ Committee API returned status {res.status_code}. Using static fallback.")
+            if alert_fn:
+                alert_fn(f"⚠️ Committee API returned HTTP {res.status_code}. Using static COMMITTEE_CODE_MAP.", status="WARN")
+            return dict(_STATIC_COMMITTEE_CODE_MAP), dict(_STATIC_LOCAL_LEXICON), {}, False
+
+        raw = res.json()
+        committees = raw.get('Committees', []) if isinstance(raw, dict) else raw
+        if not isinstance(committees, list) or len(committees) == 0:
+            print("⚠️ Committee API returned empty list. Using static fallback.")
+            if alert_fn:
+                alert_fn("⚠️ Committee API returned 0 committees. Using static COMMITTEE_CODE_MAP.", status="WARN")
+            return dict(_STATIC_COMMITTEE_CODE_MAP), dict(_STATIC_LOCAL_LEXICON), {}, False
+
+        # Build code map from API
+        live_code_map = {}
+        live_parent_map = {}  # CommitteeNumber -> parent CommitteeNumber
+        committee_id_to_number = {}  # CommitteeID -> CommitteeNumber (for parent resolution)
+
+        for c in committees:
+            code = str(c.get('CommitteeNumber', '')).strip()
+            name = str(c.get('Name', '')).strip()
+            chamber = str(c.get('ChamberCode', '')).strip()
+            comm_id = c.get('CommitteeID')
+            parent_id = c.get('ParentCommitteeID')
+
+            if not code or not name:
+                continue
+
+            # Build full name with chamber prefix
+            chamber_prefix = "House " if chamber == "H" else "Senate " if chamber == "S" else ""
+            full_name = f"{chamber_prefix}{name}"
+            live_code_map[code] = full_name
+
+            if comm_id is not None:
+                committee_id_to_number[comm_id] = code
+
+            if parent_id is not None:
+                # Store parent_id temporarily; resolve to code after all committees loaded
+                live_parent_map[code] = parent_id
+
+        # Resolve parent IDs to committee numbers
+        resolved_parent_map = {}
+        for child_code, parent_id in live_parent_map.items():
+            parent_code = committee_id_to_number.get(parent_id)
+            if parent_code:
+                resolved_parent_map[child_code] = parent_code
+
+        # Build lexicon from API names
+        live_lexicon = {}
+        for code, full_name in live_code_map.items():
+            # Skip subcommittees for lexicon (they're matched via parent fallback)
+            if code in resolved_parent_map:
+                continue
+            # Extract the committee name part (after "House "/"Senate ")
+            parts = full_name.split(" ", 1)
+            if len(parts) < 2:
+                continue
+            name_part = parts[1].lower()
+            # Generate aliases: full name, and each comma/and-separated segment
+            aliases = [name_part]
+            for segment in re.split(r',\s*|\s+and\s+', name_part):
+                segment = segment.strip()
+                if segment and len(segment) > 3:  # Skip tiny fragments like "and"
+                    aliases.append(segment)
+            live_lexicon[full_name] = aliases
+
+        # === DRIFT DETECTION ===
+        # Compare live vs static to catch unexpected changes
+        drift_messages = []
+        for code, static_name in _STATIC_COMMITTEE_CODE_MAP.items():
+            if code not in live_code_map:
+                drift_messages.append(f"Static code {code} ({static_name}) missing from live API")
+            elif live_code_map[code] != static_name:
+                drift_messages.append(f"Code {code} name changed: '{static_name}' -> '{live_code_map[code]}'")
+        for code in live_code_map:
+            if code not in _STATIC_COMMITTEE_CODE_MAP and code not in resolved_parent_map:
+                drift_messages.append(f"New top-level committee from API: {code} = {live_code_map[code]}")
+
+        if drift_messages:
+            drift_summary = "; ".join(drift_messages[:5])  # Cap at 5 to avoid massive alerts
+            print(f"🔄 COMMITTEE_DRIFT detected: {drift_summary}")
+            if alert_fn:
+                alert_fn(f"🔄 COMMITTEE_DRIFT: {drift_summary}", status="WARN")
+
+        # Apply live maps
+        COMMITTEE_CODE_MAP = live_code_map
+        LOCAL_LEXICON = live_lexicon
+        PARENT_COMMITTEE_MAP = resolved_parent_map
+
+        print(f"✅ Committee maps rebuilt from API: {len(live_code_map)} codes, {len(live_lexicon)} lexicon entries, {len(resolved_parent_map)} parent relationships.")
+        return live_code_map, live_lexicon, resolved_parent_map, True
+
+    except Exception as e:
+        print(f"⚠️ Committee API call failed: {e}. Using static fallback.")
+        if alert_fn:
+            alert_fn(f"⚠️ Committee API failed: {e}. Using static COMMITTEE_CODE_MAP.", status="WARN")
+        return dict(_STATIC_COMMITTEE_CODE_MAP), dict(_STATIC_LOCAL_LEXICON), {}, False
 
 def resolve_committee_from_refid(refid):
     """Extract committee name from History_refid using structural codes.
@@ -174,15 +299,33 @@ def find_api_schedule_match(api_schedule_map, date_str, event_location, outcome_
             return k
 
     # --- Subcommittee -> parent committee fallback ---
-    # "House Courts of Justice-Civil" normalizes to "house courts justice civil"
-    # "House Courts of Justice" normalizes to "house courts justice"
-    # If no exact match, try matching a parent (API key is prefix of target).
+    # Uses PARENT_COMMITTEE_MAP (from Committee API ParentCommitteeID) when available.
+    # Falls back to normalized name prefix matching only if API parent data is unavailable.
     parent_matches = []
     if not exact_matches:
-        for k in dated_keys:
-            k_norm = normalize_room_key(k.split("_", 1)[1])
-            if k_norm and target_norm.startswith(k_norm) and target_norm != k_norm:
-                parent_matches.append(k)
+        # Try structural parent lookup first (enterprise-grade: ParentCommitteeID)
+        if PARENT_COMMITTEE_MAP:
+            # Find the committee code for event_location (reverse lookup)
+            event_code = None
+            for code, name in COMMITTEE_CODE_MAP.items():
+                if normalize_room_key(name) == target_norm:
+                    event_code = code
+                    break
+            if event_code and event_code in PARENT_COMMITTEE_MAP:
+                parent_code = PARENT_COMMITTEE_MAP[event_code]
+                parent_name = COMMITTEE_CODE_MAP.get(parent_code, "")
+                if parent_name:
+                    parent_norm = normalize_room_key(parent_name)
+                    for k in dated_keys:
+                        k_norm = normalize_room_key(k.split("_", 1)[1])
+                        if k_norm == parent_norm:
+                            parent_matches.append(k)
+        # Fallback: name-prefix heuristic (only if no PARENT_COMMITTEE_MAP data)
+        if not parent_matches and not PARENT_COMMITTEE_MAP:
+            for k in dated_keys:
+                k_norm = normalize_room_key(k.split("_", 1)[1])
+                if k_norm and target_norm.startswith(k_norm) and target_norm != k_norm:
+                    parent_matches.append(k)
         for k in parent_matches:
             if has_concrete_time(k):
                 return k
@@ -416,6 +559,9 @@ def run_calendar_update():
         ACTIVE_SESSION = session_data["code"]
         test_start_date = session_data["start"]
         test_end_date = session_data["end"]
+
+    # === DYNAMIC COMMITTEE MAPS (Enterprise: rebuilt from API each run) ===
+    build_committee_maps(http_session, ACTIVE_SESSION, alert_fn=push_system_alert)
 
     scrape_start = datetime(2026, 2, 9)
     scrape_end = now + timedelta(days=7)
@@ -734,18 +880,37 @@ def run_calendar_update():
                     matched_committee = refid_committee if refid_committee else lexicon_committee
 
                 if matched_committee:
-                    # Double-Entry Mismatch Check
+                    # === DOUBLE-ENTRY MISMATCH DETECTION (Categorized) ===
+                    # Instead of suppressing mismatches, categorize them by root cause.
+                    # Categories: PARENT_CHILD (INFO), TIMING_LAG (INFO), COMMITTEE_DRIFT (WARN)
                     memory_room = bill_locations[bill_num]
                     if "Floor" not in memory_room and matched_committee != memory_room and not is_referral:
-                        # Suppress false positives:
-                        # 1) Subcommittee->parent: "SFin - Resources Sub" vs "SFin" is expected workflow
                         mem_norm = normalize_room_key(memory_room)
                         match_norm = normalize_room_key(matched_committee)
-                        is_parent_child = mem_norm.startswith(match_norm) or match_norm.startswith(mem_norm)
-                        # 2) "Placed on X Agenda" actions arrive before the referral that moved the bill
-                        is_agenda_placement = "placed on" in outcome_lower and "agenda" in outcome_lower
-                        if not is_parent_child and not is_agenda_placement:
-                            outcome_text = f"⚠️ [Mismatch Detected: Origin State was {memory_room}] " + outcome_text
+
+                        # Category 1: PARENT_CHILD — subcommittee action within parent committee
+                        # Validated via PARENT_COMMITTEE_MAP when available, name prefix fallback otherwise
+                        is_parent_child = False
+                        if PARENT_COMMITTEE_MAP:
+                            mem_code = next((c for c, n in COMMITTEE_CODE_MAP.items() if normalize_room_key(n) == mem_norm), None)
+                            match_code = next((c for c, n in COMMITTEE_CODE_MAP.items() if normalize_room_key(n) == match_norm), None)
+                            if mem_code and match_code:
+                                is_parent_child = (PARENT_COMMITTEE_MAP.get(mem_code) == match_code or
+                                                   PARENT_COMMITTEE_MAP.get(match_code) == mem_code)
+                        if not is_parent_child:
+                            # Fallback: name prefix (still valid for unregistered subcommittees)
+                            is_parent_child = mem_norm.startswith(match_norm) or match_norm.startswith(mem_norm)
+
+                        # Category 2: TIMING_LAG — agenda placement before referral records
+                        is_timing_lag = "placed on" in outcome_lower and "agenda" in outcome_lower
+
+                        # Route by category
+                        if is_parent_child:
+                            outcome_text = f"ℹ️ [PARENT_CHILD: Memory={memory_room}] " + outcome_text
+                        elif is_timing_lag:
+                            outcome_text = f"ℹ️ [TIMING_LAG: Memory={memory_room}] " + outcome_text
+                        else:
+                            outcome_text = f"⚠️ [COMMITTEE_DRIFT: Origin State was {memory_room}] " + outcome_text
 
                     if is_referral and "from" not in outcome_lower:
                         # Floor to Committee Referral
@@ -771,9 +936,42 @@ def run_calendar_update():
                     if any(x in outcome_lower for x in ["reported", "discharged"]) and not any(x in outcome_lower for x in ["fail"]):
                         bill_locations[bill_num] = acting_chamber_prefix + "Floor"
 
-            # Filter Noise (Executed AFTER memory state updates)
-            noise_words = ["impact statement", "substitute printed", "laid on speaker's table", "laid on clerk's desk", "presented", "reprinted", "engrossed by senate - committee substitute", "engrossed by house - committee substitute"]
-            if any(n in outcome_lower for n in noise_words): continue
+            # === NOISE FILTER (Positive Identification) ===
+            # Enterprise standard: actions are classified as KNOWN_NOISE, KNOWN_EVENT, or UNKNOWN.
+            # KNOWN_NOISE is silently filtered. KNOWN_EVENT passes through.
+            # UNKNOWN is flagged for human review (surfaced as ℹ️ tag, not suppressed).
+            #
+            # Assumption: these lists cover all Virginia action types for session 261.
+            # How it could break: new action types introduced in future sessions.
+            # Runtime check: UNKNOWN actions are tagged and counted; spike = new action type.
+            KNOWN_NOISE_PATTERNS = [
+                "impact statement", "substitute printed", "laid on speaker's table",
+                "laid on clerk's desk", "presented", "reprinted",
+                "engrossed by senate - committee substitute",
+                "engrossed by house - committee substitute",
+                "printed as engrossed", "enrolled", "signed by",
+                "communicated to governor", "effective -",
+                "fiscal impact statement", "acts of assembly chapter",
+            ]
+            KNOWN_EVENT_PATTERNS = [
+                "referred to", "assigned", "reported", "passed", "failed",
+                "defeated", "tabled", "continued", "incorporated",
+                "committee substitute", "floor substitute", "amended",
+                "recommends", "recommend", "rereferred",
+                "discharged", "stricken", "reconsidered", "conferee",
+                "approved by governor", "vetoed", "governor's",
+                "placed on", "block vote", "voice vote", "roll call",
+                "reading dispensed", "read first", "read second", "read third",
+                "agreed to", "rejected",
+            ]
+            is_known_noise = any(n in outcome_lower for n in KNOWN_NOISE_PATTERNS)
+            is_known_event = any(e in outcome_lower for e in KNOWN_EVENT_PATTERNS)
+
+            if is_known_noise and not is_known_event:
+                continue  # Confirmed noise, safe to filter
+            if not is_known_noise and not is_known_event:
+                # UNKNOWN action type — flag but don't suppress
+                outcome_text = f"❓ [UNKNOWN_ACTION] " + outcome_text
             
             # --- UI RENDERING & FUZZY MATCH ---
             event_location = event_location.strip()
@@ -855,12 +1053,15 @@ def run_calendar_update():
             
             if new_cache_entries and cache_sheet:
                 print(f"🗄️ Writing {len(new_cache_entries)} new historic records to API_Cache...")
-                try: 
+                try:
                     existing_keys = {f"{r.get('Date', '')}_{r.get('Committee', '')}".strip().lower() for r in cache_records} if cache_sheet else set()
                     unique_new_entries = [e for e in new_cache_entries if f"{e[0]}_{e[1]}".strip().lower() not in existing_keys]
                     if unique_new_entries:
                         cache_sheet.append_rows(unique_new_entries)
-                except Exception as e: print(f"⚠️ Failed to update Cache tab: {e}")
+                        print(f"✅ Wrote {len(unique_new_entries)} new records to API_Cache.")
+                except Exception as e:
+                    print(f"🚨 CRITICAL: Failed to update API_Cache: {e}")
+                    push_system_alert(f"🚨 API_Cache write failure: {e}. {len(new_cache_entries)} records lost. Historical data may be incomplete on next offline run.", status="CRITICAL")
                 
             print("✅ SUCCESS: Regression Test Build is complete.")
         else:
