@@ -161,7 +161,7 @@ def find_api_schedule_match(api_schedule_map, date_str, event_location, outcome_
 
     def has_concrete_time(key):
         time_val = str(api_schedule_map.get(key, {}).get("Time", "")).strip().lower()
-        return time_val not in ["", "time tba", "journal entry", "ledger"]
+        return time_val not in ["", "time tba", "tba", "journal entry", "ledger"]
 
     target_norm = normalize_room_key(event_location)
     exact_matches = []
@@ -401,7 +401,7 @@ def run_calendar_update():
         test_start_date = session_data["start"]
         test_end_date = session_data["end"]
 
-    scrape_start = datetime(2026, 3, 1)
+    scrape_start = datetime(2026, 2, 9)
     scrape_end = now + timedelta(days=7)
 
     print("🔐 Authenticating with Google Cloud...")
@@ -581,7 +581,10 @@ def run_calendar_update():
                     t_val = str(ev.get("Time", "")).strip()
                     if _is_non_concrete_time(t_val):
                         continue
-                    best_times[f"{date_key}_{committee_key}"] = t_val
+                    best_times[f"{date_key}_{committee_key}"] = {
+                        "Time": t_val,
+                        "SortTime": str(ev.get("SortTime", "23:59")).strip()
+                    }
 
                 if best_times:
                     for ev in master_events:
@@ -589,11 +592,13 @@ def run_calendar_update():
                             continue
                         map_key = f"{str(ev.get('Date', '')).strip()}_{str(ev.get('Committee', '')).strip()}"
                         if map_key in best_times and _is_non_concrete_time(ev.get("Time", "")):
-                            ev["Time"] = best_times[map_key]
+                            ev["Time"] = best_times[map_key]["Time"]
+                            ev["SortTime"] = best_times[map_key]["SortTime"]
 
                     for map_key, sched in api_schedule_map.items():
                         if map_key in best_times and _is_non_concrete_time(sched.get("Time", "")):
-                            sched["Time"] = best_times[map_key]
+                            sched["Time"] = best_times[map_key]["Time"]
+                            sched["SortTime"] = best_times[map_key]["SortTime"]
 
         except Exception as e:
             print(f"🚨 API Schedule failed: {e}")
@@ -692,7 +697,12 @@ def run_calendar_update():
                     # If also a rerefer, try to find the destination from text
                     destination_committee = None
                     if is_rerefer:
-                        dest_match = re.search(r'(?:re)?referred to\s+(?:Committee (?:on|for)\s+)?([A-Z][A-Za-z,\s&\-]+?)(?:\s*\(|\s*$)', outcome_text.split("reported")[0] if "reported" not in outcome_text.split("referred")[-1] else outcome_text.split("referred")[-1])
+                        # Find destination after the LAST "referred to" in the full text.
+                        # Previous logic split on "referred" which removed the word itself,
+                        # making the regex unable to match. Fix: use rfind on the full string.
+                        _ref_idx = outcome_text.lower().rfind('referred to')
+                        _dest_search = outcome_text[_ref_idx:] if _ref_idx >= 0 else ''
+                        dest_match = re.search(r'referred to\s+(?:Committee (?:on|for)\s+)?([A-Z][A-Za-z,\s&\-]+?)(?:\s*\(|\s*[;.]|\s*$)', _dest_search, re.IGNORECASE)
                         if dest_match:
                             dest_name_raw = dest_match.group(1).strip().rstrip(',').strip()
                             # Look up destination in LOCAL_LEXICON
@@ -791,6 +801,14 @@ def run_calendar_update():
 
     final_df = pd.DataFrame(filtered_events)
     if not final_df.empty:
+        # === OPTION A: Collapse Journal Entry phantoms into single Ledger Updates block ===
+        # Must run BEFORE dedup so that journal entries from different phantom committees
+        # that share the same bill+date get properly deduplicated under one card.
+        journal_mask = final_df['Time'] == 'Journal Entry'
+        if journal_mask.any():
+            final_df.loc[journal_mask, 'Committee'] = '📋 Ledger Updates'
+            print(f"📋 Collapsed {journal_mask.sum()} journal entries into Ledger Updates blocks.")
+
         final_df = final_df[~((final_df['Bill'] == "No agenda listed.") & final_df.duplicated(subset=['Date', 'Committee', 'Time'], keep=False))]
         final_df = final_df.sort_values(by=['Date', 'Committee', 'Bill', 'Source'])
         final_df = final_df.drop_duplicates(subset=['Date', 'Committee', 'Bill'], keep='last')
