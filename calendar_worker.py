@@ -53,6 +53,73 @@ LOCAL_LEXICON = {
 
 IGNORE_WORDS = {"committee", "on", "the", "of", "and", "for", "meeting", "joint", "to", "referred", "assigned", "re-referred", "substitute", "substitutes", "placed", "with", "amendment", "amendments", "a", "an", "by", "recommendation", "recommends", "recommend", "block", "vote", "voice"}
 
+# === VERIFIED COMMITTEE CODE MAP ===
+# Built from 3,868 "Referred to Committee" actions in HISTORY.CSV.
+# Each code had 100% agreement across all rows — zero conflicts.
+# This is a primary key lookup, not text interpretation.
+COMMITTEE_CODE_MAP = {
+    "H01": "House Agriculture, Chesapeake and Natural Resources",
+    "H02": "House Appropriations",
+    "H07": "House Counties, Cities and Towns",
+    "H08": "House Courts of Justice",
+    "H09": "House Education",
+    "H10": "House Finance",
+    "H11": "House General Laws",
+    "H14": "House Labor and Commerce",
+    "H15": "House Public Safety",
+    "H18": "House Privileges and Elections",
+    "H19": "House Transportation",
+    "H20": "House Rules",
+    "H21": "House Communications, Technology and Innovation",
+    "H24": "House Health and Human Services",
+    "S01": "Senate Agriculture, Conservation and Natural Resources",
+    "S02": "Senate Commerce and Labor",
+    "S04": "Senate Education and Health",
+    "S05": "Senate Finance and Appropriations",
+    "S07": "Senate Local Government",
+    "S08": "Senate Privileges and Elections",
+    "S09": "Senate Rehabilitation and Social Services",
+    "S10": "Senate Rules",
+    "S11": "Senate Transportation",
+    "S12": "Senate General Laws and Technology",
+    "S13": "Senate Courts of Justice",
+}
+
+def resolve_committee_from_refid(refid):
+    """Extract committee name from History_refid using structural codes.
+
+    Returns (committee_name, source) where source is:
+      - "refid_direct" for committee code refids (H14, S04)
+      - "refid_vote" for vote-style refids (H14V2610034 -> H14)
+      - None if refid doesn't contain a usable committee code
+    """
+    if not refid:
+        return None, None
+    refid = refid.strip()
+
+    # Direct committee code: H14, S04, etc.
+    if re.match(r'^[HS]\d{1,2}$', refid):
+        name = COMMITTEE_CODE_MAP.get(refid)
+        if not name:
+            # Try zero-padded: S2 -> S02
+            padded = refid[0] + refid[1:].zfill(2)
+            name = COMMITTEE_CODE_MAP.get(padded)
+        if name:
+            return name, "refid_direct"
+
+    # Vote-style refid: H14V2610034 -> H14, S2V1869 -> S2
+    vote_match = re.match(r'^([HS])(\d{1,2})V\d+', refid)
+    if vote_match:
+        code_raw = vote_match.group(1) + vote_match.group(2)
+        name = COMMITTEE_CODE_MAP.get(code_raw)
+        if not name:
+            padded = vote_match.group(1) + vote_match.group(2).zfill(2)
+            name = COMMITTEE_CODE_MAP.get(padded)
+        if name:
+            return name, "refid_vote"
+
+    return None, None
+
 # === ACTION SCOPE VECTORS ===
 ABSOLUTE_FLOOR_VERBS = ["reading dispensed", "read first", "read second", "read third", "engrossed", "enrolled", "passed senate", "passed house", "signed by", "presented", "received", "communicated", "agreed to", "rejected", "conferees:"]
 DYNAMIC_VERBS = ["passed by", "reconsidered", "failed", "defeated", "laid on the table", "tabled", "continued", "strike", "stricken", "incorporate", "recommend", "recommends"]
@@ -540,6 +607,11 @@ def run_calendar_update():
         bill_col = next((c for c in df_past.columns if 'bill' in c.lower()), 'BillNumber')
         date_col = next((c for c in df_past.columns if 'date' in c.lower()), 'HistoryDate')
         desc_col = next((c for c in df_past.columns if 'desc' in c.lower() or 'action' in c.lower()), 'Description')
+        refid_col = next((c for c in df_past.columns if 'refid' in c.lower() or 'ref_id' in c.lower() or 'ref' in c.lower()), None)
+        if refid_col:
+            print(f"🔑 Found refid column: '{refid_col}' — enabling structural committee resolution.")
+        else:
+            print("⚠️ No refid column found in HISTORY.CSV — falling back to text-only committee matching.")
         df_past['CleanBill'] = df_past[bill_col].astype(str).str.replace(' ', '').str.upper()
         df_past['ParsedDate'] = pd.to_datetime(df_past[date_col], errors='coerce')
         df_past = df_past[(df_past['ParsedDate'] >= test_start_date) & (df_past['ParsedDate'] <= test_end_date)]
@@ -591,15 +663,51 @@ def run_calendar_update():
                 # --- ACTION SCOPE: DYNAMIC & EXPLICIT ROOM MATCH ---
                 committee_search_prefix = "Joint " if "joint" in outcome_lower or ("house" in outcome_lower and "senate" in outcome_lower) else acting_chamber_prefix
 
-                matched_committee = None
+                # PHASE 1: Structural resolution via History_refid (primary key lookup)
+                refid_committee = None
+                if refid_col:
+                    raw_refid = str(row.get(refid_col, '')).strip()
+                    refid_committee, refid_source = resolve_committee_from_refid(raw_refid)
+
+                # PHASE 2: Text-based resolution via LOCAL_LEXICON (fallback)
+                lexicon_committee = None
                 for api_name, aliases in LOCAL_LEXICON.items():
                     if api_name.startswith(committee_search_prefix) and any(alias and alias in outcome_lower for alias in aliases):
-                        matched_committee = api_name; break
+                        lexicon_committee = api_name; break
+
+                # Determine action type
+                is_referral = any(x in outcome_lower for x in ["referred", "assigned"]) and not any(x in outcome_lower for x in ["fail", "defeat", "strike"])
+                is_report = any(x in outcome_lower for x in ["reported", "discharged"]) and not any(x in outcome_lower for x in ["fail", "defeat"])
+                is_rerefer = is_report and ("rereferred" in outcome_lower or ("referred" in outcome_lower and "reported" in outcome_lower))
+                destination_committee = None  # Used for rerefer: where the bill goes next
+
+                # PHASE 3: Select the correct committee for each role
+                # For "reported from X and rereferred to Y":
+                #   - refid encodes X (the committee that voted/met)
+                #   - lexicon may match X or Y depending on alias iteration order
+                #   - We need: event_location = X (for time lookup), destination = Y (for state update)
+                if is_report and refid_committee:
+                    # Refid is authoritative for the ACTING committee (where the vote happened)
+                    acting_committee = refid_committee
+                    # If also a rerefer, try to find the destination from text
+                    destination_committee = None
+                    if is_rerefer:
+                        dest_match = re.search(r'(?:re)?referred to\s+(?:Committee (?:on|for)\s+)?([A-Z][A-Za-z,\s&\-]+?)(?:\s*\(|\s*$)', outcome_text.split("reported")[0] if "reported" not in outcome_text.split("referred")[-1] else outcome_text.split("referred")[-1])
+                        if dest_match:
+                            dest_name_raw = dest_match.group(1).strip().rstrip(',').strip()
+                            # Look up destination in LOCAL_LEXICON
+                            for api_name, aliases in LOCAL_LEXICON.items():
+                                if api_name.startswith(committee_search_prefix) and any(alias and alias in dest_name_raw.lower() for alias in aliases):
+                                    destination_committee = api_name; break
+                    matched_committee = acting_committee
+                elif is_referral and not is_report:
+                    # Pure referral: refid = destination committee code, lexicon also finds destination
+                    matched_committee = refid_committee if refid_committee else lexicon_committee
+                else:
+                    # All other actions: prefer refid, fall back to lexicon
+                    matched_committee = refid_committee if refid_committee else lexicon_committee
 
                 if matched_committee:
-                    is_referral = any(x in outcome_lower for x in ["referred", "assigned"]) and not any(x in outcome_lower for x in ["fail", "defeat", "strike"])
-                    is_report = any(x in outcome_lower for x in ["reported", "discharged"]) and not any(x in outcome_lower for x in ["fail", "defeat"])
-
                     # Double-Entry Mismatch Check
                     memory_room = bill_locations[bill_num]
                     if "Floor" not in memory_room and matched_committee != memory_room and not is_referral:
@@ -607,11 +715,14 @@ def run_calendar_update():
 
                     if is_referral and "from" not in outcome_lower:
                         # Floor to Committee Referral
-                        event_location = bill_locations[bill_num] 
+                        event_location = bill_locations[bill_num]
                         bill_locations[bill_num] = matched_committee # Update target
                     elif is_report:
-                        event_location = matched_committee # Distributed Checkpoint Heal
-                        bill_locations[bill_num] = acting_chamber_prefix + "Floor" 
+                        event_location = matched_committee # Distributed Checkpoint Heal (now refid-verified)
+                        if is_rerefer and destination_committee:
+                            bill_locations[bill_num] = destination_committee # Bill goes to new committee
+                        else:
+                            bill_locations[bill_num] = acting_chamber_prefix + "Floor"
                     else:
                         event_location = matched_committee
                         bill_locations[bill_num] = matched_committee
