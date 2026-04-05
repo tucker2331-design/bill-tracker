@@ -312,11 +312,11 @@ st.divider()
 st.subheader("5) Diagnostic Tag Deep Dive")
 
 if "Outcome" in sheet_df.columns:
-    for tag_label, tag_pattern in TAG_PATTERNS.items():
-        tag_mask = sheet_df["Outcome"].astype(str).str.contains(tag_pattern, na=False)
-        tag_count = int(tag_mask.sum())
+    # Reuse pre-calculated tag_counts from Executive Summary instead of recalculating
+    for tag_label, tag_count in tag_counts.items():
         if tag_count > 0:
             with st.expander(f"🏷 {tag_label} ({tag_count} rows)", expanded=False):
+                tag_mask = sheet_df["Outcome"].astype(str).str.contains(tag_label, na=False)
                 tag_rows = sheet_df.loc[tag_mask, ["Date", "Committee", "Time", "Bill", "Outcome"]].head(100)
                 st.dataframe(tag_rows, use_container_width=True, hide_index=True)
 else:
@@ -345,6 +345,10 @@ if "Time" in sheet_df.columns:
 # ===================== SECTION 7: LIS PARITY CHECK =====================
 st.divider()
 st.subheader("7) Compare Missing-Time Rows against LIS Schedule")
+
+# Initialize so download payload always has valid references
+gap_counts = pd.DataFrame(columns=["gap_type", "count"])
+issues = pd.DataFrame()
 
 if lis_df.empty:
     st.warning("LIS schedule unavailable; cannot produce parity diff.")
@@ -420,10 +424,6 @@ else:
 st.divider()
 st.subheader("9) Download Payload")
 
-gap_counts_data = []
-if lis_df is not None and not lis_df.empty and not missing_df.empty:
-    gap_counts_data = gap_counts.to_dict(orient="records") if "gap_counts" in dir() else []
-
 payload = {
     "generated_at_utc": datetime.utcnow().isoformat() + "Z",
     "xray_version": XRAY_VERSION,
@@ -431,11 +431,11 @@ payload = {
     "sheet_ref": sheet_ref,
     "lis_ref": lis_ref,
     "sheet_rows": int(len(sheet_df)),
-    "missing_rows": int(len(missing_df)) if not missing_df.empty else 0,
+    "missing_rows": int(len(missing_df)),
     "lis_rows": int(len(lis_df)),
-    "issues_rows": int(len(issues)) if "issues" in dir() else 0,
+    "issues_rows": int(len(issues)),
     "tag_counts": tag_counts,
     "source_counts": {str(k): int(v) for k, v in source_counts.items()},
-    "gap_counts": gap_counts_data,
+    "gap_counts": gap_counts.to_dict(orient="records") if not gap_counts.empty else [],
 }
 st.download_button("Download summary JSON", data=json.dumps(payload, indent=2), file_name="xray_summary.json")

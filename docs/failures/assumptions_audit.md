@@ -53,12 +53,29 @@
 - **How it was caught:** Gemini PR review
 - **Fix:** Moved to module-level constants
 
+### 10. Cache write alert lost (pushed after Sheet1 write)
+- **What broke:** `push_system_alert()` appended to `alert_rows`, but `alert_rows` was already extended into `filtered_events` before the cache write. Any cache failure alert was never written to Sheet1.
+- **How it was caught:** Gemini PR review, execution order analysis
+- **Fix:** Cache write moved before Sheet1 write. Failure alert injected directly into `final_df` via `pd.concat`.
+
 ### 11. Floor actions classified as KNOWN_NOISE (self-audit catch)
 - **What broke:** `enrolled`, `signed by`, `presented`, `communicated to governor` were in KNOWN_NOISE_PATTERNS. These are real legislative milestones (also in ABSOLUTE_FLOOR_VERBS) that should appear on the calendar. The positive-ID noise filter was silently eating them because they matched KNOWN_NOISE but not KNOWN_EVENT.
 - **How it was caught:** Pre-push audit comparing KNOWN_NOISE against ABSOLUTE_FLOOR_VERBS
 - **Fix:** Moved all ABSOLUTE_FLOOR_VERBS entries into KNOWN_EVENT_PATTERNS. Added `enrolled`, `signed by`, `presented`, `communicated`, `received`, `engrossed` to KNOWN_EVENT.
 
-### 10. Cache write alert lost (pushed after Sheet1 write)
-- **What broke:** `push_system_alert()` appended to `alert_rows`, but `alert_rows` was already extended into `filtered_events` before the cache write. Any cache failure alert was never written to Sheet1.
-- **How it was caught:** Gemini PR review, execution order analysis
-- **Fix:** Cache write moved before Sheet1 write. Failure alert injected directly into `final_df` via `pd.concat`.
+## Bugs Caught by PR Review (Gemini PR#9)
+
+### 12. Redundant tag count recalculation in X-Ray
+- **What broke:** Section 5 recalculated `str.contains().sum()` for every tag when `tag_counts` was already computed in Section 3.
+- **How it was caught:** Gemini PR review
+- **Fix:** Iterate over pre-calculated `tag_counts` dict, only compute `str.contains()` mask for the row sample display.
+
+### 13. `dir()` used to check variable existence
+- **What broke:** `gap_counts` and `issues` were only defined inside conditional blocks. Download payload used `"gap_counts" in dir()` as a guard — fragile and hard to reason about.
+- **How it was caught:** Gemini PR review
+- **Fix:** Initialize `gap_counts` and `issues` as empty DataFrames before the conditional blocks.
+
+### 14. Redundant `.empty` check on DataFrame length
+- **What broke:** `int(len(missing_df)) if not missing_df.empty else 0` — `len()` already returns 0 for empty DataFrames.
+- **How it was caught:** Gemini PR review
+- **Fix:** Simplified to `int(len(missing_df))`.
