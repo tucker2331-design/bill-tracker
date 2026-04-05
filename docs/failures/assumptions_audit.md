@@ -85,7 +85,7 @@
 ### 15. X-Ray Streamlit serving stale file (pages/ray2.py)
 - **What broke:** All X-Ray upgrades went to `calendar_xray.py` at repo root, but Streamlit serves from `pages/ray2.py` (auto-discovered by Streamlit's pages/ directory convention). User saw build "2026-04-03.3" despite code being at "2026-04-04.1".
 - **How it was caught:** User reported X-Ray not updating after PR merge
-- **Fix:** Synced `pages/ray2.py` with `calendar_xray.py` content. Both files now at build "2026-04-04.2". Going forward, `pages/ray2.py` is the authoritative Streamlit page.
+- **Fix:** Synced `pages/ray2.py` with `calendar_xray.py` content. Both files now at build "2026-04-05.1". Going forward, `pages/ray2.py` is the authoritative Streamlit page.
 
 ### 16. UNKNOWN_ACTION patterns not classified
 - **What broke:** "rules suspended", "offered" (amendment actions), and "incorporates" were not in KNOWN_EVENT_PATTERNS. These are real legislative actions being flagged as ❓ UNKNOWN_ACTION.

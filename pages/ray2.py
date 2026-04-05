@@ -45,8 +45,8 @@ TAG_PATTERNS = {
 MEETING_ACTION_PATTERNS = [
     # Committee meeting actions (members must be present to vote/deliberate)
     "reported", "recommends", "recommend", "committee substitute",
-    "incorporated", "incorporates", "discharged", "stricken",
-    "tabled", "continued to",
+    "incorporate", "incorporated", "incorporates", "discharged", "stricken",
+    "tabled", "continued",
     # Floor session actions (chamber must be in session)
     "passed", "failed", "defeated", "amended",
     "floor substitute", "rules suspended", "offered",
@@ -567,6 +567,13 @@ if "Outcome" in sheet_df.columns and "Time" in sheet_df.columns:
     ])
     st.dataframe(matrix, use_container_width=True, hide_index=True)
 
+    def _extract_pattern(outcome_text: str) -> str:
+        lower = str(outcome_text).lower()
+        for p in MEETING_ACTION_PATTERNS:
+            if p in lower:
+                return p
+        return "unknown"
+
     # --- Drill down: meeting actions missing times ---
     if bug_count > 0:
         st.markdown("---")
@@ -594,13 +601,6 @@ if "Outcome" in sheet_df.columns and "Time" in sheet_df.columns:
 
         # By matched pattern (what kind of meeting action?)
         st.markdown("#### By Action Type")
-
-        def _extract_pattern(outcome_text: str) -> str:
-            lower = str(outcome_text).lower()
-            for p in MEETING_ACTION_PATTERNS:
-                if p in lower:
-                    return p
-            return "unknown"
 
         mt_without_display = mt_without.copy()
         mt_without_display["action_type"] = mt_without_display["Outcome"].map(_extract_pattern)

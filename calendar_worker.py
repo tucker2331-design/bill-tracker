@@ -79,7 +79,7 @@ KNOWN_NOISE_PATTERNS = [
 # silent filtering. See docs/failures/assumptions_audit.md #11.
 KNOWN_EVENT_PATTERNS = [
     "referred to", "assigned", "reported", "passed", "failed",
-    "defeated", "tabled", "continued", "incorporated", "incorporates",
+    "defeated", "tabled", "continued", "incorporate", "incorporated", "incorporates",
     "committee substitute", "floor substitute", "amended",
     "recommends", "recommend", "rereferred",
     "discharged", "stricken", "reconsidered", "conferee",
