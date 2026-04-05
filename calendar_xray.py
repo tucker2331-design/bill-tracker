@@ -11,7 +11,7 @@ from urllib3.util.retry import Retry
 st.set_page_config(page_title="LIS Calendar X-Ray", layout="wide")
 st.title("🩻 LIS Calendar X-Ray")
 st.caption("Diagnostic tool for Sheet1 ↔ LIS schedule parity checks.")
-XRAY_VERSION = "2026-04-04.1"
+XRAY_VERSION = "2026-04-05.1"
 st.caption(f"Build: {XRAY_VERSION}")
 
 DEFAULT_SHEET_ID = "1PQDtaTTUeYv781bx4_ZiehcvbEmUt8t7jFmZYJoJGKM"
@@ -29,6 +29,52 @@ TAG_PATTERNS = {
     "UNKNOWN_ACTION": "UNKNOWN_ACTION",
     "Memory Anchor": "Memory Anchor",
 }
+
+# === ACTION CLASSIFICATION: Meeting vs Administrative ===
+# Meeting actions: require people in a room — committee hearing, floor session,
+# subcommittee meeting, conference committee, executive signing.
+# A lobbyist needs to know WHEN these happened.
+#
+# Administrative actions: desk work by a clerk, chair, or staff — routing,
+# printing, filing. These can happen at 7pm on a Friday with no meeting.
+# They belong in Ledger Updates with no time expectation.
+#
+# Assumption: these lists cover all Virginia action types for session 261.
+# How it could break: new action types in future sessions.
+# Runtime check: UNCLASSIFIED count in Section 10. Spike = new action type.
+MEETING_ACTION_PATTERNS = [
+    # Committee meeting actions (members must be present to vote/deliberate)
+    "reported", "recommends", "recommend", "committee substitute",
+    "incorporated", "incorporates", "discharged", "stricken",
+    "tabled", "continued to",
+    # Floor session actions (chamber must be in session)
+    "passed", "failed", "defeated", "amended",
+    "floor substitute", "rules suspended", "offered",
+    "block vote", "voice vote", "roll call",
+    "reading dispensed", "read first", "read second", "read third",
+    "agreed to", "rejected", "reconsidered",
+    # Conference committee (conferees must meet)
+    "conferee", "conference report",
+    # Executive actions (happen at specific documented times)
+    "approved by governor", "vetoed", "governor's recommendation",
+    "governor's substitute", "governor:",
+]
+
+ADMINISTRATIVE_PATTERNS = [
+    # Clerk routing (no meeting required)
+    "referred to", "assigned", "rereferred",
+    # Agenda/calendar placement (clerk action)
+    "placed on",
+    # Printing / engrossing (production office)
+    "impact statement", "fiscal impact", "substitute printed",
+    "reprinted", "printed as engrossed",
+    # Ceremonial / procedural milestones (announced on floor but not hearings)
+    "enrolled", "signed by", "presented", "communicated",
+    "received", "engrossed",
+    # Administrative notations
+    "laid on speaker's table", "laid on clerk's desk",
+    "effective -", "acts of assembly chapter",
+]
 
 
 def get_http_session() -> requests.Session:
@@ -133,6 +179,23 @@ def classify_join_gaps(joined: pd.DataFrame) -> pd.DataFrame:
     out.loc[~out["LIS_Committee"].isna() & lis_non_concrete, "gap_type"] = "lis_time_not_concrete"
     out.loc[~out["LIS_Committee"].isna() & ~lis_non_concrete, "gap_type"] = "sheet_missing_lis_has_time"
     return out
+
+
+def classify_action(outcome_text: str) -> str:
+    """Classify a legislative action as meeting, administrative, or unclassified.
+
+    Returns one of: 'meeting', 'administrative', 'unclassified'.
+    When both meeting and administrative patterns match (e.g. "reported and rereferred"),
+    meeting wins — the action happened in a meeting even if it also triggered routing.
+    """
+    lower = str(outcome_text).lower()
+    is_meeting = any(p in lower for p in MEETING_ACTION_PATTERNS)
+    is_admin = any(p in lower for p in ADMINISTRATIVE_PATTERNS)
+    if is_meeting:
+        return "meeting"
+    if is_admin:
+        return "administrative"
+    return "unclassified"
 
 
 def count_diagnostic_tags(sheet_df: pd.DataFrame) -> dict:
@@ -420,9 +483,235 @@ else:
     st.info("No Source column found.")
 
 
-# ===================== SECTION 9: DOWNLOAD =====================
+# ===================== SECTION 9: ACTION CLASSIFICATION AUDIT =====================
 st.divider()
-st.subheader("9) Download Payload")
+st.subheader("9) Action Classification Audit — The Accuracy Metric")
+st.caption(
+    "Every action is classified as a **meeting action** (vote, report, reading, recommendation — "
+    "requires people in a room at a specific time) or **administrative** (referral, printing, filing — "
+    "desk work with no meeting). Meeting actions without times are **bugs**. "
+    "Administrative actions without times are **correct** (they belong in Ledger)."
+)
+
+# Accuracy metric defaults
+accuracy_metric = {
+    "meeting_with_time": 0,
+    "meeting_without_time": 0,
+    "admin_with_time": 0,
+    "admin_without_time": 0,
+    "unclassified_with_time": 0,
+    "unclassified_without_time": 0,
+}
+
+if "Outcome" in sheet_df.columns and "Time" in sheet_df.columns:
+    sheet_df["_action_class"] = sheet_df["Outcome"].map(classify_action)
+    sheet_df["_has_time"] = ~sheet_df["Time"].map(normalize_time).isin(PLACEHOLDER_TIMES)
+
+    meeting_df = sheet_df[sheet_df["_action_class"] == "meeting"]
+    admin_df = sheet_df[sheet_df["_action_class"] == "administrative"]
+    unclass_df = sheet_df[sheet_df["_action_class"] == "unclassified"]
+
+    mt_with = meeting_df[meeting_df["_has_time"]]
+    mt_without = meeting_df[~meeting_df["_has_time"]]
+    ad_with = admin_df[admin_df["_has_time"]]
+    ad_without = admin_df[~admin_df["_has_time"]]
+    uc_with = unclass_df[unclass_df["_has_time"]]
+    uc_without = unclass_df[~unclass_df["_has_time"]]
+
+    accuracy_metric = {
+        "meeting_with_time": len(mt_with),
+        "meeting_without_time": len(mt_without),
+        "admin_with_time": len(ad_with),
+        "admin_without_time": len(ad_without),
+        "unclassified_with_time": len(uc_with),
+        "unclassified_without_time": len(uc_without),
+    }
+
+    bug_count = len(mt_without)
+    unclass_count = len(uc_with) + len(uc_without)
+
+    # === THE METRIC ===
+    st.markdown("### The Number That Matters")
+    if bug_count == 0:
+        st.success(f"**ZERO** meeting actions without times. Every vote, report, and reading has its time.")
+    else:
+        st.error(f"**{bug_count:,}** meeting actions are missing their times. These happened in a room at a real time and we don't have it.")
+
+    if unclass_count > 0:
+        st.warning(f"**{unclass_count:,}** actions could not be classified (new action types?). Review needed.")
+
+    # --- Summary matrix ---
+    st.markdown("#### Classification Matrix")
+    matrix = pd.DataFrame([
+        {
+            "Category": "Meeting (vote/report/reading/floor)",
+            "With Time": f"{len(mt_with):,}",
+            "Without Time": f"{len(mt_without):,}",
+            "Total": f"{len(meeting_df):,}",
+            "Status": "BUGS" if len(mt_without) > 0 else "CLEAN",
+        },
+        {
+            "Category": "Administrative (referral/printing/filing)",
+            "With Time": f"{len(ad_with):,}",
+            "Without Time": f"{len(ad_without):,}",
+            "Total": f"{len(admin_df):,}",
+            "Status": "OK",
+        },
+        {
+            "Category": "Unclassified (needs human review)",
+            "With Time": f"{len(uc_with):,}",
+            "Without Time": f"{len(uc_without):,}",
+            "Total": f"{unclass_count:,}",
+            "Status": "REVIEW" if unclass_count > 0 else "CLEAN",
+        },
+    ])
+    st.dataframe(matrix, use_container_width=True, hide_index=True)
+
+    # --- Drill down: meeting actions missing times ---
+    if bug_count > 0:
+        st.markdown("---")
+        st.markdown("### Meeting Actions Missing Times (The Bugs)")
+
+        # By committee
+        st.markdown("#### By Committee")
+        bugs_by_comm = (
+            mt_without.groupby("Committee")
+            .size()
+            .reset_index(name="count")
+            .sort_values("count", ascending=False)
+        )
+        st.dataframe(bugs_by_comm, use_container_width=True, hide_index=True)
+
+        # By date
+        st.markdown("#### By Date")
+        bugs_by_date = (
+            mt_without.groupby("Date")
+            .size()
+            .reset_index(name="count")
+            .sort_values("count", ascending=False)
+        )
+        st.dataframe(bugs_by_date, use_container_width=True, hide_index=True)
+
+        # By matched pattern (what kind of meeting action?)
+        st.markdown("#### By Action Type")
+
+        def _extract_pattern(outcome_text: str) -> str:
+            lower = str(outcome_text).lower()
+            for p in MEETING_ACTION_PATTERNS:
+                if p in lower:
+                    return p
+            return "unknown"
+
+        mt_without_display = mt_without.copy()
+        mt_without_display["action_type"] = mt_without_display["Outcome"].map(_extract_pattern)
+        bugs_by_type = (
+            mt_without_display.groupby("action_type")
+            .size()
+            .reset_index(name="count")
+            .sort_values("count", ascending=False)
+        )
+        st.dataframe(bugs_by_type, use_container_width=True, hide_index=True)
+
+        # Sample rows
+        st.markdown("#### Sample Rows (first 300)")
+        display_cols = [c for c in ["Date", "Committee", "Time", "Bill", "Outcome", "Source"] if c in mt_without.columns]
+        st.dataframe(mt_without[display_cols].head(300), use_container_width=True, hide_index=True)
+
+    # --- Drill down: unclassified actions ---
+    if unclass_count > 0:
+        st.markdown("---")
+        st.markdown("### Unclassified Actions (Need Pattern Assignment)")
+        st.caption(
+            "These actions don't match any known meeting or administrative pattern. "
+            "Each one needs to be added to either MEETING_ACTION_PATTERNS or ADMINISTRATIVE_PATTERNS "
+            "in the X-Ray and KNOWN_EVENT_PATTERNS or KNOWN_NOISE_PATTERNS in calendar_worker.py."
+        )
+
+        # Show unique outcome snippets to help classify
+        uc_all = pd.concat([uc_with, uc_without])
+        # Strip diagnostic tags to show raw action text
+        uc_all_display = uc_all.copy()
+        uc_all_display["raw_action"] = (
+            uc_all_display["Outcome"]
+            .astype(str)
+            .str.replace(r"^[^\]]*\]\s*", "", regex=True)  # strip leading [TAG] prefixes
+            .str.replace(r"^[HS]\s+", "", regex=True)       # strip chamber prefix
+            .str.strip()
+            .str[:80]  # truncate for readability
+        )
+        unique_actions = (
+            uc_all_display.groupby("raw_action")
+            .size()
+            .reset_index(name="count")
+            .sort_values("count", ascending=False)
+        )
+        st.dataframe(unique_actions.head(50), use_container_width=True, hide_index=True)
+
+        display_cols = [c for c in ["Date", "Committee", "Time", "Bill", "Outcome"] if c in uc_all.columns]
+        with st.expander(f"All {unclass_count} unclassified rows", expanded=False):
+            st.dataframe(uc_all[display_cols].head(200), use_container_width=True, hide_index=True)
+
+    # --- Ledger health check ---
+    st.markdown("---")
+    st.markdown("### Ledger Health Check")
+    st.caption(
+        "Ledger Updates should contain ONLY administrative actions. "
+        "If meeting actions are hiding in Ledger, that's a calendar_worker matching bug."
+    )
+
+    if "Committee" in sheet_df.columns:
+        ledger_mask = sheet_df["Committee"].astype(str).str.contains("Ledger Updates", na=False)
+        ledger_rows_df = sheet_df[ledger_mask]
+
+        if ledger_rows_df.empty:
+            st.info("No Ledger Updates rows found.")
+        else:
+            ledger_meeting = ledger_rows_df[ledger_rows_df["_action_class"] == "meeting"]
+            ledger_admin = ledger_rows_df[ledger_rows_df["_action_class"] == "administrative"]
+            ledger_unclass = ledger_rows_df[ledger_rows_df["_action_class"] == "unclassified"]
+
+            lc1, lc2, lc3, lc4 = st.columns(4)
+            lc1.metric("Total Ledger Rows", f"{len(ledger_rows_df):,}")
+            lc2.metric("Admin (correct)", f"{len(ledger_admin):,}")
+            lc3.metric("Meeting (BUGS)", f"{len(ledger_meeting):,}")
+            lc4.metric("Unclassified", f"{len(ledger_unclass):,}")
+
+            if len(ledger_meeting) > 0:
+                st.error(
+                    f"**{len(ledger_meeting):,}** meeting actions are buried in Ledger Updates. "
+                    "These are votes/reports/readings that happened at a real time but calendar_worker "
+                    "couldn't find their schedule match, so they fell through to Journal Entry → Ledger."
+                )
+                st.markdown("#### Meeting Actions Hiding in Ledger")
+
+                ledger_mt_display = ledger_meeting.copy()
+                ledger_mt_display["action_type"] = ledger_mt_display["Outcome"].map(_extract_pattern)
+
+                # By action type
+                ledger_by_type = (
+                    ledger_mt_display.groupby("action_type")
+                    .size()
+                    .reset_index(name="count")
+                    .sort_values("count", ascending=False)
+                )
+                st.dataframe(ledger_by_type, use_container_width=True, hide_index=True)
+
+                # Sample rows
+                display_cols = [c for c in ["Date", "Bill", "Outcome", "action_type"] if c in ledger_mt_display.columns]
+                with st.expander(f"All {len(ledger_meeting)} meeting actions in Ledger", expanded=False):
+                    st.dataframe(ledger_mt_display[display_cols].head(500), use_container_width=True, hide_index=True)
+            else:
+                st.success("Ledger is clean. No meeting actions hiding in Ledger Updates.")
+
+    # Clean up temp columns
+    sheet_df.drop(columns=["_action_class", "_has_time"], inplace=True, errors="ignore")
+else:
+    st.warning("Cannot classify actions: Outcome or Time column missing.")
+
+
+# ===================== SECTION 10: DOWNLOAD =====================
+st.divider()
+st.subheader("10) Download Payload")
 
 payload = {
     "generated_at_utc": datetime.utcnow().isoformat() + "Z",
@@ -435,6 +724,7 @@ payload = {
     "lis_rows": int(len(lis_df)),
     "issues_rows": int(len(issues)),
     "tag_counts": tag_counts,
+    "accuracy_metric": accuracy_metric,
     "source_counts": {str(k): int(v) for k, v in source_counts.items()},
     "gap_counts": gap_counts.to_dict(orient="records") if not gap_counts.empty else [],
 }
