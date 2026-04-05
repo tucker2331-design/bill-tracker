@@ -134,6 +134,11 @@ COMMITTEE_CODE_MAP = dict(_STATIC_COMMITTEE_CODE_MAP)  # Will be replaced at run
 # Used to validate subcommittee->parent fallback instead of name heuristics.
 PARENT_COMMITTEE_MAP = {}  # Populated at runtime by build_committee_maps()
 
+# === CHILDREN OF PARENT (reverse of PARENT_COMMITTEE_MAP) ===
+# Maps parent CommitteeNumber -> list of child CommitteeNumbers.
+# Pre-calculated to avoid O(n) scan of PARENT_COMMITTEE_MAP inside find_api_schedule_match().
+CHILDREN_OF_PARENT = {}  # Populated at runtime by build_committee_maps()
+
 # === NORMALIZED REVERSE LOOKUP (O(1) name->code) ===
 # Pre-calculated after build_committee_maps() to avoid O(n) scans inside 60k-row loops.
 NORM_TO_CODE = {}  # Populated at runtime by build_committee_maps()
@@ -149,7 +154,7 @@ def build_committee_maps(http_session, session_code, alert_fn=None):
     How it could break: API schema changes, new fields, or endpoint moves.
     Runtime check: Drift detection compares live vs static and alerts on differences.
     """
-    global COMMITTEE_CODE_MAP, LOCAL_LEXICON, PARENT_COMMITTEE_MAP, NORM_TO_CODE
+    global COMMITTEE_CODE_MAP, LOCAL_LEXICON, PARENT_COMMITTEE_MAP, NORM_TO_CODE, CHILDREN_OF_PARENT
 
     url = f"https://lis.virginia.gov/Committee/api/getcommitteelistasync?sessionCode={session_code}"
     try:
@@ -246,6 +251,10 @@ def build_committee_maps(http_session, session_code, alert_fn=None):
         LOCAL_LEXICON = live_lexicon
         PARENT_COMMITTEE_MAP = resolved_parent_map
         NORM_TO_CODE = {normalize_room_key(v): k for k, v in live_code_map.items()}
+        # Pre-calculate reverse parent->children map for O(1) lookups in find_api_schedule_match()
+        CHILDREN_OF_PARENT = {}
+        for child_code, parent_code in resolved_parent_map.items():
+            CHILDREN_OF_PARENT.setdefault(parent_code, []).append(child_code)
 
         print(f"✅ Committee maps rebuilt from API: {len(live_code_map)} codes, {len(live_lexicon)} lexicon entries, {len(resolved_parent_map)} parent relationships.")
         return live_code_map, live_lexicon, resolved_parent_map, True
@@ -356,21 +365,23 @@ def find_api_schedule_match(api_schedule_map, date_str, event_location, outcome_
 
     # Direction 2: If exact match exists but has no concrete time, check children
     if exact_matches and not any(has_concrete_time(k) for k in exact_matches):
-        if PARENT_COMMITTEE_MAP:
+        if CHILDREN_OF_PARENT:
             event_code = NORM_TO_CODE.get(target_norm)
-            if event_code:
-                # Find all child committees that have this as their parent
-                child_codes = [c for c, p in PARENT_COMMITTEE_MAP.items() if p == event_code]
+            if event_code and event_code in CHILDREN_OF_PARENT:
+                # O(1) lookup of child committees via pre-calculated reverse map
+                child_codes = CHILDREN_OF_PARENT[event_code]
+                # Pre-calculate normalized keys for dated entries (avoid redundant normalize_room_key calls)
+                dated_norms = {k: normalize_room_key(k.split("_", 1)[1]) for k in dated_keys}
                 for child_code in child_codes:
                     child_name = COMMITTEE_CODE_MAP.get(child_code, "")
                     if child_name:
                         child_norm = normalize_room_key(child_name)
                         for k in dated_keys:
-                            k_norm = normalize_room_key(k.split("_", 1)[1])
-                            if k_norm == child_norm and has_concrete_time(k):
+                            if dated_norms[k] == child_norm and has_concrete_time(k):
                                 child_matches.append(k)
-        # If we found a child with a concrete time, use the earliest one
+        # If we found children with concrete times, use the earliest by SortTime
         if child_matches:
+            child_matches.sort(key=lambda k: api_schedule_map[k].get("SortTime", "23:59"))
             return child_matches[0]
 
     # Direction 1: event is a subcommittee, look for parent
@@ -663,8 +674,8 @@ def run_calendar_update():
             api_schedule_map[k] = {"Time": str(r.get("Time", "")), "SortTime": str(r.get("SortTime", "")), "Status": str(r.get("Status", ""))}
             
             c_lower = c.lower()
-            _is_house_convene = any(h in c_lower for h in ["house convenes", "house chamber", "house session", "house floor"])
-            _is_senate_convene = any(s in c_lower for s in ["senate convenes", "senate chamber", "senate session", "senate floor"])
+            _is_house_convene = any(h in c_lower for h in ["house convenes", "house chamber", "house session", "house floor", "house of delegates"])
+            _is_senate_convene = any(s in c_lower for s in ["senate convenes", "senate chamber", "senate session", "senate floor", "senate of virginia"])
             if _is_house_convene or _is_senate_convene:
                 chamber = "House" if _is_house_convene else "Senate"
                 if d not in convene_times: convene_times[d] = {}
@@ -768,12 +779,11 @@ def run_calendar_update():
                     ])
                     if _is_house_floor:
                         if date_str not in convene_times: convene_times[date_str] = {}
-                        if "House" not in convene_times[date_str]:  # Don't overwrite canonical entry
-                            convene_times[date_str]["House"] = {"Time": time_val, "SortTime": sort_time_24h, "Name": normalized_name.strip()}
+                        # Live API ALWAYS overwrites cache — cache is fallback, not primary
+                        convene_times[date_str]["House"] = {"Time": time_val, "SortTime": sort_time_24h, "Name": normalized_name.strip()}
                     elif _is_senate_floor:
                         if date_str not in convene_times: convene_times[date_str] = {}
-                        if "Senate" not in convene_times[date_str]:
-                            convene_times[date_str]["Senate"] = {"Time": time_val, "SortTime": sort_time_24h, "Name": normalized_name.strip()}
+                        convene_times[date_str]["Senate"] = {"Time": time_val, "SortTime": sort_time_24h, "Name": normalized_name.strip()}
                     
                     if meeting_date <= now:
                         new_cache_entries.append([date_str, normalized_name.strip(), time_val, sort_time_24h, status])
