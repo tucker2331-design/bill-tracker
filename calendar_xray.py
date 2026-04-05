@@ -11,7 +11,7 @@ from urllib3.util.retry import Retry
 st.set_page_config(page_title="LIS Calendar X-Ray", layout="wide")
 st.title("🩻 LIS Calendar X-Ray")
 st.caption("Diagnostic tool for Sheet1 ↔ LIS schedule parity checks.")
-XRAY_VERSION = "2026-04-05.1"
+XRAY_VERSION = "2026-04-05.2"
 st.caption(f"Build: {XRAY_VERSION}")
 
 DEFAULT_SHEET_ID = "1PQDtaTTUeYv781bx4_ZiehcvbEmUt8t7jFmZYJoJGKM"
@@ -53,8 +53,9 @@ MEETING_ACTION_PATTERNS = [
     "block vote", "voice vote", "roll call",
     "reading dispensed", "read first", "read second", "read third",
     "agreed to", "rejected", "reconsidered",
-    # Conference committee (conferees must meet)
+    # Conference actions (require chamber or conferees in session)
     "conferee", "conference report",
+    "requested conference committee", "acceded to request",
     # Executive actions (happen at specific documented times)
     "approved by governor", "vetoed", "governor's recommendation",
     "governor's substitute", "governor:",
@@ -74,6 +75,14 @@ ADMINISTRATIVE_PATTERNS = [
     # Administrative notations
     "laid on speaker's table", "laid on clerk's desk",
     "effective -", "acts of assembly chapter",
+    # Governor deadline / scheduling notations (clerk-generated)
+    "governor's action deadline", "action deadline",
+    # Skeleton rows from API/DOCKET (already have times, just scheduling entries)
+    "scheduled",
+    # End-of-session status (bill died in committee, no meeting involved)
+    "left in",
+    # Blank / empty actions
+    "blank action",
 ]
 
 

@@ -85,7 +85,7 @@
 ### 15. X-Ray Streamlit serving stale file (pages/ray2.py)
 - **What broke:** All X-Ray upgrades went to `calendar_xray.py` at repo root, but Streamlit serves from `pages/ray2.py` (auto-discovered by Streamlit's pages/ directory convention). User saw build "2026-04-03.3" despite code being at "2026-04-04.1".
 - **How it was caught:** User reported X-Ray not updating after PR merge
-- **Fix:** Synced `pages/ray2.py` with `calendar_xray.py` content. Both files now at build "2026-04-05.1". Going forward, `pages/ray2.py` is the authoritative Streamlit page.
+- **Fix:** Synced `pages/ray2.py` with `calendar_xray.py` content. Both files now at build "2026-04-05.2". Going forward, `pages/ray2.py` is the authoritative Streamlit page.
 
 ### 16. UNKNOWN_ACTION patterns not classified
 - **What broke:** "rules suspended", "offered" (amendment actions), and "incorporates" were not in KNOWN_EVENT_PATTERNS. These are real legislative actions being flagged as ❓ UNKNOWN_ACTION.
@@ -97,3 +97,19 @@
 - **How it was caught:** User pushed back asking "how close are we really?" during data review
 - **Fix:** Added X-Ray Section 9 "Action Classification Audit" which classifies EVERY row as meeting action or administrative based on the Outcome text. The true accuracy metric is: **meeting actions without times = bugs**. Also added Ledger Health Check to find meeting actions buried in Ledger Updates (votes/reports that fell through to Journal Entry because calendar_worker couldn't match them to a schedule entry). This is the real bug count.
 - **Lesson:** Never trust a metric that excludes the hard cases. The denominator matters as much as the numerator.
+
+### 18. Convene time capture too narrow — only "House Convenes" / "House Chamber"
+- **What broke:** LIS Schedule API may list floor sessions under names like "House Session", "House Floor Period", or "House of Delegates" — not just "House Convenes". The convene_times dict only populated on exact matches for "house convenes" and "house chamber", missing alternative names. Similarly, the cache reader only matched "Convenes" (capital C substring).
+- **How it was caught:** X-Ray Section 9 showed 408 "passed" + 169 "agreed to" + 149 "read first" actions buried in Ledger — all floor actions that should have had convene times.
+- **Fix:** Expanded both live API and cache readers to match broader floor session patterns: "house session", "house floor", "house of delegates", "senate session", "senate floor", "senate of virginia". Added "first match wins" guard so canonical names aren't overwritten by fallback matches.
+- **Runtime check:** Convene time gap diagnostic now logs hit/miss counts and missing date/chamber combos after each run.
+
+### 19. Parent-to-child schedule lookup missing — only child-to-parent existed
+- **What broke:** `find_api_schedule_match()` had child→parent fallback (subcommittee inherits parent time) but NOT parent→child. When a parent committee like "House Appropriations" had "Time TBA" in the Schedule API but its subcommittees had concrete times, the parent's actions got TBA instead of inheriting a child time.
+- **How it was caught:** X-Ray showed 147 House Appropriations meeting actions without times despite subcommittees having concrete times on the same dates.
+- **Fix:** Added Direction 2 lookup: when exact match exists but has non-concrete time, search PARENT_COMMITTEE_MAP for child committees and check if any have concrete times for the same date.
+
+### 20. 3,150 unclassified actions — missing pattern coverage
+- **What broke:** X-Ray action classification didn't recognize: "Governor's Action Deadline" (1,145), "Scheduled" (454), "Left in [committee]" (231), "requested conference committee" (167), "acceded to request" (84), "Blank Action" (29).
+- **How it was caught:** X-Ray Section 9 unclassified warning.
+- **Fix:** Added all patterns to appropriate lists. "Governor's Action Deadline", "Scheduled", "Left in", "Blank Action" → ADMINISTRATIVE. "Requested conference committee", "acceded to request" → MEETING. Also added to calendar_worker.py KNOWN_EVENT/KNOWN_NOISE accordingly.
