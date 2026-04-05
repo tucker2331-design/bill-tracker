@@ -302,7 +302,9 @@ def resolve_committee_from_refid(refid):
     return None, None
 
 # === ACTION SCOPE VECTORS ===
-ABSOLUTE_FLOOR_VERBS = ["reading dispensed", "read first", "read second", "read third", "engrossed", "enrolled", "passed senate", "passed house", "signed by", "presented", "received", "communicated", "agreed to", "rejected", "conferees:", "rules suspended"]
+ABSOLUTE_FLOOR_VERBS = ["reading dispensed", "read first", "read second", "read third", "engrossed", "enrolled", "passed", "signed by", "presented", "received", "communicated", "agreed to", "rejected", "conferees:", "rules suspended"]
+# "passed" covers "passed house", "passed senate", AND bare "passed (40-Y 0-N)".
+# "passed by" (tabling) is excluded via PASSED_BY_EXCLUSION check at the call site.
 DYNAMIC_VERBS = ["passed by", "reconsidered", "failed", "defeated", "laid on the table", "tabled", "continued", "strike", "stricken", "incorporate", "recommend", "recommends"]
 
 def normalize_room_key(text):
@@ -926,7 +928,7 @@ def run_calendar_update():
             # --- ACTION SCOPE: ABSOLUTES ---
             is_exec = any(ev in outcome_lower for ev in ["approved by governor", "vetoed by governor", "governor's substitute", "governor's recommendation", "governor:"]) and not (outcome_text.startswith('H ') or outcome_text.startswith('S '))
             is_conf = "conferee" in outcome_lower or "conference report" in outcome_lower
-            is_absolute_floor = any(f in outcome_lower for f in ABSOLUTE_FLOOR_VERBS)
+            is_absolute_floor = any(f in outcome_lower for f in ABSOLUTE_FLOOR_VERBS) and "passed by" not in outcome_lower
             
             if is_exec: 
                 event_location = "Executive Action"
@@ -1082,10 +1084,15 @@ def run_calendar_update():
                 if normalize_room_key(matched_name) != normalize_room_key(event_location):
                     event_location = matched_name
             
-            if "Floor" in event_location:
+            if "Floor" in event_location or event_location in ("Executive Action", "Conference Committee"):
                 anchor = convene_times.get(date_str, {}).get(acting_chamber_prefix.strip())
                 if anchor:
-                    time_val, sort_time_24h, event_location = anchor["Time"], anchor["SortTime"], anchor["Name"]
+                    if "Floor" in event_location:
+                        # Floor actions adopt the chamber session name (e.g., "House Convenes")
+                        time_val, sort_time_24h, event_location = anchor["Time"], anchor["SortTime"], anchor["Name"]
+                    else:
+                        # Executive/Conference keep their own location but get the chamber's time
+                        time_val, sort_time_24h = anchor["Time"], anchor["SortTime"]
                     _floor_hit += 1
                 else:
                     _floor_miss += 1
@@ -1094,6 +1101,13 @@ def run_calendar_update():
             master_events.append({"Date": date_str, "Time": time_val, "SortTime": sort_time_24h, "Status": status, "Committee": event_location, "Bill": bill_num, "Outcome": outcome_text, "AgendaOrder": 999, "Source": "CSV"})
 
     # === CONVENE TIME GAP REPORT ===
+    print(f"📊 Convene times populated for {len(convene_times)} dates total")
+    # Check for TBA convene times (populated but useless)
+    _tba_convene = [(d, ch) for d in convene_times for ch in convene_times[d] if convene_times[d][ch].get("Time", "") in ("Time TBA", "TBA", "")]
+    if _tba_convene:
+        print(f"⚠️ {len(_tba_convene)} convene time entries have TBA/empty times (populated but not concrete):")
+        for d, ch in sorted(_tba_convene)[:10]:
+            print(f"     {d}_{ch}: Time='{convene_times[d][ch].get('Time', '')}'")
     if _floor_miss > 0:
         print(f"🚨 CONVENE GAP: {_floor_miss} floor actions missed convene times (vs {_floor_hit} hits)")
         print(f"   Missing date/chamber combos ({len(_floor_miss_dates)}):")

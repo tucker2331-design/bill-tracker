@@ -109,6 +109,21 @@
 - **How it was caught:** X-Ray showed 147 House Appropriations meeting actions without times despite subcommittees having concrete times on the same dates.
 - **Fix:** Added Direction 2 lookup: when exact match exists but has non-concrete time, search PARENT_COMMITTEE_MAP for child committees and check if any have concrete times for the same date.
 
+### 21. "passed" missing from ABSOLUTE_FLOOR_VERBS — 408 floor actions misclassified
+- **What broke:** ABSOLUTE_FLOOR_VERBS had "passed senate" and "passed house" but NOT bare "passed". When HISTORY.CSV action text was `"Passed (40-Y 0-N)"` without the chamber name, it didn't match any absolute verb. Fell through to Memory Anchor, kept prior committee location, never got convene time → Journal Entry → Ledger.
+- **How it was caught:** X-Ray Section 9 Ledger Health Check showed "passed" as the #1 meeting action hiding in Ledger (408 count).
+- **Fix:** Replaced "passed senate"/"passed house" with bare "passed" in ABSOLUTE_FLOOR_VERBS (substring matching covers both). Added `and "passed by" not in outcome_lower` guard to prevent "passed by" (tabling) from being classified as floor.
+
+### 22. Executive/Conference actions had no time resolution path
+- **What broke:** `event_location = "Executive Action"` and `"Conference Committee"` didn't contain "Floor", so the convene time lookup at line 1085 never fired. These actions kept "Journal Entry" as their time → collapsed to Ledger. 110 bugs (48 approved by governor, 35 conferee, 27 conference report).
+- **How it was caught:** X-Ray Ledger Health Check breakdown by action type.
+- **Fix:** Extended floor action check to `if "Floor" in event_location or event_location in ("Executive Action", "Conference Committee")`. Exec/Conference get the chamber's convene time but keep their own location label.
+
+### 23. Schedule API has 545 entries (16.5%) with empty ScheduleTime
+- **What broke:** 545 of 3,310 Schedule API entries have no time. House Courts of Justice has ZERO times across all 98 entries. Earlier validation checked entry existence ("3,310 entries confirmed 1:1"), not time completeness.
+- **How it was caught:** Direct analysis of Schedule API response data.
+- **Status:** Not code-fixable. These committees genuinely don't publish times to the Schedule API. May need alternative time sources (Description HTML, committee agenda pages). Deferred pending code-fixable bug resolution.
+
 ### 20. 3,150 unclassified actions — missing pattern coverage
 - **What broke:** X-Ray action classification didn't recognize: "Governor's Action Deadline" (1,145), "Scheduled" (454), "Left in [committee]" (231), "requested conference committee" (167), "acceded to request" (84), "Blank Action" (29).
 - **How it was caught:** X-Ray Section 9 unclassified warning.
