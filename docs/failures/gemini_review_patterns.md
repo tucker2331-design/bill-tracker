@@ -66,3 +66,17 @@ Recurring mistakes to self-check BEFORE pushing code. Each pattern has been caug
 - `enrolled`, `signed by`, `presented` in both KNOWN_NOISE and ABSOLUTE_FLOOR_VERBS (self-audit catch)
 
 **Self-check:** When creating classification lists, verify no item appears in a contradicting list. Automated: `set(NOISE) & set(EVENTS)` should be empty.
+
+## 10. Editing the Wrong File (Stale Copies)
+**Pattern:** Multiple copies of the same file exist (e.g., `xray.py`, `calendar_xray.py`, `pages/ray2.py`). Edits go to the wrong copy and never reach the user.
+**Examples:**
+- X-Ray upgrades applied to `calendar_xray.py` but Streamlit served `pages/ray2.py` (2026-04-04)
+
+**Self-check:** Before editing, verify which file the runtime actually loads. For Streamlit: check `pages/` directory. For imports: grep for the import statement.
+
+## 11. Substring Match Misses (Verb Tense/Form)
+**Pattern:** Using `"word" in text` for classification but the text contains a different form of the word (e.g., "incorporates" vs "incorporated").
+**Examples:**
+- `"incorporated"` in KNOWN_EVENT didn't match `"incorporates hb912"` — different verb form
+
+**Self-check:** When adding a word to a classification list, also add common conjugations (past/present/plural). Or use stemming.

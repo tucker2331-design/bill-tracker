@@ -79,7 +79,7 @@ KNOWN_NOISE_PATTERNS = [
 # silent filtering. See docs/failures/assumptions_audit.md #11.
 KNOWN_EVENT_PATTERNS = [
     "referred to", "assigned", "reported", "passed", "failed",
-    "defeated", "tabled", "continued", "incorporated",
+    "defeated", "tabled", "continued", "incorporate", "incorporated", "incorporates",
     "committee substitute", "floor substitute", "amended",
     "recommends", "recommend", "rereferred",
     "discharged", "stricken", "reconsidered", "conferee",
@@ -89,6 +89,7 @@ KNOWN_EVENT_PATTERNS = [
     "agreed to", "rejected",
     "enrolled", "signed by", "presented", "communicated",
     "received", "engrossed",
+    "rules suspended", "offered",
 ]
 
 # === STATIC FALLBACK COMMITTEE CODE MAP ===
@@ -288,7 +289,7 @@ def resolve_committee_from_refid(refid):
     return None, None
 
 # === ACTION SCOPE VECTORS ===
-ABSOLUTE_FLOOR_VERBS = ["reading dispensed", "read first", "read second", "read third", "engrossed", "enrolled", "passed senate", "passed house", "signed by", "presented", "received", "communicated", "agreed to", "rejected", "conferees:"]
+ABSOLUTE_FLOOR_VERBS = ["reading dispensed", "read first", "read second", "read third", "engrossed", "enrolled", "passed senate", "passed house", "signed by", "presented", "received", "communicated", "agreed to", "rejected", "conferees:", "rules suspended"]
 DYNAMIC_VERBS = ["passed by", "reconsidered", "failed", "defeated", "laid on the table", "tabled", "continued", "strike", "stricken", "incorporate", "recommend", "recommends"]
 
 def normalize_room_key(text):

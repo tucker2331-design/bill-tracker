@@ -79,3 +79,21 @@
 - **What broke:** `int(len(missing_df)) if not missing_df.empty else 0` — `len()` already returns 0 for empty DataFrames.
 - **How it was caught:** Gemini PR review
 - **Fix:** Simplified to `int(len(missing_df))`.
+
+## Bugs Caught by Self-Audit (2026-04-04)
+
+### 15. X-Ray Streamlit serving stale file (pages/ray2.py)
+- **What broke:** All X-Ray upgrades went to `calendar_xray.py` at repo root, but Streamlit serves from `pages/ray2.py` (auto-discovered by Streamlit's pages/ directory convention). User saw build "2026-04-03.3" despite code being at "2026-04-04.1".
+- **How it was caught:** User reported X-Ray not updating after PR merge
+- **Fix:** Synced `pages/ray2.py` with `calendar_xray.py` content. Both files now at build "2026-04-05.1". Going forward, `pages/ray2.py` is the authoritative Streamlit page.
+
+### 16. UNKNOWN_ACTION patterns not classified
+- **What broke:** "rules suspended", "offered" (amendment actions), and "incorporates" were not in KNOWN_EVENT_PATTERNS. These are real legislative actions being flagged as ❓ UNKNOWN_ACTION.
+- **How it was caught:** X-Ray data analysis showing recurring UNKNOWN_ACTION tags
+- **Fix:** Added "rules suspended", "offered", "incorporates" to KNOWN_EVENT_PATTERNS. Note: "incorporated" was already there but doesn't substring-match "incorporates".
+
+### 17. "0 missing" gold metric was misleading — only measured matched committees
+- **What broke:** X-Ray Section 7 reported "0 rows missing time that LIS has" but this metric ONLY counted rows where the committee name matched between Sheet1 and LIS Schedule. The 4,228 `no_lis_committee_match` rows — including Ledger Updates, Floor actions, and potentially real committee actions — were excluded entirely from the metric. We were celebrating 100% accuracy on a subset while ignoring a massive unexamined population.
+- **How it was caught:** User pushed back asking "how close are we really?" during data review
+- **Fix:** Added X-Ray Section 9 "Action Classification Audit" which classifies EVERY row as meeting action or administrative based on the Outcome text. The true accuracy metric is: **meeting actions without times = bugs**. Also added Ledger Health Check to find meeting actions buried in Ledger Updates (votes/reports that fell through to Journal Entry because calendar_worker couldn't match them to a schedule entry). This is the real bug count.
+- **Lesson:** Never trust a metric that excludes the hard cases. The denominator matters as much as the numerator.
