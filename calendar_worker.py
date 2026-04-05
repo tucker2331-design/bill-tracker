@@ -72,6 +72,9 @@ KNOWN_NOISE_PATTERNS = [
     "engrossed by house - committee substitute",
     "printed as engrossed", "effective -",
     "fiscal impact statement", "acts of assembly chapter",
+    # Administrative / scheduling entries (not real legislative actions)
+    "governor's action deadline", "action deadline",
+    "scheduled", "left in",
 ]
 # NOTE: "enrolled", "signed by", "presented", "communicated to governor"
 # were originally in KNOWN_NOISE but they are real legislative milestones
@@ -90,6 +93,7 @@ KNOWN_EVENT_PATTERNS = [
     "enrolled", "signed by", "presented", "communicated",
     "received", "engrossed",
     "rules suspended", "offered",
+    "requested conference committee", "acceded to request",
 ]
 
 # === STATIC FALLBACK COMMITTEE CODE MAP ===
@@ -341,10 +345,35 @@ def find_api_schedule_match(api_schedule_map, date_str, event_location, outcome_
         if has_concrete_time(k):
             return k
 
-    # --- Subcommittee -> parent committee fallback ---
+    # --- Subcommittee -> parent committee fallback (both directions) ---
+    # Direction 1 (child->parent): event is a subcommittee, look for parent schedule entry.
+    # Direction 2 (parent->child): event is a parent committee, exact match has TBA time,
+    #   look for subcommittee entries on the same date with concrete times.
     # Uses PARENT_COMMITTEE_MAP (from Committee API ParentCommitteeID) when available.
     # Falls back to normalized name prefix matching only if API parent data is unavailable.
     parent_matches = []
+    child_matches = []
+
+    # Direction 2: If exact match exists but has no concrete time, check children
+    if exact_matches and not any(has_concrete_time(k) for k in exact_matches):
+        if PARENT_COMMITTEE_MAP:
+            event_code = NORM_TO_CODE.get(target_norm)
+            if event_code:
+                # Find all child committees that have this as their parent
+                child_codes = [c for c, p in PARENT_COMMITTEE_MAP.items() if p == event_code]
+                for child_code in child_codes:
+                    child_name = COMMITTEE_CODE_MAP.get(child_code, "")
+                    if child_name:
+                        child_norm = normalize_room_key(child_name)
+                        for k in dated_keys:
+                            k_norm = normalize_room_key(k.split("_", 1)[1])
+                            if k_norm == child_norm and has_concrete_time(k):
+                                child_matches.append(k)
+        # If we found a child with a concrete time, use the earliest one
+        if child_matches:
+            return child_matches[0]
+
+    # Direction 1: event is a subcommittee, look for parent
     if not exact_matches:
         # Try structural parent lookup first (enterprise-grade: ParentCommitteeID)
         if PARENT_COMMITTEE_MAP:
@@ -633,10 +662,14 @@ def run_calendar_update():
             k = f"{d}_{c}"
             api_schedule_map[k] = {"Time": str(r.get("Time", "")), "SortTime": str(r.get("SortTime", "")), "Status": str(r.get("Status", ""))}
             
-            if "Convenes" in c:
-                chamber = "House" if "House" in c else "Senate"
+            c_lower = c.lower()
+            _is_house_convene = any(h in c_lower for h in ["house convenes", "house chamber", "house session", "house floor"])
+            _is_senate_convene = any(s in c_lower for s in ["senate convenes", "senate chamber", "senate session", "senate floor"])
+            if _is_house_convene or _is_senate_convene:
+                chamber = "House" if _is_house_convene else "Senate"
                 if d not in convene_times: convene_times[d] = {}
-                convene_times[d][chamber] = {"Time": str(r.get("Time", "")), "SortTime": str(r.get("SortTime", "")), "Name": c}
+                if chamber not in convene_times[d]:  # Don't overwrite with stale cache if live data exists
+                    convene_times[d][chamber] = {"Time": str(r.get("Time", "")), "SortTime": str(r.get("SortTime", "")), "Name": c}
     except Exception as e:
         print(f"⚠️ Cache tab empty or unreadable. ({e})")
 
@@ -721,12 +754,26 @@ def run_calendar_update():
                     map_key = f"{date_str}_{normalized_name.strip()}"
                     api_schedule_map[map_key] = {"Time": time_val, "SortTime": sort_time_24h, "Status": status}
                     
-                    if "house convenes" in owner_lower or "house chamber" in owner_lower:
+                    # Capture convene times from any floor-session-like Schedule API entry.
+                    # Primary: "House Convenes", "House Chamber" (canonical LIS names)
+                    # Expanded: "House Session", "House Floor Period", "House of Delegates"
+                    # Only set if not already set for this date (first match wins = most specific)
+                    _is_house_floor = any(h in owner_lower for h in [
+                        "house convenes", "house chamber", "house session",
+                        "house floor", "house of delegates",
+                    ])
+                    _is_senate_floor = any(s in owner_lower for s in [
+                        "senate convenes", "senate chamber", "senate session",
+                        "senate floor", "senate of virginia",
+                    ])
+                    if _is_house_floor:
                         if date_str not in convene_times: convene_times[date_str] = {}
-                        convene_times[date_str]["House"] = {"Time": time_val, "SortTime": sort_time_24h, "Name": normalized_name.strip()}
-                    elif "senate convenes" in owner_lower or "senate chamber" in owner_lower:
+                        if "House" not in convene_times[date_str]:  # Don't overwrite canonical entry
+                            convene_times[date_str]["House"] = {"Time": time_val, "SortTime": sort_time_24h, "Name": normalized_name.strip()}
+                    elif _is_senate_floor:
                         if date_str not in convene_times: convene_times[date_str] = {}
-                        convene_times[date_str]["Senate"] = {"Time": time_val, "SortTime": sort_time_24h, "Name": normalized_name.strip()}
+                        if "Senate" not in convene_times[date_str]:
+                            convene_times[date_str]["Senate"] = {"Time": time_val, "SortTime": sort_time_24h, "Name": normalized_name.strip()}
                     
                     if meeting_date <= now:
                         new_cache_entries.append([date_str, normalized_name.strip(), time_val, sort_time_24h, status])
@@ -806,6 +853,17 @@ def run_calendar_update():
             print(f"🚨 API Schedule failed: {e}")
             push_system_alert(f"🚨 LIS Schedule API failed during run: {e}. Times may be stale or unavailable.", status="OFFLINE")
 
+    # === CONVENE TIME COVERAGE DIAGNOSTIC ===
+    # Log which dates have convene times and which don't.
+    # Floor actions on dates without convene times become Journal Entry -> Ledger.
+    convene_dates_house = sorted([d for d in convene_times if "House" in convene_times[d]])
+    convene_dates_senate = sorted([d for d in convene_times if "Senate" in convene_times[d]])
+    print(f"📊 Convene time coverage: House={len(convene_dates_house)} dates, Senate={len(convene_dates_senate)} dates")
+    if convene_dates_house:
+        print(f"   House range: {convene_dates_house[0]} to {convene_dates_house[-1]}")
+    if convene_dates_senate:
+        print(f"   Senate range: {convene_dates_senate[0]} to {convene_dates_senate[-1]}")
+
     print("📡 Processing HISTORY.CSV via Sequential Turing Machine...")
     df_past = safe_fetch_csv(f"https://blob.lis.virginia.gov/lisfiles/{blob_code}/HISTORY.CSV")
     if df_past.empty: df_past = safe_fetch_csv(f"https://lis.blob.core.windows.net/lisfiles/{blob_code}/HISTORY.CSV")
@@ -829,6 +887,9 @@ def run_calendar_update():
         # Enterprise State Memory
         bill_locations = {}
         last_seen_date = {}
+        _floor_hit = 0      # Floor actions that got convene times
+        _floor_miss = 0     # Floor actions that missed convene times
+        _floor_miss_dates = set()  # Which dates are missing
 
         for _, row in df_past.iterrows():
             bill_num = row['CleanBill']
@@ -1013,9 +1074,25 @@ def run_calendar_update():
             
             if "Floor" in event_location:
                 anchor = convene_times.get(date_str, {}).get(acting_chamber_prefix.strip())
-                if anchor: time_val, sort_time_24h, event_location = anchor["Time"], anchor["SortTime"], anchor["Name"]
+                if anchor:
+                    time_val, sort_time_24h, event_location = anchor["Time"], anchor["SortTime"], anchor["Name"]
+                    _floor_hit += 1
+                else:
+                    _floor_miss += 1
+                    _floor_miss_dates.add(f"{date_str}_{acting_chamber_prefix.strip()}")
                 
             master_events.append({"Date": date_str, "Time": time_val, "SortTime": sort_time_24h, "Status": status, "Committee": event_location, "Bill": bill_num, "Outcome": outcome_text, "AgendaOrder": 999, "Source": "CSV"})
+
+    # === CONVENE TIME GAP REPORT ===
+    if _floor_miss > 0:
+        print(f"🚨 CONVENE GAP: {_floor_miss} floor actions missed convene times (vs {_floor_hit} hits)")
+        print(f"   Missing date/chamber combos ({len(_floor_miss_dates)}):")
+        for combo in sorted(_floor_miss_dates)[:20]:
+            print(f"     {combo}")
+        if len(_floor_miss_dates) > 20:
+            print(f"     ... and {len(_floor_miss_dates) - 20} more")
+    else:
+        print(f"✅ All {_floor_hit} floor actions matched convene times.")
 
     print("🧹 Filtering Noise & Slicing Viewport...")
     filtered_events = []
