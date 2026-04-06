@@ -303,9 +303,10 @@ def resolve_committee_from_refid(refid):
 
 # === ACTION SCOPE VECTORS ===
 ABSOLUTE_FLOOR_VERBS = ["reading dispensed", "read first", "read second", "read third", "passed senate", "passed house", "agreed to", "rejected", "rules suspended", "conference report agreed"]
-# Removed from ABSOLUTE_FLOOR: "signed by", "enrolled", "presented", "received",
-# "communicated", "conferees:" — these are administrative/clerk actions per HISTORY.CSV
-# data analysis. They do not require people in a room at a specific time.
+# Removed from ABSOLUTE_FLOOR: "signed by", "enrolled", "engrossed", "presented",
+# "received", "communicated", "conferees:" — these are administrative/clerk actions
+# per HISTORY.CSV data analysis. They do not require people in a room at a specific
+# time. "read second" already catches "Read second time and engrossed".
 # Added: "conference report agreed" — floor vote on conference committee compromise.
 DYNAMIC_VERBS = ["passed by", "reconsidered", "failed", "defeated", "laid on the table", "tabled", "continued", "strike", "stricken", "incorporate", "recommend", "recommends"]
 
