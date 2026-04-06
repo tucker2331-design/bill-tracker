@@ -109,20 +109,27 @@
 - **How it was caught:** X-Ray showed 147 House Appropriations meeting actions without times despite subcommittees having concrete times on the same dates.
 - **Fix:** Added Direction 2 lookup: when exact match exists but has non-concrete time, search PARENT_COMMITTEE_MAP for child committees and check if any have concrete times for the same date.
 
-### 21. "passed" missing from ABSOLUTE_FLOOR_VERBS — 408 floor actions misclassified
-- **What broke:** ABSOLUTE_FLOOR_VERBS had "passed senate" and "passed house" but NOT bare "passed". When HISTORY.CSV action text was `"Passed (40-Y 0-N)"` without the chamber name, it didn't match any absolute verb. Fell through to Memory Anchor, kept prior committee location, never got convene time → Journal Entry → Ledger.
-- **How it was caught:** X-Ray Section 9 Ledger Health Check showed "passed" as the #1 meeting action hiding in Ledger (408 count).
-- **Fix:** Replaced "passed senate"/"passed house" with bare "passed" in ABSOLUTE_FLOOR_VERBS (substring matching covers both). Added `and "passed by" not in outcome_lower` guard to prevent "passed by" (tabling) from being classified as floor.
+### 21. REVERTED — "passed" is NOT missing from floor verbs
+- **Original assumption:** Bare "passed" needed to be added to ABSOLUTE_FLOOR_VERBS because 408 Ledger bugs showed "passed" as #1 meeting action.
+- **Data disproved it:** HISTORY.CSV analysis shows "passed" ALWAYS appears as "Passed House" or "Passed Senate" — never bare. "passed house" and "passed senate" already match. The 408 bugs are floor actions that matched correctly but missed convene times.
+- **Lesson:** Check the actual data before changing classification lists. The bug was convene time coverage, not verb matching.
 
-### 22. Executive/Conference actions had no time resolution path
-- **What broke:** `event_location = "Executive Action"` and `"Conference Committee"` didn't contain "Floor", so the convene time lookup at line 1085 never fired. These actions kept "Journal Entry" as their time → collapsed to Ledger. 110 bugs (48 approved by governor, 35 conferee, 27 conference report).
-- **How it was caught:** X-Ray Ledger Health Check breakdown by action type.
-- **Fix:** Extended floor action check to `if "Floor" in event_location or event_location in ("Executive Action", "Conference Committee")`. Exec/Conference get the chamber's convene time but keep their own location label.
+### 22. REVERTED — Executive/Conference are NOT chamber-time actions
+- **Original assumption:** Governor approval and conferee actions needed chamber session times.
+- **Data disproved it:** "Approved by Governor-Chapter 7 (effective...)" has a DATE but no time — governor acts on her own schedule. "Conferees appointed by House" is an administrative listing. Conference MEETINGS happen separately from chamber sessions.
+- **Lesson:** "Happened in the legislative process" ≠ "happened during a chamber session at a specific time."
+- **Correct fix:** Reclassified governor actions, conferee appointments as ADMINISTRATIVE in X-Ray. Only "conference report agreed" (floor vote) stays as MEETING. Removed "signed by", "enrolled", "communicated", "presented", "received" from ABSOLUTE_FLOOR_VERBS — these are clerk/paperwork actions.
 
 ### 23. Schedule API has 545 entries (16.5%) with empty ScheduleTime
 - **What broke:** 545 of 3,310 Schedule API entries have no time. House Courts of Justice has ZERO times across all 98 entries. Earlier validation checked entry existence ("3,310 entries confirmed 1:1"), not time completeness.
 - **How it was caught:** Direct analysis of Schedule API response data.
 - **Status:** Not code-fixable. These committees genuinely don't publish times to the Schedule API. May need alternative time sources (Description HTML, committee agenda pages). Deferred pending code-fixable bug resolution.
+
+### 24. Administrative actions misclassified as meeting actions inflated bug count
+- **What broke:** ABSOLUTE_FLOOR_VERBS contained "signed by" (24), "enrolled" (33), "communicated" (16), "presented" (0), "received" (0), "conferees:" — these are clerk/paperwork actions that do NOT require people in a room at a specific time. Forcing them to "Floor" → missing convene time → Journal Entry → Ledger → counted as bugs. Similarly, X-Ray MEETING_ACTION_PATTERNS included governor actions and conferee appointments.
+- **How it was caught:** User challenged whether these were truly floor actions. HISTORY.CSV data analysis confirmed: "Enrolled Bill communicated to Governor" is clerk transmission, "Signed by Speaker" is ceremonial paperwork, "Approved by Governor" happens on governor's schedule.
+- **Fix:** Removed admin actions from ABSOLUTE_FLOOR_VERBS. Reclassified in X-Ray: governor actions → ADMINISTRATIVE, conferee appointments → ADMINISTRATIVE. Only "conference report agreed" (floor vote) stays as MEETING. Reordered priority: absolute_floor checked BEFORE conference.
+- **Impact:** Reduces X-Ray bug count by reclassifying ~120+ phantom bugs as correctly-untimed administrative actions.
 
 ### 20. 3,150 unclassified actions — missing pattern coverage
 - **What broke:** X-Ray action classification didn't recognize: "Governor's Action Deadline" (1,145), "Scheduled" (454), "Left in [committee]" (231), "requested conference committee" (167), "acceded to request" (84), "Blank Action" (29).

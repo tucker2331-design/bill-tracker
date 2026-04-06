@@ -104,6 +104,18 @@ Recurring mistakes to self-check BEFORE pushing code. Each pattern has been caug
 
 **Self-check:** When adding verb+qualifier patterns, ask: "Can this verb appear WITHOUT the qualifier?" If yes, use the general form with guards for false positives.
 
+**UPDATE: Pattern #15 itself was wrong.** Data analysis showed "passed" ALWAYS appears with "House"/"Senate" in Virginia HISTORY.CSV — the original "passed senate"/"passed house" patterns were correct. The real bug was convene time coverage, not verb matching. **Always check the actual data before changing classification lists.**
+
+## 16. Assuming All Legislative Actions Need Times
+**Pattern:** Classifying actions as "meeting" (needs a time) when they're really administrative. Not every action in the legislative process happens in a room at a specific time.
+**Examples:**
+- "Approved by Governor" — governor acts on her own schedule, no chamber session
+- "Conferees appointed by House" — leadership designates members, administrative listing
+- "Enrolled Bill communicated to Governor" — clerk transmission, paperwork
+- "Signed by Speaker" — ceremonial paperwork, not a timed floor event
+
+**Self-check:** Before classifying an action as "meeting", ask: "Does this require people to be physically present in a room at a specific time?" If not, it's administrative.
+
 ## 11. Substring Match Misses (Verb Tense/Form)
 **Pattern:** Using `"word" in text` for classification but the text contains a different form of the word (e.g., "incorporates" vs "incorporated").
 **Examples:**
