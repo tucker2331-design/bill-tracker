@@ -85,7 +85,7 @@ KNOWN_EVENT_PATTERNS = [
     "defeated", "tabled", "continued", "incorporate", "incorporated", "incorporates",
     "committee substitute", "floor substitute", "amended",
     "recommends", "recommend", "rereferred",
-    "discharged", "stricken", "reconsidered", "conferee",
+    "discharged", "stricken", "reconsidered", "conferee", "conference report",
     "approved by governor", "vetoed", "governor's",
     "placed on", "block vote", "voice vote", "roll call",
     "reading dispensed", "read first", "read second", "read third",
