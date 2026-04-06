@@ -76,16 +76,16 @@ KNOWN_NOISE_PATTERNS = [
     "governor's action deadline", "action deadline",
     "scheduled", "left in",
 ]
-# NOTE: "enrolled", "signed by", "presented", "communicated to governor"
-# were originally in KNOWN_NOISE but they are real legislative milestones
-# (floor actions in ABSOLUTE_FLOOR_VERBS). Moved to KNOWN_EVENT to prevent
-# silent filtering. See docs/failures/assumptions_audit.md #11.
+# NOTE: "enrolled", "signed by", "presented", "communicated" are real legislative
+# milestones (not noise) but are ADMINISTRATIVE — they don't require people in a
+# room at a specific time. They stay in KNOWN_EVENT (not silently filtered) but
+# are NOT in ABSOLUTE_FLOOR_VERBS. See docs/failures/assumptions_audit.md #11, #24.
 KNOWN_EVENT_PATTERNS = [
     "referred to", "assigned", "reported", "passed", "failed",
     "defeated", "tabled", "continued", "incorporate", "incorporated", "incorporates",
     "committee substitute", "floor substitute", "amended",
     "recommends", "recommend", "rereferred",
-    "discharged", "stricken", "reconsidered", "conferee",
+    "discharged", "stricken", "reconsidered", "conferee", "conference report",
     "approved by governor", "vetoed", "governor's",
     "placed on", "block vote", "voice vote", "roll call",
     "reading dispensed", "read first", "read second", "read third",
@@ -302,7 +302,12 @@ def resolve_committee_from_refid(refid):
     return None, None
 
 # === ACTION SCOPE VECTORS ===
-ABSOLUTE_FLOOR_VERBS = ["reading dispensed", "read first", "read second", "read third", "engrossed", "enrolled", "passed senate", "passed house", "signed by", "presented", "received", "communicated", "agreed to", "rejected", "conferees:", "rules suspended"]
+ABSOLUTE_FLOOR_VERBS = ["reading dispensed", "read first", "read second", "read third", "passed senate", "passed house", "agreed to", "rejected", "rules suspended", "conference report agreed"]
+# Removed from ABSOLUTE_FLOOR: "signed by", "enrolled", "engrossed", "presented",
+# "received", "communicated", "conferees:" — these are administrative/clerk actions
+# per HISTORY.CSV data analysis. They do not require people in a room at a specific
+# time. "read second" already catches "Read second time and engrossed".
+# Added: "conference report agreed" — floor vote on conference committee compromise.
 DYNAMIC_VERBS = ["passed by", "reconsidered", "failed", "defeated", "laid on the table", "tabled", "continued", "strike", "stricken", "incorporate", "recommend", "recommends"]
 
 def normalize_room_key(text):
@@ -925,18 +930,20 @@ def run_calendar_update():
             
             # --- ACTION SCOPE: ABSOLUTES ---
             is_exec = any(ev in outcome_lower for ev in ["approved by governor", "vetoed by governor", "governor's substitute", "governor's recommendation", "governor:"]) and not (outcome_text.startswith('H ') or outcome_text.startswith('S '))
-            is_conf = "conferee" in outcome_lower or "conference report" in outcome_lower
             is_absolute_floor = any(f in outcome_lower for f in ABSOLUTE_FLOOR_VERBS)
-            
-            if is_exec: 
+            # "conferee" alone (appointing names) = administrative, no time needed.
+            # "conference report agreed" = floor vote, caught by is_absolute_floor above.
+            is_conf = ("conferee" in outcome_lower or "conference report" in outcome_lower) and not is_absolute_floor
+
+            if is_exec:
                 event_location = "Executive Action"
                 bill_locations[bill_num] = "Executive Action"
-            elif is_conf: 
-                event_location = "Conference Committee"
-                bill_locations[bill_num] = "Conference Committee"
             elif is_absolute_floor:
                 event_location = acting_chamber_prefix + "Floor"
                 bill_locations[bill_num] = event_location # Force heal memory
+            elif is_conf:
+                event_location = "Conference Committee"
+                bill_locations[bill_num] = "Conference Committee"
             else:
                 # --- ACTION SCOPE: DYNAMIC & EXPLICIT ROOM MATCH ---
                 committee_search_prefix = "Joint " if "joint" in outcome_lower or ("house" in outcome_lower and "senate" in outcome_lower) else acting_chamber_prefix
@@ -1094,6 +1101,13 @@ def run_calendar_update():
             master_events.append({"Date": date_str, "Time": time_val, "SortTime": sort_time_24h, "Status": status, "Committee": event_location, "Bill": bill_num, "Outcome": outcome_text, "AgendaOrder": 999, "Source": "CSV"})
 
     # === CONVENE TIME GAP REPORT ===
+    print(f"📊 Convene times populated for {len(convene_times)} dates total")
+    # Check for TBA convene times (populated but useless)
+    _tba_convene = [(d, ch) for d in convene_times for ch in convene_times[d] if convene_times[d][ch].get("Time", "") in ("Time TBA", "TBA", "")]
+    if _tba_convene:
+        print(f"⚠️ {len(_tba_convene)} convene time entries have TBA/empty times (populated but not concrete):")
+        for d, ch in sorted(_tba_convene)[:10]:
+            print(f"     {d}_{ch}: Time='{convene_times[d][ch].get('Time', '')}'")
     if _floor_miss > 0:
         print(f"🚨 CONVENE GAP: {_floor_miss} floor actions missed convene times (vs {_floor_hit} hits)")
         print(f"   Missing date/chamber combos ({len(_floor_miss_dates)}):")

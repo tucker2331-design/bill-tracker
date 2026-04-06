@@ -53,12 +53,8 @@ MEETING_ACTION_PATTERNS = [
     "block vote", "voice vote", "roll call",
     "reading dispensed", "read first", "read second", "read third",
     "agreed to", "rejected", "reconsidered",
-    # Conference actions (require chamber or conferees in session)
-    "conferee", "conference report",
-    "requested conference committee", "acceded to request",
-    # Executive actions (happen at specific documented times)
-    "approved by governor", "vetoed", "governor's recommendation",
-    "governor's substitute", "governor:",
+    # Conference floor votes (chamber must be in session to vote on compromise)
+    "conference report agreed",
 ]
 
 ADMINISTRATIVE_PATTERNS = [
@@ -69,9 +65,14 @@ ADMINISTRATIVE_PATTERNS = [
     # Printing / engrossing (production office)
     "impact statement", "fiscal impact", "substitute printed",
     "reprinted", "printed as engrossed",
-    # Ceremonial / procedural milestones (announced on floor but not hearings)
+    # Ceremonial / procedural milestones (clerk/paperwork, not timed meetings)
     "enrolled", "signed by", "presented", "communicated",
     "received", "engrossed",
+    # Conference committee administrative (appointing members, printing reports, not voting)
+    "conferee", "conference report", "requested conference committee", "acceded to request",
+    # Executive branch actions (governor acts on her own schedule, not in chamber)
+    "approved by governor", "vetoed", "governor's recommendation",
+    "governor's substitute", "governor:",
     # Administrative notations
     "laid on speaker's table", "laid on clerk's desk",
     "effective -", "acts of assembly chapter",
