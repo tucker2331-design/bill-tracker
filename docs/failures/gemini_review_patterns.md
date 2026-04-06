@@ -74,6 +74,13 @@ Recurring mistakes to self-check BEFORE pushing code. Each pattern has been caug
 
 **Self-check:** Before editing, verify which file the runtime actually loads. For Streamlit: check `pages/` directory. For imports: grep for the import statement.
 
+## 11. Substring Match Misses (Verb Tense/Form)
+**Pattern:** Using `"word" in text` for classification but the text contains a different form of the word (e.g., "incorporates" vs "incorporated").
+**Examples:**
+- `"incorporated"` in KNOWN_EVENT didn't match `"incorporates hb912"` — different verb form
+
+**Self-check:** When adding a word to a classification list, also add common conjugations (past/present/plural). Or use stemming.
+
 ## 12. O(n) Scan Inside Hot Loop (Pre-calculate Reverse Maps)
 **Pattern:** Linear scan of a map to find reverse relationships inside a function called 60k+ times.
 **Examples:**
@@ -113,12 +120,6 @@ Recurring mistakes to self-check BEFORE pushing code. Each pattern has been caug
 - "Conferees appointed by House" — leadership designates members, administrative listing
 - "Enrolled Bill communicated to Governor" — clerk transmission, paperwork
 - "Signed by Speaker" — ceremonial paperwork, not a timed floor event
+- "Engrossed by House as amended" — clerk preparing official text, not a timed event
 
 **Self-check:** Before classifying an action as "meeting", ask: "Does this require people to be physically present in a room at a specific time?" If not, it's administrative.
-
-## 11. Substring Match Misses (Verb Tense/Form)
-**Pattern:** Using `"word" in text` for classification but the text contains a different form of the word (e.g., "incorporates" vs "incorporated").
-**Examples:**
-- `"incorporated"` in KNOWN_EVENT didn't match `"incorporates hb912"` — different verb form
-
-**Self-check:** When adding a word to a classification list, also add common conjugations (past/present/plural). Or use stemming.
