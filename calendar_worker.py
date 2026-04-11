@@ -628,6 +628,13 @@ def extract_rogue_agenda(url, session, target_date_dt=None, depth=0):
         print(f"⚠️ Agenda extraction failed for {url}: {e}")
     return sorted(list(found_bills)), False
 
+
+def _is_non_concrete_time(value):
+    """Check if a time value is a non-concrete placeholder (TBA, empty, etc.)."""
+    t = str(value or "").strip().lower()
+    return t in {"", "time tba", "tba", "journal entry", "ledger", "none", "nan"}
+
+
 def run_calendar_update():
     http_session = get_armored_session()
     
@@ -848,10 +855,6 @@ def run_calendar_update():
                 # If LIS provides multiple schedule rows for the same date+committee,
                 # promote any concrete time to sibling API/API_Skeleton rows that are
                 # still placeholder time values.
-                def _is_non_concrete_time(value):
-                    t = str(value or "").strip().lower()
-                    return t in {"", "time tba", "tba", "journal entry", "ledger", "none", "nan"}
-
                 best_times = {}
                 for ev in master_events:
                     if not str(ev.get("Source", "")).startswith("API"):
@@ -892,7 +895,7 @@ def run_calendar_update():
     # This is an approximation, flagged via "~" prefix in the Time field.
     _session_markers = {}  # date -> chamber -> earliest (time, sort_time, name)
     for ev in master_events:
-        if ev.get("Source") != "API":
+        if not str(ev.get("Source", "")).startswith("API"):
             continue
         committee = str(ev.get("Committee", ""))
         c_lower = committee.lower()
@@ -914,7 +917,8 @@ def run_calendar_update():
     _fallback_count = 0
     for date, chambers in _session_markers.items():
         for chamber, (t, sort_t, name) in chambers.items():
-            if date not in convene_times or chamber not in convene_times.get(date, {}):
+            existing_time = convene_times.get(date, {}).get(chamber, {}).get("Time", "")
+            if date not in convene_times or chamber not in convene_times.get(date, {}) or _is_non_concrete_time(existing_time):
                 if date not in convene_times:
                     convene_times[date] = {}
                 convene_times[date][chamber] = {

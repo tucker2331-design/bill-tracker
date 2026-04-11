@@ -175,3 +175,13 @@
 - **What broke:** "Committee substitute printed 26106147D-H1" matched "committee substitute" in MEETING_ACTION_PATTERNS before "substitute printed" in ADMINISTRATIVE_PATTERNS. Printing is clerk work, not a meeting. 20 Ledger actions counted as meeting bugs when they're actually admin.
 - **How it was caught:** Investigation of 66 "has convene but still bug" entries revealed they were committee printing/offering actions, not floor actions.
 - **Fix:** Added ADMIN_OVERRIDE_PATTERNS list with "substitute printed" and "committee substitute printed". The classify_action function checks these BEFORE meeting patterns. More specific admin patterns win over broader meeting patterns.
+
+### 32. Session marker fallback skipped dates with non-concrete convene times
+- **What broke:** Fallback logic checked `chamber not in convene_times[date]` — but the entry might already exist with "Time TBA" or empty string. The fallback's derived time from adjourned/recessed events (which is real data) should overwrite placeholders.
+- **How it was caught:** Gemini PR#15 review identified the gap.
+- **Fix:** Added `_is_non_concrete_time(existing_time)` check to the fallback condition. Now overwrites placeholders with derived times.
+
+### 33. `_is_non_concrete_time` defined inside try block — inaccessible from outer scope
+- **What broke:** The helper function was defined inside the Schedule API `try` block. The session marker fallback code outside that scope couldn't call it.
+- **How it was caught:** Gemini PR#15 review + self-audit when implementing Finding 1 fix.
+- **Fix:** Hoisted `_is_non_concrete_time` to module level (before `run_calendar_update`). Removed the nested definition. All call sites now use the same module-level function.
