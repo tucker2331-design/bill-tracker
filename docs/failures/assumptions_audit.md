@@ -151,3 +151,27 @@
 - **What broke:** HISTORY.CSV data analysis showed 574 out of 61,841 actions didn't match any KNOWN_EVENT or KNOWN_NOISE pattern. These were flagged as ❓ UNKNOWN_ACTION in the worker and counted as "unclassified" in X-Ray Section 9. Key missing patterns: "insisted" (126), "taken up" (144), "moved from uncontested calendar" (137), "reading waived" (17+), "withdrawn" (~17), "budget amendments" (12), "elected/election by" (7), "concurred" (8), "emergency clause" (3), "recommitted" (3).
 - **How it was caught:** X-Ray Section 9 showing 749 unclassified actions. Direct HISTORY.CSV analysis confirmed 574 in raw data (difference due to diagnostic tag prepending in Sheet1).
 - **Fix:** Added 19 new MEETING patterns and 6 new ADMINISTRATIVE patterns to both worker (KNOWN_EVENT/KNOWN_NOISE) and X-Ray (MEETING_ACTION/ADMINISTRATIVE). Remaining ~25 unclassified are data fragments ("S", "Floor") and "[Committee Name] Substitute/Amendment" entries that can't be caught without false positives.
+
+### 28. Administrative milestones placed in KNOWN_NOISE — silently deleted from output
+- **What broke:** 6 patterns ("recommitted", "no further action taken", "unanimous consent to introduce", "introduced at the request of", "budget amendments available", "moved from") were added to KNOWN_NOISE instead of KNOWN_EVENT. The worker's noise filter (`if is_known_noise and not is_known_event: continue`) silently deletes noise-only items from the entire output. These are legislative milestones that lobbyists need to see in the Ledger — deleting them violates bank-grade reliability and data preservation standards.
+- **How it was caught:** Gemini PR#14 audit identified the misplacement. Codex independently flagged "moved from" as overly broad.
+- **Root cause:** Developer mentally equated "administrative" with "unimportant" and jumped to KNOWN_NOISE without tracing the code path. This is an assumption violation — the list name "NOISE" doesn't fully describe its runtime behavior (silent deletion). The consuming code was not read before making the classification decision.
+- **Fix:** Moved all 6 patterns to KNOWN_EVENT (preserved in output). Removed bare "moved from" entirely (too broad, matches "removed from"). Added CLAUDE.md pre-push checks #8 (trace the code path) and #9 (100% confidence gate).
+- **Lesson:** KNOWN_NOISE = silent deletion. Only truly disposable content (fiscal impact statements, reprints, blank actions) belongs there. When in doubt, use KNOWN_EVENT. An extra Ledger row is infinitely better than a missing legislative milestone. This principle must be enforced by tracing the consuming code, not by inferring from list names.
+
+### 29. Double-space in Schedule API OwnerName broke convene time matching (Feb 15 Pro Forma)
+- **What broke:** "House  Convenes - Pro Forma Session" (double space between "House" and "Convenes") in Schedule API OwnerName. Worker checks `"house convenes" in owner_lower` — single-space substring doesn't exist in double-space string. Result: 169 House floor actions on Feb 15 got no convene time.
+- **How it was caught:** Root cause analysis of 905 Ledger meeting bugs by date. Feb 15 had "House  Convenes - Pro Forma Session" with time 1:00 PM but all House floor actions were in Ledger.
+- **Fix:** Normalize whitespace with `re.sub(r'\s+', ' ', ...)` on both `owner_lower` and `normalized_name` before all matching logic. Also applied to cache reader for consistency.
+- **Lesson:** Never assume external API data has clean whitespace. Always normalize before substring matching.
+
+### 30. Missing "House Convenes" entry in Schedule API for Feb 17 (264 bugs)
+- **What broke:** The LIS Schedule API had no "House Convenes" entry for Feb 17, 2026, despite the House clearly being in session (264 bills passed, "House adjourned" at 1:05 PM, "House recessed" at 12:06 PM). Floor actions couldn't get convene times.
+- **How it was caught:** Same root cause analysis. Feb 17 had Senate Convenes (10:30 AM) but no House equivalent.
+- **Fix:** Added session marker fallback: after Schedule API processing, scan for dates with "adjourned"/"recessed" entries but no convene entry. Use the earliest session marker time as approximate convene time, prefixed with "~" to indicate it's derived, not authoritative.
+- **Lesson:** The Schedule API is not always complete. Session markers (adjourned, recessed) are indirect evidence of session activity and can serve as fallback time sources.
+
+### 31. "Committee substitute printed" misclassified as meeting action (20 phantom bugs)
+- **What broke:** "Committee substitute printed 26106147D-H1" matched "committee substitute" in MEETING_ACTION_PATTERNS before "substitute printed" in ADMINISTRATIVE_PATTERNS. Printing is clerk work, not a meeting. 20 Ledger actions counted as meeting bugs when they're actually admin.
+- **How it was caught:** Investigation of 66 "has convene but still bug" entries revealed they were committee printing/offering actions, not floor actions.
+- **Fix:** Added ADMIN_OVERRIDE_PATTERNS list with "substitute printed" and "committee substitute printed". The classify_action function checks these BEFORE meeting patterns. More specific admin patterns win over broader meeting patterns.
