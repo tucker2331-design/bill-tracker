@@ -467,7 +467,7 @@ def get_active_session_info(http_session):
                     d = e.get('ActualDate') or e.get('ProjectedDate')
                     if d:
                         try: valid_dates.append(pd.to_datetime(d).replace(tzinfo=None))
-                        except: pass
+                        except (ValueError, TypeError): pass
                 if valid_dates: return min(valid_dates), max(valid_dates)
                 return now, now 
 
@@ -481,7 +481,8 @@ def get_active_session_info(http_session):
                 if str(s.get('SessionYear')) == str(current_year):
                     start, end = extract_dates(s)
                     return {"code": str(s.get('SessionCode')), "start": start, "end": end + timedelta(days=14)}, True
-    except: pass
+    except Exception as e:
+        print(f"⚠️ Session API parsing failed: {e}")
     return None, False
 
 def safe_fetch_csv(url):
@@ -493,7 +494,8 @@ def safe_fetch_csv(url):
             raw_text = res.content.decode('iso-8859-1')
             df = pd.read_csv(io.StringIO(raw_text))
             return df.rename(columns=lambda x: x.strip())
-    except: pass
+    except Exception as e:
+        print(f"⚠️ CSV fetch failed for {url}: {e}")
     return pd.DataFrame()
 
 def generate_date_variants(dt):
@@ -1101,7 +1103,10 @@ def run_calendar_update():
             master_events.append({"Date": date_str, "Time": time_val, "SortTime": sort_time_24h, "Status": status, "Committee": event_location, "Bill": bill_num, "Outcome": outcome_text, "AgendaOrder": 999, "Source": "CSV"})
 
     # === CONVENE TIME GAP REPORT ===
+    scrape_start_str = scrape_start.strftime('%Y-%m-%d')
     print(f"📊 Convene times populated for {len(convene_times)} dates total")
+    _scrape_convene = {d for d in convene_times if d >= scrape_start_str}
+    print(f"   In scrape window (>= {scrape_start_str}): {len(_scrape_convene)} dates")
     # Check for TBA convene times (populated but useless)
     _tba_convene = [(d, ch) for d in convene_times for ch in convene_times[d] if convene_times[d][ch].get("Time", "") in ("Time TBA", "TBA", "")]
     if _tba_convene:
@@ -1109,12 +1114,21 @@ def run_calendar_update():
         for d, ch in sorted(_tba_convene)[:10]:
             print(f"     {d}_{ch}: Time='{convene_times[d][ch].get('Time', '')}'")
     if _floor_miss > 0:
+        # Separate pre-scrape misses (expected) from in-window misses (real bugs)
+        _in_window_misses = {c for c in _floor_miss_dates if c.split("_")[0] >= scrape_start_str}
+        _pre_window_misses = _floor_miss_dates - _in_window_misses
         print(f"🚨 CONVENE GAP: {_floor_miss} floor actions missed convene times (vs {_floor_hit} hits)")
-        print(f"   Missing date/chamber combos ({len(_floor_miss_dates)}):")
-        for combo in sorted(_floor_miss_dates)[:20]:
-            print(f"     {combo}")
-        if len(_floor_miss_dates) > 20:
-            print(f"     ... and {len(_floor_miss_dates) - 20} more")
+        print(f"   Missing date/chamber combos: {len(_floor_miss_dates)} total")
+        print(f"   Pre-scrape (expected, state-building only): {len(_pre_window_misses)}")
+        print(f"   In scrape window (REAL BUGS): {len(_in_window_misses)}")
+        if _in_window_misses:
+            for combo in sorted(_in_window_misses)[:20]:
+                print(f"     🔴 {combo}")
+        if _pre_window_misses:
+            for combo in sorted(_pre_window_misses)[:5]:
+                print(f"     ⚪ {combo} (pre-scrape)")
+            if len(_pre_window_misses) > 5:
+                print(f"     ... and {len(_pre_window_misses) - 5} more pre-scrape combos")
     else:
         print(f"✅ All {_floor_hit} floor actions matched convene times.")
 
@@ -1168,11 +1182,30 @@ def run_calendar_update():
                     existing_keys = {f"{r.get('Date', '')}_{r.get('Committee', '')}".strip().lower() for r in cache_records} if cache_sheet else set()
                     unique_new_entries = [e for e in new_cache_entries if f"{e[0]}_{e[1]}".strip().lower() not in existing_keys]
                     if unique_new_entries:
-                        cache_sheet.append_rows(unique_new_entries)
-                        print(f"✅ Wrote {len(unique_new_entries)} new records to API_Cache.")
+                        try:
+                            cache_sheet.append_rows(unique_new_entries)
+                            print(f"✅ Wrote {len(unique_new_entries)} new records to API_Cache.")
+                        except Exception as append_err:
+                            if "10000000" in str(append_err) or "limit" in str(append_err).lower():
+                                # Cache hit cell limit — compact by replacing with deduplicated data
+                                print(f"⚠️ API_Cache hit cell limit. Compacting...")
+                                merged = {}
+                                for r in cache_records:
+                                    k = f"{r.get('Date', '')}_{r.get('Committee', '')}".strip().lower()
+                                    merged[k] = [str(r.get("Date", "")), str(r.get("Committee", "")),
+                                                 str(r.get("Time", "")), str(r.get("SortTime", "")),
+                                                 str(r.get("Status", ""))]
+                                for e in new_cache_entries:
+                                    k = f"{e[0]}_{e[1]}".strip().lower()
+                                    merged[k] = e  # new data overwrites stale
+                                compacted = [["Date", "Committee", "Time", "SortTime", "Status"]] + list(merged.values())
+                                cache_sheet.clear()
+                                cache_sheet.update(values=compacted, range_name="A1")
+                                print(f"✅ Compacted API_Cache: {len(merged)} unique entries (was {len(cache_records)} rows).")
+                            else:
+                                raise append_err
                 except Exception as e:
                     print(f"🚨 CRITICAL: Failed to update API_Cache: {e}")
-                    # Inject alert directly into final_df so it's visible on Sheet1
                     cache_alert = pd.DataFrame([{
                         "Date": now.strftime("%Y-%m-%d"),
                         "Time": now.strftime("%I:%M %p"),
