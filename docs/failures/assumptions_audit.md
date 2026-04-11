@@ -146,3 +146,8 @@
 - **What broke:** Three bare `except: pass` blocks silently swallowed all exceptions: Session API parsing (line 484), CSV fetch (line 496), and date parsing in session events (line 470). Any failure in these paths produced no log output, making debugging impossible.
 - **How it was caught:** Code audit against zero-trust data standards.
 - **Fix:** Replaced with specific exception types (`ValueError`, `TypeError`) for date parsing and `Exception` with `print()` logging for Session API and CSV fetch.
+
+### 27. 574 unclassified actions — missing pattern coverage (session 261 data analysis)
+- **What broke:** HISTORY.CSV data analysis showed 574 out of 61,841 actions didn't match any KNOWN_EVENT or KNOWN_NOISE pattern. These were flagged as ❓ UNKNOWN_ACTION in the worker and counted as "unclassified" in X-Ray Section 9. Key missing patterns: "insisted" (126), "taken up" (144), "moved from uncontested calendar" (137), "reading waived" (17+), "withdrawn" (various, ~17), "budget amendments" (12), "elected/election by" (7), "concurred" (8), "emergency clause" (3), "recommitted" (3).
+- **How it was caught:** X-Ray Section 9 showing 749 unclassified actions. Direct HISTORY.CSV analysis confirmed 574 in raw data (difference due to diagnostic tag prepending in Sheet1).
+- **Fix:** Added 19 new MEETING patterns and 6 new ADMINISTRATIVE patterns to both worker (KNOWN_EVENT/KNOWN_NOISE) and X-Ray (MEETING_ACTION/ADMINISTRATIVE). Remaining ~25 unclassified are data fragments ("S", "Floor") and "[Committee Name] Substitute/Amendment" entries that can't be caught without false positives.
