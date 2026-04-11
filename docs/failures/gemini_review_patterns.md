@@ -123,3 +123,18 @@ Recurring mistakes to self-check BEFORE pushing code. Each pattern has been caug
 - "Engrossed by House as amended" — clerk preparing official text, not a timed event
 
 **Self-check:** Before classifying an action as "meeting", ask: "Does this require people to be physically present in a room at a specific time?" If not, it's administrative.
+
+## 17. Non-Atomic Clear+Write on External Storage
+**Pattern:** Using `sheet.clear()` followed by `sheet.update()` to replace data. If the update fails after the clear, data is lost.
+**Examples:**
+- API_Cache compaction: `cache_sheet.clear()` then `cache_sheet.update(values=compacted)` — if update threw, cache was gone (PR#13)
+
+**Self-check:** Any clear-then-write on external storage needs a rollback path. Either: (1) write new data first, then delete old, or (2) keep original data in memory and restore on failure. Also chunk large writes to stay under API payload limits.
+
+## 18. Silent `pass` in Exception Handlers
+**Pattern:** Using `except: pass` or `except SomeError: pass` without logging. The error is swallowed and invisible in logs, making debugging impossible.
+**Examples:**
+- Date parsing in Session API events used `except (ValueError, TypeError): pass` with no log (PR#13)
+- Three bare `except: pass` blocks in session/CSV parsing (PR#13, initial fix)
+
+**Self-check:** Every `except` block must either log or re-raise. `pass` alone is only acceptable for truly expected, high-frequency noise (e.g., expected parse failures on known-bad data) and even then should be documented with a comment explaining why.
