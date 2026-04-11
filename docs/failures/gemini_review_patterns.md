@@ -153,3 +153,24 @@ Recurring mistakes to self-check BEFORE pushing code. Each pattern has been caug
 - Bare "substitute" or "amendment" considered but rejected — would catch "substitute printed" (PR#14)
 
 **Self-check:** Before adding any pattern shorter than 10 characters, grep HISTORY.CSV for all lines containing it and verify every match should be classified the same way. Prefer the most specific pattern that covers the intended cases.
+
+## 21. Fallback Logic Skips Non-Concrete Placeholders
+**Pattern:** A fallback/override path checks "does an entry exist?" but not "is the existing entry useful?" Non-concrete placeholder values ("Time TBA", "", "TBA") occupy the slot and prevent better data from replacing them.
+**Examples:**
+- Session marker fallback checked `chamber not in convene_times[date]` — but the entry might contain "Time TBA". A real derived time from adjourned/recessed events should overwrite it (PR#15)
+
+**Self-check:** When guarding a fallback with "already exists", also check whether the existing value is concrete/useful. Use `_is_non_concrete_time()` or equivalent.
+
+## 22. Inconsistent Source Filter Patterns
+**Pattern:** One code path uses `Source != "API"` while sibling paths use `.startswith("API")`. The latter catches both "API" and "API_Skeleton" sources, the former misses API_Skeleton.
+**Examples:**
+- Session marker fallback used `!= "API"` while time promotion (lines 857, 873) used `.startswith("API")` (PR#15)
+
+**Self-check:** Use `.startswith("API")` consistently for all API source checks. Never use `== "API"` or `!= "API"` — it's fragile if new API sub-types are added.
+
+## 23. Helper Functions Defined Inside Conditional/Try Blocks
+**Pattern:** A utility function defined inside a `try` or `if` block is only accessible within that scope. Other code paths that need the same logic can't call it.
+**Examples:**
+- `_is_non_concrete_time()` defined inside Schedule API `try` block (line 851), needed by session marker fallback outside that scope (line 917) (PR#15)
+
+**Self-check:** Pure utility functions (no closures over local variables) must be at module level or at the top of the enclosing function, never inside conditional blocks.

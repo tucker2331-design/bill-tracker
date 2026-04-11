@@ -628,6 +628,13 @@ def extract_rogue_agenda(url, session, target_date_dt=None, depth=0):
         print(f"⚠️ Agenda extraction failed for {url}: {e}")
     return sorted(list(found_bills)), False
 
+
+def _is_non_concrete_time(value):
+    """Check if a time value is a non-concrete placeholder (TBA, empty, etc.)."""
+    t = str(value or "").strip().lower()
+    return t in {"", "time tba", "tba", "journal entry", "ledger", "none", "nan"}
+
+
 def run_calendar_update():
     http_session = get_armored_session()
     
@@ -695,7 +702,7 @@ def run_calendar_update():
             k = f"{d}_{c}"
             api_schedule_map[k] = {"Time": str(r.get("Time", "")), "SortTime": str(r.get("SortTime", "")), "Status": str(r.get("Status", ""))}
             
-            c_lower = c.lower()
+            c_lower = re.sub(r'\s+', ' ', c).lower()
             _is_house_convene = any(h in c_lower for h in ["house convenes", "house chamber", "house session", "house floor", "house of delegates"])
             _is_senate_convene = any(s in c_lower for s in ["senate convenes", "senate chamber", "senate session", "senate floor", "senate of virginia"])
             if _is_house_convene or _is_senate_convene:
@@ -743,7 +750,8 @@ def run_calendar_update():
                     if not (test_start_date <= meeting_date <= test_end_date): continue
                     date_str = meeting_date.strftime('%Y-%m-%d')
                     raw_owner_name = str(meeting.get('OwnerName', '')).strip()
-                    owner_lower = raw_owner_name.lower()
+                    # Normalize whitespace: "House  Convenes" -> "house convenes"
+                    owner_lower = re.sub(r'\s+', ' ', raw_owner_name).lower()
                     is_cancelled = meeting.get('IsCancelled', False)
                     status = "CANCELLED" if is_cancelled else ""
                     
@@ -772,7 +780,7 @@ def run_calendar_update():
                     elif "senate" in owner_lower: chamber_prefix = "Senate "
                     else: chamber_prefix = ""
 
-                    normalized_name = raw_owner_name
+                    normalized_name = re.sub(r'\s+', ' ', raw_owner_name).strip()
                     sub_regex = re.compile(r'\bsubcommittee\b|\bsub-committee\b|\bsub\.\b|\bsub #\b')
                     is_explicit_sub = bool(sub_regex.search(owner_lower))
 
@@ -847,10 +855,6 @@ def run_calendar_update():
                 # If LIS provides multiple schedule rows for the same date+committee,
                 # promote any concrete time to sibling API/API_Skeleton rows that are
                 # still placeholder time values.
-                def _is_non_concrete_time(value):
-                    t = str(value or "").strip().lower()
-                    return t in {"", "time tba", "tba", "journal entry", "ledger", "none", "nan"}
-
                 best_times = {}
                 for ev in master_events:
                     if not str(ev.get("Source", "")).startswith("API"):
@@ -884,6 +888,47 @@ def run_calendar_update():
         except Exception as e:
             print(f"🚨 API Schedule failed: {e}")
             push_system_alert(f"🚨 LIS Schedule API failed during run: {e}. Times may be stale or unavailable.", status="OFFLINE")
+
+    # === SESSION MARKER FALLBACK FOR MISSING CONVENE TIMES ===
+    # Some dates have session activity (adjourned, recessed) but no "Convenes" entry.
+    # Use the earliest session marker as a fallback convene time.
+    # This is an approximation, flagged via "~" prefix in the Time field.
+    _session_markers = {}  # date -> chamber -> earliest (time, sort_time, name)
+    for ev in master_events:
+        if not str(ev.get("Source", "")).startswith("API"):
+            continue
+        committee = str(ev.get("Committee", ""))
+        c_lower = committee.lower()
+        if not any(k in c_lower for k in ["adjourned", "recessed", "reconvene"]):
+            continue
+        t = ev.get("Time", "")
+        if not t or t.lower() in ("", "time tba", "tba"):
+            continue
+        date = ev.get("Date", "")
+        chamber = "House" if "house" in c_lower else "Senate" if "senate" in c_lower else None
+        if not chamber or not date:
+            continue
+        sort_t = ev.get("SortTime", "23:59")
+        if date not in _session_markers:
+            _session_markers[date] = {}
+        if chamber not in _session_markers[date] or sort_t < _session_markers[date][chamber][1]:
+            _session_markers[date][chamber] = (t, sort_t, committee)
+
+    _fallback_count = 0
+    for date, chambers in _session_markers.items():
+        for chamber, (t, sort_t, name) in chambers.items():
+            existing_time = convene_times.get(date, {}).get(chamber, {}).get("Time", "")
+            if date not in convene_times or chamber not in convene_times.get(date, {}) or _is_non_concrete_time(existing_time):
+                if date not in convene_times:
+                    convene_times[date] = {}
+                convene_times[date][chamber] = {
+                    "Time": f"~{t}",
+                    "SortTime": sort_t,
+                    "Name": f"{chamber} Convenes",
+                }
+                _fallback_count += 1
+    if _fallback_count:
+        print(f"⚠️ {_fallback_count} convene times derived from session markers (adjourned/recessed fallback)")
 
     # === CONVENE TIME COVERAGE DIAGNOSTIC ===
     # Log which dates have convene times and which don't.

@@ -207,14 +207,27 @@ def classify_join_gaps(joined: pd.DataFrame) -> pd.DataFrame:
     return out
 
 
+# Specific admin patterns that override broader meeting matches.
+# "committee substitute printed" contains "committee substitute" (meeting) but
+# the action is printing (admin). The more specific pattern wins.
+ADMIN_OVERRIDE_PATTERNS = [
+    "substitute printed",
+    "committee substitute printed",
+]
+
 def classify_action(outcome_text: str) -> str:
     """Classify a legislative action as meeting, administrative, or unclassified.
 
     Returns one of: 'meeting', 'administrative', 'unclassified'.
     When both meeting and administrative patterns match (e.g. "reported and rereferred"),
     meeting wins — the action happened in a meeting even if it also triggered routing.
+    Exception: ADMIN_OVERRIDE_PATTERNS are more specific and always win.
     """
     lower = str(outcome_text).lower()
+    # Check admin overrides first — more specific patterns that would otherwise
+    # be misclassified by broader meeting patterns
+    if any(p in lower for p in ADMIN_OVERRIDE_PATTERNS):
+        return "administrative"
     is_meeting = any(p in lower for p in MEETING_ACTION_PATTERNS)
     is_admin = any(p in lower for p in ADMINISTRATIVE_PATTERNS)
     if is_meeting:
