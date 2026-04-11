@@ -55,6 +55,15 @@ MEETING_ACTION_PATTERNS = [
     "agreed to", "rejected", "reconsidered",
     # Conference floor votes (chamber must be in session to vote on compromise)
     "conference report agreed",
+    # Parliamentary maneuvering and conference resolution (chamber in session)
+    "insisted", "taken up", "reconsideration of", "receded",
+    "reading waived", "reading of substitute waived", "reading of amendment waived",
+    "reading of amendments waived", "reading of amendment not waived",
+    "elected by", "election by", "elected to by",
+    "emergency clause", "requested second conference committee",
+    "motion for", "vote:",
+    "withdrawn", "concurred",
+    "removed from the table",
 ]
 
 ADMINISTRATIVE_PATTERNS = [
@@ -84,6 +93,13 @@ ADMINISTRATIVE_PATTERNS = [
     "left in",
     # Blank / empty actions
     "blank action",
+    # Calendar/procedural notations
+    "moved from uncontested calendar",
+    "no further action taken",
+    "unanimous consent to introduce", "introduced at the request of",
+    "budget amendments available",
+    "recommitted",
+    "fiscal impact review",
 ]
 
 
