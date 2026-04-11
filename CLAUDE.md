@@ -35,6 +35,8 @@ Write your code. Then before committing, run through this checklist:
 5. **Architecture Conformance**: Verify implementation matches the data flow in `docs/architecture/`. Do not invent new data paths without updating the doc.
 6. **Zero-Trust Data**: Verify no silent failures or bare `except: pass` anywhere in parsing or API logic. All brittle endpoints must fail gracefully with categorized alerts (severity + category). No unhandled exceptions.
 7. **Cross-List Validation**: If modifying classification lists (KNOWN_EVENT, KNOWN_NOISE, MEETING_ACTION, ADMINISTRATIVE, ABSOLUTE_FLOOR_VERBS, DYNAMIC_VERBS), verify no contradictions between lists. `set(LIST_A) & set(LIST_B)` should be intentional, not accidental.
+8. **Trace the Code Path**: For EVERY item added to ANY list, trace what the runtime does with it. Read the consuming code. KNOWN_NOISE items are **silently deleted** — only truly disposable content belongs there. KNOWN_EVENT items are **preserved**. If you can't state with certainty what happens to an item at runtime, you haven't done your job. Never assume a list name describes its behavior — read the code that consumes it.
+9. **100% Confidence Gate**: Do not commit unless you are 100% confident every change is correct. If any doubt exists, investigate it first. "Probably works" is not acceptable — prove it works with data. Run the cross-list validation script against HISTORY.CSV before every push that touches classification lists.
 
 ### PHASE 3: Write-Back Mandate (After Every Task)
 
