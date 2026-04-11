@@ -467,7 +467,8 @@ def get_active_session_info(http_session):
                     d = e.get('ActualDate') or e.get('ProjectedDate')
                     if d:
                         try: valid_dates.append(pd.to_datetime(d).replace(tzinfo=None))
-                        except (ValueError, TypeError): pass
+                        except (ValueError, TypeError):
+                            print(f"⚠️ Session date parsing failed for: {d}")
                 if valid_dates: return min(valid_dates), max(valid_dates)
                 return now, now 
 
@@ -1187,7 +1188,7 @@ def run_calendar_update():
                             print(f"✅ Wrote {len(unique_new_entries)} new records to API_Cache.")
                         except Exception as append_err:
                             if "10000000" in str(append_err) or "limit" in str(append_err).lower():
-                                # Cache hit cell limit — compact by replacing with deduplicated data
+                                # Cache hit cell limit — compact by deduplicating and replacing
                                 print(f"⚠️ API_Cache hit cell limit. Compacting...")
                                 merged = {}
                                 for r in cache_records:
@@ -1198,10 +1199,34 @@ def run_calendar_update():
                                 for e in new_cache_entries:
                                     k = f"{e[0]}_{e[1]}".strip().lower()
                                     merged[k] = e  # new data overwrites stale
-                                compacted = [["Date", "Committee", "Time", "SortTime", "Status"]] + list(merged.values())
+                                header = [["Date", "Committee", "Time", "SortTime", "Status"]]
+                                rows = list(merged.values())
+                                # Write in chunks to stay under Sheets API payload limits
+                                CHUNK_SIZE = 10000
                                 cache_sheet.clear()
-                                cache_sheet.update(values=compacted, range_name="A1")
-                                print(f"✅ Compacted API_Cache: {len(merged)} unique entries (was {len(cache_records)} rows).")
+                                try:
+                                    cache_sheet.update(values=header, range_name="A1")
+                                    for i in range(0, len(rows), CHUNK_SIZE):
+                                        chunk = rows[i:i + CHUNK_SIZE]
+                                        start_row = i + 2  # row 1 is header
+                                        cache_sheet.update(values=chunk, range_name=f"A{start_row}")
+                                    print(f"✅ Compacted API_Cache: {len(merged)} unique entries (was {len(cache_records)} rows).")
+                                except Exception as compact_err:
+                                    # Compaction write failed after clear — attempt to restore original data
+                                    print(f"🚨 Compaction write failed: {compact_err}. Attempting rollback...")
+                                    try:
+                                        restore_rows = header
+                                        for r in cache_records:
+                                            restore_rows.append([str(r.get("Date", "")), str(r.get("Committee", "")),
+                                                                 str(r.get("Time", "")), str(r.get("SortTime", "")),
+                                                                 str(r.get("Status", ""))])
+                                        for i in range(0, len(restore_rows), CHUNK_SIZE):
+                                            chunk = restore_rows[i:i + CHUNK_SIZE]
+                                            cache_sheet.update(values=chunk, range_name=f"A{i + 1}")
+                                        print(f"✅ Rollback succeeded: restored {len(cache_records)} original rows.")
+                                    except Exception as rollback_err:
+                                        print(f"🚨 CRITICAL: Rollback also failed: {rollback_err}. Cache data lost.")
+                                    raise compact_err
                             else:
                                 raise append_err
                 except Exception as e:
