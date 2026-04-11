@@ -135,3 +135,14 @@
 - **How it was caught:** User challenged whether these were truly floor actions. Gemini caught "engrossed" inconsistency (admin in X-Ray but floor in worker). HISTORY.CSV data analysis confirmed all are clerk actions.
 - **Fix:** Removed admin actions from ABSOLUTE_FLOOR_VERBS. Reclassified in X-Ray: governor actions → ADMINISTRATIVE, conferee appointments → ADMINISTRATIVE. Only "conference report agreed" (floor vote) stays as MEETING. Reordered priority: absolute_floor checked BEFORE conference.
 - **Impact:** Reduces X-Ray bug count by reclassifying ~170+ phantom bugs as correctly-untimed administrative actions.
+
+### 25. API_Cache hit Google Sheets 10M cell limit — cache writes silently failing
+- **What broke:** API_Cache sheet accumulated rows across many runs (3,310 Schedule entries × 5 columns per run). Despite dedup logic preventing exact duplicates, the sheet grew past Google Sheets' 10,000,000 cell limit. All subsequent `append_rows` calls failed with `APIError: [400]`, meaning schedule data was no longer being cached for offline fallback.
+- **How it was caught:** Worker log analysis showed CRITICAL alert: "Failed to update API_Cache: APIError: [400]: This action would increase the number of cells in the workbook above the limit of 10000000 cells."
+- **Fix:** Added cache compaction: when `append_rows` fails due to cell limit, merge all existing + new entries into a deduplicated dict (keyed by Date+Committee), clear the sheet, and write the compacted data. New data overwrites stale entries.
+- **Lesson:** Any append-only cache in Google Sheets needs a compaction strategy. The cell limit is 10M across ALL sheets in the workbook.
+
+### 26. Bare `except: pass` blocks hid failures in Session API, CSV fetch, and date parsing
+- **What broke:** Three bare `except: pass` blocks silently swallowed all exceptions: Session API parsing (line 484), CSV fetch (line 496), and date parsing in session events (line 470). Any failure in these paths produced no log output, making debugging impossible.
+- **How it was caught:** Code audit against zero-trust data standards.
+- **Fix:** Replaced with specific exception types (`ValueError`, `TypeError`) for date parsing and `Exception` with `print()` logging for Session API and CSV fetch.
