@@ -75,12 +75,7 @@ KNOWN_NOISE_PATTERNS = [
     # Administrative / scheduling entries (not real legislative actions)
     "governor's action deadline", "action deadline",
     "scheduled", "left in",
-    # Calendar/procedural notations
-    "moved from uncontested calendar", "moved from",
-    "no further action taken",
-    "unanimous consent to introduce", "introduced at the request of",
-    "budget amendments available",
-    "recommitted",
+    "blank action", "fiscal impact review",
 ]
 # NOTE: "enrolled", "signed by", "presented", "communicated" are real legislative
 # milestones (not noise) but are ADMINISTRATIVE — they don't require people in a
@@ -108,6 +103,11 @@ KNOWN_EVENT_PATTERNS = [
     "emergency clause", "requested second conference committee",
     "motion for", "vote:",
     "withdrawn", "concurred",
+    # Administrative milestones (preserved for Ledger, not silently filtered)
+    "moved from uncontested calendar", "no further action taken",
+    "unanimous consent to introduce", "introduced at the request of",
+    "budget amendments available", "recommitted",
+    "removed from the table",
 ]
 
 # === STATIC FALLBACK COMMITTEE CODE MAP ===

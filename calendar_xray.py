@@ -63,6 +63,7 @@ MEETING_ACTION_PATTERNS = [
     "emergency clause", "requested second conference committee",
     "motion for", "vote:",
     "withdrawn", "concurred",
+    "removed from the table",
 ]
 
 ADMINISTRATIVE_PATTERNS = [
@@ -93,11 +94,12 @@ ADMINISTRATIVE_PATTERNS = [
     # Blank / empty actions
     "blank action",
     # Calendar/procedural notations
-    "moved from uncontested calendar", "moved from",
+    "moved from uncontested calendar",
     "no further action taken",
     "unanimous consent to introduce", "introduced at the request of",
     "budget amendments available",
     "recommitted",
+    "fiscal impact review",
 ]
 
 

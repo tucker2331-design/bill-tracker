@@ -138,3 +138,18 @@ Recurring mistakes to self-check BEFORE pushing code. Each pattern has been caug
 - Three bare `except: pass` blocks in session/CSV parsing (PR#13, initial fix)
 
 **Self-check:** Every `except` block must either log or re-raise. `pass` alone is only acceptable for truly expected, high-frequency noise (e.g., expected parse failures on known-bad data) and even then should be documented with a comment explaining why.
+
+## 19. KNOWN_NOISE vs KNOWN_EVENT Misplacement
+**Pattern:** Adding administrative milestones to KNOWN_NOISE instead of KNOWN_EVENT. The worker silently deletes noise-only items (`if is_known_noise and not is_known_event: continue`). Milestones like "recommitted", "no further action taken", "budget amendments available" should be preserved in Ledger, not deleted.
+**Examples:**
+- "recommitted", "unanimous consent to introduce", "no further action taken" placed in KNOWN_NOISE would be silently deleted instead of preserved in Ledger (PR#14)
+
+**Self-check:** KNOWN_NOISE = truly disposable (fiscal statements, reprints, blank actions). KNOWN_EVENT = everything else that should appear in output, even if classified as ADMINISTRATIVE in X-Ray. When in doubt, use KNOWN_EVENT — an extra Ledger row is better than a missing legislative milestone.
+
+## 20. Overly Broad Substring Patterns
+**Pattern:** Adding short/common substrings to pattern lists that use `any(p in lower for p in PATTERNS)`. "moved from" matches "removed from the table", "moved from committee to floor", etc.
+**Examples:**
+- Bare "moved from" added to KNOWN_NOISE — would also match "removed from" (PR#14)
+- Bare "substitute" or "amendment" considered but rejected — would catch "substitute printed" (PR#14)
+
+**Self-check:** Before adding any pattern shorter than 10 characters, grep HISTORY.CSV for all lines containing it and verify every match should be classified the same way. Prefer the most specific pattern that covers the intended cases.
