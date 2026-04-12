@@ -174,3 +174,10 @@ Recurring mistakes to self-check BEFORE pushing code. Each pattern has been caug
 - `_is_non_concrete_time()` defined inside Schedule API `try` block (line 851), needed by session marker fallback outside that scope (line 917) (PR#15)
 
 **Self-check:** Pure utility functions (no closures over local variables) must be at module level or at the top of the enclosing function, never inside conditional blocks.
+
+## 24. Using Only First Element of a Multi-Match List
+**Pattern:** A list of matches is collected (e.g., `exact_matches`) but downstream logic only reads `[0]`. If the list contains multiple entries with different raw representations that all normalize to the same value, the first element may not be the one needed by subsequent matching logic.
+**Examples:**
+- Strategy B sub-panel matching used `exact_matches[0].split("_", 1)[1]` as the prefix to check against. If multiple exact matches exist with different raw names (e.g., "House Courts of Justice" vs "House Committee on Courts of Justice"), only the first was tried (PR#16).
+
+**Self-check:** When a collected list could contain multiple entries with different raw representations, iterate all entries rather than indexing `[0]`. Especially when downstream logic depends on string-level properties (prefix, suffix) of the raw representation.
