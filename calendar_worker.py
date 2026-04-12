@@ -408,14 +408,19 @@ def find_api_schedule_match(api_schedule_map, date_str, event_location, outcome_
         # SAFETY: Only match entries whose raw name starts with the exact target name
         # followed by a hyphen or " - ", avoiding normalized prefix false positives.
         if not child_matches:
-            # Use the raw committee name from the exact match (before normalization)
-            raw_target = exact_matches[0].split("_", 1)[1] if exact_matches else ""
-            if raw_target:
+            # Iterate ALL exact matches — different raw names can normalize identically
+            # (e.g., "House Courts of Justice" and "House Committee on Courts of Justice").
+            # Each raw name variant may be the prefix used by sub-panel schedule entries.
+            for em in exact_matches:
+                raw_target = em.split("_", 1)[1]
+                if not raw_target:
+                    continue
                 for k in dated_keys:
                     raw_k = k.split("_", 1)[1]
                     # Match "Parent-Suffix" or "Parent - Suffix" patterns only
-                    if raw_k != raw_target and (raw_k.startswith(raw_target + "-") or raw_k.startswith(raw_target + " -")) and has_concrete_time(k):
-                        child_matches.append(k)
+                    if raw_k.startswith((raw_target + "-", raw_target + " -")) and has_concrete_time(k):
+                        if k not in child_matches:
+                            child_matches.append(k)
         # If we found children with concrete times, use the earliest by SortTime
         if child_matches:
             child_matches.sort(key=lambda k: api_schedule_map[k].get("SortTime", "23:59"))
