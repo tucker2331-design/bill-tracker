@@ -384,6 +384,7 @@ def find_api_schedule_match(api_schedule_map, date_str, event_location, outcome_
 
     # Direction 2: If exact match exists but has no concrete time, check children
     if exact_matches and not any(has_concrete_time(k) for k in exact_matches):
+        # Strategy A: Structural lookup via CHILDREN_OF_PARENT (Committee API ParentCommitteeID)
         if CHILDREN_OF_PARENT:
             event_code = NORM_TO_CODE.get(target_norm)
             if event_code and event_code in CHILDREN_OF_PARENT:
@@ -398,6 +399,23 @@ def find_api_schedule_match(api_schedule_map, date_str, event_location, outcome_
                         for k in dated_keys:
                             if dated_norms[k] == child_norm and has_concrete_time(k):
                                 child_matches.append(k)
+        # Strategy B: Schedule-level hyphen-suffix matching.
+        # Some committees (e.g., "House Courts of Justice") have Schedule API entries
+        # for sub-panels ("House Courts of Justice-Civil", "-Criminal") that are NOT
+        # separate committees in the Committee API. They use a hyphen or " - " suffix
+        # after the parent name. These sub-panels often have concrete times when the
+        # parent entry has TBA.
+        # SAFETY: Only match entries whose raw name starts with the exact target name
+        # followed by a hyphen or " - ", avoiding normalized prefix false positives.
+        if not child_matches:
+            # Use the raw committee name from the exact match (before normalization)
+            raw_target = exact_matches[0].split("_", 1)[1] if exact_matches else ""
+            if raw_target:
+                for k in dated_keys:
+                    raw_k = k.split("_", 1)[1]
+                    # Match "Parent-Suffix" or "Parent - Suffix" patterns only
+                    if raw_k != raw_target and (raw_k.startswith(raw_target + "-") or raw_k.startswith(raw_target + " -")) and has_concrete_time(k):
+                        child_matches.append(k)
         # If we found children with concrete times, use the earliest by SortTime
         if child_matches:
             child_matches.sort(key=lambda k: api_schedule_map[k].get("SortTime", "23:59"))
@@ -793,7 +811,13 @@ def run_calendar_update():
                                 if not leftovers: normalized_name = api_name; break
 
                     map_key = f"{date_str}_{normalized_name.strip()}"
-                    api_schedule_map[map_key] = {"Time": time_val, "SortTime": sort_time_24h, "Status": status}
+                    # Don't overwrite a concrete time with a non-concrete one.
+                    # Multiple Schedule API entries per date+committee exist; keep the best time.
+                    existing_entry = api_schedule_map.get(map_key)
+                    if existing_entry and not _is_non_concrete_time(existing_entry.get("Time", "")) and _is_non_concrete_time(time_val):
+                        pass  # Keep existing concrete time, skip this TBA/empty overwrite
+                    else:
+                        api_schedule_map[map_key] = {"Time": time_val, "SortTime": sort_time_24h, "Status": status}
                     
                     # Capture convene times from any floor-session-like Schedule API entry.
                     # Primary: "House Convenes", "House Chamber" (canonical LIS names)
