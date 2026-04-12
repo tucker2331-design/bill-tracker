@@ -185,3 +185,15 @@
 - **What broke:** The helper function was defined inside the Schedule API `try` block. The session marker fallback code outside that scope couldn't call it.
 - **How it was caught:** Gemini PR#15 review + self-audit when implementing Finding 1 fix.
 - **Fix:** Hoisted `_is_non_concrete_time` to module level (before `run_calendar_update`). Removed the nested definition. All call sites now use the same module-level function.
+
+### 34. Schedule sub-panels not recognized as children (HCJ-Civil, HCJ-Criminal, etc.)
+- **What broke:** House Courts of Justice, House Appropriations, House Finance, and House Labor and Commerce have Schedule API entries with hyphen-suffixed names ("House Courts of Justice-Civil", "House Appropriations - Health and Human Resources Subcommittee") that carry concrete times. The parent entries have "Time TBA". But these sub-panels are NOT separate committees in the Committee API (no ParentCommitteeID relationship), so the Direction 2 structural lookup via `CHILDREN_OF_PARENT` never finds them. Result: parent committee actions get TBA time even when sub-panel times are available on the same date.
+- **How it was caught:** Live API analysis of Schedule API data for HCJ: 106 entries, all with empty ScheduleTime, but Description fields contain relative times ("15 minutes after adjournment of House Finance"). Sub-panel entries "-Civil" and "-Criminal" carry these times in their processed time_val. The parent "House Courts of Justice" entry has empty time AND empty Description.
+- **Data:** 24 fixable date+committee combos across 4 committees: HCJ (11), House Appropriations (6), House Finance (6), House Labor and Commerce (1).
+- **Fix:** Added Strategy B in `find_api_schedule_match`: when Direction 2 Strategy A (structural CHILDREN_OF_PARENT) finds nothing, check Schedule API entries whose raw name starts with the parent name + hyphen. This catches sub-panels that aren't in the Committee API.
+- **Safety:** Uses raw name string matching (not normalized prefix) to avoid false positives. Only matches "Parent-" or "Parent -" patterns.
+
+### 35. api_schedule_map overwrites concrete times with TBA on duplicate entries
+- **What broke:** Multiple Schedule API entries can exist for the same date+committee. `api_schedule_map[map_key] = {...}` overwrites unconditionally, so a later entry with "Time TBA" kills an earlier entry with a concrete time.
+- **How it was caught:** Investigation of how duplicate entries are ordered in the API response.
+- **Fix:** Added overwrite protection: if existing entry has concrete time and new entry has non-concrete time, skip the overwrite. Concrete times are preserved.
