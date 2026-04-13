@@ -305,9 +305,11 @@ def resolve_committee_from_refid(refid):
     # Vote-style refid: H14V2610034 -> H14, S2V1869 -> S2
     # Subcommittee vote refid: H14003V2610048 -> H14 (3-digit sub suffix before V)
     # The parent committee code is always 1-2 digits after H/S.
-    # Subcommittees add a 3-digit suffix (001-007) before the V.
-    # Regex: H/S + 1-2 digit parent code + optional 0-3 digit sub code + V + digits
-    vote_match = re.match(r'^([HS])(\d{1,2})\d{0,3}V\d+', refid)
+    # Subcommittees add a strictly 3-digit suffix (001-007) before the V.
+    # Non-greedy \d{1,2}? ensures 1-digit parent codes (S2) aren't consumed by the
+    # subcommittee suffix (S2001V → S2 + 001, not S20 + 01).
+    # Regex: H/S + 1-2 digit parent (non-greedy) + optional 3-digit sub + V + digits
+    vote_match = re.match(r'^([HS])(\d{1,2}?)(?:\d{3})?V\d+', refid)
     if vote_match:
         code_raw = vote_match.group(1) + vote_match.group(2)
         name = COMMITTEE_CODE_MAP.get(code_raw)
