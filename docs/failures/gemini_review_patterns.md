@@ -181,3 +181,10 @@ Recurring mistakes to self-check BEFORE pushing code. Each pattern has been caug
 - Strategy B sub-panel matching used `exact_matches[0].split("_", 1)[1]` as the prefix to check against. If multiple exact matches exist with different raw names (e.g., "House Courts of Justice" vs "House Committee on Courts of Justice"), only the first was tried (PR#16).
 
 **Self-check:** When a collected list could contain multiple entries with different raw representations, iterate all entries rather than indexing `[0]`. Especially when downstream logic depends on string-level properties (prefix, suffix) of the raw representation.
+
+## 25. Greedy Regex Quantifiers on Compound ID Fields
+**Pattern:** Using greedy `\d{1,2}` to capture a variable-length component of a compound ID when the next component is also digits. The greedy quantifier consumes digits that belong to the next field, producing wrong captures.
+**Examples:**
+- `r'^([HS])(\d{1,2})\d{0,3}V\d+'` on `S2001V1234`: greedy `\d{1,2}` captures "20" (parent = S20) instead of "2" (parent = S2). The "0" from the subcommittee suffix `001` gets eaten by the parent group (PR#17).
+
+**Self-check:** When a regex captures a variable-length numeric field followed by another numeric field, use non-greedy quantifiers (`?`) combined with fixed-width groups for the subsequent field. Alternatively, anchor on a known-width component. Always test with the minimum-length variant of each field.
