@@ -36,7 +36,8 @@ Highest concentration of edge cases in the Virginia GA session:
 | PR#14 baseline | 1,138 | — | Classification + NOISE/EVENT cleanup |
 | PR#15 | 862 | -276 | Whitespace normalization, session marker fallback |
 | PR#16 | 459 | -403 | Sub-panel schedule matching, map overwrite protection |
-| PR#17 (pending) | ? | ? | Subcommittee refid regex fix (1,637 refids unlocked) |
+| PR#17 | 427 | -32 | Subcommittee refid regex fix (1,637 refids unlocked) |
+| PR#18 (pending) | ? | ? | Prefiled/offered classification override (2,042 rows reclassified) |
 
 ### Root Causes Identified
 1. ~~**Convene time gaps (~750 bugs):** Fixed in PR#15~~ ✅
