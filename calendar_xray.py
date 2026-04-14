@@ -11,7 +11,7 @@ from urllib3.util.retry import Retry
 st.set_page_config(page_title="LIS Calendar X-Ray", layout="wide")
 st.title("🩻 LIS Calendar X-Ray")
 st.caption("Diagnostic tool for Sheet1 ↔ LIS schedule parity checks.")
-XRAY_VERSION = "2026-04-05.2"
+XRAY_VERSION = "2026-04-13.1"
 st.caption(f"Build: {XRAY_VERSION}")
 
 DEFAULT_SHEET_ID = "1PQDtaTTUeYv781bx4_ZiehcvbEmUt8t7jFmZYJoJGKM"
@@ -213,6 +213,9 @@ def classify_join_gaps(joined: pd.DataFrame) -> pd.DataFrame:
 ADMIN_OVERRIDE_PATTERNS = [
     "substitute printed",
     "committee substitute printed",
+    # Bill introduction: "Prefiled and ordered printed; Offered MM-DD-YYYY"
+    # is a clerk/production action that matches "offered" but is administrative.
+    "prefiled and ordered printed",
 ]
 
 def classify_action(outcome_text: str) -> str:
