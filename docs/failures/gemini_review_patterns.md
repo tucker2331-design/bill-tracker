@@ -188,3 +188,10 @@ Recurring mistakes to self-check BEFORE pushing code. Each pattern has been caug
 - `r'^([HS])(\d{1,2})\d{0,3}V\d+'` on `S2001V1234`: greedy `\d{1,2}` captures "20" (parent = S20) instead of "2" (parent = S2). The "0" from the subcommittee suffix `001` gets eaten by the parent group (PR#17).
 
 **Self-check:** When a regex captures a variable-length numeric field followed by another numeric field, use non-greedy quantifiers (`?`) combined with fixed-width groups for the subsequent field. Alternatively, anchor on a known-width component. Always test with the minimum-length variant of each field.
+
+## 26. Override-Only Classification (Bypassing Base List)
+**Pattern:** Adding a phrase to `ADMIN_OVERRIDE_PATTERNS` without also adding it to `ADMINISTRATIVE_PATTERNS`. The override layer catches it today, but the base list is the documented source of truth for "what counts as administrative". If the override mechanism is ever refactored or removed, the phrase silently falls back to `unclassified` or worse, back to `meeting`.
+**Examples:**
+- PR#18 added `"prefiled and ordered printed"` to `ADMIN_OVERRIDE_PATTERNS` only, not to `ADMINISTRATIVE_PATTERNS`. Gemini flagged inconsistency with standard from assumptions_audit #27.
+
+**Self-check:** Every entry in `ADMIN_OVERRIDE_PATTERNS` must also exist in `ADMINISTRATIVE_PATTERNS`. The override is a priority tiebreaker, not a replacement. Base lists are the durable classification record.

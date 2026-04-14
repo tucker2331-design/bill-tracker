@@ -100,6 +100,10 @@ ADMINISTRATIVE_PATTERNS = [
     "budget amendments available",
     "recommitted",
     "fiscal impact review",
+    # Bill introduction clerk action (also listed in ADMIN_OVERRIDE_PATTERNS
+    # because the substring "offered" in the full phrase would otherwise match
+    # MEETING_ACTION_PATTERNS). Kept here as the durable classification record.
+    "prefiled and ordered printed",
 ]
 
 
