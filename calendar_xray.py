@@ -1,6 +1,15 @@
 import io
 import json
+import sys
 from datetime import datetime
+from pathlib import Path
+
+# Streamlit loads pages/*.py with sys.path[0] = pages/, not the repo root.
+# Prepend the repo root so investigation_config (at root) resolves on deploy.
+# No-op when run from root (calendar_xray.py case), needed for pages/ray2.py.
+_REPO_ROOT = Path(__file__).resolve().parent.parent
+if str(_REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(_REPO_ROOT))
 
 import pandas as pd
 import requests
