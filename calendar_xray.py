@@ -8,10 +8,12 @@ import streamlit as st
 from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
 
+from investigation_config import INVESTIGATION_START, INVESTIGATION_END
+
 st.set_page_config(page_title="LIS Calendar X-Ray", layout="wide")
 st.title("🩻 LIS Calendar X-Ray")
 st.caption("Diagnostic tool for Sheet1 ↔ LIS schedule parity checks.")
-XRAY_VERSION = "2026-04-13.1"
+XRAY_VERSION = "2026-04-15.1"
 st.caption(f"Build: {XRAY_VERSION}")
 
 DEFAULT_SHEET_ID = "1PQDtaTTUeYv781bx4_ZiehcvbEmUt8t7jFmZYJoJGKM"
@@ -20,6 +22,10 @@ DEFAULT_API_KEY = "81D70A54-FCDC-4023-A00B-A3FD114D5984"
 
 PLACEHOLDER_TIMES = {"", "nan", "none", "time tba", "journal entry", "ledger"}
 NON_CONCRETE_LIS_TIMES = {"", "none", "nan", "tba", "time tba"}
+
+# Investigation window is imported from investigation_config.py (single
+# source of truth shared with calendar_worker.py). Edit that file to shift
+# the zoom — never redefine the constants here.
 
 # Diagnostic tag patterns injected by calendar_worker.py
 TAG_PATTERNS = {
@@ -335,6 +341,34 @@ else:
 if sheet_df.empty:
     st.warning("Sheet data unavailable; cannot audit.")
     st.stop()
+
+# === Apply investigation window ===
+# All downstream sections (executive summary, classification audit, ledger
+# health, bugs breakdown) operate on the windowed slice so the accuracy
+# metric matches the pinned investigation target. Window constants come
+# from investigation_config.py (shared with calendar_worker.py).
+if "Date" in sheet_df.columns:
+    _full_row_count = len(sheet_df)
+    # Normalize via pd.to_datetime so datetime64 columns (which astype(str)
+    # would render as "YYYY-MM-DD 00:00:00" and break lex comparison against
+    # a bare "YYYY-MM-DD" bound) are handled correctly. Unparseable rows
+    # become NaT and are excluded from the window.
+    _date_norm = pd.to_datetime(sheet_df["Date"], errors="coerce").dt.strftime("%Y-%m-%d")
+    sheet_df = sheet_df[
+        (_date_norm >= INVESTIGATION_START) & (_date_norm <= INVESTIGATION_END)
+    ].copy()
+    st.info(
+        f"🔍 Investigation window: **{INVESTIGATION_START} → {INVESTIGATION_END}** "
+        f"— {len(sheet_df):,} of {_full_row_count:,} Sheet1 rows in window. "
+        "If the worker is aligned, these numbers should match."
+    )
+    if sheet_df.empty:
+        st.warning(
+            f"No Sheet1 rows fall inside the investigation window "
+            f"{INVESTIGATION_START} → {INVESTIGATION_END}. "
+            "Either the worker has not run with aligned constants yet, or the window is wrong."
+        )
+        st.stop()
 
 # ===================== SECTION 3: EXECUTIVE SUMMARY =====================
 st.divider()

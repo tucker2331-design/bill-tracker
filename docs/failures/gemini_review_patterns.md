@@ -195,3 +195,17 @@ Recurring mistakes to self-check BEFORE pushing code. Each pattern has been caug
 - PR#18 added `"prefiled and ordered printed"` to `ADMIN_OVERRIDE_PATTERNS` only, not to `ADMINISTRATIVE_PATTERNS`. Gemini flagged inconsistency with standard from assumptions_audit #27.
 
 **Self-check:** Every entry in `ADMIN_OVERRIDE_PATTERNS` must also exist in `ADMINISTRATIVE_PATTERNS`. The override is a priority tiebreaker, not a replacement. Base lists are the durable classification record.
+
+## 27. Duplicated Configuration Across Files
+**Pattern:** The same config value (date, threshold, constant) hardcoded in multiple files that must stay in sync. "Sync by convention" means it will drift.
+**Examples:**
+- PR#19 put `INVESTIGATION_START`/`INVESTIGATION_END` in `calendar_worker.py`, `pages/ray2.py`, AND `calendar_xray.py`. Shifting the window requires three edits and any miss silently breaks alignment.
+
+**Self-check:** If a constant must appear in two or more files, promote it to a single module (`investigation_config.py`, `constants.py`) or data file (JSON/YAML) and import. Never duplicate.
+
+## 28. String-Casting a Date Column for Comparison
+**Pattern:** Using `df["Date"].astype(str)` to build a string mask against ISO date bounds. Works for clean `YYYY-MM-DD` but silently breaks if pandas loads the column as `datetime64` — `astype(str)` then produces `"2026-02-13 00:00:00"`, which compares lexicographically greater than `"2026-02-13"` and excludes the last day.
+**Examples:**
+- PR#19 window filter in `pages/ray2.py` / `calendar_xray.py` used `sheet_df["Date"].astype(str)` for the window comparison.
+
+**Self-check:** For date-bounded filters, normalize the column via `pd.to_datetime(col).dt.strftime("%Y-%m-%d")` (or compare as datetime objects directly). Never assume the source dtype is string.

@@ -17,11 +17,22 @@ from google.oauth2.service_account import Credentials
 from bs4 import BeautifulSoup
 import pdfplumber
 
+from investigation_config import INVESTIGATION_START as _WINDOW_START_STR
+from investigation_config import INVESTIGATION_END as _WINDOW_END_STR
+
 print("🚀 Waking up Enterprise Calendar Worker (Turing State Machine v6.0)...")
 
 SPREADSHEET_ID = "1PQDtaTTUeYv781bx4_ZiehcvbEmUt8t7jFmZYJoJGKM"
 API_KEY = "81D70A54-FCDC-4023-A00B-A3FD114D5984"
 HEADERS = {"WebAPIKey": API_KEY, "Accept": "application/json"}
+
+# === INVESTIGATION WINDOW ===
+# Single source of truth lives in investigation_config.py and is imported by
+# both the worker and the X-Ray tool. The strings are parsed to datetime here
+# for the worker's scrape-window filter. Do NOT define the window inline in
+# this file — edit investigation_config.py to shift the zoom.
+INVESTIGATION_START = datetime.strptime(_WINDOW_START_STR, "%Y-%m-%d")
+INVESTIGATION_END = datetime.strptime(_WINDOW_END_STR, "%Y-%m-%d")
 
 # === STATIC FALLBACK LEXICON (used only if Committee API is unavailable) ===
 # Validated against session 261 Committee API response on 2026-04-03.
@@ -700,8 +711,11 @@ def run_calendar_update():
     # === DYNAMIC COMMITTEE MAPS (Enterprise: rebuilt from API each run) ===
     build_committee_maps(http_session, ACTIVE_SESSION, alert_fn=push_system_alert)
 
-    scrape_start = datetime(2026, 2, 9)
-    scrape_end = now + timedelta(days=7)
+    # Investigation window comes from module-level constants (see top of file).
+    # Previously: scrape_start=Feb 9 + scrape_end=now+7d (rolling). That made
+    # the bug count grow mechanically every day and hid whether fixes worked.
+    scrape_start = INVESTIGATION_START
+    scrape_end = INVESTIGATION_END
 
     print("🔐 Authenticating with Google Cloud...")
     creds_json = os.environ.get("GCP_CREDENTIALS")
