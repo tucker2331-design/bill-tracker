@@ -7,12 +7,12 @@ from pathlib import Path
 # Streamlit loads pages/*.py with sys.path[0] = pages/, not the repo root.
 # Prepend the repo root so investigation_config (at root) resolves on deploy.
 # This same prelude ships in both pages/ray2.py (depth 1) and calendar_xray.py
-# (at root), so we detect the location dynamically: if __file__ lives inside
-# a directory called "pages", the repo root is one level up; otherwise this
-# file IS at the repo root. Using a flat `parent.parent` breaks the root
-# case by prepending the directory ABOVE the repo (could shadow siblings).
+# (at root). We detect the repo root by probing for investigation_config.py:
+# if it lives next to this file, we ARE the root; otherwise walk up one level.
+# Probing the target module is robust against the repo being named "pages",
+# files moving to other subdirs, or anyone reusing this prelude elsewhere.
 _HERE = Path(__file__).resolve().parent
-_REPO_ROOT = _HERE.parent if _HERE.name == "pages" else _HERE
+_REPO_ROOT = _HERE if (_HERE / "investigation_config.py").exists() else _HERE.parent
 if str(_REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(_REPO_ROOT))
 

@@ -216,3 +216,10 @@ Recurring mistakes to self-check BEFORE pushing code. Each pattern has been caug
 - PR#20 prelude used `_REPO_ROOT = Path(__file__).resolve().parent.parent` in both `pages/ray2.py` and `calendar_xray.py`. Correct for the former (pages/ → repo root); for the latter (repo root → DIRECTORY ABOVE the repo). Prepended the wrong path to `sys.path` in `calendar_xray.py`. Comment claimed "No-op when run from root" — it was not. Could silently shadow modules from a sibling project if one existed in the parent directory.
 
 **Self-check:** Any duplicated `Path(__file__)` walk must be dynamically location-aware, e.g. `_HERE.parent if _HERE.name == "pages" else _HERE`. Never claim "no-op" for a branch you haven't executed and printed. For duplicated-file code, `print(_REPO_ROOT)` from BOTH file locations during self-audit.
+
+## 30. Directory-Name Checks as Structural Signals
+**Pattern:** Detecting "where am I in the repo" by hardcoding a directory name (`_HERE.name == "pages"`). This is brittle: it breaks if the repo itself happens to be named `pages`, if the file moves to another subdir (`tools/`, `scripts/`), or if anyone reuses the prelude elsewhere. Directory names are cosmetic; they are not a reliable structural signal.
+**Examples:**
+- PR#21 prelude used `_REPO_ROOT = _HERE.parent if _HERE.name == "pages" else _HERE` in `pages/ray2.py` / `calendar_xray.py`. Works for the current layout, but silently wrong if the file moves or the folder is renamed.
+
+**Self-check:** Detect structural location by probing for a file you know lives at the target (e.g., `(_HERE / "investigation_config.py").exists()`) rather than matching a directory name. Probe the thing you actually depend on, not a naming convention.
