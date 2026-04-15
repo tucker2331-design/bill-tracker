@@ -226,3 +226,17 @@
 - **Fix:** Inserted a 3-line sys.path prelude at the top of `pages/ray2.py` (and mirrored to `calendar_xray.py` to keep diff-identical — harmless no-op when run from root) that resolves `Path(__file__).resolve().parent.parent` and prepends it to `sys.path` if not already present. The `investigation_config` import then resolves from any cwd.
 - **Audit hole that let this through:** The 9-point pre-push checklist's "duplicate file check" verified that `pages/ray2.py == calendar_xray.py`, but it did NOT verify that the import graph actually loads from the directory Streamlit uses at runtime. The parse check (`ast.parse`) only confirms syntax, not import resolution. When a new top-level import is added, the audit must include an `importlib` round-trip from the subpage directory: `cd pages && python -c "import ray2"` (or equivalent) to reproduce Streamlit's sys.path.
 - **Lesson:** Parse-clean is not import-clean. Any PR that adds a cross-file import into a Streamlit subpage file MUST be validated by running the import from the subpage directory, not the repo root. Add `cd pages && python -c "<import>"` as an explicit step in the pre-push audit for changes touching `pages/*.py`. The duplicate-file and parse checks are necessary but not sufficient.
+
+### 40. Repeat: pushed follow-up fix to closed PR branch instead of new branch from main
+- **What broke:** After PR#19 merged, X-Ray threw `ModuleNotFoundError` on deploy. I committed the sys.path fix (commit `29bbcae`) to the already-merged/closed `claude/pr19-window-alignment` branch instead of creating a new branch from the latest `origin/main`. User had to stop me and call it out. This is the SAME mistake made earlier in the session (pre-compaction, during PR#15→PR#16 transition) — marked there as "a repeated mistake." Two-time offender.
+- **How it was caught:** User noticed the target branch was closed and told me directly.
+- **Root cause:** After finishing a PR I leave the working branch checked out. When a follow-up fix is needed, muscle-memory reaches for `git commit && git push` on whatever branch is current, not "create a new branch from main first." The workflow is fast but wrong.
+- **Fix:** Created `claude/pr20-streamlit-import-fix` from `origin/main`, cherry-picked `29bbcae` onto it, force-delete / abandon the orphan commit on the closed branch, open PR#20.
+- **Hard rule going forward:** EVERY follow-up fix — whether it's a Gemini audit response, a deploy failure, or a bug report — must start with:
+  1. `git fetch origin main`
+  2. `git checkout -b <new-branch-name> origin/main`
+  3. Cherry-pick or re-apply the fix
+  4. Push to the NEW branch only
+  No exceptions. The current branch at the end of the previous PR is never the right target for the next PR.
+- **Process audit addition:** Add a pre-commit self-check: before `git commit` on any follow-up fix, run `git branch --show-current` and verify the branch does not correspond to a merged/closed PR. If the branch name matches a previously-merged PR pattern (`claude/pr<N>-*` where PR #N is closed), stop and create a new branch.
+- **Lesson:** Two repetitions means it's not a slip — it's a missing guardrail in my own process. Logging it twice in the audit is the guardrail until I internalize the "new branch from main" step as non-negotiable for every follow-up.
