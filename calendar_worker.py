@@ -23,6 +23,19 @@ SPREADSHEET_ID = "1PQDtaTTUeYv781bx4_ZiehcvbEmUt8t7jFmZYJoJGKM"
 API_KEY = "81D70A54-FCDC-4023-A00B-A3FD114D5984"
 HEADERS = {"WebAPIKey": API_KEY, "Accept": "application/json"}
 
+# === INVESTIGATION WINDOW (single source of truth) ===
+# This is the narrow date range we're currently driving to zero bugs.
+# The worker still reads a wider session window for bill state-machine
+# bookkeeping (see test_start_date/test_end_date from Session API), but only
+# rows inside [INVESTIGATION_START, INVESTIGATION_END] get written to Sheet1.
+# X-Ray Section 9 (pages/ray2.py + calendar_xray.py) filters its "bugs"
+# metric using the same constants — they MUST stay in sync.
+# To shift the zoom: edit these two lines and redeploy. Do not add a rolling
+# end like `now + timedelta(days=7)` — that produces a mechanically growing
+# bug count and breaks the investigation strategy.
+INVESTIGATION_START = datetime(2026, 2, 9)
+INVESTIGATION_END = datetime(2026, 2, 13)
+
 # === STATIC FALLBACK LEXICON (used only if Committee API is unavailable) ===
 # Validated against session 261 Committee API response on 2026-04-03.
 # Runtime: replaced by build_committee_maps() output from live API.
@@ -700,8 +713,11 @@ def run_calendar_update():
     # === DYNAMIC COMMITTEE MAPS (Enterprise: rebuilt from API each run) ===
     build_committee_maps(http_session, ACTIVE_SESSION, alert_fn=push_system_alert)
 
-    scrape_start = datetime(2026, 2, 9)
-    scrape_end = now + timedelta(days=7)
+    # Investigation window comes from module-level constants (see top of file).
+    # Previously: scrape_start=Feb 9 + scrape_end=now+7d (rolling). That made
+    # the bug count grow mechanically every day and hid whether fixes worked.
+    scrape_start = INVESTIGATION_START
+    scrape_end = INVESTIGATION_END
 
     print("🔐 Authenticating with Google Cloud...")
     creds_json = os.environ.get("GCP_CREDENTIALS")

@@ -11,7 +11,7 @@ from urllib3.util.retry import Retry
 st.set_page_config(page_title="LIS Calendar X-Ray", layout="wide")
 st.title("🩻 LIS Calendar X-Ray")
 st.caption("Diagnostic tool for Sheet1 ↔ LIS schedule parity checks.")
-XRAY_VERSION = "2026-04-13.1"
+XRAY_VERSION = "2026-04-15.1"
 st.caption(f"Build: {XRAY_VERSION}")
 
 DEFAULT_SHEET_ID = "1PQDtaTTUeYv781bx4_ZiehcvbEmUt8t7jFmZYJoJGKM"
@@ -20,6 +20,15 @@ DEFAULT_API_KEY = "81D70A54-FCDC-4023-A00B-A3FD114D5984"
 
 PLACEHOLDER_TIMES = {"", "nan", "none", "time tba", "journal entry", "ledger"}
 NON_CONCRETE_LIS_TIMES = {"", "none", "nan", "tba", "time tba"}
+
+# === INVESTIGATION WINDOW (single source of truth) ===
+# MUST stay in sync with calendar_worker.py INVESTIGATION_START/END.
+# The worker uses these to filter Sheet1 on write. X-Ray also filters the
+# loaded sheet_df to the same window so the accuracy metric reflects only
+# the rows currently under investigation. Shift the zoom by editing both
+# files (same date strings) and redeploying.
+INVESTIGATION_START = "2026-02-09"
+INVESTIGATION_END = "2026-02-13"
 
 # Diagnostic tag patterns injected by calendar_worker.py
 TAG_PATTERNS = {
@@ -335,6 +344,30 @@ else:
 if sheet_df.empty:
     st.warning("Sheet data unavailable; cannot audit.")
     st.stop()
+
+# === Apply investigation window ===
+# All downstream sections (executive summary, classification audit, ledger
+# health, bugs breakdown) operate on the windowed slice so the accuracy
+# metric matches the pinned investigation target. See INVESTIGATION_START
+# / INVESTIGATION_END at top of file and calendar_worker.py constant.
+if "Date" in sheet_df.columns:
+    _full_row_count = len(sheet_df)
+    _date_str = sheet_df["Date"].astype(str)
+    sheet_df = sheet_df[
+        (_date_str >= INVESTIGATION_START) & (_date_str <= INVESTIGATION_END)
+    ].copy()
+    st.info(
+        f"🔍 Investigation window: **{INVESTIGATION_START} → {INVESTIGATION_END}** "
+        f"— {len(sheet_df):,} of {_full_row_count:,} Sheet1 rows in window. "
+        "If the worker is aligned, these numbers should match."
+    )
+    if sheet_df.empty:
+        st.warning(
+            f"No Sheet1 rows fall inside the investigation window "
+            f"{INVESTIGATION_START} → {INVESTIGATION_END}. "
+            "Either the worker has not run with aligned constants yet, or the window is wrong."
+        )
+        st.stop()
 
 # ===================== SECTION 3: EXECUTIVE SUMMARY =====================
 st.divider()

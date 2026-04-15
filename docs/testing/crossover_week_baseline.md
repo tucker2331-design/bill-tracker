@@ -36,8 +36,11 @@ Highest concentration of edge cases in the Virginia GA session:
 | PR#14 baseline | 1,138 | — | Classification + NOISE/EVENT cleanup |
 | PR#15 | 862 | -276 | Whitespace normalization, session marker fallback |
 | PR#16 | 459 | -403 | Sub-panel schedule matching, map overwrite protection |
-| PR#17 | 427 | -32 | Subcommittee refid regex fix (1,637 refids unlocked) |
-| PR#18 (pending) | ? | ? | Prefiled/offered classification override (2,042 rows reclassified) |
+| PR#17 | 427* | -32 | Subcommittee refid regex fix (1,637 refids unlocked) |
+| PR#18 | 544* | +117 | Prefiled/offered classification override. Worker no-op (no Sheet1 rows matched). Apparent +117 was rolling-window expansion, not regression. |
+| PR#19 (pending) | 9 target | — | Window alignment: pin worker + X-Ray to `INVESTIGATION_START/END = Feb 9-13`. True crossover bug count revealed. |
+
+\* PR#14-18 numbers were unfiltered totals; the "rolling end date" in the worker made the bug count grow mechanically every day regardless of code changes. PR#19 collapses the metric to the pinned investigation window. Going forward, deltas between PRs are comparable only after PR#19.
 
 ### Root Causes Identified
 1. ~~**Convene time gaps (~750 bugs):** Fixed in PR#15~~ ✅
