@@ -27,7 +27,7 @@ from investigation_config import INVESTIGATION_START, INVESTIGATION_END
 st.set_page_config(page_title="LIS Calendar X-Ray", layout="wide")
 st.title("🩻 LIS Calendar X-Ray")
 st.caption("Diagnostic tool for Sheet1 ↔ LIS schedule parity checks.")
-XRAY_VERSION = "2026-04-15.1"
+XRAY_VERSION = "2026-04-15.2"
 st.caption(f"Build: {XRAY_VERSION}")
 
 DEFAULT_SHEET_ID = "1PQDtaTTUeYv781bx4_ZiehcvbEmUt8t7jFmZYJoJGKM"
@@ -240,6 +240,18 @@ ADMIN_OVERRIDE_PATTERNS = [
     # Bill introduction: "Prefiled and ordered printed; Offered MM-DD-YYYY"
     # is a clerk/production action that matches "offered" but is administrative.
     "prefiled and ordered printed",
+    # "[H|S] (House|Senate) (sub)?committee offered" — clerical record entry, NOT
+    # a meeting vote. 1,522 rows in session 261 (698 "_H8120" subcommittee +
+    # 184 "_H8122" committee + 640 Senate plain bill-code). Refid suffixes are
+    # LIS-internal action-type codes, not committee codes. When a real committee
+    # vote exists, the companion "Subcommittee recommends reporting..." row
+    # carries the vote and the time (80% of cases); the "offered" row is a
+    # redundant clerical twin. When there is no companion vote (20% orphans),
+    # the subcommittee didn't actually meet — the bill text was just filed into
+    # the record. These rows belong in Ledger Updates, not Section 9.
+    # See docs/failures/assumptions_audit.md #41. Supersedes #37's earlier call.
+    "subcommittee offered",
+    "committee offered",
 ]
 
 def classify_action(outcome_text: str) -> str:

@@ -39,6 +39,9 @@ Highest concentration of edge cases in the Virginia GA session:
 | PR#17 | 427* | -32 | Subcommittee refid regex fix (1,637 refids unlocked) |
 | PR#18 | 544* | +117 | Prefiled/offered classification override. Worker no-op (no Sheet1 rows matched). Apparent +117 was rolling-window expansion, not regression. |
 | PR#19 (pending) | 9 target | — | Window alignment: pin worker + X-Ray to `INVESTIGATION_START/END = Feb 9-13`. True crossover bug count revealed. |
+| PR#20 | 9 | — | Streamlit subpage sys.path prelude (ModuleNotFoundError fix for `investigation_config`). No metric change. |
+| PR#21 | 9 | — | `_REPO_ROOT` dir-name check → file-existence probe (Gemini robustness fix). No metric change. |
+| PR#22 (simulated) | 1 | -8 | `[chamber] (sub)committee offered` → `ADMIN_OVERRIDE_PATTERNS`. 8 orphan clerical-record rows moved out of Section 9. HB1372 Memory Anchor remains (bucket B — LIS has entry but blank time only). See assumptions_audit #41. |
 
 \* PR#14-18 numbers were unfiltered totals; the "rolling end date" in the worker made the bug count grow mechanically every day regardless of code changes. PR#19 collapses the metric to the pinned investigation window. Going forward, deltas between PRs are comparable only after PR#19.
 
