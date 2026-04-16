@@ -16,20 +16,25 @@ status: active
 ## Open PRs
 | # | Branch | State | Notes |
 |---|--------|-------|-------|
-| 22 | `claude/pr22-offered-admin-override` | **To be closed by user** | Premise invalidated. Will not merge. See [[failures/assumptions_audit]] #41 and [[failures/pr22_post_mortem]]. |
+| 24 | `claude/pr23-gemini-review-fixes` | **Open — Gemini review follow-up for PR#23** | Four doc fixes (placeholder link, severity alignment, `<module>` consistency, log accuracy). Scoped to documentation. |
+
+## Recently closed
+- **PR#22** `claude/pr22-offered-admin-override` — closed unmerged. Premise invalidated. See [[failures/assumptions_audit]] #41 and [[failures/pr22_post_mortem]].
+- **PR#23** `claude/docs-obsidian-brain` — merged 2026-04-16. Obsidian brain consolidation.
 
 ## Next PR (proposed, not yet approved)
-**PR#23 — Worker instrumentation for source-miss visibility.**
+**Worker instrumentation for source-miss visibility** (PR number TBD — assigned at open time).
+
 1. Replace silent `"Journal Entry"` default in `calendar_worker.py` ~line 1181 with a visible `⏱️ [NO_SCHEDULE_MATCH]` tag + Bug_Logs row (`TIMING_LAG`).
 2. Replace silent `continue` in ephemeral-language filter (~lines 1248-1261) with `alert_rows.append(...)`.
 3. Tag Memory Anchor fallbacks for admin verbs too (not just dynamic), so provenance is preserved (~lines 1158-1167).
 4. Preserve the `Journal Entry` origin column through the `📋 Ledger Updates` rename (~lines 1269-1275), so downstream can distinguish "admin action" from "un-timable meeting action."
 5. Add X-Ray Section 0: "Rows processed / sourced / unsourced / dropped" — the denominator.
 
-Not to be started without user approval. Current branch is dead once PR#22 is closed; PR#23 starts on a fresh branch from `origin/main` per [[workflow/branching_rules]].
+Not to be started without user approval. Starts on a fresh branch from `origin/main` per [[workflow/branching_rules]].
 
 ## Known bug count (as of last measured X-Ray)
-Crossover week, post-PR#21 (PR#22 reverted):
+Crossover week, post-PR#21 (PR#22 never merged):
 - Meeting actions without times: **9**
 - Unclassified: **9** (same bucket; see breakdown in [[testing/crossover_week_baseline]])
 - Caveat: **this 9 is the symptom count, not the source-miss count.** True source-miss rate will be higher once instrumentation lands. See [[state/open_anti_patterns]].

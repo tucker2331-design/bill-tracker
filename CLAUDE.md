@@ -75,7 +75,7 @@ Before every commit. Full version in `docs/workflow/three_phase_protocol.md`.
 5. **Architecture Conformance.** Matches `docs/architecture/calendar_pipeline.md`. Update the doc if the flow changes.
 6. **Zero-Trust Data.** No silent failures. No bare `except: pass`. No bare `continue` without a categorized alert.
 7. **Cross-List Validation.** Classification lists — no accidental overlap between NOISE/EVENT/MEETING/ADMIN/FLOOR lists.
-8. **Import Resolution from Subpage.** Any new top-level import touched by `pages/*.py` must be validated with `cd pages && python -c "import <mod>"`. Parse-clean ≠ import-clean.
+8. **Import Resolution from Subpage.** Any new top-level import touched by `pages/*.py` must be validated with `cd pages && python -c "import <module>"`. Parse-clean ≠ import-clean.
 9. **Source-Miss Visibility.** Grep the diff for `"Journal Entry"`, `"Ledger Updates"`, `"Time TBA"`, `"TBA"`, bare `continue`, `except: pass`. Each one must have a visible tag / alert / counter beside it. Rule: `docs/workflow/source_miss_visibility.md`.
 
 ---
