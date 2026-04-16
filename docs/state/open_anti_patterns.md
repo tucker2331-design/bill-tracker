@@ -34,7 +34,7 @@ if matched_api_key:
 
 **Fix plan:** Replace with visible `"⏱️ [NO_SCHEDULE_MATCH]"` tag + `Bug_Logs` row (`TIMING_LAG`, severity `WARN`). Preserve provenance via an origin column.
 
-**Blocked on:** User approval for the worker-instrumentation PR (see [[state/current_status]] → "Next PR").
+**Blocked on:** User approval for the worker-instrumentation PR (see [[state/current_status#Next PR (proposed, not yet approved)|Next PR]]).
 
 ---
 
