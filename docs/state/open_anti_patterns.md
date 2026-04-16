@@ -10,11 +10,16 @@ Live debt tracker for the "silent source-miss" anti-pattern surfaced in [[failur
 
 This page is the counterpart to [[failures/gemini_review_patterns]] but for debt that is known-live-in-code, not just caught-in-review.
 
+**Severity labels** use CLAUDE.md Standard #4 (`INFO` / `WARN` / `CRITICAL`):
+- `CRITICAL` — data integrity at risk (silent data loss, a metric that is structurally wrong).
+- `WARN` — unexpected but non-breaking (provenance loss, alert not routed to the right place).
+- `INFO` — expected edge case.
+
 ---
 
 ## 1. `calendar_worker.py` ~line 1181 — silent `"Journal Entry"` default
 
-**Severity:** HIGH — root disease of the Section 9 metric illusion.
+**Severity:** `CRITICAL` — data integrity at risk; root disease of the Section 9 metric illusion.
 
 ```python
 time_val = "Journal Entry"
@@ -29,13 +34,13 @@ if matched_api_key:
 
 **Fix plan:** Replace with visible `"⏱️ [NO_SCHEDULE_MATCH]"` tag + `Bug_Logs` row (`TIMING_LAG`, severity `WARN`). Preserve provenance via an origin column.
 
-**Blocked on:** User approval for PR#23 (see [[state/current_status]]).
+**Blocked on:** User approval for the worker-instrumentation PR (see [[state/current_status]] → "Next PR").
 
 ---
 
 ## 2. `calendar_worker.py` ~lines 1248-1261 — ephemeral filter silent drop
 
-**Severity:** HIGH.
+**Severity:** `CRITICAL` — silent row loss on source miss.
 
 ```python
 for ev in master_events:
@@ -53,7 +58,7 @@ for ev in master_events:
 
 ## 3. `calendar_worker.py` ~lines 1158-1167 — selective Memory Anchor tag
 
-**Severity:** MEDIUM.
+**Severity:** `WARN` — provenance loss on admin-verb Memory Anchor fallbacks.
 
 ```python
 else:
@@ -72,7 +77,7 @@ else:
 
 ## 4. `calendar_worker.py` ~lines 1269-1275 — Journal → Ledger rename erases provenance
 
-**Severity:** MEDIUM-HIGH (enabler for #1's invisibility).
+**Severity:** `WARN` — provenance loss; enabler for #1's invisibility (borderline `CRITICAL` because without it #1 would already be surfaced).
 
 ```python
 journal_mask = final_df['Time'] == 'Journal Entry'
@@ -88,7 +93,7 @@ if journal_mask.any():
 
 ## 5. `calendar_worker.py` ~line 756 — `except Exception as e: print(...)` cache fallback
 
-**Severity:** LOW-MEDIUM — not the same class as #1-4 but same family.
+**Severity:** `WARN` — alert not routed to Bug_Logs (still visible in stdout, so not silent, but not categorized either). Same family as #1-4.
 
 **Problem:** `print()` is not a categorized alert. If the cache sheet read fails in GitHub Actions, the failure appears only in stdout, not in `Bug_Logs`. Violates CLAUDE.md Standard #4 (self-describing errors).
 

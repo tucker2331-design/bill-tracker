@@ -12,7 +12,7 @@ Open this vault in Obsidian (point Obsidian at this `docs/` directory). Start at
 
 ## How this vault works
 
-The pattern is the **[LLM-Wiki](https://github.com/)** approach:
+The pattern is the **LLM-Wiki** approach (a general convention for persistent, LLM-maintained knowledge bases — not a specific repo or library):
 
 - **You** curate sources, ask questions, direct exploration.
 - **The LLM** reads sources, writes wiki pages, cross-references them, keeps the index and log current, flags contradictions.
