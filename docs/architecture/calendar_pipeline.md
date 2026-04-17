@@ -36,16 +36,23 @@ master_events -> noise filter -> journal collapse -> dedup -> viewport slice -> 
 3. **bill_locations** memory (state machine) - where the bill was last seen
 
 ## Time Resolution Priority
-1. **Exact match** in api_schedule_map (date + normalized committee name)
-2. **Parent fallback** (subcommittee inherits parent time via ParentCommitteeID)
-3. **Hint matching** (derive_room_hints from outcome text like "placed on X agenda")
-4. **Substring matching** (partial name overlap)
-5. **Convene time** (Floor actions inherit chamber convene time)
-6. **Journal Entry** (no matching schedule = administrative/ledger action)
+1. **Exact match** in api_schedule_map (date + normalized committee name) → `Origin=api_schedule`
+2. **Parent fallback** (subcommittee inherits parent time via ParentCommitteeID) → `Origin=api_schedule`
+3. **Hint matching** (derive_room_hints from outcome text like "placed on X agenda") → `Origin=api_schedule`
+4. **Substring matching** (partial name overlap) → `Origin=api_schedule`
+5. **Convene time** (Floor actions inherit chamber convene time) → `Origin=convene_anchor`
+6. **No match** → `Time="⏱️ [NO_SCHEDULE_MATCH]"`, `Origin=journal_default` (or `"⏱️ [NO_CONVENE_ANCHOR]"` / `Origin=floor_miss` for Floor actions that couldn't resolve via convene).
+
+Every `master_events` row carries an `Origin` column (added in PR-A). This is the provenance field that survives the Journal→Ledger rename so downstream (X-Ray Section 0) can distinguish silent defaults from concrete sources. See [[workflow/source_miss_visibility]].
+
+## Sheet1 Schema (worker output)
+10 columns: `Date | Time | SortTime | Status | Committee | Bill | Outcome | AgendaOrder | Source | Origin`.
+
+The `Origin` column was added in PR-A. Enumerated values: `api_schedule`, `convene_anchor`, `journal_default`, `floor_miss`, `system_alert`, `system_metrics`. One `SYSTEM_METRICS` row per run carries a JSON-encoded snapshot of the source-miss counters (`total_processed`, `sourced_api`, `sourced_convene`, `unsourced_journal`, `unsourced_anchor`, `dropped_ephemeral`, `dropped_noise`, `floor_anchor_miss`). X-Ray Section 0 parses this row to render the denominator.
 
 ## Key Design Decisions
 - Calendar subsystem is separate from v2_shadow_test to allow independent perfection
 - API_Cache provides resilience when LIS API is offline
 - Mismatch detection catches state machine errors without stopping processing
 - Noise filtering happens AFTER state machine updates (so memory stays correct)
-- Journal collapse happens BEFORE dedup (so phantom committees merge properly)
+- Ledger-Updates collapse happens BEFORE dedup (so phantom committees merge properly) and gates off the `Origin` column, not the Time string, so provenance survives the rename (PR-A)

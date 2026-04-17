@@ -11,27 +11,21 @@ status: active
 **Benchmark window:** Feb 9-13, 2026 (crossover week).
 
 ## Active focus
-**Framework audit + silent-fallback remediation.** User identified that Section 9 was "only measuring the bugs we wanted to look at" — the worker has silent source-miss paths that hide un-timable rows instead of surfacing them. See [[failures/pr22_post_mortem]] for the framework lesson, [[state/open_anti_patterns]] for the concrete lines of debt, and [[workflow/source_miss_visibility]] for the new rule.
+**PR-A (worker source-miss visibility) in review.** Instrumentation-only PR — no classification changes. Replaces every silent fallback in `calendar_worker.py` with a visible tag + counted signal, adds the `Origin` column to Sheet1, and surfaces the denominator via X-Ray Section 0. Expected to make the bug count *go up* in the short term (un-hiding what was already broken). Subsequent PRs attack the largest unsourced category.
 
 ## Open PRs
 | # | Branch | State | Notes |
 |---|--------|-------|-------|
-| 24 | `claude/pr23-gemini-review-fixes` | **Open — Gemini review follow-up for PR#23** | Four doc fixes (placeholder link, severity alignment, `<module>` consistency, log accuracy). Scoped to documentation. |
+| TBD | `claude/worker-source-miss-visibility` | **Open — PR-A, instrumentation-only** | 5 changes per [[workflow/source_miss_visibility]]: NO_SCHEDULE_MATCH tag, ephemeral-drop alert, Memory Anchor admin tag, Origin column preserved through Ledger rename, X-Ray Section 0 denominator. |
 
 ## Recently closed
 - **PR#22** `claude/pr22-offered-admin-override` — closed unmerged. Premise invalidated. See [[failures/assumptions_audit]] #41 and [[failures/pr22_post_mortem]].
 - **PR#23** `claude/docs-obsidian-brain` — merged 2026-04-16. Obsidian brain consolidation.
+- **PR#24** `claude/pr23-gemini-review-fixes` — merged 2026-04-16. Gemini review follow-ups for PR#23 (placeholder link, severity alignment, `<module>` consistency, log accuracy, section-anchor wikilink).
 
-## Next PR (proposed, not yet approved)
-**Worker instrumentation for source-miss visibility** (PR number TBD — assigned at open time).
-
-1. Replace silent `"Journal Entry"` default in `calendar_worker.py` ~line 1181 with a visible `⏱️ [NO_SCHEDULE_MATCH]` tag + Bug_Logs row (`TIMING_LAG`).
-2. Replace silent `continue` in ephemeral-language filter (~lines 1248-1261) with `alert_rows.append(...)`.
-3. Tag Memory Anchor fallbacks for admin verbs too (not just dynamic), so provenance is preserved (~lines 1158-1167).
-4. Preserve the `Journal Entry` origin column through the `📋 Ledger Updates` rename (~lines 1269-1275), so downstream can distinguish "admin action" from "un-timable meeting action."
-5. Add X-Ray Section 0: "Rows processed / sourced / unsourced / dropped" — the denominator.
-
-Not to be started without user approval. Starts on a fresh branch from `origin/main` per [[workflow/branching_rules]].
+## Next PR (after PR-A merges)
+**Attack the largest unsourced category revealed by X-Ray Section 0.**
+Once PR-A is running in production for one scheduled cycle, read Section 0. Whichever of `unsourced_journal` / `unsourced_anchor` / `floor_anchor_miss` / `dropped_ephemeral` is largest is the next PR's scope. Each follow-up PR must cite before/after counts from Section 0 to meet CLAUDE.md Standard #7.
 
 ## Known bug count (as of last measured X-Ray)
 Crossover week, post-PR#21 (PR#22 never merged):
