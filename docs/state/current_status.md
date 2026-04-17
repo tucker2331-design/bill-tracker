@@ -11,21 +11,22 @@ status: active
 **Benchmark window:** Feb 9-13, 2026 (crossover week).
 
 ## Active focus
-**PR-A (worker source-miss visibility) in review.** Instrumentation-only PR — no classification changes. Replaces every silent fallback in `calendar_worker.py` with a visible tag + counted signal, adds the `Origin` column to Sheet1, and surfaces the denominator via X-Ray Section 0. Expected to make the bug count *go up* in the short term (un-hiding what was already broken). Subsequent PRs attack the largest unsourced category.
+**PR-B (metrics visibility + diagnostic hint) open.** Two targeted fixes on top of PR-A now that PR#25 has merged and run in production: (1) viewport slice was silently dropping the `SYSTEM_METRICS` row (stamped `Date=today`, outside Feb 9-13 window) so X-Ray Section 0 rendered blank; (2) NO_SCHEDULE_MATCH / NO_CONVENE_ANCHOR rows now carry a `DiagnosticHint` column showing `bill_locations[bill]` + nearest-3 same-chamber Schedule API candidates so the 9 in-window bugs can be triaged without re-running the worker.
 
 ## Open PRs
 | # | Branch | State | Notes |
 |---|--------|-------|-------|
-| TBD | `claude/worker-source-miss-visibility` | **Open — PR-A, instrumentation-only** | 5 changes per [[workflow/source_miss_visibility]]: NO_SCHEDULE_MATCH tag, ephemeral-drop alert, Memory Anchor admin tag, Origin column preserved through Ledger rename, X-Ray Section 0 denominator. |
+| TBD | `claude/pr-b-metrics-visibility-diagnostic` | **Open — PR-B** | (1) Exempt `Origin in {system_alert, system_metrics}` from viewport slice so denominator row reaches Sheet1. (2) Add `DiagnosticHint` column populated ONLY on source-miss rows (`journal_default` / `floor_miss`). Sheet1 schema: 10 → 11 columns. See [[failures/gemini_review_patterns]] #36-#37. |
 
 ## Recently closed
 - **PR#22** `claude/pr22-offered-admin-override` — closed unmerged. Premise invalidated. See [[failures/assumptions_audit]] #41 and [[failures/pr22_post_mortem]].
 - **PR#23** `claude/docs-obsidian-brain` — merged 2026-04-16. Obsidian brain consolidation.
 - **PR#24** `claude/pr23-gemini-review-fixes` — merged 2026-04-16. Gemini review follow-ups for PR#23 (placeholder link, severity alignment, `<module>` consistency, log accuracy, section-anchor wikilink).
+- **PR#25** `claude/worker-source-miss-visibility` — merged 2026-04-16. PR-A landed (all 5 source-miss visibility changes + Gemini review fixes #31-#35). Worker run confirmed counters wired (denominator = 63,081 mutually-exclusive buckets). Metrics row never reached Sheet1 due to viewport bug → PR-B.
 
-## Next PR (after PR-A merges)
-**Attack the largest unsourced category revealed by X-Ray Section 0.**
-Once PR-A is running in production for one scheduled cycle, read Section 0. Whichever of `unsourced_journal` / `unsourced_anchor` / `floor_anchor_miss` / `dropped_ephemeral` is largest is the next PR's scope. Each follow-up PR must cite before/after counts from Section 0 to meet CLAUDE.md Standard #7.
+## Next PR (after PR-B merges)
+**Attack the largest unsourced category revealed by X-Ray Section 0 once SYSTEM_METRICS is visible.**
+Once PR-B is running and Section 0 renders the denominator, identify which of `unsourced_journal` / `unsourced_anchor` / `floor_anchor_miss` / `dropped_ephemeral` is largest. Each follow-up PR must cite before/after counts from Section 0 to meet CLAUDE.md Standard #7.
 
 ## Known bug count (as of last measured X-Ray)
 Crossover week, post-PR#21 (PR#22 never merged):

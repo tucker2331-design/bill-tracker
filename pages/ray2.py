@@ -548,8 +548,11 @@ if not missing_df.empty:
 
     # --- 4d: Sample rows (capped) ---
     st.markdown("#### 4d) Sample Rows")
+    _4d_cols = ["Date", "Committee", "Time", "SortTime", "Source", "Bill", "Outcome", "missing_reason"]
+    if "DiagnosticHint" in missing_df.columns:
+        _4d_cols.append("DiagnosticHint")
     st.dataframe(
-        missing_df[["Date", "Committee", "Time", "SortTime", "Source", "Bill", "Outcome", "missing_reason"]].head(200),
+        missing_df[_4d_cols].head(200),
         use_container_width=True,
         hide_index=True,
     )
@@ -799,7 +802,11 @@ if "Outcome" in sheet_df.columns and "Time" in sheet_df.columns:
 
         # Sample rows
         st.markdown("#### Sample Rows (first 300)")
-        display_cols = [c for c in ["Date", "Committee", "Time", "Bill", "Outcome", "Source"] if c in mt_without.columns]
+        # PR-B: surface DiagnosticHint when present so triage doesn't have to
+        # cross-reference worker logs to see bill_locations + same-date API
+        # candidates. Empty for cleanly-sourced rows. See
+        # docs/workflow/source_miss_visibility.md.
+        display_cols = [c for c in ["Date", "Committee", "Time", "Bill", "Outcome", "Source", "DiagnosticHint"] if c in mt_without.columns]
         st.dataframe(mt_without[display_cols].head(300), use_container_width=True, hide_index=True)
 
     # --- Drill down: unclassified actions ---
@@ -882,7 +889,7 @@ if "Outcome" in sheet_df.columns and "Time" in sheet_df.columns:
                 st.dataframe(ledger_by_type, use_container_width=True, hide_index=True)
 
                 # Sample rows
-                display_cols = [c for c in ["Date", "Bill", "Outcome", "action_type"] if c in ledger_mt_display.columns]
+                display_cols = [c for c in ["Date", "Bill", "Outcome", "action_type", "DiagnosticHint"] if c in ledger_mt_display.columns]
                 with st.expander(f"All {len(ledger_meeting)} meeting actions in Ledger", expanded=False):
                     st.dataframe(ledger_mt_display[display_cols].head(500), use_container_width=True, hide_index=True)
             else:
