@@ -686,17 +686,33 @@ def run_calendar_update():
     _alert_dedup_keys = set()
 
     # Source-miss visibility counters (see docs/workflow/source_miss_visibility.md).
-    # Every action enumerated must land in exactly one bucket; X-Ray Section 0 renders
-    # these as the denominator that PR#22's post-mortem identified as missing.
+    #
+    # DENOMINATOR BUCKETS (mutually exclusive — sum to total_processed):
+    #   sourced_api, sourced_convene, unsourced_journal, floor_anchor_miss, dropped_noise.
+    #   Every HISTORY.CSV row enumerated lands in exactly one of these.
+    #
+    # ORTHOGONAL TAG COUNTERS (overlap with the denominator buckets — do NOT add
+    # to the sum):
+    #   unsourced_anchor — rows whose committee came from Memory Anchor fallback.
+    #     Their time may still have been resolved via API or convene anchor, so
+    #     these overlap with sourced_api / sourced_convene / unsourced_journal.
+    #   dropped_ephemeral — rows removed by the post-loop ephemeral filter.
+    #     These are a subset of (unsourced_journal ∪ floor_anchor_miss).
+    #
+    # X-Ray Section 0 renders the denominator buckets as the primary metric
+    # and the tag counters below as side-metrics. See
+    # docs/failures/gemini_review_patterns.md #31 / #32.
     source_miss_counts = {
+        # Denominator buckets
         "total_processed": 0,       # actions visited in the main loop
-        "sourced_api": 0,           # concrete API-schedule match
+        "sourced_api": 0,           # concrete API-schedule match (and no floor-anchor override)
         "sourced_convene": 0,       # floor action resolved via convene anchor
-        "unsourced_journal": 0,     # no schedule, no anchor -> Journal Entry default
-        "unsourced_anchor": 0,      # Memory Anchor fallback (dynamic or admin)
-        "dropped_ephemeral": 0,     # ephemeral-filter drops
-        "dropped_noise": 0,         # positive-noise filter drops
-        "floor_anchor_miss": 0,     # Floor action with no convene anchor hit
+        "unsourced_journal": 0,     # no schedule, no anchor, non-floor -> NO_SCHEDULE_MATCH
+        "floor_anchor_miss": 0,     # Floor action with no convene anchor hit -> NO_CONVENE_ANCHOR
+        "dropped_noise": 0,         # positive-noise filter drops (continue at noise filter)
+        # Orthogonal tag counters (overlap with the above)
+        "unsourced_anchor": 0,      # Memory Anchor committee fallback applied
+        "dropped_ephemeral": 0,     # Post-loop ephemeral filter drops (subset of unsourced_*)
     }
 
     def push_system_alert(message, status="ALERT", category=None, severity=None, dedup_key=None):
@@ -910,7 +926,7 @@ def run_calendar_update():
                         new_cache_entries.append([date_str, normalized_name.strip(), time_val, sort_time_24h, status])
                     
                     if any(k in owner_lower for k in ["caucus", "session", "floor", "convenes", "adjourned"]):
-                        master_events.append({"Date": date_str, "Time": time_val, "SortTime": sort_time_24h, "Status": status, "Committee": normalized_name.strip() if normalized_name else "Chamber Event", "Bill": clean_desc, "Outcome": "", "AgendaOrder": -1, "Source": "API"})
+                        master_events.append({"Date": date_str, "Time": time_val, "SortTime": sort_time_24h, "Status": status, "Committee": normalized_name.strip() if normalized_name else "Chamber Event", "Bill": clean_desc, "Outcome": "", "AgendaOrder": -1, "Source": "API", "Origin": "api_schedule"})
                         continue
                     
                     has_docket = False
@@ -929,19 +945,19 @@ def run_calendar_update():
                                 
                     if combined_bills:
                         for bill in sorted(list(combined_bills)):
-                            master_events.append({"Date": date_str, "Time": time_val, "SortTime": sort_time_24h, "Status": status, "Committee": normalized_name.strip(), "Bill": bill, "Outcome": "Scheduled", "AgendaOrder": 1, "Source": "DOCKET"})
+                            master_events.append({"Date": date_str, "Time": time_val, "SortTime": sort_time_24h, "Status": status, "Committee": normalized_name.strip(), "Bill": bill, "Outcome": "Scheduled", "AgendaOrder": 1, "Source": "DOCKET", "Origin": "api_schedule"})
                             if date_str not in docket_memory: docket_memory[date_str] = {}
                             if bill not in docket_memory[date_str]: docket_memory[date_str][bill] = []
                             if normalized_name.strip() not in docket_memory[date_str][bill]: docket_memory[date_str][bill].append(normalized_name.strip())
                         has_docket = True
 
                     if dlq_flag:
-                        master_events.append({"Date": date_str, "Time": time_val, "SortTime": sort_time_24h, "Status": status, "Committee": normalized_name.strip(), "Bill": dlq_flag, "Outcome": "", "AgendaOrder": 0, "Source": "API_Skeleton"})
+                        master_events.append({"Date": date_str, "Time": time_val, "SortTime": sort_time_24h, "Status": status, "Committee": normalized_name.strip(), "Bill": dlq_flag, "Outcome": "", "AgendaOrder": 0, "Source": "API_Skeleton", "Origin": "api_schedule"})
                         has_docket = True
 
                     if not has_docket:
                         if sort_time_24h == "06:00" and "after" in time_val.lower(): clean_desc = f"⚠️ Time Unverified (Check Parent) - {clean_desc}"
-                        master_events.append({"Date": date_str, "Time": time_val, "SortTime": sort_time_24h, "Status": status, "Committee": normalized_name.strip(), "Bill": clean_desc if clean_desc else "No agenda listed.", "Outcome": "", "AgendaOrder": -1, "Source": "API_Skeleton"})
+                        master_events.append({"Date": date_str, "Time": time_val, "SortTime": sort_time_24h, "Status": status, "Committee": normalized_name.strip(), "Bill": clean_desc if clean_desc else "No agenda listed.", "Outcome": "", "AgendaOrder": -1, "Source": "API_Skeleton", "Origin": "api_schedule"})
 
                 # If LIS provides multiple schedule rows for the same date+committee,
                 # promote any concrete time to sibling API/API_Skeleton rows that are
@@ -1061,6 +1077,11 @@ def run_calendar_update():
 
         for _, row in df_past.iterrows():
             source_miss_counts["total_processed"] += 1
+            # Tracks whether committee was resolved via Memory Anchor fallback
+            # (rather than refid or lexicon). Drives the orthogonal
+            # unsourced_anchor tag counter (which overlaps denominator buckets
+            # intentionally — see docs/failures/gemini_review_patterns.md #31).
+            anchor_applied = False
             bill_num = row['CleanBill']
             outcome_text = str(row[desc_col]).strip()
             outcome_lower = outcome_text.lower()
@@ -1206,10 +1227,13 @@ def run_calendar_update():
                     # rows indistinguishable from cleanly-resolved rows downstream
                     # (silent source-miss — see docs/state/open_anti_patterns.md item #3).
                     # Tag both paths with distinct markers so X-Ray can tell them apart.
-                    if "Floor" not in event_location:
+                    anchor_applied = "Floor" not in event_location
+                    if anchor_applied:
                         anchor_tag = "⚙️ [Memory Anchor]" if is_dynamic_verb else "📝 [Memory Anchor: admin]"
                         outcome_text = f"{anchor_tag} " + outcome_text
-                        source_miss_counts["unsourced_anchor"] += 1
+                    # unsourced_anchor is incremented after time-resolution
+                    # (orthogonal tag counter). See
+                    # docs/failures/gemini_review_patterns.md #31.
 
                     # Advance state if it was a nameless report (rare but possible)
                     if any(x in outcome_lower for x in ["reported", "discharged"]) and not any(x in outcome_lower for x in ["fail"]):
@@ -1261,8 +1285,13 @@ def run_calendar_update():
                 if anchor:
                     time_val, sort_time_24h, event_location = anchor["Time"], anchor["SortTime"], anchor["Name"]
                     _floor_hit += 1
-                    if origin != "api_schedule":
-                        source_miss_counts["sourced_convene"] += 1
+                    # Origin/metric parity: if the row was already counted as
+                    # api_schedule, move it to sourced_convene so the row's
+                    # Origin field and the SYSTEM_METRICS counters agree.
+                    # See docs/failures/gemini_review_patterns.md #32.
+                    if origin == "api_schedule":
+                        source_miss_counts["sourced_api"] -= 1
+                    source_miss_counts["sourced_convene"] += 1
                     origin = "convene_anchor"
                 else:
                     _floor_miss += 1
@@ -1286,8 +1315,15 @@ def run_calendar_update():
                     status="WARN",
                     category="TIMING_LAG",
                     severity="WARN",
-                    dedup_key=f"no_match::{date_str}::{event_location}",
+                    dedup_key=f"no_match::{date_str}::{event_location}::{bill_num}",
                 )
+
+            # Orthogonal tag counter: fires on every row where the Memory
+            # Anchor committee fallback was applied, regardless of how the
+            # time ultimately resolved. Intentionally overlaps with the
+            # denominator buckets — see docs/failures/gemini_review_patterns.md #31.
+            if anchor_applied:
+                source_miss_counts["unsourced_anchor"] += 1
 
             master_events.append({
                 "Date": date_str,
@@ -1374,7 +1410,6 @@ def run_calendar_update():
     # X-Ray Section 0 can parse it. One-liner summary also goes to stdout
     # so it lands in worker logs.
     try:
-        import json as _json
         metrics_summary = (
             f"Source-miss metrics: processed={source_miss_counts['total_processed']} "
             f"sourced_api={source_miss_counts['sourced_api']} "
@@ -1393,7 +1428,7 @@ def run_calendar_update():
             "Status": "METRICS",
             "Committee": "System Status",
             "Bill": "SYSTEM_METRICS",
-            "Outcome": _json.dumps(source_miss_counts, separators=(',', ':')),
+            "Outcome": json.dumps(source_miss_counts, separators=(',', ':')),
             "AgendaOrder": -100,
             "Source": "SYSTEM",
             "Origin": "system_metrics",

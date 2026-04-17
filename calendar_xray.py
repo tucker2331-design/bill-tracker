@@ -380,35 +380,51 @@ if not _metrics_row.empty:
 
 if _metrics_payload:
     _total = int(_metrics_payload.get("total_processed", 0) or 0)
+    # Denominator buckets (mutually exclusive — should sum to _total).
     _api = int(_metrics_payload.get("sourced_api", 0) or 0)
     _conv = int(_metrics_payload.get("sourced_convene", 0) or 0)
     _unj = int(_metrics_payload.get("unsourced_journal", 0) or 0)
+    _fam = int(_metrics_payload.get("floor_anchor_miss", 0) or 0)
+    _dns = int(_metrics_payload.get("dropped_noise", 0) or 0)
+    # Orthogonal tag counters (overlap with the denominator buckets).
     _una = int(_metrics_payload.get("unsourced_anchor", 0) or 0)
     _dep = int(_metrics_payload.get("dropped_ephemeral", 0) or 0)
-    _dns = int(_metrics_payload.get("dropped_noise", 0) or 0)
-    _fam = int(_metrics_payload.get("floor_anchor_miss", 0) or 0)
+
     _sourced = _api + _conv
-    _unsourced = _unj + _una
-    _dropped = _dep + _dns
+    _unsourced = _unj + _fam
+    _bucket_sum = _api + _conv + _unj + _fam + _dns
     _source_rate = (_sourced / _total * 100.0) if _total else 0.0
 
+    st.caption(
+        "**Denominator buckets** (mutually exclusive — sum to Total processed). "
+        "See docs/failures/gemini_review_patterns.md #31."
+    )
     z1, z2, z3, z4 = st.columns(4)
     z1.metric("Total processed", f"{_total:,}")
     z2.metric("Sourced", f"{_sourced:,}", f"{_source_rate:.1f}%")
     z3.metric("Unsourced", f"{_unsourced:,}")
-    z4.metric("Dropped", f"{_dropped:,}")
+    z4.metric("Dropped (noise)", f"{_dns:,}")
 
-    z5, z6, z7, z8 = st.columns(4)
+    z5, z6, z7, z8, z9 = st.columns(5)
     z5.metric("↳ API schedule", f"{_api:,}")
     z6.metric("↳ Convene anchor", f"{_conv:,}")
     z7.metric("↳ No schedule", f"{_unj:,}")
-    z8.metric("↳ Memory anchor", f"{_una:,}")
+    z8.metric("↳ Floor-anchor miss", f"{_fam:,}")
+    z9.metric("↳ Noise drops", f"{_dns:,}")
 
-    z9, z10, z11, z12 = st.columns(4)
-    z9.metric("↳ Floor-anchor miss", f"{_fam:,}")
-    z10.metric("↳ Ephemeral drops", f"{_dep:,}")
-    z11.metric("↳ Noise drops", f"{_dns:,}")
-    z12.metric("Sheet rows (in window)", "see §3")
+    if _total and _bucket_sum != _total:
+        st.warning(
+            f"Denominator drift: buckets sum to {_bucket_sum:,} but total_processed is {_total:,}. "
+            "Investigate — denominator buckets are supposed to be mutually exclusive."
+        )
+
+    st.caption(
+        "**Orthogonal tag counters** (overlap with the denominator above — do NOT add)."
+    )
+    y1, y2, y3 = st.columns(3)
+    y1.metric("Memory-anchor tag", f"{_una:,}")
+    y2.metric("Ephemeral drops", f"{_dep:,}")
+    y3.metric("Sheet rows (in window)", "see §3")
 
     # Origin breakdown from the actual rows (cross-check against metrics).
     if "Origin" in sheet_df.columns:
