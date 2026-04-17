@@ -744,6 +744,7 @@ def run_calendar_update():
             "AgendaOrder": -99,
             "Source": "SYSTEM",
             "Origin": "system_alert",
+            "DiagnosticHint": "",
         })
 
     if not session_data:
@@ -926,7 +927,7 @@ def run_calendar_update():
                         new_cache_entries.append([date_str, normalized_name.strip(), time_val, sort_time_24h, status])
                     
                     if any(k in owner_lower for k in ["caucus", "session", "floor", "convenes", "adjourned"]):
-                        master_events.append({"Date": date_str, "Time": time_val, "SortTime": sort_time_24h, "Status": status, "Committee": normalized_name.strip() if normalized_name else "Chamber Event", "Bill": clean_desc, "Outcome": "", "AgendaOrder": -1, "Source": "API", "Origin": "api_schedule"})
+                        master_events.append({"Date": date_str, "Time": time_val, "SortTime": sort_time_24h, "Status": status, "Committee": normalized_name.strip() if normalized_name else "Chamber Event", "Bill": clean_desc, "Outcome": "", "AgendaOrder": -1, "Source": "API", "Origin": "api_schedule", "DiagnosticHint": ""})
                         continue
                     
                     has_docket = False
@@ -945,19 +946,19 @@ def run_calendar_update():
                                 
                     if combined_bills:
                         for bill in sorted(list(combined_bills)):
-                            master_events.append({"Date": date_str, "Time": time_val, "SortTime": sort_time_24h, "Status": status, "Committee": normalized_name.strip(), "Bill": bill, "Outcome": "Scheduled", "AgendaOrder": 1, "Source": "DOCKET", "Origin": "api_schedule"})
+                            master_events.append({"Date": date_str, "Time": time_val, "SortTime": sort_time_24h, "Status": status, "Committee": normalized_name.strip(), "Bill": bill, "Outcome": "Scheduled", "AgendaOrder": 1, "Source": "DOCKET", "Origin": "api_schedule", "DiagnosticHint": ""})
                             if date_str not in docket_memory: docket_memory[date_str] = {}
                             if bill not in docket_memory[date_str]: docket_memory[date_str][bill] = []
                             if normalized_name.strip() not in docket_memory[date_str][bill]: docket_memory[date_str][bill].append(normalized_name.strip())
                         has_docket = True
 
                     if dlq_flag:
-                        master_events.append({"Date": date_str, "Time": time_val, "SortTime": sort_time_24h, "Status": status, "Committee": normalized_name.strip(), "Bill": dlq_flag, "Outcome": "", "AgendaOrder": 0, "Source": "API_Skeleton", "Origin": "api_schedule"})
+                        master_events.append({"Date": date_str, "Time": time_val, "SortTime": sort_time_24h, "Status": status, "Committee": normalized_name.strip(), "Bill": dlq_flag, "Outcome": "", "AgendaOrder": 0, "Source": "API_Skeleton", "Origin": "api_schedule", "DiagnosticHint": ""})
                         has_docket = True
 
                     if not has_docket:
                         if sort_time_24h == "06:00" and "after" in time_val.lower(): clean_desc = f"⚠️ Time Unverified (Check Parent) - {clean_desc}"
-                        master_events.append({"Date": date_str, "Time": time_val, "SortTime": sort_time_24h, "Status": status, "Committee": normalized_name.strip(), "Bill": clean_desc if clean_desc else "No agenda listed.", "Outcome": "", "AgendaOrder": -1, "Source": "API_Skeleton", "Origin": "api_schedule"})
+                        master_events.append({"Date": date_str, "Time": time_val, "SortTime": sort_time_24h, "Status": status, "Committee": normalized_name.strip(), "Bill": clean_desc if clean_desc else "No agenda listed.", "Outcome": "", "AgendaOrder": -1, "Source": "API_Skeleton", "Origin": "api_schedule", "DiagnosticHint": ""})
 
                 # If LIS provides multiple schedule rows for the same date+committee,
                 # promote any concrete time to sibling API/API_Skeleton rows that are
@@ -1075,6 +1076,48 @@ def run_calendar_update():
         _floor_miss = 0     # Floor actions that missed convene times
         _floor_miss_dates = set()  # Which dates are missing
 
+        # PR-B: Date-indexed view of api_schedule_map so NO_SCHEDULE_MATCH rows
+        # can carry a diagnostic_hint listing the committees LIS *did* schedule
+        # that day. Pure measurement — no classification impact. See
+        # docs/workflow/source_miss_visibility.md and
+        # docs/failures/gemini_review_patterns.md #37.
+        api_schedule_by_date = {}
+        for _api_key, _api_val in api_schedule_map.items():
+            if "_" not in _api_key:
+                continue
+            _d, _c = _api_key.split("_", 1)
+            api_schedule_by_date.setdefault(_d, []).append(
+                (_c, str(_api_val.get("Time", "")))
+            )
+
+        def _build_diagnostic_hint(date_str, event_location, acting_chamber_prefix):
+            """Return a compact string describing why the row couldn't be sourced.
+
+            Lists up to 3 same-chamber committees LIS scheduled that date so
+            a human triaging can see if the miss is a naming mismatch (API had
+            a meeting but under a different label) vs a genuine absence (no
+            scheduled committee that day could plausibly host this action).
+            """
+            candidates = api_schedule_by_date.get(date_str, [])
+            chamber = (acting_chamber_prefix or "").strip().lower()
+            if chamber:
+                # Prefer same-chamber candidates when possible.
+                same = [c for c in candidates if c[0].strip().lower().startswith(chamber)]
+                if same:
+                    candidates = same
+            # Deduplicate on committee name, keep first occurrence order.
+            seen = set()
+            trimmed = []
+            for name, t in candidates:
+                if name in seen:
+                    continue
+                seen.add(name)
+                trimmed.append(f"{name}@{t}")
+                if len(trimmed) >= 3:
+                    break
+            api_str = "; ".join(trimmed) if trimmed else "<none>"
+            return f"loc='{event_location}'; api_{date_str}=[{api_str}]"
+
         for _, row in df_past.iterrows():
             source_miss_counts["total_processed"] += 1
             # Tracks whether committee was resolved via Memory Anchor fallback
@@ -1082,6 +1125,10 @@ def run_calendar_update():
             # unsourced_anchor tag counter (which overlaps denominator buckets
             # intentionally — see docs/failures/gemini_review_patterns.md #31).
             anchor_applied = False
+            # PR-B: populated for NO_SCHEDULE_MATCH / NO_CONVENE_ANCHOR rows
+            # so X-Ray §9 can show *why* the miss happened without hand-
+            # chasing through worker logs. Empty string for sourced rows.
+            diagnostic_hint = ""
             bill_num = row['CleanBill']
             outcome_text = str(row[desc_col]).strip()
             outcome_lower = outcome_text.lower()
@@ -1302,6 +1349,9 @@ def run_calendar_update():
                         time_val = "⏱️ [NO_CONVENE_ANCHOR]"
                         origin = "floor_miss"
                         source_miss_counts["floor_anchor_miss"] += 1
+                        diagnostic_hint = _build_diagnostic_hint(
+                            date_str, event_location, acting_chamber_prefix
+                        )
 
             if origin == "journal_default":
                 # No API match and not a floor action — the historic silent
@@ -1310,6 +1360,9 @@ def run_calendar_update():
                 # date+committee+bill is enough; bulk rows would flood.
                 time_val = "⏱️ [NO_SCHEDULE_MATCH]"
                 source_miss_counts["unsourced_journal"] += 1
+                diagnostic_hint = _build_diagnostic_hint(
+                    date_str, event_location, acting_chamber_prefix
+                )
                 push_system_alert(
                     f"No schedule match for {bill_num} at '{event_location}' on {date_str} — row deferred to Ledger.",
                     status="WARN",
@@ -1336,6 +1389,7 @@ def run_calendar_update():
                 "AgendaOrder": 999,
                 "Source": "CSV",
                 "Origin": origin,
+                "DiagnosticHint": diagnostic_hint,
             })
 
     # === CONVENE TIME GAP REPORT ===
@@ -1432,6 +1486,7 @@ def run_calendar_update():
             "AgendaOrder": -100,
             "Source": "SYSTEM",
             "Origin": "system_metrics",
+            "DiagnosticHint": "",
         })
     except Exception as _metrics_err:
         print(f"⚠️ Failed to emit source-miss metrics row: {_metrics_err}")
@@ -1463,7 +1518,15 @@ def run_calendar_update():
 
         scrape_start_str = scrape_start.strftime('%Y-%m-%d')
         scrape_end_str = scrape_end.strftime('%Y-%m-%d')
-        final_df = final_df[(final_df['Date'] >= scrape_start_str) & (final_df['Date'] <= scrape_end_str)]
+        # System rows (SYSTEM_ALERT, SYSTEM_METRICS) are stamped with `now`
+        # which typically falls outside the investigation window. Exempt them
+        # from the viewport slice so X-Ray Section 0 / Bug_Logs can see them.
+        # Without this exemption, PR-A's denominator row is silently dropped
+        # before Sheet1 is written. See docs/failures/gemini_review_patterns.md #36.
+        system_origins = {'system_alert', 'system_metrics'}
+        in_window = (final_df['Date'] >= scrape_start_str) & (final_df['Date'] <= scrape_end_str)
+        is_system = final_df['Origin'].isin(system_origins)
+        final_df = final_df[in_window | is_system]
 
         if not final_df.empty:
             # Write cache FIRST so any failure alert can be included in Sheet1 output
@@ -1532,6 +1595,7 @@ def run_calendar_update():
                         "AgendaOrder": -99,
                         "Source": "SYSTEM",
                         "Origin": "system_alert",
+                        "DiagnosticHint": "",
                     }])
                     final_df = pd.concat([final_df, cache_alert], ignore_index=True)
                     final_df = final_df.fillna("")

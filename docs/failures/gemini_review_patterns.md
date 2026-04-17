@@ -258,3 +258,17 @@ Recurring mistakes to self-check BEFORE pushing code. Each pattern has been caug
 - PR-A (PR#25) added `"Origin": origin` to the HISTORY.CSV append at ~L1292 but missed the four API/DOCKET/API_Skeleton appends at ~L913/L932/L939/L944. Resulting Sheet1 had blank Origin for all LIS-schedule-derived rows — the exact rows most likely to need provenance.
 
 **Self-check:** After adding a field to a `list.append(dict)` call, `grep -n "<list_name>.append" <file>` and confirm every single call site includes the field. Do NOT rely on `if col not in df.columns: df[col] = ""` to paper over gaps — that's a downstream bandaid, not a fix.
+
+## 36. Viewport Slice Silently Drops Out-of-Window Meta Rows
+**Pattern:** A downstream date-window filter (e.g., viewport slice) applied uniformly across all rows silently removes system/meta rows that are stamped with a different date (run timestamp) than the business data (investigation window). The denominator / alerting infrastructure you added upstream never reaches its audience.
+**Examples:**
+- PR-A (PR#25) wrote a `SYSTEM_METRICS` row to `master_events` stamped `Date=today` so it'd appear on every run. The viewport slice at the end of `calendar_worker.py` then filtered the DataFrame to `scrape_start <= Date <= scrape_end` (Feb 9-13, 2026), which excluded `Date=2026-04-16` and dropped the metrics row before `write_sheet1`. X-Ray Section 0 saw no SYSTEM_METRICS row and rendered blank despite the upstream code running correctly.
+
+**Self-check:** Any time you add a filter that subsets rows by a date/time/window, enumerate ALL the distinct row-types in the DataFrame and verify each one belongs (or is explicitly exempted). System/meta rows (`Origin in {system_alert, system_metrics}`, heartbeat rows, sentinel rows) should almost always be exempt from business-date filters. Codify with a `system_origins = {...}` set and `df[in_window | is_system]`, not a comment.
+
+## 37. Source-Miss Row Without Diagnostic Trail
+**Pattern:** A source-miss tag (`⏱️ [NO_SCHEDULE_MATCH]`, `⏱️ [NO_CONVENE_ANCHOR]`) is placed on a row so it's visible, but the triage context — what the row *was* looking for, what the matcher *found* as alternatives — is only reachable by re-running the worker with print statements. Every source-miss investigation starts at "add a print" because the row itself carries no clues.
+**Examples:**
+- PR-A (PR#25) tagged NO_SCHEDULE_MATCH rows but stored nothing about `bill_locations[bill]` (the committee the state machine was looking for) or about which committees LIS *did* schedule that day. Triage of the 9 in-window bugs would require grepping worker logs and rebuilding the matcher's view by hand.
+
+**Self-check:** Whenever you write a tag for a "we couldn't resolve X" case, write a sibling column (`DiagnosticHint`, `MissReason`, whatever) populated with the minimum state needed to explain the miss: the target value the matcher was using + the nearest-N actual candidates it could have matched. This is pure measurement, no classification impact, and turns "add a print" triage into a visible column.
