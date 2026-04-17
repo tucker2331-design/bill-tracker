@@ -34,7 +34,12 @@ DEFAULT_SHEET_ID = "1PQDtaTTUeYv781bx4_ZiehcvbEmUt8t7jFmZYJoJGKM"
 DEFAULT_SESSION_CODE = "261"
 DEFAULT_API_KEY = "81D70A54-FCDC-4023-A00B-A3FD114D5984"
 
-PLACEHOLDER_TIMES = {"", "nan", "none", "time tba", "journal entry", "ledger"}
+PLACEHOLDER_TIMES = {
+    "", "nan", "none", "time tba", "journal entry", "ledger",
+    # PR-A tagged placeholders (worker replaces silent "Journal Entry" with
+    # these visible markers — see docs/workflow/source_miss_visibility.md).
+    "⏱️ [no_schedule_match]", "⏱️ [no_convene_anchor]",
+}
 NON_CONCRETE_LIS_TIMES = {"", "none", "nan", "tba", "time tba"}
 
 # Investigation window is imported from investigation_config.py (single
@@ -355,6 +360,92 @@ else:
 if sheet_df.empty:
     st.warning("Sheet data unavailable; cannot audit.")
     st.stop()
+
+# ===================== SECTION 0: SOURCE-MISS DENOMINATOR =====================
+# Emitted by calendar_worker as a single SYSTEM_METRICS row. Renders BEFORE
+# the window slice because these counters describe the full worker run (not
+# just the investigation window). Without this denominator, downstream bug
+# counts have no context — see docs/failures/pr22_post_mortem.md.
+st.divider()
+st.subheader("0) Source-Miss Denominator (worker run-wide)")
+
+_metrics_mask = (sheet_df.get("Bill", pd.Series(dtype=str)).astype(str) == "SYSTEM_METRICS")
+_metrics_row = sheet_df.loc[_metrics_mask].tail(1)
+_metrics_payload = None
+if not _metrics_row.empty:
+    try:
+        _metrics_payload = json.loads(str(_metrics_row.iloc[0].get("Outcome", "")))
+    except (json.JSONDecodeError, TypeError, ValueError):
+        _metrics_payload = None
+
+if _metrics_payload:
+    _total = int(_metrics_payload.get("total_processed", 0) or 0)
+    # Denominator buckets (mutually exclusive — should sum to _total).
+    _api = int(_metrics_payload.get("sourced_api", 0) or 0)
+    _conv = int(_metrics_payload.get("sourced_convene", 0) or 0)
+    _unj = int(_metrics_payload.get("unsourced_journal", 0) or 0)
+    _fam = int(_metrics_payload.get("floor_anchor_miss", 0) or 0)
+    _dns = int(_metrics_payload.get("dropped_noise", 0) or 0)
+    # Orthogonal tag counters (overlap with the denominator buckets).
+    _una = int(_metrics_payload.get("unsourced_anchor", 0) or 0)
+    _dep = int(_metrics_payload.get("dropped_ephemeral", 0) or 0)
+
+    _sourced = _api + _conv
+    _unsourced = _unj + _fam
+    _bucket_sum = _api + _conv + _unj + _fam + _dns
+    _source_rate = (_sourced / _total * 100.0) if _total else 0.0
+
+    st.caption(
+        "**Denominator buckets** (mutually exclusive — sum to Total processed). "
+        "See docs/failures/gemini_review_patterns.md #31."
+    )
+    z1, z2, z3, z4 = st.columns(4)
+    z1.metric("Total processed", f"{_total:,}")
+    z2.metric("Sourced", f"{_sourced:,}", f"{_source_rate:.1f}%")
+    z3.metric("Unsourced", f"{_unsourced:,}")
+    z4.metric("Dropped (noise)", f"{_dns:,}")
+
+    z5, z6, z7, z8, z9 = st.columns(5)
+    z5.metric("↳ API schedule", f"{_api:,}")
+    z6.metric("↳ Convene anchor", f"{_conv:,}")
+    z7.metric("↳ No schedule", f"{_unj:,}")
+    z8.metric("↳ Floor-anchor miss", f"{_fam:,}")
+    z9.metric("↳ Noise drops", f"{_dns:,}")
+
+    if _total and _bucket_sum != _total:
+        st.warning(
+            f"Denominator drift: buckets sum to {_bucket_sum:,} but total_processed is {_total:,}. "
+            "Investigate — denominator buckets are supposed to be mutually exclusive."
+        )
+
+    st.caption(
+        "**Orthogonal tag counters** (overlap with the denominator above — do NOT add)."
+    )
+    y1, y2, y3 = st.columns(3)
+    y1.metric("Memory-anchor tag", f"{_una:,}")
+    y2.metric("Ephemeral drops", f"{_dep:,}")
+    y3.metric("Sheet rows (in window)", "see §3")
+
+    # Origin breakdown from the actual rows (cross-check against metrics).
+    if "Origin" in sheet_df.columns:
+        origin_counts = (
+            sheet_df[~_metrics_mask]["Origin"].astype(str).replace("", "<blank>")
+            .value_counts()
+            .reset_index()
+        )
+        origin_counts.columns = ["Origin", "count"]
+        with st.expander("Origin breakdown (rows in Sheet1)"):
+            st.dataframe(origin_counts, use_container_width=True, hide_index=True)
+    else:
+        st.caption(
+            "No Origin column on Sheet1 — worker may be running an older version. "
+            "Once PR-A is deployed this will populate automatically."
+        )
+else:
+    st.info(
+        "No SYSTEM_METRICS row found in Sheet1. This is expected until "
+        "calendar_worker PR-A deploys — Section 0 will populate on the next run."
+    )
 
 # === Apply investigation window ===
 # All downstream sections (executive summary, classification audit, ledger

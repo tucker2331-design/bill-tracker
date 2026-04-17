@@ -223,3 +223,38 @@ Recurring mistakes to self-check BEFORE pushing code. Each pattern has been caug
 - PR#21 prelude used `_REPO_ROOT = _HERE.parent if _HERE.name == "pages" else _HERE` in `pages/ray2.py` / `calendar_xray.py`. Works for the current layout, but silently wrong if the file moves or the folder is renamed.
 
 **Self-check:** Detect structural location by probing for a file you know lives at the target (e.g., `(_HERE / "investigation_config.py").exists()`) rather than matching a directory name. Probe the thing you actually depend on, not a naming convention.
+
+## 31. Counter Double-Counting Across Orthogonal Dimensions
+**Pattern:** Incrementing a "denominator bucket" counter in code that also increments another denominator bucket on the same row, when the bucket is supposed to be mutually exclusive. Happens when counters track semantically-different things (committee resolution vs time resolution) but are stored under one dict intended as "pick exactly one."
+**Examples:**
+- PR-A (PR#25) had `unsourced_anchor` incrementing on the Memory Anchor *committee* path, while `sourced_api` / `sourced_convene` / `unsourced_journal` incremented on the *time* path later in the same iteration. A Memory-Anchor row that then got an API time match landed in TWO buckets (`unsourced_anchor` AND `sourced_api`), inflating the denominator.
+
+**Self-check:** Before claiming "every row lands in exactly one bucket," trace each row through every increment site and confirm mutual exclusivity. If two counters track orthogonal dimensions, do NOT stuff them into the same "pick one" denominator dict — document one as a side counter or move the increment so it only fires on the mutually-exclusive branch (e.g., `unsourced_anchor` only if `origin in ("journal_default", "floor_miss")` at the end of the iteration).
+
+## 32. Origin Field Parity Between Metrics and Row Data
+**Pattern:** Per-row provenance field (`Origin`) and aggregate counter (`source_miss_counts`) must agree for every transition. When a row's origin is *overwritten* to a later value (e.g., `api_schedule` → `convene_anchor`) without a corresponding counter decrement/increment, the denominator reports one value and the Origin column reports another.
+**Examples:**
+- PR-A (PR#25) updated `origin = "convene_anchor"` on the floor-anchor hit but only incremented `sourced_convene` when `origin != "api_schedule"`. Result: sheet row says `Origin=convene_anchor`, metrics row says `sourced_api += 1`, `sourced_convene += 0`. X-Ray Section 0 can't reconcile.
+
+**Self-check:** Any place the row's origin is *overwritten*, the corresponding counters must move in lockstep: decrement the old bucket if it was already counted, increment the new bucket. Better: assign `origin` once per row at the final decision point, and increment the matching counter exactly once right next to it. Treat counter increments as a side effect of the origin assignment, never independent of it.
+
+## 33. Dedup-Key Scope Drift from Stated Policy
+**Pattern:** A dedup key that omits a field the inline comment claims is part of the policy. Compound keys silently narrow the policy (e.g., policy says "one alert per date+committee+bill" but key uses `date+committee` only, so all bills at the same meeting collapse into one alert).
+**Examples:**
+- PR-A (PR#25) ephemeral-drop dedup key was `f"ephemeral::{d_str}::{c_name}::{b_num}"` (correct), but the no-schedule-match dedup key was `f"no_match::{date_str}::{event_location}"` — dropped `bill_num` even though the adjacent comment said "one alert per date+committee+bill is enough."
+
+**Self-check:** When writing a `dedup_key`, read the comment/docstring that describes the dedup policy and verify every field named there appears in the key. If the key narrows the policy, update one or the other so they agree.
+
+## 34. Redundant Local Imports of Already-Imported Modules
+**Pattern:** `import json as _json` (or similar) inside a function or try block when `json` is already imported at module top-level. Usually introduced during rapid iteration as a "safety" move without checking top-of-file imports.
+**Examples:**
+- PR-A (PR#25) had `import json as _json` inside the SYSTEM_METRICS try block despite `import json` at calendar_worker.py line 3.
+
+**Self-check:** Before adding a local import, `grep -n "^import <name>\|^from <name>" <file>` at top of file. Remove any local import whose global is already in scope.
+
+## 35. Schema Field Added to One Append Site Out of Many
+**Pattern:** Adding a new column (e.g., `Origin`) to one `master_events.append(...)` call but missing the other N sites that also append to the same list. Defensive `if 'Origin' not in df.columns: df['Origin'] = ''` at read time papers over the gap; downstream analytics show empty strings in the missing rows.
+**Examples:**
+- PR-A (PR#25) added `"Origin": origin` to the HISTORY.CSV append at ~L1292 but missed the four API/DOCKET/API_Skeleton appends at ~L913/L932/L939/L944. Resulting Sheet1 had blank Origin for all LIS-schedule-derived rows — the exact rows most likely to need provenance.
+
+**Self-check:** After adding a field to a `list.append(dict)` call, `grep -n "<list_name>.append" <file>` and confirm every single call site includes the field. Do NOT rely on `if col not in df.columns: df[col] = ""` to paper over gaps — that's a downstream bandaid, not a fix.

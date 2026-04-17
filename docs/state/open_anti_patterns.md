@@ -19,6 +19,8 @@ This page is the counterpart to [[failures/gemini_review_patterns]] but for debt
 
 ## 1. `calendar_worker.py` ~line 1181 — silent `"Journal Entry"` default
 
+**Status:** resolved-in-PR-A (branch `claude/worker-source-miss-visibility`, PR# TBD). Tag + alert + Origin column landed.
+
 **Severity:** `CRITICAL` — data integrity at risk; root disease of the Section 9 metric illusion.
 
 ```python
@@ -40,6 +42,8 @@ if matched_api_key:
 
 ## 2. `calendar_worker.py` ~lines 1248-1261 — ephemeral filter silent drop
 
+**Status:** resolved-in-PR-A. Counter + deduped `push_system_alert` added on the drop branch; `dropped_ephemeral` now surfaces in X-Ray Section 0.
+
 **Severity:** `CRITICAL` — silent row loss on source miss.
 
 ```python
@@ -57,6 +61,8 @@ for ev in master_events:
 ---
 
 ## 3. `calendar_worker.py` ~lines 1158-1167 — selective Memory Anchor tag
+
+**Status:** resolved-in-PR-A. Admin-verb path now emits `📝 [Memory Anchor: admin]`; dynamic-verb path keeps `⚙️ [Memory Anchor]`. Both increment `unsourced_anchor`.
 
 **Severity:** `WARN` — provenance loss on admin-verb Memory Anchor fallbacks.
 
@@ -77,6 +83,8 @@ else:
 
 ## 4. `calendar_worker.py` ~lines 1269-1275 — Journal → Ledger rename erases provenance
 
+**Status:** resolved-in-PR-A. `Origin` column added to every `master_events` append; Ledger-Updates collapse now gates off `Origin.isin(['journal_default', 'floor_miss'])` instead of the renamed Time string, so provenance survives the rename.
+
 **Severity:** `WARN` — provenance loss; enabler for #1's invisibility (borderline `CRITICAL` because without it #1 would already be surfaced).
 
 ```python
@@ -92,6 +100,8 @@ if journal_mask.any():
 ---
 
 ## 5. `calendar_worker.py` ~line 756 — `except Exception as e: print(...)` cache fallback
+
+**Status:** resolved-in-PR-A. `print` retained for logs; categorized `push_system_alert(..., category="API_FAILURE", severity="WARN", dedup_key="cache_read_failure")` added alongside.
 
 **Severity:** `WARN` — alert not routed to Bug_Logs (still visible in stdout, so not silent, but not categorized either). Same family as #1-4.
 
