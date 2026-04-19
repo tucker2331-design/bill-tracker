@@ -1,6 +1,6 @@
 ---
 tags: [state, live, debt, anti-pattern]
-updated: 2026-04-16
+updated: 2026-04-19
 status: active
 ---
 
@@ -139,6 +139,20 @@ final_df = final_df[(final_df['Date'] >= scrape_start_str) & (final_df['Date'] <
 **Problem:** PR-A tagged NO_SCHEDULE_MATCH rows visibly but stored nothing about what the matcher was looking for or what LIS *did* schedule that day. Every investigation of the 9 in-window bugs would have started with "add a print and re-run the worker."
 
 **Fix (PR-B):** New column `DiagnosticHint` populated only on `journal_default` / `floor_miss` rows with `loc='<bill_locations[bill]>'; api_<date>=[<committee>@<time>; ...]` (nearest-3 same-chamber candidates). X-Ray Sections 4d, 9 sample rows, and the Ledger Health Check expander surface the column. Also logged as [[failures/gemini_review_patterns]] #37.
+
+---
+
+## 8. `⏱️ [NO_SCHEDULE_MATCH]` tag fires on admin-verb rows
+
+**Status:** surfaced by 2026-04-19 full-universe audit ([[testing/crossover_audit]]). Not yet fixed.
+
+**Severity:** `INFO` — no data integrity impact; cosmetic/scope issue in instrumentation. Admin rows correctly land in Ledger Updates; the extra tag is noise, not a wrong classification.
+
+**Problem:** The audit surfaced 423 Sheet1 rows in the crossover window with `Time='⏱️ [NO_SCHEDULE_MATCH]'` whose outcomes are unambiguously admin verbs (e.g. "Placed on Finance Agenda", "Placed on Appropriations Agenda"). These rows were never supposed to find a Schedule API match — the worker runs `find_api_schedule_match()` on every journal_default row regardless of verb class, and tags the miss the same way whether a meeting was expected or not. Side effect: in X-Ray, the NO_SCHEDULE_MATCH signal is diluted by 47× (423 non-bugs for every 9 bugs), reducing its usefulness as a triage filter.
+
+**Fix plan:** Either (a) skip `find_api_schedule_match()` entirely when the outcome matches admin-verb patterns, or (b) classify the tag by verb class up-front so X-Ray can filter to meeting-verb misses only. Option (b) keeps more instrumentation data; option (a) is simpler. Defer until PR-C scoping is settled — might even fall out of Class 1/Class 2 fixes if they tighten the resolution path.
+
+**Blocked on:** none; parked as deferred polish.
 
 ---
 
