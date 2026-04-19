@@ -31,9 +31,11 @@ Links use Obsidian `[[wikilink]]` format. Obsidian resolves by filename; path-qu
 ## Domain Knowledge
 - [[knowledge/lis_api_reference]] — VA LIS endpoints, auth, quirks
 - [[knowledge/tba_times]] — Schedule API returns "Time TBA"; existence ≠ concrete time
+- [[knowledge/lis_dom_scraping]] — headless-Chrome bypass for LIS SPA when Claude-in-Chrome is down
 
 ## Testing & Metrics
 - [[testing/crossover_week_baseline]] — Feb 9-13, 2026 as the benchmark; PR-by-PR bug count ledger
+- [[testing/crossover_audit]] — full-window tier-A audit of Sheet1 vs LIS website (ground truth)
 
 ## Failures / Post-Mortems
 - [[failures/assumptions_audit]] — every busted assumption and its fix (source of truth for "why we did that"); numbered, append-only
@@ -45,6 +47,9 @@ Links use Obsidian `[[wikilink]]` format. Obsidian resolves by filename; path-qu
 
 ## Raw / Source (out of scope of this wiki)
 The codebase itself (`calendar_worker.py`, `pages/ray2.py`, etc.) is the raw layer. The wiki describes it but does not duplicate it.
+
+## Tooling
+- `tools/crossover_audit/` — runnable pipeline for the full-window LIS audit; see [[testing/crossover_audit]] for context.
 
 ---
 

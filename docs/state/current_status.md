@@ -1,6 +1,6 @@
 ---
 tags: [state, live]
-updated: 2026-04-16
+updated: 2026-04-19
 status: active
 ---
 
@@ -11,7 +11,7 @@ status: active
 **Benchmark window:** Feb 9-13, 2026 (crossover week).
 
 ## Active focus
-**PR-B (metrics visibility + diagnostic hint) open.** Two targeted fixes on top of PR-A now that PR#25 has merged and run in production: (1) viewport slice was silently dropping the `SYSTEM_METRICS` row (stamped `Date=today`, outside Feb 9-13 window) so X-Ray Section 0 rendered blank; (2) NO_SCHEDULE_MATCH / NO_CONVENE_ANCHOR rows now carry a `DiagnosticHint` column showing `bill_locations[bill]` + nearest-3 same-chamber Schedule API candidates so the 9 in-window bugs can be triaged without re-running the worker.
+**Audit complete; scoping PR-C.** Full tier-A ground-truth audit of crossover week (1,544 bills × 6,885 LIS actions vs 4,473 Sheet1 rows) confirmed the X-Ray Section 9 bug count of 9 is the true, full-window bug count — no hidden meeting-misrouted rows, no phantom rows, no silent bill-drops. See [[testing/crossover_audit]]. PR-C scope is now the two-track fix: secondary time source for Class 1 (4 bugs: HB111/505/972/609 — Feb 12 H-P&E + H-Finance Schedule API gaps) + subcommittee resolution for Class 2 (5 bugs: HB24/1266/1372, SB494/555). No PR-C code until the audit is reviewed and direction confirmed.
 
 ## Open PRs
 | # | Branch | State | Notes |
@@ -29,10 +29,11 @@ status: active
 Once PR-B is running and Section 0 renders the denominator, identify which of `unsourced_journal` / `unsourced_anchor` / `floor_anchor_miss` / `dropped_ephemeral` is largest. Each follow-up PR must cite before/after counts from Section 0 to meet CLAUDE.md Standard #7.
 
 ## Known bug count (as of last measured X-Ray)
-Crossover week, post-PR#21 (PR#22 never merged):
-- Meeting actions without times: **9**
+Crossover week, post-PR-B, **audit-verified 2026-04-19**:
+- Meeting actions without times: **9** ✓ (confirmed via full-universe audit; no hidden bugs)
 - Unclassified: **9** (same bucket; see breakdown in [[testing/crossover_week_baseline]])
-- Caveat: **this 9 is the symptom count, not the source-miss count.** True source-miss rate will be higher once instrumentation lands. See [[state/open_anti_patterns]].
+- The 9-count is now the true bug count, not a symptom count. Full-universe audit in [[testing/crossover_audit]] ruled out hidden-meeting-misclass, phantom rows, and silent bill-drops.
+- Bug class distribution: 4 × Class 1 (Schedule API gap at full committee), 5 × Class 2 (subcommittee attribution miss). See [[testing/crossover_audit#findings]].
 
 ## Active architecture
 Two parallel Streamlit apps and two scheduled workers. Full description in [[architecture/calendar_pipeline]].
