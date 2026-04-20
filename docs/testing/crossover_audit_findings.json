@@ -340,14 +340,6 @@
       },
       {
         "bill": "HB1103",
-        "date": "2026-02-12",
-        "sheet1_outcome": "H Placed on Courts of Justice Agenda",
-        "sheet1_origin": "journal_default",
-        "sheet1_committee": "\ud83d\udccb Ledger Updates",
-        "diagnostic_hint": "loc='House Courts of Justice'; api_2026-02-12=[House Counties, Cities and Towns-Subcommittee #2@7:30 AM; House Public Safety-Subcommittee #2@7:30 AM; House Health and Human Services-Behavioral Health@\u2026"
-      },
-      {
-        "bill": "HB1103",
         "date": "2026-02-10",
         "sheet1_outcome": "H Placed on Courts of Justice Agenda",
         "sheet1_origin": "journal_default",
@@ -355,12 +347,12 @@
         "diagnostic_hint": "loc='House Courts of Justice'; api_2026-02-10=[House Education-K-12 Subcommittee@4:00 PM; House Republican Caucus@11:00 AM; House Privileges and Elections-Campaigns and Candidates@7:00 AM]"
       },
       {
-        "bill": "HB1109",
-        "date": "2026-02-10",
-        "sheet1_outcome": "H Assigned HAPP sub: Health & Human Resources",
+        "bill": "HB1103",
+        "date": "2026-02-12",
+        "sheet1_outcome": "H Placed on Courts of Justice Agenda",
         "sheet1_origin": "journal_default",
         "sheet1_committee": "\ud83d\udccb Ledger Updates",
-        "diagnostic_hint": "loc='House Appropriations'; api_2026-02-10=[House Education-K-12 Subcommittee@4:00 PM; House Republican Caucus@11:00 AM; House Privileges and Elections-Campaigns and Candidates@7:00 AM]"
+        "diagnostic_hint": "loc='House Courts of Justice'; api_2026-02-12=[House Counties, Cities and Towns-Subcommittee #2@7:30 AM; House Public Safety-Subcommittee #2@7:30 AM; House Health and Human Services-Behavioral Health@\u2026"
       },
       {
         "bill": "HB1109",
@@ -369,6 +361,14 @@
         "sheet1_origin": "journal_default",
         "sheet1_committee": "\ud83d\udccb Ledger Updates",
         "diagnostic_hint": "loc='House Health and Human Services'; api_2026-02-09=[House Democratic Caucus@11:15 AM; House Finance-Subcommittee #1@7:00 AM; House Communications, Technology and Innovation@10:00 AM]"
+      },
+      {
+        "bill": "HB1109",
+        "date": "2026-02-10",
+        "sheet1_outcome": "H Assigned HAPP sub: Health & Human Resources",
+        "sheet1_origin": "journal_default",
+        "sheet1_committee": "\ud83d\udccb Ledger Updates",
+        "diagnostic_hint": "loc='House Appropriations'; api_2026-02-10=[House Education-K-12 Subcommittee@4:00 PM; House Republican Caucus@11:00 AM; House Privileges and Elections-Campaigns and Candidates@7:00 AM]"
       },
       {
         "bill": "HB1111",
@@ -468,19 +468,19 @@
       },
       {
         "bill": "HB1174",
-        "date": "2026-02-10",
-        "sheet1_outcome": "H Assigned HAPP sub: Health & Human Resources",
-        "sheet1_origin": "journal_default",
-        "sheet1_committee": "\ud83d\udccb Ledger Updates",
-        "diagnostic_hint": "loc='House Appropriations'; api_2026-02-10=[House Education-K-12 Subcommittee@4:00 PM; House Republican Caucus@11:00 AM; House Privileges and Elections-Campaigns and Candidates@7:00 AM]"
-      },
-      {
-        "bill": "HB1174",
         "date": "2026-02-09",
         "sheet1_outcome": "H Placed on Health and Human Services Agenda",
         "sheet1_origin": "journal_default",
         "sheet1_committee": "\ud83d\udccb Ledger Updates",
         "diagnostic_hint": "loc='House Health and Human Services'; api_2026-02-09=[House Democratic Caucus@11:15 AM; House Finance-Subcommittee #1@7:00 AM; House Communications, Technology and Innovation@10:00 AM]"
+      },
+      {
+        "bill": "HB1174",
+        "date": "2026-02-10",
+        "sheet1_outcome": "H Assigned HAPP sub: Health & Human Resources",
+        "sheet1_origin": "journal_default",
+        "sheet1_committee": "\ud83d\udccb Ledger Updates",
+        "diagnostic_hint": "loc='House Appropriations'; api_2026-02-10=[House Education-K-12 Subcommittee@4:00 PM; House Republican Caucus@11:00 AM; House Privileges and Elections-Campaigns and Candidates@7:00 AM]"
       },
       {
         "bill": "HB1185",
@@ -620,19 +620,19 @@
       },
       {
         "bill": "HB124",
-        "date": "2026-02-12",
-        "sheet1_outcome": "H Placed on Courts of Justice Agenda",
-        "sheet1_origin": "journal_default",
-        "sheet1_committee": "\ud83d\udccb Ledger Updates",
-        "diagnostic_hint": "loc='House Courts of Justice'; api_2026-02-12=[House Counties, Cities and Towns-Subcommittee #2@7:30 AM; House Public Safety-Subcommittee #2@7:30 AM; House Health and Human Services-Behavioral Health@\u2026"
-      },
-      {
-        "bill": "HB124",
         "date": "2026-02-10",
         "sheet1_outcome": "H Placed on Courts of Justice Agenda",
         "sheet1_origin": "journal_default",
         "sheet1_committee": "\ud83d\udccb Ledger Updates",
         "diagnostic_hint": "loc='House Courts of Justice'; api_2026-02-10=[House Education-K-12 Subcommittee@4:00 PM; House Republican Caucus@11:00 AM; House Privileges and Elections-Campaigns and Candidates@7:00 AM]"
+      },
+      {
+        "bill": "HB124",
+        "date": "2026-02-12",
+        "sheet1_outcome": "H Placed on Courts of Justice Agenda",
+        "sheet1_origin": "journal_default",
+        "sheet1_committee": "\ud83d\udccb Ledger Updates",
+        "diagnostic_hint": "loc='House Courts of Justice'; api_2026-02-12=[House Counties, Cities and Towns-Subcommittee #2@7:30 AM; House Public Safety-Subcommittee #2@7:30 AM; House Health and Human Services-Behavioral Health@\u2026"
       },
       {
         "bill": "HB1240",
@@ -700,19 +700,19 @@
       },
       {
         "bill": "HB1263",
-        "date": "2026-02-10",
-        "sheet1_outcome": "H Referred to Committee on Appropriations",
-        "sheet1_origin": "journal_default",
-        "sheet1_committee": "\ud83d\udccb Ledger Updates",
-        "diagnostic_hint": "loc='House Appropriations'; api_2026-02-10=[House Education-K-12 Subcommittee@4:00 PM; House Republican Caucus@11:00 AM; House Privileges and Elections-Campaigns and Candidates@7:00 AM]"
-      },
-      {
-        "bill": "HB1263",
         "date": "2026-02-09",
         "sheet1_outcome": "H Placed on Labor and Commerce Agenda",
         "sheet1_origin": "journal_default",
         "sheet1_committee": "\ud83d\udccb Ledger Updates",
         "diagnostic_hint": "loc='House Labor and Commerce'; api_2026-02-09=[House Democratic Caucus@11:15 AM; House Finance-Subcommittee #1@7:00 AM; House Communications, Technology and Innovation@10:00 AM]"
+      },
+      {
+        "bill": "HB1263",
+        "date": "2026-02-10",
+        "sheet1_outcome": "H Referred to Committee on Appropriations",
+        "sheet1_origin": "journal_default",
+        "sheet1_committee": "\ud83d\udccb Ledger Updates",
+        "diagnostic_hint": "loc='House Appropriations'; api_2026-02-10=[House Education-K-12 Subcommittee@4:00 PM; House Republican Caucus@11:00 AM; House Privileges and Elections-Campaigns and Candidates@7:00 AM]"
       },
       {
         "bill": "HB1271",
@@ -724,19 +724,19 @@
       },
       {
         "bill": "HB1272",
-        "date": "2026-02-12",
-        "sheet1_outcome": "\ud83d\udcdd [Memory Anchor: admin] H Committee substitute printed 26106931D-H1",
-        "sheet1_origin": "journal_default",
-        "sheet1_committee": "\ud83d\udccb Ledger Updates",
-        "diagnostic_hint": "loc='House Appropriations'; api_2026-02-12=[House Counties, Cities and Towns-Subcommittee #2@7:30 AM; House Public Safety-Subcommittee #2@7:30 AM; House Health and Human Services-Behavioral Health@7:3\u2026"
-      },
-      {
-        "bill": "HB1272",
         "date": "2026-02-11",
         "sheet1_outcome": "H Placed on General Laws Agenda",
         "sheet1_origin": "journal_default",
         "sheet1_committee": "\ud83d\udccb Ledger Updates",
         "diagnostic_hint": "loc='House General Laws'; api_2026-02-11=[House Privileges and Elections-Voting Rights@7:00 AM; House Agriculture, Chesapeake and Natural Resources@4:00 PM; House Communications, Technology and Innova\u2026"
+      },
+      {
+        "bill": "HB1272",
+        "date": "2026-02-12",
+        "sheet1_outcome": "\ud83d\udcdd [Memory Anchor: admin] H Committee substitute printed 26106931D-H1",
+        "sheet1_origin": "journal_default",
+        "sheet1_committee": "\ud83d\udccb Ledger Updates",
+        "diagnostic_hint": "loc='House Appropriations'; api_2026-02-12=[House Counties, Cities and Towns-Subcommittee #2@7:30 AM; House Public Safety-Subcommittee #2@7:30 AM; House Health and Human Services-Behavioral Health@7:3\u2026"
       },
       {
         "bill": "HB1276",
@@ -796,14 +796,6 @@
       },
       {
         "bill": "HB1297",
-        "date": "2026-02-10",
-        "sheet1_outcome": "\u2139\ufe0f [TIMING_LAG: Memory=House Health and Human Services] H Placed on Appropriations Agenda",
-        "sheet1_origin": "journal_default",
-        "sheet1_committee": "\ud83d\udccb Ledger Updates",
-        "diagnostic_hint": "loc='House Appropriations'; api_2026-02-10=[House Education-K-12 Subcommittee@4:00 PM; House Republican Caucus@11:00 AM; House Privileges and Elections-Campaigns and Candidates@7:00 AM]"
-      },
-      {
-        "bill": "HB1297",
         "date": "2026-02-09",
         "sheet1_outcome": "H Placed on Health and Human Services Agenda",
         "sheet1_origin": "journal_default",
@@ -811,12 +803,12 @@
         "diagnostic_hint": "loc='House Health and Human Services'; api_2026-02-09=[House Democratic Caucus@11:15 AM; House Finance-Subcommittee #1@7:00 AM; House Communications, Technology and Innovation@10:00 AM]"
       },
       {
-        "bill": "HB1298",
-        "date": "2026-02-12",
-        "sheet1_outcome": "\ud83d\udcdd [Memory Anchor: admin] H Assigned HAPP sub: General Government and Capital Outlay",
+        "bill": "HB1297",
+        "date": "2026-02-10",
+        "sheet1_outcome": "\u2139\ufe0f [TIMING_LAG: Memory=House Health and Human Services] H Placed on Appropriations Agenda",
         "sheet1_origin": "journal_default",
         "sheet1_committee": "\ud83d\udccb Ledger Updates",
-        "diagnostic_hint": "loc='House Appropriations'; api_2026-02-12=[House Counties, Cities and Towns-Subcommittee #2@7:30 AM; House Public Safety-Subcommittee #2@7:30 AM; House Health and Human Services-Behavioral Health@7:3\u2026"
+        "diagnostic_hint": "loc='House Appropriations'; api_2026-02-10=[House Education-K-12 Subcommittee@4:00 PM; House Republican Caucus@11:00 AM; House Privileges and Elections-Campaigns and Candidates@7:00 AM]"
       },
       {
         "bill": "HB1298",
@@ -825,6 +817,14 @@
         "sheet1_origin": "journal_default",
         "sheet1_committee": "\ud83d\udccb Ledger Updates",
         "diagnostic_hint": "loc='House Courts of Justice'; api_2026-02-10=[House Education-K-12 Subcommittee@4:00 PM; House Republican Caucus@11:00 AM; House Privileges and Elections-Campaigns and Candidates@7:00 AM]"
+      },
+      {
+        "bill": "HB1298",
+        "date": "2026-02-12",
+        "sheet1_outcome": "\ud83d\udcdd [Memory Anchor: admin] H Assigned HAPP sub: General Government and Capital Outlay",
+        "sheet1_origin": "journal_default",
+        "sheet1_committee": "\ud83d\udccb Ledger Updates",
+        "diagnostic_hint": "loc='House Appropriations'; api_2026-02-12=[House Counties, Cities and Towns-Subcommittee #2@7:30 AM; House Public Safety-Subcommittee #2@7:30 AM; House Health and Human Services-Behavioral Health@7:3\u2026"
       },
       {
         "bill": "HB1304",
@@ -900,19 +900,19 @@
       },
       {
         "bill": "HB1320",
-        "date": "2026-02-10",
-        "sheet1_outcome": "H Referred to Committee on Appropriations",
-        "sheet1_origin": "journal_default",
-        "sheet1_committee": "\ud83d\udccb Ledger Updates",
-        "diagnostic_hint": "loc='House Appropriations'; api_2026-02-10=[House Education-K-12 Subcommittee@4:00 PM; House Republican Caucus@11:00 AM; House Privileges and Elections-Campaigns and Candidates@7:00 AM]"
-      },
-      {
-        "bill": "HB1320",
         "date": "2026-02-09",
         "sheet1_outcome": "H Placed on Labor and Commerce Agenda",
         "sheet1_origin": "journal_default",
         "sheet1_committee": "\ud83d\udccb Ledger Updates",
         "diagnostic_hint": "loc='House Labor and Commerce'; api_2026-02-09=[House Democratic Caucus@11:15 AM; House Finance-Subcommittee #1@7:00 AM; House Communications, Technology and Innovation@10:00 AM]"
+      },
+      {
+        "bill": "HB1320",
+        "date": "2026-02-10",
+        "sheet1_outcome": "H Referred to Committee on Appropriations",
+        "sheet1_origin": "journal_default",
+        "sheet1_committee": "\ud83d\udccb Ledger Updates",
+        "diagnostic_hint": "loc='House Appropriations'; api_2026-02-10=[House Education-K-12 Subcommittee@4:00 PM; House Republican Caucus@11:00 AM; House Privileges and Elections-Campaigns and Candidates@7:00 AM]"
       },
       {
         "bill": "HB1324",
@@ -1012,14 +1012,6 @@
       },
       {
         "bill": "HB1366",
-        "date": "2026-02-10",
-        "sheet1_outcome": "H Assigned HAPP sub: Health & Human Resources",
-        "sheet1_origin": "journal_default",
-        "sheet1_committee": "\ud83d\udccb Ledger Updates",
-        "diagnostic_hint": "loc='House Appropriations'; api_2026-02-10=[House Education-K-12 Subcommittee@4:00 PM; House Republican Caucus@11:00 AM; House Privileges and Elections-Campaigns and Candidates@7:00 AM]"
-      },
-      {
-        "bill": "HB1366",
         "date": "2026-02-09",
         "sheet1_outcome": "H Placed on Health and Human Services Agenda",
         "sheet1_origin": "journal_default",
@@ -1027,12 +1019,12 @@
         "diagnostic_hint": "loc='House Health and Human Services'; api_2026-02-09=[House Democratic Caucus@11:15 AM; House Finance-Subcommittee #1@7:00 AM; House Communications, Technology and Innovation@10:00 AM]"
       },
       {
-        "bill": "HB1372",
-        "date": "2026-02-12",
-        "sheet1_outcome": "H Referred to Committee on Appropriations",
+        "bill": "HB1366",
+        "date": "2026-02-10",
+        "sheet1_outcome": "H Assigned HAPP sub: Health & Human Resources",
         "sheet1_origin": "journal_default",
         "sheet1_committee": "\ud83d\udccb Ledger Updates",
-        "diagnostic_hint": "loc='House Appropriations'; api_2026-02-12=[House Counties, Cities and Towns-Subcommittee #2@7:30 AM; House Public Safety-Subcommittee #2@7:30 AM; House Health and Human Services-Behavioral Health@7:3\u2026"
+        "diagnostic_hint": "loc='House Appropriations'; api_2026-02-10=[House Education-K-12 Subcommittee@4:00 PM; House Republican Caucus@11:00 AM; House Privileges and Elections-Campaigns and Candidates@7:00 AM]"
       },
       {
         "bill": "HB1372",
@@ -1041,6 +1033,14 @@
         "sheet1_origin": "journal_default",
         "sheet1_committee": "\ud83d\udccb Ledger Updates",
         "diagnostic_hint": "loc='House Labor and Commerce'; api_2026-02-11=[House Privileges and Elections-Voting Rights@7:00 AM; House Agriculture, Chesapeake and Natural Resources@4:00 PM; House Communications, Technology and \u2026"
+      },
+      {
+        "bill": "HB1372",
+        "date": "2026-02-12",
+        "sheet1_outcome": "H Referred to Committee on Appropriations",
+        "sheet1_origin": "journal_default",
+        "sheet1_committee": "\ud83d\udccb Ledger Updates",
+        "diagnostic_hint": "loc='House Appropriations'; api_2026-02-12=[House Counties, Cities and Towns-Subcommittee #2@7:30 AM; House Public Safety-Subcommittee #2@7:30 AM; House Health and Human Services-Behavioral Health@7:3\u2026"
       },
       {
         "bill": "HB1379",
@@ -1092,22 +1092,14 @@
       },
       {
         "bill": "HB1391",
-        "date": "2026-02-10",
-        "sheet1_outcome": "\u2139\ufe0f [TIMING_LAG: Memory=House Health and Human Services] H Placed on Appropriations Agenda",
+        "date": "2026-02-09",
+        "sheet1_outcome": "H Placed on Health and Human Services Agenda",
         "sheet1_origin": "journal_default",
         "sheet1_committee": "\ud83d\udccb Ledger Updates",
-        "diagnostic_hint": "loc='House Appropriations'; api_2026-02-10=[House Education-K-12 Subcommittee@4:00 PM; House Republican Caucus@11:00 AM; House Privileges and Elections-Campaigns and Candidates@7:00 AM]"
+        "diagnostic_hint": "loc='House Health and Human Services'; api_2026-02-09=[House Democratic Caucus@11:15 AM; House Finance-Subcommittee #1@7:00 AM; House Communications, Technology and Innovation@10:00 AM]"
       },
       {
         "bill": "HB1391",
-        "date": "2026-02-09",
-        "sheet1_outcome": "H Placed on Health and Human Services Agenda",
-        "sheet1_origin": "journal_default",
-        "sheet1_committee": "\ud83d\udccb Ledger Updates",
-        "diagnostic_hint": "loc='House Health and Human Services'; api_2026-02-09=[House Democratic Caucus@11:15 AM; House Finance-Subcommittee #1@7:00 AM; House Communications, Technology and Innovation@10:00 AM]"
-      },
-      {
-        "bill": "HB1398",
         "date": "2026-02-10",
         "sheet1_outcome": "\u2139\ufe0f [TIMING_LAG: Memory=House Health and Human Services] H Placed on Appropriations Agenda",
         "sheet1_origin": "journal_default",
@@ -1121,6 +1113,14 @@
         "sheet1_origin": "journal_default",
         "sheet1_committee": "\ud83d\udccb Ledger Updates",
         "diagnostic_hint": "loc='House Health and Human Services'; api_2026-02-09=[House Democratic Caucus@11:15 AM; House Finance-Subcommittee #1@7:00 AM; House Communications, Technology and Innovation@10:00 AM]"
+      },
+      {
+        "bill": "HB1398",
+        "date": "2026-02-10",
+        "sheet1_outcome": "\u2139\ufe0f [TIMING_LAG: Memory=House Health and Human Services] H Placed on Appropriations Agenda",
+        "sheet1_origin": "journal_default",
+        "sheet1_committee": "\ud83d\udccb Ledger Updates",
+        "diagnostic_hint": "loc='House Appropriations'; api_2026-02-10=[House Education-K-12 Subcommittee@4:00 PM; House Republican Caucus@11:00 AM; House Privileges and Elections-Campaigns and Candidates@7:00 AM]"
       },
       {
         "bill": "HB1400",
@@ -1148,19 +1148,19 @@
       },
       {
         "bill": "HB1403",
-        "date": "2026-02-10",
-        "sheet1_outcome": "\u2139\ufe0f [TIMING_LAG: Memory=House Health and Human Services] H Placed on Appropriations Agenda",
-        "sheet1_origin": "journal_default",
-        "sheet1_committee": "\ud83d\udccb Ledger Updates",
-        "diagnostic_hint": "loc='House Appropriations'; api_2026-02-10=[House Education-K-12 Subcommittee@4:00 PM; House Republican Caucus@11:00 AM; House Privileges and Elections-Campaigns and Candidates@7:00 AM]"
-      },
-      {
-        "bill": "HB1403",
         "date": "2026-02-09",
         "sheet1_outcome": "H Placed on Health and Human Services Agenda",
         "sheet1_origin": "journal_default",
         "sheet1_committee": "\ud83d\udccb Ledger Updates",
         "diagnostic_hint": "loc='House Health and Human Services'; api_2026-02-09=[House Democratic Caucus@11:15 AM; House Finance-Subcommittee #1@7:00 AM; House Communications, Technology and Innovation@10:00 AM]"
+      },
+      {
+        "bill": "HB1403",
+        "date": "2026-02-10",
+        "sheet1_outcome": "\u2139\ufe0f [TIMING_LAG: Memory=House Health and Human Services] H Placed on Appropriations Agenda",
+        "sheet1_origin": "journal_default",
+        "sheet1_committee": "\ud83d\udccb Ledger Updates",
+        "diagnostic_hint": "loc='House Appropriations'; api_2026-02-10=[House Education-K-12 Subcommittee@4:00 PM; House Republican Caucus@11:00 AM; House Privileges and Elections-Campaigns and Candidates@7:00 AM]"
       },
       {
         "bill": "HB1405",
@@ -1188,6 +1188,14 @@
       },
       {
         "bill": "HB1411",
+        "date": "2026-02-10",
+        "sheet1_outcome": "H Placed on Courts of Justice Agenda",
+        "sheet1_origin": "journal_default",
+        "sheet1_committee": "\ud83d\udccb Ledger Updates",
+        "diagnostic_hint": "loc='House Courts of Justice'; api_2026-02-10=[House Education-K-12 Subcommittee@4:00 PM; House Republican Caucus@11:00 AM; House Privileges and Elections-Campaigns and Candidates@7:00 AM]"
+      },
+      {
+        "bill": "HB1411",
         "date": "2026-02-12",
         "sheet1_outcome": "\ud83d\udcdd [Memory Anchor: admin] H Assigned HAPP sub: General Government and Capital Outlay",
         "sheet1_origin": "journal_default",
@@ -1195,7 +1203,7 @@
         "diagnostic_hint": "loc='House Appropriations'; api_2026-02-12=[House Counties, Cities and Towns-Subcommittee #2@7:30 AM; House Public Safety-Subcommittee #2@7:30 AM; House Health and Human Services-Behavioral Health@7:3\u2026"
       },
       {
-        "bill": "HB1411",
+        "bill": "HB1413",
         "date": "2026-02-10",
         "sheet1_outcome": "H Placed on Courts of Justice Agenda",
         "sheet1_origin": "journal_default",
@@ -1211,7 +1219,7 @@
         "diagnostic_hint": "loc='House Courts of Justice'; api_2026-02-12=[House Counties, Cities and Towns-Subcommittee #2@7:30 AM; House Public Safety-Subcommittee #2@7:30 AM; House Health and Human Services-Behavioral Health@\u2026"
       },
       {
-        "bill": "HB1413",
+        "bill": "HB1414",
         "date": "2026-02-10",
         "sheet1_outcome": "H Placed on Courts of Justice Agenda",
         "sheet1_origin": "journal_default",
@@ -1225,14 +1233,6 @@
         "sheet1_origin": "journal_default",
         "sheet1_committee": "\ud83d\udccb Ledger Updates",
         "diagnostic_hint": "loc='House Courts of Justice'; api_2026-02-12=[House Counties, Cities and Towns-Subcommittee #2@7:30 AM; House Public Safety-Subcommittee #2@7:30 AM; House Health and Human Services-Behavioral Health@\u2026"
-      },
-      {
-        "bill": "HB1414",
-        "date": "2026-02-10",
-        "sheet1_outcome": "H Placed on Courts of Justice Agenda",
-        "sheet1_origin": "journal_default",
-        "sheet1_committee": "\ud83d\udccb Ledger Updates",
-        "diagnostic_hint": "loc='House Courts of Justice'; api_2026-02-10=[House Education-K-12 Subcommittee@4:00 PM; House Republican Caucus@11:00 AM; House Privileges and Elections-Campaigns and Candidates@7:00 AM]"
       },
       {
         "bill": "HB1415",
@@ -1244,19 +1244,19 @@
       },
       {
         "bill": "HB1418",
-        "date": "2026-02-10",
-        "sheet1_outcome": "\u2139\ufe0f [TIMING_LAG: Memory=House Health and Human Services] H Placed on Appropriations Agenda",
-        "sheet1_origin": "journal_default",
-        "sheet1_committee": "\ud83d\udccb Ledger Updates",
-        "diagnostic_hint": "loc='House Appropriations'; api_2026-02-10=[House Education-K-12 Subcommittee@4:00 PM; House Republican Caucus@11:00 AM; House Privileges and Elections-Campaigns and Candidates@7:00 AM]"
-      },
-      {
-        "bill": "HB1418",
         "date": "2026-02-09",
         "sheet1_outcome": "H Placed on Health and Human Services Agenda",
         "sheet1_origin": "journal_default",
         "sheet1_committee": "\ud83d\udccb Ledger Updates",
         "diagnostic_hint": "loc='House Health and Human Services'; api_2026-02-09=[House Democratic Caucus@11:15 AM; House Finance-Subcommittee #1@7:00 AM; House Communications, Technology and Innovation@10:00 AM]"
+      },
+      {
+        "bill": "HB1418",
+        "date": "2026-02-10",
+        "sheet1_outcome": "\u2139\ufe0f [TIMING_LAG: Memory=House Health and Human Services] H Placed on Appropriations Agenda",
+        "sheet1_origin": "journal_default",
+        "sheet1_committee": "\ud83d\udccb Ledger Updates",
+        "diagnostic_hint": "loc='House Appropriations'; api_2026-02-10=[House Education-K-12 Subcommittee@4:00 PM; House Republican Caucus@11:00 AM; House Privileges and Elections-Campaigns and Candidates@7:00 AM]"
       },
       {
         "bill": "HB1421",
@@ -1300,19 +1300,19 @@
       },
       {
         "bill": "HB1434",
-        "date": "2026-02-10",
-        "sheet1_outcome": "H Assigned HAPP sub: Health & Human Resources",
-        "sheet1_origin": "journal_default",
-        "sheet1_committee": "\ud83d\udccb Ledger Updates",
-        "diagnostic_hint": "loc='House Appropriations'; api_2026-02-10=[House Education-K-12 Subcommittee@4:00 PM; House Republican Caucus@11:00 AM; House Privileges and Elections-Campaigns and Candidates@7:00 AM]"
-      },
-      {
-        "bill": "HB1434",
         "date": "2026-02-09",
         "sheet1_outcome": "H Placed on Health and Human Services Agenda",
         "sheet1_origin": "journal_default",
         "sheet1_committee": "\ud83d\udccb Ledger Updates",
         "diagnostic_hint": "loc='House Health and Human Services'; api_2026-02-09=[House Democratic Caucus@11:15 AM; House Finance-Subcommittee #1@7:00 AM; House Communications, Technology and Innovation@10:00 AM]"
+      },
+      {
+        "bill": "HB1434",
+        "date": "2026-02-10",
+        "sheet1_outcome": "H Assigned HAPP sub: Health & Human Resources",
+        "sheet1_origin": "journal_default",
+        "sheet1_committee": "\ud83d\udccb Ledger Updates",
+        "diagnostic_hint": "loc='House Appropriations'; api_2026-02-10=[House Education-K-12 Subcommittee@4:00 PM; House Republican Caucus@11:00 AM; House Privileges and Elections-Campaigns and Candidates@7:00 AM]"
       },
       {
         "bill": "HB1439",
@@ -1404,19 +1404,19 @@
       },
       {
         "bill": "HB1464",
-        "date": "2026-02-12",
-        "sheet1_outcome": "\ud83d\udcdd [Memory Anchor: admin] H Assigned HAPP sub: General Government and Capital Outlay",
-        "sheet1_origin": "journal_default",
-        "sheet1_committee": "\ud83d\udccb Ledger Updates",
-        "diagnostic_hint": "loc='House Appropriations'; api_2026-02-12=[House Counties, Cities and Towns-Subcommittee #2@7:30 AM; House Public Safety-Subcommittee #2@7:30 AM; House Health and Human Services-Behavioral Health@7:3\u2026"
-      },
-      {
-        "bill": "HB1464",
         "date": "2026-02-10",
         "sheet1_outcome": "H Placed on Courts of Justice Agenda",
         "sheet1_origin": "journal_default",
         "sheet1_committee": "\ud83d\udccb Ledger Updates",
         "diagnostic_hint": "loc='House Courts of Justice'; api_2026-02-10=[House Education-K-12 Subcommittee@4:00 PM; House Republican Caucus@11:00 AM; House Privileges and Elections-Campaigns and Candidates@7:00 AM]"
+      },
+      {
+        "bill": "HB1464",
+        "date": "2026-02-12",
+        "sheet1_outcome": "\ud83d\udcdd [Memory Anchor: admin] H Assigned HAPP sub: General Government and Capital Outlay",
+        "sheet1_origin": "journal_default",
+        "sheet1_committee": "\ud83d\udccb Ledger Updates",
+        "diagnostic_hint": "loc='House Appropriations'; api_2026-02-12=[House Counties, Cities and Towns-Subcommittee #2@7:30 AM; House Public Safety-Subcommittee #2@7:30 AM; House Health and Human Services-Behavioral Health@7:3\u2026"
       },
       {
         "bill": "HB1468",
@@ -1468,19 +1468,19 @@
       },
       {
         "bill": "HB1490",
-        "date": "2026-02-10",
-        "sheet1_outcome": "H Assigned HAPP sub: Health & Human Resources",
-        "sheet1_origin": "journal_default",
-        "sheet1_committee": "\ud83d\udccb Ledger Updates",
-        "diagnostic_hint": "loc='House Appropriations'; api_2026-02-10=[House Education-K-12 Subcommittee@4:00 PM; House Republican Caucus@11:00 AM; House Privileges and Elections-Campaigns and Candidates@7:00 AM]"
-      },
-      {
-        "bill": "HB1490",
         "date": "2026-02-09",
         "sheet1_outcome": "H Placed on Health and Human Services Agenda",
         "sheet1_origin": "journal_default",
         "sheet1_committee": "\ud83d\udccb Ledger Updates",
         "diagnostic_hint": "loc='House Health and Human Services'; api_2026-02-09=[House Democratic Caucus@11:15 AM; House Finance-Subcommittee #1@7:00 AM; House Communications, Technology and Innovation@10:00 AM]"
+      },
+      {
+        "bill": "HB1490",
+        "date": "2026-02-10",
+        "sheet1_outcome": "H Assigned HAPP sub: Health & Human Resources",
+        "sheet1_origin": "journal_default",
+        "sheet1_committee": "\ud83d\udccb Ledger Updates",
+        "diagnostic_hint": "loc='House Appropriations'; api_2026-02-10=[House Education-K-12 Subcommittee@4:00 PM; House Republican Caucus@11:00 AM; House Privileges and Elections-Campaigns and Candidates@7:00 AM]"
       },
       {
         "bill": "HB1491",
@@ -1572,19 +1572,19 @@
       },
       {
         "bill": "HB1511",
-        "date": "2026-02-10",
-        "sheet1_outcome": "H Assigned HAPP sub: Health & Human Resources",
-        "sheet1_origin": "journal_default",
-        "sheet1_committee": "\ud83d\udccb Ledger Updates",
-        "diagnostic_hint": "loc='House Appropriations'; api_2026-02-10=[House Education-K-12 Subcommittee@4:00 PM; House Republican Caucus@11:00 AM; House Privileges and Elections-Campaigns and Candidates@7:00 AM]"
-      },
-      {
-        "bill": "HB1511",
         "date": "2026-02-09",
         "sheet1_outcome": "H Placed on Health and Human Services Agenda",
         "sheet1_origin": "journal_default",
         "sheet1_committee": "\ud83d\udccb Ledger Updates",
         "diagnostic_hint": "loc='House Health and Human Services'; api_2026-02-09=[House Democratic Caucus@11:15 AM; House Finance-Subcommittee #1@7:00 AM; House Communications, Technology and Innovation@10:00 AM]"
+      },
+      {
+        "bill": "HB1511",
+        "date": "2026-02-10",
+        "sheet1_outcome": "H Assigned HAPP sub: Health & Human Resources",
+        "sheet1_origin": "journal_default",
+        "sheet1_committee": "\ud83d\udccb Ledger Updates",
+        "diagnostic_hint": "loc='House Appropriations'; api_2026-02-10=[House Education-K-12 Subcommittee@4:00 PM; House Republican Caucus@11:00 AM; House Privileges and Elections-Campaigns and Candidates@7:00 AM]"
       },
       {
         "bill": "HB1513",
@@ -1676,19 +1676,19 @@
       },
       {
         "bill": "HB193",
-        "date": "2026-02-12",
-        "sheet1_outcome": "H Assigned HAPP sub: Transportation & Public Safety",
-        "sheet1_origin": "journal_default",
-        "sheet1_committee": "\ud83d\udccb Ledger Updates",
-        "diagnostic_hint": "loc='House Appropriations'; api_2026-02-12=[House Counties, Cities and Towns-Subcommittee #2@7:30 AM; House Public Safety-Subcommittee #2@7:30 AM; House Health and Human Services-Behavioral Health@7:3\u2026"
-      },
-      {
-        "bill": "HB193",
         "date": "2026-02-10",
         "sheet1_outcome": "H Placed on Courts of Justice Agenda",
         "sheet1_origin": "journal_default",
         "sheet1_committee": "\ud83d\udccb Ledger Updates",
         "diagnostic_hint": "loc='House Courts of Justice'; api_2026-02-10=[House Education-K-12 Subcommittee@4:00 PM; House Republican Caucus@11:00 AM; House Privileges and Elections-Campaigns and Candidates@7:00 AM]"
+      },
+      {
+        "bill": "HB193",
+        "date": "2026-02-12",
+        "sheet1_outcome": "H Assigned HAPP sub: Transportation & Public Safety",
+        "sheet1_origin": "journal_default",
+        "sheet1_committee": "\ud83d\udccb Ledger Updates",
+        "diagnostic_hint": "loc='House Appropriations'; api_2026-02-12=[House Counties, Cities and Towns-Subcommittee #2@7:30 AM; House Public Safety-Subcommittee #2@7:30 AM; House Health and Human Services-Behavioral Health@7:3\u2026"
       },
       {
         "bill": "HB200",
@@ -1780,22 +1780,14 @@
       },
       {
         "bill": "HB250",
-        "date": "2026-02-12",
+        "date": "2026-02-10",
         "sheet1_outcome": "H Placed on Courts of Justice Agenda",
         "sheet1_origin": "journal_default",
         "sheet1_committee": "\ud83d\udccb Ledger Updates",
-        "diagnostic_hint": "loc='House Courts of Justice'; api_2026-02-12=[House Counties, Cities and Towns-Subcommittee #2@7:30 AM; House Public Safety-Subcommittee #2@7:30 AM; House Health and Human Services-Behavioral Health@\u2026"
+        "diagnostic_hint": "loc='House Courts of Justice'; api_2026-02-10=[House Education-K-12 Subcommittee@4:00 PM; House Republican Caucus@11:00 AM; House Privileges and Elections-Campaigns and Candidates@7:00 AM]"
       },
       {
         "bill": "HB250",
-        "date": "2026-02-10",
-        "sheet1_outcome": "H Placed on Courts of Justice Agenda",
-        "sheet1_origin": "journal_default",
-        "sheet1_committee": "\ud83d\udccb Ledger Updates",
-        "diagnostic_hint": "loc='House Courts of Justice'; api_2026-02-10=[House Education-K-12 Subcommittee@4:00 PM; House Republican Caucus@11:00 AM; House Privileges and Elections-Campaigns and Candidates@7:00 AM]"
-      },
-      {
-        "bill": "HB251",
         "date": "2026-02-12",
         "sheet1_outcome": "H Placed on Courts of Justice Agenda",
         "sheet1_origin": "journal_default",
@@ -1809,6 +1801,14 @@
         "sheet1_origin": "journal_default",
         "sheet1_committee": "\ud83d\udccb Ledger Updates",
         "diagnostic_hint": "loc='House Courts of Justice'; api_2026-02-10=[House Education-K-12 Subcommittee@4:00 PM; House Republican Caucus@11:00 AM; House Privileges and Elections-Campaigns and Candidates@7:00 AM]"
+      },
+      {
+        "bill": "HB251",
+        "date": "2026-02-12",
+        "sheet1_outcome": "H Placed on Courts of Justice Agenda",
+        "sheet1_origin": "journal_default",
+        "sheet1_committee": "\ud83d\udccb Ledger Updates",
+        "diagnostic_hint": "loc='House Courts of Justice'; api_2026-02-12=[House Counties, Cities and Towns-Subcommittee #2@7:30 AM; House Public Safety-Subcommittee #2@7:30 AM; House Health and Human Services-Behavioral Health@\u2026"
       },
       {
         "bill": "HB26",
@@ -1828,19 +1828,19 @@
       },
       {
         "bill": "HB271",
-        "date": "2026-02-12",
-        "sheet1_outcome": "H Referred to Committee on Appropriations",
-        "sheet1_origin": "journal_default",
-        "sheet1_committee": "\ud83d\udccb Ledger Updates",
-        "diagnostic_hint": "loc='House Appropriations'; api_2026-02-12=[House Counties, Cities and Towns-Subcommittee #2@7:30 AM; House Public Safety-Subcommittee #2@7:30 AM; House Health and Human Services-Behavioral Health@7:3\u2026"
-      },
-      {
-        "bill": "HB271",
         "date": "2026-02-11",
         "sheet1_outcome": "H Placed on General Laws Agenda",
         "sheet1_origin": "journal_default",
         "sheet1_committee": "\ud83d\udccb Ledger Updates",
         "diagnostic_hint": "loc='House General Laws'; api_2026-02-11=[House Privileges and Elections-Voting Rights@7:00 AM; House Agriculture, Chesapeake and Natural Resources@4:00 PM; House Communications, Technology and Innova\u2026"
+      },
+      {
+        "bill": "HB271",
+        "date": "2026-02-12",
+        "sheet1_outcome": "H Referred to Committee on Appropriations",
+        "sheet1_origin": "journal_default",
+        "sheet1_committee": "\ud83d\udccb Ledger Updates",
+        "diagnostic_hint": "loc='House Appropriations'; api_2026-02-12=[House Counties, Cities and Towns-Subcommittee #2@7:30 AM; House Public Safety-Subcommittee #2@7:30 AM; House Health and Human Services-Behavioral Health@7:3\u2026"
       },
       {
         "bill": "HB275",
@@ -1892,22 +1892,14 @@
       },
       {
         "bill": "HB294",
-        "date": "2026-02-12",
+        "date": "2026-02-10",
         "sheet1_outcome": "H Placed on Courts of Justice Agenda",
         "sheet1_origin": "journal_default",
         "sheet1_committee": "\ud83d\udccb Ledger Updates",
-        "diagnostic_hint": "loc='House Courts of Justice'; api_2026-02-12=[House Counties, Cities and Towns-Subcommittee #2@7:30 AM; House Public Safety-Subcommittee #2@7:30 AM; House Health and Human Services-Behavioral Health@\u2026"
+        "diagnostic_hint": "loc='House Courts of Justice'; api_2026-02-10=[House Education-K-12 Subcommittee@4:00 PM; House Republican Caucus@11:00 AM; House Privileges and Elections-Campaigns and Candidates@7:00 AM]"
       },
       {
         "bill": "HB294",
-        "date": "2026-02-10",
-        "sheet1_outcome": "H Placed on Courts of Justice Agenda",
-        "sheet1_origin": "journal_default",
-        "sheet1_committee": "\ud83d\udccb Ledger Updates",
-        "diagnostic_hint": "loc='House Courts of Justice'; api_2026-02-10=[House Education-K-12 Subcommittee@4:00 PM; House Republican Caucus@11:00 AM; House Privileges and Elections-Campaigns and Candidates@7:00 AM]"
-      },
-      {
-        "bill": "HB295",
         "date": "2026-02-12",
         "sheet1_outcome": "H Placed on Courts of Justice Agenda",
         "sheet1_origin": "journal_default",
@@ -1921,6 +1913,14 @@
         "sheet1_origin": "journal_default",
         "sheet1_committee": "\ud83d\udccb Ledger Updates",
         "diagnostic_hint": "loc='House Courts of Justice'; api_2026-02-10=[House Education-K-12 Subcommittee@4:00 PM; House Republican Caucus@11:00 AM; House Privileges and Elections-Campaigns and Candidates@7:00 AM]"
+      },
+      {
+        "bill": "HB295",
+        "date": "2026-02-12",
+        "sheet1_outcome": "H Placed on Courts of Justice Agenda",
+        "sheet1_origin": "journal_default",
+        "sheet1_committee": "\ud83d\udccb Ledger Updates",
+        "diagnostic_hint": "loc='House Courts of Justice'; api_2026-02-12=[House Counties, Cities and Towns-Subcommittee #2@7:30 AM; House Public Safety-Subcommittee #2@7:30 AM; House Health and Human Services-Behavioral Health@\u2026"
       },
       {
         "bill": "HB297",
@@ -1940,19 +1940,19 @@
       },
       {
         "bill": "HB317",
-        "date": "2026-02-12",
-        "sheet1_outcome": "H Placed on Courts of Justice Agenda",
-        "sheet1_origin": "journal_default",
-        "sheet1_committee": "\ud83d\udccb Ledger Updates",
-        "diagnostic_hint": "loc='House Courts of Justice'; api_2026-02-12=[House Counties, Cities and Towns-Subcommittee #2@7:30 AM; House Public Safety-Subcommittee #2@7:30 AM; House Health and Human Services-Behavioral Health@\u2026"
-      },
-      {
-        "bill": "HB317",
         "date": "2026-02-10",
         "sheet1_outcome": "H Placed on Courts of Justice Agenda",
         "sheet1_origin": "journal_default",
         "sheet1_committee": "\ud83d\udccb Ledger Updates",
         "diagnostic_hint": "loc='House Courts of Justice'; api_2026-02-10=[House Education-K-12 Subcommittee@4:00 PM; House Republican Caucus@11:00 AM; House Privileges and Elections-Campaigns and Candidates@7:00 AM]"
+      },
+      {
+        "bill": "HB317",
+        "date": "2026-02-12",
+        "sheet1_outcome": "H Placed on Courts of Justice Agenda",
+        "sheet1_origin": "journal_default",
+        "sheet1_committee": "\ud83d\udccb Ledger Updates",
+        "diagnostic_hint": "loc='House Courts of Justice'; api_2026-02-12=[House Counties, Cities and Towns-Subcommittee #2@7:30 AM; House Public Safety-Subcommittee #2@7:30 AM; House Health and Human Services-Behavioral Health@\u2026"
       },
       {
         "bill": "HB318",
@@ -1972,19 +1972,19 @@
       },
       {
         "bill": "HB320",
-        "date": "2026-02-12",
-        "sheet1_outcome": "H Placed on Courts of Justice Agenda",
-        "sheet1_origin": "journal_default",
-        "sheet1_committee": "\ud83d\udccb Ledger Updates",
-        "diagnostic_hint": "loc='House Courts of Justice'; api_2026-02-12=[House Counties, Cities and Towns-Subcommittee #2@7:30 AM; House Public Safety-Subcommittee #2@7:30 AM; House Health and Human Services-Behavioral Health@\u2026"
-      },
-      {
-        "bill": "HB320",
         "date": "2026-02-10",
         "sheet1_outcome": "H Placed on Courts of Justice Agenda",
         "sheet1_origin": "journal_default",
         "sheet1_committee": "\ud83d\udccb Ledger Updates",
         "diagnostic_hint": "loc='House Courts of Justice'; api_2026-02-10=[House Education-K-12 Subcommittee@4:00 PM; House Republican Caucus@11:00 AM; House Privileges and Elections-Campaigns and Candidates@7:00 AM]"
+      },
+      {
+        "bill": "HB320",
+        "date": "2026-02-12",
+        "sheet1_outcome": "H Placed on Courts of Justice Agenda",
+        "sheet1_origin": "journal_default",
+        "sheet1_committee": "\ud83d\udccb Ledger Updates",
+        "diagnostic_hint": "loc='House Courts of Justice'; api_2026-02-12=[House Counties, Cities and Towns-Subcommittee #2@7:30 AM; House Public Safety-Subcommittee #2@7:30 AM; House Health and Human Services-Behavioral Health@\u2026"
       },
       {
         "bill": "HB328",
@@ -2052,14 +2052,6 @@
       },
       {
         "bill": "HB392",
-        "date": "2026-02-12",
-        "sheet1_outcome": "H Assigned HAPP sub: Health & Human Resources",
-        "sheet1_origin": "journal_default",
-        "sheet1_committee": "\ud83d\udccb Ledger Updates",
-        "diagnostic_hint": "loc='House Appropriations'; api_2026-02-12=[House Counties, Cities and Towns-Subcommittee #2@7:30 AM; House Public Safety-Subcommittee #2@7:30 AM; House Health and Human Services-Behavioral Health@7:3\u2026"
-      },
-      {
-        "bill": "HB392",
         "date": "2026-02-09",
         "sheet1_outcome": "H Placed on Health and Human Services Agenda",
         "sheet1_origin": "journal_default",
@@ -2075,12 +2067,12 @@
         "diagnostic_hint": "loc='House Health and Human Services'; api_2026-02-11=[House Privileges and Elections-Voting Rights@7:00 AM; House Agriculture, Chesapeake and Natural Resources@4:00 PM; House Communications, Technolo\u2026"
       },
       {
-        "bill": "HB398",
-        "date": "2026-02-10",
-        "sheet1_outcome": "H Referred to Committee on Appropriations",
+        "bill": "HB392",
+        "date": "2026-02-12",
+        "sheet1_outcome": "H Assigned HAPP sub: Health & Human Resources",
         "sheet1_origin": "journal_default",
         "sheet1_committee": "\ud83d\udccb Ledger Updates",
-        "diagnostic_hint": "loc='House Appropriations'; api_2026-02-10=[House Education-K-12 Subcommittee@4:00 PM; House Republican Caucus@11:00 AM; House Privileges and Elections-Campaigns and Candidates@7:00 AM]"
+        "diagnostic_hint": "loc='House Appropriations'; api_2026-02-12=[House Counties, Cities and Towns-Subcommittee #2@7:30 AM; House Public Safety-Subcommittee #2@7:30 AM; House Health and Human Services-Behavioral Health@7:3\u2026"
       },
       {
         "bill": "HB398",
@@ -2089,6 +2081,14 @@
         "sheet1_origin": "journal_default",
         "sheet1_committee": "\ud83d\udccb Ledger Updates",
         "diagnostic_hint": "loc='House Labor and Commerce'; api_2026-02-09=[House Democratic Caucus@11:15 AM; House Finance-Subcommittee #1@7:00 AM; House Communications, Technology and Innovation@10:00 AM]"
+      },
+      {
+        "bill": "HB398",
+        "date": "2026-02-10",
+        "sheet1_outcome": "H Referred to Committee on Appropriations",
+        "sheet1_origin": "journal_default",
+        "sheet1_committee": "\ud83d\udccb Ledger Updates",
+        "diagnostic_hint": "loc='House Appropriations'; api_2026-02-10=[House Education-K-12 Subcommittee@4:00 PM; House Republican Caucus@11:00 AM; House Privileges and Elections-Campaigns and Candidates@7:00 AM]"
       },
       {
         "bill": "HB404",
@@ -2100,19 +2100,19 @@
       },
       {
         "bill": "HB406",
-        "date": "2026-02-10",
-        "sheet1_outcome": "H Referred to Committee on Appropriations",
-        "sheet1_origin": "journal_default",
-        "sheet1_committee": "\ud83d\udccb Ledger Updates",
-        "diagnostic_hint": "loc='House Appropriations'; api_2026-02-10=[House Education-K-12 Subcommittee@4:00 PM; House Republican Caucus@11:00 AM; House Privileges and Elections-Campaigns and Candidates@7:00 AM]"
-      },
-      {
-        "bill": "HB406",
         "date": "2026-02-09",
         "sheet1_outcome": "H Placed on Labor and Commerce Agenda",
         "sheet1_origin": "journal_default",
         "sheet1_committee": "\ud83d\udccb Ledger Updates",
         "diagnostic_hint": "loc='House Labor and Commerce'; api_2026-02-09=[House Democratic Caucus@11:15 AM; House Finance-Subcommittee #1@7:00 AM; House Communications, Technology and Innovation@10:00 AM]"
+      },
+      {
+        "bill": "HB406",
+        "date": "2026-02-10",
+        "sheet1_outcome": "H Referred to Committee on Appropriations",
+        "sheet1_origin": "journal_default",
+        "sheet1_committee": "\ud83d\udccb Ledger Updates",
+        "diagnostic_hint": "loc='House Appropriations'; api_2026-02-10=[House Education-K-12 Subcommittee@4:00 PM; House Republican Caucus@11:00 AM; House Privileges and Elections-Campaigns and Candidates@7:00 AM]"
       },
       {
         "bill": "HB413",
@@ -2164,19 +2164,19 @@
       },
       {
         "bill": "HB440",
-        "date": "2026-02-12",
-        "sheet1_outcome": "H Assigned HAPP sub: Health & Human Resources",
-        "sheet1_origin": "journal_default",
-        "sheet1_committee": "\ud83d\udccb Ledger Updates",
-        "diagnostic_hint": "loc='House Appropriations'; api_2026-02-12=[House Counties, Cities and Towns-Subcommittee #2@7:30 AM; House Public Safety-Subcommittee #2@7:30 AM; House Health and Human Services-Behavioral Health@7:3\u2026"
-      },
-      {
-        "bill": "HB440",
         "date": "2026-02-10",
         "sheet1_outcome": "H Placed on Courts of Justice Agenda",
         "sheet1_origin": "journal_default",
         "sheet1_committee": "\ud83d\udccb Ledger Updates",
         "diagnostic_hint": "loc='House Courts of Justice'; api_2026-02-10=[House Education-K-12 Subcommittee@4:00 PM; House Republican Caucus@11:00 AM; House Privileges and Elections-Campaigns and Candidates@7:00 AM]"
+      },
+      {
+        "bill": "HB440",
+        "date": "2026-02-12",
+        "sheet1_outcome": "H Assigned HAPP sub: Health & Human Resources",
+        "sheet1_origin": "journal_default",
+        "sheet1_committee": "\ud83d\udccb Ledger Updates",
+        "diagnostic_hint": "loc='House Appropriations'; api_2026-02-12=[House Counties, Cities and Towns-Subcommittee #2@7:30 AM; House Public Safety-Subcommittee #2@7:30 AM; House Health and Human Services-Behavioral Health@7:3\u2026"
       },
       {
         "bill": "HB441",
@@ -2196,19 +2196,19 @@
       },
       {
         "bill": "HB447",
-        "date": "2026-02-12",
-        "sheet1_outcome": "H Placed on Courts of Justice Agenda",
-        "sheet1_origin": "journal_default",
-        "sheet1_committee": "\ud83d\udccb Ledger Updates",
-        "diagnostic_hint": "loc='House Courts of Justice'; api_2026-02-12=[House Counties, Cities and Towns-Subcommittee #2@7:30 AM; House Public Safety-Subcommittee #2@7:30 AM; House Health and Human Services-Behavioral Health@\u2026"
-      },
-      {
-        "bill": "HB447",
         "date": "2026-02-10",
         "sheet1_outcome": "H Placed on Courts of Justice Agenda",
         "sheet1_origin": "journal_default",
         "sheet1_committee": "\ud83d\udccb Ledger Updates",
         "diagnostic_hint": "loc='House Courts of Justice'; api_2026-02-10=[House Education-K-12 Subcommittee@4:00 PM; House Republican Caucus@11:00 AM; House Privileges and Elections-Campaigns and Candidates@7:00 AM]"
+      },
+      {
+        "bill": "HB447",
+        "date": "2026-02-12",
+        "sheet1_outcome": "H Placed on Courts of Justice Agenda",
+        "sheet1_origin": "journal_default",
+        "sheet1_committee": "\ud83d\udccb Ledger Updates",
+        "diagnostic_hint": "loc='House Courts of Justice'; api_2026-02-12=[House Counties, Cities and Towns-Subcommittee #2@7:30 AM; House Public Safety-Subcommittee #2@7:30 AM; House Health and Human Services-Behavioral Health@\u2026"
       },
       {
         "bill": "HB45",
@@ -2284,19 +2284,19 @@
       },
       {
         "bill": "HB489",
-        "date": "2026-02-12",
-        "sheet1_outcome": "H Placed on Courts of Justice Agenda",
-        "sheet1_origin": "journal_default",
-        "sheet1_committee": "\ud83d\udccb Ledger Updates",
-        "diagnostic_hint": "loc='House Courts of Justice'; api_2026-02-12=[House Counties, Cities and Towns-Subcommittee #2@7:30 AM; House Public Safety-Subcommittee #2@7:30 AM; House Health and Human Services-Behavioral Health@\u2026"
-      },
-      {
-        "bill": "HB489",
         "date": "2026-02-10",
         "sheet1_outcome": "H Placed on Courts of Justice Agenda",
         "sheet1_origin": "journal_default",
         "sheet1_committee": "\ud83d\udccb Ledger Updates",
         "diagnostic_hint": "loc='House Courts of Justice'; api_2026-02-10=[House Education-K-12 Subcommittee@4:00 PM; House Republican Caucus@11:00 AM; House Privileges and Elections-Campaigns and Candidates@7:00 AM]"
+      },
+      {
+        "bill": "HB489",
+        "date": "2026-02-12",
+        "sheet1_outcome": "H Placed on Courts of Justice Agenda",
+        "sheet1_origin": "journal_default",
+        "sheet1_committee": "\ud83d\udccb Ledger Updates",
+        "diagnostic_hint": "loc='House Courts of Justice'; api_2026-02-12=[House Counties, Cities and Towns-Subcommittee #2@7:30 AM; House Public Safety-Subcommittee #2@7:30 AM; House Health and Human Services-Behavioral Health@\u2026"
       },
       {
         "bill": "HB493",
@@ -2356,19 +2356,19 @@
       },
       {
         "bill": "HB548",
-        "date": "2026-02-12",
-        "sheet1_outcome": "H Placed on Courts of Justice Agenda",
-        "sheet1_origin": "journal_default",
-        "sheet1_committee": "\ud83d\udccb Ledger Updates",
-        "diagnostic_hint": "loc='House Courts of Justice'; api_2026-02-12=[House Counties, Cities and Towns-Subcommittee #2@7:30 AM; House Public Safety-Subcommittee #2@7:30 AM; House Health and Human Services-Behavioral Health@\u2026"
-      },
-      {
-        "bill": "HB548",
         "date": "2026-02-10",
         "sheet1_outcome": "H Placed on Courts of Justice Agenda",
         "sheet1_origin": "journal_default",
         "sheet1_committee": "\ud83d\udccb Ledger Updates",
         "diagnostic_hint": "loc='House Courts of Justice'; api_2026-02-10=[House Education-K-12 Subcommittee@4:00 PM; House Republican Caucus@11:00 AM; House Privileges and Elections-Campaigns and Candidates@7:00 AM]"
+      },
+      {
+        "bill": "HB548",
+        "date": "2026-02-12",
+        "sheet1_outcome": "H Placed on Courts of Justice Agenda",
+        "sheet1_origin": "journal_default",
+        "sheet1_committee": "\ud83d\udccb Ledger Updates",
+        "diagnostic_hint": "loc='House Courts of Justice'; api_2026-02-12=[House Counties, Cities and Towns-Subcommittee #2@7:30 AM; House Public Safety-Subcommittee #2@7:30 AM; House Health and Human Services-Behavioral Health@\u2026"
       },
       {
         "bill": "HB558",
@@ -2396,19 +2396,19 @@
       },
       {
         "bill": "HB560",
-        "date": "2026-02-10",
-        "sheet1_outcome": "H Assigned HAPP sub: Health & Human Resources",
-        "sheet1_origin": "journal_default",
-        "sheet1_committee": "\ud83d\udccb Ledger Updates",
-        "diagnostic_hint": "loc='House Appropriations'; api_2026-02-10=[House Education-K-12 Subcommittee@4:00 PM; House Republican Caucus@11:00 AM; House Privileges and Elections-Campaigns and Candidates@7:00 AM]"
-      },
-      {
-        "bill": "HB560",
         "date": "2026-02-09",
         "sheet1_outcome": "H Placed on Health and Human Services Agenda",
         "sheet1_origin": "journal_default",
         "sheet1_committee": "\ud83d\udccb Ledger Updates",
         "diagnostic_hint": "loc='House Health and Human Services'; api_2026-02-09=[House Democratic Caucus@11:15 AM; House Finance-Subcommittee #1@7:00 AM; House Communications, Technology and Innovation@10:00 AM]"
+      },
+      {
+        "bill": "HB560",
+        "date": "2026-02-10",
+        "sheet1_outcome": "H Assigned HAPP sub: Health & Human Resources",
+        "sheet1_origin": "journal_default",
+        "sheet1_committee": "\ud83d\udccb Ledger Updates",
+        "diagnostic_hint": "loc='House Appropriations'; api_2026-02-10=[House Education-K-12 Subcommittee@4:00 PM; House Republican Caucus@11:00 AM; House Privileges and Elections-Campaigns and Candidates@7:00 AM]"
       },
       {
         "bill": "HB561",
@@ -2420,19 +2420,19 @@
       },
       {
         "bill": "HB569",
-        "date": "2026-02-12",
-        "sheet1_outcome": "H Referred to Committee on Appropriations",
-        "sheet1_origin": "journal_default",
-        "sheet1_committee": "\ud83d\udccb Ledger Updates",
-        "diagnostic_hint": "loc='House Appropriations'; api_2026-02-12=[House Counties, Cities and Towns-Subcommittee #2@7:30 AM; House Public Safety-Subcommittee #2@7:30 AM; House Health and Human Services-Behavioral Health@7:3\u2026"
-      },
-      {
-        "bill": "HB569",
         "date": "2026-02-11",
         "sheet1_outcome": "H Placed on Labor and Commerce Agenda",
         "sheet1_origin": "journal_default",
         "sheet1_committee": "\ud83d\udccb Ledger Updates",
         "diagnostic_hint": "loc='House Labor and Commerce'; api_2026-02-11=[House Privileges and Elections-Voting Rights@7:00 AM; House Agriculture, Chesapeake and Natural Resources@4:00 PM; House Communications, Technology and \u2026"
+      },
+      {
+        "bill": "HB569",
+        "date": "2026-02-12",
+        "sheet1_outcome": "H Referred to Committee on Appropriations",
+        "sheet1_origin": "journal_default",
+        "sheet1_committee": "\ud83d\udccb Ledger Updates",
+        "diagnostic_hint": "loc='House Appropriations'; api_2026-02-12=[House Counties, Cities and Towns-Subcommittee #2@7:30 AM; House Public Safety-Subcommittee #2@7:30 AM; House Health and Human Services-Behavioral Health@7:3\u2026"
       },
       {
         "bill": "HB573",
@@ -2452,19 +2452,19 @@
       },
       {
         "bill": "HB578",
-        "date": "2026-02-10",
-        "sheet1_outcome": "\u2139\ufe0f [TIMING_LAG: Memory=House Health and Human Services] H Placed on Appropriations Agenda",
-        "sheet1_origin": "journal_default",
-        "sheet1_committee": "\ud83d\udccb Ledger Updates",
-        "diagnostic_hint": "loc='House Appropriations'; api_2026-02-10=[House Education-K-12 Subcommittee@4:00 PM; House Republican Caucus@11:00 AM; House Privileges and Elections-Campaigns and Candidates@7:00 AM]"
-      },
-      {
-        "bill": "HB578",
         "date": "2026-02-09",
         "sheet1_outcome": "H Placed on Health and Human Services Agenda",
         "sheet1_origin": "journal_default",
         "sheet1_committee": "\ud83d\udccb Ledger Updates",
         "diagnostic_hint": "loc='House Health and Human Services'; api_2026-02-09=[House Democratic Caucus@11:15 AM; House Finance-Subcommittee #1@7:00 AM; House Communications, Technology and Innovation@10:00 AM]"
+      },
+      {
+        "bill": "HB578",
+        "date": "2026-02-10",
+        "sheet1_outcome": "\u2139\ufe0f [TIMING_LAG: Memory=House Health and Human Services] H Placed on Appropriations Agenda",
+        "sheet1_origin": "journal_default",
+        "sheet1_committee": "\ud83d\udccb Ledger Updates",
+        "diagnostic_hint": "loc='House Appropriations'; api_2026-02-10=[House Education-K-12 Subcommittee@4:00 PM; House Republican Caucus@11:00 AM; House Privileges and Elections-Campaigns and Candidates@7:00 AM]"
       },
       {
         "bill": "HB590",
@@ -2516,19 +2516,19 @@
       },
       {
         "bill": "HB600",
-        "date": "2026-02-12",
-        "sheet1_outcome": "H Referred to Committee on Appropriations",
-        "sheet1_origin": "journal_default",
-        "sheet1_committee": "\ud83d\udccb Ledger Updates",
-        "diagnostic_hint": "loc='House Appropriations'; api_2026-02-12=[House Counties, Cities and Towns-Subcommittee #2@7:30 AM; House Public Safety-Subcommittee #2@7:30 AM; House Health and Human Services-Behavioral Health@7:3\u2026"
-      },
-      {
-        "bill": "HB600",
         "date": "2026-02-11",
         "sheet1_outcome": "H Placed on General Laws Agenda",
         "sheet1_origin": "journal_default",
         "sheet1_committee": "\ud83d\udccb Ledger Updates",
         "diagnostic_hint": "loc='House General Laws'; api_2026-02-11=[House Privileges and Elections-Voting Rights@7:00 AM; House Agriculture, Chesapeake and Natural Resources@4:00 PM; House Communications, Technology and Innova\u2026"
+      },
+      {
+        "bill": "HB600",
+        "date": "2026-02-12",
+        "sheet1_outcome": "H Referred to Committee on Appropriations",
+        "sheet1_origin": "journal_default",
+        "sheet1_committee": "\ud83d\udccb Ledger Updates",
+        "diagnostic_hint": "loc='House Appropriations'; api_2026-02-12=[House Counties, Cities and Towns-Subcommittee #2@7:30 AM; House Public Safety-Subcommittee #2@7:30 AM; House Health and Human Services-Behavioral Health@7:3\u2026"
       },
       {
         "bill": "HB602",
@@ -2540,6 +2540,22 @@
       },
       {
         "bill": "HB602",
+        "date": "2026-02-11",
+        "sheet1_outcome": "H Placed on Health and Human Services Agenda",
+        "sheet1_origin": "journal_default",
+        "sheet1_committee": "\ud83d\udccb Ledger Updates",
+        "diagnostic_hint": "loc='House Health and Human Services'; api_2026-02-11=[House Privileges and Elections-Voting Rights@7:00 AM; House Agriculture, Chesapeake and Natural Resources@4:00 PM; House Communications, Technolo\u2026"
+      },
+      {
+        "bill": "HB605",
+        "date": "2026-02-09",
+        "sheet1_outcome": "H Placed on Health and Human Services Agenda",
+        "sheet1_origin": "journal_default",
+        "sheet1_committee": "\ud83d\udccb Ledger Updates",
+        "diagnostic_hint": "loc='House Health and Human Services'; api_2026-02-09=[House Democratic Caucus@11:15 AM; House Finance-Subcommittee #1@7:00 AM; House Communications, Technology and Innovation@10:00 AM]"
+      },
+      {
+        "bill": "HB605",
         "date": "2026-02-11",
         "sheet1_outcome": "H Placed on Health and Human Services Agenda",
         "sheet1_origin": "journal_default",
@@ -2555,22 +2571,6 @@
         "diagnostic_hint": "loc='House Appropriations'; api_2026-02-12=[House Counties, Cities and Towns-Subcommittee #2@7:30 AM; House Public Safety-Subcommittee #2@7:30 AM; House Health and Human Services-Behavioral Health@7:3\u2026"
       },
       {
-        "bill": "HB605",
-        "date": "2026-02-09",
-        "sheet1_outcome": "H Placed on Health and Human Services Agenda",
-        "sheet1_origin": "journal_default",
-        "sheet1_committee": "\ud83d\udccb Ledger Updates",
-        "diagnostic_hint": "loc='House Health and Human Services'; api_2026-02-09=[House Democratic Caucus@11:15 AM; House Finance-Subcommittee #1@7:00 AM; House Communications, Technology and Innovation@10:00 AM]"
-      },
-      {
-        "bill": "HB605",
-        "date": "2026-02-11",
-        "sheet1_outcome": "H Placed on Health and Human Services Agenda",
-        "sheet1_origin": "journal_default",
-        "sheet1_committee": "\ud83d\udccb Ledger Updates",
-        "diagnostic_hint": "loc='House Health and Human Services'; api_2026-02-11=[House Privileges and Elections-Voting Rights@7:00 AM; House Agriculture, Chesapeake and Natural Resources@4:00 PM; House Communications, Technolo\u2026"
-      },
-      {
         "bill": "HB61",
         "date": "2026-02-10",
         "sheet1_outcome": "\u2139\ufe0f [TIMING_LAG: Memory=House Agriculture, Chesapeake and Natural Resources] H Placed on Appropriations Agenda",
@@ -2580,19 +2580,19 @@
       },
       {
         "bill": "HB610",
-        "date": "2026-02-10",
-        "sheet1_outcome": "\u2139\ufe0f [TIMING_LAG: Memory=House Health and Human Services] H Placed on Appropriations Agenda",
-        "sheet1_origin": "journal_default",
-        "sheet1_committee": "\ud83d\udccb Ledger Updates",
-        "diagnostic_hint": "loc='House Appropriations'; api_2026-02-10=[House Education-K-12 Subcommittee@4:00 PM; House Republican Caucus@11:00 AM; House Privileges and Elections-Campaigns and Candidates@7:00 AM]"
-      },
-      {
-        "bill": "HB610",
         "date": "2026-02-09",
         "sheet1_outcome": "H Placed on Health and Human Services Agenda",
         "sheet1_origin": "journal_default",
         "sheet1_committee": "\ud83d\udccb Ledger Updates",
         "diagnostic_hint": "loc='House Health and Human Services'; api_2026-02-09=[House Democratic Caucus@11:15 AM; House Finance-Subcommittee #1@7:00 AM; House Communications, Technology and Innovation@10:00 AM]"
+      },
+      {
+        "bill": "HB610",
+        "date": "2026-02-10",
+        "sheet1_outcome": "\u2139\ufe0f [TIMING_LAG: Memory=House Health and Human Services] H Placed on Appropriations Agenda",
+        "sheet1_origin": "journal_default",
+        "sheet1_committee": "\ud83d\udccb Ledger Updates",
+        "diagnostic_hint": "loc='House Appropriations'; api_2026-02-10=[House Education-K-12 Subcommittee@4:00 PM; House Republican Caucus@11:00 AM; House Privileges and Elections-Campaigns and Candidates@7:00 AM]"
       },
       {
         "bill": "HB621",
@@ -2612,19 +2612,19 @@
       },
       {
         "bill": "HB629",
-        "date": "2026-02-12",
-        "sheet1_outcome": "H Placed on Courts of Justice Agenda",
-        "sheet1_origin": "journal_default",
-        "sheet1_committee": "\ud83d\udccb Ledger Updates",
-        "diagnostic_hint": "loc='House Courts of Justice'; api_2026-02-12=[House Counties, Cities and Towns-Subcommittee #2@7:30 AM; House Public Safety-Subcommittee #2@7:30 AM; House Health and Human Services-Behavioral Health@\u2026"
-      },
-      {
-        "bill": "HB629",
         "date": "2026-02-10",
         "sheet1_outcome": "H Placed on Courts of Justice Agenda",
         "sheet1_origin": "journal_default",
         "sheet1_committee": "\ud83d\udccb Ledger Updates",
         "diagnostic_hint": "loc='House Courts of Justice'; api_2026-02-10=[House Education-K-12 Subcommittee@4:00 PM; House Republican Caucus@11:00 AM; House Privileges and Elections-Campaigns and Candidates@7:00 AM]"
+      },
+      {
+        "bill": "HB629",
+        "date": "2026-02-12",
+        "sheet1_outcome": "H Placed on Courts of Justice Agenda",
+        "sheet1_origin": "journal_default",
+        "sheet1_committee": "\ud83d\udccb Ledger Updates",
+        "diagnostic_hint": "loc='House Courts of Justice'; api_2026-02-12=[House Counties, Cities and Towns-Subcommittee #2@7:30 AM; House Public Safety-Subcommittee #2@7:30 AM; House Health and Human Services-Behavioral Health@\u2026"
       },
       {
         "bill": "HB630",
@@ -2708,14 +2708,6 @@
       },
       {
         "bill": "HB662",
-        "date": "2026-02-12",
-        "sheet1_outcome": "H Placed on Courts of Justice Agenda",
-        "sheet1_origin": "journal_default",
-        "sheet1_committee": "\ud83d\udccb Ledger Updates",
-        "diagnostic_hint": "loc='House Courts of Justice'; api_2026-02-12=[House Counties, Cities and Towns-Subcommittee #2@7:30 AM; House Public Safety-Subcommittee #2@7:30 AM; House Health and Human Services-Behavioral Health@\u2026"
-      },
-      {
-        "bill": "HB662",
         "date": "2026-02-10",
         "sheet1_outcome": "H Placed on Courts of Justice Agenda",
         "sheet1_origin": "journal_default",
@@ -2723,17 +2715,17 @@
         "diagnostic_hint": "loc='House Courts of Justice'; api_2026-02-10=[House Education-K-12 Subcommittee@4:00 PM; House Republican Caucus@11:00 AM; House Privileges and Elections-Campaigns and Candidates@7:00 AM]"
       },
       {
+        "bill": "HB662",
+        "date": "2026-02-12",
+        "sheet1_outcome": "H Placed on Courts of Justice Agenda",
+        "sheet1_origin": "journal_default",
+        "sheet1_committee": "\ud83d\udccb Ledger Updates",
+        "diagnostic_hint": "loc='House Courts of Justice'; api_2026-02-12=[House Counties, Cities and Towns-Subcommittee #2@7:30 AM; House Public Safety-Subcommittee #2@7:30 AM; House Health and Human Services-Behavioral Health@\u2026"
+      },
+      {
         "bill": "HB669",
         "date": "2026-02-10",
         "sheet1_outcome": "H Placed on Appropriations Agenda",
-        "sheet1_origin": "journal_default",
-        "sheet1_committee": "\ud83d\udccb Ledger Updates",
-        "diagnostic_hint": "loc='House Appropriations'; api_2026-02-10=[House Education-K-12 Subcommittee@4:00 PM; House Republican Caucus@11:00 AM; House Privileges and Elections-Campaigns and Candidates@7:00 AM]"
-      },
-      {
-        "bill": "HB672",
-        "date": "2026-02-10",
-        "sheet1_outcome": "H Referred to Committee on Appropriations",
         "sheet1_origin": "journal_default",
         "sheet1_committee": "\ud83d\udccb Ledger Updates",
         "diagnostic_hint": "loc='House Appropriations'; api_2026-02-10=[House Education-K-12 Subcommittee@4:00 PM; House Republican Caucus@11:00 AM; House Privileges and Elections-Campaigns and Candidates@7:00 AM]"
@@ -2747,12 +2739,12 @@
         "diagnostic_hint": "loc='House Labor and Commerce'; api_2026-02-09=[House Democratic Caucus@11:15 AM; House Finance-Subcommittee #1@7:00 AM; House Communications, Technology and Innovation@10:00 AM]"
       },
       {
-        "bill": "HB674",
-        "date": "2026-02-12",
-        "sheet1_outcome": "H Assigned HAPP sub: Health & Human Resources",
+        "bill": "HB672",
+        "date": "2026-02-10",
+        "sheet1_outcome": "H Referred to Committee on Appropriations",
         "sheet1_origin": "journal_default",
         "sheet1_committee": "\ud83d\udccb Ledger Updates",
-        "diagnostic_hint": "loc='House Appropriations'; api_2026-02-12=[House Counties, Cities and Towns-Subcommittee #2@7:30 AM; House Public Safety-Subcommittee #2@7:30 AM; House Health and Human Services-Behavioral Health@7:3\u2026"
+        "diagnostic_hint": "loc='House Appropriations'; api_2026-02-10=[House Education-K-12 Subcommittee@4:00 PM; House Republican Caucus@11:00 AM; House Privileges and Elections-Campaigns and Candidates@7:00 AM]"
       },
       {
         "bill": "HB674",
@@ -2771,12 +2763,12 @@
         "diagnostic_hint": "loc='House Health and Human Services'; api_2026-02-11=[House Privileges and Elections-Voting Rights@7:00 AM; House Agriculture, Chesapeake and Natural Resources@4:00 PM; House Communications, Technolo\u2026"
       },
       {
-        "bill": "HB675",
-        "date": "2026-02-10",
-        "sheet1_outcome": "H Referred to Committee on Appropriations",
+        "bill": "HB674",
+        "date": "2026-02-12",
+        "sheet1_outcome": "H Assigned HAPP sub: Health & Human Resources",
         "sheet1_origin": "journal_default",
         "sheet1_committee": "\ud83d\udccb Ledger Updates",
-        "diagnostic_hint": "loc='House Appropriations'; api_2026-02-10=[House Education-K-12 Subcommittee@4:00 PM; House Republican Caucus@11:00 AM; House Privileges and Elections-Campaigns and Candidates@7:00 AM]"
+        "diagnostic_hint": "loc='House Appropriations'; api_2026-02-12=[House Counties, Cities and Towns-Subcommittee #2@7:30 AM; House Public Safety-Subcommittee #2@7:30 AM; House Health and Human Services-Behavioral Health@7:3\u2026"
       },
       {
         "bill": "HB675",
@@ -2785,6 +2777,14 @@
         "sheet1_origin": "journal_default",
         "sheet1_committee": "\ud83d\udccb Ledger Updates",
         "diagnostic_hint": "loc='House Labor and Commerce'; api_2026-02-09=[House Democratic Caucus@11:15 AM; House Finance-Subcommittee #1@7:00 AM; House Communications, Technology and Innovation@10:00 AM]"
+      },
+      {
+        "bill": "HB675",
+        "date": "2026-02-10",
+        "sheet1_outcome": "H Referred to Committee on Appropriations",
+        "sheet1_origin": "journal_default",
+        "sheet1_committee": "\ud83d\udccb Ledger Updates",
+        "diagnostic_hint": "loc='House Appropriations'; api_2026-02-10=[House Education-K-12 Subcommittee@4:00 PM; House Republican Caucus@11:00 AM; House Privileges and Elections-Campaigns and Candidates@7:00 AM]"
       },
       {
         "bill": "HB677",
@@ -2844,14 +2844,6 @@
       },
       {
         "bill": "HB717",
-        "date": "2026-02-12",
-        "sheet1_outcome": "H Assigned HAPP sub: Health & Human Resources",
-        "sheet1_origin": "journal_default",
-        "sheet1_committee": "\ud83d\udccb Ledger Updates",
-        "diagnostic_hint": "loc='House Appropriations'; api_2026-02-12=[House Counties, Cities and Towns-Subcommittee #2@7:30 AM; House Public Safety-Subcommittee #2@7:30 AM; House Health and Human Services-Behavioral Health@7:3\u2026"
-      },
-      {
-        "bill": "HB717",
         "date": "2026-02-09",
         "sheet1_outcome": "H Placed on Health and Human Services Agenda",
         "sheet1_origin": "journal_default",
@@ -2865,6 +2857,14 @@
         "sheet1_origin": "journal_default",
         "sheet1_committee": "\ud83d\udccb Ledger Updates",
         "diagnostic_hint": "loc='House Health and Human Services'; api_2026-02-11=[House Privileges and Elections-Voting Rights@7:00 AM; House Agriculture, Chesapeake and Natural Resources@4:00 PM; House Communications, Technolo\u2026"
+      },
+      {
+        "bill": "HB717",
+        "date": "2026-02-12",
+        "sheet1_outcome": "H Assigned HAPP sub: Health & Human Resources",
+        "sheet1_origin": "journal_default",
+        "sheet1_committee": "\ud83d\udccb Ledger Updates",
+        "diagnostic_hint": "loc='House Appropriations'; api_2026-02-12=[House Counties, Cities and Towns-Subcommittee #2@7:30 AM; House Public Safety-Subcommittee #2@7:30 AM; House Health and Human Services-Behavioral Health@7:3\u2026"
       },
       {
         "bill": "HB722",
@@ -2956,19 +2956,19 @@
       },
       {
         "bill": "HB76",
-        "date": "2026-02-10",
-        "sheet1_outcome": "\u2139\ufe0f [TIMING_LAG: Memory=House Health and Human Services] H Placed on Appropriations Agenda",
-        "sheet1_origin": "journal_default",
-        "sheet1_committee": "\ud83d\udccb Ledger Updates",
-        "diagnostic_hint": "loc='House Appropriations'; api_2026-02-10=[House Education-K-12 Subcommittee@4:00 PM; House Republican Caucus@11:00 AM; House Privileges and Elections-Campaigns and Candidates@7:00 AM]"
-      },
-      {
-        "bill": "HB76",
         "date": "2026-02-09",
         "sheet1_outcome": "H Placed on Health and Human Services Agenda",
         "sheet1_origin": "journal_default",
         "sheet1_committee": "\ud83d\udccb Ledger Updates",
         "diagnostic_hint": "loc='House Health and Human Services'; api_2026-02-09=[House Democratic Caucus@11:15 AM; House Finance-Subcommittee #1@7:00 AM; House Communications, Technology and Innovation@10:00 AM]"
+      },
+      {
+        "bill": "HB76",
+        "date": "2026-02-10",
+        "sheet1_outcome": "\u2139\ufe0f [TIMING_LAG: Memory=House Health and Human Services] H Placed on Appropriations Agenda",
+        "sheet1_origin": "journal_default",
+        "sheet1_committee": "\ud83d\udccb Ledger Updates",
+        "diagnostic_hint": "loc='House Appropriations'; api_2026-02-10=[House Education-K-12 Subcommittee@4:00 PM; House Republican Caucus@11:00 AM; House Privileges and Elections-Campaigns and Candidates@7:00 AM]"
       },
       {
         "bill": "HB763",
@@ -2988,14 +2988,6 @@
       },
       {
         "bill": "HB765",
-        "date": "2026-02-12",
-        "sheet1_outcome": "H Referred to Committee on Appropriations",
-        "sheet1_origin": "journal_default",
-        "sheet1_committee": "\ud83d\udccb Ledger Updates",
-        "diagnostic_hint": "loc='House Appropriations'; api_2026-02-12=[House Counties, Cities and Towns-Subcommittee #2@7:30 AM; House Public Safety-Subcommittee #2@7:30 AM; House Health and Human Services-Behavioral Health@7:3\u2026"
-      },
-      {
-        "bill": "HB765",
         "date": "2026-02-11",
         "sheet1_outcome": "H Placed on General Laws Agenda",
         "sheet1_origin": "journal_default",
@@ -3003,12 +2995,12 @@
         "diagnostic_hint": "loc='House General Laws'; api_2026-02-11=[House Privileges and Elections-Voting Rights@7:00 AM; House Agriculture, Chesapeake and Natural Resources@4:00 PM; House Communications, Technology and Innova\u2026"
       },
       {
-        "bill": "HB769",
+        "bill": "HB765",
         "date": "2026-02-12",
-        "sheet1_outcome": "H Placed on Courts of Justice Agenda",
+        "sheet1_outcome": "H Referred to Committee on Appropriations",
         "sheet1_origin": "journal_default",
         "sheet1_committee": "\ud83d\udccb Ledger Updates",
-        "diagnostic_hint": "loc='House Courts of Justice'; api_2026-02-12=[House Counties, Cities and Towns-Subcommittee #2@7:30 AM; House Public Safety-Subcommittee #2@7:30 AM; House Health and Human Services-Behavioral Health@\u2026"
+        "diagnostic_hint": "loc='House Appropriations'; api_2026-02-12=[House Counties, Cities and Towns-Subcommittee #2@7:30 AM; House Public Safety-Subcommittee #2@7:30 AM; House Health and Human Services-Behavioral Health@7:3\u2026"
       },
       {
         "bill": "HB769",
@@ -3017,6 +3009,14 @@
         "sheet1_origin": "journal_default",
         "sheet1_committee": "\ud83d\udccb Ledger Updates",
         "diagnostic_hint": "loc='House Courts of Justice'; api_2026-02-10=[House Education-K-12 Subcommittee@4:00 PM; House Republican Caucus@11:00 AM; House Privileges and Elections-Campaigns and Candidates@7:00 AM]"
+      },
+      {
+        "bill": "HB769",
+        "date": "2026-02-12",
+        "sheet1_outcome": "H Placed on Courts of Justice Agenda",
+        "sheet1_origin": "journal_default",
+        "sheet1_committee": "\ud83d\udccb Ledger Updates",
+        "diagnostic_hint": "loc='House Courts of Justice'; api_2026-02-12=[House Counties, Cities and Towns-Subcommittee #2@7:30 AM; House Public Safety-Subcommittee #2@7:30 AM; House Health and Human Services-Behavioral Health@\u2026"
       },
       {
         "bill": "HB79",
@@ -3116,19 +3116,19 @@
       },
       {
         "bill": "HB838",
-        "date": "2026-02-10",
-        "sheet1_outcome": "\u2139\ufe0f [TIMING_LAG: Memory=House Health and Human Services] H Placed on Appropriations Agenda",
-        "sheet1_origin": "journal_default",
-        "sheet1_committee": "\ud83d\udccb Ledger Updates",
-        "diagnostic_hint": "loc='House Appropriations'; api_2026-02-10=[House Education-K-12 Subcommittee@4:00 PM; House Republican Caucus@11:00 AM; House Privileges and Elections-Campaigns and Candidates@7:00 AM]"
-      },
-      {
-        "bill": "HB838",
         "date": "2026-02-09",
         "sheet1_outcome": "H Placed on Health and Human Services Agenda",
         "sheet1_origin": "journal_default",
         "sheet1_committee": "\ud83d\udccb Ledger Updates",
         "diagnostic_hint": "loc='House Health and Human Services'; api_2026-02-09=[House Democratic Caucus@11:15 AM; House Finance-Subcommittee #1@7:00 AM; House Communications, Technology and Innovation@10:00 AM]"
+      },
+      {
+        "bill": "HB838",
+        "date": "2026-02-10",
+        "sheet1_outcome": "\u2139\ufe0f [TIMING_LAG: Memory=House Health and Human Services] H Placed on Appropriations Agenda",
+        "sheet1_origin": "journal_default",
+        "sheet1_committee": "\ud83d\udccb Ledger Updates",
+        "diagnostic_hint": "loc='House Appropriations'; api_2026-02-10=[House Education-K-12 Subcommittee@4:00 PM; House Republican Caucus@11:00 AM; House Privileges and Elections-Campaigns and Candidates@7:00 AM]"
       },
       {
         "bill": "HB840",
@@ -3196,19 +3196,19 @@
       },
       {
         "bill": "HB895",
-        "date": "2026-02-10",
-        "sheet1_outcome": "H Referred to Committee on Appropriations",
-        "sheet1_origin": "journal_default",
-        "sheet1_committee": "\ud83d\udccb Ledger Updates",
-        "diagnostic_hint": "loc='House Appropriations'; api_2026-02-10=[House Education-K-12 Subcommittee@4:00 PM; House Republican Caucus@11:00 AM; House Privileges and Elections-Campaigns and Candidates@7:00 AM]"
-      },
-      {
-        "bill": "HB895",
         "date": "2026-02-09",
         "sheet1_outcome": "H Placed on Labor and Commerce Agenda",
         "sheet1_origin": "journal_default",
         "sheet1_committee": "\ud83d\udccb Ledger Updates",
         "diagnostic_hint": "loc='House Labor and Commerce'; api_2026-02-09=[House Democratic Caucus@11:15 AM; House Finance-Subcommittee #1@7:00 AM; House Communications, Technology and Innovation@10:00 AM]"
+      },
+      {
+        "bill": "HB895",
+        "date": "2026-02-10",
+        "sheet1_outcome": "H Referred to Committee on Appropriations",
+        "sheet1_origin": "journal_default",
+        "sheet1_committee": "\ud83d\udccb Ledger Updates",
+        "diagnostic_hint": "loc='House Appropriations'; api_2026-02-10=[House Education-K-12 Subcommittee@4:00 PM; House Republican Caucus@11:00 AM; House Privileges and Elections-Campaigns and Candidates@7:00 AM]"
       },
       {
         "bill": "HB896",
@@ -3260,19 +3260,19 @@
       },
       {
         "bill": "HB931",
-        "date": "2026-02-12",
-        "sheet1_outcome": "H Assigned HAPP sub: Health & Human Resources",
-        "sheet1_origin": "journal_default",
-        "sheet1_committee": "\ud83d\udccb Ledger Updates",
-        "diagnostic_hint": "loc='House Appropriations'; api_2026-02-12=[House Counties, Cities and Towns-Subcommittee #2@7:30 AM; House Public Safety-Subcommittee #2@7:30 AM; House Health and Human Services-Behavioral Health@7:3\u2026"
-      },
-      {
-        "bill": "HB931",
         "date": "2026-02-11",
         "sheet1_outcome": "H Placed on Health and Human Services Agenda",
         "sheet1_origin": "journal_default",
         "sheet1_committee": "\ud83d\udccb Ledger Updates",
         "diagnostic_hint": "loc='House Health and Human Services'; api_2026-02-11=[House Privileges and Elections-Voting Rights@7:00 AM; House Agriculture, Chesapeake and Natural Resources@4:00 PM; House Communications, Technolo\u2026"
+      },
+      {
+        "bill": "HB931",
+        "date": "2026-02-12",
+        "sheet1_outcome": "H Assigned HAPP sub: Health & Human Resources",
+        "sheet1_origin": "journal_default",
+        "sheet1_committee": "\ud83d\udccb Ledger Updates",
+        "diagnostic_hint": "loc='House Appropriations'; api_2026-02-12=[House Counties, Cities and Towns-Subcommittee #2@7:30 AM; House Public Safety-Subcommittee #2@7:30 AM; House Health and Human Services-Behavioral Health@7:3\u2026"
       },
       {
         "bill": "HB935",

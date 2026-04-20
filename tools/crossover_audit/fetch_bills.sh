@@ -9,11 +9,19 @@
 
 set -u
 
-CHROME="/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"
+# Portable Chrome path. Override via env var, e.g.:
+#   CHROME=/usr/bin/google-chrome bash tools/crossover_audit/fetch_bills.sh
+CHROME="${CHROME:-/Applications/Google Chrome.app/Contents/MacOS/Google Chrome}"
 LIST="${1:-/tmp/lis_audit/to_fetch.txt}"
 OUTDIR="/tmp/lis_audit"
 PARALLEL=8
 MIN_SIZE=15000
+
+if [ ! -x "$CHROME" ]; then
+    echo "ERROR: Chrome binary not found/executable at: $CHROME" >&2
+    echo "Override with: CHROME=/path/to/chrome bash $0 ..." >&2
+    exit 1
+fi
 
 if [ ! -f "$LIST" ]; then
     echo "ERROR: bill list not found: $LIST" >&2
@@ -35,16 +43,29 @@ fetch_one() {
             return 0
         fi
     fi
+    # Track Chrome exit status explicitly; a non-zero exit means the dump is
+    # invalid even if the file was partially written. Retry once with a longer
+    # budget, then mark the bill as failed so callers see it.
+    local rc size
     "$CHROME" --headless=new --disable-gpu --virtual-time-budget=15000 \
         --dump-dom "https://lis.virginia.gov/bill-details/20261/${bill}" \
         > "$out" 2>/dev/null
-    local size
+    rc=$?
     size=$(wc -c < "$out")
-    if [ "$size" -lt "$MIN_SIZE" ]; then
+    if [ "$rc" -ne 0 ] || [ "$size" -lt "$MIN_SIZE" ]; then
         "$CHROME" --headless=new --disable-gpu --virtual-time-budget=25000 \
             --dump-dom "https://lis.virginia.gov/bill-details/20261/${bill}" \
             > "$out" 2>/dev/null
+        rc=$?
         size=$(wc -c < "$out")
+    fi
+    if [ "$rc" -ne 0 ]; then
+        echo "  ${bill}: FAIL (Chrome rc=${rc}, ${size}B)" >&2
+        return 1
+    fi
+    if [ "$size" -lt "$MIN_SIZE" ]; then
+        echo "  ${bill}: UNDERSIZED (${size}B, likely hydration failure)" >&2
+        return 1
     fi
     echo "  ${bill}: ${size}B"
 }

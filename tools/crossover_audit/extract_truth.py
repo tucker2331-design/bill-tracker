@@ -20,6 +20,7 @@ Parser strategy:
     contamination.
 """
 import argparse
+import html
 import json
 import re
 import sys
@@ -47,6 +48,10 @@ WINDOW_END = (2026, 2, 13)
 
 def strip_tags(s: str) -> str:
     s = re.sub(r"<[^>]+>", " ", s)
+    # Unescape HTML entities (&amp;, &nbsp;, numeric refs) that LIS emits in
+    # committee / bill text. Without this, downstream text comparisons against
+    # API-sourced strings fail whenever names contain "&" etc.
+    s = html.unescape(s)
     s = re.sub(r"\s+", " ", s).strip()
     return s
 

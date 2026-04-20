@@ -46,7 +46,9 @@ def main() -> int:
         return 1
 
     by_bill = defaultdict(list)
-    with HISTORY_CSV.open() as f:
+    # HISTORY.CSV is ISO-8859-1 (see docs/knowledge/lis_api_reference.md). Opening
+    # without this raises UnicodeDecodeError on rows with Latin-1 punctuation.
+    with HISTORY_CSV.open(encoding="iso-8859-1") as f:
         for row in csv.DictReader(f):
             bill = row["Bill_id"].strip()
             if not BILL_RE.match(bill):

@@ -151,7 +151,8 @@ def load_lis_truth(path: Path):
 
 def load_history(path: Path):
     by_bill = defaultdict(list)
-    with path.open() as f:
+    # HISTORY.CSV is ISO-8859-1 (see docs/knowledge/lis_api_reference.md).
+    with path.open(encoding="iso-8859-1") as f:
         for r in csv.DictReader(f):
             bill = r["Bill_id"].strip()
             if not BILL_RE.match(bill):
@@ -198,9 +199,13 @@ def diff(sheet1, truth, history):
         })
 
     # --- Check 2/3: per-(bill, date) comparison ---
-    for bill in sorted(universe & sheet_bills):
-        sheet_rows = sheet1[bill]
-        hist_rows = history[bill]
+    # Iterate the UNION so phantom_row also catches Sheet1 rows on bills that
+    # never appeared in HISTORY (universe is HISTORY-derived). Missing that
+    # would let a phantom bill pass silently and weaken the "phantom_row: 0"
+    # claim. Use .get(..., []) so we never auto-vivify defaultdict keys.
+    for bill in sorted(universe | sheet_bills):
+        sheet_rows = sheet1.get(bill, [])
+        hist_rows = history.get(bill, [])
         lis_rows = truth.get(bill, [])
 
         # Group by date
@@ -214,7 +219,10 @@ def diff(sheet1, truth, history):
         for r in hist_rows:
             hist_by_date[r["date"]].append(r)
 
-        all_dates = set(sheet_by_date) | set(lis_by_date) | set(hist_by_date)
+        # Sort dates so JSON output is deterministic across runs (Python set
+        # iteration is hash-randomized; without sort, findings.json churns on
+        # every run and clutters diffs).
+        all_dates = sorted(set(sheet_by_date) | set(lis_by_date) | set(hist_by_date))
         for d in all_dates:
             sheet_rows_d = sheet_by_date.get(d, [])
             lis_rows_d = lis_by_date.get(d, [])
