@@ -341,6 +341,44 @@ ABSOLUTE_FLOOR_VERBS = ["reading dispensed", "read first", "read second", "read 
 # Added: "conference report agreed" — floor vote on conference committee compromise.
 DYNAMIC_VERBS = ["passed by", "reconsidered", "failed", "defeated", "laid on the table", "tabled", "continued", "strike", "stricken", "incorporate", "recommend", "recommends"]
 
+# Meeting-verb tokens used by the write-time chokepoint (_append_event, I4) to
+# classify rows that REQUIRE a concrete time (people had to be in a room at
+# HH:MM). Mirrors tools/crossover_audit/diff_sheet1.py MEETING_VERBS — keep
+# the two lists in sync; a drift between them weakens the bug-detection
+# signal from the audit tool. This list is intentionally high-recall: false
+# positives only elevate the "meeting_unsourced" telemetry counter, they
+# do not drop or reclassify rows.
+MEETING_VERB_TOKENS = [
+    "reported from",
+    "recommends reporting",
+    "recommends continuing",
+    "recommends passing",
+    "recommends laying",
+    "recommends defeating",
+    "recommends striking",
+    "committee amendment offered",
+    "committee substitute offered",
+    "subcommittee substitute offered",
+    "subcommittee amendment offered",
+    "committee offered",
+    "subcommittee offered",
+    "continued to next session",
+    "continued to 2027",
+    "passed by for the day",
+    "passed by indefinitely",
+    "engrossed",
+    "read first time",
+    "read second time",
+    "read third time",
+    "constitutional reading dispensed",
+    "taken up",
+    "laid on the table",
+    "stricken from docket",
+    "block vote",
+    "voice vote",
+    "rules suspended",
+]
+
 def normalize_room_key(text):
     if not text:
         return ""
@@ -713,6 +751,9 @@ def run_calendar_update():
         # Orthogonal tag counters (overlap with the above)
         "unsourced_anchor": 0,      # Memory Anchor committee fallback applied
         "dropped_ephemeral": 0,     # Post-loop ephemeral filter drops (subset of unsourced_*)
+        # PR-C1: write-time chokepoint telemetry (see _append_event below)
+        "invariant_violations": 0,  # Rows that failed I1/I2/I3 at append time
+        "meeting_unsourced": 0,     # Meeting-verb outcome with Origin in {journal_default, floor_miss}
     }
 
     def push_system_alert(message, status="ALERT", category=None, severity=None, dedup_key=None):
@@ -747,6 +788,95 @@ def run_calendar_update():
             "DiagnosticHint": "",
         })
 
+    # PR-C1: single chokepoint for every master_events.append in this run.
+    # All 5 append sites route through here so write-time invariants fire in
+    # ONE place, and the mass-violation circuit breaker downstream has a
+    # concrete counter to watch. Closes over master_events, source_miss_counts,
+    # push_system_alert from the enclosing scope — no args needed at call
+    # sites, so the diff at each call site is just a function-name swap.
+    #
+    # Invariants (violations tag + alert, do NOT drop the row — visibility
+    # beats silence; the circuit breaker watches the rate):
+    #   I1 schema        — all 11 required columns present
+    #   I2 origin_enum   — Origin in VALID_ORIGINS
+    #   I3 time/origin   — concrete-source Origins cannot carry a [NO_*] Time
+    #   I4 meeting_verb  — telemetry only: outcome carries a meeting verb
+    #                      AND Origin is unsourced → increment
+    #                      meeting_unsourced (what the breaker watches).
+    _VALID_ORIGINS = {
+        "api_schedule", "convene_anchor", "journal_default",
+        "floor_miss", "system_alert", "system_metrics",
+    }
+    _REQUIRED_KEYS = {
+        "Date", "Time", "SortTime", "Status", "Committee", "Bill",
+        "Outcome", "AgendaOrder", "Source", "Origin", "DiagnosticHint",
+    }
+    _UNSOURCED_ORIGINS_FOR_METRICS = {"journal_default", "floor_miss"}
+
+    def _append_event(event):
+        """PR-C1 write-time chokepoint. See comment block above for invariants."""
+        bill_id = event.get("Bill", "?")
+        date_id = event.get("Date", "?")
+
+        # I1: schema completeness. Fill missing keys with "" so downstream
+        # pandas/serialization stays happy, but count + alert so the gap is
+        # never silent.
+        missing = _REQUIRED_KEYS - set(event.keys())
+        if missing:
+            for k in missing:
+                event[k] = ""
+            source_miss_counts["invariant_violations"] += 1
+            push_system_alert(
+                f"I1 schema violation on append: missing {sorted(missing)}; "
+                f"bill={bill_id} date={date_id}",
+                status="CRITICAL",
+                category="DATA_ANOMALY",
+                severity="CRITICAL",
+                dedup_key=f"I1::{bill_id}::{date_id}",
+            )
+
+        # I2: Origin must be in the declared enum. An unrecognized value
+        # means a code path set Origin to something the pipeline doesn't
+        # know how to handle downstream (Ledger collapse, viewport exempt,
+        # X-Ray Section 0). Tag + alert; do not rewrite.
+        origin = event.get("Origin", "")
+        if origin not in _VALID_ORIGINS:
+            source_miss_counts["invariant_violations"] += 1
+            push_system_alert(
+                f"I2 origin enum violation: Origin='{origin}' not in "
+                f"{sorted(_VALID_ORIGINS)}; bill={bill_id} date={date_id}",
+                status="CRITICAL",
+                category="DATA_ANOMALY",
+                severity="CRITICAL",
+                dedup_key=f"I2::{origin}::{bill_id}",
+            )
+
+        # I3: time/origin parity. If we claimed a concrete source
+        # (api_schedule / convene_anchor) the Time cannot be a [NO_*] tag —
+        # that combination means the matcher's return value got lost
+        # somewhere on the way to the append. Catch it at write time.
+        time_val = str(event.get("Time", ""))
+        if origin in {"api_schedule", "convene_anchor"} and time_val.startswith("\u23f1\ufe0f [NO_"):
+            source_miss_counts["invariant_violations"] += 1
+            push_system_alert(
+                f"I3 time/origin parity violation: Origin='{origin}' but "
+                f"Time='{time_val}'; bill={bill_id} date={date_id}",
+                status="CRITICAL",
+                category="DATA_ANOMALY",
+                severity="CRITICAL",
+                dedup_key=f"I3::{origin}::{bill_id}::{date_id}",
+            )
+
+        # I4: meeting-verb telemetry. Pure counter — what the circuit
+        # breaker watches for regression. A row with a meeting-verb outcome
+        # AND an unsourced Origin is exactly the Section 9 bug shape.
+        if origin in _UNSOURCED_ORIGINS_FOR_METRICS:
+            outcome_lower = str(event.get("Outcome", "")).lower()
+            if any(v in outcome_lower for v in MEETING_VERB_TOKENS):
+                source_miss_counts["meeting_unsourced"] += 1
+
+        master_events.append(event)
+
     if not session_data:
         print("🚨 CRITICAL: Failed to retrieve active session. Proceeding in OFFLINE mode.")
         push_system_alert("🚨 LIS Session API unavailable. Running in OFFLINE mode; schedule times may be stale from API_Cache.", status="OFFLINE")
@@ -780,6 +910,31 @@ def run_calendar_update():
         else: worksheet.update_acell("Z1", "OFFLINE")
     except Exception as e:
         print(f"⚠️ Failed to write API status flag to Sheet1!Z1: {e}")
+
+    # PR-C1: read the last-successful-cycle timestamp from Sheet1!Y1.
+    # Wired up in C1 but not yet consumed — PR-C2 will use this value as the
+    # "since" cursor so gap-backfill happens automatically when a cycle
+    # fails (prevents the "if a scrape fails the next cycle only sees the
+    # last 15 min" scenario). Written to Y1 at the end of a successful
+    # Sheet1 write, below. Read is INFO-only on failure because a missing
+    # state cell on first run is expected; a permission / API error is
+    # logged so it can be triaged.
+    last_successful_cycle_end_utc = None
+    try:
+        _raw_y1 = worksheet.acell("Y1").value
+        last_successful_cycle_end_utc = (_raw_y1 or "").strip() or None
+        if last_successful_cycle_end_utc:
+            print(f"🕒 Last successful cycle ended: {last_successful_cycle_end_utc} (state cell Y1)")
+        else:
+            print("🕒 State cell Y1 is empty — this is normal on first run after PR-C1 deploys.")
+    except Exception as _state_read_err:
+        push_system_alert(
+            f"Could not read state cell Sheet1!Y1 (last_successful_cycle_end_utc): {_state_read_err}",
+            status="INFO",
+            category="API_FAILURE",
+            severity="INFO",
+            dedup_key="state_cell_y1_read_fail",
+        )
 
     print("🗄️ Pulling historical schedule from API_Cache...")
     api_schedule_map = {}
@@ -927,7 +1082,7 @@ def run_calendar_update():
                         new_cache_entries.append([date_str, normalized_name.strip(), time_val, sort_time_24h, status])
                     
                     if any(k in owner_lower for k in ["caucus", "session", "floor", "convenes", "adjourned"]):
-                        master_events.append({"Date": date_str, "Time": time_val, "SortTime": sort_time_24h, "Status": status, "Committee": normalized_name.strip() if normalized_name else "Chamber Event", "Bill": clean_desc, "Outcome": "", "AgendaOrder": -1, "Source": "API", "Origin": "api_schedule", "DiagnosticHint": ""})
+                        _append_event({"Date": date_str, "Time": time_val, "SortTime": sort_time_24h, "Status": status, "Committee": normalized_name.strip() if normalized_name else "Chamber Event", "Bill": clean_desc, "Outcome": "", "AgendaOrder": -1, "Source": "API", "Origin": "api_schedule", "DiagnosticHint": ""})
                         continue
                     
                     has_docket = False
@@ -946,19 +1101,19 @@ def run_calendar_update():
                                 
                     if combined_bills:
                         for bill in sorted(list(combined_bills)):
-                            master_events.append({"Date": date_str, "Time": time_val, "SortTime": sort_time_24h, "Status": status, "Committee": normalized_name.strip(), "Bill": bill, "Outcome": "Scheduled", "AgendaOrder": 1, "Source": "DOCKET", "Origin": "api_schedule", "DiagnosticHint": ""})
+                            _append_event({"Date": date_str, "Time": time_val, "SortTime": sort_time_24h, "Status": status, "Committee": normalized_name.strip(), "Bill": bill, "Outcome": "Scheduled", "AgendaOrder": 1, "Source": "DOCKET", "Origin": "api_schedule", "DiagnosticHint": ""})
                             if date_str not in docket_memory: docket_memory[date_str] = {}
                             if bill not in docket_memory[date_str]: docket_memory[date_str][bill] = []
                             if normalized_name.strip() not in docket_memory[date_str][bill]: docket_memory[date_str][bill].append(normalized_name.strip())
                         has_docket = True
 
                     if dlq_flag:
-                        master_events.append({"Date": date_str, "Time": time_val, "SortTime": sort_time_24h, "Status": status, "Committee": normalized_name.strip(), "Bill": dlq_flag, "Outcome": "", "AgendaOrder": 0, "Source": "API_Skeleton", "Origin": "api_schedule", "DiagnosticHint": ""})
+                        _append_event({"Date": date_str, "Time": time_val, "SortTime": sort_time_24h, "Status": status, "Committee": normalized_name.strip(), "Bill": dlq_flag, "Outcome": "", "AgendaOrder": 0, "Source": "API_Skeleton", "Origin": "api_schedule", "DiagnosticHint": ""})
                         has_docket = True
 
                     if not has_docket:
                         if sort_time_24h == "06:00" and "after" in time_val.lower(): clean_desc = f"⚠️ Time Unverified (Check Parent) - {clean_desc}"
-                        master_events.append({"Date": date_str, "Time": time_val, "SortTime": sort_time_24h, "Status": status, "Committee": normalized_name.strip(), "Bill": clean_desc if clean_desc else "No agenda listed.", "Outcome": "", "AgendaOrder": -1, "Source": "API_Skeleton", "Origin": "api_schedule", "DiagnosticHint": ""})
+                        _append_event({"Date": date_str, "Time": time_val, "SortTime": sort_time_24h, "Status": status, "Committee": normalized_name.strip(), "Bill": clean_desc if clean_desc else "No agenda listed.", "Outcome": "", "AgendaOrder": -1, "Source": "API_Skeleton", "Origin": "api_schedule", "DiagnosticHint": ""})
 
                 # If LIS provides multiple schedule rows for the same date+committee,
                 # promote any concrete time to sibling API/API_Skeleton rows that are
@@ -1378,7 +1533,7 @@ def run_calendar_update():
             if anchor_applied:
                 source_miss_counts["unsourced_anchor"] += 1
 
-            master_events.append({
+            _append_event({
                 "Date": date_str,
                 "Time": time_val,
                 "SortTime": sort_time_24h,
@@ -1601,11 +1756,88 @@ def run_calendar_update():
                     final_df = final_df.fillna("")
 
             sheet_data = [final_df.columns.values.tolist()] + final_df.values.tolist()
-            print("💾 Writing to Enterprise Database...")
-            worksheet.clear()
-            worksheet.update(values=sheet_data, range_name="A1")
 
-            print("✅ SUCCESS: Regression Test Build is complete.")
+            # PR-C1: MASS-VIOLATION CIRCUIT BREAKER — last safety net before
+            # Sheet1 is overwritten. If this cycle's write-time invariants
+            # failed at a high rate, OR the meeting-verb-unsourced count
+            # spiked well past today's known-bug baseline (9 for crossover
+            # week), refuse the clear+update. The previous cycle's data
+            # stays as last-known-good; a compact summary goes to Sheet1!X1
+            # so lobbyists / X-Ray can see that a cycle was held back and
+            # why. Thresholds are intentionally generous — the breaker is a
+            # safety net for REGRESSIONS, not a gate on normal operation.
+            CIRCUIT_MAX_VIOLATION_RATE = 0.10         # >10% of rows failing invariants
+            CIRCUIT_MAX_ABS_VIOLATIONS = 50           # or >=50 absolute
+            CIRCUIT_MAX_MEETING_UNSOURCED = 50        # or >=50 meeting-verb misses (baseline ~9)
+            _total = max(1, source_miss_counts["total_processed"])
+            _violations = source_miss_counts["invariant_violations"]
+            _meeting_unsourced = source_miss_counts["meeting_unsourced"]
+            _violation_rate = _violations / _total
+            _breaker_tripped = (
+                _violation_rate > CIRCUIT_MAX_VIOLATION_RATE
+                or _violations >= CIRCUIT_MAX_ABS_VIOLATIONS
+                or _meeting_unsourced >= CIRCUIT_MAX_MEETING_UNSOURCED
+            )
+
+            if _breaker_tripped:
+                _breaker_msg = (
+                    f"🚨 CIRCUIT BREAKER TRIPPED at {now.strftime('%Y-%m-%d %H:%M UTC')} — "
+                    f"invariant_violations={_violations} "
+                    f"meeting_unsourced={_meeting_unsourced} "
+                    f"total_processed={_total} "
+                    f"violation_rate={_violation_rate:.2%}. "
+                    f"Refusing Sheet1 overwrite to preserve last-known-good. "
+                    f"Thresholds: rate>{CIRCUIT_MAX_VIOLATION_RATE:.0%} or "
+                    f"violations>={CIRCUIT_MAX_ABS_VIOLATIONS} or "
+                    f"meeting_unsourced>={CIRCUIT_MAX_MEETING_UNSOURCED}."
+                )
+                print(_breaker_msg)
+                # Non-destructive visibility: write a short banner to Sheet1!X1.
+                # Does not clear the data. Normal cycles overwrite X1 with "OK"
+                # below so a stale banner never lingers across healthy cycles.
+                try:
+                    worksheet.update_acell("X1", _breaker_msg[:4500])
+                except Exception as _x1_err:
+                    print(f"⚠️ Failed to write circuit-breaker banner to Sheet1!X1: {_x1_err}")
+                push_system_alert(
+                    _breaker_msg,
+                    status="CRITICAL",
+                    category="DATA_ANOMALY",
+                    severity="CRITICAL",
+                    dedup_key=f"circuit_breaker::{now.strftime('%Y-%m-%d')}",
+                )
+                print("🛑 Sheet1 overwrite skipped. State cell Y1 NOT advanced so next cycle's gap-backfill (PR-C2) covers this missed window.")
+            else:
+                print("💾 Writing to Enterprise Database...")
+                worksheet.clear()
+                worksheet.update(values=sheet_data, range_name="A1")
+
+                # Non-destructive: clear any stale breaker banner from a prior
+                # tripped cycle so X1 reflects CURRENT state. Cheap cell write.
+                try:
+                    worksheet.update_acell("X1", "")
+                except Exception as _x1_clear_err:
+                    print(f"⚠️ Failed to clear Sheet1!X1 breaker banner: {_x1_clear_err}")
+
+                # PR-C1: advance the last-successful-cycle cursor. Written
+                # ONLY on a successful Sheet1 write so that a failed/halted
+                # cycle leaves Y1 pointing at the last good cycle — PR-C2's
+                # gap-backfill logic can then use this as its "since" cursor.
+                try:
+                    worksheet.update_acell(
+                        "Y1",
+                        now.strftime("%Y-%m-%dT%H:%M:%SZ"),
+                    )
+                except Exception as _state_write_err:
+                    push_system_alert(
+                        f"Could not write state cell Sheet1!Y1 after successful cycle: {_state_write_err}",
+                        status="WARN",
+                        category="API_FAILURE",
+                        severity="WARN",
+                        dedup_key="state_cell_y1_write_fail",
+                    )
+
+                print("✅ SUCCESS: Regression Test Build is complete.")
         else:
             print("⚠️ Viewport slice resulted in an empty dataframe.")
             worksheet.clear()

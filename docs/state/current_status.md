@@ -1,6 +1,6 @@
 ---
 tags: [state, live]
-updated: 2026-04-19
+updated: 2026-04-21
 status: active
 ---
 
@@ -11,11 +11,12 @@ status: active
 **Benchmark window:** Feb 9-13, 2026 (crossover week).
 
 ## Active focus
-**Audit complete; scoping PR-C.** Full tier-A ground-truth audit of crossover week (1,544 bills × 6,885 LIS actions vs 4,473 Sheet1 rows) confirmed the X-Ray Section 9 bug count of 9 is the true, full-window bug count — no hidden meeting-misrouted rows, no phantom rows, no silent bill-drops. See [[testing/crossover_audit]]. PR-C scope is now the two-track fix: secondary time source for Class 1 (4 bugs: HB111/505/972/609 — Feb 12 H-P&E + H-Finance Schedule API gaps) + subcommittee resolution for Class 2 (5 bugs: HB24/1266/1372, SB494/555). No PR-C code until the audit is reviewed and direction confirmed.
+**PR-C1 opened — write-time safety rails + state scaffolding.** First PR in the PR-C series. Lands four pieces of infrastructure that PR-C2+ (the actual bug fixes) depend on: (1) single write-time chokepoint `_append_event()` enforcing invariants I1 (schema completeness), I2 (Origin enum), I3 (Time/Origin parity for concrete sources), I4 (meeting-verb telemetry); (2) mass-violation circuit breaker that refuses the Sheet1 overwrite on >10% violation rate / ≥50 absolute violations / ≥50 meeting_unsourced, preserving last-known-good data; (3) state cell `Sheet1!Y1` holding `last_successful_cycle_end_utc` (read in C1, consumed by C2 for gap-backfill); (4) GitHub Actions `concurrency` block queuing overlapping cycles. Zero bug-count delta expected from C1 alone — this is the scaffolding that makes subsequent fix-passes auditable. The crossover-audit-confirmed 9-bug target (4×Class 1 Schedule API gaps + 5×Class 2 subcommittee attribution misses) is the scope for PR-C2+. See [[testing/crossover_audit]] and [[architecture/calendar_pipeline#Write-Time Safety Rails (PR-C1)]].
 
 ## Open PRs
 | # | Branch | State | Notes |
 |---|--------|-------|-------|
+| TBD | `claude/pr-c1-append-event-chokepoint` | **Open — PR-C1** | Write-time safety rails + state scaffolding. (1) `_append_event()` chokepoint in `run_calendar_update` enforcing I1-I4. (2) Mass-violation circuit breaker preserving last-known-good Sheet1 on threshold trip. (3) State cell `Sheet1!Y1` read/write for `last_successful_cycle_end_utc` cursor. (4) YAML `concurrency: { group: calendar-worker, cancel-in-progress: false }` on calendar_worker workflow. (5) Two new orthogonal counters in `source_miss_counts`: `invariant_violations`, `meeting_unsourced`. Scaffolding for PR-C2+; no bug-count change expected. See [[architecture/calendar_pipeline#Write-Time Safety Rails (PR-C1)]]. |
 | TBD | `claude/pr-b-metrics-visibility-diagnostic` | **Open — PR-B** | (1) Exempt `Origin in {system_alert, system_metrics}` from viewport slice so denominator row reaches Sheet1. (2) Add `DiagnosticHint` column populated ONLY on source-miss rows (`journal_default` / `floor_miss`). Sheet1 schema: 10 → 11 columns. See [[failures/gemini_review_patterns]] #36-#37. |
 
 ## Recently closed
@@ -24,9 +25,11 @@ status: active
 - **PR#24** `claude/pr23-gemini-review-fixes` — merged 2026-04-16. Gemini review follow-ups for PR#23 (placeholder link, severity alignment, `<module>` consistency, log accuracy, section-anchor wikilink).
 - **PR#25** `claude/worker-source-miss-visibility` — merged 2026-04-16. PR-A landed (all 5 source-miss visibility changes + Gemini review fixes #31-#35). Worker run confirmed counters wired (denominator = 63,081 mutually-exclusive buckets). Metrics row never reached Sheet1 due to viewport bug → PR-B.
 
-## Next PR (after PR-B merges)
-**Attack the largest unsourced category revealed by X-Ray Section 0 once SYSTEM_METRICS is visible.**
-Once PR-B is running and Section 0 renders the denominator, identify which of `unsourced_journal` / `unsourced_anchor` / `floor_anchor_miss` / `dropped_ephemeral` is largest. Each follow-up PR must cite before/after counts from Section 0 to meet CLAUDE.md Standard #7.
+## Next PR (after PR-C1 merges)
+**PR-C2: gap-backfill using the `Y1` cursor.** PR-C1 lands the write side of the cursor (Y1 advance on successful overwrite, left alone on breaker trip). PR-C2 consumes it as the "since" cursor so a failed/skipped cycle's window is automatically re-processed on the next healthy run. After C2, the PR-C fix-passes (per-class) begin:
+- **PR-C3** — LegislationEvent API as secondary time source (collapses Class 1: 4 bugs — HB111/505/972/609). Fallback chain documented in [[log]] 2026-04-20 entry and [[knowledge/lis_api_reference]].
+- **PR-C4** — Subcommittee attribution resolver (collapses Class 2: 5 bugs — HB24/1266/1372, SB494/555).
+- **PR-C5+** — Mop-up: address whichever category X-Ray Section 0 surfaces as largest residual (`unsourced_journal` / `unsourced_anchor` / `floor_anchor_miss` / `dropped_ephemeral`). Each PR must cite before/after counts from Section 0 to meet CLAUDE.md Standard #7.
 
 ## Known bug count (as of last measured X-Ray)
 Crossover week, post-PR-B, **audit-verified 2026-04-19**:

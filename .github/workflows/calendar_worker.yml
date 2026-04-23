@@ -5,6 +5,18 @@ on:
     - cron: '*/15 * * * *' # Runs every 15 minutes
   workflow_dispatch: # Adds a manual "Run Now" button in GitHub
 
+# PR-C1: queue overlapping cycles rather than parallelizing them. If a cycle
+# N is still running when cycle N+1 fires (e.g. GitHub Actions is slow and
+# the 15-min run took 18 min), N+1 waits for N to finish. `cancel-in-progress:
+# false` means we NEVER cancel a mid-flight cycle — losing work mid-cycle
+# would leave Sheet1 in a half-written state, which is worse than queuing.
+# The 15-min cron is tight enough that queued cycles still complete within
+# a reasonable window; a truly stuck cycle would need separate alerting
+# (GitHub Actions surfaces runtime > threshold natively).
+concurrency:
+  group: calendar-worker
+  cancel-in-progress: false
+
 jobs:
   update-database:
     runs-on: ubuntu-latest
