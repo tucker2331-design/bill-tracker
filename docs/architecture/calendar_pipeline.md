@@ -59,3 +59,115 @@ The `DiagnosticHint` column was added in PR-B. Populated ONLY for rows where `Or
 - Noise filtering happens AFTER state machine updates (so memory stays correct)
 - Ledger-Updates collapse happens BEFORE dedup (so phantom committees merge properly) and gates off the `Origin` column, not the Time string, so provenance survives the rename (PR-A)
 - Viewport slice exempts `Origin in {system_alert, system_metrics}` from the `scrape_start..scrape_end` window so meta rows (stamped with the run timestamp, not investigation dates) actually reach Sheet1 (PR-B, see [[failures/gemini_review_patterns]] #36)
+
+## Write-Time Safety Rails (PR-C1)
+
+All bill-row writes into `master_events` pass through a single closure,
+`_append_event()`, defined inside `run_calendar_update()`. The chokepoint
+enforces four invariants:
+
+| # | Invariant | Failure mode |
+|---|-----------|--------------|
+| I1 | Schema completeness — all 11 columns present | fill missing with `""`, push `DATA_ANOMALY / CRITICAL` alert |
+| I2 | `Origin` in `{api_schedule, convene_anchor, journal_default, floor_miss, system_alert, system_metrics}` | push `DATA_ANOMALY / CRITICAL` alert (row is not rewritten — downstream must handle visibly) |
+| I3 | Concrete-source Origins (`api_schedule` / `convene_anchor`) cannot carry a `⏱️ [NO_*]` Time | push `DATA_ANOMALY / CRITICAL` alert |
+| I4 | Telemetry counter `meeting_unsourced` (no invariant) — outcome contains a meeting verb AND Origin is unsourced | increment counter; fed to the circuit breaker |
+
+Rows are NEVER dropped by the chokepoint. Visibility beats silence; the
+mass-violation circuit breaker downstream watches the rate. Violations and
+the meeting-verb counter both surface through the existing `SYSTEM_METRICS`
+row (X-Ray Section 0 renders them alongside the prior counters).
+
+### Mass-Violation Circuit Breaker
+
+Just before `worksheet.clear() + worksheet.update()`, the worker evaluates:
+
+- `violation_rate > 10%` (invariants / **`rows_appended`** — see Counter schema below; review-fix from Gemini)
+- OR `invariant_violations >= 50`
+- OR `meeting_unsourced >= 50` (baseline today: ~9 for crossover week)
+
+If any threshold trips, the worker **refuses the Sheet1 overwrite** and
+leaves the previous cycle's data intact as last-known-good. Three
+durable visibility writes happen on trip (review-fix from Codex —
+`alert_rows` is in-memory and dies with the process, so the original
+design would have lost SYSTEM_ALERT visibility of the trip):
+
+- `Sheet1!X1` — compact human-readable banner (truncated to 4500 chars)
+- `Sheet1!W1` — machine-readable JSON trip record (`trip_utc`,
+  `invariant_violations`, `meeting_unsourced`, `rows_appended`,
+  `total_processed`, `violation_rate`, `thresholds`). Read at the TOP
+  of the next cycle as a carry-forward; that cycle emits a proper
+  `DATA_ANOMALY / CRITICAL` SYSTEM_ALERT row describing the prior
+  trip, so Bug_Logs / SYSTEM_ALERT monitors see the trip one cycle
+  delayed. W1 is cleared on the next successful overwrite so the
+  carry-forward doesn't double-report.
+- In-memory `alert_rows` entry — surfaces THIS cycle's stdout /
+  GitHub Actions log, but is expected to die with the process on the
+  breaker branch. The durable W1 + next-cycle carry-forward is the
+  real monitoring path.
+
+The state cell `Y1` is NOT advanced, so the next cycle's gap-backfill
+window (PR-C2) naturally covers the skipped cycle.
+
+Thresholds are intentionally generous — a safety net for REGRESSIONS, not
+a gate on normal operation.
+
+### State Cell `Sheet1!Y1` — `last_successful_cycle_end_utc`
+
+Written at the end of every successful Sheet1 overwrite with the ISO UTC
+timestamp of the cycle (**real UTC via `datetime.now(timezone.utc)`** —
+review-fix from Codex. The `now` variable used throughout the cycle is
+`datetime.now(America/New_York).replace(tzinfo=None)` i.e. naive ET;
+using it for the Y1 "UTC" write would shift the cursor by 4–5 hours
+across DST). Read at the top of the next cycle (logged only in C1;
+PR-C2 will consume this as the "since" cursor so a failed cycle auto-
+backfills in the next healthy cycle). Empty on first post-PR-C1 deploy —
+that's expected and does not alert. A read or write API error emits a
+categorized `API_FAILURE` alert.
+
+### State Cell `Sheet1!W1` — durable breaker trip record (PR-C1 review-fix)
+
+JSON-encoded record written on circuit-breaker trip so the trip survives
+the process exit when the normal `worksheet.update(...)` path is skipped.
+Read at the top of the next cycle and surfaced as a carry-forward
+`DATA_ANOMALY / CRITICAL` SYSTEM_ALERT. Cleared (`""`) on every
+successful Sheet1 overwrite.
+
+Format:
+```json
+{
+  "trip_utc": "2026-04-21T14:30:00Z",
+  "invariant_violations": 52,
+  "meeting_unsourced": 9,
+  "rows_appended": 4500,
+  "total_processed": 63081,
+  "violation_rate": 0.0116,
+  "thresholds": {"rate": 0.10, "violations_abs": 50, "meeting_unsourced_abs": 50}
+}
+```
+
+Non-JSON content in W1 triggers a `WARN` SYSTEM_ALERT (possible manual
+edit or partial write). Read errors emit `API_FAILURE / INFO`.
+
+### GitHub Actions Concurrency
+
+`.github/workflows/calendar_worker.yml` declares
+`concurrency: { group: calendar-worker, cancel-in-progress: false }`. If a
+cycle's runtime slips past 15 min, the next cron firing queues rather than
+running in parallel. No in-flight cycle is ever cancelled — half-written
+Sheet1 is worse than a delayed cycle.
+
+### Counter schema additions (for X-Ray Section 0)
+
+`source_miss_counts` gains three orthogonal tag counters:
+- `invariant_violations` — tally of rows that failed I1/I2/I3 at `_append_event` time
+- `meeting_unsourced` — rows with meeting-verb outcome AND Origin in `{journal_default, floor_miss}` (the Section 9 bug shape)
+- `rows_appended` (PR-C1 review-fix, Gemini) — the true denominator for
+  the circuit breaker's violation-rate threshold. Counts rows that
+  actually reached `_append_event` (i.e. where an invariant COULD have
+  fired). `total_processed` is NOT used for the rate because it also
+  counts rows that died before append (noise drops, etc.), which would
+  dilute the rate and make the threshold less sensitive.
+
+All three overlap the existing denominator buckets by design, like
+`unsourced_anchor` and `dropped_ephemeral`. See [[failures/gemini_review_patterns]] #31 for the orthogonal-vs-denominator pattern.

@@ -272,3 +272,24 @@ Recurring mistakes to self-check BEFORE pushing code. Each pattern has been caug
 - PR-A (PR#25) tagged NO_SCHEDULE_MATCH rows but stored nothing about `bill_locations[bill]` (the committee the state machine was looking for) or about which committees LIS *did* schedule that day. Triage of the 9 in-window bugs would require grepping worker logs and rebuilding the matcher's view by hand.
 
 **Self-check:** Whenever you write a tag for a "we couldn't resolve X" case, write a sibling column (`DiagnosticHint`, `MissReason`, whatever) populated with the minimum state needed to explain the miss: the target value the matcher was using + the nearest-N actual candidates it could have matched. This is pure measurement, no classification impact, and turns "add a print" triage into a visible column.
+
+## 38. Naive-ET datetime Labeled as UTC
+**Pattern:** `datetime.now(tz).replace(tzinfo=None).strftime("%Y-%m-%dT%H:%M:%SZ")` — when `tz` is a local zone (America/New_York), stripping `tzinfo` leaves a naive local wall-clock time. The `Z` suffix then LIES: it labels ET time as UTC, and any consumer that parses the value back as UTC shifts the window by 4–5 hours (and across DST). Silent cursor drift.
+**Examples:**
+- PR-C1 (PR#28) wrote `Sheet1!Y1` — the `last_successful_cycle_end_utc` cursor — using the cycle's `now` variable, which is naive ET. A downstream gap-backfill consumer treating Y1 as UTC would backfill either 4 hours too much or 5 hours too little depending on DST, either missing an intervening cycle or re-processing rows.
+
+**Self-check:** Any field with `utc` in its name, or any ISO-8601 string with a `Z` suffix, must be produced by `datetime.now(timezone.utc)` (or an explicit `.astimezone(timezone.utc)`). Grep for `strftime.*%Y-%m-%dT.*Z` across the diff and trace the datetime back to its source. If the source is `datetime.now(<local_tz>)` or has `.replace(tzinfo=None)` anywhere in its ancestry, fix it. The ET `now` variable is legitimate for ET-facing fields (alert rows' human-readable timestamp) but NEVER for fields labeled UTC.
+
+## 39. In-Memory Alert Lists Die on Skipped-Write Paths
+**Pattern:** An alert helper appends to an in-memory list (`alert_rows`) that is persisted to Sheet1 ONLY as part of the main `worksheet.update()` call. Any control-flow path that intentionally skips `worksheet.update()` (circuit breakers, safe-mode exits, early returns) also silently drops every alert that was accumulated on that path. The most important alerts — the ones that triggered the safe-mode — are the ones lost.
+**Examples:**
+- PR-C1 (PR#28) circuit-breaker path wrote a `DATA_ANOMALY / CRITICAL` alert via `push_system_alert(...)` and then skipped `worksheet.update()` by design (to preserve last-known-good data). The alert was appended to `alert_rows`, which is a function-local list — it died with the process. The only durable signal was a compact banner in `Sheet1!X1`; any monitor watching SYSTEM_ALERT rows would miss the trip entirely.
+
+**Self-check:** Any "skip the main write" branch needs its OWN durable write path — a dedicated cell (e.g., `Sheet1!W1` for a JSON breaker record), a separate alerts tab, or an `append_rows` call that doesn't touch the preserved data region. Treat the in-memory alert list as non-durable by default; assume the process dies the second after you append to it. A carry-forward read on the next cycle converts the durable side-channel into a proper SYSTEM_ALERT row so monitor visibility is only delayed, not lost.
+
+## 40. Mixed-Universe Counter as Rate Denominator
+**Pattern:** A rate threshold (`violations / N > 10%`) uses a pipeline-wide denominator `N` that includes rows where the numerator event could NOT have fired (rows dropped before the check, rows from a different code path, noise filters). The rate is silently diluted, making the threshold less sensitive than its stated fraction implies.
+**Examples:**
+- PR-C1 (PR#28) circuit breaker initially computed `violation_rate = invariant_violations / total_processed`. `total_processed` counts every pipeline entry including rows dropped as noise BEFORE reaching `_append_event`. But `invariant_violations` can only fire INSIDE `_append_event`. So a 10% rate against `total_processed` could correspond to a 15–30% rate against the rows that actually hit the chokepoint — the threshold was less strict than it looked.
+
+**Self-check:** Before writing `rate = numerator / denominator`, check that the denominator counts exactly the universe where the numerator event was possible. If they differ (e.g., numerator fires inside a chokepoint, denominator counts pipeline entries), either (a) move the denominator increment into the chokepoint, or (b) add a dedicated orthogonal counter (`rows_appended`) that tracks the true opportunity-set and use THAT as the denominator. Keep the pipeline-wide counter intact for its existing purpose; don't overload one counter for two different denominator semantics.
