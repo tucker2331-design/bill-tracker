@@ -9,7 +9,7 @@ import re
 import io
 import tempfile
 import urllib.parse
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 import pytz
 from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
@@ -754,6 +754,17 @@ def run_calendar_update():
         # PR-C1: write-time chokepoint telemetry (see _append_event below)
         "invariant_violations": 0,  # Rows that failed I1/I2/I3 at append time
         "meeting_unsourced": 0,     # Meeting-verb outcome with Origin in {journal_default, floor_miss}
+        # PR-C1 review-fix (Gemini): orthogonal-tag counter that is the true
+        # denominator for the circuit breaker's violation-rate threshold. It
+        # counts ONLY rows that actually reached _append_event (so ~system
+        # rows + bill rows), which is the universe where invariants COULD
+        # have been violated. Using the pipeline-level total_processed here
+        # would be wrong because total_processed also counts rows that died
+        # before append (noise drops, etc.), inflating the denominator and
+        # making the rate threshold less sensitive. Kept orthogonal so
+        # existing denominator-bucket math (sourced_api + sourced_convene +
+        # ... = total_processed) stays intact.
+        "rows_appended": 0,
     }
 
     def push_system_alert(message, status="ALERT", category=None, severity=None, dedup_key=None):
@@ -875,6 +886,13 @@ def run_calendar_update():
             if any(v in outcome_lower for v in MEETING_VERB_TOKENS):
                 source_miss_counts["meeting_unsourced"] += 1
 
+        # Breaker denominator (PR-C1 review-fix, Gemini). Count AFTER the
+        # invariant checks so rows_appended tracks the chokepoint's actual
+        # throughput, including rows that tripped an invariant (they still
+        # append — visibility beats silence). rate = violations / appended
+        # is then the true "what fraction of chokepoint rows failed", not
+        # "what fraction of pipeline entries failed".
+        source_miss_counts["rows_appended"] += 1
         master_events.append(event)
 
     if not session_data:
@@ -934,6 +952,54 @@ def run_calendar_update():
             category="API_FAILURE",
             severity="INFO",
             dedup_key="state_cell_y1_read_fail",
+        )
+
+    # Review-fix (Codex P2): carry-forward read for Sheet1!W1. If the
+    # previous cycle tripped the mass-violation circuit breaker, it left a
+    # JSON trip record in W1 (because its in-memory alert_rows died with
+    # the process). Surface it here as a first-class SYSTEM_ALERT row on
+    # THIS cycle so any monitor watching Bug_Logs / SYSTEM_ALERT rows sees
+    # the trip — just delayed by one cycle. W1 is then cleared on THIS
+    # cycle's successful overwrite so we don't double-report. Read is
+    # INFO-only on failure; a missing cell is the common case (W1 empty
+    # means previous cycle was healthy).
+    try:
+        _raw_w1 = worksheet.acell("W1").value
+        _raw_w1 = (_raw_w1 or "").strip()
+        if _raw_w1:
+            try:
+                _prev = json.loads(_raw_w1)
+                push_system_alert(
+                    f"Previous cycle tripped circuit breaker at {_prev.get('trip_utc', '?')} — "
+                    f"invariant_violations={_prev.get('invariant_violations', '?')} "
+                    f"meeting_unsourced={_prev.get('meeting_unsourced', '?')} "
+                    f"rows_appended={_prev.get('rows_appended', '?')} "
+                    f"violation_rate={_prev.get('violation_rate', '?')}. "
+                    f"Sheet1 overwrite was skipped; data you saw in the previous window was "
+                    f"last-known-good from an earlier cycle.",
+                    status="CRITICAL",
+                    category="DATA_ANOMALY",
+                    severity="CRITICAL",
+                    dedup_key=f"breaker_carryforward::{_prev.get('trip_utc', 'unknown')}",
+                )
+            except (ValueError, json.JSONDecodeError) as _w1_parse_err:
+                # W1 had non-JSON content — surface anyway so the operator can
+                # eyeball it rather than silently lose the signal.
+                push_system_alert(
+                    f"Sheet1!W1 contained non-JSON content (possible manual edit or "
+                    f"partial write): {_raw_w1[:200]}",
+                    status="WARN",
+                    category="DATA_ANOMALY",
+                    severity="WARN",
+                    dedup_key="w1_parse_fail",
+                )
+    except Exception as _w1_read_err:
+        push_system_alert(
+            f"Could not read state cell Sheet1!W1 (breaker carry-forward): {_w1_read_err}",
+            status="INFO",
+            category="API_FAILURE",
+            severity="INFO",
+            dedup_key="state_cell_w1_read_fail",
         )
 
     print("🗄️ Pulling historical schedule from API_Cache...")
@@ -1769,22 +1835,40 @@ def run_calendar_update():
             CIRCUIT_MAX_VIOLATION_RATE = 0.10         # >10% of rows failing invariants
             CIRCUIT_MAX_ABS_VIOLATIONS = 50           # or >=50 absolute
             CIRCUIT_MAX_MEETING_UNSOURCED = 50        # or >=50 meeting-verb misses (baseline ~9)
-            _total = max(1, source_miss_counts["total_processed"])
+            # Review-fix (Gemini): denominator is rows_appended, not
+            # total_processed — rows_appended counts ONLY rows that reached
+            # the chokepoint (the universe where invariants COULD fire),
+            # so the rate is a true fraction-of-opportunity, not diluted
+            # by pre-append drops.
+            _rows_appended = max(1, source_miss_counts["rows_appended"])
+            _total_processed = source_miss_counts["total_processed"]
             _violations = source_miss_counts["invariant_violations"]
             _meeting_unsourced = source_miss_counts["meeting_unsourced"]
-            _violation_rate = _violations / _total
+            _violation_rate = _violations / _rows_appended
             _breaker_tripped = (
                 _violation_rate > CIRCUIT_MAX_VIOLATION_RATE
                 or _violations >= CIRCUIT_MAX_ABS_VIOLATIONS
                 or _meeting_unsourced >= CIRCUIT_MAX_MEETING_UNSOURCED
             )
 
+            # Review-fix (Codex P1): cycle-end timestamp for Sheet1!Y1 MUST
+            # be real UTC. The `now` variable 30 lines up is
+            # datetime.now(America/New_York).replace(tzinfo=None) — naive
+            # ET mislabeled as UTC by its "Z" suffix. Compute a real UTC
+            # timestamp here and use it for every "end of cycle UTC" write
+            # below. Kept separate so all other uses of `now` (alert row
+            # Date/Time stamped in ET, which is what lobbyists expect) are
+            # unchanged.
+            _cycle_end_utc = datetime.now(timezone.utc)
+            _cycle_end_utc_iso = _cycle_end_utc.strftime("%Y-%m-%dT%H:%M:%SZ")
+
             if _breaker_tripped:
                 _breaker_msg = (
-                    f"🚨 CIRCUIT BREAKER TRIPPED at {now.strftime('%Y-%m-%d %H:%M UTC')} — "
+                    f"🚨 CIRCUIT BREAKER TRIPPED at {_cycle_end_utc_iso} — "
                     f"invariant_violations={_violations} "
                     f"meeting_unsourced={_meeting_unsourced} "
-                    f"total_processed={_total} "
+                    f"rows_appended={_rows_appended} "
+                    f"total_processed={_total_processed} "
                     f"violation_rate={_violation_rate:.2%}. "
                     f"Refusing Sheet1 overwrite to preserve last-known-good. "
                     f"Thresholds: rate>{CIRCUIT_MAX_VIOLATION_RATE:.0%} or "
@@ -1792,19 +1876,49 @@ def run_calendar_update():
                     f"meeting_unsourced>={CIRCUIT_MAX_MEETING_UNSOURCED}."
                 )
                 print(_breaker_msg)
-                # Non-destructive visibility: write a short banner to Sheet1!X1.
-                # Does not clear the data. Normal cycles overwrite X1 with "OK"
+                # Non-destructive visibility #1: compact banner to Sheet1!X1.
+                # Does not clear the data. Normal cycles overwrite X1 with ""
                 # below so a stale banner never lingers across healthy cycles.
                 try:
                     worksheet.update_acell("X1", _breaker_msg[:4500])
                 except Exception as _x1_err:
                     print(f"⚠️ Failed to write circuit-breaker banner to Sheet1!X1: {_x1_err}")
+
+                # Review-fix (Codex P2): durable machine-readable trip record
+                # to Sheet1!W1. `push_system_alert` only appends to the
+                # in-memory `alert_rows` list, which is thrown away on this
+                # path because we intentionally skip worksheet.update(). So
+                # the critical trip was previously only visible in the X1
+                # banner + GitHub Actions stdout — invisible to any monitor
+                # that watches SYSTEM_ALERT rows. W1 now carries a JSON
+                # payload that the NEXT cycle reads + surfaces as a proper
+                # SYSTEM_ALERT carry-forward alert (see _breaker_carryforward
+                # block at the top of run_calendar_update). W1 is cleared on
+                # successful overwrite so stale records don't double-report.
+                try:
+                    _breaker_record = {
+                        "trip_utc": _cycle_end_utc_iso,
+                        "invariant_violations": _violations,
+                        "meeting_unsourced": _meeting_unsourced,
+                        "rows_appended": _rows_appended,
+                        "total_processed": _total_processed,
+                        "violation_rate": round(_violation_rate, 4),
+                        "thresholds": {
+                            "rate": CIRCUIT_MAX_VIOLATION_RATE,
+                            "violations_abs": CIRCUIT_MAX_ABS_VIOLATIONS,
+                            "meeting_unsourced_abs": CIRCUIT_MAX_MEETING_UNSOURCED,
+                        },
+                    }
+                    worksheet.update_acell("W1", json.dumps(_breaker_record)[:49000])
+                except Exception as _w1_err:
+                    print(f"⚠️ Failed to write circuit-breaker record to Sheet1!W1: {_w1_err}")
+
                 push_system_alert(
                     _breaker_msg,
                     status="CRITICAL",
                     category="DATA_ANOMALY",
                     severity="CRITICAL",
-                    dedup_key=f"circuit_breaker::{now.strftime('%Y-%m-%d')}",
+                    dedup_key=f"circuit_breaker::{_cycle_end_utc.strftime('%Y-%m-%d')}",
                 )
                 print("🛑 Sheet1 overwrite skipped. State cell Y1 NOT advanced so next cycle's gap-backfill (PR-C2) covers this missed window.")
             else:
@@ -1819,15 +1933,25 @@ def run_calendar_update():
                 except Exception as _x1_clear_err:
                     print(f"⚠️ Failed to clear Sheet1!X1 breaker banner: {_x1_clear_err}")
 
+                # Review-fix (Codex P2): also clear W1 (the durable trip
+                # record) on successful write. If we didn't, a healthy
+                # cycle would leave the prior trip record sitting in W1,
+                # and the NEXT cycle's carry-forward read would surface
+                # the same trip a second time.
+                try:
+                    worksheet.update_acell("W1", "")
+                except Exception as _w1_clear_err:
+                    print(f"⚠️ Failed to clear Sheet1!W1 breaker record: {_w1_clear_err}")
+
                 # PR-C1: advance the last-successful-cycle cursor. Written
                 # ONLY on a successful Sheet1 write so that a failed/halted
                 # cycle leaves Y1 pointing at the last good cycle — PR-C2's
                 # gap-backfill logic can then use this as its "since" cursor.
+                # Review-fix (Codex P1): use real UTC, not ET-masquerading-
+                # as-UTC. _cycle_end_utc_iso is computed above from
+                # datetime.now(timezone.utc).
                 try:
-                    worksheet.update_acell(
-                        "Y1",
-                        now.strftime("%Y-%m-%dT%H:%M:%SZ"),
-                    )
+                    worksheet.update_acell("Y1", _cycle_end_utc_iso)
                 except Exception as _state_write_err:
                     push_system_alert(
                         f"Could not write state cell Sheet1!Y1 after successful cycle: {_state_write_err}",

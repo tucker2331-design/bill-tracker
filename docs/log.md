@@ -11,6 +11,20 @@ Append-only, reverse-chronological (newest at top). Each entry opens with `## [Y
 
 ---
 
+## [2026-04-21] pr | PR-C1 review fixes — Codex P1/P2 + Gemini denominator
+
+Three review findings on PR #28 addressed in one follow-up commit on `claude/pr-c1-append-event-chokepoint`. All three are real issues; all three surface anti-patterns worth extracting so future PRs don't repeat them. New entries #38, #39, #40 in [[failures/gemini_review_patterns]].
+
+**Codex P1 — Y1 stored as ET mislabeled UTC:** `now = datetime.now(America/New_York).replace(tzinfo=None)` at L722. My Y1 write used `now.strftime("%Y-%m-%dT%H:%M:%SZ")` — the `Z` suffix is a lie, it's actually local ET wall-clock time. A PR-C2 consumer treating Y1 as UTC would shift the gap-backfill window by 4–5 hours across DST, either missing or double-processing intervals. Fix: added `timezone` to the datetime import, compute `_cycle_end_utc = datetime.now(timezone.utc)` at breaker evaluation time, use `_cycle_end_utc.strftime(...)` for Y1 and the breaker message. All other uses of `now` (alert rows' human-readable timestamp, date keys) stay ET because those are ET-facing fields. Anti-pattern #38.
+
+**Codex P2 — breaker alert not durable:** `push_system_alert` appends to `alert_rows`, which is a function-local list persisted to Sheet1 ONLY as part of the main `worksheet.update(...)` call. The breaker path deliberately skips that update — so the alert died with the process. My architecture doc's claim "goes to `alert_rows` (so the next healthy cycle surfaces it)" was flat wrong — `alert_rows` resets each cycle. Fix: added a durable JSON trip record at `Sheet1!W1` (compact banner stays at X1), plus a carry-forward READ at the top of the next cycle that converts the W1 record into a proper `DATA_ANOMALY / CRITICAL` SYSTEM_ALERT row. W1 is cleared on successful overwrite so the carry-forward doesn't double-report. SYSTEM_ALERT monitors now see breaker trips one cycle delayed instead of never. Anti-pattern #39.
+
+**Gemini high — denominator semantics:** `_violation_rate = invariant_violations / total_processed` used a denominator that counted pipeline entries including rows dropped before `_append_event` (noise filter, state-machine drops). Numerator can only fire INSIDE `_append_event`. Rate was silently diluted. Gemini's suggestion was to move `total_processed` increment into `_append_event` — I took a variation that preserves existing denominator-bucket math: added a new orthogonal counter `rows_appended` inside `_append_event`, used as the breaker's rate denominator. `total_processed` stays as the mutually-exclusive-bucket sum it's always been (Section 0 denominator). Anti-pattern #40.
+
+**Also updated:** [[architecture/calendar_pipeline]] breaker section corrected re: in-memory alert durability; added W1 subsection; flagged real-UTC requirement on Y1.
+
+**Phase-2 re-audit after fixes:** AST parse pass, `_append_event` still defined exactly once, diff visibility grep still empty. Ready to push.
+
 ## [2026-04-21] pr | PR-C1 opened — write-time chokepoint + circuit breaker + state cell + concurrency
 
 First PR in the PR-C series. Pure scaffolding — lands the infrastructure that PR-C2+ (the actual bug fixes) depend on. Zero bug-count delta expected from C1 alone; this is a prerequisite for auditable fix-passes. Branch: `claude/pr-c1-append-event-chokepoint`.
