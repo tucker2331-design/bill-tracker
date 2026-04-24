@@ -171,3 +171,112 @@ Sheet1 is worse than a delayed cycle.
 
 All three overlap the existing denominator buckets by design, like
 `unsourced_anchor` and `dropped_ephemeral`. See [[failures/gemini_review_patterns]] #31 for the orthogonal-vs-denominator pattern.
+
+## Gap Detection + Witness Log + Reconciliation (PR-C2)
+
+PR-C2 closes the loop from PR-C1 scaffolding. Three cooperating pieces, each
+doing one thing:
+
+### Part A — Y1 gap detection
+
+At the top of every cycle, the worker now parses `Sheet1!Y1`
+(`last_successful_cycle_end_utc`), computes `gap_minutes` against
+`datetime.now(timezone.utc)`, and classifies the cause. `gap_cause` is one of:
+
+| Value | Meaning | Alert |
+|-------|---------|-------|
+| `first_run` | Y1 empty — fresh deploy / cleared | (none) |
+| `future_cursor` | Y1 > now (clock skew / manual edit) | WARN `DATA_ANOMALY` |
+| `stale_cursor` | Y1 > 30 days old | CRITICAL `DATA_ANOMALY` |
+| `malformed_cursor` | Y1 parse failed | WARN `DATA_ANOMALY` |
+| `breaker_carryforward` | W1 populated — previous cycle tripped breaker | (carry-forward alert from W1 block) |
+| `outage` | valid cursor, gap past threshold | WARN @ >20 min, CRITICAL @ >60 min (`API_FAILURE`) |
+| `normal` | gap within 20 min | (none) |
+
+Thresholds in code: `GAP_WARN_MINUTES=20`, `GAP_CRITICAL_MINUTES=60`,
+`GAP_STALE_DAYS=30`, `GAP_RECONCILIATION_MAX_DAYS=7`.
+
+`source_miss_counts` gains two new keys for SYSTEM_METRICS: `gap_minutes`
+(float, or `-1` sentinel when N/A) and `gap_cause` (string). Both are
+orthogonal to the denominator buckets.
+
+`_gap_window_start_utc` is the usable bound for Part C — set ONLY when Y1
+parses cleanly and is neither future nor stale.
+
+### Part B — `Schedule_Witness` change-feed tab
+
+Append-only log of **ADDED + CHANGED** LIS Schedule API deltas, one row per
+delta. Schema (11 cols):
+
+```
+seen_at_utc | run_id | event_type | meeting_date | committee | time |
+sort_time | status | prev_time | prev_sort_time | prev_status
+```
+
+Delta computation:
+1. **Before** the live Schedule API loop: deep-copy `api_schedule_map` →
+   `_pre_live_schedule_snapshot`.
+2. Live loop runs unchanged, mutating `api_schedule_map`.
+3. **After** the live loop (but before the `best_times` post-pass, so we
+   capture raw LIS signal): iterate `api_schedule_map` and diff against
+   snapshot. ADDED = key not in snapshot. CHANGED = key in both, value
+   differs.
+
+**REMOVED** is intentionally NOT emitted — absence from a poll cannot be
+reliably distinguished from cross-session cache staleness or filtering.
+Data-loss detection for those cases is handled by Part C reconciliation.
+
+- **Tab auto-created** on first delta (via `gspread.exceptions.WorksheetNotFound`
+  → `sheet.add_worksheet(...)` + header write).
+- **Retention:** 90-day rolling. Prune runs every cycle, deleting
+  contiguous oldest rows whose `seen_at_utc` < `now_utc - 90d`. ISO 8601
+  strings sort lexically, so `col_values(1)` + linear scan + single
+  `delete_rows(2, end)` is the hot path.
+- **Write is NOT gated by the circuit breaker** — witness rows survive
+  even when Sheet1 overwrite is suppressed. This is the whole point:
+  reconciliation on the next healthy cycle needs the record of what LIS
+  told us even during a trip.
+- **Volume math:** steady-state deltas/cycle is small (cache warms
+  quickly). Worst case 100 deltas × 96 cycles × 90 days × 11 cols ≈ 9.5M
+  cells, within the 10M cell limit. Cold-start (empty cache) is a one-time
+  ~3,310 ADDED burst, then self-normalizes.
+
+### Part C — Gap-triggered reconciliation (HISTORY-vs-witness)
+
+Runs ONLY when `gap_cause in {outage, breaker_carryforward}` AND
+`gap_minutes >= GAP_CRITICAL_MINUTES (60)` AND `_gap_window_start_utc` is
+set.
+
+Hard cap: `GAP_RECONCILIATION_MAX_DAYS = 7`. Gaps larger than the cap emit
+a CRITICAL `DATA_ANOMALY` (`dedup_key=gap_reconciliation_oversized::<date>`)
+and skip the check — manual review required.
+
+Within the cap, the worker:
+1. Builds the gap date range in ET (dates from `_gap_window_start_utc`
+   through current cycle, inclusive).
+2. Builds a **witness date index** = `{meeting_date}` from THIS cycle's
+   deltas + all prior rows in `Schedule_Witness`.
+3. Filters `df_past` (HISTORY.CSV) to rows whose `ParsedDate` is in the gap
+   window AND whose description contains any `MEETING_VERB_TOKENS` entry.
+4. Groups candidates by date. For each gap-window date with HISTORY
+   meeting-verb rows but **no** witness evidence → emits WARN
+   `DATA_ANOMALY` (`dedup_key=blind_window_loss::<date>::<gap_cause>`)
+   labeled "CONFIRMED BLIND-WINDOW LOSS".
+
+Counters added to `source_miss_counts`: `reconciliation_blind_dates`,
+`reconciliation_checked_dates`.
+
+**Why date-granularity, not committee-granularity:** HISTORY rows don't
+carry committee names directly — committee is resolved by the Sequential
+Turing Machine later in the cycle. Running reconciliation BEFORE the
+state machine keeps the check cheap and independent of STM correctness.
+A date with zero witness events is unambiguous blind-window loss
+regardless of which committee met.
+
+### Future-consideration flag
+
+The CRITICAL alerts emitted by PR-C2 (`y1_stale`, `gap_reconciliation_oversized`,
+`gap_critical`) are routed through the existing `push_system_alert` path
+(appear as `SYSTEM_ALERT` rows in Sheet1 / Bug_Logs). Owner may later want
+to re-route these through a dedicated dashboard or push channel. See
+[[ideas/future_improvements#Notification Routing (flagged 2026-04-24, PR-C2)]].
