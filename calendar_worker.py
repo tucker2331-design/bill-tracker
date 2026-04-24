@@ -713,6 +713,36 @@ def _is_non_concrete_time(value):
     return t in {"", "time tba", "tba", "journal entry", "ledger", "none", "nan"}
 
 
+# PR-C2 Part B (Gemini round 2, concern #1):
+# The Schedule API documents only OwnerName / ScheduleDate / ScheduleTime /
+# Description / IsCancelled (see docs/knowledge/lis_api_reference.md). The
+# room/location field is NOT documented. Empirically, LIS has used the keys
+# "Location", "Room", and "RoomDescription" across different payload shapes.
+# We try them in that order and return the first non-empty value, reporting
+# which key fired so we can track whichever one LIS is currently using.
+# Returning "" (not None) keeps the value JSON-serializable and lexically
+# comparable against cache entries that default to empty string.
+_LOCATION_KEY_ORDER = ("Location", "Room", "RoomDescription")
+
+
+def _extract_meeting_location(meeting):
+    """Return (location_str, key_fired) for a Schedule API meeting dict.
+
+    Tries the documented-alias fallback chain and returns the first non-empty
+    value, stripped. Returns ("", None) when none of the keys resolve.
+    """
+    if not isinstance(meeting, dict):
+        return "", None
+    for key in _LOCATION_KEY_ORDER:
+        raw = meeting.get(key)
+        if raw is None:
+            continue
+        val = str(raw).strip()
+        if val:
+            return val, key
+    return "", None
+
+
 def run_calendar_update():
     http_session = get_armored_session()
     
@@ -765,6 +795,17 @@ def run_calendar_update():
         # existing denominator-bucket math (sourced_api + sourced_convene +
         # ... = total_processed) stays intact.
         "rows_appended": 0,
+        # PR-C2 Part B (Gemini review): witness observability.
+        #   witness_location_backfills — count of CHANGED deltas suppressed
+        #     because the ONLY field that changed was Location going empty
+        #     → populated. These are the expected one-time migration burst
+        #     after Location was introduced as a tracked field; surface the
+        #     count so the burst is visible but quiet.
+        #   witness_rows — size-of-tab read (first-column length, incl.
+        #     header) captured after the append so the canary threshold
+        #     and the L3b prune lag are observable.
+        "witness_location_backfills": 0,
+        "witness_rows": -1,
     }
 
     def push_system_alert(message, status="ALERT", category=None, severity=None, dedup_key=None):
@@ -930,13 +971,12 @@ def run_calendar_update():
         print(f"⚠️ Failed to write API status flag to Sheet1!Z1: {e}")
 
     # PR-C1: read the last-successful-cycle timestamp from Sheet1!Y1.
-    # Wired up in C1 but not yet consumed — PR-C2 will use this value as the
-    # "since" cursor so gap-backfill happens automatically when a cycle
-    # fails (prevents the "if a scrape fails the next cycle only sees the
-    # last 15 min" scenario). Written to Y1 at the end of a successful
-    # Sheet1 write, below. Read is INFO-only on failure because a missing
-    # state cell on first run is expected; a permission / API error is
-    # logged so it can be triaged.
+    # PR-C2 Part A consumes this as the "since" cursor for gap detection.
+    # PR-C2 Part C consumes `_gap_window_start_utc` (derived below) to bound
+    # HISTORY-vs-witness reconciliation. Written to Y1 at the end of a
+    # successful Sheet1 write. Read is INFO-only on failure because a
+    # missing state cell on first run is expected; a permission / API
+    # error is logged so it can be triaged.
     last_successful_cycle_end_utc = None
     try:
         _raw_y1 = worksheet.acell("Y1").value
@@ -963,12 +1003,20 @@ def run_calendar_update():
     # cycle's successful overwrite so we don't double-report. Read is
     # INFO-only on failure; a missing cell is the common case (W1 empty
     # means previous cycle was healthy).
+    #
+    # PR-C2 Part A: _breaker_carryforward_detected flag is consumed by the
+    # gap-classification block below to label `gap_cause = breaker_carryforward`
+    # when the gap was caused by a trip (vs. a genuine outage).
+    _breaker_carryforward_detected = False
+    _breaker_carryforward_trip_utc = None
     try:
         _raw_w1 = worksheet.acell("W1").value
         _raw_w1 = (_raw_w1 or "").strip()
         if _raw_w1:
             try:
                 _prev = json.loads(_raw_w1)
+                _breaker_carryforward_detected = True
+                _breaker_carryforward_trip_utc = _prev.get('trip_utc')
                 push_system_alert(
                     f"Previous cycle tripped circuit breaker at {_prev.get('trip_utc', '?')} — "
                     f"invariant_violations={_prev.get('invariant_violations', '?')} "
@@ -1002,6 +1050,142 @@ def run_calendar_update():
             dedup_key="state_cell_w1_read_fail",
         )
 
+    # ================================================================
+    # PR-C2 Part A: Y1 gap detection + classification
+    # ================================================================
+    # PR-C1 wrote Y1 (last_successful_cycle_end_utc) but didn't consume it.
+    # This block closes that loop: compute how far behind we are vs. the
+    # last known-good cycle, classify the cause, and emit WARN/CRITICAL
+    # alerts. The classification is fed to SYSTEM_METRICS (source_miss_counts)
+    # for X-Ray Section 0 cycle-health telemetry, and `_gap_window_start_utc`
+    # is used by Part C to bound the HISTORY-vs-witness reconciliation.
+    #
+    # ALL gap math uses REAL UTC (datetime.now(timezone.utc)). The naive-ET
+    # `now` variable 150 lines up would introduce a 4-5 hour DST-dependent
+    # offset and cause false alarms twice a year (see PR-C1 Codex P1 fix).
+    #
+    # gap_cause values (string; one-of):
+    #   first_run            Y1 empty — fresh deploy or cleared by operator
+    #   future_cursor        Y1 > now — clock skew or manual edit, WARN
+    #   stale_cursor         Y1 older than GAP_STALE_DAYS — CRITICAL
+    #   malformed_cursor     Y1 parse failed — WARN, recovery disabled this cycle
+    #   breaker_carryforward W1 populated — previous cycle was suppressed by
+    #                         the mass-violation circuit breaker (PR-C1)
+    #   outage               valid cursor, gap past WARN threshold, no breaker
+    #   normal               valid cursor, gap within WARN threshold
+    #
+    # NOTE (future consideration): the CRITICAL alert on stale_cursor (>7 days
+    # for Part C reconciliation, >30 days for stale detection) is currently
+    # routed through the existing push_system_alert → Bug_Logs path. Owner may
+    # later route these through a separate dashboard / push channel. See
+    # docs/ideas/future_improvements.md (PR-C2 7-day alert routing).
+    GAP_WARN_MINUTES = 20                  # >1 missed 15-min cycle + slop
+    GAP_CRITICAL_MINUTES = 60              # >4 missed cycles
+    GAP_STALE_DAYS = 30                    # cursor too old to trust for recovery
+    GAP_RECONCILIATION_MAX_DAYS = 7        # hard cap for Part C re-poll window
+
+    _cycle_start_utc = datetime.now(timezone.utc)
+    gap_minutes = None              # None when unknown (first_run / malformed)
+    gap_cause = None
+    _gap_window_start_utc = None    # Set ONLY when cursor is usable for Part C
+
+    if not last_successful_cycle_end_utc:
+        gap_cause = "first_run"
+        print("🕒 Gap detection: first_run (Y1 empty — fresh deploy or cleared).")
+    else:
+        _y1_parsed = None
+        try:
+            _y1_parsed = datetime.strptime(
+                last_successful_cycle_end_utc, "%Y-%m-%dT%H:%M:%SZ"
+            ).replace(tzinfo=timezone.utc)
+        except (ValueError, TypeError) as _y1_parse_err:
+            gap_cause = "malformed_cursor"
+            push_system_alert(
+                f"Sheet1!Y1 has malformed timestamp {last_successful_cycle_end_utc!r} "
+                f"({_y1_parse_err}). Treating as empty; PR-C2 gap-recovery disabled this "
+                f"cycle. Next successful Sheet1 overwrite will re-anchor the cursor.",
+                status="WARN",
+                category="DATA_ANOMALY",
+                severity="WARN",
+                dedup_key=f"y1_malformed::{last_successful_cycle_end_utc}",
+            )
+
+        if _y1_parsed is not None:
+            _delta_seconds = (_cycle_start_utc - _y1_parsed).total_seconds()
+            if _delta_seconds < 0:
+                gap_cause = "future_cursor"
+                gap_minutes = round(_delta_seconds / 60.0, 2)
+                push_system_alert(
+                    f"Sheet1!Y1 timestamp {last_successful_cycle_end_utc} is in the future "
+                    f"relative to cycle start {_cycle_start_utc.strftime('%Y-%m-%dT%H:%M:%SZ')} "
+                    f"(delta={gap_minutes} min). Possible clock skew or manual edit. "
+                    f"Gap-recovery disabled this cycle.",
+                    status="WARN",
+                    category="DATA_ANOMALY",
+                    severity="WARN",
+                    dedup_key=f"y1_future::{last_successful_cycle_end_utc}",
+                )
+            elif _delta_seconds > GAP_STALE_DAYS * 86400:
+                gap_cause = "stale_cursor"
+                gap_minutes = round(_delta_seconds / 60.0, 2)
+                push_system_alert(
+                    f"Sheet1!Y1 cursor is {gap_minutes:.0f} min old "
+                    f"(>{GAP_STALE_DAYS} days). Worker has been offline for an extended "
+                    f"period; reconciliation window exceeds safe bounds. Manual review "
+                    f"required before trusting recovery output.",
+                    status="CRITICAL",
+                    category="DATA_ANOMALY",
+                    severity="CRITICAL",
+                    dedup_key=f"y1_stale::{_cycle_start_utc.strftime('%Y-%m-%d')}",
+                )
+            else:
+                gap_minutes = round(_delta_seconds / 60.0, 2)
+                _gap_window_start_utc = _y1_parsed  # usable anchor for Part C
+                if _breaker_carryforward_detected:
+                    gap_cause = "breaker_carryforward"
+                    # Carry-forward alert already fired in the W1 block above;
+                    # do not double-alert here. Part C still evaluates this
+                    # cycle for reconciliation because the gap is real.
+                    print(
+                        f"🕒 Gap detection: breaker_carryforward — gap={gap_minutes:.1f} min "
+                        f"(trip_utc={_breaker_carryforward_trip_utc})"
+                    )
+                elif _delta_seconds >= GAP_CRITICAL_MINUTES * 60:
+                    gap_cause = "outage"
+                    push_system_alert(
+                        f"Cycle gap is {gap_minutes:.1f} min (>{GAP_CRITICAL_MINUTES}) — "
+                        f"4+ missed 15-min cycles since last successful overwrite at "
+                        f"{last_successful_cycle_end_utc}. PR-C2 Part C will attempt "
+                        f"reconciliation if gap ≤ {GAP_RECONCILIATION_MAX_DAYS} days.",
+                        status="CRITICAL",
+                        category="API_FAILURE",
+                        severity="CRITICAL",
+                        dedup_key=f"gap_critical::{_cycle_start_utc.strftime('%Y-%m-%d %H')}",
+                    )
+                elif _delta_seconds >= GAP_WARN_MINUTES * 60:
+                    gap_cause = "outage"
+                    push_system_alert(
+                        f"Cycle gap is {gap_minutes:.1f} min (>{GAP_WARN_MINUTES}) — "
+                        f"at least one missed 15-min cycle since {last_successful_cycle_end_utc}.",
+                        status="WARN",
+                        category="API_FAILURE",
+                        severity="WARN",
+                        dedup_key=f"gap_warn::{_cycle_start_utc.strftime('%Y-%m-%d %H')}",
+                    )
+                else:
+                    gap_cause = "normal"
+                print(
+                    f"🕒 Gap detection: cause={gap_cause}, gap_minutes={gap_minutes}, "
+                    f"cursor={last_successful_cycle_end_utc}"
+                )
+
+    # Feed into SYSTEM_METRICS so X-Ray Section 0 (future renderer) can
+    # visualize per-cycle health. gap_minutes uses -1 as the "not applicable"
+    # sentinel (JSON-safe, distinguishable from any real gap value which is
+    # always >= 0 or None-sentinel at first_run).
+    source_miss_counts["gap_minutes"] = gap_minutes if gap_minutes is not None else -1
+    source_miss_counts["gap_cause"] = gap_cause or "unknown"
+
     print("🗄️ Pulling historical schedule from API_Cache...")
     api_schedule_map = {}
     convene_times = {}
@@ -1010,11 +1194,43 @@ def run_calendar_update():
     try:
         cache_sheet = sheet.worksheet("API_Cache")
         cache_records = cache_sheet.get_all_records()
+
+        # PR-C2 Part B: one-time header migration so the Location column
+        # written by new_cache_entries is actually readable by future
+        # get_all_records() calls. Without this, column F receives data
+        # but row 1 has only 5 labels, so every subsequent cycle reads
+        # Location as "" and the migration burst guard has to fire forever.
+        # Writing "Location" into F1 is idempotent and cheap.
+        try:
+            _cache_header = cache_sheet.row_values(1)
+            if "Location" not in _cache_header:
+                cache_sheet.update(values=[["Location"]], range_name="F1")
+                print("🗄️ API_Cache: migrated header to include Location (PR-C2).")
+        except Exception as _mig_err:
+            # Do not block the cycle on header migration — the witness
+            # migration burst guard will keep deltas quiet if this fails;
+            # surface once so the stuck state is visible.
+            push_system_alert(
+                f"API_Cache header migration skipped: {_mig_err}. "
+                f"Location delta detection will be suppressed by the "
+                f"migration burst guard until header is repaired manually.",
+                status="INFO", category="API_FAILURE", severity="INFO",
+                dedup_key="cache_header_migration_fail",
+            )
+
         for r in cache_records:
             d = str(r.get("Date", ""))
             c = str(r.get("Committee", ""))
             k = f"{d}_{c}"
-            api_schedule_map[k] = {"Time": str(r.get("Time", "")), "SortTime": str(r.get("SortTime", "")), "Status": str(r.get("Status", ""))}
+            api_schedule_map[k] = {
+                "Time": str(r.get("Time", "")),
+                "SortTime": str(r.get("SortTime", "")),
+                "Status": str(r.get("Status", "")),
+                # PR-C2 Part B: Location is a new column in API_Cache. Pre-migration
+                # rows won't have it (get_all_records returns "" for missing keys),
+                # which is exactly what the migration burst guard below expects.
+                "Location": str(r.get("Location", "")),
+            }
             
             c_lower = re.sub(r'\s+', ' ', c).lower()
             _is_house_convene = any(h in c_lower for h in ["house convenes", "house chamber", "house session", "house floor", "house of delegates"])
@@ -1060,6 +1276,49 @@ def run_calendar_update():
                     docket_memory[date_str][b_num].append(c_name)
 
     new_cache_entries = []
+
+    # ================================================================
+    # PR-C2 Part B: Schedule_Witness change-feed — constants & snapshot
+    # ================================================================
+    # These constants are hoisted ABOVE the live loop so the delta
+    # computation inside the loop can reference WITNESS_DELTA_FIELDS (the
+    # strict whitelist). Moving them below would reintroduce a NameError
+    # the moment any delta is computed.
+    #
+    # WITNESS_DELTA_FIELDS (Gemini review, concerns #1 + round-2 #1):
+    # **STRICT WHITELIST** — any field added here becomes a delta trigger
+    # and WILL appear in witness rows. NEVER add volatile LIS metadata
+    # (last_modified, cache ETags, opaque IDs, computed sort helpers) or
+    # the change-feed will explode into junk. The bar is: "does a change
+    # to this field represent a real-world schedule delta a legislative
+    # tracker cares about?" Time / SortTime / Status / Location = yes.
+    # Everything else = no.
+    WITNESS_TAB_NAME = "Schedule_Witness"
+    WITNESS_RETENTION_DAYS = 90
+    WITNESS_CANARY_ROW_THRESHOLD = 500_000
+    WITNESS_DELTA_FIELDS = ("Time", "SortTime", "Status", "Location")
+    WITNESS_HEADER = [
+        "seen_at_utc", "run_id", "event_type", "meeting_date", "committee",
+        "time", "sort_time", "status", "location",
+        "prev_time", "prev_sort_time", "prev_status", "prev_location",
+    ]
+
+    # Capture the state of api_schedule_map BEFORE the live loop runs.
+    # This is the "what we knew last cycle" reference for delta computation
+    # below. Deep-copy the inner dicts so the post-pass best_times promotion
+    # (which mutates entries in-place) can't corrupt our snapshot.
+    #
+    # Deltas are computed at the END of the live loop (pre-best_times, so the
+    # witness captures raw LIS signal rather than our post-processing) into
+    # `_witness_deltas`, then written to the Schedule_Witness tab after the
+    # live try/except block so the write path is independent of live-API
+    # exceptions. Write is also NOT gated by the circuit breaker — the
+    # witness log exists precisely to survive cycle failures.
+    _pre_live_schedule_snapshot = {k: dict(v) for k, v in api_schedule_map.items()}
+    _witness_deltas = []  # list of dicts; written after live try/except
+    _witness_run_id = os.environ.get("GITHUB_RUN_ID", "local")
+    _witness_seen_at_utc = _cycle_start_utc.strftime("%Y-%m-%dT%H:%M:%SZ")
+
     if api_is_online:
         print("📡 Downloading Live API Schedule & Agendas...")
         try:
@@ -1081,6 +1340,13 @@ def run_calendar_update():
                     raw_time = str(meeting.get('ScheduleTime', '')).strip()
                     raw_desc = str(meeting.get('Description', ''))
                     clean_desc = re.sub(r'<[^>]+>', '', raw_desc).strip()
+
+                    # PR-C2 Part B (Gemini round 2, concern #1): room moves are
+                    # frequent during GA session; witness MUST capture them. Field
+                    # name is undocumented — try the alias chain. The first-fire
+                    # key is recorded only on the first hit per cycle so we can
+                    # tell whether LIS has migrated schemas without spamming logs.
+                    location_val, _loc_key_fired = _extract_meeting_location(meeting)
                     
                     agenda_url = None
                     link_match = re.search(r'href=[\'"]?([^\'" >]+)', raw_desc)
@@ -1122,7 +1388,12 @@ def run_calendar_update():
                     if existing_entry and not _is_non_concrete_time(existing_entry.get("Time", "")) and _is_non_concrete_time(time_val):
                         pass  # Keep existing concrete time, skip this TBA/empty overwrite
                     else:
-                        api_schedule_map[map_key] = {"Time": time_val, "SortTime": sort_time_24h, "Status": status}
+                        api_schedule_map[map_key] = {
+                            "Time": time_val,
+                            "SortTime": sort_time_24h,
+                            "Status": status,
+                            "Location": location_val,
+                        }
                     
                     # Capture convene times from any floor-session-like Schedule API entry.
                     # Primary: "House Convenes", "House Chamber" (canonical LIS names)
@@ -1145,7 +1416,11 @@ def run_calendar_update():
                         convene_times[date_str]["Senate"] = {"Time": time_val, "SortTime": sort_time_24h, "Name": normalized_name.strip()}
                     
                     if meeting_date <= now:
-                        new_cache_entries.append([date_str, normalized_name.strip(), time_val, sort_time_24h, status])
+                        # PR-C2 Part B: Location is column 6. Pre-migration cache
+                        # rows lack this column; compaction block below pads on
+                        # first read so get_all_records returns "" rather than
+                        # KeyError.
+                        new_cache_entries.append([date_str, normalized_name.strip(), time_val, sort_time_24h, status, location_val])
                     
                     if any(k in owner_lower for k in ["caucus", "session", "floor", "convenes", "adjourned"]):
                         _append_event({"Date": date_str, "Time": time_val, "SortTime": sort_time_24h, "Status": status, "Committee": normalized_name.strip() if normalized_name else "Chamber Event", "Bill": clean_desc, "Outcome": "", "AgendaOrder": -1, "Source": "API", "Origin": "api_schedule", "DiagnosticHint": ""})
@@ -1180,6 +1455,109 @@ def run_calendar_update():
                     if not has_docket:
                         if sort_time_24h == "06:00" and "after" in time_val.lower(): clean_desc = f"⚠️ Time Unverified (Check Parent) - {clean_desc}"
                         _append_event({"Date": date_str, "Time": time_val, "SortTime": sort_time_24h, "Status": status, "Committee": normalized_name.strip(), "Bill": clean_desc if clean_desc else "No agenda listed.", "Outcome": "", "AgendaOrder": -1, "Source": "API_Skeleton", "Origin": "api_schedule", "DiagnosticHint": ""})
+
+                # ============================================================
+                # PR-C2 Part B: compute ADDED / CHANGED deltas (raw LIS signal)
+                # ============================================================
+                # Diff the post-live api_schedule_map against the pre-live
+                # snapshot captured before this loop. Deltas are computed
+                # BEFORE the best_times post-pass so the witness log faithfully
+                # records what LIS told us, not our downstream adjustments.
+                # REMOVED is intentionally NOT emitted — a key missing from a
+                # given poll cannot be reliably distinguished from "LIS did
+                # not return it this cycle due to filtering / cross-session
+                # cache staleness". Data-loss detection for those cases is
+                # handled by Part C (HISTORY-vs-witness reconciliation).
+                try:
+                    for _wkey, _wval in api_schedule_map.items():
+                        _prev = _pre_live_schedule_snapshot.get(_wkey)
+                        # Iterate the whitelist (Gemini concern #1): if we ever add
+                        # a new tracked field, we only have to touch
+                        # WITNESS_DELTA_FIELDS + WITNESS_HEADER and the comparison
+                        # stays honest. Never iterate _wval.items() — that would
+                        # make any future metadata key (last_modified, ETag, etc.)
+                        # implicitly a delta trigger.
+                        _cur_by_field = {f: str(_wval.get(f, "")) for f in WITNESS_DELTA_FIELDS}
+                        if "_" in _wkey:
+                            _mdate, _mcomm = _wkey.split("_", 1)
+                        else:
+                            _mdate, _mcomm = "", _wkey
+                        if _prev is None:
+                            # New key — not seen in cache snapshot; treat as ADDED.
+                            # First-run note: on first cycle after a fresh deploy,
+                            # EVERY live meeting is ADDED because the cache is
+                            # empty. That's expected and self-normalizes after
+                            # one cycle.
+                            _witness_deltas.append({
+                                "seen_at_utc": _witness_seen_at_utc,
+                                "run_id": _witness_run_id,
+                                "event_type": "ADDED",
+                                "meeting_date": _mdate,
+                                "committee": _mcomm,
+                                "time": _cur_by_field["Time"],
+                                "sort_time": _cur_by_field["SortTime"],
+                                "status": _cur_by_field["Status"],
+                                "location": _cur_by_field["Location"],
+                                "prev_time": "",
+                                "prev_sort_time": "",
+                                "prev_status": "",
+                                "prev_location": "",
+                            })
+                        else:
+                            _prev_by_field = {f: str(_prev.get(f, "")) for f in WITNESS_DELTA_FIELDS}
+                            _changed_fields = {
+                                f for f in WITNESS_DELTA_FIELDS
+                                if _cur_by_field[f] != _prev_by_field[f]
+                            }
+                            if not _changed_fields:
+                                continue
+                            # Migration burst guard (Gemini concern #1): API_Cache
+                            # did not previously store Location, so on the first
+                            # cycle(s) after this deploy EVERY cached entry has
+                            # Location="" while the live entry has a real value.
+                            # Without this guard, every pre-existing meeting would
+                            # emit a bogus CHANGED delta. Real Location changes —
+                            # prev non-empty and current non-empty but different —
+                            # still pass through untouched. Count backfills so the
+                            # one-time burst is visible without being noise.
+                            if (
+                                _changed_fields == {"Location"}
+                                and _prev_by_field["Location"] == ""
+                                and _cur_by_field["Location"] != ""
+                            ):
+                                source_miss_counts["witness_location_backfills"] += 1
+                                continue
+                            _witness_deltas.append({
+                                "seen_at_utc": _witness_seen_at_utc,
+                                "run_id": _witness_run_id,
+                                "event_type": "CHANGED",
+                                "meeting_date": _mdate,
+                                "committee": _mcomm,
+                                "time": _cur_by_field["Time"],
+                                "sort_time": _cur_by_field["SortTime"],
+                                "status": _cur_by_field["Status"],
+                                "location": _cur_by_field["Location"],
+                                "prev_time": _prev_by_field["Time"],
+                                "prev_sort_time": _prev_by_field["SortTime"],
+                                "prev_status": _prev_by_field["Status"],
+                                "prev_location": _prev_by_field["Location"],
+                            })
+                    print(
+                        f"📝 Schedule_Witness: {len(_witness_deltas)} deltas detected "
+                        f"(ADDED+CHANGED); "
+                        f"suppressed_location_backfills={source_miss_counts['witness_location_backfills']}."
+                    )
+                except Exception as _delta_err:
+                    # Delta computation must never block the live merge. If it
+                    # fails we still want the cache + master_events writes to
+                    # proceed; the next cycle will recompute.
+                    push_system_alert(
+                        f"Schedule_Witness delta computation failed: {_delta_err}. "
+                        f"Witness log skipped this cycle.",
+                        status="WARN", category="DATA_ANOMALY", severity="WARN",
+                        dedup_key="witness_delta_fail",
+                    )
+                    _witness_deltas = []
 
                 # If LIS provides multiple schedule rows for the same date+committee,
                 # promote any concrete time to sibling API/API_Skeleton rows that are
@@ -1217,6 +1595,117 @@ def run_calendar_update():
         except Exception as e:
             print(f"🚨 API Schedule failed: {e}")
             push_system_alert(f"🚨 LIS Schedule API failed during run: {e}. Times may be stale or unavailable.", status="OFFLINE")
+
+    # ================================================================
+    # PR-C2 Part B: write Schedule_Witness change-feed (append-only)
+    # ================================================================
+    # Append-only log of ADDED/CHANGED LIS Schedule API events, one row per
+    # delta. NOT gated by the circuit breaker: witness is an independent tab
+    # whose entire purpose is to survive cycle failures so Part C can run
+    # HISTORY-vs-witness reconciliation even when Sheet1 was held back.
+    #
+    # Schema (13 cols): see WITNESS_HEADER (hoisted above the live loop).
+    # ISO timestamps (YYYY-MM-DDTHH:MM:SSZ) sort lexically, so retention
+    # deletes by contiguous prefix — done by L3b nightly audit, not here
+    # (Gemini round-1 concern #2: in-cycle append + delete_rows race).
+    #
+    # Volume math: steady-state ~0-100 deltas/cycle × 96 cycles/day × 90-day
+    # retention × 13 cols << Sheets' 10M-cell limit (change-feed semantics,
+    # not snapshot). The size canary below surfaces runaway growth.
+    def _ensure_witness_tab():
+        """Return the Schedule_Witness worksheet, auto-creating it with
+        header on first call. Returns None on permanent failure so callers
+        can skip gracefully."""
+        try:
+            return sheet.worksheet(WITNESS_TAB_NAME)
+        except gspread.exceptions.WorksheetNotFound:
+            try:
+                new_ws = sheet.add_worksheet(
+                    title=WITNESS_TAB_NAME,
+                    rows=1000,
+                    cols=len(WITNESS_HEADER),
+                )
+                new_ws.update(values=[WITNESS_HEADER], range_name="A1")
+                print(f"📝 Created {WITNESS_TAB_NAME} tab with header.")
+                return new_ws
+            except Exception as _create_err:
+                push_system_alert(
+                    f"Could not create {WITNESS_TAB_NAME} tab: {_create_err}. "
+                    f"PR-C2 witness log disabled until tab exists.",
+                    status="WARN", category="API_FAILURE", severity="WARN",
+                    dedup_key="witness_create_fail",
+                )
+                return None
+        except Exception as _lookup_err:
+            push_system_alert(
+                f"Could not open {WITNESS_TAB_NAME} tab: {_lookup_err}. "
+                f"PR-C2 witness log skipped this cycle.",
+                status="WARN", category="API_FAILURE", severity="WARN",
+                dedup_key="witness_open_fail",
+            )
+            return None
+
+    witness_tab = None
+    if _witness_deltas:
+        witness_tab = _ensure_witness_tab()
+        if witness_tab is not None:
+            try:
+                rows_to_append = [
+                    [d[col] for col in WITNESS_HEADER]
+                    for d in _witness_deltas
+                ]
+                witness_tab.append_rows(rows_to_append, value_input_option="RAW")
+                print(
+                    f"📝 {WITNESS_TAB_NAME}: appended {len(rows_to_append)} deltas "
+                    f"(run_id={_witness_run_id})."
+                )
+            except Exception as _append_err:
+                push_system_alert(
+                    f"{WITNESS_TAB_NAME} append failed: {_append_err}. "
+                    f"{len(_witness_deltas)} deltas lost this cycle; next cycle "
+                    f"will re-observe any still-current state.",
+                    status="WARN", category="API_FAILURE", severity="WARN",
+                    dedup_key="witness_append_fail",
+                )
+
+    # Size canary (Gemini concern #2): in-cycle prune was removed because
+    # append_rows + col_values(1) + delete_rows on the same tab in the same
+    # 15-min cycle is a documented eventual-consistency race in the Sheets
+    # API — it can silently delete rows we just wrote, or skew the prune
+    # boundary. Retention is now owned by the L3b Nightly Audit (TODO, see
+    # docs/ideas/future_improvements.md) which runs outside the 15-min path
+    # and has exclusive use of the tab.
+    #
+    # What stays in-cycle: a cheap first-column read so we can (a) WARN if
+    # the tab exceeds the safety threshold — which indicates L3b hasn't run
+    # — and (b) expose the row count in source_miss_counts so X-Ray can
+    # plot witness growth. Read-only; no writes from here.
+    if witness_tab is None:
+        # Open read-only for the canary even if we had no deltas this cycle.
+        witness_tab = _ensure_witness_tab()
+    if witness_tab is not None:
+        try:
+            _witness_rows_total = len(witness_tab.col_values(1))
+            source_miss_counts["witness_rows"] = _witness_rows_total
+            if _witness_rows_total > WITNESS_CANARY_ROW_THRESHOLD:
+                push_system_alert(
+                    f"{WITNESS_TAB_NAME} row count is {_witness_rows_total:,} "
+                    f"(> {WITNESS_CANARY_ROW_THRESHOLD:,}). L3b nightly audit "
+                    f"retention prune has not been running; witness tab is "
+                    f"approaching Sheets' 10M-cell limit. Manual compact or "
+                    f"L3b audit required.",
+                    status="WARN", category="DATA_ANOMALY", severity="WARN",
+                    dedup_key="witness_canary_over_threshold",
+                )
+        except Exception as _canary_err:
+            # Canary failure must not block the cycle. Surface it once so we
+            # know the read path is broken — next cycle will retry.
+            push_system_alert(
+                f"{WITNESS_TAB_NAME} size canary read failed: {_canary_err}. "
+                f"Retention monitoring disabled this cycle.",
+                status="INFO", category="API_FAILURE", severity="INFO",
+                dedup_key="witness_canary_read_fail",
+            )
 
     # === SESSION MARKER FALLBACK FOR MISSING CONVENE TIMES ===
     # Some dates have session activity (adjourned, recessed) but no "Convenes" entry.
@@ -1286,7 +1775,150 @@ def run_calendar_update():
         df_past['CleanBill'] = df_past[bill_col].astype(str).str.replace(' ', '').str.upper()
         df_past['ParsedDate'] = pd.to_datetime(df_past[date_col], errors='coerce')
         df_past = df_past[(df_past['ParsedDate'] >= test_start_date) & (df_past['ParsedDate'] <= test_end_date)]
-        
+
+        # ============================================================
+        # PR-C2 Part C: HISTORY-vs-witness reconciliation (gap recovery)
+        # ============================================================
+        # Runs ONLY when Part A detected a gap that crossed the CRITICAL
+        # threshold (>= GAP_CRITICAL_MINUTES) AND the gap is bounded (<=
+        # GAP_RECONCILIATION_MAX_DAYS). Over the 7-day cap the check is
+        # skipped with a CRITICAL alert — the window is too wide for the
+        # blind-window-loss signal to be actionable (user requested manual
+        # review above that threshold).
+        #
+        # "Active re-poll" is already happening: the current cycle's live
+        # Schedule API pass (Part B) captured whatever LIS has NOW. Part C
+        # is the downstream check — for each meeting-verb HISTORY row whose
+        # ParsedDate falls inside the gap window, see if Schedule_Witness has
+        # ANY evidence that ANY committee was scheduled on that same date.
+        # A date with meeting-verb HISTORY actions but zero witness evidence
+        # = confirmed blind-window loss (we were offline while LIS surfaced
+        # and then retracted the schedule, and the meeting happened anyway).
+        #
+        # NOTE (future consideration): the CRITICAL notification here is
+        # routed through push_system_alert → SYSTEM_ALERT row. Owner may
+        # later want this on a dedicated dashboard / push channel. See
+        # docs/ideas/future_improvements.md (PR-C2 7-day alert routing).
+        _reconciliation_should_run = (
+            gap_cause in {"outage", "breaker_carryforward"}
+            and gap_minutes is not None
+            and gap_minutes >= GAP_CRITICAL_MINUTES
+            and _gap_window_start_utc is not None
+        )
+        if _reconciliation_should_run:
+            _gap_days = gap_minutes / (60.0 * 24.0)
+            if _gap_days > GAP_RECONCILIATION_MAX_DAYS:
+                push_system_alert(
+                    f"Gap-recovery reconciliation SKIPPED: gap of {_gap_days:.2f} days exceeds "
+                    f"{GAP_RECONCILIATION_MAX_DAYS}-day cap (gap_cause={gap_cause}). "
+                    f"HISTORY.CSV will still be processed, but blind-window losses during "
+                    f"the gap cannot be confirmed programmatically. Manual review required.",
+                    status="CRITICAL", category="DATA_ANOMALY", severity="CRITICAL",
+                    dedup_key=f"gap_reconciliation_oversized::{_cycle_start_utc.strftime('%Y-%m-%d')}",
+                )
+            else:
+                try:
+                    _et = pytz.timezone("America/New_York")
+                    _gap_start_et_date = _gap_window_start_utc.astimezone(_et).date()
+                    _cycle_end_et_date = _cycle_start_utc.astimezone(_et).date()
+                    gap_date_strs = set()
+                    _d = _gap_start_et_date
+                    while _d <= _cycle_end_et_date:
+                        gap_date_strs.add(_d.strftime("%Y-%m-%d"))
+                        _d += timedelta(days=1)
+
+                    # Build witness date index from THIS cycle's deltas +
+                    # any prior witness rows. Prior rows matter for gaps
+                    # that start long before the current cycle — we may
+                    # have witnessed a committee well ahead of its meeting
+                    # date. Read failure falls back to deltas-only; alert
+                    # fires but reconciliation proceeds with a weaker index
+                    # (better a partial check than no check).
+                    witness_dates = {
+                        delta.get("meeting_date", "") for delta in _witness_deltas
+                    }
+                    if witness_tab is not None:
+                        try:
+                            # Gemini round-3 HIGH: do NOT use get_all_values()
+                            # — Schedule_Witness is a change-feed that can
+                            # approach Sheets' 10M-cell ceiling; pulling the
+                            # entire tab into memory every cycle is a
+                            # scale cliff. Only meeting_date is needed to
+                            # build the witness-date set. WITNESS_HEADER is
+                            # the canonical schema we write at tab creation,
+                            # so the column index is stable; col_values is
+                            # 1-indexed.
+                            _date_col_idx = WITNESS_HEADER.index("meeting_date") + 1
+                            _dates_from_tab = witness_tab.col_values(_date_col_idx)
+                            if len(_dates_from_tab) > 1:
+                                # _dates_from_tab[0] is the header cell; skip it.
+                                witness_dates.update(_dates_from_tab[1:])
+                        except Exception as _wread_err:
+                            push_system_alert(
+                                f"Part C reconciliation: couldn't read {WITNESS_TAB_NAME} "
+                                f"for prior-cycle witness index ({_wread_err}). Falling "
+                                f"back to this-cycle deltas only.",
+                                status="WARN", category="API_FAILURE", severity="WARN",
+                                dedup_key="reconciliation_witness_read_fail",
+                            )
+
+                    if desc_col in df_past.columns:
+                        _desc_lower = df_past[desc_col].astype(str).str.lower()
+                        _meeting_verb_mask = _desc_lower.apply(
+                            lambda _d: any(v in _d for v in MEETING_VERB_TOKENS)
+                        )
+                        _date_strs_series = df_past['ParsedDate'].dt.strftime('%Y-%m-%d')
+                        _date_mask = _date_strs_series.isin(gap_date_strs)
+                        _candidates = df_past[_meeting_verb_mask & _date_mask]
+
+                        _reconciled_dates = 0
+                        _blind_window_dates = 0
+                        for _gdate, _group in _candidates.groupby(
+                            _candidates['ParsedDate'].dt.strftime('%Y-%m-%d')
+                        ):
+                            _reconciled_dates += 1
+                            if _gdate not in witness_dates:
+                                _blind_window_dates += 1
+                                _bills = (
+                                    _group[bill_col].astype(str)
+                                    .str.replace(' ', '').str.upper().unique().tolist()
+                                )
+                                _bills_sample = ', '.join(_bills[:5])
+                                if len(_bills) > 5:
+                                    _bills_sample += f"...+{len(_bills) - 5}"
+                                push_system_alert(
+                                    f"CONFIRMED BLIND-WINDOW LOSS on {_gdate}: HISTORY shows "
+                                    f"{len(_group)} meeting-verb actions (bills: {_bills_sample}) "
+                                    f"but {WITNESS_TAB_NAME} has zero evidence of ANY committee "
+                                    f"being scheduled that date. Gap window: "
+                                    f"{_gap_start_et_date}→{_cycle_end_et_date} "
+                                    f"(cause={gap_cause}, gap_minutes={gap_minutes:.1f}).",
+                                    status="WARN", category="DATA_ANOMALY", severity="WARN",
+                                    dedup_key=f"blind_window_loss::{_gdate}::{gap_cause}",
+                                )
+                        print(
+                            f"🔍 Part C reconciliation: checked {len(_candidates)} "
+                            f"meeting-verb HISTORY rows across {_reconciled_dates} of "
+                            f"{len(gap_date_strs)} gap-window dates; "
+                            f"{_blind_window_dates} confirmed blind-window dates."
+                        )
+                        source_miss_counts["reconciliation_blind_dates"] = _blind_window_dates
+                        source_miss_counts["reconciliation_checked_dates"] = _reconciled_dates
+                    else:
+                        push_system_alert(
+                            f"Part C reconciliation: HISTORY.CSV missing description column "
+                            f"{desc_col!r}. Skipping blind-window check.",
+                            status="WARN", category="DATA_ANOMALY", severity="WARN",
+                            dedup_key="reconciliation_no_desc_col",
+                        )
+                except Exception as _recon_err:
+                    push_system_alert(
+                        f"Part C reconciliation failed: {_recon_err}. "
+                        f"Gap-recovery blind-window check skipped this cycle.",
+                        status="WARN", category="DATA_ANOMALY", severity="WARN",
+                        dedup_key="reconciliation_fail",
+                    )
+
         df_past['OriginalOrder'] = range(len(df_past))
         df_past = df_past.sort_values(by=['ParsedDate', 'OriginalOrder'])
         
@@ -1693,7 +2325,11 @@ def run_calendar_update():
             f"unsourced_anchor={source_miss_counts['unsourced_anchor']} "
             f"dropped_ephemeral={source_miss_counts['dropped_ephemeral']} "
             f"dropped_noise={source_miss_counts['dropped_noise']} "
-            f"floor_anchor_miss={source_miss_counts['floor_anchor_miss']}"
+            f"floor_anchor_miss={source_miss_counts['floor_anchor_miss']} "
+            f"gap_cause={source_miss_counts.get('gap_cause', 'unknown')} "
+            f"gap_minutes={source_miss_counts.get('gap_minutes', -1)} "
+            f"witness_rows={source_miss_counts.get('witness_rows', -1)} "
+            f"witness_location_backfills={source_miss_counts.get('witness_location_backfills', 0)}"
         )
         print(f"📊 {metrics_summary}")
         alert_rows.append({
@@ -1767,13 +2403,16 @@ def run_calendar_update():
                                 merged = {}
                                 for r in cache_records:
                                     k = f"{r.get('Date', '')}_{r.get('Committee', '')}".strip().lower()
+                                    # PR-C2 Part B: pad pre-migration rows (no Location
+                                    # column) with "" so the compaction schema stays
+                                    # rectangular and get_all_records() keeps working.
                                     merged[k] = [str(r.get("Date", "")), str(r.get("Committee", "")),
                                                  str(r.get("Time", "")), str(r.get("SortTime", "")),
-                                                 str(r.get("Status", ""))]
+                                                 str(r.get("Status", "")), str(r.get("Location", ""))]
                                 for e in new_cache_entries:
                                     k = f"{e[0]}_{e[1]}".strip().lower()
                                     merged[k] = e  # new data overwrites stale
-                                header = [["Date", "Committee", "Time", "SortTime", "Status"]]
+                                header = [["Date", "Committee", "Time", "SortTime", "Status", "Location"]]
                                 rows = list(merged.values())
                                 # Write in chunks to stay under Sheets API payload limits
                                 CHUNK_SIZE = 10000
@@ -1791,9 +2430,11 @@ def run_calendar_update():
                                     try:
                                         restore_rows = header
                                         for r in cache_records:
+                                            # Pad pre-migration rows with "" so rollback
+                                            # stays rectangular against the new 6-col header.
                                             restore_rows.append([str(r.get("Date", "")), str(r.get("Committee", "")),
                                                                  str(r.get("Time", "")), str(r.get("SortTime", "")),
-                                                                 str(r.get("Status", ""))])
+                                                                 str(r.get("Status", "")), str(r.get("Location", ""))])
                                         for i in range(0, len(restore_rows), CHUNK_SIZE):
                                             chunk = restore_rows[i:i + CHUNK_SIZE]
                                             cache_sheet.update(values=chunk, range_name=f"A{i + 1}")

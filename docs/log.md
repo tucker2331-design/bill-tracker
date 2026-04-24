@@ -1,6 +1,6 @@
 ---
 tags: [log, meta]
-updated: 2026-04-21
+updated: 2026-04-24
 ---
 
 # Project Log
@@ -8,6 +8,48 @@ updated: 2026-04-21
 Append-only, reverse-chronological (newest at top). Each entry opens with `## [YYYY-MM-DD] <kind> | <title>` so `grep "^## \[" log.md | head -20` gives a parseable timeline.
 
 **Kinds:** `ingest` (new source/doc processed), `pr` (PR opened/merged/closed), `decision` (architectural or workflow), `lint` (wiki health-check pass), `session` (notable multi-hour working block), `post-mortem` (failure analysis).
+
+---
+
+## [2026-04-24] pr | PR-C2 round-3 patch — col_values() for reconciliation witness-date index
+
+Single-point fix in response to Gemini round-3 HIGH review of PR #29. Part C reconciliation was reading the `Schedule_Witness` tab via `get_all_values()` to build the prior-cycle `witness_dates` index. Given the 90-day retention target and high cycle frequency, the change-feed can approach Sheets' 10M-cell ceiling, and pulling the entire sheet into memory every cycle is a latent scale cliff that eventually breaks the worker via timeout or memory pressure. Only `meeting_date` is needed for the index. Switched to `col_values(WITNESS_HEADER.index("meeting_date") + 1)` which fetches only that column. Header cell is sliced off via `[1:]`. The existing try/except fallback-to-deltas-only semantics is unchanged, so a col-read failure still degrades gracefully.
+
+Adversarial audit: WITNESS_HEADER is the canonical schema we write at tab creation (inside `_ensure_witness_tab`), so index lookup against the constant is stable and matches what's on the tab. No schema drift risk unless someone hand-edits the tab header — and in that case the col fetch still returns the data, just potentially from a different column; the fallback semantics would give weaker reconciliation for one cycle until detected. Acceptable. No other `witness_tab.get_all_values/get_all_records` call sites in the worker (grep-verified). AST parse clean.
+
+Docs updated: architecture/calendar_pipeline Part C bullet 2 now documents the `col_values()` path + the memory-cliff rationale.
+
+---
+
+## [2026-04-24] pr | PR-C2 round-2 patches — Location delta, prune moved to L3b, size canary
+
+Pushed three patches on the open PR-C2 branch in response to Gemini round-2 review. Owner greenlit Concerns 1 + 2 for the current branch; Concern 3 (Playwright scraper) deferred to PR-C2.1.
+
+**Concern 1 — Location/Room missing from witness (round-1 junk-delta whitelist + round-2 "Missing Room Update"):** `WITNESS_DELTA_FIELDS = ("Time", "SortTime", "Status", "Location")` constant introduced with DO-NOT-ADD-METADATA warning. Delta comparison rewritten to iterate the whitelist — never iterate `_wval.items()` or any future metadata key becomes a delta trigger. `_extract_meeting_location(meeting)` uses a `Location → Room → RoomDescription` fallback chain (the field is not documented in [[knowledge/lis_api_reference]]) and logs which key fired. Location threaded through `api_schedule_map`, `new_cache_entries`, API_Cache header + compaction. `WITNESS_HEADER` grew from 11 → 13 cols (`location`, `prev_location` appended to both the current-state and prev-state halves). **Migration burst guard:** on first cycle(s) after deploy, API_Cache-seeded entries have Location="" while live entries are populated — without suppression every meeting would emit a bogus CHANGED delta. Suppress ONLY when the delta is {"Location"} and it went empty→populated; count in `witness_location_backfills` so the one-time burst is visible but quiet. Real room moves (both sides non-empty) still emit. One-time header migration in the cache-read path writes `F1="Location"` if missing, so subsequent cycles can actually read the column back (without this, the burst guard would fire forever).
+
+**Concern 2 — Pruning race (round-1 "Pruning Race Condition"):** removed the in-cycle `append_rows` + `col_values(1)` + `delete_rows` block entirely. Same-cycle append-then-delete on a Google Sheets tab is a documented eventual-consistency race that can silently delete rows we just wrote. Retention is now owned by an L3b Nightly Audit (TODO, see [[ideas/future_improvements#L3b Nightly Audit — Schedule_Witness retention owner (flagged 2026-04-24, PR-C2 round-2)]]) running outside the 15-min hot path. Cycle still does a cheap `col_values(1)` read as a size canary: exposes `witness_rows` in `source_miss_counts` and fires `witness_canary_over_threshold` WARN at > 500,000 rows so L3b lag is visible.
+
+**Concern 3 — Playwright scraper deferred to PR-C2.1.** Will use `wait_for_selector()` tied to the actual schedule-table DOM element (NOT `wait_for_load_state("networkidle")` which hangs on bloated gov sites) and ≥ 15s per-date timeout (5s was too aggressive for LIS at peak session). Flagged in [[ideas/future_improvements#PR-C2.1 — Playwright historical scraper (deferred from PR-C2)]].
+
+**Adversarial audit (embedded at commit time):** Caught a NameError bug during audit — `WITNESS_DELTA_FIELDS` was originally defined after the live loop but referenced inside it; hoisted the constants block above the pre-live snapshot so closure order matches execution order. API_Cache schema migration is idempotent; compaction + rollback blocks both padded to 6 cols so writes stay rectangular. No new silent fallbacks: every new except path has a categorized alert with a unique dedup_key. Whitelist iteration means we cannot accidentally add a new field without explicitly opting in. AST parse clean.
+
+---
+
+## [2026-04-24] pr | PR-C2 opened — gap detection + witness log + reconciliation
+
+Second PR in the PR-C series, on branch `claude/pr-c2-gap-detection-witness-log`. Three-part scope, all landing together so data-recovery infrastructure is cohesive:
+
+**Part A — Y1 gap detection.** Parses `Sheet1!Y1` (written by PR-C1), computes `gap_minutes = now_utc − Y1`, classifies `gap_cause` as one of `first_run`, `future_cursor`, `stale_cursor` (>30 d), `malformed_cursor`, `breaker_carryforward` (W1 populated), `outage`, `normal`. Emits WARN at >20 min gap, CRITICAL at >60 min, CRITICAL on stale_cursor. `gap_cause` and `gap_minutes` land in `source_miss_counts` for SYSTEM_METRICS. `_gap_window_start_utc` becomes the usable bound for Part C — set ONLY when Y1 parses cleanly and is neither future nor stale. All comparisons use `datetime.now(timezone.utc)` (PR-C1 Codex P1 fix already made the UTC import available).
+
+**Part B — `Schedule_Witness` change-feed tab.** Append-only log of ADDED + CHANGED LIS Schedule API deltas, one row per delta (11 cols: `seen_at_utc | run_id | event_type | meeting_date | committee | time | sort_time | status | prev_time | prev_sort_time | prev_status`). Pre-live deep-copy snapshot of `api_schedule_map` is diffed against post-live state BEFORE the `best_times` post-pass so the witness captures raw LIS signal. REMOVED deferred — can't reliably distinguish "LIS dropped it" from "LIS did not return it this poll" given cross-session cache staleness. Data-loss detection for that case is Part C's job. Tab auto-created on first delta. 90-day rolling prune via lexical sort of ISO timestamps + single `delete_rows(2, N)`. Write NOT gated by the circuit breaker — witness rows have to survive breaker trips, since the entire point is reconciliation on the next healthy cycle. Volume math: steady-state well under 10M-cell Sheets limit (change-feed, not snapshot); cold-start ~3.3k ADDED burst then normalizes.
+
+**Part C — HISTORY-vs-witness reconciliation.** Runs ONLY when `gap_cause in {outage, breaker_carryforward}` AND `gap_minutes >= 60`. Hard cap `GAP_RECONCILIATION_MAX_DAYS = 7`: over cap, CRITICAL `DATA_ANOMALY` alert + skip (manual review required). Within cap, builds gap date range in ET, builds witness date index (this cycle's deltas + all prior Schedule_Witness rows), filters `df_past` (HISTORY.CSV) to meeting-verb rows in gap window, and for each date with HISTORY meeting-verb rows but zero witness evidence emits a WARN `DATA_ANOMALY` labeled "CONFIRMED BLIND-WINDOW LOSS". Date-granularity (not committee-granularity) because HISTORY doesn't carry committee directly — resolving committee would force reconciliation to run AFTER the Sequential Turing Machine, which defeats the "cheap and independent" goal. `reconciliation_blind_dates` / `reconciliation_checked_dates` added to `source_miss_counts`.
+
+**Future-consideration flag.** Owner flagged during scoping that the CRITICAL alerts here (`y1_stale`, `gap_reconciliation_oversized`, `gap_critical`) may eventually want a dedicated dashboard or push channel rather than routing through `SYSTEM_ALERT` rows. Tagged in code comments on both alert sites, in [[architecture/calendar_pipeline#Future-consideration flag]], and in a new section in [[ideas/future_improvements#Notification Routing (flagged 2026-04-24, PR-C2)]].
+
+Adversarial audit (because Codex/Gemini don't re-review mid-stream): 9-point pre-push checklist clean; boundary conditions verified — Y1 parse handles None + ValueError + future + stale + malformed; delta computation survives api_is_online=False (empty deltas, no write); prune handles all-old / all-new / empty-tab / single-row / multi-row cases; breaker interaction confirmed (trip leaves Y1 untouched → next cycle detects as `breaker_carryforward`); source_miss_counts mixed int/string values serialize cleanly via `json.dumps`; no new silent fallbacks (every except has a categorized alert).
+
+Zero bug-count delta expected. This is observability + data-recovery infrastructure; PR-C3 (LegislationEvent API) is the first fix-pass that collapses Class 1 bugs.
 
 ---
 
