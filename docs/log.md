@@ -11,6 +11,16 @@ Append-only, reverse-chronological (newest at top). Each entry opens with `## [Y
 
 ---
 
+## [2026-04-24] pr | PR-C2 round-3 patch — col_values() for reconciliation witness-date index
+
+Single-point fix in response to Gemini round-3 HIGH review of PR #29. Part C reconciliation was reading the `Schedule_Witness` tab via `get_all_values()` to build the prior-cycle `witness_dates` index. Given the 90-day retention target and high cycle frequency, the change-feed can approach Sheets' 10M-cell ceiling, and pulling the entire sheet into memory every cycle is a latent scale cliff that eventually breaks the worker via timeout or memory pressure. Only `meeting_date` is needed for the index. Switched to `col_values(WITNESS_HEADER.index("meeting_date") + 1)` which fetches only that column. Header cell is sliced off via `[1:]`. The existing try/except fallback-to-deltas-only semantics is unchanged, so a col-read failure still degrades gracefully.
+
+Adversarial audit: WITNESS_HEADER is the canonical schema we write at tab creation (inside `_ensure_witness_tab`), so index lookup against the constant is stable and matches what's on the tab. No schema drift risk unless someone hand-edits the tab header — and in that case the col fetch still returns the data, just potentially from a different column; the fallback semantics would give weaker reconciliation for one cycle until detected. Acceptable. No other `witness_tab.get_all_values/get_all_records` call sites in the worker (grep-verified). AST parse clean.
+
+Docs updated: architecture/calendar_pipeline Part C bullet 2 now documents the `col_values()` path + the memory-cliff rationale.
+
+---
+
 ## [2026-04-24] pr | PR-C2 round-2 patches — Location delta, prune moved to L3b, size canary
 
 Pushed three patches on the open PR-C2 branch in response to Gemini round-2 review. Owner greenlit Concerns 1 + 2 for the current branch; Concern 3 (Playwright scraper) deferred to PR-C2.1.

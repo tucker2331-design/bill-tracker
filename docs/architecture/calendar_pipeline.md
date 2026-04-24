@@ -289,7 +289,12 @@ Within the cap, the worker:
 1. Builds the gap date range in ET (dates from `_gap_window_start_utc`
    through current cycle, inclusive).
 2. Builds a **witness date index** = `{meeting_date}` from THIS cycle's
-   deltas + all prior rows in `Schedule_Witness`.
+   deltas + all prior rows in `Schedule_Witness`. The prior-rows read
+   fetches **only the `meeting_date` column** via `col_values()` (not
+   `get_all_values()`) — the witness tab is a change-feed that can
+   approach Sheets' 10M-cell ceiling and a full-sheet pull is a memory
+   cliff at scale (Gemini round-3 HIGH). Column index comes from
+   `WITNESS_HEADER.index("meeting_date") + 1` (1-indexed Sheets API).
 3. Filters `df_past` (HISTORY.CSV) to rows whose `ParsedDate` is in the gap
    window AND whose description contains any `MEETING_VERB_TOKENS` entry.
 4. Groups candidates by date. For each gap-window date with HISTORY

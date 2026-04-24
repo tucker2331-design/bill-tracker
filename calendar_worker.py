@@ -1839,14 +1839,20 @@ def run_calendar_update():
                     }
                     if witness_tab is not None:
                         try:
-                            _all_witness = witness_tab.get_all_values()
-                            if len(_all_witness) > 1:
-                                _hdr = _all_witness[0]
-                                if "meeting_date" in _hdr:
-                                    _date_idx = _hdr.index("meeting_date")
-                                    for _row in _all_witness[1:]:
-                                        if len(_row) > _date_idx:
-                                            witness_dates.add(_row[_date_idx])
+                            # Gemini round-3 HIGH: do NOT use get_all_values()
+                            # — Schedule_Witness is a change-feed that can
+                            # approach Sheets' 10M-cell ceiling; pulling the
+                            # entire tab into memory every cycle is a
+                            # scale cliff. Only meeting_date is needed to
+                            # build the witness-date set. WITNESS_HEADER is
+                            # the canonical schema we write at tab creation,
+                            # so the column index is stable; col_values is
+                            # 1-indexed.
+                            _date_col_idx = WITNESS_HEADER.index("meeting_date") + 1
+                            _dates_from_tab = witness_tab.col_values(_date_col_idx)
+                            if len(_dates_from_tab) > 1:
+                                # _dates_from_tab[0] is the header cell; skip it.
+                                witness_dates.update(_dates_from_tab[1:])
                         except Exception as _wread_err:
                             push_system_alert(
                                 f"Part C reconciliation: couldn't read {WITNESS_TAB_NAME} "
