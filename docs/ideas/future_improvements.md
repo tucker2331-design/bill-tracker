@@ -1,5 +1,39 @@
 # Future Improvements
 
+## L3b Nightly Audit — Schedule_Witness retention owner (flagged 2026-04-24, PR-C2 round-2)
+- [ ] Implement L3b nightly audit that owns `Schedule_Witness` retention.
+  **Context:** PR-C2's original design pruned the witness tab inside the
+  15-min cycle (`append_rows` + `col_values(1)` + `delete_rows` on the same
+  tab). Gemini round-1 concern #2 flagged this as a documented
+  eventual-consistency race in the Sheets API — under load the prune can
+  silently delete rows we just appended, or skew the retention boundary.
+  The in-cycle prune was removed in the PR-C2 round-2 patches. Retention
+  is now enforced by an L3b Nightly Audit which runs outside the 15-min
+  hot path, reads the witness tab under exclusive use, and deletes rows
+  whose `seen_at_utc` < `now_utc - 90d`.
+  **Canary in place:** the 15-min cycle still reads `col_values(1)` and
+  surfaces `witness_rows` in `source_miss_counts` + `witness_canary_over_threshold`
+  WARN when rows > 500_000 — so L3b-audit lag is visible.
+  **Tagged in:** [[architecture/calendar_pipeline#Part B — `Schedule_Witness` change-feed tab]]
+  and in code comments at the canary site.
+
+## PR-C2.1 — Playwright historical scraper (deferred from PR-C2)
+- [ ] When Part C emits `CONFIRMED BLIND-WINDOW LOSS` for a date, launch a
+  Playwright scrape of the LIS Meeting Schedule web page for that
+  historical date so missing times can be filled in. Gemini correction
+  (2026-04-24): the LIS Meeting Schedule page has a date-picker that
+  exposes historical schedules, so the scraper CAN act as a time machine
+  — Part C elevates from "detect blind-window loss" to "recover missing
+  times where possible".
+  **Must-have (Gemini round-2 concerns #2 and #3):**
+  - Use `wait_for_selector()` bound to the actual schedule-table DOM
+    element. Do NOT use `wait_for_load_state("networkidle")` — bloated
+    government sites rarely reach true network idle (broken background
+    trackers), causing indefinite hangs.
+  - Per-date timeout ≥ 15 seconds. The prior plan's 5s budget is too
+    tight for LIS during peak session and produces false-positive
+    timeouts on slow historical-database queries.
+
 ## Notification Routing (flagged 2026-04-24, PR-C2)
 - [ ] Re-route PR-C2 CRITICAL alerts to a dedicated monitoring channel.
   **Context:** PR-C2 emits two CRITICAL classes via `push_system_alert` (so

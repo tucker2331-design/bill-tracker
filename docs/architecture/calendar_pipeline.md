@@ -206,21 +206,42 @@ parses cleanly and is neither future nor stale.
 ### Part B — `Schedule_Witness` change-feed tab
 
 Append-only log of **ADDED + CHANGED** LIS Schedule API deltas, one row per
-delta. Schema (11 cols):
+delta. Schema (13 cols):
 
 ```
 seen_at_utc | run_id | event_type | meeting_date | committee | time |
-sort_time | status | prev_time | prev_sort_time | prev_status
+sort_time | status | location | prev_time | prev_sort_time | prev_status |
+prev_location
 ```
 
 Delta computation:
 1. **Before** the live Schedule API loop: deep-copy `api_schedule_map` →
    `_pre_live_schedule_snapshot`.
-2. Live loop runs unchanged, mutating `api_schedule_map`.
+2. Live loop runs unchanged, mutating `api_schedule_map`. Each meeting's
+   `Location` is extracted via `_extract_meeting_location()` — a fallback
+   chain over `Location` → `Room` → `RoomDescription` because the field
+   is not explicitly documented (see [[knowledge/lis_api_reference]]).
 3. **After** the live loop (but before the `best_times` post-pass, so we
-   capture raw LIS signal): iterate `api_schedule_map` and diff against
-   snapshot. ADDED = key not in snapshot. CHANGED = key in both, value
-   differs.
+   capture raw LIS signal): iterate `api_schedule_map` and diff each entry
+   against the snapshot using the strict whitelist `WITNESS_DELTA_FIELDS =
+   ("Time", "SortTime", "Status", "Location")`. ADDED = key not in
+   snapshot. CHANGED = any whitelisted field differs.
+
+**Whitelist rule (Gemini round-1 concern #1, round-2 concern #1):** fields
+outside `WITNESS_DELTA_FIELDS` are invisible to delta logic. Volatile LIS
+metadata (last_modified, ETags, opaque IDs) MUST NOT be added here or the
+change-feed explodes into junk. Room moves are a real-world schedule
+delta a legislative tracker cares about, so Location is in; purely
+cosmetic server-side metadata is out.
+
+**Migration burst guard:** API_Cache did not store Location before this
+PR, so the first cycle post-deploy has `prev.Location = ""` for every
+cached entry. Without suppression, every meeting would emit a bogus
+CHANGED delta. We suppress the delta when the ONLY changed field is
+Location going empty → populated, and count suppressions in
+`witness_location_backfills` so the one-time burst is visible but quiet.
+Real room moves (prev and cur both non-empty but different) pass through
+normally.
 
 **REMOVED** is intentionally NOT emitted — absence from a poll cannot be
 reliably distinguished from cross-session cache staleness or filtering.
@@ -228,18 +249,31 @@ Data-loss detection for those cases is handled by Part C reconciliation.
 
 - **Tab auto-created** on first delta (via `gspread.exceptions.WorksheetNotFound`
   → `sheet.add_worksheet(...)` + header write).
-- **Retention:** 90-day rolling. Prune runs every cycle, deleting
-  contiguous oldest rows whose `seen_at_utc` < `now_utc - 90d`. ISO 8601
-  strings sort lexically, so `col_values(1)` + linear scan + single
-  `delete_rows(2, end)` is the hot path.
+- **API_Cache schema migration:** on every cycle, if `row_values(1)` lacks
+  `"Location"`, cell F1 is repaired so future `get_all_records()` reads
+  pick up the Location column. Idempotent. Failure surfaces an INFO alert
+  (`cache_header_migration_fail`) — migration-burst guard keeps delta
+  stream clean even if repair stalls.
+- **Retention ownership moved to L3b Nightly Audit** (Gemini round-1
+  concern #2). The original design pruned inside the 15-min cycle with
+  `append_rows` + `col_values(1)` + `delete_rows` on the same tab; that
+  is a documented eventual-consistency race in the Sheets API and has
+  been removed. Retention is now a TODO owned by
+  [[ideas/future_improvements]].
+- **Size canary** replaces the prune: a cheap `len(col_values(1))` read
+  exposes the row count in `source_miss_counts["witness_rows"]` and
+  emits a WARN (`witness_canary_over_threshold`) if rows exceed
+  `WITNESS_CANARY_ROW_THRESHOLD = 500_000`. The canary's purpose is to
+  make L3b-audit lag visible, not to enforce retention.
 - **Write is NOT gated by the circuit breaker** — witness rows survive
   even when Sheet1 overwrite is suppressed. This is the whole point:
   reconciliation on the next healthy cycle needs the record of what LIS
   told us even during a trip.
 - **Volume math:** steady-state deltas/cycle is small (cache warms
-  quickly). Worst case 100 deltas × 96 cycles × 90 days × 11 cols ≈ 9.5M
-  cells, within the 10M cell limit. Cold-start (empty cache) is a one-time
-  ~3,310 ADDED burst, then self-normalizes.
+  quickly). Worst case 100 deltas × 96 cycles × 90 days × 13 cols ≈ 11M
+  cells — trims close to the 10M limit, which is why the canary
+  threshold is set to trigger well before that ceiling and why L3b
+  ownership is required.
 
 ### Part C — Gap-triggered reconciliation (HISTORY-vs-witness)
 

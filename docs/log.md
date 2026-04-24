@@ -11,6 +11,20 @@ Append-only, reverse-chronological (newest at top). Each entry opens with `## [Y
 
 ---
 
+## [2026-04-24] pr | PR-C2 round-2 patches — Location delta, prune moved to L3b, size canary
+
+Pushed three patches on the open PR-C2 branch in response to Gemini round-2 review. Owner greenlit Concerns 1 + 2 for the current branch; Concern 3 (Playwright scraper) deferred to PR-C2.1.
+
+**Concern 1 — Location/Room missing from witness (round-1 junk-delta whitelist + round-2 "Missing Room Update"):** `WITNESS_DELTA_FIELDS = ("Time", "SortTime", "Status", "Location")` constant introduced with DO-NOT-ADD-METADATA warning. Delta comparison rewritten to iterate the whitelist — never iterate `_wval.items()` or any future metadata key becomes a delta trigger. `_extract_meeting_location(meeting)` uses a `Location → Room → RoomDescription` fallback chain (the field is not documented in [[knowledge/lis_api_reference]]) and logs which key fired. Location threaded through `api_schedule_map`, `new_cache_entries`, API_Cache header + compaction. `WITNESS_HEADER` grew from 11 → 13 cols (`location`, `prev_location` appended to both the current-state and prev-state halves). **Migration burst guard:** on first cycle(s) after deploy, API_Cache-seeded entries have Location="" while live entries are populated — without suppression every meeting would emit a bogus CHANGED delta. Suppress ONLY when the delta is {"Location"} and it went empty→populated; count in `witness_location_backfills` so the one-time burst is visible but quiet. Real room moves (both sides non-empty) still emit. One-time header migration in the cache-read path writes `F1="Location"` if missing, so subsequent cycles can actually read the column back (without this, the burst guard would fire forever).
+
+**Concern 2 — Pruning race (round-1 "Pruning Race Condition"):** removed the in-cycle `append_rows` + `col_values(1)` + `delete_rows` block entirely. Same-cycle append-then-delete on a Google Sheets tab is a documented eventual-consistency race that can silently delete rows we just wrote. Retention is now owned by an L3b Nightly Audit (TODO, see [[ideas/future_improvements#L3b Nightly Audit — Schedule_Witness retention owner (flagged 2026-04-24, PR-C2 round-2)]]) running outside the 15-min hot path. Cycle still does a cheap `col_values(1)` read as a size canary: exposes `witness_rows` in `source_miss_counts` and fires `witness_canary_over_threshold` WARN at > 500,000 rows so L3b lag is visible.
+
+**Concern 3 — Playwright scraper deferred to PR-C2.1.** Will use `wait_for_selector()` tied to the actual schedule-table DOM element (NOT `wait_for_load_state("networkidle")` which hangs on bloated gov sites) and ≥ 15s per-date timeout (5s was too aggressive for LIS at peak session). Flagged in [[ideas/future_improvements#PR-C2.1 — Playwright historical scraper (deferred from PR-C2)]].
+
+**Adversarial audit (embedded at commit time):** Caught a NameError bug during audit — `WITNESS_DELTA_FIELDS` was originally defined after the live loop but referenced inside it; hoisted the constants block above the pre-live snapshot so closure order matches execution order. API_Cache schema migration is idempotent; compaction + rollback blocks both padded to 6 cols so writes stay rectangular. No new silent fallbacks: every new except path has a categorized alert with a unique dedup_key. Whitelist iteration means we cannot accidentally add a new field without explicitly opting in. AST parse clean.
+
+---
+
 ## [2026-04-24] pr | PR-C2 opened — gap detection + witness log + reconciliation
 
 Second PR in the PR-C series, on branch `claude/pr-c2-gap-detection-witness-log`. Three-part scope, all landing together so data-recovery infrastructure is cohesive:
