@@ -1,6 +1,6 @@
 ---
 tags: [state, live]
-updated: 2026-04-24
+updated: 2026-04-25
 status: active
 ---
 
@@ -11,10 +11,12 @@ status: active
 **Benchmark window:** Feb 9-13, 2026 (crossover week).
 
 ## Active focus
-**PR-C2 merged (PR#29, 2026-04-24) — gap detection + Schedule_Witness + reconciliation now live.** Three rounds of Gemini review folded in: round-1 inline at PR open; round-2 = Location-delta whitelist + prune→L3b + migration burst guard + size canary; round-3 = `col_values()` for the reconciliation witness-date index (avoids a scale cliff on the change-feed tab). First post-merge cycle produced the expected migration burst on `Schedule_Witness` — cached entries with `Location=""` populated to live values, and a subset where SortTime also drifted bypassed the `{Location}`-only burst guard and emitted `CHANGED` rows. That's first-cycle behavior; the next cycle is being monitored to confirm steady-state quiet. Three observability gaps surfaced from the post-merge sheet inspection, all flagged in [[ideas/future_improvements]]: (1) witness cache-carryover scope — diff iterates the full cache, so historical entries outside the scrape window emit noise on any tracked-field drift; (2) `API_Cache` historical-row `Location` is permanently empty after migration unless explicitly backfilled; (3) `Bug_Logs` tab is still empty for `calendar_worker` (no integration yet). Active work: **scaffolding PR-C2.1** — Playwright historical scraper triggered on `CONFIRMED BLIND-WINDOW LOSS` for time recovery (per Gemini round-2 concern #3: `wait_for_selector()` bound to the schedule-table DOM, ≥15s per-date timeout); also the natural backfill channel for historical `API_Cache` Location. See [[architecture/calendar_pipeline#Gap Detection + Witness Log + Reconciliation (PR-C2)]].
+**PR-C3 in flight — LegislationEvent API as secondary time source for Class-1 bugs.** The originally-planned PR-C2.1 (Playwright historical scraper) was reverted on 2026-04-25 after headless verification proved the premise wrong: no public web source has 2026 historical schedules the LIS Schedule API doesn't already expose. Deeper investigation surfaced the actual fix path — the LIS **LegislationEvent API** publishes minute-precision `EventDate` for every bill action, including the 4 Class-1 bug actions (HB111/505/972/609 on 2026-02-12) where the Schedule API has zero entries for the parent committee. Verification confirmed all four recoverable: HB111 → 9:02 PM, HB505 → 9:02 PM, HB972 → 9:03 PM, HB609 → 9:24 AM. Current commit on branch `claude/pr-c3-legislation-event-fallback` ships the surgical helper (`_resolve_via_legislation_event_api`) as fallback step 6 in the time-resolution chain, two new public-facing constants (`LIS_PUBLIC_API_KEY`, `LEGISLATION_EVENT_HEADERS`), 5-digit session-code normalization, per-cycle LegislationID cache, 3 new counters (`sourced_legislation_event` denominator + `legislation_event_attempted/recovered` orthogonal). 9-of-9 standalone unit-test cases pass (4 happy path + 5 negative). Bug-count delta target: **9 → 5** on the next worker run (the 4 Class-1 bugs collapse; 5 Class-2 subcommittee-attribution bugs remain for PR-C4). Two infrastructure gotchas captured in code + brain: (a) two distinct public WebAPIKeys (legacy worker key vs SPA public key), (b) 3-digit vs 5-digit session-code formats. See [[architecture/calendar_pipeline#Secondary Time Source via LegislationEvent (PR-C3)]] and [[knowledge/lis_api_reference]].
 
 ## Open PRs
-*(none currently open — PR-C2.1 will appear here when branched.)*
+| # | Branch | State | Notes |
+|---|--------|-------|-------|
+| TBD | `claude/pr-c3-legislation-event-fallback` | **In flight — PR-C3** | Helper `_resolve_via_legislation_event_api()` as fallback step 6 in the Time Resolution chain (after API_Schedule / convene_anchor, before journal_default). Two-step LIS lookup (LegislationVersion → LegislationEvent). Targets the 4 Class-1 bugs on Feb 12. Standalone unit tests pass against all 4 verified bug cases. Awaiting worker run to confirm 9 → 5 bug-count delta. |
 
 ## Recently closed
 - **PR#29** `claude/pr-c2-gap-detection-witness-log` — merged 2026-04-24. PR-C2 landed: Y1 gap detection + 7 `gap_cause` classes (WARN @ >20m, CRITICAL @ >60m or stale-cursor); `Schedule_Witness` change-feed tab (13 cols, whitelist-iterated `WITNESS_DELTA_FIELDS = (Time, SortTime, Status, Location)`, migration burst guard, retention deferred to L3b); HISTORY-vs-witness reconciliation with 7-day cap + CRITICAL-over-cap alert. Three rounds of Gemini review folded in (round-2: Location delta + prune→L3b + canary; round-3: `col_values()` scale-cliff fix). Zero bug-count delta — observability + data-recovery infrastructure. New `source_miss_counts` counters: `gap_minutes`, `gap_cause`, `witness_rows`, `witness_location_backfills`, `reconciliation_blind_dates`, `reconciliation_checked_dates`.
@@ -27,10 +29,9 @@ status: active
 - **PR#22** `claude/pr22-offered-admin-override` — closed unmerged. Premise invalidated. See [[failures/assumptions_audit]] #41 and [[failures/pr22_post_mortem]].
 
 ## Next PR
-PR-C2.1 first (still PR-C series infrastructure / data recovery), then per-class fix-passes:
-- **PR-C2.1** *(active)* — Playwright historical scraper triggered on `CONFIRMED BLIND-WINDOW LOSS` for time recovery, plus historical `API_Cache` Location backfill (same scrape, second column). `wait_for_selector()` bound to the schedule-table DOM (NOT `networkidle`), ≥15s per-date timeout. See [[ideas/future_improvements#PR-C2.1 — Playwright historical scraper (deferred from PR-C2)]].
-- **PR-C3** — LegislationEvent API as secondary time source (collapses Class 1: 4 bugs — HB111/505/972/609). Fallback chain documented in [[log]] 2026-04-20 entry and [[knowledge/lis_api_reference]].
-- **PR-C4** — Subcommittee attribution resolver (collapses Class 2: 5 bugs — HB24/1266/1372, SB494/555).
+PR-C3 in flight (above); after merge:
+- **PR-C4** — Subcommittee attribution resolver for Class 2 (5 bugs: HB24/1266/1372/SB494/SB555). LegislationEvent API (the PR-C3 hookup) gives TIME but `CommitteeNumber/CommitteeName` are `None` on vote-style events, so it doesn't help Class 2 directly. Likely needs `CommitteeLegislationReferral` API or `bill_locations` walking the SUBCOMMITTEE that received the action rather than the parent.
+- **PR-C2.1 (deferred — invalidated)** — original Playwright historical scraper plan reverted on 2026-04-25 after headless verification. No public web source has 2026 historical schedules the API doesn't already expose.
 - **PR-C5+** — Mop-up: address whichever category X-Ray Section 0 surfaces as largest residual (`unsourced_journal` / `unsourced_anchor` / `floor_anchor_miss` / `dropped_ephemeral`). Each PR must cite before/after counts from Section 0 to meet CLAUDE.md Standard #7.
 
 ## Known bug count (as of last measured X-Ray)
