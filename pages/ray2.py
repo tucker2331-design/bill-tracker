@@ -383,16 +383,26 @@ if _metrics_payload:
     # Denominator buckets (mutually exclusive — should sum to _total).
     _api = int(_metrics_payload.get("sourced_api", 0) or 0)
     _conv = int(_metrics_payload.get("sourced_convene", 0) or 0)
+    # PR-C3: LegislationEvent fallback bucket. MUST be summed into
+    # _bucket_sum below; missing it would re-introduce denominator
+    # drift (Codex PR-C3 P2).
+    _le = int(_metrics_payload.get("sourced_legislation_event", 0) or 0)
     _unj = int(_metrics_payload.get("unsourced_journal", 0) or 0)
     _fam = int(_metrics_payload.get("floor_anchor_miss", 0) or 0)
     _dns = int(_metrics_payload.get("dropped_noise", 0) or 0)
     # Orthogonal tag counters (overlap with the denominator buckets).
     _una = int(_metrics_payload.get("unsourced_anchor", 0) or 0)
     _dep = int(_metrics_payload.get("dropped_ephemeral", 0) or 0)
+    # PR-C3 orthogonal: how many rows we attempted vs recovered via
+    # the LegislationEvent fallback. Delta (attempted - recovered) is
+    # the count we still cannot source from any LIS API — the genuine
+    # source-gap signal.
+    _le_att = int(_metrics_payload.get("legislation_event_attempted", 0) or 0)
+    _le_rec = int(_metrics_payload.get("legislation_event_recovered", 0) or 0)
 
-    _sourced = _api + _conv
+    _sourced = _api + _conv + _le
     _unsourced = _unj + _fam
-    _bucket_sum = _api + _conv + _unj + _fam + _dns
+    _bucket_sum = _api + _conv + _le + _unj + _fam + _dns
     _source_rate = (_sourced / _total * 100.0) if _total else 0.0
 
     st.caption(
@@ -405,12 +415,13 @@ if _metrics_payload:
     z3.metric("Unsourced", f"{_unsourced:,}")
     z4.metric("Dropped (noise)", f"{_dns:,}")
 
-    z5, z6, z7, z8, z9 = st.columns(5)
+    z5, z6, z7, z8, z9, z10 = st.columns(6)
     z5.metric("↳ API schedule", f"{_api:,}")
     z6.metric("↳ Convene anchor", f"{_conv:,}")
-    z7.metric("↳ No schedule", f"{_unj:,}")
-    z8.metric("↳ Floor-anchor miss", f"{_fam:,}")
-    z9.metric("↳ Noise drops", f"{_dns:,}")
+    z7.metric("↳ LegislationEvent", f"{_le:,}")
+    z8.metric("↳ No schedule", f"{_unj:,}")
+    z9.metric("↳ Floor-anchor miss", f"{_fam:,}")
+    z10.metric("↳ Noise drops", f"{_dns:,}")
 
     if _total and _bucket_sum != _total:
         st.warning(
@@ -421,10 +432,12 @@ if _metrics_payload:
     st.caption(
         "**Orthogonal tag counters** (overlap with the denominator above — do NOT add)."
     )
-    y1, y2, y3 = st.columns(3)
+    y1, y2, y3, y4, y5 = st.columns(5)
     y1.metric("Memory-anchor tag", f"{_una:,}")
     y2.metric("Ephemeral drops", f"{_dep:,}")
-    y3.metric("Sheet rows (in window)", "see §3")
+    y3.metric("LegEvent attempted", f"{_le_att:,}")
+    y4.metric("LegEvent recovered", f"{_le_rec:,}")
+    y5.metric("Sheet rows (in window)", "see §3")
 
     # Origin breakdown from the actual rows (cross-check against metrics).
     if "Origin" in sheet_df.columns:

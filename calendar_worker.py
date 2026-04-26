@@ -550,6 +550,18 @@ def _normalize_session_code_5d(active_session):
     endpoints reject the 3-digit form with
     "Provided Session Code is invalid". Always convert before calling them.
     Empty / None / non-numeric inputs return "" so callers must guard.
+
+    LIMITATION (Gemini PR-C3 review): the hardcoded "20" prefix assumes
+    21st-century sessions. A legacy 3-digit "941" (1994 Regular) would
+    incorrectly become "20941" — but the only path that reaches this
+    helper with a 3-digit input is the OFFLINE-fallback inside
+    `run_calendar_update()` (search for `ACTIVE_SESSION = "261"`) which
+    fires only when `get_active_session_info()` fails. When the Session API
+    succeeds, ACTIVE_SESSION already arrives in 5-digit form
+    ("20261") from `Session/api/GetSessionListAsync` and this function
+    is a no-op. If we ever need to look up historical (pre-2000)
+    sessions, thread `session_year` from `session_data["start"].year`
+    through this helper.
     """
     code = str(active_session or "").strip()
     if not code or not code.isdigit():
@@ -564,8 +576,22 @@ def _normalize_session_code_5d(active_session):
     return ""
 
 
+def _legislation_event_token_set(text):
+    """Lowercased ≥3-letter alphabetic tokens for description matching.
+
+    Stops emoji, punctuation, single-letter chamber prefixes ("H"/"S"),
+    and small connectors ("by", "of", "to") from inflating the overlap
+    score. Used by `_resolve_via_legislation_event_api` to match the
+    Sheet1 outcome text against the right LegislationEvent when a bill
+    has multiple events on the same date+chamber (Codex PR-C3 P1).
+    """
+    if not text:
+        return set()
+    return {w.lower() for w in re.findall(r'[A-Za-z]{3,}', text)}
+
+
 def _resolve_via_legislation_event_api(
-    http_session, bill_num, action_date_str,
+    http_session, bill_num, action_date_str, outcome_text,
     session_code_5d, acting_chamber_code, legislation_id_cache, push_alert,
 ):
     """PR-C3: secondary time source via LIS LegislationEvent API.
@@ -618,7 +644,7 @@ def _resolve_via_legislation_event_api(
             legislation_id_cache[cache_key] = ""
             return None
         try:
-            versions = (r.json() or {}).get("LegislationsVersion") or []
+            raw_json = r.json()
         except Exception as e:
             push_alert(
                 f"LegislationVersion JSON parse failed for {bill_num}: {e}",
@@ -627,7 +653,21 @@ def _resolve_via_legislation_event_api(
             )
             legislation_id_cache[cache_key] = ""
             return None
-        legislation_id = versions[0].get("LegislationID") if versions else None
+        # Defensive: API contract says dict, but assert before .get() so a
+        # contract change surfaces as a categorized alert, not an
+        # AttributeError (Gemini PR-C3 review).
+        if not isinstance(raw_json, dict):
+            push_alert(
+                f"LegislationVersion returned non-dict JSON for {bill_num}: "
+                f"{type(raw_json).__name__}",
+                status="WARN", category="DATA_ANOMALY", severity="WARN",
+                dedup_key=f"legislation_version_shape::{bill_num}",
+            )
+            legislation_id_cache[cache_key] = ""
+            return None
+        versions = raw_json.get("LegislationsVersion") or []
+        first = versions[0] if versions else None
+        legislation_id = first.get("LegislationID") if isinstance(first, dict) else None
         legislation_id_cache[cache_key] = legislation_id or ""
 
     if not legislation_id:
@@ -656,7 +696,7 @@ def _resolve_via_legislation_event_api(
         )
         return None
     try:
-        events = (r.json() or {}).get("LegislationEvents") or []
+        raw_json = r.json()
     except Exception as e:
         push_alert(
             f"LegislationEvent JSON parse failed for {bill_num}: {e}",
@@ -664,6 +704,15 @@ def _resolve_via_legislation_event_api(
             dedup_key=f"legislation_event_parse::{bill_num}",
         )
         return None
+    if not isinstance(raw_json, dict):
+        push_alert(
+            f"LegislationEvent returned non-dict JSON for {bill_num}: "
+            f"{type(raw_json).__name__}",
+            status="WARN", category="DATA_ANOMALY", severity="WARN",
+            dedup_key=f"legislation_event_shape::{bill_num}",
+        )
+        return None
+    events = raw_json.get("LegislationEvents") or []
 
     # Step 3: filter to events on the action date AND the acting chamber
     # (House actions should not borrow Senate-side timestamps).
@@ -683,17 +732,42 @@ def _resolve_via_legislation_event_api(
 
     # Prefer events with a real wall-clock time (skip midnight-only
     # date-stamps, which encode date-only "filed" actions). Among real-time
-    # events, take the latest — when a committee meets and votes on multiple
-    # bills, EventDate captures the per-action timestamp, and the latest is
-    # the one that completed the action we're trying to time.
+    # events, MATCH the right action — Codex PR-C3 P1 flagged that a bill
+    # may have multiple events in the same chamber on the same date (e.g.
+    # HB1 on 2026-03-03 had a Senate "Constitutional reading dispensed"
+    # at 13:44 and a "Passed by for the day" at 13:45). Picking the latest
+    # would mis-time the earlier action. Score each candidate by token
+    # overlap between the Sheet1 outcome text and the event Description;
+    # tie-break by latest EventDate so the most recent rendering of the
+    # same logical action wins. Score=0 (no token overlap) is treated as
+    # NO confident match → return None and fall through to the existing
+    # journal_default path; the alert there carries the diagnostic_hint
+    # so the human can see what we did and didn't have.
     real_time_events = [
         e for e in matching
         if str(e.get("EventDate") or "")[11:] not in ("", "00:00:00")
     ]
     if not real_time_events:
         return None
-    real_time_events.sort(key=lambda e: e.get("EventDate") or "")
-    chosen = real_time_events[-1]
+    outcome_tokens = _legislation_event_token_set(outcome_text)
+    if not outcome_tokens:
+        # No outcome to match against — abstain rather than guess. The
+        # existing journal_default path emits the categorized alert so
+        # the row is still visible.
+        return None
+    scored = []
+    for e in real_time_events:
+        ev_tokens = _legislation_event_token_set(str(e.get("Description") or ""))
+        score = len(outcome_tokens & ev_tokens)
+        scored.append((score, e.get("EventDate") or "", e))
+    # Sort: highest score first, latest EventDate as tie-break.
+    scored.sort(key=lambda triple: (triple[0], triple[1]), reverse=True)
+    best_score = scored[0][0]
+    if best_score == 0:
+        # No token overlap with any candidate — refuse to assign a time.
+        # This is the safety net Codex P1 was concerned about.
+        return None
+    chosen = scored[0][2]
 
     edate_full = str(chosen.get("EventDate"))
     try:
@@ -2451,6 +2525,7 @@ def run_calendar_update():
                     http_session=http_session,
                     bill_num=bill_num,
                     action_date_str=date_str,
+                    outcome_text=outcome_text,
                     session_code_5d=_session_code_5d,
                     acting_chamber_code=acting_chamber_prefix.strip()[:1].upper(),
                     legislation_id_cache=_legislation_id_cache,
