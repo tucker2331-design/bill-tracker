@@ -1,13 +1,64 @@
 ---
 tags: [log, meta]
-updated: 2026-04-24
+updated: 2026-04-26
 ---
 
 # Project Log
 
 Append-only, reverse-chronological (newest at top). Each entry opens with `## [YYYY-MM-DD] <kind> | <title>` so `grep "^## \[" log.md | head -20` gives a parseable timeline.
 
-**Kinds:** `ingest` (new source/doc processed), `pr` (PR opened/merged/closed), `decision` (architectural or workflow), `lint` (wiki health-check pass), `session` (notable multi-hour working block), `post-mortem` (failure analysis).
+**Kinds:** `ingest` (new source/doc processed), `pr` (PR opened/merged/closed), `decision` (architectural or workflow), `lint` (wiki health-check pass), `session` (notable multi-hour working block), `post-mortem` (failure analysis), `milestone` (project-goal threshold crossed).
+
+---
+
+## [2026-04-26] milestone | Meeting actions without times = 0 (first half of CLAUDE.md "done" hit)
+
+Worker run on the PR-C3.1 code (PR #31 head `a2bb618`) reports X-Ray Section 9 = `0 meeting actions without times`. Crossover-week bug count: **9 → 0** in a single PR. The CLAUDE.md "Current Goal" — "every action that happened in a meeting must show the time of that meeting" — is satisfied for the benchmark window.
+
+Bucket math holds with no drift warning: `sourced_api(12,324) + sourced_convene(32,429) + sourced_legislation_event(182) + unsourced_journal(6,553) + floor_anchor_miss(6,571) + dropped_noise(6,696) = 64,755 = total_processed`. LegEvent telemetry: 185 attempted / 182 recovered / 3 abstained (the abstain-on-zero-overlap and wrong-chamber safety nets working as designed). Worker completed normally (~2 min cycle), no recurrence of the Apr 25 hang. Section 7 (Sheet vs LIS time parity): 0 rows missing time in Sheet but with time in LIS. Section 8: 0 system alerts. Ledger Health Check: 428 admin / 0 meeting bugs / 0 unclassified.
+
+**Class-2 collapse — unexpected bonus.** The PR was scoped to fix 4 × Class-1 (parent-committee Schedule API gap on HB111/505/972/609). All 5 × Class-2 subcommittee-attribution bugs (HB24/1266/1372/SB494/SB555) collapsed too — confirmed by inspection of `MEETING_VERB_TOKENS` (`calendar_worker.py:362`): `"subcommittee offered"` and `"recommends continuing"` are in the canonical allowlist, so all Class-2 outcomes pass the PR-C3.1 gate. The LegislationEvent endpoint is keyed by **bill + date + chamber** (not committee), so subcommittee-vs-parent attribution doesn't gate time recovery. PR-C4 (originally scoped for Class-2) is provisionally retired — see [[state/current_status#class-2-collapse-via-legislationevent-pr-c31-side-effect]]. Re-open only if Sheet1 `Committee` column accuracy is later promoted from "informational" to a tracked metric.
+
+**Half remaining.** The other half of the "done" criterion — `unclassified → 0` — is still open. Section 9 reports 157 unclassified actions (REVIEW). Sample inspection: predominantly meta rows (agenda links, "House Convenes", "Immediately upon adjournment of …"). PR-C5 will categorize each into NOISE/ADMIN pattern lists.
+
+---
+
+## [2026-04-26] pr | PR-C3.1 opened as PR #31 — response cache + meeting-verb gate
+
+Branch `claude/pr-c3.1-legislation-event-cached`. Two surgical fixes on the PR-C3 base, both born from the Apr 25 incident post-mortem (entry below):
+
+1. **`_legislation_event_cache`** per-cycle, mirroring the existing `_legislation_id_cache` pattern. Keys are `(bill_num, session_code_5d)`. The endpoint returns the bill's whole event history in one shot, so a single fetch covers every action_date for that bill — eliminates the N+1 fetch that hit the LIS WAF rate-limiter on Apr 25. Negative cache: any failure path stores `[]` so a same-cycle retry storm cannot stack the urllib3 `Retry(total=4, backoff_factor=2)` on top of the rate-limiter. Categorized `push_alert` with `dedup_key` still fires on miss so the failure remains visible.
+2. **Meeting-verb gate** — call site changed from `if origin == "journal_default":` to `if origin == "journal_default" and any(v in outcome_lower for v in MEETING_VERB_TOKENS):`. Reuses the existing canonical allowlist at `calendar_worker.py:362` (already used by the convene-times index and HISTORY-vs-witness reconciliation — single source of truth, NOT a parallel list). Collapses the candidate set from "every journal_default row in the full session window" (thousands of admin actions like Prefiled / Referred / Printed) to actual meeting-verb candidates (the Class-1 + Class-2 patterns).
+
+Codex P1 outcome_text matcher, Codex P2 X-Ray denominator (`sourced_legislation_event` bucket + `legislation_event_attempted/recovered` orthogonal counters), Gemini `isinstance(..., dict)` type-safety guards, and the session-code 3-digit limitation docstring are all preserved unchanged from PR-C3 round-2.
+
+Diff scope: `calendar_worker.py` only. `calendar_xray.py` and `pages/ray2.py` unchanged from PR-C3 round-2 (still diff-identical per CLAUDE.md pre-push #4).
+
+**Tests (13/13 passing on Python 3.9 via `python3 test_pr_c3_helper_v2.py`):** all 11 from PR-C3 round-2 still green (matcher behavior unchanged); two new regression tests prove the cache (`test_pr_c31_event_cache_prevents_refetch`: 2 calls for same bill on different dates → exactly 1 LegislationEvent HTTP request; `test_pr_c31_negative_cache_suppresses_retry_on_failure`: HTTP 500 on first call → second call hits `[]` cache, total fetch attempts = 1).
+
+**Branch ancestry note — revert-of-merge resolved via `-s ours` merge.** PR-C3.1 was branched from the PR-C3 tip (`f5745c4`) to preserve a single review surface. After main reverted PR #30 (commit `246cba5`), the merge-base of branch and main was `f5745c4` and the branch's diff-vs-base diverged opposite-direction from main's diff-vs-base — the canonical revert-of-merge three-way conflict. Two attempts were tried before landing the right one: `git revert 246cba5` was a zero-diff no-op (HEAD already had everything the revert removed) and would not have cleared GitHub's conflict block; `git merge -X ours origin/main` silently un-applied module-level constants (`LEGISLATION_EVENT_HEADERS`) on non-conflict lines and broke the resolver with a NameError. Final fix: `git merge -s ours --no-ff origin/main` (commit `a2bb618`) — the strategy form discards theirs tree entirely while still recording main as a merge parent, shifting the merge-base to `246cba5` and clearing the conflict without force-push. Full mechanical analysis: [[failures/assumptions_audit]] #44.
+
+---
+
+## [2026-04-26] post-mortem | Apr 25 PR#30 worker hang — N+1 fetch + over-broad gate
+
+PR #30 merged 2026-04-25; on the next 15-min worker cycle the GitHub Actions run hung 11+ min vs normal ~2 min and was manually canceled. Reverted on main as commit `246cba5` (the bleed-stop) the same day.
+
+**Root cause #1 — N+1 fetch (dominant cost).** The original `_resolve_via_legislation_event_api` cached `LegislationID` per (bill, session) but NOT the `LegislationEvent` history fetch. The endpoint returns the bill's whole history in one shot, so a single fetch covers every action_date — yet every `journal_default` row in HISTORY.CSV triggered a fresh fetch. With ~3,000 unique bills and likely ~10,000+ journal_default rows across the full session window, the worker issued thousands of redundant HTTP calls. Combined with `urllib3.Retry(total=4, backoff_factor=2)` on 429s, LIS WAF rate-limiting cascaded into 40s+ stalls per affected request.
+
+**Root cause #2 — gate too loose.** `if origin == "journal_default":` fired across the FULL session window (Jan 14 → May 1, NOT the Feb 9-13 investigation window — see `calendar_worker.py:2080`) for thousands of administrative rows ("Prefiled", "Referred to Committee", "Printed") with zero chance of recovering a meeting time. The Class-1 bug pattern is specifically *committee meeting verbs* with no Schedule API entry — orders of magnitude smaller.
+
+**What had been tested and what hadn't.** Standalone unit tests (13/13 pre-merge) covered matcher correctness on the 4 Class-1 + HB1 multi-event cases and the abstain safety nets. They did NOT exercise the gate's selectivity at session scale or the per-cycle HTTP-call count. The reviewer playbook for new fallback paths needs a "candidate-set sizing" check before merge — see [[failures/assumptions_audit]] #42 / #43.
+
+**Remediation.** Both root causes fixed surgically in PR-C3.1 (PR #31 — entry above). Validated by two new regression tests; no force-push, no history rewrite. Audit trail preserved: PR#30 merge → main revert → PR-C3.1 → `-s ours` merge of main → meeting-bug=0 milestone, all visible in linear log.
+
+---
+
+## [2026-04-25] pr | PR-C3 round-2 + PR #30 merged (and reverted same day)
+
+Pushed Codex P1/P2 + Gemini round-1 review fixes on `claude/pr-c3-legislation-event-fallback` (commit `f5745c4`): outcome_text token-overlap matcher with score=0 abstain (Codex P1); `sourced_legislation_event` added to mutually-exclusive `_bucket_sum` plus orthogonal `legislation_event_attempted/recovered` counters in `calendar_xray.py` + `pages/ray2.py` (Codex P2, files diff-identical per CLAUDE.md pre-push #4); `isinstance(raw_json, dict)` guards on both `r.json()` parses (Gemini); LIMITATION docstring on `_normalize_session_code_5d` documenting the 21st-century "20" prefix assumption with upgrade path (Gemini). 11/11 standalone tests passing. Pre-push audit caught a stale `calendar_worker.py:942` line ref in the LIMITATION docstring (actual line was 1233, now 1259); replaced with a search-string anchor that won't rot.
+
+PR #30 merged at `4d398ac`. The very next worker cycle hung 11+ min and was manually canceled — see [post-mortem](#2026-04-26-post-mortem--apr-25-pr30-worker-hang--n1-fetch--over-broad-gate) above. Reverted on main as `246cba5`. Net same-day status: PR-C3 round-2 code returned to a feature branch, awaiting the surgical fix that became PR-C3.1.
 
 ---
 
