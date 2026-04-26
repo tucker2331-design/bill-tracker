@@ -269,14 +269,20 @@ def classify_action(outcome_text: str) -> str:
     Exception: ADMIN_OVERRIDE_PATTERNS are more specific and always win.
     """
     lower = str(outcome_text).lower().strip()
-    # PR-C5: Empty / "None" outcome = LIS Schedule API skeleton row with no
-    # bill action attached (caucuses, convenes, adjournments, recesses).
-    # These are legitimate calendar entries that carry a time but no action
-    # verb because nothing was voted on in the row itself. Classify as
-    # administrative — they don't require people in a room to vote.
-    # Without this guard the substring-match loop returns "unclassified"
-    # for empty strings (no pattern matches "") and inflates Section 9 REVIEW.
-    if not lower or lower == "none":
+    # PR-C5: Empty / "None" / "nan" outcome = LIS Schedule API skeleton row
+    # with no bill action attached (caucuses, convenes, adjournments,
+    # recesses). These are legitimate calendar entries that carry a time
+    # but no action verb because nothing was voted on in the row itself.
+    # Classify as administrative — they don't require people in a room
+    # to vote. Without this guard the substring-match loop returns
+    # "unclassified" for empty strings (no pattern matches "") and
+    # inflates Section 9 REVIEW. "nan" is included for consistency with
+    # the codebase's existing PLACEHOLDER_TIMES + NON_CONCRETE_LIS_TIMES
+    # sets — pandas renders empty Sheets/Excel cells as float NaN, and
+    # str(NaN).lower() == "nan" (Gemini PR-C5 review). Adding "nan" to
+    # ADMINISTRATIVE_PATTERNS would be unsafe (substring matches
+    # "finance") so the exact-match guard here is the right place.
+    if not lower or lower in ("none", "nan"):
         return "administrative"
     # Check admin overrides first — more specific patterns that would otherwise
     # be misclassified by broader meeting patterns
