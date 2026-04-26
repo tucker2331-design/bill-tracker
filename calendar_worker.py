@@ -26,17 +26,6 @@ SPREADSHEET_ID = "1PQDtaTTUeYv781bx4_ZiehcvbEmUt8t7jFmZYJoJGKM"
 API_KEY = "81D70A54-FCDC-4023-A00B-A3FD114D5984"
 HEADERS = {"WebAPIKey": API_KEY, "Accept": "application/json"}
 
-# PR-C3: LegislationEvent / LegislationVersion endpoints reject the legacy
-# WebAPIKey with HTTP 401 — they require the SPA's public key (sourced from
-# https://lis.virginia.gov/handleTitle.js, which is loaded by every public
-# page). Both keys are public; neither alone covers the full API surface.
-# See docs/knowledge/lis_api_reference.md for the full key→endpoint mapping.
-LIS_PUBLIC_API_KEY = "FCE351B6-9BD8-46E0-B18F-5572F4CCA5B9"
-LEGISLATION_EVENT_HEADERS = {
-    "WebAPIKey": LIS_PUBLIC_API_KEY,
-    "Accept": "application/json",
-}
-
 # === INVESTIGATION WINDOW ===
 # Single source of truth lives in investigation_config.py and is imported by
 # both the worker and the X-Ray tool. The strings are parsed to datetime here
@@ -542,270 +531,6 @@ def find_api_schedule_match(api_schedule_map, date_str, event_location, outcome_
             return k
     return None
 
-def _normalize_session_code_5d(active_session):
-    """PR-C3 helper: convert legacy 3-digit '261' to MVC-style '20261'.
-
-    The Schedule / Committee / Session APIs accept either form, but the
-    LegislationEvent / LegislationVersion / AdvancedLegislationSearch
-    endpoints reject the 3-digit form with
-    "Provided Session Code is invalid". Always convert before calling them.
-    Empty / None / non-numeric inputs return "" so callers must guard.
-
-    LIMITATION (Gemini PR-C3 review): the hardcoded "20" prefix assumes
-    21st-century sessions. A legacy 3-digit "941" (1994 Regular) would
-    incorrectly become "20941" — but the only path that reaches this
-    helper with a 3-digit input is the OFFLINE-fallback inside
-    `run_calendar_update()` (search for `ACTIVE_SESSION = "261"`) which
-    fires only when `get_active_session_info()` fails. When the Session API
-    succeeds, ACTIVE_SESSION already arrives in 5-digit form
-    ("20261") from `Session/api/GetSessionListAsync` and this function
-    is a no-op. If we ever need to look up historical (pre-2000)
-    sessions, thread `session_year` from `session_data["start"].year`
-    through this helper.
-    """
-    code = str(active_session or "").strip()
-    if not code or not code.isdigit():
-        return ""
-    if len(code) == 5:
-        return code
-    if len(code) == 3:
-        return f"20{code}"
-    # Anything else is a format we haven't seen; surface as empty so caller
-    # falls through to the existing journal_default path rather than emitting
-    # a malformed API request.
-    return ""
-
-
-def _legislation_event_token_set(text):
-    """Lowercased ≥3-letter alphabetic tokens for description matching.
-
-    Stops emoji, punctuation, single-letter chamber prefixes ("H"/"S"),
-    and small connectors ("by", "of", "to") from inflating the overlap
-    score. Used by `_resolve_via_legislation_event_api` to match the
-    Sheet1 outcome text against the right LegislationEvent when a bill
-    has multiple events on the same date+chamber (Codex PR-C3 P1).
-    """
-    if not text:
-        return set()
-    return {w.lower() for w in re.findall(r'[A-Za-z]{3,}', text)}
-
-
-def _resolve_via_legislation_event_api(
-    http_session, bill_num, action_date_str, outcome_text,
-    session_code_5d, acting_chamber_code, legislation_id_cache, push_alert,
-):
-    """PR-C3: secondary time source via LIS LegislationEvent API.
-
-    Triggered when `find_api_schedule_match()` returned no concrete time —
-    the Class-1 bug pattern is meetings (e.g. House Privileges and Elections
-    on 2026-02-12) where the Schedule API has zero entries for the parent
-    committee but HISTORY shows the bill action. The LegislationEvent API
-    publishes minute-precision `EventDate` for each action even when the
-    Schedule API is silent. Verified against HB111/505/972/609 on Feb 12 →
-    21:02:00 / 21:02:00 / 21:03:00 / 09:24:00 respectively.
-
-    Two-step lookup: bill number → LegislationID (cached per cycle) →
-    event history filtered to `action_date_str`.
-
-    Returns (Time, SortTime, Status) tuple if recovery succeeds; None on
-    miss, parse failure, network error, or API gap. Every failure path
-    emits a categorized `push_alert` per CLAUDE.md Standard #4 — never
-    raises into the caller.
-    """
-    if not session_code_5d:
-        return None
-
-    # Step 1: LegislationID lookup (cached for the cycle — IDs are stable
-    # within a session).
-    cache_key = (bill_num, session_code_5d)
-    legislation_id = legislation_id_cache.get(cache_key)
-    if legislation_id is None:
-        try:
-            r = http_session.get(
-                "https://lis.virginia.gov/LegislationVersion/api/GetLegislationVersionbyBillNumberAsync",
-                headers=LEGISLATION_EVENT_HEADERS,
-                params={"billNumber": bill_num, "sessionCode": session_code_5d},
-                timeout=10,
-            )
-        except Exception as e:
-            push_alert(
-                f"LegislationVersion lookup raised for {bill_num}: {type(e).__name__}: {e}",
-                status="WARN", category="API_FAILURE", severity="WARN",
-                dedup_key=f"legislation_version_exc::{bill_num}",
-            )
-            legislation_id_cache[cache_key] = ""  # negative-cache to avoid retry storms this cycle
-            return None
-        if r.status_code != 200:
-            push_alert(
-                f"LegislationVersion lookup failed for {bill_num}: HTTP {r.status_code}",
-                status="WARN", category="API_FAILURE", severity="WARN",
-                dedup_key=f"legislation_version_http::{bill_num}::{r.status_code}",
-            )
-            legislation_id_cache[cache_key] = ""
-            return None
-        try:
-            raw_json = r.json()
-        except Exception as e:
-            push_alert(
-                f"LegislationVersion JSON parse failed for {bill_num}: {e}",
-                status="WARN", category="DATA_ANOMALY", severity="WARN",
-                dedup_key=f"legislation_version_parse::{bill_num}",
-            )
-            legislation_id_cache[cache_key] = ""
-            return None
-        # Defensive: API contract says dict, but assert before .get() so a
-        # contract change surfaces as a categorized alert, not an
-        # AttributeError (Gemini PR-C3 review).
-        if not isinstance(raw_json, dict):
-            push_alert(
-                f"LegislationVersion returned non-dict JSON for {bill_num}: "
-                f"{type(raw_json).__name__}",
-                status="WARN", category="DATA_ANOMALY", severity="WARN",
-                dedup_key=f"legislation_version_shape::{bill_num}",
-            )
-            legislation_id_cache[cache_key] = ""
-            return None
-        versions = raw_json.get("LegislationsVersion") or []
-        first = versions[0] if versions else None
-        legislation_id = first.get("LegislationID") if isinstance(first, dict) else None
-        legislation_id_cache[cache_key] = legislation_id or ""
-
-    if not legislation_id:
-        return None
-
-    # Step 2: event history.
-    try:
-        r = http_session.get(
-            "https://lis.virginia.gov/LegislationEvent/api/GetPublicLegislationEventHistoryListAsync",
-            headers=LEGISLATION_EVENT_HEADERS,
-            params={"legislationID": legislation_id, "sessionCode": session_code_5d},
-            timeout=10,
-        )
-    except Exception as e:
-        push_alert(
-            f"LegislationEvent fetch raised for {bill_num} (LID={legislation_id}): {type(e).__name__}: {e}",
-            status="WARN", category="API_FAILURE", severity="WARN",
-            dedup_key=f"legislation_event_exc::{bill_num}",
-        )
-        return None
-    if r.status_code != 200:
-        push_alert(
-            f"LegislationEvent fetch failed for {bill_num} (LID={legislation_id}): HTTP {r.status_code}",
-            status="WARN", category="API_FAILURE", severity="WARN",
-            dedup_key=f"legislation_event_http::{bill_num}::{r.status_code}",
-        )
-        return None
-    try:
-        raw_json = r.json()
-    except Exception as e:
-        push_alert(
-            f"LegislationEvent JSON parse failed for {bill_num}: {e}",
-            status="WARN", category="DATA_ANOMALY", severity="WARN",
-            dedup_key=f"legislation_event_parse::{bill_num}",
-        )
-        return None
-    if not isinstance(raw_json, dict):
-        push_alert(
-            f"LegislationEvent returned non-dict JSON for {bill_num}: "
-            f"{type(raw_json).__name__}",
-            status="WARN", category="DATA_ANOMALY", severity="WARN",
-            dedup_key=f"legislation_event_shape::{bill_num}",
-        )
-        return None
-    events = raw_json.get("LegislationEvents") or []
-
-    # Step 3: filter to events on the action date AND the acting chamber
-    # (House actions should not borrow Senate-side timestamps).
-    matching = []
-    for e in events:
-        edate_full = str(e.get("EventDate") or "")
-        if edate_full[:10] != action_date_str:
-            continue
-        # Chamber filter: tolerate empty ChamberCode in the response (some
-        # joint-action events lack it), but reject explicit cross-chamber.
-        ev_chamber = str(e.get("ChamberCode") or "").strip().upper()
-        if acting_chamber_code and ev_chamber and ev_chamber != acting_chamber_code:
-            continue
-        matching.append(e)
-    if not matching:
-        return None
-
-    # Prefer events with a real wall-clock time (skip midnight-only
-    # date-stamps, which encode date-only "filed" actions). Among real-time
-    # events, MATCH the right action — Codex PR-C3 P1 flagged that a bill
-    # may have multiple events in the same chamber on the same date (e.g.
-    # HB1 on 2026-03-03 had a Senate "Constitutional reading dispensed"
-    # at 13:44 and a "Passed by for the day" at 13:45). Picking the latest
-    # would mis-time the earlier action. Score each candidate by token
-    # overlap between the Sheet1 outcome text and the event Description;
-    # tie-break by latest EventDate so the most recent rendering of the
-    # same logical action wins. Score=0 (no token overlap) is treated as
-    # NO confident match → return None and fall through to the existing
-    # journal_default path; the alert there carries the diagnostic_hint
-    # so the human can see what we did and didn't have.
-    real_time_events = [
-        e for e in matching
-        if str(e.get("EventDate") or "")[11:] not in ("", "00:00:00")
-    ]
-    if not real_time_events:
-        return None
-    outcome_tokens = _legislation_event_token_set(outcome_text)
-    if not outcome_tokens:
-        # No outcome to match against — abstain rather than guess. The
-        # existing journal_default path emits the categorized alert so
-        # the row is still visible.
-        return None
-    scored = []
-    for e in real_time_events:
-        ev_tokens = _legislation_event_token_set(str(e.get("Description") or ""))
-        score = len(outcome_tokens & ev_tokens)
-        scored.append((score, e.get("EventDate") or "", e))
-    # Sort: highest score first, latest EventDate as tie-break.
-    scored.sort(key=lambda triple: (triple[0], triple[1]), reverse=True)
-    best_score = scored[0][0]
-    if best_score == 0:
-        # No token overlap with any candidate — refuse to assign a time.
-        # This is the safety net Codex P1 was concerned about.
-        return None
-    chosen = scored[0][2]
-
-    edate_full = str(chosen.get("EventDate"))
-    try:
-        h = int(edate_full[11:13])
-        m = int(edate_full[14:16])
-    except (ValueError, IndexError) as e:
-        push_alert(
-            f"LegislationEvent EventDate parse failed for {bill_num}: "
-            f"{edate_full!r} ({e})",
-            status="WARN", category="DATA_ANOMALY", severity="WARN",
-            dedup_key=f"legislation_event_time_parse::{bill_num}",
-        )
-        return None
-    if not (0 <= h <= 23 and 0 <= m <= 59):
-        push_alert(
-            f"LegislationEvent EventDate out of range for {bill_num}: "
-            f"{edate_full!r} (H={h}, M={m})",
-            status="WARN", category="DATA_ANOMALY", severity="WARN",
-            dedup_key=f"legislation_event_time_range::{bill_num}",
-        )
-        return None
-
-    # 12-hour wall-clock string consistent with Schedule API ScheduleTime.
-    if h == 0:
-        time_12h = f"12:{m:02d} AM"
-    elif h < 12:
-        time_12h = f"{h}:{m:02d} AM"
-    elif h == 12:
-        time_12h = f"12:{m:02d} PM"
-    else:
-        time_12h = f"{h - 12}:{m:02d} PM"
-    sort_time_24h = f"{h:02d}:{m:02d}"
-    # LegislationEvent doesn't carry a cancellation flag on the public
-    # history endpoint — leave Status empty so downstream Status logic
-    # behaves identically to a clean api_schedule resolution.
-    return (time_12h, sort_time_24h, "")
-
-
 def get_armored_session():
     session = requests.Session()
     session.headers.update({'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/120.0.0.0 Safari/537.36'})
@@ -1050,8 +775,7 @@ def run_calendar_update():
         "total_processed": 0,       # actions visited in the main loop
         "sourced_api": 0,           # concrete API-schedule match (and no floor-anchor override)
         "sourced_convene": 0,       # floor action resolved via convene anchor
-        "sourced_legislation_event": 0,  # PR-C3: time recovered via LegislationEvent API fallback
-        "unsourced_journal": 0,     # no schedule, no anchor, no LegislationEvent recovery, non-floor -> NO_SCHEDULE_MATCH
+        "unsourced_journal": 0,     # no schedule, no anchor, non-floor -> NO_SCHEDULE_MATCH
         "floor_anchor_miss": 0,     # Floor action with no convene anchor hit -> NO_CONVENE_ANCHOR
         "dropped_noise": 0,         # positive-noise filter drops (continue at noise filter)
         # Orthogonal tag counters (overlap with the above)
@@ -1082,17 +806,6 @@ def run_calendar_update():
         #     and the L3b prune lag are observable.
         "witness_location_backfills": 0,
         "witness_rows": -1,
-        # PR-C3 telemetry: orthogonal counters for the LegislationEvent
-        # fallback. `legislation_event_attempted` increments every time we
-        # call the fallback (i.e. find_api_schedule_match returned no
-        # concrete time AND the row isn't a Floor action). `..._recovered`
-        # is the subset that actually returned a usable time. The delta
-        # (attempted - recovered) is the row count we still cannot source
-        # from any API (true Class-1 unrecoverable). Independent of the
-        # `sourced_legislation_event` denominator bucket so the bucket
-        # math (sum = total_processed) stays clean.
-        "legislation_event_attempted": 0,
-        "legislation_event_recovered": 0,
     }
 
     def push_system_alert(message, status="ALERT", category=None, severity=None, dedup_key=None):
@@ -1145,11 +858,6 @@ def run_calendar_update():
     _VALID_ORIGINS = {
         "api_schedule", "convene_anchor", "journal_default",
         "floor_miss", "system_alert", "system_metrics",
-        # PR-C3: secondary time source via LegislationEvent API. Used when
-        # the Schedule API has no concrete-time entry for the parent
-        # committee (Class-1 bug class). Treated as a CONCRETE source for
-        # I3 below.
-        "legislation_event",
     }
     _REQUIRED_KEYS = {
         "Date", "Time", "SortTime", "Status", "Committee", "Bill",
@@ -1200,7 +908,7 @@ def run_calendar_update():
         # that combination means the matcher's return value got lost
         # somewhere on the way to the append. Catch it at write time.
         time_val = str(event.get("Time", ""))
-        if origin in {"api_schedule", "convene_anchor", "legislation_event"} and time_val.startswith("\u23f1\ufe0f [NO_"):
+        if origin in {"api_schedule", "convene_anchor"} and time_val.startswith("\u23f1\ufe0f [NO_"):
             source_miss_counts["invariant_violations"] += 1
             push_system_alert(
                 f"I3 time/origin parity violation: Origin='{origin}' but "
@@ -1231,24 +939,13 @@ def run_calendar_update():
     if not session_data:
         print("🚨 CRITICAL: Failed to retrieve active session. Proceeding in OFFLINE mode.")
         push_system_alert("🚨 LIS Session API unavailable. Running in OFFLINE mode; schedule times may be stale from API_Cache.", status="OFFLINE")
-        ACTIVE_SESSION = "261"
+        ACTIVE_SESSION = "261" 
         test_start_date = datetime(2026, 1, 14)
         test_end_date = datetime(2026, 5, 1)
     else:
         ACTIVE_SESSION = session_data["code"]
         test_start_date = session_data["start"]
         test_end_date = session_data["end"]
-
-    # PR-C3 per-cycle state for LegislationEvent fallback. The 5-digit
-    # session code is required by the new MVC endpoints (LegislationEvent
-    # rejects the legacy 3-digit form). The cache is per-cycle because
-    # LegislationID values are stable within a session and we don't want
-    # to re-pay the bill-number → ID hop for every action of the same
-    # bill. Keys are (bill_num, session_code_5d); a cached "" means
-    # "looked up and not found" (negative cache to suppress retry storms
-    # this cycle).
-    _session_code_5d = _normalize_session_code_5d(ACTIVE_SESSION)
-    _legislation_id_cache = {}
 
     # === DYNAMIC COMMITTEE MAPS (Enterprise: rebuilt from API each run) ===
     build_committee_maps(http_session, ACTIVE_SESSION, alert_fn=push_system_alert)
@@ -2509,40 +2206,11 @@ def run_calendar_update():
                             date_str, event_location, acting_chamber_prefix
                         )
 
-            # PR-C3: LegislationEvent API as secondary time source. Fires
-            # ONLY when (a) the Schedule API didn't yield a concrete time
-            # AND (b) the row is not a Floor action (Floor goes through
-            # convene_anchor / floor_miss, not LegislationEvent). This
-            # targets the Class-1 bug pattern: HISTORY records a committee
-            # action but the Schedule API has no parent-committee entry
-            # for the date (verified Feb 12 2026: HB111/505/972 vs P&E,
-            # HB609 vs Finance — all recovered with minute-precision
-            # EventDate). The helper guarantees no exceptions escape and
-            # emits categorized alerts for every failure path.
             if origin == "journal_default":
-                source_miss_counts["legislation_event_attempted"] += 1
-                _le_result = _resolve_via_legislation_event_api(
-                    http_session=http_session,
-                    bill_num=bill_num,
-                    action_date_str=date_str,
-                    outcome_text=outcome_text,
-                    session_code_5d=_session_code_5d,
-                    acting_chamber_code=acting_chamber_prefix.strip()[:1].upper(),
-                    legislation_id_cache=_legislation_id_cache,
-                    push_alert=push_system_alert,
-                )
-                if _le_result is not None:
-                    time_val, sort_time_24h, status = _le_result
-                    origin = "legislation_event"
-                    source_miss_counts["sourced_legislation_event"] += 1
-                    source_miss_counts["legislation_event_recovered"] += 1
-
-            if origin == "journal_default":
-                # No API match, no convene anchor, AND LegislationEvent
-                # had nothing — the historic silent "Journal Entry" default
-                # that PR#22's post-mortem flagged. Replace with a visible
-                # marker and count it. One alert per date+committee+bill
-                # is enough; bulk rows would flood.
+                # No API match and not a floor action — the historic silent
+                # "Journal Entry" default that PR#22's post-mortem flagged.
+                # Replace with a visible marker and count it. One alert per
+                # date+committee+bill is enough; bulk rows would flood.
                 time_val = "⏱️ [NO_SCHEDULE_MATCH]"
                 source_miss_counts["unsourced_journal"] += 1
                 diagnostic_hint = _build_diagnostic_hint(

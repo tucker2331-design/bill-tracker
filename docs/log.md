@@ -11,32 +11,6 @@ Append-only, reverse-chronological (newest at top). Each entry opens with `## [Y
 
 ---
 
-## [2026-04-25] ingest | LIS API surface fully inventoried (developer portal + LegislationEvent verified)
-
-PR-C2.1 was reverted yesterday after headless verification proved the "historical web scraper" premise wrong (no public web source has 2026 data the Schedule API doesn't). Today's deeper investigation surfaced the actual recovery path: the **LegislationEvent API** publishes minute-precision `EventDate` timestamps for every bill action, including the 4 Class-1 bug actions (HB111/505/972/609 on Feb 12) where the Schedule API has zero entries for the parent committee.
-
-**Verification results (read-only probes, single cycle):**
-- HB111 (P&E Feb 12) → `EventDate: 2026-02-12T21:02:00`
-- HB505 (P&E Feb 12) → `EventDate: 2026-02-12T21:02:00`
-- HB972 (P&E Feb 12) → `EventDate: 2026-02-12T21:03:00`
-- HB609 (Finance Feb 12) → `EventDate: 2026-02-12T09:24:00`
-
-All four have recoverable times via `https://lis.virginia.gov/LegislationEvent/api/GetPublicLegislationEventHistoryListAsync?legislationID={id}&sessionCode=20261`.
-
-**Owner correction (mid-investigation): the LIS dev portal at `lis.virginia.gov/developers` lists ALL 31 public API services**. LegislationEvent is not new or hidden. The brain previously documented only 3 (Session/Committee/Schedule), so this knowledge was effectively lost. [[knowledge/lis_api_reference]] now contains the full inventory plus the LegislationEvent + LegislationVersion contracts.
-
-**Three integration gotchas captured in the brain:**
-
-1. **Two distinct public WebAPIKeys.** The legacy worker key (`81D70A54-...`) covers Session/Committee/Schedule but returns 401 on the new MVC endpoints. The SPA's public key from `handleTitle.js` (`FCE351B6-...`) covers everything. Neither alone covers the full API surface.
-2. **Two session-code formats.** Legacy 3-digit `261` works on Schedule/Committee/Session; new MVC endpoints (LegislationEvent, LegislationVersion, AdvancedLegislationSearch, ...) require 5-digit `20261` and reject the legacy form with `"Provided Session Code is invalid"`.
-3. **Two-step bill→ID→events lookup.** `LegislationEvent` requires `legislationID` (not `billNumber`). One extra hop through `LegislationVersion/api/GetLegislationVersionbyBillNumberAsync` resolves it. LegislationID is stable per session — cacheable.
-
-**Next:** PR-C3 — surgical 80-120 line addition in `calendar_worker.py`: `_resolve_via_legislation_event_api(bill_num, action_date)` as fallback in the time-resolution chain (after API_Schedule, before `journal_default`). Targets exactly the 4 Class-1 bugs. Class-2 (subcommittee attribution) remains a separate problem; LegislationEvent's `CommitteeNumber/CommitteeName` are `None` on vote-style events so this API doesn't help that class directly.
-
-## [2026-04-24] pr | PR#29 merged — PR-C2 (gap detection + Schedule_Witness + reconciliation)
-
-Merged into `main` at 17:17 UTC after three rounds of Gemini review (round-1 inline at PR open, round-2 Location/prune/canary patches, round-3 `col_values()` scale-cliff fix). Merge commit `fddfea6`. Final shipped scope: Y1 gap-detection with 7 `gap_cause` classes + WARN/CRITICAL thresholds; `Schedule_Witness` change-feed tab (13 cols, ADDED+CHANGED only, whitelist-iterated `WITNESS_DELTA_FIELDS = (Time, SortTime, Status, Location)`, migration burst guard, retention deferred to L3b Nightly Audit); HISTORY-vs-witness reconciliation with 7-day cap. Zero bug-count delta as expected — observability + data-recovery infrastructure. Counters added to `source_miss_counts`: `gap_minutes`, `gap_cause`, `witness_rows`, `witness_location_backfills`, `reconciliation_blind_dates`, `reconciliation_checked_dates`. Three follow-ups still flagged in [[ideas/future_improvements]]: L3b Nightly Audit (witness retention owner), PR-C2.1 Playwright historical scraper (data-recovery), Notification Routing for `y1_stale` / `gap_reconciliation_oversized` / `gap_critical` CRITICALs. Next: PR-C3 (LegislationEvent API as secondary time source) — first fix-pass that collapses Class 1 bugs.
-
 ## [2026-04-24] pr | PR-C2 round-3 patch — col_values() for reconciliation witness-date index
 
 Single-point fix in response to Gemini round-3 HIGH review of PR #29. Part C reconciliation was reading the `Schedule_Witness` tab via `get_all_values()` to build the prior-cycle `witness_dates` index. Given the 90-day retention target and high cycle frequency, the change-feed can approach Sheets' 10M-cell ceiling, and pulling the entire sheet into memory every cycle is a latent scale cliff that eventually breaks the worker via timeout or memory pressure. Only `meeting_date` is needed for the index. Switched to `col_values(WITNESS_HEADER.index("meeting_date") + 1)` which fetches only that column. Header cell is sliced off via `[1:]`. The existing try/except fallback-to-deltas-only semantics is unchanged, so a col-read failure still degrades gracefully.

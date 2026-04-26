@@ -41,15 +41,14 @@ master_events -> noise filter -> journal collapse -> dedup -> viewport slice -> 
 3. **Hint matching** (derive_room_hints from outcome text like "placed on X agenda") → `Origin=api_schedule`
 4. **Substring matching** (partial name overlap) → `Origin=api_schedule`
 5. **Convene time** (Floor actions inherit chamber convene time) → `Origin=convene_anchor`
-6. **LegislationEvent API fallback** (PR-C3) — non-Floor rows where steps 1-4 found no concrete time hit `_resolve_via_legislation_event_api()`. Two-step LIS lookup (`LegislationVersion` → `LegislationEvent`) returns `EventDate` with minute precision for the bill's action on that date, even when the Schedule API has no entry for the parent committee. → `Origin=legislation_event`. See "Secondary Time Source via LegislationEvent (PR-C3)" below.
-7. **No match** → `Time="⏱️ [NO_SCHEDULE_MATCH]"`, `Origin=journal_default` (or `"⏱️ [NO_CONVENE_ANCHOR]"` / `Origin=floor_miss` for Floor actions that couldn't resolve via convene).
+6. **No match** → `Time="⏱️ [NO_SCHEDULE_MATCH]"`, `Origin=journal_default` (or `"⏱️ [NO_CONVENE_ANCHOR]"` / `Origin=floor_miss` for Floor actions that couldn't resolve via convene).
 
 Every `master_events` row carries an `Origin` column (added in PR-A). This is the provenance field that survives the Journal→Ledger rename so downstream (X-Ray Section 0) can distinguish silent defaults from concrete sources. See [[workflow/source_miss_visibility]].
 
 ## Sheet1 Schema (worker output)
 11 columns: `Date | Time | SortTime | Status | Committee | Bill | Outcome | AgendaOrder | Source | Origin | DiagnosticHint`.
 
-The `Origin` column was added in PR-A. Enumerated values: `api_schedule`, `convene_anchor`, `legislation_event` (PR-C3), `journal_default`, `floor_miss`, `system_alert`, `system_metrics`. One `SYSTEM_METRICS` row per run carries a JSON-encoded snapshot of the source-miss counters (`total_processed`, `sourced_api`, `sourced_convene`, `sourced_legislation_event`, `unsourced_journal`, `unsourced_anchor`, `dropped_ephemeral`, `dropped_noise`, `floor_anchor_miss`, `legislation_event_attempted`, `legislation_event_recovered`). X-Ray Section 0 parses this row to render the denominator.
+The `Origin` column was added in PR-A. Enumerated values: `api_schedule`, `convene_anchor`, `journal_default`, `floor_miss`, `system_alert`, `system_metrics`. One `SYSTEM_METRICS` row per run carries a JSON-encoded snapshot of the source-miss counters (`total_processed`, `sourced_api`, `sourced_convene`, `unsourced_journal`, `unsourced_anchor`, `dropped_ephemeral`, `dropped_noise`, `floor_anchor_miss`). X-Ray Section 0 parses this row to render the denominator.
 
 The `DiagnosticHint` column was added in PR-B. Populated ONLY for rows where `Origin in {journal_default, floor_miss}`; empty string otherwise. Value format: `loc='<bill_locations[bill]>'; api_<date>=[<committee>@<time>; ...]` (nearest-3 same-chamber Schedule API candidates for that date, or `<none>`). Pure measurement — no classification impact. See [[workflow/source_miss_visibility]] and [[failures/gemini_review_patterns]] #37.
 
@@ -70,8 +69,8 @@ enforces four invariants:
 | # | Invariant | Failure mode |
 |---|-----------|--------------|
 | I1 | Schema completeness — all 11 columns present | fill missing with `""`, push `DATA_ANOMALY / CRITICAL` alert |
-| I2 | `Origin` in `{api_schedule, convene_anchor, legislation_event, journal_default, floor_miss, system_alert, system_metrics}` | push `DATA_ANOMALY / CRITICAL` alert (row is not rewritten — downstream must handle visibly) |
-| I3 | Concrete-source Origins (`api_schedule` / `convene_anchor` / `legislation_event`) cannot carry a `⏱️ [NO_*]` Time | push `DATA_ANOMALY / CRITICAL` alert |
+| I2 | `Origin` in `{api_schedule, convene_anchor, journal_default, floor_miss, system_alert, system_metrics}` | push `DATA_ANOMALY / CRITICAL` alert (row is not rewritten — downstream must handle visibly) |
+| I3 | Concrete-source Origins (`api_schedule` / `convene_anchor`) cannot carry a `⏱️ [NO_*]` Time | push `DATA_ANOMALY / CRITICAL` alert |
 | I4 | Telemetry counter `meeting_unsourced` (no invariant) — outcome contains a meeting verb AND Origin is unsourced | increment counter; fed to the circuit breaker |
 
 Rows are NEVER dropped by the chokepoint. Visibility beats silence; the
@@ -320,107 +319,3 @@ The CRITICAL alerts emitted by PR-C2 (`y1_stale`, `gap_reconciliation_oversized`
 (appear as `SYSTEM_ALERT` rows in Sheet1 / Bug_Logs). Owner may later want
 to re-route these through a dedicated dashboard or push channel. See
 [[ideas/future_improvements#Notification Routing (flagged 2026-04-24, PR-C2)]].
-
-## Secondary Time Source via LegislationEvent (PR-C3)
-
-The 4 Class-1 crossover-week bugs (HB111/505/972 → House P&E Feb 12;
-HB609 → House Finance Feb 12) share a single root cause: **the Schedule
-API has no entry for the parent committee on the date the action
-happened**. HISTORY.CSV records the bill action; the Schedule API is
-silent. Until PR-C3, those rows fell through to `Origin=journal_default`
-with `Time="⏱️ [NO_SCHEDULE_MATCH]"`.
-
-### What PR-C3 does
-
-When `find_api_schedule_match()` returns no concrete time AND the row is
-not a Floor action, the worker now calls
-`_resolve_via_legislation_event_api(http_session, bill_num,
-action_date_str, session_code_5d, acting_chamber_code,
-legislation_id_cache, push_alert)` as a final fallback before tagging
-the row `journal_default`. The helper performs a two-step LIS lookup:
-
-1. `LegislationVersion/api/GetLegislationVersionbyBillNumberAsync` —
-   resolve `bill_num` → `LegislationID` (cached per cycle in
-   `_legislation_id_cache`; LegislationIDs are stable within a session).
-2. `LegislationEvent/api/GetPublicLegislationEventHistoryListAsync` —
-   fetch the bill's full action history.
-
-Events are filtered to `EventDate.date() == action_date_str` AND
-`ChamberCode == acting_chamber_code` (House actions cannot borrow
-Senate-side timestamps, and vice versa). Midnight-only timestamps
-(date-only filings) are skipped. Among real-time matches, the latest is
-chosen — when a committee meets and votes on multiple bills, EventDate
-captures per-action timestamps and the latest is the action we want to
-time. The `EventDate` HH:MM is rendered as a 12-hour string consistent
-with `Schedule API ScheduleTime` so downstream sorting and rendering
-behave identically to a clean `api_schedule` resolution.
-
-### Verified outcomes (2026-04-25, against API_261 snapshot)
-
-- HB111 → 9:02 PM (`EventDate: 2026-02-12T21:02:00`)
-- HB505 → 9:02 PM (`EventDate: 2026-02-12T21:02:00`)
-- HB972 → 9:03 PM (`EventDate: 2026-02-12T21:03:00`)
-- HB609 → 9:24 AM (`EventDate: 2026-02-12T09:24:00`)
-
-All four were `journal_default` before PR-C3; all four collapse to
-`Origin=legislation_event` with concrete times after.
-
-### Two integration gotchas (locked in code + comments)
-
-1. **Different API key.** `LegislationEvent` rejects the worker's legacy
-   `WebAPIKey` with HTTP 401. The endpoints use the SPA's public key
-   (`FCE351B6-...` from `lis.virginia.gov/handleTitle.js`), exposed as
-   `LIS_PUBLIC_API_KEY` at module top. Both keys are public; neither
-   alone covers the full LIS API surface. See
-   [[knowledge/lis_api_reference#Two API keys (don't confuse them)]].
-2. **Different session-code format.** New MVC endpoints reject the
-   legacy 3-digit `261` with `"Provided Session Code is invalid"` and
-   require 5-digit `20261`. Conversion happens once per cycle via
-   `_normalize_session_code_5d(ACTIVE_SESSION)` and is cached in
-   `_session_code_5d`.
-
-### Failure semantics (CLAUDE.md Standard #4 compliance)
-
-The helper never raises into the caller. Every failure path emits one
-categorized `push_system_alert` with a stable dedup_key:
-
-| Failure | Category | Severity | dedup_key |
-|---|---|---|---|
-| LegislationVersion HTTP error | API_FAILURE | WARN | `legislation_version_http::<bill>::<status>` |
-| LegislationVersion network exception | API_FAILURE | WARN | `legislation_version_exc::<bill>` |
-| LegislationVersion JSON parse error | DATA_ANOMALY | WARN | `legislation_version_parse::<bill>` |
-| LegislationEvent HTTP error | API_FAILURE | WARN | `legislation_event_http::<bill>::<status>` |
-| LegislationEvent network exception | API_FAILURE | WARN | `legislation_event_exc::<bill>` |
-| LegislationEvent JSON parse error | DATA_ANOMALY | WARN | `legislation_event_parse::<bill>` |
-| EventDate string parse error | DATA_ANOMALY | WARN | `legislation_event_time_parse::<bill>` |
-| EventDate H/M out of valid range | DATA_ANOMALY | WARN | `legislation_event_time_range::<bill>` |
-
-LegislationVersion lookups that return an empty result set (bogus bill
-number) are silently negative-cached as `""` in
-`_legislation_id_cache` so subsequent rows for the same bill skip the
-network round-trip.
-
-### Counter schema additions
-
-- `sourced_legislation_event` — denominator bucket. Increments once per
-  row whose Time was successfully recovered via LegislationEvent. Sums
-  with `sourced_api`, `sourced_convene`, `unsourced_journal`, etc. to
-  `total_processed`.
-- `legislation_event_attempted` — orthogonal tag counter. Number of
-  `journal_default` rows that triggered the fallback call. Useful as
-  the denominator for the "what fraction of would-be journal_default
-  bugs did LegislationEvent rescue?" metric.
-- `legislation_event_recovered` — orthogonal tag counter. Subset that
-  actually got a usable EventDate. The delta
-  (`attempted - recovered`) is the count of rows that remain truly
-  unrecoverable from any API — the genuine source-gap signal.
-
-### What this fix does NOT address
-
-- **Class-2 bugs (HB24/HB1266/HB1372/SB494/SB555 — subcommittee
-  attribution).** LegislationEvent's `CommitteeNumber`/`CommitteeName`
-  fields are `None` on the vote-style events that drive these bugs, so
-  the API gives us TIME but not COMMITTEE for them. Class-2 needs a
-  separate resolver — likely walking `CommitteeLegislationReferral` or
-  tightening `bill_locations` to follow the SUBCOMMITTEE that received
-  the action rather than the parent. Tracked as PR-C4.

@@ -17,25 +17,6 @@
   **Tagged in:** [[architecture/calendar_pipeline#Part B — `Schedule_Witness` change-feed tab]]
   and in code comments at the canary site.
 
-## Witness cache-carryover scope filtering (flagged 2026-04-24, PR-C2 post-merge)
-- [ ] Filter `api_schedule_map` keys to a bounded date window before the
-  `Schedule_Witness` delta diff so historical cache entries outside the
-  active scrape window stop emitting `CHANGED` rows on every cycle.
-  **Context:** First post-merge cycle showed `CHANGED` deltas for cached
-  meetings dated Nov 2025 - Jan 2026 — well outside the Feb 9-13 scrape
-  window. Mechanism: `api_schedule_map` is seeded from ALL `API_Cache`
-  rows at `calendar_worker.py:1221` with no date filter. The live-loop
-  date filter at `:1332` scopes only the *write* side; the delta diff at
-  `:1472` then iterates the FULL map. The `{Location}`-only burst guard
-  correctly suppresses Location-only changes, but any historical entry
-  where SortTime/Status also drifts still emits a `CHANGED` row — noise
-  for meetings the witness isn't responsible for tracking.
-  **Fix:** Filter `api_schedule_map.items()` to keys whose
-  `meeting_date >= scrape_start - <buffer>` immediately before the diff
-  loop. Preserves Part C reconciliation's full witness index (it reads
-  the tab via `col_values()`, independent of this filter).
-  **Tagged in:** [[architecture/calendar_pipeline#Part B — `Schedule_Witness` change-feed tab]]
-
 ## PR-C2.1 — Playwright historical scraper (deferred from PR-C2)
 - [ ] When Part C emits `CONFIRMED BLIND-WINDOW LOSS` for a date, launch a
   Playwright scrape of the LIS Meeting Schedule web page for that
@@ -52,25 +33,6 @@
   - Per-date timeout ≥ 15 seconds. The prior plan's 5s budget is too
     tight for LIS during peak session and produces false-positive
     timeouts on slow historical-database queries.
-
-## API_Cache historical Location backfill (flagged 2026-04-24, PR-C2 post-merge)
-- [ ] Backfill `Location` on `API_Cache` rows that predate the PR-C2
-  schema migration. The migration only writes `F1="Location"` in the
-  header; pre-existing rows stay rectangular via `""` padding from
-  `get_all_records()` and never receive a real Location value.
-  **Context:** Post-merge inspection showed `API_Cache` rows for
-  Nov 2025 - Dec 2025 with `Location=""` while the live LIS API returns
-  real values (Senate Room A, House Chamber, Virtual Meeting, etc.). The
-  witness `{Location}`-only burst guard correctly suppresses the
-  first-cycle backfill noise on the witness, but the cache itself stays
-  empty — every historical row is permanently degraded for downstream
-  consumers (X-Ray, Sheet1 location resolution, future analytics).
-  **Channel:** PR-C2.1's Playwright scraper is the natural backfill path
-  — it already revisits historical schedules for `CONFIRMED BLIND-WINDOW
-  LOSS` time recovery, and Location lives one DOM tier from time on the
-  same page. Folding Location backfill into the same scrape avoids a
-  second pass through LIS for the same dates.
-  **Tagged in:** [[ideas/future_improvements#PR-C2.1 — Playwright historical scraper (deferred from PR-C2)]]
 
 ## Notification Routing (flagged 2026-04-24, PR-C2)
 - [ ] Re-route PR-C2 CRITICAL alerts to a dedicated monitoring channel.
@@ -89,28 +51,6 @@
   in Bug_Logs if alert volume grows. Tagged in
   [[architecture/calendar_pipeline#Part C — Gap-Triggered Reconciliation (PR-C2)]]
   and in code comments on the two alert sites.
-
-## Bug_Logs routing for calendar_worker (flagged 2026-04-24, PR-C2 post-merge)
-- [ ] Wire `calendar_worker.py` to write categorized alerts to the
-  `Bug_Logs` tab (PR-A's `source_miss_counts` denominator buckets,
-  PR-C1's circuit-breaker trips, PR-C2's gap/witness/reconciliation
-  alerts) rather than only routing them through `SYSTEM_ALERT` rows on
-  `Sheet1`.
-  **Context:** Post-merge inspection confirmed the `Bug_Logs` tab is
-  empty for `calendar_worker`. Today, `push_system_alert()` appends to
-  the in-memory `alert_rows` list, which lands as `SYSTEM_ALERT` rows in
-  the cycle's `Sheet1` overwrite. `Sheet1` is rewritten on every cycle —
-  alerts disappear once a healthy cycle ships. `Bug_Logs` exists in the
-  workbook (only `backend_worker.py` writes there).
-  **Why it matters now:** PR-C2's CRITICAL alerts (`y1_stale`,
-  `gap_reconciliation_oversized`, `gap_critical`) deserve durable
-  history per the [[ideas/future_improvements#Notification Routing (flagged 2026-04-24, PR-C2)]]
-  entry above. Bug_Logs routing is a precondition for any future
-  dashboard or push channel consuming those rows, since `Sheet1` is
-  ephemeral while `Bug_Logs` is append-only. Already partially captured
-  under "High Priority (Before v2 Merge)" below; this entry is the
-  concrete post-PR-C2 confirmation that the gap exists and matters.
-  **Tagged in:** [[architecture/calendar_pipeline]]
 
 ## High Priority (Before v2 Merge)
 - [ ] Nightly session/committee discovery bot (Session API + Committee API)
