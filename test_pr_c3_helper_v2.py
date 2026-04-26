@@ -94,10 +94,17 @@ def _capture_alert(message, status="WARN", category="UNKNOWN", severity="WARN", 
     _alerts.append({"message": message, "category": category, "severity": severity, "dedup_key": dedup_key})
 
 
-def _resolve(bill_num, action_date, outcome_text, events, chamber="H"):
-    """Drive the real resolver against an in-memory event payload."""
-    cache = {(bill_num, "20261"): 12345}  # pre-cache LegislationID, skip step 1
-    session = _FakeSession(events)
+def _resolve(bill_num, action_date, outcome_text, events, chamber="H",
+             event_cache=None, session=None):
+    """Drive the real resolver against an in-memory event payload.
+
+    `event_cache` and `session` can be passed in to assert cache reuse
+    across multiple calls for the same bill (PR-C3.1)."""
+    id_cache = {(bill_num, "20261"): 12345}  # pre-cache LegislationID, skip step 1
+    if session is None:
+        session = _FakeSession(events)
+    if event_cache is None:
+        event_cache = {}
     return calendar_worker._resolve_via_legislation_event_api(
         http_session=session,
         bill_num=bill_num,
@@ -105,7 +112,8 @@ def _resolve(bill_num, action_date, outcome_text, events, chamber="H"):
         outcome_text=outcome_text,
         session_code_5d="20261",
         acting_chamber_code=chamber,
-        legislation_id_cache=cache,
+        legislation_id_cache=id_cache,
+        legislation_event_cache=event_cache,
         push_alert=_capture_alert,
     )
 
@@ -218,6 +226,69 @@ def test_wrong_chamber_filtered_out():
     assert result is None, result
 
 
+def test_pr_c31_event_cache_prevents_refetch():
+    """PR-C3.1 N+1 fix: a second call for the same (bill, session) must NOT
+    issue another LegislationEvent HTTP request. This is the regression
+    that caused the Apr 25 worker hang."""
+    events = [
+        {"EventDate": "2026-02-12T21:02:00", "ChamberCode": "H", "Description": "Reported from Privileges and Elections"},
+        {"EventDate": "2026-02-13T10:15:00", "ChamberCode": "H", "Description": "Reported from Privileges and Elections"},
+    ]
+    cache = {}
+    session = _FakeSession(events)
+    # First call — populates cache for both endpoints.
+    r1 = _resolve("HB111", "2026-02-12", "Reported from Privileges and Elections",
+                  events, chamber="H", event_cache=cache, session=session)
+    assert r1 == ("9:02 PM", "21:02", ""), r1
+    legislation_event_calls_after_1 = sum(1 for url, _ in session.calls if "LegislationEvent" in url)
+    # Second call for the SAME bill on a DIFFERENT date — must hit cache.
+    r2 = _resolve("HB111", "2026-02-13", "Reported from Privileges and Elections",
+                  events, chamber="H", event_cache=cache, session=session)
+    assert r2 == ("10:15 AM", "10:15", ""), r2
+    legislation_event_calls_after_2 = sum(1 for url, _ in session.calls if "LegislationEvent" in url)
+    assert legislation_event_calls_after_2 == legislation_event_calls_after_1, (
+        f"Cache breach: LegislationEvent fetched {legislation_event_calls_after_2} times, "
+        f"expected to stay at {legislation_event_calls_after_1} after second call"
+    )
+    assert (("HB111", "20261") in cache), "cache key not populated"
+
+
+def test_pr_c31_negative_cache_suppresses_retry_on_failure():
+    """A failed fetch (HTTP 500) must populate the cache with `[]` so the
+    next row for the same bill doesn't re-attempt and stack retries."""
+    cache = {}
+
+    class _FailingSession:
+        def __init__(self):
+            self.event_call_count = 0
+
+        def get(self, url, **_kw):
+            if "LegislationEvent" in url:
+                self.event_call_count += 1
+                return _FakeResponse({}, status_code=500)
+            return _FakeResponse({"LegislationsVersion": [{"LegislationID": 12345}]})
+
+    session = _FailingSession()
+    r1 = calendar_worker._resolve_via_legislation_event_api(
+        http_session=session, bill_num="HB111", action_date_str="2026-02-12",
+        outcome_text="Reported from Committee", session_code_5d="20261",
+        acting_chamber_code="H", legislation_id_cache={("HB111", "20261"): 12345},
+        legislation_event_cache=cache, push_alert=_capture_alert,
+    )
+    r2 = calendar_worker._resolve_via_legislation_event_api(
+        http_session=session, bill_num="HB111", action_date_str="2026-02-13",
+        outcome_text="Reported from Committee", session_code_5d="20261",
+        acting_chamber_code="H", legislation_id_cache={("HB111", "20261"): 12345},
+        legislation_event_cache=cache, push_alert=_capture_alert,
+    )
+    assert r1 is None and r2 is None
+    assert session.event_call_count == 1, (
+        f"Negative cache breach: fetch attempted {session.event_call_count} times, "
+        "expected exactly 1 (second call should hit `[]` cache)"
+    )
+    assert cache.get(("HB111", "20261")) == []
+
+
 # --- Runner -------------------------------------------------------------
 if __name__ == "__main__":
     tests = [
@@ -232,6 +303,8 @@ if __name__ == "__main__":
         test_empty_outcome_abstains,
         test_midnight_only_events_are_skipped,
         test_wrong_chamber_filtered_out,
+        test_pr_c31_event_cache_prevents_refetch,
+        test_pr_c31_negative_cache_suppresses_retry_on_failure,
     ]
     failed = 0
     for t in tests:

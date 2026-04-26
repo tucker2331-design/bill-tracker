@@ -592,7 +592,8 @@ def _legislation_event_token_set(text):
 
 def _resolve_via_legislation_event_api(
     http_session, bill_num, action_date_str, outcome_text,
-    session_code_5d, acting_chamber_code, legislation_id_cache, push_alert,
+    session_code_5d, acting_chamber_code,
+    legislation_id_cache, legislation_event_cache, push_alert,
 ):
     """PR-C3: secondary time source via LIS LegislationEvent API.
 
@@ -673,46 +674,59 @@ def _resolve_via_legislation_event_api(
     if not legislation_id:
         return None
 
-    # Step 2: event history.
-    try:
-        r = http_session.get(
-            "https://lis.virginia.gov/LegislationEvent/api/GetPublicLegislationEventHistoryListAsync",
-            headers=LEGISLATION_EVENT_HEADERS,
-            params={"legislationID": legislation_id, "sessionCode": session_code_5d},
-            timeout=10,
-        )
-    except Exception as e:
-        push_alert(
-            f"LegislationEvent fetch raised for {bill_num} (LID={legislation_id}): {type(e).__name__}: {e}",
-            status="WARN", category="API_FAILURE", severity="WARN",
-            dedup_key=f"legislation_event_exc::{bill_num}",
-        )
-        return None
-    if r.status_code != 200:
-        push_alert(
-            f"LegislationEvent fetch failed for {bill_num} (LID={legislation_id}): HTTP {r.status_code}",
-            status="WARN", category="API_FAILURE", severity="WARN",
-            dedup_key=f"legislation_event_http::{bill_num}::{r.status_code}",
-        )
-        return None
-    try:
-        raw_json = r.json()
-    except Exception as e:
-        push_alert(
-            f"LegislationEvent JSON parse failed for {bill_num}: {e}",
-            status="WARN", category="DATA_ANOMALY", severity="WARN",
-            dedup_key=f"legislation_event_parse::{bill_num}",
-        )
-        return None
-    if not isinstance(raw_json, dict):
-        push_alert(
-            f"LegislationEvent returned non-dict JSON for {bill_num}: "
-            f"{type(raw_json).__name__}",
-            status="WARN", category="DATA_ANOMALY", severity="WARN",
-            dedup_key=f"legislation_event_shape::{bill_num}",
-        )
-        return None
-    events = raw_json.get("LegislationEvents") or []
+    # Step 2: event history. PR-C3.1: cache the response per (bill,
+    # session) — the endpoint returns the bill's whole history in one
+    # shot, so subsequent journal_default rows for the same bill must
+    # NOT re-fetch. `[]` means "fetched and negative" (either truly
+    # empty or the fetch failed); either way, do not retry this cycle.
+    cache_key = (bill_num, session_code_5d)
+    if cache_key in legislation_event_cache:
+        events = legislation_event_cache[cache_key]
+    else:
+        try:
+            r = http_session.get(
+                "https://lis.virginia.gov/LegislationEvent/api/GetPublicLegislationEventHistoryListAsync",
+                headers=LEGISLATION_EVENT_HEADERS,
+                params={"legislationID": legislation_id, "sessionCode": session_code_5d},
+                timeout=10,
+            )
+        except Exception as e:
+            push_alert(
+                f"LegislationEvent fetch raised for {bill_num} (LID={legislation_id}): {type(e).__name__}: {e}",
+                status="WARN", category="API_FAILURE", severity="WARN",
+                dedup_key=f"legislation_event_exc::{bill_num}",
+            )
+            legislation_event_cache[cache_key] = []
+            return None
+        if r.status_code != 200:
+            push_alert(
+                f"LegislationEvent fetch failed for {bill_num} (LID={legislation_id}): HTTP {r.status_code}",
+                status="WARN", category="API_FAILURE", severity="WARN",
+                dedup_key=f"legislation_event_http::{bill_num}::{r.status_code}",
+            )
+            legislation_event_cache[cache_key] = []
+            return None
+        try:
+            raw_json = r.json()
+        except Exception as e:
+            push_alert(
+                f"LegislationEvent JSON parse failed for {bill_num}: {e}",
+                status="WARN", category="DATA_ANOMALY", severity="WARN",
+                dedup_key=f"legislation_event_parse::{bill_num}",
+            )
+            legislation_event_cache[cache_key] = []
+            return None
+        if not isinstance(raw_json, dict):
+            push_alert(
+                f"LegislationEvent returned non-dict JSON for {bill_num}: "
+                f"{type(raw_json).__name__}",
+                status="WARN", category="DATA_ANOMALY", severity="WARN",
+                dedup_key=f"legislation_event_shape::{bill_num}",
+            )
+            legislation_event_cache[cache_key] = []
+            return None
+        events = raw_json.get("LegislationEvents") or []
+        legislation_event_cache[cache_key] = events
 
     # Step 3: filter to events on the action date AND the acting chamber
     # (House actions should not borrow Senate-side timestamps).
@@ -1249,6 +1263,15 @@ def run_calendar_update():
     # this cycle).
     _session_code_5d = _normalize_session_code_5d(ACTIVE_SESSION)
     _legislation_id_cache = {}
+    # PR-C3.1: per-cycle response cache for the LegislationEvent fetch.
+    # The endpoint returns the bill's FULL event history in one shot, so a
+    # single fetch covers every action_date for that bill. Without this
+    # cache, every journal_default row in HISTORY.CSV (thousands across the
+    # full session window) re-fetched the same payload — that combined
+    # with the urllib3 Retry(total=4, backoff_factor=2) on 429s caused the
+    # Apr 25 worker hang. Negative cache (`[]`) suppresses re-attempt on
+    # a same-cycle failure; categorized alert already fired on the miss.
+    _legislation_event_cache = {}
 
     # === DYNAMIC COMMITTEE MAPS (Enterprise: rebuilt from API each run) ===
     build_committee_maps(http_session, ACTIVE_SESSION, alert_fn=push_system_alert)
@@ -2510,16 +2533,22 @@ def run_calendar_update():
                         )
 
             # PR-C3: LegislationEvent API as secondary time source. Fires
-            # ONLY when (a) the Schedule API didn't yield a concrete time
-            # AND (b) the row is not a Floor action (Floor goes through
-            # convene_anchor / floor_miss, not LegislationEvent). This
-            # targets the Class-1 bug pattern: HISTORY records a committee
-            # action but the Schedule API has no parent-committee entry
-            # for the date (verified Feb 12 2026: HB111/505/972 vs P&E,
-            # HB609 vs Finance — all recovered with minute-precision
-            # EventDate). The helper guarantees no exceptions escape and
-            # emits categorized alerts for every failure path.
-            if origin == "journal_default":
+            # ONLY when (a) the Schedule API didn't yield a concrete time,
+            # (b) the row is not a Floor action (Floor goes through
+            # convene_anchor / floor_miss), AND (c) the outcome carries a
+            # MEETING_VERB_TOKENS verb (PR-C3.1 gate tightening). The
+            # un-tightened gate fired for every journal_default row in the
+            # full session window — thousands of administrative actions
+            # ("Prefiled", "Referred to Committee", "Printed") with zero
+            # chance of recovering a meeting time, all hammering the LIS
+            # WAF and stacking urllib3 retry/backoff. Restricting to
+            # meeting-verb rows collapses the candidate set to the actual
+            # Class-1 pattern. This targets HB111/505/972 vs P&E and
+            # HB609 vs Finance on Feb 12 2026 — all recovered with
+            # minute-precision EventDate. The helper guarantees no
+            # exceptions escape and emits categorized alerts for every
+            # failure path.
+            if origin == "journal_default" and any(v in outcome_lower for v in MEETING_VERB_TOKENS):
                 source_miss_counts["legislation_event_attempted"] += 1
                 _le_result = _resolve_via_legislation_event_api(
                     http_session=http_session,
@@ -2529,6 +2558,7 @@ def run_calendar_update():
                     session_code_5d=_session_code_5d,
                     acting_chamber_code=acting_chamber_prefix.strip()[:1].upper(),
                     legislation_id_cache=_legislation_id_cache,
+                    legislation_event_cache=_legislation_event_cache,
                     push_alert=push_system_alert,
                 )
                 if _le_result is not None:
