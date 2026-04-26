@@ -417,10 +417,21 @@ network round-trip.
 
 ### What this fix does NOT address
 
-- **Class-2 bugs (HB24/HB1266/HB1372/SB494/SB555 — subcommittee
-  attribution).** LegislationEvent's `CommitteeNumber`/`CommitteeName`
-  fields are `None` on the vote-style events that drive these bugs, so
-  the API gives us TIME but not COMMITTEE for them. Class-2 needs a
-  separate resolver — likely walking `CommitteeLegislationReferral` or
-  tightening `bill_locations` to follow the SUBCOMMITTEE that received
-  the action rather than the parent. Tracked as PR-C4.
+- **Sheet1 `Committee` column accuracy for Class-2 rows (subcommittee
+  attribution).** LegislationEvent recovers TIME for HB24/1266/1372 +
+  SB494/555 (the `MEETING_VERB_TOKENS` allowlist at
+  `calendar_worker.py:362` includes `"subcommittee offered"` and
+  `"recommends continuing"`, so all 5 outcomes pass the PR-C3.1 gate;
+  the endpoint is keyed by bill+date+chamber, not committee, so
+  attribution doesn't gate time recovery — that's why the bug count
+  went 9 → 0 in PR-C3.1, see [[log#2026-04-26-milestone--meeting-actions-without-times--0-first-half-of-claudemd-done-hit]]).
+  However, LegislationEvent's `CommitteeNumber`/`CommitteeName` fields
+  are `None` on these vote-style events, so the Sheet1 `Committee`
+  column may still show parent or "Memory Anchor" rather than the
+  actual subcommittee for these rows. **PR-C4 is provisionally retired**
+  because the project's bug-count metric (CLAUDE.md "Current Goal") is
+  meeting actions without times, not committee-name accuracy. Re-open
+  only if Sheet1 `Committee` accuracy is later promoted to a tracked
+  metric — at which point the fix is `CommitteeLegislationReferral`
+  walking or tightening `bill_locations` to follow the subcommittee
+  that received the action.

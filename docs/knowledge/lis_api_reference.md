@@ -59,7 +59,7 @@ PR-C3+)_ are queued for integration.
 | Authentication | (login only) | no | Not for public scraping |
 | Calendar | yes | no | Floor calendar (chamber order-of-business), distinct from committee Schedule |
 | **Committee** | yes | **yes** | `getcommitteelistasync?sessionCode=261` — already integrated |
-| CommitteeLegislationReferral | yes | no | Likely useful for committee-attribution work (PR-C4) |
+| CommitteeLegislationReferral | yes | no | Reserved for future committee-attribution work (PR-C4 retired 2026-04-26 — see [[state/current_status#class-2-collapse-via-legislationevent-pr-c31-side-effect]]; this endpoint becomes the primary tool if Sheet1 `Committee` accuracy is later promoted to a tracked metric) |
 | CommunicationFileGeneration | (generation) | no | |
 | Contact | (admin) | no | |
 | Legislation | yes | no | Bill metadata by ID list |
@@ -138,7 +138,7 @@ PR-C3+)_ are queued for integration.
 - **Both params required** — error message says `"Please provide a LegislationID and a SessionCode"` if either is missing.
 - Returns `{LegislationEvents: [...]}`. Each event:
   - `LegislationEventID` (numeric), `EventCode` (e.g. `H8122` "House committee offered"), `EventDate` (`YYYY-MM-DDTHH:MM:SS` — **minute-precision wall-clock time**), `Description`, `LegislationNumber`, `ChamberCode`, `SessionCode`.
-  - `CommitteeNumber` and `CommitteeName` may be `None` for vote-style events. **Caveat for PR-C4: this endpoint gives us TIME but not always COMMITTEE for the vote-style actions where Class-2 attribution fails.**
+  - `CommitteeNumber` and `CommitteeName` may be `None` for vote-style events. **Caveat (post-PR-C3.1): this endpoint gives us TIME but not always COMMITTEE for the vote-style actions. The TIME recovery alone was sufficient to collapse all 9 crossover-week bugs (Class-1 + Class-2) because the project's accuracy metric is meeting actions without times, not committee-name accuracy. PR-C4 retired 2026-04-26 — see [[state/current_status#class-2-collapse-via-legislationevent-pr-c31-side-effect]].**
   - Reference fields: `ReferenceID`, `ReferenceNumber`, `ReferenceTypeID`, `ReferenceType` (e.g. "Vote"), `ActorType` (e.g. "House"), `LegislationTextID`.
   - `BillHistoryReferences[]` — child array of supporting documents (PDFs, fiscal impact statements).
 - **EventDate is the actual recorded action time.** Verified for the 4 Class-1 bugs:
