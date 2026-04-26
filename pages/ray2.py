@@ -129,6 +129,19 @@ ADMINISTRATIVE_PATTERNS = [
     # because the substring "offered" in the full phrase would otherwise match
     # MEETING_ACTION_PATTERNS). Kept here as the durable classification record.
     "prefiled and ordered printed",
+    # PR-C5: LIS Schedule API skeleton rows. These are committee meetings
+    # / caucuses / agenda links that the Schedule API surfaces with a time
+    # but no bill action verb attached. Their Outcome column carries an
+    # agenda link or an "info" placeholder rather than a vote/report verb.
+    # Routing to administrative because no action happened in the row
+    # itself — the votes (when they happen) are in separate HISTORY rows
+    # the worker correctly attributes. Coverage of the 157 unclassified
+    # rows surfaced by Section 9 on the post-PR-C3.1 worker run:
+    "(view meeting)",            # ~110 rows — the (Agenda) (View Meeting) link family
+    "no agenda listed",          # ~12 rows — LIS placeholder text for press-conf and Time-TBA committees
+    "subcommittee info",         # ~3 rows — Senate Finance sub-rows with bare "Subcommittee Info" outcome
+    "speaker's conference room", # ~3 rows — Capitol Commission Bible Study / Prayer Meeting / Speaker's Devotional
+    "[memory anchor: admin]",    # 1 row + future-proofs any other Memory-Anchor admin tag rows
 ]
 
 
@@ -255,7 +268,16 @@ def classify_action(outcome_text: str) -> str:
     meeting wins — the action happened in a meeting even if it also triggered routing.
     Exception: ADMIN_OVERRIDE_PATTERNS are more specific and always win.
     """
-    lower = str(outcome_text).lower()
+    lower = str(outcome_text).lower().strip()
+    # PR-C5: Empty / "None" outcome = LIS Schedule API skeleton row with no
+    # bill action attached (caucuses, convenes, adjournments, recesses).
+    # These are legitimate calendar entries that carry a time but no action
+    # verb because nothing was voted on in the row itself. Classify as
+    # administrative — they don't require people in a room to vote.
+    # Without this guard the substring-match loop returns "unclassified"
+    # for empty strings (no pattern matches "") and inflates Section 9 REVIEW.
+    if not lower or lower == "none":
+        return "administrative"
     # Check admin overrides first — more specific patterns that would otherwise
     # be misclassified by broader meeting patterns
     if any(p in lower for p in ADMIN_OVERRIDE_PATTERNS):
