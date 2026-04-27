@@ -1,5 +1,34 @@
 # Crossover Week Baseline (Feb 9-13, 2026)
 
+## STATUS — DONE (2026-04-27)
+
+**Both halves of CLAUDE.md "done" criterion HIT for crossover week.**
+
+| Metric | Final | Δ from baseline |
+|---|---:|---:|
+| Meeting actions without times (Section 9 bug count) | **0** ✓ | -1,138 (-100%) |
+| Unclassified actions (Section 9 REVIEW) | **0** ✓ | -731 (-100%) |
+| Meeting actions hiding in Ledger | **0** ✓ | -453 (-100%) |
+| Worker-side `UNKNOWN_ACTION` counter | 1 → **0** (PR #34 in flight) | -1 outlier |
+
+This page is preserved as the historical progress tracker; the live-state page is [[state/current_status]]. The page is closed-loop — no further bug-count updates expected. Reopen only if a regression surfaces in a future worker run, or if the architecture is reworked in a way that invalidates the metric.
+
+**The two PRs that closed it:**
+- [[log#2026-04-26-milestone--meeting-actions-without-times--0-first-half-of-claudemd-done-hit]] — PR-C3.1 (PR #31) collapsed the 9 meeting-bug residue (4 × Class-1 + 5 × Class-2, both via the LegislationEvent fallback's bill+date+chamber keying)
+- [[log#2026-04-27-milestone--both-halves-of-claudemd-done-criterion-hit-for-crossover-week]] — PR-C5 (PR #33) collapsed the 157 unclassified residue (5 substring patterns + empty-outcome guard handling pandas NaN)
+
+**The framework lessons that made it possible** (chronological):
+- [[failures/pr22_post_mortem]] / [[failures/assumptions_audit]] #41 — PR#22 rejected; reclassification PRs require semantic justification, not metric convenience
+- [[workflow/source_miss_visibility]] (PR-A / PR#25) — every source-miss must emit a visible counted signal; no silent defaults
+- [[testing/crossover_audit]] (PR#27) — full-universe ground truth proved the 9-bug count was honest
+- [[failures/assumptions_audit]] #42 / #43 — PR-C3 N+1 + over-broad gate post-mortem; "candidate-set sizing" check added to pre-push audit
+- [[failures/assumptions_audit]] #44 — `git merge -s ours` is the right operation for revert-of-merge feature branches
+- [[failures/assumptions_audit]] #45 — "missing pattern" vs "malformed upstream row" are different failure modes (PR-C5.1)
+
+**What this milestone unlocks:** the investigation window can widen from the Feb 9-13 test value to the full session (Jan 14 → May 1) per [[failures/assumptions_audit]] #5. That is the next strategic move (PR-D series) — see [[state/current_status#next-pr-pr-34-in-flight-above]].
+
+---
+
 ## Why Crossover Week
 Highest concentration of edge cases in the Virginia GA session:
 - ~174 events/week (vs ~80 typical week)
@@ -9,7 +38,7 @@ Highest concentration of edge cases in the Virginia GA session:
 - Conference committees forming
 - Relative time resolution under stress ("upon adjournment of X")
 
-## Current Metrics (as of 2026-04-12, post-PR#16)
+## Historical Metrics (as of 2026-04-12, post-PR#16)
 
 ### X-Ray Section 9 — Action Classification Audit (THE METRIC)
 - Meeting actions WITH times: 10,883
@@ -51,8 +80,10 @@ Highest concentration of edge cases in the Virginia GA session:
 6. **Committee TBA with no sub-panels:** Some committees genuinely have no times anywhere.
 
 ## What "100% Accuracy" Means
-1. Every meeting action (vote, report, reading, recommendation) has the time it happened
-2. Administrative actions (referrals, printing, filing) are in Ledger with no time expectation
-3. Zero unclassified actions (every action type assigned to meeting or administrative)
-4. Ledger Health Check shows zero meeting actions hiding in Ledger
-5. X-Ray Section 9 bug count = 0
+1. Every meeting action (vote, report, reading, recommendation) has the time it happened ✓
+2. Administrative actions (referrals, printing, filing) are in Ledger with no time expectation ✓
+3. Zero unclassified actions (every action type assigned to meeting or administrative) ✓
+4. Ledger Health Check shows zero meeting actions hiding in Ledger ✓
+5. X-Ray Section 9 bug count = 0 ✓
+
+**All 5 satisfied for crossover week as of 2026-04-27.**

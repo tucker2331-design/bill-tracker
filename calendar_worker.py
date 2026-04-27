@@ -2312,7 +2312,49 @@ def run_calendar_update():
             outcome_text = str(row[desc_col]).strip()
             outcome_lower = outcome_text.lower()
             date_str = row['ParsedDate'].strftime('%Y-%m-%d')
-            
+
+            # PR-C5.1: Malformed-row guard. HISTORY.CSV occasionally contains
+            # rows whose History_description is just the chamber prefix ("S "
+            # or "H ") with no verb attached, often paired with an empty
+            # History_refid. Verified case: SB584 on 2026-02-10 carries three
+            # rows — two real ("Senate committee offered" + "Failed to report
+            # …") and one malformed ("S " with empty refid). The malformed
+            # row has no action to classify, so it falls through KNOWN_NOISE
+            # / KNOWN_EVENT into the UNKNOWN_ACTION tag path at line ~2477.
+            # Pre-PR-C5 it landed in Sheet1 as Section 9 unclassified; post
+            # PR-C5 the [memory anchor: admin] pattern routes it to
+            # administrative, but Section 5's UNKNOWN_ACTION counter still
+            # ticked at 1. Adding a NOISE pattern would be unsafe ("s "
+            # substring-matches every "S Foo" Senate row). The right fix is
+            # structural: detect the empty-after-strip case here, emit a
+            # categorized DATA_ANOMALY alert (Zero-Trust visibility), and
+            # drop. Bucketed under dropped_noise because these are upstream
+            # data anomalies with no actionable content; the alert (not the
+            # bucket label) carries the diagnostic distinction.
+            # Gemini/Codex PR-C5.1 review (high/P1): outcome_text is already
+            # `.strip()`-ed at the top of this block, so a raw HISTORY value
+            # of "S " / "H " arrives here as "S" / "H" — startswith("S ") /
+            # startswith("H ") with the trailing space then returns False
+            # and the malformed row would NOT be dropped. The elif branch
+            # catches the post-strip bare-prefix case explicitly.
+            _outcome_remainder = outcome_text
+            if _outcome_remainder.startswith(('H ', 'S ')):
+                _outcome_remainder = _outcome_remainder[2:].strip()
+            elif _outcome_remainder in ('H', 'S'):
+                _outcome_remainder = ""
+            if not _outcome_remainder:
+                _refid = str(row.get(refid_col) or '') if refid_col else ''
+                push_system_alert(
+                    f"Malformed HISTORY row for {bill_num} on {date_str}: empty description after chamber-prefix strip "
+                    f"(raw_desc={outcome_text!r}, refid={_refid!r})",
+                    status="WARN",
+                    category="DATA_ANOMALY",
+                    severity="WARN",
+                    dedup_key=f"history_empty_desc::{bill_num}::{date_str}",
+                )
+                source_miss_counts["dropped_noise"] += 1
+                continue
+
             if outcome_text.startswith('H '): acting_chamber_prefix = "House "
             elif outcome_text.startswith('S '): acting_chamber_prefix = "Senate "
             else: acting_chamber_prefix = "House " if bill_num.startswith('H') else "Senate "
