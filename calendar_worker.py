@@ -2331,9 +2331,17 @@ def run_calendar_update():
             # drop. Bucketed under dropped_noise because these are upstream
             # data anomalies with no actionable content; the alert (not the
             # bucket label) carries the diagnostic distinction.
+            # Gemini/Codex PR-C5.1 review (high/P1): outcome_text is already
+            # `.strip()`-ed at the top of this block, so a raw HISTORY value
+            # of "S " / "H " arrives here as "S" / "H" — startswith("S ") /
+            # startswith("H ") with the trailing space then returns False
+            # and the malformed row would NOT be dropped. The elif branch
+            # catches the post-strip bare-prefix case explicitly.
             _outcome_remainder = outcome_text
-            if _outcome_remainder.startswith('H ') or _outcome_remainder.startswith('S '):
+            if _outcome_remainder.startswith(('H ', 'S ')):
                 _outcome_remainder = _outcome_remainder[2:].strip()
+            elif _outcome_remainder in ('H', 'S'):
+                _outcome_remainder = ""
             if not _outcome_remainder:
                 _refid = str(row.get(refid_col) or '') if refid_col else ''
                 push_system_alert(
