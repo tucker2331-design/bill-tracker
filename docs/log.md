@@ -1,6 +1,6 @@
 ---
 tags: [log, meta]
-updated: 2026-04-26
+updated: 2026-04-27
 ---
 
 # Project Log
@@ -8,6 +8,56 @@ updated: 2026-04-26
 Append-only, reverse-chronological (newest at top). Each entry opens with `## [YYYY-MM-DD] <kind> | <title>` so `grep "^## \[" log.md | head -20` gives a parseable timeline.
 
 **Kinds:** `ingest` (new source/doc processed), `pr` (PR opened/merged/closed), `decision` (architectural or workflow), `lint` (wiki health-check pass), `session` (notable multi-hour working block), `post-mortem` (failure analysis), `milestone` (project-goal threshold crossed).
+
+---
+
+## [2026-04-27] milestone | BOTH halves of CLAUDE.md "done" criterion HIT for crossover week
+
+Worker run on PR-C5 code (PR #33 merged at `313e9a3`) reports X-Ray Section 9 = `0 meeting actions without times` AND `0 unclassified`. Both halves of the CLAUDE.md project goal — `meeting bug count → 0` AND `unclassified → 0` — are simultaneously satisfied for the Feb 9-13 benchmark window. **Crossover week is mathematically verified clean.**
+
+**The math, which is the proof.** Comparing post-PR-C3.1 → post-PR-C5:
+
+| Section 9 row | Before PR-C5 | After PR-C5 | Δ |
+|---|---:|---:|---:|
+| Meeting (with / without / total) | 2,715 / 0 / 2,715 ✓ | 2,715 / 0 / 2,715 ✓ | 0 / 0 / 0 |
+| Administrative (with / without / total) | 1,176 / 431 / 1,607 | 1,312 / 452 / 1,764 | +136 / +21 / +157 |
+| Unclassified (with / without / total) | 136 / 21 / 157 | 0 / 0 / 0 ✓ | −136 / −21 / −157 |
+
+**Exactly** the 157 unclassified rows moved into administrative. Zero misrouted to meeting (no false positives). Zero remain unclassified. The 5 substring patterns (`(view meeting)`, `no agenda listed`, `subcommittee info`, `speaker's conference room`, `[memory anchor: admin]`) plus the empty-outcome guard (`if not lower or lower in ("none", "nan")`) fully covered the bucket — no PR-C5.1 pattern triage needed for the 156 schedule-skeleton rows.
+
+**Other green signals:** Section 7 (Sheet vs LIS time parity) = 0 missing; Section 8 (system alerts) = 0; Ledger Health Check = 428 admin / 0 meeting bugs / 0 unclassified; bucket math holds with no drift warning.
+
+**One residual flagged for PR-C5.1 (this branch):** Section 5's worker-side `UNKNOWN_ACTION (1 row)` counter still ticks. That row is SB584 on 2026-02-10 — **a malformed HISTORY.CSV row** with description `"S "` (chamber prefix + space, no verb) and empty refid. It's an upstream LIS data anomaly, not a missing pattern. PR-C5.1 adds a structural malformed-row guard. See entry below.
+
+**What this milestone unlocks.** The investigation window can now widen from the Feb 9-13 test value to the full session (Jan 14 → May 1) per [[failures/assumptions_audit]] #5's "When to fix: After calendar reaches 100% accuracy". That's the next move (PR-D series). [[architecture/calendar_pipeline]] is proven on the hardest week; the stress-test will prove (or disprove) it at session scale.
+
+---
+
+## [2026-04-27] pr | PR-C5.1 — malformed HISTORY-row guard (SB584 outlier)
+
+Branch `claude/pr-c5.1-sb584-outlier-and-writeback`. One surgical addition to `calendar_worker.py` plus the writeback for the meeting-bug=0 milestone.
+
+**Why this exists.** After PR-C5 (PR #33) cleared Section 9 unclassified to 0, Section 5's worker-side `UNKNOWN_ACTION` counter still showed 1 row. Investigation: the row was SB584 / 2026-02-10 / Senate P&E. Direct fetch of LIS LegislationEvent API showed **two** real events for SB584 that day (`S8122` "Senate committee offered" 11:30, `S0808` "Failed to report from Privileges and Elections with substitute (7-Y 7-N 1-A)" 00:00) — both verbs already match `KNOWN_EVENT_PATTERNS` (`"offered"` and `"failed"`). So the verbs themselves were not the issue. Direct fetch of HISTORY.CSV showed **three** rows for SB584 that day — the two real ones plus a third with description literally `"S "` (chamber prefix + space, no verb) and empty `History_refid`. That malformed row is what the worker tags `UNKNOWN_ACTION`.
+
+**Why a pattern addition would have been wrong.** Adding `"s "` to `KNOWN_NOISE_PATTERNS` would substring-match every "S Foo" Senate row — Zero-Trust violation by means of false-positive noise filtering. The verb-list approach assumes there IS a verb to classify; here there isn't.
+
+**Fix — structural guard at `calendar_worker.py:2316`.** After `outcome_text` is set and chamber prefix detected, strip the leading `H ` / `S ` and check if the remainder is empty. If yes: emit categorized `push_system_alert` (`category="DATA_ANOMALY"`, `severity="WARN"`, `dedup_key=f"history_empty_desc::{bill_num}::{date_str}"` — flooding-safe per CLAUDE.md Standard #4), increment `source_miss_counts["dropped_noise"]` to keep denominator math intact (one bucket added to total_processed), and `continue`. The DATA_ANOMALY alert (not the bucket label) carries the diagnostic distinction; future PR can promote to a dedicated `dropped_malformed` counter if the volume warrants.
+
+**Expected next worker run:** Section 5 `UNKNOWN_ACTION` 1 → 0; Section 9 metrics unchanged; Section 8 may show a one-time WARN row for the SB584 anomaly with the dedup_key. Bucket math still holds: dropped_noise +1, all other buckets identical.
+
+**New page:** [[failures/assumptions_audit]] #45 — captures the lesson that "missing pattern" and "malformed upstream row" are different failure modes and the gate that distinguishes them.
+
+---
+
+## [2026-04-27] pr | PR #33 merged — PR-C5 unclassified pattern triage
+
+Merged into `main` at `313e9a3`. Five substrings added to `ADMINISTRATIVE_PATTERNS` (`(view meeting)`, `no agenda listed`, `subcommittee info`, `speaker's conference room`, `[memory anchor: admin]`); `classify_action()` empty-outcome guard added (`if not lower or lower in ("none", "nan")`). Files mirrored via `cp` to preserve diff-identical contract. Gemini PR review caught one issue mid-flight: the original guard was `lower == "none"` and missed pandas NaN values — fixed by extending to `lower in ("none", "nan")` with comment block documenting why exact-match is the right place (substring `"nan"` would sweep "finance"/"Tennessee"). 14/14 logic spot-check + Gemini review fix. See [[log#2026-04-27-milestone--both-halves-of-claudemd-done-criterion-hit-for-crossover-week]] above for the milestone details and bucket math.
+
+---
+
+## [2026-04-26] pr | PR #32 merged — docs sync recovery + Codex/Gemini review fixes
+
+Merged into `main` at `1b9bfc7` then follow-up `c7838c1`. Recovered the stranded PR-C3.1 writeback commit (`57dfc63`) that was pushed to a now-dead branch after PR #31 merged. Cherry-picked cleanly as `8950c0b` onto a fresh branch from main, then pushed Codex P2 fix (PR #31 row moved out of Open PRs table) and Gemini renumbering (added missing `#41` PR#22 line-level lesson, renumbered my entries to `#42/#43/#44`, updated 4 back-references in lockstep). Net effect: the brain on main is fully synced with the meeting-bug=0 milestone state.
 
 ---
 
