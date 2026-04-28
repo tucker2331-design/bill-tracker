@@ -25,12 +25,12 @@
 - **Runtime check:** System alert pushed when offline mode activates
 - **When to fix:** Before next session starts (Jan 2027)
 
-### 5. scrape_start = Feb 9 (Test Value) — CLOSED 2026-04-28
-- **What it assumed:** We only care about crossover week forward
-- **How it broke:** Missing earlier session data
-- **Runtime check:** N/A — intentional test constraint
-- **When to fix:** After calendar reaches 100% accuracy, set to session start date
-- **Status (2026-04-28):** **CLOSED.** The 100%-accuracy gate was crossed on 2026-04-27 — both halves of the CLAUDE.md "done" criterion (meeting actions without times = 0 AND unclassified = 0) HIT for the Feb 9-13 crossover-week window. See [[log#2026-04-27-milestone--both-halves-of-claudemd-done-criterion-hit-for-crossover-week]]. **PR-C6 / Move 3a (this commit)** widens `investigation_config.py` from `INVESTIGATION_START/END = "2026-02-09" / "2026-02-13"` to `"2026-01-14" / "2026-05-01"` — the full 2026 VA GA session window. ISO date strings preserved; no rolling-now logic introduced (would re-trigger entry #38). This is the stress-test phase: if Section 9's bug count and unclassified count hold at 0 across the full session, the architecture is validated end-to-end and gates v2_shadow_test integration (Move 3b). If new bug classes surface that crossover week didn't expose, triage them as PR-D.1 / D.2 / etc. per the standard PR-C playbook. **This entry is preserved as historical record; do NOT add a new entry — assumption #5 is closed.**
+### 5. scrape_start = Feb 9 (Test Value) — CLOSED 2026-04-28: widened to full session via PR-C6
+- **What it assumed:** Driving bug count to 0 only required the Feb 9-13 crossover-week window (the hardest concentration of edge cases in the VA GA session).
+- **How it broke:** The narrow window deliberately excluded earlier (Jan 14 → Feb 8) and later (Feb 14 → May 1) session data. With the test-value window in place, the bug count was bounded by the crossover window's row volume, not the full session — accuracy outside that window was untested.
+- **Runtime check:** N/A — intentional test constraint while the window was narrow.
+- **Fix (2026-04-28, PR-C6):** widened `investigation_config.py` from `INVESTIGATION_START/END = "2026-02-09" / "2026-02-13"` to `"2026-01-14" / "2026-05-01"` — the full 2026 VA GA session window. ISO date strings preserved; no rolling-now logic introduced (would re-trigger entry #38).
+- **Status (2026-04-28):** **CLOSED.** The 100%-accuracy gate that the original "When to fix" line specified was crossed on 2026-04-27 — both halves of the CLAUDE.md "done" criterion (meeting actions without times = 0 AND unclassified = 0) HIT for the Feb 9-13 crossover-week window. See [[log]] entry `## [2026-04-27] milestone | BOTH halves of CLAUDE.md "done" criterion HIT for crossover week`. PR-C6 then performed the widening this entry promised. The stress-test phase begins on the next worker cycle: if Section 9's bug count and unclassified count hold at 0 across the full session, the architecture is validated end-to-end and gates v2_shadow_test integration (Move 3b). If new bug classes surface that the crossover window didn't expose, triage them as PR-C6.1 / C6.2 / etc. per the standard PR-C playbook (consistent with this PR's series; do NOT branch into a new PR-D series unless an architecturally distinct phase is reached). **This entry is preserved as historical record; do NOT add a new entry — assumption #5 is closed.**
 
 ### 6. Noise Words Negative Filter (Fixed: positive identification)
 - **What it assumed:** We know ALL noise patterns in advance
