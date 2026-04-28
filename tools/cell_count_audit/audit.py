@@ -102,10 +102,16 @@ def main() -> int:
         # If the top sheet alone is more than half the workbook, Option A
         # (shrink that sheet) is likely the right move. Otherwise the
         # workbook is broadly distributed and Option B/C deserve weight.
+        # Codex (P2) review fix on PR-C6.1 / PR #36: reference the actual
+        # dominant worksheet by name, not a hardcoded "Sheet1". The
+        # measurement instrument must not pre-suppose which sheet is
+        # the offender — that would steer PR-C6.2 toward the wrong target
+        # whenever the dominant sheet happens to be (e.g.) API_Cache or
+        # Schedule_Witness.
         if biggest_share > 50.0:
             print(
-                "Distribution: dominated by the top sheet — "
-                "Option A (shrink Sheet1) is the natural first move."
+                f"Distribution: dominated by '{biggest['title']}' — "
+                f"Option A (shrink '{biggest['title']}') is the natural first move."
             )
         else:
             print(
