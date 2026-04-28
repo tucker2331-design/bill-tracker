@@ -134,25 +134,40 @@ def main() -> int:
         return 1
 
     # === Safety check 2: cols 7..col_count empty across all rows ===
+    # Gemini PR-C6.2 review (high): a single get_values() over ~7M cells
+    # can blow past the Google Sheets API ~10MB JSON response cap or
+    # time out mid-stream. Read in CHUNK_SIZE-row batches instead. Each
+    # chunk is at most CHUNK_SIZE rows × 20 padding cols = 1M cells of
+    # mostly-empty strings — comfortably inside the API budget.
     first_extra_letter = col_to_letter(TARGET_COL_COUNT + 1)
     last_extra_letter = col_to_letter(cols_before)
-    extra_range = f"{first_extra_letter}1:{last_extra_letter}{rows_before}"
     extra_col_count = cols_before - TARGET_COL_COUNT
+    CHUNK_SIZE = 50_000
     print(
-        f"[check 2] reading {extra_range} "
-        f"({rows_before:,} rows × {extra_col_count} padding cols, "
-        f"{rows_before * extra_col_count:,} cells)..."
+        f"[check 2] scanning {first_extra_letter}1:{last_extra_letter}{rows_before} "
+        f"({rows_before:,} rows × {extra_col_count} padding cols) "
+        f"in chunks of {CHUNK_SIZE:,} rows..."
     )
-    extra_values = ws.get_values(extra_range)
 
     non_empty: list[tuple[int, int, str]] = []
-    for row_idx, row in enumerate(extra_values, start=1):
-        for col_offset, cell in enumerate(row, start=0):
-            if cell != "":
-                col_idx = TARGET_COL_COUNT + 1 + col_offset
-                non_empty.append((row_idx, col_idx, cell))
-                if len(non_empty) >= NON_EMPTY_REPORT_LIMIT:
-                    break
+    chunks_read = 0
+    for chunk_start in range(1, rows_before + 1, CHUNK_SIZE):
+        chunk_end = min(chunk_start + CHUNK_SIZE - 1, rows_before)
+        chunk_range = (
+            f"{first_extra_letter}{chunk_start}:{last_extra_letter}{chunk_end}"
+        )
+        chunk_values = ws.get_values(chunk_range)
+        chunks_read += 1
+        for r_offset, row in enumerate(chunk_values):
+            for col_offset, cell in enumerate(row):
+                if cell != "":
+                    row_idx = chunk_start + r_offset
+                    col_idx = TARGET_COL_COUNT + 1 + col_offset
+                    non_empty.append((row_idx, col_idx, cell))
+                    if len(non_empty) >= NON_EMPTY_REPORT_LIMIT:
+                        break
+            if len(non_empty) >= NON_EMPTY_REPORT_LIMIT:
+                break
         if len(non_empty) >= NON_EMPTY_REPORT_LIMIT:
             break
 
@@ -173,7 +188,8 @@ def main() -> int:
         return 1
     print(
         f"[check 2] PASSED: all {rows_before * extra_col_count:,} cells "
-        f"in cols {TARGET_COL_COUNT + 1}..{cols_before} are empty."
+        f"in cols {TARGET_COL_COUNT + 1}..{cols_before} are empty "
+        f"({chunks_read} chunk{'s' if chunks_read != 1 else ''} read)."
     )
 
     # === Resize ===
@@ -199,8 +215,12 @@ def main() -> int:
         return 0
 
     print()
-    print(f"LIVE WRITE — calling worksheet.resize(rows={rows_before:,}, cols={TARGET_COL_COUNT})...")
-    ws.resize(rows=rows_before, cols=TARGET_COL_COUNT)
+    # Gemini PR-C6.2 review (medium): omit rows= so a concurrent worker
+    # cycle that appends to API_Cache between the row_count fetch above
+    # and this resize call cannot have its new rows silently truncated.
+    # The goal is only to trim columns; rows are intentionally untouched.
+    print(f"LIVE WRITE — calling worksheet.resize(cols={TARGET_COL_COUNT}) (rows untouched)...")
+    ws.resize(cols=TARGET_COL_COUNT)
     print("Resize call returned cleanly.")
 
     # === Post-resize verification ===
@@ -218,13 +238,23 @@ def main() -> int:
             file=sys.stderr,
         )
         return 1
-    if rows_check != rows_before:
+    # Row growth is fine: a concurrent worker cycle may have appended new
+    # rows between `rows_before` and this verification. Only shrinkage is
+    # a defect (rows= arg was intentionally omitted from resize precisely
+    # to avoid that — see comment above the resize call).
+    if rows_check < rows_before:
         print(
-            f"WARN: row count changed during resize ({rows_before} → {rows_check}). "
-            f"Investigate before next worker cycle.",
+            f"WARN: row count decreased during resize ({rows_before} → {rows_check}). "
+            f"This should be impossible since rows= was not passed to resize. Investigate.",
             file=sys.stderr,
         )
         return 1
+    if rows_check > rows_before:
+        print(
+            f"NOTE: row count grew during script run "
+            f"({rows_before:,} → {rows_check:,}, +{rows_check - rows_before} rows). "
+            f"A concurrent worker cycle appended rows — expected behavior, no action needed."
+        )
     print()
     print(
         f"Reclaimed: {cells_reclaimed:,} cells. "
