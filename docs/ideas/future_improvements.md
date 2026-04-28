@@ -1,5 +1,51 @@
 # Future Improvements
 
+## New-Verb Canary — drift detection at cycle 1 (flagged 2026-04-28, PR-C6 stress test)
+- [ ] Add a startup canary in `calendar_worker.py` that scans HISTORY.CSV
+  outcome strings for verbs not matched by ANY classifier list
+  (`KNOWN_NOISE_PATTERNS`, `KNOWN_EVENT_PATTERNS`, `MEETING_VERB_TOKENS`,
+  `ADMINISTRATIVE_PATTERNS`, `MEETING_ACTION_PATTERNS`,
+  `ADMIN_OVERRIDE_PATTERNS`). For each unknown verb, emit one
+  categorized `push_system_alert(category="DATA_ANOMALY", severity="WARN",
+  dedup_key=f"new_verb::{verb_normalized}")`. Same dedup-by-verb pattern
+  as the PR-C5.1 SB584 malformed-row alert — flooding-safe across cycles.
+  **Why:** the PR-C6 full-session stress test surfaced 997 meeting-bug
+  rows (vs 0 in crossover week) because verbs that appear post-Feb-13
+  (`Reported with amendments`, `Conference report agreed`, etc. — exact
+  list TBD by PR-C6.3 dump) are not in `MEETING_VERB_TOKENS` and so the
+  PR-C3.1 LegislationEvent fallback gate never fires for them. We
+  caught the drift only by running the X-Ray on a wider window — i.e.,
+  when a human happened to look at Section 9. With a canary, the FIRST
+  cycle that processes a new verb emits a visible alert; the next
+  session, or any out-of-distribution edge case in the current session,
+  is caught at cycle 1, not month 1. Cost is negligible (set
+  difference over ~64k strings per cycle, computed once at startup).
+  **Connects to:** [[failures/source_miss_visibility]] — same architecture
+  (every silent fallback emits a categorized counted signal), extended
+  to the verb-list dimension.
+  **Tagged in:** [[failures/assumptions_audit]] #6 (the existing
+  "noise words negative filter" entry already names this risk class).
+
+## Per-state lexicon extraction — `lexicons/va.py` (flagged 2026-04-28, PR-C6 stress test)
+- [ ] Extract every VA-specific pattern list from `calendar_worker.py`
+  and `pages/ray2.py` into a single `lexicons/va.py` module. The
+  pattern lists in scope (currently duplicated across files):
+  `KNOWN_NOISE_PATTERNS`, `KNOWN_EVENT_PATTERNS`, `MEETING_VERB_TOKENS`,
+  `MEETING_ACTION_PATTERNS`, `ADMINISTRATIVE_PATTERNS`,
+  `ADMIN_OVERRIDE_PATTERNS`. The X-Ray and worker today carry partly
+  overlapping copies — drift is silent and only caught by manual diff.
+  **Why now:** PR-C6.3 will add verbs to the worker's
+  `MEETING_VERB_TOKENS` to recover 994 lost meeting times. The X-Ray's
+  `MEETING_ACTION_PATTERNS` has its own list; both need the same edit
+  to stay aligned. A single source of truth eliminates the drift class.
+  **50-state vector:** CLAUDE.md Standard #6 ("every VA-specific pattern
+  must be isolated and swappable") names this — adding state #2 should
+  be `lexicons/<state>.py` plus a config flag, NOT a code fork. Keeping
+  this on the deferred list because it's a refactor with non-trivial
+  blast radius and PR-C6.3/C6.4/C6.5 should land first to stabilize the
+  current verb set before extracting it.
+  **Tagged in:** CLAUDE.md Standard #6.
+
 ## L3b Nightly Audit — Schedule_Witness retention owner (flagged 2026-04-24, PR-C2 round-2)
 - [ ] Implement L3b nightly audit that owns `Schedule_Witness` retention.
   **Context:** PR-C2's original design pruned the witness tab inside the
