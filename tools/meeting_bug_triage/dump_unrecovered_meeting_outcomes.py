@@ -88,6 +88,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import sys
 from collections import Counter
 from datetime import datetime
@@ -97,7 +98,12 @@ from google.oauth2.service_account import Credentials
 
 SPREADSHEET_ID = "1PQDtaTTUeYv781bx4_ZiehcvbEmUt8t7jFmZYJoJGKM"
 TARGET_SHEET = "Sheet1"
-TARGET_COMMITTEE = "Ledger Updates"
+# Codex PR-C6.3 review (P1): the worker writes the unsourced-row collapse
+# label as "📋 Ledger Updates" with the emoji prefix at calendar_worker.py:2772
+# (`final_df.loc[journal_mask, 'Committee'] = '📋 Ledger Updates'`). An exact
+# match against "Ledger Updates" without the emoji would drop every row the
+# script is supposed to count, producing misleading near-zero output.
+TARGET_COMMITTEE = "📋 Ledger Updates"
 SCOPES = ["https://www.googleapis.com/auth/spreadsheets.readonly"]
 OUTCOME_TOP_N = 50
 VERB_PREFIX_LEN = 60
@@ -105,6 +111,29 @@ VERB_PREFIX_LEN = 60
 # Investigation window — single source of truth at the repo root.
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 from investigation_config import INVESTIGATION_START, INVESTIGATION_END  # noqa: E402
+
+# Gemini PR-C6.3 review (medium): parse the window once at module load,
+# not inside in_window() which fires per row. Saves ~70k strptime calls
+# per worker-output run.
+INVESTIGATION_START_DATE = datetime.strptime(INVESTIGATION_START, "%Y-%m-%d").date()
+INVESTIGATION_END_DATE = datetime.strptime(INVESTIGATION_END, "%Y-%m-%d").date()
+
+# Self-audit (PR-C6.3 review pass): the worker prepends diagnostic tags
+# like "⚠️ [COMMITTEE_DRIFT: ...]" and "[Memory Anchor: admin]" to
+# Outcome strings before write. Without stripping these, Section 3's
+# verb-prefix counts fragment — the same underlying verb across
+# different tag combinations becomes multiple prefixes with low counts
+# each, which obscures the gate-excluded surface PR-C7 is sized against.
+#
+# Match: optional leading non-word / non-whitespace / NON-BRACKET prefix
+# (emoji glyphs + variation selectors) and zero-or-more bracketed tags.
+# CRITICAL: the leading-symbol class MUST exclude `[` and `]` — otherwise
+# the symbol class greedily eats the opening bracket of a tag (e.g.
+# "[Memory Anchor: admin] ..." → leading group matches `[`, bracket group
+# then has nothing to match, tag survives in the verb prefix and
+# fragments the count). Caught by the self-audit test on
+# "[Memory Anchor: admin] H Assigned to subcommittee".
+DIAGNOSTIC_TAG_PATTERN = re.compile(r"^(?:[^\w\s\[\]]+\s*)?(?:\[[^\]]*\]\s*)*")
 
 # === Pattern lists duplicated from pages/ray2.py (X-Ray classifier) ===
 # Source: pages/ray2.py:37-42, 70-145, 255-261 (as of 2026-04-28).
@@ -239,14 +268,16 @@ def in_window(date_str: str) -> bool:
         d = datetime.strptime(s, "%Y-%m-%d").date()
     except ValueError:
         return False
-    start = datetime.strptime(INVESTIGATION_START, "%Y-%m-%d").date()
-    end = datetime.strptime(INVESTIGATION_END, "%Y-%m-%d").date()
-    return start <= d <= end
+    return INVESTIGATION_START_DATE <= d <= INVESTIGATION_END_DATE
 
 
 def extract_verb_prefix(outcome: str) -> str:
-    """Strip leading 'H ' / 'S ' chamber prefix; lowercase; truncate."""
-    s = str(outcome).strip()
+    """Strip diagnostic tags + leading 'H ' / 'S ' chamber prefix; lowercase; truncate.
+
+    Order matters: strip tags FIRST so the chamber-prefix check sees the
+    actual verb prefix rather than the emoji/bracket.
+    """
+    s = DIAGNOSTIC_TAG_PATTERN.sub("", str(outcome).strip()).strip()
     if s[:2] in ("H ", "S "):
         s = s[2:].lstrip()
     return s.lower()[:VERB_PREFIX_LEN]
