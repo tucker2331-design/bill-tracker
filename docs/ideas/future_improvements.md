@@ -1,30 +1,70 @@
 # Future Improvements
 
-## New-Verb Canary — drift detection at cycle 1 (flagged 2026-04-28, PR-C6 stress test)
-- [ ] Add a startup canary in `calendar_worker.py` that scans HISTORY.CSV
-  outcome strings for verbs not matched by ANY classifier list
+## ~~New-Verb Canary — drift detection at cycle 1~~ (REJECTED 2026-04-28)
+- ❌ **REJECTED by owner 2026-04-28** as a band-aid that creates
+  perpetual manual engineering debt. The end state still required a
+  developer to hardcode each new verb into a lexicon file — unscalable
+  to 50 states and to vocabulary drift within VA. A canary that fires
+  visibility events at cycle 1 only shortens the time-to-detection;
+  it does not change the response shape, which remains "human reads
+  alert, human writes code." Replaced by the structural-classifier
+  direction below. Audit trail preserved here so the rationale is
+  not lost on next read.
+
+## Structural classifier as source of truth — LegislationEvent over text patterns (flagged 2026-04-28, supersedes "New-Verb Canary")
+- [ ] **The architectural pivot.** Replace the text-pattern verb gate
+  with structural data from the LIS LegislationEvent API as the
+  classifier of record. The text-pattern architecture
   (`KNOWN_NOISE_PATTERNS`, `KNOWN_EVENT_PATTERNS`, `MEETING_VERB_TOKENS`,
-  `ADMINISTRATIVE_PATTERNS`, `MEETING_ACTION_PATTERNS`,
-  `ADMIN_OVERRIDE_PATTERNS`). For each unknown verb, emit one
-  categorized `push_system_alert(category="DATA_ANOMALY", severity="WARN",
-  dedup_key=f"new_verb::{verb_normalized}")`. Same dedup-by-verb pattern
-  as the PR-C5.1 SB584 malformed-row alert — flooding-safe across cycles.
-  **Why:** the PR-C6 full-session stress test surfaced 997 meeting-bug
-  rows (vs 0 in crossover week) because verbs that appear post-Feb-13
-  (`Reported with amendments`, `Conference report agreed`, etc. — exact
-  list TBD by PR-C6.3 dump) are not in `MEETING_VERB_TOKENS` and so the
-  PR-C3.1 LegislationEvent fallback gate never fires for them. We
-  caught the drift only by running the X-Ray on a wider window — i.e.,
-  when a human happened to look at Section 9. With a canary, the FIRST
-  cycle that processes a new verb emits a visible alert; the next
-  session, or any out-of-distribution edge case in the current session,
-  is caught at cycle 1, not month 1. Cost is negligible (set
-  difference over ~64k strings per cycle, computed once at startup).
-  **Connects to:** [[failures/source_miss_visibility]] — same architecture
-  (every silent fallback emits a categorized counted signal), extended
-  to the verb-list dimension.
-  **Tagged in:** [[failures/assumptions_audit]] #6 (the existing
-  "noise words negative filter" entry already names this risk class).
+  `MEETING_ACTION_PATTERNS`, `ADMINISTRATIVE_PATTERNS`,
+  `ADMIN_OVERRIDE_PATTERNS`) doesn't scale: each new verb, each new
+  session, each new state requires a hand-edit to a hardcoded list.
+  The PR-C6 full-session stress test surfaced 997 meeting bugs
+  precisely because new vocabulary entered HISTORY.CSV between the
+  Feb 9-13 crossover sample and the rest of the session.
+  **Why structural wins:** every state's bill-tracking system exposes
+  SOME structured event API (VA's LegislationEvent, Congress.gov bulk
+  data, NCSL state-legislatures aggregator). The structural API tells
+  us WHAT happened — vote, report, reading, referral — without us
+  parsing free-form text. Use it as the classifier of record; text
+  patterns become a last-resort fallback for rows the structural data
+  doesn't cover.
+  **Concrete code move for VA (PR-C6.3 alternative direction):**
+    1. Remove the `MEETING_VERB_TOKENS` gate from the LegislationEvent
+       fallback at `calendar_worker.py:2522`. Today, a row only attempts
+       LegEvent recovery if its outcome contains a verb in the allowlist
+       — that is the verb-list dependency we are escaping.
+    2. Add a persistent cross-cycle LegEvent cache (keyed by
+       `(bill, session)`, persisted between worker runs in a sibling
+       sheet or a small SQLite blob). The endpoint returns the bill's
+       whole event history in one call, so a cache hit is a free
+       in-memory lookup. Cost stays bounded as the cache fills.
+    3. With #1 and #2 in place, ANY `journal_default` row attempts
+       LegEvent recovery; matching events backfill time/committee.
+       The 994 meeting bugs from the PR-C6 stress test should collapse
+       without adding a single line to `MEETING_VERB_TOKENS`.
+    4. The remaining tail (LegEvent has no matching event for the row)
+       lands in a residual `unsourced_no_legevent` bucket — visible,
+       counted, far smaller surface than the current verb-list
+       maintenance burden.
+  **Risk to manage:** PR-C3 (PR #30) hung the worker on N+1 LegEvent
+  fetches against the LIS WAF — the original sin that drove the
+  per-cycle cache in PR-C3.1 ([[failures/assumptions_audit]] #42).
+  Going from "verb-gated" to "all journal_default rows fire LegEvent"
+  enlarges the candidate set by ~15× per cycle. The per-cycle cache
+  alone may not be enough; the cross-cycle cache (item #2 above) is
+  what makes the move safe. Pre-merge audit MUST size
+  `unique_bills_in_journal_default × expected_calls_per_bill` against
+  the LIS WAF rate-limiter before shipping.
+  **For 50 states:** each new state plugs in ONE structural-event
+  adapter that normalizes its API response into a shared internal
+  schema `(bill, date, chamber, action_type)`. The text pattern lists
+  get archived as the VA-only fallback they already are. No more
+  per-clerk verb maintenance.
+  **Connects to:** [[failures/assumptions_audit]] #6 (Noise Words
+  Negative Filter — names this risk class); CLAUDE.md Standard #6
+  (50-state isolation); CLAUDE.md Standard #3 (data-driven, not
+  text-driven — structural identifiers over text parsing).
 
 ## Per-state lexicon extraction — `lexicons/va.py` (flagged 2026-04-28, PR-C6 stress test)
 - [ ] Extract every VA-specific pattern list from `calendar_worker.py`
