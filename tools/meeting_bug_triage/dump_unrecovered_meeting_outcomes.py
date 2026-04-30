@@ -18,9 +18,29 @@ readings) that fell through the worker's classification path because:
      placeholder time. Per CLAUDE.md Standard #4 the row is visible
      (PR-A source-miss visibility), but the time is not recovered.
 
-To fix: identify which meeting verbs the worker is missing and add
-them to `MEETING_VERB_TOKENS`. This script produces the verb dump
-that PR-C6.3 (the actual fix) will be scoped against.
+Role of this script (revised 2026-04-28)
+----------------------------------------
+The owner rejected the original "add verbs to MEETING_VERB_TOKENS"
+remediation as a band-aid that doesn't scale to 50 states. The
+strategic pivot (see docs/ideas/future_improvements.md, "Structural
+classifier as source of truth — LegislationEvent over text patterns")
+removes the verb-list dependency entirely by dropping the
+MEETING_VERB_TOKENS gate at calendar_worker.py:2522 and letting every
+journal_default row attempt LegEvent recovery (gated only by a
+cross-cycle persistent cache that keeps cost bounded).
+
+Under that pivot, this script's role changes from "scope the verb-list
+edit" to "**verify the structural pivot's coverage**":
+
+  - BEFORE PR-C7 ships: this script's Section 2 quantifies how many
+    meeting-bug rows would MOVE from gate-excluded to gate-included
+    if the gate is removed (today's verb-list coverage gap = the
+    ceiling on the structural pivot's recovery surface).
+  - AFTER PR-C7 ships: re-run this script. The bug count in Section 1
+    should collapse toward 0. If it doesn't, the residual rows
+    represent the LegEvent coverage tail (bills/dates/chambers the
+    LIS structured event log doesn't have), which is the next layer
+    to triage.
 
 Method
 ------
@@ -38,16 +58,24 @@ Three sections:
   1. Top N unique outcomes (where N = OUTCOME_TOP_N) by row count,
      among Sheet1 rows where Committee="Ledger Updates", Time is a
      placeholder, and classify_action(Outcome)=="meeting". This is
-     the raw bug distribution.
+     the raw bug distribution. **Pre-PR-C7: large. Post-PR-C7: should
+     collapse toward 0.**
 
   2. Verb-coverage analysis. For each of those outcomes, extract the
      verb prefix (first VERB_PREFIX_LEN chars, lowercased, normalized)
      and check whether ANY substring in `MEETING_VERB_TOKENS` matches
-     it. Outcomes where NO worker token matches are the actionable
-     additions for PR-C6.3.
+     it. **Pre-PR-C7:** rows where NO token matches are the
+     gate-excluded set the structural pivot will newly admit.
+     **Post-PR-C7:** the gate is gone; this section becomes a
+     historical artifact and the covered/uncovered split is a
+     diagnostic of which rows the *old* gate would have caught.
 
-  3. Suggested additions to `MEETING_VERB_TOKENS`, deduplicated by
-     verb prefix and ordered by aggregate row count. Copy-paste-ready.
+  3. Verbs currently excluded by the `MEETING_VERB_TOKENS` gate,
+     ranked by row count. **Pre-PR-C7:** these verbs become
+     LegEvent candidates the moment the gate is removed; they are
+     the structural pivot's expected recovery surface. **Post-PR-C7:**
+     this section enumerates the verbs the structural pivot picked
+     up that the verb-list approach would have required hand-editing.
 
 Read-only by construction
 -------------------------
@@ -330,15 +358,22 @@ def main() -> int:
         )
         return 0
 
-    # === Section 3: suggested additions, ranked by impact ===
-    print("=== Suggested MEETING_VERB_TOKENS additions (ranked by impact) ===")
+    # === Section 3: gate-excluded verbs (PR-C7 recovery surface) ===
+    print("=== Verbs currently excluded by the MEETING_VERB_TOKENS gate ===")
     print()
     print("Each line is a unique verb prefix from a bug row whose outcome")
-    print("does not match any current MEETING_VERB_TOKENS entry. The")
-    print("`bug_rows` column is the count of rows whose verb prefix")
-    print("starts with this string. Pick the smallest substring that")
-    print("uniquely identifies the meeting verb without matching any")
-    print("admin pattern in ADMINISTRATIVE_PATTERNS.")
+    print("does NOT match any current MEETING_VERB_TOKENS entry, so the")
+    print("PR-C3.1 LegislationEvent fallback gate at calendar_worker.py:2522")
+    print("never fires for it today.")
+    print()
+    print("Pre-PR-C7 reading: these are the verbs the structural pivot")
+    print("(remove the gate; let every journal_default row attempt LegEvent")
+    print("via a cross-cycle persistent cache) will newly admit. The total")
+    print("`bug_rows` count is the upper bound on PR-C7's recovery surface.")
+    print()
+    print("Post-PR-C7 reading: the gate is gone; this section enumerates")
+    print("the verbs the structural pivot picked up that the verb-list")
+    print("approach would have required hand-editing one by one.")
     print()
     print(f"  {'bug_rows':>9}  prefix")
     print(f"  {'─' * 9}  {'─' * 60}")
