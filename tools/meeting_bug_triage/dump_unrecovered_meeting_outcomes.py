@@ -338,9 +338,18 @@ def main() -> int:
         f"Column indices: " + ", ".join(f"{c}={col_idx[c]}" for c in required_cols)
     )
 
-    def _cell(row: list[str], col: str) -> str:
-        i = col_idx[col]
-        return row[i] if i < len(row) else ""
+    # Gemini PR-C6.3.1 review (medium): pull the column indices into
+    # locals once instead of going through a `_cell()` helper that
+    # re-does the dict lookup + function-call overhead per cell on
+    # every one of the 35k+ rows. Same locality-of-work principle as
+    # the strptime pre-parse for INVESTIGATION_*_DATE above. Inlining
+    # the bounds check keeps the defense against gspread row-trim
+    # behavior (some versions truncate trailing empty cells per row).
+    idx_date = col_idx["Date"]
+    idx_comm = col_idx["Committee"]
+    idx_time = col_idx["Time"]
+    idx_outcome = col_idx["Outcome"]
+    idx_bill = col_idx["Bill"]
 
     in_window_count = 0
     ledger_count = 0
@@ -348,23 +357,30 @@ def main() -> int:
     bugs: list[dict] = []
     classification_counter: Counter[str] = Counter()
     for r in data_rows:
-        if not in_window(_cell(r, "Date")):
+        row_len = len(r)
+        val_date = r[idx_date] if idx_date < row_len else ""
+        if not in_window(val_date):
             continue
         in_window_count += 1
-        if _cell(r, "Committee").strip() != TARGET_COMMITTEE:
+
+        val_comm = r[idx_comm] if idx_comm < row_len else ""
+        if val_comm.strip() != TARGET_COMMITTEE:
             continue
         ledger_count += 1
-        if normalize_time(_cell(r, "Time")) not in PLACEHOLDER_TIMES:
+
+        val_time = r[idx_time] if idx_time < row_len else ""
+        if normalize_time(val_time) not in PLACEHOLDER_TIMES:
             continue
         placeholder_count += 1
-        outcome = _cell(r, "Outcome")
+
+        outcome = r[idx_outcome] if idx_outcome < row_len else ""
         cls = classify_action(outcome)
         classification_counter[cls] += 1
         if cls == "meeting":
             bugs.append(
                 {
-                    "date": _cell(r, "Date"),
-                    "bill": _cell(r, "Bill"),
+                    "date": val_date,
+                    "bill": r[idx_bill] if idx_bill < row_len else "",
                     "outcome": outcome,
                 }
             )
