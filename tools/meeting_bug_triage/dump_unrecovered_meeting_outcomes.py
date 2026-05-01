@@ -302,32 +302,85 @@ def main() -> int:
     print(f"Filter:          Committee=='{TARGET_COMMITTEE}' AND Time in PLACEHOLDER_TIMES")
     print()
 
-    rows = ws.get_all_records()
-    print(f"Loaded {len(rows):,} rows from {TARGET_SHEET}.")
+    # Use get_all_values() instead of get_all_records() because Sheet1's
+    # worksheet has 26 allocated cols but only ~12 schema cols, so row 1
+    # is [Date, Time, ..., DiagnosticHint, "", "", ...] — gspread's
+    # get_all_records() rejects sheets with duplicate header values
+    # (multiple "" cells parse as identical keys, raising
+    # GSpreadException). Build the column-index map ourselves from the
+    # non-empty header cells instead. Caught at runtime in PR-C6.3 first
+    # production run; the underlying schema bloat (Sheet1 over-allocated
+    # to 26 cols when it should be ~12) is the same class of problem
+    # PR-C6.2 fixed for API_Cache and is a candidate for a future
+    # Sheet1-trim PR — but that touches the production worker's write
+    # path so it's out of scope here.
+    all_values = ws.get_all_values()
+    if not all_values:
+        print("ERROR: Sheet1 is empty.", file=sys.stderr)
+        return 1
+
+    header = all_values[0]
+    required_cols = ["Date", "Committee", "Time", "Outcome", "Bill"]
+    col_idx: dict[str, int] = {}
+    for col in required_cols:
+        if col not in header:
+            print(
+                f"ERROR: required column {col!r} not found in Sheet1 header. "
+                f"Available cols: {[h for h in header if h]}",
+                file=sys.stderr,
+            )
+            return 1
+        col_idx[col] = header.index(col)
+
+    data_rows = all_values[1:]
+    print(f"Loaded {len(data_rows):,} data rows from {TARGET_SHEET}.")
+    print(
+        f"Column indices: " + ", ".join(f"{c}={col_idx[c]}" for c in required_cols)
+    )
+
+    # Gemini PR-C6.3.1 review (medium): pull the column indices into
+    # locals once instead of going through a `_cell()` helper that
+    # re-does the dict lookup + function-call overhead per cell on
+    # every one of the 35k+ rows. Same locality-of-work principle as
+    # the strptime pre-parse for INVESTIGATION_*_DATE above. Inlining
+    # the bounds check keeps the defense against gspread row-trim
+    # behavior (some versions truncate trailing empty cells per row).
+    idx_date = col_idx["Date"]
+    idx_comm = col_idx["Committee"]
+    idx_time = col_idx["Time"]
+    idx_outcome = col_idx["Outcome"]
+    idx_bill = col_idx["Bill"]
 
     in_window_count = 0
     ledger_count = 0
     placeholder_count = 0
     bugs: list[dict] = []
     classification_counter: Counter[str] = Counter()
-    for r in rows:
-        if not in_window(r.get("Date", "")):
+    for r in data_rows:
+        row_len = len(r)
+        val_date = r[idx_date] if idx_date < row_len else ""
+        if not in_window(val_date):
             continue
         in_window_count += 1
-        if str(r.get("Committee", "")).strip() != TARGET_COMMITTEE:
+
+        val_comm = r[idx_comm] if idx_comm < row_len else ""
+        if val_comm.strip() != TARGET_COMMITTEE:
             continue
         ledger_count += 1
-        if normalize_time(r.get("Time", "")) not in PLACEHOLDER_TIMES:
+
+        val_time = r[idx_time] if idx_time < row_len else ""
+        if normalize_time(val_time) not in PLACEHOLDER_TIMES:
             continue
         placeholder_count += 1
-        outcome = str(r.get("Outcome", "") or "")
+
+        outcome = r[idx_outcome] if idx_outcome < row_len else ""
         cls = classify_action(outcome)
         classification_counter[cls] += 1
         if cls == "meeting":
             bugs.append(
                 {
-                    "date": str(r.get("Date", "")),
-                    "bill": str(r.get("Bill", "")),
+                    "date": val_date,
+                    "bill": r[idx_bill] if idx_bill < row_len else "",
                     "outcome": outcome,
                 }
             )
