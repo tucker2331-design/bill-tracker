@@ -60,6 +60,7 @@ from collections import Counter
 from datetime import datetime
 
 import gspread
+import pandas as pd
 from google.oauth2.service_account import Credentials
 
 SPREADSHEET_ID = "1PQDtaTTUeYv781bx4_ZiehcvbEmUt8t7jFmZYJoJGKM"
@@ -127,9 +128,17 @@ def in_window(date_str: str) -> bool:
     s = str(date_str or "").strip()
     if not s:
         return False
+    # Gemini PR-C6.4 review (high): strptime("%Y-%m-%d") is brittle if
+    # someone changes the Sheet's Date column formatting in the Google
+    # Sheets UI (e.g., to "M/D/YYYY"). The Date column today is
+    # machine-written by calendar_worker.py so the risk is mostly
+    # theoretical, but pd.to_datetime is more permissive at near-zero
+    # cost in a one-shot diagnostic. Empty-string short-circuit above
+    # is preserved so we never call to_datetime with "". TypeError
+    # caught for the None case if it ever slips through.
     try:
-        d = datetime.strptime(s, "%Y-%m-%d").date()
-    except ValueError:
+        d = pd.to_datetime(s).date()
+    except (ValueError, TypeError):
         return False
     return INVESTIGATION_START_DATE <= d <= INVESTIGATION_END_DATE
 
