@@ -435,3 +435,131 @@ network round-trip.
   metric — at which point the fix is `CommitteeLegislationReferral`
   walking or tightening `bill_locations` to follow the subcommittee
   that received the action.
+
+## Cross-Cycle Persistent LegEvent Cache (PR-C7, in flight 2026-05-04)
+
+PR-C7 replaces PR-C3.1's `MEETING_VERB_TOKENS` text-pattern gate with a cross-cycle persistent LegislationEvent cache. The pivot is the architectural answer to "why pattern-list maintenance doesn't scale to 50 states" (CLAUDE.md Standard #6) — text patterns become a last-resort fallback; structural API data becomes the source of truth.
+
+**Trigger:** PR-C6.4 LegEvent sizing audit returned the surprising fact that `MEETING_VERB_TOKENS` was firing on 0.1% of `journal_default` rows (3 of 4,893). The verb gate was effectively turned off in production while creating the false expectation that LegEvent recovery was happening for "all the bills it should." PR-C6.3 verb dump separately revealed that the X-Ray's reported 994 "meeting bugs" were 80%+ false positives (admin actions matching meeting-substring patterns like `recommend`, `passed`, `failed`). Together: the existing time-recovery path was both nearly off AND the metric measuring its impact was inflated by misclassification.
+
+### Cache schema (two new tabs)
+
+**`LegEvent_Bills`** — one row per `(bill, session_5d)` — bill-level metadata:
+
+| col | meaning |
+|---|---|
+| `Bill` | normalized bill number (HB123) |
+| `Session` | 5-digit session code (20261) |
+| `LastHistoryHash` | SHA256 hex digest of sorted `(date, outcome, refid)` HISTORY rows for this bill |
+| `FetchedAtUTC` | ISO-8601 UTC timestamp of last successful fetch |
+| `LatestEventType` | `Description` field of the chronologically latest event in the cache (truncated to 200 chars) |
+| `LatestEventDate` | YYYY-MM-DD of the latest event |
+| `IsTerminal` | TRUE/FALSE — whether `LatestEventType` matches `TERMINAL_DESCRIPTION_PATTERNS` |
+
+**`LegEvent_Events`** — one row per `(bill, event_id)` — per-event records:
+
+| col | meaning |
+|---|---|
+| `Bill` | bill number |
+| `Session` | session code |
+| `EventID` | from LIS API |
+| `EventDate` | full datetime string from LIS API |
+| `ChamberCode` | `H` / `S` / blank |
+| `Description` | LIS API description (truncated to 1000 chars) |
+
+Initial allocations: `LegEvent_Bills` 3,000 rows × 7 cols = 21,000 cells; `LegEvent_Events` 25,000 rows × 6 cols = 150,000 cells. Total ~171k cells — small fraction of post-PR-C6.2 ~7M-cell workbook headroom.
+
+### Three-layer refresh policy (live-readiness)
+
+The cache uses HISTORY.CSV mutation as the primary refresh signal, with TTL safety net and terminal short-circuit.
+
+**Layer 1 — Source-change refresh.** Per bill, compute `current_history_hash = sha256(sorted (date, outcome, refid) tuples)`. Compare against `LastHistoryHash` in the cached `LegEvent_Bills` row. If different → bill is hot, refresh. Latency on new event: < 15 minutes (next worker cycle detects the new HISTORY row → flags the bill → fetches LegEvent within the same cycle).
+
+**Layer 2 — TTL safety net.** Every bill is force-refreshed if `FetchedAtUTC` is older than 6 hours, regardless of hash status. Catches LegEvent-leads-HISTORY drift.
+
+**Layer 3 — Terminal-bill short-circuit.** A bill whose `LatestEventType` matches `TERMINAL_DESCRIPTION_PATTERNS` cannot mutate further. Skip refresh entirely. Initially empty pending real API observation; populate in PR-C7.2 after first prod cycle samples actual descriptions.
+
+### Refresh queue priority (owner-mandated EXPLICIT, not organic)
+
+Tier A (uncached bills, no cache row exists yet) **drains first** before Tier B (hash-changed) and Tier C (TTL-expired). Owner reasoning: "Because our WAF budget is strictly capped at 500 fetches per cycle, queue prioritization is paramount. An 'Organic' blend risks exhausting the WAF budget on TTL-expirations while bills with zero cached data are starved."
+
+Cap: `LEGEVENT_FETCHES_PER_CYCLE = 500`. Excess queued for next cycle; tracked via `legevent_hydration_queued` telemetry.
+
+### Worker integration points
+
+```
+1. Startup, after API_Cache load:
+   - _get_or_create_legevent_tabs(sheet)
+   - _load_legevent_cache(bills_ws, events_ws) → bills_meta, events_cache
+   - _legislation_event_cache.update(events_cache)  [seed per-cycle resolver cache]
+
+2. After df_past is filtered, BEFORE the iterrows loop:
+   - candidate_bills = unique CleanBill in df_past
+   - history_hashes = compute per-bill SHA256
+   - queue, tiers = _build_legevent_refresh_queue(...)
+   - _hydrate_legevent_cache(queue, ...)  [up to 500 fetches]
+   - SEED non-hydrated bills with negative cache:
+       _legislation_id_cache[(bill, session)] = ""
+       _legislation_event_cache[(bill, session)] = []
+     [PR-C7 review fix per Codex P1 + Gemini critical — prevents row
+     loop from triggering ad-hoc fetches on Tier A overflow bills]
+
+3. Row loop (calendar_worker.py:3110):
+   - DROP the verb gate: `if origin == "journal_default" and any(v in
+     outcome_lower for v in MEETING_VERB_TOKENS):` → `if origin ==
+     "journal_default":`
+   - Call _resolve_via_legislation_event_api as before — but it is
+     now strictly a cache lookup (no network) thanks to (a) hydration
+     pre-populating cache for queue bills and (b) negative-cache seed
+     for overflow bills.
+
+4. Pre-Sheet1-write:
+   - _persist_legevent_cache(bills_meta, events_cache, ...) writes
+     both tabs back. Uses write-then-clear-trailing pattern (Gemini
+     PR-C7 medium review): mid-write crash leaves OLD data in unwritten
+     rows, not empty sheet.
+```
+
+### Why the PR-C3 hang vector cannot recur
+
+PR-C3 ([[failures/assumptions_audit#42]]) hung the worker because uncapped LegEvent fetches fired from inside the row loop, racing the LIS WAF with urllib3 backoff stacking. PR-C7 inverts the timing: ALL fetches happen in the pre-iteration hydration phase under hard 500 cap. The row loop calls `_resolve_via_legislation_event_api` only for cache lookups — network-free for hydrated bills, instant negative-cache hit for non-hydrated bills via the existing PR-C3.1 short-circuit. The row loop never makes a network call.
+
+### Telemetry (orthogonal to denominator buckets)
+
+Eleven new counters in `source_miss_counts` (added in PR-C7):
+
+```
+legevent_cache_loaded_bills          — bills meta loaded from sheet
+legevent_cache_loaded_events         — events loaded from sheet
+legevent_tier_a_uncached             — Tier A queue depth
+legevent_tier_b_hash_changed         — Tier B queue depth
+legevent_tier_c_ttl_expired          — Tier C queue depth
+legevent_skipped_terminal            — bills short-circuited (terminal)
+legevent_skipped_fresh               — bills skipped (cache fresh)
+legevent_fetched_this_cycle          — actual fetches performed
+legevent_hydration_queued            — bills needing fetch but over cap
+legevent_cache_hits                  — row-loop cache lookup hits (events present)
+legevent_cache_misses                — row-loop cache lookup misses (empty list)
+legevent_overflow_no_fetch           — bills seeded with negative cache (PR-C7
+                                        review fix, Codex P1 + Gemini critical)
+```
+
+These don't change the bucket math (`sourced_api + sourced_convene + ...
+= total_processed`). They observe cache behavior, not source classification.
+
+### Graceful degradation
+
+Every cache touchpoint has a categorized `push_system_alert` on failure and the worker falls back to today's behavior:
+
+| Failure | Behavior |
+|---|---|
+| Cache tab creation fails | `push_alert` + `None` ws handle → cache load returns `({}, {})` → hydration is no-op → row loop behaves like PR-C3.1 with empty per-cycle cache |
+| Cache load (read) fails | Same as above |
+| Cache persist (write) fails | `push_alert`; next cycle re-hydrates whatever the sheet doesn't have |
+| Per-fetch failure | Existing PR-C3.1 negative-cache logic; categorized alert; no retry storm |
+
+### What PR-C7 does NOT address (deferred to PR-C7.1 / PR-C7.2)
+
+- **Sheet1 schema migration:** no `LegEventType` column added in PR-C7. The cache classifies bills internally but doesn't surface structural EventType to Sheet1 consumers.
+- **X-Ray classifier rewrite:** `pages/ray2.py` `classify_action()` still uses `MEETING_ACTION_PATTERNS` substring matching. This is the source of the 994 false-positive "meeting bugs" found in PR-C6.3. PR-C7.1 adds `LegEventType` as a Sheet1 column written by the worker for cache-hit rows; X-Ray reads it FIRST and falls back to text patterns only when EventType is absent.
+- **`TERMINAL_DESCRIPTION_PATTERNS` population:** empty initially. Populate in PR-C7.2 after observing real LIS API response shapes from PR-C7's first cold-start.

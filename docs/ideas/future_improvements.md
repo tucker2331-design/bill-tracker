@@ -11,7 +11,8 @@
   direction below. Audit trail preserved here so the rationale is
   not lost on next read.
 
-## Structural classifier as source of truth — LegislationEvent over text patterns (flagged 2026-04-28, supersedes "New-Verb Canary")
+## Structural classifier as source of truth — LegislationEvent over text patterns (flagged 2026-04-28, IMPLEMENTED 2026-05-03 in PR-C7)
+- ✅ **IMPLEMENTED 2026-05-03 — PR #41 (in flight, awaiting bot re-review on commit `45c72b5`).** Time-recovery side of the pivot ships as PR-C7. Classification side deferred to PR-C7.1 (Sheet1 `LegEventType` column + X-Ray reads it). See [[log#2026-05-03-pr--pr-c7-opened-pr-41--drop-verb-gate--cross-cycle-persistent-legevent-cache]] and [[state/current_status]] for current state.
 - [ ] **The architectural pivot.** Replace the text-pattern verb gate
   with structural data from the LIS LegislationEvent API as the
   classifier of record. The text-pattern architecture

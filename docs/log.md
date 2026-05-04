@@ -1,6 +1,6 @@
 ---
 tags: [log, meta]
-updated: 2026-04-27
+updated: 2026-05-04
 ---
 
 # Project Log
@@ -8,6 +8,136 @@ updated: 2026-04-27
 Append-only, reverse-chronological (newest at top). Each entry opens with `## [YYYY-MM-DD] <kind> | <title>` so `grep "^## \[" log.md | head -20` gives a parseable timeline.
 
 **Kinds:** `ingest` (new source/doc processed), `pr` (PR opened/merged/closed), `decision` (architectural or workflow), `lint` (wiki health-check pass), `session` (notable multi-hour working block), `post-mortem` (failure analysis), `milestone` (project-goal threshold crossed).
+
+---
+
+## [2026-05-04] pr | PR-C7 review fixes — Codex P1 + Gemini critical/high/medium/medium
+
+Branch `claude/pr-c7-legevent-persistent-cache` commit `45c72b5`. Four findings on the PR-C7 initial commit, all real, all addressed:
+
+1. **Codex P1 + Gemini CRITICAL (same issue, both bots agreed):** the row loop called `_resolve_via_legislation_event_api` unconditionally on every `journal_default` row. For Tier A overflow bills (cold-start cycles 1-4, ~1,500 bills/cycle queued for next cycle), the cache key was absent → resolver fell into its network-fetch path, bypassing `LEGEVENT_FETCHES_PER_CYCLE` and recreating the [[failures/assumptions_audit#42|PR-C3 hang vector]]. Fix: seed both `_legislation_id_cache[(bill, session)] = ""` and `_legislation_event_cache[(bill, session)] = []` for every candidate bill that did NOT make the queue. The resolver short-circuits cleanly via existing PR-C3.1 cache checks. Row loop is now strictly cache-lookup-only regardless of which tier a bill is in. New telemetry `legevent_overflow_no_fetch` tracks the seed count.
+2. **Gemini HIGH:** initial worksheet rows undersized (1,000 vs 2,002 cold-start surface). `update(range_name="A{N}")` raises when N > allocated rows. Fix: 3,000 rows for `LegEvent_Bills`, 25,000 for `LegEvent_Events`. ~170k cells total — small fraction of post-PR-C6.2 ~7M-cell workbook headroom.
+3. **Gemini MEDIUM:** `_persist_legevent_cache` did `clear() then update()`, leaving the sheet temporarily empty during chunked writes. Mid-write crash → cache destroyed. Fix: write-then-clear-trailing pattern. Old rows are preserved during the write phase; trailing clear at the end removes stale rows beyond the new tail. Mid-write crash now leaves OLD data intact for unwritten rows.
+4. **Gemini MEDIUM:** `_is_terminal_legevent_description` substring match assumed pre-lowercased patterns. Fix: lowercase patterns at check time (`p.lower() in lower`). Forward-looking — constant is currently empty `()`, but a future maintainer can populate with natural casing without silent match failures.
+
+New entries appended to [[failures/assumptions_audit]]: #47 (queue-with-cap requires explicit overflow handling), #48 (when a metric jumps at scale, sample-verify the metric's definition before scoping a fix), #49 (gspread default 26-col grid → silent over-allocation; check dimensions before persist).
+
+Awaiting bot re-review on `45c72b5`. Once clean → merge → first cold-start cycle.
+
+---
+
+## [2026-05-03] decision | Owner rejects New-Verb Canary; mandates structural classifier pivot for PR-C7
+
+After PR-C6.3's verb-dump returned 994 "meeting bugs" with the dominant mass being **X-Ray classifier false positives** (admin actions like `Governor's Recommendation` matching the substring `"recommend"` in `MEETING_ACTION_PATTERNS`), I proposed two paths:
+- **Strategic prevention idea (rejected):** "New-Verb Canary" — startup scan for unknown verbs, alert per new verb. Owner rejected as a band-aid: even with cycle-1 visibility, the response is a human writing code to add the verb to a hardcoded list. Doesn't scale to 50 states or to vocabulary drift within VA.
+- **Structural pivot (approved):** drop the `MEETING_VERB_TOKENS` gate at `calendar_worker.py:2593` and use the LIS LegislationEvent API as the source of truth. With a cross-cycle persistent cache, every `journal_default` row gets a chance at recovery. The 50-state plan: each new state plugs in a structural-event adapter normalized to `(bill, date, chamber, action_type)`.
+
+Owner mandates locked:
+- **TTL safety net: 6 hours** (`LEGEVENT_TTL_SECONDS = 21600`)
+- **Per-cycle fetch cap: 500** (`LEGEVENT_FETCHES_PER_CYCLE = 500`)
+- **Cold-start strategy: EXPLICIT** (rejected my "organic" recommendation): Tier A (uncached) drains FIRST before Tier B (hash-changed) and Tier C (TTL-expired). User reasoning: "An 'Organic' blend risks exhausting the WAF budget on TTL-expirations while bills with zero cached data are starved."
+- Live-readiness signal: SHA256 of sorted `(date, outcome, refid)` HISTORY rows per bill. Clerk edit → hash changes → cache refresh in next cycle.
+- Terminal short-circuit infrastructure: `TERMINAL_DESCRIPTION_PATTERNS` — empty initially pending real API observation.
+
+`docs/ideas/future_improvements.md` updated to mark "New-Verb Canary" REJECTED with rationale preserved (audit trail) and add "Structural classifier as source of truth" with full implementation plan.
+
+---
+
+## [2026-05-03] pr | PR-C7 opened (PR #41) — drop verb gate + cross-cycle persistent LegEvent cache
+
+Branch `claude/pr-c7-legevent-persistent-cache` commit `70f14f8`. Implementation:
+
+- New constants: `LEGEVENT_BILLS_TAB`, `LEGEVENT_EVENTS_TAB`, `LEGEVENT_TTL_SECONDS = 21600`, `LEGEVENT_FETCHES_PER_CYCLE = 500`, `TERMINAL_DESCRIPTION_PATTERNS = ()`.
+- New helpers: `_hash_history_rows_for_bill`, `_is_terminal_legevent_description`, `_get_or_create_legevent_tabs`, `_load_legevent_cache`, `_build_legevent_refresh_queue` (Tier A → B → C with cap), `_hydrate_legevent_cache`, `_persist_legevent_cache`.
+- Worker integration: pre-iteration cache load + hash compute + tier + hydrate; row loop drops verb gate; pre-Sheet1-write persists cache.
+- 11 new telemetry counters in `source_miss_counts` (orthogonal to bucket math): `legevent_cache_loaded_bills/events`, `legevent_tier_a/b/c`, `legevent_skipped_terminal/fresh`, `legevent_fetched_this_cycle`, `legevent_hydration_queued`, `legevent_cache_hits/misses`.
+- Diff: 558 ins / 15 del to `calendar_worker.py`.
+- Local sanity: hash determinism + order-independence, terminal pattern empty/populated paths, Tier A→B→C order with terminal/fresh skip, cap enforcement + overflow telemetry. All passing.
+
+Why dropping the verb gate is safe: PR-C7 inverts the timing. ALL fetches happen in pre-iteration hydration under hard 500 cap. Row loop is network-free (cache lookup only). PR-C3 hang root cause cannot recur. (Caveat: bot review caught a Tier A overflow path that DID fetch — fixed in `45c72b5`.)
+
+---
+
+## [2026-05-01] pr | PR #40 merged — PR-C6.4 LegEvent sizing audit
+
+Merged at `3039123`. Read-only diagnostic returned the data PR-C7 ships against:
+- **Cold-start surface: 2,002 unique bills** in `journal_default` rows
+- **Today's `MEETING_VERB_TOKENS` gate fires on 3 rows / 3 bills (0.1%)** — the gate is essentially turned off in production
+- **Top 20 bills:** flat distribution, max 10 rows per bill (HB569), median 7
+- **Cycles to full hydration at 500/cycle: 4** (~60 min wall-clock)
+- **Steady-state warm cycle:** 50-200 fetches at 2/5/10% bill-churn scenarios — comfortably under 840 budget
+- **Recommendation:** Phased rollout required (cold-start exceeds 840 single-cycle budget)
+
+Gemini high review folded in pre-merge: `pd.to_datetime` for date parsing + `pandas` install in workflow YAML.
+
+---
+
+## [2026-05-01] pr | PR #39 merged — PR-C6.3.1 hotfix (get_all_values for duplicate-empty header)
+
+Merged at `1941ec7`. PR-C6.3 (PR #38) shipped clean against local sanity tests but **crashed on its first production run**:
+```
+gspread.exceptions.GSpreadException: the header row in the worksheet contains
+duplicates: ['']
+```
+Root cause: Sheet1's worksheet has 26 allocated cols but only ~12 schema cols. Row 1 = `[Date, Time, ..., DiagnosticHint, "", "", ...]` — the 14+ trailing empty cells parsed as identical `''` keys. **Same root class as the API_Cache 92% problem PR-C6.2 fixed:** over-allocated grid columns. Fix: `get_all_values()` + `list.index()` for column lookup. `list.index()` returns the first match, sidestepping the duplicate-key issue. Defensive `_cell()` helper for short-row tolerance.
+
+Gemini medium follow-up review folded in: pre-calc column indices in locals + drop the `_cell()` helper inline. Matches the existing strptime pre-parse hygiene (Gemini's earlier fix in the dump tool).
+
+---
+
+## [2026-05-01] pr | PR #38 merged — PR-C6.3 verb-dump triage tool
+
+Merged at `1941ec7` (alongside PR-C6.3.1 hotfix). Read-only triage that revealed the misclassification finding: top "meeting bug" rows are **`Governor's Recommendation` (76+41+5)**, **`[Memory Anchor] X Failed to Pass from conference` (14)**, **`Bill text as passed Senate (SRxxxER)` family (~46 unique outcomes)** — all administrative actions misclassified as meetings because the X-Ray's `MEETING_ACTION_PATTERNS` substring list matches them (`recommend`, `passed`, `failed`, `concurred`).
+
+Reframed mid-PR (commit `f0890cb`) from "scope verb-list edits" to "verify PR-C7 structural pivot's coverage." Owner rejected the verb-list-extension fix as a band-aid (see [[#2026-05-03 decision | Owner rejects New-Verb Canary; mandates structural classifier pivot for PR-C7]]).
+
+Codex P1 + Gemini medium reviews folded in:
+- `TARGET_COMMITTEE = "📋 Ledger Updates"` (matches `calendar_worker.py:2772` worker write — exact match against unprefixed `"Ledger Updates"` would silently match 0 rows)
+- Pre-parse window dates at module load (saves ~70k strptime calls)
+- `DIAGNOSTIC_TAG_PATTERN` regex strips leading emoji + bracketed tags so verb counts don't fragment across `⚠️ [COMMITTEE_DRIFT: ...] H Reported` vs `H Reported`. Caught a self-audit bug in the regex (greedy symbol class ate `[`); fixed by excluding `[` and `]` from the symbol class.
+
+---
+
+## [2026-04-28] pr | PR #37 merged — PR-C6.2 trim API_Cache from 26 → 6 cols
+
+Merged at `18134b5`. **Reclaimed 7,076,220 cells = 70.8% of the 10M cap.** Workbook total 9,996,623 → 2,920,403 cells (99.97% → 29.2% of cap). Headroom 3,377 → 7,079,597 cells.
+
+`API_Cache` had 26 allocated cols but only 6 schema cols (`Date, Committee, Time, SortTime, Status, Location` — canonical at `calendar_worker.py:2819`). Cols 7-26 were empty padding inherited from the worksheet's default grid size. The worker writes 6-col rows and reads by header — cols 7-26 were unreachable from any code path.
+
+Three-layer safety on the resize: (1) header schema match check, (2) all-empty G:Z check across all 353,811 rows in 50k-row chunks (Gemini high — single 7M-cell read would exceed Sheets API payload limit), (3) workflow_dispatch dry-run gate default true.
+
+Codex P2 + Gemini medium folded in: drop `rows=` from `worksheet.resize()` so a concurrent worker cycle's appends aren't truncated.
+
+Operator runbook executed cleanly: dry-run cycle (run #1) → live-write cycle (run #2) → cell-count audit re-verification.
+
+---
+
+## [2026-04-28] pr | PR #36 merged — PR-C6.1 cell-count audit
+
+Merged at `18134b5` (alongside PR-C6.2). Read-only audit returned the unambiguous diagnosis:
+
+| # | rows | cols | cells | % wb | % cap | title |
+|---:|---:|---:|---:|---:|---:|---|
+| 1 | 353,811 | 26 | **9,199,086** | **92.0%** | **92.0%** | **API_Cache** |
+| 2 | 28,909 | 26 | 751,634 | 7.5% | 7.5% | Sheet1 |
+| 3 | 1,000 | 26 | 26,000 | 0.3% | 0.3% | Bug_Logs |
+| 4 | 1,531 | 13 | 19,903 | 0.2% | 0.2% | Schedule_Witness |
+
+API_Cache dominated by 12×. Codex P2 review folded in: recommendation must reference `biggest['title']` dynamically, not hardcode `"Sheet1"`.
+
+---
+
+## [2026-04-28] pr | PR #35 merged — PR-C6 / Move 3a (full-session stress test)
+
+Merged at `214104b`. Widened `investigation_config.py` from `2026-02-09 → 2026-02-13` to `2026-01-14 → 2026-05-01` (full 2026 VA GA session window). First worker run on the wider window crashed at `calendar_worker.py:2972`:
+```
+gspread.exceptions.APIError: APIError: [400]: This action would increase the
+number of cells in the workbook above the limit of 10000000 cells.
+```
+
+The architecture held — pipeline ran cleanly through 64,891 HISTORY rows, source-miss bucket math clean, classification ran, reconciliation ran, API_Cache write succeeded. **Only the final `worksheet.update()` for Sheet1 hit the cap.** "Suffering from success" — diagnosed as workbook capacity ceiling, not code defect. Triggered the PR-C6.1 → PR-C6.2 cell-cap remediation arc.
+
+Updated [[failures/assumptions_audit]] #5 (scrape_start) status to CLOSED — gate satisfied. Gemini medium review fixes folded in (broken wikilink anchor → `[[log]]` reference, triage naming `PR-D.1/D.2` → `PR-C6.1/C6.2`, ambiguous `(this commit)` → `PR-C6`, stale "When to fix" line restructured).
 
 ---
 
