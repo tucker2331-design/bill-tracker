@@ -891,11 +891,17 @@ def _is_terminal_legevent_description(description: str) -> bool:
     Used to short-circuit refresh on bills that cannot mutate further. Empty
     pattern set returns False for everything (safe default — every bill
     refreshes on TTL/hash signal until terminal patterns are populated).
+
+    Gemini PR-C7 medium review: lowercase patterns at check time so a
+    future maintainer adding (e.g.) "Approved by Governor" to the
+    constant — the natural casing — doesn't silently fail the substring
+    match against the lowercased description. Defensive, no behavior
+    change while the constant is empty.
     """
     if not TERMINAL_DESCRIPTION_PATTERNS or not description:
         return False
     lower = description.lower()
-    return any(p in lower for p in TERMINAL_DESCRIPTION_PATTERNS)
+    return any(p.lower() in lower for p in TERMINAL_DESCRIPTION_PATTERNS)
 
 
 def _get_or_create_legevent_tabs(sheet, push_alert):
@@ -904,16 +910,30 @@ def _get_or_create_legevent_tabs(sheet, push_alert):
     Returns (bills_ws, events_ws). Either may be None if creation failed —
     callers MUST handle that and degrade gracefully (fall back to the
     PR-C3.1 per-cycle cache only).
+
+    Initial row capacity (Gemini PR-C7 high review): sized to PR-C6.4's
+    cold-start audit (2,002 unique bills) plus headroom. Bills tab gets
+    3,000 rows; events tab gets 25,000 rows (~12 events/bill capacity).
+    `update(range_name="A{N}")` raises an API error when N exceeds the
+    worksheet's allocated row count, so undersizing here would crash on
+    first persist. Sheets cells used: 3,000 × 7 + 25,000 × 6 = 171,000 —
+    a small fraction of the post-PR-C6.2 ~7M-cell workbook headroom.
     """
-    def _open_or_create(tab_name, header):
+    sizing = {
+        LEGEVENT_BILLS_TAB:  (3_000, LEGEVENT_BILLS_HEADER),
+        LEGEVENT_EVENTS_TAB: (25_000, LEGEVENT_EVENTS_HEADER),
+    }
+
+    def _open_or_create(tab_name):
+        rows_init, header = sizing[tab_name]
         try:
             ws = sheet.worksheet(tab_name)
             return ws
         except gspread.exceptions.WorksheetNotFound:
             try:
-                ws = sheet.add_worksheet(title=tab_name, rows=1000, cols=len(header))
+                ws = sheet.add_worksheet(title=tab_name, rows=rows_init, cols=len(header))
                 ws.update(values=[header], range_name="A1")
-                print(f"📝 Created {tab_name} tab with header.")
+                print(f"📝 Created {tab_name} tab ({rows_init:,} rows × {len(header)} cols) with header.")
                 return ws
             except Exception as e:
                 push_alert(
@@ -930,10 +950,7 @@ def _get_or_create_legevent_tabs(sheet, push_alert):
             )
             return None
 
-    return (
-        _open_or_create(LEGEVENT_BILLS_TAB, LEGEVENT_BILLS_HEADER),
-        _open_or_create(LEGEVENT_EVENTS_TAB, LEGEVENT_EVENTS_HEADER),
-    )
+    return (_open_or_create(LEGEVENT_BILLS_TAB), _open_or_create(LEGEVENT_EVENTS_TAB))
 
 
 def _load_legevent_cache(bills_ws, events_ws, push_alert):
@@ -1171,9 +1188,16 @@ def _persist_legevent_cache(
     """Write the in-memory caches back to the sheet at end of cycle.
 
     Writes the FULL caches each time (not deltas) — simpler, idempotent,
-    and avoids drift between memory and sheet. For 2,002 bills × 7 cols +
-    20k events × 6 cols = ~134k cells per write. Fits comfortably in the
-    Sheets API payload budget when chunked.
+    and avoids drift between memory and sheet.
+
+    Gemini PR-C7 medium review: write-then-clear-trailing pattern instead
+    of clear-then-write. Clear-then-write leaves the sheet temporarily
+    empty during the chunked write; if the worker crashes or the network
+    fails mid-way, the persistent cache is destroyed. Write-first means
+    a mid-write failure leaves OLD data intact for rows beyond the
+    in-flight chunk, which is recoverable (next cycle re-persists). The
+    trailing clear at the end removes any old rows beyond the new
+    dataset's tail (preventing stale data from masquerading as fresh).
 
     Failures emit categorized alerts but never raise into the caller.
     Next cycle re-hydrates whatever the sheet doesn't have.
@@ -1182,6 +1206,47 @@ def _persist_legevent_cache(
         return
 
     CHUNK_SIZE = 5000
+
+    def _write_then_clear_trailing(ws, rows, tab_name, dedup_key):
+        new_count = len(rows)
+        if new_count == 0:
+            return
+        last_col_letter = chr(ord("A") + len(rows[0]) - 1)
+
+        # Step 1: write new rows row-by-row (chunked). Old rows beyond the
+        # new range are untouched — so a mid-write failure leaves the
+        # sheet with NEW data in rows 1..k and OLD data in rows k+1..N,
+        # which is strictly better than the empty window of clear-first.
+        try:
+            for i in range(0, new_count, CHUNK_SIZE):
+                chunk = rows[i:i + CHUNK_SIZE]
+                ws.update(values=chunk, range_name=f"A{i + 1}")
+        except Exception as e:
+            push_alert(
+                f"Failed to persist {tab_name} (write phase): {e}. "
+                f"Sheet may have a mix of old + new data; next cycle re-persists.",
+                status="WARN", category="API_FAILURE", severity="WARN",
+                dedup_key=f"{dedup_key}_write",
+            )
+            return
+
+        # Step 2: clear trailing rows that contained old data.
+        # ws.row_count is the worksheet's allocated row count; anything
+        # beyond new_count is stale. batch_clear is idempotent and
+        # cheap — it just empties cells.
+        try:
+            allocated_rows = ws.row_count
+            if allocated_rows > new_count:
+                trailing_range = f"A{new_count + 1}:{last_col_letter}{allocated_rows}"
+                ws.batch_clear([trailing_range])
+        except Exception as e:
+            push_alert(
+                f"Failed to clear trailing rows of {tab_name}: {e}. "
+                f"Sheet may contain stale rows beyond row {new_count}; "
+                f"reader logic should ignore rows with empty Bill/Session.",
+                status="INFO", category="API_FAILURE", severity="INFO",
+                dedup_key=f"{dedup_key}_trailing_clear",
+            )
 
     # Bills tab: header + one row per (bill, session)
     bills_rows = [LEGEVENT_BILLS_HEADER]
@@ -1194,17 +1259,9 @@ def _persist_legevent_cache(
             str(meta.get("LatestEventDate", "")),
             "TRUE" if meta.get("IsTerminal") else "FALSE",
         ])
-    try:
-        bills_ws.clear()
-        for i in range(0, len(bills_rows), CHUNK_SIZE):
-            chunk = bills_rows[i:i + CHUNK_SIZE]
-            bills_ws.update(values=chunk, range_name=f"A{i + 1}")
-    except Exception as e:
-        push_alert(
-            f"Failed to persist {LEGEVENT_BILLS_TAB}: {e}. Next cycle re-hydrates.",
-            status="WARN", category="API_FAILURE", severity="WARN",
-            dedup_key="legevent_bills_persist_fail",
-        )
+    _write_then_clear_trailing(
+        bills_ws, bills_rows, LEGEVENT_BILLS_TAB, "legevent_bills_persist_fail",
+    )
 
     # Events tab: header + one row per event
     events_rows = [LEGEVENT_EVENTS_HEADER]
@@ -1217,17 +1274,9 @@ def _persist_legevent_cache(
                 str(e.get("ChamberCode", "")),
                 str(e.get("Description", ""))[:1000],  # cap per-cell length
             ])
-    try:
-        events_ws.clear()
-        for i in range(0, len(events_rows), CHUNK_SIZE):
-            chunk = events_rows[i:i + CHUNK_SIZE]
-            events_ws.update(values=chunk, range_name=f"A{i + 1}")
-    except Exception as e:
-        push_alert(
-            f"Failed to persist {LEGEVENT_EVENTS_TAB}: {e}. Next cycle re-hydrates.",
-            status="WARN", category="API_FAILURE", severity="WARN",
-            dedup_key="legevent_events_persist_fail",
-        )
+    _write_then_clear_trailing(
+        events_ws, events_rows, LEGEVENT_EVENTS_TAB, "legevent_events_persist_fail",
+    )
 
 
 # === END PR-C7 helper block ================================================
@@ -1533,8 +1582,11 @@ def run_calendar_update():
         "legevent_skipped_fresh":       0,  # bills skipped (cache fresh)
         "legevent_fetched_this_cycle":  0,  # actual fetches performed
         "legevent_hydration_queued":    0,  # bills needing fetch but over cap
-        "legevent_cache_hits":          0,  # row-level cache lookup hits
-        "legevent_cache_misses":        0,  # row-level cache lookup misses
+        "legevent_cache_hits":          0,  # row-level: cache has events for this bill
+        "legevent_cache_misses":        0,  # row-level: cache has empty list (seeded or fetched-empty)
+        "legevent_overflow_no_fetch":   0,  # cycle-level: bills seeded with negative cache
+                                            # to suppress row-loop network fetches (Codex P1
+                                            # + Gemini critical review fix)
     }
 
     def push_system_alert(message, status="ALERT", category=None, severity=None, dedup_key=None):
@@ -2814,6 +2866,41 @@ def run_calendar_update():
             source_miss_counts["legevent_fetched_this_cycle"] = n_fetched
             print(f"📚 LegEvent cache: hydrated {n_fetched} bills this cycle.")
 
+        # Codex (P1) + Gemini (critical) review fix: seed negative-cache
+        # entries for every candidate bill NOT in the hydration queue.
+        # Without this, a Tier A overflow bill (or a bill skipped on
+        # terminal/fresh) reaches the row loop with no cache entry, and
+        # `_resolve_via_legislation_event_api` falls into its network-
+        # fetch path on cache miss. That bypasses LEGEVENT_FETCHES_PER_CYCLE
+        # and re-creates the PR-C3 hang vector this PR is supposed to
+        # eliminate. Seeding both caches with empty negative values
+        # forces the resolver to short-circuit:
+        #   - legislation_id_cache: "" (falsy) → resolver returns None
+        #     at the `if not legislation_id` check, no events fetch
+        #   - legislation_event_cache: [] → defense in depth (resolver
+        #     hits the empty events list, returns None at `if not matching`)
+        # Both seeds skip non-hydrated bills cleanly. The row loop NEVER
+        # makes a network call regardless of which tier the bill is in.
+        _hydrated_bills_set = set(legevent_queue)
+        _overflow_seeded = 0
+        for _bill in legevent_candidate_bills:
+            if _bill in _hydrated_bills_set:
+                continue
+            _ck = (_bill, _session_code_5d)
+            # Don't clobber existing cache entries (terminal / fresh bills
+            # were loaded from persistent storage with their real events).
+            if _ck not in _legislation_id_cache:
+                _legislation_id_cache[_ck] = ""
+            if _ck not in _legislation_event_cache:
+                _legislation_event_cache[_ck] = []
+                _overflow_seeded += 1
+        source_miss_counts["legevent_overflow_no_fetch"] = _overflow_seeded
+        if _overflow_seeded:
+            print(
+                f"📚 LegEvent cache: seeded {_overflow_seeded} non-hydrated bills "
+                f"with negative cache (row-loop fetches suppressed)."
+            )
+
         for _, row in df_past.iterrows():
             source_miss_counts["total_processed"] += 1
             # Tracks whether committee was resolved via Memory Anchor fallback
@@ -3118,7 +3205,13 @@ def run_calendar_update():
             if origin == "journal_default":
                 source_miss_counts["legislation_event_attempted"] += 1
                 cache_key_pr_c7 = (bill_num, _session_code_5d)
-                if cache_key_pr_c7 in _legislation_event_cache:
+                # Hits = cache has a non-empty events list (hydrated bill).
+                # Misses = cache has empty list ([]) — either seeded for
+                # overflow this cycle (PR-C7 negative cache) or fetched
+                # empty in a prior cycle. Either way, the row loop will
+                # NOT trigger a network fetch — the resolver short-
+                # circuits via the existing PR-C3.1 cache check.
+                if cache_key_pr_c7 in _legislation_event_cache and _legislation_event_cache[cache_key_pr_c7]:
                     source_miss_counts["legevent_cache_hits"] += 1
                 else:
                     source_miss_counts["legevent_cache_misses"] += 1
