@@ -820,6 +820,419 @@ def _resolve_via_legislation_event_api(
     return (time_12h, sort_time_24h, "")
 
 
+# ============================================================================
+# PR-C7: LegEvent persistent cache (cross-cycle, live-ready)
+# ============================================================================
+# Owner-mandated structural pivot from text-pattern-driven LegEvent gating
+# (PR-C3.1's MEETING_VERB_TOKENS) to structural-data-driven recovery: every
+# journal_default row gets a chance at LegEvent recovery, gated only by a
+# cross-cycle persistent cache. The cache uses HISTORY.CSV mutation as the
+# refresh signal (live-readiness primitive — bill mutates → next cycle
+# refetches), with a 6-hour TTL safety net for LegEvent-leads-HISTORY drift,
+# and a terminal-bill short-circuit for bills that cannot mutate further.
+#
+# Tab schema (mirrors API_Cache pattern):
+#
+#   LegEvent_Bills — per-(bill, session) metadata, one row per bill.
+#     Bill, Session, LastHistoryHash, FetchedAtUTC, LatestEventType,
+#     LatestEventDate, IsTerminal
+#
+#   LegEvent_Events — per-event records, one row per event.
+#     Bill, Session, EventID, EventDate, ChamberCode, Description
+#
+# Refresh queue priority (owner mandate: explicit, not organic):
+#   Tier A — uncached bills (no cache row exists yet)        ← drains first
+#   Tier B — hash-changed (cache exists, HISTORY mutated)    ← drains second
+#   Tier C — TTL-expired (cache exists, hash unchanged, >6h) ← drains last
+#   Cap:     LEGEVENT_FETCHES_PER_CYCLE per cycle (500 conservative)
+#
+# Sizing audit (PR-C6.4): cold-start = 2,002 bills → 4 cycles to full
+# hydration at 500/cycle. Steady-state warm cycle = 50-200 fetches (well
+# under cap). See docs/ideas/future_improvements.md → "Structural
+# classifier as source of truth" for the design rationale.
+
+LEGEVENT_BILLS_TAB = "LegEvent_Bills"
+LEGEVENT_EVENTS_TAB = "LegEvent_Events"
+LEGEVENT_BILLS_HEADER = [
+    "Bill", "Session", "LastHistoryHash", "FetchedAtUTC",
+    "LatestEventType", "LatestEventDate", "IsTerminal",
+]
+LEGEVENT_EVENTS_HEADER = [
+    "Bill", "Session", "EventID", "EventDate", "ChamberCode", "Description",
+]
+LEGEVENT_TTL_SECONDS = 6 * 3600       # owner-mandated 6h TTL safety net
+LEGEVENT_FETCHES_PER_CYCLE = 500      # owner-mandated 500 cap; raise w/ telemetry
+# Terminal-event detection: bills whose latest event matches one of these
+# substrings (case-insensitive, against the LegEvent Description field) are
+# considered finished and skipped on refresh. Initially empty pending review
+# of actual API response shapes; populate after first production cycle.
+# Adding a substring here MUST verify it cannot occur in non-terminal events
+# (same precedence concerns as the X-Ray's classify_action substring lists).
+TERMINAL_DESCRIPTION_PATTERNS: tuple[str, ...] = ()
+
+
+def _hash_history_rows_for_bill(rows: list[tuple]) -> str:
+    """Stable SHA256 hash of HISTORY rows for one bill.
+
+    Input: list of (date_str, outcome_text, refid_str) tuples. Sorted before
+    hashing so row order in the source CSV doesn't matter. The hash is
+    compared against `LastHistoryHash` in the cached LegEvent_Bills row to
+    detect mutation since the last successful fetch.
+    """
+    import hashlib
+    items = sorted(f"{d}\x00{o}\x00{r}" for d, o, r in rows)
+    payload = "\x01".join(items)
+    return hashlib.sha256(payload.encode("utf-8")).hexdigest()
+
+
+def _is_terminal_legevent_description(description: str) -> bool:
+    """True if `description` matches any TERMINAL_DESCRIPTION_PATTERNS substring.
+
+    Used to short-circuit refresh on bills that cannot mutate further. Empty
+    pattern set returns False for everything (safe default — every bill
+    refreshes on TTL/hash signal until terminal patterns are populated).
+    """
+    if not TERMINAL_DESCRIPTION_PATTERNS or not description:
+        return False
+    lower = description.lower()
+    return any(p in lower for p in TERMINAL_DESCRIPTION_PATTERNS)
+
+
+def _get_or_create_legevent_tabs(sheet, push_alert):
+    """Idempotent creation of LegEvent_Bills + LegEvent_Events tabs.
+
+    Returns (bills_ws, events_ws). Either may be None if creation failed —
+    callers MUST handle that and degrade gracefully (fall back to the
+    PR-C3.1 per-cycle cache only).
+    """
+    def _open_or_create(tab_name, header):
+        try:
+            ws = sheet.worksheet(tab_name)
+            return ws
+        except gspread.exceptions.WorksheetNotFound:
+            try:
+                ws = sheet.add_worksheet(title=tab_name, rows=1000, cols=len(header))
+                ws.update(values=[header], range_name="A1")
+                print(f"📝 Created {tab_name} tab with header.")
+                return ws
+            except Exception as e:
+                push_alert(
+                    f"Failed to create {tab_name}: {e}. PR-C7 persistent cache disabled this cycle.",
+                    status="WARN", category="API_FAILURE", severity="WARN",
+                    dedup_key=f"legevent_tab_create::{tab_name}",
+                )
+                return None
+        except Exception as e:
+            push_alert(
+                f"Failed to open {tab_name}: {e}. PR-C7 persistent cache disabled this cycle.",
+                status="WARN", category="API_FAILURE", severity="WARN",
+                dedup_key=f"legevent_tab_open::{tab_name}",
+            )
+            return None
+
+    return (
+        _open_or_create(LEGEVENT_BILLS_TAB, LEGEVENT_BILLS_HEADER),
+        _open_or_create(LEGEVENT_EVENTS_TAB, LEGEVENT_EVENTS_HEADER),
+    )
+
+
+def _load_legevent_cache(bills_ws, events_ws, push_alert):
+    """Load cross-cycle cache from sheet into in-memory dicts.
+
+    Returns (bills_meta, events_cache):
+      bills_meta:    {(bill, session_5d): {LastHistoryHash, FetchedAtUTC,
+                                            LatestEventType, LatestEventDate,
+                                            IsTerminal}}
+      events_cache:  {(bill, session_5d): [event_dict, ...]} — same shape
+                     `_resolve_via_legislation_event_api` expects.
+
+    Cache load failure on either tab returns ({}, {}) and emits a
+    categorized alert. Worker proceeds with empty cache (cold-start).
+    """
+    bills_meta: dict = {}
+    events_cache: dict = {}
+    if bills_ws is None or events_ws is None:
+        return bills_meta, events_cache
+
+    # PR-C6.3.1 lesson: get_all_records() rejects worksheets with duplicate
+    # empty header cells. Use get_all_values() + manual indexing.
+    try:
+        bills_values = bills_ws.get_all_values()
+    except Exception as e:
+        push_alert(
+            f"Failed to read {LEGEVENT_BILLS_TAB}: {e}. Treating cache as empty (cold-start).",
+            status="WARN", category="API_FAILURE", severity="WARN",
+            dedup_key="legevent_bills_read_fail",
+        )
+        return bills_meta, events_cache
+
+    if len(bills_values) > 1:
+        bh = bills_values[0]
+        try:
+            bi = {col: bh.index(col) for col in LEGEVENT_BILLS_HEADER}
+        except ValueError:
+            push_alert(
+                f"{LEGEVENT_BILLS_TAB} header missing required cols. Got {bh!r}; "
+                f"expected {LEGEVENT_BILLS_HEADER!r}. Treating cache as empty.",
+                status="WARN", category="DATA_ANOMALY", severity="WARN",
+                dedup_key="legevent_bills_header",
+            )
+            return {}, {}
+        for row in bills_values[1:]:
+            row_len = len(row)
+            bill = (row[bi["Bill"]] if bi["Bill"] < row_len else "").strip()
+            session = (row[bi["Session"]] if bi["Session"] < row_len else "").strip()
+            if not bill or not session:
+                continue
+            bills_meta[(bill, session)] = {
+                "LastHistoryHash": row[bi["LastHistoryHash"]] if bi["LastHistoryHash"] < row_len else "",
+                "FetchedAtUTC":    row[bi["FetchedAtUTC"]] if bi["FetchedAtUTC"] < row_len else "",
+                "LatestEventType": row[bi["LatestEventType"]] if bi["LatestEventType"] < row_len else "",
+                "LatestEventDate": row[bi["LatestEventDate"]] if bi["LatestEventDate"] < row_len else "",
+                "IsTerminal":      (row[bi["IsTerminal"]] if bi["IsTerminal"] < row_len else "").upper() == "TRUE",
+            }
+
+    try:
+        events_values = events_ws.get_all_values()
+    except Exception as e:
+        push_alert(
+            f"Failed to read {LEGEVENT_EVENTS_TAB}: {e}. Treating events cache as empty.",
+            status="WARN", category="API_FAILURE", severity="WARN",
+            dedup_key="legevent_events_read_fail",
+        )
+        return bills_meta, events_cache
+
+    if len(events_values) > 1:
+        eh = events_values[0]
+        try:
+            ei = {col: eh.index(col) for col in LEGEVENT_EVENTS_HEADER}
+        except ValueError:
+            push_alert(
+                f"{LEGEVENT_EVENTS_TAB} header missing required cols. Got {eh!r}; "
+                f"expected {LEGEVENT_EVENTS_HEADER!r}. Treating events cache as empty.",
+                status="WARN", category="DATA_ANOMALY", severity="WARN",
+                dedup_key="legevent_events_header",
+            )
+            return bills_meta, {}
+        for row in events_values[1:]:
+            row_len = len(row)
+            bill = (row[ei["Bill"]] if ei["Bill"] < row_len else "").strip()
+            session = (row[ei["Session"]] if ei["Session"] < row_len else "").strip()
+            if not bill or not session:
+                continue
+            events_cache.setdefault((bill, session), []).append({
+                "EventID":     row[ei["EventID"]] if ei["EventID"] < row_len else "",
+                "EventDate":   row[ei["EventDate"]] if ei["EventDate"] < row_len else "",
+                "ChamberCode": row[ei["ChamberCode"]] if ei["ChamberCode"] < row_len else "",
+                "Description": row[ei["Description"]] if ei["Description"] < row_len else "",
+            })
+
+    return bills_meta, events_cache
+
+
+def _build_legevent_refresh_queue(
+    candidate_bills, current_hashes, bills_meta, session_5d,
+    now_utc, fetch_cap, ttl_seconds,
+):
+    """Build the refresh queue with explicit Tier A → B → C priority.
+
+    Owner mandate: Tier A (uncached bills, no cache row exists yet) MUST
+    drain before Tier B (hash-changed) and Tier C (TTL-expired). An
+    organic blend would risk starving uncached bills during cold-start
+    while TTL-expirations consume the budget.
+
+    Returns (queue, tier_counts) where:
+      queue:        list of bills (capped at fetch_cap), drained in
+                    Tier A → B → C order
+      tier_counts:  dict for telemetry
+    """
+    from datetime import timezone
+
+    tier_a: list = []  # uncached
+    tier_b: list = []  # hash-changed
+    tier_c: list = []  # TTL-expired
+    skipped_terminal = 0
+    skipped_fresh = 0
+
+    for bill in sorted(candidate_bills):  # sort for deterministic order
+        cached = bills_meta.get((bill, session_5d))
+        current_hash = current_hashes.get(bill, "")
+        if cached is None:
+            tier_a.append(bill)
+            continue
+        if cached.get("IsTerminal"):
+            skipped_terminal += 1
+            continue
+        if cached.get("LastHistoryHash") != current_hash:
+            tier_b.append(bill)
+            continue
+        # Hash unchanged AND non-terminal — check TTL
+        fetched_at = cached.get("FetchedAtUTC", "")
+        try:
+            fa = datetime.fromisoformat(fetched_at.replace("Z", "+00:00"))
+            if fa.tzinfo is None:
+                fa = fa.replace(tzinfo=timezone.utc)
+            age = (now_utc - fa).total_seconds()
+        except (ValueError, AttributeError):
+            age = float("inf")  # unparseable timestamp → treat as expired
+        if age > ttl_seconds:
+            tier_c.append(bill)
+        else:
+            skipped_fresh += 1
+
+    full = tier_a + tier_b + tier_c
+    queue = full[:fetch_cap]
+    queued_overflow = max(0, len(full) - fetch_cap)
+
+    return queue, {
+        "tier_a": len(tier_a),
+        "tier_b": len(tier_b),
+        "tier_c": len(tier_c),
+        "skipped_terminal": skipped_terminal,
+        "skipped_fresh": skipped_fresh,
+        "queue_size": len(queue),
+        "queued_overflow": queued_overflow,
+    }
+
+
+def _hydrate_legevent_cache(
+    refresh_queue, http_session, session_5d, current_hashes,
+    legislation_id_cache, legislation_event_cache, bills_meta,
+    push_alert, now_utc,
+):
+    """Fetch each queued bill's LegEvent history and update both caches.
+
+    Reuses _resolve_via_legislation_event_api's existing fetch + negative-
+    cache logic by calling it with a synthetic action_date_str (any date —
+    we only care about populating the per-bill events cache). The function
+    is idempotent against `legislation_event_cache` membership: if the key
+    is already present, it returns from cache without re-fetching.
+
+    For each bill, after fetch:
+      - Populate `legislation_event_cache[(bill, session)]` (already done
+        by the resolver; we just observe the side-effect)
+      - Update `bills_meta[(bill, session)]` with new metadata (hash,
+        FetchedAtUTC, LatestEventType, LatestEventDate, IsTerminal)
+
+    Returns int — number of fetches actually performed (may be < queue
+    length if any bills hit cached-already short-circuit).
+    """
+    fetches = 0
+    for bill in refresh_queue:
+        cache_key = (bill, session_5d)
+        # Force re-fetch for this cycle: drop any prior cache entry so the
+        # resolver's "if cache_key in cache" short-circuit doesn't apply.
+        # This is the cross-cycle refresh semantic.
+        legislation_event_cache.pop(cache_key, None)
+
+        # Use the resolver as the fetch primitive. We pass a sentinel date
+        # ("0000-00-00") that will never match any event; the resolver
+        # will populate the per-bill cache as a side effect even though
+        # it returns None for the synthetic match.
+        _resolve_via_legislation_event_api(
+            http_session=http_session,
+            bill_num=bill,
+            action_date_str="0000-00-00",
+            outcome_text="",  # empty token set → returns None defensively
+            session_code_5d=session_5d,
+            acting_chamber_code="",
+            legislation_id_cache=legislation_id_cache,
+            legislation_event_cache=legislation_event_cache,
+            push_alert=push_alert,
+        )
+        fetches += 1
+
+        # Update bills_meta from whatever events the cache now contains
+        events = legislation_event_cache.get(cache_key) or []
+        if events:
+            # Latest event = max EventDate
+            latest = max(events, key=lambda e: str(e.get("EventDate") or ""))
+            latest_desc = str(latest.get("Description") or "")
+            latest_date = str(latest.get("EventDate") or "")[:10]
+            is_terminal = _is_terminal_legevent_description(latest_desc)
+        else:
+            latest_desc = ""
+            latest_date = ""
+            is_terminal = False
+
+        bills_meta[cache_key] = {
+            "LastHistoryHash": current_hashes.get(bill, ""),
+            "FetchedAtUTC":    now_utc.isoformat().replace("+00:00", "Z"),
+            "LatestEventType": latest_desc[:200],  # truncate against runaway descriptions
+            "LatestEventDate": latest_date,
+            "IsTerminal":      is_terminal,
+        }
+    return fetches
+
+
+def _persist_legevent_cache(
+    bills_meta, events_cache, bills_ws, events_ws, push_alert,
+):
+    """Write the in-memory caches back to the sheet at end of cycle.
+
+    Writes the FULL caches each time (not deltas) — simpler, idempotent,
+    and avoids drift between memory and sheet. For 2,002 bills × 7 cols +
+    20k events × 6 cols = ~134k cells per write. Fits comfortably in the
+    Sheets API payload budget when chunked.
+
+    Failures emit categorized alerts but never raise into the caller.
+    Next cycle re-hydrates whatever the sheet doesn't have.
+    """
+    if bills_ws is None or events_ws is None:
+        return
+
+    CHUNK_SIZE = 5000
+
+    # Bills tab: header + one row per (bill, session)
+    bills_rows = [LEGEVENT_BILLS_HEADER]
+    for (bill, session), meta in sorted(bills_meta.items()):
+        bills_rows.append([
+            bill, session,
+            str(meta.get("LastHistoryHash", "")),
+            str(meta.get("FetchedAtUTC", "")),
+            str(meta.get("LatestEventType", "")),
+            str(meta.get("LatestEventDate", "")),
+            "TRUE" if meta.get("IsTerminal") else "FALSE",
+        ])
+    try:
+        bills_ws.clear()
+        for i in range(0, len(bills_rows), CHUNK_SIZE):
+            chunk = bills_rows[i:i + CHUNK_SIZE]
+            bills_ws.update(values=chunk, range_name=f"A{i + 1}")
+    except Exception as e:
+        push_alert(
+            f"Failed to persist {LEGEVENT_BILLS_TAB}: {e}. Next cycle re-hydrates.",
+            status="WARN", category="API_FAILURE", severity="WARN",
+            dedup_key="legevent_bills_persist_fail",
+        )
+
+    # Events tab: header + one row per event
+    events_rows = [LEGEVENT_EVENTS_HEADER]
+    for (bill, session), events in sorted(events_cache.items()):
+        for e in events:
+            events_rows.append([
+                bill, session,
+                str(e.get("EventID", "")),
+                str(e.get("EventDate", "")),
+                str(e.get("ChamberCode", "")),
+                str(e.get("Description", ""))[:1000],  # cap per-cell length
+            ])
+    try:
+        events_ws.clear()
+        for i in range(0, len(events_rows), CHUNK_SIZE):
+            chunk = events_rows[i:i + CHUNK_SIZE]
+            events_ws.update(values=chunk, range_name=f"A{i + 1}")
+    except Exception as e:
+        push_alert(
+            f"Failed to persist {LEGEVENT_EVENTS_TAB}: {e}. Next cycle re-hydrates.",
+            status="WARN", category="API_FAILURE", severity="WARN",
+            dedup_key="legevent_events_persist_fail",
+        )
+
+
+# === END PR-C7 helper block ================================================
+
+
 def get_armored_session():
     session = requests.Session()
     session.headers.update({'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/120.0.0.0 Safari/537.36'})
@@ -1107,6 +1520,21 @@ def run_calendar_update():
         # math (sum = total_processed) stays clean.
         "legislation_event_attempted": 0,
         "legislation_event_recovered": 0,
+        # PR-C7 telemetry: cross-cycle persistent LegEvent cache. These are
+        # ORTHOGONAL to the denominator buckets (don't change bucket math).
+        # Bank-grade visibility per CLAUDE.md Standard #4: every cache
+        # decision is observable in SYSTEM_METRICS.
+        "legevent_cache_loaded_bills":  0,  # bills meta loaded from sheet
+        "legevent_cache_loaded_events": 0,  # events loaded from sheet
+        "legevent_tier_a_uncached":     0,  # uncached bills (cold-start surface)
+        "legevent_tier_b_hash_changed": 0,  # cache exists, HISTORY mutated
+        "legevent_tier_c_ttl_expired":  0,  # cache exists, hash same, > TTL
+        "legevent_skipped_terminal":    0,  # bills short-circuited (terminal)
+        "legevent_skipped_fresh":       0,  # bills skipped (cache fresh)
+        "legevent_fetched_this_cycle":  0,  # actual fetches performed
+        "legevent_hydration_queued":    0,  # bills needing fetch but over cap
+        "legevent_cache_hits":          0,  # row-level cache lookup hits
+        "legevent_cache_misses":        0,  # row-level cache lookup misses
     }
 
     def push_system_alert(message, status="ALERT", category=None, severity=None, dedup_key=None):
@@ -2297,6 +2725,95 @@ def run_calendar_update():
             api_str = "; ".join(trimmed) if trimmed else "<none>"
             return f"loc='{event_location}'; api_{date_str}=[{api_str}]"
 
+        # ====================================================================
+        # PR-C7: LegEvent persistent cache — load + hydrate before iteration
+        # ====================================================================
+        # Owner-mandated structural pivot: drop the MEETING_VERB_TOKENS gate
+        # (PR-C3.1) and let every journal_default row attempt LegEvent
+        # recovery via a cross-cycle persistent cache. The cache uses
+        # HISTORY.CSV mutation as the live-readiness signal (hash per bill),
+        # with a 6h TTL safety net and explicit Tier A → B → C priority for
+        # cold-start drainage.
+        #
+        # Sizing audit (PR-C6.4): cold-start = 2,002 bills, 4 cycles to
+        # full hydration at 500/cycle. Steady-state = 50-200 fetches/cycle.
+        # ====================================================================
+        from datetime import timezone
+        legevent_now_utc = datetime.now(timezone.utc)
+        legevent_bills_ws, legevent_events_ws = _get_or_create_legevent_tabs(
+            sheet, push_system_alert,
+        )
+        legevent_bills_meta, _persistent_events_cache = _load_legevent_cache(
+            legevent_bills_ws, legevent_events_ws, push_system_alert,
+        )
+        # Seed the per-cycle resolver cache from the persistent store. The
+        # PR-C3.1 resolver short-circuits on `cache_key in legislation_event_cache`
+        # so any pre-populated entry skips the network fetch.
+        _legislation_event_cache.update(_persistent_events_cache)
+
+        source_miss_counts["legevent_cache_loaded_bills"] = len(legevent_bills_meta)
+        source_miss_counts["legevent_cache_loaded_events"] = sum(
+            len(v) for v in _persistent_events_cache.values()
+        )
+
+        # Compute per-bill HISTORY hash from df_past. Group by CleanBill and
+        # build (date, outcome, refid) tuples so a clerk's edit to any of
+        # those fields trips the hash and queues the bill for refresh.
+        legevent_history_hashes: dict = {}
+        legevent_candidate_bills: set = set()
+        if not df_past.empty:
+            for clean_bill, group in df_past.groupby("CleanBill"):
+                bill_str = str(clean_bill).strip()
+                if not bill_str:
+                    continue
+                legevent_candidate_bills.add(bill_str)
+                rows_tuple = []
+                for _, hr in group.iterrows():
+                    d = hr["ParsedDate"].strftime("%Y-%m-%d") if pd.notna(hr.get("ParsedDate")) else ""
+                    o = str(hr.get(desc_col, "") or "")
+                    r = str(hr.get(refid_col, "") or "") if refid_col else ""
+                    rows_tuple.append((d, o, r))
+                legevent_history_hashes[bill_str] = _hash_history_rows_for_bill(rows_tuple)
+
+        legevent_queue, legevent_tiers = _build_legevent_refresh_queue(
+            candidate_bills=legevent_candidate_bills,
+            current_hashes=legevent_history_hashes,
+            bills_meta=legevent_bills_meta,
+            session_5d=_session_code_5d,
+            now_utc=legevent_now_utc,
+            fetch_cap=LEGEVENT_FETCHES_PER_CYCLE,
+            ttl_seconds=LEGEVENT_TTL_SECONDS,
+        )
+        source_miss_counts["legevent_tier_a_uncached"]     = legevent_tiers["tier_a"]
+        source_miss_counts["legevent_tier_b_hash_changed"] = legevent_tiers["tier_b"]
+        source_miss_counts["legevent_tier_c_ttl_expired"]  = legevent_tiers["tier_c"]
+        source_miss_counts["legevent_skipped_terminal"]    = legevent_tiers["skipped_terminal"]
+        source_miss_counts["legevent_skipped_fresh"]       = legevent_tiers["skipped_fresh"]
+        source_miss_counts["legevent_hydration_queued"]    = legevent_tiers["queued_overflow"]
+
+        print(
+            f"📚 LegEvent cache: loaded={len(legevent_bills_meta)} bills, "
+            f"tiers A/B/C={legevent_tiers['tier_a']}/{legevent_tiers['tier_b']}/{legevent_tiers['tier_c']}, "
+            f"skipped(terminal/fresh)={legevent_tiers['skipped_terminal']}/{legevent_tiers['skipped_fresh']}, "
+            f"queued_overflow={legevent_tiers['queued_overflow']}, "
+            f"refreshing={len(legevent_queue)} (cap={LEGEVENT_FETCHES_PER_CYCLE})"
+        )
+
+        if legevent_queue:
+            n_fetched = _hydrate_legevent_cache(
+                refresh_queue=legevent_queue,
+                http_session=http_session,
+                session_5d=_session_code_5d,
+                current_hashes=legevent_history_hashes,
+                legislation_id_cache=_legislation_id_cache,
+                legislation_event_cache=_legislation_event_cache,
+                bills_meta=legevent_bills_meta,
+                push_alert=push_system_alert,
+                now_utc=legevent_now_utc,
+            )
+            source_miss_counts["legevent_fetched_this_cycle"] = n_fetched
+            print(f"📚 LegEvent cache: hydrated {n_fetched} bills this cycle.")
+
         for _, row in df_past.iterrows():
             source_miss_counts["total_processed"] += 1
             # Tracks whether committee was resolved via Memory Anchor fallback
@@ -2575,23 +3092,36 @@ def run_calendar_update():
                         )
 
             # PR-C3: LegislationEvent API as secondary time source. Fires
-            # ONLY when (a) the Schedule API didn't yield a concrete time,
+            # when (a) the Schedule API didn't yield a concrete time and
             # (b) the row is not a Floor action (Floor goes through
-            # convene_anchor / floor_miss), AND (c) the outcome carries a
-            # MEETING_VERB_TOKENS verb (PR-C3.1 gate tightening). The
-            # un-tightened gate fired for every journal_default row in the
-            # full session window — thousands of administrative actions
-            # ("Prefiled", "Referred to Committee", "Printed") with zero
-            # chance of recovering a meeting time, all hammering the LIS
-            # WAF and stacking urllib3 retry/backoff. Restricting to
-            # meeting-verb rows collapses the candidate set to the actual
-            # Class-1 pattern. This targets HB111/505/972 vs P&E and
-            # HB609 vs Finance on Feb 12 2026 — all recovered with
-            # minute-precision EventDate. The helper guarantees no
-            # exceptions escape and emits categorized alerts for every
-            # failure path.
-            if origin == "journal_default" and any(v in outcome_lower for v in MEETING_VERB_TOKENS):
+            # convene_anchor / floor_miss).
+            #
+            # PR-C7 (2026-05-03): the MEETING_VERB_TOKENS gate that PR-C3.1
+            # added is REMOVED. The pre-iteration hydration phase has
+            # already populated `_legislation_event_cache` for every
+            # candidate bill in the queue (Tier A → B → C, capped at
+            # LEGEVENT_FETCHES_PER_CYCLE). The resolver below is now a
+            # cache-lookup-only operation for hydrated bills — no network
+            # fetch, no rate-limit risk. For bills whose hydration was
+            # deferred (overflow → next cycle), the cache key is absent
+            # and the resolver short-circuits via its negative-cache logic.
+            # The PR-C3 hang root cause (uncapped fetches in the row loop)
+            # cannot recur because the row loop never fetches.
+            #
+            # Reason for dropping the verb gate: per the PR-C6.4 sizing
+            # audit and PR-C6.3 verb dump, MEETING_VERB_TOKENS gated only
+            # 0.1% of journal_default rows. The gate was effectively off
+            # while creating the false expectation that LegEvent recovery
+            # was happening for "all the bills it should." The structural
+            # pivot (live-ready cache + drop gate) is the architecturally
+            # correct fix: data-driven, not text-driven (CLAUDE.md #3).
+            if origin == "journal_default":
                 source_miss_counts["legislation_event_attempted"] += 1
+                cache_key_pr_c7 = (bill_num, _session_code_5d)
+                if cache_key_pr_c7 in _legislation_event_cache:
+                    source_miss_counts["legevent_cache_hits"] += 1
+                else:
+                    source_miss_counts["legevent_cache_misses"] += 1
                 _le_result = _resolve_via_legislation_event_api(
                     http_session=http_session,
                     bill_num=bill_num,
@@ -2967,6 +3497,19 @@ def run_calendar_update():
                 )
                 print("🛑 Sheet1 overwrite skipped. State cell Y1 NOT advanced so next cycle's gap-backfill (PR-C2) covers this missed window.")
             else:
+                # PR-C7: persist the LegEvent cache before Sheet1 write so
+                # any persist failure surfaces as an alert in this cycle's
+                # output. Idempotent — writes the FULL caches each time
+                # rather than deltas. Failure paths are categorized alerts;
+                # next cycle re-hydrates whatever the sheet doesn't have.
+                _persist_legevent_cache(
+                    bills_meta=legevent_bills_meta,
+                    events_cache=_legislation_event_cache,
+                    bills_ws=legevent_bills_ws,
+                    events_ws=legevent_events_ws,
+                    push_alert=push_system_alert,
+                )
+
                 print("💾 Writing to Enterprise Database...")
                 worksheet.clear()
                 worksheet.update(values=sheet_data, range_name="A1")
