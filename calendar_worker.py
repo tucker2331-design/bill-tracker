@@ -2790,7 +2790,6 @@ def run_calendar_update():
         # Sizing audit (PR-C6.4): cold-start = 2,002 bills, 4 cycles to
         # full hydration at 500/cycle. Steady-state = 50-200 fetches/cycle.
         # ====================================================================
-        from datetime import timezone
         legevent_now_utc = datetime.now(timezone.utc)
         legevent_bills_ws, legevent_events_ws = _get_or_create_legevent_tabs(
             sheet, push_system_alert,

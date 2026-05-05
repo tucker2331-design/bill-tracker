@@ -11,6 +11,26 @@ Append-only, reverse-chronological (newest at top). Each entry opens with `## [Y
 
 ---
 
+## [2026-05-05] pr | PR-C7 merged → first cold-start cycle bricked → PR-C7.0.1 hotfix opened (PR #42)
+
+PR #41 (PR-C7) merged at `c917d6de` 2026-05-05T00:01:55Z. The very next scheduled cycle (run [25350329090](https://github.com/tucker2331-design/bill-tracker/actions/runs/25350329090), `workflow_dispatch` at 00:02:24Z, ~30s after merge) failed with:
+
+```
+UnboundLocalError: local variable 'timezone' referenced before assignment
+File "calendar_worker.py", line 1893, in run_calendar_update
+    _cycle_start_utc = datetime.now(timezone.utc)
+```
+
+**Root cause:** PR-C7 added a redundant `from datetime import timezone` at `calendar_worker.py:2793` inside the LegEvent recovery block of `run_calendar_update()`. Python's scoping rule made `timezone` local-to-function for the entire body — references at lines 1893 and 1906 (which had previously resolved to the module-level import at line 12) raised `UnboundLocalError` before the local import had executed.
+
+**Fix:** one-line deletion at `calendar_worker.py:2793`. Branch `claude/quizzical-euler-b32824` commit `efe1a90`. Worktree-isolated branch (per [[workflow/branching_rules]] — PR #41 is closed/merged so its branch is dead; new work branches from main).
+
+**[[failures/assumptions_audit#50|assumptions_audit #50]]** captures the lesson: function-scope import shadowing bypasses parse-clean checks and the 9-point pre-push audit. Process upgrade proposed: add Point 10 (Function-Scope Shadow Check) and a 60-second `IS_DRY_RUN=true` pre-merge dry-run for any diff that touches `calendar_worker.py:run_calendar_update`.
+
+**PR #42:** https://github.com/tucker2331-design/bill-tracker/pull/42 — awaiting bot review + owner merge. Once merged, the next 15-min cycle becomes cold-start cycle 1 (the cold-start clock the handoff anticipated effectively *did not start* at 00:01:55Z; it starts when PR #42 lands).
+
+---
+
 ## [2026-05-04] pr | PR-C7 review fixes — Codex P1 + Gemini critical/high/medium/medium
 
 Branch `claude/pr-c7-legevent-persistent-cache` commit `45c72b5`. Four findings on the PR-C7 initial commit, all real, all addressed:
