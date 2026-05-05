@@ -513,18 +513,29 @@ Cap: `LEGEVENT_FETCHES_PER_CYCLE = 500`. Excess queued for next cycle; tracked v
      pre-populating cache for queue bills and (b) negative-cache seed
      for overflow bills.
 
-4. Pre-breaker-decision (post-PR-C7.0.2):
+4. Post-noise-filter, pre-metrics (function-scope, post-PR-C7.0.2):
    - _persist_legevent_cache(bills_meta, events_cache, ...) writes
-     both tabs back UNCONDITIONALLY before the circuit-breaker check.
-     The cache is conceptually independent of Sheet1 correctness —
-     persist on every cycle regardless of breaker outcome.
+     both tabs back UNCONDITIONALLY at function scope, just before
+     the source-miss metrics block (~line 3340). Runs after the noise
+     filter ends and before `alert_rows` is folded into `filtered_events`.
+   - Two design constraints satisfied by this placement:
+     (a) Truly unconditional — no enclosing `if not final_df.empty:`,
+         no breaker gate, no viewport-non-empty gate. The cache persists
+         on EVERY cycle.
+     (b) Persist-failure alerts (`push_system_alert` calls inside
+         `_persist_legevent_cache`) reach this cycle's Sheet1 output
+         because they land in `alert_rows` BEFORE the
+         `filtered_events.extend(alert_rows)` fold, not after.
    - Uses write-then-clear-trailing pattern (Gemini PR-C7 medium review):
      mid-write crash leaves OLD data in unwritten rows, not empty sheet.
-   - Hoisted out of the breaker-pass `else` branch in PR-C7.0.2 after
-     the Groundhog Day deadlock — gating persist on Sheet1 success
-     creates a self-reinforcing loop in any cold-start where cycle 1
-     hydration is insufficient to clear the breaker. See
-     [[failures/assumptions_audit#51]].
+   - History: PR-C7 originally placed this in the breaker-pass `else`
+     branch — Groundhog Day at cold-start, fixed in PR-C7.0.2 commit
+     `7493d45`. That fix moved it before the breaker check but still
+     inside `if not final_df.empty:` blocks — Gemini medium review on
+     PR #43 caught the residual gating, fixed in commit `b0f3998`. See
+     [[failures/assumptions_audit#51]] for the full bot-review fold-in
+     and the lesson generalization (every enclosing `if`, not just the
+     most-obvious one).
 ```
 
 ### Why the PR-C3 hang vector cannot recur

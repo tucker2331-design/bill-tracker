@@ -24,7 +24,7 @@ status: active
 ## Open PRs
 | # | Branch | State | Notes |
 |---|--------|-------|-------|
-| 43 | `claude/pr-c7-0-2-persist-before-breaker` | **Open — PR-C7.0.2 hotfix (Groundhog Day)** | Hoist `_persist_legevent_cache(...)` from the breaker-pass `else` branch to before the `if _breaker_tripped:` check. Cache writes now happen unconditionally on every cycle. Sheet1 overwrite remains gated on breaker. Diff: `+18/-13`. Awaiting bot review. |
+| 43 | `claude/pr-c7-0-2-persist-before-breaker` | **Open — PR-C7.0.2 hotfix (Groundhog Day) with Gemini fold-in** | Hoist `_persist_legevent_cache(...)` to function-scope, just before the source-miss metrics block (~line 3340). Cache writes now happen UNCONDITIONALLY on every cycle — no enclosing `if not final_df.empty:`, no breaker gate, no viewport-non-empty gate. Persist-failure alerts now reach this cycle's Sheet1 output (run before `alert_rows` is folded into `filtered_events`, not after). Initial fix at `7493d45` moved out of the breaker `else` branch only; Gemini medium review caught the residual `if not final_df.empty:` gating and the alert-visibility issue, fixed in `b0f3998`. Final diff across both commits: `+47/-31`. Awaiting owner merge. |
 
 ## Recently closed (this session, 2026-04-28 → 2026-05-05)
 - **PR#42** `claude/quizzical-euler-b32824` — merged 2026-05-05 at `2512a96`. **PR-C7.0.1 hotfix** for the cold-start brick — one-line deletion at `calendar_worker.py:2793` of a redundant `from datetime import timezone` that shadowed the module-level binding inside `run_calendar_update()`. Diff: `1 file changed, 1 deletion(-)` plus docs writeback (`+42/-5`). Restored worker process health but exposed the deeper Groundhog Day deadlock — see PR #43 above and [[failures/assumptions_audit#51]].

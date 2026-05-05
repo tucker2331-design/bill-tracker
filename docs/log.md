@@ -23,7 +23,7 @@ PR #42 (PR-C7.0.1) merged at `2512a96` 2026-05-05T00:16:15Z. Cycle 1 worked stru
 
 **[[failures/assumptions_audit#51|assumptions_audit #51]]** captures the lesson: idempotent state-carrying side effects must not be gated on a check that can permanently prevent them. Audit upgrades proposed: Point 11 (Side-Effect Gating Check) + dry-run with breaker artificially tripped + monitor-as-bug-signal for counters that should be moving but aren't.
 
-**PR #43:** https://github.com/tucker2331-design/bill-tracker/pull/43 — awaiting bot review + owner merge.
+**PR #43:** https://github.com/tucker2331-design/bill-tracker/pull/43 — Gemini medium review (commit `b0f3998`) caught that the initial fix at `7493d45` hoisted persist out of the `else: _breaker_tripped` branch but **left it inside two enclosing `if not final_df.empty:` checks** AND after `sheet_data` was finalized. Two real issues: (1) empty `final_df` would recreate the deadlock with a different gate (same bug class as #51, different precondition); (2) persist-failure alerts wouldn't reach this cycle's Sheet1 because they'd land in `alert_rows` after the fold into `filtered_events`. Final placement is function-scope at ~line 3340, just before the source-miss metrics block. **Lesson generalization** added to [[failures/assumptions_audit#51]]: "must not be gated on a check that can permanently prevent them" applies to **every** enclosing check, not just the most-obvious one. Treating bot review as a real signal paid off again. Awaiting owner merge.
 
 ---
 
