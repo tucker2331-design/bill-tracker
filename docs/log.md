@@ -11,6 +11,22 @@ Append-only, reverse-chronological (newest at top). Each entry opens with `## [Y
 
 ---
 
+## [2026-05-05] pr | PR-C7.0.1 merged → 12 cycles of Groundhog Day → PR-C7.0.2 hotfix (PR #43)
+
+PR #42 (PR-C7.0.1) merged at `2512a96` 2026-05-05T00:16:15Z. Cycle 1 worked structurally — queue identified 3,645 uncached bills (vs PR-C6.4's 2,002 estimate; ~82% larger surface, sizing-variance entry deferred until queue drains), 500 hydrated, 3,145 negative-cache seeded, row loop strictly cache-lookup-only (the Codex P1 / Gemini critical fix held). But the breaker tripped at `meeting_unsourced=150` (the 3,145 unhydrated bills had unsourced meeting actions). Sheet1 overwrite refused, state cell Y1 frozen at pre-PR-C7 `2026-05-04T23:47:03Z`.
+
+**Then 12 cycles ran identically over ~16 hours.** Same gap (877.8 min), same tier counts (A/B/C=3,645/0/0), same overflow (3,145), same hydration (500 — same 500 bills every cycle), same breaker trip. Each cycle's GitHub Actions run was green. The worker was achieving 0% structural progress while reporting 100% individual-cycle success.
+
+**Root cause:** `_persist_legevent_cache(...)` lived inside the `else` branch of `if _breaker_tripped:` at `calendar_worker.py:3597`. Breaker trips → persist skipped → next cycle reloads zero → re-hydrate same 500 → re-trip → loop. Same bug class as PR #41's Codex P1 / Gemini critical row-loop finding ("side effect on the wrong side of a check that doesn't fire on the test path") — caught on the row-loop face, missed on the persist face.
+
+**Fix:** PR #43 hoists `_persist_legevent_cache(...)` to before the `if _breaker_tripped:` check. Persist runs unconditionally; Sheet1 overwrite remains gated on the breaker. Branch `claude/pr-c7-0-2-persist-before-breaker` commit `7493d45`. Diff: `+18/-13`.
+
+**[[failures/assumptions_audit#51|assumptions_audit #51]]** captures the lesson: idempotent state-carrying side effects must not be gated on a check that can permanently prevent them. Audit upgrades proposed: Point 11 (Side-Effect Gating Check) + dry-run with breaker artificially tripped + monitor-as-bug-signal for counters that should be moving but aren't.
+
+**PR #43:** https://github.com/tucker2331-design/bill-tracker/pull/43 — Gemini medium review (commit `b0f3998`) caught that the initial fix at `7493d45` hoisted persist out of the `else: _breaker_tripped` branch but **left it inside two enclosing `if not final_df.empty:` checks** AND after `sheet_data` was finalized. Two real issues: (1) empty `final_df` would recreate the deadlock with a different gate (same bug class as #51, different precondition); (2) persist-failure alerts wouldn't reach this cycle's Sheet1 because they'd land in `alert_rows` after the fold into `filtered_events`. Final placement is function-scope at ~line 3340, just before the source-miss metrics block. **Lesson generalization** added to [[failures/assumptions_audit#51]]: "must not be gated on a check that can permanently prevent them" applies to **every** enclosing check, not just the most-obvious one. Treating bot review as a real signal paid off again. Awaiting owner merge.
+
+---
+
 ## [2026-05-05] pr | PR-C7 merged → first cold-start cycle bricked → PR-C7.0.1 hotfix opened (PR #42)
 
 PR #41 (PR-C7) merged at `c917d6de` 2026-05-05T00:01:55Z. The very next scheduled cycle (run [25350329090](https://github.com/tucker2331-design/bill-tracker/actions/runs/25350329090), `workflow_dispatch` at 00:02:24Z, ~30s after merge) failed with:

@@ -513,11 +513,29 @@ Cap: `LEGEVENT_FETCHES_PER_CYCLE = 500`. Excess queued for next cycle; tracked v
      pre-populating cache for queue bills and (b) negative-cache seed
      for overflow bills.
 
-4. Pre-Sheet1-write:
+4. Post-noise-filter, pre-metrics (function-scope, post-PR-C7.0.2):
    - _persist_legevent_cache(bills_meta, events_cache, ...) writes
-     both tabs back. Uses write-then-clear-trailing pattern (Gemini
-     PR-C7 medium review): mid-write crash leaves OLD data in unwritten
-     rows, not empty sheet.
+     both tabs back UNCONDITIONALLY at function scope, just before
+     the source-miss metrics block (~line 3340). Runs after the noise
+     filter ends and before `alert_rows` is folded into `filtered_events`.
+   - Two design constraints satisfied by this placement:
+     (a) Truly unconditional — no enclosing `if not final_df.empty:`,
+         no breaker gate, no viewport-non-empty gate. The cache persists
+         on EVERY cycle.
+     (b) Persist-failure alerts (`push_system_alert` calls inside
+         `_persist_legevent_cache`) reach this cycle's Sheet1 output
+         because they land in `alert_rows` BEFORE the
+         `filtered_events.extend(alert_rows)` fold, not after.
+   - Uses write-then-clear-trailing pattern (Gemini PR-C7 medium review):
+     mid-write crash leaves OLD data in unwritten rows, not empty sheet.
+   - History: PR-C7 originally placed this in the breaker-pass `else`
+     branch — Groundhog Day at cold-start, fixed in PR-C7.0.2 commit
+     `7493d45`. That fix moved it before the breaker check but still
+     inside `if not final_df.empty:` blocks — Gemini medium review on
+     PR #43 caught the residual gating, fixed in commit `b0f3998`. See
+     [[failures/assumptions_audit#51]] for the full bot-review fold-in
+     and the lesson generalization (every enclosing `if`, not just the
+     most-obvious one).
 ```
 
 ### Why the PR-C3 hang vector cannot recur
