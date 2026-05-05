@@ -3529,6 +3529,24 @@ def run_calendar_update():
             _cycle_end_utc = datetime.now(timezone.utc)
             _cycle_end_utc_iso = _cycle_end_utc.strftime("%Y-%m-%dT%H:%M:%SZ")
 
+            # Persist the LegEvent cache BEFORE the breaker check. Cache
+            # state is independent of Sheet1 correctness — fetched
+            # LegislationEvent data is valid regardless of the row
+            # pipeline's outcome. Persisting only on the success branch
+            # creates a deadlock: a tripped breaker skips persist, the
+            # next cycle reloads zero, the same first 500 bills hydrate
+            # again, the same meeting_unsourced count produces the same
+            # trip → loop forever. Idempotent — writes the FULL caches
+            # each time. Failure paths are categorized alerts; next
+            # cycle re-hydrates whatever the sheet doesn't have.
+            _persist_legevent_cache(
+                bills_meta=legevent_bills_meta,
+                events_cache=_legislation_event_cache,
+                bills_ws=legevent_bills_ws,
+                events_ws=legevent_events_ws,
+                push_alert=push_system_alert,
+            )
+
             if _breaker_tripped:
                 _breaker_msg = (
                     f"🚨 CIRCUIT BREAKER TRIPPED at {_cycle_end_utc_iso} — "
@@ -3589,19 +3607,6 @@ def run_calendar_update():
                 )
                 print("🛑 Sheet1 overwrite skipped. State cell Y1 NOT advanced so next cycle's gap-backfill (PR-C2) covers this missed window.")
             else:
-                # PR-C7: persist the LegEvent cache before Sheet1 write so
-                # any persist failure surfaces as an alert in this cycle's
-                # output. Idempotent — writes the FULL caches each time
-                # rather than deltas. Failure paths are categorized alerts;
-                # next cycle re-hydrates whatever the sheet doesn't have.
-                _persist_legevent_cache(
-                    bills_meta=legevent_bills_meta,
-                    events_cache=_legislation_event_cache,
-                    bills_ws=legevent_bills_ws,
-                    events_ws=legevent_events_ws,
-                    push_alert=push_system_alert,
-                )
-
                 print("💾 Writing to Enterprise Database...")
                 worksheet.clear()
                 worksheet.update(values=sheet_data, range_name="A1")
