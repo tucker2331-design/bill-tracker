@@ -513,11 +513,18 @@ Cap: `LEGEVENT_FETCHES_PER_CYCLE = 500`. Excess queued for next cycle; tracked v
      pre-populating cache for queue bills and (b) negative-cache seed
      for overflow bills.
 
-4. Pre-Sheet1-write:
+4. Pre-breaker-decision (post-PR-C7.0.2):
    - _persist_legevent_cache(bills_meta, events_cache, ...) writes
-     both tabs back. Uses write-then-clear-trailing pattern (Gemini
-     PR-C7 medium review): mid-write crash leaves OLD data in unwritten
-     rows, not empty sheet.
+     both tabs back UNCONDITIONALLY before the circuit-breaker check.
+     The cache is conceptually independent of Sheet1 correctness —
+     persist on every cycle regardless of breaker outcome.
+   - Uses write-then-clear-trailing pattern (Gemini PR-C7 medium review):
+     mid-write crash leaves OLD data in unwritten rows, not empty sheet.
+   - Hoisted out of the breaker-pass `else` branch in PR-C7.0.2 after
+     the Groundhog Day deadlock — gating persist on Sheet1 success
+     creates a self-reinforcing loop in any cold-start where cycle 1
+     hydration is insufficient to clear the breaker. See
+     [[failures/assumptions_audit#51]].
 ```
 
 ### Why the PR-C3 hang vector cannot recur
