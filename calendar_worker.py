@@ -3337,6 +3337,35 @@ def run_calendar_update():
                     continue
         filtered_events.append(ev)
 
+    # Persist the LegEvent cache UNCONDITIONALLY here. Two design
+    # constraints:
+    #   1. State must carry forward regardless of row-pipeline outcome.
+    #      Sheet1 correctness depends on the row pipeline; the cache's
+    #      correctness depends only on whether LIS LegislationEvent
+    #      fetches succeeded. Gating persist on any downstream check
+    #      (breaker pass, non-empty final_df, viewport non-empty) creates
+    #      a self-reinforcing deadlock in any cold-start where cycle 1's
+    #      output trips that check — the cache never persists, the next
+    #      cycle reloads zero, the same hydration runs, the same downstream
+    #      check trips again. Loop forever.
+    #   2. Persist alerts must land in this cycle's Sheet1 output.
+    #      `_persist_legevent_cache` calls `push_system_alert` on failure;
+    #      those alerts append to `alert_rows`, which gets folded into
+    #      `filtered_events` ~40 lines below. Anywhere downstream of that
+    #      fold (e.g., next to the breaker check, after sheet_data is
+    #      built) means alerts about THIS cycle's persist failures
+    #      surface only on the NEXT cycle — too late for X-Ray Section 0
+    #      to attribute the failure to the cycle that caused it.
+    # Function is idempotent — writes the FULL caches each time, not
+    # deltas — so calling on every cycle is safe.
+    _persist_legevent_cache(
+        bills_meta=legevent_bills_meta,
+        events_cache=_legislation_event_cache,
+        bills_ws=legevent_bills_ws,
+        events_ws=legevent_events_ws,
+        push_alert=push_system_alert,
+    )
+
     # === SOURCE-MISS METRICS (Section 0 denominator) ===
     # Surface the counters that PR-A's post-mortem identified as missing.
     # Encoded as a JSON-in-outcome alert row with Bill="SYSTEM_METRICS" so
@@ -3528,24 +3557,6 @@ def run_calendar_update():
             # unchanged.
             _cycle_end_utc = datetime.now(timezone.utc)
             _cycle_end_utc_iso = _cycle_end_utc.strftime("%Y-%m-%dT%H:%M:%SZ")
-
-            # Persist the LegEvent cache BEFORE the breaker check. Cache
-            # state is independent of Sheet1 correctness — fetched
-            # LegislationEvent data is valid regardless of the row
-            # pipeline's outcome. Persisting only on the success branch
-            # creates a deadlock: a tripped breaker skips persist, the
-            # next cycle reloads zero, the same first 500 bills hydrate
-            # again, the same meeting_unsourced count produces the same
-            # trip → loop forever. Idempotent — writes the FULL caches
-            # each time. Failure paths are categorized alerts; next
-            # cycle re-hydrates whatever the sheet doesn't have.
-            _persist_legevent_cache(
-                bills_meta=legevent_bills_meta,
-                events_cache=_legislation_event_cache,
-                bills_ws=legevent_bills_ws,
-                events_ws=legevent_events_ws,
-                push_alert=push_system_alert,
-            )
 
             if _breaker_tripped:
                 _breaker_msg = (
