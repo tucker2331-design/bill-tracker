@@ -2566,8 +2566,49 @@ def run_calendar_update():
         print(f"   Senate range: {convene_dates_senate[0]} to {convene_dates_senate[-1]}")
 
     print("📡 Processing HISTORY.CSV via Sequential Turing Machine...")
-    df_past = safe_fetch_csv(f"https://blob.lis.virginia.gov/lisfiles/{blob_code}/HISTORY.CSV")
-    if df_past.empty: df_past = safe_fetch_csv(f"https://lis.blob.core.windows.net/lisfiles/{blob_code}/HISTORY.CSV")
+    # `blob.lis.virginia.gov` was a CNAME alias to the canonical Azure
+    # blob host; verified NXDOMAIN universally as of 2026-05-05. Use the
+    # canonical Azure URL only (matches DOCKET.CSV's URL pattern at line
+    # ~2066). If this fails, surface it loudly — there is no longer a
+    # second host to fall back to. See [[failures/assumptions_audit#52]].
+    df_past = safe_fetch_csv(f"https://lis.blob.core.windows.net/lisfiles/{blob_code}/HISTORY.CSV")
+    if df_past.empty:
+        push_system_alert(
+            f"HISTORY.CSV fetch returned empty for session {blob_code} from "
+            f"lis.blob.core.windows.net. Worker will proceed with no past-action "
+            f"data this cycle — Sheet1 row count will collapse if this persists.",
+            status="CRITICAL", category="API_FAILURE", severity="CRITICAL",
+            dedup_key="history_csv_fetch_empty",
+        )
+
+    # Initialize LegEvent persistent cache state UNCONDITIONALLY here,
+    # before the HISTORY-dependent block. The cache loads from Google
+    # Sheets (LegEvent_Bills + LegEvent_Events tabs), not from HISTORY.CSV
+    # — its preconditions are independent of df_past. The unconditional
+    # `_persist_legevent_cache(...)` call later in this function (~line
+    # 3340, PR-C7.0.2 placement) references `legevent_bills_meta /
+    # legevent_bills_ws / legevent_events_ws`; if HISTORY.CSV fails AND
+    # those vars aren't bound here, that call raises UnboundLocalError
+    # before the alert above can land in Sheet1. Hydration (which
+    # genuinely needs df_past) stays inside the `if not df_past.empty:`
+    # block below. See [[failures/assumptions_audit#50]] for the
+    # function-scope-binding lesson and Codex P1 review on PR #44.
+    legevent_now_utc = datetime.now(timezone.utc)
+    legevent_bills_ws, legevent_events_ws = _get_or_create_legevent_tabs(
+        sheet, push_system_alert,
+    )
+    legevent_bills_meta, _persistent_events_cache = _load_legevent_cache(
+        legevent_bills_ws, legevent_events_ws, push_system_alert,
+    )
+    # Seed the per-cycle resolver cache from the persistent store. The
+    # PR-C3.1 resolver short-circuits on `cache_key in legislation_event_cache`
+    # so any pre-populated entry skips the network fetch.
+    _legislation_event_cache.update(_persistent_events_cache)
+
+    source_miss_counts["legevent_cache_loaded_bills"] = len(legevent_bills_meta)
+    source_miss_counts["legevent_cache_loaded_events"] = sum(
+        len(v) for v in _persistent_events_cache.values()
+    )
         
     if not df_past.empty:
         bill_col = next((c for c in df_past.columns if 'bill' in c.lower()), 'BillNumber')
@@ -2778,7 +2819,7 @@ def run_calendar_update():
             return f"loc='{event_location}'; api_{date_str}=[{api_str}]"
 
         # ====================================================================
-        # PR-C7: LegEvent persistent cache — load + hydrate before iteration
+        # PR-C7: LegEvent persistent cache — hydrate before iteration
         # ====================================================================
         # Owner-mandated structural pivot: drop the MEETING_VERB_TOKENS gate
         # (PR-C3.1) and let every journal_default row attempt LegEvent
@@ -2789,23 +2830,12 @@ def run_calendar_update():
         #
         # Sizing audit (PR-C6.4): cold-start = 2,002 bills, 4 cycles to
         # full hydration at 500/cycle. Steady-state = 50-200 fetches/cycle.
+        #
+        # Cache state (`legevent_bills_meta`, `legevent_bills_ws`,
+        # `legevent_events_ws`) is initialized UNCONDITIONALLY above the
+        # `if not df_past.empty:` block — see the LegEvent init block near
+        # line 2575. Hydration happens here because it depends on df_past.
         # ====================================================================
-        legevent_now_utc = datetime.now(timezone.utc)
-        legevent_bills_ws, legevent_events_ws = _get_or_create_legevent_tabs(
-            sheet, push_system_alert,
-        )
-        legevent_bills_meta, _persistent_events_cache = _load_legevent_cache(
-            legevent_bills_ws, legevent_events_ws, push_system_alert,
-        )
-        # Seed the per-cycle resolver cache from the persistent store. The
-        # PR-C3.1 resolver short-circuits on `cache_key in legislation_event_cache`
-        # so any pre-populated entry skips the network fetch.
-        _legislation_event_cache.update(_persistent_events_cache)
-
-        source_miss_counts["legevent_cache_loaded_bills"] = len(legevent_bills_meta)
-        source_miss_counts["legevent_cache_loaded_events"] = sum(
-            len(v) for v in _persistent_events_cache.values()
-        )
 
         # Compute per-bill HISTORY hash from df_past. Group by CleanBill and
         # build (date, outcome, refid) tuples so a clerk's edit to any of

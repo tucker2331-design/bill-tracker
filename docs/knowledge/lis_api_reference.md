@@ -152,10 +152,10 @@ PR-C3+)_ are queued for integration.
 
 ### HISTORY.CSV
 
-`https://lis.blob.core.windows.net/lisfiles/{sessionYear}/HISTORY.CSV`
+`https://lis.blob.core.windows.net/lisfiles/{sessionYear}/HISTORY.CSV` — **canonical, authoritative.** HTTP 200, ~4.7 MB, ISO-8859-1; CNAMEs to `blob.lvl04prdstr02c.store.core.windows.net`.
 
-- Alternative: `https://blob.lis.virginia.gov/lisfiles/{sessionYear}/HISTORY.CSV`
-- Session 261 (year 2026): 60,694 rows.
+- ⚠️ **Dead alias (do not use):** `https://blob.lis.virginia.gov/lisfiles/{sessionYear}/HISTORY.CSV` — verified NXDOMAIN universally as of 2026-05-05. The CNAME to the canonical Azure host has been removed by LIS. Worker fallback that tried this URL first wasted ~10s + emitted a misleading WARN every cycle from PR-C7's first run through 2026-05-06; dropped in PR-C7.0.3. See [[failures/assumptions_audit#52]].
+- Session 261 (year 2026): grew from 60,694 (project baseline) to 65,169 data rows + 1 header by 2026-05-05.
 - Key columns: BillNumber, HistoryDate, Description, History_refid.
 - History_refid encodes committee codes: "H14" (direct), "H14V2610034" (vote-style).
 
@@ -172,7 +172,7 @@ PR-C3+)_ are queued for integration.
 - Schedule API `ScheduleTime` can be relative ("upon adjournment of the Senate"); see `build_time_graph()`.
 - Description field is HTML, may contain links to PDF agendas.
 - HISTORY.CSV encoding is ISO-8859-1, not UTF-8.
-- Some blob URLs use different subdomain patterns (blob.lis vs lis.blob).
+- Use `lis.blob.core.windows.net` ONLY for blob fetches. The legacy `blob.lis.virginia.gov` CNAME alias is dead (NXDOMAIN) — see HISTORY.CSV note above.
 - `History_refid` may be empty for some action types (floor actions, executive actions).
 - `sessionCode` is silently ignored on Schedule API but strictly enforced on new MVC endpoints (and in 5-digit form only there).
 - Two distinct WebAPIKeys are required across the API surface — neither alone covers all endpoints.
