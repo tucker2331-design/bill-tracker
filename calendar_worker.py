@@ -2566,8 +2566,20 @@ def run_calendar_update():
         print(f"   Senate range: {convene_dates_senate[0]} to {convene_dates_senate[-1]}")
 
     print("📡 Processing HISTORY.CSV via Sequential Turing Machine...")
-    df_past = safe_fetch_csv(f"https://blob.lis.virginia.gov/lisfiles/{blob_code}/HISTORY.CSV")
-    if df_past.empty: df_past = safe_fetch_csv(f"https://lis.blob.core.windows.net/lisfiles/{blob_code}/HISTORY.CSV")
+    # `blob.lis.virginia.gov` was a CNAME alias to the canonical Azure
+    # blob host; verified NXDOMAIN universally as of 2026-05-05. Use the
+    # canonical Azure URL only (matches DOCKET.CSV's URL pattern at line
+    # ~2066). If this fails, surface it loudly — there is no longer a
+    # second host to fall back to. See [[failures/assumptions_audit#52]].
+    df_past = safe_fetch_csv(f"https://lis.blob.core.windows.net/lisfiles/{blob_code}/HISTORY.CSV")
+    if df_past.empty:
+        push_system_alert(
+            f"HISTORY.CSV fetch returned empty for session {blob_code} from "
+            f"lis.blob.core.windows.net. Worker will proceed with no past-action "
+            f"data this cycle — Sheet1 row count will collapse if this persists.",
+            status="CRITICAL", category="API_FAILURE", severity="CRITICAL",
+            dedup_key="history_csv_fetch_empty",
+        )
         
     if not df_past.empty:
         bill_col = next((c for c in df_past.columns if 'bill' in c.lower()), 'BillNumber')

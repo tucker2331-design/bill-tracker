@@ -11,6 +11,41 @@ Append-only, reverse-chronological (newest at top). Each entry opens with `## [Y
 
 ---
 
+## [2026-05-06] pr | PR-C7.0.3 dead-alias hotfix — `blob.lis.virginia.gov` NXDOMAIN diagnostic
+
+Owner asked whether the persistent `⚠️ CSV fetch failed for https://blob.lis.virginia.gov/lisfiles/20261/HISTORY.CSV: ... NameResolutionError ... Errno -2` warning (firing every cycle since at least 2026-05-04) was state-wide LIS infrastructure failure or LIS punishing us for the high-volume PR-C7 cold-start testing.
+
+**Diagnostic:** `nslookup` from a different ISP than the GitHub Actions runners returned NXDOMAIN for `blob.lis.virginia.gov` — universal, not GHA-specific, not rate-limit-shaped. Meanwhile `lis.virginia.gov` resolved normally (`20.110.235.203`) and canonical `lis.blob.core.windows.net` served HTTP 200 with 4.7 MB / 65,170 lines of HISTORY.CSV — matching exactly the worker's `processed=65169` per cycle, confirming the silent-fallback at `calendar_worker.py:2569-2570` had been masking the dead alias by always succeeding on the canonical retry. Other LIS endpoints we hammer much harder (Session API, LegislationEvent at 500 fetches/cycle for hydration, DOCKET.CSV from `lis.blob.core.windows.net`) all healthy.
+
+**Conclusion:** dead CNAME alias, not targeted blocking. LIS removed the `blob.lis.virginia.gov` CNAME at some unknown date; the worker's WARN log line had been the only externally-visible signal but its structure made it look like a transient fetch failure rather than a permanent dead URL.
+
+**Fix (PR-C7.0.3, branch `claude/pr-c7-0-3-drop-dead-blob-alias`):** drop the dead alias from the worker entirely, use canonical `lis.blob.core.windows.net` only. Replace silent-empty-DataFrame fallback with a CRITICAL `push_system_alert` if HISTORY.CSV ever returns empty — aligns with [[workflow/source_miss_visibility]] (no silent failure on a source miss).
+
+**[[failures/assumptions_audit#52]]** captures the lesson: a `try-then-fallback` pattern that succeeds on the fallback every time is observability debt, not resilience. Audit upgrade proposed: Point 12 — *Fallback Liveness Check.* Process upgrade: a WARN appearing in N consecutive cycles is a CRITICAL pending investigation; cycle-stable WARNs are not transient by definition.
+
+**Brain updates:** [[knowledge/lis_api_reference]] flipped to mark `blob.lis.virginia.gov` as ⚠️ DEAD (Do Not Use); HISTORY.CSV row count updated from 60,694 baseline to current 65,169 + 1 header.
+
+---
+
+## [2026-05-06] milestone | PR-C7 architecture validated — out of Groundhog Day, cold-start draining
+
+Cycle 2 of post-PR#43 confirmed the persistent LegEvent cache works as designed.
+
+| Metric | Cycle 1 (post-#43) | Cycle 2 | Δ |
+|---|---|---|---|
+| `loaded` from persistent cache | 0 | 500 | +500 ← **persist round-tripped** |
+| Tier A (uncached) | 3,645 | 3,145 | −500 |
+| `skipped(terminal/fresh)` | 0/0 | 0/500 | The 500 loaded are within TTL → treated as fresh, no re-fetch |
+| `queued_overflow` | 3,145 | 2,645 | −500 |
+| `unsourced_journal` | 6,235 | 6,158 | −77 |
+| `meeting_unsourced` | 150 | 144 | −6 |
+
+Drain projection: ~7 more cycles to fully drain Tier A. Breaker clears when `meeting_unsourced < 50` — currently ~6/cycle drop, likely accelerates as the 500/cycle hydration hits the bills that actually have unsourced meeting actions. Once breaker clears, Sheet1 overwrite resumes, Y1 advances, gap closes from 1039 min back to ~15 min steady state. Post-drain quantification of the X-Ray Section 9 real-bug residue (vs the ~80% classifier-false-positive mass) lands when `meeting_unsourced` stabilizes.
+
+Two things deferred until queue=0: (1) sizing-variance audit entry — PR-C6.4 sized the cold-start at 2,002 bills, reality is 3,645 (~82% larger); will be assumptions_audit #53 with real cycle counts; (2) post-PR-C7 baseline capture in [[testing/crossover_week_baseline]].
+
+---
+
 ## [2026-05-05] pr | PR-C7.0.1 merged → 12 cycles of Groundhog Day → PR-C7.0.2 hotfix (PR #43)
 
 PR #42 (PR-C7.0.1) merged at `2512a96` 2026-05-05T00:16:15Z. Cycle 1 worked structurally — queue identified 3,645 uncached bills (vs PR-C6.4's 2,002 estimate; ~82% larger surface, sizing-variance entry deferred until queue drains), 500 hydrated, 3,145 negative-cache seeded, row loop strictly cache-lookup-only (the Codex P1 / Gemini critical fix held). But the breaker tripped at `meeting_unsourced=150` (the 3,145 unhydrated bills had unsourced meeting actions). Sheet1 overwrite refused, state cell Y1 frozen at pre-PR-C7 `2026-05-04T23:47:03Z`.
