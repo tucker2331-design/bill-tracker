@@ -25,6 +25,8 @@ Owner asked whether the persistent `⚠️ CSV fetch failed for https://blob.lis
 
 **Brain updates:** [[knowledge/lis_api_reference]] flipped to mark `blob.lis.virginia.gov` as ⚠️ DEAD (Do Not Use); HISTORY.CSV row count updated from 60,694 baseline to current 65,169 + 1 header.
 
+**Codex P1 fold-in (post-push):** dropping the dead-alias fallback newly exposed a dormant `UnboundLocalError` — `legevent_bills_meta / legevent_bills_ws / legevent_events_ws` were initialized inside `if not df_past.empty:`, so a real empty df_past would crash the unconditional persist call (PR-C7.0.2 placement) before the new CRITICAL alert could land in Sheet1. Same bug class as [[failures/assumptions_audit#50]] but a different root cause: **conditional binding on a previously-unreachable path** rather than Python's local-binding rule. Before PR-C7.0.3, the silent fallback to canonical always succeeded, so the never-bound path was effectively dead code. **Removing dead code can resurrect previously-dead error paths.** Fix folded into the same PR: hoist the LegEvent INIT block (load + counters, df_past-independent) to function-scope before the `if not df_past.empty:` check. Hydration stays inside the block. **[[failures/assumptions_audit#52]]** updated with the fold-in subsection and a new audit upgrade — **Point 13: Dead-Path Resurrection Check.** When dropping a fallback or simplifying a defensive pattern, grep every function-scope variable that was bound only on the path being removed; confirm each is either re-bound unconditionally or no longer referenced downstream.
+
 ---
 
 ## [2026-05-06] milestone | PR-C7 architecture validated — out of Groundhog Day, cold-start draining
