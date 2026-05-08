@@ -1800,6 +1800,49 @@ def run_calendar_update():
             dedup_key="state_cell_y1_read_fail",
         )
 
+    # PR-C7.0.4: read last-known-good meeting_unsourced count from Sheet1!Y2.
+    # The PR-C1 mass-violation circuit breaker originally tripped on an
+    # absolute threshold of 50 (against a crossover-week baseline of ~9).
+    # Post-PR-C7 the steady-state floor is ~150 (the residue of X-Ray
+    # classifier false positives that LegEvent cannot recover — the real
+    # fix is PR-C7.1's structural classifier rewrite). The old absolute
+    # threshold trips every cycle in steady state, freezing Sheet1
+    # indefinitely (3+ days observed). The delta-vs-last-known-good
+    # breaker below uses Y2 as the rolling baseline so:
+    #   - steady state passes (delta = 0)
+    #   - real regressions (delta > 25) still trip
+    #   - PR-C7.1 improvements ratchet Y2 down automatically on each
+    #     successful cycle
+    # Catastrophic absolute floor (500) preserved as backstop for
+    # pathological spikes. Default 0 → first-cycle / missing baseline
+    # initialization handled in the breaker block.
+    last_known_good_meeting_unsourced = 0
+    try:
+        _raw_y2 = worksheet.acell("Y2").value
+        _y2_str = (_raw_y2 or "").strip()
+        if _y2_str:
+            last_known_good_meeting_unsourced = int(_y2_str)
+            print(f"🕒 Last known good meeting_unsourced: {last_known_good_meeting_unsourced} (state cell Y2)")
+        else:
+            print("🕒 State cell Y2 is empty — this is normal on first run after PR-C7.0.4 deploys.")
+    except ValueError as _y2_parse_err:
+        push_system_alert(
+            f"Sheet1!Y2 has malformed integer value {_raw_y2!r}: {_y2_parse_err}. "
+            f"Falling back to last_known_good=0; breaker delta-check will be inactive this cycle.",
+            status="WARN",
+            category="DATA_ANOMALY",
+            severity="WARN",
+            dedup_key="state_cell_y2_malformed",
+        )
+    except Exception as _y2_read_err:
+        push_system_alert(
+            f"Could not read state cell Sheet1!Y2 (last_known_good_meeting_unsourced): {_y2_read_err}",
+            status="INFO",
+            category="API_FAILURE",
+            severity="INFO",
+            dedup_key="state_cell_y2_read_fail",
+        )
+
     # Review-fix (Codex P2): carry-forward read for Sheet1!W1. If the
     # previous cycle tripped the mass-violation circuit breaker, it left a
     # JSON trip record in W1 (because its in-memory alert_rows died with
@@ -3549,18 +3592,31 @@ def run_calendar_update():
 
             sheet_data = [final_df.columns.values.tolist()] + final_df.values.tolist()
 
-            # PR-C1: MASS-VIOLATION CIRCUIT BREAKER — last safety net before
-            # Sheet1 is overwritten. If this cycle's write-time invariants
-            # failed at a high rate, OR the meeting-verb-unsourced count
-            # spiked well past today's known-bug baseline (9 for crossover
-            # week), refuse the clear+update. The previous cycle's data
-            # stays as last-known-good; a compact summary goes to Sheet1!X1
-            # so lobbyists / X-Ray can see that a cycle was held back and
-            # why. Thresholds are intentionally generous — the breaker is a
-            # safety net for REGRESSIONS, not a gate on normal operation.
-            CIRCUIT_MAX_VIOLATION_RATE = 0.10         # >10% of rows failing invariants
-            CIRCUIT_MAX_ABS_VIOLATIONS = 50           # or >=50 absolute
-            CIRCUIT_MAX_MEETING_UNSOURCED = 50        # or >=50 meeting-verb misses (baseline ~9)
+            # PR-C1 + PR-C7.0.4: MASS-VIOLATION CIRCUIT BREAKER — last
+            # safety net before Sheet1 is overwritten. If this cycle's
+            # write-time invariants failed at a high rate, OR the meeting-
+            # verb-unsourced count regressed sharply against the last
+            # known good baseline, refuse the clear+update. The previous
+            # cycle's data stays as last-known-good; a compact summary
+            # goes to Sheet1!X1 so lobbyists / X-Ray can see that a cycle
+            # was held back and why. Thresholds are intentionally generous
+            # — the breaker is a safety net for REGRESSIONS, not a gate
+            # on normal operation.
+            #
+            # PR-C7.0.4 recalibration: replace the absolute meeting_unsourced
+            # threshold (50, set against a pre-PR-C7 baseline of ~9) with
+            # delta-vs-last-known-good (read from Sheet1!Y2) plus an
+            # absolute catastrophic floor. Steady-state post-PR-C7 is ~150
+            # (X-Ray classifier false positives, fixed structurally in
+            # PR-C7.1). Stale data is unacceptable in a live tracking
+            # environment; the old absolute threshold froze Sheet1 for
+            # 3+ days. The delta-based check tracks the baseline rolling-
+            # forward AND auto-tracks improvements when PR-C7.1 ships.
+            # See [[failures/assumptions_audit#53]].
+            CIRCUIT_MAX_VIOLATION_RATE = 0.10              # >10% of rows failing invariants
+            CIRCUIT_MAX_ABS_VIOLATIONS = 50                # or >=50 absolute
+            CIRCUIT_MAX_MEETING_UNSOURCED_DELTA = 25       # or >25 worse than last good
+            CIRCUIT_MAX_MEETING_UNSOURCED_ABS = 500        # or >500 catastrophic absolute floor
             # Review-fix (Gemini): denominator is rows_appended, not
             # total_processed — rows_appended counts ONLY rows that reached
             # the chokepoint (the universe where invariants COULD fire),
@@ -3571,10 +3627,19 @@ def run_calendar_update():
             _violations = source_miss_counts["invariant_violations"]
             _meeting_unsourced = source_miss_counts["meeting_unsourced"]
             _violation_rate = _violations / _rows_appended
+            # PR-C7.0.4: delta is max(0, current - prior) — improvements
+            # don't count toward tripping. First cycle after deploy or
+            # after operator-cleared Y2: baseline is 0, delta-check is
+            # bypassed (one cycle's grace) and the catastrophic absolute
+            # floor handles pathological spikes. Subsequent cycles use
+            # the rolling Y2 baseline that ratchets on every success.
+            _meeting_unsourced_delta = max(0, _meeting_unsourced - last_known_good_meeting_unsourced)
+            _delta_check_active = last_known_good_meeting_unsourced > 0
             _breaker_tripped = (
                 _violation_rate > CIRCUIT_MAX_VIOLATION_RATE
                 or _violations >= CIRCUIT_MAX_ABS_VIOLATIONS
-                or _meeting_unsourced >= CIRCUIT_MAX_MEETING_UNSOURCED
+                or (_delta_check_active and _meeting_unsourced_delta > CIRCUIT_MAX_MEETING_UNSOURCED_DELTA)
+                or _meeting_unsourced > CIRCUIT_MAX_MEETING_UNSOURCED_ABS
             )
 
             # Review-fix (Codex P1): cycle-end timestamp for Sheet1!Y1 MUST
@@ -3593,13 +3658,16 @@ def run_calendar_update():
                     f"🚨 CIRCUIT BREAKER TRIPPED at {_cycle_end_utc_iso} — "
                     f"invariant_violations={_violations} "
                     f"meeting_unsourced={_meeting_unsourced} "
+                    f"meeting_unsourced_delta={_meeting_unsourced_delta} "
+                    f"(vs Y2 baseline={last_known_good_meeting_unsourced}) "
                     f"rows_appended={_rows_appended} "
                     f"total_processed={_total_processed} "
                     f"violation_rate={_violation_rate:.2%}. "
                     f"Refusing Sheet1 overwrite to preserve last-known-good. "
                     f"Thresholds: rate>{CIRCUIT_MAX_VIOLATION_RATE:.0%} or "
                     f"violations>={CIRCUIT_MAX_ABS_VIOLATIONS} or "
-                    f"meeting_unsourced>={CIRCUIT_MAX_MEETING_UNSOURCED}."
+                    f"meeting_unsourced_delta>{CIRCUIT_MAX_MEETING_UNSOURCED_DELTA} "
+                    f"(when baseline>0) or meeting_unsourced>{CIRCUIT_MAX_MEETING_UNSOURCED_ABS}."
                 )
                 print(_breaker_msg)
                 # Non-destructive visibility #1: compact banner to Sheet1!X1.
@@ -3626,13 +3694,16 @@ def run_calendar_update():
                         "trip_utc": _cycle_end_utc_iso,
                         "invariant_violations": _violations,
                         "meeting_unsourced": _meeting_unsourced,
+                        "meeting_unsourced_delta": _meeting_unsourced_delta,
+                        "meeting_unsourced_baseline_y2": last_known_good_meeting_unsourced,
                         "rows_appended": _rows_appended,
                         "total_processed": _total_processed,
                         "violation_rate": round(_violation_rate, 4),
                         "thresholds": {
                             "rate": CIRCUIT_MAX_VIOLATION_RATE,
                             "violations_abs": CIRCUIT_MAX_ABS_VIOLATIONS,
-                            "meeting_unsourced_abs": CIRCUIT_MAX_MEETING_UNSOURCED,
+                            "meeting_unsourced_delta": CIRCUIT_MAX_MEETING_UNSOURCED_DELTA,
+                            "meeting_unsourced_abs": CIRCUIT_MAX_MEETING_UNSOURCED_ABS,
                         },
                     }
                     worksheet.update_acell("W1", json.dumps(_breaker_record)[:49000])
@@ -3685,6 +3756,24 @@ def run_calendar_update():
                         category="API_FAILURE",
                         severity="WARN",
                         dedup_key="state_cell_y1_write_fail",
+                    )
+
+                # PR-C7.0.4: write THIS cycle's meeting_unsourced as the
+                # rolling baseline for next cycle's delta-check. Only on
+                # successful overwrite — a tripped/halted cycle leaves Y2
+                # at the LAST GOOD value so the next cycle compares
+                # against the same baseline (no drift). When PR-C7.1
+                # ships and meeting_unsourced drops sharply, Y2 ratchets
+                # down automatically, locking in the new floor.
+                try:
+                    worksheet.update_acell("Y2", str(_meeting_unsourced))
+                except Exception as _y2_write_err:
+                    push_system_alert(
+                        f"Could not write state cell Sheet1!Y2 after successful cycle: {_y2_write_err}",
+                        status="WARN",
+                        category="API_FAILURE",
+                        severity="WARN",
+                        dedup_key="state_cell_y2_write_fail",
                     )
 
                 print("✅ SUCCESS: Regression Test Build is complete.")
