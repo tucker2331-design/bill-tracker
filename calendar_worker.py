@@ -1814,21 +1814,33 @@ def run_calendar_update():
     #   - PR-C7.1 improvements ratchet Y2 down automatically on each
     #     successful cycle
     # Catastrophic absolute floor (500) preserved as backstop for
-    # pathological spikes. Default 0 → first-cycle / missing baseline
-    # initialization handled in the breaker block.
+    # pathological spikes.
+    #
+    # Codex P2 review fix: track baseline PRESENCE separately from the
+    # numeric value. Encoding "no baseline" as `value == 0` collides
+    # with the legitimate post-PR-C7.1 scenario where the classifier
+    # fix drives meeting_unsourced to 0 — Y2 then writes "0", and a
+    # subsequent regression from 0 → 26..500 would silently bypass the
+    # delta breaker because activation was keyed on `value > 0`.
+    # `y2_baseline_present` is True ONLY on successful read + non-empty
+    # value + successful int parse. All failure modes degrade to
+    # `present=False` (delta-check inactive, catastrophic floor still
+    # applies) — safe degradation, no over-permissive fallback.
     last_known_good_meeting_unsourced = 0
+    y2_baseline_present = False
     try:
         _raw_y2 = worksheet.acell("Y2").value
         _y2_str = (_raw_y2 or "").strip()
         if _y2_str:
             last_known_good_meeting_unsourced = int(_y2_str)
+            y2_baseline_present = True
             print(f"🕒 Last known good meeting_unsourced: {last_known_good_meeting_unsourced} (state cell Y2)")
         else:
             print("🕒 State cell Y2 is empty — this is normal on first run after PR-C7.0.4 deploys.")
     except ValueError as _y2_parse_err:
         push_system_alert(
             f"Sheet1!Y2 has malformed integer value {_raw_y2!r}: {_y2_parse_err}. "
-            f"Falling back to last_known_good=0; breaker delta-check will be inactive this cycle.",
+            f"Falling back to baseline-absent; breaker delta-check inactive this cycle.",
             status="WARN",
             category="DATA_ANOMALY",
             severity="WARN",
@@ -3628,13 +3640,17 @@ def run_calendar_update():
             _meeting_unsourced = source_miss_counts["meeting_unsourced"]
             _violation_rate = _violations / _rows_appended
             # PR-C7.0.4: delta is max(0, current - prior) — improvements
-            # don't count toward tripping. First cycle after deploy or
-            # after operator-cleared Y2: baseline is 0, delta-check is
-            # bypassed (one cycle's grace) and the catastrophic absolute
-            # floor handles pathological spikes. Subsequent cycles use
-            # the rolling Y2 baseline that ratchets on every success.
+            # don't count toward tripping. Activation keys on baseline
+            # PRESENCE, not on `value > 0` (Codex P2 review fix): a
+            # successful post-PR-C7.1 cycle that drives meeting_unsourced
+            # to 0 writes Y2="0", which is a VALID baseline; the delta
+            # check must stay active so a subsequent 0 → 26+ regression
+            # still trips. First cycle after deploy / operator-cleared /
+            # malformed Y2: presence=False → delta-check inactive (one
+            # cycle's grace) and the catastrophic absolute floor handles
+            # pathological spikes.
             _meeting_unsourced_delta = max(0, _meeting_unsourced - last_known_good_meeting_unsourced)
-            _delta_check_active = last_known_good_meeting_unsourced > 0
+            _delta_check_active = y2_baseline_present
             _breaker_tripped = (
                 _violation_rate > CIRCUIT_MAX_VIOLATION_RATE
                 or _violations >= CIRCUIT_MAX_ABS_VIOLATIONS
