@@ -1,0 +1,52 @@
+name: 🧮 Derived Classifier Math Audit (PR-C7.1a)
+
+# Read-only viability audit for the derived classifier proposed in
+# PR-C7.1. Owner mandate (2026-05-11): mathematical proof of safety
+# before the architecture is implemented.
+#
+# Cost: ~200 LIS API calls (well under any rate limit), ~5 min wall
+# clock. Persists incremental progress to Sheet1 tab `C7_1a_RawCorpus`
+# every 10 bills so a mid-process interruption (rate limit, timeout,
+# rerun) loses at most one batch.
+#
+# See tools/c7_1a_audit/audit.py for the full method + math.
+#
+# Manual trigger only. Outputs land in:
+#   - Sheet1!C7_1a_RawCorpus    (fetched event corpus, checkpointable)
+#   - Sheet1!C7_1a_TokenStats   (per-token signal table)
+#   - Sheet1!C7_1a_DLQ_Samples  (50 examples for human inspection)
+#   - Sheet1!C7_1a_Summary      (headline numbers + sweep grid)
+
+on:
+  workflow_dispatch: {}
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    # 6 hours = GitHub Actions' default per-job ceiling. The audit at
+    # SAMPLE_BILLS=ALL is ~3.6k bills × 2 LIS calls = ~7.2k API
+    # requests; at 1-2 req/sec with exponential backoff that's
+    # ~60-120 min wall clock. Checkpointing every 25 bills means
+    # any timeout or rate-limit-induced restart loses at most one
+    # batch (25 bills). Re-running picks up where the last run left
+    # off; FAILED bills (Codex P1 review fix) are not checkpointed
+    # and naturally retry.
+    timeout-minutes: 360
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v3
+
+      - name: Setup Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.10'
+
+      - name: Install Dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install gspread google-auth pandas requests
+
+      - name: Run PR-C7.1a Audit
+        env:
+          GCP_CREDENTIALS: ${{ secrets.GCP_CREDENTIALS }}
+        run: python tools/c7_1a_audit/audit.py
