@@ -156,6 +156,30 @@ final_df = final_df[(final_df['Date'] >= scrape_start_str) & (final_df['Date'] <
 
 ---
 
+## 9. `calendar_worker.py` ~line 1272 — persist reads `e.get("EventID", "")` but API field is `LegislationEventID`
+
+**Status:** surfaced during PR-C7.1a viability audit prep (2026-05-11). Not yet fixed.
+
+**Severity:** `WARN` — every persisted event row in `LegEvent_Events` has an empty `EventID` column. No data loss in the time-recovery path (the resolver matches by `(bill, date, description)`, not EventID), but the schema field is structurally useless and would mask any future feature that depends on event-level identity.
+
+**Problem:** The LIS LegislationEvent API returns events with the field name `LegislationEventID` (verified live 2026-05-11 against HB1: 30 events, every one with `LegislationEventID`). The worker's persist at `calendar_worker.py:1272` reads `str(e.get("EventID", ""))` — wrong key, returns empty string for every event.
+
+```python
+events_rows.append([
+    bill, session,
+    str(e.get("EventID", "")),         # ← wrong key; field is "LegislationEventID"
+    str(e.get("EventDate", ""))[:25],
+    str(e.get("ChamberCode", "")),
+    str(e.get("Description", ""))[:1000],
+])
+```
+
+**Fix plan:** part of PR-C7.0.6 (the schema extension that adds `EventCode` per event). At the same time, fix the key lookup to read `LegislationEventID`. Old persisted rows have `EventID=""`; a TTL refresh (~6h) backfills the corrected value.
+
+**Blocked on:** PR-C7.1a math result. If the audit greenlights the derived classifier architecture, PR-C7.0.6 ships the full schema migration (adds `EventCode` + fixes `LegislationEventID`); otherwise this gets its own minor fix.
+
+---
+
 ## How this page is kept current
 
 - Every new silent-fallback discovered: add here with location + fix plan + severity.

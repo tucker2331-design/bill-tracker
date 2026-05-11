@@ -11,6 +11,43 @@ Append-only, reverse-chronological (newest at top). Each entry opens with `## [Y
 
 ---
 
+## [2026-05-11] pr | PR-C7.1a — derived-classifier math-proof audit (read-only)
+
+Owner mandate: *"I do not trust 'good ideas' without mathematical proof... Define a strict mathematical threshold for 'Trust' (e.g., minimum Support Count to ignore typos, and maximum Entropy to avoid chaotic words). ... Give me the exact percentage of historical rows that pass the Trust Threshold versus the percentage that fail and route to the DLQ. If the DLQ rate is too high, this architecture is not sustainable. ... Consider processing power and don't lose progress on hourly/weekly limits."*
+
+Strategic agreement landed in the prior message:
+1. PR-D (static `lexicons/va.py`) is retired. The classifier becomes a **derived artifact** built from observed structural data, not a checked-in dictionary.
+2. Audit-first sequencing: PR-C7.1a proves the math BEFORE PR-C7.0.6 (schema migration) and PR-C7.1b (the rewrite).
+3. Alert semantics: novel **EventCode** appearing in LIS = CRITICAL alert (structural vocabulary expansion). Novel narrative phrase in HISTORY = silently absorbed by the classifier. Structural novelty alerts; narrative novelty absorbs.
+
+**Structural finding while scoping PR-C7.1a:** the LIS LegislationEvent API returns **`EventCode`** per event (verified live 2026-05-11 against HB1: 30 events, every one has `EventCode` plus `LegislationEventTypeID`, `IsPassed`, `IsMapped`, `Sequence`). The worker NEVER extracts these — only takes `EventDate`, `ChamberCode`, `Description`. The persist code at `calendar_worker.py:1272` also has a wrong-field-name bug (reads `e.get("EventID", "")` but the API field is `LegislationEventID`); every persisted event row has an empty EventID column. Both findings logged: the structural ones inform PR-C7.0.6's schema; the EventID typo is parked in [[state/open_anti_patterns#9]].
+
+**Audit method:**
+1. Deterministic sample of 100 bills from HISTORY.CSV (seed 20260511 for reproducibility).
+2. Two-step LIS fetch per bill (~200 API calls total). Checkpoints every 10 bills to `Sheet1!C7_1a_RawCorpus` so a mid-process interruption loses at most one batch.
+3. Build training corpus of (Description, EventCode) pairs. Bill-level 80/20 split (training/validation) to prevent leakage.
+4. **Token trust math:** `TRUSTED(t) ⟺ support(t) ≥ MIN_SUPPORT ∧ H(EventCode | t) ≤ MAX_ENTROPY` where `H` is the per-token entropy of the EventCode distribution in bits. Headline: `MIN_SUPPORT = 10`, `MAX_ENTROPY = 1.0 bits`.
+5. **Row trust math:** `ROW_TRUSTED ⟺ trusted_tokens_count ≥ 2 ∧ top_votes ≥ 2 ∧ margin ≥ 1` (votes are token-level argmax-EventCode majority).
+6. Score the FULL HISTORY.CSV corpus (~65,169 rows). Report exact PASS / DLQ percentages.
+7. Validate on the held-out 20%: precision on rows the classifier was willing to classify.
+8. Sweep over a 4×4 grid of (MIN_SUPPORT ∈ {5, 10, 20, 50}, MAX_ENTROPY ∈ {0.5, 1.0, 1.5, 2.0}) for the Pareto frontier.
+9. Write four tabs: `C7_1a_RawCorpus` (checkpoint), `C7_1a_TokenStats` (per-token signal table), `C7_1a_DLQ_Samples` (50 examples for human inspection), `C7_1a_Summary` (headline numbers + sweep JSON).
+
+**Processing-power minimization:**
+- LIS calls: ~200 total (2 per bill × 100 bills). Well under any rate limit; retries with exponential backoff for transient 429s.
+- Sheets API: 1 read for checkpoint + 4 writes (one per output tab) + N append_rows for the checkpoint batches. Well under 60 reads/min, 60 writes/min limits.
+- CPU: tokenize + dict-build + score. Total wall-clock ~5 min on the first run, <30s on a checkpoint-resume run.
+- Workflow timeout: 30 min (generous; allows recovery if a single run goes long).
+- **Idempotent:** re-running with the same seed picks the same sample; the checkpoint tab skips already-fetched bills; the math phases are pure and reproducible.
+
+**Path forward (gate on audit results):**
+- If headline PASS rate ≥ ~95% AND validation precision ≥ ~95%: proceed to PR-C7.0.6 (schema migration to persist `EventCode` per event) + PR-C7.1b (the rewrite). Static MEETING_ACTION_PATTERNS / ADMINISTRATIVE_PATTERNS / ADMIN_OVERRIDE_PATTERNS deleted.
+- If headline numbers are weaker: revisit thresholds, possibly add bigrams to the tokenizer, or escalate the sweep. Document the decision in [[failures/assumptions_audit]] regardless of outcome.
+
+**Pre-push audit walk (the 15-point version is now canonical via PR #46):** module docstring `tools/c7_1a_audit/audit.py` walks all 15 points explicitly. Point 14 (Threshold Calibration) called out: MIN_SUPPORT / MAX_ENTROPY are audit-internal parameters with a published sweep grid, NOT production breaker thresholds. Point 15 (Sentinel-Value Collision) called out: DLQ reasons are explicit string constants from `trust_math.py`, not encoded by sentinel values.
+
+---
+
 ## [2026-05-11] decision | Codify Points 10-15 of the pre-push audit (PR-C7.0.5)
 
 Owner directive: *"we must formalize our operational learnings before writing new code. Technical debt in our prompt instructions (CLAUDE.md) is just as dangerous as technical debt in our Python scripts."*
