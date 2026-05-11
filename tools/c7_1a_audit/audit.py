@@ -119,7 +119,7 @@ from trust_math import (  # noqa: E402
 # Constants (audit-internal — NOT production thresholds)
 # ---------------------------------------------------------------------------
 
-GSHEET_ID = "1msUW9wq6OavWmw_DwT4yTLuKzUtnpmKzAoflpijhAUE"  # Mastermind DB
+SPREADSHEET_ID = "1PQDtaTTUeYv781bx4_ZiehcvbEmUt8t7jFmZYJoJGKM"  # Mastermind DB (matches calendar_worker.py:25 + sibling audit tools)
 GSHEET_SCOPES = [
     "https://www.googleapis.com/auth/spreadsheets",
     "https://www.googleapis.com/auth/drive",
@@ -236,7 +236,7 @@ def authenticate_sheets() -> gspread.Spreadsheet:
         creds_dict, scopes=GSHEET_SCOPES,
     )
     client = gspread.authorize(creds)
-    return client.open_by_key(GSHEET_ID)
+    return client.open_by_key(SPREADSHEET_ID)
 
 
 def get_or_create_tab(
