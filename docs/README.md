@@ -1,6 +1,6 @@
 ---
 tags: [meta, vault]
-updated: 2026-04-16
+updated: 2026-05-11
 status: active
 ---
 
@@ -32,7 +32,7 @@ Read [[workflow/persistent_memory]] first. The short version: **this vault is TH
 
 The operating lifecycle is in [[workflow/three_phase_protocol]]:
 - **Phase 1 — Context routing:** read [[index]] first, then the specific pages relevant to the task.
-- **Phase 2 — Pre-push audit:** run the 9-point checklist before every commit.
+- **Phase 2 — Pre-push audit:** run the 15-point checklist before every commit (originally 9 points; expanded to 15 in PR-C7.0.5 — see [[workflow/three_phase_protocol]] for the canonical list).
 - **Phase 3 — Write-back:** every lesson, API quirk, failure, metric delta, and PR event gets filed back into the vault before the session ends.
 
 ## Vault structure
