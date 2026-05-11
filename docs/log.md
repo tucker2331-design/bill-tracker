@@ -11,6 +11,34 @@ Append-only, reverse-chronological (newest at top). Each entry opens with `## [Y
 
 ---
 
+## [2026-05-11] decision | Codify Points 10-15 of the pre-push audit (PR-C7.0.5)
+
+Owner directive: *"we must formalize our operational learnings before writing new code. Technical debt in our prompt instructions (CLAUDE.md) is just as dangerous as technical debt in our Python scripts."*
+
+The PR-C7 work block surfaced six distinct bug classes that the existing 9-point pre-push audit could not have caught — none of them were diff-shaped failures (where the new code is wrong). All six were **interaction failures** between new code and pre-existing code paths / variables / thresholds. Each had been logged as a forward-looking "Audit upgrade: add Point X" note in the corresponding [[failures/assumptions_audit]] entry. The lessons were written down, but the practice had not formally changed. PR-C7.0.5 closes that loop.
+
+**Audit-point backlog → canonical:**
+
+| # | Point | Source | Bug class |
+|---|---|---|---|
+| 10 | Function-Scope Shadow Check | [[failures/assumptions_audit#50]] | Local `from X import Y` shadows module-level `Y` for the entire function (Python local-binding rule). Surface symptom: `UnboundLocalError` at runtime, invisible to `py_compile`. |
+| 11 | Side-Effect Gating Check | [[failures/assumptions_audit#51]] | State-carrying side effect gated on a check that can be permanently true → Groundhog Day deadlock. Gemini fold-in: applies to *every* enclosing `if`, not just the most-obvious one. |
+| 12 | Fallback Liveness Check | [[failures/assumptions_audit#52]] | `try X, fallback Y` where X has been dead for >24h. Cycle-stable WARN is not a transient. |
+| 13 | Dead-Path Resurrection Check | [[failures/assumptions_audit#52]] (Codex fold-in) | Removing dead code resurrects previously-dead error paths. Variables bound only on the removed path become unbound on the survivor. |
+| 14 | Threshold Calibration Check | [[failures/assumptions_audit#53]] | Absolute thresholds anchored to a current-state baseline silently go stale when an architectural change shifts the metric's floor. Prefer delta-vs-rolling-baseline. |
+| 15 | Sentinel-Value Collision Check | [[failures/assumptions_audit#53]] (Codex P2 fold-in) | Encoding "absent" by a sentinel value that's also a legitimate runtime value. Track presence separately (boolean flag, `Optional[T]`, etc.). |
+
+**Locations updated:**
+- [[CLAUDE.md]] (project root): header `(9 points)` → `(15 points)`; appended 6 new one-line entries with cross-references.
+- [[workflow/three_phase_protocol]] (authoritative full version): Phase 2 section updated with 6 new entries including worked examples and cross-references.
+- `assumptions_audit.md` entries #50-#53 unchanged — the historical forward-looking notes ("Audit upgrade: add Point X") stand as the justification record. The cross-reference now flows in both directions (audit point → entry, entry → audit point).
+
+**What this is NOT:** the audit-point codification does NOT replace per-PR code review or bot review. It's a checklist for the *push author* to walk before commit, in the same role as the original 9 points. Bot review (Codex P1/P2, Gemini critical/high/medium) continues to be treated as a real signal — most of the entries #50-#53 were caught by bot review, which is itself the strongest evidence that even a 15-point self-audit is insufficient without independent eyes.
+
+**Process note for the next active block (PR-C7.1):** these 6 new points are now active. Any PR opened post-codification is expected to walk all 15. The X-Ray classifier rewrite (PR-C7.1) is the immediate test case — it touches the row pipeline (Point 5), introduces a new Sheet1 column (Point 14: threshold-watched metrics will move), modifies `pages/ray2.py` (Point 4: keep `calendar_xray.py` in sync), and changes the metric definition (Point 14 explicitly).
+
+---
+
 ## [2026-05-08] pr | PR-C7.0.4 breaker recalibration — Sheet1 frozen 3+ days, owner directive to unfreeze
 
 Owner directive: *"stale data is unacceptable in a live tracking environment."*
