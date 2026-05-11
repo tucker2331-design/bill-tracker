@@ -23,11 +23,15 @@ on:
 jobs:
   audit:
     runs-on: ubuntu-latest
-    # 30 min is generous; the audit normally finishes in <5 min. A
-    # higher ceiling allows partial-progress resumption: even if a
-    # single run goes long, checkpointing means re-running picks up
-    # where we left off.
-    timeout-minutes: 30
+    # 6 hours = GitHub Actions' default per-job ceiling. The audit at
+    # SAMPLE_BILLS=ALL is ~3.6k bills × 2 LIS calls = ~7.2k API
+    # requests; at 1-2 req/sec with exponential backoff that's
+    # ~60-120 min wall clock. Checkpointing every 25 bills means
+    # any timeout or rate-limit-induced restart loses at most one
+    # batch (25 bills). Re-running picks up where the last run left
+    # off; FAILED bills (Codex P1 review fix) are not checkpointed
+    # and naturally retry.
+    timeout-minutes: 360
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v3

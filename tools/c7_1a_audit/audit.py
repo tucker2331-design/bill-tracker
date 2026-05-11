@@ -96,6 +96,7 @@ from datetime import datetime, timezone
 import gspread
 import pandas as pd
 import requests
+from enum import Enum
 from google.oauth2 import service_account
 from gspread.exceptions import WorksheetNotFound
 
@@ -140,12 +141,29 @@ LEGISLATION_EVENT_URL = (
     "api/GetPublicLegislationEventHistoryListAsync"
 )
 
-# Sample size for the LIS fetch phase. 100 bills × ~30 events average
-# = ~3,000 labeled training pairs. Well within rate-limit budget
-# (~200 API calls total at 2 per bill).
-SAMPLE_BILLS = 100
+# Sample size for the LIS fetch phase.
+#
+# Owner correction (2026-05-11): the original SAMPLE_BILLS=100 was a
+# grave mistake. At MIN_SUPPORT=10 (a token must appear >=10 times to
+# be TRUSTED), 100 bills × ~30 events = ~3,000 events isn't enough to
+# cover the EventCode alphabet. Many real codes get filtered out as
+# "rare" and the math doesn't actually prove anything.
+#
+# Cardinality of the universe: the cold-start drain (2026-05-08) had
+# loaded=3,645 bills in the persistent cache. Setting SAMPLE_BILLS to
+# a number >= that bound means we sample every distinct bill in
+# HISTORY.CSV. The Phase-0 checkpoint handles the resulting
+# 7,000-API-call workload across multiple workflow runs if needed.
+#
+# Cost analysis:
+#   ~3,600 bills × 2 API calls = ~7,200 LIS requests
+#   At ~1-2 calls/sec with backoff = 60-120 min wall clock for a
+#   from-scratch run. Checkpointing every 25 bills keeps the
+#   resume-loss bounded to one batch.
+SAMPLE_BILLS = 10_000               # effectively "all" — the sample is bounded by the distinct-bill universe
 HELDOUT_FRACTION = 0.2
-RANDOM_SEED = 20260511  # deterministic so re-runs hit the same sample
+RANDOM_SEED = 20260511              # deterministic so re-runs hit the same sample
+CHECKPOINT_BATCH = 25               # bills per checkpoint flush (was 10; raised for higher volume)
 
 # Checkpoint tab: appended incrementally during PHASE 0.
 RAW_CORPUS_TAB = "C7_1a_RawCorpus"
@@ -153,7 +171,19 @@ RAW_CORPUS_HEADER = [
     "Bill", "LegislationEventID", "EventDate", "EventCode",
     "ChamberCode", "Description",
 ]
-RAW_CORPUS_CHECKPOINT_BATCH = 10
+# Codex P1 review fix (2026-05-11): distinguish three fetch outcomes
+# so transient API failures are NOT checkpointed as "confirmed empty"
+# (which would silently bias the corpus + skip permanently on rerun).
+#
+# Confirmed-empty bills (LIS returned no LegislationID OR an empty
+# events list) are checkpointed with a single sentinel row where
+# EventCode = `_CONFIRMED_EMPTY_` and other event columns are blank;
+# this is distinguishable from "fetched with events" (real EventCode)
+# AND from "not yet fetched" (no row at all).
+#
+# Failed bills are NOT checkpointed; they remain in to_fetch on
+# resume so transient failures retry naturally.
+CONFIRMED_EMPTY_SENTINEL = "_CONFIRMED_EMPTY_"
 
 # Output tabs (rewritten on each completion).
 TOKEN_STATS_TAB = "C7_1a_TokenStats"
@@ -238,20 +268,48 @@ def fetch_history_csv() -> pd.DataFrame:
     response = requests.get(HISTORY_CSV_URL, timeout=30)
     response.raise_for_status()
     df = pd.read_csv(io.BytesIO(response.content), encoding="iso-8859-1")
+    # Gemini medium review fix: strip whitespace from column names so
+    # downstream substring matches don't trip on " BillNumber" etc.
+    # Mirrors calendar_worker.py:1340.
+    df.columns = df.columns.str.strip()
     print(f"✅ HISTORY.CSV: {len(df):,} rows, columns: {list(df.columns)}")
     return df
 
 
+def _find_bill_column(history_df: pd.DataFrame) -> str:
+    """Locate the bill-number column robustly.
+
+    Gemini HIGH review fix: production HISTORY.CSV often uses
+    `BillNumber` (or `Bill_id` for older snapshots). Match by
+    substring `bill` in column name (same pattern as
+    calendar_worker.py:2669), with explicit failure if absent.
+    """
+    candidates = [c for c in history_df.columns if "bill" in c.lower()]
+    if not candidates:
+        raise RuntimeError(
+            f"HISTORY.CSV has no bill column; saw {list(history_df.columns)}"
+        )
+    # Prefer an exact match if present, else the first substring hit.
+    for preferred in ("Bill_id", "BillNumber", "Bill"):
+        for c in candidates:
+            if c == preferred:
+                return c
+    return candidates[0]
+
+
 def sample_bills(history_df: pd.DataFrame, n: int, seed: int) -> list[str]:
-    """Deterministic random sample of distinct Bill_id values from HISTORY.
+    """Deterministic random sample of distinct bills from HISTORY.
 
     Sorted before sampling so the choice is reproducible across runs
-    (set-iteration order is not stable).
+    (set-iteration order is not stable). If n exceeds the universe
+    size, returns the full universe (the post-correction default).
     """
-    bill_col = next(c for c in history_df.columns if c.lower() == "bill_id")
+    bill_col = _find_bill_column(history_df)
     distinct = sorted({str(b).strip() for b in history_df[bill_col] if str(b).strip()})
+    if n is None or n <= 0 or n >= len(distinct):
+        return distinct
     rng = random.Random(seed)
-    return rng.sample(distinct, k=min(n, len(distinct)))
+    return rng.sample(distinct, k=n)
 
 
 def read_checkpoint(corpus_ws: gspread.Worksheet) -> tuple[set[str], list[dict]]:
@@ -303,12 +361,34 @@ def append_checkpoint(corpus_ws: gspread.Worksheet, new_event_rows: list[list]) 
     corpus_ws.append_rows(new_event_rows, value_input_option="RAW")
 
 
-def lis_fetch_with_retry(url: str, params: dict, kind: str) -> dict | None:
-    """GET with exponential backoff. Returns parsed JSON dict or None.
+class FetchResult(Enum):
+    """Codex P1 review fix: distinguish failure modes so the checkpoint
+    doesn't conflate transient errors with confirmed-empty bills.
 
-    Caller is responsible for downstream None handling. We never raise
-    so a single bad bill doesn't crash the whole audit; the failed
-    bill is logged and the audit continues with the rest.
+      OK      — got events; check the returned list
+      EMPTY   — confirmed empty (no LegislationID or empty events list).
+                Bill is structurally absent from LIS LegislationEvent;
+                that's a stable fact, safe to checkpoint as known-empty.
+      FAILED  — transient failure (retries exhausted, JSON parse, HTTP
+                5xx, network timeout). Bill is NOT checkpointed; will
+                be retried on the next workflow run.
+    """
+    OK = "OK"
+    EMPTY = "EMPTY"
+    FAILED = "FAILED"
+
+
+def lis_fetch_with_retry(
+    url: str, params: dict, kind: str,
+) -> tuple[FetchResult, dict | None]:
+    """GET with exponential backoff.
+
+    Returns (status, parsed_json). status is FAILED for any transient
+    error, OK for successful 200+JSON, EMPTY is never returned here
+    (only the caller can interpret an empty response payload).
+
+    Gemini medium review fix: true exponential backoff (2**attempt)
+    instead of the prior linear (attempt + 1).
     """
     last_err = None
     for attempt in range(LIS_RETRY_MAX):
@@ -318,67 +398,115 @@ def lis_fetch_with_retry(url: str, params: dict, kind: str) -> dict | None:
             )
         except Exception as e:
             last_err = f"{type(e).__name__}: {e}"
-            time.sleep(LIS_RETRY_BACKOFF_S * (attempt + 1))
+            time.sleep(LIS_RETRY_BACKOFF_S * (2 ** attempt))
             continue
         if r.status_code != 200:
             last_err = f"HTTP {r.status_code}: {r.text[:200]}"
             # 4xx is non-retryable except 429 (rate limit)
             if r.status_code != 429 and 400 <= r.status_code < 500:
                 break
-            time.sleep(LIS_RETRY_BACKOFF_S * (attempt + 1))
+            time.sleep(LIS_RETRY_BACKOFF_S * (2 ** attempt))
             continue
         try:
-            return r.json()
+            return FetchResult.OK, r.json()
         except Exception as e:
             last_err = f"JSON parse: {type(e).__name__}: {e}"
             break
-    print(f"⚠️ {kind} fetch gave up after {LIS_RETRY_MAX} attempts: {last_err}")
-    return None
+    print(f"⚠️ {kind} fetch FAILED after {LIS_RETRY_MAX} attempts: {last_err}")
+    return FetchResult.FAILED, None
 
 
-def fetch_legislation_events_for_bill(bill_num: str) -> list[dict]:
-    """Two-step LIS lookup. Returns list of event dicts (possibly empty)."""
-    version = lis_fetch_with_retry(
+def fetch_legislation_events_for_bill(
+    bill_num: str,
+) -> tuple[FetchResult, list[dict]]:
+    """Two-step LIS lookup with explicit failure distinction.
+
+    Returns:
+      (OK, [event, event, ...])      — fetched, has events
+      (EMPTY, [])                    — fetched, confirmed no events
+                                       (no LegislationID OR empty list)
+      (FAILED, [])                   — transient failure; do not
+                                       checkpoint; caller should retry
+                                       on next workflow run
+
+    Empty vs failed is determined by whether we got a clean HTTP 200
+    + valid JSON back at every step. A 5xx, timeout, or JSON parse
+    error is FAILED. A 200 with an empty response payload is EMPTY.
+    """
+    v_status, version_json = lis_fetch_with_retry(
         LEGISLATION_VERSION_URL,
         {"billNumber": bill_num, "sessionCode": SESSION_CODE_5D},
         kind=f"LegislationVersion[{bill_num}]",
     )
-    if not isinstance(version, dict):
-        return []
-    versions_list = version.get("LegislationsVersion") or []
+    if v_status == FetchResult.FAILED:
+        return FetchResult.FAILED, []
+    if not isinstance(version_json, dict):
+        # OK status but unparsable structure — treat as FAILED so we
+        # retry rather than checkpoint as empty.
+        return FetchResult.FAILED, []
+    versions_list = version_json.get("LegislationsVersion") or []
     if not versions_list:
-        return []
-    legislation_id = versions_list[0].get("LegislationID")
+        # 200 with no versions — the bill genuinely has no LegislationID.
+        return FetchResult.EMPTY, []
+    first = versions_list[0]
+    if not isinstance(first, dict):
+        return FetchResult.FAILED, []
+    legislation_id = first.get("LegislationID")
     if not legislation_id:
-        return []
-    events_payload = lis_fetch_with_retry(
+        return FetchResult.EMPTY, []
+    e_status, events_payload = lis_fetch_with_retry(
         LEGISLATION_EVENT_URL,
         {"legislationID": legislation_id, "sessionCode": SESSION_CODE_5D},
         kind=f"LegislationEvent[{bill_num}/{legislation_id}]",
     )
+    if e_status == FetchResult.FAILED:
+        return FetchResult.FAILED, []
     if not isinstance(events_payload, dict):
-        return []
+        return FetchResult.FAILED, []
     events = events_payload.get("LegislationEvents") or []
-    return events if isinstance(events, list) else []
+    if not isinstance(events, list):
+        return FetchResult.FAILED, []
+    if len(events) == 0:
+        return FetchResult.EMPTY, []
+    return FetchResult.OK, events
 
 
 def phase_0_fetch_corpus(
     sheet: gspread.Spreadsheet, target_bills: list[str],
-) -> list[dict]:
+) -> tuple[list[dict], list[str]]:
     """Fetch LegEvent events for target_bills, checkpointing every N bills.
 
-    Returns a list of event dicts. Each event dict carries:
-      Bill, LegislationEventID, EventDate, EventCode, ChamberCode,
-      Description.
+    Codex P1 review fix: distinguish three outcomes per bill.
+      - OK     -> checkpoint event rows; add to already_fetched
+      - EMPTY  -> checkpoint a single sentinel row with EventCode =
+                  CONFIRMED_EMPTY_SENTINEL; add to already_fetched
+      - FAILED -> DO NOT checkpoint; bill remains in to_fetch on
+                  next workflow run for natural retry
+
+    Returns (all_events, failed_bills). all_events covers prior +
+    new OK fetches. failed_bills is reported in the summary so
+    transient failures are visible.
     """
     corpus_ws = get_or_create_tab(
-        sheet, RAW_CORPUS_TAB, RAW_CORPUS_HEADER, rows=5000,
+        sheet, RAW_CORPUS_TAB, RAW_CORPUS_HEADER, rows=50_000,
     )
     already_fetched, prior_events = read_checkpoint(corpus_ws)
     print(
-        f"📚 PHASE 0 checkpoint: {len(already_fetched)} bills already fetched, "
-        f"{len(prior_events)} events on tab."
+        f"📚 PHASE 0 checkpoint: {len(already_fetched)} bills already fetched "
+        f"({len(prior_events)} event rows on tab — sentinels for confirmed-empty "
+        f"are counted as fetched but contribute no events to the corpus)."
     )
+
+    # Filter prior_events down to actual events (drop confirmed-empty sentinels)
+    prior_real_events = [
+        e for e in prior_events
+        if e.get("EventCode") and e.get("EventCode") != CONFIRMED_EMPTY_SENTINEL
+    ]
+    if len(prior_real_events) != len(prior_events):
+        print(
+            f"   ({len(prior_events) - len(prior_real_events)} sentinel rows "
+            f"filtered out of the training corpus.)"
+        )
 
     to_fetch = [b for b in target_bills if b not in already_fetched]
     print(
@@ -387,17 +515,19 @@ def phase_0_fetch_corpus(
     )
     pending_rows: list[list] = []
     new_events: list[dict] = []
-    fail_count = 0
+    confirmed_empty_count = 0
+    failed_bills: list[str] = []
     for i, bill in enumerate(to_fetch, start=1):
-        events = fetch_legislation_events_for_bill(bill)
-        if not events:
-            fail_count += 1
-            # We DO record the bill as "fetched (empty)" so we don't
-            # retry it on resume. The corpus tab's row count for this
-            # bill will be zero — by design, not by failure.
-            pending_rows.append([bill, "", "", "", "", ""])
+        status, events = fetch_legislation_events_for_bill(bill)
+        if status == FetchResult.FAILED:
+            # DO NOT checkpoint. Bill stays in to_fetch on resume.
+            failed_bills.append(bill)
+        elif status == FetchResult.EMPTY:
+            # Checkpoint a sentinel row so we don't refetch on resume.
+            pending_rows.append([bill, "", "", CONFIRMED_EMPTY_SENTINEL, "", ""])
             already_fetched.add(bill)
-        else:
+            confirmed_empty_count += 1
+        else:  # OK
             for e in events:
                 pending_rows.append([
                     bill,
@@ -416,12 +546,15 @@ def phase_0_fetch_corpus(
                     "Description": e.get("Description", ""),
                 })
             already_fetched.add(bill)
-        # Checkpoint every N bills
-        if i % RAW_CORPUS_CHECKPOINT_BATCH == 0:
+        # Checkpoint every N bills (whichever finishes first: i counter
+        # or the pending_rows buffer hitting a threshold).
+        if i % CHECKPOINT_BATCH == 0 and pending_rows:
             append_checkpoint(corpus_ws, pending_rows)
             print(
                 f"  💾 checkpoint at {i}/{len(to_fetch)} bills "
-                f"(wrote {len(pending_rows)} new rows, {fail_count} no-event so far)"
+                f"(wrote {len(pending_rows)} rows, "
+                f"confirmed-empty={confirmed_empty_count}, "
+                f"failed={len(failed_bills)})"
             )
             pending_rows = []
     # Final flush
@@ -430,12 +563,20 @@ def phase_0_fetch_corpus(
         print(
             f"  💾 final checkpoint flush: {len(pending_rows)} new rows."
         )
-    all_events = prior_events + new_events
+    all_events = prior_real_events + new_events
     print(
-        f"✅ PHASE 0 complete: {len(all_events)} total events from "
-        f"{len(already_fetched)} bills ({fail_count} new fetches returned empty)."
+        f"✅ PHASE 0 complete: {len(all_events)} total events from corpus "
+        f"({len(already_fetched)} bills marked fetched, "
+        f"{confirmed_empty_count} new confirmed-empty, "
+        f"{len(failed_bills)} FAILED — will retry on next workflow run)."
     )
-    return all_events
+    if failed_bills:
+        print(
+            f"⚠️ FAILED bills (sample of up to 20): "
+            f"{', '.join(failed_bills[:20])}"
+            + (f" ... +{len(failed_bills) - 20} more" if len(failed_bills) > 20 else "")
+        )
+    return all_events, failed_bills
 
 
 # ---------------------------------------------------------------------------
@@ -517,13 +658,15 @@ def score_full_history(
       - reason_counter: Counter of {"PASS", DLQ_reason_1, ...}
       - dlq_samples: up to 50 DLQ rows (with full context) for manual inspection
     """
+    # Gemini HIGH review fix: substring-match column lookups so
+    # this works on both BillNumber and Bill_id schemas.
     desc_col = next(
-        (c for c in history_df.columns if c.lower() in {"history_description", "description"}),
+        (c for c in history_df.columns if "desc" in c.lower() or "action" in c.lower()),
         None,
     )
-    bill_col = next(c for c in history_df.columns if c.lower() == "bill_id")
+    bill_col = _find_bill_column(history_df)
     date_col = next(
-        (c for c in history_df.columns if c.lower() in {"history_date", "historydate", "date"}),
+        (c for c in history_df.columns if "date" in c.lower()),
         None,
     )
     if not desc_col:
@@ -611,7 +754,7 @@ def run_sweep(
     """
     sweep_results: list[dict] = []
     desc_col = next(
-        (c for c in history_df.columns if c.lower() in {"history_description", "description"}),
+        (c for c in history_df.columns if "desc" in c.lower() or "action" in c.lower()),
         None,
     )
     if not desc_col:
@@ -709,7 +852,12 @@ def main() -> int:
 
     # PHASE 0b: target bills + LIS fetch with checkpointing
     target_bills = sample_bills(history_df, SAMPLE_BILLS, RANDOM_SEED)
-    events = phase_0_fetch_corpus(sheet, target_bills)
+    print(
+        f"📊 Target bills: {len(target_bills)} (sample cap was {SAMPLE_BILLS}; "
+        f"distinct bills in HISTORY.CSV is the binding constraint when "
+        f"SAMPLE_BILLS exceeds the universe)."
+    )
+    events, failed_bills = phase_0_fetch_corpus(sheet, target_bills)
 
     # Group events by bill for the split
     events_by_bill: dict[str, list[dict]] = defaultdict(list)
@@ -803,7 +951,9 @@ def main() -> int:
         "run_utc_start": start_utc.strftime("%Y-%m-%dT%H:%M:%SZ"),
         "run_utc_end": end_utc.strftime("%Y-%m-%dT%H:%M:%SZ"),
         "elapsed_seconds": round(elapsed, 1),
-        "sample_bills_target": SAMPLE_BILLS,
+        "sample_bills_cap": SAMPLE_BILLS,
+        "target_bills": len(target_bills),
+        "bills_failed_this_run": len(failed_bills),
         "sample_bills_with_events": n_bills_with_events,
         "training_pairs": len(train_pairs),
         "heldout_pairs": len(held_pairs),
