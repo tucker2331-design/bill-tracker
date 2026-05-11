@@ -49,4 +49,11 @@ jobs:
       - name: Run PR-C7.1a Audit
         env:
           GCP_CREDENTIALS: ${{ secrets.GCP_CREDENTIALS }}
-        run: python tools/c7_1a_audit/audit.py
+          # PYTHONUNBUFFERED=1 forces line-by-line stdout streaming
+          # so progress lines appear in the Actions log in real time.
+          # Without this Python block-buffers stdout when piped to a
+          # non-TTY; with our ~100-byte log lines a 4KB buffer can
+          # hide 5+ min of progress. Belt-and-suspenders with the
+          # `-u` flag on the python invocation below.
+          PYTHONUNBUFFERED: "1"
+        run: python -u tools/c7_1a_audit/audit.py
