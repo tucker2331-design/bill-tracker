@@ -11,6 +11,31 @@ Append-only, reverse-chronological (newest at top). Each entry opens with `## [Y
 
 ---
 
+## [2026-05-08] pr | PR-C7.0.4 breaker recalibration — Sheet1 frozen 3+ days, owner directive to unfreeze
+
+Owner directive: *"stale data is unacceptable in a live tracking environment."*
+
+**Symptom:** Sheet1 has been frozen at `2026-05-04T23:47:03Z` for ~3+ days. Worker process is healthy every cycle, but the PR-C1 mass-violation circuit breaker has been tripping on `meeting_unsourced >= 50` every cycle since the cold-start completed. Latest cycle (run `25531131454` on `9214010`, 2026-05-08T01:32:22Z) shows the architecture is fully steady-state: `loaded=3645 bills`, `tiers A/B/C=0/6/1641`, all bills cached. But `meeting_unsourced=150` is the steady-state floor (X-Ray classifier false positives — `Governor's Recommendation` matching the `recommend` substring, etc.), and the threshold of 50 was set against a pre-PR-C7 baseline of ~9.
+
+**The breaker was technically working as specified.** The specification was wrong because the threshold was anchored to a transient value, not a structural property. PR-C7 changed the input distribution (every `journal_default` row gets a LegEvent attempt; recoverable rows drop out, non-recoverable rows stay) and revealed that the PR-C1 absolute threshold encoded an implicit baseline that PR-C7 invalidated.
+
+**Decision:** since stale UI is unacceptable AND the structural fix for the 150 floor (PR-C7.1's classifier rewrite) is days away, recalibrate the breaker now. Replace `CIRCUIT_MAX_MEETING_UNSOURCED = 50` (absolute) with **`CIRCUIT_MAX_MEETING_UNSOURCED_DELTA = 25`** (regression vs `Sheet1!Y2` rolling baseline) plus **`CIRCUIT_MAX_MEETING_UNSOURCED_ABS = 500`** (catastrophic absolute floor). New state cell `Y2` stores last-known-good `meeting_unsourced`, written on every successful Sheet1 overwrite. Delta = `max(0, current - prior)` — improvements never trip; PR-C7.1 ratchets Y2 down automatically when it lands.
+
+**Behavior matrix:**
+- Steady state at 150: delta=0 → breaker passes → Sheet1 unfreezes
+- Real regression spike (e.g., 150 → 200): delta=50 > 25 → breaker trips
+- PR-C7.1 lands, drops to 30: passes, Y2 ratchets to 30, new floor tracked
+- Catastrophic (e.g., 600): absolute floor 500 still trips
+- First cycle post-deploy with Y2 empty: delta-check inactive, floor handles edge cases
+
+**Brain writeback:** [[failures/assumptions_audit#53]] captures the lesson — *threshold values that anchor to a current-state baseline are time-bombs* — with proposed **Point 14 audit upgrade** (*Threshold Calibration Check*: when a PR's diff is architecturally significant, grep every existing threshold against the new steady-state and flag any that would now trip on healthy operation). Cross-references #48 (the diagnostic shape: "metric definition silently changed") and inverts it into the action shape ("threshold definition silently went stale").
+
+**PR #45:** https://github.com/tucker2331-design/bill-tracker/pull/45. Initial diff `+104/-15`. Awaiting owner merge. Once merged: next cycle establishes Y2 baseline at ~150, Sheet1 unfreezes, gap_minutes drops from ~4400 back toward steady state. Then the next active block is PR-C7.1.
+
+**Codex P2 fold-in (commit `af4aa7e`):** the initial activation logic keyed delta-check active on `last_known_good_meeting_unsourced > 0`. Codex caught that this silently conflates "Y2 absent / unreadable / malformed" with "Y2 = 0 (a legitimate post-PR-C7.1 baseline once the classifier fix drives meeting_unsourced to 0)." Future regression vector: when PR-C7.1 ships, Y2 = "0" gets written; next cycle reads Y2=0 and turns OFF the delta-check; a regression from 0 → 26..500 then bypasses the >25 delta threshold AND the 500 absolute floor (because 26..500 < 500), gets accepted, and Y2 ratchets up to that regressed value. The breaker would adapt to a regression instead of catching it. **Fix:** track baseline **presence** as a separate `y2_baseline_present` boolean (default False, True ONLY on successful read + non-empty value + successful int parse). Activation keys on the presence flag, not the value. **Lesson generalization** added to [[failures/assumptions_audit#53]]: **never encode "absence of a value" by a sentinel value of that same type.** Proposed **Point 15 audit upgrade** — *Sentinel-Value Collision Check.* Same root class as the Optional/Maybe-type-confusion bugs that bite many languages. Total PR diff: `+129/-24` across 2 code commits.
+
+---
+
 ## [2026-05-06] pr | PR-C7.0.3 dead-alias hotfix — `blob.lis.virginia.gov` NXDOMAIN diagnostic
 
 Owner asked whether the persistent `⚠️ CSV fetch failed for https://blob.lis.virginia.gov/lisfiles/20261/HISTORY.CSV: ... NameResolutionError ... Errno -2` warning (firing every cycle since at least 2026-05-04) was state-wide LIS infrastructure failure or LIS punishing us for the high-volume PR-C7 cold-start testing.

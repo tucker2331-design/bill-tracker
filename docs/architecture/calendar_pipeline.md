@@ -85,7 +85,28 @@ Just before `worksheet.clear() + worksheet.update()`, the worker evaluates:
 
 - `violation_rate > 10%` (invariants / **`rows_appended`** — see Counter schema below; review-fix from Gemini)
 - OR `invariant_violations >= 50`
-- OR `meeting_unsourced >= 50` (baseline today: ~9 for crossover week)
+- OR **`meeting_unsourced_delta > 25`** (regression vs `Sheet1!Y2` rolling baseline; only active when `last_known_good > 0`) — PR-C7.0.4
+- OR **`meeting_unsourced > 500`** (catastrophic absolute floor; always active) — PR-C7.0.4
+
+The `meeting_unsourced` check was originally an absolute threshold of 50
+(set against a pre-PR-C7 crossover-week baseline of ~9). PR-C7 changed
+the metric's distribution: every `journal_default` row now attempts
+LegEvent recovery, recoverable rows drop out, **structurally
+non-recoverable rows stay** (X-Ray classifier false positives like
+`Governor's Recommendation` matching the substring `recommend`). The
+post-PR-C7 steady-state floor is ~150 — well above the old absolute
+threshold, which froze Sheet1 for 3+ days. PR-C7.0.4 replaced the
+absolute check with a **delta-vs-rolling-baseline** check (`Y2`)
+plus a catastrophic absolute floor:
+
+- Steady state at 150: delta=0 → breaker passes → Sheet1 updates
+- Real regression spike (delta>25): breaker still trips
+- PR-C7.1 improvement (e.g., 150 → 30): Y2 ratchets down on the
+  successful cycle, locking in the new floor automatically
+- Catastrophic spike (>500): absolute floor still trips
+
+See [[failures/assumptions_audit#53]] for the full lesson and proposed
+Point 14 audit upgrade (*Threshold Calibration Check*).
 
 If any threshold trips, the worker **refuses the Sheet1 overwrite** and
 leaves the previous cycle's data intact as last-known-good. Three
@@ -134,18 +155,48 @@ Read at the top of the next cycle and surfaced as a carry-forward
 `DATA_ANOMALY / CRITICAL` SYSTEM_ALERT. Cleared (`""`) on every
 successful Sheet1 overwrite.
 
-Format:
+Format (post-PR-C7.0.4):
 ```json
 {
   "trip_utc": "2026-04-21T14:30:00Z",
   "invariant_violations": 52,
-  "meeting_unsourced": 9,
+  "meeting_unsourced": 175,
+  "meeting_unsourced_delta": 25,
+  "meeting_unsourced_baseline_y2": 150,
   "rows_appended": 4500,
   "total_processed": 63081,
   "violation_rate": 0.0116,
-  "thresholds": {"rate": 0.10, "violations_abs": 50, "meeting_unsourced_abs": 50}
+  "thresholds": {
+    "rate": 0.10,
+    "violations_abs": 50,
+    "meeting_unsourced_delta": 25,
+    "meeting_unsourced_abs": 500
+  }
 }
 ```
+
+### State Cell `Sheet1!Y2` — last-known-good `meeting_unsourced` (PR-C7.0.4)
+
+Integer count of `meeting_unsourced` from the last successful Sheet1
+overwrite. Read at the top of every cycle (alongside Y1 and W1); used
+to compute the breaker's `_meeting_unsourced_delta = max(0, current -
+prior)`. Written ONLY on successful overwrite — a tripped or halted
+cycle leaves Y2 at the previous good value so the next cycle's delta
+is computed against the same baseline (no drift while the system is
+failing).
+
+When PR-C7.1 lands and meeting_unsourced drops sharply, Y2 ratchets
+down automatically on each successful cycle, locking in the new floor.
+The breaker thereby tracks the metric's improvements without manual
+recalibration.
+
+Empty on first post-PR-C7.0.4 deploy — that's expected. Delta-check
+is bypassed (`_delta_check_active = baseline > 0`) and the catastrophic
+absolute floor (500) handles edge cases. The first successful cycle
+establishes the baseline. Malformed integer in Y2 emits a `WARN /
+DATA_ANOMALY` alert and falls back to baseline=0 (delta-check inactive,
+floor still applies). Any read or write API error emits a categorized
+`API_FAILURE` alert.
 
 Non-JSON content in W1 triggers a `WARN` SYSTEM_ALERT (possible manual
 edit or partial write). Read errors emit `API_FAILURE / INFO`.
