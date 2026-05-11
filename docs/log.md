@@ -53,6 +53,8 @@ Strategic agreement landed in the prior message:
 - **Gemini MEDIUM — whitespace in CSV column names:** added `df.columns = df.columns.str.strip()` after `pd.read_csv`. Mirrors `calendar_worker.py:1340`.
 - **Gemini MEDIUM — backoff was linear, comment said exponential:** changed `LIS_RETRY_BACKOFF_S * (attempt + 1)` (linear) to `LIS_RETRY_BACKOFF_S * (2 ** attempt)` (true exponential). Comment and code now agree.
 
+**Post-merge first-run failure (2026-05-11 17:44Z):** the workflow crashed at `client.open_by_key(GSHEET_ID)` with `gspread.exceptions.SpreadsheetNotFound: 404`. Root cause: I had fabricated `GSHEET_ID = "1msUW9wq6OavWmw_..."` instead of grep'ing for the canonical value used everywhere else. Production `SPREADSHEET_ID = "1PQDtaTTUeYv781bx4_..."` lives in `calendar_worker.py:25` and in every sibling audit tool's source. Fix: rename `GSHEET_ID` → `SPREADSHEET_ID` (matches sibling-tool convention), use the correct literal. **Lesson:** when adding a tool that mirrors an existing tool's auth pattern, copy the constants from the sibling, don't re-derive them. This is the config-level analogue of the function-scope rule (a single value used in multiple places lives at one source of truth, not multiple). Did not warrant a new assumptions_audit entry — the practice is already covered by Standard #5 (Dynamic Configuration) and Standard #7 (No Vibe Coding); my mistake was the failure mode, not a novel pattern.
+
 ---
 
 ## [2026-05-11] decision | Codify Points 10-15 of the pre-push audit (PR-C7.0.5)
