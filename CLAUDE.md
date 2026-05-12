@@ -124,6 +124,11 @@ Points 1-9 are the original audit. Points 10-15 were codified in PR-C7.0.5 after
 - Match rates, edge case counts, before/after metrics.
 - If you can't measure it, you can't ship it. **And your metric must have a denominator** — see `docs/workflow/source_miss_visibility.md`.
 
+### 8. ZERO ROUTINE HUMAN MAINTENANCE
+- Architecture must absorb routine variation autonomously. Human notification is for genuine anomalies (data integrity violations, upstream contract breaks, structurally unprecedented variation, security events), not for "X happened, please update the table."
+- "Routine" means the variation is predictable in shape, and the architecture has a deterministic way to interpret it. "Anomaly" means it doesn't.
+- Operational expression of Standard #6: scaling to 50 states means zero ongoing per-state maintenance, not just isolated patterns. Full statement and architectural options in `docs/workflow/zero_routine_maintenance.md`.
+
 ---
 
 ## Architecture (at-a-glance)

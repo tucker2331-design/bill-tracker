@@ -24,6 +24,8 @@ Links use Obsidian `[[wikilink]]` format. Obsidian resolves by filename; path-qu
 - [[workflow/push_and_pr]] — after every commit: push, open PR, return link
 - [[workflow/source_miss_visibility]] — mandatory rule: no silent fallback on a source miss
 - [[workflow/persistent_memory]] — this `docs/` folder IS the brain; not global memory
+- [[workflow/zero_routine_maintenance]] — Standard #8: 50-state SaaS requires zero ongoing per-state maintenance; humans get pinged only for true anomalies
+- [[workflow/use_tools_when_stuck]] — methodology note: consult the actual upstream source (WebFetch, API probes, etc.) alongside local reasoning, not instead of it
 
 ## Architecture
 - [[architecture/calendar_pipeline]] — LIS → worker → Sheet1 data flow + resolution priorities
