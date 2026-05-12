@@ -124,6 +124,19 @@ Points 1-9 are the original audit. Points 10-15 were codified in PR-C7.0.5 after
 - Match rates, edge case counts, before/after metrics.
 - If you can't measure it, you can't ship it. **And your metric must have a denominator** — see `docs/workflow/source_miss_visibility.md`.
 
+### 8. ZERO ROUTINE HUMAN MAINTENANCE
+- Any architecture that requires routine human intervention as part of normal operations is invalid.
+- Human notification is reserved for **genuine anomalies that warrant interruption** (data integrity violations, upstream contract breaks, security events, multi-source disagreements that automated reasoning cannot resolve).
+- "Routine" means predictable variation the architecture can resolve deterministically (new EventCode in an existing structural range, new phrasing in known taxonomy, etc.). "Anomaly" means structurally unprecedented variation that requires judgment.
+- The architectural pattern that satisfies this: **multi-source triangulation with deterministic agreement → ship; disagreement → alert.** Same shape as triple modular redundancy, multi-signature crypto, distributed consensus.
+- Operational expression of Standard #6: scaling to 50 states means zero ongoing maintenance per state, not just isolated patterns. Full statement in `docs/workflow/zero_routine_maintenance.md`. Codified 2026-05-11 after the PR-C7.1 architectural pivot.
+
+### 9. EXTERNAL RESEARCH WHEN STUCK
+- When an architecture choice feels like a forced trade-off (precision vs coverage, automation vs accuracy), the unblocking move is **external research**, not deeper local reasoning.
+- WebSearch, WebFetch, direct API probes, gh CLI, cross-domain analogue lookup — reach for tools first, infer second.
+- The most common source of "almost-right but not-quite" architectural proposals is stale training data; the antidote is checking the actual upstream source or finding the same problem shape solved in another domain (HTTP status codes, healthcare ICD-10, etc.).
+- Full guidance in `docs/workflow/use_tools_when_stuck.md`. Codified 2026-05-11 after the surface-level civic-tech search missed the structural EventCode pattern in the LIS API.
+
 ---
 
 ## Architecture (at-a-glance)
