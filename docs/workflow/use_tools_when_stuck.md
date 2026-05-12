@@ -37,5 +37,5 @@ The pattern: when a problem feels stuck and the upstream is a documented externa
 
 ## Related
 
-- [[zero_routine_maintenance]] — the architectural principle that today's external research informed
-- [[../failures/assumptions_audit#54]] — the failure mode (minimizing the cost of a "small" routine burden) that the external research helped surface
+- [[workflow/zero_routine_maintenance]] — the architectural principle that today's external research informed
+- [[failures/assumptions_audit#54]] — the failure mode (minimizing the cost of a "small" routine burden) that the external research helped surface

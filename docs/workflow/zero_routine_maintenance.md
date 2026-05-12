@@ -51,5 +51,5 @@ When evaluating a proposed architecture, ask: *in normal operations, how often d
 
 ## Related
 
-- [[../../CLAUDE.md|CLAUDE.md]] Standard #6 (Scalability to 50 States) — Standard #8 is the operational expression
-- [[../failures/assumptions_audit#54]] — the failure mode this principle prevents
+- [CLAUDE.md](../../CLAUDE.md) Standard #6 (Scalability to 50 States) — Standard #8 is the operational expression
+- [[failures/assumptions_audit#54]] — the failure mode this principle prevents
