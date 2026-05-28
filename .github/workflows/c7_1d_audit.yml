@@ -1,0 +1,39 @@
+name: 🔬 Structural Audit of Section 9 Flagged Rows (PR-C7.1d)
+
+# Read-only audit. Categorizes every X-Ray Section 9 "meeting action
+# without time" flagged row against LIS LegislationEvent structural
+# data into classes B/C/D/E (see tools/c7_1d_structural_audit/categorize.py).
+# Answers the months-old question: of the rows flagged as bugs, how many
+# are false positives (wrong classification), recoverable (LIS has the
+# time, worker missed it), genuine LIS time gaps, or fragile-data holes?
+#
+# Read-only w.r.t. Sheet1; writes only to C7_1d_* result tabs.
+# Checkpoints per-bill fetches every 25 bills (C7_1d_BillEvents tab) so
+# a mid-process interruption loses at most one batch.
+
+on:
+  workflow_dispatch: {}
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v3
+
+      - name: Setup Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.10'
+
+      - name: Install Dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install gspread google-auth requests
+
+      - name: Run PR-C7.1d Structural Audit
+        env:
+          GCP_CREDENTIALS: ${{ secrets.GCP_CREDENTIALS }}
+          PYTHONUNBUFFERED: "1"
+        run: python -u tools/c7_1d_structural_audit/audit.py
