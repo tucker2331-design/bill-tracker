@@ -1,0 +1,32 @@
+name: 🔠 EventCode Namespace Dump (PR-C7.1b prereq)
+
+# Read-only. Dumps the complete EventCode namespace from the production
+# LegEvent_Events cache + verifies the PR-C7.0.6 persist landed
+# (EventCode populated, EventID non-blank). Cross-tabs each code against
+# the current text classifier to pinpoint which codes it mislabels.
+# Grounds the PR-C7.1b deterministic EventCode→category mapping design.
+# See tools/c7_1b_eventcode_namespace/dump.py.
+
+on:
+  workflow_dispatch: {}
+
+jobs:
+  dump:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v3
+      - name: Setup Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.10'
+      - name: Install Dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install gspread google-auth
+      - name: Run EventCode Namespace Dump
+        env:
+          GCP_CREDENTIALS: ${{ secrets.GCP_CREDENTIALS }}
+          PYTHONUNBUFFERED: "1"
+        run: python -u tools/c7_1b_eventcode_namespace/dump.py
