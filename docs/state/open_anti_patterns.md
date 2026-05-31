@@ -158,7 +158,7 @@ final_df = final_df[(final_df['Date'] >= scrape_start_str) & (final_df['Date'] <
 
 ## 9. `calendar_worker.py` ~line 1272 — persist reads `e.get("EventID", "")` but API field is `LegislationEventID`
 
-**Status:** surfaced during PR-C7.1a viability audit prep (2026-05-11). Not yet fixed.
+**Status:** resolved-in-PR-C7.0.6 (2026-05-31). Persist now reads `str(e.get("LegislationEventID") or e.get("EventID") or "")` — handles both event-dict shapes (raw API events from hydration carry `LegislationEventID`; reloaded events carry `EventID`). Shipped alongside the `EventCode` column addition. Old persisted rows backfill on the next TTL refresh.
 
 **Severity:** `WARN` — every persisted event row in `LegEvent_Events` has an empty `EventID` column. No data loss in the time-recovery path (the resolver matches by `(bill, date, description)`, not EventID), but the schema field is structurally useless and would mask any future feature that depends on event-level identity.
 
