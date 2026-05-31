@@ -162,6 +162,15 @@ def get_or_create(sheet, name, header, rows=2000):
 def write_tab(sheet, name, header, rows, last_col):
     ws = get_or_create(sheet, name, header, rows=max(2000, len(rows) + 100))
     payload = [header] + rows
+    # Gemini HIGH review fix: get_or_create only sizes on CREATE. An
+    # existing tab from a prior run keeps its old allocation; if the new
+    # payload is larger, ws.update raises an APIError (exceeds grid).
+    # Resize up first. (For this tool the namespace is small — well under
+    # 2000 rows — so this is defensive/robustness rather than triggerable
+    # here, but it's correct and matches the fragile-data posture.)
+    needed = len(payload)
+    if ws.row_count < needed:
+        ws.resize(rows=max(2000, needed + 100))
     ws.update(values=payload, range_name="A1")
     allocated = ws.row_count
     if allocated > len(payload):
@@ -188,8 +197,19 @@ def main() -> int:
         return header.index(col) if col in header else -1
     i_code, i_desc = idx("EventCode"), idx("Description")
     i_chamber, i_date, i_id = idx("ChamberCode"), idx("EventDate"), idx("EventID")
-    if i_desc < 0:
-        print(f"❌ {EVENTS_TAB} header missing Description. Got: {header}")
+    # Gemini MEDIUM review fix: validate ALL legacy required columns up
+    # front and fail LOUD, not just Description. A missing column would
+    # otherwise leave its idx at -1 and the per-row bounds guards
+    # (`i_x >= 0 and i_x < n`) would silently skip it, producing
+    # incomplete metrics instead of an error (Standard #4: no silent
+    # failures). EventCode is checked SEPARATELY below because its
+    # absence has a distinct, expected meaning (persist hasn't run yet),
+    # not a corrupt-header meaning.
+    required = {"Description": i_desc, "ChamberCode": i_chamber,
+                "EventDate": i_date, "EventID": i_id}
+    missing = [c for c, ix in required.items() if ix < 0]
+    if missing:
+        print(f"❌ {EVENTS_TAB} header missing required columns {missing}. Got: {header}")
         return 1
     if i_code < 0:
         print(f"⚠️ {EVENTS_TAB} header has NO EventCode column — PR-C7.0.6 persist "
