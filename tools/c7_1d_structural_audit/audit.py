@@ -309,19 +309,28 @@ class FetchResult(Enum):
 
 
 def lis_fetch_with_retry(url, params, kind):
+    """GET with exponential backoff. Skips the sleep on the final attempt.
+
+    Gemini medium review-fix (2026-05-13): the prior version slept after
+    the last attempt's failure too, adding wasted latency before the
+    function returned FAILED. Now we only sleep when there's another
+    attempt remaining.
+    """
     last = None
     for attempt in range(LIS_RETRY_MAX):
         try:
             r = requests.get(url, headers=LIS_HEADERS, params=params, timeout=LIS_TIMEOUT_S)
         except Exception as e:
             last = f"{type(e).__name__}: {e}"
-            time.sleep(LIS_RETRY_BACKOFF_S * (2 ** attempt))
+            if attempt < LIS_RETRY_MAX - 1:
+                time.sleep(LIS_RETRY_BACKOFF_S * (2 ** attempt))
             continue
         if r.status_code != 200:
             last = f"HTTP {r.status_code}"
             if r.status_code != 429 and 400 <= r.status_code < 500:
                 break
-            time.sleep(LIS_RETRY_BACKOFF_S * (2 ** attempt))
+            if attempt < LIS_RETRY_MAX - 1:
+                time.sleep(LIS_RETRY_BACKOFF_S * (2 ** attempt))
             continue
         try:
             return FetchResult.OK, r.json()
@@ -340,8 +349,11 @@ def fetch_events_for_bill(bill_num):
     )
     if v_status == FetchResult.FAILED or not isinstance(vj, dict):
         return FetchResult.FAILED, []
-    versions = vj.get("LegislationsVersion") or []
-    if not versions:
+    # Gemini medium review-fix (2026-05-13): explicitly check isinstance
+    # before indexing — a non-list truthy value from the API would raise
+    # TypeError on `versions[0]`. Defensive per the fragile-data mandate.
+    versions = vj.get("LegislationsVersion")
+    if not isinstance(versions, list) or not versions:
         return FetchResult.EMPTY, []
     first = versions[0]
     if not isinstance(first, dict):
@@ -511,7 +523,9 @@ def main() -> int:
             ])
             continue
         evs = events_by_bill.get(f["bill"], [])
-        cat = categorize_row(f["bill"], f["date"], evs)
+        # Pass outcome so the categorizer can apply production-faithful
+        # chamber + token-overlap matching (Codex P2 review-fix 2026-05-13).
+        cat = categorize_row(f["bill"], f["date"], f["outcome"], evs)
         class_counts[cat.linkage_class] += 1
         for code in cat.event_codes:
             eventcode_hist[code] += 1

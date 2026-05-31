@@ -36,6 +36,7 @@ Nothing learned in a session may be lost. Route every artifact to the right page
 | Artifact | Lands in |
 |----------|----------|
 | External code review anti-pattern (Gemini, etc.) | `docs/failures/gemini_review_patterns.md` — **extract BEFORE writing any fix** |
+| Bot review on an open PR (Codex / Gemini) | follow `docs/workflow/bot_review_fold_in.md` — implement, re-audit, push (bots review commits, not replies) |
 | Bug fixed | `docs/failures/assumptions_audit.md` — numbered, append-only |
 | Framework-level lesson | New page in `docs/failures/`, linked from `docs/index.md` |
 | API quirk | `docs/knowledge/` |

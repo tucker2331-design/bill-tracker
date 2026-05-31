@@ -28,6 +28,15 @@ Owner directive: *"Fetch the LegEvent data for the flagged rows and categorize t
 
 **Open question still open:** the residue-handling architecture (PR-C7.1b) is gated on this audit's measured class breakdown. We stopped guessing. The audit runs, returns the B/C/D/E/F split, and the architecture follows from the data.
 
+**Bot review fold-in (Codex P2 + 4 Gemini, 2026-05-13):**
+- **Codex P2 (high-impact, fixed):** matcher used `(bill, date)` only — same-day cross-chamber events would have classified the row as Class B (recoverable) when the production resolver correctly abstains. Fixed by mirroring `calendar_worker.py`'s resolver: chamber filter (from outcome's `H `/`S ` prefix, fallback to bill prefix) + token overlap (3+ letter alphabetic tokens, same as `_legislation_event_token_set`). Class B now means "production resolver would have recovered," Class C means "production resolver would refuse" (no real time OR zero overlap). Smoke test confirms: HB1 row with only Senate event correctly classifies as Class D, not Class B.
+- **Gemini HIGH / Codex P2 (date validation, fixed):** `event_date_only("not-a-date")` returned `"not-a-dat"` (truthy), bypassing the malformed-counter and allowing prefix-based date-match. Added `_DATE_SHAPE = re.compile(r"^\d{4}-\d{2}-\d{2}$")` validator. Now strict.
+- **Gemini medium (midnight normalization, fixed):** `eventdate_has_real_time("2026-02-12T00:00:00.000Z")` would have returned True (exact-string compare missed fractional seconds + timezone). Switched to regex extraction of the `HH:MM:SS` prefix before midnight check.
+- **Gemini medium (versions list check, fixed):** `versions[0]` on a non-list truthy value could TypeError. Added `isinstance(versions, list)` check.
+- **Gemini medium (final-retry sleep, fixed):** the prior version slept after the last attempt before returning FAILED. Now skips sleep on the final attempt; wasted latency removed.
+
+**Lesson codified:** [[workflow/bot_review_fold_in]] — the bot review process was implicit across the session's ~10 PRs but never written down. Owner flagged: *"we should have established process you know to follow in the brain that includes reviewing these implementing good and necessary changes and then re-auditing yourself because the reviewers will not review your response to their initial reviews."* New workflow page documents the loop. Linked from [[index]] and [[CLAUDE.md]] write-back routing table.
+
 ---
 
 ## [2026-05-11] pr | PR-C7.1a — derived-classifier math-proof audit (read-only)
