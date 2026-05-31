@@ -1,6 +1,6 @@
 ---
 tags: [state, live]
-updated: 2026-05-11
+updated: 2026-05-31
 status: active
 ---
 
@@ -11,17 +11,23 @@ status: active
 **Benchmark window:** Full 2026 VA GA session (2026-01-14 → 2026-05-01) since PR-C6 / Move 3a 2026-04-28. Crossover week (Feb 9-13) remains the historical reference but is no longer the active scope.
 
 ## Active focus
-**🔬 PR-C7.1d STRUCTURAL AUDIT OPEN — measure what the Section 9 "bugs" actually are.** The months-old open question: we got the bug count down to ~150 but don't know how to handle the residue OR the ones to come. Reading the brain back ([[failures/pr22_post_mortem]], PR-C6.3 verb-dump) reframed it: the ~150 aren't 150 unresolved bugs — they're 150 rows the **current X-Ray text-classifier flags**, and ~80%+ are false positives (`Governor's Recommendation` matching `"recommend"`, `Bill text as passed Senate (SR###ER)` matching `"passed"`). We have never MEASURED the breakdown by structural cause; everything has been inference.
+**✅ PR-C7.1d STRUCTURAL AUDIT COMPLETE — the months-old "what are the bugs" question is ANSWERED with data.** Audit ran 2026-05-31 against 1049 flagged Section 9 rows (full window). The count is **two distinct populations, not one** — see [[failures/assumptions_audit#55]] for the full measurement:
 
-PR-C7.1d is that measurement. Read-only. For each flagged row, fetch LIS LegislationEvent data and categorize by structural fact:
-- **B** — matched meeting event WITH a real wall-clock time → recoverable; worker missed it
-- **C** — matched meeting event, NO real time → genuine LIS time gap
-- **D** — no LegEvent event for (bill, date) → likely clerical annotation LegEvent doesn't track
-- **E** — matched but EventCode null/empty → FRAGILE-DATA hole (owner constraint 2026-05-12: LIS drops columns/leaves fields null)
-- **F** — bill LIS fetch failed → indeterminate, retry (NOT conflated with D, per PR-C7.1a Codex P1 lesson FAILED≠EMPTY)
-- Class A (false positive) read off the EventCode histogram, not hardcoded.
+| Population | ~Count | What it is | Fix |
+|---|---|---|---|
+| **False positives** | **~942 (90%)** | `H5601`/`S5601` "Bill text as passed House and Senate (HB####ER)" (842) + `G7210` "Governor's recommendation received" (100). NOT meetings — engrossed-text records + executive receipts. X-Ray's substring matcher caught `"passed"`/`"recommendation"`. | classify by EventCode → administrative; they vanish |
+| **Genuine meetings** | **~100** | real floor votes + committee actions (read 2nd/3rd, passed, conference report agreed, rules suspended, committee/subcommittee offered, reported-from-committee) | the floor_miss fix below |
 
-**We don't have THE answer yet** — the residue-handling architecture (PR-C7.1b) is gated on this audit's measured class breakdown. No guessing until the data is in. Owner guardrails locked: (1) no LLM runtime dependency; (2) no OpenStates fallback (their VA classifier is regex-on-text — the brittleness we're escaping); (3) **no hiding rows from lobbyists and no probabilistic guesses** — the lobbyist surface must be complete AND structurally correct (codified as the Standard #3 sharpening this PR ships).
+**LIS data quality (the fragile-data question, answered):** 13,259 events — **0 null EventCodes, 0 null EventDates, 0 malformed, 0 failed fetches.** Structural fields are clean for session 20261. Architecture is viable; defensive code still earns its keep over years × 50 states.
+
+**The mechanical reason genuine meetings are dropped:** LegEvent recovery is gated `if origin == "journal_default"` at `calendar_worker.py:3289`. Floor actions are forced to `event_location="Floor"` by `ABSOLUTE_FLOOR_VERBS` (line 347/3072), routed through the convene-anchor path (3239). On a convene-anchor **miss** they get `origin="floor_miss"` (3259) — which **skips** the LegEvent block; on a hit they get a real time (not dropped). `tools/c7_1d_structural_audit/diagnose_floor_gate.py` showed the at-risk population: 105 of 299 real-timed events in a 12-bill sample are floor votes (e.g. `S6015` "Conference report agreed to by Senate" at `2026-03-13T17:05:14`). **Codex P2 correction:** that 105/299 is the at-risk population, NOT the dropped count — only the convene-miss subset actually drops, and that subset is the audit's ~100 flagged genuine-meeting rows. LegEvent has the time; the worker never asks for the floor_miss subset.
+
+**PR-C7.1b scope (now data-backed, no longer guessing):**
+1. **X-Ray classifies by EventCode**, not text substring → the ~942 false positives (`H5601`/`S5601`/`G7210`) reclassify as administrative and stop being flagged. This is the bulk of the count.
+2. **Worker floor_miss fallthrough** → when a floor action misses its convene anchor, attempt LegEvent recovery before defaulting to `⏱️ [NO_CONVENE_ANCHOR]`. Recovers the genuine floor-vote residue (LegEvent has the times).
+Both are data-driven (Standard #3) and need zero per-state maintenance (Standard #8).
+
+Owner guardrails still locked: (1) no LLM runtime dependency; (2) no OpenStates fallback (regex-on-text brittleness); (3) no hiding rows / no probabilistic guesses — lobbyist surface complete AND structurally correct (Standard #3 sharpened 2026-05-12).
 
 **Structural finding while scoping PR-C7.1a (2026-05-11):** LIS LegislationEvent API returns `EventCode` per event (a discrete structural code like `H4020`, `H8500`) — exactly the per-event label the derived classifier needs. Verified live against HB1 (30 events, every one with EventCode plus `LegislationEventTypeID`, `IsPassed`, `IsMapped`). The worker NEVER extracts `EventCode`; only takes `EventDate`, `ChamberCode`, `Description`. The bills_meta.LatestEventType field is actually the latest event's Description text (truncated 200 chars), not a structural code. **Implication:** PR-C7.1a uses a one-shot LIS fetch (sample of 100 bills, ~200 API calls total, well within budget) to build the labeled corpus directly — no schema dependency. If the math passes, PR-C7.0.6 extends the persisted schema to capture `EventCode` per event going forward. **Side observation:** `calendar_worker.py:1272` reads `e.get("EventID", "")` but the API field is `LegislationEventID`; every persisted event row has an empty EventID column. Logged as [[state/open_anti_patterns#9]], fixed alongside PR-C7.0.6.
 
@@ -35,14 +41,20 @@ PR-C7.1d is that measurement. Read-only. For each flagged row, fetch LIS Legisla
 
 **🔍 LIS DNS diagnostic (2026-05-06, closed).** Owner asked whether the persistent `⚠️ CSV fetch failed for blob.lis.virginia.gov` warning was state-wide infrastructure failure or LIS punishing us for heavy testing. Verdict: **dead CNAME alias, universal NXDOMAIN, not targeted at us.** Diagnosis + fix shipped in PR #44. Logged as [[failures/assumptions_audit#52]] with proposed Points 12 (Fallback Liveness) and 13 (Dead-Path Resurrection) audit upgrades.
 
-**The 994 framing was wrong** (carries forward; not yet retired). PR-C6.3 verb-dump returned 994 "meeting bugs" but the dominant mass (~80%+) are X-Ray classifier false positives. PR-C7 fixed the time-recovery side; the X-Ray classifier fix is **PR-C7.1 (deferred — next active work)** — `LegEventType` Sheet1 column + `pages/ray2.py` consumes structural EventType instead of text. Real residue measurable once PR-C7.0.4 lands and Sheet1 starts updating again.
+**The 994-was-false-positives hypothesis is now CONFIRMED, not just suspected.** PR-C6.3 estimated ~80%+ of the meeting-bug count was X-Ray classifier false positives. PR-C7.1d MEASURED it: ~90% (942/1049) are non-meeting EventCodes (`H5601`/`S5601` bill-text, `G7210` governor-receipt) flagged by substring matching. The hypothesis held. See [[failures/assumptions_audit#55]].
 
 ## Open PRs
 | # | Branch | State | Notes |
 |---|--------|-------|-------|
-| TBD | `claude/pr-c7-1d-structural-audit` | **Open — PR-C7.1d structural audit (read-only) + Standard #3 sharpening** | New tool `tools/c7_1d_structural_audit/` categorizes every Section 9 flagged row against LIS LegislationEvent data into classes B/C/D/E/F (+ A via EventCode histogram). Pure `categorize.py` (smoke-tested, 8 class/defensive cases pass) + `audit.py` orchestrator reusing PR-C7.1a's checkpointed fetch (FetchResult enum, exponential backoff, every-25-bills checkpoint). Writes `C7_1d_RowVerdicts` / `C7_1d_DataQuality` / `C7_1d_Summary` tabs. Class F separates fetch-failures from genuine no-event (D) — FAILED≠EMPTY, the PR-C7.1a Codex P1 lesson. Also folds in the **Standard #3 sharpening** (greenlit): text parsing forbidden on the lobbyist-facing path. Defensive throughout per the fragile-government-data mandate. Walks all 15 audit points (module docstring). |
+| TBD | `claude/pr-c7-1d-floor-gate-diagnosis` | **Open — floor-gate diagnostic + measured-result writeback** | Adds `tools/c7_1d_structural_audit/diagnose_floor_gate.py` (demonstrates the floor_miss→LegEvent-skip MECHANISM on live data: 105/299 sampled real-timed events are at-risk floor votes) + brain writeback of the PR-C7.1d measured result ([[failures/assumptions_audit#55]], current_status, log). Codex P2 + 2 Gemini folded in: defensive isinstance checks + the at-risk-vs-dropped correction (the 105/299 is at-risk, not dropped; dropped count = the audit's flagged set). No worker changes — diagnostic + docs only. The actual fix is PR-C7.1b (next). |
 
-## Recently closed (this session, 2026-04-28 → 2026-05-12)
+## Next: PR-C7.1b (data-backed, ready to scope)
+The audit + diagnosis give the full picture. PR-C7.1b has two independent parts, either shippable alone:
+1. **EventCode classification in X-Ray** (`pages/ray2.py` + `calendar_xray.py`) — consult EventCode before text patterns. Collapses the ~942 false positives. Requires the worker to persist EventCode per event first (schema add — fold in [[state/open_anti_patterns#9]] `LegislationEventID` fix at the same time).
+2. **Worker floor_miss → LegEvent fallthrough** (`calendar_worker.py:3289`) — when a floor action misses its convene anchor, attempt LegEvent recovery before defaulting to `⏱️ [NO_CONVENE_ANCHOR]`. Recovers the genuine floor-vote residue. Watch Point 11 (Side-Effect Gating) + Point 13 (Dead-Path Resurrection) on this one — it changes the origin-gating logic.
+
+## Recently closed (this session, 2026-04-28 → 2026-05-31)
+- **PR#51** `claude/pr-c7-1d-structural-audit` — merged 2026-05-12. **PR-C7.1d structural audit + Standard #3 sharpening.** Tool `tools/c7_1d_structural_audit/` (pure `categorize.py` + `audit.py`). Ran 2026-05-31: **1049 flagged rows = ~942 false positives (90%, non-meeting EventCodes) + ~100 genuine meetings.** LIS data clean (0 nulls across 13,259 events). Codex P2 + 4 Gemini folded in pre-merge (chamber+token-overlap matching mirroring the production resolver, date validation, midnight normalization, list-type check, retry-sleep). New [[workflow/bot_review_fold_in]] codified the review loop. See [[failures/assumptions_audit#55]].
 - **PR#50** `claude/pr-c7-1d-principle-codification` — merged 2026-05-12 at `efdd71a`. **Standard #8 (Zero Routine Human Maintenance)** codified in CLAUDE.md + [[workflow/zero_routine_maintenance]]. New [[failures/assumptions_audit#54]]. Owner-corrected mid-PR: dropped overprescription (multi-source triangulation as THE mechanism), removed a proposed Standard #9 (external-research methodology belongs in workflow, not as a non-negotiable engineering standard), fixed 3 Gemini wikilink-syntax findings. Net of the pruning: ~140 fewer lines. Lesson reinforced: don't promote single-instance observations to universal mandates; don't crowd the brain.
 - **PR#49** `claude/pr-c7-1a-unbuffer-stdout` — merged 2026-05-11 at `18d8589`. **PR-C7.1a buffering hotfix.** `PYTHONUNBUFFERED: "1"` + `python -u` so Actions log streams progress in real time. Gemini medium fold-in (commit `261b0ca`): the post-mortem log entry used shell syntax (`PYTHONUNBUFFERED=1`); flipped to YAML mapping syntax to match the actual workflow. Same root class as Point 3 (Doc Version Sync) but applied to syntax-environment markers.
 - **PR#48** `claude/pr-c7-1a-spreadsheet-id-hotfix` — merged 2026-05-11 at `98b832f`. **PR-C7.1a hotfix.** `GSHEET_ID` was fabricated, not grep'd from the project — caused 404 on first post-merge run. Renamed `GSHEET_ID` → `SPREADSHEET_ID` (matches sibling-tool convention) + corrected literal to `1PQDtaTTUeYv781bx4_...`. Gemini medium fold-in (commit `c7f6395`): bullet-formatted the post-mortem entry to match surrounding log entries. Pattern: "Sibling-Tool Constant Match" — when adding a tool that mirrors an existing tool's external dependencies, copy constants from the sibling explicitly.

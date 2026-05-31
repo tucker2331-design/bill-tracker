@@ -11,6 +11,24 @@ Append-only, reverse-chronological (newest at top). Each entry opens with `## [Y
 
 ---
 
+## [2026-05-31] milestone | PR-C7.1d audit RAN — the months-old "what are the bugs" question is answered
+
+The PR-C7.1d structural audit ran against 1049 flagged Section 9 rows (full window). **The count is two distinct populations, not one homogeneous pile** — the framing that had stalled every prior strategy discussion was wrong.
+
+- **~942 (90%) false positives:** `H5601`/`S5601` "Bill text as passed House and Senate (HB####ER)" (842) + `G7210` "Governor's recommendation received" (100). Engrossed-text document records + executive receipts, NOT meetings. X-Ray's substring matcher flagged `"passed"`/`"recommendation"`. Confirmed via EventCode, not estimated.
+- **~100 genuine meetings:** real floor votes + committee actions that legitimately lack a shown time.
+- **LIS data quality:** 13,259 events, 0 null EventCodes / 0 null EventDates / 0 malformed / 0 failed. Clean for session 20261. The fragile-data concern is real for robustness-over-years but the structural fields are present and well-formed today.
+
+**Diagnosis (owner directive: "stop with the menus, write the script, run it, tell me the exact mechanical reason"):** wrote `tools/c7_1d_structural_audit/diagnose_floor_gate.py`, ran it on live LIS. **105 of 299 real-timed events in a 12-bill sample are `ABSOLUTE_FLOOR_VERBS` floor votes AT RISK of the dead-end.** The chain: floor action → forced `event_location="Floor"` (line 3072) → convene-anchor path (3239) → convene **miss** → `origin="floor_miss"` (3259) → LegEvent block at 3289 gated on `journal_default` SKIPS it. LegEvent has the minute-precision time (e.g. `S6015` conference-report-agreed at `17:05:14`); the worker never asks. **Codex P2 fold-in:** the 105/299 is the *at-risk* population (floor votes that COULD dead-end), NOT the dropped count — the worker only drops the subset whose convene anchor is also missing. The authoritative dropped count is the audit's ~100 flagged genuine-meeting rows. The diagnostic proves the mechanism; the flagged set counts the drops. (My initial writeback conflated the two — a Standard #7 wrong-denominator error, now corrected.)
+
+Full measurement + both lessons (audit-design: discriminating signal must be IN the class definition; the bug: recovery gated on one origin value excludes rows that need recovery) in [[failures/assumptions_audit#55]].
+
+**PR-C7.1b is now scoped against data, not inference:** (1) X-Ray classifies by EventCode → 942 false positives reclassify administrative; (2) worker floor_miss → LegEvent fallthrough → recovers the genuine floor-vote residue. See [[state/current_status#Next: PR-C7.1b (data-backed, ready to scope)]].
+
+Diagnostic + this writeback shipped on branch `claude/pr-c7-1d-floor-gate-diagnosis` (the PR-C7.1d audit branch #51 already merged; fresh branch from main per [[workflow/branching_rules]]).
+
+---
+
 ## [2026-05-12] pr | PR-C7.1d — structural audit of Section 9 flagged rows (read-only) + Standard #3 sharpening
 
 Owner directive: *"Fetch the LegEvent data for the flagged rows and categorize them into Class A, B, C, and D. Stop guessing and show me the actual measured breakdown."* Plus the fragile-data constraint: *"Government data is fragile. LIS frequently drops columns, changes headers, leaves fields null. Your structural logic must be highly defensive."*
