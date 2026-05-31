@@ -16,12 +16,26 @@ Hypothesis (from reading calendar_worker.py):
   show `⏱️ [NO_CONVENE_ANCHOR]` even though LegEvent has their exact
   minute-precision time. The worker structurally never asks.
 
-This script PROVES it on real LIS data — no Sheets access needed:
+This script demonstrates the MECHANISM on real LIS data — no Sheets
+access needed:
   1. Fetch LegEvent events for a sample of bills.
   2. For each event: does it carry a real wall-clock time? Is its
      description an ABSOLUTE_FLOOR_VERB (worker forces it to Floor)?
-  3. Count floor-type, real-timed events — these are exactly the
-     meetings the worker's floor_miss dead-end drops.
+  3. Count floor-type, real-timed events — the population AT RISK of
+     the floor_miss dead-end.
+
+SCOPE CAVEAT (Codex P2 review, 2026-05-31): this count is the AT-RISK
+population, NOT the actually-dropped count. The worker only dead-ends a
+floor action when its convene anchor is ALSO missing — if
+`convene_times[date][chamber]` exists, the worker sets
+`origin = "convene_anchor"` and the row gets a real time (NOT dropped).
+This script does not have the worker's convene-time graph, so it cannot
+tell which of the at-risk events actually missed their anchor. The
+ACTUAL dropped count is the C7_1d audit's flagged genuine-meeting rows
+(rows truly showing placeholder times) — a subset of this at-risk
+population. This script proves the mechanism is real and the at-risk
+population is non-trivial; the audit's flagged set is the authoritative
+dropped count.
 
 Read-only. No Sheets writes. LIS API only.
 """
@@ -63,15 +77,23 @@ def fetch_events(bill):
         v = requests.get(VERSION_URL, headers=LIS_HEADERS,
                          params={"billNumber": bill, "sessionCode": SESSION_CODE_5D}, timeout=15)
         vj = v.json()
+        if not isinstance(vj, dict):
+            return []
         versions = vj.get("LegislationsVersion")
         if not isinstance(versions, list) or not versions:
             return []
-        lid = versions[0].get("LegislationID")
+        first = versions[0]
+        if not isinstance(first, dict):
+            return []
+        lid = first.get("LegislationID")
         if not lid:
             return []
         e = requests.get(EVENT_URL, headers=LIS_HEADERS,
                          params={"legislationID": lid, "sessionCode": SESSION_CODE_5D}, timeout=15)
-        evs = e.json().get("LegislationEvents") or []
+        ej = e.json()
+        if not isinstance(ej, dict):
+            return []
+        evs = ej.get("LegislationEvents") or []
         return evs if isinstance(evs, list) else []
     except Exception as ex:
         print(f"  ⚠️ {bill}: {type(ex).__name__}: {ex}")
@@ -96,6 +118,8 @@ def main():
         evs = fetch_events(bill)
         time.sleep(0.3)
         for e in evs:
+            if not isinstance(e, dict):
+                continue
             total_events += 1
             desc = safe_str(e.get("Description"))
             code = safe_str(e.get("EventCode"))
@@ -111,22 +135,30 @@ def main():
 
     print(f"Total events examined:                 {total_events}")
     print(f"Events with a real wall-clock time:    {total_realtime}")
-    print(f"  ... that are ABSOLUTE_FLOOR_VERBS:   {len(floor_realtime)}  <-- worker forces these to Floor")
+    print(f"  ... that are ABSOLUTE_FLOOR_VERBS:   {len(floor_realtime)}  <-- AT-RISK population")
     print(f"  ... non-floor (LegEvent path OK):    {nonfloor_realtime}")
     print()
-    print("FLOOR-TYPE EVENTS WITH REAL TIMES (worker routes via convene-anchor;")
-    print("on a convene miss → origin=floor_miss → LegEvent block SKIPPED at line 3289):")
+    print("FLOOR-TYPE EVENTS WITH REAL TIMES — the AT-RISK population.")
+    print("Worker routes these via the convene-anchor path. Of these, ONLY the")
+    print("subset whose (date,chamber) also LACKS a convene anchor becomes")
+    print("origin=floor_miss → LegEvent block SKIPPED (line 3289). The rest get")
+    print("origin=convene_anchor and a real time — NOT dropped. This script")
+    print("cannot distinguish the two (no convene-time graph); the C7_1d audit's")
+    print("flagged genuine-meeting rows are the authoritative dropped count.")
     print(f"  {'bill':<8} {'code':<8} {'eventdate':<22} description")
     for bill, code, edate, desc in floor_realtime[:40]:
         print(f"  {bill:<8} {code:<8} {edate:<22} {desc}")
     print()
-    print("EventCode histogram among the floor-type real-timed events:")
+    print("EventCode histogram among the AT-RISK floor-type real-timed events:")
     for code, n in floor_realtime_codes.most_common():
         print(f"  {code:<8} {n}")
     print()
-    print("CONCLUSION: each row above is a meeting LegEvent timestamps to the")
-    print("minute, but the worker's floor_miss dead-end (origin != 'journal_default')")
-    print("prevents the LegEvent block from ever running for it.")
+    print("CONCLUSION (mechanism, not count): floor votes routinely carry a")
+    print("minute-precision LegEvent time. When such an action ALSO misses its")
+    print("convene anchor, the floor_miss dead-end (origin != 'journal_default')")
+    print("prevents the LegEvent block from recovering that time. The fix is to")
+    print("fall through floor_miss → LegEvent. The number of rows actually")
+    print("affected = the C7_1d audit's flagged genuine-meeting residue.")
     return 0
 
 
