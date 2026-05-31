@@ -11,6 +11,25 @@ Append-only, reverse-chronological (newest at top). Each entry opens with `## [Y
 
 ---
 
+## [2026-05-31] pr | PR-C7.0.6 — persist EventCode per event + fix EventID typo (prerequisite for PR-C7.1b)
+
+Worker-only schema add to `LegEvent_Events`: new `EventCode` column (the structural action code `H4020`/`S5100`/`G7050` that PR-C7.1b's classifier will consume instead of substring text matching). Shipped as a small safe prerequisite ahead of the big classifier PR, so the persistent cache is already warm with EventCode by the time C7.1b lands.
+
+Three defensive details (fragile-government-data mandate):
+1. **EventCode OPTIONAL on read.** Old persisted rows predate the column; the load reads it via a separate `ei_eventcode = eh.index("EventCode") if "EventCode" in eh else -1` index, guarded by `0 <= ei_eventcode < row_len`, defaulting `""`. Adding it to the STRICT required-column set would raise `ValueError` on the one-cycle header transition and wipe the whole events cache. Split `LEGEVENT_EVENTS_REQUIRED_COLS` (the original 6) from `LEGEVENT_EVENTS_HEADER` (now 7).
+2. **Grid widened before write.** The tab was created with 6 cols; persist now writes 7-wide rows. `_get_or_create_legevent_tabs` widens an existing narrow tab via `add_cols` (additive, idempotent, alert-wrapped) before persist, so `update` can't raise "exceeds grid limits".
+3. **EventID typo fixed (closes [[state/open_anti_patterns#9]]).** Persist read `e.get("EventID")`, but raw API events (from hydration) carry `LegislationEventID`; reloaded events carry `EventID`. Now reads `LegislationEventID or EventID` to handle both dict shapes.
+
+**Sequencing correction caught while scoping:** I almost shipped the floor_miss→LegEvent fallthrough alone. Caught the interaction first: `H5601`/`S5601` "Bill text as passed" rows match `"passed house"` → forced Floor → floor_miss; a standalone fallthrough would "recover" them with their 4 AM document-batch timestamp — a wrong time on a non-meeting row. The two PR-C7.1b parts are NOT independent (my earlier writeback was wrong about that): the floor fix is only safe AFTER EventCode classification pulls document/admin codes off the floor path. Hence C7.0.6 (this) → C7.1b (classification + floor fix together).
+
+Hang-safety for the eventual floor_miss fallthrough verified ahead of time: floor_miss bills are in `legevent_candidate_bills` (line ~2905) and negative-cache-seeded (line ~2978), so the row loop never fetches regardless of origin — the PR-C3 hang vector (assumptions_audit #42/#47) stays closed. PR-C7's Codex P1 seeding covers all origins, not just journal_default.
+
+Diff `+52/-4`, worker-only. Branch `claude/pr-c7-0-6-persist-eventcode`. Brain: arch doc schema table updated, open_anti_patterns #9 marked resolved, current_status sequencing section added.
+
+**Codex P2 fold-in (2026-05-31):** the initial commit inserted `EventCode` at index 4 (mid-schema). Codex caught that this breaks the write-then-clear-trailing partial-write recoverability: a transient mid-persist failure leaves new-7-col header + stale-old-6-col rows, and the name-indexed reader then reads stale rows as `EventCode=<old ChamberCode>`, `ChamberCode=<old Description>` — silent corruption. Fix: APPEND `EventCode` last; stale old rows keep legacy fields at fixed indices and the trailing EventCode degrades to `""`. Lesson in [[failures/assumptions_audit#56]] (append-don't-insert for partial-write-tolerant schemas — same family as protobuf field-numbering). Gemini had no comments.
+
+---
+
 ## [2026-05-31] milestone | PR-C7.1d audit RAN — the months-old "what are the bugs" question is answered
 
 The PR-C7.1d structural audit ran against 1049 flagged Section 9 rows (full window). **The count is two distinct populations, not one homogeneous pile** — the framing that had stalled every prior strategy discussion was wrong.

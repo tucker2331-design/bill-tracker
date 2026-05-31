@@ -858,6 +858,28 @@ LEGEVENT_BILLS_HEADER = [
     "LatestEventType", "LatestEventDate", "IsTerminal",
 ]
 LEGEVENT_EVENTS_HEADER = [
+    "Bill", "Session", "EventID", "EventDate", "ChamberCode", "Description", "EventCode",
+]
+# PR-C7.0.6: EventCode is the structural action code (e.g. H4020, S5100,
+# G7050) the X-Ray classifier will consume in PR-C7.1b to replace
+# substring text matching. Added to the persisted schema here so the
+# cache is warm with EventCode before C7.1b ships. EventCode is OPTIONAL
+# on READ (see _load_legevent_cache) — old persisted rows predate it and
+# default to "" until the next persist backfills them; treating it as a
+# required column would raise on the one-cycle header transition and wipe
+# the whole events cache. The original six columns remain required.
+#
+# CRITICAL (Codex P2 review): EventCode is APPENDED AFTER the legacy
+# columns, not inserted among them. The write-then-clear-trailing persist
+# can leave a partial mix of new-7-col and stale-old-6-col rows under the
+# new header after a transient Sheets failure. Appending keeps every
+# legacy column at its original index, so a stale 6-col row reads
+# correctly (legacy fields intact, EventCode absent → "" via the bounds
+# guard). Inserting EventCode mid-schema would shift ChamberCode/
+# Description and silently corrupt stale rows on the next load. This
+# preserves the documented partial-write recoverability of
+# write-then-clear-trailing.
+LEGEVENT_EVENTS_REQUIRED_COLS = [
     "Bill", "Session", "EventID", "EventDate", "ChamberCode", "Description",
 ]
 LEGEVENT_TTL_SECONDS = 6 * 3600       # owner-mandated 6h TTL safety net
@@ -916,8 +938,9 @@ def _get_or_create_legevent_tabs(sheet, push_alert):
     3,000 rows; events tab gets 25,000 rows (~12 events/bill capacity).
     `update(range_name="A{N}")` raises an API error when N exceeds the
     worksheet's allocated row count, so undersizing here would crash on
-    first persist. Sheets cells used: 3,000 × 7 + 25,000 × 6 = 171,000 —
-    a small fraction of the post-PR-C6.2 ~7M-cell workbook headroom.
+    first persist. Sheets cells used: 3,000 × 7 + 25,000 × 7 = 196,000
+    (events tab is 7 cols since PR-C7.0.6 added EventCode) — a small
+    fraction of the post-PR-C6.2 ~7M-cell workbook headroom.
     """
     sizing = {
         LEGEVENT_BILLS_TAB:  (3_000, LEGEVENT_BILLS_HEADER),
@@ -928,6 +951,26 @@ def _get_or_create_legevent_tabs(sheet, push_alert):
         rows_init, header = sizing[tab_name]
         try:
             ws = sheet.worksheet(tab_name)
+            # PR-C7.0.6: a tab created under an older (narrower) header
+            # must be widened BEFORE persist writes the new column count,
+            # or `update` with a wider-than-grid range raises "exceeds
+            # grid limits". The LegEvent_Events tab was created with 6
+            # cols (pre-EventCode); the header is now 7. Expand columns
+            # up to len(header) if the grid is narrower. Idempotent: a
+            # tab already wide enough is left untouched. Additive only —
+            # never shrinks (which would delete data).
+            try:
+                _old_cols = ws.col_count
+                if _old_cols < len(header):
+                    ws.add_cols(len(header) - _old_cols)
+                    print(f"📝 Widened {tab_name} to {len(header)} cols (was {_old_cols}).")
+            except Exception as _resize_err:
+                push_alert(
+                    f"Failed to widen {tab_name} to {len(header)} cols: {_resize_err}. "
+                    f"Persist may fail this cycle; falls back to PR-C3.1 behavior.",
+                    status="WARN", category="API_FAILURE", severity="WARN",
+                    dedup_key=f"legevent_tab_widen::{tab_name}",
+                )
             return ws
         except gspread.exceptions.WorksheetNotFound:
             try:
@@ -1021,16 +1064,20 @@ def _load_legevent_cache(bills_ws, events_ws, push_alert):
 
     if len(events_values) > 1:
         eh = events_values[0]
+        # Strict check only the ORIGINAL required columns. EventCode
+        # (PR-C7.0.6) is optional on read — old persisted rows predate it.
         try:
-            ei = {col: eh.index(col) for col in LEGEVENT_EVENTS_HEADER}
+            ei = {col: eh.index(col) for col in LEGEVENT_EVENTS_REQUIRED_COLS}
         except ValueError:
             push_alert(
                 f"{LEGEVENT_EVENTS_TAB} header missing required cols. Got {eh!r}; "
-                f"expected {LEGEVENT_EVENTS_HEADER!r}. Treating events cache as empty.",
+                f"expected at least {LEGEVENT_EVENTS_REQUIRED_COLS!r}. Treating events cache as empty.",
                 status="WARN", category="DATA_ANOMALY", severity="WARN",
                 dedup_key="legevent_events_header",
             )
             return bills_meta, {}
+        # EventCode column index, or -1 if the persisted tab predates it.
+        ei_eventcode = eh.index("EventCode") if "EventCode" in eh else -1
         for row in events_values[1:]:
             row_len = len(row)
             bill = (row[ei["Bill"]] if ei["Bill"] < row_len else "").strip()
@@ -1040,6 +1087,7 @@ def _load_legevent_cache(bills_ws, events_ws, push_alert):
             events_cache.setdefault((bill, session), []).append({
                 "EventID":     row[ei["EventID"]] if ei["EventID"] < row_len else "",
                 "EventDate":   row[ei["EventDate"]] if ei["EventDate"] < row_len else "",
+                "EventCode":   row[ei_eventcode] if 0 <= ei_eventcode < row_len else "",
                 "ChamberCode": row[ei["ChamberCode"]] if ei["ChamberCode"] < row_len else "",
                 "Description": row[ei["Description"]] if ei["Description"] < row_len else "",
             })
@@ -1263,16 +1311,31 @@ def _persist_legevent_cache(
         bills_ws, bills_rows, LEGEVENT_BILLS_TAB, "legevent_bills_persist_fail",
     )
 
-    # Events tab: header + one row per event
+    # Events tab: header + one row per event.
+    # Column order MUST match LEGEVENT_EVENTS_HEADER (EventCode is LAST —
+    # appended after the legacy columns so a partial-write mix of old-6-col
+    # and new-7-col rows stays readable; see the header-constant note re:
+    # Codex P2):
+    #   Bill, Session, EventID, EventDate, ChamberCode, Description, EventCode
+    # Event dicts arrive in TWO shapes (PR-C7.0.6 note):
+    #   - fresh from hydration = raw LIS API events → key "LegislationEventID"
+    #     (numeric) + "EventCode"
+    #   - reloaded from the persisted tab → key "EventID" + "EventCode"
+    # So read the ID from whichever key is present (this also closes
+    # open_anti_patterns #9: persist previously read e.get("EventID") on
+    # raw API events, where the field is actually "LegislationEventID", so
+    # every freshly-hydrated event persisted a blank ID). EventCode is
+    # present in BOTH shapes.
     events_rows = [LEGEVENT_EVENTS_HEADER]
     for (bill, session), events in sorted(events_cache.items()):
         for e in events:
             events_rows.append([
                 bill, session,
-                str(e.get("EventID", "")),
+                str(e.get("LegislationEventID") or e.get("EventID") or ""),
                 str(e.get("EventDate", "")),
                 str(e.get("ChamberCode", "")),
                 str(e.get("Description", ""))[:1000],  # cap per-cell length
+                str(e.get("EventCode", "")),
             ])
     _write_then_clear_trailing(
         events_ws, events_rows, LEGEVENT_EVENTS_TAB, "legevent_events_persist_fail",
