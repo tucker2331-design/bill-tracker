@@ -858,7 +858,7 @@ LEGEVENT_BILLS_HEADER = [
     "LatestEventType", "LatestEventDate", "IsTerminal",
 ]
 LEGEVENT_EVENTS_HEADER = [
-    "Bill", "Session", "EventID", "EventDate", "EventCode", "ChamberCode", "Description",
+    "Bill", "Session", "EventID", "EventDate", "ChamberCode", "Description", "EventCode",
 ]
 # PR-C7.0.6: EventCode is the structural action code (e.g. H4020, S5100,
 # G7050) the X-Ray classifier will consume in PR-C7.1b to replace
@@ -868,6 +868,17 @@ LEGEVENT_EVENTS_HEADER = [
 # default to "" until the next persist backfills them; treating it as a
 # required column would raise on the one-cycle header transition and wipe
 # the whole events cache. The original six columns remain required.
+#
+# CRITICAL (Codex P2 review): EventCode is APPENDED AFTER the legacy
+# columns, not inserted among them. The write-then-clear-trailing persist
+# can leave a partial mix of new-7-col and stale-old-6-col rows under the
+# new header after a transient Sheets failure. Appending keeps every
+# legacy column at its original index, so a stale 6-col row reads
+# correctly (legacy fields intact, EventCode absent → "" via the bounds
+# guard). Inserting EventCode mid-schema would shift ChamberCode/
+# Description and silently corrupt stale rows on the next load. This
+# preserves the documented partial-write recoverability of
+# write-then-clear-trailing.
 LEGEVENT_EVENTS_REQUIRED_COLS = [
     "Bill", "Session", "EventID", "EventDate", "ChamberCode", "Description",
 ]
@@ -1301,8 +1312,11 @@ def _persist_legevent_cache(
     )
 
     # Events tab: header + one row per event.
-    # Column order MUST match LEGEVENT_EVENTS_HEADER:
-    #   Bill, Session, EventID, EventDate, EventCode, ChamberCode, Description
+    # Column order MUST match LEGEVENT_EVENTS_HEADER (EventCode is LAST —
+    # appended after the legacy columns so a partial-write mix of old-6-col
+    # and new-7-col rows stays readable; see the header-constant note re:
+    # Codex P2):
+    #   Bill, Session, EventID, EventDate, ChamberCode, Description, EventCode
     # Event dicts arrive in TWO shapes (PR-C7.0.6 note):
     #   - fresh from hydration = raw LIS API events → key "LegislationEventID"
     #     (numeric) + "EventCode"
@@ -1319,9 +1333,9 @@ def _persist_legevent_cache(
                 bill, session,
                 str(e.get("LegislationEventID") or e.get("EventID") or ""),
                 str(e.get("EventDate", "")),
-                str(e.get("EventCode", "")),
                 str(e.get("ChamberCode", "")),
                 str(e.get("Description", ""))[:1000],  # cap per-cell length
+                str(e.get("EventCode", "")),
             ])
     _write_then_clear_trailing(
         events_ws, events_rows, LEGEVENT_EVENTS_TAB, "legevent_events_persist_fail",

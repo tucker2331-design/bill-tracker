@@ -515,9 +515,9 @@ PR-C7 replaces PR-C3.1's `MEETING_VERB_TOKENS` text-pattern gate with a cross-cy
 | `Session` | session code |
 | `EventID` | LIS `LegislationEventID` (PR-C7.0.6 fixed the key — was read as `EventID`, which the API doesn't return, so freshly-hydrated events persisted blank IDs) |
 | `EventDate` | full datetime string from LIS API |
-| `EventCode` | **structural action code** (e.g. `H4020`, `S5100`, `G7050`) — added PR-C7.0.6. The signal PR-C7.1b's classifier consumes instead of substring text matching. OPTIONAL on read (old rows predate it → default `""`, backfilled next persist). |
 | `ChamberCode` | `H` / `S` / blank |
 | `Description` | LIS API description (truncated to 1000 chars) |
+| `EventCode` | **structural action code** (e.g. `H4020`, `S5100`, `G7050`) — added PR-C7.0.6, **appended LAST** (Codex P2: keeps legacy columns at fixed indices so a partial write-then-clear mix of old-6-col / new-7-col rows stays readable). The signal PR-C7.1b's classifier consumes instead of substring text matching. OPTIONAL on read (old rows predate it → default `""`, backfilled next persist). |
 
 Initial allocations: `LegEvent_Bills` 3,000 rows × 7 cols = 21,000 cells; `LegEvent_Events` 25,000 rows × 7 cols = 175,000 cells (PR-C7.0.6 added EventCode; existing 6-col tab widened in-place via `add_cols`). Total ~196k cells — small fraction of post-PR-C6.2 ~7M-cell workbook headroom.
 

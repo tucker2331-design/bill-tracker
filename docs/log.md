@@ -26,6 +26,8 @@ Hang-safety for the eventual floor_miss fallthrough verified ahead of time: floo
 
 Diff `+52/-4`, worker-only. Branch `claude/pr-c7-0-6-persist-eventcode`. Brain: arch doc schema table updated, open_anti_patterns #9 marked resolved, current_status sequencing section added.
 
+**Codex P2 fold-in (2026-05-31):** the initial commit inserted `EventCode` at index 4 (mid-schema). Codex caught that this breaks the write-then-clear-trailing partial-write recoverability: a transient mid-persist failure leaves new-7-col header + stale-old-6-col rows, and the name-indexed reader then reads stale rows as `EventCode=<old ChamberCode>`, `ChamberCode=<old Description>` — silent corruption. Fix: APPEND `EventCode` last; stale old rows keep legacy fields at fixed indices and the trailing EventCode degrades to `""`. Lesson in [[failures/assumptions_audit#56]] (append-don't-insert for partial-write-tolerant schemas — same family as protobuf field-numbering). Gemini had no comments.
+
 ---
 
 ## [2026-05-31] milestone | PR-C7.1d audit RAN — the months-old "what are the bugs" question is answered
