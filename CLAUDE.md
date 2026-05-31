@@ -36,6 +36,7 @@ Nothing learned in a session may be lost. Route every artifact to the right page
 | Artifact | Lands in |
 |----------|----------|
 | External code review anti-pattern (Gemini, etc.) | `docs/failures/gemini_review_patterns.md` — **extract BEFORE writing any fix** |
+| Bot review on an open PR (Codex / Gemini) | follow `docs/workflow/bot_review_fold_in.md` — implement, re-audit, push (bots review commits, not replies) |
 | Bug fixed | `docs/failures/assumptions_audit.md` — numbered, append-only |
 | Framework-level lesson | New page in `docs/failures/`, linked from `docs/index.md` |
 | API quirk | `docs/knowledge/` |
@@ -103,7 +104,7 @@ Points 1-9 are the original audit. Points 10-15 were codified in PR-C7.0.5 after
 
 ### 3. DATA-DRIVEN, NOT TEXT-DRIVEN
 - Structural identifiers (API codes, primary keys, refids) over text parsing.
-- Text parsing is a fallback; must be validated against structural data.
+- **Text parsing is forbidden on the lobbyist-facing path. Structural determinism is required, not preferred.** Text parsing may be used for INTERNAL diagnostics only, validated against structural data. (Sharpened 2026-05-12: the lobbyist surface must be both complete AND structurally correct — never a probabilistic guess, never a hidden row.)
 
 ### 4. SELF-DESCRIBING ERRORS
 - No suppressed warnings. Categorize + route.

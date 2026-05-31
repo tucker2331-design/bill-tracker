@@ -11,6 +11,34 @@ Append-only, reverse-chronological (newest at top). Each entry opens with `## [Y
 
 ---
 
+## [2026-05-12] pr | PR-C7.1d — structural audit of Section 9 flagged rows (read-only) + Standard #3 sharpening
+
+Owner directive: *"Fetch the LegEvent data for the flagged rows and categorize them into Class A, B, C, and D. Stop guessing and show me the actual measured breakdown."* Plus the fragile-data constraint: *"Government data is fragile. LIS frequently drops columns, changes headers, leaves fields null. Your structural logic must be highly defensive."*
+
+**The reframe that unblocked this:** reading [[failures/pr22_post_mortem]] + the PR-C6.3 verb-dump back showed the ~150 "bugs" aren't 150 unresolved time gaps — they're 150 rows the **current X-Ray text-classifier flags**, ~80%+ false positives. We had never MEASURED the breakdown by structural cause. The whole "what do we do with the residue" debate was happening without data.
+
+**The tool** (`tools/c7_1d_structural_audit/`):
+- `categorize.py` — pure, testable. Classes by structural fact: **B** (matched meeting event WITH real time → recoverable, worker missed it), **C** (matched, no real time → genuine LIS gap), **D** (no LegEvent event for bill+date → likely clerical annotation), **E** (matched but EventCode null → FRAGILE DATA), **F** (bill fetch failed → indeterminate, retry — NOT conflated with D), **X** (malformed flagged row). Class A (false positive) read off the EventCode histogram, not hardcoded (no EventCode→category mapping exists yet; that's PR-C7.1b).
+- `audit.py` — orchestrator. Replicates the X-Ray's exact flagging logic (same patterns as [[meeting_bug_triage|the triage tool]]); fetches LegEvent per distinct flagged bill (reuses PR-C7.1a's `FetchResult` enum + exponential backoff + 25-bill checkpoint); writes `C7_1d_RowVerdicts` / `C7_1d_DataQuality` / `C7_1d_Summary`.
+- The `C7_1d_DataQuality` tab measures LIS structural fragility directly (null-EventCode %, null/malformed EventDate %, failed-bill count) — the evidence base for how defensive the eventual architecture must be.
+
+**Self-caught defect before push:** initial version set `events_by_bill[failed_bill] = []`, which would have categorized failed-fetch rows as Class D (no event). That conflates "fetch failed" with "LIS has no event" — exactly the PR-C7.1a Codex P1 lesson (FAILED≠EMPTY). Fixed by tracking `failed_bills` as a separate set and assigning Class F. This is also Point 15 (Sentinel-Value Collision) — presence-of-failure tracked separately, not encoded by an empty list.
+
+**Standard #3 sharpening folded in** (greenlit decision): *"Text parsing is forbidden on the lobbyist-facing path. Structural determinism is required, not preferred."* Plus the owner's hard guardrails captured in [[state/current_status]]: no LLM runtime dependency; no OpenStates fallback (their VA classifier is regex-on-text — the brittleness we're escaping); **no hiding rows from lobbyists, no probabilistic guesses** (owner rejected my hide-from-UI idea — the surface must be complete AND correct).
+
+**Open question still open:** the residue-handling architecture (PR-C7.1b) is gated on this audit's measured class breakdown. We stopped guessing. The audit runs, returns the B/C/D/E/F split, and the architecture follows from the data.
+
+**Bot review fold-in (Codex P2 + 4 Gemini, 2026-05-13):**
+- **Codex P2 (high-impact, fixed):** matcher used `(bill, date)` only — same-day cross-chamber events would have classified the row as Class B (recoverable) when the production resolver correctly abstains. Fixed by mirroring `calendar_worker.py`'s resolver: chamber filter (from outcome's `H `/`S ` prefix, fallback to bill prefix) + token overlap (3+ letter alphabetic tokens, same as `_legislation_event_token_set`). Class B now means "production resolver would have recovered," Class C means "production resolver would refuse" (no real time OR zero overlap). Smoke test confirms: HB1 row with only Senate event correctly classifies as Class D, not Class B.
+- **Gemini HIGH / Codex P2 (date validation, fixed):** `event_date_only("not-a-date")` returned `"not-a-dat"` (truthy), bypassing the malformed-counter and allowing prefix-based date-match. Added `_DATE_SHAPE = re.compile(r"^\d{4}-\d{2}-\d{2}$")` validator. Now strict.
+- **Gemini medium (midnight normalization, fixed):** `eventdate_has_real_time("2026-02-12T00:00:00.000Z")` would have returned True (exact-string compare missed fractional seconds + timezone). Switched to regex extraction of the `HH:MM:SS` prefix before midnight check.
+- **Gemini medium (versions list check, fixed):** `versions[0]` on a non-list truthy value could TypeError. Added `isinstance(versions, list)` check.
+- **Gemini medium (final-retry sleep, fixed):** the prior version slept after the last attempt before returning FAILED. Now skips sleep on the final attempt; wasted latency removed.
+
+**Lesson codified:** [[workflow/bot_review_fold_in]] — the bot review process was implicit across the session's ~10 PRs but never written down. Owner flagged: *"we should have established process you know to follow in the brain that includes reviewing these implementing good and necessary changes and then re-auditing yourself because the reviewers will not review your response to their initial reviews."* New workflow page documents the loop. Linked from [[index]] and [[CLAUDE.md]] write-back routing table.
+
+---
+
 ## [2026-05-11] pr | PR-C7.1a — derived-classifier math-proof audit (read-only)
 
 Owner mandate: *"I do not trust 'good ideas' without mathematical proof... Define a strict mathematical threshold for 'Trust' (e.g., minimum Support Count to ignore typos, and maximum Entropy to avoid chaotic words). ... Give me the exact percentage of historical rows that pass the Trust Threshold versus the percentage that fail and route to the DLQ. If the DLQ rate is too high, this architecture is not sustainable. ... Consider processing power and don't lose progress on hourly/weekly limits."*
