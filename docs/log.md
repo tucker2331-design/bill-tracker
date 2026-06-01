@@ -30,6 +30,20 @@ Diff `+52/-4`, worker-only. Branch `claude/pr-c7-0-6-persist-eventcode`. Brain: 
 
 ---
 
+## [2026-05-31] decision | NO DICTIONARY — route on LIS's own structural fields (ReferenceType/VoteTally)
+
+Owner cut to the core: *"why does LIS know what the code means and not ours? why do we need a dictionary in the first place... LIS knows what it means and it's correct on their site why can't ours be if we have access to that source of truth."*
+
+Answer: LIS doesn't decode a dictionary — `Description` IS the plain-English meaning, served directly, and it's in every API response we pull. We never needed a dictionary for DISPLAY. The only internal need was calendar-vs-admin routing, and **LIS classifies that itself** via `ReferenceType`/`VoteTally`/`IsPassed` — documented at [[knowledge/lis_api_reference]]:142 since PR-C3, unused.
+
+Live probe (`tools/c7_1b_eventcode_namespace/probe_referencetype.py`, 37 bills / 1,106 events) proved the text classifier is wrong BOTH ways: flagged all 142 `LegislationText` docs as meetings (known false positives) AND missed 249 of 392 real `Vote`s (unknown false negatives). False-positive codes are structurally clean: H5601/S5601=`LegislationText`, G7210=`Communication`, none with `VoteTally`.
+
+Honest refinement: `ReferenceType` alone isn't a clean binary (`Communication` mixes timestamped admin). The router is a multi-field structural function (`VoteTally` → meeting; `LegislationText`/`TextVersion` → admin; middle needs full-dataset measurement) — dictionary-free, maintenance-free, new-EventCode-proof.
+
+Decisions: EventCode→category dictionary ABANDONED. PR #54 (its premise) to be closed/superseded. Brain lesson captured as [[failures/assumptions_audit#57]]: we reached for text/dictionary 4× while the source's own classification sat documented in our brain — the meta-lesson on reading the brain (and the upstream's full API) thoroughly. `lis_api_reference` updated with a prominent classification-fields callout so it's never buried again.
+
+---
+
 ## [2026-05-31] milestone | PR-C7.1d audit RAN — the months-old "what are the bugs" question is answered
 
 The PR-C7.1d structural audit ran against 1049 flagged Section 9 rows (full window). **The count is two distinct populations, not one homogeneous pile** — the framing that had stalled every prior strategy discussion was wrong.
