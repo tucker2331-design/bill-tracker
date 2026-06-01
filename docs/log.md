@@ -11,6 +11,20 @@ Append-only, reverse-chronological (newest at top). Each entry opens with `## [Y
 
 ---
 
+## [2026-06-01] milestone | Structural router PASSES full-scale validation — 90% of the bug count is misclassification, provably
+
+Ran `full_validate.py` against ALL 1,049 flagged X-Ray Section-9 rows (run on `c563498`, sheet+log-captured — numbers from `C7_1b_FV_Summary`, not transcribed). The dictionary-free structural router (routes on LIS's own `VoteTally`/`ReferenceType`/`Status`/Governor, [[failures/assumptions_audit#58]]):
+
+- **943 (89.9%) → admin** — false positives collapsed (document 843: H5601/S5601 "Bill text as passed" family + conference-report docs; executive 100: G7210 "Governor's Recommendation").
+- **103 (9.8%) → meeting** — genuine residue (committee/subcommittee *offered* 85 + committee reports *with vote tallies* 18). The "committee offered → meeting" routing independently agrees with the owner's PR#22 ground-truth ruling ([[failures/pr22_post_mortem]]).
+- **3 no_event** (clerical, no LegEvent match), **0 FAILED**, **status-grouping drift NONE at full scale** (covers LIS's complete 52-status published list).
+
+Near-exact match to the C7.1d prediction (~942/~100). The router is validated at full scale. **Metric impact:** wiring it in drops Section 9 from 1,049 → ~106. **Caveat preserved:** "routes to meeting" ≠ "has a time" — the ~103 residue still need time recovery (the separate floor_miss→LegEvent fix); the router resolves the *classification* 90%, time-recovery closes the rest.
+
+The weeks-long "what are these bugs / how do we handle them without a brittle dictionary" question is now answered with full-scale data and a defensive, source-consuming, zero-maintenance router. **Next: PR-C7.1b proper (wire into X-Ray + worker) — gated on owner greenlight (the promised design-review checkpoint); plan in [[state/current_status]].**
+
+---
+
 ## [2026-05-31] pr | PR-C7.0.6 — persist EventCode per event + fix EventID typo (prerequisite for PR-C7.1b)
 
 Worker-only schema add to `LegEvent_Events`: new `EventCode` column (the structural action code `H4020`/`S5100`/`G7050` that PR-C7.1b's classifier will consume instead of substring text matching). Shipped as a small safe prerequisite ahead of the big classifier PR, so the persistent cache is already warm with EventCode by the time C7.1b lands.
