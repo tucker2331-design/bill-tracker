@@ -87,6 +87,19 @@ PR-C3+)_ are queued for integration.
 | User | (account) | no | |
 | Vote | yes | no | Vote tallies |
 
+## Reference / controlled-vocabulary endpoints (the "dictionary" endpoints)
+
+**LIS publishes its controlled vocabularies as runtime-fetchable reference lists.** Consume these and runtime-validate against them (Standard #1: static values must have runtime validation that alerts on drift) instead of hardcoding/guessing the vocabulary. Discovered 2026-05-31 by probing `/developers/<Service>` + enumerating `Get…ListAsync` methods — see [[failures/assumptions_audit#58]].
+
+### LegislationStatus list — the controlled Status vocabulary
+
+`GET https://lis.virginia.gov/Legislation/api/GetLegislationStatusListAsync` (auth: `FCE351B6-…` key)
+
+- Returns `{"References":[{"LegislationStatusID":int,"Name":str,"DisplayName":str, ["LegislationVersionID":int]}, …]}`.
+- **52 entries** as of session 20261 (50 unique `Name`s — "Governor's Veto"/"Governor's Recommendation" each appear twice with different IDs). `Name` is what the per-event `Status` field carries (e.g. "Enrolled-House", "In House"); `DisplayName` is LIS's coarser label (e.g. "Enrolled-House" → "Enrolled").
+- **Use:** the PR-C7.1b structural router groups these `Name`s into meeting (in-session: "In House", "Engrossed", "Reported Out-*", readings, conference, blank) vs admin (post-passage/clerical: "Enrolled-*", "Pending Governor's Communication", "Awaiting Governor's Action", "Approved", "Acts of Assembly Chapter", …). Grouping lives in `tools/c7_1b_eventcode_namespace/structural_router.py` (`ADMIN_PIPELINE_STATUSES` / `MEETING_INSESSION_STATUSES`); `validate_status_grouping()` checks our grouping covers the live list every run and alerts on a new/unseen status. Owner-approved as "consuming the source," not a banned dictionary.
+- **Sibling probes that 404'd** (do not retry): `GetLegislationEventTypeListAsync`, `GetReferenceTypeListAsync`, `GetEventTypeListAsync` under both `/Legislation` and `/LegislationEvent`. The Status list is the one that exists. `ReferenceType`/`LegislationEventType` controllers return the SPA HTML shell (no API).
+
 ## Currently integrated endpoints (used by `calendar_worker.py`)
 
 ### Session API
@@ -140,6 +153,13 @@ PR-C3+)_ are queued for integration.
   - `LegislationEventID` (numeric), `EventCode` (e.g. `H8122` "House committee offered"), `EventDate` (`YYYY-MM-DDTHH:MM:SS` — **minute-precision wall-clock time**), `Description`, `LegislationNumber`, `ChamberCode`, `SessionCode`.
   - `CommitteeNumber` and `CommitteeName` may be `None` for vote-style events. **Caveat (post-PR-C3.1): this endpoint gives us TIME but not always COMMITTEE for the vote-style actions. The TIME recovery alone was sufficient to collapse all 9 crossover-week bugs (Class-1 + Class-2) because the project's accuracy metric is meeting actions without times, not committee-name accuracy. PR-C4 retired 2026-04-26 — see [[state/current_status#class-2-collapse-via-legislationevent-pr-c31-side-effect]].**
   - Reference fields: `ReferenceID`, `ReferenceNumber`, `ReferenceTypeID`, `ReferenceType` (e.g. "Vote"), `ActorType` (e.g. "House"), `LegislationTextID`.
+
+> **🧭 CLASSIFICATION FIELDS — LIS classifies every action; consume this, do NOT build a dictionary or text-match.** (Promoted to a callout 2026-05-31 after we reached for text/dictionary 4× while these sat here unused since PR-C3 — see [[failures/assumptions_audit#57]].) Each event carries LIS's OWN structural type. **Authoritative measurement** (`probe_referencetype.py`, 37 bills / **1,068** events, file-captured):
+> - **`ReferenceType`** — observed values + counts: `Vote` (473), `<blank>` (291), `LegislationText` (115), `LegislationFile` (86), `Committee` (61), `Subcommittee` (41), `Legislation` (1).
+> - **`VoteTally`** — present ⟺ a recorded vote (266 events). The single cleanest meeting signal, but NARROW (only recorded votes; misses readings/reports that are also meetings).
+> - **`IsPassed`** (bool), **`EventDate`** wall-clock time presence.
+>
+> **`ReferenceType` is NOT a clean binary router** (measured, do not over-trust): `Vote` includes non-votes ("Read first time", referrals) and only 262/473 carry a `VoteTally`; `<blank>` mixes floor meetings ("Read third time") with admin ("Enrolled", "Governor's Action Deadline"). **What routes cleanly:** `VoteTally` present → meeting; `LegislationText` + `LegislationFile` → documents/admin (201 events); `Committee`/`Subcommittee` ReferenceType → referral/assignment = admin. **Hard middle:** the `<blank>` + Vote-without-tally bucket needs the full-dataset measurement. Confirmed false-positive codes: H5601/S5601 = `LegislationText`, **G7210 = `<blank>`** (not "Communication"), none with a `VoteTally`. **`Description` is the plain-English meaning to DISPLAY (identical to LIS's site); the structural fields are for internal calendar-vs-ledger ROUTING. Never show a raw code to a lobbyist; never derive what LIS already labels.**
   - `BillHistoryReferences[]` — child array of supporting documents (PDFs, fiscal impact statements).
 - **EventDate is the actual recorded action time.** Verified for the 4 Class-1 bugs:
   - HB111 (Feb 12 P&E): `2026-02-12T21:02:00`
