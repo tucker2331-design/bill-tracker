@@ -517,9 +517,17 @@ PR-C7 replaces PR-C3.1's `MEETING_VERB_TOKENS` text-pattern gate with a cross-cy
 | `EventDate` | full datetime string from LIS API |
 | `ChamberCode` | `H` / `S` / blank |
 | `Description` | LIS API description (truncated to 1000 chars) |
-| `EventCode` | **structural action code** (e.g. `H4020`, `S5100`, `G7050`) — added PR-C7.0.6, **appended LAST** (Codex P2: keeps legacy columns at fixed indices so a partial write-then-clear mix of old-6-col / new-7-col rows stays readable). The signal PR-C7.1b's classifier consumes instead of substring text matching. OPTIONAL on read (old rows predate it → default `""`, backfilled next persist). |
+| `EventCode` | **structural action code** (e.g. `H4020`, `S5100`, `G7050`) — added PR-C7.0.6, **appended LAST**. OPTIONAL on read. |
+| `ReferenceType` | LIS's semantic type (`Vote`, `LegislationText`, `LegislationFile`, `Committee`, `Subcommittee`, `Communication`, …) — added PR-C7.1b-1, appended. Router input. OPTIONAL on read. |
+| `VoteTally` | vote tally string when present (e.g. `21-Y 19-N`) — present ⟺ a recorded vote. Added PR-C7.1b-1, appended. OPTIONAL. |
+| `ActorType` | `House` / `Senate` / `Governor` — added PR-C7.1b-1, appended. OPTIONAL. |
+| `Status` | LIS's published bill-status `Name` (e.g. `In House`, `Enrolled-House`) from `GetLegislationStatusListAsync` — added PR-C7.1b-1, appended. Router's middle-bucket input. OPTIONAL. |
 
-Initial allocations: `LegEvent_Bills` 3,000 rows × 7 cols = 21,000 cells; `LegEvent_Events` 25,000 rows × 7 cols = 175,000 cells (PR-C7.0.6 added EventCode; existing 6-col tab widened in-place via `add_cols`). Total ~196k cells — small fraction of post-PR-C6.2 ~7M-cell workbook headroom.
+**Every new column is APPENDED** (never inserted mid-schema) so a partial write-then-clear mix of old-narrower / new-wider rows stays readable — stale rows keep legacy columns at fixed indices, absent new columns default `""` (assumptions_audit #56). The 4 PR-C7.1b-1 fields feed `structural_router.route_event()` ([[failures/assumptions_audit#58]]) — the dictionary-free calendar-vs-ledger router that replaces the X-Ray's substring text matching.
+
+**Sheet1 gains an additive `LegEventRoute` column (PR-C7.1b-1)** carrying the router's verdict (`meeting`/`admin`/`""`) per HISTORY-derived row. **Observability ONLY in C7.1b-1** — it does NOT change `Origin`, `Committee`, row placement, or `meeting_unsourced` (so the breaker + calendar + UI are unchanged). PR-C7.1b-2 has the X-Ray `classify_action()` consume it. A startup drift check fetches `GetLegislationStatusListAsync` and CRITICAL-alerts on any published status the router hasn't grouped (Standard #1 runtime validation).
+
+Initial allocations: `LegEvent_Bills` 3,000 rows × 7 cols = 21,000 cells; `LegEvent_Events` 25,000 rows × 11 cols = 275,000 cells (PR-C7.0.6 added EventCode → 7; PR-C7.1b-1 appended ReferenceType/VoteTally/ActorType/Status → 11; existing narrower tabs widened in-place via `add_cols`). Total ~296k cells — small fraction of post-PR-C6.2 ~7M-cell workbook headroom.
 
 ### Three-layer refresh policy (live-readiness)
 

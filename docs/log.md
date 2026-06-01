@@ -11,6 +11,20 @@ Append-only, reverse-chronological (newest at top). Each entry opens with `## [Y
 
 ---
 
+## [2026-06-01] pr | PR-C7.1b-1 — worker persists structural fields + writes additive LegEventRoute (no UI change)
+
+Owner greenlit the wiring as a two-PR split, safest path: build the backend first, prove the data populates in the sheet before touching the X-Ray/UI, secure the 90% classification win (Section 9 1,049 → ~106), handle time-recovery separately later.
+
+**C7.1b-1 is additive + observability-only — does NOT change `Origin`, `Committee`, row placement, or `meeting_unsourced`.** So the circuit breaker, the calendar, and the lobbyist UI are all unchanged this PR. What it does:
+- Promotes `structural_router.py` to the repo root (single source of truth; worker + tools import it; tool-dir dupe deleted) — kills the worker-vs-X-Ray drift class before it can start.
+- Worker persists `ReferenceType`/`VoteTally`/`ActorType`/`Status` per event to `LegEvent_Events`, appended after EventCode (→11 cols, #56 append-don't-insert, tab auto-widened). Optional on read; backfills over ~7 TTL cycles.
+- Worker writes an additive Sheet1 `LegEventRoute` column (`meeting`/`admin`/`""`) via `_route_for_row()` (cache-lookup-only, mirrors the validated full_validate matcher), defaulted via `setdefault` in `_append_event` so it's not a `_REQUIRED_KEY` (no I1 violation).
+- Startup drift check: fetches `GetLegislationStatusListAsync`, CRITICAL-alerts on unclassified statuses (Standard #1), INFO-degrades on fetch failure.
+
+15-point audit walked; key checks: Point 8 (no `pages/` file imports worker/router — verified), Point 14 (breaker inputs unchanged — `meeting_unsourced` untouched), Point 56 (all new cols appended), Point 2 (`_route_for_row` module-level before call site). `_route_for_row` unit-tested on a mock multi-event cache (bill-text→admin, floor-vote→meeting, no-event→""). Validate after merge: `LegEvent_Events` 4 new cols + Sheet1 `LegEventRoute` matching the 943/103 split. Then PR-C7.1b-2 (X-Ray consumes `LegEventRoute`).
+
+---
+
 ## [2026-06-01] milestone | Structural router PASSES full-scale validation — 90% of the bug count is misclassification, provably
 
 Ran `full_validate.py` against ALL 1,049 flagged X-Ray Section-9 rows (run on `c563498`, sheet+log-captured — numbers from `C7_1b_FV_Summary`, not transcribed). The dictionary-free structural router (routes on LIS's own `VoteTally`/`ReferenceType`/`Status`/Governor, [[failures/assumptions_audit#58]]):
