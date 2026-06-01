@@ -87,6 +87,19 @@ PR-C3+)_ are queued for integration.
 | User | (account) | no | |
 | Vote | yes | no | Vote tallies |
 
+## Reference / controlled-vocabulary endpoints (the "dictionary" endpoints)
+
+**LIS publishes its controlled vocabularies as runtime-fetchable reference lists.** Consume these and runtime-validate against them (Standard #1: static values must have runtime validation that alerts on drift) instead of hardcoding/guessing the vocabulary. Discovered 2026-05-31 by probing `/developers/<Service>` + enumerating `Get…ListAsync` methods — see [[failures/assumptions_audit#58]].
+
+### LegislationStatus list — the controlled Status vocabulary
+
+`GET https://lis.virginia.gov/Legislation/api/GetLegislationStatusListAsync` (auth: `FCE351B6-…` key)
+
+- Returns `{"References":[{"LegislationStatusID":int,"Name":str,"DisplayName":str, ["LegislationVersionID":int]}, …]}`.
+- **52 entries** as of session 20261 (50 unique `Name`s — "Governor's Veto"/"Governor's Recommendation" each appear twice with different IDs). `Name` is what the per-event `Status` field carries (e.g. "Enrolled-House", "In House"); `DisplayName` is LIS's coarser label (e.g. "Enrolled-House" → "Enrolled").
+- **Use:** the PR-C7.1b structural router groups these `Name`s into meeting (in-session: "In House", "Engrossed", "Reported Out-*", readings, conference, blank) vs admin (post-passage/clerical: "Enrolled-*", "Pending Governor's Communication", "Awaiting Governor's Action", "Approved", "Acts of Assembly Chapter", …). Grouping lives in `tools/c7_1b_eventcode_namespace/structural_router.py` (`ADMIN_PIPELINE_STATUSES` / `MEETING_INSESSION_STATUSES`); `validate_status_grouping()` checks our grouping covers the live list every run and alerts on a new/unseen status. Owner-approved as "consuming the source," not a banned dictionary.
+- **Sibling probes that 404'd** (do not retry): `GetLegislationEventTypeListAsync`, `GetReferenceTypeListAsync`, `GetEventTypeListAsync` under both `/Legislation` and `/LegislationEvent`. The Status list is the one that exists. `ReferenceType`/`LegislationEventType` controllers return the SPA HTML shell (no API).
+
 ## Currently integrated endpoints (used by `calendar_worker.py`)
 
 ### Session API
