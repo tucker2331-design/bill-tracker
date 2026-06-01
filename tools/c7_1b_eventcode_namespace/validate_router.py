@@ -17,13 +17,17 @@ terminal).
 """
 from __future__ import annotations
 
+import os
 import sys
 import time
 from collections import Counter, defaultdict
 
 import requests
 
-sys.path.insert(0, __file__.rsplit("/", 1)[0])
+# structural_router.py lives at the repo root (single source of truth,
+# imported by calendar_worker.py + tools alike — no duplicated copy that
+# can drift). Repo root = three dirs up from this file.
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 from structural_router import route_event, _s  # noqa: E402
 
 LIS_HEADERS = {"WebAPIKey": "FCE351B6-9BD8-46E0-B18F-5572F4CCA5B9"}
