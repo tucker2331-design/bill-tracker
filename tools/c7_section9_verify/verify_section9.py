@@ -71,26 +71,27 @@ def load_production_classifier(repo_root: str):
     drift (the whole reason the structural router lives at repo root too).
     """
     xray_path = os.path.join(repo_root, "pages", "ray2.py")
-    src = open(xray_path, encoding="utf-8").read()
+    with open(xray_path, encoding="utf-8") as f:  # Gemini PR #65: context manager
+        src = f.read()
     tree = ast.parse(src)
     wanted_funcs = {"classify_action", "normalize_time"}
     wanted_consts = {
         "MEETING_ACTION_PATTERNS", "ADMINISTRATIVE_PATTERNS",
         "ADMIN_OVERRIDE_PATTERNS", "PLACEHOLDER_TIMES",
     }
+    # Gemini PR #65: collect found constants in ONE pass (no second
+    # traversal; robust to multi-target / tuple-unpack assignments).
     const_src, func_src = [], []
+    found_consts = set()
     for node in tree.body:
         if isinstance(node, ast.Assign):
             for t in node.targets:
                 if isinstance(t, ast.Name) and t.id in wanted_consts:
                     const_src.append(ast.get_source_segment(src, node))
+                    found_consts.add(t.id)
         if isinstance(node, ast.FunctionDef) and node.name in wanted_funcs:
             func_src.append(ast.get_source_segment(src, node))
-    missing = wanted_consts - {
-        n.targets[0].id for n in tree.body
-        if isinstance(n, ast.Assign) and isinstance(n.targets[0], ast.Name)
-        and n.targets[0].id in wanted_consts
-    }
+    missing = wanted_consts - found_consts
     if missing:
         raise RuntimeError(
             f"pages/ray2.py is missing expected constants {missing!r} — the "
@@ -104,7 +105,8 @@ def load_production_classifier(repo_root: str):
 def fetch_tab_csv(sheet_id: str, tab: str) -> pd.DataFrame:
     url = (f"https://docs.google.com/spreadsheets/d/{sheet_id}"
            f"/gviz/tq?tqx=out:csv&sheet={tab}")
-    raw = urllib.request.urlopen(url, timeout=30).read().decode("utf-8")
+    with urllib.request.urlopen(url, timeout=30) as resp:  # Gemini PR #65: close socket
+        raw = resp.read().decode("utf-8")
     return pd.read_csv(io.StringIO(raw))
 
 
@@ -213,17 +215,29 @@ def render(report: dict) -> str:
         a(f"  Cache coverage: unavailable ({cov['error']})")
     a("=" * 66)
     # Honest interpretation guard (the #62 lesson, inline).
+    _pct = cov.get("pct")
     if not report["route_column_populated"]:
         a("  VERDICT: LegEventRoute is empty — worker hasn't written routes "
           "(pre-C7.1b-1 code or stale read). Not a real measurement yet.")
-    elif cov.get("pct") is not None and cov["pct"] < 95:
+    elif _pct is None:
+        # Codex P2 (PR #65): coverage unavailable (cache tabs unreadable /
+        # malformed / missing) means we CANNOT confirm the cache is
+        # hydrated — so we must NOT fall through to a success verdict even
+        # if Section 9 dropped. Treat as inconclusive (the whole point of
+        # this tool is to refuse premature-victory calls — #62).
+        a("  VERDICT: cache coverage could not be measured — INCONCLUSIVE. "
+          "Can't confirm the LegEvent cache is hydrated, so the route-aware "
+          "count is not yet trustworthy. Fix cache-tab access and re-run.")
+    elif _pct < 95:
         a("  VERDICT: cache still hydrating — this is a partial, honest "
           "snapshot, NOT the final number. Do not declare the drop yet.")
     elif delta > 0:
         a(f"  VERDICT: route-aware count is {report['section9_route_aware']:,} "
-          f"(down {delta:,} from text-only). Measured against production ✓")
+          f"(down {delta:,} from text-only), cache hydrated. Measured "
+          f"against production ✓")
     else:
-        a("  VERDICT: no drop in production. Investigate before claiming a win.")
+        a("  VERDICT: cache hydrated but no drop in production. Investigate "
+          "before claiming a win.")
     return "\n".join(lines)
 
 
