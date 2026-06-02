@@ -11,6 +11,46 @@ Append-only, reverse-chronological (newest at top). Each entry opens with `## [Y
 
 ---
 
+## [2026-06-02] post-mortem | C7.1b-1 was stranded on a merged branch — #40 recurrence; re-landed via cherry-pick
+
+**What happened:** "check what things look like" — I pulled the worker logs (6 clean runs on `1cf2289`) and noticed the C7.1b-1 status-grouping `✅` line was absent. Initial (wrong) diagnosis: the worker's status-list fetch was failing. The REAL cause, found by grepping the deployed worker: **`1cf2289` (main) has ZERO C7.1b-1 markers — no `_route_for_row`, no 11-col header, no drift check.** PR #54 merged at `c563498`; I then pushed `bdbd902` (validation writeback) and `5ae3237` (the whole C7.1b-1 worker change) to the SAME branch AFTER it had merged. Both stranded on the dead `claude/pr-c7-1b-eventcode-namespace` branch; never reached main. The worker had been running pre-C7.1b-1 code the entire time.
+
+**This is [[failures/assumptions_audit#40]] AGAIN** (pushed follow-up to an already-merged PR branch — the rule "closed/merged PRs have dead branches; branch from main for any follow-up"). Third occurrence. Root cause this time: I treated the long-lived `eventcode-namespace` branch as still-open and kept committing across the validation→greenlight→build arc, not noticing PR #54 merged mid-stream at `c563498`.
+
+**Recovery:** fresh branch from `origin/main`, `git cherry-pick bdbd902 5ae3237` (clean — linear children of `c563498`, which IS in main). Verified all C7.1b-1 markers restored + parse-clean. Then folded in the observability layer (below).
+
+**Process tightening (the rule already exists; I failed to apply it):** before pushing ANY commit, check whether the target branch's PR is still open (`gh pr view <n> --json state`). Merged PR = dead branch = new branch from main. And: when a result looks wrong in prod (a missing log line), FIRST verify the code is deployed (`git merge-base --is-ancestor <commit> origin/main`) before diagnosing runtime causes — I burned a cycle assuming a fetch failure when the code simply wasn't there.
+
+---
+
+## [2026-06-01] pr | PR-C7.1b-1 — worker persists structural fields + writes additive LegEventRoute (no UI change)
+
+Owner greenlit the wiring as a two-PR split, safest path: build the backend first, prove the data populates in the sheet before touching the X-Ray/UI, secure the 90% classification win (Section 9 1,049 → ~106), handle time-recovery separately later.
+
+**C7.1b-1 is additive + observability-only — does NOT change `Origin`, `Committee`, row placement, or `meeting_unsourced`.** So the circuit breaker, the calendar, and the lobbyist UI are all unchanged this PR. What it does:
+- Promotes `structural_router.py` to the repo root (single source of truth; worker + tools import it; tool-dir dupe deleted) — kills the worker-vs-X-Ray drift class before it can start.
+- Worker persists `ReferenceType`/`VoteTally`/`ActorType`/`Status` per event to `LegEvent_Events`, appended after EventCode (→11 cols, #56 append-don't-insert, tab auto-widened). Optional on read; backfills over ~7 TTL cycles.
+- Worker writes an additive Sheet1 `LegEventRoute` column (`meeting`/`admin`/`""`) via `_route_for_row()` (cache-lookup-only, mirrors the validated full_validate matcher), defaulted via `setdefault` in `_append_event` so it's not a `_REQUIRED_KEY` (no I1 violation).
+- Startup drift check: fetches `GetLegislationStatusListAsync`, CRITICAL-alerts on unclassified statuses (Standard #1), INFO-degrades on fetch failure.
+
+15-point audit walked; key checks: Point 8 (no `pages/` file imports worker/router — verified), Point 14 (breaker inputs unchanged — `meeting_unsourced` untouched), Point 56 (all new cols appended), Point 2 (`_route_for_row` module-level before call site). `_route_for_row` unit-tested on a mock multi-event cache (bill-text→admin, floor-vote→meeting, no-event→""). Validate after merge: `LegEvent_Events` 4 new cols + Sheet1 `LegEventRoute` matching the 943/103 split. Then PR-C7.1b-2 (X-Ray consumes `LegEventRoute`).
+
+---
+
+## [2026-06-01] milestone | Structural router PASSES full-scale validation — 90% of the bug count is misclassification, provably
+
+Ran `full_validate.py` against ALL 1,049 flagged X-Ray Section-9 rows (run on `c563498`, sheet+log-captured — numbers from `C7_1b_FV_Summary`, not transcribed). The dictionary-free structural router (routes on LIS's own `VoteTally`/`ReferenceType`/`Status`/Governor, [[failures/assumptions_audit#58]]):
+
+- **943 (89.9%) → admin** — false positives collapsed (document 843: H5601/S5601 "Bill text as passed" family + conference-report docs; executive 100: G7210 "Governor's Recommendation").
+- **103 (9.8%) → meeting** — genuine residue (committee/subcommittee *offered* 85 + committee reports *with vote tallies* 18). The "committee offered → meeting" routing independently agrees with the owner's PR#22 ground-truth ruling ([[failures/pr22_post_mortem]]).
+- **3 no_event** (clerical, no LegEvent match), **0 FAILED**, **status-grouping drift NONE at full scale** (covers LIS's complete 52-status published list).
+
+Near-exact match to the C7.1d prediction (~942/~100). The router is validated at full scale. **Metric impact:** wiring it in drops Section 9 from 1,049 → ~106. **Caveat preserved:** "routes to meeting" ≠ "has a time" — the ~103 residue still need time recovery (the separate floor_miss→LegEvent fix); the router resolves the *classification* 90%, time-recovery closes the rest.
+
+The weeks-long "what are these bugs / how do we handle them without a brittle dictionary" question is now answered with full-scale data and a defensive, source-consuming, zero-maintenance router. **Next: PR-C7.1b proper (wire into X-Ray + worker) — gated on owner greenlight (the promised design-review checkpoint); plan in [[state/current_status]].**
+
+---
+
 ## [2026-05-31] pr | PR-C7.0.6 — persist EventCode per event + fix EventID typo (prerequisite for PR-C7.1b)
 
 Worker-only schema add to `LegEvent_Events`: new `EventCode` column (the structural action code `H4020`/`S5100`/`G7050` that PR-C7.1b's classifier will consume instead of substring text matching). Shipped as a small safe prerequisite ahead of the big classifier PR, so the persistent cache is already warm with EventCode by the time C7.1b lands.

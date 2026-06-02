@@ -20,6 +20,14 @@ import pdfplumber
 from investigation_config import INVESTIGATION_START as _WINDOW_START_STR
 from investigation_config import INVESTIGATION_END as _WINDOW_END_STR
 
+# PR-C7.1b-1: the dictionary-free structural calendar-vs-ledger router.
+# Single source of truth at the repo root, imported by the worker AND the
+# validation tools — NO duplicated copy that can drift (the worker-vs-X-Ray
+# drift class). Routes on LIS's own ReferenceType/VoteTally/Status/Governor;
+# validated full-scale (943 admin / 103 meeting / 0 drift, 2026-06-01).
+from structural_router import route_event as _route_event
+from structural_router import validate_status_grouping as _validate_status_grouping
+
 print("🚀 Waking up Enterprise Calendar Worker (Turing State Machine v6.0)...")
 
 SPREADSHEET_ID = "1PQDtaTTUeYv781bx4_ZiehcvbEmUt8t7jFmZYJoJGKM"
@@ -590,6 +598,47 @@ def _legislation_event_token_set(text):
     return {w.lower() for w in re.findall(r'[A-Za-z]{3,}', text)}
 
 
+def _route_for_row(bill_num, session_5d, action_date_str, outcome_text,
+                   acting_chamber_code, legislation_event_cache):
+    """PR-C7.1b-1: structural calendar-vs-ledger route for one Sheet1 row.
+
+    Cache-lookup-only (NO network — same contract as the row loop's
+    resolver call post-PR-C7). Finds the cached LegislationEvent for this
+    (bill, date[, chamber]) with the best token overlap against the
+    outcome (same matching as `_resolve_via_legislation_event_api` and the
+    full-validation tool), then returns
+    `structural_router.route_event(best).route` — "meeting" or "admin".
+
+    Returns "" when there's no cached event to route from (no hydrated
+    events for the bill, or none on this date). "" means "router had
+    nothing to say" — the row keeps today's text-based placement; this PR
+    never acts on the route, only records it. Never raises.
+    """
+    try:
+        events = legislation_event_cache.get((bill_num, session_5d)) or []
+        if not events:
+            return ""
+        date10 = str(action_date_str or "")[:10]
+        cands = []
+        for e in events:
+            if not isinstance(e, dict):
+                continue
+            if str(e.get("EventDate") or "")[:10] != date10:
+                continue
+            ev_chamber = str(e.get("ChamberCode") or "").strip().upper()
+            if acting_chamber_code and ev_chamber and ev_chamber != acting_chamber_code:
+                continue
+            cands.append(e)
+        if not cands:
+            return ""
+        otoks = _legislation_event_token_set(outcome_text)
+        best = max(cands, key=lambda e: len(otoks & _legislation_event_token_set(str(e.get("Description") or ""))))
+        return _route_event(best).route
+    except Exception:
+        # Observability-only column — never let it break the cycle.
+        return ""
+
+
 def _resolve_via_legislation_event_api(
     http_session, bill_num, action_date_str, outcome_text,
     session_code_5d, acting_chamber_code,
@@ -859,6 +908,7 @@ LEGEVENT_BILLS_HEADER = [
 ]
 LEGEVENT_EVENTS_HEADER = [
     "Bill", "Session", "EventID", "EventDate", "ChamberCode", "Description", "EventCode",
+    "ReferenceType", "VoteTally", "ActorType", "Status",
 ]
 # PR-C7.0.6: EventCode is the structural action code (e.g. H4020, S5100,
 # G7050) the X-Ray classifier will consume in PR-C7.1b to replace
@@ -869,16 +919,22 @@ LEGEVENT_EVENTS_HEADER = [
 # required column would raise on the one-cycle header transition and wipe
 # the whole events cache. The original six columns remain required.
 #
-# CRITICAL (Codex P2 review): EventCode is APPENDED AFTER the legacy
-# columns, not inserted among them. The write-then-clear-trailing persist
-# can leave a partial mix of new-7-col and stale-old-6-col rows under the
-# new header after a transient Sheets failure. Appending keeps every
-# legacy column at its original index, so a stale 6-col row reads
-# correctly (legacy fields intact, EventCode absent → "" via the bounds
-# guard). Inserting EventCode mid-schema would shift ChamberCode/
-# Description and silently corrupt stale rows on the next load. This
-# preserves the documented partial-write recoverability of
-# write-then-clear-trailing.
+# CRITICAL (Codex P2 review, applied to EventCode AND the PR-C7.1b-1
+# structural fields below): every NEW column is APPENDED AFTER the legacy
+# columns, never inserted among them. The write-then-clear-trailing
+# persist can leave a partial mix of new-width and stale-old-width rows
+# under the new header after a transient Sheets failure. Appending keeps
+# every legacy column at its original index, so a stale narrower row
+# reads correctly (legacy fields intact, new columns absent → "" via the
+# bounds guard). Inserting mid-schema would shift later columns and
+# silently corrupt stale rows on the next load. See assumptions_audit #56.
+#
+# PR-C7.1b-1: ReferenceType / VoteTally / ActorType / Status are LIS's own
+# structural classification fields, persisted here so the cross-cycle
+# cache carries everything structural_router.route_event() needs (it
+# routes calendar-vs-ledger from these, replacing substring text matching
+# in PR-C7.1b-2). All OPTIONAL on read (same backfill semantics as
+# EventCode). Appended after EventCode, in header order.
 LEGEVENT_EVENTS_REQUIRED_COLS = [
     "Bill", "Session", "EventID", "EventDate", "ChamberCode", "Description",
 ]
@@ -938,8 +994,9 @@ def _get_or_create_legevent_tabs(sheet, push_alert):
     3,000 rows; events tab gets 25,000 rows (~12 events/bill capacity).
     `update(range_name="A{N}")` raises an API error when N exceeds the
     worksheet's allocated row count, so undersizing here would crash on
-    first persist. Sheets cells used: 3,000 × 7 + 25,000 × 7 = 196,000
-    (events tab is 7 cols since PR-C7.0.6 added EventCode) — a small
+    first persist. Sheets cells used: 3,000 × 7 + 25,000 × 11 = 296,000
+    (events tab is 11 cols since PR-C7.1b-1 appended ReferenceType/
+    VoteTally/ActorType/Status to the PR-C7.0.6 7-col schema) — a small
     fraction of the post-PR-C6.2 ~7M-cell workbook headroom.
     """
     sizing = {
@@ -951,14 +1008,14 @@ def _get_or_create_legevent_tabs(sheet, push_alert):
         rows_init, header = sizing[tab_name]
         try:
             ws = sheet.worksheet(tab_name)
-            # PR-C7.0.6: a tab created under an older (narrower) header
-            # must be widened BEFORE persist writes the new column count,
-            # or `update` with a wider-than-grid range raises "exceeds
-            # grid limits". The LegEvent_Events tab was created with 6
-            # cols (pre-EventCode); the header is now 7. Expand columns
-            # up to len(header) if the grid is narrower. Idempotent: a
-            # tab already wide enough is left untouched. Additive only —
-            # never shrinks (which would delete data).
+            # PR-C7.0.6 / PR-C7.1b-1: a tab created under an older
+            # (narrower) header must be widened BEFORE persist writes the
+            # new column count, or `update` with a wider-than-grid range
+            # raises "exceeds grid limits". LegEvent_Events grew 6→7
+            # (EventCode) →11 (ReferenceType/VoteTally/ActorType/Status).
+            # Expand columns up to len(header) if the grid is narrower.
+            # Idempotent: a tab already wide enough is left untouched.
+            # Additive only — never shrinks (which would delete data).
             try:
                 _old_cols = ws.col_count
                 if _old_cols < len(header):
@@ -1076,8 +1133,20 @@ def _load_legevent_cache(bills_ws, events_ws, push_alert):
                 dedup_key="legevent_events_header",
             )
             return bills_meta, {}
-        # EventCode column index, or -1 if the persisted tab predates it.
-        ei_eventcode = eh.index("EventCode") if "EventCode" in eh else -1
+        # Optional columns: index, or -1 if the persisted tab predates them.
+        # EventCode (PR-C7.0.6) + the PR-C7.1b-1 structural fields are all
+        # optional on read — old rows default to "" until the next persist
+        # backfills them (same one-cycle-transition safety as EventCode).
+        def _opt(col):
+            return eh.index(col) if col in eh else -1
+        ei_eventcode = _opt("EventCode")
+        ei_reftype = _opt("ReferenceType")
+        ei_votetally = _opt("VoteTally")
+        ei_actortype = _opt("ActorType")
+        ei_status = _opt("Status")
+
+        def _cell(row, row_len, idx):
+            return row[idx] if 0 <= idx < row_len else ""
         for row in events_values[1:]:
             row_len = len(row)
             bill = (row[ei["Bill"]] if ei["Bill"] < row_len else "").strip()
@@ -1087,9 +1156,13 @@ def _load_legevent_cache(bills_ws, events_ws, push_alert):
             events_cache.setdefault((bill, session), []).append({
                 "EventID":     row[ei["EventID"]] if ei["EventID"] < row_len else "",
                 "EventDate":   row[ei["EventDate"]] if ei["EventDate"] < row_len else "",
-                "EventCode":   row[ei_eventcode] if 0 <= ei_eventcode < row_len else "",
+                "EventCode":   _cell(row, row_len, ei_eventcode),
                 "ChamberCode": row[ei["ChamberCode"]] if ei["ChamberCode"] < row_len else "",
                 "Description": row[ei["Description"]] if ei["Description"] < row_len else "",
+                "ReferenceType": _cell(row, row_len, ei_reftype),
+                "VoteTally":     _cell(row, row_len, ei_votetally),
+                "ActorType":     _cell(row, row_len, ei_actortype),
+                "Status":        _cell(row, row_len, ei_status),
             })
 
     return bills_meta, events_cache
@@ -1312,23 +1385,25 @@ def _persist_legevent_cache(
     )
 
     # Events tab: header + one row per event.
-    # Column order MUST match LEGEVENT_EVENTS_HEADER (EventCode is LAST —
-    # appended after the legacy columns so a partial-write mix of old-6-col
-    # and new-7-col rows stays readable; see the header-constant note re:
-    # Codex P2):
-    #   Bill, Session, EventID, EventDate, ChamberCode, Description, EventCode
-    # Event dicts arrive in TWO shapes (PR-C7.0.6 note):
+    # Column order MUST match LEGEVENT_EVENTS_HEADER. New columns are
+    # APPENDED (EventCode then the PR-C7.1b-1 structural fields) so a
+    # partial-write mix of old-narrower and new-wider rows stays readable
+    # (assumptions_audit #56 / Codex P2):
+    #   Bill, Session, EventID, EventDate, ChamberCode, Description,
+    #   EventCode, ReferenceType, VoteTally, ActorType, Status
+    # Event dicts arrive in TWO shapes:
     #   - fresh from hydration = raw LIS API events → key "LegislationEventID"
-    #     (numeric) + "EventCode"
-    #   - reloaded from the persisted tab → key "EventID" + "EventCode"
-    # So read the ID from whichever key is present (this also closes
-    # open_anti_patterns #9: persist previously read e.get("EventID") on
-    # raw API events, where the field is actually "LegislationEventID", so
-    # every freshly-hydrated event persisted a blank ID). EventCode is
-    # present in BOTH shapes.
+    #     (numeric); structural fields present as-is
+    #   - reloaded from the persisted tab → key "EventID"; structural fields
+    #     reconstructed by _load_legevent_cache (default "" on old rows)
+    # Read the ID from whichever key is present (closes open_anti_patterns
+    # #9). VoteTally may be a non-string (list/dict) from the raw API —
+    # coerce defensively and cap length.
     events_rows = [LEGEVENT_EVENTS_HEADER]
     for (bill, session), events in sorted(events_cache.items()):
         for e in events:
+            _vt = e.get("VoteTally")
+            _vt_str = "" if _vt in (None, "", [], {}) else str(_vt)
             events_rows.append([
                 bill, session,
                 str(e.get("LegislationEventID") or e.get("EventID") or ""),
@@ -1336,6 +1411,10 @@ def _persist_legevent_cache(
                 str(e.get("ChamberCode", "")),
                 str(e.get("Description", ""))[:1000],  # cap per-cell length
                 str(e.get("EventCode", "")),
+                str(e.get("ReferenceType", "")),
+                _vt_str[:200],
+                str(e.get("ActorType", "")),
+                str(e.get("Status", "")),
             ])
     _write_then_clear_trailing(
         events_ws, events_rows, LEGEVENT_EVENTS_TAB, "legevent_events_persist_fail",
@@ -1650,6 +1729,15 @@ def run_calendar_update():
         "legevent_overflow_no_fetch":   0,  # cycle-level: bills seeded with negative cache
                                             # to suppress row-loop network fetches (Codex P1
                                             # + Gemini critical review fix)
+        # PR-C7.1b-1 observability: distribution of the structural router's
+        # LegEventRoute verdict across HISTORY-derived rows. Surfaced in the
+        # metrics line so the calendar-vs-ledger split (the validated
+        # 943-admin / 103-meeting collapse) is visible in the WORKER LOG —
+        # no Sheet access needed. "blank" = router had no cached event for
+        # the row yet (TTL backfill incomplete); should fall over cycles.
+        "legevent_route_meeting": 0,
+        "legevent_route_admin":   0,
+        "legevent_route_blank":   0,
     }
 
     def push_system_alert(message, status="ALERT", category=None, severity=None, dedup_key=None):
@@ -1718,6 +1806,17 @@ def run_calendar_update():
         """PR-C1 write-time chokepoint. See comment block above for invariants."""
         bill_id = event.get("Bill", "?")
         date_id = event.get("Date", "?")
+
+        # PR-C7.1b-1: LegEventRoute is an ADDITIVE, observability-only
+        # column carrying the structural router's calendar-vs-ledger
+        # verdict ("meeting"/"admin"/"") for this row. NOT in
+        # _REQUIRED_KEYS (so a caller that doesn't set it doesn't trip the
+        # I1 schema-violation counter); defaulted here so every row has
+        # the column. This PR ONLY records the route — it does NOT change
+        # row placement; the X-Ray still classifies via text until
+        # PR-C7.1b-2 consumes this column. Lets us prove the route
+        # populates correctly in Sheet1 before touching the UI.
+        event.setdefault("LegEventRoute", "")
 
         # I1: schema completeness. Fill missing keys with "" so downstream
         # pandas/serialization stays happy, but count + alert so the gap is
@@ -2727,7 +2826,64 @@ def run_calendar_update():
     source_miss_counts["legevent_cache_loaded_events"] = sum(
         len(v) for v in _persistent_events_cache.values()
     )
-        
+
+    # PR-C7.1b-1: Status-grouping drift check (Standard #1 — static values
+    # must have runtime validation that alerts when they drift). The
+    # structural router groups LIS's published Status vocabulary; if LIS
+    # adds a NEW status, our grouping silently routes it via the
+    # time-presence fallback until extended. Fetch LIS's published list
+    # and alert on any status we haven't classified. Read-only; any fetch
+    # failure degrades to an INFO and skips (never blocks the cycle).
+    try:
+        _sl = http_session.get(
+            "https://lis.virginia.gov/Legislation/api/GetLegislationStatusListAsync",
+            headers=LEGISLATION_EVENT_HEADERS, timeout=10,
+        )
+        if _sl.status_code == 200:
+            _sl_json = _sl.json()
+            # Gemini review: verify References is a LIST before iterating —
+            # a non-iterable truthy value (int/bool from an unexpected API
+            # shape) would otherwise raise TypeError. (Caught by the
+            # surrounding try, but this degrades cleanly to "skipped"
+            # rather than a generic exception. Fragile-data mandate.)
+            _refs = _sl_json.get("References") if isinstance(_sl_json, dict) else None
+            _live_status_names = [
+                x.get("Name") for x in _refs if isinstance(x, dict)
+            ] if isinstance(_refs, list) else []
+            _status_drift = _validate_status_grouping(_live_status_names)
+            if _status_drift:
+                # PR-C7.1b-1 observability: print on EVERY path (not just
+                # success) so the worker LOG is self-describing — push_alert
+                # only reaches Sheet1, invisible in stdout. Drift is the
+                # anomaly we MOST need to see in the log.
+                print(f"🚨 Status-grouping DRIFT: {len(_status_drift)} unclassified status(es): {_status_drift}")
+                push_system_alert(
+                    f"LegislationStatus drift: LIS publishes {len(_status_drift)} "
+                    f"status(es) the structural router has not classified "
+                    f"(meeting/admin): {_status_drift}. These route via the "
+                    f"time-presence fallback until structural_router's grouping "
+                    f"is extended. See assumptions_audit #58.",
+                    status="CRITICAL", category="DATA_ANOMALY", severity="CRITICAL",
+                    dedup_key=f"status_grouping_drift::{','.join(_status_drift)}",
+                )
+            else:
+                print(f"✅ Status-grouping coverage: all {len(_live_status_names)} published statuses classified.")
+        else:
+            print(f"⚠️ Status-grouping drift check: LegislationStatus list HTTP {_sl.status_code} — skipped this cycle.")
+            push_system_alert(
+                f"Could not fetch LegislationStatus list for drift check: HTTP {_sl.status_code}. "
+                f"Skipping drift validation this cycle.",
+                status="INFO", category="API_FAILURE", severity="INFO",
+                dedup_key="status_list_fetch_http",
+            )
+    except Exception as _sl_err:
+        print(f"⚠️ Status-grouping drift check skipped: {type(_sl_err).__name__}: {_sl_err}")
+        push_system_alert(
+            f"Status-grouping drift check skipped (fetch/parse failed): {type(_sl_err).__name__}: {_sl_err}.",
+            status="INFO", category="API_FAILURE", severity="INFO",
+            dedup_key="status_list_fetch_exc",
+        )
+
     if not df_past.empty:
         bill_col = next((c for c in df_past.columns if 'bill' in c.lower()), 'BillNumber')
         date_col = next((c for c in df_past.columns if 'date' in c.lower()), 'HistoryDate')
@@ -3405,6 +3561,27 @@ def run_calendar_update():
             if anchor_applied:
                 source_miss_counts["unsourced_anchor"] += 1
 
+            # PR-C7.1b-1: record the structural router's calendar-vs-ledger
+            # verdict for this row (cache-lookup-only, no network). This is
+            # OBSERVABILITY ONLY — it does NOT change `Origin`, `Committee`,
+            # or where the row lands; the X-Ray still classifies via text
+            # until PR-C7.1b-2 consumes this column. Lets us verify the
+            # route populates correctly in Sheet1 before touching the UI.
+            legevent_route = _route_for_row(
+                bill_num=bill_num,
+                session_5d=_session_code_5d,
+                action_date_str=date_str,
+                outcome_text=outcome_text,
+                acting_chamber_code=acting_chamber_prefix.strip()[:1].upper(),
+                legislation_event_cache=_legislation_event_cache,
+            )
+            if legevent_route == "meeting":
+                source_miss_counts["legevent_route_meeting"] += 1
+            elif legevent_route == "admin":
+                source_miss_counts["legevent_route_admin"] += 1
+            else:
+                source_miss_counts["legevent_route_blank"] += 1
+
             _append_event({
                 "Date": date_str,
                 "Time": time_val,
@@ -3417,6 +3594,7 @@ def run_calendar_update():
                 "Source": "CSV",
                 "Origin": origin,
                 "DiagnosticHint": diagnostic_hint,
+                "LegEventRoute": legevent_route,
             })
 
     # === CONVENE TIME GAP REPORT ===
@@ -3532,7 +3710,10 @@ def run_calendar_update():
             f"gap_cause={source_miss_counts.get('gap_cause', 'unknown')} "
             f"gap_minutes={source_miss_counts.get('gap_minutes', -1)} "
             f"witness_rows={source_miss_counts.get('witness_rows', -1)} "
-            f"witness_location_backfills={source_miss_counts.get('witness_location_backfills', 0)}"
+            f"witness_location_backfills={source_miss_counts.get('witness_location_backfills', 0)} "
+            f"legevent_route_meeting={source_miss_counts['legevent_route_meeting']} "
+            f"legevent_route_admin={source_miss_counts['legevent_route_admin']} "
+            f"legevent_route_blank={source_miss_counts['legevent_route_blank']}"
         )
         print(f"📊 {metrics_summary}")
         alert_rows.append({
