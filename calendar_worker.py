@@ -1043,6 +1043,29 @@ LEGEVENT_EVENTS_REQUIRED_COLS = [
 ]
 LEGEVENT_TTL_SECONDS = 6 * 3600       # owner-mandated 6h TTL safety net
 LEGEVENT_FETCHES_PER_CYCLE = 500      # owner-mandated 500 cap; raise w/ telemetry
+# PR-C7.1e: Google Sheets hard cap is 10M cells/workbook. Keep a safety
+# ceiling below it so cache-tab creation/growth alerts loudly rather than
+# tripping the raw API error (which froze Sheet1 in PR-C6). Shared by tab
+# creation (_get_or_create_legevent_tabs) and growth (_persist's
+# _ensure_row_capacity) so BOTH paths respect the same budget (Codex P2,
+# PR #61: creation must be budget-aware too, not just growth).
+LEGEVENT_WORKBOOK_CELL_CEILING = 9_500_000
+
+
+def _workbook_cell_headroom(spreadsheet, col_count):
+    """Rows of `col_count` width that can still be added under the ceiling.
+
+    Returns an int (>=0) or None if the workbook can't be measured (in which
+    case callers fall through to an unguarded attempt — the raw API error is
+    still caught downstream). Sums allocated cells across all worksheets,
+    which is what Google counts against the 10M cap.
+    """
+    try:
+        total_cells = sum(w.row_count * w.col_count
+                          for w in spreadsheet.worksheets())
+    except Exception:
+        return None
+    return max(0, (LEGEVENT_WORKBOOK_CELL_CEILING - total_cells) // max(1, col_count))
 # Terminal-event detection: bills whose latest event matches one of these
 # substrings (case-insensitive, against the LegEvent Description field) are
 # considered finished and skipped on refresh. Initially empty pending review
@@ -1151,11 +1174,20 @@ def _get_or_create_legevent_tabs(sheet, push_alert):
             try:
                 _old_rows = ws.row_count
                 if _old_rows < rows_init:
-                    ws.add_rows(rows_init - _old_rows)
-                    print(f"📈 Grew {tab_name} to {rows_init:,} rows (was {_old_rows:,}).")
+                    # Codex P2 (PR #61): clamp the one-step lift to the
+                    # workbook cell budget so growing a near-cap workbook
+                    # can't trip the 10M cap. _ensure_row_capacity in the
+                    # persist path grows further on demand (and alerts) if
+                    # the data genuinely needs more than fits here.
+                    _headroom = _workbook_cell_headroom(sheet, len(header))
+                    _target_rows = (rows_init if _headroom is None
+                                    else min(rows_init, _old_rows + _headroom))
+                    if _target_rows > _old_rows:
+                        ws.add_rows(_target_rows - _old_rows)
+                        print(f"📈 Grew {tab_name} to {_target_rows:,} rows (was {_old_rows:,}).")
             except Exception as _grow_err:
                 push_alert(
-                    f"Failed to grow {tab_name} to {rows_init:,} rows: {_grow_err}. "
+                    f"Failed to grow {tab_name} toward {rows_init:,} rows: {_grow_err}. "
                     f"Persist's _ensure_row_capacity will retry on demand.",
                     status="WARN", category="API_FAILURE", severity="WARN",
                     dedup_key=f"legevent_tab_grow::{tab_name}",
@@ -1163,9 +1195,18 @@ def _get_or_create_legevent_tabs(sheet, push_alert):
             return ws
         except gspread.exceptions.WorksheetNotFound:
             try:
-                ws = sheet.add_worksheet(title=tab_name, rows=rows_init, cols=len(header))
+                # Codex P2 (PR #61): clamp the initial allocation to the
+                # workbook cell budget. Creating a 120k-row tab in a near-cap
+                # workbook would fail `add_worksheet` (exceeds 10M) and return
+                # None, disabling the LegEvent cache ENTIRELY — worse than the
+                # old 25k that would have fit. Instead create a smaller tab
+                # (header + whatever fits) and let the guarded persist grow it.
+                _headroom = _workbook_cell_headroom(sheet, len(header))
+                _create_rows = (rows_init if _headroom is None
+                                else max(2, min(rows_init, _headroom)))
+                ws = sheet.add_worksheet(title=tab_name, rows=_create_rows, cols=len(header))
                 ws.update(values=[header], range_name="A1")
-                print(f"📝 Created {tab_name} tab ({rows_init:,} rows × {len(header)} cols) with header.")
+                print(f"📝 Created {tab_name} tab ({_create_rows:,} rows × {len(header)} cols) with header.")
                 return ws
             except Exception as e:
                 push_alert(
@@ -1459,10 +1500,6 @@ def _persist_legevent_cache(
         return
 
     CHUNK_SIZE = 5000
-    # Sheets hard cap is 10M cells per workbook. Keep a safety ceiling
-    # below it so a cache that outgrows expectations alerts loudly rather
-    # than tripping the raw API error (which froze Sheet1 in PR-C6).
-    WORKBOOK_CELL_CEILING = 9_500_000
     ROW_GROWTH_BUFFER = 5_000  # grow past the exact need so we don't resize every cycle
 
     def _ensure_row_capacity(ws, needed_rows, tab_name, dedup_key):
@@ -1481,46 +1518,46 @@ def _persist_legevent_cache(
         current = ws.row_count
         if needed_rows <= current:
             return needed_rows
-        target = needed_rows + ROW_GROWTH_BUFFER
-        add = target - current
-        # Workbook cell-budget guard — sum allocated cells across all tabs.
-        try:
-            total_cells = sum(w.row_count * w.col_count
-                              for w in ws.spreadsheet.worksheets())
-        except Exception:
-            total_cells = None  # can't measure → fall through to a plain grow attempt
-        if total_cells is not None:
-            projected = total_cells + add * ws.col_count
-            if projected > WORKBOOK_CELL_CEILING:
-                # Cannot grow to the full target without risking the 10M cap.
-                # Grow only as far as the budget allows, persist what fits,
-                # and alert CRITICAL — incomplete cache routing is a data
-                # integrity issue a human must resolve (prune Schedule_Witness
-                # via the L3b audit, or trim event retention).
-                safe_add = max(0, (WORKBOOK_CELL_CEILING - total_cells) // ws.col_count)
-                writable = current + safe_add
+        # MINIMUM growth = just enough to fit the data; DESIRED adds a buffer
+        # so we don't resize every cycle.
+        min_add = needed_rows - current
+        desired_add = min_add + ROW_GROWTH_BUFFER
+        add = desired_add
+        headroom_rows = _workbook_cell_headroom(ws.spreadsheet, ws.col_count)
+        if headroom_rows is not None:
+            # Gemini HIGH (PR #61): gate the CRITICAL alert + truncation on the
+            # MINIMUM need, not the buffered target. A buffer that would push
+            # past the ceiling is NOT data loss — only the data itself failing
+            # to fit is. Alerting on the buffer is false operational noise.
+            if min_add > headroom_rows:
+                # The data genuinely doesn't fit under the cell ceiling.
+                writable = current + headroom_rows
                 push_alert(
                     f"{tab_name} needs {needed_rows:,} rows but the workbook cell "
-                    f"budget ({total_cells:,}/10,000,000) only allows {writable:,}. "
-                    f"Persisting {writable:,}; {max(0, needed_rows - writable):,} rows "
-                    f"dropped this cycle — cache routing will be INCOMPLETE. ACTION: "
-                    f"prune Schedule_Witness (L3b audit) or trim LegEvent retention.",
+                    f"budget only allows {writable:,} (ceiling "
+                    f"{LEGEVENT_WORKBOOK_CELL_CEILING:,} cells). Persisting "
+                    f"{writable:,}; {max(0, needed_rows - writable):,} rows dropped "
+                    f"this cycle — cache routing will be INCOMPLETE. ACTION: prune "
+                    f"Schedule_Witness (L3b audit) or trim LegEvent retention.",
                     status="ALERT", category="DATA_ANOMALY", severity="CRITICAL",
                     dedup_key=f"{dedup_key}_cell_budget",
                 )
-                if safe_add > 0:
+                if headroom_rows > 0:
                     try:
-                        ws.add_rows(safe_add)
+                        ws.add_rows(headroom_rows)
                     except Exception:
                         return current
                 return writable
+            # Data fits; cap the buffered growth to the available headroom
+            # (no alert — nothing dropped, we just grow a little less).
+            add = min(desired_add, headroom_rows)
         try:
             ws.add_rows(add)
-            print(f"📈 Grew {tab_name} grid {current:,} → {target:,} rows "
+            print(f"📈 Grew {tab_name} grid {current:,} → {current + add:,} rows "
                   f"(data needs {needed_rows:,}).")
         except Exception as e:
             push_alert(
-                f"Failed to grow {tab_name} to {target:,} rows: {e}. Persist "
+                f"Failed to grow {tab_name} by {add:,} rows: {e}. Persist "
                 f"truncates at {current:,} this cycle; next cycle retries.",
                 status="WARN", category="API_FAILURE", severity="WARN",
                 dedup_key=f"{dedup_key}_row_grow",
