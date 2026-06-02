@@ -45,7 +45,7 @@ status: active
 
 ## Next up (after this session's merges)
 
-1. **Admin-route gating on journal_default fallback resolver** (deferred from PR #58 scope) — when `route == "admin"` on a journal_default row, skip the resolver too (currently it recovers admin rows with 4 AM document times). Small follow-up.
+1. ✅ ~~Admin-route gating on journal_default fallback resolver~~ — **done in PR-C7.1g** (`route == "admin"` journal_default rows now skip the resolver instead of getting a wrong 4 AM document time; new `legevent_admin_skipped` counter). Shipped before re-hydration so the freshly-filled cache produces correct output. Re-hydration-safe (blank routes still recover).
 2. **Chronological-replay simulation** — dynamic-readiness validation. Feed HISTORY day-by-day to test incremental arrival / evolving bill state on the frozen 2026 corpus. The one dynamic test possible on static data. See [[ideas/future_improvements]].
 3. **Forward-calendar block** — the real dynamic frontier (upcoming meetings before they happen; Schedule API future-window + reconciliation against actual outcomes). Owner-flagged hardest future challenge.
 4. **`backend_worker.py` / `v2_shadow_test` rework** to absorb the calendar subsystem's advanced material before subsystem merger.

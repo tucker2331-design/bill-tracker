@@ -11,6 +11,16 @@ Append-only, reverse-chronological (newest at top). Each entry opens with `## [Y
 
 ---
 
+## [2026-06-02] pr | PR-C7.1g — admin-route gate on the journal_default resolver (deferred follow-up, done)
+
+Closes the item deferred from PR-C7.1c's scope. The journal_default LegEvent recovery path computes `_row_route` and, when `route=="meeting"`, recovers via the cache-direct helper; on any miss it fell through to `_resolve_via_legislation_event_api`. That fallback ran for `route=="admin"` rows too — so an administrative action (e.g. a "Governor's Recommendation" / "Bill text as passed" event) could be "recovered" with its ~4 AM document-batch timestamp, putting a structurally-WRONG time on an admin row (Standard #3 violation on the lobbyist surface).
+
+Fix: `if _le_result is None and _row_route == "admin": skip` (increment new `legevent_admin_skipped` counter, surfaced in SYSTEM_METRICS) `elif _le_result is None:` run the resolver as before. Admin rows drop to NO_SCHEDULE_MATCH → Ledger Updates (timeless, correct); blank/meeting/unknown-future routes keep today's behavior unchanged.
+
+**Re-hydration-safe + well-timed:** while the LegEvent cache is still re-filling (PR-C7.1e), routes are mostly `""` (blank), not `"admin"`, so this gate doesn't bite — blank rows still hit the resolver. It only activates once a bill's events are cached AND structurally admin, so shipping it BEFORE re-hydration means the freshly-filled cache produces correct output from the first hydrated cycle. 5-case unit test (admin→skip, meeting+hit→cache-direct, meeting+miss→resolver, blank→resolver, unknown-future→resolver). Parse-clean; 15-point audit walked (only literal `"admin"` skips; the skip is counted, never silent).
+
+---
+
 ## [2026-06-02] pr | PR #61 + #62 + #63 merged — cache-capacity fix (the real blocker), cron/quiet-hours, legacy post-mortem
 
 Three PRs merged after live verification disproved the earlier "Section 9 closed" claim (see the correction milestone below + [[failures/assumptions_audit#62]]).

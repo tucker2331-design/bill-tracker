@@ -1998,6 +1998,13 @@ def run_calendar_update():
         # not meeting times. Closes the ~103 genuine-meeting residue
         # PR-C7.1d measured.
         "legevent_floor_recovered": 0,
+        # PR-C7.1g: journal_default rows whose structural route is "admin"
+        # and which we therefore did NOT attempt to time-recover (skipping
+        # the fallback resolver so an admin action doesn't get a wrong
+        # document-batch timestamp). They land in Ledger Updates, correctly
+        # timeless. Visible here so the "we chose not to recover" decision
+        # isn't silent (Standard #4).
+        "legevent_admin_skipped": 0,
     }
 
     def push_system_alert(message, status="ALERT", category=None, severity=None, dedup_key=None):
@@ -3947,18 +3954,35 @@ def run_calendar_update():
                         acting_chamber_code=acting_chamber_prefix.strip()[:1].upper(),
                         push_alert=push_system_alert,
                     )
-                if _le_result is None:
-                    # Cache-direct didn't recover (route != "meeting", OR
-                    # route == "meeting" but cache helper couldn't match
-                    # — zero token overlap / midnight-only / etc). Fall
-                    # back to the full resolver, which preserves today's
-                    # journal_default behavior on every path EXCEPT the
-                    # regression case (cached events + negative-cached
-                    # id) — that one is now handled by the cache-direct
-                    # helper above. Admin-route gating on this fallback
-                    # is intentionally deferred to a separate PR; this
-                    # PR's scope is restoring the broken recovery path,
-                    # not changing what gets routed where.
+                if _le_result is None and _row_route == "admin":
+                    # PR-C7.1g (the deferred admin-route gate): route=="admin"
+                    # means LIS's own structural fields (ReferenceType /
+                    # VoteTally / Status) classify this action as
+                    # administrative — it belongs in Ledger Updates with NO
+                    # meeting time. Skip the fallback resolver, which would
+                    # otherwise "recover" a document-batch timestamp (e.g. the
+                    # ~4 AM time on a "Bill text as passed" / "Governor's
+                    # Recommendation" event) onto an admin row — a
+                    # structurally-WRONG time on the lobbyist surface
+                    # (Standard #3). Leaving _le_result None drops the row to
+                    # NO_SCHEDULE_MATCH → Ledger Updates, which is exactly
+                    # where an admin action belongs. Counted for visibility.
+                    #
+                    # Timing note: while the LegEvent cache is still
+                    # re-hydrating (PR-C7.1e), most routes are "" (blank), NOT
+                    # "admin" — blank rows still hit the resolver below
+                    # (preserving today's behavior). This gate only bites once
+                    # a bill's events are cached AND structurally admin, so it
+                    # is correct-by-construction the moment the cache fills.
+                    source_miss_counts["legevent_admin_skipped"] += 1
+                elif _le_result is None:
+                    # Cache-direct didn't recover (route == "" with no cached
+                    # events, OR route == "meeting" but the cache helper
+                    # couldn't match — zero token overlap / midnight-only /
+                    # etc). Fall back to the full resolver, which preserves
+                    # today's journal_default behavior on every non-admin path
+                    # (and the LegislationID lookup chain for blank routes
+                    # where the cache may not be populated).
                     _le_result = _resolve_via_legislation_event_api(
                         http_session=http_session,
                         bill_num=bill_num,
@@ -4166,7 +4190,8 @@ def run_calendar_update():
             f"legevent_route_meeting={source_miss_counts['legevent_route_meeting']} "
             f"legevent_route_admin={source_miss_counts['legevent_route_admin']} "
             f"legevent_route_blank={source_miss_counts['legevent_route_blank']} "
-            f"legevent_floor_recovered={source_miss_counts['legevent_floor_recovered']}"
+            f"legevent_floor_recovered={source_miss_counts['legevent_floor_recovered']} "
+            f"legevent_admin_skipped={source_miss_counts['legevent_admin_skipped']}"
         )
         print(f"📊 {metrics_summary}")
         alert_rows.append({
