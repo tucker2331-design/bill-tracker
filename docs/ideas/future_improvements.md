@@ -222,3 +222,13 @@
 - [ ] Batch Google Sheets writes instead of clear+update
 - [ ] Lazy agenda PDF extraction (only fetch if bill list is empty from docket)
 - [ ] Cache Committee API response (changes only at session start)
+
+## Dynamic-environment readiness (added 2026-06-02, owner mandate)
+We validate against a FROZEN, complete session; the product's real job is the LIVE session. These design for that — see [[state/current_status#Why the remaining work is DESIGN-FOR-DYNAMIC, not static cleanup]] and [[log#2026-06-02 decision]].
+- [ ] **Chronological-replay simulation** — feed HISTORY.CSV day-by-day in date order and confirm the worker/router/cache handle incremental arrival, a bill's state evolving across days, and late-breaking actions. The ONE dynamic test runnable on static data, pre-launch. Validates the structural router + cache stay correct as data accrues, not just on the complete snapshot.
+- [ ] **Forward calendar (upcoming meetings before they happen)** — the real dynamic frontier and owner-flagged hardest future challenge. All work to date is HISTORY-backed (past actions). Requires the Schedule API future-window as the signal source + reconciliation against actual outcomes as days pass (predicted meeting → did it happen / reschedule / cancel). Different success metric ("did the predicted meeting occur as scheduled?"). Scope after C7.1b closes.
+- [ ] **Bot-reviewer continuity** — Gemini Code Assist GitHub bot sunsets (consumer install blocked 2026-06-18, reviews cease 2026-07-17; per Google's deprecation page the for-individuals IDE extension + Gemini CLI stop 2026-06-18 too, migration target "Antigravity"). This is the free `gemini-code-assist[bot]` PR reviewer only — distinct from any consumer Gemini chatbot subscription, which is unaffected. **Codex (`chatgpt-codex-connector`) is unaffected and stays as reviewer #1.** Replacement candidates for the second pair of eyes (all free for public repos):
+    - **CodeRabbit** — free Pro tier for public/OSS repos; closest drop-in to the Gemini bot's inline-PR-comment UX.
+    - **Qodo PR-Agent** (formerly CodiumAI, open-source, ~8.5k★) — self-host via GitHub Action with our own LLM key; works with any model incl. local. Most control, no vendor lock-in.
+    - **GitHub Copilot code review** — included if we ever hold a Copilot seat; native to the PR surface.
+    - Fallback with zero new vendor: **Codex alone + the tightened 15-point self-audit** (already covers the bug classes the bots historically caught). Decide before mid-July; parked until C7.1b closes.

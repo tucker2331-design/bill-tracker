@@ -11,6 +11,24 @@ Append-only, reverse-chronological (newest at top). Each entry opens with `## [Y
 
 ---
 
+## [2026-06-02] decision | Design-for-dynamic mandate + backfill automation + session handoff
+
+**Owner direction at session end:** "we are out of session for now [VA GA adjourned]. My lobbyists aren't using the program AND we don't have new training data — we are static on info and we need to design for a dynamic environment." Plus: automate the multi-cycle backfill so it doesn't require 7-8 manual triggers.
+
+**Automation shipped — PR #56 `⏩ LegEvent Backfill Burst`:** one dispatch pauses the 15-min cron, runs the worker N cycles (default 8) back-to-back in one job (~30 min vs ~2 hrs), resumes the cron with `if: always()`. Hands-off cold-start/backfill.
+
+**Design-for-dynamic — the strategic frame that justifies the remaining roadmap (recorded so it survives the session boundary):**
+- We are validating against a FROZEN, complete session (static HISTORY). That's a gift for ground-truth validation but a blind spot for dynamic behavior — we cannot test incremental arrival / mid-session clerk edits / new-vocabulary handling against static data.
+- **Why the structural router is THE dynamic design (not just a static cleanup):** a live session constantly produces NEW Description phrasings. A text/learned classifier breaks on new vocabulary and needs retraining on data we don't have — the exact treadmill rejected. The structural router consumes LIS's OWN `ReferenceType`/`VoteTally`/`Status` — populated for every action LIS publishes — so a never-before-seen action routes correctly on day one, zero retraining. It is **training-free by construction**, which is precisely right for "static on info now, dynamic later."
+- **Dynamic safety net is already built (C7.1b-1):** the Status-grouping drift CRITICAL alert fires when a 2027 session introduces a new Status/EventCode (not a silent break); the SHA256 hash-mutation signal re-hydrates a bill the cycle after a clerk edits it (Standard #8 — absorb routine variation, alert only on true anomalies).
+- **Two dynamic-readiness items added to the roadmap** (see [[ideas/future_improvements]]): (1) a **chronological-replay simulation** — feed HISTORY day-by-day in order to test incremental arrival / evolving bill state on static data, the one dynamic test we CAN run pre-launch; (2) the **forward-calendar block** (already flagged as the hardest future challenge) — showing upcoming meetings before they happen, the real dynamic frontier, needs Schedule API future-window + reconciliation.
+
+**Operational note:** Gemini Code Assist is being sunset (new installs blocked 2026-06-18; reviews cease 2026-07-17). We lose one of two bot reviewers in ~6 weeks. Decide a replacement / tightened self-audit before mid-July — park until C7.1b closes.
+
+**Session handoff (next session resumes here):** see [[state/current_status]] top block.
+
+---
+
 ## [2026-06-02] post-mortem | C7.1b-1 was stranded on a merged branch — #40 recurrence; re-landed via cherry-pick
 
 **What happened:** "check what things look like" — I pulled the worker logs (6 clean runs on `1cf2289`) and noticed the C7.1b-1 status-grouping `✅` line was absent. Initial (wrong) diagnosis: the worker's status-list fetch was failing. The REAL cause, found by grepping the deployed worker: **`1cf2289` (main) has ZERO C7.1b-1 markers — no `_route_for_row`, no 11-col header, no drift check.** PR #54 merged at `c563498`; I then pushed `bdbd902` (validation writeback) and `5ae3237` (the whole C7.1b-1 worker change) to the SAME branch AFTER it had merged. Both stranded on the dead `claude/pr-c7-1b-eventcode-namespace` branch; never reached main. The worker had been running pre-C7.1b-1 code the entire time.
