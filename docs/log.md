@@ -11,6 +11,18 @@ Append-only, reverse-chronological (newest at top). Each entry opens with `## [Y
 
 ---
 
+## [2026-06-02] post-mortem | C7.1b-1 was stranded on a merged branch — #40 recurrence; re-landed via cherry-pick
+
+**What happened:** "check what things look like" — I pulled the worker logs (6 clean runs on `1cf2289`) and noticed the C7.1b-1 status-grouping `✅` line was absent. Initial (wrong) diagnosis: the worker's status-list fetch was failing. The REAL cause, found by grepping the deployed worker: **`1cf2289` (main) has ZERO C7.1b-1 markers — no `_route_for_row`, no 11-col header, no drift check.** PR #54 merged at `c563498`; I then pushed `bdbd902` (validation writeback) and `5ae3237` (the whole C7.1b-1 worker change) to the SAME branch AFTER it had merged. Both stranded on the dead `claude/pr-c7-1b-eventcode-namespace` branch; never reached main. The worker had been running pre-C7.1b-1 code the entire time.
+
+**This is [[failures/assumptions_audit#40]] AGAIN** (pushed follow-up to an already-merged PR branch — the rule "closed/merged PRs have dead branches; branch from main for any follow-up"). Third occurrence. Root cause this time: I treated the long-lived `eventcode-namespace` branch as still-open and kept committing across the validation→greenlight→build arc, not noticing PR #54 merged mid-stream at `c563498`.
+
+**Recovery:** fresh branch from `origin/main`, `git cherry-pick bdbd902 5ae3237` (clean — linear children of `c563498`, which IS in main). Verified all C7.1b-1 markers restored + parse-clean. Then folded in the observability layer (below).
+
+**Process tightening (the rule already exists; I failed to apply it):** before pushing ANY commit, check whether the target branch's PR is still open (`gh pr view <n> --json state`). Merged PR = dead branch = new branch from main. And: when a result looks wrong in prod (a missing log line), FIRST verify the code is deployed (`git merge-base --is-ancestor <commit> origin/main`) before diagnosing runtime causes — I burned a cycle assuming a fetch failure when the code simply wasn't there.
+
+---
+
 ## [2026-06-01] pr | PR-C7.1b-1 — worker persists structural fields + writes additive LegEventRoute (no UI change)
 
 Owner greenlit the wiring as a two-PR split, safest path: build the backend first, prove the data populates in the sheet before touching the X-Ray/UI, secure the 90% classification win (Section 9 1,049 → ~106), handle time-recovery separately later.
