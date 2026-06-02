@@ -2214,8 +2214,21 @@ def run_calendar_update():
     # routed through the existing push_system_alert → Bug_Logs path. Owner may
     # later route these through a separate dashboard / push channel. See
     # docs/ideas/future_improvements.md (PR-C2 7-day alert routing).
-    GAP_WARN_MINUTES = 20                  # >1 missed 15-min cycle + slop
-    GAP_CRITICAL_MINUTES = 60              # >4 missed cycles
+    # PR-C7.1f: gap thresholds are derived from the SCHEDULED cadence + the
+    # overnight quiet window, NOT the old 15-min assumption. The cron is now
+    # every 3h (calendar_worker.yml) and scheduled runs self-skip 11pm-6am ET
+    # (the __main__ quiet gate). The largest HEALTHY gap is therefore the
+    # overnight span (~12h), so the old `60 min = outage` would fire a false
+    # CRITICAL + trigger wasteful Part-C reconciliation (extra LIS calls)
+    # EVERY cycle (Codex P2, PR #62). Keep these in sync with the cron cadence
+    # and the quiet window if either changes (e.g. 30-min cadence in-session).
+    SCHEDULE_CADENCE_MINUTES = 180         # matches cron '0 */3 * * *'
+    QUIET_WINDOW_MINUTES = 7 * 60          # 11pm-6am ET overnight skip
+    # WARN at 2 missed active cycles; CRITICAL only PAST the worst healthy
+    # overnight gap (quiet window bridged by the cadence on both ends), so
+    # reconciliation fires on a REAL outage, never on the nightly skip.
+    GAP_WARN_MINUTES = SCHEDULE_CADENCE_MINUTES * 2                          # 360
+    GAP_CRITICAL_MINUTES = QUIET_WINDOW_MINUTES + SCHEDULE_CADENCE_MINUTES * 2  # 780
     GAP_STALE_DAYS = 30                    # cursor too old to trust for recovery
     GAP_RECONCILIATION_MAX_DAYS = 7        # hard cap for Part C re-poll window
 
@@ -2289,8 +2302,9 @@ def run_calendar_update():
                     gap_cause = "outage"
                     push_system_alert(
                         f"Cycle gap is {gap_minutes:.1f} min (>{GAP_CRITICAL_MINUTES}) — "
-                        f"4+ missed 15-min cycles since last successful overwrite at "
-                        f"{last_successful_cycle_end_utc}. PR-C2 Part C will attempt "
+                        f"exceeds the worst healthy overnight gap since last successful "
+                        f"overwrite at {last_successful_cycle_end_utc}; likely a real "
+                        f"outage, not the nightly quiet skip. PR-C2 Part C will attempt "
                         f"reconciliation if gap ≤ {GAP_RECONCILIATION_MAX_DAYS} days.",
                         status="CRITICAL",
                         category="API_FAILURE",
@@ -2301,7 +2315,8 @@ def run_calendar_update():
                     gap_cause = "outage"
                     push_system_alert(
                         f"Cycle gap is {gap_minutes:.1f} min (>{GAP_WARN_MINUTES}) — "
-                        f"at least one missed 15-min cycle since {last_successful_cycle_end_utc}.",
+                        f"2+ missed scheduled cycles since {last_successful_cycle_end_utc} "
+                        f"(an overnight quiet skip can land here and is benign).",
                         status="WARN",
                         category="API_FAILURE",
                         severity="WARN",
@@ -4351,7 +4366,14 @@ if __name__ == "__main__":
     _event_name = os.environ.get("GITHUB_EVENT_NAME", "")
     if _event_name == "schedule":
         _et_hour = datetime.now(pytz.timezone("America/New_York")).hour
-        _in_quiet = (_et_hour >= QUIET_START_HOUR_ET) or (_et_hour < QUIET_END_HOUR_ET)
+        # Gemini medium (PR #62): handle both a midnight-spanning window
+        # (start > end, the normal 23→6 case) AND a within-day window
+        # (start < end), so a future reconfigure (e.g. 1am-5am) doesn't
+        # invert the logic and mark almost the whole day quiet.
+        if QUIET_START_HOUR_ET > QUIET_END_HOUR_ET:
+            _in_quiet = (_et_hour >= QUIET_START_HOUR_ET) or (_et_hour < QUIET_END_HOUR_ET)
+        else:
+            _in_quiet = QUIET_START_HOUR_ET <= _et_hour < QUIET_END_HOUR_ET
         if _in_quiet:
             print(
                 f"😴 Quiet hours ({QUIET_START_HOUR_ET}:00–{QUIET_END_HOUR_ET}:00 ET): "
