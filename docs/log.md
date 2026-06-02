@@ -1,6 +1,6 @@
 ---
 tags: [log, meta]
-updated: 2026-05-04
+updated: 2026-06-02
 ---
 
 # Project Log
@@ -8,6 +8,22 @@ updated: 2026-05-04
 Append-only, reverse-chronological (newest at top). Each entry opens with `## [YYYY-MM-DD] <kind> | <title>` so `grep "^## \[" log.md | head -20` gives a parseable timeline.
 
 **Kinds:** `ingest` (new source/doc processed), `pr` (PR opened/merged/closed), `decision` (architectural or workflow), `lint` (wiki health-check pass), `session` (notable multi-hour working block), `post-mortem` (failure analysis), `milestone` (project-goal threshold crossed).
+
+---
+
+## [2026-06-02] pr | PR #56 review fold-in — Codex P1 (concurrency lock) + P2 (preserve prior cron state)
+
+Two real Codex findings on `.github/workflows/legevent_backfill_burst.yml` at commit `deb7486`, both addressed:
+
+1. **Codex P1 — share the cron worker concurrency lock.** The burst declared its own `concurrency.group: legevent-backfill-burst`, so it did NOT serialize with `calendar_worker.yml`'s `calendar-worker` group. GitHub docs are explicit: `gh workflow disable` stops *future triggers*, it does NOT cancel runs already queued or in flight. A 15-min cron cycle that started ~14 min before the burst was dispatched could still be writing Sheet1 / the LegEvent cache when the burst's first `python -u calendar_worker.py` fires → clear+update race against the cron. **Fix:** changed `concurrency.group` to `calendar-worker` so GitHub queues the burst behind any in-flight cron at the queue layer; the disable step then runs once the burst actually starts, preventing future cron triggers from queueing during the burst. Belt + suspenders.
+
+2. **Codex P2 — preserve the cron worker's prior disabled state.** The original cleanup step blindly re-enabled the cron in `always()`, which would silently reactivate a cron the owner had intentionally disabled (maintenance window, paused release, etc.) before triggering the burst. Same anti-pattern class as silent source-miss: the cleanup overrode owner intent without any visible signal. **Fix:** `gh workflow view --json state -q .state` captures the prior state as a step output; the burst disables only if `state == active`; the cleanup re-enables only if the snapshotted `prior_state == 'active'`. A new "Note prior-disabled cron was left in place" step prints when we leave it as-is, so the decision is visible in the run log. `if: always()` still fires the conditional, so a burst failure/timeout doesn't strand the cron in the disabled state when we DID disable it.
+
+Header comment block updated to reflect the new behavior: the original "`if: always()` guarantees the cron comes back" wording was now misleading. The burst's safety story is now (a) shared queue lock + (b) disable-while-running + (c) state-aware re-enable.
+
+YAML validates parse-clean (7 steps total, `pause` step has the `id` Codex P2 relies on).
+
+PR #56 retains its OWNER-DECISION status: not needed for the current backfill (handoff measured the 3,645-bill cold-start completed organically on the cron). Kept as infrastructure for 2027 session start / schema migrations. The two fixes mean it's now mergeable when the owner is ready.
 
 ---
 
