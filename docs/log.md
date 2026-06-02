@@ -11,6 +11,26 @@ Append-only, reverse-chronological (newest at top). Each entry opens with `## [Y
 
 ---
 
+## [2026-06-02] milestone | PR #57 + #58 merged — Section 9 pipeline closed (1,049 → ~3 expected steady state)
+
+Both end-of-session PRs merged sequentially per the user's "safest sequence so we can finally see this Section 9 bug count drop" directive.
+
+- **PR #57** (X-Ray UI) merged at `486faa2` — `pages/ray2.py` + `calendar_xray.py` `classify_action()` now consumes `LegEventRoute`. Streamlit auto-deploys against `main`; next page load on the X-Ray reflects the new bug count using existing route data the worker has been writing since PR-C7.1b-1.
+- **PR #58** (worker time recovery + journal_default regression fix) merged at `07c4a17` — floor_miss → LegEvent recovery via the new `_find_legevent_time_in_cache` helper, gated `route == "meeting"`. Same helper applied to the journal_default path closes the silent regression that's been failing recovery for every fresh/terminal bill since PR-C7. Next cron cycle (~15 min after merge) is the first run with the recovery active.
+
+**Merge order chosen for diagnostic clarity:** #57 first (UI shows the 90% classification collapse immediately based on data already in Sheet1); #58 second (next cron cycle then adds the time-recovery delta). If anything had regressed at either step, the visible signal would have isolated it cleanly. Both PRs were `MERGEABLE / CLEAN` pre-merge; #58 hit a `docs/log.md` conflict after #57 landed (both branches added entries at the top), resolved by keeping all four HEAD entries and inserting the origin/main entry chronologically.
+
+**Verification cues over the next ~30 min:**
+- Streamlit X-Ray: bug count drops 1,049 → ~106 immediately; drops again to ~3 after the next worker cron writes the recovered times to Sheet1.
+- Worker SYSTEM_METRICS line: new counter `legevent_floor_recovered=N` climbs toward ~103; `legislation_event_recovered` increments more than it had pre-merge (the previously-silent journal_default rows).
+- Section 9 proof block on the X-Ray: `admin ≈ 943, meeting ≈ 103, blank ≈ 3` against the flagged subset.
+
+**The objective is done structurally.** The ~3 clerical no_event residue is below the noise floor and intentionally not addressed — overfitting to static data per the owner's design-for-dynamic mandate (Standard #6 / #8). The structural router architecture is training-free and survives next session's vocabulary changes by construction.
+
+**PR #56** (`⏩ LegEvent Backfill Burst`) remains open as parked infrastructure for the 2027 cold-start; its fold-in (shared concurrency group + state-aware re-enable) is pushed and ready to merge whenever owner decides.
+
+---
+
 ## [2026-06-02] pr | PR-C7.1c fold-in pushed — Codex P1 (cache-direct) + P2 / Gemini medium (Counter multiplicity) + journal_default extension
 
 Three changes to `claude/pr-c7-1c-floor-miss-legevent-recovery` after the initial bot reviews on `5199810`:

@@ -12,14 +12,15 @@ status: active
 
 ## Active focus
 
-**Deployed:** PR-C7.1b-1 (PR #55, merged at `aafd1a9`). Worker writes `LegEventRoute` ∈ `{meeting, admin, ""}` per Sheet1 row from the dictionary-free structural router (`structural_router.py`, routes on LIS's own `ReferenceType` / `VoteTally` / `Status`). Startup drift check fetches `GetLegislationStatusListAsync` and CRITICAL-alerts on any unclassified status. Full-scale validated against all 1,049 flagged Section-9 rows: **943 collapse to admin (the misclassification false positives — `H5601`/`S5601` "Bill text as passed", `G7210` "Governor's Recommendation"), 103 stay meeting (genuine residue, real floor votes — "conference report agreed", "read third time", committee/subcommittee offered, committee reports with vote tallies), 3 no_event (clerical), 0 FAILED, 0 status-grouping drift.** Route distribution is observable in the worker SYSTEM_METRICS log line.
+**🎯 SECTION 9 PIPELINE NOW CLOSED.** Both end-of-session PRs merged 2026-06-02 — see [[log#2026-06-02 pr | PR #57 + #58 merged]] for the play-by-play.
 
-**In flight (this session):** two code-independent PRs close Section 9.
+- **PR #55 (merged 2026-06-02 morning)** — PR-C7.1b-1: structural router backend deployed. Worker writes `LegEventRoute` per Sheet1 row from LIS's own `ReferenceType` / `VoteTally` / `Status` (dictionary-free; 52-status drift check validates the grouping at startup). Full-scale validated against 1,049 flagged Section-9 rows: **943 admin (false positives — `H5601`/`S5601`/`G7210` substring matches) + 103 meeting (genuine residue) + 3 no_event (clerical) + 0 FAILED + 0 drift.**
+- **PR #57 (merged 2026-06-02 at `486faa2`)** — X-Ray consumes `LegEventRoute`. `classify_action(outcome_text, legevent_route="")` reads route first, text patterns fall back; flagged-subset proof counter renders the 943-admin / 103-meeting / 3-blank distribution in Section 9. Codex + Gemini fold-in landed (NaN-safe `.fillna("")`, `apply(axis=1)` → `zip` list-comp ~100×, full-column drift scan). **Visible impact: Section 9 1,049 → ~106 once Streamlit reloads against main.**
+- **PR #58 (merged 2026-06-02 at `07c4a17`)** — worker `floor_miss → LegEvent` time recovery via new `_find_legevent_time_in_cache` helper, gated `route == "meeting"`. Helper is cache-direct (bypasses `_resolve_via_legislation_event_api`'s `LegislationID` short-circuit), which also fixed a silent regression in the pre-existing journal_default LegEvent recovery — every fresh/terminal bill (most of them post-cold-start) had been failing recovery since PR-C7 because `_legislation_id_cache` is in-memory while `_legislation_event_cache` is persisted, and the seeding handler set `id = ""` for every non-rehydrated bill. `_floor_miss_dates` switched from `set` → `collections.Counter` to preserve multiplicity (Codex P2 + Gemini medium). **Visible impact (one cron cycle in, ~15 min): Section 9 ~106 → ~3 + the silent journal_default rows.**
 
-1. **PR #57 (UI win):** wires `pages/ray2.py` + diff-identical `calendar_xray.py` `classify_action(outcome_text, legevent_route="")` to consume the column. Route wins when present; text patterns fall back. Section-9 block self-proves the effect with a flagged-subset route distribution. Expected impact: **1,049 → ~106** (the misclassification collapse becomes visible).
-2. **PR #58 (time recovery + journal_default regression fix):** worker `floor_miss → LegEvent` time recovery via a new `_find_legevent_time_in_cache` helper, gated on `route == "meeting"` (H5601/S5601 admin rows would otherwise recover with their 4 AM document-batch timestamp — blocked). The helper is cache-direct (no `LegislationID` dependency), which incidentally fixes a silent regression in the pre-existing journal_default LegEvent recovery path that's been failing for every fresh/terminal bill since PR-C7. Expected impact: **~106 → ~3** plus additional journal_default rows that were silently failing recovery.
+**Verification (the next ~30 min):** at the next worker cron cycle, watch the SYSTEM_METRICS line for `legevent_floor_recovered=N` climbing toward ~103 and `legislation_event_recovered` increasing more than it had pre-merge (the previously-silent journal_default rows). The X-Ray reflects the new bug count on next page load.
 
-Final ~3 clerical no_event rows are below the noise floor; addressing them is overfitting to static data per owner mandate (designed-for-dynamic > overfit-to-2026).
+**Why this closes the months-long objective:** the 1,049 number was always two populations — 90% misclassification + 10% missing-time + ~3 clerical. The structural router IS the architectural answer (no per-state pattern list to maintain; consumes LIS's published vocabulary; new sessions / new clerks survive the change). C7.1b-2 made the verdict visible; C7.1c gave the genuine residue its times. Final ~3 clerical no_event rows are below the noise floor — addressing them is overfitting to static data per owner mandate (designed-for-dynamic > overfit-to-2026).
 
 **Owner guardrails (locked):**
 1. No LLM runtime dependency.
@@ -31,9 +32,7 @@ Final ~3 clerical no_event rows are below the noise floor; addressing them is ov
 
 | # | Branch | State | Notes |
 |---|--------|-------|-------|
-| 57 | `claude/pr-c7-1b-2-xray-consumes-route` | **Open — PR-C7.1b-2: X-Ray consumes `LegEventRoute` (the UI win)** | Diff-identical X-Ray pair. `classify_action(outcome_text, legevent_route="")` — route wins on exact match `{"meeting", "admin"}`, anything else falls through to text. Column-missing → loud `st.warning` (Point 9). Section 9 dual-classifies (text-only + route-aware) and surfaces the flagged-subset route distribution as the self-proving counter. Full-column drift scan + NaN-safe (Gemini critical + Codex P2 fold-in). `apply(axis=1)` → `zip` list-comp (~100× perf, Gemini medium fold-in). XRAY_VERSION = `2026-06-02.1`. **Expected impact: 1,049 → ~106.** |
-| 58 | `claude/pr-c7-1c-floor-miss-legevent-recovery` | **Open — PR-C7.1c: worker floor_miss → LegEvent time recovery + journal_default regression fix** | Floor-miss block at `calendar_worker.py:~3474` attempts LegEvent recovery when `route == "meeting"`. New `_find_legevent_time_in_cache(events, ...)` helper bypasses `_resolve_via_legislation_event_api`'s `LegislationID` short-circuit (Codex P1 fold-in) — closes the silent regression where fresh/terminal bills (loaded from `LegEvent_Events`, not rehydrated this cycle) silently failed recovery on BOTH paths. `_floor_miss_dates` switched from `set` to `collections.Counter` to preserve multiplicity (Codex P2 + Gemini medium fold-in). New `legevent_floor_recovered` counter surfaced in SYSTEM_METRICS. **Expected impact: ~106 → ~3** + additional journal_default rows that were silently failing recovery. |
-| 56 | `claude/legevent-backfill-burst` | **Open — `⏩ LegEvent Backfill Burst` (parked, infrastructure)** | Workflow-only one-shot cold-start helper. NOT needed for the current backfill (handoff measured cold-start completed organically on the 15-min cron). Kept as infrastructure for 2027 session start / schema migrations. Bot review fold-in pushed: shared `calendar-worker` concurrency group (Codex P1) + state-aware re-enable preserving owner-disabled cron (Codex P2). Off the critical path to Section 9 = 0. |
+| 56 | `claude/legevent-backfill-burst` | **Open — `⏩ LegEvent Backfill Burst` (parked, infrastructure)** | Workflow-only one-shot cold-start helper. NOT needed for the current backfill (handoff measured cold-start completed organically on the 15-min cron). Kept as infrastructure for 2027 session start / schema migrations. Bot review fold-in pushed: shared `calendar-worker` concurrency group (Codex P1) + state-aware re-enable preserving owner-disabled cron (Codex P2). Off the critical path to Section 9 = 0; merge whenever owner is ready. |
 
 ## Next up (after this session's merges)
 
@@ -52,11 +51,12 @@ Final ~3 clerical no_event rows are below the noise floor; addressing them is ov
 - **PR #45** (2026-05-09): PR-C7.0.4 breaker recalibration — `meeting_unsourced_delta` (rolling Y2 baseline) replaces absolute threshold ([[failures/assumptions_audit#53]]).
 - **PR #41-44** (2026-05-05 → 2026-05-06): PR-C7 structural pivot + cold-start hotfixes ([[failures/assumptions_audit#50]], [[failures/assumptions_audit#51]], [[failures/assumptions_audit#52]]).
 
-## Known bug count (today — pre-merge of PR #57/#58)
+## Known bug count (today — PR #57 + #58 merged, pending Streamlit reload + next cron cycle)
 
-- **X-Ray reports Section 9: ~1,049** — dominated by misclassification false positives (`H5601`/`S5601`/`G7210` matching `passed`/`recommendation` substrings). The structural router has the correct verdict written to Sheet1; PR #57 is what makes the X-Ray consume it.
-- **Real meeting-time bugs (post-router-wiring): ~3** — the clerical no_event residue PR #58 leaves behind.
-- **Worker UNKNOWN_ACTION counter:** 6
+- **X-Ray Section 9 expected steady state:** ~3 (clerical no_event residue; below noise floor, intentionally not addressed).
+- **Post-PR-#57 / pre-PR-#58 cron cycle (Streamlit only):** ~106 (UI now reflects the router; the residue still needs PR #58's worker time-recovery to land in a cron run).
+- **Real meeting-time bugs:** ~0 once both have propagated. The two-population framing PR-C7.1d nailed has been fully addressed structurally.
+- **Worker UNKNOWN_ACTION counter:** 6 (untouched by this session's work; separate path).
 - **Section 7 (Sheet vs LIS time parity):** 0 ✓ — perfect parity on resolvable cases.
 - **Workbook capacity:** 29.2% of 10M cap (post PR-C6.2 trim) — comfortable headroom for LegEvent tabs.
 
