@@ -11,6 +11,18 @@ Append-only, reverse-chronological (newest at top). Each entry opens with `## [Y
 
 ---
 
+## [2026-06-02] pr | PR #61 + #62 + #63 merged — cache-capacity fix (the real blocker), cron/quiet-hours, legacy post-mortem
+
+Three PRs merged after live verification disproved the earlier "Section 9 closed" claim (see the correction milestone below + [[failures/assumptions_audit#62]]).
+
+- **PR #61** (PR-C7.1e) merged at `b837d17` — **the actual fix.** `LegEvent_Events` cache tab 25k→120k rows + `_ensure_row_capacity` (grow-before-write, workbook-cell-budget guarded, CRITICAL-alert on overflow) + one-step lift of the existing 25k tab + a shared `_workbook_cell_headroom` helper. Review fold-in: **Gemini HIGH** (budget guard was gating the CRITICAL alert on the buffered target, not the minimum need → false CRITICALs; now gates on `needed_rows`) + **Codex P2** (tab *creation*/grow at 120k bypassed the budget guard → could fail `add_worksheet` on a near-cap workbook and disable the cache; now both create and grow clamp to the budget). 3-branch capacity unit test + create-clamp test passing.
+- **PR #62** (PR-C7.1f) merged at `83d0e96` — worker cadence 15min→3h + overnight quiet-hours gate (11pm-6am ET, DST-correct, scheduled-runs-only; manual dispatch + Backfill Burst bypass). Review fold-in: **Codex P2** (gap thresholds `GAP_CRITICAL=60` were 15-min-calibrated → every 3h run + overnight skip would false-`outage` + trigger wasteful Part-C reconciliation; recalibrated to cadence-derived `WARN=cadence*2=360`, `CRITICAL=quiet+cadence*2=780` so the ~12h healthy overnight gap doesn't reconcile — Point-14 calibration) + **Gemini medium** (quiet-window logic now handles non-midnight-spanning windows).
+- **PR #63** merged at `cd7f009` — [[failures/legacy_calendar_versions]] post-mortem (why app.py/shadow_v2/v2_shadow_test/backend_worker/xray are relative failures: text-driven, hardcoded `20261`, 15 silent excepts, `st_autorefresh` per-tab). Gemini fold-in (terminology/grammar). Linked from [[index]].
+
+**STATE: cache fix is MERGED but NOT YET VALIDATED in production.** The next worker run grows the tab and starts persisting all bills' events, but full re-hydration takes several cycles (or one ⏩ LegEvent Backfill Burst, PR #56). **Only after re-hydration + a fresh live cross-tab is the Section 9 drop real** — do NOT re-declare victory before measuring (the #62-assumptions_audit trap). Re-hydration involves ~4k LIS calls (burst) or several cron cycles; owner drives the trigger (API-exposure call).
+
+---
+
 ## [2026-06-02] milestone | PR #57 + #58 merged — Section 9 pipeline closed (1,049 → ~3 expected steady state)
 
 Both end-of-session PRs merged sequentially per the user's "safest sequence so we can finally see this Section 9 bug count drop" directive.

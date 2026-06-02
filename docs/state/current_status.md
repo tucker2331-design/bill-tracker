@@ -12,17 +12,19 @@ status: active
 
 ## Active focus
 
-**⚠️ SECTION 9 NOT YET CLOSED — earlier "closed" claim was FALSE (corrected 2026-06-02 by live verification).** PR #57 + #58 merged, but a post-merge cross-tab against live Sheet1 showed the count went **UP** (1,010 → 1,072), not down. Root cause: the `LegEvent_Events` cache tab is undersized 3.4× and silently truncates — only 1,063 of 3,645 bills (HB1..HB577) have cached events; the rest route blank, so both PRs are no-ops on the flagged set (`legevent_floor_recovered=0`). Full measurement + framework lesson in [[failures/assumptions_audit#62]]. **The fix is PR #61 (PR-C7.1e) — in flight.** The architecture is sound; the cache just couldn't hold the data.
+**⚠️ SECTION 9 NOT YET CLOSED — cache fix MERGED, awaiting re-hydration + re-verification.** PR #57 + #58 merged but were no-ops in production: a live cross-tab showed the count went **UP** (1,010 → 1,072) because the `LegEvent_Events` cache tab was undersized 3.4× and silently truncated — only 1,063 of 3,645 bills (HB1..HB577) had cached events, the rest routed blank. **PR #61 (PR-C7.1e) — the fix — is now MERGED at `b837d17`.** But merging the fix ≠ the drop: the cache must still re-hydrate (the worker grows the tab + persists all bills' events over several cycles, or one Backfill Burst), and **then** a fresh live cross-tab confirms the real numbers. Full measurement + framework lesson in [[failures/assumptions_audit#62]]. The architecture is sound; it just needs the cache full before the routes populate.
 
-**What's actually deployed (correct, but starved by the cache bug):**
-- **PR #55** — PR-C7.1b-1: structural router backend. Worker writes `LegEventRoute` from LIS's own `ReferenceType`/`VoteTally`/`Status` (dictionary-free; 52-status drift check). Validated *offline* by `full_validate.py` (fresh fetch) at 943-admin / 103-meeting / 3-no_event — but that tool never exercised the truncated production cache (the trap in #62).
-- **PR #57** (`486faa2`) — X-Ray `classify_action(outcome_text, legevent_route="")` reads route first, text fallback. **Correct code, but blank routes (from the starved cache) make it fall through to text → no collapse in production yet.**
-- **PR #58** (`07c4a17`) — worker floor_miss → LegEvent recovery via `_find_legevent_time_in_cache`, gated `route=="meeting"`. **Correct code, but the gate never fires because routes are blank → `legevent_floor_recovered=0`.** (Also fixed a real pre-existing journal_default regression — that fix stands.)
+**What's deployed now (all merged; correct code, waiting on a full cache):**
+- **PR #55** — structural router backend (`LegEventRoute` from LIS's `ReferenceType`/`VoteTally`/`Status`).
+- **PR #57** — X-Ray `classify_action` consumes the route (text fallback when blank).
+- **PR #58** — worker floor_miss → LegEvent recovery, gated `route=="meeting"` (+ a real journal_default regression fix that stands).
+- **PR #61** — cache capacity fix (events tab 25k→120k + dynamic grow-or-alert). **This unblocks the three above** once the cache re-hydrates.
+- **PR #62** — cadence 3h + overnight quiet hours (API-ban + runtime); gap thresholds recalibrated for the new cadence.
 
-**The actual path to closing Section 9:**
-1. **Merge PR #61 (PR-C7.1e cache capacity fix)** — events tab 25k→120k + dynamic grow-or-alert. Unblocks everything.
-2. **Re-hydrate the cache** — dispatch the worker ~6 cycles, or run the Backfill Burst (PR #56) once, so all 3,645 bills get cached events persisted.
-3. **Re-verify against live Sheet1** (the cross-tab in this session's method, NOT a sidecar tool). Only then is the drop real. Expected: ~1,010 → ~106 (router collapse) → ~3 (floor recovery), but **measure, don't assume** — that's exactly the mistake #62 documents.
+**The remaining path to closing Section 9:**
+1. ✅ ~~Merge PR #61~~ — done (`b837d17`).
+2. **Re-hydrate the cache** (owner triggers — involves LIS calls): dispatch the worker several cycles, or run the ⏩ Backfill Burst (PR #56) once (bypasses quiet hours; ~4k LIS calls, paced by the 500/cycle cap → all 3,645 bills cached in one ~30-min run). Watch the worker log: `📈 Grew LegEvent_Events grid …` then `legevent_route_blank` should fall and `legevent_floor_recovered` climb over cycles.
+3. **Re-verify against live Sheet1** (this session's cross-tab method, NOT a sidecar tool). Only then is the drop real. Expected ~1,010 → ~106 (router collapse) → ~3 (floor recovery) — **measure, don't assume** (the #62 trap).
 
 **Verification method (use this, not full_validate.py):** fetch live Sheet1 via gviz CSV, run both text-only and route-aware `classify_action` against it, cross-tab text-class × route-value on no-time rows. This exercises the real production artifact (`LegEventRoute` column written by the worker). The worker SYSTEM_METRICS line (`legevent_floor_recovered`, `legevent_route_admin/meeting/blank`) is the second corroborating source.
 
@@ -36,9 +38,10 @@ status: active
 
 | # | Branch | State | Notes |
 |---|--------|-------|-------|
-| 61 | `claude/pr-c7-1e-legevent-cache-capacity` | **Open — PR-C7.1e: LegEvent_Events cache capacity fix (THE blocker)** | The reason #57/#58 are no-ops. Events tab 25k→120k rows + `_ensure_row_capacity` (grow-before-write, workbook-cell-budget-guarded, CRITICAL alert on overflow) + one-step lift of the existing 25k tab. 3-branch unit test passing. **Merge → re-hydrate → re-verify = the real Section 9 drop.** See [[failures/assumptions_audit#62]]. |
-| 60 | `docs/forward-calendar-design` | **Open — forward-calendar design entry (docs)** | Detailed design for the 2027 upcoming-meetings surface. 4 Gemini findings folded in (datetime/date TypeError, pinned-investigation reproducibility guard, dedup key granularity, viewport-slice disconnect) + corrected the stale "Section 9 closed" premise. Design only; no code. |
-| 56 | `claude/legevent-backfill-burst` | **Open — `⏩ LegEvent Backfill Burst` (now USEFUL for PR #61 re-hydration)** | Workflow-only N-cycle burst. Originally parked, but post-#61 it's the fastest way to re-hydrate the cache (run once → all 3,645 bills cached in one dispatch instead of ~6 cron cycles). Bot fold-in pushed: shared `calendar-worker` concurrency group (Codex P1) + state-aware re-enable (Codex P2). |
+| 60 | `docs/forward-calendar-design` | **Open — forward-calendar design entry (docs)** | Detailed design for the 2027 upcoming-meetings surface. 4 Gemini findings folded in (datetime/date TypeError, pinned-investigation reproducibility guard, dedup key granularity, viewport-slice disconnect) + corrected the stale "Section 9 closed" premise. Design only; no code. **Awaiting bot re-review of the fold-in commit before merge.** |
+| 56 | `claude/legevent-backfill-burst` | **Open — `⏩ LegEvent Backfill Burst` (the re-hydration tool for PR #61)** | Workflow-only N-cycle burst. Post-#61 it's the fastest way to re-hydrate the cache (run once → all 3,645 bills cached in one dispatch, bypasses quiet hours). Bot fold-in pushed: shared `calendar-worker` concurrency group (Codex P1) + state-aware re-enable (Codex P2). Ready to merge + dispatch when owner is ready to spend the ~4k LIS calls. |
+
+**Merged this session:** #57, #58 (router UI + floor recovery), #61 (cache capacity — the real fix), #62 (cadence + quiet hours), #63 (legacy post-mortem). See [[log]].
 
 ## Next up (after this session's merges)
 
