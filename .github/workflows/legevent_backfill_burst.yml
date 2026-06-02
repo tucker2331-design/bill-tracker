@@ -1,0 +1,90 @@
+name: ⏩ LegEvent Backfill Burst (one-shot, hands-off)
+
+# One dispatch runs the worker N times back-to-back in a SINGLE job, so a
+# cold-start / structural-field backfill that would otherwise need ~7-8
+# separate 15-min cron cycles (~2 hours of manual waiting) completes in
+# one ~30-min run with zero babysitting.
+#
+# Why this is safe:
+#   - It PAUSES the 15-min "🤖 Mastermind Ghost Worker 2" cron for the
+#     duration (gh workflow disable) so two workers never write Sheet1 /
+#     the LegEvent cache concurrently (no clear+update race), then RESUMES
+#     it on the way out — `if: always()` guarantees the cron comes back
+#     even if the burst errors or times out.
+#   - Each iteration is a normal, idempotent worker cycle. The LegEvent
+#     cache persists per cycle, so cycle N+1 loads cycle N's progress and
+#     hydrates the next 500 bills — exactly the cron behavior, minus the
+#     15-min idle gaps. Total LIS call volume is unchanged (the 500/cycle
+#     hydration cap + armored-session backoff still pace each cycle); the
+#     burst only removes the waiting.
+#   - A single failed cycle does NOT abort the burst (|| true) — the next
+#     cycle resumes from the persisted cache.
+#
+# Use: dispatch with `cycles` (default 8 — covers the ~3,645-bill backfill
+# at 500/cycle with margin). Watch the log for the per-cycle
+# `📊 ...legevent_route_*` line climbing and `legevent_route_blank`
+# falling toward steady state.
+
+on:
+  workflow_dispatch:
+    inputs:
+      cycles:
+        description: 'Back-to-back worker cycles to run in one job'
+        required: false
+        default: '8'
+
+# Needed so the job can pause/resume the cron worker via gh.
+permissions:
+  actions: write
+  contents: read
+
+# Belt-and-suspenders: never let two of THIS burst run at once.
+concurrency:
+  group: legevent-backfill-burst
+  cancel-in-progress: false
+
+jobs:
+  burst:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v3
+
+      - name: Setup Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.10'
+
+      - name: Install Dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install gspread google-auth pandas requests beautifulsoup4 pdfplumber pytz
+
+      - name: Pause the 15-min cron worker (avoid concurrent Sheet1 writes)
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh workflow disable calendar_worker.yml || echo "⚠️ could not disable cron (may already be disabled) — continuing"
+
+      - name: Backfill burst — run the worker N cycles back-to-back
+        env:
+          GCP_CREDENTIALS: ${{ secrets.GCP_CREDENTIALS }}
+          PYTHONUNBUFFERED: "1"
+        run: |
+          N="${{ github.event.inputs.cycles }}"
+          N="${N:-8}"
+          echo "▶️ Running $N back-to-back worker cycles."
+          for i in $(seq 1 "$N"); do
+            echo "════════════════════ burst cycle $i / $N ════════════════════"
+            python -u calendar_worker.py || echo "⚠️ cycle $i errored — next cycle resumes from the persisted cache"
+            sleep 20
+          done
+          echo "✅ Burst complete ($N cycles)."
+
+      - name: Resume the 15-min cron worker (ALWAYS, even on failure)
+        if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh workflow enable calendar_worker.yml || echo "⚠️ could not re-enable cron — RE-ENABLE MANUALLY: Actions → 🤖 Mastermind Ghost Worker 2 → ⋯ → Enable"
