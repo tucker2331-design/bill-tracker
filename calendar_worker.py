@@ -2841,10 +2841,15 @@ def run_calendar_update():
         )
         if _sl.status_code == 200:
             _sl_json = _sl.json()
+            # Gemini review: verify References is a LIST before iterating —
+            # a non-iterable truthy value (int/bool from an unexpected API
+            # shape) would otherwise raise TypeError. (Caught by the
+            # surrounding try, but this degrades cleanly to "skipped"
+            # rather than a generic exception. Fragile-data mandate.)
+            _refs = _sl_json.get("References") if isinstance(_sl_json, dict) else None
             _live_status_names = [
-                x.get("Name") for x in (_sl_json.get("References") or [])
-                if isinstance(x, dict)
-            ] if isinstance(_sl_json, dict) else []
+                x.get("Name") for x in _refs if isinstance(x, dict)
+            ] if isinstance(_refs, list) else []
             _status_drift = _validate_status_grouping(_live_status_names)
             if _status_drift:
                 # PR-C7.1b-1 observability: print on EVERY path (not just
