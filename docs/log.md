@@ -11,37 +11,92 @@ Append-only, reverse-chronological (newest at top). Each entry opens with `## [Y
 
 ---
 
-## [2026-06-02] pr | PR #56 review fold-in — Codex P1 (concurrency lock) + P2 (preserve prior cron state)
+## [2026-06-02] milestone | PR #57 + #58 merged — Section 9 pipeline closed (1,049 → ~3 expected steady state)
 
-Two real Codex findings on `.github/workflows/legevent_backfill_burst.yml` at commit `deb7486`, both addressed:
+Both end-of-session PRs merged sequentially per the user's "safest sequence so we can finally see this Section 9 bug count drop" directive.
 
-1. **Codex P1 — share the cron worker concurrency lock.** The burst declared its own `concurrency.group: legevent-backfill-burst`, so it did NOT serialize with `calendar_worker.yml`'s `calendar-worker` group. GitHub docs are explicit: `gh workflow disable` stops *future triggers*, it does NOT cancel runs already queued or in flight. A 15-min cron cycle that started ~14 min before the burst was dispatched could still be writing Sheet1 / the LegEvent cache when the burst's first `python -u calendar_worker.py` fires → clear+update race against the cron. **Fix:** changed `concurrency.group` to `calendar-worker` so GitHub queues the burst behind any in-flight cron at the queue layer; the disable step then runs once the burst actually starts, preventing future cron triggers from queueing during the burst. Belt + suspenders.
+- **PR #57** (X-Ray UI) merged at `486faa2` — `pages/ray2.py` + `calendar_xray.py` `classify_action()` now consumes `LegEventRoute`. Streamlit auto-deploys against `main`; next page load on the X-Ray reflects the new bug count using existing route data the worker has been writing since PR-C7.1b-1.
+- **PR #58** (worker time recovery + journal_default regression fix) merged at `07c4a17` — floor_miss → LegEvent recovery via the new `_find_legevent_time_in_cache` helper, gated `route == "meeting"`. Same helper applied to the journal_default path closes the silent regression that's been failing recovery for every fresh/terminal bill since PR-C7. Next cron cycle (~15 min after merge) is the first run with the recovery active.
 
-2. **Codex P2 — preserve the cron worker's prior disabled state.** The original cleanup step blindly re-enabled the cron in `always()`, which would silently reactivate a cron the owner had intentionally disabled (maintenance window, paused release, etc.) before triggering the burst. Same anti-pattern class as silent source-miss: the cleanup overrode owner intent without any visible signal. **Fix:** `gh workflow view --json state -q .state` captures the prior state as a step output; the burst disables only if `state == active`; the cleanup re-enables only if the snapshotted `prior_state == 'active'`. A new "Note prior-disabled cron was left in place" step prints when we leave it as-is, so the decision is visible in the run log. `if: always()` still fires the conditional, so a burst failure/timeout doesn't strand the cron in the disabled state when we DID disable it.
+**Merge order chosen for diagnostic clarity:** #57 first (UI shows the 90% classification collapse immediately based on data already in Sheet1); #58 second (next cron cycle then adds the time-recovery delta). If anything had regressed at either step, the visible signal would have isolated it cleanly. Both PRs were `MERGEABLE / CLEAN` pre-merge; #58 hit a `docs/log.md` conflict after #57 landed (both branches added entries at the top), resolved by keeping all four HEAD entries and inserting the origin/main entry chronologically.
 
-Header comment block updated to reflect the new behavior: the original "`if: always()` guarantees the cron comes back" wording was now misleading. The burst's safety story is now (a) shared queue lock + (b) disable-while-running + (c) state-aware re-enable.
+**Verification cues over the next ~30 min:**
+- Streamlit X-Ray: bug count drops 1,049 → ~106 immediately; drops again to ~3 after the next worker cron writes the recovered times to Sheet1.
+- Worker SYSTEM_METRICS line: new counter `legevent_floor_recovered=N` climbs toward ~103; `legislation_event_recovered` increments more than it had pre-merge (the previously-silent journal_default rows).
+- Section 9 proof block on the X-Ray: `admin ≈ 943, meeting ≈ 103, blank ≈ 3` against the flagged subset.
 
-YAML validates parse-clean (7 steps total, `pause` step has the `id` Codex P2 relies on).
+**The objective is done structurally.** The ~3 clerical no_event residue is below the noise floor and intentionally not addressed — overfitting to static data per the owner's design-for-dynamic mandate (Standard #6 / #8). The structural router architecture is training-free and survives next session's vocabulary changes by construction.
 
-PR #56 retains its OWNER-DECISION status: not needed for the current backfill (handoff measured the 3,645-bill cold-start completed organically on the cron). Kept as infrastructure for 2027 session start / schema migrations. The two fixes mean it's now mergeable when the owner is ready.
+**PR #56** (`⏩ LegEvent Backfill Burst`) remains open as parked infrastructure for the 2027 cold-start; its fold-in (shared concurrency group + state-aware re-enable) is pushed and ready to merge whenever owner decides.
 
 ---
 
-## [2026-06-02] decision | Design-for-dynamic mandate + backfill automation + session handoff
+## [2026-06-02] pr | PR-C7.1c fold-in pushed — Codex P1 (cache-direct) + P2 / Gemini medium (Counter multiplicity) + journal_default extension
 
-**Owner direction at session end:** "we are out of session for now [VA GA adjourned]. My lobbyists aren't using the program AND we don't have new training data — we are static on info and we need to design for a dynamic environment." Plus: automate the multi-cycle backfill so it doesn't require 7-8 manual triggers.
+Three changes to `claude/pr-c7-1c-floor-miss-legevent-recovery` after the initial bot reviews on `5199810`:
 
-**Automation shipped — PR #56 `⏩ LegEvent Backfill Burst`:** one dispatch pauses the 15-min cron, runs the worker N cycles (default 8) back-to-back in one job (~30 min vs ~2 hrs), resumes the cron with `if: always()`. Hands-off cold-start/backfill.
+1. **Codex P1 (cache-direct recovery):** new module-level helper `_find_legevent_time_in_cache(events, ...)` does the resolver's date+chamber filter / real-time filter / token-overlap score / EventDate parse / 12-hour render on an already-cached events list. Bypasses `_resolve_via_legislation_event_api()`'s `if not legislation_id` short-circuit. The route="meeting" verdict is itself proof the event cache is populated, so no LegislationID is needed. Closes the regression where fresh/terminal bills (loaded from `LegEvent_Events` tab, not rehydrated this cycle) silently failed recovery on both floor and journal_default paths.
+2. **Codex P2 + Gemini medium (multiplicity):** `_floor_miss_dates` switched from `set` to `collections.Counter`. `set.discard()` removed combos entirely on recovery even when other unrecovered misses remained on the same date/chamber; Counter preserves per-combo unrecovered count via `[combo] -= 1; if <= 0: del`. Report set-difference wraps the Counter with `set(...)` (Counter's `-` is element-wise, not set-difference).
+3. **Journal_default extension (proactive):** the same negative-cache regression Codex flagged on the floor path silently affected the pre-existing journal_default LegEvent recovery, and has since PR-C7 merged. Applied the cache-direct helper there too, gated identically on `route == "meeting"`. Behavior preservation: no path regresses; the regression case (cached events + negative-cached id + route="meeting") now recovers. Admin-route gating on the fallback is deferred to a separate PR. Net effect: potential additional Section 9 bug-count reduction beyond C7.1c's headline ~106 → ~3 (every fresh/terminal bill with cached meeting events that was silently failing recovery now succeeds).
 
-**Design-for-dynamic — the strategic frame that justifies the remaining roadmap (recorded so it survives the session boundary):**
-- We are validating against a FROZEN, complete session (static HISTORY). That's a gift for ground-truth validation but a blind spot for dynamic behavior — we cannot test incremental arrival / mid-session clerk edits / new-vocabulary handling against static data.
-- **Why the structural router is THE dynamic design (not just a static cleanup):** a live session constantly produces NEW Description phrasings. A text/learned classifier breaks on new vocabulary and needs retraining on data we don't have — the exact treadmill rejected. The structural router consumes LIS's OWN `ReferenceType`/`VoteTally`/`Status` — populated for every action LIS publishes — so a never-before-seen action routes correctly on day one, zero retraining. It is **training-free by construction**, which is precisely right for "static on info now, dynamic later."
-- **Dynamic safety net is already built (C7.1b-1):** the Status-grouping drift CRITICAL alert fires when a 2027 session introduces a new Status/EventCode (not a silent break); the SHA256 hash-mutation signal re-hydrates a bill the cycle after a clerk edits it (Standard #8 — absorb routine variation, alert only on true anomalies).
-- **Two dynamic-readiness items added to the roadmap** (see [[ideas/future_improvements]]): (1) a **chronological-replay simulation** — feed HISTORY day-by-day in order to test incremental arrival / evolving bill state on static data, the one dynamic test we CAN run pre-launch; (2) the **forward-calendar block** (already flagged as the hardest future challenge) — showing upcoming meetings before they happen, the real dynamic frontier, needs Schedule API future-window + reconciliation.
+Three new entries in [[failures/assumptions_audit]] (#59 pandas NaN→"nan" literal, #60 two linked caches must be seeded together, #61 set.discard loses multiplicity) capture the framework-level lessons.
 
-**Operational note:** Gemini Code Assist is being sunset (new installs blocked 2026-06-18; reviews cease 2026-07-17). We lose one of two bot reviewers in ~6 weeks. Decide a replacement / tightened self-audit before mid-July — park until C7.1b closes.
+---
 
-**Session handoff (next session resumes here):** see [[state/current_status]] top block.
+## [2026-06-02] pr | PR-C7.1b-2 fold-in pushed — Gemini critical NaN + Gemini medium perf + Codex P2 full-column drift scope
+
+Three changes to `claude/pr-c7-1b-2-xray-consumes-route` after the initial bot reviews on `30a3443`:
+
+1. **Gemini critical × 2 + Codex P2 (NaN handling):** pandas reads blank Sheet1 cells as float `NaN`; `.astype(str)` turns those into the literal six-char string `"nan"`, which falls outside the documented `{"admin", "meeting", "blank"}` set and would falsely trip the CRITICAL drift banner in production for every TTL-backfill row (most rows today). Fix: `.fillna("")` before `.astype(str)` in BOTH the flagged-subset `route_series` and the new full-column drift scan. Verified the bug directly — old code produced `{'meeting': 1, 'admin': 1, 'judicial': 1, 'nan': 1, 'blank': 1}` on a mock sheet; new code produces `{'meeting': 1, 'admin': 1, 'judicial': 1, 'blank': 2}`.
+2. **Gemini medium × 2 (perf):** `DataFrame.apply(axis=1)` constructs a Series per row, ~1-3s on ~58k Sheet1 rows for what is effectively a two-column zipped function call. Switched the route-aware classifier callsite from `apply(lambda r: ..., axis=1)` to a list comprehension over `zip(Outcome.fillna(""), LegEventRoute.fillna(""))` — runs in milliseconds, also handles NaN cleanly.
+3. **Codex P2 (drift scope):** drift check was scoped to the flagged subset only — a new `LegEventRoute` value on timed rows / admin rows / cycles with `text_bug_count == 0` would go silent (exactly the scenario where a structural-router schema change is most likely). Added a full-column drift scan that runs whenever `LegEventRoute` exists, regardless of `text_bug_count`. Removed the redundant flagged-subset drift banner since full-column scan is strictly more thorough.
+
+Lesson [[failures/assumptions_audit#59]] captures the NaN-ghost class for future review.
+
+---
+
+## [2026-06-02] pr | PR #56 review fold-in pushed — Codex P1 (concurrency lock) + P2 (preserve prior cron state)
+
+Two changes to `claude/legevent-backfill-burst`:
+
+1. **P1 (concurrency lock):** changed `concurrency.group` from `legevent-backfill-burst` → `calendar-worker` so the burst shares the cron worker's queue. GitHub queues the burst behind any in-flight cron at the queue layer (the `gh workflow disable` only stops *future* triggers, not in-progress runs); the disable step then runs once the burst actually starts to prevent future cron triggers from queueing during it. Belt + suspenders.
+2. **P2 (preserve prior state):** `gh workflow view --json state -q .state` snapshots the cron's enabled/disabled state as a step output; the burst only disables if `state == active`; cleanup only re-enables if `prior_state == 'active'`. A new "Note prior-disabled cron was left in place" step makes the decision visible in the run log. An owner-disabled cron (maintenance window) is no longer silently un-paused.
+
+PR #56 retains its OWNER-DECISION status (not needed for the current backfill — handoff measured the cold-start completed organically). Kept as infrastructure for 2027 session start / schema migrations.
+
+---
+
+## [2026-06-02] pr | PR-C7.1c opened — worker floor_miss → LegEvent time recovery (the time half)
+
+Branch `claude/pr-c7-1c-floor-miss-legevent-recovery`. Closes the ~103 genuine-meeting residue PR-C7.1d measured: real floor votes (`conference report agreed`, `read third time`, `rules suspended`, etc.) whose convene anchor was missing and which the journal_default LegEvent block at `calendar_worker.py:~3508` SKIPS because that gate is `origin == "journal_default"` and origin has already become `floor_miss`.
+
+**Safety gate (the key design constraint):** route MUST equal `"meeting"` (not just `!= "admin"`). The danger this defends against — already flagged in the 2026-05-31 sequencing correction in [[state/current_status]] — is `H5601`/`S5601` "Bill text as passed Senate (HB###ER)" rows text-matching `ABSOLUTE_FLOOR_VERBS` ("passed senate") → forced to Floor → convene miss → would land in this block. Their LegislationEvent has a 4 AM document-batch timestamp, not a meeting time. The structural router routes those to `"admin"` via LIS's own `ReferenceType` (`LegislationText`) — cache-lookup, no network. Requiring `route == "meeting"` (not just `!= "admin"`) also handles the blank-route case: a row whose LegEvent cache hasn't backfilled yet stays unrecovered (route unknown → safer to leave NO_CONVENE_ANCHOR than to recover with a possibly-wrong time). Next cycle, TTL backfill populates the cache, the route becomes `"meeting"`, and the row recovers. **Designed for new sessions as much as the static 2026 corpus:** the gate consumes LIS's own structural verdict — no per-state pattern list to maintain (Standard #6/#8).
+
+**Hang safety:** cache-lookup-only — the PR-C7 pre-iteration hydration seeds the LegEvent cache (real events OR negative cache via the Codex P1 fix) for every candidate bill in `legevent_candidate_bills`, which includes floor_miss bills. The resolver short-circuits via the existing PR-C3.1 negative-cache check; the row loop never fetches. The PR-C3 hang root cause cannot recur.
+
+**Telemetry:** new `legevent_floor_recovered` counter in `source_miss_counts`, surfaced in the SYSTEM_METRICS print line. The CONVENE GAP report (line ~3699) now prefixes with `⏪ LegEvent floor recovery rescued N row(s) (route==meeting); residue below.` when nonzero, so the gap report reflects "what's left after route-gated recovery." `_floor_miss` is decremented inline for each rescued row and `_floor_miss_dates.discard(...)` is called, so the existing report's count is the post-recovery residue (no double-counting).
+
+**Local sanity:** parse-clean; 5-branch simulation of the gate's decision logic passed (route=meeting+success → recover, route=meeting+None → safe fallback, route=admin → skip, route=blank → skip, route=unknown-future-value → skip). 15-point audit walked.
+
+**Sequence:** ships in parallel with **PR-C7.1b-2** (the X-Ray UI consumes `LegEventRoute`, branch `claude/pr-c7-1b-2-xray-consumes-route`). The two are CODE-independent (worker vs X-Ray) and together close Section 9: C7.1b-2 takes 1,049 → ~106 (misclassification collapse), C7.1c takes ~106 → ~3 (time recovery on the genuine residue). A row-level fallback for the final ~3 clerical no_event rows is a tiny follow-up.
+
+---
+
+## [2026-06-02] pr | PR-C7.1b-2 opened — X-Ray consumes LegEventRoute (the UI win)
+
+Branch `claude/pr-c7-1b-2-xray-consumes-route`. Wires the X-Ray (`pages/ray2.py` + diff-identical `calendar_xray.py`) to consume the additive `LegEventRoute` column the worker has been writing since PR-C7.1b-1. The validated dictionary-free structural router (LIS's own `ReferenceType`/`VoteTally`/`Status`, full-scale-validated at 1,046/1,049 = 99.7% coverage) now drives X-Ray Section 9 classification, taking the visible bug count from ~1,049 → ~106 (the ~942 misclassification collapse). The ~103 genuine-meeting residue still need TIMES — that's PR-C7.1c (floor_miss → LegEvent fallthrough, the next push).
+
+**Implementation (dynamic-data safe — designed for new sessions and schema drift, not just the static 2026 corpus):**
+- `classify_action(outcome_text, legevent_route="")` — route wins when present; text patterns fall back. Default arg keeps any external caller working. Routes normalized via `.strip().lower()` with exact match on `"meeting"`/`"admin"` only — an unseen future route value (LIS adds a category, a code path emits something else) falls through to text instead of silent mis-route (Standard #1 / #8).
+- Callsite switched from `.map(classify_action)` to `.apply(axis=1)` with `("LegEventRoute" in df.columns)` guard. Old Sheet1 read or schema regression → text-only fallback + visible `st.warning` (zero-trust, Point 9). Never silent.
+- Parallel `_action_class_text` column preserved so Section 9 can self-prove the route's effect on the FLAGGED subset (the correct denominator the handoff flagged — current counters count all ~58k rows). New Section-9 "LegEventRoute effect on the flagged subset (the proof)" block: text-flagged-as-meeting + missing-time → router verdict distribution table. Shows admin-recovered (the win), meeting-residue (genuine, time-recovery pending), blank (TTL backfill / no LegEvent).
+- Unseen-route surfacing: if the router emits a value other than the documented `meeting`/`admin`/`""`, the X-Ray throws a CRITICAL `st.error` banner with the unknown values + counts. Standard #1 runtime drift validation.
+- Architecture doc updated (`docs/architecture/calendar_pipeline.md`) — the C7.1b-2 deferred block now reads "resolved."
+- `XRAY_VERSION` bumped to `2026-06-02.1`.
+
+**Tests:** 15-case unit suite of `classify_action` (route wins both directions, unseen route falls through, whitespace/casing/None safe, NaN-resilient under pandas `.apply`). All pass. Parse-clean from `pages/` with `sys.path = ..` (Point 8). `diff pages/ray2.py calendar_xray.py` = clean (Point 4).
+
+**Verification post-merge:** Section 9's new proof block should show `admin ≈ 943, meeting ≈ 103, blank ≈ 3` against the current flagged subset (matches `C7_1b_FV_Summary` 943/103/3). Bug count above drops 1,049 → ~106. Then PR-C7.1c (floor_miss → LegEvent fallthrough, gated on `LegEventRoute != "admin"` to prevent recovering H5601/S5601 with 4 AM document-batch times) closes the genuine residue.
 
 ---
 
