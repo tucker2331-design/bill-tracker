@@ -44,6 +44,7 @@ Links use Obsidian `[[wikilink]]` format. Obsidian resolves by filename; path-qu
 - [[failures/assumptions_audit]] — every busted assumption and its fix (source of truth for "why we did that"); numbered, append-only
 - [[failures/gemini_review_patterns]] — recurring mistakes caught in external code review (pre-push checklist)
 - [[failures/pr22_post_mortem]] — framework-level lesson: we were measuring only the bugs we wanted to see
+- [[failures/legacy_calendar_versions]] — why the old app.py / shadow_v2 / v2_shadow_test / backend_worker / xray versions are relative failures (text-driven, hardcoded session, silent excepts, unthrottled polling) — the "before" picture that justifies the current architecture
 
 ## Ideas / Deferred Work
 - [[ideas/future_improvements]] — things on deck, priority-tagged
