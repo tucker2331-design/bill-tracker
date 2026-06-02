@@ -1,0 +1,137 @@
+name: ⏩ LegEvent Backfill Burst (one-shot, hands-off)
+
+# One dispatch runs the worker N times back-to-back in a SINGLE job, so a
+# cold-start / structural-field backfill that would otherwise need ~7-8
+# separate 15-min cron cycles (~2 hours of manual waiting) completes in
+# one ~30-min run with zero babysitting.
+#
+# Why this is safe:
+#   - It SHARES the cron's `calendar-worker` concurrency group (Codex P1
+#     fix, 2026-06-02) so GitHub queues the burst behind any cron run
+#     already in flight, and queues any incoming cron behind the burst.
+#     No clear+update race against an already-running cron.
+#   - On top of the queue lock, it PAUSES the 15-min cron via
+#     `gh workflow disable` while the burst runs, so no new cron cycles
+#     even queue during the burst's ~30 min. The cleanup re-enables the
+#     cron IFF this run is the one that disabled it — a cron that was
+#     already disabled (maintenance window, owner-paused release) is left
+#     in place (Codex P2 fix, 2026-06-02). `if: always()` keeps the
+#     conditional re-enable firing on burst failure/timeout.
+#   - Each iteration is a normal, idempotent worker cycle. The LegEvent
+#     cache persists per cycle, so cycle N+1 loads cycle N's progress and
+#     hydrates the next 500 bills — exactly the cron behavior, minus the
+#     15-min idle gaps. Total LIS call volume is unchanged (the 500/cycle
+#     hydration cap + armored-session backoff still pace each cycle); the
+#     burst only removes the waiting.
+#   - A single failed cycle does NOT abort the burst (|| true) — the next
+#     cycle resumes from the persisted cache.
+#
+# Use: dispatch with `cycles` (default 8 — covers the ~3,645-bill backfill
+# at 500/cycle with margin). Watch the log for the per-cycle
+# `📊 ...legevent_route_*` line climbing and `legevent_route_blank`
+# falling toward steady state.
+
+on:
+  workflow_dispatch:
+    inputs:
+      cycles:
+        description: 'Back-to-back worker cycles to run in one job'
+        required: false
+        default: '8'
+
+# Needed so the job can pause/resume the cron worker via gh.
+permissions:
+  actions: write
+  contents: read
+
+# Share `calendar_worker.yml`'s `calendar-worker` concurrency group so the
+# burst SERIALIZES with the 15-min cron writer instead of racing it.
+# Background (Codex P1, 2026-06-02):
+#   The burst pauses the cron via `gh workflow disable` mid-job, but the
+#   GitHub docs are explicit that disabling stops *future triggers* — it
+#   does NOT cancel runs already queued or in progress. With its own
+#   concurrency group, a cron cycle that started ~14 min before the burst
+#   was dispatched could still be writing Sheet1 / the LegEvent cache at
+#   the moment the burst's first `python -u calendar_worker.py` fires →
+#   clear+update race on the cache.
+#   Sharing the cron's `calendar-worker` group fixes that at the GitHub-
+#   queue layer: if any `calendar-worker` run is in-flight when the burst
+#   dispatches, GitHub queues the burst behind it; the disable step then
+#   runs once the burst actually starts, so future cron triggers can't
+#   queue against the burst either. Belt + suspenders.
+concurrency:
+  group: calendar-worker
+  cancel-in-progress: false
+
+jobs:
+  burst:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v3
+
+      - name: Setup Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.10'
+
+      - name: Install Dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install gspread google-auth pandas requests beautifulsoup4 pdfplumber pytz
+
+      - name: Snapshot cron state + pause if currently active
+        id: pause
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          # Codex P2 fix (2026-06-02): record the cron's prior state so
+          # the cleanup step can re-enable IFF this run actually disabled
+          # it. The previous version blindly re-enabled the cron in
+          # `always()`, which would silently reactivate a cron the owner
+          # had intentionally disabled (maintenance window, paused
+          # release, etc.) before triggering the burst.
+          # `gh workflow view` returns state as `active`, `disabled_manually`,
+          # or `disabled_inactivity`. Anything other than `active` means
+          # we should leave it alone.
+          PRIOR_STATE=$(gh workflow view calendar_worker.yml --json state -q .state)
+          echo "prior_state=${PRIOR_STATE}" >> "$GITHUB_OUTPUT"
+          if [ "$PRIOR_STATE" = "active" ]; then
+            gh workflow disable calendar_worker.yml
+            echo "🛑 cron worker disabled by this burst (prior state: active)"
+          else
+            echo "ℹ️ cron worker prior state is '${PRIOR_STATE}' — leaving as-is, will not re-enable"
+          fi
+
+      - name: Backfill burst — run the worker N cycles back-to-back
+        env:
+          GCP_CREDENTIALS: ${{ secrets.GCP_CREDENTIALS }}
+          PYTHONUNBUFFERED: "1"
+        run: |
+          N="${{ github.event.inputs.cycles }}"
+          N="${N:-8}"
+          echo "▶️ Running $N back-to-back worker cycles."
+          for i in $(seq 1 "$N"); do
+            echo "════════════════════ burst cycle $i / $N ════════════════════"
+            python -u calendar_worker.py || echo "⚠️ cycle $i errored — next cycle resumes from the persisted cache"
+            sleep 20
+          done
+          echo "✅ Burst complete ($N cycles)."
+
+      - name: Resume the 15-min cron worker (ONLY if we disabled it)
+        # `always()` keeps this firing on burst failure/timeout; the
+        # `prior_state == 'active'` gate is the Codex P2 fix that
+        # preserves a previously-disabled cron (maintenance window,
+        # release pause, etc.) so the burst can't silently un-pause
+        # work the owner had paused on purpose.
+        if: always() && steps.pause.outputs.prior_state == 'active'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh workflow enable calendar_worker.yml || echo "⚠️ could not re-enable cron — RE-ENABLE MANUALLY: Actions → 🤖 Mastermind Ghost Worker 2 → ⋯ → Enable"
+
+      - name: Note prior-disabled cron was left in place
+        if: always() && steps.pause.outputs.prior_state != 'active'
+        run: |
+          echo "ℹ️ Cron worker was '${{ steps.pause.outputs.prior_state }}' before this burst — left unchanged."
