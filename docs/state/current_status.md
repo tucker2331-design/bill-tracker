@@ -1,6 +1,6 @@
 ---
 tags: [state, live]
-updated: 2026-05-31
+updated: 2026-06-02
 status: active
 ---
 
@@ -67,7 +67,8 @@ Owner guardrails still locked: (1) no LLM runtime dependency; (2) no OpenStates 
 ## Open PRs
 | # | Branch | State | Notes |
 |---|--------|-------|-------|
-| TBD | `claude/pr-c7-0-6-persist-eventcode` | **Open — PR-C7.0.6: persist EventCode + fix EventID typo** | Worker-only schema add: `LegEvent_Events` gains an `EventCode` column (the structural action code PR-C7.1b's classifier consumes). EventCode is OPTIONAL on read (old rows default `""`, backfill next persist) so the one-cycle header transition can't wipe the cache. Existing 6-col tab widened in-place via `add_cols` before persist. Also closes [[state/open_anti_patterns#9]] — persist now reads `LegislationEventID or EventID` (handles both event-dict shapes: raw-API-from-hydration vs reloaded-from-tab). Prerequisite for PR-C7.1b; warms the cache with EventCode before the classifier ships. Diff `+52/-4`, worker-only (X-Ray untouched). |
+| TBD | `claude/pr-c7-1b-2-xray-consumes-route` | **Open — PR-C7.1b-2: X-Ray consumes `LegEventRoute` (the UI win)** | Wires `pages/ray2.py` + diff-identical `calendar_xray.py` `classify_action(outcome_text, legevent_route="")` to consume the worker's structural-router verdict. Dynamic-data safe: route normalized + exact-match only, unseen future route values fall through to text (Standard #1/#8); column-missing path is loud `st.warning`, not silent (Point 9). New Section-9 "LegEventRoute effect on the flagged subset" block — parallel `_action_class_text` lets the X-Ray self-prove the route's effect with the correct denominator (the flagged subset, not all 58k rows). Bumps `XRAY_VERSION` to `2026-06-02.1`. Architecture doc updated. 15-case unit suite passing (route wins both directions, unseen-route falls through, NaN-resilient). 15-point audit walked. Expected impact post-merge: Section 9 1,049 → ~106 (the ~942 misclassification collapse becomes visible in the UI; the ~103 genuine residue still need TIMES — that's PR-C7.1c). |
+| 56 | `claude/legevent-backfill-burst` | **Open — `⏩ LegEvent Backfill Burst` (parked)** | Workflow-only one-shot cold-start helper (pauses 15-min cron → runs worker N× → resumes). Handoff measured the burst is NOT needed for the current backfill (cache loads 3645 bills organically). Two **unaddressed Codex findings** on the code commit `deb7486`: P1 (new concurrency group doesn't share with `calendar_worker.yml`'s `calendar-worker` group → `gh workflow disable` doesn't cancel in-progress runs → race risk), P2 (`always()` cleanup re-enables cron even when previously disabled). Keep open as cold-start infrastructure for 2027 session start / schema migrations — address the two findings before merging, but it is NOT on the critical path to Section 9 = 0. |
 
 ## Sequencing correction (caught while scoping, 2026-05-31)
 I almost shipped the **floor_miss → LegEvent fallthrough alone** and caught a harmful interaction first: `H5601`/`S5601` "Bill text as passed" rows match `"passed house"` → forced to Floor → floor_miss; a standalone fallthrough would "recover" them with their 4 AM document-batch timestamp — a wrong time on a non-meeting row. The two PR-C7.1b parts are NOT independent: the floor fix is only safe **after** EventCode classification pulls the document/admin codes off the floor path. Corrected sequence:

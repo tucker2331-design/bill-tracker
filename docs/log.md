@@ -1,6 +1,6 @@
 ---
 tags: [log, meta]
-updated: 2026-05-04
+updated: 2026-06-02
 ---
 
 # Project Log
@@ -8,6 +8,24 @@ updated: 2026-05-04
 Append-only, reverse-chronological (newest at top). Each entry opens with `## [YYYY-MM-DD] <kind> | <title>` so `grep "^## \[" log.md | head -20` gives a parseable timeline.
 
 **Kinds:** `ingest` (new source/doc processed), `pr` (PR opened/merged/closed), `decision` (architectural or workflow), `lint` (wiki health-check pass), `session` (notable multi-hour working block), `post-mortem` (failure analysis), `milestone` (project-goal threshold crossed).
+
+---
+
+## [2026-06-02] pr | PR-C7.1b-2 opened — X-Ray consumes LegEventRoute (the UI win)
+
+Branch `claude/pr-c7-1b-2-xray-consumes-route`. Wires the X-Ray (`pages/ray2.py` + diff-identical `calendar_xray.py`) to consume the additive `LegEventRoute` column the worker has been writing since PR-C7.1b-1. The validated dictionary-free structural router (LIS's own `ReferenceType`/`VoteTally`/`Status`, full-scale-validated at 1,046/1,049 = 99.7% coverage) now drives X-Ray Section 9 classification, taking the visible bug count from ~1,049 → ~106 (the ~942 misclassification collapse). The ~103 genuine-meeting residue still need TIMES — that's PR-C7.1c (floor_miss → LegEvent fallthrough, the next push).
+
+**Implementation (dynamic-data safe — designed for new sessions and schema drift, not just the static 2026 corpus):**
+- `classify_action(outcome_text, legevent_route="")` — route wins when present; text patterns fall back. Default arg keeps any external caller working. Routes normalized via `.strip().lower()` with exact match on `"meeting"`/`"admin"` only — an unseen future route value (LIS adds a category, a code path emits something else) falls through to text instead of silent mis-route (Standard #1 / #8).
+- Callsite switched from `.map(classify_action)` to `.apply(axis=1)` with `("LegEventRoute" in df.columns)` guard. Old Sheet1 read or schema regression → text-only fallback + visible `st.warning` (zero-trust, Point 9). Never silent.
+- Parallel `_action_class_text` column preserved so Section 9 can self-prove the route's effect on the FLAGGED subset (the correct denominator the handoff flagged — current counters count all ~58k rows). New Section-9 "LegEventRoute effect on the flagged subset (the proof)" block: text-flagged-as-meeting + missing-time → router verdict distribution table. Shows admin-recovered (the win), meeting-residue (genuine, time-recovery pending), blank (TTL backfill / no LegEvent).
+- Unseen-route surfacing: if the router emits a value other than the documented `meeting`/`admin`/`""`, the X-Ray throws a CRITICAL `st.error` banner with the unknown values + counts. Standard #1 runtime drift validation.
+- Architecture doc updated (`docs/architecture/calendar_pipeline.md`) — the C7.1b-2 deferred block now reads "resolved."
+- `XRAY_VERSION` bumped to `2026-06-02.1`.
+
+**Tests:** 15-case unit suite of `classify_action` (route wins both directions, unseen route falls through, whitespace/casing/None safe, NaN-resilient under pandas `.apply`). All pass. Parse-clean from `pages/` with `sys.path = ..` (Point 8). `diff pages/ray2.py calendar_xray.py` = clean (Point 4).
+
+**Verification post-merge:** Section 9's new proof block should show `admin ≈ 943, meeting ≈ 103, blank ≈ 3` against the current flagged subset (matches `C7_1b_FV_Summary` 943/103/3). Bug count above drops 1,049 → ~106. Then PR-C7.1c (floor_miss → LegEvent fallthrough, gated on `LegEventRoute != "admin"` to prevent recovering H5601/S5601 with 4 AM document-batch times) closes the genuine residue.
 
 ---
 
