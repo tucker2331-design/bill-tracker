@@ -54,6 +54,7 @@ The codebase itself (`calendar_worker.py`, `pages/ray2.py`, etc.) is the raw lay
 
 ## Tooling
 - `tools/crossover_audit/` — runnable pipeline for the full-window LIS audit; see [[testing/crossover_audit]] for context.
+- `tools/c7_section9_verify/` — read-only check of the X-Ray Section 9 count against LIVE Sheet1 (the production artifact, not a sidecar tool). The reusable form of the verification method [[failures/assumptions_audit#62]] mandates; run after re-hydrating the LegEvent cache.
 
 ---
 
