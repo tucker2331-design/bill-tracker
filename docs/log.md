@@ -1,6 +1,6 @@
 ---
 tags: [log, meta]
-updated: 2026-05-04
+updated: 2026-06-02
 ---
 
 # Project Log
@@ -8,6 +8,22 @@ updated: 2026-05-04
 Append-only, reverse-chronological (newest at top). Each entry opens with `## [YYYY-MM-DD] <kind> | <title>` so `grep "^## \[" log.md | head -20` gives a parseable timeline.
 
 **Kinds:** `ingest` (new source/doc processed), `pr` (PR opened/merged/closed), `decision` (architectural or workflow), `lint` (wiki health-check pass), `session` (notable multi-hour working block), `post-mortem` (failure analysis), `milestone` (project-goal threshold crossed).
+
+---
+
+## [2026-06-02] pr | PR-C7.1c opened — worker floor_miss → LegEvent time recovery (the time half)
+
+Branch `claude/pr-c7-1c-floor-miss-legevent-recovery`. Closes the ~103 genuine-meeting residue PR-C7.1d measured: real floor votes (`conference report agreed`, `read third time`, `rules suspended`, etc.) whose convene anchor was missing and which the journal_default LegEvent block at `calendar_worker.py:~3508` SKIPS because that gate is `origin == "journal_default"` and origin has already become `floor_miss`.
+
+**Safety gate (the key design constraint):** route MUST equal `"meeting"` (not just `!= "admin"`). The danger this defends against — already flagged in the 2026-05-31 sequencing correction in [[state/current_status]] — is `H5601`/`S5601` "Bill text as passed Senate (HB###ER)" rows text-matching `ABSOLUTE_FLOOR_VERBS` ("passed senate") → forced to Floor → convene miss → would land in this block. Their LegislationEvent has a 4 AM document-batch timestamp, not a meeting time. The structural router routes those to `"admin"` via LIS's own `ReferenceType` (`LegislationText`) — cache-lookup, no network. Requiring `route == "meeting"` (not just `!= "admin"`) also handles the blank-route case: a row whose LegEvent cache hasn't backfilled yet stays unrecovered (route unknown → safer to leave NO_CONVENE_ANCHOR than to recover with a possibly-wrong time). Next cycle, TTL backfill populates the cache, the route becomes `"meeting"`, and the row recovers. **Designed for new sessions as much as the static 2026 corpus:** the gate consumes LIS's own structural verdict — no per-state pattern list to maintain (Standard #6/#8).
+
+**Hang safety:** cache-lookup-only — the PR-C7 pre-iteration hydration seeds the LegEvent cache (real events OR negative cache via the Codex P1 fix) for every candidate bill in `legevent_candidate_bills`, which includes floor_miss bills. The resolver short-circuits via the existing PR-C3.1 negative-cache check; the row loop never fetches. The PR-C3 hang root cause cannot recur.
+
+**Telemetry:** new `legevent_floor_recovered` counter in `source_miss_counts`, surfaced in the SYSTEM_METRICS print line. The CONVENE GAP report (line ~3699) now prefixes with `⏪ LegEvent floor recovery rescued N row(s) (route==meeting); residue below.` when nonzero, so the gap report reflects "what's left after route-gated recovery." `_floor_miss` is decremented inline for each rescued row and `_floor_miss_dates.discard(...)` is called, so the existing report's count is the post-recovery residue (no double-counting).
+
+**Local sanity:** parse-clean; 5-branch simulation of the gate's decision logic passed (route=meeting+success → recover, route=meeting+None → safe fallback, route=admin → skip, route=blank → skip, route=unknown-future-value → skip). 15-point audit walked.
+
+**Sequence:** ships in parallel with **PR-C7.1b-2** (the X-Ray UI consumes `LegEventRoute`, branch `claude/pr-c7-1b-2-xray-consumes-route`). The two are CODE-independent (worker vs X-Ray) and together close Section 9: C7.1b-2 takes 1,049 → ~106 (misclassification collapse), C7.1c takes ~106 → ~3 (time recovery on the genuine residue). A row-level fallback for the final ~3 clerical no_event rows is a tiny follow-up.
 
 ---
 
