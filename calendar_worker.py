@@ -1092,19 +1092,28 @@ def _get_or_create_legevent_tabs(sheet, push_alert):
     callers MUST handle that and degrade gracefully (fall back to the
     PR-C3.1 per-cycle cache only).
 
-    Initial row capacity (Gemini PR-C7 high review): sized to PR-C6.4's
-    cold-start audit (2,002 unique bills) plus headroom. Bills tab gets
-    3,000 rows; events tab gets 25,000 rows (~12 events/bill capacity).
-    `update(range_name="A{N}")` raises an API error when N exceeds the
-    worksheet's allocated row count, so undersizing here would crash on
-    first persist. Sheets cells used: 3,000 × 7 + 25,000 × 11 = 296,000
-    (events tab is 11 cols since PR-C7.1b-1 appended ReferenceType/
-    VoteTally/ActorType/Status to the PR-C7.0.6 7-col schema) — a small
-    fraction of the post-PR-C6.2 ~7M-cell workbook headroom.
+    Initial row capacity. **PR-C7.1e recalibration:** the original sizing
+    (Gemini PR-C7 high review) used PR-C6.4's cold-start audit — 2,002
+    bills, 25,000 events-tab rows (~12 events/bill). Both inputs were
+    wrong: reality is 3,645 candidate bills × ~23.5 LegislationEvents per
+    bill ≈ 85,700 event rows. The audit measured HISTORY rows per bill
+    (~7), NOT the LegislationEvent API's full per-bill event history
+    (~23.5). The 25,000-row tab truncated at the first ~1,063 bills
+    (alphabetically HB1..HB577); `update(range_name="A{N}")` raises
+    "exceeds grid limits" when N > allocated rows, the chunked persist
+    caught it into a Bug_Logs alert, and every bill after the cutoff
+    persisted ZERO events — silently defeating PR-C7.1b/c routing for 71%
+    of bills. See [[failures/assumptions_audit]] #62.
+    Two-part fix: (1) realistic initial allocation below; (2) `_persist`
+    now grows the grid to fit the data BEFORE writing (dynamic
+    `_ensure_row_capacity`, workbook-cell-cap guarded), so a future
+    session that outgrows even this allocation expands instead of
+    truncating. Sheets cells: 6,000 × 7 + 120,000 × 11 = 1,362,000 — well
+    under the 10M workbook cap (the guard enforces this at runtime).
     """
     sizing = {
-        LEGEVENT_BILLS_TAB:  (3_000, LEGEVENT_BILLS_HEADER),
-        LEGEVENT_EVENTS_TAB: (25_000, LEGEVENT_EVENTS_HEADER),
+        LEGEVENT_BILLS_TAB:  (6_000, LEGEVENT_BILLS_HEADER),
+        LEGEVENT_EVENTS_TAB: (120_000, LEGEVENT_EVENTS_HEADER),
     }
 
     def _open_or_create(tab_name):
@@ -1130,6 +1139,26 @@ def _get_or_create_legevent_tabs(sheet, push_alert):
                     f"Persist may fail this cycle; falls back to PR-C3.1 behavior.",
                     status="WARN", category="API_FAILURE", severity="WARN",
                     dedup_key=f"legevent_tab_widen::{tab_name}",
+                )
+            # PR-C7.1e: grow an existing under-allocated tab up to the
+            # current initial-row target (symmetric with the col-widening
+            # above). The old LegEvent_Events tab was created at 25,000
+            # rows; this lifts it to the realistic allocation in ONE step
+            # so persist doesn't have to grow it incrementally over ~6
+            # cycles. Additive only — never shrinks (would delete data).
+            # The persist path's _ensure_row_capacity still handles any
+            # need BEYOND this (with the workbook cell-budget guard).
+            try:
+                _old_rows = ws.row_count
+                if _old_rows < rows_init:
+                    ws.add_rows(rows_init - _old_rows)
+                    print(f"📈 Grew {tab_name} to {rows_init:,} rows (was {_old_rows:,}).")
+            except Exception as _grow_err:
+                push_alert(
+                    f"Failed to grow {tab_name} to {rows_init:,} rows: {_grow_err}. "
+                    f"Persist's _ensure_row_capacity will retry on demand.",
+                    status="WARN", category="API_FAILURE", severity="WARN",
+                    dedup_key=f"legevent_tab_grow::{tab_name}",
                 )
             return ws
         except gspread.exceptions.WorksheetNotFound:
@@ -1430,12 +1459,94 @@ def _persist_legevent_cache(
         return
 
     CHUNK_SIZE = 5000
+    # Sheets hard cap is 10M cells per workbook. Keep a safety ceiling
+    # below it so a cache that outgrows expectations alerts loudly rather
+    # than tripping the raw API error (which froze Sheet1 in PR-C6).
+    WORKBOOK_CELL_CEILING = 9_500_000
+    ROW_GROWTH_BUFFER = 5_000  # grow past the exact need so we don't resize every cycle
+
+    def _ensure_row_capacity(ws, needed_rows, tab_name, dedup_key):
+        """Grow the worksheet grid to hold `needed_rows` BEFORE writing.
+
+        PR-C7.1e: `ws.update(range_name="A{N}")` raises "exceeds grid
+        limits" when N > the worksheet's allocated row count — it does NOT
+        auto-expand. The old code relied on a fixed 25,000-row allocation
+        and silently truncated everything past it (the chunked write
+        raised mid-loop, got caught, and later bills persisted nothing).
+        This grows the grid on demand, guarded by the workbook 10M-cell
+        cap. Returns the number of rows we can safely write: == needed_rows
+        on success, or a smaller cap-limited count with a CRITICAL alert so
+        truncation is NEVER silent (Standard #2 / #4).
+        """
+        current = ws.row_count
+        if needed_rows <= current:
+            return needed_rows
+        target = needed_rows + ROW_GROWTH_BUFFER
+        add = target - current
+        # Workbook cell-budget guard — sum allocated cells across all tabs.
+        try:
+            total_cells = sum(w.row_count * w.col_count
+                              for w in ws.spreadsheet.worksheets())
+        except Exception:
+            total_cells = None  # can't measure → fall through to a plain grow attempt
+        if total_cells is not None:
+            projected = total_cells + add * ws.col_count
+            if projected > WORKBOOK_CELL_CEILING:
+                # Cannot grow to the full target without risking the 10M cap.
+                # Grow only as far as the budget allows, persist what fits,
+                # and alert CRITICAL — incomplete cache routing is a data
+                # integrity issue a human must resolve (prune Schedule_Witness
+                # via the L3b audit, or trim event retention).
+                safe_add = max(0, (WORKBOOK_CELL_CEILING - total_cells) // ws.col_count)
+                writable = current + safe_add
+                push_alert(
+                    f"{tab_name} needs {needed_rows:,} rows but the workbook cell "
+                    f"budget ({total_cells:,}/10,000,000) only allows {writable:,}. "
+                    f"Persisting {writable:,}; {max(0, needed_rows - writable):,} rows "
+                    f"dropped this cycle — cache routing will be INCOMPLETE. ACTION: "
+                    f"prune Schedule_Witness (L3b audit) or trim LegEvent retention.",
+                    status="ALERT", category="DATA_ANOMALY", severity="CRITICAL",
+                    dedup_key=f"{dedup_key}_cell_budget",
+                )
+                if safe_add > 0:
+                    try:
+                        ws.add_rows(safe_add)
+                    except Exception:
+                        return current
+                return writable
+        try:
+            ws.add_rows(add)
+            print(f"📈 Grew {tab_name} grid {current:,} → {target:,} rows "
+                  f"(data needs {needed_rows:,}).")
+        except Exception as e:
+            push_alert(
+                f"Failed to grow {tab_name} to {target:,} rows: {e}. Persist "
+                f"truncates at {current:,} this cycle; next cycle retries.",
+                status="WARN", category="API_FAILURE", severity="WARN",
+                dedup_key=f"{dedup_key}_row_grow",
+            )
+            return current
+        return needed_rows
 
     def _write_then_clear_trailing(ws, rows, tab_name, dedup_key):
         new_count = len(rows)
         if new_count == 0:
             return
         last_col_letter = chr(ord("A") + len(rows[0]) - 1)
+
+        # PR-C7.1e: ensure the grid can hold every row BEFORE writing.
+        # Without this the chunked write below raises "exceeds grid limits"
+        # the moment a chunk crosses the allocated row count, truncating
+        # the cache to whatever fit (the bug that blanked 71% of routes).
+        writable = _ensure_row_capacity(ws, new_count, tab_name, dedup_key)
+        if writable < new_count:
+            # Budget-capped: write only what fits (alert already fired in
+            # _ensure_row_capacity). Better a partial, visible cache than a
+            # raw API crash that freezes the whole Sheet1 write.
+            rows = rows[:writable]
+            new_count = writable
+            if new_count == 0:
+                return
 
         # Step 1: write new rows row-by-row (chunked). Old rows beyond the
         # new range are untouched — so a mid-write failure leaves the
