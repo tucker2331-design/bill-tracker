@@ -4334,5 +4334,29 @@ def run_calendar_update():
     else:
         print("⚠️ No data generated for the window.")
 
-if __name__ == "__main__": 
+if __name__ == "__main__":
+    # PR-C7.1f: quiet-hours gate. VA GA does no business overnight, so a
+    # SCHEDULED (cron) run in the quiet window is wasted LIS/Sheets API
+    # exposure with nothing to scrape. Skip it. Computed in ET at runtime
+    # so it stays correct across DST (EDT off-season, EST during session)
+    # without a fixed-UTC cron drifting an hour twice a year.
+    #
+    # IMPORTANT — only `schedule` events are gated. A human clicking
+    # "Run Now" (workflow_dispatch) or the ⏩ LegEvent Backfill Burst
+    # (which loops `python calendar_worker.py` inside a workflow_dispatch
+    # job) ALWAYS run, so cold-start / re-hydration is never blocked by
+    # the time of day. GitHub sets GITHUB_EVENT_NAME on every run.
+    QUIET_START_HOUR_ET = 23  # 11pm ET — no scheduled runs at/after this
+    QUIET_END_HOUR_ET = 6     # 6am ET  — scheduled runs resume at/after this
+    _event_name = os.environ.get("GITHUB_EVENT_NAME", "")
+    if _event_name == "schedule":
+        _et_hour = datetime.now(pytz.timezone("America/New_York")).hour
+        _in_quiet = (_et_hour >= QUIET_START_HOUR_ET) or (_et_hour < QUIET_END_HOUR_ET)
+        if _in_quiet:
+            print(
+                f"😴 Quiet hours ({QUIET_START_HOUR_ET}:00–{QUIET_END_HOUR_ET}:00 ET): "
+                f"current ET hour={_et_hour}; scheduled run skipped (no GA business "
+                f"overnight). Manual dispatch and the Backfill Burst bypass this gate."
+            )
+            sys.exit(0)
     run_calendar_update()

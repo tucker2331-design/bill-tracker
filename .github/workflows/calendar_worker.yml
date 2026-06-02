@@ -2,8 +2,20 @@ name: 🤖 Mastermind Ghost Worker 2
 
 on:
   schedule:
-    - cron: '*/15 * * * *' # Runs every 15 minutes
-  workflow_dispatch: # Adds a manual "Run Now" button in GitHub
+    # PR-C7.1f: every 3 hours (was every 15 min). Two reasons:
+    #   1. Runtime is ~16-19 min, so a 15-min cron structurally backs up —
+    #      runs queue behind each other (concurrency: calendar-worker,
+    #      cancel-in-progress: false) and GitHub deprioritizes/skips
+    #      scheduled fires under a growing backlog. 3h >> 19min, no pile-up.
+    #   2. VA GA is adjourned (off-season) + pre-launch — frequent runs are
+    #      wasted LIS API exposure (ban risk) with no new HISTORY to scrape.
+    # The worker ALSO self-gates overnight (quiet hours 11pm-6am ET, in
+    # calendar_worker.py __main__) for scheduled runs only — manual dispatch
+    # and the Backfill Burst always run.
+    # LIVE-SESSION NOTE: when the 2027 session opens, bump this up for
+    # fresher data — but to ~30 min (fits the ~19-min runtime), NOT 15 min.
+    - cron: '0 */3 * * *' # every 3 hours, on the hour (UTC)
+  workflow_dispatch: # Adds a manual "Run Now" button (bypasses quiet hours)
 
 # PR-C1: queue overlapping cycles rather than parallelizing them. If a cycle
 # N is still running when cycle N+1 fires (e.g. GitHub Actions is slow and
