@@ -27,7 +27,7 @@ from investigation_config import INVESTIGATION_START, INVESTIGATION_END
 st.set_page_config(page_title="LIS Calendar X-Ray", layout="wide")
 st.title("🩻 LIS Calendar X-Ray")
 st.caption("Diagnostic tool for Sheet1 ↔ LIS schedule parity checks.")
-XRAY_VERSION = "2026-04-15.1"
+XRAY_VERSION = "2026-06-02.1"
 st.caption(f"Build: {XRAY_VERSION}")
 
 DEFAULT_SHEET_ID = "1PQDtaTTUeYv781bx4_ZiehcvbEmUt8t7jFmZYJoJGKM"
@@ -260,14 +260,29 @@ ADMIN_OVERRIDE_PATTERNS = [
     "prefiled and ordered printed",
 ]
 
-def classify_action(outcome_text: str) -> str:
+def classify_action(outcome_text: str, legevent_route: str = "") -> str:
     """Classify a legislative action as meeting, administrative, or unclassified.
 
     Returns one of: 'meeting', 'administrative', 'unclassified'.
-    When both meeting and administrative patterns match (e.g. "reported and rereferred"),
-    meeting wins — the action happened in a meeting even if it also triggered routing.
-    Exception: ADMIN_OVERRIDE_PATTERNS are more specific and always win.
+
+    PR-C7.1b-2: when ``legevent_route`` is the structural router's verdict
+    (worker writes ``LegEventRoute`` ∈ {"meeting", "admin", ""} per row,
+    sourced from LIS's own ``ReferenceType`` / ``VoteTally`` / ``Status``),
+    it wins over the text-pattern fallback. Routes are normalized
+    (strip+lower, exact match) so an unseen future route value (LIS
+    introducing a new category) falls through to text — the classifier
+    never silently mis-routes on a new structural value.
+
+    When both meeting and administrative patterns match (e.g. "reported and
+    rereferred"), meeting wins — the action happened in a meeting even if
+    it also triggered routing. Exception: ADMIN_OVERRIDE_PATTERNS are more
+    specific and always win.
     """
+    route = str(legevent_route or "").strip().lower()
+    if route == "meeting":
+        return "meeting"
+    if route == "admin":
+        return "administrative"
     lower = str(outcome_text).lower().strip()
     # PR-C5: Empty / "None" / "nan" outcome = LIS Schedule API skeleton row
     # with no bill action attached (caucuses, convenes, adjournments,
@@ -733,7 +748,34 @@ accuracy_metric = {
 }
 
 if "Outcome" in sheet_df.columns and "Time" in sheet_df.columns:
-    sheet_df["_action_class"] = sheet_df["Outcome"].map(classify_action)
+    # PR-C7.1b-2: classification is now route-aware. The worker writes
+    # ``LegEventRoute`` per row from LIS's own structural fields (the
+    # validated, dictionary-free router). When the column is present we let
+    # that verdict win; we ALSO keep a parallel text-only verdict so the
+    # flagged-subset section below can self-prove the route's effect on
+    # the actual bug population (the correct denominator).
+    #
+    # Column-existence guard: a stale Sheet1 read or schema regression
+    # leaves rows without ``LegEventRoute``. Fall back to text — keep the
+    # X-Ray working — and surface the gap visibly below (Section 9 warning).
+    sheet_df["_action_class_text"] = sheet_df["Outcome"].map(classify_action)
+    if "LegEventRoute" in sheet_df.columns:
+        # Gemini medium (PR #57 review): pandas `.apply(axis=1)` constructs
+        # a Series per row → ~1-3s of latency on the ~58k Sheet1 rows for
+        # what is effectively a two-column zipped function call. Switching
+        # to a list comprehension over `zip(...)` runs in milliseconds.
+        # `.fillna("")` handles pandas reading blank cells as NaN — both
+        # Outcome (rare) and LegEventRoute (common, TTL backfill rows) —
+        # so `classify_action(...)` never sees a float NaN as its text.
+        sheet_df["_action_class"] = [
+            classify_action(o, r)
+            for o, r in zip(
+                sheet_df["Outcome"].fillna(""),
+                sheet_df["LegEventRoute"].fillna(""),
+            )
+        ]
+    else:
+        sheet_df["_action_class"] = sheet_df["_action_class_text"]
     sheet_df["_has_time"] = ~sheet_df["Time"].map(normalize_time).isin(PLACEHOLDER_TIMES)
 
     meeting_df = sheet_df[sheet_df["_action_class"] == "meeting"]
@@ -768,6 +810,126 @@ if "Outcome" in sheet_df.columns and "Time" in sheet_df.columns:
 
     if unclass_count > 0:
         st.warning(f"**{unclass_count:,}** actions could not be classified (new action types?). Review needed.")
+
+    # === PR-C7.1b-2: route effect on the flagged subset (the proof) ===
+    # The structural router writes ``LegEventRoute`` per row from LIS's own
+    # ``ReferenceType`` / ``VoteTally`` / ``Status`` fields. Before this PR
+    # the X-Ray classified by text substrings, so ``Governor's
+    # Recommendation`` matched ``recommend`` (meeting) and ``Bill text as
+    # passed Senate (SR###ER)`` matched ``passed`` (meeting) — ~943 admin
+    # rows misclassified as meeting bugs out of the ~1,049 historical
+    # Section-9 count.
+    #
+    # Self-proving counter: among rows the TEXT classifier still calls
+    # ``meeting`` + missing time (the "before" population), how does the
+    # structural router distribute them? ``admin`` = reclassified-correctly
+    # (the win); ``meeting`` = genuine residue (needs time recovery, not a
+    # misclassification); blank = no LegislationEvent matched (clerical /
+    # backfill in progress). The denominator is the FLAGGED subset, not
+    # all ~58k rows — fixes the denominator gap the handoff flagged.
+    text_bugs_mask = (sheet_df["_action_class_text"] == "meeting") & ~sheet_df["_has_time"]
+    text_bug_count = int(text_bugs_mask.sum())
+    if "LegEventRoute" not in sheet_df.columns:
+        st.warning(
+            "⚠️ `LegEventRoute` column missing from Sheet1 — X-Ray falling back to "
+            "text-only classification. Worker may be on pre-C7.1b-1 code, or the "
+            "Sheet1 read is stale. The bug count above is the OLD (text-only) number."
+        )
+    else:
+        # === Full-column drift scan (Codex P2 fold-in, PR #57 review) ===
+        # The drift check must run on ALL rows, not just the flagged
+        # subset. Otherwise an unseen `LegEventRoute` value that appears
+        # only on timed rows, admin rows, or any cycle where
+        # ``text_bug_count == 0`` would go silent — exactly the scenario
+        # where a structural-router schema change is most likely (cycle
+        # after a successful PR-C7.1c merge, or a new LIS category that
+        # we haven't yet wired into the router). Same NaN→"" fill as the
+        # flagged-subset chain (Gemini critical).
+        full_route_series = (
+            sheet_df["LegEventRoute"]
+            .fillna("")
+            .astype(str)
+            .str.strip()
+            .str.lower()
+            .replace("", "blank")
+        )
+        full_route_counts = full_route_series.value_counts().to_dict()
+        full_unseen = {
+            k: v for k, v in full_route_counts.items()
+            if k not in ("admin", "meeting", "blank")
+        }
+        if full_unseen:
+            # Surface the drift with a CRITICAL banner. A new route value
+            # isn't necessarily wrong, but it IS unclassified-by-this-X-Ray
+            # and warrants human review (Standard #1 — runtime drift
+            # validation against the structural router's published verdict
+            # set). The full-column scope means a single timed admin row
+            # with an unknown route trips the banner even when the bug
+            # count is zero.
+            st.error(
+                "🚨 `LegEventRoute` returned values this X-Ray doesn't know — likely "
+                "a structural-router schema change. Review and update "
+                "`classify_action()` to handle them. Unseen values + counts across "
+                "ALL Sheet1 rows: "
+                + ", ".join(f"`{k}`={v}" for k, v in sorted(full_unseen.items()))
+            )
+
+        if text_bug_count > 0:
+            # Flagged-subset proof block. Reuses the same NaN-safe chain.
+            # Drift detection here is INTENTIONALLY redundant with the
+            # full-column scan above — having both is harmless and makes
+            # the flagged-subset's denominator math (admin/meeting/blank
+            # counts) defensible against the exact same NaN-vs-"nan"
+            # casting bug the full-column scan defends against (Gemini
+            # critical fix #1).
+            route_series = (
+                sheet_df.loc[text_bugs_mask, "LegEventRoute"]
+                .fillna("")
+                .astype(str)
+                .str.strip()
+                .str.lower()
+                .replace("", "blank")
+            )
+            route_counts = route_series.value_counts().to_dict()
+            admin_recovered = int(route_counts.get("admin", 0))
+            meeting_residue = int(route_counts.get("meeting", 0))
+            blank_residue = int(route_counts.get("blank", 0))
+
+            pct_admin = (100.0 * admin_recovered / text_bug_count) if text_bug_count else 0.0
+            coverage = (
+                100.0 * (admin_recovered + meeting_residue) / text_bug_count
+            ) if text_bug_count else 0.0
+            nonblank = text_bug_count - blank_residue
+
+            st.markdown("#### LegEventRoute effect on the flagged subset (the proof)")
+            st.caption(
+                f"Text-only classifier flagged **{text_bug_count:,}** rows as meeting bugs. "
+                f"Structural router (LIS `ReferenceType`/`VoteTally`/`Status`) reclassifies "
+                f"**{admin_recovered:,}** ({pct_admin:.1f}%) as administrative — that is the "
+                f"misclassification collapse. **{meeting_residue:,}** stay meeting (genuine "
+                f"residue — time-recovery is the separate fix). **{blank_residue:,}** blank "
+                f"(no LegislationEvent matched / TTL backfill still in progress)."
+            )
+            route_matrix = pd.DataFrame([
+                {"Router verdict": "admin (reclassified — was misclassified by text)",
+                 "Count": f"{admin_recovered:,}",
+                 "% of flagged": f"{pct_admin:.1f}%"},
+                {"Router verdict": "meeting (genuine — needs time recovery)",
+                 "Count": f"{meeting_residue:,}",
+                 "% of flagged": f"{(100.0 * meeting_residue / text_bug_count if text_bug_count else 0.0):.1f}%"},
+                {"Router verdict": "blank (no LegEvent / backfill)",
+                 "Count": f"{blank_residue:,}",
+                 "% of flagged": f"{(100.0 * blank_residue / text_bug_count if text_bug_count else 0.0):.1f}%"},
+            ])
+            st.dataframe(route_matrix, use_container_width=True, hide_index=True)
+            if nonblank > 0:
+                st.caption(
+                    f"Router coverage on non-blank flagged subset: "
+                    f"**{(admin_recovered + meeting_residue):,}/{nonblank:,}** "
+                    f"({(100.0 * (admin_recovered + meeting_residue) / nonblank):.1f}%). "
+                    f"Overall coverage incl. blanks: "
+                    f"{coverage:.1f}% (blanks shrink as TTL hydrates)."
+                )
 
     # --- Summary matrix ---
     st.markdown("#### Classification Matrix")
@@ -937,7 +1099,11 @@ if "Outcome" in sheet_df.columns and "Time" in sheet_df.columns:
                 st.success("Ledger is clean. No meeting actions hiding in Ledger Updates.")
 
     # Clean up temp columns
-    sheet_df.drop(columns=["_action_class", "_has_time"], inplace=True, errors="ignore")
+    sheet_df.drop(
+        columns=["_action_class", "_action_class_text", "_has_time"],
+        inplace=True,
+        errors="ignore",
+    )
 else:
     st.warning("Cannot classify actions: Outcome or Time column missing.")
 
