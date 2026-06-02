@@ -1729,6 +1729,15 @@ def run_calendar_update():
         "legevent_overflow_no_fetch":   0,  # cycle-level: bills seeded with negative cache
                                             # to suppress row-loop network fetches (Codex P1
                                             # + Gemini critical review fix)
+        # PR-C7.1b-1 observability: distribution of the structural router's
+        # LegEventRoute verdict across HISTORY-derived rows. Surfaced in the
+        # metrics line so the calendar-vs-ledger split (the validated
+        # 943-admin / 103-meeting collapse) is visible in the WORKER LOG —
+        # no Sheet access needed. "blank" = router had no cached event for
+        # the row yet (TTL backfill incomplete); should fall over cycles.
+        "legevent_route_meeting": 0,
+        "legevent_route_admin":   0,
+        "legevent_route_blank":   0,
     }
 
     def push_system_alert(message, status="ALERT", category=None, severity=None, dedup_key=None):
@@ -2838,6 +2847,11 @@ def run_calendar_update():
             ] if isinstance(_sl_json, dict) else []
             _status_drift = _validate_status_grouping(_live_status_names)
             if _status_drift:
+                # PR-C7.1b-1 observability: print on EVERY path (not just
+                # success) so the worker LOG is self-describing — push_alert
+                # only reaches Sheet1, invisible in stdout. Drift is the
+                # anomaly we MOST need to see in the log.
+                print(f"🚨 Status-grouping DRIFT: {len(_status_drift)} unclassified status(es): {_status_drift}")
                 push_system_alert(
                     f"LegislationStatus drift: LIS publishes {len(_status_drift)} "
                     f"status(es) the structural router has not classified "
@@ -2850,6 +2864,7 @@ def run_calendar_update():
             else:
                 print(f"✅ Status-grouping coverage: all {len(_live_status_names)} published statuses classified.")
         else:
+            print(f"⚠️ Status-grouping drift check: LegislationStatus list HTTP {_sl.status_code} — skipped this cycle.")
             push_system_alert(
                 f"Could not fetch LegislationStatus list for drift check: HTTP {_sl.status_code}. "
                 f"Skipping drift validation this cycle.",
@@ -2857,6 +2872,7 @@ def run_calendar_update():
                 dedup_key="status_list_fetch_http",
             )
     except Exception as _sl_err:
+        print(f"⚠️ Status-grouping drift check skipped: {type(_sl_err).__name__}: {_sl_err}")
         push_system_alert(
             f"Status-grouping drift check skipped (fetch/parse failed): {type(_sl_err).__name__}: {_sl_err}.",
             status="INFO", category="API_FAILURE", severity="INFO",
@@ -3554,6 +3570,12 @@ def run_calendar_update():
                 acting_chamber_code=acting_chamber_prefix.strip()[:1].upper(),
                 legislation_event_cache=_legislation_event_cache,
             )
+            if legevent_route == "meeting":
+                source_miss_counts["legevent_route_meeting"] += 1
+            elif legevent_route == "admin":
+                source_miss_counts["legevent_route_admin"] += 1
+            else:
+                source_miss_counts["legevent_route_blank"] += 1
 
             _append_event({
                 "Date": date_str,
@@ -3683,7 +3705,10 @@ def run_calendar_update():
             f"gap_cause={source_miss_counts.get('gap_cause', 'unknown')} "
             f"gap_minutes={source_miss_counts.get('gap_minutes', -1)} "
             f"witness_rows={source_miss_counts.get('witness_rows', -1)} "
-            f"witness_location_backfills={source_miss_counts.get('witness_location_backfills', 0)}"
+            f"witness_location_backfills={source_miss_counts.get('witness_location_backfills', 0)} "
+            f"legevent_route_meeting={source_miss_counts['legevent_route_meeting']} "
+            f"legevent_route_admin={source_miss_counts['legevent_route_admin']} "
+            f"legevent_route_blank={source_miss_counts['legevent_route_blank']}"
         )
         print(f"📊 {metrics_summary}")
         alert_rows.append({
