@@ -222,3 +222,9 @@
 - [ ] Batch Google Sheets writes instead of clear+update
 - [ ] Lazy agenda PDF extraction (only fetch if bill list is empty from docket)
 - [ ] Cache Committee API response (changes only at session start)
+
+## Dynamic-environment readiness (added 2026-06-02, owner mandate)
+We validate against a FROZEN, complete session; the product's real job is the LIVE session. These design for that — see [[state/current_status#Why the remaining work is DESIGN-FOR-DYNAMIC, not static cleanup]] and [[log#2026-06-02 decision]].
+- [ ] **Chronological-replay simulation** — feed HISTORY.CSV day-by-day in date order and confirm the worker/router/cache handle incremental arrival, a bill's state evolving across days, and late-breaking actions. The ONE dynamic test runnable on static data, pre-launch. Validates the structural router + cache stay correct as data accrues, not just on the complete snapshot.
+- [ ] **Forward calendar (upcoming meetings before they happen)** — the real dynamic frontier and owner-flagged hardest future challenge. All work to date is HISTORY-backed (past actions). Requires the Schedule API future-window as the signal source + reconciliation against actual outcomes as days pass (predicted meeting → did it happen / reschedule / cancel). Different success metric ("did the predicted meeting occur as scheduled?"). Scope after C7.1b closes.
+- [ ] **Bot-reviewer continuity** — Gemini Code Assist sunsets 2026-07-17. Decide: rely on Codex + tightened 15-point self-audit, or evaluate a replacement reviewer. Decide before mid-July.
