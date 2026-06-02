@@ -12,15 +12,19 @@ status: active
 
 ## Active focus
 
-**🎯 SECTION 9 PIPELINE NOW CLOSED.** Both end-of-session PRs merged 2026-06-02 — see [[log#2026-06-02 pr | PR #57 + #58 merged]] for the play-by-play.
+**⚠️ SECTION 9 NOT YET CLOSED — earlier "closed" claim was FALSE (corrected 2026-06-02 by live verification).** PR #57 + #58 merged, but a post-merge cross-tab against live Sheet1 showed the count went **UP** (1,010 → 1,072), not down. Root cause: the `LegEvent_Events` cache tab is undersized 3.4× and silently truncates — only 1,063 of 3,645 bills (HB1..HB577) have cached events; the rest route blank, so both PRs are no-ops on the flagged set (`legevent_floor_recovered=0`). Full measurement + framework lesson in [[failures/assumptions_audit#62]]. **The fix is PR #61 (PR-C7.1e) — in flight.** The architecture is sound; the cache just couldn't hold the data.
 
-- **PR #55 (merged 2026-06-02 morning)** — PR-C7.1b-1: structural router backend deployed. Worker writes `LegEventRoute` per Sheet1 row from LIS's own `ReferenceType` / `VoteTally` / `Status` (dictionary-free; 52-status drift check validates the grouping at startup). Full-scale validated against 1,049 flagged Section-9 rows: **943 admin (false positives — `H5601`/`S5601`/`G7210` substring matches) + 103 meeting (genuine residue) + 3 no_event (clerical) + 0 FAILED + 0 drift.**
-- **PR #57 (merged 2026-06-02 at `486faa2`)** — X-Ray consumes `LegEventRoute`. `classify_action(outcome_text, legevent_route="")` reads route first, text patterns fall back; flagged-subset proof counter renders the 943-admin / 103-meeting / 3-blank distribution in Section 9. Codex + Gemini fold-in landed (NaN-safe `.fillna("")`, `apply(axis=1)` → `zip` list-comp ~100×, full-column drift scan). **Visible impact: Section 9 1,049 → ~106 once Streamlit reloads against main.**
-- **PR #58 (merged 2026-06-02 at `07c4a17`)** — worker `floor_miss → LegEvent` time recovery via new `_find_legevent_time_in_cache` helper, gated `route == "meeting"`. Helper is cache-direct (bypasses `_resolve_via_legislation_event_api`'s `LegislationID` short-circuit), which also fixed a silent regression in the pre-existing journal_default LegEvent recovery — every fresh/terminal bill (most of them post-cold-start) had been failing recovery since PR-C7 because `_legislation_id_cache` is in-memory while `_legislation_event_cache` is persisted, and the seeding handler set `id = ""` for every non-rehydrated bill. `_floor_miss_dates` switched from `set` → `collections.Counter` to preserve multiplicity (Codex P2 + Gemini medium). **Visible impact (one cron cycle in, ~15 min): Section 9 ~106 → ~3 + the silent journal_default rows.**
+**What's actually deployed (correct, but starved by the cache bug):**
+- **PR #55** — PR-C7.1b-1: structural router backend. Worker writes `LegEventRoute` from LIS's own `ReferenceType`/`VoteTally`/`Status` (dictionary-free; 52-status drift check). Validated *offline* by `full_validate.py` (fresh fetch) at 943-admin / 103-meeting / 3-no_event — but that tool never exercised the truncated production cache (the trap in #62).
+- **PR #57** (`486faa2`) — X-Ray `classify_action(outcome_text, legevent_route="")` reads route first, text fallback. **Correct code, but blank routes (from the starved cache) make it fall through to text → no collapse in production yet.**
+- **PR #58** (`07c4a17`) — worker floor_miss → LegEvent recovery via `_find_legevent_time_in_cache`, gated `route=="meeting"`. **Correct code, but the gate never fires because routes are blank → `legevent_floor_recovered=0`.** (Also fixed a real pre-existing journal_default regression — that fix stands.)
 
-**Verification (the next ~30 min):** at the next worker cron cycle, watch the SYSTEM_METRICS line for `legevent_floor_recovered=N` climbing toward ~103 and `legislation_event_recovered` increasing more than it had pre-merge (the previously-silent journal_default rows). The X-Ray reflects the new bug count on next page load.
+**The actual path to closing Section 9:**
+1. **Merge PR #61 (PR-C7.1e cache capacity fix)** — events tab 25k→120k + dynamic grow-or-alert. Unblocks everything.
+2. **Re-hydrate the cache** — dispatch the worker ~6 cycles, or run the Backfill Burst (PR #56) once, so all 3,645 bills get cached events persisted.
+3. **Re-verify against live Sheet1** (the cross-tab in this session's method, NOT a sidecar tool). Only then is the drop real. Expected: ~1,010 → ~106 (router collapse) → ~3 (floor recovery), but **measure, don't assume** — that's exactly the mistake #62 documents.
 
-**Why this closes the months-long objective:** the 1,049 number was always two populations — 90% misclassification + 10% missing-time + ~3 clerical. The structural router IS the architectural answer (no per-state pattern list to maintain; consumes LIS's published vocabulary; new sessions / new clerks survive the change). C7.1b-2 made the verdict visible; C7.1c gave the genuine residue its times. Final ~3 clerical no_event rows are below the noise floor — addressing them is overfitting to static data per owner mandate (designed-for-dynamic > overfit-to-2026).
+**Verification method (use this, not full_validate.py):** fetch live Sheet1 via gviz CSV, run both text-only and route-aware `classify_action` against it, cross-tab text-class × route-value on no-time rows. This exercises the real production artifact (`LegEventRoute` column written by the worker). The worker SYSTEM_METRICS line (`legevent_floor_recovered`, `legevent_route_admin/meeting/blank`) is the second corroborating source.
 
 **Owner guardrails (locked):**
 1. No LLM runtime dependency.
@@ -32,7 +36,9 @@ status: active
 
 | # | Branch | State | Notes |
 |---|--------|-------|-------|
-| 56 | `claude/legevent-backfill-burst` | **Open — `⏩ LegEvent Backfill Burst` (parked, infrastructure)** | Workflow-only one-shot cold-start helper. NOT needed for the current backfill (handoff measured cold-start completed organically on the 15-min cron). Kept as infrastructure for 2027 session start / schema migrations. Bot review fold-in pushed: shared `calendar-worker` concurrency group (Codex P1) + state-aware re-enable preserving owner-disabled cron (Codex P2). Off the critical path to Section 9 = 0; merge whenever owner is ready. |
+| 61 | `claude/pr-c7-1e-legevent-cache-capacity` | **Open — PR-C7.1e: LegEvent_Events cache capacity fix (THE blocker)** | The reason #57/#58 are no-ops. Events tab 25k→120k rows + `_ensure_row_capacity` (grow-before-write, workbook-cell-budget-guarded, CRITICAL alert on overflow) + one-step lift of the existing 25k tab. 3-branch unit test passing. **Merge → re-hydrate → re-verify = the real Section 9 drop.** See [[failures/assumptions_audit#62]]. |
+| 60 | `docs/forward-calendar-design` | **Open — forward-calendar design entry (docs)** | Detailed design for the 2027 upcoming-meetings surface. 4 Gemini findings folded in (datetime/date TypeError, pinned-investigation reproducibility guard, dedup key granularity, viewport-slice disconnect) + corrected the stale "Section 9 closed" premise. Design only; no code. |
+| 56 | `claude/legevent-backfill-burst` | **Open — `⏩ LegEvent Backfill Burst` (now USEFUL for PR #61 re-hydration)** | Workflow-only N-cycle burst. Originally parked, but post-#61 it's the fastest way to re-hydrate the cache (run once → all 3,645 bills cached in one dispatch instead of ~6 cron cycles). Bot fold-in pushed: shared `calendar-worker` concurrency group (Codex P1) + state-aware re-enable (Codex P2). |
 
 ## Next up (after this session's merges)
 
@@ -51,14 +57,15 @@ status: active
 - **PR #45** (2026-05-09): PR-C7.0.4 breaker recalibration — `meeting_unsourced_delta` (rolling Y2 baseline) replaces absolute threshold ([[failures/assumptions_audit#53]]).
 - **PR #41-44** (2026-05-05 → 2026-05-06): PR-C7 structural pivot + cold-start hotfixes ([[failures/assumptions_audit#50]], [[failures/assumptions_audit#51]], [[failures/assumptions_audit#52]]).
 
-## Known bug count (today — PR #57 + #58 merged, pending Streamlit reload + next cron cycle)
+## Known bug count (MEASURED against live Sheet1, 2026-06-02 post-#57/#58)
 
-- **X-Ray Section 9 expected steady state:** ~3 (clerical no_event residue; below noise floor, intentionally not addressed).
-- **Post-PR-#57 / pre-PR-#58 cron cycle (Streamlit only):** ~106 (UI now reflects the router; the residue still needs PR #58's worker time-recovery to land in a cron run).
-- **Real meeting-time bugs:** ~0 once both have propagated. The two-population framing PR-C7.1d nailed has been fully addressed structurally.
-- **Worker UNKNOWN_ACTION counter:** 6 (untouched by this session's work; separate path).
-- **Section 7 (Sheet vs LIS time parity):** 0 ✓ — perfect parity on resolvable cases.
-- **Workbook capacity:** 29.2% of 10M cap (post PR-C6.2 trim) — comfortable headroom for LegEvent tabs.
+- **X-Ray Section 9 — route-aware (current production):** **1,072** ❌ (went UP from text-only 1,010 — the cache-starvation regression, not a real increase). This is the honest number until PR #61 lands + cache re-hydrates.
+- **X-Ray Section 9 — text-only (pre-#57 baseline):** 1,010.
+- **Why up not down:** 1,008/1,010 flagged rows route `blank` (cache has events for only 1,063/3,645 bills); 0 collapsed to admin; the router *added* 62 false-positives (admin rows like "Placed on X Agenda" routing to meeting). Full cross-tab in [[failures/assumptions_audit#62]].
+- **Expected after PR #61 + re-hydration:** ~106 (collapse) then ~3 (floor recovery) — **to be re-measured, not assumed.**
+- **Worker UNKNOWN_ACTION counter:** 6 (separate path, untouched).
+- **Section 7 (Sheet vs LIS time parity):** 0 ✓.
+- **Cache coverage (the bug):** 1,063 / 3,645 bills have cached events (29%); `LegEvent_Events` at 24,999/25,000 rows (full). PR #61 fixes the allocation.
 
 ## Active architecture
 
