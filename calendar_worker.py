@@ -3743,17 +3743,70 @@ def run_calendar_update():
                     source_miss_counts["legevent_cache_hits"] += 1
                 else:
                     source_miss_counts["legevent_cache_misses"] += 1
-                _le_result = _resolve_via_legislation_event_api(
-                    http_session=http_session,
+
+                # PR-C7.1c review fold-in EXTENSION (Codex P1, journal_default
+                # path): same negative-cache regression as the floor path.
+                # When a bill's events were loaded from the persisted
+                # `LegEvent_Events` tab (fresh/terminal — not queued for
+                # rehydration this cycle), `_legislation_event_cache` has
+                # real events but `_legislation_id_cache[(bill,session)]`
+                # was seeded "" by the overflow handler at ~line 3205.
+                # `_resolve_via_legislation_event_api()` short-circuits at
+                # `if not legislation_id` BEFORE reading those cached
+                # events, so journal_default recovery has been silently
+                # FAILING for every fresh/terminal bill since PR-C7
+                # (the dominant steady-state case, weeks of underrecovery).
+                #
+                # Mirror the floor fix: check the structural route; when
+                # route=="meeting" (which is itself proof the event cache
+                # is populated — the route was computed from it), use the
+                # cache-direct helper. Otherwise fall through to the full
+                # resolver (handles route="" cases where the cache may not
+                # be populated and we WANT the LegislationID lookup chain).
+                _le_result = None
+                _row_route = _route_for_row(
                     bill_num=bill_num,
+                    session_5d=_session_code_5d,
                     action_date_str=date_str,
                     outcome_text=outcome_text,
-                    session_code_5d=_session_code_5d,
                     acting_chamber_code=acting_chamber_prefix.strip()[:1].upper(),
-                    legislation_id_cache=_legislation_id_cache,
                     legislation_event_cache=_legislation_event_cache,
-                    push_alert=push_system_alert,
                 )
+                if _row_route == "meeting":
+                    _row_cached_events = _legislation_event_cache.get(
+                        (bill_num, _session_code_5d)
+                    ) or []
+                    _le_result = _find_legevent_time_in_cache(
+                        events=_row_cached_events,
+                        bill_num=bill_num,
+                        action_date_str=date_str,
+                        outcome_text=outcome_text,
+                        acting_chamber_code=acting_chamber_prefix.strip()[:1].upper(),
+                        push_alert=push_system_alert,
+                    )
+                if _le_result is None:
+                    # Cache-direct didn't recover (route != "meeting", OR
+                    # route == "meeting" but cache helper couldn't match
+                    # — zero token overlap / midnight-only / etc). Fall
+                    # back to the full resolver, which preserves today's
+                    # journal_default behavior on every path EXCEPT the
+                    # regression case (cached events + negative-cached
+                    # id) — that one is now handled by the cache-direct
+                    # helper above. Admin-route gating on this fallback
+                    # is intentionally deferred to a separate PR; this
+                    # PR's scope is restoring the broken recovery path,
+                    # not changing what gets routed where.
+                    _le_result = _resolve_via_legislation_event_api(
+                        http_session=http_session,
+                        bill_num=bill_num,
+                        action_date_str=date_str,
+                        outcome_text=outcome_text,
+                        session_code_5d=_session_code_5d,
+                        acting_chamber_code=acting_chamber_prefix.strip()[:1].upper(),
+                        legislation_id_cache=_legislation_id_cache,
+                        legislation_event_cache=_legislation_event_cache,
+                        push_alert=push_system_alert,
+                    )
                 if _le_result is not None:
                     time_val, sort_time_24h, status = _le_result
                     origin = "legislation_event"
