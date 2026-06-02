@@ -9,6 +9,7 @@ import re
 import io
 import tempfile
 import urllib.parse
+from collections import Counter
 from datetime import datetime, timedelta, timezone
 import pytz
 from requests.adapters import HTTPAdapter
@@ -637,6 +638,108 @@ def _route_for_row(bill_num, session_5d, action_date_str, outcome_text,
     except Exception:
         # Observability-only column — never let it break the cycle.
         return ""
+
+
+def _find_legevent_time_in_cache(
+    events, bill_num, action_date_str, outcome_text,
+    acting_chamber_code, push_alert,
+):
+    """PR-C7.1c review fold-in (Codex P1): pure cache-side time extraction.
+
+    Same matching + 12-hour rendering as `_resolve_via_legislation_event_api`
+    steps 3-5, but operates on an already-cached `events` list instead of
+    going through the LegislationID lookup chain. This closes the regression
+    Codex flagged on PR #58:
+
+        When PR-C7's pre-iteration hydration seeds `_legislation_id_cache`
+        with a negative entry for a bill that was skipped as fresh/terminal
+        (because its real events are already loaded into
+        `_legislation_event_cache` from the persisted `LegEvent_Events`
+        tab), the resolver short-circuits at `if not legislation_id` BEFORE
+        it ever reads those cached events. The floor recovery path saw
+        `route_for_row == "meeting"` (which IS sourced from the populated
+        event cache), but recovery then failed, regressing rescued floor
+        times back to `⏱️ [NO_CONVENE_ANCHOR]` on the second cycle and
+        every cycle after.
+
+    The fix is to read the event cache directly when route says "meeting"
+    — we already know events exist (the route is itself proof) and we don't
+    need legislation_id to extract their times.
+
+    Contract: same as the resolver — returns `(time_12h, sort_time_24h,
+    status)` on success, `None` on any miss / parse failure / ambiguity.
+    Never raises into the caller. Never makes a network call.
+    """
+    # Step 1: filter to events on this date + chamber.
+    matching = []
+    for e in events or ():
+        if not isinstance(e, dict):
+            continue
+        edate_full = str(e.get("EventDate") or "")
+        if edate_full[:10] != action_date_str:
+            continue
+        ev_chamber = str(e.get("ChamberCode") or "").strip().upper()
+        if acting_chamber_code and ev_chamber and ev_chamber != acting_chamber_code:
+            continue
+        matching.append(e)
+    if not matching:
+        return None
+
+    # Step 2: real-time events only (skip midnight-only date-stamps).
+    real_time_events = [
+        e for e in matching
+        if str(e.get("EventDate") or "")[11:] not in ("", "00:00:00")
+    ]
+    if not real_time_events:
+        return None
+
+    # Step 3: token-overlap score; tie-break by latest EventDate.
+    outcome_tokens = _legislation_event_token_set(outcome_text)
+    if not outcome_tokens:
+        return None
+    scored = []
+    for e in real_time_events:
+        ev_tokens = _legislation_event_token_set(str(e.get("Description") or ""))
+        score = len(outcome_tokens & ev_tokens)
+        scored.append((score, e.get("EventDate") or "", e))
+    scored.sort(key=lambda triple: (triple[0], triple[1]), reverse=True)
+    best_score = scored[0][0]
+    if best_score == 0:
+        return None
+    chosen = scored[0][2]
+
+    # Step 4: parse + render to the resolver's 12-hour/24-hour format.
+    edate_full = str(chosen.get("EventDate"))
+    try:
+        h = int(edate_full[11:13])
+        m = int(edate_full[14:16])
+    except (ValueError, IndexError) as exc:
+        push_alert(
+            f"LegEvent EventDate parse failed for {bill_num} (cache path): "
+            f"{edate_full!r} ({exc})",
+            status="WARN", category="DATA_ANOMALY", severity="WARN",
+            dedup_key=f"legevent_cache_time_parse::{bill_num}",
+        )
+        return None
+    if not (0 <= h <= 23 and 0 <= m <= 59):
+        push_alert(
+            f"LegEvent EventDate out of range for {bill_num} (cache path): "
+            f"{edate_full!r} (H={h}, M={m})",
+            status="WARN", category="DATA_ANOMALY", severity="WARN",
+            dedup_key=f"legevent_cache_time_range::{bill_num}",
+        )
+        return None
+
+    if h == 0:
+        time_12h = f"12:{m:02d} AM"
+    elif h < 12:
+        time_12h = f"{h}:{m:02d} AM"
+    elif h == 12:
+        time_12h = f"12:{m:02d} PM"
+    else:
+        time_12h = f"{h - 12}:{m:02d} PM"
+    sort_time_24h = f"{h:02d}:{m:02d}"
+    return (time_12h, sort_time_24h, "")
 
 
 def _resolve_via_legislation_event_api(
@@ -1738,6 +1841,15 @@ def run_calendar_update():
         "legevent_route_meeting": 0,
         "legevent_route_admin":   0,
         "legevent_route_blank":   0,
+        # PR-C7.1c: floor_miss → LegEvent time recovery. Counts rows that
+        # would have been tagged ⏱️ [NO_CONVENE_ANCHOR] (floor action,
+        # convene anchor missing) but were rescued by LegEvent because the
+        # structural router confirmed they're real meetings (route ==
+        # "meeting"). Admin-routed floor-text rows (H5601/S5601 "Bill text
+        # as passed") are NOT rescued — those have document-batch times,
+        # not meeting times. Closes the ~103 genuine-meeting residue
+        # PR-C7.1d measured.
+        "legevent_floor_recovered": 0,
     }
 
     def push_system_alert(message, status="ALERT", category=None, severity=None, dedup_key=None):
@@ -3048,7 +3160,17 @@ def run_calendar_update():
         last_seen_date = {}
         _floor_hit = 0      # Floor actions that got convene times
         _floor_miss = 0     # Floor actions that missed convene times
-        _floor_miss_dates = set()  # Which dates are missing
+        # PR-C7.1c review fold-in (Codex P2 + Gemini medium): combo →
+        # unrecovered miss count, NOT a set. The original `set()` lost
+        # multiplicity — if 3 floor actions on the same date/chamber missed
+        # and 1 was rescued by LegEvent recovery, `.discard()` removed the
+        # combo entirely, hiding the other 2 from the CONVENE GAP report.
+        # `Counter` preserves the per-combo unrecovered count so a recovery
+        # decrement (and possible delete-on-zero) leaves remaining misses
+        # visible. The downstream report iterates keys (combos with count
+        # > 0 are the live ones). Imported at module top to avoid Point-10
+        # local-shadow risk.
+        _floor_miss_dates = Counter()
 
         # PR-B: Date-indexed view of api_schedule_map so NO_SCHEDULE_MATCH rows
         # can carry a diagnostic_hint listing the committees LIS *did* schedule
@@ -3470,16 +3592,119 @@ def run_calendar_update():
                     origin = "convene_anchor"
                 else:
                     _floor_miss += 1
-                    _floor_miss_dates.add(f"{date_str}_{acting_chamber_prefix.strip()}")
+                    _floor_miss_dates[f"{date_str}_{acting_chamber_prefix.strip()}"] += 1
                     if origin == "journal_default":
-                        # Concrete source miss: floor action with no convene anchor.
-                        # Tag the row so it cannot masquerade as a clean row downstream.
-                        time_val = "⏱️ [NO_CONVENE_ANCHOR]"
-                        origin = "floor_miss"
-                        source_miss_counts["floor_anchor_miss"] += 1
-                        diagnostic_hint = _build_diagnostic_hint(
-                            date_str, event_location, acting_chamber_prefix
+                        # PR-C7.1c: floor_miss → LegEvent time recovery.
+                        # Closes the ~103 genuine-meeting residue
+                        # PR-C7.1d measured (real floor votes — "conference
+                        # report agreed", "read third time" — whose convene
+                        # anchor was missing and which the journal_default
+                        # LegEvent block below SKIPS because that gate is
+                        # `origin == "journal_default"` and origin is about
+                        # to become "floor_miss").
+                        #
+                        # SAFETY: gated on the structural router's verdict.
+                        # The danger this gate defends against: H5601/S5601
+                        # "Bill text as passed Senate (HB###ER)" rows match
+                        # ABSOLUTE_FLOOR_VERBS ("passed senate") → forced
+                        # to Floor → convene_anchor miss → would land here.
+                        # Their LegislationEvent has a 4 AM document-batch
+                        # timestamp, NOT a meeting time. Recovering them
+                        # would write a wrong time on an admin row.
+                        #
+                        # The structural router routes those to "admin"
+                        # via LIS's own ReferenceType (LegislationText) —
+                        # cache-lookup, no network. We require route ==
+                        # "meeting" (not just != "admin") so blank-route
+                        # rows ALSO stay unrecovered: route unknown means
+                        # the TTL backfill hasn't reached this bill yet
+                        # or the bill has no LegEvent — either way, safer
+                        # to leave NO_CONVENE_ANCHOR than to recover with
+                        # a possibly-wrong time. Next cycle the cache
+                        # populates and the route becomes "meeting" and
+                        # the row recovers.
+                        #
+                        # HANG SAFETY: cache-lookup-only. The PR-C7
+                        # pre-iteration hydration seeds the cache (real
+                        # events OR negative cache via the Codex P1 fix)
+                        # for every candidate bill in `legevent_candidate_bills`,
+                        # which includes floor_miss bills. The resolver
+                        # below short-circuits via the existing PR-C3.1
+                        # negative-cache check — no network fetch from
+                        # the row loop. The PR-C3 hang root cause cannot
+                        # recur.
+                        _floor_route = _route_for_row(
+                            bill_num=bill_num,
+                            session_5d=_session_code_5d,
+                            action_date_str=date_str,
+                            outcome_text=outcome_text,
+                            acting_chamber_code=acting_chamber_prefix.strip()[:1].upper(),
+                            legislation_event_cache=_legislation_event_cache,
                         )
+                        _floor_recovered = None
+                        if _floor_route == "meeting":
+                            # PR-C7.1c review fold-in (Codex P1): pull time
+                            # directly from the event cache, bypassing
+                            # `_resolve_via_legislation_event_api`'s
+                            # `LegislationID` gate. The route="meeting"
+                            # verdict is ITSELF proof that the event cache
+                            # has hydrated events for this bill (the route
+                            # is computed from those events). The original
+                            # resolver call regressed here whenever PR-C7's
+                            # negative-cache seeding had set
+                            # `_legislation_id_cache[(bill,session)] = ""`
+                            # for a bill that was loaded from the persisted
+                            # `LegEvent_Events` tab but not queued for
+                            # rehydration this cycle (fresh / terminal).
+                            # The new helper reads `_legislation_event_cache`
+                            # directly with identical matching semantics —
+                            # cache-only, no network, no `LegislationID`
+                            # dependency — so recovery stays stable across
+                            # cycles.
+                            _cached_events = _legislation_event_cache.get(
+                                (bill_num, _session_code_5d)
+                            ) or []
+                            _floor_recovered = _find_legevent_time_in_cache(
+                                events=_cached_events,
+                                bill_num=bill_num,
+                                action_date_str=date_str,
+                                outcome_text=outcome_text,
+                                acting_chamber_code=acting_chamber_prefix.strip()[:1].upper(),
+                                push_alert=push_system_alert,
+                            )
+                        if _floor_recovered is not None:
+                            time_val, sort_time_24h, status = _floor_recovered
+                            origin = "legislation_event"
+                            source_miss_counts["sourced_legislation_event"] += 1
+                            source_miss_counts["legislation_event_recovered"] += 1
+                            source_miss_counts["legevent_floor_recovered"] += 1
+                            # Back out the convene-gap counters so the
+                            # post-loop report reflects only UNRECOVERED
+                            # floor misses.
+                            #
+                            # PR-C7.1c review fold-in (Codex P2 + Gemini
+                            # medium): decrement the per-combo Counter
+                            # instead of `set.discard`. `discard` removed
+                            # the combo entry entirely even when OTHER
+                            # rows on the same date/chamber were still
+                            # unrecovered, hiding them from the CONVENE
+                            # GAP report. Decrementing the counter and
+                            # only deleting the key when it drops to zero
+                            # preserves the multiplicity Codex flagged.
+                            _floor_miss -= 1
+                            _combo_key = f"{date_str}_{acting_chamber_prefix.strip()}"
+                            _floor_miss_dates[_combo_key] -= 1
+                            if _floor_miss_dates[_combo_key] <= 0:
+                                del _floor_miss_dates[_combo_key]
+                        else:
+                            # Concrete source miss: floor action with no convene anchor.
+                            # Tag the row so it cannot masquerade as a clean row downstream.
+                            time_val = "⏱️ [NO_CONVENE_ANCHOR]"
+                            origin = "floor_miss"
+                            source_miss_counts["floor_anchor_miss"] += 1
+                            diagnostic_hint = _build_diagnostic_hint(
+                                date_str, event_location, acting_chamber_prefix
+                            )
 
             # PR-C3: LegislationEvent API as secondary time source. Fires
             # when (a) the Schedule API didn't yield a concrete time and
@@ -3518,17 +3743,70 @@ def run_calendar_update():
                     source_miss_counts["legevent_cache_hits"] += 1
                 else:
                     source_miss_counts["legevent_cache_misses"] += 1
-                _le_result = _resolve_via_legislation_event_api(
-                    http_session=http_session,
+
+                # PR-C7.1c review fold-in EXTENSION (Codex P1, journal_default
+                # path): same negative-cache regression as the floor path.
+                # When a bill's events were loaded from the persisted
+                # `LegEvent_Events` tab (fresh/terminal — not queued for
+                # rehydration this cycle), `_legislation_event_cache` has
+                # real events but `_legislation_id_cache[(bill,session)]`
+                # was seeded "" by the overflow handler at ~line 3205.
+                # `_resolve_via_legislation_event_api()` short-circuits at
+                # `if not legislation_id` BEFORE reading those cached
+                # events, so journal_default recovery has been silently
+                # FAILING for every fresh/terminal bill since PR-C7
+                # (the dominant steady-state case, weeks of underrecovery).
+                #
+                # Mirror the floor fix: check the structural route; when
+                # route=="meeting" (which is itself proof the event cache
+                # is populated — the route was computed from it), use the
+                # cache-direct helper. Otherwise fall through to the full
+                # resolver (handles route="" cases where the cache may not
+                # be populated and we WANT the LegislationID lookup chain).
+                _le_result = None
+                _row_route = _route_for_row(
                     bill_num=bill_num,
+                    session_5d=_session_code_5d,
                     action_date_str=date_str,
                     outcome_text=outcome_text,
-                    session_code_5d=_session_code_5d,
                     acting_chamber_code=acting_chamber_prefix.strip()[:1].upper(),
-                    legislation_id_cache=_legislation_id_cache,
                     legislation_event_cache=_legislation_event_cache,
-                    push_alert=push_system_alert,
                 )
+                if _row_route == "meeting":
+                    _row_cached_events = _legislation_event_cache.get(
+                        (bill_num, _session_code_5d)
+                    ) or []
+                    _le_result = _find_legevent_time_in_cache(
+                        events=_row_cached_events,
+                        bill_num=bill_num,
+                        action_date_str=date_str,
+                        outcome_text=outcome_text,
+                        acting_chamber_code=acting_chamber_prefix.strip()[:1].upper(),
+                        push_alert=push_system_alert,
+                    )
+                if _le_result is None:
+                    # Cache-direct didn't recover (route != "meeting", OR
+                    # route == "meeting" but cache helper couldn't match
+                    # — zero token overlap / midnight-only / etc). Fall
+                    # back to the full resolver, which preserves today's
+                    # journal_default behavior on every path EXCEPT the
+                    # regression case (cached events + negative-cached
+                    # id) — that one is now handled by the cache-direct
+                    # helper above. Admin-route gating on this fallback
+                    # is intentionally deferred to a separate PR; this
+                    # PR's scope is restoring the broken recovery path,
+                    # not changing what gets routed where.
+                    _le_result = _resolve_via_legislation_event_api(
+                        http_session=http_session,
+                        bill_num=bill_num,
+                        action_date_str=date_str,
+                        outcome_text=outcome_text,
+                        session_code_5d=_session_code_5d,
+                        acting_chamber_code=acting_chamber_prefix.strip()[:1].upper(),
+                        legislation_id_cache=_legislation_id_cache,
+                        legislation_event_cache=_legislation_event_cache,
+                        push_alert=push_system_alert,
+                    )
                 if _le_result is not None:
                     time_val, sort_time_24h, status = _le_result
                     origin = "legislation_event"
@@ -3609,9 +3887,20 @@ def run_calendar_update():
         for d, ch in sorted(_tba_convene)[:10]:
             print(f"     {d}_{ch}: Time='{convene_times[d][ch].get('Time', '')}'")
     if _floor_miss > 0:
-        # Separate pre-scrape misses (expected) from in-window misses (real bugs)
-        _in_window_misses = {c for c in _floor_miss_dates if c.split("_")[0] >= scrape_start_str}
-        _pre_window_misses = _floor_miss_dates - _in_window_misses
+        # Separate pre-scrape misses (expected) from in-window misses (real bugs).
+        # PR-C7.1c review fold-in: `_floor_miss_dates` is now a Counter
+        # (was a set). Wrap with `set(...)` for the difference op — Counter's
+        # `-` operator is element-wise subtraction, not set difference.
+        _all_combos = set(_floor_miss_dates)
+        _in_window_misses = {c for c in _all_combos if c.split("_")[0] >= scrape_start_str}
+        _pre_window_misses = _all_combos - _in_window_misses
+        # PR-C7.1c: surface LegEvent recovery count so the gap report
+        # reflects "what's left after route-gated recovery" — _floor_miss
+        # was decremented inline for each rescued row, so this print line
+        # already shows the post-recovery residue.
+        _floor_recov = source_miss_counts.get("legevent_floor_recovered", 0)
+        if _floor_recov:
+            print(f"⏪ LegEvent floor recovery rescued {_floor_recov} row(s) (route==meeting); residue below.")
         print(f"🚨 CONVENE GAP: {_floor_miss} floor actions missed convene times (vs {_floor_hit} hits)")
         print(f"   Missing date/chamber combos: {len(_floor_miss_dates)} total")
         print(f"   Pre-scrape (expected, state-building only): {len(_pre_window_misses)}")
@@ -3713,7 +4002,8 @@ def run_calendar_update():
             f"witness_location_backfills={source_miss_counts.get('witness_location_backfills', 0)} "
             f"legevent_route_meeting={source_miss_counts['legevent_route_meeting']} "
             f"legevent_route_admin={source_miss_counts['legevent_route_admin']} "
-            f"legevent_route_blank={source_miss_counts['legevent_route_blank']}"
+            f"legevent_route_blank={source_miss_counts['legevent_route_blank']} "
+            f"legevent_floor_recovered={source_miss_counts['legevent_floor_recovered']}"
         )
         print(f"📊 {metrics_summary}")
         alert_rows.append({
