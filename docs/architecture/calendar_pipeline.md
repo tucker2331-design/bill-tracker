@@ -49,7 +49,7 @@ Every `master_events` row carries an `Origin` column (added in PR-A). This is th
 ## Sheet1 Schema (worker output)
 11 columns: `Date | Time | SortTime | Status | Committee | Bill | Outcome | AgendaOrder | Source | Origin | DiagnosticHint`.
 
-The `Origin` column was added in PR-A. Enumerated values: `api_schedule`, `convene_anchor`, `legislation_event` (PR-C3), `journal_default`, `floor_miss`, `system_alert`, `system_metrics`. One `SYSTEM_METRICS` row per run carries a JSON-encoded snapshot of the source-miss counters (`total_processed`, `sourced_api`, `sourced_convene`, `sourced_legislation_event`, `unsourced_journal`, `unsourced_anchor`, `dropped_ephemeral`, `dropped_noise`, `floor_anchor_miss`, `legislation_event_attempted`, `legislation_event_recovered`). X-Ray Section 0 parses this row to render the denominator.
+The `Origin` column was added in PR-A. Enumerated values: `api_schedule`, `convene_anchor`, `legislation_event` (PR-C3), `journal_default`, `floor_miss`, `admin_default` (PR-C7.1g), `system_alert`, `system_metrics`. `admin_default` is a journal_default row the structural router classified `route=="admin"` whose time recovery was deliberately skipped (no wrong document-batch timestamp); it collapses into 📋 Ledger Updates like journal_default/floor_miss but does NOT emit the per-row source-miss WARN or count `unsourced_journal`. One `SYSTEM_METRICS` row per run carries a JSON-encoded snapshot of the source-miss counters (`total_processed`, `sourced_api`, `sourced_convene`, `sourced_legislation_event`, `unsourced_journal`, `unsourced_anchor`, `dropped_ephemeral`, `dropped_noise`, `floor_anchor_miss`, `legislation_event_attempted`, `legislation_event_recovered`). X-Ray Section 0 parses this row to render the denominator.
 
 The `DiagnosticHint` column was added in PR-B. Populated ONLY for rows where `Origin in {journal_default, floor_miss}`; empty string otherwise. Value format: `loc='<bill_locations[bill]>'; api_<date>=[<committee>@<time>; ...]` (nearest-3 same-chamber Schedule API candidates for that date, or `<none>`). Pure measurement — no classification impact. See [[workflow/source_miss_visibility]] and [[failures/gemini_review_patterns]] #37.
 
@@ -70,7 +70,7 @@ enforces four invariants:
 | # | Invariant | Failure mode |
 |---|-----------|--------------|
 | I1 | Schema completeness — all 11 columns present | fill missing with `""`, push `DATA_ANOMALY / CRITICAL` alert |
-| I2 | `Origin` in `{api_schedule, convene_anchor, legislation_event, journal_default, floor_miss, system_alert, system_metrics}` | push `DATA_ANOMALY / CRITICAL` alert (row is not rewritten — downstream must handle visibly) |
+| I2 | `Origin` in `{api_schedule, convene_anchor, legislation_event, journal_default, floor_miss, admin_default, system_alert, system_metrics}` | push `DATA_ANOMALY / CRITICAL` alert (row is not rewritten — downstream must handle visibly) |
 | I3 | Concrete-source Origins (`api_schedule` / `convene_anchor` / `legislation_event`) cannot carry a `⏱️ [NO_*]` Time | push `DATA_ANOMALY / CRITICAL` alert |
 | I4 | Telemetry counter `meeting_unsourced` (no invariant) — outcome contains a meeting verb AND Origin is unsourced | increment counter; fed to the circuit breaker |
 
