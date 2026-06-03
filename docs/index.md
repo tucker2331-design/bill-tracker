@@ -30,6 +30,7 @@ Links use Obsidian `[[wikilink]]` format. Obsidian resolves by filename; path-qu
 
 ## Architecture
 - [[architecture/calendar_pipeline]] — LIS → worker → Sheet1 data flow + resolution priorities
+- [[architecture/scalability_audit]] — standing standards-compliance audit (scalable / sustainable / zero-maintenance?); re-run after any architecturally-significant change
 
 ## Domain Knowledge
 - [[knowledge/lis_api_reference]] — VA LIS endpoints, auth, quirks
