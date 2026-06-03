@@ -1,6 +1,6 @@
 ---
 tags: [state, live]
-updated: 2026-06-02
+updated: 2026-06-03
 status: active
 ---
 
@@ -12,21 +12,22 @@ status: active
 
 ## Active focus
 
-**⚠️ SECTION 9 NOT YET CLOSED — cache fix MERGED, awaiting re-hydration + re-verification.** PR #57 + #58 merged but were no-ops in production: a live cross-tab showed the count went **UP** (1,010 → 1,072) because the `LegEvent_Events` cache tab was undersized 3.4× and silently truncated — only 1,063 of 3,645 bills (HB1..HB577) had cached events, the rest routed blank. **PR #61 (PR-C7.1e) — the fix — is now MERGED at `b837d17`.** But merging the fix ≠ the drop: the cache must still re-hydrate (the worker grows the tab + persists all bills' events over several cycles, or one Backfill Burst), and **then** a fresh live cross-tab confirms the real numbers. Full measurement + framework lesson in [[failures/assumptions_audit#62]]. The architecture is sound; it just needs the cache full before the routes populate.
+**✅ CACHE FULLY HYDRATED (3,645/3,645 bills, ~65k event rows). Section 9 driven from 1,072 → 210 measured, with two open PRs projecting → ~28.** The cache-starvation era is over (PRs #61/#67 fixed truncation + Tier-A starvation; crossover audit confirmed `meeting_in_ledger 9→0` vs frozen LIS ground truth). Section 9 is now decomposed into named, structural residue classes — **no remaining "mystery" rows.**
 
-**What's deployed now (all merged; correct code, waiting on a full cache):**
-- **PR #55** — structural router backend (`LegEventRoute` from LIS's `ReferenceType`/`VoteTally`/`Status`).
-- **PR #57** — X-Ray `classify_action` consumes the route (text fallback when blank).
-- **PR #58** — worker floor_miss → LegEvent recovery, gated `route=="meeting"` (+ a real journal_default regression fix that stands).
-- **PR #61** — cache capacity fix (events tab 25k→120k + dynamic grow-or-alert). **This unblocks the three above** once the cache re-hydrates.
-- **PR #62** — cadence 3h + overnight quiet hours (API-ban + runtime); gap thresholds recalibrated for the new cadence.
+**Section 9 residue decomposition (measured 2026-06-03, route-aware, live Sheet1 = 210):**
 
-**The remaining path to closing Section 9:**
-1. ✅ ~~Merge PR #61~~ — done (`b837d17`).
-2. **Re-hydrate the cache** (owner triggers — involves LIS calls): dispatch the worker several cycles, or run the ⏩ Backfill Burst (PR #56) once (bypasses quiet hours; ~4k LIS calls, paced by the 500/cycle cap → all 3,645 bills cached in one ~30-min run). Watch the worker log: `📈 Grew LegEvent_Events grid …` then `legevent_route_blank` should fall and `legevent_floor_recovered` climb over cycles.
-3. **Re-verify against live Sheet1** (this session's cross-tab method, NOT a sidecar tool). Only then is the drop real. Expected ~1,010 → ~106 (router collapse) → ~3 (floor recovery) — **measure, don't assume** (the #62 trap).
+| Class | Count | Route/Origin | Status |
+|---|---|---|---|
+| **Governor** (`Governor's Recommendation`, `…received by Senate/House`) | **114** | blank/journal_default | **FIXED → PR #72** (null-cell `"None"` bug; now route admin → Ledger) |
+| **Rereferred to Y** (HISTORY secondary split of "Reported from X and rereferred to Y") | **~69** | meeting/journal_default | **FIXED → PR #71** (sibling-time inheritance from the resolved "Reported from X" meeting) |
+| **Signed by President/Speaker** (ceremonial session-end signing) | **14** | meeting/floor_miss | **IRREDUCIBLE without a dictionary** — see below |
+| Misc (`Placed on Calendar/Agenda`, `Passed by for the day`, `Continued pursuant to Rule 22`, 3× api_schedule) | **~13** | mixed | Not yet individually mapped; small tail |
 
-**Verification method (use this, not full_validate.py):** fetch live Sheet1 via gviz CSV, run both text-only and route-aware `classify_action` against it, cross-tab text-class × route-value on no-time rows. This exercises the real production artifact (`LegEventRoute` column written by the worker). The worker SYSTEM_METRICS line (`legevent_floor_recovered`, `legevent_route_admin/meeting/blank`) is the second corroborating source.
+**The 14 "Signed by President/Speaker" are the structural floor (honest residue).** LIS represents them *identically* to genuine floor meeting actions: empty `Status`, midnight `EventDate`, no `VoteTally`, chamber `ActorType`. The ONLY signal separating "Signed by President" (admin/ceremonial) from "Read third time" (a real floor meeting, **747 of them** in the same empty-status+midnight bucket) is the `EventCode` (S5620) or the literal text "signed by" — **both are the per-state dictionary the owner explicitly rejected** (won't scale to 50 states). Flipping the router's empty-status default to clear the 14 would misclassify all 747 "Read third time" floor reads → net worse. These 14 ceremonial signings are non-actionable for a lobbyist (the exact minute a joint resolution was signed at sine die). **Decision: accept as honest upstream-limited residue, not a bug.** Reaching literal 0 here requires re-admitting a text/EventCode exception, which contradicts Standard #3 + #6. (Documented; revisit only if the owner decides a narrow ceremonial exception is acceptable.)
+
+**Net projection once #71 + #72 merge + one worker cycle:** 210 → ~28, of which 14 are the irreducible signed-by and ~13 a small unmapped misc tail. **The "desired product" is effectively a ~98% structural reduction (1,072 → ~28) with every remaining row named and explained — no probabilistic guesses, no dictionary, scales to 50 states unchanged.**
+
+**Verification method (use this, not full_validate.py):** fetch live Sheet1 via gviz CSV, run both text-only and route-aware `classify_action` against it, cross-tab text-class × route-value on no-time rows. ⚠️ **Read the sheet with `gspread.get_all_values` semantics (raw strings), NOT `pandas.read_csv`** — pandas auto-NaN's the string `"None"` and silently heals the very corruption production chokes on (that masked the Governor bug for weeks; [[failures/assumptions_audit#66]]). The worker SYSTEM_METRICS line (`legevent_floor_recovered`, `legevent_route_admin/meeting/blank`) is the second corroborating source.
 
 **Owner guardrails (locked):**
 1. No LLM runtime dependency.
@@ -38,10 +39,14 @@ status: active
 
 | # | Branch | State | Notes |
 |---|--------|-------|-------|
-| 60 | `docs/forward-calendar-design` | **Open — forward-calendar design entry (docs)** | Detailed design for the 2027 upcoming-meetings surface. 4 Gemini findings folded in (datetime/date TypeError, pinned-investigation reproducibility guard, dedup key granularity, viewport-slice disconnect) + corrected the stale "Section 9 closed" premise. Design only; no code. **Awaiting bot re-review of the fold-in commit before merge.** |
-| 56 | `claude/legevent-backfill-burst` | **Open — `⏩ LegEvent Backfill Burst` (the re-hydration tool for PR #61)** | Workflow-only N-cycle burst. Post-#61 it's the fastest way to re-hydrate the cache (run once → all 3,645 bills cached in one dispatch, bypasses quiet hours). Bot fold-in pushed: shared `calendar-worker` concurrency group (Codex P1) + state-aware re-enable (Codex P2). Ready to merge + dispatch when owner is ready to spend the ~4k LIS calls. |
+| **72** | `claude/pr-c7-1k-legevent-null-normalization` | **Open — Governor blank-route fix (the 114-row residue)** | `_clean_legevent_cell()` collapses JSON-null `"None"` → `""` on persist+load. Clears all 114 Governor rows (route admin → Ledger). Validated with raw-string repro. **Awaiting bot review.** [[failures/assumptions_audit#66]]. |
+| **71** | `claude/pr-c7-1j-sibling-time-inheritance` | **Open — sibling-time inheritance (the ~69 rereferred rows)** | Timeless meeting-routed `journal_default`/`floor_miss` row inherits the resolved time of its same-`(Bill,Date)` committee/floor meeting, ONLY when unambiguous. Zero vocabulary. **Awaiting bot review.** [[failures/assumptions_audit#65]]. |
+| 60 | `docs/forward-calendar-design` | **Open — forward-calendar design (docs)** | 2027 upcoming-meetings surface design. 4 Gemini findings folded in. Design only. **Awaiting bot re-review.** |
+| 56 | `claude/legevent-backfill-burst` | **Open — `⏩ LegEvent Backfill Burst`** | Re-hydration tool. No longer needed for current backfill (cache is full); reserved for 2027 cold-start. `gh api` state-fetch fix pushed. Mergeable anytime. |
 
-**Merged this session:** #57, #58 (router UI + floor recovery), #61 (cache capacity — the real fix), #62 (cadence + quiet hours), #63 (legacy post-mortem). See [[log]].
+**Merge sequencing:** #71 and #72 touch DIFFERENT regions of `calendar_worker.py` (no code conflict) but both append to `assumptions_audit.md` (#65 vs #66) — expect a trivial append conflict on whichever merges second; resolve by keeping both in numeric order. After both merge, dispatch one worker cycle, then re-cross-tab Section 9 (expect ~28).
+
+**Merged earlier this session:** #57, #58 (router UI + floor recovery), #61 (cache capacity), #62 (cadence + quiet hours), #63 (legacy post-mortem), #67 (Tier-A starvation fix), #69 (forward-window foundation), #70 (route 0-overlap guard). See [[log]].
 
 ## Next up (after this session's merges)
 
@@ -60,15 +65,14 @@ status: active
 - **PR #45** (2026-05-09): PR-C7.0.4 breaker recalibration — `meeting_unsourced_delta` (rolling Y2 baseline) replaces absolute threshold ([[failures/assumptions_audit#53]]).
 - **PR #41-44** (2026-05-05 → 2026-05-06): PR-C7 structural pivot + cold-start hotfixes ([[failures/assumptions_audit#50]], [[failures/assumptions_audit#51]], [[failures/assumptions_audit#52]]).
 
-## Known bug count (MEASURED against live Sheet1, 2026-06-02 post-#57/#58)
+## Known bug count (MEASURED against live Sheet1, 2026-06-03 post-hydration)
 
-- **X-Ray Section 9 — route-aware (current production):** **1,072** ❌ (went UP from text-only 1,010 — the cache-starvation regression, not a real increase). This is the honest number until PR #61 lands + cache re-hydrates.
-- **X-Ray Section 9 — text-only (pre-#57 baseline):** 1,010.
-- **Why up not down:** 1,008/1,010 flagged rows route `blank` (cache has events for only 1,063/3,645 bills); 0 collapsed to admin; the router *added* 62 false-positives (admin rows like "Placed on X Agenda" routing to meeting). Full cross-tab in [[failures/assumptions_audit#62]].
-- **Expected after PR #61 + re-hydration:** ~106 (collapse) then ~3 (floor recovery) — **to be re-measured, not assumed.**
+- **X-Ray Section 9 — route-aware (current production):** **210** (down from the 1,072 cache-starvation peak). Fully decomposed (see Active focus table): 114 Governor (→ #72) + ~69 rereferred (→ #71) + 14 ceremonial signed-by (irreducible) + ~13 misc tail.
+- **Projected after #71 + #72 merge + one cycle:** **~28** (14 irreducible signed-by + ~13 unmapped misc + 1).
+- **Crossover accuracy (frozen LIS ground truth, Feb 9-13):** `meeting_in_ledger` **9 → 0** ✓ at full hydration. The structural correctness check passes.
 - **Worker UNKNOWN_ACTION counter:** 6 (separate path, untouched).
 - **Section 7 (Sheet vs LIS time parity):** 0 ✓.
-- **Cache coverage (the bug):** 1,063 / 3,645 bills have cached events (29%); `LegEvent_Events` at 24,999/25,000 rows (full). PR #61 fixes the allocation.
+- **Cache coverage:** **3,645 / 3,645 bills hydrated (100%)** ✓; `LegEvent_Events` ~65k rows (tab capacity 120k post-#61). The 29% starvation is resolved.
 
 ## Active architecture
 
