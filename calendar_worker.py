@@ -2020,6 +2020,13 @@ def run_calendar_update():
         # not meeting times. Closes the ~103 genuine-meeting residue
         # PR-C7.1d measured.
         "legevent_floor_recovered": 0,
+        # PR-C7.1g: journal_default rows whose structural route is "admin"
+        # and which we therefore did NOT attempt to time-recover (skipping
+        # the fallback resolver so an admin action doesn't get a wrong
+        # document-batch timestamp). They land in Ledger Updates, correctly
+        # timeless. Visible here so the "we chose not to recover" decision
+        # isn't silent (Standard #4).
+        "legevent_admin_skipped": 0,
     }
 
     def push_system_alert(message, status="ALERT", category=None, severity=None, dedup_key=None):
@@ -2077,6 +2084,12 @@ def run_calendar_update():
         # committee (Class-1 bug class). Treated as a CONCRETE source for
         # I3 below.
         "legislation_event",
+        # PR-C7.1g (#66 fold-in): journal_default rows the structural router
+        # classifies as administrative (route=="admin") whose resolver we
+        # deliberately skip (no wrong document-batch time). NOT a concrete
+        # source (I3 exempt) and NOT an unsourced meeting miss (I4 exempt) —
+        # a timeless admin row that collapses into 📋 Ledger Updates.
+        "admin_default",
     }
     _REQUIRED_KEYS = {
         "Date", "Time", "SortTime", "Status", "Committee", "Bill",
@@ -3973,18 +3986,51 @@ def run_calendar_update():
                         acting_chamber_code=acting_chamber_prefix.strip()[:1].upper(),
                         push_alert=push_system_alert,
                     )
-                if _le_result is None:
-                    # Cache-direct didn't recover (route != "meeting", OR
-                    # route == "meeting" but cache helper couldn't match
-                    # — zero token overlap / midnight-only / etc). Fall
-                    # back to the full resolver, which preserves today's
-                    # journal_default behavior on every path EXCEPT the
-                    # regression case (cached events + negative-cached
-                    # id) — that one is now handled by the cache-direct
-                    # helper above. Admin-route gating on this fallback
-                    # is intentionally deferred to a separate PR; this
-                    # PR's scope is restoring the broken recovery path,
-                    # not changing what gets routed where.
+                if _le_result is None and _row_route == "admin":
+                    # PR-C7.1g (+ #66 review fold-in): route=="admin" means
+                    # LIS's own structural fields (ReferenceType / VoteTally /
+                    # Status) classify this action as administrative — it
+                    # belongs in Ledger Updates with NO meeting time. Don't run
+                    # the resolver, which would attach a ~4 AM document-batch
+                    # timestamp (e.g. on a "Bill text as passed" / "Governor's
+                    # Recommendation" event) — a structurally-WRONG time on the
+                    # lobbyist surface (Standard #3).
+                    #
+                    # Route the row to its OWN terminal origin "admin_default"
+                    # (NOT journal_default) so it does NOT fall into the
+                    # journal_default source-miss block below — that block fires
+                    # a per-row TIMING_LAG WARN + counts unsourced_journal,
+                    # which for hundreds of expected-timeless admin rows would
+                    # flood Bug_Logs and overstate the source gap (Gemini HIGH
+                    # #66). admin_default still collapses into 📋 Ledger Updates
+                    # (added to the collapse mask) and carries the visible
+                    # NO_SCHEDULE_MATCH marker (not the old silent "Journal
+                    # Entry"). It is NOT a concrete source (I3 ok) and NOT in
+                    # the unsourced-meeting set (I4 won't count it).
+                    #
+                    # Back out the top-of-block legislation_event_attempted
+                    # increment: a deliberate non-attempt is not a failed
+                    # attempt, so attempted−recovered stays the honest LIS
+                    # source-gap signal the X-Ray reads (Codex P2 #66).
+                    #
+                    # Timing note: while the LegEvent cache is still
+                    # re-hydrating (PR-C7.1e), most routes are "" (blank), NOT
+                    # "admin" — blank rows still hit the resolver below. This
+                    # gate only bites once a bill's events are cached AND
+                    # structurally admin, so it is correct-by-construction the
+                    # moment the cache fills.
+                    source_miss_counts["legevent_admin_skipped"] += 1
+                    source_miss_counts["legislation_event_attempted"] -= 1
+                    origin = "admin_default"
+                    time_val = "⏱️ [NO_SCHEDULE_MATCH]"
+                elif _le_result is None:
+                    # Cache-direct didn't recover (route == "" with no cached
+                    # events, OR route == "meeting" but the cache helper
+                    # couldn't match — zero token overlap / midnight-only /
+                    # etc). Fall back to the full resolver, which preserves
+                    # today's journal_default behavior on every non-admin path
+                    # (and the LegislationID lookup chain for blank routes
+                    # where the cache may not be populated).
                     _le_result = _resolve_via_legislation_event_api(
                         http_session=http_session,
                         bill_num=bill_num,
@@ -4192,7 +4238,8 @@ def run_calendar_update():
             f"legevent_route_meeting={source_miss_counts['legevent_route_meeting']} "
             f"legevent_route_admin={source_miss_counts['legevent_route_admin']} "
             f"legevent_route_blank={source_miss_counts['legevent_route_blank']} "
-            f"legevent_floor_recovered={source_miss_counts['legevent_floor_recovered']}"
+            f"legevent_floor_recovered={source_miss_counts['legevent_floor_recovered']} "
+            f"legevent_admin_skipped={source_miss_counts['legevent_admin_skipped']}"
         )
         print(f"📊 {metrics_summary}")
         alert_rows.append({
@@ -4226,10 +4273,14 @@ def run_calendar_update():
         # committee-label rename (see docs/workflow/source_miss_visibility.md).
         if 'Origin' not in final_df.columns:
             final_df['Origin'] = ''
-        journal_mask = final_df['Origin'].isin(['journal_default', 'floor_miss'])
+        # PR-C7.1g (#66 fold-in): admin_default joins the collapse set — these
+        # are structurally-administrative rows we deliberately left timeless;
+        # they belong in 📋 Ledger Updates exactly like journal_default /
+        # floor_miss, just without the per-row source-miss WARN those two emit.
+        journal_mask = final_df['Origin'].isin(['journal_default', 'floor_miss', 'admin_default'])
         if journal_mask.any():
             final_df.loc[journal_mask, 'Committee'] = '📋 Ledger Updates'
-            print(f"📋 Collapsed {int(journal_mask.sum())} unsourced rows into Ledger Updates blocks.")
+            print(f"📋 Collapsed {int(journal_mask.sum())} unsourced/admin rows into Ledger Updates blocks.")
 
         final_df = final_df[~((final_df['Bill'] == "No agenda listed.") & final_df.duplicated(subset=['Date', 'Committee', 'Time'], keep=False))]
         final_df = final_df.sort_values(by=['Date', 'Committee', 'Bill', 'Source'])

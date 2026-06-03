@@ -1,5 +1,42 @@
 # Future Improvements
 
+## Forward-calendar block — upcoming meetings before they happen (flagged 2026-06-02 post-PR-#57/#58, real-work-prep priority)
+
+**Strategic context:** Section 9's structural fix is *in flight* — PR #57 + #58 merged 2026-06-02, but live verification showed they're no-ops until the cache-capacity bug lands (PR #61 / PR-C7.1e) and the cache re-hydrates; see [[failures/assumptions_audit#62]]. (An earlier draft of this block said "structurally closed" — the same premature-victory mistake #62 documents. Corrected.) Once that's done, the next dynamic frontier for the 2027 session is showing lobbyists *upcoming* meetings — not just past actions. The product today is HISTORY.CSV-backed and shows "what happened in committee at time T." The real lobbyist surface is "what's on the schedule for the next 7-14 days?"
+
+**Why this is the right next move for real-work readiness:** the structural router + LegEvent recovery handle past-action accuracy. The forward calendar is functionally NEW capability — a different signal source (Schedule API future-window) writing different row shapes (SCHEDULED-not-yet-happened). VA GA is currently adjourned, so we can ship the code with synthetic test fixtures and have it ready before 2027-01.
+
+**Architecture (extends existing patterns, not a rewrite):**
+1. **Data source — Schedule API future window.** `getschedulelistasync` returns the FULL session's schedule including future-dated meetings. The worker already calls this endpoint (line 2460); today it filters to `test_start_date ≤ meeting_date ≤ test_end_date` and the viewport slice further filters to `[scrape_start, scrape_end]`. Extend the viewport on the upper end. **⚠️ Both the fetch filter AND the final viewport slice must use the new `effective_scrape_end` upper bound (Gemini PR-#60 finding):** the worker fetches against one bound but the viewport slice (`final_df = final_df[... Date <= scrape_end]`) re-filters before Sheet1 write. If the slice still uses the old `scrape_end`, every future-dated row we just fetched gets silently dropped before write. Thread `effective_scrape_end` through to the slice, not just the fetch.
+2. **Effective viewport upper bound.** New constant `FORWARD_WINDOW = timedelta(days=14)` (configurable). `effective_scrape_end = min(test_end_date, max(scrape_end, today + FORWARD_WINDOW))`. Keeps the upper bound within-session (no spurious 2028 entries) and capped at +14 days (no mile-long calendar when a session has months of scheduled meetings). **Two type/semantics traps (Gemini PR-#60 findings):**
+   - **`today` must be a tz-naive `datetime`, not `date.today()` (TypeError risk).** `test_end_date` / `scrape_end` are tz-naive `datetime` objects in the worker; `min()`/`max()` between a `date` and a `datetime` raises `TypeError`. Build `today` from the existing ET `now` helper (`datetime.now(pytz.timezone('America/New_York')).replace(tzinfo=None)`, normalized to midnight) so all operands are the same type. `FORWARD_WINDOW` is a `timedelta` so `today + FORWARD_WINDOW` is a `datetime`.
+   - **Only extend forward in a LIVE/in-session run, not a pinned investigation (reproducibility).** When `scrape_end` is pinned to a historical date via `investigation_config.py`, real-world `today` is far later, so `max(scrape_end, today + FORWARD_WINDOW)` collapses to `today + FORWARD_WINDOW` → capped at `test_end_date` → the worker scrapes the WHOLE session, silently ignoring the pinned `INVESTIGATION_END`. Guard: only apply the forward extension when the run is live (e.g. `scrape_end >= today - small_epsilon`, or an explicit `IS_LIVE_RUN` flag), so pinned investigations stay reproducible at their configured window.
+3. **Row shape — distinctive Origin.** Schedule API future-dated entries get `Origin = "scheduled_future"` (new enum value). HISTORY-backed (past) entries keep their existing Origins. The chokepoint's I2 validator (`_VALID_ORIGINS`) gets the new value added.
+4. **Reconciliation — natural transition as future becomes past.** Each cycle re-fetches the Schedule API. As "today" advances, a previously-future meeting either:
+   - Has HISTORY rows now → the HISTORY-backed row supersedes the future entry (existing logic; structural router classifies the action).
+   - Has no HISTORY rows → the meeting is "in progress today" or "happened but no bills moved" → stays as `scheduled_future` until it's clearly in the past, then either gets a HAPPENED marker (if HISTORY shows up later) or stays in the calendar as "no bills moved."
+5. **X-Ray section — `Section X: Upcoming meetings (next 14 days)`.** Filters Sheet1 rows where `Origin == "scheduled_future" AND meeting_date > today`. Renders as a calendar widget grouped by date.
+6. **Cancellation handling.** Schedule API already exposes `IsCancelled` (line 2472). Cancelled future meetings render with strikethrough + `Status="CANCELLED"`. No code change needed beyond the section's display.
+
+**Dynamic-safety considerations:**
+- Schedule API may return MORE fields in 2027 than today (LIS adds metadata). The worker already does defensive `.get()` reads; verify no `dict[key]` accesses on the Schedule API response path.
+- A meeting that's scheduled today + has bills move TODAY → both `scheduled_future` row and HISTORY-backed rows would exist on the same meeting until `meeting_date < today`. Dedup: if a HISTORY row exists for the meeting, suppress the `scheduled_future` placeholder (HISTORY is the source of truth). **⚠️ Dedup key must NOT be just `(date, committee)` (Gemini PR-#60 finding) — too coarse.** A committee can meet twice in one day (morning + afternoon), and subcommittees normalize to the same parent name, so a single HISTORY row would wrongly suppress an unrelated `scheduled_future` placeholder for the *other* meeting that day. Use a finer key — `(date, committee, time)` (distinguishes morning/afternoon sittings) or `(date, committee, bill)` (suppress the placeholder only for meetings whose bills actually moved). Prefer `(date, committee, time)` since the Schedule API carries the meeting time and that's the natural identity of a sitting; fall back to bill-level suppression only if time granularity proves insufficient.
+- Sheet1 capacity (currently 29.2% of 10M-cell cap) easily absorbs +14 days × 50 meetings/day = ~700 cells/cycle. No headroom concern.
+- The structural router (`_route_for_row`) currently returns `""` for rows without cached LegEvent (true for scheduled_future rows by definition — no LegEvent until the meeting happens). The X-Ray's full-column drift scan (PR #57 fold-in) treats `""` as `"blank"` → no false drift alerts on the new rows.
+
+**Testing approach (since VA GA is adjourned and no real future data exists today):**
+- Synthetic Schedule API fixture: inject mock future-dated entries via `pages/v2_shadow_test.py` "Manual upload" mode (the existing manual-upload pattern is the test seam).
+- A pytest-style unit test that calls the worker's row-processing on synthetic data and asserts the resulting Sheet1-shape includes `scheduled_future` rows.
+- A workflow_dispatch tool that POSTS synthetic Schedule API rows into a test spreadsheet and runs the worker against it. Smoke-tests the full pipeline.
+
+**Sequencing:**
+1. **Step 1 (small):** add the `FORWARD_WINDOW_DAYS` constant + `effective_scrape_end` computation + new `Origin = "scheduled_future"` enum + the viewport extension. Worker fetches and writes future rows. No X-Ray change yet. Verify the Schedule API plumbing.
+2. **Step 2 (small):** X-Ray Section X — read `Origin = "scheduled_future"` rows, render as upcoming-meetings widget.
+3. **Step 3 (med):** dedup + reconciliation — when HISTORY catches up to a previously-future meeting, suppress the duplicate. Test the boundary handoff.
+4. **Step 4 (synthetic-test):** ship the workflow_dispatch tool with synthetic-injection capability so we can validate the 2027 flow without waiting for January.
+
+**Owner guardrails:** same as today — Standard #1 / #4 / #6 / #8. The forward-calendar adds NEW dynamic surface but doesn't change the existing safety story (text-parsing forbidden, source-miss visibility maintained, etc.).
+
 ## ~~New-Verb Canary — drift detection at cycle 1~~ (REJECTED 2026-04-28)
 - ❌ **REJECTED by owner 2026-04-28** as a band-aid that creates
   perpetual manual engineering debt. The end state still required a
