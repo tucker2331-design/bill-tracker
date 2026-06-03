@@ -11,6 +11,18 @@ Append-only, reverse-chronological (newest at top). Each entry opens with `## [Y
 
 ---
 
+## [2026-06-03] pr | hotfix — Backfill Burst died on `gh workflow view --json` (no such flag)
+
+The owner stopped the 15-min cron and dispatched the ⏩ Backfill Burst; it **failed in 21s** at the "Snapshot cron state + pause if currently active" step with `unknown flag: --json`. Root cause: the PR #56 Codex-P2 fold-in snapshotted the cron's prior state with `gh workflow view calendar_worker.yml --json state` — but **`gh workflow view` has no `--json` flag** (that's a `gh run`/`gh pr` flag). The step exited 1 and the burst aborted before running a single cycle.
+
+Why it slipped past pre-merge: I "verified" the snapshot idea with `gh workflow view ... --json ... 2>/dev/null || <fallback>` in my own shell — the `2>/dev/null || fallback` silently swallowed the `unknown flag` error, so the broken command looked like it worked. **Lesson: a `2>/dev/null || fallback` while spot-checking a CLI invocation can mask the exact error you're checking for; verify the command's exit code/output WITHOUT the swallow before baking it into a workflow.** And: GitHub CLI `--json` support is per-subcommand — `gh run`/`gh pr`/`gh workflow list` have it; `gh workflow view` does not.
+
+Fix: use the REST API — `gh api "repos/${{ github.repository }}/actions/workflows/calendar_worker.yml" --jq '.state'` returns `active` / `disabled_manually` / `disabled_inactivity`. Verified live (returns `active`). Defaults to `"active"` on API hiccup so a transient blip can't strand the cron disabled. The Codex-P2 behavior (only re-enable if WE disabled it) is preserved. YAML validated.
+
+After merge: re-dispatch the burst — it'll snapshot `active` → disable the cron → run N cycles (now hydrating correctly thanks to PR-C7.1h) → re-enable.
+
+---
+
 ## [2026-06-03] pr | PR-C7.1h — Tier A = "no cached events" (fixes the hydration starvation that kept the cache at 29%)
 
 **The cache fix (PR-C7.1e) merged but the cache stayed pinned at exactly 1,063/3,645 bills (29.2%) across 8 hours of cron cycles.** Diagnosed live: PR-C7.1e was correct but DORMANT — the tab only grows when the in-memory events cache exceeds 25k rows, and that cache wasn't growing because the hydration queue never fetched the uncached bills. Root cause: `_build_legevent_refresh_queue` defined Tier A ("uncached, drains FIRST") as **no `bills_meta` row**, but a truncation victim keeps its metadata row (`FetchedAtUTC` set) with ZERO events — so all 2,582 victims were misclassified Tier B/C and mostly skipped as "fresh," while the 1,063 already-cached early-alphabet bills perpetually TTL-expired (6h TTL vs ~3h cron) and re-consumed the 500/cycle budget. Same ~500 HB bills re-fetched every cycle; SB/SR/HJ never reached. Full lesson in [[failures/assumptions_audit#63]] (proxy-vs-actual: "has metadata" ≠ "has events").

@@ -92,10 +92,17 @@ jobs:
           # `always()`, which would silently reactivate a cron the owner
           # had intentionally disabled (maintenance window, paused
           # release, etc.) before triggering the burst.
-          # `gh workflow view` returns state as `active`, `disabled_manually`,
-          # or `disabled_inactivity`. Anything other than `active` means
-          # we should leave it alone.
-          PRIOR_STATE=$(gh workflow view calendar_worker.yml --json state -q .state)
+          #
+          # NOTE (hotfix 2026-06-03): the prior version called
+          # `gh workflow view calendar_worker.yml --json state` — but
+          # `gh workflow view` has NO `--json` flag (that's a `gh run`/
+          # `gh pr` flag), so the step died with "unknown flag: --json"
+          # and the whole burst failed before running a single cycle. Use
+          # the REST API, which exposes `.state` = `active` /
+          # `disabled_manually` / `disabled_inactivity`. `${{ github.repository }}`
+          # gives `owner/repo`. Default to "active" if the call hiccups so
+          # a transient API blip can't strand the cron disabled.
+          PRIOR_STATE=$(gh api "repos/${{ github.repository }}/actions/workflows/calendar_worker.yml" --jq '.state' 2>/dev/null || echo "active")
           echo "prior_state=${PRIOR_STATE}" >> "$GITHUB_OUTPUT"
           if [ "$PRIOR_STATE" = "active" ]; then
             gh workflow disable calendar_worker.yml
