@@ -1834,17 +1834,55 @@ def get_active_session_info(http_session):
         print(f"⚠️ Session API parsing failed: {e}")
     return None, False
 
-def safe_fetch_csv(url):
-    try:
-        res = requests.get(url, timeout=10)
-        if res.status_code == 200:
-            if b'BillNumber' not in res.content and b'HistoryDate' not in res.content and b'Committee' not in res.content:
+def safe_fetch_csv(url, attempts=3):
+    """Fetch a LIS blob CSV (HISTORY.CSV / DOCKET.CSV) with completeness guards.
+
+    Reliability fix (assumptions_audit #68): the previous version did a single
+    bare `requests.get(timeout=10)` and `pd.read_csv` of whatever bytes came
+    back. A TRUNCATED download (multi-MB HISTORY.CSV cut off mid-stream — likely
+    on the old 10s timeout) still parses cleanly as a SILENTLY-PARTIAL
+    DataFrame; the worker then wrote a partial Sheet1 (the 2026-06-03 incident:
+    HISTORY came back with only the recent tail → the calendar lost the entire
+    crossover week, and `df_past.empty` was False so no alert fired). Same
+    failure class as the #62 cache truncation: partial data that looks valid.
+
+    Guards now:
+      1. Retry up to `attempts` times (the bare get had none).
+      2. timeout 60s (was 10) — HISTORY.CSV is several MB.
+      3. COMPLETENESS: reject when the received body is shorter than the
+         server-declared Content-Length, and retry. A complete body is required
+         before we trust the parse. On exhaustion return an EMPTY frame, which
+         the caller treats as a hard fetch failure (CRITICAL alert + the
+         Sheet1-write is gated so last-known-good is preserved, not collapsed).
+    """
+    last_err = None
+    for attempt in range(1, attempts + 1):
+        try:
+            res = requests.get(url, timeout=60)
+            if res.status_code != 200:
+                last_err = f"HTTP {res.status_code}"
+                continue
+            body = res.content
+            # Completeness check: a short body == truncated download.
+            declared = res.headers.get("Content-Length")
+            if declared is not None:
+                try:
+                    declared_n = int(declared)
+                    if len(body) < declared_n:
+                        last_err = f"truncated body {len(body)}/{declared_n} bytes"
+                        print(f"⚠️ CSV truncated for {url}: {last_err} (attempt {attempt}/{attempts})")
+                        continue
+                except (ValueError, TypeError):
+                    pass  # unparseable header — fall through to content checks
+            if b'BillNumber' not in body and b'HistoryDate' not in body and b'Committee' not in body:
+                # 200 but not a recognizable CSV (e.g., an error page) — empty.
                 return pd.DataFrame()
-            raw_text = res.content.decode('iso-8859-1')
-            df = pd.read_csv(io.StringIO(raw_text))
+            df = pd.read_csv(io.StringIO(body.decode('iso-8859-1')))
             return df.rename(columns=lambda x: x.strip())
-    except Exception as e:
-        print(f"⚠️ CSV fetch failed for {url}: {e}")
+        except Exception as e:
+            last_err = str(e)
+            print(f"⚠️ CSV fetch failed for {url}: {e} (attempt {attempt}/{attempts})")
+    print(f"⚠️ CSV fetch exhausted {attempts} attempts for {url}: {last_err}")
     return pd.DataFrame()
 
 def generate_date_variants(dt):
@@ -3322,7 +3360,22 @@ def run_calendar_update():
             print("⚠️ No refid column found in HISTORY.CSV — falling back to text-only committee matching.")
         df_past['CleanBill'] = df_past[bill_col].astype(str).str.replace(' ', '').str.upper()
         df_past['ParsedDate'] = pd.to_datetime(df_past[date_col], errors='coerce')
-        df_past = df_past[(df_past['ParsedDate'] >= test_start_date) & (df_past['ParsedDate'] <= test_end_date)]
+        # Reliability clamp (assumptions_audit #68): test_start_date/test_end_date
+        # come from the Session API's SessionEvents min/max (get_active_session_info).
+        # That list is a SPARSE summary (~5 events) and the API intermittently
+        # returns a subset whose min jumps forward (e.g. to late March), which
+        # silently SHRANK df_past and dropped the entire early session — including
+        # crossover week (Feb 9-13) — from Sheet1. The 2026-06-03 incident:
+        # processed=310 vs 65,180 on byte-identical HISTORY/config, the only
+        # variable being this flaky session min-date. The pinned investigation
+        # window [INVESTIGATION_START, INVESTIGATION_END] is the stable FLOOR: the
+        # Session API may only EXTEND the processing window (earlier start / later
+        # end), never shrink it below the pinned bounds — so the calendar can no
+        # longer silently lose the test window. Standard #2 (no silent partial
+        # output) + still #5-dynamic (wider real session bounds always win).
+        _eff_start = min(test_start_date, INVESTIGATION_START)
+        _eff_end = max(test_end_date, INVESTIGATION_END)
+        df_past = df_past[(df_past['ParsedDate'] >= _eff_start) & (df_past['ParsedDate'] <= _eff_end)]
 
         # ============================================================
         # PR-C2 Part C: HISTORY-vs-witness reconciliation (gap recovery)
