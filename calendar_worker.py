@@ -2075,6 +2075,9 @@ def run_calendar_update():
         # timeless. Visible here so the "we chose not to recover" decision
         # isn't silent (Standard #4).
         "legevent_admin_skipped": 0,
+        # PR-C7.1j: secondary split-action rows that inherited their meeting's
+        # time+committee from a same-(Bill,Date) resolved sibling.
+        "sibling_inherited": 0,
     }
 
     def push_system_alert(message, status="ALERT", category=None, severity=None, dedup_key=None):
@@ -2144,6 +2147,12 @@ def run_calendar_update():
         # the row-generation increment (PR-FC1b) can emit it without tripping
         # the I2 origin-enum invariant. No producer yet — registration only.
         "scheduled_future",
+        # PR-C7.1j: a timeless meeting-routed row (a secondary split-action
+        # like "Rereferred to Y") that inherited its meeting's Time/Committee
+        # from a same-(Bill, Date) resolved sibling. Carries a REAL time, so
+        # it IS a concrete source for I3 (cannot carry a [NO_*] Time) and does
+        # NOT collapse into Ledger Updates.
+        "sibling_meeting",
     }
     _REQUIRED_KEYS = {
         "Date", "Time", "SortTime", "Status", "Committee", "Bill",
@@ -2205,7 +2214,7 @@ def run_calendar_update():
         # that combination means the matcher's return value got lost
         # somewhere on the way to the append. Catch it at write time.
         time_val = str(event.get("Time", ""))
-        if origin in {"api_schedule", "convene_anchor", "legislation_event"} and time_val.startswith("\u23f1\ufe0f [NO_"):
+        if origin in {"api_schedule", "convene_anchor", "legislation_event", "sibling_meeting"} and time_val.startswith("\u23f1\ufe0f [NO_"):
             source_miss_counts["invariant_violations"] += 1
             push_system_alert(
                 f"I3 time/origin parity violation: Origin='{origin}' but "
@@ -4303,6 +4312,9 @@ def run_calendar_update():
             f"legevent_route_blank={source_miss_counts['legevent_route_blank']} "
             f"legevent_floor_recovered={source_miss_counts['legevent_floor_recovered']} "
             f"legevent_admin_skipped={source_miss_counts['legevent_admin_skipped']}"
+            # NB: sibling_inherited (PR-C7.1j) is NOT in this line — it's
+            # computed AFTER this row is serialized (it needs final_df); it
+            # surfaces in its own "🔗 Sibling-time inheritance: N …" print.
         )
         print(f"📊 {metrics_summary}")
         alert_rows.append({
@@ -4336,6 +4348,64 @@ def run_calendar_update():
         # committee-label rename (see docs/workflow/source_miss_visibility.md).
         if 'Origin' not in final_df.columns:
             final_df['Origin'] = ''
+
+        # === PR-C7.1j: sibling-time inheritance for split committee actions ===
+        # LIS HISTORY.CSV splits ONE voted committee action — e.g. "Reported
+        # from Local Government AND rereferred to Finance (15-Y 0-N)" — into a
+        # PRIMARY row ("Reported from X", which resolves the committee meeting
+        # time via api_schedule) and a SECONDARY row ("Rereferred to Y", which
+        # the worker attributes to the destination committee Y, finds no
+        # meeting there, and leaves timeless → Ledger). The secondary action
+        # genuinely happened in the SAME meeting as the primary. Structural
+        # rule, ZERO vocabulary (no admin/meeting word lists — scales to 50
+        # states unchanged): a timeless, MEETING-ROUTED row inherits the
+        # Time / SortTime / Committee of a same-(Bill, Date) sibling that
+        # resolved a real committee/floor meeting — but ONLY when that
+        # meeting is UNAMBIGUOUS (a single distinct resolved time for the
+        # bill that day). If the bill had multiple distinct meetings that
+        # day we do NOT guess (Standard #3, no probabilistic attribution).
+        try:
+            import collections as _collections
+            _CONCRETE = {"api_schedule", "convene_anchor", "legislation_event"}
+            _is_ph = final_df['Time'].astype(str).str.startswith("⏱️ [NO_")
+            _route_lc = (final_df['LegEventRoute'].fillna("").astype(str).str.strip().str.lower()
+                         if 'LegEventRoute' in final_df.columns
+                         else pd.Series([""] * len(final_df), index=final_df.index))
+            # Map (Bill, Date) -> set of distinct resolved (Time, SortTime, Committee).
+            _resolved = final_df[final_df['Origin'].isin(_CONCRETE) & ~_is_ph]
+            _meeting_by_key = _collections.defaultdict(set)
+            for _bill, _date, _t, _st, _comm in zip(
+                _resolved['Bill'], _resolved['Date'], _resolved['Time'],
+                _resolved['SortTime'], _resolved['Committee']):
+                _meeting_by_key[(_bill, _date)].add((str(_t), str(_st), str(_comm)))
+            # Timeless, meeting-routed secondary rows (NOT admin_default — those
+            # are deliberately timeless; only journal_default/floor_miss).
+            _inherit_mask = (
+                final_df['Origin'].isin(['journal_default', 'floor_miss'])
+                & _is_ph & (_route_lc == "meeting")
+            )
+            _inherited = 0
+            for _idx in list(final_df[_inherit_mask].index):
+                _mt = _meeting_by_key.get((final_df.at[_idx, 'Bill'], final_df.at[_idx, 'Date']))
+                if _mt and len(_mt) == 1:          # unambiguous single meeting that day
+                    _t, _st, _comm = next(iter(_mt))
+                    final_df.at[_idx, 'Time'] = _t
+                    final_df.at[_idx, 'SortTime'] = _st
+                    final_df.at[_idx, 'Committee'] = _comm
+                    final_df.at[_idx, 'Origin'] = 'sibling_meeting'
+                    _inherited += 1
+            source_miss_counts["sibling_inherited"] = (
+                source_miss_counts.get("sibling_inherited", 0) + _inherited)
+            if _inherited:
+                print(f"\U0001f517 Sibling-time inheritance: {_inherited} split-action rows "
+                      f"inherited their meeting's time + committee.")
+        except Exception as _sib_err:
+            push_system_alert(
+                f"Sibling-time inheritance failed: {_sib_err}. Rows stay timeless this cycle.",
+                status="WARN", category="DATA_ANOMALY", severity="WARN",
+                dedup_key="sibling_inherit_fail",
+            )
+
         # PR-C7.1g (#66 fold-in): admin_default joins the collapse set — these
         # are structurally-administrative rows we deliberately left timeless;
         # they belong in 📋 Ledger Updates exactly like journal_default /
