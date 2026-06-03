@@ -633,7 +633,23 @@ def _route_for_row(bill_num, session_5d, action_date_str, outcome_text,
         if not cands:
             return ""
         otoks = _legislation_event_token_set(outcome_text)
-        best = max(cands, key=lambda e: len(otoks & _legislation_event_token_set(str(e.get("Description") or ""))))
+        def _overlap(e):
+            return len(otoks & _legislation_event_token_set(str(e.get("Description") or "")))
+        best = max(cands, key=_overlap)
+        # PR-C7.1i: require a NON-ZERO token overlap — the same guard
+        # `_find_legevent_time_in_cache` already enforces (`best_score == 0
+        # -> return None`). `_route_for_row` was the ONLY matcher that
+        # returned a verdict for a 0-overlap, date+chamber-only match, so an
+        # administrative row inherited the route of a DIFFERENT same-date
+        # action. Confirmed: SB41 "Rereferred to Finance and Appropriations"
+        # (admin) picked up the route of that day's "Reported from
+        # Transportation (14-Y 0-N)" (a committee vote → meeting). Zero
+        # shared tokens ⇒ not this row's action; return blank so the X-Ray
+        # falls back to text (which classifies "Rereferred"/"Placed on" as
+        # administrative). The dominant remaining Section-9 false-positive
+        # class (~106 journal_default rows).
+        if _overlap(best) == 0:
+            return ""
         return _route_event(best).route
     except Exception:
         # Observability-only column — never let it break the cycle.
