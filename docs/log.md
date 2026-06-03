@@ -9,6 +9,14 @@ Append-only, reverse-chronological (newest at top). Each entry opens with `## [Y
 
 **Kinds:** `ingest` (new source/doc processed), `pr` (PR opened/merged/closed), `decision` (architectural or workflow), `lint` (wiki health-check pass), `session` (notable multi-hour working block), `post-mortem` (failure analysis), `milestone` (project-goal threshold crossed).
 
+## [2026-06-03] pr | PR-C7.1j — sibling-time inheritance (structural fix for the genuine Section-9 residue, NO dictionary)
+
+After hydration, Section 9 = 190. Owner flagged the risk that fixing it would mean building a per-state admin-word dictionary (the anti-pattern the whole structural pivot eliminated). Probing the LIS LegislationEvent API (owner's "structural join first" call) proved the dictionary was never the answer: the largest genuine residue — "Rereferred to Finance" rows with no time — are NOT misclassified admin words. LIS treats "Reported from X **and rereferred to Y** (vote)" as ONE committee event; HISTORY.CSV splits it into a primary row (with refid) + a secondary "Rereferred to Y" row (EMPTY refid). The worker attributes the secondary row to the destination Y, which didn't meet, so it goes timeless → Ledger. Every such row has a same-(Bill,Date) sibling "Reported from X" that resolved the real committee time. See [[failures/assumptions_audit#65]].
+
+Fix (`Origin=sibling_meeting`): a timeless, MEETING-routed `journal_default`/`floor_miss` row inherits the Time/SortTime/Committee of a same-`(Bill,Date)` resolved committee/floor sibling — only when that meeting time is UNAMBIGUOUS (single distinct resolved time that day; else no guess, Standard #3). Pure structural rule, zero vocabulary, scales to 50 states. New origin registered in `_VALID_ORIGINS` + I3 concrete set (carries a real time) + architecture doc; does NOT collapse to Ledger; new `sibling_inherited` counter (printed in its own log line — it's computed after the SYSTEM_METRICS row is serialized). 4-case unit test (inherits / ambiguous-skip / admin_default-skip / no-sibling-skip). Parse-clean; 15-point audit walked.
+
+Expected: drops the genuine "rereferred/secondary split" chunk of Section 9 after a worker run. (The ~108 governor/signed rows are a separate, self-resolving hydration-lag item — they route admin against the full cache.)
+
 ---
 
 ## [2026-06-03] pr | PR-C7.1i — route matcher 0-overlap guard (the dominant remaining Section-9 false positive)
