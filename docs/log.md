@@ -11,6 +11,14 @@ Append-only, reverse-chronological (newest at top). Each entry opens with `## [Y
 
 ---
 
+## [2026-06-03] pr | PR-C7.1i — route matcher 0-overlap guard (the dominant remaining Section-9 false positive)
+
+Post-hydration (97.8%) Section 9 was 266, not ~3. The residue was ~106 ADMIN rows ("Placed on X Agenda", "Rereferred to Finance") that the structural router routed to MEETING. Root cause (confirmed on SB41): `_route_for_row` matched a row to the best same-`(date,chamber)` cached event via `max(cands, key=token_overlap)` but returned its route EVEN AT ZERO OVERLAP — so "Rereferred to Finance" inherited the route of that day's coincident "Reported from Transportation (14-Y 0-N)" committee vote. The sibling TIME matcher `_find_legevent_time_in_cache` already had the guard (`best_score==0 -> None`); the ROUTE matcher was the only one missing it. Fix: `if _overlap(best)==0: return ""` -> the row falls back to text classification (admin). 4-case unit test. See [[failures/assumptions_audit#64]].
+
+Expected: after merge + one worker run re-writes `LegEventRoute`, Section 9 drops 266 -> ~160 (the ~106 admin false-positives become admin). Remaining ~160 = ~143 blank-route genuine meeting-verbs without a cached-event match + 14 floor_miss (floor_recovered=0) — the next diagnosis.
+
+---
+
 ## [2026-06-03] pr | hotfix — Backfill Burst died on `gh workflow view --json` (no such flag)
 
 The owner stopped the 15-min cron and dispatched the ⏩ Backfill Burst; it **failed in 21s** at the "Snapshot cron state + pause if currently active" step with `unknown flag: --json`. Root cause: the PR #56 Codex-P2 fold-in snapshotted the cron's prior state with `gh workflow view calendar_worker.yml --json state` — but **`gh workflow view` has no `--json` flag** (that's a `gh run`/`gh pr` flag). The step exited 1 and the burst aborted before running a single cycle.
