@@ -11,6 +11,18 @@ Append-only, reverse-chronological (newest at top). Each entry opens with `## [Y
 
 ---
 
+## [2026-06-02] pr | PR-C7.1g — admin-route gate on the journal_default resolver (deferred follow-up, done)
+
+Closes the item deferred from PR-C7.1c's scope. The journal_default LegEvent recovery path computes `_row_route` and, when `route=="meeting"`, recovers via the cache-direct helper; on any miss it fell through to `_resolve_via_legislation_event_api`. That fallback ran for `route=="admin"` rows too — so an administrative action (e.g. a "Governor's Recommendation" / "Bill text as passed" event) could be "recovered" with its ~4 AM document-batch timestamp, putting a structurally-WRONG time on an admin row (Standard #3 violation on the lobbyist surface).
+
+Fix: `if _le_result is None and _row_route == "admin": skip` (increment new `legevent_admin_skipped` counter, surfaced in SYSTEM_METRICS) `elif _le_result is None:` run the resolver as before. Admin rows drop to NO_SCHEDULE_MATCH → Ledger Updates (timeless, correct); blank/meeting/unknown-future routes keep today's behavior unchanged.
+
+**Re-hydration-safe + well-timed:** while the LegEvent cache is still re-filling (PR-C7.1e), routes are mostly `""` (blank), not `"admin"`, so this gate doesn't bite — blank rows still hit the resolver. It only activates once a bill's events are cached AND structurally admin, so shipping it BEFORE re-hydration means the freshly-filled cache produces correct output from the first hydrated cycle. 5-case unit test (admin→skip, meeting+hit→cache-direct, meeting+miss→resolver, blank→resolver, unknown-future→resolver).
+
+**Review fold-in (#66):** the initial commit only skipped the resolver, leaving `origin=="journal_default"` — which (Gemini HIGH) flowed the admin row into the downstream journal_default source-miss block (a per-row TIMING_LAG WARN + `unsourced_journal++` → Bug_Logs flood once hundreds of admin rows hydrate) and (Codex P2) left the top-of-block `legislation_event_attempted++` standing, so X-Ray Section 0's `attempted − recovered` source-gap signal would overstate gaps. Fix: introduced a dedicated terminal origin **`admin_default`** — the admin-skip branch sets `origin="admin_default"`, `time_val="⏱️ [NO_SCHEDULE_MATCH]"`, backs out the attempted increment; the new origin is registered in `_VALID_ORIGINS` (I2) + the Ledger-collapse mask (still lands in 📋 Ledger Updates) and is deliberately excluded from the concrete-source set (I3) and unsourced-meeting set (I4). End-to-end flow test confirms admin→admin_default (no WARN, no unsourced_journal, attempted backed out, collapses) / meeting→honest attempted-recovered / blank→journal_default+WARN unchanged. X-Ray is origin-agnostic on these values. Architecture doc Origin enum + I2 table updated. Parse-clean; 15-point audit walked.
+
+---
+
 ## [2026-06-02] pr | PR #61 + #62 + #63 merged — cache-capacity fix (the real blocker), cron/quiet-hours, legacy post-mortem
 
 Three PRs merged after live verification disproved the earlier "Section 9 closed" claim (see the correction milestone below + [[failures/assumptions_audit#62]]).
