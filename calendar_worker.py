@@ -1274,6 +1274,35 @@ def _get_or_create_legevent_tabs(sheet, push_alert):
     return (_open_or_create(LEGEVENT_BILLS_TAB), _open_or_create(LEGEVENT_EVENTS_TAB))
 
 
+def _clean_legevent_cell(v):
+    """Normalize a nullable LIS structural field to a clean string.
+
+    The LIS API returns JSON null (Python ``None``) for an absent ChamberCode /
+    ReferenceType / ActorType / Status / EventCode. A naive ``str(None)`` yields
+    the literal string ``"None"``. That sentinel is *truthy*, and the failure is
+    silent and asymmetric:
+
+      - Fresh-from-API events keep real ``None`` — the chamber filter's
+        ``e.get("ChamberCode") or ""`` correctly collapses it to "" (None is
+        falsy), so they route fine.
+      - Cache-RELOADED events carry the persisted string ``"None"`` (truthy), so
+        the same filter computes ``ev_chamber="NONE"`` and EXCLUDES the event
+        as a non-matching chamber → ``_route_for_row`` finds no candidate →
+        blank route. This silently starved every cache-loaded Governor event
+        (ChamberCode null) of its route — the Section-9 governor-blank bug.
+        See assumptions_audit #66.
+
+    Collapsing ``None`` and the stringified null sentinels to "" makes
+    cache-loaded and fresh-API events route IDENTICALLY. Never apply to
+    Description (free text may legitimately contain the word "None"); VoteTally
+    is guarded separately on persist (list/dict coercion).
+    """
+    if v is None:
+        return ""
+    s = str(v).strip()
+    return "" if s.lower() in ("none", "null", "nan") else s
+
+
 def _load_legevent_cache(bills_ws, events_ws, push_alert):
     """Load cross-cycle cache from sheet into in-memory dicts.
 
@@ -1374,16 +1403,22 @@ def _load_legevent_cache(bills_ws, events_ws, push_alert):
             session = (row[ei["Session"]] if ei["Session"] < row_len else "").strip()
             if not bill or not session:
                 continue
+            # Normalize nullable structural fields: a persisted literal "None"
+            # (from a prior str(None) on a null API field) is truthy and would
+            # silently mis-route cache-loaded events — see _clean_legevent_cell
+            # / assumptions_audit #66. Description/EventID/EventDate are NOT
+            # normalized (free text / IDs / timestamps never carry null
+            # sentinels we must collapse).
             events_cache.setdefault((bill, session), []).append({
                 "EventID":     row[ei["EventID"]] if ei["EventID"] < row_len else "",
                 "EventDate":   row[ei["EventDate"]] if ei["EventDate"] < row_len else "",
-                "EventCode":   _cell(row, row_len, ei_eventcode),
-                "ChamberCode": row[ei["ChamberCode"]] if ei["ChamberCode"] < row_len else "",
+                "EventCode":   _clean_legevent_cell(_cell(row, row_len, ei_eventcode)),
+                "ChamberCode": _clean_legevent_cell(row[ei["ChamberCode"]] if ei["ChamberCode"] < row_len else ""),
                 "Description": row[ei["Description"]] if ei["Description"] < row_len else "",
-                "ReferenceType": _cell(row, row_len, ei_reftype),
+                "ReferenceType": _clean_legevent_cell(_cell(row, row_len, ei_reftype)),
                 "VoteTally":     _cell(row, row_len, ei_votetally),
-                "ActorType":     _cell(row, row_len, ei_actortype),
-                "Status":        _cell(row, row_len, ei_status),
+                "ActorType":     _clean_legevent_cell(_cell(row, row_len, ei_actortype)),
+                "Status":        _clean_legevent_cell(_cell(row, row_len, ei_status)),
             })
 
     return bills_meta, events_cache
@@ -1725,17 +1760,22 @@ def _persist_legevent_cache(
         for e in events:
             _vt = e.get("VoteTally")
             _vt_str = "" if _vt in (None, "", [], {}) else str(_vt)
+            # Nullable structural fields go through _clean_legevent_cell so a
+            # JSON-null API value persists as "" (not the truthy string "None"
+            # that str(None) would yield) — assumptions_audit #66. EventDate is
+            # cleaned too (a "None" timestamp would defeat _has_real_time's
+            # 'T'-presence check messily). Description is left raw.
             events_rows.append([
                 bill, session,
                 str(e.get("LegislationEventID") or e.get("EventID") or ""),
-                str(e.get("EventDate", "")),
-                str(e.get("ChamberCode", "")),
+                _clean_legevent_cell(e.get("EventDate")),
+                _clean_legevent_cell(e.get("ChamberCode")),
                 str(e.get("Description", ""))[:1000],  # cap per-cell length
-                str(e.get("EventCode", "")),
-                str(e.get("ReferenceType", "")),
+                _clean_legevent_cell(e.get("EventCode")),
+                _clean_legevent_cell(e.get("ReferenceType")),
                 _vt_str[:200],
-                str(e.get("ActorType", "")),
-                str(e.get("Status", "")),
+                _clean_legevent_cell(e.get("ActorType")),
+                _clean_legevent_cell(e.get("Status")),
             ])
     _write_then_clear_trailing(
         events_ws, events_rows, LEGEVENT_EVENTS_TAB, "legevent_events_persist_fail",
