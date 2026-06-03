@@ -1343,7 +1343,7 @@ def _load_legevent_cache(bills_ws, events_ws, push_alert):
 
 def _build_legevent_refresh_queue(
     candidate_bills, current_hashes, bills_meta, session_5d,
-    now_utc, fetch_cap, ttl_seconds,
+    now_utc, fetch_cap, ttl_seconds, events_cache=None,
 ):
     """Build the refresh queue with explicit Tier A → B → C priority.
 
@@ -1352,6 +1352,24 @@ def _build_legevent_refresh_queue(
     organic blend would risk starving uncached bills during cold-start
     while TTL-expirations consume the budget.
 
+    PR-C7.1h: "uncached" means **no cached EVENTS**, not merely "no
+    bills_meta row." A bill that was truncated out of `LegEvent_Events`
+    (the PR-C7.1e cap bug) keeps its `bills_meta` row — `FetchedAtUTC` is
+    set — but has ZERO cached events. The old `cached is None` test
+    classified it as Tier B/C and, because it has metadata, it would even
+    be skipped as "fresh." Meanwhile the already-cached early-alphabet
+    bills perpetually TTL-expire and re-qualify, so the 500/cycle budget
+    re-fetched the SAME ~1,063 bills every cron cycle and the truncation
+    victims were STARVED forever (observed: cache pinned at exactly
+    1,063/3,645 bills across many cycles; `tiers A/B/C=0/0/2645`). Gating
+    Tier A on "no cached events" makes the truncation victims (and the
+    genuine 2027 cold-start, and any future re-truncation) drain FIRST and
+    self-heal via the ordinary cron — no Backfill Burst required.
+
+    `events_cache` is the in-memory `(bill, session) -> [event,...]` map AS
+    OF queue-build time (reloaded from the tab; the negative-cache `[]`
+    seeding happens later, so absent/empty here == genuinely no events).
+
     Returns (queue, tier_counts) where:
       queue:        list of bills (capped at fetch_cap), drained in
                     Tier A → B → C order
@@ -1359,7 +1377,8 @@ def _build_legevent_refresh_queue(
     """
     from datetime import timezone
 
-    tier_a: list = []  # uncached
+    events_cache = events_cache or {}
+    tier_a: list = []  # uncached (no cached events)
     tier_b: list = []  # hash-changed
     tier_c: list = []  # TTL-expired
     skipped_terminal = 0
@@ -1368,7 +1387,10 @@ def _build_legevent_refresh_queue(
     for bill in sorted(candidate_bills):  # sort for deterministic order
         cached = bills_meta.get((bill, session_5d))
         current_hash = current_hashes.get(bill, "")
-        if cached is None:
+        # PR-C7.1h: no metadata OR no cached events ⇒ Tier A (drains first).
+        # `events_cache.get(...)` is None/[] for a truncation victim.
+        has_events = bool(events_cache.get((bill, session_5d)))
+        if cached is None or not has_events:
             tier_a.append(bill)
             continue
         if cached.get("IsTerminal"):
@@ -3436,6 +3458,10 @@ def run_calendar_update():
             now_utc=legevent_now_utc,
             fetch_cap=LEGEVENT_FETCHES_PER_CYCLE,
             ttl_seconds=LEGEVENT_TTL_SECONDS,
+            # PR-C7.1h: pass the reloaded events cache so Tier A = "no cached
+            # events" (truncation victims drain first), not merely "no
+            # metadata row." Must be BEFORE the negative-cache [] seeding.
+            events_cache=_legislation_event_cache,
         )
         source_miss_counts["legevent_tier_a_uncached"]     = legevent_tiers["tier_a"]
         source_miss_counts["legevent_tier_b_hash_changed"] = legevent_tiers["tier_b"]
