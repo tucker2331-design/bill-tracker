@@ -12,7 +12,15 @@ status: active
 
 ## Active focus
 
-**✅ SECTION 9 = 25 — MEASURED on live Sheet1 after #71+#72 merged + a worker cycle (2026-06-03). Down from 1,072 peak / 210 pre-merge = a 97.7% structural reduction. Every remaining row is named; ~15–17 are the proven no-dictionary floor.** Cache is 100% hydrated (3,645/3,645 bills, ~65k events); crossover audit confirmed `meeting_in_ledger 9→0` vs frozen LIS ground truth.
+**✅ SECTION 9 = 10 — MEASURED on the FULL live Sheet1 (65,180 rows processed, 35,491 written) after #74 (ministerial rule) + #75 (window clamp), 2026-06-03. Trajectory: 1,072 peak → 210 → 25 (#71+#72) → 10 (#74). A 99.1% reduction.** Cache 100% hydrated; crossover `meeting_in_ledger` holds 9→0.
+
+**Two things landed this block:**
+
+1. **The ministerial event-type law (#74 / [[failures/assumptions_audit#67]])** — the answer to "can't gamble on an influx next session." The empty-status admin class was 412 timeless signings (404 on sine die), recurring/growing. Resolved dictionary-free: *a deliberative action leaves a vote OR a timestamp; a ministerial record leaves neither.* `compute_ministerial_eventcodes()` derives, from each session's own data, the EventCodes that never (≥20 occ) carry a vote or a real time → Ledger. 33-code set, self-calibrating, zero per-state config. Cleared the 15 signed/placed rows (590 admin rows moved meeting→Ledger, 0 genuine meetings swept).
+
+2. **A silent-data-loss bug, found + fixed (#75 / [[failures/assumptions_audit#68]])** — the first verify run returned "Section 9 = 0" on a 277-row sheet that had **silently dropped crossover week**: `df_past`'s window came from the Session API's sparse 5-event summary, whose min-date intermittently jumps forward (65,180 vs 310 processed on identical inputs), and `df_past.empty` was False so no alert fired. Fixed by clamping the window to never shrink below the pinned investigation floor + hardening `safe_fetch_csv` (retries, 60s timeout, Content-Length completeness). The 65,180-row re-run confirms the sheet is whole again.
+
+**The 10 residue (measured, full sheet, all named — none ballooning):** 3 governor date-drift (HISTORY-vs-LegEvent date mismatch), 2 LIS-published Time-TBA (upstream-empty), 1 rereferred (HB438, #71 conservative non-guess), 4 other (HB447 "Continued…Rule 22" = TBA; HB642 "Conferees appointed"; SJ209 "Reported from P&E" = confirmed NOT in DOCKET.CSV; +1). ~5-6 are upstream-limited (no time exists in any LIS source); ~3 governor are fixable via a date-reconciliation pass.
 
 **Section 9 residue decomposition — BEFORE (210 pre-merge) → AFTER (25 measured):**
 
@@ -69,10 +77,11 @@ The remaining **14 signed-by + 1 placed = 15** are the hard no-dictionary floor;
 - **PR #45** (2026-05-09): PR-C7.0.4 breaker recalibration — `meeting_unsourced_delta` (rolling Y2 baseline) replaces absolute threshold ([[failures/assumptions_audit#53]]).
 - **PR #41-44** (2026-05-05 → 2026-05-06): PR-C7 structural pivot + cold-start hotfixes ([[failures/assumptions_audit#50]], [[failures/assumptions_audit#51]], [[failures/assumptions_audit#52]]).
 
-## Known bug count (MEASURED against live Sheet1, 2026-06-03 post #71+#72 + worker cycle)
+## Known bug count (MEASURED against the FULL live Sheet1, 2026-06-03 post #74+#75 + worker cycle 26914210038)
 
-- **X-Ray Section 9 — route-aware (current production):** **25** ✓ (down from 1,072 peak / 210 pre-merge — a 97.7% reduction). Decomposed: 14 signed-by + 3 governor-date-drift + 3 schedule-gap + 3 LIS-TBA + 1 rereferred + 1 placed. See Active focus table.
-- **Irreducible floor:** ~15–17 (no-dictionary structural floor + upstream-empty TBA). The other ~8 are fixable with care (see candidate micro-fixes).
+- **X-Ray Section 9 — route-aware (current production):** **10** ✓ (down from 1,072 peak / 25 pre-ministerial — a **99.1% reduction**). Measured on the full sheet (65,180 rows processed, 35,491 written). Decomposed: 3 governor-date-drift + 2 LIS-TBA + 1 rereferred + 4 other (HB447 TBA, HB642 conferees, SJ209 not-in-DOCKET, +1).
+- **Influx-proofed:** the dominant former class (empty-status signings/placings) is now handled by the **self-calibrating ministerial law** (#74), so next session's bulk signings are classified from their own data with zero maintenance — no longer a ballooning risk.
+- **Remaining floor:** ~5-6 upstream-limited (no time exists in any LIS source — TBA / not-in-DOCKET / date-only); ~3 governor are fixable via a date-reconciliation pass; 1 rereferred is a #71 conservative non-guess.
 - **Crossover accuracy (frozen LIS ground truth, Feb 9-13):** `meeting_in_ledger` **9 → 0** ✓ at full hydration. The structural correctness check passes.
 - **Worker UNKNOWN_ACTION counter:** 6 (separate path, untouched).
 - **Section 7 (Sheet vs LIS time parity):** 0 ✓.
