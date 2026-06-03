@@ -11,6 +11,18 @@ Append-only, reverse-chronological (newest at top). Each entry opens with `## [Y
 
 ---
 
+## [2026-06-03] pr | PR-C7.1h — Tier A = "no cached events" (fixes the hydration starvation that kept the cache at 29%)
+
+**The cache fix (PR-C7.1e) merged but the cache stayed pinned at exactly 1,063/3,645 bills (29.2%) across 8 hours of cron cycles.** Diagnosed live: PR-C7.1e was correct but DORMANT — the tab only grows when the in-memory events cache exceeds 25k rows, and that cache wasn't growing because the hydration queue never fetched the uncached bills. Root cause: `_build_legevent_refresh_queue` defined Tier A ("uncached, drains FIRST") as **no `bills_meta` row**, but a truncation victim keeps its metadata row (`FetchedAtUTC` set) with ZERO events — so all 2,582 victims were misclassified Tier B/C and mostly skipped as "fresh," while the 1,063 already-cached early-alphabet bills perpetually TTL-expired (6h TTL vs ~3h cron) and re-consumed the 500/cycle budget. Same ~500 HB bills re-fetched every cycle; SB/SR/HJ never reached. Full lesson in [[failures/assumptions_audit#63]] (proxy-vs-actual: "has metadata" ≠ "has events").
+
+**Fix:** Tier A is now `cached is None OR not events_cache.get((bill, session))`. Pass the reloaded events cache into the queue builder (BEFORE the negative-`[]` seeding, so absent/empty == genuinely eventless). Truncation victims + the genuine 2027 cold-start + any future re-truncation now drain in Tier A FIRST and self-heal via the ordinary cron — the Backfill Burst (#56, now merged) is no longer *required*, just faster. Still 500/cycle capped (no fetch storm).
+
+**Validates the owner's original mandate** ("uncached drains FIRST") which the old metadata-based test silently defeated. Unit test: truncation victim with 'fresh' metadata but no events → Tier A (not skipped); genuine cold-start (no metadata) → Tier A; all-cached-fresh → tier_a=0 (regression unchanged); omitted events_cache → safe default. Parse-clean; 15-point audit walked.
+
+**Post-merge:** the next active-hours cron cycle will drain ~500 Tier-A bills, persist them (PR-C7.1e grows the tab), and coverage climbs ~500 bills/cycle → full in ~5-6 active cycles (or one burst). Re-verify with `tools/c7_section9_verify`.
+
+---
+
 ## [2026-06-02] pr | PR #61 + #62 + #63 merged — cache-capacity fix (the real blocker), cron/quiet-hours, legacy post-mortem
 
 Three PRs merged after live verification disproved the earlier "Section 9 closed" claim (see the correction milestone below + [[failures/assumptions_audit#62]]).
