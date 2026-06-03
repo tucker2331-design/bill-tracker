@@ -12,21 +12,28 @@ status: active
 
 ## Active focus
 
-**✅ CACHE FULLY HYDRATED (3,645/3,645 bills, ~65k event rows). Section 9 driven from 1,072 → 210 measured, with two open PRs projecting → ~28.** The cache-starvation era is over (PRs #61/#67 fixed truncation + Tier-A starvation; crossover audit confirmed `meeting_in_ledger 9→0` vs frozen LIS ground truth). Section 9 is now decomposed into named, structural residue classes — **no remaining "mystery" rows.**
+**✅ SECTION 9 = 25 — MEASURED on live Sheet1 after #71+#72 merged + a worker cycle (2026-06-03). Down from 1,072 peak / 210 pre-merge = a 97.7% structural reduction. Every remaining row is named; ~15–17 are the proven no-dictionary floor.** Cache is 100% hydrated (3,645/3,645 bills, ~65k events); crossover audit confirmed `meeting_in_ledger 9→0` vs frozen LIS ground truth.
 
-**Section 9 residue decomposition (measured 2026-06-03, route-aware, live Sheet1 = 210):**
+**Section 9 residue decomposition — BEFORE (210 pre-merge) → AFTER (25 measured):**
 
-| Class | Count | Route/Origin | Status |
-|---|---|---|---|
-| **Governor** (`Governor's Recommendation`, `…received by Senate/House`) | **114** | blank/journal_default | **FIXED → PR #72** (null-cell `"None"` bug; now route admin → Ledger) |
-| **Rereferred to Y** (HISTORY secondary split of "Reported from X and rereferred to Y") | **~69** | meeting/journal_default | **FIXED → PR #71** (sibling-time inheritance from the resolved "Reported from X" meeting) |
-| **Empty-status admin** = `Signed by President/Speaker` (14) + `Placed on Calendar/Agenda` (6) | **~20** | meeting/floor_miss + meeting/journal_default | **IRREDUCIBLE without a dictionary** — see below |
-| **Genuine schedule-gap** = `Reported from P&E (13-Y…)` (SJ209), `Conferees appointed`, `Passed by for the day` | **~4** | meeting/journal_default | Real meetings we failed to time; **#71 may rescue via sibling**; SJ209 is a true DOCKET/schedule miss worth a future look |
-| **LIS Time-TBA** = `Continued pursuant to Rule 22`, 2× COMMITTEE_DRIFT | **3** | api_schedule | **Honest — LIS itself publishes `Time TBA`** (no concrete time exists upstream). Not a bug. |
+| Class | Before | After | Route/Origin | Status |
+|---|---|---|---|---|
+| **Governor** (`Governor's Recommendation`, `…received by Senate/House`) | 114 | **3** | now admin/admin_default | **FIXED → PR #72** (null-cell `"None"`). 111/114 now route admin → Ledger. The **3 residual** are a HISTORY-vs-LegEvent **date drift** (Sheet1 row dated 4/13–4/14 from HISTORY; the LegEvent is 4/11–4/12 "received" / 4/22 "concurred" → exact-date route match misses → blank → text reads "recommend**ation**" as meeting). Reconvene/veto-session edge; candidate micro-fix below. |
+| **Rereferred to Y** (HISTORY secondary split of "Reported from X and rereferred to Y") | ~69 | **1** | meeting/journal_default | **FIXED → PR #71** (sibling-time inheritance). 68/69 cleared. The **1 residual** (HB438) had no unambiguous resolved sibling that day, so #71 correctly declined to guess (Standard #3). |
+| **Empty-status admin** = `Signed by President/Speaker` (14) + `Placed on Calendar` (1 residual) | ~20 | **15** | meeting/floor_miss + journal_default | **IRREDUCIBLE without a dictionary** — see below. (Most "Placed on" cleared via route; 14 signed-by + 1 placed remain.) |
+| **Genuine schedule-gap** = SJ209 `Reported from P&E (13-Y…)`, `Conferees appointed` (HB642), `Passed by for the day` (HB246) | ~4 | **3** | meeting/journal_default | Real meetings we failed to time. **SJ209 is a true DOCKET/schedule miss** — the one legitimately-fixable sliver (committee met, our DOCKET join missed it). |
+| **LIS Time-TBA** = `Continued pursuant to Rule 22` (HB447), COMMITTEE_DRIFT | 3 | **3** | api_schedule | **Honest — LIS itself publishes `Time TBA`** (no concrete time exists upstream). Not a bug. |
+| **TOTAL** | **210** | **25** | | |
+
+**Candidate micro-fixes for the last ~8 (optional — diminishing returns, weigh against risk):**
+1. **3 governor date-drift** → a date-tolerant route match for *unambiguous single-occurrence actor events* (a bill has exactly one Governor's Recommendation per session, so matching by (bill, ActorType=Governor) within ±2 days is structurally safe). Carries a small false-match risk — needs the "single distinct candidate" guard like #71. **OR** treat as a HISTORY-date-accuracy issue (the calendar may be placing the action 1–2 days off LIS's authoritative LegEvent date).
+2. **1 rereferred (HB438)** → inherent #71 limitation; only closes if its sibling resolves.
+3. **SJ209** → DOCKET coverage gap (Senate P&E meeting not joined). The genuinely-fixable schedule-gap.
+The remaining **14 signed-by + 1 placed = 15** are the hard no-dictionary floor; **2 TBA** are upstream-empty. So the irreducible floor is ~15–17 and the rest (~8) are fixable with care.
 
 **The ~20 "empty-status admin" rows are the proven structural floor (honest residue).** Full raw-LIS-event probe (2026-06-03): "Signed by" (`S5620`/`H5620`) and "Placed on Calendar" (`H5220`) are represented *identically* to genuine floor meeting actions on every field the lobbyist-path may use — empty `Status`, no `VoteTally`, `RefType=None`, chamber `ActorType`. The one structural separator is `EventCode`/`LegislationEventTypeID` (a per-state dictionary the owner explicitly rejected — won't scale to 50 states). **Time-presence on the event's own `EventDate` is NOT a clean separator either:** "Placed"/"Signed" are always midnight (0 real-time of 532/2601), but **755 genuine "Read third time" floor reads are also midnight** — so flipping the router's empty-status default to time-presence would clear the 20 admin rows at the cost of misclassifying 755 floor reads to admin (net worse). These 20 are non-actionable for a lobbyist (the minute a JR was signed at sine die; a clerk's calendar placement). **Decision: accept as honest upstream-limited residue.** Literal 0 requires re-admitting a text/EventCode exception → contradicts Standard #3 + #6. Revisit only if the owner accepts a narrow ceremonial exception, OR if LIS publishes an EventType→category reference that lets us derive it at runtime (Standard #5 — the one path that would close it structurally).
 
-**Net projection once #71 + #72 merge + one worker cycle:** 210 → ~27, of which ~20 are the irreducible empty-status admin (signed/placed), 3 are honest LIS Time-TBA, and ~4 are genuine schedule-gaps (#71 may shrink further). **The "desired product" is effectively a ~97% structural reduction (1,072 → ~27) with EVERY remaining row named and explained — no probabilistic guesses, no dictionary, scales to 50 states unchanged. The remaining floor is upstream-limited (LIS structural ambiguity / LIS-published TBA), not an architecture defect.**
+**ACHIEVED (measured, not projected):** 1,072 → **25** after #71 + #72 merged + one worker cycle. ~15–17 are the irreducible floor (14 signed-by + 1 placed empty-status admin + 2 LIS-TBA); the other ~8 (3 governor date-drift, 1 rereferred sibling-miss, SJ209 DOCKET-gap, etc.) are fixable with care but carry diminishing returns / Standard-#3 risk. **The architecture is sound: no probabilistic guesses, no dictionary, scales to 50 states unchanged. The remaining floor is upstream-limited (LIS structural ambiguity / LIS-published TBA / HISTORY-vs-LegEvent date drift), not an architecture defect.**
 
 **Verification method (use this, not full_validate.py):** fetch live Sheet1 via gviz CSV, run both text-only and route-aware `classify_action` against it, cross-tab text-class × route-value on no-time rows. ⚠️ **Read the sheet with `gspread.get_all_values` semantics (raw strings), NOT `pandas.read_csv`** — pandas auto-NaN's the string `"None"` and silently heals the very corruption production chokes on (that masked the Governor bug for weeks; [[failures/assumptions_audit#66]]). The worker SYSTEM_METRICS line (`legevent_floor_recovered`, `legevent_route_admin/meeting/blank`) is the second corroborating source.
 
@@ -40,14 +47,10 @@ status: active
 
 | # | Branch | State | Notes |
 |---|--------|-------|-------|
-| **72** | `claude/pr-c7-1k-legevent-null-normalization` | **Open — Governor blank-route fix (the 114-row residue)** | `_clean_legevent_cell()` collapses JSON-null `"None"` → `""` on persist+load. Clears all 114 Governor rows (route admin → Ledger). Validated with raw-string repro. **Awaiting bot review.** [[failures/assumptions_audit#66]]. |
-| **71** | `claude/pr-c7-1j-sibling-time-inheritance` | **Open — sibling-time inheritance (the ~69 rereferred rows)** | Timeless meeting-routed `journal_default`/`floor_miss` row inherits the resolved time of its same-`(Bill,Date)` committee/floor meeting, ONLY when unambiguous. Zero vocabulary. **Awaiting bot review.** [[failures/assumptions_audit#65]]. |
 | 60 | `docs/forward-calendar-design` | **Open — forward-calendar design (docs)** | 2027 upcoming-meetings surface design. 4 Gemini findings folded in. Design only. **Awaiting bot re-review.** |
 | 56 | `claude/legevent-backfill-burst` | **Open — `⏩ LegEvent Backfill Burst`** | Re-hydration tool. No longer needed for current backfill (cache is full); reserved for 2027 cold-start. `gh api` state-fetch fix pushed. Mergeable anytime. |
 
-**Merge sequencing:** #71 and #72 touch DIFFERENT regions of `calendar_worker.py` (no code conflict) but both append to `assumptions_audit.md` (#65 vs #66) — expect a trivial append conflict on whichever merges second; resolve by keeping both in numeric order. After both merge, dispatch one worker cycle, then re-cross-tab Section 9 (expect ~28).
-
-**Merged earlier this session:** #57, #58 (router UI + floor recovery), #61 (cache capacity), #62 (cadence + quiet hours), #63 (legacy post-mortem), #67 (Tier-A starvation fix), #69 (forward-window foundation), #70 (route 0-overlap guard). See [[log]].
+**Merged this session (Section 9: 1,072 → 25):** #57, #58 (router UI + floor recovery), #61 (cache capacity), #62 (cadence + quiet hours), #63 (legacy post-mortem), #67 (Tier-A starvation fix), #69 (forward-window foundation), #70 (route 0-overlap guard), **#71 (sibling-time inheritance — rereferred 69→1)**, **#72 (LegEvent null-cell normalization — governor 114→3)**. See [[log]].
 
 ## Next up (after this session's merges)
 
@@ -66,10 +69,10 @@ status: active
 - **PR #45** (2026-05-09): PR-C7.0.4 breaker recalibration — `meeting_unsourced_delta` (rolling Y2 baseline) replaces absolute threshold ([[failures/assumptions_audit#53]]).
 - **PR #41-44** (2026-05-05 → 2026-05-06): PR-C7 structural pivot + cold-start hotfixes ([[failures/assumptions_audit#50]], [[failures/assumptions_audit#51]], [[failures/assumptions_audit#52]]).
 
-## Known bug count (MEASURED against live Sheet1, 2026-06-03 post-hydration)
+## Known bug count (MEASURED against live Sheet1, 2026-06-03 post #71+#72 + worker cycle)
 
-- **X-Ray Section 9 — route-aware (current production):** **210** (down from the 1,072 cache-starvation peak). Fully decomposed (see Active focus table): 114 Governor (→ #72) + ~69 rereferred (→ #71) + 14 ceremonial signed-by (irreducible) + ~13 misc tail.
-- **Projected after #71 + #72 merge + one cycle:** **~28** (14 irreducible signed-by + ~13 unmapped misc + 1).
+- **X-Ray Section 9 — route-aware (current production):** **25** ✓ (down from 1,072 peak / 210 pre-merge — a 97.7% reduction). Decomposed: 14 signed-by + 3 governor-date-drift + 3 schedule-gap + 3 LIS-TBA + 1 rereferred + 1 placed. See Active focus table.
+- **Irreducible floor:** ~15–17 (no-dictionary structural floor + upstream-empty TBA). The other ~8 are fixable with care (see candidate micro-fixes).
 - **Crossover accuracy (frozen LIS ground truth, Feb 9-13):** `meeting_in_ledger` **9 → 0** ✓ at full hydration. The structural correctness check passes.
 - **Worker UNKNOWN_ACTION counter:** 6 (separate path, untouched).
 - **Section 7 (Sheet vs LIS time parity):** 0 ✓.
