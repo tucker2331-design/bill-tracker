@@ -28,6 +28,7 @@ from investigation_config import INVESTIGATION_END as _WINDOW_END_STR
 # validated full-scale (943 admin / 103 meeting / 0 drift, 2026-06-01).
 from structural_router import route_event as _route_event
 from structural_router import validate_status_grouping as _validate_status_grouping
+from structural_router import compute_ministerial_eventcodes as _compute_ministerial_eventcodes
 
 print("🚀 Waking up Enterprise Calendar Worker (Turing State Machine v6.0)...")
 
@@ -632,7 +633,8 @@ def _legislation_event_token_set(text):
 
 
 def _route_for_row(bill_num, session_5d, action_date_str, outcome_text,
-                   acting_chamber_code, legislation_event_cache):
+                   acting_chamber_code, legislation_event_cache,
+                   ministerial_codes=frozenset()):
     """PR-C7.1b-1: structural calendar-vs-ledger route for one Sheet1 row.
 
     Cache-lookup-only (NO network — same contract as the row loop's
@@ -682,7 +684,7 @@ def _route_for_row(bill_num, session_5d, action_date_str, outcome_text,
         # class (~106 journal_default rows).
         if _overlap(best) == 0:
             return ""
-        return _route_event(best).route
+        return _route_event(best, ministerial_codes=ministerial_codes).route
     except Exception:
         # Observability-only column — never let it break the cycle.
         return ""
@@ -2099,6 +2101,9 @@ def run_calendar_update():
         "legevent_route_meeting": 0,
         "legevent_route_admin":   0,
         "legevent_route_blank":   0,
+        # PR-C7.1l: count of runtime-derived ministerial EventCodes (event
+        # types that never carry a vote or a real meeting time → ledger).
+        "legevent_ministerial_eventtypes": 0,
         # PR-C7.1c: floor_miss → LegEvent time recovery. Counts rows that
         # would have been tagged ⏱️ [NO_CONVENE_ANCHOR] (floor action,
         # convene anchor missing) but were rescued by LegEvent because the
@@ -3640,6 +3645,27 @@ def run_calendar_update():
                 f"with negative cache (row-loop fetches suppressed)."
             )
 
+        # PR-C7.1l: derive the MINISTERIAL EventCode set from the now-hydrated
+        # cache. An event TYPE whose every occurrence (>= MINISTERIAL_MIN_SAMPLES)
+        # carries neither a vote nor a real meeting timestamp is non-deliberative
+        # (Signed by, Enrolled, Placed on Calendar, Assigned sub, Received, …) →
+        # ledger, not a timed meeting. Dictionary-free + self-calibrating: a new
+        # state's codes or a new LIS event type are judged from their own data.
+        # Closes the empty-status ambiguity that surfaced "Signed by" rows in
+        # X-Ray Section 9 (assumptions_audit #67). Recomputed each cycle; a
+        # sparse cold-start cache just yields a smaller set (graceful, never a
+        # false positive). Passed into every _route_for_row call below.
+        _ministerial_codes = _compute_ministerial_eventcodes(
+            (e for _evs in _legislation_event_cache.values() for e in _evs)
+        )
+        source_miss_counts["legevent_ministerial_eventtypes"] = len(_ministerial_codes)
+        if _ministerial_codes:
+            print(
+                f"🗂️  LegEvent ministerial event types (runtime-derived, ledger-routed): "
+                f"{len(_ministerial_codes)} codes covering "
+                f"{sum(1 for _evs in _legislation_event_cache.values() for e in _evs if str(e.get('EventCode') or '') in _ministerial_codes)} events."
+            )
+
         for _, row in df_past.iterrows():
             source_miss_counts["total_processed"] += 1
             # Tracks whether committee was resolved via Memory Anchor fallback
@@ -3954,6 +3980,7 @@ def run_calendar_update():
                             outcome_text=outcome_text,
                             acting_chamber_code=acting_chamber_prefix.strip()[:1].upper(),
                             legislation_event_cache=_legislation_event_cache,
+                            ministerial_codes=_ministerial_codes,
                         )
                         _floor_recovered = None
                         if _floor_route == "meeting":
@@ -4085,6 +4112,7 @@ def run_calendar_update():
                     outcome_text=outcome_text,
                     acting_chamber_code=acting_chamber_prefix.strip()[:1].upper(),
                     legislation_event_cache=_legislation_event_cache,
+                    ministerial_codes=_ministerial_codes,
                 )
                 if _row_route == "meeting":
                     _row_cached_events = _legislation_event_cache.get(
@@ -4199,6 +4227,7 @@ def run_calendar_update():
                 outcome_text=outcome_text,
                 acting_chamber_code=acting_chamber_prefix.strip()[:1].upper(),
                 legislation_event_cache=_legislation_event_cache,
+                ministerial_codes=_ministerial_codes,
             )
             if legevent_route == "meeting":
                 source_miss_counts["legevent_route_meeting"] += 1
