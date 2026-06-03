@@ -54,6 +54,38 @@ LEGISLATION_EVENT_HEADERS = {
 INVESTIGATION_START = datetime.strptime(_WINDOW_START_STR, "%Y-%m-%d")
 INVESTIGATION_END = datetime.strptime(_WINDOW_END_STR, "%Y-%m-%d")
 
+# === FORWARD CALENDAR (PR-FC1, design in docs/ideas/future_improvements.md) ===
+# How far ahead to surface scheduled-but-not-yet-happened meetings. A timedelta
+# (NOT a bare int) so `today + FORWARD_WINDOW` stays a datetime — mixing a
+# `date` with the worker's tz-naive `datetime` bounds raises TypeError
+# (Gemini PR-#60 finding #1).
+FORWARD_WINDOW = timedelta(days=14)
+
+
+def compute_effective_scrape_end(scrape_end, test_end_date, today,
+                                 forward_window=FORWARD_WINDOW):
+    """Viewport upper bound when surfacing UPCOMING meetings (forward calendar).
+
+    Pure function (no I/O) — unit-tested. All three datetime args must be
+    tz-naive `datetime` (NOT `date`); build `today` from the ET `now` helper
+    normalized to midnight.
+
+    Behavior (Gemini PR-#60 findings baked in):
+      - PINNED / HISTORICAL run (the common case today: VA GA adjourned,
+        scrape_end far in the past): return scrape_end UNCHANGED, so a pinned
+        `INVESTIGATION_END` stays reproducible and the forward extension can't
+        silently scrape the whole session (finding #2).
+      - LIVE run (scrape_end at/after ~today): extend the upper bound to
+        `today + forward_window`, capped at `test_end_date` so we never emit
+        spurious next-session dates.
+
+    "Live" = scrape_end is no older than `forward_window` behind today; a
+    pinned window ending further back than that is treated as historical.
+    """
+    if scrape_end < today - forward_window:
+        return scrape_end  # pinned/historical — never extend (reproducibility)
+    return min(test_end_date, max(scrape_end, today + forward_window))
+
 # === STATIC FALLBACK LEXICON (used only if Committee API is unavailable) ===
 # Validated against session 261 Committee API response on 2026-04-03.
 # Runtime: replaced by build_committee_maps() output from live API.
@@ -2106,6 +2138,12 @@ def run_calendar_update():
         # source (I3 exempt) and NOT an unsourced meeting miss (I4 exempt) —
         # a timeless admin row that collapses into 📋 Ledger Updates.
         "admin_default",
+        # PR-FC1 (forward calendar): a Schedule-API meeting that hasn't
+        # happened yet (meeting_date > today). Carries a real scheduled Time
+        # (not a [NO_*] tag) so it is NOT I3-exempt-only; registered here so
+        # the row-generation increment (PR-FC1b) can emit it without tripping
+        # the I2 origin-enum invariant. No producer yet — registration only.
+        "scheduled_future",
     }
     _REQUIRED_KEYS = {
         "Date", "Time", "SortTime", "Status", "Committee", "Bill",
@@ -2234,6 +2272,15 @@ def run_calendar_update():
     # the bug count grow mechanically every day and hid whether fixes worked.
     scrape_start = INVESTIGATION_START
     scrape_end = INVESTIGATION_END
+    # PR-FC1 (forward calendar): upper bound that extends ahead by FORWARD_WINDOW
+    # ONLY on a live run (no-op while VA GA is adjourned + scrape_end is pinned
+    # in the past — verified: scrape_end=2026-05-01 < today, so this == scrape_end
+    # today). `now` is the tz-naive ET datetime from the top of this function;
+    # normalize to midnight so the window is whole-day.
+    _today_naive = now.replace(hour=0, minute=0, second=0, microsecond=0)
+    effective_scrape_end = compute_effective_scrape_end(
+        scrape_end, test_end_date, _today_naive
+    )
 
     print("🔐 Authenticating with Google Cloud...")
     creds_json = os.environ.get("GCP_CREDENTIALS")
@@ -4304,7 +4351,12 @@ def run_calendar_update():
         final_df = final_df.fillna("")
 
         scrape_start_str = scrape_start.strftime('%Y-%m-%d')
-        scrape_end_str = scrape_end.strftime('%Y-%m-%d')
+        # PR-FC1: slice on the FORWARD-extended upper bound so future-dated
+        # scheduled_future rows survive to Sheet1 (Gemini PR-#60 finding #4:
+        # the viewport slice must use the same extended bound as the fetch,
+        # or future rows are fetched then silently dropped here). No-op today
+        # (effective_scrape_end == scrape_end while the session is pinned/past).
+        scrape_end_str = effective_scrape_end.strftime('%Y-%m-%d')
         # System rows (SYSTEM_ALERT, SYSTEM_METRICS) are stamped with `now`
         # which typically falls outside the investigation window. Exempt them
         # from the viewport slice so X-Ray Section 0 / Bug_Logs can see them.

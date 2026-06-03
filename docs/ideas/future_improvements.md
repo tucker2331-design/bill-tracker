@@ -30,7 +30,8 @@
 - A workflow_dispatch tool that POSTS synthetic Schedule API rows into a test spreadsheet and runs the worker against it. Smoke-tests the full pipeline.
 
 **Sequencing:**
-1. **Step 1 (small):** add the `FORWARD_WINDOW_DAYS` constant + `effective_scrape_end` computation + new `Origin = "scheduled_future"` enum + the viewport extension. Worker fetches and writes future rows. No X-Ray change yet. Verify the Schedule API plumbing.
+1. **Step 1a (DONE — PR-FC1, 2026-06-03):** the date-window FOUNDATION shipped — `FORWARD_WINDOW = timedelta(days=14)` + the pure, unit-tested `compute_effective_scrape_end(scrape_end, test_end_date, today)` (both Gemini #1 tz-safety + #2 pinned-reproducibility findings baked in: pinned/historical runs return scrape_end unchanged, live runs extend +14d capped at session end), wired into the viewport slice (Gemini #4), and `scheduled_future` registered in `_VALID_ORIGINS`. **Verified no-op on the current adjourned session** (scrape_end pinned in the past). NO producer yet.
+   - **Step 1b (next):** the row-GENERATION — turn Schedule-API meetings with `meeting_date > today` into `scheduled_future` master_events rows (the risky part; touches the Schedule-API→rows path). Worker writes future rows. Still no X-Ray change.
 2. **Step 2 (small):** X-Ray Section X — read `Origin = "scheduled_future"` rows, render as upcoming-meetings widget.
 3. **Step 3 (med):** dedup + reconciliation — when HISTORY catches up to a previously-future meeting, suppress the duplicate. Test the boundary handoff.
 4. **Step 4 (synthetic-test):** ship the workflow_dispatch tool with synthetic-injection capability so we can validate the 2027 flow without waiting for January.
