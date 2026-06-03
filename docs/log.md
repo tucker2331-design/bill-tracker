@@ -21,6 +21,18 @@ Fix: use the REST API — `gh api "repos/${{ github.repository }}/actions/workfl
 
 After merge: re-dispatch the burst — it'll snapshot `active` → disable the cron → run N cycles (now hydrating correctly thanks to PR-C7.1h) → re-enable.
 
+## [2026-06-03] pr | PR-FC1 — forward-calendar date-window foundation (Step 1a)
+
+First increment of the forward calendar (the future-proofing feature). Ships ONLY the date-window foundation — the part Gemini found two real bugs in (#60 review) — fully unit-tested and a verified no-op on the current adjourned session, so it can't perturb the just-stabilized pipeline.
+
+- `FORWARD_WINDOW = timedelta(days=14)` + pure `compute_effective_scrape_end(scrape_end, test_end_date, today)`. Pinned/historical runs (today's real state: `scrape_end=2026-05-01` < today) return `scrape_end` UNCHANGED (Gemini #2 reproducibility); a LIVE run extends the upper bound +14d, capped at `test_end_date` (no spurious next-session dates). All-datetime operands (Gemini #1 tz-safety — no `date`/`datetime` TypeError).
+- Wired into the viewport slice (`scrape_end_str = effective_scrape_end.strftime(...)`) so future-dated rows will survive to Sheet1 once generated (Gemini #4 fetch/slice-bound parity). No-op now.
+- `scheduled_future` registered in `_VALID_ORIGINS` (I2) + architecture-doc origin enum. **No producer yet** — registration only.
+
+5-case date-logic unit test passes (pinned-no-extend / live-extend / cap-at-session-end / within-window-behind / no-TypeError). Parse-clean.
+
+**Next: Step 1b** — the row-generation (Schedule-API meetings with `meeting_date > today` → `scheduled_future` rows). That's the riskier increment (touches the Schedule-API→rows path); deliberately split out so this foundation lands clean. Full plan in [[ideas/future_improvements#Forward-calendar block]].
+
 ---
 
 ## [2026-06-03] pr | PR-C7.1h — Tier A = "no cached events" (fixes the hydration starvation that kept the cache at 29%)
