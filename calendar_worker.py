@@ -29,6 +29,8 @@ from investigation_config import INVESTIGATION_END as _WINDOW_END_STR
 from structural_router import route_event as _route_event
 from structural_router import validate_status_grouping as _validate_status_grouping
 from structural_router import compute_ministerial_eventcodes as _compute_ministerial_eventcodes
+from structural_router import build_admin_recovery_index as _build_admin_recovery_index
+from structural_router import recover_admin_route as _recover_admin_route
 
 print("🚀 Waking up Enterprise Calendar Worker (Turing State Machine v6.0)...")
 
@@ -634,7 +636,7 @@ def _legislation_event_token_set(text):
 
 def _route_for_row(bill_num, session_5d, action_date_str, outcome_text,
                    acting_chamber_code, legislation_event_cache,
-                   ministerial_codes=frozenset()):
+                   ministerial_codes=frozenset(), admin_recovery_index=frozenset()):
     """PR-C7.1b-1: structural calendar-vs-ledger route for one Sheet1 row.
 
     Cache-lookup-only (NO network — same contract as the row loop's
@@ -644,50 +646,56 @@ def _route_for_row(bill_num, session_5d, action_date_str, outcome_text,
     full-validation tool), then returns
     `structural_router.route_event(best).route` — "meeting" or "admin".
 
-    Returns "" when there's no cached event to route from (no hydrated
-    events for the bill, or none on this date). "" means "router had
-    nothing to say" — the row keeps today's text-based placement; this PR
-    never acts on the route, only records it. Never raises.
+    PR-C7.1n: when that primary (exact-date) match yields no route (no event,
+    no same-date candidate, or 0-overlap — typically a HISTORY-vs-LegEvent date
+    drift on a reconvene/governor/conference action), fall back to
+    `recover_admin_route`: look the outcome up in LIS's OWN EventType reference
+    (admin_recovery_index) and route ADMIN if every EventCode LIS maps that
+    description to is admin. Recovers an admin route without an exact event
+    match and WITHOUT a hand-authored text pattern; asserts admin only, so it
+    can never manufacture a false meeting. Never raises.
     """
+    route = ""
     try:
         events = legislation_event_cache.get((bill_num, session_5d)) or []
-        if not events:
-            return ""
-        date10 = str(action_date_str or "")[:10]
-        cands = []
-        for e in events:
-            if not isinstance(e, dict):
-                continue
-            if str(e.get("EventDate") or "")[:10] != date10:
-                continue
-            ev_chamber = str(e.get("ChamberCode") or "").strip().upper()
-            if acting_chamber_code and ev_chamber and ev_chamber != acting_chamber_code:
-                continue
-            cands.append(e)
-        if not cands:
-            return ""
-        otoks = _legislation_event_token_set(outcome_text)
-        def _overlap(e):
-            return len(otoks & _legislation_event_token_set(str(e.get("Description") or "")))
-        best = max(cands, key=_overlap)
-        # PR-C7.1i: require a NON-ZERO token overlap — the same guard
-        # `_find_legevent_time_in_cache` already enforces (`best_score == 0
-        # -> return None`). `_route_for_row` was the ONLY matcher that
-        # returned a verdict for a 0-overlap, date+chamber-only match, so an
-        # administrative row inherited the route of a DIFFERENT same-date
-        # action. Confirmed: SB41 "Rereferred to Finance and Appropriations"
-        # (admin) picked up the route of that day's "Reported from
-        # Transportation (14-Y 0-N)" (a committee vote → meeting). Zero
-        # shared tokens ⇒ not this row's action; return blank so the X-Ray
-        # falls back to text (which classifies "Rereferred"/"Placed on" as
-        # administrative). The dominant remaining Section-9 false-positive
-        # class (~106 journal_default rows).
-        if _overlap(best) == 0:
-            return ""
-        return _route_event(best, ministerial_codes=ministerial_codes).route
+        if events:
+            date10 = str(action_date_str or "")[:10]
+            cands = []
+            for e in events:
+                if not isinstance(e, dict):
+                    continue
+                if str(e.get("EventDate") or "")[:10] != date10:
+                    continue
+                ev_chamber = str(e.get("ChamberCode") or "").strip().upper()
+                if acting_chamber_code and ev_chamber and ev_chamber != acting_chamber_code:
+                    continue
+                cands.append(e)
+            if cands:
+                otoks = _legislation_event_token_set(outcome_text)
+                def _overlap(e):
+                    return len(otoks & _legislation_event_token_set(str(e.get("Description") or "")))
+                best = max(cands, key=_overlap)
+                # PR-C7.1i: require a NON-ZERO token overlap — the same guard
+                # `_find_legevent_time_in_cache` already enforces (`best_score == 0
+                # -> return None`). `_route_for_row` was the ONLY matcher that
+                # returned a verdict for a 0-overlap, date+chamber-only match, so an
+                # administrative row inherited the route of a DIFFERENT same-date
+                # action. Confirmed: SB41 "Rereferred to Finance and Appropriations"
+                # (admin) picked up the route of that day's "Reported from
+                # Transportation (14-Y 0-N)" (a committee vote → meeting). Zero
+                # shared tokens ⇒ not this row's action.
+                if _overlap(best) != 0:
+                    route = _route_event(best, ministerial_codes=ministerial_codes).route
     except Exception:
         # Observability-only column — never let it break the cycle.
-        return ""
+        route = ""
+    # PR-C7.1n: EventType-reference admin recovery for an unresolved (blank) route.
+    if not route:
+        try:
+            route = _recover_admin_route(outcome_text, admin_recovery_index)
+        except Exception:
+            route = ""
+    return route
 
 
 def _find_legevent_time_in_cache(
@@ -2142,6 +2150,9 @@ def run_calendar_update():
         # PR-C7.1l: count of runtime-derived ministerial EventCodes (event
         # types that never carry a vote or a real meeting time → ledger).
         "legevent_ministerial_eventtypes": 0,
+        # PR-C7.1n: count of LIS EventType-reference descriptions that recover an
+        # admin route for date-drift-blank rows (governor/conference/reconvene).
+        "legevent_admin_recovery_descs": 0,
         # PR-C7.1c: floor_miss → LegEvent time recovery. Counts rows that
         # would have been tagged ⏱️ [NO_CONVENE_ANCHOR] (floor action,
         # convene anchor missing) but were rescued by LegEvent because the
@@ -3719,6 +3730,41 @@ def run_calendar_update():
                 f"{sum(1 for _evs in _legislation_event_cache.values() for e in _evs if str(e.get('EventCode') or '') in _ministerial_codes)} events."
             )
 
+        # PR-C7.1n: build the EventType-reference admin-recovery index from LIS's
+        # OWN published EventCode<->description table. Used to recover an ADMIN
+        # route for a row whose event couldn't be matched by date (HISTORY-vs-
+        # LegEvent date drift on governor/conference/reconvene actions) — instead
+        # of a hand text pattern, look the outcome up in LIS's vocabulary and
+        # route admin only when every mapped EventCode is admin. Read-only,
+        # degrades to an empty index (no-op) on any fetch failure.
+        _admin_recovery_index = frozenset()
+        try:
+            _etref = http_session.get(
+                "https://lis.virginia.gov/LegislationEvent/api/getlegislationeventtypereferencesasync",
+                headers=LEGISLATION_EVENT_HEADERS, params={"sessionCode": _session_code_5d}, timeout=15,
+            )
+            if _etref.status_code == 200:
+                _etj = _etref.json()
+                _etitems = _etj if isinstance(_etj, list) else next(
+                    (v for v in _etj.values() if isinstance(v, list)), []) if isinstance(_etj, dict) else []
+                _admin_recovery_index = _build_admin_recovery_index(_etitems, _ministerial_codes)
+            else:
+                push_system_alert(
+                    f"EventType reference fetch HTTP {_etref.status_code}; admin-recovery disabled "
+                    f"this cycle (date-drifted governor/conference rows fall back to text).",
+                    status="WARN", category="API_FAILURE", severity="WARN",
+                    dedup_key="eventtype_ref_fetch_fail",
+                )
+        except Exception as _eterr:
+            push_system_alert(
+                f"EventType reference fetch failed: {_eterr}. Admin-recovery disabled this cycle.",
+                status="WARN", category="API_FAILURE", severity="WARN",
+                dedup_key="eventtype_ref_fetch_fail",
+            )
+        source_miss_counts["legevent_admin_recovery_descs"] = len(_admin_recovery_index)
+        if _admin_recovery_index:
+            print(f"🗂️  EventType admin-recovery descriptions (LIS reference): {len(_admin_recovery_index)}.")
+
         for _, row in df_past.iterrows():
             source_miss_counts["total_processed"] += 1
             # Tracks whether committee was resolved via Memory Anchor fallback
@@ -4034,6 +4080,7 @@ def run_calendar_update():
                             acting_chamber_code=acting_chamber_prefix.strip()[:1].upper(),
                             legislation_event_cache=_legislation_event_cache,
                             ministerial_codes=_ministerial_codes,
+                            admin_recovery_index=_admin_recovery_index,
                         )
                         _floor_recovered = None
                         if _floor_route == "meeting":
@@ -4166,6 +4213,7 @@ def run_calendar_update():
                     acting_chamber_code=acting_chamber_prefix.strip()[:1].upper(),
                     legislation_event_cache=_legislation_event_cache,
                     ministerial_codes=_ministerial_codes,
+                    admin_recovery_index=_admin_recovery_index,
                 )
                 if _row_route == "meeting":
                     _row_cached_events = _legislation_event_cache.get(
@@ -4281,6 +4329,7 @@ def run_calendar_update():
                 acting_chamber_code=acting_chamber_prefix.strip()[:1].upper(),
                 legislation_event_cache=_legislation_event_cache,
                 ministerial_codes=_ministerial_codes,
+                admin_recovery_index=_admin_recovery_index,
             )
             if legevent_route == "meeting":
                 source_miss_counts["legevent_route_meeting"] += 1
