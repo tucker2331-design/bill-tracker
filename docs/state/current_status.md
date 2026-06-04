@@ -12,9 +12,16 @@ status: active
 
 ## Active focus
 
-**✅ SECTION 9 = 7 (projected; run in flight) — the upstream-limited floor — after #77 (EventType-reference admin recovery). Trajectory: 1,072 → 210 → 25 (#71+#72) → 10 (#74) → 7 (#77). A 99.3% reduction.** Cache 100% hydrated; crossover `meeting_in_ledger` holds 9→0.
+**✅ SECTION 9 = 6, converging to ~4 as the cache re-hydrates — after the LegEvent structural-join recovery (#81/#82). Trajectory: 1,072 → 210 → 25 → 10 → 7 → 6→~4. ~99.5% reduction, zero fabricated times.** Cache 100% hydrated; crossover `meeting_in_ledger` holds 9→0.
 
-**The 7 are the proven irreducible floor — all GENUINELY lack a concrete time in any LIS source (deep-dive [[failures/assumptions_audit#69]]):** SJ209 "Reported from P&E" (Senate P&E meets **"15 minutes after adjournment"** — a relative time, no clock value; confirmed not in DOCKET), HB447/HB919/SB834 (LIS-published `Time TBA`), HB642 conferees (procedural, 5 AM doc-artifact only), HB246 reconvene passed-by, HB438 (#71 conservative non-guess). Surfacing a time for any of these would be **inventing data** (Standard #3 forbids). This is a complete, structurally-correct lobbyist surface: every row shown, none with a fabricated time.
+**The owner pushed past "upstream-limited": several timeless rows weren't missing a TIME, they were missing a JOIN.** The fix (#81, regression-fixed by #82 — [[failures/assumptions_audit#71]]) recovers a timeless meeting row from its matched LegEvent's OWN published structural fields: `CommitteeName` → that committee's scheduled meeting time (the committee it actually met in — e.g. HB438's rereferral → Senate Courts of Justice 8:00 AM); no committee + chamber `ActorType` → that chamber's convene time (HB642/HB246 floor actions → 12:00 PM). Dictionary-free, scales to 50 states. **HB642 already recovered; HB438/HB246 land their times once `CommitteeName` back-fills (6h TTL / a backfill burst).**
+
+**Also this block:**
+- **#79 (relative-time sort fix):** committees that meet "X min after adjournment" now sort to their real after-adjournment slot (Senate adjourned-time + offset), not convene+1min — ~168 committees re-ordered correctly. Display time stays LIS's published relative string (LIS-parity). [[failures/assumptions_audit#70]].
+- **#80 (forward calendar Step 1b):** the producer — future Schedule meetings tagged `scheduled_future`. Verified no-op on the adjourned session; activates 2027.
+- **The regression I caught (#82):** #81's first cut didn't persist `CommitteeName`, so it timed committee reports as floor actions (SJ209 → wrong 10:00 AM). Caught by verifying the ROW, not the count. Fixed with a 3-state sentinel (name / "" floor / "?" unknown-refuse).
+
+**SJ209 is the one genuinely irreducible row:** P&E voted 13-Y on 3/10 but LIS published NO 3/10 P&E meeting — the time exists in no source (only the forbidden "15-min-after-adjournment" pattern guess). The remaining floor (~4) = SJ209 + HB447/HB919/SB834 (House committees with empty published schedule times).
 
 **Three things landed this block (#74, #75, #77):**
 
