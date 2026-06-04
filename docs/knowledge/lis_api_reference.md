@@ -1,6 +1,6 @@
 ---
 tags: [knowledge, lis, api]
-updated: 2026-04-25
+updated: 2026-06-03
 status: active
 ---
 
@@ -98,7 +98,23 @@ PR-C3+)_ are queued for integration.
 - Returns `{"References":[{"LegislationStatusID":int,"Name":str,"DisplayName":str, ["LegislationVersionID":int]}, …]}`.
 - **52 entries** as of session 20261 (50 unique `Name`s — "Governor's Veto"/"Governor's Recommendation" each appear twice with different IDs). `Name` is what the per-event `Status` field carries (e.g. "Enrolled-House", "In House"); `DisplayName` is LIS's coarser label (e.g. "Enrolled-House" → "Enrolled").
 - **Use:** the PR-C7.1b structural router groups these `Name`s into meeting (in-session: "In House", "Engrossed", "Reported Out-*", readings, conference, blank) vs admin (post-passage/clerical: "Enrolled-*", "Pending Governor's Communication", "Awaiting Governor's Action", "Approved", "Acts of Assembly Chapter", …). Grouping lives in `tools/c7_1b_eventcode_namespace/structural_router.py` (`ADMIN_PIPELINE_STATUSES` / `MEETING_INSESSION_STATUSES`); `validate_status_grouping()` checks our grouping covers the live list every run and alerts on a new/unseen status. Owner-approved as "consuming the source," not a banned dictionary.
-- **Sibling probes that 404'd** (do not retry): `GetLegislationEventTypeListAsync`, `GetReferenceTypeListAsync`, `GetEventTypeListAsync` under both `/Legislation` and `/LegislationEvent`. The Status list is the one that exists. `ReferenceType`/`LegislationEventType` controllers return the SPA HTML shell (no API).
+- **Sibling probes that 404'd** (do not retry): `GetLegislationEventTypeListAsync`, `GetReferenceTypeListAsync`, `GetEventTypeListAsync` under both `/Legislation` and `/LegislationEvent`. But the **`…ReferencesAsync`** form DOES exist — see next.
+
+### LegislationEvent type reference — the controlled EventCode vocabulary (discovered 2026-06-03)
+
+`GET https://lis.virginia.gov/LegislationEvent/api/GetLegislationEventTypeReferencesAsync?sessionCode=20261` (auth: `FCE351B6-…` key)
+
+- Returns **3,912 entries** for 20261, each keyed by `EventCode` (LIS's structural identifier, e.g. `S5620`, `H4130`, `G7210`) with fields: `LegislationDescription`, `CalendarDescription`, `JournalDescription`, `VoteDescription`, `LegislationChamberCode`, `ActorTypeID`, **`AdministrativeAction`**, **`IsPassage`**, `IsPassed`, `CommitteeComplete`, `CommitteeDescription`, `IsPublic`, `IsActive`, `ReconsiderationDescription`, `ActionReferences`, `EventReferences`.
+- **This is LIS's own EventCode↔description map — the authoritative join between a HISTORY/event description and its structural EventCode.**
+- **What the flags do and DON'T give you:**
+  - `AdministrativeAction=true` flags only **37 SESSION-procedural** types (Adjourn, Call to Order, Period of Devotions, Elections) — NOT bill admin actions. "Signed by President" / "Placed on Calendar" are `AdministrativeAction=false`. **So it is NOT a meeting-vs-admin flag for bill actions** — don't use it as one.
+  - `IsPassage=true` (68 codes) = passage votes (already caught by VoteTally).
+  - `CommitteeComplete=true` (~2,372 codes) marks committee-context events.
+  - There is **no clean meeting/admin category field.** The meeting/admin split must still be derived structurally (vote/timestamp/ministerial/G-prefix/Status).
+- **Uses (PR-C7.1n):**
+  1. **Admin recovery for date-drift-blank rows** — `build_admin_recovery_index()` / `recover_admin_route()` in `structural_router.py`: when a row can't be matched to its event by date (HISTORY date vs LegEvent date drift 1-9 days on governor/conference/reconvene actions), look the outcome up in these descriptions and route admin iff every mapped EventCode is admin (G-prefix or ministerial). Dictionary-free (LIS's own vocabulary), zero maintenance. See [[failures/assumptions_audit#69]].
+  2. **The ministerial law** ([[failures/assumptions_audit#67]]) uses per-EventCode timestamp/vote behavior from the cache; the reference's canonical descriptions make it auditable.
+- **Further standardization opportunities (not yet built):** (a) an EventCode drift monitor — alert when a data EventCode is absent from this reference (LIS added a new type), the EventCode analogue of `validate_status_grouping`; (b) extend recovery to re-anchor a row to its authoritative LegEvent date (fixes the date-drift at the join key, not just the route).
 
 ## Currently integrated endpoints (used by `calendar_worker.py`)
 
@@ -196,6 +212,8 @@ PR-C3+)_ are queued for integration.
 - `History_refid` may be empty for some action types (floor actions, executive actions).
 - `sessionCode` is silently ignored on Schedule API but strictly enforced on new MVC endpoints (and in 5-digit form only there).
 - Two distinct WebAPIKeys are required across the API surface — neither alone covers all endpoints.
+- **Schedule entries can carry a RELATIVE time, not a clock time** (discovered 2026-06-03). Senate committee meetings are routinely scheduled as `Description="15 minutes after adjournment of the Senate"` with `ScheduleTime` empty — there is **no concrete wall-clock time to surface**. This is a real upstream limitation (not a join bug): e.g. SJ209 "Reported from Privileges and Elections" is genuinely timeless because Senate P&E meets "after adjournment", not at a fixed minute. Don't chase these as fixable — they're the honest no-concrete-time floor (Section 9 #69).
+- **HISTORY action date vs LegislationEvent date DRIFT 1-9 days** for governor / conference / reconvene actions (discovered 2026-06-03). The HISTORY.CSV date is NOT always the authoritative event date; the LegislationEvent date is. Any exact-date join between a HISTORY row and a LegEvent will miss these. Key off EventCode (via the EventType reference), not the date. See [[failures/assumptions_audit#69]].
 
 ## See also
 
