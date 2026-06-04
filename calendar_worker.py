@@ -830,6 +830,36 @@ def _find_legevent_time_in_cache(
     return (time_12h, sort_time_24h, "")
 
 
+def _plausible_meeting_time(eventdate_raw):
+    """Render a LegEvent EventDate to (12h, 24h) ONLY when the clock time falls in
+    plausible legislative-meeting hours [07:00–23:00]. LIS stamps non-meeting
+    events with document-batch artifacts (00:00 / 04:00 / 05:00); a meeting
+    actually held lands in business/evening hours. Heuristic, last-resort only —
+    documented as an assumption (assumptions_audit #72): used solely to time a
+    row that has NO other source, and bounded so an artifact can never leak
+    through. Returns None when out of range / unparseable."""
+    s = str(eventdate_raw or "")
+    if "T" in s:
+        t = s.split("T", 1)[1]
+    elif " " in s:
+        t = s.split(" ", 1)[1]
+    else:
+        return None
+    try:
+        h = int(t[0:2]); m = int(t[3:5])
+    except (ValueError, IndexError):
+        return None
+    if not (7 <= h <= 23 and 0 <= m <= 59):
+        return None
+    if h < 12:
+        ampm = f"{h}:{m:02d} AM"
+    elif h == 12:
+        ampm = f"12:{m:02d} PM"
+    else:
+        ampm = f"{h - 12}:{m:02d} PM"
+    return (ampm, f"{h:02d}:{m:02d}")
+
+
 def _recover_time_via_legevent_committee(
     events, action_date_str, acting_chamber_code, outcome_text,
     api_schedule_map, convene_times,
@@ -902,13 +932,23 @@ def _recover_time_via_legevent_committee(
                 if normalize_room_key(k.split("_", 1)[1]) == target and not _is_non_concrete_time(v.get("Time", "")):
                     return (v.get("Time"), v.get("SortTime"), v.get("Status", "Scheduled"),
                             k.split("_", 1)[1], "api_schedule")
+            # Committee not scheduled with a concrete time (e.g. a subcommittee
+            # LIS published with an empty time). Last resort: the matched event's
+            # OWN timestamp — but only when it's a plausible meeting time.
+            _ts = _plausible_meeting_time(best.get("EventDate"))
+            if _ts:
+                return (_ts[0], _ts[1], "Scheduled", f"{chamber} {cmte}".strip(), "legislation_event")
             return None
         if chamber:
-            # Floor action → the chamber's floor-session convene time.
+            # Floor action → the chamber's floor-session convene time, else the
+            # event's own plausible timestamp.
             anchor = convene_times.get(action_date_str, {}).get(chamber)
             if anchor and not _is_non_concrete_time(anchor.get("Time", "")):
                 return (anchor.get("Time"), anchor.get("SortTime"), "Scheduled",
                         anchor.get("Name", f"{chamber} Floor"), "convene_anchor")
+            _ts = _plausible_meeting_time(best.get("EventDate"))
+            if _ts:
+                return (_ts[0], _ts[1], "Scheduled", f"{chamber} Floor", "legislation_event")
         return None
     except Exception:
         return None
@@ -4200,6 +4240,23 @@ def run_calendar_update():
                 matched_name = matched_api_key.split("_", 1)[1]
                 if normalize_room_key(matched_name) != normalize_room_key(event_location):
                     event_location = matched_name
+                # PR-C7.1q: the matched committee meeting has NO concrete time
+                # (LIS published it as "Time TBA"/empty). The row's text-based
+                # committee attribution may be wrong — try the LegEvent's
+                # AUTHORITATIVE CommitteeName: it may reveal a FLOOR action
+                # mis-filed under a committee (→ convene time) or carry a real
+                # timestamp. Only fires on a TBA row, only when CommitteeName is
+                # known (not "?"), and only ADOPTS a concrete result — so it can
+                # never make a TBA row worse. assumptions_audit #72.
+                if _is_non_concrete_time(time_val):
+                    _ctx = _recover_time_via_legevent_committee(
+                        _legislation_event_cache.get((bill_num, _session_code_5d)) or [],
+                        date_str, acting_chamber_prefix.strip()[:1].upper(),
+                        outcome_text, api_schedule_map, convene_times,
+                    )
+                    if _ctx is not None:
+                        time_val, sort_time_24h, status, event_location, origin = _ctx
+                        source_miss_counts["legevent_context_recovered"] += 1
 
             if "Floor" in event_location:
                 anchor = convene_times.get(date_str, {}).get(acting_chamber_prefix.strip())
