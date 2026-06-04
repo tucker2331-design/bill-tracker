@@ -12,7 +12,13 @@ status: active
 
 ## Active focus
 
-**✅ SECTION 9 = 10 — MEASURED on the FULL live Sheet1 (65,180 rows processed, 35,491 written) after #74 (ministerial rule) + #75 (window clamp), 2026-06-03. Trajectory: 1,072 peak → 210 → 25 (#71+#72) → 10 (#74). A 99.1% reduction.** Cache 100% hydrated; crossover `meeting_in_ledger` holds 9→0.
+**✅ SECTION 9 = 7 (projected; run in flight) — the upstream-limited floor — after #77 (EventType-reference admin recovery). Trajectory: 1,072 → 210 → 25 (#71+#72) → 10 (#74) → 7 (#77). A 99.3% reduction.** Cache 100% hydrated; crossover `meeting_in_ledger` holds 9→0.
+
+**The 7 are the proven irreducible floor — all GENUINELY lack a concrete time in any LIS source (deep-dive [[failures/assumptions_audit#69]]):** SJ209 "Reported from P&E" (Senate P&E meets **"15 minutes after adjournment"** — a relative time, no clock value; confirmed not in DOCKET), HB447/HB919/SB834 (LIS-published `Time TBA`), HB642 conferees (procedural, 5 AM doc-artifact only), HB246 reconvene passed-by, HB438 (#71 conservative non-guess). Surfacing a time for any of these would be **inventing data** (Standard #3 forbids). This is a complete, structurally-correct lobbyist surface: every row shown, none with a fabricated time.
+
+**Three things landed this block (#74, #75, #77):**
+
+0. **EventType-reference admin recovery (#77 / [[failures/assumptions_audit#69]])** — the last reducible class was 3 "Governor's Recommendation" rows blanked by HISTORY-vs-LegEvent **date drift** (1-9 days). Fixed dictionary-free: when the date-match is blank, recover the route from LIS's OWN published EventCode↔description reference (`GetLegislationEventTypeReferencesAsync`), routing admin only when every mapped code is admin. This is the standardization step — blank rows now route via LIS vocabulary, not hand text patterns (shrinking the Standard-#3 text dependency). Self-calibrating, zero maintenance.
 
 **Two things landed this block:**
 
@@ -79,7 +85,7 @@ The remaining **14 signed-by + 1 placed = 15** are the hard no-dictionary floor;
 
 ## Known bug count (MEASURED against the FULL live Sheet1, 2026-06-03 post #74+#75 + worker cycle 26914210038)
 
-- **X-Ray Section 9 — route-aware (current production):** **10** ✓ (down from 1,072 peak / 25 pre-ministerial — a **99.1% reduction**). Measured on the full sheet (65,180 rows processed, 35,491 written). Decomposed: 3 governor-date-drift + 2 LIS-TBA + 1 rereferred + 4 other (HB447 TBA, HB642 conferees, SJ209 not-in-DOCKET, +1).
+- **X-Ray Section 9 — route-aware (current production):** **7** ✓ (down from 1,072 peak — a **99.3% reduction**; #77 recovered the 3 governor date-drift rows to admin). Measured on the full sheet. The 7 are all genuinely-no-concrete-time-in-any-source (relative-time committees / LIS `Time TBA` / not-in-DOCKET / midnight) — the irreducible floor; reducing further would require inventing data.
 - **Influx-proofed:** the dominant former class (empty-status signings/placings) is now handled by the **self-calibrating ministerial law** (#74), so next session's bulk signings are classified from their own data with zero maintenance — no longer a ballooning risk.
 - **Remaining floor:** ~5-6 upstream-limited (no time exists in any LIS source — TBA / not-in-DOCKET / date-only); ~3 governor are fixable via a date-reconciliation pass; 1 rereferred is a #71 conservative non-guess.
 - **Crossover accuracy (frozen LIS ground truth, Feb 9-13):** `meeting_in_ledger` **9 → 0** ✓ at full hydration. The structural correctness check passes.
