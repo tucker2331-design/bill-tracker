@@ -873,7 +873,16 @@ def _recover_time_via_legevent_committee(
         best = max(matching, key=lambda e: len(otoks & _legislation_event_token_set(str(e.get("Description") or ""))))
         if len(otoks & _legislation_event_token_set(str(best.get("Description") or ""))) == 0:
             return None  # coincidental same-date event, not this row's action
-        cmte = str(best.get("CommitteeName") or "").strip()
+        # CommitteeName "?" = the matched event predates the persisted column
+        # (pre-PR-C7.1p cache row): we don't yet know if it's a committee or a
+        # floor action, so REFUSE to recover rather than mis-time a committee
+        # report as a floor convene (the SJ209 regression). The real value
+        # back-fills on the bill's next API fetch. None/"" = a known floor
+        # action (LIS returns no committee); a name = a committee action.
+        cn = best.get("CommitteeName", "?")
+        if cn == "?":
+            return None
+        cmte = str(cn or "").strip()
         chamber = {"S": "Senate", "H": "House"}.get(acting_chamber_code, "")
         if cmte:
             # Committee action → that committee's scheduled meeting time.
@@ -1165,8 +1174,15 @@ LEGEVENT_BILLS_HEADER = [
 ]
 LEGEVENT_EVENTS_HEADER = [
     "Bill", "Session", "EventID", "EventDate", "ChamberCode", "Description", "EventCode",
-    "ReferenceType", "VoteTally", "ActorType", "Status",
+    "ReferenceType", "VoteTally", "ActorType", "Status", "CommitteeName",
 ]
+# PR-C7.1p: CommitteeName persisted so the structural time-recovery
+# (_recover_time_via_legevent_committee) can distinguish a COMMITTEE action
+# (CommitteeName present → committee meeting time) from a FLOOR action (LIS
+# returns None → "" → convene time). A cache row written BEFORE this column
+# existed reloads as the sentinel "?" (UNKNOWN) — the recovery refuses to act on
+# "?" so it never mis-times a committee report as a floor action while the cache
+# back-fills the real value on each bill's next API fetch. assumptions_audit #71.
 # PR-C7.0.6: EventCode is the structural action code (e.g. H4020, S5100,
 # G7050) the X-Ray classifier will consume in PR-C7.1b to replace
 # substring text matching. Added to the persisted schema here so the
@@ -1500,6 +1516,7 @@ def _load_legevent_cache(bills_ws, events_ws, push_alert):
         ei_votetally = _opt("VoteTally")
         ei_actortype = _opt("ActorType")
         ei_status = _opt("Status")
+        ei_committee = _opt("CommitteeName")
 
         def _cell(row, row_len, idx):
             return row[idx] if 0 <= idx < row_len else ""
@@ -1525,6 +1542,11 @@ def _load_legevent_cache(bills_ws, events_ws, push_alert):
                 "VoteTally":     _cell(row, row_len, ei_votetally),
                 "ActorType":     _clean_legevent_cell(_cell(row, row_len, ei_actortype)),
                 "Status":        _clean_legevent_cell(_cell(row, row_len, ei_status)),
+                # PR-C7.1p: "?" when the column predates this field (pre-column
+                # cache row) so the structural recovery treats it as UNKNOWN and
+                # won't mis-time a committee report as a floor action; a real ""
+                # (floor) only comes from a row written WITH the column.
+                "CommitteeName": (_clean_legevent_cell(_cell(row, row_len, ei_committee)) if ei_committee >= 0 else "?"),
             })
 
     return bills_meta, events_cache
@@ -1882,6 +1904,11 @@ def _persist_legevent_cache(
                 _vt_str[:200],
                 _clean_legevent_cell(e.get("ActorType")),
                 _clean_legevent_cell(e.get("Status")),
+                # PR-C7.1p: CommitteeName. A fresh API event has the key (a name,
+                # or None for a floor action → "" after cleaning). An event still
+                # in the pre-column cache lacks the key → the "?" default
+                # persists "unknown" so the recovery won't mis-time it.
+                _clean_legevent_cell(e.get("CommitteeName", "?")),
             ])
     _write_then_clear_trailing(
         events_ws, events_rows, LEGEVENT_EVENTS_TAB, "legevent_events_persist_fail",
