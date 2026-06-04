@@ -1902,15 +1902,35 @@ def generate_date_variants(dt):
         f"{month_full} {d}", f"{month_short} {d}", f"{month_full} {d_pad}", f"{month_short} {d_pad}"
     ]
 
+def _parse_relative_offset_minutes(text):
+    """Minutes offset from a relative-time phrase published by LIS:
+    "15 minutes after …" → 15, "30 Minutes after …" → 30, "2 hours after …"
+    → 120, "Upon adjournment …" → 0. assumptions_audit #70."""
+    t = str(text).lower()
+    m = re.search(r'(\d+)\s*min', t)
+    if m:
+        return int(m.group(1))
+    h = re.search(r'(\d+)\s*hour', t)
+    if h:
+        return int(h.group(1)) * 60
+    return 0
+
+
 def parse_24h_time(raw_time, parent_time_24h=None):
     time_val = raw_time.strip().replace('.', '').upper()
     if any(m in time_val.lower() for m in ["after", "upon"]):
-        if parent_time_24h and parent_time_24h != "06:00":
+        if parent_time_24h and parent_time_24h not in ("06:00", "23:59"):
             try:
                 pt = datetime.strptime(parent_time_24h, '%H:%M')
-                return (pt + timedelta(minutes=1)).strftime('%H:%M')
-            except: return "06:00" 
-        return "06:00" 
+                # PR-C7.1o: add the ACTUAL published offset ("15 minutes after")
+                # to the ACTUAL basis (the parent is now the chamber's published
+                # "adjourned" clock time — see build_time_graph), not a flat
+                # +1 minute on the convene time (which placed Senate committees
+                # ~2-7h too early). assumptions_audit #70.
+                return (pt + timedelta(minutes=_parse_relative_offset_minutes(time_val))).strftime('%H:%M')
+            except:
+                return "06:00"
+        return "06:00"
     try: return datetime.strptime(time_val, '%I:%M %p').strftime('%H:%M')
     except: return "23:59"
 
@@ -1928,20 +1948,40 @@ def build_time_graph(schedules):
         if "senate convenes" in k or "senate chamber" in k: raw_times["senate"] = v; raw_times["the senate"] = v
 
     resolved_times = {}
+    def _adjourned_key(chamber):
+        # The published "[chamber] adjourned" session marker whose ScheduleTime
+        # is a concrete clock time (e.g. OwnerName "Senate adjourned" → "5:19 PM").
+        # Excludes any node whose value is itself relative/placeholder.
+        return next((k for k, v in raw_times.items()
+                     if chamber in k and "adjourn" in k
+                     and not any(x in str(v).lower() for x in ["after", "upon", "minute", "hour", "recess"])), None)
     def resolve_node(name_key, visited=None):
         if visited is None: visited = set()
         if name_key in resolved_times: return resolved_times[name_key]
-        if name_key in visited: return "06:00" 
-        
+        if name_key in visited: return "06:00"
+
         visited.add(name_key)
         raw_str = raw_times.get(name_key, "")
         if not raw_str: return "23:59"
 
         dynamic_markers = ["upon adjournment", "minutes after", "hour after", "recess"]
         if any(m in raw_str.lower() for m in dynamic_markers):
-            found_parent = next((p for p in raw_times if len(p) > 5 and p in raw_str.lower()), None)
+            rl = raw_str.lower()
+            found_parent = None
+            # PR-C7.1o: an "after adjournment" committee meets after the chamber's
+            # floor session ENDS — anchor to the PUBLISHED "[chamber] adjourned"
+            # clock marker. Checked BEFORE the generic substring match, which
+            # would otherwise grab the bare "senate"/"house" convene node and
+            # place the meeting ~2-7h too early (assumptions_audit #70).
+            if "adjourn" in rl:
+                chamber = "senate" if "senate" in rl else ("house" if "house" in rl else None)
+                if chamber:
+                    found_parent = _adjourned_key(chamber)
             if not found_parent:
-                rl = raw_str.lower()
+                found_parent = next((p for p in raw_times if len(p) > 5 and p in rl), None)
+            if not found_parent:
+                # No adjourned marker published that day → fall back to convene
+                # (the pre-PR-C7.1o behavior) rather than guess.
                 if "senate adjourns" in rl or "adjournment of the senate" in rl: found_parent = "senate convenes"
                 elif "house adjourns" in rl or "adjournment of the house" in rl: found_parent = "house convenes"
                 elif "recess" in rl and "house" in rl: found_parent = next((k for k, v in raw_times.items() if "recess" in v.lower() and "house" in k.lower()), None)
