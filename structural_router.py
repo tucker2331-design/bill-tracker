@@ -117,17 +117,36 @@ def _has_real_time(eventdate_raw) -> bool:
     return bool(t) and t not in ("00:00:00", "00:00", "0:00:00", "0:00")
 
 
-# Times LIS stamps on document/clerical batch events that are NOT a real
-# meeting wall-clock time. 00:00:00 is the date-only marker; 04:00:00 is the
-# overnight document-processing artifact observed on "Enrolled"/"Bill text"
-# events (measured 2026-06-03 — see assumptions_audit #67). Kept separate from
-# `_has_real_time` so the router's existing time-presence fallback (rule 5) is
-# unchanged; this stricter view is used ONLY to derive ministerial types.
-_NON_MEETING_TIMES = frozenset({"00:00:00", "00:00", "0:00:00", "0:00", "04:00:00", "04:00", "4:00:00"})
+# A real meeting wall-clock time falls in VA legislative business hours. The
+# VA General Assembly (floor + committee) convenes roughly 07:00–23:00; any
+# timestamp outside that band is a LIS document/clerical batch artifact:
+# 00:00 (date-only) and the overnight document-processing stamps 04:00 / 05:00
+# observed on "Enrolled" / "Bill text" / "Continued pursuant to House Rule 22"
+# events (measured 2026-06-03 and 2026-06-04 — assumptions_audit #67, #74).
+#
+# This window is the SINGLE source of truth for "is this a real meeting time",
+# shared by value with calendar_worker._plausible_meeting_time (which renders the
+# clock time for last-resort recovery). They MUST agree: the 2026-06-04 Section-9
+# regression was a {00:00, 04:00} BLOCKLIST here disagreeing with a [07:00, 23:00]
+# WINDOW there — the 05:00 Rule-22 artifact slipped the blocklist, so H0840 looked
+# "timed", dodged ministerial classification, routed `meeting`, and surfaced
+# timeless in X-Ray Section 9 (assumptions_audit #74). A bounded window, not a
+# blocklist, ends the artifact-hour whack-a-mole and cannot silently drift past a
+# newly-observed batch hour. Validated against a 117-bill / 300-EventCode sample:
+# every code newly captured by the window is clerical (Enrolled, Bill text,
+# Signed by, Placed on Calendar, communicated to Governor, Rule-22 continuance);
+# every deliberative action either lands in-hours or carries a vote tally (and the
+# vote check in compute_ministerial_eventcodes protects it regardless of time).
+MEETING_HOUR_MIN = 7
+MEETING_HOUR_MAX = 23
 
 
 def _has_meeting_time(eventdate_raw) -> bool:
-    """Stricter than _has_real_time: also rejects the 04:00 doc-batch artifact."""
+    """True only when EventDate carries a real meeting wall-clock time — i.e. the
+    hour is within VA legislative business hours [MEETING_HOUR_MIN, MEETING_HOUR_MAX].
+    Rejects every document-batch artifact (00:00 / 04:00 / 05:00) in one stroke.
+    Stricter than `_has_real_time` (which only rejects 00:00 and backs the router's
+    rule-5 time-presence fallback — deliberately left unchanged)."""
     s = _s(eventdate_raw)
     if "T" in s:
         t = s.split("T", 1)[1]
@@ -135,8 +154,12 @@ def _has_meeting_time(eventdate_raw) -> bool:
         t = s.split(" ", 1)[1]
     else:
         return False
-    t = t.strip()[:8]
-    return bool(t) and t not in _NON_MEETING_TIMES
+    t = t.strip()
+    try:
+        hour = int(t.split(":")[0])
+    except (ValueError, IndexError):
+        return False
+    return MEETING_HOUR_MIN <= hour <= MEETING_HOUR_MAX
 
 
 # Default occurrence floor before an EventCode may be judged "ministerial".
