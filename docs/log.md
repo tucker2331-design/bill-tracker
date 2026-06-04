@@ -9,6 +9,16 @@ Append-only, reverse-chronological (newest at top). Each entry opens with `## [Y
 
 **Kinds:** `ingest` (new source/doc processed), `pr` (PR opened/merged/closed), `decision` (architectural or workflow), `lint` (wiki health-check pass), `session` (notable multi-hour working block), `post-mortem` (failure analysis), `milestone` (project-goal threshold crossed).
 
+## [2026-06-04] pr | #79/#80/#81/#82 — "look harder at the timeless 7" → relative-time sort fix, LegEvent structural-join recovery (+ a caught regression), forward-calendar producer
+
+Owner pushed past "the 7 are upstream-limited" — "look at all the data across all the endpoints; find a standardized solution like the published LIS guide; don't guess." Four shipments:
+- **#79 (PR-C7.1o):** the "15 min after adjournment" committee times were resolved to convene+1min (~2-7h too early). LIS publishes the basis (a "Senate/House adjourned" marker with the real clock time + the literal offset); fixed `build_time_graph`/`parse_24h_time` to anchor on the adjourned marker + parsed offset. ~168 committees re-sorted to their real slot. Honest scope: this corrects the SORT time; the displayed time stays LIS's published relative string (LIS-parity). [[failures/assumptions_audit#70]].
+- **#81 (PR-C7.1p):** the standardized join the owner asked for — a timeless meeting row recovers its time from the matched LegEvent's OWN `CommitteeName` (→ committee schedule time; the committee it actually met in, e.g. HB438 rereferral → Senate Courts of Justice 8:00 AM) or, for a floor action (no committee, chamber actor), the chamber convene time (HB642/HB246 → 12:00 PM). Replaces the verb list (`ABSOLUTE_FLOOR_VERBS`) with a structural signal. [[failures/assumptions_audit#71]].
+- **#82 (PR-C7.1p.1):** caught + fixed a regression #81 shipped — the cache never persisted `CommitteeName`, so committee reports were timed as floor actions (SJ209 → wrong 10:00 AM). Caught by verifying the ROW, not the count. Fixed with a persisted 3-state sentinel (name → committee / "" → floor / "?" → unknown-refuse). SJ209 back to honestly timeless; 0 mis-timed committee reports.
+- **#80 (PR-FC1b):** forward-calendar producer (Step 1b) — future Schedule meetings tagged `scheduled_future`. Verified no-op on the adjourned session; activates 2027. Remaining: Step 2 X-Ray "Upcoming meetings" section, Step 3 reconciliation, Step 4 synthetic test.
+
+Section 9: 7 → 6, converging to ~4 as `CommitteeName` back-fills (HB642 already recovered). SJ209 is the one genuinely irreducible row (P&E voted 3/10 but LIS published no 3/10 meeting). See [[state/current_status]].
+
 ## [2026-06-03] pr | PR-C7.1n (#77) — EventType-reference admin recovery (Section 9 10 → 7, the upstream floor)
 
 Owner: "keep going until you reduce it as far as possible… with this api guide what else can you improve and standardize… look into why they are lacking times." Traced all 10 residue rows across EVERY source (HISTORY date, LegEvent date+timestamp, Schedule API, DOCKET, EventType reference). Two commonalities: **DATE DRIFT** (governor/conference/reconvene actions where HISTORY date ≠ authoritative LegEvent date by 1-9 days → exact-date route match blanks → text reads "recommendation" as meeting) and **GENUINE no-time** (relative-time committees, LIS-published `Time TBA`, midnight, not-in-DOCKET).
