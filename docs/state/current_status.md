@@ -1,6 +1,6 @@
 ---
 tags: [state, live]
-updated: 2026-06-03
+updated: 2026-06-04
 status: active
 ---
 
@@ -12,7 +12,15 @@ status: active
 
 ## Active focus
 
-**✅ SECTION 9 = 6, converging to ~4 as the cache re-hydrates — after the LegEvent structural-join recovery (#81/#82). Trajectory: 1,072 → 210 → 25 → 10 → 7 → 6→~4. ~99.5% reduction, zero fabricated times.** Cache 100% hydrated; crossover `meeting_in_ledger` holds 9→0.
+**✅ SECTION 9 = 4 MEASURED (was projected 1 — the projection was never real; see below), → 3 once the 05:00 ministerial fix lands. Trajectory: 1,072 → 210 → 25 → 10 → 7 → 6 (measured) → 4 (after #87) → 3 (after #74/PR-C7.1t). ~99.7% reduction, zero fabricated times.** Cache 100% hydrated; crossover `meeting_in_ledger` holds 9→0.
+
+**⚠️ Procedural lesson (audit #74): #72's "4 → 1" was a PROJECTION, never measured — the verifying backfill burst checked out the PR #84 commit an hour BEFORE #87 merged, so it ran the pre-recovery code. The first real cold-start measurement (2026-06-04) was 6; a fresh worker cycle WITH #87 gave 4. Always verify a metric delta on a run whose `headSha` provably contains the PR's commit.**
+
+**The measured residual 4 (each pulled from LIS):**
+- **HB447** "Continued pursuant to House Rule 22" (`H0840`, stamped 05:00, no vote) — a batch end-of-session disposition that SHOULD route admin. Root cause: `structural_router._has_meeting_time`'s `{00:00,04:00}` blocklist missed 05:00, so it looked "timed" → dodged the ministerial law → routed meeting. **FIXED by #74/PR-C7.1t** (unify on the `[07:00,23:00]` business-hours window, validated against 117 bills / 300 EventCodes — only clerical codes newly captured, every voted action protected). → drops HB447.
+- **SJ209** "Reported from P&E (13-Y…)" 3/10 — **the one genuinely irreducible row.** P&E voted but LIS published no 3/10 P&E meeting (`api_2026-03-10` = caucuses + convene only). Time exists in no source.
+- **HB438** "Rereferred to Finance" 3/02 — the admin half of a compound voted `S1307` "Reported from Courts of Justice AND rereferred"; the Senate committee meeting itself is absent from `api_2026-03-02`. Separately tracked, not yet fixed.
+- **HB246** "Passed by for the day" 4/22 — a Reconvened-Session floor action that should anchor to `House Convenes 2026 Reconvened Session@12:00 PM` but the floor→convene recovery returned None. Separately tracked, not yet fixed.
 
 **The owner pushed past "upstream-limited": several timeless rows weren't missing a TIME, they were missing a JOIN.** The fix (#81, regression-fixed by #82 — [[failures/assumptions_audit#71]]) recovers a timeless meeting row from its matched LegEvent's OWN published structural fields: `CommitteeName` → that committee's scheduled meeting time (the committee it actually met in — e.g. HB438's rereferral → Senate Courts of Justice 8:00 AM); no committee + chamber `ActorType` → that chamber's convene time (HB642/HB246 floor actions → 12:00 PM). Dictionary-free, scales to 50 states. **HB642 already recovered; HB438/HB246 land their times once `CommitteeName` back-fills (6h TTL / a backfill burst).**
 

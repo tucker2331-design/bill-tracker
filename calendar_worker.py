@@ -31,6 +31,12 @@ from structural_router import validate_status_grouping as _validate_status_group
 from structural_router import compute_ministerial_eventcodes as _compute_ministerial_eventcodes
 from structural_router import build_admin_recovery_index as _build_admin_recovery_index
 from structural_router import recover_admin_route as _recover_admin_route
+# Single source of truth for the VA legislative business-hours window. Shared with
+# structural_router._has_meeting_time so the ministerial detector and this
+# last-resort renderer can never disagree about whether a timestamp is a real
+# meeting time (the 2026-06-04 / 05:00-artifact Section-9 regression, audit #74).
+from structural_router import MEETING_HOUR_MIN as _MEETING_HOUR_MIN
+from structural_router import MEETING_HOUR_MAX as _MEETING_HOUR_MAX
 
 print("🚀 Waking up Enterprise Calendar Worker (Turing State Machine v6.0)...")
 
@@ -859,7 +865,7 @@ def _plausible_meeting_time(eventdate_raw):
         h = int(t[0:2]); m = int(t[3:5])
     except (ValueError, IndexError):
         return None
-    if not (7 <= h <= 23 and 0 <= m <= 59):
+    if not (_MEETING_HOUR_MIN <= h <= _MEETING_HOUR_MAX and 0 <= m <= 59):
         return None
     if h < 12:
         ampm = f"{h}:{m:02d} AM"
