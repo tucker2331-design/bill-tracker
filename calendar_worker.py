@@ -89,6 +89,30 @@ def compute_effective_scrape_end(scrape_end, test_end_date, today,
         return scrape_end  # pinned/historical — never extend (reproducibility)
     return min(test_end_date, max(scrape_end, today + forward_window))
 
+
+def schedule_meeting_origin(meeting_date, now):
+    """PR-FC1b (forward-calendar producer): the Origin for a Schedule-API
+    committee meeting — 'scheduled_future' if the meeting is in the FUTURE
+    (after today), else 'api_schedule' (past/today, the existing behavior).
+
+    The forward calendar surfaces meetings BEFORE they happen. A future-dated
+    Schedule entry is tagged 'scheduled_future' so the X-Ray can render it in an
+    "Upcoming meetings" section and so it's distinguishable from a meeting that
+    already occurred. The classification is re-derived every cycle against the
+    current 'today', so a meeting transitions scheduled_future → api_schedule
+    naturally as today advances past it; once HISTORY rows appear for that
+    meeting, the reconciliation pass (Step 3) dedups them.
+
+    SAFETY: compares dates only (a meeting at any time today is NOT future). On
+    the current ADJOURNED session every meeting is in the past, so this returns
+    'api_schedule' for everything — a verified no-op, same posture as PR-FC1.
+    Never raises (defensive: falls back to 'api_schedule').
+    """
+    try:
+        return "scheduled_future" if meeting_date.date() > now.date() else "api_schedule"
+    except Exception:
+        return "api_schedule"
+
 # === STATIC FALLBACK LEXICON (used only if Committee API is unavailable) ===
 # Validated against session 261 Committee API response on 2026-04-03.
 # Runtime: replaced by build_committee_maps() output from live API.
@@ -2981,7 +3005,7 @@ def run_calendar_update():
                                 
                     if combined_bills:
                         for bill in sorted(list(combined_bills)):
-                            _append_event({"Date": date_str, "Time": time_val, "SortTime": sort_time_24h, "Status": status, "Committee": normalized_name.strip(), "Bill": bill, "Outcome": "Scheduled", "AgendaOrder": 1, "Source": "DOCKET", "Origin": "api_schedule", "DiagnosticHint": ""})
+                            _append_event({"Date": date_str, "Time": time_val, "SortTime": sort_time_24h, "Status": status, "Committee": normalized_name.strip(), "Bill": bill, "Outcome": "Scheduled", "AgendaOrder": 1, "Source": "DOCKET", "Origin": schedule_meeting_origin(meeting_date, now), "DiagnosticHint": ""})
                             if date_str not in docket_memory: docket_memory[date_str] = {}
                             if bill not in docket_memory[date_str]: docket_memory[date_str][bill] = []
                             if normalized_name.strip() not in docket_memory[date_str][bill]: docket_memory[date_str][bill].append(normalized_name.strip())
@@ -2993,7 +3017,7 @@ def run_calendar_update():
 
                     if not has_docket:
                         if sort_time_24h == "06:00" and "after" in time_val.lower(): clean_desc = f"⚠️ Time Unverified (Check Parent) - {clean_desc}"
-                        _append_event({"Date": date_str, "Time": time_val, "SortTime": sort_time_24h, "Status": status, "Committee": normalized_name.strip(), "Bill": clean_desc if clean_desc else "No agenda listed.", "Outcome": "", "AgendaOrder": -1, "Source": "API_Skeleton", "Origin": "api_schedule", "DiagnosticHint": ""})
+                        _append_event({"Date": date_str, "Time": time_val, "SortTime": sort_time_24h, "Status": status, "Committee": normalized_name.strip(), "Bill": clean_desc if clean_desc else "No agenda listed.", "Outcome": "", "AgendaOrder": -1, "Source": "API_Skeleton", "Origin": schedule_meeting_origin(meeting_date, now), "DiagnosticHint": ""})
 
                 # ============================================================
                 # PR-C2 Part B: compute ADDED / CHANGED deltas (raw LIS signal)
