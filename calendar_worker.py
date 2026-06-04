@@ -49,6 +49,16 @@ LEGISLATION_EVENT_HEADERS = {
     "Accept": "application/json",
 }
 
+# PR-C7.1s (stress-test Y2): the LegislationEvent fields the structural router
+# and every recovery depend on. A fetched event is canaried against this set so
+# a silent LIS rename/removal raises a CRITICAL alert instead of breaking
+# routing invisibly — the deepest single risk of a structural architecture
+# (docs/architecture/stress_test_failure_modes Y2; assumptions_audit #73).
+_EXPECTED_EVENT_KEYS = frozenset({
+    "EventCode", "EventDate", "ChamberCode", "Description",
+    "ReferenceType", "VoteTally", "ActorType", "Status", "CommitteeName",
+})
+
 # === INVESTIGATION WINDOW ===
 # Single source of truth lives in investigation_config.py and is imported by
 # both the worker and the X-Ray tool. The strings are parsed to datetime here
@@ -1091,6 +1101,21 @@ def _resolve_via_legislation_event_api(
             return None
         events = raw_json.get("LegislationEvents") or []
         legislation_event_cache[cache_key] = events
+        # PR-C7.1s (stress-test Y2): LIS field-rename canary. The structural
+        # router + every recovery key off specific event fields; a silent
+        # rename/removal upstream would break routing with NO error. Assert the
+        # expected keys exist on a fetched event and alert on drift — the one
+        # canary the structural architecture lacked (assumptions_audit #73).
+        if events and isinstance(events[0], dict):
+            _missing_keys = _EXPECTED_EVENT_KEYS - set(events[0].keys())
+            if _missing_keys:
+                push_alert(
+                    f"LIS LegislationEvent SCHEMA DRIFT: expected keys {sorted(_missing_keys)} absent from "
+                    f"the API response (bill {bill_num}). Structural routing/recovery depends on them — "
+                    f"verify the LIS API contract before trusting this cycle's classifications.",
+                    status="CRITICAL", category="DATA_ANOMALY", severity="CRITICAL",
+                    dedup_key="legevent_schema_drift",
+                )
 
     # Step 3: filter to events on the action date AND the acting chamber
     # (House actions should not borrow Senate-side timestamps).
@@ -1474,7 +1499,14 @@ def _clean_legevent_cell(v):
     return "" if s.lower() in ("none", "null", "nan") else s
 
 
-def _load_legevent_cache(bills_ws, events_ws, push_alert):
+def _load_legevent_cache(bills_ws, events_ws, push_alert, active_session=None):
+    # PR-C7.1s (stress-test fix): the cache is keyed by (bill, session) and is
+    # re-persisted in full each cycle. Without pruning, a NEW session (2027)
+    # would load the prior session's ~65k events AND hydrate its own ~65k →
+    # ~130k rows > the LEGEVENT_EVENTS_TAB cap → silent truncation (the #62 bug,
+    # recurring annually). Loading ONLY the active session drops stale-session
+    # rows so the next persist clears them (the tab self-prunes on session
+    # rollover). active_session=None keeps every session (back-compat / tests).
     """Load cross-cycle cache from sheet into in-memory dicts.
 
     Returns (bills_meta, events_cache):
@@ -1522,6 +1554,8 @@ def _load_legevent_cache(bills_ws, events_ws, push_alert):
             session = (row[bi["Session"]] if bi["Session"] < row_len else "").strip()
             if not bill or not session:
                 continue
+            if active_session and session != active_session:
+                continue  # PR-C7.1s: drop stale-session rows (tab self-prunes)
             bills_meta[(bill, session)] = {
                 "LastHistoryHash": row[bi["LastHistoryHash"]] if bi["LastHistoryHash"] < row_len else "",
                 "FetchedAtUTC":    row[bi["FetchedAtUTC"]] if bi["FetchedAtUTC"] < row_len else "",
@@ -1575,6 +1609,8 @@ def _load_legevent_cache(bills_ws, events_ws, push_alert):
             session = (row[ei["Session"]] if ei["Session"] < row_len else "").strip()
             if not bill or not session:
                 continue
+            if active_session and session != active_session:
+                continue  # PR-C7.1s: drop stale-session events (tab self-prunes)
             # Normalize nullable structural fields: a persisted literal "None"
             # (from a prior str(None) on a null API field) is truthy and would
             # silently mis-route cache-loaded events — see _clean_legevent_cell
@@ -2637,7 +2673,19 @@ def run_calendar_update():
     if not creds_json: sys.exit(1)
         
     gc = gspread.authorize(Credentials.from_service_account_info(json.loads(creds_json), scopes=["https://www.googleapis.com/auth/spreadsheets"]))
-    sheet = gc.open_by_key(SPREADSHEET_ID)
+    # PR-C7.1s (stress-test fix): retry the workbook open. A transient Google
+    # Sheets 503 here fails the ENTIRE cycle (observed 2026-06-04) — the cron
+    # recovers next run, but a short backoff avoids the gap and the false alarm.
+    sheet = None
+    for _open_attempt in range(1, 5):
+        try:
+            sheet = gc.open_by_key(SPREADSHEET_ID)
+            break
+        except Exception as _open_err:
+            if _open_attempt == 4:
+                raise
+            print(f"⚠️ Sheets open failed ({_open_err}); retry {_open_attempt}/3 after backoff.")
+            time.sleep(2 ** _open_attempt)
     worksheet = sheet.worksheet("Sheet1")
     
     try:
@@ -3539,6 +3587,7 @@ def run_calendar_update():
     )
     legevent_bills_meta, _persistent_events_cache = _load_legevent_cache(
         legevent_bills_ws, legevent_events_ws, push_system_alert,
+        active_session=_session_code_5d,
     )
     # Seed the per-cycle resolver cache from the persistent store. The
     # PR-C3.1 resolver short-circuits on `cache_key in legislation_event_cache`
