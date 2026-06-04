@@ -2600,6 +2600,28 @@ def run_calendar_update():
     # the bug count grow mechanically every day and hid whether fixes worked.
     scrape_start = INVESTIGATION_START
     scrape_end = INVESTIGATION_END
+    # Standard #1 runtime drift check (PR-C7.1r): the investigation window is a
+    # PINNED static config (reproducible testing on 2026). If the LIS Session API
+    # now reports an ACTIVE session starting AFTER this pinned window ends, we're a
+    # new session (e.g. 2027) running on a stale config. The #75 df_past clamp +
+    # the forward-window keep the worker FUNCTIONING (the pinned floor is earlier
+    # than the new session, so new-session data still passes both filters and
+    # blob_code is already session-derived) — but the viewport lower bound and the
+    # Section-9 denominator are still anchored to the old window. Alert so an
+    # operator updates investigation_config.py; never silently drift (Standard #1).
+    try:
+        if session_data and session_data.get("start") and session_data["start"] > INVESTIGATION_END:
+            push_system_alert(
+                f"Investigation window is STALE: active session {ACTIVE_SESSION} starts "
+                f"{str(session_data['start'])[:10]}, after the pinned INVESTIGATION_END "
+                f"{INVESTIGATION_END.date()}. Worker continues via the #75 clamp + forward-window, "
+                f"but update investigation_config.py (INVESTIGATION_START/END) to this session so the "
+                f"viewport and Section-9 metrics are session-correct.",
+                status="WARN", category="DATA_ANOMALY", severity="WARN",
+                dedup_key="investigation_window_stale",
+            )
+    except Exception:
+        pass
     # PR-FC1 (forward calendar): upper bound that extends ahead by FORWARD_WINDOW
     # ONLY on a live run (no-op while VA GA is adjourned + scrape_end is pinned
     # in the past — verified: scrape_end=2026-05-01 < today, so this == scrape_end
