@@ -89,6 +89,30 @@ def compute_effective_scrape_end(scrape_end, test_end_date, today,
         return scrape_end  # pinned/historical — never extend (reproducibility)
     return min(test_end_date, max(scrape_end, today + forward_window))
 
+
+def schedule_meeting_origin(meeting_date, now):
+    """PR-FC1b (forward-calendar producer): the Origin for a Schedule-API
+    committee meeting — 'scheduled_future' if the meeting is in the FUTURE
+    (after today), else 'api_schedule' (past/today, the existing behavior).
+
+    The forward calendar surfaces meetings BEFORE they happen. A future-dated
+    Schedule entry is tagged 'scheduled_future' so the X-Ray can render it in an
+    "Upcoming meetings" section and so it's distinguishable from a meeting that
+    already occurred. The classification is re-derived every cycle against the
+    current 'today', so a meeting transitions scheduled_future → api_schedule
+    naturally as today advances past it; once HISTORY rows appear for that
+    meeting, the reconciliation pass (Step 3) dedups them.
+
+    SAFETY: compares dates only (a meeting at any time today is NOT future). On
+    the current ADJOURNED session every meeting is in the past, so this returns
+    'api_schedule' for everything — a verified no-op, same posture as PR-FC1.
+    Never raises (defensive: falls back to 'api_schedule').
+    """
+    try:
+        return "scheduled_future" if meeting_date.date() > now.date() else "api_schedule"
+    except Exception:
+        return "api_schedule"
+
 # === STATIC FALLBACK LEXICON (used only if Committee API is unavailable) ===
 # Validated against session 261 Committee API response on 2026-04-03.
 # Runtime: replaced by build_committee_maps() output from live API.
@@ -798,6 +822,78 @@ def _find_legevent_time_in_cache(
         time_12h = f"{h - 12}:{m:02d} PM"
     sort_time_24h = f"{h:02d}:{m:02d}"
     return (time_12h, sort_time_24h, "")
+
+
+def _recover_time_via_legevent_committee(
+    events, action_date_str, acting_chamber_code, outcome_text,
+    api_schedule_map, convene_times,
+):
+    """Standardized structural meeting-time recovery (assumptions_audit #71).
+
+    A committee report ("Reported from Privileges and Elections") or a floor
+    procedural action ("Conferees appointed by Senate", "Passed by for the day")
+    is stamped date-only (midnight) in the LegislationEvent, so
+    `_find_legevent_time_in_cache` (which needs a real timestamp) can't time it —
+    yet the action DID happen in a meeting we already hold a time for. This
+    recovers it from the matched LegEvent's OWN published structural fields,
+    never a verb list:
+
+      - `CommitteeName` present  → that committee's SCHEDULED meeting time that
+        date (api_schedule_map). Critically, the LegEvent attributes the action
+        to the committee it ACTUALLY happened in — so "Reported from Courts of
+        Justice and rereferred to Finance" resolves to Courts of Justice's
+        meeting, not the destination "Finance" (which never met).
+      - no `CommitteeName` (a floor action; chamber `ActorType`) → that
+        chamber's floor-session CONVENE time that date (convene_times). This
+        replaces the verb-based floor recognition (ABSOLUTE_FLOOR_VERBS) with a
+        structural one, so "Conferees appointed" / "Passed by for the day" — not
+        in any verb list — are still timed.
+
+    Dictionary-free, uses LIS's own event data (like the EventType reference),
+    scales to 50 states. Returns (time, sort_time, status, committee_label,
+    origin) or None. Never raises.
+    """
+    try:
+        # Match the row to its event(s) on this date + chamber, best overlap.
+        matching = []
+        for e in events or ():
+            if not isinstance(e, dict):
+                continue
+            if str(e.get("EventDate") or "")[:10] != action_date_str:
+                continue
+            ev_ch = str(e.get("ChamberCode") or "").strip().upper()
+            if acting_chamber_code and ev_ch and ev_ch != acting_chamber_code:
+                continue
+            matching.append(e)
+        if not matching:
+            return None
+        otoks = _legislation_event_token_set(outcome_text)
+        if not otoks:
+            return None
+        best = max(matching, key=lambda e: len(otoks & _legislation_event_token_set(str(e.get("Description") or ""))))
+        if len(otoks & _legislation_event_token_set(str(best.get("Description") or ""))) == 0:
+            return None  # coincidental same-date event, not this row's action
+        cmte = str(best.get("CommitteeName") or "").strip()
+        chamber = {"S": "Senate", "H": "House"}.get(acting_chamber_code, "")
+        if cmte:
+            # Committee action → that committee's scheduled meeting time.
+            target = normalize_room_key(f"{chamber} {cmte}".strip())
+            for k, v in api_schedule_map.items():
+                if not k.startswith(f"{action_date_str}_"):
+                    continue
+                if normalize_room_key(k.split("_", 1)[1]) == target and not _is_non_concrete_time(v.get("Time", "")):
+                    return (v.get("Time"), v.get("SortTime"), v.get("Status", "Scheduled"),
+                            k.split("_", 1)[1], "api_schedule")
+            return None
+        if chamber:
+            # Floor action → the chamber's floor-session convene time.
+            anchor = convene_times.get(action_date_str, {}).get(chamber)
+            if anchor and not _is_non_concrete_time(anchor.get("Time", "")):
+                return (anchor.get("Time"), anchor.get("SortTime"), "Scheduled",
+                        anchor.get("Name", f"{chamber} Floor"), "convene_anchor")
+        return None
+    except Exception:
+        return None
 
 
 def _resolve_via_legislation_event_api(
@@ -2202,6 +2298,10 @@ def run_calendar_update():
         # not meeting times. Closes the ~103 genuine-meeting residue
         # PR-C7.1d measured.
         "legevent_floor_recovered": 0,
+        # PR-C7.1p: timeless meeting rows recovered via the LegEvent's own
+        # CommitteeName (→ committee schedule time) or chamber ActorType
+        # (→ convene time) — the structural join, no verb list.
+        "legevent_context_recovered": 0,
         # PR-C7.1g: journal_default rows whose structural route is "admin"
         # and which we therefore did NOT attempt to time-recover (skipping
         # the fallback resolver so an admin action doesn't get a wrong
@@ -2981,7 +3081,7 @@ def run_calendar_update():
                                 
                     if combined_bills:
                         for bill in sorted(list(combined_bills)):
-                            _append_event({"Date": date_str, "Time": time_val, "SortTime": sort_time_24h, "Status": status, "Committee": normalized_name.strip(), "Bill": bill, "Outcome": "Scheduled", "AgendaOrder": 1, "Source": "DOCKET", "Origin": "api_schedule", "DiagnosticHint": ""})
+                            _append_event({"Date": date_str, "Time": time_val, "SortTime": sort_time_24h, "Status": status, "Committee": normalized_name.strip(), "Bill": bill, "Outcome": "Scheduled", "AgendaOrder": 1, "Source": "DOCKET", "Origin": schedule_meeting_origin(meeting_date, now), "DiagnosticHint": ""})
                             if date_str not in docket_memory: docket_memory[date_str] = {}
                             if bill not in docket_memory[date_str]: docket_memory[date_str][bill] = []
                             if normalized_name.strip() not in docket_memory[date_str][bill]: docket_memory[date_str][bill].append(normalized_name.strip())
@@ -2993,7 +3093,7 @@ def run_calendar_update():
 
                     if not has_docket:
                         if sort_time_24h == "06:00" and "after" in time_val.lower(): clean_desc = f"⚠️ Time Unverified (Check Parent) - {clean_desc}"
-                        _append_event({"Date": date_str, "Time": time_val, "SortTime": sort_time_24h, "Status": status, "Committee": normalized_name.strip(), "Bill": clean_desc if clean_desc else "No agenda listed.", "Outcome": "", "AgendaOrder": -1, "Source": "API_Skeleton", "Origin": "api_schedule", "DiagnosticHint": ""})
+                        _append_event({"Date": date_str, "Time": time_val, "SortTime": sort_time_24h, "Status": status, "Committee": normalized_name.strip(), "Bill": clean_desc if clean_desc else "No agenda listed.", "Outcome": "", "AgendaOrder": -1, "Source": "API_Skeleton", "Origin": schedule_meeting_origin(meeting_date, now), "DiagnosticHint": ""})
 
                 # ============================================================
                 # PR-C2 Part B: compute ADDED / CHANGED deltas (raw LIS signal)
@@ -4328,6 +4428,30 @@ def run_calendar_update():
                     origin = "legislation_event"
                     source_miss_counts["sourced_legislation_event"] += 1
                     source_miss_counts["legislation_event_recovered"] += 1
+
+            # PR-C7.1p: STRUCTURAL meeting-time recovery — the final fallback
+            # before NO_SCHEDULE_MATCH. A committee report / floor procedural
+            # action is stamped date-only in the LegEvent (so the timestamp
+            # recovery above can't time it) yet DID happen in a meeting we hold a
+            # time for. Recover it from the matched LegEvent's OWN CommitteeName
+            # (→ that committee's scheduled meeting time) or, for a floor action
+            # with no committee, the chamber's convene time. Dictionary-free
+            # (no verb list). Gated on origin still being journal_default, so it
+            # can ONLY add a time to an otherwise-timeless row — never alter an
+            # existing resolution. See assumptions_audit #71.
+            if origin == "journal_default":
+                _ctx = _recover_time_via_legevent_committee(
+                    _legislation_event_cache.get((bill_num, _session_code_5d)) or [],
+                    date_str, acting_chamber_prefix.strip()[:1].upper(),
+                    outcome_text, api_schedule_map, convene_times,
+                )
+                if _ctx is not None:
+                    time_val, sort_time_24h, status, event_location, origin = _ctx
+                    source_miss_counts["legevent_context_recovered"] += 1
+                    if origin == "api_schedule":
+                        source_miss_counts["sourced_api"] += 1
+                    elif origin == "convene_anchor":
+                        source_miss_counts["sourced_convene"] += 1
 
             if origin == "journal_default":
                 # No API match, no convene anchor, AND LegislationEvent
