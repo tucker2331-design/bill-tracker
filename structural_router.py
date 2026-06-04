@@ -39,6 +39,7 @@ Description — zero dictionary, zero maintenance, no KeyError surface.
 """
 from __future__ import annotations
 
+import re as _re
 from dataclasses import dataclass
 
 DOCUMENT_REFTYPES = frozenset({"LegislationText", "LegislationFile"})
@@ -267,6 +268,76 @@ def route_event(event: dict, ministerial_codes: frozenset = frozenset()) -> Rout
     if _has_real_time(event.get("EventDate")):
         return RouteVerdict("meeting", "status_unknown_timefallback")
     return RouteVerdict("admin", "status_unknown_timefallback")
+
+
+# === EventType-reference admin recovery (PR-C7.1n) ==========================
+# LIS publishes a full EventType reference (GetLegislationEventTypeReferences
+# Async): EventCode <-> canonical descriptions. We use it to recover the
+# structural route for a row whose event could NOT be matched by date — the
+# HISTORY.CSV action date and the LegislationEvent date drift by 1-9 days for
+# reconvene/conference/governor actions, so the exact-date matcher returns blank
+# and the row falls to text classification (which reads "Governor's
+# Recommendation" as a meeting). Instead of a hand-authored "governor -> admin"
+# text pattern (a per-state dictionary), we look the outcome up in LIS's OWN
+# published descriptions, recover the EventCode(s), and route by them.
+# Asserts ADMIN ONLY (G-prefix executive or ministerial) and ONLY when EVERY
+# candidate code agrees — so it can only move a blank route to admin, never
+# manufacture a false meeting. See assumptions_audit #69.
+
+def normalize_event_description(s) -> str:
+    """Normalize a HISTORY outcome / reference description to a comparable key.
+
+    Strips a leading emoji-tag block (e.g. "📝 [Memory Anchor: admin] "), a
+    chamber prefix ("S "/"H "), a trailing vote tally "(13-Y 0-N)", then reduces
+    to space-joined alnum tokens. Used ONLY to recover LIS's structural EventCode
+    from its own published vocabulary — never to classify by text.
+    """
+    s = _s(s)
+    s = _re.sub(r'^[^A-Za-z0-9]*\[[^\]]*\]\s*', '', s)   # leading [tag] block (+ any emoji)
+    s = _re.sub(r'^\s*[HS]\s+', '', s)                   # chamber prefix
+    s = _re.sub(r'\s*\([^)]*\)\s*$', '', s)              # trailing (vote tally)
+    s = _re.sub(r'[^a-z0-9]+', ' ', s.lower()).strip()
+    return s
+
+
+def build_admin_recovery_index(reference_items, ministerial_codes=frozenset()) -> frozenset:
+    """From LIS's EventType reference, the set of normalized descriptions whose
+    EVERY EventCode routes admin (G-prefix executive OR ministerial).
+
+    A description qualifies only if all EventCodes LIS maps it to are admin —
+    so recovering an admin route from it can never mislabel a deliberative
+    action. ``reference_items`` is the list from
+    GetLegislationEventTypeReferencesAsync; ``ministerial_codes`` is the
+    runtime-derived ministerial set. Never raises.
+    """
+    desc2codes: dict = {}
+    try:
+        for it in reference_items or []:
+            if not isinstance(it, dict):
+                continue
+            ec = _s(it.get("EventCode"))
+            if not ec:
+                continue
+            for fld in ("LegislationDescription", "CalendarDescription", "JournalDescription"):
+                d = it.get(fld)
+                if d:
+                    desc2codes.setdefault(normalize_event_description(d), set()).add(ec)
+    except Exception:
+        return frozenset()
+    def _is_admin_code(ec: str) -> bool:
+        return ec[:1] == "G" or ec in ministerial_codes
+    return frozenset(
+        nd for nd, codes in desc2codes.items()
+        if nd and codes and all(_is_admin_code(ec) for ec in codes)
+    )
+
+
+def recover_admin_route(outcome, admin_recovery_index) -> str:
+    """Return "admin" if the outcome's normalized description is a known
+    all-admin LIS description, else "". Safe fallback for a blank route."""
+    if not admin_recovery_index:
+        return ""
+    return "admin" if normalize_event_description(outcome) in admin_recovery_index else ""
 
 
 def validate_status_grouping(live_status_names) -> list[str]:
