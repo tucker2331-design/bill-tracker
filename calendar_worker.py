@@ -109,7 +109,13 @@ def schedule_meeting_origin(meeting_date, now):
     Never raises (defensive: falls back to 'api_schedule').
     """
     try:
-        return "scheduled_future" if meeting_date.date() > now.date() else "api_schedule"
+        # Gemini fold-in (PR #80): meeting_date / now may already be a `date`
+        # (no `.date()`), which would raise AttributeError → silently swallowed →
+        # always "api_schedule" (future meetings never surfaced). Normalize both
+        # to a date regardless of whether they're a datetime or a date.
+        md = meeting_date.date() if hasattr(meeting_date, "date") else meeting_date
+        nd = now.date() if hasattr(now, "date") else now
+        return "scheduled_future" if md > nd else "api_schedule"
     except Exception:
         return "api_schedule"
 
@@ -870,8 +876,11 @@ def _recover_time_via_legevent_committee(
         otoks = _legislation_event_token_set(outcome_text)
         if not otoks:
             return None
-        best = max(matching, key=lambda e: len(otoks & _legislation_event_token_set(str(e.get("Description") or ""))))
-        if len(otoks & _legislation_event_token_set(str(best.get("Description") or ""))) == 0:
+        # Gemini fold-in (PR #81): score each candidate once, not twice
+        # (once in max(), once in the re-check).
+        scored = [(len(otoks & _legislation_event_token_set(str(e.get("Description") or ""))), e) for e in matching]
+        best_score, best = max(scored, key=lambda t: t[0])
+        if best_score == 0:
             return None  # coincidental same-date event, not this row's action
         # CommitteeName "?" = the matched event predates the persisted column
         # (pre-PR-C7.1p cache row): we don't yet know if it's a committee or a
@@ -1546,7 +1555,13 @@ def _load_legevent_cache(bills_ws, events_ws, push_alert):
                 # cache row) so the structural recovery treats it as UNKNOWN and
                 # won't mis-time a committee report as a floor action; a real ""
                 # (floor) only comes from a row written WITH the column.
-                "CommitteeName": (_clean_legevent_cell(_cell(row, row_len, ei_committee)) if ei_committee >= 0 else "?"),
+                # Gemini fold-in (PR #82 CRITICAL): gate on the index being in
+                # THIS ROW's bounds (0 <= ei < row_len), not just present in the
+                # header (ei >= 0). A legacy short row in a mixed-width tab has
+                # the header column but no cell — it must read "?" (unknown), not
+                # "" (which the helper returns for an out-of-range index and which
+                # the recovery would treat as a real floor action).
+                "CommitteeName": (_clean_legevent_cell(row[ei_committee]) if (0 <= ei_committee < row_len) else "?"),
             })
 
     return bills_meta, events_cache
@@ -2074,10 +2089,13 @@ def build_time_graph(schedules):
     def _adjourned_key(chamber):
         # The published "[chamber] adjourned" session marker whose ScheduleTime
         # is a concrete clock time (e.g. OwnerName "Senate adjourned" → "5:19 PM").
-        # Excludes any node whose value is itself relative/placeholder.
+        # Excludes any node whose value is itself relative OR a non-concrete
+        # placeholder ("Time TBA"/empty) — Gemini fold-in (PR #79): a TBA adjourned
+        # marker would otherwise be picked and parse to "23:59", a wrong anchor.
         return next((k for k, v in raw_times.items()
                      if chamber in k and "adjourn" in k
-                     and not any(x in str(v).lower() for x in ["after", "upon", "minute", "hour", "recess"])), None)
+                     and not any(x in str(v).lower() for x in ["after", "upon", "minute", "hour", "recess"])
+                     and not _is_non_concrete_time(v)), None)
     def resolve_node(name_key, visited=None):
         if visited is None: visited = set()
         if name_key in resolved_times: return resolved_times[name_key]
