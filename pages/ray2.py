@@ -1108,6 +1108,45 @@ else:
     st.warning("Cannot classify actions: Outcome or Time column missing.")
 
 
+# ============ SECTION 11: UPCOMING MEETINGS (FORWARD CALENDAR, PR-FC1b/Step 2) ============
+st.divider()
+st.subheader("11) Upcoming Meetings (next 14 days) — Forward Calendar")
+st.caption(
+    "Schedule-API meetings that have NOT happened yet (Origin=`scheduled_future`, emitted by "
+    "PR-FC1b for any meeting dated after today). Empty during an adjourned session — populates "
+    "live during the 2027 session as the producer tags future-dated meetings."
+)
+
+if "Origin" in sheet_df.columns and "Date" in sheet_df.columns:
+    _today_str = datetime.now().strftime("%Y-%m-%d")
+    _upcoming = sheet_df[
+        (sheet_df["Origin"].astype(str) == "scheduled_future")
+        & (sheet_df["Date"].astype(str) >= _today_str)
+    ].copy()
+    st.metric("Upcoming scheduled meetings", len(_upcoming))
+    if _upcoming.empty:
+        st.info(
+            "No upcoming meetings on the schedule (VA GA is adjourned — expected). The producer "
+            "(PR-FC1b) is a verified no-op while every meeting is in the past; this section is the "
+            "consumer that surfaces `scheduled_future` rows during a live session."
+        )
+    else:
+        # Cancellation visibility — the Schedule API's IsCancelled flows into Status.
+        _sort_cols = [c for c in ["Date", "SortTime"] if c in _upcoming.columns]
+        if _sort_cols:
+            _upcoming = _upcoming.sort_values(_sort_cols)
+        _show_cols = [c for c in ["Time", "Committee", "Bill", "Status"] if c in _upcoming.columns]
+        _cancelled = _upcoming["Status"].astype(str).str.contains("cancel", case=False, na=False) \
+            if "Status" in _upcoming.columns else pd.Series([False] * len(_upcoming))
+        if _cancelled.any():
+            st.warning(f"⚠️ {int(_cancelled.sum())} of the upcoming meetings are CANCELLED.")
+        for _d, _grp in _upcoming.groupby("Date"):
+            st.markdown(f"**📅 {_d}** — {len(_grp)} meeting(s)")
+            st.dataframe(_grp[_show_cols], use_container_width=True, hide_index=True)
+else:
+    st.warning("No Origin/Date column on Sheet1 — cannot render the forward calendar.")
+
+
 # ===================== SECTION 10: DOWNLOAD =====================
 st.divider()
 st.subheader("10) Download Payload")
