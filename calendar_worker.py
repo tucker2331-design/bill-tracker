@@ -861,8 +861,14 @@ def _plausible_meeting_time(eventdate_raw):
         t = s.split(" ", 1)[1]
     else:
         return None
+    # Parse by splitting on ":" (NOT fixed slicing t[0:2]/t[3:5]) so a
+    # single-digit hour like "7:30:00" parses correctly — same method as
+    # structural_router._has_meeting_time, keeping the two fully consistent
+    # (Gemini PR #90 review; LIS zero-pads today, but matching the parsers
+    # removes a latent divergence between the shared window's two consumers).
+    _parts = t.strip().split(":")
     try:
-        h = int(t[0:2]); m = int(t[3:5])
+        h = int(_parts[0]); m = int(_parts[1])
     except (ValueError, IndexError):
         return None
     if not (_MEETING_HOUR_MIN <= h <= _MEETING_HOUR_MAX and 0 <= m <= 59):
