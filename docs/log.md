@@ -9,6 +9,16 @@ Append-only, reverse-chronological (newest at top). Each entry opens with `## [Y
 
 **Kinds:** `ingest` (new source/doc processed), `pr` (PR opened/merged/closed), `decision` (architectural or workflow), `lint` (wiki health-check pass), `session` (notable multi-hour working block), `post-mortem` (failure analysis), `milestone` (project-goal threshold crossed).
 
+## [2026-06-05] milestone | Section 9 = 1 MEASURED & DURABLE — the residual is one irreducible LIS data gap (SJ209)
+
+Cold-start re-verification after the prior block exposed that **#72's "Section 9 = 1" was a projection, never measured** — the verifying burst ran a commit from before #87 merged (audit #74). The first REAL measurement was 6. Closed to a measured, durable **1** through three structural fixes (each verified on the produced rows, not just the count):
+
+- **#90 (PR-C7.1t / audit #74):** unify the "real meeting time" definition on ONE `[07:00,23:00]` window shared by `structural_router._has_meeting_time` and `_plausible_meeting_time`. The `{00:00,04:00}` blocklist missed the **05:00** doc-batch artifact, so `H0840` Rule-22 continuances looked "timed" → dodged the ministerial law → routed meeting. Validated against a 117-bill / 300-EventCode sample (only clerical codes newly captured; every voted action vote-protected).
+- **#91 (PR-C7.1u):** terminal-only schema back-fill — a NO-OP (the run proved every bill is `IsTerminal=FALSE`), corrected by ↓.
+- **#92 (PR-C7.1v / audit #75):** the real blocker. The recovery was proven CORRECT on fresh API data (HB438→8 AM, HB246→12 PM, HB447→10 AM) but in production reads the cache, where **500 bills / 12,793 events still had `CommitteeName="?"`** (pre-column hydration) — which the recovery refuses — and they were skipped as "fresh" because persist bumps `FetchedAtUTC` without re-fetching. Fix: detect `"?"` directly and re-queue before the terminal/TTL skips. One migration cycle (`schema_backfill=500`) → cache 100% migrated (0 `"?"`) → the 3 rows timed → Section 9 = **1**, 0 mis-timed.
+
+The remaining **SJ209** is honestly irreducible: P&E voted 13-Y on 3/10, but LIS published no 3/10 P&E meeting. Trajectory 1,072 → 1 (~99.9%). See [[state/current_status]], [[failures/assumptions_audit#74]], [[failures/assumptions_audit#75]].
+
 ## [2026-06-04] pr | #79/#80/#81/#82 — "look harder at the timeless 7" → relative-time sort fix, LegEvent structural-join recovery (+ a caught regression), forward-calendar producer
 
 Owner pushed past "the 7 are upstream-limited" — "look at all the data across all the endpoints; find a standardized solution like the published LIS guide; don't guess." Four shipments:
