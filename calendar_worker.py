@@ -1691,7 +1691,7 @@ def _build_legevent_refresh_queue(
     tier_c: list = []  # TTL-expired
     skipped_terminal = 0
     skipped_fresh = 0
-    terminal_schema_backfill = 0  # PR-C7.1u: terminal bills re-queued to migrate a "?" column
+    schema_backfill = 0  # PR-C7.1v: bills re-queued to migrate a "?" structural column
 
     for bill in sorted(candidate_bills):  # sort for deterministic order
         cached = bills_meta.get((bill, session_5d))
@@ -1702,26 +1702,28 @@ def _build_legevent_refresh_queue(
         if cached is None or not has_events:
             tier_a.append(bill)
             continue
+        # PR-C7.1v: schema-incomplete cache migration (assumptions_audit #75).
+        # A bill whose cached events predate the CommitteeName column carry the
+        # "?" sentinel; the structural time-recovery REFUSES "?" (it can't tell a
+        # committee action from a floor one), so the row is stuck at
+        # NO_SCHEDULE_MATCH FOREVER even though its meeting time exists (HB438's
+        # report sibling is 8:00 AM; HB246's 4/22 convene is 12:00 PM; HB447's is
+        # 10:00 AM). Such a bill is otherwise skipped — by IsTerminal OR (the case
+        # MEASURED here: 500 bills / 12,793 events) by the TTL "fresh" gate,
+        # because persist bumps FetchedAtUTC without a re-fetch, so the "?" rows
+        # look perpetually fresh and never re-qualify. Detect the incomplete
+        # column DIRECTLY and re-queue ONCE, BEFORE the terminal/TTL skips, so it
+        # migrates regardless of those states. Bounded (only "?" rows),
+        # deterministic (one fetch each), self-clearing (a real API fetch writes
+        # the value). The recovery was verified correct on fresh API data — the
+        # ONLY gap was the unmigrated cache.
+        if any(_e.get("CommitteeName", "?") == "?"
+               for _e in (events_cache.get((bill, session_5d)) or [])):
+            tier_b.append(bill)
+            schema_backfill += 1
+            continue
         if cached.get("IsTerminal"):
-            # PR-C7.1u: a terminal bill is normally never re-fetched — its
-            # legislative journey is over and its HISTORY hash is frozen. BUT a
-            # bill whose cached events predate a structural column carries the
-            # "?" schema-incomplete sentinel for that field, and the structural
-            # time-recovery REFUSES "?" (it can't tell a committee action from a
-            # floor one without it). Such a terminal row is therefore stranded at
-            # NO_SCHEDULE_MATCH FOREVER even though its meeting time exists in the
-            # schedule (e.g. HB438's report sibling is 8:00 AM; HB246's 4/22
-            # convene is 12:00 PM) — terminal-skip means the "?" never back-fills.
-            # Re-queue it ONCE to migrate the column; the next persist writes the
-            # real CommitteeName and it returns to terminal-skip. Bounded (only
-            # "?" rows), deterministic (one fetch each), self-completing — the
-            # cache-side analogue of a schema migration. See assumptions_audit #75.
-            _evs = events_cache.get((bill, session_5d)) or []
-            if _evs and any(_e.get("CommitteeName", "?") == "?" for _e in _evs):
-                tier_b.append(bill)
-                terminal_schema_backfill += 1
-            else:
-                skipped_terminal += 1
+            skipped_terminal += 1
             continue
         if cached.get("LastHistoryHash") != current_hash:
             tier_b.append(bill)
@@ -1750,7 +1752,7 @@ def _build_legevent_refresh_queue(
         "tier_c": len(tier_c),
         "skipped_terminal": skipped_terminal,
         "skipped_fresh": skipped_fresh,
-        "terminal_schema_backfill": terminal_schema_backfill,
+        "schema_backfill": schema_backfill,
         "queue_size": len(queue),
         "queued_overflow": queued_overflow,
     }
@@ -3972,13 +3974,13 @@ def run_calendar_update():
         source_miss_counts["legevent_skipped_terminal"]    = legevent_tiers["skipped_terminal"]
         source_miss_counts["legevent_skipped_fresh"]       = legevent_tiers["skipped_fresh"]
         source_miss_counts["legevent_hydration_queued"]    = legevent_tiers["queued_overflow"]
-        source_miss_counts["legevent_terminal_schema_backfill"] = legevent_tiers["terminal_schema_backfill"]
+        source_miss_counts["legevent_schema_backfill"] = legevent_tiers["schema_backfill"]
 
         print(
             f"📚 LegEvent cache: loaded={len(legevent_bills_meta)} bills, "
             f"tiers A/B/C={legevent_tiers['tier_a']}/{legevent_tiers['tier_b']}/{legevent_tiers['tier_c']}, "
             f"skipped(terminal/fresh)={legevent_tiers['skipped_terminal']}/{legevent_tiers['skipped_fresh']}, "
-            f"terminal_schema_backfill={legevent_tiers['terminal_schema_backfill']}, "
+            f"schema_backfill={legevent_tiers['schema_backfill']}, "
             f"queued_overflow={legevent_tiers['queued_overflow']}, "
             f"refreshing={len(legevent_queue)} (cap={LEGEVENT_FETCHES_PER_CYCLE})"
         )
