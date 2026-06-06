@@ -1014,14 +1014,17 @@ def _build_standing_schedule_maps(schedules, start_date, end_date):
     patt = defaultdict(Counter)
     adjourned = defaultdict(dict)
     try:
+        # ISO "YYYY-MM-DD" sorts lexically == chronologically, so compare the
+        # date STRING against pre-formatted bounds — no per-entry pd.to_datetime
+        # (Gemini PR #96 perf review). Malformed/out-of-range dates fall outside
+        # [_start_s, _end_s] and are skipped.
+        _start_s = start_date.strftime('%Y-%m-%d') if hasattr(start_date, 'strftime') else str(start_date)[:10]
+        _end_s = end_date.strftime('%Y-%m-%d') if hasattr(end_date, 'strftime') else str(end_date)[:10]
         for m in schedules or ():
             owner = re.sub(r'\s+', ' ', str(m.get('OwnerName') or '')).strip()
             t = str(m.get('ScheduleTime') or '').strip()
             d = str(m.get('ScheduleDate') or '')[:10]
-            if not (owner and t and d):
-                continue
-            md = pd.to_datetime(d, errors='coerce')
-            if pd.isna(md) or not (start_date <= md <= end_date):
+            if not (owner and t and d) or not (_start_s <= d <= _end_s):
                 continue
             ol = owner.lower()
             # Published "[chamber] adjourned" concrete clock marker.
@@ -1076,14 +1079,11 @@ def _derive_standing_committee_time(committee_norm, committee_label, chamber_cod
                 t = datetime.strptime(pattern.upper().replace('.', ''), '%I:%M %p')
             except Exception:
                 return None
-        h, m = t.hour, t.minute
-        if h < 12:
-            ampm = f"{h if h else 12}:{m:02d} AM"
-        elif h == 12:
-            ampm = f"12:{m:02d} PM"
-        else:
-            ampm = f"{h - 12}:{m:02d} PM"
-        return (ampm, f"{h:02d}:{m:02d}", "Scheduled (derived)", committee_label, "derived_standing")
+        # 12h display via strftime (Gemini PR #96). lstrip('0') drops the leading
+        # zero of %I ("05:34 PM" -> "5:34 PM"; "12:00 PM" unaffected) — cross-
+        # platform, unlike the %-I glibc extension.
+        ampm = t.strftime('%I:%M %p').lstrip('0')
+        return (ampm, t.strftime('%H:%M'), "Scheduled (derived)", committee_label, "derived_standing")
     except Exception:
         return None
 
