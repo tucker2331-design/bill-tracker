@@ -885,6 +885,7 @@ def _plausible_meeting_time(eventdate_raw):
 def _recover_time_via_legevent_committee(
     events, action_date_str, acting_chamber_code, outcome_text,
     api_schedule_map, convene_times,
+    committee_modal_standing=None, adjourned_clock_by_date=None,
 ):
     """Standardized structural meeting-time recovery (assumptions_audit #71).
 
@@ -960,6 +961,20 @@ def _recover_time_via_legevent_committee(
             _ts = _plausible_meeting_time(best.get("EventDate"))
             if _ts:
                 return (_ts[0], _ts[1], "Scheduled", f"{chamber} {cmte}".strip(), "legislation_event")
+            # LAST RESORT (FLAGGED, owner-approved): no per-meeting schedule entry
+            # and no usable event timestamp — but the committee demonstrably MET
+            # (this report event carries its vote) and publishes a MODAL standing
+            # schedule pattern all session. Derive the time from that pattern
+            # anchored to the date's published "[chamber] adjourned" clock, and
+            # tag it "derived_standing" so the UI flags it as ASSUMED (the time is
+            # the committee's own recurring published time, not a per-meeting fact).
+            # Bounded: fires only when a strong modal pattern AND the anchor exist;
+            # else stays timeless. assumptions_audit #76.
+            _d = _derive_standing_committee_time(
+                target, f"{chamber} {cmte}".strip(), acting_chamber_code,
+                action_date_str, committee_modal_standing or {}, adjourned_clock_by_date or {})
+            if _d:
+                return _d
             return None
         if chamber:
             # Floor action → the chamber's floor-session convene time, else the
@@ -972,6 +987,103 @@ def _recover_time_via_legevent_committee(
             if _ts:
                 return (_ts[0], _ts[1], "Scheduled", f"{chamber} Floor", "legislation_event")
         return None
+    except Exception:
+        return None
+
+
+def _build_standing_schedule_maps(schedules, start_date, end_date):
+    """Derive two maps from the Schedule API for the FLAGGED last-resort time
+    derivation (assumptions_audit #76 — owner-approved):
+
+      committee_modal_standing: {normalize_room_key(committee): (pattern, n, chamber)}
+        Each committee's DOMINANT published ScheduleTime within the active
+        window, kept ONLY when it's a genuine STANDING pattern (the plurality AND
+        >= MIN_STANDING_SAMPLES occurrences). This is the committee's OWN
+        recurring published time, derived from LIS data — no dictionary, scales
+        to 50 states.
+      adjourned_clock_by_date: {date: {"Senate"/"House": "HH:MM"}}
+        The published "[chamber] adjourned" concrete clock per date.
+
+    Used ONLY when a committee demonstrably met (a LegEvent report carrying a
+    vote) but published NO per-meeting schedule entry that date: fill the gap
+    from its standing pattern anchored to that date's adjourned clock, flagged
+    derived. Never raises."""
+    from collections import Counter, defaultdict
+    MIN_STANDING_SAMPLES = 3
+    _rel = ("after", "upon")
+    patt = defaultdict(Counter)
+    adjourned = defaultdict(dict)
+    try:
+        for m in schedules or ():
+            owner = re.sub(r'\s+', ' ', str(m.get('OwnerName') or '')).strip()
+            t = str(m.get('ScheduleTime') or '').strip()
+            d = str(m.get('ScheduleDate') or '')[:10]
+            if not (owner and t and d):
+                continue
+            md = pd.to_datetime(d, errors='coerce')
+            if pd.isna(md) or not (start_date <= md <= end_date):
+                continue
+            ol = owner.lower()
+            # Published "[chamber] adjourned" concrete clock marker.
+            if "adjourn" in ol and not any(x in t.lower() for x in _rel) and not _is_non_concrete_time(t):
+                ch = "Senate" if "senate" in ol else ("House" if "house" in ol else None)
+                if ch:
+                    try:
+                        adjourned[d][ch] = datetime.strptime(t.upper().replace('.', ''), '%I:%M %p').strftime('%H:%M')
+                    except Exception:
+                        pass
+                continue
+            # Committee standing pattern — exclude floor/caucus/marker rows.
+            if any(x in ol for x in ("convenes", "adjourn", "recess", "caucus",
+                                     "session", "floor", "chamber", "press")):
+                continue
+            patt[normalize_room_key(owner)][t] += 1
+    except Exception:
+        return {}, {}
+    modal = {}
+    for cm, c in patt.items():
+        top, n = c.most_common(1)[0]
+        if n >= MIN_STANDING_SAMPLES:
+            ch = "Senate" if "senate" in top.lower() else ("House" if "house" in top.lower() else None)
+            modal[cm] = (top, n, ch)
+    return modal, {k: dict(v) for k, v in adjourned.items()}
+
+
+def _derive_standing_committee_time(committee_norm, committee_label, chamber_code,
+                                    date, committee_modal_standing, adjourned_clock_by_date):
+    """FLAGGED last-resort time derivation (assumptions_audit #76, owner-approved).
+
+    A committee with a strong MODAL standing schedule pattern met on a date for
+    which LIS published no per-meeting entry. Derive the time from that pattern:
+    a relative pattern ("15 minutes after the Senate adjourns") anchors to the
+    date's published adjourned clock + offset; a concrete recurring pattern
+    ("8:00 AM") is used directly. Returns (time12, sort24, status, label,
+    "derived_standing") — the `derived_standing` origin is the UI's signal to
+    flag the time as ASSUMED. None when nothing derivable. Never raises."""
+    try:
+        info = committee_modal_standing.get(committee_norm)
+        if not info:
+            return None
+        pattern, _n, anchor_chamber = info
+        if any(x in pattern.lower() for x in ("after", "upon")):
+            ch = anchor_chamber or ("Senate" if chamber_code == "S" else "House")
+            base24 = adjourned_clock_by_date.get(date, {}).get(ch)
+            if not base24:
+                return None
+            t = datetime.strptime(base24, '%H:%M') + timedelta(minutes=_parse_relative_offset_minutes(pattern))
+        else:
+            try:
+                t = datetime.strptime(pattern.upper().replace('.', ''), '%I:%M %p')
+            except Exception:
+                return None
+        h, m = t.hour, t.minute
+        if h < 12:
+            ampm = f"{h if h else 12}:{m:02d} AM"
+        elif h == 12:
+            ampm = f"12:{m:02d} PM"
+        else:
+            ampm = f"{h - 12}:{m:02d} PM"
+        return (ampm, f"{h:02d}:{m:02d}", "Scheduled (derived)", committee_label, "derived_standing")
     except Exception:
         return None
 
@@ -2368,6 +2480,7 @@ def run_calendar_update():
         "total_processed": 0,       # actions visited in the main loop
         "sourced_api": 0,           # concrete API-schedule match (and no floor-anchor override)
         "sourced_convene": 0,       # floor action resolved via convene anchor
+        "derived_standing": 0,      # FLAGGED assumed time from committee's modal standing schedule (#76)
         "sourced_legislation_event": 0,  # PR-C3: time recovered via LegislationEvent API fallback
         "unsourced_journal": 0,     # no schedule, no anchor, no LegislationEvent recovery, non-floor -> NO_SCHEDULE_MATCH
         "floor_anchor_miss": 0,     # Floor action with no convene anchor hit -> NO_CONVENE_ANCHOR
@@ -3017,6 +3130,11 @@ def run_calendar_update():
     print("🗄️ Pulling historical schedule from API_Cache...")
     api_schedule_map = {}
     convene_times = {}
+    # FLAGGED last-resort derivation maps (assumptions_audit #76). Initialized
+    # here (like api_schedule_map) so they always exist even on an offline cycle;
+    # populated from the live Schedule API below.
+    committee_modal_standing = {}
+    adjourned_clock_by_date = {}
     cache_sheet = None
     cache_records = []  # Must be initialized before try block to avoid NameError on failure
     try:
@@ -3154,6 +3272,12 @@ def run_calendar_update():
             if sched_res.status_code == 200:
                 schedules = sched_res.json().get('Schedules', []) if isinstance(sched_res.json(), dict) else sched_res.json()
                 resolved_parent_map = build_time_graph(schedules)
+                # FLAGGED last-resort derivation maps (assumptions_audit #76):
+                # each committee's modal standing schedule pattern + per-date
+                # adjourned clocks, used only when a committee met but published
+                # no per-meeting entry (e.g. SJ209's 3/10 P&E meeting).
+                committee_modal_standing, adjourned_clock_by_date = _build_standing_schedule_maps(
+                    schedules, test_start_date, test_end_date)
                 
                 for meeting in schedules:
                     meeting_date = pd.to_datetime(meeting.get('ScheduleDate', '1970-01-01'), errors='coerce')
@@ -4360,6 +4484,7 @@ def run_calendar_update():
                         _legislation_event_cache.get((bill_num, _session_code_5d)) or [],
                         date_str, acting_chamber_prefix.strip()[:1].upper(),
                         outcome_text, api_schedule_map, convene_times,
+                        committee_modal_standing, adjourned_clock_by_date,
                     )
                     if _ctx is not None:
                         time_val, sort_time_24h, status, event_location, origin = _ctx
@@ -4653,6 +4778,7 @@ def run_calendar_update():
                     _legislation_event_cache.get((bill_num, _session_code_5d)) or [],
                     date_str, acting_chamber_prefix.strip()[:1].upper(),
                     outcome_text, api_schedule_map, convene_times,
+                    committee_modal_standing, adjourned_clock_by_date,
                 )
                 if _ctx is not None:
                     time_val, sort_time_24h, status, event_location, origin = _ctx
@@ -4661,6 +4787,9 @@ def run_calendar_update():
                         source_miss_counts["sourced_api"] += 1
                     elif origin == "convene_anchor":
                         source_miss_counts["sourced_convene"] += 1
+                    elif origin == "derived_standing":
+                        # FLAGGED assumed time (committee's modal standing pattern).
+                        source_miss_counts["derived_standing"] += 1
 
             if origin == "journal_default":
                 # No API match, no convene anchor, AND LegislationEvent
@@ -4842,6 +4971,7 @@ def run_calendar_update():
             f"Source-miss metrics: processed={source_miss_counts['total_processed']} "
             f"sourced_api={source_miss_counts['sourced_api']} "
             f"sourced_convene={source_miss_counts['sourced_convene']} "
+            f"derived_standing={source_miss_counts['derived_standing']} "
             f"unsourced_journal={source_miss_counts['unsourced_journal']} "
             f"unsourced_anchor={source_miss_counts['unsourced_anchor']} "
             f"dropped_ephemeral={source_miss_counts['dropped_ephemeral']} "

@@ -811,6 +811,28 @@ if "Outcome" in sheet_df.columns and "Time" in sheet_df.columns:
     if unclass_count > 0:
         st.warning(f"**{unclass_count:,}** actions could not be classified (new action types?). Review needed.")
 
+    # === PR-C7.1w: DERIVED / ASSUMED times (transparency) ===
+    # A row whose time was filled by the FLAGGED last-resort derivation
+    # (Origin == "derived_standing") DOES carry a concrete time, so it is
+    # correctly NOT a Section-9 "missing time" bug. But that time is the
+    # committee's OWN modal standing schedule pattern anchored to the day's
+    # published adjournment — an inference, not a per-meeting published fact
+    # (LIS published no per-meeting schedule entry; e.g. SJ209's 3/10 P&E
+    # meeting). Surface these explicitly so an assumed time is NEVER mistaken
+    # for a hard one — the lobbyist surface stays complete AND honest
+    # (Standard #3, owner-approved last resort; assumptions_audit #76).
+    if "Origin" in sheet_df.columns:
+        derived_df = sheet_df[sheet_df["Origin"].astype(str) == "derived_standing"]
+        if len(derived_df) > 0:
+            st.warning(
+                f"**{len(derived_df):,}** time(s) are **DERIVED / ASSUMED** — filled from the "
+                "committee's standing schedule pattern + the day's published adjournment "
+                "because LIS published no per-meeting schedule entry. These are flagged, "
+                "not hidden: show them highlighted in the calendar as *assumed from history*."
+            )
+            _cols = [c for c in ("Date", "Time", "Committee", "Bill", "Outcome", "Origin") if c in derived_df.columns]
+            st.dataframe(derived_df[_cols], use_container_width=True, hide_index=True)
+
     # === PR-C7.1b-2: route effect on the flagged subset (the proof) ===
     # The structural router writes ``LegEventRoute`` per row from LIS's own
     # ``ReferenceType`` / ``VoteTally`` / ``Status`` fields. Before this PR
