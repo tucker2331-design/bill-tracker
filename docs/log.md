@@ -9,6 +9,16 @@ Append-only, reverse-chronological (newest at top). Each entry opens with `## [Y
 
 **Kinds:** `ingest` (new source/doc processed), `pr` (PR opened/merged/closed), `decision` (architectural or workflow), `lint` (wiki health-check pass), `session` (notable multi-hour working block), `post-mortem` (failure analysis), `milestone` (project-goal threshold crossed).
 
+## [2026-06-06] milestone | 🎯 Section 9 = 0 — EVERY meeting action now has a time (SJ209 closed via flagged standing-schedule derivation)
+
+Owner pushed past "SJ209 is irreducible" a third time: *"you tell me the last few are unfixable then you find a way — is there another source? We know the committee; fill the time and flag it as assumed, but check every endpoint first."* Both instincts correct.
+
+**The hunt (PR #96 / PR-C7.1w / audit #76):** enumerated all **246 LIS `/api/` endpoints**. Found the committee **MinutesBook** API — it *confirms* P&E's 3/10 meeting officially (published book #3853, "Closed"), though its content blobs 404. DOCKET.CSV has no time column; Calendar API is floor-only. The concrete time is derivable from the committee's OWN published data: P&E's modal standing pattern "15 minutes after the Senate adjourns" (6/6 regular-session meetings) + the published 3/10 "Senate adjourned 5:19 PM" = **5:34 PM**.
+
+**The fix:** `_build_standing_schedule_maps()` + `_derive_standing_committee_time()` — a FLAGGED last-resort wired AFTER every real source (HB438 still keeps its real 8:00 AM; SJ209 gets 5:34 PM derived). Tagged `Origin="derived_standing"`; the X-Ray surfaces a "DERIVED / ASSUMED times" block so an assumed time is flagged, never hidden. Owner-approved narrow relaxation of Standard #3.
+
+**Verified in production** (run 27075505625): `derived_standing=1`, Section-9 missing-times = **0**, SJ209 row = `5:34 PM / derived_standing`, no duplicates (the 3/13 6:00 PM row is the separate House P&E report). Trajectory 1,072 → 0 (100%). See [[state/current_status]], [[failures/assumptions_audit#76]].
+
 ## [2026-06-05] milestone | Section 9 = 1 MEASURED & DURABLE — the residual is one irreducible LIS data gap (SJ209)
 
 Cold-start re-verification after the prior block exposed that **#72's "Section 9 = 1" was a projection, never measured** — the verifying burst ran a commit from before #87 merged (audit #74). The first REAL measurement was 6. Closed to a measured, durable **1** through three structural fixes (each verified on the produced rows, not just the count):
