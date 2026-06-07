@@ -41,6 +41,7 @@ Links use Obsidian `[[wikilink]]` format. Obsidian resolves by filename; path-qu
 ## Testing & Metrics
 - [[testing/crossover_week_baseline]] — Feb 9-13, 2026 as the benchmark; PR-by-PR bug count ledger
 - [[testing/crossover_audit]] — full-window tier-A audit of Sheet1 vs LIS website (ground truth)
+- [[testing/edge_case_registry]] — living catalog of the edge-case SPACE per pipeline stage (Phase-C multi-session replay findings) — full-window tier-A audit of Sheet1 vs LIS website (ground truth)
 
 ## Failures / Post-Mortems
 - [[failures/assumptions_audit]] — every busted assumption and its fix (source of truth for "why we did that"); numbered, append-only
