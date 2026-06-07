@@ -778,9 +778,25 @@ if "Outcome" in sheet_df.columns and "Time" in sheet_df.columns:
         sheet_df["_action_class"] = sheet_df["_action_class_text"]
     sheet_df["_has_time"] = ~sheet_df["Time"].map(normalize_time).isin(PLACEHOLDER_TIMES)
 
-    meeting_df = sheet_df[sheet_df["_action_class"] == "meeting"]
-    admin_df = sheet_df[sheet_df["_action_class"] == "administrative"]
-    unclass_df = sheet_df[sheet_df["_action_class"] == "unclassified"]
+    # Exclude the worker's OWN diagnostic rows (SYSTEM_ALERT / SYSTEM_METRICS,
+    # Committee "System Status") from the accuracy metric — they are not
+    # legislative actions, and their alert/JSON text classifies as
+    # "unclassified", spuriously inflating the unclassified count (measured: the
+    # only 2 "unclassified" rows were these). The accuracy metric must score the
+    # calendar, not the worker's telemetry. (accuracy_sentinel applies the same
+    # exclusion so dashboard and sentinel agree.)
+    # Build the system-row mask guarding on column presence — don't eagerly
+    # construct a fallback Series on every .get() (Gemini #106 review).
+    _is_system = pd.Series(False, index=sheet_df.index)
+    if "Bill" in sheet_df.columns:
+        _is_system = _is_system | sheet_df["Bill"].astype(str).str.startswith("SYSTEM_")
+    if "Committee" in sheet_df.columns:
+        _is_system = _is_system | (sheet_df["Committee"].astype(str).str.strip() == "System Status")
+    _legislative = sheet_df[~_is_system]
+
+    meeting_df = _legislative[_legislative["_action_class"] == "meeting"]
+    admin_df = _legislative[_legislative["_action_class"] == "administrative"]
+    unclass_df = _legislative[_legislative["_action_class"] == "unclassified"]
 
     mt_with = meeting_df[meeting_df["_has_time"]]
     mt_without = meeting_df[~meeting_df["_has_time"]]
