@@ -1095,15 +1095,18 @@ def _derive_standing_committee_time(committee_norm, committee_label, chamber_cod
             # capture would stop at the hyphen, yield "senate", and be wrongly
             # allowed. The class still stops at "(" so a trailing "(View Meeting)"
             # annotation on a genuine chamber pattern doesn't break the match.
-            # Allowlist the FORMAL chamber names too (Gemini #100 re-review):
-            # VA writes "House of Delegates" / "Senate of Virginia", so a bare
-            # {"senate","house"} set would WRONGLY reject "adjournment of the
-            # House of Delegates" (a false decline). A committee ("House
-            # Appropriations") still fails the set. (Mirrors the chamber-name
-            # lists in the convene detector; G3 will lift both into one config.)
+            # The adjourning body must be a CHAMBER, incl. VA's formal names
+            # ("House of Delegates"/"Senate of Virginia") so we don't falsely
+            # reject "adjournment of the House of Delegates" (Gemini #100 r2).
+            # Capture the FULL body name up to any "(" annotation ([^()]+) and
+            # check the COMPLETE string — more robust than a character class,
+            # which truncates a committee name at a separator (hyphen, comma, …)
+            # and could leave just "senate" (Gemini #100 r1 hyphen + r3 comma,
+            # generalized). (Mirrors the convene detector's chamber lists; G3
+            # will lift both into one per-state config.)
             _CHAMBER_FLOOR_NAMES = ("senate", "house", "senate of virginia", "house of delegates")
-            _of = re.search(r'adjourn\w*\s+of\s+(?:the\s+)?([a-z][a-z &-]*)', pl)
-            if _of and _of.group(1).strip(" -") not in _CHAMBER_FLOOR_NAMES:
+            _of = re.search(r'adjourn\w*\s+of\s+(?:the\s+)?([^()]+)', pl)
+            if _of and _of.group(1).strip(" .,-") not in _CHAMBER_FLOOR_NAMES:
                 return None
             ch = anchor_chamber or ("Senate" if chamber_code == "S" else "House")
             base24 = adjourned_clock_by_date.get(date, {}).get(ch)
