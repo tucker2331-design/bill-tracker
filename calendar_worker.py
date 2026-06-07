@@ -1077,13 +1077,20 @@ def _derive_standing_committee_time(committee_norm, committee_label, chamber_cod
         pattern, _n, anchor_chamber = info
         pl = pattern.lower()
         if any(x in pl for x in ("after", "upon")):
-            # Only the chamber-FLOOR-adjournment form is safe to anchor here. A
-            # pattern tied to another body ("upon adjournment of X subcommittee")
-            # or a non-adjournment relative ("30 minutes after recess") would
-            # anchor to the WRONG basis — decline and stay timeless. Edge-case
-            # audit (#76): the chamber-adjournment + offset is the only relative
-            # form we can resolve from published data with confidence.
-            if "adjourn" not in pl or "subcommittee" in pl or "recess" in pl:
+            # Only the chamber-FLOOR adjournment is safe to anchor. Decline any
+            # non-adjournment relative ("after recess", "upon completion of …")
+            # AND any pattern that adjourns a DIFFERENT body — "adjournment of the
+            # Senate Finance Committee", "upon adjournment of Commerce and Labor",
+            # "of X Subcommittee" — since that body's end time isn't resolvable
+            # from published data; anchoring it to the chamber floor would be
+            # wrong. Edge-case audit #76 + Gemini #99: an ALLOWLIST on the
+            # adjourning body (must be exactly the chamber) is more robust than a
+            # blocklist of "committee"/"subcommittee" — it also catches committees
+            # named WITHOUT the word "committee" (e.g. "Commerce and Labor").
+            if "adjourn" not in pl or "recess" in pl:
+                return None
+            _of = re.search(r'adjourn\w*\s+of\s+(?:the\s+)?([a-z][a-z &]*)', pl)
+            if _of and _of.group(1).strip() not in ("senate", "house"):
                 return None
             ch = anchor_chamber or ("Senate" if chamber_code == "S" else "House")
             base24 = adjourned_clock_by_date.get(date, {}).get(ch)
