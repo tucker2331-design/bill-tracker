@@ -39,7 +39,15 @@ RAY = os.path.normpath(os.path.join(os.path.dirname(os.path.abspath(__file__)), 
 SHEET = "1PQDtaTTUeYv781bx4_ZiehcvbEmUt8t7jFmZYJoJGKM"
 # Columns the accuracy metric depends on; a rename upstream must FAIL the sentinel,
 # not let it silently pass (a missing column would read "" and classify benign).
-REQUIRED_COLUMNS = ("Bill", "Outcome", "Time", "LegEventRoute", "Committee", "Origin")
+REQUIRED_COLUMNS = ("Outcome", "Time", "LegEventRoute", "Origin", "Source")
+# Floor on the POSITIVE health metric (structural-resolution rate = non-blank
+# LegEventRoute / legislative rows). Baseline ~83.6% (2026). This is the answer to
+# "homework grading" (Gemini review): a ceiling on BAD outcomes is gameable —
+# if 2027 LIS breaks its schema, the worker gracefully routes everything to the
+# fallback, meeting_unsourced/Section-9 stay 0, and a bad-outcome ceiling reports
+# PASS. But the structural router goes BLANK en masse, so the resolution rate
+# COLLAPSES — which IS the failure, un-gameable. Below this floor = CRITICAL.
+MIN_STRUCTURAL_RESOLUTION = 0.70
 
 
 def _get(url, tries=4):
@@ -76,8 +84,11 @@ def _load_ray2_semantics():
     return ns["classify_action"], ns["normalize_time"], ns["PLACEHOLDER_TIMES"]
 
 
-def _is_system_row(bill, committee):
-    return str(bill).startswith("SYSTEM_") or str(committee).strip() == "System Status"
+def _is_system_row(source):
+    # STRUCTURAL flag the worker writes on its own diagnostic rows (Source="SYSTEM",
+    # Origin="system_alert"/"system_metrics") — NOT the "System Status" committee
+    # TEXT (Standard #3: data-driven, not text-driven; Gemini review).
+    return str(source).strip().upper() == "SYSTEM"
 
 
 def main():
@@ -86,6 +97,8 @@ def main():
     ap.add_argument("--derived-max", type=int, default=25, help="over-derivation guard (G2)")
     ap.add_argument("--section9-max", type=int, default=0)
     ap.add_argument("--unclassified-max", type=int, default=0)
+    ap.add_argument("--min-resolution", type=float, default=MIN_STRUCTURAL_RESOLUTION,
+                    help="floor on structural-resolution rate (anti-homework-grading)")
     args = ap.parse_args()
 
     classify_action, normalize_time, placeholder = _load_ray2_semantics()
@@ -113,15 +126,17 @@ def main():
         i = ci.get(c, -1)
         return r[i] if 0 <= i < len(r) else ""
 
-    total = meeting = mwt = unclass = derived = system = 0
+    total = meeting = mwt = unclass = derived = system = routed = 0
     s9_rows, uc_rows = [], []
     for r in rows[1:]:
         if not any(x.strip() for x in r):
             continue
-        if _is_system_row(cell(r, "Bill"), cell(r, "Committee")):
+        if _is_system_row(cell(r, "Source")):
             system += 1
             continue
         total += 1
+        if str(cell(r, "LegEventRoute")).strip():
+            routed += 1  # structurally resolved by the router (non-blank route)
         cls = classify_action(cell(r, "Outcome"), cell(r, "LegEventRoute"))
         has_time = normalize_time(cell(r, "Time")) not in placeholder
         if cell(r, "Origin") == "derived_standing":
@@ -156,6 +171,15 @@ def main():
     if not floor_ok:
         failed.append("FLOOR (partial sheet — lesson #75)")
     gate("DERIVED volume (over-derivation guard)", derived, args.derived_max, None)
+    # POSITIVE health floor (anti-homework-grading, Gemini review): if the worker
+    # gracefully degraded en masse (e.g., 2027 LIS schema break), bad-outcome
+    # ceilings still PASS but the structural-resolution rate COLLAPSES.
+    resolution = (routed / total) if total else 0.0
+    res_ok = resolution >= args.min_resolution
+    print(f"  [{'PASS' if res_ok else 'FAIL'}] STRUCTURAL RESOLUTION: {resolution:.1%} routed (min {args.min_resolution:.0%}) "
+          f"— un-gameable mass-degradation guard")
+    if not res_ok:
+        failed.append(f"STRUCTURAL RESOLUTION collapsed to {resolution:.1%} (CRITICAL: possible LIS schema break — the worker is routing everything to fallback)")
 
     if failed:
         print(f"\n🚨 SENTINEL FAIL — {len(failed)} invariant(s) breached: {', '.join(failed)}")

@@ -32,3 +32,15 @@ python3 tools/reconciliation/reconcile_votes.py --max-drift 1.0   # exit!=0 if d
 No secrets — reads the live Sheet via the public gviz CSV. Also wired as the
 `🔎 Reconciliation Tripwire` GitHub workflow (manual `workflow_dispatch`;
 `schedule` is ready to enable once the baseline is confirmed stable).
+
+## External-source brittleness (Gemini review)
+This tripwire's independent reference is the LIS **MinutesBook JSON API**
+(`getpublishedminutesbooklistasync` + `getminutesbookasync`) — **not** HTML/PDF
+scraping, so it is more stable than a scraper, but it is still an external
+government API that can change shape or be retired. Guard: if the fetch throws or
+the published-book count falls below `MIN_EXPECTED_BOOKS` (50; a real session
+publishes hundreds), the tool raises a distinct **`EXTERNAL SOURCE CHANGE`**
+failure (exit code **2**, vs **1** for a real drift breach) — an empty/broken
+independent source verifies nothing and must never be reported as "0 drift / PASS."
+If you see exit 2, investigate the MinutesBook API contract before trusting any
+subsequent reconciliation.
