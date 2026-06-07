@@ -1,0 +1,33 @@
+name: 🔎 Reconciliation Tripwire (Sheet1 vs official minutes)
+
+# Standard #2: periodically diff our output against an INDEPENDENT LIS source
+# (the official committee MinutesBook — NOT used by the worker pipeline). Catches
+# UNKNOWN drift in production (mis-attribution / fabricated meetings / gross date
+# errors), not just bugs we can enumerate. Reads the live Sheet via the public
+# gviz CSV — NO secrets required.
+#
+# PROTOTYPE-THEN-SCHEDULE: manual (workflow_dispatch) for now. The commented
+# `schedule` is ready to enable once the baseline (~0.33% known opening-day /
+# crossover residual) is confirmed stable across a few manual runs.
+
+on:
+  workflow_dispatch:
+    inputs:
+      max_drift:
+        description: "Max mis-attribution drift %% before failing"
+        default: "1.0"
+  # schedule:
+  #   - cron: "0 13 * * 1"   # Mondays 13:00 UTC — enable after baseline confirmed
+
+jobs:
+  reconcile:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Reconcile committee reports vs official minutes
+        run: |
+          python3 tools/reconciliation/reconcile_votes.py --max-drift "${{ github.event.inputs.max_drift || '1.0' }}"
