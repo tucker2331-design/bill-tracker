@@ -785,10 +785,13 @@ if "Outcome" in sheet_df.columns and "Time" in sheet_df.columns:
     # only 2 "unclassified" rows were these). The accuracy metric must score the
     # calendar, not the worker's telemetry. (accuracy_sentinel applies the same
     # exclusion so dashboard and sentinel agree.)
-    _is_system = (
-        sheet_df.get("Bill", pd.Series("", index=sheet_df.index)).astype(str).str.startswith("SYSTEM_")
-        | (sheet_df.get("Committee", pd.Series("", index=sheet_df.index)).astype(str).str.strip() == "System Status")
-    )
+    # Build the system-row mask guarding on column presence — don't eagerly
+    # construct a fallback Series on every .get() (Gemini #106 review).
+    _is_system = pd.Series(False, index=sheet_df.index)
+    if "Bill" in sheet_df.columns:
+        _is_system = _is_system | sheet_df["Bill"].astype(str).str.startswith("SYSTEM_")
+    if "Committee" in sheet_df.columns:
+        _is_system = _is_system | (sheet_df["Committee"].astype(str).str.strip() == "System Status")
     _legislative = sheet_df[~_is_system]
 
     meeting_df = _legislative[_legislative["_action_class"] == "meeting"]

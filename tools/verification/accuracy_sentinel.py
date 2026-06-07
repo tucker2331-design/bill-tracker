@@ -83,8 +83,12 @@ def main():
     args = ap.parse_args()
 
     classify_action, normalize_time, placeholder = _load_ray2_semantics()
-    rows = list(csv.reader(io.StringIO(_get(
-        f"https://docs.google.com/spreadsheets/d/{SHEET}/gviz/tq?tqx=out:csv&sheet=Sheet1"))))
+    try:
+        raw = _get(f"https://docs.google.com/spreadsheets/d/{SHEET}/gviz/tq?tqx=out:csv&sheet=Sheet1")
+    except Exception as e:
+        print(f"🚨 SENTINEL FAIL — could not fetch the live sheet after retries: {e}")
+        return 1
+    rows = list(csv.reader(io.StringIO(raw)))
     # An empty/unreadable sheet is itself a failure to catch, not a crash.
     if len(rows) < 2:
         print(f"🚨 SENTINEL FAIL — sheet returned {len(rows)} rows (empty/unreadable). Cannot verify.")
