@@ -9,6 +9,15 @@ Append-only, reverse-chronological (newest at top). Each entry opens with `## [Y
 
 **Kinds:** `ingest` (new source/doc processed), `pr` (PR opened/merged/closed), `decision` (architectural or workflow), `lint` (wiki health-check pass), `session` (notable multi-hour working block), `post-mortem` (failure analysis), `milestone` (project-goal threshold crossed).
 
+## [2026-06-07] session | Post-Section-9 audit + independent verification + proactive future-proofing (PRs #100-104)
+
+Owner: "thorough audit vs our brain's sustainability demands, then full verification, then future-proofing — who's to say that's all the bugs?" Three phases:
+- **A — standards audit** ([[architecture/scalability_audit]], PR #101): 8-standard re-run; 4 gaps — G2/G4 fixed (PR #104), G1 deferred, G3 logged (YAGNI).
+- **B — reconciliation tripwire** ([[tools/reconciliation]], PR #103, Standard #2): diff vs the independent official MinutesBook. **99.67% of committee reports confirmed**, 0.33% known residual → PASS. The continuous answer to unknown bugs. Vote-tally diffing found unreliable (minutes' VoteTally often empty) → verifies meeting/attribution existence ±2d.
+- **C — multi-session edge replay** ([[testing/edge_case_registry]], PR #102): pure functions vs every session LIS serves. Found **B1** (real `parse_24h_time` "8am"/"8:30AM" → 23:59 sort bug, FIXED PR #104), the LIS rolling-window limit, and text-fallback coverage gaps (veto/rename) that `route_event` handles structurally. 2027 cold-start dry-run PASSED.
+
+Also the **discipline correction** the owner caught: I'd been merging before bot review. PR #100 (the derived-standing fold-in) was then held for review and Gemini caught **4 rounds** of real separator edge cases in my own regex (hyphen → formal chamber names → comma → trailing punct); folded all in (final: alpha-words extraction). Lesson: wait for the audit before merging. PRs #100-104 all merged after a CLEAN bot review. See [[failures/assumptions_audit#77]].
+
 ## [2026-06-06] milestone | 🎯 Section 9 = 0 — EVERY meeting action now has a time (SJ209 closed via flagged standing-schedule derivation)
 
 Owner pushed past "SJ209 is irreducible" a third time: *"you tell me the last few are unfixable then you find a way — is there another source? We know the committee; fill the time and flag it as assumed, but check every endpoint first."* Both instincts correct.
