@@ -1046,7 +1046,14 @@ def _build_standing_schedule_maps(schedules, start_date, end_date):
     modal = {}
     for cm, c in patt.items():
         top, n = c.most_common(1)[0]
-        if n >= MIN_STANDING_SAMPLES:
+        total = sum(c.values())
+        # Require a STRONG standing pattern: enough samples (MIN_STANDING_SAMPLES)
+        # AND a clear MAJORITY of the committee's entries (n*2 >= total, i.e. ≥50%).
+        # A committee whose schedule genuinely varies (no dominant time) yields no
+        # modal — the derivation then declines rather than assert a minority time.
+        # Edge-case audit (#76): drops Senate Finance & Appropriations' 30-33%
+        # "modals" while keeping P&E's 75% "15 min after the Senate adjourns".
+        if n >= MIN_STANDING_SAMPLES and n * 2 >= total:
             ch = "Senate" if "senate" in top.lower() else ("House" if "house" in top.lower() else None)
             modal[cm] = (top, n, ch)
     return modal, {k: dict(v) for k, v in adjourned.items()}
@@ -1068,7 +1075,16 @@ def _derive_standing_committee_time(committee_norm, committee_label, chamber_cod
         if not info:
             return None
         pattern, _n, anchor_chamber = info
-        if any(x in pattern.lower() for x in ("after", "upon")):
+        pl = pattern.lower()
+        if any(x in pl for x in ("after", "upon")):
+            # Only the chamber-FLOOR-adjournment form is safe to anchor here. A
+            # pattern tied to another body ("upon adjournment of X subcommittee")
+            # or a non-adjournment relative ("30 minutes after recess") would
+            # anchor to the WRONG basis — decline and stay timeless. Edge-case
+            # audit (#76): the chamber-adjournment + offset is the only relative
+            # form we can resolve from published data with confidence.
+            if "adjourn" not in pl or "subcommittee" in pl or "recess" in pl:
+                return None
             ch = anchor_chamber or ("Senate" if chamber_code == "S" else "House")
             base24 = adjourned_clock_by_date.get(date, {}).get(ch)
             if not base24:
@@ -1079,6 +1095,13 @@ def _derive_standing_committee_time(committee_norm, committee_label, chamber_cod
                 t = datetime.strptime(pattern.upper().replace('.', ''), '%I:%M %p')
             except Exception:
                 return None
+        # Business-hours guard (edge-case audit #76): a late adjournment + offset
+        # can wrap past midnight (observed: 12:29 AM on the reconvened session)
+        # and a stray concrete pattern can be pre-dawn — both implausible for a
+        # real committee meeting. Bound to the shared [MIN, MAX] window (same
+        # window as _has_meeting_time / _plausible_meeting_time); else timeless.
+        if not (_MEETING_HOUR_MIN <= t.hour <= _MEETING_HOUR_MAX):
+            return None
         # 12h display via strftime (Gemini PR #96). lstrip('0') drops the leading
         # zero of %I ("05:34 PM" -> "5:34 PM"; "12:00 PM" unaffected) — cross-
         # platform, unlike the %-I glibc extension.
