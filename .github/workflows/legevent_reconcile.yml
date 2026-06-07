@@ -16,8 +16,8 @@ on:
       max_drift:
         description: "Max mis-attribution drift %% before failing"
         default: "1.0"
-  # schedule:
-  #   - cron: "0 13 * * 1"   # Mondays 13:00 UTC — enable after baseline confirmed
+  schedule:
+    - cron: "0 13 * * 1"   # Mondays 13:00 UTC — baseline (0.33%) confirmed stable
 
 jobs:
   reconcile:

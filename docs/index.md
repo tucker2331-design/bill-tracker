@@ -32,6 +32,7 @@ Links use Obsidian `[[wikilink]]` format. Obsidian resolves by filename; path-qu
 - [[architecture/calendar_pipeline]] — LIS → worker → Sheet1 data flow + resolution priorities
 - [[architecture/scalability_audit]] — standing standards-compliance audit (scalable / sustainable / zero-maintenance?); re-run after any architecturally-significant change
 - [[architecture/stress_test_failure_modes]] — adversarial failure-mode audit: what breaks tomorrow / in 6 months / in 2 years, with severity + status
+- [[architecture/verification_durability]] — the three-layer continuous accuracy guard (breaker / daily sentinel / weekly reconciliation); how next session won't silently regress
 
 ## Domain Knowledge
 - [[knowledge/lis_api_reference]] — VA LIS endpoints, auth, quirks
@@ -57,6 +58,8 @@ The codebase itself (`calendar_worker.py`, `pages/ray2.py`, etc.) is the raw lay
 
 ## Tooling
 - `tools/crossover_audit/` — runnable pipeline for the full-window LIS audit; see [[testing/crossover_audit]] for context.
+- `tools/verification/` — the **Accuracy Sentinel** (daily Section-9 + unclassified + partial-sheet guard; session-agnostic). See [[architecture/verification_durability]].
+- `tools/reconciliation/` — the **Reconciliation Tripwire** (weekly diff vs the independent official MinutesBook).
 - `tools/c7_section9_verify/` — read-only check of the X-Ray Section 9 count against LIVE Sheet1 (the production artifact, not a sidecar tool). The reusable form of the verification method [[failures/assumptions_audit#62]] mandates; run after re-hydrating the LegEvent cache.
 
 ---
