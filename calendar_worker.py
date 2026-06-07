@@ -1461,6 +1461,12 @@ LEGEVENT_EVENTS_REQUIRED_COLS = [
 ]
 LEGEVENT_TTL_SECONDS = 6 * 3600       # owner-mandated 6h TTL safety net
 LEGEVENT_FETCHES_PER_CYCLE = 500      # owner-mandated 500 cap; raise w/ telemetry
+# G2 (scalability_audit): derived_standing is the FLAGGED last-resort assumed-time
+# path; it should be rare (1 in the 2026 session). A spike means over-derivation
+# (a modal-map/matching bug) that would LOWER meeting_unsourced and look falsely
+# healthy — alert above this absolute floor. Loose because a 2027 cold start may
+# briefly derive a handful before the cache warms; tune with telemetry.
+DERIVED_STANDING_ALERT_MAX = 25
 # PR-C7.1e: Google Sheets hard cap is 10M cells/workbook. Keep a safety
 # ceiling below it so cache-tab creation/growth alerts loudly rather than
 # tripping the raw API error (which froze Sheet1 in PR-C6). Shared by tab
@@ -2341,8 +2347,19 @@ def parse_24h_time(raw_time, parent_time_24h=None):
             except:
                 return "06:00"
         return "06:00"
-    try: return datetime.strptime(time_val, '%I:%M %p').strftime('%H:%M')
-    except: return "23:59"
+    # Normalize loose LIS time formats before strptime (edge_case_registry B1,
+    # found by the multi-session replay): insert a space before AM/PM
+    # ("8:30AM" -> "8:30 AM") and add ":00" to a colon-less hour ("8AM" ->
+    # "8:00 AM"). Without this, real entries like "8am" (Senate General Laws) and
+    # "8:30AM" (Senate Education & Health) fell to the 23:59 sentinel and
+    # mis-sorted the meeting to end-of-day — invisible to Section 9 (it HAS a
+    # time; only the SORT was wrong, same blind spot as #79).
+    _t = re.sub(r'(\d)\s*(AM|PM)\b', r'\1 \2', time_val)
+    _t = re.sub(r'^(\d{1,2})\s+(AM|PM)$', r'\1:00 \2', _t)
+    try:
+        return datetime.strptime(_t, '%I:%M %p').strftime('%H:%M')
+    except Exception:
+        return "23:59"
 
 def build_time_graph(schedules):
     raw_times = {}
@@ -5041,6 +5058,23 @@ def run_calendar_update():
             # surfaces in its own "🔗 Sibling-time inheritance: N …" print.
         )
         print(f"📊 {metrics_summary}")
+        # G4 (Standard #7 — a metric needs a DENOMINATOR): derived_standing is a
+        # LAST-resort fraction of the recovery-eligible pool (rows the structural
+        # recovery targeted = its successes + its NO_SCHEDULE_MATCH failures).
+        _derived = source_miss_counts.get("derived_standing", 0)
+        _recov_pool = source_miss_counts.get("legevent_context_recovered", 0) + source_miss_counts.get("unsourced_journal", 0)
+        print(f"🔎 Derived/assumed times: {_derived} of ~{_recov_pool} recovery-eligible rows "
+              f"({(100.0 * _derived / _recov_pool if _recov_pool else 0):.2f}%) — flagged Origin=derived_standing")
+        # G2 (Standard #2/#4 — volume guard): a derived_standing spike signals
+        # over-derivation (modal-map / matching bug) that LOWERS meeting_unsourced
+        # and looks falsely healthy. Alert above the absolute floor.
+        if _derived > DERIVED_STANDING_ALERT_MAX:
+            push_system_alert(
+                f"derived_standing={_derived} exceeds {DERIVED_STANDING_ALERT_MAX} — the FLAGGED last-resort "
+                f"assumed-time path is firing far more than expected; verify the modal map / matching "
+                f"(possible over-derivation masking meeting_unsourced).",
+                status="WARN", category="DATA_ANOMALY", severity="WARN", dedup_key="derived_standing_volume",
+            )
         alert_rows.append({
             "Date": now.strftime("%Y-%m-%d"),
             "Time": now.strftime("%I:%M %p"),
