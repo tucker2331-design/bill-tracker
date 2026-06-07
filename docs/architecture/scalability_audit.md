@@ -1,12 +1,39 @@
 ---
 tags: [architecture, audit, scalability, standards]
-updated: 2026-06-03
+updated: 2026-06-07
 status: active
 ---
 
 # Scalability & Sustainability Audit — Standards Compliance
 
-A standing assessment of the calendar subsystem against the 8 Non-Negotiable Engineering Standards (CLAUDE.md). Re-run and date-stamp this after any architecturally-significant change. Owner's question that prompted it (2026-06-03): *"is everything scalable, sustainable, long-term, and 0-maintenance?"*
+A standing assessment of the calendar subsystem against the 8 Non-Negotiable Engineering Standards (CLAUDE.md). Re-run and date-stamp this after any architecturally-significant change. Owner's question that prompted it (2026-06-03): *"is everything scalable, sustainable, long-term, and 0-maintenance?"* Re-run 2026-06-07 at owner's request after the Section-9 → 0 work block ("make sure it checks off all of our sustainability demands").
+
+## Verdict (2026-06-07, after Section 9 = 0 via `derived_standing` + ministerial-window + schema-migration)
+
+**Lobbyist-critical path remains sound and self-defending. This block ADDED four NON-blocking gaps that should close before 50-state scale or the 2027 season — none corrupts current output, but each is a real Standard debt.** The new `derived_standing` feature (the flagged last-resort time) is correct and bounded but is the source of three of the four gaps.
+
+| # | Standard | Verdict (2026-06-07) | Gap introduced this block |
+|---|----------|----------------------|---------------------------|
+| 1 | Zero assumptions + runtime drift-validation | ⚠️ **GAP** | New static heuristics — `MEETING_HOUR_MIN/MAX = 7/23`, `MIN_STANDING_SAMPLES = 3`, the majority rule, the `_build_standing_schedule_maps` exclusion word-list — are documented (#74/#76) but have **no runtime drift check**. Standard #1 demands "a runtime check that validates it." E.g. nothing counts meeting-routed rows whose real timestamp falls OUTSIDE [7,23] (the signal the window is too tight). **Fix G1.** |
+| 2 | Bank-grade reliability (breaker + RECONCILIATION) | ⚠️ **GAP (known)** | Circuit breaker intact. But (a) **reconciliation vs LIS is still NOT built** (Standard #2's "periodically diff output against LIS") — the standing latent debt, now Phase B; (b) the breaker watches `meeting_unsourced` but has **no guard on `derived_standing` volume** — an over-derivation bug would LOWER `meeting_unsourced` (looks healthy) while emitting wrong assumed times. **Fix G2 + Phase-B tripwire.** |
+| 3 | Data-driven, not text | ⚠️ **caveat (widened)** | `derived_standing` is a SECOND lobbyist-path consumer that parses LIS's published relative-time text ("15 minutes after the Senate adjourns") — same family as #79. Owner-approved, last-resort, FLAGGED (`Origin=derived_standing`, shown as ASSUMED). Honest status: the lobbyist path is structural EXCEPT the flagged derived time + the existing blank-route text classifier. |
+| 4 | Self-describing errors | ✅ (mostly) | `derived_standing` counter exists; a declined derivation falls through to the visible `NO_SCHEDULE_MATCH` alert. Minor: no metric for the derivation's denominator (see #7). |
+| 5 | Dynamic configuration | ✅ | Modal patterns + adjourned clocks are DERIVED from the Schedule API each cycle (`_build_standing_schedule_maps`); nothing new hardcoded except the heuristics in #1. |
+| 6 | Scalability to 50 states | ⚠️ **GAP (new surface)** | `derived_standing` hardcodes VA/English specifics: chamber names "Senate"/"House", the "adjourned" marker concept, the "X minutes after [chamber] adjourns" grammar, and English exclusion words. It IS isolated to 2 functions (Standard #6 "isolated and swappable" — half-met) but **not parameterized** — it ports only with per-state tuning. New VA-specific surface area GREW this block. **Fix G3 (extract a per-state config block).** |
+| 7 | No vibe coding (metric needs a DENOMINATOR) | ⚠️ **GAP** | `derived_standing = 1` is a bare numerator. The owner's own rule: a metric needs a denominator. Missing: "of N committee-report rows unsourced by any real source, M were derived, K stayed timeless." Without it we can't see if derivation is over/under-firing. **Fix G4.** |
+| 8 | Zero routine maintenance | ✅ (with #6) | Self-calibrating across VA sessions (modal re-derives from each session's Schedule API). The per-state tuning of #6 is a one-time onboarding cost, not routine. The Phase-B tripwire would further reduce the "human watches the count" residue. |
+
+### Actionable fixes from this audit (small, batched as one PR after #100 merges)
+- **G1 — out-of-window drift counter:** count meeting-routed rows whose real timestamp is outside `[MEETING_HOUR_MIN, MEETING_HOUR_MAX]`; surface in `SYSTEM_METRICS` so a too-tight window is visible (Standard #1/#4). Cheap.
+- **G2 — `derived_standing` volume guard:** it is a LAST resort and should be rare; alert (WARN) if it exceeds a small absolute count in a cycle (signal of over-derivation / a modal-map bug). Standard #2/#4.
+- **G3 — isolate the VA-specifics:** lift chamber names + the adjourned-grammar tokens + exclusion words into a clearly-labeled per-state config block (Standard #6) so state #2 swaps a table, not code.
+- **G4 — derivation denominator:** emit `derived_eligible` (committee-report rows unsourced by a real source) alongside `derived_standing` and `derived_declined`, so the metric has a denominator (Standard #7).
+
+*(G1/G2/G4 are quick; G3 is a refactor. None blocks current correctness — `derived_standing=1` and bounded. Held until #100 merges to avoid `calendar_worker.py` conflicts.)*
+
+---
+
+## Verdict (2026-06-03, after Section 9 = 1,072 → 25) — superseded, kept for history
 
 ## Verdict (2026-06-03, after Section 9 = 1,072 → 25)
 
