@@ -868,7 +868,8 @@ def _plausible_meeting_time(eventdate_raw):
     # removes a latent divergence between the shared window's two consumers).
     _parts = t.strip().split(":")
     try:
-        h = int(_parts[0]); m = int(_parts[1])
+        h = int(_parts[0])
+        m = int(_parts[1])
     except (ValueError, IndexError):
         return None
     if not (_MEETING_HOUR_MIN <= h <= _MEETING_HOUR_MAX and 0 <= m <= 59):
@@ -1089,8 +1090,13 @@ def _derive_standing_committee_time(committee_norm, committee_label, chamber_cod
             # named WITHOUT the word "committee" (e.g. "Commerce and Labor").
             if "adjourn" not in pl or "recess" in pl:
                 return None
-            _of = re.search(r'adjourn\w*\s+of\s+(?:the\s+)?([a-z][a-z &]*)', pl)
-            if _of and _of.group(1).strip() not in ("senate", "house"):
+            # Hyphen IS in the class (Gemini #100): committee names are often
+            # hyphenated ("Senate - Finance", "Senate-Finance"); without it the
+            # capture would stop at the hyphen, yield "senate", and be wrongly
+            # allowed. The class still stops at "(" so a trailing "(View Meeting)"
+            # annotation on a genuine chamber pattern doesn't break the match.
+            _of = re.search(r'adjourn\w*\s+of\s+(?:the\s+)?([a-z][a-z &-]*)', pl)
+            if _of and _of.group(1).strip(" -") not in ("senate", "house"):
                 return None
             ch = anchor_chamber or ("Senate" if chamber_code == "S" else "House")
             base24 = adjourned_clock_by_date.get(date, {}).get(ch)
