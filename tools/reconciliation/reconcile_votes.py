@@ -69,16 +69,34 @@ def main():
     # catch a WRONG VOTE, not a slightly-off DATE (tracked separately).
     from datetime import datetime as _dt, timedelta as _td
     DATE_TOL = 2
+    # EXTERNAL-SOURCE DEPENDENCY (Gemini review): this tripwire relies on the LIS
+    # MinutesBook JSON API (NOT HTML/PDF scraping — more stable, but still external
+    # and versionable). It is the SECOND, independent source; if it FAILS or returns
+    # suspiciously FEW books, we must NOT silently report PASS — an empty/broken
+    # independent source verifies nothing (0 drift would be a false PASS, the same
+    # "homework-grading" trap). Raise a distinct EXTERNAL SOURCE CHANGE failure
+    # (exit 2) so it is never confused with a real drift breach (exit 1).
+    MIN_EXPECTED_BOOKS = 50   # a real session publishes hundreds; <50 == source broke/empty
     print("Fetching official MinutesBook index (independent source)…")
     book_idx = {}
     nbooks = 0
-    for cc in ("S", "H"):
-        j = json.loads(_get(f"https://lis.virginia.gov/MinutesBook/api/getpublishedminutesbooklistasync?sessionCode={args.session}&chamberCode={cc}", H).decode())
-        for m in j.get("Minutes") or []:
-            if m.get("CommitteeName") and m.get("MinutesDate"):
-                book_idx.setdefault((cc, committee_core(m["CommitteeName"])), {})[m["MinutesDate"][:10]] = m["MinutesBookID"]
-                nbooks += 1
+    try:
+        for cc in ("S", "H"):
+            j = json.loads(_get(f"https://lis.virginia.gov/MinutesBook/api/getpublishedminutesbooklistasync?sessionCode={args.session}&chamberCode={cc}", H).decode())
+            for m in j.get("Minutes") or []:
+                if m.get("CommitteeName") and m.get("MinutesDate"):
+                    book_idx.setdefault((cc, committee_core(m["CommitteeName"])), {})[m["MinutesDate"][:10]] = m["MinutesBookID"]
+                    nbooks += 1
+    except Exception as e:
+        print(f"🚨 EXTERNAL SOURCE CHANGE — MinutesBook API fetch/parse failed ({type(e).__name__}: {e}). "
+              f"Cannot reconcile against the independent source; NOT reporting PASS.")
+        return 2
     print(f"  {nbooks} official committee-meeting books")
+    if nbooks < MIN_EXPECTED_BOOKS:
+        print(f"🚨 EXTERNAL SOURCE CHANGE — only {nbooks} minutes books (< {MIN_EXPECTED_BOOKS}); the "
+              f"MinutesBook API likely changed shape or returned empty. An empty independent source "
+              f"can't verify drift — NOT reporting PASS (this is NOT '0 drift').")
+        return 2
 
     def books_near(cc, core, date):
         """(abs_offset, bookId) for this committee within ±DATE_TOL days, nearest first."""

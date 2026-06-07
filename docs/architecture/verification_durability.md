@@ -32,6 +32,36 @@ say that's all the bugs?": it diffs our output against a source the pipeline
 **never touches** (the official committee minutes), catching *unknown* drift no
 internal check could.
 
+## Anti-"homework-grading" invariants (Gemini architectural review, audit #78)
+
+A guard that only watches BAD outcomes is defeated by **graceful degradation**:
+if 2027 LIS breaks its schema, the worker cleanly routes everything to the
+fallback/Ledger, `meeting_unsourced` / Section 9 stay 0, and a bad-outcome
+ceiling reports PASS over a silent catastrophe. So the guards include **positive
+invariants** and **dead-source detection**:
+
+- **Structural-resolution FLOOR (sentinel):** non-blank `LegEventRoute` /
+  legislative rows must stay ≥ 70% (baseline ~83.6%). Mass degradation
+  *collapses* this — that IS the failure being measured, so it can't be gamed by
+  the worker "handling" the break. The positive-health complement to the
+  breaker's single negative signal.
+- **EXTERNAL SOURCE CHANGE (tripwire):** the reconciliation depends on the LIS
+  **MinutesBook JSON API** (not HTML/PDF scraping — more stable, but still
+  external and versionable). If it returns too few books or the fetch throws, the
+  tripwire raises a distinct `EXTERNAL SOURCE CHANGE` failure (exit 2) — an empty
+  independent source verifies nothing and must never read as "0 drift / PASS."
+- **Structural, not text, identity:** the worker's own diagnostic rows are
+  excluded by the structural `Source == "SYSTEM"` flag, never the "System Status"
+  committee text (Standard #3).
+
+**Known proliferation (acknowledged, not "fixed"):** the in-cycle **circuit
+breaker** watches `meeting_unsourced`, which graceful mass-degradation also drives
+to 0 — the same blind spot. Its trip logic is left unchanged on purpose (it is
+delicately calibrated; a new input risks freezing the 2027 cold start — audit
+#53). The sentinel's structural-resolution floor is its deliberate macro-degradation
+complement: the breaker guards per-cycle on its calibrated signal; the sentinel
+(daily, non-gating) catches the mass-degradation a single signal can't.
+
 ## Why this is session-agnostic (2027-safe)
 - The worker derives session code, committee maps, ministerial codes, the modal
   schedule maps, and the convene/adjourned graph from the LIS APIs **each cycle**
