@@ -73,6 +73,37 @@ complement: the breaker guards per-cycle on its calibrated signal; the sentinel
 - The cache self-prunes the prior session on rollover (audit #73), and a cold
   2027 start drains Tier A then self-heals (stress-test S1/S2).
 
+## Is it TRULY session-agnostic? (the honest confirmation)
+
+**YES for all logic and all three guardrails — with ONE deliberate, self-alerting
+annual transition point, not routine maintenance.**
+
+Session-agnostic by construction:
+- The worker derives session code, committee maps, ministerial EventCodes, the
+  modal schedule maps, and the convene/adjourned graph from the LIS APIs **every
+  cycle** — re-calibrated from 2027's own data, no 2026 constants in the logic.
+- All three guards read the **active** session's live output/APIs, never a 2026
+  snapshot, and their thresholds are session-stable invariants (resolution ≥ 70%
+  vs ~83.6% baseline; drift ≤ 1%; derived ≤ 25; ≥ 50 minutes books).
+- New features degrade safely on a cold 2027 cache (DR1 dry-run: empty maps →
+  no derivation, all-Tier-A hydration, no spurious back-fill).
+- The cache self-prunes the prior session on rollover (#73); the breaker
+  preserves last-known-good through the cold-start spike (#75 clamp + S2).
+
+The one NON-automatic touchpoint (deliberate, self-alerting — Standard #8's
+"deliberate annual transition," not "routine maintenance"):
+- **`investigation_config.py` window** is pinned (`INVESTIGATION_END=2026-05-01`).
+  When the 2027 session starts, the worker raises a WARN that the window is stale
+  (#1r); the operator updates it **once** (~5 min). Until then the worker still
+  functions on the #75-clamped window.
+
+One session-START watch item (first ~1-2 weeks of a new session only): the
+sentinel's absolute row-floor (5000) and resolution-floor assume a populated
+sheet. Early in a fresh session the sheet is still ramping; the breaker's
+last-known-good preservation covers most of this (the sheet shows carried-forward
+data until 2027's cache warms), but confirm the sentinel isn't tripping on a
+legitimate early-session ramp before treating it as a regression.
+
 ## What "verified" means here (honest scope)
 - **Section 9 = 0** and **unclassified = 0** are measured against the FULL live
   sheet every day (the goal, both halves).
