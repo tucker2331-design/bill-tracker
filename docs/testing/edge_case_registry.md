@@ -16,7 +16,7 @@ The 2026 bugs surfaced because we looked at 2026 data. To catch *unknown* classe
 |---|---|---|
 | `00:00` / `04:00` / `05:00` doc-batch artifacts | ✅ | `[7,23]` window (#74) excludes all; unified router+recovery. |
 | Relative "X min after [chamber] adjourns" | ✅ | #79 anchor + offset; derivation reuses it. |
-| **`"8am"` (no colon), `"8:30AM"` (no space before AM/PM), lowercase** | ❌ **OPEN BUG** | `parse_24h_time` `strptime('%I:%M %p')` fails → **`23:59` sort fallback** → meeting mis-sorted to end-of-day. Real current entries: Senate General Laws 1/23 (`8am`), Senate Education & Health 2/6 (`8:30AM`). **Same blind spot as #79** (has a time, so Section 9 never flagged it; the SORT is wrong). Fix: normalize (insert space before AM/PM, add `:00` when colon-less) before strptime. **→ post-#100 batch.** |
+| **`"8am"` (no colon), `"8:30AM"` (no space before AM/PM), lowercase** | ✅ **FIXED (PR-C7.1y)** | `parse_24h_time` `strptime('%I:%M %p')` fails → **`23:59` sort fallback** → meeting mis-sorted to end-of-day. Real current entries: Senate General Laws 1/23 (`8am`), Senate Education & Health 2/6 (`8:30AM`). **Same blind spot as #79** (has a time, so Section 9 never flagged it; the SORT is wrong). Fix: normalize (insert space before AM/PM, add `:00` when colon-less) before strptime. **→ post-#100 batch.** |
 | `"Invalid date"` literal junk | ⚠️ | → `23:59`; rare LIS junk (Crime Commission 2025). Acceptable fallback but should be counted (Standard #4 visibility). |
 | midnight-wrap (late adjournment + offset → 00:29) | ✅ | derivation bounds to `[7,23]` (#76). |
 
@@ -49,7 +49,7 @@ The STRUCTURAL primary (`route_event` on ReferenceType/VoteTally/Status) is robu
 | Schedule API / HISTORY.CSV rolling window (no pre-2022) | ✅ documented; bounds historical backfill |
 
 ## Open items → batched
-- **B1 (bug):** `parse_24h_time` / `_plausible_meeting_time` no-colon/no-space/lowercase time formats → robust normalize. *(post-#100 code batch)*
+- **B1 (bug):** ✅ FIXED (PR-C7.1y) — `parse_24h_time` normalizes no-colon/no-space/lowercase formats before strptime.
 - **G1–G4:** the Standard gaps from `scalability_audit.md` (drift counter, derived volume guard, 50-state isolation, denominator).
 - **V1 (verify, Phase B):** production `unclassified` count in the reconvened/veto session ~0 (structural route covers veto); committee-rename handling.
 - **DR1:** 2027 cold-start dry-run.
