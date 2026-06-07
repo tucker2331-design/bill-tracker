@@ -868,7 +868,8 @@ def _plausible_meeting_time(eventdate_raw):
     # removes a latent divergence between the shared window's two consumers).
     _parts = t.strip().split(":")
     try:
-        h = int(_parts[0]); m = int(_parts[1])
+        h = int(_parts[0])
+        m = int(_parts[1])
     except (ValueError, IndexError):
         return None
     if not (_MEETING_HOUR_MIN <= h <= _MEETING_HOUR_MAX and 0 <= m <= 59):
@@ -1077,13 +1078,39 @@ def _derive_standing_committee_time(committee_norm, committee_label, chamber_cod
         pattern, _n, anchor_chamber = info
         pl = pattern.lower()
         if any(x in pl for x in ("after", "upon")):
-            # Only the chamber-FLOOR-adjournment form is safe to anchor here. A
-            # pattern tied to another body ("upon adjournment of X subcommittee")
-            # or a non-adjournment relative ("30 minutes after recess") would
-            # anchor to the WRONG basis — decline and stay timeless. Edge-case
-            # audit (#76): the chamber-adjournment + offset is the only relative
-            # form we can resolve from published data with confidence.
-            if "adjourn" not in pl or "subcommittee" in pl or "recess" in pl:
+            # Only the chamber-FLOOR adjournment is safe to anchor. Decline any
+            # non-adjournment relative ("after recess", "upon completion of …")
+            # AND any pattern that adjourns a DIFFERENT body — "adjournment of the
+            # Senate Finance Committee", "upon adjournment of Commerce and Labor",
+            # "of X Subcommittee" — since that body's end time isn't resolvable
+            # from published data; anchoring it to the chamber floor would be
+            # wrong. Edge-case audit #76 + Gemini #99: an ALLOWLIST on the
+            # adjourning body (must be exactly the chamber) is more robust than a
+            # blocklist of "committee"/"subcommittee" — it also catches committees
+            # named WITHOUT the word "committee" (e.g. "Commerce and Labor").
+            if "adjourn" not in pl or "recess" in pl:
+                return None
+            # Hyphen IS in the class (Gemini #100): committee names are often
+            # hyphenated ("Senate - Finance", "Senate-Finance"); without it the
+            # capture would stop at the hyphen, yield "senate", and be wrongly
+            # allowed. The class still stops at "(" so a trailing "(View Meeting)"
+            # annotation on a genuine chamber pattern doesn't break the match.
+            # The adjourning body must be a CHAMBER, incl. VA's formal names
+            # ("House of Delegates"/"Senate of Virginia") so we don't falsely
+            # reject "adjournment of the House of Delegates" (Gemini #100 r2).
+            # Capture the body up to any "(" annotation, then reduce it to its
+            # ALPHA WORDS only — immune to ANY separator or trailing punctuation
+            # (space, hyphen, comma, period, semicolon, newline). This ends the
+            # separator/trailing-char class definitively (Gemini #100 r1 hyphen,
+            # r3 comma, r4 trailing-punct) instead of a fragile strip() set: a
+            # committee ("senate finance committee", "senate - finance" → "senate
+            # finance") collapses to a multi-word string that is NOT in the
+            # chamber allowlist, so only a true chamber-floor body matches.
+            # (Mirrors the convene detector's chamber lists; G3 lifts both into
+            # one per-state config.)
+            _CHAMBER_FLOOR_NAMES = ("senate", "house", "senate of virginia", "house of delegates")
+            _of = re.search(r'adjourn\w*\s+of\s+(?:the\s+)?([^()]+)', pl)
+            if _of and " ".join(re.findall(r'[a-z]+', _of.group(1))) not in _CHAMBER_FLOOR_NAMES:
                 return None
             ch = anchor_chamber or ("Senate" if chamber_code == "S" else "House")
             base24 = adjourned_clock_by_date.get(date, {}).get(ch)
