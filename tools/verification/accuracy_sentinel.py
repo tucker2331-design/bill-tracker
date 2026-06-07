@@ -25,6 +25,7 @@ Usage: python3 tools/verification/accuracy_sentinel.py [--min-rows 5000] [--deri
 """
 import sys
 import io
+import os
 import csv
 import re
 import ast
@@ -32,8 +33,13 @@ import argparse
 import time
 import urllib.request
 
-RAY = "pages/ray2.py"
+# Resolve ray2.py relative to THIS file, not the cwd, so the sentinel runs from
+# any working directory (Gemini #106).
+RAY = os.path.normpath(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", "pages", "ray2.py"))
 SHEET = "1PQDtaTTUeYv781bx4_ZiehcvbEmUt8t7jFmZYJoJGKM"
+# Columns the accuracy metric depends on; a rename upstream must FAIL the sentinel,
+# not let it silently pass (a missing column would read "" and classify benign).
+REQUIRED_COLUMNS = ("Bill", "Outcome", "Time", "LegEventRoute", "Committee", "Origin")
 
 
 def _get(url, tries=4):
@@ -41,7 +47,7 @@ def _get(url, tries=4):
     for attempt in range(tries):
         try:
             with urllib.request.urlopen(url, timeout=120) as resp:
-                return resp.read().decode()
+                return resp.read().decode("utf-8")
         except Exception:
             if attempt == tries - 1:
                 raise
@@ -66,7 +72,7 @@ def _load_ray2_semantics():
             if ((isinstance(n, (ast.Assign, ast.AnnAssign)) and _defines_const(n))
                 or (isinstance(n, ast.FunctionDef) and n.name in funcs))]
     ns = {"re": re}
-    exec(compile(ast.Module(body, []), "ray2-extract", "exec"), ns)
+    exec(compile(ast.Module(body, []), "ray2-extract", "exec", dont_inherit=True), ns)
     return ns["classify_action"], ns["normalize_time"], ns["PLACEHOLDER_TIMES"]
 
 
@@ -94,6 +100,14 @@ def main():
         print(f"🚨 SENTINEL FAIL — sheet returned {len(rows)} rows (empty/unreadable). Cannot verify.")
         return 1
     ci = {c: i for i, c in enumerate(rows[0])}
+    # Schema-drift guard: a renamed/removed column would read "" everywhere and
+    # let the metric silently pass (Section 9 falsely 0). Require the columns the
+    # accuracy metric depends on (Gemini #106).
+    _missing = [c for c in REQUIRED_COLUMNS if c not in ci]
+    if _missing:
+        print(f"🚨 SENTINEL FAIL — sheet is missing required column(s) {_missing}; "
+              f"schema may have changed. Cannot trust the accuracy metric.")
+        return 1
 
     def cell(r, c):
         i = ci.get(c, -1)
