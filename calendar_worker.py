@@ -2256,9 +2256,13 @@ def get_active_session_info(http_session):
                     if not d:
                         continue
                     try:
-                        ev.append(pd.to_datetime(d).replace(tzinfo=None))
+                        dt = pd.to_datetime(d).replace(tzinfo=None)
                     except (ValueError, TypeError):
                         print(f"⚠️ Session date parsing failed for: {d}")
+                        continue
+                    if pd.isna(dt):   # pd.to_datetime can return NaT instead of raising; don't pollute max() (Gemini #109)
+                        continue
+                    ev.append(dt)
                 end = max(ev) if ev else datetime(syear, 7, 1)
                 # Plausibility: end after start and within ~2y (malformed feed guard).
                 if not (start < end < start + timedelta(days=730)):
