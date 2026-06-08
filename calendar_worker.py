@@ -18,8 +18,6 @@ from google.oauth2.service_account import Credentials
 from bs4 import BeautifulSoup
 import pdfplumber
 
-from investigation_config import INVESTIGATION_START as _WINDOW_START_STR
-from investigation_config import INVESTIGATION_END as _WINDOW_END_STR
 
 # PR-C7.1b-1: the dictionary-free structural calendar-vs-ledger router.
 # Single source of truth at the repo root, imported by the worker AND the
@@ -66,12 +64,13 @@ _EXPECTED_EVENT_KEYS = frozenset({
 })
 
 # === INVESTIGATION WINDOW ===
-# Single source of truth lives in investigation_config.py and is imported by
-# both the worker and the X-Ray tool. The strings are parsed to datetime here
-# for the worker's scrape-window filter. Do NOT define the window inline in
-# this file — edit investigation_config.py to shift the zoom.
-INVESTIGATION_START = datetime.strptime(_WINDOW_START_STR, "%Y-%m-%d")
-INVESTIGATION_END = datetime.strptime(_WINDOW_END_STR, "%Y-%m-%d")
+# The worker's scrape/processing window is DERIVED FROM THE SESSION API each run
+# (Standard #5): get_active_session_info → extract_dates reads the published
+# "Session Start" event and the latest in-session event. There is NO pinned
+# INVESTIGATION_START/END here anymore (it required a manual annual bump — a
+# Standard #5/#8 violation). The X-Ray diagnostic (ray2.py) still imports
+# investigation_config.py for its own DISPLAY viewport; that is a separate,
+# non-production concern.
 
 # === FORWARD CALENDAR (PR-FC1, design in docs/ideas/future_improvements.md) ===
 # How far ahead to surface scheduled-but-not-yet-happened meetings. A timedelta
@@ -2233,16 +2232,37 @@ def get_active_session_info(http_session):
             now = datetime.now(tz).replace(tzinfo=None)
 
             def extract_dates(session_obj):
-                events = session_obj.get('SessionEvents', [])
-                valid_dates = []
-                for e in events:
+                # Window DERIVED from the Session API (Standard #5), made robust to
+                # the flaky-subset SessionEvents bug (#75): the old `min(events)`
+                # jumped to late March when the API returned a PARTIAL event list,
+                # silently shrinking the window and dropping crossover week. Anchor
+                # the START instead to the STABLE `SessionYear` field — Nov 1 of the
+                # year BEFORE the session (before prefiling begins; the HISTORY blob
+                # is session-specific, so an early floor can't bleed in the prior
+                # session). END = the latest published session event (Adjournment/
+                # Reconvene); the caller extends it to >= today for a live session.
+                # This captures everything the old min/max did (and is a superset,
+                # so it can never silently shrink) with NO hardcoded year.
+                try:
+                    syear = int(session_obj.get('SessionYear'))
+                except (TypeError, ValueError):
+                    syear = now.year
+                start = datetime(syear - 1, 11, 1)
+                ev = []
+                for e in session_obj.get('SessionEvents', []):
                     d = e.get('ActualDate') or e.get('ProjectedDate')
-                    if d:
-                        try: valid_dates.append(pd.to_datetime(d).replace(tzinfo=None))
-                        except (ValueError, TypeError):
-                            print(f"⚠️ Session date parsing failed for: {d}")
-                if valid_dates: return min(valid_dates), max(valid_dates)
-                return now, now 
+                    if not d:
+                        continue
+                    try:
+                        ev.append(pd.to_datetime(d).replace(tzinfo=None))
+                    except (ValueError, TypeError):
+                        print(f"⚠️ Session date parsing failed for: {d}")
+                end = max(ev) if ev else datetime(syear, 7, 1)
+                # Plausibility: end after start and within ~2y (malformed feed guard).
+                if not (start < end < start + timedelta(days=730)):
+                    print(f"⚠️ Implausible session window {start}..{end}; using year-anchored fallback.")
+                    end = datetime(syear, 7, 1)
+                return start, end
 
             for s in sessions:
                 if s.get('IsActive') or s.get('IsDefault'):
@@ -2814,9 +2834,14 @@ def run_calendar_update():
     if not session_data:
         print("🚨 CRITICAL: Failed to retrieve active session. Proceeding in OFFLINE mode.")
         push_system_alert("🚨 LIS Session API unavailable. Running in OFFLINE mode; schedule times may be stale from API_Cache.", status="OFFLINE")
+        # Last-resort fallback ONLY when the Session API is unreachable (so the
+        # session code/dates genuinely can't be derived). Anchor the window to the
+        # CURRENT year — not a hardcoded 2026 — so a future-year offline cycle
+        # still has a sane window. (ACTIVE_SESSION can't be derived offline; "261"
+        # is the documented degraded default — blob_code will then read 2026 data.)
         ACTIVE_SESSION = "261"
-        test_start_date = datetime(2026, 1, 14)
-        test_end_date = datetime(2026, 5, 1)
+        test_start_date = datetime(datetime.now().year, 1, 1)
+        test_end_date = datetime.now() + timedelta(days=14)
     else:
         ACTIVE_SESSION = session_data["code"]
         test_start_date = session_data["start"]
@@ -2845,38 +2870,24 @@ def run_calendar_update():
     # === DYNAMIC COMMITTEE MAPS (Enterprise: rebuilt from API each run) ===
     build_committee_maps(http_session, ACTIVE_SESSION, alert_fn=push_system_alert)
 
-    # Investigation window comes from module-level constants (see top of file).
-    # Previously: scrape_start=Feb 9 + scrape_end=now+7d (rolling). That made
-    # the bug count grow mechanically every day and hid whether fixes worked.
-    scrape_start = INVESTIGATION_START
-    scrape_end = INVESTIGATION_END
-    # Standard #1 runtime drift check (PR-C7.1r): the investigation window is a
-    # PINNED static config (reproducible testing on 2026). If the LIS Session API
-    # now reports an ACTIVE session starting AFTER this pinned window ends, we're a
-    # new session (e.g. 2027) running on a stale config. The #75 df_past clamp +
-    # the forward-window keep the worker FUNCTIONING (the pinned floor is earlier
-    # than the new session, so new-session data still passes both filters and
-    # blob_code is already session-derived) — but the viewport lower bound and the
-    # Section-9 denominator are still anchored to the old window. Alert so an
-    # operator updates investigation_config.py; never silently drift (Standard #1).
-    try:
-        if session_data and session_data.get("start") and session_data["start"] > INVESTIGATION_END:
-            push_system_alert(
-                f"Investigation window is STALE: active session {ACTIVE_SESSION} starts "
-                f"{str(session_data['start'])[:10]}, after the pinned INVESTIGATION_END "
-                f"{INVESTIGATION_END.date()}. Worker continues via the #75 clamp + forward-window, "
-                f"but update investigation_config.py (INVESTIGATION_START/END) to this session so the "
-                f"viewport and Section-9 metrics are session-correct.",
-                status="WARN", category="DATA_ANOMALY", severity="WARN",
-                dedup_key="investigation_window_stale",
-            )
-    except Exception:
-        pass
+    # Scrape/processing window = the session window DERIVED FROM THE SESSION API
+    # at runtime (Standard #5: "date ranges — derived from LIS APIs at runtime").
+    # `test_start_date`/`test_end_date` come from the SessionEvents "Session Start"
+    # event → latest in-session event +14d (get_active_session_info). This replaces
+    # the previously-pinned INVESTIGATION_START/END, which (a) required a manual
+    # annual config bump — a Standard #5/#8 violation the owner correctly flagged —
+    # and (b) was a #75-era workaround for the old `min(events)`-grabs-the-prefile-
+    # date flakiness, now fixed at the SOURCE in extract_dates. So a new 2027
+    # session auto-derives its own window with NO human action and NO stale-config
+    # WARN. INVESTIGATION_* survives ONLY as the offline last-resort fallback (set
+    # above, now-anchored) for a fully-unreachable Session API.
+    scrape_start = test_start_date
+    scrape_end = test_end_date
     # PR-FC1 (forward calendar): upper bound that extends ahead by FORWARD_WINDOW
-    # ONLY on a live run (no-op while VA GA is adjourned + scrape_end is pinned
-    # in the past — verified: scrape_end=2026-05-01 < today, so this == scrape_end
-    # today). `now` is the tz-naive ET datetime from the top of this function;
-    # normalize to midnight so the window is whole-day.
+    # ONLY on a live run. No-op once a session has adjourned (scrape_end, now the
+    # derived session-end +14d, is in the past → compute_effective_scrape_end
+    # returns it unchanged). `now` is the tz-naive ET datetime from the top of this
+    # function; normalize to midnight so the window is whole-day.
     _today_naive = now.replace(hour=0, minute=0, second=0, microsecond=0)
     effective_scrape_end = compute_effective_scrape_end(
         scrape_end, test_end_date, _today_naive
@@ -3892,21 +3903,16 @@ def run_calendar_update():
             print("⚠️ No refid column found in HISTORY.CSV — falling back to text-only committee matching.")
         df_past['CleanBill'] = df_past[bill_col].astype(str).str.replace(' ', '').str.upper()
         df_past['ParsedDate'] = pd.to_datetime(df_past[date_col], errors='coerce')
-        # Reliability clamp (assumptions_audit #68): test_start_date/test_end_date
-        # come from the Session API's SessionEvents min/max (get_active_session_info).
-        # That list is a SPARSE summary (~5 events) and the API intermittently
-        # returns a subset whose min jumps forward (e.g. to late March), which
-        # silently SHRANK df_past and dropped the entire early session — including
-        # crossover week (Feb 9-13) — from Sheet1. The 2026-06-03 incident:
-        # processed=310 vs 65,180 on byte-identical HISTORY/config, the only
-        # variable being this flaky session min-date. The pinned investigation
-        # window [INVESTIGATION_START, INVESTIGATION_END] is the stable FLOOR: the
-        # Session API may only EXTEND the processing window (earlier start / later
-        # end), never shrink it below the pinned bounds — so the calendar can no
-        # longer silently lose the test window. Standard #2 (no silent partial
-        # output) + still #5-dynamic (wider real session bounds always win).
-        _eff_start = min(test_start_date, INVESTIGATION_START)
-        _eff_end = max(test_end_date, INVESTIGATION_END)
+        # df_past window (assumptions_audit #68/#75). The flaky-subset SessionEvents
+        # bug that silently SHRANK this window (2026-06-03: processed=310 vs 65,180)
+        # is now fixed at the ROOT in extract_dates — the start is anchored to the
+        # stable SessionYear (Nov 1 prior year), never the flaky min(events). So no
+        # hardcoded INVESTIGATION_* floor is needed; the only guard is extending the
+        # upper bound to today so an in-progress session captures recent rows.
+        # Session-specific HISTORY blob means the early floor can't bleed the prior
+        # session. Standard #2 (no silent shrink) + #5 (fully API-derived).
+        _eff_start = test_start_date
+        _eff_end = max(test_end_date, _today_naive)
         df_past = df_past[(df_past['ParsedDate'] >= _eff_start) & (df_past['ParsedDate'] <= _eff_end)]
 
         # ============================================================
