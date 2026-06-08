@@ -2249,7 +2249,9 @@ def get_active_session_info(http_session):
                     syear = now.year
                 start = datetime(syear - 1, 11, 1)
                 ev = []
-                for e in session_obj.get('SessionEvents', []):
+                # `or []` — a JSON "SessionEvents": null would make .get(...,[])
+                # return None and the loop raise TypeError (Gemini #109).
+                for e in (session_obj.get('SessionEvents') or []):
                     d = e.get('ActualDate') or e.get('ProjectedDate')
                     if not d:
                         continue
@@ -2840,8 +2842,11 @@ def run_calendar_update():
         # still has a sane window. (ACTIVE_SESSION can't be derived offline; "261"
         # is the documented degraded default — blob_code will then read 2026 data.)
         ACTIVE_SESSION = "261"
-        test_start_date = datetime(datetime.now().year, 1, 1)
-        test_end_date = datetime.now() + timedelta(days=14)
+        # Use the ET `now` (defined above), not datetime.now() — the rest of the
+        # worker is ET-tz-naive; datetime.now() would be the runner's UTC and skew
+        # the window by hours/a-DST-hour (Gemini #109).
+        test_start_date = datetime(now.year, 1, 1)
+        test_end_date = now + timedelta(days=14)
     else:
         ACTIVE_SESSION = session_data["code"]
         test_start_date = session_data["start"]
