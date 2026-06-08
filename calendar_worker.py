@@ -2256,13 +2256,13 @@ def get_active_session_info(http_session):
                     if not d:
                         continue
                     try:
-                        dt = pd.to_datetime(d).replace(tzinfo=None)
+                        dt = pd.to_datetime(d)
                     except (ValueError, TypeError):
                         print(f"⚠️ Session date parsing failed for: {d}")
                         continue
-                    if pd.isna(dt):   # pd.to_datetime can return NaT instead of raising; don't pollute max() (Gemini #109)
+                    if pd.isna(dt):   # pd.to_datetime returns NaT (not raise) on some bad input; guard BEFORE .replace (Gemini #109)
                         continue
-                    ev.append(dt)
+                    ev.append(dt.replace(tzinfo=None))
                 end = max(ev) if ev else datetime(syear, 7, 1)
                 # Plausibility: end after start and within ~2y (malformed feed guard).
                 if not (start < end < start + timedelta(days=730)):
@@ -2845,10 +2845,14 @@ def run_calendar_update():
         # CURRENT year — not a hardcoded 2026 — so a future-year offline cycle
         # still has a sane window. (ACTIVE_SESSION can't be derived offline; "261"
         # is the documented degraded default — blob_code will then read 2026 data.)
-        ACTIVE_SESSION = "261"
-        # Use the ET `now` (defined above), not datetime.now() — the rest of the
-        # worker is ET-tz-naive; datetime.now() would be the runner's UTC and skew
-        # the window by hours/a-DST-hour (Gemini #109).
+        # Even the offline session code is now YEAR-derived (VA regular-session
+        # code = "20"+YY+"1"), not a hardcoded 2026 "261" — so an offline 2027
+        # cycle reads 2027's blob, not stale 2026 data. (A special-session-only
+        # period would still need the API; offline is a degraded last resort.)
+        # And use the ET `now` (defined above), not datetime.now() — the rest of
+        # the worker is ET-tz-naive; datetime.now() would be the runner's UTC and
+        # skew the window by hours / a DST hour. (Gemini #109)
+        ACTIVE_SESSION = f"20{now.year % 100:02d}1"
         test_start_date = datetime(now.year, 1, 1)
         test_end_date = now + timedelta(days=14)
     else:
