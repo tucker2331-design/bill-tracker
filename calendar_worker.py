@@ -2853,7 +2853,9 @@ def run_calendar_update():
         # the worker is ET-tz-naive; datetime.now() would be the runner's UTC and
         # skew the window by hours / a DST hour. (Gemini #109)
         ACTIVE_SESSION = f"20{now.year % 100:02d}1"
-        test_start_date = datetime(now.year, 1, 1)
+        # Match the online window logic (Nov 1 of the prior year → captures prefiles)
+        # so offline degrades consistently, not to a narrower Jan-1 start. (Gemini #109)
+        test_start_date = datetime(now.year - 1, 11, 1)
         test_end_date = now + timedelta(days=14)
     else:
         ACTIVE_SESSION = session_data["code"]
