@@ -7,6 +7,7 @@ import re
 import difflib
 from datetime import datetime
 from google.oauth2.service_account import Credentials
+from lis_authorization import is_authorized_session, LIS_API_AUTHORIZED_SESSIONS  # ban-safe gate
 
 print("🚀 Waking up Enterprise Ghost Worker...")
 
@@ -16,17 +17,21 @@ API_KEY = "81D70A54-FCDC-4023-A00B-A3FD114D5984"
 HEADERS = {"WebAPIKey": API_KEY, "Accept": "application/json"}
 
 def get_active_session():
-    now = datetime.now()
-    year = now.year
-    years_to_check = [year + 1, year] if now.month >= 11 else [year]
-    for y in years_to_check:
-        for suffix in ["10", "9", "8", "7", "6", "5", "4", "3", "2", "1"]:
-            session_code = f"{y}{suffix}"
-            test_url = f"https://lis.blob.core.windows.net/lisfiles/{session_code}/HISTORY.CSV"
-            try:
-                if requests.head(test_url, timeout=3).status_code == 200: return session_code
-            except: pass
-    return f"{year}1"
+    # LIS API AUTHORIZATION (ban-safe — docs/knowledge/lis_api_authorization.md):
+    # ONLY probe blobs for AUTHORIZED sessions (2025/2026). The previous version
+    # HEAD-probed {year}{suffix} combos and, in November, year+1 (2027) codes —
+    # i.e. it would hit UNAUTHORIZED session URLs, a ban risk. Probe newest-first
+    # among the authorized set; the caller also gates before any data pull.
+    for session_code in sorted(LIS_API_AUTHORIZED_SESSIONS, reverse=True):
+        test_url = f"https://lis.blob.core.windows.net/lisfiles/{session_code}/HISTORY.CSV"
+        try:
+            if requests.head(test_url, timeout=3).status_code == 200:
+                return session_code
+        except Exception:
+            pass
+    # No authorized session has data published yet — return the newest authorized
+    # code; the main-flow gate will alert if it can't actually be used.
+    return sorted(LIS_API_AUTHORIZED_SESSIONS, reverse=True)[0]
 
 ACTIVE_SESSION = get_active_session()
 TARGET_URL = "https://lis.virginia.gov/Legislation/api/getlegislationsessionlistasync"
@@ -196,6 +201,18 @@ def run_update():
     sheet = gc.open_by_key(SPREADSHEET_ID)
     worksheet = sheet.worksheet("Sheet1")
     bug_worksheet = sheet.worksheet("Bug_Logs")
+
+    # LIS API AUTHORIZATION GATE (ban-safe): never pull data for an unauthorized
+    # session (2025/2026 only). Halt + log rather than risk an API ban; Sheet1 keeps
+    # its last-known-good. See docs/knowledge/lis_api_authorization.md.
+    if not is_authorized_session(ACTIVE_SESSION):
+        print(f"🛑 LIS authorization halt — session {ACTIVE_SESSION} not authorized; skipping cycle.")
+        bug_worksheet.append_row([datetime.now().strftime("%Y-%m-%d %H:%M"), "GLOBAL",
+            "🛑 LIS Authorization Halt",
+            f"Active session {ACTIVE_SESSION} not in authorized set (2025/2026 only); "
+            f"skipped all LIS calls to avoid a ban. Add to lis_authorization if LIS authorized it.",
+            "🚨 Open"])
+        return
 
     print("📡 Pulling State API and CSVs...")
     try:

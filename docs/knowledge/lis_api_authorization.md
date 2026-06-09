@@ -42,7 +42,21 @@ authorization window the same way (a `*_API_AUTHORIZED_SESSIONS` allowlist + run
 and record the rule as a sibling of this page. Do not assume an API returning data implies
 authorization to use it.
 
-## Enforcement points (where this rule lives in code)
-- `tools/edge_case_replay/schedule_replay.py` — `LIS_API_AUTHORIZED_SESSIONS` allowlist + assert.
-- `calendar_worker.py` — session code derived from the live Session API (active session only).
-- This page is the authoritative statement; see also [[index]] and [[log]].
+## Enforcement (single source of truth + every live caller gated)
+The rule is enforced in code by **`lis_authorization.py`** (repo root) — the ONLY place the
+authorized set is defined:
+- `LIS_API_AUTHORIZED_SESSIONS = {"20251","20261"}` — widen ONLY when LIS notifies.
+- `is_authorized_session(code)` / `assert_lis_authorized(code)` (normalizes legacy 3-digit "261").
+
+Every code path that hits `lis.virginia.gov` or `lisfiles/*` is gated through it (2026-06-09):
+- `calendar_worker.py` — after deriving the active session, **HALT + CRITICAL alert** if not
+  authorized (no data calls; Sheet1 keeps last-known-good). 2027 self-announces until widened.
+- `backend_worker.py` — `get_active_session()` now **only probes authorized-session blobs**
+  (the old probe HEAD-hit `year+1` 2027 URLs in November — a ban risk), plus a main-flow gate.
+- `pages/ray2.py` + `calendar_xray.py` — `load_lis_schedule()` asserts before the Schedule call.
+- `tools/reconciliation/reconcile_votes.py` — asserts `--session` before any MinutesBook call.
+- `tools/edge_case_replay/schedule_replay.py` — imports the shared set (no local copy).
+- `tools/verification/accuracy_sentinel.py` — reads only the Google Sheet (gviz), **no LIS call** → no gate needed.
+
+To widen for a new authorized session: edit the one set in `lis_authorization.py`. This page is
+the authoritative statement; see also [[index]] and [[log]].

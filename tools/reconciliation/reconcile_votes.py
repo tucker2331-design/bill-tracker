@@ -22,8 +22,10 @@ DRIFT = MISATTRIB / (committee meetings we could check). Exit non-zero if it
 exceeds --max-drift. Designed to run one-shot AND on a schedule (manual until
 proven). Usage: python3 tools/reconciliation/reconcile_votes.py [--max-drift 0.5] [--limit N]
 """
-import sys, io, csv, re, json, time, argparse, urllib.request
+import sys, io, csv, re, json, time, argparse, urllib.request, os
 from collections import Counter
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
+from lis_authorization import assert_lis_authorized  # LIS API 2025/2026-only gate (ban-safe)
 
 SHEET = "1PQDtaTTUeYv781bx4_ZiehcvbEmUt8t7jFmZYJoJGKM"
 API_KEY = "81D70A54-FCDC-4023-A00B-A3FD114D5984"
@@ -59,6 +61,7 @@ def main():
     ap.add_argument("--limit", type=int, default=0, help="0 = all committee-report rows")
     ap.add_argument("--session", default="20261")
     args = ap.parse_args()
+    assert_lis_authorized(args.session)  # ban-safe: refuse to reconcile against an unauthorized session
     H = {"WebAPIKey": API_KEY, "Accept": "application/json"}
     HP = {"WebAPIKey": PUB_KEY, "Accept": "*/*"}
 

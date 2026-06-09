@@ -23,6 +23,7 @@ from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
 
 from investigation_config import INVESTIGATION_START, INVESTIGATION_END
+from lis_authorization import assert_lis_authorized  # LIS API 2025/2026-only gate (ban-safe)
 
 st.set_page_config(page_title="LIS Calendar X-Ray", layout="wide")
 st.title("🩻 LIS Calendar X-Ray")
@@ -179,6 +180,7 @@ def load_sheet_df(http: requests.Session, sheet_id: str) -> tuple[pd.DataFrame, 
 
 
 def load_lis_schedule(http: requests.Session, session_code: str, api_key: str) -> tuple[pd.DataFrame, str]:
+    assert_lis_authorized(session_code)  # ban-safe: never call LIS for an unauthorized session
     url = "https://lis.virginia.gov/Schedule/api/getschedulelistasync"
     headers = {"WebAPIKey": api_key, "Accept": "application/json"}
     res = http.get(url, headers=headers, params={"sessionCode": session_code}, timeout=20)
