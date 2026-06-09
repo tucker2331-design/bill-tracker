@@ -25,8 +25,21 @@ from datetime import datetime, timedelta
 
 ROOT = "/Users/tuckerward/Documents/Projects/bill-tracker"
 API_KEY = "81D70A54-FCDC-4023-A00B-A3FD114D5984"
-# 2020-2025 regulars + 2024/2020 specials + 2025: max edge variety incl. COVID-era
-SESSIONS = ["20251", "20242", "20241", "20231", "20221", "20212", "20211", "20202", "20201"]
+# === LIS API AUTHORIZATION RULE (lis.virginia.gov/developers) ===
+# The LIS API toolset is authorized for the 2025 and 2026 sessions ONLY. The
+# General Assembly has NOT authorized pulling sessions prior to 2025 through this
+# API — those must come from legacylis.virginia.gov via CSV download. An earlier
+# run of this replay queried the new API for 2020-2024 sessions, which is outside
+# that authorization; it is now restricted to authorized sessions. For pre-2025
+# format variety, repoint the fetch at legacylis.virginia.gov CSVs instead.
+# Authoritative note: docs/knowledge/lis_api_authorization.md
+LIS_API_AUTHORIZED_SESSIONS = {"20261", "20251"}  # widen ONLY when LIS notifies (portal banner)
+SESSIONS = ["20261", "20251"]
+assert set(SESSIONS) <= LIS_API_AUTHORIZED_SESSIONS, (
+    "LIS rule violation: the lis.virginia.gov API toolset is authorized for 2025/2026 "
+    "only — use legacylis.virginia.gov CSVs for older sessions "
+    "(see docs/knowledge/lis_api_authorization.md)."
+)
 
 def extract(path, names):
     src = open(f"{ROOT}/{path}").read()

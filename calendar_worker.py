@@ -39,6 +39,12 @@ from structural_router import MEETING_HOUR_MAX as _MEETING_HOUR_MAX
 print("🚀 Waking up Enterprise Calendar Worker (Turing State Machine v6.0)...")
 
 SPREADSHEET_ID = "1PQDtaTTUeYv781bx4_ZiehcvbEmUt8t7jFmZYJoJGKM"
+# LIS API AUTHORIZATION RULE: this API toolset (lis.virginia.gov/* + lisfiles/*) is
+# authorized for the 2025 and 2026 sessions ONLY; pre-2025 data must come from
+# legacylis.virginia.gov CSVs. This worker is compliant by construction — it derives
+# the session code from the live Session API and operates on the ACTIVE session only,
+# never an old one. Do NOT add pre-2025 session calls here. See
+# docs/knowledge/lis_api_authorization.md.
 API_KEY = "81D70A54-FCDC-4023-A00B-A3FD114D5984"
 HEADERS = {"WebAPIKey": API_KEY, "Accept": "application/json"}
 
