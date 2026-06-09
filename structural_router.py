@@ -363,6 +363,69 @@ def recover_admin_route(outcome, admin_recovery_index) -> str:
     return "admin" if normalize_event_description(outcome) in admin_recovery_index else ""
 
 
+# === PR-C8.1: structural classification of HISTORY rows by their refid IDENTITY ===
+# Closes the ~16% blank-route gap WITHOUT reading any description text (Standard #3).
+# The decision consumes only the refid's typed grammar + structural joins. See
+# docs/architecture/pr_c8_structural_classification.md and
+# docs/knowledge/history_refid_namespace.md. Measured on session 20261 (2026-06-09).
+#
+# `History_refid` is a typed namespace, NOT opaque text:
+#   - "H14V2610034"  V-grammar  -> a committee VOTE record (meeting evidence). These never
+#                                  appear in VOTE.CSV (which is floor-only); that is expected.
+#   - "26110000"     numeric, IS a VOTE.CSV key -> a floor roll-call (meeting evidence).
+#   - "5141"/"001"   numeric, NOT a VOTE.CSV key, shared by >=K same-date bills -> a clerk
+#                                  BATCH document (agenda/assignment notice) -> administrative.
+#   - "5xxx"         numeric, NOT a VOTE.CSV key, fan-out < K -> singleton clerk doc -> surface.
+#   - "H14"/"S04"    committee-code -> referral/administrative attribution.
+#   - ""             empty -> no refid signal.
+# A row is classified ONLY by ITS OWN refid (per-row purity): a bill assigned to a
+# subcommittee AND voted the same day is two rows, each classified on its own refid.
+
+_VOTE_REFID_RE = _re.compile(r'^[HS]\d{1,2}(?:\d{3})?V\d+$')   # committee vote record grammar
+_COMMITTEE_REFID_RE = _re.compile(r'^[HS]\d{1,2}$')            # H14 / S04 committee code
+
+# Refid classes. The first three are MEETING evidence; BATCH_NOTICE/COMMITTEE_REF are
+# administrative; SINGLETON_DOC/UNKNOWN_REFID/EMPTY carry no decisive signal (-> surface).
+REFID_VOTE_COMMITTEE = "VOTE_COMMITTEE"   # V-grammar refid
+REFID_VOTE_FLOOR     = "VOTE_FLOOR"       # numeric refid present in VOTE.CSV
+REFID_BATCH_NOTICE   = "BATCH_NOTICE"     # non-vote numeric refid, fan-out >= K
+REFID_SINGLETON_DOC  = "SINGLETON_DOC"    # non-vote numeric refid, fan-out < K
+REFID_COMMITTEE_REF  = "COMMITTEE_REF"    # committee-code refid
+REFID_UNKNOWN        = "UNKNOWN_REFID"    # some other non-empty shape
+REFID_EMPTY          = "EMPTY"            # no refid
+
+
+def classify_refid(refid, *, fanout: int = 0, in_vote_csv: bool = False,
+                   batch_min_bills: int = 2) -> str:
+    """Classify a HISTORY row by its `History_refid` alone (no prose). Pure.
+
+    Args:
+      refid:        the row's History_refid string.
+      fanout:       how many distinct bills share (this refid, this date). Batch signature.
+      in_vote_csv:  whether this refid is a key in VOTE.CSV (floor roll-call). The CALLER
+                    performs the join (set membership) and passes the boolean; this stays pure.
+      batch_min_bills: K — the minimum same-date bill fan-out for a non-vote numeric refid to
+                    count as a clerk BATCH document. Default 2 (measured: len-3/4 batch refids
+                    are 0% vote-join at every fan level, so the law is safe at small K).
+
+    Returns one of the REFID_* constants. Meeting evidence: VOTE_COMMITTEE, VOTE_FLOOR.
+    Administrative: BATCH_NOTICE, COMMITTEE_REF. No decisive signal (caller should SURFACE):
+    SINGLETON_DOC, UNKNOWN_REFID, EMPTY.
+    """
+    r = _s(refid).strip()
+    if not r:
+        return REFID_EMPTY
+    if _VOTE_REFID_RE.match(r):
+        return REFID_VOTE_COMMITTEE
+    if r.isdigit():
+        if in_vote_csv:
+            return REFID_VOTE_FLOOR
+        return REFID_BATCH_NOTICE if fanout >= batch_min_bills else REFID_SINGLETON_DOC
+    if _COMMITTEE_REFID_RE.match(r):
+        return REFID_COMMITTEE_REF
+    return REFID_UNKNOWN
+
+
 def validate_status_grouping(live_status_names) -> list[str]:
     """Standard #1 runtime check: compare our grouping to LIS's published list.
 
