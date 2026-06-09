@@ -9,6 +9,16 @@ Append-only, reverse-chronological (newest at top). Each entry opens with `## [Y
 
 **Kinds:** `ingest` (new source/doc processed), `pr` (PR opened/merged/closed), `decision` (architectural or workflow), `lint` (wiki health-check pass), `session` (notable multi-hour working block), `post-mortem` (failure analysis), `milestone` (project-goal threshold crossed).
 
+## [2026-06-09] decision | PR-C8 execution spec written for handoff to a lighter model
+
+Deep-reasoning session (owner: "lay out the plan and hard guidelines... so a less strenuous
+model can carry out your hardwork"). Produced [[architecture/pr_c8_structural_classification]]:
+12 hard rules (no prose on the decision path with a UUID litmus test, fail-safe direction,
+review/worker gates, never tune-to-pass), the structural decision chain (route → vote-join →
+batch-notice law → surface), 3-PR sequence with per-PR merge gates + golden tests + open
+items (V-refid↔VOTE.CSV correspondence must be MEASURED, K chosen empirically), and a
+stop-and-escalate protocol. Foundation discovery logged at [[knowledge/history_refid_namespace]].
+
 ## [2026-06-09] pr | #110 merged: LIS 2025/2026-only rule enforced in code (shared guard, every live caller)
 
 `lis_authorization.py` = single source of truth ({20251,20261} + assert). Gated: calendar_worker

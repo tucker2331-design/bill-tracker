@@ -1,6 +1,6 @@
 ---
 tags: [state, live]
-updated: 2026-06-04
+updated: 2026-06-09
 status: active
 ---
 
@@ -11,6 +11,20 @@ status: active
 **Benchmark window:** Full 2026 VA GA session (2026-01-14 → 2026-05-01). **VA GA is now ADJOURNED — HISTORY is static (no new actions until the 2027 session). Pre-launch: lobbyists are not using the product yet.**
 
 ## Active focus
+
+**🎯 PR-C8 — CLOSE THE 16% STRUCTURALLY (2026-06-09, NEXT UP).** The blank-route rows
+(~16%) are still classified by hand-built text patterns — the last Standard-#3 violation on
+the lobbyist path. Deep-reasoning session produced the full execution spec:
+**[[architecture/pr_c8_structural_classification]] — the implementing model MUST follow it
+verbatim (hard rules, gates, golden tests, stop-and-escalate protocol).** Foundation: the
+`History_refid` typed-namespace discovery + VOTE.CSV roll-call join + the batch-notice law
+(96.7% of blank journal rows proven structurally, 0 counterexamples) —
+[[knowledge/history_refid_namespace]]. Three PRs: C8.1 shadow telemetry → C8.2 flip (text
+patterns deleted from ray2/calendar_xray) → C8.3 guards (completeness tripwire + unconfirmed
+budget). Also done this block: LIS API authorization rule captured + enforced in code
+(PR #110, [[knowledge/lis_api_authorization]]); dynamic session window (PR #109) — no more
+pinned INVESTIGATION window in the worker.
+
 
 **🔒 SUSTAINABILITY AUDIT + VERIFICATION + FUTURE-PROOFING (2026-06-07).** Owner asked to confirm the Section-9=0 work checks off all standards, verify it independently, and proactively hunt edge cases ("who's to say that's all the bugs?"). Three phases, all done:
 - **Phase A — standards audit** ([[architecture/scalability_audit]], PR #101): re-ran the 8 standards against the new architecture. Lobbyist-critical path sound. 4 gaps: **G2** (derived volume guard) + **G4** (derived denominator) FIXED (PR #104); **G1** (window drift counter) deferred (B1 closes the known class); **G3** (50-state isolation of derived_standing's VA/English specifics) logged as YAGNI until state #2.
