@@ -9,6 +9,15 @@ Append-only, reverse-chronological (newest at top). Each entry opens with `## [Y
 
 **Kinds:** `ingest` (new source/doc processed), `pr` (PR opened/merged/closed), `decision` (architectural or workflow), `lint` (wiki health-check pass), `session` (notable multi-hour working block), `post-mortem` (failure analysis), `milestone` (project-goal threshold crossed).
 
+## [2026-06-09] pr | #110 merged: LIS 2025/2026-only rule enforced in code (shared guard, every live caller)
+
+`lis_authorization.py` = single source of truth ({20251,20261} + assert). Gated: calendar_worker
+(halt + alert direct to Sheet1!X1 — Gemini caught the buffered-alert-loss as a RECURRENCE of
+pattern #39), backend_worker (probe only authorized blobs; old probe HEAD-hit 2027 URLs each
+November), ray2/calendar_xray (assert + clean st.error), reconcile_votes, schedule_replay.
+2 Gemini rounds folded; final CRITICAL verified stale (code already writes X1 directly).
+Branch worker run: success, processed=65366, sentinel all-green — gate is a 2026 no-op.
+
 ## [2026-06-09] decision | LIS API authorization rule captured + one past violation remediated
 
 Owner spotted the LIS Developers Portal banner: the API toolset is authorized for **2025/2026
