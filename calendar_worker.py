@@ -29,6 +29,7 @@ from structural_router import validate_status_grouping as _validate_status_group
 from structural_router import compute_ministerial_eventcodes as _compute_ministerial_eventcodes
 from structural_router import build_admin_recovery_index as _build_admin_recovery_index
 from structural_router import recover_admin_route as _recover_admin_route
+from lis_authorization import is_authorized_session  # LIS API 2025/2026-only gate (ban-safe)
 # Single source of truth for the VA legislative business-hours window. Shared with
 # structural_router._has_meeting_time so the ministerial detector and this
 # last-resort renderer can never disagree about whether a timestamp is a real
@@ -39,6 +40,12 @@ from structural_router import MEETING_HOUR_MAX as _MEETING_HOUR_MAX
 print("🚀 Waking up Enterprise Calendar Worker (Turing State Machine v6.0)...")
 
 SPREADSHEET_ID = "1PQDtaTTUeYv781bx4_ZiehcvbEmUt8t7jFmZYJoJGKM"
+# LIS API AUTHORIZATION RULE: this API toolset (lis.virginia.gov/* + lisfiles/*) is
+# authorized for the 2025 and 2026 sessions ONLY; pre-2025 data must come from
+# legacylis.virginia.gov CSVs. This worker is compliant by construction — it derives
+# the session code from the live Session API and operates on the ACTIVE session only,
+# never an old one. Do NOT add pre-2025 session calls here. See
+# docs/knowledge/lis_api_authorization.md.
 API_KEY = "81D70A54-FCDC-4023-A00B-A3FD114D5984"
 HEADERS = {"WebAPIKey": API_KEY, "Accept": "application/json"}
 
@@ -2861,6 +2868,29 @@ def run_calendar_update():
         ACTIVE_SESSION = session_data["code"]
         test_start_date = session_data["start"]
         test_end_date = session_data["end"]
+
+    # LIS API AUTHORIZATION GATE (ban-safe — docs/knowledge/lis_api_authorization.md).
+    # MUST run before the first LIS data call (build_committee_maps just below) so an
+    # unauthorized session never touches the API/blob — that risks a ban. NOTE:
+    # push_system_alert only BUFFERS to alert_rows, which is flushed AFTER the sheet
+    # opens (~L2955); because we return early here, we persist the halt DIRECTLY to
+    # Sheet1!X1 (the cell the circuit breaker uses), so it is never silently lost
+    # (Gemini #110 CRITICAL). Last-known-good Sheet1 data is otherwise preserved.
+    if not is_authorized_session(ACTIVE_SESSION):
+        _halt = (f"🛑 LIS AUTHORIZATION HALT {now:%Y-%m-%d %H:%M}: active session "
+                 f"{ACTIVE_SESSION} not in the authorized set (2025/2026 only). Skipped ALL LIS "
+                 f"calls this cycle to avoid an API ban. If LIS authorized this session, add it to "
+                 f"lis_authorization.LIS_API_AUTHORIZED_SESSIONS.")
+        print(_halt)
+        try:
+            _creds = os.environ.get("GCP_CREDENTIALS")
+            if _creds:
+                _gc = gspread.authorize(Credentials.from_service_account_info(
+                    json.loads(_creds), scopes=["https://www.googleapis.com/auth/spreadsheets"]))
+                _gc.open_by_key(SPREADSHEET_ID).worksheet("Sheet1").update_acell("X1", _halt[:4500])
+        except Exception as _e:
+            print(f"   (could not persist halt alert to Sheet1!X1: {_e})")
+        return
 
     # PR-C3 per-cycle state for LegislationEvent fallback. The 5-digit
     # session code is required by the new MVC endpoints (LegislationEvent

@@ -23,6 +23,7 @@ from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
 
 from investigation_config import INVESTIGATION_START, INVESTIGATION_END
+from lis_authorization import assert_lis_authorized  # LIS API 2025/2026-only gate (ban-safe)
 
 st.set_page_config(page_title="LIS Calendar X-Ray", layout="wide")
 st.title("🩻 LIS Calendar X-Ray")
@@ -179,6 +180,7 @@ def load_sheet_df(http: requests.Session, sheet_id: str) -> tuple[pd.DataFrame, 
 
 
 def load_lis_schedule(http: requests.Session, session_code: str, api_key: str) -> tuple[pd.DataFrame, str]:
+    assert_lis_authorized(session_code)  # ban-safe: never call LIS for an unauthorized session
     url = "https://lis.virginia.gov/Schedule/api/getschedulelistasync"
     headers = {"WebAPIKey": api_key, "Accept": "application/json"}
     res = http.get(url, headers=headers, params={"sessionCode": session_code}, timeout=20)
@@ -371,6 +373,10 @@ if mode == "Live fetch":
             lis_df, lis_ref = load_lis_schedule(http, session_code, api_key)
             st.success(f"Loaded LIS schedule rows: {len(lis_df)}")
             st.code(lis_ref)
+        except PermissionError as exc:
+            # LIS authorization gate (lis_authorization.py): unauthorized session —
+            # show the rule cleanly instead of a raw Streamlit traceback (Gemini #110).
+            st.error(f"LIS authorization: {exc}")
         except requests.RequestException as exc:
             st.error(f"Failed to load LIS schedule (network/http): {exc}")
         except json.JSONDecodeError as exc:

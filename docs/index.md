@@ -35,6 +35,7 @@ Links use Obsidian `[[wikilink]]` format. Obsidian resolves by filename; path-qu
 - [[architecture/verification_durability]] — the three-layer continuous accuracy guard (breaker / daily sentinel / weekly reconciliation); how next session won't silently regress
 
 ## Domain Knowledge
+- [[knowledge/lis_api_authorization]] — **RULE: LIS API authorized for 2025/2026 ONLY; pre-2025 via legacylis CSV**
 - [[knowledge/lis_api_reference]] — VA LIS endpoints, auth, quirks
 - [[knowledge/tba_times]] — Schedule API returns "Time TBA"; existence ≠ concrete time
 - [[knowledge/lis_dom_scraping]] — headless-Chrome bypass for LIS SPA when Claude-in-Chrome is down

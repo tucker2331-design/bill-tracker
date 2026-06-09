@@ -9,6 +9,18 @@ Append-only, reverse-chronological (newest at top). Each entry opens with `## [Y
 
 **Kinds:** `ingest` (new source/doc processed), `pr` (PR opened/merged/closed), `decision` (architectural or workflow), `lint` (wiki health-check pass), `session` (notable multi-hour working block), `post-mortem` (failure analysis), `milestone` (project-goal threshold crossed).
 
+## [2026-06-09] decision | LIS API authorization rule captured + one past violation remediated
+
+Owner spotted the LIS Developers Portal banner: the API toolset is authorized for **2025/2026
+session data ONLY**; pre-2025 must come from `legacylis.virginia.gov` CSV. Audit result:
+production is COMPLIANT (active session `20261` only). One internal tool —
+`tools/edge_case_replay/schedule_replay.py` — had queried the new API for seven pre-2025
+sessions (one-time, read-only, internal); now pinned to `{20261,20251}` with a runtime assert.
+Rule recorded as [[knowledge/lis_api_authorization]] (linked from [[index]]); enforce per-state
+when scaling. Also discovered (for later): the portal lists `Calendar` and
+`CommitteeLegislationReferral` APIs we don't use yet — candidate structural sources for the
+House "Placed on Agenda" routing.
+
 ## [2026-06-07] session | Post-Section-9 audit + independent verification + proactive future-proofing (PRs #100-104)
 
 Owner: "thorough audit vs our brain's sustainability demands, then full verification, then future-proofing — who's to say that's all the bugs?" Three phases:
