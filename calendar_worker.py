@@ -2870,22 +2870,26 @@ def run_calendar_update():
         test_end_date = session_data["end"]
 
     # LIS API AUTHORIZATION GATE (ban-safe — docs/knowledge/lis_api_authorization.md).
-    # The toolset is authorized for 2025/2026 ONLY. Calling the API/blob for any other
-    # session risks a ban. The Session API LIST call above carries no session code, so
-    # it is fine; but EVERY data pull below (committee maps, HISTORY/DOCKET blobs,
-    # LegislationEvent) is session-scoped. If the active session isn't authorized (e.g.
-    # 2027 before LIS notifies + we widen the set), HALT this cycle and alert — never
-    # make an unauthorized call. Last-known-good Sheet1 is preserved (no write).
+    # MUST run before the first LIS data call (build_committee_maps just below) so an
+    # unauthorized session never touches the API/blob — that risks a ban. NOTE:
+    # push_system_alert only BUFFERS to alert_rows, which is flushed AFTER the sheet
+    # opens (~L2955); because we return early here, we persist the halt DIRECTLY to
+    # Sheet1!X1 (the cell the circuit breaker uses), so it is never silently lost
+    # (Gemini #110 CRITICAL). Last-known-good Sheet1 data is otherwise preserved.
     if not is_authorized_session(ACTIVE_SESSION):
-        push_system_alert(
-            f"🛑 LIS AUTHORIZATION HALT: active session {ACTIVE_SESSION} is not in the "
-            f"authorized set (2025/2026 only). Skipping ALL LIS data calls this cycle to "
-            f"avoid an API ban. If LIS has authorized this session, add its code to "
-            f"lis_authorization.LIS_API_AUTHORIZED_SESSIONS.",
-            status="CRITICAL", category="API_FAILURE", severity="CRITICAL",
-            dedup_key="lis_authorization_halt",
-        )
-        print(f"🛑 LIS authorization halt — session {ACTIVE_SESSION} not authorized; skipping cycle.")
+        _halt = (f"🛑 LIS AUTHORIZATION HALT {datetime.now():%Y-%m-%d %H:%M}: active session "
+                 f"{ACTIVE_SESSION} not in the authorized set (2025/2026 only). Skipped ALL LIS "
+                 f"calls this cycle to avoid an API ban. If LIS authorized this session, add it to "
+                 f"lis_authorization.LIS_API_AUTHORIZED_SESSIONS.")
+        print(_halt)
+        try:
+            _creds = os.environ.get("GCP_CREDENTIALS")
+            if _creds:
+                _gc = gspread.authorize(Credentials.from_service_account_info(
+                    json.loads(_creds), scopes=["https://www.googleapis.com/auth/spreadsheets"]))
+                _gc.open_by_key(SPREADSHEET_ID).worksheet("Sheet1").update_acell("X1", _halt[:4500])
+        except Exception as _e:
+            print(f"   (could not persist halt alert to Sheet1!X1: {_e})")
         return
 
     # PR-C3 per-cycle state for LegislationEvent fallback. The 5-digit

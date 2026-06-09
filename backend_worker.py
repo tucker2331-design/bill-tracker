@@ -22,7 +22,8 @@ def get_active_session():
     # HEAD-probed {year}{suffix} combos and, in November, year+1 (2027) codes —
     # i.e. it would hit UNAUTHORIZED session URLs, a ban risk. Probe newest-first
     # among the authorized set; the caller also gates before any data pull.
-    for session_code in sorted(LIS_API_AUTHORIZED_SESSIONS, reverse=True):
+    authorized_sorted = sorted(LIS_API_AUTHORIZED_SESSIONS, reverse=True)  # newest authorized first
+    for session_code in authorized_sorted:
         test_url = f"https://lis.blob.core.windows.net/lisfiles/{session_code}/HISTORY.CSV"
         try:
             if requests.head(test_url, timeout=3).status_code == 200:
@@ -31,7 +32,7 @@ def get_active_session():
             pass
     # No authorized session has data published yet — return the newest authorized
     # code; the main-flow gate will alert if it can't actually be used.
-    return sorted(LIS_API_AUTHORIZED_SESSIONS, reverse=True)[0]
+    return authorized_sorted[0]
 
 ACTIVE_SESSION = get_active_session()
 TARGET_URL = "https://lis.virginia.gov/Legislation/api/getlegislationsessionlistasync"

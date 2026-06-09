@@ -23,7 +23,8 @@ import ast, re, sys, json, urllib.request, urllib.parse
 from collections import Counter, defaultdict
 from datetime import datetime, timedelta
 
-ROOT = "/Users/tuckerward/Documents/Projects/bill-tracker"
+import os
+ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))  # portable: repo root from this file
 API_KEY = "81D70A54-FCDC-4023-A00B-A3FD114D5984"
 # === LIS API AUTHORIZATION RULE (single source of truth: lis_authorization.py) ===
 # The toolset is authorized for 2025/2026 ONLY; pre-2025 must use legacylis CSV. An
