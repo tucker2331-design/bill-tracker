@@ -373,6 +373,10 @@ if mode == "Live fetch":
             lis_df, lis_ref = load_lis_schedule(http, session_code, api_key)
             st.success(f"Loaded LIS schedule rows: {len(lis_df)}")
             st.code(lis_ref)
+        except PermissionError as exc:
+            # LIS authorization gate (lis_authorization.py): unauthorized session —
+            # show the rule cleanly instead of a raw Streamlit traceback (Gemini #110).
+            st.error(f"LIS authorization: {exc}")
         except requests.RequestException as exc:
             st.error(f"Failed to load LIS schedule (network/http): {exc}")
         except json.JSONDecodeError as exc:

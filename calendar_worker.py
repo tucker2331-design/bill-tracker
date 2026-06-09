@@ -2877,7 +2877,7 @@ def run_calendar_update():
     # Sheet1!X1 (the cell the circuit breaker uses), so it is never silently lost
     # (Gemini #110 CRITICAL). Last-known-good Sheet1 data is otherwise preserved.
     if not is_authorized_session(ACTIVE_SESSION):
-        _halt = (f"🛑 LIS AUTHORIZATION HALT {datetime.now():%Y-%m-%d %H:%M}: active session "
+        _halt = (f"🛑 LIS AUTHORIZATION HALT {now:%Y-%m-%d %H:%M}: active session "
                  f"{ACTIVE_SESSION} not in the authorized set (2025/2026 only). Skipped ALL LIS "
                  f"calls this cycle to avoid an API ban. If LIS authorized this session, add it to "
                  f"lis_authorization.LIS_API_AUTHORIZED_SESSIONS.")
