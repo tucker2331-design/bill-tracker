@@ -2807,7 +2807,8 @@ def run_calendar_update():
         # rows get "" (their class comes from LegEventRoute/RefidClass).
         if "ScheduleClass" not in event:
             if event.get("Origin") in ("api_schedule", "scheduled_future"):
-                _lookup_key = f"{event.get('Date', '')}_{event.get('Committee', '')}"
+                # normalize_room_key on BOTH sides makes the join phrasing-invariant (Gemini #112 HIGH)
+                _lookup_key = f"{event.get('Date', '')}_{normalize_room_key(event.get('Committee', ''))}"
                 _sc = _classify_schedule_type(_schedule_typeid_by_key.get(_lookup_key, ""))
                 # source_miss_counts is a plain dict (not Counter), and these keys are NOT
                 # pre-initialized (unlike refidclass_*) — .get() avoids a KeyError crash.
@@ -3502,7 +3503,11 @@ def run_calendar_update():
                     _stid_val = meeting.get("ScheduleTypeID")   # don't stringify None -> "None"
                     _stid_raw = str(_stid_val).strip() if _stid_val is not None else ""
                     if _stid_raw:
-                        _schedule_typeid_by_key[map_key] = _stid_raw
+                        # Key by the NORMALIZED committee so the _append_event lookup matches
+                        # regardless of the row's raw committee phrasing — normalize_room_key
+                        # collapses "House Committee on Courts of Justice" == "House Courts of
+                        # Justice" (Gemini #112 HIGH). map_key (api_schedule_map) is untouched.
+                        _schedule_typeid_by_key[f"{date_str}_{normalize_room_key(normalized_name)}"] = _stid_raw
                     # Don't overwrite a concrete time with a non-concrete one.
                     # Multiple Schedule API entries per date+committee exist; keep the best time.
                     existing_entry = api_schedule_map.get(map_key)
