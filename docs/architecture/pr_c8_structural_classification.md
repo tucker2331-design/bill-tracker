@@ -195,3 +195,34 @@ STOP, write findings to [[state/current_status]], and wait for the owner when:
 - [ ] Structural resolution ≥ floor; sentinel + reconcile + completeness all green in CI.
 - [ ] All three PRs merged with Gemini review folded + branch worker validation.
 - [ ] assumptions_audit, calendar_pipeline, verification_durability, log, current_status updated.
+
+---
+
+## PR-C8.1b — ScheduleType companion (added after the C8.1 native measurement)
+
+C8.1's RefidClass only covers HISTORY-loop rows. The C8.1 shadow run showed the remaining
+blank-route rows are ALL `api_schedule` origin: ~1,452 skeleton (already admin via the
+empty-outcome rule) + ~964 text rows ("Scheduled" commission/board meetings + Schedule-API
+"Placed on X Agenda" links). Their structural signal is the Schedule API's **`ScheduleTypeID`**
+(measured inventory, 20261): `1`=Committee (940), `2`=Chamber (1), `4`=Caucus (457),
+`5`=Other/commission (1869), `6`=Docket (209).
+
+**Wiring (the schema-migration part — follow the CommitteeName `"?"` migration precedent):**
+1. When the worker fetches the Schedule API, capture `ScheduleTypeID` per entry.
+2. Add `ScheduleTypeID` to the **API_Cache** schema (new column; migration-burst guard handles
+   pre-migration rows returning "" — same pattern as the `Location`/`CommitteeName` columns).
+3. Carry it into `api_schedule_map[k]` (currently stores Time/SortTime/Status/Location at L3311).
+4. Stamp a `ScheduleClass` column on api_schedule rows (SHADOW, additive telemetry), via a new
+   pure `classify_schedule_type(schedule_type_id) -> MEETING_EVENT|FLOOR|CAUCUS|DOCKET|OTHER`
+   in structural_router (golden-tested). NO text — keyed on the integer id only.
+5. Gate: shadow run, sentinel green, distribution dumped in the PR; ≥ ~95% of api_schedule
+   text rows get a non-OTHER ScheduleClass.
+
+**Open items to MEASURE (don't assume):**
+- Whether the `api_schedule` "Placed on X Agenda" rows DUPLICATE the HISTORY journal_default
+  "Placed on Agenda" rows (possible double-count on the sheet) — characterize before C8.2.
+- Whether the "Scheduled" commission rows (interim, dated pre-session e.g. 2025-11) should be
+  in the session window at all, or are window-filter leakage (orthogonal to classification).
+
+Then **C8.2** flips classify_action onto BOTH signals (RefidClass + ScheduleClass) and deletes
+the text patterns.
