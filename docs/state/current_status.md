@@ -19,7 +19,7 @@ the lobbyist path. Deep-reasoning session produced the full execution spec:
 verbatim (hard rules, gates, golden tests, stop-and-escalate protocol).** Foundation: the
 `History_refid` typed-namespace discovery + VOTE.CSV roll-call join + the batch-notice law
 (96.7% of blank journal rows proven structurally, 0 counterexamples) —
-[[knowledge/history_refid_namespace]]. Three PRs: C8.1 shadow telemetry → C8.2 flip (text
+[[knowledge/history_refid_namespace]]. **C8.1 DONE (PR #111, shadow): RefidClass batch-notice law solves the journal_default 16% at 98.3%, 0 counterexamples, K=2; next C8.1b = ScheduleTypeID for 964 api_schedule-text rows, then C8.2 flip.** Three PRs: C8.1 shadow telemetry → C8.2 flip (text
 patterns deleted from ray2/calendar_xray) → C8.3 guards (completeness tripwire + unconfirmed
 budget). Also done this block: LIS API authorization rule captured + enforced in code
 (PR #110, [[knowledge/lis_api_authorization]]); dynamic session window (PR #109) — no more

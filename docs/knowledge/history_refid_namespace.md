@@ -41,3 +41,30 @@ exists; Calendar API = floor calendars only (its blob `.JSON` file 404s).
 `lis.virginia.gov/<AnyController>/api/<anything>` returns **HTTP 200 with the React SPA
 shell HTML** for nonexistent routes. A 200 does NOT mean an endpoint exists — require
 `application/json` content-type + parseable body before believing a probe.
+
+## REFINEMENT from PR-C8.1 native measurement (2026-06-09)
+The original "numeric refid = batch document" was too coarse. Measured segmentation of the
+numeric refid space (session 20261):
+
+| refid len | distinct | VOTE.CSV join | role |
+|---|---|---|---|
+| 3 | 7 | 0% | subcommittee-assignment batch |
+| 4 | 315 | 0% | agenda-notice batch |
+| 6 | 30 | 0% | singleton per-bill doc |
+| 7 | 182 | **100%** | floor roll-call vote-id |
+| 8 | 1,380 | **100%** | floor roll-call vote-id |
+
+Consequences for the decision chain:
+- **Vote evidence has TWO structural forms** (either ⇒ meeting): (a) refid matches the V-grammar
+  `^[HS]\d{1,2}(?:\d{3})?V\d+$` (committee vote record — these NEVER appear in VOTE.CSV, which is
+  floor-only; 0% join is EXPECTED, not a miss); (b) a bare-numeric refid that IS a key in VOTE.CSV
+  (floor roll-call). The earlier spec idea of "VOTE_REF_UNMATCHED → surface" was WRONG for V-grammar
+  refids — a V-refid is itself the vote record.
+- **Batch-notice = a NON-vote numeric refid (not a VOTE.CSV key) shared by ≥K same-date bills.** The
+  len-3/4 batch refids are 0% vote-join at every fan level, so the law is safe; K is small.
+- **Per-row purity (critical):** classify each row by ITS OWN refid. A bill assigned to a
+  subcommittee (batch, admin) AND voted (separate row, meeting) on the same day is TWO rows, each
+  correct. A "bill voted that day" test is NOT a valid batch counterexample (it produced 587 false
+  positives at K=2). The only valid counterexample is the batch ROW's own refid joining VOTE.CSV (=0).
+- **K is finalized from the NATIVE shadow run** (C8.1), not this reverse-join (which has ~654
+  bill+date join-miss artifacts that vanish when the worker builds rows from HISTORY directly).
