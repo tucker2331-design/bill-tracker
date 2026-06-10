@@ -29,6 +29,7 @@ from structural_router import validate_status_grouping as _validate_status_group
 from structural_router import compute_ministerial_eventcodes as _compute_ministerial_eventcodes
 from structural_router import build_admin_recovery_index as _build_admin_recovery_index
 from structural_router import recover_admin_route as _recover_admin_route
+from structural_router import classify_refid as _classify_refid  # PR-C8.1 structural refid identity
 from lis_authorization import is_authorized_session  # LIS API 2025/2026-only gate (ban-safe)
 # Single source of truth for the VA legislative business-hours window. Shared with
 # structural_router._has_meeting_time so the ministerial detector and this
@@ -2651,6 +2652,18 @@ def run_calendar_update():
         "legevent_route_meeting": 0,
         "legevent_route_admin":   0,
         "legevent_route_blank":   0,
+        # PR-C8.1 (SHADOW): distribution of the structural refid-class (classify_refid)
+        # across HISTORY-derived rows. Telemetry ONLY — does not route any row this PR.
+        # Lets us measure, from the native side, what fraction of blank-route rows the
+        # refid identity classifies (target: most -> BATCH_NOTICE/COMMITTEE_REF) and the
+        # true residual (-> SINGLETON_DOC/UNKNOWN/EMPTY) before the C8.2 flip.
+        "refidclass_vote_committee": 0,
+        "refidclass_vote_floor":    0,
+        "refidclass_batch_notice":  0,
+        "refidclass_singleton_doc": 0,
+        "refidclass_committee_ref": 0,
+        "refidclass_unknown_refid": 0,
+        "refidclass_empty":         0,
         # PR-C7.1l: count of runtime-derived ministerial EventCodes (event
         # types that never carry a vote or a real meeting time → ledger).
         "legevent_ministerial_eventtypes": 0,
@@ -2777,6 +2790,8 @@ def run_calendar_update():
         # PR-C7.1b-2 consumes this column. Lets us prove the route
         # populates correctly in Sheet1 before touching the UI.
         event.setdefault("LegEventRoute", "")
+        # PR-C8.1 (SHADOW): additive refid-class column; defaulted so every row has it.
+        event.setdefault("RefidClass", "")
 
         # I1: schema completeness. Fill missing keys with "" so downstream
         # pandas/serialization stays happy, but count + alert so the gap is
@@ -3948,6 +3963,34 @@ def run_calendar_update():
             print("⚠️ No refid column found in HISTORY.CSV — falling back to text-only committee matching.")
         df_past['CleanBill'] = df_past[bill_col].astype(str).str.replace(' ', '').str.upper()
         df_past['ParsedDate'] = pd.to_datetime(df_past[date_col], errors='coerce')
+        # === PR-C8.1 (SHADOW): structural refid-class indexes (read-only telemetry) ===
+        # Two indexes the refid classifier needs, both derived from authorized-session data:
+        #   _vote_id_set  — VOTE.CSV roll-call keys (a numeric refid in this set = floor vote)
+        #   _refid_fanout — (numeric refid, date) -> distinct-bill count (batch-document signature)
+        # NOTHING is reclassified here; we only STAMP RefidClass per row for native measurement
+        # before the C8.2 flip. See docs/architecture/pr_c8_structural_classification.md.
+        _vote_id_set = set()
+        try:
+            _df_vote = safe_fetch_csv(f"https://lis.blob.core.windows.net/lisfiles/{blob_code}/VOTE.CSV")
+            if not _df_vote.empty:
+                _vc0 = _df_vote.columns[0]
+                _vote_id_set = {str(v).strip() for v in _df_vote[_vc0] if str(v).strip().isdigit()}
+        except Exception as _ve:
+            push_system_alert(f"VOTE.CSV fetch failed ({_ve}); refid vote-join unavailable (shadow telemetry).",
+                              status="WARN", category="API_FAILURE", severity="WARN", dedup_key="vote_csv_fail")
+        if len(_vote_id_set) < 50:  # a real session publishes hundreds; thin => degraded evidence
+            push_system_alert(f"VOTE.CSV returned {len(_vote_id_set)} roll-call ids (<50); refid "
+                              f"vote-join evidence degraded this cycle (shadow telemetry only).",
+                              status="WARN", category="API_FAILURE", severity="WARN", dedup_key="vote_csv_thin")
+        print(f"🗳️  VOTE.CSV roll-call ids: {len(_vote_id_set)} (refid vote-join index)")
+        _refid_fanout = {}
+        if refid_col:
+            _fan = {}
+            for _rid, _pdt, _cb in zip(df_past[refid_col].astype(str), df_past['ParsedDate'], df_past['CleanBill']):
+                _rids = _rid.strip()
+                if _rids.isdigit() and pd.notna(_pdt):
+                    _fan.setdefault((_rids, _pdt.strftime('%Y-%m-%d')), set()).add(_cb)
+            _refid_fanout = {_k: len(_v) for _k, _v in _fan.items()}
         # df_past window (assumptions_audit #68/#75). The flaky-subset SessionEvents
         # bug that silently SHRANK this window (2026-06-03: processed=310 vs 65,180)
         # is now fixed at the ROOT in extract_dates — the start is anchored to the
@@ -4958,7 +5001,16 @@ def run_calendar_update():
             else:
                 source_miss_counts["legevent_route_blank"] += 1
 
+            # PR-C8.1 (SHADOW): structural refid identity for this row — telemetry ONLY,
+            # consumes no description text and does NOT change routing/placement (Standard #3).
+            _row_refid = (str(row.get(refid_col, "") or "").strip() if refid_col else "")
+            _row_fanout = _refid_fanout.get((_row_refid, date_str), 0) if _row_refid.isdigit() else 0
+            _refid_class = _classify_refid(_row_refid, fanout=_row_fanout,
+                                           in_vote_csv=(_row_refid in _vote_id_set))
+            source_miss_counts["refidclass_" + _refid_class.lower()] += 1
+
             _append_event({
+                "RefidClass": _refid_class,
                 "Date": date_str,
                 "Time": time_val,
                 "SortTime": sort_time_24h,
@@ -5103,7 +5155,15 @@ def run_calendar_update():
             f"legevent_route_admin={source_miss_counts['legevent_route_admin']} "
             f"legevent_route_blank={source_miss_counts['legevent_route_blank']} "
             f"legevent_floor_recovered={source_miss_counts['legevent_floor_recovered']} "
-            f"legevent_admin_skipped={source_miss_counts['legevent_admin_skipped']}"
+            f"legevent_admin_skipped={source_miss_counts['legevent_admin_skipped']} "
+            # PR-C8.1 SHADOW: structural refid-class distribution (telemetry only)
+            f"| refidclass: vote_committee={source_miss_counts['refidclass_vote_committee']} "
+            f"vote_floor={source_miss_counts['refidclass_vote_floor']} "
+            f"batch_notice={source_miss_counts['refidclass_batch_notice']} "
+            f"singleton_doc={source_miss_counts['refidclass_singleton_doc']} "
+            f"committee_ref={source_miss_counts['refidclass_committee_ref']} "
+            f"unknown_refid={source_miss_counts['refidclass_unknown_refid']} "
+            f"empty={source_miss_counts['refidclass_empty']}"
             # NB: sibling_inherited (PR-C7.1j) is NOT in this line — it's
             # computed AFTER this row is serialized (it needs final_df); it
             # surfaces in its own "🔗 Sibling-time inheritance: N …" print.
