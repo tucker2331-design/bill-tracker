@@ -7,6 +7,7 @@ import gspread
 import pandas as pd
 import re
 import io
+import csv
 import tempfile
 import urllib.parse
 from collections import Counter
@@ -3969,12 +3970,17 @@ def run_calendar_update():
         #   _refid_fanout — (numeric refid, date) -> distinct-bill count (batch-document signature)
         # NOTHING is reclassified here; we only STAMP RefidClass per row for native measurement
         # before the C8.2 flip. See docs/architecture/pr_c8_structural_classification.md.
+        # VOTE.CSV is a RAGGED csv (each roll-call row has a different member count), which
+        # pandas/safe_fetch_csv silently mangles to 0 usable ids — fetch raw and read with
+        # csv.reader. Vote id = the first column (a digit string like "26110000").
         _vote_id_set = set()
         try:
-            _df_vote = safe_fetch_csv(f"https://lis.blob.core.windows.net/lisfiles/{blob_code}/VOTE.CSV")
-            if not _df_vote.empty:
-                _vc0 = _df_vote.columns[0]
-                _vote_id_set = {str(v).strip() for v in _df_vote[_vc0] if str(v).strip().isdigit()}
+            _vr = http_session.get(f"https://lis.blob.core.windows.net/lisfiles/{blob_code}/VOTE.CSV",
+                                   headers=HEADERS, timeout=60)
+            if _vr.status_code == 200:
+                for _vrow in csv.reader(io.StringIO(_vr.content.decode("utf-8", "replace"))):
+                    if _vrow and _vrow[0].strip().isdigit():
+                        _vote_id_set.add(_vrow[0].strip())
         except Exception as _ve:
             push_system_alert(f"VOTE.CSV fetch failed ({_ve}); refid vote-join unavailable (shadow telemetry).",
                               status="WARN", category="API_FAILURE", severity="WARN", dedup_key="vote_csv_fail")
@@ -5003,7 +5009,10 @@ def run_calendar_update():
 
             # PR-C8.1 (SHADOW): structural refid identity for this row — telemetry ONLY,
             # consumes no description text and does NOT change routing/placement (Standard #3).
-            _row_refid = (str(row.get(refid_col, "") or "").strip() if refid_col else "")
+            _rv = row.get(refid_col, "") if refid_col else ""
+            _row_refid = "" if pd.isna(_rv) else str(_rv).strip()   # empty cells parse as NaN
+            if _row_refid.lower() in ("nan", "none"):
+                _row_refid = ""
             _row_fanout = _refid_fanout.get((_row_refid, date_str), 0) if _row_refid.isdigit() else 0
             _refid_class = _classify_refid(_row_refid, fanout=_row_fanout,
                                            in_vote_csv=(_row_refid in _vote_id_set))
