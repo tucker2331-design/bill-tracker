@@ -9,6 +9,13 @@ Append-only, reverse-chronological (newest at top). Each entry opens with `## [Y
 
 **Kinds:** `ingest` (new source/doc processed), `pr` (PR opened/merged/closed), `decision` (architectural or workflow), `lint` (wiki health-check pass), `session` (notable multi-hour working block), `post-mortem` (failure analysis), `milestone` (project-goal threshold crossed).
 
+## [2026-06-10] pr | #111 MERGED — PR-C8.1 structural evidence layer (RefidClass), shadow
+
+All 3 gates green: worker success (VOTE.CSV=1606, refidclass stable), Gemini clean (3 rounds:
+ragged-VOTE.CSV, float64 coercion, pandas-NA reprs — all folded), sentinel green. The
+batch-notice law (text-free) solves the journal_default 16% at 98.3%, 0 counterexamples, K=2.
+Shadow = zero behavior change. Next: C8.1b (ScheduleTypeID for 964 api_schedule-text rows).
+
 ## [2026-06-10] pr | #111 opened — PR-C8.1 structural evidence layer (RefidClass), shadow
 
 Text-free `classify_refid` (by History_refid identity) stamped as shadow telemetry. Native
