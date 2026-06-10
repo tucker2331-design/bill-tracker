@@ -9,6 +9,18 @@ Append-only, reverse-chronological (newest at top). Each entry opens with `## [Y
 
 **Kinds:** `ingest` (new source/doc processed), `pr` (PR opened/merged/closed), `decision` (architectural or workflow), `lint` (wiki health-check pass), `session` (notable multi-hour working block), `post-mortem` (failure analysis), `milestone` (project-goal threshold crossed).
 
+## [2026-06-10] pr | #112 MERGED — PR-C8.1b ScheduleType companion (ScheduleClass), shadow
+
+Closes the api_schedule tail of the 16%. classify_schedule_type (pure, golden-tested) keys on
+LIS's integer ScheduleTypeID; in-memory (date_committee)->ScheduleTypeID index from raw
+`schedules` (NO API_Cache migration); _append_event stamps ScheduleClass centrally. Both open
+items resolved by measurement (agenda rows NOT dup: 0% overlap; 'Scheduled' rows NOT leakage:
+99% in-session). Coverage 100% (1814/1814 api_schedule text rows non-OTHER), sentinel green.
+4 Gemini rounds folded: KeyError crash (.get), str(None) guard, readability, float-proof, and
+the normalize_room_key BOTH-sides join fix; final HIGH was a verified-stale re-emission
+(code already implemented the suggestion + coverage held). Structural evidence layer COMPLETE
+(RefidClass + ScheduleClass). Next: C8.2 — the FLIP (delete the text patterns).
+
 ## [2026-06-10] pr | #111 MERGED — PR-C8.1 structural evidence layer (RefidClass), shadow
 
 All 3 gates green: worker success (VOTE.CSV=1606, refidclass stable), Gemini clean (3 rounds:
