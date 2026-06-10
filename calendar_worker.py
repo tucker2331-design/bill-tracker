@@ -2806,15 +2806,16 @@ def run_calendar_update():
         # integer typing — NO prose), looked up by the row's (date, committee) key. Other
         # rows get "" (their class comes from LegEventRoute/RefidClass).
         if "ScheduleClass" not in event:
-            _sc = ""
             if event.get("Origin") in ("api_schedule", "scheduled_future"):
-                _stid = _schedule_typeid_by_key.get(f"{event.get('Date','')}_{event.get('Committee','')}", "")
-                _sc = _classify_schedule_type(_stid)
-                # source_miss_counts is a plain dict (not Counter); .get() avoids a KeyError
-                # crash on these not-pre-initialized keys (Gemini #112 CRITICAL).
+                _lookup_key = f"{event.get('Date', '')}_{event.get('Committee', '')}"
+                _sc = _classify_schedule_type(_schedule_typeid_by_key.get(_lookup_key, ""))
+                # source_miss_counts is a plain dict (not Counter), and these keys are NOT
+                # pre-initialized (unlike refidclass_*) — .get() avoids a KeyError crash.
                 _key = "scheduleclass_" + _sc.lower()
                 source_miss_counts[_key] = source_miss_counts.get(_key, 0) + 1
-            event["ScheduleClass"] = _sc
+                event["ScheduleClass"] = _sc
+            else:
+                event["ScheduleClass"] = ""
 
         # I1: schema completeness. Fill missing keys with "" so downstream
         # pandas/serialization stays happy, but count + alert so the gap is
