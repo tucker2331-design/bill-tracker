@@ -464,3 +464,34 @@ def validate_status_grouping(live_status_names) -> list[str]:
         if name and name not in CLASSIFIED_STATUSES:
             unclassified.append(name)
     return sorted(set(unclassified))
+
+
+# === PR-C8.1b: structural classification of api_schedule rows by ScheduleTypeID ===
+# The Schedule API types every entry with an integer ScheduleTypeID — LIS's OWN typing,
+# no prose. This is the companion to classify_refid for the api_schedule-origin blank rows
+# (RefidClass only covers HISTORY-loop rows). Measured inventory (session 20261):
+#   1 Committee (940) · 2 Chamber (1) · 4 Caucus (457) · 5 Other/commission (1869) · 6 Docket (209)
+# Returns the structural TYPE label; the meeting-vs-admin mapping for the calendar is decided
+# in the C8.2 chain (e.g. MEETING_EVENT/FLOOR/COMMISSION carry their own time; DOCKET = admin).
+SCHED_COMMITTEE   = "MEETING_EVENT"   # type 1 — a committee meeting (attendable, has a time)
+SCHED_FLOOR       = "FLOOR"           # type 2 — chamber/floor session
+SCHED_CAUCUS      = "CAUCUS"          # type 4 — caucus
+SCHED_COMMISSION  = "COMMISSION"      # type 5 — board/commission/other scheduled body
+SCHED_DOCKET      = "DOCKET"          # type 6 — docket/agenda placement (administrative)
+SCHED_OTHER       = "SCHED_OTHER"     # unmapped id -> no decisive signal (surface)
+
+_SCHEDULE_TYPE_MAP = {
+    "1": SCHED_COMMITTEE, "2": SCHED_FLOOR, "4": SCHED_CAUCUS,
+    "5": SCHED_COMMISSION, "6": SCHED_DOCKET,
+}
+
+
+def classify_schedule_type(schedule_type_id) -> str:
+    """Map a Schedule API ScheduleTypeID (integer id, as int or str) to its structural
+    class label. Pure; no prose. Unknown/missing ids -> SCHED_OTHER (surface, fail-safe).
+    A NEW ScheduleTypeID LIS introduces lands in SCHED_OTHER (visible) rather than being
+    silently mis-bucketed. Float-inference-proof (5.0 -> "5"), mirroring normalize_refid."""
+    s = str(schedule_type_id).strip()
+    if s.endswith(".0") and s[:-2].isdigit():   # float-inference artifact, e.g. 5.0 -> "5"
+        s = s[:-2]
+    return _SCHEDULE_TYPE_MAP.get(s, SCHED_OTHER)
