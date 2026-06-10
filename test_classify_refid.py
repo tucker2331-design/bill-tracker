@@ -30,6 +30,13 @@ CASES = [
     # SAFETY INVARIANT: a numeric refid that DID join VOTE.CSV must never be BATCH, regardless
     # of fan-out — vote evidence outranks the batch law (chain rule 4 before rule 5).
     (("5354", 63, True), REFID_VOTE_FLOOR),
+    # FLOAT ROBUSTNESS: pandas may infer the refid column as float64. classify_refid must
+    # normalize these itself, not misclassify them as UNKNOWN (Gemini PR-C8.1 review).
+    ((26110000.0, 0, True), REFID_VOTE_FLOOR),     # float refid joining VOTE.CSV
+    (("5141.0", 2, False), REFID_BATCH_NOTICE),    # stringified-float artifact "5141.0"
+    ((5141.0, 1, False), REFID_SINGLETON_DOC),     # bare float, fan-out < K
+    ((float("nan"), 0, False), REFID_EMPTY),       # NaN float -> empty
+    ((None, 0, False), REFID_EMPTY),
 ]
 
 

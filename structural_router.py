@@ -384,6 +384,27 @@ def recover_admin_route(outcome, admin_recovery_index) -> str:
 _VOTE_REFID_RE = _re.compile(r'^[HS]\d{1,2}(?:\d{3})?V\d+$')   # committee vote record grammar
 _COMMITTEE_REFID_RE = _re.compile(r'^[HS]\d{1,2}$')            # H14 / S04 committee code
 
+
+def normalize_refid(v) -> str:
+    """Normalize a History_refid cell to a clean string id, robust to pandas type
+    inference (the #1 fragility here). A column pandas infers as float64 turns
+    "26110000" into the float 26110000.0, whose str() is "26110000.0" — which fails
+    .isdigit() and silently misclassifies. Rules: NaN/None/""/"nan"/"none" -> "";
+    whole-number float -> the integer string (drop the ".0"); a stringified-float
+    artifact ("26110000.0") -> "26110000"; everything else -> stripped string."""
+    if v is None:
+        return ""
+    if isinstance(v, float):
+        if v != v:            # NaN (NaN != NaN)
+            return ""
+        return str(int(v)) if v == int(v) else str(v)
+    s = str(v).strip()
+    if s.lower() in ("nan", "none"):
+        return ""
+    if s.endswith(".0") and s[:-2].isdigit():   # float-inference artifact, e.g. "26110000.0"
+        return s[:-2]
+    return s
+
 # Refid classes. The first three are MEETING evidence; BATCH_NOTICE/COMMITTEE_REF are
 # administrative; SINGLETON_DOC/UNKNOWN_REFID/EMPTY carry no decisive signal (-> surface).
 REFID_VOTE_COMMITTEE = "VOTE_COMMITTEE"   # V-grammar refid
@@ -412,7 +433,7 @@ def classify_refid(refid, *, fanout: int = 0, in_vote_csv: bool = False,
     Administrative: BATCH_NOTICE, COMMITTEE_REF. No decisive signal (caller should SURFACE):
     SINGLETON_DOC, UNKNOWN_REFID, EMPTY.
     """
-    r = _s(refid).strip()
+    r = normalize_refid(refid)   # self-contained: float64/nan/none/".0" all handled here
     if not r:
         return REFID_EMPTY
     if _VOTE_REFID_RE.match(r):

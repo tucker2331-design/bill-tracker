@@ -31,6 +31,7 @@ from structural_router import compute_ministerial_eventcodes as _compute_ministe
 from structural_router import build_admin_recovery_index as _build_admin_recovery_index
 from structural_router import recover_admin_route as _recover_admin_route
 from structural_router import classify_refid as _classify_refid  # PR-C8.1 structural refid identity
+from structural_router import normalize_refid as _normalize_refid  # float64/nan-proof refid cleanup
 from lis_authorization import is_authorized_session  # LIS API 2025/2026-only gate (ban-safe)
 # Single source of truth for the VA legislative business-hours window. Shared with
 # structural_router._has_meeting_time so the ministerial detector and this
@@ -3992,8 +3993,8 @@ def run_calendar_update():
         _refid_fanout = {}
         if refid_col:
             _fan = {}
-            for _rid, _pdt, _cb in zip(df_past[refid_col].astype(str), df_past['ParsedDate'], df_past['CleanBill']):
-                _rids = _rid.strip()
+            for _rid, _pdt, _cb in zip(df_past[refid_col], df_past['ParsedDate'], df_past['CleanBill']):
+                _rids = _normalize_refid(_rid)   # float64/nan-proof (matches the stamp's key)
                 if _rids.isdigit() and pd.notna(_pdt):
                     _fan.setdefault((_rids, _pdt.strftime('%Y-%m-%d')), set()).add(_cb)
             _refid_fanout = {_k: len(_v) for _k, _v in _fan.items()}
@@ -5009,10 +5010,7 @@ def run_calendar_update():
 
             # PR-C8.1 (SHADOW): structural refid identity for this row — telemetry ONLY,
             # consumes no description text and does NOT change routing/placement (Standard #3).
-            _rv = row.get(refid_col, "") if refid_col else ""
-            _row_refid = "" if pd.isna(_rv) else str(_rv).strip()   # empty cells parse as NaN
-            if _row_refid.lower() in ("nan", "none"):
-                _row_refid = ""
+            _row_refid = _normalize_refid(row.get(refid_col, "")) if refid_col else ""  # float64/nan-proof
             _row_fanout = _refid_fanout.get((_row_refid, date_str), 0) if _row_refid.isdigit() else 0
             _refid_class = _classify_refid(_row_refid, fanout=_row_fanout,
                                            in_vote_csv=(_row_refid in _vote_id_set))
