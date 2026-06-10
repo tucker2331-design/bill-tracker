@@ -32,6 +32,7 @@ from structural_router import build_admin_recovery_index as _build_admin_recover
 from structural_router import recover_admin_route as _recover_admin_route
 from structural_router import classify_refid as _classify_refid  # PR-C8.1 structural refid identity
 from structural_router import normalize_refid as _normalize_refid  # float64/nan-proof refid cleanup
+from structural_router import classify_schedule_type as _classify_schedule_type  # PR-C8.1b ScheduleTypeID
 from lis_authorization import is_authorized_session  # LIS API 2025/2026-only gate (ban-safe)
 # Single source of truth for the VA legislative business-hours window. Shared with
 # structural_router._has_meeting_time so the ministerial detector and this
@@ -2777,6 +2778,12 @@ def run_calendar_update():
     }
     _UNSOURCED_ORIGINS_FOR_METRICS = {"journal_default", "floor_miss"}
 
+    # PR-C8.1b (SHADOW): (date_committee) -> ScheduleTypeID, built from the raw Schedule API
+    # after the fetch below; lets _append_event stamp the structural ScheduleClass on
+    # api_schedule rows without an API_Cache schema migration. Bound here so the closure
+    # captures it; empty until populated (early non-schedule appends see "" -> SCHED_OTHER).
+    _schedule_typeid_by_key = {}
+
     def _append_event(event):
         """PR-C1 write-time chokepoint. See comment block above for invariants."""
         bill_id = event.get("Bill", "?")
@@ -2794,6 +2801,17 @@ def run_calendar_update():
         event.setdefault("LegEventRoute", "")
         # PR-C8.1 (SHADOW): additive refid-class column; defaulted so every row has it.
         event.setdefault("RefidClass", "")
+        # PR-C8.1b (SHADOW): additive schedule-class column. For api_schedule-origin rows,
+        # derive the structural class from the Schedule API's ScheduleTypeID (LIS's own
+        # integer typing — NO prose), looked up by the row's (date, committee) key. Other
+        # rows get "" (their class comes from LegEventRoute/RefidClass).
+        if "ScheduleClass" not in event:
+            _sc = ""
+            if event.get("Origin") in ("api_schedule", "scheduled_future"):
+                _stid = _schedule_typeid_by_key.get(f"{event.get('Date','')}_{event.get('Committee','')}", "")
+                _sc = _classify_schedule_type(_stid)
+                source_miss_counts["scheduleclass_" + _sc.lower()] += 1
+            event["ScheduleClass"] = _sc
 
         # I1: schema completeness. Fill missing keys with "" so downstream
         # pandas/serialization stays happy, but count + alert so the gap is
@@ -3474,6 +3492,12 @@ def run_calendar_update():
                                 if not leftovers: normalized_name = api_name; break
 
                     map_key = f"{date_str}_{normalized_name.strip()}"
+                    # PR-C8.1b (SHADOW): record this entry's structural ScheduleTypeID so
+                    # _append_event can stamp ScheduleClass on the matching row (no API_Cache
+                    # migration). Same (date_committee) key the row will look up.
+                    _stid_raw = str(meeting.get("ScheduleTypeID", "")).strip()
+                    if _stid_raw:
+                        _schedule_typeid_by_key[map_key] = _stid_raw
                     # Don't overwrite a concrete time with a non-concrete one.
                     # Multiple Schedule API entries per date+committee exist; keep the best time.
                     existing_entry = api_schedule_map.get(map_key)
