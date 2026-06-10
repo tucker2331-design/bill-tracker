@@ -9,6 +9,15 @@ Append-only, reverse-chronological (newest at top). Each entry opens with `## [Y
 
 **Kinds:** `ingest` (new source/doc processed), `pr` (PR opened/merged/closed), `decision` (architectural or workflow), `lint` (wiki health-check pass), `session` (notable multi-hour working block), `post-mortem` (failure analysis), `milestone` (project-goal threshold crossed).
 
+## [2026-06-10] pr | #111 opened — PR-C8.1 structural evidence layer (RefidClass), shadow
+
+Text-free `classify_refid` (by History_refid identity) stamped as shadow telemetry. Native
+measurement: journal_default blank rows 98.3% BATCH_NOTICE, 0 counterexamples, K=2; the
+"Placed on Agenda" 16% structurally solved. Found+fixed 2 telemetry bugs (ragged VOTE.CSV via
+pandas; empty-refid NaN→UNKNOWN). Scope boundary: 964 api_schedule-text rows need ScheduleTypeID
+→ C8.1b. Sentinel green (shadow = no behavior change). [[knowledge/history_refid_namespace]],
+assumptions_audit #80.
+
 ## [2026-06-09] decision | PR-C8 execution spec written for handoff to a lighter model
 
 Deep-reasoning session (owner: "lay out the plan and hard guidelines... so a less strenuous
