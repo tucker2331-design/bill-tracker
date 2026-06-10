@@ -2810,7 +2810,10 @@ def run_calendar_update():
             if event.get("Origin") in ("api_schedule", "scheduled_future"):
                 _stid = _schedule_typeid_by_key.get(f"{event.get('Date','')}_{event.get('Committee','')}", "")
                 _sc = _classify_schedule_type(_stid)
-                source_miss_counts["scheduleclass_" + _sc.lower()] += 1
+                # source_miss_counts is a plain dict (not Counter); .get() avoids a KeyError
+                # crash on these not-pre-initialized keys (Gemini #112 CRITICAL).
+                _key = "scheduleclass_" + _sc.lower()
+                source_miss_counts[_key] = source_miss_counts.get(_key, 0) + 1
             event["ScheduleClass"] = _sc
 
         # I1: schema completeness. Fill missing keys with "" so downstream
@@ -3495,7 +3498,8 @@ def run_calendar_update():
                     # PR-C8.1b (SHADOW): record this entry's structural ScheduleTypeID so
                     # _append_event can stamp ScheduleClass on the matching row (no API_Cache
                     # migration). Same (date_committee) key the row will look up.
-                    _stid_raw = str(meeting.get("ScheduleTypeID", "")).strip()
+                    _stid_val = meeting.get("ScheduleTypeID")   # don't stringify None -> "None"
+                    _stid_raw = str(_stid_val).strip() if _stid_val is not None else ""
                     if _stid_raw:
                         _schedule_typeid_by_key[map_key] = _stid_raw
                     # Don't overwrite a concrete time with a non-concrete one.
