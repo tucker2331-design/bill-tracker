@@ -490,5 +490,8 @@ def classify_schedule_type(schedule_type_id) -> str:
     """Map a Schedule API ScheduleTypeID (integer id, as int or str) to its structural
     class label. Pure; no prose. Unknown/missing ids -> SCHED_OTHER (surface, fail-safe).
     A NEW ScheduleTypeID LIS introduces lands in SCHED_OTHER (visible) rather than being
-    silently mis-bucketed."""
-    return _SCHEDULE_TYPE_MAP.get(str(schedule_type_id).strip(), SCHED_OTHER)
+    silently mis-bucketed. Float-inference-proof (5.0 -> "5"), mirroring normalize_refid."""
+    s = str(schedule_type_id).strip()
+    if s.endswith(".0") and s[:-2].isdigit():   # float-inference artifact, e.g. 5.0 -> "5"
+        s = s[:-2]
+    return _SCHEDULE_TYPE_MAP.get(s, SCHED_OTHER)

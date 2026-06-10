@@ -17,6 +17,9 @@ CASES = [
     (3, SCHED_OTHER),        # id 3 unused in 20261 -> surface, not mis-bucketed
     (99, SCHED_OTHER),       # a future/unknown id lands visible, never silently wrong
     ("", SCHED_OTHER), (None, SCHED_OTHER),
+    # FLOAT ROBUSTNESS (mirrors classify_refid): a float-inferred id must still map.
+    (5.0, SCHED_COMMISSION), ("5.0", SCHED_COMMISSION),
+    (1.0, SCHED_COMMITTEE), ("6.0", SCHED_DOCKET),
 ]
 
 
