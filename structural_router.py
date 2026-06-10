@@ -399,7 +399,7 @@ def normalize_refid(v) -> str:
             return ""
         return str(int(v)) if v == int(v) else str(v)
     s = str(v).strip()
-    if s.lower() in ("nan", "none"):
+    if s.lower() in ("nan", "none", "na", "<na>", "null"):   # incl. pandas nullable NA reprs
         return ""
     if s.endswith(".0") and s[:-2].isdigit():   # float-inference artifact, e.g. "26110000.0"
         return s[:-2]

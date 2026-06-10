@@ -37,6 +37,11 @@ CASES = [
     ((5141.0, 1, False), REFID_SINGLETON_DOC),     # bare float, fan-out < K
     ((float("nan"), 0, False), REFID_EMPTY),       # NaN float -> empty
     ((None, 0, False), REFID_EMPTY),
+    (("nan", 0, False), REFID_EMPTY),              # string reprs of missing values
+    (("none", 0, False), REFID_EMPTY),
+    (("NA", 0, False), REFID_EMPTY),               # pandas nullable NA reprs (Gemini PR-C8.1)
+    (("<NA>", 0, False), REFID_EMPTY),
+    (("5354.0", 63, False), REFID_BATCH_NOTICE),   # float-string batch refid still batches
 ]
 
 

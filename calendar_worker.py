@@ -3978,10 +3978,10 @@ def run_calendar_update():
         try:
             _vr = http_session.get(f"https://lis.blob.core.windows.net/lisfiles/{blob_code}/VOTE.CSV",
                                    headers=HEADERS, timeout=60)
-            if _vr.status_code == 200:
-                for _vrow in csv.reader(io.StringIO(_vr.content.decode("utf-8", "replace"))):
-                    if _vrow and _vrow[0].strip().isdigit():
-                        _vote_id_set.add(_vrow[0].strip())
+            _vr.raise_for_status()   # non-200 (404/500) -> except below, a DISTINCT "fetch failed" alert
+            for _vrow in csv.reader(io.StringIO(_vr.content.decode("utf-8", "replace"))):
+                if _vrow and _vrow[0].strip().isdigit():
+                    _vote_id_set.add(_vrow[0].strip())
         except Exception as _ve:
             push_system_alert(f"VOTE.CSV fetch failed ({_ve}); refid vote-join unavailable (shadow telemetry).",
                               status="WARN", category="API_FAILURE", severity="WARN", dedup_key="vote_csv_fail")
