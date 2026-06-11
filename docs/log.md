@@ -20,7 +20,11 @@ unconfirmed 75→31; structural coverage 99.8%→99.92%; Section 9 still 0; sent
 ray2/calendar_xray diff-identical. Discovery: a refid names the DOCUMENT, not the action — SB764's
 veto-received carries a `digits+D` doc refid (same shape as admin "substitute printed"), so
 `digits+D → admin` is FORBIDDEN (would bury a veto); those surface, vetoes handled in C8.4b
-(route_event G-family split). [[failures/assumptions_audit#83]]. Awaiting Gemini re-audit loop.
+(route_event G-family split). [[failures/assumptions_audit#83]]. **Gemini round 1: clean. Round 2
+(confirming re-audit): caught a real defensive gap** — HISTORY read via `pd.read_csv` with no
+`dtype` could float-infer refids, dropping leading zeros and truncating a len≥7 vote-id into the
+len≤6 document bucket (hidden meeting; ~0 VA risk, real 50-state hazard). Folded in: `dtype=str`
+at the read (zero regression, 65,367 rows). The mandated confirming re-audit earned its keep.
 
 ## [2026-06-10] pr | #114 MERGED — PR-C8.3 completeness tripwire + 99.8% structural-coverage metric
 

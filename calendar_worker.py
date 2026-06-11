@@ -2338,7 +2338,13 @@ def safe_fetch_csv(url, attempts=3):
             if b'BillNumber' not in body and b'HistoryDate' not in body and b'Committee' not in body:
                 # 200 but not a recognizable CSV (e.g., an error page) — empty.
                 return pd.DataFrame()
-            df = pd.read_csv(io.StringIO(body.decode('iso-8859-1')))
+            # dtype=str: zero-trust against pandas type-inference (the #1 refid fragility — see
+            # normalize_refid). Float-inferring a numeric refid column drops LEADING ZEROS and
+            # appends ".0", which would truncate a len>=7 vote-id to len<=6 and route it as a
+            # document instead of surfacing it (a hidden meeting — Gemini #115). HISTORY/DOCKET are
+            # all identifier/text/date columns (no arithmetic), so reading every column as a string
+            # is both safe and correct; normalize_refid stays as the belt-and-suspenders backup.
+            df = pd.read_csv(io.StringIO(body.decode('iso-8859-1')), dtype=str)
             return df.rename(columns=lambda x: x.strip())
         except Exception as e:
             last_err = str(e)
