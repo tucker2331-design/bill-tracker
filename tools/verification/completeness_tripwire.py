@@ -35,7 +35,8 @@ MIN_EXPECTED_MEETINGS = 30   # a real session schedules hundreds of committee me
 def _get(url, headers=None, timeout=90, retries=3):
     for a in range(retries):
         try:
-            return urllib.request.urlopen(urllib.request.Request(url, headers=headers or {}), timeout=timeout).read()
+            with urllib.request.urlopen(urllib.request.Request(url, headers=headers or {}), timeout=timeout) as resp:
+                return resp.read()
         except Exception:
             if a == retries - 1:
                 raise
@@ -123,9 +124,12 @@ def main():
         t = str(e.get("ScheduleTime") or "").strip()
         if not t or re.search(r'tba|tbd|call', t, re.I):   # only meetings LIS gave a concrete time
             continue
-        code = to_code(e.get("OwnerName"))
+        owner = e.get("OwnerName")
+        if not owner:
+            continue          # schedule entry with no owner name — can't attribute, skip
+        code = to_code(owner)
         if not code:
-            unresolved_owner.add(committee_core(e.get("OwnerName")))
+            unresolved_owner.add(committee_core(owner))
             continue
         lis_meetings.add((code, d))
     if len(lis_meetings) < MIN_EXPECTED_MEETINGS:
@@ -134,7 +138,14 @@ def main():
         return 2
 
     # 3) OUR coverage: every (committee_code, date) Sheet1 has a legislative row for.
-    rows = list(csv.reader(io.StringIO(_get(f"https://docs.google.com/spreadsheets/d/{SHEET}/gviz/tq?tqx=out:csv&sheet=Sheet1", timeout=120).decode())))
+    try:
+        rows = list(csv.reader(io.StringIO(_get(f"https://docs.google.com/spreadsheets/d/{SHEET}/gviz/tq?tqx=out:csv&sheet=Sheet1", timeout=120).decode())))
+    except Exception as e:
+        print(f"🚨 CANNOT VERIFY — Sheet1 fetch/parse failed ({type(e).__name__}: {e}); NOT reporting PASS.")
+        return 2
+    if len(rows) < 2:
+        print("🚨 CANNOT VERIFY — Sheet1 returned <2 rows (empty/unreadable); NOT reporting PASS.")
+        return 2
     ci = {c: i for i, c in enumerate(rows[0])}
     g = lambda r, c: (r[ci[c]] if c in ci and ci[c] < len(r) else "")
     our = set()
