@@ -147,6 +147,12 @@ def main():
         print("🚨 CANNOT VERIFY — Sheet1 returned <2 rows (empty/unreadable); NOT reporting PASS.")
         return 2
     ci = {c: i for i, c in enumerate(rows[0])}
+    _need = [c for c in ("Source", "Committee", "Date") if c not in ci]
+    if _need:
+        # A renamed/removed column would read "" everywhere -> rows skipped -> a FALSE
+        # completeness gap (false hidden-meeting alarm). Fail-clean instead (Gemini #114).
+        print(f"🚨 CANNOT VERIFY — Sheet1 missing required column(s) {_need}; schema changed. NOT reporting PASS.")
+        return 2
     g = lambda r, c: (r[ci[c]] if c in ci and ci[c] < len(r) else "")
     our = set()
     for r in rows[1:]:
