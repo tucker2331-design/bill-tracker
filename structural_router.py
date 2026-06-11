@@ -443,6 +443,14 @@ def classify_refid(refid, *, fanout: int = 0, in_vote_csv: bool = False,
     Administrative (document refs): BATCH_NOTICE, COMMITTEE_REF, SINGLETON_DOC (len<=6 numeric;
     verified 100% "Placed on Agenda/Calendar" + docket placements, 2026-06-11). No decisive
     signal (caller should SURFACE): VOTE_UNMATCHED, UNKNOWN_REFID, EMPTY.
+
+    CALLER CONTRACT (the length law's only soft spot — Gemini #115): pass `refid` as the RAW
+    string from the source (read with `dtype=str`). The length test below is the document↔vote-id
+    boundary, and `normalize_refid` CANNOT recover a digit already destroyed upstream: if pandas
+    float-infers the column, a leading-zero vote-id like "0123456" becomes 123456.0 -> "123456"
+    (len 6) BEFORE this function ever sees it, and no logic here can tell it apart from a genuine
+    len-6 document. The fix therefore lives at the read site (calendar_worker.safe_fetch_csv uses
+    dtype=str), not here. This is documented, not enforceable in-function, by construction.
     """
     r = normalize_refid(refid)   # self-contained: float64/nan/none/".0" all handled here
     if not r:
