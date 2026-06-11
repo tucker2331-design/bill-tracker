@@ -182,10 +182,14 @@ def classify_action(outcome_text: str = "", legevent_route: str = "",
       1. LegEventRoute — the structural router's EventCode/VoteTally/Status verdict.
       2. empty / "none" / "nan" outcome = a Schedule skeleton row -> administrative (carries its
          own time; a null-check, not prose parsing).
-      3. RefidClass (History_refid identity): BATCH_NOTICE/COMMITTEE_REF -> administrative
-         (clerk batch / committee referral). A vote-grammar refid is NOT treated as a meeting
-         here: the ROUTE above is the meeting authority, and a blank-route vote-refid is a
-         referral-by-recorded-vote (admin outcome, no committee time), not a committee report.
+      3. RefidClass (History_refid identity): BATCH_NOTICE/COMMITTEE_REF/SINGLETON_DOC ->
+         administrative. Clerk DOCUMENT references — batch notices, committee referrals, and
+         (SINGLETON_DOC, PR-C8.4a) the len<=6 numeric "Placed on Agenda/Calendar" docket
+         placements (measured 2026-06-11: len<=6 numeric refids are 0% VOTE.CSV join / 100%
+         docket-placement; a len>=7 vote-id-shaped refid not in VOTE.CSV is VOTE_UNMATCHED and
+         SURFACES, never admin). A vote-grammar refid is NOT treated as a meeting here: the ROUTE
+         above is the meeting authority, and a blank-route vote-refid is a referral-by-recorded-
+         vote (admin outcome, no committee time), not a committee report.
       4. ScheduleClass (Schedule API ScheduleTypeID): MEETING_EVENT/FLOOR/COMMISSION -> meeting
          (scheduled hearings surfaced on the calendar — owner decision 2026-06-10);
          DOCKET/CAUCUS -> administrative.
@@ -201,7 +205,7 @@ def classify_action(outcome_text: str = "", legevent_route: str = "",
     if not lower or lower in ("none", "nan"):
         return "administrative"
     rc = str(refid_class or "").strip().upper()
-    if rc in ("BATCH_NOTICE", "COMMITTEE_REF"):   # vote-grammar refids: route is the meeting authority
+    if rc in ("BATCH_NOTICE", "COMMITTEE_REF", "SINGLETON_DOC"):   # clerk DOCUMENT refs (len<=6 numeric / committee code)
         return "administrative"
     sc = str(schedule_class or "").strip().upper()
     if sc in ("MEETING_EVENT", "FLOOR", "COMMISSION"):

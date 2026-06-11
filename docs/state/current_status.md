@@ -1,6 +1,6 @@
 ---
 tags: [state, live]
-updated: 2026-06-09
+updated: 2026-06-11
 status: active
 ---
 
@@ -12,18 +12,32 @@ status: active
 
 ## Active focus
 
-**🎯 PR-C8 — CLOSE THE 16% STRUCTURALLY (2026-06-09, NEXT UP).** The blank-route rows
-(~16%) are still classified by hand-built text patterns — the last Standard-#3 violation on
-the lobbyist path. Deep-reasoning session produced the full execution spec:
-**[[architecture/pr_c8_structural_classification]] — the implementing model MUST follow it
-verbatim (hard rules, gates, golden tests, stop-and-escalate protocol).** Foundation: the
-`History_refid` typed-namespace discovery + VOTE.CSV roll-call join + the batch-notice law
-(96.7% of blank journal rows proven structurally, 0 counterexamples) —
-[[knowledge/history_refid_namespace]]. **C8.1 + C8.1b + C8.2 MERGED (#111/#112/#113) — THE 16% IS CLOSED STRUCTURALLY; TEXT PATTERNS DELETED:** RefidClass batch-notice law solves the journal_default 16% at 98.3%, 0 counterexamples, K=2; next C8.1b = ScheduleTypeID carry (API_Cache schema migration → api_schedule_map → ScheduleClass stamp) for the ~964 api_schedule-text rows; plan in [[architecture/pr_c8_structural_classification]] §C8.1b. classify_action is now 100% structural (no prose); 967 scheduled hearings surfaced to the calendar; 'unconfirmed' is the fail-safe lane (75, budget 150). **NEXT: C8.3 — completeness tripwire (PoC was 180/180) + convert the unconfirmed budget to a per-tracker rolling baseline.** Three PRs: C8.1 shadow telemetry → C8.2 flip (text
-patterns deleted from ray2/calendar_xray) → C8.3 guards (completeness tripwire + unconfirmed
-budget). Also done this block: LIS API authorization rule captured + enforced in code
-(PR #110, [[knowledge/lis_api_authorization]]); dynamic session window (PR #109) — no more
-pinned INVESTIGATION window in the worker.
+**🎯 PR-C8.4 — THE RESIDUAL ~75 UNCONFIRMED, PURELY STRUCTURALLY (2026-06-11, ACTIVE).**
+C8.1→C8.3 are MERGED (#111/#112/#113/#114): the 16% is closed structurally, text patterns
+deleted from ray2/calendar_xray, Section 9 = 0, unclassified = 0, **99.8% structural coverage**
+(~75 unconfirmed of 37,389), completeness tripwire live (180/180). C8.4 closes the *closeable*
+residual and routes the rest into honest, visible lanes. **Full spec + hard rules:
+[[architecture/pr_c8_structural_classification]] §PR-C8.4.**
+
+Residual decomposition: ~29 governor (empty refid), 2 referral-by-vote (HB26/HB137, `V`-refid),
+~18 singleton clerk-docs, ~27 calendar-placed (already timed). **Gemini's 3 risks on the first
+draft are CLEARED (2026-06-11):** (1) `ActorType='Governor'`/`G`-prefix EventCode are
+structural — `route_event` already routes them, so NO description-text prefix-strip (that idea
+is dead); (2) the **Veto Blindspot** is real — `G`-codes split into ACTION-REQUIRED (`G7900`
+veto, `G72xx` recommendation) vs MILESTONE (`G7050`/`G9998`/`G7010`), and all-governor→admin
+would bury vetoes; (3) descriptions are never altered so the Chapter ID is preserved.
+**OWNER DECISION: vetoes/recommendations surface ON THE CALENDAR** as dated `executive` entries
+(new 4th class), flagged, no meeting-time expectation — and `executive` is **excluded from
+Section 9** behind a structural-governor guard so no real meeting can reach the exemption.
+Key structural constraint: HISTORY governor rows have empty refid, so EventCode/ActorType is
+reachable only by a many-to-many `(bill,date)` join — per-row disambiguation is impossible
+without text, so ambiguous rows SURFACE (fail-safe), and the governor resolver reads the
+hydrated LegEvent cache, NEVER loosening the primary `_route_for_row` match (stability rule).
+Sequencing: **C8.4a** (referral-by-vote + time recovery; singleton→admin) then **C8.4b**
+(governor resolver + `executive` class + Section-9 exclusion). Each PR runs the full Gemini
+re-audit loop (re-request review until no findings / only verified-stale). Earlier this block:
+LIS API authorization rule enforced (#110, [[knowledge/lis_api_authorization]]); dynamic
+session window (#109).
 
 
 **🔒 SUSTAINABILITY AUDIT + VERIFICATION + FUTURE-PROOFING (2026-06-07).** Owner asked to confirm the Section-9=0 work checks off all standards, verify it independently, and proactively hunt edge cases ("who's to say that's all the bugs?"). Three phases, all done:

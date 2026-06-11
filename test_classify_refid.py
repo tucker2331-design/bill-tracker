@@ -7,7 +7,7 @@ docs/knowledge/history_refid_namespace.md.
 """
 from structural_router import (
     classify_refid, REFID_VOTE_COMMITTEE, REFID_VOTE_FLOOR, REFID_BATCH_NOTICE,
-    REFID_SINGLETON_DOC, REFID_COMMITTEE_REF, REFID_UNKNOWN, REFID_EMPTY,
+    REFID_SINGLETON_DOC, REFID_COMMITTEE_REF, REFID_VOTE_UNMATCHED, REFID_UNKNOWN, REFID_EMPTY,
 )
 
 CASES = [
@@ -42,6 +42,17 @@ CASES = [
     (("NA", 0, False), REFID_EMPTY),               # pandas nullable NA reprs (Gemini PR-C8.1)
     (("<NA>", 0, False), REFID_EMPTY),
     (("5354.0", 63, False), REFID_BATCH_NOTICE),   # float-string batch refid still batches
+    # NUMERIC LENGTH LAW (PR-C8.4a, measured 20261): len<=6 = document, len>=7 = vote-id namespace.
+    (("123456", 1, False), REFID_SINGLETON_DOC),   # len-6 numeric, not in VOTE.CSV -> document
+    (("123456", 5, False), REFID_BATCH_NOTICE),    # len-6 numeric, fan-out>=K -> batch document
+    (("2610807", 0, False), REFID_VOTE_UNMATCHED), # len-7 vote-id-shaped but NOT in VOTE.CSV ->
+                                                   # SURFACE (failed join; never read as a document)
+    (("26110000", 0, False), REFID_VOTE_UNMATCHED),# len-8 vote-id-shaped, not in VOTE.CSV -> surface
+    (("2610807", 0, True), REFID_VOTE_FLOOR),      # same len-7 but IN VOTE.CSV -> meeting (join wins)
+    # LEADING-ZERO CONTRACT (Gemini #115): the caller must pass the RAW string (worker reads
+    # dtype=str). A correctly-preserved leading-zero len-7 vote-id surfaces; the catastrophic case
+    # (float-truncation to len 6) is unrecoverable in-function and is prevented at the read site.
+    (("0123456", 0, False), REFID_VOTE_UNMATCHED), # len-7 with leading zero, string-preserved -> surface
 ]
 
 
