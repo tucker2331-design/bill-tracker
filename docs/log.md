@@ -9,6 +9,17 @@ Append-only, reverse-chronological (newest at top). Each entry opens with `## [Y
 
 **Kinds:** `ingest` (new source/doc processed), `pr` (PR opened/merged/closed), `decision` (architectural or workflow), `lint` (wiki health-check pass), `session` (notable multi-hour working block), `post-mortem` (failure analysis), `milestone` (project-goal threshold crossed).
 
+## [2026-06-10] milestone | PR-C8.2 MERGED — THE FLIP: text patterns deleted, classification 100% structural
+
+The hand-built verb dictionaries (MEETING_ACTION_PATTERNS / ADMINISTRATIVE_PATTERNS /
+ADMIN_OVERRIDE_PATTERNS) are DELETED from ray2.py + calendar_xray.py. classify_action now reads
+NO prose — decides on LegEventRoute -> RefidClass -> ScheduleClass, else 'unconfirmed'
+(surfaced, never hidden). The UUID litmus test passes. Live: Section 9 = 0, unclassified = 0,
+unconfirmed = 75 (<=150), resolution 83.8%; 967 scheduled hearings surfaced to the calendar
+(owner decision). Zero-diff gate caught + fixed the VOTE-refid referral bug (audit #81) and a
+splice that deleted 9 fns (audit #82). Standard #3 satisfied on the lobbyist path. Next: C8.3
+guards (completeness tripwire + unconfirmed error-budget).
+
 ## [2026-06-10] pr | #112 MERGED — PR-C8.1b ScheduleType companion (ScheduleClass), shadow
 
 Closes the api_schedule tail of the 16%. classify_schedule_type (pure, golden-tested) keys on
