@@ -226,8 +226,26 @@ def compute_ministerial_eventcodes(events_iterable, min_samples: int = MINISTERI
 
 @dataclass(frozen=True)
 class RouteVerdict:
-    route: str     # "meeting" | "admin"
+    route: str     # "meeting" | "admin" | "executive"
     reason: str    # which rule fired
+
+
+# Action-required EXECUTIVE EventCode families (PR-C8.4b). The governor actions a lobbyist must
+# RESPOND to — VETOES (G79xx) trigger a veto/reconvene session, and the GOVERNOR'S RECOMMENDATIONS/
+# amendments (G72xx) trigger a chamber concurrence vote. Owner decision (2026-06-11): these surface
+# on the CALENDAR (a dated, flagged, time-less "executive" row), never buried in the admin ledger
+# (hiding a veto is a catastrophic silent failure). MILESTONE executive codes (G70xx approved/
+# deadline, G99xx Acts-of-Assembly chapter) are NOT here — they are terminal/informational and stay
+# admin -> ledger (volume: ~4,700 milestone vs ~810 action-required, 20261; calendar would flood).
+# Families verified against LIS event descriptions (2026-06-11): G72xx + G73xx = RECOMMENDATION
+# (G7210/G7220 "recommendation received", G7320 "recommendation adopted", G7321/2/4 variants);
+# G79xx = VETO (G7900 "Vetoed by Governor", G7910 variant). MILESTONE families G70xx (deadline/
+# approved) + G99xx (Acts chapter) are NOT here -> ledger.
+# Why a PREFIX, not an exact set: it is the FAIL-SAFE direction — a new/variant code inside these
+# families OVER-surfaces (visible on the calendar) rather than hiding an action-required event.
+# (Known limit: a brand-new action-required family OUTSIDE G72/G73/G79 would route admin/ledger;
+# drift alerting on unseen G-codes is the future guard. See pr_c8_structural_classification §C8.4b.)
+_EXEC_ACTION_REQUIRED_PREFIXES = ("G72", "G73", "G79")
 
 
 def route_event(event: dict, ministerial_codes: frozenset = frozenset()) -> RouteVerdict:
@@ -259,6 +277,16 @@ def route_event(event: dict, ministerial_codes: frozenset = frozenset()) -> Rout
         return RouteVerdict("meeting", "recorded_vote")
 
     code = _s(event.get("EventCode"))
+    # Action-required executive (veto G79xx / governor's recommendation G72xx) -> SURFACE on the
+    # calendar. Checked BEFORE ministerial_codes on purpose: these codes are ministerial-SHAPED
+    # (no vote, no meeting time) so they would otherwise route admin and be buried in the ledger —
+    # exactly the veto-blindspot we must prevent. A chamber vote ON a recommendation ("concurred,
+    # 64-Y 35-N") carries a VoteTally and is already caught as a meeting above, so it never reaches
+    # here. Milestone executive codes (approved/chapter/deadline) are NOT in these families and fall
+    # through to the admin "executive" verdict below (ledger).
+    if code[:3] in _EXEC_ACTION_REQUIRED_PREFIXES:
+        return RouteVerdict("executive", "executive_action_required")
+
     if code and code in ministerial_codes:
         return RouteVerdict("admin", "ministerial_eventtype")
 

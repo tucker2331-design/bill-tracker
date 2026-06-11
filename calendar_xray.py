@@ -176,10 +176,15 @@ def classify_join_gaps(joined: pd.DataFrame) -> pd.DataFrame:
 
 def classify_action(outcome_text: str = "", legevent_route: str = "",
                     refid_class: str = "", schedule_class: str = "") -> str:
-    """Classify an action as meeting / administrative / unconfirmed — STRUCTURALLY, with NO
-    text-pattern matching (PR-C8.2; Standard #3). The hand-built verb lists are gone. Order
+    """Classify an action as meeting / administrative / executive / unconfirmed — STRUCTURALLY,
+    with NO text-pattern matching (PR-C8.2; Standard #3). The hand-built verb lists are gone. Order
     (first hit wins); outcome_text is used ONLY for the empty/skeleton null-check, never parsed:
-      1. LegEventRoute — the structural router's EventCode/VoteTally/Status verdict.
+      1. LegEventRoute — the structural router's EventCode/VoteTally/Status verdict. "executive"
+         (PR-C8.4b) = an action-required governor event (veto G79xx / recommendation G72xx/G73xx)
+         -> surfaces ON THE CALENDAR, flagged, with NO meeting-time expectation. It is a distinct
+         class (not "meeting"), so it is structurally EXCLUDED from the Section-9 meeting-without-
+         time count — a governor action is not a convened meeting. The guard is the route itself:
+         only route_event's G79/G72/G73 gate yields "executive", so no real meeting can reach it.
       2. empty / "none" / "nan" outcome = a Schedule skeleton row -> administrative (carries its
          own time; a null-check, not prose parsing).
       3. RefidClass (History_refid identity): BATCH_NOTICE/COMMITTEE_REF/SINGLETON_DOC ->
@@ -201,6 +206,8 @@ def classify_action(outcome_text: str = "", legevent_route: str = "",
         return "meeting"
     if route == "admin":
         return "administrative"
+    if route == "executive":   # PR-C8.4b: action-required governor action -> calendar, time-less, not a Section-9 bug
+        return "executive"
     lower = str(outcome_text).lower().strip()
     if not lower or lower in ("none", "nan"):
         return "administrative"
@@ -701,6 +708,11 @@ if "Outcome" in sheet_df.columns and "Time" in sheet_df.columns:
     meeting_df = _legislative[_legislative["_action_class"] == "meeting"]
     admin_df = _legislative[_legislative["_action_class"] == "administrative"]
     unclass_df = _legislative[_legislative["_action_class"] == "unconfirmed"]
+    # PR-C8.4b: action-required governor actions (veto / recommendation) — a distinct class that
+    # surfaces ON THE CALENDAR, flagged, with NO meeting-time expectation. NOT counted in Section 9
+    # (a governor action is not a convened meeting); shown in its own block below so it is never
+    # silently dropped from the diagnostic.
+    executive_df = _legislative[_legislative["_action_class"] == "executive"]
 
     mt_with = meeting_df[meeting_df["_has_time"]]
     mt_without = meeting_df[~meeting_df["_has_time"]]
@@ -716,6 +728,7 @@ if "Outcome" in sheet_df.columns and "Time" in sheet_df.columns:
         "admin_without_time": len(ad_without),
         "unclassified_with_time": len(uc_with),
         "unclassified_without_time": len(uc_without),
+        "executive": len(executive_df),   # PR-C8.4b: governor action-required, on the calendar
     }
 
     bug_count = len(mt_without)
@@ -891,6 +904,13 @@ if "Outcome" in sheet_df.columns and "Time" in sheet_df.columns:
             "Status": "OK",
         },
         {
+            "Category": "Executive (governor veto/recommendation — on calendar, time-less)",
+            "With Time": "—",
+            "Without Time": f"{len(executive_df):,}",
+            "Total": f"{len(executive_df):,}",
+            "Status": "OK",   # time-less by design; NOT a Section-9 bug
+        },
+        {
             "Category": "Unconfirmed (surfaced for verification — never hidden)",
             "With Time": f"{len(uc_with):,}",
             "Without Time": f"{len(uc_without):,}",
@@ -984,6 +1004,20 @@ if "Outcome" in sheet_df.columns and "Time" in sheet_df.columns:
         display_cols = [c for c in ["Date", "Committee", "Time", "Bill", "Outcome"] if c in uc_all.columns]
         with st.expander(f"All {unclass_count} unclassified rows", expanded=False):
             st.dataframe(uc_all[display_cols].head(200), use_container_width=True, hide_index=True)
+
+    # --- Executive (governor action-required) drill-down (PR-C8.4b) ---
+    if len(executive_df) > 0:
+        st.markdown("---")
+        st.markdown("### 🏛️ Executive Actions (Governor — On the Calendar)")
+        st.caption(
+            "Action-required governor events — VETOES (EventCode G79xx) and RECOMMENDATIONS "
+            "(G72xx/G73xx) — routed structurally by route_event. They surface ON THE CALENDAR "
+            "(committee '🏛️ Governor'), flagged and time-less by design: a governor action is not "
+            "a convened meeting, so it is correctly EXCLUDED from the Section-9 meeting-without-time "
+            "count. They are NOT buried in the Ledger (owner decision 2026-06-11)."
+        )
+        _exec_cols = [c for c in ["Date", "Committee", "Time", "Bill", "Outcome"] if c in executive_df.columns]
+        st.dataframe(executive_df[_exec_cols].head(300), use_container_width=True, hide_index=True)
 
     # --- Ledger health check ---
     st.markdown("---")

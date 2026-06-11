@@ -128,7 +128,7 @@ def main():
         i = ci.get(c, -1)
         return r[i] if 0 <= i < len(r) else ""
 
-    total = meeting = mwt = unclass = unconfirmed = derived = system = routed = 0
+    total = meeting = mwt = unclass = unconfirmed = derived = system = routed = executive = 0
     s9_rows, uc_rows, unconf_rows = [], [], []
     for r in rows[1:]:
         if not any(x.strip() for x in r):
@@ -157,9 +157,11 @@ def main():
             unconfirmed += 1
             if len(unconf_rows) < 15:
                 unconf_rows.append((cell(r, "Bill"), cell(r, "Date"), cell(r, "Outcome")[:60]))
+        elif cls == "executive":   # PR-C8.4b: action-required governor action, on the calendar, time-less by design
+            executive += 1
 
     print(f"=== ACCURACY SENTINEL (live sheet, {total} legislative rows; {system} system rows excluded) ===")
-    print(f"  meeting={meeting}  unclassified={unclass}  unconfirmed={unconfirmed}  derived_standing={derived}")
+    print(f"  meeting={meeting}  unclassified={unclass}  unconfirmed={unconfirmed}  executive={executive}  derived_standing={derived}")
     failed = []
 
     def gate(name, val, mx, examples):

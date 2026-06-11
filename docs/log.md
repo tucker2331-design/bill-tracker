@@ -9,7 +9,25 @@ Append-only, reverse-chronological (newest at top). Each entry opens with `## [Y
 
 **Kinds:** `ingest` (new source/doc processed), `pr` (PR opened/merged/closed), `decision` (architectural or workflow), `lint` (wiki health-check pass), `session` (notable multi-hour working block), `post-mortem` (failure analysis), `milestone` (project-goal threshold crossed).
 
-## [2026-06-11] pr | PR-C8.4a OPENED — SINGLETON_DOC ("Placed on Agenda") → admin; refid length law
+## [2026-06-11] pr | PR-C8.4b OPENED — the veto-blindspot fix: new "executive" route/class on the calendar
+
+Governor vetoes/recommendations were routing `admin` → buried in the Ledger (the live Veto
+Blindspot). `route_event` now returns a new `"executive"` route for action-required governor
+EventCode families — VETO `G79xx` + RECOMMENDATION `G72xx`/`G73xx` (measured from real bill events;
+`G7320` caught my initial G72-only guess) — checked BEFORE `ministerial_codes` (a veto is
+ministerial-shaped, so the order is load-bearing) and after VoteTally (so a chamber vote ON a
+recommendation stays a meeting). `classify_action` maps `executive` → a new `executive` class that
+surfaces ON THE CALENDAR (worker `executive_default` origin + "🏛️ Governor" committee label, kept
+OUT of the Ledger collapse mask), time-less and EXCLUDED from Section 9 (route is the guard — no
+real meeting can reach it). MILESTONE governor codes (approved/chapter/deadline, ~4,700 rows) stay
+admin; only action-required (~808) surface. Worker integration: `executive_default` in
+`_VALID_ORIGINS` (auto I3/I4-exempt), route counter + metrics line. X-Ray: Classification Matrix
+row + "🏛️ Executive Actions" drill-down. New `test_route_event.py` (20 golden, incl. the
+veto-before-ministerial ordering); sentinel reports `executive=`; ray2/calendar_xray diff-identical.
+[[failures/assumptions_audit#84]]. Awaiting Gemini re-audit loop. (Live effect realizes on the next
+worker run, which moves the matched veto/rec rows Ledger→Governor calendar.)
+
+## [2026-06-11] pr | #115 MERGED — PR-C8.4a: SINGLETON_DOC ("Placed on Agenda") → admin; refid length law
 
 Closes 44 of the 75 unconfirmed structurally + corrects 6 false-meetings (all `SINGLETON_DOC`
 "Placed on Agenda/Calendar" / "Assigned sub" docket placements → administrative, consistent with
@@ -25,6 +43,10 @@ veto-received carries a `digits+D` doc refid (same shape as admin "substitute pr
 `dtype` could float-infer refids, dropping leading zeros and truncating a len≥7 vote-id into the
 len≤6 document bucket (hidden meeting; ~0 VA risk, real 50-state hazard). Folded in: `dtype=str`
 at the read (zero regression, 65,367 rows). The mandated confirming re-audit earned its keep.
+Round 3 documented the leading-zero CALLER CONTRACT + golden tests; round 4 accepted
+`keep_default_na=False` (strict string posture, verified zero-regression). Rounds 5: only the
+redundant leading-zero re-emission (can't be fixed in-function — addressed at the read). **MERGED**
+after the redundant stop-condition; main @ 70039c0. Next: C8.4b (route_event G-family → executive).
 
 ## [2026-06-10] pr | #114 MERGED — PR-C8.3 completeness tripwire + 99.8% structural-coverage metric
 
