@@ -56,94 +56,13 @@ TAG_PATTERNS = {
     "Memory Anchor": "Memory Anchor",
 }
 
-# === ACTION CLASSIFICATION: Meeting vs Administrative ===
-# Meeting actions: require people in a room — committee hearing, floor session,
-# subcommittee meeting, conference committee, executive signing.
-# A lobbyist needs to know WHEN these happened.
-#
-# Administrative actions: desk work by a clerk, chair, or staff — routing,
-# printing, filing. These can happen at 7pm on a Friday with no meeting.
-# They belong in Ledger Updates with no time expectation.
-#
-# Assumption: these lists cover all Virginia action types for session 261.
-# How it could break: new action types in future sessions.
-# Runtime check: UNCLASSIFIED count in Section 10. Spike = new action type.
-MEETING_ACTION_PATTERNS = [
-    # Committee meeting actions (members must be present to vote/deliberate)
-    "reported", "recommends", "recommend", "committee substitute",
-    "incorporate", "incorporated", "incorporates", "discharged", "stricken",
-    "tabled", "continued",
-    # Floor session actions (chamber must be in session)
-    "passed", "failed", "defeated", "amended",
-    "floor substitute", "rules suspended", "offered",
-    "block vote", "voice vote", "roll call",
-    "reading dispensed", "read first", "read second", "read third",
-    "agreed to", "rejected", "reconsidered",
-    # Conference floor votes (chamber must be in session to vote on compromise)
-    "conference report agreed",
-    # Parliamentary maneuvering and conference resolution (chamber in session)
-    "insisted", "taken up", "reconsideration of", "receded",
-    "reading waived", "reading of substitute waived", "reading of amendment waived",
-    "reading of amendments waived", "reading of amendment not waived",
-    "elected by", "election by", "elected to by",
-    "emergency clause", "requested second conference committee",
-    "motion for", "vote:",
-    "withdrawn", "concurred",
-    "removed from the table",
-]
+# === ACTION CLASSIFICATION: Meeting vs Administrative (STRUCTURAL — PR-C8.2) ===
+# Meeting actions (people in a room — committee hearing, floor session, a recorded vote):
+# a lobbyist needs WHEN. Administrative actions (clerk/chair desk work — routing, printing,
+# filing, docketing): no meeting, Ledger Updates, no time expectation. classify_action()
+# decides this STRUCTURALLY (LegEventRoute -> RefidClass -> ScheduleClass), with NO text
+# patterns. Anything with no structural signal is SURFACED as 'unconfirmed' (never hidden).
 
-ADMINISTRATIVE_PATTERNS = [
-    # Clerk routing (no meeting required)
-    "referred to", "assigned", "rereferred",
-    # Agenda/calendar placement (clerk action)
-    "placed on",
-    # Printing / engrossing (production office)
-    "impact statement", "fiscal impact", "substitute printed",
-    "reprinted", "printed as engrossed",
-    # Ceremonial / procedural milestones (clerk/paperwork, not timed meetings)
-    "enrolled", "signed by", "presented", "communicated",
-    "received", "engrossed",
-    # Conference committee administrative (appointing members, printing reports, not voting)
-    "conferee", "conference report", "requested conference committee", "acceded to request",
-    # Executive branch actions (governor acts on her own schedule, not in chamber)
-    "approved by governor", "vetoed", "governor's recommendation",
-    "governor's substitute", "governor:",
-    # Administrative notations
-    "laid on speaker's table", "laid on clerk's desk",
-    "effective -", "acts of assembly chapter",
-    # Governor deadline / scheduling notations (clerk-generated)
-    "governor's action deadline", "action deadline",
-    # Skeleton rows from API/DOCKET (already have times, just scheduling entries)
-    "scheduled",
-    # End-of-session status (bill died in committee, no meeting involved)
-    "left in",
-    # Blank / empty actions
-    "blank action",
-    # Calendar/procedural notations
-    "moved from uncontested calendar",
-    "no further action taken",
-    "unanimous consent to introduce", "introduced at the request of",
-    "budget amendments available",
-    "recommitted",
-    "fiscal impact review",
-    # Bill introduction clerk action (also listed in ADMIN_OVERRIDE_PATTERNS
-    # because the substring "offered" in the full phrase would otherwise match
-    # MEETING_ACTION_PATTERNS). Kept here as the durable classification record.
-    "prefiled and ordered printed",
-    # PR-C5: LIS Schedule API skeleton rows. These are committee meetings
-    # / caucuses / agenda links that the Schedule API surfaces with a time
-    # but no bill action verb attached. Their Outcome column carries an
-    # agenda link or an "info" placeholder rather than a vote/report verb.
-    # Routing to administrative because no action happened in the row
-    # itself — the votes (when they happen) are in separate HISTORY rows
-    # the worker correctly attributes. Coverage of the 157 unclassified
-    # rows surfaced by Section 9 on the post-PR-C3.1 worker run:
-    "(view meeting)",            # ~110 rows — the (Agenda) (View Meeting) link family
-    "no agenda listed",          # ~12 rows — LIS placeholder text for press-conf and Time-TBA committees
-    "subcommittee info",         # ~3 rows — Senate Finance sub-rows with bare "Subcommittee Info" outcome
-    "speaker's conference room", # ~3 rows — Capitol Commission Bible Study / Prayer Meeting / Speaker's Devotional
-    "[memory anchor: admin]",    # 1 row + future-proofs any other Memory-Anchor admin tag rows
-]
 
 
 def get_http_session() -> requests.Session:
@@ -254,31 +173,24 @@ def classify_join_gaps(joined: pd.DataFrame) -> pd.DataFrame:
 # Specific admin patterns that override broader meeting matches.
 # "committee substitute printed" contains "committee substitute" (meeting) but
 # the action is printing (admin). The more specific pattern wins.
-ADMIN_OVERRIDE_PATTERNS = [
-    "substitute printed",
-    "committee substitute printed",
-    # Bill introduction: "Prefiled and ordered printed; Offered MM-DD-YYYY"
-    # is a clerk/production action that matches "offered" but is administrative.
-    "prefiled and ordered printed",
-]
 
-def classify_action(outcome_text: str, legevent_route: str = "") -> str:
-    """Classify a legislative action as meeting, administrative, or unclassified.
-
-    Returns one of: 'meeting', 'administrative', 'unclassified'.
-
-    PR-C7.1b-2: when ``legevent_route`` is the structural router's verdict
-    (worker writes ``LegEventRoute`` ∈ {"meeting", "admin", ""} per row,
-    sourced from LIS's own ``ReferenceType`` / ``VoteTally`` / ``Status``),
-    it wins over the text-pattern fallback. Routes are normalized
-    (strip+lower, exact match) so an unseen future route value (LIS
-    introducing a new category) falls through to text — the classifier
-    never silently mis-routes on a new structural value.
-
-    When both meeting and administrative patterns match (e.g. "reported and
-    rereferred"), meeting wins — the action happened in a meeting even if
-    it also triggered routing. Exception: ADMIN_OVERRIDE_PATTERNS are more
-    specific and always win.
+def classify_action(outcome_text: str = "", legevent_route: str = "",
+                    refid_class: str = "", schedule_class: str = "") -> str:
+    """Classify an action as meeting / administrative / unconfirmed — STRUCTURALLY, with NO
+    text-pattern matching (PR-C8.2; Standard #3). The hand-built verb lists are gone. Order
+    (first hit wins); outcome_text is used ONLY for the empty/skeleton null-check, never parsed:
+      1. LegEventRoute — the structural router's EventCode/VoteTally/Status verdict.
+      2. empty / "none" / "nan" outcome = a Schedule skeleton row -> administrative (carries its
+         own time; a null-check, not prose parsing).
+      3. RefidClass (History_refid identity): BATCH_NOTICE/COMMITTEE_REF -> administrative
+         (clerk batch / committee referral). A vote-grammar refid is NOT treated as a meeting
+         here: the ROUTE above is the meeting authority, and a blank-route vote-refid is a
+         referral-by-recorded-vote (admin outcome, no committee time), not a committee report.
+      4. ScheduleClass (Schedule API ScheduleTypeID): MEETING_EVENT/FLOOR/COMMISSION -> meeting
+         (scheduled hearings surfaced on the calendar — owner decision 2026-06-10);
+         DOCKET/CAUCUS -> administrative.
+      5. No structural signal -> 'unconfirmed': SURFACED (visible + flagged), never hidden — the
+         fail-safe lane, REPLACING the old 'unclassified' (which no longer exists).
     """
     route = str(legevent_route or "").strip().lower()
     if route == "meeting":
@@ -286,32 +198,17 @@ def classify_action(outcome_text: str, legevent_route: str = "") -> str:
     if route == "admin":
         return "administrative"
     lower = str(outcome_text).lower().strip()
-    # PR-C5: Empty / "None" / "nan" outcome = LIS Schedule API skeleton row
-    # with no bill action attached (caucuses, convenes, adjournments,
-    # recesses). These are legitimate calendar entries that carry a time
-    # but no action verb because nothing was voted on in the row itself.
-    # Classify as administrative — they don't require people in a room
-    # to vote. Without this guard the substring-match loop returns
-    # "unclassified" for empty strings (no pattern matches "") and
-    # inflates Section 9 REVIEW. "nan" is included for consistency with
-    # the codebase's existing PLACEHOLDER_TIMES + NON_CONCRETE_LIS_TIMES
-    # sets — pandas renders empty Sheets/Excel cells as float NaN, and
-    # str(NaN).lower() == "nan" (Gemini PR-C5 review). Adding "nan" to
-    # ADMINISTRATIVE_PATTERNS would be unsafe (substring matches
-    # "finance") so the exact-match guard here is the right place.
     if not lower or lower in ("none", "nan"):
         return "administrative"
-    # Check admin overrides first — more specific patterns that would otherwise
-    # be misclassified by broader meeting patterns
-    if any(p in lower for p in ADMIN_OVERRIDE_PATTERNS):
+    rc = str(refid_class or "").strip().upper()
+    if rc in ("BATCH_NOTICE", "COMMITTEE_REF"):   # vote-grammar refids: route is the meeting authority
         return "administrative"
-    is_meeting = any(p in lower for p in MEETING_ACTION_PATTERNS)
-    is_admin = any(p in lower for p in ADMINISTRATIVE_PATTERNS)
-    if is_meeting:
+    sc = str(schedule_class or "").strip().upper()
+    if sc in ("MEETING_EVENT", "FLOOR", "COMMISSION"):
         return "meeting"
-    if is_admin:
+    if sc in ("DOCKET", "CAUCUS"):
         return "administrative"
-    return "unclassified"
+    return "unconfirmed"
 
 
 def count_diagnostic_tags(sheet_df: pd.DataFrame) -> dict:
@@ -764,24 +661,19 @@ if "Outcome" in sheet_df.columns and "Time" in sheet_df.columns:
     # Column-existence guard: a stale Sheet1 read or schema regression
     # leaves rows without ``LegEventRoute``. Fall back to text — keep the
     # X-Ray working — and surface the gap visibly below (Section 9 warning).
-    sheet_df["_action_class_text"] = sheet_df["Outcome"].map(classify_action)
-    if "LegEventRoute" in sheet_df.columns:
-        # Gemini medium (PR #57 review): pandas `.apply(axis=1)` constructs
-        # a Series per row → ~1-3s of latency on the ~58k Sheet1 rows for
-        # what is effectively a two-column zipped function call. Switching
-        # to a list comprehension over `zip(...)` runs in milliseconds.
-        # `.fillna("")` handles pandas reading blank cells as NaN — both
-        # Outcome (rare) and LegEventRoute (common, TTL backfill rows) —
-        # so `classify_action(...)` never sees a float NaN as its text.
-        sheet_df["_action_class"] = [
-            classify_action(o, r)
-            for o, r in zip(
-                sheet_df["Outcome"].fillna(""),
-                sheet_df["LegEventRoute"].fillna(""),
-            )
-        ]
-    else:
-        sheet_df["_action_class"] = sheet_df["_action_class_text"]
+    # PR-C8.2: classification is fully STRUCTURAL now (route -> RefidClass -> ScheduleClass),
+    # no text patterns. Pass every structural column; a column missing on a legacy sheet
+    # defaults to "" so the row lands in 'unconfirmed' (surfaced, fail-safe).
+    def _sc_col(_name):
+        return sheet_df[_name].fillna("") if _name in sheet_df.columns else [""] * len(sheet_df)
+    sheet_df["_action_class"] = [
+        classify_action(o, r, rc, sc)
+        for o, r, rc, sc in zip(_sc_col("Outcome"), _sc_col("LegEventRoute"),
+                                _sc_col("RefidClass"), _sc_col("ScheduleClass"))
+    ]
+    # No separate text classifier anymore; the legacy flagged-subset section compares
+    # against the structural verdict itself (alias).
+    sheet_df["_action_class_text"] = sheet_df["_action_class"]
     sheet_df["_has_time"] = ~sheet_df["Time"].map(normalize_time).isin(PLACEHOLDER_TIMES)
 
     # Exclude the worker's OWN diagnostic rows (SYSTEM_ALERT / SYSTEM_METRICS,
@@ -804,7 +696,7 @@ if "Outcome" in sheet_df.columns and "Time" in sheet_df.columns:
 
     meeting_df = _legislative[_legislative["_action_class"] == "meeting"]
     admin_df = _legislative[_legislative["_action_class"] == "administrative"]
-    unclass_df = _legislative[_legislative["_action_class"] == "unclassified"]
+    unclass_df = _legislative[_legislative["_action_class"] == "unconfirmed"]
 
     mt_with = meeting_df[meeting_df["_has_time"]]
     mt_without = meeting_df[~meeting_df["_has_time"]]
@@ -995,7 +887,7 @@ if "Outcome" in sheet_df.columns and "Time" in sheet_df.columns:
             "Status": "OK",
         },
         {
-            "Category": "Unclassified (needs human review)",
+            "Category": "Unconfirmed (surfaced for verification — never hidden)",
             "With Time": f"{len(uc_with):,}",
             "Without Time": f"{len(uc_without):,}",
             "Total": f"{unclass_count:,}",
@@ -1004,12 +896,9 @@ if "Outcome" in sheet_df.columns and "Time" in sheet_df.columns:
     ])
     st.dataframe(matrix, use_container_width=True, hide_index=True)
 
-    def _extract_pattern(outcome_text: str) -> str:
-        lower = str(outcome_text).lower()
-        for p in MEETING_ACTION_PATTERNS:
-            if p in lower:
-                return p
-        return "unknown"
+    def _extract_pattern(refid_class) -> str:
+        # PR-C8.2: structural action label (RefidClass) — no text patterns.
+        return str(refid_class) or "(none)"
 
     # --- Drill down: meeting actions missing times ---
     if bug_count > 0:
@@ -1040,7 +929,7 @@ if "Outcome" in sheet_df.columns and "Time" in sheet_df.columns:
         st.markdown("#### By Action Type")
 
         mt_without_display = mt_without.copy()
-        mt_without_display["action_type"] = mt_without_display["Outcome"].map(_extract_pattern)
+        mt_without_display["action_type"] = (mt_without_display["RefidClass"].map(_extract_pattern) if "RefidClass" in mt_without_display.columns else "(structural)")
         bugs_by_type = (
             mt_without_display.groupby("action_type")
             .size()
@@ -1061,11 +950,11 @@ if "Outcome" in sheet_df.columns and "Time" in sheet_df.columns:
     # --- Drill down: unclassified actions ---
     if unclass_count > 0:
         st.markdown("---")
-        st.markdown("### Unclassified Actions (Need Pattern Assignment)")
+        st.markdown("### Unconfirmed Actions (Surfaced for Verification)")
         st.caption(
-            "These actions don't match any known meeting or administrative pattern. "
-            "Each one needs to be added to either MEETING_ACTION_PATTERNS or ADMINISTRATIVE_PATTERNS "
-            "in the X-Ray and KNOWN_EVENT_PATTERNS or KNOWN_NOISE_PATTERNS in calendar_worker.py."
+            "These rows have NO structural signal (no LegEventRoute, no recorded-vote/batch "
+            "RefidClass, no ScheduleClass). Per PR-C8.2 they are SURFACED here (never hidden) "
+            "rather than guessed. A rising count signals new LIS structure to investigate."
         )
 
         # Show unique outcome snippets to help classify
@@ -1126,7 +1015,7 @@ if "Outcome" in sheet_df.columns and "Time" in sheet_df.columns:
                 st.markdown("#### Meeting Actions Hiding in Ledger")
 
                 ledger_mt_display = ledger_meeting.copy()
-                ledger_mt_display["action_type"] = ledger_mt_display["Outcome"].map(_extract_pattern)
+                ledger_mt_display["action_type"] = (ledger_mt_display["RefidClass"].map(_extract_pattern) if "RefidClass" in ledger_mt_display.columns else "(structural)")
 
                 # By action type
                 ledger_by_type = (
