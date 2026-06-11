@@ -405,15 +405,25 @@ def normalize_refid(v) -> str:
         return s[:-2]
     return s
 
-# Refid classes. The first three are MEETING evidence; BATCH_NOTICE/COMMITTEE_REF are
-# administrative; SINGLETON_DOC/UNKNOWN_REFID/EMPTY carry no decisive signal (-> surface).
+# Refid classes. VOTE_COMMITTEE/VOTE_FLOOR are MEETING evidence; BATCH_NOTICE/COMMITTEE_REF/
+# SINGLETON_DOC are administrative DOCUMENT references (see the length law below);
+# VOTE_UNMATCHED/UNKNOWN_REFID/EMPTY carry no decisive signal (-> surface).
 REFID_VOTE_COMMITTEE = "VOTE_COMMITTEE"   # V-grammar refid
 REFID_VOTE_FLOOR     = "VOTE_FLOOR"       # numeric refid present in VOTE.CSV
-REFID_BATCH_NOTICE   = "BATCH_NOTICE"     # non-vote numeric refid, fan-out >= K
-REFID_SINGLETON_DOC  = "SINGLETON_DOC"    # non-vote numeric refid, fan-out < K
+REFID_BATCH_NOTICE   = "BATCH_NOTICE"     # short (len<=6) non-vote numeric refid, fan-out >= K
+REFID_SINGLETON_DOC  = "SINGLETON_DOC"    # short (len<=6) non-vote numeric refid, fan-out < K
 REFID_COMMITTEE_REF  = "COMMITTEE_REF"    # committee-code refid
+REFID_VOTE_UNMATCHED = "VOTE_UNMATCHED"   # vote-id-shaped numeric (len>=7) NOT found in VOTE.CSV
 REFID_UNKNOWN        = "UNKNOWN_REFID"    # some other non-empty shape
 REFID_EMPTY          = "EMPTY"            # no refid
+
+# The numeric-refid LENGTH LAW (measured 2026-06-11 against HISTORY.CSV x VOTE.CSV, 20261):
+#   len 3/4/6 numeric refids -> 0.0% VOTE.CSV join (clerk DOCUMENT ids: dockets, agendas,
+#                               subcommittee assignments) -> administrative.
+#   len 7/8   numeric refids -> 100.0% VOTE.CSV join (roll-call VOTE ids) -> meeting.
+# So len >= 7 is the structural vote-id namespace. A len>=7 numeric NOT present in VOTE.CSV is a
+# vote-id whose join FAILED (anomaly) -> it must SURFACE (fail-safe), never be read as a document.
+_VOTE_ID_MIN_LEN = 7
 
 
 def classify_refid(refid, *, fanout: int = 0, in_vote_csv: bool = False,
@@ -425,13 +435,14 @@ def classify_refid(refid, *, fanout: int = 0, in_vote_csv: bool = False,
       fanout:       how many distinct bills share (this refid, this date). Batch signature.
       in_vote_csv:  whether this refid is a key in VOTE.CSV (floor roll-call). The CALLER
                     performs the join (set membership) and passes the boolean; this stays pure.
-      batch_min_bills: K — the minimum same-date bill fan-out for a non-vote numeric refid to
-                    count as a clerk BATCH document. Default 2 (measured: len-3/4 batch refids
-                    are 0% vote-join at every fan level, so the law is safe at small K).
+      batch_min_bills: K — the minimum same-date bill fan-out for a SHORT (len<=6) non-vote
+                    numeric refid to count as a clerk BATCH document. Default 2 (measured:
+                    len-3/4 batch refids are 0% vote-join at every fan level, so safe at small K).
 
     Returns one of the REFID_* constants. Meeting evidence: VOTE_COMMITTEE, VOTE_FLOOR.
-    Administrative: BATCH_NOTICE, COMMITTEE_REF. No decisive signal (caller should SURFACE):
-    SINGLETON_DOC, UNKNOWN_REFID, EMPTY.
+    Administrative (document refs): BATCH_NOTICE, COMMITTEE_REF, SINGLETON_DOC (len<=6 numeric;
+    verified 100% "Placed on Agenda/Calendar" + docket placements, 2026-06-11). No decisive
+    signal (caller should SURFACE): VOTE_UNMATCHED, UNKNOWN_REFID, EMPTY.
     """
     r = normalize_refid(refid)   # self-contained: float64/nan/none/".0" all handled here
     if not r:
@@ -441,6 +452,10 @@ def classify_refid(refid, *, fanout: int = 0, in_vote_csv: bool = False,
     if r.isdigit():
         if in_vote_csv:
             return REFID_VOTE_FLOOR
+        # Length law: len>=7 is the vote-id namespace. A vote-id-shaped numeric NOT in VOTE.CSV
+        # is a FAILED join (anomaly), never a document -> surface, do not route admin.
+        if len(r) >= _VOTE_ID_MIN_LEN:
+            return REFID_VOTE_UNMATCHED
         return REFID_BATCH_NOTICE if fanout >= batch_min_bills else REFID_SINGLETON_DOC
     if _COMMITTEE_REFID_RE.match(r):
         return REFID_COMMITTEE_REF

@@ -9,6 +9,19 @@ Append-only, reverse-chronological (newest at top). Each entry opens with `## [Y
 
 **Kinds:** `ingest` (new source/doc processed), `pr` (PR opened/merged/closed), `decision` (architectural or workflow), `lint` (wiki health-check pass), `session` (notable multi-hour working block), `post-mortem` (failure analysis), `milestone` (project-goal threshold crossed).
 
+## [2026-06-11] pr | PR-C8.4a OPENED — SINGLETON_DOC ("Placed on Agenda") → admin; refid length law
+
+Closes 44 of the 75 unconfirmed structurally + corrects 6 false-meetings (all `SINGLETON_DOC`
+"Placed on Agenda/Calendar" / "Assigned sub" docket placements → administrative, consistent with
+the existing `BATCH_NOTICE` treatment). `structural_router`: numeric-refid LENGTH LAW (measured —
+len≤6 = 0% vote-join = document; len≥7 = 100% = vote-id) + new `VOTE_UNMATCHED` class (len≥7
+not-in-VOTE.CSV → SURFACE, fail-safe guard). Worker counter pre-init fixed (KeyError guard).
+unconfirmed 75→31; structural coverage 99.8%→99.92%; Section 9 still 0; sentinel all-green;
+ray2/calendar_xray diff-identical. Discovery: a refid names the DOCUMENT, not the action — SB764's
+veto-received carries a `digits+D` doc refid (same shape as admin "substitute printed"), so
+`digits+D → admin` is FORBIDDEN (would bury a veto); those surface, vetoes handled in C8.4b
+(route_event G-family split). [[failures/assumptions_audit#83]]. Awaiting Gemini re-audit loop.
+
 ## [2026-06-10] pr | #114 MERGED — PR-C8.3 completeness tripwire + 99.8% structural-coverage metric
 
 Layer 4 (no-hidden-meeting): completeness_tripwire.py joins LIS Schedule committee meetings vs

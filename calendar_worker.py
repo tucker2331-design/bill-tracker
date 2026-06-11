@@ -2655,16 +2655,17 @@ def run_calendar_update():
         "legevent_route_meeting": 0,
         "legevent_route_admin":   0,
         "legevent_route_blank":   0,
-        # PR-C8.1 (SHADOW): distribution of the structural refid-class (classify_refid)
-        # across HISTORY-derived rows. Telemetry ONLY — does not route any row this PR.
-        # Lets us measure, from the native side, what fraction of blank-route rows the
-        # refid identity classifies (target: most -> BATCH_NOTICE/COMMITTEE_REF) and the
-        # true residual (-> SINGLETON_DOC/UNKNOWN/EMPTY) before the C8.2 flip.
+        # PR-C8.1: distribution of the structural refid-class (classify_refid) across
+        # HISTORY-derived rows. Now LIVE on the lobbyist path: classify_action routes
+        # BATCH_NOTICE/COMMITTEE_REF (C8.2) and SINGLETON_DOC (C8.4a) -> administrative;
+        # VOTE_UNMATCHED/UNKNOWN/EMPTY SURFACE (unconfirmed). This counter is the native-side
+        # telemetry of that distribution.
         "refidclass_vote_committee": 0,
         "refidclass_vote_floor":    0,
         "refidclass_batch_notice":  0,
         "refidclass_singleton_doc": 0,
         "refidclass_committee_ref": 0,
+        "refidclass_vote_unmatched": 0,   # PR-C8.4a: len>=7 vote-id-shaped refid NOT in VOTE.CSV (anomaly -> surface)
         "refidclass_unknown_refid": 0,
         "refidclass_empty":         0,
         # PR-C7.1l: count of runtime-derived ministerial EventCodes (event
@@ -5203,6 +5204,7 @@ def run_calendar_update():
             f"batch_notice={source_miss_counts['refidclass_batch_notice']} "
             f"singleton_doc={source_miss_counts['refidclass_singleton_doc']} "
             f"committee_ref={source_miss_counts['refidclass_committee_ref']} "
+            f"vote_unmatched={source_miss_counts['refidclass_vote_unmatched']} "
             f"unknown_refid={source_miss_counts['refidclass_unknown_refid']} "
             f"empty={source_miss_counts['refidclass_empty']}"
             # NB: sibling_inherited (PR-C7.1j) is NOT in this line — it's
