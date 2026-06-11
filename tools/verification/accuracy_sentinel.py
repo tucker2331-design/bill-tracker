@@ -39,7 +39,7 @@ RAY = os.path.normpath(os.path.join(os.path.dirname(os.path.abspath(__file__)), 
 SHEET = "1PQDtaTTUeYv781bx4_ZiehcvbEmUt8t7jFmZYJoJGKM"
 # Columns the accuracy metric depends on; a rename upstream must FAIL the sentinel,
 # not let it silently pass (a missing column would read "" and classify benign).
-REQUIRED_COLUMNS = ("Outcome", "Time", "LegEventRoute", "Origin", "Source")
+REQUIRED_COLUMNS = ("Outcome", "Time", "LegEventRoute", "Origin", "Source", "RefidClass", "ScheduleClass")
 # Floor on the POSITIVE health metric (structural-resolution rate = non-blank
 # LegEventRoute / legislative rows). Baseline ~83.6% (2026). This is the answer to
 # "homework grading" (Gemini review): a ceiling on BAD outcomes is gameable —
@@ -68,8 +68,7 @@ def _load_ray2_semantics():
     Handles both plain and type-annotated (PEP 526) constant assignments."""
     with open(RAY, encoding="utf-8") as fh:
         tree = ast.parse(fh.read())
-    consts = {"PLACEHOLDER_TIMES", "NON_CONCRETE_LIS_TIMES", "MEETING_ACTION_PATTERNS",
-              "ADMINISTRATIVE_PATTERNS", "ADMIN_OVERRIDE_PATTERNS"}
+    consts = {"PLACEHOLDER_TIMES", "NON_CONCRETE_LIS_TIMES"}  # PR-C8.2: verb-pattern lists deleted
     funcs = {"normalize_time", "classify_action"}
 
     def _defines_const(node):
@@ -97,6 +96,7 @@ def main():
     ap.add_argument("--derived-max", type=int, default=25, help="over-derivation guard (G2)")
     ap.add_argument("--section9-max", type=int, default=0)
     ap.add_argument("--unclassified-max", type=int, default=0)
+    ap.add_argument("--unconfirmed-max", type=int, default=150, help="budget for the surfaced fail-safe lane (PR-C8.2)")
     ap.add_argument("--min-resolution", type=float, default=MIN_STRUCTURAL_RESOLUTION,
                     help="floor on structural-resolution rate (anti-homework-grading)")
     args = ap.parse_args()
@@ -126,8 +126,8 @@ def main():
         i = ci.get(c, -1)
         return r[i] if 0 <= i < len(r) else ""
 
-    total = meeting = mwt = unclass = derived = system = routed = 0
-    s9_rows, uc_rows = [], []
+    total = meeting = mwt = unclass = unconfirmed = derived = system = routed = 0
+    s9_rows, uc_rows, unconf_rows = [], [], []
     for r in rows[1:]:
         if not any(x.strip() for x in r):
             continue
@@ -137,7 +137,7 @@ def main():
         total += 1
         if str(cell(r, "LegEventRoute")).strip():
             routed += 1  # structurally resolved by the router (non-blank route)
-        cls = classify_action(cell(r, "Outcome"), cell(r, "LegEventRoute"))
+        cls = classify_action(cell(r, "Outcome"), cell(r, "LegEventRoute"), cell(r, "RefidClass"), cell(r, "ScheduleClass"))
         has_time = normalize_time(cell(r, "Time")) not in placeholder
         if cell(r, "Origin") == "derived_standing":
             derived += 1
@@ -151,9 +151,13 @@ def main():
             unclass += 1
             if len(uc_rows) < 15:
                 uc_rows.append((cell(r, "Bill"), cell(r, "Date"), cell(r, "Outcome")[:60]))
+        elif cls == "unconfirmed":
+            unconfirmed += 1
+            if len(unconf_rows) < 15:
+                unconf_rows.append((cell(r, "Bill"), cell(r, "Date"), cell(r, "Outcome")[:60]))
 
     print(f"=== ACCURACY SENTINEL (live sheet, {total} legislative rows; {system} system rows excluded) ===")
-    print(f"  meeting={meeting}  unclassified={unclass}  derived_standing={derived}")
+    print(f"  meeting={meeting}  unclassified={unclass}  unconfirmed={unconfirmed}  derived_standing={derived}")
     failed = []
 
     def gate(name, val, mx, examples):
@@ -166,6 +170,7 @@ def main():
 
     gate("SECTION 9 (meeting without time)", mwt, args.section9_max, s9_rows)
     gate("UNCLASSIFIED legislative rows", unclass, args.unclassified_max, uc_rows)
+    gate("UNCONFIRMED (surfaced fail-safe lane)", unconfirmed, args.unconfirmed_max, unconf_rows)
     floor_ok = total >= args.min_rows
     print(f"  [{'PASS' if floor_ok else 'FAIL'}] FLOOR (legislative rows): {total} (min {args.min_rows}) — partial/empty-sheet guard")
     if not floor_ok:
