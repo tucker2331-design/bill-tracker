@@ -35,6 +35,9 @@ Links use Obsidian `[[wikilink]]` format. Obsidian resolves by filename; path-qu
 - [[architecture/stress_test_failure_modes]] — adversarial failure-mode audit: what breaks tomorrow / in 6 months / in 2 years, with severity + status
 - [[architecture/verification_durability]] — the three-layer continuous accuracy guard (breaker / daily sentinel / weekly reconciliation); how next session won't silently regress
 
+## Tooling (verification)
+- `tools/verification/completeness_tripwire.py` — no-hidden-meeting guarantee (LIS calendar vs Sheet1, code-join)
+
 ## Domain Knowledge
 - [[knowledge/history_refid_namespace]] — refid = typed namespace (vote-join, batch-notice law); VOTE/BILLS.CSV; SPA-shell false-200s
 - [[knowledge/lis_api_authorization]] — **RULE: LIS API authorized for 2025/2026 ONLY; pre-2025 via legacylis CSV**

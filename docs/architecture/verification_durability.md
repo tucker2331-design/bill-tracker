@@ -15,22 +15,34 @@ regressions themselves, and require no per-session human action (Standard #2 +
 so 2027 is covered the moment the worker writes to it — no code change, no
 re-audit.
 
-## The three layers
+## The four layers
 
 | Layer | Cadence | What it guards | Trips when | Where |
 |---|---|---|---|---|
 | **1. In-cycle circuit breaker** | every 15 min (worker) | bad Sheet1 overwrites | `meeting_unsourced` regresses vs rolling baseline (delta) or the abs floor | `calendar_worker.py` |
-| **2. Accuracy sentinel** | daily (cron) | the accuracy METRIC | Section 9 > 0, unclassified > 0, sheet collapses below the floor, or over-derivation | `tools/verification/accuracy_sentinel.py` → `🛡️ Accuracy Sentinel` |
+| **2. Accuracy sentinel** | daily (cron) | the accuracy METRIC | Section 9 > 0, unclassified > 0, **unconfirmed > budget**, sheet collapse, over-derivation, **structural coverage < floor** | `tools/verification/accuracy_sentinel.py` → `🛡️ Accuracy Sentinel` |
 | **3. Reconciliation tripwire** | weekly (cron) | DRIFT vs an INDEPENDENT source | committee reports stop matching the official MinutesBook (mis-attribution) above threshold | `tools/reconciliation/reconcile_votes.py` → `🔎 Reconciliation Tripwire` |
+| **4. Completeness tripwire** | weekly (cron) | a HIDDEN meeting (the catastrophic failure) | a committee meeting on the LIS Schedule calendar is ABSENT from Sheet1 (join by committee CODE) | `tools/verification/completeness_tripwire.py` → `🗓️ Completeness Tripwire` |
 
-**Why three.** Layer 1 stops bad data from ever being written *this cycle*. Layer
+**Why four.** Layer 1 stops bad data from ever being written *this cycle*. Layer
 2 re-derives the published accuracy metric from the live sheet using the **same**
 `classify_action` as production (extracted from `ray2.py` at runtime, so it can
 never drift) and fails if the goal (Section 9 = 0, unclassified = 0) regresses —
 the answer to "did new data quietly break it?" Layer 3 is the answer to "who's to
 say that's all the bugs?": it diffs our output against a source the pipeline
 **never touches** (the official committee minutes), catching *unknown* drift no
-internal check could.
+internal check could. Layer 4 (PR-C8.3) is the verifiable **no-hidden-meeting**
+guarantee — every committee meeting LIS itself calendars must appear in our data
+(180/180 = 100% at baseline); a dead Schedule source → `EXTERNAL SOURCE CHANGE`
+(exit 2), never a false PASS.
+
+**Two structural-health metrics (sentinel, post-PR-C8).** The classification is now
+fully structural (no text patterns). The sentinel reports BOTH: **ROUTER RESOLUTION**
+(LegEventRoute / rows, ~83.8% — the original router's reach, the mass-degradation
+floor) and **STRUCTURAL COVERAGE** (1 − unconfirmed/rows, ~99.8% — how much is
+classified by *any* structural signal: route + RefidClass + ScheduleClass + skeleton).
+Coverage is the honest "the 16% is structural now, not text" headline; only the
+surfaced `unconfirmed` fail-safe lane is uncovered, and it is never hidden.
 
 ## Anti-"homework-grading" invariants (Gemini architectural review, audit #78)
 

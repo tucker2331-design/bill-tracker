@@ -98,7 +98,9 @@ def main():
     ap.add_argument("--unclassified-max", type=int, default=0)
     ap.add_argument("--unconfirmed-max", type=int, default=150, help="budget for the surfaced fail-safe lane (PR-C8.2)")
     ap.add_argument("--min-resolution", type=float, default=MIN_STRUCTURAL_RESOLUTION,
-                    help="floor on structural-resolution rate (anti-homework-grading)")
+                    help="floor on the ORIGINAL router (LegEventRoute) reach (anti-homework-grading)")
+    ap.add_argument("--min-coverage", type=float, default=0.97,
+                    help="floor on TOTAL structural coverage (1 - unconfirmed/rows); baseline ~99.8%% (PR-C8)")
     args = ap.parse_args()
 
     classify_action, normalize_time, placeholder = _load_ray2_semantics()
@@ -176,15 +178,26 @@ def main():
     if not floor_ok:
         failed.append("FLOOR (partial sheet — lesson #75)")
     gate("DERIVED volume (over-derivation guard)", derived, args.derived_max, None)
-    # POSITIVE health floor (anti-homework-grading, Gemini review): if the worker
-    # gracefully degraded en masse (e.g., 2027 LIS schema break), bad-outcome
-    # ceilings still PASS but the structural-resolution rate COLLAPSES.
+    # TWO complementary positive-health metrics (anti-homework-grading, Gemini #78):
+    #  (a) ROUTER RESOLUTION = LegEventRoute / rows — how far the ORIGINAL structural router
+    #      (route_event) reaches on its own. Baseline ~83.6%; a collapse = an LIS schema break.
+    #  (b) STRUCTURAL COVERAGE = 1 - unconfirmed/rows — how much of the calendar is classified by
+    #      ANY structural signal (route + RefidClass + ScheduleClass + skeleton) after PR-C8. This
+    #      is the honest "we replaced the 16% text with structure" number (~99.8%); only the
+    #      'unconfirmed' fail-safe lane is uncovered. (PR-C8.3: the headline the owner expected —
+    #      the old "83.8%" was only metric (a) and undersold the structural work.)
     resolution = (routed / total) if total else 0.0
     res_ok = resolution >= args.min_resolution
-    print(f"  [{'PASS' if res_ok else 'FAIL'}] STRUCTURAL RESOLUTION: {resolution:.1%} routed (min {args.min_resolution:.0%}) "
+    print(f"  [{'PASS' if res_ok else 'FAIL'}] ROUTER RESOLUTION (LegEventRoute): {resolution:.1%} (min {args.min_resolution:.0%}) "
           f"— un-gameable mass-degradation guard")
     if not res_ok:
-        failed.append(f"STRUCTURAL RESOLUTION collapsed to {resolution:.1%} (CRITICAL: possible LIS schema break — the worker is routing everything to fallback)")
+        failed.append(f"ROUTER RESOLUTION collapsed to {resolution:.1%} (CRITICAL: possible LIS schema break — the router is falling through en masse)")
+    coverage = ((total - unconfirmed) / total) if total else 0.0
+    cov_ok = coverage >= args.min_coverage
+    print(f"  [{'PASS' if cov_ok else 'FAIL'}] STRUCTURAL COVERAGE (any signal): {coverage:.2%} (min {args.min_coverage:.0%}) "
+          f"— the 16% is now structural, not text; only the surfaced 'unconfirmed' lane is uncovered")
+    if not cov_ok:
+        failed.append(f"STRUCTURAL COVERAGE dropped to {coverage:.2%} (too many rows fell to the unconfirmed lane — new LIS structure?)")
 
     if failed:
         print(f"\n🚨 SENTINEL FAIL — {len(failed)} invariant(s) breached: {', '.join(failed)}")
