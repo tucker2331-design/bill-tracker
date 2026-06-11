@@ -9,6 +9,15 @@ Append-only, reverse-chronological (newest at top). Each entry opens with `## [Y
 
 **Kinds:** `ingest` (new source/doc processed), `pr` (PR opened/merged/closed), `decision` (architectural or workflow), `lint` (wiki health-check pass), `session` (notable multi-hour working block), `post-mortem` (failure analysis), `milestone` (project-goal threshold crossed).
 
+## [2026-06-10] pr | #114 MERGED — PR-C8.3 completeness tripwire + 99.8% structural-coverage metric
+
+Layer 4 (no-hidden-meeting): completeness_tripwire.py joins LIS Schedule committee meetings vs
+Sheet1 by committee CODE (subcommittees roll to parent) — 180/180 (100%); EXTERNAL SOURCE
+CHANGE / CANNOT VERIFY guards; auth-gated; weekly workflow. Sentinel now reports STRUCTURAL
+COVERAGE (1-unconfirmed/rows = 99.80%) as the honest headline (old 83.8% relabeled ROUTER
+RESOLUTION, kept as the mass-degradation floor). 3 Gemini rounds folded. Next: C8.4 — close the
+5 structural gaps in the unconfirmed 0.2%.
+
 ## [2026-06-10] milestone | PR-C8.2 MERGED — THE FLIP: text patterns deleted, classification 100% structural
 
 The hand-built verb dictionaries (MEETING_ACTION_PATTERNS / ADMINISTRATIVE_PATTERNS /
