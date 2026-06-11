@@ -1,0 +1,31 @@
+name: 🗓️ Completeness Tripwire (no hidden meeting)
+
+# Standard #2: the verifiable NO-HIDDEN-MEETING guarantee. Joins the LIS Schedule
+# API's committee meetings (the independent calendar) against our Sheet1 coverage by
+# committee CODE. Any committee meeting LIS lists that is ABSENT from our data = a
+# possible hidden meeting (the catastrophic failure) -> FAIL. A dead/empty Schedule
+# source -> EXTERNAL SOURCE CHANGE (exit 2), never a false PASS. Reads Sheet1 via the
+# public gviz CSV; LIS calls are gated to authorized sessions (lis_authorization.py).
+# NO secrets required. PoC measured 180/180 (100%) on 2026-06-09.
+
+on:
+  workflow_dispatch:
+    inputs:
+      session:
+        description: "LIS session code (authorized: 20251 / 20261)"
+        default: "20261"
+  schedule:
+    - cron: "0 13 * * 1"   # Mondays 13:00 UTC — alongside the reconciliation tripwire
+
+jobs:
+  completeness:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Verify every LIS committee meeting is covered by Sheet1
+        run: |
+          python3 tools/verification/completeness_tripwire.py --session "${{ github.event.inputs.session || '20261' }}"
