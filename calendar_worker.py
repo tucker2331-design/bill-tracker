@@ -4411,12 +4411,17 @@ def run_calendar_update():
         # those would silently route admin -> Ledger (a buried veto). Compare every G-prefix code
         # in the now-hydrated cache against the classified set and SHOUT on any unknown so the
         # owner classifies it before it bites. Mirrors the status-grouping drift check; same cache
-        # iteration the ministerial derivation just used (cache fully populated here).
-        _live_g_codes = {
-            str(e.get("EventCode") or "").strip()
-            for _evs in _legislation_event_cache.values() for e in _evs
-            if str(e.get("EventCode") or "").strip()[:1] == "G"
-        }
+        # iteration the ministerial derivation just used (cache fully populated here). Defensive
+        # loop (isinstance guard + compute the code once) — a malformed non-dict cache entry must
+        # never crash the drift check (Gemini #118; route_event guards the same way).
+        _live_g_codes = set()
+        for _evs in _legislation_event_cache.values():
+            for e in (_evs or []):
+                if not isinstance(e, dict):
+                    continue
+                _code = str(e.get("EventCode") or "").strip()
+                if _code[:1] == "G":
+                    _live_g_codes.add(_code)
         _gov_drift = _validate_governor_eventcodes(_live_g_codes)
         if _gov_drift:
             print(f"🚨 Governor EventCode DRIFT: {len(_gov_drift)} unclassified G-code(s): {_gov_drift}")
