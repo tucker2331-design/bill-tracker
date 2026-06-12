@@ -9,7 +9,7 @@ Append-only, reverse-chronological (newest at top). Each entry opens with `## [Y
 
 **Kinds:** `ingest` (new source/doc processed), `pr` (PR opened/merged/closed), `decision` (architectural or workflow), `lint` (wiki health-check pass), `session` (notable multi-hour working block), `post-mortem` (failure analysis), `milestone` (project-goal threshold crossed).
 
-## [2026-06-11] pr | PR-C8.4b OPENED — the veto-blindspot fix: new "executive" route/class on the calendar
+## [2026-06-11] pr | #116 MERGED — PR-C8.4b: the veto-blindspot fix (new "executive" route/class on the calendar)
 
 Governor vetoes/recommendations were routing `admin` → buried in the Ledger (the live Veto
 Blindspot). `route_event` now returns a new `"executive"` route for action-required governor
@@ -24,8 +24,11 @@ admin; only action-required (~808) surface. Worker integration: `executive_defau
 `_VALID_ORIGINS` (auto I3/I4-exempt), route counter + metrics line. X-Ray: Classification Matrix
 row + "🏛️ Executive Actions" drill-down. New `test_route_event.py` (20 golden, incl. the
 veto-before-ministerial ordering); sentinel reports `executive=`; ray2/calendar_xray diff-identical.
-[[failures/assumptions_audit#84]]. Awaiting Gemini re-audit loop. (Live effect realizes on the next
-worker run, which moves the matched veto/rec rows Ledger→Governor calendar.)
+[[failures/assumptions_audit#84]]. **MERGED** (2 Gemini rounds; round-1 HIGH caught a PRE-EXISTING
+denominator-drift false-alarm of 3,034 — admin_default + derived_standing were omitted from the
+X-Ray `_bucket_sum`; fixed + verified drift 3,034→0; round-2 re-emission verified-redundant).
+main @ c39a914. **Live effect realizes on the next worker run** (moves matched veto/rec rows
+Ledger→Governor calendar) — verify on a run whose headSha contains c39a914 (audit #74).
 
 ## [2026-06-11] pr | #115 MERGED — PR-C8.4a: SINGLETON_DOC ("Placed on Agenda") → admin; refid length law
 

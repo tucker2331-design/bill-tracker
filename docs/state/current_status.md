@@ -12,12 +12,22 @@ status: active
 
 ## Active focus
 
-**🎯 PR-C8.4 — THE RESIDUAL ~75 UNCONFIRMED, PURELY STRUCTURALLY (2026-06-11, ACTIVE).**
-C8.1→C8.3 are MERGED (#111/#112/#113/#114): the 16% is closed structurally, text patterns
-deleted from ray2/calendar_xray, Section 9 = 0, unclassified = 0, **99.8% structural coverage**
-(~75 unconfirmed of 37,389), completeness tripwire live (180/180). C8.4 closes the *closeable*
-residual and routes the rest into honest, visible lanes. **Full spec + hard rules:
+**🎯 PR-C8.4 — DONE (both PRs merged 2026-06-11). NEXT: verify the live worker run.**
+C8.1→C8.4 are all MERGED. The 16% is closed structurally; text patterns gone; Section 9 = 0;
+unclassified = 0; **structural coverage 99.92%**; completeness tripwire 180/180. C8.4 closed the
+*closeable* residual and routes the rest into honest, visible lanes. **Full spec:
 [[architecture/pr_c8_structural_classification]] §PR-C8.4.**
+
+**▶️ IMMEDIATE NEXT (verification): the C8.4b veto fix realizes on the next worker run** (route_event
+runs in the worker against the LegEvent cache). After a run whose `headSha` contains `c39a914`
+(audit #74 — verify on a containing run, never project): confirm `legevent_route_executive` > 0,
+the veto/recommendation rows moved Ledger→`🏛️ Governor` calendar, sentinel still green
+(`executive` > 0, Section 9 = 0), completeness tripwire still 180/180, and denominator drift = 0.
+
+**Deferred/standing:** convert the unconfirmed budget to a rolling baseline after 2 weeks green;
+replace the worker's `MEETING_VERB_TOKENS` internal text-telemetry with a structural signal
+(50-state cleanliness); add drift-alerting on unseen `G`-codes outside `G72/G73/G79` (the one
+fail-unsafe gap in the executive prefix rule — a brand-new action-required family would route admin).
 
 Residual decomposition: ~29 governor (empty refid), 2 referral-by-vote (HB26/HB137, `V`-refid),
 ~18 singleton clerk-docs, ~27 calendar-placed (already timed). **Gemini's 3 risks on the first
@@ -37,8 +47,8 @@ Sequencing: **C8.4a ✅ MERGED (#115)** — SINGLETON_DOC "Placed on Agenda" →
 measured refid LENGTH LAW (len≤6=document, len≥7=vote-id) + `VOTE_UNMATCHED` surface guard +
 `dtype=str`/`keep_default_na=False` read hardening (5 Gemini rounds; unconfirmed 75→31, coverage
 99.8%→99.92%, Section 9 still 0). HB26 referral correctly surfaces (H08 Courts of Justice held no
-timed meeting on 2/5 → unrecoverable; never a meeting-without-time). **C8.4b ⏳ OPEN (awaiting
-Gemini re-audit)** — the veto-blindspot fix: `route_event` returns a new `"executive"` route for
+timed meeting on 2/5 → unrecoverable; never a meeting-without-time). **C8.4b ✅ MERGED (#116)** —
+the veto-blindspot fix: `route_event` returns a new `"executive"` route for
 action-required governor families (veto `G79xx` / recommendation `G72xx`/`G73xx` — measured, not
 guessed), checked BEFORE `ministerial_codes` (a veto is ministerial-shaped; order is load-bearing).
 `classify_action` → new `executive` class surfacing ON THE CALENDAR (worker `executive_default` +
