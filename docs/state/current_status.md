@@ -18,11 +18,14 @@ unclassified = 0; **structural coverage 99.92%**; completeness tripwire 180/180.
 *closeable* residual and routes the rest into honest, visible lanes. **Full spec:
 [[architecture/pr_c8_structural_classification]] §PR-C8.4.**
 
-**▶️ IMMEDIATE NEXT (verification): the C8.4b veto fix realizes on the next worker run** (route_event
-runs in the worker against the LegEvent cache). After a run whose `headSha` contains `c39a914`
-(audit #74 — verify on a containing run, never project): confirm `legevent_route_executive` > 0,
-the veto/recommendation rows moved Ledger→`🏛️ Governor` calendar, sentinel still green
-(`executive` > 0, Section 9 = 0), completeness tripwire still 180/180, and denominator drift = 0.
+**✅ C8.4b VERIFIED LIVE (worker run 2026-06-12, headSha contains the merge — audit #74):** 331
+executive rows on the 🏛️ Governor calendar (recommendations + vetoes); **7 "Vetoed by Governor"
+moved Ledger→Governor calendar, 0 left in Ledger** (the veto blindspot is closed); Section 9 = 0;
+unconfirmed = 31; completeness tripwire 180/180; **denominator drift = 0**. The run also exposed a
+route/placement edge (7 floor-verb-matched veto-received rows route=executive but stuck in the
+Ledger) → fixed in **C8.4b-1 ✅ MERGED (#117)** (floor-path executive carve-out + convene-gap
+counter back-out; 2 Gemini rounds). A final verification run is in flight to confirm those 7 move
+to the calendar.
 
 **Deferred/standing:** convert the unconfirmed budget to a rolling baseline after 2 weeks green;
 replace the worker's `MEETING_VERB_TOKENS` internal text-telemetry with a structural signal

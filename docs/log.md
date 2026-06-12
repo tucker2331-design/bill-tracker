@@ -9,6 +9,20 @@ Append-only, reverse-chronological (newest at top). Each entry opens with `## [Y
 
 **Kinds:** `ingest` (new source/doc processed), `pr` (PR opened/merged/closed), `decision` (architectural or workflow), `lint` (wiki health-check pass), `session` (notable multi-hour working block), `post-mortem` (failure analysis), `milestone` (project-goal threshold crossed).
 
+## [2026-06-12] pr | #117 MERGED — PR-C8.4b-1: floor-path executive carve-out (route/placement consistency)
+
+Post-merge worker run for C8.4b verified the fix LIVE (331 executive rows on the calendar, 7
+"Vetoed by Governor" moved Ledger→🏛️ Governor with 0 left in Ledger, Section 9=0, completeness
+180/180, drift 0) but exposed a route/placement inconsistency: 7 rows had `route=="executive"` yet
+sat in the Ledger (`origin=floor_miss`) — the worker's FLOOR path (a separate, earlier consumer of
+the route) tagged floor-verb-matched "Governor's Veto Received"/"substitute printed" rows as
+floor misses. Fix: an `elif _floor_route == "executive"` carve-out mirroring the main executive
+branch (executive_default + 🏛️ Governor + legevent_executive_placed bucket), mutually exclusive with
+the main resolver (gated `origin=="journal_default"`). 2 Gemini rounds: round-1 HIGH (back out the
+convene-gap counters `_floor_miss`/`_floor_miss_dates` — these aren't floor misses) folded in;
+round-2 re-emission verified-redundant (suggestion == committed code). [[failures/assumptions_audit#84]].
+main @ b07e87e. Live effect on the next worker run (moves the 7 floor-routed veto rows → calendar).
+
 ## [2026-06-11] pr | #116 MERGED — PR-C8.4b: the veto-blindspot fix (new "executive" route/class on the calendar)
 
 Governor vetoes/recommendations were routing `admin` → buried in the Ledger (the live Veto
