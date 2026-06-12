@@ -2704,6 +2704,11 @@ def run_calendar_update():
         # timeless. Visible here so the "we chose not to recover" decision
         # isn't silent (Standard #4).
         "legevent_admin_skipped": 0,
+        # PR-C8.4b: DENOMINATOR bucket for executive_default rows (action-required governor
+        # actions — veto/recommendation — placed on the calendar, timeless by design). Mirrors
+        # legevent_admin_skipped: no sourced_*/unsourced_* bucket counts these, so it must be in
+        # the denominator sum or the X-Ray's "Denominator drift" check trips (Gemini #116).
+        "legevent_executive_placed": 0,
         # PR-C7.1j: secondary split-action rows that inherited their meeting's
         # time+committee from a same-(Bill,Date) resolved sibling.
         "sibling_inherited": 0,
@@ -4968,7 +4973,12 @@ def run_calendar_update():
                     # "🏛️ Governor" committee label and renders on the calendar day, time-less.
                     # classify_action maps route=="executive" -> the "executive" class, which is a
                     # distinct (non-meeting) class and is therefore EXCLUDED from Section 9.
-                    source_miss_counts["legevent_route_executive"] += 1
+                    # legevent_executive_placed mirrors legevent_admin_skipped: it is the DENOMINATOR
+                    # bucket for executive_default rows (timeless-by-design, no other bucket counts
+                    # them). The route-distribution counter legevent_route_executive is incremented
+                    # SEPARATELY in the route-counter block below (mirroring legevent_route_admin) —
+                    # do NOT increment it here too, or the route count double-counts.
+                    source_miss_counts["legevent_executive_placed"] += 1
                     source_miss_counts["legislation_event_attempted"] -= 1  # deliberate non-attempt (mirror admin)
                     origin = "executive_default"
                     time_val = "🏛️ [GOVERNOR ACTION]"
@@ -5234,6 +5244,7 @@ def run_calendar_update():
             f"legevent_route_blank={source_miss_counts['legevent_route_blank']} "
             f"legevent_floor_recovered={source_miss_counts['legevent_floor_recovered']} "
             f"legevent_admin_skipped={source_miss_counts['legevent_admin_skipped']} "
+            f"legevent_executive_placed={source_miss_counts['legevent_executive_placed']} "
             # PR-C8.1 SHADOW: structural refid-class distribution (telemetry only)
             f"| refidclass: vote_committee={source_miss_counts['refidclass_vote_committee']} "
             f"vote_floor={source_miss_counts['refidclass_vote_floor']} "

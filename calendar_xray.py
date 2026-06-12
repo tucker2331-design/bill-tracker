@@ -347,6 +347,14 @@ if _metrics_payload:
     _unj = int(_metrics_payload.get("unsourced_journal", 0) or 0)
     _fam = int(_metrics_payload.get("floor_anchor_miss", 0) or 0)
     _dns = int(_metrics_payload.get("dropped_noise", 0) or 0)
+    # Timeless-by-design denominator buckets (MUST be summed into _bucket_sum or the drift check
+    # trips — Gemini #116). These rows are placed deliberately WITHOUT a meeting time and so are
+    # in no sourced_*/unsourced_* bucket: derived_standing (1 flagged assumed time, #76),
+    # legevent_admin_skipped (route=="admin" -> Ledger, PR-C7.1g), and legevent_executive_placed
+    # (route=="executive" -> Governor calendar, PR-C8.4b).
+    _derived = int(_metrics_payload.get("derived_standing", 0) or 0)
+    _adm = int(_metrics_payload.get("legevent_admin_skipped", 0) or 0)
+    _exec = int(_metrics_payload.get("legevent_executive_placed", 0) or 0)
     # Orthogonal tag counters (overlap with the denominator buckets).
     _una = int(_metrics_payload.get("unsourced_anchor", 0) or 0)
     _dep = int(_metrics_payload.get("dropped_ephemeral", 0) or 0)
@@ -359,18 +367,20 @@ if _metrics_payload:
 
     _sourced = _api + _conv + _le
     _unsourced = _unj + _fam
-    _bucket_sum = _api + _conv + _le + _unj + _fam + _dns
+    _timeless = _derived + _adm + _exec   # placed by design without a recovered meeting time
+    _bucket_sum = _api + _conv + _le + _unj + _fam + _dns + _timeless
     _source_rate = (_sourced / _total * 100.0) if _total else 0.0
 
     st.caption(
         "**Denominator buckets** (mutually exclusive — sum to Total processed). "
         "See docs/failures/gemini_review_patterns.md #31."
     )
-    z1, z2, z3, z4 = st.columns(4)
+    z1, z2, z3, z4, z4b = st.columns(5)
     z1.metric("Total processed", f"{_total:,}")
     z2.metric("Sourced", f"{_sourced:,}", f"{_source_rate:.1f}%")
     z3.metric("Unsourced", f"{_unsourced:,}")
     z4.metric("Dropped (noise)", f"{_dns:,}")
+    z4b.metric("Timeless (by design)", f"{_timeless:,}")
 
     z5, z6, z7, z8, z9, z10 = st.columns(6)
     z5.metric("↳ API schedule", f"{_api:,}")
@@ -379,6 +389,12 @@ if _metrics_payload:
     z8.metric("↳ No schedule", f"{_unj:,}")
     z9.metric("↳ Floor-anchor miss", f"{_fam:,}")
     z10.metric("↳ Noise drops", f"{_dns:,}")
+
+    # Timeless-by-design breakdown (admin -> Ledger, executive -> Governor calendar, derived time).
+    z11, z12, z13 = st.columns(3)
+    z11.metric("↳ Admin (Ledger)", f"{_adm:,}")
+    z12.metric("↳ 🏛️ Executive (calendar)", f"{_exec:,}")
+    z13.metric("↳ Derived-standing time", f"{_derived:,}")
 
     if _total and _bucket_sum != _total:
         st.warning(
