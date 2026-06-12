@@ -33,11 +33,21 @@ Key structural constraint: HISTORY governor rows have empty refid, so EventCode/
 reachable only by a many-to-many `(bill,date)` join — per-row disambiguation is impossible
 without text, so ambiguous rows SURFACE (fail-safe), and the governor resolver reads the
 hydrated LegEvent cache, NEVER loosening the primary `_route_for_row` match (stability rule).
-Sequencing: **C8.4a** (referral-by-vote + time recovery; singleton→admin) then **C8.4b**
-(governor resolver + `executive` class + Section-9 exclusion). Each PR runs the full Gemini
-re-audit loop (re-request review until no findings / only verified-stale). Earlier this block:
-LIS API authorization rule enforced (#110, [[knowledge/lis_api_authorization]]); dynamic
-session window (#109).
+Sequencing: **C8.4a ✅ MERGED (#115)** — SINGLETON_DOC "Placed on Agenda" → admin via the
+measured refid LENGTH LAW (len≤6=document, len≥7=vote-id) + `VOTE_UNMATCHED` surface guard +
+`dtype=str`/`keep_default_na=False` read hardening (5 Gemini rounds; unconfirmed 75→31, coverage
+99.8%→99.92%, Section 9 still 0). HB26 referral correctly surfaces (H08 Courts of Justice held no
+timed meeting on 2/5 → unrecoverable; never a meeting-without-time). **C8.4b ⏳ OPEN (awaiting
+Gemini re-audit)** — the veto-blindspot fix: `route_event` returns a new `"executive"` route for
+action-required governor families (veto `G79xx` / recommendation `G72xx`/`G73xx` — measured, not
+guessed), checked BEFORE `ministerial_codes` (a veto is ministerial-shaped; order is load-bearing).
+`classify_action` → new `executive` class surfacing ON THE CALENDAR (worker `executive_default` +
+"🏛️ Governor" label, out of the Ledger collapse), time-less + EXCLUDED from Section 9 (route is the
+guard). Milestone governor codes (~4,700) stay admin; only action-required (~808) surface. Fixes
+the LIVE veto-burying (today "Vetoed by Governor" routes admin). Honest residual (~31 surfaced):
+29 `digits+D` "substitute printed" + veto-received + HB26. New `test_route_event.py` (20 golden).
+Live effect realizes on the next worker run. Each PR runs the full Gemini re-audit loop. Earlier
+this block: LIS API authorization rule enforced (#110); dynamic session window (#109).
 
 
 **🔒 SUSTAINABILITY AUDIT + VERIFICATION + FUTURE-PROOFING (2026-06-07).** Owner asked to confirm the Section-9=0 work checks off all standards, verify it independently, and proactively hunt edge cases ("who's to say that's all the bugs?"). Three phases, all done:

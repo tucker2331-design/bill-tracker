@@ -2663,6 +2663,7 @@ def run_calendar_update():
         # the row yet (TTL backfill incomplete); should fall over cycles.
         "legevent_route_meeting": 0,
         "legevent_route_admin":   0,
+        "legevent_route_executive": 0,   # PR-C8.4b: action-required governor action -> calendar
         "legevent_route_blank":   0,
         # PR-C8.1: distribution of the structural refid-class (classify_refid) across
         # HISTORY-derived rows. Now LIVE on the lobbyist path: classify_action routes
@@ -2703,6 +2704,11 @@ def run_calendar_update():
         # timeless. Visible here so the "we chose not to recover" decision
         # isn't silent (Standard #4).
         "legevent_admin_skipped": 0,
+        # PR-C8.4b: DENOMINATOR bucket for executive_default rows (action-required governor
+        # actions — veto/recommendation — placed on the calendar, timeless by design). Mirrors
+        # legevent_admin_skipped: no sourced_*/unsourced_* bucket counts these, so it must be in
+        # the denominator sum or the X-Ray's "Denominator drift" check trips (Gemini #116).
+        "legevent_executive_placed": 0,
         # PR-C7.1j: secondary split-action rows that inherited their meeting's
         # time+committee from a same-(Bill,Date) resolved sibling.
         "sibling_inherited": 0,
@@ -2769,6 +2775,12 @@ def run_calendar_update():
         # source (I3 exempt) and NOT an unsourced meeting miss (I4 exempt) —
         # a timeless admin row that collapses into 📋 Ledger Updates.
         "admin_default",
+        # PR-C8.4b: an action-required governor action (veto / recommendation) routed
+        # "executive" by route_event. Like admin_default it carries no concrete meeting time
+        # (I3-exempt: not in the I3 origin set) and is not an unsourced-meeting miss (I4-exempt:
+        # not in _UNSOURCED_ORIGINS_FOR_METRICS). UNLIKE admin_default it does NOT join the
+        # Ledger collapse mask — it SURFACES on the calendar under a "🏛️ Governor" label.
+        "executive_default",
         # PR-FC1 (forward calendar): a Schedule-API meeting that hasn't
         # happened yet (meeting_date > today). Carries a real scheduled Time
         # (not a [NO_*] tag) so it is NOT I3-exempt-only; registered here so
@@ -4950,6 +4962,28 @@ def run_calendar_update():
                     source_miss_counts["legislation_event_attempted"] -= 1
                     origin = "admin_default"
                     time_val = "⏱️ [NO_SCHEDULE_MATCH]"
+                elif _le_result is None and _row_route == "executive":
+                    # PR-C8.4b: an ACTION-REQUIRED governor action (veto G79xx / recommendation
+                    # G72xx/G73xx). Like the admin branch, this is a deliberate NON-attempt at time
+                    # resolution — there is no convened meeting, so the resolver would only stamp a
+                    # structurally-wrong ~4 AM document time (Standard #3). UNLIKE admin, it must
+                    # SURFACE ON THE CALENDAR, never the ledger: burying a veto/recommendation is the
+                    # catastrophic silent failure (owner decision 2026-06-11). executive_default is
+                    # deliberately NOT in the journal/Ledger collapse mask below, so it keeps a
+                    # "🏛️ Governor" committee label and renders on the calendar day, time-less.
+                    # classify_action maps route=="executive" -> the "executive" class, which is a
+                    # distinct (non-meeting) class and is therefore EXCLUDED from Section 9.
+                    # legevent_executive_placed mirrors legevent_admin_skipped: it is the DENOMINATOR
+                    # bucket for executive_default rows (timeless-by-design, no other bucket counts
+                    # them). The route-distribution counter legevent_route_executive is incremented
+                    # SEPARATELY in the route-counter block below (mirroring legevent_route_admin) —
+                    # do NOT increment it here too, or the route count double-counts.
+                    source_miss_counts["legevent_executive_placed"] += 1
+                    source_miss_counts["legislation_event_attempted"] -= 1  # deliberate non-attempt (mirror admin)
+                    origin = "executive_default"
+                    time_val = "🏛️ [GOVERNOR ACTION]"
+                    sort_time_24h = "23:59"
+                    event_location = "🏛️ Governor"
                 elif _le_result is None:
                     # Cache-direct didn't recover (route == "" with no cached
                     # events, OR route == "meeting" but the cache helper
@@ -5049,6 +5083,8 @@ def run_calendar_update():
                 source_miss_counts["legevent_route_meeting"] += 1
             elif legevent_route == "admin":
                 source_miss_counts["legevent_route_admin"] += 1
+            elif legevent_route == "executive":   # PR-C8.4b: action-required governor action
+                source_miss_counts["legevent_route_executive"] += 1
             else:
                 source_miss_counts["legevent_route_blank"] += 1
 
@@ -5204,9 +5240,11 @@ def run_calendar_update():
             f"witness_location_backfills={source_miss_counts.get('witness_location_backfills', 0)} "
             f"legevent_route_meeting={source_miss_counts['legevent_route_meeting']} "
             f"legevent_route_admin={source_miss_counts['legevent_route_admin']} "
+            f"legevent_route_executive={source_miss_counts['legevent_route_executive']} "
             f"legevent_route_blank={source_miss_counts['legevent_route_blank']} "
             f"legevent_floor_recovered={source_miss_counts['legevent_floor_recovered']} "
             f"legevent_admin_skipped={source_miss_counts['legevent_admin_skipped']} "
+            f"legevent_executive_placed={source_miss_counts['legevent_executive_placed']} "
             # PR-C8.1 SHADOW: structural refid-class distribution (telemetry only)
             f"| refidclass: vote_committee={source_miss_counts['refidclass_vote_committee']} "
             f"vote_floor={source_miss_counts['refidclass_vote_floor']} "
