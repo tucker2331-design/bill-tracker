@@ -4835,6 +4835,21 @@ def run_calendar_update():
                             _floor_miss_dates[_combo_key] -= 1
                             if _floor_miss_dates[_combo_key] <= 0:
                                 del _floor_miss_dates[_combo_key]
+                        elif _floor_route == "executive":
+                            # PR-C8.4b-1: an ACTION-REQUIRED governor action (veto "received" /
+                            # recommendation) that ALSO tripped the floor-verb gate. It is NOT a
+                            # floor-meeting miss — route_event matched it to a G79xx/G72xx/G73xx
+                            # event, so it must surface on the Governor CALENDAR exactly like the
+                            # main resolver's executive branch, NOT be tagged floor_miss → Ledger
+                            # (which left route=="executive" rows physically in the ledger — a
+                            # route/placement inconsistency caught by the post-merge worker run).
+                            # Mirrors the main branch: executive_default origin, "🏛️ Governor"
+                            # label, timeless flag, denominator bucket legevent_executive_placed.
+                            source_miss_counts["legevent_executive_placed"] += 1
+                            origin = "executive_default"
+                            time_val = "🏛️ [GOVERNOR ACTION]"
+                            sort_time_24h = "23:59"
+                            event_location = "🏛️ Governor"
                         else:
                             # Concrete source miss: floor action with no convene anchor.
                             # Tag the row so it cannot masquerade as a clean row downstream.
