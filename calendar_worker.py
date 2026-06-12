@@ -4850,6 +4850,15 @@ def run_calendar_update():
                             time_val = "🏛️ [GOVERNOR ACTION]"
                             sort_time_24h = "23:59"
                             event_location = "🏛️ Governor"
+                            # This row is NOT a floor-meeting miss, so back out the convene-gap
+                            # counters incremented at the top of the floor block (exactly as the
+                            # recovery branch above does) — otherwise the post-loop CONVENE GAP
+                            # report over-counts misses by these executive rows (Gemini #117).
+                            _floor_miss -= 1
+                            _combo_key = f"{date_str}_{acting_chamber_prefix.strip()}"
+                            _floor_miss_dates[_combo_key] -= 1
+                            if _floor_miss_dates[_combo_key] <= 0:
+                                del _floor_miss_dates[_combo_key]
                         else:
                             # Concrete source miss: floor action with no convene anchor.
                             # Tag the row so it cannot masquerade as a clean row downstream.
