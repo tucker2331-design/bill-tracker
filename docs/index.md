@@ -29,7 +29,8 @@ Links use Obsidian `[[wikilink]]` format. Obsidian resolves by filename; path-qu
 - [[workflow/bot_review_fold_in]] — handling Codex / Gemini PR reviews: implement, re-audit, push (bots review commits, not replies)
 
 ## Architecture
-- [[architecture/pr_c8_structural_classification]] — **ACTIVE PLAN: close the 16% structurally; hard rules + gates for the implementing model**
+- [[architecture/post_c8_hardening]] — **ACTIVE: three grounded post-C8.4 hardening solutions (G-code drift alert, structural meeting_unsourced, unconfirmed rolling baseline)**
+- [[architecture/pr_c8_structural_classification]] — close the 16% structurally; hard rules + gates for the implementing model
 - [[architecture/calendar_pipeline]] — LIS → worker → Sheet1 data flow + resolution priorities
 - [[architecture/scalability_audit]] — standing standards-compliance audit (scalable / sustainable / zero-maintenance?); re-run after any architecturally-significant change
 - [[architecture/stress_test_failure_modes]] — adversarial failure-mode audit: what breaks tomorrow / in 6 months / in 2 years, with severity + status
