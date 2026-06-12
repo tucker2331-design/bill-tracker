@@ -610,20 +610,23 @@ def classify_action(outcome_text: str = "", legevent_route: str = "",
     calendar_xray.py, tools/verification/accuracy_sentinel.py, and calendar_worker.py. Pure
     (string ops only); no pandas/streamlit. Behavior is locked by test_classify_action.py.
     """
-    route = str(legevent_route or "").strip().lower()
+    # Use the NA-safe _s helper (None-guard + str().strip(), never the `X or ""` boolean coercion
+    # that raises TypeError on pandas pd.NA — Gemini #120). _s maps None->""; pd.NA->"<NA>",
+    # np.nan->"nan" (caught by the NA-repr null-check below), so every nullable flavor is handled.
+    route = _s(legevent_route).lower()
     if route == "meeting":
         return "meeting"
     if route == "admin":
         return "administrative"
     if route == "executive":   # PR-C8.4b: action-required governor action -> calendar, time-less, not a Section-9 bug
         return "executive"
-    lower = str(outcome_text).lower().strip()
-    if not lower or lower in ("none", "nan"):
+    lower = _s(outcome_text).lower()
+    if lower in ("", "none", "nan", "na", "<na>", "null"):   # empty/skeleton or any NA repr -> admin
         return "administrative"
-    rc = str(refid_class or "").strip().upper()
+    rc = _s(refid_class).upper()
     if rc in ("BATCH_NOTICE", "COMMITTEE_REF", "SINGLETON_DOC"):   # clerk DOCUMENT refs (len<=6 numeric / committee code)
         return "administrative"
-    sc = str(schedule_class or "").strip().upper()
+    sc = _s(schedule_class).upper()
     if sc in ("MEETING_EVENT", "FLOOR", "COMMISSION"):
         return "meeting"
     if sc in ("DOCKET", "CAUCUS"):

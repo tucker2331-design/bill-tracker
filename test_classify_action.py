@@ -42,7 +42,24 @@ CASES = [
     # 8. Defaults / robustness.
     ((), "administrative"),  # all-default -> empty outcome -> administrative
     ((None, None, None, None), "administrative"),  # None-safe -> empty outcome
+    # 9. Pandas/numpy nullable robustness (Gemini #120): must NEVER crash on pd.NA (the `X or ""`
+    #    boolean coercion used to raise TypeError) and NA-repr inputs normalize like empty.
+    (("<NA>", "", "", ""), "administrative"),    # <NA> outcome string -> NA-repr -> admin
+    (("na", "", "", ""), "administrative"),
+    (("null", "", "", ""), "administrative"),
 ]
+
+# pd.NA / np.nan crash-safety: build dynamically so the suite still runs without pandas/numpy.
+try:
+    import pandas as _pd, numpy as _np
+    CASES += [
+        ((_pd.NA, "", "", ""), "administrative"),          # pd.NA outcome -> NA-repr -> admin (no crash)
+        ((_np.nan, "", "", ""), "administrative"),         # np.nan outcome -> "nan" -> admin
+        (("Reported (12-Y)", _pd.NA, _pd.NA, _pd.NA), "unconfirmed"),  # pd.NA route/refid/sched -> no crash, surfaces
+        (("anything", "meeting", _pd.NA, _pd.NA), "meeting"),          # route still wins; pd.NA refid/sched no crash
+    ]
+except ImportError:
+    pass
 
 
 def main():
