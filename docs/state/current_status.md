@@ -29,10 +29,25 @@ in Ledger 7→**0**; `route==executive` (324) == `Committee==🏛️ Governor` (
 fully consistent; `route_executive` == `executive_placed` == 554 (gap closed); `floor_anchor_miss`
 −7; drift 0; sentinel PASS; completeness 180/180. **C8.4 (a+b+b-1) DONE & PRODUCTION-VERIFIED.**
 
-**Deferred/standing:** convert the unconfirmed budget to a rolling baseline after 2 weeks green;
-replace the worker's `MEETING_VERB_TOKENS` internal text-telemetry with a structural signal
-(50-state cleanliness); add drift-alerting on unseen `G`-codes outside `G72/G73/G79` (the one
-fail-unsafe gap in the executive prefix rule — a brand-new action-required family would route admin).
+**🛡️ POST-C8.4 HARDENING — all 3 deferred items DONE (2026-06-12).** Designs + grounding in
+[[architecture/post_c8_hardening]] (each mirrors an existing in-codebase precedent). All merged
+through the Gemini re-audit loop:
+- **G-code drift alert ✅ MERGED (#118)** — `validate_governor_eventcodes` (mirrors
+  `validate_status_grouping`) + a once-per-cycle worker check; any G-code outside
+  `KNOWN_GOVERNOR_EVENTCODES` → CRITICAL/DATA_ANOMALY alert. Closes the executive prefix rule's
+  one fail-unsafe gap. Live drift `[]`.
+- **Structural `meeting_unsourced` ✅ MERGED (#119)** — I4 now counts `LegEventRoute=="meeting"` +
+  unsourced origin (the true Section-9-bug shape), not `MEETING_VERB_TOKENS`. Text gone from the
+  breaker signal; live-verified equivalent (0). (The Part C reconciliation verb pre-filter ~L4159
+  is a separate, harder migration — tracked in [[ideas/future_improvements]].)
+- **Unconfirmed rolling baseline ✅ MERGED (#1a #120 + #1b #121)** — `classify_action` centralized
+  in `structural_router` (one source; removes the AST-extract + diff-identical-triplicate; 0-diff
+  across 37,531 rows); worker counts `unconfirmed_rows`, reads/ratchets a Y3 rolling baseline, and
+  ALERTS (not trips — unconfirmed rows are safe-surfaced) on a >25 spike vs Y3. Sentinel keeps
+  `--unconfirmed-max` as the absolute backstop. assumptions_audit #85.
+
+**Standing (genuinely deferred):** the Part C reconciliation verb pre-filter migration (above);
+the crossover_audit MEETING_VERBS mirror (offline tool).
 
 Residual decomposition: ~29 governor (empty refid), 2 referral-by-vote (HB26/HB137, `V`-refid),
 ~18 singleton clerk-docs, ~27 calendar-placed (already timed). **Gemini's 3 risks on the first

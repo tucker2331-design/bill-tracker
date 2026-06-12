@@ -9,6 +9,15 @@ Append-only, reverse-chronological (newest at top). Each entry opens with `## [Y
 
 **Kinds:** `ingest` (new source/doc processed), `pr` (PR opened/merged/closed), `decision` (architectural or workflow), `lint` (wiki health-check pass), `session` (notable multi-hour working block), `post-mortem` (failure analysis), `milestone` (project-goal threshold crossed).
 
+## [2026-06-12] milestone | POST-C8.4 HARDENING COMPLETE — all 3 deferred items merged
+
+#118 (G-code drift alert), #119 (structural meeting_unsourced), #120 (centralize classify_action),
+#121 (unconfirmed rolling baseline) all MERGED. Each grounded in an existing precedent
+(validate_status_grouping / LegEventRoute / the Y2 breaker), each through the Gemini re-audit loop
+— which caught: a dtype/NA leading-zero hazard, the floor-path convene-gap counter, a pd.NA crash,
+and confirmed the route-based meeting_unsourced premise (0, not 150). main @ db1189c. Final
+verification worker run dispatched. Designs: [[architecture/post_c8_hardening]].
+
 ## [2026-06-12] pr | PR-hardening1b OPENED — unconfirmed rolling baseline (Y3 spike alert)
 
 The sentinel gated `unconfirmed` against an ABSOLUTE --unconfirmed-max (150) — audit #53's
