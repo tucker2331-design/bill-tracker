@@ -609,6 +609,12 @@ def classify_action(outcome_text: str = "", legevent_route: str = "",
     PR-hardening1a: centralized here (single source of truth) — imported by pages/ray2.py,
     calendar_xray.py, tools/verification/accuracy_sentinel.py, and calendar_worker.py. Pure
     (string ops only); no pandas/streamlit. Behavior is locked by test_classify_action.py.
+
+    Params are annotated ``str`` for the intended-caller contract, but every input is None- and
+    pandas-NA-tolerant (None / pd.NA / np.nan / "<NA>" / "null" all normalize to "" via ``_s``
+    and the NA-repr null-check) — see the pd.NA crash-safety cases in test_classify_action.py.
+    NOT annotated ``str | None``: that union syntax is 3.10+ and would break the worker/tooling on
+    Python 3.9, which this module supports (the codebase avoids ``X | None`` for that reason).
     """
     # Use the NA-safe _s helper (None-guard + str().strip(), never the `X or ""` boolean coercion
     # that raises TypeError on pandas pd.NA — Gemini #120). _s maps None->""; pd.NA->"<NA>",
