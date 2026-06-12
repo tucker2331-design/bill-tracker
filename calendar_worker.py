@@ -2913,14 +2913,9 @@ def run_calendar_update():
         if origin in _UNSOURCED_ORIGINS_FOR_METRICS and event.get("LegEventRoute") == "meeting":
             source_miss_counts["meeting_unsourced"] += 1
 
-        # PR-hardening1b: count the surfaced 'unconfirmed' rows for the rolling-baseline spike
-        # alert, using the SAME canonical classify_action the X-Ray/sentinel use (hardening1a) over
-        # the finalized columns — so the worker's count can never drift from the displayed class.
-        # Exclude the worker's own SYSTEM diagnostic rows (the sentinel/X-Ray exclude them too).
-        if str(event.get("Source", "")).strip().upper() != "SYSTEM":
-            if _classify_action(event.get("Outcome", ""), event.get("LegEventRoute", ""),
-                                event.get("RefidClass", ""), event.get("ScheduleClass", "")) == "unconfirmed":
-                source_miss_counts["unconfirmed_rows"] += 1
+        # NB: unconfirmed_rows is counted AFTER the loop over the FINAL written rows (final_df),
+        # NOT here — _append_event is PRE the ephemeral-filter + dedup, so a per-row count here
+        # over-counts by rows that get dropped before the sheet write (PR-hardening1b-1).
 
         # Breaker denominator (PR-C1 review-fix, Gemini). Count AFTER the
         # invariant checks so rows_appended tracks the chokepoint's actual
@@ -5586,6 +5581,22 @@ def run_calendar_update():
                     final_df = final_df.fillna("")
 
             sheet_data = [final_df.columns.values.tolist()] + final_df.values.tolist()
+
+            # PR-hardening1b-1: count the surfaced 'unconfirmed' rows over the FINAL written rows
+            # (final_df == sheet_data, AFTER the ephemeral filter + (Date,Committee,Bill) dedup),
+            # excluding SYSTEM diagnostic rows — so the worker's count matches the sentinel/X-Ray
+            # population (the 'budget' the Y3 rolling baseline replaces). Counting in _append_event
+            # was PRE-filter and over-counted by deduped/ephemeral rows (46 vs the sheet's 31). Uses
+            # the canonical classify_action (hardening1a), so it can never drift from the displayed
+            # class. Recomputed (set, not +=) so a re-run within the cycle can't double-count.
+            _uc = 0
+            for _rec in final_df.to_dict("records"):
+                if str(_rec.get("Source", "")).strip().upper() == "SYSTEM":
+                    continue
+                if _classify_action(_rec.get("Outcome", ""), _rec.get("LegEventRoute", ""),
+                                    _rec.get("RefidClass", ""), _rec.get("ScheduleClass", "")) == "unconfirmed":
+                    _uc += 1
+            source_miss_counts["unconfirmed_rows"] = _uc
 
             # PR-C1 + PR-C7.0.4: MASS-VIOLATION CIRCUIT BREAKER — last
             # safety net before Sheet1 is overwritten. If this cycle's
