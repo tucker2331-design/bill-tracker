@@ -2902,8 +2902,10 @@ def run_calendar_update():
         # becomes a true Section-9-regression detector. (Blank-route rows during cold-start
         # hydration aren't counted — but the breaker watches the DELTA, and a hydration transient
         # is not a regression; the route is set once the cache is warm.)
-        if origin in _UNSOURCED_ORIGINS_FOR_METRICS and \
-                str(event.get("LegEventRoute", "")).strip().lower() == "meeting":
+        # event["LegEventRoute"] is guaranteed present (setdefault above) and already a normalized
+        # route_event verdict ("meeting"/"admin"/"executive"/""), so compare it directly — same as
+        # the route-counter block. No redundant str/strip/lower on this per-row hot path (Gemini #119).
+        if origin in _UNSOURCED_ORIGINS_FOR_METRICS and event.get("LegEventRoute") == "meeting":
             source_miss_counts["meeting_unsourced"] += 1
 
         # Breaker denominator (PR-C1 review-fix, Gemini). Count AFTER the
