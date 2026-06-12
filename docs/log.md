@@ -9,6 +9,18 @@ Append-only, reverse-chronological (newest at top). Each entry opens with `## [Y
 
 **Kinds:** `ingest` (new source/doc processed), `pr` (PR opened/merged/closed), `decision` (architectural or workflow), `lint` (wiki health-check pass), `session` (notable multi-hour working block), `post-mortem` (failure analysis), `milestone` (project-goal threshold crossed).
 
+## [2026-06-12] pr | PR-hardening2 OPENED — structural meeting_unsourced (drop MEETING_VERB_TOKENS from I4)
+
+I4 (the write-time chokepoint) computed the circuit breaker's `meeting_unsourced` regression signal
+from a VA-English verb list. Now STRUCTURAL: count when `LegEventRoute == "meeting"` AND
+`origin in {journal_default, floor_miss}` — the router's own verdict that a row is a meeting the
+worker couldn't time (the true Section-9-bug shape). Standard #3/#6 (no prose, 50-state-clean) and
+a STRICTER detector. Behavior-preserving: verb-based and route-based both = 0 at steady state
+(Section 9 = 0), so no breaker recalibration (Y2 already ratcheted to 0). MEETING_VERB_TOKENS stays
+(still used by the Part C reconciliation candidate pre-filter ~L4159 — df_past has no route column,
+a separate harder migration tracked in ideas — and the offline crossover_audit mirror). Solution 2
+of 3 in [[architecture/post_c8_hardening]]. Awaiting Gemini.
+
 ## [2026-06-12] pr | PR-hardening3 OPENED — G-code drift alert (closes the executive prefix rule's fail-unsafe gap)
 
 `validate_governor_eventcodes` (structural_router, mirrors `validate_status_grouping`) + a once-per-

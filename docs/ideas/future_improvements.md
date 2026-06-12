@@ -270,3 +270,13 @@ We validate against a FROZEN, complete session; the product's real job is the LI
     - **Qodo PR-Agent** (formerly CodiumAI, open-source, ~8.5k★) — self-host via GitHub Action with our own LLM key; works with any model incl. local. Most control, no vendor lock-in.
     - **GitHub Copilot code review** — included if we ever hold a Copilot seat; native to the PR surface.
     - Fallback with zero new vendor: **Codex alone + the tightened 15-point self-audit** (already covers the bug classes the bots historically caught). Decide before mid-July; parked until C7.1b closes.
+
+## Structural migration of the Part C reconciliation verb pre-filter (post-hardening2)
+
+`calendar_worker.py` ~L4159 still selects `df_past` rows by `MEETING_VERB_TOKENS` (text) to choose
+which historical rows to re-check for gaps in the Part C reconciliation. I4's telemetry was made
+structural in PR-hardening2 (`LegEventRoute == "meeting"`), but `df_past` is the raw HISTORY frame
+with no route column, so migrating this pre-filter needs the route computed for those rows (re-run
+`_route_for_row`, or carry the route into `df_past`). Lower priority — it's an internal
+reconciliation candidate filter, high-recall, and never drops/reclassifies a lobbyist-facing row.
+The offline `tools/crossover_audit/diff_sheet1.py` MEETING_VERBS mirror is the same class.
