@@ -27,6 +27,7 @@ import pdfplumber
 # validated full-scale (943 admin / 103 meeting / 0 drift, 2026-06-01).
 from structural_router import route_event as _route_event
 from structural_router import validate_status_grouping as _validate_status_grouping
+from structural_router import validate_governor_eventcodes as _validate_governor_eventcodes  # PR-hardening3 G-code drift
 from structural_router import compute_ministerial_eventcodes as _compute_ministerial_eventcodes
 from structural_router import build_admin_recovery_index as _build_admin_recovery_index
 from structural_router import recover_admin_route as _recover_admin_route
@@ -4403,6 +4404,30 @@ def run_calendar_update():
             (e for _evs in _legislation_event_cache.values() for e in _evs)
         )
         source_miss_counts["legevent_ministerial_eventtypes"] = len(_ministerial_codes)
+
+        # PR-hardening3: GOVERNOR EVENTCODE DRIFT — closes the executive prefix rule's one
+        # fail-UNSAFE gap (PR-C8.4b). route_event routes the action-required families
+        # (G72/G73/G79) to the calendar BY PREFIX; a brand-new action-required G-family OUTSIDE
+        # those would silently route admin -> Ledger (a buried veto). Compare every G-prefix code
+        # in the now-hydrated cache against the classified set and SHOUT on any unknown so the
+        # owner classifies it before it bites. Mirrors the status-grouping drift check; same cache
+        # iteration the ministerial derivation just used (cache fully populated here).
+        _live_g_codes = {
+            str(e.get("EventCode") or "").strip()
+            for _evs in _legislation_event_cache.values() for e in _evs
+            if str(e.get("EventCode") or "").strip()[:1] == "G"
+        }
+        _gov_drift = _validate_governor_eventcodes(_live_g_codes)
+        if _gov_drift:
+            print(f"🚨 Governor EventCode DRIFT: {len(_gov_drift)} unclassified G-code(s): {_gov_drift}")
+            push_system_alert(
+                f"Governor EventCode drift: LIS publishes {len(_gov_drift)} G-prefix EventCode(s) "
+                f"the executive router has not classified: {_gov_drift}. A NEW action-required "
+                f"family (veto/recommendation) outside G72/G73/G79 would route admin -> Ledger "
+                f"(a buried veto). Classify each in route_event before it bites. See post_c8_hardening.",
+                status="CRITICAL", category="DATA_ANOMALY", severity="CRITICAL",
+                dedup_key=f"governor_eventcode_drift::{','.join(_gov_drift)}",
+            )
         if _ministerial_codes:
             print(
                 f"🗂️  LegEvent ministerial event types (runtime-derived, ledger-routed): "
