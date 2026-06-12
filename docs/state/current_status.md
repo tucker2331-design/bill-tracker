@@ -24,8 +24,10 @@ moved Ledger→Governor calendar, 0 left in Ledger** (the veto blindspot is clos
 unconfirmed = 31; completeness tripwire 180/180; **denominator drift = 0**. The run also exposed a
 route/placement edge (7 floor-verb-matched veto-received rows route=executive but stuck in the
 Ledger) → fixed in **C8.4b-1 ✅ MERGED (#117)** (floor-path executive carve-out + convene-gap
-counter back-out; 2 Gemini rounds). A final verification run is in flight to confirm those 7 move
-to the calendar.
+counter back-out; 2 Gemini rounds). **C8.4b-1 VERIFIED LIVE (2026-06-12 run):** `route==executive`
+in Ledger 7→**0**; `route==executive` (324) == `Committee==🏛️ Governor` (324) — route/placement now
+fully consistent; `route_executive` == `executive_placed` == 554 (gap closed); `floor_anchor_miss`
+−7; drift 0; sentinel PASS; completeness 180/180. **C8.4 (a+b+b-1) DONE & PRODUCTION-VERIFIED.**
 
 **Deferred/standing:** convert the unconfirmed budget to a rolling baseline after 2 weeks green;
 replace the worker's `MEETING_VERB_TOKENS` internal text-telemetry with a structural signal
