@@ -9,6 +9,20 @@ Append-only, reverse-chronological (newest at top). Each entry opens with `## [Y
 
 **Kinds:** `ingest` (new source/doc processed), `pr` (PR opened/merged/closed), `decision` (architectural or workflow), `lint` (wiki health-check pass), `session` (notable multi-hour working block), `post-mortem` (failure analysis), `milestone` (project-goal threshold crossed).
 
+## [2026-06-12] pr | PR-hardening1b OPENED — unconfirmed rolling baseline (Y3 spike alert)
+
+The sentinel gated `unconfirmed` against an ABSOLUTE --unconfirmed-max (150) — audit #53's
+calibration-bug shape. Now a rolling baseline, mirroring the Y2 meeting_unsourced breaker: the
+worker counts `unconfirmed_rows` (canonical classify_action over finalized columns, ex-SYSTEM),
+reads last-known-good from a NEW state cell Y3 (separate presence flag, audit #15),
+delta=max(0,current-Y3), and on `present and delta>25` raises a DATA_ANOMALY/WARN spike alert;
+ratchets Y3=current on success. DECISION (as-built): it ALERTS, not trips — `unconfirmed` rows are
+SAFE-surfaced (visible+flagged), not bad data, so halting the whole sheet would be disproportionate
+(contrast meeting_unsourced = a real meeting-without-time = correctly trips). Keeps the breaker
+trip logic untouched (Hard Rule 10). Sentinel keeps --unconfirmed-max as the absolute backstop (it's
+stateless → can't do rolling). Verified: worker unconfirmed_rows count == sentinel's (31, no drift);
+delta truth table correct. Solution 1b (final) in [[architecture/post_c8_hardening]]. Awaiting Gemini.
+
 ## [2026-06-12] pr | PR-hardening1a OPENED — centralize classify_action (single source of truth)
 
 Moved `classify_action` from pages/ray2.py into structural_router.py (it's pure string-ops, fits

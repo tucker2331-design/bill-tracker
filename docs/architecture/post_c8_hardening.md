@@ -111,17 +111,22 @@ snapshot, so sentinel-current ≈ any worker-written baseline from the same cycl
    removes the AST hack and the diff-identical maintenance, and lets the WORKER compute the
    `unconfirmed` count authoritatively from one source. (All existing golden tests stay; add a
    classify_action golden suite.)
-2. **Worker:** compute the per-cycle `unconfirmed` count (shared `classify_action` over its rows);
-   add an `unconfirmed`-delta ARM to the existing circuit breaker, reading last-known-good from a
-   NEW state cell `Sheet1!Y3` with a separate `y3_baseline_present` flag (audit #15). Trip when
-   `unconfirmed_delta > K` (a SPIKE = new LIS structure the classifier doesn't cover yet) OR an
-   absolute catastrophic floor; improvements ratchet Y3 down; first cycle / cleared / malformed
-   Y3 → delta-check inactive (floor still applies). On trip → refuse the Sheet1 overwrite (keep
-   last-known-good) — a sudden mass of unclassifiable rows means an LIS schema break, and bank-
-   grade behavior is to NOT publish the degraded sheet.
-3. **Sentinel:** replace the absolute `--unconfirmed-max` with delta-vs-Y3 (read Y3 from the
-   sheet) + keep a generous absolute backstop (mirrors the breaker's catastrophic floor). Now
-   self-calibrating.
+2. **Worker:** compute the per-cycle `unconfirmed` count in `_append_event` (shared
+   `classify_action` over the finalized columns, excluding SYSTEM rows); read last-known-good from
+   a NEW state cell `Sheet1!Y3` with a separate `y3_baseline_present` flag (audit #15);
+   `unconfirmed_delta = max(0, current - Y3)`; on `y3_present and delta > K` raise a categorized
+   **ALERT** (DATA_ANOMALY/WARN). Ratchet Y3 = current on a successful cycle.
+   - **DECISION (as-built): ALERT, not a breaker TRIP.** Originally specced as a breaker arm that
+     refuses the Sheet1 overwrite. Reconsidered: `unconfirmed` rows are the SAFE-surfaced fail-safe
+     lane (visible + flagged), NOT bad data. Halting the whole sheet for a fail-safe-lane spike
+     would withhold every good row too — disproportionate. A spike means "new LIS structure to
+     classify," which is an alert-and-investigate, not a publish-halt. (Contrast `meeting_unsourced`,
+     which IS bad data on the lobbyist surface — a meeting without a time — so it correctly trips.)
+     This also keeps the breaker's trip logic untouched (Hard Rule 10).
+3. **Sentinel:** keep `--unconfirmed-max` as the ABSOLUTE catastrophic backstop (the sentinel is
+   stateless → cannot do a rolling delta; sentinel-current == the Y3 the worker just wrote → no
+   signal). The sensitive, self-calibrating rolling detection is the worker's Y3 alert; the
+   sentinel's absolute gate mirrors the breaker's catastrophic floor alongside its delta.
 
 **Risk / guard:** presence-flag (no zero-collision, audit #15); first-cycle grace; catastrophic
 floor backstop; delta only on increases (improvements never trip); the refactor is covered by the

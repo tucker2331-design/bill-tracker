@@ -32,6 +32,7 @@ from structural_router import compute_ministerial_eventcodes as _compute_ministe
 from structural_router import build_admin_recovery_index as _build_admin_recovery_index
 from structural_router import recover_admin_route as _recover_admin_route
 from structural_router import classify_refid as _classify_refid  # PR-C8.1 structural refid identity
+from structural_router import classify_action as _classify_action  # PR-hardening1b: count unconfirmed rows (centralized in 1a)
 from structural_router import normalize_refid as _normalize_refid  # float64/nan-proof refid cleanup
 from structural_router import classify_schedule_type as _classify_schedule_type  # PR-C8.1b ScheduleTypeID
 from lis_authorization import is_authorized_session  # LIS API 2025/2026-only gate (ban-safe)
@@ -2607,6 +2608,10 @@ def run_calendar_update():
         # PR-C1: write-time chokepoint telemetry (see _append_event below)
         "invariant_violations": 0,  # Rows that failed I1/I2/I3 at append time
         "meeting_unsourced": 0,     # Meeting-verb outcome with Origin in {journal_default, floor_miss}
+        # PR-hardening1b: count of rows the canonical classify_action puts in the surfaced
+        # 'unconfirmed' fail-safe lane (excludes SYSTEM rows). Drives the rolling-baseline spike
+        # alert (Y3) — a sudden jump = new LIS structure the structural classifier doesn't cover.
+        "unconfirmed_rows": 0,
         # PR-C1 review-fix (Gemini): orthogonal-tag counter that is the true
         # denominator for the circuit breaker's violation-rate threshold. It
         # counts ONLY rows that actually reached _append_event (so ~system
@@ -2908,6 +2913,15 @@ def run_calendar_update():
         if origin in _UNSOURCED_ORIGINS_FOR_METRICS and event.get("LegEventRoute") == "meeting":
             source_miss_counts["meeting_unsourced"] += 1
 
+        # PR-hardening1b: count the surfaced 'unconfirmed' rows for the rolling-baseline spike
+        # alert, using the SAME canonical classify_action the X-Ray/sentinel use (hardening1a) over
+        # the finalized columns — so the worker's count can never drift from the displayed class.
+        # Exclude the worker's own SYSTEM diagnostic rows (the sentinel/X-Ray exclude them too).
+        if str(event.get("Source", "")).strip().upper() != "SYSTEM":
+            if _classify_action(event.get("Outcome", ""), event.get("LegEventRoute", ""),
+                                event.get("RefidClass", ""), event.get("ScheduleClass", "")) == "unconfirmed":
+                source_miss_counts["unconfirmed_rows"] += 1
+
         # Breaker denominator (PR-C1 review-fix, Gemini). Count AFTER the
         # invariant checks so rows_appended tracks the chokepoint's actual
         # throughput, including rows that tripped an invariant (they still
@@ -3114,6 +3128,39 @@ def run_calendar_update():
             category="API_FAILURE",
             severity="INFO",
             dedup_key="state_cell_y2_read_fail",
+        )
+
+    # PR-hardening1b: read last-known-good UNCONFIRMED count from Sheet1!Y3 — the rolling baseline
+    # for the unconfirmed spike alert (mirrors the Y2 meeting_unsourced breaker, audit #53: prefer
+    # delta-vs-rolling-baseline over an absolute budget). Presence is tracked SEPARATELY from the
+    # value (audit #15 sentinel-value collision): a legitimate "0" baseline must not read as
+    # "no baseline". All failure modes -> present=False (delta alert inactive one cycle), never an
+    # over-permissive fallback. NOTE: a spike here ALERTS (new LIS structure to classify); it does
+    # NOT trip the breaker — 'unconfirmed' rows are SAFE-surfaced (visible+flagged), not bad data,
+    # so halting the whole sheet would withhold good rows for a fail-safe lane.
+    last_known_good_unconfirmed = 0
+    y3_baseline_present = False
+    try:
+        _raw_y3 = worksheet.acell("Y3").value
+        _y3_str = (_raw_y3 or "").strip()
+        if _y3_str:
+            last_known_good_unconfirmed = int(_y3_str)
+            y3_baseline_present = True
+            print(f"🕒 Last known good unconfirmed: {last_known_good_unconfirmed} (state cell Y3)")
+        else:
+            print("🕒 State cell Y3 is empty — normal on first run after PR-hardening1b deploys.")
+    except ValueError as _y3_parse_err:
+        push_system_alert(
+            f"Sheet1!Y3 has malformed integer value {_raw_y3!r}: {_y3_parse_err}. "
+            f"Falling back to baseline-absent; unconfirmed delta-alert inactive this cycle.",
+            status="WARN", category="DATA_ANOMALY", severity="WARN",
+            dedup_key="state_cell_y3_malformed",
+        )
+    except Exception as _y3_read_err:
+        push_system_alert(
+            f"Could not read state cell Sheet1!Y3 (last_known_good_unconfirmed): {_y3_read_err}",
+            status="INFO", category="API_FAILURE", severity="INFO",
+            dedup_key="state_cell_y3_read_fail",
         )
 
     # Review-fix (Codex P2): carry-forward read for Sheet1!W1. If the
@@ -5297,6 +5344,7 @@ def run_calendar_update():
             f"unsourced_anchor={source_miss_counts['unsourced_anchor']} "
             f"dropped_ephemeral={source_miss_counts['dropped_ephemeral']} "
             f"dropped_noise={source_miss_counts['dropped_noise']} "
+            f"unconfirmed_rows={source_miss_counts['unconfirmed_rows']} "
             f"floor_anchor_miss={source_miss_counts['floor_anchor_miss']} "
             f"gap_cause={source_miss_counts.get('gap_cause', 'unknown')} "
             f"gap_minutes={source_miss_counts.get('gap_minutes', -1)} "
@@ -5564,6 +5612,7 @@ def run_calendar_update():
             CIRCUIT_MAX_ABS_VIOLATIONS = 50                # or >=50 absolute
             CIRCUIT_MAX_MEETING_UNSOURCED_DELTA = 25       # or >25 worse than last good
             CIRCUIT_MAX_MEETING_UNSOURCED_ABS = 500        # or >500 catastrophic absolute floor
+            UNCONFIRMED_DELTA_ALERT = 25                   # PR-hardening1b: alert (NOT trip) on a >25 unconfirmed spike vs Y3
             # Review-fix (Gemini): denominator is rows_appended, not
             # total_processed — rows_appended counts ONLY rows that reached
             # the chokepoint (the universe where invariants COULD fire),
@@ -5592,6 +5641,25 @@ def run_calendar_update():
                 or (_delta_check_active and _meeting_unsourced_delta > CIRCUIT_MAX_MEETING_UNSOURCED_DELTA)
                 or _meeting_unsourced > CIRCUIT_MAX_MEETING_UNSOURCED_ABS
             )
+
+            # PR-hardening1b: UNCONFIRMED ROLLING-BASELINE SPIKE ALERT (the rolling replacement for
+            # the sentinel's absolute --unconfirmed-max). Delta vs the Y3 baseline, max(0, ...) so
+            # improvements never alert; active only when a baseline is present (first cycle / cleared
+            # Y3 = one cycle's grace). This ALERTS — it does NOT add to _breaker_tripped — because
+            # 'unconfirmed' rows are SAFE-surfaced (visible + flagged), not bad data; a spike means
+            # new LIS structure to classify, not a reason to withhold the whole sheet (audit #53).
+            _unconfirmed = source_miss_counts["unconfirmed_rows"]
+            _unconfirmed_delta = max(0, _unconfirmed - last_known_good_unconfirmed)
+            if y3_baseline_present and _unconfirmed_delta > UNCONFIRMED_DELTA_ALERT:
+                push_system_alert(
+                    f"Unconfirmed spike: {_unconfirmed} rows in the surfaced 'unconfirmed' lane this "
+                    f"cycle, +{_unconfirmed_delta} vs the Y3 rolling baseline ({last_known_good_unconfirmed}). "
+                    f"A jump this size usually means LIS introduced structure the classifier doesn't "
+                    f"cover yet — investigate (new EventCode/ScheduleTypeID/refid shape). Rows stay "
+                    f"SAFE-surfaced; the sheet still publishes (this is an alert, not a halt).",
+                    status="WARN", category="DATA_ANOMALY", severity="WARN",
+                    dedup_key=f"unconfirmed_spike::{datetime.now(timezone.utc).strftime('%Y-%m-%d')}",
+                )
 
             # Review-fix (Codex P1): cycle-end timestamp for Sheet1!Y1 MUST
             # be real UTC. The `now` variable 30 lines up is
@@ -5725,6 +5793,21 @@ def run_calendar_update():
                         category="API_FAILURE",
                         severity="WARN",
                         dedup_key="state_cell_y2_write_fail",
+                    )
+
+                # PR-hardening1b: ratchet the UNCONFIRMED rolling baseline (Y3) — same discipline as
+                # Y2. Written ONLY on a successful overwrite, so a halted cycle leaves Y3 at the last
+                # good value (no drift). Improvements ratchet it down automatically, locking the new
+                # floor; a future spike then alerts against the tightened baseline.
+                try:
+                    worksheet.update_acell("Y3", str(_unconfirmed))
+                except Exception as _y3_write_err:
+                    push_system_alert(
+                        f"Could not write state cell Sheet1!Y3 after successful cycle: {_y3_write_err}",
+                        status="WARN",
+                        category="API_FAILURE",
+                        severity="WARN",
+                        dedup_key="state_cell_y3_write_fail",
                     )
 
                 print("✅ SUCCESS: Regression Test Build is complete.")

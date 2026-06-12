@@ -100,7 +100,12 @@ def main():
     ap.add_argument("--derived-max", type=int, default=25, help="over-derivation guard (G2)")
     ap.add_argument("--section9-max", type=int, default=0)
     ap.add_argument("--unclassified-max", type=int, default=0)
-    ap.add_argument("--unconfirmed-max", type=int, default=150, help="budget for the surfaced fail-safe lane (PR-C8.2)")
+    ap.add_argument("--unconfirmed-max", type=int, default=150,
+                    help="ABSOLUTE backstop for the surfaced fail-safe lane. PR-hardening1b: the "
+                         "sensitive, self-calibrating spike detection is now the WORKER's Y3 "
+                         "rolling-baseline alert (delta vs the prior cycle — the sentinel is "
+                         "stateless and cannot do rolling); this absolute gate remains as the "
+                         "catastrophic backstop, mirroring the breaker's abs floor alongside its delta.")
     ap.add_argument("--min-resolution", type=float, default=MIN_STRUCTURAL_RESOLUTION,
                     help="floor on the ORIGINAL router (LegEventRoute) reach (anti-homework-grading)")
     ap.add_argument("--min-coverage", type=float, default=0.97,
