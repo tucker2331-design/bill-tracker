@@ -243,9 +243,40 @@ class RouteVerdict:
 # approved) + G99xx (Acts chapter) are NOT here -> ledger.
 # Why a PREFIX, not an exact set: it is the FAIL-SAFE direction — a new/variant code inside these
 # families OVER-surfaces (visible on the calendar) rather than hiding an action-required event.
-# (Known limit: a brand-new action-required family OUTSIDE G72/G73/G79 would route admin/ledger;
-# drift alerting on unseen G-codes is the future guard. See pr_c8_structural_classification §C8.4b.)
+# (Known limit closed by validate_governor_eventcodes below: a brand-new action-required family
+# OUTSIDE G72/G73/G79 would route admin/ledger; the drift check makes that LOUD. See
+# pr_c8_structural_classification §C8.4b and post_c8_hardening §Solution 3.)
 _EXEC_ACTION_REQUIRED_PREFIXES = ("G72", "G73", "G79")
+
+# Every G-prefix governor EventCode we have CLASSIFIED (measured 2026-06-11 from the LIS EventType
+# reference + live bill events). Action-required (-> executive via _EXEC_ACTION_REQUIRED_PREFIXES):
+# G7210/G7220/G7320/G7321/G7322/G7324 (recommendation), G7900/G7910 (veto). Milestone (-> admin/
+# ledger): G4000, G7010 (action deadline), G7050 (approved-chapter), G9998/G9999 (Acts chapter).
+# This set exists ONLY for drift detection — routing is by PREFIX (route_event), so a NEW variant
+# inside a known family still routes correctly without editing this set. Its job is to catch a NEW
+# code OUTSIDE every known family (the prefix rule's one fail-UNSAFE gap) before it silently buries
+# a veto. Keep it in sync with route_event's families when a drift alert is classified.
+KNOWN_GOVERNOR_EVENTCODES = frozenset({
+    "G4000", "G7010", "G7050", "G7210", "G7220",
+    "G7320", "G7321", "G7322", "G7324", "G7900", "G7910", "G9998", "G9999",
+})
+
+
+def validate_governor_eventcodes(live_g_codes) -> list[str]:
+    """Standard #1/#8 runtime drift check for the executive prefix rule (PR-C8.4b). Pass the
+    distinct G-prefix EventCodes observed in this cycle's LegislationEvent data. Returns the
+    G-codes NOT in KNOWN_GOVERNOR_EVENTCODES — governor EventCodes LIS has begun publishing that
+    we have never classified. Empty = coverage current. Non-empty is DRIFT: the caller raises a
+    categorized CRITICAL/DATA_ANOMALY alert so a human decides action-required (add the family to
+    route_event's _EXEC_ACTION_REQUIRED_PREFIXES) vs milestone (confirm it routes admin) BEFORE a
+    new action-required family can be silently buried in the Ledger. Pure; never raises. Mirrors
+    validate_status_grouping (the sibling Status-vocabulary drift check)."""
+    out = []
+    for raw in (live_g_codes or []):
+        code = _s(raw)
+        if code[:1] == "G" and code not in KNOWN_GOVERNOR_EVENTCODES:
+            out.append(code)
+    return sorted(set(out))
 
 
 def route_event(event: dict, ministerial_codes: frozenset = frozenset()) -> RouteVerdict:

@@ -9,6 +9,16 @@ Append-only, reverse-chronological (newest at top). Each entry opens with `## [Y
 
 **Kinds:** `ingest` (new source/doc processed), `pr` (PR opened/merged/closed), `decision` (architectural or workflow), `lint` (wiki health-check pass), `session` (notable multi-hour working block), `post-mortem` (failure analysis), `milestone` (project-goal threshold crossed).
 
+## [2026-06-12] pr | PR-hardening3 OPENED — G-code drift alert (closes the executive prefix rule's fail-unsafe gap)
+
+`validate_governor_eventcodes` (structural_router, mirrors `validate_status_grouping`) + a once-per-
+cycle worker check over the hydrated LegEvent cache: any G-prefix EventCode LIS publishes that is
+NOT in `KNOWN_GOVERNOR_EVENTCODES` raises a CRITICAL/DATA_ANOMALY drift alert. Closes the one
+fail-UNSAFE gap in C8.4b's executive PREFIX rule (a new action-required family outside G72/G73/G79
+would silently route admin→Ledger = a buried veto). Golden suite (9) + live verification: reference
+G-codes == classified set, drift []. Zero behavior change (additive observability).
+[[failures/assumptions_audit#85]]. Solution 3 of 3 in [[architecture/post_c8_hardening]]. Awaiting Gemini.
+
 ## [2026-06-12] pr | #117 MERGED — PR-C8.4b-1: floor-path executive carve-out (route/placement consistency)
 
 Post-merge worker run for C8.4b verified the fix LIVE (331 executive rows on the calendar, 7
