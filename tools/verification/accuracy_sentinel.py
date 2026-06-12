@@ -63,13 +63,17 @@ def _get(url, tries=4):
 
 
 def _load_ray2_semantics():
-    """Extract the REAL classify_action / normalize_time / PLACEHOLDER_TIMES from
-    ray2.py so the sentinel can NEVER drift from production classification.
-    Handles both plain and type-annotated (PEP 526) constant assignments."""
+    """classify_action is now IMPORTED from structural_router (PR-hardening1a — the single source
+    of truth shared by the worker, X-Ray, and this sentinel; no more AST-extraction drift risk).
+    normalize_time + PLACEHOLDER_TIMES are display helpers still defined in ray2.py, so they stay
+    AST-extracted (so the sentinel never drifts from the X-Ray's time-presence semantics)."""
+    import os, sys
+    sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
+    from structural_router import classify_action  # canonical classifier
     with open(RAY, encoding="utf-8") as fh:
         tree = ast.parse(fh.read())
     consts = {"PLACEHOLDER_TIMES", "NON_CONCRETE_LIS_TIMES"}  # PR-C8.2: verb-pattern lists deleted
-    funcs = {"normalize_time", "classify_action"}
+    funcs = {"normalize_time"}  # PR-hardening1a: classify_action now imported, not extracted
 
     def _defines_const(node):
         targets = node.targets if isinstance(node, ast.Assign) else ([node.target] if isinstance(node, ast.AnnAssign) else [])
@@ -80,7 +84,7 @@ def _load_ray2_semantics():
                 or (isinstance(n, ast.FunctionDef) and n.name in funcs))]
     ns = {"re": re}
     exec(compile(ast.Module(body, []), "ray2-extract", "exec", dont_inherit=True), ns)
-    return ns["classify_action"], ns["normalize_time"], ns["PLACEHOLDER_TIMES"]
+    return classify_action, ns["normalize_time"], ns["PLACEHOLDER_TIMES"]
 
 
 def _is_system_row(source):

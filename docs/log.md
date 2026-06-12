@@ -9,6 +9,17 @@ Append-only, reverse-chronological (newest at top). Each entry opens with `## [Y
 
 **Kinds:** `ingest` (new source/doc processed), `pr` (PR opened/merged/closed), `decision` (architectural or workflow), `lint` (wiki health-check pass), `session` (notable multi-hour working block), `post-mortem` (failure analysis), `milestone` (project-goal threshold crossed).
 
+## [2026-06-12] pr | PR-hardening1a OPENED — centralize classify_action (single source of truth)
+
+Moved `classify_action` from pages/ray2.py into structural_router.py (it's pure string-ops, fits
+the dependency-free module). ray2.py + calendar_xray.py now IMPORT it (diff-identical preserved);
+the accuracy sentinel imports it instead of AST-extracting it; the worker can now import it too
+(the foundation for hardening1b's unconfirmed rolling baseline). Removes the triplicate
+definition + the AST-extraction drift risk (the "no duplicated copy that can drift" the
+structural_router header warns against). Behavior-preserving: new test_classify_action.py (23
+golden) + zero-diff gate = 0 diffs across 37,531 live rows; sentinel green; diff-identical held.
+Solution 1a of (1a+1b) in [[architecture/post_c8_hardening]]. Awaiting Gemini.
+
 ## [2026-06-12] pr | PR-hardening2 OPENED — structural meeting_unsourced (drop MEETING_VERB_TOKENS from I4)
 
 I4 (the write-time chokepoint) computed the circuit breaker's `meeting_unsourced` regression signal
