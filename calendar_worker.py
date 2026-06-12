@@ -453,13 +453,15 @@ ABSOLUTE_FLOOR_VERBS = ["reading dispensed", "read first", "read second", "read 
 # Added: "conference report agreed" — floor vote on conference committee compromise.
 DYNAMIC_VERBS = ["passed by", "reconsidered", "failed", "defeated", "laid on the table", "tabled", "continued", "strike", "stricken", "incorporate", "recommend", "recommends"]
 
-# Meeting-verb tokens used by the write-time chokepoint (_append_event, I4) to
-# classify rows that REQUIRE a concrete time (people had to be in a room at
-# HH:MM). Mirrors tools/crossover_audit/diff_sheet1.py MEETING_VERBS — keep
-# the two lists in sync; a drift between them weakens the bug-detection
-# signal from the audit tool. This list is intentionally high-recall: false
-# positives only elevate the "meeting_unsourced" telemetry counter, they
-# do not drop or reclassify rows.
+# Meeting-verb tokens. PR-hardening2: I4 (the write-time chokepoint) NO LONGER uses these — its
+# meeting_unsourced breaker signal is now STRUCTURAL (LegEventRoute == "meeting"; Standard #3/#6).
+# Remaining uses, both still text-based:
+#   (a) the Part C reconciliation candidate pre-filter (~line 4159) — selects df_past rows to
+#       re-check for gaps; df_past is the raw HISTORY frame with NO route column, so a structural
+#       migration there is a separate, harder follow-up (tracked in ideas/future_improvements).
+#   (b) the OFFLINE tools/crossover_audit/diff_sheet1.py MEETING_VERBS mirror — keep the two in
+#       sync; drift weakens the audit tool's bug signal.
+# High-recall; these never drop/reclassify a row.
 MEETING_VERB_TOKENS = [
     "reported from",
     "recommends reporting",
@@ -2890,13 +2892,21 @@ def run_calendar_update():
                 dedup_key=f"I3::{origin}::{bill_id}::{date_id}",
             )
 
-        # I4: meeting-verb telemetry. Pure counter — what the circuit
-        # breaker watches for regression. A row with a meeting-verb outcome
-        # AND an unsourced Origin is exactly the Section 9 bug shape.
-        if origin in _UNSOURCED_ORIGINS_FOR_METRICS:
-            outcome_lower = str(event.get("Outcome", "")).lower()
-            if any(v in outcome_lower for v in MEETING_VERB_TOKENS):
-                source_miss_counts["meeting_unsourced"] += 1
+        # I4: meeting-unsourced telemetry — the circuit breaker's Section-9-regression signal.
+        # PR-hardening2: now STRUCTURAL. The Section-9-bug shape is "the router classified this row
+        # a meeting (LegEventRoute == 'meeting') but the worker could not source a time for it
+        # (origin in the unsourced set)". This replaces the VA-English MEETING_VERB_TOKENS proxy
+        # (Standard #3/#6 — no prose, scales to 50 states) and is a STRICTER detector: it watches
+        # the router's own structural verdict, not a hand-listed verb, so it catches a timeless
+        # meeting whatever its wording. Steady state = 0 (Section 9 = 0), so the Y2 delta-breaker
+        # becomes a true Section-9-regression detector. (Blank-route rows during cold-start
+        # hydration aren't counted — but the breaker watches the DELTA, and a hydration transient
+        # is not a regression; the route is set once the cache is warm.)
+        # event["LegEventRoute"] is guaranteed present (setdefault above) and already a normalized
+        # route_event verdict ("meeting"/"admin"/"executive"/""), so compare it directly — same as
+        # the route-counter block. No redundant str/strip/lower on this per-row hot path (Gemini #119).
+        if origin in _UNSOURCED_ORIGINS_FOR_METRICS and event.get("LegEventRoute") == "meeting":
+            source_miss_counts["meeting_unsourced"] += 1
 
         # Breaker denominator (PR-C1 review-fix, Gemini). Count AFTER the
         # invariant checks so rows_appended tracks the chokepoint's actual
