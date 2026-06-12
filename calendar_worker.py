@@ -5589,14 +5589,16 @@ def run_calendar_update():
             # was PRE-filter and over-counted by deduped/ephemeral rows (46 vs the sheet's 31). Uses
             # the canonical classify_action (hardening1a), so it can never drift from the displayed
             # class. Recomputed (set, not +=) so a re-run within the cycle can't double-count.
-            _uc = 0
-            for _rec in final_df.to_dict("records"):
-                if str(_rec.get("Source", "")).strip().upper() == "SYSTEM":
-                    continue
-                if _classify_action(_rec.get("Outcome", ""), _rec.get("LegEventRoute", ""),
-                                    _rec.get("RefidClass", ""), _rec.get("ScheduleClass", "")) == "unconfirmed":
-                    _uc += 1
-            source_miss_counts["unconfirmed_rows"] = _uc
+            # zip the Series directly (no per-row dict materialization — Gemini #122 perf, ~37k
+            # rows/cycle). Column-presence guard: all are guaranteed by I1 + setdefaults, but if one
+            # were ever missing the count stays 0 (its pre-init) rather than KeyError-crashing.
+            _uc_cols = ("Outcome", "LegEventRoute", "RefidClass", "ScheduleClass", "Source")
+            if all(_c in final_df.columns for _c in _uc_cols):
+                source_miss_counts["unconfirmed_rows"] = sum(
+                    1 for _o, _r, _rc, _sc, _src in zip(*(final_df[_c] for _c in _uc_cols))
+                    if str(_src).strip().upper() != "SYSTEM"
+                    and _classify_action(_o, _r, _rc, _sc) == "unconfirmed"
+                )
 
             # PR-C1 + PR-C7.0.4: MASS-VIOLATION CIRCUIT BREAKER — last
             # safety net before Sheet1 is overwritten. If this cycle's
