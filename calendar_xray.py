@@ -24,6 +24,7 @@ from urllib3.util.retry import Retry
 
 from investigation_config import INVESTIGATION_START, INVESTIGATION_END
 from lis_authorization import assert_lis_authorized  # LIS API 2025/2026-only gate (ban-safe)
+from structural_router import classify_action  # PR-hardening1a: single source of truth (shared with worker + sentinel)
 
 st.set_page_config(page_title="LIS Calendar X-Ray", layout="wide")
 st.title("🩻 LIS Calendar X-Ray")
@@ -170,56 +171,8 @@ def classify_join_gaps(joined: pd.DataFrame) -> pd.DataFrame:
     return out
 
 
-# Specific admin patterns that override broader meeting matches.
-# "committee substitute printed" contains "committee substitute" (meeting) but
-# the action is printing (admin). The more specific pattern wins.
-
-def classify_action(outcome_text: str = "", legevent_route: str = "",
-                    refid_class: str = "", schedule_class: str = "") -> str:
-    """Classify an action as meeting / administrative / executive / unconfirmed — STRUCTURALLY,
-    with NO text-pattern matching (PR-C8.2; Standard #3). The hand-built verb lists are gone. Order
-    (first hit wins); outcome_text is used ONLY for the empty/skeleton null-check, never parsed:
-      1. LegEventRoute — the structural router's EventCode/VoteTally/Status verdict. "executive"
-         (PR-C8.4b) = an action-required governor event (veto G79xx / recommendation G72xx/G73xx)
-         -> surfaces ON THE CALENDAR, flagged, with NO meeting-time expectation. It is a distinct
-         class (not "meeting"), so it is structurally EXCLUDED from the Section-9 meeting-without-
-         time count — a governor action is not a convened meeting. The guard is the route itself:
-         only route_event's G79/G72/G73 gate yields "executive", so no real meeting can reach it.
-      2. empty / "none" / "nan" outcome = a Schedule skeleton row -> administrative (carries its
-         own time; a null-check, not prose parsing).
-      3. RefidClass (History_refid identity): BATCH_NOTICE/COMMITTEE_REF/SINGLETON_DOC ->
-         administrative. Clerk DOCUMENT references — batch notices, committee referrals, and
-         (SINGLETON_DOC, PR-C8.4a) the len<=6 numeric "Placed on Agenda/Calendar" docket
-         placements (measured 2026-06-11: len<=6 numeric refids are 0% VOTE.CSV join / 100%
-         docket-placement; a len>=7 vote-id-shaped refid not in VOTE.CSV is VOTE_UNMATCHED and
-         SURFACES, never admin). A vote-grammar refid is NOT treated as a meeting here: the ROUTE
-         above is the meeting authority, and a blank-route vote-refid is a referral-by-recorded-
-         vote (admin outcome, no committee time), not a committee report.
-      4. ScheduleClass (Schedule API ScheduleTypeID): MEETING_EVENT/FLOOR/COMMISSION -> meeting
-         (scheduled hearings surfaced on the calendar — owner decision 2026-06-10);
-         DOCKET/CAUCUS -> administrative.
-      5. No structural signal -> 'unconfirmed': SURFACED (visible + flagged), never hidden — the
-         fail-safe lane, REPLACING the old 'unclassified' (which no longer exists).
-    """
-    route = str(legevent_route or "").strip().lower()
-    if route == "meeting":
-        return "meeting"
-    if route == "admin":
-        return "administrative"
-    if route == "executive":   # PR-C8.4b: action-required governor action -> calendar, time-less, not a Section-9 bug
-        return "executive"
-    lower = str(outcome_text).lower().strip()
-    if not lower or lower in ("none", "nan"):
-        return "administrative"
-    rc = str(refid_class or "").strip().upper()
-    if rc in ("BATCH_NOTICE", "COMMITTEE_REF", "SINGLETON_DOC"):   # clerk DOCUMENT refs (len<=6 numeric / committee code)
-        return "administrative"
-    sc = str(schedule_class or "").strip().upper()
-    if sc in ("MEETING_EVENT", "FLOOR", "COMMISSION"):
-        return "meeting"
-    if sc in ("DOCKET", "CAUCUS"):
-        return "administrative"
-    return "unconfirmed"
+# classify_action lives in structural_router (PR-hardening1a — single source of truth, imported at
+# the top). The hand-built admin/meeting verb patterns it replaced were deleted in PR-C8.2.
 
 
 def count_diagnostic_tags(sheet_df: pd.DataFrame) -> dict:
