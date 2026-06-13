@@ -4192,10 +4192,13 @@ def run_calendar_update():
                         _date_strs_series = df_past['ParsedDate'].dt.strftime('%Y-%m-%d')
                         _gap_rows = df_past[_date_strs_series.isin(gap_date_strs)]
                         if len(_gap_rows):
-                            _meeting_mask = _gap_rows[refid_col].map(
-                                lambda _rid: _classify_refid(
-                                    _rid, in_vote_csv=(_normalize_refid(_rid) in _vote_id_set)
-                                ) in (_REFID_VOTE_COMMITTEE, _REFID_VOTE_FLOOR)
+                            # Normalize each refid ONCE (Gemini #123), then both the VOTE.CSV
+                            # membership test and classify_refid reuse it (classify_refid's internal
+                            # normalize is idempotent on an already-clean value).
+                            _norm_refids = _gap_rows[refid_col].map(_normalize_refid)
+                            _meeting_mask = _norm_refids.map(
+                                lambda _r: _classify_refid(_r, in_vote_csv=(_r in _vote_id_set))
+                                in (_REFID_VOTE_COMMITTEE, _REFID_VOTE_FLOOR)
                             )
                             _candidates = _gap_rows[_meeting_mask]
                         else:
