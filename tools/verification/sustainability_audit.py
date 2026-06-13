@@ -104,9 +104,10 @@ ORDER = {"FAIL": 0, "WARN": 1, "SKIP": 2, "PASS": 3}
 
 
 def _get(url, tries=4):
+    req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0 (sustainability-audit)"})
     for attempt in range(tries):
         try:
-            with urllib.request.urlopen(url, timeout=120) as resp:
+            with urllib.request.urlopen(req, timeout=120) as resp:
                 return resp.read().decode("utf-8")
         except Exception:
             if attempt == tries - 1:
@@ -258,9 +259,11 @@ def check_determinism():
         for r in rows[1:]:
             if g(r, "Source") == "SYSTEM":
                 continue
-            # Skip gviz trailing/blank rows so they can't read as a phantom
-            # collision group (Gemini #125).
-            if not any(cell.strip() for cell in r):
+            # Only consider REAL calendar rows (a Date and a Bill). This skips
+            # blank trailing rows AND partially-empty formatting rows whose key
+            # fields are empty — either would otherwise form a phantom collision
+            # group keyed on "" and false-FAIL the check (Gemini #125 HIGH).
+            if not (g(r, "Date").strip() and g(r, "Bill").strip()):
                 continue
             groups[(g(r, "Date"), g(r, "Committee"), g(r, "Bill"), g(r, "Source"))].add((g(r, "Time"), g(r, "Outcome")))
         collisions = sum(1 for v in groups.values() if len(v) > 1)
