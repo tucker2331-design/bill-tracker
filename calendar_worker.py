@@ -32,6 +32,7 @@ from structural_router import compute_ministerial_eventcodes as _compute_ministe
 from structural_router import build_admin_recovery_index as _build_admin_recovery_index
 from structural_router import recover_admin_route as _recover_admin_route
 from structural_router import classify_refid as _classify_refid  # PR-C8.1 structural refid identity
+from structural_router import REFID_VOTE_COMMITTEE as _REFID_VOTE_COMMITTEE, REFID_VOTE_FLOOR as _REFID_VOTE_FLOOR  # Part C: recorded-vote = meeting
 from structural_router import classify_action as _classify_action  # PR-hardening1b: count unconfirmed rows (centralized in 1a)
 from structural_router import normalize_refid as _normalize_refid  # float64/nan-proof refid cleanup
 from structural_router import classify_schedule_type as _classify_schedule_type  # PR-C8.1b ScheduleTypeID
@@ -454,45 +455,13 @@ ABSOLUTE_FLOOR_VERBS = ["reading dispensed", "read first", "read second", "read 
 # Added: "conference report agreed" — floor vote on conference committee compromise.
 DYNAMIC_VERBS = ["passed by", "reconsidered", "failed", "defeated", "laid on the table", "tabled", "continued", "strike", "stricken", "incorporate", "recommend", "recommends"]
 
-# Meeting-verb tokens. PR-hardening2: I4 (the write-time chokepoint) NO LONGER uses these — its
-# meeting_unsourced breaker signal is now STRUCTURAL (LegEventRoute == "meeting"; Standard #3/#6).
-# Remaining uses, both still text-based:
-#   (a) the Part C reconciliation candidate pre-filter (~line 4159) — selects df_past rows to
-#       re-check for gaps; df_past is the raw HISTORY frame with NO route column, so a structural
-#       migration there is a separate, harder follow-up (tracked in ideas/future_improvements).
-#   (b) the OFFLINE tools/crossover_audit/diff_sheet1.py MEETING_VERBS mirror — keep the two in
-#       sync; drift weakens the audit tool's bug signal.
-# High-recall; these never drop/reclassify a row.
-MEETING_VERB_TOKENS = [
-    "reported from",
-    "recommends reporting",
-    "recommends continuing",
-    "recommends passing",
-    "recommends laying",
-    "recommends defeating",
-    "recommends striking",
-    "committee amendment offered",
-    "committee substitute offered",
-    "subcommittee substitute offered",
-    "subcommittee amendment offered",
-    "committee offered",
-    "subcommittee offered",
-    "continued to next session",
-    "continued to 2027",
-    "passed by for the day",
-    "passed by indefinitely",
-    "engrossed",
-    "read first time",
-    "read second time",
-    "read third time",
-    "constitutional reading dispensed",
-    "taken up",
-    "laid on the table",
-    "stricken from docket",
-    "block vote",
-    "voice vote",
-    "rules suspended",
-]
+# MEETING_VERB_TOKENS removed (PR-Part-C): the worker no longer text-matches meeting verbs ANYWHERE
+# on the path. The two former uses are now structural — I4's breaker signal is LegEventRoute=="meeting"
+# (PR-hardening2), and the Part C gap-recovery check uses a recorded-vote RefidClass signal
+# (VOTE_COMMITTEE/VOTE_FLOOR, cache-independent). The offline triage/audit tools
+# (tools/meeting_bug_triage/dump_unrecovered_meeting_outcomes.py and crossover_audit/diff_sheet1.py)
+# keep their OWN verb lists — they are standalone scripts, NOT imports of this constant.
+
 
 def normalize_room_key(text):
     if not text:
@@ -4206,14 +4175,31 @@ def run_calendar_update():
                                 dedup_key="reconciliation_witness_read_fail",
                             )
 
-                    if desc_col in df_past.columns:
-                        _desc_lower = df_past[desc_col].astype(str).str.lower()
-                        _meeting_verb_mask = _desc_lower.apply(
-                            lambda _d: any(v in _d for v in MEETING_VERB_TOKENS)
-                        )
+                    if refid_col and refid_col in df_past.columns:
+                        # Part C: STRUCTURAL meeting signal — a recorded-vote refid (VOTE_COMMITTEE /
+                        # VOTE_FLOOR). Cache-INDEPENDENT (computed from History_refid + the VOTE.CSV id
+                        # set, both already in scope here — this block runs BEFORE the LegEvent cache
+                        # is hydrated, so route_event is unavailable). Replaces the VA-English
+                        # MEETING_VERB_TOKENS proxy — the last text dependency in the worker
+                        # (Standard #3/#6, 50-state-clean). Measured (full 20261 HISTORY): of 51
+                        # verb-flagged dates the recorded-vote signal catches 45, and all 6 "misses"
+                        # are BENIGN — 4 are non-session FALSE-positives the verb mask over-caught
+                        # (three Sundays + a Sunday batch-dated bulk of "read first time"), and 2 are
+                        # floor days whose chamber convene the witness side records anyway. Committee
+                        # meetings (the real blind-window risk) always produce a recorded vote, so they
+                        # are caught — the structural signal is MORE precise here, not less. Filter to
+                        # gap dates FIRST (a small window) so classify_refid runs on few rows.
                         _date_strs_series = df_past['ParsedDate'].dt.strftime('%Y-%m-%d')
-                        _date_mask = _date_strs_series.isin(gap_date_strs)
-                        _candidates = df_past[_meeting_verb_mask & _date_mask]
+                        _gap_rows = df_past[_date_strs_series.isin(gap_date_strs)]
+                        if len(_gap_rows):
+                            _meeting_mask = _gap_rows[refid_col].map(
+                                lambda _rid: _classify_refid(
+                                    _rid, in_vote_csv=(_normalize_refid(_rid) in _vote_id_set)
+                                ) in (_REFID_VOTE_COMMITTEE, _REFID_VOTE_FLOOR)
+                            )
+                            _candidates = _gap_rows[_meeting_mask]
+                        else:
+                            _candidates = _gap_rows  # empty (no HISTORY rows in the gap window)
 
                         _reconciled_dates = 0
                         _blind_window_dates = 0
@@ -4232,7 +4218,7 @@ def run_calendar_update():
                                     _bills_sample += f"...+{len(_bills) - 5}"
                                 push_system_alert(
                                     f"CONFIRMED BLIND-WINDOW LOSS on {_gdate}: HISTORY shows "
-                                    f"{len(_group)} meeting-verb actions (bills: {_bills_sample}) "
+                                    f"{len(_group)} recorded-vote meeting actions (bills: {_bills_sample}) "
                                     f"but {WITNESS_TAB_NAME} has zero evidence of ANY committee "
                                     f"being scheduled that date. Gap window: "
                                     f"{_gap_start_et_date}→{_cycle_end_et_date} "
@@ -4242,7 +4228,7 @@ def run_calendar_update():
                                 )
                         print(
                             f"🔍 Part C reconciliation: checked {len(_candidates)} "
-                            f"meeting-verb HISTORY rows across {_reconciled_dates} of "
+                            f"recorded-vote meeting HISTORY rows across {_reconciled_dates} of "
                             f"{len(gap_date_strs)} gap-window dates; "
                             f"{_blind_window_dates} confirmed blind-window dates."
                         )
@@ -4250,10 +4236,10 @@ def run_calendar_update():
                         source_miss_counts["reconciliation_checked_dates"] = _reconciled_dates
                     else:
                         push_system_alert(
-                            f"Part C reconciliation: HISTORY.CSV missing description column "
-                            f"{desc_col!r}. Skipping blind-window check.",
+                            f"Part C reconciliation: HISTORY.CSV missing History_refid column "
+                            f"({refid_col!r}). Skipping the structural blind-window check.",
                             status="WARN", category="DATA_ANOMALY", severity="WARN",
-                            dedup_key="reconciliation_no_desc_col",
+                            dedup_key="reconciliation_no_refid_col",
                         )
                 except Exception as _recon_err:
                     push_system_alert(

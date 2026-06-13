@@ -271,12 +271,13 @@ We validate against a FROZEN, complete session; the product's real job is the LI
     - **GitHub Copilot code review** — included if we ever hold a Copilot seat; native to the PR surface.
     - Fallback with zero new vendor: **Codex alone + the tightened 15-point self-audit** (already covers the bug classes the bots historically caught). Decide before mid-July; parked until C7.1b closes.
 
-## Structural migration of the Part C reconciliation verb pre-filter (post-hardening2)
+## ~~Structural migration of the Part C reconciliation verb pre-filter~~ — DONE (Part C, 2026-06-13)
 
-`calendar_worker.py` ~L4159 still selects `df_past` rows by `MEETING_VERB_TOKENS` (text) to choose
-which historical rows to re-check for gaps in the Part C reconciliation. I4's telemetry was made
-structural in PR-hardening2 (`LegEventRoute == "meeting"`), but `df_past` is the raw HISTORY frame
-with no route column, so migrating this pre-filter needs the route computed for those rows (re-run
-`_route_for_row`, or carry the route into `df_past`). Lower priority — it's an internal
-reconciliation candidate filter, high-recall, and never drops/reclassifies a lobbyist-facing row.
-The offline `tools/crossover_audit/diff_sheet1.py` MEETING_VERBS mirror is the same class.
+DONE: the Part C gap-recovery check now uses a recorded-vote `RefidClass` signal
+(`VOTE_COMMITTEE`/`VOTE_FLOOR`) instead of `MEETING_VERB_TOKENS` — cache-independent (it runs
+before LegEvent hydration, so `route_event` was unavailable; computed from `History_refid` + the
+VOTE.CSV id set). Measured MORE precise (drops non-session Sunday false-positives). The worker's
+`MEETING_VERB_TOKENS` constant was removed — **the worker is now fully text-free on the meeting
+path.** The only remaining verb lists are in OFFLINE standalone tools (their own copies, not
+imports): `tools/crossover_audit/diff_sheet1.py` and `tools/meeting_bug_triage/`. Migrating those
+is optional (offline, not the lobbyist/worker path).
