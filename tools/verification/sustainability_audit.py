@@ -60,6 +60,7 @@ import json
 import os
 import re
 import sys
+import time
 import urllib.request
 from collections import defaultdict, namedtuple
 from datetime import datetime, timezone
@@ -105,6 +106,7 @@ def _get(url, tries=4):
         except Exception:
             if attempt == tries - 1:
                 raise
+            time.sleep(2 ** attempt)  # exponential backoff on transient/rate-limit errors (Gemini #125)
     return ""
 
 
@@ -130,7 +132,9 @@ def check_temporal():
     #    offline fallback f"20{now.year % 100:02d}1". A new hardcoded assignment
     #    like ACTIVE_SESSION = "20261" would pin the worker to one year.
     assigns = re.findall(r'^\s*ACTIVE_SESSION\s*=\s*(.+)$', src, re.MULTILINE)
-    bad = [a.strip() for a in assigns if re.match(r'["\']\d', a.strip())]
+    # A hardcoded pin is a bare or quoted numeric literal (ACTIVE_SESSION = "20261"
+    # OR = 20261). Quote-agnostic so an unquoted int pin is also caught (Gemini #125).
+    bad = [a.strip() for a in assigns if re.match(r'["\']?\d', a.strip())]
     if bad:
         out.append(Result("TEMPORAL", "session-derivation",
                            "FAIL", f"ACTIVE_SESSION assigned a hardcoded literal: {bad}"))
@@ -140,7 +144,7 @@ def check_temporal():
 
     # 2. The year-relative offline fallback must still be present (a 2027 offline
     #    cycle must derive 20271, not a stale 2026).
-    if re.search(r'f"20\{now\.year\s*%\s*100', src):
+    if re.search(r'''f["']20\{now\.year\s*%\s*100''', src):  # quote-agnostic (Gemini #125)
         now = datetime.now(timezone.utc)
         expect = f"20{now.year % 100:02d}1"
         out.append(Result("TEMPORAL", "offline-fallback", "PASS",
@@ -232,6 +236,10 @@ def check_determinism():
         groups = defaultdict(set)
         for r in rows[1:]:
             if g(r, "Source") == "SYSTEM":
+                continue
+            # Skip gviz trailing/blank rows so they can't read as a phantom
+            # collision group (Gemini #125).
+            if not any(cell.strip() for cell in r):
                 continue
             groups[(g(r, "Date"), g(r, "Committee"), g(r, "Bill"), g(r, "Source"))].add((g(r, "Time"), g(r, "Outcome")))
         collisions = sum(1 for v in groups.values() if len(v) > 1)
@@ -344,15 +352,19 @@ def check_state_wedge():
     except Exception as exc:
         return [Result("STATE-WEDGE", "stale-halt", "SKIP", f"could not read live sheet: {exc}")]
     blob = "\n".join(",".join(r) for r in rows[:3])
-    m = re.search(r'HALT\s+(\d{4}-\d{2}-\d{2})', blob)
+    # Cover BOTH persisted wedge markers: the LIS-authorization HALT and a
+    # carried-forward CIRCUIT BREAKER trip (Gemini #125) — either, when stale,
+    # means the worker is stuck rather than transiently retrying.
+    m = re.search(r'(HALT|BREAKER\s+TRIPPED|TRIPPED)\D{0,40}?(\d{4}-\d{2}-\d{2})', blob)
     if not m:
-        return [Result("STATE-WEDGE", "stale-halt", "PASS", "no persisted HALT marker on the sheet")]
-    halted = datetime.strptime(m.group(1), "%Y-%m-%d").replace(tzinfo=timezone.utc)
-    age = (datetime.now(timezone.utc) - halted).days
+        return [Result("STATE-WEDGE", "stale-marker", "PASS", "no persisted HALT / breaker-trip marker on the sheet")]
+    marker, day = m.group(1).strip(), m.group(2)
+    stuck = datetime.strptime(day, "%Y-%m-%d").replace(tzinfo=timezone.utc)
+    age = (datetime.now(timezone.utc) - stuck).days
     if age > 2:
-        return [Result("STATE-WEDGE", "stale-halt", "FAIL",
-                       f"a HALT marker dated {m.group(1)} is {age}d old — the worker appears wedged, not retrying")]
-    return [Result("STATE-WEDGE", "stale-halt", "WARN", f"a recent HALT marker dated {m.group(1)} ({age}d) — confirm recovery")]
+        return [Result("STATE-WEDGE", "stale-marker", "FAIL",
+                       f"a {marker} marker dated {day} is {age}d old — the worker appears wedged, not retrying")]
+    return [Result("STATE-WEDGE", "stale-marker", "WARN", f"a recent {marker} marker dated {day} ({age}d) — confirm recovery")]
 
 
 def main():
@@ -361,18 +373,32 @@ def main():
     print(f"  {datetime.now(timezone.utc):%Y-%m-%d %H:%M UTC}  ·  expansion-aware (walks live tabs + code)")
     print("=" * 78)
 
+    # (trigger, fn) registry: a check that RAISES is tagged with its real trigger
+    # (not fn.__name__), so the harness error still groups + prints (Gemini #125) —
+    # an audit tool must never silently drop its own failure.
+    checks = [
+        ("TEMPORAL", check_temporal),
+        ("UPSTREAM", check_upstream_schema),
+        ("DETERMINISM", check_determinism),
+        ("CAPACITY", check_capacity),
+        ("STATE-WEDGE", check_state_wedge),
+    ]
     results = []
-    for fn in (check_temporal, check_upstream_schema, check_determinism, check_capacity, check_state_wedge):
+    for trigger, fn in checks:
         try:
             results.extend(fn())
         except Exception as exc:
-            results.append(Result(fn.__name__, "harness-error", "FAIL", f"check raised: {exc}"))
+            results.append(Result(trigger, "harness-error", "FAIL", f"check raised: {exc}"))
 
     by_trigger = defaultdict(list)
     for r in results:
         by_trigger[r.trigger].append(r)
     glyph = {"PASS": "✅", "WARN": "⚠️ ", "FAIL": "🚨", "SKIP": "⏭️ "}
-    for trigger in ("TEMPORAL", "UPSTREAM", "DETERMINISM", "CAPACITY", "STATE-WEDGE"):
+    # Iterate the known order first, then any other trigger present, so a result
+    # with an unexpected trigger is still printed rather than dropped.
+    ordered = [t for t, _ in checks]
+    ordered += [t for t in by_trigger if t not in ordered]
+    for trigger in ordered:
         if trigger not in by_trigger:
             continue
         print(f"\n[{trigger}]")
