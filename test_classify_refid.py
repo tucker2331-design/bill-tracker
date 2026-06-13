@@ -7,7 +7,8 @@ docs/knowledge/history_refid_namespace.md.
 """
 from structural_router import (
     classify_refid, REFID_VOTE_COMMITTEE, REFID_VOTE_FLOOR, REFID_BATCH_NOTICE,
-    REFID_SINGLETON_DOC, REFID_COMMITTEE_REF, REFID_VOTE_UNMATCHED, REFID_UNKNOWN, REFID_EMPTY,
+    REFID_SINGLETON_DOC, REFID_COMMITTEE_REF, REFID_VOTE_UNMATCHED, REFID_DOCUMENT,
+    REFID_UNKNOWN, REFID_EMPTY,
 )
 
 CASES = [
@@ -53,6 +54,17 @@ CASES = [
     # dtype=str). A correctly-preserved leading-zero len-7 vote-id surfaces; the catastrophic case
     # (float-truncation to len 6) is unrecoverable in-function and is prevented at the read site.
     (("0123456", 0, False), REFID_VOTE_UNMATCHED), # len-7 with leading zero, string-preserved -> surface
+    # BILL-VERSION DOCUMENT refids (PR-C8.4c): \d+[A-Z] = a printed/received document id -> DOCUMENT
+    # (-> admin). 0% VOTE.CSV join. Closes the "Governor's substitute printed" / "Veto Received" lane.
+    (("26108316D", 0, False), REFID_DOCUMENT),     # substitute-printed document id
+    (("26110164G", 0, False), REFID_DOCUMENT),     # other version-letter suffix
+    (("26109829C", 0, False), REFID_DOCUMENT),     # conference-substitute document id
+    (("HB1F122", 0, False), REFID_UNKNOWN),        # bill-prefixed (fiscal impact) is NOT \d+[A-Z] -> still UNKNOWN
+    (("SV866", 0, False), REFID_UNKNOWN),          # bill-prefixed -> UNKNOWN (not a \d+[A-Z] document id)
+    # TRAILING-DIGIT shape must SURFACE, not be assumed a document (Gemini #124 — the grammar is
+    # tight on purpose; 0 such refids exist today, so this guards a future unconfirmed shape).
+    (("123A456", 0, False), REFID_UNKNOWN),        # \d+[A-Z]+\d+ is UNCONFIRMED -> UNKNOWN (surface), not DOCUMENT
+    (("26108316D1", 0, False), REFID_UNKNOWN),     # a doc-looking id WITH a trailing digit -> still UNKNOWN
 ]
 
 

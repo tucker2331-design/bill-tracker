@@ -2654,6 +2654,7 @@ def run_calendar_update():
         "refidclass_singleton_doc": 0,
         "refidclass_committee_ref": 0,
         "refidclass_vote_unmatched": 0,   # PR-C8.4a: len>=7 vote-id-shaped refid NOT in VOTE.CSV (anomaly -> surface)
+        "refidclass_document":      0,    # PR-C8.4c: bill-version document refid (\d+[A-Z]) -> admin
         "refidclass_unknown_refid": 0,
         "refidclass_empty":         0,
         # PR-C7.1l: count of runtime-derived ministerial EventCodes (event
@@ -5348,6 +5349,7 @@ def run_calendar_update():
             f"singleton_doc={source_miss_counts['refidclass_singleton_doc']} "
             f"committee_ref={source_miss_counts['refidclass_committee_ref']} "
             f"vote_unmatched={source_miss_counts['refidclass_vote_unmatched']} "
+            f"document={source_miss_counts['refidclass_document']} "
             f"unknown_refid={source_miss_counts['refidclass_unknown_refid']} "
             f"empty={source_miss_counts['refidclass_empty']}"
             # NB: sibling_inherited (PR-C7.1j) is NOT in this line — it's

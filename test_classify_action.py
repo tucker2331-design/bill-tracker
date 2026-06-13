@@ -23,6 +23,11 @@ CASES = [
     (("H Placed on Finance Agenda", "", "SINGLETON_DOC", ""), "administrative"),
     (("H Assigned sub", "", "BATCH_NOTICE", ""), "administrative"),
     (("H Referred to X", "", "COMMITTEE_REF", ""), "administrative"),
+    (("H Governor's substitute printed", "", "DOCUMENT", ""), "administrative"),  # PR-C8.4c: blank-route document -> admin
+    # ROUTE-FIRST GUARD (the safety invariant): an action-required governor row that carries a
+    # DOCUMENT refid but ROUTES executive must stay executive (route is checked before RefidClass),
+    # so DOCUMENT->admin can NEVER bury a surfaced veto/recommendation.
+    (("Vetoed by Governor", "executive", "DOCUMENT", ""), "executive"),
     # 4. RefidClass admin OUTRANKS a meeting ScheduleClass (C8.4a consistency: a docket placement
     #    that also matched a same-day meeting is still the placement, like the BATCH equivalents).
     (("H Placed on Agenda", "", "SINGLETON_DOC", "MEETING_EVENT"), "administrative"),

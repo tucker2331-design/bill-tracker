@@ -21,6 +21,18 @@ verb-flagged dates, 45 caught; the 6 misses are all benign (4 non-session Sunday
 fully text-free on the meeting path.** Offline triage/audit tools keep their own verb copies
 (standalone). Awaiting Gemini.
 
+## [2026-06-13] pr | PR-C8.4c OPENED — close the residual 31 unconfirmed -> 1 (DOCUMENT refid -> admin)
+
+The 31 unconfirmed were clerical document rows: ~29 "Governor's substitute printed" + 1 "Veto
+Received" (\d+[A-Z] document-version refids) + 1 HB26 referral. New REFID_DOCUMENT class
+(\d+[A-Z], 0% VOTE.CSV join) -> administrative. SAFE only via classify_action's route-first guard:
+the action-required DECISIONS (4 vetoes + 312 recommendations also carry digits+D refids!) route
+'executive' and never reach the DOCUMENT tier; only BLANK-route clerical document rows land there.
+Verified: 0 meeting->admin surprises (risk-set empty), 180 executive rows protected, unconfirmed
+31 -> 1 (just HB26). Reverses the C8.4a digits+D caution, now that C8.4b surfaces the decisions via
+their G-codes (the original risk is gone). [[failures/assumptions_audit#87]]. golden: classify_refid
+35, classify_action 32. Live flip realizes on the next worker run. Awaiting Gemini.
+
 ## [2026-06-13] milestone | POST-C8.4 HARDENING VERIFIED LIVE — all 3 solutions complete
 
 #118/#119/#120/#121 + the #122 follow-up (count-population fix) all merged. Final worker run
