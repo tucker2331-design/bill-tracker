@@ -12,7 +12,7 @@ status: active
 
 ## Active focus
 
-**🎯 C8.4 + POST-C8.4 HARDENING — ALL DONE & PRODUCTION-VERIFIED (2026-06-13).** C8.1→C8.4 merged
+**🎯 C8.4 + POST-C8.4 HARDENING — ALL DONE & PRODUCTION-VERIFIED (2026-06-13).** **+ C8.4c (#124): residual unconfirmed 31→1, STRUCTURAL COVERAGE = 100.00% (live-verified). The lone surfaced row is HB26 — a committee referral-by-vote LIS never published a timed meeting for. Vetoes/recommendations all still on the calendar (route-first guard).** C8.1→C8.4 merged
 (16% closed structurally; text patterns gone; Section 9 = 0; unclassified = 0; structural coverage
 99.92%; completeness 180/180), the governor veto-blindspot fixed (#116/#117), and the 3 post-C8.4
 hardening items merged + live-verified (#118/#119/#120/#121/#122). Details below. **No active work

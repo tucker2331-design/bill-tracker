@@ -21,7 +21,7 @@ verb-flagged dates, 45 caught; the 6 misses are all benign (4 non-session Sunday
 fully text-free on the meeting path.** Offline triage/audit tools keep their own verb copies
 (standalone). Awaiting Gemini.
 
-## [2026-06-13] pr | PR-C8.4c OPENED — close the residual 31 unconfirmed -> 1 (DOCUMENT refid -> admin)
+## [2026-06-13] pr | #124 MERGED — PR-C8.4c: residual unconfirmed 31 -> 1; STRUCTURAL COVERAGE 100.00%
 
 The 31 unconfirmed were clerical document rows: ~29 "Governor's substitute printed" + 1 "Veto
 Received" (\d+[A-Z] document-version refids) + 1 HB26 referral. New REFID_DOCUMENT class
@@ -31,7 +31,7 @@ the action-required DECISIONS (4 vetoes + 312 recommendations also carry digits+
 Verified: 0 meeting->admin surprises (risk-set empty), 180 executive rows protected, unconfirmed
 31 -> 1 (just HB26). Reverses the C8.4a digits+D caution, now that C8.4b surfaces the decisions via
 their G-codes (the original risk is gone). [[failures/assumptions_audit#87]]. golden: classify_refid
-35, classify_action 32. Live flip realizes on the next worker run. Awaiting Gemini.
+35, classify_action 32. **VERIFIED LIVE (worker run, headSha contains the merge):** unconfirmed 31->1 (the 1 = HB26, VOTE_COMMITTEE, no LIS-published timed meeting); STRUCTURAL COVERAGE 99.92%->**100.00%**; Section 9 still 0; 'Vetoed by Governor' 7/7 still executive (0 buried — route-first guard held); refidclass_document=8739 stamped; completeness 180/180. Gemini r1 HIGH tightened the regex to ^\d+[A-Z]+$ (no trailing digits -> surface). main @ 0028b0a.
 
 ## [2026-06-13] milestone | POST-C8.4 HARDENING VERIFIED LIVE — all 3 solutions complete
 
