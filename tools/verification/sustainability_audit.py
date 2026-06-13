@@ -153,15 +153,21 @@ def check_temporal():
         out.append(Result("TEMPORAL", "offline-fallback", "FAIL",
                            "year-relative offline session fallback missing — an offline future cycle could pin to 2026"))
 
-    # 3. The one deliberate pinned constant (investigation window) must keep its
-    #    staleness WARN, so the annual transition self-alerts (audit #1r) rather
-    #    than silently anchoring metrics to an old window.
-    if re.search(r'INVESTIGATION_END', src) and re.search(r'stale|window.*WARN|WARN.*window', src, re.IGNORECASE):
-        out.append(Result("TEMPORAL", "window-staleness-alarm", "PASS",
-                           "investigation-window staleness WARN still wired (deliberate annual transition self-alerts)"))
+    # 3. The scrape/processing window must be DERIVED from the Session API each
+    #    run, NOT pinned to a year. The old manual INVESTIGATION_START/END pin and
+    #    its #1r staleness WARN were REMOVED once the window became fully auto-
+    #    derived (calendar_worker.py ~L2975-2980); INVESTIGATION_* now survives
+    #    only as the offline last-resort fallback. Anchor on the real derivation
+    #    functions, not a comment (Gemini #125: the prior check matched a comment
+    #    and described an obsolete annual-transition WARN).
+    if re.search(r'def get_active_session_info', src) and re.search(r'\bextract_dates\b', src):
+        out.append(Result("TEMPORAL", "window-auto-derived", "PASS",
+                           "scrape window derived from the Session API each run (get_active_session_info + "
+                           "extract_dates); INVESTIGATION_* is offline-fallback only — no manual annual bump"))
     else:
-        out.append(Result("TEMPORAL", "window-staleness-alarm", "WARN",
-                           "could not confirm the investigation-window staleness WARN — verify the #1r alarm still fires"))
+        out.append(Result("TEMPORAL", "window-auto-derived", "FAIL",
+                           "could not confirm the window is auto-derived from the Session API — a pinned window "
+                           "would anchor metrics to a stale year"))
     return out
 
 
@@ -229,6 +235,14 @@ def check_determinism():
             out.append(Result("DETERMINISM", "live-collisions", "SKIP", "Sheet1 unreadable/empty"))
             return out
         ci = {c: i for i, c in enumerate(rows[0])}
+        # Don't run the collision logic on a sheet missing the key/value columns —
+        # every g() would read "" and the check would falsely PASS (Gemini #125).
+        needed = ("Date", "Committee", "Bill", "Source", "Time", "Outcome")
+        missing = [c for c in needed if c not in ci]
+        if missing:
+            out.append(Result("DETERMINISM", "live-collisions", "SKIP",
+                               f"Sheet1 missing column(s) {missing} — cannot verify dedup determinism"))
+            return out
 
         def g(r, c):
             return r[ci[c]] if c in ci and ci[c] < len(r) else ""
@@ -270,9 +284,13 @@ def check_capacity():
         return [Result("CAPACITY", "workbook-cells", "SKIP", f"gspread/google-auth unavailable: {exc}")]
 
     out = []
-    gc = gspread.authorize(Credentials.from_service_account_info(
-        json.loads(creds_json), scopes=["https://www.googleapis.com/auth/spreadsheets"]))
-    sheet = gc.open_by_key(SPREADSHEET_ID)
+    try:
+        gc = gspread.authorize(Credentials.from_service_account_info(
+            json.loads(creds_json), scopes=["https://www.googleapis.com/auth/spreadsheets"]))
+        sheet = gc.open_by_key(SPREADSHEET_ID)
+    except Exception as exc:
+        # A connection / auth error must SKIP loudly, not crash the check (Gemini #125).
+        return [Result("CAPACITY", "workbook-cells", "SKIP", f"could not authorize/open the workbook: {exc}")]
 
     # 1. Total allocated cells vs the 10M cap — walks ACTUAL worksheets, so a new
     #    tab is auto-included. FAIL >90% cap, WARN >60%.
