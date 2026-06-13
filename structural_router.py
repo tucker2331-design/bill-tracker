@@ -444,7 +444,10 @@ _VOTE_REFID_RE = _re.compile(r'^[HS]\d{1,2}(?:\d{3})?V\d+$')   # committee vote 
 _COMMITTEE_REFID_RE = _re.compile(r'^[HS]\d{1,2}$')            # H14 / S04 committee code
 # Bill-VERSION document id: a numeric doc id + a letter version code (26108316D, 26110164G,
 # 26109829C). 0% VOTE.CSV join (measured C8.4a) — a printed/received DOCUMENT, never a vote.
-_DOCUMENT_REFID_RE = _re.compile(r'^\d+[A-Z]+\d*$')
+# NO trailing digits (measured: 10,445 match `\d+[A-Z]+`, 0 have trailing digits). Kept tight on
+# purpose (Gemini #124): a `\d+[A-Z]+\d+` shape is UNCONFIRMED, so it must SURFACE (UNKNOWN), not
+# be assumed a document and routed admin — "surface, don't guess".
+_DOCUMENT_REFID_RE = _re.compile(r'^\d+[A-Z]+$')
 
 
 def normalize_refid(v) -> str:

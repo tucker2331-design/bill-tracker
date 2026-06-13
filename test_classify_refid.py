@@ -61,6 +61,10 @@ CASES = [
     (("26109829C", 0, False), REFID_DOCUMENT),     # conference-substitute document id
     (("HB1F122", 0, False), REFID_UNKNOWN),        # bill-prefixed (fiscal impact) is NOT \d+[A-Z] -> still UNKNOWN
     (("SV866", 0, False), REFID_UNKNOWN),          # bill-prefixed -> UNKNOWN (not a \d+[A-Z] document id)
+    # TRAILING-DIGIT shape must SURFACE, not be assumed a document (Gemini #124 — the grammar is
+    # tight on purpose; 0 such refids exist today, so this guards a future unconfirmed shape).
+    (("123A456", 0, False), REFID_UNKNOWN),        # \d+[A-Z]+\d+ is UNCONFIRMED -> UNKNOWN (surface), not DOCUMENT
+    (("26108316D1", 0, False), REFID_UNKNOWN),     # a doc-looking id WITH a trailing digit -> still UNKNOWN
 ]
 
 
