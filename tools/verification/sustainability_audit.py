@@ -185,11 +185,12 @@ def check_upstream_schema():
                        "_EXPECTED_EVENT_KEYS not found — the field-rename canary is gone")]
     expected = set(re.findall(r'["\']([A-Za-z_]+)["\']', m.group(1)))
 
-    # Every field read off an LIS-event receiver (event / ev / e). Convention-
-    # driven: a NEW field read here that is not in the canary or the internal
-    # allowlist is auto-flagged, so adding code that consumes a new LIS field
-    # forces the canary to grow.
-    read = set(re.findall(r'\b(?:event|ev|e)\.get\(\s*["\']([A-Za-z_]+)["\']', src))
+    # Every field read off an LIS-event receiver. The worker holds events in
+    # several variables (event / ev / e and the max()-selected best / chosen /
+    # latest), so all are scoped (Gemini #125). Convention-driven: a NEW field read
+    # here that is not in the canary or the internal allowlist is auto-flagged, so
+    # adding code that consumes a new LIS field forces the canary to grow.
+    read = set(re.findall(r'\b(?:event|ev|e|best|chosen|latest)\.get\(\s*["\']([A-Za-z_]+)["\']', src))
     lis_read = read - INTERNAL_EVENT_KEYS
     gap = lis_read - expected
 
