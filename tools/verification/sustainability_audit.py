@@ -310,9 +310,17 @@ def check_capacity():
                 d = datetime.strptime(mdate.group(1), "%Y-%m-%d").replace(tzinfo=timezone.utc)
                 if oldest is None or d < oldest:
                     oldest = d
-        age = (now - oldest).days if oldest else None
         hard_cap_rows = SOFT_CEILING // max(1, int(ws.col_count))
-        if age is not None and age > days:
+        if oldest is None:
+            # No parseable timestamp in column 1 — we CANNOT assert retention.
+            # Surface it (SKIP, never a silent PASS) so the column assumption
+            # gets re-confirmed rather than masked.
+            out.append(Result("CAPACITY", f"retention:{title}", "SKIP",
+                               f"'{title}' has no parseable YYYY-MM-DD in column 1 ({rc:,} rows) — "
+                               f"cannot verify the {days}d retention; confirm the timestamp column."))
+            continue
+        age = (now - oldest).days
+        if age > days:
             out.append(Result("CAPACITY", f"retention:{title}", "WARN",
                                f"'{title}' holds rows {age}d old (> {days}d retention) — the prune is NOT running. "
                                f"{rc:,} rows; ~{hard_cap_rows - rc:,} rows of runway to the cell ceiling. "
