@@ -61,6 +61,7 @@ import os
 import re
 import sys
 import time
+import urllib.parse
 import urllib.request
 from collections import defaultdict, namedtuple
 from datetime import datetime, timezone
@@ -92,6 +93,10 @@ UNRECOGNISED_TAB_ROW_WARN = 50_000  # a large tab we don't know the policy of ->
 INTERNAL_EVENT_KEYS = {
     "Date", "Committee", "Time", "Origin", "Source", "Outcome", "Bill",
     "SortTime", "LegEventRoute", "RefidClass", "ScheduleClass",
+    # Read off event-named receivers but NOT live LegislationEvent-API fields, so
+    # they don't belong in that endpoint's canary (Gemini #125):
+    "EventID",        # reloaded-cache fallback key, not the live API field (the live field is LegislationEventID)
+    "ActualDate", "ProjectedDate",  # Session-API (GetSessionList) date fields read off a session obj, not a LegislationEvent
 }
 
 Result = namedtuple("Result", "trigger name severity detail")
@@ -111,7 +116,8 @@ def _get(url, tries=4):
 
 
 def _gviz_rows(tab="Sheet1"):
-    url = f"https://docs.google.com/spreadsheets/d/{SPREADSHEET_ID}/gviz/tq?tqx=out:csv&sheet={tab}"
+    # URL-encode the tab name so spaces / special chars don't break the gviz URL (Gemini #125).
+    url = f"https://docs.google.com/spreadsheets/d/{SPREADSHEET_ID}/gviz/tq?tqx=out:csv&sheet={urllib.parse.quote(tab)}"
     return list(csv.reader(io.StringIO(_get(url))))
 
 
@@ -332,10 +338,18 @@ def check_capacity():
         # OLDEST row is the first data row. Read only a small top slice (one ranged
         # read) instead of the whole 100k+ column (Gemini #125 HIGH), and take the
         # min parseable date — robust even if the first cell is momentarily blank.
-        top = ws.get("A2:A11") or []
+        try:
+            top = ws.get("A2:A11") or []
+        except Exception as exc:
+            # A transient API/rate-limit error on one tab SKIPs that tab, not the
+            # whole capacity check (Gemini #125).
+            out.append(Result("CAPACITY", f"retention:{title}", "SKIP",
+                               f"could not read '{title}' top rows: {exc}"))
+            continue
         oldest = None
         for cell in top:
-            v = cell[0] if cell else ""
+            # ws.get returns a list-of-lists; guard non-list / empty cells explicitly.
+            v = cell[0] if isinstance(cell, (list, tuple)) and cell else ""
             mdate = re.match(r'(\d{4}-\d{2}-\d{2})', str(v))
             if mdate:
                 d = datetime.strptime(mdate.group(1), "%Y-%m-%d").replace(tzinfo=timezone.utc)
