@@ -9,6 +9,18 @@ Append-only, reverse-chronological (newest at top). Each entry opens with `## [Y
 
 **Kinds:** `ingest` (new source/doc processed), `pr` (PR opened/merged/closed), `decision` (architectural or workflow), `lint` (wiki health-check pass), `session` (notable multi-hour working block), `post-mortem` (failure analysis), `milestone` (project-goal threshold crossed).
 
+## [2026-06-13] pr | Part C OPENED — last worker text dependency gone (verb gap-check → recorded-vote RefidClass)
+
+The Part C gap-recovery reconciliation selected HISTORY rows by `MEETING_VERB_TOKENS` to find
+"meetings" on gap dates. Migrated to a STRUCTURAL recorded-vote signal (`classify_refid` →
+`VOTE_COMMITTEE`/`VOTE_FLOOR`), cache-independent (this block runs before LegEvent hydration, so
+route_event is out — uses History_refid + the VOTE.CSV id set, both in scope). Owner chose RefidClass
+(structural, 50-state-clean) over keeping the verb OR-fallback. Measured MORE precise: of 51
+verb-flagged dates, 45 caught; the 6 misses are all benign (4 non-session Sunday false-positives +
+2 witnessed floor days). Removed the now-dead `MEETING_VERB_TOKENS` constant — **the worker is now
+fully text-free on the meeting path.** Offline triage/audit tools keep their own verb copies
+(standalone). Awaiting Gemini.
+
 ## [2026-06-13] milestone | POST-C8.4 HARDENING VERIFIED LIVE — all 3 solutions complete
 
 #118/#119/#120/#121 + the #122 follow-up (count-population fix) all merged. Final worker run
