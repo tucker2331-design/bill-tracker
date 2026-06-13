@@ -1,6 +1,6 @@
 ---
 tags: [state, live]
-updated: 2026-06-11
+updated: 2026-06-13
 status: active
 ---
 
@@ -12,11 +12,12 @@ status: active
 
 ## Active focus
 
-**🎯 PR-C8.4 — DONE (both PRs merged 2026-06-11). NEXT: verify the live worker run.**
-C8.1→C8.4 are all MERGED. The 16% is closed structurally; text patterns gone; Section 9 = 0;
-unclassified = 0; **structural coverage 99.92%**; completeness tripwire 180/180. C8.4 closed the
-*closeable* residual and routes the rest into honest, visible lanes. **Full spec:
-[[architecture/pr_c8_structural_classification]] §PR-C8.4.**
+**🎯 C8.4 + POST-C8.4 HARDENING — ALL DONE & PRODUCTION-VERIFIED (2026-06-13).** C8.1→C8.4 merged
+(16% closed structurally; text patterns gone; Section 9 = 0; unclassified = 0; structural coverage
+99.92%; completeness 180/180), the governor veto-blindspot fixed (#116/#117), and the 3 post-C8.4
+hardening items merged + live-verified (#118/#119/#120/#121/#122). Details below. **No active work
+item open** — see "Standing (genuinely deferred)" for the only remaining (low-priority) follow-ups.
+Specs: [[architecture/pr_c8_structural_classification]] §PR-C8.4 + [[architecture/post_c8_hardening]].
 
 **✅ C8.4b VERIFIED LIVE (worker run 2026-06-12, headSha contains the merge — audit #74):** 331
 executive rows on the 🏛️ Governor calendar (recommendations + vetoes); **7 "Vetoed by Governor"
