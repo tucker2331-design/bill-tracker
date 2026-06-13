@@ -277,6 +277,7 @@ def check_capacity():
     # 1. Total allocated cells vs the 10M cap — walks ACTUAL worksheets, so a new
     #    tab is auto-included. FAIL >90% cap, WARN >60%.
     tabs = sheet.worksheets()
+    ws_by_title = {ws.title: ws for ws in tabs}  # reuse — avoid a per-tab worksheet() API call (Gemini #125)
     per_tab = [(ws.title, int(ws.row_count), int(ws.col_count), int(ws.row_count) * int(ws.col_count)) for ws in tabs]
     total = sum(c for _, _, _, c in per_tab)
     frac = total / GOOGLE_SHEETS_CELL_CAP
@@ -303,16 +304,19 @@ def check_capacity():
     #    assert no row is older than that horizon (the prune is actually running).
     now = datetime.now(timezone.utc)
     for title, days in RETENTION_DAYS.items():
-        try:
-            ws = sheet.worksheet(title)
-        except Exception:
+        ws = ws_by_title.get(title)
+        if ws is None:
             out.append(Result("CAPACITY", f"retention:{title}", "SKIP", f"tab '{title}' not found"))
             continue
         rc = int(ws.row_count)
-        # Pull the first column (timestamps) once; find the oldest ISO date.
-        col1 = ws.col_values(1)
+        # The tab is append-only with a monotonic seen_at_utc in column 1, so the
+        # OLDEST row is the first data row. Read only a small top slice (one ranged
+        # read) instead of the whole 100k+ column (Gemini #125 HIGH), and take the
+        # min parseable date — robust even if the first cell is momentarily blank.
+        top = ws.get("A2:A11") or []
         oldest = None
-        for v in col1[1:]:
+        for cell in top:
+            v = cell[0] if cell else ""
             mdate = re.match(r'(\d{4}-\d{2}-\d{2})', str(v))
             if mdate:
                 d = datetime.strptime(mdate.group(1), "%Y-%m-%d").replace(tzinfo=timezone.utc)
@@ -350,7 +354,11 @@ def check_state_wedge():
     try:
         rows = _gviz_rows("Sheet1")
     except Exception as exc:
-        return [Result("STATE-WEDGE", "stale-halt", "SKIP", f"could not read live sheet: {exc}")]
+        return [Result("STATE-WEDGE", "stale-marker", "SKIP", f"could not read live sheet: {exc}")]
+    # An empty/unreadable sheet must NOT read as "no marker -> PASS" (false pass,
+    # Gemini #125) — there is simply nothing to verify, so SKIP loudly.
+    if not rows:
+        return [Result("STATE-WEDGE", "stale-marker", "SKIP", "Sheet1 empty/unreadable — cannot check for a wedge marker")]
     blob = "\n".join(",".join(r) for r in rows[:3])
     # Cover BOTH persisted wedge markers: the LIS-authorization HALT and a
     # carried-forward CIRCUIT BREAKER trip (Gemini #125) — either, when stale,
