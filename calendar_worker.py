@@ -2608,10 +2608,11 @@ def run_calendar_update():
         # PR-C1: write-time chokepoint telemetry (see _append_event below)
         "invariant_violations": 0,  # Rows that failed I1/I2/I3 at append time
         "meeting_unsourced": 0,     # Meeting-verb outcome with Origin in {journal_default, floor_miss}
-        # PR-hardening1b: count of rows the canonical classify_action puts in the surfaced
-        # 'unconfirmed' fail-safe lane (excludes SYSTEM rows). Drives the rolling-baseline spike
-        # alert (Y3) — a sudden jump = new LIS structure the structural classifier doesn't cover.
-        "unconfirmed_rows": 0,
+        # NB (PR-hardening1b-1): the unconfirmed-row count is NOT a source_miss_counts key — it can
+        # only be computed over final_df (post ephemeral-filter + dedup), which is built AFTER the
+        # SYSTEM_METRICS JSON is serialized, so a key here would publish a stale 0. It's a local
+        # (`_unconfirmed`) computed late and consumed by the Y3 spike alert; ray2 publishes the
+        # 'unconfirmed' count from the sheet, and Y3 records the ratcheted value.
         # PR-C1 review-fix (Gemini): orthogonal-tag counter that is the true
         # denominator for the circuit breaker's violation-rate threshold. It
         # counts ONLY rows that actually reached _append_event (so ~system
@@ -2913,14 +2914,9 @@ def run_calendar_update():
         if origin in _UNSOURCED_ORIGINS_FOR_METRICS and event.get("LegEventRoute") == "meeting":
             source_miss_counts["meeting_unsourced"] += 1
 
-        # PR-hardening1b: count the surfaced 'unconfirmed' rows for the rolling-baseline spike
-        # alert, using the SAME canonical classify_action the X-Ray/sentinel use (hardening1a) over
-        # the finalized columns — so the worker's count can never drift from the displayed class.
-        # Exclude the worker's own SYSTEM diagnostic rows (the sentinel/X-Ray exclude them too).
-        if str(event.get("Source", "")).strip().upper() != "SYSTEM":
-            if _classify_action(event.get("Outcome", ""), event.get("LegEventRoute", ""),
-                                event.get("RefidClass", ""), event.get("ScheduleClass", "")) == "unconfirmed":
-                source_miss_counts["unconfirmed_rows"] += 1
+        # NB: unconfirmed_rows is counted AFTER the loop over the FINAL written rows (final_df),
+        # NOT here — _append_event is PRE the ephemeral-filter + dedup, so a per-row count here
+        # over-counts by rows that get dropped before the sheet write (PR-hardening1b-1).
 
         # Breaker denominator (PR-C1 review-fix, Gemini). Count AFTER the
         # invariant checks so rows_appended tracks the chokepoint's actual
@@ -5344,7 +5340,6 @@ def run_calendar_update():
             f"unsourced_anchor={source_miss_counts['unsourced_anchor']} "
             f"dropped_ephemeral={source_miss_counts['dropped_ephemeral']} "
             f"dropped_noise={source_miss_counts['dropped_noise']} "
-            f"unconfirmed_rows={source_miss_counts['unconfirmed_rows']} "
             f"floor_anchor_miss={source_miss_counts['floor_anchor_miss']} "
             f"gap_cause={source_miss_counts.get('gap_cause', 'unknown')} "
             f"gap_minutes={source_miss_counts.get('gap_minutes', -1)} "
@@ -5587,6 +5582,26 @@ def run_calendar_update():
 
             sheet_data = [final_df.columns.values.tolist()] + final_df.values.tolist()
 
+            # PR-hardening1b-1: count the surfaced 'unconfirmed' rows over the FINAL written rows
+            # (final_df == sheet_data, AFTER the ephemeral filter + (Date,Committee,Bill) dedup),
+            # excluding SYSTEM rows — the sentinel/X-Ray population the Y3 rolling baseline tracks
+            # (counting in _append_event was PRE-filter and over-counted: 46 vs the sheet's 31).
+            # A LOCAL, not source_miss_counts: the SYSTEM_METRICS JSON is serialized far above
+            # (~L5393, before final_df exists), so a published count would be a stale 0 (Gemini #122
+            # r2). ray2 already publishes 'unconfirmed' from the sheet and Y3 records the ratcheted
+            # value, so observability is covered. Consumed by the delta-alert + the Y3 write below.
+            # zip the Series directly (no per-row dict materialization — Gemini #122 perf, ~37k rows);
+            # column-presence guard so a missing column leaves the count 0 rather than KeyError.
+            _unconfirmed = 0
+            _uc_cols = ("Outcome", "LegEventRoute", "RefidClass", "ScheduleClass", "Source")
+            if all(_c in final_df.columns for _c in _uc_cols):
+                _unconfirmed = sum(
+                    1 for _o, _r, _rc, _sc, _src in zip(*(final_df[_c] for _c in _uc_cols))
+                    if str(_src).strip().upper() != "SYSTEM"
+                    and _classify_action(_o, _r, _rc, _sc) == "unconfirmed"
+                )
+            print(f"📊 Unconfirmed (surfaced) rows on the written sheet: {_unconfirmed}")
+
             # PR-C1 + PR-C7.0.4: MASS-VIOLATION CIRCUIT BREAKER — last
             # safety net before Sheet1 is overwritten. If this cycle's
             # write-time invariants failed at a high rate, OR the meeting-
@@ -5648,7 +5663,7 @@ def run_calendar_update():
             # Y3 = one cycle's grace). This ALERTS — it does NOT add to _breaker_tripped — because
             # 'unconfirmed' rows are SAFE-surfaced (visible + flagged), not bad data; a spike means
             # new LIS structure to classify, not a reason to withhold the whole sheet (audit #53).
-            _unconfirmed = source_miss_counts["unconfirmed_rows"]
+            # _unconfirmed is the LOCAL counted over final_df above (the written rows).
             _unconfirmed_delta = max(0, _unconfirmed - last_known_good_unconfirmed)
             if y3_baseline_present and _unconfirmed_delta > UNCONFIRMED_DELTA_ALERT:
                 push_system_alert(

@@ -9,6 +9,15 @@ Append-only, reverse-chronological (newest at top). Each entry opens with `## [Y
 
 **Kinds:** `ingest` (new source/doc processed), `pr` (PR opened/merged/closed), `decision` (architectural or workflow), `lint` (wiki health-check pass), `session` (notable multi-hour working block), `post-mortem` (failure analysis), `milestone` (project-goal threshold crossed).
 
+## [2026-06-12] pr | PR-hardening1b-1 OPENED — count unconfirmed_rows over the WRITTEN rows (not pre-filter)
+
+The hardening1b verification run exposed a count-population mismatch: the worker counted
+unconfirmed_rows in _append_event (PRE the ephemeral-filter + (Date,Committee,Bill) dedup) = 46,
+but the sentinel/X-Ray (written sheet) see 31. Fix: count over final_df (== sheet_data, post-filter)
+excluding SYSTEM, via the canonical classify_action. Now 31 == the budget population the Y3 rolling
+baseline tracks. Verified on the live written rows (31). [[failures/assumptions_audit#86]]. Caught by
+the post-merge run (audit #74), not the unit sim (which measured the sheet, not the count site).
+
 ## [2026-06-12] milestone | POST-C8.4 HARDENING COMPLETE — all 3 deferred items merged
 
 #118 (G-code drift alert), #119 (structural meeting_unsourced), #120 (centralize classify_action),
