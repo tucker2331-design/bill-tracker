@@ -442,6 +442,9 @@ def recover_admin_route(outcome, admin_recovery_index) -> str:
 
 _VOTE_REFID_RE = _re.compile(r'^[HS]\d{1,2}(?:\d{3})?V\d+$')   # committee vote record grammar
 _COMMITTEE_REFID_RE = _re.compile(r'^[HS]\d{1,2}$')            # H14 / S04 committee code
+# Bill-VERSION document id: a numeric doc id + a letter version code (26108316D, 26110164G,
+# 26109829C). 0% VOTE.CSV join (measured C8.4a) — a printed/received DOCUMENT, never a vote.
+_DOCUMENT_REFID_RE = _re.compile(r'^\d+[A-Z]+\d*$')
 
 
 def normalize_refid(v) -> str:
@@ -473,6 +476,7 @@ REFID_BATCH_NOTICE   = "BATCH_NOTICE"     # short (len<=6) non-vote numeric refi
 REFID_SINGLETON_DOC  = "SINGLETON_DOC"    # short (len<=6) non-vote numeric refid, fan-out < K
 REFID_COMMITTEE_REF  = "COMMITTEE_REF"    # committee-code refid
 REFID_VOTE_UNMATCHED = "VOTE_UNMATCHED"   # vote-id-shaped numeric (len>=7) NOT found in VOTE.CSV
+REFID_DOCUMENT       = "DOCUMENT"         # bill-version document id (\d+[A-Z], e.g. 26108316D) -> admin
 REFID_UNKNOWN        = "UNKNOWN_REFID"    # some other non-empty shape
 REFID_EMPTY          = "EMPTY"            # no refid
 
@@ -500,8 +504,10 @@ def classify_refid(refid, *, fanout: int = 0, in_vote_csv: bool = False,
 
     Returns one of the REFID_* constants. Meeting evidence: VOTE_COMMITTEE, VOTE_FLOOR.
     Administrative (document refs): BATCH_NOTICE, COMMITTEE_REF, SINGLETON_DOC (len<=6 numeric;
-    verified 100% "Placed on Agenda/Calendar" + docket placements, 2026-06-11). No decisive
-    signal (caller should SURFACE): VOTE_UNMATCHED, UNKNOWN_REFID, EMPTY.
+    verified 100% "Placed on Agenda/Calendar" + docket placements, 2026-06-11), and DOCUMENT
+    (PR-C8.4c: a bill-version document id `\d+[A-Z]`, e.g. 26108316D — printed/received clerical
+    rows; 0% VOTE.CSV join). No decisive signal (caller should SURFACE): VOTE_UNMATCHED,
+    UNKNOWN_REFID, EMPTY.
 
     CALLER CONTRACT (the length law's only soft spot — Gemini #115): pass `refid` as the RAW
     string from the source (read with `dtype=str`). The length test below is the document↔vote-id
@@ -526,6 +532,8 @@ def classify_refid(refid, *, fanout: int = 0, in_vote_csv: bool = False,
         return REFID_BATCH_NOTICE if fanout >= batch_min_bills else REFID_SINGLETON_DOC
     if _COMMITTEE_REFID_RE.match(r):
         return REFID_COMMITTEE_REF
+    if _DOCUMENT_REFID_RE.match(r):
+        return REFID_DOCUMENT
     return REFID_UNKNOWN
 
 
@@ -630,7 +638,14 @@ def classify_action(outcome_text: str = "", legevent_route: str = "",
     if lower in ("", "none", "nan", "na", "<na>", "null"):   # empty/skeleton or any NA repr -> admin
         return "administrative"
     rc = _s(refid_class).upper()
-    if rc in ("BATCH_NOTICE", "COMMITTEE_REF", "SINGLETON_DOC"):   # clerk DOCUMENT refs (len<=6 numeric / committee code)
+    # Clerk DOCUMENT refs -> administrative. DOCUMENT (PR-C8.4c) = a bill-version-document refid
+    # (\d+[A-Z], e.g. 26108316D) — the printed/received clerical sub-steps ("Governor's substitute
+    # printed", "Veto Received"). SAFE here only because the ROUTE is checked FIRST above: every
+    # action-required governor DECISION (veto/recommendation) matches its G-code and routes
+    # "executive", so it never reaches this tier; only a BLANK-route document row lands here. (This
+    # is the C8.4a "digits+D -> admin would bury a veto" caution, RESOLVED once C8.4b surfaced the
+    # decisions via their G-codes — see assumptions_audit #83/#87.)
+    if rc in ("BATCH_NOTICE", "COMMITTEE_REF", "SINGLETON_DOC", "DOCUMENT"):
         return "administrative"
     sc = _s(schedule_class).upper()
     if sc in ("MEETING_EVENT", "FLOOR", "COMMISSION"):
