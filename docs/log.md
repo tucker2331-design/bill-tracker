@@ -9,6 +9,15 @@ Append-only, reverse-chronological (newest at top). Each entry opens with `## [Y
 
 **Kinds:** `ingest` (new source/doc processed), `pr` (PR opened/merged/closed), `decision` (architectural or workflow), `lint` (wiki health-check pass), `session` (notable multi-hour working block), `post-mortem` (failure analysis), `milestone` (project-goal threshold crossed).
 
+## [2026-06-13] milestone | POST-C8.4 HARDENING VERIFIED LIVE — all 3 solutions complete
+
+#118/#119/#120/#121 + the #122 follow-up (count-population fix) all merged. Final worker run
+confirmed end-to-end: worker read Y3=46, counted unconfirmed=31 over the WRITTEN rows, ratcheted
+Y3 46→31 (rolling baseline self-calibrated), no spurious spike alert (delta 0 on an improvement),
+unconfirmed_rows correctly NOT in the published metrics JSON (it's a local); meeting_unsourced=0
+(route-based), 0 G-code drift alerts; sentinel all-green (Section 9=0, unconfirmed=31, executive=324),
+completeness 180/180. main @ 661f2bc. assumptions_audit #85 (G-code drift) + #86 (count population).
+
 ## [2026-06-12] pr | PR-hardening1b-1 OPENED — count unconfirmed_rows over the WRITTEN rows (not pre-filter)
 
 The hardening1b verification run exposed a count-population mismatch: the worker counted

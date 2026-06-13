@@ -46,6 +46,11 @@ through the Gemini re-audit loop:
   ALERTS (not trips — unconfirmed rows are safe-surfaced) on a >25 spike vs Y3. Sentinel keeps
   `--unconfirmed-max` as the absolute backstop. assumptions_audit #85.
 
+**VERIFIED LIVE (2026-06-13 run):** Y3 rolling baseline ratcheted 46→31 (the worker counts over
+the WRITTEN rows now — #122 fixed a count-population bug where _append_event over-counted pre-filter);
+no spurious spike alert; meeting_unsourced=0; 0 G-code drift; sentinel green; completeness 180/180.
+assumptions_audit #86 (count-population lesson).
+
 **Standing (genuinely deferred):** the Part C reconciliation verb pre-filter migration (above);
 the crossover_audit MEETING_VERBS mirror (offline tool).
 
