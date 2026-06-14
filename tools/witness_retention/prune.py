@@ -66,10 +66,14 @@ def _parse_seen_at(s):
     except ValueError:
         pass
     # Degraded/legacy fallback: a leading bare date (midnight) — still better than
-    # aborting; only a TRULY unparseable non-empty value returns None (-> abort).
+    # aborting. Wrap the parse so a regex-shaped-but-invalid calendar date (e.g.
+    # "2026-13-99") returns None instead of crashing (Gemini #126).
     m = re.match(r'(\d{4}-\d{2}-\d{2})$', s)
     if m:
-        return datetime.strptime(m.group(1), "%Y-%m-%d").replace(tzinfo=timezone.utc)
+        try:
+            return datetime.strptime(m.group(1), "%Y-%m-%d").replace(tzinfo=timezone.utc)
+        except ValueError:
+            return None
     return None
 
 
@@ -99,10 +103,11 @@ def main() -> int:
     expired = 0
     for i, v in enumerate(col1[1:], start=2):  # i = 1-based sheet row number
         s = str(v).strip()
-        if s == "":
-            # Empty cell (e.g. a trailing/padding cell) — STOP the prefix here. We
-            # never delete past an unknown boundary and never abort on a benign
-            # blank (Gemini #126): prune the contiguous expired block found so far.
+        if s == "" or s.lower() in ("none", "nan", "null", "<na>"):
+            # Empty / null-repr cell (trailing padding or a null-like value) — STOP
+            # the prefix here. We never delete past an unknown boundary and never
+            # abort on a benign blank (Gemini #126): prune the contiguous expired
+            # block found so far.
             break
         seen = _parse_seen_at(s)
         if seen is None:
