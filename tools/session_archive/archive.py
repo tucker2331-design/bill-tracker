@@ -58,13 +58,17 @@ def _open():
 
 def _copy_tab(src_ws, archive, target_name):
     """Copy src_ws into the archive workbook as `target_name`, replacing any existing
-    tab of that name (so re-runs are idempotent)."""
-    try:
-        archive.del_worksheet(archive.worksheet(target_name))
-    except gspread.WorksheetNotFound:
-        pass
+    tab of that name (so re-runs are idempotent). Copy FIRST, then delete the old
+    same-named tab, then rename — so the archive never momentarily drops to 0 sheets
+    (a single-sheet workbook cannot have its only tab deleted) (Gemini #131)."""
     props = src_ws.copy_to(ARCHIVE_ID)  # Sheets copyTo -> {'sheetId':..., 'title':'Copy of ...'}
     new = archive.get_worksheet_by_id(props["sheetId"])
+    try:
+        old = archive.worksheet(target_name)
+        if old.id != new.id:
+            archive.del_worksheet(old)
+    except gspread.WorksheetNotFound:
+        pass
     new.update_title(target_name)
     return new
 
@@ -107,7 +111,7 @@ def migrate_c7(main, archive):
         print(f"[copy-only] {len(targets)} tab(s) now preserved in the archive. Re-run with "
               f"CONFIRM=delete to remove them from the live workbook and reclaim cap.")
         return 0
-    main.batch_update({"requests": [{"deleteSheet": {"sheetId": w.id}} for w in targets]})
+    main.batch_update({"requests": [{"deleteSheet": {"sheetId": int(w.id)}} for w in targets]})
     print(f"✅ removed {len(targets)} {C7_PREFIX}* tab(s) from the live workbook (preserved in the archive).")
     return 0
 
