@@ -5905,9 +5905,10 @@ def run_calendar_update():
                 # active session — ONLY on a successful overwrite, and only if the
                 # rollover archive (if one was needed) succeeded. Same discipline as
                 # Y2/Y3: a halted/failed cycle leaves V1 unchanged so the rollover is
-                # retried. On the first run after deploy V1 is empty, so this simply
-                # initialises it to the current session (no archive).
-                if _advance_sheet_session:
+                # retried. Write only when V1 actually CHANGED (rollover) or is empty
+                # (first-run init) — no redundant acell write on a steady-state cycle
+                # (Gemini #133).
+                if _advance_sheet_session and _sheet_session != ACTIVE_SESSION:
                     try:
                         worksheet.update_acell(SHEET_SESSION_CELL, ACTIVE_SESSION)
                     except Exception as _ss_write_err:
