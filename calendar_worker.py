@@ -5485,7 +5485,7 @@ def run_calendar_update():
         # so this is output-neutral now and the guard for a future schema that
         # carries >1 action per (bill,committee,date). assumptions_audit ref.
         final_df = final_df.reset_index(drop=True)
-        final_df['_dedup_order'] = range(len(final_df))
+        final_df['_dedup_order'] = final_df.index  # 0..N-1 after reset_index — the append-order tiebreaker
         final_df = final_df.sort_values(by=['Date', 'Committee', 'Bill', 'Source', '_dedup_order'])
         final_df = final_df.drop_duplicates(subset=['Date', 'Committee', 'Bill'], keep='last')
         final_df = final_df.drop(columns=['_dedup_order'])
