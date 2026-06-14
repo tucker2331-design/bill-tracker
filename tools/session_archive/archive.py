@@ -62,27 +62,23 @@ def _open():
 
 
 def _copy_tab(src_ws, archive, target_name):
-    """Copy src_ws into the archive workbook as `target_name`, replacing any existing
-    tab of that name (so re-runs are idempotent). Copy FIRST, then delete the old
-    same-named tab, then rename — so the archive never momentarily drops to 0 sheets
-    (a single-sheet workbook cannot have its only tab deleted) (Gemini #131)."""
-    props = src_ws.copy_to(ARCHIVE_ID)  # Sheets copyTo -> {'sheetId':..., 'title':'Copy of ...'}
-    # Find the freshly-copied sheet by id, comparing as STRINGS. gspread's
-    # Worksheet.id and get_worksheet_by_id's equality have differed in type (int vs
-    # str) across versions, so a strict-typed lookup is fragile (Gemini #131). A
-    # string compare over the worksheet list is robust to either convention.
-    sid = str(props.get("sheetId"))
-    new = next((w for w in archive.worksheets() if str(w.id) == sid), None)
-    if new is None:
-        raise RuntimeError(f"copied sheet id={sid} not found in the archive after copy_to")
+    """Copy src_ws into the archive as `target_name`, replacing any existing tab of
+    that name (idempotent). Uses copy_to + ONE atomic batch_update (delete-old-then-
+    rename, in that order so there's no title collision and the archive never drops to
+    0 sheets). No full worksheet-list fetch in the loop, and no reliance on the gspread
+    Worksheet constructor / get_worksheet_by_id typing — version-robust (Gemini #131)."""
     try:
-        old = archive.worksheet(target_name)
-        if old.id != new.id:
-            archive.del_worksheet(old)
+        old_id = archive.worksheet(target_name).id  # a pre-existing same-named target, if any
     except gspread.WorksheetNotFound:
-        pass
-    new.update_title(target_name)
-    return new
+        old_id = None
+    props = src_ws.copy_to(ARCHIVE_ID)  # Sheets copyTo -> {'sheetId':..., 'title':'Copy of ...'}
+    requests = []
+    if old_id is not None:
+        requests.append({"deleteSheet": {"sheetId": int(old_id)}})  # drop the stale target first
+    requests.append({"updateSheetProperties": {
+        "properties": {"sheetId": int(props["sheetId"]), "title": target_name},
+        "fields": "title"}})
+    archive.batch_update({"requests": requests})
 
 
 def verify(main, archive):
