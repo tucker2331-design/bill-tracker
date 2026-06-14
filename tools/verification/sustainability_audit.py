@@ -190,7 +190,13 @@ def check_upstream_schema():
     if not m:
         return [Result("UPSTREAM", "schema-canary", "FAIL",
                        "_EXPECTED_EVENT_KEYS not found — the field-rename canary is gone")]
-    expected = set(re.findall(r'["\']([A-Za-z_]+)["\']', m.group(1)))
+    # Strip line comments from the frozenset body BEFORE extracting quoted keys: a
+    # field name merely MENTIONED in a comment inside the set (e.g. '"EventID" is
+    # intentionally NOT required') must not count as a covered key — that would be a
+    # FALSE PASS masking a real gap. The harness's own 11-vs-10 output caught this
+    # (the watcher needs a watcher — assumptions_audit #88).
+    body = "\n".join(line.split("#", 1)[0] for line in m.group(1).splitlines())
+    expected = set(re.findall(r'["\']([A-Za-z_]+)["\']', body))
 
     # Every field read off an LIS-event receiver. The worker holds events in
     # several variables (event / ev / e and the max()-selected best / chosen /
