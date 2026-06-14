@@ -82,9 +82,11 @@ def _copy_tab(src_ws, archive, target_name):
 
 
 def verify(main, archive):
-    print(f"MAIN:    {main.title}  ({len(main.worksheets())} tabs)")
-    print(f"ARCHIVE: {archive.title}  ({len(archive.worksheets())} tabs)")
-    print("Archive tabs:", [w.title for w in archive.worksheets()])
+    main_tabs = main.worksheets()
+    arch_tabs = archive.worksheets()  # fetch once, reuse (Gemini #131)
+    print(f"MAIN:    {main.title}  ({len(main_tabs)} tabs)")
+    print(f"ARCHIVE: {archive.title}  ({len(arch_tabs)} tabs)")
+    print("Archive tabs:", [w.title for w in arch_tabs])
     print("✅ Service account can open BOTH workbooks — the share is correct.")
     return 0
 
