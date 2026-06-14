@@ -197,7 +197,7 @@ def check_upstream_schema():
     # latest), so all are scoped (Gemini #125). Convention-driven: a NEW field read
     # here that is not in the canary or the internal allowlist is auto-flagged, so
     # adding code that consumes a new LIS field forces the canary to grow.
-    read = set(re.findall(r'\b(?:event|ev|e|best|chosen|latest)\.get\(\s*["\']([A-Za-z_]+)["\']', src))
+    read = set(re.findall(r'\b(?:event|ev|e|_e|best|chosen|latest)\.get\(\s*["\']([A-Za-z_]+)["\']', src))
     lis_read = read - INTERNAL_EVENT_KEYS
     gap = lis_read - expected
 
