@@ -76,8 +76,10 @@ def main() -> int:
         return 0
 
     print("\n[delete] applying…")
+    # Atomic batch delete — all-or-nothing in a single API call, so a mid-loop
+    # failure can't leave a partial deletion, and no rate-limit risk (Gemini #130).
+    sheet.batch_update({"requests": [{"deleteSheet": {"sheetId": w.id}} for w in targets]})
     for w in targets:
-        sheet.del_worksheet(w)
         print(f"  ✅ deleted {w.title}")
     after = sum(int(w.row_count) * int(w.col_count) for w in sheet.worksheets())
     print(f"\nCells after: {after:,} ({100.0 * after / GOOGLE_SHEETS_CELL_CAP:.1f}% of cap). Freed {total_before - after:,}.")
