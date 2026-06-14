@@ -9,6 +9,15 @@ Append-only, reverse-chronological (newest at top). Each entry opens with `## [Y
 
 **Kinds:** `ingest` (new source/doc processed), `pr` (PR opened/merged/closed), `decision` (architectural or workflow), `lint` (wiki health-check pass), `session` (notable multi-hour working block), `post-mortem` (failure analysis), `milestone` (project-goal threshold crossed).
 
+## [2026-06-14] session | Sustainability campaign — the audit, made executable (PRs #125/#126/#127)
+
+Owner asked to prove the system can sustain itself unattended ("find the hidden unsustainable issues; I don't know what to look for anymore") and to be conscious that the DB will grow. Reframed latent failure as a **time bomb** with one of five *enumerable* triggers (temporal / capacity / upstream-schema / state-wedge / determinism) and swept all five conclusively. Findings: temporal SAFE (session/window runtime-derived, verified); state-wedge SAFE (per-cycle self-clearing); determinism LATENT (0 live collisions but no dedup tiebreaker); upstream GAP (`LegislationEventID` consumed but uncovered by the canary); capacity FAIL (Witness append-only, prune never built). Meta-finding: [[architecture/stress_test_failure_modes]] had silently rotted (S5 false-safe — the very claim the text bug hid behind; Y2 false-open), so the audit was a claims-ledger, not verdicts.
+
+- **#125 MERGED — `sustainability_audit.py` + weekly workflow.** The stress test made EXECUTABLE: 5 trigger classes, PASS/WARN/FAIL/SKIP, **convention-driven** (walks live tabs + code field-reads, so DB additions auto-surface). 8 Gemini rounds (the loop caught two silent-skip bugs in the audit tool itself). **First live run caught an unknown real finding: workbook at 79.7% of the 10M cell cap** (API_Cache 353,811 rows; stale C7_1a_RawCorpus 65,447) → [[ideas/future_improvements]], owner decision pending.
+- **#126 MERGED — Witness retention prune (L3b).** The prune the worker expected but that was never built; shares the worker concurrency group for exclusive tab access. Closes the Witness unbounded-growth path. 4 Gemini rounds (off-by-one precision, empty/null/invalid-date edges).
+- **#127 MERGED — worker expansion-safety.** `LegislationEventID` → Y2 canary; deterministic dedup tiebreaker (`_dedup_order`, output-neutral — 0 live collisions). Flips the last two harness WARNs → PASS.
+- **Docs reconciled (this PR):** stress-test S3/S5/Y2/Y5 + standing-open corrected; `verification_durability` classify_action mechanism + #1r WARN fixed; harness added as durability **Layer 5**; assumptions_audit **#88** (audits-as-claims-rot). **Open for owner:** the API_Cache/79.7%-cap remediation (destructive — needs go-ahead).
+
 ## [2026-06-13] pr | Part C OPENED — last worker text dependency gone (verb gap-check → recorded-vote RefidClass)
 
 The Part C gap-recovery reconciliation selected HISTORY rows by `MEETING_VERB_TOKENS` to find

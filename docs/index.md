@@ -65,7 +65,8 @@ The codebase itself (`calendar_worker.py`, `pages/ray2.py`, etc.) is the raw lay
 
 ## Tooling
 - `tools/crossover_audit/` — runnable pipeline for the full-window LIS audit; see [[testing/crossover_audit]] for context.
-- `tools/verification/` — the **Accuracy Sentinel** (daily Section-9 + unclassified + partial-sheet guard; session-agnostic). See [[architecture/verification_durability]].
+- `tools/verification/` — the **Accuracy Sentinel** (daily Section-9 + unclassified + partial-sheet guard; session-agnostic) and the **Sustainability Audit** (`sustainability_audit.py`, weekly — the executable 5-trigger time-bomb sweep; durability Layer 5). See [[architecture/verification_durability]].
+- `tools/witness_retention/` — the **L3b Witness retention prune** (`prune.py`, daily — deletes `Schedule_Witness` rows >90d; shares the worker concurrency group for exclusive tab access).
 - `tools/reconciliation/` — the **Reconciliation Tripwire** (weekly diff vs the independent official MinutesBook).
 - `tools/c7_section9_verify/` — read-only check of the X-Ray Section 9 count against LIVE Sheet1 (the production artifact, not a sidecar tool). The reusable form of the verification method [[failures/assumptions_audit#62]] mandates; run after re-hydrating the LegEvent cache.
 
