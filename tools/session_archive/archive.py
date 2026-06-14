@@ -41,7 +41,12 @@ def _open():
     if not creds:
         print("ERROR: GCP_CREDENTIALS not set.", file=sys.stderr)
         sys.exit(1)
-    gc = gspread.authorize(Credentials.from_service_account_info(json.loads(creds), scopes=SCOPES))
+    try:
+        info = json.loads(creds)
+    except json.JSONDecodeError as exc:
+        print(f"ERROR: GCP_CREDENTIALS is not valid JSON: {exc}", file=sys.stderr)
+        sys.exit(1)
+    gc = gspread.authorize(Credentials.from_service_account_info(info, scopes=SCOPES))
     try:
         main = gc.open_by_key(MAIN_ID)
     except Exception as exc:
