@@ -1,5 +1,14 @@
 # Future Improvements
 
+## ⚠️ Workbook capacity — API_Cache row retention + stale-tab cleanup (LIVE finding, sustainability_audit 2026-06-14, OWNER DECISION NEEDED)
+
+**The finding (surfaced by `sustainability_audit` CAPACITY on its first live run):** the Mastermind DB workbook is at **79.7% of Google Sheets' 10M-cell cap** (7,969,640 / 10,000,000; ~2M headroom, 17 tabs). At the cap, the worker's Sheet1 write fails (`gspread.APIError [400] … above the limit of 10000000 cells` — the exact crash in `tools/cell_count_audit/audit.py`). The cell-ceiling guard (`LEGEVENT_WORKBOOK_CELL_CEILING=9.5M`) protects the LegEvent-cache writes but NOT Sheet1/API_Cache appends. Two contributors need a decision:
+
+1. **`API_Cache` — 353,811 append-only rows, no row-retention (the structural risk).** The worker appends new `(Date,Committee,…)` schedule-cache entries every cycle (`calendar_worker.py:~5506`) and never prunes rows; it grows every session. The existing `trim_api_cache_cols.py` trims *padding columns* (26→6), not rows. **Options:** (a) session-scoped prune on rollover — drop prior-session rows (mirrors the LegEvent cache S1 fix / [[architecture/stress_test_failure_modes]] S1); (b) age-based retention; (c) dedup on `(Date,Committee,Location)`. **(a) is the cleanest and matches an existing pattern.** *Destructive (deletes cache rows — re-fetchable from LIS), needs careful design so time-recovery lookups aren't broken; needs owner go-ahead.*
+2. **`C7_1a_RawCorpus` — 65,447 rows of DEAD data.** A one-shot corpus from the PR-C7.1a audit (`tools/c7_1a_audit/audit.py`), referenced by nothing in production. Deleting the tab (+ siblings `C7_1a_TokenStats`/`C7_1a_DLQ_Samples`/`C7_1a_Summary`) reclaims the cells immediately. *Whole-tab delete = irreversible; regenerable by re-running the audit; needs owner go-ahead.*
+
+**Tracking:** `sustainability_audit` keeps both as `unrecognised-tab` WARNs until a policy is declared (register in `RETENTION_DAYS` or `BOUNDED_TABS`). Cross-ref [[architecture/stress_test_failure_modes]] Y5 + standing-open #1.
+
 ## Forward-calendar block — upcoming meetings before they happen (flagged 2026-06-02 post-PR-#57/#58, real-work-prep priority)
 
 **Strategic context:** Section 9's structural fix is *in flight* — PR #57 + #58 merged 2026-06-02, but live verification showed they're no-ops until the cache-capacity bug lands (PR #61 / PR-C7.1e) and the cache re-hydrates; see [[failures/assumptions_audit#62]]. (An earlier draft of this block said "structurally closed" — the same premature-victory mistake #62 documents. Corrected.) Once that's done, the next dynamic frontier for the 2027 session is showing lobbyists *upcoming* meetings — not just past actions. The product today is HISTORY.CSV-backed and shows "what happened in committee at time T." The real lobbyist surface is "what's on the schedule for the next 7-14 days?"
@@ -125,8 +134,8 @@
   current verb set before extracting it.
   **Tagged in:** CLAUDE.md Standard #6.
 
-## L3b Nightly Audit — Schedule_Witness retention owner (flagged 2026-04-24, PR-C2 round-2)
-- [ ] Implement L3b nightly audit that owns `Schedule_Witness` retention.
+## ✅ DONE — L3b Nightly Audit — Schedule_Witness retention owner (flagged 2026-04-24; SHIPPED #126, 2026-06-14)
+- [x] **SHIPPED in PR #126** as `tools/witness_retention/prune.py` + `.github/workflows/witness_retention.yml`. Deletes the contiguous leading prefix of `Schedule_Witness` rows whose `seen_at_utc < now − 90d`; aborts on schema drift; no-op when nothing expired. The workflow **joins the worker's `calendar-worker` concurrency group** (`cancel-in-progress: false`) → exclusive tab access, no append/delete race, zero worker-workflow change. Caught by `sustainability_audit` CAPACITY (asserts no Witness row older than the horizon). *(Note: surfaced by the sustainability audit, which found this had been a `TODO` the whole time despite stress-test Y5 claiming "retention prune exists.")* Original design notes below for history:
   **Context:** PR-C2's original design pruned the witness tab inside the
   15-min cycle (`append_rows` + `col_values(1)` + `delete_rows` on the same
   tab). Gemini round-1 concern #2 flagged this as a documented

@@ -15,19 +15,24 @@ regressions themselves, and require no per-session human action (Standard #2 +
 so 2027 is covered the moment the worker writes to it — no code change, no
 re-audit.
 
-## The four layers
+## The five layers
 
 | Layer | Cadence | What it guards | Trips when | Where |
 |---|---|---|---|---|
-| **1. In-cycle circuit breaker** | every 15 min (worker) | bad Sheet1 overwrites | `meeting_unsourced` regresses vs rolling baseline (delta) or the abs floor | `calendar_worker.py` |
+| **1. In-cycle circuit breaker** | every cycle (worker) | bad Sheet1 overwrites | `meeting_unsourced` regresses vs rolling baseline (delta) or the abs floor | `calendar_worker.py` |
 | **2. Accuracy sentinel** | daily (cron) | the accuracy METRIC | Section 9 > 0, unclassified > 0, **unconfirmed > budget**, sheet collapse, over-derivation, **structural coverage < floor** | `tools/verification/accuracy_sentinel.py` → `🛡️ Accuracy Sentinel` |
 | **3. Reconciliation tripwire** | weekly (cron) | DRIFT vs an INDEPENDENT source | committee reports stop matching the official MinutesBook (mis-attribution) above threshold | `tools/reconciliation/reconcile_votes.py` → `🔎 Reconciliation Tripwire` |
 | **4. Completeness tripwire** | weekly (cron) | a HIDDEN meeting (the catastrophic failure) | a committee meeting on the LIS Schedule calendar is ABSENT from Sheet1 (join by committee CODE) | `tools/verification/completeness_tripwire.py` → `🗓️ Completeness Tripwire` |
+| **5. Sustainability audit** | weekly (cron) | LATENT / future "time-bomb" failures the other four can't see — five enumerable triggers: temporal, capacity, upstream-schema, state-wedge, determinism | a PRESENT danger (over cell-cap, broken retention, an unguarded consumed field, a live dedup collision, a stale wedge marker); trajectory risks WARN, never silently skip | `tools/verification/sustainability_audit.py` → `🧭 Sustainability Audit` |
+
+Layer 5 (added 2026-06-14) is the answer to *"who's to say that's all the bugs, and how do I find them when I step away?"* The other four guard against REGRESSION of known-good state; Layer 5 guards against latent failures wired to a trigger that hasn't fired yet (a year rollover, the workbook filling, an LIS field rename, a wedged baseline, a nondeterministic dedup). It is **convention-driven** — it walks the workbook's ACTUAL tabs and the code's ACTUAL event-field reads — so a future DB addition is auto-covered or auto-flagged. Crucially, it makes [[stress_test_failure_modes]] **executable**: that page had silently rotted (a status claim drifted out of sync with the code, which is how the 2026 text bug hid), and an un-run claim is indistinguishable from a lie once enough time passes. On its first live run it caught a real, unknown finding: the workbook at **79.7% of the 10M cell cap**.
 
 **Why four.** Layer 1 stops bad data from ever being written *this cycle*. Layer
 2 re-derives the published accuracy metric from the live sheet using the **same**
-`classify_action` as production (extracted from `ray2.py` at runtime, so it can
-never drift) and fails if the goal (Section 9 = 0, unclassified = 0) regresses —
+`classify_action` as production (now **IMPORTED from `structural_router.py`** — the
+single centralized source, post-C8.4c; it was formerly AST-extracted from `ray2.py`,
+which this page described until corrected 2026-06-14) and fails if the goal (Section
+9 = 0, unclassified = 0) regresses —
 the answer to "did new data quietly break it?" Layer 3 is the answer to "who's to
 say that's all the bugs?": it diffs our output against a source the pipeline
 **never touches** (the official committee minutes), catching *unknown* drift no
