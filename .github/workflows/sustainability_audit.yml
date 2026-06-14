@@ -1,0 +1,38 @@
+name: 🧭 Sustainability Audit (time-bomb sweep)
+
+# Standard #1/#2/#8: the recurring, EXPANSION-AWARE guard against LATENT failures
+# — code correct on today's data but wired to a trigger that hasn't fired yet.
+# It walks the five enumerable trigger classes (temporal / capacity / upstream
+# schema / state-wedge / determinism) against the LIVE workbook and the LIVE code,
+# and fails loudly on a PRESENT danger (WARN findings are surfaced but non-gating).
+#
+# This is the prose stress-test (docs/architecture/stress_test_failure_modes.md)
+# made EXECUTABLE so it can never silently rot the way a claims-ledger does. It is
+# convention-driven (walks actual tabs + actual code field-reads) so future DB
+# additions are auto-covered or auto-flagged, never silently skipped.
+#
+# Needs GCP_CREDENTIALS for the capacity/retention checks (same secret the worker
+# uses); the temporal / schema / determinism checks run with no secret.
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "17 9 * * 1"   # weekly, Mondays 09:17 UTC
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install gspread google-auth
+      - name: Time-bomb sweep (temporal / capacity / upstream / wedge / determinism)
+        env:
+          GCP_CREDENTIALS: ${{ secrets.GCP_CREDENTIALS }}
+        run: python3 tools/verification/sustainability_audit.py
