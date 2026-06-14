@@ -1,0 +1,53 @@
+name: 🗄️ Session Archive (preserve + roll over)
+
+# Preserve each session's output (and the one-time C7_1a audit corpus) in the
+# SEPARATE archive workbook, so the live workbook stays under the 10M-cell cap and
+# every session is kept for later trend analysis. See tools/session_archive/archive.py.
+#
+# Manual trigger. Defaults to the read-only `verify` mode. Shares the calendar-worker
+# concurrency group so it never races a worker write to the live workbook.
+
+on:
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: "verify | snapshot-session | migrate-c7"
+        type: choice
+        default: "verify"
+        options:
+          - verify
+          - snapshot-session
+          - migrate-c7
+      session_code:
+        description: "session code for snapshot-session (e.g. 20261)"
+        type: string
+        default: "20261"
+      confirm:
+        description: "type 'delete' to let migrate-c7 remove the copied tabs from the live workbook"
+        type: string
+        default: ""
+
+concurrency:
+  group: calendar-worker
+  cancel-in-progress: false
+
+jobs:
+  archive:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install gspread google-auth
+      - name: Session archive (${{ inputs.mode }})
+        env:
+          GCP_CREDENTIALS: ${{ secrets.GCP_CREDENTIALS }}
+          MODE: ${{ inputs.mode }}
+          SESSION_CODE: ${{ inputs.session_code }}
+          CONFIRM: ${{ inputs.confirm }}
+        run: python3 tools/session_archive/archive.py
