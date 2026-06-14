@@ -1,0 +1,42 @@
+name: 🗑️ Delete stale C7_1a audit tabs (one-shot)
+
+# One-shot maintenance: delete the PR-C7.1a derived-classifier audit tabs (C7_1a_*)
+# to reclaim workbook cells. They are read by nothing in production and are
+# regenerable from HISTORY.CSV. See tools/cleanup_stale_tabs/delete_c7_1a.py.
+#
+# Manual trigger only. DEFAULTS TO dry-run — choose mode=delete to actually delete.
+# Shares the calendar-worker concurrency group so it never races a worker write.
+
+on:
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: "dry-run (list only) or delete (apply)"
+        type: choice
+        default: "dry-run"
+        options:
+          - dry-run
+          - delete
+
+concurrency:
+  group: calendar-worker
+  cancel-in-progress: false
+
+jobs:
+  cleanup:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install gspread google-auth
+      - name: Delete stale C7_1a tabs (${{ inputs.mode }})
+        env:
+          GCP_CREDENTIALS: ${{ secrets.GCP_CREDENTIALS }}
+          MODE: ${{ inputs.mode }}
+        run: python3 tools/cleanup_stale_tabs/delete_c7_1a.py
