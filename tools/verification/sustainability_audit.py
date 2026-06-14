@@ -225,7 +225,7 @@ def check_determinism():
     # carries a row-unique column (OriginalOrder / a stable index) immediately
     # before the final drop_duplicates(subset=['Date', 'Committee', 'Bill']).
     final_dedup = re.search(r"sort_values\(by=\[([^\]]+)\]\)\s*\n\s*final_df\s*=\s*final_df\.drop_duplicates\(\s*subset=\[\s*['\"]Date['\"]", src)
-    tiebreak_ok = bool(final_dedup and re.search(r"OriginalOrder|RowUID|_uid|StableIndex", final_dedup.group(1)))
+    tiebreak_ok = bool(final_dedup and re.search(r"OriginalOrder|RowUID|_uid|_dedup_order|StableIndex", final_dedup.group(1)))
     if tiebreak_ok:
         out.append(Result("DETERMINISM", "dedup-tiebreaker", "PASS",
                            "final drop_duplicates is preceded by a sort with a row-unique tiebreaker"))

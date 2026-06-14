@@ -75,6 +75,11 @@ LEGISLATION_EVENT_HEADERS = {
 _EXPECTED_EVENT_KEYS = frozenset({
     "EventCode", "EventDate", "ChamberCode", "Description",
     "ReferenceType", "VoteTally", "ActorType", "Status", "CommitteeName",
+    # The persist reads LegislationEventID off every raw API event (the live
+    # event-identity field, per open_anti_patterns #9 — verified present on all
+    # fetched events); a silent rename must trip the canary too. The reloaded-cache
+    # fallback key "EventID" is intentionally NOT required (it's not the API field).
+    "LegislationEventID",
 })
 
 # === INVESTIGATION WINDOW ===
@@ -5473,8 +5478,17 @@ def run_calendar_update():
             print(f"📋 Collapsed {int(journal_mask.sum())} unsourced/admin rows into Ledger Updates blocks.")
 
         final_df = final_df[~((final_df['Bill'] == "No agenda listed.") & final_df.duplicated(subset=['Date', 'Committee', 'Time'], keep=False))]
-        final_df = final_df.sort_values(by=['Date', 'Committee', 'Bill', 'Source'])
+        # Deterministic dedup: keep='last' must NOT depend on pandas' unstable sort.
+        # A row-unique tiebreaker (_dedup_order = append order) totally orders the
+        # rows, so the survivor of any (Date,Committee,Bill) group is fixed. Today
+        # there are 0 such collisions (sustainability_audit DETERMINISM proves it),
+        # so this is output-neutral now and the guard for a future schema that
+        # carries >1 action per (bill,committee,date). assumptions_audit ref.
+        final_df = final_df.reset_index(drop=True)
+        final_df['_dedup_order'] = final_df.index  # 0..N-1 after reset_index — the append-order tiebreaker
+        final_df = final_df.sort_values(by=['Date', 'Committee', 'Bill', 'Source', '_dedup_order'])
         final_df = final_df.drop_duplicates(subset=['Date', 'Committee', 'Bill'], keep='last')
+        final_df = final_df.drop(columns=['_dedup_order'])
         final_df = final_df.fillna("")
 
         scrape_start_str = scrape_start.strftime('%Y-%m-%d')
