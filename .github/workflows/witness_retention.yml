@@ -1,0 +1,37 @@
+name: 🧹 Witness Retention Prune (L3b)
+
+# The "L3b nightly audit" calendar_worker.py expects: deletes Schedule_Witness
+# change-feed rows older than 90 days so the tab stays bounded with ZERO human
+# action (closes the workbook's one unbounded-growth path; Standard #8).
+#
+# Shares the `calendar-worker` concurrency group so it NEVER runs while the worker
+# is appending to the same tab — the "exclusive use of the tab" the worker comment
+# requires. Scheduled inside the worker's overnight quiet hours and off its cron
+# slots as belt-and-suspenders.
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "23 7 * * *"   # daily 07:23 UTC (~3am ET; quiet hours; not a worker 3h slot)
+
+concurrency:
+  group: calendar-worker
+  cancel-in-progress: false
+
+jobs:
+  prune:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install gspread google-auth
+      - name: Prune Schedule_Witness rows older than 90 days
+        env:
+          GCP_CREDENTIALS: ${{ secrets.GCP_CREDENTIALS }}
+        run: python3 tools/witness_retention/prune.py
