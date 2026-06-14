@@ -62,7 +62,14 @@ def _copy_tab(src_ws, archive, target_name):
     same-named tab, then rename — so the archive never momentarily drops to 0 sheets
     (a single-sheet workbook cannot have its only tab deleted) (Gemini #131)."""
     props = src_ws.copy_to(ARCHIVE_ID)  # Sheets copyTo -> {'sheetId':..., 'title':'Copy of ...'}
-    new = archive.get_worksheet_by_id(props["sheetId"])
+    # Find the freshly-copied sheet by id, comparing as STRINGS. gspread's
+    # Worksheet.id and get_worksheet_by_id's equality have differed in type (int vs
+    # str) across versions, so a strict-typed lookup is fragile (Gemini #131). A
+    # string compare over the worksheet list is robust to either convention.
+    sid = str(props.get("sheetId"))
+    new = next((w for w in archive.worksheets() if str(w.id) == sid), None)
+    if new is None:
+        raise RuntimeError(f"copied sheet id={sid} not found in the archive after copy_to")
     try:
         old = archive.worksheet(target_name)
         if old.id != new.id:
