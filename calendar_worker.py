@@ -5902,14 +5902,15 @@ def run_calendar_update():
                         dedup_key="state_cell_y3_write_fail",
                     )
 
-                # PR (auto-rollover): advance the sheet-session marker (V1) to the
-                # active session — ONLY on a successful overwrite, and only if the
-                # rollover archive (if one was needed) succeeded. Same discipline as
-                # Y2/Y3: a halted/failed cycle leaves V1 unchanged so the rollover is
-                # retried. Write only when V1 actually CHANGED (rollover) or is empty
-                # (first-run init) — no redundant acell write on a steady-state cycle
-                # (Gemini #133).
-                if _advance_sheet_session and _sheet_session != ACTIVE_SESSION:
+                # PR (auto-rollover): re-write the sheet-session marker (V1) EVERY
+                # successful cycle — the `worksheet.clear()` above wipes ALL cells,
+                # including V1, so (exactly like Y2/Y3) it MUST be restored each cycle
+                # or it goes empty and a rollover landing in that window would be missed
+                # (Gemini #133 CRITICAL — this corrects an earlier conditional-write
+                # optimization that overlooked the clear()). Skipped only when
+                # `_advance_sheet_session` is False (the V1 read failed, or the rollover
+                # archive failed) so the rollover is re-detected/retried next cycle.
+                if _advance_sheet_session:
                     try:
                         worksheet.update_acell(SHEET_SESSION_CELL, ACTIVE_SESSION)
                     except Exception as _ss_write_err:
