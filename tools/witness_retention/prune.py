@@ -52,6 +52,27 @@ RETENTION_DAYS = 90  # mirrors calendar_worker.WITNESS_RETENTION_DAYS; the susta
 SCOPES = ["https://www.googleapis.com/auth/spreadsheets"]
 
 
+def _parse_seen_at(s):
+    """Parse the witness seen_at_utc at FULL precision (the worker writes
+    '%Y-%m-%dT%H:%M:%SZ'). Full precision matters: truncating to the date and
+    comparing against a time-precise cutoff would prune a boundary-day row up to a
+    day early (Gemini #126). Returns an aware UTC datetime, or None if unparseable.
+    """
+    s = str(s).strip()
+    if not s:
+        return None
+    try:
+        return datetime.strptime(s, "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=timezone.utc)
+    except ValueError:
+        pass
+    # Degraded/legacy fallback: a leading bare date (midnight) — still better than
+    # aborting; only a TRULY unparseable non-empty value returns None (-> abort).
+    m = re.match(r'(\d{4}-\d{2}-\d{2})$', s)
+    if m:
+        return datetime.strptime(m.group(1), "%Y-%m-%d").replace(tzinfo=timezone.utc)
+    return None
+
+
 def main() -> int:
     creds = os.environ.get("GCP_CREDENTIALS")
     if not creds:
@@ -78,21 +99,19 @@ def main() -> int:
     expired = 0
     for i, v in enumerate(col1[1:], start=2):  # i = 1-based sheet row number
         s = str(v).strip()
-        m = re.match(r'(\d{4}-\d{2}-\d{2})', s)
-        if not m:
-            if s == "":
-                # Empty cell (e.g. a trailing/padding cell from col_values) — STOP
-                # the prefix here. We never delete past an unknown boundary and we
-                # never abort on a benign blank (Gemini #126): we simply prune the
-                # contiguous expired block found so far.
-                break
-            # A NON-empty, non-date value is genuine schema drift — abort rather
+        if s == "":
+            # Empty cell (e.g. a trailing/padding cell) — STOP the prefix here. We
+            # never delete past an unknown boundary and never abort on a benign
+            # blank (Gemini #126): prune the contiguous expired block found so far.
+            break
+        seen = _parse_seen_at(s)
+        if seen is None:
+            # A NON-empty, unparseable value is genuine schema drift — abort rather
             # than prune blindly.
-            print(f"ERROR: {WITNESS_TAB} column 1 at row {i} is not an ISO date ({v!r}). "
+            print(f"ERROR: {WITNESS_TAB} column 1 at row {i} is not an ISO timestamp ({v!r}). "
                   f"Schema drift — ABORTING prune, no rows deleted.", file=sys.stderr)
             return 1
-        day = datetime.strptime(m.group(1), "%Y-%m-%d").replace(tzinfo=timezone.utc)
-        if day < cutoff:
+        if seen < cutoff:  # full-precision comparison — no date truncation, no off-by-one
             expired += 1
         else:
             break  # first non-expired row — stop; we only delete the contiguous old prefix
