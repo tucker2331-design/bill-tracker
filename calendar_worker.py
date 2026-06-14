@@ -2551,10 +2551,11 @@ SESSION_ARCHIVE_ID = "1AA-dCUDAPvq59Hv01DqteEquBJ1kkqI0QR5ECd10QeA"
 SHEET_SESSION_CELL = "V1"  # far-right row-1 state cell; re-written each cycle like Y2/Y3
 
 
-def _archive_completed_session(sheet, old_code):
-    """Snapshot the live Sheet1 into the archive workbook as ``Session_<old_code>``,
-    replacing any existing snapshot of that session (idempotent). Returns the target
-    tab name; raises on failure (the caller decides whether to advance the marker).
+def _archive_completed_session(sheet, worksheet, old_code):
+    """Snapshot the live Sheet1 (`worksheet`, already fetched by the caller) into the
+    archive workbook as ``Session_<old_code>``, replacing any existing snapshot of that
+    session (idempotent). Returns the target tab name; raises on failure (the caller
+    decides whether to advance the marker).
 
     copy_to + a single atomic batch_update (delete-old-then-rename by raw sheetId): no
     full worksheet-list fetch, and no reliance on the gspread Worksheet constructor /
@@ -2564,9 +2565,9 @@ def _archive_completed_session(sheet, old_code):
     target = f"Session_{old_code}"
     try:
         old_id = archive.worksheet(target).id
-    except gspread.WorksheetNotFound:
+    except gspread.exceptions.WorksheetNotFound:
         old_id = None
-    props = sheet.worksheet("Sheet1").copy_to(SESSION_ARCHIVE_ID)
+    props = worksheet.copy_to(SESSION_ARCHIVE_ID)
     requests = []
     if old_id is not None:
         requests.append({"deleteSheet": {"sheetId": int(old_id)}})
@@ -3192,7 +3193,7 @@ def run_calendar_update():
         )
     if _sheet_session and _sheet_session != ACTIVE_SESSION:
         try:
-            _archived_to = _archive_completed_session(sheet, _sheet_session)
+            _archived_to = _archive_completed_session(sheet, worksheet, _sheet_session)
             print(f"📦 Session rollover {_sheet_session} → {ACTIVE_SESSION}: "
                   f"archived the completed session to '{_archived_to}' in the archive workbook.")
         except Exception as _arch_err:
