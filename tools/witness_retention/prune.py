@@ -77,8 +77,17 @@ def main() -> int:
     cutoff = datetime.now(timezone.utc) - timedelta(days=RETENTION_DAYS)
     expired = 0
     for i, v in enumerate(col1[1:], start=2):  # i = 1-based sheet row number
-        m = re.match(r'(\d{4}-\d{2}-\d{2})', str(v))
+        s = str(v).strip()
+        m = re.match(r'(\d{4}-\d{2}-\d{2})', s)
         if not m:
+            if s == "":
+                # Empty cell (e.g. a trailing/padding cell from col_values) — STOP
+                # the prefix here. We never delete past an unknown boundary and we
+                # never abort on a benign blank (Gemini #126): we simply prune the
+                # contiguous expired block found so far.
+                break
+            # A NON-empty, non-date value is genuine schema drift — abort rather
+            # than prune blindly.
             print(f"ERROR: {WITNESS_TAB} column 1 at row {i} is not an ISO date ({v!r}). "
                   f"Schema drift — ABORTING prune, no rows deleted.", file=sys.stderr)
             return 1
