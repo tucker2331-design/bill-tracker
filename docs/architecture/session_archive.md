@@ -20,8 +20,9 @@ home, and every session is kept (owner requirement, 2026-06-14).
   records. Goal: **keep every session, forever**, for cross-session trends.
 
 ## The archive
-- A SEPARATE workbook, **"Mastermind Archive"** (`1AA-dCUDAPvq59Hv01DqteEquBJ1kkqI0QR5ECd10QeA`),
-  owner-created and shared with the worker's service account as Editor. Its own 10M-cell
+- A SEPARATE workbook, **"Mastermind Archive"** (id `1AA-dCUD…`; canonical = `ARCHIVE_ID`
+  in `tools/session_archive/archive.py` — the single source of truth), owner-created and
+  shared with the worker's service account as Editor. Its own 10M-cell
   budget → scales for years; the 50-session trend vision spans archive workbooks if needed.
 - One clearly-named tab per session: `Session_<code>` (e.g. `Session_20261`).
 - The one-time PR-C7.1a audit corpus (`C7_1a_*`) also lives here (moved out of the live book).
