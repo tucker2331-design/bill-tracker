@@ -5433,6 +5433,7 @@ def run_calendar_update():
     #      to attribute the failure to the cycle that caused it.
     # Function is idempotent — writes the FULL caches each time, not
     # deltas — so calling on every cycle is safe.
+    _phase("HISTORY STM processing + LegEvent hydration + classification")
     _persist_legevent_cache(
         bills_meta=legevent_bills_meta,
         events_cache=_legislation_event_cache,
@@ -5519,7 +5520,7 @@ def run_calendar_update():
     if alert_rows:
         filtered_events.extend(alert_rows)
 
-    _phase("HISTORY STM processing + LegEvent hydration + classification")
+    _phase("LegEvent cache persistence (_persist_legevent_cache — full-cache chunked write)")
     final_df = pd.DataFrame(filtered_events)
     if not final_df.empty:
         # === OPTION A: Collapse unsourced rows into single Ledger Updates block ===
@@ -5708,6 +5709,9 @@ def run_calendar_update():
                     final_df = final_df.fillna("")
 
             sheet_data = [final_df.columns.values.tolist()] + final_df.values.tolist()
+            # Unconditional (before the breaker if/else) so this timing prints even on a
+            # trip — final_df assembly + the API_Cache write both already ran (Gemini #139).
+            _phase("final_df assembly + API_Cache write")
 
             # PR-hardening1b-1: count the surfaced 'unconfirmed' rows over the FINAL written rows
             # (final_df == sheet_data, AFTER the ephemeral filter + (Date,Committee,Bill) dedup),
@@ -5904,7 +5908,6 @@ def run_calendar_update():
                           "Actions failure email — past the in-sheet-only alert.")
                     sys.exit(1)
             else:
-                _phase("final_df assembly + API_Cache/witness/cache persistence")
                 print("💾 Writing to Enterprise Database...")
                 worksheet.clear()
                 worksheet.update(values=sheet_data, range_name="A1")
