@@ -345,7 +345,10 @@ def check_capacity():
             continue
         try:
             populated = len(ws_by_title[title].col_values(1))  # populated extent (col A)
-        except Exception:
+        except Exception as exc:
+            # Never silently skip — the audit's own rule (Gemini #134).
+            out.append(Result("CAPACITY", f"wasted-grid:{title}", "SKIP",
+                               f"could not read populated extent of '{title}': {exc}"))
             continue
         wasted = (rc - populated) * cc
         if rc > populated * 2 and (rc - populated) >= WASTED_GRID_MIN_ALLOCATED:

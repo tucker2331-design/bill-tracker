@@ -41,6 +41,15 @@ NON_EMPTY_REPORT_LIMIT = 10
 CHUNK_SIZE = 50_000
 
 
+def col_to_letter(n: int) -> str:
+    """1-indexed column number to A1 letter (handles AA, AB, ...)."""
+    result = ""
+    while n > 0:
+        n, rem = divmod(n - 1, 26)
+        result = chr(ord("A") + rem) + result
+    return result
+
+
 def main() -> int:
     dry_run = os.environ.get("DRY_RUN", "true").strip().lower() in ("true", "1", "yes")
 
@@ -84,14 +93,18 @@ def main() -> int:
         return 0
 
     # === Safety check 2: every cell in rows (target+1 .. row_count) is empty ===
-    # Chunked scan (mirrors the cols tool) so we never pull millions of cells at once.
+    # resize(rows=target) deletes rows beyond target across ALL columns, so scan the
+    # FULL allocated width (A .. last col), not just A-F — otherwise data in cols G+
+    # (if the grid is wider than the schema) would be deleted unscanned (Gemini #134).
+    # Chunked so we never pull millions of cells at once.
     first_extra = target_rows + 1
-    print(f"[check 2] scanning A{first_extra}:F{rows_before} "
-          f"({rows_before - target_rows:,} rows × {TARGET_COL_COUNT} cols) in {CHUNK_SIZE:,}-row chunks...")
+    last_col = col_to_letter(cols_before)
+    print(f"[check 2] scanning A{first_extra}:{last_col}{rows_before} "
+          f"({rows_before - target_rows:,} rows × {cols_before} cols) in {CHUNK_SIZE:,}-row chunks...")
     non_empty = []
     for chunk_start in range(first_extra, rows_before + 1, CHUNK_SIZE):
         chunk_end = min(chunk_start + CHUNK_SIZE - 1, rows_before)
-        for r_offset, row in enumerate(ws.get_values(f"A{chunk_start}:F{chunk_end}")):
+        for r_offset, row in enumerate(ws.get_values(f"A{chunk_start}:{last_col}{chunk_end}")):
             for c_offset, cell in enumerate(row):
                 if cell != "":
                     non_empty.append((chunk_start + r_offset, c_offset + 1, cell))
