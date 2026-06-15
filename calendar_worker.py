@@ -2268,13 +2268,13 @@ def get_active_session_info(http_session):
             for s in sessions:
                 if s.get('IsActive') or s.get('IsDefault'):
                     start, end = extract_dates(s)
-                    return {"code": str(s.get('SessionCode')), "start": start, "end": end + timedelta(days=14)}, True, False
+                    return {"code": str(s.get('SessionCode')), "start": start, "end": end + timedelta(days=14), "is_active": bool(s.get('IsActive'))}, True, False
 
             current_year = now.year
             for s in sessions:
                 if str(s.get('SessionYear')) == str(current_year):
                     start, end = extract_dates(s)
-                    return {"code": str(s.get('SessionCode')), "start": start, "end": end + timedelta(days=14)}, True, False
+                    return {"code": str(s.get('SessionCode')), "start": start, "end": end + timedelta(days=14), "is_active": bool(s.get('IsActive'))}, True, False
     except Exception as e:
         print(f"⚠️ Session API parsing failed: {e}")
     return None, False, auth_failed
@@ -2588,7 +2588,11 @@ def run_calendar_update():
     http_session = get_armored_session()
     
     session_data, api_is_online, _session_auth_failed = get_active_session_info(http_session)
-    
+    # Session-active flag for the sentinel's staleness gate (Gemini SRE C): the LIS
+    # Session API's IsActive — true only while the GA is actually meeting (new actions
+    # expected). Off-session it is false, so the freshness gate correctly stays quiet.
+    _session_active = bool(session_data.get("is_active")) if session_data else False
+
     tz = pytz.timezone('America/New_York')
     now = datetime.now(tz).replace(tzinfo=None)
     alert_rows = []
@@ -3192,6 +3196,17 @@ def run_calendar_update():
             status="INFO", category="API_FAILURE", severity="INFO",
             dedup_key="state_cell_y3_read_fail",
         )
+
+    # Consecutive breaker-trip counter (Sheet1!T1) for escalation (Gemini SRE A). It
+    # SURVIVES a trip cycle (the trip path skips worksheet.clear()) and is reset to 0 on a
+    # successful overwrite, so it counts trips-in-a-row since the last healthy write.
+    _consec_trips_prev = 0
+    try:
+        _raw_t1 = worksheet.acell("T1").value
+        if _raw_t1 and str(_raw_t1).strip().isdigit():
+            _consec_trips_prev = int(str(_raw_t1).strip())
+    except Exception:
+        _consec_trips_prev = 0
 
     # PR (auto-rollover): the live Sheet1 must correspond to the active session. V1 holds
     # the session the sheet currently represents; when it differs from ACTIVE_SESSION a
@@ -5728,6 +5743,7 @@ def run_calendar_update():
             CIRCUIT_MAX_ABS_VIOLATIONS = 50                # or >=50 absolute
             CIRCUIT_MAX_MEETING_UNSOURCED_DELTA = 25       # or >25 worse than last good
             CIRCUIT_MAX_MEETING_UNSOURCED_ABS = 500        # or >500 catastrophic absolute floor
+            CIRCUIT_CONSECUTIVE_TRIP_ESCALATION = 3        # 3 trips in a row -> CRITICAL + fail the run (Gemini SRE A)
             UNCONFIRMED_DELTA_ALERT = 25                   # PR-hardening1b: alert (NOT trip) on a >25 unconfirmed spike vs Y3
             # Review-fix (Gemini): denominator is rows_appended, not
             # total_processed — rows_appended counts ONLY rows that reached
@@ -5853,6 +5869,29 @@ def run_calendar_update():
                     dedup_key=f"circuit_breaker::{_cycle_end_utc.strftime('%Y-%m-%d')}",
                 )
                 print("🛑 Sheet1 overwrite skipped. State cell Y1 NOT advanced so next cycle's gap-backfill (PR-C2) covers this missed window.")
+
+                # Consecutive-trip ESCALATION (Gemini SRE A): a single trip preserves
+                # last-known-good and stays GREEN (no email). A CONTINUOUS trip (e.g. an
+                # upstream schema break) would freeze Sheet1 indefinitely with only quiet
+                # in-sheet alerts. Count trips-in-a-row in T1 (survives the trip cycle);
+                # on the Nth, fail the run so GitHub EMAILS — escalating past in-sheet.
+                _consec_trips = _consec_trips_prev + 1
+                try:
+                    worksheet.update_acell("T1", str(_consec_trips))
+                except Exception as _t1_err:
+                    print(f"⚠️ Failed to write Sheet1!T1 consecutive-trip count: {_t1_err}")
+                if _consec_trips >= CIRCUIT_CONSECUTIVE_TRIP_ESCALATION:
+                    _stuck = (f"🛑🛑 CIRCUIT BREAKER STUCK: tripped {_consec_trips} consecutive cycles — "
+                              f"Sheet1 is FROZEN (not updating) and last-known-good is going stale. Almost "
+                              f"certainly an upstream LIS schema/data break. INVESTIGATE NOW.")
+                    try:
+                        worksheet.update_acell("X1", _stuck[:4500])
+                    except Exception:
+                        pass
+                    print(_stuck)
+                    print("🛑🛑 Failing the run (exit 1) so the stuck breaker ESCALATES to a GitHub "
+                          "Actions failure email — past the in-sheet-only alert.")
+                    sys.exit(1)
             else:
                 print("💾 Writing to Enterprise Database...")
                 worksheet.clear()
@@ -5874,6 +5913,23 @@ def run_calendar_update():
                     worksheet.update_acell("W1", "")
                 except Exception as _w1_clear_err:
                     print(f"⚠️ Failed to clear Sheet1!W1 breaker record: {_w1_clear_err}")
+
+                # Reset the consecutive breaker-trip counter on a healthy write — the
+                # clear() above wiped T1, so restore it to 0 (Gemini SRE A).
+                try:
+                    worksheet.update_acell("T1", "0")
+                except Exception as _t1_reset_err:
+                    print(f"⚠️ Failed to reset Sheet1!T1: {_t1_reset_err}")
+
+                # Session-active flag for the sentinel's staleness gate (Gemini SRE C).
+                # clear() wiped it; re-write each healthy cycle. The sentinel reads S1 and,
+                # during an ACTIVE session, enforces a freshness gate on the newest action
+                # date — catching a frozen pipeline that preserves last-known-good and
+                # therefore passes every shape check.
+                try:
+                    worksheet.update_acell("S1", "ACTIVE" if _session_active else "ADJOURNED")
+                except Exception as _s1_err:
+                    print(f"⚠️ Failed to write Sheet1!S1 session flag: {_s1_err}")
 
                 # PR-C1: advance the last-successful-cycle cursor. Written
                 # ONLY on a successful Sheet1 write so that a failed/halted
