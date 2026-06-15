@@ -2486,6 +2486,7 @@ def extract_rogue_agenda(url, session, target_date_dt=None, depth=0):
         if res.status_code != 200: return [], False, False
 
         if '.pdf' in url.lower() or b'%PDF' in res.content[:5]:
+            temp_pdf_path = None
             try:
                 with tempfile.NamedTemporaryFile(delete=False, suffix='.pdf') as temp_pdf:
                     temp_pdf.write(res.content)
@@ -2494,11 +2495,16 @@ def extract_rogue_agenda(url, session, target_date_dt=None, depth=0):
                     for page in pdf.pages:
                         text = page.extract_text()
                         if text: found_bills.update([m.upper() for m in re.findall(regex_pattern, text.replace(" ", ""))])
-                os.remove(temp_pdf_path)
                 fetch_ok = True  # PDF parsed cleanly -> result (incl. empty) is authoritative
             except Exception as e:
                 print(f"⚠️ Agenda PDF parse failed for {url}: {e}")
                 return [], True, False
+            finally:
+                # delete=False temp file must be cleaned on EVERY path — success,
+                # parse-exception, even the early return above — or it leaks to
+                # disk across PDFs in a run (Gemini #140 r2).
+                if temp_pdf_path and os.path.exists(temp_pdf_path):
+                    os.remove(temp_pdf_path)
         else:
             soup = BeautifulSoup(res.text, 'html.parser')
             target_href = None
