@@ -224,19 +224,31 @@ def main():
     # fail if the newest action Date is more than N BUSINESS days old (weekend-aware, so a
     # Fri→Mon gap is not a false alarm). Off-session, S1=ADJOURNED and this stays silent.
     try:
-        _s1 = _get(f"https://docs.google.com/spreadsheets/d/{SHEET}/gviz/tq?tqx=out:csv&sheet=Sheet1&range=S1")
+        # &headers=0 so gviz returns the raw single cell rather than inferring it as a header (Gemini #138).
+        _s1 = _get(f"https://docs.google.com/spreadsheets/d/{SHEET}/gviz/tq?tqx=out:csv&sheet=Sheet1&range=S1&headers=0")
         session_flag = next((c.strip().strip('"') for c in _s1.replace("\n", ",").split(",") if c.strip().strip('"')), "")
     except Exception as _sf_err:
         session_flag = ""
         print(f"  [SKIP] STALENESS: could not read the S1 session flag ({_sf_err}); gate inactive this run.")
     if session_flag.upper() == "ACTIVE":
-        if not latest_date:
-            print("  [FAIL] STALENESS: session is ACTIVE but no parseable action Date in the sheet.")
-            failed.append("STALENESS (active session, no dated rows)")
+        import datetime as _dt
+        try:
+            _latest = _dt.date.fromisoformat(latest_date) if latest_date else None
+        except ValueError:
+            _latest = None
+        if _latest is None:
+            print(f"  [FAIL] STALENESS: session is ACTIVE but no parseable action Date (latest={latest_date!r}).")
+            failed.append("STALENESS (active session, no parseable dated rows)")
         else:
-            import datetime as _dt
-            _latest = _dt.date.fromisoformat(latest_date)
-            _today = _dt.date.today()
+            # "today" in EASTERN time — the sheet's Dates are ET. _dt.date.today() on the
+            # GitHub runner is UTC, which in the ET evening is the NEXT day -> a false +1 in
+            # the age (Gemini #138). zoneinfo is stdlib; fall back to a fixed EST offset if
+            # the tz database isn't present.
+            try:
+                from zoneinfo import ZoneInfo
+                _today = _dt.datetime.now(ZoneInfo("America/New_York")).date()
+            except Exception:
+                _today = _dt.datetime.now(_dt.timezone(_dt.timedelta(hours=-5))).date()
             biz_age = sum(1 for n in range(1, (_today - _latest).days + 1)
                           if (_latest + _dt.timedelta(days=n)).weekday() < 5)  # weekdays only
             stale_ok = biz_age <= args.staleness_max_business_days
