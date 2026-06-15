@@ -5902,17 +5902,21 @@ def run_calendar_update():
                         dedup_key="state_cell_y3_write_fail",
                     )
 
-                # PR (auto-rollover): re-write the sheet-session marker (V1) EVERY
+                # PR (auto-rollover): restore the sheet-session marker (V1) EVERY
                 # successful cycle — the `worksheet.clear()` above wipes ALL cells,
-                # including V1, so (exactly like Y2/Y3) it MUST be restored each cycle
-                # or it goes empty and a rollover landing in that window would be missed
-                # (Gemini #133 CRITICAL — this corrects an earlier conditional-write
-                # optimization that overlooked the clear()). Skipped only when
-                # `_advance_sheet_session` is False (the V1 read failed, or the rollover
-                # archive failed) so the rollover is re-detected/retried next cycle.
-                if _advance_sheet_session:
+                # including V1, so (exactly like Y2/Y3) it MUST be re-written or it goes
+                # empty and a rollover landing in that window is silently lost. On
+                # success / steady-state / first-init write the ACTIVE session; but if
+                # the rollover ARCHIVE FAILED (_advance False, old code known), write the
+                # OLD code BACK so V1 still flags the pending rollover and next cycle
+                # RETRIES it — never leaving V1 empty, which would permanently drop the
+                # completed session's archive (Gemini #133 CRITICAL ×2). A failed V1
+                # READ leaves _sheet_session "" -> nothing to write back -> re-init next
+                # cycle.
+                _session_to_write = ACTIVE_SESSION if _advance_sheet_session else _sheet_session
+                if _session_to_write:
                     try:
-                        worksheet.update_acell(SHEET_SESSION_CELL, ACTIVE_SESSION)
+                        worksheet.update_acell(SHEET_SESSION_CELL, _session_to_write)
                     except Exception as _ss_write_err:
                         push_system_alert(
                             f"Could not write sheet-session marker Sheet1!{SHEET_SESSION_CELL} "
