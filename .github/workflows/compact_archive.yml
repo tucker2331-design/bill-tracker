@@ -1,0 +1,48 @@
+name: 🗜️ Compact Session Archive
+
+# Automated storage management for the session archive: trims each archive tab to its
+# real data width, reclaiming the empty column padding copy_to carries over (~halves
+# each Session snapshot). Lossless — the safety scan only ever trims verified-empty
+# columns. Runs monthly (auto-applies) so the archive manages its own storage with no
+# new workbook / Drive scope; the sustainability_audit archive-cells check is the
+# backstop. Manual dispatch defaults to dry-run.
+#
+# Shares the calendar-worker concurrency group so it never races the rollover's archive
+# write. See tools/session_archive/compact_archive.py.
+
+on:
+  schedule:
+    - cron: "41 8 1 * *"   # monthly, 1st @ 08:41 UTC
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: "true = report only; false = apply"
+        type: choice
+        default: "true"
+        options:
+          - "true"
+          - "false"
+
+concurrency:
+  group: calendar-worker
+  cancel-in-progress: false
+
+jobs:
+  compact:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install gspread google-auth
+      - name: Compact archive tabs
+        env:
+          GCP_CREDENTIALS: ${{ secrets.GCP_CREDENTIALS }}
+          # scheduled run -> inputs.dry_run is empty -> "false" (auto-apply); dispatch -> the input
+          DRY_RUN: ${{ inputs.dry_run || 'false' }}
+        run: python3 tools/session_archive/compact_archive.py
