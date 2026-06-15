@@ -2586,6 +2586,16 @@ def _archive_completed_session(sheet, worksheet, old_code):
 
 def run_calendar_update():
     http_session = get_armored_session()
+    # Phase timing (operational visibility + the speed-audit profile). Prints elapsed per
+    # phase with real time.time() deltas (so it survives GitHub's buffered-stdout flush,
+    # unlike log timestamps). Read the "⏱️ PHASE" lines to see where a ~20-min cycle goes.
+    _phase_t0 = time.perf_counter()  # monotonic, immune to clock adjustments (Gemini #139)
+    _phase_last = _phase_t0
+    def _phase(label):
+        nonlocal _phase_last
+        _now = time.perf_counter()
+        print(f"⏱️ PHASE {label}: {_now - _phase_last:.1f}s  (cumulative {_now - _phase_t0:.1f}s)")
+        _phase_last = _now
     
     session_data, api_is_online, _session_auth_failed = get_active_session_info(http_session)
     # Session-active flag for the sentinel's staleness gate (Gemini SRE C): the LIS
@@ -4047,6 +4057,7 @@ def run_calendar_update():
     if convene_dates_senate:
         print(f"   Senate range: {convene_dates_senate[0]} to {convene_dates_senate[-1]}")
 
+    _phase("setup + all fetches (session/maps/schedule/docket/witness/API_Cache-read)")
     print("📡 Processing HISTORY.CSV via Sequential Turing Machine...")
     # `blob.lis.virginia.gov` was a CNAME alias to the canonical Azure
     # blob host; verified NXDOMAIN universally as of 2026-05-05. Use the
@@ -5423,6 +5434,7 @@ def run_calendar_update():
     #      to attribute the failure to the cycle that caused it.
     # Function is idempotent — writes the FULL caches each time, not
     # deltas — so calling on every cycle is safe.
+    _phase("HISTORY STM processing + LegEvent hydration + classification")
     _persist_legevent_cache(
         bills_meta=legevent_bills_meta,
         events_cache=_legislation_event_cache,
@@ -5509,6 +5521,7 @@ def run_calendar_update():
     if alert_rows:
         filtered_events.extend(alert_rows)
 
+    _phase("LegEvent cache persistence (_persist_legevent_cache — full-cache chunked write)")
     final_df = pd.DataFrame(filtered_events)
     if not final_df.empty:
         # === OPTION A: Collapse unsourced rows into single Ledger Updates block ===
@@ -5697,6 +5710,9 @@ def run_calendar_update():
                     final_df = final_df.fillna("")
 
             sheet_data = [final_df.columns.values.tolist()] + final_df.values.tolist()
+            # Unconditional (before the breaker if/else) so this timing prints even on a
+            # trip — final_df assembly + the API_Cache write both already ran (Gemini #139).
+            _phase("final_df assembly + API_Cache write")
 
             # PR-hardening1b-1: count the surfaced 'unconfirmed' rows over the FINAL written rows
             # (final_df == sheet_data, AFTER the ephemeral filter + (Date,Committee,Bill) dedup),
@@ -5999,6 +6015,7 @@ def run_calendar_update():
                         dedup_key="sheet_session_write_fail",
                     )
 
+                _phase("Sheet1 clear() + full update() + state-cell writes")
                 print("✅ SUCCESS: Regression Test Build is complete.")
         else:
             print("⚠️ Viewport slice resulted in an empty dataframe.")
