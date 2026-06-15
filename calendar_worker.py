@@ -2210,12 +2210,18 @@ def get_armored_session():
 
 def get_active_session_info(http_session):
     print("📡 Pinging Master API for Session Intelligence...")
+    # auth_failed distinguishes a 401/403 (the WebAPIKey was rotated/revoked — a
+    # PERMANENT failure needing a human to update the key) from a transient outage
+    # (recovers next cycle). The caller raises a distinct CRITICAL on the former so a
+    # key rotation can't hide inside the every-cycle "OFFLINE" noise.
+    auth_failed = False
     try:
         res = http_session.get("https://lis.virginia.gov/Session/api/GetSessionListAsync", headers=HEADERS, timeout=10)
+        auth_failed = res.status_code in (401, 403)
         if res.status_code == 200:
             raw_json = res.json()
             sessions = raw_json.get('Sessions', []) if isinstance(raw_json, dict) else raw_json
-            if not isinstance(sessions, list) or len(sessions) == 0: return None, False
+            if not isinstance(sessions, list) or len(sessions) == 0: return None, False, auth_failed
 
             tz = pytz.timezone('America/New_York')
             now = datetime.now(tz).replace(tzinfo=None)
@@ -2262,16 +2268,16 @@ def get_active_session_info(http_session):
             for s in sessions:
                 if s.get('IsActive') or s.get('IsDefault'):
                     start, end = extract_dates(s)
-                    return {"code": str(s.get('SessionCode')), "start": start, "end": end + timedelta(days=14)}, True
+                    return {"code": str(s.get('SessionCode')), "start": start, "end": end + timedelta(days=14)}, True, False
 
             current_year = now.year
             for s in sessions:
                 if str(s.get('SessionYear')) == str(current_year):
                     start, end = extract_dates(s)
-                    return {"code": str(s.get('SessionCode')), "start": start, "end": end + timedelta(days=14)}, True
+                    return {"code": str(s.get('SessionCode')), "start": start, "end": end + timedelta(days=14)}, True, False
     except Exception as e:
         print(f"⚠️ Session API parsing failed: {e}")
-    return None, False
+    return None, False, auth_failed
 
 def safe_fetch_csv(url, attempts=3):
     """Fetch a LIS blob CSV (HISTORY.CSV / DOCKET.CSV) with completeness guards.
@@ -2368,7 +2374,7 @@ def parse_24h_time(raw_time, parent_time_24h=None):
                 # +1 minute on the convene time (which placed Senate committees
                 # ~2-7h too early). assumptions_audit #70.
                 return (pt + timedelta(minutes=_parse_relative_offset_minutes(time_val))).strftime('%H:%M')
-            except:
+            except Exception:
                 return "06:00"
         return "06:00"
     # Normalize loose LIS time formats before strptime (edge_case_registry B1,
@@ -2581,7 +2587,7 @@ def _archive_completed_session(sheet, worksheet, old_code):
 def run_calendar_update():
     http_session = get_armored_session()
     
-    session_data, api_is_online = get_active_session_info(http_session)
+    session_data, api_is_online, _session_auth_failed = get_active_session_info(http_session)
     
     tz = pytz.timezone('America/New_York')
     now = datetime.now(tz).replace(tzinfo=None)
@@ -2943,7 +2949,21 @@ def run_calendar_update():
 
     if not session_data:
         print("🚨 CRITICAL: Failed to retrieve active session. Proceeding in OFFLINE mode.")
-        push_system_alert("🚨 LIS Session API unavailable. Running in OFFLINE mode; schedule times may be stale from API_Cache.", status="OFFLINE")
+        if _session_auth_failed:
+            # A 401/403 on the gateway = the WebAPIKey was rotated/revoked. This will
+            # NOT self-heal — every cycle stays offline-degraded until a human updates
+            # API_KEY / LIS_PUBLIC_API_KEY. Distinct CRITICAL so it can't hide inside
+            # the transient-outage OFFLINE noise (fallback-liveness, audit #52).
+            push_system_alert(
+                "🔑 LIS API AUTH FAILURE (HTTP 401/403): the WebAPIKey was likely rotated/revoked. "
+                "The worker is running OFFLINE-DEGRADED and will NOT recover until API_KEY / "
+                "LIS_PUBLIC_API_KEY are updated in calendar_worker.py. Re-source the public key from "
+                "the LIS SPA bundle (handleTitle.js).",
+                status="CRITICAL", category="API_FAILURE", severity="CRITICAL",
+                dedup_key="lis_api_auth_failure",
+            )
+        else:
+            push_system_alert("🚨 LIS Session API unavailable. Running in OFFLINE mode; schedule times may be stale from API_Cache.", status="OFFLINE")
         # Last-resort fallback ONLY when the Session API is unreachable (so the
         # session code/dates genuinely can't be derived). Anchor the window to the
         # CURRENT year — not a hardcoded 2026 — so a future-year offline cycle
@@ -3922,15 +3942,16 @@ def run_calendar_update():
 
     # Size canary (Gemini concern #2): in-cycle prune was removed because
     # append_rows + col_values(1) + delete_rows on the same tab in the same
-    # 15-min cycle is a documented eventual-consistency race in the Sheets
-    # API — it can silently delete rows we just wrote, or skew the prune
-    # boundary. Retention is now owned by the L3b Nightly Audit (TODO, see
-    # docs/ideas/future_improvements.md) which runs outside the 15-min path
-    # and has exclusive use of the tab.
+    # cycle is a documented eventual-consistency race in the Sheets API — it
+    # can silently delete rows we just wrote, or skew the prune boundary.
+    # Retention is now owned by the L3b retention prune (SHIPPED in #126:
+    # tools/witness_retention/prune.py + the witness_retention.yml workflow),
+    # which runs outside the cycle path, shares the worker concurrency group
+    # for exclusive tab access, and deletes rows older than 90 days.
     #
     # What stays in-cycle: a cheap first-column read so we can (a) WARN if
-    # the tab exceeds the safety threshold — which indicates L3b hasn't run
-    # — and (b) expose the row count in source_miss_counts so X-Ray can
+    # the tab exceeds the safety threshold — which would indicate the L3b
+    # prune is NOT running — and (b) expose the row count in source_miss_counts so X-Ray can
     # plot witness growth. Read-only; no writes from here.
     if witness_tab is None:
         # Open read-only for the canary even if we had no deltas this cycle.
