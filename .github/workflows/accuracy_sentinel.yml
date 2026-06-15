@@ -9,8 +9,14 @@ name: 🛡️ Accuracy Sentinel (Section 9 + unclassified guard)
 
 on:
   workflow_dispatch:
+  # Run IMMEDIATELY after every worker cycle so an accuracy regression is caught on the
+  # data that just landed — not up to a day later (the "cleaning crew in line after the
+  # worker"). The daily cron stays as a backstop in case the worker doesn't run.
+  workflow_run:
+    workflows: ["🤖 Mastermind Ghost Worker 2"]
+    types: [completed]
   schedule:
-    - cron: "0 12 * * *"   # daily 12:00 UTC
+    - cron: "0 12 * * *"   # daily 12:00 UTC (backstop)
 
 jobs:
   sentinel:

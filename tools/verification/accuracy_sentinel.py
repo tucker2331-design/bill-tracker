@@ -110,6 +110,9 @@ def main():
                     help="floor on the ORIGINAL router (LegEventRoute) reach (anti-homework-grading)")
     ap.add_argument("--min-coverage", type=float, default=0.97,
                     help="floor on TOTAL structural coverage (1 - unconfirmed/rows); baseline ~99.8%% (PR-C8)")
+    ap.add_argument("--staleness-max-business-days", type=int, default=2,
+                    help="during an ACTIVE session, fail if the newest action Date is older than this many "
+                         "business days (data-FLOW guard, Gemini SRE C)")
     args = ap.parse_args()
 
     classify_action, normalize_time, placeholder = _load_ray2_semantics()
@@ -139,6 +142,7 @@ def main():
 
     total = meeting = mwt = unclass = unconfirmed = derived = system = routed = executive = 0
     s9_rows, uc_rows, unconf_rows = [], [], []
+    latest_date = ""  # newest action Date seen (ISO sorts lexically) — for the staleness gate
     for r in rows[1:]:
         if not any(x.strip() for x in r):
             continue
@@ -146,6 +150,9 @@ def main():
             system += 1
             continue
         total += 1
+        _d = cell(r, "Date").strip()
+        if len(_d) == 10 and _d[4] == "-" and _d > latest_date:  # YYYY-MM-DD, lexical max
+            latest_date = _d
         if str(cell(r, "LegEventRoute")).strip():
             routed += 1  # structurally resolved by the router (non-blank route)
         cls = classify_action(cell(r, "Outcome"), cell(r, "LegEventRoute"), cell(r, "RefidClass"), cell(r, "ScheduleClass"))
@@ -209,6 +216,50 @@ def main():
           f"— the 16% is now structural, not text; only the surfaced 'unconfirmed' lane is uncovered")
     if not cov_ok:
         failed.append(f"STRUCTURAL COVERAGE dropped to {coverage:.2%} (too many rows fell to the unconfirmed lane — new LIS structure?)")
+
+    # STALENESS GATE (Gemini SRE C): the checks above verify data SHAPE, not data FLOW.
+    # If LIS stops publishing (or the API returns empty) the worker preserves last-known-
+    # good and every shape-check still passes — a silently frozen pipeline. So: ONLY while
+    # the GA is actually in session (worker writes Sheet1!S1=ACTIVE via the API's IsActive),
+    # fail if the newest action Date is more than N BUSINESS days old (weekend-aware, so a
+    # Fri→Mon gap is not a false alarm). Off-session, S1=ADJOURNED and this stays silent.
+    try:
+        # &headers=0 so gviz returns the raw single cell rather than inferring it as a header (Gemini #138).
+        _s1 = _get(f"https://docs.google.com/spreadsheets/d/{SHEET}/gviz/tq?tqx=out:csv&sheet=Sheet1&range=S1&headers=0")
+        session_flag = next((c.strip().strip('"') for c in _s1.replace("\n", ",").split(",") if c.strip().strip('"')), "")
+    except Exception as _sf_err:
+        session_flag = ""
+        print(f"  [SKIP] STALENESS: could not read the S1 session flag ({_sf_err}); gate inactive this run.")
+    if session_flag.upper() == "ACTIVE":
+        import datetime as _dt
+        try:
+            _latest = _dt.date.fromisoformat(latest_date) if latest_date else None
+        except ValueError:
+            _latest = None
+        if _latest is None:
+            print(f"  [FAIL] STALENESS: session is ACTIVE but no parseable action Date (latest={latest_date!r}).")
+            failed.append("STALENESS (active session, no parseable dated rows)")
+        else:
+            # "today" in EASTERN time — the sheet's Dates are ET. _dt.date.today() on the
+            # GitHub runner is UTC, which in the ET evening is the NEXT day -> a false +1 in
+            # the age (Gemini #138). zoneinfo is stdlib; fall back to a fixed EST offset if
+            # the tz database isn't present.
+            try:
+                from zoneinfo import ZoneInfo
+                _today = _dt.datetime.now(ZoneInfo("America/New_York")).date()
+            except Exception:
+                _today = _dt.datetime.now(_dt.timezone(_dt.timedelta(hours=-5))).date()
+            biz_age = sum(1 for n in range(1, (_today - _latest).days + 1)
+                          if (_latest + _dt.timedelta(days=n)).weekday() < 5)  # weekdays only
+            stale_ok = biz_age <= args.staleness_max_business_days
+            print(f"  [{'PASS' if stale_ok else 'FAIL'}] STALENESS (active session): newest action {latest_date} "
+                  f"is {biz_age} business day(s) old (max {args.staleness_max_business_days}) — data-FLOW guard")
+            if not stale_ok:
+                failed.append(f"STALENESS: newest action {latest_date} is {biz_age} business days old during an "
+                              f"ACTIVE session — LIS ingestion may be broken / the API returning empty")
+    else:
+        print(f"  [PASS] STALENESS: session flag is {session_flag or 'unset'} (not ACTIVE) — freshness gate "
+              f"correctly silent off-session")
 
     if failed:
         print(f"\n🚨 SENTINEL FAIL — {len(failed)} invariant(s) breached: {', '.join(failed)}")
