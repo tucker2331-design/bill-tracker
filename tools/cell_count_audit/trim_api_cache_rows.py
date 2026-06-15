@@ -104,7 +104,10 @@ def main() -> int:
     non_empty = []
     for chunk_start in range(first_extra, rows_before + 1, CHUNK_SIZE):
         chunk_end = min(chunk_start + CHUNK_SIZE - 1, rows_before)
-        for r_offset, row in enumerate(ws.get_values(f"A{chunk_start}:{last_col}{chunk_end}")):
+        # get_values returns None for a fully-empty range — which is the EXPECTED case
+        # here (the rows beyond target should be empty), so `or []` is essential or the
+        # safety scan crashes on exactly the sheets it should pass (Gemini #134).
+        for r_offset, row in enumerate(ws.get_values(f"A{chunk_start}:{last_col}{chunk_end}") or []):
             for c_offset, cell in enumerate(row):
                 if cell != "":
                     non_empty.append((chunk_start + r_offset, c_offset + 1, cell))
