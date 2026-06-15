@@ -34,8 +34,9 @@ TARGET_SHEET = "API_Cache"
 EXPECTED_SCHEMA = ["Date", "Committee", "Time", "SortTime", "Status", "Location"]
 TARGET_COL_COUNT = len(EXPECTED_SCHEMA)
 GOOGLE_SHEETS_CELL_CAP = 10_000_000
-ROW_BUFFER = 5_000   # headroom above the populated extent so appends don't immediately re-grow
-MIN_TARGET_ROWS = 2_000
+TARGET_ROWS = 10_000  # generous fixed target (actual data ~1,632); safety-check 2 proves
+                      # every row beyond it is empty before any resize, so no col read of
+                      # the 353k grid is needed and no data can be lost.
 SCOPES = ["https://www.googleapis.com/auth/spreadsheets"]
 NON_EMPTY_REPORT_LIMIT = 10
 CHUNK_SIZE = 50_000
@@ -80,13 +81,12 @@ def main() -> int:
         return 1
     print(f"[check 1] PASSED: cols A-F match {EXPECTED_SCHEMA}")
 
-    # === Determine the populated extent + target row count ===
-    # col A (Date) is the key — every data row has it, so its populated length is the
-    # data extent. The check-2 scan independently confirms nothing lives below target.
-    populated_rows = len(ws.col_values(1))  # includes the header row
-    target_rows = max(populated_rows + ROW_BUFFER, MIN_TARGET_ROWS)
-    print(f"[extent] {populated_rows:,} populated rows (col A); target after trim: "
-          f"{target_rows:,} rows ({ROW_BUFFER:,} buffer).")
+    # === Target row count ===
+    # A fixed, generous target — no full-column read of the 353k grid. The actual data
+    # is ~1,632 rows; safety-check 2 below PROVES every row beyond the target is empty
+    # before any resize, so this cannot lose data even if the target were too small.
+    target_rows = TARGET_ROWS
+    print(f"[target] resize to {target_rows:,} rows (fixed; safety-check 2 verifies it's safe).")
 
     if target_rows >= rows_before:
         print(f"\nNothing to do: target {target_rows:,} >= current {rows_before:,} rows. Exiting cleanly.")
