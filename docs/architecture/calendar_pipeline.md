@@ -17,6 +17,9 @@ LIS Schedule API -> build_time_graph() -> resolved_parent_map
                  -> api_schedule_map (live, merged with cache)
                  -> convene_times (live)
                  -> agenda URLs -> extract_rogue_agenda() -> bill lists
+                    (Agenda_Cache: settled >2d-old meetings served from cache,
+                     skip fetch+PDF-parse; recent/future always re-parse —
+                     speed audit 2026-06-15, [[failures/assumptions_audit]] #89)
 
 Azure Blob DOCKET.CSV -> docket_memory (date -> bill -> committees)
 Azure Blob HISTORY.CSV -> Sequential Turing Machine:

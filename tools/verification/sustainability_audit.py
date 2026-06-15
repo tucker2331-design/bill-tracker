@@ -79,7 +79,12 @@ WORKER = os.path.join(_ROOT, "calendar_worker.py")
 # must not contain rows older than its retention horizon (the prune must be
 # working). A tab NOT listed and NOT in BOUNDED_TABS that grows large is flagged
 # for a policy decision — that is how a future append-only tab auto-surfaces. ---
-RETENTION_DAYS = {"Schedule_Witness": 90}
+RETENTION_DAYS = {"Schedule_Witness": 90,
+                  # Agenda_Cache: settled-meeting agenda->bills speed cache. The
+                  # worker prunes rows older than 540d on load (older agendas never
+                  # fall in any scrape window). Date is MeetingDate in column A, so
+                  # the retention check below reads the right column unchanged.
+                  "Agenda_Cache": 540}
 # Tabs whose size is bounded by OVERWRITE semantics (write-then-clear-trailing),
 # not by retention — they need no prune. Membership is asserted by behaviour
 # (they are rewritten each cycle), documented here so the "unrecognised large
