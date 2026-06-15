@@ -85,6 +85,7 @@ RETENTION_DAYS = {"Schedule_Witness": 90}
 # tab" warning does not false-fire on them.
 BOUNDED_TABS = {"Sheet1", "LegEvent_Cache", "LegEvent_Events"}
 UNRECOGNISED_TAB_ROW_WARN = 50_000  # a large tab we don't know the policy of -> WARN
+WASTED_GRID_MIN_ALLOCATED = 10_000  # only probe allocated-vs-populated on tabs this big
 
 # --- UPSTREAM: internal keys that ride on event-shaped dicts but are NOT LIS API
 # fields (the worker's own normalised-event schema), so they are not expected in
@@ -333,6 +334,30 @@ def check_capacity():
             out.append(Result("CAPACITY", f"unrecognised-tab:{title}", "WARN",
                                f"'{title}' has {rc:,} rows but no declared retention/overwrite policy — "
                                f"register it in RETENTION_DAYS or BOUNDED_TABS and confirm it cannot grow unbounded"))
+
+    # 2b. Wasted grid — a tab whose ALLOCATED rows vastly exceed its POPULATED rows
+    #     (e.g. API_Cache: 353k allocated, ~1.6k data). Google bills the cap on the
+    #     ALLOCATED grid, so a stale over-allocation silently eats the cap even though
+    #     the data is tiny. The workbook-cells check sees only the total; THIS surfaces
+    #     the cheap fix (resize to fit). Only large tabs are probed (one col read each).
+    for title, rc, cc, cells in per_tab:
+        if rc < WASTED_GRID_MIN_ALLOCATED:
+            continue
+        try:
+            # get("A1:A") returns only the API-truncated populated rows (no full-grid
+            # read), so this is cheap even on a 353k-allocated tab (Gemini #134).
+            populated = len(ws_by_title[title].get("A1:A") or [])
+        except Exception as exc:
+            # Never silently skip — the audit's own rule (Gemini #134).
+            out.append(Result("CAPACITY", f"wasted-grid:{title}", "SKIP",
+                               f"could not read populated extent of '{title}': {exc}"))
+            continue
+        wasted = (rc - populated) * cc
+        if rc > populated * 2 and (rc - populated) >= WASTED_GRID_MIN_ALLOCATED:
+            out.append(Result("CAPACITY", f"wasted-grid:{title}", "WARN",
+                               f"'{title}' allocates {rc:,} rows but only ~{populated:,} are populated — "
+                               f"~{wasted:,} cells of empty grid billed against the cap. Resize the grid to "
+                               f"fit (e.g. tools/cell_count_audit/trim_api_cache_rows.py for API_Cache)."))
 
     # 3. Retention enforcement — for each append-only tab with a declared horizon,
     #    assert no row is older than that horizon (the prune is actually running).

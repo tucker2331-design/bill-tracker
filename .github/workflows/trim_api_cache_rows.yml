@@ -1,0 +1,40 @@
+name: 🔧 Trim API_Cache rows (one-shot)
+
+# One-shot: shrink the API_Cache ALLOCATED row grid to fit its actual data, reclaiming
+# ~2.1M workbook cells (the row analogue of trim_api_cache_cols). See
+# tools/cell_count_audit/trim_api_cache_rows.py. Defaults to DRY RUN.
+# Shares the calendar-worker concurrency group so it never races a worker write.
+
+on:
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: "true = report only; false = perform the resize"
+        type: choice
+        default: "true"
+        options:
+          - "true"
+          - "false"
+
+concurrency:
+  group: calendar-worker
+  cancel-in-progress: false
+
+jobs:
+  trim:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install gspread google-auth
+      - name: Trim API_Cache rows (dry_run=${{ inputs.dry_run }})
+        env:
+          GCP_CREDENTIALS: ${{ secrets.GCP_CREDENTIALS }}
+          DRY_RUN: ${{ inputs.dry_run }}
+        run: python3 tools/cell_count_audit/trim_api_cache_rows.py
