@@ -2546,22 +2546,28 @@ AGENDA_CACHE_RETENTION_DAYS = 540  # ~1.5y: last full session + margin; older ag
 
 def _load_agenda_cache(sheet, now):
     """Load url -> (meeting_date_str, [bills]) for settled meetings, dropping rows
-    older than the retention horizon. Returns (cache, worksheet_or_None, pruned).
-    Never raises: any failure yields an empty cache so the worker parses fresh."""
+    older than the retention horizon. Returns (cache, worksheet_or_None, pruned,
+    load_ok). Never raises: any failure yields an empty cache so the worker parses
+    fresh. load_ok is False ONLY on a transient open/read FAILURE (tab may hold
+    rows we couldn't read) — persist must then NOT rewrite, or it would wipe the
+    whole cache with this cycle's handful of new rows (Gemini #140 CRITICAL). A
+    genuinely-absent tab (WorksheetNotFound) is load_ok=True: creating it is safe.
+    load_ok is a SEPARATE boolean, NOT encoded into the ws slot — failure must not
+    masquerade as a value a success can produce (this PR's own lesson, audit #15)."""
     try:
         ws = sheet.worksheet(AGENDA_CACHE_TAB)
     except gspread.exceptions.WorksheetNotFound:
-        return {}, None, False
+        return {}, None, False, True   # absent (first run) -> safe to create on persist
     except Exception as e:
         print(f"⚠️ Agenda_Cache open failed ({e}); all agendas parse fresh this cycle.")
-        return {}, None, False
+        return {}, None, False, False  # unknown tab state -> DO NOT persist (no wipe)
     horizon = (now - timedelta(days=AGENDA_CACHE_RETENTION_DAYS)).strftime("%Y-%m-%d")
     cache, pruned = {}, False
     try:
-        rows = ws.get_all_values()
+        rows = ws.get_all_values() or []   # guard: empty sheet can yield falsy/None
     except Exception as e:
         print(f"⚠️ Agenda_Cache read failed ({e}); all agendas parse fresh this cycle.")
-        return {}, ws, False
+        return {}, ws, False, False  # tab may hold unread rows -> DO NOT persist (no wipe)
     for r in rows[1:]:  # skip header
         if not r or len(r) < 2 or not r[1]:
             continue  # blank/short trailing grid row in OUR OWN cache (not an LIS
@@ -2572,14 +2578,21 @@ def _load_agenda_cache(sheet, now):
             pruned = True  # too old to ever be queried again -> drop (rewrite on persist)
             continue
         cache[url] = (mdate, bills)
-    return cache, ws, pruned
+    return cache, ws, pruned, True
 
 
-def _persist_agenda_cache(sheet, ws, cache, dirty):
+def _persist_agenda_cache(sheet, ws, cache, dirty, load_ok):
     """Rewrite the agenda cache tab from the (already-pruned) in-memory dict when
     it changed this cycle. Fail-safe: a write failure just means the affected
     agendas re-parse next cycle — no accuracy loss. Rows are sorted oldest-first
-    so column A stays monotonic for the sustainability_audit retention check."""
+    so column A stays monotonic for the sustainability_audit retention check.
+    SKIPS the rewrite when the load failed transiently (load_ok=False): the dict
+    holds only this cycle's new rows, so clearing+rewriting would destroy the
+    entire existing cache (Gemini #140 CRITICAL). It re-tries cleanly next cycle."""
+    if not load_ok:
+        print("⚠️ Agenda_Cache persist skipped — load failed earlier this cycle; "
+              "rewriting now would wipe the existing tab (Gemini #140). Retries next cycle.")
+        return
     if not dirty:
         return
     try:
@@ -3649,7 +3662,7 @@ def run_calendar_update():
     # Speed audit: load the settled-agenda parse cache (prunes itself to the
     # retention horizon on load). _agenda_cache_dirty starts True only if the load
     # pruned an aged-out row, so the persist rewrites the trimmed tab this cycle.
-    agenda_parse_cache, _agenda_cache_ws, _agenda_cache_dirty = _load_agenda_cache(sheet, now)
+    agenda_parse_cache, _agenda_cache_ws, _agenda_cache_dirty, _agenda_cache_load_ok = _load_agenda_cache(sheet, now)
     _agenda_cache_hits = 0
 
     new_cache_entries = []
@@ -5746,7 +5759,7 @@ def run_calendar_update():
 
         # Persist the settled-agenda parse cache (speed audit). Independent of
         # final_df, so it runs even on an empty-output cycle. Fail-safe inside.
-        _persist_agenda_cache(sheet, _agenda_cache_ws, agenda_parse_cache, _agenda_cache_dirty)
+        _persist_agenda_cache(sheet, _agenda_cache_ws, agenda_parse_cache, _agenda_cache_dirty, _agenda_cache_load_ok)
         if _agenda_cache_hits:
             print(f"⚡ Agenda cache: {_agenda_cache_hits} settled agendas served from cache (skipped fetch+PDF-parse).")
 
