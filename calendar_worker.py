@@ -18,6 +18,14 @@ from urllib3.util.retry import Retry
 from google.oauth2.service_account import Credentials
 from bs4 import BeautifulSoup
 import pdfplumber
+import logging
+
+# pdfminer (pdfplumber's parsing engine) emits a "Could not get FontBBox from
+# font descriptor" WARNING for every malformed font in a parsed agenda PDF —
+# hundreds of lines per cycle that bury real worker output in the Actions log
+# (surfaced by the 2026-06-15 speed audit). The text still extracts correctly;
+# these are pure noise. Silence pdfminer to ERROR so the log stays readable.
+logging.getLogger("pdfminer").setLevel(logging.ERROR)
 
 
 # PR-C7.1b-1: the dictionary-free structural calendar-vs-ledger router.
@@ -2461,16 +2469,22 @@ def build_time_graph(schedules):
     return resolved_times
 
 def extract_rogue_agenda(url, session, target_date_dt=None, depth=0):
-    if depth > 1: return [], False 
+    # Returns (bills, is_corrupt, fetch_ok). fetch_ok is True ONLY when a parse
+    # branch completed cleanly, so the caller can safely cache the result. A
+    # non-200, a depth give-up, or any exception returns fetch_ok=False — so an
+    # empty list produced by a TRANSIENT failure is never frozen into the agenda
+    # cache as a real "0 bills" answer (that would be a silent accuracy loss).
+    if depth > 1: return [], False, False
     found_bills = set()
+    fetch_ok = False
     regex_pattern = r'\b([HS][BJR]\s*\d+)'
     if url.startswith('/'): url = f"https://lis.virginia.gov{url}"
-        
+
     try:
         time.sleep(0.25)
         res = session.get(url, timeout=15)
-        if res.status_code != 200: return [], False
-        
+        if res.status_code != 200: return [], False, False
+
         if '.pdf' in url.lower() or b'%PDF' in res.content[:5]:
             try:
                 with tempfile.NamedTemporaryFile(delete=False, suffix='.pdf') as temp_pdf:
@@ -2481,9 +2495,10 @@ def extract_rogue_agenda(url, session, target_date_dt=None, depth=0):
                         text = page.extract_text()
                         if text: found_bills.update([m.upper() for m in re.findall(regex_pattern, text.replace(" ", ""))])
                 os.remove(temp_pdf_path)
+                fetch_ok = True  # PDF parsed cleanly -> result (incl. empty) is authoritative
             except Exception as e:
                 print(f"⚠️ Agenda PDF parse failed for {url}: {e}")
-                return [], True
+                return [], True, False
         else:
             soup = BeautifulSoup(res.text, 'html.parser')
             target_href = None
@@ -2498,15 +2513,91 @@ def extract_rogue_agenda(url, session, target_date_dt=None, depth=0):
                 if agenda_links: target_href = agenda_links[0].get('href')
                     
             if target_href: return extract_rogue_agenda(urllib.parse.urljoin(url, target_href), session, target_date_dt, depth + 1)
-            
+
             for script in soup.find_all('script'):
                 if script.string and any(x in script.string for x in ['HB', 'SB', 'HJ', 'SJ']):
                     found_bills.update([m.upper() for m in re.findall(regex_pattern, script.string.replace(" ", ""))])
-            
+
             found_bills.update([m.upper() for m in re.findall(regex_pattern, soup.get_text(separator=' ').replace(" ", ""))])
+            fetch_ok = True  # HTML parsed cleanly
     except Exception as e:
         print(f"⚠️ Agenda extraction failed for {url}: {e}")
-    return sorted(list(found_bills)), False
+        # fetch_ok stays False -> caller won't cache; bills found so far still flow this cycle
+    return sorted(list(found_bills)), False, fetch_ok
+
+
+# ── Agenda-parse cache (speed audit, 2026-06-15) ──────────────────────────────
+# extract_rogue_agenda fetches + PDF-parses a committee's agenda every cycle. For
+# a meeting that already happened the docket is IMMUTABLE, yet the worker re-
+# fetched + re-parsed the ENTIRE adjourned-session agenda set every cycle — the
+# dominant off-season cost (the pdfminer FontBBox flood the speed audit surfaced).
+# This caches url -> bills for SETTLED (past) meetings so they skip the fetch+
+# parse entirely. PURE SPEEDUP: a miss, an absent/stale tab, or ANY cache error
+# falls straight through to a fresh parse — never an accuracy loss. Recent/future
+# meetings (within AGENDA_CACHE_SETTLE_DAYS of today) are ALWAYS re-parsed because
+# their docket can still change. The tab is date-keyed in column A and pruned to
+# AGENDA_CACHE_RETENTION_DAYS on load so it stays bounded across sessions
+# (registered in tools/verification/sustainability_audit.py RETENTION_DAYS).
+AGENDA_CACHE_TAB = "Agenda_Cache"
+AGENDA_CACHE_HEADER = ["MeetingDate", "URL", "Bills"]
+AGENDA_CACHE_SETTLE_DAYS = 2       # a meeting older than this is settled -> cacheable
+AGENDA_CACHE_RETENTION_DAYS = 540  # ~1.5y: last full session + margin; older agendas never fall in a scrape window
+
+
+def _load_agenda_cache(sheet, now):
+    """Load url -> (meeting_date_str, [bills]) for settled meetings, dropping rows
+    older than the retention horizon. Returns (cache, worksheet_or_None, pruned).
+    Never raises: any failure yields an empty cache so the worker parses fresh."""
+    try:
+        ws = sheet.worksheet(AGENDA_CACHE_TAB)
+    except gspread.exceptions.WorksheetNotFound:
+        return {}, None, False
+    except Exception as e:
+        print(f"⚠️ Agenda_Cache open failed ({e}); all agendas parse fresh this cycle.")
+        return {}, None, False
+    horizon = (now - timedelta(days=AGENDA_CACHE_RETENTION_DAYS)).strftime("%Y-%m-%d")
+    cache, pruned = {}, False
+    try:
+        rows = ws.get_all_values()
+    except Exception as e:
+        print(f"⚠️ Agenda_Cache read failed ({e}); all agendas parse fresh this cycle.")
+        return {}, ws, False
+    for r in rows[1:]:  # skip header
+        if not r or len(r) < 2 or not r[1]:
+            continue  # blank/short trailing grid row in OUR OWN cache (not an LIS
+                      # source miss): a dropped cache row simply re-parses fresh
+        mdate, url = (r[0] or "").strip(), r[1].strip()
+        bills = [b for b in (r[2].split(",") if len(r) > 2 and r[2] else []) if b]
+        if mdate and mdate < horizon:
+            pruned = True  # too old to ever be queried again -> drop (rewrite on persist)
+            continue
+        cache[url] = (mdate, bills)
+    return cache, ws, pruned
+
+
+def _persist_agenda_cache(sheet, ws, cache, dirty):
+    """Rewrite the agenda cache tab from the (already-pruned) in-memory dict when
+    it changed this cycle. Fail-safe: a write failure just means the affected
+    agendas re-parse next cycle — no accuracy loss. Rows are sorted oldest-first
+    so column A stays monotonic for the sustainability_audit retention check."""
+    if not dirty:
+        return
+    try:
+        rows = [AGENDA_CACHE_HEADER]
+        for url, (mdate, bills) in sorted(cache.items(), key=lambda kv: (kv[1][0], kv[0])):
+            rows.append([mdate, url, ",".join(bills)])
+        if ws is None:
+            ws = sheet.add_worksheet(title=AGENDA_CACHE_TAB,
+                                     rows=max(2000, len(rows) + 100),
+                                     cols=len(AGENDA_CACHE_HEADER))
+        elif len(rows) > ws.row_count:
+            # Sheets update() does NOT auto-extend the grid; grow it first.
+            ws.add_rows(len(rows) - ws.row_count + 100)
+        ws.clear()
+        ws.update(values=rows, range_name="A1")
+        print(f"🗄️ Agenda_Cache: persisted {len(rows) - 1} settled agendas (skip re-parse next cycle).")
+    except Exception as e:
+        print(f"⚠️ Agenda_Cache persist failed ({e}); affected agendas re-parse next cycle (no data loss).")
 
 
 def _is_non_concrete_time(value):
@@ -2587,7 +2678,7 @@ def _archive_completed_session(sheet, worksheet, old_code):
 def run_calendar_update():
     http_session = get_armored_session()
     # Phase timing (operational visibility + the speed-audit profile). Prints elapsed per
-    # phase with real time.time() deltas (so it survives GitHub's buffered-stdout flush,
+    # phase with real perf_counter() deltas (so it survives GitHub's buffered-stdout flush,
     # unlike log timestamps). Read the "⏱️ PHASE" lines to see where a ~20-min cycle goes.
     _phase_t0 = time.perf_counter()  # monotonic, immune to clock adjustments (Gemini #139)
     _phase_last = _phase_t0
@@ -3555,6 +3646,12 @@ def run_calendar_update():
                     if b_num not in docket_memory[date_str]: docket_memory[date_str][b_num] = []
                     docket_memory[date_str][b_num].append(c_name)
 
+    # Speed audit: load the settled-agenda parse cache (prunes itself to the
+    # retention horizon on load). _agenda_cache_dirty starts True only if the load
+    # pruned an aged-out row, so the persist rewrites the trimmed tab this cycle.
+    agenda_parse_cache, _agenda_cache_ws, _agenda_cache_dirty = _load_agenda_cache(sheet, now)
+    _agenda_cache_hits = 0
+
     new_cache_entries = []
 
     # ================================================================
@@ -3728,7 +3825,22 @@ def run_calendar_update():
                     dlq_flag = ""
                     
                     if agenda_url and not is_cancelled and (scrape_start <= meeting_date <= scrape_end):
-                        extracted_bills, is_corrupt = extract_rogue_agenda(agenda_url, http_session, meeting_date)
+                        # Speed audit: a meeting older than the settle window is
+                        # immutable -> serve its bills from Agenda_Cache and skip
+                        # the fetch+PDF-parse. Recent/future meetings ALWAYS re-
+                        # parse (docket can still change). Cache only an
+                        # AUTHORITATIVE read (fetch_ok) of a settled meeting — a
+                        # transient empty result must never be frozen as real.
+                        _agenda_settled = meeting_date.date() < (now.date() - timedelta(days=AGENDA_CACHE_SETTLE_DAYS))
+                        _cached = agenda_parse_cache.get(agenda_url) if _agenda_settled else None
+                        if _cached is not None:
+                            extracted_bills, is_corrupt = _cached[1], False
+                            _agenda_cache_hits += 1
+                        else:
+                            extracted_bills, is_corrupt, _fetch_ok = extract_rogue_agenda(agenda_url, http_session, meeting_date)
+                            if _agenda_settled and _fetch_ok:
+                                agenda_parse_cache[agenda_url] = (meeting_date.strftime("%Y-%m-%d"), extracted_bills)
+                                _agenda_cache_dirty = True
                         combined_bills.update(extracted_bills)
                         if is_corrupt: dlq_flag = "⚠️ [Agenda unreadable - Manual check required]"
                     
@@ -5631,6 +5743,12 @@ def run_calendar_update():
         in_window = (final_df['Date'] >= scrape_start_str) & (final_df['Date'] <= scrape_end_str)
         is_system = final_df['Origin'].isin(system_origins)
         final_df = final_df[in_window | is_system]
+
+        # Persist the settled-agenda parse cache (speed audit). Independent of
+        # final_df, so it runs even on an empty-output cycle. Fail-safe inside.
+        _persist_agenda_cache(sheet, _agenda_cache_ws, agenda_parse_cache, _agenda_cache_dirty)
+        if _agenda_cache_hits:
+            print(f"⚡ Agenda cache: {_agenda_cache_hits} settled agendas served from cache (skipped fetch+PDF-parse).")
 
         if not final_df.empty:
             # Write cache FIRST so any failure alert can be included in Sheet1 output
