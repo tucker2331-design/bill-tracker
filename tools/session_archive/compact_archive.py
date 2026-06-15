@@ -44,7 +44,7 @@ def col_to_letter(n: int) -> str:
     return result
 
 
-def compact_tab(ws) -> int:
+def compact_tab(ws, dry_run) -> int:
     """Col-trim one tab to its header width. Returns cells reclaimed (0 if skipped)."""
     cols_before = int(ws.col_count)
     rows_before = int(ws.row_count)
@@ -79,7 +79,7 @@ def compact_tab(ws) -> int:
 
     reclaimed = rows_before * (cols_before - target_cols)
     print(f"  • {ws.title}: {cols_before} -> {target_cols} cols; reclaim {reclaimed:,} cells.")
-    if os.environ.get("DRY_RUN", "true").strip().lower() in ("true", "1", "yes"):
+    if dry_run:
         return reclaimed
     ws.resize(cols=target_cols)
     print(f"    ✅ trimmed {ws.title}.")
@@ -102,14 +102,16 @@ def main() -> int:
     print(f"Before:  {before:,} cells ({100.0 * before / GOOGLE_SHEETS_CELL_CAP:.1f}% of cap)")
     print()
 
-    total_reclaimed = sum(compact_tab(w) for w in tabs)
+    total_reclaimed = sum(compact_tab(w, dry_run) for w in tabs)
     print()
     if dry_run:
         print(f"[DRY RUN] would reclaim {total_reclaimed:,} cells "
               f"({100.0 * total_reclaimed / GOOGLE_SHEETS_CELL_CAP:.1f}% of cap). Re-run with DRY_RUN=false to apply.")
     else:
-        after = sum(int(w.row_count) * int(w.col_count) for w in archive.worksheets())
-        print(f"✅ Reclaimed {before - after:,} cells. After: {after:,} "
+        # Compaction is lossless (only empty cells removed), so the post-count is exact
+        # arithmetic — no extra worksheets() API call (Gemini #136).
+        after = before - total_reclaimed
+        print(f"✅ Reclaimed {total_reclaimed:,} cells. After: {after:,} "
               f"({100.0 * after / GOOGLE_SHEETS_CELL_CAP:.1f}% of cap).")
     return 0
 
