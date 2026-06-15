@@ -124,7 +124,7 @@ def main() -> int:
         return 1
     print(f"[check 2] PASSED: all rows beyond {target_rows:,} are empty.")
 
-    cells_after = target_rows * TARGET_COL_COUNT
+    cells_after = target_rows * cols_before  # resize(rows=) leaves cols untouched (Gemini #134)
     print(f"\nWould resize {rows_before:,} -> {target_rows:,} rows; reclaim "
           f"{cells_before - cells_after:,} cells (workbook drops by that much).")
 

@@ -344,7 +344,9 @@ def check_capacity():
         if rc < WASTED_GRID_MIN_ALLOCATED:
             continue
         try:
-            populated = len(ws_by_title[title].col_values(1))  # populated extent (col A)
+            # get("A1:A") returns only the API-truncated populated rows (no full-grid
+            # read), so this is cheap even on a 353k-allocated tab (Gemini #134).
+            populated = len(ws_by_title[title].get("A1:A") or [])
         except Exception as exc:
             # Never silently skip — the audit's own rule (Gemini #134).
             out.append(Result("CAPACITY", f"wasted-grid:{title}", "SKIP",
