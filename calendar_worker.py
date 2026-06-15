@@ -2589,10 +2589,10 @@ def run_calendar_update():
     # Phase timing (operational visibility + the speed-audit profile). Prints elapsed per
     # phase with real time.time() deltas (so it survives GitHub's buffered-stdout flush,
     # unlike log timestamps). Read the "⏱️ PHASE" lines to see where a ~20-min cycle goes.
-    _phase_t0 = time.time()
+    _phase_t0 = time.perf_counter()  # monotonic, immune to clock adjustments (Gemini #139)
     _phase_last = [_phase_t0]
     def _phase(label):
-        _now = time.time()
+        _now = time.perf_counter()
         print(f"⏱️ PHASE {label}: {_now - _phase_last[0]:.1f}s  (cumulative {_now - _phase_t0:.1f}s)")
         _phase_last[0] = _now
     
