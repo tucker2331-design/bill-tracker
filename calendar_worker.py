@@ -3173,38 +3173,41 @@ def run_calendar_update():
             dedup_key="state_cell_y3_read_fail",
         )
 
-    # PR (auto-rollover): the sheet must correspond to the active session. V1 holds the
-    # session the live Sheet1 currently represents; when it differs from ACTIVE_SESSION
-    # a NEW session has started — archive the COMPLETED session's Sheet1 BEFORE this
-    # cycle overwrites it (non-destructive copy; the live write is unaffected). The
-    # marker advances ONLY on a successful overwrite (cycle end), so a mid-cycle failure
-    # re-archives next cycle rather than losing the rollover.
-    _advance_sheet_session = True
+    # PR (auto-rollover): the live Sheet1 must correspond to the active session. V1 holds
+    # the session the sheet currently represents; when it differs from ACTIVE_SESSION a
+    # NEW session has started. The rollover archive is a PRECONDITION for overwriting
+    # Sheet1: if we cannot read V1, cannot archive a detected rollover, or cannot advance
+    # V1, we FAIL THE CYCLE (raise) so Sheet1 — still holding the completed session — is
+    # NEVER cleared/overwritten before that session is safely archived. (Gemini #133
+    # CRITICAL: a continue-on-failure path would overwrite Sheet1 with the NEW session
+    # and then, on the retry, copy THAT new data into Session_<old> — corrupting the
+    # archive and losing the old session. Raising preserves last-known-good; the next
+    # scheduled run retries with Sheet1 still intact.)
     try:
         _sheet_session = (worksheet.acell(SHEET_SESSION_CELL).value or "").strip()
     except Exception as _ss_read_err:
-        _sheet_session = ""
-        _advance_sheet_session = False  # couldn't read the marker -> don't overwrite it this cycle
-        push_system_alert(
-            f"Could not read sheet-session marker Sheet1!{SHEET_SESSION_CELL}: {_ss_read_err}. "
-            f"Skipping the rollover check this cycle.",
-            status="INFO", category="API_FAILURE", severity="INFO",
-            dedup_key="sheet_session_read_fail",
-        )
+        print(f"🛑 Could not read sheet-session marker Sheet1!{SHEET_SESSION_CELL}: {_ss_read_err}. "
+              f"Failing the cycle so Sheet1 is not overwritten before a possible rollover is archived.")
+        raise
     if _sheet_session and _sheet_session != ACTIVE_SESSION:
         try:
             _archived_to = _archive_completed_session(sheet, worksheet, _sheet_session)
-            print(f"📦 Session rollover {_sheet_session} → {ACTIVE_SESSION}: "
-                  f"archived the completed session to '{_archived_to}' in the archive workbook.")
         except Exception as _arch_err:
-            _advance_sheet_session = False  # retry the archive next cycle; do NOT advance V1
-            push_system_alert(
-                f"Session-rollover archive of {_sheet_session} FAILED: {_arch_err}. The live cycle "
-                f"continues normally; the archive retries next cycle (marker not advanced).",
-                status="WARN", category="API_FAILURE", severity="WARN",
-                dedup_key=f"session_archive_fail::{_sheet_session}",
-            )
-            print(f"⚠️ Session archive of {_sheet_session} failed: {_arch_err}")
+            print(f"🛑 Session-rollover archive of {_sheet_session} FAILED: {_arch_err}. Failing the "
+                  f"cycle so Sheet1 (still the completed session) is not overwritten; retried next cycle.")
+            raise
+        # Advance V1 to the active session IMMEDIATELY — before any overwrite touches
+        # Sheet1 — so a later failure can never re-archive the new session's data over
+        # Session_<old>. (clear() wipes V1; it is re-asserted at cycle end.)
+        try:
+            worksheet.update_acell(SHEET_SESSION_CELL, ACTIVE_SESSION)
+        except Exception as _ss_set_err:
+            print(f"🛑 Archived {_sheet_session} but could not advance Sheet1!{SHEET_SESSION_CELL}: "
+                  f"{_ss_set_err}. Failing the cycle so Sheet1 is not overwritten while the marker "
+                  f"still reads the old session.")
+            raise
+        print(f"📦 Session rollover {_sheet_session} → {ACTIVE_SESSION}: "
+              f"archived the completed session to '{_archived_to}' in the archive workbook.")
 
     # Review-fix (Codex P2): carry-forward read for Sheet1!W1. If the
     # previous cycle tripped the mass-violation circuit breaker, it left a
@@ -5902,28 +5905,22 @@ def run_calendar_update():
                         dedup_key="state_cell_y3_write_fail",
                     )
 
-                # PR (auto-rollover): restore the sheet-session marker (V1) EVERY
-                # successful cycle — the `worksheet.clear()` above wipes ALL cells,
-                # including V1, so (exactly like Y2/Y3) it MUST be re-written or it goes
-                # empty and a rollover landing in that window is silently lost. On
-                # success / steady-state / first-init write the ACTIVE session; but if
-                # the rollover ARCHIVE FAILED (_advance False, old code known), write the
-                # OLD code BACK so V1 still flags the pending rollover and next cycle
-                # RETRIES it — never leaving V1 empty, which would permanently drop the
-                # completed session's archive (Gemini #133 CRITICAL ×2). A failed V1
-                # READ leaves _sheet_session "" -> nothing to write back -> re-init next
-                # cycle.
-                _session_to_write = ACTIVE_SESSION if _advance_sheet_session else _sheet_session
-                if _session_to_write:
-                    try:
-                        worksheet.update_acell(SHEET_SESSION_CELL, _session_to_write)
-                    except Exception as _ss_write_err:
-                        push_system_alert(
-                            f"Could not write sheet-session marker Sheet1!{SHEET_SESSION_CELL} "
-                            f"after a successful cycle: {_ss_write_err}",
-                            status="WARN", category="API_FAILURE", severity="WARN",
-                            dedup_key="sheet_session_write_fail",
-                        )
+                # PR (auto-rollover): re-assert the sheet-session marker (V1) to the
+                # active session — `worksheet.clear()` above wiped ALL cells (incl. V1),
+                # so like Y2/Y3 it must be restored each successful cycle. Reaching here
+                # means any rollover was already archived AND V1 advanced before the
+                # overwrite (failures raised), so the value is unconditionally the active
+                # session. A failure here leaves V1 empty -> next cycle re-initialises it
+                # (the completed session is already archived, so no re-archive occurs).
+                try:
+                    worksheet.update_acell(SHEET_SESSION_CELL, ACTIVE_SESSION)
+                except Exception as _ss_write_err:
+                    push_system_alert(
+                        f"Could not restore sheet-session marker Sheet1!{SHEET_SESSION_CELL} "
+                        f"after a successful cycle: {_ss_write_err}",
+                        status="WARN", category="API_FAILURE", severity="WARN",
+                        dedup_key="sheet_session_write_fail",
+                    )
 
                 print("✅ SUCCESS: Regression Test Build is complete.")
         else:
