@@ -67,6 +67,7 @@ from collections import defaultdict, namedtuple
 from datetime import datetime, timezone
 
 SPREADSHEET_ID = "1PQDtaTTUeYv781bx4_ZiehcvbEmUt8t7jFmZYJoJGKM"
+ARCHIVE_SPREADSHEET_ID = "1AA-dCUDAPvq59Hv01DqteEquBJ1kkqI0QR5ECd10QeA"  # session archive (own 10M budget)
 GOOGLE_SHEETS_CELL_CAP = 10_000_000
 SOFT_CEILING = 9_500_000  # mirrors calendar_worker.LEGEVENT_WORKBOOK_CELL_CEILING
 
@@ -407,6 +408,28 @@ def check_capacity():
         else:
             out.append(Result("CAPACITY", f"retention:{title}", "PASS",
                                f"'{title}' oldest row {age}d old (<= {days}d) — retention enforced; {rc:,} rows"))
+
+    # 4. Archive workbook capacity — the session archive is a SEPARATE workbook with
+    #    its OWN 10M-cell budget; one session of output (~0.45M cells) lands per
+    #    rollover, so a single archive book holds ~20 sessions (a decade-plus). Watch
+    #    it too so "the archive filled" is a long-lead alert, never a surprise — and
+    #    the cue to add a second archive book (or enable auto-create).
+    try:
+        archive = gc.open_by_key(ARCHIVE_SPREADSHEET_ID)
+        a_total = sum(int(w.row_count) * int(w.col_count) for w in archive.worksheets())
+        a_frac = a_total / GOOGLE_SHEETS_CELL_CAP
+        a_detail = (f"archive '{archive.title}' {a_total:,}/{GOOGLE_SHEETS_CELL_CAP:,} cells "
+                    f"({a_frac:.1%}); {len(archive.worksheets())} tabs")
+        if a_frac >= 0.85:
+            out.append(Result("CAPACITY", "archive-cells", "FAIL",
+                               "archive OVER 85% of its 10M cap — add a second archive workbook NOW. " + a_detail))
+        elif a_frac >= 0.60:
+            out.append(Result("CAPACITY", "archive-cells", "WARN",
+                               "archive over 60% of its 10M cap — plan a second archive workbook. " + a_detail))
+        else:
+            out.append(Result("CAPACITY", "archive-cells", "PASS", a_detail))
+    except Exception as exc:
+        out.append(Result("CAPACITY", "archive-cells", "SKIP", f"could not read the archive workbook: {exc}"))
     return out
 
 
