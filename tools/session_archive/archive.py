@@ -69,7 +69,7 @@ def _copy_tab(src_ws, archive, target_name):
     Worksheet constructor / get_worksheet_by_id typing — version-robust (Gemini #131)."""
     try:
         old_id = archive.worksheet(target_name).id  # a pre-existing same-named target, if any
-    except gspread.WorksheetNotFound:
+    except gspread.exceptions.WorksheetNotFound:
         old_id = None
     props = src_ws.copy_to(ARCHIVE_ID)  # Sheets copyTo -> {'sheetId':..., 'title':'Copy of ...'}
     requests = []

@@ -2539,6 +2539,45 @@ def _extract_meeting_location(meeting):
     return "", None
 
 
+# === SESSION ROLLOVER ARCHIVE ===
+# The live Sheet1 must correspond to the active session — the THIRD of the three that
+# must agree: the live LIS session code, the session used for API calls
+# (ACTIVE_SESSION), and the session the sheet holds (Sheet1!V1). When V1 differs from
+# ACTIVE_SESSION a NEW session has begun, so the worker archives the COMPLETED
+# session's Sheet1 to the separate archive workbook BEFORE this cycle overwrites it.
+# Non-destructive (a copy) — the live write proceeds normally regardless, so a
+# mis-fire can never lose live data. V1 advances only on a successful overwrite.
+SESSION_ARCHIVE_ID = "1AA-dCUDAPvq59Hv01DqteEquBJ1kkqI0QR5ECd10QeA"
+SHEET_SESSION_CELL = "V1"  # far-right row-1 state cell; re-written each cycle like Y2/Y3
+
+
+def _archive_completed_session(sheet, worksheet, old_code):
+    """Snapshot the live Sheet1 (`worksheet`, already fetched by the caller) into the
+    archive workbook as ``Session_<old_code>``, replacing any existing snapshot of that
+    session (idempotent). Returns the target tab name; raises on failure (the caller
+    decides whether to advance the marker).
+
+    copy_to + a single atomic batch_update (delete-old-then-rename by raw sheetId): no
+    full worksheet-list fetch, and no reliance on the gspread Worksheet constructor /
+    get_worksheet_by_id typing (version-robust). Canonical standalone tool, kept in
+    sync: tools/session_archive/archive.py."""
+    archive = sheet.client.open_by_key(SESSION_ARCHIVE_ID)
+    target = f"Session_{old_code}"
+    try:
+        old_id = archive.worksheet(target).id
+    except gspread.exceptions.WorksheetNotFound:
+        old_id = None
+    props = worksheet.copy_to(SESSION_ARCHIVE_ID)
+    requests = []
+    if old_id is not None:
+        requests.append({"deleteSheet": {"sheetId": int(old_id)}})
+    requests.append({"updateSheetProperties": {
+        "properties": {"sheetId": int(props["sheetId"]), "title": target},
+        "fields": "title"}})
+    archive.batch_update({"requests": requests})
+    return target
+
+
 def run_calendar_update():
     http_session = get_armored_session()
     
@@ -3133,6 +3172,42 @@ def run_calendar_update():
             status="INFO", category="API_FAILURE", severity="INFO",
             dedup_key="state_cell_y3_read_fail",
         )
+
+    # PR (auto-rollover): the live Sheet1 must correspond to the active session. V1 holds
+    # the session the sheet currently represents; when it differs from ACTIVE_SESSION a
+    # NEW session has started. The rollover archive is a PRECONDITION for overwriting
+    # Sheet1: if we cannot read V1, cannot archive a detected rollover, or cannot advance
+    # V1, we FAIL THE CYCLE (raise) so Sheet1 — still holding the completed session — is
+    # NEVER cleared/overwritten before that session is safely archived. (Gemini #133
+    # CRITICAL: a continue-on-failure path would overwrite Sheet1 with the NEW session
+    # and then, on the retry, copy THAT new data into Session_<old> — corrupting the
+    # archive and losing the old session. Raising preserves last-known-good; the next
+    # scheduled run retries with Sheet1 still intact.)
+    try:
+        _sheet_session = (worksheet.acell(SHEET_SESSION_CELL).value or "").strip()
+    except Exception as _ss_read_err:
+        print(f"🛑 Could not read sheet-session marker Sheet1!{SHEET_SESSION_CELL}: {_ss_read_err}. "
+              f"Failing the cycle so Sheet1 is not overwritten before a possible rollover is archived.")
+        raise
+    if _sheet_session and _sheet_session != ACTIVE_SESSION:
+        try:
+            _archived_to = _archive_completed_session(sheet, worksheet, _sheet_session)
+        except Exception as _arch_err:
+            print(f"🛑 Session-rollover archive of {_sheet_session} FAILED: {_arch_err}. Failing the "
+                  f"cycle so Sheet1 (still the completed session) is not overwritten; retried next cycle.")
+            raise
+        # Advance V1 to the active session IMMEDIATELY — before any overwrite touches
+        # Sheet1 — so a later failure can never re-archive the new session's data over
+        # Session_<old>. (clear() wipes V1; it is re-asserted at cycle end.)
+        try:
+            worksheet.update_acell(SHEET_SESSION_CELL, ACTIVE_SESSION)
+        except Exception as _ss_set_err:
+            print(f"🛑 Archived {_sheet_session} but could not advance Sheet1!{SHEET_SESSION_CELL}: "
+                  f"{_ss_set_err}. Failing the cycle so Sheet1 is not overwritten while the marker "
+                  f"still reads the old session.")
+            raise
+        print(f"📦 Session rollover {_sheet_session} → {ACTIVE_SESSION}: "
+              f"archived the completed session to '{_archived_to}' in the archive workbook.")
 
     # Review-fix (Codex P2): carry-forward read for Sheet1!W1. If the
     # previous cycle tripped the mass-violation circuit breaker, it left a
@@ -5828,6 +5903,23 @@ def run_calendar_update():
                         category="API_FAILURE",
                         severity="WARN",
                         dedup_key="state_cell_y3_write_fail",
+                    )
+
+                # PR (auto-rollover): re-assert the sheet-session marker (V1) to the
+                # active session — `worksheet.clear()` above wiped ALL cells (incl. V1),
+                # so like Y2/Y3 it must be restored each successful cycle. Reaching here
+                # means any rollover was already archived AND V1 advanced before the
+                # overwrite (failures raised), so the value is unconditionally the active
+                # session. A failure here leaves V1 empty -> next cycle re-initialises it
+                # (the completed session is already archived, so no re-archive occurs).
+                try:
+                    worksheet.update_acell(SHEET_SESSION_CELL, ACTIVE_SESSION)
+                except Exception as _ss_write_err:
+                    push_system_alert(
+                        f"Could not restore sheet-session marker Sheet1!{SHEET_SESSION_CELL} "
+                        f"after a successful cycle: {_ss_write_err}",
+                        status="WARN", category="API_FAILURE", severity="WARN",
+                        dedup_key="sheet_session_write_fail",
                     )
 
                 print("✅ SUCCESS: Regression Test Build is complete.")
