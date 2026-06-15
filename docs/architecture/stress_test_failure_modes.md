@@ -48,7 +48,7 @@ The actionable code items are CLOSED. What remains is inherent (external) or a p
 2. **LIS API/site redesign** (inherent, ~once a decade): detected + alerted by the schema canary + guards (never silent), but a human adapts the code. The single biggest "needs a touch."
 3. **T2 — X-Ray read caching** for many concurrent product viewers (MED, only matters at launch scale).
 4. **Y3 — per-state validation of the text fallback + heuristics** when state #2 onboards.
-5. **Archive auto-create** (optional zero-touch): needs the service account creds to include Drive scope; until then `sustainability_audit` CAPACITY (`archive-cells`) gives years of lead time. Owner decision.
+5. **Archive 2nd-workbook** (~6-9 years out): OWNER CHOSE FULL FIDELITY (2026-06-15) — all 25 columns kept, nothing dropped. Each session ~940k cells; one workbook holds ~9 sessions. `sustainability_audit` CAPACITY (`archive-cells`) flags it years ahead; the action then is a 2-min manual create+share of a 2nd archive book (like the first) OR enable Drive scope on the service account → auto-create (offered, not yet built — needs the scope). *(The `compact_archive` workflow (#136) is a harmless col-padding guard — the archive snapshots are already tight, ~0 to reclaim; full-fidelity snapshots have no waste to trim.)*
 
 **CLOSED this campaign:** ~~Y2 field-rename canary~~ (#127) · ~~Witness retention~~ (#126) · ~~API_Cache + workbook capacity~~ (#131 archive + #134 trim → 79.7%→54.8%) · ~~Y1 API-key 401-halt~~ (#135) · ~~Y4 Node-20 bumps~~ (#135) · ~~the audit-rot itself~~ (the harness, #125) · ~~the auto-rollover hook~~ (#133).
 
