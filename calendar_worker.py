@@ -2590,11 +2590,12 @@ def run_calendar_update():
     # phase with real time.time() deltas (so it survives GitHub's buffered-stdout flush,
     # unlike log timestamps). Read the "⏱️ PHASE" lines to see where a ~20-min cycle goes.
     _phase_t0 = time.perf_counter()  # monotonic, immune to clock adjustments (Gemini #139)
-    _phase_last = [_phase_t0]
+    _phase_last = _phase_t0
     def _phase(label):
+        nonlocal _phase_last
         _now = time.perf_counter()
-        print(f"⏱️ PHASE {label}: {_now - _phase_last[0]:.1f}s  (cumulative {_now - _phase_t0:.1f}s)")
-        _phase_last[0] = _now
+        print(f"⏱️ PHASE {label}: {_now - _phase_last:.1f}s  (cumulative {_now - _phase_t0:.1f}s)")
+        _phase_last = _now
     
     session_data, api_is_online, _session_auth_failed = get_active_session_info(http_session)
     # Session-active flag for the sentinel's staleness gate (Gemini SRE C): the LIS
