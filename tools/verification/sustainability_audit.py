@@ -416,10 +416,11 @@ def check_capacity():
     #    the cue to add a second archive book (or enable auto-create).
     try:
         archive = gc.open_by_key(ARCHIVE_SPREADSHEET_ID)
-        a_total = sum(int(w.row_count) * int(w.col_count) for w in archive.worksheets())
+        a_tabs = archive.worksheets()  # fetch once, reuse (Gemini #135)
+        a_total = sum(int(w.row_count) * int(w.col_count) for w in a_tabs)
         a_frac = a_total / GOOGLE_SHEETS_CELL_CAP
         a_detail = (f"archive '{archive.title}' {a_total:,}/{GOOGLE_SHEETS_CELL_CAP:,} cells "
-                    f"({a_frac:.1%}); {len(archive.worksheets())} tabs")
+                    f"({a_frac:.1%}); {len(a_tabs)} tabs")
         if a_frac >= 0.85:
             out.append(Result("CAPACITY", "archive-cells", "FAIL",
                                "archive OVER 85% of its 10M cap — add a second archive workbook NOW. " + a_detail))
