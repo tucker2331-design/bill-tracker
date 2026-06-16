@@ -81,7 +81,7 @@ def _df_content_hash(df):
     if it does, this upgrades to a sorted/canonical hash before Stage 2b skips.
     Any error returns a distinct token → treated as CHANGED → recompute (fail-safe)."""
     try:
-        if df is None or getattr(df, "empty", True):
+        if df is None or not isinstance(df, pd.DataFrame) or df.empty:
             return "EMPTY"
         return hashlib.sha256(
             pd.util.hash_pandas_object(df, index=False).values.tobytes()
@@ -6266,10 +6266,13 @@ def run_calendar_update():
                         "sess=" + str(ACTIVE_SESSION),
                         "hist=" + _df_content_hash(df_past),
                         "dock=" + _df_content_hash(df_docket),
-                        "vote=" + (_sha(*sorted(_vote_id_set)) if _vote_id_set else "EMPTY"),
+                        # Join-then-hash (not *-unpack) so a multi-thousand-element set
+                        # doesn't build a huge args tuple — byte-identical to the unpacked
+                        # form since _sha 0x1f-separates parts (Gemini #146 r2).
+                        "vote=" + (_sha("\x1f".join(sorted(_vote_id_set))) if _vote_id_set else "EMPTY"),
                         # Canonical per-entry hash: sorted (key, value) items, NOT the
                         # dict's str() repr (which is insertion-order-fragile, Gemini #146).
-                        "sched=" + _sha(*(
+                        "sched=" + _sha("\x1f".join(
                             f"{k}|{sorted((api_schedule_map.get(k) or {}).items())}"
                             for k in sorted(api_schedule_map)
                         )),
