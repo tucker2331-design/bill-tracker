@@ -3507,7 +3507,12 @@ def run_calendar_update():
     # inputs match. Read failure → empty → treated as CHANGED (observe-only here).
     _prev_input_signature = ""
     try:
-        _prev_input_signature = (worksheet.acell("AB1").value or "").strip()
+        # AB1 is column 28; on a pre-widen grid (<28 cols, e.g. first run after this
+        # deploy) reading it would APIError. The success block widens to 28 on the
+        # first successful cycle, so just skip the read until then (Gemini #146) —
+        # an absent prev-signature correctly reads as CHANGED (observe-only).
+        if worksheet.col_count >= 28:
+            _prev_input_signature = (worksheet.acell("AB1").value or "").strip()
     except Exception as _sig_read_err:
         print(f"⚠️ Could not read Sheet1!AB1 prev input-signature ({_sig_read_err}); treated as CHANGED.")
 
@@ -4302,6 +4307,11 @@ def run_calendar_update():
     df_past = _history_future.result()   # prefetched at the top of the fetch section; already downloaded
     _blob_pool.shutdown(wait=False)
     _phase("HISTORY.CSV download (prefetched — should be ~0s if hidden behind phase 1)")
+
+    # Always-defined BEFORE the empty-HISTORY branch so the Stage-2 input signature
+    # never NameErrors on an empty cycle (Gemini #146). Populated from VOTE.CSV below
+    # when HISTORY is present; an empty cycle hashes it as the empty set.
+    _vote_id_set = set()
     if df_past.empty:
         push_system_alert(
             f"HISTORY.CSV fetch returned empty for session {blob_code} from "
@@ -4418,7 +4428,7 @@ def run_calendar_update():
         # VOTE.CSV is a RAGGED csv (each roll-call row has a different member count), which
         # pandas/safe_fetch_csv silently mangles to 0 usable ids — fetch raw and read with
         # csv.reader. Vote id = the first column (a digit string like "26110000").
-        _vote_id_set = set()
+        # (_vote_id_set already initialised right after the HISTORY fetch — Gemini #146.)
         try:
             _vr = http_session.get(f"https://lis.blob.core.windows.net/lisfiles/{blob_code}/VOTE.CSV",
                                    headers=HEADERS, timeout=60)
@@ -6257,7 +6267,12 @@ def run_calendar_update():
                         "hist=" + _df_content_hash(df_past),
                         "dock=" + _df_content_hash(df_docket),
                         "vote=" + (_sha(*sorted(_vote_id_set)) if _vote_id_set else "EMPTY"),
-                        "sched=" + _sha(*(f"{k}={api_schedule_map[k]}" for k in sorted(api_schedule_map))),
+                        # Canonical per-entry hash: sorted (key, value) items, NOT the
+                        # dict's str() repr (which is insertion-order-fragile, Gemini #146).
+                        "sched=" + _sha(*(
+                            f"{k}|{sorted((api_schedule_map.get(k) or {}).items())}"
+                            for k in sorted(api_schedule_map)
+                        )),
                     )
                     _sig_match = bool(_prev_input_signature) and _input_signature == _prev_input_signature
                     print(f"🔁 INPUT SIGNATURE {'MATCH' if _sig_match else 'CHANGED'} "
