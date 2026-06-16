@@ -178,6 +178,18 @@ events_rows.append([
 
 **Blocked on:** PR-C7.1a math result. If the audit greenlights the derived classifier architecture, PR-C7.0.6 ships the full schema migration (adds `EventCode` + fixes `LegislationEventID`); otherwise this gets its own minor fix.
 
+## 10. `run_sequential_turing_machine` — `or`-on-nullable-pandas patterns in the STM body (deferred from #147)
+
+**Status:** OPEN, deferred to a separate follow-up (flagged by Gemini on PR #147 r2, 2026-06-16).
+
+**Severity:** `WARN` (theoretical) — the patterns are in the **moved STM body that has been running in production and passing the accuracy sentinel** (Section 9 = 0). So either the field is never problematically null, or the existing behavior is intended. Not an active bug.
+
+**Problem:** several `row.get(<col>) or <default>` (and similar) expressions on pandas row fields inside the extracted `run_sequential_turing_machine`. `float('nan')` is **truthy** in Python, so `nan or default` returns `nan`, not `default` — a latent surprise if a field can be NaN and the code expects the default. Gemini rated some HIGH.
+
+**Why deferred:** PR #147 is a **proven behavior-preserving MOVE** (660-line body verified line-for-line identical). Fixing these here would (a) break the pure-move guarantee, (b) risk a behavior change in production-validated code, (c) muddy an extraction PR. They predate #147 (the move only made the diff visible).
+
+**Fix plan:** a separate, focused PR — first DATA-CONFIRM whether each flagged field is ever actually NaN at that point (don't change classification on a hunch — Standard #7); fix only the ones that are real, each with a before/after on the live metric. Do this AFTER the incremental-STM differential oracle exists, so any change is provably output-identical.
+
 ---
 
 ## How this page is kept current
