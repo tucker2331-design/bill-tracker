@@ -2708,13 +2708,26 @@ def run_calendar_update():
         _phase_last = _now
     
     session_data, api_is_online, _session_auth_failed = get_active_session_info(http_session)
-    # Session-active flag for the sentinel's staleness gate (Gemini SRE C): the LIS
-    # Session API's IsActive — true only while the GA is actually meeting (new actions
-    # expected). Off-session it is false, so the freshness gate correctly stays quiet.
-    _session_active = bool(session_data.get("is_active")) if session_data else False
 
     tz = pytz.timezone('America/New_York')
     now = datetime.now(tz).replace(tzinfo=None)
+
+    # Session-active flag for the sentinel's staleness gate (Gemini SRE C). Standard #1:
+    # the LIS Session API's IsActive does NOT flip to False at sine die — it stays True
+    # through the post-session interim (observed 2026-06-15: session 20261 still
+    # IsActive=True ~6 weeks after its last action on 2026-05-05). IsActive alone
+    # therefore over-reports "actively meeting", and the sentinel's freshness gate
+    # false-fired the entire interim (newest action 29 business days old, S1=ACTIVE).
+    # Gate it on the scheduled window too: ACTIVE only while LIS says active AND we are
+    # at/before the session end (already +14d-buffered for the reconvened/veto session
+    # in get_active_session_info). S1 must stay SCHEDULE-derived, never data-derived —
+    # otherwise the very gate that reads it could never catch a frozen pipeline that
+    # preserves last-known-good. See [[failures/assumptions_audit]] #90.
+    _session_end = session_data.get("end") if session_data else None
+    _session_active = bool(
+        session_data and session_data.get("is_active")
+        and _session_end is not None and now <= _session_end
+    )
     alert_rows = []
     _alert_dedup_keys = set()
 
