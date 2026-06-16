@@ -50,4 +50,10 @@ jobs:
       - name: Run Backend Worker
         env:
           GCP_CREDENTIALS: ${{ secrets.GCP_CREDENTIALS }}
+          # Optional ops/bug-alert channel. If this secret is unset, notify_slack
+          # is a no-op and the worker runs unchanged (in-sheet SYSTEM_ALERT rows +
+          # the GitHub failure email remain the baseline). Set repo secret
+          # SLACK_WEBHOOK_URL to a Slack Incoming Webhook URL to activate.
+          # See docs/architecture/alerting.md.
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
         run: python calendar_worker.py

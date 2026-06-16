@@ -31,6 +31,7 @@ import re
 import ast
 import argparse
 import time
+import json
 import urllib.request
 
 # Resolve ray2.py relative to THIS file, not the cwd, so the sentinel runs from
@@ -60,6 +61,25 @@ def _get(url, tries=4):
             if attempt == tries - 1:
                 raise
             time.sleep(2 ** attempt)
+
+
+def _notify_slack(text):
+    """Best-effort Slack post when the sentinel FAILS. DORMANT until the
+    SLACK_WEBHOOK_URL env var (a GitHub Actions secret) is set. stdlib-only
+    (urllib + json) to keep the sentinel dependency- and secret-free by default.
+    NEVER raises — a Slack outage must not change the sentinel's exit code (the
+    real escalation is the non-zero exit → GitHub Actions failure email)."""
+    url = os.environ.get("SLACK_WEBHOOK_URL")
+    if not url or not text:  # no webhook, or nothing to say -> don't post an empty msg
+        return
+    try:
+        data = json.dumps({"text": str(text)[:3000]}).encode("utf-8")
+        req = urllib.request.Request(url, data=data,
+                                     headers={"Content-Type": "application/json"})
+        with urllib.request.urlopen(req, timeout=8):  # close the response (no fd leak), matches _get
+            pass
+    except Exception as e:
+        print(f"⚠️ Slack notify failed (non-fatal): {e}")
 
 
 def _load_ray2_semantics():
@@ -262,7 +282,12 @@ def main():
               f"correctly silent off-session")
 
     if failed:
-        print(f"\n🚨 SENTINEL FAIL — {len(failed)} invariant(s) breached: {', '.join(failed)}")
+        _msg = f"\n🚨 SENTINEL FAIL — {len(failed)} invariant(s) breached: {', '.join(failed)}"
+        print(_msg)
+        # Mirror to Slack (dormant until SLACK_WEBHOOK_URL is set). The non-zero
+        # exit below already escalates to a GitHub Actions failure email; this adds
+        # a faster, specific channel naming the breached invariant(s).
+        _notify_slack(f"🚨 *Accuracy Sentinel FAILED* (calendar) — {len(failed)} invariant(s): {', '.join(failed)}")
         return 1
     print("\n✅ SENTINEL PASS — all accuracy invariants hold.")
     return 0

@@ -28,4 +28,8 @@ jobs:
         with:
           python-version: "3.11"
       - name: Accuracy invariants (Section 9 / unclassified / floor / derived)
+        env:
+          # Optional: posts a specific Slack alert on FAIL (dormant if unset; the
+          # non-zero exit already emails via GitHub). See docs/architecture/alerting.md.
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
         run: python3 tools/verification/accuracy_sentinel.py

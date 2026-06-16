@@ -32,6 +32,7 @@ Links use Obsidian `[[wikilink]]` format. Obsidian resolves by filename; path-qu
 - [[architecture/post_c8_hardening]] — **ACTIVE: three grounded post-C8.4 hardening solutions (G-code drift alert, structural meeting_unsourced, unconfirmed rolling baseline)**
 - [[architecture/pr_c8_structural_classification]] — close the 16% structurally; hard rules + gates for the implementing model
 - [[architecture/calendar_pipeline]] — LIS → worker → Sheet1 data flow + resolution priorities
+- [[architecture/alerting]] — bug-notification protocol: in-sheet `SYSTEM_ALERT` / GitHub failure email / Slack ops channel; which tripwire fires when, and how to wire Slack
 - [[architecture/scalability_audit]] — standing standards-compliance audit (scalable / sustainable / zero-maintenance?); re-run after any architecturally-significant change
 - [[architecture/stress_test_failure_modes]] — adversarial failure-mode audit: what breaks tomorrow / in 6 months / in 2 years, with severity + status
 - [[architecture/verification_durability]] — the FIVE-layer continuous guard (breaker / daily sentinel / weekly reconciliation / completeness / **sustainability audit**); how next session won't silently regress
