@@ -150,6 +150,20 @@ backfills in the next healthy cycle). Empty on first post-PR-C1 deploy —
 that's expected and does not alert. A read or write API error emits a
 categorized `API_FAILURE` alert.
 
+### State Cell `Sheet1!AA1` — public data-freshness marker (site display)
+
+Written at the end of every successful cycle with the **same value as `Y1`**
+(`_cycle_end_utc_iso`, real UTC), but kept as a SEPARATE cell on purpose:
+`Y1` is the internal PR-C1 backfill cursor and may change meaning as that
+logic evolves, whereas `AA1` is a **stable public contract** the lobbyist-
+facing site reads (`gviz…&sheet=Sheet1&range=AA1&headers=0`) to show "data
+refreshed X ago". It measures TRUE freshness — only a fully successful cycle
+reaches the write, so a failed / GitHub-delayed / breaker-halted run leaves
+the last-good timestamp and the site correctly surfaces staleness (the
+dispatch time is NOT a freshness signal — it precedes the ~variable queue
+delay). `clear()` wipes it each cycle; re-written on every healthy cycle. A
+write error emits a categorized `API_FAILURE` WARN (display-only; non-fatal).
+
 ### State Cell `Sheet1!W1` — durable breaker trip record (PR-C1 review-fix)
 
 JSON-encoded record written on circuit-breaker trip so the trip survives
