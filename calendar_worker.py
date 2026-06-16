@@ -41,7 +41,8 @@ def notify_slack(text):
     if not url or not text:  # no webhook, or nothing to say -> don't post an empty msg
         return
     try:
-        requests.post(url, json={"text": str(text)[:3000]}, timeout=8)
+        _resp = requests.post(url, json={"text": str(text)[:3000]}, timeout=8)
+        _resp.raise_for_status()  # 4xx/5xx (bad/expired webhook, rate-limit) don't raise on their own
     except Exception as e:
         # Standard #2/#4: visible, never silent — but non-fatal (it's an alert
         # channel, not data). The in-sheet alert already captured the event.
