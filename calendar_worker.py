@@ -2780,7 +2780,9 @@ def run_sequential_turing_machine(df_past, *,
         _build_diagnostic_hint,
         _classify_refid,
         _normalize_refid,
-        http_session):
+        http_session,
+        _floor_hit,
+        _floor_miss):
     for _, row in df_past.iterrows():
         source_miss_counts["total_processed"] += 1
         # Tracks whether committee was resolved via Memory Anchor fallback
@@ -3472,6 +3474,12 @@ def run_sequential_turing_machine(df_past, *,
             "LegEventRoute": legevent_route,
         })
 
+    # Caller-initialised SCALAR accumulators: ints don't propagate back through the
+    # call the way the mutable dicts/Counters do, so return them for the post-loop
+    # reporting in run_calendar_update (Gemini #147 CRITICAL — the two use-before-
+    # assign accumulators my first extraction's loaded-minus-stored proof wrongly
+    # cleared because a `+=` both loads AND stores).
+    return _floor_hit, _floor_miss
 
 
 def run_calendar_update():
@@ -5610,7 +5618,7 @@ def run_calendar_update():
         if _admin_recovery_index:
             print(f"🗂️  EventType admin-recovery descriptions (LIS reference): {len(_admin_recovery_index)}.")
 
-        run_sequential_turing_machine(df_past,
+        _floor_hit, _floor_miss = run_sequential_turing_machine(df_past,
             bill_locations=bill_locations,
             last_seen_date=last_seen_date,
             api_schedule_map=api_schedule_map,
@@ -5634,7 +5642,9 @@ def run_calendar_update():
             _build_diagnostic_hint=_build_diagnostic_hint,
             _classify_refid=_classify_refid,
             _normalize_refid=_normalize_refid,
-            http_session=http_session)
+            http_session=http_session,
+            _floor_hit=_floor_hit,
+            _floor_miss=_floor_miss)
     # === CONVENE TIME GAP REPORT ===
     scrape_start_str = scrape_start.strftime('%Y-%m-%d')
     print(f"📊 Convene times populated for {len(convene_times)} dates total")
