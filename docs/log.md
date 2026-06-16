@@ -9,7 +9,11 @@ Append-only, reverse-chronological (newest at top). Each entry opens with `## [Y
 
 **Kinds:** `ingest` (new source/doc processed), `pr` (PR opened/merged/closed), `decision` (architectural or workflow), `lint` (wiki health-check pass), `session` (notable multi-hour working block), `post-mortem` (failure analysis), `milestone` (project-goal threshold crossed).
 
-## [2026-06-16] pr | #141 OPENED — sentinel staleness false-fire fix (S1=ACTIVE outlived the session)
+## [2026-06-16] pr | #142 OPENED — public data-freshness marker Sheet1!AA1 (site "data refreshed X ago")
+
+Owner ask: persist the time of the last SUCCESSFUL calendar run (distinct from the GitHub dispatch time, which precedes a variable queue delay) so the site can show lobbyists how recent the data is — and surface a major GitHub delay. Added `Sheet1!AA1`, written on every successful cycle with `_cycle_end_utc_iso` (the same real-UTC value as the `Y1` backfill cursor, but a SEPARATE stable public contract decoupled from Y1's internal semantics). Only a fully successful cycle reaches the write, so a failed/delayed/halted run leaves the last-good time and the site correctly shows staleness. Site reads `gviz…&sheet=Sheet1&range=AA1&headers=0`. State-cell map updated in [[architecture/calendar_pipeline]].
+
+## [2026-06-16] pr | #141 MERGED — sentinel staleness false-fire fix (S1=ACTIVE outlived the session)
 
 Caught during #140's live verification: the accuracy sentinel went **red** at 21:28 on 2026-06-15 (first cycle after #138's staleness gate deployed) — `[FAIL] STALENESS: newest action 2026-05-05 is 29 business days old during an ACTIVE session`. Root cause: `_session_active` trusted LIS `IsActive` alone, but `IsActive` stays True through the post-sine-die interim, so `S1=ACTIVE` mislabeled an adjourned session and the freshness gate expected data that legitimately wasn't coming. **NOT** caused by the agenda cache (orthogonal). Fix: `_session_active = is_active AND now <= session_end` (schedule-gated; `_session_active` has exactly one consumer, the S1 write). S1 must stay schedule-derived, never data-derived, or the gate it feeds could never catch a real freeze ([[failures/assumptions_audit]] #90). Speedup also confirmed this run: **#1399 cache-cold 20m44s → #1400 cache-warm 8m8s** (actual compute ~2m; rest is GitHub queue delay). Truth-table tested. Prereq for the Slack ops channel (a cycle-stable false-fire would spam it on cycle 1).
 

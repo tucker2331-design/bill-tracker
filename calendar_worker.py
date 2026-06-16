@@ -6115,6 +6115,27 @@ def run_calendar_update():
                         dedup_key="state_cell_y1_write_fail",
                     )
 
+                # Public DATA-FRESHNESS marker for the lobbyist-facing site. Same value
+                # as Y1 (this cycle's successful end, real UTC) but a SEPARATE, stable
+                # display contract: Y1 is the internal PR-C1 backfill cursor and may
+                # change meaning later; AA1 exists solely so the site can read
+                # gviz…&range=AA1 and show "data refreshed X ago". It measures TRUE
+                # freshness, immune to GitHub dispatch/queue delay — ONLY a fully
+                # successful cycle reaches here, so a failed/delayed/halted run leaves
+                # the last-good time and the site correctly shows staleness. clear()
+                # wipes it each cycle; re-written here like the other state cells.
+                # State-cell map: docs/architecture/calendar_pipeline.md.
+                try:
+                    worksheet.update_acell("AA1", _cycle_end_utc_iso)
+                except Exception as _freshness_write_err:
+                    push_system_alert(
+                        f"Could not write data-freshness cell Sheet1!AA1 after successful cycle: {_freshness_write_err}",
+                        status="WARN",
+                        category="API_FAILURE",
+                        severity="WARN",
+                        dedup_key="state_cell_aa1_write_fail",
+                    )
+
                 # PR-C7.0.4: write THIS cycle's meeting_unsourced as the
                 # rolling baseline for next cycle's delta-check. Only on
                 # successful overwrite — a tripped/halted cycle leaves Y2
