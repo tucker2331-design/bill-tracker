@@ -2,6 +2,7 @@ import os
 import sys
 import json
 import time
+import hashlib
 import requests
 import gspread
 import pandas as pd
@@ -48,6 +49,45 @@ def notify_slack(text):
         # Standard #2/#4: visible, never silent — but non-fatal (it's an alert
         # channel, not data). The in-sheet alert already captured the event.
         print(f"⚠️ Slack notify failed (non-fatal): {e}")
+
+
+# ── Worker-speed Stage 2: input-signature change detection (OBSERVE-ONLY) ──────
+# Goal: skip the 60k-row recompute when EVERY output-affecting input is unchanged
+# since the last successful cycle. This is the OBSERVE-ONLY half — it computes the
+# signature, logs whether it WOULD skip, and stores it, but never actually skips.
+# That validates the detector on real cycles (is it stable off-season? any false
+# "changed"?) BEFORE the skip is wired (Stage 2b), so an accuracy-critical short-
+# circuit is never flipped on an unproven detector. See [[ideas/future_improvements]].
+#
+# Bump WORKER_OUTPUT_LOGIC_VERSION on ANY change to output-affecting logic so the
+# signature changes and a recompute is forced even when the inputs are byte-identical
+# (otherwise a code fix wouldn't take effect until an input moved).
+WORKER_OUTPUT_LOGIC_VERSION = "2026-06-16.1"
+
+
+def _sha(*parts):
+    """Stable SHA-256 over the parts, 0x1f-separated. Order of args matters."""
+    h = hashlib.sha256()
+    for p in parts:
+        h.update(str(p).encode("utf-8", "replace"))
+        h.update(b"\x1f")
+    return h.hexdigest()
+
+
+def _df_content_hash(df):
+    """Fast, order-DEPENDENT content hash of a DataFrame (all columns). A row-
+    reorder counts as a change → recompute, which is SAFE (slower, never wrong).
+    The observe-only stage tells us whether LIS reorders its exports off-season;
+    if it does, this upgrades to a sorted/canonical hash before Stage 2b skips.
+    Any error returns a distinct token → treated as CHANGED → recompute (fail-safe)."""
+    try:
+        if df is None or not isinstance(df, pd.DataFrame) or df.empty:
+            return "EMPTY"
+        return hashlib.sha256(
+            pd.util.hash_pandas_object(df, index=False).values.tobytes()
+        ).hexdigest()
+    except Exception as e:
+        return f"HASHERR:{type(e).__name__}"
 
 
 # PR-C7.1b-1: the dictionary-free structural calendar-vs-ledger router.
@@ -3462,6 +3502,20 @@ def run_calendar_update():
             dedup_key="state_cell_w1_read_fail",
         )
 
+    # Stage-2 (observe-only): read the PREVIOUS cycle's input signature from AB1
+    # BEFORE clear() wipes it, so the recompute path can log whether this cycle's
+    # inputs match. Read failure → empty → treated as CHANGED (observe-only here).
+    _prev_input_signature = ""
+    try:
+        # AB1 is column 28; on a pre-widen grid (<28 cols, e.g. first run after this
+        # deploy) reading it would APIError. The success block widens to 28 on the
+        # first successful cycle, so just skip the read until then (Gemini #146) —
+        # an absent prev-signature correctly reads as CHANGED (observe-only).
+        if worksheet.col_count >= 28:
+            _prev_input_signature = (worksheet.acell("AB1").value or "").strip()
+    except Exception as _sig_read_err:
+        print(f"⚠️ Could not read Sheet1!AB1 prev input-signature ({_sig_read_err}); treated as CHANGED.")
+
     # ================================================================
     # PR-C2 Part A: Y1 gap detection + classification
     # ================================================================
@@ -4253,6 +4307,11 @@ def run_calendar_update():
     df_past = _history_future.result()   # prefetched at the top of the fetch section; already downloaded
     _blob_pool.shutdown(wait=False)
     _phase("HISTORY.CSV download (prefetched — should be ~0s if hidden behind phase 1)")
+
+    # Always-defined BEFORE the empty-HISTORY branch so the Stage-2 input signature
+    # never NameErrors on an empty cycle (Gemini #146). Populated from VOTE.CSV below
+    # when HISTORY is present; an empty cycle hashes it as the empty set.
+    _vote_id_set = set()
     if df_past.empty:
         push_system_alert(
             f"HISTORY.CSV fetch returned empty for session {blob_code} from "
@@ -4369,7 +4428,7 @@ def run_calendar_update():
         # VOTE.CSV is a RAGGED csv (each roll-call row has a different member count), which
         # pandas/safe_fetch_csv silently mangles to 0 usable ids — fetch raw and read with
         # csv.reader. Vote id = the first column (a digit string like "26110000").
-        _vote_id_set = set()
+        # (_vote_id_set already initialised right after the HISTORY fetch — Gemini #146.)
         try:
             _vr = http_session.get(f"https://lis.blob.core.windows.net/lisfiles/{blob_code}/VOTE.CSV",
                                    headers=HEADERS, timeout=60)
@@ -6177,13 +6236,14 @@ def run_calendar_update():
                 # State-cell map: docs/architecture/calendar_pipeline.md.
                 try:
                     # Sheet1 is the default 26-col grid (A–Z) — the existing state
-                    # cells deliberately stop at Z. AA is the 27th column, and
-                    # update_acell does NOT auto-expand the grid (it would APIError
-                    # every cycle, Gemini #142). Widen once to fit; idempotent —
-                    # clear() empties values but never shrinks the grid, so after the
-                    # first cycle col_count >= 27 and this is a no-op.
-                    if worksheet.col_count < 27:
-                        worksheet.add_cols(27 - worksheet.col_count)
+                    # cells deliberately stop at Z. AA (col 27, freshness) and AB
+                    # (col 28, Stage-2 input signature) are beyond it, and update_acell
+                    # does NOT auto-expand the grid (it would APIError every cycle,
+                    # Gemini #142). Widen once to fit both; idempotent — clear() empties
+                    # values but never shrinks the grid, so after the first cycle
+                    # col_count >= 28 and this is a no-op.
+                    if worksheet.col_count < 28:
+                        worksheet.add_cols(28 - worksheet.col_count)
                     worksheet.update_acell("AA1", _cycle_end_utc_iso)
                 except Exception as _freshness_write_err:
                     push_system_alert(
@@ -6193,6 +6253,38 @@ def run_calendar_update():
                         severity="WARN",
                         dedup_key="state_cell_aa1_write_fail",
                     )
+
+                # Stage-2 (OBSERVE-ONLY): compute this cycle's input signature from the
+                # still-in-scope inputs, LOG whether it matches last cycle's (i.e. whether
+                # a recompute COULD have been skipped), and persist it to AB1 for next
+                # cycle's comparison. NOTHING skips on a match yet — this validates the
+                # detector on real cycles before Stage 2b wires the actual skip. Non-fatal:
+                # any error just means no signature this cycle (it'll read as CHANGED next).
+                try:
+                    _input_signature = _sha(
+                        "v=" + WORKER_OUTPUT_LOGIC_VERSION,
+                        "sess=" + str(ACTIVE_SESSION),
+                        "hist=" + _df_content_hash(df_past),
+                        "dock=" + _df_content_hash(df_docket),
+                        # Join-then-hash (not *-unpack) so a multi-thousand-element set
+                        # doesn't build a huge args tuple — byte-identical to the unpacked
+                        # form since _sha 0x1f-separates parts (Gemini #146 r2).
+                        "vote=" + (_sha("\x1f".join(sorted(_vote_id_set))) if _vote_id_set else "EMPTY"),
+                        # Canonical per-entry hash: sorted (key, value) items, NOT the
+                        # dict's str() repr (which is insertion-order-fragile, Gemini #146).
+                        "sched=" + _sha("\x1f".join(
+                            f"{k}|{sorted((api_schedule_map.get(k) or {}).items())}"
+                            for k in sorted(api_schedule_map)
+                        )),
+                    )
+                    _sig_match = bool(_prev_input_signature) and _input_signature == _prev_input_signature
+                    print(f"🔁 INPUT SIGNATURE {'MATCH' if _sig_match else 'CHANGED'} "
+                          f"(observe-only — would-skip recompute: {'YES' if _sig_match else 'no'}); "
+                          f"cur={_input_signature[:12]} prev={(_prev_input_signature or 'none')[:12]} "
+                          f"logic={WORKER_OUTPUT_LOGIC_VERSION}")
+                    worksheet.update_acell("AB1", _input_signature)
+                except Exception as _sig_err:
+                    print(f"⚠️ Stage-2 input-signature compute/write failed (observe-only, non-fatal): {_sig_err}")
 
                 # PR-C7.0.4: write THIS cycle's meeting_unsourced as the
                 # rolling baseline for next cycle's delta-check. Only on
