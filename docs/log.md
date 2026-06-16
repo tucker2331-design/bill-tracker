@@ -9,7 +9,7 @@ Append-only, reverse-chronological (newest at top). Each entry opens with `## [Y
 
 **Kinds:** `ingest` (new source/doc processed), `pr` (PR opened/merged/closed), `decision` (architectural or workflow), `lint` (wiki health-check pass), `session` (notable multi-hour working block), `post-mortem` (failure analysis), `milestone` (project-goal threshold crossed).
 
-## [2026-06-16] pr | #143 OPENED — Slack ops alerts (CRITICAL worker + sentinel FAIL → webhook)
+## [2026-06-16] pr | #143 MERGED — Slack ops alerts (CRITICAL worker + sentinel FAIL → webhook)
 
 Owner ask: wire bug notifications to Slack (the old product versions used `slack_sdk` to broadcast bill updates to subscribers — a different use case; this is ops/bug alerting from the worker). Added `notify_slack()` (worker, requests) + `_notify_slack()` (sentinel, stdlib urllib so it stays dependency-free), both **dormant until the `SLACK_WEBHOOK_URL` repo secret is set** (no-op → worker/sentinel run byte-identically pre-wiring). **CRITICAL-only by design** to keep the channel high-signal: hooked into `push_system_alert` (severity==CRITICAL → covers breaker trip, LIS auth failure, I1–I3 data anomalies), the breaker STUCK escalation (explicit synchronous ping before `sys.exit(1)`), and the accuracy-sentinel FAIL (names the breached invariant). Both workflows pass the secret. Never raises / 8s cap so a Slack outage can't fail or slow a cycle. New [[architecture/alerting]] documents all three channels (in-sheet `SYSTEM_ALERT` / GitHub failure email / Slack) + every tripwire + the one-time webhook setup. **Owner action to activate: create a Slack Incoming Webhook, add it as repo secret `SLACK_WEBHOOK_URL`.**
 
