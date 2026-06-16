@@ -1,0 +1,35 @@
+name: 🔔 Slack Webhook Test
+
+# Manual smoke test for the ops/bug-alert channel. Posts ONE harmless test
+# message to whatever SLACK_WEBHOOK_URL points at, and fails the run (red X) if
+# the secret is missing or Slack rejects the post — so a glance at the run tells
+# you the webhook is wired end-to-end. Safe to re-run anytime (e.g. if the
+# webhook is rotated). See docs/architecture/alerting.md.
+
+on:
+  workflow_dispatch:
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Post a test alert to Slack
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+        run: |
+          set -euo pipefail
+          if [ -z "${SLACK_WEBHOOK_URL:-}" ]; then
+            echo "::error::SLACK_WEBHOOK_URL secret is not set — add it under Settings → Secrets and variables → Actions."
+            exit 1
+          fi
+          code=$(curl -sS -o /tmp/slack_resp -w '%{http_code}' -X POST \
+            -H 'Content-type: application/json' \
+            --data '{"text":":wave: *Mastermind Ghost Worker 2 (calendar)* — Slack alerts are wired up. This is a one-off test ping; real messages fire only on CRITICAL worker alerts or an accuracy-sentinel failure."}' \
+            "$SLACK_WEBHOOK_URL")
+          echo "Slack responded HTTP $code: $(cat /tmp/slack_resp)"
+          if [ "$code" != "200" ]; then
+            echo "::error::Slack rejected the post (HTTP $code). Common causes: webhook revoked/expired, or the app was removed from the workspace."
+            exit 1
+          fi
+          echo "✅ Test alert delivered (HTTP 200). Check the channel you bound the webhook to."
