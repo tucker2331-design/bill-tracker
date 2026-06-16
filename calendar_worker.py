@@ -38,10 +38,10 @@ def notify_slack(text):
     routine WARN/INFO stay in the in-sheet SYSTEM_ALERT log to keep the channel
     high-signal. See docs/architecture/alerting.md."""
     url = os.environ.get("SLACK_WEBHOOK_URL")
-    if not url:
+    if not url or not text:  # no webhook, or nothing to say -> don't post an empty msg
         return
     try:
-        requests.post(url, json={"text": text[:3000]}, timeout=8)
+        requests.post(url, json={"text": str(text)[:3000]}, timeout=8)
     except Exception as e:
         # Standard #2/#4: visible, never silent — but non-fatal (it's an alert
         # channel, not data). The in-sheet alert already captured the event.

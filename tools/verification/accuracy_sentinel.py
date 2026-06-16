@@ -70,13 +70,14 @@ def _notify_slack(text):
     NEVER raises — a Slack outage must not change the sentinel's exit code (the
     real escalation is the non-zero exit → GitHub Actions failure email)."""
     url = os.environ.get("SLACK_WEBHOOK_URL")
-    if not url:
+    if not url or not text:  # no webhook, or nothing to say -> don't post an empty msg
         return
     try:
-        data = json.dumps({"text": text[:3000]}).encode("utf-8")
+        data = json.dumps({"text": str(text)[:3000]}).encode("utf-8")
         req = urllib.request.Request(url, data=data,
                                      headers={"Content-Type": "application/json"})
-        urllib.request.urlopen(req, timeout=8)
+        with urllib.request.urlopen(req, timeout=8):  # close the response (no fd leak), matches _get
+            pass
     except Exception as e:
         print(f"⚠️ Slack notify failed (non-fatal): {e}")
 
