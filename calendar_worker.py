@@ -28,6 +28,26 @@ import logging
 logging.getLogger("pdfminer").setLevel(logging.ERROR)
 
 
+def notify_slack(text):
+    """Best-effort POST of an OPS / bug alert to Slack. DORMANT until the
+    SLACK_WEBHOOK_URL env var (a GitHub Actions secret) is set — the worker runs
+    byte-identically until the channel is wired up, so this is safe to ship before
+    the secret exists. NEVER raises and never meaningfully blocks: a Slack outage
+    must not fail or slow a worker cycle (8s cap, non-fatal on error). Reserved for
+    CRITICAL ops events (breaker trips, auth failure, data-integrity anomalies) —
+    routine WARN/INFO stay in the in-sheet SYSTEM_ALERT log to keep the channel
+    high-signal. See docs/architecture/alerting.md."""
+    url = os.environ.get("SLACK_WEBHOOK_URL")
+    if not url:
+        return
+    try:
+        requests.post(url, json={"text": text[:3000]}, timeout=8)
+    except Exception as e:
+        # Standard #2/#4: visible, never silent — but non-fatal (it's an alert
+        # channel, not data). The in-sheet alert already captured the event.
+        print(f"⚠️ Slack notify failed (non-fatal): {e}")
+
+
 # PR-C7.1b-1: the dictionary-free structural calendar-vs-ledger router.
 # Single source of truth at the repo root, imported by the worker AND the
 # validation tools — NO duplicated copy that can drift (the worker-vs-X-Ray
@@ -2911,6 +2931,13 @@ def run_calendar_update():
             "Origin": "system_alert",
             "DiagnosticHint": "",
         })
+        # Mirror CRITICAL ops alerts to Slack (dormant until SLACK_WEBHOOK_URL is
+        # set). CRITICAL-only BY DESIGN — WARN/INFO stay in the in-sheet log so the
+        # channel carries only "stop and look" events (breaker trip, auth failure,
+        # I1–I3 data anomalies). We are past the dedup gate above, so a repeated
+        # CRITICAL with the same dedup_key won't double-post within a cycle.
+        if (severity or "").upper() == "CRITICAL":
+            notify_slack(f"🚨 *Mastermind Ghost Worker 2 (calendar)* [{(category or 'UNKNOWN').upper()}]\n{message}")
 
     # PR-C1: single chokepoint for every master_events.append in this run.
     # All 5 append sites route through here so write-time invariants fire in
@@ -6055,6 +6082,12 @@ def run_calendar_update():
                     except Exception:
                         pass
                     print(_stuck)
+                    # Synchronous Slack post BEFORE sys.exit — this is the loudest
+                    # event (Sheet1 frozen N cycles). notify_slack is no-op without the
+                    # secret, so this stays safe pre-wiring. (The trip CRITICAL above
+                    # already posted once; the STUCK escalation adds the "frozen N
+                    # cycles" context that warrants a second, louder ping.)
+                    notify_slack(f"🛑🛑 *Mastermind Ghost Worker 2 (calendar)* — CIRCUIT BREAKER STUCK\n{_stuck}")
                     print("🛑🛑 Failing the run (exit 1) so the stuck breaker ESCALATES to a GitHub "
                           "Actions failure email — past the in-sheet-only alert.")
                     sys.exit(1)
