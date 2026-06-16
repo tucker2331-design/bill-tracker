@@ -6126,6 +6126,14 @@ def run_calendar_update():
                 # wipes it each cycle; re-written here like the other state cells.
                 # State-cell map: docs/architecture/calendar_pipeline.md.
                 try:
+                    # Sheet1 is the default 26-col grid (A–Z) — the existing state
+                    # cells deliberately stop at Z. AA is the 27th column, and
+                    # update_acell does NOT auto-expand the grid (it would APIError
+                    # every cycle, Gemini #142). Widen once to fit; idempotent —
+                    # clear() empties values but never shrinks the grid, so after the
+                    # first cycle col_count >= 27 and this is a no-op.
+                    if worksheet.col_count < 27:
+                        worksheet.add_cols(27 - worksheet.col_count)
                     worksheet.update_acell("AA1", _cycle_end_utc_iso)
                 except Exception as _freshness_write_err:
                     push_system_alert(
