@@ -11,6 +11,7 @@ import csv
 import tempfile
 import urllib.parse
 from collections import Counter
+from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timedelta, timezone
 import pytz
 from requests.adapters import HTTPAdapter
@@ -3685,10 +3686,23 @@ def run_calendar_update():
 
     blob_code = f"20{ACTIVE_SESSION}" if len(ACTIVE_SESSION) == 3 else ACTIVE_SESSION
     master_events = []
-    docket_memory = {} 
+    docket_memory = {}
+
+    # Stage-1 speedup: prefetch the two big Azure blobs CONCURRENTLY here, at the
+    # top of the fetch section, so the multi-MB HISTORY.CSV download overlaps ALL of
+    # phase 1 (committee maps, API_Cache read, the Schedule API + 3,310-row loop).
+    # By the time phase 2 calls _history_future.result() the download is already
+    # done, so its latency is hidden. safe_fetch_csv uses its OWN requests.get (not
+    # the shared http_session), so running it in a thread is safe — same bytes, same
+    # completeness guards, zero accuracy change. Errors stay inside safe_fetch_csv
+    # (it returns an empty frame, never raises), so .result() preserves the existing
+    # empty-frame handling at each call site.
+    _blob_pool = ThreadPoolExecutor(max_workers=2)
+    _docket_future = _blob_pool.submit(safe_fetch_csv, f"https://lis.blob.core.windows.net/lisfiles/{blob_code}/DOCKET.CSV")
+    _history_future = _blob_pool.submit(safe_fetch_csv, f"https://lis.blob.core.windows.net/lisfiles/{blob_code}/HISTORY.CSV")
 
     print("📡 Downloading Official DOCKET.CSV...")
-    df_docket = safe_fetch_csv(f"https://lis.blob.core.windows.net/lisfiles/{blob_code}/DOCKET.CSV")
+    df_docket = _docket_future.result()
     if not df_docket.empty:
         df_docket.columns = df_docket.columns.str.strip().str.lower().str.replace(' ', '_')
         bill_col = next((c for c in df_docket.columns if 'bill' in c), None)
@@ -4236,7 +4250,9 @@ def run_calendar_update():
     # canonical Azure URL only (matches DOCKET.CSV's URL pattern at line
     # ~2066). If this fails, surface it loudly — there is no longer a
     # second host to fall back to. See [[failures/assumptions_audit#52]].
-    df_past = safe_fetch_csv(f"https://lis.blob.core.windows.net/lisfiles/{blob_code}/HISTORY.CSV")
+    df_past = _history_future.result()   # prefetched at the top of the fetch section; already downloaded
+    _blob_pool.shutdown(wait=False)
+    _phase("HISTORY.CSV download (prefetched — should be ~0s if hidden behind phase 1)")
     if df_past.empty:
         push_system_alert(
             f"HISTORY.CSV fetch returned empty for session {blob_code} from "
