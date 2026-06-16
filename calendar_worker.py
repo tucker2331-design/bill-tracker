@@ -2756,6 +2756,724 @@ def _archive_completed_session(sheet, worksheet, old_code):
     return target
 
 
+def run_sequential_turing_machine(df_past, *,
+        bill_locations,
+        last_seen_date,
+        api_schedule_map,
+        docket_memory,
+        convene_times,
+        _append_event,
+        push_system_alert,
+        source_miss_counts,
+        _admin_recovery_index,
+        _ministerial_codes,
+        _vote_id_set,
+        _refid_fanout,
+        committee_modal_standing,
+        adjourned_clock_by_date,
+        _floor_miss_dates,
+        desc_col,
+        refid_col,
+        _session_code_5d,
+        _legislation_event_cache,
+        _legislation_id_cache,
+        _build_diagnostic_hint,
+        _classify_refid,
+        _normalize_refid,
+        http_session):
+    for _, row in df_past.iterrows():
+        source_miss_counts["total_processed"] += 1
+        # Tracks whether committee was resolved via Memory Anchor fallback
+        # (rather than refid or lexicon). Drives the orthogonal
+        # unsourced_anchor tag counter (which overlaps denominator buckets
+        # intentionally — see docs/failures/gemini_review_patterns.md #31).
+        anchor_applied = False
+        # PR-B: populated for NO_SCHEDULE_MATCH / NO_CONVENE_ANCHOR rows
+        # so X-Ray §9 can show *why* the miss happened without hand-
+        # chasing through worker logs. Empty string for sourced rows.
+        diagnostic_hint = ""
+        bill_num = row['CleanBill']
+        outcome_text = str(row[desc_col]).strip()
+        outcome_lower = outcome_text.lower()
+        date_str = row['ParsedDate'].strftime('%Y-%m-%d')
+
+        # PR-C5.1: Malformed-row guard. HISTORY.CSV occasionally contains
+        # rows whose History_description is just the chamber prefix ("S "
+        # or "H ") with no verb attached, often paired with an empty
+        # History_refid. Verified case: SB584 on 2026-02-10 carries three
+        # rows — two real ("Senate committee offered" + "Failed to report
+        # …") and one malformed ("S " with empty refid). The malformed
+        # row has no action to classify, so it falls through KNOWN_NOISE
+        # / KNOWN_EVENT into the UNKNOWN_ACTION tag path at line ~2477.
+        # Pre-PR-C5 it landed in Sheet1 as Section 9 unclassified; post
+        # PR-C5 the [memory anchor: admin] pattern routes it to
+        # administrative, but Section 5's UNKNOWN_ACTION counter still
+        # ticked at 1. Adding a NOISE pattern would be unsafe ("s "
+        # substring-matches every "S Foo" Senate row). The right fix is
+        # structural: detect the empty-after-strip case here, emit a
+        # categorized DATA_ANOMALY alert (Zero-Trust visibility), and
+        # drop. Bucketed under dropped_noise because these are upstream
+        # data anomalies with no actionable content; the alert (not the
+        # bucket label) carries the diagnostic distinction.
+        # Gemini/Codex PR-C5.1 review (high/P1): outcome_text is already
+        # `.strip()`-ed at the top of this block, so a raw HISTORY value
+        # of "S " / "H " arrives here as "S" / "H" — startswith("S ") /
+        # startswith("H ") with the trailing space then returns False
+        # and the malformed row would NOT be dropped. The elif branch
+        # catches the post-strip bare-prefix case explicitly.
+        _outcome_remainder = outcome_text
+        if _outcome_remainder.startswith(('H ', 'S ')):
+            _outcome_remainder = _outcome_remainder[2:].strip()
+        elif _outcome_remainder in ('H', 'S'):
+            _outcome_remainder = ""
+        if not _outcome_remainder:
+            _refid = str(row.get(refid_col) or '') if refid_col else ''
+            push_system_alert(
+                f"Malformed HISTORY row for {bill_num} on {date_str}: empty description after chamber-prefix strip "
+                f"(raw_desc={outcome_text!r}, refid={_refid!r})",
+                status="WARN",
+                category="DATA_ANOMALY",
+                severity="WARN",
+                dedup_key=f"history_empty_desc::{bill_num}::{date_str}",
+            )
+            source_miss_counts["dropped_noise"] += 1
+            continue
+
+        if outcome_text.startswith('H '): acting_chamber_prefix = "House "
+        elif outcome_text.startswith('S '): acting_chamber_prefix = "Senate "
+        else: acting_chamber_prefix = "House " if bill_num.startswith('H') else "Senate "
+
+        if bill_num not in bill_locations: bill_locations[bill_num] = acting_chamber_prefix + "Floor"
+
+        # --- MORNING RECONCILIATION ---
+        if bill_num not in last_seen_date or last_seen_date[bill_num] != date_str:
+            last_seen_date[bill_num] = date_str
+            if date_str in docket_memory and bill_num in docket_memory[date_str]:
+                scheduled_rooms = docket_memory[date_str][bill_num]
+                for room in scheduled_rooms:
+                    if acting_chamber_prefix.lower() in room.lower() or "joint" in room.lower():
+                        bill_locations[bill_num] = room # Proactive Docket Heal
+                        break
+
+        # --- ACTION SCOPE: ABSOLUTES ---
+        is_exec = any(ev in outcome_lower for ev in ["approved by governor", "vetoed by governor", "governor's substitute", "governor's recommendation", "governor:"]) and not (outcome_text.startswith('H ') or outcome_text.startswith('S '))
+        is_absolute_floor = any(f in outcome_lower for f in ABSOLUTE_FLOOR_VERBS)
+        # "conferee" alone (appointing names) = administrative, no time needed.
+        # "conference report agreed" = floor vote, caught by is_absolute_floor above.
+        is_conf = ("conferee" in outcome_lower or "conference report" in outcome_lower) and not is_absolute_floor
+
+        if is_exec:
+            event_location = "Executive Action"
+            bill_locations[bill_num] = "Executive Action"
+        elif is_absolute_floor:
+            event_location = acting_chamber_prefix + "Floor"
+            bill_locations[bill_num] = event_location # Force heal memory
+        elif is_conf:
+            event_location = "Conference Committee"
+            bill_locations[bill_num] = "Conference Committee"
+        else:
+            # --- ACTION SCOPE: DYNAMIC & EXPLICIT ROOM MATCH ---
+            committee_search_prefix = "Joint " if "joint" in outcome_lower or ("house" in outcome_lower and "senate" in outcome_lower) else acting_chamber_prefix
+
+            # PHASE 1: Structural resolution via History_refid (primary key lookup)
+            refid_committee = None
+            if refid_col:
+                raw_refid = str(row.get(refid_col, '')).strip()
+                refid_committee, refid_source = resolve_committee_from_refid(raw_refid)
+
+            # PHASE 2: Text-based resolution via LOCAL_LEXICON (fallback)
+            lexicon_committee = None
+            for api_name, aliases in LOCAL_LEXICON.items():
+                if api_name.startswith(committee_search_prefix) and any(alias and alias in outcome_lower for alias in aliases):
+                    lexicon_committee = api_name; break
+
+            # Determine action type
+            is_referral = any(x in outcome_lower for x in ["referred", "assigned"]) and not any(x in outcome_lower for x in ["fail", "defeat", "strike"])
+            is_report = any(x in outcome_lower for x in ["reported", "discharged"]) and not any(x in outcome_lower for x in ["fail", "defeat"])
+            is_rerefer = is_report and ("rereferred" in outcome_lower or ("referred" in outcome_lower and "reported" in outcome_lower))
+            destination_committee = None  # Used for rerefer: where the bill goes next
+
+            # PHASE 3: Select the correct committee for each role
+            # For "reported from X and rereferred to Y":
+            #   - refid encodes X (the committee that voted/met)
+            #   - lexicon may match X or Y depending on alias iteration order
+            #   - We need: event_location = X (for time lookup), destination = Y (for state update)
+            if is_report and refid_committee:
+                # Refid is authoritative for the ACTING committee (where the vote happened)
+                acting_committee = refid_committee
+                # If also a rerefer, try to find the destination from text
+                destination_committee = None
+                if is_rerefer:
+                    # Find destination after the LAST "referred to" in the full text.
+                    # Previous logic split on "referred" which removed the word itself,
+                    # making the regex unable to match. Fix: use rfind on the full string.
+                    _ref_idx = outcome_text.lower().rfind('referred to')
+                    _dest_search = outcome_text[_ref_idx:] if _ref_idx >= 0 else ''
+                    dest_match = re.search(r'referred to\s+(?:Committee (?:on|for)\s+)?([A-Z][A-Za-z,\s&\-]+?)(?:\s*\(|\s*[;.]|\s*$)', _dest_search, re.IGNORECASE)
+                    if dest_match:
+                        dest_name_raw = dest_match.group(1).strip().rstrip(',').strip()
+                        # Look up destination in LOCAL_LEXICON
+                        for api_name, aliases in LOCAL_LEXICON.items():
+                            if api_name.startswith(committee_search_prefix) and any(alias and alias in dest_name_raw.lower() for alias in aliases):
+                                destination_committee = api_name; break
+                matched_committee = acting_committee
+            elif is_referral and not is_report:
+                # Pure referral: refid = destination committee code, lexicon also finds destination
+                matched_committee = refid_committee if refid_committee else lexicon_committee
+            else:
+                # All other actions: prefer refid, fall back to lexicon
+                matched_committee = refid_committee if refid_committee else lexicon_committee
+
+            if matched_committee:
+                # === DOUBLE-ENTRY MISMATCH DETECTION (Categorized) ===
+                # Instead of suppressing mismatches, categorize them by root cause.
+                # Categories: PARENT_CHILD (INFO), TIMING_LAG (INFO), COMMITTEE_DRIFT (WARN)
+                memory_room = bill_locations[bill_num]
+                if "Floor" not in memory_room and matched_committee != memory_room and not is_referral:
+                    mem_norm = normalize_room_key(memory_room)
+                    match_norm = normalize_room_key(matched_committee)
+
+                    # Category 1: PARENT_CHILD — subcommittee action within parent committee
+                    # Validated via PARENT_COMMITTEE_MAP when available, name prefix fallback otherwise
+                    is_parent_child = False
+                    if PARENT_COMMITTEE_MAP:
+                        # O(1) reverse lookup via pre-calculated NORM_TO_CODE map
+                        mem_code = NORM_TO_CODE.get(mem_norm)
+                        match_code = NORM_TO_CODE.get(match_norm)
+                        if mem_code and match_code:
+                            is_parent_child = (PARENT_COMMITTEE_MAP.get(mem_code) == match_code or
+                                               PARENT_COMMITTEE_MAP.get(match_code) == mem_code)
+                    if not is_parent_child:
+                        # Fallback: name prefix (still valid for unregistered subcommittees)
+                        is_parent_child = mem_norm.startswith(match_norm) or match_norm.startswith(mem_norm)
+
+                    # Category 2: TIMING_LAG — agenda placement before referral records
+                    is_timing_lag = "placed on" in outcome_lower and "agenda" in outcome_lower
+
+                    # Route by category
+                    if is_parent_child:
+                        outcome_text = f"ℹ️ [PARENT_CHILD: Memory={memory_room}] " + outcome_text
+                    elif is_timing_lag:
+                        outcome_text = f"ℹ️ [TIMING_LAG: Memory={memory_room}] " + outcome_text
+                    else:
+                        outcome_text = f"⚠️ [COMMITTEE_DRIFT: Origin State was {memory_room}] " + outcome_text
+
+                if is_referral and "from" not in outcome_lower:
+                    # Floor to Committee Referral
+                    event_location = bill_locations[bill_num]
+                    bill_locations[bill_num] = matched_committee # Update target
+                elif is_report:
+                    event_location = matched_committee # Distributed Checkpoint Heal (now refid-verified)
+                    if is_rerefer and destination_committee:
+                        bill_locations[bill_num] = destination_committee # Bill goes to new committee
+                    else:
+                        bill_locations[bill_num] = acting_chamber_prefix + "Floor"
+                else:
+                    event_location = matched_committee
+                    bill_locations[bill_num] = matched_committee
+            else:
+                # Dynamic Nameless (Memory Anchor)
+                event_location = bill_locations[bill_num]
+                is_dynamic_verb = any(v in outcome_lower for v in DYNAMIC_VERBS)
+                # Previously only dynamic verbs were tagged, leaving admin Memory-Anchor
+                # rows indistinguishable from cleanly-resolved rows downstream
+                # (silent source-miss — see docs/state/open_anti_patterns.md item #3).
+                # Tag both paths with distinct markers so X-Ray can tell them apart.
+                anchor_applied = "Floor" not in event_location
+                if anchor_applied:
+                    anchor_tag = "⚙️ [Memory Anchor]" if is_dynamic_verb else "📝 [Memory Anchor: admin]"
+                    outcome_text = f"{anchor_tag} " + outcome_text
+                # unsourced_anchor is incremented after time-resolution
+                # (orthogonal tag counter). See
+                # docs/failures/gemini_review_patterns.md #31.
+
+                # Advance state if it was a nameless report (rare but possible)
+                if any(x in outcome_lower for x in ["reported", "discharged"]) and not any(x in outcome_lower for x in ["fail"]):
+                    bill_locations[bill_num] = acting_chamber_prefix + "Floor"
+
+        # === NOISE FILTER (Positive Identification — see module-level constants) ===
+        is_known_noise = any(n in outcome_lower for n in KNOWN_NOISE_PATTERNS)
+        is_known_event = any(e in outcome_lower for e in KNOWN_EVENT_PATTERNS)
+
+        if is_known_noise and not is_known_event:
+            source_miss_counts["dropped_noise"] += 1
+            continue  # Confirmed noise, safe to filter
+        if not is_known_noise and not is_known_event:
+            # UNKNOWN action type — flag but don't suppress
+            outcome_text = f"❓ [UNKNOWN_ACTION] " + outcome_text
+
+        # --- UI RENDERING & FUZZY MATCH ---
+        event_location = event_location.strip()
+        time_val = "Journal Entry"
+        sort_time_24h = "23:59"
+        status = ""
+        # Origin tracks how time_val was resolved. Required by
+        # docs/workflow/source_miss_visibility.md so downstream (X-Ray
+        # Section 0) can filter silent defaults from concrete sources.
+        origin = "journal_default"
+
+        matched_api_key = find_api_schedule_match(
+            api_schedule_map=api_schedule_map,
+            date_str=date_str,
+            event_location=event_location,
+            outcome_text=outcome_text,
+            acting_chamber_prefix=acting_chamber_prefix,
+        )
+
+        if matched_api_key:
+            time_val = api_schedule_map[matched_api_key]["Time"]
+            sort_time_24h = api_schedule_map[matched_api_key]["SortTime"]
+            status = api_schedule_map[matched_api_key]["Status"]
+            origin = "api_schedule"
+            source_miss_counts["sourced_api"] += 1
+            # Adopt parent committee's canonical name when a subcommittee
+            # matched via parent fallback (e.g. "Courts of Justice-Civil" -> "Courts of Justice")
+            matched_name = matched_api_key.split("_", 1)[1]
+            if normalize_room_key(matched_name) != normalize_room_key(event_location):
+                event_location = matched_name
+            # PR-C7.1q: the matched committee meeting has NO concrete time
+            # (LIS published it as "Time TBA"/empty). The row's text-based
+            # committee attribution may be wrong — try the LegEvent's
+            # AUTHORITATIVE CommitteeName: it may reveal a FLOOR action
+            # mis-filed under a committee (→ convene time) or carry a real
+            # timestamp. Only fires on a TBA row, only when CommitteeName is
+            # known (not "?"), and only ADOPTS a concrete result — so it can
+            # never make a TBA row worse. assumptions_audit #72.
+            if _is_non_concrete_time(time_val):
+                _ctx = _recover_time_via_legevent_committee(
+                    _legislation_event_cache.get((bill_num, _session_code_5d)) or [],
+                    date_str, acting_chamber_prefix.strip()[:1].upper(),
+                    outcome_text, api_schedule_map, convene_times,
+                    committee_modal_standing, adjourned_clock_by_date,
+                )
+                if _ctx is not None:
+                    time_val, sort_time_24h, status, event_location, origin = _ctx
+                    source_miss_counts["legevent_context_recovered"] += 1
+
+        if "Floor" in event_location:
+            anchor = convene_times.get(date_str, {}).get(acting_chamber_prefix.strip())
+            if anchor:
+                time_val, sort_time_24h, event_location = anchor["Time"], anchor["SortTime"], anchor["Name"]
+                _floor_hit += 1
+                # Origin/metric parity: if the row was already counted as
+                # api_schedule, move it to sourced_convene so the row's
+                # Origin field and the SYSTEM_METRICS counters agree.
+                # See docs/failures/gemini_review_patterns.md #32.
+                if origin == "api_schedule":
+                    source_miss_counts["sourced_api"] -= 1
+                source_miss_counts["sourced_convene"] += 1
+                origin = "convene_anchor"
+            else:
+                _floor_miss += 1
+                _floor_miss_dates[f"{date_str}_{acting_chamber_prefix.strip()}"] += 1
+                if origin == "journal_default":
+                    # PR-C7.1c: floor_miss → LegEvent time recovery.
+                    # Closes the ~103 genuine-meeting residue
+                    # PR-C7.1d measured (real floor votes — "conference
+                    # report agreed", "read third time" — whose convene
+                    # anchor was missing and which the journal_default
+                    # LegEvent block below SKIPS because that gate is
+                    # `origin == "journal_default"` and origin is about
+                    # to become "floor_miss").
+                    #
+                    # SAFETY: gated on the structural router's verdict.
+                    # The danger this gate defends against: H5601/S5601
+                    # "Bill text as passed Senate (HB###ER)" rows match
+                    # ABSOLUTE_FLOOR_VERBS ("passed senate") → forced
+                    # to Floor → convene_anchor miss → would land here.
+                    # Their LegislationEvent has a 4 AM document-batch
+                    # timestamp, NOT a meeting time. Recovering them
+                    # would write a wrong time on an admin row.
+                    #
+                    # The structural router routes those to "admin"
+                    # via LIS's own ReferenceType (LegislationText) —
+                    # cache-lookup, no network. We require route ==
+                    # "meeting" (not just != "admin") so blank-route
+                    # rows ALSO stay unrecovered: route unknown means
+                    # the TTL backfill hasn't reached this bill yet
+                    # or the bill has no LegEvent — either way, safer
+                    # to leave NO_CONVENE_ANCHOR than to recover with
+                    # a possibly-wrong time. Next cycle the cache
+                    # populates and the route becomes "meeting" and
+                    # the row recovers.
+                    #
+                    # HANG SAFETY: cache-lookup-only. The PR-C7
+                    # pre-iteration hydration seeds the cache (real
+                    # events OR negative cache via the Codex P1 fix)
+                    # for every candidate bill in `legevent_candidate_bills`,
+                    # which includes floor_miss bills. The resolver
+                    # below short-circuits via the existing PR-C3.1
+                    # negative-cache check — no network fetch from
+                    # the row loop. The PR-C3 hang root cause cannot
+                    # recur.
+                    _floor_route = _route_for_row(
+                        bill_num=bill_num,
+                        session_5d=_session_code_5d,
+                        action_date_str=date_str,
+                        outcome_text=outcome_text,
+                        acting_chamber_code=acting_chamber_prefix.strip()[:1].upper(),
+                        legislation_event_cache=_legislation_event_cache,
+                        ministerial_codes=_ministerial_codes,
+                        admin_recovery_index=_admin_recovery_index,
+                    )
+                    _floor_recovered = None
+                    if _floor_route == "meeting":
+                        # PR-C7.1c review fold-in (Codex P1): pull time
+                        # directly from the event cache, bypassing
+                        # `_resolve_via_legislation_event_api`'s
+                        # `LegislationID` gate. The route="meeting"
+                        # verdict is ITSELF proof that the event cache
+                        # has hydrated events for this bill (the route
+                        # is computed from those events). The original
+                        # resolver call regressed here whenever PR-C7's
+                        # negative-cache seeding had set
+                        # `_legislation_id_cache[(bill,session)] = ""`
+                        # for a bill that was loaded from the persisted
+                        # `LegEvent_Events` tab but not queued for
+                        # rehydration this cycle (fresh / terminal).
+                        # The new helper reads `_legislation_event_cache`
+                        # directly with identical matching semantics —
+                        # cache-only, no network, no `LegislationID`
+                        # dependency — so recovery stays stable across
+                        # cycles.
+                        _cached_events = _legislation_event_cache.get(
+                            (bill_num, _session_code_5d)
+                        ) or []
+                        _floor_recovered = _find_legevent_time_in_cache(
+                            events=_cached_events,
+                            bill_num=bill_num,
+                            action_date_str=date_str,
+                            outcome_text=outcome_text,
+                            acting_chamber_code=acting_chamber_prefix.strip()[:1].upper(),
+                            push_alert=push_system_alert,
+                        )
+                    if _floor_recovered is not None:
+                        time_val, sort_time_24h, status = _floor_recovered
+                        origin = "legislation_event"
+                        source_miss_counts["sourced_legislation_event"] += 1
+                        source_miss_counts["legislation_event_recovered"] += 1
+                        source_miss_counts["legevent_floor_recovered"] += 1
+                        # Back out the convene-gap counters so the
+                        # post-loop report reflects only UNRECOVERED
+                        # floor misses.
+                        #
+                        # PR-C7.1c review fold-in (Codex P2 + Gemini
+                        # medium): decrement the per-combo Counter
+                        # instead of `set.discard`. `discard` removed
+                        # the combo entry entirely even when OTHER
+                        # rows on the same date/chamber were still
+                        # unrecovered, hiding them from the CONVENE
+                        # GAP report. Decrementing the counter and
+                        # only deleting the key when it drops to zero
+                        # preserves the multiplicity Codex flagged.
+                        _floor_miss -= 1
+                        _combo_key = f"{date_str}_{acting_chamber_prefix.strip()}"
+                        _floor_miss_dates[_combo_key] -= 1
+                        if _floor_miss_dates[_combo_key] <= 0:
+                            del _floor_miss_dates[_combo_key]
+                    elif _floor_route == "executive":
+                        # PR-C8.4b-1: an ACTION-REQUIRED governor action (veto "received" /
+                        # recommendation) that ALSO tripped the floor-verb gate. It is NOT a
+                        # floor-meeting miss — route_event matched it to a G79xx/G72xx/G73xx
+                        # event, so it must surface on the Governor CALENDAR exactly like the
+                        # main resolver's executive branch, NOT be tagged floor_miss → Ledger
+                        # (which left route=="executive" rows physically in the ledger — a
+                        # route/placement inconsistency caught by the post-merge worker run).
+                        # Mirrors the main branch: executive_default origin, "🏛️ Governor"
+                        # label, timeless flag, denominator bucket legevent_executive_placed.
+                        source_miss_counts["legevent_executive_placed"] += 1
+                        origin = "executive_default"
+                        time_val = "🏛️ [GOVERNOR ACTION]"
+                        sort_time_24h = "23:59"
+                        event_location = "🏛️ Governor"
+                        # This row is NOT a floor-meeting miss, so back out the convene-gap
+                        # counters incremented at the top of the floor block (exactly as the
+                        # recovery branch above does) — otherwise the post-loop CONVENE GAP
+                        # report over-counts misses by these executive rows (Gemini #117).
+                        _floor_miss -= 1
+                        _combo_key = f"{date_str}_{acting_chamber_prefix.strip()}"
+                        _floor_miss_dates[_combo_key] -= 1
+                        if _floor_miss_dates[_combo_key] <= 0:
+                            del _floor_miss_dates[_combo_key]
+                    else:
+                        # Concrete source miss: floor action with no convene anchor.
+                        # Tag the row so it cannot masquerade as a clean row downstream.
+                        time_val = "⏱️ [NO_CONVENE_ANCHOR]"
+                        origin = "floor_miss"
+                        source_miss_counts["floor_anchor_miss"] += 1
+                        diagnostic_hint = _build_diagnostic_hint(
+                            date_str, event_location, acting_chamber_prefix
+                        )
+
+        # PR-C3: LegislationEvent API as secondary time source. Fires
+        # when (a) the Schedule API didn't yield a concrete time and
+        # (b) the row is not a Floor action (Floor goes through
+        # convene_anchor / floor_miss).
+        #
+        # PR-C7 (2026-05-03): the MEETING_VERB_TOKENS gate that PR-C3.1
+        # added is REMOVED. The pre-iteration hydration phase has
+        # already populated `_legislation_event_cache` for every
+        # candidate bill in the queue (Tier A → B → C, capped at
+        # LEGEVENT_FETCHES_PER_CYCLE). The resolver below is now a
+        # cache-lookup-only operation for hydrated bills — no network
+        # fetch, no rate-limit risk. For bills whose hydration was
+        # deferred (overflow → next cycle), the cache key is absent
+        # and the resolver short-circuits via its negative-cache logic.
+        # The PR-C3 hang root cause (uncapped fetches in the row loop)
+        # cannot recur because the row loop never fetches.
+        #
+        # Reason for dropping the verb gate: per the PR-C6.4 sizing
+        # audit and PR-C6.3 verb dump, MEETING_VERB_TOKENS gated only
+        # 0.1% of journal_default rows. The gate was effectively off
+        # while creating the false expectation that LegEvent recovery
+        # was happening for "all the bills it should." The structural
+        # pivot (live-ready cache + drop gate) is the architecturally
+        # correct fix: data-driven, not text-driven (CLAUDE.md #3).
+        if origin == "journal_default":
+            source_miss_counts["legislation_event_attempted"] += 1
+            cache_key_pr_c7 = (bill_num, _session_code_5d)
+            # Hits = cache has a non-empty events list (hydrated bill).
+            # Misses = cache has empty list ([]) — either seeded for
+            # overflow this cycle (PR-C7 negative cache) or fetched
+            # empty in a prior cycle. Either way, the row loop will
+            # NOT trigger a network fetch — the resolver short-
+            # circuits via the existing PR-C3.1 cache check.
+            if cache_key_pr_c7 in _legislation_event_cache and _legislation_event_cache[cache_key_pr_c7]:
+                source_miss_counts["legevent_cache_hits"] += 1
+            else:
+                source_miss_counts["legevent_cache_misses"] += 1
+
+            # PR-C7.1c review fold-in EXTENSION (Codex P1, journal_default
+            # path): same negative-cache regression as the floor path.
+            # When a bill's events were loaded from the persisted
+            # `LegEvent_Events` tab (fresh/terminal — not queued for
+            # rehydration this cycle), `_legislation_event_cache` has
+            # real events but `_legislation_id_cache[(bill,session)]`
+            # was seeded "" by the overflow handler at ~line 3205.
+            # `_resolve_via_legislation_event_api()` short-circuits at
+            # `if not legislation_id` BEFORE reading those cached
+            # events, so journal_default recovery has been silently
+            # FAILING for every fresh/terminal bill since PR-C7
+            # (the dominant steady-state case, weeks of underrecovery).
+            #
+            # Mirror the floor fix: check the structural route; when
+            # route=="meeting" (which is itself proof the event cache
+            # is populated — the route was computed from it), use the
+            # cache-direct helper. Otherwise fall through to the full
+            # resolver (handles route="" cases where the cache may not
+            # be populated and we WANT the LegislationID lookup chain).
+            _le_result = None
+            _row_route = _route_for_row(
+                bill_num=bill_num,
+                session_5d=_session_code_5d,
+                action_date_str=date_str,
+                outcome_text=outcome_text,
+                acting_chamber_code=acting_chamber_prefix.strip()[:1].upper(),
+                legislation_event_cache=_legislation_event_cache,
+                ministerial_codes=_ministerial_codes,
+                admin_recovery_index=_admin_recovery_index,
+            )
+            if _row_route == "meeting":
+                _row_cached_events = _legislation_event_cache.get(
+                    (bill_num, _session_code_5d)
+                ) or []
+                _le_result = _find_legevent_time_in_cache(
+                    events=_row_cached_events,
+                    bill_num=bill_num,
+                    action_date_str=date_str,
+                    outcome_text=outcome_text,
+                    acting_chamber_code=acting_chamber_prefix.strip()[:1].upper(),
+                    push_alert=push_system_alert,
+                )
+            if _le_result is None and _row_route == "admin":
+                # PR-C7.1g (+ #66 review fold-in): route=="admin" means
+                # LIS's own structural fields (ReferenceType / VoteTally /
+                # Status) classify this action as administrative — it
+                # belongs in Ledger Updates with NO meeting time. Don't run
+                # the resolver, which would attach a ~4 AM document-batch
+                # timestamp (e.g. on a "Bill text as passed" / "Governor's
+                # Recommendation" event) — a structurally-WRONG time on the
+                # lobbyist surface (Standard #3).
+                #
+                # Route the row to its OWN terminal origin "admin_default"
+                # (NOT journal_default) so it does NOT fall into the
+                # journal_default source-miss block below — that block fires
+                # a per-row TIMING_LAG WARN + counts unsourced_journal,
+                # which for hundreds of expected-timeless admin rows would
+                # flood Bug_Logs and overstate the source gap (Gemini HIGH
+                # #66). admin_default still collapses into 📋 Ledger Updates
+                # (added to the collapse mask) and carries the visible
+                # NO_SCHEDULE_MATCH marker (not the old silent "Journal
+                # Entry"). It is NOT a concrete source (I3 ok) and NOT in
+                # the unsourced-meeting set (I4 won't count it).
+                #
+                # Back out the top-of-block legislation_event_attempted
+                # increment: a deliberate non-attempt is not a failed
+                # attempt, so attempted−recovered stays the honest LIS
+                # source-gap signal the X-Ray reads (Codex P2 #66).
+                #
+                # Timing note: while the LegEvent cache is still
+                # re-hydrating (PR-C7.1e), most routes are "" (blank), NOT
+                # "admin" — blank rows still hit the resolver below. This
+                # gate only bites once a bill's events are cached AND
+                # structurally admin, so it is correct-by-construction the
+                # moment the cache fills.
+                source_miss_counts["legevent_admin_skipped"] += 1
+                source_miss_counts["legislation_event_attempted"] -= 1
+                origin = "admin_default"
+                time_val = "⏱️ [NO_SCHEDULE_MATCH]"
+            elif _le_result is None and _row_route == "executive":
+                # PR-C8.4b: an ACTION-REQUIRED governor action (veto G79xx / recommendation
+                # G72xx/G73xx). Like the admin branch, this is a deliberate NON-attempt at time
+                # resolution — there is no convened meeting, so the resolver would only stamp a
+                # structurally-wrong ~4 AM document time (Standard #3). UNLIKE admin, it must
+                # SURFACE ON THE CALENDAR, never the ledger: burying a veto/recommendation is the
+                # catastrophic silent failure (owner decision 2026-06-11). executive_default is
+                # deliberately NOT in the journal/Ledger collapse mask below, so it keeps a
+                # "🏛️ Governor" committee label and renders on the calendar day, time-less.
+                # classify_action maps route=="executive" -> the "executive" class, which is a
+                # distinct (non-meeting) class and is therefore EXCLUDED from Section 9.
+                # legevent_executive_placed mirrors legevent_admin_skipped: it is the DENOMINATOR
+                # bucket for executive_default rows (timeless-by-design, no other bucket counts
+                # them). The route-distribution counter legevent_route_executive is incremented
+                # SEPARATELY in the route-counter block below (mirroring legevent_route_admin) —
+                # do NOT increment it here too, or the route count double-counts.
+                source_miss_counts["legevent_executive_placed"] += 1
+                source_miss_counts["legislation_event_attempted"] -= 1  # deliberate non-attempt (mirror admin)
+                origin = "executive_default"
+                time_val = "🏛️ [GOVERNOR ACTION]"
+                sort_time_24h = "23:59"
+                event_location = "🏛️ Governor"
+            elif _le_result is None:
+                # Cache-direct didn't recover (route == "" with no cached
+                # events, OR route == "meeting" but the cache helper
+                # couldn't match — zero token overlap / midnight-only /
+                # etc). Fall back to the full resolver, which preserves
+                # today's journal_default behavior on every non-admin path
+                # (and the LegislationID lookup chain for blank routes
+                # where the cache may not be populated).
+                _le_result = _resolve_via_legislation_event_api(
+                    http_session=http_session,
+                    bill_num=bill_num,
+                    action_date_str=date_str,
+                    outcome_text=outcome_text,
+                    session_code_5d=_session_code_5d,
+                    acting_chamber_code=acting_chamber_prefix.strip()[:1].upper(),
+                    legislation_id_cache=_legislation_id_cache,
+                    legislation_event_cache=_legislation_event_cache,
+                    push_alert=push_system_alert,
+                )
+            if _le_result is not None:
+                time_val, sort_time_24h, status = _le_result
+                origin = "legislation_event"
+                source_miss_counts["sourced_legislation_event"] += 1
+                source_miss_counts["legislation_event_recovered"] += 1
+
+        # PR-C7.1p: STRUCTURAL meeting-time recovery — the final fallback
+        # before NO_SCHEDULE_MATCH. A committee report / floor procedural
+        # action is stamped date-only in the LegEvent (so the timestamp
+        # recovery above can't time it) yet DID happen in a meeting we hold a
+        # time for. Recover it from the matched LegEvent's OWN CommitteeName
+        # (→ that committee's scheduled meeting time) or, for a floor action
+        # with no committee, the chamber's convene time. Dictionary-free
+        # (no verb list). Gated on origin still being journal_default, so it
+        # can ONLY add a time to an otherwise-timeless row — never alter an
+        # existing resolution. See assumptions_audit #71.
+        if origin == "journal_default":
+            _ctx = _recover_time_via_legevent_committee(
+                _legislation_event_cache.get((bill_num, _session_code_5d)) or [],
+                date_str, acting_chamber_prefix.strip()[:1].upper(),
+                outcome_text, api_schedule_map, convene_times,
+                committee_modal_standing, adjourned_clock_by_date,
+            )
+            if _ctx is not None:
+                time_val, sort_time_24h, status, event_location, origin = _ctx
+                source_miss_counts["legevent_context_recovered"] += 1
+                if origin == "api_schedule":
+                    source_miss_counts["sourced_api"] += 1
+                elif origin == "convene_anchor":
+                    source_miss_counts["sourced_convene"] += 1
+                elif origin == "derived_standing":
+                    # FLAGGED assumed time (committee's modal standing pattern).
+                    source_miss_counts["derived_standing"] += 1
+
+        if origin == "journal_default":
+            # No API match, no convene anchor, AND LegislationEvent
+            # had nothing — the historic silent "Journal Entry" default
+            # that PR#22's post-mortem flagged. Replace with a visible
+            # marker and count it. One alert per date+committee+bill
+            # is enough; bulk rows would flood.
+            time_val = "⏱️ [NO_SCHEDULE_MATCH]"
+            source_miss_counts["unsourced_journal"] += 1
+            diagnostic_hint = _build_diagnostic_hint(
+                date_str, event_location, acting_chamber_prefix
+            )
+            push_system_alert(
+                f"No schedule match for {bill_num} at '{event_location}' on {date_str} — row deferred to Ledger.",
+                status="WARN",
+                category="TIMING_LAG",
+                severity="WARN",
+                dedup_key=f"no_match::{date_str}::{event_location}::{bill_num}",
+            )
+
+        # Orthogonal tag counter: fires on every row where the Memory
+        # Anchor committee fallback was applied, regardless of how the
+        # time ultimately resolved. Intentionally overlaps with the
+        # denominator buckets — see docs/failures/gemini_review_patterns.md #31.
+        if anchor_applied:
+            source_miss_counts["unsourced_anchor"] += 1
+
+        # PR-C7.1b-1: record the structural router's calendar-vs-ledger
+        # verdict for this row (cache-lookup-only, no network). This is
+        # OBSERVABILITY ONLY — it does NOT change `Origin`, `Committee`,
+        # or where the row lands; the X-Ray still classifies via text
+        # until PR-C7.1b-2 consumes this column. Lets us verify the
+        # route populates correctly in Sheet1 before touching the UI.
+        legevent_route = _route_for_row(
+            bill_num=bill_num,
+            session_5d=_session_code_5d,
+            action_date_str=date_str,
+            outcome_text=outcome_text,
+            acting_chamber_code=acting_chamber_prefix.strip()[:1].upper(),
+            legislation_event_cache=_legislation_event_cache,
+            ministerial_codes=_ministerial_codes,
+            admin_recovery_index=_admin_recovery_index,
+        )
+        if legevent_route == "meeting":
+            source_miss_counts["legevent_route_meeting"] += 1
+        elif legevent_route == "admin":
+            source_miss_counts["legevent_route_admin"] += 1
+        elif legevent_route == "executive":   # PR-C8.4b: action-required governor action
+            source_miss_counts["legevent_route_executive"] += 1
+        else:
+            source_miss_counts["legevent_route_blank"] += 1
+
+        # PR-C8.1 (SHADOW): structural refid identity for this row — telemetry ONLY,
+        # consumes no description text and does NOT change routing/placement (Standard #3).
+        _row_refid = _normalize_refid(row.get(refid_col, "")) if refid_col else ""  # float64/nan-proof
+        _row_fanout = _refid_fanout.get((_row_refid, date_str), 0) if _row_refid.isdigit() else 0
+        _refid_class = _classify_refid(_row_refid, fanout=_row_fanout,
+                                       in_vote_csv=(_row_refid in _vote_id_set))
+        source_miss_counts["refidclass_" + _refid_class.lower()] += 1
+
+        _append_event({
+            "RefidClass": _refid_class,
+            "Date": date_str,
+            "Time": time_val,
+            "SortTime": sort_time_24h,
+            "Status": status,
+            "Committee": event_location,
+            "Bill": bill_num,
+            "Outcome": outcome_text,
+            "AgendaOrder": 999,
+            "Source": "CSV",
+            "Origin": origin,
+            "DiagnosticHint": diagnostic_hint,
+            "LegEventRoute": legevent_route,
+        })
+
+
+
 def run_calendar_update():
     http_session = get_armored_session()
     # Phase timing (operational visibility + the speed-audit profile). Prints elapsed per
@@ -4892,697 +5610,31 @@ def run_calendar_update():
         if _admin_recovery_index:
             print(f"🗂️  EventType admin-recovery descriptions (LIS reference): {len(_admin_recovery_index)}.")
 
-        for _, row in df_past.iterrows():
-            source_miss_counts["total_processed"] += 1
-            # Tracks whether committee was resolved via Memory Anchor fallback
-            # (rather than refid or lexicon). Drives the orthogonal
-            # unsourced_anchor tag counter (which overlaps denominator buckets
-            # intentionally — see docs/failures/gemini_review_patterns.md #31).
-            anchor_applied = False
-            # PR-B: populated for NO_SCHEDULE_MATCH / NO_CONVENE_ANCHOR rows
-            # so X-Ray §9 can show *why* the miss happened without hand-
-            # chasing through worker logs. Empty string for sourced rows.
-            diagnostic_hint = ""
-            bill_num = row['CleanBill']
-            outcome_text = str(row[desc_col]).strip()
-            outcome_lower = outcome_text.lower()
-            date_str = row['ParsedDate'].strftime('%Y-%m-%d')
-
-            # PR-C5.1: Malformed-row guard. HISTORY.CSV occasionally contains
-            # rows whose History_description is just the chamber prefix ("S "
-            # or "H ") with no verb attached, often paired with an empty
-            # History_refid. Verified case: SB584 on 2026-02-10 carries three
-            # rows — two real ("Senate committee offered" + "Failed to report
-            # …") and one malformed ("S " with empty refid). The malformed
-            # row has no action to classify, so it falls through KNOWN_NOISE
-            # / KNOWN_EVENT into the UNKNOWN_ACTION tag path at line ~2477.
-            # Pre-PR-C5 it landed in Sheet1 as Section 9 unclassified; post
-            # PR-C5 the [memory anchor: admin] pattern routes it to
-            # administrative, but Section 5's UNKNOWN_ACTION counter still
-            # ticked at 1. Adding a NOISE pattern would be unsafe ("s "
-            # substring-matches every "S Foo" Senate row). The right fix is
-            # structural: detect the empty-after-strip case here, emit a
-            # categorized DATA_ANOMALY alert (Zero-Trust visibility), and
-            # drop. Bucketed under dropped_noise because these are upstream
-            # data anomalies with no actionable content; the alert (not the
-            # bucket label) carries the diagnostic distinction.
-            # Gemini/Codex PR-C5.1 review (high/P1): outcome_text is already
-            # `.strip()`-ed at the top of this block, so a raw HISTORY value
-            # of "S " / "H " arrives here as "S" / "H" — startswith("S ") /
-            # startswith("H ") with the trailing space then returns False
-            # and the malformed row would NOT be dropped. The elif branch
-            # catches the post-strip bare-prefix case explicitly.
-            _outcome_remainder = outcome_text
-            if _outcome_remainder.startswith(('H ', 'S ')):
-                _outcome_remainder = _outcome_remainder[2:].strip()
-            elif _outcome_remainder in ('H', 'S'):
-                _outcome_remainder = ""
-            if not _outcome_remainder:
-                _refid = str(row.get(refid_col) or '') if refid_col else ''
-                push_system_alert(
-                    f"Malformed HISTORY row for {bill_num} on {date_str}: empty description after chamber-prefix strip "
-                    f"(raw_desc={outcome_text!r}, refid={_refid!r})",
-                    status="WARN",
-                    category="DATA_ANOMALY",
-                    severity="WARN",
-                    dedup_key=f"history_empty_desc::{bill_num}::{date_str}",
-                )
-                source_miss_counts["dropped_noise"] += 1
-                continue
-
-            if outcome_text.startswith('H '): acting_chamber_prefix = "House "
-            elif outcome_text.startswith('S '): acting_chamber_prefix = "Senate "
-            else: acting_chamber_prefix = "House " if bill_num.startswith('H') else "Senate "
-            
-            if bill_num not in bill_locations: bill_locations[bill_num] = acting_chamber_prefix + "Floor"
-            
-            # --- MORNING RECONCILIATION ---
-            if bill_num not in last_seen_date or last_seen_date[bill_num] != date_str:
-                last_seen_date[bill_num] = date_str
-                if date_str in docket_memory and bill_num in docket_memory[date_str]:
-                    scheduled_rooms = docket_memory[date_str][bill_num]
-                    for room in scheduled_rooms:
-                        if acting_chamber_prefix.lower() in room.lower() or "joint" in room.lower():
-                            bill_locations[bill_num] = room # Proactive Docket Heal
-                            break
-            
-            # --- ACTION SCOPE: ABSOLUTES ---
-            is_exec = any(ev in outcome_lower for ev in ["approved by governor", "vetoed by governor", "governor's substitute", "governor's recommendation", "governor:"]) and not (outcome_text.startswith('H ') or outcome_text.startswith('S '))
-            is_absolute_floor = any(f in outcome_lower for f in ABSOLUTE_FLOOR_VERBS)
-            # "conferee" alone (appointing names) = administrative, no time needed.
-            # "conference report agreed" = floor vote, caught by is_absolute_floor above.
-            is_conf = ("conferee" in outcome_lower or "conference report" in outcome_lower) and not is_absolute_floor
-
-            if is_exec:
-                event_location = "Executive Action"
-                bill_locations[bill_num] = "Executive Action"
-            elif is_absolute_floor:
-                event_location = acting_chamber_prefix + "Floor"
-                bill_locations[bill_num] = event_location # Force heal memory
-            elif is_conf:
-                event_location = "Conference Committee"
-                bill_locations[bill_num] = "Conference Committee"
-            else:
-                # --- ACTION SCOPE: DYNAMIC & EXPLICIT ROOM MATCH ---
-                committee_search_prefix = "Joint " if "joint" in outcome_lower or ("house" in outcome_lower and "senate" in outcome_lower) else acting_chamber_prefix
-
-                # PHASE 1: Structural resolution via History_refid (primary key lookup)
-                refid_committee = None
-                if refid_col:
-                    raw_refid = str(row.get(refid_col, '')).strip()
-                    refid_committee, refid_source = resolve_committee_from_refid(raw_refid)
-
-                # PHASE 2: Text-based resolution via LOCAL_LEXICON (fallback)
-                lexicon_committee = None
-                for api_name, aliases in LOCAL_LEXICON.items():
-                    if api_name.startswith(committee_search_prefix) and any(alias and alias in outcome_lower for alias in aliases):
-                        lexicon_committee = api_name; break
-
-                # Determine action type
-                is_referral = any(x in outcome_lower for x in ["referred", "assigned"]) and not any(x in outcome_lower for x in ["fail", "defeat", "strike"])
-                is_report = any(x in outcome_lower for x in ["reported", "discharged"]) and not any(x in outcome_lower for x in ["fail", "defeat"])
-                is_rerefer = is_report and ("rereferred" in outcome_lower or ("referred" in outcome_lower and "reported" in outcome_lower))
-                destination_committee = None  # Used for rerefer: where the bill goes next
-
-                # PHASE 3: Select the correct committee for each role
-                # For "reported from X and rereferred to Y":
-                #   - refid encodes X (the committee that voted/met)
-                #   - lexicon may match X or Y depending on alias iteration order
-                #   - We need: event_location = X (for time lookup), destination = Y (for state update)
-                if is_report and refid_committee:
-                    # Refid is authoritative for the ACTING committee (where the vote happened)
-                    acting_committee = refid_committee
-                    # If also a rerefer, try to find the destination from text
-                    destination_committee = None
-                    if is_rerefer:
-                        # Find destination after the LAST "referred to" in the full text.
-                        # Previous logic split on "referred" which removed the word itself,
-                        # making the regex unable to match. Fix: use rfind on the full string.
-                        _ref_idx = outcome_text.lower().rfind('referred to')
-                        _dest_search = outcome_text[_ref_idx:] if _ref_idx >= 0 else ''
-                        dest_match = re.search(r'referred to\s+(?:Committee (?:on|for)\s+)?([A-Z][A-Za-z,\s&\-]+?)(?:\s*\(|\s*[;.]|\s*$)', _dest_search, re.IGNORECASE)
-                        if dest_match:
-                            dest_name_raw = dest_match.group(1).strip().rstrip(',').strip()
-                            # Look up destination in LOCAL_LEXICON
-                            for api_name, aliases in LOCAL_LEXICON.items():
-                                if api_name.startswith(committee_search_prefix) and any(alias and alias in dest_name_raw.lower() for alias in aliases):
-                                    destination_committee = api_name; break
-                    matched_committee = acting_committee
-                elif is_referral and not is_report:
-                    # Pure referral: refid = destination committee code, lexicon also finds destination
-                    matched_committee = refid_committee if refid_committee else lexicon_committee
-                else:
-                    # All other actions: prefer refid, fall back to lexicon
-                    matched_committee = refid_committee if refid_committee else lexicon_committee
-
-                if matched_committee:
-                    # === DOUBLE-ENTRY MISMATCH DETECTION (Categorized) ===
-                    # Instead of suppressing mismatches, categorize them by root cause.
-                    # Categories: PARENT_CHILD (INFO), TIMING_LAG (INFO), COMMITTEE_DRIFT (WARN)
-                    memory_room = bill_locations[bill_num]
-                    if "Floor" not in memory_room and matched_committee != memory_room and not is_referral:
-                        mem_norm = normalize_room_key(memory_room)
-                        match_norm = normalize_room_key(matched_committee)
-
-                        # Category 1: PARENT_CHILD — subcommittee action within parent committee
-                        # Validated via PARENT_COMMITTEE_MAP when available, name prefix fallback otherwise
-                        is_parent_child = False
-                        if PARENT_COMMITTEE_MAP:
-                            # O(1) reverse lookup via pre-calculated NORM_TO_CODE map
-                            mem_code = NORM_TO_CODE.get(mem_norm)
-                            match_code = NORM_TO_CODE.get(match_norm)
-                            if mem_code and match_code:
-                                is_parent_child = (PARENT_COMMITTEE_MAP.get(mem_code) == match_code or
-                                                   PARENT_COMMITTEE_MAP.get(match_code) == mem_code)
-                        if not is_parent_child:
-                            # Fallback: name prefix (still valid for unregistered subcommittees)
-                            is_parent_child = mem_norm.startswith(match_norm) or match_norm.startswith(mem_norm)
-
-                        # Category 2: TIMING_LAG — agenda placement before referral records
-                        is_timing_lag = "placed on" in outcome_lower and "agenda" in outcome_lower
-
-                        # Route by category
-                        if is_parent_child:
-                            outcome_text = f"ℹ️ [PARENT_CHILD: Memory={memory_room}] " + outcome_text
-                        elif is_timing_lag:
-                            outcome_text = f"ℹ️ [TIMING_LAG: Memory={memory_room}] " + outcome_text
-                        else:
-                            outcome_text = f"⚠️ [COMMITTEE_DRIFT: Origin State was {memory_room}] " + outcome_text
-
-                    if is_referral and "from" not in outcome_lower:
-                        # Floor to Committee Referral
-                        event_location = bill_locations[bill_num]
-                        bill_locations[bill_num] = matched_committee # Update target
-                    elif is_report:
-                        event_location = matched_committee # Distributed Checkpoint Heal (now refid-verified)
-                        if is_rerefer and destination_committee:
-                            bill_locations[bill_num] = destination_committee # Bill goes to new committee
-                        else:
-                            bill_locations[bill_num] = acting_chamber_prefix + "Floor"
-                    else:
-                        event_location = matched_committee
-                        bill_locations[bill_num] = matched_committee
-                else:
-                    # Dynamic Nameless (Memory Anchor)
-                    event_location = bill_locations[bill_num]
-                    is_dynamic_verb = any(v in outcome_lower for v in DYNAMIC_VERBS)
-                    # Previously only dynamic verbs were tagged, leaving admin Memory-Anchor
-                    # rows indistinguishable from cleanly-resolved rows downstream
-                    # (silent source-miss — see docs/state/open_anti_patterns.md item #3).
-                    # Tag both paths with distinct markers so X-Ray can tell them apart.
-                    anchor_applied = "Floor" not in event_location
-                    if anchor_applied:
-                        anchor_tag = "⚙️ [Memory Anchor]" if is_dynamic_verb else "📝 [Memory Anchor: admin]"
-                        outcome_text = f"{anchor_tag} " + outcome_text
-                    # unsourced_anchor is incremented after time-resolution
-                    # (orthogonal tag counter). See
-                    # docs/failures/gemini_review_patterns.md #31.
-
-                    # Advance state if it was a nameless report (rare but possible)
-                    if any(x in outcome_lower for x in ["reported", "discharged"]) and not any(x in outcome_lower for x in ["fail"]):
-                        bill_locations[bill_num] = acting_chamber_prefix + "Floor"
-
-            # === NOISE FILTER (Positive Identification — see module-level constants) ===
-            is_known_noise = any(n in outcome_lower for n in KNOWN_NOISE_PATTERNS)
-            is_known_event = any(e in outcome_lower for e in KNOWN_EVENT_PATTERNS)
-
-            if is_known_noise and not is_known_event:
-                source_miss_counts["dropped_noise"] += 1
-                continue  # Confirmed noise, safe to filter
-            if not is_known_noise and not is_known_event:
-                # UNKNOWN action type — flag but don't suppress
-                outcome_text = f"❓ [UNKNOWN_ACTION] " + outcome_text
-
-            # --- UI RENDERING & FUZZY MATCH ---
-            event_location = event_location.strip()
-            time_val = "Journal Entry"
-            sort_time_24h = "23:59"
-            status = ""
-            # Origin tracks how time_val was resolved. Required by
-            # docs/workflow/source_miss_visibility.md so downstream (X-Ray
-            # Section 0) can filter silent defaults from concrete sources.
-            origin = "journal_default"
-
-            matched_api_key = find_api_schedule_match(
-                api_schedule_map=api_schedule_map,
-                date_str=date_str,
-                event_location=event_location,
-                outcome_text=outcome_text,
-                acting_chamber_prefix=acting_chamber_prefix,
-            )
-
-            if matched_api_key:
-                time_val = api_schedule_map[matched_api_key]["Time"]
-                sort_time_24h = api_schedule_map[matched_api_key]["SortTime"]
-                status = api_schedule_map[matched_api_key]["Status"]
-                origin = "api_schedule"
-                source_miss_counts["sourced_api"] += 1
-                # Adopt parent committee's canonical name when a subcommittee
-                # matched via parent fallback (e.g. "Courts of Justice-Civil" -> "Courts of Justice")
-                matched_name = matched_api_key.split("_", 1)[1]
-                if normalize_room_key(matched_name) != normalize_room_key(event_location):
-                    event_location = matched_name
-                # PR-C7.1q: the matched committee meeting has NO concrete time
-                # (LIS published it as "Time TBA"/empty). The row's text-based
-                # committee attribution may be wrong — try the LegEvent's
-                # AUTHORITATIVE CommitteeName: it may reveal a FLOOR action
-                # mis-filed under a committee (→ convene time) or carry a real
-                # timestamp. Only fires on a TBA row, only when CommitteeName is
-                # known (not "?"), and only ADOPTS a concrete result — so it can
-                # never make a TBA row worse. assumptions_audit #72.
-                if _is_non_concrete_time(time_val):
-                    _ctx = _recover_time_via_legevent_committee(
-                        _legislation_event_cache.get((bill_num, _session_code_5d)) or [],
-                        date_str, acting_chamber_prefix.strip()[:1].upper(),
-                        outcome_text, api_schedule_map, convene_times,
-                        committee_modal_standing, adjourned_clock_by_date,
-                    )
-                    if _ctx is not None:
-                        time_val, sort_time_24h, status, event_location, origin = _ctx
-                        source_miss_counts["legevent_context_recovered"] += 1
-
-            if "Floor" in event_location:
-                anchor = convene_times.get(date_str, {}).get(acting_chamber_prefix.strip())
-                if anchor:
-                    time_val, sort_time_24h, event_location = anchor["Time"], anchor["SortTime"], anchor["Name"]
-                    _floor_hit += 1
-                    # Origin/metric parity: if the row was already counted as
-                    # api_schedule, move it to sourced_convene so the row's
-                    # Origin field and the SYSTEM_METRICS counters agree.
-                    # See docs/failures/gemini_review_patterns.md #32.
-                    if origin == "api_schedule":
-                        source_miss_counts["sourced_api"] -= 1
-                    source_miss_counts["sourced_convene"] += 1
-                    origin = "convene_anchor"
-                else:
-                    _floor_miss += 1
-                    _floor_miss_dates[f"{date_str}_{acting_chamber_prefix.strip()}"] += 1
-                    if origin == "journal_default":
-                        # PR-C7.1c: floor_miss → LegEvent time recovery.
-                        # Closes the ~103 genuine-meeting residue
-                        # PR-C7.1d measured (real floor votes — "conference
-                        # report agreed", "read third time" — whose convene
-                        # anchor was missing and which the journal_default
-                        # LegEvent block below SKIPS because that gate is
-                        # `origin == "journal_default"` and origin is about
-                        # to become "floor_miss").
-                        #
-                        # SAFETY: gated on the structural router's verdict.
-                        # The danger this gate defends against: H5601/S5601
-                        # "Bill text as passed Senate (HB###ER)" rows match
-                        # ABSOLUTE_FLOOR_VERBS ("passed senate") → forced
-                        # to Floor → convene_anchor miss → would land here.
-                        # Their LegislationEvent has a 4 AM document-batch
-                        # timestamp, NOT a meeting time. Recovering them
-                        # would write a wrong time on an admin row.
-                        #
-                        # The structural router routes those to "admin"
-                        # via LIS's own ReferenceType (LegislationText) —
-                        # cache-lookup, no network. We require route ==
-                        # "meeting" (not just != "admin") so blank-route
-                        # rows ALSO stay unrecovered: route unknown means
-                        # the TTL backfill hasn't reached this bill yet
-                        # or the bill has no LegEvent — either way, safer
-                        # to leave NO_CONVENE_ANCHOR than to recover with
-                        # a possibly-wrong time. Next cycle the cache
-                        # populates and the route becomes "meeting" and
-                        # the row recovers.
-                        #
-                        # HANG SAFETY: cache-lookup-only. The PR-C7
-                        # pre-iteration hydration seeds the cache (real
-                        # events OR negative cache via the Codex P1 fix)
-                        # for every candidate bill in `legevent_candidate_bills`,
-                        # which includes floor_miss bills. The resolver
-                        # below short-circuits via the existing PR-C3.1
-                        # negative-cache check — no network fetch from
-                        # the row loop. The PR-C3 hang root cause cannot
-                        # recur.
-                        _floor_route = _route_for_row(
-                            bill_num=bill_num,
-                            session_5d=_session_code_5d,
-                            action_date_str=date_str,
-                            outcome_text=outcome_text,
-                            acting_chamber_code=acting_chamber_prefix.strip()[:1].upper(),
-                            legislation_event_cache=_legislation_event_cache,
-                            ministerial_codes=_ministerial_codes,
-                            admin_recovery_index=_admin_recovery_index,
-                        )
-                        _floor_recovered = None
-                        if _floor_route == "meeting":
-                            # PR-C7.1c review fold-in (Codex P1): pull time
-                            # directly from the event cache, bypassing
-                            # `_resolve_via_legislation_event_api`'s
-                            # `LegislationID` gate. The route="meeting"
-                            # verdict is ITSELF proof that the event cache
-                            # has hydrated events for this bill (the route
-                            # is computed from those events). The original
-                            # resolver call regressed here whenever PR-C7's
-                            # negative-cache seeding had set
-                            # `_legislation_id_cache[(bill,session)] = ""`
-                            # for a bill that was loaded from the persisted
-                            # `LegEvent_Events` tab but not queued for
-                            # rehydration this cycle (fresh / terminal).
-                            # The new helper reads `_legislation_event_cache`
-                            # directly with identical matching semantics —
-                            # cache-only, no network, no `LegislationID`
-                            # dependency — so recovery stays stable across
-                            # cycles.
-                            _cached_events = _legislation_event_cache.get(
-                                (bill_num, _session_code_5d)
-                            ) or []
-                            _floor_recovered = _find_legevent_time_in_cache(
-                                events=_cached_events,
-                                bill_num=bill_num,
-                                action_date_str=date_str,
-                                outcome_text=outcome_text,
-                                acting_chamber_code=acting_chamber_prefix.strip()[:1].upper(),
-                                push_alert=push_system_alert,
-                            )
-                        if _floor_recovered is not None:
-                            time_val, sort_time_24h, status = _floor_recovered
-                            origin = "legislation_event"
-                            source_miss_counts["sourced_legislation_event"] += 1
-                            source_miss_counts["legislation_event_recovered"] += 1
-                            source_miss_counts["legevent_floor_recovered"] += 1
-                            # Back out the convene-gap counters so the
-                            # post-loop report reflects only UNRECOVERED
-                            # floor misses.
-                            #
-                            # PR-C7.1c review fold-in (Codex P2 + Gemini
-                            # medium): decrement the per-combo Counter
-                            # instead of `set.discard`. `discard` removed
-                            # the combo entry entirely even when OTHER
-                            # rows on the same date/chamber were still
-                            # unrecovered, hiding them from the CONVENE
-                            # GAP report. Decrementing the counter and
-                            # only deleting the key when it drops to zero
-                            # preserves the multiplicity Codex flagged.
-                            _floor_miss -= 1
-                            _combo_key = f"{date_str}_{acting_chamber_prefix.strip()}"
-                            _floor_miss_dates[_combo_key] -= 1
-                            if _floor_miss_dates[_combo_key] <= 0:
-                                del _floor_miss_dates[_combo_key]
-                        elif _floor_route == "executive":
-                            # PR-C8.4b-1: an ACTION-REQUIRED governor action (veto "received" /
-                            # recommendation) that ALSO tripped the floor-verb gate. It is NOT a
-                            # floor-meeting miss — route_event matched it to a G79xx/G72xx/G73xx
-                            # event, so it must surface on the Governor CALENDAR exactly like the
-                            # main resolver's executive branch, NOT be tagged floor_miss → Ledger
-                            # (which left route=="executive" rows physically in the ledger — a
-                            # route/placement inconsistency caught by the post-merge worker run).
-                            # Mirrors the main branch: executive_default origin, "🏛️ Governor"
-                            # label, timeless flag, denominator bucket legevent_executive_placed.
-                            source_miss_counts["legevent_executive_placed"] += 1
-                            origin = "executive_default"
-                            time_val = "🏛️ [GOVERNOR ACTION]"
-                            sort_time_24h = "23:59"
-                            event_location = "🏛️ Governor"
-                            # This row is NOT a floor-meeting miss, so back out the convene-gap
-                            # counters incremented at the top of the floor block (exactly as the
-                            # recovery branch above does) — otherwise the post-loop CONVENE GAP
-                            # report over-counts misses by these executive rows (Gemini #117).
-                            _floor_miss -= 1
-                            _combo_key = f"{date_str}_{acting_chamber_prefix.strip()}"
-                            _floor_miss_dates[_combo_key] -= 1
-                            if _floor_miss_dates[_combo_key] <= 0:
-                                del _floor_miss_dates[_combo_key]
-                        else:
-                            # Concrete source miss: floor action with no convene anchor.
-                            # Tag the row so it cannot masquerade as a clean row downstream.
-                            time_val = "⏱️ [NO_CONVENE_ANCHOR]"
-                            origin = "floor_miss"
-                            source_miss_counts["floor_anchor_miss"] += 1
-                            diagnostic_hint = _build_diagnostic_hint(
-                                date_str, event_location, acting_chamber_prefix
-                            )
-
-            # PR-C3: LegislationEvent API as secondary time source. Fires
-            # when (a) the Schedule API didn't yield a concrete time and
-            # (b) the row is not a Floor action (Floor goes through
-            # convene_anchor / floor_miss).
-            #
-            # PR-C7 (2026-05-03): the MEETING_VERB_TOKENS gate that PR-C3.1
-            # added is REMOVED. The pre-iteration hydration phase has
-            # already populated `_legislation_event_cache` for every
-            # candidate bill in the queue (Tier A → B → C, capped at
-            # LEGEVENT_FETCHES_PER_CYCLE). The resolver below is now a
-            # cache-lookup-only operation for hydrated bills — no network
-            # fetch, no rate-limit risk. For bills whose hydration was
-            # deferred (overflow → next cycle), the cache key is absent
-            # and the resolver short-circuits via its negative-cache logic.
-            # The PR-C3 hang root cause (uncapped fetches in the row loop)
-            # cannot recur because the row loop never fetches.
-            #
-            # Reason for dropping the verb gate: per the PR-C6.4 sizing
-            # audit and PR-C6.3 verb dump, MEETING_VERB_TOKENS gated only
-            # 0.1% of journal_default rows. The gate was effectively off
-            # while creating the false expectation that LegEvent recovery
-            # was happening for "all the bills it should." The structural
-            # pivot (live-ready cache + drop gate) is the architecturally
-            # correct fix: data-driven, not text-driven (CLAUDE.md #3).
-            if origin == "journal_default":
-                source_miss_counts["legislation_event_attempted"] += 1
-                cache_key_pr_c7 = (bill_num, _session_code_5d)
-                # Hits = cache has a non-empty events list (hydrated bill).
-                # Misses = cache has empty list ([]) — either seeded for
-                # overflow this cycle (PR-C7 negative cache) or fetched
-                # empty in a prior cycle. Either way, the row loop will
-                # NOT trigger a network fetch — the resolver short-
-                # circuits via the existing PR-C3.1 cache check.
-                if cache_key_pr_c7 in _legislation_event_cache and _legislation_event_cache[cache_key_pr_c7]:
-                    source_miss_counts["legevent_cache_hits"] += 1
-                else:
-                    source_miss_counts["legevent_cache_misses"] += 1
-
-                # PR-C7.1c review fold-in EXTENSION (Codex P1, journal_default
-                # path): same negative-cache regression as the floor path.
-                # When a bill's events were loaded from the persisted
-                # `LegEvent_Events` tab (fresh/terminal — not queued for
-                # rehydration this cycle), `_legislation_event_cache` has
-                # real events but `_legislation_id_cache[(bill,session)]`
-                # was seeded "" by the overflow handler at ~line 3205.
-                # `_resolve_via_legislation_event_api()` short-circuits at
-                # `if not legislation_id` BEFORE reading those cached
-                # events, so journal_default recovery has been silently
-                # FAILING for every fresh/terminal bill since PR-C7
-                # (the dominant steady-state case, weeks of underrecovery).
-                #
-                # Mirror the floor fix: check the structural route; when
-                # route=="meeting" (which is itself proof the event cache
-                # is populated — the route was computed from it), use the
-                # cache-direct helper. Otherwise fall through to the full
-                # resolver (handles route="" cases where the cache may not
-                # be populated and we WANT the LegislationID lookup chain).
-                _le_result = None
-                _row_route = _route_for_row(
-                    bill_num=bill_num,
-                    session_5d=_session_code_5d,
-                    action_date_str=date_str,
-                    outcome_text=outcome_text,
-                    acting_chamber_code=acting_chamber_prefix.strip()[:1].upper(),
-                    legislation_event_cache=_legislation_event_cache,
-                    ministerial_codes=_ministerial_codes,
-                    admin_recovery_index=_admin_recovery_index,
-                )
-                if _row_route == "meeting":
-                    _row_cached_events = _legislation_event_cache.get(
-                        (bill_num, _session_code_5d)
-                    ) or []
-                    _le_result = _find_legevent_time_in_cache(
-                        events=_row_cached_events,
-                        bill_num=bill_num,
-                        action_date_str=date_str,
-                        outcome_text=outcome_text,
-                        acting_chamber_code=acting_chamber_prefix.strip()[:1].upper(),
-                        push_alert=push_system_alert,
-                    )
-                if _le_result is None and _row_route == "admin":
-                    # PR-C7.1g (+ #66 review fold-in): route=="admin" means
-                    # LIS's own structural fields (ReferenceType / VoteTally /
-                    # Status) classify this action as administrative — it
-                    # belongs in Ledger Updates with NO meeting time. Don't run
-                    # the resolver, which would attach a ~4 AM document-batch
-                    # timestamp (e.g. on a "Bill text as passed" / "Governor's
-                    # Recommendation" event) — a structurally-WRONG time on the
-                    # lobbyist surface (Standard #3).
-                    #
-                    # Route the row to its OWN terminal origin "admin_default"
-                    # (NOT journal_default) so it does NOT fall into the
-                    # journal_default source-miss block below — that block fires
-                    # a per-row TIMING_LAG WARN + counts unsourced_journal,
-                    # which for hundreds of expected-timeless admin rows would
-                    # flood Bug_Logs and overstate the source gap (Gemini HIGH
-                    # #66). admin_default still collapses into 📋 Ledger Updates
-                    # (added to the collapse mask) and carries the visible
-                    # NO_SCHEDULE_MATCH marker (not the old silent "Journal
-                    # Entry"). It is NOT a concrete source (I3 ok) and NOT in
-                    # the unsourced-meeting set (I4 won't count it).
-                    #
-                    # Back out the top-of-block legislation_event_attempted
-                    # increment: a deliberate non-attempt is not a failed
-                    # attempt, so attempted−recovered stays the honest LIS
-                    # source-gap signal the X-Ray reads (Codex P2 #66).
-                    #
-                    # Timing note: while the LegEvent cache is still
-                    # re-hydrating (PR-C7.1e), most routes are "" (blank), NOT
-                    # "admin" — blank rows still hit the resolver below. This
-                    # gate only bites once a bill's events are cached AND
-                    # structurally admin, so it is correct-by-construction the
-                    # moment the cache fills.
-                    source_miss_counts["legevent_admin_skipped"] += 1
-                    source_miss_counts["legislation_event_attempted"] -= 1
-                    origin = "admin_default"
-                    time_val = "⏱️ [NO_SCHEDULE_MATCH]"
-                elif _le_result is None and _row_route == "executive":
-                    # PR-C8.4b: an ACTION-REQUIRED governor action (veto G79xx / recommendation
-                    # G72xx/G73xx). Like the admin branch, this is a deliberate NON-attempt at time
-                    # resolution — there is no convened meeting, so the resolver would only stamp a
-                    # structurally-wrong ~4 AM document time (Standard #3). UNLIKE admin, it must
-                    # SURFACE ON THE CALENDAR, never the ledger: burying a veto/recommendation is the
-                    # catastrophic silent failure (owner decision 2026-06-11). executive_default is
-                    # deliberately NOT in the journal/Ledger collapse mask below, so it keeps a
-                    # "🏛️ Governor" committee label and renders on the calendar day, time-less.
-                    # classify_action maps route=="executive" -> the "executive" class, which is a
-                    # distinct (non-meeting) class and is therefore EXCLUDED from Section 9.
-                    # legevent_executive_placed mirrors legevent_admin_skipped: it is the DENOMINATOR
-                    # bucket for executive_default rows (timeless-by-design, no other bucket counts
-                    # them). The route-distribution counter legevent_route_executive is incremented
-                    # SEPARATELY in the route-counter block below (mirroring legevent_route_admin) —
-                    # do NOT increment it here too, or the route count double-counts.
-                    source_miss_counts["legevent_executive_placed"] += 1
-                    source_miss_counts["legislation_event_attempted"] -= 1  # deliberate non-attempt (mirror admin)
-                    origin = "executive_default"
-                    time_val = "🏛️ [GOVERNOR ACTION]"
-                    sort_time_24h = "23:59"
-                    event_location = "🏛️ Governor"
-                elif _le_result is None:
-                    # Cache-direct didn't recover (route == "" with no cached
-                    # events, OR route == "meeting" but the cache helper
-                    # couldn't match — zero token overlap / midnight-only /
-                    # etc). Fall back to the full resolver, which preserves
-                    # today's journal_default behavior on every non-admin path
-                    # (and the LegislationID lookup chain for blank routes
-                    # where the cache may not be populated).
-                    _le_result = _resolve_via_legislation_event_api(
-                        http_session=http_session,
-                        bill_num=bill_num,
-                        action_date_str=date_str,
-                        outcome_text=outcome_text,
-                        session_code_5d=_session_code_5d,
-                        acting_chamber_code=acting_chamber_prefix.strip()[:1].upper(),
-                        legislation_id_cache=_legislation_id_cache,
-                        legislation_event_cache=_legislation_event_cache,
-                        push_alert=push_system_alert,
-                    )
-                if _le_result is not None:
-                    time_val, sort_time_24h, status = _le_result
-                    origin = "legislation_event"
-                    source_miss_counts["sourced_legislation_event"] += 1
-                    source_miss_counts["legislation_event_recovered"] += 1
-
-            # PR-C7.1p: STRUCTURAL meeting-time recovery — the final fallback
-            # before NO_SCHEDULE_MATCH. A committee report / floor procedural
-            # action is stamped date-only in the LegEvent (so the timestamp
-            # recovery above can't time it) yet DID happen in a meeting we hold a
-            # time for. Recover it from the matched LegEvent's OWN CommitteeName
-            # (→ that committee's scheduled meeting time) or, for a floor action
-            # with no committee, the chamber's convene time. Dictionary-free
-            # (no verb list). Gated on origin still being journal_default, so it
-            # can ONLY add a time to an otherwise-timeless row — never alter an
-            # existing resolution. See assumptions_audit #71.
-            if origin == "journal_default":
-                _ctx = _recover_time_via_legevent_committee(
-                    _legislation_event_cache.get((bill_num, _session_code_5d)) or [],
-                    date_str, acting_chamber_prefix.strip()[:1].upper(),
-                    outcome_text, api_schedule_map, convene_times,
-                    committee_modal_standing, adjourned_clock_by_date,
-                )
-                if _ctx is not None:
-                    time_val, sort_time_24h, status, event_location, origin = _ctx
-                    source_miss_counts["legevent_context_recovered"] += 1
-                    if origin == "api_schedule":
-                        source_miss_counts["sourced_api"] += 1
-                    elif origin == "convene_anchor":
-                        source_miss_counts["sourced_convene"] += 1
-                    elif origin == "derived_standing":
-                        # FLAGGED assumed time (committee's modal standing pattern).
-                        source_miss_counts["derived_standing"] += 1
-
-            if origin == "journal_default":
-                # No API match, no convene anchor, AND LegislationEvent
-                # had nothing — the historic silent "Journal Entry" default
-                # that PR#22's post-mortem flagged. Replace with a visible
-                # marker and count it. One alert per date+committee+bill
-                # is enough; bulk rows would flood.
-                time_val = "⏱️ [NO_SCHEDULE_MATCH]"
-                source_miss_counts["unsourced_journal"] += 1
-                diagnostic_hint = _build_diagnostic_hint(
-                    date_str, event_location, acting_chamber_prefix
-                )
-                push_system_alert(
-                    f"No schedule match for {bill_num} at '{event_location}' on {date_str} — row deferred to Ledger.",
-                    status="WARN",
-                    category="TIMING_LAG",
-                    severity="WARN",
-                    dedup_key=f"no_match::{date_str}::{event_location}::{bill_num}",
-                )
-
-            # Orthogonal tag counter: fires on every row where the Memory
-            # Anchor committee fallback was applied, regardless of how the
-            # time ultimately resolved. Intentionally overlaps with the
-            # denominator buckets — see docs/failures/gemini_review_patterns.md #31.
-            if anchor_applied:
-                source_miss_counts["unsourced_anchor"] += 1
-
-            # PR-C7.1b-1: record the structural router's calendar-vs-ledger
-            # verdict for this row (cache-lookup-only, no network). This is
-            # OBSERVABILITY ONLY — it does NOT change `Origin`, `Committee`,
-            # or where the row lands; the X-Ray still classifies via text
-            # until PR-C7.1b-2 consumes this column. Lets us verify the
-            # route populates correctly in Sheet1 before touching the UI.
-            legevent_route = _route_for_row(
-                bill_num=bill_num,
-                session_5d=_session_code_5d,
-                action_date_str=date_str,
-                outcome_text=outcome_text,
-                acting_chamber_code=acting_chamber_prefix.strip()[:1].upper(),
-                legislation_event_cache=_legislation_event_cache,
-                ministerial_codes=_ministerial_codes,
-                admin_recovery_index=_admin_recovery_index,
-            )
-            if legevent_route == "meeting":
-                source_miss_counts["legevent_route_meeting"] += 1
-            elif legevent_route == "admin":
-                source_miss_counts["legevent_route_admin"] += 1
-            elif legevent_route == "executive":   # PR-C8.4b: action-required governor action
-                source_miss_counts["legevent_route_executive"] += 1
-            else:
-                source_miss_counts["legevent_route_blank"] += 1
-
-            # PR-C8.1 (SHADOW): structural refid identity for this row — telemetry ONLY,
-            # consumes no description text and does NOT change routing/placement (Standard #3).
-            _row_refid = _normalize_refid(row.get(refid_col, "")) if refid_col else ""  # float64/nan-proof
-            _row_fanout = _refid_fanout.get((_row_refid, date_str), 0) if _row_refid.isdigit() else 0
-            _refid_class = _classify_refid(_row_refid, fanout=_row_fanout,
-                                           in_vote_csv=(_row_refid in _vote_id_set))
-            source_miss_counts["refidclass_" + _refid_class.lower()] += 1
-
-            _append_event({
-                "RefidClass": _refid_class,
-                "Date": date_str,
-                "Time": time_val,
-                "SortTime": sort_time_24h,
-                "Status": status,
-                "Committee": event_location,
-                "Bill": bill_num,
-                "Outcome": outcome_text,
-                "AgendaOrder": 999,
-                "Source": "CSV",
-                "Origin": origin,
-                "DiagnosticHint": diagnostic_hint,
-                "LegEventRoute": legevent_route,
-            })
-
+        run_sequential_turing_machine(df_past,
+            bill_locations=bill_locations,
+            last_seen_date=last_seen_date,
+            api_schedule_map=api_schedule_map,
+            docket_memory=docket_memory,
+            convene_times=convene_times,
+            _append_event=_append_event,
+            push_system_alert=push_system_alert,
+            source_miss_counts=source_miss_counts,
+            _admin_recovery_index=_admin_recovery_index,
+            _ministerial_codes=_ministerial_codes,
+            _vote_id_set=_vote_id_set,
+            _refid_fanout=_refid_fanout,
+            committee_modal_standing=committee_modal_standing,
+            adjourned_clock_by_date=adjourned_clock_by_date,
+            _floor_miss_dates=_floor_miss_dates,
+            desc_col=desc_col,
+            refid_col=refid_col,
+            _session_code_5d=_session_code_5d,
+            _legislation_event_cache=_legislation_event_cache,
+            _legislation_id_cache=_legislation_id_cache,
+            _build_diagnostic_hint=_build_diagnostic_hint,
+            _classify_refid=_classify_refid,
+            _normalize_refid=_normalize_refid,
+            http_session=http_session)
     # === CONVENE TIME GAP REPORT ===
     scrape_start_str = scrape_start.strftime('%Y-%m-%d')
     print(f"📊 Convene times populated for {len(convene_times)} dates total")
