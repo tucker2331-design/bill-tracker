@@ -117,6 +117,54 @@ def _stm_outputs_equivalent(events_a, events_b):
     return (not only_a and not only_b), only_a, only_b
 
 
+# ── Incremental-STM engine: per-bill reuse + SHADOW differential ───────────────
+# Order-invariance is PROVEN (run 27661570960: 58,294 events identical), so a bill's
+# events depend only on its own HISTORY rows + the shared inputs. The engine reuses a
+# bill's CACHED events from last cycle when its HISTORY hash is unchanged AND the
+# shared inputs (schedule/docket/convene/committee/session) didn't move; otherwise it
+# recomputes that bill. This builds the incremental result and DIFFS it against the
+# full run — the shadow proof that runs every cycle before we ever flip to skipping
+# the recompute. _STM_EVENT_KEY_FIELDS is the canonical event identity (above).
+def _event_bill_key(ev):
+    """The CleanBill the STM keyed this event on (no spaces, uppercase) — matches
+    the legevent_history_hashes keys + df_past['CleanBill']."""
+    return str(ev.get("Bill", "")).replace(" ", "").upper()
+
+
+def _stm_incremental_shadow(full_events, current_hashes, shared_changed, prev_cache):
+    """Build the incremental event set from last cycle's per-bill cache + this cycle's
+    full per-bill output, and compare to full. Pure (no I/O) — the engine's core.
+
+    full_events : flat list of THIS cycle's full-STM event dicts (its contribution).
+    current_hashes : {bill -> current HISTORY hash} (reuse of legevent_history_hashes).
+    shared_changed : True if the shared inputs moved since last cycle (-> no reuse).
+    prev_cache : {bill -> {"hash": str, "events": [event_key_tuples]}} from last cycle.
+
+    Returns (matches, only_in_full, only_in_incr, n_reused, n_recomputed). A reused bill
+    contributes its CACHED keys; a recomputed bill contributes THIS cycle's full keys.
+    If the engine is correct, a reused (unchanged) bill's cached keys equal its full keys,
+    so matches==True. Any mismatch is a real divergence to investigate BEFORE the flip."""
+    full_keys_by_bill = {}
+    for e in full_events:
+        full_keys_by_bill.setdefault(_event_bill_key(e), []).append(_stm_event_key(e))
+    incr_keys, n_reused, n_recomputed = [], 0, 0
+    for bill in set(full_keys_by_bill) | set(current_hashes) | set(prev_cache):
+        cached = prev_cache.get(bill)
+        reusable = (not shared_changed) and cached is not None \
+            and current_hashes.get(bill, "\x00MISSING") == cached.get("hash")
+        if reusable:
+            incr_keys.extend(cached.get("events", []))
+            n_reused += 1
+        else:
+            incr_keys.extend(full_keys_by_bill.get(bill, []))
+            n_recomputed += 1
+    full_keys = [_stm_event_key(e) for e in full_events]
+    fc, ic = Counter(full_keys), Counter(incr_keys)
+    only_full = sorted((fc - ic).elements())
+    only_incr = sorted((ic - fc).elements())
+    return (not only_full and not only_incr), only_full, only_incr, n_reused, n_recomputed
+
+
 # PR-C7.1b-1: the dictionary-free structural calendar-vs-ledger router.
 # Single source of truth at the repo root, imported by the worker AND the
 # validation tools — NO duplicated copy that can drift (the worker-vs-X-Ray
