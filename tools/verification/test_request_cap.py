@@ -56,11 +56,13 @@ def main():
     if cw.lis_request_count["n"] != 100:
         fails.append("5: cap=0 should never raise")
 
-    # 6) get_armored_session resets the counter (no cross-cycle accumulation — Gemini #156)
+    # 6) the factory must NOT reset the counter — the reset lives at CYCLE start
+    #    (run_calendar_update), so multiple sessions in one cycle accumulate (Gemini #156)
     cw.lis_request_count["n"] = 99
     cw.get_armored_session()
-    if cw.lis_request_count["n"] != 0:
-        fails.append(f"6: get_armored_session must reset the counter, got {cw.lis_request_count['n']}")
+    if cw.lis_request_count["n"] != 99:
+        fails.append(f"6: factory must NOT reset the counter (reset moved to cycle start), "
+                     f"got {cw.lis_request_count['n']}")
 
     # 7) the armored session mounts the counting adapter
     s = cw.get_armored_session()

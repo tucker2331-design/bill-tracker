@@ -2471,7 +2471,6 @@ class _CountingHTTPAdapter(HTTPAdapter):
         return super().send(request, **kwargs)
 
 def get_armored_session():
-    lis_request_count["n"] = 0  # fresh per-cycle count (Gemini #156): never accumulate across cycles
     session = requests.Session()
     session.headers.update({'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/120.0.0.0 Safari/537.36'})
     retries = Retry(total=4, backoff_factor=2, status_forcelist=[429, 500, 502, 503, 504])
@@ -3792,7 +3791,8 @@ def run_sequential_turing_machine(df_past, *,
 
 
 def run_calendar_update():
-    http_session = get_armored_session()
+    lis_request_count["n"] = 0  # guardrail #4: reset the per-cycle request count at CYCLE start
+    http_session = get_armored_session()  # (not in the factory — robust if more sessions get created; Gemini #156)
     # Phase timing (operational visibility + the speed-audit profile). Prints elapsed per
     # phase with real perf_counter() deltas (so it survives GitHub's buffered-stdout flush,
     # unlike log timestamps). Read the "⏱️ PHASE" lines to see where a ~20-min cycle goes.
