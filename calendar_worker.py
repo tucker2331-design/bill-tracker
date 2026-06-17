@@ -5692,15 +5692,20 @@ def run_calendar_update():
             _smc_snapshot = dict(source_miss_counts)
             master_events.clear()
             for _k in list(source_miss_counts): source_miss_counts[_k] = 0
-            _silent_kwargs = dict(_stm_shared_kwargs)
-            _silent_kwargs["push_system_alert"] = (lambda *a, **k: None)  # run-1 already raised real alerts
-            # Group by CleanBill — the STM's actual per-bill key (bill_num = row['CleanBill'],
-            # added at df-prep above), NOT the raw Bill_id — so bills group exactly as the
-            # per-bill state machine does, date-ordered within each bill.
+            # Group by CleanBill (the STM's per-bill key: bill_num = row['CleanBill']),
+            # preserving the PRODUCTION row order WITHIN each bill via _orig_order — so
+            # the ONLY difference from run 1 is cross-bill interleaving, NOT same-day
+            # tie order. That isolates exactly the invariant under test (Gemini #148):
+            # without the tiebreaker, same-(bill,date) rows could reorder and false-fail.
+            _df_bill = df_past.assign(_orig_order=range(len(df_past))).sort_values(
+                ["CleanBill", "_orig_order"]).reset_index(drop=True)
+            # The re-run reuses the REAL push_system_alert (via _stm_shared_kwargs):
+            # _append_event is a closure over it and can't be swapped, and re-run alerts
+            # dedup against run 1's by dedup_key, so no duplicate SYSTEM_ALERTs (Gemini #148).
             run_sequential_turing_machine(
-                df_past.sort_values(["CleanBill", "ParsedDate"]).reset_index(drop=True),
+                _df_bill,
                 bill_locations={}, last_seen_date={}, _floor_miss_dates=Counter(),
-                _floor_hit=0, _floor_miss=0, **_silent_kwargs)
+                _floor_hit=0, _floor_miss=0, **_stm_shared_kwargs)
             _events_bill = list(master_events)
             _ok, _only_date, _only_bill = _stm_outputs_equivalent(_events_date, _events_bill)
             master_events.clear(); master_events.extend(_events_date)            # RESTORE production output
