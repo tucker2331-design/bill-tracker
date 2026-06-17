@@ -1,0 +1,7 @@
+# LIS blob conditional-fetch cache (guardrail #1) — raw blob bytes + ETags,
+# persisted across runs via the GitHub Actions cache, never committed.
+.lis_blob_cache/
+
+# Python
+__pycache__/
+*.pyc

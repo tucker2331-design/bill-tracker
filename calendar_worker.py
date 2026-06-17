@@ -2517,6 +2517,65 @@ def get_active_session_info(http_session):
         print(f"⚠️ Session API parsing failed: {e}")
     return None, False, auth_failed
 
+# ── LIS-safety guardrail #1: conditional blob fetch (don't re-download unchanged blobs) ──
+# Azure honors If-None-Match → 304 (verified 2026-06-17: the 4.7 MB HISTORY.CSV returns 304
+# with a zero-byte body when the ETag matches). We persist each blob's bytes + ETag across
+# runs in `.lis_blob_cache/` (restored by the GitHub Actions cache) and send If-None-Match.
+# A 304 means Azure GUARANTEES byte-identity, so reusing the cached copy is exactly correct —
+# pure upstream-load reduction, zero accuracy change. ANY uncertainty (cache disabled/missing,
+# length mismatch, unreadable, marker-check fail) falls back to a full unconditional GET. See
+# docs/knowledge/lis_api_safety.md.
+_BLOB_CACHE_DIR = os.environ.get("LIS_BLOB_CACHE_DIR", ".lis_blob_cache")
+_BLOB_CACHE_ENABLED = os.environ.get("LIS_BLOB_CACHE", "1") == "1"  # kill switch: LIS_BLOB_CACHE=0
+blob_cache_stats = {"reuse_304": 0, "download_200": 0}
+
+def _blob_cache_paths(url):
+    key = hashlib.sha256(url.encode("utf-8")).hexdigest()[:24]
+    return (os.path.join(_BLOB_CACHE_DIR, key + ".bin"),
+            os.path.join(_BLOB_CACHE_DIR, key + ".json"))
+
+def _read_blob_cache(url):
+    """Return (etag, body_bytes) iff a COMPLETE, length-verified cache entry exists, else
+    (None, None). A missing/partial/length-mismatched entry reads as no-cache (→ full GET)."""
+    if not _BLOB_CACHE_ENABLED:
+        return None, None
+    try:
+        bin_path, meta_path = _blob_cache_paths(url)
+        if not (os.path.exists(bin_path) and os.path.exists(meta_path)):
+            return None, None
+        with open(meta_path, "r") as f:
+            meta = json.load(f)
+        etag = meta.get("etag")
+        length = meta.get("length")
+        if not etag:
+            return None, None
+        with open(bin_path, "rb") as f:
+            body = f.read()
+        if length is not None and len(body) != int(length):  # integrity: bytes match recorded length
+            return None, None
+        return etag, body
+    except Exception:
+        return None, None  # any cache fault → behave as a miss (fail-safe)
+
+def _write_blob_cache(url, etag, body):
+    """Persist bytes + ETag. Bytes first (temp+fsync+rename), meta LAST, so a present meta
+    implies complete bytes. Best-effort: a write failure never breaks the fetch."""
+    if not (_BLOB_CACHE_ENABLED and etag):
+        return
+    try:
+        os.makedirs(_BLOB_CACHE_DIR, exist_ok=True)
+        bin_path, meta_path = _blob_cache_paths(url)
+        tmp = bin_path + ".tmp"
+        with open(tmp, "wb") as f:
+            f.write(body)
+            f.flush()
+            os.fsync(f.fileno())
+        os.replace(tmp, bin_path)
+        with open(meta_path, "w") as f:
+            json.dump({"etag": etag, "length": len(body)}, f)
+    except Exception as _e:
+        print(f"⚠️ blob cache write skipped for {url}: {_e}")
+
 def safe_fetch_csv(url, attempts=3):
     """Fetch a LIS blob CSV (HISTORY.CSV / DOCKET.CSV) with completeness guards.
 
@@ -2537,27 +2596,48 @@ def safe_fetch_csv(url, attempts=3):
          before we trust the parse. On exhaustion return an EMPTY frame, which
          the caller treats as a hard fetch failure (CRITICAL alert + the
          Sheet1-write is gated so last-known-good is preserved, not collapsed).
+
+    LIS-safety guardrail #1 (2026-06-17): sends If-None-Match with the cached ETag; on
+    304 Azure GUARANTEES byte-identity, so we reuse the cached bytes and skip the multi-MB
+    transfer. The reused bytes still pass the SAME completeness/marker checks as a fresh
+    download, so a corrupt/stale cache can never yield bad data — any failure drops the cache
+    and falls back to a full unconditional GET. The parsed DataFrame is identical to a fresh
+    download; this only cuts upstream bytes, never accuracy. See lis_api_safety.md.
     """
     last_err = None
+    cached_etag, cached_body = _read_blob_cache(url)
     for attempt in range(1, attempts + 1):
         try:
-            res = requests.get(url, timeout=60)
-            if res.status_code != 200:
+            res = requests.get(url, timeout=60,
+                               headers={"If-None-Match": cached_etag} if cached_etag else {})
+            if res.status_code == 304 and cached_body is not None:
+                body, from_cache = cached_body, True
+            elif res.status_code == 200:
+                body, from_cache = res.content, False
+                # Completeness check: a short body == truncated download.
+                declared = res.headers.get("Content-Length")
+                if declared is not None:
+                    try:
+                        declared_n = int(declared)
+                        if len(body) < declared_n:
+                            last_err = f"truncated body {len(body)}/{declared_n} bytes"
+                            print(f"⚠️ CSV truncated for {url}: {last_err} (attempt {attempt}/{attempts})")
+                            continue
+                    except (ValueError, TypeError):
+                        pass  # unparseable header — fall through to content checks
+            else:
+                # 304 with no usable cache (we only send If-None-Match when we HAVE the bytes,
+                # so this is a corrupt-cache edge) or any non-200: drop the cache and retry
+                # UNCONDITIONALLY — fail-safe is always a full download.
+                cached_etag, cached_body = None, None
                 last_err = f"HTTP {res.status_code}"
                 continue
-            body = res.content
-            # Completeness check: a short body == truncated download.
-            declared = res.headers.get("Content-Length")
-            if declared is not None:
-                try:
-                    declared_n = int(declared)
-                    if len(body) < declared_n:
-                        last_err = f"truncated body {len(body)}/{declared_n} bytes"
-                        print(f"⚠️ CSV truncated for {url}: {last_err} (attempt {attempt}/{attempts})")
-                        continue
-                except (ValueError, TypeError):
-                    pass  # unparseable header — fall through to content checks
+            # Marker check applies to BOTH fresh AND reused bytes — a junk cache falls back.
             if b'BillNumber' not in body and b'HistoryDate' not in body and b'Committee' not in body:
+                if from_cache:
+                    cached_etag, cached_body = None, None  # cached body is junk → unconditional retry
+                    last_err = "cached body failed CSV marker check"
+                    continue
                 # 200 but not a recognizable CSV (e.g., an error page) — empty.
                 return pd.DataFrame()
             # dtype=str + keep_default_na=False: zero-trust against pandas type-inference (the #1
@@ -2570,6 +2650,12 @@ def safe_fetch_csv(url, attempts=3):
             # PARSED values — to_datetime("")==NaT just like NaN — never a raw column), so all-string
             # is safe and correct. Verified zero regression: identical RefidClass over 65,367 rows.
             df = pd.read_csv(io.StringIO(body.decode('iso-8859-1')), dtype=str, keep_default_na=False)
+            if from_cache:
+                blob_cache_stats["reuse_304"] += 1
+                print(f"♻️  blob cache HIT — 304, reused {len(body)//1024} KB (no re-download): {url}")
+            else:
+                blob_cache_stats["download_200"] += 1
+                _write_blob_cache(url, res.headers.get("ETag"), body)
             return df.rename(columns=lambda x: x.strip())
         except Exception as e:
             last_err = str(e)
