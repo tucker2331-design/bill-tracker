@@ -5443,6 +5443,11 @@ def run_calendar_update():
                 blob_cache_stats["reuse_304"] += 1
                 print(f"♻️  blob cache HIT — 304, reused {len(_v_bytes)//1024} KB (no re-download): {_vote_url}")
             else:
+                # 304 with NO usable cache (race/eviction) hands back an EMPTY body that
+                # raise_for_status() does NOT reject (304 is 3xx) — re-GET UNCONDITIONALLY first
+                # so we never overwrite the cache with empty bytes (Gemini #154 critical).
+                if _vr.status_code == 304:
+                    _vr = http_session.get(_vote_url, headers=HEADERS, timeout=60)
                 _vr.raise_for_status()   # non-200 (404/500) -> except below, a DISTINCT "fetch failed" alert
                 _v_bytes = _vr.content
                 blob_cache_stats["download_200"] += 1
