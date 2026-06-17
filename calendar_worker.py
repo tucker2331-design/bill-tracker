@@ -2437,6 +2437,29 @@ def _persist_legevent_cache(
 # === END PR-C7 helper block ================================================
 
 
+# ── LIS-safety guardrail #4: hard request ceiling (runaway guard) ──
+# A response hook on the shared session counts every request it makes; if a SINGLE cycle
+# ever exceeds LIS_REQUEST_CAP we ABORT rather than keep hammering LIS. The cap sits far
+# above the worst HEALTHY cycle (even a cold-cache LegEvent hydration is a few thousand
+# requests, and the Backfill Burst batches per process), so it trips only on a genuine
+# runaway (e.g. an infinite loop), never on normal operation (Pre-Push Audit #14
+# calibration). Scope note: gspread/Sheets use their own session (not counted); blob fetches
+# via safe_fetch_csv are bare-requests + bounded (attempts<=3). See docs/knowledge/lis_api_safety.md.
+LIS_REQUEST_CAP = max(0, int(os.environ.get("LIS_REQUEST_CAP", "15000") or "0"))  # 0 disables
+lis_request_count = {"n": 0}
+
+class LisRequestCapExceeded(BaseException):
+    """A single cycle exceeded LIS_REQUEST_CAP. Inherits BaseException so it bypasses the
+    worker's `except Exception` blocks and aborts cleanly to __main__ (never locally swallowed)."""
+
+def _lis_request_counter_hook(resp, *args, **kwargs):
+    lis_request_count["n"] += 1
+    if LIS_REQUEST_CAP and lis_request_count["n"] > LIS_REQUEST_CAP:
+        raise LisRequestCapExceeded(
+            f"{lis_request_count['n']} session requests in one cycle exceeds the cap of "
+            f"{LIS_REQUEST_CAP} — aborting to protect the LIS API (likely a runaway loop).")
+    return resp
+
 def get_armored_session():
     session = requests.Session()
     session.headers.update({'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/120.0.0.0 Safari/537.36'})
@@ -2444,6 +2467,7 @@ def get_armored_session():
     adapter = HTTPAdapter(max_retries=retries)
     session.mount('http://', adapter)
     session.mount('https://', adapter)
+    session.hooks['response'].append(_lis_request_counter_hook)  # guardrail #4: count + cap
     return session
 
 def get_active_session_info(http_session):
@@ -6912,4 +6936,17 @@ if __name__ == "__main__":
                 f"overnight). Manual dispatch and the Backfill Burst bypass this gate."
             )
             sys.exit(0)
-    run_calendar_update()
+    # LIS-safety guardrail #4: a runaway request loop aborts the cycle via LisRequestCapExceeded
+    # (BaseException → bypasses inner excepts). Surface it loudly (Slack + non-zero exit → GitHub
+    # failure email) and stop; Sheet1 keeps last-known-good (we never wrote a partial output).
+    try:
+        run_calendar_update()
+        print(f"📊 LIS session requests this cycle: {lis_request_count['n']} (cap {LIS_REQUEST_CAP}).")
+    except LisRequestCapExceeded as _cap_err:
+        print(f"🚨 CRITICAL — {_cap_err}")
+        try:
+            notify_slack(f"🚨 CRITICAL — LIS request cap exceeded: {_cap_err} Cycle aborted; "
+                         f"Sheet1 unchanged (last-known-good preserved). Investigate for a runaway loop.")
+        except Exception:
+            pass
+        sys.exit(1)
