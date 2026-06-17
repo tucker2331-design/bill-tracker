@@ -6919,7 +6919,10 @@ if __name__ == "__main__":
         # immediate) so our arrival is decorrelated from the tick. Tiny vs the 3h interval and
         # harmless at higher cadence (the concurrency lock still serializes cycles). Configurable
         # via JITTER_MAX_SECONDS; 0 disables. See docs/knowledge/lis_api_safety.md.
-        _jitter_max = max(0, int(os.environ.get("JITTER_MAX_SECONDS", "180") or "0"))
+        try:
+            _jitter_max = max(0, int(os.environ.get("JITTER_MAX_SECONDS", "180")))
+        except (ValueError, TypeError):
+            _jitter_max = 180  # a malformed env var must never crash the scheduled run (Gemini #155)
         if _jitter_max:
             _jitter = random.randint(0, _jitter_max)
             print(f"🎲 Jitter (guardrail #2): sleeping {_jitter}s (of max {_jitter_max}s) before "
