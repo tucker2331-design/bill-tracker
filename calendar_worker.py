@@ -161,7 +161,11 @@ def _stm_incremental_shadow(full_events, current_hashes, shared_changed, prev_ca
     incr_keys, n_reused, n_recomputed = [], 0, 0
     for bill in set(full_keys_by_bill) | set(current_hashes) | set(prev_cache):
         cached = prev_cache.get(bill)
+        # A malformed cache entry (events not a list — e.g. a JSON parse failure set it to
+        # None) must RECOMPUTE, not reuse-as-empty: reusing it would silently drop that
+        # bill's events and false-flag a divergence (Gemini #151).
         reusable = (not shared_changed) and isinstance(cached, dict) \
+            and isinstance(cached.get("events"), list) \
             and current_hashes.get(bill, "\x00MISSING") == cached.get("hash")
         if reusable:
             _cev = cached.get("events")
@@ -5894,6 +5898,7 @@ def run_calendar_update():
                     "conv=" + _sha("\x1f".join(
                         f"{d}|{ch}|{(convene_times.get(d) or {}).get(ch, {}).get('Time','')}"
                         f"|{(convene_times.get(d) or {}).get(ch, {}).get('SortTime','')}"
+                        f"|{(convene_times.get(d) or {}).get(ch, {}).get('Name','')}"   # Name -> event Committee (Gemini #151)
                         for d in sorted(convene_times) for ch in sorted(convene_times.get(d) or {}))),
                 )
                 _bill_cache, _bill_cache_ws, _bill_cache_ok, _prev_shared_sig = _load_stm_bill_cache(sheet)
