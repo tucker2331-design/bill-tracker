@@ -2572,6 +2572,13 @@ def _write_blob_cache(url, etag, body):
             f.write(body)
             f.flush()
             os.fsync(f.fileno())
+        # Remove the OLD meta before swapping in the new bytes (Gemini #153 r3): if the meta
+        # write then fails, we're left with new bytes + NO meta = a clean miss, never new bytes
+        # paired with a stale ETag. _read also length-checks, but this removes the window entirely.
+        try:
+            os.remove(meta_path)
+        except FileNotFoundError:
+            pass
         os.replace(bin_tmp, bin_path)
         with open(meta_tmp, "w") as f:         # meta write is atomic too (Gemini #153): a partial
             json.dump({"etag": etag, "length": len(body)}, f)   # meta reads as a miss anyway, but
@@ -2618,6 +2625,7 @@ def safe_fetch_csv(url, attempts=3):
     last_err = None
     cached_etag, cached_body = _read_blob_cache(url)
     for attempt in range(1, attempts + 1):
+        from_cache = False                     # reset per attempt so the except below reflects THIS try
         try:
             res = requests.get(url, timeout=60,
                                headers={"If-None-Match": cached_etag} if cached_etag else {})
@@ -2669,6 +2677,8 @@ def safe_fetch_csv(url, attempts=3):
                 _write_blob_cache(url, res.headers.get("ETag"), body)
             return df.rename(columns=lambda x: x.strip())
         except Exception as e:
+            if from_cache:                     # decode/parse blew up on the CACHED body (Gemini #153 r3):
+                cached_etag, cached_body = None, None  # drop it so the retry downloads fresh, not 304-loops
             last_err = str(e)
             print(f"⚠️ CSV fetch failed for {url}: {e} (attempt {attempt}/{attempts})")
     print(f"⚠️ CSV fetch exhausted {attempts} attempts for {url}: {last_err}")

@@ -32,8 +32,7 @@ def reset(tmp, enabled=True):
     cw.blob_cache_stats["reuse_304"] = 0
     cw.blob_cache_stats["download_200"] = 0
 
-def main():
-    tmp = tempfile.mkdtemp()
+def main(tmp):
     fails = []
 
     # 1) cold: 200 download → DataFrame + cache write, no If-None-Match sent
@@ -85,11 +84,14 @@ def main():
     if etag_read is not None: fails.append("5: length-mismatched cache should read as miss")
 
     if fails:
-        shutil.rmtree(tmp, ignore_errors=True)
         print("❌ FAILURES:")
         for x in fails: print("   -", x)
         sys.exit(1)
-    shutil.rmtree(tmp, ignore_errors=True)   # clean up the temp cache dir (Gemini #153 r2)
     print("✅ all blob-cache tests passed (200-write, 304-reuse, corrupt-fallback, kill-switch, length-guard)")
 
-main()
+if __name__ == "__main__":
+    _tmp = tempfile.mkdtemp()
+    try:
+        main(_tmp)
+    finally:
+        shutil.rmtree(_tmp, ignore_errors=True)   # always clean up the temp cache dir (Gemini #153)
