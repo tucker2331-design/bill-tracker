@@ -123,13 +123,17 @@ _STM_EVENT_INT_FIELDS = ("AgendaOrder",)
 
 def _reconstruct_stm_event(key):
     """Rebuild a full event dict from a cached _stm_event_key tuple/list, restoring int fields
-    so a reused bill's row is byte-identical to a freshly-computed one."""
-    ev = dict(zip(_STM_EVENT_KEY_FIELDS, tuple(key) if isinstance(key, list) else key))
+    so a reused bill's row is byte-identical to a freshly-computed one. A malformed key (None /
+    str / wrong length from a corrupt or older-schema cache) yields {} — the caller skips it."""
+    if not isinstance(key, (list, tuple)):
+        return {}                              # corrupt cache row → skip, never crash (Gemini #157)
+    ev = dict(zip(_STM_EVENT_KEY_FIELDS, tuple(key)))
     for _f in _STM_EVENT_INT_FIELDS:
-        try:
-            ev[_f] = int(ev[_f])
-        except (ValueError, TypeError):
-            pass  # leave as-is if somehow non-numeric (e.g. an I1-filled "") — matches the full run
+        if _f in ev:                           # a truncated key may lack the field → no KeyError (Gemini #157)
+            try:
+                ev[_f] = int(ev[_f])
+            except (ValueError, TypeError):
+                pass  # leave as-is if somehow non-numeric (e.g. an I1-filled "") — matches the full run
     return ev
 
 
@@ -6055,6 +6059,10 @@ def run_calendar_update():
             events from cache THROUGH _append_event — so every breaker counter (meeting_unsourced,
             rows_appended, invariant_violations) is reproduced exactly (they're functions of the
             event set). Events are the full 14-field tuples → lossless dict reconstruction."""
+            # .astype(str).str.strip() is NOT redundant (Gemini #157): legevent_history_hashes — and
+            # thus _incr_changed — is keyed by str(clean_bill).strip() (the groupby build), so the
+            # df_past side MUST use the same normalization or a changed bill with stray whitespace
+            # would miss the .isin and be wrongly reused STALE. Cheap (vectorized, once/cycle).
             _df_changed = df_past[df_past["CleanBill"].astype(str).str.strip().isin(_incr_changed)]
             _fh, _fm = run_sequential_turing_machine(_df_changed,
                 bill_locations={}, last_seen_date={}, _floor_miss_dates=_floor_miss_dates,
@@ -6062,8 +6070,10 @@ def run_calendar_update():
             for _cb, _entry in _incr_cache.items():
                 if _cb == _STM_CACHE_SHARED_SIG_KEY or _cb in _incr_changed:
                     continue
-                for _ek in _entry.get("events", []):
-                    _append_event(_reconstruct_stm_event(_ek))
+                for _ek in (_entry.get("events") or []):   # events may be None on a corrupt load (Gemini #157)
+                    _ev = _reconstruct_stm_event(_ek)
+                    if _ev:                                # skip a malformed (empty) reconstruction
+                        _append_event(_ev)
             return _fh, _fm
 
         if _incr_mode == "1" and _incr_ready:
@@ -6089,6 +6099,7 @@ def run_calendar_update():
                 _full_smc = dict(source_miss_counts)
                 _shadow_alerts = list(alert_rows)
                 _shadow_dedup = set(_alert_dedup_keys)
+                _shadow_fmd = Counter(_floor_miss_dates)               # the subset-STM mutates this by ref (Gemini #157)
                 del master_events[_pre_stm_len:]                       # isolate the incremental run
                 for _k in list(source_miss_counts):
                     source_miss_counts[_k] = _pre_stm_smc.get(_k, 0)
@@ -6107,6 +6118,7 @@ def run_calendar_update():
                     source_miss_counts[_k] = _full_smc.get(_k, 0)
                 alert_rows[:] = _shadow_alerts
                 _alert_dedup_keys.clear(); _alert_dedup_keys.update(_shadow_dedup)
+                _floor_miss_dates.clear(); _floor_miss_dates.update(_shadow_fmd)  # undo the shadow's mutation
                 if _ev_ok and not _tel_diff:
                     print(f"✅ INCREMENTAL-PRIMARY SHADOW MATCH — subset-STM({len(_incr_changed)} changed) + "
                           f"cache reuse == full STM: events AND breaker telemetry identical. Safe to flip to '1'.")

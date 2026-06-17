@@ -50,6 +50,17 @@ def main():
         fails.append(f"5: _STM_EVENT_INT_FIELDS changed to {cw._STM_EVENT_INT_FIELDS} — update this test "
                      f"and confirm reconstruction handles the new non-string field")
 
+    # 5b) malformed cache keys never crash — they reconstruct to {} (caller skips), and a
+    #     truncated key (missing AgendaOrder) doesn't KeyError (Gemini #157)
+    for bad in (None, "garbage", 42):
+        if cw._reconstruct_stm_event(bad) != {}:
+            fails.append(f"5b: malformed key {bad!r} must reconstruct to {{}}")
+    _short = cw._stm_event_key(_event(1))[:-8]   # drop trailing fields incl. AgendaOrder
+    try:
+        cw._reconstruct_stm_event(_short)        # must not raise (KeyError on AgendaOrder)
+    except Exception as e:
+        fails.append(f"5b: truncated key must not raise, got {type(e).__name__}")
+
     # 6) the shared-input signature is deterministic and sensitive to each input
     _dk = pd.DataFrame({"a": ["1", "2"]})
     base = dict(active_session="20261", df_docket=_dk, vote_id_set={"1", "2"},
