@@ -2445,7 +2445,10 @@ def _persist_legevent_cache(
 # runaway (e.g. an infinite loop), never on normal operation (Pre-Push Audit #14
 # calibration). Scope note: gspread/Sheets use their own session (not counted); blob fetches
 # via safe_fetch_csv are bare-requests + bounded (attempts<=3). See docs/knowledge/lis_api_safety.md.
-LIS_REQUEST_CAP = max(0, int(os.environ.get("LIS_REQUEST_CAP", "15000") or "0"))  # 0 disables
+try:
+    LIS_REQUEST_CAP = max(0, int(os.environ.get("LIS_REQUEST_CAP", "15000")))  # 0 disables
+except (ValueError, TypeError):
+    LIS_REQUEST_CAP = 15000  # malformed env var must never crash the worker (Gemini #155/#156)
 lis_request_count = {"n": 0}
 
 class LisRequestCapExceeded(BaseException):
