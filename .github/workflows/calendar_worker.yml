@@ -47,6 +47,19 @@ jobs:
           python -m pip install --upgrade pip
           pip install requests gspread google-auth pandas beautifulsoup4 pdfplumber
 
+      # LIS-safety guardrail #1: persist the conditional-fetch blob cache across runs so
+      # If-None-Match can return 304 and skip re-downloading unchanged blobs (the 4.7 MB
+      # HISTORY.CSV especially). Unique key + prefix restore-keys = "always save, restore
+      # the latest". Pure speed/courtesy; a cache miss just downloads normally. See
+      # docs/knowledge/lis_api_safety.md.
+      - name: Restore LIS blob cache
+        uses: actions/cache@v4
+        with:
+          path: .lis_blob_cache
+          key: lis-blob-cache-${{ github.run_id }}-${{ github.run_attempt }}
+          restore-keys: |
+            lis-blob-cache-
+
       - name: Run Backend Worker
         env:
           GCP_CREDENTIALS: ${{ secrets.GCP_CREDENTIALS }}
