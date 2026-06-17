@@ -5939,23 +5939,41 @@ def run_calendar_update():
             _rp_days, _rp_mismatch, _rp_details, _rp_secs = 0, 0, [], 0.0
             try:
                 _rp_t0 = time.perf_counter()
-                _all_days = sorted(pd.to_datetime(df_past["ParsedDate"], errors="coerce")
-                                   .dropna().dt.normalize().unique())
-                print(f"🎬 REPLAY SIM: {len(_all_days)} session-days, day-by-day (LOCAL, network-free)...")
-                _rp_cache = {}
-                for _day in _all_days:
-                    _df_d = df_past[df_past["ParsedDate"] <= _day]
-                    _hashes_d = {}
-                    for _cb, _grp in _df_d.groupby("CleanBill"):
-                        _b = str(_cb).strip()
-                        if not _b:
-                            continue
-                        _rt = []
-                        for _, _hr in _grp.iterrows():
-                            _dd = _hr["ParsedDate"].strftime("%Y-%m-%d") if pd.notna(_hr.get("ParsedDate")) else ""
-                            _rt.append((_dd, str(_hr.get(desc_col, "") or ""),
-                                        str(_hr.get(refid_col, "") or "") if refid_col else ""))
-                        _hashes_d[_b] = _hash_history_rows_for_bill(_rt)
+                _rp_stride = max(1, int(os.environ.get("STM_REPLAY_STRIDE", "5") or "5"))
+                # Pre-extract per-day row ADDITIONS in ONE pass (column zip — no groupby/
+                # iterrows on the growing slice every day, Gemini #152). Then walk days
+                # accumulating per-bill rows and re-hashing ONLY the bills that changed that
+                # day; run the (expensive) full STM + compare every Nth day (stride) so the
+                # ~90 STM re-runs — the real cost — drop to ~18.
+                _norm = df_past["ParsedDate"].dt.normalize()
+                _desc_vals = (df_past[desc_col].astype(str) if desc_col in df_past.columns
+                              else [""] * len(df_past))
+                _refid_vals = (df_past[refid_col].astype(str) if (refid_col and refid_col in df_past.columns)
+                               else [""] * len(df_past))
+                _day_adds = {}
+                for _bv, _dn, _pdv, _dv, _rv in zip(df_past["CleanBill"].astype(str), _norm,
+                                                    df_past["ParsedDate"], _desc_vals, _refid_vals):
+                    if pd.isna(_dn):
+                        continue
+                    _bb = _bv.strip()
+                    if not _bb:
+                        continue
+                    _ds = _pdv.strftime("%Y-%m-%d") if pd.notna(_pdv) else ""
+                    _day_adds.setdefault(_dn, []).append((_bb, (_ds, str(_dv or ""), str(_rv or ""))))
+                _all_days = sorted(_day_adds)
+                print(f"🎬 REPLAY SIM: {len(_all_days)} session-days (stride {_rp_stride}), LOCAL, network-free...")
+                _acc_rows, _acc_hash, _rp_cache = {}, {}, {}
+                for _di, _day in enumerate(_all_days):
+                    _changed = set()
+                    for _bb, _rt in _day_adds[_day]:                 # accumulate EVERY day (HISTORY-as-of-D exact)
+                        _acc_rows.setdefault(_bb, []).append(_rt)
+                        _changed.add(_bb)
+                    for _bb in _changed:                             # re-hash ONLY bills that changed today
+                        _acc_hash[_bb] = _hash_history_rows_for_bill(_acc_rows[_bb])
+                    if _di % _rp_stride != 0 and _di != len(_all_days) - 1:
+                        continue                                     # only CHECK (full STM + diff) on stride days
+                    _hashes_d = dict(_acc_hash)
+                    _df_d = df_past[_norm <= _day]
                     del master_events[_pre_stm_len:]                 # isolate this day's STM output
                     for _k in list(source_miss_counts):
                         source_miss_counts[_k] = 0
@@ -5968,11 +5986,11 @@ def run_calendar_update():
                         _rp_mismatch += 1
                         if len(_rp_details) < 5:
                             _rp_details.append((str(pd.Timestamp(_day).date()), len(_of), len(_oi)))
-                    _rp_cache, _byb = {}, {}                          # next day's reuse ground truth
+                    _rp_cache, _byb = {}, {}                          # next checkpoint's reuse ground truth
                     for _e in _full_d:
                         _byb.setdefault(_event_bill_key(_e), []).append(_stm_event_key(_e))
-                    for _b in set(_byb) | set(_hashes_d):
-                        _rp_cache[_b] = {"hash": _hashes_d.get(_b, ""), "events": _byb.get(_b, [])}
+                    for _bb in set(_byb) | set(_hashes_d):
+                        _rp_cache[_bb] = {"hash": _hashes_d.get(_bb, ""), "events": _byb.get(_bb, [])}
                 _rp_secs = time.perf_counter() - _rp_t0
             except Exception as _replay_err:
                 print(f"⚠️ Replay sim failed (observe-only, non-fatal): {_replay_err}")
@@ -5984,11 +6002,11 @@ def run_calendar_update():
                 _alert_dedup_keys.clear()
                 _alert_dedup_keys.update(_rp_dedup)
             if _rp_days and _rp_mismatch == 0:
-                print(f"🎬✅ REPLAY SIM PASSED — {_rp_days} session-days, incremental==full at EVERY step. The "
-                      f"engine reproduces the 2026 calendar day-by-day on real in-season deltas. ({_rp_secs:.0f}s)")
+                print(f"🎬✅ REPLAY SIM PASSED — {_rp_days} checkpoints across the session, incremental==full at "
+                      f"EVERY one. The engine reproduces the 2026 calendar on real in-season deltas. ({_rp_secs:.0f}s)")
             elif _rp_mismatch:
                 push_system_alert(
-                    f"REPLAY SIM: incremental != full on {_rp_mismatch}/{_rp_days} session-days — a HISTORY-delta "
+                    f"REPLAY SIM: incremental != full at {_rp_mismatch}/{_rp_days} session checkpoints — a HISTORY-delta "
                     f"reuse bug in the incremental engine. Sample (day, only-full, only-incr): {_rp_details}. "
                     f"Must NOT flip to incremental-primary until root-caused.",
                     status="CRITICAL", category="DATA_ANOMALY", severity="CRITICAL", dedup_key="stm_replay_mismatch")
