@@ -2571,8 +2571,12 @@ def _write_blob_cache(url, etag, body):
             f.flush()
             os.fsync(f.fileno())
         os.replace(tmp, bin_path)
-        with open(meta_path, "w") as f:
-            json.dump({"etag": etag, "length": len(body)}, f)
+        meta_tmp = meta_path + ".tmp"          # meta write is atomic too (Gemini #153): a partial
+        with open(meta_tmp, "w") as f:         # meta would read as a miss anyway, but temp+replace
+            json.dump({"etag": etag, "length": len(body)}, f)   # avoids leaving a corrupt meta on disk
+            f.flush()
+            os.fsync(f.fileno())
+        os.replace(meta_tmp, meta_path)
     except Exception as _e:
         print(f"⚠️ blob cache write skipped for {url}: {_e}")
 
