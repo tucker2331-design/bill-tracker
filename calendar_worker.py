@@ -3,6 +3,7 @@ import sys
 import json
 import time
 import random
+import threading
 import hashlib
 import requests
 import gspread
@@ -2452,6 +2453,8 @@ try:
 except (ValueError, TypeError):
     LIS_REQUEST_CAP = 15000  # malformed env var must never crash the worker (Gemini #155/#156)
 lis_request_count = {"n": 0}
+_lis_count_lock = threading.Lock()  # the increment is read-modify-write (not atomic) — guard it so a
+                                    # future concurrent use of the session can't lose counts (Gemini #156)
 
 class LisRequestCapExceeded(BaseException):
     """A single cycle exceeded LIS_REQUEST_CAP. Inherits BaseException so it bypasses the
@@ -2464,10 +2467,12 @@ class _CountingHTTPAdapter(HTTPAdapter):
     would count zero and the cap could never trip). One increment per logical request; aborts
     the cycle the moment the per-cycle cap is passed (without making the over-cap request)."""
     def send(self, request, *args, **kwargs):  # *args: full LSP compatibility with HTTPAdapter.send
-        lis_request_count["n"] += 1
-        if LIS_REQUEST_CAP and lis_request_count["n"] > LIS_REQUEST_CAP:
+        with _lis_count_lock:
+            lis_request_count["n"] += 1
+            _n = lis_request_count["n"]
+        if LIS_REQUEST_CAP and _n > LIS_REQUEST_CAP:
             raise LisRequestCapExceeded(
-                f"{lis_request_count['n']} session requests in one cycle exceeds the cap of "
+                f"{_n} session requests in one cycle exceeds the cap of "
                 f"{LIS_REQUEST_CAP} — aborting to protect the LIS API (likely a runaway loop).")
         return super().send(request, *args, **kwargs)
 
@@ -3792,7 +3797,8 @@ def run_sequential_turing_machine(df_past, *,
 
 
 def run_calendar_update():
-    lis_request_count["n"] = 0  # guardrail #4: reset the per-cycle request count at CYCLE start
+    with _lis_count_lock:
+        lis_request_count["n"] = 0  # guardrail #4: reset the per-cycle request count at CYCLE start
     http_session = get_armored_session()  # (not in the factory — robust if more sessions get created; Gemini #156)
     # Phase timing (operational visibility + the speed-audit profile). Prints elapsed per
     # phase with real perf_counter() deltas (so it survives GitHub's buffered-stdout flush,
