@@ -125,8 +125,8 @@ def _reconstruct_stm_event(key):
     """Rebuild a full event dict from a cached _stm_event_key tuple/list, restoring int fields
     so a reused bill's row is byte-identical to a freshly-computed one. A malformed key (None /
     str / wrong length from a corrupt or older-schema cache) yields {} — the caller skips it."""
-    if not isinstance(key, (list, tuple)):
-        return {}                              # corrupt cache row → skip, never crash (Gemini #157)
+    if not isinstance(key, (list, tuple)) or len(key) != len(_STM_EVENT_KEY_FIELDS):
+        return {}                              # corrupt / truncated / old-schema cache row → skip (Gemini #157)
     ev = dict(zip(_STM_EVENT_KEY_FIELDS, tuple(key)))
     for _f in _STM_EVENT_INT_FIELDS:
         if _f in ev:                           # a truncated key may lack the field → no KeyError (Gemini #157)
@@ -6106,12 +6106,26 @@ def run_calendar_update():
                 _run_incremental_into_master(0, 0)
                 _incr_events = list(master_events[_pre_stm_len:])
                 _ev_ok, _only_full, _only_incr = _stm_outputs_equivalent(_full_events, _incr_events)
+                # ACCURACY-CRITICAL counters — these feed the Section-9 circuit breaker. Reconstruction
+                # via _append_event reproduces them exactly, so a mismatch here is a real bug → CRITICAL.
                 _crit = ("meeting_unsourced", "rows_appended", "invariant_violations")
-                _tel_diff = {k: (_full_smc.get(k, 0) - _pre_stm_smc.get(k, 0),
-                                 source_miss_counts.get(k, 0) - _pre_stm_smc.get(k, 0))
-                             for k in _crit
-                             if (_full_smc.get(k, 0) - _pre_stm_smc.get(k, 0))
-                             != (source_miss_counts.get(k, 0) - _pre_stm_smc.get(k, 0))}
+                _crit_diff = {k: (_full_smc.get(k, 0) - _pre_stm_smc.get(k, 0),
+                                  source_miss_counts.get(k, 0) - _pre_stm_smc.get(k, 0))
+                              for k in _crit
+                              if (_full_smc.get(k, 0) - _pre_stm_smc.get(k, 0))
+                              != (source_miss_counts.get(k, 0) - _pre_stm_smc.get(k, 0))}
+                # FULL telemetry diff (every counter the STM moved this cycle + the floor scalars) —
+                # OBSERVE-ONLY. The incremental reproduces event-derived counters (route/class/origin/
+                # floor) but NOT per-row PROCESS counters (total_processed, dropped_noise, cache hits/
+                # misses, *_attempted, *_recovered) for reused bills — those are inherently irreproducible
+                # without re-processing. This surfaces the EXACT deltas on real data so reproduction can be
+                # built empirically (which to mirror, which are inherent) before flipping to '1'.
+                _all_keys = set(_full_smc) | set(source_miss_counts) | set(_pre_stm_smc)
+                _tel_all = {k: (_full_smc.get(k, 0) - _pre_stm_smc.get(k, 0),
+                                source_miss_counts.get(k, 0) - _pre_stm_smc.get(k, 0))
+                            for k in _all_keys
+                            if (_full_smc.get(k, 0) - _pre_stm_smc.get(k, 0))
+                            != (source_miss_counts.get(k, 0) - _pre_stm_smc.get(k, 0))}
                 del master_events[_pre_stm_len:]                       # RESTORE production (full output + telemetry)
                 master_events.extend(_full_events)
                 for _k in list(source_miss_counts):
@@ -6119,19 +6133,20 @@ def run_calendar_update():
                 alert_rows[:] = _shadow_alerts
                 _alert_dedup_keys.clear(); _alert_dedup_keys.update(_shadow_dedup)
                 _floor_miss_dates.clear(); _floor_miss_dates.update(_shadow_fmd)  # undo the shadow's mutation
-                if _ev_ok and not _tel_diff:
-                    print(f"✅ INCREMENTAL-PRIMARY SHADOW MATCH — subset-STM({len(_incr_changed)} changed) + "
-                          f"cache reuse == full STM: events AND breaker telemetry identical. Safe to flip to '1'.")
+                if _ev_ok and not _crit_diff:
+                    print(f"✅ INCREMENTAL-PRIMARY SHADOW MATCH — subset-STM({len(_incr_changed)} changed) + cache "
+                          f"reuse == full STM: CALENDAR + breaker telemetry identical. Non-breaker telemetry deltas "
+                          f"(observe-only, expected for reused bills): {_tel_all if _tel_all else 'none'}.")
                 else:
                     push_system_alert(
-                        f"INCREMENTAL-PRIMARY SHADOW DIVERGENCE: the incremental path would NOT reproduce the "
-                        f"full run — events only-full={len(_only_full)}, only-incr={len(_only_incr)}; breaker "
-                        f"telemetry deltas (full,incr)={_tel_diff}. Do NOT set STM_INCREMENTAL_PRIMARY=1 until "
-                        f"root-caused. only-full={_only_full[:2]}; only-incr={_only_incr[:2]}",
+                        f"INCREMENTAL-PRIMARY SHADOW DIVERGENCE: the incremental path would NOT reproduce the full "
+                        f"run — events only-full={len(_only_full)}, only-incr={len(_only_incr)}; BREAKER telemetry "
+                        f"deltas (full,incr)={_crit_diff}. Do NOT set STM_INCREMENTAL_PRIMARY=1 until root-caused. "
+                        f"only-full={_only_full[:2]}; only-incr={_only_incr[:2]}; all-telemetry-Δ={_tel_all}",
                         status="CRITICAL", category="DATA_ANOMALY", severity="CRITICAL",
                         dedup_key="stm_incremental_primary_divergence")
                     print(f"🚨 INCREMENTAL-PRIMARY SHADOW DIVERGENCE — events Δ=({len(_only_full)},{len(_only_incr)}), "
-                          f"telemetry Δ={_tel_diff} (SYSTEM_ALERT)")
+                          f"breaker Δ={_crit_diff} (SYSTEM_ALERT)")
             except Exception as _incr_shadow_err:
                 # observe-only: restore is best-effort; production already has the full output
                 print(f"⚠️ incremental-primary shadow failed (observe-only, non-fatal): {_incr_shadow_err}")
