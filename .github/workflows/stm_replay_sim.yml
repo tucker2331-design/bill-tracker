@@ -1,0 +1,38 @@
+name: 🎬 STM Replay Sim (day-by-day 2026 validation)
+
+# The strongest pre-2027 validation of the incremental STM: runs ONE normal worker
+# cycle, then replays the 2026 session at session-day checkpoints entirely in memory
+# (slicing the already-downloaded HISTORY), proving incremental==full at every checkpoint
+# on real in-season deltas. The STM is cache-lookup-only (ZERO network), so the replay
+# makes NO LIS calls — the only LIS contact is the single normal cycle's fetches. Manual
+# only; ~30 min in the background (STM_REPLAY_STRIDE). CRITICAL alert on divergence. See alerting.md.
+
+on:
+  workflow_dispatch:
+
+concurrency:
+  group: calendar-worker          # share the worker lock — never overlaps a real cycle
+  cancel-in-progress: false
+
+jobs:
+  replay:
+    runs-on: ubuntu-latest
+    timeout-minutes: 350          # generous ceiling; STM_REPLAY_STRIDE=1 (every day) can run ~hours
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+      - name: Install Dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install requests gspread google-auth pandas beautifulsoup4 pdfplumber
+      - name: Run worker + replay sim
+        env:
+          GCP_CREDENTIALS: ${{ secrets.GCP_CREDENTIALS }}
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+          STM_REPLAY_SIM: "1"
+          # Check every Nth session-day (the full STM re-run is the cost). 5 -> ~18
+          # checkpoints, ~30 min; set "1" for the exhaustive every-day replay (~hours).
+          STM_REPLAY_STRIDE: "5"
+        run: python calendar_worker.py
