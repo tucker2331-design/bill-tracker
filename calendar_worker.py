@@ -5431,10 +5431,28 @@ def run_calendar_update():
         # csv.reader. Vote id = the first column (a digit string like "26110000").
         # (_vote_id_set already initialised right after the HISTORY fetch — Gemini #146.)
         try:
-            _vr = http_session.get(f"https://lis.blob.core.windows.net/lisfiles/{blob_code}/VOTE.CSV",
-                                   headers=HEADERS, timeout=60)
-            _vr.raise_for_status()   # non-200 (404/500) -> except below, a DISTINCT "fetch failed" alert
-            for _vrow in csv.reader(io.StringIO(_vr.content.decode("utf-8", "replace"))):
+            _vote_url = f"https://lis.blob.core.windows.net/lisfiles/{blob_code}/VOTE.CSV"
+            # LIS-safety guardrail #1: conditional fetch (don't re-download unchanged VOTE.CSV).
+            # Reuses the blob-cache helpers; a 304 = Azure byte-identity guarantee → reuse cached
+            # bytes; the length-guarded cache + fail-safe full GET keep this accuracy-neutral.
+            _v_etag, _v_cached = _read_blob_cache(_vote_url)
+            _vr = http_session.get(_vote_url, timeout=60,
+                                   headers={**HEADERS, **({"If-None-Match": _v_etag} if _v_etag else {})})
+            if _vr.status_code == 304 and _v_cached is not None:
+                _v_bytes = _v_cached
+                blob_cache_stats["reuse_304"] += 1
+                print(f"♻️  blob cache HIT — 304, reused {len(_v_bytes)//1024} KB (no re-download): {_vote_url}")
+            else:
+                # 304 with NO usable cache (race/eviction) hands back an EMPTY body that
+                # raise_for_status() does NOT reject (304 is 3xx) — re-GET UNCONDITIONALLY first
+                # so we never overwrite the cache with empty bytes (Gemini #154 critical).
+                if _vr.status_code == 304:
+                    _vr = http_session.get(_vote_url, headers=HEADERS, timeout=60)
+                _vr.raise_for_status()   # non-200 (404/500) -> except below, a DISTINCT "fetch failed" alert
+                _v_bytes = _vr.content
+                blob_cache_stats["download_200"] += 1
+                _write_blob_cache(_vote_url, _vr.headers.get("ETag"), _v_bytes)
+            for _vrow in csv.reader(io.StringIO(_v_bytes.decode("utf-8", "replace"))):
                 if _vrow and _vrow[0].strip().isdigit():
                     _vote_id_set.add(_vrow[0].strip())
         except Exception as _ve:
