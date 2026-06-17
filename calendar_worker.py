@@ -5690,6 +5690,12 @@ def run_calendar_update():
             print("🔬 STM order-invariance oracle: re-running in BILL-grouped order...")
             _events_date = [dict(e) for e in master_events]
             _smc_snapshot = dict(source_miss_counts)
+            # Isolate the re-run's alert side-effects: snapshot + restore alert_rows and
+            # _alert_dedup_keys so the re-run (which reuses the real push_system_alert via
+            # the _append_event closure) can't pollute production alerts OR leak a dedup
+            # key that would suppress a LATER legitimate alert this cycle (Gemini #148).
+            _alert_rows_snapshot = list(alert_rows)
+            _dedup_keys_snapshot = set(_alert_dedup_keys)
             master_events.clear()
             for _k in list(source_miss_counts): source_miss_counts[_k] = 0
             # Group by CleanBill (the STM's per-bill key: bill_num = row['CleanBill']),
@@ -5708,8 +5714,10 @@ def run_calendar_update():
                 _floor_hit=0, _floor_miss=0, **_stm_shared_kwargs)
             _events_bill = list(master_events)
             _ok, _only_date, _only_bill = _stm_outputs_equivalent(_events_date, _events_bill)
-            master_events.clear(); master_events.extend(_events_date)            # RESTORE production output
+            master_events.clear(); master_events.extend(_events_date)            # RESTORE production state
             for _k in list(source_miss_counts): source_miss_counts[_k] = _smc_snapshot.get(_k, 0)
+            alert_rows[:] = _alert_rows_snapshot                                  # in-place: closure ref preserved
+            _alert_dedup_keys.clear(); _alert_dedup_keys.update(_dedup_keys_snapshot)
             if _ok:
                 print(f"✅ STM ORDER-INVARIANCE HOLDS — {len(_events_date)} events identical under date-order "
                       f"vs bill-order. Per-bill decomposition is OUTPUT-SAFE; the incremental STM is greenlit.")
