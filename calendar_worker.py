@@ -5922,6 +5922,77 @@ def run_calendar_update():
                                         legevent_history_hashes, _shared_sig, _bill_cache_ok)
             except Exception as _shadow_err:
                 print(f"⚠️ Incremental shadow check failed (observe-only, non-fatal): {_shadow_err}")
+
+        # ── INCREMENTAL-STM REPLAY SIM: day-by-day across the 2026 session (flag-gated) ──
+        # The strongest pre-2027 validation: replays the FULL session day by day (when bills
+        # actually changed), proving incremental==full at every step on real in-season deltas.
+        # 100% LOCAL — slices the already-downloaded HISTORY; run_sequential_turing_machine is
+        # cache-lookup-only (ZERO network), so the replay makes NO LIS calls. Snapshot+restore
+        # of master_events/source_miss_counts/alerts so it never perturbs the cycle (its own
+        # summary alert is raised AFTER the restore). Set repo var STM_REPLAY_SIM=1 + dispatch
+        # the stm_replay_sim workflow; it runs for ~hours in the background. See alerting.md.
+        if os.environ.get("STM_REPLAY_SIM") == "1":
+            _rp_events = list(master_events)
+            _rp_smc = dict(source_miss_counts)
+            _rp_alerts = list(alert_rows)
+            _rp_dedup = set(_alert_dedup_keys)
+            _rp_days, _rp_mismatch, _rp_details, _rp_secs = 0, 0, [], 0.0
+            try:
+                _rp_t0 = time.perf_counter()
+                _all_days = sorted(pd.to_datetime(df_past["ParsedDate"], errors="coerce")
+                                   .dropna().dt.normalize().unique())
+                print(f"🎬 REPLAY SIM: {len(_all_days)} session-days, day-by-day (LOCAL, network-free)...")
+                _rp_cache = {}
+                for _day in _all_days:
+                    _df_d = df_past[df_past["ParsedDate"] <= _day]
+                    _hashes_d = {}
+                    for _cb, _grp in _df_d.groupby("CleanBill"):
+                        _b = str(_cb).strip()
+                        if not _b:
+                            continue
+                        _rt = []
+                        for _, _hr in _grp.iterrows():
+                            _dd = _hr["ParsedDate"].strftime("%Y-%m-%d") if pd.notna(_hr.get("ParsedDate")) else ""
+                            _rt.append((_dd, str(_hr.get(desc_col, "") or ""),
+                                        str(_hr.get(refid_col, "") or "") if refid_col else ""))
+                        _hashes_d[_b] = _hash_history_rows_for_bill(_rt)
+                    del master_events[_pre_stm_len:]                 # isolate this day's STM output
+                    for _k in list(source_miss_counts):
+                        source_miss_counts[_k] = 0
+                    run_sequential_turing_machine(_df_d, bill_locations={}, last_seen_date={},
+                        _floor_miss_dates=Counter(), _floor_hit=0, _floor_miss=0, **_stm_shared_kwargs)
+                    _full_d = list(master_events[_pre_stm_len:])
+                    _m, _of, _oi, _r, _rc = _stm_incremental_shadow(_full_d, _hashes_d, False, _rp_cache)
+                    _rp_days += 1
+                    if not _m:
+                        _rp_mismatch += 1
+                        if len(_rp_details) < 5:
+                            _rp_details.append((str(pd.Timestamp(_day).date()), len(_of), len(_oi)))
+                    _rp_cache, _byb = {}, {}                          # next day's reuse ground truth
+                    for _e in _full_d:
+                        _byb.setdefault(_event_bill_key(_e), []).append(_stm_event_key(_e))
+                    for _b in set(_byb) | set(_hashes_d):
+                        _rp_cache[_b] = {"hash": _hashes_d.get(_b, ""), "events": _byb.get(_b, [])}
+                _rp_secs = time.perf_counter() - _rp_t0
+            except Exception as _replay_err:
+                print(f"⚠️ Replay sim failed (observe-only, non-fatal): {_replay_err}")
+            finally:                                                 # ALWAYS restore the production cycle
+                master_events[:] = _rp_events
+                for _k in list(source_miss_counts):
+                    source_miss_counts[_k] = _rp_smc.get(_k, 0)
+                alert_rows[:] = _rp_alerts
+                _alert_dedup_keys.clear()
+                _alert_dedup_keys.update(_rp_dedup)
+            if _rp_days and _rp_mismatch == 0:
+                print(f"🎬✅ REPLAY SIM PASSED — {_rp_days} session-days, incremental==full at EVERY step. The "
+                      f"engine reproduces the 2026 calendar day-by-day on real in-season deltas. ({_rp_secs:.0f}s)")
+            elif _rp_mismatch:
+                push_system_alert(
+                    f"REPLAY SIM: incremental != full on {_rp_mismatch}/{_rp_days} session-days — a HISTORY-delta "
+                    f"reuse bug in the incremental engine. Sample (day, only-full, only-incr): {_rp_details}. "
+                    f"Must NOT flip to incremental-primary until root-caused.",
+                    status="CRITICAL", category="DATA_ANOMALY", severity="CRITICAL", dedup_key="stm_replay_mismatch")
+                print(f"🎬🚨 REPLAY SIM FAILED — {_rp_mismatch}/{_rp_days} days diverged. Sample: {_rp_details}")
     # === CONVENE TIME GAP REPORT ===
     scrape_start_str = scrape_start.strftime('%Y-%m-%d')
     print(f"📊 Convene times populated for {len(convene_times)} dates total")
