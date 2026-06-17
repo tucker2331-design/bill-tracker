@@ -56,4 +56,11 @@ jobs:
           # SLACK_WEBHOOK_URL to a Slack Incoming Webhook URL to activate.
           # See docs/architecture/alerting.md.
           SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+          # Incremental-STM SHADOW validation (observe-only). Set repo VARIABLE
+          # STM_INCREMENTAL_SHADOW="1" to validate, on the real production cycles, that
+          # reusing unchanged bills' cached events == the full run (it never changes the
+          # output — just logs MATCH and raises a CRITICAL on any divergence). Runs ON the
+          # production worker (no extra cycle, no extra LIS load) for a validation window,
+          # then unset before the flip to incremental-primary. Off when the var is unset.
+          STM_INCREMENTAL_SHADOW: ${{ vars.STM_INCREMENTAL_SHADOW }}
         run: python calendar_worker.py
