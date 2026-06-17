@@ -90,6 +90,34 @@ def _df_content_hash(df):
         return f"HASHERR:{type(e).__name__}"
 
 
+# ── Incremental-STM oracle: cross-bill ORDER-INVARIANCE check ──────────────────
+# The incremental engine (reprocess only changed bills, reuse the rest) is correct
+# IFF a bill's events depend only on that bill's rows + the shared read-only inputs,
+# NOT on how bills interleave with each other. We prove that directly: run the full
+# STM in date order AND in bill-grouped order on the SAME inputs; if the OUTPUT SETS
+# are identical, cross-bill order doesn't matter -> per-bill decomposition is sound.
+# Order-INDEPENDENT comparison (the two runs append in different orders by design).
+_STM_EVENT_KEY_FIELDS = ("Date", "Time", "SortTime", "Status", "Committee", "Bill",
+                         "Outcome", "AgendaOrder", "Source", "Origin",
+                         "DiagnosticHint", "LegEventRoute", "RefidClass", "ScheduleClass")
+
+
+def _stm_event_key(ev):
+    """Canonical, hashable identity of an STM event dict (all output-defining fields)."""
+    return tuple(str(ev.get(k, "")) for k in _STM_EVENT_KEY_FIELDS)
+
+
+def _stm_outputs_equivalent(events_a, events_b):
+    """True iff the two event lists are the SAME MULTISET (order-independent).
+    Returns (ok, only_in_a, only_in_b) where the diffs are sorted key-lists."""
+    from collections import Counter as _C
+    ka = _C(_stm_event_key(e) for e in events_a)
+    kb = _C(_stm_event_key(e) for e in events_b)
+    only_a = sorted((ka - kb).elements())
+    only_b = sorted((kb - ka).elements())
+    return (not only_a and not only_b), only_a, only_b
+
+
 # PR-C7.1b-1: the dictionary-free structural calendar-vs-ledger router.
 # Single source of truth at the repo root, imported by the worker AND the
 # validation tools — NO duplicated copy that can drift (the worker-vs-X-Ray
@@ -5618,9 +5646,9 @@ def run_calendar_update():
         if _admin_recovery_index:
             print(f"🗂️  EventType admin-recovery descriptions (LIS reference): {len(_admin_recovery_index)}.")
 
-        _floor_hit, _floor_miss = run_sequential_turing_machine(df_past,
-            bill_locations=bill_locations,
-            last_seen_date=last_seen_date,
+        # Shared READ-ONLY inputs (identical across the production run and the
+        # order-invariance re-run). Bundled so the oracle can't drift from the real call.
+        _stm_shared_kwargs = dict(
             api_schedule_map=api_schedule_map,
             docket_memory=docket_memory,
             convene_times=convene_times,
@@ -5633,7 +5661,6 @@ def run_calendar_update():
             _refid_fanout=_refid_fanout,
             committee_modal_standing=committee_modal_standing,
             adjourned_clock_by_date=adjourned_clock_by_date,
-            _floor_miss_dates=_floor_miss_dates,
             desc_col=desc_col,
             refid_col=refid_col,
             _session_code_5d=_session_code_5d,
@@ -5643,8 +5670,52 @@ def run_calendar_update():
             _classify_refid=_classify_refid,
             _normalize_refid=_normalize_refid,
             http_session=http_session,
+        )
+        _floor_hit, _floor_miss = run_sequential_turing_machine(df_past,
+            bill_locations=bill_locations,
+            last_seen_date=last_seen_date,
+            _floor_miss_dates=_floor_miss_dates,
             _floor_hit=_floor_hit,
-            _floor_miss=_floor_miss)
+            _floor_miss=_floor_miss,
+            **_stm_shared_kwargs)
+
+        # ── INCREMENTAL-STM ORACLE: cross-bill order-invariance (flag-gated) ─────
+        # Proves a bill's events depend only on its own rows + shared inputs, not on
+        # how bills interleave — the exact invariant the incremental engine rests on.
+        # Re-runs the STM in BILL-grouped order on the SAME inputs and asserts the
+        # output MULTISET is identical. OFF in production (doubles STM time); a
+        # dedicated CI job sets STM_ORDER_INVARIANCE_CHECK=1. Restores the production
+        # (date-order) output + telemetry afterward, so it never alters the cycle.
+        if os.environ.get("STM_ORDER_INVARIANCE_CHECK") == "1":
+            print("🔬 STM order-invariance oracle: re-running in BILL-grouped order...")
+            _events_date = [dict(e) for e in master_events]
+            _smc_snapshot = dict(source_miss_counts)
+            master_events.clear()
+            for _k in list(source_miss_counts): source_miss_counts[_k] = 0
+            _silent_kwargs = dict(_stm_shared_kwargs)
+            _silent_kwargs["push_system_alert"] = (lambda *a, **k: None)  # run-1 already raised real alerts
+            # Group by CleanBill — the STM's actual per-bill key (bill_num = row['CleanBill'],
+            # added at df-prep above), NOT the raw Bill_id — so bills group exactly as the
+            # per-bill state machine does, date-ordered within each bill.
+            run_sequential_turing_machine(
+                df_past.sort_values(["CleanBill", "ParsedDate"]).reset_index(drop=True),
+                bill_locations={}, last_seen_date={}, _floor_miss_dates=Counter(),
+                _floor_hit=0, _floor_miss=0, **_silent_kwargs)
+            _events_bill = list(master_events)
+            _ok, _only_date, _only_bill = _stm_outputs_equivalent(_events_date, _events_bill)
+            master_events.clear(); master_events.extend(_events_date)            # RESTORE production output
+            for _k in list(source_miss_counts): source_miss_counts[_k] = _smc_snapshot.get(_k, 0)
+            if _ok:
+                print(f"✅ STM ORDER-INVARIANCE HOLDS — {len(_events_date)} events identical under date-order "
+                      f"vs bill-order. Per-bill decomposition is OUTPUT-SAFE; the incremental STM is greenlit.")
+            else:
+                push_system_alert(
+                    f"STM ORDER-VARIANCE: per-bill decomposition is NOT output-identical to the full date-order run "
+                    f"— {len(_only_date)} event(s) only-in-date-order, {len(_only_bill)} only-in-bill-order. The "
+                    f"incremental STM must NOT ship until this hidden cross-bill dependency is root-caused. "
+                    f"only-date={_only_date[:2]}; only-bill={_only_bill[:2]}",
+                    status="CRITICAL", category="DATA_ANOMALY", severity="CRITICAL", dedup_key="stm_order_variance")
+                print(f"🚨 STM ORDER-VARIANCE — only-date={len(_only_date)}, only-bill={len(_only_bill)} (SYSTEM_ALERT raised)")
     # === CONVENE TIME GAP REPORT ===
     scrape_start_str = scrape_start.strftime('%Y-%m-%d')
     print(f"📊 Convene times populated for {len(convene_times)} dates total")
