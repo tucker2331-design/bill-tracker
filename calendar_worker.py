@@ -5985,7 +5985,7 @@ def run_calendar_update():
                     if not _m:
                         _rp_mismatch += 1
                         if len(_rp_details) < 5:
-                            _rp_details.append((str(pd.Timestamp(_day).date()), len(_of), len(_oi)))
+                            _rp_details.append((str(_day.date()), len(_of), len(_oi)))
                     _rp_cache, _byb = {}, {}                          # next checkpoint's reuse ground truth
                     for _e in _full_d:
                         _byb.setdefault(_event_bill_key(_e), []).append(_stm_event_key(_e))
