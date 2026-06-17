@@ -110,9 +110,8 @@ def _stm_event_key(ev):
 def _stm_outputs_equivalent(events_a, events_b):
     """True iff the two event lists are the SAME MULTISET (order-independent).
     Returns (ok, only_in_a, only_in_b) where the diffs are sorted key-lists."""
-    from collections import Counter as _C
-    ka = _C(_stm_event_key(e) for e in events_a)
-    kb = _C(_stm_event_key(e) for e in events_b)
+    ka = Counter(_stm_event_key(e) for e in events_a)   # Counter imported at module level
+    kb = Counter(_stm_event_key(e) for e in events_b)
     only_a = sorted((ka - kb).elements())
     only_b = sorted((kb - ka).elements())
     return (not only_a and not only_b), only_a, only_b
@@ -5698,13 +5697,12 @@ def run_calendar_update():
             _dedup_keys_snapshot = set(_alert_dedup_keys)
             master_events.clear()
             for _k in list(source_miss_counts): source_miss_counts[_k] = 0
-            # Group by CleanBill (the STM's per-bill key: bill_num = row['CleanBill']),
-            # preserving the PRODUCTION row order WITHIN each bill via _orig_order — so
-            # the ONLY difference from run 1 is cross-bill interleaving, NOT same-day
-            # tie order. That isolates exactly the invariant under test (Gemini #148):
-            # without the tiebreaker, same-(bill,date) rows could reorder and false-fail.
-            _df_bill = df_past.assign(_orig_order=range(len(df_past))).sort_values(
-                ["CleanBill", "_orig_order"]).reset_index(drop=True)
+            # Group by CleanBill (the STM's per-bill key: bill_num = row['CleanBill']).
+            # A STABLE sort preserves each bill's PRODUCTION (date) row order within the
+            # group, so the ONLY difference from run 1 is cross-bill interleaving, NOT
+            # same-day tie order — which is exactly the invariant under test (Gemini #148):
+            # without stability, same-(bill,date) rows could reorder and false-fail.
+            _df_bill = df_past.sort_values("CleanBill", kind="stable").reset_index(drop=True)
             # The re-run reuses the REAL push_system_alert (via _stm_shared_kwargs):
             # _append_event is a closure over it and can't be swapped, and re-run alerts
             # dedup against run 1's by dedup_key, so no duplicate SYSTEM_ALERTs (Gemini #148).
