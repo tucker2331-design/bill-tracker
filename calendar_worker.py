@@ -5670,6 +5670,12 @@ def run_calendar_update():
             _normalize_refid=_normalize_refid,
             http_session=http_session,
         )
+        # Phase-1 (schedule/docket/chamber) events are ALREADY in master_events; the STM
+        # appends ON TOP. Capture the baseline length so the oracle compares only the STM's
+        # OWN contribution (master_events[_pre_stm_len:]), not the shared phase-1 prefix —
+        # the first oracle run flagged 2,493 phantom "only-date" events that were just the
+        # phase-1 prefix the re-run's reset had dropped (run 27660470113).
+        _pre_stm_len = len(master_events)
         _floor_hit, _floor_miss = run_sequential_turing_machine(df_past,
             bill_locations=bill_locations,
             last_seen_date=last_seen_date,
@@ -5687,7 +5693,7 @@ def run_calendar_update():
         # (date-order) output + telemetry afterward, so it never alters the cycle.
         if os.environ.get("STM_ORDER_INVARIANCE_CHECK") == "1":
             print("🔬 STM order-invariance oracle: re-running in BILL-grouped order...")
-            _events_date = [dict(e) for e in master_events]
+            _events_date = [dict(e) for e in master_events[_pre_stm_len:]]   # STM's date-order contribution ONLY
             _smc_snapshot = dict(source_miss_counts)
             # Isolate the re-run's alert side-effects: snapshot + restore alert_rows and
             # _alert_dedup_keys so the re-run (which reuses the real push_system_alert via
@@ -5695,7 +5701,7 @@ def run_calendar_update():
             # key that would suppress a LATER legitimate alert this cycle (Gemini #148).
             _alert_rows_snapshot = list(alert_rows)
             _dedup_keys_snapshot = set(_alert_dedup_keys)
-            master_events.clear()
+            del master_events[_pre_stm_len:]      # keep the phase-1 baseline; drop only the STM's date-order events
             for _k in list(source_miss_counts): source_miss_counts[_k] = 0
             # Group by CleanBill (the STM's per-bill key: bill_num = row['CleanBill']).
             # A STABLE sort preserves each bill's PRODUCTION (date) row order within the
@@ -5710,9 +5716,9 @@ def run_calendar_update():
                 _df_bill,
                 bill_locations={}, last_seen_date={}, _floor_miss_dates=Counter(),
                 _floor_hit=0, _floor_miss=0, **_stm_shared_kwargs)
-            _events_bill = list(master_events)
+            _events_bill = list(master_events[_pre_stm_len:])                  # STM's bill-order contribution ONLY
             _ok, _only_date, _only_bill = _stm_outputs_equivalent(_events_date, _events_bill)
-            master_events.clear(); master_events.extend(_events_date)            # RESTORE production state
+            del master_events[_pre_stm_len:]; master_events.extend(_events_date)   # RESTORE production (baseline + date-order STM)
             for _k in list(source_miss_counts): source_miss_counts[_k] = _smc_snapshot.get(_k, 0)
             alert_rows[:] = _alert_rows_snapshot                                  # in-place: closure ref preserved
             _alert_dedup_keys.clear(); _alert_dedup_keys.update(_dedup_keys_snapshot)
