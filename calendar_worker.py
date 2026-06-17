@@ -2438,8 +2438,9 @@ def _persist_legevent_cache(
 
 
 # ── LIS-safety guardrail #4: hard request ceiling (runaway guard) ──
-# A response hook on the shared session counts every request it makes; if a SINGLE cycle
-# ever exceeds LIS_REQUEST_CAP we ABORT rather than keep hammering LIS. The cap sits far
+# A counting HTTP adapter (_CountingHTTPAdapter) tallies every request the shared session
+# makes — in send(), before urllib3's retry loop; if a SINGLE cycle ever exceeds
+# LIS_REQUEST_CAP we ABORT rather than keep hammering LIS. The cap sits far
 # above the worst HEALTHY cycle (even a cold-cache LegEvent hydration is a few thousand
 # requests, and the Backfill Burst batches per process), so it trips only on a genuine
 # runaway (e.g. an infinite loop), never on normal operation (Pre-Push Audit #14
@@ -2455,22 +2456,28 @@ class LisRequestCapExceeded(BaseException):
     """A single cycle exceeded LIS_REQUEST_CAP. Inherits BaseException so it bypasses the
     worker's `except Exception` blocks and aborts cleanly to __main__ (never locally swallowed)."""
 
-def _lis_request_counter_hook(resp, *args, **kwargs):
-    lis_request_count["n"] += 1
-    if LIS_REQUEST_CAP and lis_request_count["n"] > LIS_REQUEST_CAP:
-        raise LisRequestCapExceeded(
-            f"{lis_request_count['n']} session requests in one cycle exceeds the cap of "
-            f"{LIS_REQUEST_CAP} — aborting to protect the LIS API (likely a runaway loop).")
-    return resp
+class _CountingHTTPAdapter(HTTPAdapter):
+    """Counts every LOGICAL upstream request in send() — BEFORE urllib3's internal retry loop —
+    so a call that exhausts its retries and RAISES is still counted (Codex #156 P1: a Requests
+    `response` hook fires only on a returned response, so a 429/5xx loop that exhausts retries
+    would count zero and the cap could never trip). One increment per logical request; aborts
+    the cycle the moment the per-cycle cap is passed (without making the over-cap request)."""
+    def send(self, request, **kwargs):
+        lis_request_count["n"] += 1
+        if LIS_REQUEST_CAP and lis_request_count["n"] > LIS_REQUEST_CAP:
+            raise LisRequestCapExceeded(
+                f"{lis_request_count['n']} session requests in one cycle exceeds the cap of "
+                f"{LIS_REQUEST_CAP} — aborting to protect the LIS API (likely a runaway loop).")
+        return super().send(request, **kwargs)
 
 def get_armored_session():
+    lis_request_count["n"] = 0  # fresh per-cycle count (Gemini #156): never accumulate across cycles
     session = requests.Session()
     session.headers.update({'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/120.0.0.0 Safari/537.36'})
     retries = Retry(total=4, backoff_factor=2, status_forcelist=[429, 500, 502, 503, 504])
-    adapter = HTTPAdapter(max_retries=retries)
+    adapter = _CountingHTTPAdapter(max_retries=retries)  # guardrail #4: count (in send) + cap
     session.mount('http://', adapter)
     session.mount('https://', adapter)
-    session.hooks['response'].append(_lis_request_counter_hook)  # guardrail #4: count + cap
     return session
 
 def get_active_session_info(http_session):
