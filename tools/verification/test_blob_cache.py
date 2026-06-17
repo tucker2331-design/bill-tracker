@@ -1,4 +1,4 @@
-import os, sys, tempfile, io
+import os, sys, tempfile, io, shutil
 import pandas as pd
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", ".."))
@@ -85,9 +85,11 @@ def main():
     if etag_read is not None: fails.append("5: length-mismatched cache should read as miss")
 
     if fails:
+        shutil.rmtree(tmp, ignore_errors=True)
         print("❌ FAILURES:")
         for x in fails: print("   -", x)
         sys.exit(1)
+    shutil.rmtree(tmp, ignore_errors=True)   # clean up the temp cache dir (Gemini #153 r2)
     print("✅ all blob-cache tests passed (200-write, 304-reuse, corrupt-fallback, kill-switch, length-guard)")
 
 main()

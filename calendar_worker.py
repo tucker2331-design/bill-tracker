@@ -2545,6 +2545,8 @@ def _read_blob_cache(url):
             return None, None
         with open(meta_path, "r") as f:
             meta = json.load(f)
+        if not isinstance(meta, dict):        # valid JSON but not an object (Gemini #153 r2) → miss
+            return None, None
         etag = meta.get("etag")
         length = meta.get("length")
         if not etag:
@@ -2562,23 +2564,28 @@ def _write_blob_cache(url, etag, body):
     implies complete bytes. Best-effort: a write failure never breaks the fetch."""
     if not (_BLOB_CACHE_ENABLED and etag):
         return
+    bin_path, meta_path = _blob_cache_paths(url)   # computed OUTSIDE the try so the except can
+    bin_tmp, meta_tmp = bin_path + ".tmp", meta_path + ".tmp"   # always clean up its temp files
     try:
         os.makedirs(_BLOB_CACHE_DIR, exist_ok=True)
-        bin_path, meta_path = _blob_cache_paths(url)
-        tmp = bin_path + ".tmp"
-        with open(tmp, "wb") as f:
+        with open(bin_tmp, "wb") as f:
             f.write(body)
             f.flush()
             os.fsync(f.fileno())
-        os.replace(tmp, bin_path)
-        meta_tmp = meta_path + ".tmp"          # meta write is atomic too (Gemini #153): a partial
-        with open(meta_tmp, "w") as f:         # meta would read as a miss anyway, but temp+replace
-            json.dump({"etag": etag, "length": len(body)}, f)   # avoids leaving a corrupt meta on disk
-            f.flush()
+        os.replace(bin_tmp, bin_path)
+        with open(meta_tmp, "w") as f:         # meta write is atomic too (Gemini #153): a partial
+            json.dump({"etag": etag, "length": len(body)}, f)   # meta reads as a miss anyway, but
+            f.flush()                          # temp+replace avoids leaving a corrupt meta on disk
             os.fsync(f.fileno())
         os.replace(meta_tmp, meta_path)
     except Exception as _e:
         print(f"⚠️ blob cache write skipped for {url}: {_e}")
+        for _t in (bin_tmp, meta_tmp):         # remove orphaned temp files on failure (Gemini #153 r2)
+            try:
+                if os.path.exists(_t):
+                    os.remove(_t)
+            except Exception:
+                pass
 
 def safe_fetch_csv(url, attempts=3):
     """Fetch a LIS blob CSV (HISTORY.CSV / DOCKET.CSV) with completeness guards.
