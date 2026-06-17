@@ -89,7 +89,7 @@ RETENTION_DAYS = {"Schedule_Witness": 90,
 # not by retention — they need no prune. Membership is asserted by behaviour
 # (they are rewritten each cycle), documented here so the "unrecognised large
 # tab" warning does not false-fire on them.
-BOUNDED_TABS = {"Sheet1", "LegEvent_Cache", "LegEvent_Events"}
+BOUNDED_TABS = {"Sheet1", "LegEvent_Cache", "LegEvent_Events", "STM_Bill_Cache"}
 UNRECOGNISED_TAB_ROW_WARN = 50_000  # a large tab we don't know the policy of -> WARN
 WASTED_GRID_MIN_ALLOCATED = 10_000  # only probe allocated-vs-populated on tabs this big
 

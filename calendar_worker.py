@@ -161,7 +161,11 @@ def _stm_incremental_shadow(full_events, current_hashes, shared_changed, prev_ca
     incr_keys, n_reused, n_recomputed = [], 0, 0
     for bill in set(full_keys_by_bill) | set(current_hashes) | set(prev_cache):
         cached = prev_cache.get(bill)
+        # A malformed cache entry (events not a list — e.g. a JSON parse failure set it to
+        # None) must RECOMPUTE, not reuse-as-empty: reusing it would silently drop that
+        # bill's events and false-flag a divergence (Gemini #151).
         reusable = (not shared_changed) and isinstance(cached, dict) \
+            and isinstance(cached.get("events"), list) \
             and current_hashes.get(bill, "\x00MISSING") == cached.get("hash")
         if reusable:
             _cev = cached.get("events")
@@ -178,6 +182,80 @@ def _stm_incremental_shadow(full_events, current_hashes, shared_changed, prev_ca
     only_full = sorted((fc - ic).elements())
     only_incr = sorted((ic - fc).elements())
     return (not only_full and not only_incr), only_full, only_incr, n_reused, n_recomputed
+
+
+# Per-bill event cache for the incremental engine: {bill -> (history_hash, event_keys)}.
+# Persisted each shadow cycle as the ground truth for the NEXT cycle's reuse check; later
+# (the flip) it's what the engine reads to reuse unchanged bills' events. Fail-safe like
+# the agenda cache: any error -> empty/skip -> recompute, never a crash or a wipe.
+STM_BILL_CACHE_TAB = "STM_Bill_Cache"
+STM_BILL_CACHE_HEADER = ["Bill", "HistoryHash", "EventsJSON"]
+
+
+_STM_CACHE_SHARED_SIG_KEY = "__SHARED_SIG__"   # special row holding the shared-input signature
+
+
+def _load_stm_bill_cache(sheet):
+    """Load {bill -> {"hash": str, "events": [key_lists]}} + the stored shared-input sig.
+    Returns (cache, ws, load_ok, prev_shared_sig). load_ok is False ONLY on a transient
+    open/read failure (so persist won't wipe a tab it couldn't read — agenda-cache guard,
+    Gemini #140). The shared sig is a special row (survives Sheet1's clear, unlike a state
+    cell). Never raises."""
+    try:
+        ws = sheet.worksheet(STM_BILL_CACHE_TAB)
+    except gspread.exceptions.WorksheetNotFound:
+        return {}, None, True, ""        # absent (first run) -> safe to create on persist
+    except Exception as e:
+        print(f"⚠️ STM_Bill_Cache open failed ({e}); shadow recomputes all this cycle.")
+        return {}, None, False, ""
+    try:
+        rows = ws.get_all_values() or []
+    except Exception as e:
+        print(f"⚠️ STM_Bill_Cache read failed ({e}); shadow recomputes all this cycle.")
+        return {}, ws, False, ""
+    cache, prev_shared_sig = {}, ""
+    for r in rows[1:]:                   # skip header
+        if not r or len(r) < 3 or not r[0]:
+            continue
+        bill = r[0].strip()
+        if bill == _STM_CACHE_SHARED_SIG_KEY:
+            prev_shared_sig = r[1]
+            continue
+        try:
+            events = json.loads(r[2]) if r[2] else []
+        except Exception:
+            events = None                # malformed -> _stm_incremental_shadow guards it (recompute)
+        cache[bill] = {"hash": r[1], "events": events}
+    return cache, ws, True, prev_shared_sig   # reached here => open + read succeeded
+
+
+def _persist_stm_bill_cache(sheet, ws, full_events, current_hashes, shared_sig, load_ok):
+    """Rewrite the cache from THIS cycle's full output (next cycle's reuse ground truth) +
+    the shared-input sig (special row). Skips on load failure (don't wipe a tab we couldn't
+    read). Chunked write (the events JSON can be large). Fail-safe: a write error just means
+    next shadow recomputes."""
+    if not load_ok:
+        print("⚠️ STM_Bill_Cache persist skipped — load failed this cycle (avoids wiping it).")
+        return
+    try:
+        by_bill = {}
+        for e in (full_events or []):
+            by_bill.setdefault(_event_bill_key(e), []).append(_stm_event_key(e))   # json.dumps serializes tuples natively
+        rows = [STM_BILL_CACHE_HEADER, [_STM_CACHE_SHARED_SIG_KEY, shared_sig, ""]]
+        for bill in sorted(set(by_bill) | set(current_hashes or {})):
+            rows.append([bill, (current_hashes or {}).get(bill, ""), json.dumps(by_bill.get(bill, []))])
+        if ws is None:
+            ws = sheet.add_worksheet(title=STM_BILL_CACHE_TAB,
+                                     rows=max(1000, len(rows) + 100), cols=len(STM_BILL_CACHE_HEADER))
+        elif len(rows) > ws.row_count:
+            ws.add_rows(len(rows) - ws.row_count + 100)
+        ws.clear()
+        _CHUNK = 1000                    # the EventsJSON cells are large; keep each request small
+        for i in range(0, len(rows), _CHUNK):
+            ws.update(values=rows[i:i + _CHUNK], range_name=f"A{i + 1}")
+        print(f"🗄️ STM_Bill_Cache: persisted {len(rows) - 1} bills for next-cycle reuse.")
+    except Exception as e:
+        print(f"⚠️ STM_Bill_Cache persist failed ({e}); next shadow recomputes (no harm).")
 
 
 # PR-C7.1b-1: the dictionary-free structural calendar-vs-ledger router.
@@ -5796,6 +5874,54 @@ def run_calendar_update():
                     f"only-date={_only_date[:2]}; only-bill={_only_bill[:2]}",
                     status="CRITICAL", category="DATA_ANOMALY", severity="CRITICAL", dedup_key="stm_order_variance")
                 print(f"🚨 STM ORDER-VARIANCE — only-date={len(_only_date)}, only-bill={len(_only_bill)} (SYSTEM_ALERT raised)")
+
+        # ── INCREMENTAL-STM SHADOW: prove cached-bill reuse == full, every cycle (flag-gated) ──
+        # Builds the incremental output from last cycle's per-bill cache + this cycle's full
+        # output and DIFFS it against full. OBSERVE-ONLY — production always uses the full
+        # output; this just validates, over many REAL cycles, that reusing an unchanged bill's
+        # cached events is safe BEFORE any flip to incremental-primary. Order-invariance is
+        # proven, so the only remaining risk is the shared-input dependency (a bill's TIME
+        # shifting when the schedule/docket/convene move) — which the shared-sig gate catches.
+        if os.environ.get("STM_INCREMENTAL_SHADOW") == "1":
+            try:
+                # Shared-input signature: everything that can change a bill's location/time
+                # EXCEPT its own HISTORY (that's the per-bill hash). Canonical hashes so a
+                # dict/row reorder can't false-trip it (the #146 lesson). If this moved since
+                # last cycle, NO bill is reusable (times may have shifted) -> full recompute.
+                _shared_sig = _sha(
+                    "v=" + WORKER_OUTPUT_LOGIC_VERSION,
+                    "sess=" + str(ACTIVE_SESSION),
+                    "dock=" + _df_content_hash(df_docket),
+                    "vote=" + (_sha("\x1f".join(sorted(_vote_id_set))) if _vote_id_set else "EMPTY"),
+                    "sched=" + _sha("\x1f".join(
+                        f"{k}|{sorted((api_schedule_map.get(k) or {}).items())}" for k in sorted(api_schedule_map))),
+                    "conv=" + _sha("\x1f".join(
+                        f"{d}|{ch}|{(convene_times.get(d) or {}).get(ch, {}).get('Time','')}"
+                        f"|{(convene_times.get(d) or {}).get(ch, {}).get('SortTime','')}"
+                        f"|{(convene_times.get(d) or {}).get(ch, {}).get('Name','')}"   # Name -> event Committee (Gemini #151)
+                        for d in sorted(convene_times) for ch in sorted(convene_times.get(d) or {}))),
+                )
+                _bill_cache, _bill_cache_ws, _bill_cache_ok, _prev_shared_sig = _load_stm_bill_cache(sheet)
+                _shared_changed = (not _prev_shared_sig) or (_shared_sig != _prev_shared_sig)
+                _stm_full_contribution = master_events[_pre_stm_len:]
+                _match, _of, _oi, _reused, _recomp = _stm_incremental_shadow(
+                    _stm_full_contribution, legevent_history_hashes, _shared_changed, _bill_cache)
+                if _match:
+                    print(f"✅ INCREMENTAL SHADOW MATCH — {_reused} bills reused, {_recomp} recomputed "
+                          f"(shared_changed={_shared_changed}); cached-bill reuse is SAFE this cycle.")
+                else:
+                    push_system_alert(
+                        f"INCREMENTAL SHADOW DIVERGENCE: reusing cached events would have produced a DIFFERENT "
+                        f"calendar — {len(_of)} only-in-full, {len(_oi)} only-in-incremental (reused={_reused}, "
+                        f"recomputed={_recomp}, shared_changed={_shared_changed}). The incremental engine must NOT "
+                        f"flip to primary until root-caused. only-full={_of[:2]}; only-incr={_oi[:2]}",
+                        status="CRITICAL", category="DATA_ANOMALY", severity="CRITICAL",
+                        dedup_key="stm_incremental_divergence")
+                    print(f"🚨 INCREMENTAL SHADOW DIVERGENCE — only-full={len(_of)}, only-incr={len(_oi)} (SYSTEM_ALERT)")
+                _persist_stm_bill_cache(sheet, _bill_cache_ws, _stm_full_contribution,
+                                        legevent_history_hashes, _shared_sig, _bill_cache_ok)
+            except Exception as _shadow_err:
+                print(f"⚠️ Incremental shadow check failed (observe-only, non-fatal): {_shadow_err}")
     # === CONVENE TIME GAP REPORT ===
     scrape_start_str = scrape_start.strftime('%Y-%m-%d')
     print(f"📊 Convene times populated for {len(convene_times)} dates total")
