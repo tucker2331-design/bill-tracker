@@ -103,7 +103,10 @@ _STM_EVENT_KEY_FIELDS = ("Date", "Time", "SortTime", "Status", "Committee", "Bil
 
 
 def _stm_event_key(ev):
-    """Canonical, hashable identity of an STM event dict (all output-defining fields)."""
+    """Canonical, hashable identity of an STM event dict (all output-defining fields).
+    A non-dict (e.g. a malformed cache row) yields an all-empty key, never a crash."""
+    if not isinstance(ev, dict):
+        return tuple("" for _ in _STM_EVENT_KEY_FIELDS)
     return tuple(str(ev.get(k, "")) for k in _STM_EVENT_KEY_FIELDS)
 
 
@@ -128,6 +131,8 @@ def _stm_outputs_equivalent(events_a, events_b):
 def _event_bill_key(ev):
     """The CleanBill the STM keyed this event on (no spaces, uppercase) — matches
     the legevent_history_hashes keys + df_past['CleanBill']."""
+    if not isinstance(ev, dict):
+        return ""
     return str(ev.get("Bill", "")).replace(" ", "").upper()
 
 
@@ -143,17 +148,24 @@ def _stm_incremental_shadow(full_events, current_hashes, shared_changed, prev_ca
     Returns (matches, only_in_full, only_in_incr, n_reused, n_recomputed). A reused bill
     contributes its CACHED keys; a recomputed bill contributes THIS cycle's full keys.
     If the engine is correct, a reused (unchanged) bill's cached keys equal its full keys,
-    so matches==True. Any mismatch is a real divergence to investigate BEFORE the flip."""
+    so matches==True. Any mismatch is a real divergence to investigate BEFORE the flip.
+
+    Defensive: prev_cache is loaded from a Sheet (parsed JSON) so it may be None or hold
+    malformed entries — a bad cache must degrade to "recompute", never crash (Gemini #150)."""
+    full_events = full_events or []
+    current_hashes = current_hashes or {}
+    prev_cache = prev_cache or {}
     full_keys_by_bill = {}
     for e in full_events:
         full_keys_by_bill.setdefault(_event_bill_key(e), []).append(_stm_event_key(e))
     incr_keys, n_reused, n_recomputed = [], 0, 0
     for bill in set(full_keys_by_bill) | set(current_hashes) | set(prev_cache):
         cached = prev_cache.get(bill)
-        reusable = (not shared_changed) and cached is not None \
+        reusable = (not shared_changed) and isinstance(cached, dict) \
             and current_hashes.get(bill, "\x00MISSING") == cached.get("hash")
         if reusable:
-            incr_keys.extend(cached.get("events", []))
+            _cev = cached.get("events")
+            incr_keys.extend(_cev if isinstance(_cev, list) else [])   # malformed -> empty -> mismatch caught, not crash
             n_reused += 1
         else:
             incr_keys.extend(full_keys_by_bill.get(bill, []))
