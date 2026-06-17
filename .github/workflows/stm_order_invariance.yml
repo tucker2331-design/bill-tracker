@@ -1,0 +1,37 @@
+name: 🔬 STM Order-Invariance Oracle
+
+# Proves the incremental-STM safety invariant on REAL data: runs the worker with
+# STM_ORDER_INVARIANCE_CHECK=1, which re-runs the STM in bill-grouped order and
+# asserts the output multiset is identical to the date-order run. If it ever differs,
+# the worker raises a CRITICAL SYSTEM_ALERT (and Slack) — the incremental engine must
+# NOT ship until that's root-caused. Manual/weekly; it doubles the STM time, so it's
+# kept OFF the production worker's hot path. See docs/ideas/future_improvements Step 6.
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '17 7 * * 1'   # weekly, Mondays 07:17 UTC (off the worker's :00 cadence)
+
+concurrency:
+  group: calendar-worker      # share the worker's lock so it never overlaps a real cycle
+  cancel-in-progress: false
+
+jobs:
+  order-invariance:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40       # the re-run doubles the STM phase
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+      - name: Install Dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install requests gspread google-auth pandas beautifulsoup4 pdfplumber
+      - name: Run worker with the order-invariance oracle enabled
+        env:
+          GCP_CREDENTIALS: ${{ secrets.GCP_CREDENTIALS }}
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+          STM_ORDER_INVARIANCE_CHECK: "1"
+        run: python calendar_worker.py
