@@ -236,13 +236,13 @@ def _persist_stm_bill_cache(sheet, ws, full_events, current_hashes, shared_sig, 
     try:
         by_bill = {}
         for e in (full_events or []):
-            by_bill.setdefault(_event_bill_key(e), []).append(list(_stm_event_key(e)))
+            by_bill.setdefault(_event_bill_key(e), []).append(_stm_event_key(e))   # json.dumps serializes tuples natively
         rows = [STM_BILL_CACHE_HEADER, [_STM_CACHE_SHARED_SIG_KEY, shared_sig, ""]]
         for bill in sorted(set(by_bill) | set(current_hashes or {})):
             rows.append([bill, (current_hashes or {}).get(bill, ""), json.dumps(by_bill.get(bill, []))])
         if ws is None:
             ws = sheet.add_worksheet(title=STM_BILL_CACHE_TAB,
-                                     rows=max(5000, len(rows) + 100), cols=len(STM_BILL_CACHE_HEADER))
+                                     rows=max(1000, len(rows) + 100), cols=len(STM_BILL_CACHE_HEADER))
         elif len(rows) > ws.row_count:
             ws.add_rows(len(rows) - ws.row_count + 100)
         ws.clear()
