@@ -2463,13 +2463,13 @@ class _CountingHTTPAdapter(HTTPAdapter):
     `response` hook fires only on a returned response, so a 429/5xx loop that exhausts retries
     would count zero and the cap could never trip). One increment per logical request; aborts
     the cycle the moment the per-cycle cap is passed (without making the over-cap request)."""
-    def send(self, request, **kwargs):
+    def send(self, request, *args, **kwargs):  # *args: full LSP compatibility with HTTPAdapter.send
         lis_request_count["n"] += 1
         if LIS_REQUEST_CAP and lis_request_count["n"] > LIS_REQUEST_CAP:
             raise LisRequestCapExceeded(
                 f"{lis_request_count['n']} session requests in one cycle exceeds the cap of "
                 f"{LIS_REQUEST_CAP} — aborting to protect the LIS API (likely a runaway loop).")
-        return super().send(request, **kwargs)
+        return super().send(request, *args, **kwargs)
 
 def get_armored_session():
     session = requests.Session()
