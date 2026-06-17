@@ -165,7 +165,10 @@ def _stm_incremental_shadow(full_events, current_hashes, shared_changed, prev_ca
             and current_hashes.get(bill, "\x00MISSING") == cached.get("hash")
         if reusable:
             _cev = cached.get("events")
-            incr_keys.extend(_cev if isinstance(_cev, list) else [])   # malformed -> empty -> mismatch caught, not crash
+            # JSON deserializes the cached key-tuples as LISTS (unhashable) — Counter needs
+            # hashables, so coerce each to a tuple; malformed -> mismatch caught, not crash (Gemini #150).
+            if isinstance(_cev, list):
+                incr_keys.extend(tuple(k) if isinstance(k, list) else k for k in _cev)
             n_reused += 1
         else:
             incr_keys.extend(full_keys_by_bill.get(bill, []))
