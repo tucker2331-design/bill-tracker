@@ -44,6 +44,7 @@ Links use Obsidian `[[wikilink]]` format. Obsidian resolves by filename; path-qu
 ## Domain Knowledge
 - [[knowledge/history_refid_namespace]] — refid = typed namespace (vote-join, batch-notice law); VOTE/BILLS.CSV; SPA-shell false-200s
 - [[knowledge/lis_api_authorization]] — **RULE: LIS API authorized for 2025/2026 ONLY; pre-2025 via legacylis CSV**
+- [[knowledge/lis_api_safety]] — **CHARTER: how hard/often we may hit LIS — 5 guardrails + meeting-driven cadence (load tracks activity, never a metronome)**
 - [[knowledge/lis_api_reference]] — VA LIS endpoints, auth, quirks
 - [[knowledge/tba_times]] — Schedule API returns "Time TBA"; existence ≠ concrete time
 - [[knowledge/lis_dom_scraping]] — headless-Chrome bypass for LIS SPA when Claude-in-Chrome is down
