@@ -6030,6 +6030,7 @@ def run_calendar_update():
         # phase-1 prefix the re-run's reset had dropped (run 27660470113).
         _pre_stm_len = len(master_events)
         _pre_stm_smc = dict(source_miss_counts)   # telemetry baseline → measure the STM's per-cycle DELTA
+        _pre_stm_fmd = Counter(_floor_miss_dates) # floor baseline → clean reset on an incremental fallback
                                                   # (so the flip's shadow can prove breaker counters match)
 
         # ── INCREMENTAL-STM FLIP (flag-gated): reprocess only CHANGED bills + reuse cached events ──
@@ -6089,37 +6090,61 @@ def run_calendar_update():
                 if (_cb == _STM_CACHE_SHARED_SIG_KEY or _cb in _incr_changed
                         or _cb not in legevent_history_hashes):
                     continue
-                for _ek in (_entry.get("events") or []):   # events may be None on a corrupt load (Gemini #157)
+                _evs = _entry.get("events")
+                if not isinstance(_evs, list):         # None/int/garbage on a corrupt load — skip, never crash (Gemini #157)
+                    continue
+                for _ek in _evs:
                     _ev = _reconstruct_stm_event(_ek)
-                    if _ev:                                # skip a malformed (empty) reconstruction
+                    if _ev:                            # skip a malformed (empty) reconstruction
                         _append_event(_ev)
             return _fh, _fm
 
-        if _incr_mode == "1" and _incr_ready:
-            _floor_hit, _floor_miss = _run_incremental_into_master(_floor_hit, _floor_miss)
-            print(f"⚡ INCREMENTAL-PRIMARY: recomputed {len(_incr_changed)} changed bills; reused "
-                  f"{max(0, len(_incr_cache) - 1 - len(_incr_changed))} from cache (full STM skipped).")
-        else:
-            _floor_hit, _floor_miss = run_sequential_turing_machine(df_past,
-                bill_locations=bill_locations,
-                last_seen_date=last_seen_date,
-                _floor_miss_dates=_floor_miss_dates,
-                _floor_hit=_floor_hit,
-                _floor_miss=_floor_miss,
+        def _run_full_stm(_fh, _fm):
+            return run_sequential_turing_machine(df_past,
+                bill_locations=bill_locations, last_seen_date=last_seen_date,
+                _floor_miss_dates=_floor_miss_dates, _floor_hit=_fh, _floor_miss=_fm,
                 **_stm_shared_kwargs)
+
+        if _incr_mode == "1" and _incr_ready:
+            try:
+                _floor_hit, _floor_miss = _run_incremental_into_master(_floor_hit, _floor_miss)
+                print(f"⚡ INCREMENTAL-PRIMARY: recomputed {len(_incr_changed)} changed bills; reused "
+                      f"{max(0, len(_incr_cache) - 1 - len(_incr_changed))} from cache (full STM skipped).")
+            except Exception as _incr_primary_err:
+                # FAIL-SAFE: any incremental failure → discard the partial contribution and run the
+                # full STM, so a reconstruction bug can never write a partial/wrong Sheet1 (accuracy > speed).
+                push_system_alert(
+                    f"INCREMENTAL-PRIMARY failed ({_incr_primary_err}); fell back to the full STM this cycle "
+                    f"(output unaffected). Investigate before trusting incremental-primary.",
+                    status="WARN", category="DATA_ANOMALY", severity="WARN", dedup_key="stm_incremental_primary_fallback")
+                print(f"⚠️ incremental-primary failed → full STM fallback: {_incr_primary_err}")
+                del master_events[_pre_stm_len:]                       # drop the partial incremental contribution
+                for _k in list(source_miss_counts):
+                    source_miss_counts[_k] = _pre_stm_smc.get(_k, 0)   # reset telemetry to the pre-STM baseline
+                _floor_miss_dates.clear(); _floor_miss_dates.update(_pre_stm_fmd)  # and the floor counter
+                _floor_hit, _floor_miss = _run_full_stm(_floor_hit, _floor_miss)
+        else:
+            _floor_hit, _floor_miss = _run_full_stm(_floor_hit, _floor_miss)
 
         # SHADOW validation of the incremental-PRIMARY path: the full STM above drives Sheet1 +
         # telemetry; here we run the EXACT primary path (subset-STM + reconstruct) in ISOLATION and
         # prove it reproduces the full output AND the breaker-feeding counters. Snapshot/restore so
         # production is untouched; CRITICAL on any divergence. This is the gate before flipping to "1".
         if _incr_mode == "shadow" and _incr_ready:
+            # Snapshots captured BEFORE the try so the finally can ALWAYS restore — a shadow
+            # exception must NEVER leave production master_events/telemetry corrupted (it would be
+            # written to Sheet1). The divergence verdict is computed in the try and reported AFTER
+            # the finally, on restored state. (Gemini #157 CRITICAL.)
+            _full_events = [dict(e) for e in master_events[_pre_stm_len:]]
+            _full_smc = dict(source_miss_counts)
+            _shadow_alerts = list(alert_rows)
+            _shadow_dedup = set(_alert_dedup_keys)
+            _shadow_fmd = Counter(_floor_miss_dates)
+            _shadow_failed = False
+            _ev_ok, _only_full, _only_incr, _crit_diff, _tel_all = True, [], [], {}, {}
             try:
-                _full_events = [dict(e) for e in master_events[_pre_stm_len:]]
-                _full_smc = dict(source_miss_counts)
-                _shadow_alerts = list(alert_rows)
-                _shadow_dedup = set(_alert_dedup_keys)
-                _shadow_fmd = Counter(_floor_miss_dates)               # the subset-STM mutates this by ref (Gemini #157)
                 del master_events[_pre_stm_len:]                       # isolate the incremental run
+                _floor_miss_dates.clear(); _floor_miss_dates.update(_pre_stm_fmd)  # start floor from the pre-STM baseline
                 for _k in list(source_miss_counts):
                     source_miss_counts[_k] = _pre_stm_smc.get(_k, 0)
                 _run_incremental_into_master(0, 0)
@@ -6133,42 +6158,46 @@ def run_calendar_update():
                               for k in _crit
                               if (_full_smc.get(k, 0) - _pre_stm_smc.get(k, 0))
                               != (source_miss_counts.get(k, 0) - _pre_stm_smc.get(k, 0))}
-                # FULL telemetry diff (every counter the STM moved this cycle + the floor scalars) —
-                # OBSERVE-ONLY. The incremental reproduces event-derived counters (route/class/origin/
-                # floor) but NOT per-row PROCESS counters (total_processed, dropped_noise, cache hits/
-                # misses, *_attempted, *_recovered) for reused bills — those are inherently irreproducible
-                # without re-processing. This surfaces the EXACT deltas on real data so reproduction can be
-                # built empirically (which to mirror, which are inherent) before flipping to '1'.
+                # FULL telemetry diff (every counter the STM moved this cycle) — OBSERVE-ONLY. The
+                # incremental reproduces event-derived counters but NOT per-row PROCESS counters
+                # (total_processed, dropped_noise, cache hits/misses, *_attempted, *_recovered) for
+                # reused bills — inherently irreproducible without re-processing, and they feed nothing
+                # downstream. Surfaced so the expected deltas are visible during the shadow window.
                 _all_keys = set(_full_smc) | set(source_miss_counts) | set(_pre_stm_smc)
                 _tel_all = {k: (_full_smc.get(k, 0) - _pre_stm_smc.get(k, 0),
                                 source_miss_counts.get(k, 0) - _pre_stm_smc.get(k, 0))
                             for k in _all_keys
                             if (_full_smc.get(k, 0) - _pre_stm_smc.get(k, 0))
                             != (source_miss_counts.get(k, 0) - _pre_stm_smc.get(k, 0))}
-                del master_events[_pre_stm_len:]                       # RESTORE production (full output + telemetry)
+            except Exception as _incr_shadow_err:
+                _shadow_failed = True
+                print(f"⚠️ incremental-primary shadow failed (observe-only, non-fatal): {_incr_shadow_err}")
+            finally:
+                # ALWAYS restore production — full output + telemetry + alerts + floor — even on exception.
+                del master_events[_pre_stm_len:]
                 master_events.extend(_full_events)
                 for _k in list(source_miss_counts):
                     source_miss_counts[_k] = _full_smc.get(_k, 0)
                 alert_rows[:] = _shadow_alerts
                 _alert_dedup_keys.clear(); _alert_dedup_keys.update(_shadow_dedup)
-                _floor_miss_dates.clear(); _floor_miss_dates.update(_shadow_fmd)  # undo the shadow's mutation
-                if _ev_ok and not _crit_diff:
-                    print(f"✅ INCREMENTAL-PRIMARY SHADOW MATCH — subset-STM({len(_incr_changed)} changed) + cache "
-                          f"reuse == full STM: CALENDAR + breaker telemetry identical. Non-breaker telemetry deltas "
-                          f"(observe-only, expected for reused bills): {_tel_all if _tel_all else 'none'}.")
-                else:
-                    push_system_alert(
-                        f"INCREMENTAL-PRIMARY SHADOW DIVERGENCE: the incremental path would NOT reproduce the full "
-                        f"run — events only-full={len(_only_full)}, only-incr={len(_only_incr)}; BREAKER telemetry "
-                        f"deltas (full,incr)={_crit_diff}. Do NOT set STM_INCREMENTAL_PRIMARY=1 until root-caused. "
-                        f"only-full={_only_full[:2]}; only-incr={_only_incr[:2]}; all-telemetry-Δ={_tel_all}",
-                        status="CRITICAL", category="DATA_ANOMALY", severity="CRITICAL",
-                        dedup_key="stm_incremental_primary_divergence")
-                    print(f"🚨 INCREMENTAL-PRIMARY SHADOW DIVERGENCE — events Δ=({len(_only_full)},{len(_only_incr)}), "
-                          f"breaker Δ={_crit_diff} (SYSTEM_ALERT)")
-            except Exception as _incr_shadow_err:
-                # observe-only: restore is best-effort; production already has the full output
-                print(f"⚠️ incremental-primary shadow failed (observe-only, non-fatal): {_incr_shadow_err}")
+                _floor_miss_dates.clear(); _floor_miss_dates.update(_shadow_fmd)
+            # Report on the RESTORED state (a divergence alert then lands on production alert_rows).
+            if _shadow_failed:
+                pass
+            elif _ev_ok and not _crit_diff:
+                print(f"✅ INCREMENTAL-PRIMARY SHADOW MATCH — subset-STM({len(_incr_changed)} changed) + cache "
+                      f"reuse == full STM: CALENDAR + breaker telemetry identical. Non-breaker telemetry deltas "
+                      f"(observe-only, expected for reused bills): {_tel_all if _tel_all else 'none'}.")
+            else:
+                push_system_alert(
+                    f"INCREMENTAL-PRIMARY SHADOW DIVERGENCE: the incremental path would NOT reproduce the full "
+                    f"run — events only-full={len(_only_full)}, only-incr={len(_only_incr)}; BREAKER telemetry "
+                    f"deltas (full,incr)={_crit_diff}. Do NOT set STM_INCREMENTAL_PRIMARY=1 until root-caused. "
+                    f"only-full={_only_full[:2]}; only-incr={_only_incr[:2]}; all-telemetry-Δ={_tel_all}",
+                    status="CRITICAL", category="DATA_ANOMALY", severity="CRITICAL",
+                    dedup_key="stm_incremental_primary_divergence")
+                print(f"🚨 INCREMENTAL-PRIMARY SHADOW DIVERGENCE — events Δ=({len(_only_full)},{len(_only_incr)}), "
+                      f"breaker Δ={_crit_diff} (SYSTEM_ALERT)")
 
         # ── INCREMENTAL-STM ORACLE: cross-bill order-invariance (flag-gated) ─────
         # Proves a bill's events depend only on its own rows + shared inputs, not on
