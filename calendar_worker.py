@@ -6110,8 +6110,14 @@ def run_calendar_update():
         if _incr_mode == "1" and _incr_ready:
             try:
                 _floor_hit, _floor_miss = _run_incremental_into_master(_floor_hit, _floor_miss)
-                print(f"⚡ INCREMENTAL-PRIMARY: recomputed {len(_incr_changed)} changed bills; reused "
-                      f"{max(0, len(_incr_cache) - 1 - len(_incr_changed))} from cache (full STM skipped).")
+                # reused = cached bills that are NOT changed AND still in the current HISTORY — exactly
+                # what the reuse loop reconstructs (excludes new bills, which are in _incr_changed, and
+                # phantom bills, which are skipped). The naive len(cache)-1-len(changed) under-counts
+                # because _incr_changed also holds NEW bills absent from the cache (Gemini #157).
+                _reused_n = len((set(_incr_cache) - {_STM_CACHE_SHARED_SIG_KEY} - _incr_changed)
+                                & set(legevent_history_hashes))
+                print(f"⚡ INCREMENTAL-PRIMARY: recomputed {len(_incr_changed)} changed bills; "
+                      f"reused {_reused_n} from cache (full STM skipped).")
             except Exception as _incr_primary_err:
                 # FAIL-SAFE: any incremental failure → discard the partial contribution and run the
                 # full STM, so a reconstruction bug can never write a partial/wrong Sheet1 (accuracy > speed).
