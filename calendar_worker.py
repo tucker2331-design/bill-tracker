@@ -236,9 +236,9 @@ def _compute_stm_shared_sig(active_session, df_docket, vote_id_set, api_schedule
         "sched=" + _sha("\x1f".join(
             f"{k}|{sorted((api_schedule_map.get(k) or {}).items())}" for k in sorted(api_schedule_map))),
         "conv=" + _sha("\x1f".join(
-            f"{d}|{ch}|{(convene_times.get(d) or {}).get(ch, {}).get('Time','')}"
-            f"|{(convene_times.get(d) or {}).get(ch, {}).get('SortTime','')}"
-            f"|{(convene_times.get(d) or {}).get(ch, {}).get('Name','')}"   # Name -> event Committee (Gemini #151)
+            f"{d}|{ch}|{((convene_times.get(d) or {}).get(ch) or {}).get('Time','')}"     # or {} (not ,{}):
+            f"|{((convene_times.get(d) or {}).get(ch) or {}).get('SortTime','')}"          # a present-but-None
+            f"|{((convene_times.get(d) or {}).get(ch) or {}).get('Name','')}"   # ch -> .get crash (Gemini #157)
             for d in sorted(convene_times) for ch in sorted(convene_times.get(d) or {}))),
     )
 
@@ -6089,6 +6089,8 @@ def run_calendar_update():
                 # mode. (New bills are already in _incr_changed via a missing/mismatched cache hash.)
                 if (_cb == _STM_CACHE_SHARED_SIG_KEY or _cb in _incr_changed
                         or _cb not in legevent_history_hashes):
+                    continue
+                if not isinstance(_entry, dict):       # a corrupt cache row may not be a dict (Gemini #157)
                     continue
                 _evs = _entry.get("events")
                 if not isinstance(_evs, list):         # None/int/garbage on a corrupt load — skip, never crash (Gemini #157)
