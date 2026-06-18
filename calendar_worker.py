@@ -112,6 +112,31 @@ def _stm_event_key(ev):
     return tuple(str(ev.get(k, "")) for k in _STM_EVENT_KEY_FIELDS)
 
 
+# AgendaOrder is the ONLY non-string event field (an int: -100..999); every other field is a
+# string. _stm_event_key str()-coerces all of them, so a cached key stores AgendaOrder as a
+# STRING. Reconstructing a cached event for the incremental flip must restore that int type, or
+# a REUSED bill's Sheet1 row would differ (str "1") from a freshly-computed one (int 1) and the
+# column would go mixed-type. The shadow CANNOT catch this (it str-coerces both sides), so type
+# fidelity is enforced here by construction + asserted by tools/verification/test_incremental_flip.py.
+# If a new non-string field is ever added to _STM_EVENT_KEY_FIELDS, extend this AND that test.
+_STM_EVENT_INT_FIELDS = ("AgendaOrder",)
+
+def _reconstruct_stm_event(key):
+    """Rebuild a full event dict from a cached _stm_event_key tuple/list, restoring int fields
+    so a reused bill's row is byte-identical to a freshly-computed one. A malformed key (None /
+    str / wrong length from a corrupt or older-schema cache) yields {} — the caller skips it."""
+    if not isinstance(key, (list, tuple)) or len(key) != len(_STM_EVENT_KEY_FIELDS):
+        return {}                              # corrupt / truncated / old-schema cache row → skip (Gemini #157)
+    ev = dict(zip(_STM_EVENT_KEY_FIELDS, key))  # key validated list/tuple of exact length; no tuple() needed
+    for _f in _STM_EVENT_INT_FIELDS:
+        if _f in ev:                           # a truncated key may lack the field → no KeyError (Gemini #157)
+            try:
+                ev[_f] = int(ev[_f])
+            except (ValueError, TypeError):
+                pass  # leave as-is if somehow non-numeric (e.g. an I1-filled "") — matches the full run
+    return ev
+
+
 def _stm_outputs_equivalent(events_a, events_b):
     """True iff the two event lists are the SAME MULTISET (order-independent).
     Returns (ok, only_in_a, only_in_b) where the diffs are sorted key-lists."""
@@ -195,6 +220,27 @@ STM_BILL_CACHE_HEADER = ["Bill", "HistoryHash", "EventsJSON"]
 
 
 _STM_CACHE_SHARED_SIG_KEY = "__SHARED_SIG__"   # special row holding the shared-input signature
+
+
+def _compute_stm_shared_sig(active_session, df_docket, vote_id_set, api_schedule_map, convene_times):
+    """The shared-input signature: a canonical hash of EVERYTHING that can change a bill's
+    location/time EXCEPT its own HISTORY (that's the per-bill hash). If this moved since the
+    last cycle, NO bill is reusable (times may have shifted) → full recompute. Canonical
+    (sorted) so a dict/row reorder can't false-trip it (the #146 lesson). ONE definition,
+    used by BOTH the incremental shadow AND the incremental-primary flip, so they can't drift."""
+    return _sha(
+        "v=" + WORKER_OUTPUT_LOGIC_VERSION,
+        "sess=" + str(active_session),
+        "dock=" + _df_content_hash(df_docket),
+        "vote=" + (_sha("\x1f".join(sorted(vote_id_set))) if vote_id_set else "EMPTY"),
+        "sched=" + _sha("\x1f".join(
+            f"{k}|{sorted((api_schedule_map.get(k) or {}).items())}" for k in sorted(api_schedule_map))),
+        "conv=" + _sha("\x1f".join(
+            f"{d}|{ch}|{((convene_times.get(d) or {}).get(ch) or {}).get('Time','')}"     # or {} (not ,{}):
+            f"|{((convene_times.get(d) or {}).get(ch) or {}).get('SortTime','')}"          # a present-but-None
+            f"|{((convene_times.get(d) or {}).get(ch) or {}).get('Name','')}"   # ch -> .get crash (Gemini #157)
+            for d in sorted(convene_times) for ch in sorted(convene_times.get(d) or {}))),
+    )
 
 
 def _load_stm_bill_cache(sheet):
@@ -5983,13 +6029,183 @@ def run_calendar_update():
         # the first oracle run flagged 2,493 phantom "only-date" events that were just the
         # phase-1 prefix the re-run's reset had dropped (run 27660470113).
         _pre_stm_len = len(master_events)
-        _floor_hit, _floor_miss = run_sequential_turing_machine(df_past,
-            bill_locations=bill_locations,
-            last_seen_date=last_seen_date,
-            _floor_miss_dates=_floor_miss_dates,
-            _floor_hit=_floor_hit,
-            _floor_miss=_floor_miss,
-            **_stm_shared_kwargs)
+        _pre_stm_smc = dict(source_miss_counts)   # telemetry baseline → measure the STM's per-cycle DELTA
+        _pre_stm_fmd = Counter(_floor_miss_dates) # floor baseline → clean reset on an incremental fallback
+                                                  # (so the flip's shadow can prove breaker counters match)
+
+        # ── INCREMENTAL-STM FLIP (flag-gated): reprocess only CHANGED bills + reuse cached events ──
+        # STM_INCREMENTAL_PRIMARY: "" (off, default full STM) | "shadow" (full drives Sheet1; ALSO
+        # run the incremental in isolation and prove events+breaker-telemetry identical) | "1" (the
+        # incremental drives Sheet1 — the time win). Reuse is gated on the cache loading AND the
+        # shared-input signature being unchanged (else a time shift could move a bill that didn't
+        # change its own history → full recompute). Validated by order-invariance + the cache shadow
+        # + the day-by-day replay; the "shadow" mode is the final gate before "1". See future_improvements Step 6.
+        _incr_mode = os.environ.get("STM_INCREMENTAL_PRIMARY", "")
+        _incr_ready, _incr_changed, _incr_cache = False, set(), {}
+        if _incr_mode in ("1", "shadow"):
+            try:
+                _incr_sig = _compute_stm_shared_sig(ACTIVE_SESSION, df_docket, _vote_id_set,
+                                                    api_schedule_map, convene_times)
+                _incr_cache, _incr_cache_ws, _incr_cache_ok, _incr_prev_sig = _load_stm_bill_cache(sheet)
+                if _incr_cache_ok and _incr_prev_sig and _incr_sig == _incr_prev_sig:
+                    _incr_changed = {b for b, h in legevent_history_hashes.items()
+                                     if _incr_cache.get(b, {}).get("hash") != h}
+                    _incr_ready = True
+            except Exception as _incr_prep_err:
+                print(f"⚠️ incremental prep failed → full STM this cycle: {_incr_prep_err}")
+                _incr_ready = False
+
+        def _run_incremental_into_master(_fh, _fm):
+            """Subset-STM on the CHANGED bills (fresh per-bill state) + reconstruct UNCHANGED bills'
+            events from cache THROUGH _append_event — so every breaker counter (meeting_unsourced,
+            rows_appended, invariant_violations) is reproduced exactly (they're functions of the
+            event set). Events are the full 14-field tuples → lossless dict reconstruction.
+
+            TELEMETRY (Gemini #157, reasoned): reused bills go through _append_event, so the
+            event-derived counters that GATE SAFETY are exact — the breaker reads only
+            invariant_violations/rows_appended (rate), meeting_unsourced (Y2), and _unconfirmed
+            (Y3, recomputed from the FINAL event set). The STM's other counters are PROCESS state
+            (dropped_noise, total_processed, legevent_cache_hits/misses, *_recovered, sourced_*,
+            _floor_hit/_floor_miss) — they describe work DONE, are NOT present in the final events,
+            and feed nothing downstream (verified: _floor_hit/_floor_miss are STM-internal only).
+            In primary mode they correctly report only the changed bills actually processed; they
+            are deliberately NOT mirrored here (a partial mirror would be *wrong*, not more complete).
+            The "⚡ INCREMENTAL-PRIMARY" log line labels the cycle so the lower process counts read
+            correctly. Full process-counter parity would need per-bill delta caching — unnecessary
+            for correctness; see future_improvements Step 6."""
+            # .astype(str).str.strip() is NOT redundant (Gemini #157): legevent_history_hashes — and
+            # thus _incr_changed — is keyed by str(clean_bill).strip() (the groupby build), so the
+            # df_past side MUST use the same normalization or a changed bill with stray whitespace
+            # would miss the .isin and be wrongly reused STALE. Cheap (vectorized, once/cycle).
+            _df_changed = df_past[df_past["CleanBill"].astype(str).str.strip().isin(_incr_changed)]
+            _fh, _fm = run_sequential_turing_machine(_df_changed,
+                bill_locations={}, last_seen_date={}, _floor_miss_dates=_floor_miss_dates,
+                _floor_hit=_fh, _floor_miss=_fm, **_stm_shared_kwargs)
+            for _cb, _entry in _incr_cache.items():
+                # Skip: the sig row; CHANGED bills (recomputed by the subset-STM above); and — the
+                # phantom guard (Gemini #157) — any cached bill NO LONGER in the current HISTORY
+                # (`legevent_history_hashes`). Without the last check a deleted/filtered bill would
+                # be reconstructed as a phantom event the full run never produces — silent in primary
+                # mode. (New bills are already in _incr_changed via a missing/mismatched cache hash.)
+                if (_cb == _STM_CACHE_SHARED_SIG_KEY or _cb in _incr_changed
+                        or _cb not in legevent_history_hashes):
+                    continue
+                if not isinstance(_entry, dict):       # a corrupt cache row may not be a dict (Gemini #157)
+                    continue
+                _evs = _entry.get("events")
+                if not isinstance(_evs, list):         # None/int/garbage on a corrupt load — skip, never crash (Gemini #157)
+                    continue
+                for _ek in _evs:
+                    _ev = _reconstruct_stm_event(_ek)
+                    if _ev:                            # skip a malformed (empty) reconstruction
+                        _append_event(_ev)
+            return _fh, _fm
+
+        def _run_full_stm(_fh, _fm):
+            return run_sequential_turing_machine(df_past,
+                bill_locations=bill_locations, last_seen_date=last_seen_date,
+                _floor_miss_dates=_floor_miss_dates, _floor_hit=_fh, _floor_miss=_fm,
+                **_stm_shared_kwargs)
+
+        if _incr_mode == "1" and _incr_ready:
+            try:
+                _floor_hit, _floor_miss = _run_incremental_into_master(_floor_hit, _floor_miss)
+                # reused = cached bills that are NOT changed AND still in the current HISTORY — exactly
+                # what the reuse loop reconstructs (excludes new bills, which are in _incr_changed, and
+                # phantom bills, which are skipped). The naive len(cache)-1-len(changed) under-counts
+                # because _incr_changed also holds NEW bills absent from the cache (Gemini #157).
+                _reused_n = len((set(_incr_cache) - {_STM_CACHE_SHARED_SIG_KEY} - _incr_changed)
+                                & set(legevent_history_hashes))
+                print(f"⚡ INCREMENTAL-PRIMARY: recomputed {len(_incr_changed)} changed bills; "
+                      f"reused {_reused_n} from cache (full STM skipped).")
+            except Exception as _incr_primary_err:
+                # FAIL-SAFE: any incremental failure → discard the partial contribution and run the
+                # full STM, so a reconstruction bug can never write a partial/wrong Sheet1 (accuracy > speed).
+                push_system_alert(
+                    f"INCREMENTAL-PRIMARY failed ({_incr_primary_err}); fell back to the full STM this cycle "
+                    f"(output unaffected). Investigate before trusting incremental-primary.",
+                    status="WARN", category="DATA_ANOMALY", severity="WARN", dedup_key="stm_incremental_primary_fallback")
+                print(f"⚠️ incremental-primary failed → full STM fallback: {_incr_primary_err}")
+                del master_events[_pre_stm_len:]                       # drop the partial incremental contribution
+                for _k in list(source_miss_counts):
+                    source_miss_counts[_k] = _pre_stm_smc.get(_k, 0)   # reset telemetry to the pre-STM baseline
+                _floor_miss_dates.clear(); _floor_miss_dates.update(_pre_stm_fmd)  # and the floor counter
+                _floor_hit, _floor_miss = _run_full_stm(_floor_hit, _floor_miss)
+        else:
+            _floor_hit, _floor_miss = _run_full_stm(_floor_hit, _floor_miss)
+
+        # SHADOW validation of the incremental-PRIMARY path: the full STM above drives Sheet1 +
+        # telemetry; here we run the EXACT primary path (subset-STM + reconstruct) in ISOLATION and
+        # prove it reproduces the full output AND the breaker-feeding counters. Snapshot/restore so
+        # production is untouched; CRITICAL on any divergence. This is the gate before flipping to "1".
+        if _incr_mode == "shadow" and _incr_ready:
+            # Snapshots captured BEFORE the try so the finally can ALWAYS restore — a shadow
+            # exception must NEVER leave production master_events/telemetry corrupted (it would be
+            # written to Sheet1). The divergence verdict is computed in the try and reported AFTER
+            # the finally, on restored state. (Gemini #157 CRITICAL.)
+            _full_events = [dict(e) for e in master_events[_pre_stm_len:]]
+            _full_smc = dict(source_miss_counts)
+            _shadow_alerts = list(alert_rows)
+            _shadow_dedup = set(_alert_dedup_keys)
+            _shadow_fmd = Counter(_floor_miss_dates)
+            _shadow_failed = False
+            _ev_ok, _only_full, _only_incr, _crit_diff, _tel_all = True, [], [], {}, {}
+            try:
+                del master_events[_pre_stm_len:]                       # isolate the incremental run
+                _floor_miss_dates.clear(); _floor_miss_dates.update(_pre_stm_fmd)  # start floor from the pre-STM baseline
+                for _k in list(source_miss_counts):
+                    source_miss_counts[_k] = _pre_stm_smc.get(_k, 0)
+                _run_incremental_into_master(0, 0)
+                _incr_events = list(master_events[_pre_stm_len:])
+                _ev_ok, _only_full, _only_incr = _stm_outputs_equivalent(_full_events, _incr_events)
+                # ACCURACY-CRITICAL counters — these feed the Section-9 circuit breaker. Reconstruction
+                # via _append_event reproduces them exactly, so a mismatch here is a real bug → CRITICAL.
+                _crit = ("meeting_unsourced", "rows_appended", "invariant_violations")
+                _crit_diff = {k: (_full_smc.get(k, 0) - _pre_stm_smc.get(k, 0),
+                                  source_miss_counts.get(k, 0) - _pre_stm_smc.get(k, 0))
+                              for k in _crit
+                              if (_full_smc.get(k, 0) - _pre_stm_smc.get(k, 0))
+                              != (source_miss_counts.get(k, 0) - _pre_stm_smc.get(k, 0))}
+                # FULL telemetry diff (every counter the STM moved this cycle) — OBSERVE-ONLY. The
+                # incremental reproduces event-derived counters but NOT per-row PROCESS counters
+                # (total_processed, dropped_noise, cache hits/misses, *_attempted, *_recovered) for
+                # reused bills — inherently irreproducible without re-processing, and they feed nothing
+                # downstream. Surfaced so the expected deltas are visible during the shadow window.
+                _all_keys = set(_full_smc) | set(source_miss_counts) | set(_pre_stm_smc)
+                _tel_all = {k: (_full_smc.get(k, 0) - _pre_stm_smc.get(k, 0),
+                                source_miss_counts.get(k, 0) - _pre_stm_smc.get(k, 0))
+                            for k in _all_keys
+                            if (_full_smc.get(k, 0) - _pre_stm_smc.get(k, 0))
+                            != (source_miss_counts.get(k, 0) - _pre_stm_smc.get(k, 0))}
+            except Exception as _incr_shadow_err:
+                _shadow_failed = True
+                print(f"⚠️ incremental-primary shadow failed (observe-only, non-fatal): {_incr_shadow_err}")
+            finally:
+                # ALWAYS restore production — full output + telemetry + alerts + floor — even on exception.
+                del master_events[_pre_stm_len:]
+                master_events.extend(_full_events)
+                for _k in list(source_miss_counts):
+                    source_miss_counts[_k] = _full_smc.get(_k, 0)
+                alert_rows[:] = _shadow_alerts
+                _alert_dedup_keys.clear(); _alert_dedup_keys.update(_shadow_dedup)
+                _floor_miss_dates.clear(); _floor_miss_dates.update(_shadow_fmd)
+            # Report on the RESTORED state (a divergence alert then lands on production alert_rows).
+            if _shadow_failed:
+                pass
+            elif _ev_ok and not _crit_diff:
+                print(f"✅ INCREMENTAL-PRIMARY SHADOW MATCH — subset-STM({len(_incr_changed)} changed) + cache "
+                      f"reuse == full STM: CALENDAR + breaker telemetry identical. Non-breaker telemetry deltas "
+                      f"(observe-only, expected for reused bills): {_tel_all if _tel_all else 'none'}.")
+            else:
+                push_system_alert(
+                    f"INCREMENTAL-PRIMARY SHADOW DIVERGENCE: the incremental path would NOT reproduce the full "
+                    f"run — events only-full={len(_only_full)}, only-incr={len(_only_incr)}; BREAKER telemetry "
+                    f"deltas (full,incr)={_crit_diff}. Do NOT set STM_INCREMENTAL_PRIMARY=1 until root-caused. "
+                    f"only-full={_only_full[:2]}; only-incr={_only_incr[:2]}; all-telemetry-Δ={_tel_all}",
+                    status="CRITICAL", category="DATA_ANOMALY", severity="CRITICAL",
+                    dedup_key="stm_incremental_primary_divergence")
+                print(f"🚨 INCREMENTAL-PRIMARY SHADOW DIVERGENCE — events Δ=({len(_only_full)},{len(_only_incr)}), "
+                      f"breaker Δ={_crit_diff} (SYSTEM_ALERT)")
 
         # ── INCREMENTAL-STM ORACLE: cross-bill order-invariance (flag-gated) ─────
         # Proves a bill's events depend only on its own rows + shared inputs, not on
@@ -6054,19 +6270,8 @@ def run_calendar_update():
                 # EXCEPT its own HISTORY (that's the per-bill hash). Canonical hashes so a
                 # dict/row reorder can't false-trip it (the #146 lesson). If this moved since
                 # last cycle, NO bill is reusable (times may have shifted) -> full recompute.
-                _shared_sig = _sha(
-                    "v=" + WORKER_OUTPUT_LOGIC_VERSION,
-                    "sess=" + str(ACTIVE_SESSION),
-                    "dock=" + _df_content_hash(df_docket),
-                    "vote=" + (_sha("\x1f".join(sorted(_vote_id_set))) if _vote_id_set else "EMPTY"),
-                    "sched=" + _sha("\x1f".join(
-                        f"{k}|{sorted((api_schedule_map.get(k) or {}).items())}" for k in sorted(api_schedule_map))),
-                    "conv=" + _sha("\x1f".join(
-                        f"{d}|{ch}|{(convene_times.get(d) or {}).get(ch, {}).get('Time','')}"
-                        f"|{(convene_times.get(d) or {}).get(ch, {}).get('SortTime','')}"
-                        f"|{(convene_times.get(d) or {}).get(ch, {}).get('Name','')}"   # Name -> event Committee (Gemini #151)
-                        for d in sorted(convene_times) for ch in sorted(convene_times.get(d) or {}))),
-                )
+                _shared_sig = _compute_stm_shared_sig(
+                    ACTIVE_SESSION, df_docket, _vote_id_set, api_schedule_map, convene_times)
                 _bill_cache, _bill_cache_ws, _bill_cache_ok, _prev_shared_sig = _load_stm_bill_cache(sheet)
                 _shared_changed = (not _prev_shared_sig) or (_shared_sig != _prev_shared_sig)
                 _stm_full_contribution = master_events[_pre_stm_len:]
