@@ -127,7 +127,7 @@ def _reconstruct_stm_event(key):
     str / wrong length from a corrupt or older-schema cache) yields {} — the caller skips it."""
     if not isinstance(key, (list, tuple)) or len(key) != len(_STM_EVENT_KEY_FIELDS):
         return {}                              # corrupt / truncated / old-schema cache row → skip (Gemini #157)
-    ev = dict(zip(_STM_EVENT_KEY_FIELDS, tuple(key)))
+    ev = dict(zip(_STM_EVENT_KEY_FIELDS, key))  # key validated list/tuple of exact length; no tuple() needed
     for _f in _STM_EVENT_INT_FIELDS:
         if _f in ev:                           # a truncated key may lack the field → no KeyError (Gemini #157)
             try:
