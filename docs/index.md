@@ -61,6 +61,7 @@ Links use Obsidian `[[wikilink]]` format. Obsidian resolves by filename; path-qu
 - [[failures/legacy_calendar_versions]] — why the old app.py / shadow_v2 / v2_shadow_test / backend_worker / xray versions are relative failures (text-driven, hardcoded session, silent excepts, unthrottled polling) — the "before" picture that justifies the current architecture
 
 ## Ideas / Deferred Work
+- [[ideas/product_roadmap]] — **post-accuracy direction: reviewer swap (A), product vision → LIS data inventory → UI design (B), 2027-gated items (C). The anti-looping plan.**
 - [[ideas/future_improvements]] — things on deck, priority-tagged
 
 ## Raw / Source (out of scope of this wiki)

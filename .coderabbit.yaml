@@ -1,0 +1,41 @@
+# CodeRabbit — AI PR review for the VA Legislative Bill Tracker.
+# Free for public repos. Replaces Gemini Code Assist (sunsetting ~2026-07-17) and pairs with
+# Codex (chatgpt-codex-connector) for two-independent-reviewer coverage on every PR.
+# Schema: https://docs.coderabbit.ai/reference/configuration
+language: en-US
+early_access: false
+reviews:
+  profile: assertive               # thorough — matches the project's bank-grade-reliability bar
+  request_changes_workflow: false
+  high_level_summary: true
+  review_status: true
+  poem: false
+  collapse_walkthrough: false
+  auto_review:
+    enabled: true
+    drafts: false
+  # The docs/ Obsidian vault is prose (the project "brain"), not code — don't review it as code.
+  path_filters:
+    - "!docs/**"
+  path_instructions:
+    - path: "calendar_worker.py"
+      instructions: >-
+        Bank-grade reliability. Flag any silent failure: a bare `except: pass`, or a bare
+        `continue`/fallback without a categorized alert/counter. Enforce Standard #3 — NO text
+        parsing on the lobbyist-facing path; classification must be structural (LIS API codes /
+        refids), text only for internal diagnostics. Any NEW path that calls `lis.virginia.gov`
+        or the `lisfiles` blobs must respect the authorization rule (2025/2026 session codes
+        only) and the LIS-safety guardrails (conditional fetch, jitter, the per-cycle request
+        cap). Watch for accuracy regressions in the calendar output and in the circuit-breaker
+        inputs (meeting_unsourced, rows_appended, invariant_violations, the Y2/Y3 baselines).
+    - path: "structural_router.py"
+      instructions: >-
+        Single source of truth for action classification, imported by the worker AND the
+        verification tools. Changes here must keep the worker and tools in lockstep; no
+        VA/English-specific assumptions that wouldn't scale to 50 states.
+    - path: "tools/verification/**"
+      instructions: >-
+        Verification/test scripts. Confirm each actually asserts the invariant in its name and
+        fails LOUDLY (non-zero exit / explicit failure), never silently passes.
+chat:
+  auto_reply: true
