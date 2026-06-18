@@ -6058,7 +6058,20 @@ def run_calendar_update():
             """Subset-STM on the CHANGED bills (fresh per-bill state) + reconstruct UNCHANGED bills'
             events from cache THROUGH _append_event — so every breaker counter (meeting_unsourced,
             rows_appended, invariant_violations) is reproduced exactly (they're functions of the
-            event set). Events are the full 14-field tuples → lossless dict reconstruction."""
+            event set). Events are the full 14-field tuples → lossless dict reconstruction.
+
+            TELEMETRY (Gemini #157, reasoned): reused bills go through _append_event, so the
+            event-derived counters that GATE SAFETY are exact — the breaker reads only
+            invariant_violations/rows_appended (rate), meeting_unsourced (Y2), and _unconfirmed
+            (Y3, recomputed from the FINAL event set). The STM's other counters are PROCESS state
+            (dropped_noise, total_processed, legevent_cache_hits/misses, *_recovered, sourced_*,
+            _floor_hit/_floor_miss) — they describe work DONE, are NOT present in the final events,
+            and feed nothing downstream (verified: _floor_hit/_floor_miss are STM-internal only).
+            In primary mode they correctly report only the changed bills actually processed; they
+            are deliberately NOT mirrored here (a partial mirror would be *wrong*, not more complete).
+            The "⚡ INCREMENTAL-PRIMARY" log line labels the cycle so the lower process counts read
+            correctly. Full process-counter parity would need per-bill delta caching — unnecessary
+            for correctness; see future_improvements Step 6."""
             # .astype(str).str.strip() is NOT redundant (Gemini #157): legevent_history_hashes — and
             # thus _incr_changed — is keyed by str(clean_bill).strip() (the groupby build), so the
             # df_past side MUST use the same normalization or a changed bill with stray whitespace
@@ -6068,7 +6081,13 @@ def run_calendar_update():
                 bill_locations={}, last_seen_date={}, _floor_miss_dates=_floor_miss_dates,
                 _floor_hit=_fh, _floor_miss=_fm, **_stm_shared_kwargs)
             for _cb, _entry in _incr_cache.items():
-                if _cb == _STM_CACHE_SHARED_SIG_KEY or _cb in _incr_changed:
+                # Skip: the sig row; CHANGED bills (recomputed by the subset-STM above); and — the
+                # phantom guard (Gemini #157) — any cached bill NO LONGER in the current HISTORY
+                # (`legevent_history_hashes`). Without the last check a deleted/filtered bill would
+                # be reconstructed as a phantom event the full run never produces — silent in primary
+                # mode. (New bills are already in _incr_changed via a missing/mismatched cache hash.)
+                if (_cb == _STM_CACHE_SHARED_SIG_KEY or _cb in _incr_changed
+                        or _cb not in legevent_history_hashes):
                     continue
                 for _ek in (_entry.get("events") or []):   # events may be None on a corrupt load (Gemini #157)
                     _ev = _reconstruct_stm_event(_ek)
