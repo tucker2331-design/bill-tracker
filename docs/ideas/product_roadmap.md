@@ -55,7 +55,7 @@ data → UI.** Designing UI before we know the user's jobs and what data backs t
   pretend to know"). Decisions-and-why captured so we don't re-litigate. Clients/positions and the
   historical tracker are explicitly parked there.
 
-### B2. LIS data inventory + gap analysis  📋 NOT STARTED (I can pre-draft solo)
+### B2. LIS data inventory + gap analysis  ⏳ DRAFTED → [[ideas/lis_data_inventory]] (awaiting owner §7 calls)
 - **WHAT:** a complete catalog of (a) what LIS actually exposes (all ~246 endpoints / blobs /
   fields), (b) what we currently ingest for the calendar, (c) what we DON'T yet collect. Then map
   candidate features (from B1) to the data each needs → which are buildable from existing data vs
