@@ -65,6 +65,22 @@ data → UI.** Designing UI before we know the user's jobs and what data backs t
   and scoped, not discovered mid-build. **Owner explicitly wants to discuss this alongside the UI.**
 - **WHY before B3:** the UI can only show what the data supports; this bounds the design space.
 
+### B0 (decided 2026-06-18) — stack + backend foundation
+- **Front-end stack: React + Vite, hosted free on Cloudflare Pages** (owner delegated the choice).
+  Static SPA, never-sleeps CDN, full control for the custom timeline; reads the worker's data from
+  the Google Sheet via gviz (the X-Ray's proven, free path). $0 end-to-end. Streamlit was the
+  pragmatic alternative but fights the rich interactivity our vision needs.
+- **Bill-data backend: rebuild structurally, do NOT port the old text logic.** Assessment of
+  `backend_worker.py` (`process_history_state_machine`/`determine_lifecycle`): it is entirely
+  text-parsing (regex committee scrape + `desc.startswith("h ")` chamber hack + hardcoded English
+  death/admin macro lists + `on_bad_lines='skip'` silent drop) — the exact anti-pattern the calendar
+  effort replaced. **Reuse its data MODEL + lifecycle/stage CONCEPTS; rebuild the implementation on
+  `calendar_worker`'s structural engine** (committee codes, refid resolution, the structural router,
+  LIS status/eventcode vocabularies, safe_fetch with completeness/truncation guards). The bill
+  records derive from the structural per-bill state the worker already computes — not a second
+  text pass. Completeness (top trust priority) starts free: processed distinct bills vs the HISTORY
+  blob's distinct bills + the truncation guard; external `AdvancedLegislationSearch` count later.
+
 ### B3. UI / information-display design  📋 NOT STARTED (I do "a lot of reading" first)
 - **WHAT:** research information-display + UI/UX best practices (dashboards, dense-data tables,
   legislative/financial-terminal patterns, progressive disclosure, accessibility), then design the
