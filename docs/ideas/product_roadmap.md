@@ -47,12 +47,13 @@ This is the "what should lobbyists see / best site" work. **Sequence is delibera
 data → UI.** Designing UI before we know the user's jobs and what data backs them is exactly the
 "looping without knowing what we want" trap the owner called out.
 
-### B1. Product vision — the lobbyist's jobs-to-be-done  📋 NOT STARTED (collaborative)
-- **WHAT:** a written north-star: who the user is (VA GA lobbyist), the jobs they hire this tool
-  for (track bills, anticipate meetings, never miss a vote/action, report to clients…), and what
-  "best" means vs. LIS itself and vs. competitors.
-- **GOAL / done-means:** a 1–2 page vision doc every later feature/UI choice can be traced to. If a
-  proposed feature doesn't serve a job here, we don't build it. **Owner drives; I draft + pressure-test.**
+### B1. Product vision — the lobbyist's jobs-to-be-done  ✅ LOCKED → [[ideas/product_vision]]
+- **DONE (2026-06-18):** the full vision + screen spec is locked in [[ideas/product_vision]] — the
+  four lenses, the global Tracking/full switch, the landing (what's-new + crossover-lane timeline +
+  mini-calendar), the calendar/search tabs, the bill card (with the recovered pin + correlation
+  rule), the operator bug tab, and the **trust layer** (freshness/completeness/certainty — "never
+  pretend to know"). Decisions-and-why captured so we don't re-litigate. Clients/positions and the
+  historical tracker are explicitly parked there.
 
 ### B2. LIS data inventory + gap analysis  📋 NOT STARTED (I can pre-draft solo)
 - **WHAT:** a complete catalog of (a) what LIS actually exposes (all ~246 endpoints / blobs /
