@@ -123,7 +123,15 @@ Ordered by value / trust-criticality:
 Each is additive and isolated (Standard #6) — ingest into its own tab/store, keyed by bill, behind
 its own fetch with the same LIS-safety guardrails. None blocks the others.
 
-## 7. Open questions for the owner (these decide the DB expansions)
+## 7b. OWNER DECISIONS (2026-06-18) — the expansions are now decided
+- **Completeness diff: ✅ BUILD** (bill-universe vs our set; "tracking N of N"; alert on missing). Top priority.
+- **Patron + Subject: ✅ INGEST BOTH** (powers "by patron"/"by subject" filters + patron on the card).
+- **Written summary: ✅ INGEST** (`LegislationSummary`), shown **truncated (~2 lines) + "more"** at the top of the card dropdown so it doesn't crowd; full text via the LIS link.
+- **LIS bill-page link: ✅ EVERY CARD.** Recovered pattern (`shadow_v2.py:535`): `https://lis.virginia.gov/bill-details/{sessionCode}/{billNumber}` — deterministic, no API, not brittle. **Use the DYNAMIC session code** (old code hardcoded `20261`). This is also the "pressure valve" for anything that doesn't fit on the card.
+- **Fiscal impact: ✅ LINK FROM HISTORY (light).** Not full ingest — capture `BillHistoryReferences[]` doc links from the LegislationEvent we already fetch, and render a "fiscal impact ↗" inline on the history row where the impact statement appears. (The LIS page link also exposes it for free as a baseline.)
+- **Full bill text / amendment versions: DEFERRED** (heavy; phase 2 if ever).
+
+## 7. Open questions for the owner (these decide the DB expansions) — RESOLVED, see §7b
 1. **Completeness:** ship the bill-universe/count diff (§5) regardless? (My strong rec: yes — it's
    the scariest silent gap and it's how the "track N of N" trust signal becomes real.)
 2. **Patron + Subject:** do you want **"by patron" and "by subject"** as v1 search filters? If yes,
