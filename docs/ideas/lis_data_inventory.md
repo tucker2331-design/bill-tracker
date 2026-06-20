@@ -66,10 +66,14 @@ The timeline + calendar need the **crossover deadline date**, and we don't have 
 (2026-06-18): crossover currently exists ONLY as a **hardcoded test window** in
 `investigation_config.py` (Feb 9–13 2026, used while driving the bug count to 0) — never a derived
 value. The `Session.SessionEvents` we parse are Start/Adjournment/Prefile/Reconvene only — **no
-crossover event**. So it needs a real source. Candidates, to confirm with a focused Session-API
-probe: (a) a crossover event type in `SessionEvents` the worker doesn't currently read; (b) the
-session's procedural resolution / published session calendar; (c) derive from the Schedule. Per
-Standard #5, derive at runtime — but first confirm where it lives. Small, non-blocking follow-up.
+crossover event**. So it needs a real source. **PROBED LIVE (2026-06-18): crossover is NOT in the Session API.** The
+2026 session returns only 5 dated `SessionEvents` (convene 1/14, prefile 11/17, adjournment ~3/14,
+reconvene 4/22) — and their `EventName`s even came back blank in that response (a quirk worth noting
+for whoever wires session dates). Crossover is absent. Remaining candidates (investigate when we
+build the timeline, not blocking now): (a) the GA's **published session calendar** (LIS publishes a
+"schedule of session" with crossover marked — possibly via the `Calendar` service or a session-rules
+doc); (b) capture it once per session from that calendar with a runtime drift check (mild Standard
+#5 tension, acceptable if validated). Flagged as a focused timeline-build follow-up.
 
 ## 4. Feature → data → status (the core table)
 | B1 feature / field | Source | Status |
