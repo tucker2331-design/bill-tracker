@@ -61,11 +61,15 @@ fact a corroborating feed hasn't confirmed, not just status-vs-history):
 → B2 action: record each feed's expected cadence so the trust layer can compute "this fact is N
 hours ahead of its corroborator" and flag it.
 
-## 3. Crossover date — confirm the source
-The timeline + calendar need the **crossover deadline date**. `Session.SessionEvents` carries
-start/adjourn/prefile/reconvene — **crossover may not be an explicit event**. B2 to verify: is
-crossover in `SessionEvents`, derivable from the Schedule/Calendar, or a published session-rules
-date we capture once per session? (Standard #5: derive it, don't hardcode — but confirm where.)
+## 3. Crossover date — NOT captured today (confirmed)
+The timeline + calendar need the **crossover deadline date**, and we don't have it. Code check
+(2026-06-18): crossover currently exists ONLY as a **hardcoded test window** in
+`investigation_config.py` (Feb 9–13 2026, used while driving the bug count to 0) — never a derived
+value. The `Session.SessionEvents` we parse are Start/Adjournment/Prefile/Reconvene only — **no
+crossover event**. So it needs a real source. Candidates, to confirm with a focused Session-API
+probe: (a) a crossover event type in `SessionEvents` the worker doesn't currently read; (b) the
+session's procedural resolution / published session calendar; (c) derive from the Schedule. Per
+Standard #5, derive at runtime — but first confirm where it lives. Small, non-blocking follow-up.
 
 ## 4. Feature → data → status (the core table)
 | B1 feature / field | Source | Status |
