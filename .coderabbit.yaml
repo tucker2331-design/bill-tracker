@@ -7,10 +7,10 @@ early_access: false
 reviews:
   profile: assertive               # thorough — matches the project's bank-grade-reliability bar
   request_changes_workflow: false
-  high_level_summary: true
+  high_level_summary: false        # speed: skip the summary/walkthrough generation, go to comments
   review_status: true
   poem: false
-  collapse_walkthrough: false
+  collapse_walkthrough: true
   auto_review:
     enabled: true
     drafts: false
@@ -18,6 +18,17 @@ reviews:
   path_filters:
     - "!docs/**"
   path_instructions:
+    - path: "**/*.py"
+      instructions: >-
+        Prioritize CORRECTNESS and RUNTIME bugs, not only style/security — this is the lens to
+        cover. Hunt specifically: None/NaN/pd.NA handling (str(None) -> 'None', boolean-of-NA
+        TypeErrors, `x or ''` on nullable fields); pandas pitfalls (iterrows on large frames,
+        missing-column KeyErrors, dtype/NA surprises); external-API limits (gspread.update does
+        NOT auto-expand the grid -> "exceeds grid limits"; Google Sheets / LIS rate limits;
+        empty or partial API/CSV responses); FAIL-SAFES (never overwrite good data with empty on
+        a transient fetch failure); type confusion, off-by-one, and silent drops. Treat a
+        crash-on-edge-input or a data-integrity regression as HIGH priority. Bank-grade
+        reliability, no silent failures.
     - path: "calendar_worker.py"
       instructions: >-
         Bank-grade reliability. Flag any silent failure: a bare `except: pass`, or a bare
