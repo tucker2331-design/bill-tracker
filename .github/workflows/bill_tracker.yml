@@ -1,0 +1,38 @@
+name: 🗂️ Bill Tracker (manual)
+
+# The new lobbyist-product backend (bill_tracker.py). MANUAL ONLY for now — validate the
+# structural pipeline on demand before we ever schedule it (cautious: it makes a handful of
+# LIS calls — the bill list + HISTORY blob — through the worker's guarded fetch + request cap).
+# Writes the Bill_Tracker tab the React/Vite front end will read via gviz. See product_roadmap §B0.
+on:
+  workflow_dispatch:
+
+concurrency:
+  group: calendar-worker          # share the worker lock — never overlap a calendar cycle's LIS use
+  cancel-in-progress: false
+
+jobs:
+  bill-tracker:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+      - name: Install Dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install requests gspread google-auth pandas beautifulsoup4 pdfplumber
+      - name: Restore LIS blob cache
+        uses: actions/cache@v4
+        with:
+          path: .lis_blob_cache
+          key: lis-blob-cache-${{ github.run_id }}-${{ github.run_attempt }}
+          restore-keys: |
+            lis-blob-cache-
+      - name: Run bill tracker
+        env:
+          GCP_CREDENTIALS: ${{ secrets.GCP_CREDENTIALS }}
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+        run: python bill_tracker.py
