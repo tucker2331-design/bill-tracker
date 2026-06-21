@@ -27,6 +27,7 @@ import json
 import datetime
 
 import gspread
+import pytz
 import pandas as pd
 from google.oauth2.service_account import Credentials
 
@@ -67,13 +68,21 @@ def _clean_bill(bill):
 
 
 def _parse_date(s):
-    """Best-effort date parse for DOCKET dates; None on anything unparseable (never raises)."""
+    """Parse a DOCKET meeting date. Returns a `date`, or None on anything unparseable (never raises).
+
+    Heuristic (Standard #1):
+      - ASSUMES LIS publishes DOCKET dates in one of `%m/%d/%Y`, `%Y-%m-%d`, `%m/%d/%y`.
+      - BREAKS if LIS introduces a new date format → that row returns None.
+      - RUNTIME CHECK: every None is counted into `completeness.docket_unparseable_dates`
+        (with its `docket_rows_total` denominator) so a format change surfaces as a rising
+        rate instead of silently dropping upcoming meetings.
+    """
     s = str(s).strip()
     for fmt in ("%m/%d/%Y", "%Y-%m-%d", "%m/%d/%y"):
         try:
             return datetime.datetime.strptime(s, fmt).date()
         except (ValueError, TypeError):
-            continue
+            continue   # try the next format; exhausting all of them → None, counted by the caller
     return None
 
 
@@ -115,7 +124,7 @@ def _derive_position(rows, bill):
         refid = str(r.get("refid", "")).strip()
         name, source = resolve_committee_from_refid(refid)
         if not name:
-            continue
+            continue   # non-committee action (floor/admin) — no position info; the row is still kept in `history`
         chamber = "House" if refid[:1].upper() == "H" else "Senate"
         current_chamber, last_committee = chamber, name
         if chamber != origin:
@@ -127,8 +136,22 @@ def _derive_position(rows, bill):
 
 
 def _latest_vote(rows):
-    """Most recent recorded vote: the tally is a DISPLAY of LIS's own published tally (allowed — it
-    is showing, not classifying); the location is STRUCTURAL (the committee from the refid, else Floor)."""
+    """Most recent recorded vote → {tally, location, date}. The location is STRUCTURAL (the committee
+    from the vote refid, else Floor). The tally is a DISPLAY of LIS's OWN published tally string —
+    showing it, never classifying on it.
+
+    Granularity note (re: the calendar's meeting-time rule): this carries the vote's DATE, not a
+    meeting TIME, on purpose. The card's "latest vote" summarises a PAST vote, for which date +
+    location + tally is the complete, decision-relevant record. Meeting-TIME accuracy is the calendar
+    subsystem's domain (X-Ray Section 9) — that separate, 100%-accurate engine owns the time lens; we
+    do not duplicate its convene-time resolution here.
+
+    Heuristic (Standard #1):
+      - ASSUMES LIS writes tallies in its published `N-Y N-N [N-A...]` form (the `_TALLY_RE` shape).
+      - BREAKS if LIS changes that surface form → a real vote could read as no-vote (empty tally).
+      - RUNTIME CHECK: a structural cross-check (votes present in VOTE.CSV vs. tallies surfaced) is
+        the PR3 follow-up; until then the LIS bill-page link on the card is the authoritative backstop.
+    """
     for r in reversed(rows):   # newest first
         m = _TALLY_RE.search(str(r.get("action", "")))
         if m:
@@ -175,14 +198,22 @@ def build_bill_records(http_session, session_code):
     for b, act, dt, rf in zip(bills, descs, dates, refids):
         act = act.strip()
         if b and act:
-            hist_by_bill.setdefault(b, []).append({"action": act, "date": str(dt).strip(), "refid": str(rf).strip()})
+            # Normalize the refid at this ingestion boundary — resolve_committee_from_refid matches
+            # case-sensitive `^[HS]…` regexes, so a lowercase/mixed-case refid from LIS would silently
+            # fail to resolve (Gemini #161). Upper-case once here so every downstream read is clean.
+            hist_by_bill.setdefault(b, []).append(
+                {"action": act, "date": dt.strip(), "refid": rf.strip().upper()})
 
     # 3) Committee maps (populates the global COMMITTEE_CODE_MAP for resolve_committee_from_refid).
-    #    Enrichment only — on failure it falls back to the static map; never hard-fail the spine.
+    #    Enrichment only: build_committee_maps already has its OWN static fallback, so this broad
+    #    catch is a deliberate belt-and-suspenders guard for a truly unexpected failure — it must
+    #    never sink the spine. Kept broad ON PURPOSE (any failure here is acceptable to absorb), but
+    #    the alert carries the exception TYPE so an unexpected mode is still diagnosable, not hidden.
     try:
         build_committee_maps(http_session, blob_code)
     except Exception as _cm_err:
-        _alert("WARN", "API_FAILURE", f"committee map build failed ({_cm_err}); using static fallback.")
+        _alert("WARN", "API_FAILURE",
+               f"committee map build failed ({type(_cm_err).__name__}: {_cm_err}); using static fallback.")
 
     # 4) DOCKET (guarded) → upcoming committee meetings per bill. Empty off-season is correct, not an error.
     docket_by_bill = {}
@@ -199,10 +230,14 @@ def build_bill_records(http_session, session_code):
             for b, dt, cm in zip(dbills, ddates, dcomms):
                 if b:
                     docket_by_bill.setdefault(b, []).append({"date": str(dt).strip(), "committee": str(cm).strip()})
-    today = datetime.date.today()
+    # Virginia-local (ET) date — NOT the runner's UTC date. An evening run on a UTC CI box would
+    # otherwise treat tomorrow as "today" and drop a meeting still scheduled for today in ET
+    # (Gemini/Qodo #161). Matches the repo's America/New_York convention (calendar_worker).
+    today = datetime.datetime.now(pytz.timezone("America/New_York")).date()
 
     now_utc = datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
-    records, universe_bills, skipped_universe, docket_unparseable = [], set(), 0, 0
+    records, universe_bills, skipped_universe = [], set(), 0
+    docket_unparseable, docket_rows_total = 0, 0   # the metric + its denominator (Standard #7)
     for item in universe:
         bill = _clean_bill(item.get("LegislationNumber", ""))
         if not bill:
@@ -213,10 +248,11 @@ def build_bill_records(http_session, session_code):
         position = _derive_position(rows, bill)
         upcoming = []
         for d in docket_by_bill.get(bill, []):
+            docket_rows_total += 1         # the denominator for the unparseable-rate metric
             meeting_day = _parse_date(d["date"])
             if meeting_day is None:
-                docket_unparseable += 1   # counted, not silently dropped (source-miss visibility)
-                continue
+                docket_unparseable += 1    # counted (over docket_rows_total), not silently dropped
+                continue                   # malformed date → skip this meeting; surfaced as a rate
             if meeting_day >= today:       # future meetings only (empty off-season, correctly)
                 upcoming.append(d)
         records.append({
@@ -245,7 +281,11 @@ def build_bill_records(http_session, session_code):
         "prefiled_no_history": len(universe_bills - history_bills),
         "in_history_not_in_universe": sorted(history_bills - universe_bills),  # should be empty
         "skipped_malformed_universe": skipped_universe,
-        "docket_unparseable_dates": docket_unparseable,   # upcoming-meeting dates LIS gave in an unknown format
+        # Unparseable DOCKET dates as a RATE with its explicit denominator (Standard #7), not a bare
+        # count — so a format change reads as a rising fraction regardless of docket size.
+        "docket_unparseable_dates": docket_unparseable,
+        "docket_rows_total": docket_rows_total,
+        "docket_unparseable_rate": round(docket_unparseable / docket_rows_total, 4) if docket_rows_total else 0.0,
         "checked_at_utc": now_utc,
     }
     return records, completeness
