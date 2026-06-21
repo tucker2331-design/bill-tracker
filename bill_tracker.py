@@ -2,8 +2,9 @@
 
 The forward-build backend for the new product (NOT the old text-driven `backend_worker`). It
 REUSES calendar_worker's hardened machinery — the LIS-authorization gate, the counted/guarded
-session (guardrail #4), and the completeness/truncation-guarded blob fetch (guardrail #1) — and
-emits one record per bill to a `Bill_Tracker` tab that the React/Vite front end reads via gviz.
+session (guardrail #4), the completeness/truncation-guarded blob fetch (guardrail #1), and the
+Slack alerter — and emits one record per bill to a `Bill_Tracker` tab that the React/Vite front
+end reads via gviz.
 
 PR 1 (this file) = the correct, low-risk SPINE: the bill universe + title + raw LIS status +
 the action/date history + a derived outcome (raw status always kept — never hide it) + the FREE
@@ -27,11 +28,12 @@ from google.oauth2.service_account import Credentials
 
 # Reuse the worker's proven, guarded primitives — single source of truth, inherits the
 # LIS-safety guardrails (request cap via the counted session, blob cache + truncation guard
-# via safe_fetch_csv) rather than re-implementing fetch logic.
+# via safe_fetch_csv) and the Slack alerter rather than re-implementing any of it.
 from calendar_worker import (
     safe_fetch_csv,
     get_armored_session,
     get_active_session_info,
+    notify_slack,
     HEADERS,
     SPREADSHEET_ID,
 )
@@ -41,22 +43,36 @@ BILL_TRACKER_TAB = "Bill_Tracker"
 BILL_LIST_URL = "https://lis.virginia.gov/Legislation/api/getlegislationsessionlistasync"
 
 
+def _alert(severity, category, message):
+    """Categorized, self-describing alert (Standard #4) → Slack if configured; always printed.
+    Terminal failures must never be silent prints."""
+    line = f"🚨 {severity} [BILL_TRACKER/{category}] {message}"
+    print(line)
+    try:
+        notify_slack(line)
+    except Exception:
+        pass
+
+
 def _blob_code(active_session):
-    """5-digit blob/session form (the blobs + MVC endpoints want 20261, not 261)."""
+    """5-digit blob/session form (the blobs + Legislation MVC endpoints want 20261, not 261)."""
     s = str(active_session)
     return f"20{s}" if len(s) == 3 else s
 
 
 def _clean_bill(bill):
-    """Match the worker's CleanBill convention so the universe and HISTORY join 1:1."""
+    """Match the worker's CleanBill convention so the universe and HISTORY join 1:1.
+    NA/None-safe so a missing id reads as '' (and is skipped), never the literal 'NONE'/'<NA>'."""
+    if bill is None or (not isinstance(bill, str) and pd.isna(bill)):
+        return ""
     return str(bill).replace(" ", "").upper().strip()
 
 
 # Outcome is a CONVENIENCE derivation over LIS's OWN controlled Status vocabulary (consuming the
 # source, not parsing free description text). The RAW LIS status is always kept on the record, so
 # nothing is hidden; an unrecognized status yields outcome "in_progress" and is FLAGGED (the trust
-# layer surfaces it rather than silently bucketing). These sets are LIS Status `Name`s; a drift
-# check (a status outside all sets) is reported, mirroring the worker's validate_status_grouping.
+# layer surfaces it rather than silently bucketing). These match LIS Status `Name`s; a drift count
+# (a status outside all sets) is reported, mirroring the worker's validate_status_grouping.
 _OUTCOME_SIGNED = ("approved", "acts of assembly", "chapter")
 _OUTCOME_VETOED = ("veto",)
 _OUTCOME_DEAD = ("passed by indefinitely", "stricken", "left in", "failed", "tabled",
@@ -85,8 +101,9 @@ def build_bill_records(http_session, session_code):
     blob_code = _blob_code(session_code)
 
     # 1) The authoritative bill UNIVERSE (also titles + status, and the completeness source).
+    #    Pass the 5-digit code — the Legislation MVC endpoints reject the 3-digit form.
     resp = http_session.get(BILL_LIST_URL, headers=HEADERS,
-                            params={"sessionCode": session_code}, timeout=30)
+                            params={"sessionCode": blob_code}, timeout=30)
     resp.raise_for_status()
     universe = resp.json().get("Legislations", []) or []
     if not universe:
@@ -94,28 +111,33 @@ def build_bill_records(http_session, session_code):
                            "(fail-safe: keep last-known-good).")
 
     # 2) HISTORY (guarded fetch: truncation/completeness checked, blob-cache-aware) → per-bill rows.
+    #    Fail-safe: an empty frame (transient fetch issue) must NOT overwrite the tab with empty
+    #    histories — keep last-known-good.
     hist_df = safe_fetch_csv(f"https://lis.blob.core.windows.net/lisfiles/{blob_code}/HISTORY.CSV")
+    if hist_df.empty:
+        raise RuntimeError("HISTORY.CSV came back empty — refusing to overwrite with empty histories "
+                           "(fail-safe: keep last-known-good).")
     hist_by_bill = {}
-    if not hist_df.empty:
-        cols = {c.lower(): c for c in hist_df.columns}
-        bill_col = next((cols[c] for c in ("billnumber", "bill_number", "bill_id") if c in cols), None)
-        desc_col = next((cols[c] for c in ("description", "history_description", "action") if c in cols), None)
-        date_col = next((cols[c] for c in ("historydate", "history_date", "date") if c in cols), None)
-        if bill_col and desc_col:
-            for _bill, grp in hist_df.groupby(hist_df[bill_col].astype(str).map(_clean_bill)):
-                rows = []
-                for _, r in grp.iterrows():
-                    action = str(r.get(desc_col, "") or "").strip()
-                    when = str(r.get(date_col, "") or "").strip() if date_col else ""
-                    if action:
-                        rows.append({"action": action, "date": when})
-                hist_by_bill[_bill] = rows
+    cols = {c.lower(): c for c in hist_df.columns}
+    bill_col = next((cols[c] for c in ("billnumber", "bill_number", "bill_id") if c in cols), None)
+    desc_col = next((cols[c] for c in ("description", "history_description", "action") if c in cols), None)
+    date_col = next((cols[c] for c in ("historydate", "history_date", "date") if c in cols), None)
+    if bill_col and desc_col:
+        # Column-zip with fillna — fast (no per-row iterrows) and NA-safe (no `… or ''` on pd.NA).
+        bills = hist_df[bill_col].map(_clean_bill)
+        descs = hist_df[desc_col].fillna("").astype(str)
+        dates = hist_df[date_col].fillna("").astype(str) if date_col else [""] * len(hist_df)
+        for b, act, dt in zip(bills, descs, dates):
+            act = act.strip()
+            if b and act:
+                hist_by_bill.setdefault(b, []).append({"action": act, "date": str(dt).strip()})
 
     now_utc = datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
-    records, universe_bills, unrecognized_status = [], set(), set()
+    records, universe_bills, unrecognized_status, skipped_universe = [], set(), set(), 0
     for item in universe:
         bill = _clean_bill(item.get("LegislationNumber", ""))
         if not bill:
+            skipped_universe += 1   # surfaced in completeness (source-miss visibility), never silent
             continue
         universe_bills.add(bill)
         title = str(item.get("Description", "") or "").strip()
@@ -140,13 +162,13 @@ def build_bill_records(http_session, session_code):
     #    HISTORY but NOT the universe is an anomaly to surface; bills in the universe with no
     #    HISTORY are simply prefiled-not-yet-acted (expected, counted).
     history_bills = set(hist_by_bill)
-    missing_from_universe = sorted(history_bills - universe_bills)
     completeness = {
         "universe_count": len(universe_bills),
         "records_written": len(records),
         "history_bills": len(history_bills),
         "prefiled_no_history": len(universe_bills - history_bills),
-        "in_history_not_in_universe": missing_from_universe,   # should be empty
+        "in_history_not_in_universe": sorted(history_bills - universe_bills),  # should be empty
+        "skipped_malformed_universe": skipped_universe,
         "unrecognized_statuses": sorted(unrecognized_status),  # trust: surface, don't bucket silently
         "checked_at_utc": now_utc,
     }
@@ -154,17 +176,14 @@ def build_bill_records(http_session, session_code):
 
 
 def write_bill_tracker(records, completeness):
-    """Write the records + a completeness summary to the Bill_Tracker tab (create if missing)."""
+    """Write the records + a completeness summary to the Bill_Tracker tab (create if missing).
+    Resizes the grid first — gspread.update does NOT auto-expand and errors past the grid."""
     creds_json = os.environ.get("GCP_CREDENTIALS")
     if not creds_json:
         raise RuntimeError("GCP_CREDENTIALS not set")
     gc = gspread.authorize(Credentials.from_service_account_info(
         json.loads(creds_json), scopes=["https://www.googleapis.com/auth/spreadsheets"]))
     sheet = gc.open_by_key(SPREADSHEET_ID)
-    try:
-        ws = sheet.worksheet(BILL_TRACKER_TAB)
-    except gspread.WorksheetNotFound:
-        ws = sheet.add_worksheet(title=BILL_TRACKER_TAB, rows=max(1000, len(records) + 100), cols=8)
 
     header = ["Bill", "Title", "Status (LIS)", "Outcome", "Last Action", "History (JSON)",
               "Data As Of (UTC)", "Source"]
@@ -172,38 +191,53 @@ def write_bill_tracker(records, completeness):
         r["bill"], r["title"], r["status_lis"], r["outcome"], r["last_action_date"],
         json.dumps(r["history"], ensure_ascii=False), r["data_as_of_utc"], r["source"],
     ] for r in records]
+    need_rows, need_cols = len(rows) + 50, 10   # A..H data + the J1 completeness summary
+
+    try:
+        ws = sheet.worksheet(BILL_TRACKER_TAB)
+        if ws.row_count < need_rows or ws.col_count < need_cols:   # grow to fit (update won't auto-expand)
+            ws.resize(rows=max(ws.row_count, need_rows), cols=max(ws.col_count, need_cols))
+    except gspread.exceptions.WorksheetNotFound:
+        ws = sheet.add_worksheet(title=BILL_TRACKER_TAB, rows=need_rows, cols=need_cols)
+
     ws.clear()
     ws.update(values=rows, range_name="A1")
-
-    # completeness summary in a far cell the front end can read for the trust header
+    # completeness summary in a far cell the front end reads for the trust header
     ws.update(values=[[json.dumps(completeness, ensure_ascii=False)]], range_name="J1")
 
 
 def run_bill_tracker():
-    http_session = get_armored_session()   # counted/guarded (guardrail #4)
+    try:
+        http_session = get_armored_session()   # counted/guarded (guardrail #4)
 
-    # Session derived at runtime from the Session API (Standard #5 — never hardcoded).
-    info, ok, _auth_failed = get_active_session_info(http_session)
-    if not ok or not info or not info.get("code"):
-        print("🛑 could not derive the active session; skipping (fail-safe — keep last-known-good).")
-        return
-    session_code = str(info["code"])
+        # Session derived at runtime from the Session API (Standard #5 — never hardcoded).
+        info, ok, _auth_failed = get_active_session_info(http_session)
+        if not ok or not info or not info.get("code"):
+            _alert("CRITICAL", "API_FAILURE",
+                   "could not derive the active session; skipped (kept last-known-good).")
+            return
+        session_code = str(info["code"])
 
-    # LIS-authorization gate (ban-safe): never pull data for an unauthorized session.
-    if not is_authorized_session(session_code):
-        print(f"🛑 LIS authorization halt — session {session_code} not authorized; skipping.")
-        return
+        # LIS-authorization gate (ban-safe): never pull data for an unauthorized session.
+        if not is_authorized_session(session_code):
+            print(f"🛑 LIS authorization halt — session {session_code} not authorized; skipping.")
+            return
 
-    records, completeness = build_bill_records(http_session, session_code)
-    write_bill_tracker(records, completeness)
-    print(f"✅ Bill_Tracker written: {len(records)} bills "
-          f"({completeness['prefiled_no_history']} prefiled-no-history). "
-          f"Completeness: {completeness['records_written']}/{completeness['universe_count']} of the "
-          f"universe; {len(completeness['in_history_not_in_universe'])} in-history-not-in-universe; "
-          f"{len(completeness['unrecognized_statuses'])} unrecognized statuses.")
-    if completeness["in_history_not_in_universe"]:
-        print(f"⚠️ COMPLETENESS ANOMALY — bills in HISTORY but absent from the universe: "
-              f"{completeness['in_history_not_in_universe'][:10]}")
+        records, completeness = build_bill_records(http_session, session_code)
+        write_bill_tracker(records, completeness)
+        print(f"✅ Bill_Tracker written: {len(records)} bills "
+              f"({completeness['prefiled_no_history']} prefiled-no-history). Completeness: "
+              f"{completeness['records_written']}/{completeness['universe_count']} of the universe; "
+              f"{len(completeness['in_history_not_in_universe'])} in-history-not-in-universe; "
+              f"{completeness['skipped_malformed_universe']} skipped; "
+              f"{len(completeness['unrecognized_statuses'])} unrecognized statuses.")
+        if completeness["in_history_not_in_universe"]:
+            _alert("WARN", "DATA_ANOMALY",
+                   f"{len(completeness['in_history_not_in_universe'])} bills in HISTORY but absent from "
+                   f"the universe: {completeness['in_history_not_in_universe'][:10]}")
+    except Exception as e:
+        _alert("CRITICAL", "API_FAILURE", f"bill_tracker cycle failed: {type(e).__name__}: {e}")
+        raise
 
 
 if __name__ == "__main__":
