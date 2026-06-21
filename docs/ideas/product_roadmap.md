@@ -80,6 +80,13 @@ data → UI.** Designing UI before we know the user's jobs and what data backs t
   records derive from the structural per-bill state the worker already computes — not a second
   text pass. Completeness (top trust priority) starts free: processed distinct bills vs the HISTORY
   blob's distinct bills + the truncation guard; external `AdvancedLegislationSearch` count later.
+  - **CORRECTION (owner, 2026-06-18): DROP the old linear lifecycle labels** (`In Committee → Out of
+    Committee → Awaiting Signature → Signed`). They flatten the two-chamber + re-referral reality
+    (committee happens twice; bills bounce; "out of committee" can't say which chamber) — the exact
+    thing the crossover-lane timeline fixes. Reuse only the old data-model FIELDS. A bill's state =
+    two STRUCTURAL axes: **position** (chamber lane + crossover side + committee + referral count,
+    the same signal the timeline uses) + **outcome** (alive / died-at-stage / passed / signed /
+    vetoed). No linear ladder.
 
 ### B3. UI / information-display design  📋 NOT STARTED (I do "a lot of reading" first)
 - **WHAT:** research information-display + UI/UX best practices (dashboards, dense-data tables,
