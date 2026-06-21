@@ -101,10 +101,13 @@ def build_bill_records(http_session, session_code):
                             params={"sessionCode": blob_code}, timeout=30)
     resp.raise_for_status()
     payload = resp.json()
-    universe = payload.get("Legislations", []) or [] if isinstance(payload, dict) else []
+    if not isinstance(payload, dict):   # explicit, not precedence-dependent (Qodo #159)
+        raise RuntimeError("bill universe response was not a JSON object — refusing to overwrite "
+                           "(fail-safe: keep last-known-good).")
+    universe = payload.get("Legislations") or []
     if not universe:
-        raise RuntimeError("bill universe came back empty/non-dict — refusing to overwrite with "
-                           "nothing (fail-safe: keep last-known-good).")
+        raise RuntimeError("bill universe came back empty — refusing to overwrite with nothing "
+                           "(fail-safe: keep last-known-good).")
 
     # 2) HISTORY (guarded fetch: truncation/completeness checked, blob-cache-aware) → per-bill rows.
     #    Fail-safe: an empty frame (transient fetch issue) must NOT overwrite the tab with empty
