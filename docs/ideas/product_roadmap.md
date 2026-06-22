@@ -95,7 +95,7 @@ data → UI.** Designing UI before we know the user's jobs and what data backs t
   gviz ($0, Cloudflare Pages). The global Tracking↔full switch + trust header, and all four lenses +
   the bill card: Today (what's-new), Timeline (crossover lanes — the centerpiece), Calendar, Search
   (faceted), Health (operator trust). Build clean; every view validated against live data
-  (screenshots in the session). In a PR. See `web/README.md` + [[log]] 2026-06-22.
+  (screenshots in the session). **MERGED to main (#164, `7f90917`)** — reviews clean. See `web/README.md` + [[log]] 2026-06-22.
 - **NEXT (polish):** timeline committee-board drill-down (§3b); chief-patron full name (universe
   `Patrons` upgrade); co-patron backfill; calendar-subsystem integration (floor + crossover-date +
   vote times); Cloudflare Pages deploy.
