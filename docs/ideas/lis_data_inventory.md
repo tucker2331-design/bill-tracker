@@ -85,14 +85,15 @@ doc); (b) capture it once per session from that calendar with a runtime drift ch
 | Referral-count badge | re-referral tracking | ✅ have |
 | Calendar tab | Schedule + the calendar subsystem | ✅ have |
 | Search: chamber / committee / status filters | derived | ✅ have |
-| Search: **by patron** | LegislationPatron | ❌ ingest needed |
-| Search: **by subject** | LegislationSubject | ❌ ingest needed |
+| Search: **by patron** | **BILLS.CSV** (`Patron_id`/`Patron_name`) | ✅ built (bill_tracker PR3 — BULK from BILLS.CSV, chief patron, 0 per-bill calls; 3645/3645 covered) |
+| Search: **by subject** | LegislationSubject | ❌ **DEFERRED — no bulk source** (PR3 probe: no subject blob exists; the LegislationSubject MVC endpoint is per-bill = 3,645-call ban risk). Needs a confirmed bulk-safe source (find the real endpoint via the SPA's network traffic, or a throttled/cached backfill). |
 | Bill card: number / catchline / status / lifecycle / committee | current pipeline | ✅ built (bill_tracker PR1 spine + PR2 structural position: chamber/crossed/last_committee/referral_count) |
 | Bill card: latest vote + **where** | VOTE + action committee | ✅ built (bill_tracker PR2 — `latest_vote{tally,location,date}`, location structural from the vote refid). **Vote meeting-TIME is sourced from the calendar subsystem at the calendar↔product merge — never re-derived in bill_tracker (single source of truth; see [[log]] 2026-06-21 decision).** |
 | Bill card: next meeting + **committee** | DOCKET/Schedule | ✅ built (bill_tracker PR2 — `upcoming[]` from DOCKET.CSV, future-only) |
 | Bill card: history (action\|date, pin) | HISTORY/LegEvent | ✅ have |
 | Bill card: **summary text** | LegislationSummary | ❌ optional ingest |
-| Bill card: **patron** | LegislationPatron | ❌ ingest needed for "by patron" anyway |
+| Bill card: **patron** | **BILLS.CSV** (`Patron_name`/`Patron_id`) | ✅ built (bill_tracker PR3 — chief patron, bulk) |
+| Bill outcome (alive/dead/passed/signed/vetoed/**carried_over**) | **BILLS.CSV** boolean flags | ✅ built (bill_tracker PR3 — STRUCTURAL-first from `Vetoed`/`Approved`/`Carried_over`/`Failed`/`Passed`; 99.7% structural, keyword fallback only for flagless bills; fixed "Continued"→carried_over) |
 | Bill card: **bill text / amendments** | LegislationText/Version | ❌ heavier ingest |
 | Trust: data-as-of freshness | `AA1` marker | ✅ have (surface it) |
 | Trust: per-bill freshness | derivable from cycle | ⚠️ build (track per bill) |
@@ -109,13 +110,26 @@ or a full `Legislation` list. Plan: each cycle, fetch the universe count/ids, di
 This is the single highest-value B2 build — it closes the gap a lobbyist can't see.
 
 ## 6. Database expansion — what to start collecting (and what each unlocks)
+
+> **PR3 finding (2026-06-22): `BILLS.CSV` is a fourth bulk blob** (`lisfiles/{session}/BILLS.CSV`,
+> 3,646 rows = every bill, one fetch — same pattern as HISTORY/DOCKET/VOTE; it was missing from §1).
+> It carries, in BULK: `Patron_id`/`Patron_name` (chief patron — **closed item 2 with zero per-bill
+> calls**); structural outcome booleans `Vetoed`/`Approved`/`Carried_over`/`Failed`/`Passed` (now the
+> structural-first `outcome`); `Last_house_committee_id`/`Last_senate_committee_id` (structural
+> committee codes — a free future cross-check against the refid-derived `last_committee`, Standard #2);
+> `Chapter_id`; and `Full_text_doc1..6` (full-text document refs — a lighter path to item 5 than
+> `LegislationText`). **Probed for a subject blob — none exists** (clean 404 on SUBINDEX/SUBJECT/etc.;
+> only BILLS/HISTORY/DOCKET/VOTE), and the `LegislationSubject` MVC endpoint is per-bill (ban risk), so
+> subject (item 3) stays deferred pending a confirmed bulk-safe source.
+
 Ordered by value / trust-criticality:
 1. **Bill universe + count** (`AdvancedLegislationSearch` / `Legislation`) — *trust-critical.* Closes
    the completeness gap (§5) and makes the "full General Assembly" view authoritative, not
-   action-derived. **Recommend yes regardless.**
-2. **Patron** (`LegislationPatron`/`LegislationByMember`) — powers "by patron" search (a filter you
-   specified) and is high-value on the card (lobbyists care intensely who carries a bill).
-3. **Subject** (`LegislationSubject`) — powers "by subject" search + discovery grouping.
+   action-derived. **✅ DONE** (bill_tracker PR1 — the universe IS the authoritative set; 3645/3645).
+2. **Patron** — **✅ DONE** (bill_tracker PR3 — chief patron, BULK from `BILLS.CSV`, not the per-bill
+   `LegislationPatron` endpoint). Co-patrons (beyond the chief) remain a later enhancement.
+3. **Subject** (`LegislationSubject`) — powers "by subject" search + discovery grouping. **⏸️ DEFERRED
+   — no bulk source found** (see PR3 finding above).
 4. **Summary** (`LegislationSummary`) — a real one-paragraph summary on the card beyond the catchline.
 5. **Bill text / versions / amendments** (`LegislationText`) — the heaviest data; needed only if we
    show text or amendment diffs (a richer, later feature).
