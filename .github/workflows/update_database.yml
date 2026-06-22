@@ -1,9 +1,23 @@
-name: 🤖 Mastermind Ghost Worker
+name: 🤖 Mastermind Ghost Worker (PAUSED)
 
+# ⏸️ SCHEDULE PAUSED 2026-06-22 (owner decision) — LIS-safety / ban-risk.
+# This LEGACY text-driven backend (backend_worker.py) re-downloaded HISTORY.CSV (~4.7 MB) + DOCKET.CSV
+# + hit the bill-list API UNCONDITIONALLY every 15 min (96×/day) — no ETag/304, no jitter, no request
+# cap, no quiet hours (the antithesis of the LIS-safety charter — see docs/knowledge/lis_api_safety.md
+# per-job cadence ledger). It feeds the OLD front end (v2_shadow_test), now being replaced by
+# bill_tracker + the new front end (B3). Paused to stop the ongoing exposure.
+# TO RESUME: un-comment the `schedule:` block below (and reconsider adding the guardrails first).
 on:
-  schedule:
-    - cron: '*/15 * * * *' # Runs every 15 minutes
-  workflow_dispatch: # Adds a manual "Run Now" button in GitHub
+  # schedule:
+  #   - cron: '*/15 * * * *' # Runs every 15 minutes  ← PAUSED 2026-06-22 (ban-risk; see header)
+  workflow_dispatch: # manual "Run Now" still available (the worker is paused, not removed)
+
+permissions:
+  contents: read     # least-privilege: only needs checkout; writes go to Sheets via GCP_CREDENTIALS
+
+concurrency:
+  group: calendar-worker   # share the worker lock — a manual run must never overlap a calendar/bill_tracker
+  cancel-in-progress: false  # cycle's LIS use (CodeRabbit #163)
 
 jobs:
   update-database:
