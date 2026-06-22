@@ -104,7 +104,8 @@ _OUTCOME_CARRIED = ("carried over", "continued")   # carried over to the next se
 _OUTCOME_DEAD = ("passed by indefinitely", "stricken", "left in", "failed", "tabled",
                  "incorporated", "withdrawn", "no action")
 _OUTCOME_AWAITING = ("enrolled", "pending governor", "awaiting governor", "communicated to governor",
-                     "governor's action", "passed")   # passed the legislature, awaiting the Governor
+                     "governor's action")   # NOTE: "passed" handled separately — a single-chamber
+                                            # "Passed House"/"Passed Senate" is mid-process, not awaiting
 
 
 def _outcome_from_flags(meta):
@@ -136,9 +137,15 @@ def _derive_outcome(raw_status):
         return "signed"
     if any(k in s for k in _OUTCOME_CARRIED):   # before DEAD: "continued to" must not read as dead
         return "carried_over"
-    if any(k in s for k in _OUTCOME_DEAD):      # before AWAITING: "passed by indefinitely" is dead, not awaiting
+    if any(k in s for k in _OUTCOME_DEAD):      # before the "passed" check: "passed by indefinitely" is dead
         return "dead"
     if any(k in s for k in _OUTCOME_AWAITING):
+        return "awaiting_governor"
+    if "passed" in s:
+        # A single-chamber pass ("Passed House"/"Passed Senate") is still mid-process; only a full pass
+        # (bare "Passed" / "Passed Both") awaits the Governor (Qodo #162 — don't read one chamber as done).
+        if ("house" in s or "senate" in s) and "both" not in s:
+            return "in_progress"
         return "awaiting_governor"
     return "in_progress"
 
@@ -154,39 +161,43 @@ def _derive_outcome(raw_status):
 
 
 def _build_bills_meta(blob_code):
-    """BULK ingest of BILLS.CSV (one guarded blob — NEVER per-bill) → {clean_bill: {patron_name,
-    patron_id, vetoed, approved, chaptered, carried_over, failed, passed}} + the row count. `chaptered`
-    is `Chapter_id` presence (a chapter in the Acts of Assembly = enacted, incl. resolutions that
-    chapter without a Governor's signature). Enrichment only: on an empty/failed fetch or a missing bill
-    column, returns ({}, 0) and the caller fails soft (keyword-only outcome, empty patron)."""
+    """BULK ingest of BILLS.CSV (one guarded blob — NEVER per-bill) → (meta, row_count, skipped_no_bill)
+    where meta is {clean_bill: {patron_name, patron_id, vetoed, approved, chaptered, carried_over,
+    failed, passed}}. `chaptered` is `Chapter_id` presence (a chapter in the Acts of Assembly = enacted,
+    incl. resolutions that chapter without a Governor's signature). Enrichment only: on an empty/failed
+    fetch or a missing bill column, returns ({}, 0, 0) and the caller fails soft (keyword-only outcome,
+    empty patron) AND alerts on the total-failure case (bills_meta_rows == 0)."""
     df = safe_fetch_csv(f"https://lis.blob.core.windows.net/lisfiles/{blob_code}/BILLS.CSV")
     if df.empty:
-        return {}, 0
+        return {}, 0, 0
     cols = {c.lower(): c for c in df.columns}
     bill_col = next((cols[c] for c in ("bill_id", "billnumber", "bill_number") if c in cols), None)
     if not bill_col:
-        return {}, 0
+        return {}, 0, 0
 
-    def series(name):   # NA-safe column or all-empty placeholder (no iterrows, no `… or ''` on pd.NA)
-        c = cols.get(name)
+    def series(name):   # NA-safe column or all-empty placeholder (no iterrows, no `… or ''` on pd.NA).
+        # Tolerate minor LIS header variants (Patron_name vs PatronName) by also trying the
+        # underscore-stripped key (Gemini #162); cols keys are already lower-cased.
+        c = cols.get(name) or cols.get(name.replace("_", ""))
         return df[c].fillna("").astype(str) if c else [""] * len(df)
 
     def is_y(v):
         return str(v).strip().upper() == "Y"
 
-    meta = {}
+    meta, skipped_no_bill = {}, 0
     for b, pnm, pid, vet, app, chap, car, fail, pas in zip(
             df[bill_col].map(_clean_bill), series("patron_name"), series("patron_id"),
             series("vetoed"), series("approved"), series("chapter_id"),
             series("carried_over"), series("failed"), series("passed")):
         if not b:
-            continue   # malformed BILLS.CSV row with no bill id — nothing to key on (enrichment, skip)
+            skipped_no_bill += 1   # malformed BILLS.CSV row, no bill id — counted (source-miss visibility)
+            continue
         meta[b] = {
             "patron_name": pnm.strip(), "patron_id": pid.strip(),
             "vetoed": is_y(vet), "approved": is_y(app), "chaptered": bool(chap.strip()),
             "carried_over": is_y(car), "failed": is_y(fail), "passed": is_y(pas),
         }
-    return meta, len(df)
+    return meta, len(df), skipped_no_bill
 
 
 def _derive_position(rows, bill):
@@ -310,7 +321,7 @@ def build_bill_records(http_session, session_code):
                 if b:
                     docket_by_bill.setdefault(b, []).append({"date": str(dt).strip(), "committee": str(cm).strip()})
     # 5) BILLS.CSV (one guarded BULK blob) → chief patron + structural outcome flags for every bill.
-    bills_meta, bills_meta_rows = _build_bills_meta(blob_code)
+    bills_meta, bills_meta_rows, bills_skipped_no_bill = _build_bills_meta(blob_code)
 
     # Virginia-local (ET) date — NOT the runner's UTC date. An evening run on a UTC CI box would
     # otherwise treat tomorrow as "today" and drop a meeting still scheduled for today in ET
@@ -391,6 +402,7 @@ def build_bill_records(http_session, session_code):
         "docket_unparseable_rate": round(docket_unparseable / docket_rows_total, 4) if docket_rows_total else 0.0,
         # BILLS.CSV bulk-join coverage (trust: did the patron/outcome enrichment actually reach the bills?)
         "bills_meta_rows": bills_meta_rows,
+        "bills_skipped_no_bill": bills_skipped_no_bill,   # malformed BILLS.CSV rows (no bill id), counted
         "outcome_structural": outcome_structural,
         "outcome_keyword_fallback": outcome_keyword,
         "patron_present": patron_present,
@@ -485,11 +497,17 @@ def run_bill_tracker():
                    f"keyword-vs-structural outcome mismatch {completeness['outcome_keyword_mismatch_rate']:.2%} "
                    f"({completeness['outcome_keyword_mismatches']} bills, e.g. {completeness['outcome_mismatch_sample']}) "
                    f"— the keyword fallback has drifted from LIS's structural flags; review _derive_outcome.")
-        # Bulk-join coverage: a large keyword-fallback share means BILLS.CSV under-covered the universe.
-        if completeness["patron_missing"] > 0.05 * max(1, completeness["records_written"]):
+        # BILLS.CSV TOTAL failure (fetch empty or bill column undetected) — distinct from partial
+        # under-coverage: every bill lost its patron + structural outcome this cycle (CodeRabbit #162).
+        if completeness["bills_meta_rows"] == 0 and completeness["records_written"] > 0:
+            _alert("WARN", "API_FAILURE",
+                   "BILLS.CSV fetched/parsed to 0 rows — patron + structural outcome UNAVAILABLE this "
+                   "cycle; fell back to keyword-only outcome + empty patron (spine still written).")
+        # Partial under-coverage (BILLS.CSV present but didn't cover the universe): a different signal.
+        elif completeness["patron_missing"] > 0.05 * max(1, completeness["records_written"]):
             _alert("WARN", "DATA_ANOMALY",
                    f"patron missing for {completeness['patron_missing']}/{completeness['records_written']} "
-                   f"bills — BILLS.CSV may have under-covered the universe (fetch/schema issue).")
+                   f"bills — BILLS.CSV partially under-covered the universe (schema/join issue).")
     except Exception as e:
         _alert("CRITICAL", "API_FAILURE", f"bill_tracker cycle failed: {type(e).__name__}: {e}")
         raise
