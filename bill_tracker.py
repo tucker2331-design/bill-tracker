@@ -9,15 +9,22 @@ structural committee resolvers, and the Slack alerter — and emits one record p
 PR 1 = the SPINE: universe + title + raw LIS status + a derived outcome (raw status always kept) +
 the action/date history + the FREE completeness check + the freshness/provenance fields.
 
-PR 2 (this file) = STRUCTURAL POSITION, from refids (no text classification, no probabilistic
-guess): chamber + crossed-over + last committee + referral count (via resolve_committee_from_refid,
-which reports whether a refid is a direct committee referral vs a committee vote); latest vote WITH
-its location (committee from the vote refid; tally is a DISPLAY of LIS's own published tally);
-upcoming meetings (DOCKET). LIS's own `status` remains the authoritative "where it is" — these are
-*certain* structural facts layered on top, never a re-guessed location state machine.
+PR 2 = STRUCTURAL POSITION, from refids (no text classification, no probabilistic guess): chamber +
+crossed-over + last committee + referral count; latest vote WITH its location; upcoming meetings
+(DOCKET). LIS's own `status` remains the authoritative "where it is".
 
-DEFERRED to PR 3: patron + subject ingests (check for a bulk endpoint first — per-bill calls over
-3,645 bills would be a ban risk), and the true status-drift check (reuse validate_status_grouping).
+PR 3 (this file) = BILLS.CSV ingest (ONE bulk blob — never per-bill, which over 3,645 bills would be
+a ban risk): chief PATRON (name + id); a STRUCTURAL-first `outcome` from LIS's OWN fields (Vetoed /
+Approved / Chapter_id / Carried_over / Failed / Passed — more reliable than the status keyword, and it
+fixes "Continued"→carried_over and chaptered resolutions which the keyword missed); and a SELF-
+CALIBRATING outcome check — the keyword fallback is validated each run against LIS's own structural
+flags (the oracle), surfaced as a mismatch RATE. No hardcoded status vocabulary to maintain (Standard
+#1/#8): LIS is internally inconsistent (its bill feed emits "Continued", absent from its OWN status
+reference), so any name allow-list would false-flag forever — the structural reconciliation is the
+sustainable check, zero extra LIS calls.
+SUBJECT is DEFERRED: LIS publishes NO bulk subject blob (BILLS/HISTORY/DOCKET/VOTE are the only ones)
+and the LegislationSubject endpoint is per-bill (a 3,645-call ban risk) — needs a confirmed bulk-safe
+source before ingest (see docs/ideas/lis_data_inventory.md §6).
 
 See docs/ideas/product_vision.md, docs/ideas/product_roadmap.md §B0, docs/ideas/lis_data_inventory.md.
 """
@@ -86,28 +93,111 @@ def _parse_date(s):
     return None
 
 
-# Outcome is a CONVENIENCE label over LIS's OWN controlled Status vocabulary (consuming the source,
-# not parsing free description text). The RAW LIS status is ALWAYS kept on the record.
+# Outcome is a CONVENIENCE label; the RAW LIS status is ALWAYS kept on the record. PR3 makes it
+# STRUCTURAL-first: `_outcome_from_flags` reads LIS's OWN boolean flags from BILLS.CSV; the keyword
+# path below is the FALLBACK for a bill absent from BILLS.CSV (consuming the controlled Status string,
+# never free description text). "carried_over" is distinct from "dead": a continued bill returns next
+# session — the PR1 keyword set wrongly folded "Continued" into in_progress/dead.
 _OUTCOME_SIGNED = ("approved", "acts of assembly", "chapter")
 _OUTCOME_VETOED = ("veto",)
+_OUTCOME_CARRIED = ("carried over", "continued")   # carried over to the next session — NOT dead/failed
 _OUTCOME_DEAD = ("passed by indefinitely", "stricken", "left in", "failed", "tabled",
-                 "incorporated", "continued to", "carried over", "withdrawn", "no action")
+                 "incorporated", "withdrawn", "no action")
 _OUTCOME_AWAITING = ("enrolled", "pending governor", "awaiting governor", "communicated to governor",
-                     "governor's action")
+                     "governor's action")   # NOTE: "passed" handled separately — a single-chamber
+                                            # "Passed House"/"Passed Senate" is mid-process, not awaiting
+
+
+def _outcome_from_flags(meta):
+    """STRUCTURAL outcome (Standard #3) from BILLS.CSV's OWN fields; None if none is set (→ caller falls
+    back to the keyword path). Precedence is most-terminal-first, validated against every status×flag
+    combo in the live 2026 data: a vetoed bill also flags Passed (Vetoed wins); an Incorporated bill
+    flags Failed; a Continued bill flags Carried_over (returns next session); and a `Chapter_id` (a
+    chapter in the Acts of Assembly) means ENACTED whether or not `Approved` is set — that covers joint
+    resolutions, which chapter WITHOUT a Governor's signature (so `Approved=N` yet they are signed/done;
+    the keyword-vs-structural reconciliation surfaced these as the 8 HJ/SJ "Acts of Assembly Chapter"
+    cases)."""
+    if not meta:
+        return None
+    if meta.get("vetoed"):                            return "vetoed"
+    if meta.get("approved") or meta.get("chaptered"): return "signed"   # gov-signed OR chaptered resolution
+    if meta.get("carried_over"):                      return "carried_over"
+    if meta.get("failed"):                            return "dead"     # covers Failed + Incorporated
+    if meta.get("passed"):                            return "awaiting_governor"
+    return None
 
 
 def _derive_outcome(raw_status):
-    """Clearly-derived convenience label; the raw status is the authoritative field on the record."""
+    """KEYWORD-fallback outcome over the controlled Status string (used only when BILLS.CSV lacks the
+    bill). The raw status is the authoritative field on the record; this is a convenience label."""
     s = str(raw_status).lower()
     if any(k in s for k in _OUTCOME_VETOED):
         return "vetoed"
     if any(k in s for k in _OUTCOME_SIGNED):
         return "signed"
-    if any(k in s for k in _OUTCOME_DEAD):
+    if any(k in s for k in _OUTCOME_CARRIED):   # before DEAD: "continued to" must not read as dead
+        return "carried_over"
+    if any(k in s for k in _OUTCOME_DEAD):      # before the "passed" check: "passed by indefinitely" is dead
         return "dead"
     if any(k in s for k in _OUTCOME_AWAITING):
         return "awaiting_governor"
+    if "passed" in s:
+        # A single-chamber pass ("Passed House"/"Passed Senate") is still mid-process; only a full pass
+        # (bare "Passed" / "Passed Both") awaits the Governor (Qodo #162 — don't read one chamber as done).
+        if ("house" in s or "senate" in s) and "both" not in s:
+            return "in_progress"
+        return "awaiting_governor"
     return "in_progress"
+
+
+# NOTE (sustainability, Standard #1/#8): the bill-level `outcome` is derived STRUCTURALLY from
+# BILLS.CSV's own fields (above), NOT from a hardcoded status-name vocabulary — so a new LIS status
+# never needs a human to "extend a table". The keyword path is only a fallback for flagless bills, and
+# it is itself runtime-VALIDATED by the structural-vs-keyword reconciliation in build_bill_records
+# (LIS's own flags are the oracle). We deliberately do NOT diff against a status-name allow-list:
+# LIS is internally inconsistent (its bill feed emits bare "Continued", which is absent from its OWN
+# GetLegislationStatusListAsync reference), so any name allow-list — hardcoded or fetched — would
+# false-flag forever. See docs/ideas/lis_data_inventory.md §6 / docs/log.md (2026-06-22).
+
+
+def _build_bills_meta(blob_code):
+    """BULK ingest of BILLS.CSV (one guarded blob — NEVER per-bill) → (meta, row_count, skipped_no_bill)
+    where meta is {clean_bill: {patron_name, patron_id, vetoed, approved, chaptered, carried_over,
+    failed, passed}}. `chaptered` is `Chapter_id` presence (a chapter in the Acts of Assembly = enacted,
+    incl. resolutions that chapter without a Governor's signature). Enrichment only: on an empty/failed
+    fetch or a missing bill column, returns ({}, 0, 0) and the caller fails soft (keyword-only outcome,
+    empty patron) AND alerts on the total-failure case (bills_meta_rows == 0)."""
+    df = safe_fetch_csv(f"https://lis.blob.core.windows.net/lisfiles/{blob_code}/BILLS.CSV")
+    if df.empty:
+        return {}, 0, 0
+    cols = {c.lower(): c for c in df.columns}
+    bill_col = next((cols[c] for c in ("bill_id", "billnumber", "bill_number") if c in cols), None)
+    if not bill_col:
+        return {}, 0, 0
+
+    def series(name):   # NA-safe column or all-empty placeholder (no iterrows, no `… or ''` on pd.NA).
+        # Tolerate minor LIS header variants (Patron_name vs PatronName) by also trying the
+        # underscore-stripped key (Gemini #162); cols keys are already lower-cased.
+        c = cols.get(name) or cols.get(name.replace("_", ""))
+        return df[c].fillna("").astype(str) if c else [""] * len(df)
+
+    def is_y(v):
+        return str(v).strip().upper() == "Y"
+
+    meta, skipped_no_bill = {}, 0
+    for b, pnm, pid, vet, app, chap, car, fail, pas in zip(
+            df[bill_col].map(_clean_bill), series("patron_name"), series("patron_id"),
+            series("vetoed"), series("approved"), series("chapter_id"),
+            series("carried_over"), series("failed"), series("passed")):
+        if not b:
+            skipped_no_bill += 1   # malformed BILLS.CSV row, no bill id — counted (source-miss visibility)
+            continue
+        meta[b] = {
+            "patron_name": pnm.strip(), "patron_id": pid.strip(),
+            "vetoed": is_y(vet), "approved": is_y(app), "chaptered": bool(chap.strip()),
+            "carried_over": is_y(car), "failed": is_y(fail), "passed": is_y(pas),
+        }
+    return meta, len(df), skipped_no_bill
 
 
 def _derive_position(rows, bill):
@@ -149,8 +239,8 @@ def _latest_vote(rows):
     Heuristic (Standard #1):
       - ASSUMES LIS writes tallies in its published `N-Y N-N [N-A...]` form (the `_TALLY_RE` shape).
       - BREAKS if LIS changes that surface form → a real vote could read as no-vote (empty tally).
-      - RUNTIME CHECK: a structural cross-check (votes present in VOTE.CSV vs. tallies surfaced) is
-        the PR3 follow-up; until then the LIS bill-page link on the card is the authoritative backstop.
+      - RUNTIME CHECK: a structural cross-check (votes present in VOTE.CSV vs. tallies surfaced) is a
+        future follow-up; until then the LIS bill-page link on the card is the authoritative backstop.
     """
     for r in reversed(rows):   # newest first
         m = _TALLY_RE.search(str(r.get("action", "")))
@@ -230,6 +320,9 @@ def build_bill_records(http_session, session_code):
             for b, dt, cm in zip(dbills, ddates, dcomms):
                 if b:
                     docket_by_bill.setdefault(b, []).append({"date": str(dt).strip(), "committee": str(cm).strip()})
+    # 5) BILLS.CSV (one guarded BULK blob) → chief patron + structural outcome flags for every bill.
+    bills_meta, bills_meta_rows, bills_skipped_no_bill = _build_bills_meta(blob_code)
+
     # Virginia-local (ET) date — NOT the runner's UTC date. An evening run on a UTC CI box would
     # otherwise treat tomorrow as "today" and drop a meeting still scheduled for today in ET
     # (Gemini/Qodo #161). Matches the repo's America/New_York convention (calendar_worker).
@@ -238,6 +331,8 @@ def build_bill_records(http_session, session_code):
     now_utc = datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
     records, universe_bills, skipped_universe = [], set(), 0
     docket_unparseable, docket_rows_total = 0, 0   # the metric + its denominator (Standard #7)
+    outcome_structural, outcome_keyword, patron_present = 0, 0, 0   # trust counters (coverage of the bulk join)
+    outcome_mismatches = []   # self-calibrating drift: keyword-derived outcome ≠ LIS's structural flags
     for item in universe:
         bill = _clean_bill(item.get("LegislationNumber", ""))
         if not bill:
@@ -255,11 +350,30 @@ def build_bill_records(http_session, session_code):
                 continue                   # malformed date → skip this meeting; surfaced as a rate
             if meeting_day >= today:       # future meetings only (empty off-season, correctly)
                 upcoming.append(d)
+
+        raw_status = str(item.get("LegislationStatus", "") or "").strip()
+        meta = bills_meta.get(bill)
+        structural_outcome = _outcome_from_flags(meta)   # STRUCTURAL-first (Standard #3)
+        keyword_outcome = _derive_outcome(raw_status)    # always computed — also the reconciliation probe
+        if structural_outcome:
+            outcome, outcome_structural = structural_outcome, outcome_structural + 1
+            # Self-calibrating runtime check (Standard #1): LIS's OWN flags are the oracle. A keyword
+            # outcome that disagrees means our status-string logic has drifted from LIS reality (this
+            # is what would have caught the "Continued"→carried_over bug) — surfaced as a rate, alerted.
+            if keyword_outcome != structural_outcome:
+                outcome_mismatches.append(bill)
+        else:
+            outcome, outcome_keyword = keyword_outcome, outcome_keyword + 1   # flagless (early-stage) bill
+        patron = meta["patron_name"] if meta else ""
+        if patron:
+            patron_present += 1
         records.append({
             "bill": bill,
             "title": str(item.get("Description", "") or "").strip(),
-            "status_lis": str(item.get("LegislationStatus", "") or "").strip(),  # authoritative, always shown
-            "outcome": _derive_outcome(item.get("LegislationStatus", "")),
+            "status_lis": raw_status,                                # authoritative, always shown
+            "outcome": outcome,                                      # structural-first, keyword fallback
+            "patron": patron,                                        # chief patron (BILLS.CSV) — "by patron"
+            "patron_id": meta["patron_id"] if meta else "",
             "chamber": position["current_chamber"],
             "crossed_over": position["crossed_over"],
             "last_committee": position["last_committee"],
@@ -286,6 +400,19 @@ def build_bill_records(http_session, session_code):
         "docket_unparseable_dates": docket_unparseable,
         "docket_rows_total": docket_rows_total,
         "docket_unparseable_rate": round(docket_unparseable / docket_rows_total, 4) if docket_rows_total else 0.0,
+        # BILLS.CSV bulk-join coverage (trust: did the patron/outcome enrichment actually reach the bills?)
+        "bills_meta_rows": bills_meta_rows,
+        "bills_skipped_no_bill": bills_skipped_no_bill,   # malformed BILLS.CSV rows (no bill id), counted
+        "outcome_structural": outcome_structural,
+        "outcome_keyword_fallback": outcome_keyword,
+        "patron_present": patron_present,
+        "patron_missing": len(records) - patron_present,
+        # Self-calibrating outcome check (replaces a hardcoded status vocabulary): among bills LIS gives
+        # structural flags for, how often does our keyword logic disagree? Expressed as a RATE with its
+        # denominator (Standard #7); a rising rate = our status-string handling has drifted from LIS.
+        "outcome_keyword_mismatches": len(outcome_mismatches),
+        "outcome_keyword_mismatch_rate": round(len(outcome_mismatches) / outcome_structural, 4) if outcome_structural else 0.0,
+        "outcome_mismatch_sample": sorted(outcome_mismatches)[:10],
         "checked_at_utc": now_utc,
     }
     return records, completeness
@@ -301,16 +428,17 @@ def write_bill_tracker(records, completeness):
         json.loads(creds_json), scopes=["https://www.googleapis.com/auth/spreadsheets"]))
     sheet = gc.open_by_key(SPREADSHEET_ID)
 
-    header = ["Bill", "Title", "Status (LIS)", "Outcome", "Chamber", "Crossed Over", "Last Committee",
-              "Referrals", "Last Action", "Latest Vote (JSON)", "Upcoming (JSON)", "History (JSON)",
-              "Data As Of (UTC)", "Source"]
+    header = ["Bill", "Title", "Status (LIS)", "Outcome", "Patron", "Patron ID", "Chamber",
+              "Crossed Over", "Last Committee", "Referrals", "Last Action", "Latest Vote (JSON)",
+              "Upcoming (JSON)", "History (JSON)", "Data As Of (UTC)", "Source"]
     rows = [header] + [[
-        r["bill"], r["title"], r["status_lis"], r["outcome"], r["chamber"],
+        r["bill"], r["title"], r["status_lis"], r["outcome"], r["patron"], r["patron_id"], r["chamber"],
         "yes" if r["crossed_over"] else "no", r["last_committee"], r["referral_count"], r["last_action_date"],
         json.dumps(r["latest_vote"], ensure_ascii=False), json.dumps(r["upcoming"], ensure_ascii=False),
         json.dumps(r["history"], ensure_ascii=False), r["data_as_of_utc"], r["source"],
     ] for r in records]
-    need_rows, need_cols = len(rows) + 50, 16   # A..N data + the P1 completeness summary
+    # 16 data cols (A..P); the completeness summary lives at R1 (col 18), clear of the data.
+    completeness_cell, need_rows, need_cols = "R1", len(rows) + 50, 18
 
     try:
         ws = sheet.worksheet(BILL_TRACKER_TAB)
@@ -320,10 +448,10 @@ def write_bill_tracker(records, completeness):
         ws = sheet.add_worksheet(title=BILL_TRACKER_TAB, rows=need_rows, cols=need_cols)
 
     ws.clear()
-    # One batched write (rows + the P1 completeness summary the front end reads for its trust header).
+    # One batched write (rows + the completeness summary the front end reads for its trust header).
     ws.batch_update([
         {"range": "A1", "values": rows},
-        {"range": "P1", "values": [[json.dumps(completeness, ensure_ascii=False)]]},
+        {"range": completeness_cell, "values": [[json.dumps(completeness, ensure_ascii=False)]]},
     ])
 
 
@@ -348,14 +476,38 @@ def run_bill_tracker():
         write_bill_tracker(records, completeness)
         crossed = sum(1 for r in records if r["crossed_over"])
         print(f"✅ Bill_Tracker written: {len(records)} bills "
-              f"({completeness['prefiled_no_history']} prefiled-no-history, {crossed} crossed over). "
+              f"({completeness['prefiled_no_history']} prefiled-no-history, {crossed} crossed over, "
+              f"{completeness['patron_present']} with patron). "
               f"Completeness: {completeness['records_written']}/{completeness['universe_count']} of the "
               f"universe; {len(completeness['in_history_not_in_universe'])} in-history-not-in-universe; "
-              f"{completeness['skipped_malformed_universe']} skipped.")
+              f"{completeness['skipped_malformed_universe']} skipped. "
+              f"Outcome: {completeness['outcome_structural']} structural / "
+              f"{completeness['outcome_keyword_fallback']} keyword-fallback; "
+              f"keyword-vs-structural mismatch {completeness['outcome_keyword_mismatch_rate']:.2%}.")
         if completeness["in_history_not_in_universe"]:
             _alert("WARN", "DATA_ANOMALY",
                    f"{len(completeness['in_history_not_in_universe'])} bills in HISTORY but absent from "
                    f"the universe: {completeness['in_history_not_in_universe'][:10]}")
+        # Self-calibrating outcome drift (Standard #1): LIS's OWN structural flags are the oracle for our
+        # keyword logic. A spike in disagreement means our status-string handling has drifted from LIS —
+        # no hardcoded vocabulary to maintain. >1% is the alert floor (the steady-state residual is one
+        # benign "In House"+Carried_over edge bill, ~0.03%).
+        if completeness["outcome_keyword_mismatch_rate"] > 0.01:
+            _alert("WARN", "DATA_ANOMALY",
+                   f"keyword-vs-structural outcome mismatch {completeness['outcome_keyword_mismatch_rate']:.2%} "
+                   f"({completeness['outcome_keyword_mismatches']} bills, e.g. {completeness['outcome_mismatch_sample']}) "
+                   f"— the keyword fallback has drifted from LIS's structural flags; review _derive_outcome.")
+        # BILLS.CSV TOTAL failure (fetch empty or bill column undetected) — distinct from partial
+        # under-coverage: every bill lost its patron + structural outcome this cycle (CodeRabbit #162).
+        if completeness["bills_meta_rows"] == 0 and completeness["records_written"] > 0:
+            _alert("WARN", "API_FAILURE",
+                   "BILLS.CSV fetched/parsed to 0 rows — patron + structural outcome UNAVAILABLE this "
+                   "cycle; fell back to keyword-only outcome + empty patron (spine still written).")
+        # Partial under-coverage (BILLS.CSV present but didn't cover the universe): a different signal.
+        elif completeness["patron_missing"] > 0.05 * max(1, completeness["records_written"]):
+            _alert("WARN", "DATA_ANOMALY",
+                   f"patron missing for {completeness['patron_missing']}/{completeness['records_written']} "
+                   f"bills — BILLS.CSV partially under-covered the universe (schema/join issue).")
     except Exception as e:
         _alert("CRITICAL", "API_FAILURE", f"bill_tracker cycle failed: {type(e).__name__}: {e}")
         raise
