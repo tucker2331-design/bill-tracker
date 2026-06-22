@@ -1,6 +1,6 @@
 ---
 tags: [ideas, roadmap, strategy, product]
-updated: 2026-06-18
+updated: 2026-06-22
 status: active
 ---
 
@@ -88,13 +88,18 @@ data → UI.** Designing UI before we know the user's jobs and what data backs t
     the same signal the timeline uses) + **outcome** (alive / died-at-stage / passed / signed /
     vetoed). No linear ladder.
 
-### B3. UI / information-display design  📋 NOT STARTED (I do "a lot of reading" first)
-- **WHAT:** research information-display + UI/UX best practices (dashboards, dense-data tables,
-  legislative/financial-terminal patterns, progressive disclosure, accessibility), then design the
-  most efficient + intuitive interface for the jobs in B1, within the data envelope of B2.
-- **GOAL / done-means:** a research synthesis + concrete design proposals (wireframes/mockups) the
-  owner can react to — not code yet. Build only after a design is chosen.
-- **DEPENDS ON:** B1 (what it's for) + B2 (what it can show).
+### B3. UI / information-display design + build  🚧 FOUNDATION BUILT (2026-06-22, `web/`)
+- **WHAT:** the lobbyist front end. The B1 vision was detailed enough to build to directly (owner:
+  "do it"), so this went straight to a working SPA rather than a wireframe-proposal pass.
+- **DONE:** React + Vite + TS static SPA in `web/`, reading the `Bill_Tracker` tab client-side via
+  gviz ($0, Cloudflare Pages). The global Tracking↔full switch + trust header, and all four lenses +
+  the bill card: Today (what's-new), Timeline (crossover lanes — the centerpiece), Calendar, Search
+  (faceted), Health (operator trust). Build clean; every view validated against live data
+  (screenshots in the session). In a PR. See `web/README.md` + [[log]] 2026-06-22.
+- **NEXT (polish):** timeline committee-board drill-down (§3b); chief-patron full name (universe
+  `Patrons` upgrade); co-patron backfill; calendar-subsystem integration (floor + crossover-date +
+  vote times); Cloudflare Pages deploy.
+- **DEPENDS ON:** B1 (what it's for) + B2 (what it can show) — both locked.
 
 ---
 

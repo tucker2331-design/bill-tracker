@@ -1,6 +1,6 @@
 ---
 tags: [ideas, product, lis, data, b2]
-updated: 2026-06-18
+updated: 2026-06-22
 status: active
 ---
 
@@ -85,7 +85,7 @@ doc); (b) capture it once per session from that calendar with a runtime drift ch
 | Referral-count badge | re-referral tracking | ✅ have |
 | Calendar tab | Schedule + the calendar subsystem | ✅ have |
 | Search: chamber / committee / status filters | derived | ✅ have |
-| Search: **by patron** | **BILLS.CSV** (`Patron_id`/`Patron_name`) | ✅ built (bill_tracker PR3 — BULK from BILLS.CSV, chief patron, 0 per-bill calls; 3645/3645 covered) |
+| Search: **by patron** | **BILLS.CSV** (`Patron_id`/`Patron_name`) | ✅ built (bill_tracker PR3 — BULK chief patron, 0 per-bill calls; 3645/3645). **Co-patrons:** ❌ deferred — no bulk source (B3 probe); cheapest is `LegislationByMember` × ~148 members (bounded, invertible) → a future throttled/cached backfill, NOT the 6h cycle. **Chief-patron full name:** the bill-universe `Patrons` field (the call we already make) carries `MemberDisplayName` ("Jeion A. Ward") + `MemberID` — a planned upgrade over BILLS.CSV's surname ("Ward"). |
 | Search: **by subject** | LegislationSubject | ❌ **DEFERRED — no bulk source** (PR3 probe: no subject blob exists; the LegislationSubject MVC endpoint is per-bill = 3,645-call ban risk). Needs a confirmed bulk-safe source (find the real endpoint via the SPA's network traffic, or a throttled/cached backfill). |
 | Bill card: number / catchline / status / lifecycle / committee | current pipeline | ✅ built (bill_tracker PR1 spine + PR2 structural position: chamber/crossed/last_committee/referral_count) |
 | Bill card: latest vote + **where** | VOTE + action committee | ✅ built (bill_tracker PR2 — `latest_vote{tally,location,date}`, location structural from the vote refid). **Vote meeting-TIME is sourced from the calendar subsystem at the calendar↔product merge — never re-derived in bill_tracker (single source of truth; see [[log]] 2026-06-21 decision).** |

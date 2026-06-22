@@ -5,3 +5,10 @@
 # Python
 __pycache__/
 *.pyc
+
+# Claude Code — local/transient (launch.json is committed; the rest is not)
+.claude/worktrees/
+.claude/settings.local.json
+
+# web (front end) local npm cache used in the sandbox
+web/.npm-cache/
