@@ -1,6 +1,6 @@
 ---
 tags: [state, live]
-updated: 2026-06-16
+updated: 2026-06-22
 status: active
 ---
 
@@ -11,6 +11,8 @@ status: active
 **Benchmark window:** Full 2026 VA GA session (2026-01-14 → 2026-05-01). **VA GA is now ADJOURNED — HISTORY is static (no new actions until the 2027 session). Pre-launch: lobbyists are not using the product yet.**
 
 ## Active focus
+
+**🏗️ FORWARD-BUILD BACKEND IN PROGRESS (2026-06-22) — `bill_tracker.py`, the new lobbyist-product backend (NOT the old text-driven `backend_worker`).** Structural, reusing `calendar_worker`'s guarded machinery + structural resolvers. **PR1 (#159) MERGED + VALIDATED** = the spine (universe + title + raw status + outcome + history + free completeness trust signal; live 3645/3645). **PR2 (#161) MERGED + VALIDATED 2026-06-22** = structural position from refids (chamber / crossed_over / last_committee / referral_count), latest vote WITH structural location, DOCKET upcoming meetings; live run `3645/3645, 0 anomalies, 1416 crossed over`. Reviewer bench (CodeRabbit clean + Qodo + Codex) proven across both PRs. **Key decision (2026-06-22):** vote meeting-TIME is the calendar subsystem's domain — sourced at the calendar↔product merge, never re-derived in bill_tracker (single source of truth; see [[log]]). **NEXT:** PR3 (patron + subject ingests via a BULK endpoint — per-bill over 3,645 bills is a LIS-ban risk; + the true status-drift check), then schedule `bill_tracker` (manual-dispatch only today), then the React/Vite front end (B3). The reviewer-swap (Phase A) is effectively done — CodeRabbit + Qodo + Codex are the live bench ahead of the Gemini sunset.
 
 **🧭 DIRECTION SHIFT (2026-06-18) — accuracy + infra DONE; next chapter is the PRODUCT.** The calendar's core goal is achieved (Section 9 = 0, verified). This session shipped the infrastructure on top: LIS-safety guardrails #1 (conditional fetch, all 3 blobs, #153/#154), #2 (jitter, #155), #4 (hard request cap, #156) — the whole charter is now live ([[knowledge/lis_api_safety]]) — and the **incremental-STM flip (#157, flag-gated & dormant)**, the ~180s→~6s in-season speed lever (owner toggles `STM_INCREMENTAL_PRIMARY=shadow`→`=1` when ready). **Owner decided NOT to merge back into the old `backend_worker.py`/`v2_shadow_test`** (don't retrofit the new engine into the old case) → forward-build a purpose-built product. **The plan is now [[ideas/product_roadmap]]:** (A) swap the sunsetting Gemini reviewer for CodeRabbit + Codex [in progress]; (B) product vision → LIS data inventory/gap analysis → UI design [the next collaborative chapter]; (C) 2027-data-gated items (forward-calendar, meeting cadence, in-season flip validation). Everything below is the (completed) accuracy + infra history.
 
