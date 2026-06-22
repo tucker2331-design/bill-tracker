@@ -30,7 +30,10 @@ See docs/ideas/product_vision.md, docs/ideas/product_roadmap.md §B0, docs/ideas
 """
 import os
 import re
+import sys
 import json
+import time
+import random
 import datetime
 
 import gspread
@@ -513,5 +516,35 @@ def run_bill_tracker():
         raise
 
 
+def _scheduled_gate():
+    """Ban-safety for SCHEDULED runs only (mirrors calendar_worker.py __main__; keep in sync — see
+    docs/knowledge/lis_api_safety.md):
+      - QUIET HOURS: skip 11pm–6am ET. No GA business overnight and the bill data is static then, so a
+        scheduled hit is pure, pointless LIS exposure.
+      - JITTER (guardrail #2): a fixed cron fires at the same wall-clock instant every cycle — a needless
+        metronome signature. Delay a scheduled run by a small random amount to decorrelate from the tick.
+    Manual dispatch bypasses BOTH (GITHUB_EVENT_NAME != 'schedule') so on-demand validation is immediate."""
+    if os.environ.get("GITHUB_EVENT_NAME", "") != "schedule":
+        return
+    quiet_start_et, quiet_end_et = 23, 6
+    et_hour = datetime.datetime.now(pytz.timezone("America/New_York")).hour
+    in_quiet = ((et_hour >= quiet_start_et or et_hour < quiet_end_et)   # midnight-spanning window
+                if quiet_start_et > quiet_end_et else (quiet_start_et <= et_hour < quiet_end_et))
+    if in_quiet:
+        print(f"😴 Quiet hours ({quiet_start_et}:00–{quiet_end_et}:00 ET): ET hour={et_hour}; "
+              f"scheduled run skipped (no GA business overnight; manual dispatch bypasses).")
+        sys.exit(0)
+    try:
+        jitter_max = max(0, int(os.environ.get("JITTER_MAX_SECONDS", "180")))
+    except (ValueError, TypeError):
+        jitter_max = 180   # a malformed env var must never crash the scheduled run
+    if jitter_max:
+        jitter = random.randint(0, jitter_max)
+        print(f"🎲 Jitter (guardrail #2): sleeping {jitter}s (of max {jitter_max}s) before the "
+              f"scheduled cycle — decorrelate from the cron tick.")
+        time.sleep(jitter)
+
+
 if __name__ == "__main__":
+    _scheduled_gate()       # quiet-hours + jitter for scheduled runs (no-op for manual dispatch)
     run_bill_tracker()

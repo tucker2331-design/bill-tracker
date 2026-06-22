@@ -1,6 +1,6 @@
 ---
 tags: [knowledge, api, lis, rule, sustainability, cadence]
-updated: 2026-06-17
+updated: 2026-06-22
 status: active
 ---
 
@@ -80,6 +80,13 @@ which is exactly what this charter governs.
 2. Ship guardrail #2 (jitter) + guardrail #4 (per-source daily cap + alert).
 3. Ship the incremental-STM flip (in flight) so cycles are cheap.
 4. *Then* ship guardrail #5 (meeting-driven cadence) — fast only in real meeting windows.
+
+## Per-job cadence ledger (every scheduled LIS consumer)
+| Job (workflow) | Cadence | Guardrails | Notes |
+|---|---|---|---|
+| **calendar_worker** (`🤖 Mastermind Ghost Worker 2`) | `0 */3 * * *` (3h) + jitter + quiet hours | 1✅ 2✅ 3✅ 4✅ 5❌ | The charter's primary subject; 3h is conservative-by-design. |
+| **bill_tracker** (`🗂️ Bill Tracker`) | `40 */6 * * *` (6h, :40) + jitter + quiet hours | 1✅ 2✅ 3✅ 4✅ | Added 2026-06-22. **Inherits 1/3/4** by reusing `get_armored_session()` (counted + retrying adapter) + `safe_fetch_csv` (conditional blob fetch) — patron/outcome blob is BILLS.CSV, also conditional. Adds **#2 jitter + quiet hours** via `_scheduled_gate()` (mirrors the worker). LIGHT job (~5 reads, mostly 304s); 6h off-season is generous (bill data regenerates ~daily). Bump to ~2h in-session (2027). Shares the `calendar-worker` concurrency lock → never overlaps a calendar cycle's LIS use. |
+| **backend_worker** (`🤖 Mastermind Ghost Worker`, `update_database.yml`) | `*/15 * * * *` (**every 15 min, 96×/day**) | **1❌ 2❌ 3❌ 4❌ 5❌** | ⚠️ **CHARTER VIOLATION — the project's single biggest ban risk.** Raw `pd.read_csv(HISTORY.CSV)` (~4.7 MB) + `DOCKET.CSV` + the bill-list API, **UNCONDITIONAL** (no ETag/304), **no jitter, no request cap, no quiet hours** — a textbook blind metronome re-downloading multi-MB blobs 96×/day. This is the LEGACY text-driven backend feeding the OLD front end (`v2_shadow_test`), being replaced by `bill_tracker` + the new front end (B3). **Owner decision pending (2026-06-22):** turn its cadence down to match (3–6h) / add the guards / disable once the new front end is live. Until then it dominates our LIS exposure. See [[log]].
 
 ## 50-state scaling
 This charter is **per-source**. Every new state's source gets the same five guardrails and
