@@ -93,7 +93,7 @@ doc); (b) capture it once per session from that calendar with a runtime drift ch
 | Bill card: history (action\|date, pin) | HISTORY/LegEvent | ✅ have |
 | Bill card: **summary text** | LegislationSummary | ❌ optional ingest |
 | Bill card: **patron** | **BILLS.CSV** (`Patron_name`/`Patron_id`) | ✅ built (bill_tracker PR3 — chief patron, bulk) |
-| Bill outcome (alive/dead/passed/signed/vetoed/**carried_over**) | **BILLS.CSV** boolean flags | ✅ built (bill_tracker PR3 — STRUCTURAL-first from `Vetoed`/`Approved`/`Carried_over`/`Failed`/`Passed`; 99.7% structural, keyword fallback only for flagless bills; fixed "Continued"→carried_over) |
+| Bill outcome (alive/dead/passed/signed/vetoed/**carried_over**) | **BILLS.CSV** structural fields | ✅ built (bill_tracker PR3 — STRUCTURAL-first from `Vetoed`/`Approved`/**`Chapter_id`**/`Carried_over`/`Failed`/`Passed`; 99.7% structural, keyword fallback only for the 12 flagless "Introduced" resolutions; fixed "Continued"→carried_over AND chaptered resolutions→signed; outcome now 1:1 with the raw status counts). Validated each run by a SELF-CALIBRATING keyword-vs-structural reconciliation (LIS's own flags are the oracle) — **no hardcoded status vocabulary** (Standard #1/#8). |
 | Bill card: **bill text / amendments** | LegislationText/Version | ❌ heavier ingest |
 | Trust: data-as-of freshness | `AA1` marker | ✅ have (surface it) |
 | Trust: per-bill freshness | derivable from cycle | ⚠️ build (track per bill) |
@@ -115,12 +115,21 @@ This is the single highest-value B2 build — it closes the gap a lobbyist can't
 > 3,646 rows = every bill, one fetch — same pattern as HISTORY/DOCKET/VOTE; it was missing from §1).
 > It carries, in BULK: `Patron_id`/`Patron_name` (chief patron — **closed item 2 with zero per-bill
 > calls**); structural outcome booleans `Vetoed`/`Approved`/`Carried_over`/`Failed`/`Passed` (now the
-> structural-first `outcome`); `Last_house_committee_id`/`Last_senate_committee_id` (structural
-> committee codes — a free future cross-check against the refid-derived `last_committee`, Standard #2);
-> `Chapter_id`; and `Full_text_doc1..6` (full-text document refs — a lighter path to item 5 than
-> `LegislationText`). **Probed for a subject blob — none exists** (clean 404 on SUBINDEX/SUBJECT/etc.;
-> only BILLS/HISTORY/DOCKET/VOTE), and the `LegislationSubject` MVC endpoint is per-bill (ban risk), so
-> subject (item 3) stays deferred pending a confirmed bulk-safe source.
+> structural-first `outcome`); **`Chapter_id`** (a chapter in the Acts of Assembly = ENACTED, incl.
+> joint resolutions that chapter WITHOUT a Governor's signature — the signal that fixed the 8 HJ/SJ
+> mislabels); `Last_house_committee_id`/`Last_senate_committee_id` (structural committee codes — a free
+> future cross-check against the refid-derived `last_committee`, Standard #2); and `Full_text_doc1..6`
+> (full-text document refs — a lighter path to item 5 than `LegislationText`). **Probed for a subject
+> blob — none exists** (clean 404 on SUBINDEX/SUBJECT/etc.; only BILLS/HISTORY/DOCKET/VOTE), and the
+> `LegislationSubject` MVC endpoint is per-bill (ban risk), so subject (item 3) stays deferred pending a
+> confirmed bulk-safe source.
+>
+> **LIS quirk found (2026-06-22):** the bill-list feed's `LegislationStatus` is internally inconsistent
+> with LIS's OWN `GetLegislationStatusListAsync` reference — the feed emits bare **"Continued"** (442
+> bills) which is ABSENT from the published list (which has "Continued To"/"Continued to House"/…). So a
+> status-name allow-list — hardcoded OR fetched at runtime — would false-flag forever. bill_tracker
+> therefore derives outcome STRUCTURALLY (flags + `Chapter_id`) and validates the keyword fallback by a
+> self-calibrating reconciliation against those flags, with NO status-name vocabulary (Standard #1/#8).
 
 Ordered by value / trust-criticality:
 1. **Bill universe + count** (`AdvancedLegislationSearch` / `Legislation`) — *trust-critical.* Closes
