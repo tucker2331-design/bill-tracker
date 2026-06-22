@@ -18,6 +18,10 @@ on:
     - cron: '40 */6 * * *'        # every 6 hours at :40 UTC (off-season-conservative; see notes above)
   workflow_dispatch:              # manual "Run Now" — bypasses quiet hours + jitter
 
+permissions:
+  contents: read                  # least-privilege (CodeRabbit #163): only needs checkout; writes go to
+                                  # Google Sheets via GCP_CREDENTIALS, not the GITHUB_TOKEN
+
 concurrency:
   group: calendar-worker          # share the worker lock — never overlap a calendar cycle's LIS use
   cancel-in-progress: false
@@ -36,7 +40,7 @@ jobs:
       - name: Install Dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install requests gspread google-auth pandas beautifulsoup4 pdfplumber
+          pip install requests gspread google-auth pandas pytz beautifulsoup4 pdfplumber
       - name: Restore LIS blob cache
         uses: actions/cache@v4
         with:

@@ -12,6 +12,13 @@ on:
   #   - cron: '*/15 * * * *' # Runs every 15 minutes  ← PAUSED 2026-06-22 (ban-risk; see header)
   workflow_dispatch: # manual "Run Now" still available (the worker is paused, not removed)
 
+permissions:
+  contents: read     # least-privilege: only needs checkout; writes go to Sheets via GCP_CREDENTIALS
+
+concurrency:
+  group: calendar-worker   # share the worker lock — a manual run must never overlap a calendar/bill_tracker
+  cancel-in-progress: false  # cycle's LIS use (CodeRabbit #163)
+
 jobs:
   update-database:
     runs-on: ubuntu-latest

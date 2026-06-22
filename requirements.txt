@@ -1,5 +1,6 @@
 streamlit
 pandas
+pytz
 requests
 slack_sdk
 beautifulsoup4

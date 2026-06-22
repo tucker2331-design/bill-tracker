@@ -30,7 +30,6 @@ See docs/ideas/product_vision.md, docs/ideas/product_roadmap.md §B0, docs/ideas
 """
 import os
 import re
-import sys
 import json
 import time
 import random
@@ -517,15 +516,26 @@ def run_bill_tracker():
 
 
 def _scheduled_gate():
-    """Ban-safety for SCHEDULED runs only (mirrors calendar_worker.py __main__; keep in sync — see
-    docs/knowledge/lis_api_safety.md):
-      - QUIET HOURS: skip 11pm–6am ET. No GA business overnight and the bill data is static then, so a
-        scheduled hit is pure, pointless LIS exposure.
-      - JITTER (guardrail #2): a fixed cron fires at the same wall-clock instant every cycle — a needless
-        metronome signature. Delay a scheduled run by a small random amount to decorrelate from the tick.
-    Manual dispatch bypasses BOTH (GITHUB_EVENT_NAME != 'schedule') so on-demand validation is immediate."""
+    """Ban-safety for SCHEDULED runs only (mirrors calendar_worker.py __main__; keep in sync). Returns
+    True if the cycle should PROCEED, False to SKIP — the caller, not this helper, exits (Gemini #163:
+    no sys.exit inside a helper → unit-testable). Manual dispatch always proceeds (returns True
+    immediately). Two ban-safety behaviours for scheduled runs:
+      - QUIET HOURS: skip 11pm–6am ET — no GA business overnight and the bill data is static then, so a
+        scheduled hit is pure, pointless LIS exposure → return False.
+      - JITTER (guardrail #2): a fixed cron fires at the same wall-clock instant every cycle (a needless
+        metronome signature); delay a small random amount to decorrelate from the tick → return True.
+
+    Heuristic config (Standard #1):
+      - ASSUMES `JITTER_MAX_SECONDS` is a non-negative int (default 180); `GITHUB_EVENT_NAME` is set by
+        the Actions runner ('schedule' vs 'workflow_dispatch').
+      - BREAKS if `JITTER_MAX_SECONDS` is malformed → caught, defaulted to 180, AND surfaced as a WARN
+        (never a silent fallback). A missing `GITHUB_EVENT_NAME` (e.g. a local run) reads as non-schedule
+        → proceeds immediately, the safe default.
+      - RUNTIME CHECK: the malformed-config WARN above; quiet-hours/jitter decisions are printed every
+        scheduled run so the log is self-describing. See docs/knowledge/lis_api_safety.md.
+    """
     if os.environ.get("GITHUB_EVENT_NAME", "") != "schedule":
-        return
+        return True
     quiet_start_et, quiet_end_et = 23, 6
     et_hour = datetime.datetime.now(pytz.timezone("America/New_York")).hour
     in_quiet = ((et_hour >= quiet_start_et or et_hour < quiet_end_et)   # midnight-spanning window
@@ -533,18 +543,21 @@ def _scheduled_gate():
     if in_quiet:
         print(f"😴 Quiet hours ({quiet_start_et}:00–{quiet_end_et}:00 ET): ET hour={et_hour}; "
               f"scheduled run skipped (no GA business overnight; manual dispatch bypasses).")
-        sys.exit(0)
+        return False
+    raw_jitter = os.environ.get("JITTER_MAX_SECONDS", "180")
     try:
-        jitter_max = max(0, int(os.environ.get("JITTER_MAX_SECONDS", "180")))
+        jitter_max = max(0, int(raw_jitter))
     except (ValueError, TypeError):
-        jitter_max = 180   # a malformed env var must never crash the scheduled run
+        jitter_max = 180   # a malformed env var must never crash the run — but it must NOT be silent
+        _alert("WARN", "UNKNOWN", f"JITTER_MAX_SECONDS malformed ({raw_jitter!r}); using default 180s.")
     if jitter_max:
         jitter = random.randint(0, jitter_max)
         print(f"🎲 Jitter (guardrail #2): sleeping {jitter}s (of max {jitter_max}s) before the "
               f"scheduled cycle — decorrelate from the cron tick.")
         time.sleep(jitter)
+    return True
 
 
 if __name__ == "__main__":
-    _scheduled_gate()       # quiet-hours + jitter for scheduled runs (no-op for manual dispatch)
-    run_bill_tracker()
+    if _scheduled_gate():       # quiet-hours + jitter for scheduled runs (always True for manual dispatch)
+        run_bill_tracker()      # else: scheduled run skipped (quiet hours) — clean exit 0
