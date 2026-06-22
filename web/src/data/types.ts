@@ -61,6 +61,7 @@ export interface Completeness {
   outcome_keyword_mismatches?: number;
   outcome_keyword_mismatch_rate?: number;
   checked_at_utc?: string;
+  session_code?: string;   // authoritative 5-digit code if the backend stamps it (preferred over inference)
 }
 
 export interface BillData {

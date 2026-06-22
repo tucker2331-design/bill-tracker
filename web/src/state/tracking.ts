@@ -9,30 +9,42 @@ export type Scope = "tracking" | "full";
 const STAR_KEY = "bt.tracked";
 const SCOPE_KEY = "bt.scope";
 
+// localStorage can throw (private mode, blocked, quota) — never let storage access crash the app.
+function safeGet(key: string): string | null {
+  try { return localStorage.getItem(key); } catch { return null; }
+}
+function safeSet(key: string, val: string) {
+  try { localStorage.setItem(key, val); } catch { /* storage unavailable — in-memory only this session */ }
+}
+
+function readStarred(): Set<string> {
+  try {
+    const v = JSON.parse(safeGet(STAR_KEY) || "[]");
+    // Guard the shape: a stray non-array (e.g. a bare string) must NOT be spread into a Set, or
+    // `new Set("HB1")` would split it into characters {'H','B','1'} (Gemini/Qodo #164).
+    return new Set<string>(Array.isArray(v) ? v.filter((x) => typeof x === "string") : []);
+  } catch { return new Set<string>(); }
+}
+
 const listeners = new Set<() => void>();
 const emit = () => listeners.forEach((l) => l());
 const subscribe = (cb: () => void) => { listeners.add(cb); return () => { listeners.delete(cb); }; };
 
-function readStarred(): Set<string> {
-  try { return new Set<string>(JSON.parse(localStorage.getItem(STAR_KEY) || "[]")); }
-  catch { return new Set<string>(); }
-}
-
 // New users have 0 tracked bills, so default scope is "full" (otherwise the app looks empty); once
 // they star bills they flip to "Tracking".
 let starred: Set<string> = readStarred();
-let scope: Scope = localStorage.getItem(SCOPE_KEY) === "tracking" ? "tracking" : "full";
+let scope: Scope = safeGet(SCOPE_KEY) === "tracking" ? "tracking" : "full";
 
 const getScope = () => scope;
 const getStarred = () => starred;   // identity is stable until a toggle replaces the Set (snapshot-safe)
 
-export function setScope(s: Scope) { scope = s; localStorage.setItem(SCOPE_KEY, s); emit(); }
+export function setScope(s: Scope) { scope = s; safeSet(SCOPE_KEY, s); emit(); }
 
 export function toggleTracked(id: string) {
   const next = new Set(starred);
   if (next.has(id)) next.delete(id); else next.add(id);
   starred = next;
-  localStorage.setItem(STAR_KEY, JSON.stringify([...starred]));
+  safeSet(STAR_KEY, JSON.stringify([...starred]));
   emit();
 }
 

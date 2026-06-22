@@ -5,7 +5,7 @@ import { OutcomeChip, Star } from "./common";
 export function BillBox({ bill, onOpen }: { bill: Bill; onOpen: (b: Bill) => void }) {
   return (
     <div className="billbox" onClick={() => onOpen(bill)} role="button" tabIndex={0}
-      onKeyDown={(e) => { if (e.key === "Enter") onOpen(bill); }}>
+      onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onOpen(bill); } }}>
       <Star id={bill.bill} />
       <div style={{ minWidth: 0 }}>
         <span className="num">{bill.bill}</span>{" "}

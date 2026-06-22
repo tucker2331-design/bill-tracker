@@ -4,6 +4,7 @@ import { loadBillData } from "./data/gviz";
 import { scopedBills } from "./data/derive";
 import { useScope, useStarred } from "./state/tracking";
 import { ScopeSwitch, TrustHeader } from "./components/common";
+import { ErrorBoundary } from "./components/ErrorBoundary";
 import { BillCard } from "./components/BillCard";
 import { Landing } from "./views/Landing";
 import { Timeline } from "./views/Timeline";
@@ -63,11 +64,15 @@ export default function App() {
           Couldn't load data: {error}<br /><span className="muted">The Mastermind DB sheet must be link-readable for gviz.</span>
         </p>}
         {!data && !error && <p className="center-msg">Loading the General Assembly…</p>}
-        {data && tab === "today" && <Landing bills={visible} onOpen={open} />}
-        {data && tab === "timeline" && <Timeline bills={visible} onOpen={open} />}
-        {data && tab === "calendar" && <Calendar bills={visible} onOpen={open} />}
-        {data && tab === "search" && <Search bills={visible} onOpen={open} />}
-        {data && tab === "health" && <Health completeness={data.completeness} dataAsOf={data.dataAsOf} />}
+        {data && (
+          <ErrorBoundary resetKey={tab}>
+            {tab === "today" && <Landing bills={visible} onOpen={open} />}
+            {tab === "timeline" && <Timeline bills={visible} onOpen={open} />}
+            {tab === "calendar" && <Calendar bills={visible} onOpen={open} />}
+            {tab === "search" && <Search bills={visible} onOpen={open} />}
+            {tab === "health" && <Health completeness={data.completeness} dataAsOf={data.dataAsOf} />}
+          </ErrorBoundary>
+        )}
       </main>
 
       {selected && data && (

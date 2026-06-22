@@ -22,6 +22,8 @@ export function Star({ id }: { id: string }) {
   return (
     <button
       className={`star ${on ? "on" : ""}`}
+      aria-pressed={on}
+      aria-label={on ? "Tracking — click to untrack" : "Track this bill"}
       title={on ? "Tracking — click to untrack" : "Track this bill"}
       onClick={(e) => { e.stopPropagation(); toggleTracked(id); }}
     >

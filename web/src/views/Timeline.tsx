@@ -67,16 +67,16 @@ export function Timeline({ bills, onOpen }: { bills: Bill[]; onOpen: (b: Bill) =
 
       <div className="lanes" style={{ ["--stage-cols" as string]: COLUMNS.length + 1 }}>
         {/* Prefiled + origin committee, then the crossover divider, then 2nd-chamber + governor */}
-        <LaneCol label={COLUMNS[0].label}><Count stage="prefiled" side="Senate" /><Line /><Count stage="prefiled" side="House" /></LaneCol>
-        <LaneCol label={COLUMNS[1].label}><Count stage="committee1" side="Senate" /><Line /><Count stage="committee1" side="House" /></LaneCol>
+        <LaneCol label={COLUMNS[0].label} s={<Count stage="prefiled" side="Senate" />} h={<Count stage="prefiled" side="House" />} />
+        <LaneCol label={COLUMNS[1].label} s={<Count stage="committee1" side="Senate" />} h={<Count stage="committee1" side="House" />} />
         <div className="lanecol crossover">
           <div className="scell" />
           <div className="crosslabel">✦ CROSSOVER ✦</div>
           <div className="hcell" />
           <div className="stagename">deadline</div>
         </div>
-        <LaneCol label={COLUMNS[2].label}><Count stage="committee2" side="Senate" /><Line /><Count stage="committee2" side="House" /></LaneCol>
-        <LaneCol label={COLUMNS[3].label}><Count stage="governor" side="Senate" /><Line /><Count stage="governor" side="House" /></LaneCol>
+        <LaneCol label={COLUMNS[2].label} s={<Count stage="committee2" side="Senate" />} h={<Count stage="committee2" side="House" />} />
+        <LaneCol label={COLUMNS[3].label} s={<Count stage="governor" side="Senate" />} h={<Count stage="governor" side="House" />} />
       </div>
 
       <div style={{ display: "flex", gap: 10, marginTop: 12, flexWrap: "wrap" }}>
@@ -104,18 +104,16 @@ export function Timeline({ bills, onOpen }: { bills: Bill[]; onOpen: (b: Bill) =
   );
 }
 
-function LaneCol({ label, children }: { label: string; children: React.ReactNode }) {
-  const [s, line, h] = children as React.ReactNode[];
+function LaneCol({ label, s, h }: { label: string; s: React.ReactNode; h: React.ReactNode }) {
   return (
     <div className="lanecol">
       <div className="scell">{s}</div>
-      {line}
+      <div className="center" />   {/* the centerline a bill crosses */}
       <div className="hcell">{h}</div>
       <div className="stagename">{label}</div>
     </div>
   );
 }
-const Line = () => <div className="center" />;
 
 function DiedStat({ side, bills, onClick }: { side: Chamber; bills: Bill[]; onClick: () => void }) {
   return (

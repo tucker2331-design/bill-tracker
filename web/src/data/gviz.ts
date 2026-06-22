@@ -54,6 +54,11 @@ function toBill(r: string[]): Bill | null {
   if (!bill || bill.toLowerCase() === "bill") return null;   // skip blanks / a stray header echo
   const outcomeRaw = (r[COL.outcome] || "").trim() as Outcome;
   const chamberRaw = (r[COL.chamber] || "").trim();
+  // Trust the structural chamber field, but if it's ever unexpected, derive from the bill-number
+  // prefix (H*/S*) rather than blind-defaulting to House and skewing the lane counts (CodeRabbit #164).
+  const chamber: Chamber = chamberRaw === "Senate" || chamberRaw === "House"
+    ? chamberRaw
+    : (bill[0]?.toUpperCase() === "S" ? "Senate" : "House");
   return {
     bill,
     title: (r[COL.title] || "").trim(),
@@ -61,7 +66,7 @@ function toBill(r: string[]): Bill | null {
     outcome: OUTCOMES.has(outcomeRaw) ? outcomeRaw : "in_progress",
     patron: (r[COL.patron] || "").trim(),
     patronId: (r[COL.patronId] || "").trim(),
-    chamber: (chamberRaw === "Senate" ? "Senate" : "House") as Chamber,
+    chamber,
     crossedOver: (r[COL.crossed] || "").trim().toLowerCase() === "yes",
     lastCommittee: (r[COL.lastCommittee] || "").trim(),
     referrals: parseInt(r[COL.referrals] || "0", 10) || 0,
@@ -74,20 +79,39 @@ function toBill(r: string[]): Bill | null {
   };
 }
 
-// VA session code for the LIS bill link: regular session = `${year}1` (2026 → "20261"). Inferred from
-// the data's freshness year for now; a future backend tweak can stamp it explicitly in the payload.
+// VA session code for the LIS bill link. PREFER the authoritative value the backend can stamp into
+// the completeness payload (`session_code`); fall back to inferring the regular session `${year}1`
+// (2026 → "20261") from the data's freshness year. (Standard #5: derive, don't hardcode — the
+// inference is the documented fallback only, used until bill_tracker stamps it.)
 function inferSessionCode(dataAsOf: Date | null): string {
   const year = (dataAsOf ?? new Date()).getUTCFullYear();
   return `${year}1`;
 }
 
-export async function loadBillData(): Promise<BillData> {
-  const res = await fetch(gvizCsvUrl(BILL_TRACKER_TAB), { cache: "no-store" });
-  if (!res.ok) throw new Error(`gviz fetch failed: HTTP ${res.status}`);
-  const rows = parseCsv(await res.text());
-  if (rows.length === 0) throw new Error("empty Bill_Tracker sheet");
+const FETCH_TIMEOUT_MS = 20000;
 
-  const header = rows[0];
+export async function loadBillData(): Promise<BillData> {
+  // Bound the fetch so a stalled request can't leave the app loading forever.
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), FETCH_TIMEOUT_MS);
+  let text: string;
+  try {
+    const res = await fetch(gvizCsvUrl(BILL_TRACKER_TAB), { cache: "no-store", signal: ctrl.signal });
+    if (!res.ok) throw new Error(`gviz fetch failed: HTTP ${res.status}`);
+    text = await res.text();
+  } catch (e) {
+    throw new Error(ctrl.signal.aborted ? `data request timed out after ${FETCH_TIMEOUT_MS / 1000}s` : String((e as Error)?.message || e));
+  } finally {
+    clearTimeout(timer);
+  }
+
+  const rows = parseCsv(text);
+  // Shape sanity-check: a 200 that isn't our CSV (an HTML error/login page, a renamed tab) must NOT
+  // be parsed into a silent empty/mislabelled dataset. Require the known header.
+  const header = rows[0] ?? [];
+  if ((header[0] || "").trim().toLowerCase() !== "bill" || header.length < 16) {
+    throw new Error("unexpected Bill_Tracker shape — header row didn't match (sheet renamed, not shared, or an error page?)");
+  }
   const completeness = jsonOr<Completeness | null>(header[COMPLETENESS_COL], null);
 
   const bills: Bill[] = [];
@@ -96,10 +120,20 @@ export async function loadBillData(): Promise<BillData> {
     if (b) bills.push(b);
   }
 
-  // Freshest record timestamp = the trust header's "data as of".
+  // "Data as of" = the completeness stamp if present, else the FRESHEST per-bill timestamp (not row 0,
+  // which could be stale if row order ever changes).
   let dataAsOf: Date | null = null;
-  const stamp = completeness?.checked_at_utc || bills[0]?.dataAsOf;
-  if (stamp) { const d = new Date(stamp); if (!isNaN(d.getTime())) dataAsOf = d; }
+  const fromStamp = completeness?.checked_at_utc ? new Date(completeness.checked_at_utc) : null;
+  if (fromStamp && !isNaN(fromStamp.getTime())) {
+    dataAsOf = fromStamp;
+  } else {
+    let max = 0;
+    for (const b of bills) { const t = Date.parse(b.dataAsOf); if (!isNaN(t) && t > max) max = t; }
+    if (max > 0) dataAsOf = new Date(max);
+  }
 
-  return { bills, completeness, dataAsOf, sessionCode: inferSessionCode(dataAsOf) };
+  const stamped = (completeness?.session_code || "").trim();
+  const sessionCode = /^\d{5}$/.test(stamped) ? stamped : inferSessionCode(dataAsOf);
+
+  return { bills, completeness, dataAsOf, sessionCode };
 }
