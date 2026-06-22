@@ -87,9 +87,9 @@ doc); (b) capture it once per session from that calendar with a runtime drift ch
 | Search: chamber / committee / status filters | derived | ✅ have |
 | Search: **by patron** | LegislationPatron | ❌ ingest needed |
 | Search: **by subject** | LegislationSubject | ❌ ingest needed |
-| Bill card: number / catchline / status / lifecycle / committee | current pipeline | ✅ have (confirm catchline feed) |
-| Bill card: latest vote + **where** | VOTE + action committee | ✅ have |
-| Bill card: next meeting + **committee** | DOCKET/Schedule | ✅ have |
+| Bill card: number / catchline / status / lifecycle / committee | current pipeline | ✅ built (bill_tracker PR1 spine + PR2 structural position: chamber/crossed/last_committee/referral_count) |
+| Bill card: latest vote + **where** | VOTE + action committee | ✅ built (bill_tracker PR2 — `latest_vote{tally,location,date}`, location structural from the vote refid). **Vote meeting-TIME is sourced from the calendar subsystem at the calendar↔product merge — never re-derived in bill_tracker (single source of truth; see [[log]] 2026-06-21 decision).** |
+| Bill card: next meeting + **committee** | DOCKET/Schedule | ✅ built (bill_tracker PR2 — `upcoming[]` from DOCKET.CSV, future-only) |
 | Bill card: history (action\|date, pin) | HISTORY/LegEvent | ✅ have |
 | Bill card: **summary text** | LegislationSummary | ❌ optional ingest |
 | Bill card: **patron** | LegislationPatron | ❌ ingest needed for "by patron" anyway |
