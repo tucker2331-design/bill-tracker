@@ -313,7 +313,20 @@ calendar-UX surveys — agenda-vs-grid, overflow, today/selected differentiation
 - **Trust inline:** a "data as of X ago" freshness cue; if a meeting time is derived/TBA, mark it (vision §7
   — "allowed not to know; never to pretend").
 
-## Still queued (lower priority — read if a feature needs it)
+## Reading / discovery queue (read as the relevant feature comes up)
+**Owner-requested 2026-06-23 (digest + bank notes when reached — "so the brain keeps growing"):**
+- **David McCandless — *Information is Beautiful*** — the popular infographic-design canon (visual
+  storytelling, color, the "beautiful = designed" bar). Directly counters the "screams-AI / stale / generic"
+  critique the redesign targets; mine it for *craft* moves that make the product feel intentionally designed.
+- **"Data Visualization and Dashboard Design Case Study" (Medium article)** — a worked dashboard case study;
+  concrete layout / hierarchy / KPI-tile decisions. Aim at the **Health/operator dashboard (Task #4)** + the
+  bullet-graph gauges (PL-8) and the overall dashboard polish. (Find the specific article when reached; log
+  the URL + the transferable decisions.)
+- **CLEVER°FRANKE** (data-experience design studio, cleverfranke.com) — known for dense, beautiful,
+  *data-driven* visual systems + identity. Reference for the visual-craft ceiling ("designed, not generic")
+  and for data-as-aesthetic; study their case studies for color, density, and motion restraint.
+
+**Standing (lower priority — read if a feature needs it):**
 - **Tufte — *Envisioning Information*** full (color, maps, layering) — have the calendar-relevant core; revisit
   if we add maps/cartograms (50-state).
 - **Norman — *Design of Everyday Things*** (affordances) + **Wroblewski** (forms/mobile) — for the eventual
