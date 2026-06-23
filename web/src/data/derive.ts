@@ -1,5 +1,6 @@
 import type { Bill, Chamber } from "./types";
 import type { Scope } from "../state/tracking";
+import { dateSort } from "./dates";
 
 // Structural derivations for the views — all from the fields bill_tracker already emits, no guessing.
 
@@ -60,16 +61,11 @@ export function tallyOutcomes(bills: Bill[]): OutcomeTally {
 // Flatten every bill's history into a dated feed (newest first) for the "what's new" lens.
 export interface FeedItem { bill: string; title: string; action: string; date: string; sortKey: number; }
 
-function dateSortKey(d: string): number {
-  const t = Date.parse(d);
-  return isNaN(t) ? 0 : t;
-}
-
 export function buildFeed(bills: Bill[]): FeedItem[] {
   const items: FeedItem[] = [];
   for (const b of bills) {
     for (const h of b.history) {
-      items.push({ bill: b.bill, title: b.title, action: h.action, date: h.date, sortKey: dateSortKey(h.date) });
+      items.push({ bill: b.bill, title: b.title, action: h.action, date: h.date, sortKey: dateSort(h.date) });
     }
   }
   items.sort((a, b) => b.sortKey - a.sortKey);

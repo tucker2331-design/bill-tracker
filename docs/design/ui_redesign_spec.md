@@ -6,6 +6,17 @@ status: active
 
 # UI Redesign Spec — owner feedback (2026-06-22)
 
+> **PROGRESS (2026-06-22, branch `claude/ui-redesign`):** ✅ items **1, 2, 3, 5, 8** done + a full visual
+> system overhaul grounded in the reading. Calendar sliver (Today planner column w/ empty state) replaces
+> "Next up"; timeline moved onto the landing below what's-new; timeline redrawn as a smooth integrated
+> **spine** (continuous centerline + nodes, no boxes); **crossover shrunk** to a thin dashed seam; new
+> **tinted cool canvas** (not white/cream) + elevated cards + muted palette + spacing/type scales +
+> weight-based hierarchy + shadows-over-borders. Build clean, screenshot-verified, zero console errors.
+> **Remaining:** item **4 (Floor stage)** — deferred until the backend emits a floor/passed-chamber signal
+> (an always-empty node would mislead); items **6–7 (Search overflow + chamber-toggle bug + facet counts)**
+> — next PR (box text-overflow is already fixed globally by the new `.cat` 2-line clamp).
+
+
 Direct feedback on the v1 front end ([[design/information_display]] is the principle layer; this is the
 concrete change list). Owner's framing: **read full-length design books first, then redesign.** The
 overarching verdict: **"the whole thing is stale and screams AI — simple UI, fix that."** So this is not
@@ -43,6 +54,12 @@ just feature work — it's a *visual-craft* upgrade (see the Refactoring-UI note
 8. **"Screams AI / stale / simple"** → a genuine visual identity pass: a real type scale + pairing,
    a considered color system (not default blues), intentional spacing scale, depth/hierarchy, restraint.
    This is the Refactoring-UI work — start from *hierarchy, spacing, and color*, not decoration.
+
+## Queued next (owner, 2026-06-23)
+- **Drop the standalone Timeline tab** — redundant now that the timeline is on the landing. ✅ DONE (in this PR).
+- **Read the queued books** (Tufte VDQI full, Hearst, Munzner) → [[design/reading_notes]], THEN
+- **Build the Calendar feature** — integrate the perfected calendar subsystem into the Calendar tab (full calendar w/ times + the marked crossover deadline); the landing sliver is the "today" window. (Task #3; do after digesting calendar-UI knowledge.)
+- **Health/bugs tab + master-site content** (Task #4): design what the operator view shows. **CONSTRAINT: the Health page will be ACCESS-GATED to the owner + a few others** — design it as an operator/admin surface (not lobbyist-facing), and plan auth-gating compatible with the $0 static-SPA + gviz setup (e.g. Cloudflare Access, a separate gated deploy, or a token). The lobbyist-facing trust signals stay inline (vision §7); the deep operator layer lives behind the gate (§3f). The master site is the eventual home for the bug tab + the historical tracker (§9).
 
 ## Sequencing (owner)
 - **"First, knock off the first 2 items in your list of 4."** *Interpretation (confirm):* the 4 = the

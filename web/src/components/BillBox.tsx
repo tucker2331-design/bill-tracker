@@ -4,12 +4,12 @@ import { OutcomeChip, Star } from "./common";
 // The ONE bill component reused in every view (search, timeline drill-down, feed targets).
 export function BillBox({ bill, onOpen }: { bill: Bill; onOpen: (b: Bill) => void }) {
   return (
-    <div className="billbox" onClick={() => onOpen(bill)} role="button" tabIndex={0}
-      onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onOpen(bill); } }}>
+    <div className={`billbox ${bill.chamber === "Senate" ? "senate" : "house"}`} onClick={() => onOpen(bill)} role="button" tabIndex={0}
+      onKeyDown={(e) => { if (e.target === e.currentTarget && (e.key === "Enter" || e.key === " ")) { e.preventDefault(); onOpen(bill); } }}>
       <Star id={bill.bill} />
       <div style={{ minWidth: 0 }}>
-        <span className="num">{bill.bill}</span>{" "}
-        <span className="cat" title={bill.title}>{bill.title}</span>
+        <div className="num">{bill.bill}</div>
+        <div className="cat" title={bill.title}>{bill.title}</div>
       </div>
       <div className="meta">
         {bill.referrals > 1 && <span className="chip referral">{ordinal(bill.referrals)} ref</span>}
