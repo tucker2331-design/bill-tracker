@@ -61,6 +61,20 @@ just feature work — it's a *visual-craft* upgrade (see the Refactoring-UI note
 - **Build the Calendar feature** — integrate the perfected calendar subsystem into the Calendar tab (full calendar w/ times + the marked crossover deadline); the landing sliver is the "today" window. (Task #3; do after digesting calendar-UI knowledge.)
 - **Health/bugs tab + master-site content** (Task #4): design what the operator view shows. **CONSTRAINT: the Health page will be ACCESS-GATED to the owner + a few others** — design it as an operator/admin surface (not lobbyist-facing), and plan auth-gating compatible with the $0 static-SPA + gviz setup (e.g. Cloudflare Access, a separate gated deploy, or a token). The lobbyist-facing trust signals stay inline (vision §7); the deep operator layer lives behind the gate (§3f). The master site is the eventual home for the bug tab + the historical tracker (§9).
 
+## Timeline — terminal stages should BRANCH, not end at "To Governor" (owner, 2026-06-23)
+Owner UI note (future, not blocking the Calendar work): **the timeline ending just at "To Governor" isn't
+representative of how the process actually ends.** A bill's end is not one node — it forks. Wants the tail of
+the spine to **branch into the real terminal outcomes**, e.g. after the second chamber: **→ To Governor →
+{signed / vetoed}**, **→ continued to next session (carried over)**, **→ failed / died**. Specifically:
+**"failed" is currently shown in boxes at the BOTTOM** (the `died-row` DiedStat tiles under the spine) —
+"which is nice, but holistically it's really an **action on the table, not a side note**." So **died/failed
++ carried-over should be terminal branches IN the pipeline geometry** (an honest end-state the bill reaches),
+not a footnote below it. Design a branching tail: the spine splits into the decided outcomes so "where did
+this bill end up" reads directly off position. Keep it honest/structural (we already have `outcome` =
+signed/vetoed/dead/carried_over/awaiting_governor + `deriveStage`'s `died`); this is re-geometry, not new data.
+→ a Timeline follow-up after Calendar + Health. (Recorded so it isn't lost; relates to the deferred Floor-stage
+item — both are "make the pipeline match the real process.")
+
 ## Sequencing (owner)
 - **"First, knock off the first 2 items in your list of 4."** *Interpretation (confirm):* the 4 = the
   four lenses/views; **first 2 = Today (landing) + Timeline** — which is exactly what items 1–5 above

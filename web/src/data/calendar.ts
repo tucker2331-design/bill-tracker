@@ -45,12 +45,21 @@ export const CROSSOVER_BY_SESSION: Record<string, string> = {
 };
 
 const SHEET1_TAB = "Sheet1";
-const PROJECTION = "select A,B,C,E,F,G,J"; // Date,Time,SortTime,Committee,Bill,Outcome,Origin
-const FETCH_TIMEOUT_MS = 30000;            // the projected Sheet1 is ~5 MB
+const PROJECTION = "select A,B,C,D,E,F,G,J,L"; // Date,Time,SortTime,Status,Committee,Bill,Outcome,Origin,LegEventRoute
+const FETCH_TIMEOUT_MS = 30000;               // the projected Sheet1 is ~5 MB
 
 const META_ORIGINS = new Set(["system_alert", "system_metrics"]);
 const LEDGER_COMMITTEE = "📋 Ledger Updates";   // admin collapse — no meeting, no time expectation
 const GOVERNOR_COMMITTEE = "🏛️ Governor";       // dated executive actions — not a meeting (out of scope v1)
+// CANCELLED is the structural cancellation flag the worker derives from the LIS Schedule API's own
+// `IsCancelled` field (calendar_worker.py ~L4936) → Sheet1 Status column. LIS placeholds a cancelled
+// committee slot with an empty time, which is why most "Time TBA" rows were cancelled placeholders, not
+// gatherings. BUT cancellation must be judged at the MEETING level, never the row: the flag is sometimes
+// propagated onto rows for a slot where a meeting actually HAPPENED (real votes recorded — e.g. a
+// subcommittee "reporting (10-Y 0-N)"). So we drop a meeting ONLY when it is cancelled AND carries no real
+// meeting action (LegEventRoute=="meeting"); a cancelled slot with a recorded vote is kept (it occurred).
+const CANCELLED_STATUS = "cancelled";
+const MEETING_ROUTE = "meeting"; // the subsystem's verdict that a real gathering/vote happened in this row
 // A time is non-concrete (can't place a meeting by clock time) for these worker placeholders.
 const NON_CONCRETE = new Set(["", "nan", "none", "time tba", "tba", "journal entry", "ledger"]);
 const BILL_RE = /^[HS][BJR]\d+$/; // VA bill ids: HB/SB/HJ/SJ/HR/SR + number (skeleton rows hold addresses)
@@ -60,6 +69,13 @@ function isConcreteTime(time: string): boolean {
   if (NON_CONCRETE.has(t)) return false;
   if (t.startsWith("⏱")) return false; // ⏱️ [NO_SCHEDULE_MATCH] / [NO_CONVENE_ANCHOR]
   return true;
+}
+
+// The worker sometimes carries LIS's dynamic-time DESCRIPTION (e.g. "Immediately upon adjournment of House
+// Education") instead of a clock time — this is exactly what the LIS website shows, so we keep it, but strip
+// the trailing link markers / newlines the schedule feed appends so it reads as a clean time phrase.
+function cleanTime(time: string): string {
+  return time.split(/[\r\n]/)[0].replace(/\s*\((?:Agenda|View Meeting|Meeting Materials)\)\s*/gi, "").trim();
 }
 
 function normalizeBill(raw: string): string | null {
@@ -133,21 +149,24 @@ async function _loadCalendar(): Promise<CalendarData> {
   const rows = parseCsv(text);
   const header = rows[0] ?? [];
   // Shape guard: a 200 that isn't our projected CSV (renamed tab, error page) must not parse to a silent
-  // empty calendar. The projection's header is exactly these 7 names.
-  if ((header[0] || "").trim().toLowerCase() !== "date" || (header[6] || "").trim().toLowerCase() !== "origin") {
+  // empty calendar. The projection's header is exactly these 9 names (…Origin col 7, LegEventRoute col 8).
+  if ((header[0] || "").trim().toLowerCase() !== "date" || (header[8] || "").trim().toLowerCase() !== "legeventroute") {
     throw new Error("unexpected Sheet1 shape — calendar header didn't match (tab renamed, not shared, or an error page?)");
   }
 
-  // Group rows into meetings keyed by (day, committee, time).
+  // Group rows into meetings keyed by (day, committee, time). Projected cols:
+  // 0 Date · 1 Time · 2 SortTime · 3 Status · 4 Committee · 5 Bill · 6 Outcome · 7 Origin · 8 LegEventRoute
   const groups = new Map<string, Meeting>();
+  // Per-meeting cancellation judgement (meeting-level, not row-level): was any row CANCELLED, and did any
+  // row record a real meeting action? A meeting is dropped only when cancelled AND no real action occurred.
+  const flags = new Map<string, { cancelled: boolean; held: boolean }>();
   for (let i = 1; i < rows.length; i++) {
     const r = rows[i];
-    const origin = (r[6] || "").trim();
+    const origin = (r[7] || "").trim();
     if (META_ORIGINS.has(origin)) continue;
-    const committee = (r[3] || "").trim();
+    const committee = (r[4] || "").trim();
     // The Ledger collapse (admin, no meeting) + executive actions + meta rows are not meetings. Everything
-    // else IS a real meeting and is kept — including ones LIS scheduled without a concrete time (shown
-    // "Time TBA"), so we never silently drop a meeting a lobbyist needs to know happened (vision §1/§7).
+    // else is kept (parity with the LIS calendar) unless it's a cancelled placeholder (judged below).
     if (!committee || committee === LEDGER_COMMITTEE || committee === GOVERNOR_COMMITTEE) continue;
     const dt = parseLisDate(r[0]);
     if (!dt) continue;
@@ -162,17 +181,38 @@ async function _loadCalendar(): Promise<CalendarData> {
       const chamber: Chamber | null = committee.startsWith("House") ? "House"
         : committee.startsWith("Senate") ? "Senate" : null;
       const kind: MeetingKind = /\bConvenes\b/.test(committee) ? "floor" : "committee";
-      m = { dateKey: dk, committee, chamber, kind, time: concrete ? rawTime : "Time TBA",
+      m = { dateKey: dk, committee, chamber, kind, time: concrete ? cleanTime(rawTime) : "Time TBA",
         tba: !concrete, minutes: toMinutes(sortTime, rawTime), bills: [] };
       groups.set(key, m);
+      flags.set(key, { cancelled: false, held: false });
+    } else if (concrete && m.tba) {
+      m.time = cleanTime(rawTime); m.tba = false; m.minutes = toMinutes(sortTime, rawTime); // a real time supersedes TBA
     }
-    const bill = normalizeBill(r[4] || "");
-    if (bill && !m.bills.some((x) => x.bill === bill)) m.bills.push({ bill, action: (r[5] || "").trim() });
+    const f = flags.get(key)!;
+    if ((r[3] || "").trim().toLowerCase() === CANCELLED_STATUS) f.cancelled = true;
+    if ((r[8] || "").trim().toLowerCase() === MEETING_ROUTE) f.held = true;
+    const billRaw = (r[5] || "").trim();
+    const bill = normalizeBill(billRaw);
+    if (bill) {
+      if (!m.bills.some((x) => x.bill === bill)) m.bills.push({ bill, action: (r[6] || "").trim() });
+    } else if (m.tba && m.time === "Time TBA" && billRaw && billRaw.toLowerCase() !== "no agenda listed.") {
+      // Skeleton schedule row: the worker copies LIS's verbatim Description into the Bill column
+      // (calendar_worker.py ~L5082). When LIS published no ScheduleTime, that Description IS the time LIS
+      // itself shows ("Immediately after Transportation & Public Safety"). We DISPLAY that structural field
+      // verbatim instead of "Time TBA" — pure pass-through of an API-returned value, no marker-matching /
+      // extraction / derivation (Standard #3: structural, trustworthy without intervention; if LIS rephrases
+      // we just show the new phrasing). cleanTime only drops HTML-less link labels + newlines for display.
+      const note = cleanTime(billRaw);
+      if (note) m.time = note;
+    }
   }
 
-  // Bucket by day; sort meetings by time, bills by number within each meeting.
+  // Bucket by day; drop cancelled placeholders (cancelled AND no real meeting action ever recorded there).
+  // Sort meetings by time, bills by number within each meeting.
   const byDay = new Map<string, Meeting[]>();
-  for (const m of groups.values()) {
+  for (const [key, m] of groups) {
+    const f = flags.get(key)!;
+    if (f.cancelled && !f.held) continue; // cancelled, nothing happened → not on the calendar
     m.bills.sort((a, b) => a.bill.localeCompare(b.bill, undefined, { numeric: true }));
     (byDay.get(m.dateKey) ?? byDay.set(m.dateKey, []).get(m.dateKey)!).push(m);
   }
@@ -181,11 +221,13 @@ async function _loadCalendar(): Promise<CalendarData> {
   }
 
   const keys = [...byDay.keys()].sort();
+  let totalMeetings = 0;
+  for (const ms of byDay.values()) totalMeetings += ms.length; // kept meetings (cancelled placeholders dropped)
   return {
     byDay,
     minKey: keys[0] || "",
     maxKey: keys[keys.length - 1] || "",
-    totalMeetings: groups.size,
+    totalMeetings,
     dataAsOf,
   };
 }
