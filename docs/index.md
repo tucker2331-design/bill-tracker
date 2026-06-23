@@ -61,7 +61,9 @@ Links use Obsidian `[[wikilink]]` format. Obsidian resolves by filename; path-qu
 - [[failures/legacy_calendar_versions]] — why the old app.py / shadow_v2 / v2_shadow_test / backend_worker / xray versions are relative failures (text-driven, hardcoded session, silent excepts, unthrottled polling) — the "before" picture that justifies the current architecture
 
 ## Design (how the front end should look + behave)
-- [[design/information_display]] — **the design north-star, grounded in the canon (Tufte VDQI 2nd ed, Envisioning Information; Few; Hearst/Flamenco; Gestalt/WCAG). Every principle → an actionable rule mapped to a screen, + a punch-list for `web/`. Living — grows as more sources are read.**
+- [[design/information_display]] — **the design north-star: principles → actionable rules mapped to each screen + a punch-list for `web/`. Living.**
+- [[design/reading_notes]] — **per-book DEEP-READ digests (Few *Information Dashboard Design* read in full; *Refactoring UI* tactics; Tufte/Hearst queued). The raw material; concrete fixes for the "screams-AI" critique.**
+- [[design/ui_redesign_spec]] — **owner's 2026-06-22 UI change-list: landing relayout (calendar sliver + timeline below), smoother less-boxy timeline, shrink crossover, Floor stage?, Search bugs, the visual-identity pass.**
 
 ## Ideas / Deferred Work
 - [[ideas/product_roadmap]] — **post-accuracy direction: reviewer swap (A), product vision → LIS data inventory → UI design (B), 2027-gated items (C). The anti-looping plan.**
