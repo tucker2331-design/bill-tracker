@@ -65,7 +65,8 @@ Links use Obsidian `[[wikilink]]` format. Obsidian resolves by filename; path-qu
 ## Design (how the front end should look + behave)
 - [[design/information_display]] — **the design north-star: principles → actionable rules mapped to each screen + a punch-list for `web/`. Living.**
 - [[design/reading_notes]] — **per-book DEEP-READ digests (Few *Information Dashboard Design* read in full; *Refactoring UI* tactics; Tufte/Hearst queued). The raw material; concrete fixes for the "screams-AI" critique.**
-- [[design/ui_redesign_spec]] — **owner's 2026-06-22 UI change-list: landing relayout (calendar sliver + timeline below), smoother less-boxy timeline, shrink crossover, Floor stage?, Search bugs, the visual-identity pass.**
+- [[design/ui_redesign_spec]] — **owner's 2026-06-22 UI change-list: landing relayout (calendar sliver + timeline below), smoother less-boxy timeline, shrink crossover, Floor stage?, Search bugs, the visual-identity pass + the 2026-06-23 timeline-should-BRANCH feedback.**
+- [[design/health_operator_tab]] — **SCOPE (Task #4): the operator Health tab — Few bullet-graph gauges w/ danger bands (PL-8), grounded in live SYSTEM_METRICS/SYSTEM_ALERT signals; Cloudflare Access gating + the data-publicity caveat.**
 
 ## Ideas / Deferred Work
 - [[ideas/product_roadmap]] — **post-accuracy direction: reviewer swap (A), product vision → LIS data inventory → UI design (B), 2027-gated items (C). The anti-looping plan.**
