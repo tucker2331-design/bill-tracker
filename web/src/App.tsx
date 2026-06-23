@@ -69,7 +69,9 @@ export default function App() {
         {data && (
           <ErrorBoundary resetKey={tab}>
             {tab === "today" && <Landing bills={visible} onOpen={open} />}
-            {tab === "calendar" && <Calendar bills={visible} onOpen={open} />}
+            {/* Calendar reads the calendar subsystem (Sheet1) and scopes itself via the global switch,
+                so it gets the FULL bill set for the agenda→card lookup, not the pre-scoped `visible`. */}
+            {tab === "calendar" && <Calendar bills={data.bills} sessionCode={data.sessionCode} onOpen={open} />}
             {tab === "search" && <Search bills={visible} onOpen={open} />}
             {tab === "health" && <Health completeness={data.completeness} dataAsOf={data.dataAsOf} />}
           </ErrorBoundary>
