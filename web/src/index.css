@@ -43,7 +43,7 @@
   --shadow: 0 1px 2px rgba(22,30,55,.06), 0 8px 20px rgba(22,30,55,.07);
   --shadow-lg: 0 2px 6px rgba(22,30,55,.08), 0 22px 48px rgba(22,30,55,.16);
 
-  font-family: "Inter", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  font-family: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
 }
 
 * { box-sizing: border-box; }
@@ -58,13 +58,12 @@ h2, h3 { margin: 0; }
 
 /* ── App shell ── */
 .app { display: flex; flex-direction: column; min-height: 100%; }
-.topbar { position: sticky; top: 0; z-index: 20; background: var(--canvas-2);
-  display: flex; align-items: center; gap: var(--s5); padding: 10px var(--s5); flex-wrap: wrap; }
+.appheader { position: sticky; top: 0; z-index: 20; background: var(--canvas-2); box-shadow: var(--shadow-sm); }
+.topbar { display: flex; align-items: center; gap: var(--s5); padding: 10px var(--s5); flex-wrap: wrap; }
 .brand { font-weight: 800; font-size: 16px; letter-spacing: -.3px; display: flex; align-items: center; gap: var(--s2); }
 .brand .dot { width: 9px; height: 9px; border-radius: 50%; background: var(--accent); }
 .spacer { flex: 1; }
-.nav { display: flex; gap: var(--s1); padding: 0 var(--s5); background: var(--canvas-2);
-  position: sticky; top: 49px; z-index: 19; overflow-x: auto; }
+.nav { display: flex; gap: var(--s1); padding: 0 var(--s5); overflow-x: auto; }
 .nav button { border: 0; background: transparent; color: var(--ink-soft); padding: 11px var(--s3) 13px; font-weight: 600;
   border-bottom: 2px solid transparent; white-space: nowrap; }
 .nav button.active { color: var(--ink); border-bottom-color: var(--accent); }

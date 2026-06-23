@@ -44,20 +44,23 @@ export default function App() {
 
   return (
     <div className="app">
-      <header className="topbar">
-        <div className="brand"><span className="dot" /> VA Bill Tracker</div>
-        <ScopeSwitch />
-        <div className="spacer" />
-        {data && <TrustHeader dataAsOf={data.dataAsOf} completeness={data.completeness} shown={visible.length} />}
-      </header>
+      {/* one sticky container so the nav never overlaps a wrapped topbar (no hard-coded offset) */}
+      <div className="appheader">
+        <header className="topbar">
+          <div className="brand"><span className="dot" /> VA Bill Tracker</div>
+          <ScopeSwitch />
+          <div className="spacer" />
+          {data && <TrustHeader dataAsOf={data.dataAsOf} completeness={data.completeness} shown={visible.length} />}
+        </header>
 
-      <nav className="nav">
-        {TABS.map((t) => (
-          <button key={t.id} className={tab === t.id ? "active" : ""} onClick={() => setTab(t.id)}>
-            {t.label}
-          </button>
-        ))}
-      </nav>
+        <nav className="nav">
+          {TABS.map((t) => (
+            <button key={t.id} className={tab === t.id ? "active" : ""} onClick={() => setTab(t.id)}>
+              {t.label}
+            </button>
+          ))}
+        </nav>
+      </div>
 
       <main className="main">
         {error && <p className="center-msg" style={{ color: "var(--stale)" }}>

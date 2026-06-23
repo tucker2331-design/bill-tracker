@@ -1,29 +1,21 @@
 import { useMemo } from "react";
 import type { Bill } from "../data/types";
+import { parseLisDate, dayKey } from "../data/dates";
 
 // Today's calendar as a paper-planner day column (owner request): the day-of-week + numerical date at
 // the head, the day's committee meetings down it, a fixed-height widget that scrolls internally. The
 // full calendar lives in the Calendar tab; this is the "what's happening today" sliver on the landing.
-function ymd(d: Date): string {
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
-}
-// DOCKET dates arrive as m/d/Y or Y-m-d; compare by calendar day, tolerant of either form.
-function isToday(raw: string, todayKey: string): boolean {
-  const t = Date.parse(raw);
-  if (isNaN(t)) return false;
-  return ymd(new Date(t)) === todayKey;
-}
-
 export function CalendarSliver({ bills, onOpen }: { bills: Bill[]; onOpen: (b: Bill) => void }) {
   const today = new Date();
   const dow = today.toLocaleDateString("en-US", { weekday: "long" });
   const head = today.toLocaleDateString("en-US", { month: "short", day: "numeric" });
-  const todayKey = ymd(today);
+  const todayKey = dayKey(today);
 
   const events = useMemo(() => {
     const evs: { bill: string; committee: string; b: Bill }[] = [];
-    for (const b of bills) for (const m of b.upcoming) {
-      if (isToday(m.date, todayKey)) evs.push({ bill: b.bill, committee: m.committee || "Committee", b });
+    for (const b of bills) for (const m of b.upcoming ?? []) {
+      const d = parseLisDate(m.date);                      // robust local parse (no Date.parse drift)
+      if (d && dayKey(d) === todayKey) evs.push({ bill: b.bill, committee: m.committee || "Committee", b });
     }
     return evs.sort((a, b) => a.committee.localeCompare(b.committee));
   }, [bills, todayKey]);

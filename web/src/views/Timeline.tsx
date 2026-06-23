@@ -102,8 +102,11 @@ export function Timeline({ bills, onOpen, embedded = false }: { bills: Bill[]; o
 }
 
 function DiedStat({ side, bills, onClick }: { side: Chamber; bills: Bill[]; onClick: () => void }) {
+  const live = bills.length > 0;
   return (
-    <div className="stat" style={{ cursor: bills.length ? "pointer" : "default", minWidth: 130, borderLeft: `3px solid var(--${side === "Senate" ? "senate" : "house"})` }} onClick={onClick}>
+    <div className="stat" style={{ cursor: live ? "pointer" : "default", minWidth: 130, borderLeft: `3px solid var(--${side === "Senate" ? "senate" : "house"})` }}
+      onClick={onClick} role={live ? "button" : undefined} tabIndex={live ? 0 : undefined}
+      onKeyDown={(e) => { if (live && (e.key === "Enter" || e.key === " ")) { e.preventDefault(); onClick(); } }}>
       <div className="n" style={{ color: side === "Senate" ? "var(--senate)" : "var(--house)" }}>{bills.length.toLocaleString()}</div>
       <div className="l">{side} died / carried</div>
     </div>

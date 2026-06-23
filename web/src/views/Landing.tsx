@@ -1,6 +1,7 @@
 import { useMemo, useState } from "react";
 import type { Bill } from "../data/types";
 import { buildFeed, tallyOutcomes } from "../data/derive";
+import { parseLisDate, dateSort } from "../data/dates";
 import { OutcomeChip } from "../components/common";
 import { CalendarSliver } from "../components/CalendarSliver";
 import { Timeline } from "./Timeline";
@@ -15,7 +16,7 @@ export function Landing({ bills, onOpen }: { bills: Bill[]; onOpen: (b: Bill) =>
   const days = useMemo(() => {
     const m = new Map<string, typeof feed>();
     for (const it of feed) (m.get(it.date || "Undated") ?? m.set(it.date || "Undated", []).get(it.date || "Undated")!).push(it);
-    return [...m.entries()].sort((a, b) => (Date.parse(b[0]) || 0) - (Date.parse(a[0]) || 0));
+    return [...m.entries()].sort((a, b) => dateSort(b[0]) - dateSort(a[0]));
   }, [feed]);
 
   const [dayIdx, setDayIdx] = useState(0);
@@ -25,7 +26,8 @@ export function Landing({ bills, onOpen }: { bills: Bill[]; onOpen: (b: Bill) =>
   }
 
   const [curDay, items] = days[Math.min(dayIdx, days.length - 1)] ?? ["", []];
-  const dayLabel = curDay && Date.parse(curDay) ? new Date(curDay).toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" }) : curDay || "—";
+  const curDate = parseLisDate(curDay);
+  const dayLabel = curDate ? curDate.toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" }) : curDay || "—";
 
   return (
     <div>
