@@ -6,6 +6,17 @@ status: active
 
 # UI Redesign Spec — owner feedback (2026-06-22)
 
+> **PROGRESS (2026-06-22, branch `claude/ui-redesign`):** ✅ items **1, 2, 3, 5, 8** done + a full visual
+> system overhaul grounded in the reading. Calendar sliver (Today planner column w/ empty state) replaces
+> "Next up"; timeline moved onto the landing below what's-new; timeline redrawn as a smooth integrated
+> **spine** (continuous centerline + nodes, no boxes); **crossover shrunk** to a thin dashed seam; new
+> **tinted cool canvas** (not white/cream) + elevated cards + muted palette + spacing/type scales +
+> weight-based hierarchy + shadows-over-borders. Build clean, screenshot-verified, zero console errors.
+> **Remaining:** item **4 (Floor stage)** — deferred until the backend emits a floor/passed-chamber signal
+> (an always-empty node would mislead); items **6–7 (Search overflow + chamber-toggle bug + facet counts)**
+> — next PR (box text-overflow is already fixed globally by the new `.cat` 2-line clamp).
+
+
 Direct feedback on the v1 front end ([[design/information_display]] is the principle layer; this is the
 concrete change list). Owner's framing: **read full-length design books first, then redesign.** The
 overarching verdict: **"the whole thing is stale and screams AI — simple UI, fix that."** So this is not
