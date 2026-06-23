@@ -15,6 +15,7 @@ Links use Obsidian `[[wikilink]]` format. Obsidian resolves by filename; path-qu
 - [[log]] — chronological, append-only record of ingests / decisions / PRs / lint passes
 
 ## State (live trackers — read these to know what's happening NOW)
+- [[state/next_session]] — **▶️ START HERE: the next-session kickoff — current state + the owner queue (read books → Calendar feature → Health bullet-graph tab) + how we work**
 - [[state/current_status]] — active focus, open PR, current bug count, what's next
 - [[state/open_anti_patterns]] — known silent fallbacks still living in the code (worker.py line debt)
 

@@ -153,6 +153,7 @@ Prioritized; each cites the principle. Fold into the next front-end polish PR.
 | **PL-5** | Build the **§3b committee board as small multiples** (identical column template, money-committees last, sub-headers, mirrored across the centerline) | Timeline detail | P4, P14 |
 | **PL-6** | Ensure all numbers use tabular figures; verify chamber/outcome are not color-only (add labels) + check colorblind contrast | global | P15, P19 |
 | **PL-7** | Outcome distribution + completeness always shown **with denominator** ("N of N") | Today, Health | P6 |
+| **PL-8** | **Health metrics as bullet graphs / gauges with threshold bands** (owner 2026-06-23: "like the red zone on a car's RPMs") — each metric as a measure against good/warning/**danger** bands + a target marker, so a red-zone reading is instant; repeat as small multiples. This is **Few's bullet graph** (his invention for exactly this). Calibrate danger thresholds from the steady-state + existing alert floors (e.g. keyword-mismatch ~0.03% safe / >1% red; freshness green→amber→red by age). | Health | P4 (small multiples), P10 (color=attention), Few bullet graph |
 
 ---
 
