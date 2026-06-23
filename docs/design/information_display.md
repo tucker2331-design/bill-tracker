@@ -1,6 +1,6 @@
 ---
 tags: [design, ui, information-display, reference, web]
-updated: 2026-06-22
+updated: 2026-06-23
 status: active
 ---
 
@@ -21,12 +21,13 @@ are already textbook; this page sharpens them and catches where the current buil
 ## 1. The canon (reading log)
 | Source | Status | What it governs here |
 |---|---|---|
-| **Tufte — *The Visual Display of Quantitative Information*, 2nd ed.** (owner's #1) | ✅ synthesized 2026-06-22 | data-ink, chartjunk, the lie factor, small multiples, data density, graphical integrity |
-| **Tufte — *Envisioning Information*** | ✅ synthesized | layering & separation, micro/macro readings, the "smallest effective difference", 1+1=3 clutter |
-| **Few — *Show Me the Numbers* / *Information Dashboard Design*** | ✅ synthesized | tables vs graphs, "remove non-data pixels, enhance data pixels", at-a-glance, color for attention |
-| **Hearst — *Search User Interfaces* (Flamenco)** | ✅ synthesized | faceted navigation: integrate browse+search, fluid refine/expand, **avoid empty result sets**, show facet counts |
+| **Tufte — *The Visual Display of Quantitative Information*, 2nd ed.** (owner's #1) | ✅ **deep-read 2026-06-23** ([[design/reading_notes]]) | data-ink, chartjunk, the lie factor, **small multiples** (calendar grid = small multiples), data density / shrink, graphical integrity |
+| **Tufte — *Envisioning Information*** | ✅ deep-read 2026-06-23 | layering & separation, **micro/macro readings** (overview+detail in one geometry), the "smallest effective difference", 1+1=3 clutter |
+| **Few — *Show Me the Numbers* / *Information Dashboard Design*** | ✅ read in full 2026-06-22 | tables vs graphs, "remove non-data pixels, enhance data pixels", at-a-glance, color for attention, bullet graph |
+| **Munzner — *Visualization Analysis & Design* (Ch5 Marks & Channels)** | ✅ **deep-read 2026-06-23** ([[design/reading_notes]]) | **encoding-channel effectiveness ranking** (position > length > area > color); expressiveness/effectiveness; separable channels; popout — justifies the timeline + calendar encodings |
+| **Hearst — *Search User Interfaces* (Ch1 + Ch8 Flamenco)** | ✅ **deep-read 2026-06-23** ([[design/reading_notes]]) | 7 SUI guidelines; faceted nav: integrate browse+search, fluid refine/expand, **avoid empty result sets**, **facet counts as scent**, per-facet removable chips, recognition>recall |
 | Gestalt / typography / WCAG | ✅ baseline | proximity, alignment, hierarchy, tabular figures, never color-alone, contrast, focus |
-| *(next)* Norman — *Design of Everyday Things*; Wroblewski — forms/mobile; Munzner — *Visualization Analysis & Design* | ⏳ queued | affordances, input design, encoding-channel theory |
+| *(next)* Norman — *Design of Everyday Things*; Wroblewski — forms/mobile | ⏳ queued | affordances, input design |
 
 ---
 
@@ -154,6 +155,7 @@ Prioritized; each cites the principle. Fold into the next front-end polish PR.
 | **PL-6** | Ensure all numbers use tabular figures; verify chamber/outcome are not color-only (add labels) + check colorblind contrast | global | P15, P19 |
 | **PL-7** | Outcome distribution + completeness always shown **with denominator** ("N of N") | Today, Health | P6 |
 | **PL-8** | **Health metrics as bullet graphs / gauges with threshold bands** (owner 2026-06-23: "like the red zone on a car's RPMs") — each metric as a measure against good/warning/**danger** bands + a target marker, so a red-zone reading is instant; repeat as small multiples. This is **Few's bullet graph** (his invention for exactly this). Calibrate danger thresholds from the steady-state + existing alert floors (e.g. keyword-mismatch ~0.03% safe / >1% red; freshness green→amber→red by age). | Health | P4 (small multiples), P10 (color=attention), Few bullet graph |
+| **PL-9** | **Calendar tab = month grid (small multiples of days) + day/agenda column, one geometry** (micro/macro). Time encoded by **vertical position** (Munzner #1 magnitude channel — never color/size); hairline grid (data-ink); **today + the crossover deadline are the only loud cells** (Few attention / Munzner single-channel popout); weekends/out-of-month = quietest tint (smallest effective difference). Meeting chip = committee+chamber by spatial group + quiet hue + text label (never color-alone). "Time TBA"/derived times honestly marked (trust layer). Designed empty state off-season. Full build rules in [[design/reading_notes#Synthesis — Calendar UI patterns]]. | Calendar | P4, P9 micro/macro, P10, Munzner channels, Few palette |
 
 ---
 
