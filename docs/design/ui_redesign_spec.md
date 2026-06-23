@@ -55,6 +55,12 @@ just feature work — it's a *visual-craft* upgrade (see the Refactoring-UI note
    a considered color system (not default blues), intentional spacing scale, depth/hierarchy, restraint.
    This is the Refactoring-UI work — start from *hierarchy, spacing, and color*, not decoration.
 
+## Queued next (owner, 2026-06-23)
+- **Drop the standalone Timeline tab** — redundant now that the timeline is on the landing. ✅ DONE (in this PR).
+- **Read the queued books** (Tufte VDQI full, Hearst, Munzner) → [[design/reading_notes]], THEN
+- **Build the Calendar feature** — integrate the perfected calendar subsystem into the Calendar tab (full calendar w/ times + the marked crossover deadline); the landing sliver is the "today" window. (Task #3; do after digesting calendar-UI knowledge.)
+- **Health/bugs tab + master-site content** (Task #4): design what the operator view shows. **CONSTRAINT: the Health page will be ACCESS-GATED to the owner + a few others** — design it as an operator/admin surface (not lobbyist-facing), and plan auth-gating compatible with the $0 static-SPA + gviz setup (e.g. Cloudflare Access, a separate gated deploy, or a token). The lobbyist-facing trust signals stay inline (vision §7); the deep operator layer lives behind the gate (§3f). The master site is the eventual home for the bug tab + the historical tracker (§9).
+
 ## Sequencing (owner)
 - **"First, knock off the first 2 items in your list of 4."** *Interpretation (confirm):* the 4 = the
   four lenses/views; **first 2 = Today (landing) + Timeline** — which is exactly what items 1–5 above

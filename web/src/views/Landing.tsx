@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react";
 import type { Bill } from "../data/types";
 import { buildFeed, tallyOutcomes } from "../data/derive";
-import { parseLisDate, dateSort } from "../data/dates";
+import { parseLisDate, dateSort, dayKey } from "../data/dates";
 import { OutcomeChip } from "../components/common";
 import { CalendarSliver } from "../components/CalendarSliver";
 import { Timeline } from "./Timeline";
@@ -15,7 +15,11 @@ export function Landing({ bills, onOpen }: { bills: Bill[]; onOpen: (b: Bill) =>
 
   const days = useMemo(() => {
     const m = new Map<string, typeof feed>();
-    for (const it of feed) (m.get(it.date || "Undated") ?? m.set(it.date || "Undated", []).get(it.date || "Undated")!).push(it);
+    for (const it of feed) {
+      const d = parseLisDate(it.date);                 // normalize so one day buckets once, any format
+      const key = d ? dayKey(d) : "Undated";
+      (m.get(key) ?? m.set(key, []).get(key)!).push(it);
+    }
     return [...m.entries()].sort((a, b) => dateSort(b[0]) - dateSort(a[0]));
   }, [feed]);
 
@@ -72,7 +76,7 @@ export function Landing({ bills, onOpen }: { bills: Bill[]; onOpen: (b: Bill) =>
           <Summary n={tally.dead} o="dead" />
           <Summary n={tally.carried_over} o="carried_over" />
         </div>
-        <Timeline bills={bills} onOpen={onOpen} embedded />
+        <Timeline bills={bills} onOpen={onOpen} />
       </div>
     </div>
   );

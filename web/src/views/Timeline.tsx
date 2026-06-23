@@ -15,7 +15,7 @@ const COLUMNS: { stage: Stage; label: string }[] = [
 
 type DrillKey = string;
 
-export function Timeline({ bills, onOpen, embedded = false }: { bills: Bill[]; onOpen: (b: Bill) => void; embedded?: boolean }) {
+export function Timeline({ bills, onOpen }: { bills: Bill[]; onOpen: (b: Bill) => void }) {
   const { counts, cellBills, died } = useMemo(() => {
     const counts: Record<string, number> = {};
     const cellBills = new Map<DrillKey, Bill[]>();
@@ -57,13 +57,11 @@ export function Timeline({ bills, onOpen, embedded = false }: { bills: Bill[]; o
 
   return (
     <div>
-      {!embedded && (
-        <div className="spine-legend">
-          <span><span className="swatch" style={{ background: "var(--senate)" }} />Senate · above the line</span>
-          <span><span className="swatch" style={{ background: "var(--house)" }} />House · below the line</span>
-          <span className="muted">Position is progress — a bill crosses the line at crossover.</span>
-        </div>
-      )}
+      <div className="spine-legend">
+        <span><span className="swatch" style={{ background: "var(--senate)" }} />Senate · above the line</span>
+        <span><span className="swatch" style={{ background: "var(--house)" }} />House · below the line</span>
+        <span className="muted">Position is progress — a bill crosses the line at crossover.</span>
+      </div>
 
       <div className="spine">
         <div className="track" />

@@ -7,15 +7,14 @@ import { ScopeSwitch, TrustHeader } from "./components/common";
 import { ErrorBoundary } from "./components/ErrorBoundary";
 import { BillCard } from "./components/BillCard";
 import { Landing } from "./views/Landing";
-import { Timeline } from "./views/Timeline";
 import { Calendar } from "./views/Calendar";
 import { Search } from "./views/Search";
 import { Health } from "./views/Health";
 
-type Tab = "today" | "timeline" | "calendar" | "search" | "health";
+// No standalone Timeline tab — the timeline lives on the landing (owner, 2026-06-23: redundant).
+type Tab = "today" | "calendar" | "search" | "health";
 const TABS: { id: Tab; label: string }[] = [
   { id: "today", label: "Today" },
-  { id: "timeline", label: "Timeline" },
   { id: "calendar", label: "Calendar" },
   { id: "search", label: "Search" },
   { id: "health", label: "Health" },
@@ -70,7 +69,6 @@ export default function App() {
         {data && (
           <ErrorBoundary resetKey={tab}>
             {tab === "today" && <Landing bills={visible} onOpen={open} />}
-            {tab === "timeline" && <Timeline bills={visible} onOpen={open} />}
             {tab === "calendar" && <Calendar bills={visible} onOpen={open} />}
             {tab === "search" && <Search bills={visible} onOpen={open} />}
             {tab === "health" && <Health completeness={data.completeness} dataAsOf={data.dataAsOf} />}
