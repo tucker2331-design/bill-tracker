@@ -236,8 +236,6 @@ def _history(item: Dict[str, Any]) -> List[Dict[str, str]]:
     history = []
     for action in actions:
         action_text = str(action.get("text", "") or "").strip()
-        if not action_text:
-            continue
         raw_chamber = str(action.get("chamber", "") or "").strip()
         normalized_chamber = _norm_chamber(raw_chamber)
         entry = {
@@ -245,6 +243,8 @@ def _history(item: Dict[str, Any]) -> List[Dict[str, str]]:
             "date": str(action.get("date", "") or "").strip(),
             "chamber": normalized_chamber,
         }
+        if not action_text:
+            entry["action_missing"] = True
         if raw_chamber and not normalized_chamber:
             entry["chamber_raw"] = raw_chamber
         history.append(entry)
@@ -325,6 +325,15 @@ def _build_health(counters: Dict[str, int], records_written: int) -> Dict[str, A
             "message": "OpenLeg records without session values cannot receive a public nysenate.gov bill URL.",
         })
 
+    if counters.get("missing_action_text", 0):
+        findings.append({
+            "severity": "WARN",
+            "code": "MISSING_ACTION_TEXT",
+            "count": counters["missing_action_text"],
+            "denominator": records_written,
+            "message": "One or more OpenLeg action records lacked text; the row is preserved with action_missing=true.",
+        })
+
     return {
         "status": _health_status(findings),
         "findings": findings,
@@ -332,6 +341,7 @@ def _build_health(counters: Dict[str, int], records_written: int) -> Dict[str, A
             "skipped_malformed_bill": 0,
             "unknown_chamber_value": 0,
             "source_url_missing_session": 0,
+            "missing_action_text": 0,
             "unknown_structural_outcome": "review every run until terminal outcome mapping is structurally complete",
         },
     }
@@ -371,6 +381,7 @@ def bill_to_record(item: Dict[str, Any], fetched_at_utc: str) -> Tuple[Dict[str,
         "has_sponsor": 1 if _member_name(sponsor_member) else 0,
         "has_summary": 1 if str(item.get("summary", "") or "").strip() else 0,
         "committee_agenda_refs": len(agenda_refs),
+        "missing_action_text": sum(1 for h in history if h.get("action_missing")),
         "unknown_origin_chamber": 1 if _has_unknown_chamber(position["origin_chamber_raw"]) else 0,
         "unknown_action_chamber": sum(1 for h in history if h.get("chamber_raw")),
         "unknown_agenda_chamber": sum(1 for r in agenda_refs if r.get("chamber_raw")),
@@ -425,7 +436,7 @@ class NYOpenLegClient:
         merged = dict(params)
         merged["key"] = self.api_key
         url = f"{self.base_url}{path}"
-        last_error: Optional[BaseException] = None
+        last_error: Optional[str] = None
         for attempt in range(1, MAX_HTTP_ATTEMPTS + 1):
             resp: Optional[requests.Response] = None
             try:
@@ -443,12 +454,19 @@ class NYOpenLegClient:
                     raise NYOpenLegError(f"OpenLeg reported failure for {path}: {payload.get('message')}")
                 return payload
             except requests.RequestException as err:
-                last_error = err
+                error_response = getattr(err, "response", None)
+                status = getattr(error_response, "status_code", None)
+                last_error = err.__class__.__name__
+                if status is not None:
+                    last_error = f"{last_error} status={status}"
                 if attempt < MAX_HTTP_ATTEMPTS:
                     time.sleep(_retry_delay_seconds(resp, attempt))
                     continue
                 break
-        raise NYOpenLegError(f"OpenLeg request for {path} failed after {MAX_HTTP_ATTEMPTS} attempts: {last_error}")
+        raise NYOpenLegError(
+            f"OpenLeg request for {path} failed after {MAX_HTTP_ATTEMPTS} attempts: "
+            f"{last_error or 'unknown error'}"
+        )
 
     def iter_bills(
         self,
@@ -509,6 +527,7 @@ def build_ny_bill_records(
         "has_sponsor": 0,
         "has_summary": 0,
         "committee_agenda_refs": 0,
+        "missing_action_text": 0,
         "unknown_origin_chamber": 0,
         "unknown_action_chamber": 0,
         "unknown_agenda_chamber": 0,
@@ -554,6 +573,7 @@ def build_ny_bill_records(
         "unknown_structural_outcome": unknown_outcome,
         "unknown_structural_outcome_rate": _safe_rate(unknown_outcome, len(records)),
         "unknown_chamber_value": unknown_chamber,
+        "missing_action_text": counters.get("missing_action_text", 0),
         "source_url_missing_session": counters["source_url_missing_session"],
         "outcome_sources": {
             key.replace("outcome_source_", ""): value
@@ -647,11 +667,19 @@ def write_ny_bill_tracker(records: List[Dict[str, Any]], completeness: Dict[str,
     except gspread.exceptions.WorksheetNotFound:
         ws = sheet.add_worksheet(title=NY_BILL_TRACKER_TAB, rows=need_rows, cols=need_cols)
 
-    ws.clear()
-    ws.batch_update([
-        {"range": "A1", "values": rows},
+    clear_rows = max(ws.row_count, need_rows)
+    tail_rows = max(0, clear_rows - len(rows))
+    updates = [
+        {"range": f"A1:P{len(rows)}", "values": rows},
+        {"range": "Q1", "values": [[""]]},
         {"range": completeness_cell, "values": [[json.dumps(completeness, ensure_ascii=False)]]},
-    ])
+    ]
+    if tail_rows:
+        updates.append({
+            "range": f"A{len(rows) + 1}:R{clear_rows}",
+            "values": [[""] * 18 for _ in range(tail_rows)],
+        })
+    ws.batch_update(updates)
 
 
 def run_ny_bill_tracker(*, write: bool = True) -> Tuple[List[Dict[str, Any]], Dict[str, Any]]:

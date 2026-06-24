@@ -54,9 +54,12 @@ maps to product `House` for that column only.
 - Do not infer a complete meeting calendar from Senate-centered endpoints.
 - Completeness metrics always include denominators/rates where useful.
 - The run-level `health` object must surface unknown structural outcomes,
-  malformed bill IDs, unrecognized chamber values, and missing public source URLs.
+  malformed bill IDs, unrecognized chamber values, missing action text, and
+  missing public source URLs.
 - Empty bill pages before OpenLeg's declared `total` / `offsetEnd` end-of-range
   are hard failures to protect the last-known-good sheet from partial overwrites.
+- Sheet writes use padded range replacement instead of clearing first, so a
+  transient Google Sheets write failure does not leave `NY_Bill_Tracker` empty.
 - A missing `NY_OPENLEG_API_KEY` is a hard failure, not an empty output.
 
 ## Known differences from Virginia

@@ -69,6 +69,7 @@ Record in this page and [[ny/log]]:
 | outcome_sources | TBD |
 | unknown_structural_outcome_rate | TBD |
 | unknown_chamber_value | TBD |
+| missing_action_text | TBD |
 | source_url_missing_session | TBD |
 | health.status | TBD |
 | health.findings | TBD |

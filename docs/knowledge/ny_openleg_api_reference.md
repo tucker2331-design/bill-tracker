@@ -84,6 +84,7 @@ Trust counters written to `R1`:
 - `outcome_sources`
 - `unknown_structural_outcome` and `unknown_structural_outcome_rate`
 - `unknown_chamber_value`
+- `missing_action_text`
 - `source_url_missing_session`
 - `health.status` and `health.findings`
 - `calendar_scope_note`

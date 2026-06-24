@@ -1,5 +1,7 @@
 import os
 
+import requests
+
 import ny_bill_tracker as ny
 
 
@@ -177,6 +179,26 @@ def test_unknown_chambers_and_missing_session_are_counted_not_inferred():
     assert counters["source_url_missing_session"] == 1
 
 
+def test_missing_action_text_is_preserved_and_counted():
+    record, counters = ny.bill_to_record(
+        _sample_bill(
+            actions={
+                "items": [
+                    {"date": "2025-01-10", "sequenceNo": 1, "chamber": "SENATE", "text": ""},
+                ],
+                "size": 1,
+            },
+            pastCommittees={"items": [], "size": 0},
+        ),
+        "2026-06-24T12:00:00Z",
+    )
+
+    assert record["history"][0]["action"] == ""
+    assert record["history"][0]["action_missing"] is True
+    assert record["last_action_date"] == "2025-01-10"
+    assert counters["missing_action_text"] == 1
+
+
 def test_build_ny_bill_records_counts_completeness():
     class FakeClient:
         def iter_bills(self, session_year, *, full, limit, max_pages):
@@ -199,6 +221,34 @@ def test_build_ny_bill_records_counts_completeness():
     assert completeness["health"]["status"] == "WARN"
     assert completeness["health"]["findings"][0]["code"] == "UNKNOWN_STRUCTURAL_OUTCOME"
     assert "Assembly calendar/committee data" in completeness["calendar_scope_note"]
+
+
+def test_get_json_redacts_request_exception_details():
+    client = ny.NYOpenLegClient(api_key="secret-key")
+
+    class FakeSession:
+        headers = {}
+
+        def get(self, url, params, timeout):
+            response = requests.Response()
+            response.status_code = 503
+            response.url = f"{url}?key={params['key']}"
+            raise requests.HTTPError(f"503 Server Error for url: {response.url}", response=response)
+
+    old_sleep = ny.time.sleep
+    try:
+        client.session = FakeSession()
+        ny.time.sleep = lambda _seconds: None
+        client.get_json("/bills/2025")
+    except ny.NYOpenLegError as err:
+        text = str(err)
+        assert "secret-key" not in text
+        assert "key=" not in text
+        assert "HTTPError status=503" in text
+    else:
+        raise AssertionError("Expected NYOpenLegError")
+    finally:
+        ny.time.sleep = old_sleep
 
 
 def test_iter_bills_rejects_empty_page_before_declared_end():

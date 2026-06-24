@@ -9,6 +9,15 @@ status: active
 Append-only, reverse-chronological. Use the same prefix shape as the main log:
 `## [YYYY-MM-DD] <kind> | <title>`.
 
+## [2026-06-24] review | CodeRabbit second-pass safety fold-in
+
+Folded in valid CodeRabbit findings after `e1b7f8f`: action records with blank
+OpenLeg `text` are now preserved in history with `action_missing=true` and
+counted in completeness health; OpenLeg request retries store sanitized
+exception class/status only so `NY_OPENLEG_API_KEY` cannot leak through raised
+request URLs; Google Sheets writes no longer call `ws.clear()` before replacement
+data is written, preserving last-known-good rows on transient write failure.
+
 ## [2026-06-24] review | CodeRabbit and Qodo fold-in on PR #168
 
 Folded in valid open review items after `dfbf989`: pinned the NY workflow's
