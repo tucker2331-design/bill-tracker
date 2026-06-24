@@ -194,8 +194,9 @@ def _derive_position(item: Dict[str, Any], history: List[Dict[str, str]]) -> Dic
         if committee_chamber:
             current_ny_chamber = committee_chamber
         name = str(committee.get("name") or "").strip()
-        if name and (not distinct or distinct[-1] != name):
-            distinct.append(name)
+        key = (committee_chamber, name)
+        if name and (not distinct or distinct[-1] != key):
+            distinct.append(key)
 
     for action in history:
         action_chamber = action.get("chamber")
@@ -488,8 +489,10 @@ class NYOpenLegClient:
             )
             result = payload.get("result") if isinstance(payload.get("result"), dict) else {}
             items = _items(result)
-            total = int(payload.get("total") or len(items))
-            offset_end = int(payload.get("offsetEnd") or (offset + len(items) - 1))
+            if payload.get("total") is None or payload.get("offsetEnd") is None:
+                raise NYOpenLegError("OpenLeg response missing pagination metadata")
+            total = int(payload["total"])
+            offset_end = int(payload["offsetEnd"])
             if not items:
                 if offset_end < total:
                     raise NYOpenLegError(

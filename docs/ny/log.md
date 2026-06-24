@@ -9,6 +9,13 @@ status: active
 Append-only, reverse-chronological. Use the same prefix shape as the main log:
 `## [YYYY-MM-DD] <kind> | <title>`.
 
+## [2026-06-24] review | CodeRabbit pagination/referral fold-in
+
+Folded in two valid CodeRabbit findings after `7f148b0`: referral distinctness
+now keys on `(NY chamber, committee name)` so same-named Senate/Assembly
+committees do not collapse, and OpenLeg pagination now requires `total` and
+`offsetEnd` metadata before deciding a fetch is complete.
+
 ## [2026-06-24] review | CodeRabbit second-pass safety fold-in
 
 Folded in valid CodeRabbit findings after `e1b7f8f`: action records with blank
