@@ -1,8 +1,16 @@
 ---
 tags: [design, ui, health, operator, bullet-graph, access-gated, scope, web]
-updated: 2026-06-23
-status: planned
+updated: 2026-06-24
+status: built
 ---
+
+> **▶️ BUILT 2026-06-24** (`claude/health-tab`, verified live): `web/src/components/BulletGraph.tsx`
+> (reusable Few bullet graph w/ danger bands), `web/src/data/health.ts` (lightweight `tq WHERE`
+> operator-signal loader — ~2 KB, not the 5 MB sheet), `web/src/views/Health.tsx` (9 prioritized gauges +
+> breaker chip + severity-coded alert feed + router distribution + raw counters). 0 console errors;
+> App.tsx unchanged (Health kept its props). **Remaining: the ACCESS-GATING infra (§4) — Cloudflare Access
+> on an operator deploy.** Harmless visible now (pre-launch, no lobbyists; metrics are operational, not
+> secret); must be gated before the public launch.
 
 # Health / Operator Tab — SCOPE (Task #4)
 
