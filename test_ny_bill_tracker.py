@@ -145,6 +145,23 @@ def test_referral_count_distinguishes_same_named_committees_across_chambers():
     assert record["referral_count"] == 2
 
 
+def test_referral_count_preserves_unknown_raw_chamber_codes():
+    record, _ = ny.bill_to_record(
+        _sample_bill(
+            pastCommittees={
+                "items": [
+                    {"chamber": "EXECUTIVE", "name": "Rules", "referenceDate": "2025-01-10T00:00"},
+                    {"chamber": "JOINT", "name": "Rules", "referenceDate": "2025-06-01T00:00"},
+                ],
+                "size": 2,
+            },
+        ),
+        "2026-06-24T12:00:00Z",
+    )
+
+    assert record["referral_count"] == 2
+
+
 def test_outcome_uses_structural_veto_messages_without_status_text():
     record, counters = ny.bill_to_record(
         _sample_bill(

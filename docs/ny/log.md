@@ -9,6 +9,14 @@ status: active
 Append-only, reverse-chronological. Use the same prefix shape as the main log:
 `## [YYYY-MM-DD] <kind> | <title>`.
 
+## [2026-06-24] review | CodeRabbit raw committee chamber fold-in
+
+Folded in CodeRabbit's final referral de-dupe finding after `5c792d5`: unknown
+OpenLeg committee chamber codes now remain distinct in the referral key by
+falling back to raw chamber provenance when exact normalization fails. Added a
+fixture so same-named referrals from different unknown chamber codes cannot
+silently collapse.
+
 ## [2026-06-24] hardening | Exact chamber code normalization
 
 Owner standard tightened again: structural source codes must be normalized by

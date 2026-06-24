@@ -193,11 +193,12 @@ def _derive_position(item: Dict[str, Any], history: List[Dict[str, str]]) -> Dic
 
     distinct = []
     for committee in sorted(past_committees, key=lambda c: str(c.get("referenceDate", "") or "")):
-        committee_chamber = _norm_chamber(committee.get("chamber"))
+        raw_committee_chamber = str(committee.get("chamber") or "").strip()
+        committee_chamber = _norm_chamber(raw_committee_chamber)
         if committee_chamber:
             current_ny_chamber = committee_chamber
         name = str(committee.get("name") or "").strip()
-        key = (committee_chamber, name)
+        key = (committee_chamber or raw_committee_chamber, name)
         if name and (not distinct or distinct[-1] != key):
             distinct.append(key)
 
