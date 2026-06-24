@@ -9,6 +9,13 @@ status: active
 Append-only, reverse-chronological. Use the same prefix shape as the main log:
 `## [YYYY-MM-DD] <kind> | <title>`.
 
+## [2026-06-24] review | CodeRabbit sheet stale-cell fold-in
+
+Folded in CodeRabbit's active-row stale-cell finding after `d352834`: the
+Google Sheets update payload now blanks column Q for all active rows and clears
+column R below the `R1` completeness cell, while still avoiding pre-write
+`ws.clear()`.
+
 ## [2026-06-24] review | CodeRabbit pagination/referral fold-in
 
 Folded in two valid CodeRabbit findings after `7f148b0`: referral distinctness

@@ -674,9 +674,14 @@ def write_ny_bill_tracker(records: List[Dict[str, Any]], completeness: Dict[str,
     tail_rows = max(0, clear_rows - len(rows))
     updates = [
         {"range": f"A1:P{len(rows)}", "values": rows},
-        {"range": "Q1", "values": [[""]]},
+        {"range": f"Q1:Q{len(rows)}", "values": [[""] for _ in range(len(rows))]},
         {"range": completeness_cell, "values": [[json.dumps(completeness, ensure_ascii=False)]]},
     ]
+    if len(rows) > 1:
+        updates.append({
+            "range": f"R2:R{len(rows)}",
+            "values": [[""] for _ in range(len(rows) - 1)],
+        })
     if tail_rows:
         updates.append({
             "range": f"A{len(rows) + 1}:R{clear_rows}",
