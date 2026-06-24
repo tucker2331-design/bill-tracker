@@ -13,13 +13,18 @@ Links use Obsidian `[[wikilink]]` format. Obsidian resolves by filename; path-qu
 - [[README]] — vault entry; how this brain is structured and how to maintain it
 - [[index]] — this file
 - [[log]] — chronological, append-only record of ingests / decisions / PRs / lint passes
+- [[ny/README]] — **New York START HERE**; separate NY brain entry while the NY engine is being retuned
+- [[ny/index]] — catalog of the New York brain section
 
 ## State (live trackers — read these to know what's happening NOW)
 - [[state/next_session]] — **▶️ START HERE: the next-session kickoff — current state + the owner queue (read books → Calendar feature → Health bullet-graph tab) + how we work**
 - [[state/current_status]] — active focus, open PR, current bug count, what's next
 - [[state/open_anti_patterns]] — known silent fallbacks still living in the code (worker.py line debt)
+- [[ny/state/current_status]] — New York-specific live status and next steps
 
 ## Workflow & Protocols (how we work)
+- [[ny/workflow/source_scoping_protocol]] — New York source-scoping protocol: scope, plan, test, then promote
+- [[ny/workflow/owner_setup]] — New York owner setup checklist for API key, sheet, and secrets
 - [[workflow/three_phase_protocol]] — context routing → pre-push audit → write-back mandate
 - [[workflow/branching_rules]] — when to reuse vs create a branch (PR state decides)
 - [[workflow/push_and_pr]] — after every commit: push, open PR, return link
@@ -30,6 +35,7 @@ Links use Obsidian `[[wikilink]]` format. Obsidian resolves by filename; path-qu
 - [[workflow/bot_review_fold_in]] — handling Codex / Gemini PR reviews: implement, re-audit, push (bots review commits, not replies)
 
 ## Architecture
+- [[ny/architecture/bill_pipeline]] — New York OpenLeg bill engine pipeline and source-to-field mapping
 - [[architecture/post_c8_hardening]] — **ACTIVE: three grounded post-C8.4 hardening solutions (G-code drift alert, structural meeting_unsourced, unconfirmed rolling baseline)**
 - [[architecture/pr_c8_structural_classification]] — close the 16% structurally; hard rules + gates for the implementing model
 - [[architecture/calendar_pipeline]] — LIS → worker → Sheet1 data flow + resolution priorities
@@ -47,15 +53,18 @@ Links use Obsidian `[[wikilink]]` format. Obsidian resolves by filename; path-qu
 - [[knowledge/lis_api_authorization]] — **RULE: LIS API authorized for 2025/2026 ONLY; pre-2025 via legacylis CSV**
 - [[knowledge/lis_api_safety]] — **CHARTER: how hard/often we may hit LIS — 5 guardrails + meeting-driven cadence (load tracks activity, never a metronome)**
 - [[knowledge/lis_api_reference]] — VA LIS endpoints, auth, quirks
+- [[knowledge/ny_openleg_api_reference]] — New York OpenLegislation source map and first engine contract
 - [[knowledge/tba_times]] — Schedule API returns "Time TBA"; existence ≠ concrete time
 - [[knowledge/lis_dom_scraping]] — headless-Chrome bypass for LIS SPA when Claude-in-Chrome is down
 
 ## Testing & Metrics
+- [[ny/testing/validation_plan]] — New York fixture, dry-run, and live-write validation plan
 - [[testing/crossover_week_baseline]] — Feb 9-13, 2026 as the benchmark; PR-by-PR bug count ledger
 - [[testing/crossover_audit]] — full-window tier-A audit of Sheet1 vs LIS website (ground truth)
 - [[testing/edge_case_registry]] — living catalog of the edge-case SPACE per pipeline stage (Phase-C multi-session replay findings) — full-window tier-A audit of Sheet1 vs LIS website (ground truth)
 
 ## Failures / Post-Mortems
+- [[ny/failures/assumptions_register]] — New York-local assumptions and failures ledger
 - [[failures/assumptions_audit]] — every busted assumption and its fix (source of truth for "why we did that"); numbered, append-only
 - [[failures/gemini_review_patterns]] — recurring mistakes caught in external code review (pre-push checklist)
 - [[failures/pr22_post_mortem]] — framework-level lesson: we were measuring only the bugs we wanted to see
@@ -67,6 +76,7 @@ Links use Obsidian `[[wikilink]]` format. Obsidian resolves by filename; path-qu
 - [[design/ui_redesign_spec]] — **owner's 2026-06-22 UI change-list: landing relayout (calendar sliver + timeline below), smoother less-boxy timeline, shrink crossover, Floor stage?, Search bugs, the visual-identity pass.**
 
 ## Ideas / Deferred Work
+- [[ny/ideas/data_inventory]] — New York source inventory and unresolved meeting/calendar questions
 - [[ideas/product_roadmap]] — **post-accuracy direction: reviewer swap (A), product vision → LIS data inventory → UI design (B), 2027-gated items (C). The anti-looping plan.**
 - [[ideas/product_vision]] — **LOCKED B1 product spec: four lenses, crossover-lane timeline, bill card, trust layer ("never pretend to know"). Build the front end toward this.**
 - [[ideas/lis_data_inventory]] — **B2: feature → LIS data → have it?/ingest it. The completeness gap, the feed-skew map, and the DB-expansion decisions (owner §7 questions).**

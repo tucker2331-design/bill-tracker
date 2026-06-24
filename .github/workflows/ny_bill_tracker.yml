@@ -1,0 +1,76 @@
+name: New York Bill Tracker
+
+# Manual-only while the NY source contract is being validated.
+# Do not add a schedule until docs/ny/testing/validation_plan.md has a reviewed
+# full-session dry run, a successful write, and an owner-approved cadence.
+on:
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: "check-config | dry-run | write"
+        required: true
+        default: "check-config"
+        type: choice
+        options:
+          - check-config
+          - dry-run
+          - write
+      session_year:
+        description: "NY OpenLeg session year, e.g. 2025 for 2025-2026"
+        required: true
+        default: "2025"
+      max_pages:
+        description: "Optional page cap for probes; leave blank for full session"
+        required: false
+        default: ""
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ny-bill-tracker
+  cancel-in-progress: false
+
+jobs:
+  ny-bill-tracker:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.10"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install requests gspread google-auth
+
+      - name: Check runtime configuration
+        if: ${{ inputs.mode == 'check-config' }}
+        env:
+          NY_OPENLEG_API_KEY: ${{ secrets.NY_OPENLEG_API_KEY }}
+          NY_SPREADSHEET_ID: ${{ secrets.NY_SPREADSHEET_ID }}
+          GCP_CREDENTIALS: ${{ secrets.GCP_CREDENTIALS }}
+        run: python ny_bill_tracker.py --check-config
+
+      - name: Dry-run New York bill tracker
+        if: ${{ inputs.mode == 'dry-run' }}
+        env:
+          NY_OPENLEG_API_KEY: ${{ secrets.NY_OPENLEG_API_KEY }}
+          NY_OPENLEG_SESSION_YEAR: ${{ inputs.session_year }}
+          NY_OPENLEG_MAX_PAGES: ${{ inputs.max_pages }}
+        run: python ny_bill_tracker.py --dry-run
+
+      - name: Write New York bill tracker
+        if: ${{ inputs.mode == 'write' }}
+        env:
+          NY_OPENLEG_API_KEY: ${{ secrets.NY_OPENLEG_API_KEY }}
+          NY_SPREADSHEET_ID: ${{ secrets.NY_SPREADSHEET_ID }}
+          GCP_CREDENTIALS: ${{ secrets.GCP_CREDENTIALS }}
+          NY_OPENLEG_SESSION_YEAR: ${{ inputs.session_year }}
+          NY_OPENLEG_MAX_PAGES: ${{ inputs.max_pages }}
+        run: python ny_bill_tracker.py
