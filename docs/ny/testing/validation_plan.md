@@ -131,8 +131,7 @@ Post-write owner spot check: open the New York workbook, confirm the
 header, and confirm `R1` contains completeness JSON.
 
 Owner spot check cleared on 2026-06-24: the `NY_Bill_Tracker` tab loaded and the
-expected data was present. The follow-up hardening branch adds automated
-read-back verification so future write cycles do not depend on manual inspection.
+expected data was present.
 
 ## Automated read-back verification
 
@@ -151,6 +150,22 @@ fail:
 This check is intentionally after-write. It is not a substitute for the source
 health counters; it confirms that the production artifact in Google Sheets
 matches the run that just completed.
+
+Branch validation:
+
+| Metric | Result |
+|---|---|
+| PR | `#169` |
+| GitHub Actions run | `28137147423` |
+| commit | `61636dc` |
+| mode / session | `write` / `2025` |
+| elapsed time | 2m 33s |
+| bills built | 25,314 |
+| rows verified | 25,315 |
+| bills verified | 25,314 |
+| tail verified through row | 25,365 |
+| health status | WARN |
+| workflow status | passed |
 
 ## Scheduling gate
 
