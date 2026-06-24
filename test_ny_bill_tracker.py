@@ -146,7 +146,7 @@ def test_referral_count_distinguishes_same_named_committees_across_chambers():
 
 
 def test_referral_count_preserves_unknown_raw_chamber_codes():
-    record, _ = ny.bill_to_record(
+    record, counters = ny.bill_to_record(
         _sample_bill(
             pastCommittees={
                 "items": [
@@ -160,6 +160,7 @@ def test_referral_count_preserves_unknown_raw_chamber_codes():
     )
 
     assert record["referral_count"] == 2
+    assert counters["unknown_past_committee_chamber"] == 2
 
 
 def test_outcome_uses_structural_veto_messages_without_status_text():

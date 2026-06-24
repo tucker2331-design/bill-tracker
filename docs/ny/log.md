@@ -9,6 +9,13 @@ status: active
 Append-only, reverse-chronological. Use the same prefix shape as the main log:
 `## [YYYY-MM-DD] <kind> | <title>`.
 
+## [2026-06-24] review | CodeRabbit committee chamber health fold-in
+
+Folded in CodeRabbit's health-surface finding after `8a14ad1`: unknown
+`pastCommittees[].chamber` values now flow into row counters, run completeness,
+and the `UNKNOWN_CHAMBER_VALUE` health finding instead of only preserving raw
+referral provenance.
+
 ## [2026-06-24] review | CodeRabbit raw committee chamber fold-in
 
 Folded in CodeRabbit's final referral de-dupe finding after `5c792d5`: unknown

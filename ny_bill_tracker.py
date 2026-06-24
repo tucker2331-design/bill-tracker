@@ -192,9 +192,12 @@ def _derive_position(item: Dict[str, Any], history: List[Dict[str, str]]) -> Dic
         last_committee = str(past_committees[-1].get("name") or "").strip()
 
     distinct = []
+    unknown_past_committee_chambers = 0
     for committee in sorted(past_committees, key=lambda c: str(c.get("referenceDate", "") or "")):
         raw_committee_chamber = str(committee.get("chamber") or "").strip()
         committee_chamber = _norm_chamber(raw_committee_chamber)
+        if raw_committee_chamber and not committee_chamber:
+            unknown_past_committee_chambers += 1
         if committee_chamber:
             current_ny_chamber = committee_chamber
         name = str(committee.get("name") or "").strip()
@@ -223,6 +226,7 @@ def _derive_position(item: Dict[str, Any], history: List[Dict[str, str]]) -> Dic
         "crossed_over": crossed,
         "last_committee": last_committee,
         "referral_count": len(distinct),
+        "unknown_past_committee_chamber_count": unknown_past_committee_chambers,
     }
 
 
@@ -311,6 +315,7 @@ def _build_health(counters: Dict[str, int], records_written: int) -> Dict[str, A
         counters.get("unknown_origin_chamber", 0)
         + counters.get("unknown_action_chamber", 0)
         + counters.get("unknown_agenda_chamber", 0)
+        + counters.get("unknown_past_committee_chamber", 0)
     )
     if unknown_chambers:
         findings.append({
@@ -390,6 +395,7 @@ def bill_to_record(item: Dict[str, Any], fetched_at_utc: str) -> Tuple[Dict[str,
         "unknown_origin_chamber": 1 if _has_unknown_chamber(position["origin_chamber_raw"]) else 0,
         "unknown_action_chamber": sum(1 for h in history if h.get("chamber_raw")),
         "unknown_agenda_chamber": sum(1 for r in agenda_refs if r.get("chamber_raw")),
+        "unknown_past_committee_chamber": position["unknown_past_committee_chamber_count"],
         f"outcome_source_{outcome_source}": 1,
     }
     session = item.get("session")
@@ -538,6 +544,7 @@ def build_ny_bill_records(
         "unknown_origin_chamber": 0,
         "unknown_action_chamber": 0,
         "unknown_agenda_chamber": 0,
+        "unknown_past_committee_chamber": 0,
         "source_url_missing_session": 0,
     }
 
@@ -559,6 +566,7 @@ def build_ny_bill_records(
         counters["unknown_origin_chamber"]
         + counters["unknown_action_chamber"]
         + counters["unknown_agenda_chamber"]
+        + counters["unknown_past_committee_chamber"]
     )
     completeness = {
         "state": "NY",
