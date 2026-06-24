@@ -120,7 +120,7 @@ def _norm_chamber(value: Any) -> str:
     text = str(value or "").upper()
     if text.startswith("SEN"):
         return "Senate"
-    if text.startswith("ASM") or text.startswith("ASS"):
+    if text.startswith("ASM") or text.startswith("ASSEM"):
         return "Assembly"
     return str(value or "").strip()
 
@@ -168,7 +168,7 @@ def _latest_vote(votes_container: Any) -> Dict[str, Any]:
     }
 
 
-def _derive_position(item: Dict[str, Any]) -> Dict[str, Any]:
+def _derive_position(item: Dict[str, Any], history: List[Dict[str, str]]) -> Dict[str, Any]:
     bill_type = item.get("billType") if isinstance(item.get("billType"), dict) else {}
     origin_chamber = _norm_chamber(bill_type.get("chamber"))
     status = item.get("status") if isinstance(item.get("status"), dict) else {}
@@ -185,16 +185,12 @@ def _derive_position(item: Dict[str, Any]) -> Dict[str, Any]:
         if name and (not distinct or distinct[-1] != name):
             distinct.append(name)
 
-    other = "ASSEMBLY" if origin_chamber == "Senate" else "SENATE"
-    status_markers = [
-        str(status.get("statusType", "") or "").upper(),
-        str(status.get("statusDesc", "") or "").upper(),
-    ]
-    for milestone in _items(item.get("milestones")):
-        if isinstance(milestone, dict):
-            status_markers.append(str(milestone.get("statusType", "") or "").upper())
-            status_markers.append(str(milestone.get("statusDesc", "") or "").upper())
-    crossed = bool(origin_chamber and any(other in marker for marker in status_markers))
+    if origin_chamber == "Senate":
+        crossed = any(h.get("chamber") == "Assembly" for h in history)
+    elif origin_chamber == "Assembly":
+        crossed = any(h.get("chamber") == "Senate" for h in history)
+    else:
+        crossed = False
 
     return {
         "current_chamber": origin_chamber,
@@ -264,9 +260,9 @@ def bill_to_record(item: Dict[str, Any], fetched_at_utc: str) -> Tuple[Dict[str,
     status = item.get("status") if isinstance(item.get("status"), dict) else {}
     sponsor = item.get("sponsor") if isinstance(item.get("sponsor"), dict) else {}
     sponsor_member = sponsor.get("member") if isinstance(sponsor.get("member"), dict) else {}
-    position = _derive_position(item)
-    outcome, outcome_source = _derive_outcome(item)
     history = _history(item)
+    position = _derive_position(item, history)
+    outcome, outcome_source = _derive_outcome(item)
     agenda_refs = _agenda_refs(item)
 
     last_action_date = ""

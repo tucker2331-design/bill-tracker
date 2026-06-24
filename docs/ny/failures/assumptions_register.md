@@ -25,3 +25,19 @@ surface a `calendar_scope_note` until both-chamber meeting coverage is validated
 
 **Guard:** [[ny/workflow/source_scoping_protocol]] requires a source contract and
 dry-run proof before a long-term NY calendar worker is built.
+
+## 2. Crossed-over must use action chamber, not status text
+
+**Assumption:** controlled OpenLeg status and milestone strings could safely
+indicate whether a bill had crossed chambers.
+
+**Reality:** even controlled status strings are still text for this purpose.
+Gemini review on PR #168 correctly flagged that `crossed_over` should use the
+structural `chamber` field from action history instead.
+
+**Fix:** `_derive_position()` now receives normalized action history and sets
+`crossed_over` from whether any action chamber differs from the bill's origin
+chamber.
+
+**Guard:** `test_bill_to_record_flattens_openleg_shape` now includes an Assembly
+action in the fixture so the structural crossed-over path is tested.

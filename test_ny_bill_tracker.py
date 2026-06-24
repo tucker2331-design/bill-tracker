@@ -20,10 +20,11 @@ def _sample_bill(**overrides):
         "summary": "Creates a program.",
         "actions": {
             "items": [
-                {"date": "2025-01-10", "sequenceNo": 2, "chamber": "SENATE", "text": "REFERRED TO FINANCE"},
                 {"date": "2025-01-10", "sequenceNo": 1, "chamber": "SENATE", "text": "INTRODUCED"},
+                {"date": "2025-01-10", "sequenceNo": 2, "chamber": "SENATE", "text": "REFERRED TO FINANCE"},
+                {"date": "2025-06-01", "sequenceNo": 1, "chamber": "ASSEMBLY", "text": "REFERRED TO ENVIRONMENTAL CONSERVATION"},
             ],
-            "size": 2,
+            "size": 3,
         },
         "pastCommittees": {
             "items": [
@@ -74,8 +75,12 @@ def test_bill_to_record_flattens_openleg_shape():
     assert record["crossed_over"] is True
     assert record["last_committee"] == "Environmental Conservation"
     assert record["referral_count"] == 2
-    assert record["last_action_date"] == "2025-01-10"
-    assert [h["action"] for h in record["history"]] == ["INTRODUCED", "REFERRED TO FINANCE"]
+    assert record["last_action_date"] == "2025-06-01"
+    assert [h["action"] for h in record["history"]] == [
+        "INTRODUCED",
+        "REFERRED TO FINANCE",
+        "REFERRED TO ENVIRONMENTAL CONSERVATION",
+    ]
     assert record["latest_vote"]["tally"] == "3-Y 1-N"
     assert counters["has_actions"] == 1
     assert counters["has_votes"] == 1

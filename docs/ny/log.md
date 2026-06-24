@@ -9,6 +9,15 @@ status: active
 Append-only, reverse-chronological. Use the same prefix shape as the main log:
 `## [YYYY-MM-DD] <kind> | <title>`.
 
+## [2026-06-24] review | Gemini fold-in on PR #168
+
+Gemini reviewed PR #168 and flagged two actionable findings: `crossed_over`
+used status/milestone text instead of structural action chamber, and
+`_norm_chamber()` matched the ambiguous `ASS` prefix for Assembly. Folded both
+in: crossed-over now derives from normalized `actions.items[].chamber`, tests
+include an Assembly action fixture, and Assembly prefix matching uses `ASSEM`
+instead of `ASS`. Added assumptions-register entry #2.
+
 ## [2026-06-24] session | New York brain and first bill engine scaffolded
 
 Created the NY brain branch inside `docs/ny/` with a separate start page,
