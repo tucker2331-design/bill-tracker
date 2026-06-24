@@ -19,6 +19,7 @@ status: active
 | History | `actions.items[]` | Built |
 | Latest vote | `votes.items[]` | Built |
 | Committee position | `status.committeeName` + `pastCommittees` | Built |
+| Product chamber | `billType.chamber`, `actions.items[].chamber`, `pastCommittees[].chamber` | Built; Assembly maps to product House and NY-native values are preserved |
 | Agenda references | `committeeAgendas` | Counted as provenance |
 | Full meeting calendar | agendas/calendars/committees | Not built; source coverage needs validation |
 | Incremental updates | `/api/3/bills/updates/...`, `/api/3/updates/...` | Planned after full-universe validation |

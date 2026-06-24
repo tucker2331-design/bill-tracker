@@ -9,6 +9,15 @@ status: active
 Append-only, reverse-chronological. Use the same prefix shape as the main log:
 `## [YYYY-MM-DD] <kind> | <title>`.
 
+## [2026-06-24] review | CodeRabbit and Qodo fold-in on PR #168
+
+Folded in valid open review items after `dfbf989`: pinned the NY workflow's
+GitHub actions to official tag SHAs, moved NY workflow dependencies to pinned
+`requirements-ny.txt`, changed Slack-alert fallback category to `UNKNOWN`,
+made OpenLeg pagination fail on empty pages before the declared end, and aligned
+the shared product `Chamber` column with the VA contract (`House` / `Senate`)
+while preserving NY-native `Assembly` / `Senate` in NY-only provenance fields.
+
 ## [2026-06-24] hardening | Structural-only outcome and health counters
 
 Owner standard tightened: no text parsing for durable classifications. Removed

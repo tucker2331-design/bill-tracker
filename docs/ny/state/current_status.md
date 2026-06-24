@@ -26,6 +26,9 @@ First pass is the New York bill-record engine, not the UI:
   Bill, Title, Status, Outcome, Patron, Chamber, Crossed Over, Last Committee,
   Referrals, Last Action, Latest Vote JSON, Upcoming JSON, History JSON,
   Data As Of, Source.
+- The shared `Chamber` column emits product-compatible `House` / `Senate`; NY
+  native `Assembly` / `Senate` chamber values are preserved in NY-only JSON
+  provenance fields.
 - Completeness JSON at `R1`, including action-history coverage, sponsor coverage,
   vote coverage, summary coverage, agenda-reference count, outcome-source counts,
   unknown structural outcome rate, unrecognized chamber counters, missing source

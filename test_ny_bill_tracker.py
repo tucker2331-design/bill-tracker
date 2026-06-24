@@ -71,7 +71,9 @@ def test_bill_to_record_flattens_openleg_shape():
     assert record["status_lis"] == "In Assembly Committee"
     assert record["outcome"] == "unknown_structural"
     assert record["patron"] == "Jane Q. Sponsor"
-    assert record["chamber"] == "Senate"
+    assert record["chamber"] == "House"
+    assert record["ny_origin_chamber"] == "Senate"
+    assert record["ny_current_chamber"] == "Assembly"
     assert record["crossed_over"] is True
     assert record["last_committee"] == "Environmental Conservation"
     assert record["referral_count"] == 2
@@ -99,6 +101,31 @@ def test_outcome_prefers_structural_signed_boolean():
     assert counters["outcome_source_signed_boolean"] == 1
 
 
+def test_assembly_origin_maps_to_product_house_with_ny_provenance():
+    record, _ = ny.bill_to_record(
+        _sample_bill(
+            basePrintNo="A1234",
+            billType={"chamber": "ASSEMBLY", "desc": "Assembly", "resolution": False},
+            actions={
+                "items": [
+                    {"date": "2025-01-10", "sequenceNo": 1, "chamber": "ASSEMBLY", "text": "INTRODUCED"},
+                ],
+                "size": 1,
+            },
+            pastCommittees={
+                "items": [{"chamber": "ASSEMBLY", "name": "Ways and Means", "referenceDate": "2025-01-10T00:00"}],
+                "size": 1,
+            },
+        ),
+        "2026-06-24T12:00:00Z",
+    )
+
+    assert record["chamber"] == "House"
+    assert record["crossed_over"] is False
+    assert record["ny_origin_chamber"] == "Assembly"
+    assert record["ny_current_chamber"] == "Assembly"
+
+
 def test_outcome_uses_structural_veto_messages_without_status_text():
     record, counters = ny.bill_to_record(
         _sample_bill(
@@ -123,6 +150,7 @@ def test_unknown_chambers_and_missing_session_are_counted_not_inferred():
                 ],
                 "size": 1,
             },
+            pastCommittees={"items": [], "size": 0},
             committeeAgendas={
                 "items": [
                     {
@@ -137,6 +165,8 @@ def test_unknown_chambers_and_missing_session_are_counted_not_inferred():
     )
 
     assert record["chamber"] == ""
+    assert record["ny_origin_chamber"] == ""
+    assert record["ny_current_chamber"] == ""
     assert record["ny_origin_chamber_raw"] == "EXECUTIVE"
     assert record["source_url"] == ""
     assert record["history"][0]["chamber"] == ""
@@ -169,6 +199,22 @@ def test_build_ny_bill_records_counts_completeness():
     assert completeness["health"]["status"] == "WARN"
     assert completeness["health"]["findings"][0]["code"] == "UNKNOWN_STRUCTURAL_OUTCOME"
     assert "Assembly calendar/committee data" in completeness["calendar_scope_note"]
+
+
+def test_iter_bills_rejects_empty_page_before_declared_end():
+    client = ny.NYOpenLegClient(api_key="test")
+
+    def fake_get_json(path, **params):
+        assert params["offset"] == 1
+        return {"success": True, "total": 10, "offsetEnd": 1, "result": {"items": [], "size": 0}}
+
+    client.get_json = fake_get_json
+    try:
+        list(client.iter_bills(2025))
+    except ny.NYOpenLegError as err:
+        assert "empty page before the declared end" in str(err)
+    else:
+        raise AssertionError("Expected NYOpenLegError")
 
 
 def test_runtime_requirements_separate_fetch_and_write():

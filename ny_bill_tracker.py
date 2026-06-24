@@ -58,7 +58,7 @@ def _alert(severity: str, category: str, message: str) -> None:
 
         notify_slack(line)
     except Exception as slack_err:
-        print(f"WARN [NY_BILL_TRACKER/ALERT_PATH] Slack alert not delivered: {slack_err}")
+        print(f"WARN [NY_BILL_TRACKER/UNKNOWN] Slack alert not delivered: {slack_err}")
 
 
 def _clean_bill(value: Any) -> str:
@@ -124,6 +124,14 @@ def _has_unknown_chamber(value: Any) -> bool:
     return bool(str(value or "").strip()) and not _norm_chamber(value)
 
 
+def _product_chamber(ny_chamber: str) -> str:
+    if ny_chamber == "Assembly":
+        return "House"
+    if ny_chamber == "Senate":
+        return "Senate"
+    return ""
+
+
 def _member_name(member: Any) -> str:
     if not isinstance(member, dict):
         return ""
@@ -171,6 +179,7 @@ def _derive_position(item: Dict[str, Any], history: List[Dict[str, str]]) -> Dic
     bill_type = item.get("billType") if isinstance(item.get("billType"), dict) else {}
     origin_chamber_raw = bill_type.get("chamber")
     origin_chamber = _norm_chamber(origin_chamber_raw)
+    current_ny_chamber = origin_chamber
     status = item.get("status") if isinstance(item.get("status"), dict) else {}
     past_committees = [c for c in _items(item.get("pastCommittees")) if isinstance(c, dict)]
 
@@ -181,9 +190,17 @@ def _derive_position(item: Dict[str, Any], history: List[Dict[str, str]]) -> Dic
 
     distinct = []
     for committee in sorted(past_committees, key=lambda c: str(c.get("referenceDate", "") or "")):
+        committee_chamber = _norm_chamber(committee.get("chamber"))
+        if committee_chamber:
+            current_ny_chamber = committee_chamber
         name = str(committee.get("name") or "").strip()
         if name and (not distinct or distinct[-1] != name):
             distinct.append(name)
+
+    for action in history:
+        action_chamber = action.get("chamber")
+        if action_chamber in ("Senate", "Assembly"):
+            current_ny_chamber = action_chamber
 
     if origin_chamber == "Senate":
         crossed = any(h.get("chamber") == "Assembly" for h in history)
@@ -193,7 +210,10 @@ def _derive_position(item: Dict[str, Any], history: List[Dict[str, str]]) -> Dic
         crossed = False
 
     return {
-        "current_chamber": origin_chamber,
+        "current_chamber": _product_chamber(current_ny_chamber),
+        "current_chamber_ny": current_ny_chamber,
+        "origin_chamber": _product_chamber(origin_chamber),
+        "origin_chamber_ny": origin_chamber,
         "origin_chamber_raw": str(origin_chamber_raw or "").strip(),
         "crossed_over": crossed,
         "last_committee": last_committee,
@@ -378,6 +398,8 @@ def bill_to_record(item: Dict[str, Any], fetched_at_utc: str) -> Tuple[Dict[str,
         "source": "NY OpenLegislation",
         "source_url": source_url,
         "ny_summary": str(item.get("summary", "") or "").strip(),
+        "ny_origin_chamber": position["origin_chamber_ny"],
+        "ny_current_chamber": position["current_chamber_ny"],
         "ny_origin_chamber_raw": position["origin_chamber_raw"],
         "ny_agenda_refs": agenda_refs,
     }
@@ -449,13 +471,19 @@ class NYOpenLegClient:
             result = payload.get("result") if isinstance(payload.get("result"), dict) else {}
             items = _items(result)
             total = int(payload.get("total") or len(items))
+            offset_end = int(payload.get("offsetEnd") or (offset + len(items) - 1))
             if not items:
+                if offset_end < total:
+                    raise NYOpenLegError(
+                        f"OpenLeg returned an empty page before the declared end "
+                        f"(offset={offset}, offsetEnd={offset_end}, total={total})"
+                    )
                 break
             for item in items:
-                if isinstance(item, dict):
-                    yield item
+                if not isinstance(item, dict):
+                    raise NYOpenLegError(f"OpenLeg bill item at offset {offset} was not a JSON object")
+                yield item
             pages += 1
-            offset_end = int(payload.get("offsetEnd") or (offset + len(items) - 1))
             if offset_end >= total:
                 break
             if max_pages is not None and pages >= max_pages:

@@ -93,6 +93,10 @@ Outcome mapping is structural-only in the first engine: `signed == true` maps to
 `unknown_structural` until another durable source field is validated. Status
 description text is retained on rows but is not used as a classifier.
 
+The shared product `Chamber` column emits `House` / `Senate`; OpenLeg's native
+`Assembly` value is preserved in NY-only provenance fields so the existing
+product parser and the state-native facts are both explicit.
+
 ## Open questions
 
 - Confirm the most complete authoritative source for Assembly committee meeting times. OpenLeg's docs warn that Assembly committee/calendar data is not available through the Senate OpenLeg endpoints.

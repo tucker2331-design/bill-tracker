@@ -27,7 +27,7 @@ NY_OPENLEG_API_KEY
 | Outcome | structural-only: `signed == true`, present `vetoMessages`, else `unknown_structural` |
 | Patron | `sponsor.member.fullName` |
 | Patron ID | `sponsor.member.memberId` |
-| Chamber | `billType.chamber` |
+| Chamber | product current chamber (`House`/`Senate`), derived from structural NY chamber movement |
 | Crossed Over | structural `actions.items[].chamber` compared with `billType.chamber` |
 | Last Committee | `status.committeeName`, fallback latest `pastCommittees` |
 | Referrals | distinct sequential `pastCommittees` |
@@ -35,6 +35,16 @@ NY_OPENLEG_API_KEY
 | History | sorted `actions.items[]` by `(date, sequenceNo)` |
 | Upcoming | intentionally empty in pass 1 until a validated NY meeting source exists |
 | Source | `NY OpenLegislation` |
+
+NY-native chamber names are preserved in JSON-only fields:
+
+- `ny_origin_chamber`: `Senate` / `Assembly`
+- `ny_current_chamber`: `Senate` / `Assembly`
+- `ny_origin_chamber_raw`: raw OpenLeg `billType.chamber`
+
+The shared product `Chamber` column uses Virginia-compatible vocabulary because
+the existing product parser expects `House` / `Senate`. In New York, `Assembly`
+maps to product `House` for that column only.
 
 ## Safety and honesty rules
 
@@ -45,6 +55,8 @@ NY_OPENLEG_API_KEY
 - Completeness metrics always include denominators/rates where useful.
 - The run-level `health` object must surface unknown structural outcomes,
   malformed bill IDs, unrecognized chamber values, and missing public source URLs.
+- Empty bill pages before OpenLeg's declared `total` / `offsetEnd` end-of-range
+  are hard failures to protect the last-known-good sheet from partial overwrites.
 - A missing `NY_OPENLEG_API_KEY` is a hard failure, not an empty output.
 
 ## Known differences from Virginia

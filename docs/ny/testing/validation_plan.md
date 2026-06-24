@@ -45,7 +45,8 @@ Expected before owner secrets are set:
 - `NY_SPREADSHEET_ID` missing for writes
 
 GitHub Actions equivalent: run `New York Bill Tracker` with mode
-`check-config`. The workflow is manual-only by design.
+`check-config`. The workflow is manual-only by design and installs from pinned
+`requirements-ny.txt`.
 
 ## First live dry run
 
