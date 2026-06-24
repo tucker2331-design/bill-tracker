@@ -35,6 +35,9 @@
 
   --stale: #d2403a;      --ok: #1d8f57;
 
+  /* bullet-graph qualitative bands (subtle — the measure bar must dominate; danger = the RPM redline) */
+  --bg-good: #eaf5ef;    --bg-warn: #f7f0de;    --bg-danger: #fdeceb;
+
   /* spacing scale (RUI ~25% steps) */
   --s1: 4px; --s2: 8px; --s3: 12px; --s4: 16px; --s5: 24px; --s6: 32px; --s7: 48px; --s8: 64px;
   /* radii + depth (two-part shadows; cards pop off the tinted canvas) */
@@ -241,3 +244,49 @@ h2, h3 { margin: 0; }
 .summaryrow { display: flex; flex-wrap: wrap; gap: var(--s4) var(--s5); }
 .summaryrow .it { display: flex; align-items: center; gap: var(--s2); }
 .summaryrow .it .sn { font-size: 21px; font-weight: 800; }
+
+/* ── Health / operator tab — Few bullet graphs with danger bands ── */
+.hl-status { display: flex; align-items: center; gap: var(--s3); margin-bottom: var(--s4); flex-wrap: wrap; }
+.hl-breaker { display: inline-flex; align-items: center; gap: 6px; padding: 5px 12px; border-radius: 999px; font-weight: 700; font-size: 12.5px; }
+.hl-breaker.ok { background: var(--o-signed-bg); color: var(--ok); }
+.hl-breaker.trip { background: var(--o-vetoed-bg); color: var(--stale); }
+
+/* one bullet graph (small multiple) */
+.hl-gauges { display: flex; flex-direction: column; gap: var(--s4); margin-bottom: var(--s5); }
+.bg-row { display: flex; flex-direction: column; gap: 5px; }
+.bg-head { display: flex; align-items: baseline; justify-content: space-between; gap: var(--s3); }
+.bg-label { font-size: 12.5px; font-weight: 600; color: var(--ink-soft); }
+.bg-value { font-size: 16px; font-weight: 800; font-variant-numeric: tabular-nums; }
+.bg-track { position: relative; height: 16px; border-radius: 4px; overflow: hidden; background: var(--surface-2); }
+.bg-band { position: absolute; top: 0; bottom: 0; }                      /* qualitative range */
+.bg-measure { position: absolute; top: 5px; height: 6px; left: 0; border-radius: 3px; }  /* the value bar (Few: thin, centered) */
+.bg-target { position: absolute; top: -2px; bottom: -2px; width: 2px; background: var(--ink); }  /* target tick */
+.bg-sub { font-size: 11.5px; color: var(--ink-faint); }
+
+/* alert feed */
+.hl-alert { display: flex; align-items: baseline; gap: var(--s2); padding: 8px var(--s1); flex-wrap: wrap; }
+.hl-alert + .hl-alert { border-top: 1px solid var(--line); }
+.hl-sev { font-size: 10.5px; font-weight: 800; letter-spacing: .4px; padding: 2px 7px; border-radius: 5px; }
+.hl-sev.critical { background: var(--o-vetoed-bg); color: var(--stale); }
+.hl-sev.warn { background: var(--o-carry-bg); color: var(--o-carry); }
+.hl-sev.info { background: var(--surface-2); color: var(--ink-soft); }
+.hl-cat { font-size: 10.5px; font-weight: 700; color: var(--ink-faint); text-transform: uppercase; letter-spacing: .3px; }
+.hl-amsg { flex: 1; min-width: 200px; color: var(--ink); font-size: 13px; }
+.hl-adate { color: var(--ink-faint); font-size: 12px; white-space: nowrap; }
+
+/* classification distribution */
+.hl-dist { display: flex; flex-direction: column; gap: 7px; }
+.hl-distrow { display: grid; grid-template-columns: 78px 1fr 130px; gap: var(--s2); align-items: center; }
+.hl-distk { font-size: 12px; font-weight: 700; color: var(--ink-soft); }
+.hl-distbar { height: 10px; background: var(--surface-2); border-radius: 3px; overflow: hidden; }
+.hl-distbar span { display: block; height: 100%; }
+.hl-distv { font-size: 12px; color: var(--ink-soft); text-align: right; font-variant-numeric: tabular-nums; }
+
+/* raw counters */
+.hl-raw { margin-bottom: var(--s4); }
+.hl-raw summary { cursor: pointer; font-size: 12px; font-weight: 700; color: var(--ink-faint); text-transform: uppercase; letter-spacing: .5px; }
+.hl-rawgrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 4px var(--s4); margin-top: var(--s3); }
+.hl-rawcell { display: flex; justify-content: space-between; gap: var(--s2); font-size: 12px; padding: 3px 0; border-bottom: 1px solid var(--line); }
+.hl-rawk { color: var(--ink-faint); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.hl-rawv { font-weight: 700; font-variant-numeric: tabular-nums; }
+.hl-foot { margin-top: var(--s4); font-size: 12px; line-height: 1.6; }
