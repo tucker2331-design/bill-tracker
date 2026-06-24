@@ -24,11 +24,11 @@ NY_OPENLEG_API_KEY
 | Bill | `basePrintNo` / `printNo` |
 | Title | `title` |
 | Status (LIS) | `status.statusDesc` / `status.statusType` |
-| Outcome | structural-first `signed`; veto from `vetoMessages` + veto status; then status fallback |
+| Outcome | structural-only: `signed == true`, present `vetoMessages`, else `unknown_structural` |
 | Patron | `sponsor.member.fullName` |
 | Patron ID | `sponsor.member.memberId` |
 | Chamber | `billType.chamber` |
-| Crossed Over | controlled status/milestone fields naming the opposite chamber |
+| Crossed Over | structural `actions.items[].chamber` compared with `billType.chamber` |
 | Last Committee | `status.committeeName`, fallback latest `pastCommittees` |
 | Referrals | distinct sequential `pastCommittees` |
 | Latest Vote | latest `votes.items[]` by `voteDate`, summarized from `memberVotes` |
@@ -39,9 +39,12 @@ NY_OPENLEG_API_KEY
 ## Safety and honesty rules
 
 - Keep Virginia and New York engines in separate files until the common abstraction is proven.
-- Raw OpenLeg status is always retained; `outcome` is a convenience label.
+- Raw OpenLeg status is always retained for display/provenance; it is not used
+  to classify `outcome` or `crossed_over`.
 - Do not infer a complete meeting calendar from Senate-centered endpoints.
 - Completeness metrics always include denominators/rates where useful.
+- The run-level `health` object must surface unknown structural outcomes,
+  malformed bill IDs, unrecognized chamber values, and missing public source URLs.
 - A missing `NY_OPENLEG_API_KEY` is a hard failure, not an empty output.
 
 ## Known differences from Virginia

@@ -12,6 +12,8 @@ Current fixture checks:
 
 - `test_bill_to_record_flattens_openleg_shape`
 - `test_outcome_prefers_structural_signed_boolean`
+- `test_outcome_uses_structural_veto_messages_without_status_text`
+- `test_unknown_chambers_and_missing_session_are_counted_not_inferred`
 - `test_build_ny_bill_records_counts_completeness`
 
 Local commands:
@@ -64,7 +66,18 @@ Record in this page and [[ny/log]]:
 | patron_present / patron_missing | TBD |
 | summary_present | TBD |
 | outcome_sources | TBD |
+| unknown_structural_outcome_rate | TBD |
+| unknown_chamber_value | TBD |
+| source_url_missing_session | TBD |
+| health.status | TBD |
+| health.findings | TBD |
 | elapsed time | TBD |
+
+Interpretation rule: `unknown_structural_outcome_rate` is allowed during this
+first source-contract pass, but it is never silently converted to `in_progress`
+from status text. A non-zero value means the next scoping pass must find a
+durable OpenLeg structural field, accept an explicit unresolved product state,
+or document why terminal-outcome parity is not available yet.
 
 ## First live write
 

@@ -28,7 +28,8 @@ First pass is the New York bill-record engine, not the UI:
   Data As Of, Source.
 - Completeness JSON at `R1`, including action-history coverage, sponsor coverage,
   vote coverage, summary coverage, agenda-reference count, outcome-source counts,
-  and a New York calendar-scope note.
+  unknown structural outcome rate, unrecognized chamber counters, missing source
+  URL counters, a run-level `health` object, and a New York calendar-scope note.
 - Manual-only GitHub Actions workflow: `New York Bill Tracker`
   (`check-config`, `dry-run`, `write`). No schedule yet.
 
@@ -39,6 +40,11 @@ OpenLeg's public docs state that Assembly calendar data is not currently sent
 to OpenLeg, and the committee docs say Assembly committee data is not currently
 sent and `chamber` must be `senate`. So bill records are the first reliable
 NY layer; full meeting parity needs a separate source-validation pass.
+
+Terminal outcome classification is also intentionally source-honest. The engine
+uses structural `signed` and `vetoMessages` fields; bills without a proven
+structural terminal marker are labeled `unknown_structural` and counted in
+health metrics instead of being inferred from status text.
 
 ## Next steps
 

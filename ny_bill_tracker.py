@@ -36,12 +36,13 @@ from typing import Any, Dict, Iterable, List, Optional, Tuple
 
 import gspread
 import requests
-from google.oauth2.service_account import Credentials
 
 
 OPENLEG_BASE_URL = "https://legislation.nysenate.gov/api/3"
 NY_BILL_TRACKER_TAB = os.environ.get("NY_BILL_TRACKER_TAB", "NY_Bill_Tracker")
 DEFAULT_TIMEOUT_SECONDS = 30
+MAX_HTTP_ATTEMPTS = 3
+RETRY_STATUS_CODES = {429, 500, 502, 503, 504}
 
 
 class NYOpenLegError(RuntimeError):
@@ -89,16 +90,10 @@ def _size(container: Any) -> int:
     return len(_items(container))
 
 
-def _parse_date(value: Any) -> Optional[_dt.date]:
-    if not value:
-        return None
-    text = str(value).strip()[:10]
-    for fmt in ("%Y-%m-%d", "%m/%d/%Y", "%m/%d/%y"):
-        try:
-            return _dt.datetime.strptime(text, fmt).date()
-        except ValueError:
-            continue
-    return None
+def _safe_rate(numerator: int, denominator: int) -> float:
+    if denominator <= 0:
+        return 0.0
+    return round(numerator / denominator, 4)
 
 
 def _sort_key_for_action(action: Dict[str, Any]) -> Tuple[str, int]:
@@ -117,12 +112,16 @@ def _status_text(status: Dict[str, Any]) -> str:
 
 
 def _norm_chamber(value: Any) -> str:
-    text = str(value or "").upper()
+    text = str(value or "").strip().upper()
     if text.startswith("SEN"):
         return "Senate"
     if text.startswith("ASM") or text.startswith("ASSEM"):
         return "Assembly"
-    return str(value or "").strip()
+    return ""
+
+
+def _has_unknown_chamber(value: Any) -> bool:
+    return bool(str(value or "").strip()) and not _norm_chamber(value)
 
 
 def _member_name(member: Any) -> str:
@@ -170,7 +169,8 @@ def _latest_vote(votes_container: Any) -> Dict[str, Any]:
 
 def _derive_position(item: Dict[str, Any], history: List[Dict[str, str]]) -> Dict[str, Any]:
     bill_type = item.get("billType") if isinstance(item.get("billType"), dict) else {}
-    origin_chamber = _norm_chamber(bill_type.get("chamber"))
+    origin_chamber_raw = bill_type.get("chamber")
+    origin_chamber = _norm_chamber(origin_chamber_raw)
     status = item.get("status") if isinstance(item.get("status"), dict) else {}
     past_committees = [c for c in _items(item.get("pastCommittees")) if isinstance(c, dict)]
 
@@ -194,6 +194,7 @@ def _derive_position(item: Dict[str, Any], history: List[Dict[str, str]]) -> Dic
 
     return {
         "current_chamber": origin_chamber,
+        "origin_chamber_raw": str(origin_chamber_raw or "").strip(),
         "crossed_over": crossed,
         "last_committee": last_committee,
         "referral_count": len(distinct),
@@ -201,41 +202,33 @@ def _derive_position(item: Dict[str, Any], history: List[Dict[str, str]]) -> Dic
 
 
 def _derive_outcome(item: Dict[str, Any]) -> Tuple[str, str]:
-    """Return (outcome, source). Raw OpenLeg status is always kept on the record."""
-    status = item.get("status") if isinstance(item.get("status"), dict) else {}
-    status_blob = " ".join([
-        str(status.get("statusType", "") or ""),
-        str(status.get("statusDesc", "") or ""),
-    ]).lower()
-
+    """Return (outcome, source) from structural OpenLeg fields only."""
     if bool(item.get("signed")):
         return "signed", "signed_boolean"
-    if _size(item.get("vetoMessages")) and "veto" in status_blob:
+    if _size(item.get("vetoMessages")):
         return "vetoed", "veto_messages"
-
-    if any(k in status_blob for k in ("signed", "chapter", "adopted")):
-        return "signed", "status"
-    if "veto" in status_blob:
-        return "vetoed", "status"
-    if any(k in status_blob for k in ("lost", "defeated", "stricken", "died", "failed")):
-        return "dead", "status"
-    if any(k in status_blob for k in ("governor", "delivered")):
-        return "awaiting_governor", "status"
-    return "in_progress", "default"
+    return "unknown_structural", "unresolved_structural"
 
 
 def _history(item: Dict[str, Any]) -> List[Dict[str, str]]:
     actions = [a for a in _items(item.get("actions")) if isinstance(a, dict)]
     actions.sort(key=_sort_key_for_action)
-    return [
-        {
-            "action": str(a.get("text", "") or "").strip(),
-            "date": str(a.get("date", "") or "").strip(),
-            "chamber": _norm_chamber(a.get("chamber")),
+    history = []
+    for action in actions:
+        action_text = str(action.get("text", "") or "").strip()
+        if not action_text:
+            continue
+        raw_chamber = str(action.get("chamber", "") or "").strip()
+        normalized_chamber = _norm_chamber(raw_chamber)
+        entry = {
+            "action": action_text,
+            "date": str(action.get("date", "") or "").strip(),
+            "chamber": normalized_chamber,
         }
-        for a in actions
-        if str(a.get("text", "") or "").strip()
-    ]
+        if raw_chamber and not normalized_chamber:
+            entry["chamber_raw"] = raw_chamber
+        history.append(entry)
+    return history
 
 
 def _agenda_refs(item: Dict[str, Any]) -> List[Dict[str, str]]:
@@ -245,13 +238,94 @@ def _agenda_refs(item: Dict[str, Any]) -> List[Dict[str, str]]:
             continue
         agenda_id = agenda_ref.get("agendaId") if isinstance(agenda_ref.get("agendaId"), dict) else {}
         committee_id = agenda_ref.get("committeeId") if isinstance(agenda_ref.get("committeeId"), dict) else {}
-        refs.append({
+        raw_chamber = str(committee_id.get("chamber", "") or "").strip()
+        normalized_chamber = _norm_chamber(raw_chamber)
+        ref = {
             "year": str(agenda_id.get("year", "") or ""),
             "agenda_number": str(agenda_id.get("number", "") or ""),
             "committee": str(committee_id.get("name", "") or ""),
-            "chamber": _norm_chamber(committee_id.get("chamber")),
-        })
+            "chamber": normalized_chamber,
+        }
+        if raw_chamber and not normalized_chamber:
+            ref["chamber_raw"] = raw_chamber
+        refs.append(ref)
     return refs
+
+
+def _health_status(findings: List[Dict[str, Any]]) -> str:
+    severities = {str(f.get("severity", "")).upper() for f in findings}
+    if "CRITICAL" in severities:
+        return "CRITICAL"
+    if "WARN" in severities:
+        return "WARN"
+    return "OK"
+
+
+def _build_health(counters: Dict[str, int], records_written: int) -> Dict[str, Any]:
+    findings: List[Dict[str, Any]] = []
+    if counters["skipped_malformed_bill"]:
+        findings.append({
+            "severity": "CRITICAL",
+            "code": "MALFORMED_BILL_ID",
+            "count": counters["skipped_malformed_bill"],
+            "denominator": counters["bills_seen"],
+            "message": "OpenLeg returned bill records without a usable bill number; skipped rows require source-contract review.",
+        })
+
+    unknown_outcomes = counters.get("outcome_source_unresolved_structural", 0)
+    if unknown_outcomes:
+        findings.append({
+            "severity": "WARN",
+            "code": "UNKNOWN_STRUCTURAL_OUTCOME",
+            "count": unknown_outcomes,
+            "denominator": records_written,
+            "message": "No durable structural terminal-outcome field mapped for these bills; raw status is retained for display only.",
+        })
+
+    unknown_chambers = (
+        counters.get("unknown_origin_chamber", 0)
+        + counters.get("unknown_action_chamber", 0)
+        + counters.get("unknown_agenda_chamber", 0)
+    )
+    if unknown_chambers:
+        findings.append({
+            "severity": "WARN",
+            "code": "UNKNOWN_CHAMBER_VALUE",
+            "count": unknown_chambers,
+            "denominator": records_written,
+            "message": "One or more chamber codes were outside the Senate/Assembly structural mapping and were preserved as raw provenance.",
+        })
+
+    if counters.get("source_url_missing_session", 0):
+        findings.append({
+            "severity": "WARN",
+            "code": "SOURCE_URL_MISSING_SESSION",
+            "count": counters["source_url_missing_session"],
+            "denominator": records_written,
+            "message": "OpenLeg records without session values cannot receive a public nysenate.gov bill URL.",
+        })
+
+    return {
+        "status": _health_status(findings),
+        "findings": findings,
+        "thresholds": {
+            "skipped_malformed_bill": 0,
+            "unknown_chamber_value": 0,
+            "source_url_missing_session": 0,
+            "unknown_structural_outcome": "review every run until terminal outcome mapping is structurally complete",
+        },
+    }
+
+
+def _retry_delay_seconds(resp: Optional[requests.Response], attempt: int) -> float:
+    if resp is not None:
+        retry_after = resp.headers.get("Retry-After")
+        if retry_after:
+            try:
+                return min(30.0, max(1.0, float(retry_after)))
+            except ValueError:
+                pass
+    return min(8.0, 2.0 ** (attempt - 1))
 
 
 def bill_to_record(item: Dict[str, Any], fetched_at_utc: str) -> Tuple[Dict[str, Any], Dict[str, int]]:
@@ -277,8 +351,14 @@ def bill_to_record(item: Dict[str, Any], fetched_at_utc: str) -> Tuple[Dict[str,
         "has_sponsor": 1 if _member_name(sponsor_member) else 0,
         "has_summary": 1 if str(item.get("summary", "") or "").strip() else 0,
         "committee_agenda_refs": len(agenda_refs),
+        "unknown_origin_chamber": 1 if _has_unknown_chamber(position["origin_chamber_raw"]) else 0,
+        "unknown_action_chamber": sum(1 for h in history if h.get("chamber_raw")),
+        "unknown_agenda_chamber": sum(1 for r in agenda_refs if r.get("chamber_raw")),
         f"outcome_source_{outcome_source}": 1,
     }
+    session = item.get("session")
+    counters["source_url_missing_session"] = 1 if bill and not session else 0
+    source_url = f"https://www.nysenate.gov/legislation/bills/{session}/{bill}" if bill and session else ""
     record = {
         "bill": bill,
         "title": str(item.get("title", "") or "").strip(),
@@ -296,8 +376,9 @@ def bill_to_record(item: Dict[str, Any], fetched_at_utc: str) -> Tuple[Dict[str,
         "history": history,
         "data_as_of_utc": fetched_at_utc,
         "source": "NY OpenLegislation",
-        "source_url": f"https://www.nysenate.gov/legislation/bills/{item.get('session')}/{bill}" if bill else "",
+        "source_url": source_url,
         "ny_summary": str(item.get("summary", "") or "").strip(),
+        "ny_origin_chamber_raw": position["origin_chamber_raw"],
         "ny_agenda_refs": agenda_refs,
     }
     return record, counters
@@ -322,16 +403,30 @@ class NYOpenLegClient:
         merged = dict(params)
         merged["key"] = self.api_key
         url = f"{self.base_url}{path}"
-        resp = self.session.get(url, params=merged, timeout=self.timeout)
-        if resp.status_code == 429:
-            raise NYOpenLegError("OpenLeg returned 429 rate-limit response")
-        resp.raise_for_status()
-        payload = resp.json()
-        if not isinstance(payload, dict):
-            raise NYOpenLegError(f"OpenLeg response for {path} was not a JSON object")
-        if payload.get("success") is False:
-            raise NYOpenLegError(f"OpenLeg reported failure for {path}: {payload.get('message')}")
-        return payload
+        last_error: Optional[BaseException] = None
+        for attempt in range(1, MAX_HTTP_ATTEMPTS + 1):
+            resp: Optional[requests.Response] = None
+            try:
+                resp = self.session.get(url, params=merged, timeout=self.timeout)
+                if resp.status_code in RETRY_STATUS_CODES and attempt < MAX_HTTP_ATTEMPTS:
+                    time.sleep(_retry_delay_seconds(resp, attempt))
+                    continue
+                if resp.status_code == 429:
+                    raise NYOpenLegError("OpenLeg returned 429 rate-limit response after retries")
+                resp.raise_for_status()
+                payload = resp.json()
+                if not isinstance(payload, dict):
+                    raise NYOpenLegError(f"OpenLeg response for {path} was not a JSON object")
+                if payload.get("success") is False:
+                    raise NYOpenLegError(f"OpenLeg reported failure for {path}: {payload.get('message')}")
+                return payload
+            except requests.RequestException as err:
+                last_error = err
+                if attempt < MAX_HTTP_ATTEMPTS:
+                    time.sleep(_retry_delay_seconds(resp, attempt))
+                    continue
+                break
+        raise NYOpenLegError(f"OpenLeg request for {path} failed after {MAX_HTTP_ATTEMPTS} attempts: {last_error}")
 
     def iter_bills(
         self,
@@ -386,6 +481,10 @@ def build_ny_bill_records(
         "has_sponsor": 0,
         "has_summary": 0,
         "committee_agenda_refs": 0,
+        "unknown_origin_chamber": 0,
+        "unknown_action_chamber": 0,
+        "unknown_agenda_chamber": 0,
+        "source_url_missing_session": 0,
     }
 
     for item in client.iter_bills(session_year, full=True, limit=limit, max_pages=max_pages):
@@ -401,6 +500,12 @@ def build_ny_bill_records(
     if not records:
         raise NYOpenLegError("OpenLeg bill universe came back empty - refusing to overwrite")
 
+    unknown_outcome = counters.get("outcome_source_unresolved_structural", 0)
+    unknown_chamber = (
+        counters["unknown_origin_chamber"]
+        + counters["unknown_action_chamber"]
+        + counters["unknown_agenda_chamber"]
+    )
     completeness = {
         "state": "NY",
         "source": "NY OpenLegislation",
@@ -409,18 +514,25 @@ def build_ny_bill_records(
         "bills_seen": counters["bills_seen"],
         "skipped_malformed_bill": counters["skipped_malformed_bill"],
         "has_actions": counters["has_actions"],
-        "has_actions_rate": round(counters["has_actions"] / len(records), 4),
+        "has_actions_rate": _safe_rate(counters["has_actions"], len(records)),
         "has_votes": counters["has_votes"],
-        "has_votes_rate": round(counters["has_votes"] / len(records), 4),
+        "has_votes_rate": _safe_rate(counters["has_votes"], len(records)),
         "patron_present": counters["has_sponsor"],
         "patron_missing": len(records) - counters["has_sponsor"],
+        "patron_present_rate": _safe_rate(counters["has_sponsor"], len(records)),
         "summary_present": counters["has_summary"],
+        "summary_present_rate": _safe_rate(counters["has_summary"], len(records)),
         "committee_agenda_refs": counters["committee_agenda_refs"],
+        "unknown_structural_outcome": unknown_outcome,
+        "unknown_structural_outcome_rate": _safe_rate(unknown_outcome, len(records)),
+        "unknown_chamber_value": unknown_chamber,
+        "source_url_missing_session": counters["source_url_missing_session"],
         "outcome_sources": {
             key.replace("outcome_source_", ""): value
             for key, value in sorted(counters.items())
             if key.startswith("outcome_source_")
         },
+        "health": _build_health(counters, len(records)),
         "calendar_scope_note": (
             "OpenLeg bill records include committeeAgendas references, but this engine does not yet "
             "claim full NY meeting coverage. Official OpenLeg docs describe Senate calendar/committee "
@@ -479,10 +591,10 @@ def write_ny_bill_tracker(records: List[Dict[str, Any]], completeness: Dict[str,
     creds_json = os.environ.get("GCP_CREDENTIALS")
     if not creds_json:
         raise RuntimeError("GCP_CREDENTIALS not set")
-    gc = gspread.authorize(Credentials.from_service_account_info(
+    gc = gspread.service_account_from_dict(
         json.loads(creds_json),
         scopes=["https://www.googleapis.com/auth/spreadsheets"],
-    ))
+    )
     sheet = gc.open_by_key(_spreadsheet_id())
 
     header = ["Bill", "Title", "Status (LIS)", "Outcome", "Patron", "Patron ID", "Chamber",
@@ -497,6 +609,7 @@ def write_ny_bill_tracker(records: List[Dict[str, Any]], completeness: Dict[str,
         json.dumps(r["history"], ensure_ascii=False),
         r["data_as_of_utc"], r["source"],
     ] for r in records]
+    # Q is intentionally left empty so the run-level completeness JSON is visually separated from row data.
     completeness_cell, need_rows, need_cols = "R1", len(rows) + 50, 18
 
     try:

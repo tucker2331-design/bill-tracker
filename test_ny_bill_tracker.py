@@ -69,7 +69,7 @@ def test_bill_to_record_flattens_openleg_shape():
 
     assert record["bill"] == "S1234"
     assert record["status_lis"] == "In Assembly Committee"
-    assert record["outcome"] == "in_progress"
+    assert record["outcome"] == "unknown_structural"
     assert record["patron"] == "Jane Q. Sponsor"
     assert record["chamber"] == "Senate"
     assert record["crossed_over"] is True
@@ -86,6 +86,7 @@ def test_bill_to_record_flattens_openleg_shape():
     assert counters["has_votes"] == 1
     assert counters["has_sponsor"] == 1
     assert counters["committee_agenda_refs"] == 1
+    assert counters["outcome_source_unresolved_structural"] == 1
 
 
 def test_outcome_prefers_structural_signed_boolean():
@@ -96,6 +97,54 @@ def test_outcome_prefers_structural_signed_boolean():
 
     assert record["outcome"] == "signed"
     assert counters["outcome_source_signed_boolean"] == 1
+
+
+def test_outcome_uses_structural_veto_messages_without_status_text():
+    record, counters = ny.bill_to_record(
+        _sample_bill(
+            vetoMessages={"items": [{"message": "source object present"}], "size": 1},
+            status={"statusType": "IN_SENATE_COMM", "statusDesc": "In Senate Committee"},
+        ),
+        "2026-06-24T12:00:00Z",
+    )
+
+    assert record["outcome"] == "vetoed"
+    assert counters["outcome_source_veto_messages"] == 1
+
+
+def test_unknown_chambers_and_missing_session_are_counted_not_inferred():
+    record, counters = ny.bill_to_record(
+        _sample_bill(
+            session=None,
+            billType={"chamber": "EXECUTIVE", "desc": "Executive"},
+            actions={
+                "items": [
+                    {"date": "2025-01-10", "sequenceNo": 1, "chamber": "EXECUTIVE", "text": "DELIVERED"},
+                ],
+                "size": 1,
+            },
+            committeeAgendas={
+                "items": [
+                    {
+                        "agendaId": {"number": 12, "year": 2025},
+                        "committeeId": {"chamber": "EXECUTIVE", "name": "Governor"},
+                    }
+                ],
+                "size": 1,
+            },
+        ),
+        "2026-06-24T12:00:00Z",
+    )
+
+    assert record["chamber"] == ""
+    assert record["ny_origin_chamber_raw"] == "EXECUTIVE"
+    assert record["source_url"] == ""
+    assert record["history"][0]["chamber"] == ""
+    assert record["history"][0]["chamber_raw"] == "EXECUTIVE"
+    assert counters["unknown_origin_chamber"] == 1
+    assert counters["unknown_action_chamber"] == 1
+    assert counters["unknown_agenda_chamber"] == 1
+    assert counters["source_url_missing_session"] == 1
 
 
 def test_build_ny_bill_records_counts_completeness():
@@ -115,6 +164,10 @@ def test_build_ny_bill_records_counts_completeness():
     assert completeness["patron_missing"] == 1
     assert completeness["has_actions"] == 1
     assert completeness["has_actions_rate"] == 0.5
+    assert completeness["unknown_structural_outcome"] == 2
+    assert completeness["unknown_structural_outcome_rate"] == 1.0
+    assert completeness["health"]["status"] == "WARN"
+    assert completeness["health"]["findings"][0]["code"] == "UNKNOWN_STRUCTURAL_OUTCOME"
     assert "Assembly calendar/committee data" in completeness["calendar_scope_note"]
 
 

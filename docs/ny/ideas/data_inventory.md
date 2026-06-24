@@ -13,6 +13,7 @@ status: active
 | Bill universe | `/api/3/bills/{sessionYear}` | Built in `ny_bill_tracker.py` |
 | Title | bill `title` | Built |
 | Raw status | `status.statusDesc` / `status.statusType` | Built |
+| Structural outcome | `signed`, `vetoMessages` | Partial; unresolved bills are `unknown_structural` and counted |
 | Sponsor | `sponsor.member` | Built |
 | Summary | `summary` | Counted in completeness; not yet written as its own UI column |
 | History | `actions.items[]` | Built |
@@ -21,6 +22,10 @@ status: active
 | Agenda references | `committeeAgendas` | Counted as provenance |
 | Full meeting calendar | agendas/calendars/committees | Not built; source coverage needs validation |
 | Incremental updates | `/api/3/bills/updates/...`, `/api/3/updates/...` | Planned after full-universe validation |
+
+Raw status is display/provenance text only. It must not be used to convert
+`unknown_structural` into signed, dead, pending, governor, crossed-over, or
+other product classifications.
 
 ## Calendar / meeting gap
 

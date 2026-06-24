@@ -29,8 +29,10 @@ Virginia assumptions harden into New York architecture without proof.
 4. **Runtime inputs are explicit.** NY writes require `NY_SPREADSHEET_ID`; do
    not default into the Virginia workbook by accident. NY source calls require
    `NY_OPENLEG_API_KEY`.
-5. **Raw status stays visible.** Any derived `outcome` is a convenience label;
-   the original OpenLeg status must remain on the record.
+5. **Raw status stays visible but does not classify.** Derived fields such as
+   `outcome` and `crossed_over` must come from structural fields. OpenLeg status
+   text is kept for display/provenance only. If a structural mapping is not
+   proven, write an explicit unresolved value and count it in health metrics.
 6. **No meeting-calendar claims without both-chamber validation.** OpenLeg's
    Senate agenda/calendar endpoints are useful, but Assembly coverage must be
    independently sourced or validated before the UI claims full NY calendar
@@ -59,6 +61,7 @@ Before adding a new NY data path:
 
 - Which official source is being used?
 - Which fields are structural and which are display text?
+- Which classifications are structural-only, and which are still unresolved?
 - What is the denominator for the completeness claim?
 - What happens when the source is missing, partial, or rate-limited?
 - Which fixture test proves the flattener?

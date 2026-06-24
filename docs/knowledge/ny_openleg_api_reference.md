@@ -82,7 +82,16 @@ Trust counters written to `R1`:
 - `summary_present`
 - `committee_agenda_refs`
 - `outcome_sources`
+- `unknown_structural_outcome` and `unknown_structural_outcome_rate`
+- `unknown_chamber_value`
+- `source_url_missing_session`
+- `health.status` and `health.findings`
 - `calendar_scope_note`
+
+Outcome mapping is structural-only in the first engine: `signed == true` maps to
+`signed`, present `vetoMessages` maps to `vetoed`, and everything else remains
+`unknown_structural` until another durable source field is validated. Status
+description text is retained on rows but is not used as a classifier.
 
 ## Open questions
 

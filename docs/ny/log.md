@@ -9,6 +9,17 @@ status: active
 Append-only, reverse-chronological. Use the same prefix shape as the main log:
 `## [YYYY-MM-DD] <kind> | <title>`.
 
+## [2026-06-24] hardening | Structural-only outcome and health counters
+
+Owner standard tightened: no text parsing for durable classifications. Removed
+OpenLeg status-text outcome fallbacks from `ny_bill_tracker.py`; `outcome` now
+uses structural `signed` and `vetoMessages` only, with all other bills marked
+`unknown_structural`. Added health findings/counters for unknown structural
+outcomes, unrecognized chamber values, malformed bill IDs, and missing source
+URL sessions. Folded in CodeRabbit-valid durability feedback: bounded OpenLeg
+HTTP retries, guarded public bill URLs, modern `gspread.service_account_from_dict`
+write auth, and an explicit completeness-cell layout comment.
+
 ## [2026-06-24] review | Gemini fold-in on PR #168
 
 Gemini reviewed PR #168 and flagged two actionable findings: `crossed_over`

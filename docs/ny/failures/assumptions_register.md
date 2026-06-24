@@ -41,3 +41,19 @@ chamber.
 
 **Guard:** `test_bill_to_record_flattens_openleg_shape` now includes an Assembly
 action in the fixture so the structural crossed-over path is tested.
+
+## 3. Outcome must not be inferred from status text
+
+**Assumption:** controlled OpenLeg `statusType` / `statusDesc` strings could be
+used as a temporary terminal outcome fallback.
+
+**Reality:** even controlled status strings are display/provenance text for this
+engine. Using them to infer signed, dead, governor, or veto outcomes would hide
+source-contract gaps and invite long-term drift.
+
+**Fix:** `_derive_outcome()` now uses only structural `signed` and
+`vetoMessages`. Anything else becomes `unknown_structural`.
+
+**Guard:** completeness JSON includes `unknown_structural_outcome`,
+`unknown_structural_outcome_rate`, and a `health` warning until terminal outcome
+coverage is structurally validated.
