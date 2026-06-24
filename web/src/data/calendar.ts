@@ -49,7 +49,7 @@ const PROJECTION = "select A,B,C,D,E,F,G,J,L"; // Date,Time,SortTime,Status,Comm
 const FETCH_TIMEOUT_MS = 30000;               // the projected Sheet1 is ~5 MB
 
 const META_ORIGINS = new Set(["system_alert", "system_metrics"]);
-const LEDGER_COMMITTEE = "📋 Ledger Updates";   // admin collapse — no meeting, no time expectation
+const LEDGER_COMMITTEE = "📋 Ledger Updates"; // [PLACEHOLDER "Ledger Updates"] the worker's admin collapse — these are NOT meetings (no time expectation); excluded from the calendar below.
 const GOVERNOR_COMMITTEE = "🏛️ Governor";       // dated executive actions — not a meeting (out of scope v1)
 // CANCELLED is the structural cancellation flag the worker derives from the LIS Schedule API's own
 // `IsCancelled` field (calendar_worker.py ~L4936) → Sheet1 Status column. LIS placeholds a cancelled
@@ -126,7 +126,12 @@ async function fetchFreshness(): Promise<Date | null> {
     const cell = (parseCsv(txt)?.[0]?.[0] || "").trim();
     const d = cell ? new Date(cell) : null;
     return d && !isNaN(d.getTime()) ? d : null;
-  } catch { return null; }
+  } catch (e) {
+    // Optional must not mean SILENT (Qodo): freshness is non-blocking, but operators/devs still need an
+    // observable signal when Sheet1!AA1 can't be read — surface it rather than swallow (Standard #4).
+    console.warn("calendar freshness (Sheet1!AA1) read failed; freshness shows 'unknown'", e);
+    return null;
+  }
 }
 
 // Session cache: the Calendar tab unmounts on tab-switch, so memoize the (~5 MB) load for the page's life
@@ -181,6 +186,8 @@ async function _loadCalendar(): Promise<CalendarData> {
       const chamber: Chamber | null = committee.startsWith("House") ? "House"
         : committee.startsWith("Senate") ? "Senate" : null;
       const kind: MeetingKind = /\bConvenes\b/.test(committee) ? "floor" : "committee";
+      // [PLACEHOLDER "Time TBA"] honest display marker when LIS published no ScheduleTime — never a hidden
+      // or guessed time; superseded below by a concrete time (L194) or LIS's verbatim Description (L203+).
       m = { dateKey: dk, committee, chamber, kind, time: concrete ? cleanTime(rawTime) : "Time TBA",
         tba: !concrete, minutes: toMinutes(sortTime, rawTime), bills: [] };
       groups.set(key, m);

@@ -17,6 +17,56 @@ type YM = { y: number; m: number }; // m is 0-indexed
 
 const ymOf = (key: string): YM => ({ y: +key.slice(0, 4), m: +key.slice(5, 7) - 1 });
 const ymKey = (ym: YM) => `${ym.y}-${String(ym.m + 1).padStart(2, "0")}`;
+const BILL_CAP = 16; // floor sessions can carry a few hundred bills — show a sample, expand on demand
+
+// A quiet density cue per day cell: the count + up to a few chamber-tinted dots (Senate indigo / House
+// teal / other grey). Position/number carry the data; color stays muted (Munzner: hue is the redundant cue).
+function MeetingDots({ meetings }: { meetings: Meeting[] }) {
+  const dots = meetings.slice(0, 6);
+  return (
+    <div className="cell-meet">
+      <span className="cell-n">{meetings.length}</span>
+      <span className="cell-dots">
+        {dots.map((m, i) => (
+          <span key={i} className="dot" style={{
+            background: m.chamber === "Senate" ? "var(--senate)" : m.chamber === "House" ? "var(--house)" : "var(--ink-faint)",
+          }} />
+        ))}
+      </span>
+    </div>
+  );
+}
+
+function MeetingRow({ m, billMap, onOpen }: {
+  m: Meeting; billMap: Map<string, Bill>; onOpen: (b: Bill) => void;
+}) {
+  const [expanded, setExpanded] = useState(false);
+  const side = m.chamber === "Senate" ? "var(--senate)" : m.chamber === "House" ? "var(--house)" : "var(--ink-faint)";
+  const shown = expanded ? m.bills : m.bills.slice(0, BILL_CAP);
+  const extra = m.bills.length - shown.length;
+  return (
+    <div className="cal-mtg" style={{ borderLeftColor: side }}>
+      <div className="cal-mtg-h">
+        <span className={`cal-mtg-t${m.tba ? " tba" : ""}`}>{m.time}</span>
+        <span className="cal-mtg-c" style={{ color: side }}>{m.committee}</span>
+        {m.bills.length > 0 && <span className="cal-mtg-n">{m.bills.length}</span>}
+      </div>
+      {m.bills.length > 0 && (
+        <div className="cal-bills">
+          {shown.map((it) => {
+            const b = billMap.get(it.bill);
+            return b ? (
+              <button key={it.bill} className="cal-bchip on" title={it.action || b.title} onClick={() => onOpen(b)}>{it.bill}</button>
+            ) : (
+              <span key={it.bill} className="cal-bchip" title={it.action}>{it.bill}</span>
+            );
+          })}
+          {extra > 0 && <button className="cal-more" onClick={() => setExpanded(true)}>+{extra} more</button>}
+        </div>
+      )}
+    </div>
+  );
+}
 
 export function Calendar({ bills, sessionCode, onOpen }: {
   bills: Bill[]; sessionCode: string; onOpen: (b: Bill) => void;
@@ -105,6 +155,9 @@ export function Calendar({ bills, sessionCode, onOpen }: {
   });
 
   const inRange = (mk: string) => mk >= cal.minKey.slice(0, 7) && mk <= cal.maxKey.slice(0, 7);
+  // Normalize a month shift via Date so the prev/next GUARDS roll over years correctly. Keying
+  // {m: month.m ± 1} directly yields invalid "2026-00" / "2026-13" at Jan/Dec (Qodo HIGH). Mirrors step().
+  const shiftYM = (delta: number): YM => { const d = new Date(month.y, month.m + delta, 1); return { y: d.getFullYear(), m: d.getMonth() }; };
   const step = (delta: number) => setMonth((cur) => {
     if (!cur) return cur;
     const d = new Date(cur.y, cur.m + delta, 1); return { y: d.getFullYear(), m: d.getMonth() };
@@ -117,9 +170,9 @@ export function Calendar({ bills, sessionCode, onOpen }: {
     <div>
       <div className="cal-top">
         <div className="cal-nav">
-          <button className="cal-step" onClick={() => step(-1)} disabled={!inRange(ymKey({ y: month.y, m: month.m - 1 }))} aria-label="Previous month">‹</button>
+          <button className="cal-step" onClick={() => step(-1)} disabled={!inRange(ymKey(shiftYM(-1)))} aria-label="Previous month">‹</button>
           <h2 className="cal-title">{MONTHS[month.m]} {month.y}</h2>
-          <button className="cal-step" onClick={() => step(1)} disabled={!inRange(ymKey({ y: month.y, m: month.m + 1 }))} aria-label="Next month">›</button>
+          <button className="cal-step" onClick={() => step(1)} disabled={!inRange(ymKey(shiftYM(1)))} aria-label="Next month">›</button>
           <span className="muted cal-count">{monthMeetings.toLocaleString()} meeting{monthMeetings === 1 ? "" : "s"}{scope === "tracking" ? " · tracked" : ""}</span>
         </div>
         <div className="cal-actions">
@@ -190,57 +243,6 @@ export function Calendar({ bills, sessionCode, onOpen }: {
         actions live in the bill history, not here. <span style={{ color: "var(--senate)" }}>● Senate</span>{" "}
         <span style={{ color: "var(--house)" }}>● House</span>.
       </p>
-    </div>
-  );
-}
-
-// A quiet density cue per day cell: the count + up to a few chamber-tinted dots (Senate indigo / House
-// teal / other grey). Position/number carry the data; color stays muted (Munzner: hue is the redundant cue).
-function MeetingDots({ meetings }: { meetings: Meeting[] }) {
-  const dots = meetings.slice(0, 6);
-  return (
-    <div className="cell-meet">
-      <span className="cell-n">{meetings.length}</span>
-      <span className="cell-dots">
-        {dots.map((m, i) => (
-          <span key={i} className="dot" style={{
-            background: m.chamber === "Senate" ? "var(--senate)" : m.chamber === "House" ? "var(--house)" : "var(--ink-faint)",
-          }} />
-        ))}
-      </span>
-    </div>
-  );
-}
-
-const BILL_CAP = 16; // floor sessions can carry a few hundred bills — show a sample, expand on demand
-
-function MeetingRow({ m, billMap, onOpen }: {
-  m: Meeting; billMap: Map<string, Bill>; onOpen: (b: Bill) => void;
-}) {
-  const [expanded, setExpanded] = useState(false);
-  const side = m.chamber === "Senate" ? "var(--senate)" : m.chamber === "House" ? "var(--house)" : "var(--ink-faint)";
-  const shown = expanded ? m.bills : m.bills.slice(0, BILL_CAP);
-  const extra = m.bills.length - shown.length;
-  return (
-    <div className="cal-mtg" style={{ borderLeftColor: side }}>
-      <div className="cal-mtg-h">
-        <span className={`cal-mtg-t${m.tba ? " tba" : ""}`}>{m.time}</span>
-        <span className="cal-mtg-c" style={{ color: side }}>{m.committee}</span>
-        {m.bills.length > 0 && <span className="cal-mtg-n">{m.bills.length}</span>}
-      </div>
-      {m.bills.length > 0 && (
-        <div className="cal-bills">
-          {shown.map((it) => {
-            const b = billMap.get(it.bill);
-            return b ? (
-              <button key={it.bill} className="cal-bchip on" title={it.action || b.title} onClick={() => onOpen(b)}>{it.bill}</button>
-            ) : (
-              <span key={it.bill} className="cal-bchip" title={it.action}>{it.bill}</span>
-            );
-          })}
-          {extra > 0 && <button className="cal-more" onClick={() => setExpanded(true)}>+{extra} more</button>}
-        </div>
-      )}
     </div>
   );
 }
