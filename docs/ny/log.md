@@ -9,6 +9,15 @@ status: active
 Append-only, reverse-chronological. Use the same prefix shape as the main log:
 `## [YYYY-MM-DD] <kind> | <title>`.
 
+## [2026-06-24] hardening | Exact chamber code normalization
+
+Owner standard tightened again: structural source codes must be normalized by
+explicit accepted values, not prefix matching. `ny_bill_tracker.py` now maps
+known OpenLeg chamber codes exactly and treats unknown values as unresolved raw
+provenance with health counters. Added regression coverage so future unrelated
+codes like `SENIOR` or `ASSEMBLYMAN` cannot silently classify as Senate or
+Assembly.
+
 ## [2026-06-24] review | CodeRabbit sheet stale-cell fold-in
 
 Folded in CodeRabbit's active-row stale-cell finding after `d352834`: the

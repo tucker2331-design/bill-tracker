@@ -43,6 +43,13 @@ NY_BILL_TRACKER_TAB = os.environ.get("NY_BILL_TRACKER_TAB", "NY_Bill_Tracker")
 DEFAULT_TIMEOUT_SECONDS = 30
 MAX_HTTP_ATTEMPTS = 3
 RETRY_STATUS_CODES = {429, 500, 502, 503, 504}
+CHAMBER_CODE_MAP = {
+    "SENATE": "Senate",
+    "SEN": "Senate",
+    "ASSEMBLY": "Assembly",
+    "ASM": "Assembly",
+    "ASSEM": "Assembly",
+}
 
 
 class NYOpenLegError(RuntimeError):
@@ -112,12 +119,8 @@ def _status_text(status: Dict[str, Any]) -> str:
 
 
 def _norm_chamber(value: Any) -> str:
-    text = str(value or "").strip().upper()
-    if text.startswith("SEN"):
-        return "Senate"
-    if text.startswith("ASM") or text.startswith("ASSEM"):
-        return "Assembly"
-    return ""
+    code = str(value or "").strip().upper()
+    return CHAMBER_CODE_MAP.get(code, "")
 
 
 def _has_unknown_chamber(value: Any) -> bool:

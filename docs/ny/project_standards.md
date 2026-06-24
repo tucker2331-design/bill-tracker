@@ -33,11 +33,14 @@ Virginia assumptions harden into New York architecture without proof.
    `outcome` and `crossed_over` must come from structural fields. OpenLeg status
    text is kept for display/provenance only. If a structural mapping is not
    proven, write an explicit unresolved value and count it in health metrics.
-6. **No meeting-calendar claims without both-chamber validation.** OpenLeg's
+6. **Exact structural code maps only.** Source-code normalizers must use
+   explicit accepted values, not prefix/prose matching. Unknown codes stay
+   unknown, preserve raw provenance where useful, and increment health counters.
+7. **No meeting-calendar claims without both-chamber validation.** OpenLeg's
    Senate agenda/calendar endpoints are useful, but Assembly coverage must be
    independently sourced or validated before the UI claims full NY calendar
    parity.
-7. **Tests before promotion.** Fixture tests are acceptable for source-shape
+8. **Tests before promotion.** Fixture tests are acceptable for source-shape
    logic. A live dry run with denominators is required before scheduling or
    writing to a production tab.
 

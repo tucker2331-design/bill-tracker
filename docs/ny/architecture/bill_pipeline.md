@@ -51,6 +51,9 @@ maps to product `House` for that column only.
 - Keep Virginia and New York engines in separate files until the common abstraction is proven.
 - Raw OpenLeg status is always retained for display/provenance; it is not used
   to classify `outcome` or `crossed_over`.
+- Chamber normalization uses an exact map of known OpenLeg chamber codes.
+  Unknown values are preserved as raw provenance and counted, not prefix-matched
+  into Senate/Assembly.
 - Do not infer a complete meeting calendar from Senate-centered endpoints.
 - Completeness metrics always include denominators/rates where useful.
 - The run-level `health` object must surface unknown structural outcomes,

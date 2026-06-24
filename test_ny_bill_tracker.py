@@ -196,6 +196,29 @@ def test_unknown_chambers_and_missing_session_are_counted_not_inferred():
     assert counters["source_url_missing_session"] == 1
 
 
+def test_chamber_normalization_uses_exact_codes_not_prefixes():
+    record, counters = ny.bill_to_record(
+        _sample_bill(
+            billType={"chamber": "SENIOR", "desc": "Unexpected future code"},
+            actions={
+                "items": [
+                    {"date": "2025-01-10", "sequenceNo": 1, "chamber": "ASSEMBLYMAN", "text": "CODE SAMPLE"},
+                ],
+                "size": 1,
+            },
+            pastCommittees={"items": [], "size": 0},
+        ),
+        "2026-06-24T12:00:00Z",
+    )
+
+    assert record["chamber"] == ""
+    assert record["ny_origin_chamber"] == ""
+    assert record["history"][0]["chamber"] == ""
+    assert record["history"][0]["chamber_raw"] == "ASSEMBLYMAN"
+    assert counters["unknown_origin_chamber"] == 1
+    assert counters["unknown_action_chamber"] == 1
+
+
 def test_missing_action_text_is_preserved_and_counted():
     record, counters = ny.bill_to_record(
         _sample_bill(
