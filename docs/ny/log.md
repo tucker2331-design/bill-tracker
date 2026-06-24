@@ -9,6 +9,26 @@ status: active
 Append-only, reverse-chronological. Use the same prefix shape as the main log:
 `## [YYYY-MM-DD] <kind> | <title>`.
 
+## [2026-06-24] validation | First live write passed
+
+Post-merge GitHub Actions live write passed for `New York Bill Tracker` mode
+`write`, session year `2025`, against the explicitly configured New York sheet
+target. Run `28136320411` completed in 2m 25s and built `NY_Bill_Tracker` with
+25,314 bills, 25,268 bills with sponsor, and 25,314 bills with action history.
+This confirms the engine can fetch the full 2025 OpenLeg bill session and write
+the NY tab without touching Virginia workflow state. GitHub also emitted a
+non-engine annotation that pinned official actions using Node.js 20 are being
+run on Node.js 24 by GitHub.
+
+## [2026-06-24] validation | Full-session dry run passed
+
+Post-merge GitHub Actions validation passed for `New York Bill Tracker` mode
+`dry-run`, session year `2025`, no `max_pages` cap. Run `28136128891` completed
+in 1m 56s with 25,314 records written from 25,314 bills seen. Health status was
+`WARN` only for the expected `UNKNOWN_STRUCTURAL_OUTCOME` source-contract bucket
+(24,326 / 25,314); malformed bills, unknown chamber values, missing action text,
+and missing source URLs were all zero.
+
 ## [2026-06-24] review | CodeRabbit committee chamber health fold-in
 
 Folded in CodeRabbit's health-surface finding after `8a14ad1`: unknown
