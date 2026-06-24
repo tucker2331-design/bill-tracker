@@ -15,6 +15,7 @@ NY_OPENLEG_API_KEY
   -> bill_to_record()
   -> records + completeness
   -> NY_Bill_Tracker tab (default) + R1 completeness JSON
+  -> read back header, bill column, R1 completeness, and stale-tail range
 ```
 
 ## Source-to-field mapping
@@ -64,6 +65,9 @@ maps to product `House` for that column only.
   last-known-good sheet from partial overwrites.
 - Sheet writes use padded range replacement instead of clearing first, so a
   transient Google Sheets write failure does not leave `NY_Bill_Tracker` empty.
+- After a write, the engine reads the actual worksheet back and verifies the
+  header, bill-column identity, `R1` completeness fields, health status, and a
+  bounded tail range below the active payload. A mismatch fails the workflow.
 - A missing `NY_OPENLEG_API_KEY` is a hard failure, not an empty output.
 
 ## Known differences from Virginia

@@ -15,6 +15,9 @@ Current fixture checks:
 - `test_outcome_uses_structural_veto_messages_without_status_text`
 - `test_unknown_chambers_and_missing_session_are_counted_not_inferred`
 - `test_build_ny_bill_records_counts_completeness`
+- `test_sheet_readback_verifies_payload_and_completeness`
+- `test_sheet_readback_rejects_stale_tail_cells`
+- `test_sheet_readback_rejects_completeness_mismatch`
 
 Local commands:
 
@@ -127,6 +130,28 @@ Post-write owner spot check: open the New York workbook, confirm the
 `NY_Bill_Tracker` tab exists, confirm approximately 25,315 rows including the
 header, and confirm `R1` contains completeness JSON.
 
+Owner spot check cleared on 2026-06-24: the `NY_Bill_Tracker` tab loaded and the
+expected data was present. The follow-up hardening branch adds automated
+read-back verification so future write cycles do not depend on manual inspection.
+
+## Automated read-back verification
+
+Purpose: verify the actual Google Sheet artifact produced by write mode.
+
+The writer must fail the workflow after a write if any of these read-back checks
+fail:
+
+- row 1, columns A:P match the expected product header
+- `R1` is parseable JSON and matches the just-built completeness object for
+  state, source, session year, records written, bills seen, checked-at timestamp,
+  and health status
+- column A from row 2 through the active payload matches the bill IDs just built
+- the bounded tail range immediately below the active payload has no stale cells
+
+This check is intentionally after-write. It is not a substitute for the source
+health counters; it confirms that the production artifact in Google Sheets
+matches the run that just completed.
+
 ## Scheduling gate
 
 Do not add a scheduled workflow until:
@@ -134,6 +159,7 @@ Do not add a scheduled workflow until:
 - full dry run passes
 - first write passes
 - owner confirms post-write sheet spot check
+- automated read-back verification passes on GitHub Actions
 - OpenLeg cadence/rate expectations are documented
 
 The workflow `.github/workflows/ny_bill_tracker.yml` exists only as a manual

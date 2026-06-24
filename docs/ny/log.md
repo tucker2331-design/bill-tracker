@@ -9,6 +9,15 @@ status: active
 Append-only, reverse-chronological. Use the same prefix shape as the main log:
 `## [YYYY-MM-DD] <kind> | <title>`.
 
+## [2026-06-24] hardening | Automated sheet read-back verification scoped
+
+Owner confirmed the first live `NY_Bill_Tracker` sheet spot check loaded
+correctly. Started the follow-up production hardening branch to verify the
+actual Google Sheet artifact after write mode: header contract, `R1`
+completeness JSON, active bill column, and stale-tail cells below the payload.
+Scheduling remains blocked until this verifier passes review and a live Actions
+write.
+
 ## [2026-06-24] validation | First live write passed
 
 Post-merge GitHub Actions live write passed for `New York Bill Tracker` mode

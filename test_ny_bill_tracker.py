@@ -281,6 +281,131 @@ def test_build_ny_bill_records_counts_completeness():
     assert "Assembly calendar/committee data" in completeness["calendar_scope_note"]
 
 
+def test_sheet_readback_verifies_payload_and_completeness():
+    class FakeWorksheet:
+        def __init__(self, rows, completeness):
+            self.rows = rows
+            self.completeness = completeness
+
+        def row_values(self, row):
+            assert row == 1
+            return self.rows[0] + ["", self.completeness]
+
+        def acell(self, cell):
+            assert cell == "R1"
+
+            class Cell:
+                value = self.completeness
+
+            return Cell()
+
+        def get_values(self, range_name):
+            if range_name == "A2:A3":
+                return [[self.rows[1][0]], [self.rows[2][0]]]
+            if range_name == "A4:R53":
+                return []
+            raise AssertionError(f"unexpected range {range_name}")
+
+    class FakeClient:
+        def iter_bills(self, session_year, *, full, limit, max_pages):
+            yield _sample_bill(basePrintNo="S1")
+            yield _sample_bill(basePrintNo="A2")
+
+    records, completeness = ny.build_ny_bill_records(FakeClient(), 2025)
+    rows = ny._sheet_rows(records)
+    result = ny._verify_written_sheet(FakeWorksheet(rows, ny.json.dumps(completeness)), records, completeness)
+
+    assert result["verified_rows"] == 3
+    assert result["verified_bills"] == 2
+    assert result["health_status"] == "WARN"
+
+
+def test_sheet_readback_rejects_stale_tail_cells():
+    class FakeWorksheet:
+        def row_values(self, row):
+            return list(ny.NY_SHEET_HEADER)
+
+        def acell(self, cell):
+            class Cell:
+                value = ny.json.dumps({
+                    "state": "NY",
+                    "source": "NY OpenLegislation",
+                    "session_year": 2025,
+                    "records_written": 1,
+                    "bills_seen": 1,
+                    "checked_at_utc": "2026-06-24T12:00:00Z",
+                    "health": {"status": "OK"},
+                })
+
+            return Cell()
+
+        def get_values(self, range_name):
+            if range_name == "A2:A2":
+                return [["S1"]]
+            if range_name == "A3:R52":
+                return [["OLD"]]
+            raise AssertionError(f"unexpected range {range_name}")
+
+    records = [{"bill": "S1"}]
+    completeness = {
+        "state": "NY",
+        "source": "NY OpenLegislation",
+        "session_year": 2025,
+        "records_written": 1,
+        "bills_seen": 1,
+        "checked_at_utc": "2026-06-24T12:00:00Z",
+        "health": {"status": "OK"},
+    }
+
+    try:
+        ny._verify_written_sheet(FakeWorksheet(), records, completeness)
+    except RuntimeError as err:
+        assert "stale cells" in str(err)
+    else:
+        raise AssertionError("Expected stale-tail read-back failure")
+
+
+def test_sheet_readback_rejects_completeness_mismatch():
+    class FakeWorksheet:
+        def row_values(self, row):
+            return list(ny.NY_SHEET_HEADER)
+
+        def acell(self, cell):
+            class Cell:
+                value = ny.json.dumps({
+                    "state": "NY",
+                    "source": "NY OpenLegislation",
+                    "session_year": 2025,
+                    "records_written": 2,
+                    "bills_seen": 1,
+                    "checked_at_utc": "2026-06-24T12:00:00Z",
+                    "health": {"status": "OK"},
+                })
+
+            return Cell()
+
+        def get_values(self, range_name):
+            raise AssertionError("bill reads should not run after R1 mismatch")
+
+    records = [{"bill": "S1"}]
+    completeness = {
+        "state": "NY",
+        "source": "NY OpenLegislation",
+        "session_year": 2025,
+        "records_written": 1,
+        "bills_seen": 1,
+        "checked_at_utc": "2026-06-24T12:00:00Z",
+        "health": {"status": "OK"},
+    }
+
+    try:
+        ny._verify_written_sheet(FakeWorksheet(), records, completeness)
+    except RuntimeError as err:
+        assert "records_written" in str(err)
+    else:
+        raise AssertionError("Expected R1 completeness read-back failure")
+
+
 def test_get_json_redacts_request_exception_details():
     client = ny.NYOpenLegClient(api_key="secret-key")
 
