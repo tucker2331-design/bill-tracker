@@ -18,6 +18,10 @@ to record which fields are structurally supported, which fields are
 display/provenance only, why `Upcoming` remains an explicit calendar-source gap,
 and which health counters must stay visible.
 
+Gemini review on PR #170 found that two quality-audit counter names did not
+match the actual `R1` completeness JSON. Folded in the correction:
+`committee_agenda_refs` and `skipped_malformed_bill`.
+
 ## [2026-06-24] validation | Read-back verifier merged and passed on main
 
 PR #169 merged to `main` as squash commit `5cfd215`. Post-merge GitHub Actions

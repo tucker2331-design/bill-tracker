@@ -81,12 +81,12 @@ Current run-level health and completeness include:
 - `has_votes_rate`
 - `patron_present_rate`
 - `summary_present_rate`
-- `agenda_refs`
+- `committee_agenda_refs`
 - `outcome_sources`
 - `unknown_structural_outcome`
 - `unknown_structural_outcome_rate`
 - `unknown_chamber_value`
-- `malformed_bill_ids`
+- `skipped_malformed_bill`
 - `missing_action_text`
 - `source_url_missing_session`
 - `calendar_scope_note`
@@ -125,4 +125,3 @@ that does not match the visible sheet.
 5. Official action maintenance: GitHub has warned that the pinned official
    actions are being run on a newer Node runtime. Track separately from engine
    correctness and update pinned SHAs under review.
-
