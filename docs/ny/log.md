@@ -9,6 +9,24 @@ status: active
 Append-only, reverse-chronological. Use the same prefix shape as the main log:
 `## [YYYY-MM-DD] <kind> | <title>`.
 
+## [2026-06-24] audit | Daily schedule and quality audit scoped
+
+Owner approved a once-daily schedule while frontend work is pending. Updated the
+NY workflow to add a daily scheduled write while retaining manual
+`check-config`, `dry-run`, and `write` modes. Added [[ny/testing/quality_audit]]
+to record which fields are structurally supported, which fields are
+display/provenance only, why `Upcoming` remains an explicit calendar-source gap,
+and which health counters must stay visible.
+
+Gemini review on PR #170 found that two quality-audit counter names did not
+match the actual `R1` completeness JSON. Folded in the correction:
+`committee_agenda_refs` and `skipped_malformed_bill`.
+
+Qodo review on PR #170 found three operational review items. Folded in the
+actionable ones: added [[ny/testing/quality_audit]] to the root [[index]],
+restricted production NY writes to `refs/heads/main`, and split concurrency so
+manual config/dry-run probes cannot queue ahead of scheduled writes.
+
 ## [2026-06-24] validation | Read-back verifier merged and passed on main
 
 PR #169 merged to `main` as squash commit `5cfd215`. Post-merge GitHub Actions

@@ -59,6 +59,7 @@ Links use Obsidian `[[wikilink]]` format. Obsidian resolves by filename; path-qu
 
 ## Testing & Metrics
 - [[ny/testing/validation_plan]] — New York fixture, dry-run, and live-write validation plan
+- [[ny/testing/quality_audit]] — New York structural indicators, time coverage, health counters, and open audit items
 - [[testing/crossover_week_baseline]] — Feb 9-13, 2026 as the benchmark; PR-by-PR bug count ledger
 - [[testing/crossover_audit]] — full-window tier-A audit of Sheet1 vs LIS website (ground truth)
 - [[testing/edge_case_registry]] — living catalog of the edge-case SPACE per pipeline stage (Phase-C multi-session replay findings) — full-window tier-A audit of Sheet1 vs LIS website (ground truth)

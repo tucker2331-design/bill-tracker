@@ -24,7 +24,7 @@ separate until we intentionally generalize them.
    - API/source work: [[knowledge/ny_openleg_api_reference]] and [[ny/ideas/data_inventory]]
    - Architecture work: [[ny/architecture/bill_pipeline]]
    - Planning/scoping: [[ny/workflow/source_scoping_protocol]]
-   - Testing/validation: [[ny/testing/validation_plan]]
+   - Testing/validation: [[ny/testing/validation_plan]] and [[ny/testing/quality_audit]]
    - Failures/lessons: [[ny/failures/assumptions_register]]
    - Owner inputs: [[ny/workflow/owner_setup]]
 
@@ -51,6 +51,7 @@ Every NY finding lands in the NY branch of the brain first:
 | Architecture decision | [[ny/architecture/bill_pipeline]] |
 | Source uncertainty or data gap | [[ny/ideas/data_inventory]] |
 | Test result/validation metric | [[ny/testing/validation_plan]] |
+| Standards audit | [[ny/testing/quality_audit]] |
 | Broken assumption/fix lesson | [[ny/failures/assumptions_register]] |
 | Session event/decision | [[ny/log]] |
 | Active focus change | [[ny/state/current_status]] |
