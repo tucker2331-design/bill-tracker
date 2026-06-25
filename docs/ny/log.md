@@ -20,6 +20,9 @@ non-empty `Upcoming JSON` promotion.
 PR #174 bot fold-in: accepted CodeRabbit's workflow-security finding and moved
 all `workflow_dispatch` probe inputs out of shell template interpolation and
 into quoted step environment variables before invoking `ny_calendar_probe.py`.
+Accepted Qodo's follow-up reliability findings: probe runs now use a stable
+workflow concurrency key, probe date windows are validated and capped at 31
+days, and Assembly detail sampling is bounded to `0..10` pages.
 
 ## [2026-06-25] review | PR #173 bot fold-in
 

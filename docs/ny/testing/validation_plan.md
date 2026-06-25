@@ -21,6 +21,9 @@ Current fixture checks:
 - `test_sheet_readback_rejects_completeness_mismatch`
 - `test_sheet_readback_rejects_non_object_completeness_json`
 - `test_parse_sources_rejects_unknown_source_names`
+- `test_validate_probe_window_rejects_malformed_dates`
+- `test_validate_probe_window_rejects_inverted_or_large_ranges`
+- `test_bounded_detail_limit_rejects_unbounded_sampling`
 - `test_env_int_reports_invalid_detail_limit_cleanly`
 - `test_clean_label_preserves_falsy_source_values`
 - `test_result_items_ignores_malformed_result_payload`
@@ -134,11 +137,13 @@ GitHub Actions equivalent: run `New York Calendar Probe` manually. Use:
 | sources | `openleg` first, then `openleg,assembly` for combined health |
 | from_date | active-week or quiet-week start, e.g. `2026-01-01` |
 | to_date | active-week or quiet-week end, e.g. `2026-02-01` |
-| detail_limit | `3` for sampled Assembly detail validation |
+| detail_limit | `3` for sampled Assembly detail validation; accepted range is `0` through `10` |
 
 The workflow uses `NY_OPENLEG_API_KEY`, has no Google Sheets credentials, and
 uploads `ny-calendar-probe.json` as an artifact. The artifact is the review
 surface for Senate agenda coverage before any calendar worker promotion.
+Probe windows must be valid zero-padded `YYYY-MM-DD` ranges, `from_date` must be
+before `to_date`, and the range is capped at 31 days.
 
 The OpenLeg live report should be recorded here and in [[ny/log]] before any
 Senate calendar worker or non-empty `Upcoming JSON` values are built.

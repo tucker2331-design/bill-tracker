@@ -22,6 +22,43 @@ def test_parse_sources_rejects_unknown_source_names():
         raise AssertionError("unknown source name should fail")
 
 
+def test_validate_probe_window_rejects_malformed_dates():
+    try:
+        probe._validate_probe_window("2026-1-01", "2026-02-01")
+    except ValueError as err:
+        assert "from-date must be YYYY-MM-DD" in str(err)
+    else:
+        raise AssertionError("malformed probe date should fail")
+
+
+def test_validate_probe_window_rejects_inverted_or_large_ranges():
+    try:
+        probe._validate_probe_window("2026-02-01", "2026-02-01")
+    except ValueError as err:
+        assert "from-date must be before to-date" in str(err)
+    else:
+        raise AssertionError("inverted probe window should fail")
+
+    try:
+        probe._validate_probe_window("2026-01-01", "2026-02-15")
+    except ValueError as err:
+        assert "31 days or less" in str(err)
+    else:
+        raise AssertionError("oversized probe window should fail")
+
+
+def test_bounded_detail_limit_rejects_unbounded_sampling():
+    assert probe._bounded_detail_limit(0) == 0
+    assert probe._bounded_detail_limit(10) == 10
+    for value in (-1, 11):
+        try:
+            probe._bounded_detail_limit(value)
+        except ValueError as err:
+            assert "detail-limit must be between 0 and 10" in str(err)
+        else:
+            raise AssertionError("out-of-range detail limit should fail")
+
+
 def test_env_int_reports_invalid_detail_limit_cleanly():
     old_value = os.environ.get("NY_CALENDAR_PROBE_DETAIL_LIMIT")
     try:
