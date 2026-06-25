@@ -127,6 +127,19 @@ Live OpenLeg agenda validation still needed:
 NY_OPENLEG_API_KEY=... python3 ny_calendar_probe.py --from-date 2026-01-01 --to-date 2026-02-01
 ```
 
+GitHub Actions equivalent: run `New York Calendar Probe` manually. Use:
+
+| Input | Value |
+|---|---|
+| sources | `openleg` first, then `openleg,assembly` for combined health |
+| from_date | active-week or quiet-week start, e.g. `2026-01-01` |
+| to_date | active-week or quiet-week end, e.g. `2026-02-01` |
+| detail_limit | `3` for sampled Assembly detail validation |
+
+The workflow uses `NY_OPENLEG_API_KEY`, has no Google Sheets credentials, and
+uploads `ny-calendar-probe.json` as an artifact. The artifact is the review
+surface for Senate agenda coverage before any calendar worker promotion.
+
 The OpenLeg live report should be recorded here and in [[ny/log]] before any
 Senate calendar worker or non-empty `Upcoming JSON` values are built.
 
