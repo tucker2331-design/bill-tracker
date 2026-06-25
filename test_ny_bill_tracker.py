@@ -281,6 +281,10 @@ def test_build_ny_bill_records_counts_completeness():
     assert "Assembly calendar/committee data" in completeness["calendar_scope_note"]
 
 
+def test_health_status_uses_standard_info_token_when_clean():
+    assert ny._health_status([]) == "INFO"
+
+
 def test_sheet_readback_verifies_payload_and_completeness():
     class FakeWorksheet:
         def __init__(self, rows, completeness):
@@ -290,14 +294,6 @@ def test_sheet_readback_verifies_payload_and_completeness():
         def row_values(self, row):
             assert row == 1
             return self.rows[0] + ["", self.completeness]
-
-        def acell(self, cell):
-            assert cell == "R1"
-
-            class Cell:
-                value = self.completeness
-
-            return Cell()
 
         def get_values(self, range_name):
             if range_name == "A2:A3":
@@ -323,21 +319,16 @@ def test_sheet_readback_verifies_payload_and_completeness():
 def test_sheet_readback_rejects_stale_tail_cells():
     class FakeWorksheet:
         def row_values(self, row):
-            return list(ny.NY_SHEET_HEADER)
-
-        def acell(self, cell):
-            class Cell:
-                value = ny.json.dumps({
-                    "state": "NY",
-                    "source": "NY OpenLegislation",
-                    "session_year": 2025,
-                    "records_written": 1,
-                    "bills_seen": 1,
-                    "checked_at_utc": "2026-06-24T12:00:00Z",
-                    "health": {"status": "OK"},
-                })
-
-            return Cell()
+            completeness = ny.json.dumps({
+                "state": "NY",
+                "source": "NY OpenLegislation",
+                "session_year": 2025,
+                "records_written": 1,
+                "bills_seen": 1,
+                "checked_at_utc": "2026-06-24T12:00:00Z",
+                "health": {"status": "INFO"},
+            })
+            return list(ny.NY_SHEET_HEADER) + ["", completeness]
 
         def get_values(self, range_name):
             if range_name == "A2:A2":
@@ -354,7 +345,7 @@ def test_sheet_readback_rejects_stale_tail_cells():
         "records_written": 1,
         "bills_seen": 1,
         "checked_at_utc": "2026-06-24T12:00:00Z",
-        "health": {"status": "OK"},
+        "health": {"status": "INFO"},
     }
 
     try:
@@ -368,21 +359,16 @@ def test_sheet_readback_rejects_stale_tail_cells():
 def test_sheet_readback_rejects_completeness_mismatch():
     class FakeWorksheet:
         def row_values(self, row):
-            return list(ny.NY_SHEET_HEADER)
-
-        def acell(self, cell):
-            class Cell:
-                value = ny.json.dumps({
-                    "state": "NY",
-                    "source": "NY OpenLegislation",
-                    "session_year": 2025,
-                    "records_written": 2,
-                    "bills_seen": 1,
-                    "checked_at_utc": "2026-06-24T12:00:00Z",
-                    "health": {"status": "OK"},
-                })
-
-            return Cell()
+            completeness = ny.json.dumps({
+                "state": "NY",
+                "source": "NY OpenLegislation",
+                "session_year": 2025,
+                "records_written": 2,
+                "bills_seen": 1,
+                "checked_at_utc": "2026-06-24T12:00:00Z",
+                "health": {"status": "INFO"},
+            })
+            return list(ny.NY_SHEET_HEADER) + ["", completeness]
 
         def get_values(self, range_name):
             raise AssertionError("bill reads should not run after R1 mismatch")
@@ -395,7 +381,7 @@ def test_sheet_readback_rejects_completeness_mismatch():
         "records_written": 1,
         "bills_seen": 1,
         "checked_at_utc": "2026-06-24T12:00:00Z",
-        "health": {"status": "OK"},
+        "health": {"status": "INFO"},
     }
 
     try:
@@ -404,6 +390,33 @@ def test_sheet_readback_rejects_completeness_mismatch():
         assert "records_written" in str(err)
     else:
         raise AssertionError("Expected R1 completeness read-back failure")
+
+
+def test_sheet_readback_rejects_non_object_completeness_json():
+    class FakeWorksheet:
+        def row_values(self, row):
+            return list(ny.NY_SHEET_HEADER) + ["", "[]"]
+
+        def get_values(self, range_name):
+            raise AssertionError("bill reads should not run after malformed R1 JSON")
+
+    records = [{"bill": "S1"}]
+    completeness = {
+        "state": "NY",
+        "source": "NY OpenLegislation",
+        "session_year": 2025,
+        "records_written": 1,
+        "bills_seen": 1,
+        "checked_at_utc": "2026-06-24T12:00:00Z",
+        "health": {"status": "INFO"},
+    }
+
+    try:
+        ny._verify_written_sheet(FakeWorksheet(), records, completeness)
+    except RuntimeError as err:
+        assert "not an object" in str(err)
+    else:
+        raise AssertionError("Expected non-object R1 completeness read-back failure")
 
 
 def test_get_json_redacts_request_exception_details():

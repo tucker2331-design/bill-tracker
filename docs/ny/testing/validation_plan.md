@@ -15,9 +15,11 @@ Current fixture checks:
 - `test_outcome_uses_structural_veto_messages_without_status_text`
 - `test_unknown_chambers_and_missing_session_are_counted_not_inferred`
 - `test_build_ny_bill_records_counts_completeness`
+- `test_health_status_uses_standard_info_token_when_clean`
 - `test_sheet_readback_verifies_payload_and_completeness`
 - `test_sheet_readback_rejects_stale_tail_cells`
 - `test_sheet_readback_rejects_completeness_mismatch`
+- `test_sheet_readback_rejects_non_object_completeness_json`
 
 Local commands:
 

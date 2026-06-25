@@ -43,6 +43,7 @@ NY_BILL_TRACKER_TAB = os.environ.get("NY_BILL_TRACKER_TAB", "NY_Bill_Tracker")
 DEFAULT_TIMEOUT_SECONDS = 30
 MAX_HTTP_ATTEMPTS = 3
 RETRY_STATUS_CODES = {429, 500, 502, 503, 504}
+TAIL_VERIFY_ROWS = 50
 NY_SHEET_HEADER = [
     "Bill",
     "Title",
@@ -305,7 +306,7 @@ def _health_status(findings: List[Dict[str, Any]]) -> str:
         return "CRITICAL"
     if "WARN" in severities:
         return "WARN"
-    return "OK"
+    return "INFO"
 
 
 def _build_health(counters: Dict[str, int], records_written: int) -> Dict[str, Any]:
@@ -693,23 +694,31 @@ def _verify_written_sheet(
     clear_rows: Optional[int] = None,
 ) -> Dict[str, Any]:
     expected_rows = len(records) + 1
-    tail_end_row = max(clear_rows or (expected_rows + 50), expected_rows)
+    tail_limit_row = expected_rows + TAIL_VERIFY_ROWS
+    tail_end_row = max(min(clear_rows or tail_limit_row, tail_limit_row), expected_rows)
     expected_bills = [str(r["bill"]) for r in records]
 
-    header = _pad_row(ws.row_values(1), len(NY_SHEET_HEADER))
+    row1 = ws.row_values(1)
+    header = _pad_row(row1, len(NY_SHEET_HEADER))
     if header != NY_SHEET_HEADER:
         raise RuntimeError("NY sheet read-back failed: header row does not match writer contract")
 
-    raw_completeness = ws.acell("R1").value or ""
+    raw_completeness = _pad_row(row1, 18)[17]
     try:
         written_completeness = json.loads(raw_completeness)
     except json.JSONDecodeError as err:
         raise RuntimeError("NY sheet read-back failed: R1 completeness JSON is not parseable") from err
+    if not isinstance(written_completeness, dict):
+        raise RuntimeError("NY sheet read-back failed: R1 completeness JSON is not an object")
 
     for key in ("state", "source", "session_year", "records_written", "bills_seen", "checked_at_utc"):
         if written_completeness.get(key) != completeness.get(key):
             raise RuntimeError(f"NY sheet read-back failed: R1 completeness mismatch for {key}")
-    if written_completeness.get("health", {}).get("status") != completeness.get("health", {}).get("status"):
+    written_health = written_completeness.get("health")
+    expected_health = completeness.get("health")
+    if not isinstance(written_health, dict) or not isinstance(expected_health, dict):
+        raise RuntimeError("NY sheet read-back failed: R1 health object mismatch")
+    if written_health.get("status") != expected_health.get("status"):
         raise RuntimeError("NY sheet read-back failed: R1 health status mismatch")
 
     bill_rows = ws.get_values(f"A2:A{expected_rows}") or []
@@ -730,7 +739,7 @@ def _verify_written_sheet(
         "verified_rows": expected_rows,
         "verified_bills": len(expected_bills),
         "verified_tail_through_row": tail_end_row,
-        "health_status": written_completeness.get("health", {}).get("status", ""),
+        "health_status": written_health.get("status", ""),
         "checked_at_utc": written_completeness.get("checked_at_utc", ""),
     }
 

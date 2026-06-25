@@ -9,6 +9,15 @@ status: active
 Append-only, reverse-chronological. Use the same prefix shape as the main log:
 `## [YYYY-MM-DD] <kind> | <title>`.
 
+## [2026-06-24] review | PR #169 bot fold-in
+
+Folded in valid Gemini, Qodo, and CodeRabbit findings on the NY read-back
+verification branch: reused the already-fetched first sheet row for `R1`
+completeness JSON instead of making a separate `acell` call, rejected non-object
+`R1` JSON before `.get()` access, bounded tail verification to the documented
+50-row sentinel range, and changed clean health status from non-standard `OK` to
+standard `INFO`.
+
 ## [2026-06-24] hardening | Automated sheet read-back verification live-tested
 
 Owner confirmed the first live `NY_Bill_Tracker` sheet spot check loaded
