@@ -25,6 +25,8 @@ LOGGER = logging.getLogger(__name__)
 DEFAULT_ASSEMBLY_AGENDA_URL = "https://nyassembly.gov/leg/?sh=agen"
 DEFAULT_ASSEMBLY_FLOOR_URL = "https://nyassembly.gov/leg/?sh=sked"
 DEFAULT_TIMEOUT_SECONDS = 30
+MAX_DETAIL_LIMIT = 10
+MAX_PROBE_DAYS = 31
 SUPPORTED_SOURCES = {"openleg", "assembly"}
 CHAMBER_CODE_MAP = {
     "SENATE": "Senate",
@@ -135,6 +137,35 @@ def _parse_sources(value: str) -> set[str]:
     if not sources:
         raise ValueError("At least one source is required.")
     return sources
+
+
+def _parse_probe_date(value: str, label: str) -> _dt.date:
+    cleaned = _clean_label(value)
+    if len(cleaned) != 10 or cleaned[4] != "-" or cleaned[7] != "-":
+        raise ValueError(f"{label} must be YYYY-MM-DD")
+    try:
+        parsed = _dt.date.fromisoformat(cleaned)
+    except ValueError as err:
+        raise ValueError(f"{label} must be a valid YYYY-MM-DD date") from err
+    if parsed.isoformat() != cleaned:
+        raise ValueError(f"{label} must be zero-padded YYYY-MM-DD")
+    return parsed
+
+
+def _validate_probe_window(from_date: str, to_date: str) -> tuple[str, str]:
+    start = _parse_probe_date(from_date, "from-date")
+    end = _parse_probe_date(to_date, "to-date")
+    if start >= end:
+        raise ValueError("from-date must be before to-date")
+    if (end - start).days > MAX_PROBE_DAYS:
+        raise ValueError(f"probe date range must be {MAX_PROBE_DAYS} days or less")
+    return start.isoformat(), end.isoformat()
+
+
+def _bounded_detail_limit(value: int) -> int:
+    if value < 0 or value > MAX_DETAIL_LIMIT:
+        raise ValueError(f"detail-limit must be between 0 and {MAX_DETAIL_LIMIT}")
+    return value
 
 
 def _env_int(name: str, default: int) -> int:
@@ -579,6 +610,8 @@ def run_probe(
     include_assembly: bool,
     detail_limit: int = 3,
 ) -> Dict[str, Any]:
+    from_date, to_date = _validate_probe_window(from_date, to_date)
+    detail_limit = _bounded_detail_limit(detail_limit)
     audits: List[SourceAudit] = []
     if include_openleg:
         try:
@@ -676,13 +709,16 @@ def main() -> None:
         print(json.dumps({"requirements": checks}, indent=2))
         raise SystemExit(0 if all(check["status"] == "ok" for check in checks) else 1)
 
-    report = run_probe(
-        from_date=args.from_date,
-        to_date=args.to_date,
-        include_openleg=include_openleg,
-        include_assembly=include_assembly,
-        detail_limit=max(0, args.detail_limit),
-    )
+    try:
+        report = run_probe(
+            from_date=args.from_date,
+            to_date=args.to_date,
+            include_openleg=include_openleg,
+            include_assembly=include_assembly,
+            detail_limit=args.detail_limit,
+        )
+    except ValueError as err:
+        raise SystemExit(str(err)) from err
     rendered = json.dumps(report, indent=2, ensure_ascii=False, sort_keys=True)
     if args.output:
         with open(args.output, "w", encoding="utf-8") as handle:
