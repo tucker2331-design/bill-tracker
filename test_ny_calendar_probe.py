@@ -1,4 +1,16 @@
+import logging
+import os
+
 import ny_calendar_probe as probe
+
+
+class _ListHandler(logging.Handler):
+    def __init__(self):
+        super().__init__()
+        self.records = []
+
+    def emit(self, record):
+        self.records.append(record)
 
 
 def test_parse_sources_rejects_unknown_source_names():
@@ -8,6 +20,32 @@ def test_parse_sources_rejects_unknown_source_names():
         assert "typo" in str(err)
     else:
         raise AssertionError("unknown source name should fail")
+
+
+def test_env_int_reports_invalid_detail_limit_cleanly():
+    old_value = os.environ.get("NY_CALENDAR_PROBE_DETAIL_LIMIT")
+    try:
+        os.environ["NY_CALENDAR_PROBE_DETAIL_LIMIT"] = "not-a-number"
+        try:
+            probe._env_int("NY_CALENDAR_PROBE_DETAIL_LIMIT", 3)
+        except SystemExit as err:
+            assert "NY_CALENDAR_PROBE_DETAIL_LIMIT must be an integer" in str(err)
+        else:
+            raise AssertionError("invalid env int should fail")
+    finally:
+        if old_value is None:
+            os.environ.pop("NY_CALENDAR_PROBE_DETAIL_LIMIT", None)
+        else:
+            os.environ["NY_CALENDAR_PROBE_DETAIL_LIMIT"] = old_value
+
+
+def test_clean_label_preserves_falsy_source_values():
+    assert probe._clean_label(0) == "0"
+    assert probe._clean_label(False) == "False"
+
+
+def test_result_items_ignores_malformed_result_payload():
+    assert probe._result_items({"result": "malformed"}) == []
 
 
 def test_parse_openleg_meetings_builds_canonical_senate_rows():
@@ -140,12 +178,57 @@ def test_probe_report_keeps_time_denominator_balanced():
     assert report["totals"]["time_bucket_denominator_drift"] == 0
 
 
-def test_probe_report_flags_empty_probe_as_source_gap_not_no_events():
-    report = probe.build_probe_report([probe._audit("empty", [])])
+def test_probe_report_flags_unknown_time_bucket_drift():
+    audit = probe._audit("fixture", [probe.ProbeRow(time_bucket="mystery")])
+
+    report = probe.build_probe_report([audit])
+
+    assert report["status"] == "CRITICAL"
+    assert report["totals"]["unknown_time_bucket"] == 1
+    assert report["totals"]["time_bucket_denominator_drift"] == 1
+    assert report["health_findings"][0]["code"] == "TIME_BUCKET_DENOMINATOR_DRIFT"
+
+
+def test_probe_report_flags_per_source_gap_not_no_events():
+    audits = [
+        probe._audit("empty_source", [], fetched=True),
+        probe._audit("populated_source", [probe.ProbeRow(time_bucket="exact_clock")], fetched=True),
+    ]
+
+    report = probe.build_probe_report(audits)
 
     assert report["status"] == "WARN"
-    assert report["health_findings"][0]["code"] == "NO_ROWS_OBSERVED"
-    assert "not a claim of no events" in report["health_findings"][0]["message"]
+    assert report["totals"]["rows"] == 1
+    assert report["totals"]["source_gap"] == 1
+    assert any(finding["code"] == "SOURCE_GAP" for finding in report["health_findings"])
+    assert not any(finding["code"] == "NO_ROWS_OBSERVED" for finding in report["health_findings"])
+
+
+def test_probe_report_flags_empty_probe_as_source_gap_not_no_events():
+    report = probe.build_probe_report([probe._audit("empty", [], fetched=True)])
+
+    assert report["status"] == "WARN"
+    codes = [finding["code"] for finding in report["health_findings"]]
+    assert "SOURCE_GAP" in codes
+    assert "NO_ROWS_OBSERVED" in codes
+    assert any("not a claim of no events" in finding["message"] for finding in report["health_findings"])
+
+
+def test_record_source_error_logs_context():
+    handler = _ListHandler()
+    old_level = probe.LOGGER.level
+    try:
+        probe.LOGGER.setLevel(logging.WARNING)
+        probe.LOGGER.addHandler(handler)
+        rendered = probe._record_source_error("fixture_source", RuntimeError("boom"))
+    finally:
+        probe.LOGGER.removeHandler(handler)
+        probe.LOGGER.setLevel(old_level)
+
+    assert rendered == "RuntimeError: boom"
+    assert handler.records
+    assert handler.records[0].levelno == logging.WARNING
+    assert "fixture_source" in handler.records[0].getMessage()
 
 
 def test_run_probe_samples_assembly_detail_pages_without_writes():

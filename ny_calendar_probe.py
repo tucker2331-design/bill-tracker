@@ -12,6 +12,7 @@ import argparse
 import datetime as _dt
 import html.parser
 import json
+import logging
 import os
 from dataclasses import asdict, dataclass
 from typing import Any, Dict, Iterable, List, Optional
@@ -20,6 +21,7 @@ from urllib.parse import parse_qs, urljoin, urlparse
 import requests
 
 
+LOGGER = logging.getLogger(__name__)
 DEFAULT_ASSEMBLY_AGENDA_URL = "https://nyassembly.gov/leg/?sh=agen"
 DEFAULT_ASSEMBLY_FLOOR_URL = "https://nyassembly.gov/leg/?sh=sked"
 DEFAULT_TIMEOUT_SECONDS = 30
@@ -32,6 +34,8 @@ CHAMBER_CODE_MAP = {
     "ASM": "Assembly",
     "A": "Assembly",
 }
+# Official relative-time labels are preserved as relative timing, never treated
+# as exact clock events.
 KNOWN_RELATIVE_TIMES = {
     "OFF THE FLOOR": "OFF_THE_FLOOR",
     "TBA": "TBA",
@@ -133,6 +137,16 @@ def _parse_sources(value: str) -> set[str]:
     return sources
 
 
+def _env_int(name: str, default: int) -> int:
+    raw = os.environ.get(name, "").strip()
+    if not raw:
+        return default
+    try:
+        return int(raw)
+    except ValueError as err:
+        raise SystemExit(f"{name} must be an integer") from err
+
+
 def _parse_html(html: str) -> _AnchorParser:
     parser = _AnchorParser()
     parser.feed(html or "")
@@ -154,6 +168,8 @@ def _sample_sources(rows: List[ProbeRow], limit: int) -> List[str]:
     sources: List[str] = []
     for row in rows:
         if not row.source or row.source in seen:
+            # Structural skip: duplicate or sourceless rows are excluded from
+            # detail sampling and remain visible through source-row counters.
             continue
         seen.add(row.source)
         sources.append(row.source)
@@ -163,11 +179,15 @@ def _sample_sources(rows: List[ProbeRow], limit: int) -> List[str]:
 
 
 def _clean_label(value: Any) -> str:
-    return " ".join(str(value or "").replace("\xa0", " ").split()).strip()
+    if value is None:
+        return ""
+    return " ".join(str(value).replace("\xa0", " ").split()).strip()
 
 
 def _clean_bill(value: Any) -> str:
-    return str(value or "").replace(" ", "").upper().strip()
+    if value is None:
+        return ""
+    return str(value).replace(" ", "").upper().strip()
 
 
 def _first_present(source: Dict[str, Any], keys: Iterable[str]) -> str:
@@ -227,12 +247,13 @@ def _items(container: Any) -> List[Any]:
 
 
 def _norm_chamber(value: Any) -> str:
-    raw = str(value or "").strip().upper()
+    raw = _clean_label(value).upper()
     return CHAMBER_CODE_MAP.get(raw, "")
 
 
 def _result_items(payload: Dict[str, Any]) -> List[Dict[str, Any]]:
-    result = payload.get("result") if isinstance(payload.get("result"), dict) else payload.get("result")
+    raw_result = payload.get("result")
+    result = raw_result if isinstance(raw_result, (dict, list)) else {}
     items = _items(result)
     return [item for item in items if isinstance(item, dict)]
 
@@ -292,12 +313,15 @@ def parse_assembly_agenda_index(html: str, *, source_url: str) -> List[ProbeRow]
     for link in parser.links:
         query = _query_map(link.href)
         if query.get("sh", "").lower() != "agen2":
+            # Structural skip: only agenda-detail links belong in this parser.
             continue
         agenda_id = query.get("agenda", "")
         agenda_no = query.get("ano", "")
         committee = _clean_label(query.get("com", ""))
         key = (agenda_id, agenda_no, committee)
         if not agenda_id or key in seen:
+            # Structural skip: source gaps are counted per audited source, while
+            # malformed/duplicate links are ignored as non-rows.
             continue
         seen.add(key)
         rows.append(ProbeRow(
@@ -331,6 +355,7 @@ def parse_assembly_agenda_detail(html: str, *, source_url: str) -> List[ProbeRow
         query = _query_map(link.href)
         bill = _clean_bill(query.get("bn") or query.get("billno") or query.get("bill"))
         if not bill or bill in seen:
+            # Structural skip: only first-observed bill links are audit rows.
             continue
         seen.add(bill)
         rows.append(ProbeRow(
@@ -358,11 +383,14 @@ def parse_assembly_floor_index(html: str, *, source_url: str) -> List[ProbeRow]:
     for link in parser.links:
         query = _query_map(link.href)
         if query.get("sh", "").lower() != "sked2":
+            # Structural skip: only floor-calendar detail links belong here.
             continue
         calnum = query.get("calnum", "")
         calver = query.get("calver", "")
         key = (calnum, calver)
         if not calnum or key in seen:
+            # Structural skip: source gaps are per audited source; duplicate
+            # calendar links are not emitted as rows.
             continue
         seen.add(key)
         rows.append(ProbeRow(
@@ -391,6 +419,7 @@ def parse_assembly_floor_detail(html: str, *, source_url: str) -> List[ProbeRow]
         link_query = _query_map(link.href)
         bill = _clean_bill(link_query.get("bn") or link_query.get("billno") or link_query.get("bill"))
         if not bill or bill in seen:
+            # Structural skip: only first-observed bill links are audit rows.
             continue
         seen.add(bill)
         rows.append(ProbeRow(
@@ -439,7 +468,6 @@ def _counter_for_rows(rows: List[ProbeRow]) -> Dict[str, int]:
         + counters["no_clock_source"]
         + counters["terminal_or_timeless"]
         + counters["source_gap"]
-        + counters["unknown_time_bucket"]
     )
     counters["time_bucket_denominator"] = denominator
     counters["time_bucket_denominator_drift"] = 1 if denominator != len(rows) else 0
@@ -447,13 +475,17 @@ def _counter_for_rows(rows: List[ProbeRow]) -> Dict[str, int]:
 
 
 def _audit(source: str, rows: List[ProbeRow], *, fetched: bool = False, errors: Optional[List[str]] = None) -> SourceAudit:
+    parsed = not errors
+    counters = _counter_for_rows(rows)
+    if fetched and parsed and not rows:
+        counters["source_gap"] = 1
     return SourceAudit(
         source=source,
         fetched=fetched,
-        parsed=not errors,
+        parsed=parsed,
         rows=len(rows),
         errors=errors or [],
-        counters=_counter_for_rows(rows),
+        counters=counters,
         examples=[asdict(row) for row in rows[:5]],
     )
 
@@ -470,6 +502,7 @@ def build_probe_report(audits: List[SourceAudit]) -> Dict[str, Any]:
         "no_clock_source": 0,
         "terminal_or_timeless": 0,
         "source_gap": 0,
+        "unknown_time_bucket": 0,
         "time_bucket_denominator_drift": 0,
     }
     for audit in audits:
@@ -482,7 +515,14 @@ def build_probe_report(audits: List[SourceAudit]) -> Dict[str, Any]:
                 "source": audit.source,
                 "errors": audit.errors,
             })
-        for key in ("exact_clock", "relative_time", "no_clock_source", "terminal_or_timeless", "source_gap"):
+        if audit.fetched and audit.parsed and audit.rows == 0:
+            health_findings.append({
+                "severity": "WARN",
+                "code": "SOURCE_GAP",
+                "source": audit.source,
+                "message": "Source fetched and parsed but produced zero rows; this is not a claim of no events.",
+            })
+        for key in ("exact_clock", "relative_time", "no_clock_source", "terminal_or_timeless", "source_gap", "unknown_time_bucket"):
             totals[key] += int(audit.counters.get(key, 0))
         if audit.counters.get("time_bucket_denominator_drift"):
             totals["time_bucket_denominator_drift"] += 1
@@ -521,6 +561,16 @@ def _fetch_text(session: requests.Session, url: str) -> str:
     return response.text
 
 
+def _record_source_error(source: str, err: Exception) -> str:
+    LOGGER.warning(
+        "NY calendar probe source failed source=%s error_type=%s",
+        source,
+        type(err).__name__,
+        exc_info=True,
+    )
+    return f"{type(err).__name__}: {err}"
+
+
 def run_probe(
     *,
     from_date: str,
@@ -539,7 +589,7 @@ def run_probe(
             payload = client.get_json(path)
             audits.append(_audit("openleg_agenda_meetings", parse_openleg_meetings(payload, source_path=path), fetched=True))
         except Exception as err:
-            audits.append(_audit("openleg_agenda_meetings", [], fetched=False, errors=[f"{type(err).__name__}: {err}"]))
+            audits.append(_audit("openleg_agenda_meetings", [], fetched=False, errors=[_record_source_error("openleg_agenda_meetings", err)]))
 
     if include_assembly:
         session = requests.Session()
@@ -553,7 +603,7 @@ def run_probe(
             audits.append(_audit("assembly_agenda_index", agenda_rows, fetched=True))
         except Exception as err:
             agenda_rows = []
-            audits.append(_audit("assembly_agenda_index", [], fetched=False, errors=[f"{type(err).__name__}: {err}"]))
+            audits.append(_audit("assembly_agenda_index", [], fetched=False, errors=[_record_source_error("assembly_agenda_index", err)]))
 
         try:
             html = _fetch_text(session, DEFAULT_ASSEMBLY_FLOOR_URL)
@@ -561,7 +611,7 @@ def run_probe(
             audits.append(_audit("assembly_floor_index", floor_rows, fetched=True))
         except Exception as err:
             floor_rows = []
-            audits.append(_audit("assembly_floor_index", [], fetched=False, errors=[f"{type(err).__name__}: {err}"]))
+            audits.append(_audit("assembly_floor_index", [], fetched=False, errors=[_record_source_error("assembly_floor_index", err)]))
 
         if detail_limit > 0 and agenda_rows:
             detail_rows: List[ProbeRow] = []
@@ -570,7 +620,7 @@ def run_probe(
                 try:
                     detail_rows.extend(parse_assembly_agenda_detail(_fetch_text(session, url), source_url=url))
                 except Exception as err:
-                    detail_errors.append(f"{url}: {type(err).__name__}: {err}")
+                    detail_errors.append(f"{url}: {_record_source_error('assembly_agenda_detail_sample', err)}")
             audits.append(_audit("assembly_agenda_detail_sample", detail_rows, fetched=True, errors=detail_errors))
 
         if detail_limit > 0 and floor_rows:
@@ -580,7 +630,7 @@ def run_probe(
                 try:
                     detail_rows.extend(parse_assembly_floor_detail(_fetch_text(session, url), source_url=url))
                 except Exception as err:
-                    detail_errors.append(f"{url}: {type(err).__name__}: {err}")
+                    detail_errors.append(f"{url}: {_record_source_error('assembly_floor_detail_sample', err)}")
             audits.append(_audit("assembly_floor_detail_sample", detail_rows, fetched=True, errors=detail_errors))
 
     return build_probe_report(audits)
@@ -607,7 +657,7 @@ def main() -> None:
     parser.add_argument(
         "--detail-limit",
         type=int,
-        default=int(os.environ.get("NY_CALENDAR_PROBE_DETAIL_LIMIT", "3")),
+        default=_env_int("NY_CALENDAR_PROBE_DETAIL_LIMIT", 3),
         help="Assembly agenda/floor detail pages to sample from each index. Use 0 for index-only.",
     )
     parser.add_argument("--check-config", action="store_true", help="Print required runtime inputs and exit.")

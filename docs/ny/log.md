@@ -9,6 +9,16 @@ status: active
 Append-only, reverse-chronological. Use the same prefix shape as the main log:
 `## [YYYY-MM-DD] <kind> | <title>`.
 
+## [2026-06-25] review | PR #173 bot fold-in
+
+Folded in valid Gemini, Qodo, and CodeRabbit findings on the read-only calendar
+probe branch. The probe now preserves falsy source values in labels, ignores
+malformed OpenLeg `result` payloads safely, fails invalid
+`NY_CALENDAR_PROBE_DETAIL_LIMIT` values with a controlled message, logs source
+probe exceptions before storing typed audit errors, warns on per-source
+zero-row gaps, surfaces unknown time buckets in totals, and makes denominator
+drift reachable when a row lands outside the known bucket set.
+
 ## [2026-06-25] implementation | Read-only NY calendar probe scaffolded
 
 Added `ny_calendar_probe.py` and `test_ny_calendar_probe.py` as the first

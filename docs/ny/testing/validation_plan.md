@@ -21,13 +21,19 @@ Current fixture checks:
 - `test_sheet_readback_rejects_completeness_mismatch`
 - `test_sheet_readback_rejects_non_object_completeness_json`
 - `test_parse_sources_rejects_unknown_source_names`
+- `test_env_int_reports_invalid_detail_limit_cleanly`
+- `test_clean_label_preserves_falsy_source_values`
+- `test_result_items_ignores_malformed_result_payload`
 - `test_parse_openleg_meetings_builds_canonical_senate_rows`
 - `test_parse_openleg_meetings_counts_missing_time_explicitly`
 - `test_parse_assembly_agenda_index_uses_structural_detail_links`
 - `test_parse_assembly_agenda_detail_preserves_relative_time_label`
 - `test_parse_assembly_floor_index_and_detail_mark_timeless_rows`
 - `test_probe_report_keeps_time_denominator_balanced`
+- `test_probe_report_flags_unknown_time_bucket_drift`
+- `test_probe_report_flags_per_source_gap_not_no_events`
 - `test_probe_report_flags_empty_probe_as_source_gap_not_no_events`
+- `test_record_source_error_logs_context`
 - `test_run_probe_samples_assembly_detail_pages_without_writes`
 
 Local commands:
@@ -88,7 +94,7 @@ PYTHONDONTWRITEBYTECODE=1 python3 ny_calendar_probe.py --sources assembly --deta
 
 | Metric | Result |
 |---|---|
-| checked_at_utc | `2026-06-25T04:59:37Z` |
+| checked_at_utc | `2026-06-25T15:00:12Z` |
 | status | `INFO` |
 | production_write | `false` |
 | total rows | 365 |
@@ -103,6 +109,8 @@ PYTHONDONTWRITEBYTECODE=1 python3 ny_calendar_probe.py --sources assembly --deta
 | relative_time | 154 |
 | no_clock_source | 17 |
 | terminal_or_timeless | 194 |
+| source_gap | 0 |
+| unknown_time_bucket | 0 |
 | time_bucket_denominator_drift | 0 |
 
 Interpretation: the official Assembly agenda/floor pages expose durable
