@@ -49,3 +49,5 @@ or generalize only after both systems are stable enough to compare cleanly.
 
 - `ny_bill_tracker.py` - first New York bill engine, separate from `bill_tracker.py`
 - `test_ny_bill_tracker.py` - fixture-based unit smoke tests for the New York flattener
+- `ny_calendar_probe.py` - read-only calendar source probe; no sheet writes and no `Upcoming JSON` promotion
+- `test_ny_calendar_probe.py` - fixture-based tests for NY calendar source parsing and audit counters
