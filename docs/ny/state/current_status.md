@@ -11,7 +11,8 @@ state-specific source contracts clearly separated in the brain and code.
 
 ## Active focus
 
-First pass is the New York bill-record engine, not the UI. The engine has now
+First pass is the New York bill-record engine plus a read-only calendar source
+probe, not the UI. The bill engine has now
 passed full-session dry-run, first live-write validation, branch-level
 production read-back verification, bot review, merge, and post-merge main
 validation. The once-daily workflow schedule is live on `main` as of PR #170
@@ -42,6 +43,12 @@ validation. The once-daily workflow schedule is live on `main` as of PR #170
 - GitHub Actions workflow: `New York Bill Tracker` with manual
   `check-config`, `dry-run`, and `write` modes plus a once-daily production
   write schedule.
+- Read-only calendar probe scaffold: `ny_calendar_probe.py` parses OpenLeg
+  Senate agenda-meeting JSON and official Assembly agenda/floor-calendar link
+  structures into audit rows and health counters without writing sheets.
+- Live Assembly probe validation passed on 2026-06-25: 365 rows across agenda
+  index, floor index, agenda-detail sample, and floor-detail sample sources;
+  zero source errors; zero health findings; zero time-bucket denominator drift.
 
 ## Important source caveat
 
@@ -64,7 +71,8 @@ witness or anchor sources until validated.
 
 ## Next steps
 
-1. Scope durable terminal-outcome parity for bills currently counted as `unknown_structural`, without status-text inference.
-2. Build a read-only NY calendar source probe before promoting any calendar rows.
-3. Build a session-rollover plan before the next New York legislative session.
-4. Revisit cadence after frontend and incremental-update scoping.
+1. Run the read-only NY calendar source probe live against OpenLeg with `NY_OPENLEG_API_KEY`, then record Senate agenda coverage metrics.
+2. Design the first NY calendar worker from the validated probe contract before promoting any non-empty `Upcoming JSON`.
+3. Scope durable terminal-outcome parity for bills currently counted as `unknown_structural`, without status-text inference.
+4. Build a session-rollover plan before the next New York legislative session.
+5. Revisit cadence after frontend and incremental-update scoping.

@@ -1,6 +1,6 @@
 ---
 tags: [ny, testing, validation]
-updated: 2026-06-24
+updated: 2026-06-25
 status: active
 ---
 
@@ -20,13 +20,37 @@ Current fixture checks:
 - `test_sheet_readback_rejects_stale_tail_cells`
 - `test_sheet_readback_rejects_completeness_mismatch`
 - `test_sheet_readback_rejects_non_object_completeness_json`
+- `test_parse_sources_rejects_unknown_source_names`
+- `test_env_int_reports_invalid_detail_limit_cleanly`
+- `test_clean_label_preserves_falsy_source_values`
+- `test_result_items_ignores_malformed_result_payload`
+- `test_parse_openleg_meetings_builds_canonical_senate_rows`
+- `test_parse_openleg_meetings_counts_missing_time_explicitly`
+- `test_parse_openleg_meetings_keeps_separate_date_and_time_fields`
+- `test_parse_assembly_agenda_index_uses_structural_detail_links`
+- `test_parse_assembly_agenda_detail_preserves_relative_time_label`
+- `test_parse_assembly_floor_index_and_detail_mark_timeless_rows`
+- `test_probe_report_keeps_time_denominator_balanced`
+- `test_probe_report_flags_unknown_time_bucket_drift`
+- `test_probe_report_flags_per_source_gap_not_no_events`
+- `test_probe_report_flags_empty_probe_as_source_gap_not_no_events`
+- `test_record_source_error_logs_context`
+- `test_run_probe_samples_assembly_detail_pages_without_writes`
 
 Local commands:
 
 ```bash
 PYTHONPYCACHEPREFIX=/tmp/bill-tracker-pycache python3 -m py_compile ny_bill_tracker.py test_ny_bill_tracker.py
+PYTHONPYCACHEPREFIX=/tmp/bill-tracker-pycache python3 -m py_compile ny_calendar_probe.py test_ny_calendar_probe.py
 PYTHONPYCACHEPREFIX=/tmp/bill-tracker-pycache python3 - <<'PY'
 import test_ny_bill_tracker as t
+for name in dir(t):
+    if name.startswith("test_"):
+        getattr(t, name)()
+        print(f"PASS {name}")
+PY
+PYTHONDONTWRITEBYTECODE=1 python3 - <<'PY'
+import test_ny_calendar_probe as t
 for name in dir(t):
     if name.startswith("test_"):
         getattr(t, name)()
@@ -35,6 +59,76 @@ PY
 ```
 
 `pytest` is not installed in the current local environment as of 2026-06-24.
+
+## Calendar source probe
+
+The first NY calendar implementation is a read-only source probe:
+`ny_calendar_probe.py`.
+
+It must not write Google Sheets and must not populate `Upcoming JSON`. Its job
+is to prove or reject source shapes before calendar promotion:
+
+- OpenLeg Senate agenda meeting JSON via
+  `/api/3/agendas/meetings/{fromDateTime}/{toDateTime}`
+- official Assembly committee agenda index/detail links
+- official Assembly floor calendar index/detail links
+- explicit time buckets: `exact_clock`, `relative_time`, `no_clock_source`,
+  `terminal_or_timeless`, and `source_gap`
+- visible health findings for empty probes and denominator drift
+
+Local validation on 2026-06-25:
+
+```bash
+PYTHONPYCACHEPREFIX=/private/tmp/pycache python3 -m py_compile ny_calendar_probe.py test_ny_calendar_probe.py
+PYTHONDONTWRITEBYTECODE=1 python3 -c "import test_ny_calendar_probe as t; [getattr(t, name)() for name in sorted(dir(t)) if name.startswith('test_')]; print('test_ny_calendar_probe direct tests passed')"
+PYTHONDONTWRITEBYTECODE=1 python3 ny_calendar_probe.py --check-config --sources assembly
+```
+
+Result: passed. Local `pytest` is still unavailable, so calendar tests were run
+by direct function invocation.
+
+Live Assembly validation on 2026-06-25:
+
+```bash
+PYTHONDONTWRITEBYTECODE=1 python3 ny_calendar_probe.py --sources assembly --detail-limit 3
+```
+
+| Metric | Result |
+|---|---|
+| checked_at_utc | `2026-06-25T15:00:12Z` |
+| status | `INFO` |
+| production_write | `false` |
+| total rows | 365 |
+| sources audited | 4 |
+| sources_with_errors | 0 |
+| health_findings | none |
+| assembly_agenda_index rows | 17 |
+| assembly_floor_index rows | 5 |
+| assembly_agenda_detail_sample rows | 154 |
+| assembly_floor_detail_sample rows | 189 |
+| exact_clock | 0 |
+| relative_time | 154 |
+| no_clock_source | 17 |
+| terminal_or_timeless | 194 |
+| source_gap | 0 |
+| unknown_time_bucket | 0 |
+| time_bucket_denominator_drift | 0 |
+
+Interpretation: the official Assembly agenda/floor pages expose durable
+structural links for agenda and floor-calendar rows. The sample detail pass
+found agenda bill links with explicit `OFF_THE_FLOOR` relative timing and floor
+calendar bill links that are structurally release-only, not clocked events.
+This proves enough source shape for a later calendar worker design, but it does
+not yet promote rows into `Upcoming JSON`.
+
+Live OpenLeg agenda validation still needed:
+
+```bash
+NY_OPENLEG_API_KEY=... python3 ny_calendar_probe.py --from-date 2026-01-01 --to-date 2026-02-01
+```
+
+The OpenLeg live report should be recorded here and in [[ny/log]] before any
+Senate calendar worker or non-empty `Upcoming JSON` values are built.
 
 ## Pre-live config check
 

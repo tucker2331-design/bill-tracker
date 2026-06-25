@@ -9,6 +9,43 @@ status: active
 Append-only, reverse-chronological. Use the same prefix shape as the main log:
 `## [YYYY-MM-DD] <kind> | <title>`.
 
+## [2026-06-25] review | PR #173 bot fold-in
+
+Folded in valid Gemini, Qodo, and CodeRabbit findings on the read-only calendar
+probe branch. The probe now preserves falsy source values in labels, ignores
+malformed OpenLeg `result` payloads safely, fails invalid
+`NY_CALENDAR_PROBE_DETAIL_LIMIT` values with a controlled message, logs source
+probe exceptions before storing typed audit errors, warns on per-source
+zero-row gaps, surfaces unknown time buckets in totals, and makes denominator
+drift reachable when a row lands outside the known bucket set.
+
+Second CodeRabbit fold-in separated OpenLeg datetime fields from time-only
+`meetingTime` fields so a standalone clock label cannot overwrite
+`meetingDate` during Senate agenda parsing.
+
+## [2026-06-25] implementation | Read-only NY calendar probe scaffolded
+
+Added `ny_calendar_probe.py` and `test_ny_calendar_probe.py` as the first
+calendar-engine implementation step after [[ny/architecture/calendar_source_options]].
+The probe parses OpenLeg Senate agenda-meeting JSON plus official Assembly
+agenda/floor-calendar link structures into audit rows, explicit time buckets,
+and health counters. It performs no Google Sheet writes and does not populate
+`Upcoming JSON`.
+
+Local validation passed by direct fixture invocation because `pytest` is not
+installed locally: syntax compile with `PYTHONPYCACHEPREFIX=/private/tmp/pycache`,
+`test_ny_calendar_probe` direct function calls, and
+`ny_calendar_probe.py --check-config --sources assembly`.
+
+Live Assembly validation also passed on 2026-06-25 with
+`ny_calendar_probe.py --sources assembly --detail-limit 3`: 365 rows across
+four audited source buckets, zero source errors, zero health findings, and zero
+time-bucket denominator drift. The split was 17 agenda-index rows, 5
+floor-index rows, 154 agenda-detail bill rows with `OFF_THE_FLOOR` relative
+timing, and 189 floor-calendar bill rows marked `CALENDAR_RELEASE_ONLY`.
+OpenLeg live agenda validation remains separate because it requires
+`NY_OPENLEG_API_KEY`.
+
 ## [2026-06-25] scoping | New York calendar source options documented
 
 Scoped the safest path for rebuilding the Virginia-style calendar in New York.
