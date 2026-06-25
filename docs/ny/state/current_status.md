@@ -14,7 +14,8 @@ state-specific source contracts clearly separated in the brain and code.
 First pass is the New York bill-record engine, not the UI. The engine has now
 passed full-session dry-run, first live-write validation, branch-level
 production read-back verification, bot review, merge, and post-merge main
-validation:
+validation. The once-daily workflow schedule is live on `main` as of PR #170
+(`7cd08c8`):
 
 - `ny_bill_tracker.py` is a new file and does not mutate the Virginia `bill_tracker.py` path.
 - Output defaults to a separate `NY_Bill_Tracker` sheet tab.
@@ -57,7 +58,7 @@ health metrics instead of being inferred from status text.
 
 ## Next steps
 
-1. Merge the once-daily workflow schedule after review.
-2. Scope durable terminal-outcome parity for bills currently counted as `unknown_structural`, without status-text inference.
-3. Validate a meeting/calendar source for Assembly before building a NY calendar worker.
-4. Build a session-rollover plan before the next New York legislative session.
+1. Scope durable terminal-outcome parity for bills currently counted as `unknown_structural`, without status-text inference.
+2. Validate a meeting/calendar source for Assembly before building a NY calendar worker.
+3. Build a session-rollover plan before the next New York legislative session.
+4. Revisit cadence after frontend and incremental-update scoping.

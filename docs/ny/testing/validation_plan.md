@@ -209,6 +209,9 @@ Daily cadence:
 | Manual modes retained | `check-config`, `dry-run`, `write` |
 | Production write ref | `refs/heads/main` only |
 | Production concurrency | scheduled and manual writes serialize; branch probes do not block writes |
+| Merge PR | `#170` |
+| Merge commit | `7cd08c8` |
+| Post-merge check-config | GitHub Actions run `28139043035`, passed |
 
 This is a conservative production heartbeat. Increase frequency only after a
 fresh OpenLeg source/rate review and an incremental-update plan.

@@ -27,6 +27,10 @@ actionable ones: added [[ny/testing/quality_audit]] to the root [[index]],
 restricted production NY writes to `refs/heads/main`, and split concurrency so
 manual config/dry-run probes cannot queue ahead of scheduled writes.
 
+PR #170 merged to `main` as squash commit `7cd08c8`. Post-merge GitHub Actions
+run `28139043035` passed in `check-config` mode on `main`, confirming the merged
+workflow is dispatchable and the non-write path skips production writes.
+
 ## [2026-06-24] validation | Read-back verifier merged and passed on main
 
 PR #169 merged to `main` as squash commit `5cfd215`. Post-merge GitHub Actions
