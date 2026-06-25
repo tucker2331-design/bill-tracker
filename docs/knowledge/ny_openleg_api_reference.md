@@ -1,6 +1,6 @@
 ---
 tags: [knowledge, ny, api, openleg]
-updated: 2026-06-24
+updated: 2026-06-25
 status: active
 ---
 
@@ -49,8 +49,12 @@ Available Senate-centered endpoints:
 - `GET /api/3/calendars/{year}`
 - `GET /api/3/agendas/{year}/{agendaNo}`
 - `GET /api/3/agendas/{year}`
-- `GET /api/3/agendas/meetings/{from datetime}/{to datetime}`
+- `GET /api/3/agendas/meetings/{fromDateTime}/{toDateTime}`
 - `GET /api/3/committees/{session}/senate`
+
+`fromDateTime` and `toDateTime` are date-time path parameters. Keep this
+placeholder spelling in NY docs so future probe code has one canonical endpoint
+shape to implement.
 
 Implication: New York's first product backend must not claim full state meeting coverage from these sources alone. `ny_bill_tracker.py` keeps bill-level `committeeAgendas` as provenance, but leaves `upcoming` empty until a meeting-source pass can be validated.
 

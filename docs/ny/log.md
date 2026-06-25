@@ -1,6 +1,6 @@
 ---
 tags: [ny, log, meta]
-updated: 2026-06-24
+updated: 2026-06-25
 status: active
 ---
 
@@ -8,6 +8,25 @@ status: active
 
 Append-only, reverse-chronological. Use the same prefix shape as the main log:
 `## [YYYY-MM-DD] <kind> | <title>`.
+
+## [2026-06-25] scoping | New York calendar source options documented
+
+Scoped the safest path for rebuilding the Virginia-style calendar in New York.
+Added [[ny/architecture/calendar_source_options]] as the primary architecture
+note: Senate begins with OpenLeg agenda meetings and Senate calendar APIs;
+Assembly uses official Assembly agenda/floor calendar pages through
+DOM/link-structured extraction after a probe; public hearings, session
+calendars, and standing committee schedules start as witness or anchor sources.
+The page records explicit time policy, row origins, health counters, rejected
+shortcuts, and a read-only source-probe plan before production `Upcoming JSON`.
+
+Bot fold-in on PR #172 accepted Qodo's frontmatter/root-index isolation and
+endpoint-consistency findings plus Gemini's metrics-denominator cautions:
+`docs/index.md` now has complete frontmatter and only links to NY strategy,
+OpenLeg agenda-meetings placeholders use one canonical date-time spelling, and
+calendar health metrics are documented as final audit/completeness outputs
+rather than stale main-table rows. Timeless-by-design rows must occupy explicit
+denominator buckets.
 
 ## [2026-06-24] audit | Daily schedule and quality audit scoped
 

@@ -1,6 +1,6 @@
 ---
 tags: [ny, testing, audit, quality]
-updated: 2026-06-24
+updated: 2026-06-25
 status: active
 ---
 
@@ -123,8 +123,9 @@ Workflow-level production guardrails:
 
 1. Terminal outcome parity: find a durable structural OpenLeg field or keep the
    unresolved product state explicit.
-2. Calendar/time parity: validate a both-chamber meeting source before writing
-   any NY calendar worker or non-empty `Upcoming` values.
+2. Calendar/time parity: validate the staged source plan in
+   [[ny/architecture/calendar_source_options]] before writing any NY calendar
+   worker or non-empty `Upcoming` values.
 3. Session rollover: the daily workflow currently defaults to session year
    `2025`. Build an explicit rollover strategy before the next NY session.
 4. Cadence/rate limits: daily full-session refresh is acceptable based on

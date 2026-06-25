@@ -1,6 +1,6 @@
 ---
 tags: [ny, index, meta]
-updated: 2026-06-24
+updated: 2026-06-25
 status: active
 ---
 
@@ -23,6 +23,7 @@ or generalize only after both systems are stable enough to compare cleanly.
 ## Architecture
 
 - [[ny/architecture/bill_pipeline]] - OpenLeg bill engine data flow and output contract
+- [[ny/architecture/calendar_source_options]] - source options and recommended phased architecture for a New York calendar spine
 
 ## Workflow
 

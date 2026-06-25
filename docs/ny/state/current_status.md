@@ -1,6 +1,6 @@
 ---
 tags: [ny, state, live]
-updated: 2026-06-24
+updated: 2026-06-25
 status: active
 ---
 
@@ -56,9 +56,15 @@ uses structural `signed` and `vetoMessages` fields; bills without a proven
 structural terminal marker are labeled `unknown_structural` and counted in
 health metrics instead of being inferred from status text.
 
+Calendar scoping has a dedicated architecture page:
+[[ny/architecture/calendar_source_options]]. The recommended path is Senate
+OpenLeg agenda/calendar APIs first, Assembly official agenda/floor calendar
+DOM probes second, and public hearing/session/standing-schedule documents as
+witness or anchor sources until validated.
+
 ## Next steps
 
 1. Scope durable terminal-outcome parity for bills currently counted as `unknown_structural`, without status-text inference.
-2. Validate a meeting/calendar source for Assembly before building a NY calendar worker.
+2. Build a read-only NY calendar source probe before promoting any calendar rows.
 3. Build a session-rollover plan before the next New York legislative session.
 4. Revisit cadence after frontend and incremental-update scoping.
