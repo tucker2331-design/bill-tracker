@@ -17,6 +17,10 @@ does not receive Google Sheets credentials, has no schedule, and uploads the
 probe JSON as an artifact for review before any Senate calendar worker or
 non-empty `Upcoming JSON` promotion.
 
+PR #174 bot fold-in: accepted CodeRabbit's workflow-security finding and moved
+all `workflow_dispatch` probe inputs out of shell template interpolation and
+into quoted step environment variables before invoking `ny_calendar_probe.py`.
+
 ## [2026-06-25] review | PR #173 bot fold-in
 
 Folded in valid Gemini, Qodo, and CodeRabbit findings on the read-only calendar

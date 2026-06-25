@@ -50,24 +50,29 @@ jobs:
       - name: Check probe runtime configuration
         env:
           NY_OPENLEG_API_KEY: ${{ secrets.NY_OPENLEG_API_KEY }}
-        run: python ny_calendar_probe.py --check-config --sources "${{ inputs.sources }}"
+          PROBE_SOURCES: ${{ inputs.sources }}
+        run: python ny_calendar_probe.py --check-config --sources "$PROBE_SOURCES"
 
       - name: Run read-only calendar probe
         env:
           NY_OPENLEG_API_KEY: ${{ secrets.NY_OPENLEG_API_KEY }}
+          PROBE_SOURCES: ${{ inputs.sources }}
+          PROBE_FROM_DATE: ${{ inputs.from_date }}
+          PROBE_TO_DATE: ${{ inputs.to_date }}
+          PROBE_DETAIL_LIMIT: ${{ inputs.detail_limit }}
         run: |
           mkdir -p artifacts
           python ny_calendar_probe.py \
-            --sources "${{ inputs.sources }}" \
-            --from-date "${{ inputs.from_date }}" \
-            --to-date "${{ inputs.to_date }}" \
-            --detail-limit "${{ inputs.detail_limit }}" \
+            --sources "$PROBE_SOURCES" \
+            --from-date "$PROBE_FROM_DATE" \
+            --to-date "$PROBE_TO_DATE" \
+            --detail-limit "$PROBE_DETAIL_LIMIT" \
             --output artifacts/ny-calendar-probe.json
 
       - name: Upload probe JSON
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
-          name: ny-calendar-probe-${{ inputs.sources }}-${{ inputs.from_date }}-${{ inputs.to_date }}
+          name: ny-calendar-probe-${{ github.run_id }}
           path: artifacts/ny-calendar-probe.json
           if-no-files-found: error
           retention-days: 30
