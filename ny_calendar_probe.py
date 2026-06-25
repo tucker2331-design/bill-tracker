@@ -272,9 +272,9 @@ def parse_openleg_meetings(payload: Dict[str, Any], *, source_path: str) -> List
             or _norm_chamber(_nested_name(meeting, "committeeId", "chamber"))
             or "Senate"
         )
-        date_time = _first_present(meeting, ("meetingDateTime", "dateTime", "startDateTime", "meetingTime"))
+        date_time = _first_present(meeting, ("meetingDateTime", "dateTime", "startDateTime"))
         date = _date_part(date_time) or _first_present(meeting, ("meetingDate", "date"))
-        time = _time_part(date_time) or _first_present(meeting, ("time",))
+        time = _time_part(date_time) or _first_present(meeting, ("meetingTime", "time"))
         agenda_id = meeting.get("agendaId") if isinstance(meeting.get("agendaId"), dict) else {}
         agenda_order = _first_present(agenda_id, ("number", "agendaNo"))
         if not agenda_order:

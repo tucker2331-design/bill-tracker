@@ -26,6 +26,7 @@ Current fixture checks:
 - `test_result_items_ignores_malformed_result_payload`
 - `test_parse_openleg_meetings_builds_canonical_senate_rows`
 - `test_parse_openleg_meetings_counts_missing_time_explicitly`
+- `test_parse_openleg_meetings_keeps_separate_date_and_time_fields`
 - `test_parse_assembly_agenda_index_uses_structural_detail_links`
 - `test_parse_assembly_agenda_detail_preserves_relative_time_label`
 - `test_parse_assembly_floor_index_and_detail_mark_timeless_rows`

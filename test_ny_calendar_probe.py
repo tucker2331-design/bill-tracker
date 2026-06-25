@@ -95,6 +95,26 @@ def test_parse_openleg_meetings_counts_missing_time_explicitly():
     assert rows[0].time_bucket == "no_clock_source"
 
 
+def test_parse_openleg_meetings_keeps_separate_date_and_time_fields():
+    payload = {
+        "result": {
+            "items": [
+                {
+                    "meetingDate": "2026-01-12",
+                    "meetingTime": "10:00 AM",
+                    "committee": {"chamber": "SENATE", "name": "Finance"},
+                }
+            ]
+        }
+    }
+
+    rows = probe.parse_openleg_meetings(payload, source_path="/agendas/meetings/2026-01-01/2026-02-01")
+
+    assert rows[0].date == "2026-01-12"
+    assert rows[0].time == "10:00 AM"
+    assert rows[0].time_bucket == "exact_clock"
+
+
 def test_parse_assembly_agenda_index_uses_structural_detail_links():
     html = """
     <html><body>

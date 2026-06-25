@@ -19,6 +19,10 @@ probe exceptions before storing typed audit errors, warns on per-source
 zero-row gaps, surfaces unknown time buckets in totals, and makes denominator
 drift reachable when a row lands outside the known bucket set.
 
+Second CodeRabbit fold-in separated OpenLeg datetime fields from time-only
+`meetingTime` fields so a standalone clock label cannot overwrite
+`meetingDate` during Senate agenda parsing.
+
 ## [2026-06-25] implementation | Read-only NY calendar probe scaffolded
 
 Added `ny_calendar_probe.py` and `test_ny_calendar_probe.py` as the first
