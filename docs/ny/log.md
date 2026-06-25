@@ -9,6 +9,27 @@ status: active
 Append-only, reverse-chronological. Use the same prefix shape as the main log:
 `## [YYYY-MM-DD] <kind> | <title>`.
 
+## [2026-06-24] review | PR #169 bot fold-in
+
+Folded in valid Gemini, Qodo, and CodeRabbit findings on the NY read-back
+verification branch: reused the already-fetched first sheet row for `R1`
+completeness JSON instead of making a separate `acell` call, rejected non-object
+`R1` JSON before `.get()` access, bounded tail verification to the documented
+50-row sentinel range, and changed clean health status from non-standard `OK` to
+standard `INFO`. Post-fold-in branch Actions run `28137572349` passed in write
+mode on commit `bc9b691`: 25,314 bills built, 25,315 rows verified, and tail
+verified through row 25,365.
+
+## [2026-06-24] hardening | Automated sheet read-back verification live-tested
+
+Owner confirmed the first live `NY_Bill_Tracker` sheet spot check loaded
+correctly. Follow-up PR #169 adds production read-back verification of the
+actual Google Sheet artifact after write mode: header contract, `R1`
+completeness JSON, active bill column, and stale-tail cells below the payload.
+Branch Actions run `28137147423` passed in write mode on commit `61636dc`:
+25,314 bills built, 25,315 rows verified, and tail verified through row 25,365.
+Scheduling remains blocked until this verifier passes bot review and merges.
+
 ## [2026-06-24] validation | First live write passed
 
 Post-merge GitHub Actions live write passed for `New York Bill Tracker` mode

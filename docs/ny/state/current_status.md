@@ -11,7 +11,10 @@ state-specific source contracts clearly separated in the brain and code.
 
 ## Active focus
 
-First pass is the New York bill-record engine, not the UI:
+First pass is the New York bill-record engine, not the UI. The engine has now
+passed full-session dry-run, first live-write validation, and branch-level
+production read-back verification. The active hardening work is getting that
+verifier through bot review and merged:
 
 - `ny_bill_tracker.py` is a new file and does not mutate the Virginia `bill_tracker.py` path.
 - Output defaults to a separate `NY_Bill_Tracker` sheet tab.
@@ -33,6 +36,8 @@ First pass is the New York bill-record engine, not the UI:
   vote coverage, summary coverage, agenda-reference count, outcome-source counts,
   unknown structural outcome rate, unrecognized chamber counters, missing source
   URL counters, a run-level `health` object, and a New York calendar-scope note.
+- Post-write read-back verification exists on PR #169 so the workflow checks
+  the actual Google Sheet artifact after writing, not only the in-memory payload.
 - Manual-only GitHub Actions workflow: `New York Bill Tracker`
   (`check-config`, `dry-run`, `write`). No schedule yet.
 
@@ -51,7 +56,7 @@ health metrics instead of being inferred from status text.
 
 ## Next steps
 
-1. Run a dry fetch with a real `NY_OPENLEG_API_KEY`.
-2. Inspect the first full-session completeness object before writing to a user-facing tab.
-3. Decide where NY should live operationally: same workbook with `NY_*` tabs or a separate NY workbook.
+1. Fold in bot review on PR #169, then merge the post-write read-back verifier.
+2. Decide a production cadence for the manual-only NY workflow after read-back verification passes bot review.
+3. Scope durable terminal-outcome parity for bills currently counted as `unknown_structural`, without status-text inference.
 4. Validate a meeting/calendar source for Assembly before building a NY calendar worker.

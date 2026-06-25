@@ -43,6 +43,25 @@ NY_BILL_TRACKER_TAB = os.environ.get("NY_BILL_TRACKER_TAB", "NY_Bill_Tracker")
 DEFAULT_TIMEOUT_SECONDS = 30
 MAX_HTTP_ATTEMPTS = 3
 RETRY_STATUS_CODES = {429, 500, 502, 503, 504}
+TAIL_VERIFY_ROWS = 50
+NY_SHEET_HEADER = [
+    "Bill",
+    "Title",
+    "Status (LIS)",
+    "Outcome",
+    "Patron",
+    "Patron ID",
+    "Chamber",
+    "Crossed Over",
+    "Last Committee",
+    "Referrals",
+    "Last Action",
+    "Latest Vote (JSON)",
+    "Upcoming (JSON)",
+    "History (JSON)",
+    "Data As Of (UTC)",
+    "Source",
+]
 CHAMBER_CODE_MAP = {
     "SENATE": "Senate",
     "SEN": "Senate",
@@ -287,7 +306,7 @@ def _health_status(findings: List[Dict[str, Any]]) -> str:
         return "CRITICAL"
     if "WARN" in severities:
         return "WARN"
-    return "OK"
+    return "INFO"
 
 
 def _build_health(counters: Dict[str, int], records_written: int) -> Dict[str, Any]:
@@ -650,7 +669,82 @@ def print_runtime_requirements(*, write: bool) -> bool:
     return all(c["status"] == "ok" for c in checks)
 
 
-def write_ny_bill_tracker(records: List[Dict[str, Any]], completeness: Dict[str, Any]) -> None:
+def _sheet_rows(records: List[Dict[str, Any]]) -> List[List[Any]]:
+    return [NY_SHEET_HEADER] + [[
+        r["bill"], r["title"], r["status_lis"], r["outcome"], r["patron"], r["patron_id"],
+        r["chamber"], "yes" if r["crossed_over"] else "no", r["last_committee"],
+        r["referral_count"], r["last_action_date"],
+        json.dumps(r["latest_vote"], ensure_ascii=False),
+        json.dumps(r["upcoming"], ensure_ascii=False),
+        json.dumps(r["history"], ensure_ascii=False),
+        r["data_as_of_utc"], r["source"],
+    ] for r in records]
+
+
+def _pad_row(row: List[Any], width: int) -> List[str]:
+    values = ["" if value is None else str(value) for value in row[:width]]
+    return values + [""] * (width - len(values))
+
+
+def _verify_written_sheet(
+    ws: Any,
+    records: List[Dict[str, Any]],
+    completeness: Dict[str, Any],
+    *,
+    clear_rows: Optional[int] = None,
+) -> Dict[str, Any]:
+    expected_rows = len(records) + 1
+    tail_limit_row = expected_rows + TAIL_VERIFY_ROWS
+    tail_end_row = max(min(clear_rows or tail_limit_row, tail_limit_row), expected_rows)
+    expected_bills = [str(r["bill"]) for r in records]
+
+    row1 = ws.row_values(1)
+    header = _pad_row(row1, len(NY_SHEET_HEADER))
+    if header != NY_SHEET_HEADER:
+        raise RuntimeError("NY sheet read-back failed: header row does not match writer contract")
+
+    raw_completeness = _pad_row(row1, 18)[17]
+    try:
+        written_completeness = json.loads(raw_completeness)
+    except json.JSONDecodeError as err:
+        raise RuntimeError("NY sheet read-back failed: R1 completeness JSON is not parseable") from err
+    if not isinstance(written_completeness, dict):
+        raise RuntimeError("NY sheet read-back failed: R1 completeness JSON is not an object")
+
+    for key in ("state", "source", "session_year", "records_written", "bills_seen", "checked_at_utc"):
+        if written_completeness.get(key) != completeness.get(key):
+            raise RuntimeError(f"NY sheet read-back failed: R1 completeness mismatch for {key}")
+    written_health = written_completeness.get("health")
+    expected_health = completeness.get("health")
+    if not isinstance(written_health, dict) or not isinstance(expected_health, dict):
+        raise RuntimeError("NY sheet read-back failed: R1 health object mismatch")
+    if written_health.get("status") != expected_health.get("status"):
+        raise RuntimeError("NY sheet read-back failed: R1 health status mismatch")
+
+    bill_rows = ws.get_values(f"A2:A{expected_rows}") or []
+    actual_bills = [_pad_row(row, 1)[0] for row in bill_rows]
+    if actual_bills != expected_bills:
+        raise RuntimeError(
+            f"NY sheet read-back failed: bill column mismatch "
+            f"({len(actual_bills)} read back, {len(expected_bills)} expected)"
+        )
+
+    if tail_end_row > expected_rows:
+        tail_values = ws.get_values(f"A{expected_rows + 1}:R{tail_end_row}") or []
+        stale_tail_cells = sum(1 for row in tail_values for value in row if str(value or "").strip())
+        if stale_tail_cells:
+            raise RuntimeError("NY sheet read-back failed: stale cells remain below the active payload")
+
+    return {
+        "verified_rows": expected_rows,
+        "verified_bills": len(expected_bills),
+        "verified_tail_through_row": tail_end_row,
+        "health_status": written_health.get("status", ""),
+        "checked_at_utc": written_completeness.get("checked_at_utc", ""),
+    }
+
+
+def write_ny_bill_tracker(records: List[Dict[str, Any]], completeness: Dict[str, Any]) -> Dict[str, Any]:
     creds_json = os.environ.get("GCP_CREDENTIALS")
     if not creds_json:
         raise RuntimeError("GCP_CREDENTIALS not set")
@@ -660,18 +754,7 @@ def write_ny_bill_tracker(records: List[Dict[str, Any]], completeness: Dict[str,
     )
     sheet = gc.open_by_key(_spreadsheet_id())
 
-    header = ["Bill", "Title", "Status (LIS)", "Outcome", "Patron", "Patron ID", "Chamber",
-              "Crossed Over", "Last Committee", "Referrals", "Last Action", "Latest Vote (JSON)",
-              "Upcoming (JSON)", "History (JSON)", "Data As Of (UTC)", "Source"]
-    rows = [header] + [[
-        r["bill"], r["title"], r["status_lis"], r["outcome"], r["patron"], r["patron_id"],
-        r["chamber"], "yes" if r["crossed_over"] else "no", r["last_committee"],
-        r["referral_count"], r["last_action_date"],
-        json.dumps(r["latest_vote"], ensure_ascii=False),
-        json.dumps(r["upcoming"], ensure_ascii=False),
-        json.dumps(r["history"], ensure_ascii=False),
-        r["data_as_of_utc"], r["source"],
-    ] for r in records]
+    rows = _sheet_rows(records)
     # Q is intentionally left empty so the run-level completeness JSON is visually separated from row data.
     completeness_cell, need_rows, need_cols = "R1", len(rows) + 50, 18
 
@@ -700,6 +783,7 @@ def write_ny_bill_tracker(records: List[Dict[str, Any]], completeness: Dict[str,
             "values": [[""] * 18 for _ in range(tail_rows)],
         })
     ws.batch_update(updates)
+    return _verify_written_sheet(ws, records, completeness, clear_rows=clear_rows)
 
 
 def run_ny_bill_tracker(*, write: bool = True) -> Tuple[List[Dict[str, Any]], Dict[str, Any]]:
@@ -714,13 +798,16 @@ def run_ny_bill_tracker(*, write: bool = True) -> Tuple[List[Dict[str, Any]], Di
         limit=limit,
         max_pages=max_pages,
     )
+    verification = None
     if write:
-        write_ny_bill_tracker(records, completeness)
+        verification = write_ny_bill_tracker(records, completeness)
     print(
         f"NY_Bill_Tracker built: {len(records)} bills for {session_year}; "
         f"{completeness['patron_present']} with sponsor; "
         f"{completeness['has_actions']} with action history."
     )
+    if verification:
+        print(f"NY_Bill_Tracker read-back verified: {json.dumps(verification, sort_keys=True)}")
     return records, completeness
 
 
