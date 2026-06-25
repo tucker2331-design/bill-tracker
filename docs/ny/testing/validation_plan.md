@@ -158,16 +158,19 @@ Branch validation:
 | Metric | Result |
 |---|---|
 | PR | `#169` |
-| GitHub Actions run | `28137147423` |
-| commit | `61636dc` |
+| GitHub Actions run | `28137572349` |
+| commit | `bc9b691` |
 | mode / session | `write` / `2025` |
-| elapsed time | 2m 33s |
+| elapsed time | 2m 38s |
 | bills built | 25,314 |
 | rows verified | 25,315 |
 | bills verified | 25,314 |
 | tail verified through row | 25,365 |
 | health status | WARN |
 | workflow status | passed |
+
+Earlier branch validation on commit `61636dc` also passed in run `28137147423`.
+Run `28137572349` is the post-bot-fold-in live validation.
 
 ## Scheduling gate
 

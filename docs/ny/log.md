@@ -16,7 +16,9 @@ verification branch: reused the already-fetched first sheet row for `R1`
 completeness JSON instead of making a separate `acell` call, rejected non-object
 `R1` JSON before `.get()` access, bounded tail verification to the documented
 50-row sentinel range, and changed clean health status from non-standard `OK` to
-standard `INFO`.
+standard `INFO`. Post-fold-in branch Actions run `28137572349` passed in write
+mode on commit `bc9b691`: 25,314 bills built, 25,315 rows verified, and tail
+verified through row 25,365.
 
 ## [2026-06-24] hardening | Automated sheet read-back verification live-tested
 
