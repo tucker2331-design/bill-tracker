@@ -25,6 +25,9 @@ The workflow runs once daily after the 2026-06-24 validation gates passed:
 - daily cron: `40 17 * * *`
 - manual modes retained: `check-config`, `dry-run`, `write`
 - scheduled writes default to `NY_OPENLEG_SESSION_YEAR=2025`
+- production writes are restricted to `refs/heads/main`
+- write runs share a production concurrency group; manual `check-config` and
+  `dry-run` probes do not queue ahead of scheduled writes
 
 The daily schedule is intentionally conservative until the frontend and
 incremental update path are scoped. Any increase in cadence needs a fresh source

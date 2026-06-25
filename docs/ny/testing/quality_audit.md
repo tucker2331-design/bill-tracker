@@ -111,6 +111,14 @@ Write mode now verifies the actual Google Sheet after writing:
 This protects against partial writes, stale rows, and completeness metadata
 that does not match the visible sheet.
 
+Workflow-level production guardrails:
+
+- scheduled and manual production writes are restricted to `refs/heads/main`
+- manual `check-config` and `dry-run` modes can run from branches without
+  acquiring the production write concurrency group
+- scheduled writes and manual writes serialize with each other so two
+  production writes cannot race the same tab
+
 ## Open audit items
 
 1. Terminal outcome parity: find a durable structural OpenLeg field or keep the

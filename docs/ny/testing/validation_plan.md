@@ -207,6 +207,8 @@ Daily cadence:
 | Mode | scheduled `write` |
 | Session default | `2025` |
 | Manual modes retained | `check-config`, `dry-run`, `write` |
+| Production write ref | `refs/heads/main` only |
+| Production concurrency | scheduled and manual writes serialize; branch probes do not block writes |
 
 This is a conservative production heartbeat. Increase frequency only after a
 fresh OpenLeg source/rate review and an incremental-update plan.
