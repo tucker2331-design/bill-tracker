@@ -1,6 +1,6 @@
 ---
 tags: [index, meta]
-updated: 2026-04-16
+updated: 2026-06-25
 ---
 
 # Project Brain — Index
@@ -36,6 +36,7 @@ Links use Obsidian `[[wikilink]]` format. Obsidian resolves by filename; path-qu
 
 ## Architecture
 - [[ny/architecture/bill_pipeline]] — New York OpenLeg bill engine pipeline and source-to-field mapping
+- [[ny/architecture/calendar_source_options]] — New York calendar source options: Senate OpenLeg first, Assembly official-source path, visible no-time/source-gap states
 - [[architecture/post_c8_hardening]] — **ACTIVE: three grounded post-C8.4 hardening solutions (G-code drift alert, structural meeting_unsourced, unconfirmed rolling baseline)**
 - [[architecture/pr_c8_structural_classification]] — close the 16% structurally; hard rules + gates for the implementing model
 - [[architecture/calendar_pipeline]] — LIS → worker → Sheet1 data flow + resolution priorities

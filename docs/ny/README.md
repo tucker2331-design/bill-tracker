@@ -1,6 +1,6 @@
 ---
 tags: [ny, meta, start-here]
-updated: 2026-06-24
+updated: 2026-06-25
 status: active
 ---
 
@@ -22,7 +22,7 @@ separate until we intentionally generalize them.
 4. [[ny/state/current_status]] - active NY build state.
 5. The relevant task page:
    - API/source work: [[knowledge/ny_openleg_api_reference]] and [[ny/ideas/data_inventory]]
-   - Architecture work: [[ny/architecture/bill_pipeline]]
+   - Architecture work: [[ny/architecture/bill_pipeline]] and [[ny/architecture/calendar_source_options]]
    - Planning/scoping: [[ny/workflow/source_scoping_protocol]]
    - Testing/validation: [[ny/testing/validation_plan]] and [[ny/testing/quality_audit]]
    - Failures/lessons: [[ny/failures/assumptions_register]]
@@ -49,6 +49,7 @@ Every NY finding lands in the NY branch of the brain first:
 |---|---|
 | API quirk/source fact | [[knowledge/ny_openleg_api_reference]] |
 | Architecture decision | [[ny/architecture/bill_pipeline]] |
+| Calendar source decision | [[ny/architecture/calendar_source_options]] |
 | Source uncertainty or data gap | [[ny/ideas/data_inventory]] |
 | Test result/validation metric | [[ny/testing/validation_plan]] |
 | Standards audit | [[ny/testing/quality_audit]] |
