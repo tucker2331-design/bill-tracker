@@ -152,7 +152,12 @@ Candidate origins:
 - `ny_public_hearing_calendar`
 - `ny_no_clock_relative`
 - `ny_calendar_scope_gap`
-- `system_metrics`
+
+Metrics are not a row origin. Do not serialize final health metrics into an
+early-constructed `system_metrics` row in the main calendar table; that pattern
+can go stale as later pipeline steps add, drop, or reconcile rows. Keep run
+metrics in the final completeness/health object or a dedicated audit artifact
+that is computed after row assembly is complete.
 
 ## Health counters
 
@@ -166,6 +171,7 @@ Required counters:
 - exact-clock rows
 - relative-time rows
 - no-time rows with explicit reason
+- terminal or timeless-by-design rows with explicit origin bucket
 - rows with source URL
 - agenda/calendar bill-link count
 - bill-link join misses against the bill universe
@@ -182,6 +188,12 @@ Required counters:
 The completeness object should distinguish "calendar source not claimed" from
 "no events found." A blank or empty result set is not safe unless the source
 coverage denominator was known and the fetch/parser health passed.
+
+Denominator rule: every produced row must land in exactly one time bucket:
+`exact_clock`, `relative_time`, `no_clock_source`, `terminal_or_timeless`, or
+`source_gap`. Administrative, executive, session-date-only, and other
+timeless-by-design rows are not denominator leftovers; they need explicit
+origin buckets so health math does not produce false drift warnings.
 
 ## Source-probe plan
 

@@ -21,7 +21,7 @@ status: active
 | Committee position | `status.committeeName` + `pastCommittees` | Built |
 | Product chamber | `billType.chamber`, `actions.items[].chamber`, `pastCommittees[].chamber` | Built; Assembly maps to product House and NY-native values are preserved |
 | Agenda references | `committeeAgendas` | Counted as provenance |
-| Senate committee agenda meetings | `/api/3/agendas/meetings/{from}/{to}` plus agenda details | Scoped as first calendar spine source; not built |
+| Senate committee agenda meetings | `/api/3/agendas/meetings/{fromDateTime}/{toDateTime}` plus agenda details | Scoped as first calendar spine source; not built |
 | Senate floor calendars | `/api/3/calendars/...` plus bill `calendars` refs | Scoped as floor-list source; time needs a session/convene source |
 | Assembly committee agendas | Official Assembly agenda index/detail pages | Scoped for DOM-structured official-source probe; not built |
 | Assembly floor calendars | Official Assembly floor calendar list/detail pages | Scoped for DOM-structured official-source probe; not built |

@@ -1,6 +1,7 @@
 ---
 tags: [index, meta]
 updated: 2026-06-25
+status: active
 ---
 
 # Project Brain — Index
@@ -36,7 +37,7 @@ Links use Obsidian `[[wikilink]]` format. Obsidian resolves by filename; path-qu
 
 ## Architecture
 - [[ny/architecture/bill_pipeline]] — New York OpenLeg bill engine pipeline and source-to-field mapping
-- [[ny/architecture/calendar_source_options]] — New York calendar source options: Senate OpenLeg first, Assembly official-source path, visible no-time/source-gap states
+- [[ny/architecture/calendar_source_options]] — New York calendar source options
 - [[architecture/post_c8_hardening]] — **ACTIVE: three grounded post-C8.4 hardening solutions (G-code drift alert, structural meeting_unsourced, unconfirmed rolling baseline)**
 - [[architecture/pr_c8_structural_classification]] — close the 16% structurally; hard rules + gates for the implementing model
 - [[architecture/calendar_pipeline]] — LIS → worker → Sheet1 data flow + resolution priorities
@@ -101,7 +102,7 @@ The codebase itself (`calendar_worker.py`, `pages/ray2.py`, etc.) is the raw lay
 
 - **Wikilinks over markdown links** where possible — Obsidian's graph view and backlinks depend on `[[name]]` syntax.
 - **Section-anchored wikilinks** when pointing at a specific header in another page: `[[page#Section Header|display text]]`. Lets Obsidian jump straight to the header on click. Don't write `[[page]] → "Section"` with a manual arrow — the section anchor is the link.
-- **Frontmatter on every page:** `tags`, `updated: YYYY-MM-DD`, optional `status: active | archived | stub`.
+- **Frontmatter on every page:** `tags`, `updated: YYYY-MM-DD`, and `status: active | archived | stub`.
 - **One concept per page.** If a page covers two separate things, split it.
 - **Cross-reference instead of duplicate.** If information belongs on page A, reference it from page B with a wikilink rather than copy-pasting.
 - **Update on touch.** Whenever a page is read in service of a task, update the `updated:` field if the content needs refreshing.
