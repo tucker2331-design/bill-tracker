@@ -38,7 +38,7 @@ Virginia's source assumptions.
 
 ## Decisions to make
 
-1. Should New York write to the same workbook with `NY_*` tabs, or to a separate workbook?
+1. Workbook strategy: separate New York workbook for now, via `NY_SPREADSHEET_ID`.
 2. Should summary be added to the shared product tab schema now, or wait until the UI is ready?
 3. What source should be used for Assembly meeting times?
-4. What run cadence is acceptable under the OpenLeg API key terms once a full-session fetch is measured?
+4. Run cadence: once daily for now; revisit after frontend and incremental-update scoping.

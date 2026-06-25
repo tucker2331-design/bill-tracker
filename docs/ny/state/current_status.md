@@ -38,8 +38,9 @@ validation:
   URL counters, a run-level `health` object, and a New York calendar-scope note.
 - Post-write read-back verification is live on `main` so the workflow checks the
   actual Google Sheet artifact after writing, not only the in-memory payload.
-- Manual-only GitHub Actions workflow: `New York Bill Tracker`
-  (`check-config`, `dry-run`, `write`). No schedule yet.
+- GitHub Actions workflow: `New York Bill Tracker` with manual
+  `check-config`, `dry-run`, and `write` modes plus a once-daily production
+  write schedule.
 
 ## Important source caveat
 
@@ -56,6 +57,7 @@ health metrics instead of being inferred from status text.
 
 ## Next steps
 
-1. Decide a production cadence for the manual-only NY workflow.
+1. Merge the once-daily workflow schedule after review.
 2. Scope durable terminal-outcome parity for bills currently counted as `unknown_structural`, without status-text inference.
 3. Validate a meeting/calendar source for Assembly before building a NY calendar worker.
+4. Build a session-rollover plan before the next New York legislative session.

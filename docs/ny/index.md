@@ -32,6 +32,7 @@ or generalize only after both systems are stable enough to compare cleanly.
 ## Testing / Failures
 
 - [[ny/testing/validation_plan]] - fixture, dry-run, live-write validation gates
+- [[ny/testing/quality_audit]] - structural indicators, time coverage, health counters, and open quality items
 - [[ny/failures/assumptions_register]] - NY-local assumption and failure ledger
 - [[ny/log]] - NY-local chronological log
 

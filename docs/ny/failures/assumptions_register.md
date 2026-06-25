@@ -57,3 +57,19 @@ source-contract gaps and invite long-term drift.
 **Guard:** completeness JSON includes `unknown_structural_outcome`,
 `unknown_structural_outcome_rate`, and a `health` warning until terminal outcome
 coverage is structurally validated.
+
+## 4. Daily schedule still needs explicit session rollover
+
+**Assumption:** a daily scheduled write is enough production automation for the
+first NY engine.
+
+**Reality:** daily cadence is appropriate now, but the workflow default is
+`NY_OPENLEG_SESSION_YEAR=2025` for New York's 2025-2026 session. That is safe
+for the current cycle and not a forever setting.
+
+**Decision:** schedule once daily now, then scope session rollover before the
+next NY session. Do not let a hard-coded session default become hidden
+technical debt.
+
+**Guard:** [[ny/testing/quality_audit]] tracks session rollover as an open audit
+item, and [[ny/testing/validation_plan]] records the current cadence contract.

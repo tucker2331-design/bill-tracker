@@ -18,6 +18,18 @@ NY_OPENLEG_API_KEY
   -> read back header, bill column, R1 completeness, and stale-tail range
 ```
 
+## Runtime cadence
+
+The workflow runs once daily after the 2026-06-24 validation gates passed:
+
+- daily cron: `40 17 * * *`
+- manual modes retained: `check-config`, `dry-run`, `write`
+- scheduled writes default to `NY_OPENLEG_SESSION_YEAR=2025`
+
+The daily schedule is intentionally conservative until the frontend and
+incremental update path are scoped. Any increase in cadence needs a fresh source
+and rate-limit review.
+
 ## Source-to-field mapping
 
 | Product field | OpenLeg source |
@@ -69,6 +81,9 @@ maps to product `House` for that column only.
   header, bill-column identity, `R1` completeness fields, health status, and a
   bounded tail range below the active payload. A mismatch fails the workflow.
 - A missing `NY_OPENLEG_API_KEY` is a hard failure, not an empty output.
+- Empty `Upcoming` means "calendar source not claimed," not "no upcoming
+  meetings." Time-bearing NY calendar fields require a separate source contract
+  and validation run before product use.
 
 ## Known differences from Virginia
 

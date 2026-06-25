@@ -190,14 +190,23 @@ Post-merge validation:
 
 ## Scheduling gate
 
-Do not add a scheduled workflow until:
+The schedule gate passed on 2026-06-24 after:
 
 - full dry run passes
 - first write passes
 - owner confirms post-write sheet spot check
 - automated read-back verification passes on GitHub Actions
-- OpenLeg cadence/rate expectations are documented
+- owner approves a once-daily cadence while the frontend is not yet live
 
-The workflow `.github/workflows/ny_bill_tracker.yml` exists only as a manual
-`check-config` / `dry-run` / `write` runner. No cron is allowed until the above
-gates are complete.
+Daily cadence:
+
+| Field | Value |
+|---|---|
+| Workflow | `.github/workflows/ny_bill_tracker.yml` |
+| Cron | `40 17 * * *` |
+| Mode | scheduled `write` |
+| Session default | `2025` |
+| Manual modes retained | `check-config`, `dry-run`, `write` |
+
+This is a conservative production heartbeat. Increase frequency only after a
+fresh OpenLeg source/rate review and an incremental-update plan.
