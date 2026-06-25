@@ -9,6 +9,14 @@ status: active
 Append-only, reverse-chronological. Use the same prefix shape as the main log:
 `## [YYYY-MM-DD] <kind> | <title>`.
 
+## [2026-06-24] validation | Read-back verifier merged and passed on main
+
+PR #169 merged to `main` as squash commit `5cfd215`. Post-merge GitHub Actions
+run `28137876638` passed in write mode on `main`: 25,314 bills built, 25,315
+rows verified, 25,314 bills verified, `R1` health status `WARN`, and the
+bounded tail range verified through row 25,365. Scheduling remains a separate
+cadence decision; the artifact verifier is now live.
+
 ## [2026-06-24] review | PR #169 bot fold-in
 
 Folded in valid Gemini, Qodo, and CodeRabbit findings on the NY read-back

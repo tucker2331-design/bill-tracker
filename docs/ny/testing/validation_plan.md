@@ -172,6 +172,22 @@ Branch validation:
 Earlier branch validation on commit `61636dc` also passed in run `28137147423`.
 Run `28137572349` is the post-bot-fold-in live validation.
 
+Post-merge validation:
+
+| Metric | Result |
+|---|---|
+| GitHub Actions run | `28137876638` |
+| commit | `5cfd215` |
+| branch | `main` |
+| mode / session | `write` / `2025` |
+| elapsed time | 2m 33s |
+| bills built | 25,314 |
+| rows verified | 25,315 |
+| bills verified | 25,314 |
+| tail verified through row | 25,365 |
+| health status | WARN |
+| workflow status | passed |
+
 ## Scheduling gate
 
 Do not add a scheduled workflow until:
