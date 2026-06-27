@@ -12,6 +12,37 @@ spun up `docs/ny/` fresh), then all the hard-won VA lessons **don't carry to NY*
 compounding, which defeats its purpose. We must resolve this. The answer is the same `core/ + states/`
 shape we're applying to the code (see [[ideas/multi_state_org_structure]]), applied to the brain:
 
+## What actually carries over — the NUANCE (owner pushed: "more than that, more nuance")
+It is NOT whole *files* copying over. It's **assets at different grains** — and it includes **code, design,
+and methodology**, not just docs (the thin-list mistake). Four tiers:
+
+- **Tier 1 — pure shared (inherit wholesale):** the 8 standards + the 15-point pre-push audit; the trust-layer
+  PHILOSOPHY ("never pretend," provisional flags, denominators); structural-determinism (no text parsing on
+  the lobbyist path; *displaying an API field ≠ parsing*); the workflow protocols (branch+PR, bot-review
+  fold-in, write-back, the 3-phase protocol); **the PRODUCT VISION** (four lenses, crossover-lane timeline,
+  bill card, trust layer); **the DESIGN SYSTEM** ([[design/reading_notes]] → [[design/information_display]]
+  rules, the visual system, the bullet-graph Health, the calendar UI patterns, the reusable components). *A
+  new state's product is the SAME product, restyled — same components, same lenses.*
+- **Tier 2 — shared as PATTERNS, with VA instances as EVIDENCE (the key nuance).** [[failures/assumptions_audit]]
+  and [[failures/gemini_review_patterns]] are NOT VA trivia: each entry is a *(generalizable pattern, VA
+  instance)* pair. The PATTERN generalizes ("or-on-nullable-pandas," "verify a metric on a run whose headSha
+  contains the commit," "the sentinel that outlived the session," "side-effect gating," "sentinel-value
+  collision," "displaying ≠ parsing"); the instance is the proof. → a new state inherits the PATTERNS as a
+  pre-flight checklist; the VA specifics stay as the evidence trail. **These files split at the LESSON level,
+  not the file level** — the reorg should distill a generalized "engineering lessons / pre-flight checklist"
+  from them into the shared layer, leaving the instances in place.
+- **Tier 3 — the reusable ENGINE CODE (carries as CODE, not docs).** `structural_router` (meeting/admin
+  framework), the reconciliation framework, the time-resolution machinery, the breaker / sentinel /
+  sustainability-audit machinery, the trust/completeness primitives. The per-state **source adapters** (LIS
+  blobs vs OpenLeg vs PA bulk) are written fresh against this shared `core/` (see [[ideas/multi_state_org_structure]]).
+- **Tier 4 — pure per-state (don't carry):** the endpoints + source maps; the quirks (VA "Time TBA"/
+  `IsCancelled`/`OnCalendar`; NY Assembly-not-in-OpenLeg); committee structure, session calendar, crossover
+  date; the live status + the per-state assumptions register.
+
+**The single most valuable transferable asset is the METHODOLOGY** (Tier 1): *how* we scope-before-build,
+probe a source, validate against structural data, run the bot-review loop, and write back. That discipline —
+not any VA fact — is what makes state #10 nearly mechanical.
+
 ## The rule: generalizable lesson → SHARED brain; state-specific fact → per-state brain
 - **SHARED brain (the "mega brain" — `docs/` root, the accumulated cross-state wisdom).** State-AGNOSTIC
   things every future state inherits on day one:

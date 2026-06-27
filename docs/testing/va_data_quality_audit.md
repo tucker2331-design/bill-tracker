@@ -18,10 +18,18 @@ concerning numbers." This page is the live diagnosis + the investigation queue. 
 So nothing here is a crisis. These are SECONDARY edges to smooth for a truly clean/sustainable VA standard.
 
 ## The edges to investigate (priority order)
-1. **`invariant_violations = 1`** (should be 0; persistent). One row failed a write-time invariant
-   (I1 schema / I2 Origin / I3 concrete-source-carries-no-`[NO_*]`). Per [[architecture/calendar_pipeline]]
-   it should emit a `DATA_ANOMALY/CRITICAL` alert, but only a `TIMING_LAG` alert is visible. **Action:**
-   find WHICH row + WHICH invariant; confirm the violation is surfaced (if not, that's a visibility gap).
+1. **`invariant_violations = 1`** (should be 0; persistent). **DIAGNOSED 2026-06-25 (live sheet):** it is
+   **NOT an I3** violation — 0 concrete-source rows (`api_schedule`/`convene_anchor`/`legislation_event`/
+   `sibling_meeting`) carry a `⏱️ [NO_*]` placeholder or empty time (the 482 "Time TBA"-on-`api_schedule`
+   are legit LIS values, not I3). So it's a **single I1 (missing column) or I2 (unexpected Origin) row**, and
+   crucially **it is INVISIBLE** — per [[architecture/calendar_pipeline]] an invariant violation should emit
+   a `DATA_ANOMALY/CRITICAL` alert, but the only `SYSTEM_ALERT` on the sheet is the `TIMING_LAG` one. **So a
+   data-integrity violation is being COUNTED but not SURFACED — you can't see which row or why.** → **THE FIX
+   is observability:** `_append_event` must emit a per-row `DATA_ANOMALY` alert naming the offending bill/
+   date/Origin/which-invariant, so it reaches the SYSTEM_ALERT feed + the Health tab (then the row is
+   diagnosable). (Worker change in the chokepoint — Section-9-sensitive; validate carefully.) **Also: the
+   doc's I2 allowed-Origin list is STALE** — it omits `executive_default` + `derived_standing`, which ARE in
+   the live data; since violations=1 (not 325) the CODE's set includes them, so it's doc drift to fix.
 2. **`gap_minutes = 179.43` but `gap_cause = normal`** — 179 min (~3 h) exceeds the documented
    `GAP_WARN=20` / `GAP_CRITICAL=60` thresholds, yet it's classified "normal." Either the off-season cadence
    was relaxed (then the thresholds/AA1-freshness gauge need recalibration to match) or the classification is
@@ -39,6 +47,21 @@ So nothing here is a crisis. These are SECONDARY edges to smooth for a truly cle
 6. **HB30 `Conference Committee` 2026-06-19 `TIMING_LAG`** — a conference-committee action with no schedule
    match → Ledger. Likely upstream-limited (LIS published no timed conference meeting, like HB26/HB137), but
    confirm it's honest residue, not a missed source.
+
+## Health-tab observability gaps (owner: "what's missing?" — 2026-06-25)
+The Health gauges surface the *counts*; the deeper trust layer (vision §7 lists several as "should track,
+don't yet") is still missing. Priority gaps to BUILD (folds into the Health-tab follow-up + the data work):
+1. **Invariant-violation DETAIL** — which row + which invariant (this audit proved the count alone is
+   undiagnosable). The fix in edge #1 above (per-row `DATA_ANOMALY` alert) makes it show in the alert feed.
+2. **Alert HISTORY, not just the latest** — the tab shows one `SYSTEM_ALERT`; surface the recent feed (`Bug_Logs`).
+3. **Drift canaries** — `validate_status_grouping` / G-code (`validate_governor_eventcodes`) / committee-map
+   drift fire on UPSTREAM changes but aren't on the tab (the early warning that LIS changed something).
+4. **Independent reconciliation result** — the MinutesBook 99.67% tripwire (our strongest "are we right?").
+5. **Sentinel + sustainability-audit status** — the 5-layer durability guard's latest verdicts ([[architecture/verification_durability]]).
+6. **Per-bill freshness** (§7 #2: did one bill quietly stop updating?), **feed-skew** (§7 #3), and
+   **universe-vs-LIS-introduced-total** (§7 #1: is the universe itself complete, not just records==universe).
+7. **Trend sparklines** — gauges are point-in-time; reading the session archive for each metric's trajectory
+   shows DIRECTION (is drift growing?) — the real early-warning. Pairs with [[architecture/session_archive]].
 
 ## Method (per the brain discipline)
 Read the LIVE Sheet1 via gviz (raw strings, not pandas auto-NaN — [[failures/assumptions_audit#66]]); diagnose
