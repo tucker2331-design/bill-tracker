@@ -70,18 +70,24 @@ export function Health({ completeness, dataAsOf }: { completeness: Completeness 
           <BulletGraph label="Section-9 accuracy · meeting actions without a time" value={section9 ?? 0}
             max={50} target={0} bands={lower(0.5, 25, 50)} sub="0 = every meeting action has a time (the project goal)" />
         ) : <CalLoading err={hErr} />}
-        <BulletGraph label="Bill completeness · records written vs LIS universe" value={completePct}
-          max={100} target={100} bands={higher(98, 99.99, 100)} unit="%" format={oneDp}
-          sub={`${written.toLocaleString()} of ${universe.toLocaleString()} bills${anomalies ? ` · ${anomalies} in-history-not-in-universe` : ""}`} />
-        <BulletGraph label="History-vs-universe anomalies" value={anomalies}
-          max={20} target={0} bands={lower(0.5, 5, 20)} sub="bills seen in HISTORY but absent from the universe (scariest silent gap)" />
+        {/* Bill-backend gauges only render when the completeness payload is present — a null payload must NOT
+            display as a real 0% / 0 (that would read as a false danger; "allowed not to know, never pretend"). */}
+        {c ? (<>
+          <BulletGraph label="Bill completeness · records written vs LIS universe" value={completePct}
+            max={100} target={100} bands={higher(98, 99.99, 100)} unit="%" format={oneDp}
+            sub={`${written.toLocaleString()} of ${universe.toLocaleString()} bills${anomalies ? ` · ${anomalies} in-history-not-in-universe` : ""}`} />
+          <BulletGraph label="History-vs-universe anomalies" value={anomalies}
+            max={20} target={0} bands={lower(0.5, 5, 20)} sub="bills seen in HISTORY but absent from the universe (scariest silent gap)" />
+        </>) : <p className="muted">Bill-backend signals unavailable (no completeness payload in Bill_Tracker R1).</p>}
       </div>
 
       <h2 className="h">Freshness — two workers, two clocks</h2>
       <div className="hl-gauges">
-        <BulletGraph label="Bill backend · hours since last good run" value={billFreshH}
-          max={24} target={0} bands={lower(6, 12, 24)} unit=" h" format={hrs}
-          sub={c?.checked_at_utc || dataAsOf?.toISOString() || "unknown"} />
+        {dataAsOf ? (
+          <BulletGraph label="Bill backend · hours since last good run" value={billFreshH}
+            max={24} target={0} bands={lower(6, 12, 24)} unit=" h" format={hrs}
+            sub={c?.checked_at_utc || dataAsOf.toISOString()} />
+        ) : <p className="muted">Bill-backend freshness unknown (no timestamp).</p>}
         {h ? (
           <BulletGraph label="Calendar subsystem · hours since last good cycle" value={calFreshH}
             max={24} target={0} bands={lower(6, 12, 24)} unit=" h" format={hrs}
@@ -95,17 +101,21 @@ export function Health({ completeness, dataAsOf }: { completeness: Completeness 
           <BulletGraph label="Write-time invariant violations" value={violations ?? 0}
             max={60} target={0} bands={lower(0.5, 49, 60)} sub="rows that failed a schema/Origin invariant at write (breaker trips at ≥50)" />
         ) : <CalLoading err={hErr} />}
-        <BulletGraph label="Outcome drift · keyword↔structural mismatch" value={driftPct}
-          max={2} target={0} bands={lower(0.1, 1, 2)} unit="%" format={oneDp}
-          sub="self-calibrating reconciliation vs LIS's own flags (steady ≈ 0.03%)" />
+        {c && (
+          <BulletGraph label="Outcome drift · keyword↔structural mismatch" value={driftPct}
+            max={2} target={0} bands={lower(0.1, 1, 2)} unit="%" format={oneDp}
+            sub="self-calibrating reconciliation vs LIS's own flags (steady ≈ 0.03%)" />
+        )}
         {h && (
           <BulletGraph label="Unclassified share · router returned blank" value={unclassPct}
             max={25} target={0} bands={lower(8, 15, 25)} unit="%" format={oneDp}
             sub={`${(m.legevent_route_blank ?? 0).toLocaleString()} of ${total.toLocaleString()} rows (floor/skeleton rows are legitimately blank)`} />
         )}
-        <BulletGraph label="Patron coverage" value={patronPct}
-          max={100} target={100} bands={higher(98, 99.99, 100)} unit="%" format={oneDp}
-          sub={`${(c?.patron_present ?? 0).toLocaleString()} of ${written.toLocaleString()} bills with a chief patron`} />
+        {c && (
+          <BulletGraph label="Patron coverage" value={patronPct}
+            max={100} target={100} bands={higher(98, 99.99, 100)} unit="%" format={oneDp}
+            sub={`${(c.patron_present ?? 0).toLocaleString()} of ${written.toLocaleString()} bills with a chief patron`} />
+        )}
       </div>
 
       {/* ── Alert feed: the operator's "needs a human" list (Standard #8) ── */}

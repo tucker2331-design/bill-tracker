@@ -270,6 +270,7 @@ h2, h3 { margin: 0; }
 .hl-sev.critical { background: var(--o-vetoed-bg); color: var(--stale); }
 .hl-sev.warn { background: var(--o-carry-bg); color: var(--o-carry); }
 .hl-sev.info { background: var(--surface-2); color: var(--ink-soft); }
+.hl-sev.unknown { background: var(--o-dead-bg); color: var(--o-dead); }
 .hl-cat { font-size: 10.5px; font-weight: 700; color: var(--ink-faint); text-transform: uppercase; letter-spacing: .3px; }
 .hl-amsg { flex: 1; min-width: 200px; color: var(--ink); font-size: 13px; }
 .hl-adate { color: var(--ink-faint); font-size: 12px; white-space: nowrap; }

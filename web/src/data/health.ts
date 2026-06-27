@@ -8,7 +8,9 @@ import { SPREADSHEET_ID } from "../config";
 
 const SHEET1 = "Sheet1";
 const FETCH_TIMEOUT_MS = 12000;
+const CACHE_TTL_MS = 120000; // operator data must stay current — re-fetch after 2 min (not cached forever)
 const META_QUERY = "select A,D,G,J where J = 'system_metrics' or J = 'system_alert'"; // Date,Status,Outcome,Origin
+const KNOWN_SEVERITIES = new Set(["INFO", "WARN", "CRITICAL"]); // the worker's Status vocabulary (Standard #4)
 
 export interface HealthAlert {
   severity: string;   // INFO | WARN | CRITICAL (the worker's Status cell, structural)
@@ -49,7 +51,11 @@ function parseMetrics(cell: string): Record<string, number> {
       const n = typeof v === "number" ? v : Number(v);
       if (Number.isFinite(n)) out[k] = n;
     }
-  } catch { /* malformed metrics row — surfaced as an empty gauge set, never crashes the tab */ }
+  } catch (e) {
+    // Optional ≠ silent (Standard #4): a malformed metrics row surfaces an empty gauge set, but the dev/
+    // operator still needs to know the SYSTEM_METRICS JSON didn't parse — warn rather than swallow.
+    console.warn("Health: SYSTEM_METRICS row is not valid JSON; gauges will be empty", e);
+  }
   return out;
 }
 
@@ -57,11 +63,16 @@ function firstCell(txt: string): string {
   return (parseCsv(txt)?.[0]?.[0] || "").trim();
 }
 
-let _healthPromise: Promise<HealthData> | null = null;
+// TTL cache: serve a recent load instantly (tab re-opens) but RE-FETCH after the TTL so operator data is
+// never stale-forever; a failed load clears the cache so the next open retries.
+let _cache: { at: number; data: Promise<HealthData> } | null = null;
 
 export function loadHealth(): Promise<HealthData> {
-  if (!_healthPromise) _healthPromise = _loadHealth().catch((e) => { _healthPromise = null; throw e; });
-  return _healthPromise;
+  const now = Date.now();
+  if (!_cache || now - _cache.at > CACHE_TTL_MS) {
+    _cache = { at: now, data: _loadHealth().catch((e) => { _cache = null; throw e; }) };
+  }
+  return _cache.data;
 }
 
 async function _loadHealth(): Promise<HealthData> {
@@ -72,6 +83,11 @@ async function _loadHealth(): Promise<HealthData> {
     fetchText(gvizUrl("range=AA1&headers=0")).catch((e) => { console.warn("Health: AA1 freshness read failed", e); return ""; }),
     fetchText(gvizUrl("range=W1&headers=0")).catch((e) => { console.warn("Health: W1 breaker read failed", e); return ""; }),
   ]);
+
+  // Shape guard: a 200 that isn't our CSV (an HTML login/error page) must not parse to a silent empty set.
+  if (metaTxt.trimStart().startsWith("<")) {
+    throw new Error("unexpected Sheet1 response — not CSV (sheet renamed, not link-readable, or an error page?)");
+  }
 
   const rows = parseCsv(metaTxt);
   let metrics: Record<string, number> = {};
@@ -87,10 +103,14 @@ async function _loadHealth(): Promise<HealthData> {
       const msg = (r[2] || "").trim();
       // Our own structured tag "[SEV:CATEGORY] message" — internal format we control (not LIS prose).
       const m = /^\[([A-Z]+):([A-Z_]+)\]\s*(.*)$/s.exec(msg);
+      // VALIDATE the severity against the worker's known vocabulary — an unrecognized value is flagged
+      // "UNKNOWN" (never silently coerced to INFO; "allowed not to know, never pretend"). Category likewise
+      // normalized to a clean non-empty token for display.
+      const rawSev = (r[1] || m?.[1] || "").trim().toUpperCase();
       alerts.push({
-        severity: (r[1] || m?.[1] || "INFO").trim(),
-        category: m?.[2] || "",
-        message: m?.[3] || msg,
+        severity: KNOWN_SEVERITIES.has(rawSev) ? rawSev : "UNKNOWN",
+        category: (m?.[2] || "").trim().toUpperCase() || "UNCATEGORIZED",
+        message: (m?.[3] || msg).trim(),
         date: (r[0] || "").trim(),
       });
     }

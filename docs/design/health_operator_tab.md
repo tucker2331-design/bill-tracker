@@ -1,7 +1,7 @@
 ---
 tags: [design, ui, health, operator, bullet-graph, access-gated, scope, web]
 updated: 2026-06-24
-status: built
+status: active
 ---
 
 > **▶️ BUILT 2026-06-24** (`claude/health-tab`, verified live): `web/src/components/BulletGraph.tsx`
