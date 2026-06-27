@@ -34,6 +34,7 @@ Links use Obsidian `[[wikilink]]` format. Obsidian resolves by filename; path-qu
 - [[workflow/zero_routine_maintenance]] — Standard #8: 50-state SaaS requires zero ongoing per-state maintenance; humans get pinged only for true anomalies
 - [[workflow/use_tools_when_stuck]] — methodology note: consult the actual upstream source (WebFetch, API probes, etc.) alongside local reasoning, not instead of it
 - [[workflow/bot_review_fold_in]] — handling Codex / Gemini PR reviews: implement, re-audit, push (bots review commits, not replies)
+- [[workflow/cross_state_brain]] — **the "mega brain": generalizable lessons → SHARED brain (compounds across states); state-specific facts → per-state `docs/<state>/`. So building each state gets easier. (owner 2026-06-25)**
 
 ## Architecture
 - [[ny/architecture/bill_pipeline]] — New York OpenLeg bill engine pipeline and source-to-field mapping
@@ -62,6 +63,7 @@ Links use Obsidian `[[wikilink]]` format. Obsidian resolves by filename; path-qu
 ## Testing & Metrics
 - [[ny/testing/validation_plan]] — New York fixture, dry-run, and live-write validation plan
 - [[ny/testing/quality_audit]] — New York structural indicators, time coverage, health counters, and open audit items
+- [[testing/va_data_quality_audit]] — **ACTIVE (owner 2026-06-25): "clean sustainable data" optimization — the live Health-tab edges to smooth (invariant_violations=1, gap-classification, unknown_refid cohort, Ledger-collapse volume, legevent recovery). Section 9 still 0.**
 - [[testing/crossover_week_baseline]] — Feb 9-13, 2026 as the benchmark; PR-by-PR bug count ledger
 - [[testing/crossover_audit]] — full-window tier-A audit of Sheet1 vs LIS website (ground truth)
 - [[testing/edge_case_registry]] — living catalog of the edge-case SPACE per pipeline stage (Phase-C multi-session replay findings) — full-window tier-A audit of Sheet1 vs LIS website (ground truth)
