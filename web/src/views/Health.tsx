@@ -1,6 +1,8 @@
 import { useEffect, useState } from "react";
 import type { Completeness } from "../data/types";
-import { BulletGraph, type Band } from "../components/BulletGraph";
+import { BulletGraph } from "../components/BulletGraph";
+import { bandTone, type Band } from "../components/bands";
+import { HealthVitals, type Vital, type VitalSeg } from "../components/HealthVitals";
 import { loadHealth, type HealthData } from "../data/health";
 
 // The operator / Health tab (vision §3f + §7): the trust signals the system ALREADY produces, as Few
@@ -50,8 +52,40 @@ export function Health({ completeness, dataAsOf }: { completeness: Completeness 
   const calFreshH = hoursSince(h?.calendarFreshness ?? null);
   const breakerOk = h ? !h.breakerTrip : true;
 
+  // ── At-a-glance vitals: roll the gauges below into four category rings. Each segment's tone comes from
+  // `bandTone` over the SAME bands the matching gauge uses, so the donut and the detail never disagree; a
+  // segment whose backend payload is absent is "unknown" (grey), never a false green. ──
+  const sv = (label: string, value: number, bands: Band[], known: boolean): VitalSeg =>
+    ({ label, tone: known ? bandTone(value, bands) : "unknown" });
+  const critCount = h ? h.alerts.filter((a) => a.severity === "CRITICAL").length : 0;
+  const warnCount = h ? h.alerts.filter((a) => a.severity === "WARN").length : 0;
+  const vitals: Vital[] = [
+    { name: "Accuracy", segs: [
+      sv("Section-9 · meeting actions without a time", section9 ?? 0, lower(0.5, 25, 50), section9 != null),
+      sv("Outcome drift · keyword↔structural", driftPct, lower(0.1, 1, 2), !!c),
+    ] },
+    { name: "Completeness", segs: [
+      sv("Bill completeness · records vs universe", completePct, higher(98, 99.99, 100), !!c && universe > 0),
+      sv("History-vs-universe anomalies", anomalies, lower(0.5, 5, 20), !!c),
+      sv("Patron coverage", patronPct, higher(98, 99.99, 100), !!c && written > 0),
+      sv("Unclassified share · router blank", unclassPct, lower(8, 15, 25), !!h),
+    ] },
+    { name: "Freshness", segs: [
+      sv("Bill backend clock", billFreshH, lower(6, 12, 24), !!dataAsOf),
+      sv("Calendar clock", calFreshH, lower(6, 12, 24), !!h?.calendarFreshness),
+    ] },
+    { name: "Stability", segs: [
+      { label: "Circuit breaker", tone: !h ? "unknown" : breakerOk ? "good" : "danger" },
+      sv("Write-time invariant violations", violations ?? 0, lower(0.5, 49, 60), violations != null),
+      { label: "Active alerts", tone: !h ? "unknown" : critCount ? "danger" : warnCount ? "warn" : "good" },
+    ] },
+  ];
+
   return (
     <div>
+      <h2 className="h">At a glance</h2>
+      <HealthVitals vitals={vitals} />
+
       {/* ── System status: the breaker + the TWO freshnesses (different workers) ── */}
       <div className="hl-status">
         <span className={`hl-breaker ${breakerOk ? "ok" : "trip"}`}>

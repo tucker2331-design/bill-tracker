@@ -4,8 +4,8 @@
 // Direction-agnostic: the CALLER orders the band tones (danger-left for higher-is-better, danger-right for
 // lower-is-better), so this component never needs to know which way is "good".
 
-export type BandTone = "good" | "warn" | "danger";
-export interface Band { upto: number; tone: BandTone; } // ranges ascending by `upto`; last `upto` = max
+import { bandTone, type Band, type BandTone } from "./bands";
+export type { Band, BandTone } from "./bands"; // re-export for existing `import … from "./BulletGraph"` callers
 
 const BAND_BG: Record<BandTone, string> = {
   good: "var(--bg-good)",
@@ -33,7 +33,7 @@ export function BulletGraph({ label, value, max, target, bands, format, unit, su
   const safeMax = max > 0 ? max : 1;
   const pct = (v: number) => Math.max(0, Math.min(1, v / safeMax)) * 100;
   const sorted = [...bands].sort((a, b) => a.upto - b.upto);
-  const tone: BandTone = (sorted.find((b) => value <= b.upto) ?? sorted[sorted.length - 1])?.tone ?? "good";
+  const tone: BandTone = bandTone(value, bands);
   const fmt = format ?? ((n: number) => n.toLocaleString());
   const u = unit ?? "";
 
