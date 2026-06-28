@@ -448,6 +448,24 @@ _COMMITTEE_REFID_RE = _re.compile(r'^[HS]\d{1,2}$')            # H14 / S04 commi
 # purpose (Gemini #124): a `\d+[A-Z]+\d+` shape is UNCONFIRMED, so it must SURFACE (UNKNOWN), not
 # be assumed a document and routed admin — "surface, don't guess".
 _DOCUMENT_REFID_RE = _re.compile(r'^\d+[A-Z]+$')
+# Bill IMPACT-STATEMENT document id: <bill><opt version segment>F<dept code>, e.g. HB1000F122,
+# HB1002ERF122 (engrossed reprint), HB1001H1F122 (House substitute 1), SB106S1F122. The `F<code>`
+# is the statement-filing marker; the optional version segment is `[A-EG-Z0-9]*` — A–Z (EXCEPT F) +
+# digits. Excluding F is deliberate (Qodo, audit #50): if the segment allowed F, a double-marker shape
+# like `HB1000F122F999` would match and be assumed a DOCUMENT → routed admin, instead of SURFACING as
+# UNKNOWN ("surface, don't guess"); excluding it anchors on the single trailing `F\d+`. No real version
+# segment contains F (ER/E/H1/S1/EH1/ES1/HC1), so this is tighter, not narrower.
+# ASSUMPTION (the 3-part heuristic doc, Standard #1): these are filed analysis documents that never
+# surface as a meeting. MEASURED 2026-06-27 (unknown_refid_probe.py + route_crosscheck.py, session
+# 20261): 4,299 rows, 0% VOTE.CSV join, fan-out=1, descriptions = "Fiscal Impact Statement from …"
+# (4,293) + "Racial and Ethnic Impact Statement" (6), and 0 live Sheet1 rows (worker noise-filters them).
+# HOW IT BREAKS: LIS starts surfacing an impact refid as a timed meeting row. RUNTIME CHECK: that would
+# carry a meeting time → if timeless it increments `meeting_unsourced` (Section-9), tripping the breaker
+# / accuracy sentinel; and the refid-shape drift monitor (validate_refid_shapes) alerts on any NOVEL
+# impact-shape variant. So this routes admin exactly like the bill-version DOCUMENT class above; the
+# route-cross-check is the safety basis (unlike the \d+D_H#### compounds and "incorporated" bill-refs,
+# which route=meeting and must NOT get an admin refid label).
+_IMPACT_DOC_REFID_RE = _re.compile(r'^[HS]B\d+[A-EG-Z0-9]*F\d+$')
 
 
 def normalize_refid(v) -> str:
@@ -509,7 +527,8 @@ def classify_refid(refid, *, fanout: int = 0, in_vote_csv: bool = False,
     Administrative (document refs): BATCH_NOTICE, COMMITTEE_REF, SINGLETON_DOC (len<=6 numeric;
     verified 100% "Placed on Agenda/Calendar" + docket placements, 2026-06-11), and DOCUMENT
     (PR-C8.4c: a bill-version document id `\d+[A-Z]`, e.g. 26108316D — printed/received clerical
-    rows; 0% VOTE.CSV join). No decisive signal (caller should SURFACE): VOTE_UNMATCHED,
+    rows; 0% VOTE.CSV join; AND 2026-06-27 the impact-statement family `[HS]B\d+…F\d+`, e.g. HB1000F122
+    — fiscal + racial/ethnic, route-confirmed noise-filtered documents). No decisive signal (SURFACE): VOTE_UNMATCHED,
     UNKNOWN_REFID, EMPTY.
 
     CALLER CONTRACT (the length law's only soft spot — Gemini #115): pass `refid` as the RAW
@@ -536,6 +555,10 @@ def classify_refid(refid, *, fanout: int = 0, in_vote_csv: bool = False,
     if _COMMITTEE_REFID_RE.match(r):
         return REFID_COMMITTEE_REF
     if _DOCUMENT_REFID_RE.match(r):
+        return REFID_DOCUMENT
+    # Impact-statement document refids (HB1000F122 fiscal / racial-ethnic; HB1002ERF122 / SB106S1F122).
+    # Route-confirmed clerical DOCUMENTs (0 vote-join, noise-filtered, never surface) — see the regex note.
+    if _IMPACT_DOC_REFID_RE.match(r):
         return REFID_DOCUMENT
     return REFID_UNKNOWN
 

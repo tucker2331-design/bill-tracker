@@ -15,7 +15,16 @@ rows (session 20261):
 | `H14V2610034` (vote id) | 5,657 | roll-call vote id | **JOIN to VOTE.CSV** = structural "a recorded vote happened on this row" — replaces any text tally-regex |
 | numeric, shared across bills same-date | most of 8,231 | **batch document id** (one agenda/assignment notice fanning across 4–63 bills) | **batch-notice law** (below) |
 | numeric, singleton | ~1,568 | per-bill document id (e.g. governor's substitute print) | residual → surface |
+| `HB1000F122` (impact-stmt doc) | 4,299 | bill **impact-statement** filing (`[HS]B\d+…F\d+`): Fiscal (4,293) + Racial-and-Ethnic (6) | **DOCUMENT → admin** (2026-06-27): 0 vote-join, fan-out=1, **0 live Sheet1 rows (noise-filtered)** → `classify_refid` `_IMPACT_DOC_REFID_RE` |
 | empty | 27,332 | floor readings/clerical | other signals |
+
+**Impact-statement caveat (2026-06-27, route-cross-checked):** the `…F###` shape was classified DOCUMENT
+only AFTER confirming via the live route that it never surfaces (0 Sheet1 rows). The sibling unknown shapes
+do the OPPOSITE — `\d+D_H####` "(sub)committee offered" compounds and `HB####/SB####` "incorporated" bill-refs
+**route `LegEventRoute=meeting`** (real committee times from the schedule match, not the refid), so they must
+NOT get an admin refid label and stay UNKNOWN/surface until a dedicated *non-decisive* class lands. Lesson: a
+refid's identity ≠ its row's route; the refid class must never override a positive meeting route to admin.
+See [[testing/va_data_quality_audit]] edge #3.
 
 **VOTE.CSV** (never opened before 2026-06-09): per-member roll calls, first column = vote id
 (`26110000`-style) matching the V-refid suffix. 1,606 roll-calls in 20261. This is the
