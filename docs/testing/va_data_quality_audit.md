@@ -28,6 +28,15 @@ So nothing here is a crisis. These are SECONDARY edges to smooth for a truly cle
    **Residual finding (separate, deferred):** the I2 alert IS pushed by `_append_event` (code is correct),
    yet only the `TIMING_LAG` alert was visible on the sheet — so the alert HISTORY isn't fully surfaced
    (only the latest). That's Health gap #2 (alert history / Bug_Logs) + worth checking the Actions logs.
+   **PREVENTION (owner: "how do we prevent these false alarms in the future?") — ✅ DONE 2026-06-27:**
+   `test_origin_registry_sync.py` parses `calendar_worker.py` with `ast` (the `_VALID_ORIGINS` set is
+   function-local, not importable) and asserts every Origin the worker USES (assigned to `origin`, set as
+   an `"Origin"` dict literal, or branched on via `==`/`in`) is registered, and no dead registrations.
+   Verified it FAILS listing `derived_standing` in the exact pre-fix state. Wired into the repo's first
+   test-CI gate, `.github/workflows/structural_tests.yml` (stdlib-only, no creds — runs the 6 structural
+   golden tests on every PR + pushes to main; **green on #176's own run**). So this drift class can no
+   longer merge silently. GENERALIZABLE → every state's worker should carry the same origin-registry sync
+   test ([[workflow/cross_state_brain]]).
 2. **`gap_minutes = 179.43`, `gap_cause = normal`** — ✅ **RESOLVED 2026-06-25: NOT a bug.** The cron is now
    `0 */3 * * *` (every 3 h — changed because the 15-min cron backed up on ~16-19 min runtime), and the
    thresholds AUTO-SCALE: `GAP_WARN = SCHEDULE_CADENCE_MINUTES(180)×2 = 360 min (6 h)`, `GAP_CRITICAL =
