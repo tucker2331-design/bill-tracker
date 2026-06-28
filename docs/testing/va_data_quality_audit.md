@@ -34,11 +34,21 @@ So nothing here is a crisis. These are SECONDARY edges to smooth for a truly cle
    QUIET_WINDOW(420)+360 = 780 min (13 h)`. So a ~3 h gap is correctly `normal`; freshness IS trustworthy.
    The `20/60` was the 15-min-era value — **stale doc fixed** in [[architecture/calendar_pipeline]]. (The
    Health freshness gauge bands lower(6,12,24) happen to align well; could pin danger to 13 h exactly.)
-3. **`refidclass_unknown_refid = 5,051` (7.7%)** — ⏸️ **SCOPED (safe, an optimization — not a bug).** The
-   classifier **SURFACES** UNKNOWN_REFID rows (never routes them admin), so they're safely handled, not
-   silently mis-routed (consistent with `meeting_unsourced=0`). Reducing the count = a structural-coverage
-   optimization: sample the distinct unknown refid *shapes* from HISTORY.CSV (needs the dynamic session blob
-   path) — if one shape dominates, extend the namespace law; if heterogeneous, honest residue. **Deferred.**
+3. **`refidclass_unknown_refid` — 🔵 THE PATH TO unknown→0 (owner: structurally identifiable ⇒ identify it).**
+   **INVESTIGATED 2026-06-25** (fetched live `lisfiles/20261/HISTORY.CSV`, ran `classify_refid` over all rows):
+   the ~9,350 `UNKNOWN_REFID` rows are **NOT junk — they have clear structural shapes** the namespace law just
+   doesn't cover yet:
+   - `SV###` / `SV####` (3,513) + `VSV###` (468) — Senate amendment / vote refids.
+   - the `HB###F###` family (~3,400: `HB100F122`, `HB100ERF122` engrossed, `HB109H1F122` substitute) — bill
+     **version/amendment DOCUMENT** refids (clerical, admin — like the existing `\d+[A-Z]` DOCUMENT class).
+   - `########D_H####` (881: `26105750D_H8120`) — **COMPOUND `<document>_<vote-id>`** (the `_H####` is a vote).
+   **→ FIX = extend `classify_refid` (structural_router.py) to recognize these** → `unknown_refid` drops toward 0.
+   **⚠️ CRITICAL nuance — NOT a blanket "→ DOCUMENT":** the version/amendment shapes are admin DOCUMENTs, but
+   the `_`-compounds carry a **vote-id** = MEETING evidence, so they must SPLIT and route via the vote-join
+   (preserve the meeting signal), never be buried as admin. This is **Section-9-sensitive** (it feeds the
+   meeting/admin routing) → its own focused PR with: golden tests per shape, an offline diff proving 0 rows
+   flip meeting↔admin incorrectly, and a live worker run measuring `unknown_refid` ↓ + `meeting_unsourced`
+   still 0. Cross-ref [[knowledge/history_refid_namespace]] (the refid namespace law this extends).
 4. **Ledger-collapse volume (~21%)** — ✅ **CONFIRMED SOUND 2026-06-25 (live sheet).** 7,826 Ledger rows, all
    correct collapse origins (`floor_miss` 3,402 / `journal_default` 2,765 / `admin_default` 1,659). A text
    spot-check for "meeting verbs" hit 906 rows, but they are **clerical document rows** ("Bill text as passed
