@@ -4208,8 +4208,11 @@ def run_calendar_update():
         # (api_schedule / convene_anchor) the Time cannot be a [NO_*] tag —
         # that combination means the matcher's return value got lost
         # somewhere on the way to the append. Catch it at write time.
+        # derived_standing carries a REAL (assumed) clock time (#76), never a [NO_*] tag — so it's a
+        # concrete-time source too; included here to ENFORCE that (CodeRabbit on #176), catching a
+        # regression where the derived time goes missing, not just registering the origin for I2 above.
         time_val = str(event.get("Time", ""))
-        if origin in {"api_schedule", "convene_anchor", "legislation_event", "sibling_meeting"} and time_val.startswith("\u23f1\ufe0f [NO_"):
+        if origin in {"api_schedule", "convene_anchor", "legislation_event", "sibling_meeting", "derived_standing"} and time_val.startswith("\u23f1\ufe0f [NO_"):
             source_miss_counts["invariant_violations"] += 1
             push_system_alert(
                 f"I3 time/origin parity violation: Origin='{origin}' but "

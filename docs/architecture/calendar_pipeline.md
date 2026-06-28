@@ -1,3 +1,9 @@
+---
+tags: [architecture, calendar, pipeline, worker]
+updated: 2026-06-28
+status: active
+---
+
 # Calendar Worker Pipeline Architecture
 
 ## Data Flow
