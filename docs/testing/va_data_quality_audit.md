@@ -44,20 +44,36 @@ So nothing here is a crisis. These are SECONDARY edges to smooth for a truly cle
    The `20/60` was the 15-min-era value — **stale doc fixed** in [[architecture/calendar_pipeline]]. (The
    Health freshness gauge bands lower(6,12,24) happen to align well; could pin danger to 13 h exactly.)
 3. **`refidclass_unknown_refid` — 🔵 THE PATH TO unknown→0 (owner: structurally identifiable ⇒ identify it).**
-   **INVESTIGATED 2026-06-25** (fetched live `lisfiles/20261/HISTORY.CSV`, ran `classify_refid` over all rows):
-   the ~9,350 `UNKNOWN_REFID` rows are **NOT junk — they have clear structural shapes** the namespace law just
-   doesn't cover yet:
-   - `SV###` / `SV####` (3,513) + `VSV###` (468) — Senate amendment / vote refids.
-   - the `HB###F###` family (~3,400: `HB100F122`, `HB100ERF122` engrossed, `HB109H1F122` substitute) — bill
-     **version/amendment DOCUMENT** refids (clerical, admin — like the existing `\d+[A-Z]` DOCUMENT class).
-   - `########D_H####` (881: `26105750D_H8120`) — **COMPOUND `<document>_<vote-id>`** (the `_H####` is a vote).
-   **→ FIX = extend `classify_refid` (structural_router.py) to recognize these** → `unknown_refid` drops toward 0.
-   **⚠️ CRITICAL nuance — NOT a blanket "→ DOCUMENT":** the version/amendment shapes are admin DOCUMENTs, but
-   the `_`-compounds carry a **vote-id** = MEETING evidence, so they must SPLIT and route via the vote-join
-   (preserve the meeting signal), never be buried as admin. This is **Section-9-sensitive** (it feeds the
-   meeting/admin routing) → its own focused PR with: golden tests per shape, an offline diff proving 0 rows
-   flip meeting↔admin incorrectly, and a live worker run measuring `unknown_refid` ↓ + `meeting_unsourced`
-   still 0. Cross-ref [[knowledge/history_refid_namespace]] (the refid namespace law this extends).
+   **RE-PROBED 2026-06-27** (fresh `lisfiles/20261/HISTORY.CSV` + `VOTE.CSV`; `classify_refid` over all 65,377
+   rows with the real vote-join + fan-out; `scratchpad/unknown_refid_probe.py`). **9,350 `UNKNOWN_REFID` (14.3%).**
+   HISTORY has only 4 cols — `Bill_id, History_date, History_description, History_refid` (no EventCode), so the
+   description is **validation-only text** (Standard #3), the verdict below is from the refid shape + structural
+   joins. Exact cohort (vote-join is **0** for ALL of them; fan-out noted):
+   - **`…F###` fiscal/version family (≈4,260, fan-out=1)** — `HB1000F122`, `HB1002ERF122`, `HB1001H1F122`,
+     `SB106S1F122`, … desc = **"Fiscal Impact Statement from Department/SCC/VCSC"**. Clerical **DOCUMENTS** → admin.
+   - **`\d+D_H####` compounds (882, fan-out=1)** — `26101239D_H8120`, … desc = **"House (sub)committee offered"**.
+     ⛔ **HYPOTHESIS REFUTED:** the prior note assumed the `_H####` is a **vote-id = meeting evidence**. The probe
+     proves it is **NOT** — the `_H8120` suffix has **0/882 VOTE.CSV join** (it's a 4-digit register tag, not a
+     7–8-digit roll-call id). The leading `\d+D` IS the existing DOCUMENT grammar. So these are **DOCUMENTS → admin**;
+     there is **no vote to split out**, no meeting signal to preserve. (This deletes the old "must split" plan.)
+   - **`SV###`/`VSV###` (4,081, fan-out up to 107)** — desc = **"Constitutional reading dispensed (… Block)"**. A
+     Senate floor procedural register; 0 vote-join. **DOMAIN-SENSITIVE:** is "reading dispensed" a meeting/floor
+     action (surface w/ a floor time) or admin? Needs the owner's call / a route-cross-check before a confident class.
+   - **`HB####`/`SB####`-as-refid (88, fan-out ≤4)** — desc = **"Incorporated by <committee> (HB…-…)"**. The refid
+     points at ANOTHER bill (a cross-reference). Also domain-sensitive (committee disposition vs admin).
+   **SAFETY RE-SCOPED (key finding):** `RefidClass` is currently a **SHADOW measurement column** — STAMPED + counted
+   (`source_miss_counts["refidclass_…"]`), but the live meeting/admin/ledger **routing runs off `LegEventRoute`
+   (EventCode), NOT `RefidClass`**. The only `RefidClass` consumer is the Part-C gap-recovery, which keys on the
+   **recorded-VOTE** signal (`VOTE_COMMITTEE/VOTE_FLOOR`); the I4 breaker keys on `LegEventRoute=="meeting"`. So an
+   `UNKNOWN→DOCUMENT` reclass **creates no vote signal** (all cohorts 0 vote-join) and **cannot move
+   `meeting_unsourced`** — it's measurement-only today. Section-9-sensitivity is **deferred to the future C8.2 flip**
+   (when `RefidClass` starts driving routing); the classes must be *correct* for that day, which is why SV###/
+   incorporated need the domain call, not a guess.
+   **→ PLAN (split the PR by risk):** (a) **SAFE NOW** — extend `classify_refid` for the two DOCUMENT families
+   (`…F###` fiscal + `\d+D_H####` compound ≈ **5,140 rows / 55% of unknowns**) → admin DOCUMENT class; golden tests
+   per shape + offline diff proving 0 rows leave a MEETING class + `unknown_refid` ↓≈5,140. Zero routing change.
+   (b) **DEFER** — SV### reading-dispensed + bill-ref "incorporated" (≈4,170) pending the owner's meeting/admin call.
+   Cross-ref [[knowledge/history_refid_namespace]] (the namespace law this extends).
 4. **Ledger-collapse volume (~21%)** — ✅ **CONFIRMED SOUND 2026-06-25 (live sheet).** 7,826 Ledger rows, all
    correct collapse origins (`floor_miss` 3,402 / `journal_default` 2,765 / `admin_default` 1,659). A text
    spot-check for "meeting verbs" hit 906 rows, but they are **clerical document rows** ("Bill text as passed
