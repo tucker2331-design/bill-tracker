@@ -318,6 +318,8 @@ from structural_router import compute_ministerial_eventcodes as _compute_ministe
 from structural_router import build_admin_recovery_index as _build_admin_recovery_index
 from structural_router import recover_admin_route as _recover_admin_route
 from structural_router import classify_refid as _classify_refid  # PR-C8.1 structural refid identity
+from structural_router import validate_refid_shapes as _validate_refid_shapes  # refid SHAPE drift monitor
+from structural_router import REFID_UNKNOWN as _REFID_UNKNOWN, REFID_SHAPE_MIN_VOLUME as _REFID_SHAPE_MIN_VOLUME
 from structural_router import REFID_VOTE_COMMITTEE as _REFID_VOTE_COMMITTEE, REFID_VOTE_FLOOR as _REFID_VOTE_FLOOR  # Part C: recorded-vote = meeting
 from structural_router import classify_action as _classify_action  # PR-hardening1b: count unconfirmed rows (centralized in 1a)
 from structural_router import normalize_refid as _normalize_refid  # float64/nan-proof refid cleanup
@@ -6531,6 +6533,35 @@ def run_calendar_update():
             # surfaces in its own "🔗 Sibling-time inheritance: N …" print.
         )
         print(f"📊 {metrics_summary}")
+
+        # Refid SHAPE drift monitor (the SUSTAINABLE answer to unknown_refid — mirrors the status-
+        # grouping drift check). Instead of hand-adding a grammar per new refid shape, alert when a
+        # NOVEL shape (a LIS refid namespace classify_refid doesn't recognize) appears in volume →
+        # human review. UNKNOWN_REFID is fanout/vote-independent (only the numeric branch consults
+        # those, and numerics never return UNKNOWN), so the unknown cohort re-derives from the refid
+        # column alone — no hot-loop hook. route_event still routes these rows; this keeps the refid
+        # MEASUREMENT honest (Standard #1 runtime-validation, #4 UNKNOWN→human, #8 anomaly-only).
+        try:
+            _refid_series = (df_past[refid_col].astype(str) if (refid_col and refid_col in df_past.columns)
+                             else [])
+            _unknown_refids = [_r for _r in (_normalize_refid(_v) for _v in _refid_series)
+                               if _r and _classify_refid(_r) == _REFID_UNKNOWN]
+            _shape_drift = _validate_refid_shapes(_unknown_refids)
+            if _shape_drift:
+                _top = ", ".join(f"{s}×{c}" for s, c in sorted(_shape_drift.items(), key=lambda kv: -kv[1]))
+                print(f"🚨 Refid-shape DRIFT: {len(_shape_drift)} novel shape(s): {_top}")
+                push_system_alert(
+                    f"Refid-shape drift: {len(_shape_drift)} NEW refid namespace(s) LIS introduced that "
+                    f"classify_refid does not recognize, each ≥{_REFID_SHAPE_MIN_VOLUME} rows: {_top}. "
+                    f"Review the cohort, then extend the grammar or acknowledge it in "
+                    f"KNOWN_REFID_SHAPES (structural_router).",
+                    status="WARN", category="DATA_ANOMALY", severity="WARN",
+                    dedup_key=f"refid_shape_drift::{','.join(sorted(_shape_drift))}",
+                )
+        except Exception as _rsd_e:
+            # Optional ≠ silent (Standard #4): a monitor failure must not crash the cycle, but log it.
+            print(f"⚠️ refid-shape drift check skipped ({_rsd_e})")
+
         # G4 (Standard #7 — a metric needs a DENOMINATOR): derived_standing is a
         # LAST-resort fraction of the recovery-eligible pool (rows the structural
         # recovery targeted = its successes + its NO_SCHEDULE_MATCH failures).

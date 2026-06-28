@@ -540,6 +540,59 @@ def classify_refid(refid, *, fanout: int = 0, in_vote_csv: bool = False,
     return REFID_UNKNOWN
 
 
+# === Refid SHAPE drift monitor — the SUSTAINABLE answer to UNKNOWN_REFID ===
+# classify_refid recognizes a fixed grammar; an unrecognized shape silently becomes UNKNOWN_REFID
+# with NO signal that LIS introduced something new — so the only way to "cover" it was to hand-add a
+# grammar per shape (a maintenance treadmill, and the refid layer's least-sustainable corner). This
+# mirrors validate_status_grouping instead: a baseline of ACKNOWLEDGED shapes + a runtime diff that
+# ALERTS when a NOVEL shape appears in volume → human review. Static-value-WITH-runtime-drift-alert
+# (Standard #1), UNKNOWN→human (Standard #4), ping-only-on-anomaly (Standard #8). The human then
+# classifies a genuinely-new shape ONCE (extend the grammar, or just acknowledge it here), rather than
+# us pre-coding every shape. NOTE: the refid layer is a SECONDARY/shadow cross-check — route_event
+# (EventCode/ReferenceType/Status) is the primary structural router and already routes these rows; this
+# monitor keeps the refid measurement honest, it does not gate routing.
+_REFID_DIGIT_RUN = _re.compile(r'\d+')
+
+
+def refid_shape_signature(refid) -> str:
+    """The refid's structural shape skeleton: each maximal digit-run -> '#', letters/underscore kept
+    literal. "HB1000F122" -> "HB#F#"; "26101239D_H8120" -> "#D_H#"; "SV100" -> "SV#". Pure."""
+    return _REFID_DIGIT_RUN.sub('#', normalize_refid(refid))
+
+
+# The acknowledged UNKNOWN-refid shapes (census 2026-06-27, session 20261 — scratchpad/unknown_refid_
+# probe.py). This is NOT a verdict (no meeting/admin meaning) — purely "we have seen this shape and a
+# human has eyeballed the cohort." A live unknown shape ABSENT here, appearing >= the volume floor, is
+# DRIFT: LIS introduced a new refid namespace → review it (then extend the grammar or add it below).
+KNOWN_REFID_SHAPES = frozenset({
+    "SV#", "VSV#",                                  # Senate floor "Constitutional reading dispensed"
+    "HB#", "SB#",                                   # bill cross-reference ("Incorporated by <bill>")
+    "#D_H#", "#A_H#", "#D_H#_H#",                   # <document>_<register> "(sub)committee offered"
+    "HB#F#", "SB#F#", "HB#ERF#", "SB#ERF#",         # bill impact-statement document family (fiscal /
+    "HB#EF#", "SB#EF#", "HB#H#F#", "SB#H#F#",       # racial-ethnic), incl. version segments — these are
+    "HB#S#F#", "SB#S#F#", "HB#EH#F#", "SB#ES#F#",   # classified DOCUMENT by classify_refid's _IMPACT_DOC
+    "HB#HC#F#", "SB#HC#F#", "SB#E#F#",              # grammar where present; acknowledged here regardless
+})
+# A shape this common in ONE session is a systematic new namespace, not a one-off typo. Below this the
+# residual stays quiet UNKNOWN (correctly surfaced, not alerted — it isn't a structural pattern yet).
+REFID_SHAPE_MIN_VOLUME = 25
+
+
+def validate_refid_shapes(unknown_refids, *, min_volume: int = REFID_SHAPE_MIN_VOLUME,
+                          known=KNOWN_REFID_SHAPES) -> dict:
+    """Mirror of validate_status_grouping for refid SHAPES. Pass the refids classify_refid returned
+    UNKNOWN_REFID for; returns {signature: count} for NOVEL shapes (not in `known`) seen >= min_volume
+    times. Empty dict = no drift. The caller raises a categorized alert (CRITICAL/DATA_ANOMALY) so a new
+    LIS refid namespace is detected, never silently absorbed. Never raises."""
+    from collections import Counter
+    counts: Counter = Counter()
+    for refid in (unknown_refids or []):
+        sig = refid_shape_signature(refid)
+        if sig and sig not in known:
+            counts[sig] += 1
+    return {sig: c for sig, c in counts.items() if c >= min_volume}
+
+
 def validate_status_grouping(live_status_names) -> list[str]:
     """Standard #1 runtime check: compare our grouping to LIS's published list.
 
