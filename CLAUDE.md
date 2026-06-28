@@ -14,6 +14,15 @@ Calendar 100% accuracy vs LIS website. The accuracy metric is in X-Ray Section 9
 
 The `docs/` folder is the project **brain**. It is an Obsidian vault of markdown files. **All persistent memory (failure lessons, API quirks, workflow rules, architecture notes, live state) lives there, not in global `~/.claude/` memory.**
 
+### New York work
+
+New York is now a separate state-brain inside this same vault. For any New York
+task, read `docs/ny/README.md` and `docs/ny/project_standards.md` after the root
+index/current-status pass. Keep New York source facts, assumptions, validation
+metrics, and active state in `docs/ny/` until a shared multi-state abstraction is
+proven. Do not source-swap Virginia logic into New York without first scoping,
+planning, and testing the New York source contract.
+
 ### At the start of every session (read these first)
 1. `docs/index.md` — catalog of every page in the vault. Know what exists before you answer.
 2. `docs/state/current_status.md` — what's active right now.

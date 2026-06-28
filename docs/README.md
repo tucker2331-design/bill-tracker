@@ -26,6 +26,9 @@ The pattern is the **LLM-Wiki** approach (a general convention for persistent, L
 3. [[state/open_anti_patterns]] — known silent-fallback debt in the code.
 4. [[log]] — chronological record of ingests / decisions / PRs.
 
+For New York work, start at [[ny/README]] after this page. The NY section is
+intentionally separate while the New York engine is being scoped and validated.
+
 ## For the LLM maintaining this vault
 
 Read [[workflow/persistent_memory]] first. The short version: **this vault is THE brain for this project**. Not global `~/.claude/` memory. All persistent memory writes land here.
