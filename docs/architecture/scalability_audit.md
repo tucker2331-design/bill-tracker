@@ -71,3 +71,24 @@ The 25 residue is dominated by cases where the structural sources genuinely lack
 
 1. **HISTORY-vs-LegEvent date drift** — the calendar places a row by HISTORY date, which can be 1–2 days off LIS's authoritative LegEvent date (cause of the 3 residual governor rows). A reconciliation that prefers the LegEvent (gold-standard) date for placement would fix both the Section-9 rows and a latent calendar-accuracy issue. Carries match-care (do it only for unambiguous single-occurrence events).
 2. **No `_clean_legevent_cell` normalization counter** — the heal is silent; a flood of normalized cells (signal of an upstream schema change) wouldn't surface. Trivial Standard-#4/#9 visibility add.
+
+## Curation-debt inventory — the "what else is hiding?" sweep (owner 2026-06-28)
+Owner: the curated-dictionary / detect-vs-fix concern only surfaced because they watched — *"makes me
+concerned for what else might be hiding."* So a SYSTEMATIC sweep of `structural_router`'s curated domain
+values, graded by whether each has the paired runtime DRIFT-ALERT its siblings have (Standard #1).
+**Re-run this whenever a change adds or grows a curated set** (the new CodeRabbit sustainability lens, PR #179,
+now also flags it on any future addition).
+
+| Curated value | Drift-alert? | Note |
+|---|---|---|
+| `ADMIN_PIPELINE_STATUSES` / `MEETING_INSESSION_STATUSES` | ✅ `validate_status_grouping` | the gold-standard pattern |
+| `KNOWN_GOVERNOR_EVENTCODES` | ✅ `validate_governor_eventcodes` | |
+| refid grammars + `KNOWN_REFID_SHAPES` | ✅ `validate_refid_shapes` (#178) | |
+| **`DOCUMENT_REFTYPES` / `REFERRAL_REFTYPES`** | ❌ **none** | a new LIS ReferenceType silently falls through `route_event` rule 2/3 → no alert. FIX: `validate_reference_types` vs LIS's published ReferenceType list, mirroring `validate_status_grouping`. |
+| **`_SCHEDULE_TYPE_MAP`** (ScheduleTypeID→label) | ❌ **none** | a new ScheduleTypeID maps to `SCHED_OTHER` (surfaces, fail-safe) but with no alert that LIS added a type. FIX: `validate_schedule_types` vs the live ScheduleTypeID set. |
+| `MEETING_HOUR_MIN/MAX`, `_VOTE_ID_MIN_LEN` | ❌ none | measured physical/structural constants (legislative hours; the len≥7 vote-id boundary). Lower drift-risk; document the measurement + a periodic re-measure, not a per-cycle alert. |
+
+**The 3 ❌ rows ARE the answer to "what's hiding" — same class as the status grouping, minus the drift-alert.**
+None is a live bug (each fails safe TODAY: an unrecognized value routes by a later rule / surfaces as
+`SCHED_OTHER`), but each would silently rot on an upstream change. NEXT: a focused "sustainability hardening"
+PR adding `validate_reference_types` + `validate_schedule_types`. See [[architecture/verification_durability#Sustainability honesty — the curation inventory + the path past "detect + ping" (owner 2026-06-28)]].
