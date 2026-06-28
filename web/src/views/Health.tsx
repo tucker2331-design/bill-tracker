@@ -76,13 +76,13 @@ export function Health({ completeness, dataAsOf }: { completeness: Completeness 
   const vitals: Vital[] = [
     { name: "Accuracy", segs: [
       sv("Section-9 · meeting actions without a time", section9 ?? 0, lower(0.5, 25, 50), section9 != null),
-      sv("Outcome drift · keyword↔structural", driftPct, lower(0.1, 1, 2), !!c),
+      sv("Outcome drift · keyword↔structural", driftPct, lower(0.1, 1, 2), c?.outcome_keyword_mismatch_rate != null),
     ] },
     { name: "Completeness", segs: [
       sv("Bill completeness · records vs universe", completePct, higher(98, 99.99, 100), !!c && universe > 0),
       sv("History-vs-universe anomalies", anomalies, lower(0.5, 5, 20), !!c),
       sv("Patron coverage", patronPct, higher(98, 99.99, 100), !!c && written > 0),
-      sv("Unclassified share · router blank", unclassPct, lower(8, 15, 25), !!h),
+      sv("Unclassified share · router blank", unclassPct, lower(8, 15, 25), !!h && total > 0),
     ] },
     { name: "Freshness", segs: [
       sv("Bill backend clock", billFreshH, lower(6, 12, 24), !!dataAsOf),
@@ -102,10 +102,16 @@ export function Health({ completeness, dataAsOf }: { completeness: Completeness 
 
       {/* ── System status: the breaker + the TWO freshnesses (different workers) ── */}
       <div className="hl-status">
-        <span className={`hl-breaker ${breakerOk ? "ok" : "trip"}`}>
-          {breakerOk ? "● Circuit breaker armed" : "▲ BREAKER TRIPPED"}
-        </span>
-        {!breakerOk && h?.breakerTrip && (
+        {!h ? (
+          // Don't claim "armed" before the calendar-worker payload loads — that's a false green when we
+          // simply don't know yet (CodeRabbit #167; "never pretend"). Show the unknown state instead.
+          <span className="hl-breaker unknown">● Circuit breaker — awaiting calendar worker</span>
+        ) : (
+          <span className={`hl-breaker ${breakerOk ? "ok" : "trip"}`}>
+            {breakerOk ? "● Circuit breaker armed" : "▲ BREAKER TRIPPED"}
+          </span>
+        )}
+        {h && !breakerOk && h.breakerTrip && (
           <span className="muted" style={{ fontSize: 12 }}>
             tripped {String((h.breakerTrip as { trip_utc?: string }).trip_utc ?? "")} — Sheet1 holds last-known-good
           </span>
@@ -185,12 +191,12 @@ export function Health({ completeness, dataAsOf }: { completeness: Completeness 
           <BulletGraph label="Write-time invariant violations" value={violations ?? 0}
             max={60} target={0} bands={lower(0.5, 49, 60)} sub="rows that failed a schema/Origin invariant at write (breaker trips at ≥50)" />
         ) : <CalLoading err={hErr} />}
-        {c && (
+        {c?.outcome_keyword_mismatch_rate != null && (
           <BulletGraph label="Outcome drift · keyword↔structural mismatch" value={driftPct}
             max={2} target={0} bands={lower(0.1, 1, 2)} unit="%" format={oneDp}
             sub="self-calibrating reconciliation vs LIS's own flags (steady ≈ 0.03%)" />
         )}
-        {h && (
+        {h && total > 0 && (
           <BulletGraph label="Unclassified share · router returned blank" value={unclassPct}
             max={25} target={0} bands={lower(8, 15, 25)} unit="%" format={oneDp}
             sub={`${(m.legevent_route_blank ?? 0).toLocaleString()} of ${total.toLocaleString()} rows (floor/skeleton rows are legitimately blank)`} />

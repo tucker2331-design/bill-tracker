@@ -250,6 +250,7 @@ h2, h3 { margin: 0; }
 .hl-breaker { display: inline-flex; align-items: center; gap: 6px; padding: 5px 12px; border-radius: 999px; font-weight: 700; font-size: 12.5px; }
 .hl-breaker.ok { background: var(--o-signed-bg); color: var(--ok); }
 .hl-breaker.trip { background: var(--o-vetoed-bg); color: var(--stale); }
+.hl-breaker.unknown { background: var(--o-dead-bg); color: var(--o-dead); }
 
 /* at-a-glance vitals — segmented activity-ring donuts (one per category, rolls up the gauges below) */
 .hl-vitals { display: grid; grid-template-columns: repeat(4, 1fr); gap: var(--s3); margin-bottom: var(--s5); }
@@ -294,7 +295,7 @@ h2, h3 { margin: 0; }
 .bg-track { position: relative; height: 16px; border-radius: 4px; overflow: hidden; background: var(--surface-2); }
 .bg-band { position: absolute; top: 0; bottom: 0; }                      /* qualitative range */
 .bg-measure { position: absolute; top: 5px; height: 6px; left: 0; border-radius: 3px; }  /* the value bar (Few: thin, centered) */
-.bg-target { position: absolute; top: -2px; bottom: -2px; width: 2px; background: var(--ink); }  /* target tick */
+.bg-target { position: absolute; top: 0; bottom: 0; width: 2px; background: var(--ink); }  /* target tick (full track height — the old -2px overhang was clipped by the track's overflow:hidden, CodeRabbit #167) */
 .bg-sub { font-size: 11.5px; color: var(--ink-faint); }
 
 /* alert feed */

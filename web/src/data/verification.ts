@@ -35,6 +35,7 @@ const GUARDS: { key: string; label: string; proves: string; cadence: "daily" | "
 ];
 
 const CACHE_TTL_MS = 300000; // 5 min — CI verdicts change at most daily; keep GitHub API calls light
+const FETCH_TIMEOUT_MS = 12000; // a hung GitHub request must not pin the panel on "Loading…" forever
 
 let _cache: { at: number; data: Promise<GuardRun[]> } | null = null;
 
@@ -51,7 +52,17 @@ async function _load(): Promise<GuardRun[]> {
     const base = { key: g.key, label: g.label, proves: g.proves, cadence: g.cadence };
     try {
       const url = `https://api.github.com/repos/${REPO}/actions/workflows/${g.key}/runs?per_page=1`;
-      const res = await fetch(url, { headers: { Accept: "application/vnd.github+json" }, cache: "no-store" });
+      // Timeout the fetch — a hung GitHub request would leave the panel stuck on "Loading…" forever
+      // (the Health effect only settles when the promise does). On abort/timeout we fall to the catch
+      // below and show "—" (CodeRabbit #167).
+      const ctrl = new AbortController();
+      const timer = setTimeout(() => ctrl.abort(), FETCH_TIMEOUT_MS);
+      let res: Response;
+      try {
+        res = await fetch(url, { headers: { Accept: "application/vnd.github+json" }, cache: "no-store", signal: ctrl.signal });
+      } finally {
+        clearTimeout(timer);
+      }
       if (!res.ok) throw new Error(`GitHub API HTTP ${res.status}`);
       const j = await res.json();
       const run = j.workflow_runs?.[0];

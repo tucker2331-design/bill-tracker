@@ -48,8 +48,15 @@ function parseMetrics(cell: string): Record<string, number> {
   try {
     const obj = JSON.parse(cell);
     for (const [k, v] of Object.entries(obj)) {
-      const n = typeof v === "number" ? v : Number(v);
-      if (Number.isFinite(n)) out[k] = n;
+      // Only keep genuine numbers (or non-empty numeric strings). Number(null)/Number("")/Number(false)
+      // all coerce to 0, which would turn an ABSENT metric into a false-green 0 — the Health vitals rely
+      // on a missing key staying missing so they render "unknown" (CodeRabbit #167; "never pretend").
+      if (typeof v === "number" && Number.isFinite(v)) {
+        out[k] = v;
+      } else if (typeof v === "string" && v.trim() !== "") {
+        const n = Number(v);
+        if (Number.isFinite(n)) out[k] = n;
+      }
     }
   } catch (e) {
     // Optional ≠ silent (Standard #4): a malformed metrics row surfaces an empty gauge set, but the dev/
