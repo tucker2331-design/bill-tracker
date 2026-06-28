@@ -1,0 +1,95 @@
+---
+tags: [ny, architecture, bill-pipeline]
+updated: 2026-06-24
+status: active
+---
+
+# New York Bill Pipeline
+
+## Data flow
+
+```
+NY_OPENLEG_API_KEY
+  -> NYOpenLegClient
+  -> /api/3/bills/{sessionYear}?limit=1000&offset=N&full=true
+  -> bill_to_record()
+  -> records + completeness
+  -> NY_Bill_Tracker tab (default) + R1 completeness JSON
+  -> read back header, bill column, R1 completeness, and stale-tail range
+```
+
+## Runtime cadence
+
+The workflow runs once daily after the 2026-06-24 validation gates passed:
+
+- daily cron: `40 17 * * *`
+- manual modes retained: `check-config`, `dry-run`, `write`
+- scheduled writes default to `NY_OPENLEG_SESSION_YEAR=2025`
+- production writes are restricted to `refs/heads/main`
+- write runs share a production concurrency group; manual `check-config` and
+  `dry-run` probes do not queue ahead of scheduled writes
+
+The daily schedule is intentionally conservative until the frontend and
+incremental update path are scoped. Any increase in cadence needs a fresh source
+and rate-limit review.
+
+## Source-to-field mapping
+
+| Product field | OpenLeg source |
+|---|---|
+| Bill | `basePrintNo` / `printNo` |
+| Title | `title` |
+| Status (LIS) | `status.statusDesc` / `status.statusType` |
+| Outcome | structural-only: `signed == true`, present `vetoMessages`, else `unknown_structural` |
+| Patron | `sponsor.member.fullName` |
+| Patron ID | `sponsor.member.memberId` |
+| Chamber | product current chamber (`House`/`Senate`), derived from structural NY chamber movement |
+| Crossed Over | structural `actions.items[].chamber` compared with `billType.chamber` |
+| Last Committee | `status.committeeName`, fallback latest `pastCommittees` |
+| Referrals | distinct sequential `pastCommittees` |
+| Latest Vote | latest `votes.items[]` by `voteDate`, summarized from `memberVotes` |
+| History | sorted `actions.items[]` by `(date, sequenceNo)` |
+| Upcoming | intentionally empty in pass 1 until a validated NY meeting source exists |
+| Source | `NY OpenLegislation` |
+
+NY-native chamber names are preserved in JSON-only fields:
+
+- `ny_origin_chamber`: `Senate` / `Assembly`
+- `ny_current_chamber`: `Senate` / `Assembly`
+- `ny_origin_chamber_raw`: raw OpenLeg `billType.chamber`
+
+The shared product `Chamber` column uses Virginia-compatible vocabulary because
+the existing product parser expects `House` / `Senate`. In New York, `Assembly`
+maps to product `House` for that column only.
+
+## Safety and honesty rules
+
+- Keep Virginia and New York engines in separate files until the common abstraction is proven.
+- Raw OpenLeg status is always retained for display/provenance; it is not used
+  to classify `outcome` or `crossed_over`.
+- Chamber normalization uses an exact map of known OpenLeg chamber codes.
+  Unknown values are preserved as raw provenance and counted, not prefix-matched
+  into Senate/Assembly.
+- Do not infer a complete meeting calendar from Senate-centered endpoints.
+- Completeness metrics always include denominators/rates where useful.
+- The run-level `health` object must surface unknown structural outcomes,
+  malformed bill IDs, unrecognized chamber values, missing action text, and
+  missing public source URLs.
+- Missing OpenLeg pagination metadata, or empty bill pages before the declared
+  `total` / `offsetEnd` end-of-range, are hard failures to protect the
+  last-known-good sheet from partial overwrites.
+- Sheet writes use padded range replacement instead of clearing first, so a
+  transient Google Sheets write failure does not leave `NY_Bill_Tracker` empty.
+- After a write, the engine reads the actual worksheet back and verifies the
+  header, bill-column identity, `R1` completeness fields, health status, and a
+  bounded tail range below the active payload. A mismatch fails the workflow.
+- A missing `NY_OPENLEG_API_KEY` is a hard failure, not an empty output.
+- Empty `Upcoming` means "calendar source not claimed," not "no upcoming
+  meetings." Time-bearing NY calendar fields require a separate source contract
+  and validation run before product use.
+
+## Known differences from Virginia
+
+- Virginia has bulk CSV blobs (`HISTORY.CSV`, `BILLS.CSV`, `DOCKET.CSV`, `VOTE.CSV`) and LIS-specific structural refids.
+- New York has a richer JSON bill response, including actions, votes, sponsor, summary, past committees, and agenda references.
+- New York's public OpenLeg docs warn that Assembly calendar/committee data is not available through those Senate OpenLeg endpoints, so the calendar worker cannot be a straight source swap.
