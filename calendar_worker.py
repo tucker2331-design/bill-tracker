@@ -4211,8 +4211,12 @@ def run_calendar_update():
         # derived_standing carries a REAL (assumed) clock time (#76), never a [NO_*] tag — so it's a
         # concrete-time source too; included here to ENFORCE that (CodeRabbit on #176), catching a
         # regression where the derived time goes missing, not just registering the origin for I2 above.
-        time_val = str(event.get("Time", ""))
-        if origin in {"api_schedule", "convene_anchor", "legislation_event", "sibling_meeting", "derived_standing"} and time_val.startswith("\u23f1\ufe0f [NO_"):
+        # Normalize the RAW Time before the check \u2014 str(None)/str(pd.NA) -> "None"/"<NA>" are non-empty,
+        # which would disguise a concrete-origin row that LOST its time and let it skip this guard
+        # (CodeRabbit on #176). A missing/empty time on a concrete origin is itself an I3 violation.
+        raw_time = event.get("Time", "")
+        time_val = "" if pd.isna(raw_time) else str(raw_time).strip()
+        if origin in {"api_schedule", "convene_anchor", "legislation_event", "sibling_meeting", "derived_standing"} and (not time_val or time_val.startswith("\u23f1\ufe0f [NO_")):
             source_miss_counts["invariant_violations"] += 1
             push_system_alert(
                 f"I3 time/origin parity violation: Origin='{origin}' but "
