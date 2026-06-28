@@ -450,15 +450,22 @@ _COMMITTEE_REFID_RE = _re.compile(r'^[HS]\d{1,2}$')            # H14 / S04 commi
 _DOCUMENT_REFID_RE = _re.compile(r'^\d+[A-Z]+$')
 # Bill IMPACT-STATEMENT document id: <bill><opt version segment>F<dept code>, e.g. HB1000F122,
 # HB1002ERF122 (engrossed reprint), HB1001H1F122 (House substitute 1), SB106S1F122. The `F<code>`
-# is the statement-filing marker; the optional `[A-Z0-9]*` is the version segment (ER/E/H1/S1).
-# Measured 2026-06-27 (scratchpad/unknown_refid_probe.py + route_crosscheck.py, session 20261):
-# 4,299 rows, 0% VOTE.CSV join, fan-out=1, descriptions = "Fiscal Impact Statement from …" (4,293)
-# + "Racial and Ethnic Impact Statement" (6) — both filed analysis DOCUMENTs about a bill — and BOTH
-# have 0 live Sheet1 rows (the worker noise-filters them), so neither ever surfaces as a meeting.
-# So this routes admin exactly like the bill-version DOCUMENT class above. The route-cross-check is the
-# safety basis: unlike the \d+D_H#### compounds and "incorporated" bill-refs (which route=meeting and
-# must NOT get an admin refid label), the impact-statement family genuinely never surfaces.
-_IMPACT_DOC_REFID_RE = _re.compile(r'^[HS]B\d+[A-Z0-9]*F\d+$')
+# is the statement-filing marker; the optional version segment is `[A-EG-Z0-9]*` — A–Z (EXCEPT F) +
+# digits. Excluding F is deliberate (Qodo, audit #50): if the segment allowed F, a double-marker shape
+# like `HB1000F122F999` would match and be assumed a DOCUMENT → routed admin, instead of SURFACING as
+# UNKNOWN ("surface, don't guess"); excluding it anchors on the single trailing `F\d+`. No real version
+# segment contains F (ER/E/H1/S1/EH1/ES1/HC1), so this is tighter, not narrower.
+# ASSUMPTION (the 3-part heuristic doc, Standard #1): these are filed analysis documents that never
+# surface as a meeting. MEASURED 2026-06-27 (unknown_refid_probe.py + route_crosscheck.py, session
+# 20261): 4,299 rows, 0% VOTE.CSV join, fan-out=1, descriptions = "Fiscal Impact Statement from …"
+# (4,293) + "Racial and Ethnic Impact Statement" (6), and 0 live Sheet1 rows (worker noise-filters them).
+# HOW IT BREAKS: LIS starts surfacing an impact refid as a timed meeting row. RUNTIME CHECK: that would
+# carry a meeting time → if timeless it increments `meeting_unsourced` (Section-9), tripping the breaker
+# / accuracy sentinel; and the refid-shape drift monitor (validate_refid_shapes) alerts on any NOVEL
+# impact-shape variant. So this routes admin exactly like the bill-version DOCUMENT class above; the
+# route-cross-check is the safety basis (unlike the \d+D_H#### compounds and "incorporated" bill-refs,
+# which route=meeting and must NOT get an admin refid label).
+_IMPACT_DOC_REFID_RE = _re.compile(r'^[HS]B\d+[A-EG-Z0-9]*F\d+$')
 
 
 def normalize_refid(v) -> str:

@@ -73,6 +73,8 @@ CASES = [
     (("SV866", 0, False), REFID_UNKNOWN),          # SV### "reading dispensed" (no B) -> still UNKNOWN
     (("26101239D_H8120", 0, False), REFID_UNKNOWN),# \d+D_H#### compound routes=meeting -> must stay UNKNOWN
     (("HB1046", 0, False), REFID_UNKNOWN),         # bare bill-ref ("incorporated") routes=meeting -> UNKNOWN
+    (("HB1000F122F999", 0, False), REFID_UNKNOWN), # double-F over-matched the old [A-Z0-9]* segment; the
+                                                   # F-excluded segment surfaces it as UNKNOWN (audit #50)
     (("H14V2610034", 0, False), REFID_VOTE_COMMITTEE), # vote grammar unaffected by the fiscal rule
     # TRAILING-DIGIT shape must SURFACE, not be assumed a document (Gemini #124 — the grammar is
     # tight on purpose; 0 such refids exist today, so this guards a future unconfirmed shape).
