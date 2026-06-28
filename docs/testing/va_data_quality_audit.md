@@ -69,10 +69,24 @@ So nothing here is a crisis. These are SECONDARY edges to smooth for a truly cle
    `meeting_unsourced`** — it's measurement-only today. Section-9-sensitivity is **deferred to the future C8.2 flip**
    (when `RefidClass` starts driving routing); the classes must be *correct* for that day, which is why SV###/
    incorporated need the domain call, not a guess.
-   **→ PLAN (split the PR by risk):** (a) **SAFE NOW** — extend `classify_refid` for the two DOCUMENT families
-   (`…F###` fiscal + `\d+D_H####` compound ≈ **5,140 rows / 55% of unknowns**) → admin DOCUMENT class; golden tests
-   per shape + offline diff proving 0 rows leave a MEETING class + `unknown_refid` ↓≈5,140. Zero routing change.
-   (b) **DEFER** — SV### reading-dispensed + bill-ref "incorporated" (≈4,170) pending the owner's meeting/admin call.
+   **LIVE-ROUTE CROSS-CHECK 2026-06-27** (owner chose "cross-check the live route", not classify-by-shape —
+   `scratchpad/route_crosscheck.py`, matched Sheet1 Outcome text → its `LegEventRoute`/`Origin`/Time). This
+   **overturned the shape-based "compound = document" guess** — the refid shape and the row's route disagree:
+   - **`…F###` fiscal:** **0 live Sheet1 rows** (noise-filtered before write). Truly a document, never surfaces
+     → **DOCUMENT/admin is safe & correct.** The only true-document cohort. (≈4,260 rows / 46%.)
+   - **`\d+D_H####` compounds:** **450 live rows, ALL `LegEventRoute=meeting`** (api_schedule/legislation_event/
+     convene_anchor, concrete times). "(sub)committee offered" actions surface as MEETINGS — the time comes from
+     the schedule match, NOT the refid. **A refid→admin label here would BURY meetings (the exact Section-9
+     regression).** → NOT a document; must stay a non-decisive/surface class.
+   - **`HB#/SB#` incorporated:** **85 live rows, ALL `meeting`** (api_schedule) → likewise NOT admin; a bill
+     cross-reference whose route comes from the schedule match.
+   - **`SV###` reading-dispensed:** 1 of ~4,081 in Sheet1 (noise-filtered procedural) → doesn't surface.
+   **→ REVISED DESIGN (the focused `classify_refid` PR):** (1) `…F###` → **REFID_DOCUMENT** (extend grammar) — the
+   one real admin verdict, route-confirmed safe. (2) compounds / SV### / bill-ref → **NEW *identified-but-
+   non-decisive* classes** (named for observability so `unknown_refid`→~0, but SAME surface behavior as UNKNOWN —
+   they assert NO meeting/admin verdict, so the future C8.2 flip can't misroute them). Golden tests per shape +
+   offline diff asserting **no refid whose rows route=meeting gets an admin-implying class**. The lesson: a
+   refid's identity ≠ its row's route; RefidClass must never override a positive meeting route to admin.
    Cross-ref [[knowledge/history_refid_namespace]] (the namespace law this extends).
 4. **Ledger-collapse volume (~21%)** — ✅ **CONFIRMED SOUND 2026-06-25 (live sheet).** 7,826 Ledger rows, all
    correct collapse origins (`floor_miss` 3,402 / `journal_default` 2,765 / `admin_default` 1,659). A text
