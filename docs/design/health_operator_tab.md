@@ -17,8 +17,14 @@ status: active
 > + `web/src/components/bands.ts` (extracted `bandTone`). All detail below is unchanged. Verified live:
 > Accuracy 2/2, Completeness 4/4, Freshness 2/2 green; Stability 1/3 amber (the live `invariant_violations=1`
 > #176 fixes + the honest HB30 `TIMING_LAG`). tsc + eslint clean.
-
-# Health / Operator Tab — SCOPE (Task #4)
+>
+> **▶️ ADDED 2026-06-28** (`claude/health-tab`, verified live, commit `fab3909`): the **"Are we right?"
+> independent-verification panel** (§3a) — owner pushed that the system "just pings me to fix it" and
+> couldn't SEE the durability guard. `web/src/data/verification.ts` reads the 4 session-agnostic guards'
+> (completeness / reconciliation / accuracy-sentinel / sustainability) latest **GitHub Actions** runs live
+> (status + freshness + staleness). Read-only, NO token (repo public; the guards are deliberately
+> credential-free, so we read the verdict where it lives — the workflow run — rather than break their
+> no-secrets design by making them write to the sheet). Verified: all 4 green, CORS OK, 0 console errors.
 
 Owner queue **Task #4**. The operator/admin trust surface (vision §3f + §7): surface the diagnostics the
 system **already produces**, as **Few bullet-graph gauges with danger bands** (owner: *"like a car's RPM
@@ -120,6 +126,24 @@ shared `bandTone`, unknown-as-grey*. Reusable as-is for NY/PA once their workers
   the rows went), so drift in the structural router is visible.
 - **Raw counters** — the full `SYSTEM_METRICS` JSON in a collapsible block for deep inspection.
 - Everything carries its **denominator** (PL-7) and a provenance note (which sheet/cell it came from).
+
+## 3a. "Are we right?" — independent-verification panel (owner 2026-06-28)
+Owner pushed that the system "just pings me to fix it instead of building it sustainably" and — the root of
+the low confidence — couldn't SEE the durability guard ([[architecture/verification_durability]]): it verifies
+the live output against INDEPENDENT sources (reconciliation vs the official **MinutesBook**, completeness vs
+LIS's **own calendar**) but runs in GitHub Actions and only ALERTS on failure, so the green is invisible. The
+panel surfaces each of the **4 session-agnostic guards** (layers 2–5; layer 1 = the breaker chip above) with
+its latest run **status + freshness + a staleness flag** (a guard that stopped running is its own failure),
+each row stating what it *independently proves*.
+- **Design decision — read the verdict where it lives, don't break the guards.** The guards are deliberately
+  **credential-free** (the sentinel is literally "NO secrets, runs in 2027 unchanged"). Making them WRITE a
+  verdict to the sheet would add secrets to secret-free durability tooling — wrong. The repo is **public**, so
+  `web/src/data/verification.ts` reads the **GitHub Actions API** (`/actions/workflows/<file>/runs?per_page=1`)
+  **unauthenticated** (CORS-OK, ~60/hr/IP, 5-min TTL cache — fine for the gated owner tab). A failed read shows
+  "—", never a fake green (vision §7).
+- **Not the ceiling (logged):** this still *shows* the guard, it doesn't make it auto-correct. The deeper
+  sustainability track (make LIS's calendar AUTO-WIN; shrink the curated groupings against the loop) is in
+  [[architecture/verification_durability#Sustainability honesty — the curation inventory + the path past "detect + ping" (owner 2026-06-28)]].
 
 ## 4. Access-gating (the CONSTRAINT — operator-only, not lobbyist-facing)
 **Cloudflare Access (Zero Trust)** is the clean fit for the $0 static-SPA + gviz setup:
