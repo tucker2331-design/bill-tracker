@@ -4,6 +4,7 @@ import { BulletGraph } from "../components/BulletGraph";
 import { bandTone, type Band } from "../components/bands";
 import { HealthVitals, type Vital, type VitalSeg } from "../components/HealthVitals";
 import { loadHealth, type HealthData } from "../data/health";
+import { loadVerification, type GuardRun } from "../data/verification";
 
 // The operator / Health tab (vision §3f + §7): the trust signals the system ALREADY produces, as Few
 // bullet graphs with danger bands (PL-8 / owner's "RPM redline"). Bill-backend signals arrive via props
@@ -21,6 +22,13 @@ const higher = (danger: number, warn: number, max = 100): Band[] =>
 const hoursSince = (d: Date | null) => (d ? (Date.now() - d.getTime()) / 3.6e6 : NaN);
 const hrs = (n: number) => (Number.isFinite(n) ? `${n.toFixed(1)}` : "—");
 const oneDp = (n: number) => n.toFixed(1);
+const agoText = (d: Date | null) => {
+  if (!d) return "";
+  const h = (Date.now() - d.getTime()) / 3.6e6;
+  if (h < 1) return "just now";
+  if (h < 24) return `${Math.round(h)}h ago`;
+  return `${Math.round(h / 24)}d ago`;
+};
 
 export function Health({ completeness, dataAsOf }: { completeness: Completeness | null; dataAsOf: Date | null }) {
   const [h, setH] = useState<HealthData | null>(null);
@@ -28,6 +36,12 @@ export function Health({ completeness, dataAsOf }: { completeness: Completeness 
   useEffect(() => {
     let alive = true;
     loadHealth().then((d) => alive && setH(d)).catch((e) => alive && setHErr(String(e?.message || e)));
+    return () => { alive = false; };
+  }, []);
+  const [guards, setGuards] = useState<GuardRun[] | null>(null);
+  useEffect(() => {
+    let alive = true;
+    loadVerification().then((d) => alive && setGuards(d)).catch(() => alive && setGuards([]));
     return () => { alive = false; };
   }, []);
 
@@ -97,6 +111,42 @@ export function Health({ completeness, dataAsOf }: { completeness: Completeness 
           </span>
         )}
       </div>
+
+      {/* ── "Are we right?" — the 5-layer durability guard's INDEPENDENT verification (reconciliation vs
+            the MinutesBook, completeness vs LIS's own calendar), surfaced live from GitHub Actions
+            (verification_durability.md). Turns the CI-only green into a visible trust signal; an
+            unreachable API shows "—", never a fake pass. Layer 1 (the breaker) is the live chip above. ── */}
+      <h2 className="h">Are we right? · independent verification</h2>
+      {guards === null ? (
+        <p className="muted" style={{ marginBottom: 18 }}>Loading independent verification…</p>
+      ) : guards.length === 0 ? (
+        <p className="muted" style={{ marginBottom: 18 }}>Independent verification unavailable (GitHub API unreachable).</p>
+      ) : (
+        <div className="hl-verify panel">
+          {guards.map((g) => {
+            const txt = g.status === "pass" ? `✓ verified ${agoText(g.lastRun)}`
+              : g.status === "fail" ? `✕ FAILED ${agoText(g.lastRun)}`
+              : g.status === "running" ? "running…" : "—";
+            return (
+              <div key={g.key} className="hl-vrow">
+                <span className={`hl-vdot ${g.status}`} aria-hidden="true" />
+                <span className="hl-vlabel">{g.label}</span>
+                <span className="hl-vproves">{g.proves}</span>
+                {g.url ? (
+                  <a className={`hl-verstat ${g.status}${g.stale ? " stale" : ""}`} href={g.url} target="_blank" rel="noreferrer">
+                    {txt}{g.stale ? " · stale" : ""}
+                  </a>
+                ) : (
+                  <span className={`hl-verstat ${g.status}`}>{txt}</span>
+                )}
+              </div>
+            );
+          })}
+          <div className="hl-vfoot muted">
+            Live from GitHub Actions · a red or stale row means the independent check itself needs a look.
+          </div>
+        </div>
+      )}
 
       <h2 className="h">Accuracy &amp; completeness — the lobbyist-facing guarantees</h2>
       <div className="hl-gauges">
