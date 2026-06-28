@@ -138,3 +138,27 @@ invariant + its example rows, (2) check whether it's a real regression or an
 upstream LIS change (schema canary / new vocabulary), (3) the worker's breaker
 has already preserved last-known-good for the in-cycle case. Never silence a
 tripped guard without finding the cause — that's the #62/#72/#82 lesson.
+
+## Sustainability honesty — the curation inventory + the path past "detect + ping" (owner 2026-06-28)
+Owner pushed hard: *"most of the system relies on dictionaries and our great solution was just pinging me
+to fix it instead of building it to a groundbreakingly sustainable level."* Straight accounting:
+- **STRUCTURAL / dynamic (zero curation, runtime-derived):** committee maps (Committee API), session +
+  date windows (Session API), ministerial codes; vote evidence (VoteTally + VOTE.CSV join), meeting times
+  (Schedule API + convene graph), outcomes (BILLS.CSV flags). **The bulk of the pipeline.**
+- **CURATED (drift-ALERT, not drift-FIX):** `route_event` status groupings (the 52-status admin/meeting
+  split), the ReferenceType sets, the 7–23 business-hours window, the `classify_refid` grammars. These are
+  FALLBACKS/refinements, each **empirically justified** (e.g. the 05:00 document-batch-time fix that faked
+  meeting times — [[failures/assumptions_audit#74]]), each with drift DETECTION — but a genuinely-new
+  category still needs human judgment. The refid shape-drift monitor (#178) is more "detect + ping"
+  (sanctioned by Standard #8 for structurally-unprecedented variation — but not the ceiling).
+- **THE PATH to groundbreaking sustainability (NOT more groupings):** (1) **meeting = PROVEN** (a vote, an
+  in-hours wall-clock time, a Schedule match, or a committee-vote refid), never assumed; (2) everything
+  else = **admin by SAFE DEFAULT** — a brand-new category can't fabricate a meeting, so no grouping is
+  needed; (3) the **5-layer guard as the SELF-CORRECTING backstop** (esp. reconciliation vs the MinutesBook
+  + completeness vs LIS's own calendar — independent ground truth), which lets the curated groupings shrink
+  toward zero because the loop catches what they miss. **TWO real gaps drive the low confidence:** (a) the
+  guard is **INVISIBLE** — it runs in CI and alerts to the sheet, so the owner never SEES 180/180 or 99.67%
+  → **surface it (Health tab #6)**; (b) it **ALERTS, doesn't AUTO-CORRECT** → make LIS's calendar AUTO-WIN
+  (the multi-state "bulk grades the scraper" pattern, applied to VA classification). **Sequence:** surface
+  first (visibility = confidence), then reconciliation→auto-correct, then shrink the curated groupings
+  against the loop. This is the real sustainability track, logged so it isn't lost. See [[ideas/multi_state_data_strategy]].
