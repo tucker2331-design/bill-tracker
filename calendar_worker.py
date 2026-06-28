@@ -5498,6 +5498,11 @@ def run_calendar_update():
             dedup_key="status_list_fetch_exc",
         )
 
+    # Pre-init: refid_col is assigned only inside `if not df_past.empty:` below, but the post-loop
+    # refid-shape drift monitor reads it on EVERY path (incl. an empty-history cycle). Without this it
+    # UnboundLocalErrors there — caught, but it silently suppresses the monitor + would fire a spurious
+    # WARN every empty cycle. Bound to None so the monitor's `if refid_col` guard cleanly skips. (audit #49)
+    refid_col = None
     if not df_past.empty:
         bill_col = next((c for c in df_past.columns if 'bill' in c.lower()), 'BillNumber')
         date_col = next((c for c in df_past.columns if 'date' in c.lower()), 'HistoryDate')
@@ -6559,8 +6564,20 @@ def run_calendar_update():
                     dedup_key=f"refid_shape_drift::{','.join(sorted(_shape_drift))}",
                 )
         except Exception as _rsd_e:
-            # Optional ≠ silent (Standard #4): a monitor failure must not crash the cycle, but log it.
+            # Optional ≠ silent (Standard #4/#6): a monitor failure must not crash the cycle, but a bare
+            # print is invisible off the runner — surface a categorized alert + counter so a broken
+            # cross-check reaches Bug_Logs, not just stdout (audit #48). dedup on the exception TYPE so a
+            # recurring break doesn't flood. (With refid_col pre-init'd, this no longer fires on empty cycles.)
             print(f"⚠️ refid-shape drift check skipped ({_rsd_e})")
+            source_miss_counts["refid_shape_monitor_failures"] = (
+                source_miss_counts.get("refid_shape_monitor_failures", 0) + 1
+            )
+            push_system_alert(
+                f"Refid-shape drift check skipped: {type(_rsd_e).__name__}: {_rsd_e}. "
+                f"Secondary UNKNOWN-refid drift monitor disabled this cycle.",
+                status="WARN", category="DATA_ANOMALY", severity="WARN",
+                dedup_key=f"refid_shape_monitor_fail::{type(_rsd_e).__name__}",
+            )
 
         # G4 (Standard #7 — a metric needs a DENOMINATOR): derived_standing is a
         # LAST-resort fraction of the recovery-eligible pool (rows the structural
