@@ -18,22 +18,22 @@ concerning numbers." This page is the live diagnosis + the investigation queue. 
 So nothing here is a crisis. These are SECONDARY edges to smooth for a truly clean/sustainable VA standard.
 
 ## The edges to investigate (priority order)
-1. **`invariant_violations = 1`** (should be 0; persistent). **DIAGNOSED 2026-06-25 (live sheet):** it is
-   **NOT an I3** violation — 0 concrete-source rows (`api_schedule`/`convene_anchor`/`legislation_event`/
-   `sibling_meeting`) carry a `⏱️ [NO_*]` placeholder or empty time (the 482 "Time TBA"-on-`api_schedule`
-   are legit LIS values, not I3). So it's a **single I1 (missing column) or I2 (unexpected Origin) row**, and
-   crucially **it is INVISIBLE** — per [[architecture/calendar_pipeline]] an invariant violation should emit
-   a `DATA_ANOMALY/CRITICAL` alert, but the only `SYSTEM_ALERT` on the sheet is the `TIMING_LAG` one. **So a
-   data-integrity violation is being COUNTED but not SURFACED — you can't see which row or why.** → **THE FIX
-   is observability:** `_append_event` must emit a per-row `DATA_ANOMALY` alert naming the offending bill/
-   date/Origin/which-invariant, so it reaches the SYSTEM_ALERT feed + the Health tab (then the row is
-   diagnosable). (Worker change in the chokepoint — Section-9-sensitive; validate carefully.) **Also: the
-   doc's I2 allowed-Origin list is STALE** — it omits `executive_default` + `derived_standing`, which ARE in
-   the live data; since violations=1 (not 325) the CODE's set includes them, so it's doc drift to fix.
-2. **`gap_minutes = 179.43` but `gap_cause = normal`** — 179 min (~3 h) exceeds the documented
-   `GAP_WARN=20` / `GAP_CRITICAL=60` thresholds, yet it's classified "normal." Either the off-season cadence
-   was relaxed (then the thresholds/AA1-freshness gauge need recalibration to match) or the classification is
-   wrong. **Action:** reconcile the gap thresholds with the actual current cadence so freshness stays trustworthy.
+1. **`invariant_violations = 1`** — ✅ **ROOT-CAUSED + FIXED 2026-06-25** (`claude/va-invariant-derived-standing`).
+   It was NOT an I3 (0 concrete rows carry a `[NO_*]`/empty time; the 482 "Time TBA" are legit LIS values).
+   It was a **FALSE I2**: `derived_standing` (the #76 flagged-assumed SJ209 time, 1 row, emitted in
+   production) was **missing from `_VALID_ORIGINS`**, so that lone row tripped the origin-enum invariant
+   **every cycle**. Fix = register `derived_standing` (one line) → `invariant_violations` should go **1→0**
+   on the next worker run (live-validation gated on a run — [[failures/assumptions_audit#74]]). The stale
+   doc I2 list (also omitted `executive_default`) updated to match the live `_VALID_ORIGINS`.
+   **Residual finding (separate, deferred):** the I2 alert IS pushed by `_append_event` (code is correct),
+   yet only the `TIMING_LAG` alert was visible on the sheet — so the alert HISTORY isn't fully surfaced
+   (only the latest). That's Health gap #2 (alert history / Bug_Logs) + worth checking the Actions logs.
+2. **`gap_minutes = 179.43`, `gap_cause = normal`** — ✅ **RESOLVED 2026-06-25: NOT a bug.** The cron is now
+   `0 */3 * * *` (every 3 h — changed because the 15-min cron backed up on ~16-19 min runtime), and the
+   thresholds AUTO-SCALE: `GAP_WARN = SCHEDULE_CADENCE_MINUTES(180)×2 = 360 min (6 h)`, `GAP_CRITICAL =
+   QUIET_WINDOW(420)+360 = 780 min (13 h)`. So a ~3 h gap is correctly `normal`; freshness IS trustworthy.
+   The `20/60` was the 15-min-era value — **stale doc fixed** in [[architecture/calendar_pipeline]]. (The
+   Health freshness gauge bands lower(6,12,24) happen to align well; could pin danger to 13 h exactly.)
 3. **`refidclass_unknown_refid = 5,051` (7.7%)** — refids that didn't match a known namespace (the refid is
    our structural primary key). `refidclass_empty = 26,752 (41%)` is expected (floor/convene + empty-refid
    governor rows), but 5,051 *unknown* (non-empty, unclassified) is a real structural-coverage cohort.

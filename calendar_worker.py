@@ -4116,6 +4116,14 @@ def run_calendar_update():
         # it IS a concrete source for I3 (cannot carry a [NO_*] Time) and does
         # NOT collapse into Ledger Updates.
         "sibling_meeting",
+        # #76 (Section-9=0): the FLAGGED last-resort derived time (SJ209 → 5:34 PM,
+        # a committee's modal standing pattern + the published adjournment), surfaced
+        # in the X-Ray's "DERIVED / ASSUMED" block — never hidden, never a hard fact.
+        # It carries a REAL (assumed) clock time, never a [NO_*] tag, so it does not
+        # violate I3. It was emitted in production (origin counter `derived_standing=1`)
+        # but never registered here, so the single SJ209 row tripped a FALSE I2 every
+        # cycle (the persistent invariant_violations=1). Registering it = 0.
+        "derived_standing",
     }
     _REQUIRED_KEYS = {
         "Date", "Time", "SortTime", "Status", "Committee", "Bill",
