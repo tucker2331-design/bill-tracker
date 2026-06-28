@@ -59,8 +59,21 @@ CASES = [
     (("26108316D", 0, False), REFID_DOCUMENT),     # substitute-printed document id
     (("26110164G", 0, False), REFID_DOCUMENT),     # other version-letter suffix
     (("26109829C", 0, False), REFID_DOCUMENT),     # conference-substitute document id
-    (("HB1F122", 0, False), REFID_UNKNOWN),        # bill-prefixed (fiscal impact) is NOT \d+[A-Z] -> still UNKNOWN
-    (("SV866", 0, False), REFID_UNKNOWN),          # bill-prefixed -> UNKNOWN (not a \d+[A-Z] document id)
+    # IMPACT-STATEMENT document refids (2026-06-27): <bill><opt version segment>F<dept code>. Route-
+    # confirmed clerical DOCUMENTs (0 vote-join, fan-out=1; 4,293 "Fiscal Impact Statement …" + 6
+    # "Racial and Ethnic Impact Statement"; 0 live Sheet1 rows — noise-filtered, never surface) ->
+    # DOCUMENT/admin, like the \d+[A-Z] family. Offline-diff verified: 4,299 UNKNOWN->DOCUMENT, 0 else.
+    (("HB1F122", 0, False), REFID_DOCUMENT),       # minimal fiscal id (was UNKNOWN pre-2026-06-27)
+    (("HB1000F122", 0, False), REFID_DOCUMENT),    # bill + F + dept code
+    (("HB1002ERF122", 0, False), REFID_DOCUMENT),  # engrossed-reprint version segment
+    (("HB1001H1F122", 0, False), REFID_DOCUMENT),  # House-substitute-1 version segment
+    (("SB106S1F122", 0, False), REFID_DOCUMENT),   # Senate-substitute-1 version segment
+    # GUARDS: the fiscal rule must NOT swallow the meeting-routing cohorts (they route=meeting and must
+    # stay non-admin until their own non-decisive class lands) or the vote grammar.
+    (("SV866", 0, False), REFID_UNKNOWN),          # SV### "reading dispensed" (no B) -> still UNKNOWN
+    (("26101239D_H8120", 0, False), REFID_UNKNOWN),# \d+D_H#### compound routes=meeting -> must stay UNKNOWN
+    (("HB1046", 0, False), REFID_UNKNOWN),         # bare bill-ref ("incorporated") routes=meeting -> UNKNOWN
+    (("H14V2610034", 0, False), REFID_VOTE_COMMITTEE), # vote grammar unaffected by the fiscal rule
     # TRAILING-DIGIT shape must SURFACE, not be assumed a document (Gemini #124 — the grammar is
     # tight on purpose; 0 such refids exist today, so this guards a future unconfirmed shape).
     (("123A456", 0, False), REFID_UNKNOWN),        # \d+[A-Z]+\d+ is UNCONFIRMED -> UNKNOWN (surface), not DOCUMENT
