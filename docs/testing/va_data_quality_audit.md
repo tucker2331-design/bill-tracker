@@ -34,19 +34,28 @@ So nothing here is a crisis. These are SECONDARY edges to smooth for a truly cle
    QUIET_WINDOW(420)+360 = 780 min (13 h)`. So a ~3 h gap is correctly `normal`; freshness IS trustworthy.
    The `20/60` was the 15-min-era value — **stale doc fixed** in [[architecture/calendar_pipeline]]. (The
    Health freshness gauge bands lower(6,12,24) happen to align well; could pin danger to 13 h exactly.)
-3. **`refidclass_unknown_refid = 5,051` (7.7%)** — refids that didn't match a known namespace (the refid is
-   our structural primary key). `refidclass_empty = 26,752 (41%)` is expected (floor/convene + empty-refid
-   governor rows), but 5,051 *unknown* (non-empty, unclassified) is a real structural-coverage cohort.
-   **Action:** sample them — are they a new refid shape (extend the namespace law) or genuinely junk?
-4. **Ledger-collapse volume:** `floor_anchor_miss=6,640 (10.2%)` + `unsourced_journal=2,775 (4.2%)` +
-   `unsourced_anchor=4,761` ≈ **21% of rows collapse to Ledger.** All are non-meeting (`meeting_unsourced=0`),
-   so not Section-9 bugs — but **confirm none are real actions losing provenance** vs. genuinely-admin
-   (signed/placed/ministerial). This is the "no silent source-miss" rule at scale.
-5. **`legislation_event_recovered = 1,005 / 3,863 attempts (26%)`** — low recovery. The 74% failures are
-   non-meeting rows (Section 9 still 0), but verify they're genuinely unrecoverable (admin) vs. a recovery gap.
-6. **HB30 `Conference Committee` 2026-06-19 `TIMING_LAG`** — a conference-committee action with no schedule
-   match → Ledger. Likely upstream-limited (LIS published no timed conference meeting, like HB26/HB137), but
-   confirm it's honest residue, not a missed source.
+3. **`refidclass_unknown_refid = 5,051` (7.7%)** — ⏸️ **SCOPED (safe, an optimization — not a bug).** The
+   classifier **SURFACES** UNKNOWN_REFID rows (never routes them admin), so they're safely handled, not
+   silently mis-routed (consistent with `meeting_unsourced=0`). Reducing the count = a structural-coverage
+   optimization: sample the distinct unknown refid *shapes* from HISTORY.CSV (needs the dynamic session blob
+   path) — if one shape dominates, extend the namespace law; if heterogeneous, honest residue. **Deferred.**
+4. **Ledger-collapse volume (~21%)** — ✅ **CONFIRMED SOUND 2026-06-25 (live sheet).** 7,826 Ledger rows, all
+   correct collapse origins (`floor_miss` 3,402 / `journal_default` 2,765 / `admin_default` 1,659). A text
+   spot-check for "meeting verbs" hit 906 rows, but they are **clerical document rows** ("Bill text as passed
+   House (HRxxxER)") — the regex over-matched "passed" (the very text-fragility we avoid). **No real meeting
+   actions are losing provenance** — the structural signal (`meeting_unsourced=0`) is correct.
+5. **`legislation_event_recovered = 1,005 / 3,863 (26%)`** — ✅ **fine.** The 74% failures are non-meeting
+   rows (Section 9 = 0), i.e. admin rows that legitimately have no meeting time to recover. Not a gap.
+6. **HB30 `Conference Committee` `TIMING_LAG`** — ✅ **honest upstream residue** (LIS published no timed
+   conference meeting, like HB26/HB137). The lone surfaced row; never a meeting-without-time bug.
+
+## ✅ Dive conclusion (2026-06-25): the data IS clean/sustainable
+The headline metrics were already perfect (Section 9 = 0, completeness 100%). The dive found **exactly one
+real defect** — the false `invariant_violations=1` (the unregistered `derived_standing` origin), **fixed in
+PR #176** (→ 0 on the next worker run). Everything else is correct (gap classification), doc-drift (fixed),
+or safe-by-design residue (unknown-refid surfaced; Ledger collapse sound; recovery failures are admin; HB30
+upstream-limited). **The only forward optimization is edge #3** (reduce the 5,051 unknown refids — deferred).
+The remaining work is OBSERVABILITY (the Health gaps below), not correctness.
 
 ## Health-tab observability gaps (owner: "what's missing?" — 2026-06-25)
 The Health gauges surface the *counts*; the deeper trust layer (vision §7 lists several as "should track,
