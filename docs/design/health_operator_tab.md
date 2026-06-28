@@ -1,6 +1,6 @@
 ---
-tags: [design, ui, health, operator, bullet-graph, access-gated, scope, web]
-updated: 2026-06-24
+tags: [design, ui, health, operator, bullet-graph, donut, vitals, access-gated, scope, web]
+updated: 2026-06-27
 status: active
 ---
 
@@ -11,6 +11,12 @@ status: active
 > App.tsx unchanged (Health kept its props). **Remaining: the ACCESS-GATING infra (§4) — Cloudflare Access
 > on an operator deploy.** Harmless visible now (pre-launch, no lobbyists; metrics are operational, not
 > secret); must be gated before the public launch.
+>
+> **▶️ ADDED 2026-06-27** (`claude/health-tab`, verified live, commit `a66c767`): the **at-a-glance vitals**
+> — four segmented activity-ring donuts at the top of the tab (§2a). `web/src/components/HealthVitals.tsx`
+> + `web/src/components/bands.ts` (extracted `bandTone`). All detail below is unchanged. Verified live:
+> Accuracy 2/2, Completeness 4/4, Freshness 2/2 green; Stability 1/3 amber (the live `invariant_violations=1`
+> #176 fixes + the honest HB30 `TIMING_LAG`). tsc + eslint clean.
 
 # Health / Operator Tab — SCOPE (Task #4)
 
@@ -63,6 +69,48 @@ Repeat as **small multiples** (one column). Calibration from steady-state + the 
 
 Bands are **data-driven** (read from the breaker thresholds / steady-state), never hardcoded magic numbers
 that rot (Standard #1). A reading that lands in the red band makes the gauge's measure bar go red (popout).
+
+## 2a. At-a-glance vitals — the donut rollup (owner 2026-06-27)
+Owner ask: *"think of some really distinctive visualizers… maybe combined into 3–5 based on categories so I
+can quell my anxieties at a glance… keep everything plus what you add."* So the gauges (§2) all stay; the
+vitals are a **rollup layer on top**, not a replacement. Final form (after the owner picked it): *"something
+simple like the donuts that displays slightly more info and is genuinely visually appealing — wow factor."*
+
+**What shipped:** four **segmented activity-ring donuts** (`HealthVitals.tsx`), one per category:
+| Ring | Segments (one arc per metric) |
+|---|---|
+| **Accuracy** | Section-9 · Outcome drift |
+| **Completeness** | Bill completeness · History-vs-universe anomalies · Patron coverage · Unclassified share |
+| **Freshness** | Bill-backend clock · Calendar clock |
+| **Stability** | Circuit breaker · Invariant violations · Active alerts |
+
+Each ring is split into one arc per tracked metric (SVG `stroke-dasharray` arcs, rounded caps, a light
+full-circle track behind so gaps read as intentional). Center: the category's **pass-count** (`ok/N`) + a
+status glyph, both tinted by the worst-of tone. Calm green field; a warning/critical segment pops amber/red.
+Per-segment `<title>` tooltips name the metric on hover. Responsive 4→2 column grid.
+
+**The non-negotiable invariant — overview can never disagree with detail:** each segment's tone is derived
+by **`bandTone(value, bands)`** over the **SAME `bands` array the matching §2 gauge uses** (extracted to
+`bands.ts` so both the gauge and the donut import one source of truth). If a gauge is red, its arc is red.
+
+**"unknown" is a first-class tone** (neutral grey — never green, never red): when a backend payload is
+absent (e.g. the `Bill_Tracker` completeness prop hasn't loaded), the segment is *unconfirmed*, the ring
+greys, and the worst-of rollup ranks **danger > warn > unknown > ok** so one unconfirmed metric greys the
+ring rather than faking a clean bill of health. This is vision §7 — *"allowed not to know, never pretend"* —
+applied to the glance layer.
+
+**Design canon applied / why NOT the rejected forms** (three iterations to land this — keep for NY/PA):
+- ❌ **4 status rings** (filled donuts, % of checks) — owner: *"too simple."* No per-metric detail.
+- ❌ **Pie / segmented "comprehensive ribbon"** — owner: *"that sucks, way closer to the og version."*
+  The ribbon abandoned the bullet-graph visual language entirely; a pie puts magnitude on **angle/area**,
+  the channels Munzner ranks **worst** (why pies lie). Rejected on both taste and canon.
+- ✅ **Segmented donuts** — circular (the owner's instinct) but magnitude/status read by **hue popout on a
+  muted field** (Few 7.1.5), not by precise angle judgment. Arc length carries only the coarse "how many
+  metrics" count; the *precise* numbers live in the bullet graphs below. Acceptable use of a weak channel
+  because this layer is a **qualitative status glance** (spot the non-green), not a measurement surface.
+
+**Generalizable** (→ any state's Health tab): the pattern is *category rings rolling up gauges, tone via the
+shared `bandTone`, unknown-as-grey*. Reusable as-is for NY/PA once their workers emit the same signal shape.
 
 ## 3. Beyond the gauges
 - **Breaker status** — a single status chip (GREEN armed / RED tripped) from `W1` (+ the trip JSON when red).
