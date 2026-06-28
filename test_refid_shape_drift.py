@@ -69,10 +69,15 @@ def main():
         failures.append(("novel-below-floor", "ZZ#Q#", drift, {}))
     print(f"  [{'ok' if ok else 'FAIL'}] novel shape x{REFID_SHAPE_MIN_VOLUME - 1} (below floor) -> drift {drift or 'NONE'}")
 
-    # 5. empty / None input never raises, returns no drift
-    drift = validate_refid_shapes(None) or validate_refid_shapes([])
-    ok = (drift == {} or drift == {})
-    print(f"  [{'ok' if ok else 'FAIL'}] empty/None input -> drift {validate_refid_shapes(None)}")
+    # 5. empty / None input never raises, returns no drift — and a regression here MUST fail the
+    #    script (CodeRabbit #178: the old form only printed, never appended to `failures`, so it
+    #    could exit 0 even if validate_refid_shapes(None) started returning non-empty).
+    for empty in (None, []):
+        d = validate_refid_shapes(empty)
+        ok = d == {}
+        if not ok:
+            failures.append(("empty-input", empty, d, {}))
+        print(f"  [{'ok' if ok else 'FAIL'}] empty input {empty!r} -> drift {d or 'NONE'}")
 
     if failures:
         print(f"\n*** {len(failures)} FAILURE(S) ***")
