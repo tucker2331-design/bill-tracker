@@ -5,6 +5,7 @@ import { bandTone, type Band } from "../components/bands";
 import { HealthVitals, type Vital, type VitalSeg } from "../components/HealthVitals";
 import { loadHealth, type HealthData } from "../data/health";
 import { loadVerification, type GuardRun } from "../data/verification";
+import { loadHistory, seriesFor, seriesForPct, type HistoryData } from "../data/history";
 
 // The operator / Health tab (vision §3f + §7): the trust signals the system ALREADY produces, as Few
 // bullet graphs with danger bands (PL-8 / owner's "RPM redline"). Bill-backend signals arrive via props
@@ -44,6 +45,15 @@ export function Health({ completeness, dataAsOf }: { completeness: Completeness 
     loadVerification().then((d) => alive && setGuards(d)).catch(() => alive && setGuards([]));
     return () => { alive = false; };
   }, []);
+  // Per-cycle trend store (Metrics_History). Optional chrome: a null/empty result leaves the gauges as
+  // point-in-time only (no sparkline), never blanks the tab.
+  const [hist, setHist] = useState<HistoryData | null>(null);
+  useEffect(() => {
+    let alive = true;
+    loadHistory().then((d) => alive && setHist(d)).catch(() => alive && setHist(null));
+    return () => { alive = false; };
+  }, []);
+  const spark = (key: string) => (hist ? seriesFor(hist, key) : []);
 
   if (!completeness && !h && !hErr) return <p className="center-msg">Loading operator health…</p>;
 
@@ -65,6 +75,52 @@ export function Health({ completeness, dataAsOf }: { completeness: Completeness 
   const unclassPct = total > 0 ? (100 * (m.legevent_route_blank ?? 0)) / total : 0;
   const calFreshH = hoursSince(h?.calendarFreshness ?? null);
   const breakerOk = h ? !h.breakerTrip : true;
+
+  // ── Upstream-vocabulary CANARIES (green-state). The worker records each drift monitor's outcome into
+  // SYSTEM_METRICS: -1 = couldn't determine (unknown), 0 = ran clean, N = N novel value(s) = drift. Surfacing
+  // the GREEN state (not just the drift alert) proves the watchers are ALIVE — silence could also mean a dead
+  // canary. A missing key (older worker) and -1 both render "unknown", never a false ✓. ──
+  const canaryDefs: { key: string; label: string }[] = [
+    { key: "canary_status_grouping", label: "Legislation status vocabulary" },
+    { key: "canary_governor_eventcodes", label: "Governor action codes" },
+    { key: "canary_refid_shape", label: "Refid namespaces" },
+    { key: "canary_scheduletype", label: "Schedule types" },
+    { key: "canary_referencetype", label: "Reference types" },
+  ];
+  const canaries = canaryDefs.map(({ key, label }) => {
+    const v = m[key];
+    const state = v == null || v < 0 ? "unknown" : v === 0 ? "clean" : "drift";
+    return { label, state, count: state === "drift" ? v : 0 };
+  });
+
+  // ── Feed-skew: the two subsystems write on independent clocks (bill backend vs calendar worker). A large
+  // gap means the picture is internally inconsistent — a bill's history moved but the calendar hasn't caught
+  // up (or vice-versa). Computed from the two freshness clocks the tab already has (front-end only — the
+  // deeper per-source skew is scoped as a follow-up). Only meaningful when BOTH clocks are known. ──
+  const feedSkewH = Number.isFinite(billFreshH) && Number.isFinite(calFreshH) ? Math.abs(billFreshH - calFreshH) : NaN;
+
+  // ── Source-feed freshness (the grounded "per-bill freshness"): age of the HISTORY.CSV blob the bill
+  // data is bulk re-derived from. The worker writes minutes; -1 / absent = unknown (older worker or no
+  // Last-Modified this cycle) and must NOT render as a fresh 0. ──
+  const blobAgeMin = m.history_blob_age_min;
+  const blobAgeKnown = typeof blobAgeMin === "number" && blobAgeMin >= 0;
+  const blobAgeH = blobAgeKnown ? blobAgeMin / 60 : NaN;
+
+  // ── Alert HISTORY: Metrics_History holds one row per cycle, so a persistent alert (e.g. a standing
+  // TIMING_LAG) repeats every cycle it fires. A raw dump would flood; the useful view AGGREGATES distinct
+  // alerts (by severity+category+message) with a fire COUNT + first/last-seen — "what has fired, and how
+  // often," which a point-in-time snapshot can't show. Newest-last-seen first. ──
+  const alertHistory = (() => {
+    if (!hist?.available || hist.alerts.length === 0) return null;
+    const byKey = new Map<string, { severity: string; category: string; message: string; count: number; firstTs: number; lastTs: number }>();
+    for (const a of hist.alerts) {
+      const k = `${a.severity}|${a.category}|${a.message}`;
+      const e = byKey.get(k);
+      if (e) { e.count++; e.firstTs = Math.min(e.firstTs, a.ts); e.lastTs = Math.max(e.lastTs, a.ts); }
+      else byKey.set(k, { severity: a.severity, category: a.category, message: a.message, count: 1, firstTs: a.ts, lastTs: a.ts });
+    }
+    return [...byKey.values()].sort((x, y) => y.lastTs - x.lastTs);
+  })();
 
   // ── At-a-glance vitals: roll the gauges below into four category rings. Each segment's tone comes from
   // `bandTone` over the SAME bands the matching gauge uses, so the donut and the detail never disagree; a
@@ -154,11 +210,34 @@ export function Health({ completeness, dataAsOf }: { completeness: Completeness 
         </div>
       )}
 
+      {/* ── Upstream watchers (drift-canary GREEN-STATE): the five vocabulary monitors that catch LIS
+            changing its own codes/shapes. They alert on drift; this shows the ALL-CLEAR too, so silence is
+            "actively checked" not "the canary died." "?" = the worker couldn't determine it this cycle. ── */}
+      <h2 className="h">Upstream watchers {h && <span className="muted" style={{ textTransform: "none", letterSpacing: 0 }}>· is LIS still speaking our language?</span>}</h2>
+      {h ? (
+        <div className="hl-canaries panel">
+          {canaries.map((cn) => (
+            <div key={cn.label} className={`hl-canary ${cn.state}`}>
+              <span className="hl-cdot" aria-hidden="true" />
+              <span className="hl-clabel">{cn.label}</span>
+              <span className="hl-cstat">
+                {cn.state === "clean" ? "✓ no drift" : cn.state === "drift" ? `▲ ${cn.count} new value${cn.count === 1 ? "" : "s"}` : "? not checked"}
+              </span>
+            </div>
+          ))}
+          <div className="hl-vfoot muted">
+            Each watcher diffs LIS's live vocabulary against the structural router's. A “?” means the worker
+            couldn't reach the upstream list this cycle — never read it as healthy.
+          </div>
+        </div>
+      ) : <CalLoading err={hErr} />}
+
       <h2 className="h">Accuracy &amp; completeness — the lobbyist-facing guarantees</h2>
       <div className="hl-gauges">
         {h ? (
           <BulletGraph label="Section-9 accuracy · meeting actions without a time" value={section9 ?? 0}
-            max={50} target={0} bands={lower(0.5, 25, 50)} sub="0 = every meeting action has a time (the project goal)" />
+            max={50} target={0} bands={lower(0.5, 25, 50)} spark={spark("meeting_unsourced")}
+            sub="0 = every meeting action has a time (the project goal)" />
         ) : <CalLoading err={hErr} />}
         {/* Bill-backend gauges only render when the completeness payload is present — a null payload must NOT
             display as a real 0% / 0 (that would read as a false danger; "allowed not to know, never pretend"). */}
@@ -183,13 +262,33 @@ export function Health({ completeness, dataAsOf }: { completeness: Completeness 
             max={24} target={0} bands={lower(6, 12, 24)} unit=" h" format={hrs}
             sub={h.calendarFreshness?.toISOString() || "Sheet1!AA1 unreadable"} />
         ) : <CalLoading err={hErr} />}
+        {/* Source feed: HISTORY.CSV's OWN age. Bills are bulk re-derived from this blob, so they can't go
+            stale one-at-a-time — they go stale TOGETHER when LIS stops refreshing the blob, which the two
+            cycle clocks above can't see (a green cycle over a stale source). This is the grounded form of
+            "per-bill freshness." Only shown when the worker reported a Last-Modified (>= 0). */}
+        {h && blobAgeKnown && (
+          <BulletGraph label="Source feed · HISTORY.CSV blob age (hours since LIS refreshed it)" value={blobAgeH}
+            max={24} target={0} bands={lower(6, 12, 24)} unit=" h" format={hrs}
+            spark={spark("history_blob_age_min").filter((v) => v >= 0)}
+            sub="if this is stale while the cycle clocks are green, LIS stopped feeding us — every bill is stale together" />
+        )}
       </div>
+      {/* Feed-skew: the gap BETWEEN the two clocks. Small = the subsystems agree on "now"; large = one feed
+          lagged the other and the picture is momentarily inconsistent. Only shown when both clocks are known. */}
+      {Number.isFinite(feedSkewH) && (
+        <div className={`hl-skew ${feedSkewH <= 3 ? "ok" : feedSkewH <= 8 ? "warn" : "danger"}`}>
+          <span className="hl-skewdot" aria-hidden="true" />
+          Feed-skew · the two clocks are <strong>{hrs(feedSkewH)} h</strong> apart
+          <span className="muted"> — {feedSkewH <= 3 ? "in sync" : feedSkewH <= 8 ? "one feed is lagging" : "the feeds disagree on “now” — a bill may have moved on one but not the other"}</span>
+        </div>
+      )}
 
       <h2 className="h">Pipeline health</h2>
       <div className="hl-gauges">
         {h ? (
           <BulletGraph label="Write-time invariant violations" value={violations ?? 0}
-            max={60} target={0} bands={lower(0.5, 49, 60)} sub="rows that failed a schema/Origin invariant at write (breaker trips at ≥50)" />
+            max={60} target={0} bands={lower(0.5, 49, 60)} spark={spark("invariant_violations")}
+            sub="rows that failed a schema/Origin invariant at write (breaker trips at ≥50)" />
         ) : <CalLoading err={hErr} />}
         {c?.outcome_keyword_mismatch_rate != null && (
           <BulletGraph label="Outcome drift · keyword↔structural mismatch" value={driftPct}
@@ -199,6 +298,7 @@ export function Health({ completeness, dataAsOf }: { completeness: Completeness 
         {h && total > 0 && (
           <BulletGraph label="Unclassified share · router returned blank" value={unclassPct}
             max={25} target={0} bands={lower(8, 15, 25)} unit="%" format={oneDp}
+            spark={hist ? seriesForPct(hist, "legevent_route_blank", "total_processed") : []}
             sub={`${(m.legevent_route_blank ?? 0).toLocaleString()} of ${total.toLocaleString()} rows (floor/skeleton rows are legitimately blank)`} />
         )}
         {c && (
@@ -208,24 +308,40 @@ export function Health({ completeness, dataAsOf }: { completeness: Completeness 
         )}
       </div>
 
-      {/* ── Alert feed: the operator's "needs a human" list (Standard #8) ── */}
-      <h2 className="h">Alerts {h && <span className="muted" style={{ textTransform: "none", letterSpacing: 0 }}>· latest from the calendar worker</span>}</h2>
-      {h ? (
-        h.alerts.length === 0 ? (
-          <p className="muted" style={{ marginBottom: 18 }}>No active alerts — the worker is running clean.</p>
+      {/* ── Alert feed: the operator's "needs a human" list (Standard #8). When the Metrics_History trend
+            store is populated, show the rolling HISTORY (distinct alerts + how often + last-seen); until then,
+            fall back to the latest cycle's live alerts from Sheet1. ── */}
+      <h2 className="h">Alerts {h && <span className="muted" style={{ textTransform: "none", letterSpacing: 0 }}>· {alertHistory ? "recent history — what has fired and how often" : "latest from the calendar worker"}</span>}</h2>
+      {!h ? <CalLoading err={hErr} /> : alertHistory ? (
+        alertHistory.length === 0 ? (
+          <p className="muted" style={{ marginBottom: 18 }}>No alerts in the recent window — the worker is running clean.</p>
         ) : (
           <div className="panel" style={{ marginBottom: 18 }}>
-            {h.alerts.map((a, i) => (
+            {alertHistory.map((a, i) => (
               <div key={i} className="hl-alert">
                 <span className={`hl-sev ${a.severity.toLowerCase()}`}>{a.severity}</span>
                 {a.category && <span className="hl-cat">{a.category}</span>}
                 <span className="hl-amsg">{a.message}</span>
-                {a.date && <span className="hl-adate">{a.date}</span>}
+                {a.count > 1 && <span className="hl-acount" title={`fired in ${a.count} cycles`}>×{a.count}</span>}
+                <span className="hl-adate">{agoText(new Date(a.lastTs))}</span>
               </div>
             ))}
           </div>
         )
-      ) : <CalLoading err={hErr} />}
+      ) : h.alerts.length === 0 ? (
+        <p className="muted" style={{ marginBottom: 18 }}>No active alerts — the worker is running clean.</p>
+      ) : (
+        <div className="panel" style={{ marginBottom: 18 }}>
+          {h.alerts.map((a, i) => (
+            <div key={i} className="hl-alert">
+              <span className={`hl-sev ${a.severity.toLowerCase()}`}>{a.severity}</span>
+              {a.category && <span className="hl-cat">{a.category}</span>}
+              <span className="hl-amsg">{a.message}</span>
+              {a.date && <span className="hl-adate">{a.date}</span>}
+            </div>
+          ))}
+        </div>
+      )}
 
       {/* ── Structural classification distribution (drift in the router is visible) ── */}
       {h && total > 0 && (

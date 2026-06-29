@@ -291,7 +291,17 @@ h2, h3 { margin: 0; }
 .bg-row { display: flex; flex-direction: column; gap: 5px; }
 .bg-head { display: flex; align-items: baseline; justify-content: space-between; gap: var(--s3); }
 .bg-label { font-size: 12.5px; font-weight: 600; color: var(--ink-soft); }
-.bg-value { font-size: 16px; font-weight: 800; font-variant-numeric: tabular-nums; }
+.bg-spark { margin-left: auto; display: inline-flex; align-items: center; }   /* pushes spark + value to the right; label stays left */
+.bg-value { font-size: 16px; font-weight: 800; font-variant-numeric: tabular-nums; margin-left: var(--s3); }
+
+/* sparkline (per-cycle trend) */
+.spark { display: block; overflow: visible; }
+.spark-line { stroke: var(--ink-faint); }
+.spark-dot { fill: var(--ink-faint); }
+.spark-bad .spark-line { stroke: var(--stale); }   .spark-bad .spark-dot { fill: var(--stale); }
+.spark-good .spark-line { stroke: var(--ok); }      .spark-good .spark-dot { fill: var(--ok); }
+.spark-flat .spark-line { stroke: var(--ink-faint); } .spark-flat .spark-dot { fill: var(--ink-faint); }
+.spark-empty { color: var(--ink-faint); font-size: 12px; font-weight: 700; }
 .bg-track { position: relative; height: 16px; border-radius: 4px; overflow: hidden; background: var(--surface-2); }
 .bg-band { position: absolute; top: 0; bottom: 0; }                      /* qualitative range */
 .bg-measure { position: absolute; top: 5px; height: 6px; left: 0; border-radius: 3px; }  /* the value bar (Few: thin, centered) */
@@ -309,6 +319,28 @@ h2, h3 { margin: 0; }
 .hl-cat { font-size: 10.5px; font-weight: 700; color: var(--ink-faint); text-transform: uppercase; letter-spacing: .3px; }
 .hl-amsg { flex: 1; min-width: 200px; color: var(--ink); font-size: 13px; }
 .hl-adate { color: var(--ink-faint); font-size: 12px; white-space: nowrap; }
+.hl-acount { font-size: 11px; font-weight: 800; color: var(--ink-soft); background: var(--surface-2); border-radius: 5px; padding: 1px 6px; font-variant-numeric: tabular-nums; }
+
+/* upstream watchers (drift-canary green-state) */
+.hl-canaries { margin-bottom: var(--s5); }
+.hl-canary { display: flex; align-items: center; gap: 2px var(--s3); padding: 9px var(--s1); flex-wrap: wrap; }
+.hl-canary + .hl-canary { border-top: 1px solid var(--line); }
+.hl-cdot { width: 9px; height: 9px; border-radius: 50%; flex: none; background: var(--ink-faint); }
+.hl-canary.clean .hl-cdot { background: var(--ok); }
+.hl-canary.drift .hl-cdot { background: var(--stale); }
+.hl-canary.unknown .hl-cdot { background: var(--ink-faint); }
+.hl-clabel { font-size: 13px; color: var(--ink); }
+.hl-cstat { margin-left: auto; font-weight: 700; font-size: 12px; white-space: nowrap; color: var(--ink-faint); }
+.hl-canary.clean .hl-cstat { color: var(--ok); }
+.hl-canary.drift .hl-cstat { color: var(--stale); }
+
+/* feed-skew chip */
+.hl-skew { display: flex; align-items: center; gap: var(--s2); font-size: 12.5px; color: var(--ink-soft); margin: calc(-1 * var(--s2)) 0 var(--s5); padding: 8px var(--s3); border-radius: var(--radius-sm); background: var(--surface-2); flex-wrap: wrap; }
+.hl-skewdot { width: 9px; height: 9px; border-radius: 50%; flex: none; }
+.hl-skew.ok .hl-skewdot { background: var(--ok); }
+.hl-skew.warn .hl-skewdot { background: var(--o-carry); }
+.hl-skew.danger .hl-skewdot { background: var(--stale); }
+.hl-skew.danger { background: var(--bg-danger); }
 
 /* classification distribution */
 .hl-dist { display: flex; flex-direction: column; gap: 7px; }

@@ -2617,6 +2617,14 @@ def get_active_session_info(http_session):
 _BLOB_CACHE_DIR = os.environ.get("LIS_BLOB_CACHE_DIR", ".lis_blob_cache")
 _BLOB_CACHE_ENABLED = os.environ.get("LIS_BLOB_CACHE", "1") == "1"  # kill switch: LIS_BLOB_CACHE=0
 blob_cache_stats = {"reuse_304": 0, "download_200": 0}
+# Source-feed freshness: the blob's server-declared Last-Modified per URL. The bill data is
+# bulk re-derived from HISTORY.CSV every cycle, so a SINGLE bill can never be "stale" vs LIS
+# (we ARE LIS's last-action by construction) — the real blind spot is the SOURCE BLOB itself
+# stalling: if LIS stops refreshing HISTORY.CSV, every bill goes stale together even while our
+# cycle clock stays green. Azure returns Last-Modified on BOTH 200 and 304 (RFC 7232), so this
+# is populated even on a cold-start cache hit. A side-channel dict (like blob_cache_stats), so
+# it never leaks into the event schema / Schedule_Witness whitelist.
+_blob_last_modified = {}
 
 def _blob_cache_paths(url):
     key = hashlib.sha256(url.encode("utf-8")).hexdigest()[:24]
@@ -2718,6 +2726,11 @@ def safe_fetch_csv(url, attempts=3):
         try:
             res = requests.get(url, timeout=60,
                                headers={"If-None-Match": cached_etag} if cached_etag else {})
+            # Source-feed freshness: hold the server's Last-Modified as a LOCAL for now (200 OR 304 —
+            # a 304 still carries it per RFC 7232). It is committed to _blob_last_modified ONLY after the
+            # body passes the completeness + CSV-marker checks below, so a non-CSV / error 200 that
+            # happens to carry the header can never publish a false-fresh blob age (CodeRabbit #181).
+            _lm = res.headers.get("Last-Modified")
             if res.status_code == 304 and cached_body is not None:
                 body, from_cache = cached_body, True
             elif res.status_code == 200:
@@ -2748,6 +2761,11 @@ def safe_fetch_csv(url, attempts=3):
                     continue
                 # 200 but not a recognizable CSV (e.g., an error page) — empty.
                 return pd.DataFrame()
+            # Body is now a VALIDATED CSV (passed completeness + marker). Safe to commit the freshness
+            # reading; a failed/non-CSV response returned empty above without ever reaching here, so it
+            # can't publish a false-fresh blob age (CodeRabbit #181).
+            if _lm:
+                _blob_last_modified[url] = _lm
             # dtype=str + keep_default_na=False: zero-trust against pandas type-inference (the #1
             # refid fragility — see normalize_refid). Float-inferring a numeric refid column drops
             # LEADING ZEROS and appends ".0", which would truncate a len>=7 vote-id to len<=6 and
@@ -4032,6 +4050,27 @@ def run_calendar_update():
         # PR-C7.1j: secondary split-action rows that inherited their meeting's
         # time+committee from a same-(Bill,Date) resolved sibling.
         "sibling_inherited": 0,
+        # Health-observability: drift-canary GREEN-STATE. The five upstream-vocabulary
+        # canaries (status grouping / governor codes / refid shapes / schedule types /
+        # reference types) already ALERT on drift, but they emit nothing when clean — so
+        # the Health tab cannot distinguish "actively checked, all clear" from "the canary
+        # itself never ran." Record each one's outcome so the operator sees the watchers
+        # are ALIVE, not just silent. Encoding (sentinel-safe per CLAUDE.md audit #15):
+        #   -1 = couldn't determine this cycle (not run / errored / upstream fetch failed)
+        #    0 = ran, ZERO drift (the all-clear)
+        #    N = ran, N novel value(s) — drift (the existing alert also fired)
+        # -1 is never a legitimate drift count (counts are ≥0), so it is a collision-free
+        # "absent" sentinel; the front-end renders -1 as "?" (unknown), never false-green.
+        "canary_status_grouping":     -1,
+        "canary_governor_eventcodes": -1,
+        "canary_refid_shape":         -1,
+        "canary_scheduletype":        -1,
+        "canary_referencetype":       -1,
+        # Source-feed freshness: age (MINUTES) of the HISTORY.CSV blob = now - its Last-Modified.
+        # The honest answer to "is a bill going stale?" in a bulk-re-derive architecture: bills go
+        # stale together when the SOURCE blob stalls, which the cycle clock can't see. -1 = unknown
+        # (no Last-Modified this cycle) — sentinel-safe (an age is never negative), never false-fresh.
+        "history_blob_age_min":       -1,
     }
 
     def push_system_alert(message, status="ALERT", category=None, severity=None, dedup_key=None):
@@ -5357,6 +5396,49 @@ def run_calendar_update():
                 dedup_key="witness_canary_read_fail",
             )
 
+    # === Health-observability: per-cycle alert + metrics HISTORY tab (helper) ===
+    # Sheet1 is OVERWRITTEN every cycle, so the operator only ever sees the LATEST
+    # SYSTEM_ALERT / SYSTEM_METRICS row. Metrics_History is an append-only mirror of THIS
+    # cycle's SYSTEM rows, so the Health tab can show alert HISTORY (what fired and when) +
+    # metric TRENDS (sparklines), not just a point-in-time snapshot. Same minimal schema the
+    # front-end already parses (Status / Origin / Outcome) plus a lexically-sortable
+    # RunTimestampUTC so the OUT-OF-BAND prune (tools/metrics_history/prune.py) deletes by
+    # contiguous prefix — no in-cycle append+delete_rows race (same rule as Schedule_Witness).
+    # Defined at function-body scope (before its single call site in the end-of-cycle block),
+    # never inside a conditional — CLAUDE.md pre-push audit #2.
+    METRICS_HISTORY_TAB = "Metrics_History"
+    METRICS_HISTORY_HEADER = ["RunTimestampUTC", "Status", "Origin", "Outcome"]
+
+    def _ensure_metrics_history_tab():
+        """Return the Metrics_History worksheet, auto-creating it with header on first call.
+        Returns None on permanent failure so the caller skips gracefully (mirrors
+        _ensure_witness_tab — same fail-open, alert-don't-crash contract)."""
+        try:
+            return sheet.worksheet(METRICS_HISTORY_TAB)
+        except gspread.exceptions.WorksheetNotFound:
+            try:
+                _ws = sheet.add_worksheet(title=METRICS_HISTORY_TAB, rows=1000,
+                                          cols=len(METRICS_HISTORY_HEADER))
+                _ws.update(values=[METRICS_HISTORY_HEADER], range_name="A1")
+                print(f"📈 Created {METRICS_HISTORY_TAB} tab with header.")
+                return _ws
+            except Exception as _mh_create_err:
+                push_system_alert(
+                    f"Could not create {METRICS_HISTORY_TAB} tab: {_mh_create_err}. "
+                    f"Alert/metric history disabled until the tab exists.",
+                    status="WARN", category="API_FAILURE", severity="WARN",
+                    dedup_key="metrics_history_create_fail",
+                )
+                return None
+        except Exception as _mh_open_err:
+            push_system_alert(
+                f"Could not open {METRICS_HISTORY_TAB} tab: {_mh_open_err}. "
+                f"Alert/metric history skipped this cycle.",
+                status="WARN", category="API_FAILURE", severity="WARN",
+                dedup_key="metrics_history_open_fail",
+            )
+            return None
+
     # === SESSION MARKER FALLBACK FOR MISSING CONVENE TIMES ===
     # Some dates have session activity (adjourned, recessed) but no "Convenes" entry.
     # Use the earliest session marker as a fallback convene time.
@@ -5419,6 +5501,37 @@ def run_calendar_update():
     df_past = _history_future.result()   # prefetched at the top of the fetch section; already downloaded
     _blob_pool.shutdown(wait=False)
     _phase("HISTORY.CSV download (prefetched — should be ~0s if hidden behind phase 1)")
+
+    # Source-feed freshness (the grounded form of "per-bill freshness"): age of the HISTORY.CSV
+    # blob itself. parsedate_to_datetime handles the RFC-1123 Last-Modified ("Wed, 21 Oct 2026
+    # 07:28:00 GMT"); a negative/None result leaves -1 (unknown) — never a false-fresh 0.
+    try:
+        _hist_lm = _blob_last_modified.get(f"https://lis.blob.core.windows.net/lisfiles/{blob_code}/HISTORY.CSV")
+        if _hist_lm:
+            from email.utils import parsedate_to_datetime
+            _lm_dt = parsedate_to_datetime(_hist_lm)
+            if _lm_dt is not None:
+                if _lm_dt.tzinfo is None:
+                    _lm_dt = _lm_dt.replace(tzinfo=timezone.utc)
+                _age_min = (datetime.now(timezone.utc) - _lm_dt).total_seconds() / 60.0
+                if _age_min >= 0:
+                    source_miss_counts["history_blob_age_min"] = round(_age_min, 1)
+                    print(f"🕒 HISTORY.CSV source blob last modified {_hist_lm} ({_age_min:.0f} min ago).")
+    except Exception as _lm_err:
+        # Optional ≠ silent (Standard #4/#6, audit #48): a parse failure leaves -1 (unknown) and must
+        # never crash the cycle, but it must SURFACE — otherwise the Health source-feed gauge can simply
+        # vanish with no metric/alert explaining why. Counter + categorized alert (dedup on the exception
+        # type so a recurring break can't flood); the alert rides this cycle's Sheet1 write (CodeRabbit #181).
+        print(f"⚠️ HISTORY.CSV blob-age computation skipped ({_lm_err})")
+        source_miss_counts["history_blob_age_monitor_failures"] = (
+            source_miss_counts.get("history_blob_age_monitor_failures", 0) + 1
+        )
+        push_system_alert(
+            f"HISTORY.CSV blob-age computation skipped: {type(_lm_err).__name__}: {_lm_err}. "
+            f"Source-feed freshness shows 'unknown' this cycle.",
+            status="INFO", category="DATA_ANOMALY", severity="INFO",
+            dedup_key=f"history_blob_age_monitor_fail::{type(_lm_err).__name__}",
+        )
 
     # Always-defined BEFORE the empty-HISTORY branch so the Stage-2 input signature
     # never NameErrors on an empty cycle (Gemini #146). Populated from VOTE.CSV below
@@ -5487,6 +5600,12 @@ def run_calendar_update():
                 x.get("Name") for x in _refs if isinstance(x, dict)
             ] if isinstance(_refs, list) else []
             _status_drift = _validate_status_grouping(_live_status_names)
+            # GREEN-STATE: record the outcome (0 = clean, N = drift) so the Health tab can show this
+            # canary actively ran. Only when the upstream list ACTUALLY produced statuses — a 200 with
+            # empty References would otherwise validate [] -> 0 and report a FALSE green; leave -1
+            # (unknown) in that case, and on the HTTP-fail / except paths below (CodeRabbit #181).
+            if _live_status_names:
+                source_miss_counts["canary_status_grouping"] = len(_status_drift)
             if _status_drift:
                 # PR-C7.1b-1 observability: print on EVERY path (not just
                 # success) so the worker LOG is self-describing — push_alert
@@ -5975,6 +6094,10 @@ def run_calendar_update():
                 if _code[:1] == "G":
                     _live_g_codes.add(_code)
         _gov_drift = _validate_governor_eventcodes(_live_g_codes)
+        # GREEN-STATE only when the cache actually yielded G-codes; an empty cache validates [] -> 0
+        # (false green). Leave -1 (unknown) when there's no evidence this cycle (CodeRabbit #181).
+        if _live_g_codes:
+            source_miss_counts["canary_governor_eventcodes"] = len(_gov_drift)
         if _gov_drift:
             print(f"🚨 Governor EventCode DRIFT: {len(_gov_drift)} unclassified G-code(s): {_gov_drift}")
             push_system_alert(
@@ -6569,11 +6692,16 @@ def run_calendar_update():
         # column alone — no hot-loop hook. route_event still routes these rows; this keeps the refid
         # MEASUREMENT honest (Standard #1 runtime-validation, #4 UNKNOWN→human, #8 anomaly-only).
         try:
-            _refid_series = (df_past[refid_col].astype(str) if (refid_col and refid_col in df_past.columns)
-                             else [])
+            _refid_have_history = bool(refid_col) and refid_col in df_past.columns and not df_past.empty
+            _refid_series = (df_past[refid_col].astype(str) if _refid_have_history else [])
             _unknown_refids = [_r for _r in (_normalize_refid(_v) for _v in _refid_series)
                                if _r and _classify_refid(_r) == _REFID_UNKNOWN]
             _shape_drift = _validate_refid_shapes(_unknown_refids)
+            # GREEN-STATE only when HISTORY actually produced a refid column. An empty/failed
+            # HISTORY fetch yields no rows -> _validate_refid_shapes([]) -> 0, a FALSE green; leave
+            # -1 (unknown) so a transient blob failure never reads as healthy (CodeRabbit #181).
+            if _refid_have_history:
+                source_miss_counts["canary_refid_shape"] = len(_shape_drift)
             if _shape_drift:
                 _top = ", ".join(f"{s}×{c}" for s, c in sorted(_shape_drift.items(), key=lambda kv: -kv[1]))
                 print(f"🚨 Refid-shape DRIFT: {len(_shape_drift)} novel shape(s): {_top}")
@@ -6607,6 +6735,11 @@ def run_calendar_update():
         # so it gets a structural class, not a silent OTHER bucket (Standard #1/#8).
         try:
             _new_sched_types = _validate_schedule_types(_live_schedule_type_ids)
+            # GREEN-STATE only when the Schedule path actually populated live ids; an empty set (the
+            # API never ran / returned nothing) validates [] -> 0, a FALSE green. Leave -1 otherwise
+            # (CodeRabbit #181).
+            if _live_schedule_type_ids:
+                source_miss_counts["canary_scheduletype"] = len(_new_sched_types)
             if _new_sched_types:
                 print(f"🚨 ScheduleType DRIFT: {len(_new_sched_types)} new id(s): {_new_sched_types}")
                 push_system_alert(
@@ -6640,6 +6773,11 @@ def run_calendar_update():
                 if isinstance(_ev, dict)   # a malformed cached entry must not AttributeError the monitor (CodeRabbit #180)
             }
             _new_reftypes = _validate_reference_types(_live_reftypes)
+            # GREEN-STATE only when the cache actually yielded real ReferenceType values; an empty cache
+            # (cold start) or one with no ReferenceType fields validates [] -> 0, a FALSE green. Leave -1
+            # (unknown) when there's no real evidence this cycle (CodeRabbit #181).
+            if any(_rt for _rt in _live_reftypes):
+                source_miss_counts["canary_referencetype"] = len(_new_reftypes)
             if _new_reftypes:
                 print(f"🚨 ReferenceType DRIFT: {len(_new_reftypes)} new value(s): {_new_reftypes}")
                 push_system_alert(
@@ -6693,6 +6831,41 @@ def run_calendar_update():
         })
     except Exception as _metrics_err:
         print(f"⚠️ Failed to emit source-miss metrics row: {_metrics_err}")
+
+    # Health-observability: mirror THIS cycle's SYSTEM rows into the append-only Metrics_History
+    # tab (alert HISTORY + metric TRENDS — see _ensure_metrics_history_tab). Built from `alert_rows`
+    # (which holds exactly this cycle's SYSTEM_ALERT + SYSTEM_METRICS dicts) and placed BEFORE the
+    # alert_rows→filtered_events merge for two reasons: (1) it's independent of the breaker / Sheet1
+    # write, like Schedule_Witness, so a held-back cycle still records — its alert history matters
+    # most then; (2) CRITICALLY, an append-failure push_system_alert lands in alert_rows in time to
+    # ride the merge below into final_df→Sheet1, so the failure SURFACES on the Health tab instead of
+    # dying in stdout (Qodo #181 — the old placement ran after sheet_data was already built).
+    if alert_rows:
+        try:
+            _mh_ts = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+            _mh_payload = [
+                [_mh_ts, str(_a.get("Status", "")), str(_a.get("Origin", "")), str(_a.get("Outcome", ""))]
+                for _a in alert_rows
+                if _a.get("Origin") in ("system_metrics", "system_alert")
+            ]
+            if _mh_payload:
+                _mh_tab = _ensure_metrics_history_tab()
+                if _mh_tab is not None:
+                    _mh_tab.append_rows(_mh_payload, value_input_option="RAW")
+                    print(f"📈 {METRICS_HISTORY_TAB}: appended {len(_mh_payload)} system row(s) @ {_mh_ts}.")
+        except Exception as _mh_err:
+            # No silent failure (Standard #4/#6): a history-append failure must not crash the cycle,
+            # but it must SURFACE — the trend store going dark is itself an observability gap. The
+            # alert lands in alert_rows and is merged into Sheet1 just below. dedup on the exception
+            # type so a recurring break can't flood.
+            print(f"⚠️ {METRICS_HISTORY_TAB} append skipped ({_mh_err})")
+            push_system_alert(
+                f"{METRICS_HISTORY_TAB} append failed: {type(_mh_err).__name__}: {_mh_err}. "
+                f"This cycle's alert/metric history was not recorded; the Health tab's trends + "
+                f"alert-history will show a gap until the next successful append.",
+                status="WARN", category="API_FAILURE", severity="WARN",
+                dedup_key=f"metrics_history_append_fail::{type(_mh_err).__name__}",
+            )
 
     if alert_rows:
         filtered_events.extend(alert_rows)
