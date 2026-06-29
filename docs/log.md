@@ -10,6 +10,21 @@ Append-only, reverse-chronological (newest at top). Each entry opens with `## [Y
 
 **Kinds:** `ingest` (new source/doc processed), `pr` (PR opened/merged/closed), `decision` (architectural or workflow), `lint` (wiki health-check pass), `session` (notable multi-hour working block), `post-mortem` (failure analysis), `milestone` (project-goal threshold crossed).
 
+## [2026-06-29] decision | Self-healing classification design — 3 owner corrections locked + PARKED
+
+Owner (cross-checking with Gemini) refined the self-healing/auto-classify design and PARKED it as the
+50-state scale unlock (after VA). Three corrections locked into [[ideas/self_healing_classification]]:
+**(1) Prove-to-HIDE** — my "no proof → admin" was a regression (hides a clerk's timeless meeting for ~10h);
+corrected: meeting-vs-admin is the ACTION TYPE (EventCode), confirmed-vs-not is the PROOF; a row enters the
+hidden Ledger only with POSITIVE admin-proof (clerical EventCode / batch-notice law / Docket class), else it
+SURFACES — meeting-kind + timeless → visible Suspense lane, never hidden. Beats Gemini's "surface all unproven"
+(owner's flooding fear): only candidates/ambiguous surface, proven-clerical → Ledger. **(2) Canonical-only
+learning** — the Learned Store keys ONLY on canonical IDs (EventCode/StatusID/RefidClass), never free text;
+no-canonical-ID events are unlearnable (typo-immune). **(3) Structural-integrity breaker, NOT quantity** —
+owner rejected Gemini's delta-on-correction-COUNT (quantity ≠ accuracy: high volume = loop working, low volume
+can be catastrophic; audit #53). Breaker watches foundations: every correction ground-truth-confirmed; trip on
+proof-rate collapse / vocab-drift / ground-truth self-contradiction. Then back to VA Health-observability long-tail.
+
 ## [2026-06-24] pr | Health/operator tab (Task #4) BUILT — Few bullet-graphs with danger bands (`claude/health-tab`)
 
 Owner queue **Task #4**. Rebuilt the Health view from flat stat-cards into the operator trust surface (vision §3f / PL-8 / owner's "RPM redline"), per the scope in [[design/health_operator_tab]]. **`BulletGraph.tsx`** (new): a reusable Few bullet graph — qualitative good/warn/**DANGER** bands behind a thin measure bar + a target tick; the value's color follows its band so a danger reading pops red (Munzner popout); direction-agnostic. **`data/health.ts`** (new): LIGHTWEIGHT loader — a gviz **`tq WHERE Origin='system_metrics' or 'system_alert'`** grabs only the two SYSTEM rows (**~2 KB, not the ~5 MB sheet** — rec #1) + `range=` reads for `AA1` freshness + `W1` breaker; optional reads warn-not-silent (Standard #4). **`Health.tsx`**: **9 prioritized gauges** (critical first — Section-9 accuracy=0, completeness=100%, anomalies; then **two distinct freshness clocks** — bill backend vs calendar subsystem, different workers — rec #2; then invariant violations, outcome-drift, unclassified share, patron coverage) + a **breaker chip**, the severity-coded **`SYSTEM_ALERT` feed**, the **structural router distribution** (meeting 48.4% / admin 34.2% / executive 0.8% / blank 5.7%), and collapsible raw counters. Bands calibrated from the worker's breaker thresholds + steady state, **not magic numbers** (Standard #1); every gauge carries its denominator (PL-7); leads with the critical few (Few "emphasize by de-emphasizing" — rec #3). **Kept its `{completeness, dataAsOf}` props → App.tsx unchanged.** **VERIFIED LIVE** against the production sheet: 9 gauges on real data (Section-9 0, completeness 100%, 1 invariant violation = honest amber warn, calendar fresh 0.9h vs bill 2.7h), the `WARN/TIMING_LAG` HB30 alert renders, distribution + raw counters render; build clean, **0 console errors**. One fold-in: the column-select gviz CSV has NO header row → fixed the alert loop to iterate from row 0 (was dropping the alert). **REMAINING: the ACCESS-GATING infra** (Cloudflare Access on an operator deploy, §4 of the scope) — harmless visible now (pre-launch, no lobbyists; metrics are operational not secret); must gate before public launch. **Branch `claude/health-tab` (stacked on `claude/calendar-feature` so the PR diff is Health-only); PR base = the calendar branch, retarget to main once #166 merges.**
