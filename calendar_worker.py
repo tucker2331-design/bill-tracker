@@ -4140,6 +4140,10 @@ def run_calendar_update():
     # api_schedule rows without an API_Cache schema migration. Bound here so the closure
     # captures it; empty until populated (early non-schedule appends see "" -> SCHED_OTHER).
     _schedule_typeid_by_key = {}
+    # EVERY live ScheduleTypeID seen on the raw Schedule API this cycle (not just the keyed-map values,
+    # which are last-wins per (date,committee) and drop non-committee entries) — the drift monitor's
+    # input, so a new id on ANY entry is caught (CodeRabbit #180).
+    _live_schedule_type_ids = set()
 
     def _append_event(event):
         """PR-C1 write-time chokepoint. See comment block above for invariants."""
@@ -5006,6 +5010,7 @@ def run_calendar_update():
                     _stid_val = meeting.get("ScheduleTypeID")   # don't stringify None -> "None"
                     _stid_raw = str(_stid_val).strip() if _stid_val is not None else ""
                     if _stid_raw:
+                        _live_schedule_type_ids.add(_stid_raw)   # drift-monitor input — every entry, keyed or not
                         # Key by the NORMALIZED committee so the _append_event lookup matches
                         # regardless of the row's raw committee phrasing — normalize_room_key
                         # collapses "House Committee on Courts of Justice" == "House Courts of
@@ -6601,7 +6606,7 @@ def run_calendar_update():
         # ScheduleTypeID currently lands in SCHED_OTHER (surface, fail-safe) with no other signal — alert
         # so it gets a structural class, not a silent OTHER bucket (Standard #1/#8).
         try:
-            _new_sched_types = _validate_schedule_types(set(_schedule_typeid_by_key.values()))
+            _new_sched_types = _validate_schedule_types(_live_schedule_type_ids)
             if _new_sched_types:
                 print(f"🚨 ScheduleType DRIFT: {len(_new_sched_types)} new id(s): {_new_sched_types}")
                 push_system_alert(

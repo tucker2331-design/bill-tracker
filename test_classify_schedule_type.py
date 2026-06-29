@@ -37,6 +37,8 @@ def main():
         (["1", "5.0", 6], []),                 # str + float-inference forms of known ids -> no drift
         ([1, 3, 7], ["3", "7"]),               # NEW ids 3 + 7 -> drift (sorted, normalized)
         (["", None, 2], []),                   # blank/None skipped (missing ≠ a new type)
+        ([float("nan"), 1], []),               # real float NaN skipped (not str("nan")) — CodeRabbit #180
+        (["nan", "<NA>", "none", "NA", 5], []),# NA-like string sentinels skipped, not flagged as new ids
         ([], []), (None, []),                  # empty/None input -> no drift, never raises
     ]
     for live, expected in V_CASES:
