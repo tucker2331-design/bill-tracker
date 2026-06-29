@@ -24,6 +24,7 @@ export interface HealthData {
   alerts: HealthAlert[];                     // SYSTEM_ALERT rows (the operator's "needs a human" feed)
   calendarFreshness: Date | null;            // Sheet1!AA1 — the CALENDAR worker's own last-good cycle (≠ bill backend)
   breakerTrip: Record<string, unknown> | null; // Sheet1!W1 — null when healthy; the trip JSON when the breaker fired
+  sessionActive: boolean | null;             // Sheet1!S1 — "ACTIVE"/"ADJOURNED"; null = unreadable (never assume)
 }
 
 const gvizUrl = (params: string) =>
@@ -83,12 +84,13 @@ export function loadHealth(): Promise<HealthData> {
 }
 
 async function _loadHealth(): Promise<HealthData> {
-  const [metaTxt, aa1Txt, w1Txt] = await Promise.all([
+  const [metaTxt, aa1Txt, w1Txt, s1Txt] = await Promise.all([
     fetchText(gvizUrl(`tq=${encodeURIComponent(META_QUERY)}`)),
-    // The freshness + breaker cells are optional: a failed read must not blank the whole tab. Surface a
-    // console warning (Standard #4: optional ≠ silent) and fall back to "unknown"/healthy.
+    // The freshness + breaker + session cells are optional: a failed read must not blank the whole tab.
+    // Surface a console warning (Standard #4: optional ≠ silent) and fall back to "unknown"/healthy.
     fetchText(gvizUrl("range=AA1&headers=0")).catch((e) => { console.warn("Health: AA1 freshness read failed", e); return ""; }),
     fetchText(gvizUrl("range=W1&headers=0")).catch((e) => { console.warn("Health: W1 breaker read failed", e); return ""; }),
+    fetchText(gvizUrl("range=S1&headers=0")).catch((e) => { console.warn("Health: S1 session read failed", e); return ""; }),
   ]);
 
   // Shape guard: a 200 that isn't our CSV (an HTML login/error page) must not parse to a silent empty set.
@@ -132,5 +134,10 @@ async function _loadHealth(): Promise<HealthData> {
     try { breakerTrip = JSON.parse(w1); } catch { console.warn("Health: W1 present but not JSON", w1.slice(0, 80)); }
   }
 
-  return { metrics, alerts, calendarFreshness, breakerTrip };
+  // Sheet1!S1 is the worker's session flag. Map ONLY the two known values; anything else (blank, unreadable,
+  // a future value) → null so the UI treats session state as UNKNOWN and never false-alarms ("never pretend").
+  const s1 = firstCell(s1Txt).toUpperCase();
+  const sessionActive = s1 === "ACTIVE" ? true : s1 === "ADJOURNED" ? false : null;
+
+  return { metrics, alerts, calendarFreshness, breakerTrip, sessionActive };
 }
