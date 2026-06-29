@@ -666,6 +666,62 @@ def classify_schedule_type(schedule_type_id) -> str:
     return _SCHEDULE_TYPE_MAP.get(s, SCHED_OTHER)
 
 
+def validate_schedule_types(live_schedule_type_ids) -> list:
+    """Standard #1/#8 runtime drift check for `_SCHEDULE_TYPE_MAP` — the companion to
+    validate_status_grouping / validate_governor_eventcodes / validate_refid_shapes (the
+    sustainability-debt sweep 2026-06-28 found this map had no drift-alert). Pass the distinct
+    ScheduleTypeIDs seen in the live Schedule API this cycle; returns the normalized ids NOT in the map
+    — a NEW LIS schedule type that currently lands in SCHED_OTHER (surface, fail-safe) with no other
+    signal. The caller raises a categorized alert so the new type gets a structural class, not a silent
+    OTHER bucket. Blank/missing ids are skipped (a missing id is a separate concern, not a new type).
+    Float-inference-proof, mirroring classify_schedule_type. Never raises."""
+    unknown = []
+    for raw in (live_schedule_type_ids or []):
+        if raw is None or (isinstance(raw, float) and raw != raw):   # None / NaN — missing, not a new type
+            continue
+        s = str(raw).strip()
+        if s.endswith(".0") and s[:-2].isdigit():
+            s = s[:-2]
+        if not s or s.lower() in ("nan", "none", "na", "<na>", "null"):  # str(None)/NA reprs — skip, not new
+            continue
+        if s not in _SCHEDULE_TYPE_MAP:
+            unknown.append(s)
+    return sorted(set(unknown))
+
+
+# The acknowledged ReferenceType vocabulary. MEASURED 2026-06-28 from the live LegEvent_Events cache
+# (distinct values + counts): Vote 29,746 / LegislationText 9,799 / LegislationFile 4,326 /
+# Committee 3,963 / Subcommittee 2,545 / Legislation 175 / Minutes 38 / Calendar 1 (+ blank).
+# route_event EXPLICITLY classifies the DOCUMENT_REFTYPES (rule 2) and REFERRAL_REFTYPES (rule 3); the
+# rest (Vote / Legislation / Minutes / Calendar) are handled by the vote/time/else rules and carry no
+# explicit grouping. A NEW ReferenceType LIS introduces would ride that fallback with no signal it's
+# unclassified — this set + validate_reference_types makes that DRIFT visible (Standard #1/#8). Seeded
+# with the full measured vocab so there is NO first-run false alarm (sustainability-debt sweep #2 fix).
+KNOWN_REFERENCE_TYPES = DOCUMENT_REFTYPES | REFERRAL_REFTYPES | frozenset({
+    "Vote", "Legislation", "Minutes", "Calendar",
+})
+
+
+def validate_reference_types(live_reference_types) -> list:
+    """Standard #1/#8 runtime drift check for the ReferenceType vocabulary — the companion to
+    validate_status_grouping / validate_schedule_types / validate_refid_shapes. Pass the distinct
+    ReferenceTypes seen on live LegislationEvents this cycle; returns the non-blank values NOT in
+    KNOWN_REFERENCE_TYPES — a NEW LIS ReferenceType that route_event would handle only by its
+    vote/time/else fallback, with no signal it is unclassified. The caller raises a categorized alert so
+    the grouping gets reviewed/extended. Blank/missing skipped (route_event rule 5 handles a blank
+    ReferenceType by design). Stdlib-only; never raises."""
+    unknown = []
+    for raw in (live_reference_types or []):
+        if raw is None or (isinstance(raw, float) and raw != raw):   # None / NaN — missing, not new
+            continue
+        s = str(raw).strip()
+        if not s or s.lower() in ("nan", "none", "na", "<na>", "null"):  # blank / NA reprs — skip
+            continue
+        if s not in KNOWN_REFERENCE_TYPES:
+            unknown.append(s)
+    return sorted(set(unknown))
+
+
 def classify_action(outcome_text: str = "", legevent_route: str = "",
                     refid_class: str = "", schedule_class: str = "") -> str:
     """Classify an action as meeting / administrative / executive / unconfirmed — STRUCTURALLY,
