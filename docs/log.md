@@ -10,7 +10,13 @@ Append-only, reverse-chronological (newest at top). Each entry opens with `## [Y
 
 **Kinds:** `ingest` (new source/doc processed), `pr` (PR opened/merged/closed), `decision` (architectural or workflow), `lint` (wiki health-check pass), `session` (notable multi-hour working block), `post-mortem` (failure analysis), `milestone` (project-goal threshold crossed).
 
-## [2026-06-29] pr | #181 OPEN — Health observability long-tail (canary green-state, alert/metric history, trends, source-feed freshness)
+## [2026-06-29] pr | #181 MERGED — Health observability long-tail (canary green-state, alert/metric history, trends, source-feed freshness)
+
+**MERGED to main (squash) 2026-06-29** after TWO bot fold-in rounds (7 findings total; CodeRabbit's round-2
+re-scan hung in "pending" — the known intermittent behavior — so merged on the verified state per the owner's
+standing merge-on-loop-complete authorization). Combined-main validated: worker parses, `structural_router`
+imports from `pages/`, all 5 structural golden tests pass. New `metrics_history_retention.yml` workflow + the
+canary/Metrics_History/source-feed signals go live on the next worker cycle. Below is the build record.
 
 Closed the five deferred Health-observability gaps on `claude/health-observability`, after a plan AUDIT the
 owner requested ("could it be better? did you assume?") that corrected 3 wrong assumptions
