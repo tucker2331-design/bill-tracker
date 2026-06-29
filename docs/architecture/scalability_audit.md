@@ -84,15 +84,17 @@ now also flags it on any future addition).
 | `ADMIN_PIPELINE_STATUSES` / `MEETING_INSESSION_STATUSES` | ✅ `validate_status_grouping` | the gold-standard pattern |
 | `KNOWN_GOVERNOR_EVENTCODES` | ✅ `validate_governor_eventcodes` | |
 | refid grammars + `KNOWN_REFID_SHAPES` | ✅ `validate_refid_shapes` (#178) | |
-| **`DOCUMENT_REFTYPES` / `REFERRAL_REFTYPES`** | ❌ **none** | a new LIS ReferenceType silently falls through `route_event` rule 2/3 → no alert. FIX: `validate_reference_types` vs LIS's published ReferenceType list, mirroring `validate_status_grouping`. |
+| **`DOCUMENT_REFTYPES` / `REFERRAL_REFTYPES`** | ✅ **FIXED 2026-06-28** | `validate_reference_types` + `KNOWN_REFERENCE_TYPES` (seeded from the MEASURED live LegEvent_Events vocab: Vote/LegislationText/LegislationFile/Committee/Subcommittee/Legislation/Minutes/Calendar) wired into the worker post-loop over the cache's ReferenceTypes — a new value now alerts instead of riding the vote/time/else fallback silently. Golden-tested; silent today (no first-run noise). |
 | **`_SCHEDULE_TYPE_MAP`** (ScheduleTypeID→label) | ✅ **FIXED 2026-06-28** | `validate_schedule_types` (mirrors `validate_status_grouping`) wired into the worker post-loop over the live `_schedule_typeid_by_key` values — a new ScheduleTypeID now alerts `WARN/DATA_ANOMALY` instead of silently bucketing to `SCHED_OTHER`. Golden-tested. |
 | `MEETING_HOUR_MIN/MAX`, `_VOTE_ID_MIN_LEN` | ❌ none | measured physical/structural constants (legislative hours; the len≥7 vote-id boundary). Lower drift-risk; document the measurement + a periodic re-measure, not a per-cycle alert. |
 
-**The 3 ❌ rows ARE the answer to "what's hiding" — same class as the status grouping, minus the drift-alert.**
-None is a live bug (each fails safe TODAY: an unrecognized value routes by a later rule / surfaces as
-`SCHED_OTHER`), but each would silently rot on an upstream change. **PROGRESS: `validate_schedule_types`
-shipped (PR landed 2026-06-28).** REMAINING: `validate_reference_types` — deferred because, unlike the
-ScheduleType map (whose keys ARE the complete known set), the ReferenceType "known set" beyond
-`DOCUMENT_REFTYPES ∪ REFERRAL_REFTYPES` isn't measured; needs a one-time LegislationEvent ReferenceType
-vocabulary probe to seed `KNOWN_REFERENCE_TYPES` (else a noisy first run). The `MEETING_HOUR`/`_VOTE_ID_MIN_LEN`
-constants stay documented-measurement (lower drift-risk). See [[architecture/verification_durability#Sustainability honesty — the curation inventory + the path past "detect + ping" (owner 2026-06-28)]].
+**The 3 ❌ rows WERE the answer to "what's hiding" — same class as the status grouping, minus the drift-alert.**
+Each failed safe (an unrecognized value routes by a later rule / surfaces as `SCHED_OTHER`) but would
+silently rot on an upstream change. **✅ BOTH classification-set gaps are now CLOSED (PR #180, 2026-06-28):**
+`validate_schedule_types` (the ScheduleType map) + `validate_reference_types` (the ReferenceType vocab,
+seeded from a measured LegEvent_Events probe — no noisy first run). Both wired into the worker post-loop
+alongside the refid-shape monitor, each with the surface-don't-just-print except (audit #48). The remaining
+`MEETING_HOUR`/`_VOTE_ID_MIN_LEN` are physical/structural CONSTANTS (legislative hours; the len≥7 vote-id
+boundary), not classification sets — lower drift-risk, kept as documented-measurement + periodic re-measure
+rather than a per-cycle alert. So the "curated value without a drift-alert" class is now empty for the
+classification maps. See [[architecture/verification_durability#Sustainability honesty — the curation inventory + the path past "detect + ping" (owner 2026-06-28)]].

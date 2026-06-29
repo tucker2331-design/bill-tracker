@@ -7,7 +7,7 @@ milestone executive codes (approved/deadline G70xx, Acts-chapter G99xx) stay "ad
 ordering invariant (a veto that is ALSO a ministerial code must STILL surface) is the critical one:
 it is the live veto-blindspot guard.
 """
-from structural_router import route_event
+from structural_router import route_event, validate_reference_types
 
 CASES = [
     # (event_dict, ministerial_codes) -> expected route
@@ -57,12 +57,28 @@ def main():
             failures.append((event, got, expected))
         label = event.get("EventCode") or event.get("ActorType") or type(event).__name__ if isinstance(event, dict) else repr(event)
         print(f"  [{status}] route_event({label!r:14}) -> {got:10s} (exp {expected})")
+    # validate_reference_types drift monitor (sustainability hardening 2026-06-28): the live
+    # ReferenceType set is checked against the measured KNOWN_REFERENCE_TYPES vocabulary; a NEW value
+    # (LIS adds one) must surface, today's full vocab + blank must not.
+    V_CASES = [
+        (["Vote", "LegislationText", "Committee", "Subcommittee", "Legislation", "Minutes", "Calendar"], []),
+        (["LegislationFile", "", None], []),                 # known + blank/None skipped -> no drift
+        (["Vote", "Amendment", "Conference"], ["Amendment", "Conference"]),  # 2 NEW types -> drift (sorted)
+        (["nan", "<NA>", "Committee"], []),                  # NA reprs skipped
+        ([], []), (None, []),                                # empty/None -> no drift, never raises
+    ]
+    for live, expected in V_CASES:
+        got = validate_reference_types(live)
+        if got != expected:
+            failures.append(("validate_reference_types", live, got, expected))
+        print(f"  [{'ok' if got==expected else 'FAIL'}] validate_reference_types({live!r}) -> {got}")
+
     if failures:
         print(f"\n*** {len(failures)} GOLDEN TEST FAILURE(S) ***")
         for f in failures:
             print(f"    {f}")
         return 1
-    print(f"\nAll {len(CASES)} route_event golden tests pass.")
+    print(f"\nAll {len(CASES)} route_event + {len(V_CASES)} validate_reference_types golden tests pass.")
     return 0
 
 

@@ -325,6 +325,7 @@ from structural_router import classify_action as _classify_action  # PR-hardenin
 from structural_router import normalize_refid as _normalize_refid  # float64/nan-proof refid cleanup
 from structural_router import classify_schedule_type as _classify_schedule_type  # PR-C8.1b ScheduleTypeID
 from structural_router import validate_schedule_types as _validate_schedule_types  # ScheduleTypeID drift monitor
+from structural_router import validate_reference_types as _validate_reference_types  # ReferenceType drift monitor
 from lis_authorization import is_authorized_session  # LIS API 2025/2026-only gate (ban-safe)
 # Single source of truth for the VA legislative business-hours window. Shared with
 # structural_router._has_meeting_time so the ministerial detector and this
@@ -6621,6 +6622,36 @@ def run_calendar_update():
                 f"ScheduleType drift check skipped: {type(_std_e).__name__}: {_std_e}.",
                 status="WARN", category="DATA_ANOMALY", severity="WARN",
                 dedup_key=f"scheduletype_monitor_fail::{type(_std_e).__name__}",
+            )
+
+        # ReferenceType drift monitor (the 2nd half of the sustainability-debt sweep fix). route_event
+        # explicitly classifies only the DOCUMENT/REFERRAL ReferenceTypes; a NEW LIS ReferenceType would
+        # ride the vote/time/else fallback silently. Alert so the grouping gets reviewed (Standard #1/#8).
+        # KNOWN_REFERENCE_TYPES is seeded from the measured live vocab, so this is silent today.
+        try:
+            _live_reftypes = {
+                _ev.get("ReferenceType") for _evs in _legislation_event_cache.values() for _ev in (_evs or [])
+            }
+            _new_reftypes = _validate_reference_types(_live_reftypes)
+            if _new_reftypes:
+                print(f"🚨 ReferenceType DRIFT: {len(_new_reftypes)} new value(s): {_new_reftypes}")
+                push_system_alert(
+                    f"ReferenceType drift: LIS published {len(_new_reftypes)} ReferenceType(s) not in "
+                    f"KNOWN_REFERENCE_TYPES: {_new_reftypes}. They ride route_event's vote/time/else "
+                    f"fallback — review + extend the grouping in structural_router.",
+                    status="WARN", category="DATA_ANOMALY", severity="WARN",
+                    dedup_key=f"referencetype_drift::{','.join(_new_reftypes)}",
+                )
+        except Exception as _rt_e:
+            # Same no-silent-failure rule as the monitors above (audit #48): surface + count, not print-only.
+            print(f"⚠️ referencetype drift check skipped ({_rt_e})")
+            source_miss_counts["referencetype_monitor_failures"] = (
+                source_miss_counts.get("referencetype_monitor_failures", 0) + 1
+            )
+            push_system_alert(
+                f"ReferenceType drift check skipped: {type(_rt_e).__name__}: {_rt_e}.",
+                status="WARN", category="DATA_ANOMALY", severity="WARN",
+                dedup_key=f"referencetype_monitor_fail::{type(_rt_e).__name__}",
             )
 
         # G4 (Standard #7 — a metric needs a DENOMINATOR): derived_standing is a
