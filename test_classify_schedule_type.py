@@ -4,7 +4,7 @@ Locks the ScheduleTypeID -> structural class mapping (LIS's own integer typing, 
 the companion to classify_refid for api_schedule-origin rows. Run: python3 test_classify_schedule_type.py
 """
 from structural_router import (
-    classify_schedule_type, SCHED_COMMITTEE, SCHED_FLOOR, SCHED_CAUCUS,
+    classify_schedule_type, validate_schedule_types, SCHED_COMMITTEE, SCHED_FLOOR, SCHED_CAUCUS,
     SCHED_COMMISSION, SCHED_DOCKET, SCHED_OTHER,
 )
 
@@ -30,10 +30,25 @@ def main():
         if got != expected:
             failures.append((sid, got, expected))
         print(f"  [{'ok' if got==expected else 'FAIL'}] classify_schedule_type({sid!r}) -> {got}")
+    # validate_schedule_types drift monitor (sustainability hardening 2026-06-28): the live id set is
+    # checked against _SCHEDULE_TYPE_MAP; a NEW id (LIS adds one) must surface, today's ids must not.
+    V_CASES = [
+        ([1, 2, 4, 5, 6], []),                 # the full current map -> no drift
+        (["1", "5.0", 6], []),                 # str + float-inference forms of known ids -> no drift
+        ([1, 3, 7], ["3", "7"]),               # NEW ids 3 + 7 -> drift (sorted, normalized)
+        (["", None, 2], []),                   # blank/None skipped (missing ≠ a new type)
+        ([], []), (None, []),                  # empty/None input -> no drift, never raises
+    ]
+    for live, expected in V_CASES:
+        got = validate_schedule_types(live)
+        if got != expected:
+            failures.append(("validate_schedule_types", live, got, expected))
+        print(f"  [{'ok' if got==expected else 'FAIL'}] validate_schedule_types({live!r}) -> {got}")
+
     if failures:
         print(f"\n*** {len(failures)} FAILURE(S): {failures} ***")
         return 1
-    print(f"\nAll {len(CASES)} golden tests pass.")
+    print(f"\nAll {len(CASES)} classify + {len(V_CASES)} validate golden tests pass.")
     return 0
 
 

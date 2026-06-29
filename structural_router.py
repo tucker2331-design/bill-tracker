@@ -666,6 +666,29 @@ def classify_schedule_type(schedule_type_id) -> str:
     return _SCHEDULE_TYPE_MAP.get(s, SCHED_OTHER)
 
 
+def validate_schedule_types(live_schedule_type_ids) -> list:
+    """Standard #1/#8 runtime drift check for `_SCHEDULE_TYPE_MAP` — the companion to
+    validate_status_grouping / validate_governor_eventcodes / validate_refid_shapes (the
+    sustainability-debt sweep 2026-06-28 found this map had no drift-alert). Pass the distinct
+    ScheduleTypeIDs seen in the live Schedule API this cycle; returns the normalized ids NOT in the map
+    — a NEW LIS schedule type that currently lands in SCHED_OTHER (surface, fail-safe) with no other
+    signal. The caller raises a categorized alert so the new type gets a structural class, not a silent
+    OTHER bucket. Blank/missing ids are skipped (a missing id is a separate concern, not a new type).
+    Float-inference-proof, mirroring classify_schedule_type. Never raises."""
+    unknown = []
+    for raw in (live_schedule_type_ids or []):
+        if raw is None or (isinstance(raw, float) and raw != raw):   # None / NaN — missing, not a new type
+            continue
+        s = str(raw).strip()
+        if s.endswith(".0") and s[:-2].isdigit():
+            s = s[:-2]
+        if not s or s.lower() in ("nan", "none", "na", "<na>", "null"):  # str(None)/NA reprs — skip, not new
+            continue
+        if s not in _SCHEDULE_TYPE_MAP:
+            unknown.append(s)
+    return sorted(set(unknown))
+
+
 def classify_action(outcome_text: str = "", legevent_route: str = "",
                     refid_class: str = "", schedule_class: str = "") -> str:
     """Classify an action as meeting / administrative / executive / unconfirmed — STRUCTURALLY,

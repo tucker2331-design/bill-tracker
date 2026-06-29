@@ -85,10 +85,14 @@ now also flags it on any future addition).
 | `KNOWN_GOVERNOR_EVENTCODES` | ✅ `validate_governor_eventcodes` | |
 | refid grammars + `KNOWN_REFID_SHAPES` | ✅ `validate_refid_shapes` (#178) | |
 | **`DOCUMENT_REFTYPES` / `REFERRAL_REFTYPES`** | ❌ **none** | a new LIS ReferenceType silently falls through `route_event` rule 2/3 → no alert. FIX: `validate_reference_types` vs LIS's published ReferenceType list, mirroring `validate_status_grouping`. |
-| **`_SCHEDULE_TYPE_MAP`** (ScheduleTypeID→label) | ❌ **none** | a new ScheduleTypeID maps to `SCHED_OTHER` (surfaces, fail-safe) but with no alert that LIS added a type. FIX: `validate_schedule_types` vs the live ScheduleTypeID set. |
+| **`_SCHEDULE_TYPE_MAP`** (ScheduleTypeID→label) | ✅ **FIXED 2026-06-28** | `validate_schedule_types` (mirrors `validate_status_grouping`) wired into the worker post-loop over the live `_schedule_typeid_by_key` values — a new ScheduleTypeID now alerts `WARN/DATA_ANOMALY` instead of silently bucketing to `SCHED_OTHER`. Golden-tested. |
 | `MEETING_HOUR_MIN/MAX`, `_VOTE_ID_MIN_LEN` | ❌ none | measured physical/structural constants (legislative hours; the len≥7 vote-id boundary). Lower drift-risk; document the measurement + a periodic re-measure, not a per-cycle alert. |
 
 **The 3 ❌ rows ARE the answer to "what's hiding" — same class as the status grouping, minus the drift-alert.**
 None is a live bug (each fails safe TODAY: an unrecognized value routes by a later rule / surfaces as
-`SCHED_OTHER`), but each would silently rot on an upstream change. NEXT: a focused "sustainability hardening"
-PR adding `validate_reference_types` + `validate_schedule_types`. See [[architecture/verification_durability#Sustainability honesty — the curation inventory + the path past "detect + ping" (owner 2026-06-28)]].
+`SCHED_OTHER`), but each would silently rot on an upstream change. **PROGRESS: `validate_schedule_types`
+shipped (PR landed 2026-06-28).** REMAINING: `validate_reference_types` — deferred because, unlike the
+ScheduleType map (whose keys ARE the complete known set), the ReferenceType "known set" beyond
+`DOCUMENT_REFTYPES ∪ REFERRAL_REFTYPES` isn't measured; needs a one-time LegislationEvent ReferenceType
+vocabulary probe to seed `KNOWN_REFERENCE_TYPES` (else a noisy first run). The `MEETING_HOUR`/`_VOTE_ID_MIN_LEN`
+constants stay documented-measurement (lower drift-risk). See [[architecture/verification_durability#Sustainability honesty — the curation inventory + the path past "detect + ping" (owner 2026-06-28)]].

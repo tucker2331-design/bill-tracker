@@ -324,6 +324,7 @@ from structural_router import REFID_VOTE_COMMITTEE as _REFID_VOTE_COMMITTEE, REF
 from structural_router import classify_action as _classify_action  # PR-hardening1b: count unconfirmed rows (centralized in 1a)
 from structural_router import normalize_refid as _normalize_refid  # float64/nan-proof refid cleanup
 from structural_router import classify_schedule_type as _classify_schedule_type  # PR-C8.1b ScheduleTypeID
+from structural_router import validate_schedule_types as _validate_schedule_types  # ScheduleTypeID drift monitor
 from lis_authorization import is_authorized_session  # LIS API 2025/2026-only gate (ban-safe)
 # Single source of truth for the VA legislative business-hours window. Shared with
 # structural_router._has_meeting_time so the ministerial detector and this
@@ -6592,6 +6593,34 @@ def run_calendar_update():
                 f"Secondary UNKNOWN-refid drift monitor disabled this cycle.",
                 status="WARN", category="DATA_ANOMALY", severity="WARN",
                 dedup_key=f"refid_shape_monitor_fail::{type(_rsd_e).__name__}",
+            )
+
+        # ScheduleType drift monitor (companion to the refid-shape + status-grouping checks; the
+        # sustainability-debt sweep 2026-06-28 found _SCHEDULE_TYPE_MAP had no drift-alert). A NEW LIS
+        # ScheduleTypeID currently lands in SCHED_OTHER (surface, fail-safe) with no other signal — alert
+        # so it gets a structural class, not a silent OTHER bucket (Standard #1/#8).
+        try:
+            _new_sched_types = _validate_schedule_types(set(_schedule_typeid_by_key.values()))
+            if _new_sched_types:
+                print(f"🚨 ScheduleType DRIFT: {len(_new_sched_types)} new id(s): {_new_sched_types}")
+                push_system_alert(
+                    f"ScheduleType drift: LIS published {len(_new_sched_types)} ScheduleTypeID(s) not in "
+                    f"_SCHEDULE_TYPE_MAP: {_new_sched_types}. They route SCHED_OTHER (surface) — classify "
+                    f"them in structural_router._SCHEDULE_TYPE_MAP.",
+                    status="WARN", category="DATA_ANOMALY", severity="WARN",
+                    dedup_key=f"scheduletype_drift::{','.join(_new_sched_types)}",
+                )
+        except Exception as _std_e:
+            # Same no-silent-failure rule as the refid monitor above (audit #48): surface + count, not
+            # just a print invisible off the runner.
+            print(f"⚠️ scheduletype drift check skipped ({_std_e})")
+            source_miss_counts["scheduletype_monitor_failures"] = (
+                source_miss_counts.get("scheduletype_monitor_failures", 0) + 1
+            )
+            push_system_alert(
+                f"ScheduleType drift check skipped: {type(_std_e).__name__}: {_std_e}.",
+                status="WARN", category="DATA_ANOMALY", severity="WARN",
+                dedup_key=f"scheduletype_monitor_fail::{type(_std_e).__name__}",
             )
 
         # G4 (Standard #7 — a metric needs a DENOMINATOR): derived_standing is a
