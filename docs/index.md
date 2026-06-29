@@ -42,6 +42,7 @@ Links use Obsidian `[[wikilink]]` format. Obsidian resolves by filename; path-qu
 - [[architecture/post_c8_hardening]] — **ACTIVE: three grounded post-C8.4 hardening solutions (G-code drift alert, structural meeting_unsourced, unconfirmed rolling baseline)**
 - [[architecture/pr_c8_structural_classification]] — close the 16% structurally; hard rules + gates for the implementing model
 - [[architecture/calendar_pipeline]] — LIS → worker → Sheet1 data flow + resolution priorities
+- [[architecture/relative_time_chain_resolution]] — **PLANNED: order "after committee X" subcommittee chains structurally (build_time_graph fix; Section-9-sensitive; full plan before starting)**
 - [[architecture/alerting]] — bug-notification protocol: in-sheet `SYSTEM_ALERT` / GitHub failure email / Slack ops channel; which tripwire fires when, and how to wire Slack
 - [[architecture/scalability_audit]] — standing standards-compliance audit (scalable / sustainable / zero-maintenance?); re-run after any architecturally-significant change
 - [[architecture/stress_test_failure_modes]] — adversarial failure-mode audit: what breaks tomorrow / in 6 months / in 2 years, with severity + status
@@ -78,13 +79,15 @@ Links use Obsidian `[[wikilink]]` format. Obsidian resolves by filename; path-qu
 ## Design (how the front end should look + behave)
 - [[design/information_display]] — **the design north-star: principles → actionable rules mapped to each screen + a punch-list for `web/`. Living.**
 - [[design/reading_notes]] — **per-book DEEP-READ digests (Few *Information Dashboard Design* read in full; *Refactoring UI* tactics; Tufte/Hearst queued). The raw material; concrete fixes for the "screams-AI" critique.**
-- [[design/ui_redesign_spec]] — **owner's 2026-06-22 UI change-list: landing relayout (calendar sliver + timeline below), smoother less-boxy timeline, shrink crossover, Floor stage?, Search bugs, the visual-identity pass.**
+- [[design/ui_redesign_spec]] — **owner's 2026-06-22 UI change-list: landing relayout (calendar sliver + timeline below), smoother less-boxy timeline, shrink crossover, Floor stage?, Search bugs, the visual-identity pass + the 2026-06-23 timeline-should-BRANCH feedback.**
+- [[design/health_operator_tab]] — **SCOPE (Task #4): the operator Health tab — Few bullet-graph gauges w/ danger bands (PL-8), grounded in live SYSTEM_METRICS/SYSTEM_ALERT signals; Cloudflare Access gating + the data-publicity caveat.**
 
 ## Ideas / Deferred Work
 - [[ny/ideas/data_inventory]] — New York source inventory and unresolved meeting/calendar questions
 - [[ideas/product_roadmap]] — **post-accuracy direction: reviewer swap (A), product vision → LIS data inventory → UI design (B), 2027-gated items (C). The anti-looping plan.**
 - [[ideas/product_vision]] — **LOCKED B1 product spec: four lenses, crossover-lane timeline, bill card, trust layer ("never pretend to know"). Build the front end toward this.**
 - [[ideas/lis_data_inventory]] — **B2: feature → LIS data → have it?/ingest it. The completeness gap, the feed-skew map, and the DB-expansion decisions (owner §7 questions).**
+- [[ideas/calendar_chain_ordering]] — **PLAN (queued): resolve "after committee X" meeting chains so they order correctly (worker `build_time_graph` fix; Section-9-validated). Owner-requested full plan before starting.**
 - [[ideas/multi_state_data_strategy]] — **VISION (owner 2026-06-24/25): scaling past VA — bulk-as-truth (PA hourly bulk → macro/trends DB) + a provisional, session-gated speed layer the bulk continuously GRADES (→ self-healing architecture); on-demand "latest" button; split stores by purpose; per-state source manifest. With my challenges + the owner's decisions.**
 - [[ideas/multi_state_org_structure]] — **PLAN (owner 2026-06-25): clean organization for 50 states — `core/` + `states/<code>/` code layout, one sheet/tab naming convention, `<state>_` workflows, branch pruning, shared-vs-per-state brain tags, per-state front-end config. Sequenced AFTER VA finishes.**
 - [[ideas/future_improvements]] — things on deck, priority-tagged

@@ -399,6 +399,24 @@ The CRITICAL alerts emitted by PR-C2 (`y1_stale`, `gap_reconciliation_oversized`
 to re-route these through a dedicated dashboard or push channel. See
 [[ideas/future_improvements#Notification Routing (flagged 2026-04-24, PR-C2)]].
 
+## Front-end Calendar integration (web/ reads Sheet1 read-only via gviz, PR #166)
+
+The lobbyist front end's **Calendar tab** (`web/src/views/Calendar.tsx` + `web/src/data/calendar.ts`) is the
+"by time" lens of [[ideas/product_vision]] §3c. It consumes **this subsystem's `Sheet1` output directly**,
+the same auth-free gviz CSV path the X-Ray uses (`pages/ray2.py load_sheet_df`) — `Sheet1` is in the SAME
+workbook as `Bill_Tracker`, so the existing `SPREADSHEET_ID` + a `tq` **column projection**
+(`select A,B,C,E,F,G,J` = Date,Time,SortTime,Committee,Bill,Outcome,Origin, ~5 MB vs ~9 MB full) is all it
+needs. No new credentials, no worker change. This is the long-planned calendar↔product integration, done
+**read-only** (the subsystem stays the single source of truth for meeting times — vote-time decision in [[log]]).
+
+**What the front end treats as a meeting:** a `(Date, Committee, Time)` group. It EXCLUDES the `📋 Ledger
+Updates` collapse (admin, no meeting), `🏛️ Governor` executive rows, and the `system_alert`/`system_metrics`
+meta rows. It KEEPS `Time TBA` meetings (api_schedule meetings LIS scheduled without a concrete time),
+marked honestly rather than dropped (vision §1/§7 — never silently hide a real meeting). Freshness is read
+from `Sheet1!AA1` (the documented public freshness contract). The crossover guillotine is pinned per session
+in the front end (`CROSSOVER_BY_SESSION`, 20261→2026-02-17) — **follow-up: the worker should emit the
+crossover date** so the marker is structural, not a front-end constant.
+
 ## Secondary Time Source via LegislationEvent (PR-C3)
 
 The 4 Class-1 crossover-week bugs (HB111/505/972 → House P&E Feb 12;

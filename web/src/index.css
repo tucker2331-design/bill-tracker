@@ -153,6 +153,56 @@ h2, h3 { margin: 0; }
 .daycol .ev .c { color: var(--ink-soft); font-size: 12.5px; }
 .daycol .dcempty { padding: var(--s5) var(--s4); text-align: center; color: var(--ink-faint); font-size: 12.5px; }
 
+/* ── Calendar tab — month grid (small multiples of days) + a day agenda (one geometry) ── */
+.cal-top { display: flex; flex-direction: column; gap: var(--s2); margin-bottom: var(--s3); }
+.cal-nav { display: flex; align-items: center; gap: var(--s3); flex-wrap: wrap; }
+.cal-title { font-size: 18px; font-weight: 800; letter-spacing: -.3px; min-width: 150px; }
+.cal-step { border: 1px solid var(--line-strong); background: var(--surface); border-radius: var(--radius-sm); width: 30px; height: 30px; font-size: 17px; color: var(--ink-soft); box-shadow: var(--shadow-sm); }
+.cal-step:disabled { opacity: .4; cursor: default; }
+.cal-count { font-size: 12.5px; }
+.cal-actions { display: flex; align-items: center; gap: var(--s2); flex-wrap: wrap; }
+.cal-jump { border: 1px solid transparent; background: var(--surface); border-radius: 999px; padding: 5px 12px; font-weight: 700; font-size: 12px; color: var(--ink-soft); box-shadow: var(--shadow-sm); }
+.cal-jump.cross { color: var(--o-vetoed); }
+.cal-cols { display: grid; grid-template-columns: 1.7fr 1fr; gap: var(--s4); align-items: start; }
+@media (max-width: 900px) { .cal-cols { grid-template-columns: 1fr; } }
+
+.calgrid { padding: var(--s3); }
+.cal-wk { display: grid; grid-template-columns: repeat(7, 1fr); margin-bottom: var(--s1); }
+.cal-wkd { text-align: center; font-size: 10.5px; font-weight: 700; color: var(--ink-faint); text-transform: uppercase; letter-spacing: .5px; }
+.cal-cells { display: grid; grid-template-columns: repeat(7, 1fr); gap: 3px; }
+/* one identical DayCell template ×42 — only the content varies (Tufte small multiples) */
+.cell { min-height: 62px; border-radius: 7px; padding: 5px 6px; background: var(--surface-2); display: flex; flex-direction: column; gap: 3px; }
+.cell.out { background: transparent; }
+.cell.out .cell-d { color: var(--line-strong); }
+.cell.wknd { background: var(--canvas); }                 /* weekends = the quietest difference */
+.cell.live { cursor: pointer; }
+.cell.live:hover { box-shadow: var(--shadow-sm); }
+.cell.sel { outline: 2px solid var(--accent); outline-offset: -2px; }
+.cell.today .cell-d { background: var(--accent); color: #fff; border-radius: 50%; width: 21px; height: 21px; display: inline-flex; align-items: center; justify-content: center; }
+.cell.cross { background: var(--o-vetoed-bg); outline: 1.5px solid var(--o-vetoed); outline-offset: -1.5px; } /* the one loud cell */
+.cell-d { font-size: 12px; font-weight: 700; color: var(--ink-soft); line-height: 21px; }
+.cell-cross { font-size: 8px; font-weight: 800; letter-spacing: .5px; color: var(--o-vetoed); }
+.cell-meet { margin-top: auto; display: flex; align-items: center; gap: 5px; }
+.cell-n { font-size: 13px; font-weight: 800; color: var(--ink); }
+.cell-dots { display: inline-flex; gap: 2px; flex-wrap: wrap; }
+.cell-dots .dot { width: 5px; height: 5px; border-radius: 50%; }
+
+/* the agenda column reuses .daycol; taller than the landing sliver, sticky beside the grid */
+.calagenda.daycol { max-height: 640px; position: sticky; top: 96px; }
+.cal-crossbar { background: var(--o-vetoed-bg); color: var(--o-vetoed); font-size: 12px; font-weight: 700; padding: 8px var(--s4); }
+.cal-mtg { padding: 9px var(--s2) 9px var(--s3); border-left: 3px solid var(--line); }
+.cal-mtg + .cal-mtg { border-top: 1px solid var(--line); }
+.cal-mtg-h { display: flex; gap: var(--s2); align-items: baseline; flex-wrap: wrap; }
+.cal-mtg-t { font-weight: 800; font-size: 12.5px; color: var(--ink); min-width: 60px; }
+.cal-mtg-t.tba { font-weight: 700; color: var(--ink-faint); font-style: italic; }
+.cal-mtg-c { font-weight: 600; font-size: 12.5px; }
+.cal-mtg-n { margin-left: auto; font-size: 11px; font-weight: 700; color: var(--ink-faint); }
+.cal-bills { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 6px; }
+.cal-bchip { border: 0; background: var(--surface-2); color: var(--ink-soft); border-radius: 5px; padding: 2px 7px; font-size: 11px; font-weight: 700; }
+.cal-bchip.on { background: var(--accent-soft); color: var(--accent); cursor: pointer; }
+.cal-more { border: 0; background: transparent; color: var(--accent); font-size: 11px; font-weight: 700; padding: 2px 4px; }
+.cal-legend { margin-top: var(--s4); font-size: 12px; line-height: 1.6; }
+
 /* ── Timeline — a smooth, integrated SPINE (not boxes) ── */
 .spine-legend { display: flex; gap: var(--s5); align-items: center; margin: 0 0 var(--s2); font-size: 12.5px; color: var(--ink-soft); flex-wrap: wrap; }
 .spine-legend .swatch { display: inline-block; width: 10px; height: 10px; border-radius: 3px; vertical-align: -1px; margin-right: 6px; }
