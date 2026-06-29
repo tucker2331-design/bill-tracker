@@ -64,7 +64,8 @@ def main():
         (["Vote", "LegislationText", "Committee", "Subcommittee", "Legislation", "Minutes", "Calendar"], []),
         (["LegislationFile", "", None], []),                 # known + blank/None skipped -> no drift
         (["Vote", "Amendment", "Conference"], ["Amendment", "Conference"]),  # 2 NEW types -> drift (sorted)
-        (["nan", "<NA>", "Committee"], []),                  # NA reprs skipped
+        (["nan", "<NA>", "none", "NA", "null", "Committee"], []),  # all NA-like string reprs skipped (CodeRabbit #180)
+        ([float("nan"), "Vote"], []),                        # real float NaN skipped (not str("nan"))
         ([], []), (None, []),                                # empty/None -> no drift, never raises
     ]
     for live, expected in V_CASES:

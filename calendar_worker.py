@@ -6635,7 +6635,9 @@ def run_calendar_update():
         # KNOWN_REFERENCE_TYPES is seeded from the measured live vocab, so this is silent today.
         try:
             _live_reftypes = {
-                _ev.get("ReferenceType") for _evs in _legislation_event_cache.values() for _ev in (_evs or [])
+                _ev.get("ReferenceType")
+                for _evs in _legislation_event_cache.values() for _ev in (_evs or [])
+                if isinstance(_ev, dict)   # a malformed cached entry must not AttributeError the monitor (CodeRabbit #180)
             }
             _new_reftypes = _validate_reference_types(_live_reftypes)
             if _new_reftypes:
