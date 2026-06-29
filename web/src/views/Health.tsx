@@ -5,7 +5,7 @@ import { bandTone, type Band } from "../components/bands";
 import { HealthVitals, type Vital, type VitalSeg } from "../components/HealthVitals";
 import { loadHealth, type HealthData } from "../data/health";
 import { loadVerification, type GuardRun } from "../data/verification";
-import { loadHistory, seriesFor, type HistoryData } from "../data/history";
+import { loadHistory, seriesFor, seriesForPct, type HistoryData } from "../data/history";
 
 // The operator / Health tab (vision §3f + §7): the trust signals the system ALREADY produces, as Few
 // bullet graphs with danger bands (PL-8 / owner's "RPM redline"). Bill-backend signals arrive via props
@@ -296,7 +296,8 @@ export function Health({ completeness, dataAsOf }: { completeness: Completeness 
         )}
         {h && total > 0 && (
           <BulletGraph label="Unclassified share · router returned blank" value={unclassPct}
-            max={25} target={0} bands={lower(8, 15, 25)} unit="%" format={oneDp} spark={spark("legevent_route_blank")}
+            max={25} target={0} bands={lower(8, 15, 25)} unit="%" format={oneDp}
+            spark={hist ? seriesForPct(hist, "legevent_route_blank", "total_processed") : []}
             sub={`${(m.legevent_route_blank ?? 0).toLocaleString()} of ${total.toLocaleString()} rows (floor/skeleton rows are legitimately blank)`} />
         )}
         {c && (

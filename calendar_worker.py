@@ -5585,10 +5585,12 @@ def run_calendar_update():
                 x.get("Name") for x in _refs if isinstance(x, dict)
             ] if isinstance(_refs, list) else []
             _status_drift = _validate_status_grouping(_live_status_names)
-            # GREEN-STATE: record the outcome (0 = clean, N = drift) so the Health tab can
-            # show this canary actively ran. Stays -1 (couldn't-determine) on the HTTP-fail /
-            # except paths below, which is the honest signal there.
-            source_miss_counts["canary_status_grouping"] = len(_status_drift)
+            # GREEN-STATE: record the outcome (0 = clean, N = drift) so the Health tab can show this
+            # canary actively ran. Only when the upstream list ACTUALLY produced statuses — a 200 with
+            # empty References would otherwise validate [] -> 0 and report a FALSE green; leave -1
+            # (unknown) in that case, and on the HTTP-fail / except paths below (CodeRabbit #181).
+            if _live_status_names:
+                source_miss_counts["canary_status_grouping"] = len(_status_drift)
             if _status_drift:
                 # PR-C7.1b-1 observability: print on EVERY path (not just
                 # success) so the worker LOG is self-describing — push_alert
@@ -6077,7 +6079,10 @@ def run_calendar_update():
                 if _code[:1] == "G":
                     _live_g_codes.add(_code)
         _gov_drift = _validate_governor_eventcodes(_live_g_codes)
-        source_miss_counts["canary_governor_eventcodes"] = len(_gov_drift)  # GREEN-STATE (0 clean / N drift)
+        # GREEN-STATE only when the cache actually yielded G-codes; an empty cache validates [] -> 0
+        # (false green). Leave -1 (unknown) when there's no evidence this cycle (CodeRabbit #181).
+        if _live_g_codes:
+            source_miss_counts["canary_governor_eventcodes"] = len(_gov_drift)
         if _gov_drift:
             print(f"🚨 Governor EventCode DRIFT: {len(_gov_drift)} unclassified G-code(s): {_gov_drift}")
             push_system_alert(
@@ -6672,12 +6677,16 @@ def run_calendar_update():
         # column alone — no hot-loop hook. route_event still routes these rows; this keeps the refid
         # MEASUREMENT honest (Standard #1 runtime-validation, #4 UNKNOWN→human, #8 anomaly-only).
         try:
-            _refid_series = (df_past[refid_col].astype(str) if (refid_col and refid_col in df_past.columns)
-                             else [])
+            _refid_have_history = bool(refid_col) and refid_col in df_past.columns and not df_past.empty
+            _refid_series = (df_past[refid_col].astype(str) if _refid_have_history else [])
             _unknown_refids = [_r for _r in (_normalize_refid(_v) for _v in _refid_series)
                                if _r and _classify_refid(_r) == _REFID_UNKNOWN]
             _shape_drift = _validate_refid_shapes(_unknown_refids)
-            source_miss_counts["canary_refid_shape"] = len(_shape_drift)  # GREEN-STATE (0 clean / N drift)
+            # GREEN-STATE only when HISTORY actually produced a refid column. An empty/failed
+            # HISTORY fetch yields no rows -> _validate_refid_shapes([]) -> 0, a FALSE green; leave
+            # -1 (unknown) so a transient blob failure never reads as healthy (CodeRabbit #181).
+            if _refid_have_history:
+                source_miss_counts["canary_refid_shape"] = len(_shape_drift)
             if _shape_drift:
                 _top = ", ".join(f"{s}×{c}" for s, c in sorted(_shape_drift.items(), key=lambda kv: -kv[1]))
                 print(f"🚨 Refid-shape DRIFT: {len(_shape_drift)} novel shape(s): {_top}")
@@ -6711,7 +6720,11 @@ def run_calendar_update():
         # so it gets a structural class, not a silent OTHER bucket (Standard #1/#8).
         try:
             _new_sched_types = _validate_schedule_types(_live_schedule_type_ids)
-            source_miss_counts["canary_scheduletype"] = len(_new_sched_types)  # GREEN-STATE (0 clean / N drift)
+            # GREEN-STATE only when the Schedule path actually populated live ids; an empty set (the
+            # API never ran / returned nothing) validates [] -> 0, a FALSE green. Leave -1 otherwise
+            # (CodeRabbit #181).
+            if _live_schedule_type_ids:
+                source_miss_counts["canary_scheduletype"] = len(_new_sched_types)
             if _new_sched_types:
                 print(f"🚨 ScheduleType DRIFT: {len(_new_sched_types)} new id(s): {_new_sched_types}")
                 push_system_alert(
@@ -6745,7 +6758,11 @@ def run_calendar_update():
                 if isinstance(_ev, dict)   # a malformed cached entry must not AttributeError the monitor (CodeRabbit #180)
             }
             _new_reftypes = _validate_reference_types(_live_reftypes)
-            source_miss_counts["canary_referencetype"] = len(_new_reftypes)  # GREEN-STATE (0 clean / N drift)
+            # GREEN-STATE only when the cache actually yielded real ReferenceType values; an empty cache
+            # (cold start) or one with no ReferenceType fields validates [] -> 0, a FALSE green. Leave -1
+            # (unknown) when there's no real evidence this cycle (CodeRabbit #181).
+            if any(_rt for _rt in _live_reftypes):
+                source_miss_counts["canary_referencetype"] = len(_new_reftypes)
             if _new_reftypes:
                 print(f"🚨 ReferenceType DRIFT: {len(_new_reftypes)} new value(s): {_new_reftypes}")
                 push_system_alert(
@@ -6799,6 +6816,41 @@ def run_calendar_update():
         })
     except Exception as _metrics_err:
         print(f"⚠️ Failed to emit source-miss metrics row: {_metrics_err}")
+
+    # Health-observability: mirror THIS cycle's SYSTEM rows into the append-only Metrics_History
+    # tab (alert HISTORY + metric TRENDS — see _ensure_metrics_history_tab). Built from `alert_rows`
+    # (which holds exactly this cycle's SYSTEM_ALERT + SYSTEM_METRICS dicts) and placed BEFORE the
+    # alert_rows→filtered_events merge for two reasons: (1) it's independent of the breaker / Sheet1
+    # write, like Schedule_Witness, so a held-back cycle still records — its alert history matters
+    # most then; (2) CRITICALLY, an append-failure push_system_alert lands in alert_rows in time to
+    # ride the merge below into final_df→Sheet1, so the failure SURFACES on the Health tab instead of
+    # dying in stdout (Qodo #181 — the old placement ran after sheet_data was already built).
+    if alert_rows:
+        try:
+            _mh_ts = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+            _mh_payload = [
+                [_mh_ts, str(_a.get("Status", "")), str(_a.get("Origin", "")), str(_a.get("Outcome", ""))]
+                for _a in alert_rows
+                if _a.get("Origin") in ("system_metrics", "system_alert")
+            ]
+            if _mh_payload:
+                _mh_tab = _ensure_metrics_history_tab()
+                if _mh_tab is not None:
+                    _mh_tab.append_rows(_mh_payload, value_input_option="RAW")
+                    print(f"📈 {METRICS_HISTORY_TAB}: appended {len(_mh_payload)} system row(s) @ {_mh_ts}.")
+        except Exception as _mh_err:
+            # No silent failure (Standard #4/#6): a history-append failure must not crash the cycle,
+            # but it must SURFACE — the trend store going dark is itself an observability gap. The
+            # alert lands in alert_rows and is merged into Sheet1 just below. dedup on the exception
+            # type so a recurring break can't flood.
+            print(f"⚠️ {METRICS_HISTORY_TAB} append skipped ({_mh_err})")
+            push_system_alert(
+                f"{METRICS_HISTORY_TAB} append failed: {type(_mh_err).__name__}: {_mh_err}. "
+                f"This cycle's alert/metric history was not recorded; the Health tab's trends + "
+                f"alert-history will show a gap until the next successful append.",
+                status="WARN", category="API_FAILURE", severity="WARN",
+                dedup_key=f"metrics_history_append_fail::{type(_mh_err).__name__}",
+            )
 
     if alert_rows:
         filtered_events.extend(alert_rows)
@@ -7001,41 +7053,6 @@ def run_calendar_update():
             # Unconditional (before the breaker if/else) so this timing prints even on a
             # trip — final_df assembly + the API_Cache write both already ran (Gemini #139).
             _phase("final_df assembly + API_Cache write")
-
-            # Health-observability: mirror THIS cycle's SYSTEM rows into the append-only
-            # Metrics_History tab (alert HISTORY + metric TRENDS — see the helper above).
-            # Placed here, BEFORE the breaker if/else, so it runs on BOTH the healthy-write
-            # and held-back paths: a breaker trip is exactly when its alert history matters
-            # most, and Metrics_History is an independent tab (like Schedule_Witness) whose
-            # append does not depend on Sheet1 being overwritten.
-            try:
-                _mh_cols = ("Status", "Origin", "Outcome")
-                if all(_c in final_df.columns for _c in _mh_cols):
-                    _sys_rows = final_df.loc[
-                        final_df["Origin"].isin(("system_metrics", "system_alert")), list(_mh_cols)
-                    ]
-                    if not _sys_rows.empty:
-                        _mh_ts = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
-                        _mh_payload = [
-                            [_mh_ts, str(_r.Status), str(_r.Origin), str(_r.Outcome)]
-                            for _r in _sys_rows.itertuples(index=False)
-                        ]
-                        _mh_tab = _ensure_metrics_history_tab()
-                        if _mh_tab is not None:
-                            _mh_tab.append_rows(_mh_payload, value_input_option="RAW")
-                            print(f"📈 {METRICS_HISTORY_TAB}: appended {len(_mh_payload)} system row(s) @ {_mh_ts}.")
-            except Exception as _mh_err:
-                # No silent failure (Standard #4/#6): a history-append failure must not crash
-                # the cycle, but it must SURFACE — the trend store going dark is itself an
-                # observability gap. dedup on the exception type so a recurring break can't flood.
-                print(f"⚠️ {METRICS_HISTORY_TAB} append skipped ({_mh_err})")
-                push_system_alert(
-                    f"{METRICS_HISTORY_TAB} append failed: {type(_mh_err).__name__}: {_mh_err}. "
-                    f"This cycle's alert/metric history was not recorded; the Health tab's trends + "
-                    f"alert-history will show a gap until the next successful append.",
-                    status="WARN", category="API_FAILURE", severity="WARN",
-                    dedup_key=f"metrics_history_append_fail::{type(_mh_err).__name__}",
-                )
 
             # PR-hardening1b-1: count the surfaced 'unconfirmed' rows over the FINAL written rows
             # (final_df == sheet_data, AFTER the ephemeral filter + (Date,Committee,Bill) dedup),

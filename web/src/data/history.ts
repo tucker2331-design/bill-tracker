@@ -112,3 +112,15 @@ export function seriesFor(h: HistoryData, key: string): number[] {
     .reverse()
     .map((p) => p.metrics[key]);
 }
+
+// A PERCENTAGE series (100 * num/den) per cycle, OLDEST→NEWEST. For a gauge whose value is itself a ratio
+// (e.g. unclassified share = blank/total), a raw-count spark can trend OPPOSITE to the gauge when the
+// denominator moves between cycles (CodeRabbit #181) — derive both keys per point so the spark matches the
+// gauge. Points missing either key, or with den<=0, are dropped (no divide-by-zero, no fabricated 0).
+export function seriesForPct(h: HistoryData, numKey: string, denKey: string): number[] {
+  return h.metricSeries
+    .slice()
+    .reverse()
+    .filter((p) => typeof p.metrics[numKey] === "number" && typeof p.metrics[denKey] === "number" && p.metrics[denKey] > 0)
+    .map((p) => (100 * p.metrics[numKey]) / p.metrics[denKey]);
+}

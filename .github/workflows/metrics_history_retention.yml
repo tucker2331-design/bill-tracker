@@ -18,12 +18,20 @@ concurrency:
   group: calendar-worker
   cancel-in-progress: false
 
+# Minimal token surface: this job only reads the repo to run a script + writes to Sheets via
+# GCP_CREDENTIALS — it never writes back to GitHub (CodeRabbit #181 / zizmor).
+permissions:
+  contents: read
+
 jobs:
   prune:
+    name: Prune Metrics_History
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
+        with:
+          persist-credentials: false   # nothing here pushes to the repo (CodeRabbit #181 / zizmor artipacked)
       - uses: actions/setup-python@v5
         with:
           python-version: "3.11"
