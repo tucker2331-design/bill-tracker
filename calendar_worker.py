@@ -2617,6 +2617,14 @@ def get_active_session_info(http_session):
 _BLOB_CACHE_DIR = os.environ.get("LIS_BLOB_CACHE_DIR", ".lis_blob_cache")
 _BLOB_CACHE_ENABLED = os.environ.get("LIS_BLOB_CACHE", "1") == "1"  # kill switch: LIS_BLOB_CACHE=0
 blob_cache_stats = {"reuse_304": 0, "download_200": 0}
+# Source-feed freshness: the blob's server-declared Last-Modified per URL. The bill data is
+# bulk re-derived from HISTORY.CSV every cycle, so a SINGLE bill can never be "stale" vs LIS
+# (we ARE LIS's last-action by construction) — the real blind spot is the SOURCE BLOB itself
+# stalling: if LIS stops refreshing HISTORY.CSV, every bill goes stale together even while our
+# cycle clock stays green. Azure returns Last-Modified on BOTH 200 and 304 (RFC 7232), so this
+# is populated even on a cold-start cache hit. A side-channel dict (like blob_cache_stats), so
+# it never leaks into the event schema / Schedule_Witness whitelist.
+_blob_last_modified = {}
 
 def _blob_cache_paths(url):
     key = hashlib.sha256(url.encode("utf-8")).hexdigest()[:24]
@@ -2718,6 +2726,12 @@ def safe_fetch_csv(url, attempts=3):
         try:
             res = requests.get(url, timeout=60,
                                headers={"If-None-Match": cached_etag} if cached_etag else {})
+            # Source-feed freshness: record the blob's Last-Modified whenever the server sends one
+            # (200 OR 304 — a 304 still carries it per RFC 7232). Only overwrite on a present value
+            # so a header-less response keeps the last known reading rather than blanking it.
+            _lm = res.headers.get("Last-Modified")
+            if _lm:
+                _blob_last_modified[url] = _lm
             if res.status_code == 304 and cached_body is not None:
                 body, from_cache = cached_body, True
             elif res.status_code == 200:
@@ -4048,6 +4062,11 @@ def run_calendar_update():
         "canary_refid_shape":         -1,
         "canary_scheduletype":        -1,
         "canary_referencetype":       -1,
+        # Source-feed freshness: age (MINUTES) of the HISTORY.CSV blob = now - its Last-Modified.
+        # The honest answer to "is a bill going stale?" in a bulk-re-derive architecture: bills go
+        # stale together when the SOURCE blob stalls, which the cycle clock can't see. -1 = unknown
+        # (no Last-Modified this cycle) — sentinel-safe (an age is never negative), never false-fresh.
+        "history_blob_age_min":       -1,
     }
 
     def push_system_alert(message, status="ALERT", category=None, severity=None, dedup_key=None):
@@ -5478,6 +5497,26 @@ def run_calendar_update():
     df_past = _history_future.result()   # prefetched at the top of the fetch section; already downloaded
     _blob_pool.shutdown(wait=False)
     _phase("HISTORY.CSV download (prefetched — should be ~0s if hidden behind phase 1)")
+
+    # Source-feed freshness (the grounded form of "per-bill freshness"): age of the HISTORY.CSV
+    # blob itself. parsedate_to_datetime handles the RFC-1123 Last-Modified ("Wed, 21 Oct 2026
+    # 07:28:00 GMT"); a negative/None result leaves -1 (unknown) — never a false-fresh 0.
+    try:
+        _hist_lm = _blob_last_modified.get(f"https://lis.blob.core.windows.net/lisfiles/{blob_code}/HISTORY.CSV")
+        if _hist_lm:
+            from email.utils import parsedate_to_datetime
+            _lm_dt = parsedate_to_datetime(_hist_lm)
+            if _lm_dt is not None:
+                if _lm_dt.tzinfo is None:
+                    _lm_dt = _lm_dt.replace(tzinfo=timezone.utc)
+                _age_min = (datetime.now(timezone.utc) - _lm_dt).total_seconds() / 60.0
+                if _age_min >= 0:
+                    source_miss_counts["history_blob_age_min"] = round(_age_min, 1)
+                    print(f"🕒 HISTORY.CSV source blob last modified {_hist_lm} ({_age_min:.0f} min ago).")
+    except Exception as _lm_err:
+        # Optional ≠ silent: a parse failure leaves -1 (unknown) and surfaces a print; this is a
+        # freshness HINT, not a safety gate, so it must never crash the cycle.
+        print(f"⚠️ HISTORY.CSV blob-age computation skipped ({_lm_err})")
 
     # Always-defined BEFORE the empty-HISTORY branch so the Stage-2 input signature
     # never NameErrors on an empty cycle (Gemini #146). Populated from VOTE.CSV below

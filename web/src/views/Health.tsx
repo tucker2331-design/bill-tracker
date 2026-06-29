@@ -99,6 +99,13 @@ export function Health({ completeness, dataAsOf }: { completeness: Completeness 
   // deeper per-source skew is scoped as a follow-up). Only meaningful when BOTH clocks are known. ──
   const feedSkewH = Number.isFinite(billFreshH) && Number.isFinite(calFreshH) ? Math.abs(billFreshH - calFreshH) : NaN;
 
+  // ── Source-feed freshness (the grounded "per-bill freshness"): age of the HISTORY.CSV blob the bill
+  // data is bulk re-derived from. The worker writes minutes; -1 / absent = unknown (older worker or no
+  // Last-Modified this cycle) and must NOT render as a fresh 0. ──
+  const blobAgeMin = m.history_blob_age_min;
+  const blobAgeKnown = typeof blobAgeMin === "number" && blobAgeMin >= 0;
+  const blobAgeH = blobAgeKnown ? blobAgeMin / 60 : NaN;
+
   // ── Alert HISTORY: Metrics_History holds one row per cycle, so a persistent alert (e.g. a standing
   // TIMING_LAG) repeats every cycle it fires. A raw dump would flood; the useful view AGGREGATES distinct
   // alerts (by severity+category+message) with a fire COUNT + first/last-seen — "what has fired, and how
@@ -255,6 +262,15 @@ export function Health({ completeness, dataAsOf }: { completeness: Completeness 
             max={24} target={0} bands={lower(6, 12, 24)} unit=" h" format={hrs}
             sub={h.calendarFreshness?.toISOString() || "Sheet1!AA1 unreadable"} />
         ) : <CalLoading err={hErr} />}
+        {/* Source feed: HISTORY.CSV's OWN age. Bills are bulk re-derived from this blob, so they can't go
+            stale one-at-a-time — they go stale TOGETHER when LIS stops refreshing the blob, which the two
+            cycle clocks above can't see (a green cycle over a stale source). This is the grounded form of
+            "per-bill freshness." Only shown when the worker reported a Last-Modified (>= 0). */}
+        {h && blobAgeKnown && (
+          <BulletGraph label="Source feed · HISTORY.CSV blob age (hours since LIS refreshed it)" value={blobAgeH}
+            max={24} target={0} bands={lower(6, 12, 24)} unit=" h" format={hrs} spark={spark("history_blob_age_min")}
+            sub="if this is stale while the cycle clocks are green, LIS stopped feeding us — every bill is stale together" />
+        )}
       </div>
       {/* Feed-skew: the gap BETWEEN the two clocks. Small = the subsystems agree on "now"; large = one feed
           lagged the other and the picture is momentarily inconsistent. Only shown when both clocks are known. */}
