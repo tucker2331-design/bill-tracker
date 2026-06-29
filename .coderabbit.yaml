@@ -29,6 +29,20 @@ reviews:
         a transient fetch failure); type confusion, off-by-one, and silent drops. Treat a
         crash-on-edge-input or a data-integrity regression as HIGH priority. Bank-grade
         reliability, no silent failures.
+
+        SUSTAINABILITY / ARCHITECTURE lens (Standards #1/#5/#8 — the layer a line-by-line correctness
+        pass misses, and the one the owner has had to catch by eye). Flag any NEW or grown hardcoded /
+        hand-curated value that encodes domain knowledge — a dict / set / frozenset / map / list /
+        threshold / regex GRAMMAR mapping LIS codes, statuses, committees, refid shapes, event types,
+        chambers, etc. — that LACKS a runtime drift-check which ALERTS when the authoritative source
+        (an LIS API / blob) diverges from it (Standard #1: static values MUST have runtime validation
+        that alerts on drift; Standard #5: derive config from the source at runtime, never hardcode
+        what is derivable). Also flag a guard / monitor / tripwire that only DETECTS + pings on an
+        anomaly where the authoritative source could ground-truth and AUTO-CORRECT it (Standard #8:
+        humans are pinged only for genuinely-unprecedented variation, never for routine maintenance —
+        a "hand-edit one line per new case" treadmill is the anti-pattern). For each, ask in the
+        review and state it explicitly: "when this assumption drifts in 2027, does the system ALERT or
+        silently rot?" and "is this self-correcting, or a maintenance treadmill?" Cite the Standard #.
     - path: "calendar_worker.py"
       instructions: >-
         Bank-grade reliability. Flag any silent failure: a bare `except: pass`, or a bare
@@ -43,7 +57,13 @@ reviews:
       instructions: >-
         Single source of truth for action classification, imported by the worker AND the
         verification tools. Changes here must keep the worker and tools in lockstep; no
-        VA/English-specific assumptions that wouldn't scale to 50 states.
+        VA/English-specific assumptions that wouldn't scale to 50 states. This file holds the
+        CURATED classification sets (ADMIN_PIPELINE_STATUSES / MEETING_INSESSION_STATUSES, the
+        ReferenceType sets, the refid GRAMMARS, KNOWN_REFID_SHAPES). For ANY new or grown such set,
+        REQUIRE a paired runtime drift-validator (the validate_status_grouping / validate_refid_shapes
+        pattern) that alerts when LIS's published vocabulary diverges — a static classification set
+        WITHOUT a drift-alert is the #1 sustainability defect here (Standard #1). Prefer routing on a
+        structural PROOF + safe default over growing a grouping (Standard #3).
     - path: "tools/verification/**"
       instructions: >-
         Verification/test scripts. Confirm each actually asserts the invariant in its name and
