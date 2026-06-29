@@ -5,6 +5,7 @@
 // lower-is-better), so this component never needs to know which way is "good".
 
 import { bandTone, type Band, type BandTone } from "./bands";
+import { Sparkline } from "./Sparkline";
 export type { Band, BandTone } from "./bands"; // re-export for existing `import … from "./BulletGraph"` callers
 
 const BAND_BG: Record<BandTone, string> = {
@@ -27,9 +28,11 @@ export interface BulletGraphProps {
   format?: (n: number) => string;
   unit?: string;
   sub?: string; // small caption (e.g. the denominator — PL-7)
+  spark?: number[];          // optional per-cycle trend (Metrics_History); <2 points renders "—"
+  sparkLowerBetter?: boolean; // polarity for the trend tint (default true: rising = worse)
 }
 
-export function BulletGraph({ label, value, max, target, bands, format, unit, sub }: BulletGraphProps) {
+export function BulletGraph({ label, value, max, target, bands, format, unit, sub, spark, sparkLowerBetter = true }: BulletGraphProps) {
   const safeMax = max > 0 ? max : 1;
   const pct = (v: number) => Math.max(0, Math.min(1, v / safeMax)) * 100;
   const sorted = [...bands].sort((a, b) => a.upto - b.upto);
@@ -49,6 +52,7 @@ export function BulletGraph({ label, value, max, target, bands, format, unit, su
       aria-label={`${label}: ${fmt(value)}${u} — ${tone}${target != null ? `, target ${fmt(target)}${u}` : ""}`}>
       <div className="bg-head">
         <span className="bg-label">{label}</span>
+        {spark && <span className="bg-spark" title="trend (recent cycles)"><Sparkline values={spark} lowerBetter={sparkLowerBetter} /></span>}
         <span className="bg-value" style={{ color: TONE_INK[tone] }}>{fmt(value)}{u}</span>
       </div>
       <div className="bg-track">
