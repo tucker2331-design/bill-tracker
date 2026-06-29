@@ -77,3 +77,19 @@ Consequences for the decision chain:
   positives at K=2). The only valid counterexample is the batch ROW's own refid joining VOTE.CSV (=0).
 - **K is finalized from the NATIVE shadow run** (C8.1), not this reverse-join (which has ~654
   bill+date join-miss artifacts that vanish when the worker builds rows from HISTORY directly).
+
+## Refid SHAPE drift monitor — the sustainable answer to UNKNOWN_REFID (2026-06-27)
+`classify_refid` recognizes a fixed grammar; an unrecognized shape silently becomes `UNKNOWN_REFID`,
+with no signal that LIS introduced a new namespace. Hand-adding a grammar per shape (e.g. the
+impact-statement family) is a maintenance treadmill — the refid layer's least-sustainable corner — and
+the layer is only a SECONDARY/shadow cross-check anyway (`route_event` on EventCode/ReferenceType/Status
+is the primary structural router and already routes these rows; an `UNKNOWN_REFID` is a *measurement*
+gap, not a misrouting). So instead of pre-coding every shape, `structural_router.validate_refid_shapes`
+mirrors `validate_status_grouping`: a baseline of acknowledged shapes (`KNOWN_REFID_SHAPES`, 22 census
+signatures) + a runtime diff that **alerts** (`WARN/DATA_ANOMALY`) when a NOVEL shape appears
+`≥ REFID_SHAPE_MIN_VOLUME` (25) times in a session → human review. Static-value-WITH-runtime-drift-alert
+(Standard #1), `UNKNOWN`→human (Standard #4), ping-only-on-anomaly (Standard #8). Signature = the shape
+skeleton (each digit-run → `#`; `HB1000F122`→`HB#F#`). The worker runs it post-loop off the refid column
+(`UNKNOWN_REFID` is fanout/vote-independent). A human then classifies a genuinely-new shape ONCE, rather
+than us pre-coding every one. **GENERALIZABLE** → every state's worker gets the same shape-drift monitor.
+See `test_refid_shape_drift.py`, [[testing/va_data_quality_audit]] edge #3.
