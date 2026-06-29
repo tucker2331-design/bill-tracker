@@ -35,6 +35,9 @@
 
   --stale: #d2403a;      --ok: #1d8f57;
 
+  /* bullet-graph qualitative bands (subtle — the measure bar must dominate; danger = the RPM redline) */
+  --bg-good: #eaf5ef;    --bg-warn: #f7f0de;    --bg-danger: #fdeceb;
+
   /* spacing scale (RUI ~25% steps) */
   --s1: 4px; --s2: 8px; --s3: 12px; --s4: 16px; --s5: 24px; --s6: 32px; --s7: 48px; --s8: 64px;
   /* radii + depth (two-part shadows; cards pop off the tinted canvas) */
@@ -241,3 +244,85 @@ h2, h3 { margin: 0; }
 .summaryrow { display: flex; flex-wrap: wrap; gap: var(--s4) var(--s5); }
 .summaryrow .it { display: flex; align-items: center; gap: var(--s2); }
 .summaryrow .it .sn { font-size: 21px; font-weight: 800; }
+
+/* ── Health / operator tab — Few bullet graphs with danger bands ── */
+.hl-status { display: flex; align-items: center; gap: var(--s3); margin-bottom: var(--s4); flex-wrap: wrap; }
+.hl-breaker { display: inline-flex; align-items: center; gap: 6px; padding: 5px 12px; border-radius: 999px; font-weight: 700; font-size: 12.5px; }
+.hl-breaker.ok { background: var(--o-signed-bg); color: var(--ok); }
+.hl-breaker.trip { background: var(--o-vetoed-bg); color: var(--stale); }
+.hl-breaker.unknown { background: var(--o-dead-bg); color: var(--o-dead); }
+
+/* at-a-glance vitals — segmented activity-ring donuts (one per category, rolls up the gauges below) */
+.hl-vitals { display: grid; grid-template-columns: repeat(4, 1fr); gap: var(--s3); margin-bottom: var(--s5); }
+@media (max-width: 720px) { .hl-vitals { grid-template-columns: repeat(2, 1fr); gap: var(--s4); } }
+.hl-vcard { background: var(--surface); border-radius: var(--radius); padding: var(--s4) var(--s2) var(--s3);
+  box-shadow: var(--shadow-sm); text-align: center; transition: box-shadow .14s, transform .14s; }
+.hl-vcard:hover { box-shadow: var(--shadow); transform: translateY(-2px); }
+.hl-donut { position: relative; width: 108px; height: 108px; margin: 0 auto var(--s2); }
+.hl-donut svg { width: 100%; height: 100%; display: block; }
+.hl-donc { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 1px; }
+.hl-donnum { font-size: 25px; font-weight: 800; letter-spacing: -.5px; line-height: 1; font-variant-numeric: tabular-nums; }
+.hl-donnum span { font-size: 14px; font-weight: 700; color: var(--ink-faint); }
+.hl-donmk { font-size: 11px; font-weight: 900; line-height: 1; }
+.hl-vname { font-size: 13.5px; font-weight: 800; letter-spacing: -.2px; color: var(--ink); }
+.hl-vstat { font-size: 12px; font-weight: 700; margin-top: 2px; }
+
+/* "Are we right?" — independent-verification panel (the 5-layer guard's live status from GitHub Actions) */
+.hl-verify { margin-bottom: var(--s5); }
+.hl-vrow { display: flex; align-items: baseline; gap: 2px var(--s3); padding: 9px var(--s1); flex-wrap: wrap; }
+.hl-vrow + .hl-vrow { border-top: 1px solid var(--line); }
+.hl-vdot { width: 9px; height: 9px; border-radius: 50%; align-self: center; flex: none; }
+.hl-vdot.pass { background: var(--ok); }
+.hl-vdot.fail { background: var(--stale); }
+.hl-vdot.running { background: var(--o-await); }
+.hl-vdot.unknown { background: var(--ink-faint); }
+.hl-vlabel { font-weight: 800; font-size: 13px; color: var(--ink); white-space: nowrap; }
+.hl-vproves { color: var(--ink-soft); font-size: 12.5px; flex: 1; min-width: 200px; }
+.hl-verstat { font-weight: 700; font-size: 12px; white-space: nowrap; text-decoration: none; margin-left: auto; }
+.hl-verstat.pass { color: var(--ok); }
+.hl-verstat.fail { color: var(--stale); }
+.hl-verstat.running { color: var(--o-await); }
+.hl-verstat.unknown { color: var(--ink-faint); }
+.hl-verstat.stale { color: var(--o-carry); }
+.hl-vfoot { font-size: 11.5px; line-height: 1.5; margin-top: var(--s3); padding: 0 var(--s1); }
+
+/* one bullet graph (small multiple) */
+.hl-gauges { display: flex; flex-direction: column; gap: var(--s4); margin-bottom: var(--s5); }
+.bg-row { display: flex; flex-direction: column; gap: 5px; }
+.bg-head { display: flex; align-items: baseline; justify-content: space-between; gap: var(--s3); }
+.bg-label { font-size: 12.5px; font-weight: 600; color: var(--ink-soft); }
+.bg-value { font-size: 16px; font-weight: 800; font-variant-numeric: tabular-nums; }
+.bg-track { position: relative; height: 16px; border-radius: 4px; overflow: hidden; background: var(--surface-2); }
+.bg-band { position: absolute; top: 0; bottom: 0; }                      /* qualitative range */
+.bg-measure { position: absolute; top: 5px; height: 6px; left: 0; border-radius: 3px; }  /* the value bar (Few: thin, centered) */
+.bg-target { position: absolute; top: 0; bottom: 0; width: 2px; background: var(--ink); }  /* target tick (full track height — the old -2px overhang was clipped by the track's overflow:hidden, CodeRabbit #167) */
+.bg-sub { font-size: 11.5px; color: var(--ink-faint); }
+
+/* alert feed */
+.hl-alert { display: flex; align-items: baseline; gap: var(--s2); padding: 8px var(--s1); flex-wrap: wrap; }
+.hl-alert + .hl-alert { border-top: 1px solid var(--line); }
+.hl-sev { font-size: 10.5px; font-weight: 800; letter-spacing: .4px; padding: 2px 7px; border-radius: 5px; }
+.hl-sev.critical { background: var(--o-vetoed-bg); color: var(--stale); }
+.hl-sev.warn { background: var(--o-carry-bg); color: var(--o-carry); }
+.hl-sev.info { background: var(--surface-2); color: var(--ink-soft); }
+.hl-sev.unknown { background: var(--o-dead-bg); color: var(--o-dead); }
+.hl-cat { font-size: 10.5px; font-weight: 700; color: var(--ink-faint); text-transform: uppercase; letter-spacing: .3px; }
+.hl-amsg { flex: 1; min-width: 200px; color: var(--ink); font-size: 13px; }
+.hl-adate { color: var(--ink-faint); font-size: 12px; white-space: nowrap; }
+
+/* classification distribution */
+.hl-dist { display: flex; flex-direction: column; gap: 7px; }
+.hl-distrow { display: grid; grid-template-columns: 78px 1fr 130px; gap: var(--s2); align-items: center; }
+.hl-distk { font-size: 12px; font-weight: 700; color: var(--ink-soft); }
+.hl-distbar { height: 10px; background: var(--surface-2); border-radius: 3px; overflow: hidden; }
+.hl-distbar span { display: block; height: 100%; }
+.hl-distv { font-size: 12px; color: var(--ink-soft); text-align: right; font-variant-numeric: tabular-nums; }
+
+/* raw counters */
+.hl-raw { margin-bottom: var(--s4); }
+.hl-raw summary { cursor: pointer; font-size: 12px; font-weight: 700; color: var(--ink-faint); text-transform: uppercase; letter-spacing: .5px; }
+.hl-rawgrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 4px var(--s4); margin-top: var(--s3); }
+.hl-rawcell { display: flex; justify-content: space-between; gap: var(--s2); font-size: 12px; padding: 3px 0; border-bottom: 1px solid var(--line); }
+.hl-rawk { color: var(--ink-faint); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.hl-rawv { font-weight: 700; font-variant-numeric: tabular-nums; }
+.hl-foot { margin-top: var(--s4); font-size: 12px; line-height: 1.6; }

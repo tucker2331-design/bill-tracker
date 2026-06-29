@@ -1,10 +1,30 @@
 ---
-tags: [design, ui, health, operator, bullet-graph, access-gated, scope, web]
-updated: 2026-06-23
-status: planned
+tags: [design, ui, health, operator, bullet-graph, donut, vitals, access-gated, scope, web]
+updated: 2026-06-27
+status: active
 ---
 
-# Health / Operator Tab — SCOPE (Task #4)
+> **▶️ BUILT 2026-06-24** (`claude/health-tab`, verified live): `web/src/components/BulletGraph.tsx`
+> (reusable Few bullet graph w/ danger bands), `web/src/data/health.ts` (lightweight `tq WHERE`
+> operator-signal loader — ~2 KB, not the 5 MB sheet), `web/src/views/Health.tsx` (9 prioritized gauges +
+> breaker chip + severity-coded alert feed + router distribution + raw counters). 0 console errors;
+> App.tsx unchanged (Health kept its props). **Remaining: the ACCESS-GATING infra (§4) — Cloudflare Access
+> on an operator deploy.** Harmless visible now (pre-launch, no lobbyists; metrics are operational, not
+> secret); must be gated before the public launch.
+>
+> **▶️ ADDED 2026-06-27** (`claude/health-tab`, verified live, commit `a66c767`): the **at-a-glance vitals**
+> — four segmented activity-ring donuts at the top of the tab (§2a). `web/src/components/HealthVitals.tsx`
+> + `web/src/components/bands.ts` (extracted `bandTone`). All detail below is unchanged. Verified live:
+> Accuracy 2/2, Completeness 4/4, Freshness 2/2 green; Stability 1/3 amber (the live `invariant_violations=1`
+> #176 fixes + the honest HB30 `TIMING_LAG`). tsc + eslint clean.
+>
+> **▶️ ADDED 2026-06-28** (`claude/health-tab`, verified live, commit `fab3909`): the **"Are we right?"
+> independent-verification panel** (§3a) — owner pushed that the system "just pings me to fix it" and
+> couldn't SEE the durability guard. `web/src/data/verification.ts` reads the 4 session-agnostic guards'
+> (completeness / reconciliation / accuracy-sentinel / sustainability) latest **GitHub Actions** runs live
+> (status + freshness + staleness). Read-only, NO token (repo public; the guards are deliberately
+> credential-free, so we read the verdict where it lives — the workflow run — rather than break their
+> no-secrets design by making them write to the sheet). Verified: all 4 green, CORS OK, 0 console errors.
 
 Owner queue **Task #4**. The operator/admin trust surface (vision §3f + §7): surface the diagnostics the
 system **already produces**, as **Few bullet-graph gauges with danger bands** (owner: *"like a car's RPM
@@ -56,6 +76,48 @@ Repeat as **small multiples** (one column). Calibration from steady-state + the 
 Bands are **data-driven** (read from the breaker thresholds / steady-state), never hardcoded magic numbers
 that rot (Standard #1). A reading that lands in the red band makes the gauge's measure bar go red (popout).
 
+## 2a. At-a-glance vitals — the donut rollup (owner 2026-06-27)
+Owner ask: *"think of some really distinctive visualizers… maybe combined into 3–5 based on categories so I
+can quell my anxieties at a glance… keep everything plus what you add."* So the gauges (§2) all stay; the
+vitals are a **rollup layer on top**, not a replacement. Final form (after the owner picked it): *"something
+simple like the donuts that displays slightly more info and is genuinely visually appealing — wow factor."*
+
+**What shipped:** four **segmented activity-ring donuts** (`HealthVitals.tsx`), one per category:
+| Ring | Segments (one arc per metric) |
+|---|---|
+| **Accuracy** | Section-9 · Outcome drift |
+| **Completeness** | Bill completeness · History-vs-universe anomalies · Patron coverage · Unclassified share |
+| **Freshness** | Bill-backend clock · Calendar clock |
+| **Stability** | Circuit breaker · Invariant violations · Active alerts |
+
+Each ring is split into one arc per tracked metric (SVG `stroke-dasharray` arcs, rounded caps, a light
+full-circle track behind so gaps read as intentional). Center: the category's **pass-count** (`ok/N`) + a
+status glyph, both tinted by the worst-of tone. Calm green field; a warning/critical segment pops amber/red.
+Per-segment `<title>` tooltips name the metric on hover. Responsive 4→2 column grid.
+
+**The non-negotiable invariant — overview can never disagree with detail:** each segment's tone is derived
+by **`bandTone(value, bands)`** over the **SAME `bands` array the matching §2 gauge uses** (extracted to
+`bands.ts` so both the gauge and the donut import one source of truth). If a gauge is red, its arc is red.
+
+**"unknown" is a first-class tone** (neutral grey — never green, never red): when a backend payload is
+absent (e.g. the `Bill_Tracker` completeness prop hasn't loaded), the segment is *unconfirmed*, the ring
+greys, and the worst-of rollup ranks **danger > warn > unknown > ok** so one unconfirmed metric greys the
+ring rather than faking a clean bill of health. This is vision §7 — *"allowed not to know, never pretend"* —
+applied to the glance layer.
+
+**Design canon applied / why NOT the rejected forms** (three iterations to land this — keep for NY/PA):
+- ❌ **4 status rings** (filled donuts, % of checks) — owner: *"too simple."* No per-metric detail.
+- ❌ **Pie / segmented "comprehensive ribbon"** — owner: *"that sucks, way closer to the og version."*
+  The ribbon abandoned the bullet-graph visual language entirely; a pie puts magnitude on **angle/area**,
+  the channels Munzner ranks **worst** (why pies lie). Rejected on both taste and canon.
+- ✅ **Segmented donuts** — circular (the owner's instinct) but magnitude/status read by **hue popout on a
+  muted field** (Few 7.1.5), not by precise angle judgment. Arc length carries only the coarse "how many
+  metrics" count; the *precise* numbers live in the bullet graphs below. Acceptable use of a weak channel
+  because this layer is a **qualitative status glance** (spot the non-green), not a measurement surface.
+
+**Generalizable** (→ any state's Health tab): the pattern is *category rings rolling up gauges, tone via the
+shared `bandTone`, unknown-as-grey*. Reusable as-is for NY/PA once their workers emit the same signal shape.
+
 ## 3. Beyond the gauges
 - **Breaker status** — a single status chip (GREEN armed / RED tripped) from `W1` (+ the trip JSON when red).
 - **Alert feed** — the `SYSTEM_ALERT` rows, severity-coded (INFO/WARN/CRITICAL), newest first; this is the
@@ -64,6 +126,24 @@ that rot (Standard #1). A reading that lands in the red band makes the gauge's m
   the rows went), so drift in the structural router is visible.
 - **Raw counters** — the full `SYSTEM_METRICS` JSON in a collapsible block for deep inspection.
 - Everything carries its **denominator** (PL-7) and a provenance note (which sheet/cell it came from).
+
+## 3a. "Are we right?" — independent-verification panel (owner 2026-06-28)
+Owner pushed that the system "just pings me to fix it instead of building it sustainably" and — the root of
+the low confidence — couldn't SEE the durability guard ([[architecture/verification_durability]]): it verifies
+the live output against INDEPENDENT sources (reconciliation vs the official **MinutesBook**, completeness vs
+LIS's **own calendar**) but runs in GitHub Actions and only ALERTS on failure, so the green is invisible. The
+panel surfaces each of the **4 session-agnostic guards** (layers 2–5; layer 1 = the breaker chip above) with
+its latest run **status + freshness + a staleness flag** (a guard that stopped running is its own failure),
+each row stating what it *independently proves*.
+- **Design decision — read the verdict where it lives, don't break the guards.** The guards are deliberately
+  **credential-free** (the sentinel is literally "NO secrets, runs in 2027 unchanged"). Making them WRITE a
+  verdict to the sheet would add secrets to secret-free durability tooling — wrong. The repo is **public**, so
+  `web/src/data/verification.ts` reads the **GitHub Actions API** (`/actions/workflows/<file>/runs?per_page=1`)
+  **unauthenticated** (CORS-OK, ~60/hr/IP, 5-min TTL cache — fine for the gated owner tab). A failed read shows
+  "—", never a fake green (vision §7).
+- **Not the ceiling (logged):** this still *shows* the guard, it doesn't make it auto-correct. The deeper
+  sustainability track (make LIS's calendar AUTO-WIN; shrink the curated groupings against the loop) is in
+  [[architecture/verification_durability#Sustainability honesty — the curation inventory + the path past "detect + ping" (owner 2026-06-28)]].
 
 ## 4. Access-gating (the CONSTRAINT — operator-only, not lobbyist-facing)
 **Cloudflare Access (Zero Trust)** is the clean fit for the $0 static-SPA + gviz setup:
