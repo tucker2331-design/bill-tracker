@@ -20,10 +20,12 @@ const lower = (good: number, warn: number, max: number): Band[] =>
 const higher = (danger: number, warn: number, max = 100): Band[] =>
   [{ upto: danger, tone: "danger" }, { upto: warn, tone: "warn" }, { upto: max, tone: "good" }];
 
-// Feed-skew is dominated by the BILL backend's clock (6h cron, bill_tracker.yml `40 */6 * * *`) vs the
-// calendar worker's ~15min. A HEALTHY skew is up to ~6h BY DESIGN; derive the chip thresholds from that
-// cadence so it only warns when the skew exceeds what the cadence explains (was a flat 3h/8h → amber during
-// every normal bill cycle). [code-review finding #1]
+// Feed-skew is dominated by the BILL backend's clock vs the calendar worker's ~15min. A HEALTHY skew is up
+// to ~6h BY DESIGN; derive the chip thresholds from that cadence so it only warns when the skew exceeds what
+// the cadence explains (was a flat 3h/8h → amber during every normal bill cycle). [code-review finding #1]
+// HEURISTIC (Standard #1): ASSUMES bill_tracker.yml stays on its 6h cron (`40 */6 * * *`); it BREAKS (false
+// "in sync" or false "lagging") if that cron changes; there is no runtime cross-check — this is a UI display
+// band, not a data-path heuristic — so if the cron cadence changes, update BILL_CADENCE_H to match it.
 const BILL_CADENCE_H = 6;
 const SKEW_OK_H = BILL_CADENCE_H + 1;        // ≤7h: within one bill cycle (+1h jitter/queue) = healthy
 const SKEW_WARN_H = BILL_CADENCE_H * 2 + 1;  // ≤13h: bill backend missed a scheduled run; >13h = stalled
@@ -114,9 +116,13 @@ export function Health({ completeness, dataAsOf }: { completeness: Completeness 
   const blobAgeKnown = typeof blobAgeMin === "number" && blobAgeMin >= 0;
   const blobAgeH = blobAgeKnown ? blobAgeMin / 60 : NaN;
   // Source-feed severity is meaningful ONLY during an ACTIVE session: off-season HISTORY.CSV legitimately
-  // doesn't change (no new actions), so a large blob age is EXPECTED, not a fault. Adjourned/unknown → an
-  // all-good band so the gauge informs without false-danger; in-session → provisional bands (refine once the
-  // blob's real refresh cadence is observed in Metrics_History). [code-review finding #3]
+  // doesn't change (no new actions), so a large blob age is EXPECTED, not a fault. The gauge is HIDDEN when
+  // sessionActive is null (Sheet1!S1 unreadable) — see its render guard — because BulletGraph has no neutral
+  // tone and an all-good band on an UNKNOWN session would be a false-green (CodeRabbit + Qodo #182). So these
+  // bands are only used for the two KNOWN states: ACTIVE → redline, ADJOURNED → all-good (honest: we KNOW the
+  // blob is meant to be static off-season). HEURISTIC (Standard #1): the in-session 12/24/48h redline is
+  // PROVISIONAL — LIS's real HISTORY.CSV refresh cadence isn't measured yet; it BREAKS (false-warn) if LIS
+  // refreshes slower than ~12h in-season; REFINE once Metrics_History has real blob-age data. [finding #3]
   const sessionActive = h?.sessionActive ?? null;
   const blobAgeBands: Band[] = sessionActive === true ? lower(12, 24, 48) : [{ upto: 1e9, tone: "good" }];
 
@@ -280,11 +286,15 @@ export function Health({ completeness, dataAsOf }: { completeness: Completeness 
             stale one-at-a-time — they go stale TOGETHER when LIS stops refreshing the blob, which the two
             cycle clocks above can't see (a green cycle over a stale source). This is the grounded form of
             "per-bill freshness." Only shown when the worker reported a Last-Modified (>= 0). */}
-        {h && blobAgeKnown && (
+        {/* Render only when we can MEANINGFULLY interpret the blob age — i.e., the session state is KNOWN.
+            When sessionActive is null (Sheet1!S1 unreadable) the gauge's meaning is undetermined and an
+            all-good band would be a false-green (BulletGraph has no neutral tone), so hide it — never pretend
+            (the value is uninterpretable without session context anyway). [CodeRabbit + Qodo #182] */}
+        {h && blobAgeKnown && sessionActive !== null && (
           <BulletGraph label="Source feed · HISTORY.CSV blob age (hours since LIS refreshed it)" value={blobAgeH}
             max={48} target={0} bands={blobAgeBands} unit=" h" format={hrs}
             spark={spark("history_blob_age_min").filter((v) => v >= 0)}
-            sub={sessionActive === true
+            sub={sessionActive
               ? "in-session: stale here while the cycle clocks are green = LIS stopped feeding us (provisional bands; refine once the blob's refresh cadence is measured)"
               : "off-season: HISTORY.CSV legitimately doesn't change (no new actions) — shown for reference, not alarmed"} />
         )}
