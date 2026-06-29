@@ -21,6 +21,7 @@ Links use Obsidian `[[wikilink]]` format. Obsidian resolves by filename; path-qu
 - [[state/next_session]] — **▶️ START HERE: the next-session kickoff — current state + the owner queue (read books → Calendar feature → Health bullet-graph tab) + how we work**
 - [[state/current_status]] — active focus, open PR, current bug count, what's next
 - [[state/open_anti_patterns]] — known silent fallbacks still living in the code (worker.py line debt)
+- [[state/health_gauge_calibration_plan]] — **ACTIVE plan + live checklist: the 3 `/code-review` findings on PR #181 (feed-skew bands, source-feed session-awareness, Metrics_History change-feed [deferred]); persisted so it survives compaction**
 - [[ny/state/current_status]] — New York-specific live status and next steps
 
 ## Workflow & Protocols (how we work)
