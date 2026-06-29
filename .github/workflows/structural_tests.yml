@@ -1,0 +1,47 @@
+name: ✅ Structural Tests (golden + drift guards)
+
+# The repo's structural golden tests had no CI runner — they only caught regressions if a
+# human remembered to run them locally. This gate runs them automatically on every PR (and on
+# pushes to main), so a structural regression — a misrouted EventCode, a broken refid class, or
+# the producer/validator Origin drift that caused the persistent false invariant_violations=1
+# (#176) — fails the check instead of shipping silently.
+#
+# Pure static / in-memory: structural_router is stdlib-only and the Origin drift test just parses
+# calendar_worker.py with `ast`. NO pip install, NO Google/LIS credentials, NO network — seconds to run.
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch: {}
+
+jobs:
+  structural-tests:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+      - name: Run structural golden + drift tests
+        env:
+          PYTHONUNBUFFERED: "1"
+        run: |
+          set -u
+          fail=0
+          for t in \
+            test_origin_registry_sync.py \
+            test_route_event.py \
+            test_classify_action.py \
+            test_classify_refid.py \
+            test_classify_schedule_type.py \
+            test_governor_eventcode_drift.py; do
+            echo "::group::$t"
+            if python3 -u "$t"; then echo "PASS  $t"; else echo "FAIL  $t"; fail=1; fi
+            echo "::endgroup::"
+          done
+          if [ "$fail" -ne 0 ]; then echo "::error::one or more structural tests failed"; fi
+          exit $fail

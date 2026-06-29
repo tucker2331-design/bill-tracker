@@ -18,35 +18,93 @@ concerning numbers." This page is the live diagnosis + the investigation queue. 
 So nothing here is a crisis. These are SECONDARY edges to smooth for a truly clean/sustainable VA standard.
 
 ## The edges to investigate (priority order)
-1. **`invariant_violations = 1`** (should be 0; persistent). **DIAGNOSED 2026-06-25 (live sheet):** it is
-   **NOT an I3** violation — 0 concrete-source rows (`api_schedule`/`convene_anchor`/`legislation_event`/
-   `sibling_meeting`) carry a `⏱️ [NO_*]` placeholder or empty time (the 482 "Time TBA"-on-`api_schedule`
-   are legit LIS values, not I3). So it's a **single I1 (missing column) or I2 (unexpected Origin) row**, and
-   crucially **it is INVISIBLE** — per [[architecture/calendar_pipeline]] an invariant violation should emit
-   a `DATA_ANOMALY/CRITICAL` alert, but the only `SYSTEM_ALERT` on the sheet is the `TIMING_LAG` one. **So a
-   data-integrity violation is being COUNTED but not SURFACED — you can't see which row or why.** → **THE FIX
-   is observability:** `_append_event` must emit a per-row `DATA_ANOMALY` alert naming the offending bill/
-   date/Origin/which-invariant, so it reaches the SYSTEM_ALERT feed + the Health tab (then the row is
-   diagnosable). (Worker change in the chokepoint — Section-9-sensitive; validate carefully.) **Also: the
-   doc's I2 allowed-Origin list is STALE** — it omits `executive_default` + `derived_standing`, which ARE in
-   the live data; since violations=1 (not 325) the CODE's set includes them, so it's doc drift to fix.
-2. **`gap_minutes = 179.43` but `gap_cause = normal`** — 179 min (~3 h) exceeds the documented
-   `GAP_WARN=20` / `GAP_CRITICAL=60` thresholds, yet it's classified "normal." Either the off-season cadence
-   was relaxed (then the thresholds/AA1-freshness gauge need recalibration to match) or the classification is
-   wrong. **Action:** reconcile the gap thresholds with the actual current cadence so freshness stays trustworthy.
-3. **`refidclass_unknown_refid = 5,051` (7.7%)** — refids that didn't match a known namespace (the refid is
-   our structural primary key). `refidclass_empty = 26,752 (41%)` is expected (floor/convene + empty-refid
-   governor rows), but 5,051 *unknown* (non-empty, unclassified) is a real structural-coverage cohort.
-   **Action:** sample them — are they a new refid shape (extend the namespace law) or genuinely junk?
-4. **Ledger-collapse volume:** `floor_anchor_miss=6,640 (10.2%)` + `unsourced_journal=2,775 (4.2%)` +
-   `unsourced_anchor=4,761` ≈ **21% of rows collapse to Ledger.** All are non-meeting (`meeting_unsourced=0`),
-   so not Section-9 bugs — but **confirm none are real actions losing provenance** vs. genuinely-admin
-   (signed/placed/ministerial). This is the "no silent source-miss" rule at scale.
-5. **`legislation_event_recovered = 1,005 / 3,863 attempts (26%)`** — low recovery. The 74% failures are
-   non-meeting rows (Section 9 still 0), but verify they're genuinely unrecoverable (admin) vs. a recovery gap.
-6. **HB30 `Conference Committee` 2026-06-19 `TIMING_LAG`** — a conference-committee action with no schedule
-   match → Ledger. Likely upstream-limited (LIS published no timed conference meeting, like HB26/HB137), but
-   confirm it's honest residue, not a missed source.
+1. **`invariant_violations = 1`** — ✅ **ROOT-CAUSED + FIXED 2026-06-25** (`claude/va-invariant-derived-standing`).
+   It was NOT an I3 (0 concrete rows carry a `[NO_*]`/empty time; the 482 "Time TBA" are legit LIS values).
+   It was a **FALSE I2**: `derived_standing` (the #76 flagged-assumed SJ209 time, 1 row, emitted in
+   production) was **missing from `_VALID_ORIGINS`**, so that lone row tripped the origin-enum invariant
+   **every cycle**. Fix = register `derived_standing` (one line) → `invariant_violations` should go **1→0**
+   on the next worker run (live-validation gated on a run — [[failures/assumptions_audit#74]]). The stale
+   doc I2 list (also omitted `executive_default`) updated to match the live `_VALID_ORIGINS`.
+   **Residual finding (separate, deferred):** the I2 alert IS pushed by `_append_event` (code is correct),
+   yet only the `TIMING_LAG` alert was visible on the sheet — so the alert HISTORY isn't fully surfaced
+   (only the latest). That's Health gap #2 (alert history / Bug_Logs) + worth checking the Actions logs.
+   **PREVENTION (owner: "how do we prevent these false alarms in the future?") — ✅ DONE 2026-06-27:**
+   `test_origin_registry_sync.py` parses `calendar_worker.py` with `ast` (the `_VALID_ORIGINS` set is
+   function-local, not importable) and asserts every Origin the worker USES (assigned to `origin`, set as
+   an `"Origin"` dict literal, or branched on via `==`/`in`) is registered, and no dead registrations.
+   Verified it FAILS listing `derived_standing` in the exact pre-fix state. Wired into the repo's first
+   test-CI gate, `.github/workflows/structural_tests.yml` (stdlib-only, no creds — runs the 6 structural
+   golden tests on every PR + pushes to main; **green on #176's own run**). So this drift class can no
+   longer merge silently. GENERALIZABLE → every state's worker should carry the same origin-registry sync
+   test ([[workflow/cross_state_brain]]).
+2. **`gap_minutes = 179.43`, `gap_cause = normal`** — ✅ **RESOLVED 2026-06-25: NOT a bug.** The cron is now
+   `0 */3 * * *` (every 3 h — changed because the 15-min cron backed up on ~16-19 min runtime), and the
+   thresholds AUTO-SCALE: `GAP_WARN = SCHEDULE_CADENCE_MINUTES(180)×2 = 360 min (6 h)`, `GAP_CRITICAL =
+   QUIET_WINDOW(420)+360 = 780 min (13 h)`. So a ~3 h gap is correctly `normal`; freshness IS trustworthy.
+   The `20/60` was the 15-min-era value — **stale doc fixed** in [[architecture/calendar_pipeline]]. (The
+   Health freshness gauge bands lower(6,12,24) happen to align well; could pin danger to 13 h exactly.)
+3. **`refidclass_unknown_refid` — 🔵 THE PATH TO unknown→0 (owner: structurally identifiable ⇒ identify it).**
+   **RE-PROBED 2026-06-27** (fresh `lisfiles/20261/HISTORY.CSV` + `VOTE.CSV`; `classify_refid` over all 65,377
+   rows with the real vote-join + fan-out; `scratchpad/unknown_refid_probe.py`). **9,350 `UNKNOWN_REFID` (14.3%).**
+   HISTORY has only 4 cols — `Bill_id, History_date, History_description, History_refid` (no EventCode), so the
+   description is **validation-only text** (Standard #3), the verdict below is from the refid shape + structural
+   joins. Exact cohort (vote-join is **0** for ALL of them; fan-out noted):
+   - **`…F###` fiscal/version family (≈4,260, fan-out=1)** — `HB1000F122`, `HB1002ERF122`, `HB1001H1F122`,
+     `SB106S1F122`, … desc = **"Fiscal Impact Statement from Department/SCC/VCSC"**. Clerical **DOCUMENTS** → admin.
+   - **`\d+D_H####` compounds (882, fan-out=1)** — `26101239D_H8120`, … desc = **"House (sub)committee offered"**.
+     ⛔ **HYPOTHESIS REFUTED:** the prior note assumed the `_H####` is a **vote-id = meeting evidence**. The probe
+     proves it is **NOT** — the `_H8120` suffix has **0/882 VOTE.CSV join** (it's a 4-digit register tag, not a
+     7–8-digit roll-call id). The leading `\d+D` IS the existing DOCUMENT grammar. So these are **DOCUMENTS → admin**;
+     there is **no vote to split out**, no meeting signal to preserve. (This deletes the old "must split" plan.)
+   - **`SV###`/`VSV###` (4,081, fan-out up to 107)** — desc = **"Constitutional reading dispensed (… Block)"**. A
+     Senate floor procedural register; 0 vote-join. **DOMAIN-SENSITIVE:** is "reading dispensed" a meeting/floor
+     action (surface w/ a floor time) or admin? Needs the owner's call / a route-cross-check before a confident class.
+   - **`HB####`/`SB####`-as-refid (88, fan-out ≤4)** — desc = **"Incorporated by <committee> (HB…-…)"**. The refid
+     points at ANOTHER bill (a cross-reference). Also domain-sensitive (committee disposition vs admin).
+   **SAFETY RE-SCOPED (key finding):** `RefidClass` is currently a **SHADOW measurement column** — STAMPED + counted
+   (`source_miss_counts["refidclass_…"]`), but the live meeting/admin/ledger **routing runs off `LegEventRoute`
+   (EventCode), NOT `RefidClass`**. The only `RefidClass` consumer is the Part-C gap-recovery, which keys on the
+   **recorded-VOTE** signal (`VOTE_COMMITTEE/VOTE_FLOOR`); the I4 breaker keys on `LegEventRoute=="meeting"`. So an
+   `UNKNOWN→DOCUMENT` reclass **creates no vote signal** (all cohorts 0 vote-join) and **cannot move
+   `meeting_unsourced`** — it's measurement-only today. Section-9-sensitivity is **deferred to the future C8.2 flip**
+   (when `RefidClass` starts driving routing); the classes must be *correct* for that day, which is why SV###/
+   incorporated need the domain call, not a guess.
+   **LIVE-ROUTE CROSS-CHECK 2026-06-27** (owner chose "cross-check the live route", not classify-by-shape —
+   `scratchpad/route_crosscheck.py`, matched Sheet1 Outcome text → its `LegEventRoute`/`Origin`/Time). This
+   **overturned the shape-based "compound = document" guess** — the refid shape and the row's route disagree:
+   - **`…F###` fiscal:** **0 live Sheet1 rows** (noise-filtered before write). Truly a document, never surfaces
+     → **DOCUMENT/admin is safe & correct.** The only true-document cohort. (≈4,260 rows / 46%.)
+   - **`\d+D_H####` compounds:** **450 live rows, ALL `LegEventRoute=meeting`** (api_schedule/legislation_event/
+     convene_anchor, concrete times). "(sub)committee offered" actions surface as MEETINGS — the time comes from
+     the schedule match, NOT the refid. **A refid→admin label here would BURY meetings (the exact Section-9
+     regression).** → NOT a document; must stay a non-decisive/surface class.
+   - **`HB#/SB#` incorporated:** **85 live rows, ALL `meeting`** (api_schedule) → likewise NOT admin; a bill
+     cross-reference whose route comes from the schedule match.
+   - **`SV###` reading-dispensed:** 1 of ~4,081 in Sheet1 (noise-filtered procedural) → doesn't surface.
+   **→ REVISED DESIGN (the focused `classify_refid` PR):** (1) `…F###` → **REFID_DOCUMENT** (extend grammar) — the
+   one real admin verdict, route-confirmed safe. (2) compounds / SV### / bill-ref → **NEW *identified-but-
+   non-decisive* classes** (named for observability so `unknown_refid`→~0, but SAME surface behavior as UNKNOWN —
+   they assert NO meeting/admin verdict, so the future C8.2 flip can't misroute them). Golden tests per shape +
+   offline diff asserting **no refid whose rows route=meeting gets an admin-implying class**. The lesson: a
+   refid's identity ≠ its row's route; RefidClass must never override a positive meeting route to admin.
+   Cross-ref [[knowledge/history_refid_namespace]] (the namespace law this extends).
+4. **Ledger-collapse volume (~21%)** — ✅ **CONFIRMED SOUND 2026-06-25 (live sheet).** 7,826 Ledger rows, all
+   correct collapse origins (`floor_miss` 3,402 / `journal_default` 2,765 / `admin_default` 1,659). A text
+   spot-check for "meeting verbs" hit 906 rows, but they are **clerical document rows** ("Bill text as passed
+   House (HRxxxER)") — the regex over-matched "passed" (the very text-fragility we avoid). **No real meeting
+   actions are losing provenance** — the structural signal (`meeting_unsourced=0`) is correct.
+5. **`legislation_event_recovered = 1,005 / 3,863 (26%)`** — ✅ **fine.** The 74% failures are non-meeting
+   rows (Section 9 = 0), i.e. admin rows that legitimately have no meeting time to recover. Not a gap.
+6. **HB30 `Conference Committee` `TIMING_LAG`** — ✅ **honest upstream residue** (LIS published no timed
+   conference meeting, like HB26/HB137). The lone surfaced row; never a meeting-without-time bug.
+
+## ✅ Dive conclusion (2026-06-25): the data IS clean/sustainable
+The headline metrics were already perfect (Section 9 = 0, completeness 100%). The dive found **exactly one
+real defect** — the false `invariant_violations=1` (the unregistered `derived_standing` origin), **fixed in
+PR #176** (→ 0 on the next worker run). Everything else is correct (gap classification), doc-drift (fixed),
+or safe-by-design residue (unknown-refid surfaced; Ledger collapse sound; recovery failures are admin; HB30
+upstream-limited). **The only forward optimization is edge #3** (reduce the 5,051 unknown refids — deferred).
+The remaining work is OBSERVABILITY (the Health gaps below), not correctness.
 
 ## Health-tab observability gaps (owner: "what's missing?" — 2026-06-25)
 The Health gauges surface the *counts*; the deeper trust layer (vision §7 lists several as "should track,

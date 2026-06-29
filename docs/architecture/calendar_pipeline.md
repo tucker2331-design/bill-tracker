@@ -1,3 +1,9 @@
+---
+tags: [architecture, calendar, pipeline, worker]
+updated: 2026-06-28
+status: active
+---
+
 # Calendar Worker Pipeline Architecture
 
 ## Data Flow
@@ -52,7 +58,7 @@ Every `master_events` row carries an `Origin` column (added in PR-A). This is th
 ## Sheet1 Schema (worker output)
 11 columns: `Date | Time | SortTime | Status | Committee | Bill | Outcome | AgendaOrder | Source | Origin | DiagnosticHint`.
 
-The `Origin` column was added in PR-A. Enumerated values: `api_schedule`, `convene_anchor`, `legislation_event` (PR-C3), `journal_default`, `floor_miss`, `admin_default` (PR-C7.1g), `sibling_meeting` (PR-C7.1j), `scheduled_future` (PR-FC1 — registered, no producer yet), `system_alert`, `system_metrics`. `admin_default` is a journal_default row the structural router classified `route=="admin"` whose time recovery was deliberately skipped (no wrong document-batch timestamp); it collapses into 📋 Ledger Updates like journal_default/floor_miss but does NOT emit the per-row source-miss WARN or count `unsourced_journal`. `sibling_meeting` is a timeless meeting-routed *secondary* split-action row (e.g. "Rereferred to Y" — LIS HISTORY splits this off from the combined "Reported from X and rereferred to Y" committee vote) that **inherited** the Time/SortTime/Committee of a same-`(Bill, Date)` resolved committee/floor meeting, applied only when that meeting time is unambiguous; it carries a real time (concrete source for I3) and does NOT collapse to Ledger. One `SYSTEM_METRICS` row per run carries a JSON-encoded snapshot of the source-miss counters (`total_processed`, `sourced_api`, `sourced_convene`, `sourced_legislation_event`, `unsourced_journal`, `unsourced_anchor`, `dropped_ephemeral`, `dropped_noise`, `floor_anchor_miss`, `legislation_event_attempted`, `legislation_event_recovered`). X-Ray Section 0 parses this row to render the denominator.
+The `Origin` column was added in PR-A. Enumerated values: `api_schedule`, `convene_anchor`, `legislation_event` (PR-C3), `journal_default`, `floor_miss`, `admin_default` (PR-C7.1g), `sibling_meeting` (PR-C7.1j), `scheduled_future` (PR-FC1 — registered, no producer yet), `executive_default` (PR-C8.4b — action-required governor action; surfaces under 🏛️ Governor), `derived_standing` (#76 — the flagged last-resort ASSUMED time, e.g. SJ209→5:34 PM; carries a real clock time), `system_alert`, `system_metrics`. `admin_default` is a journal_default row the structural router classified `route=="admin"` whose time recovery was deliberately skipped (no wrong document-batch timestamp); it collapses into 📋 Ledger Updates like journal_default/floor_miss but does NOT emit the per-row source-miss WARN or count `unsourced_journal`. `sibling_meeting` is a timeless meeting-routed *secondary* split-action row (e.g. "Rereferred to Y" — LIS HISTORY splits this off from the combined "Reported from X and rereferred to Y" committee vote) that **inherited** the Time/SortTime/Committee of a same-`(Bill, Date)` resolved committee/floor meeting, applied only when that meeting time is unambiguous; it carries a real time (concrete source for I3) and does NOT collapse to Ledger. One `SYSTEM_METRICS` row per run carries a JSON-encoded snapshot of the source-miss counters (`total_processed`, `sourced_api`, `sourced_convene`, `sourced_legislation_event`, `unsourced_journal`, `unsourced_anchor`, `dropped_ephemeral`, `dropped_noise`, `floor_anchor_miss`, `legislation_event_attempted`, `legislation_event_recovered`). X-Ray Section 0 parses this row to render the denominator.
 
 The `DiagnosticHint` column was added in PR-B. Populated ONLY for rows where `Origin in {journal_default, floor_miss}`; empty string otherwise. Value format: `loc='<bill_locations[bill]>'; api_<date>=[<committee>@<time>; ...]` (nearest-3 same-chamber Schedule API candidates for that date, or `<none>`). Pure measurement — no classification impact. See [[workflow/source_miss_visibility]] and [[failures/gemini_review_patterns]] #37.
 
@@ -73,7 +79,7 @@ enforces four invariants:
 | # | Invariant | Failure mode |
 |---|-----------|--------------|
 | I1 | Schema completeness — all 11 columns present | fill missing with `""`, push `DATA_ANOMALY / CRITICAL` alert |
-| I2 | `Origin` in `{api_schedule, convene_anchor, legislation_event, journal_default, floor_miss, admin_default, sibling_meeting, scheduled_future, system_alert, system_metrics}` | push `DATA_ANOMALY / CRITICAL` alert (row is not rewritten — downstream must handle visibly) |
+| I2 | `Origin` in `{api_schedule, convene_anchor, legislation_event, journal_default, floor_miss, admin_default, sibling_meeting, scheduled_future, executive_default, derived_standing, system_alert, system_metrics}` (the live `_VALID_ORIGINS`) | push `DATA_ANOMALY / CRITICAL` alert (row is not rewritten — downstream must handle visibly). **NB: `derived_standing` was added 2026-06-25 — it was emitted in production but omitted from the set, so the lone SJ209 row tripped a FALSE I2 every cycle (the persistent `invariant_violations=1`).** |
 | I3 | Concrete-source Origins (`api_schedule` / `convene_anchor` / `legislation_event` / `sibling_meeting`) cannot carry a `⏱️ [NO_*]` Time | push `DATA_ANOMALY / CRITICAL` alert |
 | I4 | Telemetry counter `meeting_unsourced` (no invariant) — outcome contains a meeting verb AND Origin is unsourced | increment counter; fed to the circuit breaker |
 
@@ -259,11 +265,15 @@ At the top of every cycle, the worker now parses `Sheet1!Y1`
 | `stale_cursor` | Y1 > 30 days old | CRITICAL `DATA_ANOMALY` |
 | `malformed_cursor` | Y1 parse failed | WARN `DATA_ANOMALY` |
 | `breaker_carryforward` | W1 populated — previous cycle tripped breaker | (carry-forward alert from W1 block) |
-| `outage` | valid cursor, gap past threshold | WARN @ >20 min, CRITICAL @ >60 min (`API_FAILURE`) |
-| `normal` | gap within 20 min | (none) |
+| `outage` | valid cursor, gap past threshold | WARN @ >`GAP_WARN_MINUTES`, CRITICAL @ >`GAP_CRITICAL_MINUTES` (`API_FAILURE`) |
+| `normal` | gap within `GAP_WARN_MINUTES` | (none) |
 
-Thresholds in code: `GAP_WARN_MINUTES=20`, `GAP_CRITICAL_MINUTES=60`,
-`GAP_STALE_DAYS=30`, `GAP_RECONCILIATION_MAX_DAYS=7`.
+Thresholds in code AUTO-SCALE with the cron cadence (no longer the old 15-min-era 20/60):
+`GAP_WARN_MINUTES = SCHEDULE_CADENCE_MINUTES * 2` and `GAP_CRITICAL_MINUTES =
+QUIET_WINDOW_MINUTES + SCHEDULE_CADENCE_MINUTES * 2`. With the current cron `0 */3 * * *`
+(`SCHEDULE_CADENCE_MINUTES=180`, `QUIET_WINDOW_MINUTES=420`) that is **WARN @ >360 min (6 h),
+CRITICAL @ >780 min (13 h)** — so a ~3 h inter-cycle gap is correctly `normal`. `GAP_STALE_DAYS=30`,
+`GAP_RECONCILIATION_MAX_DAYS=7`.
 
 `source_miss_counts` gains two new keys for SYSTEM_METRICS: `gap_minutes`
 (float, or `-1` sentinel when N/A) and `gap_cause` (string). Both are
