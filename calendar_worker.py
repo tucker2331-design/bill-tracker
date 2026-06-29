@@ -5373,6 +5373,49 @@ def run_calendar_update():
                 dedup_key="witness_canary_read_fail",
             )
 
+    # === Health-observability: per-cycle alert + metrics HISTORY tab (helper) ===
+    # Sheet1 is OVERWRITTEN every cycle, so the operator only ever sees the LATEST
+    # SYSTEM_ALERT / SYSTEM_METRICS row. Metrics_History is an append-only mirror of THIS
+    # cycle's SYSTEM rows, so the Health tab can show alert HISTORY (what fired and when) +
+    # metric TRENDS (sparklines), not just a point-in-time snapshot. Same minimal schema the
+    # front-end already parses (Status / Origin / Outcome) plus a lexically-sortable
+    # RunTimestampUTC so the OUT-OF-BAND prune (tools/metrics_history/prune.py) deletes by
+    # contiguous prefix — no in-cycle append+delete_rows race (same rule as Schedule_Witness).
+    # Defined at function-body scope (before its single call site in the end-of-cycle block),
+    # never inside a conditional — CLAUDE.md pre-push audit #2.
+    METRICS_HISTORY_TAB = "Metrics_History"
+    METRICS_HISTORY_HEADER = ["RunTimestampUTC", "Status", "Origin", "Outcome"]
+
+    def _ensure_metrics_history_tab():
+        """Return the Metrics_History worksheet, auto-creating it with header on first call.
+        Returns None on permanent failure so the caller skips gracefully (mirrors
+        _ensure_witness_tab — same fail-open, alert-don't-crash contract)."""
+        try:
+            return sheet.worksheet(METRICS_HISTORY_TAB)
+        except gspread.exceptions.WorksheetNotFound:
+            try:
+                _ws = sheet.add_worksheet(title=METRICS_HISTORY_TAB, rows=1000,
+                                          cols=len(METRICS_HISTORY_HEADER))
+                _ws.update(values=[METRICS_HISTORY_HEADER], range_name="A1")
+                print(f"📈 Created {METRICS_HISTORY_TAB} tab with header.")
+                return _ws
+            except Exception as _mh_create_err:
+                push_system_alert(
+                    f"Could not create {METRICS_HISTORY_TAB} tab: {_mh_create_err}. "
+                    f"Alert/metric history disabled until the tab exists.",
+                    status="WARN", category="API_FAILURE", severity="WARN",
+                    dedup_key="metrics_history_create_fail",
+                )
+                return None
+        except Exception as _mh_open_err:
+            push_system_alert(
+                f"Could not open {METRICS_HISTORY_TAB} tab: {_mh_open_err}. "
+                f"Alert/metric history skipped this cycle.",
+                status="WARN", category="API_FAILURE", severity="WARN",
+                dedup_key="metrics_history_open_fail",
+            )
+            return None
+
     # === SESSION MARKER FALLBACK FOR MISSING CONVENE TIMES ===
     # Some dates have session activity (adjourned, recessed) but no "Convenes" entry.
     # Use the earliest session marker as a fallback convene time.
@@ -6919,6 +6962,41 @@ def run_calendar_update():
             # Unconditional (before the breaker if/else) so this timing prints even on a
             # trip — final_df assembly + the API_Cache write both already ran (Gemini #139).
             _phase("final_df assembly + API_Cache write")
+
+            # Health-observability: mirror THIS cycle's SYSTEM rows into the append-only
+            # Metrics_History tab (alert HISTORY + metric TRENDS — see the helper above).
+            # Placed here, BEFORE the breaker if/else, so it runs on BOTH the healthy-write
+            # and held-back paths: a breaker trip is exactly when its alert history matters
+            # most, and Metrics_History is an independent tab (like Schedule_Witness) whose
+            # append does not depend on Sheet1 being overwritten.
+            try:
+                _mh_cols = ("Status", "Origin", "Outcome")
+                if all(_c in final_df.columns for _c in _mh_cols):
+                    _sys_rows = final_df.loc[
+                        final_df["Origin"].isin(("system_metrics", "system_alert")), list(_mh_cols)
+                    ]
+                    if not _sys_rows.empty:
+                        _mh_ts = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+                        _mh_payload = [
+                            [_mh_ts, str(_r.Status), str(_r.Origin), str(_r.Outcome)]
+                            for _r in _sys_rows.itertuples(index=False)
+                        ]
+                        _mh_tab = _ensure_metrics_history_tab()
+                        if _mh_tab is not None:
+                            _mh_tab.append_rows(_mh_payload, value_input_option="RAW")
+                            print(f"📈 {METRICS_HISTORY_TAB}: appended {len(_mh_payload)} system row(s) @ {_mh_ts}.")
+            except Exception as _mh_err:
+                # No silent failure (Standard #4/#6): a history-append failure must not crash
+                # the cycle, but it must SURFACE — the trend store going dark is itself an
+                # observability gap. dedup on the exception type so a recurring break can't flood.
+                print(f"⚠️ {METRICS_HISTORY_TAB} append skipped ({_mh_err})")
+                push_system_alert(
+                    f"{METRICS_HISTORY_TAB} append failed: {type(_mh_err).__name__}: {_mh_err}. "
+                    f"This cycle's alert/metric history was not recorded; the Health tab's trends + "
+                    f"alert-history will show a gap until the next successful append.",
+                    status="WARN", category="API_FAILURE", severity="WARN",
+                    dedup_key=f"metrics_history_append_fail::{type(_mh_err).__name__}",
+                )
 
             # PR-hardening1b-1: count the surfaced 'unconfirmed' rows over the FINAL written rows
             # (final_df == sheet_data, AFTER the ephemeral filter + (Date,Committee,Bill) dedup),

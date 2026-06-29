@@ -84,7 +84,12 @@ RETENTION_DAYS = {"Schedule_Witness": 90,
                   # worker prunes rows older than 540d on load (older agendas never
                   # fall in any scrape window). Date is MeetingDate in column A, so
                   # the retention check below reads the right column unchanged.
-                  "Agenda_Cache": 540}
+                  "Agenda_Cache": 540,
+                  # Metrics_History: append-only per-cycle alert/metric mirror powering the
+                  # Health-tab trends + alert history. RunTimestampUTC is in column A (ISO,
+                  # YYYY-MM-DD prefix), so the generic retention check reads it unchanged;
+                  # this entry makes the audit ASSERT tools/metrics_history/prune.py is running.
+                  "Metrics_History": 45}
 # Tabs whose size is bounded by OVERWRITE semantics (write-then-clear-trailing),
 # not by retention — they need no prune. Membership is asserted by behaviour
 # (they are rewritten each cycle), documented here so the "unrecognised large

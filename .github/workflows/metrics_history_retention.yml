@@ -1,0 +1,37 @@
+name: 📈 Metrics_History Retention Prune
+
+# Deletes Metrics_History rows older than 45 days so the Health-tab trend store stays
+# bounded with ZERO human action (closes the second append-only-tab growth path the
+# observability work introduced; Standard #8).
+#
+# Shares the `calendar-worker` concurrency group so it NEVER runs while the worker is
+# appending to the same tab — the same exclusive-access guarantee the witness prune
+# relies on. Scheduled in the overnight quiet hours, off the worker's 3h cron slots and
+# off the witness prune's slot (07:23) so the two pruners never queue back-to-back.
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "41 7 * * *"   # daily 07:41 UTC (~3am ET; quiet hours; not a worker 3h slot)
+
+concurrency:
+  group: calendar-worker
+  cancel-in-progress: false
+
+jobs:
+  prune:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install gspread google-auth
+      - name: Prune Metrics_History rows older than 45 days
+        env:
+          GCP_CREDENTIALS: ${{ secrets.GCP_CREDENTIALS }}
+        run: python3 tools/metrics_history/prune.py
