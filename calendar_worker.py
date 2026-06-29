@@ -4032,6 +4032,22 @@ def run_calendar_update():
         # PR-C7.1j: secondary split-action rows that inherited their meeting's
         # time+committee from a same-(Bill,Date) resolved sibling.
         "sibling_inherited": 0,
+        # Health-observability: drift-canary GREEN-STATE. The five upstream-vocabulary
+        # canaries (status grouping / governor codes / refid shapes / schedule types /
+        # reference types) already ALERT on drift, but they emit nothing when clean — so
+        # the Health tab cannot distinguish "actively checked, all clear" from "the canary
+        # itself never ran." Record each one's outcome so the operator sees the watchers
+        # are ALIVE, not just silent. Encoding (sentinel-safe per CLAUDE.md audit #15):
+        #   -1 = couldn't determine this cycle (not run / errored / upstream fetch failed)
+        #    0 = ran, ZERO drift (the all-clear)
+        #    N = ran, N novel value(s) — drift (the existing alert also fired)
+        # -1 is never a legitimate drift count (counts are ≥0), so it is a collision-free
+        # "absent" sentinel; the front-end renders -1 as "?" (unknown), never false-green.
+        "canary_status_grouping":     -1,
+        "canary_governor_eventcodes": -1,
+        "canary_refid_shape":         -1,
+        "canary_scheduletype":        -1,
+        "canary_referencetype":       -1,
     }
 
     def push_system_alert(message, status="ALERT", category=None, severity=None, dedup_key=None):
@@ -5487,6 +5503,10 @@ def run_calendar_update():
                 x.get("Name") for x in _refs if isinstance(x, dict)
             ] if isinstance(_refs, list) else []
             _status_drift = _validate_status_grouping(_live_status_names)
+            # GREEN-STATE: record the outcome (0 = clean, N = drift) so the Health tab can
+            # show this canary actively ran. Stays -1 (couldn't-determine) on the HTTP-fail /
+            # except paths below, which is the honest signal there.
+            source_miss_counts["canary_status_grouping"] = len(_status_drift)
             if _status_drift:
                 # PR-C7.1b-1 observability: print on EVERY path (not just
                 # success) so the worker LOG is self-describing — push_alert
@@ -5975,6 +5995,7 @@ def run_calendar_update():
                 if _code[:1] == "G":
                     _live_g_codes.add(_code)
         _gov_drift = _validate_governor_eventcodes(_live_g_codes)
+        source_miss_counts["canary_governor_eventcodes"] = len(_gov_drift)  # GREEN-STATE (0 clean / N drift)
         if _gov_drift:
             print(f"🚨 Governor EventCode DRIFT: {len(_gov_drift)} unclassified G-code(s): {_gov_drift}")
             push_system_alert(
@@ -6574,6 +6595,7 @@ def run_calendar_update():
             _unknown_refids = [_r for _r in (_normalize_refid(_v) for _v in _refid_series)
                                if _r and _classify_refid(_r) == _REFID_UNKNOWN]
             _shape_drift = _validate_refid_shapes(_unknown_refids)
+            source_miss_counts["canary_refid_shape"] = len(_shape_drift)  # GREEN-STATE (0 clean / N drift)
             if _shape_drift:
                 _top = ", ".join(f"{s}×{c}" for s, c in sorted(_shape_drift.items(), key=lambda kv: -kv[1]))
                 print(f"🚨 Refid-shape DRIFT: {len(_shape_drift)} novel shape(s): {_top}")
@@ -6607,6 +6629,7 @@ def run_calendar_update():
         # so it gets a structural class, not a silent OTHER bucket (Standard #1/#8).
         try:
             _new_sched_types = _validate_schedule_types(_live_schedule_type_ids)
+            source_miss_counts["canary_scheduletype"] = len(_new_sched_types)  # GREEN-STATE (0 clean / N drift)
             if _new_sched_types:
                 print(f"🚨 ScheduleType DRIFT: {len(_new_sched_types)} new id(s): {_new_sched_types}")
                 push_system_alert(
@@ -6640,6 +6663,7 @@ def run_calendar_update():
                 if isinstance(_ev, dict)   # a malformed cached entry must not AttributeError the monitor (CodeRabbit #180)
             }
             _new_reftypes = _validate_reference_types(_live_reftypes)
+            source_miss_counts["canary_referencetype"] = len(_new_reftypes)  # GREEN-STATE (0 clean / N drift)
             if _new_reftypes:
                 print(f"🚨 ReferenceType DRIFT: {len(_new_reftypes)} new value(s): {_new_reftypes}")
                 push_system_alert(
