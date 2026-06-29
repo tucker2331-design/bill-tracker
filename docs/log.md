@@ -10,6 +10,22 @@ Append-only, reverse-chronological (newest at top). Each entry opens with `## [Y
 
 **Kinds:** `ingest` (new source/doc processed), `pr` (PR opened/merged/closed), `decision` (architectural or workflow), `lint` (wiki health-check pass), `session` (notable multi-hour working block), `post-mortem` (failure analysis), `milestone` (project-goal threshold crossed).
 
+## [2026-06-29] pr | #181 OPEN — Health observability long-tail (canary green-state, alert/metric history, trends, source-feed freshness)
+
+Closed the five deferred Health-observability gaps on `claude/health-observability`, after a plan AUDIT the
+owner requested ("could it be better? did you assume?") that corrected 3 wrong assumptions
+([[failures/assumptions_audit#91]] per-bill-freshness moot in a bulk-re-derive pipeline → reframed to
+SOURCE-FEED freshness; #92 a green-state that flips clean on empty upstream is a false-green; #93 an alert
+emitted after its channel is finalized is silent). Worker: drift-canary green-state in `SYSTEM_METRICS`
+(-1/0/N sentinel); `Metrics_History` append-only tab + `tools/metrics_history/prune.py` (45d, shares the
+calendar-worker lock, registered in `sustainability_audit` RETENTION_DAYS); HISTORY.CSV blob-age
+(`history_blob_age_min`). Front-end: "Upstream watchers" panel, aggregated alert-history view, sparklines
+(`data/history.ts` + `Sparkline.tsx`), feed-skew chip, source-feed clock. Bot fold-in round done (4 findings:
+canary false-green guards, history-alert relocation so failures reach Sheet1, pct-sparkline, workflow perms).
+Structural tests pass; tsc/vite clean; preview-verified (honest empty-states on live data). Awaiting final bot
+pass → merge. Owner queued 3 UI follow-ups ([[design/ui_redesign_spec]]): "Are we right?" cadence-legibility,
+Calendar past-May cap, Calendar weekly-primary relayout.
+
 ## [2026-06-29] decision | Self-healing classification design — 3 owner corrections locked + PARKED
 
 Owner (cross-checking with Gemini) refined the self-healing/auto-classify design and PARKED it as the

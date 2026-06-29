@@ -83,4 +83,35 @@ item — both are "make the pipeline match the real process.")
 - Reading is PREP: digest full-length books (Tufte VDQI, Few, Hearst, **Refactoring UI** for the
   not-look-generic problem, calendar-UI patterns), notes → [[design/information_display]].
 
+## 2026-06-29 owner feedback (QUEUED — after the observability work lands)
+
+Three items the owner flagged while reviewing the live Health + Calendar tabs. **Queued, not started.**
+
+1. **"Are we right?" panel reads as stale/pointless.** The four independent-verification rows show e.g.
+   "verified 7d ago," which looks broken next to a live tab — the owner expected them to update "every time
+   the worker runs." **Root cause (not a bug):** those guards run on their OWN cadence (reconciliation +
+   completeness are WEEKLY, accuracy sentinel DAILY) — they're independent cross-checks against LIS, by
+   design not per-cycle ([[architecture/verification_durability]]). **Fix direction:** make the cadence
+   legible instead of hiding it — show "weekly check · last run 7d ago · next in ~1d" (and/or a small
+   "next run" countdown), so "7d ago" reads as "on schedule," not "stale." Consider collapsing the four
+   into a single compact trust line if the per-row detail isn't earning its space. Lands in
+   [[design/health_operator_tab]] when built.
+2. **Calendar doesn't render past May** even though the future-calendar feature was built. **Investigate:**
+   likely a scrape-window / date-filter bound in the calendar subsystem or the `web/` Calendar reader that
+   caps at the session end (2026-05-01) — VA GA is adjourned so HISTORY is static, but the Schedule API may
+   still carry future-dated entries the reader is filtering out. Confirm whether the cap is in the worker's
+   window, the gviz query, or the month-grid component, then lift it so genuine future events show.
+3. **Calendar relayout — weekly-primary + monthly-as-selector (dual function).** Make a large **7-day
+   vertical week view** the PRIMARY module at the top: events listed out per day, defaulting to the CURRENT/
+   upcoming week, with **back/forward** arrows to page to prior/next weeks. The existing **monthly grid then
+   shrinks** and becomes **dual-function**: (a) it keeps the event-widget behaviour it has now, AND (b) it
+   **highlights the week currently shown in the macro week-view** and acts as the **week selector** — moving
+   the highlighted week-window (click a week / a day) drives the top view. **UI hurdle the owner named:**
+   make it INTUITIVE that the monthly grid controls the weekly view (it serves two roles at once) — e.g. a
+   visible "week band" highlight on the month + a subtle affordance that the month is a picker, not just a
+   display. **Open questions to confirm when we build it** (noted, not blocking): does clicking a single DAY
+   in the month jump the week-view to THAT day's week (vs only the week arrows moving it)? Should the
+   week-view be the default landing for the Calendar tab, demoting the month grid? Relates to item 2 (the
+   week view must be able to page into the future).
+
 See also [[design/information_display]], [[ideas/product_vision]], [[log]].
