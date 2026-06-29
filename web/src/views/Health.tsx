@@ -268,7 +268,8 @@ export function Health({ completeness, dataAsOf }: { completeness: Completeness 
             "per-bill freshness." Only shown when the worker reported a Last-Modified (>= 0). */}
         {h && blobAgeKnown && (
           <BulletGraph label="Source feed · HISTORY.CSV blob age (hours since LIS refreshed it)" value={blobAgeH}
-            max={24} target={0} bands={lower(6, 12, 24)} unit=" h" format={hrs} spark={spark("history_blob_age_min")}
+            max={24} target={0} bands={lower(6, 12, 24)} unit=" h" format={hrs}
+            spark={spark("history_blob_age_min").filter((v) => v >= 0)}
             sub="if this is stale while the cycle clocks are green, LIS stopped feeding us — every bill is stale together" />
         )}
       </div>

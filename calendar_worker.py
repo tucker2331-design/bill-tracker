@@ -2726,12 +2726,11 @@ def safe_fetch_csv(url, attempts=3):
         try:
             res = requests.get(url, timeout=60,
                                headers={"If-None-Match": cached_etag} if cached_etag else {})
-            # Source-feed freshness: record the blob's Last-Modified whenever the server sends one
-            # (200 OR 304 — a 304 still carries it per RFC 7232). Only overwrite on a present value
-            # so a header-less response keeps the last known reading rather than blanking it.
+            # Source-feed freshness: hold the server's Last-Modified as a LOCAL for now (200 OR 304 —
+            # a 304 still carries it per RFC 7232). It is committed to _blob_last_modified ONLY after the
+            # body passes the completeness + CSV-marker checks below, so a non-CSV / error 200 that
+            # happens to carry the header can never publish a false-fresh blob age (CodeRabbit #181).
             _lm = res.headers.get("Last-Modified")
-            if _lm:
-                _blob_last_modified[url] = _lm
             if res.status_code == 304 and cached_body is not None:
                 body, from_cache = cached_body, True
             elif res.status_code == 200:
@@ -2762,6 +2761,11 @@ def safe_fetch_csv(url, attempts=3):
                     continue
                 # 200 but not a recognizable CSV (e.g., an error page) — empty.
                 return pd.DataFrame()
+            # Body is now a VALIDATED CSV (passed completeness + marker). Safe to commit the freshness
+            # reading; a failed/non-CSV response returned empty above without ever reaching here, so it
+            # can't publish a false-fresh blob age (CodeRabbit #181).
+            if _lm:
+                _blob_last_modified[url] = _lm
             # dtype=str + keep_default_na=False: zero-trust against pandas type-inference (the #1
             # refid fragility — see normalize_refid). Float-inferring a numeric refid column drops
             # LEADING ZEROS and appends ".0", which would truncate a len>=7 vote-id to len<=6 and
@@ -5514,9 +5518,20 @@ def run_calendar_update():
                     source_miss_counts["history_blob_age_min"] = round(_age_min, 1)
                     print(f"🕒 HISTORY.CSV source blob last modified {_hist_lm} ({_age_min:.0f} min ago).")
     except Exception as _lm_err:
-        # Optional ≠ silent: a parse failure leaves -1 (unknown) and surfaces a print; this is a
-        # freshness HINT, not a safety gate, so it must never crash the cycle.
+        # Optional ≠ silent (Standard #4/#6, audit #48): a parse failure leaves -1 (unknown) and must
+        # never crash the cycle, but it must SURFACE — otherwise the Health source-feed gauge can simply
+        # vanish with no metric/alert explaining why. Counter + categorized alert (dedup on the exception
+        # type so a recurring break can't flood); the alert rides this cycle's Sheet1 write (CodeRabbit #181).
         print(f"⚠️ HISTORY.CSV blob-age computation skipped ({_lm_err})")
+        source_miss_counts["history_blob_age_monitor_failures"] = (
+            source_miss_counts.get("history_blob_age_monitor_failures", 0) + 1
+        )
+        push_system_alert(
+            f"HISTORY.CSV blob-age computation skipped: {type(_lm_err).__name__}: {_lm_err}. "
+            f"Source-feed freshness shows 'unknown' this cycle.",
+            status="INFO", category="DATA_ANOMALY", severity="INFO",
+            dedup_key=f"history_blob_age_monitor_fail::{type(_lm_err).__name__}",
+        )
 
     # Always-defined BEFORE the empty-HISTORY branch so the Stage-2 input signature
     # never NameErrors on an empty cycle (Gemini #146). Populated from VOTE.CSV below
