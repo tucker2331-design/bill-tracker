@@ -268,22 +268,14 @@ h2, h3 { margin: 0; }
 .hl-vstat { font-size: 12px; font-weight: 700; margin-top: 2px; }
 
 /* "Are we right?" — independent-verification panel (the 5-layer guard's live status from GitHub Actions) */
-.hl-verify { margin-bottom: var(--s5); }
-.hl-vrow { display: flex; align-items: baseline; gap: 2px var(--s3); padding: 9px var(--s1); flex-wrap: wrap; }
-.hl-vrow + .hl-vrow { border-top: 1px solid var(--line); }
-.hl-vdot { width: 9px; height: 9px; border-radius: 50%; align-self: center; flex: none; }
-.hl-vdot.pass { background: var(--ok); }
-.hl-vdot.fail { background: var(--stale); }
-.hl-vdot.running { background: var(--o-await); }
-.hl-vdot.unknown { background: var(--ink-faint); }
-.hl-vlabel { font-weight: 800; font-size: 13px; color: var(--ink); white-space: nowrap; }
-.hl-vproves { color: var(--ink-soft); font-size: 12.5px; flex: 1; min-width: 200px; }
-.hl-verstat { font-weight: 700; font-size: 12px; white-space: nowrap; text-decoration: none; margin-left: auto; }
-.hl-verstat.pass { color: var(--ok); }
-.hl-verstat.fail { color: var(--stale); }
-.hl-verstat.running { color: var(--o-await); }
-.hl-verstat.unknown { color: var(--ink-faint); }
-.hl-verstat.stale { color: var(--o-carry); }
+/* independent-verification trust line, merged onto each at-a-glance dial (replaced the standalone panel) */
+.hl-vverify { display: inline-block; margin-top: 4px; font-size: 10.5px; font-weight: 700; text-decoration: none; max-width: 100%; }
+.hl-vverify.pass { color: var(--ok); }
+.hl-vverify.fail { color: var(--stale); }
+.hl-vverify.running { color: var(--o-await); }
+.hl-vverify.unknown { color: var(--ink-faint); }
+.hl-vverify.stale { color: var(--o-carry); }
+a.hl-vverify:hover { text-decoration: underline; }
 .hl-vfoot { font-size: 11.5px; line-height: 1.5; margin-top: var(--s3); padding: 0 var(--s1); }
 
 /* one bullet graph (small multiple) */

@@ -2,9 +2,9 @@ import { useEffect, useState } from "react";
 import type { Completeness } from "../data/types";
 import { BulletGraph } from "../components/BulletGraph";
 import { bandTone, type Band } from "../components/bands";
-import { HealthVitals, type Vital, type VitalSeg } from "../components/HealthVitals";
+import { HealthVitals, type Vital, type VitalSeg, type VitalVerify } from "../components/HealthVitals";
 import { loadHealth, type HealthData } from "../data/health";
-import { loadVerification, type GuardRun } from "../data/verification";
+import { loadVerification, type GuardRun, type GuardState } from "../data/verification";
 import { loadHistory, seriesFor, seriesForPct, type HistoryData } from "../data/history";
 
 // The operator / Health tab (vision §3f + §7): the trust signals the system ALREADY produces, as Few
@@ -149,17 +149,47 @@ export function Health({ completeness, dataAsOf }: { completeness: Completeness 
     ({ label, tone: known ? bandTone(value, bands) : "unknown" });
   const critCount = h ? h.alerts.filter((a) => a.severity === "CRITICAL").length : 0;
   const warnCount = h ? h.alerts.filter((a) => a.severity === "WARN").length : 0;
+
+  // Independent-verification badge per dial (replaces the standalone "Are we right?" panel). Each category
+  // rolls up the guards that cross-check it against an OUTSIDE source (LIS calendar / MinutesBook); shows the
+  // worst-of status, with the source + cadence + last-run in the HOVER title so the bare freshness no longer
+  // reads as "stale" on the face. A category with no guard (Freshness) gets no badge; while guards load → none.
+  const VRANK: Record<GuardState, number> = { pass: 0, unknown: 1, running: 2, fail: 3 };
+  const vitalVerify = (keys: string[]): VitalVerify | undefined => {
+    if (!guards) return undefined;                         // still loading → no badge yet
+    const gs = guards.filter((g) => keys.includes(g.key));
+    // vitalVerify is only ever called with REAL guard keys, so an empty match means verification LOADED but
+    // returned nothing (GitHub Actions unreachable → guards === []). Show "— unverifiable" rather than drop
+    // the badge, which would falsely read as "this dial has no independent check" ("never pretend" — CodeRabbit #183).
+    if (gs.length === 0) return { state: "unknown", text: "— unverifiable", title: "Independent verification unavailable — couldn't reach GitHub Actions.", url: null };
+    const worstG = gs.reduce((w, g) => (VRANK[g.status] > VRANK[w.status] ? g : w), gs[0]);
+    const anyStale = gs.some((g) => g.stale && g.status === "pass");
+    const state: VitalVerify["state"] =
+      worstG.status === "fail" ? "fail"
+      : worstG.status === "running" ? "running"
+      : worstG.status === "unknown" ? "unknown"
+      : anyStale ? "stale" : "pass";
+    const text =
+      state === "fail" ? "✕ independent check FAILED"
+      : state === "running" ? "checking…"
+      : state === "unknown" ? "— unverifiable"
+      : state === "stale" ? "✓ confirmed · re-check overdue"
+      : "✓ independently confirmed";
+    const title = gs.map((g) => `${g.label} (${g.cadence}${g.lastRun ? `, ${agoText(g.lastRun)}` : ", never run"}): ${g.proves}`).join("\n");
+    return { state, text, title, url: worstG.url };
+  };
+
   const vitals: Vital[] = [
     { name: "Accuracy", segs: [
       sv("Section-9 · meeting actions without a time", section9 ?? 0, lower(0.5, 25, 50), section9 != null),
       sv("Outcome drift · keyword↔structural", driftPct, lower(0.1, 1, 2), c?.outcome_keyword_mismatch_rate != null),
-    ] },
+    ], verify: vitalVerify(["accuracy_sentinel.yml", "legevent_reconcile.yml"]) },
     { name: "Completeness", segs: [
       sv("Bill completeness · records vs universe", completePct, higher(98, 99.99, 100), !!c && universe > 0),
       sv("History-vs-universe anomalies", anomalies, lower(0.5, 5, 20), !!c),
       sv("Patron coverage", patronPct, higher(98, 99.99, 100), !!c && written > 0),
       sv("Unclassified share · router blank", unclassPct, lower(8, 15, 25), !!h && total > 0),
-    ] },
+    ], verify: vitalVerify(["completeness_tripwire.yml"]) },
     { name: "Freshness", segs: [
       sv("Bill backend clock", billFreshH, lower(6, 12, 24), !!dataAsOf),
       sv("Calendar clock", calFreshH, lower(6, 12, 24), !!h?.calendarFreshness),
@@ -168,7 +198,7 @@ export function Health({ completeness, dataAsOf }: { completeness: Completeness 
       { label: "Circuit breaker", tone: !h ? "unknown" : breakerOk ? "good" : "danger" },
       sv("Write-time invariant violations", violations ?? 0, lower(0.5, 49, 60), violations != null),
       { label: "Active alerts", tone: !h ? "unknown" : critCount ? "danger" : warnCount ? "warn" : "good" },
-    ] },
+    ], verify: vitalVerify(["sustainability_audit.yml"]) },
   ];
 
   return (
@@ -194,41 +224,10 @@ export function Health({ completeness, dataAsOf }: { completeness: Completeness 
         )}
       </div>
 
-      {/* ── "Are we right?" — the 5-layer durability guard's INDEPENDENT verification (reconciliation vs
-            the MinutesBook, completeness vs LIS's own calendar), surfaced live from GitHub Actions
-            (verification_durability.md). Turns the CI-only green into a visible trust signal; an
-            unreachable API shows "—", never a fake pass. Layer 1 (the breaker) is the live chip above. ── */}
-      <h2 className="h">Are we right? · independent verification</h2>
-      {guards === null ? (
-        <p className="muted" style={{ marginBottom: 18 }}>Loading independent verification…</p>
-      ) : guards.length === 0 ? (
-        <p className="muted" style={{ marginBottom: 18 }}>Independent verification unavailable (GitHub API unreachable).</p>
-      ) : (
-        <div className="hl-verify panel">
-          {guards.map((g) => {
-            const txt = g.status === "pass" ? `✓ verified ${agoText(g.lastRun)}`
-              : g.status === "fail" ? `✕ FAILED ${agoText(g.lastRun)}`
-              : g.status === "running" ? "running…" : "—";
-            return (
-              <div key={g.key} className="hl-vrow">
-                <span className={`hl-vdot ${g.status}`} aria-hidden="true" />
-                <span className="hl-vlabel">{g.label}</span>
-                <span className="hl-vproves">{g.proves}</span>
-                {g.url ? (
-                  <a className={`hl-verstat ${g.status}${g.stale ? " stale" : ""}`} href={g.url} target="_blank" rel="noreferrer">
-                    {txt}{g.stale ? " · stale" : ""}
-                  </a>
-                ) : (
-                  <span className={`hl-verstat ${g.status}`}>{txt}</span>
-                )}
-              </div>
-            );
-          })}
-          <div className="hl-vfoot muted">
-            Live from GitHub Actions · a red or stale row means the independent check itself needs a look.
-          </div>
-        </div>
-      )}
+      {/* The old standalone "Are we right? · independent verification" panel was MERGED onto the at-a-glance
+          dials above (each donut now carries an "independently confirmed" trust line from the same guards) —
+          it read as a second data readout next to the gauges; on the dial it reads as "an outside source
+          agrees." See HealthVitals `verify` + `vitalVerify` above. */}
 
       {/* ── Upstream watchers (drift-canary GREEN-STATE): the five vocabulary monitors that catch LIS
             changing its own codes/shapes. They alert on drift; this shows the ALL-CLEAR too, so silence is
