@@ -109,7 +109,7 @@ Three items the owner flagged while reviewing the live Health + Calendar tabs. *
    the highlighted week-window (click a week / a day) drives the top view. **UI hurdle the owner named:**
    make it INTUITIVE that the monthly grid controls the weekly view (it serves two roles at once) — e.g. a
    visible "week band" highlight on the month + a subtle affordance that the month is a picker, not just a
-   display. **OWNER DECISIONS (2026-06-30, now building — PR #185):** (a) **layout = week view MAIN +
+   display. **✅ SHIPPED 2026-06-30 (PR #185).** **OWNER DECISIONS (2026-06-30):** (a) **layout = week view MAIN +
    compact month grid ALONGSIDE (a sidebar), NOT below** — the month gets *small* (dates + density dots
    only, no big cells/text; "no need to take up extra space"); (b) **dual selection in the month**: a 7-cell
    **week-band** highlight shows which week the big view is displaying AND a single **day-focus** marker

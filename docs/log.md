@@ -10,6 +10,20 @@ Append-only, reverse-chronological (newest at top). Each entry opens with `## [Y
 
 **Kinds:** `ingest` (new source/doc processed), `pr` (PR opened/merged/closed), `decision` (architectural or workflow), `lint` (wiki health-check pass), `session` (notable multi-hour working block), `post-mortem` (failure analysis), `milestone` (project-goal threshold crossed).
 
+## [2026-06-30] pr | #185 MERGED — Calendar week-view relayout (work-week columns + month selector)
+
+Owner relayout ([[design/ui_redesign_spec]] item 3): the 7-day week is now the PRIMARY module as COLUMNS
+(Mon–Fri visible together), empty weekend days shrink to 0.4fr ("pushed aside") + expand when they have
+meetings, meetings are compact (time + 2-line committee; bills behind a click dropdown), and a compact month
+grid alongside is a dual-cue selector — a 7-cell week band shows the displayed week + a ring marks the focused
+day; clicking a day jumps+focuses. One state (focusedDay) drives all three. Incorporated mid-build owner
+feedback ("I'm only seeing one day at a time — let me see the 5 work days, push the 2 weekend ones aside, bills
+in a dropdown"). TWO bot fold-in rounds (Gemini + CodeRabbit + Qodo): no-op-button a11y, stale stepMonth,
+out-of-range focus trap, busiest-WEEK default anchor, focus/cross + band/cross CSS-channel collisions, stable
+keys. Removed the now-dead month-grid CSS (kept .daycol* for the landing sliver). tsc/vite clean;
+preview-verified with live data (columns, weekend-aside, dropdown, week paging, mini jump+focus, crossover cues
+coexisting, 0 console errors).
+
 ## [2026-06-30] pr | #184 MERGED — surface off-season interim meetings (lift the session-end window pin)
 
 The new dial badge (#183) caught a real `completeness_tripwire` failure (2026-06-29 S10 interim committee
