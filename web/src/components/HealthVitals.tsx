@@ -13,7 +13,14 @@
 
 export type VTone = "good" | "warn" | "danger" | "unknown";
 export interface VitalSeg { label: string; tone: VTone; }
-export interface Vital { name: string; segs: VitalSeg[]; }
+// Optional INDEPENDENT-verification badge merged onto a donut (vision §7 trust layer). The 5-layer durability
+// guard cross-checks our self-reported numbers against OUTSIDE sources (LIS's own calendar / the MinutesBook);
+// surfacing its verdict ON the matching dial — instead of a separate panel — says "here's the rollup AND an
+// outside source agrees," without reading as a second data readout. `text` is the bare face; `title` (hover)
+// carries the source + cadence + last-run so the freshness no longer reads as "stale" on the surface.
+export type VVerify = "pass" | "fail" | "running" | "unknown" | "stale";
+export interface VitalVerify { state: VVerify; text: string; title: string; url: string | null; }
+export interface Vital { name: string; segs: VitalSeg[]; verify?: VitalVerify; }
 
 const STROKE: Record<VTone, string> = {
   good: "var(--ok)",
@@ -74,6 +81,13 @@ function Donut({ v }: { v: Vital }) {
       </div>
       <div className="hl-vname">{v.name}</div>
       <div className="hl-vstat" style={{ color: INK[overall] }}>{statusLine(segs)}</div>
+      {/* Independent-verification trust line (merged from the old "Are we right?" panel). Only on dials that
+          HAVE an outside cross-check; a link when the run is reachable, else plain text. Hover for the source. */}
+      {v.verify && (
+        v.verify.url
+          ? <a className={`hl-vverify ${v.verify.state}`} href={v.verify.url} target="_blank" rel="noreferrer" title={v.verify.title}>{v.verify.text}</a>
+          : <span className={`hl-vverify ${v.verify.state}`} title={v.verify.title}>{v.verify.text}</span>
+      )}
     </div>
   );
 }
