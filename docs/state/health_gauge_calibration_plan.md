@@ -1,24 +1,26 @@
 ---
-tags: [state, plan, web, health, active]
+tags: [state, plan, web, health, archived]
 updated: 2026-06-29
-status: active
+status: archived
 ---
 
 # Health gauge calibration — execution plan + live checklist
+
+> ✅ **DONE 2026-06-29 — merged in PR [#182](https://github.com/tucker2331-design/bill-tracker/pull/182)** (squash). P1 + P2 shipped; P3 deferred. One bot fold-in round (null-session false-green → hide-on-unknown; heuristic docs per Standard #1). Kept for the record; the lessons are in [[failures/assumptions_audit]] if any were generalized.
 
 Fixes the 3 findings from the `/code-review` of merged PR #181 (the Health observability long-tail).
 **Persisted here so it survives context compaction.** Ordered by effectiveness (impact ÷ effort·risk).
 Scope is entirely `web/src/` (front-end) — **do not touch `calendar_worker.py`, `structural_router.py`,
 `pages/`, or `tools/`**. Full rationale: [[testing/va_data_quality_audit]] + the review findings below.
 
-## STATUS (update as you go)
-- [ ] P1 — cadence-aware feed-skew bands (`web/src/views/Health.tsx`)
-- [ ] P2 — session-aware source-feed gauge (`web/src/data/health.ts` + `Health.tsx`)
-- [ ] P3 — DEFER (document only; do NOT implement)
-- [ ] tsc + vite build clean
-- [ ] preview-verified (Health tab, 0 console errors, feed-skew reads "in sync" green on live data)
-- [ ] PR opened · CodeRabbit + Qodo folded in · merged (squash) · branch deleted
-- [ ] brain write-back (log + current_status; flip this file to `status: archived`)
+## STATUS — all done
+- [x] P1 — cadence-aware feed-skew bands (`web/src/views/Health.tsx`)
+- [x] P2 — session-aware source-feed gauge (`web/src/data/health.ts` + `Health.tsx`)
+- [x] P3 — DEFERRED (documented in the PR; not implemented)
+- [x] tsc + vite build clean
+- [x] preview-verified (feed-skew green "in sync"; 0 console errors; source-feed gauge hidden when session unknown)
+- [x] PR #182 opened · 1 bot fold-in round · merged (squash) · branch deleted
+- [x] brain write-back (log + current_status; this file archived)
 
 Branch: `claude/health-gauge-calibration`
 

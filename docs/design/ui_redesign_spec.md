@@ -113,5 +113,19 @@ Three items the owner flagged while reviewing the live Health + Calendar tabs. *
    in the month jump the week-view to THAT day's week (vs only the week arrows moving it)? Should the
    week-view be the default landing for the Calendar tab, demoting the month grid? Relates to item 2 (the
    week view must be able to page into the future).
+4. **Timeline — show VETO + WHERE bills FAILED (design research needed).** Two related asks: (a) **visually
+   distinguish VETOED bills** on the timeline (the data already exists: `outcome === "vetoed"`), and (b)
+   **incorporate FAILURE into the pipeline geometry so you can see WHERE a bill died** — committee / floor /
+   crossover / governor — not just *that* it died. This **sharpens the 2026-06-23 "terminal stages should
+   BRANCH" note below** (died/failed + carried-over as terminal branches IN the spine, not the bottom
+   `died-row` footnote) and the **Floor-stage item (#5 above)** (a Floor node is a prerequisite for showing a
+   floor-stage death) — design all three together. **Design research required (owner flagged):** how to encode
+   terminal outcomes + stage-of-death in a pipeline/flow viz without clutter — review [[design/reading_notes]]
+   (Tufte data-ink / small multiples, Few popout-for-attention) + [[design/information_display]], and look at
+   flow/Sankey + funnel "where it dropped off" patterns; veto likely wants a reserved attention color (Few:
+   one meaning per color — `--o-vetoed` is already that). **Data check before designing:** `outcome` gives
+   signed/vetoed/dead/carried_over/awaiting_governor today, but "where it failed" needs the *stage of death*
+   (the last stage the bill structurally reached) — confirm that's derivable from `deriveStage` / the history
+   before committing to a geometry. A Timeline follow-up after Calendar + Health.
 
 See also [[design/information_display]], [[ideas/product_vision]], [[log]].

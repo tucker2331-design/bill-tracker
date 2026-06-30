@@ -10,6 +10,17 @@ Append-only, reverse-chronological (newest at top). Each entry opens with `## [Y
 
 **Kinds:** `ingest` (new source/doc processed), `pr` (PR opened/merged/closed), `decision` (architectural or workflow), `lint` (wiki health-check pass), `session` (notable multi-hour working block), `post-mortem` (failure analysis), `milestone` (project-goal threshold crossed).
 
+## [2026-06-29] pr | #182 MERGED — Health gauge calibration (cadence-aware feed-skew + session-aware source-feed)
+
+Folded the `/code-review` findings on #181 into fixes (P3 deferred). P1: the feed-skew chip's flat 3h/8h
+bands false-warned ~half of every normal cycle (bill backend 6h cron vs calendar ~15min) → bands now derive
+from `BILL_CADENCE_H` (ok ≤7h / warn ≤13h). P2: the source-feed (HISTORY.CSV blob age) gauge would
+false-danger the whole adjourned period (off-season the blob legitimately doesn't change) → `health.ts` reads
+`Sheet1!S1`, the gauge redlines only when ACTIVE, and **hides** when session state is unknown (BulletGraph has
+no neutral tone → an all-good band on unknown is a false-green; all 3 bots — CodeRabbit/Qodo/Gemini — flagged
+it). Both new heuristics documented with the assumes/breaks/fix triad (Standard #1). Plan was persisted at
+[[state/health_gauge_calibration_plan]] (now archived). One bot fold-in round; tsc/vite clean; preview-verified.
+
 ## [2026-06-29] pr | #181 MERGED — Health observability long-tail (canary green-state, alert/metric history, trends, source-feed freshness)
 
 **MERGED to main (squash) 2026-06-29** after TWO bot fold-in rounds (7 findings total; CodeRabbit's round-2
