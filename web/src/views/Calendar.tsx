@@ -50,16 +50,24 @@ function MeetingRow({ m, billMap, onOpen }: {
   const hasBills = m.bills.length > 0;
   const shown = all ? m.bills : m.bills.slice(0, BILL_CAP);
   const extra = m.bills.length - shown.length;
+  const head = (
+    <>
+      <span className="cal-mtg-top">
+        <span className={`cal-mtg-t${m.tba ? " tba" : ""}`}>{m.time}</span>
+        {hasBills && <span className="cal-mtg-n">{m.bills.length}{open ? " ▴" : " ▾"}</span>}
+      </span>
+      <span className="cal-mtg-c" style={{ color: side }}>{m.committee}</span>
+    </>
+  );
   return (
     <div className="cal-mtg" style={{ borderLeftColor: side }}>
-      <button className={`cal-mtg-h${hasBills ? " has" : ""}`} title={m.committee}
-        onClick={() => hasBills && setOpen((o) => !o)} aria-expanded={hasBills ? open : undefined}>
-        <span className="cal-mtg-top">
-          <span className={`cal-mtg-t${m.tba ? " tba" : ""}`}>{m.time}</span>
-          {hasBills && <span className="cal-mtg-n">{m.bills.length}{open ? " ▴" : " ▾"}</span>}
-        </span>
-        <span className="cal-mtg-c" style={{ color: side }}>{m.committee}</span>
-      </button>
+      {/* A real <button> only when there are bills to toggle; otherwise a plain <div> so screen-reader /
+          keyboard users aren't told it's interactive when it does nothing (Gemini #185). */}
+      {hasBills ? (
+        <button className="cal-mtg-h has" title={m.committee} onClick={() => setOpen((o) => !o)} aria-expanded={open}>{head}</button>
+      ) : (
+        <div className="cal-mtg-h" title={m.committee}>{head}</div>
+      )}
       {open && hasBills && (
         <div className="cal-bills">
           {shown.map((it) => {
@@ -170,7 +178,13 @@ export function Calendar({ bills, sessionCode, onOpen }: {
   // focus — only clicking a day does.
   const inRange = (mk: string) => mk >= cal.minKey.slice(0, 7) && mk <= cal.maxKey.slice(0, 7);
   const shiftYM = (delta: number): YM => { const d = new Date(miniMonth.y, miniMonth.m + delta, 1); return { y: d.getFullYear(), m: d.getMonth() }; };
-  const stepMonth = (delta: number) => setMiniMonth((cur) => cur ? shiftYM(delta) : cur);
+  // Compute from the updater's CURRENT value, not the closed-over miniMonth, so rapid clicks can't act on
+  // stale state (Gemini #185).
+  const stepMonth = (delta: number) => setMiniMonth((cur) => {
+    if (!cur) return cur;
+    const d = new Date(cur.y, cur.m + delta, 1);
+    return { y: d.getFullYear(), m: d.getMonth() };
+  });
   const monthFirst = new Date(miniMonth.y, miniMonth.m, 1);
   const monthGridStart = new Date(miniMonth.y, miniMonth.m, 1 - monthFirst.getDay());
   const monthCells = Array.from({ length: 42 }, (_, i) => addDays(monthGridStart, i));
@@ -248,7 +262,7 @@ export function Calendar({ bills, sessionCode, onOpen }: {
           </div>
           <div className="cal-mini-wk">{WEEKDAYS.map((w) => <div key={w} className="cal-mini-wkd">{w[0]}</div>)}</div>
           <div className="cal-mini-cells">
-            {monthCells.map((d, i) => {
+            {monthCells.map((d) => {
               const dk = dayKey(d);
               const out = d.getMonth() !== miniMonth.m;
               const ms = byDay.get(dk) ?? [];
@@ -256,7 +270,7 @@ export function Calendar({ bills, sessionCode, onOpen }: {
               const cls = ["mini-cell", out ? "out" : "", inWeek ? "band" : "", dk === focusedDay ? "focus" : "",
                 dk === todayKey ? "today" : "", dk === crossoverKey ? "cross" : "", ms.length ? "live" : ""].filter(Boolean).join(" ");
               return (
-                <button key={i} className={cls} onClick={() => setFocusedDay(dk)}
+                <button key={dk} className={cls} onClick={() => setFocusedDay(dk)}
                   aria-label={`${MONTHS[d.getMonth()]} ${d.getDate()}${ms.length ? `, ${ms.length} meetings` : ""}${inWeek ? " (shown week)" : ""}`}
                   aria-pressed={dk === focusedDay}>
                   <span className="mini-d">{d.getDate()}</span>
