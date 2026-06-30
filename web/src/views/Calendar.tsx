@@ -132,14 +132,20 @@ export function Calendar({ bills, sessionCode, onOpen }: {
   // opens onto live data, not an empty off-season week.
   useEffect(() => {
     if (!cal || focusedDay) return;
-    const counts = new Map<string, number>();
-    for (const [dk, ms] of cal.byDay) counts.set(dk.slice(0, 7), (counts.get(dk.slice(0, 7)) || 0) + ms.length);
-    let best = "", bestN = -1;
-    for (const [k, n] of counts) if (n > bestN) { bestN = n; best = k; }
-    const mk = best || todayKey.slice(0, 7);
-    const liveDays = [...cal.byDay.keys()].filter((k) => k.slice(0, 7) === mk).sort();
-    const pick = (crossoverKey && cal.byDay.get(crossoverKey)?.length && crossoverKey.slice(0, 7) === mk)
-      ? crossoverKey : liveDays[0] ?? `${mk}-01`;
+    // Anchor on the busiest WEEK (sum meetings over each Sun–Sat window), not just the busiest month, so the
+    // week view opens onto a full week rather than a sparse day in an otherwise-busy month (CodeRabbit #185).
+    const wkKey = (dk: string) => dayKey(weekStartOf(parseLisDate(dk) ?? new Date()));
+    const weekCounts = new Map<string, number>();
+    for (const [dk, ms] of cal.byDay) weekCounts.set(wkKey(dk), (weekCounts.get(wkKey(dk)) ?? 0) + ms.length);
+    let bestWeek = "", bestN = -1;
+    for (const [ws, n] of weekCounts) if (n > bestN) { bestN = n; bestWeek = ws; }
+    // Within that week, prefer the crossover day, else the busiest day.
+    let pick: string | null = (crossoverKey && cal.byDay.get(crossoverKey)?.length && wkKey(crossoverKey) === bestWeek) ? crossoverKey : null;
+    if (!pick) {
+      let bestDay = "", bestDayN = -1;
+      for (const [dk, ms] of cal.byDay) if (wkKey(dk) === bestWeek && ms.length > bestDayN) { bestDayN = ms.length; bestDay = dk; }
+      pick = bestDay || todayKey;
+    }
     setFocusedDay(pick);
   }, [cal, focusedDay, crossoverKey, todayKey]);
 
@@ -267,10 +273,13 @@ export function Calendar({ bills, sessionCode, onOpen }: {
               const out = d.getMonth() !== miniMonth.m;
               const ms = byDay.get(dk) ?? [];
               const inWeek = weekKeys.has(dk);
+              // A date outside the session range must NOT be pickable — focusing it would trap week paging,
+              // which clamps to [minKey, maxKey] (Qodo #185).
+              const dayInRange = dk >= cal.minKey && dk <= cal.maxKey;
               const cls = ["mini-cell", out ? "out" : "", inWeek ? "band" : "", dk === focusedDay ? "focus" : "",
                 dk === todayKey ? "today" : "", dk === crossoverKey ? "cross" : "", ms.length ? "live" : ""].filter(Boolean).join(" ");
               return (
-                <button key={dk} className={cls} onClick={() => setFocusedDay(dk)}
+                <button key={dk} className={cls} disabled={!dayInRange} onClick={() => setFocusedDay(dk)}
                   aria-label={`${MONTHS[d.getMonth()]} ${d.getDate()}${ms.length ? `, ${ms.length} meetings` : ""}${inWeek ? " (shown week)" : ""}`}
                   aria-pressed={dk === focusedDay}>
                   <span className="mini-d">{d.getDate()}</span>

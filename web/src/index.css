@@ -190,7 +190,7 @@ h2, h3 { margin: 0; }
 .cal-wcol { background: var(--surface); border-radius: var(--radius-sm); box-shadow: var(--shadow-sm); overflow: hidden; border-top: 3px solid transparent; min-width: 0; }
 .cal-wcol.empty { background: var(--surface-2); box-shadow: none; }
 .cal-wcol.aside { background: transparent; box-shadow: none; }   /* empty weekend, pushed to the side */
-.cal-wcol.focus { border-top-color: var(--accent); }            /* the picked day */
+.cal-wcol.focus { outline: 2px solid var(--accent); outline-offset: -2px; }  /* picked day — outline so it survives ON a crossover day (CodeRabbit #185) */
 .cal-wcol.cross { border-top-color: var(--o-vetoed); }
 .cal-wcol-h { display: flex; align-items: baseline; gap: 5px; padding: 6px var(--s2); background: var(--surface-2); }
 .cal-wcol.empty .cal-wcol-h, .cal-wcol.aside .cal-wcol-h { background: transparent; }
@@ -212,12 +212,14 @@ h2, h3 { margin: 0; }
 .cal-mini-wkd { text-align: center; font-size: 9px; font-weight: 700; color: var(--ink-faint); }
 .cal-mini-cells { display: grid; grid-template-columns: repeat(7, 1fr); gap: 1px; }
 .mini-cell { border: 0; background: transparent; border-radius: 5px; aspect-ratio: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 1px; cursor: pointer; padding: 0; }
-.mini-cell:hover { background: var(--surface-2); }
+.mini-cell:hover:not(:disabled) { background: var(--surface-2); }
+.mini-cell:disabled { cursor: default; opacity: .4; }        /* out of the session range — not pickable (Qodo #185) */
 .mini-cell.out .mini-d { color: var(--line-strong); }
 .mini-cell.band { background: var(--accent-soft); }          /* the 7-cell WEEK BAND = the week the big view shows */
 .mini-cell.focus { outline: 2px solid var(--accent); outline-offset: -2px; }  /* the picked day */
 .mini-cell.today .mini-d { color: var(--accent); font-weight: 800; }
-.mini-cell.cross { background: var(--o-vetoed-bg); }
+.mini-cell.cross { box-shadow: inset 0 0 0 1.5px var(--o-vetoed); }  /* ring, not bg, so the week band survives ON crossover (CodeRabbit #185) */
+.mini-cell.cross .mini-d { color: var(--o-vetoed); font-weight: 800; }
 .mini-d { font-size: 11px; font-weight: 700; color: var(--ink-soft); line-height: 1; }
 .mini-dots { display: inline-flex; gap: 1px; }
 .mini-dot { width: 3px; height: 3px; border-radius: 50%; }
