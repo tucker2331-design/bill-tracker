@@ -10,6 +10,20 @@ Append-only, reverse-chronological (newest at top). Each entry opens with `## [Y
 
 **Kinds:** `ingest` (new source/doc processed), `pr` (PR opened/merged/closed), `decision` (architectural or workflow), `lint` (wiki health-check pass), `session` (notable multi-hour working block), `post-mortem` (failure analysis), `milestone` (project-goal threshold crossed).
 
+## [2026-06-29] pr | #183 MERGED — merge "Are we right?" verification onto the dials
+
+Owner: the standalone "Are we right?" panel read as a second data readout next to the gauges ("isn't it just
+repeating info?") and its value (it's an INDEPENDENT cross-check vs LIS calendar / MinutesBook) didn't land.
+Removed the panel; each at-a-glance donut now carries a small "independently confirmed" trust line from the
+same guards (Accuracy ← sentinel+reconcile, Completeness ← completeness_tripwire, Stability ← sustainability,
+Freshness ← none). Source/cadence/last-run moved to the hover title + an aria-label (so the bare freshness
+stops reading as "stale"). One bot fold-in round (unverifiable-on-load-fail badge, a11y, Record<GuardState>
+typing). **Real signal surfaced:** the live Completeness badge shows ✕ FAILED — the 2026-06-29
+completeness_tripwire genuinely failed (a 2026-06-29 S10 interim committee meeting on LIS's calendar is absent
+from Sheet1). Root-caused to [[state/health_gauge_calibration_plan|the off-season window pin]] (see
+current_status / task) — same root as "Calendar shows nothing past May." Owner chose: surface interim
+meetings (bounded forward window) — that fix is next.
+
 ## [2026-06-29] pr | #182 MERGED — Health gauge calibration (cadence-aware feed-skew + session-aware source-feed)
 
 Folded the `/code-review` findings on #181 into fixes (P3 deferred). P1: the feed-skew chip's flat 3h/8h
