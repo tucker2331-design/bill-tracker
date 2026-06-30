@@ -55,6 +55,9 @@ function Donut({ v }: { v: Vital }) {
   const n = segs.length;
   const ok = segs.filter((s) => s.tone === "good").length;
   const overall = worst(segs);
+  // Expose the verification provenance to screen-readers + non-hover (touch) devices, not only the hover
+  // `title` (CodeRabbit #183). Flatten the multi-line title into one spoken sentence.
+  const vAria = v.verify ? `Independent verification — ${v.verify.text}. ${v.verify.title.replace(/\n/g, "; ")}` : undefined;
   const slot = 360 / n;
   const gap = n > 1 ? 22 : 0;            // degrees of breathing room between arcs (rounded caps eat ~14°)
   const dash = (C * (slot - gap)) / 360; // visible arc length per segment
@@ -85,8 +88,8 @@ function Donut({ v }: { v: Vital }) {
           HAVE an outside cross-check; a link when the run is reachable, else plain text. Hover for the source. */}
       {v.verify && (
         v.verify.url
-          ? <a className={`hl-vverify ${v.verify.state}`} href={v.verify.url} target="_blank" rel="noreferrer" title={v.verify.title}>{v.verify.text}</a>
-          : <span className={`hl-vverify ${v.verify.state}`} title={v.verify.title}>{v.verify.text}</span>
+          ? <a className={`hl-vverify ${v.verify.state}`} href={v.verify.url} target="_blank" rel="noreferrer" title={v.verify.title} aria-label={vAria}>{v.verify.text}</a>
+          : <span className={`hl-vverify ${v.verify.state}`} title={v.verify.title} aria-label={vAria}>{v.verify.text}</span>
       )}
     </div>
   );

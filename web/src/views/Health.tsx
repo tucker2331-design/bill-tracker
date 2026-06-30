@@ -4,7 +4,7 @@ import { BulletGraph } from "../components/BulletGraph";
 import { bandTone, type Band } from "../components/bands";
 import { HealthVitals, type Vital, type VitalSeg, type VitalVerify } from "../components/HealthVitals";
 import { loadHealth, type HealthData } from "../data/health";
-import { loadVerification, type GuardRun } from "../data/verification";
+import { loadVerification, type GuardRun, type GuardState } from "../data/verification";
 import { loadHistory, seriesFor, seriesForPct, type HistoryData } from "../data/history";
 
 // The operator / Health tab (vision §3f + §7): the trust signals the system ALREADY produces, as Few
@@ -154,11 +154,14 @@ export function Health({ completeness, dataAsOf }: { completeness: Completeness 
   // rolls up the guards that cross-check it against an OUTSIDE source (LIS calendar / MinutesBook); shows the
   // worst-of status, with the source + cadence + last-run in the HOVER title so the bare freshness no longer
   // reads as "stale" on the face. A category with no guard (Freshness) gets no badge; while guards load → none.
-  const VRANK: Record<string, number> = { pass: 0, unknown: 1, running: 2, fail: 3 };
+  const VRANK: Record<GuardState, number> = { pass: 0, unknown: 1, running: 2, fail: 3 };
   const vitalVerify = (keys: string[]): VitalVerify | undefined => {
     if (!guards) return undefined;                         // still loading → no badge yet
     const gs = guards.filter((g) => keys.includes(g.key));
-    if (gs.length === 0) return undefined;                 // no independent check for this category
+    // vitalVerify is only ever called with REAL guard keys, so an empty match means verification LOADED but
+    // returned nothing (GitHub Actions unreachable → guards === []). Show "— unverifiable" rather than drop
+    // the badge, which would falsely read as "this dial has no independent check" ("never pretend" — CodeRabbit #183).
+    if (gs.length === 0) return { state: "unknown", text: "— unverifiable", title: "Independent verification unavailable — couldn't reach GitHub Actions.", url: null };
     const worstG = gs.reduce((w, g) => (VRANK[g.status] > VRANK[w.status] ? g : w), gs[0]);
     const anyStale = gs.some((g) => g.stale && g.status === "pass");
     const state: VitalVerify["state"] =
