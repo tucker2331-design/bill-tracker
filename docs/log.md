@@ -10,6 +10,21 @@ Append-only, reverse-chronological (newest at top). Each entry opens with `## [Y
 
 **Kinds:** `ingest` (new source/doc processed), `pr` (PR opened/merged/closed), `decision` (architectural or workflow), `lint` (wiki health-check pass), `session` (notable multi-hour working block), `post-mortem` (failure analysis), `milestone` (project-goal threshold crossed).
 
+## [2026-06-30] pr | #184 MERGED — surface off-season interim meetings (lift the session-end window pin)
+
+The new dial badge (#183) caught a real `completeness_tripwire` failure (2026-06-29 S10 interim committee
+meeting absent from Sheet1) → root-caused to `compute_effective_scrape_end` pinning the worker's write-window
+at the session end off-season (treated the adjourned session as historical) — the SAME bug as "Calendar shows
+nothing past May." Owner chose: surface interim meetings, bounded. Fix (calendar_worker.py): new live
+OFF-SEASON branch extends the window to `today + INTERIM_FORWARD_WINDOW` (45d, bounded — can't reach a
+far-future session); `live_run=False` keeps pinned replays reproducible. The Schedule-loop meeting filter +
+the agenda-fetch gate now bound on `effective_scrape_end` (no-op in-season). One bot fold-in round (CodeRabbit
++ Qodo): the window drop is now non-silent — a COMMITTEE meeting BEYOND the horizon increments
+`schedule_beyond_window` + raises a WARN, the runtime validation that the 45d horizon isn't too short
+(Standard #1, audit #9). New `test_compute_effective_scrape_end.py` (6 golden cases). Production proof: the
+completeness tripwire goes green next run + the Calendar renders interim/future meetings. See
+[[failures/assumptions_audit]] (the window/completeness-mismatch lesson).
+
 ## [2026-06-29] pr | #183 MERGED — merge "Are we right?" verification onto the dials
 
 Owner: the standalone "Are we right?" panel read as a second data readout next to the gauges ("isn't it just
