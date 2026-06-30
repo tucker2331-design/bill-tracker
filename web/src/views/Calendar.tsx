@@ -5,10 +5,12 @@ import { useScope, useStarred } from "../state/tracking";
 import { relativeTime } from "../components/common";
 import { parseLisDate, dayKey } from "../data/dates";
 
-// The full Calendar — the "by time" lens. A month grid (small multiples of days, per the reading:
-// Tufte small multiples + Munzner time=position; design/reading_notes "Calendar UI patterns") for the
-// macro shape, plus a day-agenda column for the micro read — one geometry, today + the crossover seam
-// the only loud cells. The landing's CalendarSliver is the "today" window into the same idea.
+// The full Calendar — the "by time" lens, relaid out (owner 2026-06-30): a large 7-DAY WEEK VIEW is the
+// primary module (events listed out per day), with a COMPACT month grid ALONGSIDE it as a dual-cue
+// selector. One piece of state — `focusedDay` — drives everything: the week view shows that day's week;
+// the mini month highlights that whole week (a 7-cell "week band") AND marks the focused day, so clicking
+// any day BOTH jumps the week and focuses it. The landing's CalendarSliver is the "today" window into the
+// same data. (design/ui_redesign_spec 2026-06-30 item 3.)
 const MONTHS = ["January", "February", "March", "April", "May", "June",
   "July", "August", "September", "October", "November", "December"];
 const WEEKDAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
@@ -17,41 +19,56 @@ type YM = { y: number; m: number }; // m is 0-indexed
 
 const ymOf = (key: string): YM => ({ y: +key.slice(0, 4), m: +key.slice(5, 7) - 1 });
 const ymKey = (ym: YM) => `${ym.y}-${String(ym.m + 1).padStart(2, "0")}`;
+const addDays = (d: Date, n: number) => { const x = new Date(d); x.setDate(x.getDate() + n); return x; };
+const weekStartOf = (d: Date) => addDays(d, -d.getDay()); // Sunday on/before d
 const BILL_CAP = 16; // floor sessions can carry a few hundred bills — show a sample, expand on demand
 
-// A quiet density cue per day cell: the count + up to a few chamber-tinted dots (Senate indigo / House
-// teal / other grey). Position/number carry the data; color stays muted (Munzner: hue is the redundant cue).
-function MeetingDots({ meetings }: { meetings: Meeting[] }) {
-  const dots = meetings.slice(0, 6);
+// A quiet density cue per mini-month day: up to a few chamber-tinted dots (Senate indigo / House teal /
+// other grey). Position/number carry the data; color stays muted (Munzner: hue is the redundant cue).
+function DensityDots({ meetings }: { meetings: Meeting[] }) {
+  const dots = meetings.slice(0, 3);
   return (
-    <div className="cell-meet">
-      <span className="cell-n">{meetings.length}</span>
-      <span className="cell-dots">
-        {dots.map((m, i) => (
-          <span key={i} className="dot" style={{
-            background: m.chamber === "Senate" ? "var(--senate)" : m.chamber === "House" ? "var(--house)" : "var(--ink-faint)",
-          }} />
-        ))}
-      </span>
-    </div>
+    <span className="mini-dots">
+      {dots.map((m, i) => (
+        <span key={i} className="mini-dot" style={{
+          background: m.chamber === "Senate" ? "var(--senate)" : m.chamber === "House" ? "var(--house)" : "var(--ink-faint)",
+        }} />
+      ))}
+    </span>
   );
 }
 
+// A COMPACT meeting card: time + committee (clamped to 2 lines), with the bill list hidden behind a
+// click-to-expand dropdown (owner 2026-06-30 — inline bills made each day too tall to see the week). The
+// full committee name is the hover title; clicking expands the bills below.
 function MeetingRow({ m, billMap, onOpen }: {
   m: Meeting; billMap: Map<string, Bill>; onOpen: (b: Bill) => void;
 }) {
-  const [expanded, setExpanded] = useState(false);
+  const [open, setOpen] = useState(false);
+  const [all, setAll] = useState(false);
   const side = m.chamber === "Senate" ? "var(--senate)" : m.chamber === "House" ? "var(--house)" : "var(--ink-faint)";
-  const shown = expanded ? m.bills : m.bills.slice(0, BILL_CAP);
+  const hasBills = m.bills.length > 0;
+  const shown = all ? m.bills : m.bills.slice(0, BILL_CAP);
   const extra = m.bills.length - shown.length;
+  const head = (
+    <>
+      <span className="cal-mtg-top">
+        <span className={`cal-mtg-t${m.tba ? " tba" : ""}`}>{m.time}</span>
+        {hasBills && <span className="cal-mtg-n">{m.bills.length}{open ? " ▴" : " ▾"}</span>}
+      </span>
+      <span className="cal-mtg-c" style={{ color: side }}>{m.committee}</span>
+    </>
+  );
   return (
     <div className="cal-mtg" style={{ borderLeftColor: side }}>
-      <div className="cal-mtg-h">
-        <span className={`cal-mtg-t${m.tba ? " tba" : ""}`}>{m.time}</span>
-        <span className="cal-mtg-c" style={{ color: side }}>{m.committee}</span>
-        {m.bills.length > 0 && <span className="cal-mtg-n">{m.bills.length}</span>}
-      </div>
-      {m.bills.length > 0 && (
+      {/* A real <button> only when there are bills to toggle; otherwise a plain <div> so screen-reader /
+          keyboard users aren't told it's interactive when it does nothing (Gemini #185). */}
+      {hasBills ? (
+        <button className="cal-mtg-h has" title={m.committee} onClick={() => setOpen((o) => !o)} aria-expanded={open}>{head}</button>
+      ) : (
+        <div className="cal-mtg-h" title={m.committee}>{head}</div>
+      )}
+      {open && hasBills && (
         <div className="cal-bills">
           {shown.map((it) => {
             const b = billMap.get(it.bill);
@@ -61,7 +78,7 @@ function MeetingRow({ m, billMap, onOpen }: {
               <span key={it.bill} className="cal-bchip" title={it.action}>{it.bill}</span>
             );
           })}
-          {extra > 0 && <button className="cal-more" onClick={() => setExpanded(true)}>+{extra} more</button>}
+          {extra > 0 && <button className="cal-more" onClick={() => setAll(true)}>+{extra} more</button>}
         </div>
       )}
     </div>
@@ -96,8 +113,6 @@ export function Calendar({ bills, sessionCode, onOpen }: {
     if (scope === "full") return cal.byDay;
     const out = new Map<string, Meeting[]>();
     for (const [dk, ms] of cal.byDay) {
-      // Keep meetings that touch a tracked bill, and within each show ONLY the tracked bills — otherwise a
-      // floor session kept for one tracked bill would dump its whole ~300-bill docket.
       const kept = ms
         .filter((m) => m.bills.some((b) => starred.has(b.bill)))
         .map((m) => ({ ...m, bills: m.bills.filter((b) => starred.has(b.bill)) }));
@@ -109,31 +124,36 @@ export function Calendar({ bills, sessionCode, onOpen }: {
   const crossoverKey = CROSSOVER_BY_SESSION[sessionCode] ?? null;
   const todayKey = dayKey(new Date());
 
-  const [month, setMonth] = useState<YM | null>(null);
-  const [selected, setSelected] = useState<string | null>(null);
+  const [focusedDay, setFocusedDay] = useState<string | null>(null);
+  const [miniMonth, setMiniMonth] = useState<YM | null>(null);
 
-  // Default landing month: the busiest month (most meetings) so the user opens onto live data, not an
-  // empty off-season month. Computed once from the unfiltered calendar for a stable anchor.
+  // Default focus: a meaningful day in the busiest month (crossover if it lives there + is non-empty, else
+  // the first day with meetings) — computed from the UNFILTERED calendar for a stable anchor, so the view
+  // opens onto live data, not an empty off-season week.
   useEffect(() => {
-    if (!cal || month) return;
-    const counts = new Map<string, number>();
-    for (const [dk, ms] of cal.byDay) counts.set(dk.slice(0, 7), (counts.get(dk.slice(0, 7)) || 0) + ms.length);
-    let best = "", bestN = -1;
-    for (const [k, n] of counts) if (n > bestN) { bestN = n; best = k; }
-    setMonth(best ? ymOf(best + "-01") : { y: new Date().getFullYear(), m: new Date().getMonth() });
-  }, [cal, month]);
+    if (!cal || focusedDay) return;
+    // Anchor on the busiest WEEK (sum meetings over each Sun–Sat window), not just the busiest month, so the
+    // week view opens onto a full week rather than a sparse day in an otherwise-busy month (CodeRabbit #185).
+    const wkKey = (dk: string) => dayKey(weekStartOf(parseLisDate(dk) ?? new Date()));
+    const weekCounts = new Map<string, number>();
+    for (const [dk, ms] of cal.byDay) weekCounts.set(wkKey(dk), (weekCounts.get(wkKey(dk)) ?? 0) + ms.length);
+    let bestWeek = "", bestN = -1;
+    for (const [ws, n] of weekCounts) if (n > bestN) { bestN = n; bestWeek = ws; }
+    // Within that week, prefer the crossover day, else the busiest day.
+    let pick: string | null = (crossoverKey && cal.byDay.get(crossoverKey)?.length && wkKey(crossoverKey) === bestWeek) ? crossoverKey : null;
+    if (!pick) {
+      let bestDay = "", bestDayN = -1;
+      for (const [dk, ms] of cal.byDay) if (wkKey(dk) === bestWeek && ms.length > bestDayN) { bestDayN = ms.length; bestDay = dk; }
+      pick = bestDay || todayKey;
+    }
+    setFocusedDay(pick);
+  }, [cal, focusedDay, crossoverKey, todayKey]);
 
-  // When the month changes, auto-select a meaningful day for the agenda (crossover if it lives here and
-  // is non-empty, else the first day with meetings) — micro + macro visible together.
+  // The mini month follows the focused day (so a week-arrow page or a Today/Crossover jump re-centers the
+  // mini), but stays independently browsable between focus changes via its own arrows.
   useEffect(() => {
-    if (!month) return;
-    const mk = ymKey(month);
-    if (selected && selected.slice(0, 7) === mk && (byDay.get(selected)?.length)) return; // keep a valid pick
-    const daysHere = [...byDay.keys()].filter((k) => k.slice(0, 7) === mk).sort();
-    const pick = (crossoverKey && byDay.get(crossoverKey)?.length && crossoverKey.slice(0, 7) === mk)
-      ? crossoverKey : daysHere[0] ?? null;
-    setSelected(pick);
-  }, [month, byDay, crossoverKey, selected]);
+    if (focusedDay) setMiniMonth(ymOf(focusedDay));
+  }, [focusedDay]);
 
   if (error) return (
     <p className="center-msg" style={{ color: "var(--stale)" }}>
@@ -141,100 +161,138 @@ export function Calendar({ bills, sessionCode, onOpen }: {
       <span className="muted">The Mastermind DB sheet (Sheet1) must be link-readable for gviz.</span>
     </p>
   );
-  if (!cal || !month) return <p className="center-msg">Loading the session calendar…</p>;
+  if (!cal || !focusedDay || !miniMonth) return <p className="center-msg">Loading the session calendar…</p>;
 
   const fresh = relativeTime(cal.dataAsOf);
-  const monthMeetings = [...byDay.keys()].filter((k) => k.slice(0, 7) === ymKey(month))
-    .reduce((n, k) => n + (byDay.get(k)?.length ?? 0), 0);
+  const focusedDate = parseLisDate(focusedDay) ?? new Date();
+  const weekStart = weekStartOf(focusedDate);
+  const weekDays = Array.from({ length: 7 }, (_, i) => addDays(weekStart, i));
+  const weekKeys = new Set(weekDays.map(dayKey));
 
-  // 6×7 grid starting on the Sunday on/before the 1st.
-  const first = new Date(month.y, month.m, 1);
-  const gridStart = new Date(month.y, month.m, 1 - first.getDay());
-  const cells = Array.from({ length: 42 }, (_, i) => {
-    const d = new Date(gridStart); d.setDate(gridStart.getDate() + i); return d;
-  });
+  // Week nav, clamped to the data range so we never page into an empty void beyond the session.
+  const prevKey = dayKey(addDays(focusedDate, -7));
+  const nextKey = dayKey(addDays(focusedDate, 7));
+  const canPrev = prevKey >= cal.minKey;
+  const canNext = nextKey <= cal.maxKey;
+  const shiftWeek = (delta: number) => {
+    const k = dayKey(addDays(focusedDate, delta * 7));
+    if (k >= cal.minKey && k <= cal.maxKey) setFocusedDay(k);
+  };
+  const jumpTo = (key: string | null) => { if (key) setFocusedDay(key); };
 
+  // Mini-month grid (compact): 6×7 from the Sunday on/before the 1st. Browsing the mini does NOT change the
+  // focus — only clicking a day does.
   const inRange = (mk: string) => mk >= cal.minKey.slice(0, 7) && mk <= cal.maxKey.slice(0, 7);
-  // Normalize a month shift via Date so the prev/next GUARDS roll over years correctly. Keying
-  // {m: month.m ± 1} directly yields invalid "2026-00" / "2026-13" at Jan/Dec (Qodo HIGH). Mirrors step().
-  const shiftYM = (delta: number): YM => { const d = new Date(month.y, month.m + delta, 1); return { y: d.getFullYear(), m: d.getMonth() }; };
-  const step = (delta: number) => setMonth((cur) => {
+  const shiftYM = (delta: number): YM => { const d = new Date(miniMonth.y, miniMonth.m + delta, 1); return { y: d.getFullYear(), m: d.getMonth() }; };
+  // Compute from the updater's CURRENT value, not the closed-over miniMonth, so rapid clicks can't act on
+  // stale state (Gemini #185).
+  const stepMonth = (delta: number) => setMiniMonth((cur) => {
     if (!cur) return cur;
-    const d = new Date(cur.y, cur.m + delta, 1); return { y: d.getFullYear(), m: d.getMonth() };
+    const d = new Date(cur.y, cur.m + delta, 1);
+    return { y: d.getFullYear(), m: d.getMonth() };
   });
-  const jumpTo = (key: string | null) => { if (key) setMonth(ymOf(key)); };
+  const monthFirst = new Date(miniMonth.y, miniMonth.m, 1);
+  const monthGridStart = new Date(miniMonth.y, miniMonth.m, 1 - monthFirst.getDay());
+  const monthCells = Array.from({ length: 42 }, (_, i) => addDays(monthGridStart, i));
 
-  const selMeetings = selected ? (byDay.get(selected) ?? []) : [];
+  const weekLabel = `${weekStart.toLocaleDateString("en-US", { month: "short", day: "numeric" })} – ${addDays(weekStart, 6).toLocaleDateString("en-US", { month: "short", day: "numeric" })}`;
+  const weekMeetingCount = weekDays.reduce((n, d) => n + (byDay.get(dayKey(d))?.length ?? 0), 0);
 
   return (
     <div>
       <div className="cal-top">
         <div className="cal-nav">
-          <button className="cal-step" onClick={() => step(-1)} disabled={!inRange(ymKey(shiftYM(-1)))} aria-label="Previous month">‹</button>
-          <h2 className="cal-title">{MONTHS[month.m]} {month.y}</h2>
-          <button className="cal-step" onClick={() => step(1)} disabled={!inRange(ymKey(shiftYM(1)))} aria-label="Next month">›</button>
-          <span className="muted cal-count">{monthMeetings.toLocaleString()} meeting{monthMeetings === 1 ? "" : "s"}{scope === "tracking" ? " · tracked" : ""}</span>
+          <button className="cal-step" onClick={() => shiftWeek(-1)} disabled={!canPrev} aria-label="Previous week">‹</button>
+          <h2 className="cal-title">{weekLabel}</h2>
+          <button className="cal-step" onClick={() => shiftWeek(1)} disabled={!canNext} aria-label="Next week">›</button>
+          <span className="muted cal-count">{weekMeetingCount.toLocaleString()} meeting{weekMeetingCount === 1 ? "" : "s"} this week{scope === "tracking" ? " · tracked" : ""}</span>
         </div>
         <div className="cal-actions">
           {crossoverKey && <button className="cal-jump cross" onClick={() => jumpTo(crossoverKey)}>⚑ Crossover</button>}
-          {inRange(todayKey.slice(0, 7)) && <button className="cal-jump" onClick={() => jumpTo(todayKey)}>Today</button>}
+          {todayKey >= cal.minKey && todayKey <= cal.maxKey && <button className="cal-jump" onClick={() => jumpTo(todayKey)}>Today</button>}
           <span className="trust" style={{ marginLeft: "auto" }}>
             <span className={`pill ${fresh.stale ? "warn" : "good"}`} title={cal.dataAsOf?.toISOString() ?? ""}>● Calendar as of {fresh.text}</span>
           </span>
         </div>
       </div>
 
-      <div className="cal-cols">
-        <div className="calgrid panel">
-          <div className="cal-wk">{WEEKDAYS.map((w) => <div key={w} className="cal-wkd">{w}</div>)}</div>
-          <div className="cal-cells">
-            {cells.map((d, i) => {
-              const dk = dayKey(d);
-              const out = d.getMonth() !== month.m;
-              const ms = byDay.get(dk) ?? [];
-              const isToday = dk === todayKey;
-              const isCross = dk === crossoverKey;
-              const weekend = d.getDay() === 0 || d.getDay() === 6;
-              const live = ms.length > 0;
-              const cls = ["cell", out ? "out" : "", weekend ? "wknd" : "", isToday ? "today" : "",
-                isCross ? "cross" : "", live ? "live" : "", selected === dk ? "sel" : ""].filter(Boolean).join(" ");
-              return (
-                <div key={i} className={cls}
-                  onClick={() => live && setSelected(dk)}
-                  role={live ? "button" : undefined} tabIndex={live ? 0 : undefined}
-                  onKeyDown={(e) => { if (live && (e.key === "Enter" || e.key === " ")) { e.preventDefault(); setSelected(dk); } }}
-                  aria-label={live ? `${MONTHS[d.getMonth()]} ${d.getDate()}, ${ms.length} meetings` : undefined}>
-                  <div className="cell-d">{d.getDate()}</div>
-                  {isCross && <div className="cell-cross">CROSSOVER</div>}
-                  {live && <MeetingDots meetings={ms} />}
+      <div className="cal-week-layout">
+        {/* PRIMARY: the work week as COLUMNS so Mon–Fri are visible together (owner 2026-06-30). An empty
+            weekend day shrinks to 0.4fr — "pushed to the side" — and expands to a full column when it has
+            meetings (rare). Meetings are compact (bills behind a dropdown), so a day's column stays short. */}
+        <div className="cal-week" style={{
+          gridTemplateColumns: weekDays.map((d) => {
+            const wknd = d.getDay() === 0 || d.getDay() === 6;
+            const has = (byDay.get(dayKey(d))?.length ?? 0) > 0;
+            // Readable min width so work-day columns never crush; the week scrolls horizontally if the
+            // viewport is too narrow to fit them (you still see ~5 work days, then scroll for the rest).
+            return wknd && !has ? "minmax(40px,0.4fr)" : "minmax(116px,1fr)";
+          }).join(" "),
+        }}>
+          {weekDays.map((d) => {
+            const dk = dayKey(d);
+            const ms = byDay.get(dk) ?? [];
+            const isToday = dk === todayKey;
+            const isCross = dk === crossoverKey;
+            const isFocus = dk === focusedDay;
+            const wknd = d.getDay() === 0 || d.getDay() === 6;
+            const aside = wknd && ms.length === 0;
+            const cls = ["cal-wcol", isToday ? "today" : "", isCross ? "cross" : "", isFocus ? "focus" : "",
+              ms.length ? "live" : "empty", aside ? "aside" : ""].filter(Boolean).join(" ");
+            return (
+              <div key={dk} className={cls}>
+                <div className="cal-wcol-h">
+                  <span className="cal-wcol-dow">{WEEKDAYS[d.getDay()]}</span>
+                  <span className="cal-wcol-date">{d.getDate()}</span>
+                  {isToday && <span className="cal-wcol-tag today" title="Today">●</span>}
+                  {isCross && <span className="cal-wcol-tag cross" title="Crossover deadline">⚑</span>}
+                  {ms.length > 0 && <span className="cal-wcol-n">{ms.length}</span>}
                 </div>
+                <div className="cal-wcol-body">
+                  {ms.length === 0
+                    ? <div className="cal-wcol-empty">{aside ? "" : "—"}</div>
+                    : ms.map((m, i) => <MeetingRow key={i} m={m} billMap={billMap} onOpen={onOpen} />)}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+
+        {/* SELECTOR: compact month grid — dates + density dots only. A 7-cell WEEK BAND shows the week the
+            big view is displaying; a ring marks the focused day. Click any day to jump+focus. */}
+        <aside className="cal-mini">
+          <div className="cal-mini-nav">
+            <button className="cal-mini-step" onClick={() => stepMonth(-1)} disabled={!inRange(ymKey(shiftYM(-1)))} aria-label="Previous month">‹</button>
+            <span className="cal-mini-title">{MONTHS[miniMonth.m].slice(0, 3)} {miniMonth.y}</span>
+            <button className="cal-mini-step" onClick={() => stepMonth(1)} disabled={!inRange(ymKey(shiftYM(1)))} aria-label="Next month">›</button>
+          </div>
+          <div className="cal-mini-wk">{WEEKDAYS.map((w) => <div key={w} className="cal-mini-wkd">{w[0]}</div>)}</div>
+          <div className="cal-mini-cells">
+            {monthCells.map((d) => {
+              const dk = dayKey(d);
+              const out = d.getMonth() !== miniMonth.m;
+              const ms = byDay.get(dk) ?? [];
+              const inWeek = weekKeys.has(dk);
+              // A date outside the session range must NOT be pickable — focusing it would trap week paging,
+              // which clamps to [minKey, maxKey] (Qodo #185).
+              const dayInRange = dk >= cal.minKey && dk <= cal.maxKey;
+              const cls = ["mini-cell", out ? "out" : "", inWeek ? "band" : "", dk === focusedDay ? "focus" : "",
+                dk === todayKey ? "today" : "", dk === crossoverKey ? "cross" : "", ms.length ? "live" : ""].filter(Boolean).join(" ");
+              return (
+                <button key={dk} className={cls} disabled={!dayInRange} onClick={() => setFocusedDay(dk)}
+                  aria-label={`${MONTHS[d.getMonth()]} ${d.getDate()}${ms.length ? `, ${ms.length} meetings` : ""}${inWeek ? " (shown week)" : ""}`}
+                  aria-pressed={dk === focusedDay}>
+                  <span className="mini-d">{d.getDate()}</span>
+                  {ms.length > 0 && <DensityDots meetings={ms} />}
+                </button>
               );
             })}
           </div>
-        </div>
-
-        <div className="calagenda daycol">
-          {selected ? (
-            <>
-              <div className="dchead">
-                <div className="dow">{parseLisDate(selected)?.toLocaleDateString("en-US", { weekday: "long" })}</div>
-                <div className="dnum">{parseLisDate(selected)?.toLocaleDateString("en-US", { month: "short", day: "numeric" })}</div>
-              </div>
-              {selected === crossoverKey && <div className="cal-crossbar">⚑ Crossover deadline — last day to act in the chamber of origin.</div>}
-              <div className="dcbody">
-                {selMeetings.length === 0 ? (
-                  <div className="dcempty">No meetings this day.</div>
-                ) : selMeetings.map((m, i) => <MeetingRow key={i} m={m} billMap={billMap} onOpen={onOpen} />)}
-              </div>
-            </>
-          ) : (
-            <div className="dcempty" style={{ padding: "var(--s7) var(--s4)" }}>
-              {scope === "tracking"
-                ? "No meetings for your tracked bills this month. Star bills, or switch to Full GA."
-                : "Select a day to see its meetings."}
-            </div>
-          )}
-        </div>
+          <div className="cal-mini-legend muted">
+            <span><span className="swatch band" /> shown week</span>
+            <span><span className="swatch focus" /> picked day</span>
+          </div>
+        </aside>
       </div>
 
       <p className="muted cal-legend">

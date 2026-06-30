@@ -109,9 +109,14 @@ Three items the owner flagged while reviewing the live Health + Calendar tabs. *
    the highlighted week-window (click a week / a day) drives the top view. **UI hurdle the owner named:**
    make it INTUITIVE that the monthly grid controls the weekly view (it serves two roles at once) — e.g. a
    visible "week band" highlight on the month + a subtle affordance that the month is a picker, not just a
-   display. **Open questions to confirm when we build it** (noted, not blocking): does clicking a single DAY
-   in the month jump the week-view to THAT day's week (vs only the week arrows moving it)? Should the
-   week-view be the default landing for the Calendar tab, demoting the month grid? Relates to item 2 (the
+   display. **OWNER DECISIONS (2026-06-30, now building — PR #185):** (a) **layout = week view MAIN +
+   compact month grid ALONGSIDE (a sidebar), NOT below** — the month gets *small* (dates + density dots
+   only, no big cells/text; "no need to take up extra space"); (b) **dual selection in the month**: a 7-cell
+   **week-band** highlight shows which week the big view is displaying AND a single **day-focus** marker
+   (dot/ring) shows the picked day — clicking a day BOTH jumps the week view to that day's week AND focuses
+   that day (owner: "have it do both… a single highlight and then a 7-piece highlight"); back/forward arrows
+   page the week. If the dual-cue proves confusing, fall back to arrows-only — but the dual-cue is the goal.
+   Relates to item 2 (the
    week view must be able to page into the future).
 4. **Timeline — show VETO + WHERE bills FAILED (design research needed).** Two related asks: (a) **visually
    distinguish VETOED bills** on the timeline (the data already exists: `outcome === "vetoed"`), and (b)
