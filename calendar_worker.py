@@ -4063,6 +4063,12 @@ def run_calendar_update():
         # PR-C7.1j: secondary split-action rows that inherited their meeting's
         # time+committee from a same-(Bill,Date) resolved sibling.
         "sibling_inherited": 0,
+        # PR #184 (off-season interim window): COMMITTEE Schedule meetings dropped because they fall BEYOND
+        # the effective scrape window's upper bound. This is the runtime check that validates the
+        # INTERIM_FORWARD_WINDOW horizon isn't too short (Standard #1): a non-zero count means a committee
+        # meeting was past the horizon — a potential hidden meeting — and a WARN fires alongside, so the
+        # window drop is never silent (pre-push audit #9 / Standard #4).
+        "schedule_beyond_window": 0,
         # Health-observability: drift-canary GREEN-STATE. The five upstream-vocabulary
         # canaries (status grouping / governor codes / refid shapes / schedule types /
         # reference types) already ALERT on drift, but they emit nothing when clean — so
@@ -5006,9 +5012,26 @@ def run_calendar_update():
                     # Upper bound is effective_scrape_end (NOT test_end_date) so OFF-SEASON interim meetings
                     # past the session end are kept and surfaced (owner 2026-06-29). In-season this is a
                     # NO-OP — effective_scrape_end == test_end_date while the session is live — so it only
-                    # widens off-season. Mirrors the final in_window write-gate, which already uses
-                    # effective_scrape_end (the two upper bounds must agree or a kept meeting gets re-dropped).
-                    if not (test_start_date <= meeting_date <= effective_scrape_end): continue
+                    # widens off-season. Mirrors the final in_window write-gate (the two upper bounds must agree
+                    # or a kept meeting gets re-dropped).
+                    if not (pd.notna(meeting_date) and test_start_date <= meeting_date <= effective_scrape_end):
+                        # NON-SILENT drop (pre-push audit #9 / Standard #4). A COMMITTEE meeting BEYOND the
+                        # upper bound is a potential HIDDEN interim meeting — the runtime validation that the
+                        # 45d INTERIM_FORWARD_WINDOW horizon isn't too short (Standard #1). Count it + raise a
+                        # deduped WARN so it surfaces here, not only when the weekly completeness tripwire fails.
+                        # (Pre-window drops — old meetings before the session start — are expected, not counted.)
+                        if pd.notna(meeting_date) and meeting_date > effective_scrape_end:
+                            source_miss_counts["schedule_beyond_window"] = source_miss_counts.get("schedule_beyond_window", 0) + 1
+                            if str(meeting.get('ScheduleType', '')).strip() == "Committee":
+                                push_system_alert(
+                                    f"Committee meeting {meeting_date:%Y-%m-%d} is beyond the scrape window "
+                                    f"(upper bound {effective_scrape_end:%Y-%m-%d}) — a potential hidden interim "
+                                    f"meeting. If real, raise INTERIM_FORWARD_WINDOW (currently "
+                                    f"{INTERIM_FORWARD_WINDOW.days}d).",
+                                    status="WARN", category="DATA_ANOMALY", severity="WARN",
+                                    dedup_key=f"schedule_beyond_window::{meeting_date:%Y-%m-%d}",
+                                )
+                        continue
                     date_str = meeting_date.strftime('%Y-%m-%d')
                     raw_owner_name = str(meeting.get('OwnerName', '')).strip()
                     # Normalize whitespace: "House  Convenes" -> "house convenes"
@@ -5121,7 +5144,7 @@ def run_calendar_update():
                     combined_bills = set()
                     dlq_flag = ""
                     
-                    if agenda_url and not is_cancelled and (scrape_start <= meeting_date <= scrape_end):
+                    if agenda_url and not is_cancelled and (scrape_start <= meeting_date <= effective_scrape_end):
                         # Speed audit: a meeting older than the settle window is
                         # immutable -> serve its bills from Agenda_Cache and skip
                         # the fetch+PDF-parse. Recent/future meetings ALWAYS re-
