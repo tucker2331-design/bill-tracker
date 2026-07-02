@@ -50,17 +50,21 @@ function MeetingRow({ m, billMap, onOpen }: {
   const hasBills = m.bills.length > 0;
   const shown = all ? m.bills : m.bills.slice(0, BILL_CAP);
   const extra = m.bills.length - shown.length;
+  // A FLOOR session marker (chamber convening / recessing / adjourning) is session context, not a committee
+  // meeting the lobbyist tracks — render it quiet + centered + uppercase, distinct by FORM, not a colored bar
+  // (owner 2026-06-30). It keeps the bill dropdown because a convening carries the day's floor calendar.
+  const isFloor = m.kind === "floor";
   const head = (
     <>
       <span className="cal-mtg-top">
         <span className={`cal-mtg-t${m.tba ? " tba" : ""}`}>{m.time}</span>
         {hasBills && <span className="cal-mtg-n">{m.bills.length}{open ? " ▴" : " ▾"}</span>}
       </span>
-      <span className="cal-mtg-c" style={{ color: side }}>{m.committee}</span>
+      <span className="cal-mtg-c" style={isFloor ? undefined : { color: side }}>{m.committee}</span>
     </>
   );
   return (
-    <div className="cal-mtg" style={{ borderLeftColor: side }}>
+    <div className={`cal-mtg${isFloor ? " floor" : ""}`}>
       {/* A real <button> only when there are bills to toggle; otherwise a plain <div> so screen-reader /
           keyboard users aren't told it's interactive when it does nothing (Gemini #185). */}
       {hasBills ? (

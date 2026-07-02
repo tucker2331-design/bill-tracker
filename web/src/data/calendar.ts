@@ -14,6 +14,26 @@ import type { Chamber } from "./types";
 
 export type MeetingKind = "floor" | "committee";
 
+// Floor SESSION MARKERS (a chamber convening / reconvening / recessing / adjourning) vs actual committee
+// meetings. DISPLAY-ONLY heuristic: it only chooses how a row is STYLED (quiet session tissue vs a meeting
+// card) — it never hides, drops, or re-counts a row, so it is NOT the structural-completeness path Standard
+// #3 governs (a misclassification shows the wrong style, never wrong/missing data). There is no structural
+// floor/committee field in Sheet1 (LIS encodes it only in the meeting NAME), and the calendar WORKER already
+// floor-detects on these same LIS verbs — this mirrors that classification, it doesn't invent one.
+//   ASSUMES: LIS names floor markers with convene/reconvene/adjourn/recess (+ conjugations) — e.g.
+//     "House Convenes", "Senate adjourned", "House recessed until…". Caucuses ("Rural Caucus") are group
+//     meetings, not floor markers, so they stay "committee" (no verb match).
+//   BREAKS: a committee whose name contained one of those WHOLE words would misclassify (none in the VA
+//     committee list today); the pattern is word-bounded + conjugation-explicit to avoid substring over-match
+//     (Gemini/Qodo #186). The relative-time "…after adjournment of X" phrase lives in the TIME field, not the
+//     name, so a relative-timed committee meeting is never misread as floor.
+// Pure + exported so the classification is one testable place (CodeRabbit #186); web/ has no unit runner yet
+// (the CI structural tests are Python-only), so it's covered by tsc + the live preview for now.
+const FLOOR_MARKER = /\b(?:re)?conven(?:es?|ed)\b|\badjourn(?:s|ed)?\b|\brecess(?:es|ed)?\b/i;
+export function classifyMeetingKind(committee: string): MeetingKind {
+  return FLOOR_MARKER.test(committee) ? "floor" : "committee";
+}
+
 export interface AgendaItem { bill: string; action: string; }
 
 export interface Meeting {
@@ -185,7 +205,8 @@ async function _loadCalendar(): Promise<CalendarData> {
     if (!m) {
       const chamber: Chamber | null = committee.startsWith("House") ? "House"
         : committee.startsWith("Senate") ? "Senate" : null;
-      const kind: MeetingKind = /\bConvenes\b/.test(committee) ? "floor" : "committee";
+      // Floor session markers vs committee meetings — see classifyMeetingKind (display-only; word-bounded).
+      const kind: MeetingKind = classifyMeetingKind(committee);
       // [PLACEHOLDER "Time TBA"] honest display marker when LIS published no ScheduleTime — never a hidden
       // or guessed time; superseded below by a concrete time (L194) or LIS's verbatim Description (L203+).
       m = { dateKey: dk, committee, chamber, kind, time: concrete ? cleanTime(rawTime) : "Time TBA",
