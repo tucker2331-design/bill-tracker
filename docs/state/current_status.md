@@ -1,6 +1,6 @@
 ---
 tags: [state, live]
-updated: 2026-06-29
+updated: 2026-07-02
 status: active
 ---
 
@@ -11,6 +11,10 @@ status: active
 **Benchmark window:** Full 2026 VA GA session (2026-01-14 → 2026-05-01). **VA GA is now ADJOURNED — HISTORY is static (no new actions until the 2027 session). Pre-launch: lobbyists are not using the product yet.**
 
 ## Active focus
+
+**▶️ 2026-07-02 — RELATIVE-TIME CHAIN FIX: PREMISE FALSIFIED, RE-SCOPED (no PR — did NOT ship a no-op).** Picked up the queued relative-time chain ordering ([[ideas/calendar_chain_ordering]]) as the next intensive worker task. Built an offline validator (`tools/edge_case_replay/validate_relative_chains.py`) that AST-extracts `build_time_graph` old-vs-new and diffs the resolved map against the live Schedule API. Implementing the planned §3 fix (broadened detection + normalized committee parent-match, strictly additive) came back **`changed=0` — a no-op on real data.** Instrumenting 3,521 live rows / 443 dates showed the plan misdiagnosed the root: `build_time_graph` is **DATE-BLIND** (keys by `OwnerName` only — `house appropriations` = 27 dated meetings → 1 SortTime; one `house adjourned=5:42PM` for all days), and the chains are **mis-anchored** (subcommittee → floor-adjourned instead of parent committee), not stranded at 23:59. Reverted the inert code; wrote the finding to [[failures/assumptions_audit#95]] + re-scoped [[ideas/calendar_chain_ordering]] §8. **The correct fix is a date-aware refactor of the time engine (group by date, resolve per day, key `(date,name)`) integrating with the existing `adjourned_clock_by_date` path — a Section-9-critical change warranting its own focused session,** with the safety gate re-framed to "0 rows carrying a real PUBLISHED ScheduleTime move" (empty→derived rows may move — that's the fix). **The validator stays as a reusable diagnostic + gate for that session.**
+
+**▶️ 2026-07-02 — COLOR SWAP ✅ (PR [#188](https://github.com/tucker2331-design/bill-tracker/pull/188), in review).** Owner: the outcome palette had confusing overlaps. Swapped so **dead = pale/muted red** (`#b85b56`, distinct from veto's bright `#d2403a`), **carried over = yellow** (`#96820c`, = the WARN/caution hue), **referral count = grey** (new `--neutral` token); the new `--neutral` also unforks grey from red on the "unknown" health states (breaker/severity) that had been sharing `--o-dead`. `tsc`+`vite build` clean; preview-verified all five outcome colors distinct, 0 console errors. Awaiting CodeRabbit + Qodo → fold in → merge.
 
 **▶️ 2026-06-30 — CALENDAR WEEK-VIEW RELAYOUT ✅ MERGED (PR [#185](https://github.com/tucker2331-design/bill-tracker/pull/185)).** The Calendar tab is now a work-week-COLUMNS view (Mon–Fri visible together; empty weekends shrink aside; compact meetings with bills behind a dropdown) + a compact month grid alongside as a dual-cue selector (7-cell week band + focused-day ring; click a day to jump+focus). Two bot fold-in rounds. **The owner's UI queue is now CLEARED except the last design item: #7 Timeline veto/failure** (design-research-first; feasibility done — veto + coarse stage-of-death derivable now, fine committee-vs-floor granularity gated on the deferred Floor-stage field).
 

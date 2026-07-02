@@ -10,6 +10,28 @@ Append-only, reverse-chronological (newest at top). Each entry opens with `## [Y
 
 **Kinds:** `ingest` (new source/doc processed), `pr` (PR opened/merged/closed), `decision` (architectural or workflow), `lint` (wiki health-check pass), `session` (notable multi-hour working block), `post-mortem` (failure analysis), `milestone` (project-goal threshold crossed).
 
+## [2026-07-02] decision | Relative-time chain fix RE-SCOPED — plan premise falsified by measurement
+
+Picked up the queued relative-time chain ordering ([[ideas/calendar_chain_ordering]]) as the next intensive
+worker task. Built an offline validator (`tools/edge_case_replay/validate_relative_chains.py`, sibling of
+`schedule_replay.py`) that AST-extracts `build_time_graph` old-vs-new and diffs the resolved map against ONE
+live Schedule API pull. The planned §3 fix (broadened detection + normalized committee parent-match, strictly
+additive) came back **`changed=0` — a no-op on real data.** Instrumenting 3,521 rows / 443 dates falsified the
+plan's premise: `build_time_graph` is **DATE-BLIND** (name-only key; `house appropriations` = 27 dated meetings
+→ 1 SortTime), and the chains are **mis-anchored** (subcommittee → floor-adjourned), not stranded at 23:59.
+Reverted the inert code (did NOT ship a no-op); kept the validator as a reusable diagnostic + additive-only
+gate. Re-scoped to a date-aware time-engine refactor with a re-framed safety gate ("0 PUBLISHED-clock rows
+move"). Lesson → [[failures/assumptions_audit#95]] (measure current behavior before coding the fix; "no vibe
+coding" applies to PLANS, not just code). Plan §8 documents the corrected approach.
+
+## [2026-07-02] pr | #188 OPENED — color swap (dead=pale red, carried=yellow, referral=grey)
+
+Owner: the outcome palette had confusing hue overlaps (referral tan ≈ carried amber; grey `--o-dead`
+overloaded onto "unknown" health states). Swapped dead→pale red `#b85b56` (distinct from veto's bright
+`#d2403a`), carried→yellow `#96820c` (= WARN hue), referral→grey (new `--neutral` token that also unforks the
+"unknown" breaker/severity states from red). tsc/vite clean; preview-verified 5 distinct outcome colors, 0
+console errors. Awaiting CodeRabbit + Qodo.
+
 ## [2026-06-30] pr | #185 MERGED — Calendar week-view relayout (work-week columns + month selector)
 
 Owner relayout ([[design/ui_redesign_spec]] item 3): the 7-day week is now the PRIMARY module as COLUMNS

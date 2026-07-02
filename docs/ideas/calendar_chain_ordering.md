@@ -1,7 +1,8 @@
 ---
 tags: [ideas, calendar, worker, time-resolution, plan, structural]
-updated: 2026-06-30
+updated: 2026-07-02
 status: planned
+premise-revised: 2026-07-02  # §1-§6 premise ("chains stranded at 23:59, additive gate tweak") FALSIFIED — see §8
 ---
 
 # Plan — Resolve "after committee X" meeting CHAINS (calendar ordering)
@@ -109,4 +110,55 @@ relative-time meeting **doesn't name a resolvable body** at all. New directives:
 (front-end, `web/src/views/Calendar.tsx` + `data/calendar.ts`). Still Section-9-sensitive; still worker-first;
 the front-end half is display-only over a structural flag.
 
-See also [[architecture/calendar_pipeline]], [[knowledge/tba_times]], [[failures/assumptions_audit#79]], [[design/ui_redesign_spec]], [[state/next_session]].
+## 8. ⚠️ PREMISE FALSIFIED (2026-07-02) — the §1-§6 diagnosis was wrong; the fix is a DATE-AWARE refactor
+
+Before writing the §3 fix I built an offline validator (`tools/edge_case_replay/validate_relative_chains.py`)
+that AST-extracts `build_time_graph` old-vs-new, pulls the live Schedule API once, and diffs the resolved
+maps. Implementing §3 exactly (structural `_is_relative_time_text` superset + normalized committee
+parent-match, strictly additive) produced **`changed=0` — a complete no-op on real data.** Instrumenting the
+resolver against **3,521 live rows across 443 dates** showed §1-§6 misdiagnosed the root cause. See
+[[failures/assumptions_audit#95]]. The measured reality:
+
+1. **`build_time_graph` is DATE-BLIND.** It keys `raw_times`/`resolved_times` by `OwnerName` ONLY — no date.
+   Across 443 dates, every meeting of a committee collapses to ONE key (last-write-wins). Measured:
+   `house appropriations` = **27 dated meetings → 1 resolved SortTime**; `house adjourned` = a **single
+   `5:42 PM`** clock standing in for every day's adjournment. The caller (`calendar_worker.py` ~L5058)
+   applies that one name-keyed value to a committee's meetings on ALL dates. So a relative meeting's derived
+   order can be right on at most one date per name — broadening the recognition gate (§3.1) changes nothing,
+   because the chains aren't failing to be *detected*, they're being resolved on the wrong (date-blind) axis.
+
+2. **The chains are MIS-ANCHORED, not stranded at 23:59.** Of 450 relative-phrase rows: **250 → `∅`**
+   (unresolved, mostly empty-description last-writes), and the rest carry "upon adjournment"/"minutes after"
+   → they already ENTER the resolver and get a concrete-but-WRONG time. Step 1 anchors "adjournment of the
+   House **Appropriations Committee**" to the House **FLOOR** adjourned marker; step 4's loose
+   `"adjournment of the house" in rl` intercepts committee references before any committee-match can run — so
+   a subcommittee sorts BEFORE its parent committee. The owner's "piled up / mis-ordered" complaint is this
+   mis-anchoring, not a 23:59 pile.
+
+3. **"Additive-only, 0 changes" (§4b) is impossible for the real fix.** Correcting the order REQUIRES
+   re-pointing already-resolved (derived) SortTimes. The strict gate blocks the fix by construction. BUT the
+   rows that must move all have an **empty published `ScheduleTime`** — their SortTime is purely derived; the
+   displayed time stays LIS's verbatim relative phrase. So the correct safety gate is **"0 rows carrying a
+   real PUBLISHED ScheduleTime move"** (77/450 relative rows have a clock; 373 are empty→derived), with the
+   moved derived rows spot-checked for correct **parent-before-child** ordering. (Validator already
+   implements this re-framed gate.)
+
+### Revised approach (the actual §3, when this is next picked up)
+- **Make `build_time_graph` DATE-AWARE:** group `schedules` by `ScheduleDate`, build the node graph + resolve
+  WITHIN each day, and key the output map by `(date, name)` (the caller's `map_key` is already
+  `f"{date_str}_{normalized_name}"` — the parent map must match that granularity). This makes "house
+  adjourned" per-date and lets committee-parent chains resolve against the SAME day's nodes.
+- **Then** the §3.1 (broadened detection) + §3.2 (normalized committee parent-match) changes become
+  meaningful, and step 1/step 4 must recognize a COMMITTEE reference ("adjournment of the House **X
+  Committee**") and anchor to that committee node, reserving the floor-adjourned anchor for bare-chamber refs.
+- **Integrate with the existing date-aware last-resort path** (`adjourned_clock_by_date` +
+  `_derive_standing_committee_time`, [[failures/assumptions_audit#76]]) rather than duplicating it — that
+  mechanism already resolves per-date adjournment clocks for committees with no per-meeting entry.
+- **Validation:** the re-framed gate above (0 published-clock rows move) + a real worker run re-measuring
+  Section 9 = 0 (§4c, inherently post-merge in this repo's Actions-from-main flow) + the 15-point audit.
+- **Scope:** this is a Section-9-critical refactor of the time engine, NOT the two-gate tweak §3 described.
+  It warrants its own focused session and owner awareness (the owner gated this task on "plan fully before
+  starting"; the plan is now corrected). The front-end §7.2 surfacing (top-surface + highlight the truly
+  unresolvable residual) still applies, gated on the worker emitting a structural `TimeClass` flag.
+
+See also [[architecture/calendar_pipeline]], [[knowledge/tba_times]], [[failures/assumptions_audit#79]], [[failures/assumptions_audit#95]], [[design/ui_redesign_spec]], [[state/next_session]].
