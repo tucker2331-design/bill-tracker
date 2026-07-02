@@ -29,7 +29,10 @@ const STROKE: Record<VTone, string> = {
   unknown: "var(--ink-faint)", // neutral grey: present but unconfirmed (never reads as good)
 };
 const INK: Record<VTone, string> = {
-  good: "var(--ok)", warn: "var(--o-carry)", danger: "var(--stale)", unknown: "var(--o-dead)",
+  // unknown ink is the NEUTRAL grey, never the dead/failure hue: "unknown ≠ bad" ("allowed not to know,
+  // never pretend" — §7). Was --o-dead back when that token was grey; the color-swap made --o-dead a pale
+  // red, so unknown now reads on the dedicated --neutral grey (matches STROKE.unknown's intent). Qodo #188.
+  good: "var(--ok)", warn: "var(--o-carry)", danger: "var(--stale)", unknown: "var(--neutral)",
 };
 const GLYPH: Record<VTone, string> = { good: "✓", warn: "!", danger: "✕", unknown: "?" };
 // worst-of rollup: danger dominates, then warn, then unknown (can't confirm) — only an all-confirmed-good
