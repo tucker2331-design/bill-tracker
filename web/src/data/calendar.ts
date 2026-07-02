@@ -185,7 +185,12 @@ async function _loadCalendar(): Promise<CalendarData> {
     if (!m) {
       const chamber: Chamber | null = committee.startsWith("House") ? "House"
         : committee.startsWith("Senate") ? "Senate" : null;
-      const kind: MeetingKind = /\bConvenes\b/.test(committee) ? "floor" : "committee";
+      // Floor SESSION MARKERS (a chamber convening / recessing / adjourning / reconvening) vs actual
+      // committee meetings — matched on the meeting NAME (the relative-time "…after adjournment…" phrase is in
+      // the TIME field, not here, so a relative-timed committee meeting is NOT misread as floor). Caucuses are
+      // group meetings, not floor markers, so they stay "committee". The front end renders "floor" as quiet
+      // session tissue, not a meeting card (owner 2026-06-30).
+      const kind: MeetingKind = /\b(convene|reconvene|adjourn|recess)/i.test(committee) ? "floor" : "committee";
       // [PLACEHOLDER "Time TBA"] honest display marker when LIS published no ScheduleTime — never a hidden
       // or guessed time; superseded below by a concrete time (L194) or LIS's verbatim Description (L203+).
       m = { dateKey: dk, committee, chamber, kind, time: concrete ? cleanTime(rawTime) : "Time TBA",
