@@ -265,6 +265,8 @@ h2, h3 { margin: 0; }
 .out-btn.awaiting .out-n { color: var(--o-await); }
 .out-btn.vetoed { background: var(--o-vetoed-bg); }                 /* veto = the reserved attention color */
 .out-btn.vetoed .out-n, .out-btn.vetoed .out-l { color: var(--o-vetoed); }
+.out-btn.carried .out-n { color: var(--o-carry); }                 /* carried over (color-swap todo: → yellow) */
+.out-btn.dead .out-n { color: var(--o-dead); }                     /* died / failed (color-swap todo: → pale red) */
 
 /* ── Search / misc ── */
 .searchbar { display: flex; gap: var(--s2); margin-bottom: var(--s3); }
