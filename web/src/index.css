@@ -231,23 +231,40 @@ h2, h3 { margin: 0; }
 /* ── Timeline — a smooth, integrated SPINE (not boxes) ── */
 .spine-legend { display: flex; gap: var(--s5); align-items: center; margin: 0 0 var(--s2); font-size: 12.5px; color: var(--ink-soft); flex-wrap: wrap; }
 .spine-legend .swatch { display: inline-block; width: 10px; height: 10px; border-radius: 3px; vertical-align: -1px; margin-right: 6px; }
-.spine { position: relative; background: var(--surface); border-radius: var(--radius); box-shadow: var(--shadow-sm); padding: var(--s5) var(--s4); }
-.spine .track { position: absolute; left: var(--s5); right: var(--s5); top: 50%; height: 2px;
+.spine { position: relative; background: var(--surface); border-radius: var(--radius); box-shadow: var(--shadow-sm); padding: var(--s4); }
+/* stage names as a clear HEADER row, evenly over the columns — no longer collide with the count labels */
+.stage-heads { display: flex; margin-bottom: var(--s2); }
+.stage-head { flex: 1; text-align: center; font-size: 12px; font-weight: 800; color: var(--ink); letter-spacing: -.1px; }
+.spine-body { position: relative; }
+.spine-body .track { position: absolute; left: var(--s3); right: var(--s3); top: 50%; height: 2px;
   background: linear-gradient(90deg, var(--line-strong), var(--ink-faint), var(--line-strong)); transform: translateY(-1px); }
-.spine .seam { position: absolute; top: 18px; bottom: 36px; width: 0; border-left: 2px dashed var(--o-vetoed); }
-.spine .seam .seamlbl { position: absolute; top: -6px; left: 50%; transform: translateX(-50%); white-space: nowrap;
+.spine-body .seam { position: absolute; top: 14px; bottom: 14px; width: 0; border-left: 2px dashed var(--o-vetoed); }
+.spine-body .seam .seamlbl { position: absolute; top: -6px; left: 50%; transform: translateX(-50%); white-space: nowrap;
   font-size: 9.5px; font-weight: 800; letter-spacing: 1.5px; color: var(--o-vetoed); background: var(--surface); padding: 0 5px; }
 .snodes { position: relative; display: flex; align-items: stretch; }
-.snode { flex: 1; display: flex; flex-direction: column; align-items: center; min-height: 168px; position: relative; }
+.snode { flex: 1; display: flex; flex-direction: column; align-items: center; min-height: 150px; position: relative; }
 .snode .above { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: flex-end; padding-bottom: 14px; }
 .snode .dot { width: 11px; height: 11px; border-radius: 50%; background: var(--surface); border: 2px solid var(--ink-faint); z-index: 1; }
 .snode .below { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: flex-start; padding-top: 14px; }
-.snode .lbl { position: absolute; bottom: -8px; font-size: 11px; font-weight: 700; color: var(--ink-soft); white-space: nowrap; }
 .count { font-size: 25px; font-weight: 800; line-height: 1; cursor: pointer; }
 .count.s { color: var(--senate); } .count.h { color: var(--house); }
 .count.zero { color: var(--line-strong); cursor: default; }
 .countlbl { font-size: 9.5px; color: var(--ink-faint); margin-top: 4px; text-transform: uppercase; letter-spacing: .4px; }
-.died-row { display: flex; gap: var(--s3); margin-top: var(--s4); flex-wrap: wrap; align-items: center; }
+/* per-side count + a small "✕ stranded here" sub-count so failure reads AT the stage it occurred (owner 2026-06-30) */
+.scount { display: flex; flex-direction: column; align-items: center; }
+.scount-dead { font-size: 12px; font-weight: 800; color: var(--stale); cursor: pointer; margin-top: 3px; line-height: 1; }
+.scount-dead:hover { text-decoration: underline; }
+/* the governor node BRANCHES into the decided outcomes — integrated into the spine, not a separate box */
+.snode.outcome .out-fork { flex: 1; display: flex; flex-direction: column; align-items: stretch; justify-content: center; gap: 5px; width: 100%; padding: 0 2px; }
+.out-btn { display: flex; align-items: baseline; gap: 6px; border: 0; background: var(--surface-2); border-radius: 6px; padding: 4px 8px; cursor: pointer; text-align: left; }
+.out-btn:hover:not(:disabled) { box-shadow: var(--shadow-sm); }
+.out-btn:disabled { opacity: .5; cursor: default; }
+.out-btn .out-n { font-size: 16px; font-weight: 800; font-variant-numeric: tabular-nums; }
+.out-btn .out-l { font-size: 10.5px; font-weight: 700; color: var(--ink-soft); text-transform: uppercase; letter-spacing: .3px; }
+.out-btn.signed .out-n { color: var(--o-signed); }
+.out-btn.awaiting .out-n { color: var(--o-await); }
+.out-btn.vetoed { background: var(--o-vetoed-bg); }                 /* veto = the reserved attention color */
+.out-btn.vetoed .out-n, .out-btn.vetoed .out-l { color: var(--o-vetoed); }
 
 /* ── Search / misc ── */
 .searchbar { display: flex; gap: var(--s2); margin-bottom: var(--s3); }

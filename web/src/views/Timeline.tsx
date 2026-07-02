@@ -1,11 +1,13 @@
 import { useMemo, useState } from "react";
 import type { Bill, Chamber } from "../data/types";
-import { deriveStage, STAGE_LABEL, type Stage } from "../data/derive";
+import { deriveStage, type Stage } from "../data/derive";
 import { BillBox } from "../components/BillBox";
 
-// The crossover-lane pipeline (vision §3b), redrawn as a smooth integrated SPINE rather than boxes:
-// one centerline a bill literally crosses, Senate counts floating above it, House below, with the
-// crossover as a thin seam (not a wide column). Click a count to drill into those bills.
+// The crossover-lane pipeline (vision §3b) as a smooth integrated SPINE. Owner 2026-06-30: failure and the
+// terminal outcomes must live IN the pipeline geometry, not a separate box below it. So death is shown WHERE
+// it happened — a "✕ stranded here" sub-count at each stage — and the governor node BRANCHES into the decided
+// outcomes (✓ Signed / ⧗ Awaiting / ▲ Vetoed), with veto reserved the attention color. Click any count to
+// drill into those bills.
 const COLUMNS: { stage: Stage; label: string }[] = [
   { stage: "prefiled", label: "Prefiled" },
   { stage: "committee1", label: "Committee" },
@@ -13,82 +15,135 @@ const COLUMNS: { stage: Stage; label: string }[] = [
   { stage: "governor", label: "To Governor" },
 ];
 
-type DrillKey = string;
+// Stage of death for a dead/carried bill: the last stage it structurally reached. Derivable now from the same
+// fields deriveStage uses (crossed / lastCommittee); committee-vs-floor granularity waits on the Floor-stage
+// backend field ([[design/ui_redesign_spec]] item 4). deriveStage collapses all deaths into "died"; this
+// recovers WHERE.
+const lastReached = (b: Bill): Stage => b.crossedOver ? "committee2" : b.lastCommittee ? "committee1" : "prefiled";
+type OutKind = "signed" | "awaiting" | "vetoed";
 
 export function Timeline({ bills, onOpen }: { bills: Bill[]; onOpen: (b: Bill) => void }) {
-  const { counts, cellBills, died } = useMemo(() => {
-    const counts: Record<string, number> = {};
-    const cellBills = new Map<DrillKey, Bill[]>();
-    const died = { Senate: [] as Bill[], House: [] as Bill[] };
+  const { alive, stranded, outcome, cellBills } = useMemo(() => {
+    const alive: Record<string, number> = {};      // "stage|side" -> advancing count
+    const stranded: Record<string, number> = {};   // "stage|side" -> died/carried AT that stage
+    const outcome: Record<OutKind, number> = { signed: 0, awaiting: 0, vetoed: 0 };
+    const cellBills = new Map<string, Bill[]>();    // drill key -> bills
+    const push = (k: string, b: Bill) => (cellBills.get(k) ?? cellBills.set(k, []).get(k)!).push(b);
     for (const b of bills) {
       const cell = deriveStage(b);
-      if (cell.stage === "died") { died[cell.side].push(b); continue; }
-      const key = `${cell.stage}|${cell.side}`;
-      counts[key] = (counts[key] || 0) + 1;
-      (cellBills.get(key) ?? cellBills.set(key, []).get(key)!).push(b);
+      const side = cell.side;
+      if (cell.stage === "died") {
+        const kk = `${lastReached(b)}|${side}`;
+        stranded[kk] = (stranded[kk] || 0) + 1;
+        push(`stranded|${kk}`, b);
+      } else if (cell.stage === "governor") {
+        const oc: OutKind = b.outcome === "signed" ? "signed" : b.outcome === "vetoed" ? "vetoed" : "awaiting";
+        outcome[oc] += 1;
+        push(`out|${oc}`, b);
+      } else {
+        const kk = `${cell.stage}|${side}`;
+        alive[kk] = (alive[kk] || 0) + 1;
+        push(`alive|${kk}`, b);
+      }
     }
-    return { counts, cellBills, died };
+    return { alive, stranded, outcome, cellBills };
   }, [bills]);
 
-  const [drill, setDrill] = useState<DrillKey | null>(null);
-
-  const Count = ({ stage, side }: { stage: Stage; side: Chamber }) => {
-    const key = `${stage}|${side}`;
-    const n = counts[key] || 0;
-    return (
-      <div style={{ display: "flex", flexDirection: "column", alignItems: "center" }}>
-        <span className={`count ${side === "Senate" ? "s" : "h"} ${n === 0 ? "zero" : ""}`}
-          onClick={() => n > 0 && setDrill(key)} role={n > 0 ? "button" : undefined}
-          tabIndex={n > 0 ? 0 : undefined}
-          onKeyDown={(e) => { if (n > 0 && (e.key === "Enter" || e.key === " ")) { e.preventDefault(); setDrill(key); } }}
-          title={n > 0 ? "List these bills" : ""}>{n}</span>
-        <span className="countlbl">{side}</span>
-      </div>
-    );
-  };
-
-  const drillBills: Bill[] = drill
-    ? (drill.startsWith("died|") ? died[drill.endsWith("Senate") ? "Senate" : "House"] : cellBills.get(drill) ?? [])
-    : [];
+  const [drill, setDrill] = useState<string | null>(null);
+  // Sort the drilled bills the way the rest of the app groups them (owner 2026-06-30): by chamber, then by
+  // committee / subcommittee (lastCommittee sorts subcommittees under their parent since they're named
+  // "Committee - Subcommittee"), then bill number. So a stranded/outcome list reads in a familiar order.
+  const drillBills: Bill[] = useMemo(() => {
+    const list = drill ? (cellBills.get(drill) ?? []) : [];
+    return [...list].sort((a, b) =>
+      (a.chamber ?? "").localeCompare(b.chamber ?? "")
+      || (a.lastCommittee ?? "").localeCompare(b.lastCommittee ?? "")
+      || a.bill.localeCompare(b.bill, undefined, { numeric: true }));
+  }, [drill, cellBills]);
 
   if (bills.length === 0) {
     return <p className="center-msg">No bills in scope. Star some bills, or switch to <b>Full GA</b>.</p>;
   }
 
+  const openDrill = (k: string, n: number) => n > 0 && setDrill(k);
+  const kbd = (k: string, n: number) => (e: React.KeyboardEvent) => {
+    if (n > 0 && (e.key === "Enter" || e.key === " ")) { e.preventDefault(); setDrill(k); }
+  };
+
+  // One side's counts at a stage: the advancing number + a small "✕ stranded here" sub-count (dead/carried
+  // that died at this stage), so failure reads at the stage it occurred instead of a footnote below.
+  const Count = ({ stage, side }: { stage: Stage; side: Chamber }) => {
+    const kk = `${stage}|${side}`;
+    const n = alive[kk] || 0;
+    const dead = stranded[kk] || 0;
+    const aliveKey = `alive|${kk}`, deadKey = `stranded|${kk}`;
+    return (
+      <div className="scount">
+        <span className={`count ${side === "Senate" ? "s" : "h"} ${n === 0 ? "zero" : ""}`}
+          onClick={() => openDrill(aliveKey, n)} role={n > 0 ? "button" : undefined} tabIndex={n > 0 ? 0 : undefined}
+          onKeyDown={kbd(aliveKey, n)} title={n > 0 ? "List these bills" : ""}>{n}</span>
+        {dead > 0 && (
+          <span className="scount-dead" onClick={() => openDrill(deadKey, dead)} role="button" tabIndex={0}
+            onKeyDown={kbd(deadKey, dead)} title="Died / carried over at this stage">✕{dead}</span>
+        )}
+        <span className="countlbl">{side}</span>
+      </div>
+    );
+  };
+
+  const OutBtn = ({ kind, label }: { kind: OutKind; label: string }) => {
+    const n = outcome[kind]; const key = `out|${kind}`;
+    return (
+      <button type="button" className={`out-btn ${kind}${n === 0 ? " zero" : ""}`} disabled={n === 0}
+        onClick={() => openDrill(key, n)} onKeyDown={kbd(key, n)} title={n > 0 ? "List these bills" : ""}>
+        <span className="out-n">{n}</span><span className="out-l">{label}</span>
+      </button>
+    );
+  };
+
   return (
     <div>
       <div className="spine-legend">
-        <span><span className="swatch" style={{ background: "var(--senate)" }} />Senate · above the line</span>
-        <span><span className="swatch" style={{ background: "var(--house)" }} />House · below the line</span>
-        <span className="muted">Position is progress — a bill crosses the line at crossover.</span>
+        <span><span className="swatch" style={{ background: "var(--senate)" }} />Senate · above</span>
+        <span><span className="swatch" style={{ background: "var(--house)" }} />House · below</span>
+        <span><span className="swatch" style={{ background: "var(--stale)" }} />✕ died / carried at that stage</span>
+        <span className="muted">Position is progress — a bill crosses the line at crossover; the spine ends in the decided outcome.</span>
       </div>
 
       <div className="spine">
-        <div className="track" />
-        <div className="seam" style={{ left: "50%" }}><span className="seamlbl">CROSSOVER</span></div>
-        <div className="snodes">
-          {COLUMNS.map((c) => (
-            <div className="snode" key={c.stage}>
-              <div className="above"><Count stage={c.stage} side="Senate" /></div>
-              <div className="dot" />
-              <div className="below"><Count stage={c.stage} side="House" /></div>
-              <div className="lbl">{c.label}</div>
-            </div>
-          ))}
+        {/* Stage names as a clear HEADER row above the spine — kept OFF the count area so they no longer
+            collide with the SENATE / HOUSE labels (owner 2026-06-30). */}
+        <div className="stage-heads">
+          {COLUMNS.map((c) => <div key={c.stage} className="stage-head">{c.stage === "governor" ? "Outcome" : c.label}</div>)}
         </div>
-      </div>
-
-      <div className="died-row">
-        <DiedStat side="Senate" bills={died.Senate} onClick={() => died.Senate.length && setDrill("died|Senate")} />
-        <DiedStat side="House" bills={died.House} onClick={() => died.House.length && setDrill("died|House")} />
-        <span className="muted">Died / carried over — stranded, no longer advancing this session.</span>
+        <div className="spine-body">
+          <div className="track" />
+          <div className="seam" style={{ left: "50%" }}><span className="seamlbl">CROSSOVER</span></div>
+          <div className="snodes">
+            {COLUMNS.map((c) => c.stage === "governor" ? (
+              <div className="snode outcome" key="gov">
+                <div className="out-fork">
+                  <OutBtn kind="signed" label="Signed" />
+                  <OutBtn kind="awaiting" label="Awaiting" />
+                  <OutBtn kind="vetoed" label="Vetoed" />
+                </div>
+              </div>
+            ) : (
+              <div className="snode" key={c.stage}>
+                <div className="above"><Count stage={c.stage} side="Senate" /></div>
+                <div className="dot" />
+                <div className="below"><Count stage={c.stage} side="House" /></div>
+              </div>
+            ))}
+          </div>
+        </div>
       </div>
 
       {drill && (
         <div style={{ marginTop: "var(--s5)" }}>
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "var(--s2)" }}>
             <h3 className="h" style={{ margin: 0 }}>{drillLabel(drill)} — {drillBills.length} bill(s)</h3>
-            <button className="filters" style={{ boxShadow: "none", background: "transparent" }} onClick={() => setDrill(null)}>✕ clear</button>
+            <button type="button" className="filters" style={{ boxShadow: "none", background: "transparent" }} onClick={() => setDrill(null)}>✕ clear</button>
           </div>
           <div className="billgrid">
             {drillBills.slice(0, 200).map((b) => <BillBox key={b.bill} bill={b} onOpen={onOpen} />)}
@@ -99,20 +154,10 @@ export function Timeline({ bills, onOpen }: { bills: Bill[]; onOpen: (b: Bill) =
   );
 }
 
-function DiedStat({ side, bills, onClick }: { side: Chamber; bills: Bill[]; onClick: () => void }) {
-  const live = bills.length > 0;
-  return (
-    <div className="stat" style={{ cursor: live ? "pointer" : "default", minWidth: 130, borderLeft: `3px solid var(--${side === "Senate" ? "senate" : "house"})` }}
-      onClick={onClick} role={live ? "button" : undefined} tabIndex={live ? 0 : undefined}
-      onKeyDown={(e) => { if (live && (e.key === "Enter" || e.key === " ")) { e.preventDefault(); onClick(); } }}>
-      <div className="n" style={{ color: side === "Senate" ? "var(--senate)" : "var(--house)" }}>{bills.length.toLocaleString()}</div>
-      <div className="l">{side} died / carried</div>
-    </div>
-  );
-}
-
 function drillLabel(key: string): string {
-  const [stage, side] = key.split("|");
-  const label = stage === "died" ? "Died / carried over" : STAGE_LABEL[stage as Stage];
-  return `${side} · ${label}`;
+  const p = key.split("|");
+  if (p[0] === "out") return ({ signed: "Signed by the Governor", vetoed: "Vetoed", awaiting: "Awaiting the Governor" } as Record<string, string>)[p[1]] ?? p[1];
+  const stage = COLUMNS.find((c) => c.stage === p[1])?.label ?? p[1];
+  if (p[0] === "stranded") return `Died / carried · ${stage} · ${p[2]}`;
+  return `${p[2]} · ${stage}`; // alive
 }
