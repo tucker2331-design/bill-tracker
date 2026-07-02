@@ -124,7 +124,7 @@ export function Timeline({ bills, onOpen }: { bills: Bill[]; onOpen: (b: Bill) =
       <div className="spine-legend">
         <span><span className="swatch" style={{ background: "var(--senate)" }} />Senate · above</span>
         <span><span className="swatch" style={{ background: "var(--house)" }} />House · below</span>
-        <span><span className="swatch" style={{ background: "var(--stale)" }} />✕ died / carried over at that stage</span>
+        <span><span className="swatch" style={{ background: "var(--o-dead)" }} />✕ died / carried over at that stage</span>
         <span className="muted">Position is progress — a bill crosses the line at crossover; the spine ends in the decided outcome.</span>
       </div>
 
