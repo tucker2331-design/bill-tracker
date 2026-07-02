@@ -24,13 +24,16 @@ gate. Re-scoped to a date-aware time-engine refactor with a re-framed safety gat
 move"). Lesson → [[failures/assumptions_audit#95]] (measure current behavior before coding the fix; "no vibe
 coding" applies to PLANS, not just code). Plan §8 documents the corrected approach.
 
-## [2026-07-02] pr | #188 OPENED — color swap (dead=pale red, carried=yellow, referral=grey)
+## [2026-07-02] pr | #188 MERGED — color swap (dead=pale red, carried=yellow, referral=grey)
 
 Owner: the outcome palette had confusing hue overlaps (referral tan ≈ carried amber; grey `--o-dead`
 overloaded onto "unknown" health states). Swapped dead→pale red `#b85b56` (distinct from veto's bright
 `#d2403a`), carried→yellow `#96820c` (= WARN hue), referral→grey (new `--neutral` token that also unforks the
 "unknown" breaker/severity states from red). tsc/vite clean; preview-verified 5 distinct outcome colors, 0
-console errors. Awaiting CodeRabbit + Qodo.
+console errors. **Qodo fold-in (1 finding):** `HealthVitals.tsx` still colored the `unknown` vital tone with
+`--o-dead` — now pale red, which would read unknown-as-failure ("unknown ≠ bad", §7); repointed to `--neutral`
+grey (the overload class I cleared in CSS but missed in the component). Qodo re-review 0 bugs; CodeRabbit +
+structural-tests green; merged.
 
 ## [2026-06-30] pr | #185 MERGED — Calendar week-view relayout (work-week columns + month selector)
 
