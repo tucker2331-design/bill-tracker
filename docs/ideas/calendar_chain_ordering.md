@@ -1,6 +1,6 @@
 ---
 tags: [ideas, calendar, worker, time-resolution, plan, structural]
-updated: 2026-06-23
+updated: 2026-06-30
 status: planned
 ---
 
@@ -87,4 +87,26 @@ The chains show LIS's verbatim relative-time text ("Immediately upon adjournment
 Commerce") and sit at end-of-day. Honest (real LIS text, after the timed session) but not yet positionally
 ordered. Acceptable to ship; this plan is the follow-up that makes position exact.
 
-See also [[architecture/calendar_pipeline]], [[knowledge/tba_times]], [[failures/assumptions_audit#79]], [[state/next_session]].
+## 7. Owner re-confirmed on the shipped week-view + added a FRONT-END requirement (2026-06-30, PR #185)
+Reviewing the new week-view Calendar ([[design/ui_redesign_spec]] item 3), the owner saw the problem live and
+sharpened the requirement — in a single screenshot: "15 minutes after adjournment of House Finance", "1/2 hour
+after adjournment of the House", "Immediately upon adjournment of House General Laws", etc. are NOT placed
+after the adjournment they reference (still `SortTime=23:59` → sorted to the end, §6), and at least one
+relative-time meeting **doesn't name a resolvable body** at all. New directives:
+1. **Order the resolvable ones correctly** — the §3 worker fix (resolve the relative chain to a real
+   `SortTime`). Unchanged.
+2. **The UNSORTABLE ones (no resolvable parent) must be SURFACED to the TOP of the day + visibly HIGHLIGHTED**,
+   NOT buried at 23:59 where the position is silently wrong. Rationale: if we cannot time-sort it, don't
+   pretend a position — flag it. This is the calendar-surface instance of the trust rule ("allowed not to
+   know, never pretend"). **Front-end-safe (Standard #3):** the front end does NOT parse prose — the WORKER
+   must emit a **structural flag** on the row (e.g. `TimeClass = relative_resolved | relative_unresolved |
+   concrete`, or reuse the existing `⏱️ [NO_*]`/Origin telemetry), and the front end sorts `relative_unresolved`
+   to the top of the day with a distinct treatment. So the worker gains a third job: when the §3 resolver
+   can't find the parent, TAG the row `relative_unresolved` instead of silently defaulting to 23:59.
+3. **Fallback to find the committee** — that IS §3.2 (normalized parent-match against the day's node set); the
+   owner wants it attempted, and the tag from (2) is the honest outcome when it fails.
+**Net:** the plan grows a small structural-flag output (worker) + a top-surface-and-highlight rule
+(front-end, `web/src/views/Calendar.tsx` + `data/calendar.ts`). Still Section-9-sensitive; still worker-first;
+the front-end half is display-only over a structural flag.
+
+See also [[architecture/calendar_pipeline]], [[knowledge/tba_times]], [[failures/assumptions_audit#79]], [[design/ui_redesign_spec]], [[state/next_session]].

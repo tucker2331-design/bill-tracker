@@ -132,5 +132,22 @@ Three items the owner flagged while reviewing the live Health + Calendar tabs. *
    signed/vetoed/dead/carried_over/awaiting_governor today, but "where it failed" needs the *stage of death*
    (the last stage the bill structurally reached) — confirm that's derivable from `deriveStage` / the history
    before committing to a geometry. A Timeline follow-up after Calendar + Health.
+5. **Calendar — "after adjournment" ordering + surface the unsortable (owner 2026-06-30, reviewing #185).**
+   Relative-time meetings ("15 min after adjournment of House Finance", "1/2 hour after adjournment of the
+   House") aren't placed after the adjournment they reference, and one names no resolvable body. FULL plan +
+   the new "surface-unsortable-to-TOP + highlight, worker emits a structural flag" requirement live in
+   [[ideas/calendar_chain_ordering#7]] — that's the home; this is the pointer. Worker-first (Section-9
+   sensitive) + a display-only top-surface rule on the front end.
+6. **Calendar — KILL the colored left side-strip on meeting cards; differentiate chamber floor-events by
+   FORM, not a bar (owner 2026-06-30). ✅ DOING NOW (PR #186).** The `border-left: 3px solid <chamber>` on
+   `.cal-mtg` "screams AI-generated / cheap AI UI." Remove it. Per the design principles ([[design/information_display]]:
+   Few — group by whitespace not borders, one meaning per color, saturation reserved for attention;
+   Refactoring UI — hierarchy by weight+color, depth via shadow over borders): keep the chamber cue on the
+   committee-name COLOR (already there), and give House/Senate **floor session markers** (Convenes / Recessed
+   / Adjourned / Reconvened) a distinct QUIETER treatment (they're session context, not committee meetings the
+   lobbyist tracks) — e.g. a slim centered "session marker" row (no card chrome, muted, small caps), so the
+   committee-meeting CARDS are the visual primary and the floor events read as the connective session tissue.
+   NO left bar anywhere. Detect floor markers structurally where possible (see `data/calendar.ts`); the "kill
+   the bar" part is unconditional.
 
 See also [[design/information_display]], [[ideas/product_vision]], [[log]].
