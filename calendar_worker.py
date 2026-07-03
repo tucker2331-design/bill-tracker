@@ -2822,15 +2822,16 @@ def _parse_relative_offset_minutes(text):
     if m:
         return int(m.group(1))
     # Fractional hours BEFORE the integer-hour parse: LIS publishes "1/2 hour after
-    # adjournment of the House" (and "half an hour"), which the bare `(\d+)\s*hour`
-    # regex mis-reads as "2 hours" (grabbing the 2 in 1/2) → +120 instead of +30,
-    # over-delaying the whole committee's subcommittee chain by 90 min (found in the
-    # 2026-01-21 House Appropriations chain, calendar_chain_ordering §8).
-    if re.search(r'1\s*/\s*2\s*hour|half\s*(?:an?\s*)?hour', t):
+    # adjournment of the House" (and "half an hour", and the single-char forms
+    # ½/¼/¾ per the LIS docs), which the bare `(\d+)\s*hour` regex mis-reads as
+    # "2 hours" (grabbing the 2 in 1/2) → +120 instead of +30, over-delaying the
+    # committee's whole subcommittee chain by 90 min (2026-01-21 House Appropriations
+    # chain, calendar_chain_ordering §8; unicode forms folded in per Qodo #189).
+    if re.search(r'(?:1\s*/\s*2|½)\s*hour|half\s*(?:an?\s*)?hour', t):
         return 30
-    if re.search(r'1\s*/\s*4\s*hour|quarter\s*(?:of\s*an?\s*)?hour', t):
+    if re.search(r'(?:1\s*/\s*4|¼)\s*hour|quarter\s*(?:of\s*an?\s*)?hour', t):
         return 15
-    if re.search(r'3\s*/\s*4\s*hour', t):
+    if re.search(r'(?:3\s*/\s*4|¾)\s*hour', t):
         return 45
     h = re.search(r'(\d+)\s*hour', t)
     if h:
@@ -2838,9 +2839,26 @@ def _parse_relative_offset_minutes(text):
     return 0
 
 
+# A schedule row is RELATIVE-timed when LIS expresses its time as a dependency on
+# another event ("(immediately) upon/after/following …", or a bare "recess") rather
+# than a clock. This is the SINGLE canonical relative-time detector: parse_24h_time,
+# _resolve_one_day's concrete-vs-relative gate, and resolve_node's branch all consult
+# it, so the three can never diverge (pre-push audit #7). Structural SUPERSET of the
+# old fixed 4-marker list (["upon adjournment","minutes after","hour after","recess"])
+# so nothing that list matched regresses, while also catching "immediately after",
+# plural "hours after", "1/2 after adjournment", "following the …" it silently missed
+# (leaving those chains at the 23:59 end-of-day sentinel). Trigger word, not an
+# exhaustive phrase list, so no maintenance as LIS varies the offset prose.
+# calendar_chain_ordering §3.1/§8.
+def _is_relative_time_text(text):
+    return bool(re.search(r'\b(?:immediately\s+)?(?:upon|after|following)\b|\brecess\b', str(text), re.I))
+
 def parse_24h_time(raw_time, parent_time_24h=None):
     time_val = raw_time.strip().replace('.', '').upper()
-    if any(m in time_val.lower() for m in ["after", "upon"]):
+    # Relative branch consistent with _is_relative_time_text (Qodo #189): "following …"
+    # / "recess" strings resolve via the parent+offset path, not fall through to clock
+    # parsing (→ 23:59). The offset for a bare "following"/"upon" is 0 (at that event).
+    if _is_relative_time_text(time_val):
         if parent_time_24h and parent_time_24h not in ("06:00", "23:59"):
             try:
                 pt = datetime.strptime(parent_time_24h, '%H:%M')
@@ -2867,19 +2885,6 @@ def parse_24h_time(raw_time, parent_time_24h=None):
     except Exception:
         return "23:59"
 
-# A schedule row is RELATIVE-timed when LIS expresses its time as a dependency on
-# another event ("(immediately) upon/after/following …", or a bare "recess") rather
-# than a clock. Structural SUPERSET of the old fixed 4-marker list (["upon
-# adjournment","minutes after","hour after","recess"]) so nothing that list matched
-# regresses, while also catching "immediately after", plural "hours after", "1/2
-# after adjournment", "following the …" that it silently missed (leaving those chains
-# at the 23:59 end-of-day sentinel). Trigger word, not an exhaustive phrase list, so
-# no maintenance as LIS varies the offset prose. Consulted ONLY for rows without a
-# concrete clock (see _resolve_one_day's gate), so a concrete ScheduleTime is never
-# re-read as relative. calendar_chain_ordering §3.1/§8.
-def _is_relative_time_text(text):
-    return bool(re.search(r'\b(?:immediately\s+)?(?:upon|after|following)\b|\brecess\b', str(text), re.I))
-
 def _resolve_one_day(day_rows):
     """Resolve the relative-time graph for ONE day's schedule rows → {name_lower: "HH:MM"}.
 
@@ -2889,8 +2894,9 @@ def _resolve_one_day(day_rows):
     OWN, instead of the old date-blind name-key that collapsed a committee's 27 dated
     meetings to one value ([[calendar_chain_ordering]] §8, assumptions_audit #95)."""
     def _is_concrete(v):
-        # A value that carries its OWN clock (parses to a real time, no relative words).
-        return v is not None and parse_24h_time(v) != "23:59" and not any(x in str(v).lower() for x in ["after", "upon"])
+        # A value that carries its OWN clock (parses to a real time, and is not itself
+        # a relative dependency — same canonical detector the resolver uses).
+        return v is not None and parse_24h_time(v) != "23:59" and not _is_relative_time_text(v)
 
     raw_times = {}
     for m in day_rows:
@@ -2908,12 +2914,15 @@ def _resolve_one_day(day_rows):
         # resolver to follow. calendar_chain_ordering §3.1/§8.
         if _is_concrete(t_val):
             raw_times[name] = t_val                 # concrete always wins
-        elif _is_concrete(raw_times.get(name)):
-            continue                                # never clobber a concrete clock
-        elif _is_relative_time_text(stitched):
-            raw_times[name] = stitched              # relative beats empty
-        elif name not in raw_times:
-            raw_times[name] = t_val                 # empty / TBA (first non-concrete wins)
+        elif not _is_concrete(raw_times.get(name)):
+            # A stored concrete clock is KEPT (never clobbered by weaker prose); only a
+            # non-concrete-or-absent slot may be filled — relative prose over empty,
+            # else the first non-concrete value. No bare skip: the concrete-present case
+            # simply falls through with the better value already stored.
+            if _is_relative_time_text(stitched):
+                raw_times[name] = stitched          # relative beats empty
+            elif name not in raw_times:
+                raw_times[name] = t_val             # empty / TBA (first non-concrete wins)
 
     for k, v in list(raw_times.items()):
         if "house convenes" in k or "house chamber" in k: raw_times["house"] = v; raw_times["the house"] = v
@@ -3014,11 +3023,10 @@ def _resolve_one_day(day_rows):
                 # stays strictly ordered. Ordering only — the DISPLAYED time is LIS's
                 # verbatim string, untouched. Skipped when the parent is unresolved
                 # (06:00/23:59 sentinels) so a nudge can't manufacture a false position.
+                # No try/except: res is always parse_24h_time output (a valid "%H:%M" or
+                # a sentinel already excluded), so strptime cannot raise here (Qodo #189).
                 if res == parent_time and res not in ("06:00", "23:59"):
-                    try:
-                        res = (datetime.strptime(res, '%H:%M') + timedelta(minutes=1)).strftime('%H:%M')
-                    except Exception:
-                        pass
+                    res = (datetime.strptime(res, '%H:%M') + timedelta(minutes=1)).strftime('%H:%M')
                 resolved_times[name_key] = res
                 return res
             return "06:00"

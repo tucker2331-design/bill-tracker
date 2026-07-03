@@ -134,10 +134,7 @@ def main():
             chain = sorted((new_map.get((d0, norm_name(m)), "—"), norm_name(m))
                            for m in sch if date_key(m) == d0 and "appropriations" in norm_name(m))
             print(f"  spot-check {d0} — House Appropriations chain (SortTime · committee), sorted:")
-            seen = set()
-            for st, nm in chain:
-                if (st, nm) in seen: continue
-                seen.add((st, nm))
+            for st, nm in dict.fromkeys(chain):   # order-preserving de-dupe (no bare continue)
                 print(f"     {st}  {nm[:64]}")
 
     print("\n" + ("❌ FAIL — a published ScheduleTime was not honored." if fail
