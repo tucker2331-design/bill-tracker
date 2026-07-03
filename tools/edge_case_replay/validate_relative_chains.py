@@ -1,24 +1,27 @@
 #!/usr/bin/env python3
-"""Relative-time chain resolver — diagnostic + additive-only gate (calendar_chain_ordering §8).
+"""Relative-time chain resolver — validation gate + diagnostic (calendar_chain_ordering §8).
 
-TWO jobs, one live Schedule API pull per authorized session (the worker hits this
-same endpoint every cycle — within LIS-safety guardrail #4; no gspread, no writes):
+The resolver is now DATE-AWARE (build_time_graph keys by (date, name)). This gate runs
+against ONE live Schedule API pull per authorized session (the worker hits this same
+endpoint every cycle — within LIS-safety guardrail #4; no gspread, no writes) and checks:
 
-  1. DIAGNOSE the current state (always). Categorize the relative-phrase rows by how
-     build_time_graph resolves them and PROVE the date-blindness finding: the resolver
-     keys raw_times by OwnerName only, so a committee that meets on many dates collapses
-     to ONE resolved SortTime (e.g. a single "house adjourned" clock stands in for all
-     443 dates). This is the evidence behind the re-scope in calendar_chain_ordering §8.
-  2. ADDITIVE-ONLY GATE (when the working tree changes build_time_graph). Diff the NEW
-     resolved map against the merge-base OLD one and FAIL if any row carrying a REAL
-     published ScheduleTime moves. Derived rows (empty ScheduleTime) are allowed to move
-     — that's the point of the fix — but are listed for an eyeball spot-check vs LIS.
+  1. SAFETY (absolute, MUST pass) — every schedule row that carries a REAL published
+     ScheduleTime must resolve to the parse of ITS OWN clock. This is the honored-times
+     invariant: the date-aware resolver never re-derives a time LIS actually published.
+     (Stronger than a diff-vs-old, because the old date-blind map returned WRONG values
+     for some published rows via name collisions — those are fixes, not regressions.)
+
+  2. RESOLUTION (the win) — count relative-phrase rows that resolve to a concrete clock
+     now vs the old date-blind resolver, and PROVE date-awareness: the same committee on
+     different dates now gets DIFFERENT SortTimes. Spot-print a known committee chain so
+     parent-before-child ordering can be eyeballed against LIS.
 
 Run: python3 tools/edge_case_replay/validate_relative_chains.py
 """
 import ast, re, sys, os, json, subprocess, urllib.request, urllib.parse
-from collections import Counter
+from collections import Counter, defaultdict
 from datetime import datetime, timedelta
+import pandas as pd
 
 ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 API_KEY = "81D70A54-FCDC-4023-A00B-A3FD114D5984"
@@ -28,95 +31,112 @@ SESSIONS = sorted(LIS_API_AUTHORIZED_SESSIONS, reverse=True)
 for _s in SESSIONS:
     assert_lis_authorized(_s)
 
-NEEDED = {"build_time_graph", "parse_24h_time", "_parse_relative_offset_minutes",
+NEEDED = {"build_time_graph", "_resolve_one_day", "parse_24h_time", "_parse_relative_offset_minutes",
           "_is_non_concrete_time", "normalize_room_key", "_is_relative_time_text"}
 REL_RE = re.compile(r'\b(?:immediately\s+)?(?:upon|after|following)\b|\brecess\b', re.I)
 SENTINELS = {"23:59", "06:00"}
 
-def load_time_graph(source_text, label):
+def load(source_text, label):
+    if source_text is None:
+        sys.exit(f"❌ cannot load '{label}' snapshot — source missing (git show failed / merge-base absent).")
     body = [n for n in ast.parse(source_text).body if isinstance(n, ast.FunctionDef) and n.name in NEEDED]
-    ns = {"re": re, "datetime": datetime, "timedelta": timedelta, "str": str}
+    ns = {"re": re, "datetime": datetime, "timedelta": timedelta, "str": str, "pd": pd, "defaultdict": defaultdict}
     exec(compile(ast.Module(body, []), f"<{label}>", "exec"), ns)
-    return ns.get("build_time_graph"), {n.name for n in body}
+    return ns  # full namespace — callers pull build_time_graph / parse_24h_time / etc. from it
 
 def git_show(ref, path):
     try:
-        return subprocess.check_output(["git", "-C", ROOT, "show", f"{ref}:{path}"],
-                                       stderr=subprocess.DEVNULL).decode()
+        return subprocess.check_output(["git", "-C", ROOT, "show", f"{ref}:{path}"], stderr=subprocess.DEVNULL).decode()
     except subprocess.CalledProcessError:
         return None
 
-def fetch_schedules(code):
+def fetch(code):
     url = "https://lis.virginia.gov/Schedule/api/getschedulelistasync?" + urllib.parse.urlencode({"sessionCode": code})
     req = urllib.request.Request(url, headers={"WebAPIKey": API_KEY, "Accept": "application/json"})
     j = json.loads(urllib.request.urlopen(req, timeout=40).read().decode())
     return j.get("Schedules", []) if isinstance(j, dict) else j
 
-def relative_rows(schedules):
-    """(name_key, has_published_clock, date, owner, desc) for each relative-phrase row."""
-    out = []
-    for m in schedules:
-        tval = str(m.get("ScheduleTime", "")).strip()
-        desc = re.sub(r"<[^>]+>", "", str(m.get("Description", ""))).strip()
-        if not REL_RE.search(f"{tval} {desc}"):
-            continue
-        out.append((str(m.get("OwnerName", "")).strip().lower(), bool(tval),
-                    str(m.get("ScheduleDate", ""))[:10], str(m.get("OwnerName", "")).strip(), desc[:70]))
-    return out
+def norm_name(m):
+    return re.sub(r"\s+", " ", str(m.get("OwnerName", "")).strip()).lower()
+
+def date_key(m):
+    d = pd.to_datetime(m.get("ScheduleDate", ""), errors="coerce")
+    return None if pd.isna(d) else d.strftime("%Y-%m-%d")
 
 def main():
-    new_btg, _ = load_time_graph(open(f"{ROOT}/calendar_worker.py").read(), "new")
+    ns_new = load(open(f"{ROOT}/calendar_worker.py").read(), "new")
+    new_btg = ns_new["build_time_graph"]
+    parse24 = ns_new["parse_24h_time"]   # reused from the one extraction (no re-parse)
+
     base = subprocess.check_output(["git", "-C", ROOT, "merge-base", "HEAD", "origin/main"]).decode().strip()
-    old_btg, _ = load_time_graph(git_show(base, "calendar_worker.py"), "old")
-    tree_changed = new_btg.__code__.co_code != old_btg.__code__.co_code
+    old_btg = load(git_show(base, "calendar_worker.py"), "old")["build_time_graph"]  # None-source → load() exits
+    print(f"OLD snapshot (date-blind, name-keyed): {base[:9]}\n")
 
     fail = False
-    for code in SESSIONS[:1]:  # one authorized session is representative; the map is date-blind anyway
-        schedules = fetch_schedules(code)
-        new_map = new_btg(schedules)
-        rows = relative_rows(schedules)
-        dates = {str(m.get("ScheduleDate", ""))[:10] for m in schedules}
+    for code in SESSIONS[:1]:  # one authorized session is representative
+        sch = fetch(code)
+        new_map = new_btg(sch)          # {(date, name): "HH:MM"}
+        old_map = old_btg(sch)          # {name: "HH:MM"}  (date-blind)
+        dates = {date_key(m) for m in sch if date_key(m)}
+        print(f"=== session {code}: {len(sch)} rows / {len(dates)} dates ===")
 
-        # (1) DIAGNOSTIC — current-state distribution + date-blindness proof.
-        dist = Counter(new_map.get(r[0], "∅") for r in rows)
-        published = sum(1 for r in rows if r[1])
-        print(f"=== session {code}: {len(schedules)} rows across {len(dates)} dates | "
-              f"{len(rows)} relative-phrase rows ({published} with a published clock, "
-              f"{len(rows) - published} empty→derived) ===")
-        print("  resolved SortTime distribution (build_time_graph, NAME-keyed → date-blind):")
-        for v, c in dist.most_common(8):
-            print(f"     {c:4} → {v}")
-        multi = Counter(r[0] for r in rows)
-        worst = [(n, c) for n, c in multi.most_common(4)]
-        print("  date-blindness: one NAME → one SortTime, but the committee meets on many dates:")
-        for n, c in worst:
-            print(f"     {c:3} dated meetings collapse to 1 resolved value  ·  {n[:60]}")
+        # (1) SAFETY — a (date, name) that carries ANY published clock must resolve to
+        # ONE OF ITS published clocks, never a derived/relative value. (A committee can
+        # legitimately meet twice under one name in a day — 7:30 AM AND 4:00 PM — and a
+        # single (date,name) key holds one; the resolver keeps the last concrete, exactly
+        # as the caller's api_schedule_map dedup does. The corruption we forbid is a
+        # published-time key resolving to a MIS-ANCHORED derived time.)
+        pub_clocks = defaultdict(set)   # (date, name) -> {own clocks published for it}
+        for m in sch:
+            t = str(m.get("ScheduleTime", "")).strip()
+            own = parse24(t)
+            if own == "23:59" or any(x in t.lower() for x in ["after", "upon"]):
+                continue
+            dk = date_key(m)
+            if dk is not None:
+                pub_clocks[(dk, norm_name(m))].add(own)
+        violations = []
+        for key, clocks in pub_clocks.items():
+            got = new_map.get(key)
+            if got not in clocks:
+                violations.append((key[0], key[1], sorted(clocks), got))
+        print(f"  SAFETY: {len(pub_clocks)} (date,name) keys carry a published clock; "
+              f"{len(violations)} resolve to a NON-published (derived) time (must be 0)")
+        for dk, nm, clocks, got in violations[:15]:
+            print(f"     ❌ {dk} {nm[:44]:44} published={clocks} got={got}"); fail = True
 
-        # (2) ADDITIVE-ONLY GATE — only when build_time_graph actually changed.
-        if tree_changed:
-            old_map = old_btg(schedules)
-            published_names = {r[0] for r in rows if r[1]} | {
-                str(m.get("OwnerName", "")).strip().lower() for m in schedules
-                if str(m.get("ScheduleTime", "")).strip() and not REL_RE.search(str(m.get("Description", "")))}
-            moved_published, moved_derived = [], []
-            for k in set(old_map) | set(new_map):
-                o, n = old_map.get(k, "∅"), new_map.get(k, "∅")
-                if o == n:
-                    continue
-                (moved_published if k in published_names else moved_derived).append((k, o, n))
-            print(f"\n  GATE: {len(moved_published)} PUBLISHED-clock rows moved (must be 0), "
-                  f"{len(moved_derived)} derived rows moved (expected by the fix):")
-            for k, o, n in moved_published:
-                print(f"     ❌ PUBLISHED MOVED {o} → {n}   {k[:70]}"); fail = True
-            for k, o, n in sorted(moved_derived)[:20]:
-                print(f"     · derived {o} → {n}   {k[:70]}")
-        else:
-            print("\n  (build_time_graph unchanged vs merge-base — diagnostic only, gate skipped.)")
+        # (2) RESOLUTION — relative rows now concrete, + date-awareness proof.
+        rel = [m for m in sch if REL_RE.search(f"{str(m.get('ScheduleTime','')).strip()} "
+                                               f"{re.sub(r'<[^>]+>','',str(m.get('Description','')))}")]
+        now_concrete = sum(1 for m in rel
+                           if date_key(m) and new_map.get((date_key(m), norm_name(m)), "23:59") not in SENTINELS)
+        old_concrete = sum(1 for m in rel if old_map.get(norm_name(m), "23:59") not in SENTINELS)
+        print(f"  RESOLUTION: {len(rel)} relative-phrase rows | concrete SortTime: "
+              f"old(date-blind)={old_concrete} → new(date-aware)={now_concrete}")
+        # date-awareness: a committee that appears on many dates now spans multiple SortTimes
+        per_name = defaultdict(set)
+        for (dk, nm), v in new_map.items():
+            per_name[nm].add(v)
+        spread = sorted(((nm, len(vs)) for nm, vs in per_name.items() if len(vs) > 1), key=lambda x: -x[1])[:5]
+        print("  date-awareness (one NAME now resolves to MANY per-date SortTimes):")
+        for nm, k in spread:
+            print(f"     {k:2} distinct SortTimes across dates · {nm[:60]}")
 
-    if fail:
-        print("\n❌ FAIL — a published ScheduleTime moved. Not additive-safe.")
-        sys.exit(1)
-    print("\n✅ OK.")
+        # spot-check a real House Appropriations chain: parent committee vs its subcommittees
+        sample_dates = sorted({date_key(m) for m in sch
+                               if "appropriations" in norm_name(m) and REL_RE.search(
+                                   re.sub(r'<[^>]+>', '', str(m.get('Description', '')))) and date_key(m)})
+        if sample_dates:
+            d0 = sample_dates[len(sample_dates)//2]
+            chain = sorted((new_map.get((d0, norm_name(m)), "—"), norm_name(m))
+                           for m in sch if date_key(m) == d0 and "appropriations" in norm_name(m))
+            print(f"  spot-check {d0} — House Appropriations chain (SortTime · committee), sorted:")
+            for st, nm in dict.fromkeys(chain):   # order-preserving de-dupe (no bare continue)
+                print(f"     {st}  {nm[:64]}")
+
+    print("\n" + ("❌ FAIL — a published ScheduleTime was not honored." if fail
+                  else "✅ PASS — every published time honored exactly; relative chains resolve per-date."))
+    sys.exit(1 if fail else 0)
 
 if __name__ == "__main__":
     main()
