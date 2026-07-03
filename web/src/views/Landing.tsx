@@ -45,7 +45,9 @@ export function Landing({ bills, onOpen }: { bills: Bill[]; onOpen: (b: Bill) =>
             </div>
           </div>
           <div className="panel">
-            <p className="feedday">{dayLabel} <span className="muted">· {items.length} action{items.length === 1 ? "" : "s"}</span></p>
+            {/* Off-season honesty (owner 2026-07-03: "the date is from days ago — why?"): the feed opens on
+                the newest day WITH actions; when that day isn't recent, say so instead of looking stale. */}
+            <p className="feedday">{dayLabel} <span className="muted">· {items.length} action{items.length === 1 ? "" : "s"}{dayIdx === 0 && curDate && (Date.now() - curDate.getTime()) > 2 * 864e5 ? " · the most recent legislative activity — nothing newer has happened" : ""}</span></p>
             {items.length === 0 && <p className="muted" style={{ padding: "8px 4px" }}>No actions on this day.</p>}
             {items.slice(0, 80).map((it, i) => {
               const b = byBill.get(it.bill);
@@ -67,8 +69,10 @@ export function Landing({ bills, onOpen }: { bills: Bill[]; onOpen: (b: Bill) =>
       </div>
 
       <div style={{ marginTop: "var(--s6)" }}>
-        <h2 className="h">Where the bills stand</h2>
-        <div className="panel summaryrow" style={{ marginBottom: "var(--s4)" }}>
+        <h2 className="h">The pipeline</h2>
+        <Timeline bills={bills} onOpen={onOpen} />
+        <h2 className="h" style={{ marginTop: "var(--s6)" }}>Where the bills stand</h2>
+        <div className="panel summaryrow">
           <Summary n={tally.in_progress} o="in_progress" />
           <Summary n={tally.awaiting_governor} o="awaiting_governor" />
           <Summary n={tally.signed} o="signed" />
@@ -76,7 +80,6 @@ export function Landing({ bills, onOpen }: { bills: Bill[]; onOpen: (b: Bill) =>
           <Summary n={tally.dead} o="dead" />
           <Summary n={tally.carried_over} o="carried_over" />
         </div>
-        <Timeline bills={bills} onOpen={onOpen} />
       </div>
     </div>
   );

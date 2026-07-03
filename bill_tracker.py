@@ -109,6 +109,23 @@ _OUTCOME_AWAITING = ("enrolled", "pending governor", "awaiting governor", "commu
                      "governor's action")   # NOTE: "passed" handled separately — a single-chamber
                                             # "Passed House"/"Passed Senate" is mid-process, not awaiting
 
+# Per-chamber FLOOR outcome (for the Timeline's Floor stages). LIS records floor events in its OWN
+# controlled action vocabulary, which NAMES the chamber — consuming those controlled phrases (never free
+# prose), gated on the acting chamber:
+#   passage — "(Read third time and) passed House/Senate", plus the voice-vote form "Agreed to by
+#     House/Senate". A committee-substitute "agreed to" is NOT a floor passage — the `by (House|Senate)`
+#     clause excludes it (it reads "committee substitute agreed to", no "by <chamber>").
+#   defeat — "(Read third time and) defeated by House/Senate": the bill REACHED that floor and was voted
+#     down (~29 instances in 2026 vs 834+ passages). NOT the procedural "substitute/amendments rejected
+#     by X" votes — those reject the OTHER chamber's changes on bills that often still pass (e.g. HB55
+#     was "Defeated by Senate," reconsidered, and SIGNED — which is also why passage WINS over defeat).
+# Validated self-calibrating vs the structural outcome (Standard #1): 1157/1157 fully-passed BILLS show
+# both chambers passed; 0 died/carried bills show both.
+_PASS_HOUSE_RE = re.compile(r"\bpassed house\b|\bagreed to by house\b", re.I)
+_PASS_SENATE_RE = re.compile(r"\bpassed senate\b|\bagreed to by senate\b", re.I)
+_DEFEAT_HOUSE_RE = re.compile(r"\bdefeated by house\b", re.I)
+_DEFEAT_SENATE_RE = re.compile(r"\bdefeated by senate\b", re.I)
+
 
 def _outcome_from_flags(meta):
     """STRUCTURAL outcome (Standard #3) from BILLS.CSV's OWN fields; None if none is set (→ caller falls
@@ -227,6 +244,29 @@ def _derive_position(rows, bill):
             "last_committee": last_committee, "referral_count": len(referred)}
 
 
+def _derive_floor(rows):
+    """STRUCTURAL per-chamber floor outcome for the Timeline's Floor stages. Reads LIS's OWN controlled
+    action vocabulary (the regexes above), which names the chamber — consuming the source, not parsing free
+    prose (Standard #3), the same basis as the outcome derivation. Returns {house, senate} each in
+    {"passed", "defeated", ""}: "passed" = cleared that chamber's floor; "defeated" = REACHED that floor and
+    was voted down (so the Timeline places its ✕ at Floor, not Committee); "" = no floor event. Passage WINS
+    over defeat (a defeated bill can be reconsidered and then pass — HB55). The self-calibrating cross-check
+    (a fully-passed BILL must show both passed; a died bill must not) lives in build_bill_records'
+    reconciliation counters."""
+    house = senate = ""
+    for r in rows:
+        act = str(r.get("action", ""))
+        if house != "passed" and _PASS_HOUSE_RE.search(act):
+            house = "passed"
+        elif not house and _DEFEAT_HOUSE_RE.search(act):
+            house = "defeated"
+        if senate != "passed" and _PASS_SENATE_RE.search(act):
+            senate = "passed"
+        elif not senate and _DEFEAT_SENATE_RE.search(act):
+            senate = "defeated"
+    return {"house": house, "senate": senate}
+
+
 def _latest_vote(rows):
     """Most recent recorded vote → {tally, location, date}. The location is STRUCTURAL (the committee
     from the vote refid, else Floor). The tally is a DISPLAY of LIS's OWN published tally string —
@@ -335,6 +375,10 @@ def build_bill_records(http_session, session_code):
     docket_unparseable, docket_rows_total = 0, 0   # the metric + its denominator (Standard #7)
     outcome_structural, outcome_keyword, patron_present = 0, 0, 0   # trust counters (coverage of the bulk join)
     outcome_mismatches = []   # self-calibrating drift: keyword-derived outcome ≠ LIS's structural flags
+    # Floor-passage self-calibration (Standard #1): among fully-passed BILLS (HB/SB — resolutions are
+    # single-chamber and excluded), how many DON'T show both floor passages? Should be ~0; a rising rate
+    # means LIS drifted its "passed House/Senate" action vocabulary. floor_both_expected is the denominator.
+    floor_house_bills = floor_senate_bills = floor_both_expected = floor_both_missing = 0
     for item in universe:
         bill = _clean_bill(item.get("LegislationNumber", ""))
         if not bill:
@@ -369,6 +413,15 @@ def build_bill_records(http_session, session_code):
         patron = meta["patron_name"] if meta else ""
         if patron:
             patron_present += 1
+        floor = _derive_floor(rows)
+        floor_house_bills += floor["house"] == "passed"
+        floor_senate_bills += floor["senate"] == "passed"
+        # Self-calibrating reconciliation: a fully-passed BILL (HB/SB, not a single-chamber resolution)
+        # must have cleared BOTH floors. Count the exceptions as a rate (Standard #1/#7).
+        if outcome in ("awaiting_governor", "signed", "vetoed") and re.match(r"^[HS]B", bill):
+            floor_both_expected += 1
+            if not (floor["house"] == "passed" and floor["senate"] == "passed"):
+                floor_both_missing += 1
         records.append({
             "bill": bill,
             "title": str(item.get("Description", "") or "").strip(),
@@ -378,6 +431,8 @@ def build_bill_records(http_session, session_code):
             "patron_id": meta["patron_id"] if meta else "",
             "chamber": position["current_chamber"],
             "crossed_over": position["crossed_over"],
+            "floor_house": floor["house"],                           # ""|"passed"|"defeated" (Timeline Floor stage)
+            "floor_senate": floor["senate"],                         # ""|"passed"|"defeated" (Timeline Floor stage)
             "last_committee": position["last_committee"],
             "referral_count": position["referral_count"],
             "latest_vote": _latest_vote(rows),                       # {tally, location, date}
@@ -415,6 +470,14 @@ def build_bill_records(http_session, session_code):
         "outcome_keyword_mismatches": len(outcome_mismatches),
         "outcome_keyword_mismatch_rate": round(len(outcome_mismatches) / outcome_structural, 4) if outcome_structural else 0.0,
         "outcome_mismatch_sample": sorted(outcome_mismatches)[:10],
+        # Floor-passage coverage + self-calibrating reconciliation (Timeline Floor stages). The mismatch
+        # rate is the share of fully-passed BILLS not showing both floor passages — a drift signal on LIS's
+        # "passed House/Senate" vocabulary; steady ≈ 0 on 2026 data.
+        "floor_passage_house_bills": floor_house_bills,
+        "floor_passage_senate_bills": floor_senate_bills,
+        "floor_passage_both_expected": floor_both_expected,
+        "floor_passage_both_missing": floor_both_missing,
+        "floor_passage_reconcile_rate": round(floor_both_missing / floor_both_expected, 4) if floor_both_expected else 0.0,
         "checked_at_utc": now_utc,
     }
     return records, completeness
@@ -430,17 +493,22 @@ def write_bill_tracker(records, completeness):
         json.loads(creds_json), scopes=["https://www.googleapis.com/auth/spreadsheets"]))
     sheet = gc.open_by_key(SPREADSHEET_ID)
 
+    # House Floor / Senate Floor are APPENDED (cols Q,R) so the existing A..P column indices the front
+    # end reads stay stable; the completeness summary moves right (T1) to stay clear of the widened data.
+    # Values: "passed" (cleared that floor) | "defeated" (reached that floor, voted down) | "" (no floor event).
     header = ["Bill", "Title", "Status (LIS)", "Outcome", "Patron", "Patron ID", "Chamber",
               "Crossed Over", "Last Committee", "Referrals", "Last Action", "Latest Vote (JSON)",
-              "Upcoming (JSON)", "History (JSON)", "Data As Of (UTC)", "Source"]
+              "Upcoming (JSON)", "History (JSON)", "Data As Of (UTC)", "Source",
+              "House Floor", "Senate Floor"]
     rows = [header] + [[
         r["bill"], r["title"], r["status_lis"], r["outcome"], r["patron"], r["patron_id"], r["chamber"],
         "yes" if r["crossed_over"] else "no", r["last_committee"], r["referral_count"], r["last_action_date"],
         json.dumps(r["latest_vote"], ensure_ascii=False), json.dumps(r["upcoming"], ensure_ascii=False),
         json.dumps(r["history"], ensure_ascii=False), r["data_as_of_utc"], r["source"],
+        r["floor_house"], r["floor_senate"],
     ] for r in records]
-    # 16 data cols (A..P); the completeness summary lives at R1 (col 18), clear of the data.
-    completeness_cell, need_rows, need_cols = "R1", len(rows) + 50, 18
+    # 18 data cols (A..R); the completeness summary lives at T1 (col 20), clear of the data.
+    completeness_cell, need_rows, need_cols = "T1", len(rows) + 50, 20
 
     try:
         ws = sheet.worksheet(BILL_TRACKER_TAB)

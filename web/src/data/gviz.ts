@@ -1,5 +1,5 @@
 import { gvizCsvUrl, BILL_TRACKER_TAB } from "../config";
-import type { Bill, BillData, Completeness, HistoryRow, LatestVote, Meeting, Outcome, Chamber } from "./types";
+import type { Bill, BillData, Completeness, FloorEvent, HistoryRow, LatestVote, Meeting, Outcome, Chamber } from "./types";
 
 // --- CSV (RFC4180) parser ----------------------------------------------------------------------
 // gviz `tqx=out:csv` quotes any field containing a comma/quote/newline and escapes quotes as "".
@@ -37,13 +37,21 @@ function jsonOr<T>(raw: string | undefined, fallback: T): T {
   try { return JSON.parse(raw) as T; } catch { return fallback; }
 }
 
-// Header column order written by bill_tracker.write_bill_tracker (A..P); completeness lives at R1.
+// Header column order written by bill_tracker.write_bill_tracker (A..R); completeness lives at T1.
+// House/Senate Floor were APPENDED (Q,R) so cols A..P kept their indices; completeness moved to T.
 const COL = {
   bill: 0, title: 1, status: 2, outcome: 3, patron: 4, patronId: 5, chamber: 6, crossed: 7,
   lastCommittee: 8, referrals: 9, lastAction: 10, latestVote: 11, upcoming: 12, history: 13,
-  dataAsOf: 14, source: 15,
+  dataAsOf: 14, source: 15, floorHouse: 16, floorSenate: 17,
 } as const;
-const COMPLETENESS_COL = 17;   // R (Q=16 is the empty spacer)
+const COMPLETENESS_COL = 19;   // T (S=18 is the empty spacer)
+
+// Validate a floor cell against the known enum — an unrecognized value (schema drift, the pre-migration
+// empty column) reads as "" (no floor event), never a guessed stage ("allowed not to know, never pretend").
+const floorEvent = (v: string | undefined): FloorEvent => {
+  const t = (v || "").trim().toLowerCase();
+  return t === "passed" || t === "defeated" ? t : "";
+};
 
 const OUTCOMES = new Set<Outcome>([
   "signed", "vetoed", "dead", "carried_over", "awaiting_governor", "in_progress",
@@ -68,6 +76,8 @@ function toBill(r: string[]): Bill | null {
     patronId: (r[COL.patronId] || "").trim(),
     chamber,
     crossedOver: (r[COL.crossed] || "").trim().toLowerCase() === "yes",
+    floorHouse: floorEvent(r[COL.floorHouse]),
+    floorSenate: floorEvent(r[COL.floorSenate]),
     lastCommittee: (r[COL.lastCommittee] || "").trim(),
     referrals: parseInt(r[COL.referrals] || "0", 10) || 0,
     latestVote: jsonOr<LatestVote>(r[COL.latestVote], { tally: "", location: "", date: "" }),
@@ -112,7 +122,11 @@ export async function loadBillData(): Promise<BillData> {
   if ((header[0] || "").trim().toLowerCase() !== "bill" || header.length < 16) {
     throw new Error("unexpected Bill_Tracker shape — header row didn't match (sheet renamed, not shared, or an error page?)");
   }
-  const completeness = jsonOr<Completeness | null>(header[COMPLETENESS_COL], null);
+  // Read completeness at its new column (T), falling back to the OLD position (R) during the schema-
+  // migration window — after this front-end deploys but BEFORE the bill worker first rewrites the sheet
+  // with the appended Passed House/Senate cols, completeness is still at R. `||` picks whichever cell holds
+  // the JSON; jsonOr returns null for a non-JSON cell (a stray "yes"/"no"), so it can't misparse.
+  const completeness = jsonOr<Completeness | null>(header[COMPLETENESS_COL] || header[17], null);
 
   const bills: Bill[] = [];
   for (let i = 1; i < rows.length; i++) {

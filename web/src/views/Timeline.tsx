@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import type { Bill, Chamber } from "../data/types";
-import { deriveStage, type Stage } from "../data/derive";
+import { deriveStage, furthestStage, type Stage } from "../data/derive";
 import { BillBox } from "../components/BillBox";
 
 // The crossover-lane pipeline (vision §3b) as a smooth integrated SPINE. Owner 2026-06-30: failure and the
@@ -11,24 +11,17 @@ import { BillBox } from "../components/BillBox";
 const COLUMNS: { stage: Stage; label: string }[] = [
   { stage: "prefiled", label: "Prefiled" },
   { stage: "committee1", label: "Committee" },
+  { stage: "floor1", label: "Floor" },
   { stage: "committee2", label: "Committee · 2nd" },
+  { stage: "floor2", label: "Floor · 2nd" },
   { stage: "governor", label: "To Governor" },
 ];
 
-// Stage of death for a dead/carried bill: the last stage it structurally reached. Derivable now from the same
-// fields deriveStage uses (crossed / lastCommittee); committee-vs-floor granularity waits on the Floor-stage
-// backend field ([[design/ui_redesign_spec]] item 4). deriveStage collapses all deaths into "died"; this
-// recovers WHERE.
-const lastReached = (b: Bill): Stage => {
-  if (!b.lastCommittee) return "prefiled";
-  // committee1 vs committee2 from the LAST committee's chamber vs the bill's ORIGIN chamber — NOT crossedOver,
-  // which is an "ever crossed" flag that never unsets and so over-attributes deaths to committee2 when a
-  // bill's latest committee-bearing action is back in its origin chamber (Qodo #187). If the last committee
-  // is in the other chamber, the bill had crossed and died there (committee2); otherwise it's committee1.
-  const inOtherChamber = b.chamber === "House" ? b.lastCommittee.startsWith("Senate")
-    : b.chamber === "Senate" ? b.lastCommittee.startsWith("House") : false;
-  return inOtherChamber ? "committee2" : "committee1";
-};
+// Stage of death for a dead/carried bill: the last stage it structurally reached — now the SAME
+// furthestStage() the live pipeline uses (origin/second floor via passedHouse/passedSenate), so a ✕ lands
+// at the true stage (e.g. a bill that cleared its origin floor then died crossing shows ✕ at Floor, not
+// Committee). deriveStage collapses all deaths into "died"; this recovers WHERE.
+const lastReached = (b: Bill): Stage => furthestStage(b);
 type OutKind = "signed" | "awaiting" | "vetoed" | "carried" | "dead";
 
 export function Timeline({ bills, onOpen }: { bills: Bill[]; onOpen: (b: Bill) => void }) {
@@ -75,6 +68,23 @@ export function Timeline({ bills, onOpen }: { bills: Bill[]; onOpen: (b: Bill) =
       || (a.lastCommittee ?? "").localeCompare(b.lastCommittee ?? "")
       || a.bill.localeCompare(b.bill, undefined, { numeric: true }));
   }, [drill, cellBills]);
+
+  // Grouped for scanning (owner 2026-07-03: "there are so many — group by House/Senate → committee →
+  // sub"). drillBills is already sorted chamber→committee→bill, and lastCommittee is chamber-qualified and
+  // names the subcommittee inline ("House Appropriations - Transportation & Public Safety Subcommittee"),
+  // so walking it in order and breaking on a committee change yields exactly that hierarchy. Capped so a
+  // huge stage (500+ bills) can't flood the DOM; the count in each header is the FULL group size.
+  const DRILL_CAP = 300;
+  const drillGroups = useMemo(() => {
+    const groups: { committee: string; bills: Bill[] }[] = [];
+    for (const b of drillBills) {
+      const committee = b.lastCommittee || `${b.chamber} · not yet in committee`;
+      const last = groups[groups.length - 1];
+      if (last && last.committee === committee) last.bills.push(b);
+      else groups.push({ committee, bills: [b] });
+    }
+    return groups;
+  }, [drillBills]);
 
   if (bills.length === 0) {
     return <p className="center-msg">No bills in scope. Star some bills, or switch to <b>Full GA</b>.</p>;
@@ -124,7 +134,9 @@ export function Timeline({ bills, onOpen }: { bills: Bill[]; onOpen: (b: Bill) =
       <div className="spine-legend">
         <span><span className="swatch" style={{ background: "var(--senate)" }} />Senate · above</span>
         <span><span className="swatch" style={{ background: "var(--house)" }} />House · below</span>
-        <span><span className="swatch" style={{ background: "var(--o-dead)" }} />✕ died / carried over at that stage</span>
+        {/* Owner 2026-07-03: the ✕ counts confused against the end-of-spine "Died" number (✕712 > 811?).
+            The ✕s include BOTH terminal kinds, so state the math explicitly: all ✕ = Died + Carried over. */}
+        <span><span className="swatch" style={{ background: "var(--o-dead)" }} />✕ died <em>or</em> carried over at that stage — all ✕ sum to {(outcome.dead + outcome.carried).toLocaleString()} ({outcome.dead.toLocaleString()} died + {outcome.carried.toLocaleString()} carried over)</span>
         <span className="muted">Position is progress — a bill crosses the line at crossover; the spine ends in the decided outcome.</span>
       </div>
 
@@ -165,9 +177,21 @@ export function Timeline({ bills, onOpen }: { bills: Bill[]; onOpen: (b: Bill) =
             <h3 className="h" style={{ margin: 0 }}>{drillLabel(drill)} — {drillBills.length} bill(s)</h3>
             <button type="button" className="filters" style={{ boxShadow: "none", background: "transparent" }} onClick={() => setDrill(null)}>✕ clear</button>
           </div>
-          <div className="billgrid">
-            {drillBills.slice(0, 200).map((b) => <BillBox key={b.bill} bill={b} onOpen={onOpen} />)}
-          </div>
+          {(() => { let shown = 0; return drillGroups.map((g) => {
+            if (shown >= DRILL_CAP) return null;
+            const slice = g.bills.slice(0, DRILL_CAP - shown); shown += slice.length;
+            return (
+              <div key={g.committee} className="drill-group">
+                <div className="drill-grouphdr">{g.committee} <span className="muted">· {g.bills.length}</span></div>
+                <div className="billgrid">
+                  {slice.map((b) => <BillBox key={b.bill} bill={b} onOpen={onOpen} />)}
+                </div>
+              </div>
+            );
+          }); })()}
+          {drillBills.length > DRILL_CAP && (
+            <p className="muted" style={{ marginTop: "var(--s2)" }}>Showing the first {DRILL_CAP} of {drillBills.length} — narrow the scope or open a bill to see more.</p>
+          )}
         </div>
       )}
     </div>
