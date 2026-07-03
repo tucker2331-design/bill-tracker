@@ -2934,6 +2934,17 @@ def _resolve_one_day(day_rows):
         if "house convenes" in k or "house chamber" in k: raw_times["house"] = v; raw_times["the house"] = v
         if "senate convenes" in k or "senate chamber" in k: raw_times["senate"] = v; raw_times["the senate"] = v
 
+    # The day's committee-name VOCABULARY — every token appearing in some schedule node
+    # this day. A relative phrase's reference is filtered down to its intersection with
+    # this set, so any token that is NOT part of a real committee name — LIS UI captions
+    # ("(Agenda)", "Committee Info") and any FUTURE caption LIS adds ("livestream", …) —
+    # is dropped STRUCTURALLY, with no hand-curated denylist to silently rot when LIS
+    # drifts (Standard #1/#8 — grounded against the authoritative runtime node set, not a
+    # static constant; CodeRabbit #189).
+    day_vocab = set()
+    for p in raw_times:
+        day_vocab |= set(normalize_room_key(p).split())
+
     resolved_times = {}
     def _adjourned_key(chamber):
         # The published "[chamber] adjourned" session marker whose ScheduleTime
@@ -2958,15 +2969,16 @@ def _resolve_one_day(day_rows):
         # fall through to the floor-adjourned anchor below.
         m = re.search(r'(?:immediately\s+)?(?:upon|after|following)\s+(?:the\s+)?(.*)$', rl, re.I)
         ref = m.group(1) if m else rl
-        # Drop the trailing LIS UI boilerplate that pollutes the reference — the
-        # parenthetical "(Agenda)(View Meeting)" links and the "Committee Info /
-        # Subcommittee Info" caption — before tokenizing. Without this, junk tokens
-        # (info/view/meeting) are added to ref_tokens and NO schedule node covers them,
-        # so the committee match fails and the row mis-anchors to the chamber floor
-        # (2026-01-21 House Appropriations subcommittees, calendar_chain_ordering §8).
-        ref = re.sub(r'\(.*', '', ref)
-        ref_tokens = set(normalize_room_key(ref).split()) - {
-            "adjournment", "adjourned", "session", "recess", "meeting", "info", "view", "docket", "online", "agenda"}
+        ref = re.sub(r'\(.*', '', ref)   # the reference ends at the trailing "(Agenda)…" boilerplate
+        # Keep only tokens that actually name a committee THIS day (intersect with
+        # day_vocab) — LIS UI-caption noise ("Committee Info", and any future caption)
+        # is dropped structurally, so a new LIS token can't break the match or mis-anchor
+        # the row to the floor (CodeRabbit #189, calendar_chain_ordering §8). The small
+        # explicit strip removes the dependency-GRAMMAR words that ARE also node tokens
+        # ("adjourned"/"session"/"recess") — they describe the timing relationship, not
+        # the committee — so a bare "adjournment of the House" stays a bare-chamber ref.
+        ref_tokens = (set(normalize_room_key(ref).split()) & day_vocab) - {
+            "adjournment", "adjourned", "session", "recess", "meeting"}
         if not (ref_tokens - {"house", "senate", "joint"}):
             return None
         best = None
@@ -3032,7 +3044,11 @@ def _resolve_one_day(day_rows):
                 # No try/except: res is always parse_24h_time output (a valid "%H:%M" or
                 # a sentinel already excluded), so strptime cannot raise here (Qodo #189).
                 if res == parent_time and res not in ("06:00", "23:59"):
-                    res = (datetime.strptime(res, '%H:%M') + timedelta(minutes=1)).strftime('%H:%M')
+                    nudged = (datetime.strptime(res, '%H:%M') + timedelta(minutes=1)).strftime('%H:%M')
+                    # Never let the +1 land on the 23:59 UNRESOLVED sentinel (a 23:58 tie
+                    # would otherwise read as "unresolved" downstream) — keep the tie
+                    # instead in that 1-in-a-million late-night case (CodeRabbit #189).
+                    res = nudged if nudged != "23:59" else res
                 resolved_times[name_key] = res
                 return res
             return "06:00"
