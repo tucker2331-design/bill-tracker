@@ -37,10 +37,12 @@ REL_RE = re.compile(r'\b(?:immediately\s+)?(?:upon|after|following)\b|\brecess\b
 SENTINELS = {"23:59", "06:00"}
 
 def load(source_text, label):
+    if source_text is None:
+        sys.exit(f"❌ cannot load '{label}' snapshot — source missing (git show failed / merge-base absent).")
     body = [n for n in ast.parse(source_text).body if isinstance(n, ast.FunctionDef) and n.name in NEEDED]
     ns = {"re": re, "datetime": datetime, "timedelta": timedelta, "str": str, "pd": pd, "defaultdict": defaultdict}
     exec(compile(ast.Module(body, []), f"<{label}>", "exec"), ns)
-    return ns.get("build_time_graph"), {n.name for n in body}
+    return ns  # full namespace — callers pull build_time_graph / parse_24h_time / etc. from it
 
 def git_show(ref, path):
     try:
@@ -62,17 +64,12 @@ def date_key(m):
     return None if pd.isna(d) else d.strftime("%Y-%m-%d")
 
 def main():
-    new_btg, _ = load(open(f"{ROOT}/calendar_worker.py").read(), "new")
-    parse24 = None
-    # pull parse_24h_time out too (for the absolute check) from the same new source
-    body = [n for n in ast.parse(open(f"{ROOT}/calendar_worker.py").read()).body
-            if isinstance(n, ast.FunctionDef) and n.name in NEEDED]
-    ns = {"re": re, "datetime": datetime, "timedelta": timedelta, "str": str, "pd": pd, "defaultdict": defaultdict}
-    exec(compile(ast.Module(body, []), "<new>", "exec"), ns)
-    parse24 = ns["parse_24h_time"]
+    ns_new = load(open(f"{ROOT}/calendar_worker.py").read(), "new")
+    new_btg = ns_new["build_time_graph"]
+    parse24 = ns_new["parse_24h_time"]   # reused from the one extraction (no re-parse)
 
     base = subprocess.check_output(["git", "-C", ROOT, "merge-base", "HEAD", "origin/main"]).decode().strip()
-    old_btg, _ = load(git_show(base, "calendar_worker.py"), "old")
+    old_btg = load(git_show(base, "calendar_worker.py"), "old")["build_time_graph"]  # None-source → load() exits
     print(f"OLD snapshot (date-blind, name-keyed): {base[:9]}\n")
 
     fail = False
@@ -97,7 +94,7 @@ def main():
                 continue
             dk = date_key(m)
             if dk is not None:
-                pub_clocks[(dk, dk and norm_name(m))].add(own)
+                pub_clocks[(dk, norm_name(m))].add(own)
         violations = []
         for key, clocks in pub_clocks.items():
             got = new_map.get(key)

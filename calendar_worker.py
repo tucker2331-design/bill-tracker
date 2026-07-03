@@ -2827,6 +2827,12 @@ def _parse_relative_offset_minutes(text):
     # "2 hours" (grabbing the 2 in 1/2) → +120 instead of +30, over-delaying the
     # committee's whole subcommittee chain by 90 min (2026-01-21 House Appropriations
     # chain, calendar_chain_ordering §8; unicode forms folded in per Qodo #189).
+    # Mixed fraction "1 1/2 hours" / "2½ hours" = N*60 + 30 — checked BEFORE the plain
+    # half-hour case, which would otherwise match the "1/2"/"½" substring and silently
+    # drop the leading whole hours (Gemini #189).
+    mixed = re.search(r'(\d+)\s*(?:1\s*/\s*2|½)\s*hour', t)
+    if mixed:
+        return int(mixed.group(1)) * 60 + 30
     if re.search(r'(?:1\s*/\s*2|½)\s*hour|half\s*(?:an?\s*)?hour', t):
         return 30
     if re.search(r'(?:1\s*/\s*4|¼)\s*hour|quarter\s*(?:of\s*an?\s*)?hour', t):
