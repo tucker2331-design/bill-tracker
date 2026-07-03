@@ -1,8 +1,9 @@
 ---
 tags: [ideas, calendar, worker, time-resolution, plan, structural]
-updated: 2026-07-02
-status: planned
+updated: 2026-07-03
+status: done
 premise-revised: 2026-07-02  # §1-§6 premise ("chains stranded at 23:59, additive gate tweak") FALSIFIED — see §8
+implemented: 2026-07-03  # DATE-AWARE refactor shipped in PR #189 — see §8 tail
 ---
 
 # Plan — Resolve "after committee X" meeting CHAINS (calendar ordering)
@@ -160,5 +161,18 @@ resolver against **3,521 live rows across 443 dates** showed §1-§6 misdiagnose
   It warrants its own focused session and owner awareness (the owner gated this task on "plan fully before
   starting"; the plan is now corrected). The front-end §7.2 surfacing (top-surface + highlight the truly
   unresolvable residual) still applies, gated on the worker emitting a structural `TimeClass` flag.
+
+### ✅ IMPLEMENTED — PR [#189](https://github.com/tucker2331-design/bill-tracker/pull/189) (2026-07-03)
+The revised approach shipped exactly as scoped above. `build_time_graph` is now date-aware
+(`_resolve_one_day` per day, output `{(date,name):"HH:MM"}`); `_committee_parent` anchors committee
+references to the committee node (reserving the floor-adjourned clock for bare-chamber refs); concrete
+published clocks always win; a +1-min chain epsilon keeps A→B→C strictly ordered; `_parse_relative_offset_minutes`
+handles ½/mixed/unicode fractions. Validated offline (`tools/edge_case_replay/validate_relative_chains.py`):
+**SAFETY 0/2,877 published-clock keys move, RESOLUTION 198→428 relative rows concrete**, chains order
+parent→children. Three bot fold-in rounds; the notable hardening was replacing a hand-curated UI-caption
+denylist (Standard-#1 rot risk CodeRabbit flagged) with a **structural `day_vocab` intersection** (drift-proof).
+**Still OPEN:** §7.2 — the honest top-surface + highlight of the ~32/450 truly-unresolvable rows, gated on the
+worker emitting a structural `TimeClass` flag. Production proof (Section 9 = 0 + X-Ray ordering) lands on the
+next worker cycle.
 
 See also [[architecture/calendar_pipeline]], [[knowledge/tba_times]], [[failures/assumptions_audit#79]], [[failures/assumptions_audit#95]], [[design/ui_redesign_spec]], [[state/next_session]].

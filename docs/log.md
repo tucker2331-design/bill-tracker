@@ -10,6 +10,23 @@ Append-only, reverse-chronological (newest at top). Each entry opens with `## [Y
 
 **Kinds:** `ingest` (new source/doc processed), `pr` (PR opened/merged/closed), `decision` (architectural or workflow), `lint` (wiki health-check pass), `session` (notable multi-hour working block), `post-mortem` (failure analysis), `milestone` (project-goal threshold crossed).
 
+## [2026-07-03] pr | #189 MERGED — date-aware relative-time resolver (chains sort by real per-day time)
+
+Implemented the re-scoped fix (the day after the premise was falsified below). `build_time_graph` now
+resolves each DAY independently and outputs `{(date, name): "HH:MM"}`; the caller looks up
+`(date_str, owner_lower)`. Honors every published clock exactly (concrete `ScheduleTime` always wins);
+`_committee_parent` anchors a committee reference to that committee's node, not the chamber floor,
+reserving the floor-adjourned clock for bare-chamber refs; +1-min chain epsilon keeps a transitive
+A→B→C chain strictly ordered; fixed `_parse_relative_offset_minutes("1/2 hour")`=120→30 (+ mixed
+"1 1/2"/unicode "½"). Offline-validated (`tools/edge_case_replay/validate_relative_chains.py`, live
+Schedule API): SAFETY 0/2,877 published-clock keys move, RESOLUTION 198→428 relative rows concrete,
+date-awareness proven (senate adjourned = 69 distinct per-date times), chains order parent→children.
+THREE bot fold-in rounds — the standout: replaced a hand-curated UI-caption denylist (Standard-#1 rot
+risk) with a structural `day_vocab` intersection (drift-proof; also resolved 10 more rows). Worker
+golden tests pass; front-end unchanged (`toMinutes` already sorts by `SortTime`). Production proof =
+Section 9 = 0 + X-Ray ordering next worker cycle. Residual ~32/450 (root unresolvable) → §7.2 follow-up.
+Lesson [[failures/assumptions_audit#95]] closed; plan [[ideas/calendar_chain_ordering]] §8 → implemented.
+
 ## [2026-07-02] decision | Relative-time chain fix RE-SCOPED — plan premise falsified by measurement
 
 Picked up the queued relative-time chain ordering ([[ideas/calendar_chain_ordering]]) as the next intensive
