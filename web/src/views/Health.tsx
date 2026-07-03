@@ -132,14 +132,37 @@ export function Health({ completeness, dataAsOf }: { completeness: Completeness 
   // often," which a point-in-time snapshot can't show. Newest-last-seen first. ──
   const alertHistory = (() => {
     if (!hist?.available || hist.alerts.length === 0) return null;
-    const byKey = new Map<string, { severity: string; category: string; message: string; count: number; firstTs: number; lastTs: number }>();
+    type Distinct = { severity: string; category: string; message: string; count: number; firstTs: number; lastTs: number };
+    const byKey = new Map<string, Distinct>();
     for (const a of hist.alerts) {
       const k = `${a.severity}|${a.category}|${a.message}`;
       const e = byKey.get(k);
       if (e) { e.count++; e.firstTs = Math.min(e.firstTs, a.ts); e.lastTs = Math.max(e.lastTs, a.ts); }
       else byKey.set(k, { severity: a.severity, category: a.category, message: a.message, count: 1, firstTs: a.ts, lastTs: a.ts });
     }
-    return [...byKey.values()].sort((x, y) => y.lastTs - x.lastTs);
+    // Collapse HIGH-VOLUME routine categories so they don't flood the feed. A category
+    // with many DISTINCT messages (e.g. per-bill TIMING_LAG deferrals) is a routine
+    // aggregate, not N separate anomalies (Standard #8) — group it into one expandable
+    // summary. Categories with few distinct alerts (breaker, drift, API failure — the
+    // genuine "needs a human" signals) stay fully expanded. (Owner 2026-07-03: the feed
+    // read as alarming from ~471 benign deferral WARNs; the worker also stopped emitting
+    // them per-row, so this is belt-and-suspenders + handles the historical backlog.)
+    const COLLAPSE_AT = 8;
+    const groups = new Map<string, Distinct[]>();
+    for (const d of byKey.values()) (groups.get(`${d.severity}|${d.category}`) ?? groups.set(`${d.severity}|${d.category}`, []).get(`${d.severity}|${d.category}`)!).push(d);
+    type Single = { kind: "single" } & Distinct;
+    type Group = { kind: "group"; severity: string; category: string; distinct: number; totalCount: number; lastTs: number; items: Distinct[] };
+    const out: (Single | Group)[] = [];
+    for (const [, ds] of groups) {
+      if (ds.length > COLLAPSE_AT) {
+        out.push({ kind: "group", severity: ds[0].severity, category: ds[0].category, distinct: ds.length,
+          totalCount: ds.reduce((s, d) => s + d.count, 0), lastTs: Math.max(...ds.map((d) => d.lastTs)),
+          items: ds.sort((a, b) => b.lastTs - a.lastTs) });
+      } else {
+        for (const d of ds) out.push({ kind: "single", ...d });
+      }
+    }
+    return out.sort((x, y) => y.lastTs - x.lastTs);
   })();
 
   // ── At-a-glance vitals: roll the gauges below into four category rings. Each segment's tone comes from
@@ -342,7 +365,27 @@ export function Health({ completeness, dataAsOf }: { completeness: Completeness 
           <p className="muted" style={{ marginBottom: 18 }}>No alerts in the recent window — the worker is running clean.</p>
         ) : (
           <div className="panel" style={{ marginBottom: 18 }}>
-            {alertHistory.map((a, i) => (
+            {alertHistory.map((a, i) => a.kind === "group" ? (
+              <details key={i} className="hl-alertgroup">
+                <summary className="hl-alert">
+                  <span className={`hl-sev ${a.severity.toLowerCase()}`}>{a.severity}</span>
+                  {a.category && <span className="hl-cat">{a.category}</span>}
+                  <span className="hl-amsg"><strong>{a.distinct.toLocaleString()}</strong> distinct alerts (routine aggregate — expand to inspect)</span>
+                  <span className="hl-acount" title={`${a.totalCount} total occurrences across ${a.distinct} distinct alerts`}>×{a.totalCount.toLocaleString()}</span>
+                  <span className="hl-adate">{agoText(new Date(a.lastTs))}</span>
+                </summary>
+                <div style={{ paddingLeft: 8 }}>
+                  {a.items.slice(0, 100).map((d, j) => (
+                    <div key={j} className="hl-alert">
+                      <span className="hl-amsg">{d.message}</span>
+                      {d.count > 1 && <span className="hl-acount" title={`fired in ${d.count} cycles`}>×{d.count}</span>}
+                      <span className="hl-adate">{agoText(new Date(d.lastTs))}</span>
+                    </div>
+                  ))}
+                  {a.items.length > 100 && <div className="muted" style={{ padding: "4px 0" }}>…and {(a.items.length - 100).toLocaleString()} more</div>}
+                </div>
+              </details>
+            ) : (
               <div key={i} className="hl-alert">
                 <span className={`hl-sev ${a.severity.toLowerCase()}`}>{a.severity}</span>
                 {a.category && <span className="hl-cat">{a.category}</span>}

@@ -1609,8 +1609,9 @@ def _resolve_via_legislation_event_api(
     # tie-break by latest EventDate so the most recent rendering of the
     # same logical action wins. Score=0 (no token overlap) is treated as
     # NO confident match → return None and fall through to the existing
-    # journal_default path; the alert there carries the diagnostic_hint
-    # so the human can see what we did and didn't have.
+    # journal_default path; that row carries a visible [NO_SCHEDULE_MATCH]
+    # marker + the diagnostic_hint so the human can see what we did and didn't
+    # have (routed to Ledger, counted in unsourced_journal — no per-row alert).
     real_time_events = [
         e for e in matching
         if str(e.get("EventDate") or "")[11:] not in ("", "00:00:00")
@@ -3954,20 +3955,23 @@ def run_sequential_turing_machine(df_past, *,
             # No API match, no convene anchor, AND LegislationEvent
             # had nothing — the historic silent "Journal Entry" default
             # that PR#22's post-mortem flagged. Replace with a visible
-            # marker and count it. One alert per date+committee+bill
-            # is enough; bulk rows would flood.
+            # marker and count it.
             time_val = "⏱️ [NO_SCHEDULE_MATCH]"
             source_miss_counts["unsourced_journal"] += 1
             diagnostic_hint = _build_diagnostic_hint(
                 date_str, event_location, acting_chamber_prefix
             )
-            push_system_alert(
-                f"No schedule match for {bill_num} at '{event_location}' on {date_str} — row deferred to Ledger.",
-                status="WARN",
-                category="TIMING_LAG",
-                severity="WARN",
-                dedup_key=f"no_match::{date_str}::{event_location}::{bill_num}",
-            )
+            # NO per-row WARN alert. A no-schedule-match deferral to Ledger is a
+            # ROUTINE disposition, not an anomaly (Standard #8 — notify on genuine
+            # anomalies, not "X happened"): the ONLY genuine anomaly here is a MEETING
+            # action without a time, which I4 / meeting_unsourced tracks SEPARATELY. A
+            # per-(date,committee,bill) alert never collapses across bills, so a full
+            # re-derive floods the operator feed with hundreds of benign WARNs (the exact
+            # flood the sibling admin_default path already suppresses, Gemini #66). The
+            # row stays fully VISIBLE and non-silent — the [NO_SCHEDULE_MATCH] marker +
+            # diagnostic_hint on the row + the unsourced_journal counter (trended on the
+            # Health tab) carry the source-gap signal; the aggregate is a gauge, not 471
+            # notifications. (Owner 2026-07-03: the Health alert feed read as alarming.)
 
         # Orthogonal tag counter: fires on every row where the Memory
         # Anchor committee fallback was applied, regardless of how the

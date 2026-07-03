@@ -362,6 +362,15 @@ a.hl-vverify:hover { text-decoration: underline; }
 .hl-amsg { flex: 1; min-width: 200px; color: var(--ink); font-size: 13px; }
 .hl-adate { color: var(--ink-faint); font-size: 12px; white-space: nowrap; }
 .hl-acount { font-size: 11px; font-weight: 800; color: var(--ink-soft); background: var(--surface-2); border-radius: 5px; padding: 1px 6px; font-variant-numeric: tabular-nums; }
+/* A collapsed high-volume routine-alert group: the summary reads like one alert row; expand for the detail. */
+.hl-alertgroup + .hl-alert, .hl-alert + .hl-alertgroup, .hl-alertgroup + .hl-alertgroup { border-top: 1px solid var(--line); }
+.hl-alertgroup > summary { list-style: none; cursor: pointer; }
+.hl-alertgroup > summary::-webkit-details-marker { display: none; }
+.hl-alertgroup > summary::before { content: "▸"; color: var(--ink-faint); font-size: 11px; margin-right: 2px; }
+.hl-alertgroup[open] > summary::before { content: "▾"; }
+.hl-alertgroup[open] > summary { border-bottom: 1px dashed var(--line); }
+.hl-alertgroup > div .hl-alert { padding-top: 5px; padding-bottom: 5px; }
+.hl-alertgroup > div .hl-alert + .hl-alert { border-top: 1px solid var(--surface-2); }
 
 /* upstream watchers (drift-canary green-state) */
 .hl-canaries { margin-bottom: var(--s5); }
