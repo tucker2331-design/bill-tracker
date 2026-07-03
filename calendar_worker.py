@@ -13,7 +13,7 @@ import io
 import csv
 import tempfile
 import urllib.parse
-from collections import Counter
+from collections import Counter, defaultdict
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timedelta, timezone
 import pytz
@@ -2821,6 +2821,17 @@ def _parse_relative_offset_minutes(text):
     m = re.search(r'(\d+)\s*min', t)
     if m:
         return int(m.group(1))
+    # Fractional hours BEFORE the integer-hour parse: LIS publishes "1/2 hour after
+    # adjournment of the House" (and "half an hour"), which the bare `(\d+)\s*hour`
+    # regex mis-reads as "2 hours" (grabbing the 2 in 1/2) → +120 instead of +30,
+    # over-delaying the whole committee's subcommittee chain by 90 min (found in the
+    # 2026-01-21 House Appropriations chain, calendar_chain_ordering §8).
+    if re.search(r'1\s*/\s*2\s*hour|half\s*(?:an?\s*)?hour', t):
+        return 30
+    if re.search(r'1\s*/\s*4\s*hour|quarter\s*(?:of\s*an?\s*)?hour', t):
+        return 15
+    if re.search(r'3\s*/\s*4\s*hour', t):
+        return 45
     h = re.search(r'(\d+)\s*hour', t)
     if h:
         return int(h.group(1)) * 60
@@ -2856,14 +2867,53 @@ def parse_24h_time(raw_time, parent_time_24h=None):
     except Exception:
         return "23:59"
 
-def build_time_graph(schedules):
+# A schedule row is RELATIVE-timed when LIS expresses its time as a dependency on
+# another event ("(immediately) upon/after/following …", or a bare "recess") rather
+# than a clock. Structural SUPERSET of the old fixed 4-marker list (["upon
+# adjournment","minutes after","hour after","recess"]) so nothing that list matched
+# regresses, while also catching "immediately after", plural "hours after", "1/2
+# after adjournment", "following the …" that it silently missed (leaving those chains
+# at the 23:59 end-of-day sentinel). Trigger word, not an exhaustive phrase list, so
+# no maintenance as LIS varies the offset prose. Consulted ONLY for rows without a
+# concrete clock (see _resolve_one_day's gate), so a concrete ScheduleTime is never
+# re-read as relative. calendar_chain_ordering §3.1/§8.
+def _is_relative_time_text(text):
+    return bool(re.search(r'\b(?:immediately\s+)?(?:upon|after|following)\b|\brecess\b', str(text), re.I))
+
+def _resolve_one_day(day_rows):
+    """Resolve the relative-time graph for ONE day's schedule rows → {name_lower: "HH:MM"}.
+
+    Per-day because the "after X" dependency is always intra-day: "immediately after
+    the House Appropriations Committee" means that committee's meeting THAT day. So the
+    "house adjourned"/"house convenes" markers and every committee node are the day's
+    OWN, instead of the old date-blind name-key that collapsed a committee's 27 dated
+    meetings to one value ([[calendar_chain_ordering]] §8, assumptions_audit #95)."""
+    def _is_concrete(v):
+        # A value that carries its OWN clock (parses to a real time, no relative words).
+        return v is not None and parse_24h_time(v) != "23:59" and not any(x in str(v).lower() for x in ["after", "upon"])
+
     raw_times = {}
-    for m in schedules:
-        name = str(m.get('OwnerName', '')).strip().lower()
+    for m in day_rows:
+        name = re.sub(r'\s+', ' ', str(m.get('OwnerName', '')).strip()).lower()
         t_val = str(m.get('ScheduleTime', '')).strip()
         desc = re.sub(r'<[^>]+>', '', str(m.get('Description', ''))).strip()
-        stitched = f"{t_val} {desc}".lower()
-        raw_times[name] = t_val if not any(x in stitched for x in ["upon adjournment", "minutes after", "hour after", "recess"]) else stitched
+        stitched = f"{t_val} {desc}".lower().strip()
+        # PREFER the row's own CONCRETE published clock — honor LIS's published time
+        # exactly, never re-derive it from prose. A single day can carry BOTH a concrete
+        # entry AND a relative entry for the SAME committee name (a placeholder + the
+        # real time, or two listings); a concrete clock must WIN regardless of arrival
+        # order, or a later relative row would clobber the published time (the caller's
+        # own dedup already keeps concrete over TBA — this mirrors it). Only when no
+        # concrete clock exists for the name do we keep the dependency prose for the
+        # resolver to follow. calendar_chain_ordering §3.1/§8.
+        if _is_concrete(t_val):
+            raw_times[name] = t_val                 # concrete always wins
+        elif _is_concrete(raw_times.get(name)):
+            continue                                # never clobber a concrete clock
+        elif _is_relative_time_text(stitched):
+            raw_times[name] = stitched              # relative beats empty
+        elif name not in raw_times:
+            raw_times[name] = t_val                 # empty / TBA (first non-concrete wins)
 
     for k, v in list(raw_times.items()):
         if "house convenes" in k or "house chamber" in k: raw_times["house"] = v; raw_times["the house"] = v
@@ -2880,6 +2930,40 @@ def build_time_graph(schedules):
                      if chamber in k and "adjourn" in k
                      and not any(x in str(v).lower() for x in ["after", "upon", "minute", "hour", "recess"])
                      and not _is_non_concrete_time(v)), None)
+    def _committee_parent(self_key, rl):
+        # §3.2/§8 — resolve a COMMITTEE named in the relative phrase to that committee's
+        # node THIS day: "…adjournment of the House Appropriations Committee" → the
+        # "house appropriations" node, so a subcommittee anchors to its PARENT committee
+        # instead of the chamber FLOOR (the mis-anchor that sorted subcommittees before
+        # their parent). normalize_room_key strips filler ("committee/of/the/and") so
+        # the short reference's tokens are a subset of the full node's tokens; pick the
+        # node whose tokens COVER the reference, most-specific first, alphabetical
+        # tie-break (deterministic). Returns None for a BARE chamber reference
+        # ("adjournment of the House" — no committee-distinctive token) so those still
+        # fall through to the floor-adjourned anchor below.
+        m = re.search(r'(?:immediately\s+)?(?:upon|after|following)\s+(?:the\s+)?(.*)$', rl, re.I)
+        ref = m.group(1) if m else rl
+        # Drop the trailing LIS UI boilerplate that pollutes the reference — the
+        # parenthetical "(Agenda)(View Meeting)" links and the "Committee Info /
+        # Subcommittee Info" caption — before tokenizing. Without this, junk tokens
+        # (info/view/meeting) are added to ref_tokens and NO schedule node covers them,
+        # so the committee match fails and the row mis-anchors to the chamber floor
+        # (2026-01-21 House Appropriations subcommittees, calendar_chain_ordering §8).
+        ref = re.sub(r'\(.*', '', ref)
+        ref_tokens = set(normalize_room_key(ref).split()) - {
+            "adjournment", "adjourned", "session", "recess", "meeting", "info", "view", "docket", "online", "agenda"}
+        if not (ref_tokens - {"house", "senate", "joint"}):
+            return None
+        best = None
+        for p in raw_times:
+            if p == self_key:
+                continue
+            p_tokens = set(normalize_room_key(p).split())
+            if p_tokens and ref_tokens.issubset(p_tokens):
+                extra = len(p_tokens - ref_tokens)
+                if best is None or extra < best[1] or (extra == best[1] and p < best[0]):
+                    best = (p, extra)
+        return best[0] if best else None
     def resolve_node(name_key, visited=None):
         if visited is None: visited = set()
         if name_key in resolved_times: return resolved_times[name_key]
@@ -2889,16 +2973,22 @@ def build_time_graph(schedules):
         raw_str = raw_times.get(name_key, "")
         if not raw_str: return "23:59"
 
-        dynamic_markers = ["upon adjournment", "minutes after", "hour after", "recess"]
-        if any(m in raw_str.lower() for m in dynamic_markers):
-            rl = raw_str.lower()
-            found_parent = None
-            # PR-C7.1o: an "after adjournment" committee meets after the chamber's
-            # floor session ENDS — anchor to the PUBLISHED "[chamber] adjourned"
-            # clock marker. Checked BEFORE the generic substring match, which
-            # would otherwise grab the bare "senate"/"house" convene node and
-            # place the meeting ~2-7h too early (assumptions_audit #70).
-            if "adjourn" in rl:
+        # Relative-detection broadened to the structural trigger (superset of the old
+        # inline 4-marker list — every node the old gate entered still enters).
+        if _is_relative_time_text(raw_str):
+            # Collapse embedded newlines (LIS descriptions are multi-line: "…Committee\n
+            # Subcommittee Info\n(Agenda)") so the ref-extraction regex (anchored on $)
+            # and every substring check below are line-safe — otherwise the capture
+            # fails and the row mis-anchors to the chamber floor (calendar_chain_ordering §8).
+            rl = re.sub(r'\s+', ' ', raw_str.lower())
+            # (1) a COMMITTEE named in the phrase → that committee's node this day
+            #     (fixes the mis-anchor: subcommittee → parent committee, not floor).
+            found_parent = _committee_parent(name_key, rl)
+            # (2) a BARE chamber "after adjournment of the House" → the PUBLISHED
+            #     "[chamber] adjourned" floor clock. Checked before the generic
+            #     substring match, which would otherwise grab the bare convene node and
+            #     place the meeting ~2-7h too early (assumptions_audit #70).
+            if not found_parent and "adjourn" in rl:
                 chamber = "senate" if "senate" in rl else ("house" if "house" in rl else None)
                 if chamber:
                     found_parent = _adjourned_key(chamber)
@@ -2913,7 +3003,22 @@ def build_time_graph(schedules):
                 elif "recess" in rl and "senate" in rl: found_parent = next((k for k, v in raw_times.items() if "recess" in v.lower() and "senate" in k.lower()), None)
 
             if found_parent:
-                res = parse_24h_time(raw_str, resolve_node(found_parent, visited))
+                parent_time = resolve_node(found_parent, visited)
+                res = parse_24h_time(raw_str, parent_time)
+                # Chain epsilon (§3.3): an "immediately/upon" child computes to its
+                # parent's EXACT time (offset 0), tying it with the parent AND any
+                # siblings — which then fall to the alphabetical secondary sort and can
+                # invert a real chain ("commerce subcommittee immediately after the
+                # Transportation subcommittee" must sort AFTER it). Nudge a zero-offset
+                # child one minute past its resolved parent so a transitive A→B→C chain
+                # stays strictly ordered. Ordering only — the DISPLAYED time is LIS's
+                # verbatim string, untouched. Skipped when the parent is unresolved
+                # (06:00/23:59 sentinels) so a nudge can't manufacture a false position.
+                if res == parent_time and res not in ("06:00", "23:59"):
+                    try:
+                        res = (datetime.strptime(res, '%H:%M') + timedelta(minutes=1)).strftime('%H:%M')
+                    except Exception:
+                        pass
                 resolved_times[name_key] = res
                 return res
             return "06:00"
@@ -2924,6 +3029,27 @@ def build_time_graph(schedules):
 
     for name in raw_times: resolve_node(name)
     return resolved_times
+
+def build_time_graph(schedules):
+    """Resolve schedule SortTimes per DAY → {(date_str, name_lower): "HH:MM"}.
+
+    Date-aware (calendar_chain_ordering §8, assumptions_audit #95): each day's
+    convene/adjourn/committee nodes resolve against THAT day's graph, so a committee
+    meeting on many dates gets a per-date SortTime instead of one name-keyed value
+    colliding across all 443 dates. The caller keys the lookup by (date_str, name)
+    with the SAME whitespace-collapsed lower-casing used here. Rows with an unparseable
+    ScheduleDate are skipped — the caller drops them from the write window too."""
+    by_date = defaultdict(list)
+    for m in schedules:
+        d = pd.to_datetime(m.get('ScheduleDate', ''), errors='coerce')
+        if pd.isna(d):
+            continue
+        by_date[d.strftime('%Y-%m-%d')].append(m)
+    resolved = {}
+    for date_str, day_rows in by_date.items():
+        for name, t in _resolve_one_day(day_rows).items():
+            resolved[(date_str, name)] = t
+    return resolved
 
 def extract_rogue_agenda(url, session, target_date_dt=None, depth=0):
     # Returns (bills, is_corrupt, fetch_ok). fetch_ok is True ONLY when a parse
@@ -5055,7 +5181,11 @@ def run_calendar_update():
                     if link_match and any(x in raw_desc.lower() for x in ["agenda", "docket", "info"]):
                         agenda_url = link_match.group(1)
                     
-                    sort_time_24h = resolved_parent_map.get(owner_lower, "23:59")
+                    # Date-aware lookup (calendar_chain_ordering §8): build_time_graph now
+                    # keys by (date, name) so a committee's SortTime is resolved within THIS
+                    # day's graph, not a name-only value collided across all its dates.
+                    # owner_lower + date_str here match build_time_graph's own normalization.
+                    sort_time_24h = resolved_parent_map.get((date_str, owner_lower), "23:59")
                     time_val = raw_time
                     dynamic_markers = ["upon adjournment", "minutes after", "hour after", "recess"]
                     stitched_text = f"{raw_time} {clean_desc}"
