@@ -1621,8 +1621,9 @@ def _resolve_via_legislation_event_api(
     outcome_tokens = _legislation_event_token_set(outcome_text)
     if not outcome_tokens:
         # No outcome to match against — abstain rather than guess. The
-        # existing journal_default path emits the categorized alert so
-        # the row is still visible.
+        # existing journal_default path marks the row [NO_SCHEDULE_MATCH] +
+        # carries a diagnostic_hint + counts unsourced_journal, so the row
+        # is still visible (no per-row alert — a routine deferral, Standard #8).
         return None
     scored = []
     for e in real_time_events:
@@ -3851,11 +3852,13 @@ def run_sequential_turing_machine(df_past, *,
                 #
                 # Route the row to its OWN terminal origin "admin_default"
                 # (NOT journal_default) so it does NOT fall into the
-                # journal_default source-miss block below — that block fires
-                # a per-row TIMING_LAG WARN + counts unsourced_journal,
-                # which for hundreds of expected-timeless admin rows would
-                # flood Bug_Logs and overstate the source gap (Gemini HIGH
-                # #66). admin_default still collapses into 📋 Ledger Updates
+                # journal_default source-miss block below — that block counts
+                # unsourced_journal (and once fired a per-row TIMING_LAG WARN,
+                # dropped 2026-07-03 as a routine deferral flood — Standard #8).
+                # admin_default keeps this row OUT of unsourced_journal entirely,
+                # since it is STRUCTURALLY administrative (not merely unmatched) —
+                # the distinction the counter should preserve (Gemini HIGH #66).
+                # admin_default still collapses into 📋 Ledger Updates
                 # (added to the collapse mask) and carries the visible
                 # NO_SCHEDULE_MATCH marker (not the old silent "Journal
                 # Entry"). It is NOT a concrete source (I3 ok) and NOT in
@@ -7149,7 +7152,9 @@ def run_calendar_update():
         # PR-C7.1g (#66 fold-in): admin_default joins the collapse set — these
         # are structurally-administrative rows we deliberately left timeless;
         # they belong in 📋 Ledger Updates exactly like journal_default /
-        # floor_miss, just without the per-row source-miss WARN those two emit.
+        # floor_miss. (None of the three emits a per-row source-miss WARN now —
+        # journal_default's was dropped 2026-07-03 as a routine deferral, Standard
+        # #8; all three stay visible via the [NO_SCHEDULE_MATCH] marker + counters.)
         journal_mask = final_df['Origin'].isin(['journal_default', 'floor_miss', 'admin_default'])
         if journal_mask.any():
             final_df.loc[journal_mask, 'Committee'] = '📋 Ledger Updates'

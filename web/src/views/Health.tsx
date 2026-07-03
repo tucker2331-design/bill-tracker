@@ -365,8 +365,8 @@ export function Health({ completeness, dataAsOf }: { completeness: Completeness 
           <p className="muted" style={{ marginBottom: 18 }}>No alerts in the recent window — the worker is running clean.</p>
         ) : (
           <div className="panel" style={{ marginBottom: 18 }}>
-            {alertHistory.map((a, i) => a.kind === "group" ? (
-              <details key={i} className="hl-alertgroup">
+            {alertHistory.map((a) => a.kind === "group" ? (
+              <details key={`g|${a.severity}|${a.category}`} className="hl-alertgroup">
                 <summary className="hl-alert">
                   <span className={`hl-sev ${a.severity.toLowerCase()}`}>{a.severity}</span>
                   {a.category && <span className="hl-cat">{a.category}</span>}
@@ -375,8 +375,8 @@ export function Health({ completeness, dataAsOf }: { completeness: Completeness 
                   <span className="hl-adate">{agoText(new Date(a.lastTs))}</span>
                 </summary>
                 <div style={{ paddingLeft: 8 }}>
-                  {a.items.slice(0, 100).map((d, j) => (
-                    <div key={j} className="hl-alert">
+                  {a.items.slice(0, 100).map((d) => (
+                    <div key={`${d.severity}|${d.category}|${d.message}`} className="hl-alert">
                       <span className="hl-amsg">{d.message}</span>
                       {d.count > 1 && <span className="hl-acount" title={`fired in ${d.count} cycles`}>×{d.count}</span>}
                       <span className="hl-adate">{agoText(new Date(d.lastTs))}</span>
@@ -386,7 +386,7 @@ export function Health({ completeness, dataAsOf }: { completeness: Completeness 
                 </div>
               </details>
             ) : (
-              <div key={i} className="hl-alert">
+              <div key={`s|${a.severity}|${a.category}|${a.message}`} className="hl-alert">
                 <span className={`hl-sev ${a.severity.toLowerCase()}`}>{a.severity}</span>
                 {a.category && <span className="hl-cat">{a.category}</span>}
                 <span className="hl-amsg">{a.message}</span>
