@@ -175,4 +175,13 @@ denylist (Standard-#1 rot risk CodeRabbit flagged) with a **structural `day_voca
 worker emitting a structural `TimeClass` flag. Production proof (Section 9 = 0 + X-Ray ordering) lands on the
 next worker cycle.
 
+**Same-time-parent verification (owner Q, 2026-07-03):** confirmed the +1 chain epsilon anchors each
+subcommittee to its RESPECTIVE parent by NAME, not time — proven synthetically (parents at 13:00 vs 14:00 →
+children split 13:01 vs 14:01) AND in real data (2025-01-14: House Labor & Commerce AND House General Laws
+both at 15:30, each child correctly at 15:31 following its own parent). No mis-anchoring. The only residual is
+that two parents sharing the EXACT same time produce same-time children that **interleave** in the pure
+time-sorted day (times correct; visual family-grouping lost) — a front-end lineage-cue/indent concern
+(subcommittee under parent, the name already carries lineage), NOT a resolver fix. Queued as a calendar
+front-end task; overlaps the §3b committee-board concept.
+
 See also [[architecture/calendar_pipeline]], [[knowledge/tba_times]], [[failures/assumptions_audit#79]], [[failures/assumptions_audit#95]], [[design/ui_redesign_spec]], [[state/next_session]].
