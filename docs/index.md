@@ -92,6 +92,7 @@ Links use Obsidian `[[wikilink]]` format. Obsidian resolves by filename; path-qu
 - [[design/information_display]] — **the design north-star: principles → actionable rules mapped to each screen + a punch-list for `web/`. Living.**
 - [[design/reading_notes]] — **per-book DEEP-READ digests (Few *Information Dashboard Design* read in full; *Refactoring UI* tactics; Tufte/Hearst queued). The raw material; concrete fixes for the "screams-AI" critique.**
 - [[design/ui_redesign_spec]] — **owner's 2026-06-22 UI change-list: landing relayout (calendar sliver + timeline below), smoother less-boxy timeline, shrink crossover, Floor stage?, Search bugs, the visual-identity pass + the 2026-06-23 timeline-should-BRANCH feedback.**
+- [[design/ui_feedback_2026-07-04]] — **owner UI/cadence notes (2026-07-04, for later): the two freshness clocks disagree (display fix, not a cron-sync); cadence is FIXED not activity-correlated (guardrail #5 now unblocked to build); Health rings — label the two lines + explain Freshness's missing badge + make the '1 warning' descriptive & clickable; the lone live alert (HB923 blank upstream row) is a benign honest flag.**
 - [[design/health_operator_tab]] — **SCOPE (Task #4): the operator Health tab — Few bullet-graph gauges w/ danger bands (PL-8), grounded in live SYSTEM_METRICS/SYSTEM_ALERT signals; Cloudflare Access gating + the data-publicity caveat.**
 
 ## Ideas / Deferred Work

@@ -17,6 +17,24 @@ immediately** — and every push auto-rebuilds, so the flaky local Vite preview 
 - Clean-checkout build verified: `cd web && npm ci && npm run build` → `dist/` (index.html + assets +
   `_redirects`), ~80 KB gzipped JS.
 
+## ⚠️ THE #1 MISTAKE — Root directory MUST be `web`
+The app is in `web/`, not the repo root. If Root directory is left blank, Cloudflare runs `npm run build`
+at the repo root, finds **no `package.json`** (it's `web/package.json`), and the build fails with:
+```
+npm error enoent Could not read package.json: ... open '/opt/buildhome/repo/package.json'
+```
+It will ALSO waste time auto-installing the workers' Python deps (streamlit, altair, …) from the root
+`requirements.txt` — another symptom of building at the root. **Setting Root directory = `web` fixes both**
+(the build context becomes `web/`, which is pure Node). The wizard hides this field under "Advanced," so it
+is the single easiest thing to miss.
+
+### If your build already failed with that error (fix the existing project — no re-create)
+1. Open the Pages project → **Settings** → **Builds & deployments** (a.k.a. "Build configuration").
+2. Find **Root directory** → set it to **`web`** → **Save**.
+3. While there, confirm **Build command** = `npm run build` and **Build output directory** = `dist`.
+4. Go to **Deployments** → **Retry deployment** on the failed one (or push any commit to `main`). It builds
+   in ~1–2 min, Node-only.
+
 ## The one-time connect (owner action — needs YOUR Cloudflare account + GitHub OAuth)
 This part cannot be automated from here (it's account creation + OAuth authorization). ~5 minutes, mostly
 clicks. **Recommended: the dashboard Git integration** — Cloudflare builds on every push AND gives every
@@ -25,12 +43,12 @@ PR its own preview URL (which is exactly the "stop looking at a failing preview"
 1. Sign in / create an account at **dash.cloudflare.com** (free).
 2. **Workers & Pages → Create → Pages → Connect to Git.**
 3. Authorize the **Cloudflare Pages** GitHub app → select the **`bill-tracker`** repo.
-4. Set the build configuration EXACTLY:
+4. Set the build configuration EXACTLY (the ⭐ field is the one everyone misses):
    - **Production branch:** `main`
    - **Framework preset:** `Vite` (or "None" — either works)
    - **Build command:** `npm run build`
    - **Build output directory:** `dist`
-   - **Root directory (advanced):** `web`   ← the app lives in `web/`, not repo root
+   - ⭐ **Root directory (under "Advanced"):** `web`   ← REQUIRED; the app lives in `web/`, not repo root
    - (Node version is read from `web/.node-version` = 22 automatically; no env var needed.)
 5. **Save and Deploy.** You get a `https://<project>.pages.dev` URL in ~1–2 min. Every push to `main`
    redeploys; every PR gets its own `https://<hash>.<project>.pages.dev` preview.

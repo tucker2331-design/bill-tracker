@@ -8,6 +8,21 @@ status: active
 
 Append-only, reverse-chronological (newest at top). Each entry opens with `## [YYYY-MM-DD] <kind> | <title>` so `grep "^## \[" log.md | head -20` gives a parseable timeline.
 
+## [2026-07-04] decision | Cloudflare build failed (root-dir) FIXED in runbook + owner UI/cadence notes captured
+
+Owner's Cloudflare Pages build failed: `npm error enoent … /opt/buildhome/repo/package.json`. Diagnosed:
+the app is in `web/` but **Root directory wasn't set to `web`**, so Cloudflare ran `npm run build` at the
+repo root (no package.json there) AND auto-installed the workers' root `requirements.txt` Python deps. One-
+setting fix (Root directory = `web`); [[workflow/deploy_cloudflare_pages]] rewritten with a prominent "#1
+mistake" section + fix-the-existing-project steps. Owner UI/cadence notes for later banked to
+[[design/ui_feedback_2026-07-04]]: (F-1) the two freshness clocks disagree because bills=6h / calendar=3h
+FIXED crons — a display-honesty fix (show the oldest + a breakdown), NOT a cron-sync; the real unification
+is the CDN-inversion manifest. (F-2) cadence is FIXED, not activity-correlated — guardrail #5 (meeting-
+driven cadence) is documented-but-UNBUILT and now unblocked; strong next-VA-backend candidate. (F-3) Health
+rings: label the two lines (Status vs Verified), explain Freshness's absent badge, make "1 warning"
+descriptive + click-to-scroll to the alert. (F-4) the lone live alert = LIS's own blank HISTORY row for
+HB923/03-09 (verified content-less, nothing lost) — an honest upstream-defect flag, not a bug; leave it.
+
 **Kinds:** `ingest` (new source/doc processed), `pr` (PR opened/merged/closed), `decision` (architectural or workflow), `lint` (wiki health-check pass), `session` (notable multi-hour working block), `post-mortem` (failure analysis), `milestone` (project-goal threshold crossed).
 
 ## [2026-07-04] pr | #194 + #195 MERGED — Cloudflare Pages deploy prep + chief-patron FULL name (VA data follow-ups closed)
