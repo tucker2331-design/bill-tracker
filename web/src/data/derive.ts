@@ -13,15 +13,43 @@ export function isDecided(b: Bill): boolean {
   return b.outcome === "signed" || b.outcome === "vetoed" || b.outcome === "dead" || b.outcome === "carried_over";
 }
 
-// The crossover-lane pipeline stage. Position = progress; the divider is crossover. Floor stages are
-// folded into the committee flow for v1 (the Bill_Tracker data doesn't cleanly separate floor from
-// between-committee; the calendar subsystem owns that granularity).
-export type Stage = "prefiled" | "committee1" | "committee2" | "governor" | "died";
+// The crossover-lane pipeline stage. Position = progress; the divider is crossover. The two FLOOR stages
+// (origin-chamber floor before crossover, second-chamber floor after) are now first-class — the bill
+// backend emits floorHouse/floorSenate structurally (LIS's controlled "passed/defeated by House/Senate"
+// vocabulary), so a bill that reached a chamber's FLOOR is distinct from one still in that chamber's
+// committee, and a floor DEFEAT strands its ✕ at Floor rather than Committee.
+export type Stage = "prefiled" | "committee1" | "floor1" | "committee2" | "floor2" | "governor" | "died";
 
 export interface StageCell { stage: Stage; side: Chamber; crossed: boolean; decided: boolean; }
 
+// The FURTHEST pipeline stage a bill structurally reached (shared by deriveStage for live bills and
+// lastReached for died bills — same progression, so a died bill's ✕ lands at the right spot). Origin is
+// the bill's own chamber (HB→House, SB→Senate); the per-chamber floor events map onto origin-vs-second.
+// A floor event of EITHER kind (passed OR defeated) means the bill reached that floor — a defeat is a
+// floor death, so its ✕ belongs at Floor, not Committee. Checked furthest→nearest.
+export function furthestStage(b: Bill): Stage {
+  const origin: Chamber = b.bill[0]?.toUpperCase() === "S" ? "Senate" : "House";
+  const floorOrigin = origin === "House" ? b.floorHouse : b.floorSenate;
+  const floorSecond = origin === "House" ? b.floorSenate : b.floorHouse;
+  if (floorSecond) return "floor2";                // reached the SECOND chamber's floor (passed or defeated there)
+  if (b.crossedOver) return "committee2";          // reached a committee in the opposite chamber
+  if (floorOrigin) return "floor1";                // reached the ORIGIN chamber's floor (passed or defeated there)
+  if (b.lastCommittee) return "committee1";        // still in the origin chamber's committee
+  return "prefiled";
+}
+
+// The LANE a stage's cell lives in — derived from the stage + the bill's ORIGIN, never from the
+// ever-moving b.chamber (Qodo #191): a bill that crossed and then came BACK (conference) has
+// chamber=origin but stage=committee2, which would key an impossible cell like `committee2|House`
+// for an HB (committee2 IS the second chamber's committee). Lane semantics: where the stage lives.
+export function stageSide(b: Bill, stage: Stage): Chamber {
+  const origin: Chamber = b.bill[0]?.toUpperCase() === "S" ? "Senate" : "House";
+  return stage === "committee2" || stage === "floor2"
+    ? (origin === "House" ? "Senate" : "House")
+    : origin;
+}
+
 export function deriveStage(b: Bill): StageCell {
-  const side = b.chamber;
   const crossed = b.crossedOver;
   const decided = isDecided(b);
   let stage: Stage;
@@ -29,26 +57,27 @@ export function deriveStage(b: Bill): StageCell {
     stage = "died";
   } else if (b.outcome === "signed" || b.outcome === "vetoed" || b.outcome === "awaiting_governor") {
     stage = "governor";
-  } else if (crossed) {
-    stage = "committee2";                       // second chamber, still moving
-  } else if (b.lastCommittee) {
-    stage = "committee1";                       // first chamber committee
   } else {
-    stage = "prefiled";
+    stage = furthestStage(b);
   }
+  // Pipeline stages take the lane the STAGE lives in (coherent cells, Qodo #191); terminal stages
+  // keep the bill's current chamber (they have no lane cell to collide with).
+  const side = stage === "governor" || stage === "died" ? b.chamber : stageSide(b, stage);
   return { stage, side, crossed, decided };
 }
 
 export const STAGE_LABEL: Record<Stage, string> = {
   prefiled: "Prefiled",
   committee1: "In Committee",
+  floor1: "Floor",
   committee2: "In Committee (2nd)",
+  floor2: "Floor (2nd)",
   governor: "To Governor",
   died: "Died",
 };
 
-// Left→right pipeline order, with the crossover divider sitting between committee1 and committee2.
-export const STAGE_ORDER: Stage[] = ["prefiled", "committee1", "committee2", "governor"];
+// Left→right pipeline order, with the crossover divider sitting between floor1 and committee2.
+export const STAGE_ORDER: Stage[] = ["prefiled", "committee1", "floor1", "committee2", "floor2", "governor"];
 
 export interface OutcomeTally { signed: number; vetoed: number; awaiting_governor: number; dead: number; carried_over: number; in_progress: number; }
 

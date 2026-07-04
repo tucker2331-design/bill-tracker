@@ -6,6 +6,10 @@ export type Outcome =
 
 export type Chamber = "House" | "Senate";
 
+// A chamber-floor event from LIS's controlled vocabulary: "passed" (cleared that floor), "defeated"
+// (reached that floor and was voted down — the Timeline places its ✕ at Floor), "" (no floor event).
+export type FloorEvent = "" | "passed" | "defeated";
+
 export interface LatestVote {
   tally: string;     // DISPLAY of LIS's own published tally, e.g. "15-Y 0-N"
   location: string;  // structural: committee name from the vote refid, else "Floor"
@@ -31,6 +35,8 @@ export interface Bill {
   patronId: string;        // LIS member number, e.g. "H0173"
   chamber: Chamber;        // current chamber (origin until it crosses)
   crossedOver: boolean;    // a committee action in the chamber opposite origin
+  floorHouse: FloorEvent;  // House floor: "passed" | "defeated" (reached the floor, voted down) | ""
+  floorSenate: FloorEvent; // Senate floor: same enum — Timeline Floor stages
   lastCommittee: string;   // chamber-qualified, e.g. "Senate Finance and Appropriations"
   referrals: number;       // distinct sequential committees (the Nth-referral badge)
   latestVote: LatestVote;
