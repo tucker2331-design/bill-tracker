@@ -57,14 +57,32 @@ function MeetingRow({ m, billMap, onOpen }: {
   const head = (
     <>
       <span className="cal-mtg-top">
+        {/* §7.2 (owner 2026-06-30): an UNRESOLVED relative time can't be placed on the clock — flag it
+            honestly ("position unknown") instead of letting it sit in a silently-wrong slot. The meeting
+            is already sorted to the top of its day by calendar.ts. */}
+        {m.unresolved && <span className="cal-mtg-unres" title="LIS lists this meeting only relative to another event whose time is unknown — we can't place it on the clock, so it's surfaced first.">⚠ unplaceable</span>}
         <span className={`cal-mtg-t${m.tba ? " tba" : ""}`}>{m.time}</span>
         {hasBills && <span className="cal-mtg-n">{m.bills.length}{open ? " ▴" : " ▾"}</span>}
       </span>
-      <span className="cal-mtg-c" style={isFloor ? undefined : { color: side }}>{m.committee}</span>
+      {/* Subcommittee LINEAGE cue (owner 2026-07-03): when two same-time parents' subcommittees tie and
+          interleave in the time-sorted day, the family link must stay readable. The chamber-qualified name
+          already carries lineage ("House Appropriations - Transportation…"); render it as a muted parent +
+          ↳ sub. Pure typography over the structural name — both parts always shown, nothing inferred. */}
+      {(() => {
+        const p = /^((?:House|Senate|Joint)[^-]+?)\s*-\s*(.+)$/.exec(m.committee);
+        return p ? (
+          <span className="cal-mtg-c" style={isFloor ? undefined : { color: side }}>
+            <span className="cal-sub-parent">{p[1].trim()}</span>
+            <span className="cal-sub-name">↳ {p[2].trim()}</span>
+          </span>
+        ) : (
+          <span className="cal-mtg-c" style={isFloor ? undefined : { color: side }}>{m.committee}</span>
+        );
+      })()}
     </>
   );
   return (
-    <div className={`cal-mtg${isFloor ? " floor" : ""}`}>
+    <div className={`cal-mtg${isFloor ? " floor" : ""}${m.unresolved ? " unres" : ""}`}>
       {/* A real <button> only when there are bills to toggle; otherwise a plain <div> so screen-reader /
           keyboard users aren't told it's interactive when it does nothing (Gemini #185). */}
       {hasBills ? (

@@ -64,7 +64,10 @@ def notify_slack(text):
 # Bump WORKER_OUTPUT_LOGIC_VERSION on ANY change to output-affecting logic so the
 # signature changes and a recompute is forced even when the inputs are byte-identical
 # (otherwise a code fix wouldn't take effect until an input moved).
-WORKER_OUTPUT_LOGIC_VERSION = "2026-06-16.1"
+# 2026-07-04.1: date-aware SortTime resolver (#189) + the TimeClass column (#193) both change
+# Sheet1 output — force a recompute so cached/incremental paths can't serve pre-change rows
+# (Qodo #193; #189 omitted this bump, caught here).
+WORKER_OUTPUT_LOGIC_VERSION = "2026-07-04.1"
 
 
 def _sha(*parts):
@@ -101,7 +104,8 @@ def _df_content_hash(df):
 # Order-INDEPENDENT comparison (the two runs append in different orders by design).
 _STM_EVENT_KEY_FIELDS = ("Date", "Time", "SortTime", "Status", "Committee", "Bill",
                          "Outcome", "AgendaOrder", "Source", "Origin",
-                         "DiagnosticHint", "LegEventRoute", "RefidClass", "ScheduleClass")
+                         "DiagnosticHint", "LegEventRoute", "RefidClass", "ScheduleClass",
+                         "TimeClass")
 
 
 def _stm_event_key(ev):
@@ -4365,6 +4369,13 @@ def run_calendar_update():
     # which are last-wins per (date,committee) and drop non-committee entries) — the drift monitor's
     # input, so a new id on ANY entry is caught (CodeRabbit #180).
     _live_schedule_type_ids = set()
+    # §7.2 (calendar_chain_ordering): (date_committee) -> structural TIME CLASS for the meeting —
+    # "concrete" (LIS published its own clock) | "relative_resolved" (prose dependency the date-aware
+    # resolver anchored to a real clock) | "relative_unresolved" (prose dependency whose anchor could
+    # NOT be resolved — the front end surfaces these to the TOP of the day + highlights them, instead
+    # of a silently-wrong end-of-day position) | "" (TBA / no published time). Same keyed-map +
+    # _append_event stamping pattern as ScheduleClass (PR-C8.1b) — no API_Cache migration.
+    _time_class_by_key = {}
 
     def _append_event(event):
         """PR-C1 write-time chokepoint. See comment block above for invariants."""
@@ -4399,6 +4410,17 @@ def run_calendar_update():
                 event["ScheduleClass"] = _sc
             else:
                 event["ScheduleClass"] = ""
+        # §7.2: additive TimeClass column (concrete | relative_resolved | relative_unresolved | "").
+        # Stamped for schedule-sourced rows by the same (date, normalized-committee) join ScheduleClass
+        # uses; other rows get "" (their time provenance is already carried by Origin). NOT in
+        # _REQUIRED_KEYS — additive, display-only; the front end sorts relative_unresolved meetings to
+        # the top of the day + highlights them (owner 2026-06-30, calendar_chain_ordering §7.2).
+        if "TimeClass" not in event:
+            if event.get("Origin") in ("api_schedule", "scheduled_future"):
+                _tc_lookup = f"{event.get('Date', '')}_{normalize_room_key(event.get('Committee', ''))}"
+                event["TimeClass"] = _time_class_by_key.get(_tc_lookup, "")
+            else:
+                event["TimeClass"] = ""
 
         # I1: schema completeness. Fill missing keys with "" so downstream
         # pandas/serialization stays happy, but count + alert so the gap is
@@ -5263,6 +5285,32 @@ def run_calendar_update():
                         # collapses "House Committee on Courts of Justice" == "House Courts of
                         # Justice" (Gemini #112 HIGH). map_key (api_schedule_map) is untouched.
                         _schedule_typeid_by_key[f"{date_str}_{normalize_room_key(normalized_name)}"] = _stid_raw
+                    # §7.2: derive this meeting's structural TIME CLASS from what the resolver just did.
+                    # "concrete" = the published ScheduleTime is its own clock (parses, no relative words);
+                    # relative prose classifies by whether the date-aware resolver produced a real clock
+                    # (sort_time_24h off the 06:00/23:59 sentinels) — resolved vs UNRESOLVED (the honest
+                    # "we cannot place this" flag the front end surfaces); "" = TBA/no published time.
+                    # HEURISTIC (Standard #1):
+                    #   ASSUMES the resolver's 06:00/23:59 outputs are only ever its unresolved SENTINELS
+                    #   for RELATIVE rows (a genuinely 6:00 AM / 11:59 PM relative-resolved meeting would
+                    #   misread as unresolved — no such meeting exists in any observed session; a CONCRETE
+                    #   6:00 AM row is unaffected, it classifies on its own clock before this branch).
+                    #   BREAKS if the resolver changes its sentinel values, or if a real relative chain
+                    #   legitimately resolves to exactly 06:00/23:59.
+                    #   RUNTIME CHECK: the timeclass_* counters below (with timeclass_total as the
+                    #   denominator) are trended on the Health tab — a JUMP in relative_unresolved against
+                    #   a steady total is the misclassification/regression signal (steady ≈ 22/3480).
+                    if parse_24h_time(raw_time) != "23:59" and not _is_relative_time_text(raw_time):
+                        _tclass = "concrete"
+                    elif _is_relative_time_text(f"{raw_time} {clean_desc}"):
+                        _tclass = "relative_resolved" if sort_time_24h not in ("06:00", "23:59") else "relative_unresolved"
+                    else:
+                        _tclass = ""
+                    _tc_key = f"{date_str}_{normalize_room_key(normalized_name)}"
+                    # concrete WINS across same-(date,name) entries — mirrors the api_schedule_map dedup
+                    # just below, so the class always describes the time the row actually shows.
+                    if _tclass == "concrete" or _time_class_by_key.get(_tc_key) != "concrete":
+                        _time_class_by_key[_tc_key] = _tclass
                     # Don't overwrite a concrete time with a non-concrete one.
                     # Multiple Schedule API entries per date+committee exist; keep the best time.
                     existing_entry = api_schedule_map.get(map_key)
@@ -5353,6 +5401,18 @@ def run_calendar_update():
                         _append_event({"Date": date_str, "Time": time_val, "SortTime": sort_time_24h, "Status": status, "Committee": normalized_name.strip(), "Bill": clean_desc if clean_desc else "No agenda listed.", "Outcome": "", "AgendaOrder": -1, "Source": "API_Skeleton", "Origin": schedule_meeting_origin(meeting_date, now), "DiagnosticHint": ""})
 
                 # ============================================================
+                # §7.2: TimeClass distribution counters (per (date,committee) meeting, from the
+                # completed map — exact, no per-row double counting). timeclass_relative_unresolved
+                # is the honest residual the front end top-surfaces (~22/session steady state);
+                # a JUMP means the resolver's anchoring regressed — trended on the Health tab.
+                # timeclass_total is the explicit DENOMINATOR (Standard #7 / source_miss_visibility:
+                # a metric without a denominator is ambiguous) — the "" TBA/no-time class is
+                # total − (concrete + resolved + unresolved).
+                _tc_counts = Counter(_time_class_by_key.values())
+                source_miss_counts["timeclass_total"] = len(_time_class_by_key)
+                for _tc_name in ("concrete", "relative_resolved", "relative_unresolved"):
+                    source_miss_counts[f"timeclass_{_tc_name}"] = _tc_counts.get(_tc_name, 0)
+
                 # PR-C2 Part B: compute ADDED / CHANGED deltas (raw LIS signal)
                 # ============================================================
                 # Diff the post-live api_schedule_map against the pre-live
