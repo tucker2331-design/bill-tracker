@@ -31,6 +31,7 @@ Links use Obsidian `[[wikilink]]` format. Obsidian resolves by filename; path-qu
 - [[audits/fable_2026-07/multistate_ingestion_pa]] — PA researched (hourly XML + RSS — structured, NOT scraping); the formalized lambda architecture; the decade-grade controlled-vocabulary doctrine + 4-phase PA build plan
 - [[audits/fable_2026-07/multistate_ingestion_ca_fl]] — CA (pubinfo relational export VERIFIED — votes/hearings/agendas as coded tables, daily cadence + measured-lag speed-layer experiment) + FL (site-API state; live flhouse /api/ endpoint observed; dual first-party House↔Senate oracle) vs the 10–15 min target; 4-tier state taxonomy
 - [[audits/fable_2026-07/autonomy_upgrades]] — A-1/A-2 zero-touch session-follow + workbook lifecycle (owner correction; supersedes C-1/C-2's human steps)
+- [[audits/fable_2026-07/50_state_scaling_architecture]] — the three 50-state blueprints: CDN inversion (worker→static JSON→edge; manifest atomicity; migration gates), Omni-Schema v1 (freeze the de-facto shape + capability flags + CI validation), Fleet (premise-corrected: per-state workflows exist; generator + national rollup + Actions graduation path)
 - [[audits/fable_2026-07/sweep_findings]] — S-1…S-6: plaintext LIS key rotation-brittleness, CI golden-test blind spot, repo-root cruft, measurement caveats
 
 ## Workflow & Protocols (how we work)

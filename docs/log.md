@@ -10,6 +10,22 @@ Append-only, reverse-chronological (newest at top). Each entry opens with `## [Y
 
 **Kinds:** `ingest` (new source/doc processed), `pr` (PR opened/merged/closed), `decision` (architectural or workflow), `lint` (wiki health-check pass), `session` (notable multi-hour working block), `post-mortem` (failure analysis), `milestone` (project-goal threshold crossed).
 
+## [2026-07-04] decision | 50-state scaling blueprints banked (CDN inversion / Omni-Schema / Fleet)
+
+Final Gemini-prompted deliverable before audit close, with Fable's assessments on record: (1) **CDN
+inversion** = the real new build and keystone — worker publishes versioned static JSON (bills/calendar/
+health + an atomic manifest, per state) to R2/edge; gviz demoted to migration fallback then deleted;
+dual-publish diff soak as the gate; sequenced with A-1/A-2 BEFORE any new state. (2) **Omni-Schema** =
+formalization, not invention — NY already emits the VA shape by design; freeze types.ts reality as JSON
+Schema v1, add per-state CAPABILITY FLAGS (honest-absent features for thin states), CI-validate every
+payload. (3) **Fleet** = premise corrected — no monolithic 50-state cron exists; per-state workflows
+already run independently. The real problems: Actions concurrency/scheduler throttling at ~15+ states →
+generated (not hand-copied) per-state workflows, hash-staggered crons, session-aware cadence per state,
+shared-nothing storage, national manifest rollup (one state red ≠ national alert), and a NAMED graduation
+path off Actions (~12-15 active states trigger). Explicitly deferred: databases, queues, k8s. Execution
+order per owner: A-1 → A-2 → CDN inversion → fleet generator at the 3rd state.
+[[audits/fable_2026-07/50_state_scaling_architecture]].
+
 ## [2026-07-04] ingest | CA + FL researched against the 10-15 min freshness target → [[audits/fable_2026-07/multistate_ingestion_ca_fl]]
 
 Owner: repeat the PA treatment for California and Florida. **CA (verified from the official pubinfo
