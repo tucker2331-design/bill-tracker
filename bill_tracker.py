@@ -244,6 +244,34 @@ def _derive_position(rows, bill):
             "last_committee": last_committee, "referral_count": len(referred)}
 
 
+def _chief_patron_from_universe(item):
+    """Chief patron (full name, member number) from the bill-universe payload's OWN `Patrons` list —
+    LIS's authoritative structural field (Standard #3). Returns ("", "") on any absence/shape surprise
+    so the caller falls back to BILLS.CSV. Full name "Jeion A. Ward" vs BILLS.CSV's surname "Ward".
+
+    HEURISTIC (Standard #1):
+      - ASSUMES `Patrons` is a LIST of DICT entries, the chief carrying PatronTypeID==1 (or Name=="Chief
+        Patron"), with `MemberDisplayName` = full name and `MemberNumber` = the "H0173"/"S0012" id that
+        MATCHES BILLS.CSV's Patron_id format (verified live 2026-07-04 — NOT the numeric MemberID 419,
+        which would mismatch the fallback's format, so it is deliberately NOT used).
+      - BREAKS if LIS returns Patrons as a non-list, non-dict elements, or renames the fields → this
+        returns ("", "") and the row falls back to the BILLS.CSV surname (a display regression, never a
+        crash — Standard #6 zero-trust: the whole cycle must not abort on one odd payload; Qodo #195).
+      - RUNTIME CHECK: `completeness.patron_fullname_universe(+_rate)` tracks coverage every cycle; a drop
+        from ~100% is the alarm that the shape drifted (Standard #7 — surfaced as a rate)."""
+    pats = item.get("Patrons")
+    if not isinstance(pats, list):
+        return "", ""
+    dicts = [p for p in pats if isinstance(p, dict)]
+    if not dicts:
+        return "", ""
+    chief = next((p for p in dicts if p.get("PatronTypeID") == 1 or p.get("Name") == "Chief Patron"),
+                 dicts[0])
+    # MemberNumber only (the BILLS.CSV-consistent "H0173" format); if absent, leave the id empty rather
+    # than substitute the format-incompatible numeric MemberID (Qodo #195).
+    return str(chief.get("MemberDisplayName") or "").strip(), str(chief.get("MemberNumber") or "").strip()
+
+
 def _derive_floor(rows):
     """STRUCTURAL per-chamber floor outcome for the Timeline's Floor stages. Reads LIS's OWN controlled
     action vocabulary (the regexes above), which names the chamber — consuming the source, not parsing free
@@ -374,6 +402,7 @@ def build_bill_records(http_session, session_code):
     records, universe_bills, skipped_universe = [], set(), 0
     docket_unparseable, docket_rows_total = 0, 0   # the metric + its denominator (Standard #7)
     outcome_structural, outcome_keyword, patron_present = 0, 0, 0   # trust counters (coverage of the bulk join)
+    patron_fullname_universe = 0   # bills whose chief-patron FULL name came from the universe (vs BILLS.CSV surname)
     outcome_mismatches = []   # self-calibrating drift: keyword-derived outcome ≠ LIS's structural flags
     # Floor-passage self-calibration (Standard #1): among fully-passed BILLS (HB/SB — resolutions are
     # single-chamber and excluded), how many DON'T show both floor passages? Should be ~0; a rising rate
@@ -410,9 +439,19 @@ def build_bill_records(http_session, session_code):
                 outcome_mismatches.append(bill)
         else:
             outcome, outcome_keyword = keyword_outcome, outcome_keyword + 1   # flagless (early-stage) bill
-        patron = meta["patron_name"] if meta else ""
+        # Chief patron: PREFER the bill-universe payload's OWN Patrons list — LIS's authoritative field,
+        # carrying the FULL name ("Jeion A. Ward") + member number, vs BILLS.CSV's surname-only ("Ward").
+        # Same call we already make (zero extra LIS traffic). BILLS.CSV is the fallback if LIS ever drops
+        # Patrons from the list endpoint. NB: this bulk endpoint carries ONLY the chief patron
+        # (PatronTypeID==1) — verified all 3,645 lists are size 1 — so co-patrons remain a separate,
+        # bounded per-member backfill, not sourceable here (2026-07-04).
+        u_name, u_id = _chief_patron_from_universe(item)
+        patron = u_name or (meta["patron_name"] if meta else "")
+        patron_id = u_id or (meta["patron_id"] if meta else "")
         if patron:
             patron_present += 1
+        if u_name:
+            patron_fullname_universe += 1   # coverage of the richer source; a drop = LIS changed the list shape
         floor = _derive_floor(rows)
         floor_house_bills += floor["house"] == "passed"
         floor_senate_bills += floor["senate"] == "passed"
@@ -427,8 +466,8 @@ def build_bill_records(http_session, session_code):
             "title": str(item.get("Description", "") or "").strip(),
             "status_lis": raw_status,                                # authoritative, always shown
             "outcome": outcome,                                      # structural-first, keyword fallback
-            "patron": patron,                                        # chief patron (BILLS.CSV) — "by patron"
-            "patron_id": meta["patron_id"] if meta else "",
+            "patron": patron,                                        # chief patron FULL name (universe payload; BILLS.CSV surname fallback)
+            "patron_id": patron_id,
             "chamber": position["current_chamber"],
             "crossed_over": position["crossed_over"],
             "floor_house": floor["house"],                           # ""|"passed"|"defeated" (Timeline Floor stage)
@@ -464,6 +503,11 @@ def build_bill_records(http_session, session_code):
         "outcome_keyword_fallback": outcome_keyword,
         "patron_present": patron_present,
         "patron_missing": len(records) - patron_present,
+        # Coverage of the RICHER chief-patron source (universe full name vs BILLS.CSV surname). Steady ≈
+        # records_written; a drop means LIS stopped carrying Patrons on the list endpoint and we fell back
+        # to surnames (a display regression, not a data loss — surfaced, per Standard #7).
+        "patron_fullname_universe": patron_fullname_universe,
+        "patron_fullname_universe_rate": round(patron_fullname_universe / len(records), 4) if records else 0.0,
         # Self-calibrating outcome check (replaces a hardcoded status vocabulary): among bills LIS gives
         # structural flags for, how often does our keyword logic disagree? Expressed as a RATE with its
         # denominator (Standard #7); a rising rate = our status-string handling has drifted from LIS.
