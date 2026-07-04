@@ -10,6 +10,18 @@ Append-only, reverse-chronological (newest at top). Each entry opens with `## [Y
 
 **Kinds:** `ingest` (new source/doc processed), `pr` (PR opened/merged/closed), `decision` (architectural or workflow), `lint` (wiki health-check pass), `session` (notable multi-hour working block), `post-mortem` (failure analysis), `milestone` (project-goal threshold crossed).
 
+## [2026-07-04] decision | Cloudflare Pages deploy PREPPED (the flaky-local-preview fix) → [[workflow/deploy_cloudflare_pages]]
+
+Owner: "actually set up the new host for the site so I don't have to keep looking at a preview that fails."
+Host was already DECIDED (2026-06-18: React+Vite on Cloudflare Pages, over Streamlit). Prepped the repo so
+the connect is turnkey: `web/public/_redirects` (SPA fallback), `web/.node-version=22` (Vite 8's Node
+floor, so Cloudflare's build env can't drift), clean-checkout build verified (`npm ci && npm run build` →
+dist ~80KB gz). The remaining step is account-bound (create/connect Cloudflare + GitHub OAuth) — a ~5-min
+dashboard Git-connect only the owner can do; exact build settings (root `web`, build `npm run build`,
+output `dist`) documented. Dashboard route recommended because it gives a real per-PR preview URL — the
+direct cure for the failing-local-preview complaint. gviz stays the data path (link-readable sheet);
+CDN-inversion removes that dependency later. Health tab visible pre-launch (gate before public launch).
+
 ## [2026-07-04] decision | 50-state scaling blueprints banked (CDN inversion / Omni-Schema / Fleet)
 
 Final Gemini-prompted deliverable before audit close, with Fable's assessments on record: (1) **CDN
