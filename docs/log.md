@@ -10,6 +10,22 @@ Append-only, reverse-chronological (newest at top). Each entry opens with `## [Y
 
 **Kinds:** `ingest` (new source/doc processed), `pr` (PR opened/merged/closed), `decision` (architectural or workflow), `lint` (wiki health-check pass), `session` (notable multi-hour working block), `post-mortem` (failure analysis), `milestone` (project-goal threshold crossed).
 
+## [2026-07-04] pr | #193 MERGED — §7.2 TimeClass (unplaceable meetings surface first) + subcommittee lineage cue
+
+Closes calendar_chain_ordering §7.2 + the same-time-family grouping. Worker: structural `TimeClass` column
+(concrete | relative_resolved | relative_unresolved | "") via the ScheduleClass keyed-map pattern; counters +
+`timeclass_total` denominator in SYSTEM_METRICS (steady ≈ 22 unresolved / 3480). Front end: unresolved
+meetings sort to the TOP of their day + caution tint + "⚠ unplaceable" badge (whole-surface tint, never a
+side strip); "Parent - Sub" committee names render as muted parent + "↳ Sub" so interleaved same-time
+families stay readable. Qodo fold-in caught a REAL miss: #189 changed Sheet1 output without bumping
+`WORKER_OUTPUT_LOGIC_VERSION` → Stage-2/incremental signature reuse could serve pre-change rows; bumped to
+2026-07-04.1 (covers #189 + TimeClass), and TimeClass joined `_STM_EVENT_KEY_FIELDS` so the incremental-STM
+oracle can see TimeClass-only divergences. One merge-conflict resolution vs #191/#192 (took main's
+Health.tsx). Both workers manually dispatched post-merge for same-day production proof: bill worker ✅
+(House Floor: 2345 passed + 5 defeated; Senate: 2007 + 6; reconcile 1157/1157, rate 0.0 — the Timeline's
+Floor stages lit live, including the 11 real floor defeats answering the owner's "did nothing really get
+voted down on the floor?").
+
 ## [2026-07-04] pr | #191 MERGED — Timeline FLOOR stages (passed/defeated per chamber) + landing reorder + grouped drill-down
 
 The owner's "you had prefiled committee floor crossover committee end point" pipeline, done structurally.

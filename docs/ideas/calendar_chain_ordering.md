@@ -171,17 +171,21 @@ handles ½/mixed/unicode fractions. Validated offline (`tools/edge_case_replay/v
 **SAFETY 0/2,877 published-clock keys move, RESOLUTION 198→428 relative rows concrete**, chains order
 parent→children. Three bot fold-in rounds; the notable hardening was replacing a hand-curated UI-caption
 denylist (Standard-#1 rot risk CodeRabbit flagged) with a **structural `day_vocab` intersection** (drift-proof).
-**Still OPEN:** §7.2 — the honest top-surface + highlight of the ~32/450 truly-unresolvable rows, gated on the
-worker emitting a structural `TimeClass` flag. Production proof (Section 9 = 0 + X-Ray ordering) lands on the
-next worker cycle.
+**§7.2 ✅ SHIPPED (PR [#193](https://github.com/tucker2331-design/bill-tracker/pull/193), 2026-07-04):** the
+worker now emits a structural **`TimeClass`** column (`concrete | relative_resolved | relative_unresolved |
+""`) — computed in the schedule loop from what the resolver did, stamped in `_append_event` via the
+ScheduleClass keyed-map pattern (no API_Cache migration), with `timeclass_*` counters + `timeclass_total`
+denominator in SYSTEM_METRICS. The front end sorts `relative_unresolved` meetings to the TOP of their day
+with a caution tint + "⚠ unplaceable" badge. Live distribution: concrete=2877 · relative_resolved=408 ·
+relative_unresolved=22 · TBA=173. Qodo fold-in also caught that **#189 shipped without a
+`WORKER_OUTPUT_LOGIC_VERSION` bump** (Stage-2/incremental signature reuse could serve pre-change rows) —
+bumped to `2026-07-04.1` covering both; `TimeClass` added to `_STM_EVENT_KEY_FIELDS`.
 
 **Same-time-parent verification (owner Q, 2026-07-03):** confirmed the +1 chain epsilon anchors each
 subcommittee to its RESPECTIVE parent by NAME, not time — proven synthetically (parents at 13:00 vs 14:00 →
 children split 13:01 vs 14:01) AND in real data (2025-01-14: House Labor & Commerce AND House General Laws
-both at 15:30, each child correctly at 15:31 following its own parent). No mis-anchoring. The only residual is
-that two parents sharing the EXACT same time produce same-time children that **interleave** in the pure
-time-sorted day (times correct; visual family-grouping lost) — a front-end lineage-cue/indent concern
-(subcommittee under parent, the name already carries lineage), NOT a resolver fix. Queued as a calendar
-front-end task; overlaps the §3b committee-board concept.
+both at 15:30, each child correctly at 15:31 following its own parent). No mis-anchoring. The interleave
+residual (same-time families losing visual grouping) ✅ SHIPPED in the same PR #193 — "Parent - Sub" names
+render as a muted parent line + "↳ Sub" (pure typography over the structural name).
 
 See also [[architecture/calendar_pipeline]], [[knowledge/tba_times]], [[failures/assumptions_audit#79]], [[failures/assumptions_audit#95]], [[design/ui_redesign_spec]], [[state/next_session]].
