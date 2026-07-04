@@ -10,6 +10,20 @@ Append-only, reverse-chronological (newest at top). Each entry opens with `## [Y
 
 **Kinds:** `ingest` (new source/doc processed), `pr` (PR opened/merged/closed), `decision` (architectural or workflow), `lint` (wiki health-check pass), `session` (notable multi-hour working block), `post-mortem` (failure analysis), `milestone` (project-goal threshold crossed).
 
+## [2026-07-04] pr | #190 MERGED — Health alert-flood fix (routine deferrals stop paging the operator)
+
+Owner: "the health tab looked concerning with a lot of concerning notifications." Root causes, both false
+alarms: (a) ~499 distinct `WARN:TIMING_LAG` "No schedule match … deferred to Ledger" alerts — one PER BILL
+ACTION, re-emitted every cycle; routine dispositions, not anomalies (`meeting_unsourced`=0), the exact
+Standard-#8 violation the sibling admin_default path already avoided (Gemini #66); (b) the Completeness
+trust badge stuck on "✕ FAILED" from the 2026-06-29 tripwire run — the S10 gap #184 fixed on 06-30, but the
+WEEKLY guard hadn't re-run. Fix: the `journal_default` block no longer emits a per-row SYSTEM_ALERT (row
+stays visible via [NO_SCHEDULE_MATCH] + diagnostic_hint + the `unsourced_journal` counter); the Health alert
+history COLLAPSES any >8-distinct-message category into one expandable summary (handles the historical
+backlog too); re-ran `completeness_tripwire` (workflow_dispatch) → **PASSED**, validating #184's production
+proof. Preview-verified: Completeness 4/4 "independently confirmed", 499-alert flood → one collapsed line.
+One Qodo fold-in round (stable React keys on the reorderable list; stale doc/comment refresh).
+
 ## [2026-07-03] pr | #189 MERGED — date-aware relative-time resolver (chains sort by real per-day time)
 
 Implemented the re-scoped fix (the day after the premise was falsified below). `build_time_graph` now
