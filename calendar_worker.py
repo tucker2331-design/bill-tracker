@@ -1609,8 +1609,9 @@ def _resolve_via_legislation_event_api(
     # tie-break by latest EventDate so the most recent rendering of the
     # same logical action wins. Score=0 (no token overlap) is treated as
     # NO confident match → return None and fall through to the existing
-    # journal_default path; the alert there carries the diagnostic_hint
-    # so the human can see what we did and didn't have.
+    # journal_default path; that row carries a visible [NO_SCHEDULE_MATCH]
+    # marker + the diagnostic_hint so the human can see what we did and didn't
+    # have (routed to Ledger, counted in unsourced_journal — no per-row alert).
     real_time_events = [
         e for e in matching
         if str(e.get("EventDate") or "")[11:] not in ("", "00:00:00")
@@ -1620,8 +1621,9 @@ def _resolve_via_legislation_event_api(
     outcome_tokens = _legislation_event_token_set(outcome_text)
     if not outcome_tokens:
         # No outcome to match against — abstain rather than guess. The
-        # existing journal_default path emits the categorized alert so
-        # the row is still visible.
+        # existing journal_default path marks the row [NO_SCHEDULE_MATCH] +
+        # carries a diagnostic_hint + counts unsourced_journal, so the row
+        # is still visible (no per-row alert — a routine deferral, Standard #8).
         return None
     scored = []
     for e in real_time_events:
@@ -3850,11 +3852,13 @@ def run_sequential_turing_machine(df_past, *,
                 #
                 # Route the row to its OWN terminal origin "admin_default"
                 # (NOT journal_default) so it does NOT fall into the
-                # journal_default source-miss block below — that block fires
-                # a per-row TIMING_LAG WARN + counts unsourced_journal,
-                # which for hundreds of expected-timeless admin rows would
-                # flood Bug_Logs and overstate the source gap (Gemini HIGH
-                # #66). admin_default still collapses into 📋 Ledger Updates
+                # journal_default source-miss block below — that block counts
+                # unsourced_journal (and once fired a per-row TIMING_LAG WARN,
+                # dropped 2026-07-03 as a routine deferral flood — Standard #8).
+                # admin_default keeps this row OUT of unsourced_journal entirely,
+                # since it is STRUCTURALLY administrative (not merely unmatched) —
+                # the distinction the counter should preserve (Gemini HIGH #66).
+                # admin_default still collapses into 📋 Ledger Updates
                 # (added to the collapse mask) and carries the visible
                 # NO_SCHEDULE_MATCH marker (not the old silent "Journal
                 # Entry"). It is NOT a concrete source (I3 ok) and NOT in
@@ -3954,20 +3958,23 @@ def run_sequential_turing_machine(df_past, *,
             # No API match, no convene anchor, AND LegislationEvent
             # had nothing — the historic silent "Journal Entry" default
             # that PR#22's post-mortem flagged. Replace with a visible
-            # marker and count it. One alert per date+committee+bill
-            # is enough; bulk rows would flood.
+            # marker and count it.
             time_val = "⏱️ [NO_SCHEDULE_MATCH]"
             source_miss_counts["unsourced_journal"] += 1
             diagnostic_hint = _build_diagnostic_hint(
                 date_str, event_location, acting_chamber_prefix
             )
-            push_system_alert(
-                f"No schedule match for {bill_num} at '{event_location}' on {date_str} — row deferred to Ledger.",
-                status="WARN",
-                category="TIMING_LAG",
-                severity="WARN",
-                dedup_key=f"no_match::{date_str}::{event_location}::{bill_num}",
-            )
+            # NO per-row WARN alert. A no-schedule-match deferral to Ledger is a
+            # ROUTINE disposition, not an anomaly (Standard #8 — notify on genuine
+            # anomalies, not "X happened"): the ONLY genuine anomaly here is a MEETING
+            # action without a time, which I4 / meeting_unsourced tracks SEPARATELY. A
+            # per-(date,committee,bill) alert never collapses across bills, so a full
+            # re-derive floods the operator feed with hundreds of benign WARNs (the exact
+            # flood the sibling admin_default path already suppresses, Gemini #66). The
+            # row stays fully VISIBLE and non-silent — the [NO_SCHEDULE_MATCH] marker +
+            # diagnostic_hint on the row + the unsourced_journal counter (trended on the
+            # Health tab) carry the source-gap signal; the aggregate is a gauge, not 471
+            # notifications. (Owner 2026-07-03: the Health alert feed read as alarming.)
 
         # Orthogonal tag counter: fires on every row where the Memory
         # Anchor committee fallback was applied, regardless of how the
@@ -7145,7 +7152,9 @@ def run_calendar_update():
         # PR-C7.1g (#66 fold-in): admin_default joins the collapse set — these
         # are structurally-administrative rows we deliberately left timeless;
         # they belong in 📋 Ledger Updates exactly like journal_default /
-        # floor_miss, just without the per-row source-miss WARN those two emit.
+        # floor_miss. (None of the three emits a per-row source-miss WARN now —
+        # journal_default's was dropped 2026-07-03 as a routine deferral, Standard
+        # #8; all three stay visible via the [NO_SCHEDULE_MATCH] marker + counters.)
         journal_mask = final_df['Origin'].isin(['journal_default', 'floor_miss', 'admin_default'])
         if journal_mask.any():
             final_df.loc[journal_mask, 'Committee'] = '📋 Ledger Updates'
