@@ -10,6 +10,15 @@ Append-only, reverse-chronological (newest at top). Each entry opens with `## [Y
 
 **Kinds:** `ingest` (new source/doc processed), `pr` (PR opened/merged/closed), `decision` (architectural or workflow), `lint` (wiki health-check pass), `session` (notable multi-hour working block), `post-mortem` (failure analysis), `milestone` (project-goal threshold crossed).
 
+## [2026-07-04] milestone | Production proof: Section 9 = 0 held through #189+#193; TimeClass live
+
+Manually-dispatched worker run (28710792692, success): `meeting_unsourced=0`, `invariant_violations=0`,
+TimeClass column live in Sheet1 (7,249 concrete / 3,728 relative_resolved / 370 relative_unresolved rows;
+per-meeting counters 1,667 total / 19 unresolved in-window). The 2026-01-14 Senate P&E meetings — the owner's
+original unplaceable example — now carry `relative_unresolved` and top-surface with the ⚠ badge. Bill worker
+proof landed earlier the same day (floor reconcile 1157/1157, rate 0.0). The owner's full to-do list is DONE
+with production proof on both workers.
+
 ## [2026-07-04] pr | #193 MERGED — §7.2 TimeClass (unplaceable meetings surface first) + subcommittee lineage cue
 
 Closes calendar_chain_ordering §7.2 + the same-time-family grouping. Worker: structural `TimeClass` column
