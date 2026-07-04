@@ -246,14 +246,29 @@ def _derive_position(rows, bill):
 
 def _chief_patron_from_universe(item):
     """Chief patron (full name, member number) from the bill-universe payload's OWN `Patrons` list —
-    LIS's authoritative structural field (Standard #3). Prefers the PatronTypeID==1 / "Chief Patron"
-    entry; falls back to the first patron. Returns ("", "") when the list is absent so the caller can
-    fall back to BILLS.CSV. Names like "Jeion A. Ward" (full) vs BILLS.CSV's "Ward" (surname)."""
-    pats = item.get("Patrons") or []
-    chief = next((p for p in pats if p.get("PatronTypeID") == 1 or p.get("Name") == "Chief Patron"),
-                 pats[0] if pats else None)
-    if not chief:
+    LIS's authoritative structural field (Standard #3). Returns ("", "") on any absence/shape surprise
+    so the caller falls back to BILLS.CSV. Full name "Jeion A. Ward" vs BILLS.CSV's surname "Ward".
+
+    HEURISTIC (Standard #1):
+      - ASSUMES `Patrons` is a LIST of DICT entries, the chief carrying PatronTypeID==1 (or Name=="Chief
+        Patron"), with `MemberDisplayName` = full name and `MemberNumber` = the "H0173"/"S0012" id that
+        MATCHES BILLS.CSV's Patron_id format (verified live 2026-07-04 — NOT the numeric MemberID 419,
+        which would mismatch the fallback's format, so it is deliberately NOT used).
+      - BREAKS if LIS returns Patrons as a non-list, non-dict elements, or renames the fields → this
+        returns ("", "") and the row falls back to the BILLS.CSV surname (a display regression, never a
+        crash — Standard #6 zero-trust: the whole cycle must not abort on one odd payload; Qodo #195).
+      - RUNTIME CHECK: `completeness.patron_fullname_universe(+_rate)` tracks coverage every cycle; a drop
+        from ~100% is the alarm that the shape drifted (Standard #7 — surfaced as a rate)."""
+    pats = item.get("Patrons")
+    if not isinstance(pats, list):
         return "", ""
+    dicts = [p for p in pats if isinstance(p, dict)]
+    if not dicts:
+        return "", ""
+    chief = next((p for p in dicts if p.get("PatronTypeID") == 1 or p.get("Name") == "Chief Patron"),
+                 dicts[0])
+    # MemberNumber only (the BILLS.CSV-consistent "H0173" format); if absent, leave the id empty rather
+    # than substitute the format-incompatible numeric MemberID (Qodo #195).
     return str(chief.get("MemberDisplayName") or "").strip(), str(chief.get("MemberNumber") or "").strip()
 
 
@@ -492,6 +507,7 @@ def build_bill_records(http_session, session_code):
         # records_written; a drop means LIS stopped carrying Patrons on the list endpoint and we fell back
         # to surnames (a display regression, not a data loss — surfaced, per Standard #7).
         "patron_fullname_universe": patron_fullname_universe,
+        "patron_fullname_universe_rate": round(patron_fullname_universe / len(records), 4) if records else 0.0,
         # Self-calibrating outcome check (replaces a hardcoded status vocabulary): among bills LIS gives
         # structural flags for, how often does our keyword logic disagree? Expressed as a RATE with its
         # denominator (Standard #7); a rising rate = our status-string handling has drifted from LIS.
