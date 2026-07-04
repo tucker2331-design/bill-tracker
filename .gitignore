@@ -12,3 +12,6 @@ __pycache__/
 
 # web (front end) local npm cache used in the sandbox
 web/.npm-cache/
+
+# root build shim output (Cloudflare Pages)
+/dist
