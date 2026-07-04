@@ -1,6 +1,6 @@
 ---
 tags: [index, meta]
-updated: 2026-06-25
+updated: 2026-07-04
 status: active
 ---
 
@@ -23,6 +23,13 @@ Links use Obsidian `[[wikilink]]` format. Obsidian resolves by filename; path-qu
 - [[state/open_anti_patterns]] — known silent fallbacks still living in the code (worker.py line debt)
 - [[state/health_gauge_calibration_plan]] — **ACTIVE plan + live checklist: the 3 `/code-review` findings on PR #181 (feed-skew bands, source-feed session-awareness, Metrics_History change-feed [deferred]); persisted so it survives compaction**
 - [[ny/state/current_status]] — New York-specific live status and next steps
+
+## Audits (point-in-time expert reviews — execution specs for the implementing model)
+- [[audits/fable_2026-07/README]] — **▶️ FABLE AUDIT HUB (2026-07-04): the priority-ordered execution queue for Opus.** Four owner-directed deliverables from the time-limited Fable session; document-only, Opus executes.
+- [[audits/fable_2026-07/brain_audit]] — how the brain performed + 6 concrete changes (B-1…B-6) to close the Opus-vs-Fable gap (status-page restructure, case-law indexes, EXECUTABLE pre-push audit, CLAUDE.md de-drift, reasoning doctrine)
+- [[audits/fable_2026-07/codebase_longevity_audit]] — VA+NY multi-year sustainability findings C-1…C-10 (2027 rollover halt, Sheets 10M-cell ceiling, gviz/Actions coupling, NY hardening gap, BILLS.CSV oracle canary)
+- [[audits/fable_2026-07/multistate_ingestion_pa]] — PA researched (hourly XML + RSS — structured, NOT scraping); the formalized lambda architecture; the decade-grade controlled-vocabulary doctrine + 4-phase PA build plan
+- [[audits/fable_2026-07/sweep_findings]] — S-1…S-6: plaintext LIS key rotation-brittleness, CI golden-test blind spot, repo-root cruft, measurement caveats
 
 ## Workflow & Protocols (how we work)
 - [[ny/workflow/source_scoping_protocol]] — New York source-scoping protocol: scope, plan, test, then promote

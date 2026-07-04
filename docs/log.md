@@ -10,6 +10,23 @@ Append-only, reverse-chronological (newest at top). Each entry opens with `## [Y
 
 **Kinds:** `ingest` (new source/doc processed), `pr` (PR opened/merged/closed), `decision` (architectural or workflow), `lint` (wiki health-check pass), `session` (notable multi-hour working block), `post-mortem` (failure analysis), `milestone` (project-goal threshold crossed).
 
+## [2026-07-04] session | FABLE AUDIT — four execution-ready deliverables banked to [[audits/fable_2026-07/README]]
+
+Owner directive at the stopping point: use the time-limited Fable access for (1) a brain audit — what to
+change so Opus performs closer to Fable (verdict: make the written thing exactly true, small, and
+executable — B-1 status-page restructure, B-2 case-law indexes, B-3 EXECUTABLE pre-push audit script,
+B-4 CLAUDE.md de-drift, B-5 reasoning doctrine); (2) a VA+NY longevity audit (C-1 the Jan-2027
+authorization HALT + horizon canary; C-2 the Sheets 10M-cell ceiling — witness ≈232k rows measured; C-3
+gviz/Actions coupling → static-JSON inversion; C-5 BILLS.CSV oracle canary; C-8 NY hardening gap —
+canaries + LegiScan oracle; C-10 multi-session product design); (3) the PA/non-API-state question —
+RESEARCHED: PA publishes hourly Bill History XML (1969+) + per-publication RSS incl. roll calls and
+committee schedules (palegis.us/data) — structured transport, NO scraping; semantic layer = controlled
+vocabulary handled by the enumerate-the-57-year-corpus registry doctrine; lambda architecture (batch
+authoritative / speed provisional / reconciler / LegiScan verification oracle) fully specified with a
+4-phase build plan; (4) sweep S-1…S-6 (plaintext LIS key ×10 files, CI golden-test blind spot, root
+cruft). ALL document-only per the owner: "leave the grunt work to Opus." Hub README carries the priority
+queue.
+
 ## [2026-07-04] milestone | Production proof: Section 9 = 0 held through #189+#193; TimeClass live
 
 Manually-dispatched worker run (28710792692, success): `meeting_unsourced=0`, `invariant_violations=0`,
