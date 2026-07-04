@@ -10,6 +10,22 @@ Append-only, reverse-chronological (newest at top). Each entry opens with `## [Y
 
 **Kinds:** `ingest` (new source/doc processed), `pr` (PR opened/merged/closed), `decision` (architectural or workflow), `lint` (wiki health-check pass), `session` (notable multi-hour working block), `post-mortem` (failure analysis), `milestone` (project-goal threshold crossed).
 
+## [2026-07-04] pr | #194 + #195 MERGED — Cloudflare Pages deploy prep + chief-patron FULL name (VA data follow-ups closed)
+
+#194: repo turnkey for the decided host (React+Vite→Cloudflare Pages) — `web/public/_redirects` SPA
+fallback, `web/.node-version=22` (Vite-8 floor), clean-checkout build verified, connect runbook
+[[workflow/deploy_cloudflare_pages]]; the ~5-min dashboard Git-connect is owner-only (account/OAuth) and
+gives per-PR preview URLs (the flaky-local-preview cure). #195: chief-patron FULL name from the
+bill-universe payload (free — the `Patrons` list we already fetch carries `MemberDisplayName` "Jeion A.
+Ward" + `MemberNumber`; 3645/3645 coverage), with a Qodo fold-in round: crash-safe Patrons parse (isinstance
+guards so a non-list/non-dict drift can't abort the whole cycle — Standard #6), 3-part heuristic doc, rate
+companion, and `MemberNumber` used deliberately as the BILLS.CSV-format-consistent id (no numeric-MemberID
+fallback = no format corruption). Bill worker dispatched for production proof. **All VA data follow-ups now
+resolved:** chief patron ✅ (#195), co-patrons scoped-deferred ([[ideas/copatrons_backfill]] — needs
+DOM-discovered endpoint + cadence), subject deferred (no bulk source). Remaining VA: the owner's dashboard
+connect + owner-triggered `/code-review ultra`. NEXT chapter = the Fable-audit queue
+[[audits/fable_2026-07/README]].
+
 ## [2026-07-04] decision | Cloudflare Pages deploy PREPPED (the flaky-local-preview fix) → [[workflow/deploy_cloudflare_pages]]
 
 Owner: "actually set up the new host for the site so I don't have to keep looking at a preview that fails."
