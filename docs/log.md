@@ -10,6 +10,24 @@ Append-only, reverse-chronological (newest at top). Each entry opens with `## [Y
 
 **Kinds:** `ingest` (new source/doc processed), `pr` (PR opened/merged/closed), `decision` (architectural or workflow), `lint` (wiki health-check pass), `session` (notable multi-hour working block), `post-mortem` (failure analysis), `milestone` (project-goal threshold crossed).
 
+## [2026-07-04] decision | PA text-dictionary REJECTED → structural-JOIN router (live-feed evidence)
+
+Owner (via Gemini review) rejected the 57-year phrase corpus: a historical dictionary is still a text
+dictionary — a clerk's novel Tuesday phrase defeats it and pings a human. Fable retracted it and answered
+the three architectural challenges EMPIRICALLY by inspecting PA's live feeds: (1) **hidden structural
+codes FOUND** — the committee-schedule RSS carries a full custom `parss:` namespace
+(MeetingDate/MeetingTime/Committee/**Bills**/Location/InCapitol — meetings are 100% structural, agenda
+included, richer than VA's Schedule API); roll-call RSS links carry canonical DB keys
+(`sessYr/sessInd/rcNum`) with machine-serialized titles (`HB 2154 PN 2787`) and fixed-format tallies;
+printer's numbers = PA's version primary key. (2) **Prove-to-Hide fail-safe**: route by JOIN — every event
+class has a structural witness artifact (roll-call item ⇒ vote; parss:Bills ⇒ meeting; PN transition ⇒
+version event); prose is display-only, exactly VA's refid→VOTE.CSV pattern. (3) **The unseen row**: the
+router is a TOTAL function — no artifact ⇒ event_class=UNPROVEN by construction → the visible
+Suspense/Unconfirmed lane ([[ideas/self_healing_classification]] Prove-to-Hide), rate-anomaly canary (not
+per-row), auto-upgrade when the artifact trails in. Zero regex, zero human. The corpus is demoted to a
+one-time MEASUREMENT instrument (join-rate forecast + router validation set). Part 3 + Phase gates of
+[[audits/fable_2026-07/multistate_ingestion_pa]] rewritten accordingly.
+
 ## [2026-07-04] decision | Owner correction: ZERO-TOUCH rollover/capacity + first-party PA freshness ladder
 
 Owner pushed back on the Fable audit's C-1/C-2 designs ("why were your solutions pinging me… I explicitly
