@@ -197,10 +197,13 @@ export function Health({ completeness, dataAsOf }: { completeness: Completeness 
     // ring is fine," contradicting a live amber segment. The badge covers only the named OUTSIDE
     // cross-check (e.g. the sustainability audit); the ring segments above are the LIVE internal signals
     // — two different things, so say which one this is.
+    // A NON-pass badge names only the guard(s) actually IN the worst state (Qodo + CodeRabbit #192):
+    // with two guards on a dial, "✕ A + B check FAILED" would smear a passing B with A's failure.
     const names = gs.map((g) => g.label).join(" + ");
+    const worstNames = gs.filter((g) => g.status === worstG.status).map((g) => g.label).join(" + ");
     const text =
-      state === "fail" ? `✕ ${names} check FAILED`
-      : state === "running" ? `${names} check running…`
+      state === "fail" ? `✕ ${worstNames} check FAILED`
+      : state === "running" ? `${worstNames} check running…`
       : state === "unknown" ? "— unverifiable"
       : state === "stale" ? `✓ ${names} check passed · re-check overdue`
       : `✓ ${names} check passed`;

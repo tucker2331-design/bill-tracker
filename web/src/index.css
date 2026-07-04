@@ -111,6 +111,9 @@ h2, h3 { margin: 0; }
 .star { border: 0; background: transparent; font-size: 17px; line-height: 1; color: var(--ink-faint); padding: 0 2px; }
 .star.on { color: #e0a500; }
 .billgrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: var(--s2); }
+/* Drill-down grouping: a sticky-ish committee header over each cluster so a big stage reads House/Senate → committee → sub. */
+.drill-group { margin-bottom: var(--s4); }
+.drill-grouphdr { font-size: 12px; font-weight: 800; color: var(--ink-soft); letter-spacing: .2px; padding: 4px 2px 7px; border-bottom: 1px solid var(--line); margin-bottom: var(--s2); }
 
 /* ── Bill card (modal) ── */
 .cardwrap { position: fixed; inset: 0; background: rgba(20,28,48,.42); display: flex; justify-content: center; align-items: flex-start; padding: 40px 16px; z-index: 50; overflow: auto; }
