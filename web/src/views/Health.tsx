@@ -192,13 +192,20 @@ export function Health({ completeness, dataAsOf }: { completeness: Completeness 
       : worstG.status === "running" ? "running"
       : worstG.status === "unknown" ? "unknown"
       : anyStale ? "stale" : "pass";
+    // NAME the check on the badge face (owner 2026-07-03: "what does 'independently confirmed' mean —
+    // how can Stability be confirmed WITH a warning?"). The generic wording read as "everything on this
+    // ring is fine," contradicting a live amber segment. The badge covers only the named OUTSIDE
+    // cross-check (e.g. the sustainability audit); the ring segments above are the LIVE internal signals
+    // — two different things, so say which one this is.
+    const names = gs.map((g) => g.label).join(" + ");
     const text =
-      state === "fail" ? "✕ independent check FAILED"
-      : state === "running" ? "checking…"
+      state === "fail" ? `✕ ${names} check FAILED`
+      : state === "running" ? `${names} check running…`
       : state === "unknown" ? "— unverifiable"
-      : state === "stale" ? "✓ confirmed · re-check overdue"
-      : "✓ independently confirmed";
-    const title = gs.map((g) => `${g.label} (${g.cadence}${g.lastRun ? `, ${agoText(g.lastRun)}` : ", never run"}): ${g.proves}`).join("\n");
+      : state === "stale" ? `✓ ${names} check passed · re-check overdue`
+      : `✓ ${names} check passed`;
+    const title = gs.map((g) => `${g.label} (${g.cadence}${g.lastRun ? `, ${agoText(g.lastRun)}` : ", never run"}): ${g.proves}`).join("\n")
+      + "\n\nThis badge reports the named OUTSIDE cross-check only; the ring above shows the live internal signals — a warning there and a passing check here can coexist.";
     return { state, text, title, url: worstG.url };
   };
 
