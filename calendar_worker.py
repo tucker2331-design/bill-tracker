@@ -64,7 +64,10 @@ def notify_slack(text):
 # Bump WORKER_OUTPUT_LOGIC_VERSION on ANY change to output-affecting logic so the
 # signature changes and a recompute is forced even when the inputs are byte-identical
 # (otherwise a code fix wouldn't take effect until an input moved).
-WORKER_OUTPUT_LOGIC_VERSION = "2026-06-16.1"
+# 2026-07-04.1: date-aware SortTime resolver (#189) + the TimeClass column (#193) both change
+# Sheet1 output — force a recompute so cached/incremental paths can't serve pre-change rows
+# (Qodo #193; #189 omitted this bump, caught here).
+WORKER_OUTPUT_LOGIC_VERSION = "2026-07-04.1"
 
 
 def _sha(*parts):
@@ -101,7 +104,8 @@ def _df_content_hash(df):
 # Order-INDEPENDENT comparison (the two runs append in different orders by design).
 _STM_EVENT_KEY_FIELDS = ("Date", "Time", "SortTime", "Status", "Committee", "Bill",
                          "Outcome", "AgendaOrder", "Source", "Origin",
-                         "DiagnosticHint", "LegEventRoute", "RefidClass", "ScheduleClass")
+                         "DiagnosticHint", "LegEventRoute", "RefidClass", "ScheduleClass",
+                         "TimeClass")
 
 
 def _stm_event_key(ev):
@@ -5286,6 +5290,16 @@ def run_calendar_update():
                     # relative prose classifies by whether the date-aware resolver produced a real clock
                     # (sort_time_24h off the 06:00/23:59 sentinels) — resolved vs UNRESOLVED (the honest
                     # "we cannot place this" flag the front end surfaces); "" = TBA/no published time.
+                    # HEURISTIC (Standard #1):
+                    #   ASSUMES the resolver's 06:00/23:59 outputs are only ever its unresolved SENTINELS
+                    #   for RELATIVE rows (a genuinely 6:00 AM / 11:59 PM relative-resolved meeting would
+                    #   misread as unresolved — no such meeting exists in any observed session; a CONCRETE
+                    #   6:00 AM row is unaffected, it classifies on its own clock before this branch).
+                    #   BREAKS if the resolver changes its sentinel values, or if a real relative chain
+                    #   legitimately resolves to exactly 06:00/23:59.
+                    #   RUNTIME CHECK: the timeclass_* counters below (with timeclass_total as the
+                    #   denominator) are trended on the Health tab — a JUMP in relative_unresolved against
+                    #   a steady total is the misclassification/regression signal (steady ≈ 22/3480).
                     if parse_24h_time(raw_time) != "23:59" and not _is_relative_time_text(raw_time):
                         _tclass = "concrete"
                     elif _is_relative_time_text(f"{raw_time} {clean_desc}"):
@@ -5389,9 +5403,13 @@ def run_calendar_update():
                 # ============================================================
                 # §7.2: TimeClass distribution counters (per (date,committee) meeting, from the
                 # completed map — exact, no per-row double counting). timeclass_relative_unresolved
-                # is the honest residual the front end top-surfaces (~30s/session steady state);
+                # is the honest residual the front end top-surfaces (~22/session steady state);
                 # a JUMP means the resolver's anchoring regressed — trended on the Health tab.
+                # timeclass_total is the explicit DENOMINATOR (Standard #7 / source_miss_visibility:
+                # a metric without a denominator is ambiguous) — the "" TBA/no-time class is
+                # total − (concrete + resolved + unresolved).
                 _tc_counts = Counter(_time_class_by_key.values())
+                source_miss_counts["timeclass_total"] = len(_time_class_by_key)
                 for _tc_name in ("concrete", "relative_resolved", "relative_unresolved"):
                     source_miss_counts[f"timeclass_{_tc_name}"] = _tc_counts.get(_tc_name, 0)
 
