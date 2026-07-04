@@ -53,3 +53,17 @@ When evaluating a proposed architecture, ask: *in normal operations, how often d
 
 - [CLAUDE.md](../../CLAUDE.md) Standard #6 (Scalability to 50 States) — Standard #8 is the operational expression
 - [[failures/assumptions_audit#54]] — the failure mode this principle prevents
+
+
+## The "notify-only" test (owner correction, 2026-07-04 — from the Fable audit)
+
+The Fable audit's first rollover/capacity designs told the OWNER to act (runbook + reminder canary). The
+owner rejected them: *"I'm not sure why your solutions were pinging me to fix it when I explicitly stated
+my sustainability goals."* The codified test, applied to every future alert design:
+
+> **If an alert's remediation is a foreseeable, mechanizable edit (add a season code, move a tab, rotate
+> a file), the system performs the edit and INFORMS. A human is interrupted only when the world does
+> something unprecedented: an upstream refuses our key, data fails integrity, terms visibly change.**
+
+Alerts are FYI; automation is the actuator. See [[audits/fable_2026-07/autonomy_upgrades]] (A-1/A-2) for
+the corrected designs, including how to keep ban-safety (probe-verify + kill switch) without a human step.

@@ -22,17 +22,21 @@ sequencing included. Nothing here was implemented unless explicitly marked SHIPP
 
 ## Priority queue for Opus (do in this order)
 
-1. **C-1 Session-rollover runbook + horizon canary** (codebase audit) — dated risk: the system HALTS in
-   Jan 2027 without a 5-minute human action nobody will remember. Highest value per hour.
-2. **B-1 current_status.md restructure** (brain audit) — one hour of work; improves EVERY future session.
-3. **B-3 Machine-executable pre-push audit** (brain audit) — converts prose rules into checks that fire;
+> **2026-07-04 owner correction:** the original C-1/C-2 designs pinged the owner to act — that violates
+> Standard #8 ("alerts are FYI; automation is the actuator"). They are SUPERSEDED by the zero-touch
+> designs in [[audits/fable_2026-07/autonomy_upgrades]] (A-1/A-2). The queue below reflects that.
+
+1. **A-1 Self-extending session authorization** ([[audits/fable_2026-07/autonomy_upgrades]]) — the system
+   auto-follows LIS into 20271 (probe-verified, kill-switched, FYI-alerted). Dated: before Nov 2026.
+2. **A-2 Automated workbook lifecycle** (same page) — finish the rollover hook `archive.py` already
+   promises (snapshot→verify→reset, zero-touch) + the headroom-triggered ops-shard actuator.
+3. **B-1 current_status.md restructure** (brain audit) — one hour of work; improves EVERY future session.
+4. **B-3 Machine-executable pre-push audit** (brain audit) — converts prose rules into checks that fire;
    would have caught the #189 logic-version miss automatically.
-4. **C-2 Cell-ceiling gauge + witness offload plan** (codebase audit) — the quiet whale; measure first,
-   then execute the offload design.
 5. **S-1 LIS WebAPIKey hygiene** (sweep) — small, do alongside any tools/ touch.
-6. **C-8 NY canaries + verification oracle** (codebase audit) — port the proven VA patterns to NY.
-7. **P-* PA ingestion** (multistate page) — build when the owner green-lights the PA state; the page is a
-   full implementation spec, sequenced in phases with validation gates.
+6. **C-8 NY canaries + first-party verification** (codebase audit) — port the proven VA patterns to NY.
+7. **P-* PA ingestion** (multistate page, incl. Part 5's first-party freshness ladder) — build when the
+   owner green-lights PA; the page is a full implementation spec with validation gates.
 8. Everything else as convenient (each finding carries its own effort estimate).
 
 ## How to read the findings

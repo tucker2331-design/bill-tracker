@@ -50,10 +50,11 @@ years of contract stability; they have run these feeds for decades).
    - **LegiScan** — normalized 50-state JSON API + weekly per-state bulk datasets (PA archives confirmed
      to exist). Tempting as a primary (zero parsing!), **rejected as primary**: it inserts a third party
      between us and the legislature (their parser becomes our silent dependency; their outage/licensing
-     becomes ours; commercial-use terms need review). **Adopted as the independent VERIFICATION oracle**
-     — the PA analog of VA's MinutesBook reconciliation: weekly diff of our derived state vs LegiScan's,
-     divergence rate with denominator. Two independent pipelines disagreeing is the strongest
-     drift-detector money can't buy.
+     becomes ours; commercial-use terms need review). *Owner ruling 2026-07-04: keep third parties off
+     the pipeline entirely — they consume the same public feeds we do ("we are building a superior
+     competitor").* So verification is **first-party cross-channel** (Part 5: roll-call RSS vs XML
+     tallies, committee RSS vs calendars/journals — two LDPC channels grading each other); LegiScan
+     remains at most an OPTIONAL periodic outside auditor, never load-bearing.
    - **Open States / Plural** — same analysis, second choice of oracle (scraper-based; quality varies by
      state; useful as a tiebreaker source when we and LegiScan disagree).
    - Direct LDPC relationship — see above; the highest-leverage "API alternative" is often a schema doc
@@ -140,6 +141,66 @@ Phase 3 (2–3 days): speed layer — RSS pollers (committee schedules + calenda
 with provisional stamping + the reconciler. **Gate: one week of speed_wrong_rate < 1% and zero
 never-confirmed quarantines.**
 Phase 4: front-end state switcher (out of scope here; UI is Opus+owner territory per the owner).
+
+## Part 5 — FRESHER than hourly, first-party only (owner 2026-07-04: "we are building a superior competitor")
+
+Owner constraint accepted: no LegiScan/aggregators anywhere on the freshness path — they consume the same
+public feeds and are definitionally *slower* than us reading those feeds directly. The question is how
+close we can get to the **moment PA publishes**. Answer: within minutes, first-party, ban-safe — because
+the freshness floor for ANY outsider is LDPC's publication moment, and the game is won by (a) finding the
+earliest first-party surface each fact appears on, and (b) ingesting it within minutes of appearing.
+
+### The freshness ladder (all first-party)
+
+| Tier | Channel | Latency vs publication | Trust class |
+|---|---|---|---|
+| 1 | **RSS feeds** (roll calls, committee schedules, calendars, voted amendments, session reports) | minutes (poll-bound) | provisional → confirmed |
+| 2 | **palegis.us's own backing endpoints** (investigate: XHR/JSON the site's pages load) | seconds–minutes | provisional |
+| 3 | **Hourly Bill History XML** | ≤ 1 h | AUTHORITATIVE (the reconciler) |
+
+**Tier 1 is the workhorse, and it is enough for the product.** Map freshness-NEED before chasing
+freshness: the lobbyist-critical, minutes-matter events are votes just taken (roll-call RSS), meetings
+scheduled/moved/cancelled (committee-schedule RSS), floor calendars (calendar RSS), amendments voted
+(voted-amendments RSS). The only class arriving *solely* via the hourly XML is administrative history
+lines (referrals, printings, signings-recorded) — exactly the class VA doctrine already assigns **no
+freshness expectation** (Ledger-class). So the hourly XML's cadence costs us nothing a user can feel,
+PROVIDED the RSS layer is ingested aggressively:
+- **Polling design:** RSS is a polling format BY DESIGN — tiny documents, built for conditional GET
+  (`If-Modified-Since`/ETag → 304s). Poll every **2–5 min during session days/hours**, hourly on quiet
+  days, per the activity-correlated cadence charter ([[knowledge/lis_api_safety]] guardrail 5 — the
+  session calendar drives the schedule). A dozen 304s per feed per hour is a lighter footprint than one
+  XML download; this is unimpeachably sustainable.
+- **Push check (build-time, 10 min):** inspect the RSS HTTP responses for **WebSub** (`Link:
+  rel="hub"`) headers. If LDPC offers a hub, subscribe — true push, latency ≈ 0, polling drops to a
+  fallback heartbeat. If not (likely), polling stands.
+- **Optional exotic tier:** PA offers email bill-alert subscriptions; an email-to-webhook bridge could
+  act as a push TRIGGER for a targeted re-poll. Document-only: adopt ONLY if a measured gap demands it —
+  each moving part must earn its decade of upkeep.
+
+**Tier 2 is the VA playbook applied to PA** — the same move that got us the LIS SPA's LegislationEvent
+endpoint. palegis.us is a modern site rendering live data; its bill/vote/committee pages are fed by
+LDPC's internal store, fresher than the hourly export. Opus investigation protocol (1–2 h, harmless):
+open a bill page + the roll-call and committee pages with DevTools; catalog every XHR/fetch returning
+JSON; note auth (cookies? none?), shape, and stability markers; check robots.txt + site terms; if JSON
+endpoints exist, they join Tier 2 with conditional-fetch discipline + a dedicated drift canary (an
+undocumented surface gets the FULL mitigation kit: schema canary, quarantine-on-change, and Tier 3
+reconciliation). If the site is server-rendered HTML only, we simply don't build Tier 2 — Tier 1 already
+covers the minutes-matter classes; we never scrape HTML on the lobbyist path.
+
+### Why accuracy does NOT degrade as freshness increases
+Every Tier 1/2 row enters as `Provisional=true` with its origin stamped, surfaces with the provisional
+badge (the UI vocabulary already exists), and must be CONFIRMED by the next hourly XML or it is
+quarantined + alerted (Part 2's reconciler). Cross-channel redundancy gives first-party
+self-verification with no third party: roll-call RSS tallies must match the XML's "(198-0)" strings;
+committee-RSS meetings must appear in calendars/journals. Divergence = counted, alerted, and always
+resolved in favor of Tier 3. **Freshness rides on top of accuracy; it never substitutes for it.**
+
+### The competitive statement (the owner's actual thesis, confirmed)
+Aggregators are batch consumers of these same public feeds — their floor is our ceiling. A pipeline that
+ingests LDPC publications within 2–5 minutes, labels them honestly, and reconciles hourly against the
+authoritative XML is *structurally* ahead of anything downstream of the same feeds, at near-zero marginal
+cost and with the same unattended-for-years posture as VA. The only way to beat it is insider access —
+which nobody selling a product has either.
 
 Sources: [PA General Assembly Data Downloads](https://www.palegis.us/data) · [LDPC Resources](https://www.paldpc.us/Resources) · [LegiScan PA datasets](https://legiscan.com/PA/datasets)
 See also [[knowledge/lis_api_safety]] (the guardrail charter applies to every state), [[architecture/calendar_pipeline]], [[audits/fable_2026-07/codebase_longevity_audit]] C-8 (NY gets the same oracle pattern first).

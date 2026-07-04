@@ -26,6 +26,9 @@ storage growth against a hard platform ceiling, single-platform coupling, and NY
 ---
 
 ## C-1 · Session rollover Jan 2027 — the system HALTS by design without a human (CRITICAL, dated)
+> **SUPERSEDED 2026-07-04 (owner correction):** the runbook+canary design below made a human the
+> actuator — Standard #8 violation. Implement **A-1 in [[audits/fable_2026-07/autonomy_upgrades]]**
+> (auto-follow + probe-verify + kill switch + FYI alert) instead. The evidence below stands.
 - **Evidence:** `lis_authorization.py:18` `LIS_API_AUTHORIZED_SESSIONS = frozenset({"20251","20261"})`;
   `run_bill_tracker()` and the calendar worker both hard-halt on an unauthorized session ("🛑 LIS
   authorization halt"). Front end: `web/src/data/calendar.ts` `CROSSOVER_BY_SESSION` has only `"20261"`;
@@ -56,6 +59,11 @@ storage growth against a hard platform ceiling, single-platform coupling, and NY
 - **Effort:** runbook 1 h; canary ~2 h; completeness stamp ~1 h.
 
 ## C-2 · Google Sheets cell ceiling — the witness tab is the whale (HIGH, ~12–24 mo)
+> **PARTIALLY SUPERSEDED 2026-07-04:** stage (1) measure stays; stages (2)-(3) become the AUTOMATED
+> actuators of **A-2 in [[audits/fable_2026-07/autonomy_upgrades]]** (rollover hook + headroom-triggered
+> shard — zero-touch). Note: more automation existed than this audit first credited (headroom-aware tab
+> creation, retention prunes, monthly compaction); the missing piece is the actuation hook archive.py
+> itself documents as an unbuilt follow-up.
 - **Evidence (measured 2026-07-04 via gviz counts):** Schedule_Witness ≈ **232,570 rows** (13 cols ≈
   3.0M cells) *with the 90-day prune green*; Metrics_History ≈ 72,181 rows (flood-era backlog; shrinks
   after #190 + 45-day prune); Sheet1 ≈ 37,810 × 15; LegEvent cache tabs; Bill_Tracker 3,645 × 18. The

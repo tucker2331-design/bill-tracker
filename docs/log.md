@@ -10,6 +10,26 @@ Append-only, reverse-chronological (newest at top). Each entry opens with `## [Y
 
 **Kinds:** `ingest` (new source/doc processed), `pr` (PR opened/merged/closed), `decision` (architectural or workflow), `lint` (wiki health-check pass), `session` (notable multi-hour working block), `post-mortem` (failure analysis), `milestone` (project-goal threshold crossed).
 
+## [2026-07-04] decision | Owner correction: ZERO-TOUCH rollover/capacity + first-party PA freshness ladder
+
+Owner pushed back on the Fable audit's C-1/C-2 designs ("why were your solutions pinging me… I explicitly
+stated my sustainability goals") and asked: were session auto-switch + sheet rotation ever built?
+**Verified:** session DETECTION is built (Session API every cycle, Standard #5); the authorization
+allowlist halt was a DELIBERATE compliance checkpoint (LIS portal authorizes per-session), not a gap.
+Capacity: headroom-aware tab creation + prunes + monthly compaction ARE built; the **auto rollover hook is
+documented in archive.py as an unbuilt follow-up** ("a worker rollover hook will call snapshot-session
+automatically on session change (follow-up)") — the owner's memory was right. New page
+[[audits/fable_2026-07/autonomy_upgrades]]: **A-1** self-extending session authorization (auto-follow the
+Session API's active session, probe-verify 401→halt, kill switch, FYI-only alert; historical sessions stay
+frozen) + **A-2** automated workbook lifecycle (finish the rollover hook: snapshot→verify→reset; headroom-
+triggered ops-shard actuator). C-1/C-2 superseded; "notify-only test" codified into
+[[workflow/zero_routine_maintenance]]. ALSO: PA fresher-than-hourly, NO third parties (owner: "we are
+building a superior competitor") — Part 5 added to [[audits/fable_2026-07/multistate_ingestion_pa]]:
+first-party freshness ladder (RSS 2–5-min polling = the minutes-matter classes: votes/meetings/calendars;
+palegis.us XHR/JSON investigation = the VA SPA-key playbook; WebSub push check; hourly XML stays the
+authoritative reconciler — admin history lines need no freshness, VA doctrine). Freshness rides ON
+accuracy: provisional-stamped, XML-confirmed-or-quarantined, first-party cross-channel verification.
+
 ## [2026-07-04] session | FABLE AUDIT — four execution-ready deliverables banked to [[audits/fable_2026-07/README]]
 
 Owner directive at the stopping point: use the time-limited Fable access for (1) a brain audit — what to
