@@ -40,6 +40,7 @@ Links use Obsidian `[[wikilink]]` format. Obsidian resolves by filename; path-qu
 - [[workflow/three_phase_protocol]] — context routing → pre-push audit → write-back mandate
 - [[workflow/branching_rules]] — when to reuse vs create a branch (PR state decides)
 - [[workflow/push_and_pr]] — after every commit: push, open PR, return link
+- [[workflow/deploy_cloudflare_pages]] — **the decided host: React+Vite → Cloudflare Pages; repo is prepped (_redirects, node pin), owner does the 5-min dashboard Git-connect (exact settings inside)**
 - [[workflow/source_miss_visibility]] — mandatory rule: no silent fallback on a source miss
 - [[workflow/persistent_memory]] — this `docs/` folder IS the brain; not global memory
 - [[workflow/zero_routine_maintenance]] — Standard #8: 50-state SaaS requires zero ongoing per-state maintenance; humans get pinged only for true anomalies
