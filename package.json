@@ -1,0 +1,8 @@
+{
+  "name": "va-bill-tracker",
+  "private": true,
+  "description": "Root build shim so a repo-ROOT build (Cloudflare Pages' default when Root directory isn't set to web/) still builds the React SPA that lives in web/. Cloudflare runs `npm run build` here; this delegates into web/ and copies the output to a root-level dist/ that Cloudflare's default output dir picks up. If Root directory IS set to web/, Cloudflare builds web/ directly and this file is simply ignored — safe either way.",
+  "scripts": {
+    "build": "npm --prefix web ci && npm --prefix web run build && rm -rf dist && cp -r web/dist dist"
+  }
+}
