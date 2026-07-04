@@ -480,6 +480,15 @@ def build_bill_records(http_session, session_code):
         "floor_passage_reconcile_rate": round(floor_both_missing / floor_both_expected, 4) if floor_both_expected else 0.0,
         "checked_at_utc": now_utc,
     }
+    # Self-calibrating check must ALERT, not just sit in the JSON (Standard #4; CodeRabbit #191). Steady
+    # state is 0 (validated 1157/1157); >1% of fully-passed bills missing a floor passage means LIS drifted
+    # its "passed House/Senate" action vocabulary and the Timeline's Floor stages are silently under-counting.
+    if floor_both_expected and (floor_both_missing / floor_both_expected) > 0.01:
+        _alert("WARN", "DATA_ANOMALY",
+               f"floor-passage reconcile drift: {floor_both_missing}/{floor_both_expected} fully-passed "
+               f"bills lack both floor passages ({100 * floor_both_missing / floor_both_expected:.1f}%; "
+               f"steady ≈ 0). LIS's floor-passage vocabulary may have changed — check _PASS_HOUSE_RE / "
+               f"_PASS_SENATE_RE against current HISTORY actions.")
     return records, completeness
 
 

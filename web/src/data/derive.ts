@@ -38,8 +38,18 @@ export function furthestStage(b: Bill): Stage {
   return "prefiled";
 }
 
+// The LANE a stage's cell lives in — derived from the stage + the bill's ORIGIN, never from the
+// ever-moving b.chamber (Qodo #191): a bill that crossed and then came BACK (conference) has
+// chamber=origin but stage=committee2, which would key an impossible cell like `committee2|House`
+// for an HB (committee2 IS the second chamber's committee). Lane semantics: where the stage lives.
+export function stageSide(b: Bill, stage: Stage): Chamber {
+  const origin: Chamber = b.bill[0]?.toUpperCase() === "S" ? "Senate" : "House";
+  return stage === "committee2" || stage === "floor2"
+    ? (origin === "House" ? "Senate" : "House")
+    : origin;
+}
+
 export function deriveStage(b: Bill): StageCell {
-  const side = b.chamber;
   const crossed = b.crossedOver;
   const decided = isDecided(b);
   let stage: Stage;
@@ -50,6 +60,9 @@ export function deriveStage(b: Bill): StageCell {
   } else {
     stage = furthestStage(b);
   }
+  // Pipeline stages take the lane the STAGE lives in (coherent cells, Qodo #191); terminal stages
+  // keep the bill's current chamber (they have no lane cell to collide with).
+  const side = stage === "governor" || stage === "died" ? b.chamber : stageSide(b, stage);
   return { stage, side, crossed, decided };
 }
 

@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import type { Bill, Chamber } from "../data/types";
-import { deriveStage, furthestStage, type Stage } from "../data/derive";
+import { deriveStage, furthestStage, stageSide, STAGE_ORDER, type Stage } from "../data/derive";
 import { BillBox } from "../components/BillBox";
 
 // The crossover-lane pipeline (vision §3b) as a smooth integrated SPINE. Owner 2026-06-30: failure and the
@@ -8,14 +8,13 @@ import { BillBox } from "../components/BillBox";
 // it happened — a "✕ stranded here" sub-count at each stage — and the governor node BRANCHES into the decided
 // outcomes (✓ Signed / ⧗ Awaiting / ▲ Vetoed), with veto reserved the attention color. Click any count to
 // drill into those bills.
-const COLUMNS: { stage: Stage; label: string }[] = [
-  { stage: "prefiled", label: "Prefiled" },
-  { stage: "committee1", label: "Committee" },
-  { stage: "floor1", label: "Floor" },
-  { stage: "committee2", label: "Committee · 2nd" },
-  { stage: "floor2", label: "Floor · 2nd" },
-  { stage: "governor", label: "To Governor" },
-];
+// The spine's SHORT display labels, over the single-sourced STAGE_ORDER (CodeRabbit #191: the order must
+// never fork from derive.ts — only the compact wording is local to this view).
+const SPINE_LABEL: Record<Stage, string> = {
+  prefiled: "Prefiled", committee1: "Committee", floor1: "Floor",
+  committee2: "Committee · 2nd", floor2: "Floor · 2nd", governor: "To Governor", died: "Died",
+};
+const COLUMNS: { stage: Stage; label: string }[] = STAGE_ORDER.map((s) => ({ stage: s, label: SPINE_LABEL[s] }));
 
 // Stage of death for a dead/carried bill: the last stage it structurally reached — now the SAME
 // furthestStage() the live pipeline uses (origin/second floor via passedHouse/passedSenate), so a ✕ lands
@@ -35,7 +34,10 @@ export function Timeline({ bills, onOpen }: { bills: Bill[]; onOpen: (b: Bill) =
       const cell = deriveStage(b);
       const side = cell.side;
       if (cell.stage === "died") {
-        const kk = `${lastReached(b)}|${side}`;
+        // Lane from the DEATH stage (stageSide), not b.chamber — a crossed-then-returned bill would
+        // otherwise key an impossible cell like committee2|origin (Qodo #191).
+        const ds = lastReached(b);
+        const kk = `${ds}|${stageSide(b, ds)}`;
         stranded[kk] = (stranded[kk] || 0) + 1;
         push(`stranded|${kk}`, b);
         // ALSO tally the terminal END-STATE so the Outcome fork shows the full branching tail (carried over /
@@ -182,7 +184,7 @@ export function Timeline({ bills, onOpen }: { bills: Bill[]; onOpen: (b: Bill) =
             const slice = g.bills.slice(0, DRILL_CAP - shown); shown += slice.length;
             return (
               <div key={g.committee} className="drill-group">
-                <div className="drill-grouphdr">{g.committee} <span className="muted">· {g.bills.length}</span></div>
+                <div className="drill-grouphdr">{g.committee} <span className="muted">· {g.bills.length}{slice.length < g.bills.length ? ` (showing first ${slice.length})` : ""}</span></div>
                 <div className="billgrid">
                   {slice.map((b) => <BillBox key={b.bill} bill={b} onOpen={onOpen} />)}
                 </div>

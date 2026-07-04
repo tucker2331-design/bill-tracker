@@ -8,6 +8,11 @@ import { Timeline } from "./Timeline";
 
 // The daily driver (vision §3a). Top: what's-new (the anxiety-killer) + today's calendar sliver.
 // Below: where the bills stand (outcome summary) + the timeline pipeline. Full-day feed, paged by day.
+
+// When the newest action day is older than this, the feed header says so explicitly (off-season honesty,
+// owner 2026-07-03) — 2 days tolerates a quiet in-session weekend without flagging it as "nothing newer."
+const FEED_STALE_MS = 2 * 24 * 60 * 60 * 1000;
+
 export function Landing({ bills, onOpen }: { bills: Bill[]; onOpen: (b: Bill) => void }) {
   const feed = useMemo(() => buildFeed(bills), [bills]);
   const byBill = useMemo(() => new Map(bills.map((b) => [b.bill, b])), [bills]);
@@ -47,7 +52,7 @@ export function Landing({ bills, onOpen }: { bills: Bill[]; onOpen: (b: Bill) =>
           <div className="panel">
             {/* Off-season honesty (owner 2026-07-03: "the date is from days ago — why?"): the feed opens on
                 the newest day WITH actions; when that day isn't recent, say so instead of looking stale. */}
-            <p className="feedday">{dayLabel} <span className="muted">· {items.length} action{items.length === 1 ? "" : "s"}{dayIdx === 0 && curDate && (Date.now() - curDate.getTime()) > 2 * 864e5 ? " · the most recent legislative activity — nothing newer has happened" : ""}</span></p>
+            <p className="feedday">{dayLabel} <span className="muted">· {items.length} action{items.length === 1 ? "" : "s"}{dayIdx === 0 && curDate && (Date.now() - curDate.getTime()) > FEED_STALE_MS ? " · the most recent legislative activity — nothing newer has happened" : ""}</span></p>
             {items.length === 0 && <p className="muted" style={{ padding: "8px 4px" }}>No actions on this day.</p>}
             {items.slice(0, 80).map((it, i) => {
               const b = byBill.get(it.bill);
