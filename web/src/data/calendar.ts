@@ -44,6 +44,9 @@ export interface Meeting {
   time: string;          // display, e.g. "9:00 AM" — or "Time TBA" when no concrete time is published
   tba: boolean;          // true when LIS published the meeting but no concrete time (never hidden — §7)
   minutes: number;       // sort key — minutes past midnight (from the worker's SortTime, the authority)
+  unresolved: boolean;   // worker TimeClass=relative_unresolved: LIS gives only a relative time whose anchor
+                         // could NOT be resolved — position unknown, so it surfaces at the TOP of the day,
+                         // highlighted, instead of a silently-wrong end-of-day slot (§7.2, "never pretend")
   bills: AgendaItem[];   // real bills on the agenda (deduped; empty for skeleton/commission meetings)
 }
 
@@ -65,7 +68,9 @@ export const CROSSOVER_BY_SESSION: Record<string, string> = {
 };
 
 const SHEET1_TAB = "Sheet1";
-const PROJECTION = "select A,B,C,D,E,F,G,J,L"; // Date,Time,SortTime,Status,Committee,Bill,Outcome,Origin,LegEventRoute
+// Col O = TimeClass (worker §7.2: concrete | relative_resolved | relative_unresolved | ""). Empty until the
+// worker's first post-migration cycle — an empty/unknown value simply means "no flag" (no highlight).
+const PROJECTION = "select A,B,C,D,E,F,G,J,L,O"; // Date,Time,SortTime,Status,Committee,Bill,Outcome,Origin,LegEventRoute,TimeClass
 const FETCH_TIMEOUT_MS = 30000;               // the projected Sheet1 is ~5 MB
 
 const META_ORIGINS = new Set(["system_alert", "system_metrics"]);
@@ -180,7 +185,7 @@ async function _loadCalendar(): Promise<CalendarData> {
   }
 
   // Group rows into meetings keyed by (day, committee, time). Projected cols:
-  // 0 Date · 1 Time · 2 SortTime · 3 Status · 4 Committee · 5 Bill · 6 Outcome · 7 Origin · 8 LegEventRoute
+  // 0 Date · 1 Time · 2 SortTime · 3 Status · 4 Committee · 5 Bill · 6 Outcome · 7 Origin · 8 LegEventRoute · 9 TimeClass
   const groups = new Map<string, Meeting>();
   // Per-meeting cancellation judgement (meeting-level, not row-level): was any row CANCELLED, and did any
   // row record a real meeting action? A meeting is dropped only when cancelled AND no real action occurred.
@@ -210,12 +215,16 @@ async function _loadCalendar(): Promise<CalendarData> {
       // [PLACEHOLDER "Time TBA"] honest display marker when LIS published no ScheduleTime — never a hidden
       // or guessed time; superseded below by a concrete time (L194) or LIS's verbatim Description (L203+).
       m = { dateKey: dk, committee, chamber, kind, time: concrete ? cleanTime(rawTime) : "Time TBA",
-        tba: !concrete, minutes: toMinutes(sortTime, rawTime), bills: [] };
+        tba: !concrete, minutes: toMinutes(sortTime, rawTime),
+        unresolved: (r[9] || "").trim().toLowerCase() === "relative_unresolved", bills: [] };
       groups.set(key, m);
       flags.set(key, { cancelled: false, held: false });
     } else if (concrete && m.tba) {
       m.time = cleanTime(rawTime); m.tba = false; m.minutes = toMinutes(sortTime, rawTime); // a real time supersedes TBA
     }
+    // Any row of the meeting carrying the worker's relative_unresolved flag marks the whole meeting —
+    // the class is uniform per (date, committee) by construction, but rows can arrive in any order.
+    if ((r[9] || "").trim().toLowerCase() === "relative_unresolved") m.unresolved = true;
     const f = flags.get(key)!;
     if ((r[3] || "").trim().toLowerCase() === CANCELLED_STATUS) f.cancelled = true;
     if ((r[8] || "").trim().toLowerCase() === MEETING_ROUTE) f.held = true;
@@ -245,7 +254,10 @@ async function _loadCalendar(): Promise<CalendarData> {
     (byDay.get(m.dateKey) ?? byDay.set(m.dateKey, []).get(m.dateKey)!).push(m);
   }
   for (const ms of byDay.values()) {
-    ms.sort((a, b) => a.minutes - b.minutes || a.committee.localeCompare(b.committee));
+    // UNRESOLVED-relative meetings surface at the TOP of the day (owner 2026-06-30, §7.2): their real
+    // position is unknowable, so an honest "we can't place this" slot beats a silently-wrong 23:59 one.
+    ms.sort((a, b) => Number(b.unresolved) - Number(a.unresolved)
+      || a.minutes - b.minutes || a.committee.localeCompare(b.committee));
   }
 
   const keys = [...byDay.keys()].sort();
