@@ -10,6 +10,24 @@ Append-only, reverse-chronological (newest at top). Each entry opens with `## [Y
 
 **Kinds:** `ingest` (new source/doc processed), `pr` (PR opened/merged/closed), `decision` (architectural or workflow), `lint` (wiki health-check pass), `session` (notable multi-hour working block), `post-mortem` (failure analysis), `milestone` (project-goal threshold crossed).
 
+## [2026-07-04] ingest | CA + FL researched against the 10-15 min freshness target → [[audits/fable_2026-07/multistate_ingestion_ca_fl]]
+
+Owner: repeat the PA treatment for California and Florida. **CA (verified from the official pubinfo
+Readme):** the batch layer is a LITERAL RELATIONAL DATABASE export — per-legislator vote tables
+(BILL_DETAIL_VOTE_TBL), COMMITTEE_HEARING/AGENDA_TBL, DAILY_FILE_TBL, CODES_TBL, shipped MySQL DDL,
+sessions to 1989 — the most structural state yet (zero prose routing at batch). But cadence is DAILY
+(per-weekday incremental zips), so the 10-15 min target requires a speed layer: Assembly/Senate Daily
+File web apps + leginfo's own pages, gated on a Phase-0 MEASURED-LAG experiment (poll moving bills on
+session days; build a per-event-class publication-lag table; only surfaces that measure ≤ target join
+the speed layer — honest "as of" labeling otherwise). **FL:** no official bulk dump — a "site-API state":
+flsenate.gov (clean ID-keyed URL grammar; thin official RSS = daily calendar + video) + flhouse.gov with
+a LIVE `/api/document/...?sessionid=` endpoint observed in the public index (a family to enumerate in
+Phase 0). FL's structural gift: House and Senate run two INDEPENDENT first-party systems covering the
+same legislature = a built-in dual-pipeline verification oracle, no third parties. 10-15 min PROBABLE
+for FL across all critical classes, contingent on endpoint enumeration. Emerging 4-tier state taxonomy
+(API / relational-export / bulk+feeds / site-API) all binding to the SAME lambda contract — confirms
+[[ideas/multi_state_data_strategy]].
+
 ## [2026-07-04] decision | PA text-dictionary REJECTED → structural-JOIN router (live-feed evidence)
 
 Owner (via Gemini review) rejected the 57-year phrase corpus: a historical dictionary is still a text

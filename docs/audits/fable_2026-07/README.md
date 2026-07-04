@@ -17,7 +17,9 @@ sequencing included. Nothing here was implemented unless explicitly marked SHIPP
 |------|-------|
 | [[audits/fable_2026-07/brain_audit]] | How the docs/ brain performed; concrete changes so Opus operates closer to Fable |
 | [[audits/fable_2026-07/codebase_longevity_audit]] | VA + NY running code, audited for multi-YEAR sustainability + accuracy drift |
-| [[audits/fable_2026-07/multistate_ingestion_pa]] | PA (and the non-API-state class): researched sources, the lambda architecture, decade-grade text-layer doctrine |
+| [[audits/fable_2026-07/multistate_ingestion_pa]] | PA (and the non-API-state class): researched sources, the lambda architecture, structural-JOIN routing doctrine |
+| [[audits/fable_2026-07/multistate_ingestion_ca_fl]] | California + Florida researched the same way, against the 10–15 min freshness target; the emerging 4-tier state taxonomy |
+| [[audits/fable_2026-07/autonomy_upgrades]] | A-1/A-2 zero-touch session + workbook automation (owner correction to C-1/C-2) |
 | [[audits/fable_2026-07/sweep_findings]] | Everything else Fable noticed (security, CI blind spots, doc drift) |
 
 ## Priority queue for Opus (do in this order)

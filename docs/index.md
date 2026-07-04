@@ -29,6 +29,8 @@ Links use Obsidian `[[wikilink]]` format. Obsidian resolves by filename; path-qu
 - [[audits/fable_2026-07/brain_audit]] — how the brain performed + 6 concrete changes (B-1…B-6) to close the Opus-vs-Fable gap (status-page restructure, case-law indexes, EXECUTABLE pre-push audit, CLAUDE.md de-drift, reasoning doctrine)
 - [[audits/fable_2026-07/codebase_longevity_audit]] — VA+NY multi-year sustainability findings C-1…C-10 (2027 rollover halt, Sheets 10M-cell ceiling, gviz/Actions coupling, NY hardening gap, BILLS.CSV oracle canary)
 - [[audits/fable_2026-07/multistate_ingestion_pa]] — PA researched (hourly XML + RSS — structured, NOT scraping); the formalized lambda architecture; the decade-grade controlled-vocabulary doctrine + 4-phase PA build plan
+- [[audits/fable_2026-07/multistate_ingestion_ca_fl]] — CA (pubinfo relational export VERIFIED — votes/hearings/agendas as coded tables, daily cadence + measured-lag speed-layer experiment) + FL (site-API state; live flhouse /api/ endpoint observed; dual first-party House↔Senate oracle) vs the 10–15 min target; 4-tier state taxonomy
+- [[audits/fable_2026-07/autonomy_upgrades]] — A-1/A-2 zero-touch session-follow + workbook lifecycle (owner correction; supersedes C-1/C-2's human steps)
 - [[audits/fable_2026-07/sweep_findings]] — S-1…S-6: plaintext LIS key rotation-brittleness, CI golden-test blind spot, repo-root cruft, measurement caveats
 
 ## Workflow & Protocols (how we work)
