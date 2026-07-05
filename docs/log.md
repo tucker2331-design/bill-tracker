@@ -23,9 +23,16 @@ so the extra runner starts are free and off-window ticks exit in seconds. New sh
 no back-import) + **`cadence_test.py`** (31 tests, all pass). Safety: BOTH failure directions non-catastrophic
 (fast-but-guardrailed 24/7 vs today's baseline), gate fails OPEN, every default fails-toward-freshness; AC1/U1
 writes unconditional on the success path (audit #11), empty/future markers → run not trapped (audit #15).
-`py_compile` + both workers import-clean; no `pages/*.py` imports it (audit #8). CodeRabbit + Qodo pending.
+`py_compile` + both workers import-clean; no `pages/*.py` imports it (audit #8).
 Docs updated: [[knowledge/lis_api_safety]] (guardrail #5 → 🟡, cadence ledger), [[architecture/calendar_pipeline]]
 (AC1 + U1 state cells), [[design/ui_feedback_2026-07-04]] F-2, [[state/current_status]].
+**Bot fold-in (2026-07-05):** 1 Gemini + 5 Qodo, all folded in — `os.environ.get` for creds (no KeyError on
+local run), gate errors ROUTED (calendar→notify_slack, bill→_alert) not just printed, the U1 read narrowed
+to WorksheetNotFound-vs-real-error (no silent swallow), `parse_state` gained a `malformed` flag so a parse
+failure is distinguishable from a legit empty state (audit #15) + surfaced in the decide() log, and
+`build_windows` now COUNTS every skip (skipped / dropped_past / dropped_horizon — no untagged `continue`).
+Qodo's 6th (AC1 undocumented) was already satisfied on main (calendar_pipeline). Tests 31→36, all pass.
+CodeRabbit summary-only (no actionable inline). Bots re-reviewing the fold-in commit.
 
 ## [2026-07-04] pr | #197 OPENED — unify both freshness clocks in the top trust header (F-1 display fix)
 
@@ -38,7 +45,12 @@ promise-cached `loadCalendarFreshness()` (data/calendar.ts); the now-redundant i
 `relativeTime` import are removed from views/Calendar.tsx (moved up, not duplicated). NO cron/cadence change
 — that's the separate guardrail-#5 work (F-2). `tsc --noEmit` + `vite build` clean; verified in preview
 (one "Calendar as of", both clocks in the header, 3645/3645). Also removed a stray untracked `package 2.json`
-(a macOS " 2" duplicate of the #196 root build shim — never committed). CodeRabbit + Qodo review pending.
+(a macOS " 2" duplicate of the #196 root build shim — never committed).
+**Bot fold-in (2026-07-05):** 2 Qodo findings folded in — dropped the redundant second `Sheet1!AA1` fetch
+(removed `fetchFreshness()` from `loadCalendar`'s `Promise.all` + the now-unused `CalendarData.dataAsOf`;
+`loadCalendarFreshness()` is the single AA1 read), and made the App-level freshness `.catch()` observable
+(log before falling back to "unknown", Standard #4). `tsc`+`vite build` clean. **Cloudflare Pages now builds
+green** (the #196 root shim worked — deploy comments are posting on the PRs).
 
 ## [2026-07-04] decision | Cloudflare build failed (root-dir) FIXED in runbook + owner UI/cadence notes captured
 
