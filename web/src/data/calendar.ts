@@ -159,6 +159,16 @@ async function fetchFreshness(): Promise<Date | null> {
   }
 }
 
+// Lightweight standalone freshness read (just Sheet1!AA1, ~a few bytes) so the app-level trust header can
+// show the CALENDAR subsystem's clock NEXT TO the bill backend's — the two workers run on different
+// cadences (bills 6h, calendar 3h), and burying the calendar clock inside the Calendar tab made the two
+// "data as of" numbers look contradictory (owner 2026-07-04). Cached for the page's life; never throws.
+let _calFreshPromise: Promise<Date | null> | null = null;
+export function loadCalendarFreshness(): Promise<Date | null> {
+  if (!_calFreshPromise) _calFreshPromise = fetchFreshness();
+  return _calFreshPromise;
+}
+
 // Session cache: the Calendar tab unmounts on tab-switch, so memoize the (~5 MB) load for the page's life
 // — re-opening the tab is then instant and rapid toggles dedupe to one in-flight fetch. A full reload
 // re-fetches (the only refresh path needed off-season; the data is static once the GA adjourns).
