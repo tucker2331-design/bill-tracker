@@ -8,6 +8,25 @@ status: active
 
 Append-only, reverse-chronological (newest at top). Each entry opens with `## [YYYY-MM-DD] <kind> | <title>` so `grep "^## \[" log.md | head -20` gives a parseable timeline.
 
+## [2026-07-05] pr | #198 OPENED — activity-correlated cadence for both workers (LIS-safety guardrail #5)
+
+The owner's "dynamic timing" ask ([[design/ui_feedback_2026-07-04]] F-2), and the LAST unshipped LIS-safety
+guardrail. Both scheduled workers stop running blind fixed crons and instead fire FAST + self-throttle to
+real legislative activity. ONE structural signal (Standard #3, no text): the calendar worker writes
+last-full-run + forward **meeting windows** to `Sheet1!AC1` each successful cycle (windows from the same
+concrete-time rows the site shows — `Origin ∈ {api_schedule,convene_anchor,legislation_event}`, merged);
+both workers READ AC1 in their scheduled gate and skip cheaply (**Sheets-only, ZERO LIS**) unless active
+enough for their tier. Tiers (calibrated to preserve today's baselines — audit #14): calendar IN_WINDOW
+~15m / IDLE ~1h / EMPTY ~3h; bill IN_WINDOW/IDLE ~1h / EMPTY ~6h (bill throttles against its OWN marker
+`Bill_Tracker!U1`, shared windows). Crons: calendar `0 */3`→`*/15`, bill `40 */6`→`40 *`; repo is public
+so the extra runner starts are free and off-window ticks exit in seconds. New shared **`cadence.py`** (pure,
+no back-import) + **`cadence_test.py`** (31 tests, all pass). Safety: BOTH failure directions non-catastrophic
+(fast-but-guardrailed 24/7 vs today's baseline), gate fails OPEN, every default fails-toward-freshness; AC1/U1
+writes unconditional on the success path (audit #11), empty/future markers → run not trapped (audit #15).
+`py_compile` + both workers import-clean; no `pages/*.py` imports it (audit #8). CodeRabbit + Qodo pending.
+Docs updated: [[knowledge/lis_api_safety]] (guardrail #5 → 🟡, cadence ledger), [[architecture/calendar_pipeline]]
+(AC1 + U1 state cells), [[design/ui_feedback_2026-07-04]] F-2, [[state/current_status]].
+
 ## [2026-07-04] pr | #197 OPENED — unify both freshness clocks in the top trust header (F-1 display fix)
 
 Implements [[design/ui_feedback_2026-07-04]] **F-1**: the top "data as of" showed only the bill backend's

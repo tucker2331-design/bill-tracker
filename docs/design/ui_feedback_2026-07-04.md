@@ -34,6 +34,11 @@ territory). Each item has the diagnosis + the recommended fix so Opus executes w
   shipped standalone first.
 
 ## F-2 · Cadence is FIXED, not activity-correlated ("does it speed up with schedule items, slow without?")
+> **STATUS 2026-07-05: BUILT (in review) — PR #198.** Guardrail #5 shipped exactly as scoped below: both
+> workers now fire on a fast cron and self-throttle to real meeting windows (calendar ~15m in-window /
+> ~3h quiet; bill ~hourly active / ~6h quiet), keyed off ONE structural signal (`Sheet1!AC1`). So the
+> answer to the owner's question is now **YES** — it speeds up with schedule items and slows without.
+> Details in [[knowledge/lis_api_safety]] (guardrail #5 row + cadence ledger) and `cadence.py`.
 - **Answer: NO — not yet.** Both workers run fixed clocks (calendar every 3h, bills every 6h). The
   meeting-driven / activity-correlated cadence the owner is describing is **guardrail #5 in
   [[knowledge/lis_api_safety]], explicitly ❌ NOT PRESENT** — it's a documented owner proposal (2026-06-17)

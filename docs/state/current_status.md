@@ -1,6 +1,6 @@
 ---
 tags: [state, live]
-updated: 2026-07-04
+updated: 2026-07-05
 status: active
 ---
 
@@ -11,6 +11,10 @@ status: active
 **Benchmark window:** Full 2026 VA GA session (2026-01-14 → 2026-05-01). **VA GA is now ADJOURNED — HISTORY is static (no new actions until the 2027 session). Pre-launch: lobbyists are not using the product yet.**
 
 ## Active focus
+
+**▶️ 2026-07-05 — OWNER'S TWO UI/CADENCE ITEMS BUILT (PRs #197 + #198 OPEN).** From the deploy-fix session's "for later" notes:
+- **#197 — freshness clocks unified (F-1).** The top trust header now shows BOTH feed clocks together ("● Bills as of …" + "🗓 Calendar as of …") instead of only the bill clock, so the 6h-bill vs 3h-calendar cadences read as "two feeds" not a contradiction; the in-Calendar-tab pill was removed (moved up). Display-only; `tsc`+`vite build` clean, preview-verified. [[design/ui_feedback_2026-07-04]] F-1.
+- **#198 — activity-correlated cadence (F-2 / LIS-safety guardrail #5, the last unshipped guardrail).** Both workers now fire on a FAST cron and SELF-THROTTLE to real meeting windows via ONE structural signal (`Sheet1!AC1`, maintained by the calendar worker): calendar ~15m in-window / ~1h idle / ~3h empty; bill ~hourly active / ~6h empty (its own marker `Bill_Tracker!U1`, shared windows). Answers the owner's "does it speed up with schedule items, slow without?" → now YES. Zero seasonal cron edits (Standard #8). Pure logic in new `cadence.py` (31 tests, `cadence_test.py`); gate fails OPEN + all defaults fail-toward-freshness. [[knowledge/lis_api_safety]] guardrail #5 (🟡 flip to ✅ on merge). **Both awaiting CodeRabbit + Qodo → fold in → merge.** Still-open note: the deeper freshness UNIFICATION (single manifest) is Blueprint 1 of [[audits/fable_2026-07/50_state_scaling_architecture]]; F-3 (Health rings) and F-4 (leave the lone HB923 upstream-defect alert) remain from the same feedback batch.
 
 **▶️▶️ 2026-07-04 — FABLE AUDIT DELIVERED (+ owner-corrected): [[audits/fable_2026-07/README]] is the NEXT-WORK QUEUE.** Owner correction folded in: rollover/capacity designs are now ZERO-TOUCH ([[audits/fable_2026-07/autonomy_upgrades]] A-1/A-2 — top of the queue, A-1 before Nov 2026); PA freshness answered first-party-only (multistate page Part 5). The owner used time-limited Fable access for four expert deliverables (brain audit · VA+NY longevity audit · PA/multi-state ingestion architecture · sweep), all specified as execution-ready plans for Opus — **documented, deliberately NOT implemented**. Opus: read the hub README first; it carries the priority order (1: session-rollover runbook+canary C-1 — the system HALTS Jan 2027 without it; 2: current_status restructure B-1; 3: executable pre-push audit B-3; 4: cell-ceiling gauge C-2 — Schedule_Witness ≈232k rows vs the 10M-cell workbook limit; …). Key research result: **PA publishes hourly Bill History XML + per-publication RSS — structured feeds, NOT a scraping problem**; the lambda architecture + decades-grade vocabulary doctrine are fully specified in [[audits/fable_2026-07/multistate_ingestion_pa]].
 

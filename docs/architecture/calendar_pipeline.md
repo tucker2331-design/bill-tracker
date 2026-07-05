@@ -177,6 +177,34 @@ dispatch time is NOT a freshness signal — it precedes the ~variable queue
 delay). `clear()` wipes it each cycle; re-written on every healthy cycle. A
 write error emits a categorized `API_FAILURE` WARN (display-only; non-fatal).
 
+### State Cell `Sheet1!AC1` — cadence state (LIS-safety guardrail #5, PR #198)
+
+JSON written at the end of every successful cycle (unconditional on the
+success path — pre-push audit #11): `{"lfr": "<UTC iso>", "win": [["<ET
+start>","<ET end>"], …]}`. `lfr` = this cycle's end (the calendar worker's
+last full run); `win` = forward **meeting windows** — for each concrete-time
+meeting row (`Origin ∈ {api_schedule, convene_anchor, legislation_event}`,
+non-placeholder `Time`) within a 36 h horizon, the span `[meeting − 30 min,
+meeting + 120 min]`, merged so overlapping same-day meetings collapse to a
+few spans. STRUCTURAL only (Standard #3 — no text decides cadence).
+
+Read by BOTH scheduled workers in their gate to decide fast vs slow WITHOUT
+any LIS call (Sheets-only): `cadence.decide()` classifies the tier from `win`
+(IN_WINDOW / IDLE / EMPTY) and compares elapsed-since-last-run to that tier's
+floor. Empty / unreadable / malformed AC1 → EMPTY tier + no marker → **run at
+baseline eligibility** (fail-toward-freshness); a future `lfr` → run (never
+trapped below a floor — audit #15). Pure logic + parsing live in `cadence.py`
+(unit-tested `cadence_test.py`); `AC1` shares the AA/AB grid widen (col 29).
+
+### State Cell `Bill_Tracker!U1` — bill worker's cadence marker (PR #198)
+
+The bill worker's OWN last-full-run timestamp (UTC iso), written in its
+`batch_update` on success (col 21, clear of the A–R data + the T1 completeness
+summary). It reads the SHARED `Sheet1!AC1` window signal for the tier but
+throttles against U1 (its own clock), so the two workers' cadences are
+independent while keying off one activity signal. Missing U1 (first deploy) →
+no marker → run.
+
 ### State Cell `Sheet1!W1` — durable breaker trip record (PR-C1 review-fix)
 
 JSON-encoded record written on circuit-breaker trip so the trip survives
