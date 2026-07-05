@@ -59,14 +59,17 @@ MAX_WINDOWS = 300                    # seatbelt on AC1 size (a Sheets cell caps 
                                      # ~15 KB and far more than a real 36h horizon ever produces post-merge).
 
 # Per-tier minimum interval (MINUTES) between FULL runs. Tier is derived from the meeting windows below.
-# Calibrated (pre-push audit #14) to PRESERVE today's baselines (calendar ~3h, bill ~6h) while adding faster
-# tiers ONLY when the legislature is active:
-#   IN_WINDOW  a meeting is happening right now      -> fastest (calendar every tick; bill hourly)
-#   IDLE       meetings on the forward calendar,      -> medium  (~hourly)
+# Calibrated (pre-push audit #14): the ACTIVE tiers are EQUALIZED across both workers (owner 2026-07-05 —
+# bill info like floor votes / committee report outcomes posts DURING a meeting, so it's as time-sensitive
+# as the calendar on the 15-min track; running it slower would hide fresh results a lobbyist needs). Only the
+# quiet EMPTY floor differs: bill data is static off-calendar, so ~6h there is plenty while the calendar
+# holds its ~3h reconciliation baseline.
+#   IN_WINDOW  a meeting is happening right now      -> fastest: BOTH ~15 min (every scheduled tick)
+#   IDLE       meetings on the forward calendar,      -> medium:  BOTH ~hourly
 #              but none active this instant
-#   EMPTY      nothing on the forward calendar        -> slow baseline (calendar ~3h; bill ~6h)
+#   EMPTY      nothing on the forward calendar        -> quiet baseline: calendar ~3h, bill ~6h
 CALENDAR_TIER_FLOORS = {"IN_WINDOW": 0,   "IDLE": 55,  "EMPTY": 175}
-BILL_TIER_FLOORS     = {"IN_WINDOW": 55,  "IDLE": 55,  "EMPTY": 355}
+BILL_TIER_FLOORS     = {"IN_WINDOW": 0,   "IDLE": 55,  "EMPTY": 355}
 
 
 # --- low-level parsing (total functions: never raise) ---------------------------------------------------

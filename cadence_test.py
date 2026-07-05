@@ -108,10 +108,16 @@ raw = c.serialize_state(utc(2026, 2, 9, 8, 55), [["2026-02-09T08:30:00", "2026-0
 # calendar tick at 09:00 ET / 14:00 UTC, lfr in cell = 08:55 UTC -> IN_WINDOW floor 0 -> RUN
 run, tier, _ = c.decide(raw, utc(2026, 2, 9, 14, 0), et(2026, 2, 9, 9, 0), c.CALENDAR_TIER_FLOORS)
 ok(run and tier == "IN_WINDOW", f"calendar in-window -> RUN/IN_WINDOW, got {run}/{tier}")
-# bill worker: same windows, but its OWN last-run marker was 20m ago -> IN_WINDOW floor 55 -> SKIP
+# bill worker EQUALIZED in-window (owner 2026-07-05): IN_WINDOW floor 0, same as calendar — even 20m after
+# its own last run it RUNS (the 15-min track), so fresh floor votes / report outcomes aren't held back.
 run, tier, _ = c.decide(raw, utc(2026, 2, 9, 14, 0), et(2026, 2, 9, 9, 0),
                         c.BILL_TIER_FLOORS, last_run_utc=utc(2026, 2, 9, 13, 40))
-ok(not run and tier == "IN_WINDOW", f"bill in-window but 20m<55 floor -> SKIP, got {run}/{tier}")
+ok(run and tier == "IN_WINDOW", f"bill in-window is equalized (floor 0) -> RUN, got {run}/{tier}")
+# ...but a bill EMPTY tick 30m after its last run still SKIPS (6h floor) — quiet-legislature throttle intact.
+run, tier, _ = c.decide(c.serialize_state(utc(2026, 7, 4, 12, 0), []),
+                        utc(2026, 7, 4, 12, 30), et(2026, 7, 4, 8, 30),
+                        c.BILL_TIER_FLOORS, last_run_utc=utc(2026, 7, 4, 12, 0))
+ok(not run and tier == "EMPTY", f"bill empty 30m<6h floor -> SKIP, got {run}/{tier}")
 # bill worker off-season (empty windows), last run 7h ago -> EMPTY floor 355 -> RUN
 raw_empty = c.serialize_state(utc(2026, 7, 4, 12, 0), [])
 run, tier, _ = c.decide(raw_empty, utc(2026, 7, 4, 19, 0), et(2026, 7, 4, 15, 0),
