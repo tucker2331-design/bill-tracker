@@ -3,20 +3,23 @@ name: 🗂️ Bill Tracker
 # The new lobbyist-product backend (bill_tracker.py). Writes the Bill_Tracker tab the React/Vite
 # front end reads via gviz. See product_roadmap §B0.
 #
-# SCHEDULE — ban-safe by design (the owner is, rightly, ban-averse):
-#   - cron '40 */6 * * *' = every 6 hours at :40 UTC. Conservative: this is a LIGHT job (~5 guarded
-#     LIS reads, mostly 304 cache hits) but the bill data only regenerates ~daily (the LIS blobs
-#     refresh ~16:00 GMT) and the GA is adjourned (off-season → static data), so 4×/day is plenty.
-#     :40 is OFF the congested top-of-hour AND off the calendar worker's :00 slot.
-#   - The job ALSO self-gates in bill_tracker.py (_scheduled_gate): skips 11pm–6am ET quiet hours and
-#     jitters 0–180s — so scheduled runs are decorrelated from the cron tick and avoid overnight
-#     exposure. Manual dispatch bypasses the gate (immediate).
-#   - LIVE-SESSION NOTE (2027): bump the cadence for fresher data — e.g. '40 */2 * * *' (every 2h);
-#     it stays ban-safe (conditional fetch + the worker's per-cycle request cap + the shared lock).
+# SCHEDULE — ban-safe by design (the owner is, rightly, ban-averse), now ACTIVITY-CORRELATED (guardrail #5):
+#   - cron '40 * * * *' = hourly at :40 UTC. This only OFFERS a tick; bill_tracker.py (_scheduled_gate →
+#     _cadence_should_run) then self-throttles against the SHARED meeting signal (Sheet1!AC1, maintained by
+#     the calendar worker) + this worker's own last-run marker (Bill_Tracker!U1):
+#       • meeting active / on the forward calendar → run hourly (fresher patron/outcome/floor data while the
+#         GA is actually moving bills).
+#       • forward calendar empty (off-season, static data) → ~6h, the old conservative baseline.
+#     Cadence rises with legislative activity and falls to 6h when quiet — no seasonal cron edits (Standard
+#     #8). :40 stays OFF the congested top-of-hour AND off the calendar worker's :00/:15/:30/:45 slots.
+#   - Still ban-safe: LIGHT job (~5 guarded LIS reads, mostly 304s), conditional fetch (#1) + per-cycle
+#     request cap (#4) + the SHARED calendar-worker concurrency lock (never overlaps a calendar cycle's LIS
+#     use) + jitter (#2) + quiet hours (11pm–6am ET). Off-window ticks EXIT after a Sheets read (ZERO LIS).
+#     Manual dispatch bypasses every gate (immediate).
 on:
   schedule:
-    - cron: '40 */6 * * *'        # every 6 hours at :40 UTC (off-season-conservative; see notes above)
-  workflow_dispatch:              # manual "Run Now" — bypasses quiet hours + jitter
+    - cron: '40 * * * *'          # hourly at :40 UTC; the worker self-throttles per guardrail #5 (AC1 + U1)
+  workflow_dispatch:              # manual "Run Now" — bypasses quiet hours + cadence + jitter
 
 permissions:
   contents: read                  # least-privilege (CodeRabbit #163): only needs checkout; writes go to
