@@ -7648,7 +7648,9 @@ def run_calendar_update():
                     worksheet.update_acell(
                         cadence.CADENCE_STATE_CELL, cadence.serialize_state(datetime.now(pytz.utc), _cad_windows))
                     print(f"⏱️ Cadence state (AC1) written: {_cad_stats['windows']} forward window(s) from "
-                          f"{_cad_stats['parsed']} concrete meeting rows ({_cad_stats['skipped']} unparseable).")
+                          f"{_cad_stats['parsed']} concrete meeting rows "
+                          f"({_cad_stats['skipped']} unparseable, {_cad_stats['dropped_past']} past, "
+                          f"{_cad_stats['dropped_horizon']} beyond horizon).")
                 except Exception as _cad_write_err:
                     push_system_alert(
                         f"Could not write cadence-state cell Sheet1!AC1 after successful cycle: {_cad_write_err}",
@@ -7789,22 +7791,34 @@ if __name__ == "__main__":
         # (GITHUB_EVENT_NAME != 'schedule', gated above with quiet hours). Fails OPEN on ANY error: a
         # cadence bug must never SILENCE the worker — only ever slow it. See docs/knowledge/lis_api_safety.md.
         try:
-            _cad_gc = gspread.authorize(Credentials.from_service_account_info(
-                json.loads(os.environ["GCP_CREDENTIALS"]),
-                scopes=["https://www.googleapis.com/auth/spreadsheets"]))
-            _raw_cadence = _cad_gc.open_by_key(SPREADSHEET_ID).worksheet("Sheet1").acell(
-                cadence.CADENCE_STATE_CELL).value
-            _run_now, _tier, _why = cadence.decide(
-                _raw_cadence, datetime.now(pytz.utc),
-                datetime.now(pytz.timezone("America/New_York")), cadence.CALENDAR_TIER_FLOORS)
-            print(f"⏱️ Cadence gate (guardrail #5): {_why}")
-            if not _run_now:
-                sys.exit(0)
+            _cad_creds = os.environ.get("GCP_CREDENTIALS")
+            if not _cad_creds:
+                # No creds (local/dev run) — can't read AC1; fail OPEN, run.mirrors bill_tracker (Gemini #198).
+                print("⏱️ Cadence gate: GCP_CREDENTIALS unset — cannot read AC1; running this cycle.")
+            else:
+                _cad_gc = gspread.authorize(Credentials.from_service_account_info(
+                    json.loads(_cad_creds),
+                    scopes=["https://www.googleapis.com/auth/spreadsheets"]))
+                _raw_cadence = _cad_gc.open_by_key(SPREADSHEET_ID).worksheet("Sheet1").acell(
+                    cadence.CADENCE_STATE_CELL).value
+                _run_now, _tier, _why = cadence.decide(
+                    _raw_cadence, datetime.now(pytz.utc),
+                    datetime.now(pytz.timezone("America/New_York")), cadence.CALENDAR_TIER_FLOORS)
+                print(f"⏱️ Cadence gate (guardrail #5): {_why}")
+                if not _run_now:
+                    sys.exit(0)
         except SystemExit:
             raise
         except Exception as _cad_gate_err:
-            print(f"⚠️ Cadence gate error ({type(_cad_gate_err).__name__}: {_cad_gate_err}) — failing "
-                  f"OPEN (running this cycle). Investigate if it persists.")
+            # Fail OPEN (run), but ROUTE the error — not just print (Qodo #198): a recurring gate failure is
+            # an operational signal. notify_slack is best-effort here (the cycle proceeds regardless).
+            _cad_msg = (f"⚠️ Cadence gate error ({type(_cad_gate_err).__name__}: {_cad_gate_err}) — failing "
+                        f"OPEN (running this cycle). Investigate if it persists.")
+            print(_cad_msg)
+            try:
+                notify_slack(_cad_msg)
+            except Exception:
+                pass
         # LIS-safety guardrail #2: jitter. A fixed cron fires at exactly :00; hitting LIS at
         # the same wall-clock instant every cycle is a needless metronome signature. Delay a
         # SCHEDULED run by a small random amount (manual dispatch / Backfill Burst stay

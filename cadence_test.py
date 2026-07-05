@@ -28,17 +28,28 @@ def utc(y, mo, d, h, mi, s=0):
     return datetime(y, mo, d, h, mi, s, tzinfo=timezone.utc)
 
 
-# --- parse_state: total function, safe empty on garbage -------------------------------------------------
-for bad in [None, "", "not json", "[]", "123", '{"win": "nope"}', '{"lfr": 42}']:
+# --- parse_state: total function, safe empty on garbage; malformed distinguishes failure from empty -------
+# EMPTY cell (first deploy / cleared) is NOT malformed — a legitimate "no meetings" state.
+for empty in [None, ""]:
+    st = c.parse_state(empty)
+    ok(st == {"lfr": None, "windows": [], "malformed": False},
+       f"empty {empty!r} must be the non-malformed empty state, got {st}")
+# Non-empty-but-unreadable IS malformed (a real load/parse failure — audit #15 sentinel distinction).
+for bad in ["not json", "[]", "123", '{"win": "nope"}', '{"lfr": 42}']:
     st = c.parse_state(bad)
-    ok(st == {"lfr": None, "windows": []}, f"garbage {bad!r} must parse to empty state, got {st}")
+    ok(st["lfr"] is None and st["windows"] == [] and st["malformed"] is True,
+       f"garbage {bad!r} must parse to empty state flagged malformed, got {st}")
 
 st = c.parse_state('{"lfr":"2026-02-09T14:03:11Z","win":[["2026-02-09T08:30:00","2026-02-09T11:00:00"]]}')
 ok(st["lfr"] == datetime(2026, 2, 9, 14, 3, 11, tzinfo=timezone.utc), "lfr should parse to UTC")
 ok(len(st["windows"]) == 1 and st["windows"][0][0] == et(2026, 2, 9, 8, 30), "window start should parse to ET")
-# a window with end < start is dropped; a malformed pair is dropped; good ones survive
+ok(st["malformed"] is False, "a fully valid AC1 is not malformed")
+# a window with end < start is dropped; a malformed pair is dropped; good ones survive — AND it's flagged
 st = c.parse_state('{"win":[["2026-02-09T11:00:00","2026-02-09T08:30:00"],["x"],["2026-02-09T09:00:00","2026-02-09T10:00:00"]]}')
 ok(len(st["windows"]) == 1, f"only the one valid ordered window should survive, got {st['windows']}")
+ok(st["malformed"] is True, "dropped window entries must flag malformed (observable), not silently vanish")
+# a valid dict with NO win key is legitimately empty, not malformed
+ok(c.parse_state('{"lfr":"2026-02-09T14:03:11Z"}')["malformed"] is False, "absent win == no meetings, not malformed")
 
 # --- classify_tier --------------------------------------------------------------------------------------
 w = [(et(2026, 2, 9, 8, 30), et(2026, 2, 9, 11, 0))]
@@ -78,6 +89,8 @@ rows = [
 wins, stats = c.build_windows(iter(rows), now)
 ok(stats["parsed"] == 4, f"4 parseable rows expected, got {stats['parsed']}")
 ok(stats["skipped"] == 2, f"2 unparseable rows expected, got {stats['skipped']}")
+ok(stats["dropped_past"] == 1, f"1 past window expected, got {stats['dropped_past']}")
+ok(stats["dropped_horizon"] == 1, f"1 beyond-horizon window expected, got {stats['dropped_horizon']}")
 ok(len(wins) == 1, f"the two same-day meetings should MERGE to 1 span, got {len(wins)}: {wins}")
 ok(wins[0] == ["2026-02-09T08:30:00", "2026-02-09T12:00:00"], f"merged span wrong: {wins[0]}")
 

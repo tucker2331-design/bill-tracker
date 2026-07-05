@@ -109,23 +109,35 @@ def parse_marker(s):
 
 
 def parse_state(raw):
-    """Parse the AC1 JSON into {"lfr": datetime|None (UTC), "windows": [(start_et, end_et)]}.
+    """Parse the AC1 JSON into {"lfr": datetime|None (UTC), "windows": [(start_et, end_et)], "malformed": bool}.
 
-    TOTAL: any malformed field is dropped, never raises. Missing/empty/garbage -> the safe empty state
-    ({"lfr": None, "windows": []}) which the decision layer reads as "run at baseline eligibility".
+    TOTAL: never raises. The `malformed` flag distinguishes a genuine LOAD/PARSE FAILURE (a non-empty cell we
+    couldn't read) from a LEGITIMATE empty state ("no meetings"), so the two aren't collapsed into one
+    sentinel — a persistently unreadable cell stays observable instead of masquerading as "quiet legislature"
+    (pre-push audit #15, sentinel collision; Qodo #198). It never changes the RUN decision (both still
+    fail-toward-freshness) — the caller just logs the malformed case. An EMPTY/absent cell (first deploy,
+    cleared) is NOT malformed; unparseable JSON, a non-dict, a present-but-bad lfr, or any dropped window
+    entry IS.
     """
-    out = {"lfr": None, "windows": []}
+    out = {"lfr": None, "windows": [], "malformed": False}
     if not raw:
-        return out
+        return out                       # empty cell (first deploy / cleared) — expected, not malformed
     try:
         obj = json.loads(raw)
     except Exception:
+        out["malformed"] = True          # non-empty cell we couldn't parse at all — a real failure
         return out
     if not isinstance(obj, dict):
+        out["malformed"] = True
         return out
-    out["lfr"] = _parse_utc(obj.get("lfr"))
+    lfr_raw = obj.get("lfr")
+    out["lfr"] = _parse_utc(lfr_raw)
+    if lfr_raw and out["lfr"] is None:
+        out["malformed"] = True          # lfr present but unparseable -> corruption
     win = obj.get("win")
-    if isinstance(win, list):
+    if win is None:
+        pass                             # absent windows == legitimately "no meetings" (not malformed)
+    elif isinstance(win, list):
         parsed = []
         for pair in win:
             if isinstance(pair, (list, tuple)) and len(pair) == 2:
@@ -133,7 +145,13 @@ def parse_state(raw):
                 e = _parse_et(pair[1])
                 if s is not None and e is not None and e >= s:
                     parsed.append((s, e))
+                else:
+                    out["malformed"] = True   # a window entry we had to drop -> corruption
+            else:
+                out["malformed"] = True
         out["windows"] = parsed
+    else:
+        out["malformed"] = True          # win present but not a list
     return out
 
 
@@ -184,6 +202,10 @@ def decide(raw_state, now_utc, now_et, floors, last_run_utc=None):
     tier = classify_tier(now_et, st["windows"])
     lfr = st["lfr"] if last_run_utc is None else last_run_utc
     run, why = should_run(now_utc, lfr, tier, floors)
+    if st["malformed"]:
+        # Make a parse failure OBSERVABLE in the caller's log (it never changes the decision — the calendar
+        # worker rewrites AC1 every successful cycle, so a malformed cell self-heals on the next run).
+        why = "[AC1 MALFORMED — self-heals next cycle] " + why
     return run, tier, why
 
 
@@ -209,30 +231,35 @@ def build_windows(concrete_rows, now_et):
     rows whose Origin is in CONCRETE_ORIGINS and whose Time is not a placeholder. now_et: tz-aware ET.
 
     Returns (windows_iso, stats) where windows_iso is a list of [start_iso_et, end_iso_et] (ET-local, naive)
-    within FORWARD_HORIZON_HOURS ahead, merged and capped at MAX_WINDOWS. Unparseable rows are COUNTED
-    (stats['skipped']), never crash — a bad row must not blow up cadence.
+    within FORWARD_HORIZON_HOURS ahead, merged and capped at MAX_WINDOWS. EVERY skip is COUNTED into stats
+    (never a silent `continue` — the caller logs the tally, satisfying source-miss visibility): `skipped`
+    (unparseable date/time), `dropped_past` (window already elapsed), `dropped_horizon` (beyond the cache
+    horizon — a later run recaptures it). A bad row is counted, never crashes cadence.
     """
     horizon_end = now_et + timedelta(hours=FORWARD_HORIZON_HOURS)
     lead = timedelta(minutes=WINDOW_LEAD_MIN)
     tail = timedelta(minutes=WINDOW_TAIL_MIN)
     pairs = []
-    parsed = skipped = 0
+    parsed = skipped = dropped_past = dropped_horizon = 0
     for date_str, sorttime in concrete_rows:
         dt = _parse_et(f"{str(date_str).strip()}T{str(sorttime).strip()}:00")
         if dt is None:
-            skipped += 1
+            skipped += 1                # unparseable date/time — counted, not silent
             continue
         parsed += 1
         start = dt - lead
         end = dt + tail
-        if end < now_et:            # window already fully in the past -> irrelevant
+        if end < now_et:
+            dropped_past += 1           # window already fully elapsed — irrelevant (counted)
             continue
-        if start > horizon_end:     # window beyond the caching horizon -> a later full run will pick it up
+        if start > horizon_end:
+            dropped_horizon += 1        # beyond the 36 h horizon — a later full run recaptures it (counted)
             continue
         pairs.append((start, end))
     merged = _merge_windows(pairs)[:MAX_WINDOWS]
     windows_iso = [[_et_iso(s), _et_iso(e)] for (s, e) in merged]
-    return windows_iso, {"parsed": parsed, "skipped": skipped, "windows": len(windows_iso)}
+    return windows_iso, {"parsed": parsed, "skipped": skipped, "dropped_past": dropped_past,
+                         "dropped_horizon": dropped_horizon, "windows": len(windows_iso)}
 
 
 def serialize_state(now_utc, windows_iso):

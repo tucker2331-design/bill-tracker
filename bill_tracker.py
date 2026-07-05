@@ -664,8 +664,14 @@ def _cadence_should_run():
         last_raw = None
         try:
             last_raw = sheet.worksheet(BILL_TRACKER_TAB).acell(cadence.BILL_LAST_RUN_CELL).value
-        except Exception:
-            last_raw = None   # tab/cell not created yet (first deploy) → no marker → run
+        except gspread.exceptions.WorksheetNotFound:
+            last_raw = None   # tab not created yet (first deploy) → no marker → run (expected, benign)
+        except Exception as _u1_err:
+            # A REAL Sheets/API error reading U1 (not just first-deploy): don't swallow it silently (Qodo
+            # #198). Surface it, then still default to "no marker → run" (fail-toward-freshness).
+            print(f"⚠️ Cadence: couldn't read {BILL_TRACKER_TAB}!{cadence.BILL_LAST_RUN_CELL} "
+                  f"({type(_u1_err).__name__}: {_u1_err}) — treating as no marker (will run).")
+            last_raw = None
         run, tier, why = cadence.decide(
             raw_state, datetime.datetime.now(pytz.utc),
             datetime.datetime.now(pytz.timezone("America/New_York")),
@@ -673,7 +679,10 @@ def _cadence_should_run():
         print(f"⏱️ Cadence gate (guardrail #5): {why}")
         return run
     except Exception as e:
-        print(f"⚠️ Cadence gate error ({type(e).__name__}: {e}) — failing OPEN (running this cycle).")
+        # Fail OPEN (run), but ROUTE the error through the categorized alerter — not just print (Qodo #198):
+        # a recurring gate failure is an operational signal, not a transient to swallow.
+        _alert("WARN", "API_FAILURE", f"cadence gate error ({type(e).__name__}: {e}) — running this cycle "
+               f"(fail-open). Investigate if it persists.")
         return True
 
 
