@@ -8,6 +8,19 @@ status: active
 
 Append-only, reverse-chronological (newest at top). Each entry opens with `## [YYYY-MM-DD] <kind> | <title>` so `grep "^## \[" log.md | head -20` gives a parseable timeline.
 
+## [2026-07-04] pr | #197 OPENED — unify both freshness clocks in the top trust header (F-1 display fix)
+
+Implements [[design/ui_feedback_2026-07-04]] **F-1**: the top "data as of" showed only the bill backend's
+clock (~6h) while the Calendar tab showed the calendar subsystem's fresher clock (~3h) — two honest
+timestamps that read as a contradiction because they lived in different places. Fix is display-only:
+`TrustHeader` (components/common.tsx) now renders BOTH clocks side by side — "● Bills as of …" +
+"🗓 Calendar as of …"; App.tsx loads the calendar freshness (Sheet1!AA1) non-blocking via a new
+promise-cached `loadCalendarFreshness()` (data/calendar.ts); the now-redundant in-view pill + its unused
+`relativeTime` import are removed from views/Calendar.tsx (moved up, not duplicated). NO cron/cadence change
+— that's the separate guardrail-#5 work (F-2). `tsc --noEmit` + `vite build` clean; verified in preview
+(one "Calendar as of", both clocks in the header, 3645/3645). Also removed a stray untracked `package 2.json`
+(a macOS " 2" duplicate of the #196 root build shim — never committed). CodeRabbit + Qodo review pending.
+
 ## [2026-07-04] decision | Cloudflare build failed (root-dir) FIXED in runbook + owner UI/cadence notes captured
 
 Owner's Cloudflare Pages build failed: `npm error enoent … /opt/buildhome/repo/package.json`. Diagnosed:

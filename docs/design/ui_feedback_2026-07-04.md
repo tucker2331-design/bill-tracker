@@ -10,6 +10,10 @@ Owner notes captured while the Cloudflare deploy was being fixed. All "for later
 territory). Each item has the diagnosis + the recommended fix so Opus executes without re-deriving.
 
 ## F-1 · The two freshness clocks disagree ("4h at top, 1h in the Calendar") — confusing
+> **STATUS 2026-07-04: SHIPPED (pending merge) — PR #197.** Implemented as the "show both clocks together"
+> variant of the recommended fix below: `TrustHeader` renders "● Bills as of …" + "🗓 Calendar as of …"
+> side by side; the in-Calendar pill was removed (moved up, not duplicated). Display-only, no cron change.
+> The deeper single-manifest unification (Blueprint 1) still supersedes this later.
 - **Diagnosis (correct observation):** the top trust header shows the **bill backend's** `dataAsOf`
   (`bill_tracker.yml`, cron `40 */6 * * *` = every 6h → up to 6h old). The Calendar tab shows the
   **calendar worker's** `AA1` freshness (`calendar_worker.yml`, cron `0 */3 * * *` = every 3h → fresher).
