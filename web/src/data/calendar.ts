@@ -55,7 +55,9 @@ export interface CalendarData {
   minKey: string;                 // earliest / latest meeting day (YYYY-MM-DD), "" if none
   maxKey: string;
   totalMeetings: number;
-  dataAsOf: Date | null;          // the calendar subsystem's own freshness (Sheet1!AA1)
+  // NB: the calendar subsystem's freshness (Sheet1!AA1) is NOT loaded here — it's read once, standalone,
+  // via loadCalendarFreshness() for the global TrustHeader. Bundling it into this ~5 MB load would be a
+  // second, redundant AA1 request that also coupled Calendar-tab load latency to it (Qodo, PR #197).
 }
 
 // Crossover — the session "guillotine": the last day a bill may be acted on in its chamber of origin
@@ -183,8 +185,9 @@ export function loadCalendar(): Promise<CalendarData> {
 
 async function _loadCalendar(): Promise<CalendarData> {
   const url = `https://docs.google.com/spreadsheets/d/${SPREADSHEET_ID}/gviz/tq?tqx=out:csv&sheet=${SHEET1_TAB}&tq=${encodeURIComponent(PROJECTION)}`;
-  // Freshness rides along in parallel; it never blocks or fails the calendar.
-  const [text, dataAsOf] = await Promise.all([fetchText(url, FETCH_TIMEOUT_MS), fetchFreshness()]);
+  // Just the calendar payload — freshness (AA1) is read separately by loadCalendarFreshness() for the
+  // header, so it's no longer awaited here (was a redundant AA1 fetch coupling this load's latency to it).
+  const text = await fetchText(url, FETCH_TIMEOUT_MS);
 
   const rows = parseCsv(text);
   const header = rows[0] ?? [];
@@ -278,6 +281,5 @@ async function _loadCalendar(): Promise<CalendarData> {
     minKey: keys[0] || "",
     maxKey: keys[keys.length - 1] || "",
     totalMeetings,
-    dataAsOf,
   };
 }

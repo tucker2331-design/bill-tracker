@@ -36,7 +36,11 @@ export default function App() {
     let alive = true;
     loadBillData().then((d) => alive && setData(d)).catch((e) => alive && setError(String(e?.message || e)));
     // Non-blocking: a lightweight AA1 read; failure just leaves the calendar clock "unknown" (never blocks).
-    loadCalendarFreshness().then((d) => alive && setCalendarAsOf(d)).catch(() => alive && setCalendarAsOf(null));
+    // loadCalendarFreshness() already resolves to null on error, but keep a defensive, OBSERVABLE catch —
+    // never a silent swallow (Standard #4 / Qodo): log before falling back to "unknown".
+    loadCalendarFreshness()
+      .then((d) => alive && setCalendarAsOf(d))
+      .catch((e) => { console.warn("calendar freshness load failed; header clock shows 'unknown'", e); if (alive) setCalendarAsOf(null); });
     return () => { alive = false; };
   }, []);
 
