@@ -8,6 +8,20 @@ status: active
 
 Append-only, reverse-chronological (newest at top). Each entry opens with `## [YYYY-MM-DD] <kind> | <title>` so `grep "^## \[" log.md | head -20` gives a parseable timeline.
 
+## [2026-07-05] pr | #200 OPENED — Health "at a glance" rings clarified (F-3, last of the 2026-07-04 batch)
+
+Implements [[design/ui_feedback_2026-07-04]] **F-3** (owner: the rings were confusing — "1 warning" over
+"Sustainability audit check", unclear top-vs-bottom, Freshness looked like it was missing its bottom line,
+warning not actionable). Wiring-only over signals already on the page: **F-3a** label the two lines — live
+rollup = "Status: …", outside cross-check = "Verified: …"; **F-3b** Freshness (no external oracle) shows an
+explicit muted "Verified: — no outside check applies" and the others "Verified: checking…" while guards load,
+so all four rings are parallel (no more "missing" line); **F-3c** the Status rollup names the offending
+segment on hover and, when non-green, is a click target (↓) that smooth-scrolls to that category's detail
+section (Stability→Alerts, Freshness→clocks, Accuracy/Completeness→gauges). `tsc`+`vite build` clean;
+preview-verified (Stability "1 warning ↓" → scrolls to Alerts; 0 console errors). CodeRabbit + Qodo pending.
+**This closes the 2026-07-04 UI feedback batch** (F-1 #197, F-2 #198, F-3 #200; F-4 = leave the lone HB923
+upstream-defect alert, owner's low-stakes call).
+
 ## [2026-07-05] pr | #199 MERGED — Cloudflare Workers-Assets SPA fix (deploy was failing on _redirects loop)
 
 The owner's Cloudflare deploy reached "Deploying" then failed: `wrangler` rejected `web/public/_redirects`

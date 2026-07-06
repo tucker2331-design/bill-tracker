@@ -54,6 +54,12 @@ territory). Each item has the diagnosis + the recommended fix so Opus executes w
   section of [[knowledge/lis_api_safety]].
 
 ## F-3 · Health "at a glance" rings — confusing what each represents; make warnings actionable
+> **STATUS 2026-07-05: SHIPPED (pending merge) — PR #200.** All three parts done: F-3a the two lines are now
+> labeled "Status:" (live rollup) vs "Verified:" (outside guard); F-3b Freshness shows an explicit muted
+> "Verified: — no outside check applies" (all four rings parallel), others show "Verified: checking…" while
+> guards load; F-3c the Status rollup names the offending segment on hover and, when non-green, is a click
+> target (↓) that scrolls to that category's detail section (Stability→Alerts, Freshness→clocks, etc.).
+> Preview-verified (Stability "1 warning ↓" scrolls to Alerts; 0 console errors).
 Owner: *"the one ring with a warning says Sustainability audit check but just says 1 warning above it… what
 do the top and bottom each represent, and why is the bottom-left missing a bottom one. Have the warning say
 more or be clickable so it takes you to where the warning is."*
