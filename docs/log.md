@@ -8,6 +8,22 @@ status: active
 
 Append-only, reverse-chronological (newest at top). Each entry opens with `## [YYYY-MM-DD] <kind> | <title>` so `grep "^## \[" log.md | head -20` gives a parseable timeline.
 
+## [2026-07-06] pr | #202 OPENED — verify the session snapshot before advancing the marker (A-2 part 1)
+
+Continuing the Fable queue (owner: "best next thing… don't stop"). Picked A-2 (owner-salient: the "sheets
+running out / switching to a new sheet" concern). Re-checking the code found A-2 **Part 1 (rollover hook)
+was ALREADY BUILT** — same "I thought Opus had fixed this" pattern as A-1: `run_calendar_update` archives
+the completed session (`_archive_completed_session` → `Session_<old>`) on `V1≠ACTIVE_SESSION` then advances
+V1, fail-safe on exceptions. **The gap vs spec was verification:** it copied + advanced with NO check the
+copy landed, and `copy_to`+rename has SILENT partial-failure modes → could advance V1 over a broken archive,
+then next cycle's `clear()` loses the session ([[failures/assumptions_audit]] #97). Added `_verify_archived_
+snapshot()` (canonical-name + grid-dims + header-row, RAISES on mismatch → existing fail-safe preserves the
+live sheet), mirrored into `tools/session_archive/archive.py._verify_copy` (kept in sync), pure
+`_snapshot_dim_mismatch` unit-tested (`session_rollover_test.py`, 18 cases incl. worker-vs-tool agreement),
+and turned the rollover's bare `print` into an INFO SYSTEM_ALERT FYI (Slack + Health chip). `py_compile` +
+worker-import clean. **A-2 Part 2 (mid-session headroom shard actuator) remains the open A-2 piece** — larger
+(needs an ops workbook + C-2 shard) and not urgent (the rollover already archives each session out yearly).
+
 ## [2026-07-06] pr | #197 + #198 + #200 + #201 ALL MERGED (squash) — owner "merge if done reviewing"
 
 The four review-folded PRs landed on main together. Merge order handled conflict risk: #197/#198 first got

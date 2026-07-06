@@ -81,6 +81,24 @@ with CRITICAL. `AUTO_SESSION_FOLLOW=0` halts without probing.
 
 ## A-2 · Automated workbook lifecycle (finish the designed-but-unbuilt rollover hook + add relief)
 
+> **STATUS 2026-07-06 — PART 1 (rollover hook) SHIPPED/landed + COMPLETED TO SPEC.** Re-checking the code
+> found the rollover hook was ALREADY BUILT since a prior "auto-rollover" PR: `run_calendar_update`
+> compares `Sheet1!V1` (the session the live sheet represents) to `ACTIVE_SESSION`; on change it calls
+> `_archive_completed_session()` (copy_to → `Session_<old>` in the archive workbook, idempotent) then
+> advances V1 — all fail-safe: ANY failure raises so Sheet1 (still the completed session) is never
+> overwritten before it's safely archived (Gemini #133). The two gaps vs the spec below were the
+> **confirm-before-advance verification (1b)** and the **FYI alert (1d)** — both now added (PR pending):
+> `_verify_archived_snapshot()` confirms the archived tab exists by its canonical name + same grid dims +
+> same header row and RAISES on any mismatch (so we never advance V1 over a partial/failed copy) — **PR #202** — mirrored
+> into `tools/session_archive/archive.py._verify_copy` (kept in sync, asserted by `session_rollover_test.py`,
+> 18 tests); and the rollover now emits an **INFO SYSTEM_ALERT** ("Rolled over 20261 → 20271; snapshot
+> Session_20261 archived, N rows verified. No action needed.") — Slack + Health chip, same posture as A-1's
+> auto-follow FYI. Sub-step (1c) old-session **cache-row reset** is deferred as low-value (the caches are
+> bounded + have their own retention; Sheet1 — the big tab — is already archived out each rollover). **PART 2
+> (mid-session headroom shard actuator) remains the open A-2 work** — it needs an ops workbook + C-2's shard
+> design and is the larger effort; it is NOT urgent because the rollover hook already archives each
+> completed session OUT of the live workbook annually (the main cell-pressure source).
+
 **Design (Opus implements):**
 1. **The rollover hook (the missing piece archive.py already promises):** in `run_calendar_update`, the
    worker knows last cycle's session (state cell, e.g. `Sheet1!S3 = last_session_code`) and this cycle's
