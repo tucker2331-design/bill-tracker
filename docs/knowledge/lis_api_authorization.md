@@ -1,6 +1,6 @@
 ---
 tags: [knowledge, api, compliance, lis, rule]
-updated: 2026-06-09
+updated: 2026-07-05
 status: active
 ---
 
@@ -23,6 +23,27 @@ status: active
 - This is an **authorization / terms-of-use** rule, not a technical access control: the new
   API will still *return* old-session data if asked, so the discipline is on us. Using a
   registered API key does not extend the authorization to older sessions.
+
+## A-1 (2026-07-05): self-extending authorization — the live workers auto-follow the active session
+Previously the authorized set was a frozen `{20251, 20261}` that **halted both workers on any new session**
+(e.g. `20271`), requiring a manual annual edit — a Standard #8 violation (the system would halt Jan 2027
+without a human). A-1 fixes this **zero-touch and ban-safe** (PR #201, [[audits/fable_2026-07/autonomy_upgrades]] A-1):
+
+- **Two scopes in `lis_authorization.py`:** `LIS_HISTORICAL_AUTHORIZED` = the FROZEN, human-curated set of
+  known-authorized past sessions (the anti-2020–2024-replay guard; tools/replays may never exceed it). The
+  **live active session** is authorized separately, passed in per call by the workers from
+  `get_active_session_info()`. `is_authorized_session(code, active_session=…)` authorizes a code that's
+  historical OR the current active one. `LIS_API_AUTHORIZED_SESSIONS` stays a frozen alias (tools unchanged).
+- **The probe is the real ban-safety gate** (`calendar_worker.session_follow_gate`): a NEW active session is
+  probe-verified ONCE with a single bills-list GET — `200 + non-empty` ⇒ follow it + one-time FYI; `401/403`
+  ⇒ HALT (LIS genuinely refused the key — the only remaining halt); transient/empty ⇒ halt this cycle, retry.
+  The result is cached in **`Sheet1!S2`** (`verified:20271`) so the probe fires once, shared across both workers.
+- **Kill switch:** `AUTO_SESSION_FOLLOW=0` reverts to the old halt-on-new-session checkpoint (owner control).
+- **One-time diligence (open):** re-review the `lis.virginia.gov/developers` wording when the 2027 session
+  authorizes, and note here whether keys carry forward per session. The probe backstops us either way (a
+  non-carried key `401`s and we halt), so this is a courtesy record, not a safety dependency.
+- **Front-end follow-up (deferred, not halt-critical):** backend should stamp `session_code` into the
+  completeness payload (kills `inferSessionCode`) and `CROSSOVER_BY_SESSION` should become derive-or-absent.
 
 ## Compliance status (2026-06-09 audit)
 - **Production: COMPLIANT.** `calendar_worker.py`, `accuracy_sentinel.py`, `reconcile_votes.py`

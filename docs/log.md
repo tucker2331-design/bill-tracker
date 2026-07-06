@@ -8,6 +8,19 @@ status: active
 
 Append-only, reverse-chronological (newest at top). Each entry opens with `## [YYYY-MM-DD] <kind> | <title>` so `grep "^## \[" log.md | head -20` gives a parseable timeline.
 
+## [2026-07-06] pr | #201 OPENED — A-1 self-extending session authorization (Fable queue #1; halt-preventer)
+
+The top Fable-audit priority ([[audits/fable_2026-07/autonomy_upgrades]] A-1) — without it the whole system
+HALTS when the 2027 GA convenes (frozen `{20251,20261}` allowlist), which the owner flagged as a Standard #8
+violation. Now the live workers **auto-follow the session LIS's Session API declares active**, ban-safely:
+`lis_authorization.py` splits `LIS_HISTORICAL_AUTHORIZED` (frozen anti-replay set; all tools keep it via the
+`LIS_API_AUTHORIZED_SESSIONS` alias) from the active session; `is_authorized_session(code, active_session=…)`
+follows the active one; `calendar_worker.session_follow_gate` probe-verifies a NEW session ONCE (bills-list
+GET → 200+data proceeds+FYI, 401/403 halts, transient retries) caching `Sheet1!S2`; `AUTO_SESSION_FOLLOW=0`
+kill switch; both workers wired (shared S2 cache → one probe across both). 16 unit tests. Deferred (not
+halt-critical): the front-end `session_code` stamp (step 6) + portal-wording re-review (step 5; the probe
+backstops it). py_compile + workers/backend/tools import-clean. CodeRabbit + Qodo pending. [[knowledge/lis_api_authorization]] updated.
+
 ## [2026-07-05] pr | #200 OPENED — Health "at a glance" rings clarified (F-3, last of the 2026-07-04 batch)
 
 Implements [[design/ui_feedback_2026-07-04]] **F-3** (owner: the rings were confusing — "1 warning" over
