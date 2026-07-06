@@ -8,6 +8,73 @@ status: active
 
 Append-only, reverse-chronological (newest at top). Each entry opens with `## [YYYY-MM-DD] <kind> | <title>` so `grep "^## \[" log.md | head -20` gives a parseable timeline.
 
+## [2026-07-06] pr | #201 OPENED — A-1 self-extending session authorization (Fable queue #1; halt-preventer)
+
+The top Fable-audit priority ([[audits/fable_2026-07/autonomy_upgrades]] A-1) — without it the whole system
+HALTS when the 2027 GA convenes (frozen `{20251,20261}` allowlist), which the owner flagged as a Standard #8
+violation. Now the live workers **auto-follow the session LIS's Session API declares active**, ban-safely:
+`lis_authorization.py` splits `LIS_HISTORICAL_AUTHORIZED` (frozen anti-replay set; all tools keep it via the
+`LIS_API_AUTHORIZED_SESSIONS` alias) from the active session; `is_authorized_session(code, active_session=…)`
+follows the active one; `calendar_worker.session_follow_gate` probe-verifies a NEW session ONCE (bills-list
+GET → 200+data proceeds+FYI, 401/403 halts, transient retries) caching `Sheet1!S2`; `AUTO_SESSION_FOLLOW=0`
+kill switch; both workers wired (shared S2 cache → one probe across both). 16 unit tests. Deferred (not
+halt-critical): the front-end `session_code` stamp (step 6) + portal-wording re-review (step 5; the probe
+backstops it). py_compile + workers/backend/tools import-clean. CodeRabbit + Qodo pending. [[knowledge/lis_api_authorization]] updated.
+
+## [2026-07-05] pr | #200 OPENED — Health "at a glance" rings clarified (F-3, last of the 2026-07-04 batch)
+
+Implements [[design/ui_feedback_2026-07-04]] **F-3** (owner: the rings were confusing — "1 warning" over
+"Sustainability audit check", unclear top-vs-bottom, Freshness looked like it was missing its bottom line,
+warning not actionable). Wiring-only over signals already on the page: **F-3a** label the two lines — live
+rollup = "Status: …", outside cross-check = "Verified: …"; **F-3b** Freshness (no external oracle) shows an
+explicit muted "Verified: — no outside check applies" and the others "Verified: checking…" while guards load,
+so all four rings are parallel (no more "missing" line); **F-3c** the Status rollup names the offending
+segment on hover and, when non-green, is a click target (↓) that smooth-scrolls to that category's detail
+section (Stability→Alerts, Freshness→clocks, Accuracy/Completeness→gauges). `tsc`+`vite build` clean;
+preview-verified (Stability "1 warning ↓" → scrolls to Alerts; 0 console errors). CodeRabbit + Qodo pending.
+**This closes the 2026-07-04 UI feedback batch** (F-1 #197, F-2 #198, F-3 #200; F-4 = leave the lone HB923
+upstream-defect alert, owner's low-stakes call).
+
+## [2026-07-05] pr | #199 MERGED — Cloudflare Workers-Assets SPA fix (deploy was failing on _redirects loop)
+
+The owner's Cloudflare deploy reached "Deploying" then failed: `wrangler` rejected `web/public/_redirects`
+with "Line 4: Infinite loop detected in this rule." Root cause: the project deploys as **Workers Static
+Assets** (log shows `wrangler` deploying a Worker `bill-tracker` from repo-root `dist/`, auto-generating a
+config), and the classic-Pages SPA rule `/*  /index.html  200` is invalid there — Workers Assets
+canonicalises `/index.html` → `/`, which re-matches `/*` → loop. (A classic Pages project would ACCEPT that
+rule, so the error itself proves it's Workers Assets.) Fix: deleted `web/public/_redirects`, added repo-root
+`wrangler.toml` with `[assets] not_found_handling = "single-page-application"` (the Workers-Assets-native SPA
+fallback) + pinned `name`/`directory`. Build re-verified (root shim still emits a valid `dist/`). Runbook
+[[workflow/deploy_cloudflare_pages]] gained a "#2 mistake" box. **Merged to unblock the deploy** — Cloudflare
+auto-deploys `main`, so the fix only takes effect once landed. Also: bill cadence equalized to the calendar's
+15-min track in-window (owner) is folded into the still-open #198.
+
+## [2026-07-05] pr | #198 OPENED — activity-correlated cadence for both workers (LIS-safety guardrail #5)
+
+The owner's "dynamic timing" ask ([[design/ui_feedback_2026-07-04]] F-2), and the LAST unshipped LIS-safety
+guardrail. Both scheduled workers stop running blind fixed crons and instead fire FAST + self-throttle to
+real legislative activity. ONE structural signal (Standard #3, no text): the calendar worker writes
+last-full-run + forward **meeting windows** to `Sheet1!AC1` each successful cycle (windows from the same
+concrete-time rows the site shows — `Origin ∈ {api_schedule,convene_anchor,legislation_event}`, merged);
+both workers READ AC1 in their scheduled gate and skip cheaply (**Sheets-only, ZERO LIS**) unless active
+enough for their tier. Tiers (calibrated to preserve today's baselines — audit #14): calendar IN_WINDOW
+~15m / IDLE ~1h / EMPTY ~3h; bill IN_WINDOW/IDLE ~1h / EMPTY ~6h (bill throttles against its OWN marker
+`Bill_Tracker!U1`, shared windows). Crons: calendar `0 */3`→`*/15`, bill `40 */6`→`40 *`; repo is public
+so the extra runner starts are free and off-window ticks exit in seconds. New shared **`cadence.py`** (pure,
+no back-import) + **`cadence_test.py`** (31 tests, all pass). Safety: BOTH failure directions non-catastrophic
+(fast-but-guardrailed 24/7 vs today's baseline), gate fails OPEN, every default fails-toward-freshness; AC1/U1
+writes unconditional on the success path (audit #11), empty/future markers → run not trapped (audit #15).
+`py_compile` + both workers import-clean; no `pages/*.py` imports it (audit #8).
+Docs updated: [[knowledge/lis_api_safety]] (guardrail #5 → 🟡, cadence ledger), [[architecture/calendar_pipeline]]
+(AC1 + U1 state cells), [[design/ui_feedback_2026-07-04]] F-2, [[state/current_status]].
+**Bot fold-in (2026-07-05):** 1 Gemini + 5 Qodo, all folded in — `os.environ.get` for creds (no KeyError on
+local run), gate errors ROUTED (calendar→notify_slack, bill→_alert) not just printed, the U1 read narrowed
+to WorksheetNotFound-vs-real-error (no silent swallow), `parse_state` gained a `malformed` flag so a parse
+failure is distinguishable from a legit empty state (audit #15) + surfaced in the decide() log, and
+`build_windows` now COUNTS every skip (skipped / dropped_past / dropped_horizon — no untagged `continue`).
+Qodo's 6th (AC1 undocumented) was already satisfied on main (calendar_pipeline). Tests 31→36, all pass.
+CodeRabbit summary-only (no actionable inline). Bots re-reviewing the fold-in commit.
+
 ## [2026-07-04] pr | #197 OPENED — unify both freshness clocks in the top trust header (F-1 display fix)
 
 Implements [[design/ui_feedback_2026-07-04]] **F-1**: the top "data as of" showed only the bill backend's
@@ -19,7 +86,12 @@ promise-cached `loadCalendarFreshness()` (data/calendar.ts); the now-redundant i
 `relativeTime` import are removed from views/Calendar.tsx (moved up, not duplicated). NO cron/cadence change
 — that's the separate guardrail-#5 work (F-2). `tsc --noEmit` + `vite build` clean; verified in preview
 (one "Calendar as of", both clocks in the header, 3645/3645). Also removed a stray untracked `package 2.json`
-(a macOS " 2" duplicate of the #196 root build shim — never committed). CodeRabbit + Qodo review pending.
+(a macOS " 2" duplicate of the #196 root build shim — never committed).
+**Bot fold-in (2026-07-05):** 2 Qodo findings folded in — dropped the redundant second `Sheet1!AA1` fetch
+(removed `fetchFreshness()` from `loadCalendar`'s `Promise.all` + the now-unused `CalendarData.dataAsOf`;
+`loadCalendarFreshness()` is the single AA1 read), and made the App-level freshness `.catch()` observable
+(log before falling back to "unknown", Standard #4). `tsc`+`vite build` clean. **Cloudflare Pages now builds
+green** (the #196 root shim worked — deploy comments are posting on the PRs).
 
 ## [2026-07-04] decision | Cloudflare build failed (root-dir) FIXED in runbook + owner UI/cadence notes captured
 

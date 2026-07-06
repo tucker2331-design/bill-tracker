@@ -1,6 +1,6 @@
 ---
 tags: [knowledge, api, compliance, lis, rule]
-updated: 2026-06-09
+updated: 2026-07-05
 status: active
 ---
 
@@ -24,6 +24,27 @@ status: active
   API will still *return* old-session data if asked, so the discipline is on us. Using a
   registered API key does not extend the authorization to older sessions.
 
+## A-1 (2026-07-05): self-extending authorization — the live workers auto-follow the active session
+Previously the authorized set was a frozen `{20251, 20261}` that **halted both workers on any new session**
+(e.g. `20271`), requiring a manual annual edit — a Standard #8 violation (the system would halt Jan 2027
+without a human). A-1 fixes this **zero-touch and ban-safe** (PR #201, [[audits/fable_2026-07/autonomy_upgrades]] A-1):
+
+- **Two scopes in `lis_authorization.py`:** `LIS_HISTORICAL_AUTHORIZED` = the FROZEN, human-curated set of
+  known-authorized past sessions (the anti-2020–2024-replay guard; tools/replays may never exceed it). The
+  **live active session** is authorized separately, passed in per call by the workers from
+  `get_active_session_info()`. `is_authorized_session(code, active_session=…)` authorizes a code that's
+  historical OR the current active one. `LIS_API_AUTHORIZED_SESSIONS` stays a frozen alias (tools unchanged).
+- **The probe is the real ban-safety gate** (`calendar_worker.session_follow_gate`): a NEW active session is
+  probe-verified ONCE with a single bills-list GET — `200 + non-empty` ⇒ follow it + one-time FYI; `401/403`
+  ⇒ HALT (LIS genuinely refused the key — the only remaining halt); transient/empty ⇒ halt this cycle, retry.
+  The result is cached in **`Sheet1!S2`** (`verified:20271`) so the probe fires once, shared across both workers.
+- **Kill switch:** `AUTO_SESSION_FOLLOW=0` reverts to the old halt-on-new-session checkpoint (owner control).
+- **One-time diligence (open):** re-review the `lis.virginia.gov/developers` wording when the 2027 session
+  authorizes, and note here whether keys carry forward per session. The probe backstops us either way (a
+  non-carried key `401`s and we halt), so this is a courtesy record, not a safety dependency.
+- **Front-end follow-up (deferred, not halt-critical):** backend should stamp `session_code` into the
+  completeness payload (kills `inferSessionCode`) and `CROSSOVER_BY_SESSION` should become derive-or-absent.
+
 ## Compliance status (2026-06-09 audit)
 - **Production: COMPLIANT.** `calendar_worker.py`, `accuracy_sentinel.py`, `reconcile_votes.py`
   all operate on the **active session only** (currently `20261`); the session code is derived
@@ -44,13 +65,17 @@ authorization to use it.
 
 ## Enforcement (single source of truth + every live caller gated)
 The rule is enforced in code by **`lis_authorization.py`** (repo root) — the ONLY place the
-authorized set is defined:
-- `LIS_API_AUTHORIZED_SESSIONS = {"20251","20261"}` — widen ONLY when LIS notifies.
-- `is_authorized_session(code)` / `assert_lis_authorized(code)` (normalizes legacy 3-digit "261").
+authorized scope is defined. **Since A-1 (2026-07-05, see above) there are TWO scopes:**
+- `LIS_HISTORICAL_AUTHORIZED = {"20251","20261"}` — the FROZEN human-curated set (anti-replay guard).
+  `LIS_API_AUTHORIZED_SESSIONS` is a backward-compat alias of it (tools/replays keep frozen semantics).
+- the **live active session**, followed by the workers via `is_authorized_session(code, active_session=…)`
+  + `calendar_worker.session_follow_gate`'s one-time probe (`Sheet1!S2` cache; `AUTO_SESSION_FOLLOW=0` kill switch).
+- `is_authorized_session(code[, active_session])` / `assert_lis_authorized(code[, active_session])` (normalizes legacy 3-digit "261").
 
-Every code path that hits `lis.virginia.gov` or `lisfiles/*` is gated through it (2026-06-09):
-- `calendar_worker.py` — after deriving the active session, **HALT + CRITICAL alert** if not
-  authorized (no data calls; Sheet1 keeps last-known-good). 2027 self-announces until widened.
+Every code path that hits `lis.virginia.gov` or `lisfiles/*` is gated through it:
+- `calendar_worker.py` + `bill_tracker.py` — after deriving the active session, `session_follow_gate`
+  **auto-follows** it (probe-verified) or **HALTs + CRITICAL alert** only if LIS refuses the key / the kill
+  switch is set (no data calls; Sheet1 keeps last-known-good). **2027 is now followed automatically (A-1).**
 - `backend_worker.py` — `get_active_session()` now **only probes authorized-session blobs**
   (the old probe HEAD-hit `year+1` 2027 URLs in November — a ban risk), plus a main-flow gate.
 - `pages/ray2.py` + `calendar_xray.py` — `load_lis_schedule()` asserts before the Schedule call.
