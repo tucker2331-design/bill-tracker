@@ -104,7 +104,7 @@ function Donut({ v }: { v: Vital }) {
       {/* STATUS line — the LIVE rollup of this ring's own segments. Labeled "Status:" so it's not confused
           with the outside-check "Verified:" line below (F-3a). Clickable to the detail section when non-green (F-3c). */}
       {drillable ? (
-        <button className="hl-vstat" style={{ color: INK[overall] }} title={statusTitle} onClick={drill}
+        <button type="button" className="hl-vstat" style={{ color: INK[overall] }} title={statusTitle} onClick={drill}
           aria-label={`Status — ${statusLine(segs)}. ${statusTitle}`}>
           Status: {statusLine(segs)} <span className="hl-drill" aria-hidden="true">↓</span>
         </button>

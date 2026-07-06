@@ -286,7 +286,7 @@ export function Health({ completeness, dataAsOf }: { completeness: Completeness 
         </div>
       ) : <CalLoading err={hErr} />}
 
-      <h2 className="h" id="hl-sec-accuracy" style={{ scrollMarginTop: 84 }}>Accuracy &amp; completeness — the lobbyist-facing guarantees</h2>
+      <h2 className="h" id="hl-sec-accuracy">Accuracy &amp; completeness — the lobbyist-facing guarantees</h2>
       <div className="hl-gauges">
         {h ? (
           <BulletGraph label="Section-9 accuracy · meeting actions without a time" value={section9 ?? 0}
@@ -304,7 +304,7 @@ export function Health({ completeness, dataAsOf }: { completeness: Completeness 
         </>) : <p className="muted">Bill-backend signals unavailable (no completeness payload in Bill_Tracker R1).</p>}
       </div>
 
-      <h2 className="h" id="hl-sec-freshness" style={{ scrollMarginTop: 84 }}>Freshness — two workers, two clocks</h2>
+      <h2 className="h" id="hl-sec-freshness">Freshness — two workers, two clocks</h2>
       <div className="hl-gauges">
         {dataAsOf ? (
           <BulletGraph label="Bill backend · hours since last good run" value={billFreshH}
@@ -371,7 +371,7 @@ export function Health({ completeness, dataAsOf }: { completeness: Completeness 
       {/* ── Alert feed: the operator's "needs a human" list (Standard #8). When the Metrics_History trend
             store is populated, show the rolling HISTORY (distinct alerts + how often + last-seen); until then,
             fall back to the latest cycle's live alerts from Sheet1. ── */}
-      <h2 className="h" id="hl-sec-alerts" style={{ scrollMarginTop: 84 }}>Alerts {h && <span className="muted" style={{ textTransform: "none", letterSpacing: 0 }}>· {alertHistory ? "recent history — what has fired and how often" : "latest from the calendar worker"}</span>}</h2>
+      <h2 className="h" id="hl-sec-alerts">Alerts {h && <span className="muted" style={{ textTransform: "none", letterSpacing: 0 }}>· {alertHistory ? "recent history — what has fired and how often" : "latest from the calendar worker"}</span>}</h2>
       {!h ? <CalLoading err={hErr} /> : alertHistory ? (
         alertHistory.length === 0 ? (
           <p className="muted" style={{ marginBottom: 18 }}>No alerts in the recent window — the worker is running clean.</p>
