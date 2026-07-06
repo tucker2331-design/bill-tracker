@@ -8,6 +8,20 @@ status: active
 
 Append-only, reverse-chronological (newest at top). Each entry opens with `## [YYYY-MM-DD] <kind> | <title>` so `grep "^## \[" log.md | head -20` gives a parseable timeline.
 
+## [2026-07-05] pr | #199 MERGED — Cloudflare Workers-Assets SPA fix (deploy was failing on _redirects loop)
+
+The owner's Cloudflare deploy reached "Deploying" then failed: `wrangler` rejected `web/public/_redirects`
+with "Line 4: Infinite loop detected in this rule." Root cause: the project deploys as **Workers Static
+Assets** (log shows `wrangler` deploying a Worker `bill-tracker` from repo-root `dist/`, auto-generating a
+config), and the classic-Pages SPA rule `/*  /index.html  200` is invalid there — Workers Assets
+canonicalises `/index.html` → `/`, which re-matches `/*` → loop. (A classic Pages project would ACCEPT that
+rule, so the error itself proves it's Workers Assets.) Fix: deleted `web/public/_redirects`, added repo-root
+`wrangler.toml` with `[assets] not_found_handling = "single-page-application"` (the Workers-Assets-native SPA
+fallback) + pinned `name`/`directory`. Build re-verified (root shim still emits a valid `dist/`). Runbook
+[[workflow/deploy_cloudflare_pages]] gained a "#2 mistake" box. **Merged to unblock the deploy** — Cloudflare
+auto-deploys `main`, so the fix only takes effect once landed. Also: bill cadence equalized to the calendar's
+15-min track in-window (owner) is folded into the still-open #198.
+
 ## [2026-07-05] pr | #198 OPENED — activity-correlated cadence for both workers (LIS-safety guardrail #5)
 
 The owner's "dynamic timing" ask ([[design/ui_feedback_2026-07-04]] F-2), and the LAST unshipped LIS-safety
