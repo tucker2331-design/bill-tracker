@@ -20,7 +20,10 @@ export interface VitalSeg { label: string; tone: VTone; }
 // carries the source + cadence + last-run so the freshness no longer reads as "stale" on the surface.
 export type VVerify = "pass" | "fail" | "running" | "unknown" | "stale";
 export interface VitalVerify { state: VVerify; text: string; title: string; url: string | null; }
-export interface Vital { name: string; segs: VitalSeg[]; verify?: VitalVerify; }
+// `verifyApplies: false` = this category has NO external oracle (Freshness — there's no authoritative source
+// for "is our clock right"), so it shows an explicit "no outside check applies" line instead of a blank one
+// that looked like a bug (F-3b). `anchor` = the id of the detail section the Status line jumps to (F-3c).
+export interface Vital { name: string; segs: VitalSeg[]; verify?: VitalVerify; verifyApplies?: boolean; anchor?: string; }
 
 const STROKE: Record<VTone, string> = {
   good: "var(--ok)",
@@ -35,6 +38,8 @@ const INK: Record<VTone, string> = {
   good: "var(--ok)", warn: "var(--o-carry)", danger: "var(--stale)", unknown: "var(--neutral)",
 };
 const GLYPH: Record<VTone, string> = { good: "✓", warn: "!", danger: "✕", unknown: "?" };
+// Plain words for the hover title so "1 warning" says WHICH segment(s) and how bad (F-3c).
+const TONE_WORD: Record<VTone, string> = { good: "ok", warn: "warning", danger: "critical", unknown: "unconfirmed" };
 // worst-of rollup: danger dominates, then warn, then unknown (can't confirm) — only an all-confirmed-good
 // category reads green. So one unconfirmed metric greys the ring rather than faking a clean bill of health.
 const RANK: Record<VTone, number> = { good: 0, unknown: 1, warn: 2, danger: 3 };
@@ -58,6 +63,16 @@ function Donut({ v }: { v: Vital }) {
   const n = segs.length;
   const ok = segs.filter((s) => s.tone === "good").length;
   const overall = worst(segs);
+  // F-3c: the Status rollup names WHICH segment(s) are off (hover) and, when non-green, is a click target
+  // that scrolls to this category's detail section (the data is already on the page — this is just wiring).
+  const nonGreen = segs.filter((s) => s.tone !== "good");
+  const statusTitle = nonGreen.length
+    ? `${v.name} · ${nonGreen.map((s) => `${s.label} (${TONE_WORD[s.tone]})`).join(", ")} — click to see the detail below`
+    : `${v.name}: all ${n} check${n === 1 ? "" : "s"} green`;
+  const drillable = nonGreen.length > 0 && !!v.anchor;
+  const drill = () => {
+    if (v.anchor) document.getElementById(v.anchor)?.scrollIntoView({ behavior: "smooth", block: "start" });
+  };
   // Expose the verification provenance to screen-readers + non-hover (touch) devices, not only the hover
   // `title` (CodeRabbit #183). Flatten the multi-line title into one spoken sentence.
   const vAria = v.verify ? `Independent verification — ${v.verify.text}. ${v.verify.title.replace(/\n/g, "; ")}` : undefined;
@@ -86,13 +101,30 @@ function Donut({ v }: { v: Vital }) {
         </div>
       </div>
       <div className="hl-vname">{v.name}</div>
-      <div className="hl-vstat" style={{ color: INK[overall] }}>{statusLine(segs)}</div>
-      {/* Independent-verification trust line (merged from the old "Are we right?" panel). Only on dials that
-          HAVE an outside cross-check; a link when the run is reachable, else plain text. Hover for the source. */}
-      {v.verify && (
+      {/* STATUS line — the LIVE rollup of this ring's own segments. Labeled "Status:" so it's not confused
+          with the outside-check "Verified:" line below (F-3a). Clickable to the detail section when non-green (F-3c). */}
+      {drillable ? (
+        <button className="hl-vstat" style={{ color: INK[overall] }} title={statusTitle} onClick={drill}
+          aria-label={`Status — ${statusLine(segs)}. ${statusTitle}`}>
+          Status: {statusLine(segs)} <span className="hl-drill" aria-hidden="true">↓</span>
+        </button>
+      ) : (
+        <div className="hl-vstat" style={{ color: INK[overall] }} title={statusTitle}>Status: {statusLine(segs)}</div>
+      )}
+      {/* VERIFIED line — the INDEPENDENT outside cross-check (GitHub Actions guard), a DIFFERENT thing from the
+          live Status above. Labeled "Verified:" (F-3a). ALWAYS rendered so all four rings are parallel (F-3b):
+          a real badge, "checking…" while guards load, or an explicit "no outside check applies" for Freshness
+          (which has no external oracle) — never a blank line that reads as a missing/broken ring. */}
+      {v.verifyApplies === false ? (
+        <span className="hl-vverify na" title="Freshness has no external oracle — there's no authoritative source for &quot;is our clock right&quot;, so this ring has no independent cross-check. Its accuracy is the two live segment clocks above.">
+          Verified: — no outside check applies
+        </span>
+      ) : v.verify ? (
         v.verify.url
-          ? <a className={`hl-vverify ${v.verify.state}`} href={v.verify.url} target="_blank" rel="noreferrer" title={v.verify.title} aria-label={vAria}>{v.verify.text}</a>
-          : <span className={`hl-vverify ${v.verify.state}`} title={v.verify.title} aria-label={vAria}>{v.verify.text}</span>
+          ? <a className={`hl-vverify ${v.verify.state}`} href={v.verify.url} target="_blank" rel="noreferrer" title={v.verify.title} aria-label={vAria}>Verified: {v.verify.text}</a>
+          : <span className={`hl-vverify ${v.verify.state}`} title={v.verify.title} aria-label={vAria}>Verified: {v.verify.text}</span>
+      ) : (
+        <span className="hl-vverify unknown" title="Checking this category against its outside source (GitHub Actions guard)…">Verified: checking…</span>
       )}
     </div>
   );
