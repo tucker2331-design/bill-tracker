@@ -12,10 +12,28 @@ the Google Sheet via gviz (CORS-open, link-readable), so **a deployed build show
 immediately** — and every push auto-rebuilds, so the flaky local Vite preview is retired.
 
 ## What's already prepped in the repo (done)
-- `web/public/_redirects` — SPA fallback so no path 404s.
+- `wrangler.toml` (repo root) — the deploy config. The project deploys via **Cloudflare Workers Static
+  Assets** (the build log shows `wrangler` deploying a Worker named `bill-tracker` reading root `dist/`, not
+  a classic Pages upload). SPA fallback is done here with `not_found_handling = "single-page-application"`.
+- `package.json` (repo root) — build shim: `npm run build` → builds `web/` and copies `web/dist` → `./dist`
+  (so a repo-ROOT build produces the assets `wrangler.toml` deploys). #196.
 - `web/.node-version` = `22` — matches Vite 8's Node requirement so Cloudflare's build env doesn't drift.
-- Clean-checkout build verified: `cd web && npm ci && npm run build` → `dist/` (index.html + assets +
-  `_redirects`), ~80 KB gzipped JS.
+- ~~`web/public/_redirects`~~ **REMOVED (2026-07-05, PR that fixed the deploy).** See the SPA-loop box below.
+
+## ⚠️ THE #2 MISTAKE — `_redirects` SPA catch-all loops on Workers Assets
+Symptom (build reaches "Deploying" then fails):
+```
+✘ [ERROR] A request to the Cloudflare API (/accounts/…/workers/scripts/bill-tracker/versions) failed.
+  Invalid _redirects configuration:
+    Line 4: Infinite loop detected in this rule. This would cause a redirect to strip `.html` or `/index`…
+```
+Cause: the classic Pages SPA rule `/*  /index.html  200` is **invalid on Workers Static Assets** — Workers
+Assets canonicalises `/index.html` → `/`, which re-matches `/*`, so the rewrite loops and wrangler rejects it.
+(A classic Pages project would accept the same rule — so this error *is* the proof you're on Workers Assets.)
+Fix (done): deleted `web/public/_redirects` and put SPA routing in `wrangler.toml` →
+`[assets] not_found_handling = "single-page-application"` (serves `index.html` for any non-asset path, no
+loop). If this is ever reconnected as classic **Pages**, `wrangler.toml` is ignored and you re-add
+`web/public/_redirects` with `/*  /index.html  200`.
 
 ## ⚠️ THE #1 MISTAKE — Root directory MUST be `web`
 The app is in `web/`, not the repo root. If Root directory is left blank, Cloudflare runs `npm run build`
