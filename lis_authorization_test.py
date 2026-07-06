@@ -42,6 +42,11 @@ ok(a.is_authorized_session("20251", active_session="20271"),
 ok(a.is_authorized_session("271", active_session="20271"), "'271' normalizes to 20271 == active")
 ok(a.is_authorized_session("20271", active_session="271"), "active '271' normalizes to 20271")
 
+# ── FAIL CLOSED on empty/None: two blank inputs must NOT compare equal into a phantom authorization ──
+ok(not a.is_authorized_session(None, active_session=""), "None vs '' must NOT authorize (fail-closed)")
+ok(not a.is_authorized_session("", active_session=""), "'' vs '' must NOT authorize (fail-closed)")
+ok(not a.is_authorized_session(None, active_session=None), "None vs None -> not authorized")
+
 # ── assert_lis_authorized mirrors the predicate ──
 ok(a.assert_lis_authorized("20261") == "20261", "assert returns normalized code on success")
 ok(a.assert_lis_authorized("271", active_session="20271") == "20271", "assert follows the active session")

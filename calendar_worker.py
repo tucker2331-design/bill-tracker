@@ -4143,10 +4143,7 @@ def session_follow_gate(active_code, http_session, worksheet=None):
             f"Portal terms: re-review lis.virginia.gov/developers wording at your convenience "
             f"(docs/knowledge/lis_api_authorization.md). Kill switch: AUTO_SESSION_FOLLOW=0.")
     print(_fyi)
-    try:
-        notify_slack(_fyi)
-    except Exception:
-        pass
+    notify_slack(_fyi)   # notify_slack catches + logs its own failures (no bare except:pass — CodeRabbit)
     return True, None
 
 
@@ -4663,7 +4660,16 @@ def run_calendar_update():
     # declares active — but only after a one-time API-key probe verifies it (session_follow_gate). Historical
     # sessions stay frozen; the probe halts iff LIS actually refuses the key. `http_session` was already used
     # for get_active_session_info above, so this reuses it (no new session).
-    _proceed, _halt_reason = session_follow_gate(ACTIVE_SESSION, http_session)
+    # OFFLINE GUARD (CodeRabbit): when session_data is falsy, ACTIVE_SESSION is a YEAR-DERIVED fallback, NOT a
+    # session LIS declared active — so we must NOT auto-follow it (that would probe a session LIS never
+    # confirmed). A historical fallback still proceeds (reads its cached blob); a non-historical one halts
+    # until the Session API comes back and actually declares it active.
+    if not session_data and not is_historical_authorized(ACTIVE_SESSION):
+        _proceed, _halt_reason = (False,
+            "Session API is unavailable, so the year-derived fallback session was NOT LIS-declared active; "
+            "refusing to auto-follow until the Session API confirms it.")
+    else:
+        _proceed, _halt_reason = session_follow_gate(ACTIVE_SESSION, http_session)
     if not _proceed:
         _halt = (f"🛑 LIS AUTHORIZATION HALT {now:%Y-%m-%d %H:%M}: active session {ACTIVE_SESSION} — "
                  f"{_halt_reason} Skipped ALL LIS calls this cycle to avoid an API ban; last-known-good "
@@ -7817,6 +7823,22 @@ def run_calendar_update():
                         status="WARN", category="API_FAILURE", severity="WARN",
                         dedup_key="sheet_session_write_fail",
                     )
+
+                # A-1 (Gemini CRITICAL fold-in): the session-probe cache S2 is ALSO wiped by worksheet.clear()
+                # above. Restore it unconditionally each successful cycle for a FOLLOWED (non-historical)
+                # session — reaching the success path means the gate already probe-verified it — else S2 would
+                # be empty next cycle and the "probe once" design would re-probe LIS EVERY cycle (a ban risk;
+                # pre-push audit #11 side-effect-gating). Historical sessions never set S2 (no probe).
+                if not is_historical_authorized(ACTIVE_SESSION):
+                    try:
+                        worksheet.update_acell(SESSION_PROBE_CELL, f"verified:{ACTIVE_SESSION}")
+                    except Exception as _sp_write_err:
+                        push_system_alert(
+                            f"Could not restore session-probe cache Sheet1!{SESSION_PROBE_CELL} "
+                            f"after a successful cycle: {_sp_write_err}",
+                            status="WARN", category="API_FAILURE", severity="WARN",
+                            dedup_key="session_probe_cell_write_fail",
+                        )
 
                 _phase("Sheet1 clear() + full update() + state-cell writes")
                 print("✅ SUCCESS: Regression Test Build is complete.")

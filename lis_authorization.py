@@ -40,7 +40,8 @@ LIS_API_AUTHORIZED_SESSIONS = LIS_HISTORICAL_AUTHORIZED
 def normalize_session_code(session_code) -> str:
     """Best-effort 5-digit normalization so the check is robust to legacy 3-digit forms
     ("261" -> "20261"). Unknown shapes are returned stripped (and will fail the check)."""
-    s = str(session_code or "").strip()
+    # `None`-safe WITHOUT `x or ""` boolean coercion (an odd falsy input must not silently blank; CodeRabbit).
+    s = "" if session_code is None else str(session_code).strip()
     if len(s) == 3 and s.isdigit():   # legacy 3-digit -> MVC 5-digit
         return "20" + s
     return s
@@ -64,7 +65,12 @@ def is_authorized_session(session_code, active_session=None) -> bool:
     code = normalize_session_code(session_code)
     if code in LIS_HISTORICAL_AUTHORIZED:
         return True
-    return active_session is not None and code == normalize_session_code(active_session)
+    if active_session is None:
+        return False
+    active = normalize_session_code(active_session)
+    # FAIL CLOSED: both sides must be non-empty, else two blank/None inputs would compare equal ("" == "")
+    # and authorize a phantom session (CodeRabbit — ban-safety fail-open).
+    return bool(code and active) and code == active
 
 
 def assert_lis_authorized(session_code, active_session=None) -> str:
