@@ -40,6 +40,8 @@ import pytz
 import pandas as pd
 from google.oauth2.service_account import Credentials
 
+import cadence   # LIS-safety guardrail #5 — the SHARED cadence decision (same signal the calendar worker maintains)
+
 # Reuse the worker's proven, guarded primitives + structural resolvers — single source of truth.
 from calendar_worker import (
     safe_fetch_csv,
@@ -560,8 +562,9 @@ def write_bill_tracker(records, completeness):
         json.dumps(r["history"], ensure_ascii=False), r["data_as_of_utc"], r["source"],
         r["floor_house"], r["floor_senate"],
     ] for r in records]
-    # 18 data cols (A..R); the completeness summary lives at T1 (col 20), clear of the data.
-    completeness_cell, need_rows, need_cols = "T1", len(rows) + 50, 20
+    # 18 data cols (A..R); the completeness summary lives at T1 (col 20); the cadence last-run marker (U1,
+    # col 21, guardrail #5 — this worker's OWN throttle clock) sits one further right, clear of the data.
+    completeness_cell, need_rows, need_cols = "T1", len(rows) + 50, 21
 
     try:
         ws = sheet.worksheet(BILL_TRACKER_TAB)
@@ -571,10 +574,15 @@ def write_bill_tracker(records, completeness):
         ws = sheet.add_worksheet(title=BILL_TRACKER_TAB, rows=need_rows, cols=need_cols)
 
     ws.clear()
-    # One batched write (rows + the completeness summary the front end reads for its trust header).
+    # One batched write: rows + the completeness summary (front-end trust header) + the guardrail-#5 last-run
+    # marker (U1). U1 is written ONLY on a successful cycle (we only reach here on success), so a failed run
+    # leaves the prior U1 → the next scheduled tick sees a stale marker and is eligible to run (fail-toward-
+    # freshness). Same write-on-success discipline as the calendar worker's AA1/AC1.
     ws.batch_update([
         {"range": "A1", "values": rows},
         {"range": completeness_cell, "values": [[json.dumps(completeness, ensure_ascii=False)]]},
+        {"range": cadence.BILL_LAST_RUN_CELL,
+         "values": [[datetime.datetime.now(pytz.utc).strftime("%Y-%m-%dT%H:%M:%SZ")]]},
     ])
 
 
@@ -636,6 +644,48 @@ def run_bill_tracker():
         raise
 
 
+def _cadence_should_run():
+    """Guardrail #5 for the bill worker: consult the SHARED meeting-window signal (Sheet1!AC1, maintained by
+    the calendar worker) plus this worker's OWN last-run marker (Bill_Tracker!U1) to decide fast vs slow.
+
+    Returns True to PROCEED, False to SKIP. Reads Sheets only — ZERO LIS on a skip. FAILS OPEN (returns True)
+    on ANY error, and on a missing/unreadable AC1 (empty state → EMPTY tier) or missing U1 (→ no marker →
+    run): a cadence read problem must never silence the worker (Standard #4, fail-toward-freshness). Pure
+    decision logic lives in cadence.py (unit-tested); this is just the I/O wrapper.
+    """
+    try:
+        creds_json = os.environ.get("GCP_CREDENTIALS")
+        if not creds_json:
+            return True   # no creds here == a local/dev invocation; let the normal path handle auth
+        gc = gspread.authorize(Credentials.from_service_account_info(
+            json.loads(creds_json), scopes=["https://www.googleapis.com/auth/spreadsheets"]))
+        sheet = gc.open_by_key(SPREADSHEET_ID)
+        raw_state = sheet.worksheet("Sheet1").acell(cadence.CADENCE_STATE_CELL).value
+        last_raw = None
+        try:
+            last_raw = sheet.worksheet(BILL_TRACKER_TAB).acell(cadence.BILL_LAST_RUN_CELL).value
+        except gspread.exceptions.WorksheetNotFound:
+            last_raw = None   # tab not created yet (first deploy) → no marker → run (expected, benign)
+        except Exception as _u1_err:
+            # A REAL Sheets/API error reading U1 (not just first-deploy): don't swallow it silently (Qodo
+            # #198). Surface it, then still default to "no marker → run" (fail-toward-freshness).
+            print(f"⚠️ Cadence: couldn't read {BILL_TRACKER_TAB}!{cadence.BILL_LAST_RUN_CELL} "
+                  f"({type(_u1_err).__name__}: {_u1_err}) — treating as no marker (will run).")
+            last_raw = None
+        run, tier, why = cadence.decide(
+            raw_state, datetime.datetime.now(pytz.utc),
+            datetime.datetime.now(pytz.timezone("America/New_York")),
+            cadence.BILL_TIER_FLOORS, last_run_utc=cadence.parse_marker(last_raw))
+        print(f"⏱️ Cadence gate (guardrail #5): {why}")
+        return run
+    except Exception as e:
+        # Fail OPEN (run), but ROUTE the error through the categorized alerter — not just print (Qodo #198):
+        # a recurring gate failure is an operational signal, not a transient to swallow.
+        _alert("WARN", "API_FAILURE", f"cadence gate error ({type(e).__name__}: {e}) — running this cycle "
+               f"(fail-open). Investigate if it persists.")
+        return True
+
+
 def _scheduled_gate():
     """Ban-safety for SCHEDULED runs only (mirrors calendar_worker.py __main__; keep in sync). Returns
     True if the cycle should PROCEED, False to SKIP — the caller, not this helper, exits (Gemini #163:
@@ -664,6 +714,12 @@ def _scheduled_gate():
     if in_quiet:
         print(f"😴 Quiet hours ({quiet_start_et}:00–{quiet_end_et}:00 ET): ET hour={et_hour}; "
               f"scheduled run skipped (no GA business overnight; manual dispatch bypasses).")
+        return False
+    # LIS-safety guardrail #5: activity-correlated cadence (mirrors calendar_worker __main__; keep in sync).
+    # The bill worker fires on a fast (hourly) cron and self-throttles here — hourly when the legislature is
+    # active (a meeting on the SHARED calendar signal, Sheet1!AC1), ~6h when the forward calendar is empty.
+    # ZERO LIS on a skip. Checked AFTER quiet hours (cheapest first) and BEFORE jitter (never sleep to skip).
+    if not _cadence_should_run():
         return False
     raw_jitter = os.environ.get("JITTER_MAX_SECONDS", "180")
     try:

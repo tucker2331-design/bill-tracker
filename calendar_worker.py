@@ -23,6 +23,7 @@ from google.oauth2.service_account import Credentials
 from bs4 import BeautifulSoup
 import pdfplumber
 import logging
+import cadence   # LIS-safety guardrail #5 (activity-correlated cadence) — pure module, no back-import
 
 # pdfminer (pdfplumber's parsing engine) emits a "Could not get FontBBox from
 # font descriptor" WARNING for every malformed font in a parsed agenda PDF —
@@ -7608,14 +7609,14 @@ def run_calendar_update():
                 # State-cell map: docs/architecture/calendar_pipeline.md.
                 try:
                     # Sheet1 is the default 26-col grid (A–Z) — the existing state
-                    # cells deliberately stop at Z. AA (col 27, freshness) and AB
-                    # (col 28, Stage-2 input signature) are beyond it, and update_acell
-                    # does NOT auto-expand the grid (it would APIError every cycle,
-                    # Gemini #142). Widen once to fit both; idempotent — clear() empties
-                    # values but never shrinks the grid, so after the first cycle
-                    # col_count >= 28 and this is a no-op.
-                    if worksheet.col_count < 28:
-                        worksheet.add_cols(28 - worksheet.col_count)
+                    # cells deliberately stop at Z. AA (col 27, freshness), AB (col 28,
+                    # Stage-2 input signature) and AC (col 29, cadence state, guardrail
+                    # #5) are beyond it, and update_acell does NOT auto-expand the grid
+                    # (it would APIError every cycle, Gemini #142). Widen once to fit all
+                    # three; idempotent — clear() empties values but never shrinks the
+                    # grid, so after the first cycle col_count >= 29 and this is a no-op.
+                    if worksheet.col_count < 29:
+                        worksheet.add_cols(29 - worksheet.col_count)
                     worksheet.update_acell("AA1", _cycle_end_utc_iso)
                 except Exception as _freshness_write_err:
                     push_system_alert(
@@ -7624,6 +7625,39 @@ def run_calendar_update():
                         category="API_FAILURE",
                         severity="WARN",
                         dedup_key="state_cell_aa1_write_fail",
+                    )
+
+                # LIS-safety guardrail #5: write this cycle's cadence state (last-full-run + forward meeting
+                # windows) to AC1 so the NEXT scheduled tick — and the bill worker — can choose fast vs slow
+                # with NO LIS call. Written every successful cycle like AA1: a failed cycle leaves the prior
+                # AC1, whose stale lfr just makes the next tick eligible to run (fail-toward-freshness). This
+                # write is UNCONDITIONAL on the success path (pre-push audit #11) — never nested under a gate
+                # that could permanently suppress it. Windows are built from the SAME concrete-time meeting
+                # rows the site shows (Origin in CONCRETE_ORIGINS, non-placeholder Time) — STRUCTURAL, no
+                # text/keyword (Standard #3). Non-fatal: a write failure alerts but never aborts the cycle.
+                try:
+                    _cad_concrete = final_df[
+                        final_df['Origin'].isin(cadence.CONCRETE_ORIGINS)
+                        & ~final_df['Time'].astype(str).str.startswith("⏱️ [NO_")
+                    ]
+                    _cad_windows, _cad_stats = cadence.build_windows(
+                        zip(_cad_concrete['Date'].astype(str), _cad_concrete['SortTime'].astype(str)),
+                        datetime.now(pytz.timezone("America/New_York")))
+                    if worksheet.col_count < 29:
+                        worksheet.add_cols(29 - worksheet.col_count)
+                    worksheet.update_acell(
+                        cadence.CADENCE_STATE_CELL, cadence.serialize_state(datetime.now(pytz.utc), _cad_windows))
+                    print(f"⏱️ Cadence state (AC1) written: {_cad_stats['windows']} forward window(s) from "
+                          f"{_cad_stats['parsed']} concrete meeting rows "
+                          f"({_cad_stats['skipped']} unparseable, {_cad_stats['dropped_past']} past, "
+                          f"{_cad_stats['dropped_horizon']} beyond horizon).")
+                except Exception as _cad_write_err:
+                    push_system_alert(
+                        f"Could not write cadence-state cell Sheet1!AC1 after successful cycle: {_cad_write_err}",
+                        status="WARN",
+                        category="API_FAILURE",
+                        severity="WARN",
+                        dedup_key="state_cell_ac1_write_fail",
                     )
 
                 # Stage-2 (OBSERVE-ONLY): compute this cycle's input signature from the
@@ -7749,6 +7783,42 @@ if __name__ == "__main__":
                 f"overnight). Manual dispatch and the Backfill Burst bypass this gate."
             )
             sys.exit(0)
+        # LIS-safety guardrail #5: activity-correlated cadence. This worker fires on a fast 15-min cron
+        # (calendar_worker.yml) and SELF-THROTTLES here — a full cycle runs only when the legislature is
+        # active (now inside a real meeting window), else it skips down to the ~3h baseline (EMPTY tier).
+        # The decision reads ONLY the cadence-state cell Sheet1!AC1 (this worker maintains it each
+        # successful cycle) → ZERO LIS on a skip. Manual dispatch / Backfill Burst never reach here
+        # (GITHUB_EVENT_NAME != 'schedule', gated above with quiet hours). Fails OPEN on ANY error: a
+        # cadence bug must never SILENCE the worker — only ever slow it. See docs/knowledge/lis_api_safety.md.
+        try:
+            _cad_creds = os.environ.get("GCP_CREDENTIALS")
+            if not _cad_creds:
+                # No creds (local/dev run) — can't read AC1; fail OPEN, run.mirrors bill_tracker (Gemini #198).
+                print("⏱️ Cadence gate: GCP_CREDENTIALS unset — cannot read AC1; running this cycle.")
+            else:
+                _cad_gc = gspread.authorize(Credentials.from_service_account_info(
+                    json.loads(_cad_creds),
+                    scopes=["https://www.googleapis.com/auth/spreadsheets"]))
+                _raw_cadence = _cad_gc.open_by_key(SPREADSHEET_ID).worksheet("Sheet1").acell(
+                    cadence.CADENCE_STATE_CELL).value
+                _run_now, _tier, _why = cadence.decide(
+                    _raw_cadence, datetime.now(pytz.utc),
+                    datetime.now(pytz.timezone("America/New_York")), cadence.CALENDAR_TIER_FLOORS)
+                print(f"⏱️ Cadence gate (guardrail #5): {_why}")
+                if not _run_now:
+                    sys.exit(0)
+        except SystemExit:
+            raise
+        except Exception as _cad_gate_err:
+            # Fail OPEN (run), but ROUTE the error — not just print (Qodo #198): a recurring gate failure is
+            # an operational signal. notify_slack is best-effort here (the cycle proceeds regardless).
+            _cad_msg = (f"⚠️ Cadence gate error ({type(_cad_gate_err).__name__}: {_cad_gate_err}) — failing "
+                        f"OPEN (running this cycle). Investigate if it persists.")
+            print(_cad_msg)
+            try:
+                notify_slack(_cad_msg)
+            except Exception:
+                pass
         # LIS-safety guardrail #2: jitter. A fixed cron fires at exactly :00; hitting LIS at
         # the same wall-clock instant every cycle is a needless metronome signature. Delay a
         # SCHEDULED run by a small random amount (manual dispatch / Backfill Burst stay

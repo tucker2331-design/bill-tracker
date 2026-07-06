@@ -2,20 +2,20 @@ name: 🤖 Mastermind Ghost Worker 2
 
 on:
   schedule:
-    # PR-C7.1f: every 3 hours (was every 15 min). Two reasons:
-    #   1. Runtime is ~16-19 min, so a 15-min cron structurally backs up —
-    #      runs queue behind each other (concurrency: calendar-worker,
-    #      cancel-in-progress: false) and GitHub deprioritizes/skips
-    #      scheduled fires under a growing backlog. 3h >> 19min, no pile-up.
-    #   2. VA GA is adjourned (off-season) + pre-launch — frequent runs are
-    #      wasted LIS API exposure (ban risk) with no new HISTORY to scrape.
-    # The worker ALSO self-gates overnight (quiet hours 11pm-6am ET, in
-    # calendar_worker.py __main__) for scheduled runs only — manual dispatch
-    # and the Backfill Burst always run.
-    # LIVE-SESSION NOTE: when the 2027 session opens, bump this up for
-    # fresher data — but to ~30 min (fits the ~19-min runtime), NOT 15 min.
-    - cron: '0 */3 * * *' # every 3 hours, on the hour (UTC)
-  workflow_dispatch: # Adds a manual "Run Now" button (bypasses quiet hours)
+    # LIS-safety guardrail #5 (activity-correlated cadence): fire FAST but SELF-THROTTLE in the worker.
+    # The 15-min cron only OFFERS a tick; calendar_worker.py __main__ then reads the cadence-state cell
+    # (Sheet1!AC1) and decides whether this tick does real work:
+    #   • IN_WINDOW (a real meeting is happening now) → run every tick (~15-19 min) to catch votes/reports
+    #     within minutes — the freshness lobbyists actually need.
+    #   • IDLE (meetings on the forward calendar, none active now) → ~hourly.
+    #   • EMPTY (nothing scheduled ahead) → ~3h, the old conservative baseline.
+    # Load tracks the legislature, not the clock (Standard #8). Off-window ticks EXIT IN SECONDS after one
+    # Sheets read (ZERO LIS), so the old "15-min cron backs up because runtime is ~19 min" problem is gone
+    # — full runs only queue IN a meeting window, where back-to-back ~19-min cycles ARE the intent and the
+    # concurrency lock (below) serializes them safely. Quiet hours (11pm-6am ET) + jitter still apply to
+    # scheduled runs; manual dispatch / Backfill Burst bypass all gates. See docs/knowledge/lis_api_safety.md.
+    - cron: '*/15 * * * *' # every 15 min (UTC); the worker self-throttles per guardrail #5 (AC1)
+  workflow_dispatch: # Adds a manual "Run Now" button (bypasses quiet hours + cadence gate)
 
 # PR-C1: queue overlapping cycles rather than parallelizing them. If a cycle
 # N is still running when cycle N+1 fires (e.g. GitHub Actions is slow and
