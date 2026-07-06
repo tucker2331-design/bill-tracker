@@ -2,7 +2,6 @@ import { useEffect, useMemo, useState } from "react";
 import type { Bill } from "../data/types";
 import { loadCalendar, CROSSOVER_BY_SESSION, type CalendarData, type Meeting } from "../data/calendar";
 import { useScope, useStarred } from "../state/tracking";
-import { relativeTime } from "../components/common";
 import { parseLisDate, dayKey } from "../data/dates";
 
 // The full Calendar — the "by time" lens, relaid out (owner 2026-06-30): a large 7-DAY WEEK VIEW is the
@@ -185,7 +184,6 @@ export function Calendar({ bills, sessionCode, onOpen }: {
   );
   if (!cal || !focusedDay || !miniMonth) return <p className="center-msg">Loading the session calendar…</p>;
 
-  const fresh = relativeTime(cal.dataAsOf);
   const focusedDate = parseLisDate(focusedDay) ?? new Date();
   const weekStart = weekStartOf(focusedDate);
   const weekDays = Array.from({ length: 7 }, (_, i) => addDays(weekStart, i));
@@ -232,9 +230,8 @@ export function Calendar({ bills, sessionCode, onOpen }: {
         <div className="cal-actions">
           {crossoverKey && <button className="cal-jump cross" onClick={() => jumpTo(crossoverKey)}>⚑ Crossover</button>}
           {todayKey >= cal.minKey && todayKey <= cal.maxKey && <button className="cal-jump" onClick={() => jumpTo(todayKey)}>Today</button>}
-          <span className="trust" style={{ marginLeft: "auto" }}>
-            <span className={`pill ${fresh.stale ? "warn" : "good"}`} title={cal.dataAsOf?.toISOString() ?? ""}>● Calendar as of {fresh.text}</span>
-          </span>
+          {/* "Calendar as of" moved up to the global TrustHeader (owner 2026-07-04) so both feed clocks sit
+              together — see components/common.tsx TrustHeader. Not duplicated here to avoid two stamps. */}
         </div>
       </div>
 

@@ -55,7 +55,9 @@ export interface CalendarData {
   minKey: string;                 // earliest / latest meeting day (YYYY-MM-DD), "" if none
   maxKey: string;
   totalMeetings: number;
-  dataAsOf: Date | null;          // the calendar subsystem's own freshness (Sheet1!AA1)
+  // NB: the calendar subsystem's freshness (Sheet1!AA1) is NOT loaded here — it's read once, standalone,
+  // via loadCalendarFreshness() for the global TrustHeader. Bundling it into this ~5 MB load would be a
+  // second, redundant AA1 request that also coupled Calendar-tab load latency to it (Qodo, PR #197).
 }
 
 // Crossover — the session "guillotine": the last day a bill may be acted on in its chamber of origin
@@ -159,6 +161,16 @@ async function fetchFreshness(): Promise<Date | null> {
   }
 }
 
+// Lightweight standalone freshness read (just Sheet1!AA1, ~a few bytes) so the app-level trust header can
+// show the CALENDAR subsystem's clock NEXT TO the bill backend's — the two workers run on different
+// cadences (bills 6h, calendar 3h), and burying the calendar clock inside the Calendar tab made the two
+// "data as of" numbers look contradictory (owner 2026-07-04). Cached for the page's life; never throws.
+let _calFreshPromise: Promise<Date | null> | null = null;
+export function loadCalendarFreshness(): Promise<Date | null> {
+  if (!_calFreshPromise) _calFreshPromise = fetchFreshness();
+  return _calFreshPromise;
+}
+
 // Session cache: the Calendar tab unmounts on tab-switch, so memoize the (~5 MB) load for the page's life
 // — re-opening the tab is then instant and rapid toggles dedupe to one in-flight fetch. A full reload
 // re-fetches (the only refresh path needed off-season; the data is static once the GA adjourns).
@@ -173,8 +185,9 @@ export function loadCalendar(): Promise<CalendarData> {
 
 async function _loadCalendar(): Promise<CalendarData> {
   const url = `https://docs.google.com/spreadsheets/d/${SPREADSHEET_ID}/gviz/tq?tqx=out:csv&sheet=${SHEET1_TAB}&tq=${encodeURIComponent(PROJECTION)}`;
-  // Freshness rides along in parallel; it never blocks or fails the calendar.
-  const [text, dataAsOf] = await Promise.all([fetchText(url, FETCH_TIMEOUT_MS), fetchFreshness()]);
+  // Just the calendar payload — freshness (AA1) is read separately by loadCalendarFreshness() for the
+  // header, so it's no longer awaited here (was a redundant AA1 fetch coupling this load's latency to it).
+  const text = await fetchText(url, FETCH_TIMEOUT_MS);
 
   const rows = parseCsv(text);
   const header = rows[0] ?? [];
@@ -268,6 +281,5 @@ async function _loadCalendar(): Promise<CalendarData> {
     minKey: keys[0] || "",
     maxKey: keys[keys.length - 1] || "",
     totalMeetings,
-    dataAsOf,
   };
 }

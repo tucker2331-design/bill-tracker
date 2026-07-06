@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import type { Bill, BillData } from "./data/types";
 import { loadBillData } from "./data/gviz";
+import { loadCalendarFreshness } from "./data/calendar";
 import { scopedBills } from "./data/derive";
 import { useScope, useStarred } from "./state/tracking";
 import { ScopeSwitch, TrustHeader } from "./components/common";
@@ -25,12 +26,21 @@ export default function App() {
   const [error, setError] = useState<string | null>(null);
   const [tab, setTab] = useState<Tab>("today");
   const [selected, setSelected] = useState<Bill | null>(null);
+  // The calendar subsystem's own freshness (Sheet1!AA1) — undefined until loaded, null when unreadable.
+  // Surfaced in the top trust header next to the bill clock so the two feeds' cadences read cohesively.
+  const [calendarAsOf, setCalendarAsOf] = useState<Date | null | undefined>(undefined);
   const [scope] = useScope();
   const starred = useStarred();
 
   useEffect(() => {
     let alive = true;
     loadBillData().then((d) => alive && setData(d)).catch((e) => alive && setError(String(e?.message || e)));
+    // Non-blocking: a lightweight AA1 read; failure just leaves the calendar clock "unknown" (never blocks).
+    // loadCalendarFreshness() already resolves to null on error, but keep a defensive, OBSERVABLE catch —
+    // never a silent swallow (Standard #4 / Qodo): log before falling back to "unknown".
+    loadCalendarFreshness()
+      .then((d) => alive && setCalendarAsOf(d))
+      .catch((e) => { console.warn("calendar freshness load failed; header clock shows 'unknown'", e); if (alive) setCalendarAsOf(null); });
     return () => { alive = false; };
   }, []);
 
@@ -49,7 +59,7 @@ export default function App() {
           <div className="brand"><span className="dot" /> VA Bill Tracker</div>
           <ScopeSwitch />
           <div className="spacer" />
-          {data && <TrustHeader dataAsOf={data.dataAsOf} completeness={data.completeness} shown={visible.length} />}
+          {data && <TrustHeader dataAsOf={data.dataAsOf} calendarAsOf={calendarAsOf} completeness={data.completeness} shown={visible.length} />}
         </header>
 
         <nav className="nav">

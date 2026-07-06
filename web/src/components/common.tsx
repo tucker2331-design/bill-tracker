@@ -55,10 +55,11 @@ export function relativeTime(d: Date | null): { text: string; stale: boolean } {
   return { text: `${Math.round(hrs / 24)} days ago`, stale };
 }
 
-export function TrustHeader({ dataAsOf, completeness, shown }: {
-  dataAsOf: Date | null; completeness: Completeness | null; shown: number;
+export function TrustHeader({ dataAsOf, calendarAsOf, completeness, shown }: {
+  dataAsOf: Date | null; calendarAsOf?: Date | null; completeness: Completeness | null; shown: number;
 }) {
   const fresh = relativeTime(dataAsOf);
+  const cal = calendarAsOf !== undefined ? relativeTime(calendarAsOf) : null;
   const universe = completeness?.universe_count;
   const written = completeness?.records_written;
   const anomalies = completeness?.in_history_not_in_universe?.length ?? 0;
@@ -66,9 +67,17 @@ export function TrustHeader({ dataAsOf, completeness, shown }: {
   const complete = universe != null && written != null && universe === written && anomalies === 0;
   return (
     <div className="trust">
-      <span className={`pill ${fresh.stale ? "warn" : "good"}`} title={dataAsOf?.toISOString() ?? ""}>
-        ● Data as of {fresh.text}
+      {/* Both freshness clocks live TOGETHER here (owner 2026-07-04) — the bill backend (6h cadence) and the
+          calendar subsystem (3h) are separate workers, so their "as of" times differ; showing them side by
+          side up top reads as "two feeds, two clocks" instead of a contradiction buried in the Calendar tab. */}
+      <span className={`pill ${fresh.stale ? "warn" : "good"}`} title={`Bill data · ${dataAsOf?.toISOString() ?? "unknown"}`}>
+        ● Bills as of {fresh.text}
       </span>
+      {cal && (
+        <span className={`pill ${cal.stale ? "warn" : "good"}`} title={`Calendar subsystem · ${calendarAsOf?.toISOString() ?? "unknown"}`}>
+          🗓 Calendar as of {cal.text}
+        </span>
+      )}
       {universe != null && (
         <span className={`pill ${complete ? "good" : "warn"}`}
           title={`records ${written}/${universe}; ${anomalies} in-history-not-in-universe`}>
