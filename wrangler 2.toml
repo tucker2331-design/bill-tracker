@@ -1,0 +1,22 @@
+# Cloudflare deploy config — the site deploys via Cloudflare **Workers Static Assets** (the build log shows
+# `wrangler` deploying a Worker script named `bill-tracker` and reading assets from repo-root `dist/`, not a
+# classic Pages upload). Two things this file fixes / pins:
+#
+# 1. SPA FALLBACK the RIGHT way for Workers Assets. The old `web/public/_redirects` catch-all
+#    `/*  /index.html  200` is REJECTED by wrangler with "Infinite loop detected in this rule" — Workers
+#    Assets canonicalises `/index.html` → `/`, which re-matches `/*`, so the rewrite loops. Workers Assets
+#    does SPA routing via `not_found_handling` instead: any path that isn't a real asset serves `index.html`
+#    (200), so a deep link / refresh never 404s. `_redirects` was removed in favour of this.
+# 2. Deterministic name + assets dir so the Git-connected build stops auto-generating a throwaway config
+#    ("? Proceed with setup? … Adding Wrangler files to .gitignore" in the failing log = there was no config).
+#
+# `directory = "./dist"` matches the repo-root build shim (package.json `build` copies web/dist → ./dist).
+# NB: if this is ever reconnected as a classic **Pages** project instead, Pages ignores this file and the SPA
+# fallback is `web/public/_redirects` (`/*  /index.html  200`) again — see docs/workflow/deploy_cloudflare_pages.md.
+
+name = "bill-tracker"
+compatibility_date = "2025-01-01"
+
+[assets]
+directory = "./dist"
+not_found_handling = "single-page-application"
