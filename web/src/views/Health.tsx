@@ -212,26 +212,28 @@ export function Health({ completeness, dataAsOf }: { completeness: Completeness 
     return { state, text, title, url: worstG.url };
   };
 
+  // `verifyApplies` + `anchor` drive F-3 (see HealthVitals): the outside-check line is explicit even where
+  // there's no oracle (Freshness), and each Status rollup jumps to its own detail section when non-green.
   const vitals: Vital[] = [
     { name: "Accuracy", segs: [
       sv("Section-9 · meeting actions without a time", section9 ?? 0, lower(0.5, 25, 50), section9 != null),
       sv("Outcome drift · keyword↔structural", driftPct, lower(0.1, 1, 2), c?.outcome_keyword_mismatch_rate != null),
-    ], verify: vitalVerify(["accuracy_sentinel.yml", "legevent_reconcile.yml"]) },
+    ], verify: vitalVerify(["accuracy_sentinel.yml", "legevent_reconcile.yml"]), verifyApplies: true, anchor: "hl-sec-accuracy" },
     { name: "Completeness", segs: [
       sv("Bill completeness · records vs universe", completePct, higher(98, 99.99, 100), !!c && universe > 0),
       sv("History-vs-universe anomalies", anomalies, lower(0.5, 5, 20), !!c),
       sv("Patron coverage", patronPct, higher(98, 99.99, 100), !!c && written > 0),
       sv("Unclassified share · router blank", unclassPct, lower(8, 15, 25), !!h && total > 0),
-    ], verify: vitalVerify(["completeness_tripwire.yml"]) },
+    ], verify: vitalVerify(["completeness_tripwire.yml"]), verifyApplies: true, anchor: "hl-sec-accuracy" },
     { name: "Freshness", segs: [
       sv("Bill backend clock", billFreshH, lower(6, 12, 24), !!dataAsOf),
       sv("Calendar clock", calFreshH, lower(6, 12, 24), !!h?.calendarFreshness),
-    ] },
+    ], verifyApplies: false, anchor: "hl-sec-freshness" },
     { name: "Stability", segs: [
       { label: "Circuit breaker", tone: !h ? "unknown" : breakerOk ? "good" : "danger" },
       sv("Write-time invariant violations", violations ?? 0, lower(0.5, 49, 60), violations != null),
       { label: "Active alerts", tone: !h ? "unknown" : critCount ? "danger" : warnCount ? "warn" : "good" },
-    ], verify: vitalVerify(["sustainability_audit.yml"]) },
+    ], verify: vitalVerify(["sustainability_audit.yml"]), verifyApplies: true, anchor: "hl-sec-alerts" },
   ];
 
   return (
@@ -284,7 +286,7 @@ export function Health({ completeness, dataAsOf }: { completeness: Completeness 
         </div>
       ) : <CalLoading err={hErr} />}
 
-      <h2 className="h">Accuracy &amp; completeness — the lobbyist-facing guarantees</h2>
+      <h2 className="h" id="hl-sec-accuracy">Accuracy &amp; completeness — the lobbyist-facing guarantees</h2>
       <div className="hl-gauges">
         {h ? (
           <BulletGraph label="Section-9 accuracy · meeting actions without a time" value={section9 ?? 0}
@@ -302,7 +304,7 @@ export function Health({ completeness, dataAsOf }: { completeness: Completeness 
         </>) : <p className="muted">Bill-backend signals unavailable (no completeness payload in Bill_Tracker R1).</p>}
       </div>
 
-      <h2 className="h">Freshness — two workers, two clocks</h2>
+      <h2 className="h" id="hl-sec-freshness">Freshness — two workers, two clocks</h2>
       <div className="hl-gauges">
         {dataAsOf ? (
           <BulletGraph label="Bill backend · hours since last good run" value={billFreshH}
@@ -369,7 +371,7 @@ export function Health({ completeness, dataAsOf }: { completeness: Completeness 
       {/* ── Alert feed: the operator's "needs a human" list (Standard #8). When the Metrics_History trend
             store is populated, show the rolling HISTORY (distinct alerts + how often + last-seen); until then,
             fall back to the latest cycle's live alerts from Sheet1. ── */}
-      <h2 className="h">Alerts {h && <span className="muted" style={{ textTransform: "none", letterSpacing: 0 }}>· {alertHistory ? "recent history — what has fired and how often" : "latest from the calendar worker"}</span>}</h2>
+      <h2 className="h" id="hl-sec-alerts">Alerts {h && <span className="muted" style={{ textTransform: "none", letterSpacing: 0 }}>· {alertHistory ? "recent history — what has fired and how often" : "latest from the calendar worker"}</span>}</h2>
       {!h ? <CalLoading err={hErr} /> : alertHistory ? (
         alertHistory.length === 0 ? (
           <p className="muted" style={{ marginBottom: 18 }}>No alerts in the recent window — the worker is running clean.</p>
