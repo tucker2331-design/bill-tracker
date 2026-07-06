@@ -65,13 +65,17 @@ authorization to use it.
 
 ## Enforcement (single source of truth + every live caller gated)
 The rule is enforced in code by **`lis_authorization.py`** (repo root) — the ONLY place the
-authorized set is defined:
-- `LIS_API_AUTHORIZED_SESSIONS = {"20251","20261"}` — widen ONLY when LIS notifies.
-- `is_authorized_session(code)` / `assert_lis_authorized(code)` (normalizes legacy 3-digit "261").
+authorized scope is defined. **Since A-1 (2026-07-05, see above) there are TWO scopes:**
+- `LIS_HISTORICAL_AUTHORIZED = {"20251","20261"}` — the FROZEN human-curated set (anti-replay guard).
+  `LIS_API_AUTHORIZED_SESSIONS` is a backward-compat alias of it (tools/replays keep frozen semantics).
+- the **live active session**, followed by the workers via `is_authorized_session(code, active_session=…)`
+  + `calendar_worker.session_follow_gate`'s one-time probe (`Sheet1!S2` cache; `AUTO_SESSION_FOLLOW=0` kill switch).
+- `is_authorized_session(code[, active_session])` / `assert_lis_authorized(code[, active_session])` (normalizes legacy 3-digit "261").
 
-Every code path that hits `lis.virginia.gov` or `lisfiles/*` is gated through it (2026-06-09):
-- `calendar_worker.py` — after deriving the active session, **HALT + CRITICAL alert** if not
-  authorized (no data calls; Sheet1 keeps last-known-good). 2027 self-announces until widened.
+Every code path that hits `lis.virginia.gov` or `lisfiles/*` is gated through it:
+- `calendar_worker.py` + `bill_tracker.py` — after deriving the active session, `session_follow_gate`
+  **auto-follows** it (probe-verified) or **HALTs + CRITICAL alert** only if LIS refuses the key / the kill
+  switch is set (no data calls; Sheet1 keeps last-known-good). **2027 is now followed automatically (A-1).**
 - `backend_worker.py` — `get_active_session()` now **only probes authorized-session blobs**
   (the old probe HEAD-hit `year+1` 2027 URLs in November — a ban risk), plus a main-flow gate.
 - `pages/ray2.py` + `calendar_xray.py` — `load_lis_schedule()` asserts before the Schedule call.
