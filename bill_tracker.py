@@ -50,10 +50,11 @@ from calendar_worker import (
     build_committee_maps,           # populates the global COMMITTEE_CODE_MAP …
     resolve_committee_from_refid,   # … which this reads (refid -> committee name + direct/vote source)
     notify_slack,
+    session_follow_gate,            # A-1: ban-safe auto-follow of the active session (shared with the worker)
     HEADERS,
     SPREADSHEET_ID,
 )
-from lis_authorization import is_authorized_session, normalize_session_code
+from lis_authorization import normalize_session_code  # is_authorized_session now via session_follow_gate (A-1)
 
 BILL_TRACKER_TAB = "Bill_Tracker"
 BILL_LIST_URL = "https://lis.virginia.gov/Legislation/api/getlegislationsessionlistasync"
@@ -598,9 +599,13 @@ def run_bill_tracker():
             return
         session_code = str(info["code"])
 
-        # LIS-authorization gate (ban-safe): never pull data for an unauthorized session.
-        if not is_authorized_session(session_code):
-            print(f"🛑 LIS authorization halt — session {session_code} not authorized; skipping.")
+        # LIS-authorization gate (ban-safe): never pull data for an unauthorized session. A-1: auto-follow
+        # the active session LIS declares (probe-verified in session_follow_gate) instead of a hard annual
+        # halt; historical sessions stay frozen; halts only if LIS actually refuses the key. Shares the S2
+        # probe cache with the calendar worker (the probe fires once across both).
+        proceed, halt_reason = session_follow_gate(session_code, http_session)
+        if not proceed:
+            _alert("CRITICAL", "API_FAILURE", f"LIS authorization halt — session {session_code}: {halt_reason}")
             return
 
         records, completeness = build_bill_records(http_session, session_code)

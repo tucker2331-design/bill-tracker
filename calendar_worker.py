@@ -331,7 +331,7 @@ from structural_router import normalize_refid as _normalize_refid  # float64/nan
 from structural_router import classify_schedule_type as _classify_schedule_type  # PR-C8.1b ScheduleTypeID
 from structural_router import validate_schedule_types as _validate_schedule_types  # ScheduleTypeID drift monitor
 from structural_router import validate_reference_types as _validate_reference_types  # ReferenceType drift monitor
-from lis_authorization import is_authorized_session  # LIS API 2025/2026-only gate (ban-safe)
+from lis_authorization import is_authorized_session, is_historical_authorized, normalize_session_code  # LIS API gate (ban-safe) + A-1 auto-follow
 # Single source of truth for the VA legislative business-hours window. Shared with
 # structural_router._has_meeting_time so the ministerial detector and this
 # last-resort renderer can never disagree about whether a timestamp is a real
@@ -4045,6 +4045,109 @@ def run_sequential_turing_machine(df_past, *,
     return _floor_hit, _floor_miss
 
 
+# A-1: bills-list DATA endpoint used to PROBE-verify authorization for a newly-active session (a 200 +
+# non-empty body proves the WebAPIKey is authorized for that session's data; a 401/403 proves it is not).
+_SESSION_PROBE_URL = "https://lis.virginia.gov/Legislation/api/getlegislationsessionlistasync"
+# State cell holding the last probe-verified auto-followed session, e.g. "verified:20271". Distinct from V1
+# (the sheet-session marker) — this records "we PROVED the key works for this new session", so the probe
+# fires ONCE per new session, not every cycle. Sheet1 is a 26-col grid; S is col 19 (well within it).
+SESSION_PROBE_CELL = "S2"
+
+
+def session_follow_gate(active_code, http_session, worksheet=None):
+    """A-1 (zero-touch, ban-safe): decide whether the LIVE worker may proceed for the Session-API-declared
+    active session `active_code`. Returns (proceed: bool, halt_reason: str | None).
+
+    Policy (docs/audits/fable_2026-07/autonomy_upgrades.md A-1):
+      • Historical-authorized session (frozen 20251/20261) → proceed, no probe (already human-vetted).
+      • Kill switch `AUTO_SESSION_FOLLOW=0` → do NOT follow; halt on any non-historical session (reverts to
+        the old manual annual checkpoint; owner control preserved).
+      • A NEW active session → probe ONCE (result cached in Sheet1!S2): one bills-list GET for that session;
+        HTTP 200 + non-empty ⇒ verified → proceed + emit a one-time FYI (not action-required); 401/403 ⇒
+        the key is genuinely unauthorized → HALT (the only remaining halt — a real anomaly, Standard #8);
+        any other outcome (timeout/5xx/empty) ⇒ inconclusive → halt THIS cycle only, retry next cycle (do
+        NOT cache, so a transient blip never sticks us).
+
+    Ban-safe because it only ever probes the session LIS ITSELF declares active, exactly once, and stops the
+    instant LIS refuses the key. Self-contained: uses its own lightweight gspread client for the S2 cell when
+    no `worksheet` is supplied (mirrors the X1 halt path), so it works before the worker's main handle opens.
+    Never raises — any internal error returns a conservative halt.
+    """
+    code = normalize_session_code(active_code)
+    # 1. Frozen historical set → always fine, no probe.
+    if is_historical_authorized(code):
+        return True, None
+    # 2. Kill switch → revert to the old halt-on-new-session checkpoint.
+    if os.environ.get("AUTO_SESSION_FOLLOW", "1") == "0":
+        return False, (f"AUTO_SESSION_FOLLOW=0 (kill switch): refusing to auto-follow new session {code}. "
+                       f"Add it to lis_authorization.LIS_HISTORICAL_AUTHORIZED or unset the kill switch.")
+
+    # Helper: read/write the S2 probe-cache cell, tolerating a missing main handle.
+    def _probe_cell():
+        if worksheet is not None:
+            return worksheet
+        creds = os.environ.get("GCP_CREDENTIALS")
+        if not creds:
+            return None
+        gc = gspread.authorize(Credentials.from_service_account_info(
+            json.loads(creds), scopes=["https://www.googleapis.com/auth/spreadsheets"]))
+        return gc.open_by_key(SPREADSHEET_ID).worksheet("Sheet1")
+
+    try:
+        ws = _probe_cell()
+    except Exception as _cell_err:
+        # Can't reach the cache — do NOT blindly proceed to a new session; halt this cycle (safe).
+        return False, f"could not read the S2 probe cache ({type(_cell_err).__name__}: {_cell_err}); halting this cycle."
+
+    # 3. Already probe-verified this session? Then proceed silently.
+    already = ""
+    if ws is not None:
+        try:
+            already = (ws.acell(SESSION_PROBE_CELL).value or "").strip()
+        except Exception as _read_err:
+            print(f"⚠️ A-1: couldn't read {SESSION_PROBE_CELL} ({_read_err}); will re-probe.")
+    if already == f"verified:{code}":
+        return True, None
+
+    # 4. Probe the bills-list DATA endpoint for the new session (ONE request).
+    print(f"🔎 A-1: new active session {code} (not historical) — probe-verifying the API key for it…")
+    try:
+        resp = http_session.get(_SESSION_PROBE_URL, headers=HEADERS, params={"sessionCode": code}, timeout=15)
+    except Exception as _probe_err:
+        return False, (f"probe request for session {code} failed ({type(_probe_err).__name__}: {_probe_err}) "
+                       f"— inconclusive; halting this cycle, will retry next cycle.")
+    if resp.status_code in (401, 403):
+        return False, (f"🛑 LIS refused the API key for session {code} (HTTP {resp.status_code}). The key is "
+                       f"NOT authorized for this session — halting to avoid a ban. This is the genuine "
+                       f"'terms changed / key not carried forward' anomaly (Standard #8): review the portal.")
+    if resp.status_code != 200:
+        return False, (f"probe for session {code} returned HTTP {resp.status_code} — inconclusive; halting "
+                       f"this cycle, will retry next cycle.")
+    # 200 — confirm a non-empty body (an authorized-but-empty session would be odd; treat empty as inconclusive).
+    try:
+        body = resp.json()
+        nonempty = bool(body) and (len(body) > 0 if isinstance(body, (list, dict)) else True)
+    except Exception:
+        nonempty = bool((resp.text or "").strip())
+    if not nonempty:
+        return False, (f"probe for session {code} returned 200 but an EMPTY body — inconclusive; halting this "
+                       f"cycle, will retry next cycle.")
+
+    # Verified. Cache it (so the probe fires once) and emit the one-time FYI.
+    if ws is not None:
+        try:
+            ws.update_acell(SESSION_PROBE_CELL, f"verified:{code}")
+        except Exception as _w_err:
+            print(f"⚠️ A-1: couldn't persist {SESSION_PROBE_CELL}=verified:{code} ({_w_err}) — will re-probe next cycle (still safe).")
+    _fyi = (f"ℹ️ Auto-followed LIS into session {code} (Session API declared it active; API-key probe "
+            f"returned HTTP 200 with data). NO ACTION NEEDED — the workbook rolls over automatically (A-2). "
+            f"Portal terms: re-review lis.virginia.gov/developers wording at your convenience "
+            f"(docs/knowledge/lis_api_authorization.md). Kill switch: AUTO_SESSION_FOLLOW=0.")
+    print(_fyi)
+    notify_slack(_fyi)   # notify_slack catches + logs its own failures (no bare except:pass — CodeRabbit)
+    return True, None
+
+
 def run_calendar_update():
     with _lis_count_lock:
         lis_request_count["n"] = 0  # guardrail #4: reset the per-cycle request count at CYCLE start
@@ -4554,11 +4657,24 @@ def run_calendar_update():
     # opens (~L2955); because we return early here, we persist the halt DIRECTLY to
     # Sheet1!X1 (the cell the circuit breaker uses), so it is never silently lost
     # (Gemini #110 CRITICAL). Last-known-good Sheet1 data is otherwise preserved.
-    if not is_authorized_session(ACTIVE_SESSION):
-        _halt = (f"🛑 LIS AUTHORIZATION HALT {now:%Y-%m-%d %H:%M}: active session "
-                 f"{ACTIVE_SESSION} not in the authorized set (2025/2026 only). Skipped ALL LIS "
-                 f"calls this cycle to avoid an API ban. If LIS authorized this session, add it to "
-                 f"lis_authorization.LIS_API_AUTHORIZED_SESSIONS.")
+    # A-1 (2026-07-05): instead of a hard halt on any non-{20251,20261} session, auto-FOLLOW the session LIS
+    # declares active — but only after a one-time API-key probe verifies it (session_follow_gate). Historical
+    # sessions stay frozen; the probe halts iff LIS actually refuses the key. `http_session` was already used
+    # for get_active_session_info above, so this reuses it (no new session).
+    # OFFLINE GUARD (CodeRabbit): when session_data is falsy, ACTIVE_SESSION is a YEAR-DERIVED fallback, NOT a
+    # session LIS declared active — so we must NOT auto-follow it (that would probe a session LIS never
+    # confirmed). A historical fallback still proceeds (reads its cached blob); a non-historical one halts
+    # until the Session API comes back and actually declares it active.
+    if not session_data and not is_historical_authorized(ACTIVE_SESSION):
+        _proceed, _halt_reason = (False,
+            "Session API is unavailable, so the year-derived fallback session was NOT LIS-declared active; "
+            "refusing to auto-follow until the Session API confirms it.")
+    else:
+        _proceed, _halt_reason = session_follow_gate(ACTIVE_SESSION, http_session)
+    if not _proceed:
+        _halt = (f"🛑 LIS AUTHORIZATION HALT {now:%Y-%m-%d %H:%M}: active session {ACTIVE_SESSION} — "
+                 f"{_halt_reason} Skipped ALL LIS calls this cycle to avoid an API ban; last-known-good "
+                 f"Sheet1 preserved.")
         print(_halt)
         try:
             _creds = os.environ.get("GCP_CREDENTIALS")
@@ -7741,6 +7857,22 @@ def run_calendar_update():
                         status="WARN", category="API_FAILURE", severity="WARN",
                         dedup_key="sheet_session_write_fail",
                     )
+
+                # A-1 (Gemini CRITICAL fold-in): the session-probe cache S2 is ALSO wiped by worksheet.clear()
+                # above. Restore it unconditionally each successful cycle for a FOLLOWED (non-historical)
+                # session — reaching the success path means the gate already probe-verified it — else S2 would
+                # be empty next cycle and the "probe once" design would re-probe LIS EVERY cycle (a ban risk;
+                # pre-push audit #11 side-effect-gating). Historical sessions never set S2 (no probe).
+                if not is_historical_authorized(ACTIVE_SESSION):
+                    try:
+                        worksheet.update_acell(SESSION_PROBE_CELL, f"verified:{ACTIVE_SESSION}")
+                    except Exception as _sp_write_err:
+                        push_system_alert(
+                            f"Could not restore session-probe cache Sheet1!{SESSION_PROBE_CELL} "
+                            f"after a successful cycle: {_sp_write_err}",
+                            status="WARN", category="API_FAILURE", severity="WARN",
+                            dedup_key="session_probe_cell_write_fail",
+                        )
 
                 _phase("Sheet1 clear() + full update() + state-cell writes")
                 print("✅ SUCCESS: Regression Test Build is complete.")
