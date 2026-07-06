@@ -8,6 +8,19 @@ status: active
 
 Append-only, reverse-chronological (newest at top). Each entry opens with `## [YYYY-MM-DD] <kind> | <title>` so `grep "^## \[" log.md | head -20` gives a parseable timeline.
 
+## [2026-07-06] pr | #197 + #198 + #200 + #201 ALL MERGED (squash) — owner "merge if done reviewing"
+
+The four review-folded PRs landed on main together. Merge order handled conflict risk: #197/#198 first got
+`main` merged into their branches to pick up the #199 Cloudflare fix (their Workers-Build check had failed
+only because they predated `wrangler.toml`); then squash-merged #197 (freshness clocks), #198 (activity-
+correlated cadence + the owner's bill-worker equalization: bill cron `40 */6`→`*/15`, IN_WINDOW floor 0 to
+match the calendar's 15-min track, EMPTY 6h, and its OWN `bill-tracker` concurrency lock so calendar's
+in-window cycles can't starve it), #200 (F-3 Health rings), #201 (A-1 self-extending session auth). **#198 +
+#201 both touch calendar_worker.py + bill_tracker.py — combined `main` re-validated after the merges:**
+`py_compile` clean, 37 cadence tests + 19 auth tests pass, both workers import-clean, web `tsc` + `vite
+build` clean, and both integrations confirmed coexisting (cadence gate + session-follow gate both present;
+bill cron `*/15` + own lock). Cloudflare Pages deploy is green (#199 `wrangler.toml` SPA fix).
+
 ## [2026-07-06] pr | #201 OPENED — A-1 self-extending session authorization (Fable queue #1; halt-preventer)
 
 The top Fable-audit priority ([[audits/fable_2026-07/autonomy_upgrades]] A-1) — without it the whole system
