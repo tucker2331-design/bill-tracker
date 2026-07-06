@@ -1,4 +1,0 @@
-# Cloudflare Pages SPA fallback: serve index.html for any path that isn't a real
-# static asset, so the app never 404s on a refresh or a future client-side route.
-# Real files under /assets, /favicon.svg, /icons.svg are served directly first.
-/*    /index.html   200

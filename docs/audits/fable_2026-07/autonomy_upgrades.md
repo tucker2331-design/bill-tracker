@@ -33,6 +33,13 @@ So: session *detection* and capacity *awareness* were built; session *authorizat
 ---
 
 ## A-1 · Self-extending session authorization (auto-follow the legislature)
+> **STATUS 2026-07-05: SHIPPED (pending merge) — PR #201.** Implemented as specified: `lis_authorization.py`
+> split into `LIS_HISTORICAL_AUTHORIZED` (frozen) + the active-session follow (`is_authorized_session(code,
+> active_session=…)`, backward-compatible; tools unchanged); `calendar_worker.session_follow_gate` does the
+> one-time bills-list probe cached in `Sheet1!S2`, FYI-on-follow, HALT-on-401/403, `AUTO_SESSION_FOLLOW=0`
+> kill switch; both workers wired. 16 unit tests (`lis_authorization_test.py`). **Deferred (not halt-critical):**
+> step 6 front-end `session_code` stamp + `CROSSOVER_BY_SESSION` derive-or-absent; step 5 portal-wording
+> re-review (the probe backstops it). See [[knowledge/lis_api_authorization]].
 
 **Owner decision recorded:** the system follows LIS's own declaration of the active session
 automatically. The human is informed, never required.

@@ -10,6 +10,10 @@ Owner notes captured while the Cloudflare deploy was being fixed. All "for later
 territory). Each item has the diagnosis + the recommended fix so Opus executes without re-deriving.
 
 ## F-1 · The two freshness clocks disagree ("4h at top, 1h in the Calendar") — confusing
+> **STATUS 2026-07-04: SHIPPED (pending merge) — PR #197.** Implemented as the "show both clocks together"
+> variant of the recommended fix below: `TrustHeader` renders "● Bills as of …" + "🗓 Calendar as of …"
+> side by side; the in-Calendar pill was removed (moved up, not duplicated). Display-only, no cron change.
+> The deeper single-manifest unification (Blueprint 1) still supersedes this later.
 - **Diagnosis (correct observation):** the top trust header shows the **bill backend's** `dataAsOf`
   (`bill_tracker.yml`, cron `40 */6 * * *` = every 6h → up to 6h old). The Calendar tab shows the
   **calendar worker's** `AA1` freshness (`calendar_worker.yml`, cron `0 */3 * * *` = every 3h → fresher).
@@ -30,6 +34,11 @@ territory). Each item has the diagnosis + the recommended fix so Opus executes w
   shipped standalone first.
 
 ## F-2 · Cadence is FIXED, not activity-correlated ("does it speed up with schedule items, slow without?")
+> **STATUS 2026-07-05: BUILT (in review) — PR #198.** Guardrail #5 shipped exactly as scoped below: both
+> workers now fire on a fast cron and self-throttle to real meeting windows (calendar ~15m in-window /
+> ~3h quiet; bill ~hourly active / ~6h quiet), keyed off ONE structural signal (`Sheet1!AC1`). So the
+> answer to the owner's question is now **YES** — it speeds up with schedule items and slows without.
+> Details in [[knowledge/lis_api_safety]] (guardrail #5 row + cadence ledger) and `cadence.py`.
 - **Answer: NO — not yet.** Both workers run fixed clocks (calendar every 3h, bills every 6h). The
   meeting-driven / activity-correlated cadence the owner is describing is **guardrail #5 in
   [[knowledge/lis_api_safety]], explicitly ❌ NOT PRESENT** — it's a documented owner proposal (2026-06-17)
@@ -45,6 +54,12 @@ territory). Each item has the diagnosis + the recommended fix so Opus executes w
   section of [[knowledge/lis_api_safety]].
 
 ## F-3 · Health "at a glance" rings — confusing what each represents; make warnings actionable
+> **STATUS 2026-07-05: SHIPPED (pending merge) — PR #200.** All three parts done: F-3a the two lines are now
+> labeled "Status:" (live rollup) vs "Verified:" (outside guard); F-3b Freshness shows an explicit muted
+> "Verified: — no outside check applies" (all four rings parallel), others show "Verified: checking…" while
+> guards load; F-3c the Status rollup names the offending segment on hover and, when non-green, is a click
+> target (↓) that scrolls to that category's detail section (Stability→Alerts, Freshness→clocks, etc.).
+> Preview-verified (Stability "1 warning ↓" scrolls to Alerts; 0 console errors).
 Owner: *"the one ring with a warning says Sustainability audit check but just says 1 warning above it… what
 do the top and bottom each represent, and why is the bottom-left missing a bottom one. Have the warning say
 more or be clickable so it takes you to where the warning is."*
