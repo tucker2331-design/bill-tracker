@@ -4183,6 +4183,28 @@ def session_follow_gate(active_code, http_session, worksheet=None):
     return True, None
 
 
+def _quiet_window_overlap_minutes(start_utc, end_utc, quiet_start_hour=23, quiet_end_hour=6, step_min=5):
+    """Minutes of the interval [start_utc, end_utc] that fall inside the daily ET quiet window
+    (default 11pm–6am ET, midnight-spanning). Used to compute the ACTIVE-HOURS portion of a cycle gap so a
+    normal overnight self-throttle / quiet-hours skip (guardrail #5) is NOT mistaken for a missed-cycle
+    outage — the gap detector's WARN used to fire every morning on the benign overnight span (owner report,
+    2026-07-07). Walks the interval in small ET steps so it's DST-correct without hand-rolling boundary math
+    (a multi-day gap is only a few hundred cheap steps). Pure except the tz lookup; unit-tested."""
+    if end_utc <= start_utc:
+        return 0.0
+    et = pytz.timezone("America/New_York")
+    total = 0.0
+    step = timedelta(minutes=step_min)
+    t = start_utc
+    while t < end_utc:
+        h = t.astimezone(et).hour
+        in_quiet = (h >= quiet_start_hour) or (h < quiet_end_hour)   # 23→6 spans midnight
+        if in_quiet:
+            total += min(float(step_min), (end_utc - t).total_seconds() / 60.0)
+        t += step
+    return total
+
+
 def run_calendar_update():
     with _lis_count_lock:
         lis_request_count["n"] = 0  # guardrail #4: reset the per-cycle request count at CYCLE start
@@ -5063,21 +5085,18 @@ def run_calendar_update():
     # routed through the existing push_system_alert → Bug_Logs path. Owner may
     # later route these through a separate dashboard / push channel. See
     # docs/ideas/future_improvements.md (PR-C2 7-day alert routing).
-    # PR-C7.1f: gap thresholds are derived from the SCHEDULED cadence + the
-    # overnight quiet window, NOT the old 15-min assumption. The cron is now
-    # every 3h (calendar_worker.yml) and scheduled runs self-skip 11pm-6am ET
-    # (the __main__ quiet gate). The largest HEALTHY gap is therefore the
-    # overnight span (~12h), so the old `60 min = outage` would fire a false
-    # CRITICAL + trigger wasteful Part-C reconciliation (extra LIS calls)
-    # EVERY cycle (Codex P2, PR #62). Keep these in sync with the cron cadence
-    # and the quiet window if either changes (e.g. 30-min cadence in-session).
-    SCHEDULE_CADENCE_MINUTES = 180         # matches cron '0 */3 * * *'
-    QUIET_WINDOW_MINUTES = 7 * 60          # 11pm-6am ET overnight skip
-    # WARN at 2 missed active cycles; CRITICAL only PAST the worst healthy
-    # overnight gap (quiet window bridged by the cadence on both ends), so
-    # reconciliation fires on a REAL outage, never on the nightly skip.
-    GAP_WARN_MINUTES = SCHEDULE_CADENCE_MINUTES * 2                          # 360
-    GAP_CRITICAL_MINUTES = QUIET_WINDOW_MINUTES + SCHEDULE_CADENCE_MINUTES * 2  # 780
+    # Gap thresholds are compared against the ACTIVE-HOURS gap (the raw gap MINUS its overnight-quiet
+    # overlap, via _quiet_window_overlap_minutes), so a normal overnight self-throttle / quiet-hours skip
+    # reads as ~0 excess and never alerts (owner 2026-07-07: the old raw-gap WARN fired every morning). The
+    # cron is now `*/15` and self-throttles to ~3h off-season (EMPTY tier, guardrail #5), so ~180 min is the
+    # expected off-season interval. Because we already subtract the quiet window, the thresholds are pure
+    # ACTIVE-hours multiples of that interval — no quiet-window term needed anymore.
+    SCHEDULE_CADENCE_MINUTES = 180         # expected off-season (EMPTY-tier) interval; cron */15 self-throttles
+    QUIET_WINDOW_MINUTES = 7 * 60          # 11pm-6am ET overnight skip (informational; subtracted per-gap now)
+    # WARN at ~2 missed ACTIVE cycles; CRITICAL at ~4 — both in active hours, so a real DAYTIME outage fires
+    # but the nightly skip never does.
+    GAP_WARN_MINUTES = SCHEDULE_CADENCE_MINUTES * 2                          # 360 active min
+    GAP_CRITICAL_MINUTES = SCHEDULE_CADENCE_MINUTES * 4                      # 720 active min
     GAP_STALE_DAYS = 30                    # cursor too old to trust for recovery
     GAP_RECONCILIATION_MAX_DAYS = 7        # hard cap for Part C re-poll window
 
@@ -5138,6 +5157,10 @@ def run_calendar_update():
             else:
                 gap_minutes = round(_delta_seconds / 60.0, 2)
                 _gap_window_start_utc = _y1_parsed  # usable anchor for Part C
+                # ACTIVE-hours gap = raw gap MINUS its overnight-quiet overlap, so the benign nightly skip
+                # (and any self-throttle inside quiet hours) doesn't count toward "missed cycle" (owner 2026-07-07).
+                _quiet_overlap_min = _quiet_window_overlap_minutes(_y1_parsed, _cycle_start_utc)
+                _active_gap_min = max(0.0, gap_minutes - _quiet_overlap_min)
                 if _breaker_carryforward_detected:
                     gap_cause = "breaker_carryforward"
                     # Carry-forward alert already fired in the W1 block above;
@@ -5147,25 +5170,23 @@ def run_calendar_update():
                         f"🕒 Gap detection: breaker_carryforward — gap={gap_minutes:.1f} min "
                         f"(trip_utc={_breaker_carryforward_trip_utc})"
                     )
-                elif _delta_seconds >= GAP_CRITICAL_MINUTES * 60:
+                elif _active_gap_min >= GAP_CRITICAL_MINUTES:
                     gap_cause = "outage"
                     push_system_alert(
-                        f"Cycle gap is {gap_minutes:.1f} min (>{GAP_CRITICAL_MINUTES}) — "
-                        f"exceeds the worst healthy overnight gap since last successful "
-                        f"overwrite at {last_successful_cycle_end_utc}; likely a real "
-                        f"outage, not the nightly quiet skip. PR-C2 Part C will attempt "
-                        f"reconciliation if gap ≤ {GAP_RECONCILIATION_MAX_DAYS} days.",
+                        f"Cycle gap is {gap_minutes:.1f} min ({_active_gap_min:.0f} min in ACTIVE hours, "
+                        f">{GAP_CRITICAL_MINUTES}) since last successful overwrite at "
+                        f"{last_successful_cycle_end_utc} — a real DAYTIME outage, not the nightly quiet skip. "
+                        f"PR-C2 Part C will attempt reconciliation if gap ≤ {GAP_RECONCILIATION_MAX_DAYS} days.",
                         status="CRITICAL",
                         category="API_FAILURE",
                         severity="CRITICAL",
                         dedup_key=f"gap_critical::{_cycle_start_utc.strftime('%Y-%m-%d %H')}",
                     )
-                elif _delta_seconds >= GAP_WARN_MINUTES * 60:
+                elif _active_gap_min >= GAP_WARN_MINUTES:
                     gap_cause = "outage"
                     push_system_alert(
-                        f"Cycle gap is {gap_minutes:.1f} min (>{GAP_WARN_MINUTES}) — "
-                        f"2+ missed scheduled cycles since {last_successful_cycle_end_utc} "
-                        f"(an overnight quiet skip can land here and is benign).",
+                        f"Cycle gap is {gap_minutes:.1f} min ({_active_gap_min:.0f} min in ACTIVE hours, "
+                        f">{GAP_WARN_MINUTES}) — 2+ missed DAYTIME cycles since {last_successful_cycle_end_utc}.",
                         status="WARN",
                         category="API_FAILURE",
                         severity="WARN",
