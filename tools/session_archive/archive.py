@@ -89,18 +89,18 @@ def _verify_copy(archive, target_name, src_ws):
     return int(arch_ws.row_count)
 
 
-def _copy_tab(src_ws, dest_book, target_name, dest_id=ARCHIVE_ID):
-    """Copy src_ws into `dest_book` (default the ARCHIVE workbook; pass dest_id=OPS_ID + the ops book for the
-    A-2 shard) as `target_name`, replacing any existing tab of that name (idempotent). Uses copy_to + ONE
-    atomic batch_update (delete-old-then-rename, in that order so there's no title collision and the dest
-    never drops to 0 sheets). No full worksheet-list fetch in the loop, and no reliance on the gspread
-    Worksheet constructor / get_worksheet_by_id typing — version-robust (Gemini #131). VERIFIES the copy
-    landed intact before returning (confirm-before-trust); raises on mismatch."""
+def _copy_tab(src_ws, dest_book, target_name):
+    """Copy src_ws into `dest_book` (the ARCHIVE workbook for snapshot/migrate; the OPS workbook for the A-2
+    shard) as `target_name`, replacing any existing tab of that name (idempotent). Uses copy_to + ONE atomic
+    batch_update (delete-old-then-rename, in that order so there's no title collision and the dest never
+    drops to 0 sheets). No full worksheet-list fetch in the loop, and no reliance on the gspread Worksheet
+    constructor / get_worksheet_by_id typing — version-robust (Gemini #131). VERIFIES the copy landed intact
+    before returning (confirm-before-trust); raises on mismatch."""
     try:
         old_id = dest_book.worksheet(target_name).id  # a pre-existing same-named target, if any
     except gspread.exceptions.WorksheetNotFound:
         old_id = None
-    props = src_ws.copy_to(dest_id)  # Sheets copyTo -> {'sheetId':..., 'title':'Copy of ...'}
+    props = src_ws.copy_to(dest_book.id)  # dest ID from the book itself — can't mismatch dest_book (Gemini #208)
     requests = []
     if old_id is not None:
         requests.append({"deleteSheet": {"sheetId": int(old_id)}})  # drop the stale target first
@@ -169,7 +169,7 @@ def shard_witness(main, archive):
         print(f"{tab} not in VA·Live — nothing to shard (already moved, or none created yet).")
         return 0
     ops = main.client.open_by_key(OPS_ID)
-    rows = _copy_tab(src, ops, tab, dest_id=OPS_ID)   # copies AND verifies (raises on mismatch)
+    rows = _copy_tab(src, ops, tab)   # copies AND verifies (raises on mismatch)
     print(f"✅ Copied {tab} → VA·Ops ({rows:,} rows, verified present).")
     if (os.environ.get("CONFIRM") or "").lower() != "delete":
         print(f"[copy-only] {tab} is now in VA·Ops. Re-run with CONFIRM=delete to remove it from VA·Live "
