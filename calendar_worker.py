@@ -4187,7 +4187,7 @@ def _quiet_window_overlap_minutes(start_utc, end_utc, quiet_start_hour=23, quiet
     outage — the gap detector's WARN used to fire every morning on the benign overnight span (owner report,
     2026-07-07). Walks the interval in small ET steps so it's DST-correct without hand-rolling boundary math
     (a multi-day gap is only a few hundred cheap steps). Pure except the tz lookup; unit-tested."""
-    if end_utc <= start_utc:
+    if end_utc <= start_utc or step_min <= 0:   # step_min<=0 would loop forever (Gemini #206)
         return 0.0
     et = pytz.timezone("America/New_York")
     total = 0.0
@@ -4195,11 +4195,27 @@ def _quiet_window_overlap_minutes(start_utc, end_utc, quiet_start_hour=23, quiet
     t = start_utc
     while t < end_utc:
         h = t.astimezone(et).hour
-        in_quiet = (h >= quiet_start_hour) or (h < quiet_end_hour)   # 23→6 spans midnight
+        if quiet_start_hour > quiet_end_hour:   # midnight-spanning window (the 23→6 default)
+            in_quiet = (h >= quiet_start_hour) or (h < quiet_end_hour)
+        else:                                   # within-day window (start < end) — don't invert (Gemini #206)
+            in_quiet = quiet_start_hour <= h < quiet_end_hour
         if in_quiet:
             total += min(float(step_min), (end_utc - t).total_seconds() / 60.0)
         t += step
     return total
+
+
+# Cycle-gap thresholds — MODULE-LEVEL so health_gap_test.py imports the SAME values (no drift; CodeRabbit
+# #206). Compared against the ACTIVE-HOURS gap (raw minus the overnight-quiet overlap above), so a normal
+# overnight self-throttle / quiet-hours skip reads ~0 excess and never alerts, while a real DAYTIME outage
+# still fires. The cron is `*/15` self-throttling to ~3h off-season (EMPTY tier), so ~180 min is the expected
+# off-season interval; thresholds are pure active-hours multiples (the quiet window is already subtracted).
+SCHEDULE_CADENCE_MINUTES = 180             # expected off-season (EMPTY-tier) interval
+QUIET_WINDOW_MINUTES = 7 * 60              # 11pm-6am ET overnight skip (informational)
+GAP_WARN_MINUTES = SCHEDULE_CADENCE_MINUTES * 2       # 360 active min = ~2 missed daytime cycles
+GAP_CRITICAL_MINUTES = SCHEDULE_CADENCE_MINUTES * 4   # 720 active min = ~4
+GAP_STALE_DAYS = 30                        # cursor too old to trust for recovery
+GAP_RECONCILIATION_MAX_DAYS = 7            # hard cap for Part C re-poll window
 
 
 def run_calendar_update():
@@ -5083,20 +5099,10 @@ def run_calendar_update():
     # routed through the existing push_system_alert → Bug_Logs path. Owner may
     # later route these through a separate dashboard / push channel. See
     # docs/ideas/future_improvements.md (PR-C2 7-day alert routing).
-    # Gap thresholds are compared against the ACTIVE-HOURS gap (the raw gap MINUS its overnight-quiet
-    # overlap, via _quiet_window_overlap_minutes), so a normal overnight self-throttle / quiet-hours skip
-    # reads as ~0 excess and never alerts (owner 2026-07-07: the old raw-gap WARN fired every morning). The
-    # cron is now `*/15` and self-throttles to ~3h off-season (EMPTY tier, guardrail #5), so ~180 min is the
-    # expected off-season interval. Because we already subtract the quiet window, the thresholds are pure
-    # ACTIVE-hours multiples of that interval — no quiet-window term needed anymore.
-    SCHEDULE_CADENCE_MINUTES = 180         # expected off-season (EMPTY-tier) interval; cron */15 self-throttles
-    QUIET_WINDOW_MINUTES = 7 * 60          # 11pm-6am ET overnight skip (informational; subtracted per-gap now)
-    # WARN at ~2 missed ACTIVE cycles; CRITICAL at ~4 — both in active hours, so a real DAYTIME outage fires
-    # but the nightly skip never does.
-    GAP_WARN_MINUTES = SCHEDULE_CADENCE_MINUTES * 2                          # 360 active min
-    GAP_CRITICAL_MINUTES = SCHEDULE_CADENCE_MINUTES * 4                      # 720 active min
-    GAP_STALE_DAYS = 30                    # cursor too old to trust for recovery
-    GAP_RECONCILIATION_MAX_DAYS = 7        # hard cap for Part C re-poll window
+    # Gap thresholds (GAP_WARN_MINUTES / GAP_CRITICAL_MINUTES / SCHEDULE_CADENCE_MINUTES / QUIET_WINDOW_MINUTES
+    # / GAP_STALE_DAYS / GAP_RECONCILIATION_MAX_DAYS) are MODULE-LEVEL (defined next to
+    # _quiet_window_overlap_minutes) so health_gap_test.py imports the SAME constants — single source, no
+    # drift (CodeRabbit #206). They are compared against the ACTIVE-HOURS gap (raw minus quiet overlap).
 
     _cycle_start_utc = datetime.now(timezone.utc)
     gap_minutes = None              # None when unknown (first_run / malformed)
