@@ -45,7 +45,11 @@ from datetime import datetime, timedelta, timezone
 import gspread
 from google.oauth2.service_account import Credentials
 
-SPREADSHEET_ID = "1PQDtaTTUeYv781bx4_ZiehcvbEmUt8t7jFmZYJoJGKM"
+SPREADSHEET_ID = "1PQDtaTTUeYv781bx4_ZiehcvbEmUt8t7jFmZYJoJGKM"   # VA · Live
+OPS_WORKBOOK_ID = "1X7wa4brFROP9Bn81Esf4z3zjlxTZvpKeUdPWpyBkD3c"  # VA · Ops
+# A-2 Part 2: follow the witness to wherever the worker writes it. Default VA·Live (WITNESS_WORKBOOK unset);
+# VA·Ops once the owner shards it and sets WITNESS_WORKBOOK=ops — keep this prune pointed at the SAME book.
+WITNESS_WORKBOOK_ID = OPS_WORKBOOK_ID if os.environ.get("WITNESS_WORKBOOK", "").strip().lower() == "ops" else SPREADSHEET_ID
 WITNESS_TAB = "Schedule_Witness"
 RETENTION_DAYS = 90  # mirrors calendar_worker.WITNESS_RETENTION_DAYS; the sustainability
                      # audit cross-checks the live result, so any drift surfaces there.
@@ -83,7 +87,7 @@ def main() -> int:
         print("ERROR: GCP_CREDENTIALS not set.", file=sys.stderr)
         return 1
     gc = gspread.authorize(Credentials.from_service_account_info(json.loads(creds), scopes=SCOPES))
-    sheet = gc.open_by_key(SPREADSHEET_ID)
+    sheet = gc.open_by_key(WITNESS_WORKBOOK_ID)   # A-2 Part 2: VA·Live by default, VA·Ops when sharded
     try:
         ws = sheet.worksheet(WITNESS_TAB)
     except gspread.WorksheetNotFound:

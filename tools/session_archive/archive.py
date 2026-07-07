@@ -18,6 +18,9 @@ Modes (MODE env or argv[1]):
   migrate-c7        — copy the `C7_1a_*` audit tabs -> archive (PRESERVE), verify the
                       copies exist, then ONLY IF CONFIRM=delete remove them from the
                       live workbook to reclaim cap. Copy-only by default.
+  shard-witness     — A-2 Part 2: copy `Schedule_Witness` VA·Live -> VA·Ops (verify),
+                      then ONLY IF CONFIRM=delete remove it from VA·Live. Afterwards set
+                      the worker variable WITNESS_WORKBOOK=ops. Copy-only by default.
 
 Never deletes from the live workbook unless the copy is confirmed present in the archive.
 """
@@ -30,8 +33,9 @@ import sys
 import gspread
 from google.oauth2.service_account import Credentials
 
-MAIN_ID = "1PQDtaTTUeYv781bx4_ZiehcvbEmUt8t7jFmZYJoJGKM"
-ARCHIVE_ID = "1AA-dCUDAPvq59Hv01DqteEquBJ1kkqI0QR5ECd10QeA"
+MAIN_ID = "1PQDtaTTUeYv781bx4_ZiehcvbEmUt8t7jFmZYJoJGKM"       # VA · Live
+ARCHIVE_ID = "1AA-dCUDAPvq59Hv01DqteEquBJ1kkqI0QR5ECd10QeA"   # VA · Archive
+OPS_ID = "1X7wa4brFROP9Bn81Esf4z3zjlxTZvpKeUdPWpyBkD3c"        # VA · Ops (A-2 Part 2 shard target)
 C7_PREFIX = "C7_1a"  # the dead PR-C7.1a audit namespace
 SCOPES = ["https://www.googleapis.com/auth/spreadsheets"]
 
@@ -85,26 +89,26 @@ def _verify_copy(archive, target_name, src_ws):
     return int(arch_ws.row_count)
 
 
-def _copy_tab(src_ws, archive, target_name):
-    """Copy src_ws into the archive as `target_name`, replacing any existing tab of
-    that name (idempotent). Uses copy_to + ONE atomic batch_update (delete-old-then-
-    rename, in that order so there's no title collision and the archive never drops to
-    0 sheets). No full worksheet-list fetch in the loop, and no reliance on the gspread
-    Worksheet constructor / get_worksheet_by_id typing — version-robust (Gemini #131).
-    VERIFIES the copy landed intact before returning (confirm-before-trust); raises on mismatch."""
+def _copy_tab(src_ws, dest_book, target_name, dest_id=ARCHIVE_ID):
+    """Copy src_ws into `dest_book` (default the ARCHIVE workbook; pass dest_id=OPS_ID + the ops book for the
+    A-2 shard) as `target_name`, replacing any existing tab of that name (idempotent). Uses copy_to + ONE
+    atomic batch_update (delete-old-then-rename, in that order so there's no title collision and the dest
+    never drops to 0 sheets). No full worksheet-list fetch in the loop, and no reliance on the gspread
+    Worksheet constructor / get_worksheet_by_id typing — version-robust (Gemini #131). VERIFIES the copy
+    landed intact before returning (confirm-before-trust); raises on mismatch."""
     try:
-        old_id = archive.worksheet(target_name).id  # a pre-existing same-named target, if any
+        old_id = dest_book.worksheet(target_name).id  # a pre-existing same-named target, if any
     except gspread.exceptions.WorksheetNotFound:
         old_id = None
-    props = src_ws.copy_to(ARCHIVE_ID)  # Sheets copyTo -> {'sheetId':..., 'title':'Copy of ...'}
+    props = src_ws.copy_to(dest_id)  # Sheets copyTo -> {'sheetId':..., 'title':'Copy of ...'}
     requests = []
     if old_id is not None:
         requests.append({"deleteSheet": {"sheetId": int(old_id)}})  # drop the stale target first
     requests.append({"updateSheetProperties": {
         "properties": {"sheetId": int(props["sheetId"]), "title": target_name},
         "fields": "title"}})
-    archive.batch_update({"requests": requests})
-    return _verify_copy(archive, target_name, src_ws)   # raises unless the snapshot is confirmed intact
+    dest_book.batch_update({"requests": requests})
+    return _verify_copy(dest_book, target_name, src_ws)   # raises unless the copy is confirmed intact
 
 
 def verify(main, archive):
@@ -152,10 +156,36 @@ def migrate_c7(main, archive):
     return 0
 
 
+def shard_witness(main, archive):
+    """A-2 Part 2: relocate `Schedule_Witness` from VA·Live → VA·Ops (copy-verify-then-delete), then the
+    worker keeps the witness lean in VA·Ops. Copy-only by default (safe); re-run with CONFIRM=delete to
+    remove it from VA·Live once the copy is verified present. AFTER a confirmed delete, set the worker
+    variable WITNESS_WORKBOOK=ops so it writes/reads the witness in VA·Ops. Never deletes before the copy
+    verifies (the same confirm-before-destroy ethic as migrate-c7)."""
+    tab = "Schedule_Witness"
+    try:
+        src = main.worksheet(tab)
+    except gspread.exceptions.WorksheetNotFound:
+        print(f"{tab} not in VA·Live — nothing to shard (already moved, or none created yet).")
+        return 0
+    ops = main.client.open_by_key(OPS_ID)
+    rows = _copy_tab(src, ops, tab, dest_id=OPS_ID)   # copies AND verifies (raises on mismatch)
+    print(f"✅ Copied {tab} → VA·Ops ({rows:,} rows, verified present).")
+    if (os.environ.get("CONFIRM") or "").lower() != "delete":
+        print(f"[copy-only] {tab} is now in VA·Ops. Re-run with CONFIRM=delete to remove it from VA·Live "
+              f"and reclaim its cells, THEN set the worker variable WITNESS_WORKBOOK=ops.")
+        return 0
+    main.batch_update({"requests": [{"deleteSheet": {"sheetId": int(src.id)}}]})
+    print(f"✅ Removed {tab} from VA·Live (reclaimed its cells; preserved + verified in VA·Ops). "
+          f"NOW set the worker variable WITNESS_WORKBOOK=ops so it uses VA·Ops going forward.")
+    return 0
+
+
 def main_():
     mode = (os.environ.get("MODE") or (sys.argv[1] if len(sys.argv) > 1 else "verify")).strip().lower()
     main, archive = _open()
-    dispatch = {"verify": verify, "snapshot-session": snapshot_session, "migrate-c7": migrate_c7}
+    dispatch = {"verify": verify, "snapshot-session": snapshot_session, "migrate-c7": migrate_c7,
+                "shard-witness": shard_witness}
     fn = dispatch.get(mode)
     if not fn:
         print(f"ERROR: unknown MODE {mode!r} (verify | snapshot-session | migrate-c7).", file=sys.stderr)
