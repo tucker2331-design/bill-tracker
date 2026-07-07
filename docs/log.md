@@ -80,6 +80,24 @@ write-back table; repointed [[index]] "START HERE" to current_status; **archived
 [[state/next_session]]** (a second, three-weeks-stale "what's next" that had bitten me this session — closes
 sweep **S-6**). B-1 + S-6 marked shipped in the audit pages.
 
+## [2026-07-07] pr | #206 + #207 OPENED — Health-tab honesty + A-2 Part 2 phase 1
+
+Owner (2026-07-07): the Health tab shows more alerts than a "1 benign" claim; they want it to self-explain so
+a layman can tell the site is OK without asking, and the Stability ring shouldn't yellow for an experimental
+engine. Root-caused (measure-first — I'd queried current Sheet1, not the Metrics_History alert history):
+three classes, all benign, now made honest — **PR #206**: (1) cycle-gap WARN was firing every morning on the
+benign overnight quiet-skip — the detector's threshold ignored the quiet window (comment still said "cron 0
+*/3"; it's */15 self-throttled). Now thresholds on the ACTIVE-hours gap (`_quiet_window_overlap_minutes`,
+DST-correct, `health_gap_test.py` 7 cases) → nightly skip silent, real daytime outage still fires. (2) The
+incremental-STM SHADOW divergence (experimental engine, output never used) was a jargon CRITICAL → now INFO +
+plain English ("live calendar UNAFFECTED"), so it no longer yellows the Stability ring. (3) 6 per-row
+"malformed HISTORY row" WARNs → ONE benign INFO summary ("N blank rows in VA's feed — upstream defect, not
+ours"). (4) Frontend severity badges → "Action needed / Heads up / FYI" (raw on hover). WORKER_OUTPUT_LOGIC
+2026-07-04.1→2026-07-07.1 (the blank-row change touches the STM — prepush_audit correctly required the bump;
+harmless). **PR #207** (A-2 Part 2 phase 1): `sustainability_audit` now recommends the VA·Ops shard (config
+`OPS_WORKBOOK_ID=1X7wa4b…`, `SHARD_THRESHOLD_CELLS=6M`) with concrete cells-reclaimed when VA·Live crosses 6M
+(it's ~5.5M now). The auto-actuator + live witness-repoint is the gated phase-2 follow-up.
+
 ## [2026-07-06] pr | #202 + #203 + #204 ALL MERGED (squash) — A-2 verify · S-1 keys · S-2 CI
 
 Bot-reviewed, folded in, merged. **#202** (A-2 rollover snapshot verify) fold-ins: `or []` gspread
