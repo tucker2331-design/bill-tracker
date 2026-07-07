@@ -106,11 +106,12 @@ and the gap closes substantially.** The six changes below do that.
 - **Effort:** ~3 h. Highest rule-compliance leverage available.
 
 ### B-4 — CLAUDE.md is drifting; make it small and stable, push volatile facts to state pages
-> **STATUS 2026-07-06: PARTIAL (surgical).** Fixed the actively-misleading + freshly-drifted facts: the
-> Architecture at-a-glance no longer calls the PAUSED `backend_worker`/`v2_shadow_test` the "main product"
-> (it's `bill_tracker` + `web/`), and the "every 15min" cadence claims are replaced with a "don't hardcode
-> the interval — see the cadence ledger" pointer (guardrail #5 made both crons `*/15` self-throttled). The
-> fuller pass (soften the illustrative row-counts, audit the whole file for volatile facts) remains.
+> **STATUS 2026-07-07: DONE.** Fixed the actively-misleading + freshly-drifted facts: the Architecture
+> at-a-glance no longer calls the PAUSED `backend_worker`/`v2_shadow_test` the "main product" (it's
+> `bill_tracker` + `web/`); the "every 15min" cadence claims → "don't hardcode the interval — see the cadence
+> ledger"; and the illustrative row-counts (3,310 schedule / 60,694 HISTORY / hardcoded H01-H24,S01-S13) are
+> now labelled "illustrative, not contracts; derived at runtime" so a literal reader doesn't treat them as
+> fixed. CLAUDE.md's volatile-fact surface is now honest.
 - **What (verified drift):** CLAUDE.md says workers run "every 15min" (calendar is 3h since PR-C7.1f;
   bills 6h); the architecture summary predates the product backend split; Sheet1 is described via an
   11-column schema note elsewhere while reality is 15 columns (LegEventRoute, RefidClass, ScheduleClass,

@@ -163,11 +163,11 @@ Full version: `docs/architecture/calendar_pipeline.md`.
 - `calendar_xray.py` — backup of `pages/ray2.py` (NOT served)
 - `xray.py` — DEPRECATED
 
-**Data sources (gold standard: LIS):**
-- Schedule API — 3,310 entries for session 261, authoritative for meeting times
-- HISTORY.CSV — 60,694 rows, Azure blob
+**Data sources (gold standard: LIS)** — magnitudes below are illustrative (2026 session), not contracts; the code derives them at runtime:
+- Schedule API — the ~thousands of scheduled meetings, authoritative for meeting times
+- HISTORY.CSV — the per-action history blob (~tens of thousands of rows), Azure blob
 - DOCKET.CSV — committee meeting bill assignments (Senate committees confirmed)
-- Committee API — authoritative committee list (H01-H24, S01-S13)
+- Committee API — authoritative committee list (House H## / Senate S## codes)
 - Session API — session lifecycle
 
 **Key code concepts:** `build_committee_maps()`, `COMMITTEE_CODE_MAP`, `LOCAL_LEXICON`, `PARENT_COMMITTEE_MAP`, `NORM_TO_CODE`, `resolve_committee_from_refid()`, `find_api_schedule_match()`, bill state machine (`bill_locations`), convene time graph, location resolution priority, noise filter, action classification.
