@@ -80,7 +80,7 @@ def _verify_copy(archive, target_name, src_ws):
     mismatch = _snapshot_dim_mismatch(src_ws.row_count, src_ws.col_count, arch_ws.row_count, arch_ws.col_count)
     if mismatch:
         raise RuntimeError(f"snapshot '{target_name}' {mismatch} — looks partial")
-    if src_ws.row_values(1) != arch_ws.row_values(1):
+    if (src_ws.row_values(1) or []) != (arch_ws.row_values(1) or []):   # `or []`: gspread None-safe (Gemini #202)
         raise RuntimeError(f"snapshot '{target_name}' header row differs from source — content mismatch")
     return int(arch_ws.row_count)
 

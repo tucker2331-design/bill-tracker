@@ -3313,7 +3313,7 @@ def _verify_archived_snapshot(archive, target, source_ws):
                                        arch_ws.row_count, arch_ws.col_count)
     if _mismatch:
         raise RuntimeError(f"snapshot '{target}' {_mismatch} — looks partial; NOT advancing the marker")
-    if source_ws.row_values(1) != arch_ws.row_values(1):
+    if (source_ws.row_values(1) or []) != (arch_ws.row_values(1) or []):   # `or []`: gspread None-safe (Gemini #202)
         raise RuntimeError(f"snapshot '{target}' header row differs from the live sheet — content "
                            f"mismatch; NOT advancing the session marker")
     return int(arch_ws.row_count)
@@ -4957,7 +4957,9 @@ def run_calendar_update():
             f"📦 Session rollover {_sheet_session} → {ACTIVE_SESSION}: archived the completed session to "
             f"'{_archived_to}' ({_archived_rows:,} rows, snapshot verified) in the archive workbook; "
             f"live Sheet1 now re-derives for {ACTIVE_SESSION}. No action needed.",
-            status="INFO", category="API_FAILURE", severity="INFO",
+            # A SUCCESSFUL lifecycle event, not a failure — category UNKNOWN (not API_FAILURE) so it doesn't
+            # pollute API-failure health views; severity INFO keeps it a non-alarming FYI (CodeRabbit #202).
+            status="INFO", category="UNKNOWN", severity="INFO",
             dedup_key=f"session_rollover::{_sheet_session}->{ACTIVE_SESSION}")
         print(f"📦 Session rollover {_sheet_session} → {ACTIVE_SESSION}: "
               f"archived the completed session to '{_archived_to}' ({_archived_rows:,} rows verified).")

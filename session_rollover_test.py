@@ -41,7 +41,11 @@ for name, fn in [("worker", cw._snapshot_dim_mismatch), ("archive.py", _arch._sn
 
 # The two copies must AGREE on every case (they're kept in sync on purpose).
 for args in [(5, 5, 5, 5), (5, 5, 4, 5), (5, 5, 5, 4), (0, 0, 0, 0), (10, 26, 10, 27), (232000, 11, 231999, 11)]:
-    ok((cw._snapshot_dim_mismatch(*args) == "") == (_arch._snapshot_dim_mismatch(*args) == ""),
-       f"worker vs archive.py disagree on dims {args} — the two copies have drifted")
+    # Compare the EXACT strings, not just truthiness — so diagnostic-text drift between the two copies is
+    # caught too, not only a verdict flip (CodeRabbit #202).
+    worker_msg = cw._snapshot_dim_mismatch(*args)
+    archive_msg = _arch._snapshot_dim_mismatch(*args)
+    ok(worker_msg == archive_msg,
+       f"worker vs archive.py disagree on dims {args} — worker={worker_msg!r}, archive.py={archive_msg!r}")
 
 print(f"ALL {_checks} session-rollover tests passed")
