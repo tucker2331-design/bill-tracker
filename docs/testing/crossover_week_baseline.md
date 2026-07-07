@@ -1,3 +1,9 @@
+---
+tags: [testing, baseline, metric, crossover]
+updated: 2026-07-06
+status: active
+---
+
 # Crossover Week Baseline (Feb 9-13, 2026)
 
 ## STATUS — DONE (2026-04-27)

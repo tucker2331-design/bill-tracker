@@ -139,6 +139,11 @@ and the gap closes substantially.** The six changes below do that.
 - **Effort:** ~30 min. Disproportionate payoff.
 
 ### B-6 — Vault hygiene (small items)
+> **STATUS 2026-07-06: SHIPPED (mostly moot — measure-first).** Ran the checks: **0 orphans** across 78
+> pages (vault is well-linked — no action). `next_session` archived (B-1). The "`docs/testing/` is 1.6 MB of
+> baseline data" premise was STALE — it's 4 small files (~38 KB), active/complete, nothing to mark
+> archive-data; only `crossover_week_baseline.md` lacked frontmatter → added (`status: active`). The log
+> `## [date] kind | title` convention stays. An orphan check can re-run via the snippet in the 2026-07-06 log.
 - `docs/testing/` is 1.6 MB of baseline data; mark those pages `status: archive-data` in frontmatter and
   note in [[index]] "do not read wholesale — grep only." Consider moving raw baselines to repo
   `artifacts/` and leaving summary pages.

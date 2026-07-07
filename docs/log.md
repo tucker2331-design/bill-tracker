@@ -8,6 +8,21 @@ status: active
 
 Append-only, reverse-chronological (newest at top). Each entry opens with `## [YYYY-MM-DD] <kind> | <title>` so `grep "^## \[" log.md | head -20` gives a parseable timeline.
 
+## [2026-07-06] decision | B-6 — vault hygiene (measure-first: mostly moot)
+
+Ran the B-6 checks. **0 orphans** across 78 pages (well-linked — no action; reusable orphan-check snippet
+below). `next_session` already archived (B-1). The "`docs/testing/` = 1.6 MB baseline data" premise was
+STALE — it's 4 small files (~38 KB), active/complete; only `crossover_week_baseline.md` lacked frontmatter →
+added `status: active`. Log convention kept. B-6 marked shipped.
+
+```python
+# orphan check (docs/**/*.md with no inbound [[wikilink]]):
+import os,re,glob; docs=glob.glob("docs/**/*.md",recursive=True)
+names={os.path.splitext(os.path.basename(p))[0]:p for p in docs}
+linked={m for p in docs for m in re.findall(r"\[\[([^\]|#]+)",open(p).read())}
+print([p for s,p in names.items() if s.split("/")[-1] not in {l.split("/")[-1] for l in linked}])
+```
+
 ## [2026-07-06] decision | B-2 — case-law files get a generated ## Index
 
 `tools/reindex_caselaw.py` (stdlib, idempotent) inserts/refreshes a `## Index` (`#N — <lesson>`) at the top
