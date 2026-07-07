@@ -3283,7 +3283,8 @@ def _extract_meeting_location(meeting):
 # session's Sheet1 to the separate archive workbook BEFORE this cycle overwrites it.
 # Non-destructive (a copy) — the live write proceeds normally regardless, so a
 # mis-fire can never lose live data. V1 advances only on a successful overwrite.
-SESSION_ARCHIVE_ID = "1AA-dCUDAPvq59Hv01DqteEquBJ1kkqI0QR5ECd10QeA"
+SESSION_ARCHIVE_ID = "1AA-dCUDAPvq59Hv01DqteEquBJ1kkqI0QR5ECd10QeA"   # VA · Archive
+OPS_WORKBOOK_ID = "1X7wa4brFROP9Bn81Esf4z3zjlxTZvpKeUdPWpyBkD3c"       # VA · Ops (A-2 Part 2 shard target)
 SHEET_SESSION_CELL = "V1"  # far-right row-1 state cell; re-written each cycle like Y2/Y3
 
 
@@ -5757,15 +5758,34 @@ def run_calendar_update():
     # Volume math: steady-state ~0-100 deltas/cycle × 96 cycles/day × 90-day
     # retention × 13 cols << Sheets' 10M-cell limit (change-feed semantics,
     # not snapshot). The size canary below surfaces runaway growth.
-    def _ensure_witness_tab():
-        """Return the Schedule_Witness worksheet, auto-creating it with
-        header on first call. Returns None on permanent failure so callers
-        can skip gracefully."""
+    # A-2 Part 2: the witness may live in VA·Ops to keep VA·Live lean. FLAG-GATED and SAFE-BY-DEFAULT — with
+    # WITNESS_WORKBOOK unset (or != "ops") this is exactly today's behavior (VA·Live), zero change. Resolved
+    # ONCE here: every witness access (append, size-canary, Part-C read) flows through _ensure_witness_tab →
+    # this book, so there is a single source of truth and no missed site. Fail-safe: if VA·Ops can't be
+    # opened, fall back to VA·Live + WARN, so a shard-workbook outage never disables the witness. Rollout:
+    # run `tools/session_archive/archive.py shard-witness` once (copy-verify-then-delete Schedule_Witness
+    # VA·Live → VA·Ops), THEN set WITNESS_WORKBOOK=ops.
+    _witness_book = sheet
+    if os.environ.get("WITNESS_WORKBOOK", "").strip().lower() == "ops":
         try:
-            return sheet.worksheet(WITNESS_TAB_NAME)
+            _witness_book = sheet.client.open_by_key(OPS_WORKBOOK_ID)
+            print(f"📝 {WITNESS_TAB_NAME}: using VA·Ops workbook ({OPS_WORKBOOK_ID[:12]}…) per WITNESS_WORKBOOK=ops.")
+        except Exception as _ops_open_err:
+            push_system_alert(
+                f"WITNESS_WORKBOOK=ops but VA·Ops ({OPS_WORKBOOK_ID[:12]}…) could not be opened "
+                f"({_ops_open_err}); witness falls back to VA·Live this cycle.",
+                status="WARN", category="API_FAILURE", severity="WARN", dedup_key="witness_ops_open_fail")
+            _witness_book = sheet
+
+    def _ensure_witness_tab():
+        """Return the Schedule_Witness worksheet from the resolved witness workbook (_witness_book — VA·Live
+        by default, VA·Ops when WITNESS_WORKBOOK=ops), auto-creating it with header on first call. Returns
+        None on permanent failure so callers can skip gracefully."""
+        try:
+            return _witness_book.worksheet(WITNESS_TAB_NAME)
         except gspread.exceptions.WorksheetNotFound:
             try:
-                new_ws = sheet.add_worksheet(
+                new_ws = _witness_book.add_worksheet(
                     title=WITNESS_TAB_NAME,
                     rows=1000,
                     cols=len(WITNESS_HEADER),
