@@ -331,7 +331,9 @@ from structural_router import normalize_refid as _normalize_refid  # float64/nan
 from structural_router import classify_schedule_type as _classify_schedule_type  # PR-C8.1b ScheduleTypeID
 from structural_router import validate_schedule_types as _validate_schedule_types  # ScheduleTypeID drift monitor
 from structural_router import validate_reference_types as _validate_reference_types  # ReferenceType drift monitor
-from lis_authorization import is_authorized_session, is_historical_authorized, normalize_session_code  # LIS API gate (ban-safe) + A-1 auto-follow
+from lis_authorization import (  # LIS API gate (ban-safe) + A-1 auto-follow + S-1 single-source keys
+    is_authorized_session, is_historical_authorized, normalize_session_code,
+    LIS_API_KEY as API_KEY, LIS_PUBLIC_API_KEY)
 # Single source of truth for the VA legislative business-hours window. Shared with
 # structural_router._has_meeting_time so the ministerial detector and this
 # last-resort renderer can never disagree about whether a timestamp is a real
@@ -348,15 +350,13 @@ SPREADSHEET_ID = "1PQDtaTTUeYv781bx4_ZiehcvbEmUt8t7jFmZYJoJGKM"
 # the session code from the live Session API and operates on the ACTIVE session only,
 # never an old one. Do NOT add pre-2025 session calls here. See
 # docs/knowledge/lis_api_authorization.md.
-API_KEY = "81D70A54-FCDC-4023-A00B-A3FD114D5984"
+# API_KEY + LIS_PUBLIC_API_KEY are now the single env-first source in lis_authorization.py (S-1) — imported
+# above. Rotation = set the LIS_API_KEY / LIS_PUBLIC_API_KEY secret; no code edit, no hunting copies.
 HEADERS = {"WebAPIKey": API_KEY, "Accept": "application/json"}
 
 # PR-C3: LegislationEvent / LegislationVersion endpoints reject the legacy
-# WebAPIKey with HTTP 401 — they require the SPA's public key (sourced from
-# https://lis.virginia.gov/handleTitle.js, which is loaded by every public
-# page). Both keys are public; neither alone covers the full API surface.
-# See docs/knowledge/lis_api_reference.md for the full key→endpoint mapping.
-LIS_PUBLIC_API_KEY = "FCE351B6-9BD8-46E0-B18F-5572F4CCA5B9"
+# WebAPIKey with HTTP 401 — they require the SPA's public key (both public; neither
+# alone covers the full API surface). See docs/knowledge/lis_api_reference.md.
 LEGISLATION_EVENT_HEADERS = {
     "WebAPIKey": LIS_PUBLIC_API_KEY,
     "Accept": "application/json",

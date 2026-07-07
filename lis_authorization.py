@@ -26,6 +26,18 @@ non-empty ⇒ proceed; 401/403 ⇒ halt, exactly as before). Two authorization s
 Callers that pass ONLY `code` (every tool/replay) get the UNCHANGED frozen-set behavior.
 `LIS_API_AUTHORIZED_SESSIONS` remains as a backward-compat alias of the historical set.
 """
+import os
+
+# --- LIS API keys — SINGLE env-first source (S-1, 2026-07-06) -------------------------------------------
+# Both are PUBLIC/SPA-class keys (they ship in every lis.virginia.gov page — this is NOT secrecy). The point
+# is ROTATION RESILIENCE (Standard #8): if LIS rotates a key, set ONE env var / GitHub secret and every
+# importer picks it up — instead of hunting hardcoded copies across the codebase under time pressure. The
+# literal fallback preserves today's behavior when the env var is unset. Neither key alone covers the whole
+# API surface: LIS_API_KEY is the legacy toolset key; LIS_PUBLIC_API_KEY is the SPA key the
+# LegislationEvent/LegislationVersion endpoints require (they 401 the legacy key). See
+# docs/knowledge/lis_api_reference.md for the full key→endpoint mapping.
+LIS_API_KEY = os.environ.get("LIS_API_KEY", "81D70A54-FCDC-4023-A00B-A3FD114D5984")
+LIS_PUBLIC_API_KEY = os.environ.get("LIS_PUBLIC_API_KEY", "FCE351B6-9BD8-46E0-B18F-5572F4CCA5B9")
 
 # 5-digit MVC session codes. Regular sessions: "20" + YY + "1" (2025 -> 20251, 2026 -> 20261).
 # FROZEN human-curated allowlist of KNOWN-authorized past sessions. Widen ONLY with an explicit owner edit
