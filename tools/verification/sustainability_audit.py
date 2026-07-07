@@ -66,8 +66,13 @@ import urllib.request
 from collections import defaultdict, namedtuple
 from datetime import datetime, timezone
 
-SPREADSHEET_ID = "1PQDtaTTUeYv781bx4_ZiehcvbEmUt8t7jFmZYJoJGKM"
-ARCHIVE_SPREADSHEET_ID = "1AA-dCUDAPvq59Hv01DqteEquBJ1kkqI0QR5ECd10QeA"  # session archive (own 10M budget)
+SPREADSHEET_ID = "1PQDtaTTUeYv781bx4_ZiehcvbEmUt8t7jFmZYJoJGKM"          # VA · Live
+ARCHIVE_SPREADSHEET_ID = "1AA-dCUDAPvq59Hv01DqteEquBJ1kkqI0QR5ECd10QeA"  # VA · Archive (own 10M budget)
+OPS_WORKBOOK_ID = "1X7wa4brFROP9Bn81Esf4z3zjlxTZvpKeUdPWpyBkD3c"          # VA · Ops (A-2 Part 2 shard target)
+# A-2 Part 2 (headroom shard): when VA·Live crosses this, the big INTERNAL append-only tabs relocate to
+# VA·Ops (copy-verify-then-delete). Below the mid-workbook so we shard with plenty of runway, not at the edge.
+SHARD_THRESHOLD_CELLS = 6_000_000
+SHARDABLE_TABS = ("Schedule_Witness", "Metrics_History")  # internal/append-only; Schedule_Witness dominates
 GOOGLE_SHEETS_CELL_CAP = 10_000_000
 SOFT_CEILING = 9_500_000  # mirrors calendar_worker.LEGEVENT_WORKBOOK_CELL_CEILING
 
@@ -334,6 +339,20 @@ def check_capacity():
         out.append(Result("CAPACITY", "workbook-cells", "WARN", "over 60% of the 10M cell cap — " + detail))
     else:
         out.append(Result("CAPACITY", "workbook-cells", "PASS", detail))
+
+    # A-2 Part 2 (headroom shard): once VA·Live crosses the shard threshold, recommend relocating the big
+    # INTERNAL append-only tabs to VA·Ops (copy-verify-then-delete) so the live workbook stays lean — with
+    # the concrete cells reclaimed, so the action is decidable. (The auto-actuator that MOVES them + repoints
+    # the witness write is the gated follow-up; this is the always-on trigger + recommendation.)
+    _present = [title for title, _, _, _ in per_tab if title in SHARDABLE_TABS]
+    if total >= SHARD_THRESHOLD_CELLS and _present:   # only recommend real, present tabs (Gemini #207)
+        _shard_cells = sum(cells for title, _, _, cells in per_tab if title in _present)
+        out.append(Result(
+            "CAPACITY", "shard-recommended", "WARN",
+            f"VA·Live at {total:,} cells (≥ {SHARD_THRESHOLD_CELLS:,} shard threshold). Relocate "
+            f"{', '.join(_present)} to VA·Ops ({OPS_WORKBOOK_ID[:12]}…) — would reclaim "
+            f"~{_shard_cells:,} cells → new headroom ~{GOOGLE_SHEETS_CELL_CAP - total + _shard_cells:,}. "
+            f"See autonomy_upgrades A-2 Part 2."))
 
     # 2. Unrecognised large tab — a tab we have NO declared policy for that has
     #    grown big. This is how a FUTURE append-only tab surfaces for a policy
