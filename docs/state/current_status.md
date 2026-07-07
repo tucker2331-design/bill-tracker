@@ -16,7 +16,7 @@ status: active
 > below. Full history: [[log]] (PR-by-PR) + [[state/status_archive_2026H1]] (frozen pre-B-1 narrative).
 
 ## NOW
-- **Health-tab honesty MERGED (#206+#207); A-2 Part 2 fully BUILT (#207 phase 1 + #208 phase 2, open).** Health alerts are now honest/layman-clear + the experimental engine no longer yellows the ring; the witness-shard actuator is flag-gated + safe-by-default. Verify the Health tab live after the #206 deploy (alert wording + ring colour). **Deferred code-polish backlog AUDITED CLEAN** (owner ask) — [[state/open_anti_patterns]]: #8 resolved by C8 routing; only the theoretical STM #10 remains, correctly deferred.
+- **All executable VA work is DONE + MERGED.** Health-tab honesty (#206), A-2 Part 2 phase 1+2 (#207/#208), B-4-finish, backlog audit — all merged; main green (81 tests). Everything remaining in NEXT is owner-gated (a key / a decision / an owner-run trigger) or optional (S-3). Verify the Health tab live after the #206 deploy (alert wording + ring no longer yellow for the experimental engine).
 
 ## NEXT (needs owner infra / a decision — then I execute)
 1. **Enable A-2 Part 2 when VA·Live nears 6M** (~5.5M now, not urgent): `MODE=shard-witness archive.py` → `CONFIRM=delete` → set worker var `WITNESS_WORKBOOK=ops`. Fully built (#208), reversible until the delete. [[audits/fable_2026-07/autonomy_upgrades]].
