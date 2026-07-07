@@ -68,7 +68,7 @@ def notify_slack(text):
 # 2026-07-04.1: date-aware SortTime resolver (#189) + the TimeClass column (#193) both change
 # Sheet1 output — force a recompute so cached/incremental paths can't serve pre-change rows
 # (Qodo #193; #189 omitted this bump, caught here).
-WORKER_OUTPUT_LOGIC_VERSION = "2026-07-04.1"
+WORKER_OUTPUT_LOGIC_VERSION = "2026-07-07.1"
 
 
 def _sha(*parts):
@@ -3422,15 +3422,12 @@ def run_sequential_turing_machine(df_past, *,
         elif _outcome_remainder in ('H', 'S'):
             _outcome_remainder = ""
         if not _outcome_remainder:
-            _refid = str(row.get(refid_col) or '') if refid_col else ''
-            push_system_alert(
-                f"Malformed HISTORY row for {bill_num} on {date_str}: empty description after chamber-prefix strip "
-                f"(raw_desc={outcome_text!r}, refid={_refid!r})",
-                status="WARN",
-                category="DATA_ANOMALY",
-                severity="WARN",
-                dedup_key=f"history_empty_desc::{bill_num}::{date_str}",
-            )
+            # A blank upstream row (LIS published a HISTORY row with no action text, just the chamber
+            # prefix). We refuse to fabricate an action from it — but this is a routine UPSTREAM defect, so
+            # count it and let the caller emit ONE benign summary post-loop, instead of N per-row WARNs that
+            # pile up on the Health tab and read as scary (owner 2026-07-07). A genuinely novel malformation
+            # (non-empty-but-unparseable) is a different path and still alerts.
+            source_miss_counts["malformed_empty_history"] += 1
             source_miss_counts["dropped_noise"] += 1
             continue
 
@@ -4271,6 +4268,7 @@ def run_calendar_update():
         "unsourced_journal": 0,     # no schedule, no anchor, no LegislationEvent recovery, non-floor -> NO_SCHEDULE_MATCH
         "floor_anchor_miss": 0,     # Floor action with no convene anchor hit -> NO_CONVENE_ANCHOR
         "dropped_noise": 0,         # positive-noise filter drops (continue at noise filter)
+        "malformed_empty_history": 0,  # blank upstream HISTORY rows (empty desc after chamber prefix) — benign; ONE summary alert post-loop, not N per-row WARNs (owner 2026-07-07)
         # Orthogonal tag counters (overlap with the above)
         "unsourced_anchor": 0,      # Memory Anchor committee fallback applied
         "dropped_ephemeral": 0,     # Post-loop ephemeral filter drops (subset of unsourced_*)
@@ -6886,14 +6884,23 @@ def run_calendar_update():
                     print(f"✅ INCREMENTAL SHADOW MATCH — {_reused} bills reused, {_recomp} recomputed "
                           f"(shared_changed={_shared_changed}); cached-bill reuse is SAFE this cycle.")
                 else:
+                    # SHADOW / experimental (observe-only): the incremental engine's output is NEVER used —
+                    # it runs in parallel to PROVE it matches the proven full engine before any future flip.
+                    # A mismatch here is the shadow DOING ITS JOB ("not ready, stay off"), NOT a live-calendar
+                    # problem — so it is INFO, and must NOT turn the Stability ring amber (owner 2026-07-07).
                     push_system_alert(
-                        f"INCREMENTAL SHADOW DIVERGENCE: reusing cached events would have produced a DIFFERENT "
-                        f"calendar — {len(_of)} only-in-full, {len(_oi)} only-in-incremental (reused={_reused}, "
-                        f"recomputed={_recomp}, shared_changed={_shared_changed}). The incremental engine must NOT "
-                        f"flip to primary until root-caused. only-full={_of[:2]}; only-incr={_oi[:2]}",
-                        status="CRITICAL", category="DATA_ANOMALY", severity="CRITICAL",
+                        f"Experimental engine check (SHADOW — the LIVE calendar is UNAFFECTED). The optional "
+                        f"faster 'incremental' engine — which runs in parallel and whose output is never shown "
+                        f"— didn't match the proven engine on {len(_of) + len(_oi)} row(s) this cycle "
+                        f"({len(_of)} only-in-full, {len(_oi)} only-in-incremental). This is EXPECTED while it's "
+                        f"being validated: it stays OFF until it matches perfectly, so nothing you see is "
+                        f"affected. No action needed unless you're actively enabling it — set the repo variable "
+                        f"STM_INCREMENTAL_SHADOW to empty to stop these checks. "
+                        f"(debug: only-full={_of[:2]}; only-incr={_oi[:2]})",
+                        status="INFO", category="DATA_ANOMALY", severity="INFO",
                         dedup_key="stm_incremental_divergence")
-                    print(f"🚨 INCREMENTAL SHADOW DIVERGENCE — only-full={len(_of)}, only-incr={len(_oi)} (SYSTEM_ALERT)")
+                    print(f"ℹ️ Incremental SHADOW divergence (observe-only, LIVE calendar unaffected) — "
+                          f"only-full={len(_of)}, only-incr={len(_oi)}")
                 _persist_stm_bill_cache(sheet, _bill_cache_ws, _stm_full_contribution,
                                         legevent_history_hashes, _shared_sig, _bill_cache_ok)
             except Exception as _shadow_err:
@@ -7096,6 +7103,20 @@ def run_calendar_update():
 
     # === SOURCE-MISS METRICS (Section 0 denominator) ===
     # Surface the counters that PR-A's post-mortem identified as missing.
+    # ONE benign summary for the blank upstream HISTORY rows (owner 2026-07-07): LIS itself publishes rows
+    # with a chamber prefix but NO action text; we refuse to fabricate and count them. Emit a single
+    # plain-language INFO — not N per-row WARNs — so the Health tab stays readable and does NOT alarm the
+    # Stability ring (these are Virginia's data defects, not ours, and nothing is lost). A genuinely novel
+    # malformation is a different path and still WARNs.
+    _blank_history_rows = source_miss_counts.get("malformed_empty_history", 0)
+    if _blank_history_rows:
+        push_system_alert(
+            f"{_blank_history_rows} blank row(s) in Virginia's HISTORY feed this cycle — LIS published rows "
+            f"with a chamber but NO action text, so there was nothing to place on the calendar. We flagged "
+            f"them rather than guess; nothing is missing or wrong. Benign — an upstream data defect, not ours.",
+            status="INFO", category="DATA_ANOMALY", severity="INFO",
+            dedup_key="history_blank_rows_summary")
+
     # Encoded as a JSON-in-outcome alert row with Bill="SYSTEM_METRICS" so
     # X-Ray Section 0 can parse it. One-liner summary also goes to stdout
     # so it lands in worker logs.
