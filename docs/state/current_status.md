@@ -20,8 +20,11 @@ status: active
 ## NEXT (needs owner infra / a decision — then I execute)
 1. **A-2 Part 2** — mid-session headroom shard actuator ([[audits/fable_2026-07/autonomy_upgrades]]). Needs an **ops workbook** (2nd Google Sheet created + shared to the service account). NOT urgent — the rollover hook already archives each session out yearly.
 2. **C-8 Part 2** — NY independent oracle (reconciliation) ([[audits/fable_2026-07/codebase_longevity_audit]]). Needs a **LegiScan API key** + terms check. (C-8's vocab-canary gap is already largely closed — re-measured.)
-3. **CDN inversion + Omni-Schema + Fleet** ([[audits/fable_2026-07/50_state_scaling_architecture]]) — the 50-state decoupling; multi-session, owner-sequenced.
-4. **PA / multi-state ingestion** ([[audits/fable_2026-07/multistate_ingestion_pa]]) — multi-session.
+3. **Multi-state — ONE STATE AT A TIME (owner directive 2026-07-07; notes preserved, do NOT lose):** tackle each new state as its own scoped project. Notes are banked and safe:
+   - PA ingestion plan → [[audits/fable_2026-07/multistate_ingestion_pa]]
+   - CA + FL research → [[audits/fable_2026-07/multistate_ingestion_ca_fl]]
+   - 50-state decoupling (CDN inversion + Omni-Schema + Fleet) → [[audits/fable_2026-07/50_state_scaling_architecture]]
+   - NY is the live 2nd state (its own brain: [[ny/state/current_status]]); C-8 Part 2 (LegiScan oracle) is its next step.
 5. Optional/low-value: **S-3** (attic-move deprecated repo-root files — cosmetic, breaks the paused worker's manual dispatch; do only if you want the cleanup); **B-4 finish** (audit CLAUDE.md's remaining volatile facts).
 - Also open (owner-triggered): `/code-review ultra`; co-patrons backfill (scoped, deferred — [[ideas/copatrons_backfill]]).
 
