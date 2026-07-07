@@ -16,22 +16,21 @@ status: active
 > below. Full history: [[log]] (PR-by-PR) + [[state/status_archive_2026H1]] (frozen pre-B-1 narrative).
 
 ## NOW
-- **Health-tab honesty (owner 2026-07-07) — PRs #206 + #207 open.** #206: cycle-gap WARN now active-hours-aware (no false overnight), the experimental-engine SHADOW divergence → INFO+plain-language (no longer yellows the Stability ring), 6 blank-row WARNs → one benign INFO summary, frontend severity → "Action needed / Heads up / FYI". #207: capacity audit recommends the VA·Ops shard at 6M. Verify in the live Health tab after merge (alert wording + ring colour).
+- **Health-tab honesty MERGED (#206+#207); A-2 Part 2 fully BUILT (#207 phase 1 + #208 phase 2, open).** Health alerts are now honest/layman-clear + the experimental engine no longer yellows the ring; the witness-shard actuator is flag-gated + safe-by-default. Verify the Health tab live after the #206 deploy (alert wording + ring colour). **Deferred code-polish backlog AUDITED CLEAN** (owner ask) — [[state/open_anti_patterns]]: #8 resolved by C8 routing; only the theoretical STM #10 remains, correctly deferred.
 
 ## NEXT (needs owner infra / a decision — then I execute)
-1. **A-2 Part 2 — phase 2** (auto-shard actuator). Phase 1 shipped (#207: audit recommends the shard when VA·Live >6M; VA·Ops = `1X7wa4b…`). Phase 2 = the actuator that MOVES `Schedule_Witness`(+`Metrics_History`) to VA·Ops and repoints the witness write/read/prune — a careful multi-site change; **gated on VA·Live approaching 6M (it's ~5.5M now)**. [[audits/fable_2026-07/autonomy_upgrades]].
-2. **Deferred code-polish backlog** — [[state/open_anti_patterns]] (~10 silent-fallback notes). Owner wants them cleared; several likely already resolved by the Section-9=0 work → **reality-check each before fixing** (measure-first), then knock out the still-real ones in a focused pass (worker code — not marathon-tail).
-3. **C-8 Part 2** — NY independent oracle (reconciliation) ([[audits/fable_2026-07/codebase_longevity_audit]]). Needs a **LegiScan API key** + terms check. (C-8's vocab-canary gap is already largely closed — re-measured.)
-4. **Multi-state — ONE STATE AT A TIME (owner directive 2026-07-07; notes preserved, do NOT lose):** tackle each new state as its own scoped project. Notes are banked and safe:
+1. **Enable A-2 Part 2 when VA·Live nears 6M** (~5.5M now, not urgent): `MODE=shard-witness archive.py` → `CONFIRM=delete` → set worker var `WITNESS_WORKBOOK=ops`. Fully built (#208), reversible until the delete. [[audits/fable_2026-07/autonomy_upgrades]].
+2. **C-8 Part 2** — NY independent oracle (reconciliation) ([[audits/fable_2026-07/codebase_longevity_audit]]). Needs a **LegiScan API key** + terms check. (C-8's vocab-canary gap is already largely closed — re-measured.)
+3. **Multi-state — ONE STATE AT A TIME (owner directive 2026-07-07; notes preserved, do NOT lose):** tackle each new state as its own scoped project. Notes are banked and safe:
    - PA ingestion plan → [[audits/fable_2026-07/multistate_ingestion_pa]]
    - CA + FL research → [[audits/fable_2026-07/multistate_ingestion_ca_fl]]
    - 50-state decoupling (CDN inversion + Omni-Schema + Fleet) → [[audits/fable_2026-07/50_state_scaling_architecture]]
    - NY is the live 2nd state (its own brain: [[ny/state/current_status]]); C-8 Part 2 (LegiScan oracle) is its next step.
-5. Optional/low-value: **S-3** (attic-move deprecated repo-root files — cosmetic, breaks the paused worker's manual dispatch; do only if you want the cleanup); **B-4 finish** (audit CLAUDE.md's remaining volatile facts).
+4. Optional/low-value: **S-3** (attic-move deprecated repo-root files — cosmetic, breaks the paused worker's manual dispatch; do only if you want the cleanup); **B-4 finish** (audit CLAUDE.md's remaining volatile facts).
 - Also open (owner-triggered): `/code-review ultra`; co-patrons backfill (scoped, deferred — [[ideas/copatrons_backfill]]).
 
 ## RECENTLY LANDED (newest first; full detail in [[log]])
-- **2026-07-07 — Health-tab honesty (#206) + A-2 Part 2 phase 1 (#207)** — cycle-gap active-hours-aware (no false overnight WARN); experimental SHADOW divergence → INFO (no longer yellows the ring); 6 blank-row WARNs → one benign INFO; severity badges "Action needed / Heads up / FYI"; capacity audit recommends the VA·Ops shard at 6M.
+- **2026-07-07 — Health-tab honesty MERGED (#206+#207) + A-2 Part 2 phase 2 (#208) + backlog audited clean** — alerts honest/layman-clear, ring no longer yellows for the experimental engine, capacity audit recommends the shard; witness-shard actuator flag-gated + safe-by-default (`archive.py shard-witness` + `WITNESS_WORKBOOK=ops`); code-debt backlog paid down.
 - **2026-07-06 — brain hygiene: B-2 · B-3 · B-6 + C-8 re-measured** — B-3 machine `tools/prepush_audit.py` (fails an output-value change with no version bump; runs in CI, #205 merged); B-2 generated `## Index` for the two case-law files (`tools/reindex_caselaw.py`); B-6 vault hygiene (0 orphans); C-8 NY re-measured (already hardened; oracle owner-gated).
 - **2026-07-06 — brain hygiene: B-1 · B-5 · S-6 · B-4(partial)** — current_status restructured (NOW/NEXT/RECENTLY, history → [[state/status_archive_2026H1]]); [[workflow/reasoning_doctrine]] added to session-start reads; stale next_session archived; CLAUDE.md cadence de-drifted.
 - **2026-07-06 — A-2 Part 1 · S-1 · S-2 MERGED** (#202 rollover snapshot verify · #203 single env-first LIS key source · #204 worker golden + pure-logic tests now run in CI). Fable queue: A-1, A-2p1, S-1, S-2 shipped.

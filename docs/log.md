@@ -80,6 +80,21 @@ write-back table; repointed [[index]] "START HERE" to current_status; **archived
 [[state/next_session]]** (a second, three-weeks-stale "what's next" that had bitten me this session — closes
 sweep **S-6**). B-1 + S-6 marked shipped in the audit pages.
 
+## [2026-07-07] pr | #208 OPENED — A-2 Part 2 phase 2: witness relocation to VA·Ops (flag-gated)
+
+Owner said keep going — built the A-2 Part 2 actuator now that VA·Ops exists. **Measure-first de-risked it:**
+every Schedule_Witness access (append + size-canary + Part-C reconciliation read) flows through ONE point
+(`_ensure_witness_tab`), so the repoint is a single-function change with no missed site (a stranded Part-C
+read would've fired false "no evidence" alerts — the risk that made it look scary). **Safe-by-default:**
+`WITNESS_WORKBOOK` unset = today's behavior (VA·Live), zero change; `=ops` → VA·Ops with a fail-safe fallback
+to VA·Live + WARN if VA·Ops can't open. `archive.py` gains a `shard-witness` mode (copy-verify-then-delete,
+reusing `_copy_tab`/`_verify_copy`; `_copy_tab` generalized with `dest_id`); the witness prune follows the
+flag. Rollout when VA·Live nears 6M (~5.5M now): shard-witness → CONFIRM=delete → set WITNESS_WORKBOOK=ops.
+Not output-affecting; prepush_audit passes; compile + worker-import clean. Also #206/#207 MERGED (bot
+fold-ins: `step_min<=0` + within-day window guards, gap constants hoisted to module level for the test,
+shard-recommend guarded to present tabs). Backlog audited clean (#8 resolved by C8 routing; only the
+theoretical STM #10 remains, correctly deferred).
+
 ## [2026-07-07] pr | #206 + #207 OPENED — Health-tab honesty + A-2 Part 2 phase 1
 
 Owner (2026-07-07): the Health tab shows more alerts than a "1 benign" claim; they want it to self-explain so
