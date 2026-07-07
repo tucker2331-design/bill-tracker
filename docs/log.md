@@ -8,6 +8,15 @@ status: active
 
 Append-only, reverse-chronological (newest at top). Each entry opens with `## [YYYY-MM-DD] <kind> | <title>` so `grep "^## \[" log.md | head -20` gives a parseable timeline.
 
+## [2026-07-06] pr | #204 OPENED — run worker golden + pure-logic tests in CI (sweep S-2)
+
+The stdlib-only `structural_tests.yml` never ran the dep-needing worker golden suites or the pure-logic unit
+tests (they import calendar_worker/pandas/pytz) — regressions only caught if a session remembered to run them
+locally. New paths-filtered `golden_tests.yml` installs the worker deps + runs the 6 offline tests
+(compute_effective_scrape_end, pr_c3_helper_v2, refid_shape_drift, cadence, lis_authorization,
+session_rollover) on PRs/pushes touching worker logic or a test file; stdlib job stays the always-on fast
+lane. All 6 verified passing offline; YAML validated; the job self-validates on this PR. [[audits/fable_2026-07/sweep_findings]] S-2 shipped.
+
 ## [2026-07-06] pr | #203 OPENED — single env-first source for the LIS API keys (sweep S-1)
 
 Next Fable-queue knock-out (owner: "don't stop"). The LIS `WebAPIKey` (`81D70A54…`) + SPA public key

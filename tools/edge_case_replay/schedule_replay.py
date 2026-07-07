@@ -25,14 +25,14 @@ from datetime import datetime, timedelta
 
 import os
 ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))  # portable: repo root from this file
-API_KEY = "81D70A54-FCDC-4023-A00B-A3FD114D5984"
 # === LIS API AUTHORIZATION RULE (single source of truth: lis_authorization.py) ===
 # The toolset is authorized for 2025/2026 ONLY; pre-2025 must use legacylis CSV. An
 # earlier run of this replay queried the new API for 2020-2024 sessions — outside
 # that authorization. It is now restricted to the shared authorized set, enforced by
 # the shared guard so it can't drift. For pre-2025 variety, repoint to legacylis CSV.
 sys.path.insert(0, ROOT)
-from lis_authorization import LIS_API_AUTHORIZED_SESSIONS, assert_lis_authorized
+from lis_authorization import (LIS_API_AUTHORIZED_SESSIONS, assert_lis_authorized,
+    LIS_API_KEY as API_KEY)  # S-1: single env-first key source (no literal here)
 SESSIONS = sorted(LIS_API_AUTHORIZED_SESSIONS, reverse=True)  # only ever authorized sessions
 for _s in SESSIONS:
     assert_lis_authorized(_s)  # belt-and-suspenders: hard-fail before any LIS call

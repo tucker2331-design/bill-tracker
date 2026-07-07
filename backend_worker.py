@@ -7,13 +7,13 @@ import re
 import difflib
 from datetime import datetime
 from google.oauth2.service_account import Credentials
-from lis_authorization import is_authorized_session, LIS_API_AUTHORIZED_SESSIONS  # ban-safe gate
+from lis_authorization import (is_authorized_session, LIS_API_AUTHORIZED_SESSIONS,  # ban-safe gate
+    LIS_API_KEY as API_KEY)  # S-1: single env-first key source (no literal here)
 
 print("🚀 Waking up Enterprise Ghost Worker...")
 
 # --- CONFIGURATION ---
 SPREADSHEET_ID = "1566pCv70iQ7YkTQK71RfYerciK-ukW-QdblTu2-Prfw"
-API_KEY = "81D70A54-FCDC-4023-A00B-A3FD114D5984"
 HEADERS = {"WebAPIKey": API_KEY, "Accept": "application/json"}
 
 def get_active_session():

@@ -25,10 +25,10 @@ from datetime import datetime
 from collections import defaultdict
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
-from lis_authorization import assert_lis_authorized  # LIS API 2025/2026-only gate (ban-safe)
+from lis_authorization import (assert_lis_authorized,  # LIS API 2025/2026-only gate (ban-safe)
+    LIS_API_KEY as API_KEY)  # S-1: single env-first key source (no literal here)
 
 SHEET = "1PQDtaTTUeYv781bx4_ZiehcvbEmUt8t7jFmZYJoJGKM"
-API_KEY = "81D70A54-FCDC-4023-A00B-A3FD114D5984"
 MIN_EXPECTED_MEETINGS = 30   # a real session schedules hundreds of committee meetings; < this == source broke
 
 

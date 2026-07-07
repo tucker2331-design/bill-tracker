@@ -30,6 +30,12 @@ fix → validation. None are urgent-today; S-1 and S-2 should ride the next conv
 - **Validation:** `grep -rn "81D70A54" --include="*.py" | wc -l` == 1. Effort: ~1 h.
 
 ## S-2 · CI blind spot: the 9 worker golden-test files never run in CI
+> **STATUS 2026-07-06: SHIPPED (PR #204).** New paths-filtered `golden_tests.yml` job installs the worker
+> deps and runs the offline golden + pure-logic tests (compute_effective_scrape_end, pr_c3_helper_v2,
+> refid_shape_drift, cadence, lis_authorization, session_rollover) on any PR/push touching worker logic or a
+> test file. Stdlib `structural_tests.yml` stays the always-on fast lane. A broken worker helper / cadence
+> floor now fails CI without a bot. (NY tests deliberately excluded for now — separate subsystem, possible
+> network; a follow-up can add an offline NY job.)
 - **Evidence:** `structural_tests.yml` is deliberately stdlib-only (AST-extraction, no pip, seconds).
   The full golden suites (test_compute_effective_scrape_end, test_classify_*, test_route_event,
   test_pr_c3_helper_v2 …) import calendar_worker → need pandas/gspread → run only when a session
