@@ -344,13 +344,13 @@ def check_capacity():
     # INTERNAL append-only tabs to VA·Ops (copy-verify-then-delete) so the live workbook stays lean — with
     # the concrete cells reclaimed, so the action is decidable. (The auto-actuator that MOVES them + repoints
     # the witness write is the gated follow-up; this is the always-on trigger + recommendation.)
-    if total >= SHARD_THRESHOLD_CELLS:
-        _shard_cells = sum(cells for title, _, _, cells in per_tab if title in SHARDABLE_TABS)
-        _present = [title for title, _, _, _ in per_tab if title in SHARDABLE_TABS]
+    _present = [title for title, _, _, _ in per_tab if title in SHARDABLE_TABS]
+    if total >= SHARD_THRESHOLD_CELLS and _present:   # only recommend real, present tabs (Gemini #207)
+        _shard_cells = sum(cells for title, _, _, cells in per_tab if title in _present)
         out.append(Result(
             "CAPACITY", "shard-recommended", "WARN",
             f"VA·Live at {total:,} cells (≥ {SHARD_THRESHOLD_CELLS:,} shard threshold). Relocate "
-            f"{_present or list(SHARDABLE_TABS)} to VA·Ops ({OPS_WORKBOOK_ID[:12]}…) — would reclaim "
+            f"{', '.join(_present)} to VA·Ops ({OPS_WORKBOOK_ID[:12]}…) — would reclaim "
             f"~{_shard_cells:,} cells → new headroom ~{GOOGLE_SHEETS_CELL_CAP - total + _shard_cells:,}. "
             f"See autonomy_upgrades A-2 Part 2."))
 
