@@ -25,11 +25,10 @@ proven). Usage: python3 tools/reconciliation/reconcile_votes.py [--max-drift 0.5
 import sys, io, csv, re, json, time, argparse, urllib.request, os
 from collections import Counter
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
-from lis_authorization import assert_lis_authorized  # LIS API 2025/2026-only gate (ban-safe)
+from lis_authorization import (assert_lis_authorized,  # LIS API 2025/2026-only gate (ban-safe)
+    LIS_API_KEY as API_KEY, LIS_PUBLIC_API_KEY as PUB_KEY)  # S-1: single env-first key source (no literal here)
 
 SHEET = "1PQDtaTTUeYv781bx4_ZiehcvbEmUt8t7jFmZYJoJGKM"
-API_KEY = "81D70A54-FCDC-4023-A00B-A3FD114D5984"
-PUB_KEY = "FCE351B6-9BD8-46E0-B18F-5572F4CCA5B9"
 
 def _get(url, headers=None, timeout=60, retries=3):
     for a in range(retries):

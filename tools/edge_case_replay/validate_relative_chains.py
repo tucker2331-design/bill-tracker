@@ -24,9 +24,9 @@ from datetime import datetime, timedelta
 import pandas as pd
 
 ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-API_KEY = "81D70A54-FCDC-4023-A00B-A3FD114D5984"
 sys.path.insert(0, ROOT)
-from lis_authorization import LIS_API_AUTHORIZED_SESSIONS, assert_lis_authorized
+from lis_authorization import (LIS_API_AUTHORIZED_SESSIONS, assert_lis_authorized,
+    LIS_API_KEY as API_KEY)  # S-1: single env-first key source (no literal here)
 SESSIONS = sorted(LIS_API_AUTHORIZED_SESSIONS, reverse=True)
 for _s in SESSIONS:
     assert_lis_authorized(_s)
