@@ -10,6 +10,13 @@ Smaller findings from the audit passes that fit none of the other three pages. S
 fix → validation. None are urgent-today; S-1 and S-2 should ride the next convenient PRs.
 
 ## S-1 · LIS WebAPIKey committed in plaintext in 10 files
+> **STATUS 2026-07-06: SHIPPED (PR #203).** `lis_authorization.py` now exports the single env-first source
+> `LIS_API_KEY` + `LIS_PUBLIC_API_KEY` (`os.environ.get("LIS_API_KEY", "<current>")`) — **rotation = set ONE
+> GitHub secret, zero code edits.** All runnable production + tool code imports it (both workers; the 4 active
+> tools + backend_worker extend their existing `lis_authorization` import). `grep 81D70A54` in running code == 1.
+> Intentionally left (documented in the PR): deprecated `xray.py`, frozen `backend_worker_3col_backup.py`, and
+> the X-Ray UI-default pair (`pages/ray2.py`+`calendar_xray.py`, user-overridable password fields). Rotation
+> note added to [[knowledge/lis_api_authorization]].
 - **Evidence:** `grep -rn "81D70A54" --include="*.py" .` → calendar_worker.py, bill_tracker (via import),
   pages/ray2.py, calendar_xray.py, xray.py, backend_worker.py (+backup), and three tools/ scripts.
 - **Risk:** not secrecy (it appears to be the public/SPA-class key; LIS 401-handling already exists and
@@ -23,6 +30,12 @@ fix → validation. None are urgent-today; S-1 and S-2 should ride the next conv
 - **Validation:** `grep -rn "81D70A54" --include="*.py" | wc -l` == 1. Effort: ~1 h.
 
 ## S-2 · CI blind spot: the 9 worker golden-test files never run in CI
+> **STATUS 2026-07-06: SHIPPED (PR #204).** New paths-filtered `golden_tests.yml` job installs the worker
+> deps and runs the offline golden + pure-logic tests (compute_effective_scrape_end, pr_c3_helper_v2,
+> refid_shape_drift, cadence, lis_authorization, session_rollover) on any PR/push touching worker logic or a
+> test file. Stdlib `structural_tests.yml` stays the always-on fast lane. A broken worker helper / cadence
+> floor now fails CI without a bot. (NY tests deliberately excluded for now — separate subsystem, possible
+> network; a follow-up can add an offline NY job.)
 - **Evidence:** `structural_tests.yml` is deliberately stdlib-only (AST-extraction, no pip, seconds).
   The full golden suites (test_compute_effective_scrape_end, test_classify_*, test_route_event,
   test_pr_c3_helper_v2 …) import calendar_worker → need pandas/gspread → run only when a session
