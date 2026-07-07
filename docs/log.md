@@ -8,6 +8,14 @@ status: active
 
 Append-only, reverse-chronological (newest at top). Each entry opens with `## [YYYY-MM-DD] <kind> | <title>` so `grep "^## \[" log.md | head -20` gives a parseable timeline.
 
+## [2026-07-06] decision | B-2 — case-law files get a generated ## Index
+
+`tools/reindex_caselaw.py` (stdlib, idempotent) inserts/refreshes a `## Index` (`#N — <lesson>`) at the top
+of assumptions_audit.md (97 entries) + gemini_review_patterns.md (50) from the entry headers — recall drops
+from a 700+-line wholesale read to ~60 lines + a grep. Re-runnable, so it's also the maintenance mechanism
+(CLAUDE.md write-back rule: fix a bug → append the entry → re-run the tool). B-2 marked shipped. (Committed
+to main — vault + docs-generator, no worker logic; the new prepush-audit has nothing to flag.)
+
 ## [2026-07-06] pr | #205 OPENED — machine-executable pre-push audit (B-3)
 
 Highest rule-compliance leverage in the queue. The 15-point audit was prose (fires only when the model

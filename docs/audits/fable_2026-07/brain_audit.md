@@ -61,6 +61,10 @@ and the gap closes substantially.** The six changes below do that.
 - **Effort:** ~1 h once; enforced by rule after.
 
 ### B-2 — Add one-line indexes at the TOP of the two case-law files
+> **STATUS 2026-07-06: SHIPPED.** `tools/reindex_caselaw.py` (stdlib-only, idempotent) generates the `## Index`
+> block (`#N — <lesson>`) at the top of assumptions_audit.md (97) + gemini_review_patterns.md (50) from the
+> entry headers themselves — recall is now a ~60-line read + a grep. Re-runnable = the maintenance rule (added
+> to CLAUDE.md write-back: fix a bug → append the entry → re-run the tool).
 - **What:** assumptions_audit (732 lines, 96 entries) and gemini_review_patterns are read wholesale when
   a model wants recall; that's ~25k tokens for what should be a 60-line skim.
 - **Fix (detail):** At the top of each file, maintain a `## Index` block: `#N — <one-sentence lesson>`
