@@ -3287,16 +3287,50 @@ SESSION_ARCHIVE_ID = "1AA-dCUDAPvq59Hv01DqteEquBJ1kkqI0QR5ECd10QeA"
 SHEET_SESSION_CELL = "V1"  # far-right row-1 state cell; re-written each cycle like Y2/Y3
 
 
+def _snapshot_dim_mismatch(src_rows, src_cols, arch_rows, arch_cols):
+    """Pure (unit-tested): return a human description if the archived grid dimensions differ from the
+    source, else ''. `copy_to` duplicates the FULL grid, so any inequality signals a partial/failed
+    snapshot — the confirm-before-advance check below turns that into a raised, retried cycle rather than
+    a silently-truncated archive we advance the session marker over. See session_rollover_test.py."""
+    if int(src_rows) != int(arch_rows) or int(src_cols) != int(arch_cols):
+        return f"archived grid {arch_rows}x{arch_cols} != live {src_rows}x{src_cols}"
+    return ""
+
+
+def _verify_archived_snapshot(archive, target, source_ws):
+    """CONFIRM-BEFORE-ADVANCE (A-2): verify the archived snapshot landed intact — tab findable by its
+    canonical name, same grid dimensions, same header row — BEFORE the caller advances the session marker.
+    This is the same confirm-before-destroy ethic `archive.py migrate-c7` uses before deleting from live.
+    Returns the verified archived row_count; RAISES on any mismatch so the caller fails the cycle and Sheet1
+    (still the completed session) is preserved for a retry — never advancing V1 over a bad/partial archive.
+    Kept in sync with tools/session_archive/archive.py `_verify_copy`."""
+    try:
+        arch_ws = archive.worksheet(target)   # by canonical name → catches a rename batch_update that didn't land
+    except gspread.exceptions.WorksheetNotFound as _e:
+        raise RuntimeError(f"archived tab '{target}' not found after copy — the delete-then-rename "
+                           f"batch_update did not land; NOT advancing the session marker") from _e
+    _mismatch = _snapshot_dim_mismatch(source_ws.row_count, source_ws.col_count,
+                                       arch_ws.row_count, arch_ws.col_count)
+    if _mismatch:
+        raise RuntimeError(f"snapshot '{target}' {_mismatch} — looks partial; NOT advancing the marker")
+    if (source_ws.row_values(1) or []) != (arch_ws.row_values(1) or []):   # `or []`: gspread None-safe (Gemini #202)
+        raise RuntimeError(f"snapshot '{target}' header row differs from the live sheet — content "
+                           f"mismatch; NOT advancing the session marker")
+    return int(arch_ws.row_count)
+
+
 def _archive_completed_session(sheet, worksheet, old_code):
     """Snapshot the live Sheet1 (`worksheet`, already fetched by the caller) into the
     archive workbook as ``Session_<old_code>``, replacing any existing snapshot of that
-    session (idempotent). Returns the target tab name; raises on failure (the caller
-    decides whether to advance the marker).
+    session (idempotent). Returns ``(target_tab_name, verified_row_count)``; raises on
+    failure OR on a failed post-copy verification (the caller decides whether to advance
+    the marker — it does NOT advance on a raise).
 
     copy_to + a single atomic batch_update (delete-old-then-rename by raw sheetId): no
     full worksheet-list fetch, and no reliance on the gspread Worksheet constructor /
-    get_worksheet_by_id typing (version-robust). Canonical standalone tool, kept in
-    sync: tools/session_archive/archive.py."""
+    get_worksheet_by_id typing (version-robust). Then CONFIRM-BEFORE-ADVANCE via
+    _verify_archived_snapshot (A-2). Canonical standalone tool, kept in sync:
+    tools/session_archive/archive.py."""
     archive = sheet.client.open_by_key(SESSION_ARCHIVE_ID)
     target = f"Session_{old_code}"
     try:
@@ -3311,7 +3345,8 @@ def _archive_completed_session(sheet, worksheet, old_code):
         "properties": {"sheetId": int(props["sheetId"]), "title": target},
         "fields": "title"}})
     archive.batch_update({"requests": requests})
-    return target
+    verified_rows = _verify_archived_snapshot(archive, target, worksheet)   # raises if the snapshot is bad
+    return target, verified_rows
 
 
 def run_sequential_turing_machine(df_past, *,
@@ -4899,7 +4934,7 @@ def run_calendar_update():
         raise
     if _sheet_session and _sheet_session != ACTIVE_SESSION:
         try:
-            _archived_to = _archive_completed_session(sheet, worksheet, _sheet_session)
+            _archived_to, _archived_rows = _archive_completed_session(sheet, worksheet, _sheet_session)
         except Exception as _arch_err:
             print(f"🛑 Session-rollover archive of {_sheet_session} FAILED: {_arch_err}. Failing the "
                   f"cycle so Sheet1 (still the completed session) is not overwritten; retried next cycle.")
@@ -4914,8 +4949,20 @@ def run_calendar_update():
                   f"{_ss_set_err}. Failing the cycle so Sheet1 is not overwritten while the marker "
                   f"still reads the old session.")
             raise
+        # FYI, not action-required (A-2 / Standard #8: the system rolled over autonomously and informs).
+        # This is a routine once-a-session lifecycle event — surface it as an INFO SYSTEM_ALERT (Slack +
+        # Health chip), the same posture as the A-1 auto-follow FYI, so operators SEE the rollover happened
+        # (and that the archive was VERIFIED) without any step to perform.
+        push_system_alert(
+            f"📦 Session rollover {_sheet_session} → {ACTIVE_SESSION}: archived the completed session to "
+            f"'{_archived_to}' ({_archived_rows:,} rows, snapshot verified) in the archive workbook; "
+            f"live Sheet1 now re-derives for {ACTIVE_SESSION}. No action needed.",
+            # A SUCCESSFUL lifecycle event, not a failure — category UNKNOWN (not API_FAILURE) so it doesn't
+            # pollute API-failure health views; severity INFO keeps it a non-alarming FYI (CodeRabbit #202).
+            status="INFO", category="UNKNOWN", severity="INFO",
+            dedup_key=f"session_rollover::{_sheet_session}->{ACTIVE_SESSION}")
         print(f"📦 Session rollover {_sheet_session} → {ACTIVE_SESSION}: "
-              f"archived the completed session to '{_archived_to}' in the archive workbook.")
+              f"archived the completed session to '{_archived_to}' ({_archived_rows:,} rows verified).")
 
     # Review-fix (Codex P2): carry-forward read for Sheet1!W1. If the
     # previous cycle tripped the mass-violation circuit breaker, it left a

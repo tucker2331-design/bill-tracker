@@ -61,12 +61,37 @@ def _open():
     return main, archive
 
 
+def _snapshot_dim_mismatch(src_rows, src_cols, arch_rows, arch_cols):
+    """Pure: '' if the archived grid dims equal the source, else a description. `copy_to` duplicates the
+    full grid, so any inequality signals a partial snapshot. Kept in sync with calendar_worker.py."""
+    if int(src_rows) != int(arch_rows) or int(src_cols) != int(arch_cols):
+        return f"archived grid {arch_rows}x{arch_cols} != live {src_rows}x{src_cols}"
+    return ""
+
+
+def _verify_copy(archive, target_name, src_ws):
+    """Confirm-before-trust: the archived tab exists by its canonical name, same grid dims + header row as
+    the source. Raises on any mismatch (the caller must NOT treat the copy as good). Mirrors
+    calendar_worker._verify_archived_snapshot so the worker's rollover hook and this tool agree."""
+    try:
+        arch_ws = archive.worksheet(target_name)
+    except gspread.exceptions.WorksheetNotFound as exc:
+        raise RuntimeError(f"archived tab '{target_name}' not found after copy — rename did not land") from exc
+    mismatch = _snapshot_dim_mismatch(src_ws.row_count, src_ws.col_count, arch_ws.row_count, arch_ws.col_count)
+    if mismatch:
+        raise RuntimeError(f"snapshot '{target_name}' {mismatch} — looks partial")
+    if (src_ws.row_values(1) or []) != (arch_ws.row_values(1) or []):   # `or []`: gspread None-safe (Gemini #202)
+        raise RuntimeError(f"snapshot '{target_name}' header row differs from source — content mismatch")
+    return int(arch_ws.row_count)
+
+
 def _copy_tab(src_ws, archive, target_name):
     """Copy src_ws into the archive as `target_name`, replacing any existing tab of
     that name (idempotent). Uses copy_to + ONE atomic batch_update (delete-old-then-
     rename, in that order so there's no title collision and the archive never drops to
     0 sheets). No full worksheet-list fetch in the loop, and no reliance on the gspread
-    Worksheet constructor / get_worksheet_by_id typing — version-robust (Gemini #131)."""
+    Worksheet constructor / get_worksheet_by_id typing — version-robust (Gemini #131).
+    VERIFIES the copy landed intact before returning (confirm-before-trust); raises on mismatch."""
     try:
         old_id = archive.worksheet(target_name).id  # a pre-existing same-named target, if any
     except gspread.exceptions.WorksheetNotFound:
@@ -79,6 +104,7 @@ def _copy_tab(src_ws, archive, target_name):
         "properties": {"sheetId": int(props["sheetId"]), "title": target_name},
         "fields": "title"}})
     archive.batch_update({"requests": requests})
+    return _verify_copy(archive, target_name, src_ws)   # raises unless the snapshot is confirmed intact
 
 
 def verify(main, archive):
@@ -98,8 +124,8 @@ def snapshot_session(main, archive):
         return 1
     sheet1 = main.worksheet("Sheet1")
     name = f"Session_{code}"
-    _copy_tab(sheet1, archive, name)
-    print(f"✅ Snapshotted live Sheet1 -> archive '{name}' (~{int(sheet1.row_count):,} allocated rows).")
+    verified_rows = _copy_tab(sheet1, archive, name)   # copies AND confirms it landed intact (raises otherwise)
+    print(f"✅ Snapshotted live Sheet1 -> archive '{name}' (~{verified_rows:,} rows, snapshot verified).")
     return 0
 
 
