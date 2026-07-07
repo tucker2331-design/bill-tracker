@@ -1,0 +1,68 @@
+name: 🧪 Golden Tests (worker logic)
+
+# S-2 (sweep_findings): the STDLIB-only structural_tests.yml is the always-on fast lane, but the full worker
+# golden suites + the pure-logic unit tests import calendar_worker / pandas / pytz, so they never ran in CI —
+# they only caught regressions if a session REMEMBERED to run them locally. That's discipline, not
+# enforcement (a broken parse_24h_time or cadence floor could merge unnoticed). This job installs the deps
+# and runs them — but ONLY on PRs/pushes whose diff touches the worker logic or a test file (paths filter),
+# so doc-only PRs keep the ~2 min + the pip install off the critical path. Deliberately EXCLUDES anything
+# that hits the network (all listed tests are offline golden/pure tests — no LIS calls, CI-safe).
+on:
+  pull_request:
+    paths:
+      - 'calendar_worker.py'
+      - 'bill_tracker.py'
+      - 'cadence.py'
+      - 'lis_authorization.py'
+      - 'structural_router.py'
+      - 'tools/session_archive/**'
+      - 'test_*.py'
+      - '**_test.py'
+      - '.github/workflows/golden_tests.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'calendar_worker.py'
+      - 'bill_tracker.py'
+      - 'cadence.py'
+      - 'lis_authorization.py'
+      - 'structural_router.py'
+      - 'tools/session_archive/**'
+      - 'test_*.py'
+      - '**_test.py'
+  workflow_dispatch: {}
+
+jobs:
+  golden-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+          cache: pip
+      - name: Install worker deps
+        run: |
+          python -m pip install --upgrade pip
+          pip install pandas requests gspread google-auth pytz beautifulsoup4 pdfplumber
+      - name: Run golden + pure-logic tests
+        env:
+          PYTHONUNBUFFERED: "1"
+        run: |
+          set -u
+          fail=0
+          for t in \
+            test_compute_effective_scrape_end.py \
+            test_pr_c3_helper_v2.py \
+            test_refid_shape_drift.py \
+            cadence_test.py \
+            lis_authorization_test.py \
+            session_rollover_test.py; do
+            echo "::group::$t"
+            if python3 -u "$t"; then echo "PASS  $t"; else echo "FAIL  $t"; fail=1; fi
+            echo "::endgroup::"
+          done
+          if [ "$fail" -ne 0 ]; then echo "::error::one or more golden/logic tests failed"; fi
+          exit $fail
