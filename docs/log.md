@@ -8,6 +8,19 @@ status: active
 
 Append-only, reverse-chronological (newest at top). Each entry opens with `## [YYYY-MM-DD] <kind> | <title>` so `grep "^## \[" log.md | head -20` gives a parseable timeline.
 
+## [2026-07-06] pr | #205 OPENED — machine-executable pre-push audit (B-3)
+
+Highest rule-compliance leverage in the queue. The 15-point audit was prose (fires only when the model
+thinks to apply it — #189 missed the version bump, a bot caught it a PR late, audit #96). `tools/prepush_audit.py`
+(stdlib-only) now mechanically checks a diff and CI runs it every PR (`structural_tests.yml` → `prepush-audit`):
+(1) an output-VALUE-affecting change with no `WORKER_OUTPUT_LOGIC_VERSION` bump FAILS — curated anchor set of
+Sheet1-value-computing fns (`build_time_graph`/`_resolve_one_day`/`parse_24h_time`/`_append_event`/STM/
+`classify_action`/`route_event`…), deliberately EXCLUDING gating/cadence/archive/auth so those PRs aren't
+false-flagged (the exact risk I scoped for); (4) ray2↔calendar_xray divergence; (6/9) untagged
+silent-fallback literals in worker files. Judgment points print as a checklist. **Measure-first validation:
+the #189 diff (00c7354..bdb269c) FAILS; the import-only S-1 (#203) + archive-only A-2 (#202) diffs PASS.**
+Self-test on the PR's own diff passes. B-3 marked shipped in the brain audit.
+
 ## [2026-07-06] decision | B-5 + B-4(partial) — reasoning doctrine + CLAUDE.md cadence de-drift
 
 Brain-hygiene batch. **B-5:** wrote [[workflow/reasoning_doctrine]] — 8 imperative process moves (the actual

@@ -72,6 +72,13 @@ and the gap closes substantially.** The six changes below do that.
 - **Effort:** ~45 min backfill + rule.
 
 ### B-3 — Convert the pre-push audit from prose into an executable script
+> **STATUS 2026-07-06: SHIPPED (PR #205).** `tools/prepush_audit.py` (stdlib-only) enforces the mechanical
+> subset on a diff: (1) output-VALUE-affecting change → requires a `WORKER_OUTPUT_LOGIC_VERSION` bump —
+> curated anchor set of Sheet1-value-computing fns, deliberately excluding gating/cadence/archive/auth so
+> those aren't false-flagged; (4) ray2↔calendar_xray diff-identical; (6/9) untagged silent-fallback literals
+> FAIL; (2/5) WARN reminders; judgment points print as a checklist. Wired as the `prepush-audit` job in
+> structural_tests.yml (every PR). **Validated (measure-first): the #189 diff FAILS on the missing bump; the
+> import-only S-1 and archive-only A-2 diffs PASS — no false-positives.** CLAUDE.md notes the tool.
 - **What:** The 15-point audit is prose. Prose rules fire only when the model *thinks to* apply them.
   Evidence: PR #189 (Fable!) missed the logic-version bump; Qodo caught it a PR later
   ([[failures/assumptions_audit#96]]). If Fable misses prose rules, Opus will too.
