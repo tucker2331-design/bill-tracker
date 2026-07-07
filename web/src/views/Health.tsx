@@ -7,6 +7,11 @@ import { loadHealth, type HealthData } from "../data/health";
 import { loadVerification, type GuardRun, type GuardState } from "../data/verification";
 import { loadHistory, seriesFor, seriesForPct, type HistoryData } from "../data/history";
 
+// Plain-language severity for laymen (owner 2026-07-07): raw CRITICAL/WARN/INFO reads scarier than it is, so
+// a benign INFO gets overread. Keep the colour class (from severity) but show a human label instead.
+const SEV_LABEL: Record<string, string> = { CRITICAL: "Action needed", WARN: "Heads up", INFO: "FYI" };
+const sevLabel = (s: string) => SEV_LABEL[(s || "").toUpperCase()] ?? s;
+
 // The operator / Health tab (vision §3f + §7): the trust signals the system ALREADY produces, as Few
 // bullet graphs with danger bands (PL-8 / owner's "RPM redline"). Bill-backend signals arrive via props
 // (App loaded Bill_Tracker R1); calendar-subsystem signals load here from Sheet1 (lightweight, health.ts).
@@ -380,7 +385,7 @@ export function Health({ completeness, dataAsOf }: { completeness: Completeness 
             {alertHistory.map((a) => a.kind === "group" ? (
               <details key={`g|${a.severity}|${a.category}`} className="hl-alertgroup">
                 <summary className="hl-alert">
-                  <span className={`hl-sev ${a.severity.toLowerCase()}`}>{a.severity}</span>
+                  <span className={`hl-sev ${a.severity.toLowerCase()}`} title={a.severity}>{sevLabel(a.severity)}</span>
                   {a.category && <span className="hl-cat">{a.category}</span>}
                   <span className="hl-amsg"><strong>{a.distinct.toLocaleString()}</strong> distinct alerts (routine aggregate — expand to inspect)</span>
                   <span className="hl-acount" title={`${a.totalCount} total occurrences across ${a.distinct} distinct alerts`}>×{a.totalCount.toLocaleString()}</span>
@@ -399,7 +404,7 @@ export function Health({ completeness, dataAsOf }: { completeness: Completeness 
               </details>
             ) : (
               <div key={`s|${a.severity}|${a.category}|${a.message}`} className="hl-alert">
-                <span className={`hl-sev ${a.severity.toLowerCase()}`}>{a.severity}</span>
+                <span className={`hl-sev ${a.severity.toLowerCase()}`} title={a.severity}>{sevLabel(a.severity)}</span>
                 {a.category && <span className="hl-cat">{a.category}</span>}
                 <span className="hl-amsg">{a.message}</span>
                 {a.count > 1 && <span className="hl-acount" title={`fired in ${a.count} cycles`}>×{a.count}</span>}
@@ -414,7 +419,7 @@ export function Health({ completeness, dataAsOf }: { completeness: Completeness 
         <div className="panel" style={{ marginBottom: 18 }}>
           {h.alerts.map((a, i) => (
             <div key={i} className="hl-alert">
-              <span className={`hl-sev ${a.severity.toLowerCase()}`}>{a.severity}</span>
+              <span className={`hl-sev ${a.severity.toLowerCase()}`} title={a.severity}>{sevLabel(a.severity)}</span>
               {a.category && <span className="hl-cat">{a.category}</span>}
               <span className="hl-amsg">{a.message}</span>
               {a.date && <span className="hl-adate">{a.date}</span>}
