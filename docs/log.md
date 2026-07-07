@@ -8,6 +8,19 @@ status: active
 
 Append-only, reverse-chronological (newest at top). Each entry opens with `## [YYYY-MM-DD] <kind> | <title>` so `grep "^## \[" log.md | head -20` gives a parseable timeline.
 
+## [2026-07-06] decision | C-8 — NY re-measured: already hardened; oracle is owner-gated
+
+Measured `ny_bill_tracker.py` against C-8's "NY missing VA's hardening" claim (doctrine #1). NY is more
+structural than the audit assumed: `_derive_outcome` reads only `signed` (bool) + `vetoMessages` (presence);
+chambers ALREADY have drift canaries (`unknown_origin/action/agenda_chamber` counters → health WARN with
+denominators, `chamber_raw` kept, never guessed); `UNKNOWN_STRUCTURAL_OUTCOME` already fires. `statusType`/
+`statusDesc`/action-text are DISPLAY-ONLY (per docs/ny) → feed no logic, so a vocab canary on them is
+low-value (can't break accuracy). **→ Did NOT add a marginal watcher (no data justification — Standard #7).**
+C-8's real value is Part 2, the independent oracle (LegiScan-NY reconciliation), which needs a LegiScan API
+key + terms check = **owner-gated**. Status recorded in [[audits/fable_2026-07/codebase_longevity_audit]] C-8.
+**This exhausts the by-me-completable Fable queue; the remainder (A-2 Part 2 ops-workbook, C-8 oracle, CDN
+inversion, PA ingestion, S-3 optional attic cleanup) needs owner infrastructure or is a multi-session build.**
+
 ## [2026-07-06] decision | B-6 — vault hygiene (measure-first: mostly moot)
 
 Ran the B-6 checks. **0 orphans** across 78 pages (well-linked — no action; reusable orphan-check snippet

@@ -153,6 +153,25 @@ storage growth against a hard platform ceiling, single-platform coupling, and NY
 - `checked_at_utc` / completeness self-describes ✓. Add `session_code` stamp (C-1.3).
 
 ## C-8 · New York — functional but missing VA's hardening layer (HIGH for NY accuracy)
+> **STATUS 2026-07-06 — RE-MEASURED; more hardened than this audit assumed.** Reading `ny_bill_tracker.py`
+> against the spec below (doctrine #1: measure before building):
+> - **(a) vocab canaries — mostly ALREADY PRESENT / low-value.** Chamber codes ALREADY have the drift
+>   canary: `unknown_origin_chamber` / `unknown_action_chamber` / `unknown_agenda_chamber` counters →
+>   surfaced as health WARN findings WITH denominators, and an unnormalizable chamber is kept as `chamber_raw`
+>   (never guessed). `status.statusType`/`statusDesc` are **DISPLAY/PROVENANCE ONLY** (per docs/ny
+>   bill_pipeline + quality_audit + assumptions_register) — they feed NO logic, so a statusType-drift canary
+>   is low-value: a new statusType can't break accuracy. Action text is display-only too (`_history` keeps
+>   it, never classifies it). NY's accuracy path is already STRUCTURAL: `_derive_outcome` reads only `signed`
+>   (bool) + `vetoMessages` (presence), and an unmapped outcome ALREADY fires `UNKNOWN_STRUCTURAL_OUTCOME`
+>   WARN with a denominator. **→ No new canary added: it would be a marginal watcher on a display-only field,
+>   i.e. a change with no data justification (Standard #7).**
+> - **(b) independent oracle — the REAL remaining value, and it's OWNER-GATED.** NY has nothing outside
+>   OpenLeg. The valuable port is LegiScan-NY (or Assembly/Senate public-site) reconciliation — needs a
+>   **LegiScan API key + a terms check** (owner infra), same class as the other owner-gated items.
+> - **(c) session-year rollover:** fold NY into the rollover runbook alongside VA — a doc task, bundle with
+>   the next NY session.
+> **Net:** C-8's high-value work is Part 2 (oracle, owner-gated); the canary gap it names is largely already
+> closed. Do the oracle when the owner provisions a LegiScan key.
 - **Evidence (read of `ny_bill_tracker.py` + docs/ny/):** clean source contract (OpenLeg API v3, paged,
   retry/backoff, fail-safe keep-last-known-good, machine-readable completeness with named gaps —
   Assembly calendar/committee absence is documented honestly). **Missing vs VA:** (a) no drift canaries
