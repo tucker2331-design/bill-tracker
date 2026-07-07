@@ -1,10 +1,17 @@
 ---
 tags: [state, live, debt, anti-pattern]
-updated: 2026-04-19
+updated: 2026-07-07
 status: active
 ---
 
 # Open Anti-Patterns in Code
+
+> **BACKLOG AUDITED 2026-07-07 (owner asked to clear it): essentially PAID DOWN.** #1-#7 + #9 resolved
+> (PR#25 / PR-B / PR-C7.0.6); **#8 confirmed RESOLVED** by the C8 route-first admin classification; **#10 is
+> the only genuinely-open item** — a THEORETICAL `nan or default` WARN in the STM body, correctly deferred:
+> the STM is output-affecting + accuracy-critical, and Standard #7 forbids changing it on a hunch, so it
+> needs a DATA-CONFIRM pass (does each flagged field ever go NaN?) via the incremental-STM oracle before any
+> fix. Not marathon-tail work. So there is no actionable silent-fallback debt right now.
 
 Live debt tracker for the "silent source-miss" anti-pattern surfaced in [[failures/pr22_post_mortem]]. Each entry is code that swallows a missing source signal into an invisible default. The governing rule is [[workflow/source_miss_visibility]].
 
@@ -144,7 +151,10 @@ final_df = final_df[(final_df['Date'] >= scrape_start_str) & (final_df['Date'] <
 
 ## 8. `⏱️ [NO_SCHEDULE_MATCH]` tag fires on admin-verb rows
 
-**Status:** surfaced by 2026-04-19 full-universe audit ([[testing/crossover_audit]]). Not yet fixed.
+**Status:** RESOLVED-by-PR-C7.1g (confirmed 2026-07-07). `route == "admin"` rows now route to the terminal
+`admin_default` origin (deliberately timeless, no `find_api_schedule_match` miss-tag) — see
+`calendar_worker.py` ~L3880-3917. Admin verbs no longer dilute the NO_SCHEDULE_MATCH signal; the structural
+router's route-first classification made this fall out exactly as the fix-plan's option (a) predicted.
 
 **Severity:** `INFO` — no data integrity impact; cosmetic/scope issue in instrumentation. Admin rows correctly land in Ledger Updates; the extra tag is noise, not a wrong classification.
 
