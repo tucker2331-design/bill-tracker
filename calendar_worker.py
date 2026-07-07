@@ -68,7 +68,7 @@ def notify_slack(text):
 # 2026-07-04.1: date-aware SortTime resolver (#189) + the TimeClass column (#193) both change
 # Sheet1 output — force a recompute so cached/incremental paths can't serve pre-change rows
 # (Qodo #193; #189 omitted this bump, caught here).
-WORKER_OUTPUT_LOGIC_VERSION = "2026-07-04.1"
+WORKER_OUTPUT_LOGIC_VERSION = "2026-07-07.1"
 
 
 def _sha(*parts):
@@ -3422,15 +3422,12 @@ def run_sequential_turing_machine(df_past, *,
         elif _outcome_remainder in ('H', 'S'):
             _outcome_remainder = ""
         if not _outcome_remainder:
-            _refid = str(row.get(refid_col) or '') if refid_col else ''
-            push_system_alert(
-                f"Malformed HISTORY row for {bill_num} on {date_str}: empty description after chamber-prefix strip "
-                f"(raw_desc={outcome_text!r}, refid={_refid!r})",
-                status="WARN",
-                category="DATA_ANOMALY",
-                severity="WARN",
-                dedup_key=f"history_empty_desc::{bill_num}::{date_str}",
-            )
+            # A blank upstream row (LIS published a HISTORY row with no action text, just the chamber
+            # prefix). We refuse to fabricate an action from it — but this is a routine UPSTREAM defect, so
+            # count it and let the caller emit ONE benign summary post-loop, instead of N per-row WARNs that
+            # pile up on the Health tab and read as scary (owner 2026-07-07). A genuinely novel malformation
+            # (non-empty-but-unparseable) is a different path and still alerts.
+            source_miss_counts["malformed_empty_history"] += 1
             source_miss_counts["dropped_noise"] += 1
             continue
 
@@ -4183,6 +4180,44 @@ def session_follow_gate(active_code, http_session, worksheet=None):
     return True, None
 
 
+def _quiet_window_overlap_minutes(start_utc, end_utc, quiet_start_hour=23, quiet_end_hour=6, step_min=5):
+    """Minutes of the interval [start_utc, end_utc] that fall inside the daily ET quiet window
+    (default 11pm–6am ET, midnight-spanning). Used to compute the ACTIVE-HOURS portion of a cycle gap so a
+    normal overnight self-throttle / quiet-hours skip (guardrail #5) is NOT mistaken for a missed-cycle
+    outage — the gap detector's WARN used to fire every morning on the benign overnight span (owner report,
+    2026-07-07). Walks the interval in small ET steps so it's DST-correct without hand-rolling boundary math
+    (a multi-day gap is only a few hundred cheap steps). Pure except the tz lookup; unit-tested."""
+    if end_utc <= start_utc or step_min <= 0:   # step_min<=0 would loop forever (Gemini #206)
+        return 0.0
+    et = pytz.timezone("America/New_York")
+    total = 0.0
+    step = timedelta(minutes=step_min)
+    t = start_utc
+    while t < end_utc:
+        h = t.astimezone(et).hour
+        if quiet_start_hour > quiet_end_hour:   # midnight-spanning window (the 23→6 default)
+            in_quiet = (h >= quiet_start_hour) or (h < quiet_end_hour)
+        else:                                   # within-day window (start < end) — don't invert (Gemini #206)
+            in_quiet = quiet_start_hour <= h < quiet_end_hour
+        if in_quiet:
+            total += min(float(step_min), (end_utc - t).total_seconds() / 60.0)
+        t += step
+    return total
+
+
+# Cycle-gap thresholds — MODULE-LEVEL so health_gap_test.py imports the SAME values (no drift; CodeRabbit
+# #206). Compared against the ACTIVE-HOURS gap (raw minus the overnight-quiet overlap above), so a normal
+# overnight self-throttle / quiet-hours skip reads ~0 excess and never alerts, while a real DAYTIME outage
+# still fires. The cron is `*/15` self-throttling to ~3h off-season (EMPTY tier), so ~180 min is the expected
+# off-season interval; thresholds are pure active-hours multiples (the quiet window is already subtracted).
+SCHEDULE_CADENCE_MINUTES = 180             # expected off-season (EMPTY-tier) interval
+QUIET_WINDOW_MINUTES = 7 * 60              # 11pm-6am ET overnight skip (informational)
+GAP_WARN_MINUTES = SCHEDULE_CADENCE_MINUTES * 2       # 360 active min = ~2 missed daytime cycles
+GAP_CRITICAL_MINUTES = SCHEDULE_CADENCE_MINUTES * 4   # 720 active min = ~4
+GAP_STALE_DAYS = 30                        # cursor too old to trust for recovery
+GAP_RECONCILIATION_MAX_DAYS = 7            # hard cap for Part C re-poll window
+
+
 def run_calendar_update():
     with _lis_count_lock:
         lis_request_count["n"] = 0  # guardrail #4: reset the per-cycle request count at CYCLE start
@@ -4249,6 +4284,7 @@ def run_calendar_update():
         "unsourced_journal": 0,     # no schedule, no anchor, no LegislationEvent recovery, non-floor -> NO_SCHEDULE_MATCH
         "floor_anchor_miss": 0,     # Floor action with no convene anchor hit -> NO_CONVENE_ANCHOR
         "dropped_noise": 0,         # positive-noise filter drops (continue at noise filter)
+        "malformed_empty_history": 0,  # blank upstream HISTORY rows (empty desc after chamber prefix) — benign; ONE summary alert post-loop, not N per-row WARNs (owner 2026-07-07)
         # Orthogonal tag counters (overlap with the above)
         "unsourced_anchor": 0,      # Memory Anchor committee fallback applied
         "dropped_ephemeral": 0,     # Post-loop ephemeral filter drops (subset of unsourced_*)
@@ -5063,23 +5099,10 @@ def run_calendar_update():
     # routed through the existing push_system_alert → Bug_Logs path. Owner may
     # later route these through a separate dashboard / push channel. See
     # docs/ideas/future_improvements.md (PR-C2 7-day alert routing).
-    # PR-C7.1f: gap thresholds are derived from the SCHEDULED cadence + the
-    # overnight quiet window, NOT the old 15-min assumption. The cron is now
-    # every 3h (calendar_worker.yml) and scheduled runs self-skip 11pm-6am ET
-    # (the __main__ quiet gate). The largest HEALTHY gap is therefore the
-    # overnight span (~12h), so the old `60 min = outage` would fire a false
-    # CRITICAL + trigger wasteful Part-C reconciliation (extra LIS calls)
-    # EVERY cycle (Codex P2, PR #62). Keep these in sync with the cron cadence
-    # and the quiet window if either changes (e.g. 30-min cadence in-session).
-    SCHEDULE_CADENCE_MINUTES = 180         # matches cron '0 */3 * * *'
-    QUIET_WINDOW_MINUTES = 7 * 60          # 11pm-6am ET overnight skip
-    # WARN at 2 missed active cycles; CRITICAL only PAST the worst healthy
-    # overnight gap (quiet window bridged by the cadence on both ends), so
-    # reconciliation fires on a REAL outage, never on the nightly skip.
-    GAP_WARN_MINUTES = SCHEDULE_CADENCE_MINUTES * 2                          # 360
-    GAP_CRITICAL_MINUTES = QUIET_WINDOW_MINUTES + SCHEDULE_CADENCE_MINUTES * 2  # 780
-    GAP_STALE_DAYS = 30                    # cursor too old to trust for recovery
-    GAP_RECONCILIATION_MAX_DAYS = 7        # hard cap for Part C re-poll window
+    # Gap thresholds (GAP_WARN_MINUTES / GAP_CRITICAL_MINUTES / SCHEDULE_CADENCE_MINUTES / QUIET_WINDOW_MINUTES
+    # / GAP_STALE_DAYS / GAP_RECONCILIATION_MAX_DAYS) are MODULE-LEVEL (defined next to
+    # _quiet_window_overlap_minutes) so health_gap_test.py imports the SAME constants — single source, no
+    # drift (CodeRabbit #206). They are compared against the ACTIVE-HOURS gap (raw minus quiet overlap).
 
     _cycle_start_utc = datetime.now(timezone.utc)
     gap_minutes = None              # None when unknown (first_run / malformed)
@@ -5138,6 +5161,10 @@ def run_calendar_update():
             else:
                 gap_minutes = round(_delta_seconds / 60.0, 2)
                 _gap_window_start_utc = _y1_parsed  # usable anchor for Part C
+                # ACTIVE-hours gap = raw gap MINUS its overnight-quiet overlap, so the benign nightly skip
+                # (and any self-throttle inside quiet hours) doesn't count toward "missed cycle" (owner 2026-07-07).
+                _quiet_overlap_min = _quiet_window_overlap_minutes(_y1_parsed, _cycle_start_utc)
+                _active_gap_min = max(0.0, gap_minutes - _quiet_overlap_min)
                 if _breaker_carryforward_detected:
                     gap_cause = "breaker_carryforward"
                     # Carry-forward alert already fired in the W1 block above;
@@ -5147,25 +5174,23 @@ def run_calendar_update():
                         f"🕒 Gap detection: breaker_carryforward — gap={gap_minutes:.1f} min "
                         f"(trip_utc={_breaker_carryforward_trip_utc})"
                     )
-                elif _delta_seconds >= GAP_CRITICAL_MINUTES * 60:
+                elif _active_gap_min >= GAP_CRITICAL_MINUTES:
                     gap_cause = "outage"
                     push_system_alert(
-                        f"Cycle gap is {gap_minutes:.1f} min (>{GAP_CRITICAL_MINUTES}) — "
-                        f"exceeds the worst healthy overnight gap since last successful "
-                        f"overwrite at {last_successful_cycle_end_utc}; likely a real "
-                        f"outage, not the nightly quiet skip. PR-C2 Part C will attempt "
-                        f"reconciliation if gap ≤ {GAP_RECONCILIATION_MAX_DAYS} days.",
+                        f"Cycle gap is {gap_minutes:.1f} min ({_active_gap_min:.0f} min in ACTIVE hours, "
+                        f">{GAP_CRITICAL_MINUTES}) since last successful overwrite at "
+                        f"{last_successful_cycle_end_utc} — a real DAYTIME outage, not the nightly quiet skip. "
+                        f"PR-C2 Part C will attempt reconciliation if gap ≤ {GAP_RECONCILIATION_MAX_DAYS} days.",
                         status="CRITICAL",
                         category="API_FAILURE",
                         severity="CRITICAL",
                         dedup_key=f"gap_critical::{_cycle_start_utc.strftime('%Y-%m-%d %H')}",
                     )
-                elif _delta_seconds >= GAP_WARN_MINUTES * 60:
+                elif _active_gap_min >= GAP_WARN_MINUTES:
                     gap_cause = "outage"
                     push_system_alert(
-                        f"Cycle gap is {gap_minutes:.1f} min (>{GAP_WARN_MINUTES}) — "
-                        f"2+ missed scheduled cycles since {last_successful_cycle_end_utc} "
-                        f"(an overnight quiet skip can land here and is benign).",
+                        f"Cycle gap is {gap_minutes:.1f} min ({_active_gap_min:.0f} min in ACTIVE hours, "
+                        f">{GAP_WARN_MINUTES}) — 2+ missed DAYTIME cycles since {last_successful_cycle_end_utc}.",
                         status="WARN",
                         category="API_FAILURE",
                         severity="WARN",
@@ -6865,14 +6890,23 @@ def run_calendar_update():
                     print(f"✅ INCREMENTAL SHADOW MATCH — {_reused} bills reused, {_recomp} recomputed "
                           f"(shared_changed={_shared_changed}); cached-bill reuse is SAFE this cycle.")
                 else:
+                    # SHADOW / experimental (observe-only): the incremental engine's output is NEVER used —
+                    # it runs in parallel to PROVE it matches the proven full engine before any future flip.
+                    # A mismatch here is the shadow DOING ITS JOB ("not ready, stay off"), NOT a live-calendar
+                    # problem — so it is INFO, and must NOT turn the Stability ring amber (owner 2026-07-07).
                     push_system_alert(
-                        f"INCREMENTAL SHADOW DIVERGENCE: reusing cached events would have produced a DIFFERENT "
-                        f"calendar — {len(_of)} only-in-full, {len(_oi)} only-in-incremental (reused={_reused}, "
-                        f"recomputed={_recomp}, shared_changed={_shared_changed}). The incremental engine must NOT "
-                        f"flip to primary until root-caused. only-full={_of[:2]}; only-incr={_oi[:2]}",
-                        status="CRITICAL", category="DATA_ANOMALY", severity="CRITICAL",
+                        f"Experimental engine check (SHADOW — the LIVE calendar is UNAFFECTED). The optional "
+                        f"faster 'incremental' engine — which runs in parallel and whose output is never shown "
+                        f"— didn't match the proven engine on {len(_of) + len(_oi)} row(s) this cycle "
+                        f"({len(_of)} only-in-full, {len(_oi)} only-in-incremental). This is EXPECTED while it's "
+                        f"being validated: it stays OFF until it matches perfectly, so nothing you see is "
+                        f"affected. No action needed unless you're actively enabling it — set the repo variable "
+                        f"STM_INCREMENTAL_SHADOW to empty to stop these checks. "
+                        f"(debug: only-full={_of[:2]}; only-incr={_oi[:2]})",
+                        status="INFO", category="DATA_ANOMALY", severity="INFO",
                         dedup_key="stm_incremental_divergence")
-                    print(f"🚨 INCREMENTAL SHADOW DIVERGENCE — only-full={len(_of)}, only-incr={len(_oi)} (SYSTEM_ALERT)")
+                    print(f"ℹ️ Incremental SHADOW divergence (observe-only, LIVE calendar unaffected) — "
+                          f"only-full={len(_of)}, only-incr={len(_oi)}")
                 _persist_stm_bill_cache(sheet, _bill_cache_ws, _stm_full_contribution,
                                         legevent_history_hashes, _shared_sig, _bill_cache_ok)
             except Exception as _shadow_err:
@@ -7075,6 +7109,20 @@ def run_calendar_update():
 
     # === SOURCE-MISS METRICS (Section 0 denominator) ===
     # Surface the counters that PR-A's post-mortem identified as missing.
+    # ONE benign summary for the blank upstream HISTORY rows (owner 2026-07-07): LIS itself publishes rows
+    # with a chamber prefix but NO action text; we refuse to fabricate and count them. Emit a single
+    # plain-language INFO — not N per-row WARNs — so the Health tab stays readable and does NOT alarm the
+    # Stability ring (these are Virginia's data defects, not ours, and nothing is lost). A genuinely novel
+    # malformation is a different path and still WARNs.
+    _blank_history_rows = source_miss_counts.get("malformed_empty_history", 0)
+    if _blank_history_rows:
+        push_system_alert(
+            f"{_blank_history_rows} blank row(s) in Virginia's HISTORY feed this cycle — LIS published rows "
+            f"with a chamber but NO action text, so there was nothing to place on the calendar. We flagged "
+            f"them rather than guess; nothing is missing or wrong. Benign — an upstream data defect, not ours.",
+            status="INFO", category="DATA_ANOMALY", severity="INFO",
+            dedup_key="history_blank_rows_summary")
+
     # Encoded as a JSON-in-outcome alert row with Bill="SYSTEM_METRICS" so
     # X-Ray Section 0 can parse it. One-liner summary also goes to stdout
     # so it lands in worker logs.
