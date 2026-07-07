@@ -1,10 +1,15 @@
 ---
-tags: [state, live, handoff]
-updated: 2026-06-23
-status: active
+tags: [state, archive, handoff]
+updated: 2026-07-06
+status: archived
 ---
 
-# ▶️ START HERE — next session kickoff
+# ▶️ START HERE — next session kickoff  — ⚠️ ARCHIVED 2026-07-06 (S-6)
+
+> **STALE / ARCHIVED.** This page was a SECOND "what's next" that drifted three weeks out of date and
+> caused confusion (sweep S-6). There is now ONE source of "what's next": **[[state/current_status]]** (NOW /
+> NEXT / RECENTLY LANDED). Read that. Everything below is the frozen 2026-06-23 handoff, kept only for
+> history — its queue is long completed.
 
 Read this first (then [[index]], [[state/current_status]], [[state/open_anti_patterns]]). Written at the
 end of a long 2026-06-22/23 session that shipped the bill backend, ban-safe scheduling, the front end,

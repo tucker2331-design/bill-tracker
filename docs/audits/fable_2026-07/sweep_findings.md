@@ -71,6 +71,8 @@ fix → validation. None are urgent-today; S-1 and S-2 should ride the next conv
   main builds clean (`tsc` + `vite build` verified post-merge).
 
 ## S-6 · docs/state/next_session.md is a second, stale "what's next"
+> **STATUS 2026-07-06: SHIPPED** (with B-1). `next_session.md` archived (status: archived, stub banner →
+> current_status); index "START HERE" repointed to [[state/current_status]] as the ONE live source.
 Covered as brain-audit B-6; flagged here because it bit ME this session: current_status pointed to it as
 authoritative and its queue was three weeks old. One source of NEXT (current_status after B-1); archive
 the page.

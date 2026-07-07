@@ -40,6 +40,10 @@ and the gap closes substantially.** The six changes below do that.
 ---
 
 ### B-1 — Restructure `state/current_status.md` from an append-log into a true state page
+> **STATUS 2026-07-06: SHIPPED.** current_status rewritten to NOW / NEXT / RECENTLY LANDED (39 lines, gate
+> ≤60); the 289-line history moved verbatim to [[state/status_archive_2026H1]] (no loss). MOVE-only rule
+> added to CLAUDE.md's write-back table; index "START HERE" repointed to current_status; the stale
+> [[state/next_session]] archived (this also closes sweep **S-6**).
 - **What:** "Active focus" holds 10+ ▶️ entries dating to June, plus a "NEXT SESSION" pointer from
   2026-06-23 that is long-obsolete. A literal reader cannot tell NOW from HISTORY. 266 lines and growing.
 - **Risk:** Opus anchors on stale directives (e.g. resurrects a completed queue), or burns context

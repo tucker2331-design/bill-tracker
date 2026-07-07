@@ -53,7 +53,7 @@ Nothing learned in a session may be lost. Route every artifact to the right page
 | Test result / metric delta | `docs/testing/crossover_week_baseline.md` |
 | Idea or trade-off | `docs/ideas/future_improvements.md` |
 | PR event (opened/merged/closed) | `docs/log.md` — `## [YYYY-MM-DD] pr \| <title>`, newest at top |
-| Change in active focus | `docs/state/current_status.md` |
+| Change in active focus | `docs/state/current_status.md` — **MOVE-only** (B-1): keep NOW ≤3 / NEXT (ordered) / RECENTLY LANDED ≤5; finishing a task MOVES its line NOW→RECENTLY LANDED and evicts the oldest. Never append history here — that goes to `docs/log.md`. |
 | New silent-fallback found in code | `docs/state/open_anti_patterns.md` |
 | User feedback / preference | New page in `docs/workflow/` or update existing |
 

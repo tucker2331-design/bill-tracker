@@ -18,8 +18,9 @@ Links use Obsidian `[[wikilink]]` format. Obsidian resolves by filename; path-qu
 - [[ny/index]] — catalog of the New York brain section
 
 ## State (live trackers — read these to know what's happening NOW)
-- [[state/next_session]] — **▶️ START HERE: the next-session kickoff — current state + the owner queue (read books → Calendar feature → Health bullet-graph tab) + how we work**
-- [[state/current_status]] — active focus, open PR, current bug count, what's next
+- [[state/current_status]] — **▶️ START HERE: the ONE live source — NOW / NEXT / RECENTLY LANDED (B-1 restructure 2026-07-06, MOVE-only)**
+- [[state/status_archive_2026H1]] — frozen pre-B-1 history (accuracy + product narrative through 2026-07-06); reference only
+- [[state/next_session]] — ⚠️ ARCHIVED (S-6): stale duplicate "what's next"; superseded by current_status
 - [[state/open_anti_patterns]] — known silent fallbacks still living in the code (worker.py line debt)
 - [[state/health_gauge_calibration_plan]] — **ACTIVE plan + live checklist: the 3 `/code-review` findings on PR #181 (feed-skew bands, source-feed session-awareness, Metrics_History change-feed [deferred]); persisted so it survives compaction**
 - [[ny/state/current_status]] — New York-specific live status and next steps

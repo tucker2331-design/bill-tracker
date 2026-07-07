@@ -8,6 +8,18 @@ status: active
 
 Append-only, reverse-chronological (newest at top). Each entry opens with `## [YYYY-MM-DD] <kind> | <title>` so `grep "^## \[" log.md | head -20` gives a parseable timeline.
 
+## [2026-07-06] decision | B-1 + S-6 — current_status restructured to a true state page
+
+Continued the Fable queue with the brain-hygiene item (chosen over B-3, whose machine-executable audit
+needs careful "output-affecting" scoping better done fresh — noted in current_status NEXT). `current_status.md`
+was a 285-line append-log mixing NOW with months of history — a literal reader couldn't tell current from
+past (the exact failure B-1 names). Rewrote it to **NOW / NEXT / RECENTLY LANDED** (39 lines, gate ≤60); the
+full 289-line history was copied VERBATIM to [[state/status_archive_2026H1]] (status: archived) so nothing is
+lost (it's also in this log + the architecture/failures docs). Added the **MOVE-only** rule to CLAUDE.md's
+write-back table; repointed [[index]] "START HERE" to current_status; **archived the stale
+[[state/next_session]]** (a second, three-weeks-stale "what's next" that had bitten me this session — closes
+sweep **S-6**). B-1 + S-6 marked shipped in the audit pages.
+
 ## [2026-07-06] pr | #202 + #203 + #204 ALL MERGED (squash) — A-2 verify · S-1 keys · S-2 CI
 
 Bot-reviewed, folded in, merged. **#202** (A-2 rollover snapshot verify) fold-ins: `or []` gspread
