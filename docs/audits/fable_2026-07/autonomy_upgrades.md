@@ -81,6 +81,12 @@ with CRITICAL. `AUTO_SESSION_FOLLOW=0` halts without probing.
 
 ## A-2 · Automated workbook lifecycle (finish the designed-but-unbuilt rollover hook + add relief)
 
+> **OPS WORKBOOK PROVISIONED (owner, 2026-07-07):** the A-2 Part 2 shard target = **"VA · Ops"**,
+> ID `1X7wa4brFROP9Bn81Esf4z3zjlxTZvpKeUdPWpyBkD3c` (created + shared to the service account). This is
+> where `Schedule_Witness` + `Metrics_History` relocate when the live workbook crosses the headroom
+> threshold. Put this ID in config when building Part 2. **Naming schema (owner-approved): `<Jurisdiction> ·
+> <Role>`** — VA · Live (`1PQD…JGKM`) / VA · Archive (`1AA-d…QeA`) / VA · Ops (this). NY/US follow the same.
+
 > **STATUS 2026-07-06 — PART 1 (rollover hook) SHIPPED/landed + COMPLETED TO SPEC.** Re-checking the code
 > found the rollover hook was ALREADY BUILT since a prior "auto-rollover" PR: `run_calendar_update`
 > compares `Sheet1!V1` (the session the live sheet represents) to `ACTIVE_SESSION`; on change it calls
