@@ -36,8 +36,22 @@ import os
 # API surface: LIS_API_KEY is the legacy toolset key; LIS_PUBLIC_API_KEY is the SPA key the
 # LegislationEvent/LegislationVersion endpoints require (they 401 the legacy key). See
 # docs/knowledge/lis_api_reference.md for the full key→endpoint mapping.
-LIS_API_KEY = os.environ.get("LIS_API_KEY", "81D70A54-FCDC-4023-A00B-A3FD114D5984")
-LIS_PUBLIC_API_KEY = os.environ.get("LIS_PUBLIC_API_KEY", "FCE351B6-9BD8-46E0-B18F-5572F4CCA5B9")
+# Drift visibility (CodeRabbit #203): record whether each key came from the ENV var or the hardcoded
+# FALLBACK, so a "should have rotated but the secret was never set" gap is INSPECTABLE (a health/startup
+# check can read LIS_KEY_SOURCE) — WITHOUT spamming a per-run warning. The fallback is legitimately the
+# intended value until the rotation secret is wired, so warning on it every cycle would be routine noise
+# (Standard #8: interrupt a human only on a genuine anomaly, not for an intended default).
+LIS_KEY_SOURCE = {}   # name -> "env" | "fallback"
+
+
+def _key_from_env(name, default):
+    val = os.environ.get(name)
+    LIS_KEY_SOURCE[name] = "env" if val is not None else "fallback"
+    return val if val is not None else default
+
+
+LIS_API_KEY = _key_from_env("LIS_API_KEY", "81D70A54-FCDC-4023-A00B-A3FD114D5984")
+LIS_PUBLIC_API_KEY = _key_from_env("LIS_PUBLIC_API_KEY", "FCE351B6-9BD8-46E0-B18F-5572F4CCA5B9")
 
 # 5-digit MVC session codes. Regular sessions: "20" + YY + "1" (2025 -> 20251, 2026 -> 20261).
 # FROZEN human-curated allowlist of KNOWN-authorized past sessions. Widen ONLY with an explicit owner edit
