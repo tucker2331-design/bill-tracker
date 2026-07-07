@@ -16,6 +16,29 @@ on:
   workflow_dispatch: {}
 
 jobs:
+  # B-3: the mechanical half of the 15-point pre-push audit — enforces what a bot caught on #189 a PR late
+  # (an output-value change with no WORKER_OUTPUT_LOGIC_VERSION bump). Stdlib-only, so it rides the fast lane.
+  prepush-audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0   # need the base ref for the diff
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+      - name: Machine pre-push audit (mechanical 15-point subset)
+        run: |
+          if [ -n "${{ github.base_ref }}" ]; then
+            git fetch -q origin "${{ github.base_ref }}"
+            python3 tools/prepush_audit.py --base "origin/${{ github.base_ref }}"
+          else
+            python3 tools/prepush_audit.py --range HEAD~1..HEAD
+          fi
+
   structural-tests:
     runs-on: ubuntu-latest
     timeout-minutes: 10

@@ -77,7 +77,11 @@ Nothing learned in a session may be lost. Route every artifact to the right page
 
 ## Pre-Push Audit (15 points)
 
-Before every commit. Full version in `docs/workflow/three_phase_protocol.md`.
+Before every commit. Full version in `docs/workflow/three_phase_protocol.md`. **The mechanical half is now
+enforced by a script (B-3): run `python3 tools/prepush_audit.py` before commit; CI runs it on every PR
+(`structural_tests.yml` → `prepush-audit`) so an output-value change with no `WORKER_OUTPUT_LOGIC_VERSION`
+bump (audit #96), a `ray2.py`/`calendar_xray.py` divergence (point 4), or an untagged silent-fallback
+literal (points 6/9) FAILS CI. The judgment-only points (2/5/7/11/14/15) print as a checklist — still yours.**
 
 Points 1-9 are the original audit. Points 10-15 were codified in PR-C7.0.5 after the PR-C7 work block surfaced six distinct bug classes during cold-start validation; each entry below cross-references the assumptions_audit lesson that justified codifying it.
 
