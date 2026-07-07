@@ -8,6 +8,19 @@ status: active
 
 Append-only, reverse-chronological (newest at top). Each entry opens with `## [YYYY-MM-DD] <kind> | <title>` so `grep "^## \[" log.md | head -20` gives a parseable timeline.
 
+## [2026-07-06] pr | #202 + #203 + #204 ALL MERGED (squash) — A-2 verify · S-1 keys · S-2 CI
+
+Bot-reviewed, folded in, merged. **#202** (A-2 rollover snapshot verify) fold-ins: `or []` gspread
+None-guard on the header compare (both copies, Gemini), rollover FYI category `API_FAILURE`→`UNKNOWN` (a
+success event shouldn't pollute failure views, CodeRabbit), test asserts EXACT helper output not just
+verdict truthiness (CodeRabbit). **#203** (S-1 keys) fold-in: `LIS_KEY_SOURCE` records env-vs-fallback so a
+stale-default gap is inspectable WITHOUT a per-run warning (the fallback is the intended value until the
+secret is wired — Standard #8 noise-only-on-anomaly, CodeRabbit). **#204** (S-2 CI) — its golden-tests job
+had failed on `session_rollover_test.py` (a #202 file not yet on main); merge-ordered #202→#203→#204 (each
+reconciled with main) and the job then went green (self-validated: runs the 6 offline tests on the PR).
+Combined `main` re-validated after every merge (37 cadence + 19 auth + 18 rollover pass, workers
+import-clean). **Fable queue so far: A-1, A-2 Part 1, S-1, S-2 all shipped.**
+
 ## [2026-07-06] pr | #204 OPENED — run worker golden + pure-logic tests in CI (sweep S-2)
 
 The stdlib-only `structural_tests.yml` never ran the dep-needing worker golden suites or the pure-logic unit

@@ -16,7 +16,13 @@ status: active
 - **A-1 (queue #1) SHIPPED — PR #201.** Self-extending session authorization: the workers auto-follow the LIS-active session (probe-verified, `Sheet1!S2` cache, `AUTO_SESSION_FOLLOW=0` kill switch) instead of the frozen `{20251,20261}` halt. **This removes the Jan-2027 system-halt.** 16 unit tests; both workers + tools import-clean. Deferred: front-end `session_code` stamp (step 6), portal re-review (step 5, probe backstops). [[knowledge/lis_api_authorization]].
 - **NEXT in queue:** A-2 (workbook rollover hook + headroom shard), B-1 (this file's restructure), B-3 (machine-executable pre-push audit), S-1 (WebAPIKey hygiene — 9-file consolidation), C-8 (NY canaries). CDN inversion + PA ingestion remain owner-gated/sequenced (large, multi-session).
 - **All 4 PRs MERGED 2026-07-06** (squash): #197 (F-1 clocks), #198 (F-2 cadence + bill-worker equalization), #200 (F-3 rings), #201 (A-1 auth). #198+#201 both touched the workers → combined `main` re-validated (37 cadence + 19 auth tests, both workers import-clean, web tsc+build clean, both gates coexist). #201's fold-in had caught a real Gemini **CRITICAL** (S2 probe cache wiped by `worksheet.clear()` → re-probe every cycle; fixed via unconditional success-path restore). #199 (Cloudflare SPA `wrangler.toml`) MERGED — Pages deploy is green.
-- **NOW EXECUTING the rest of the queue** (owner: "move on to the best next thing… don't stop"). Order: A-2 (workbook rollover + headroom shard), B-3 (machine-executable pre-push audit), S-1 (WebAPIKey consolidation), B-1 (this file's restructure), C-8 (NY canaries).
+- **QUEUE PROGRESS 2026-07-06 (owner: "best next thing… don't stop"):** shipped + MERGED this run —
+  **A-2 Part 1** (session-rollover snapshot verify, #202), **S-1** (single env-first LIS key source, #203),
+  **S-2** (worker golden + pure-logic tests now run in CI, #204). All bot-reviewed + folded in. Combined main
+  re-validated (37+19+18 tests). **Remaining queue:** B-3 (machine-executable pre-push audit), B-1 (this
+  file's restructure + archive [[state/next_session]]), C-8 (NY canaries), **A-2 Part 2** (mid-session
+  headroom shard actuator — larger, needs an ops workbook; not urgent since rollover archives each session
+  out yearly), and the owner-gated multi-session efforts (CDN inversion, PA/multi-state ingestion).
 
 **▶️ 2026-07-05 — OWNER'S TWO UI/CADENCE ITEMS BUILT (PRs #197 + #198 OPEN).** From the deploy-fix session's "for later" notes:
 - **#197 — freshness clocks unified (F-1).** The top trust header now shows BOTH feed clocks together ("● Bills as of …" + "🗓 Calendar as of …") instead of only the bill clock, so the 6h-bill vs 3h-calendar cadences read as "two feeds" not a contradiction; the in-Calendar-tab pill was removed (moved up). Display-only; `tsc`+`vite build` clean, preview-verified. [[design/ui_feedback_2026-07-04]] F-1.
