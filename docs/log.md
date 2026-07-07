@@ -8,6 +8,18 @@ status: active
 
 Append-only, reverse-chronological (newest at top). Each entry opens with `## [YYYY-MM-DD] <kind> | <title>` so `grep "^## \[" log.md | head -20` gives a parseable timeline.
 
+## [2026-07-06] pr | #203 OPENED — single env-first source for the LIS API keys (sweep S-1)
+
+Next Fable-queue knock-out (owner: "don't stop"). The LIS `WebAPIKey` (`81D70A54…`) + SPA public key
+(`FCE351B6…`) were hardcoded across the codebase — rotation-brittleness (not secrecy; both are public). Now
+ONE env-first source in `lis_authorization.py`: `LIS_API_KEY`/`LIS_PUBLIC_API_KEY = os.environ.get(…, "<cur>")`
+→ **rotation = set one GitHub secret, zero code edits.** All runnable production + tool code imports it (both
+workers; the 4 active tools + backend_worker extend their existing `lis_authorization` import — `grep 81D70A54`
+in running code == 1). Intentionally left: deprecated `xray.py`, frozen `backend_worker_3col_backup.py`, the
+X-Ray UI-default pair (user-overridable password fields), and the dead C7 audit tools (public-key literal).
+`py_compile` clean; env override verified; both workers import-clean. Rotation runbook note added to
+[[knowledge/lis_api_authorization]]; [[audits/fable_2026-07/sweep_findings]] S-1 marked shipped.
+
 ## [2026-07-06] pr | #202 OPENED — verify the session snapshot before advancing the marker (A-2 part 1)
 
 Continuing the Fable queue (owner: "best next thing… don't stop"). Picked A-2 (owner-salient: the "sheets

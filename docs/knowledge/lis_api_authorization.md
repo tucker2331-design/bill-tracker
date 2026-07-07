@@ -85,3 +85,14 @@ Every code path that hits `lis.virginia.gov` or `lisfiles/*` is gated through it
 
 To widen for a new authorized session: edit the one set in `lis_authorization.py`. This page is
 the authoritative statement; see also [[index]] and [[log]].
+
+## API-key rotation (S-1, PR #203)
+The LIS `WebAPIKey` values are a SINGLE env-first source in `lis_authorization.py`:
+`LIS_API_KEY` (legacy toolset key) and `LIS_PUBLIC_API_KEY` (the SPA key the LegislationEvent/Version
+endpoints require). Both are public/SPA-class (they ship in every lis.virginia.gov page), so this is
+rotation resilience, not secrecy.
+- **If LIS rotates a key:** set the GitHub Actions secret `LIS_API_KEY` (and/or `LIS_PUBLIC_API_KEY`) on the
+  worker workflows — **no code edit**, no hunting hardcoded copies. Every runnable importer picks it up.
+- **Annual diligence:** confirm the current key still authenticates (a 401/403 surfaces as an
+  `API_FAILURE` alert; the workers' `auto_session_follow` probe also 401s on a dead key and halts). The
+  literal fallbacks in the module keep today's behavior when the secrets are unset.
