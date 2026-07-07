@@ -8,6 +8,17 @@ status: active
 
 Append-only, reverse-chronological (newest at top). Each entry opens with `## [YYYY-MM-DD] <kind> | <title>` so `grep "^## \[" log.md | head -20` gives a parseable timeline.
 
+## [2026-07-06] decision | B-5 + B-4(partial) — reasoning doctrine + CLAUDE.md cadence de-drift
+
+Brain-hygiene batch. **B-5:** wrote [[workflow/reasoning_doctrine]] — 8 imperative process moves (the actual
+Fable-vs-Opus gap is process, not knowledge): measure-first, verify-the-row-not-count, fail-open,
+confirm-before-advance, no-silent-fallback, structural-not-text, notify-only, write-back. Added to CLAUDE.md's
+session-start reads (#4) + [[index]]. **B-4 (surgical):** CLAUDE.md's Architecture at-a-glance called the
+PAUSED `backend_worker`/`v2_shadow_test` the "main product" and both workers "every 15min" — corrected to
+`bill_tracker`+`web/` as the product and a "don't hardcode the cadence — see the ledger" pointer (my own
+guardrail-#5 work had made both crons `*/15` self-throttled, worsening the drift). Fuller B-4 pass (row-count
+softening, whole-file volatile-fact audit) left. B-4/B-5 marked in the audit page.
+
 ## [2026-07-06] decision | B-1 + S-6 — current_status restructured to a true state page
 
 Continued the Fable queue with the brain-hygiene item (chosen over B-3, whose machine-executable audit

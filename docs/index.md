@@ -38,6 +38,7 @@ Links use Obsidian `[[wikilink]]` format. Obsidian resolves by filename; path-qu
 ## Workflow & Protocols (how we work)
 - [[ny/workflow/source_scoping_protocol]] — New York source-scoping protocol: scope, plan, test, then promote
 - [[ny/workflow/owner_setup]] — New York owner setup checklist for API key, sheet, and secrets
+- [[workflow/reasoning_doctrine]] — **session-start read: the 8 process moves that produce bank-grade work here (measure-first · verify-the-row · fail-open · confirm-before-advance · no silent fallback · structural-not-text · notify-only · write-back)**
 - [[workflow/three_phase_protocol]] — context routing → pre-push audit → write-back mandate
 - [[workflow/branching_rules]] — when to reuse vs create a branch (PR state decides)
 - [[workflow/push_and_pr]] — after every commit: push, open PR, return link

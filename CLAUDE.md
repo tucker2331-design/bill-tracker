@@ -25,8 +25,9 @@ planning, and testing the New York source contract.
 
 ### At the start of every session (read these first)
 1. `docs/index.md` — catalog of every page in the vault. Know what exists before you answer.
-2. `docs/state/current_status.md` — what's active right now.
+2. `docs/state/current_status.md` — what's active right now (NOW / NEXT / RECENTLY LANDED).
 3. `docs/state/open_anti_patterns.md` — known silent-fallback debt in the code.
+4. `docs/workflow/reasoning_doctrine.md` — the 8 process moves that produce bank-grade work here (measure-first, verify-the-row, fail-open, confirm-before-advance, no silent fallback, structural-not-text, notify-only, write-back).
 
 ### Route by task (read on demand)
 | Task involves... | Read FIRST |
@@ -145,9 +146,11 @@ Points 1-9 are the original audit. Points 10-15 were codified in PR-C7.0.5 after
 
 Full version: `docs/architecture/calendar_pipeline.md`.
 
-1. **v2_shadow_test** (`pages/v2_shadow_test.py` + `backend_worker.py`) — main product. Worker "Mastermind Ghost Worker" every 15min via GitHub Actions → Google Sheets "Mastermind DB".
-2. **calendar_worker.py + test_auto_calender.py** — calendar subsystem, perfected separately. "Mastermind Ghost Worker 2" every 15min. Merges into v2 once at 100% accuracy.
+1. **bill_tracker.py (backend) + `web/` (React+Vite+TS SPA → Cloudflare Pages)** — the lobbyist PRODUCT. `bill_tracker.py` writes the `Bill_Tracker` tab; the SPA reads it via gviz. The old `pages/v2_shadow_test.py` + `backend_worker.py` ("Mastermind Ghost Worker") path is **PAUSED/legacy**, not the product.
+2. **calendar_worker.py + test_auto_calender.py** — calendar subsystem ("Mastermind Ghost Worker 2"); merges into the product at the calendar↔product merge once at 100% accuracy.
 3. **pages/ray2.py** (+ `calendar_xray.py` backup) — X-Ray diagnostic. Streamlit serves `pages/ray2.py`. Root `calendar_xray.py` is diff-identical backup. `xray.py` is deprecated.
+
+**Cadence:** do NOT hardcode a worker interval here — it drifts. Both scheduled workers fire on a fast cron and SELF-THROTTLE to real legislative activity (LIS-safety guardrail #5). Authoritative per-job cadence ledger: `docs/knowledge/lis_api_safety.md`.
 
 **File map (what Streamlit serves):**
 - `test_auto_calender.py` — Streamlit entry

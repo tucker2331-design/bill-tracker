@@ -95,6 +95,11 @@ and the gap closes substantially.** The six changes below do that.
 - **Effort:** ~3 h. Highest rule-compliance leverage available.
 
 ### B-4 — CLAUDE.md is drifting; make it small and stable, push volatile facts to state pages
+> **STATUS 2026-07-06: PARTIAL (surgical).** Fixed the actively-misleading + freshly-drifted facts: the
+> Architecture at-a-glance no longer calls the PAUSED `backend_worker`/`v2_shadow_test` the "main product"
+> (it's `bill_tracker` + `web/`), and the "every 15min" cadence claims are replaced with a "don't hardcode
+> the interval — see the cadence ledger" pointer (guardrail #5 made both crons `*/15` self-throttled). The
+> fuller pass (soften the illustrative row-counts, audit the whole file for volatile facts) remains.
 - **What (verified drift):** CLAUDE.md says workers run "every 15min" (calendar is 3h since PR-C7.1f;
   bills 6h); the architecture summary predates the product backend split; Sheet1 is described via an
   11-column schema note elsewhere while reality is 15 columns (LegEventRoute, RefidClass, ScheduleClass,
@@ -107,6 +112,9 @@ and the gap closes substantially.** The six changes below do that.
 - **Effort:** ~1 h.
 
 ### B-5 — Distill the meta-lessons into a short `workflow/reasoning_doctrine.md` and put it in the session-start reads
+> **STATUS 2026-07-06: SHIPPED.** [[workflow/reasoning_doctrine]] written (8 imperative moves: measure-first,
+> verify-the-row, fail-open, confirm-before-advance, no silent fallback, structural-not-text, notify-only,
+> write-back). Added to CLAUDE.md's session-start read list (#4) and [[index]] workflow section.
 - **What:** The actual Fable-vs-Opus difference this session was PROCESS, not knowledge: (a) instrument
   current behavior before implementing a planned fix (#95); (b) build the validator BEFORE the change and
   let it arbitrate; (c) find the oracle + denominator first; (d) be willing to falsify the plan you were
