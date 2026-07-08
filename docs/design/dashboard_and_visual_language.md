@@ -62,6 +62,40 @@ screen calmer without losing meaning, it was decoration.**
   owner before touching.
 - The **Tracking / Full GA** segmented control — a legitimate toggle-with-selected-state pattern, not a tell.
 
+## The "AI-generated UI" tells — researched 2026-07-08 (owner: "look online at what feels AI")
+
+Owner rejected two rounds of tag redesigns as "still very AI-esque" (both the remove-the-box "colored word"
+and the deeper-fill-with-shape-tweak). Web research settled *why*. Sources:
+[DEV — every tell that makes a UI look AI-generated](https://dev.to/kiwibreaksme/i-catalogued-every-tell-that-makes-a-ui-look-ai-generated-my-own-tool-kept-failing-the-test-n52) ·
+[Smart Interface Design Patterns — Badges vs Pills vs Chips vs Tags](https://smart-interface-design-patterns.com/articles/badges-chips-tags-pills/).
+
+The catalogued tells (it's the **combination** that reads "an AI made this", not any one):
+1. **Rainbow status lists** — every row a differently-coloured badge, *including states that should be grey*.
+   "Colour means *look here*; paint every row and nothing means anything." **This was our #1 offender** — six
+   pastel outcome fills, one per outcome. THE fix is not shape, it's draining the rainbow.
+2. **Pastel-filled rounded chips** — soft candy tints (lavender/mint/peach) at pill radius, the generic
+   component-library badge (shadcn/Tailwind default). A deeper fill + corner tweak does NOT escape it.
+3. **The one default accent** — indigo `#4F46E5`/`#5E6AD2` everywhere. Pick one *signature* accent instead.
+4. **Icon-in-a-pale-chip repeated** on every card; emoji as UI icons (uncontrolled hues); centred hero +
+   gradient headline + sparkle badge; pure `#000` on white. Any single one is defensible; together = AI.
+   *Corollary:* every escape route, once popular, becomes the next tell — this is an arms race, not a checklist.
+
+**The professional inverse (what we adopted):** uniform, **neutral** containers; colour **reserved for
+meaning**, applied sparingly and semantically. This is exactly Few's "saturation reserved for attention",
+which this app's own `--o-*` comments already state ("outcomes: muted EXCEPT the attention states") — the
+rainbow was drift *from* the app's own doctrine.
+
+## Outcome-tag colour doctrine (owner-approved direction, 2026-07-08)
+Reserved-colour, three tiers of meaning — keep the box on every tag; grey is the default, colour is earned:
+- **Solid fill = a decided verdict.** Signed (green), Vetoed (angry red), Dead (a *muted brick* red — died
+  quietly in process vs a veto's loud deliberate kill; related red family, not identical).
+- **Soft tint = significant but still pending.** Carried over = amber (still alive, just deferred — not red).
+- **Grey = routine / in-process.** In progress, referral counts, and (pending owner's final call) To governor.
+Open A/B calls put to the owner: Dead's red (muted brick vs same-as-veto), Carried-over weight (soft tint vs
+solid amber), To-governor (grey vs blue tint). Implement on `.chip` once chosen — applies to every tag,
+boxes kept.
+
 ## Standing rule
 New health/status UI starts **calm-by-default**: a verdict, a short active list, a collapsed history. New
-colour must encode state. When in doubt, apply [[design/reading_notes]] (Few/RUI), not a template dashboard.
+colour must encode state, **reserved** — most things grey, saturation only where a human must look. When in
+doubt, apply [[design/reading_notes]] (Few/RUI) + the AI-tells list above, not a template dashboard.
