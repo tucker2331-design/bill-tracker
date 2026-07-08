@@ -302,6 +302,11 @@ h2, h3 { margin: 0; }
 .filters .fcount { opacity: .6; font-weight: 700; margin-left: 4px; }
 .muted { color: var(--ink-faint); }
 .center-msg { text-align: center; color: var(--ink-soft); padding: var(--s8) var(--s5); }
+/* Search pager — page-turner (never a silent cut). */
+.pager { display: flex; align-items: center; justify-content: center; gap: var(--s4); margin: var(--s5) 0 var(--s3); }
+.pager button { border: 1px solid var(--line-strong); background: var(--surface); border-radius: var(--radius-sm); padding: 7px 14px; font-weight: 600; color: var(--ink-soft); font-size: 13px; box-shadow: var(--shadow-sm); }
+.pager button:hover:not(:disabled) { color: var(--ink); }
+.pager button:disabled { opacity: .4; cursor: default; box-shadow: none; }
 .statgrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: var(--s2); }
 .stat { background: var(--surface); border-radius: var(--radius-sm); padding: 12px 14px; box-shadow: var(--shadow-sm); }
 .stat .n { font-size: 22px; font-weight: 800; }
