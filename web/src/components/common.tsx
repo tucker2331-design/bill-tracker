@@ -70,18 +70,20 @@ export function TrustHeader({ dataAsOf, calendarAsOf, completeness, shown }: {
       {/* Both freshness clocks live TOGETHER here (owner 2026-07-04) — the bill backend (6h cadence) and the
           calendar subsystem (3h) are separate workers, so their "as of" times differ; showing them side by
           side up top reads as "two feeds, two clocks" instead of a contradiction buried in the Calendar tab. */}
+      {/* Restrained: a small status dot (via CSS ::before) carries fresh/stale; the text stays neutral ink.
+          No filled pill, no emoji chrome — those "colored boxes" read as AI-built (docs/design). */}
       <span className={`pill ${fresh.stale ? "warn" : "good"}`} title={`Bill data · ${dataAsOf?.toISOString() ?? "unknown"}`}>
-        ● Bills as of {fresh.text}
+        Bills as of {fresh.text}
       </span>
       {cal && (
         <span className={`pill ${cal.stale ? "warn" : "good"}`} title={`Calendar subsystem · ${calendarAsOf?.toISOString() ?? "unknown"}`}>
-          🗓 Calendar as of {cal.text}
+          Calendar as of {cal.text}
         </span>
       )}
       {universe != null && (
         <span className={`pill ${complete ? "good" : "warn"}`}
           title={`records ${written}/${universe}; ${anomalies} in-history-not-in-universe`}>
-          {complete ? "✓" : "!"} Tracking {written}/{universe} bills
+          Tracking {written}/{universe} bills
         </span>
       )}
       <span className="muted">Showing {shown.toLocaleString()}</span>

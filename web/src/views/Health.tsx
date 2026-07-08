@@ -3,14 +3,68 @@ import type { Completeness } from "../data/types";
 import { BulletGraph } from "../components/BulletGraph";
 import { bandTone, type Band } from "../components/bands";
 import { HealthVitals, type Vital, type VitalSeg, type VitalVerify } from "../components/HealthVitals";
-import { loadHealth, type HealthData } from "../data/health";
+import { loadHealth, type HealthData, type HealthAlert } from "../data/health";
 import { loadVerification, type GuardRun, type GuardState } from "../data/verification";
 import { loadHistory, seriesFor, seriesForPct, type HistoryData } from "../data/history";
 
-// Plain-language severity for laymen (owner 2026-07-07): raw CRITICAL/WARN/INFO reads scarier than it is, so
-// a benign INFO gets overread. Keep the colour class (from severity) but show a human label instead.
-const SEV_LABEL: Record<string, string> = { CRITICAL: "Action needed", WARN: "Heads up", INFO: "FYI" };
-const sevLabel = (s: string) => SEV_LABEL[(s || "").toUpperCase()] ?? s;
+// Alert presentation (owner 2026-07-07: the feed "needs real thinking and fixing" + "colored boxes scream
+// AI"). See docs/design/dashboard_and_visual_language.md. Severity now rides a small status DOT, not a
+// saturated pill; the plain word is kept only for the hover title / screen readers.
+const SEV_WORD: Record<string, string> = { CRITICAL: "Needs a look", WARN: "Heads up", INFO: "FYI" };
+const sevWord = (s: string) => SEV_WORD[(s || "").toUpperCase()] ?? s;
+const sevDot = (s: string) => (s === "CRITICAL" ? "crit" : s === "WARN" ? "warn" : s === "INFO" ? "info" : "unknown");
+
+// Strip the internal debug tail a worker alert sometimes carries (Python reprs / tuple dumps) so the face
+// shows a plain sentence, never internal representation (docs/design Part 1 §6).
+const cleanMessage = (msg: string) =>
+  msg.replace(/\s*(\(debug:|only-full=\[|only-in-full|only-date=|only-bill=|only-incr=).*/is, "").trim();
+
+// Collapse a message to a stable CONDITION stem for grouping: drop volatile dates/numbers/ids + the debug
+// tail so recurring firings of the SAME condition ("6 blank rows on 2026-01-29…", "5 … on 2026-02-03…", the
+// per-bill "Malformed row for SB587…") group into ONE row with a count — which is what lets a condition
+// self-clear cleanly instead of spawning a fresh "active" line every cycle its count changes.
+const conditionStem = (msg: string) =>
+  cleanMessage(msg)
+    .replace(/\b\d{4}-\d{2}-\d{2}\b/g, "#date")
+    .replace(/\b[0-9][0-9,.]*\b/g, "#")
+    .replace(/\s+/g, " ")
+    .toLowerCase()
+    .slice(0, 120);
+
+// One recurring CONDITION, grouped from many raw firings. lastTs drives liveness (active vs self-cleared);
+// count is how many cycles it fired; message is the newest (cleaned) representative text.
+type Cond = { key: string; severity: string; category: string; message: string; count: number; firstTs: number; lastTs: number };
+interface AlertModel { latestCycleTs: number; active: Cond[]; resolved: Cond[]; needsLook: Cond[]; notes: Cond[]; }
+
+function groupConditions(rows: { severity: string; category: string; message: string; ts: number }[]): Cond[] {
+  const byKey = new Map<string, Cond>();
+  for (const a of rows) {
+    const key = `${a.severity}|${a.category}|${conditionStem(a.message)}`;
+    const e = byKey.get(key);
+    if (e) {
+      e.count++;
+      e.firstTs = Math.min(e.firstTs, a.ts);
+      if (a.ts >= e.lastTs) { e.lastTs = a.ts; e.message = cleanMessage(a.message); }
+    } else {
+      byKey.set(key, { key, severity: a.severity, category: a.category, message: cleanMessage(a.message), count: 1, firstTs: a.ts, lastTs: a.ts });
+    }
+  }
+  return [...byKey.values()];
+}
+const SEV_RANK = (s: string) => (s === "CRITICAL" ? 0 : s === "WARN" ? 1 : s === "INFO" ? 2 : 3);
+
+// Human names for the worker's error categories (Standard #4 vocabulary) — the raw ALL_CAPS token reads as
+// internal jargon on the lobbyist-facing page.
+const CATEGORY_LABEL: Record<string, string> = {
+  TIMING_LAG: "Timing lag (routine deferrals)",
+  DATA_ANOMALY: "Upstream data quirk",
+  API_FAILURE: "Connection / cadence",
+  PARENT_CHILD: "Parent–child linkage",
+  COMMITTEE_DRIFT: "Committee drift",
+  UNKNOWN: "Needs review",
+  UNCATEGORIZED: "Other",
+};
+const catLabel = (c: string) => CATEGORY_LABEL[(c || "").toUpperCase()] ?? (c || "Other");
 
 // The operator / Health tab (vision §3f + §7): the trust signals the system ALREADY produces, as Few
 // bullet graphs with danger bands (PL-8 / owner's "RPM redline"). Bill-backend signals arrive via props
@@ -131,43 +185,26 @@ export function Health({ completeness, dataAsOf }: { completeness: Completeness 
   const sessionActive = h?.sessionActive ?? null;
   const blobAgeBands: Band[] = sessionActive === true ? lower(12, 24, 48) : [{ upto: 1e9, tone: "good" }];
 
-  // ── Alert HISTORY: Metrics_History holds one row per cycle, so a persistent alert (e.g. a standing
-  // TIMING_LAG) repeats every cycle it fires. A raw dump would flood; the useful view AGGREGATES distinct
-  // alerts (by severity+category+message) with a fire COUNT + first/last-seen — "what has fired, and how
-  // often," which a point-in-time snapshot can't show. Newest-last-seen first. ──
-  const alertHistory = (() => {
-    if (!hist?.available || hist.alerts.length === 0) return null;
-    type Distinct = { severity: string; category: string; message: string; count: number; firstTs: number; lastTs: number };
-    const byKey = new Map<string, Distinct>();
-    for (const a of hist.alerts) {
-      const k = `${a.severity}|${a.category}|${a.message}`;
-      const e = byKey.get(k);
-      if (e) { e.count++; e.firstTs = Math.min(e.firstTs, a.ts); e.lastTs = Math.max(e.lastTs, a.ts); }
-      else byKey.set(k, { severity: a.severity, category: a.category, message: a.message, count: 1, firstTs: a.ts, lastTs: a.ts });
-    }
-    // Collapse HIGH-VOLUME routine categories so they don't flood the feed. A category
-    // with many DISTINCT messages (e.g. per-bill TIMING_LAG deferrals) is a routine
-    // aggregate, not N separate anomalies (Standard #8) — group it into one expandable
-    // summary. Categories with few distinct alerts (breaker, drift, API failure — the
-    // genuine "needs a human" signals) stay fully expanded. (Owner 2026-07-03: the feed
-    // read as alarming from ~471 benign deferral WARNs; the worker also stopped emitting
-    // them per-row, so this is belt-and-suspenders + handles the historical backlog.)
-    const COLLAPSE_AT = 8;
-    const groups = new Map<string, Distinct[]>();
-    for (const d of byKey.values()) (groups.get(`${d.severity}|${d.category}`) ?? groups.set(`${d.severity}|${d.category}`, []).get(`${d.severity}|${d.category}`)!).push(d);
-    type Single = { kind: "single" } & Distinct;
-    type Group = { kind: "group"; severity: string; category: string; distinct: number; totalCount: number; lastTs: number; items: Distinct[] };
-    const out: (Single | Group)[] = [];
-    for (const [, ds] of groups) {
-      if (ds.length > COLLAPSE_AT) {
-        out.push({ kind: "group", severity: ds[0].severity, category: ds[0].category, distinct: ds.length,
-          totalCount: ds.reduce((s, d) => s + d.count, 0), lastTs: Math.max(...ds.map((d) => d.lastTs)),
-          items: ds.sort((a, b) => b.lastTs - a.lastTs) });
-      } else {
-        for (const d of ds) out.push({ kind: "single", ...d });
-      }
-    }
-    return out.sort((x, y) => y.lastTs - x.lastTs);
+  // ── Alert MODEL: state, not stream (docs/design/dashboard_and_visual_language.md). Metrics_History is an
+  // append-only per-cycle log; a real dashboard shows what's TRUE NOW. We group raw firings into CONDITIONS
+  // (by severity+category+normalized stem) and derive liveness from the latest cycle: a condition is ACTIVE
+  // iff it fired in the most recent cycle, else it has SELF-RESOLVED and moves to the collapsed history.
+  // This is the self-clearing the owner asked for — no worker change, no human "acknowledge". ──
+  const alertModel: AlertModel | null = (() => {
+    if (!hist?.available) return null;
+    // The newest cycle in the store (system_metrics + system_alert rows share the cycle timestamp).
+    const latestCycleTs = Math.max(0, ...hist.metricSeries.map((p) => p.ts), ...hist.alerts.map((a) => a.ts));
+    const ACTIVE_TOL_MS = 6 * 60 * 1000; // "this cycle" window — well under the ~15-min in-window cadence
+    const conds = groupConditions(hist.alerts);
+    const byActivity = (a: Cond, b: Cond) => SEV_RANK(a.severity) - SEV_RANK(b.severity) || b.lastTs - a.lastTs;
+    const isActive = (c: Cond) => c.lastTs >= latestCycleTs - ACTIVE_TOL_MS;
+    const active = conds.filter(isActive).sort(byActivity);
+    const resolved = conds.filter((c) => !isActive(c)).sort((a, b) => b.lastTs - a.lastTs);
+    // "Needs a look" = only genuinely actionable, currently-live signals. A benign INFO note (blank upstream
+    // rows, an overnight cadence gap) is NOT a call to action — it shows quietly, never in the verdict count.
+    const needsLook = active.filter((c) => c.severity === "CRITICAL" || c.severity === "WARN");
+    const notes = active.filter((c) => c.severity === "INFO" || c.severity === "UNKNOWN");
+    return { latestCycleTs, active, resolved, needsLook, notes };
   })();
 
   // ── At-a-glance vitals: roll the gauges below into four category rings. Each segment's tone comes from
@@ -175,8 +212,13 @@ export function Health({ completeness, dataAsOf }: { completeness: Completeness 
   // segment whose backend payload is absent is "unknown" (grey), never a false green. ──
   const sv = (label: string, value: number, bands: Band[], known: boolean): VitalSeg =>
     ({ label, tone: known ? bandTone(value, bands) : "unknown" });
-  const critCount = h ? h.alerts.filter((a) => a.severity === "CRITICAL").length : 0;
-  const warnCount = h ? h.alerts.filter((a) => a.severity === "WARN").length : 0;
+  // The ring reflects the SAME currently-active conditions the feed shows (self-cleared ones don't count).
+  // Prefer the history-derived model; fall back to the latest cycle's live alerts when the trend store isn't
+  // up yet. Only actionable CRITICAL/WARN move the ring — a benign INFO note never turns Stability amber.
+  const critCount = alertModel ? alertModel.needsLook.filter((c) => c.severity === "CRITICAL").length
+    : h ? h.alerts.filter((a) => a.severity === "CRITICAL").length : 0;
+  const warnCount = alertModel ? alertModel.needsLook.filter((c) => c.severity === "WARN").length
+    : h ? h.alerts.filter((a) => a.severity === "WARN").length : 0;
 
   // Independent-verification badge per dial (replaces the standalone "Are we right?" panel). Each category
   // rolls up the guards that cross-check it against an OUTSIDE source (LIS calendar / MinutesBook); shows the
@@ -373,58 +415,13 @@ export function Health({ completeness, dataAsOf }: { completeness: Completeness 
         )}
       </div>
 
-      {/* ── Alert feed: the operator's "needs a human" list (Standard #8). When the Metrics_History trend
-            store is populated, show the rolling HISTORY (distinct alerts + how often + last-seen); until then,
-            fall back to the latest cycle's live alerts from Sheet1. ── */}
-      <h2 className="h" id="hl-sec-alerts">Alerts {h && <span className="muted" style={{ textTransform: "none", letterSpacing: 0 }}>· {alertHistory ? "recent history — what has fired and how often" : "latest from the calendar worker"}</span>}</h2>
-      {!h ? <CalLoading err={hErr} /> : alertHistory ? (
-        alertHistory.length === 0 ? (
-          <p className="muted" style={{ marginBottom: 18 }}>No alerts in the recent window — the worker is running clean.</p>
-        ) : (
-          <div className="panel" style={{ marginBottom: 18 }}>
-            {alertHistory.map((a) => a.kind === "group" ? (
-              <details key={`g|${a.severity}|${a.category}`} className="hl-alertgroup">
-                <summary className="hl-alert">
-                  <span className={`hl-sev ${a.severity.toLowerCase()}`} title={a.severity}>{sevLabel(a.severity)}</span>
-                  {a.category && <span className="hl-cat">{a.category}</span>}
-                  <span className="hl-amsg"><strong>{a.distinct.toLocaleString()}</strong> distinct alerts (routine aggregate — expand to inspect)</span>
-                  <span className="hl-acount" title={`${a.totalCount} total occurrences across ${a.distinct} distinct alerts`}>×{a.totalCount.toLocaleString()}</span>
-                  <span className="hl-adate">{agoText(new Date(a.lastTs))}</span>
-                </summary>
-                <div style={{ paddingLeft: 8 }}>
-                  {a.items.slice(0, 100).map((d) => (
-                    <div key={`${d.severity}|${d.category}|${d.message}`} className="hl-alert">
-                      <span className="hl-amsg">{d.message}</span>
-                      {d.count > 1 && <span className="hl-acount" title={`fired in ${d.count} cycles`}>×{d.count}</span>}
-                      <span className="hl-adate">{agoText(new Date(d.lastTs))}</span>
-                    </div>
-                  ))}
-                  {a.items.length > 100 && <div className="muted" style={{ padding: "4px 0" }}>…and {(a.items.length - 100).toLocaleString()} more</div>}
-                </div>
-              </details>
-            ) : (
-              <div key={`s|${a.severity}|${a.category}|${a.message}`} className="hl-alert">
-                <span className={`hl-sev ${a.severity.toLowerCase()}`} title={a.severity}>{sevLabel(a.severity)}</span>
-                {a.category && <span className="hl-cat">{a.category}</span>}
-                <span className="hl-amsg">{a.message}</span>
-                {a.count > 1 && <span className="hl-acount" title={`fired in ${a.count} cycles`}>×{a.count}</span>}
-                <span className="hl-adate">{agoText(new Date(a.lastTs))}</span>
-              </div>
-            ))}
-          </div>
-        )
-      ) : h.alerts.length === 0 ? (
-        <p className="muted" style={{ marginBottom: 18 }}>No active alerts — the worker is running clean.</p>
-      ) : (
-        <div className="panel" style={{ marginBottom: 18 }}>
-          {h.alerts.map((a, i) => (
-            <div key={i} className="hl-alert">
-              <span className={`hl-sev ${a.severity.toLowerCase()}`} title={a.severity}>{sevLabel(a.severity)}</span>
-              {a.category && <span className="hl-cat">{a.category}</span>}
-              <span className="hl-amsg">{a.message}</span>
-              {a.date && <span className="hl-adate">{a.date}</span>}
-            </div>
-          ))}
+      {/* ── Alerts: STATE, not stream. A verdict line answers "do I need to do anything?", then only the
+            currently-active conditions, then a collapsed self-cleared history. See
+            docs/design/dashboard_and_visual_language.md. ── */}
+      <h2 className="h" id="hl-sec-alerts">Alerts</h2>
+      {!h ? <CalLoading err={hErr} /> : (
+        <div style={{ marginBottom: 18 }}>
+          <AlertsPanel model={alertModel} liveAlerts={h.alerts} />
         </div>
       )}
 
@@ -474,4 +471,98 @@ function CalLoading({ err }: { err: string | null }) {
   return err
     ? <p className="muted" style={{ color: "var(--stale)" }}>Calendar signals unavailable: {err}</p>
     : <p className="muted">Loading calendar-subsystem signals…</p>;
+}
+
+// One active condition row: a small dot carries severity, the sentence stays neutral, meta recedes right.
+function AlertRow({ c }: { c: Cond }) {
+  return (
+    <div className="hl-arow">
+      <span className={`hl-adot ${sevDot(c.severity)}`} aria-hidden="true" title={sevWord(c.severity)} />
+      <span className="hl-amsg">{c.message}</span>
+      <span className="hl-ameta">
+        {c.count > 1 && <span className="hl-acount" title={`fired in ${c.count.toLocaleString()} cycles`}>{c.count.toLocaleString()}×</span>}
+        <span className="hl-awhen">{agoText(new Date(c.lastTs))}</span>
+      </span>
+    </div>
+  );
+}
+
+// Self-cleared history, rolled up COARSELY by category so it reads as a calm summary ("Timing lag — 300
+// routine deferrals, all cleared") instead of a wall of 300 rows. Collapsed by default. This is the "it
+// resolved itself" record without the noise — the abundance the owner objected to.
+function ClearedHistory({ resolved }: { resolved: Cond[] }) {
+  type CatRoll = { category: string; worst: string; distinct: number; firings: number; lastTs: number };
+  const byCat = new Map<string, CatRoll>();
+  for (const c of resolved) {
+    const e = byCat.get(c.category);
+    if (e) {
+      e.distinct++; e.firings += c.count; e.lastTs = Math.max(e.lastTs, c.lastTs);
+      if (SEV_RANK(c.severity) < SEV_RANK(e.worst)) e.worst = c.severity;
+    } else {
+      byCat.set(c.category, { category: c.category, worst: c.severity, distinct: 1, firings: c.count, lastTs: c.lastTs });
+    }
+  }
+  const cats = [...byCat.values()].sort((a, b) => b.lastTs - a.lastTs);
+  const mostRecent = Math.max(...resolved.map((c) => c.lastTs));
+  return (
+    <details className="hl-cleared">
+      <summary>
+        {resolved.length.toLocaleString()} {resolved.length === 1 ? "condition" : "conditions"} cleared themselves recently
+        <span className="muted"> · most recent {agoText(new Date(mostRecent))}</span>
+      </summary>
+      <div>
+        {cats.map((g) => (
+          <div className="hl-arow resolved" key={g.category}>
+            <span className={`hl-adot ${sevDot(g.worst)}`} aria-hidden="true" />
+            <span className="hl-amsg">{catLabel(g.category)}<span className="muted"> — {g.distinct.toLocaleString()} distinct, {g.firings.toLocaleString()}× total</span></span>
+            <span className="hl-ameta"><span className="hl-awhen">last seen {agoText(new Date(g.lastTs))}</span></span>
+          </div>
+        ))}
+      </div>
+    </details>
+  );
+}
+
+// The Alerts panel: a verdict line, then only currently-active conditions, then a collapsed self-cleared
+// history. Prefers the history-derived model (real self-clearing); falls back to the latest cycle's live
+// alerts (grouped the same way) when the trend store isn't up yet. See docs/design.
+function AlertsPanel({ model, liveAlerts }: { model: AlertModel | null; liveAlerts: HealthAlert[] }) {
+  const [nowMs] = useState(() => Date.now()); // stable per mount — a live alert with an unparseable date reads "just now"
+  let needsLook: Cond[], notes: Cond[], resolved: Cond[];
+  if (model) {
+    ({ needsLook, notes, resolved } = model);
+  } else {
+    const rows = liveAlerts.map((a) => ({ severity: a.severity, category: a.category, message: a.message, ts: Date.parse(a.date) || nowMs }));
+    const conds = groupConditions(rows).sort((a, b) => SEV_RANK(a.severity) - SEV_RANK(b.severity) || b.lastTs - a.lastTs);
+    needsLook = conds.filter((c) => c.severity === "CRITICAL" || c.severity === "WARN");
+    notes = conds.filter((c) => c.severity === "INFO" || c.severity === "UNKNOWN");
+    resolved = [];
+  }
+  const attention = needsLook.length > 0;
+  const hasCrit = needsLook.some((c) => c.severity === "CRITICAL");
+  const verdictClass = attention ? (hasCrit ? "attention crit" : "attention") : "clear";
+
+  return (
+    <div className="panel hl-alerts">
+      <div className={`hl-verdict ${verdictClass}`}>
+        <span className="hl-vdot" aria-hidden="true" />
+        <span className="hl-vtext">
+          {attention
+            ? `${needsLook.length} ${needsLook.length === 1 ? "condition needs" : "conditions need"} a look`
+            : "All clear — nothing needs your attention"}
+        </span>
+        {notes.length > 0 && <span className="hl-vnote">{notes.length} routine {notes.length === 1 ? "note" : "notes"}</span>}
+      </div>
+
+      {needsLook.map((c) => <AlertRow key={c.key} c={c} />)}
+
+      {notes.length > 0 && (
+        <div className="hl-notes">
+          {notes.map((c) => <AlertRow key={c.key} c={c} />)}
+        </div>
+      )}
+
+      {resolved.length > 0 && <ClearedHistory resolved={resolved} />}
+    </div>
+  );
 }

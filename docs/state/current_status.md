@@ -16,10 +16,10 @@ status: active
 > below. Full history: [[log]] (PR-by-PR) + [[state/status_archive_2026H1]] (frozen pre-B-1 narrative).
 
 ## NOW
-- **All executable VA work is DONE + MERGED.** Health-tab honesty (#206), A-2 Part 2 phase 1+2 (#207/#208), B-4-finish, backlog audit — all merged; main green (81 tests). Everything remaining in NEXT is owner-gated (a key / a decision / an owner-run trigger) or optional (S-3). Verify the Health tab live after the #206 deploy (alert wording + ring no longer yellow for the experimental engine).
+- **Health alerts REBUILT (state-not-stream) + witness shard made ZERO-TOUCH + de-AI visual pass** (owner 2026-07-07: alerts "need real thinking and fixing"; the shard shouldn't need him; "colored boxes scream AI built"). Alerts now: a verdict line (all-clear by default), only currently-active conditions, self-cleared history collapsed to a per-category summary — the self-clearing derives from the latest cycle, no worker change. `_autoshard_witness_if_full` relocates Schedule_Witness→VA·Ops itself at 6M (copy-verify-then-delete, fail-closed, FYI-only). Header/breaker/skew "colored boxes" → restrained status dots. Doctrine → [[design/dashboard_and_visual_language]]. 96 pure-logic tests green (+15 witness-shard); SPA build clean. **PR open — see [[log]].**
 
 ## NEXT (needs owner infra / a decision — then I execute)
-1. **Enable A-2 Part 2 when VA·Live nears 6M** (~5.5M now, not urgent): `MODE=shard-witness archive.py` → `CONFIRM=delete` → set worker var `WITNESS_WORKBOOK=ops`. Fully built (#208), reversible until the delete. [[audits/fable_2026-07/autonomy_upgrades]].
+1. ~~Enable A-2 Part 2 manually~~ **NO LONGER OWNER-GATED — the worker auto-shards the witness itself at 6M** (`_autoshard_witness_if_full`, zero-touch, fail-closed). Nothing for the owner to run. `archive.py shard-witness` + `WITNESS_WORKBOOK=ops` remain as manual overrides only. [[audits/fable_2026-07/autonomy_upgrades]].
 2. **C-8 Part 2** — NY independent oracle (reconciliation) ([[audits/fable_2026-07/codebase_longevity_audit]]). Needs a **LegiScan API key** + terms check. (C-8's vocab-canary gap is already largely closed — re-measured.)
 3. **Multi-state — ONE STATE AT A TIME (owner directive 2026-07-07; notes preserved, do NOT lose):** tackle each new state as its own scoped project. Notes are banked and safe:
    - PA ingestion plan → [[audits/fable_2026-07/multistate_ingestion_pa]]

@@ -3350,6 +3350,89 @@ def _archive_completed_session(sheet, worksheet, old_code):
     return target, verified_rows
 
 
+# ── A-2 Part 2 · zero-touch witness shard (Standard #8: the system moves its own data, never pings a human) ──
+# Once VA·Live crosses the shard line, the worker RELOCATES the big internal Schedule_Witness log to the
+# VA·Ops workbook itself — no `archive.py` command to run, no WITNESS_WORKBOOK env var to set. One-time
+# (a persistent flag in Sheet1!AD1), and fail-CLOSED: copy → VERIFY (dims + header) → delete-from-live, in
+# that order, so any failure leaves the original untouched in VA·Live (same confirm-before-destroy ethic as
+# the session archive). WITNESS_WORKBOOK=ops stays as a manual override for operators.
+WITNESS_SHARD_THRESHOLD_CELLS = 6_000_000   # matches tools/verification/sustainability_audit.SHARD_THRESHOLD_CELLS
+WITNESS_LOCATION_CELL = "AD1"               # Sheet1 flag: "" = VA·Live (default) · "ops" = sharded to VA·Ops
+
+
+def _workbook_total_cells(spreadsheet):
+    """Total allocated cells across every tab (what Google counts against the 10M cap), or None if the
+    workbook can't be measured. Same sum as _workbook_cell_headroom; factored out so the shard trigger can
+    read the absolute total directly (pure enough to unit-test with a fake spreadsheet)."""
+    try:
+        return sum(int(w.row_count) * int(w.col_count) for w in spreadsheet.worksheets())
+    except Exception:
+        return None
+
+
+def _verify_sharded_tab(dest_book, target, source_ws):
+    """Confirm-before-DESTROY twin of _verify_archived_snapshot, for the witness shard: the copy in VA·Ops
+    must be findable by its canonical name, same grid dims, same header row, BEFORE the original is deleted
+    from VA·Live. Returns the verified row_count; RAISES on any mismatch so the caller never deletes over a
+    partial/failed copy. Reuses _snapshot_dim_mismatch (already unit-tested)."""
+    try:
+        dws = dest_book.worksheet(target)
+    except gspread.exceptions.WorksheetNotFound as _e:
+        raise RuntimeError(f"sharded tab '{target}' not found in VA·Ops after copy — the delete-then-rename "
+                           f"batch_update did not land; NOT deleting from VA·Live") from _e
+    _mismatch = _snapshot_dim_mismatch(source_ws.row_count, source_ws.col_count, dws.row_count, dws.col_count)
+    if _mismatch:
+        raise RuntimeError(f"shard '{target}' {_mismatch} — looks partial; NOT deleting from VA·Live")
+    if (source_ws.row_values(1) or []) != (dws.row_values(1) or []):   # `or []`: gspread None-safe (Gemini #202)
+        raise RuntimeError(f"shard '{target}' header row differs from VA·Live — content mismatch; NOT deleting")
+    return int(dws.row_count)
+
+
+def _autoshard_witness_if_full(sheet, tab_name, threshold_cells=WITNESS_SHARD_THRESHOLD_CELLS,
+                               location_cell=WITNESS_LOCATION_CELL):
+    """When VA·Live crosses `threshold_cells`, relocate `tab_name` (Schedule_Witness) to VA·Ops so the live
+    workbook stays lean — automatically, once, and safely. Returns (location, did_shard, reclaimed_cells):
+      - location  : "ops" (witness now lives in VA·Ops) | "live" (unchanged — not full yet, or unmeasurable).
+      - did_shard : True ONLY on the cycle the relocation actually completes (caller emits the single FYI).
+    A persistent flag in Sheet1!<location_cell> makes this idempotent — after the one-time move every later
+    cycle short-circuits on the flag (no capacity call). Fail-CLOSED: the ONLY paths that raise are the ones
+    BEFORE any deletion (open VA·Ops / copy / verify), so a raise means the original is still intact in
+    VA·Live and the flag is unset — the caller turns that into a CRITICAL and the witness simply stays put."""
+    ws1 = sheet.worksheet("Sheet1")
+    if (ws1.acell(location_cell).value or "").strip().lower() == "ops":
+        return "ops", False, 0                       # already sharded — no capacity call, no work
+    total = _workbook_total_cells(sheet)
+    if total is None or total < threshold_cells:
+        return "live", False, 0                      # unmeasurable or still lean — witness stays in VA·Live
+    ops = sheet.client.open_by_key(OPS_WORKBOOK_ID)  # raises → caller CRITICAL, witness untouched in VA·Live
+    try:
+        src = sheet.worksheet(tab_name)
+    except gspread.exceptions.WorksheetNotFound:
+        # VA·Live is full but the witness tab was never created here (or a prior move deleted it and crashed
+        # before flagging): nothing to copy — just direct all FUTURE witness writes to VA·Ops.
+        ws1.update_acell(location_cell, "ops")
+        return "ops", True, 0
+    reclaimed = int(src.row_count) * int(src.col_count)
+    try:
+        old_id = ops.worksheet(tab_name).id          # replace any stale same-named tab in VA·Ops (idempotent)
+    except gspread.exceptions.WorksheetNotFound:
+        old_id = None
+    props = src.copy_to(OPS_WORKBOOK_ID)
+    requests = []
+    if old_id is not None:
+        requests.append({"deleteSheet": {"sheetId": int(old_id)}})
+    requests.append({"updateSheetProperties": {
+        "properties": {"sheetId": int(props["sheetId"]), "title": tab_name}, "fields": "title"}})
+    ops.batch_update({"requests": requests})
+    _verify_sharded_tab(ops, tab_name, src)          # RAISES unless the copy is confirmed intact (pre-delete)
+    sheet.batch_update({"requests": [{"deleteSheet": {"sheetId": int(src.id)}}]})  # only NOW reclaim VA·Live
+    try:
+        ws1.update_acell(location_cell, "ops")       # the move is DONE + safe; a flag-write miss self-heals
+    except Exception as _flag_err:                   # next cycle (src is gone → the WorksheetNotFound branch)
+        print(f"⚠️ witness shard completed but flag write failed ({_flag_err}); reconciles next cycle")
+    return "ops", True, reclaimed
+
+
 def run_sequential_turing_machine(df_past, *,
         bill_locations,
         last_seen_date,
@@ -5758,22 +5841,42 @@ def run_calendar_update():
     # Volume math: steady-state ~0-100 deltas/cycle × 96 cycles/day × 90-day
     # retention × 13 cols << Sheets' 10M-cell limit (change-feed semantics,
     # not snapshot). The size canary below surfaces runaway growth.
-    # A-2 Part 2: the witness may live in VA·Ops to keep VA·Live lean. FLAG-GATED and SAFE-BY-DEFAULT — with
-    # WITNESS_WORKBOOK unset (or != "ops") this is exactly today's behavior (VA·Live), zero change. Resolved
-    # ONCE here: every witness access (append, size-canary, Part-C read) flows through _ensure_witness_tab →
-    # this book, so there is a single source of truth and no missed site. Fail-safe: if VA·Ops can't be
-    # opened, fall back to VA·Live + WARN, so a shard-workbook outage never disables the witness. Rollout:
-    # run `tools/session_archive/archive.py shard-witness` once (copy-verify-then-delete Schedule_Witness
-    # VA·Live → VA·Ops), THEN set WITNESS_WORKBOOK=ops.
+    # A-2 Part 2 (ZERO-TOUCH, Standard #8): the witness may live in VA·Ops to keep VA·Live lean, and the
+    # worker moves it there ITSELF once VA·Live crosses the shard line — no command to run, no env var to set
+    # (that half-manual design was the owner's exact objection: "will it always need that?" — no). One-time
+    # + fail-CLOSED: _autoshard_witness_if_full copy-verify-then-deletes and only raises BEFORE any delete,
+    # so a failure keeps the witness intact in VA·Live. WITNESS_WORKBOOK=ops remains a manual OVERRIDE.
+    # Resolved ONCE here: every witness access (append, size-canary, Part-C read) flows through
+    # _ensure_witness_tab → this book, so there is a single source of truth and no missed site.
+    _witness_loc = "live"
+    try:
+        _witness_loc, _did_shard, _reclaimed = _autoshard_witness_if_full(sheet, WITNESS_TAB_NAME)
+        if _did_shard:
+            push_system_alert(
+                f"Storage housekeeping (done automatically — nothing for you to do). VA·Live crossed the "
+                f"{WITNESS_SHARD_THRESHOLD_CELLS:,}-cell line, so the internal Schedule_Witness log was moved to "
+                f"the VA·Ops workbook"
+                + (f", reclaiming ~{_reclaimed:,} cells" if _reclaimed else "")
+                + ". Nothing lobbyist-facing changed and the calendar is unaffected.",
+                status="INFO", category="DATA_ANOMALY", severity="INFO", dedup_key="witness_autoshard_done")
+    except Exception as _shard_err:
+        push_system_alert(
+            f"Couldn't auto-move Schedule_Witness to VA·Ops this cycle ({_shard_err}); it stays in VA·Live "
+            f"(no data lost — the copy is verified before the original is ever removed). Retries next cycle; "
+            f"only needs a human if it keeps failing for days.",
+            status="CRITICAL", category="API_FAILURE", severity="CRITICAL", dedup_key="witness_autoshard_fail")
+        _witness_loc = "live"
+
+    _use_ops = _witness_loc == "ops" or os.environ.get("WITNESS_WORKBOOK", "").strip().lower() == "ops"
     _witness_book = sheet
-    if os.environ.get("WITNESS_WORKBOOK", "").strip().lower() == "ops":
+    if _use_ops:
         try:
             _witness_book = sheet.client.open_by_key(OPS_WORKBOOK_ID)
-            print(f"📝 {WITNESS_TAB_NAME}: using VA·Ops workbook ({OPS_WORKBOOK_ID[:12]}…) per WITNESS_WORKBOOK=ops.")
+            print(f"📝 {WITNESS_TAB_NAME}: using VA·Ops workbook ({OPS_WORKBOOK_ID[:12]}…).")
         except Exception as _ops_open_err:
             push_system_alert(
-                f"WITNESS_WORKBOOK=ops but VA·Ops ({OPS_WORKBOOK_ID[:12]}…) could not be opened "
-                f"({_ops_open_err}); witness falls back to VA·Live this cycle.",
+                f"Witness should be in VA·Ops but it could not be opened ({_ops_open_err}); witness falls "
+                f"back to VA·Live this cycle.",
                 status="WARN", category="API_FAILURE", severity="WARN", dedup_key="witness_ops_open_fail")
             _witness_book = sheet
 
