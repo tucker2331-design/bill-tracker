@@ -81,9 +81,13 @@ h2, h3 { margin: 0; }
 
 /* ── Trust header ── */
 .trust { display: flex; align-items: center; gap: var(--s3); font-size: 12.5px; color: var(--ink-soft); flex-wrap: wrap; }
-.trust .pill { display: inline-flex; align-items: center; gap: 6px; padding: 3px 9px; border-radius: 999px; background: var(--accent-soft); color: var(--accent); font-weight: 600; }
-.trust .pill.warn { background: var(--o-vetoed-bg); color: var(--stale); }
-.trust .pill.good { background: var(--o-signed-bg); color: var(--ok); }
+/* No filled pill: a small dot carries fresh/stale, the text stays neutral ink (docs/design — a colored box
+   on every header label is an AI-built tell). */
+.trust .pill { display: inline-flex; align-items: center; gap: 6px; color: var(--ink-soft); font-weight: 600; }
+.trust .pill::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: var(--ink-faint); flex: none; }
+.trust .pill.good::before { background: var(--ok); }
+.trust .pill.warn::before { background: var(--stale); }
+.trust .pill.warn { color: var(--stale); }   /* stale is mildly actionable — the text tints too */
 
 /* ── Chips ── */
 .chip { display: inline-flex; align-items: center; gap: 5px; padding: 2px 8px; border-radius: 6px; font-size: 11px; font-weight: 700; letter-spacing: .2px; white-space: nowrap; }
@@ -307,10 +311,12 @@ h2, h3 { margin: 0; }
 
 /* ── Health / operator tab — Few bullet graphs with danger bands ── */
 .hl-status { display: flex; align-items: center; gap: var(--s3); margin-bottom: var(--s4); flex-wrap: wrap; }
-.hl-breaker { display: inline-flex; align-items: center; gap: 6px; padding: 5px 12px; border-radius: 999px; font-weight: 700; font-size: 12.5px; }
-.hl-breaker.ok { background: var(--o-signed-bg); color: var(--ok); }
-.hl-breaker.trip { background: var(--o-vetoed-bg); color: var(--stale); }
-.hl-breaker.unknown { background: var(--neutral-bg); color: var(--neutral); }  /* unknown = neutral grey, NOT the dead red */
+/* No filled pill (that "colored box" reads as AI-built): the ● glyph in the label IS the status dot;
+   the text stays neutral ink, only the glyph carries colour. */
+.hl-breaker { display: inline-flex; align-items: center; gap: 6px; font-weight: 600; font-size: 12.5px; color: var(--ink-soft); }
+.hl-breaker.ok { color: var(--ok); }
+.hl-breaker.trip { color: var(--stale); font-weight: 700; }
+.hl-breaker.unknown { color: var(--ink-faint); }  /* unknown = faint grey, NOT the dead red */
 
 /* at-a-glance vitals — segmented activity-ring donuts (one per category, rolls up the gauges below) */
 .hl-vitals { display: grid; grid-template-columns: repeat(4, 1fr); gap: var(--s3); margin-bottom: var(--s5); }
@@ -370,27 +376,42 @@ a.hl-vverify:hover { text-decoration: underline; }
 .bg-target { position: absolute; top: 0; bottom: 0; width: 2px; background: var(--ink); }  /* target tick (full track height — the old -2px overhang was clipped by the track's overflow:hidden, CodeRabbit #167) */
 .bg-sub { font-size: 11.5px; color: var(--ink-faint); }
 
-/* alert feed */
-.hl-alert { display: flex; align-items: baseline; gap: var(--s2); padding: 8px var(--s1); flex-wrap: wrap; }
-.hl-alert + .hl-alert { border-top: 1px solid var(--line); }
-.hl-sev { font-size: 10.5px; font-weight: 800; letter-spacing: .4px; padding: 2px 7px; border-radius: 5px; }
-.hl-sev.critical { background: var(--o-vetoed-bg); color: var(--stale); }
-.hl-sev.warn { background: var(--o-carry-bg); color: var(--o-carry); }
-.hl-sev.info { background: var(--surface-2); color: var(--ink-soft); }
-.hl-sev.unknown { background: var(--neutral-bg); color: var(--neutral); }   /* unknown severity = neutral grey, NOT the dead red */
-.hl-cat { font-size: 10.5px; font-weight: 700; color: var(--ink-faint); text-transform: uppercase; letter-spacing: .3px; }
-.hl-amsg { flex: 1; min-width: 200px; color: var(--ink); font-size: 13px; }
-.hl-adate { color: var(--ink-faint); font-size: 12px; white-space: nowrap; }
-.hl-acount { font-size: 11px; font-weight: 800; color: var(--ink-soft); background: var(--surface-2); border-radius: 5px; padding: 1px 6px; font-variant-numeric: tabular-nums; }
-/* A collapsed high-volume routine-alert group: the summary reads like one alert row; expand for the detail. */
-.hl-alertgroup + .hl-alert, .hl-alert + .hl-alertgroup, .hl-alertgroup + .hl-alertgroup { border-top: 1px solid var(--line); }
-.hl-alertgroup > summary { list-style: none; cursor: pointer; }
-.hl-alertgroup > summary::-webkit-details-marker { display: none; }
-.hl-alertgroup > summary::before { content: "▸"; color: var(--ink-faint); font-size: 11px; margin-right: 2px; }
-.hl-alertgroup[open] > summary::before { content: "▾"; }
-.hl-alertgroup[open] > summary { border-bottom: 1px dashed var(--line); }
-.hl-alertgroup > div .hl-alert { padding-top: 5px; padding-bottom: 5px; }
-.hl-alertgroup > div .hl-alert + .hl-alert { border-top: 1px solid var(--surface-2); }
+/* Alerts — STATE, not stream; calm-by-default; color only as a small status signal (never a filled pill).
+   See docs/design/dashboard_and_visual_language.md. */
+.hl-alerts { padding: 0; overflow: hidden; }
+/* Verdict: the one line that answers "do I need to do anything?" */
+.hl-verdict { display: flex; align-items: center; gap: 9px; padding: 13px var(--s4); font-size: 14px; font-weight: 600; color: var(--ink); }
+.hl-verdict + .hl-arow, .hl-verdict + .hl-notes, .hl-verdict + .hl-cleared { border-top: 1px solid var(--line); }
+.hl-vdot { width: 9px; height: 9px; border-radius: 50%; flex: none; }
+.hl-verdict.clear .hl-vdot { background: var(--ok); }
+.hl-verdict.attention .hl-vdot { background: var(--o-carry); }         /* amber for a WARN … */
+.hl-verdict.attention.crit .hl-vdot { background: var(--stale); }      /* … red only when a CRITICAL is live */
+.hl-vnote { margin-left: auto; font-size: 12px; font-weight: 500; color: var(--ink-faint); }
+/* One condition row: a small dot carries severity; the text stays neutral ink; meta recedes to the right. */
+.hl-arow { display: flex; align-items: baseline; gap: 10px; padding: 10px var(--s4); }
+.hl-arow + .hl-arow { border-top: 1px solid var(--line); }
+.hl-adot { width: 8px; height: 8px; border-radius: 50%; flex: none; position: relative; top: 4px; background: var(--ink-faint); }
+.hl-adot.crit { background: var(--stale); }
+.hl-adot.warn { background: var(--o-carry); }
+.hl-adot.info { background: var(--accent); }        /* calm blue = informational, not alarming */
+.hl-adot.unknown { background: var(--ink-faint); }
+.hl-amsg { flex: 1; min-width: 0; color: var(--ink); font-size: 13px; line-height: 1.5; }
+.hl-ameta { display: inline-flex; align-items: baseline; gap: 8px; white-space: nowrap; flex: none; }
+.hl-acount { font-size: 11px; font-weight: 700; color: var(--ink-soft); font-variant-numeric: tabular-nums; }
+.hl-awhen { font-size: 12px; color: var(--ink-faint); white-space: nowrap; }
+/* Benign notes recede onto a faint tint — present, but clearly not competing with real problems. */
+.hl-notes { border-top: 1px solid var(--line); background: var(--surface-2); }
+.hl-notes .hl-arow + .hl-arow { border-top: 1px solid var(--line); }
+.hl-notes .hl-amsg { color: var(--ink-soft); }
+/* Self-cleared history: collapsed by default (the "it resolved itself" the owner asked for). */
+.hl-cleared { border-top: 1px solid var(--line); }
+.hl-cleared > summary { list-style: none; cursor: pointer; padding: 10px var(--s4); font-size: 12.5px; color: var(--ink-soft); }
+.hl-cleared > summary::-webkit-details-marker { display: none; }
+.hl-cleared > summary::before { content: "▸"; color: var(--ink-faint); font-size: 10px; margin-right: 6px; }
+.hl-cleared[open] > summary::before { content: "▾"; }
+.hl-cleared[open] > summary { border-bottom: 1px solid var(--line); }
+.hl-arow.resolved .hl-amsg { color: var(--ink-soft); }
+.hl-arow.resolved .hl-adot { opacity: .45; }
 
 /* upstream watchers (drift-canary green-state) */
 .hl-canaries { margin-bottom: var(--s5); }
@@ -411,7 +432,7 @@ a.hl-vverify:hover { text-decoration: underline; }
 .hl-skew.ok .hl-skewdot { background: var(--ok); }
 .hl-skew.warn .hl-skewdot { background: var(--o-carry); }
 .hl-skew.danger .hl-skewdot { background: var(--stale); }
-.hl-skew.danger { background: var(--bg-danger); }
+.hl-skew.danger { color: var(--ink); }   /* the red dot carries the signal — no red box (docs/design) */
 
 /* classification distribution */
 .hl-dist { display: flex; flex-direction: column; gap: 7px; }

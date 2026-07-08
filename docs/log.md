@@ -8,6 +8,30 @@ status: active
 
 Append-only, reverse-chronological (newest at top). Each entry opens with `## [YYYY-MM-DD] <kind> | <title>` so `grep "^## \[" log.md | head -20` gives a parseable timeline.
 
+## [2026-07-07] pr | Health alerts = STATE not stream + witness auto-shard (zero-touch) + de-AI pass
+
+Owner (2026-07-07): the alerts "need real thinking and fixing… consider how a human looks at this / how other
+dashboards do things"; the witness shard "shouldn't need manual input — will it always need that?"; "these
+colored boxes scream AI built all over our site." Three fixes on branch `claude/health-alerts-state-not-stream`:
+
+1. **Alerts rebuilt as state, not stream** (`web/src/views/Health.tsx`). Was a raw append-only log — nothing
+   self-cleared, internal tuple dumps leaked, over-simplified labels on a wall. Now: a **verdict line**
+   (all-clear by default) → only **currently-active** conditions → a **collapsed per-category** self-cleared
+   history. Self-clearing derived from the latest cycle (`lastTs ≥ latestCycleTs − 6min`); conditions group by
+   a normalized stem so per-bill explosions collapse; debug tails stripped. No worker change — a
+   reinterpretation of the existing `Metrics_History` log. Live-verified: verdict "All clear · 1 routine
+   note", 300 old alerts → 3 category lines.
+2. **Witness shard is now ZERO-TOUCH** (`calendar_worker._autoshard_witness_if_full`). The worker relocates
+   `Schedule_Witness` VA·Live→VA·Ops itself at 6M (copy-verify-then-delete, one-time `Sheet1!AD1` flag,
+   fail-CLOSED, FYI-only). Kills the half-manual `archive.py` + `WITNESS_WORKBOOK=ops` rollout (Standard #8).
+   15 unit tests (`witness_shard_test.py`). `sustainability_audit` WARN reworded → `shard-imminent`. A-2 Part 2 phase 3.
+3. **De-AI visual pass** — `.hl-sev`/`.hl-breaker`/`.hl-skew`/header `.trust .pill` filled "colored boxes" +
+   ●🗓✓ emoji chrome → restrained status dots + neutral text. Implements the existing [[design/reading_notes]]
+   canon (Few: least-visible-means). Doctrine + offenders log: [[design/dashboard_and_visual_language]]. Bill
+   outcome chips + scope toggle deliberately left (owner's aesthetic call — flagged, not silently redone).
+
+96 pure-logic tests green (+15 new); SPA `tsc`/`eslint`/`vite build` clean.
+
 ## [2026-07-06] decision | C-8 — NY re-measured: already hardened; oracle is owner-gated
 
 Measured `ny_bill_tracker.py` against C-8's "NY missing VA's hardening" claim (doctrine #1). NY is more

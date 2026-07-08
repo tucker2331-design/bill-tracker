@@ -96,6 +96,7 @@ Links use Obsidian `[[wikilink]]` format. Obsidian resolves by filename; path-qu
 - [[design/ui_redesign_spec]] — **owner's 2026-06-22 UI change-list: landing relayout (calendar sliver + timeline below), smoother less-boxy timeline, shrink crossover, Floor stage?, Search bugs, the visual-identity pass + the 2026-06-23 timeline-should-BRANCH feedback.**
 - [[design/ui_feedback_2026-07-04]] — **owner UI/cadence notes (2026-07-04, for later): the two freshness clocks disagree (display fix, not a cron-sync); cadence is FIXED not activity-correlated (guardrail #5 now unblocked to build); Health rings — label the two lines + explain Freshness's missing badge + make the '1 warning' descriptive & clickable; the lone live alert (HB923 blank upstream row) is a benign honest flag.**
 - [[design/health_operator_tab]] — **SCOPE (Task #4): the operator Health tab — Few bullet-graph gauges w/ danger bands (PL-8), grounded in live SYSTEM_METRICS/SYSTEM_ALERT signals; Cloudflare Access gating + the data-publicity caveat.**
+- [[design/dashboard_and_visual_language]] — **alerts as STATE not stream (the self-clearing feed: verdict + active-only + collapsed per-category history) + the 2026-07-07 de-AI pass APPLIED (severity/breaker/skew/header "colored boxes" → status dots). Implements the [[design/reading_notes]] canon.**
 
 ## Ideas / Deferred Work
 - [[ny/ideas/data_inventory]] — New York source inventory and unresolved meeting/calendar questions

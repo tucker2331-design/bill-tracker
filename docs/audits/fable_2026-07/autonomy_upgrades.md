@@ -102,16 +102,20 @@ with CRITICAL. `AUTO_SESSION_FOLLOW=0` halts without probing.
 > auto-follow FYI. Sub-step (1c) old-session **cache-row reset** is deferred as low-value (the caches are
 > bounded + have their own retention; Sheet1 — the big tab — is already archived out each rollover).
 >
-> **PART 2 — BUILT 2026-07-07 (owner provisioned VA·Ops):** phase 1 (#207) = the weekly `sustainability_audit`
-> emits a `shard-recommended` WARN with concrete cells-reclaimed once VA·Live > 6M. Phase 2 (#208) = the
-> actuator + wiring, **flag-gated + safe-by-default**: `_ensure_witness_tab` resolves the witness workbook
-> ONCE (VA·Live by default; VA·Ops when `WITNESS_WORKBOOK=ops`, fail-safe fallback), so the single-point
-> repoint covers every witness access (append / size-canary / Part-C read — measured); `archive.py
-> shard-witness` copy-verify-then-deletes `Schedule_Witness` VA·Live→VA·Ops; the prune follows the flag.
-> **Rollout when VA·Live nears 6M (it's ~5.5M now — not urgent):** `MODE=shard-witness archive.py` →
-> `CONFIRM=delete` → set `WITNESS_WORKBOOK=ops`. Reversible until the delete. Metrics_History (frontend-read,
-> 45-day-pruned) intentionally NOT sharded — the frontend gviz-reads it from VA·Live; Schedule_Witness (the
-> dominant internal tab) is the whole win.
+> **PART 2 — phase 3 (ZERO-TOUCH ACTUATOR) BUILT 2026-07-07 — this is now Standard-#8-clean.** The owner
+> objected to the half-manual rollout ("will it always need that?" — no): a designed-in `archive.py`
+> command + `WITNESS_WORKBOOK=ops` env var IS routine maintenance. So the **worker now moves the witness
+> itself**: `calendar_worker._autoshard_witness_if_full(sheet, WITNESS_TAB_NAME)` runs each cycle, and when
+> VA·Live ≥ `WITNESS_SHARD_THRESHOLD_CELLS` (6M) it copy-verify-then-deletes `Schedule_Witness`
+> VA·Live→VA·Ops and sets a one-time flag `Sheet1!AD1="ops"`; every later cycle short-circuits on the flag
+> (no capacity call). **Idempotent + fail-CLOSED** — the only paths that raise are BEFORE any delete (open
+> VA·Ops / copy / verify), so a failure leaves the witness intact in VA·Live + a CRITICAL; success emits one
+> FYI. 15 unit tests (`witness_shard_test.py`) cover: flag short-circuit, under-threshold no-op, full+present
+> → move, full+absent → flag-only, verify-fail → no delete + no flag. **No human step anywhere.**
+> `WITNESS_WORKBOOK=ops` stays as a manual OVERRIDE; `archive.py shard-witness` stays as an operator escape
+> hatch. Prior phases: phase 1 (#207) weekly `sustainability_audit` FYI (reworded `shard-imminent` — "the
+> worker moves it automatically"); phase 2 (#208) the single-point `_ensure_witness_tab` repoint that every
+> witness access flows through. Metrics_History (frontend gviz-read, 45-day-pruned) intentionally NOT sharded.
 
 **Design (Opus implements):**
 1. **The rollover hook (the missing piece archive.py already promises):** in `run_calendar_update`, the

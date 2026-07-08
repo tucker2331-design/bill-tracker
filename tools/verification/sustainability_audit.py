@@ -340,19 +340,20 @@ def check_capacity():
     else:
         out.append(Result("CAPACITY", "workbook-cells", "PASS", detail))
 
-    # A-2 Part 2 (headroom shard): once VA·Live crosses the shard threshold, recommend relocating the big
-    # INTERNAL append-only tabs to VA·Ops (copy-verify-then-delete) so the live workbook stays lean — with
-    # the concrete cells reclaimed, so the action is decidable. (The auto-actuator that MOVES them + repoints
-    # the witness write is the gated follow-up; this is the always-on trigger + recommendation.)
+    # A-2 Part 2 (headroom shard): once VA·Live crosses the shard threshold, the calendar worker relocates
+    # the big INTERNAL Schedule_Witness log to VA·Ops ITSELF on its next run (copy-verify-then-delete —
+    # calendar_worker._autoshard_witness_if_full). This is now a zero-touch actuator, so this check is just
+    # an FYI that the auto-move is imminent, NOT a call to action. Post-move Schedule_Witness is gone from
+    # VA·Live, so `_present` is empty and this stops firing on its own.
     _present = [title for title, _, _, _ in per_tab if title in SHARDABLE_TABS]
-    if total >= SHARD_THRESHOLD_CELLS and _present:   # only recommend real, present tabs (Gemini #207)
+    if total >= SHARD_THRESHOLD_CELLS and _present:   # only fires on real, present tabs (Gemini #207)
         _shard_cells = sum(cells for title, _, _, cells in per_tab if title in _present)
         out.append(Result(
-            "CAPACITY", "shard-recommended", "WARN",
-            f"VA·Live at {total:,} cells (≥ {SHARD_THRESHOLD_CELLS:,} shard threshold). Relocate "
-            f"{', '.join(_present)} to VA·Ops ({OPS_WORKBOOK_ID[:12]}…) — would reclaim "
-            f"~{_shard_cells:,} cells → new headroom ~{GOOGLE_SHEETS_CELL_CAP - total + _shard_cells:,}. "
-            f"See autonomy_upgrades A-2 Part 2."))
+            "CAPACITY", "shard-imminent", "WARN",
+            f"VA·Live at {total:,} cells (≥ {SHARD_THRESHOLD_CELLS:,} shard threshold). The calendar worker "
+            f"will move {', '.join(_present)} to VA·Ops ({OPS_WORKBOOK_ID[:12]}…) automatically on its next "
+            f"run — no action needed. Reclaims ~{_shard_cells:,} cells → headroom "
+            f"~{GOOGLE_SHEETS_CELL_CAP - total + _shard_cells:,}. See autonomy_upgrades A-2 Part 2."))
 
     # 2. Unrecognised large tab — a tab we have NO declared policy for that has
     #    grown big. This is how a FUTURE append-only tab surfaces for a policy
