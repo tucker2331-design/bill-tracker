@@ -8,7 +8,16 @@ status: active
 
 Append-only, reverse-chronological (newest at top). Each entry opens with `## [YYYY-MM-DD] <kind> | <title>` so `grep "^## \[" log.md | head -20` gives a parseable timeline.
 
-## [2026-07-07] pr | Health alerts = STATE not stream + witness auto-shard (zero-touch) + de-AI pass
+## [2026-07-07] pr | #209 MERGED — Health alerts = STATE not stream + witness auto-shard (zero-touch) + de-AI pass
+
+**MERGED to main (squash) 2026-07-07** after Gemini fold-in: Gemini caught a CRITICAL in the auto-shard —
+the recovery flag reconciled behind the same `total>=threshold` gate the move drives below the line (split-brain
+if the flag write failed); fixed to reconcile from the tab's ACTUAL location, +2 regression tests ([[failures/assumptions_audit]]
+#98, = pre-push audit #11). Also a real regex bug (`\b[0-9]` never matched `SB587` → per-bill alerts didn't
+collapse; dropped `\b`, cleared history 300→18 on live data — [[failures/gemini_review_patterns]] #51/#52). One
+Gemini finding (`useState` unimported) was a false positive — verified imported, skipped. CodeRabbit hung
+"in progress" with 0 findings; merged on green functional CI (golden/prepush/structural/Cloudflare) per the
+owner's "merge when reviews are done, don't stop for this again."
 
 Owner (2026-07-07): the alerts "need real thinking and fixing… consider how a human looks at this / how other
 dashboards do things"; the witness shard "shouldn't need manual input — will it always need that?"; "these
