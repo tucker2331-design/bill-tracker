@@ -90,13 +90,16 @@ h2, h3 { margin: 0; }
 .trust .pill.warn { color: var(--stale); }   /* stale is mildly actionable — the text tints too */
 
 /* ── Chips ── */
-.chip { display: inline-flex; align-items: center; gap: 5px; padding: 2px 8px; border-radius: 6px; font-size: 11px; font-weight: 700; letter-spacing: .2px; white-space: nowrap; }
-.chip.signed { background: var(--o-signed-bg); color: var(--o-signed); }
-.chip.vetoed { background: var(--o-vetoed-bg); color: var(--o-vetoed); }
-.chip.awaiting_governor { background: var(--o-await-bg); color: var(--o-await); }
-.chip.dead { background: var(--o-dead-bg); color: var(--o-dead); }
-.chip.carried_over { background: var(--o-carry-bg); color: var(--o-carry); }
-.chip.in_progress { background: var(--o-prog-bg); color: var(--o-prog); }
+.chip { display: inline-flex; align-items: center; gap: 5px; padding: 2px 8px; border-radius: 4px; font-size: 11px; font-weight: 600; letter-spacing: .2px; white-space: nowrap; }
+/* Outcome tags — RESERVED colour (owner 2026-07-08, see docs/design/dashboard_and_visual_language.md).
+   Finality is the FILL: SOLID = a final verdict, TINT = still in play. Disposition is the HUE. Everything
+   routine stays grey — no rainbow of pastel fills (the #1 "AI-generated" tell). */
+.chip.signed { background: var(--o-signed); color: #fff; }             /* final: became law */
+.chip.dead { background: #d2403a; color: #fff; }                       /* final: truly dead — takes the strong red */
+.chip.vetoed { background: #fbdedb; color: #bf352f; }                  /* NOT final: likely dead but overridable → lighter red tint */
+.chip.carried_over { background: #f4e7c1; color: #87680a; }            /* NOT final: deferred to next session → amber, not red */
+.chip.awaiting_governor { background: var(--neutral-bg); color: var(--neutral); }  /* in process → grey */
+.chip.in_progress { background: var(--neutral-bg); color: var(--neutral); }        /* in process → grey */
 .chip.senate { background: var(--senate-bg); color: var(--senate); }
 .chip.house { background: var(--house-bg); color: var(--house); }
 .chip.referral { background: var(--neutral-bg); color: var(--neutral); }   /* referral count = grey (was tan, colliding with carried-over) */
@@ -105,10 +108,8 @@ h2, h3 { margin: 0; }
 /* ── Bill box (the one reused component) — bordered by shadow + spacing, not a hard rule ── */
 .billbox { display: grid; grid-template-columns: auto 1fr auto; gap: var(--s2) var(--s3); align-items: center;
   background: var(--surface); border-radius: var(--radius-sm); padding: 11px 13px; cursor: pointer; box-shadow: var(--shadow-sm);
-  border-left: 3px solid var(--line); transition: box-shadow .12s, transform .12s; }
+  transition: box-shadow .12s, transform .12s; }   /* no side bar — owner 2026-07-08: no side bars anywhere */
 .billbox:hover { box-shadow: var(--shadow); transform: translateY(-1px); }
-.billbox.senate { border-left-color: var(--senate); }
-.billbox.house { border-left-color: var(--house); }
 .billbox .num { font-weight: 800; }
 .billbox .cat { color: var(--ink); overflow: hidden; text-overflow: ellipsis; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; line-height: 1.35; }
 .billbox .meta { display: flex; gap: 5px; align-items: center; flex-wrap: wrap; justify-content: flex-end; max-width: 168px; }
