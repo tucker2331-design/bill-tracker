@@ -25,8 +25,8 @@ const cleanMessage = (msg: string) =>
 // self-clear cleanly instead of spawning a fresh "active" line every cycle its count changes.
 const conditionStem = (msg: string) =>
   cleanMessage(msg)
-    .replace(/\b\d{4}-\d{2}-\d{2}\b/g, "#date")
-    .replace(/\b[0-9][0-9,.]*\b/g, "#")
+    .replace(/\d{4}-\d{2}-\d{2}/g, "#date")
+    .replace(/[0-9][0-9,.]*/g, "#")   // no \b: a letter→digit seam isn't a word boundary, so \bSB587 never matched (Gemini #209)
     .replace(/\s+/g, " ")
     .toLowerCase()
     .slice(0, 120);

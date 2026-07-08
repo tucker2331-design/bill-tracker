@@ -158,17 +158,30 @@ ok(src.deleted, "original witness deleted from VA·Live AFTER verify")
 ok("Schedule_Witness" in {w.title for w in _BOOKS[cw.OPS_WORKBOOK_ID].worksheets()}, "witness now present in VA·Ops")
 ok(s1._cells.get(CELL) == "ops", "AD1 flag persisted = ops")
 
-# 4. Over threshold but witness tab absent → flag only, no copy, no crash.
+# 4. Over threshold but witness tab absent from BOTH books → flag only, no copy, no crash.
 live, s1 = build(THRESH + 1, witness_present=False)
 loc, did, rec = cw._autoshard_witness_if_full(live, "Schedule_Witness")
-ok((loc, did, rec) == ("ops", True, 0), "full + no witness tab → flag ops, nothing to copy")
+ok((loc, did, rec) == ("ops", True, 0), "full + no witness tab anywhere → flag ops, nothing to copy")
 ok(s1._cells.get(CELL) == "ops", "flag set even with no tab to move")
 
+# 4b. RECOVERY (audit #98 / Gemini #209 CRITICAL): a prior move landed the witness in VA·Ops but the flag
+# write didn't. Flag empty, tab GONE from VA·Live, PRESENT in VA·Ops, and VA·Live now BELOW threshold (the
+# move shrank it). Reconciliation must key off the actual location, NOT the threshold → set flag, no re-move.
+live, s1 = build(THRESH // 2, witness_present=False,
+                 ops_tabs=[FakeWS("Schedule_Witness", 200000, len(HDR), HDR)])
+loc, did, rec = cw._autoshard_witness_if_full(live, "Schedule_Witness")
+ok((loc, did, rec) == ("ops", False, 0), "recovery: present in VA·Ops + below threshold → reconcile flag, no re-move/FYI")
+ok(s1._cells.get(CELL) == "ops", "recovery: stranded flag gets set from the ACTUAL location, not the trigger")
+
 # 5. FAIL-CLOSED: a verify mismatch must RAISE and NOT delete the original / NOT set the flag.
+def _raise_verify(*a, **k):
+    raise RuntimeError("dims mismatch — looks partial")
+
+
 live, s1 = build(THRESH + 100000, ops_tabs=[])
 src = live.worksheet("Schedule_Witness")
 _orig_verify = cw._verify_sharded_tab
-cw._verify_sharded_tab = lambda *a, **k: (_ for _ in ()).throw(RuntimeError("dims mismatch — looks partial"))
+cw._verify_sharded_tab = _raise_verify
 try:
     expect_raise(lambda: cw._autoshard_witness_if_full(live, "Schedule_Witness"), "verify failure must propagate")
     ok(not src.deleted, "FAIL-CLOSED: original NOT deleted when verify fails")

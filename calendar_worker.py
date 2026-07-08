@@ -3388,33 +3388,68 @@ def _verify_sharded_tab(dest_book, target, source_ws):
     return int(dws.row_count)
 
 
+def _persist_witness_flag(ws1, location_cell):
+    """Best-effort write of the one-time witness-location flag (`Sheet1!<location_cell> = "ops"`). Swallows +
+    logs on failure: the flag is always reconcilable next cycle from the ACTUAL location (the src-missing →
+    present-in-VA·Ops branch), so a transient write glitch must never raise here — a raise on the post-delete
+    path would masquerade as a failed MOVE (audit #98)."""
+    try:
+        ws1.update_acell(location_cell, "ops")
+        return True
+    except Exception as _flag_err:
+        print(f"⚠️ witness-location flag write failed ({_flag_err}); reconciles next cycle from VA·Ops")
+        return False
+
+
 def _autoshard_witness_if_full(sheet, tab_name, threshold_cells=WITNESS_SHARD_THRESHOLD_CELLS,
                                location_cell=WITNESS_LOCATION_CELL):
     """When VA·Live crosses `threshold_cells`, relocate `tab_name` (Schedule_Witness) to VA·Ops so the live
     workbook stays lean — automatically, once, and safely. Returns (location, did_shard, reclaimed_cells):
       - location  : "ops" (witness now lives in VA·Ops) | "live" (unchanged — not full yet, or unmeasurable).
       - did_shard : True ONLY on the cycle the relocation actually completes (caller emits the single FYI).
-    A persistent flag in Sheet1!<location_cell> makes this idempotent — after the one-time move every later
-    cycle short-circuits on the flag (no capacity call). Fail-CLOSED: the ONLY paths that raise are the ones
-    BEFORE any deletion (open VA·Ops / copy / verify), so a raise means the original is still intact in
-    VA·Live and the flag is unset — the caller turns that into a CRITICAL and the witness simply stays put."""
+    A persistent flag in Sheet1!<location_cell> makes this idempotent. RECONCILIATION KEYS OFF THE ACTUAL
+    LOCATION, NOT THE THRESHOLD (audit #98 / pre-push #11): the move deletes the big tab, so `total` drops
+    below the threshold — reconciling the flag behind the threshold check would strand it unset forever, and
+    the worker would re-create an empty witness in VA·Live (split-brain). So we check where the tab actually
+    IS before we check whether the book is full. Fail-CLOSED: the ONLY paths that raise are BEFORE any delete
+    (open VA·Ops / copy / verify), so a raise leaves the original intact in VA·Live + flag unset (caller
+    CRITICAL, witness stays put)."""
     ws1 = sheet.worksheet("Sheet1")
     if (ws1.acell(location_cell).value or "").strip().lower() == "ops":
-        return "ops", False, 0                       # already sharded — no capacity call, no work
-    total = _workbook_total_cells(sheet)
-    if total is None or total < threshold_cells:
-        return "live", False, 0                      # unmeasurable or still lean — witness stays in VA·Live
-    ops = sheet.client.open_by_key(OPS_WORKBOOK_ID)  # raises → caller CRITICAL, witness untouched in VA·Live
+        return "ops", False, 0                       # flag set — already sharded, no capacity call, no work
+
+    # Where is the witness RIGHT NOW? Reconcile from that, not from the (post-move, sub-threshold) cell count.
     try:
         src = sheet.worksheet(tab_name)
     except gspread.exceptions.WorksheetNotFound:
-        # VA·Live is full but the witness tab was never created here (or a prior move deleted it and crashed
-        # before flagging): nothing to copy — just direct all FUTURE witness writes to VA·Ops.
-        ws1.update_acell(location_cell, "ops")
-        return "ops", True, 0
+        src = None
+
+    if src is None:
+        # Not in VA·Live. Either a prior move landed it in VA·Ops but the flag write didn't (recovery — must
+        # NOT depend on the threshold, which the move drove below the line), or it was never created yet.
+        ops = sheet.client.open_by_key(OPS_WORKBOOK_ID)
+        try:
+            ops.worksheet(tab_name)
+            _in_ops = True
+        except gspread.exceptions.WorksheetNotFound:
+            _in_ops = False
+        if _in_ops:
+            _persist_witness_flag(ws1, location_cell)   # the move already happened — just fix the pointer
+            return "ops", False, 0                       # reconciliation only, no second FYI
+        total = _workbook_total_cells(sheet)
+        if total is not None and total >= threshold_cells:
+            _persist_witness_flag(ws1, location_cell)    # full + no tab anywhere → create future writes in VA·Ops
+            return "ops", True, 0
+        return "live", False, 0                          # not full, not created yet → let it be born in VA·Live
+
+    # Witness is in VA·Live. Move it ONLY when the workbook is actually full.
+    total = _workbook_total_cells(sheet)
+    if total is None or total < threshold_cells:
+        return "live", False, 0                          # unmeasurable or still lean — stays in VA·Live
+    ops = sheet.client.open_by_key(OPS_WORKBOOK_ID)      # raises → caller CRITICAL, witness untouched in VA·Live
     reclaimed = int(src.row_count) * int(src.col_count)
     try:
-        old_id = ops.worksheet(tab_name).id          # replace any stale same-named tab in VA·Ops (idempotent)
+        old_id = ops.worksheet(tab_name).id              # replace any stale same-named tab in VA·Ops (idempotent)
     except gspread.exceptions.WorksheetNotFound:
         old_id = None
     props = src.copy_to(OPS_WORKBOOK_ID)
@@ -3424,13 +3459,10 @@ def _autoshard_witness_if_full(sheet, tab_name, threshold_cells=WITNESS_SHARD_TH
     requests.append({"updateSheetProperties": {
         "properties": {"sheetId": int(props["sheetId"]), "title": tab_name}, "fields": "title"}})
     ops.batch_update({"requests": requests})
-    _verify_sharded_tab(ops, tab_name, src)          # RAISES unless the copy is confirmed intact (pre-delete)
+    _verify_sharded_tab(ops, tab_name, src)              # RAISES unless the copy is confirmed intact (pre-delete)
     sheet.batch_update({"requests": [{"deleteSheet": {"sheetId": int(src.id)}}]})  # only NOW reclaim VA·Live
-    try:
-        ws1.update_acell(location_cell, "ops")       # the move is DONE + safe; a flag-write miss self-heals
-    except Exception as _flag_err:                   # next cycle (src is gone → the WorksheetNotFound branch)
-        print(f"⚠️ witness shard completed but flag write failed ({_flag_err}); reconciles next cycle")
-    return "ops", True, reclaimed
+    _persist_witness_flag(ws1, location_cell)            # move DONE + safe; a flag-write miss self-heals via the
+    return "ops", True, reclaimed                        # src-missing→in-ops reconciliation branch next cycle
 
 
 def run_sequential_turing_machine(df_past, *,
