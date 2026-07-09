@@ -56,7 +56,7 @@ export default function App() {
       {/* one sticky container so the nav never overlaps a wrapped topbar (no hard-coded offset) */}
       <div className="appheader">
         <header className="topbar">
-          <div className="brand"><span className="dot" /> VA Bill Tracker</div>
+          <div className="brand">VA Bill Tracker</div>
           <ScopeSwitch />
           <div className="spacer" />
           {data && <TrustHeader dataAsOf={data.dataAsOf} calendarAsOf={calendarAsOf} completeness={data.completeness} shown={visible.length} />}
