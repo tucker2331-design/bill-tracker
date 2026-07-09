@@ -200,6 +200,7 @@ h2, h3 { margin: 0; }
 .cal-mtg-t { font-weight: 800; font-size: 11.5px; color: var(--ink); }
 .cal-mtg-t.tba { font-weight: 700; color: var(--ink-faint); font-style: italic; }
 .cal-mtg-c { font-weight: 600; font-size: 11.5px; line-height: 1.3; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+.cal-mtg-c.open { -webkit-line-clamp: unset; overflow: visible; }   /* expanded → show the full committee name */
 .cal-mtg-n { font-size: 10px; font-weight: 700; color: var(--ink-faint); white-space: nowrap; }
 .cal-bills { display: flex; flex-wrap: wrap; gap: 3px; padding: 0 7px 6px; }
 .cal-bchip { border: 0; background: var(--surface); color: var(--ink-soft); border-radius: 5px; padding: 2px 6px; font-size: 10.5px; font-weight: 700; }
