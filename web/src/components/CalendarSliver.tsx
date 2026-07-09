@@ -1,24 +1,31 @@
-import { useMemo } from "react";
+import { useEffect, useState } from "react";
 import type { Bill } from "../data/types";
-import { parseLisDate, dayKey } from "../data/dates";
+import { dayKey } from "../data/dates";
+import { loadCalendar, type Meeting } from "../data/calendar";
 
-// Today's calendar as a paper-planner day column (owner request): the day-of-week + numerical date at
-// the head, the day's committee meetings down it, a fixed-height widget that scrolls internally. The
-// full calendar lives in the Calendar tab; this is the "what's happening today" sliver on the landing.
+// Today's calendar as a paper-planner day column (owner request): the day-of-week + numerical date at the
+// head, the day's meetings down it. It reads the SAME source as the Calendar tab — the full LIS schedule via
+// loadCalendar() (cached + shared, so opening the Calendar tab stays instant) — NOT each bill's `upcoming`
+// list, which is empty off-season and never held the non-bill meetings (caucuses, commissions, interim
+// committee meetings) that the LIS + Calendar-page views show. That mismatch is why this used to read "no
+// meetings" while the Calendar tab showed a full week (owner 2026-07-08).
 export function CalendarSliver({ bills, onOpen }: { bills: Bill[]; onOpen: (b: Bill) => void }) {
   const today = new Date();
   const dow = today.toLocaleDateString("en-US", { weekday: "long" });
   const head = today.toLocaleDateString("en-US", { month: "short", day: "numeric" });
   const todayKey = dayKey(today);
 
-  const events = useMemo(() => {
-    const evs: { bill: string; committee: string; b: Bill }[] = [];
-    for (const b of bills) for (const m of b.upcoming ?? []) {
-      const d = parseLisDate(m.date);                      // robust local parse (no Date.parse drift)
-      if (d && dayKey(d) === todayKey) evs.push({ bill: b.bill, committee: m.committee || "Committee", b });
-    }
-    return evs.sort((a, b) => a.committee.localeCompare(b.committee));
-  }, [bills, todayKey]);
+  const [meetings, setMeetings] = useState<Meeting[] | null>(null); // null = still loading
+  const [err, setErr] = useState<string | null>(null);
+  useEffect(() => {
+    let alive = true;
+    loadCalendar()
+      .then((cal) => { if (alive) setMeetings(cal.byDay.get(todayKey) ?? []); })
+      .catch((e) => { if (alive) setErr(String(e?.message || e)); });
+    return () => { alive = false; };
+  }, [todayKey]);
+
+  const byBill = new Map(bills.map((b) => [b.bill, b])); // open a bill from an agenda item
 
   return (
     <div className="daycol">
@@ -27,21 +34,32 @@ export function CalendarSliver({ bills, onOpen }: { bills: Bill[]; onOpen: (b: B
         <div className="dnum">{head}</div>
       </div>
       <div className="dcbody">
-        {events.length === 0 ? (
-          <div className="dcempty">
-            <div style={{ fontSize: 22, marginBottom: 6 }}>🗓️</div>
-            No meetings scheduled today.<br />
-            <span className="muted">The General Assembly is adjourned — this fills during session.</span>
-          </div>
-        ) : events.map((e, i) => (
-          <div className="ev" key={i} onClick={() => onOpen(e.b)} role="button" tabIndex={0}
-            onKeyDown={(ev) => { if (ev.key === "Enter" || ev.key === " ") { ev.preventDefault(); onOpen(e.b); } }}>
-            <div className="t" style={{ color: e.b.chamber === "Senate" ? "var(--senate)" : "var(--house)" }}>
-              {e.b.chamber === "Senate" ? "SEN" : "HOU"}
-            </div>
+        {err ? (
+          <div className="dcempty">Couldn't load today's calendar.<br /><span className="muted">See the Calendar tab.</span></div>
+        ) : meetings === null ? (
+          <div className="dcempty muted">Loading today's meetings…</div>
+        ) : meetings.length === 0 ? (
+          <div className="dcempty">No meetings scheduled today.<br /><span className="muted">The full week is on the Calendar tab.</span></div>
+        ) : meetings.map((m, i) => (
+          <div className="ev" key={i} style={{ cursor: "default" }}>
+            <div className="t">{m.time}</div>
             <div>
-              <div className="b">{e.bill}</div>
-              <div className="c">{e.committee}</div>
+              <div className="b">{m.committee}</div>
+              {m.bills.length > 0 && (
+                <div className="evbills">
+                  {m.bills.slice(0, 8).map((a) => {
+                    const b = byBill.get(a.bill);
+                    return (
+                      <span key={a.bill} className={`evbill${b ? "" : " nolink"}`}
+                        onClick={() => b && onOpen(b)} role={b ? "button" : undefined} tabIndex={b ? 0 : undefined}
+                        onKeyDown={(e) => { if (b && (e.key === "Enter" || e.key === " ")) { e.preventDefault(); onOpen(b); } }}>
+                        {a.bill}
+                      </span>
+                    );
+                  })}
+                  {m.bills.length > 8 && <span className="muted" style={{ fontSize: 11 }}>+{m.bills.length - 8}</span>}
+                </div>
+              )}
             </div>
           </div>
         ))}

@@ -154,11 +154,13 @@ export function Timeline({ bills, onOpen }: { bills: Bill[]; onOpen: (b: Bill) =
           <div className="snodes">
             {COLUMNS.map((c) => c.stage === "governor" ? (
               <div className="snode outcome" key="gov">
+                {/* Order (owner 2026-07-08): Awaiting in the MIDDLE, Carried over under Signed, Vetoed just
+                    above Dead — so the fork reads good→pending→bad top to bottom. */}
                 <div className="out-fork">
                   <OutBtn kind="signed" label="Signed" />
+                  <OutBtn kind="carried" label="Carried over" />
                   <OutBtn kind="awaiting" label="Awaiting" />
                   <OutBtn kind="vetoed" label="Vetoed" />
-                  <OutBtn kind="carried" label="Carried over" />
                   <OutBtn kind="dead" label="Died" />
                 </div>
               </div>

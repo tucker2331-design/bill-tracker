@@ -29,6 +29,7 @@ export function Landing({ bills, onOpen }: { bills: Bill[]; onOpen: (b: Bill) =>
   }, [feed]);
 
   const [dayIdx, setDayIdx] = useState(0);
+  const [nowMs] = useState(() => Date.now()); // stable per mount — for the off-season "staleness" check below
 
   if (bills.length === 0) {
     return <p className="center-msg">No bills in scope. Star some bills, or switch to <b>Full GA</b>.</p>;
@@ -37,6 +38,10 @@ export function Landing({ bills, onOpen }: { bills: Bill[]; onOpen: (b: Bill) =>
   const [curDay, items] = days[Math.min(dayIdx, days.length - 1)] ?? ["", []];
   const curDate = parseLisDate(curDay);
   const dayLabel = curDate ? curDate.toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" }) : curDay || "—";
+  // Off-season: the newest ACTION day (bills) is stale because the GA has adjourned — nothing is being voted
+  // on. Say so plainly so the date doesn't read as "stuck", and point to the Today panel for current meetings
+  // (owner 2026-07-08: "it shows Jun 29, not today"). Meetings ARE current — they're in the sliver, not here.
+  const isStale = dayIdx === 0 && !!curDate && nowMs - curDate.getTime() > FEED_STALE_MS;
 
   return (
     <div>
@@ -50,9 +55,13 @@ export function Landing({ bills, onOpen }: { bills: Bill[]; onOpen: (b: Bill) =>
             </div>
           </div>
           <div className="panel">
-            {/* Off-season honesty (owner 2026-07-03: "the date is from days ago — why?"): the feed opens on
-                the newest day WITH actions; when that day isn't recent, say so instead of looking stale. */}
-            <p className="feedday">{dayLabel} <span className="muted">· {items.length} action{items.length === 1 ? "" : "s"}{dayIdx === 0 && curDate && (Date.now() - curDate.getTime()) > FEED_STALE_MS ? " · the most recent legislative activity — nothing newer has happened" : ""}</span></p>
+            {/* Off-season honesty (owner 2026-07-03/08): the feed opens on the newest day WITH bill actions;
+                when that isn't recent, the header says so plainly (no box) — the date is the latest in data. */}
+            <p className="feedday">
+              {isStale
+                ? <>No bill action since <strong>{dayLabel}</strong></>
+                : <>{dayLabel} <span className="muted">· {items.length} action{items.length === 1 ? "" : "s"}</span></>}
+            </p>
             {items.length === 0 && <p className="muted" style={{ padding: "8px 4px" }}>No actions on this day.</p>}
             {items.slice(0, 80).map((it, i) => {
               const b = byBill.get(it.bill);

@@ -70,12 +70,12 @@ function MeetingRow({ m, billMap, onOpen }: {
       {(() => {
         const p = /^((?:House|Senate|Joint)[^-]+?)\s*-\s*(.+)$/.exec(m.committee);
         return p ? (
-          <span className="cal-mtg-c" style={isFloor ? undefined : { color: side }}>
+          <span className="cal-mtg-c" title={m.committee} style={isFloor ? undefined : { color: side }}>
             <span className="cal-sub-parent">{p[1].trim()}</span>
             <span className="cal-sub-name">↳ {p[2].trim()}</span>
           </span>
         ) : (
-          <span className="cal-mtg-c" style={isFloor ? undefined : { color: side }}>{m.committee}</span>
+          <span className="cal-mtg-c" title={m.committee} style={isFloor ? undefined : { color: side }}>{m.committee}</span>
         );
       })()}
     </>
@@ -216,7 +216,8 @@ export function Calendar({ bills, sessionCode, onOpen }: {
           <span className="muted cal-count">{weekMeetingCount.toLocaleString()} meeting{weekMeetingCount === 1 ? "" : "s"} this week{scope === "tracking" ? " · tracked" : ""}</span>
         </div>
         <div className="cal-actions">
-          {crossoverKey && <button className="cal-jump cross" onClick={() => jumpTo(crossoverKey)}>⚑ Crossover</button>}
+          {/* Crossover JUMP button removed (owner 2026-07-08 — testing-only); the crossover DAY marker (the ⚑
+              + red top-border on the crossover date) stays as informative context on the calendar itself. */}
           {todayKey >= cal.minKey && todayKey <= cal.maxKey && <button className="cal-jump" onClick={() => jumpTo(todayKey)}>Today</button>}
           {/* "Calendar as of" moved up to the global TrustHeader (owner 2026-07-04) so both feed clocks sit
               together — see components/common.tsx TrustHeader. Not duplicated here to avoid two stamps. */}
@@ -233,7 +234,7 @@ export function Calendar({ bills, sessionCode, onOpen }: {
             const has = (byDay.get(dayKey(d))?.length ?? 0) > 0;
             // Readable min width so work-day columns never crush; the week scrolls horizontally if the
             // viewport is too narrow to fit them (you still see ~5 work days, then scroll for the rest).
-            return wknd && !has ? "minmax(40px,0.4fr)" : "minmax(116px,1fr)";
+            return wknd && !has ? "minmax(40px,0.4fr)" : "minmax(158px,1fr)";
           }).join(" "),
         }}>
           {weekDays.map((d) => {
