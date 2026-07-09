@@ -148,27 +148,15 @@ export function Calendar({ bills, sessionCode, onOpen }: {
   const [focusedDay, setFocusedDay] = useState<string | null>(null);
   const [miniMonth, setMiniMonth] = useState<YM | null>(null);
 
-  // Default focus: a meaningful day in the busiest month (crossover if it lives there + is non-empty, else
-  // the first day with meetings) — computed from the UNFILTERED calendar for a stable anchor, so the view
-  // opens onto live data, not an empty off-season week.
-  useEffect(() => {
-    if (!cal || focusedDay) return;
-    // Anchor on the busiest WEEK (sum meetings over each Sun–Sat window), not just the busiest month, so the
-    // week view opens onto a full week rather than a sparse day in an otherwise-busy month (CodeRabbit #185).
-    const wkKey = (dk: string) => dayKey(weekStartOf(parseLisDate(dk) ?? new Date()));
-    const weekCounts = new Map<string, number>();
-    for (const [dk, ms] of cal.byDay) weekCounts.set(wkKey(dk), (weekCounts.get(wkKey(dk)) ?? 0) + ms.length);
-    let bestWeek = "", bestN = -1;
-    for (const [ws, n] of weekCounts) if (n > bestN) { bestN = n; bestWeek = ws; }
-    // Within that week, prefer the crossover day, else the busiest day.
-    let pick: string | null = (crossoverKey && cal.byDay.get(crossoverKey)?.length && wkKey(crossoverKey) === bestWeek) ? crossoverKey : null;
-    if (!pick) {
-      let bestDay = "", bestDayN = -1;
-      for (const [dk, ms] of cal.byDay) if (wkKey(dk) === bestWeek && ms.length > bestDayN) { bestDayN = ms.length; bestDay = dk; }
-      pick = bestDay || todayKey;
-    }
-    setFocusedDay(pick);
-  }, [cal, focusedDay, crossoverKey, todayKey]);
+  // Default focus (owner 2026-07-08: "start on this week / Today, NOT crossover"). Set ONCE when the calendar
+  // data arrives — computed during render (guarded so it runs a single time), not in an effect. In-session →
+  // today's week; off-season (today outside the data range) → the nearest week that HAS data (the most recent
+  // once the session has ended), so it opens onto real meetings, but it NEVER jumps to the crossover week.
+  if (cal && focusedDay === null) {
+    setFocusedDay((todayKey >= cal.minKey && todayKey <= cal.maxKey)
+      ? todayKey                                          // in-session → this week
+      : (todayKey > cal.maxKey ? cal.maxKey : cal.minKey)); // off-season → nearest week with data
+  }
 
   // The mini month follows the focused day (so a week-arrow page or a Today/Crossover jump re-centers the
   // mini), but stays independently browsable between focus changes via its own arrows.
