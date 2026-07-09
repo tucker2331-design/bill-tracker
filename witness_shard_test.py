@@ -118,16 +118,14 @@ class FakeBook:
 
 HDR = cw.WITNESS_HEADER if hasattr(cw, "WITNESS_HEADER") else ["seen_at_utc", "run_id"]
 THRESH = cw.WITNESS_SHARD_THRESHOLD_CELLS
-CELL = cw.WITNESS_LOCATION_CELL
 
 
-def build(live_cells, witness_present=True, flag=None, ops_tabs=None):
-    """A VA·Live workbook whose Sheet1 grid alone sums to ~live_cells, plus an empty VA·Ops."""
+def build(live_cells, witness_present=True, ops_tabs=None):
+    """A VA·Live workbook whose Sheet1 grid alone sums to ~live_cells, plus a VA·Ops (empty unless ops_tabs).
+    Location is DERIVED from tab presence — there is no state-cell flag any more (audit #99)."""
     _BOOKS.clear()
     cols = 30
     sheet1 = FakeWS("Sheet1", max(1, live_cells // cols), cols)
-    if flag is not None:
-        sheet1._cells[CELL] = flag
     tabs = [sheet1]
     if witness_present:
         tabs.append(FakeWS("Schedule_Witness", 200000, len(HDR), HDR))
@@ -137,10 +135,11 @@ def build(live_cells, witness_present=True, flag=None, ops_tabs=None):
     return live, sheet1
 
 
-# 1. Flag already "ops" → no work, no capacity read, stays sharded.
-live, s1 = build(THRESH * 2, flag="ops")
+# 1. Already sharded — witness ABSENT from VA·Live, PRESENT in VA·Ops → location "ops", no work, no move.
+live, s1 = build(THRESH * 2, witness_present=False,
+                 ops_tabs=[FakeWS("Schedule_Witness", 200000, len(HDR), HDR)])
 loc, did, rec = cw._autoshard_witness_if_full(live, "Schedule_Witness")
-ok((loc, did, rec) == ("ops", False, 0), "flag=ops short-circuits with no work")
+ok((loc, did, rec) == ("ops", False, 0), "already in VA·Ops → 'ops', no re-move, no FYI (even over threshold)")
 
 # 2. Under threshold → witness stays in VA·Live, untouched.
 live, s1 = build(THRESH // 2)
@@ -148,7 +147,7 @@ loc, did, rec = cw._autoshard_witness_if_full(live, "Schedule_Witness")
 ok((loc, did) == ("live", False), "under threshold → no shard")
 ok(not live.worksheet("Schedule_Witness").deleted, "witness NOT deleted under threshold")
 
-# 3. Over threshold + witness present → copy, verify, delete-from-live, flag set.
+# 3. Over threshold + witness present in VA·Live → copy, verify, delete-from-live.
 live, s1 = build(THRESH + 100000, ops_tabs=[])
 src = live.worksheet("Schedule_Witness")
 loc, did, rec = cw._autoshard_witness_if_full(live, "Schedule_Witness")
@@ -156,24 +155,20 @@ ok(loc == "ops" and did, "over threshold + present → sharded")
 ok(rec == 200000 * len(HDR), "reclaimed cells = witness grid size")
 ok(src.deleted, "original witness deleted from VA·Live AFTER verify")
 ok("Schedule_Witness" in {w.title for w in _BOOKS[cw.OPS_WORKBOOK_ID].worksheets()}, "witness now present in VA·Ops")
-ok(s1._cells.get(CELL) == "ops", "AD1 flag persisted = ops")
 
-# 4. Over threshold but witness tab absent from BOTH books → flag only, no copy, no crash.
+# 4. Over threshold but witness tab absent from BOTH books → direct future writes to VA·Ops, no copy, no crash.
 live, s1 = build(THRESH + 1, witness_present=False)
 loc, did, rec = cw._autoshard_witness_if_full(live, "Schedule_Witness")
-ok((loc, did, rec) == ("ops", True, 0), "full + no witness tab anywhere → flag ops, nothing to copy")
-ok(s1._cells.get(CELL) == "ops", "flag set even with no tab to move")
+ok((loc, did, rec) == ("ops", True, 0), "full + no witness tab anywhere → 'ops', nothing to copy")
 
-# 4b. RECOVERY (audit #98 / Gemini #209 CRITICAL): a prior move landed the witness in VA·Ops but the flag
-# write didn't. Flag empty, tab GONE from VA·Live, PRESENT in VA·Ops, and VA·Live now BELOW threshold (the
-# move shrank it). Reconciliation must key off the actual location, NOT the threshold → set flag, no re-move.
+# 4b. RECOVERY (audit #98/#99): a prior move landed the witness in VA·Ops (VA·Live now BELOW threshold since
+# the move shrank it). Location is DERIVED from actual presence, NOT the threshold → 'ops', no re-move.
 live, s1 = build(THRESH // 2, witness_present=False,
                  ops_tabs=[FakeWS("Schedule_Witness", 200000, len(HDR), HDR)])
 loc, did, rec = cw._autoshard_witness_if_full(live, "Schedule_Witness")
-ok((loc, did, rec) == ("ops", False, 0), "recovery: present in VA·Ops + below threshold → reconcile flag, no re-move/FYI")
-ok(s1._cells.get(CELL) == "ops", "recovery: stranded flag gets set from the ACTUAL location, not the trigger")
+ok((loc, did, rec) == ("ops", False, 0), "recovery: present in VA·Ops + below threshold → 'ops' from actual location")
 
-# 5. FAIL-CLOSED: a verify mismatch must RAISE and NOT delete the original / NOT set the flag.
+# 5. FAIL-CLOSED: a verify mismatch must RAISE and NOT delete the original from VA·Live.
 def _raise_verify(*a, **k):
     raise RuntimeError("dims mismatch — looks partial")
 
@@ -185,7 +180,6 @@ cw._verify_sharded_tab = _raise_verify
 try:
     expect_raise(lambda: cw._autoshard_witness_if_full(live, "Schedule_Witness"), "verify failure must propagate")
     ok(not src.deleted, "FAIL-CLOSED: original NOT deleted when verify fails")
-    ok(s1._cells.get(CELL) != "ops", "FAIL-CLOSED: flag NOT set when verify fails")
 finally:
     cw._verify_sharded_tab = _orig_verify
 
