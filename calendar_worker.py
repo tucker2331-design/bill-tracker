@@ -68,7 +68,7 @@ def notify_slack(text):
 # 2026-07-04.1: date-aware SortTime resolver (#189) + the TimeClass column (#193) both change
 # Sheet1 output — force a recompute so cached/incremental paths can't serve pre-change rows
 # (Qodo #193; #189 omitted this bump, caught here).
-WORKER_OUTPUT_LOGIC_VERSION = "2026-07-09.1"   # §9 anchor ladder places the unplaceables + §9d re-anchors 2 mis-anchored rows (SortTime + TimeClass change)
+WORKER_OUTPUT_LOGIC_VERSION = "2026-07-10.1"   # §9 anchor ladder + §9d re-anchors (SortTime/TimeClass) + additive AgendaURL/MeetingURL columns
 
 
 def _sha(*parts):
@@ -3310,6 +3310,58 @@ def extract_rogue_agenda(url, session, target_date_dt=None, depth=0):
     return sorted(list(found_bills)), False, fetch_ok
 
 
+# ── Meeting + agenda link extraction (docs/ideas/meeting_agenda_links) ─────────────────────────────
+# LIS buries the agenda-PDF and the livestream links inside the Schedule API's `Description` HTML, as anchors
+# whose LABEL is the only thing distinguishing "(Agenda)" from "(View Meeting)" from "(Registration)". The
+# Description HTML is MALFORMED (unbalanced parens, anchors nested inside anchor text — measured 2026-07-10),
+# so we parse with BeautifulSoup, never a regex over the raw string. Structural, no hand-curated URL rules.
+_LINK_AGENDA_RE  = re.compile(r"\bagenda\b|\bdocket\b", re.I)
+_LINK_MEETING_RE = re.compile(r"view\s+meeting|livestream|live\s+stream|\bwatch\b|\bvideo\b|\bstream\b", re.I)
+# KNOWN supporting labels we deliberately DON'T surface (committee homepages, materials, signup, notices).
+# Broad word-patterns, not an exact list to rot; the typo "Subommittee" (LIS's own, ×17) is covered by
+# `sub\w*mittee`. A label matching NONE of agenda/meeting/benign is reported as drift (Standard #1).
+_LINK_BENIGN_RE  = re.compile(
+    r"\binfo\b|materials|registration|\bnotice\b|bulletin|direction|\bmap\b|comment|zoom|access|"
+    r"sub\w*mittee|committee", re.I)
+
+
+def _extract_meeting_links(raw_desc):
+    """(agenda_url, meeting_url, unknown_labels) parsed from a Schedule `Description`'s anchors, by LABEL.
+
+    - agenda_url : the first anchor labelled like an agenda/docket. A combined "(Agenda and View Meeting)"
+                   fills BOTH roles (one href, two labels).
+    - meeting_url: the first anchor labelled like a livestream/"View Meeting".
+    - unknown_labels: labels matching NEITHER agenda/meeting NOR a known-benign supporting label — the drift
+                   canary. If LIS introduces a NEW agenda/meeting label we don't recognise, it surfaces here
+                   instead of a link silently going missing.
+
+    A FUTURE meeting typically has the livestream link but no agenda yet (agendas post shortly before) — that
+    is the honest ("", meeting_url) result, and the caller/front-end renders "agenda not posted yet", never a
+    dead link. Pure: no network. Never raises."""
+    if not raw_desc or "<a" not in raw_desc.lower():
+        return "", "", []
+    try:
+        soup = BeautifulSoup(raw_desc, "html.parser")
+    except Exception:
+        return "", "", []
+    agenda = meeting = ""
+    unknown = []
+    for a in soup.find_all("a"):
+        href = (a.get("href") or "").strip()
+        if not href:
+            continue
+        label = re.sub(r"\s+", " ", a.get_text(" ", strip=True)).strip().lower().strip("() ")
+        is_agenda = bool(_LINK_AGENDA_RE.search(label))
+        is_meeting = bool(_LINK_MEETING_RE.search(label))
+        if is_agenda and not agenda:
+            agenda = href
+        if is_meeting and not meeting:
+            meeting = href
+        if not is_agenda and not is_meeting and not _LINK_BENIGN_RE.search(label):
+            unknown.append(label)
+    return agenda, meeting, unknown
+
+
 # ── Agenda-parse cache (speed audit, 2026-06-15) ──────────────────────────────
 # extract_rogue_agenda fetches + PDF-parses a committee's agenda every cycle. For
 # a meeting that already happened the docket is IMMUTABLE, yet the worker re-
@@ -5630,6 +5682,10 @@ def run_calendar_update():
     _witness_deltas = []  # list of dicts; written after live try/except
     _witness_run_id = os.environ.get("GITHUB_RUN_ID", "local")
     _witness_seen_at_utc = _cycle_start_utc.strftime("%Y-%m-%dT%H:%M:%SZ")
+    # Meeting/agenda DISPLAY links, populated in the schedule loop and consumed by the final_df post-pass.
+    # Initialised HERE (above the api_is_online gate) so the post-pass never NameErrors when the API is offline.
+    _meeting_links = {}
+    _link_unknown_labels = set()
 
     if api_is_online:
         print("📡 Downloading Live API Schedule & Agendas...")
@@ -5644,7 +5700,7 @@ def run_calendar_update():
                 # no per-meeting entry (e.g. SJ209's 3/10 P&E meeting).
                 committee_modal_standing, adjourned_clock_by_date = _build_standing_schedule_maps(
                     schedules, test_start_date, test_end_date)
-                
+
                 for meeting in schedules:
                     meeting_date = pd.to_datetime(meeting.get('ScheduleDate', '1970-01-01'), errors='coerce')
                     # Upper bound is effective_scrape_end (NOT test_end_date) so OFF-SEASON interim meetings
@@ -5692,6 +5748,16 @@ def run_calendar_update():
                     link_match = re.search(r'href=[\'"]?([^\'" >]+)', raw_desc)
                     if link_match and any(x in raw_desc.lower() for x in ["agenda", "docket", "info"]):
                         agenda_url = link_match.group(1)
+
+                    # DISPLAY links for the calendar card (docs/ideas/meeting_agenda_links): the agenda PDF +
+                    # the livestream, classified by anchor LABEL (BeautifulSoup, not the first-href heuristic
+                    # above — that one is kept ONLY as the bill-extraction FETCH target and mis-picks a
+                    # video/registration page ~89× live; a separate follow-up). A future meeting often has the
+                    # livestream but no agenda yet → agenda_display is "" and the card says "not posted yet".
+                    agenda_display, meeting_display, _link_unknown = _extract_meeting_links(raw_desc)
+                    _meeting_links[(date_str, normalized_name.strip())] = (agenda_display, meeting_display)
+                    if _link_unknown:
+                        _link_unknown_labels.update(_link_unknown)
                     
                     # Date-aware lookup (calendar_chain_ordering §8): build_time_graph now
                     # keys by (date, name) so a committee's SortTime is resolved within THIS
@@ -7426,6 +7492,21 @@ def run_calendar_update():
             status="INFO", category="DATA_ANOMALY", severity="INFO",
             dedup_key="history_blank_rows_summary")
 
+    # Meeting/agenda-link DRIFT canary (docs/ideas/meeting_agenda_links, Standard #1): the label→link
+    # classifier recognises agenda/livestream/benign-supporting labels structurally. A label matching NONE of
+    # those is reported here — if LIS coins a NEW agenda/meeting label, an operator sees it instead of a link
+    # silently going missing. INFO (an observability signal, not a fault); a handful of ambiguous
+    # "presentation"/"testimony" labels is normal.
+    source_miss_counts["agenda_link_unknown_labels"] = len(_link_unknown_labels)
+    if _link_unknown_labels:
+        _sample = ", ".join(sorted(_link_unknown_labels)[:8])
+        push_system_alert(
+            f"{len(_link_unknown_labels)} unrecognised meeting-link label(s) in the Schedule feed this cycle "
+            f"(sample: {_sample}). Not surfaced as agenda/meeting links. If any looks like a real agenda or "
+            f"livestream, its label pattern needs adding to _extract_meeting_links; otherwise benign.",
+            status="INFO", category="DATA_ANOMALY", severity="INFO",
+            dedup_key="agenda_link_unknown_labels")
+
     # Encoded as a JSON-in-outcome alert row with Bill="SYSTEM_METRICS" so
     # X-Ray Section 0 can parse it. One-liner summary also goes to stdout
     # so it lands in worker logs.
@@ -7848,6 +7929,23 @@ def run_calendar_update():
                     }])
                     final_df = pd.concat([final_df, cache_alert], ignore_index=True)
                     final_df = final_df.fillna("")
+
+            # ── Meeting/agenda DISPLAY links (docs/ideas/meeting_agenda_links) ──
+            # Attach the two additive columns keyed by (Date, Committee) — the meeting's own rows carry its
+            # links; other rows (bill actions, system) get "". ADDITIVE + LAST so the front-end's column-letter
+            # reads (A–O) never shift, and the write stays A1:Q — inside the 29-col grid, state cells (S+)
+            # untouched. NOT the AD1 off-grid pattern (assumptions_audit #99); measured safe 2026-07-10.
+            if not final_df.empty:
+                if "Committee" not in final_df.columns:
+                    final_df["Committee"] = ""
+                _links_series = final_df.apply(
+                    lambda r: _meeting_links.get((str(r.get("Date", "")), str(r.get("Committee", "")).strip()), ("", "")),
+                    axis=1)
+                final_df["AgendaURL"] = [t[0] for t in _links_series]
+                final_df["MeetingURL"] = [t[1] for t in _links_series]
+                # Force the two new columns to the END, existing order preserved (front-end reads by letter).
+                _rest = [c for c in final_df.columns if c not in ("AgendaURL", "MeetingURL")]
+                final_df = final_df[_rest + ["AgendaURL", "MeetingURL"]]
 
             sheet_data = [final_df.columns.values.tolist()] + final_df.values.tolist()
             # Unconditional (before the breaker if/else) so this timing prints even on a

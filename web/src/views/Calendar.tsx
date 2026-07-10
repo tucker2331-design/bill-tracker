@@ -43,6 +43,10 @@ function MeetingRow({ m, billMap, onOpen }: {
   const [open, setOpen] = useState(false);
   const [all, setAll] = useState(false);
   const hasBills = m.bills.length > 0;
+  // A meeting is FUTURE if its day is today or later — an agenda that isn't there yet is "not posted yet"
+  // (it drops shortly before the meeting), vs a PAST meeting where a missing agenda simply isn't linked.
+  const isFuture = m.dateKey >= dayKey(new Date());
+  const hasLinks = !!(m.agendaUrl || m.meetingUrl);
   const shown = all ? m.bills : m.bills.slice(0, BILL_CAP);
   const extra = m.bills.length - shown.length;
   // A FLOOR session marker (chamber convening / recessing / adjourning) is session context, not a committee
@@ -92,6 +96,21 @@ function MeetingRow({ m, billMap, onOpen }: {
             );
           })}
           {extra > 0 && <button className="cal-more" onClick={() => setAll(true)}>+{extra} more</button>}
+        </div>
+      )}
+      {/* Meeting + agenda links (docs/ideas/meeting_agenda_links). Only when present — a dead/empty link is
+          never rendered (Standard #3, honest-absent). For a FUTURE meeting whose livestream exists but whose
+          agenda isn't posted yet, say so; a PAST meeting with no agenda link just shows the watch link. */}
+      {open && (hasLinks || (isFuture && m.meetingUrl)) && (
+        <div className="cal-links">
+          {m.agendaUrl ? (
+            <a className="cal-link" href={m.agendaUrl} target="_blank" rel="noopener noreferrer">📄 Agenda</a>
+          ) : (isFuture && m.meetingUrl) ? (
+            <span className="cal-link none">Agenda not posted yet</span>
+          ) : null}
+          {m.meetingUrl && (
+            <a className="cal-link" href={m.meetingUrl} target="_blank" rel="noopener noreferrer">▶ Watch meeting</a>
+          )}
         </div>
       )}
     </div>

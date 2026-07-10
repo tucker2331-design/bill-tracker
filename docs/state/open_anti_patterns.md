@@ -245,6 +245,27 @@ successful repair that reports nothing is indistinguishable from no repair being
 
 ---
 
+## 13. Schedule-loop bill-extraction FETCH still uses the first-href heuristic (~89 non-agenda fetches/cycle)
+
+**Severity:** `INFO` (accuracy/LIS-budget, not corruption). **Status:** OPEN — surfaced 2026-07-10 during the
+meeting-links build; the DISPLAY path was fixed, this FETCH path was deliberately left for a separate change.
+
+The schedule loop computes `agenda_url` with `re.search(r'href=…')` + `any(x in raw_desc for x in
+["agenda","docket","info"])` and feeds it to `extract_rogue_agenda` to pull the meeting's bills. Measured live:
+that first-href picks a **registration/webinar/video page 89×** per full cycle (the word "info" matches
+"Committee Info", then the first href is a granicus/webinarjam URL). The worker then fetches that page and
+regexes `[HS][BJR]\d+` out of whatever text it finds — wasted off-site fetches (LIS-safety guardrail #4) and a
+small risk of attributing a wrong page's bill numbers. The new label-based `_extract_meeting_links` already
+computes the CORRECT agenda URL for DISPLAY; the fix is to also drive the FETCH from it — but preserve the 194
+legitimate committee-info **rogue-nav** cases (where following the committee homepage IS how the agenda is
+found). Because this changes which bills land on a meeting (Section-9-adjacent), it needs its own measured
+before/after, not a bundled change. See [[ideas/meeting_agenda_links]] §2.
+
+**Fix:** prefer `_extract_meeting_links(raw_desc)`'s agenda URL for the fetch; fall back to a committee-info
+link (rogue-nav) only when there's no direct agenda; never fetch a registration/video host for bills.
+
+---
+
 ## How this page is kept current
 
 - Every new silent-fallback discovered: add here with location + fix plan + severity.

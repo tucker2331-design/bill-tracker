@@ -1,14 +1,44 @@
 ---
 tags: [ideas, calendar, lis, links, plan]
 updated: 2026-07-10
-status: active
-open_loop: Surface meeting + agenda links (owner GO 2026-07-08) — measured + scoped, needs a Sheet1 migration (29→31 cols)
+status: shipped
 ---
 
-# Meeting + agenda links — measured, scoped, not yet built
+# Meeting + agenda links — ✅ SHIPPED 2026-07-10 (both future & past)
+
+> **SHIPPED & browser-verified.** Worker: `_extract_meeting_links` (label-based, BeautifulSoup) →
+> additive `AgendaURL`/`MeetingURL` columns on Sheet1 (safe rectangular write, §4) + a drift canary for
+> unrecognised labels. Front-end: the Calendar expand-card renders "📄 Agenda" + "▶ Watch meeting" when
+> present, "Agenda not posted yet" for a FUTURE meeting whose agenda hasn't dropped, and nothing when neither
+> exists (honest-absent). Golden-tested (`test_meeting_links.py`, 13 cases) + preview-verified all three link
+> states. Live extraction check: agenda_url points at a video host **0×** (was 89× with the old first-href
+> heuristic); 1,181 agendas + 1,478 livestreams extracted, drift canary reports only ~12 ambiguous labels.
+>
+> **One follow-up left (NOT this feature):** the worker's bill-extraction FETCH (`agenda_url` at the schedule
+> loop, feeding `extract_rogue_agenda`) still uses the old first-href heuristic and so fetches a
+> registration/video page ~89× per cycle to regex bills out of it. That's a bill-extraction accuracy/LIS-budget
+> issue on a different path — deliberately left untouched here (changing which bills get extracted is a
+> separate, measured change). Tracked in [[state/open_anti_patterns]] #13.
+
+# Meeting + agenda links — the original scope (now shipped)
 
 > **Owner, 2026-07-08:** *"look into getting the links for the meetings and the agendas for those meetings…
 > a link to the agenda pdf would be even more helpful."* → **GO.**
+>
+> **Owner, 2026-07-10:** *"meeting links and agendas are expected on both FUTURE and PAST meetings — almost
+> more importantly the future ones."*
+
+## 0. Future AND past meetings — both, future first (owner 2026-07-10)
+
+The Schedule API is forward-looking: it lists **upcoming** meetings as well as past ones, and both carry the
+`(View Meeting)` livestream link and (usually) the `(Agenda)` link in the same `Description` HTML — so the
+same extraction covers both. Two future-specific rules the build MUST honour:
+- **A future meeting often has a livestream link but NO agenda yet** (agendas post shortly before the meeting).
+  The card must show the meeting/livestream link and say *"agenda not posted yet"* — never render an empty or
+  dead agenda link, and never treat "no agenda" as "no meeting."
+- **The worker already scrapes ahead of `test_end_date`** (`effective_scrape_end`, the off-season interim
+  window) so future rows are already produced; this feature must attach links to those future rows too, not
+  only historical ones.
 
 **Status: measured and designed; NOT implemented.** It needs a Sheet1 column migration and a change to which
 URLs the worker fetches — both output-sensitive. Written down in full because the alternative is exactly the
@@ -96,9 +126,16 @@ dependency, already used by `extract_rogue_agenda`), not a regex.
    Pure, no network, golden-tested against the real malformed strings above.
 2. **Replace `calendar_worker.py:5667`** with it. Preserves all 194 rogue-nav rows; removes the 89 wrong fetches.
 3. **Drift alert** on `unknown_labels` (Standard #1/#4), routed like the G-code canary.
-4. **Sheet1 migration → `AgendaURL`, `MeetingURL`.** ⚠️ **Sheet1 is 29 columns wide (A…AC). Writing col 30
-   without growing the grid is exactly [[failures/assumptions_audit#99]]** (`AD1` 400'd every cycle). Grow the
-   grid first, then write. Append at the END so existing gviz column indices don't shift.
+4. **Sheet1 columns → `AgendaURL`, `MeetingURL` — DE-RISKED 2026-07-10, NOT the AD1 pattern.** Investigated the
+   write mechanism: `sheet_data = [final_df.columns.tolist()] + final_df.values.tolist()`, then
+   `worksheet.update(range_name="A1")`. Sheet1 columns are **dynamic** (defined by `final_df`), the data write
+   is rectangular from A1, and the DATA columns are A–O (15) while the STATE cells (`S1` session, `W1` breaker,
+   `AA1` freshness, …) live at columns S+ (18+). Adding two columns **after `TimeClass` (O)** makes the write
+   A1:Q (17 cols) — **still inside the 29-col grid, with a spacer column (R) before the state cells.** So:
+   **no grid growth, no off-grid `acell`, state cells untouched.** This is a plain additive column write, the
+   opposite of the [[failures/assumptions_audit#99]] `AD1` single-off-grid-cell bug. Reorder explicitly right
+   before the write — `final_df[[…existing…] + ["AgendaURL", "MeetingURL"]]` — so A–O never shift (the
+   front-end reads by column letter) and the two new columns are always last.
 5. **Front-end:** the click-to-expand meeting card ([[ideas/calendar_chain_ordering]] §30 work,
    `web/src/views/Calendar.tsx`) renders "Agenda (PDF)" and "Watch" when present. Absent ⇒ render nothing —
    never a dead link.

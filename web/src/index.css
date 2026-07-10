@@ -233,6 +233,11 @@ h2, h3 { margin: 0; }
 .cal-bchip { border: 0; background: var(--surface); color: var(--ink-soft); border-radius: 5px; padding: 2px 6px; font-size: 10.5px; font-weight: 700; }
 .cal-bchip.on { background: var(--accent-soft); color: var(--accent); cursor: pointer; }
 .cal-more { border: 0; background: transparent; color: var(--accent); font-size: 10.5px; font-weight: 700; padding: 2px 4px; }
+/* Meeting + agenda links in the expanded card — plain text links (no pill), quiet until hovered. */
+.cal-links { display: flex; flex-wrap: wrap; gap: 12px; padding: 2px 8px 8px; }
+.cal-link { font-size: 11px; font-weight: 700; color: var(--accent); text-decoration: none; }
+.cal-link:hover { text-decoration: underline; }
+.cal-link.none { color: var(--ink-faint); font-weight: 600; font-style: italic; cursor: default; }
 .cal-legend { margin-top: var(--s4); font-size: 12px; line-height: 1.6; }
 
 /* ── Calendar relayout (owner 2026-06-30): 7-day WEEK VIEW primary + compact month grid ALONGSIDE ── */

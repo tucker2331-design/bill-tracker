@@ -58,6 +58,7 @@ jobs:
             test_pr_c3_helper_v2.py \
             test_refid_shape_drift.py \
             test_clean_legevent_cell.py \
+            test_meeting_links.py \
             cadence_test.py \
             lis_authorization_test.py \
             session_rollover_test.py \

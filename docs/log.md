@@ -64,6 +64,29 @@ same day it was built, which is the whole point: it forces a look, and the look 
 
 READY lane is now empty; every vault `open_loop` is resolved.
 
+## [2026-07-10] work | Meeting + agenda links SHIPPED (future & past) — owner ask, built & verified
+
+Owner: "meeting links and agendas are expected on both future and past meetings — almost more importantly the
+future ones." Built end-to-end:
+
+- WORKER: `_extract_meeting_links(raw_desc)` — classifies the Schedule `Description` anchors by LABEL with
+  BeautifulSoup (the HTML is malformed; regex mis-segments it). Returns (agenda, livestream, unknown_labels).
+  Wired into the schedule loop → additive `AgendaURL`/`MeetingURL` columns on Sheet1. De-risked the "migration":
+  it is NOT the AD1 off-grid pattern — Sheet1 columns are dynamic (final_df), the write is rectangular A1:Q
+  (17 cols, inside the 29-col grid), state cells at S+ untouched. + a drift canary (INFO) for labels matching
+  neither agenda/meeting nor a known-benign supporting label (Standard #1).
+- FRONT-END: projection gains cols P,Q; the Calendar expand-card renders "📄 Agenda" + "▶ Watch meeting" when
+  present, "Agenda not posted yet" for a FUTURE meeting whose agenda hasn't dropped, and nothing when neither
+  exists (honest-absent). Restrained text links, no pills. target=_blank + rel=noopener noreferrer.
+- MEASURED (live): agenda_url points at a video host 0× (was 89× with the old first-href heuristic); 1,181
+  agendas + 1,478 livestreams extracted; drift canary reports ~12 ambiguous labels (presentations/testimony).
+- VERIFIED: golden test (`test_meeting_links.py`, 13 cases) + browser preview drove all three link states with
+  synthetic data (agenda+watch / future "not posted yet" / none), correct hrefs + safety attrs, no console errors.
+
+Left as a tracked follow-up ([[state/open_anti_patterns]] #13): the bill-extraction FETCH still uses the old
+first-href heuristic (89 non-agenda fetches/cycle). That changes which bills land on a meeting, so it's a
+separate measured change — not bundled into the display feature.
+
 ## [2026-07-10] work | Health red-ring investigated → live gspread-6 shard bug fixed; auto-refresh built
 
 Owner: "you seem to be missing the rest of the to do list — I had a screenshot of a Health alert and asked you
