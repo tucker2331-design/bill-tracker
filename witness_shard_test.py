@@ -196,4 +196,29 @@ class Boom:
 
 ok(cw._workbook_total_cells(Boom()) is None, "_workbook_total_cells → None when the workbook can't be measured")
 
+# 7. _open_book_by_key — the gspread-6.x cross-workbook open (assumptions_audit #104). The old
+#    `sheet.client.open_by_key(...)` raised `'HTTPClient' object has no attribute 'open_by_key'` EVERY cycle
+#    once the witness was full, because gspread 6.x's `Spreadsheet.client` is the HTTPClient transport, not
+#    the authorized Client. The helper must pick the right path for either gspread generation.
+import gspread as _gspread
+
+class _OldClientWithOpen:              # gspread <6: sheet.client IS the authorized Client
+    def open_by_key(self, key): return ("old-client-open", key)
+class _OldSheet: client = _OldClientWithOpen()
+ok(cw._open_book_by_key(_OldSheet(), "K1") == ("old-client-open", "K1"),
+   "gspread<6: delegates to sheet.client.open_by_key")
+
+class _HttpTransport: pass             # gspread ≥6: sheet.client is the HTTPClient — NO open_by_key
+_new_sheet = type("NewSheet", (), {"client": _HttpTransport()})()
+_seen = {}
+_orig_ss = _gspread.Spreadsheet
+_gspread.Spreadsheet = lambda http, props: (_seen.update(http=http, props=props) or ("reconstructed", props["id"]))
+try:
+    got = cw._open_book_by_key(_new_sheet, "K2")
+finally:
+    _gspread.Spreadsheet = _orig_ss
+ok(got == ("reconstructed", "K2"), "gspread≥6: reconstructs a Spreadsheet on the transport")
+ok(_seen["http"] is _new_sheet.client, "gspread≥6: reuses the SAME authenticated transport (not a new auth)")
+ok(_seen["props"] == {"id": "K2"}, "gspread≥6: mirrors Client.open_by_key's {'id': key} exactly")
+
 print(f"ALL {_checks} witness-shard tests passed")
