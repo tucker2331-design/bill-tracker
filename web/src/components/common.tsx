@@ -65,28 +65,29 @@ export function TrustHeader({ dataAsOf, calendarAsOf, completeness, shown }: {
   const anomalies = completeness?.in_history_not_in_universe?.length ?? 0;
   // Completeness is the top trust signal: do we have every bill LIS has?
   const complete = universe != null && written != null && universe === written && anomalies === 0;
+  // Masthead of numbers (owner 2026-07-08): the two freshness clocks (bill backend 6h · calendar subsystem 3h
+  // are separate workers, shown side by side) + the tracking count, organized with thin dividers — no dots,
+  // no verdict text. Each value is dark ink; a STALE clock (or an incomplete count) turns its VALUE red — a
+  // colour signal, not interpretive language, so a lobbyist is reassured by default and only concerned when a
+  // number goes red (docs/design: a signal must vary to exist; reserve colour for the exception).
   return (
     <div className="trust">
-      {/* Both freshness clocks live TOGETHER here (owner 2026-07-04) — the bill backend (6h cadence) and the
-          calendar subsystem (3h) are separate workers, so their "as of" times differ; showing them side by
-          side up top reads as "two feeds, two clocks" instead of a contradiction buried in the Calendar tab. */}
-      {/* Restrained: a small status dot (via CSS ::before) carries fresh/stale; the text stays neutral ink.
-          No filled pill, no emoji chrome — those "colored boxes" read as AI-built (docs/design). */}
-      <span className={`pill ${fresh.stale ? "warn" : "good"}`} title={`Bill data · ${dataAsOf?.toISOString() ?? "unknown"}`}>
-        Bills as of {fresh.text}
+      <span className="tr-item" title={`Bill data · ${dataAsOf?.toISOString() ?? "unknown"}`}>
+        Bills <b className={fresh.stale ? "stale" : ""}>{fresh.text}</b>
       </span>
-      {cal && (
-        <span className={`pill ${cal.stale ? "warn" : "good"}`} title={`Calendar subsystem · ${calendarAsOf?.toISOString() ?? "unknown"}`}>
-          Calendar as of {cal.text}
+      {cal && (<>
+        <span className="tr-div" aria-hidden="true" />
+        <span className="tr-item" title={`Calendar subsystem · ${calendarAsOf?.toISOString() ?? "unknown"}`}>
+          Calendar <b className={cal.stale ? "stale" : ""}>{cal.text}</b>
         </span>
-      )}
-      {universe != null && (
-        <span className={`pill ${complete ? "good" : "warn"}`}
-          title={`records ${written}/${universe}; ${anomalies} in-history-not-in-universe`}>
-          Tracking {written}/{universe} bills
+      </>)}
+      {universe != null && (<>
+        <span className="tr-div" aria-hidden="true" />
+        <span className="tr-item" title={`records ${written}/${universe}; ${anomalies} in-history-not-in-universe`}>
+          Tracking <b className={complete ? "" : "stale"}>{written?.toLocaleString()} / {universe.toLocaleString()}</b>
         </span>
-      )}
-      <span className="muted">Showing {shown.toLocaleString()}</span>
+      </>)}
+      <span className="tr-showing">Showing {shown.toLocaleString()}</span>
     </div>
   );
 }

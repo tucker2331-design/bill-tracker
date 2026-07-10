@@ -80,8 +80,18 @@ The catalogued tells (it's the **combination** that reads "an AI made this", not
    gradient headline + sparkle badge; pure `#000` on white. Any single one is defensible; together = AI.
    *Corollary:* every escape route, once popular, becomes the next tell — this is an arms race, not a checklist.
 
+**7. The status DOT on everything** (owner 2026-07-08, researched: [Carbon status indicators](https://carbondesignsystem.com/patterns/status-indicator-pattern/) · [Mobbin status dot](https://mobbin.com/glossary/status-dot) · [Smashing real-time dashboards](https://www.smashingmagazine.com/2025/09/ux-strategies-real-time-dashboards/)).
+A single status dot is a legitimate, purpose-built component (shadcn `Status`, Carbon) — BUT a dot next to
+*every* item, all the **same colour** (three green dots: Bills✓ Calendar✓ Tracking✓), carries no
+information and reads as the shadcn/AI-default "dot on everything." **Rule: a dot must vary to earn its
+place.** For "last updated / as of", the professional pattern is a plain **timestamp line** ("updated 5h
+ago"); a coloured dot appears only when a clock goes **stale** (green→red). This means the earlier de-AI
+pass (pills→dots) was only half-right — dots beat filled pills, but *dots-on-everything is still a tell*.
+Applied to the top bar (redesign 2026-07-08): drop the three green dots → plain timestamps, reserve one dot
+for the stale state.
+
 **The professional inverse (what we adopted):** uniform, **neutral** containers; colour **reserved for
-meaning**, applied sparingly and semantically. This is exactly Few's "saturation reserved for attention",
+meaning**, applied sparingly and semantically — the same rule for fills AND dots (a signal must vary to exist). This is exactly Few's "saturation reserved for attention",
 which this app's own `--o-*` comments already state ("outcomes: muted EXCEPT the attention states") — the
 rainbow was drift *from* the app's own doctrine.
 

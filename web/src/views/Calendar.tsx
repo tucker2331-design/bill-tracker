@@ -61,7 +61,7 @@ function MeetingRow({ m, billMap, onOpen }: {
             is already sorted to the top of its day by calendar.ts. */}
         {m.unresolved && <span className="cal-mtg-unres" title="LIS lists this meeting only relative to another event whose time is unknown — we can't place it on the clock, so it's surfaced first.">⚠ unplaceable</span>}
         <span className={`cal-mtg-t${m.tba ? " tba" : ""}`}>{m.time}</span>
-        {hasBills && <span className="cal-mtg-n">{m.bills.length}{open ? " ▴" : " ▾"}</span>}
+        <span className="cal-mtg-n">{hasBills ? m.bills.length : ""}{open ? " ▴" : " ▾"}</span>
       </span>
       {/* Subcommittee LINEAGE cue (owner 2026-07-03): when two same-time parents' subcommittees tie and
           interleave in the time-sorted day, the family link must stay readable. The chamber-qualified name
@@ -70,25 +70,21 @@ function MeetingRow({ m, billMap, onOpen }: {
       {(() => {
         const p = /^((?:House|Senate|Joint)[^-]+?)\s*-\s*(.+)$/.exec(m.committee);
         return p ? (
-          <span className="cal-mtg-c" style={isFloor ? undefined : { color: side }}>
+          <span className={`cal-mtg-c${open ? " open" : ""}`} title={m.committee} style={isFloor ? undefined : { color: side }}>
             <span className="cal-sub-parent">{p[1].trim()}</span>
             <span className="cal-sub-name">↳ {p[2].trim()}</span>
           </span>
         ) : (
-          <span className="cal-mtg-c" style={isFloor ? undefined : { color: side }}>{m.committee}</span>
+          <span className={`cal-mtg-c${open ? " open" : ""}`} title={m.committee} style={isFloor ? undefined : { color: side }}>{m.committee}</span>
         );
       })()}
     </>
   );
   return (
     <div className={`cal-mtg${isFloor ? " floor" : ""}${m.unresolved ? " unres" : ""}`}>
-      {/* A real <button> only when there are bills to toggle; otherwise a plain <div> so screen-reader /
-          keyboard users aren't told it's interactive when it does nothing (Gemini #185). */}
-      {hasBills ? (
-        <button className="cal-mtg-h has" title={m.committee} onClick={() => setOpen((o) => !o)} aria-expanded={open}>{head}</button>
-      ) : (
-        <div className="cal-mtg-h" title={m.committee}>{head}</div>
-      )}
+      {/* Every meeting is now click-to-expand (owner 2026-07-08): expanding UNCLAMPS the committee title (so a
+          cut-off name is fully readable) and, when present, reveals the agenda bills below. */}
+      <button className="cal-mtg-h has" title={m.committee} onClick={() => setOpen((o) => !o)} aria-expanded={open}>{head}</button>
       {open && hasBills && (
         <div className="cal-bills">
           {shown.map((it) => {
@@ -148,27 +144,15 @@ export function Calendar({ bills, sessionCode, onOpen }: {
   const [focusedDay, setFocusedDay] = useState<string | null>(null);
   const [miniMonth, setMiniMonth] = useState<YM | null>(null);
 
-  // Default focus: a meaningful day in the busiest month (crossover if it lives there + is non-empty, else
-  // the first day with meetings) — computed from the UNFILTERED calendar for a stable anchor, so the view
-  // opens onto live data, not an empty off-season week.
-  useEffect(() => {
-    if (!cal || focusedDay) return;
-    // Anchor on the busiest WEEK (sum meetings over each Sun–Sat window), not just the busiest month, so the
-    // week view opens onto a full week rather than a sparse day in an otherwise-busy month (CodeRabbit #185).
-    const wkKey = (dk: string) => dayKey(weekStartOf(parseLisDate(dk) ?? new Date()));
-    const weekCounts = new Map<string, number>();
-    for (const [dk, ms] of cal.byDay) weekCounts.set(wkKey(dk), (weekCounts.get(wkKey(dk)) ?? 0) + ms.length);
-    let bestWeek = "", bestN = -1;
-    for (const [ws, n] of weekCounts) if (n > bestN) { bestN = n; bestWeek = ws; }
-    // Within that week, prefer the crossover day, else the busiest day.
-    let pick: string | null = (crossoverKey && cal.byDay.get(crossoverKey)?.length && wkKey(crossoverKey) === bestWeek) ? crossoverKey : null;
-    if (!pick) {
-      let bestDay = "", bestDayN = -1;
-      for (const [dk, ms] of cal.byDay) if (wkKey(dk) === bestWeek && ms.length > bestDayN) { bestDayN = ms.length; bestDay = dk; }
-      pick = bestDay || todayKey;
-    }
-    setFocusedDay(pick);
-  }, [cal, focusedDay, crossoverKey, todayKey]);
+  // Default focus (owner 2026-07-08: "start on this week / Today, NOT crossover"). Set ONCE when the calendar
+  // data arrives — computed during render (guarded so it runs a single time), not in an effect. In-session →
+  // today's week; off-season (today outside the data range) → the nearest week that HAS data (the most recent
+  // once the session has ended), so it opens onto real meetings, but it NEVER jumps to the crossover week.
+  if (cal && focusedDay === null) {
+    setFocusedDay((todayKey >= cal.minKey && todayKey <= cal.maxKey)
+      ? todayKey                                          // in-session → this week
+      : (todayKey > cal.maxKey ? cal.maxKey : cal.minKey)); // off-season → nearest week with data
+  }
 
   // The mini month follows the focused day (so a week-arrow page or a Today/Crossover jump re-centers the
   // mini), but stays independently browsable between focus changes via its own arrows.
@@ -228,7 +212,8 @@ export function Calendar({ bills, sessionCode, onOpen }: {
           <span className="muted cal-count">{weekMeetingCount.toLocaleString()} meeting{weekMeetingCount === 1 ? "" : "s"} this week{scope === "tracking" ? " · tracked" : ""}</span>
         </div>
         <div className="cal-actions">
-          {crossoverKey && <button className="cal-jump cross" onClick={() => jumpTo(crossoverKey)}>⚑ Crossover</button>}
+          {/* Crossover JUMP button removed (owner 2026-07-08 — testing-only); the crossover DAY marker (the ⚑
+              + red top-border on the crossover date) stays as informative context on the calendar itself. */}
           {todayKey >= cal.minKey && todayKey <= cal.maxKey && <button className="cal-jump" onClick={() => jumpTo(todayKey)}>Today</button>}
           {/* "Calendar as of" moved up to the global TrustHeader (owner 2026-07-04) so both feed clocks sit
               together — see components/common.tsx TrustHeader. Not duplicated here to avoid two stamps. */}
@@ -245,7 +230,7 @@ export function Calendar({ bills, sessionCode, onOpen }: {
             const has = (byDay.get(dayKey(d))?.length ?? 0) > 0;
             // Readable min width so work-day columns never crush; the week scrolls horizontally if the
             // viewport is too narrow to fit them (you still see ~5 work days, then scroll for the rest).
-            return wknd && !has ? "minmax(40px,0.4fr)" : "minmax(116px,1fr)";
+            return wknd && !has ? "minmax(40px,0.4fr)" : "minmax(158px,1fr)";
           }).join(" "),
         }}>
           {weekDays.map((d) => {
