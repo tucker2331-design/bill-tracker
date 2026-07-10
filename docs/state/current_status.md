@@ -22,7 +22,7 @@ status: active
 > MUST be wikilinked from this page, and a page marked `status: shipped` may not declare one.
 
 ## NOW
-- **`claude/calendar-landing-polish` pushed (3 commits), PR not yet opened.** §9 anchor ladder + `_committee_parent` multiset/lineage fix; Option-A calendar colours; What's-new times; 2/3 landing; Search rebuild; reserved-colour tags. Gates: SAFETY 0/2,889 published clocks move · RESOLUTION `relative_unresolved` 19→1 (the survivor is a correct refusal) · 118 pure-logic checks. Open the PR, then fold in bot reviews per [[workflow/bot_review_fold_in]].
+- **PR [#211](https://github.com/tucker2331-design/bill-tracker/pull/211) OPEN** (`claude/calendar-landing-polish`, 6 commits) — §9 anchor ladder + `_committee_parent` multiset/lineage fix + READY debts + Option-A calendar/landing polish + B-7 stranded-work guard. Gates: SAFETY 0/2,889 clocks move · `relative_unresolved` 19→1 (survivor is a correct refusal) · full pure-logic suite + open_loops green. **Next: fold in bot reviews on the commits** per [[workflow/bot_review_fold_in]], then merge.
 - **Meeting + agenda links (owner 2026-07-08: GO) — MEASURED + SCOPED, not built: [[ideas/meeting_agenda_links]].** Deliberately not half-built at the tail of a long session: it needs a Sheet1 **migration** (29→31 cols — an off-grid write is what caused [[failures/assumptions_audit#99]]) and it changes which URLs the worker fetches. Measured on live data: the current `agenda_url` takes the *first* `href` whenever the description says `agenda|docket|info`, which is correct 1,028× , correct-by-design 194× (rogue-nav into committee sites), and **points at a registration/video page 89×** — those get fetched and bill-regexed. LIS's own data contains the typo `'Subommittee Info'` ×17, so the label vocabulary **must** ship with a drift alert (Standard #1); its Description HTML is malformed, so parse anchors with BeautifulSoup, not regex.
 
 ## NEXT (needs owner infra / a decision — then I execute)
@@ -39,7 +39,10 @@ status: active
 ## READY (unblocked — no owner input needed; I can execute any of these)
 *The lane that did not exist until 2026-07-10. Every `open_loop:` page in the vault must appear here (or in
 NOW/NEXT), or `tools/open_loops.py` fails the pre-push audit.*
-1. **[[design/ui_redesign_spec]] item 4 (Floor stage)** — *blocked on a dependency, not on the owner*: the backend must first emit a floor/passed-chamber signal. Listed so it stays visible rather than dissolving into a plan page. (This is genuinely dependency-blocked, unlike the two items cleared 2026-07-10.)
+- **Empty (2026-07-10).** All READY debts cleared this session — see RECENTLY LANDED. The B-7 guard also
+  flagged the Floor stage as a lingering `open_loop`; investigation found it was **already shipped**
+  (`bill_tracker.py` floor signal → Timeline `floor1`/`floor2`; live House-passed=2,345 / Senate=2,007), so
+  its stale open-loop was closed. That is the guard working: it forces a look, and a look resolves it either way.
 
 ## RECENTLY LANDED (newest first; full detail in [[log]])
 - **2026-07-10 — READY debts cleared: dead terminal-skip deleted · silent-heal counter added · date-drift measured away** — `TERMINAL_DESCRIPTION_PATTERNS`/`_is_terminal_legevent_description` DELETED (text-based, fail-unsafe, never fired since PR-C7; [[failures/assumptions_audit#103]]); `_clean_legevent_cell` now counts stringified-null heals + alerts on a flood ([[state/open_anti_patterns]] #12); HISTORY-vs-LegEvent date-drift **measured to 0 live rows** on the full 37,826-row sheet (0 meeting rows empty-time or NO_SCHEDULE_MATCH) — NOT built, it's a Section-9-critical time-engine change with no failing row to justify it ([[architecture/scalability_audit]]). Two new pure tests wired into CI.

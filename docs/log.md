@@ -8,6 +8,27 @@ status: active
 
 Append-only, reverse-chronological (newest at top). Each entry opens with `## [YYYY-MM-DD] <kind> | <title>` so `grep "^## \[" log.md | head -20` gives a parseable timeline.
 
+## [2026-07-10] work | Floor stage (ui_redesign_spec item 4) was already shipped — B-7 guard caught the stale loop
+
+The new `tools/open_loops.py` flagged `design/ui_redesign_spec.md` as carrying an unfinished `open_loop`
+("Item 4 Floor stage — BLOCKED until the backend emits a floor signal"). Investigated instead of assuming:
+the signal EXISTS and the node is LIVE. `bill_tracker.py:459-476` derives `floor_house`/`floor_senate`
+(""|"passed"|"defeated") structurally from LIS's controlled floor vocabulary and writes them to Bill_Tracker
+cols 16/17; `gviz.ts` reads them; `deriveStage`/`furthestStage` place a bill at Floor; the Timeline renders
+`floor1` ("Floor") + `floor2` ("Floor · 2nd"). Live data confirms it is populated, not the empty node the
+spec feared: House floor passed=2,345 / defeated=5, Senate passed=2,007 / defeated=6 (of 3,645). Closed the
+stale open_loop. This is the SHIPPED-but-looks-open mirror of the §9 case — and the guard surfaced it the
+same day it was built, which is the whole point: it forces a look, and the look resolves it either way.
+
+READY lane is now empty; every vault `open_loop` is resolved.
+
+## [2026-07-10] pr | #211 OPENED — §9 anchor ladder + landing/calendar polish + brain stranded-work guard
+
+https://github.com/tucker2331-design/bill-tracker/pull/211 — 6 commits off `claude/calendar-landing-polish`.
+Worker §9 (relative_unresolved 19→1, SAFETY 0/2,889) + §9d two live mis-anchors + READY debts; web landing/
+calendar Option-A polish; brain B-7 stranded-work guard (`tools/open_loops.py`, pre-push point 16). Awaiting
+bot review (Codex/Gemini/CodeRabbit) — fold in per [[workflow/bot_review_fold_in]] on the commits, not replies.
+
 ## [2026-07-10] work | READY debts cleared — measure-first decided each one
 
 Owner: "dont stop until everything on the to do is done." Worked the unblocked READY lane. Two of three
