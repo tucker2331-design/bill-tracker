@@ -98,8 +98,8 @@ function MeetingRow({ m, billMap, onOpen }: {
   );
 }
 
-export function Calendar({ bills, sessionCode, onOpen }: {
-  bills: Bill[]; sessionCode: string; onOpen: (b: Bill) => void;
+export function Calendar({ bills, sessionCode, onOpen, calRefresh = 0 }: {
+  bills: Bill[]; sessionCode: string; onOpen: (b: Bill) => void; calRefresh?: number;
 }) {
   const [cal, setCal] = useState<CalendarData | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -110,7 +110,7 @@ export function Calendar({ bills, sessionCode, onOpen }: {
     let alive = true;
     loadCalendar().then((d) => alive && setCal(d)).catch((e) => alive && setError(String(e?.message || e)));
     return () => { alive = false; };
-  }, []);
+  }, [calRefresh]); // re-run when the freshness-gate invalidated the shared calendar cache
 
   // Bill lookup so a meeting's agenda chip can open the full card (when we carry that bill).
   const billMap = useMemo(() => {

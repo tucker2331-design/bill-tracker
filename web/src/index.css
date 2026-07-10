@@ -490,3 +490,23 @@ a.hl-vverify:hover { text-decoration: underline; }
 .hl-rawk { color: var(--ink-faint); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .hl-rawv { font-weight: 700; font-variant-numeric: tabular-nums; }
 .hl-foot { margin-top: var(--s4); font-size: 12px; line-height: 1.6; }
+
+/* ── Transient refresh notice ──────────────────────────────────────────────────────────────────
+   A momentary "why did this just change" cue after a background refresh (NOT a persistent pill, NOT a
+   freshness readout — that's the TrustHeader). Quiet floating line, bottom-centre, self-dismissing. */
+.refresh-note {
+  position: fixed; left: 50%; bottom: 22px; transform: translateX(-50%);
+  z-index: 60; max-width: min(92vw, 460px);
+  background: var(--surface); color: var(--ink);
+  font-size: 13px; font-weight: 600; line-height: 1.3;
+  padding: 9px 15px; border-radius: 8px;                 /* a plain toast rectangle — deliberately NOT a pill */
+  box-shadow: var(--shadow-lg); border: 1px solid var(--line);
+  animation: refresh-in var(--fade-ms, 400ms) ease-out both;
+}
+.refresh-note.leaving { animation: refresh-out var(--fade-ms, 400ms) ease-in both; }
+@keyframes refresh-in  { from { opacity: 0; transform: translate(-50%, 8px); } to { opacity: 1; transform: translate(-50%, 0); } }
+@keyframes refresh-out { from { opacity: 1; transform: translate(-50%, 0); } to { opacity: 0; transform: translate(-50%, 8px); } }
+@media (prefers-reduced-motion: reduce) {
+  .refresh-note, .refresh-note.leaving { animation: none; }
+  .refresh-note.leaving { opacity: 0; }                  /* still disappears, just no slide */
+}

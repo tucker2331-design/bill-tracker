@@ -33,7 +33,7 @@ type TimeIndex = Map<string, TimeEntry>;
 // owner 2026-07-03) — 2 days tolerates a quiet in-session weekend without flagging it as "nothing newer."
 const FEED_STALE_MS = 2 * 24 * 60 * 60 * 1000;
 
-export function Landing({ bills, onOpen }: { bills: Bill[]; onOpen: (b: Bill) => void }) {
+export function Landing({ bills, onOpen, calRefresh = 0 }: { bills: Bill[]; onOpen: (b: Bill) => void; calRefresh?: number }) {
   const feed = useMemo(() => buildFeed(bills), [bills]);
   const byBill = useMemo(() => new Map(bills.map((b) => [b.bill, b])), [bills]);
   const tally = useMemo(() => tallyOutcomes(bills), [bills]);
@@ -68,7 +68,7 @@ export function Landing({ bills, onOpen }: { bills: Bill[]; onOpen: (b: Bill) =>
       setTimes(exact);
     }).catch(() => { if (alive) setTimes(new Map()); });
     return () => { alive = false; };
-  }, []);
+  }, [calRefresh]); // re-run when the freshness-gate invalidated the calendar cache (App bumps calRefresh)
 
   const timeFor = (day: string, bill: string, action: string): TimeEntry | null =>
     times?.get(`${day}|${bill}|${normAction(action)}`) ?? null;
@@ -133,7 +133,7 @@ export function Landing({ bills, onOpen }: { bills: Bill[]; onOpen: (b: Bill) =>
 
         <div>
           <h2 className="h">Today</h2>
-          <CalendarSliver bills={bills} onOpen={onOpen} />
+          <CalendarSliver bills={bills} onOpen={onOpen} calRefresh={calRefresh} />
         </div>
       </div>
 

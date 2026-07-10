@@ -1,18 +1,21 @@
 ---
 tags: [ideas, web, product, ux, freshness]
 updated: 2026-07-10
-status: active
-open_loop: Auto-refresh the SPA when new data lands (owner 2026-07-10: "tired of manually refreshing") — probed + scoped, not built
+status: shipped
 ---
 
-# Auto-refresh when new data lands — probed, scoped, recommended
+# Auto-refresh when new data lands — ✅ SHIPPED 2026-07-10
 
 > **Owner, 2026-07-10:** *"probing how to fix the problem of having to manually refresh every time there's new
 > data. we attempted to have it auto refresh on streamlit and it was a very frustrating process that i don't
 > remember succeeding in."*
 
-**Status: probed + scoped, not built.** One small UX decision (soft pill vs hot-swap) is worth an owner nod
-before building; everything else is unblocked engineering.
+**Status: SHIPPED & browser-verified.** Freshness-gated background refresh with a transient notice. Files:
+`web/src/data/refresh.ts` (cheap stamp reads), `data/calendar.ts invalidateCalendar()`,
+`components/RefreshNotice.tsx` (the transient toast), and the gate in `App.tsx` (interval + focus), with
+`calRefresh` threaded to the three calendar-consuming components. Verified in the preview: the notice fires on
+a real stamp change with the correct per-feed label, does NOT false-fire on a formatting difference, and a
+no-change poll stays silent.
 
 ---
 
@@ -65,16 +68,21 @@ Poll only the two ~40-byte freshness cells; do the 12 MB re-fetch **only when a 
 2. **When bills' `dataAsOf` advanced** → re-run `loadBillData()`, `setData(newData)`. When calendar's `AA1`
    advanced → invalidate `_calPromise` (needs a tiny `invalidateCalendar()` export) and re-run `loadCalendar()`.
    Each feed refreshes independently — a calendar cycle doesn't drag the 6.7 MB bill payload.
-3. **Don't yank the view.** For the passive **Landing** feed, hot-swap silently. For **Search / Calendar**
-   (the user may be mid-scroll or mid-filter), show an unobtrusive **"New data — refresh" pill** in the
-   TrustHeader and swap on click or on next focus. *(This pill-vs-hot-swap split is the one UX call worth an
-   owner nod — §7.)*
+3. **Swap the data in, then explain the change with a TRANSIENT notice** (owner 2026-07-10). The data updates
+   in place (no reload); a brief line — *"Updated with the latest data"* — fades in at the corner and
+   **auto-dismisses after ~4 s**. Its ONLY job is to tell a person *why the page just changed under them* — it
+   is **not** a status indicator and **not** a "how fresh is the data" readout (that already lives in the
+   TrustHeader; duplicating it would be noise). No persistent pill (owner: "we have too many pills and they
+   scream AI UI"), no silent swap (owner: "could be confusing"). It appears only on an actual change event,
+   then it's gone.
 4. **Off-season is nearly free:** the poll is ~40 B and the gate never opens, so an idle tab costs a few bytes
    a minute and never re-downloads. In-session, it detects the worker's write within ~90 s and does **one**
    big fetch, not one per tick.
 
-The TrustHeader already shows "data as of N min ago"; this makes that number *live* instead of frozen at
-page-load, which is the honest version of the same signal.
+Keep the distinction sharp: the TrustHeader's "data as of N min ago" is the **state** (always visible,
+answers *how current*); the transient notice is the **event** (momentary, answers *why did this just move*).
+This build also makes the header's number go *live* (re-derived on each refresh) instead of frozen at
+page-load — the honest version of the same signal.
 
 ## 5. Alternatives considered (and why not)
 
@@ -98,12 +106,27 @@ page-load, which is the honest version of the same signal.
 - Watch the gviz request budget: a 90 s poll of one cell is trivial, but confirm it doesn't trip any
   Google-side rate concern on the shared sheet (it won't at this volume; note it for completeness).
 
-## 7. The one owner decision
+## 7. Owner decision — SETTLED (2026-07-10), and BUILT
 
-**Hot-swap vs. "new data" pill on the interactive tabs (Search/Calendar).** Hot-swap is the least friction but
-can move the ground under a user mid-scroll; the pill is safe but adds one click. Recommendation: **hot-swap
-Landing, pill for Search/Calendar** (swap-on-focus so even the pill usually resolves itself). Cheap to flip
-either way once seen live.
+Owner: *"do neither [pill nor silent swap] — we have too many pills and they scream AI UI, and hot-swapping
+could be confusing. Just a quick thing that goes away, because it's only to tell a person why their site
+suddenly changed, not to show how long since the data's been refreshed. Understand the distinction."* →
+**`RefreshNotice`**: a plain toast (rounded rectangle, deliberately NOT a pill), bottom-centre, that fades in
+on a refresh and auto-dismisses after ~3.5 s. It reports the EVENT ("Updated with the latest bill/calendar
+data"), never the STATE (freshness age stays in the TrustHeader). `prefers-reduced-motion` honoured.
+
+## 8. Implementation notes (2026-07-10)
+
+- The stamp refs hold the **raw cell string only**, never a `Date` round-trip. The first build seeded them
+  from `Date.toISOString()` (`…54.000Z`) while the poll re-read the raw cell (`…54Z`) — a formatting mismatch
+  that fired a phantom "calendar updated" on the very first poll. Caught in the browser test (label said "bill
+  & calendar" when only the bill was faked). Refs are now raw-only on both seed and adopt.
+- **Hidden-tab guard:** `check()` bails when `document.visibilityState === "hidden"`, so a backgrounded tab
+  doesn't poll. (This also means the automated preview reports "hidden" and the gate must be tested with a
+  `visibilityState` override — noted for the next person.)
+- Each feed refreshes independently: a calendar cycle invalidates the calendar cache + bumps `calRefresh`
+  (re-running the three consumers' `loadCalendar` effects) WITHOUT dragging the 6.7 MB bill payload, and vice
+  versa.
 
 ## 8. X-Ray (still Streamlit) — separate, lower priority
 

@@ -183,6 +183,14 @@ export function loadCalendar(): Promise<CalendarData> {
   return _calPromise;
 }
 
+// Drop the session cache so the NEXT loadCalendar()/loadCalendarFreshness() re-fetches. Called by the
+// freshness-gate (App) only when Sheet1!AA1 has actually advanced — components re-run their loadCalendar
+// effect off the App's refresh tick and get the new payload. (docs/ideas/auto_refresh_on_new_data)
+export function invalidateCalendar(): void {
+  _calPromise = null;
+  _calFreshPromise = null;
+}
+
 async function _loadCalendar(): Promise<CalendarData> {
   const url = `https://docs.google.com/spreadsheets/d/${SPREADSHEET_ID}/gviz/tq?tqx=out:csv&sheet=${SHEET1_TAB}&tq=${encodeURIComponent(PROJECTION)}`;
   // Just the calendar payload — freshness (AA1) is read separately by loadCalendarFreshness() for the

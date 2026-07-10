@@ -64,6 +64,26 @@ same day it was built, which is the whole point: it forces a look, and the look 
 
 READY lane is now empty; every vault `open_loop` is resolved.
 
+## [2026-07-10] work | Health red-ring investigated → live gspread-6 shard bug fixed; auto-refresh built
+
+Owner: "you seem to be missing the rest of the to do list — I had a screenshot of a Health alert and asked you
+to investigate." Correct — I had closed the AD1 ticket (#99) without re-measuring, and the CRITICAL was still
+firing. Pulled Metrics_History live: "Couldn't auto-move Schedule_Witness" firing multiple times a day, every
+day, with the error TEXT changed on 07-10 to `'HTTPClient' object has no attribute 'open_by_key'`. Root cause:
+the witness grew past 6M cells so the shard finally TRIGGERED and hit gspread 6.x, where `Spreadsheet.client`
+is the HTTPClient transport (no open_by_key). Fixed with a version-safe `_open_book_by_key` across all 4 sites
+(witness shard ×3 + session-archive rollover). Golden-tested both gspread generations. → [[failures/assumptions_audit#104]].
+
+Then built the auto-refresh (owner ask, refined this session): freshness-gated background refresh + a TRANSIENT
+notice. Owner corrected my pill-vs-swap framing — "do neither; just a quick thing that goes away, only to tell
+a person WHY the site changed, not how fresh the data is." Built `RefreshNotice` as a plain self-dismissing
+toast (not a pill), separate from the header's freshness readout. Browser-verified end-to-end: fires on a real
+stamp change with the right per-feed label, no formatting false-positive (caught + fixed a Date-vs-raw-string
+seed bug in the test), quiet at steady state, and it doesn't poll a hidden tab. → [[ideas/auto_refresh_on_new_data]].
+
+The through-line the owner named: a "fixed" ticket is a hypothesis until the live signal is re-measured. Their
+"it's still red" beat my "I fixed it."
+
 ## [2026-07-10] pr | #211 OPENED — §9 anchor ladder + landing/calendar polish + brain stranded-work guard
 
 https://github.com/tucker2331-design/bill-tracker/pull/211 — 6 commits off `claude/calendar-landing-polish`.
