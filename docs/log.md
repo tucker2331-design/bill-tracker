@@ -1,12 +1,78 @@
 ---
 tags: [log, meta]
-updated: 2026-06-21
+updated: 2026-07-10
 status: active
 ---
 
 # Project Log
 
 Append-only, reverse-chronological (newest at top). Each entry opens with `## [YYYY-MM-DD] <kind> | <title>` so `grep "^## \[" log.md | head -20` gives a parseable timeline.
+
+## [2026-07-10] process | B-7 — the to-do had no lane for unblocked work, so unblocked work vanished
+
+Owner: *"how did it end up we had like half scoped something like this and just let it sit when we thought
+our to-dos had been cleared?"* Root-caused, and the answer was structural rather than human.
+
+`state/current_status.md` is the to-do. Its queue heading read **"NEXT (needs owner infra / a decision — then
+I execute)"**. So a plain unfinished engineering residual — blocked on nobody, just not done — belonged to no
+lane: not NOW (not being worked), not NEXT (nothing waiting on the owner). It survived only inside a plan page
+in `ideas/`, which nothing forces a session to re-read. The §9 relative-time residual (19 measured, scoped,
+written down) sat there for a week while every "is the to-do clear?" check honestly answered *yes*.
+
+`status:` frontmatter could not have caught it either — **60 of 62 vault pages say `active`**. A signal that
+never varies is not a signal.
+
+**Fixed the mechanism, not the instance:**
+- New **READY** lane in `state/current_status.md` — unblocked work I can execute without the owner.
+- New `open_loop: <one line>` frontmatter key on any page carrying a residual.
+- New `tools/open_loops.py` enforcing two invariants: a page declaring `open_loop:` **must** be wikilinked from
+  `current_status.md`; a page marked `status: shipped` **may not** declare one. Wired into
+  `tools/prepush_audit.py` as **point 16**, running on every push (a diff-scoped check would never see the page
+  that *dropped* the link). Verified it actually fails: removing one wikilink turns the audit red.
+
+**Sweep results** (every `deferred|awaiting|not yet|revisit|TODO` in the vault, checked against the code):
+- `architecture/post_c8_hardening.md` — all three solutions **shipped**; the page still read as an open plan.
+  Marked `status: shipped` with a verification banner. (The mirror image: a done page that looks undone.)
+- `ideas/calendar_chain_ordering.md` — §7.2 front-end surfacing **shipped** (`calendar.ts:272` sorts
+  unresolved first). Corrected my own frontmatter, which had claimed it remained.
+- `architecture/scalability_audit.md` — 2 genuine latent debts → `open_loop:` + READY.
+- `design/ui_redesign_spec.md` — item 4 Floor stage, blocked on a backend signal → `open_loop:` + READY.
+- **`calendar_worker.py:1797` `TERMINAL_DESCRIPTION_PATTERNS = ()`** — empty tuple, so `_is_terminal_description`
+  has short-circuited to `False` on *every call since PR-C7*. It was to be populated "in PR-C7.2"; PR-C7.2 never
+  came. Dead branch that reads like careful defensive code → [[state/open_anti_patterns]] #11.
+- **`_clean_legevent_cell` heals silently** (0 counters) → [[state/open_anti_patterns]] #12.
+- The rest (`copatrons_backfill`, subject-search, 50-state DB) are **decisions with written rationale**, not
+  strandings. Left alone.
+
+Near-miss worth recording: the first sweep grep used `--include=*.md`, which zsh rejected, printing nothing.
+"No output" read as "absent" and I nearly reported three shipped solutions as unbuilt. Same class as the
+`limit 900` gviz truncation ([[failures/assumptions_audit#95]]): **a tool that silently returns nothing is not
+evidence of absence.** Re-ran without the flag; all three were present.
+
+## [2026-07-10] pr | §9 anchor ladder + two live mis-anchors in `_committee_parent` (branch `claude/calendar-landing-polish`)
+
+Placed the residual unplaceable meetings **structurally** (owner: *"solve it forever, don't patch it"*), and
+fixed two pre-existing mis-anchors found while doing it.
+
+- **Anchor ladder** — three strictly-additive rungs (sibling overlap · `"full committee"` → own parent ·
+  no-body-named → own chamber's floor marker, verb-selected). Each fires only after every rung above returns
+  `None`, so the Section-9 safety gate holds **by construction**: an already-resolved row is unreachable from
+  the new code. Rung 7 is guarded — a phrase that names a body nobody matched must never fall through to the
+  floor ([[failures/assumptions_audit#70]] class).
+- **§9d-i** — `_committee_parent` compared token **SETS**. LIS names a subcommittee by repeating the
+  distinctive word ("…Natural Resources **Agriculture** Subcommittee"), so the child's token set equalled its
+  parent's and they were indistinguishable. Now **multiset** containment. → [[failures/assumptions_audit#100]]
+- **§9d-ii** — the alphabetical tie-break was a guess wearing a determinism costume: `"Subcommittee #2"`
+  reduces to `{2}`, which fits House Public Safety's #2 as well as the referring committee's own. It was right
+  4/4 times *only because `"labor" < "public"`*. A bare ordinal is a self-lineage reference → scope it; still
+  tied ⇒ **refuse**. → [[failures/assumptions_audit#101]]
+- **Telemetry** read 3 unplaceable where 1 was true (counted synthetic `"house"`/`"the house"` aliases and
+  re-walked non-memoized refusals). One `_bump()` chokepoint. → [[failures/assumptions_audit#102]]
+
+Gates (live Schedule API, 3,533 rows / 447 dates): SAFETY **0 / 2,889** published-clock rows move ·
+RESOLUTION `relative_unresolved` **19 → 1** · §9d rescan **209 matches: 207 identical, 2 corrected, 0 lost** ·
+118 pure-logic checks. The one survivor is a **correct refusal**: `2025-02-22 house convenes` anchors to the
+2024 Special Session's recess — a different session, no node in that day's graph.
 
 ## [2026-07-07] pr | #209 MERGED — Health alerts = STATE not stream + witness auto-shard (zero-touch) + de-AI pass
 

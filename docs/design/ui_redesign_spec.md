@@ -1,7 +1,8 @@
 ---
 tags: [design, ui, redesign, web, owner-feedback]
-updated: 2026-06-22
+updated: 2026-07-10
 status: active
+open_loop: Item 4 (Floor stage) — BLOCKED until the backend emits a floor/passed-chamber signal
 ---
 
 # UI Redesign Spec — owner feedback (2026-06-22)

@@ -1,7 +1,8 @@
 ---
 tags: [architecture, audit, scalability, standards]
-updated: 2026-06-07
+updated: 2026-07-10
 status: active
+open_loop: 2 latent debts: HISTORY-vs-LegEvent date drift reconciliation; _clean_legevent_cell heals silently (no counter)
 ---
 
 # Scalability & Sustainability Audit — Standards Compliance

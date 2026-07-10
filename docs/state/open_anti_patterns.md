@@ -1,6 +1,6 @@
 ---
 tags: [state, live, debt, anti-pattern]
-updated: 2026-07-07
+updated: 2026-07-10
 status: active
 ---
 
@@ -199,6 +199,43 @@ events_rows.append([
 **Why deferred:** PR #147 is a **proven behavior-preserving MOVE** (660-line body verified line-for-line identical). Fixing these here would (a) break the pure-move guarantee, (b) risk a behavior change in production-validated code, (c) muddy an extraction PR. They predate #147 (the move only made the diff visible).
 
 **Fix plan:** a separate, focused PR — first DATA-CONFIRM whether each flagged field is ever actually NaN at that point (don't change classification on a hunch — Standard #7); fix only the ones that are real, each with a before/after on the live metric. Do this AFTER the incremental-STM differential oracle exists, so any change is provably output-identical.
+
+---
+
+## 11. `calendar_worker.py:1797` — `TERMINAL_DESCRIPTION_PATTERNS = ()` is empty, so its branch has NEVER fired
+
+**Severity:** `WARN` (dead path, not wrong data). **Status:** OPEN — surfaced 2026-07-10 by the stranded-work sweep.
+
+`_is_terminal_description()` guards with `if not TERMINAL_DESCRIPTION_PATTERNS or not description: return False`.
+The tuple is empty and has been since PR-C7, whose note reads *"Populate in PR-C7.2 after observing real LIS
+API response shapes from PR-C7's first cold-start."* **PR-C7.2 never happened.** So every call short-circuits
+to `False`, and whatever the function was meant to catch has been silently uncaught for the life of the code.
+
+This is the pre-push audit **#12 (fallback-liveness)** shape in its purest form: a defensive branch that is
+100% dead, indistinguishable at a glance from a branch that simply never matches. The empty-tuple guard even
+*reads* like careful defensive programming — that's what makes it invisible.
+
+**Fix (choose one, don't leave it):** populate the tuple from observed LIS response shapes (the cold-start
+happened long ago — the shapes are knowable now), **or delete the constant and the branch.** A dead branch that
+looks alive is worse than no branch. Tracked in [[state/current_status]] READY.
+
+---
+
+## 12. `calendar_worker.py:1951` — `_clean_legevent_cell` heals silently; a schema change would not surface
+
+**Severity:** `INFO` (visibility gap, no bad data). **Status:** OPEN — [[architecture/scalability_audit]] called
+this a "trivial Standard-#4/#9 visibility add"; it was never queued because no lane existed for unblocked work.
+
+The function normalizes LIS's JSON-`null` structural fields (`ChamberCode` / `ReferenceType` / `ActorType` /
+`Status` / `EventCode`) so a naive `str(None)` can't produce the truthy sentinel `"None"`. Correct, and it
+runs on every cell. But it **increments no counter**: `grep -c "legevent_normalized" calendar_worker.py` → `0`.
+
+If LIS changed a field's shape upstream and began emitting nulls where it never did before, the heal would
+absorb the entire change and nothing would ever say so. The heal is right; the *silence* is the debt — a
+successful repair that reports nothing is indistinguishable from no repair being needed.
+
+**Fix:** count normalizations per cycle and route the count through the existing source-miss/alert surface, per
+[[workflow/source_miss_visibility]] (the counter needs a denominator: normalized / total cells inspected).
 
 ---
 

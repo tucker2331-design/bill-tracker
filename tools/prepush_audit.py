@@ -16,6 +16,7 @@ Exit non-zero if any hard check FAILs. WARN/reminder lines never fail the build 
 judgment-only points (the human still owns those). See CLAUDE.md "Pre-Push Audit (15 points)".
 """
 import argparse
+import os
 import subprocess
 import sys
 
@@ -179,6 +180,23 @@ Judgment-only points (the script can't check these — confirm each):
       as a separate flag if so (audit #53/#15)."""
 
 
+def check_open_loops(fails):
+    """Point 16 — unfinished work must be reachable from the to-do (tools/open_loops.py).
+
+    Runs on EVERY push, not only when docs change: the failure mode is a residual that quietly stops
+    being linked, and a diff-scoped check would never see the page that dropped the link. Delegates to
+    open_loops.py so the invariant has exactly one implementation."""
+    tool = os.path.join(os.path.dirname(os.path.abspath(__file__)), "open_loops.py")
+    if not os.path.isfile(tool):
+        fails.append("tools/open_loops.py is missing — the stranded-work invariant is unenforced.")
+        return
+    r = subprocess.run([sys.executable, tool], capture_output=True, text=True)
+    if r.returncode != 0:
+        detail = "\n      ".join(l for l in r.stdout.splitlines() if l.strip().startswith("✗"))
+        fails.append("open_loops: a page declares unfinished work that current_status.md never links.\n"
+                     f"      {detail or r.stdout.strip() or r.stderr.strip()}")
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--base", default="origin/main")
@@ -196,6 +214,7 @@ def main():
     output_change, bumped = check_version_bump(files, fails)
     check_ray2_backup(files, fails)
     check_forbidden(files, fails)
+    check_open_loops(fails)
     warn_lines = warns(files)
 
     print(f"prepush_audit: {len(files)} file(s) in diff; "

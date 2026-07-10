@@ -56,6 +56,7 @@ Nothing learned in a session may be lost. Route every artifact to the right page
 | PR event (opened/merged/closed) | `docs/log.md` — `## [YYYY-MM-DD] pr \| <title>`, newest at top |
 | Change in active focus | `docs/state/current_status.md` — **MOVE-only** (B-1): keep NOW ≤3 / NEXT (ordered) / RECENTLY LANDED ≤5; finishing a task MOVES its line NOW→RECENTLY LANDED and evicts the oldest. Never append history here — that goes to `docs/log.md`. |
 | New silent-fallback found in code | `docs/state/open_anti_patterns.md` |
+| Work left unfinished on a page | that page's frontmatter `open_loop:` + a link from `docs/state/current_status.md` (`tools/open_loops.py` enforces it) |
 | User feedback / preference | New page in `docs/workflow/` or update existing |
 
 **Do NOT write persistent memory to `~/.claude/.../memory/`.** If the auto-memory system writes there, treat it as drift and migrate to `docs/` on the next session. See `docs/workflow/persistent_memory.md`.
@@ -75,7 +76,7 @@ Nothing learned in a session may be lost. Route every artifact to the right page
 
 ---
 
-## Pre-Push Audit (15 points)
+## Pre-Push Audit (16 points)
 
 Before every commit. Full version in `docs/workflow/three_phase_protocol.md`. **The mechanical half is now
 enforced by a script (B-3): run `python3 tools/prepush_audit.py` before commit; CI runs it on every PR
@@ -100,6 +101,7 @@ Points 1-9 are the original audit. Points 10-15 were codified in PR-C7.0.5 after
 13. **Dead-Path Resurrection Check.** When dropping a fallback or simplifying a defensive pattern, grep EVERY function-scope variable that was bound only on the path being removed. Confirm each is either re-bound unconditionally on the surviving path or no longer referenced downstream. Removing dead code can resurrect previously-dead error paths. See `docs/failures/assumptions_audit.md` #52 (Codex fold-in).
 14. **Threshold Calibration Check.** Whenever a PR's diff is architecturally significant (changes the worker's row processing pipeline, classifier, recovery surface, or breaker inputs), grep every existing absolute threshold against the new steady-state and flag any that would now trip on healthy operation. Treat any cycle-stable breaker trip as a CRITICAL calibration bug, not a transient. Prefer delta-vs-rolling-baseline thresholds for metrics whose floor depends on system behavior. See `docs/failures/assumptions_audit.md` #53.
 15. **Sentinel-Value Collision Check.** For any state cell read or persisted-value load with a default-on-failure path, ask: *"is the default ever a legitimate runtime value?"* If yes, track presence as a separate boolean flag (not encoded by the value being zero / empty / etc.). Same root class as `Optional` / `Maybe`-type-confusion bugs. See `docs/failures/assumptions_audit.md` #53 (Codex P2 fold-in).
+16. **Stranded-Work Check (mechanical, B-7).** Unfinished work must be reachable from the to-do. A vault page carrying a residual declares `open_loop: <one line>` in its frontmatter, and `tools/open_loops.py` FAILS the audit unless `docs/state/current_status.md` wikilinks that page; a page marked `status: shipped` may not declare one. Runs on EVERY push — a diff-scoped check would never see the page that *dropped* the link. **Rationale:** `NEXT` was defined as "needs owner infra / a decision", so an unblocked engineering residual had no lane (not NOW, not NEXT) and survived only inside `docs/ideas/`, invisible to every "is the to-do clear?" check — that is exactly how the §9 relative-time residual sat. The new `READY` lane + this check close it. Never trust `status:` alone as a signal: 60 of 62 pages say `active`.
 
 ---
 

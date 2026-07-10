@@ -1,7 +1,7 @@
 ---
 tags: [ideas, calendar, worker, time-resolution, plan, structural]
-updated: 2026-07-09
-status: active  # §9 shipped 2026-07-10 (1/450 residual, a correct refusal); §7.2 front-end surfacing remains
+updated: 2026-07-10
+status: shipped  # §9 landed 2026-07-10; §7.2 front-end surfacing verified shipped (calendar.ts:272)
 premise-revised: 2026-07-02  # §1-§6 premise ("chains stranded at 23:59, additive gate tweak") FALSIFIED — see §8
 implemented: 2026-07-03  # DATE-AWARE refactor shipped in PR #189 — see §8 tail
 ---
