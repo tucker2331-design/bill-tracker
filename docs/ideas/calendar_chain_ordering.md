@@ -1,7 +1,7 @@
 ---
 tags: [ideas, calendar, worker, time-resolution, plan, structural]
 updated: 2026-07-09
-status: active  # §9 residual (19 unplaceables) planned + measured, awaiting go
+status: active  # §9 shipped 2026-07-10 (1/450 residual, a correct refusal); §7.2 front-end surfacing remains
 premise-revised: 2026-07-02  # §1-§6 premise ("chains stranded at 23:59, additive gate tweak") FALSIFIED — see §8
 implemented: 2026-07-03  # DATE-AWARE refactor shipped in PR #189 — see §8 tail
 ---
@@ -249,8 +249,54 @@ silent 23:59.
   TimeClass values change, so the Stage-2 / incremental-STM signature must invalidate.
 - 15-point pre-push audit, esp. #1 (verb/phrase forms), #14 (threshold calibration).
 
-**Status:** planned + measured 2026-07-09; awaiting owner go-ahead to touch the time engine (his standing gate
-on this task: "plan it fully in the brain BEFORE starting"). Blast radius: 19 meetings / 370 bill-rows, plus
-those rows gaining times in the landing feed.
+### 9d. What the implementation found that the plan did NOT predict (2026-07-10)
 
-See also [[architecture/calendar_pipeline]], [[knowledge/tba_times]], [[failures/assumptions_audit#79]], [[failures/assumptions_audit#95]], [[design/ui_redesign_spec]], [[state/next_session]].
+The ladder was designed as three *additive* rungs. Building it surfaced two **pre-existing** defects one rung
+above — in `_committee_parent`, untouched since §3.2 — that the plan never contemplated. Both were live
+mis-anchors, and both share a root cause: **a lossy reduction plus an arbitrary tie-break.**
+
+| | Defect | Live impact | Fix |
+|---|---|---|---|
+| **9d-i** | `ref_tokens.issubset(node_tokens)` compares token **SETS**. LIS names a subcommittee by repeating the distinctive word ("…Natural Resources **Agriculture** Subcommittee"), so the child's token set equals its **parent's**. | 2 of 209 matches anchored to the parent committee instead of the named subcommittee. | Containment on the **multiset** (`Counter`): `agriculture x2` fits only the child. |
+| **9d-ii** | On a tie, take the alphabetically-first node — documented as "deterministic." | `"Subcommittee #2"` reduces to the bare ordinal `{2}`, which fits **House Public Safety's** #2 as well as the referring committee's. Right answer 4/4 times **only because `"labor" < "public"`.** | A bare ordinal is a **self-lineage** reference -> scope to the node's own committee. Still tied => **refuse**. |
+
+Measured before changing anything (Standard #7), on one live Schedule pull — 3,533 rows / 447 dates:
+
+```
+209 strict-subset matches -> 207 identical | 2 corrected | 0 newly-unmatched | 0 refusals
+```
+
+Both corrections were verified against the phrase text. Nothing was lost to gain them.
+
+**The lesson worth keeping** ([[failures/assumptions_audit#100]], [[failures/assumptions_audit#101]]): when a
+structured name is reduced to a bag of tokens, ask *what the reduction threw away* — and whether the source
+uses precisely that to disambiguate. And every tie-break encodes a claim about the world; "alphabetical"
+claims the earlier name is likelier correct, which is true of nothing. Determinism is not correctness.
+
+A third finding was in the telemetry itself: `anchor_unresolved` read **3** where **1** was true, because it
+counted synthetic lookup aliases (`"house"`, `"the house"`) and re-walked non-memoized refusals
+([[failures/assumptions_audit#102]]). A counter inside a resolver counts *resolver events*, not *meetings*.
+
+### IMPLEMENTED — 2026-07-10
+
+| Gate | Required | Measured |
+|---|---|---|
+| SAFETY | 0 published-clock rows move | **0 / 2,889** PASS |
+| RESOLUTION | `relative_unresolved` 19 -> ~0 | **1 / 450** PASS |
+| Rung telemetry | every placement attributable | `chamber 16 · parent 3 · sibling 1 · unresolved 1` |
+| Pure-logic suite | all green | 118 checks across 6 files (25 new: `anchor_ladder_test.py`) |
+| Pre-push audit | mechanical checks pass | PASS (`WORKER_OUTPUT_LOGIC_VERSION` bumped) |
+
+The SAFETY gate holds **by construction, not by diff**: each new rung fires only when every rung above it
+returned `None`, so a row an existing rung resolves is unreachable from the new code. The live 0/2,889 is
+confirmation, not the proof.
+
+**The one survivor is a correct refusal.** `2025-02-22 house convenes` reads *"15 minutes after the Recess of
+the 2024 Special Session I"* — an anchor in a **different session**, which has no node in that day's graph.
+There is nothing to resolve it to. It stays `relative_unresolved` and the front-end renders it as unplaceable.
+That is the design working: refusal is always an option.
+
+**Status:** shipped. `anchor_unresolved` is the standing drift canary — if a future LIS phrasing stops
+resolving it rises above 1 and says so, instead of a row quietly acquiring a wrong time.
+
+See also [[architecture/calendar_pipeline]], [[knowledge/tba_times]], [[failures/assumptions_audit#79]], [[failures/assumptions_audit#95]], [[failures/assumptions_audit#100]], [[failures/assumptions_audit#101]], [[failures/assumptions_audit#102]], [[design/ui_redesign_spec]], [[state/next_session]].

@@ -33,15 +33,24 @@ for _s in SESSIONS:
 
 NEEDED = {"build_time_graph", "_resolve_one_day", "parse_24h_time", "_parse_relative_offset_minutes",
           "_is_non_concrete_time", "normalize_room_key", "_is_relative_time_text"}
+# Module-level constants the extracted functions close over (the §9 anchor-ladder telemetry dict and its
+# compiled self-reference regex). Hoisted alongside the functions so a NameError can't masquerade as a
+# resolver failure. The OLD snapshot predates the ladder and simply carries none of these.
+NEEDED_GLOBALS = {"ANCHOR_RUNG_COUNTS", "_SELF_REF_RE"}
 REL_RE = re.compile(r'\b(?:immediately\s+)?(?:upon|after|following)\b|\brecess\b', re.I)
 SENTINELS = {"23:59", "06:00"}
 
 def load(source_text, label):
     if source_text is None:
         sys.exit(f"❌ cannot load '{label}' snapshot — source missing (git show failed / merge-base absent).")
-    body = [n for n in ast.parse(source_text).body if isinstance(n, ast.FunctionDef) and n.name in NEEDED]
-    ns = {"re": re, "datetime": datetime, "timedelta": timedelta, "str": str, "pd": pd, "defaultdict": defaultdict}
+    body = [n for n in ast.parse(source_text).body
+            if (isinstance(n, ast.FunctionDef) and n.name in NEEDED)
+            or (isinstance(n, ast.Assign) and len(n.targets) == 1
+                and isinstance(n.targets[0], ast.Name) and n.targets[0].id in NEEDED_GLOBALS)]
+    ns = {"re": re, "datetime": datetime, "timedelta": timedelta, "str": str, "pd": pd,
+          "defaultdict": defaultdict, "Counter": Counter}
     exec(compile(ast.Module(body, []), f"<{label}>", "exec"), ns)
+    ns.setdefault("ANCHOR_RUNG_COUNTS", {})   # old snapshot: no ladder, no telemetry
     return ns  # full namespace — callers pull build_time_graph / parse_24h_time / etc. from it
 
 def git_show(ref, path):
