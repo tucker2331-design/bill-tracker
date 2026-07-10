@@ -3478,6 +3478,22 @@ def _verify_archived_snapshot(archive, target, source_ws):
     return int(arch_ws.row_count)
 
 
+def _open_book_by_key(sheet, key):
+    """Open ANOTHER workbook by key using an existing Spreadsheet's authenticated transport — gspread
+    version-safe. gspread 6.x removed the authorized Client from `Spreadsheet.client`: that attribute is now
+    the `HTTPClient` transport, which has NO `open_by_key` (it lives on `gspread.Client`). So the old
+    `sheet.client.open_by_key(key)` raised `'HTTPClient' object has no attribute 'open_by_key'` EVERY cycle
+    once the witness grew enough to trigger a shard — a daily CRITICAL, and the witness could never actually
+    move (assumptions_audit #104). gspread 6.x's own `Client.open_by_key` is literally
+    `Spreadsheet(self.http_client, {"id": key})`, so we reconstruct the Spreadsheet on the SAME transport.
+    Kept version-safe: gspread <6 exposes a Client here (has `open_by_key`); gspread ≥6 exposes the HTTPClient
+    (reconstruct). No version pin either way."""
+    client = getattr(sheet, "client", None)
+    if hasattr(client, "open_by_key"):
+        return client.open_by_key(key)                     # gspread <6: sheet.client is the authorized Client
+    return gspread.Spreadsheet(client, {"id": key})        # gspread ≥6: mirror Client.open_by_key exactly
+
+
 def _archive_completed_session(sheet, worksheet, old_code):
     """Snapshot the live Sheet1 (`worksheet`, already fetched by the caller) into the
     archive workbook as ``Session_<old_code>``, replacing any existing snapshot of that
@@ -3490,7 +3506,7 @@ def _archive_completed_session(sheet, worksheet, old_code):
     get_worksheet_by_id typing (version-robust). Then CONFIRM-BEFORE-ADVANCE via
     _verify_archived_snapshot (A-2). Canonical standalone tool, kept in sync:
     tools/session_archive/archive.py."""
-    archive = sheet.client.open_by_key(SESSION_ARCHIVE_ID)
+    archive = _open_book_by_key(sheet, SESSION_ARCHIVE_ID)
     target = f"Session_{old_code}"
     try:
         old_id = archive.worksheet(target).id
@@ -3565,7 +3581,7 @@ def _autoshard_witness_if_full(sheet, tab_name, threshold_cells=WITNESS_SHARD_TH
 
     if src is None:
         # Not in VA·Live. Already sharded if it's in VA·Ops; otherwise it hasn't been created anywhere yet.
-        ops = sheet.client.open_by_key(OPS_WORKBOOK_ID)
+        ops = _open_book_by_key(sheet, OPS_WORKBOOK_ID)
         try:
             ops.worksheet(tab_name)
             return "ops", False, 0                        # already in VA·Ops — sharded, nothing to do, no FYI
@@ -3579,7 +3595,7 @@ def _autoshard_witness_if_full(sheet, tab_name, threshold_cells=WITNESS_SHARD_TH
     total = _workbook_total_cells(sheet)
     if total is None or total < threshold_cells:
         return "live", False, 0                          # unmeasurable or still lean — stays in VA·Live
-    ops = sheet.client.open_by_key(OPS_WORKBOOK_ID)      # raises → caller CRITICAL, witness untouched in VA·Live
+    ops = _open_book_by_key(sheet, OPS_WORKBOOK_ID)      # raises → caller CRITICAL, witness untouched in VA·Live
     reclaimed = int(src.row_count) * int(src.col_count)
     try:
         old_id = ops.worksheet(tab_name).id              # replace any stale same-named tab in VA·Ops (idempotent)
@@ -6035,7 +6051,7 @@ def run_calendar_update():
     _witness_book = sheet
     if _use_ops:
         try:
-            _witness_book = sheet.client.open_by_key(OPS_WORKBOOK_ID)
+            _witness_book = _open_book_by_key(sheet, OPS_WORKBOOK_ID)
             print(f"📝 {WITNESS_TAB_NAME}: using VA·Ops workbook ({OPS_WORKBOOK_ID[:12]}…).")
         except Exception as _ops_open_err:
             push_system_alert(
