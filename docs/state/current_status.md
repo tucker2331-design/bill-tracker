@@ -39,10 +39,7 @@ status: active
 ## READY (unblocked — no owner input needed; I can execute any of these)
 *The lane that did not exist until 2026-07-10. Every `open_loop:` page in the vault must appear here (or in
 NOW/NEXT), or `tools/open_loops.py` fails the pre-push audit.*
-- **Empty (2026-07-10).** All READY debts cleared this session — see RECENTLY LANDED. The B-7 guard also
-  flagged the Floor stage as a lingering `open_loop`; investigation found it was **already shipped**
-  (`bill_tracker.py` floor signal → Timeline `floor1`/`floor2`; live House-passed=2,345 / Senate=2,007), so
-  its stale open-loop was closed. That is the guard working: it forces a look, and a look resolves it either way.
+1. **Auto-refresh the SPA when new data lands (owner 2026-07-10) — PROBED + SCOPED: [[ideas/auto_refresh_on_new_data]].** Measured: the SPA loads once on mount and never polls, so a new worker write shows only after a hard reload. Full payloads are 6.7 MB (bills) + 5.7 MB (calendar); the freshness cells are ~40 B — so the fix is a **freshness-gated** background refresh (poll the cheap cells on a 90 s interval + window-focus; full re-fetch only when a timestamp advances). The past Streamlit auto-refresh pain is **moot** — the product is a React SPA now. One UX call for the owner: hot-swap vs a "new data" pill on Search/Calendar (rec: hot-swap Landing, pill elsewhere). Build is unblocked once that's picked.
 
 ## RECENTLY LANDED (newest first; full detail in [[log]])
 - **2026-07-10 — READY debts cleared: dead terminal-skip deleted · silent-heal counter added · date-drift measured away** — `TERMINAL_DESCRIPTION_PATTERNS`/`_is_terminal_legevent_description` DELETED (text-based, fail-unsafe, never fired since PR-C7; [[failures/assumptions_audit#103]]); `_clean_legevent_cell` now counts stringified-null heals + alerts on a flood ([[state/open_anti_patterns]] #12); HISTORY-vs-LegEvent date-drift **measured to 0 live rows** on the full 37,826-row sheet (0 meeting rows empty-time or NO_SCHEDULE_MATCH) — NOT built, it's a Section-9-critical time-engine change with no failing row to justify it ([[architecture/scalability_audit]]). Two new pure tests wired into CI.

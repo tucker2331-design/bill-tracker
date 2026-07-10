@@ -8,6 +8,30 @@ status: active
 
 Append-only, reverse-chronological (newest at top). Each entry opens with `## [YYYY-MM-DD] <kind> | <title>` so `grep "^## \[" log.md | head -20` gives a parseable timeline.
 
+## [2026-07-10] work | Probed the auto-refresh problem (owner: "tired of manually refreshing")
+
+Owner asked to probe + queue a fix for having to manually reload when new data lands, noting a past
+frustrating Streamlit auto-refresh attempt. Probed it (measure-first) and scoped it in
+[[ideas/auto_refresh_on_new_data]]:
+
+- **Confirmed the gap on the PRODUCT surface** (not just the X-Ray): `App.tsx` loads once on mount (`[]` deps),
+  `loadCalendar()` memoizes for the page's life, and there is NO interval/focus/poll anywhere. New worker data
+  shows only after a hard browser reload.
+- **The Streamlit pain is moot.** That frustration was Streamlit's rerun model (`st_autorefresh`, `st.rerun()`
+  loops, cache-vs-rerun fights, lost widget state). The product is a React SPA now, where background refresh
+  without losing UI state is a standard `setInterval`/focus + `fetch` + `setState`.
+- **Measured the costs** (live): Bill_Tracker full = 6.7 MB/3.9 s; Sheet1 calendar = 5.7 MB/1.2 s; the
+  freshness cells (`AA1`, bill `dataAsOf`) = ~40 B/0.3 s. The 40 B-to-check vs 12 MB-to-load asymmetry is the
+  whole design → recommend **freshness-gated** refresh (poll the cheap cells on a 90 s interval + window-focus;
+  full re-fetch only when a timestamp advances). Off-season an idle tab costs a few bytes/min and never
+  re-downloads; in-session it catches a write within ~90 s with ONE big fetch.
+- Rejected alternatives with reasons (naive interval = 12 MB/tick; SSE/WebSocket = infra for a poll-sized
+  problem — there is no app server, gviz reads Sheets directly). One owner UX call: hot-swap vs "new data" pill
+  on Search/Calendar.
+
+Queued in READY; unblocked once the swap-vs-pill choice is made. The B-7 guard required the new page be linked
+from current_status before the audit would pass — worked as designed.
+
 ## [2026-07-10] work | B-4 — CLAUDE.md volatile-facts audit; caught a wrong deploy target
 
 Audited CLAUDE.md for drift-prone facts. All 11 file references, 15 doc references, 8 key-code-concept
