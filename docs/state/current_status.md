@@ -33,7 +33,7 @@ status: active
    - CA + FL research → [[audits/fable_2026-07/multistate_ingestion_ca_fl]]
    - 50-state decoupling (CDN inversion + Omni-Schema + Fleet) → [[audits/fable_2026-07/50_state_scaling_architecture]]
    - NY is the live 2nd state (its own brain: [[ny/state/current_status]]); C-8 Part 2 (LegiScan oracle) is its next step.
-4. Optional/low-value: **S-3** (attic-move deprecated repo-root files — cosmetic, breaks the paused worker's manual dispatch; do only if you want the cleanup); **B-4 finish** (audit CLAUDE.md's remaining volatile facts).
+4. Optional/low-value: **S-3** (attic-move deprecated repo-root files — cosmetic, **but it breaks the paused worker's manual dispatch**, so it needs an explicit owner "yes, break it"; not done on blanket authority). ~~B-4 finish~~ **DONE 2026-07-10** (CLAUDE.md volatile-facts audit — all file/doc/function refs verified; fixed two real drifts: deploy target said "Cloudflare Pages", is Workers static-assets per `wrangler.toml`; stale page-count).
 - Also open (owner-triggered): `/code-review ultra`; co-patrons backfill (scoped, deferred — [[ideas/copatrons_backfill]]).
 
 ## READY (unblocked — no owner input needed; I can execute any of these)

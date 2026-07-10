@@ -8,6 +8,24 @@ status: active
 
 Append-only, reverse-chronological (newest at top). Each entry opens with `## [YYYY-MM-DD] <kind> | <title>` so `grep "^## \[" log.md | head -20` gives a parseable timeline.
 
+## [2026-07-10] work | B-4 — CLAUDE.md volatile-facts audit; caught a wrong deploy target
+
+Audited CLAUDE.md for drift-prone facts. All 11 file references, 15 doc references, 8 key-code-concept
+function names, the CI workflow references, and every cited audit number RESOLVE. Fixed the audit intro to
+list point 16 (stranded-work) among the checks that FAIL CI. Two real drifts found and corrected:
+
+- **Deploy target was WRONG.** CLAUDE.md said the SPA ships to "Cloudflare **Pages**"; `wrangler.toml` has
+  `[assets] directory=./dist` + `not_found_handling=single-page-application` — it is **Cloudflare Workers
+  static-assets** (matches current_status). Every session read the wrong platform. Now corrected + cites the
+  config file so it can't silently drift again.
+- **My own stale count.** The point-16 rationale said "60 of 62 pages say active"; recount is 65 of 80 (I added
+  pages today). Generalized to "nearly every page (65 of 80), so the field carries almost no information" — the
+  point, not a number that rots. Ironic in a volatile-facts audit; exactly why B-4 exists.
+
+S-3 (attic-move deprecated root files) deliberately NOT done: it breaks the paused worker's manual dispatch, so
+it needs an explicit owner "yes, break it" — not a blanket-authority change. NEXT is now owner-gated only
+(C-8 LegiScan key; multi-state per the one-state-at-a-time directive; S-3 owner call).
+
 ## [2026-07-10] work | Floor stage (ui_redesign_spec item 4) was already shipped — B-7 guard caught the stale loop
 
 The new `tools/open_loops.py` flagged `design/ui_redesign_spec.md` as carrying an unfinished `open_loop`
