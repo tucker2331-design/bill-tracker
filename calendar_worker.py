@@ -1788,13 +1788,6 @@ def _workbook_cell_headroom(spreadsheet, col_count):
     except Exception:
         return None
     return max(0, (LEGEVENT_WORKBOOK_CELL_CEILING - total_cells) // max(1, col_count))
-# Terminal-event detection: bills whose latest event matches one of these
-# substrings (case-insensitive, against the LegEvent Description field) are
-# considered finished and skipped on refresh. Initially empty pending review
-# of actual API response shapes; populate after first production cycle.
-# Adding a substring here MUST verify it cannot occur in non-terminal events
-# (same precedence concerns as the X-Ray's classify_action substring lists).
-TERMINAL_DESCRIPTION_PATTERNS: tuple[str, ...] = ()
 
 
 def _hash_history_rows_for_bill(rows: list[tuple]) -> str:
@@ -1809,25 +1802,6 @@ def _hash_history_rows_for_bill(rows: list[tuple]) -> str:
     items = sorted(f"{d}\x00{o}\x00{r}" for d, o, r in rows)
     payload = "\x01".join(items)
     return hashlib.sha256(payload.encode("utf-8")).hexdigest()
-
-
-def _is_terminal_legevent_description(description: str) -> bool:
-    """True if `description` matches any TERMINAL_DESCRIPTION_PATTERNS substring.
-
-    Used to short-circuit refresh on bills that cannot mutate further. Empty
-    pattern set returns False for everything (safe default — every bill
-    refreshes on TTL/hash signal until terminal patterns are populated).
-
-    Gemini PR-C7 medium review: lowercase patterns at check time so a
-    future maintainer adding (e.g.) "Approved by Governor" to the
-    constant — the natural casing — doesn't silently fail the substring
-    match against the lowercased description. Defensive, no behavior
-    change while the constant is empty.
-    """
-    if not TERMINAL_DESCRIPTION_PATTERNS or not description:
-        return False
-    lower = description.lower()
-    return any(p.lower() in lower for p in TERMINAL_DESCRIPTION_PATTERNS)
 
 
 def _get_or_create_legevent_tabs(sheet, push_alert):
@@ -1948,6 +1922,11 @@ def _get_or_create_legevent_tabs(sheet, push_alert):
     return (_open_or_create(LEGEVENT_BILLS_TAB), _open_or_create(LEGEVENT_EVENTS_TAB))
 
 
+# Per-cycle heal telemetry (cleared at the top of _load_legevent_cache). `sentinel` = stringified-null heals
+# ("None"/"null"/"nan" → ""), the drift canary; `cells_seen` = the denominator. See _clean_legevent_cell.
+_LEGEVENT_HEAL = {"sentinel": 0, "cells_seen": 0}
+
+
 def _clean_legevent_cell(v):
     """Normalize a nullable LIS structural field to a clean string.
 
@@ -1970,11 +1949,22 @@ def _clean_legevent_cell(v):
     cache-loaded and fresh-API events route IDENTICALLY. Never apply to
     Description (free text may legitimately contain the word "None"); VoteTally
     is guarded separately on persist (list/dict coercion).
+
+    Telemetry (2026-07-10): the STRINGIFIED-sentinel heal ("None"/"null"/"nan" → "") is counted in
+    ``_LEGEVENT_HEAL``. A real ``None`` → "" is routine null-handling (governor events legitimately null
+    ChamberCode on every cycle) and is NOT the anomaly, so it is not counted — only ``cells_seen`` is, as the
+    denominator (Standard #7). The stringified sentinel should be near-ZERO in steady state: fresh API sends
+    real null, persist writes "". A non-zero, rising count is a canary — an upstream schema change that began
+    stringifying nulls, or a bulk load of pre-heal cache rows. Surfaced by ``_load_legevent_cache``.
     """
+    _LEGEVENT_HEAL["cells_seen"] += 1
     if v is None:
         return ""
     s = str(v).strip()
-    return "" if s.lower() in ("none", "null", "nan") else s
+    if s.lower() in ("none", "null", "nan"):
+        _LEGEVENT_HEAL["sentinel"] += 1
+        return ""
+    return s
 
 
 def _load_legevent_cache(bills_ws, events_ws, push_alert, active_session=None):
@@ -1999,6 +1989,8 @@ def _load_legevent_cache(bills_ws, events_ws, push_alert, active_session=None):
     """
     bills_meta: dict = {}
     events_cache: dict = {}
+    _LEGEVENT_HEAL["sentinel"] = 0   # per-cycle: reset before this cycle's load-path heals are tallied
+    _LEGEVENT_HEAL["cells_seen"] = 0
     if bills_ws is None or events_ws is None:
         return bills_meta, events_cache
 
@@ -2118,6 +2110,21 @@ def _load_legevent_cache(bills_ws, events_ws, push_alert, active_session=None):
                 "CommitteeName": (_clean_legevent_cell(row[ei_committee]) if (0 <= ei_committee < row_len) else "?"),
             })
 
+    # Surface the silent heal (scalability_audit latent debt): a stringified-null flood means either an
+    # upstream schema change or a bulk migration of pre-heal cache rows — either way a human should see it.
+    # Near-zero is healthy; the denominator (cells_seen) keeps it honest (Standard #7). Threshold is a small
+    # absolute floor AND a 1% share so a handful of legacy rows during a one-time migration doesn't cry wolf,
+    # but a systematic flood does. INFO, not WARN: it's an observability signal, not a data-integrity break.
+    _healed, _seen = _LEGEVENT_HEAL["sentinel"], _LEGEVENT_HEAL["cells_seen"]
+    if _healed >= 100 and _seen and _healed >= 0.01 * _seen:
+        push_alert(
+            f"_clean_legevent_cell healed {_healed} stringified-null cells "
+            f"({_healed / _seen:.1%} of {_seen} structural cells loaded). Expected ~0 in steady state — "
+            f"check for an upstream LIS schema change or a large pre-heal cache still migrating.",
+            status="INFO", category="DATA_ANOMALY", severity="INFO",
+            dedup_key="legevent_sentinel_heal_flood",
+        )
+
     return bills_meta, events_cache
 
 
@@ -2161,7 +2168,7 @@ def _build_legevent_refresh_queue(
     tier_a: list = []  # uncached (no cached events)
     tier_b: list = []  # hash-changed
     tier_c: list = []  # TTL-expired
-    skipped_terminal = 0
+    skipped_terminal = 0  # retained as a telemetry slot (always 0 since terminal-skip removed 2026-07-10)
     skipped_fresh = 0
     schema_backfill = 0  # PR-C7.1v: bills re-queued to migrate a "?" structural column
 
@@ -2180,12 +2187,11 @@ def _build_legevent_refresh_queue(
         # committee action from a floor one), so the row is stuck at
         # NO_SCHEDULE_MATCH FOREVER even though its meeting time exists (HB438's
         # report sibling is 8:00 AM; HB246's 4/22 convene is 12:00 PM; HB447's is
-        # 10:00 AM). Such a bill is otherwise skipped — by IsTerminal OR (the case
-        # MEASURED here: 500 bills / 12,793 events) by the TTL "fresh" gate,
-        # because persist bumps FetchedAtUTC without a re-fetch, so the "?" rows
-        # look perpetually fresh and never re-qualify. Detect the incomplete
-        # column DIRECTLY and re-queue ONCE, BEFORE the terminal/TTL skips, so it
-        # migrates regardless of those states. Bounded (only "?" rows),
+        # 10:00 AM). Such a bill is otherwise skipped (the case MEASURED here: 500
+        # bills / 12,793 events) by the TTL "fresh" gate, because persist bumps
+        # FetchedAtUTC without a re-fetch, so the "?" rows look perpetually fresh
+        # and never re-qualify. Detect the incomplete column DIRECTLY and re-queue
+        # ONCE, BEFORE the TTL skip, so it migrates regardless. Bounded (only "?" rows),
         # deterministic (one fetch each), self-clearing (a real API fetch writes
         # the value). The recovery was verified correct on fresh API data — the
         # ONLY gap was the unmigrated cache.
@@ -2194,9 +2200,8 @@ def _build_legevent_refresh_queue(
             tier_b.append(bill)
             schema_backfill += 1
             continue
-        if cached.get("IsTerminal"):
-            skipped_terminal += 1
-            continue
+        # (terminal-skip removed 2026-07-10 — see _hydrate_legevent_cache's IsTerminal note; a bill that
+        #  can't mutate is already caught by the hash-unchanged + TTL-fresh gates below, no text guess.)
         if cached.get("LastHistoryHash") != current_hash:
             tier_b.append(bill)
             continue
@@ -2284,18 +2289,22 @@ def _hydrate_legevent_cache(
             latest = max(events, key=lambda e: str(e.get("EventDate") or ""))
             latest_desc = str(latest.get("Description") or "")
             latest_date = str(latest.get("EventDate") or "")[:10]
-            is_terminal = _is_terminal_legevent_description(latest_desc)
         else:
             latest_desc = ""
             latest_date = ""
-            is_terminal = False
 
         bills_meta[cache_key] = {
             "LastHistoryHash": current_hashes.get(bill, ""),
             "FetchedAtUTC":    now_utc.isoformat().replace("+00:00", "Z"),
             "LatestEventType": latest_desc[:200],  # truncate against runaway descriptions
             "LatestEventDate": latest_date,
-            "IsTerminal":      is_terminal,
+            # IsTerminal is retained in the persisted schema (dropping a stored column is a migration) but
+            # is now ALWAYS False. The terminal-skip optimization was removed 2026-07-10: it was TEXT-based
+            # (fail-unsafe — a mislabeled-terminal bill silently stops updating, a lobbyist accuracy loss),
+            # its pattern list had stayed empty since PR-C7 so it never once fired, and the TTL-fresh +
+            # hash-unchanged gates already skip steady-state bills. If a fetch-budget need ever appears,
+            # rebuild it STRUCTURALLY (a terminal-EventCode set + a drift alert). See assumptions_audit #103.
+            "IsTerminal":      False,
         }
     return fetches
 

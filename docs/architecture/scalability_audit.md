@@ -2,7 +2,6 @@
 tags: [architecture, audit, scalability, standards]
 updated: 2026-07-10
 status: active
-open_loop: 2 latent debts: HISTORY-vs-LegEvent date drift reconciliation; _clean_legevent_cell heals silently (no counter)
 ---
 
 # Scalability & Sustainability Audit — Standards Compliance
@@ -68,10 +67,10 @@ A standing assessment of the calendar subsystem against the 8 Non-Negotiable Eng
 
 The 25 residue is dominated by cases where the structural sources genuinely lack the answer: 15 empty-status admin (LIS encodes them identically to floor reads; only a per-state EventCode dictionary separates them), 2 LIS-published `Time TBA`, 3 HISTORY-vs-LegEvent date drift, 1 #71 conservative non-guess, and even the "fixable-looking" SJ209 P&E vote is **not in DOCKET.CSV** (confirmed 2026-06-03) — so its time isn't in our structural sources either. **The pipeline has extracted essentially everything the upstream data allows without a probabilistic guess.**
 
-## Latent debts worth a future look (small, non-blocking)
+## Latent debts worth a future look — both RESOLVED 2026-07-10
 
-1. **HISTORY-vs-LegEvent date drift** — the calendar places a row by HISTORY date, which can be 1–2 days off LIS's authoritative LegEvent date (cause of the 3 residual governor rows). A reconciliation that prefers the LegEvent (gold-standard) date for placement would fix both the Section-9 rows and a latent calendar-accuracy issue. Carries match-care (do it only for unambiguous single-occurrence events).
-2. **No `_clean_legevent_cell` normalization counter** — the heal is silent; a flood of normalized cells (signal of an upstream schema change) wouldn't surface. Trivial Standard-#4/#9 visibility add.
+1. **HISTORY-vs-LegEvent date drift — ✅ MEASURED AWAY (no live bug; NOT built).** The theory: the calendar places a row by HISTORY date, which can be 1–2 days off LIS's authoritative LegEvent date, so time-recovery (`EventDate[:10] == action_date_str`) misses → NO_SCHEDULE_MATCH → a §9 miss. The "3 residual governor rows" were measured **2026-06-03**; Section 9 hit **0 on 2026-06-06** (three days later). Re-measured on the live Sheet1 **2026-07-10** (all 37,826 rows, untruncated): of 17,018 `LegEventRoute==meeting` rows, **0 have an empty Time and 0 carry a NO_SCHEDULE_MATCH origin.** The 283 sentinel-`SortTime` meeting rows are all `api_schedule` + `relative_unresolved` — the §9 relative-*chain* unplaceables ([[ideas/calendar_chain_ordering]], fixed 19→1 by the anchor ladder), which DO show a time, not date-drift victims. **Conclusion: there is no live date-drift row to fix.** Building a LegEvent-date reconciliation into the Section-9-critical time engine to fix zero failing rows would be a speculative change to the highest-risk path — a Standard #7 violation ("if you can't measure it, you can't ship it"). **The approach is preserved here for if it recurs:** should a future measurement show meeting rows with a NO_SCHEDULE_MATCH origin whose bill has exactly ONE LegEvent whose description token-matches the action on a *different* date, prefer that LegEvent's date for placement (unambiguous single-occurrence only). Until such a row is measured, this stays unbuilt by design.
+2. **`_clean_legevent_cell` normalization counter — ✅ DONE 2026-07-10.** `_LEGEVENT_HEAL{sentinel, cells_seen}` counts the stringified-null heal (the drift signal, near-zero baseline) with `cells_seen` as the denominator (Standard #7); `_load_legevent_cache` emits an INFO `DATA_ANOMALY` when a flood crosses ≥100 cells AND ≥1% share. A routine `None`→"" is NOT counted (governor events null ChamberCode every cycle — that would drown the signal). Golden-tested in `test_clean_legevent_cell.py`. Was silent before; a schema-change flood now surfaces.
 
 ## Curation-debt inventory — the "what else is hiding?" sweep (owner 2026-06-28)
 Owner: the curated-dictionary / detect-vs-fix concern only surfaced because they watched — *"makes me

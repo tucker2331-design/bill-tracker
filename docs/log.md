@@ -8,6 +8,33 @@ status: active
 
 Append-only, reverse-chronological (newest at top). Each entry opens with `## [YYYY-MM-DD] <kind> | <title>` so `grep "^## \[" log.md | head -20` gives a parseable timeline.
 
+## [2026-07-10] work | READY debts cleared — measure-first decided each one
+
+Owner: "dont stop until everything on the to do is done." Worked the unblocked READY lane. Two of three
+items resolved by BUILDING, one resolved by MEASURING that there was nothing to build.
+
+- **Dead `TERMINAL_DESCRIPTION_PATTERNS = ()` — DELETED, not populated.** The terminal-skip optimization was
+  text-based (fail-unsafe: a mislabeled-terminal bill silently stops updating), never fired since PR-C7
+  (empty allowlist), and redundant with the TTL-fresh + hash-unchanged gates. Removed the constant, the
+  function, and the dead skip; kept the `IsTerminal` persisted column (dropping it is a migration) honestly
+  always False. → [[failures/assumptions_audit#103]], [[state/open_anti_patterns]] #11.
+- **`_clean_legevent_cell` silent heal — COUNTER ADDED.** `_LEGEVENT_HEAL{sentinel, cells_seen}` counts the
+  stringified-null heal (drift canary, near-zero baseline) with a denominator; `_load_legevent_cache` emits an
+  INFO DATA_ANOMALY on a flood. A routine `None`→"" is NOT counted (would drown the signal). New golden test
+  `test_clean_legevent_cell.py`. → [[state/open_anti_patterns]] #12.
+- **HISTORY-vs-LegEvent date drift — MEASURED AWAY, not built.** The scalability_audit's "3 date-drift rows"
+  were from 2026-06-03; Section 9 hit 0 on 2026-06-06. Re-measured the full live Sheet1 (37,826 rows,
+  untruncated): of 17,018 meeting-route rows, **0 have empty Time and 0 are NO_SCHEDULE_MATCH.** The 283
+  sentinel-SortTime meeting rows are all the §9 relative-*chain* unplaceables (which show a time), not
+  date-drift victims. Building a LegEvent-date reconciliation into the Section-9-critical time engine to fix
+  ZERO failing rows would be a Standard #7 violation. Approach preserved in [[architecture/scalability_audit]]
+  for if it ever recurs; unbuilt by design.
+- **CI gap closed:** `anchor_ladder_test.py` + `witness_shard_test.py` (both pure, both previously unregistered)
+  and the new `test_clean_legevent_cell.py` added to `golden_tests.yml`.
+
+The through-line: "done" is not always "built." Two of these three were correctly resolved by deleting or by
+measuring, not by adding code — the measure-first discipline decided each one.
+
 ## [2026-07-10] process | B-7 — the to-do had no lane for unblocked work, so unblocked work vanished
 
 Owner: *"how did it end up we had like half scoped something like this and just let it sit when we thought

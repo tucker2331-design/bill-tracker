@@ -204,7 +204,11 @@ events_rows.append([
 
 ## 11. `calendar_worker.py:1797` — `TERMINAL_DESCRIPTION_PATTERNS = ()` is empty, so its branch has NEVER fired
 
-**Severity:** `WARN` (dead path, not wrong data). **Status:** OPEN — surfaced 2026-07-10 by the stranded-work sweep.
+**Severity:** `WARN` (dead path, not wrong data). **Status:** ✅ RESOLVED 2026-07-10 — DELETED (not populated).
+The terminal-skip was text-based + fail-unsafe + redundant with the TTL/hash gates + never fired in 2+ months;
+removed the constant, the function, and the dead skip. `IsTerminal` column kept in the persisted schema
+(dropping it is a migration) but always `False`. If ever needed, rebuild structurally (terminal-EventCode set +
+drift alert). See [[failures/assumptions_audit#103]].
 
 `_is_terminal_description()` guards with `if not TERMINAL_DESCRIPTION_PATTERNS or not description: return False`.
 The tuple is empty and has been since PR-C7, whose note reads *"Populate in PR-C7.2 after observing real LIS
@@ -223,8 +227,10 @@ looks alive is worse than no branch. Tracked in [[state/current_status]] READY.
 
 ## 12. `calendar_worker.py:1951` — `_clean_legevent_cell` heals silently; a schema change would not surface
 
-**Severity:** `INFO` (visibility gap, no bad data). **Status:** OPEN — [[architecture/scalability_audit]] called
-this a "trivial Standard-#4/#9 visibility add"; it was never queued because no lane existed for unblocked work.
+**Severity:** `INFO` (visibility gap, no bad data). **Status:** ✅ RESOLVED 2026-07-10 — `_LEGEVENT_HEAL`
+counts the stringified-null heal ("None"/"null"/"nan" → "") with `cells_seen` as denominator; a routine
+`None`→"" is NOT counted (would drown the signal). `_load_legevent_cache` emits an INFO `DATA_ANOMALY` on a
+flood (≥100 cells AND ≥1% share). Golden-tested (`test_clean_legevent_cell.py`). See [[architecture/scalability_audit]].
 
 The function normalizes LIS's JSON-`null` structural fields (`ChamberCode` / `ReferenceType` / `ActorType` /
 `Status` / `EventCode`) so a naive `str(None)` can't produce the truthy sentinel `"None"`. Correct, and it
