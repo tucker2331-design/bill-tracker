@@ -85,6 +85,7 @@ Links use Obsidian `[[wikilink]]` format. Obsidian resolves by filename; path-qu
 
 ## Failures / Post-Mortems
 - [[ny/failures/assumptions_register]] — New York-local assumptions and failures ledger
+- [[failures/meeting_unsourced_regression]] — **HANDOFF (blocker):** re-merging agenda-cols/§9 trips the breaker at `meeting_unsourced=66` on full recompute; ruled-out hypotheses + the offline-STM test the next session must run.
 - [[failures/assumptions_audit]] — every busted assumption and its fix (source of truth for "why we did that"); numbered, append-only
 - [[failures/gemini_review_patterns]] — recurring mistakes caught in external code review (pre-push checklist)
 - [[failures/pr22_post_mortem]] — framework-level lesson: we were measuring only the bugs we wanted to see
