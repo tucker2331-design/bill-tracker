@@ -1924,6 +1924,15 @@ def _get_or_create_legevent_tabs(sheet, push_alert):
 
 # Per-cycle heal telemetry (cleared at the top of _load_legevent_cache). `sentinel` = stringified-null heals
 # ("None"/"null"/"nan" → ""), the drift canary; `cells_seen` = the denominator. See _clean_legevent_cell.
+#
+# SCOPE (monitored assumption, Gemini review PR #211): the canary is evaluated over the LOAD path only, and
+# that is complete for what it measures. A stringified-null SENTINEL can only originate from a PERSISTED cell
+# that once held the literal string "None" (an old pre-heal cache row) — i.e. the load path. The fresh-API
+# path receives JSON `null` → Python `None`, which `_clean_legevent_cell` collapses via its `v is None`
+# branch WITHOUT counting a sentinel (that would be routine null-handling, not drift). So the fresh path
+# cannot produce a stringified sentinel; there is nothing on it for the canary to miss. (If LIS ever literally
+# sent the JSON string "None" on the fresh path — a near-impossible repr artifact — it would heal on persist
+# and vanish as ""; that residual gap is accepted, not silently unknown.)
 _LEGEVENT_HEAL = {"sentinel": 0, "cells_seen": 0}
 
 
@@ -3028,6 +3037,12 @@ def _resolve_one_day(day_rows):
         head = re.split(r'\s*-\s*', self_key, maxsplit=1)[0].strip()
         return head if head and head != self_key and head in raw_times else None
 
+    # Dependency-GRAMMAR words stripped from a phrase's REFERENCE tokens (they describe the timing
+    # relationship, not the committee). Monitored assumption (CodeRabbit, PR #211): these are stripped from
+    # the reference but NOT from node names, so a hypothetical future VA committee whose distinctive token IS
+    # one of these ("…the Recess Committee") could lose that token from the reference and mis-anchor without
+    # `anchor_unresolved` catching it. No such VA committee exists today (the words are procedural, not
+    # subject-matter); revisit if the committee list ever adopts one. Standard #1 accepts this as documented.
     _GRAMMAR = {"adjournment", "adjourned", "session", "recess", "meeting"}
 
     def _reference_of(rl):
@@ -3111,7 +3126,11 @@ def _resolve_one_day(day_rows):
         parent = re.split(r'\s*-\s*', self_key, maxsplit=1)[0].strip()
         scored = []
         for p in raw_times:
-            if p == self_key or not p.startswith(parent):
+            if p == self_key:
+                continue
+            # A sibling shares this node's EXACT parent — compare the parent HEAD, not a prefix, so
+            # "House Rules" doesn't pull in "House Rules and Judiciary" as a false sibling (Gemini medium).
+            if re.split(r'\s*-\s*', p, maxsplit=1)[0].strip() != parent:
                 continue
             ov = len(ref_tokens & set(normalize_room_key(p).split()))
             if ov >= 2:
@@ -3316,7 +3335,8 @@ def extract_rogue_agenda(url, session, target_date_dt=None, depth=0):
 # Description HTML is MALFORMED (unbalanced parens, anchors nested inside anchor text — measured 2026-07-10),
 # so we parse with BeautifulSoup, never a regex over the raw string. Structural, no hand-curated URL rules.
 _LINK_AGENDA_RE  = re.compile(r"\bagenda\b|\bdocket\b", re.I)
-_LINK_MEETING_RE = re.compile(r"view\s+meeting|livestream|live\s+stream|\bwatch\b|\bvideo\b|\bstream\b", re.I)
+_LINK_MEETING_RE = re.compile(
+    r"view\s+meeting|livestream|live\s+stream|watch\w*|video|stream\w*", re.I)  # incl. watching/streaming (CodeRabbit)
 # KNOWN supporting labels we deliberately DON'T surface (committee homepages, materials, signup, notices).
 # Broad word-patterns, not an exact list to rot; the typo "Subommittee" (LIS's own, ×17) is covered by
 # `sub\w*mittee`. A label matching NONE of agenda/meeting/benign is reported as drift (Standard #1).
@@ -5755,7 +5775,13 @@ def run_calendar_update():
                     # video/registration page ~89× live; a separate follow-up). A future meeting often has the
                     # livestream but no agenda yet → agenda_display is "" and the card says "not posted yet".
                     agenda_display, meeting_display, _link_unknown = _extract_meeting_links(raw_desc)
-                    _meeting_links[(date_str, normalized_name.strip())] = (agenda_display, meeting_display)
+                    # KEEP the first non-empty link per (date, committee): LIS can publish several Schedule
+                    # rows for one meeting (e.g. a skeleton row with no links after the real one), and a later
+                    # empty row must not clobber links an earlier row already found (CodeRabbit MAJOR; mirrors
+                    # the "don't overwrite a concrete time with a non-concrete one" guard on api_schedule_map).
+                    _mk = (date_str, normalized_name.strip())
+                    _prev_a, _prev_m = _meeting_links.get(_mk, ("", ""))
+                    _meeting_links[_mk] = (agenda_display or _prev_a, meeting_display or _prev_m)
                     if _link_unknown:
                         _link_unknown_labels.update(_link_unknown)
                     

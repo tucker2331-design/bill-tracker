@@ -21,7 +21,7 @@ import { Timeline } from "./Timeline";
 // The bill-history action has no such tag, so we strip OUR OWN decoration before comparing. This reverses a
 // prefix we added; it is NOT parsing LIS prose. Fail-safe: if the tag format ever changes, the match simply
 // misses and the row renders "—" (honest-absent) — it can never produce a WRONG time.
-const stripWorkerTag = (s: string) => s.replace(/^\s*[^\w\s([]*\s*\[[^\]]*\]\s*/, "");
+const stripWorkerTag = (s: string) => (s || "").replace(/^\s*[^\w\s([]*\s*\[[^\]]*\]\s*/, "");
 const normAction = (s: string) => stripWorkerTag(s).trim().toLowerCase().replace(/\s+/g, " ");
 interface TimeEntry { time: string; minutes: number; }   // minutes = the worker's authoritative SortTime key
 type TimeIndex = Map<string, TimeEntry>;

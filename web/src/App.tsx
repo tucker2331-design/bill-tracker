@@ -163,8 +163,9 @@ export default function App() {
         <BillCard bill={selected} sessionCode={data.sessionCode} onClose={() => setSelected(null)} />
       )}
 
-      {/* Transient "why did this just change" cue after a background refresh — self-dismisses. */}
-      <RefreshNotice token={refresh.token} label={refresh.label} />
+      {/* Transient "why did this just change" cue after a background refresh — self-dismisses.
+          key={token} remounts it per refresh so each notice restarts its fade cleanly. */}
+      <RefreshNotice key={refresh.token} token={refresh.token} label={refresh.label} />
     </div>
   );
 }

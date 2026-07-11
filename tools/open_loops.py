@@ -86,7 +86,9 @@ def main():
             if not fn.endswith(".md"):
                 continue
             full = os.path.join(dirpath, fn)
-            rel = os.path.relpath(full, DOCS)
+            # Normalize to forward slashes so a match against Obsidian wikilinks (always "/") holds on
+            # Windows, where relpath returns backslashes (Gemini medium).
+            rel = os.path.relpath(full, DOCS).replace(os.sep, "/")
             with open(full, encoding="utf-8") as f:
                 fm = frontmatter(f.read())
             loop = fm.get("open_loop", "")

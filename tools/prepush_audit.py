@@ -190,9 +190,14 @@ def check_open_loops(fails):
     if not os.path.isfile(tool):
         fails.append("tools/open_loops.py is missing — the stranded-work invariant is unenforced.")
         return
-    r = subprocess.run([sys.executable, tool], capture_output=True, text=True)
+    try:
+        r = subprocess.run([sys.executable, tool], capture_output=True, text=True, timeout=30)
+    except subprocess.TimeoutExpired:
+        # A filesystem stall shouldn't hang the whole CI job — fail fast with a clear reason (CodeRabbit).
+        fails.append("open_loops: tools/open_loops.py did not finish within 30s (filesystem stall?).")
+        return
     if r.returncode != 0:
-        detail = "\n      ".join(l for l in r.stdout.splitlines() if l.strip().startswith("✗"))
+        detail = "\n      ".join(line for line in r.stdout.splitlines() if line.strip().startswith("✗"))
         fails.append("open_loops: a page declares unfinished work that current_status.md never links.\n"
                      f"      {detail or r.stdout.strip() or r.stderr.strip()}")
 

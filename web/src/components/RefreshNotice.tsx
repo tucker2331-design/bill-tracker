@@ -11,19 +11,24 @@ const VISIBLE_MS = 3500;   // long enough to read "Updated…", short enough to 
 const FADE_MS = 400;
 
 export function RefreshNotice({ token, label }: { token: number; label: string }) {
-  const [phase, setPhase] = useState<"in" | "out">("in");
+  // The PARENT remounts this via key={token} on each refresh, so each notice starts fresh and this effect
+  // only schedules the two timers — no setState-in-effect (CodeRabbit: that's a react-hooks purity error).
+  // Two phases: after VISIBLE_MS it starts to fade (`leaving`), and after the fade completes it fully
+  // UNMOUNTS (`gone`) so no invisible element lingers at bottom-centre (it also has pointer-events:none,
+  // but removing it is cleaner than a stack of faded ghosts).
+  const [leaving, setLeaving] = useState(false);
+  const [gone, setGone] = useState(false);
   useEffect(() => {
-    setPhase("in");
-    const toOut = setTimeout(() => setPhase("out"), VISIBLE_MS);
-    return () => clearTimeout(toOut);
-  }, [token]);
+    const toLeave = setTimeout(() => setLeaving(true), VISIBLE_MS);
+    const toGone = setTimeout(() => setGone(true), VISIBLE_MS + FADE_MS);
+    return () => { clearTimeout(toLeave); clearTimeout(toGone); };
+  }, []);
 
-  if (token === 0) return null; // nothing has refreshed yet this session
+  if (token === 0 || gone) return null; // nothing refreshed yet, or the notice has finished + unmounted
 
   return (
     <div
-      key={token}
-      className={`refresh-note ${phase === "out" ? "leaving" : ""}`}
+      className={`refresh-note ${leaving ? "leaving" : ""}`}
       role="status"
       aria-live="polite"
       style={{ ["--fade-ms" as string]: `${FADE_MS}ms` }}
