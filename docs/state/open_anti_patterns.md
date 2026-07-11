@@ -202,6 +202,18 @@ events_rows.append([
 
 ---
 
+## 13. Schedule-loop bill-extraction FETCH still uses the first-href heuristic (~89 non-agenda fetches/cycle)
+
+**Severity:** `INFO` (accuracy/LIS-budget, not corruption). **Status:** OPEN — surfaced during the meeting-links
+build (PR #211, re-shipped 2026-07-11); the DISPLAY path uses the correct label-based `_extract_meeting_links`,
+this FETCH path was left for a separate measured change. The schedule loop's `agenda_url` (first `href` when the
+desc says `agenda|docket|info`) picks a registration/webinar/video page **89×** per cycle, then `extract_rogue_agenda`
+fetches it and regexes bills out — wasted off-site fetches + a wrong-page-bills risk. Fix: drive the FETCH from
+`_extract_meeting_links` too, preserving the 194 legitimate committee-info rogue-nav cases. Because it changes which
+bills land on a meeting (Section-9-adjacent), it needs its own before/after. See [[ideas/meeting_agenda_links]] §2.
+
+---
+
 ## How this page is kept current
 
 - Every new silent-fallback discovered: add here with location + fix plan + severity.

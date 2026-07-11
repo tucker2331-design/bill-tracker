@@ -8,6 +8,25 @@ status: active
 
 Append-only, reverse-chronological (newest at top). Each entry opens with `## [YYYY-MM-DD] <kind> | <title>` so `grep "^## \[" log.md | head -20` gives a parseable timeline.
 
+## [2026-07-11] pr | RE-SHIP: #211 minus §9 — agenda links + auto-refresh + witness + B-7 shipped, §9 held back
+
+After reverting #211 for the `meeting_unsourced` 0→66 regression (entry below), reconstructed "the merge minus
+the §9 resolution change" on `claude/va-reship`: brought the full merge tree, then AST-spliced the known-good
+`_resolve_one_day` + `build_time_graph` back in and removed the §9 module globals (`ANCHOR_RUNG_COUNTS`,
+`_SELF_REF_RE`). **Proof it's safe:** ran `build_time_graph` spliced-vs-known-good on the live Schedule API —
+**0 diffs**, so the resolution path is byte-behavior-identical and `meeting_unsourced` stays 0.
+
+Kept + re-shipped: meeting/agenda links (worker additive AgendaURL/MeetingURL cols + Calendar card, future &
+past), freshness-gated auto-refresh + transient RefreshNotice, the gspread-6 witness fix, the B-7 stranded-work
+guard (`tools/open_loops.py` + pre-push point 16), the READY-debt cleanups, and the Gemini/CodeRabbit fold-in
+(RefreshNotice unmount + `_meeting_links` overwrite guard + others — [[failures/gemini_review_patterns]] #53/#54).
+Removed `anchor_ladder_test.py` (its §9 subject is reverted) and unregistered it from CI. `WORKER_OUTPUT_LOGIC_VERSION`
+bumped for the additive columns. Full test suite + web typecheck + prepush audit green.
+
+Held back: the §9 anchor ladder (the sole regression source). The 19 unplaceables stay honestly shown as
+"⚠ unplaceable". Redo scoped in [[ideas/calendar_chain_ordering]] §9 — needs an STM-level `meeting_unsourced`
+gate first. See [[state/current_status]] NOW.
+
 ## [2026-07-11] pr | #211 MERGED then REVERTED — §9 change regressed `meeting_unsourced` 0→66; witness fix kept
 
 A large PR (§9 anchor ladder + `_committee_parent` multiset fix, meeting/agenda links, auto-refresh, de-AI

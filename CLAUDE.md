@@ -56,6 +56,7 @@ Nothing learned in a session may be lost. Route every artifact to the right page
 | PR event (opened/merged/closed) | `docs/log.md` — `## [YYYY-MM-DD] pr \| <title>`, newest at top |
 | Change in active focus | `docs/state/current_status.md` — **MOVE-only** (B-1): keep NOW ≤3 / NEXT (ordered) / RECENTLY LANDED ≤5; finishing a task MOVES its line NOW→RECENTLY LANDED and evicts the oldest. Never append history here — that goes to `docs/log.md`. |
 | New silent-fallback found in code | `docs/state/open_anti_patterns.md` |
+| Work left unfinished on a page | that page's frontmatter `open_loop:` + a link from `docs/state/current_status.md` (`tools/open_loops.py` enforces it) |
 | User feedback / preference | New page in `docs/workflow/` or update existing |
 
 **Do NOT write persistent memory to `~/.claude/.../memory/`.** If the auto-memory system writes there, treat it as drift and migrate to `docs/` on the next session. See `docs/workflow/persistent_memory.md`.
@@ -75,15 +76,16 @@ Nothing learned in a session may be lost. Route every artifact to the right page
 
 ---
 
-## Pre-Push Audit (15 points)
+## Pre-Push Audit (16 points)
 
 Before every commit. Full version in `docs/workflow/three_phase_protocol.md`. **The mechanical half is now
 enforced by a script (B-3): run `python3 tools/prepush_audit.py` before commit; CI runs it on every PR
 (`structural_tests.yml` → `prepush-audit`) so an output-value change with no `WORKER_OUTPUT_LOGIC_VERSION`
-bump (audit #96), a `ray2.py`/`calendar_xray.py` divergence (point 4), or an untagged silent-fallback
-literal (points 6/9) FAILS CI. The judgment-only points (2/5/7/11/14/15) print as a checklist — still yours.**
+bump (audit #96), a `ray2.py`/`calendar_xray.py` divergence (point 4), an untagged silent-fallback
+literal (points 6/9), or a stranded `open_loop` unlinked from `current_status.md` (point 16, via
+`tools/open_loops.py`) FAILS CI. The judgment-only points (2/5/7/11/14/15) print as a checklist — still yours.**
 
-Points 1-9 are the original audit. Points 10-15 were codified in PR-C7.0.5 after the PR-C7 work block surfaced six distinct bug classes during cold-start validation; each entry below cross-references the assumptions_audit lesson that justified codifying it.
+Points 1-9 are the original audit. Points 10-15 were codified in PR-C7.0.5 after the PR-C7 work block surfaced six distinct bug classes during cold-start validation; each entry below cross-references the assumptions_audit lesson that justified codifying it. Point 16 (stranded-work) was codified 2026-07-10 after the §9 residual sat unreachable from the to-do (see [[log]]).
 
 1. **Verb Forms.** For every pattern/keyword list changed, verify ALL conjugations (base, past, present, plural).
 2. **Function Scope.** Functions defined BEFORE all call sites. Never inside a conditional / try / loop body.
@@ -100,6 +102,7 @@ Points 1-9 are the original audit. Points 10-15 were codified in PR-C7.0.5 after
 13. **Dead-Path Resurrection Check.** When dropping a fallback or simplifying a defensive pattern, grep EVERY function-scope variable that was bound only on the path being removed. Confirm each is either re-bound unconditionally on the surviving path or no longer referenced downstream. Removing dead code can resurrect previously-dead error paths. See `docs/failures/assumptions_audit.md` #52 (Codex fold-in).
 14. **Threshold Calibration Check.** Whenever a PR's diff is architecturally significant (changes the worker's row processing pipeline, classifier, recovery surface, or breaker inputs), grep every existing absolute threshold against the new steady-state and flag any that would now trip on healthy operation. Treat any cycle-stable breaker trip as a CRITICAL calibration bug, not a transient. Prefer delta-vs-rolling-baseline thresholds for metrics whose floor depends on system behavior. See `docs/failures/assumptions_audit.md` #53.
 15. **Sentinel-Value Collision Check.** For any state cell read or persisted-value load with a default-on-failure path, ask: *"is the default ever a legitimate runtime value?"* If yes, track presence as a separate boolean flag (not encoded by the value being zero / empty / etc.). Same root class as `Optional` / `Maybe`-type-confusion bugs. See `docs/failures/assumptions_audit.md` #53 (Codex P2 fold-in).
+16. **Stranded-Work Check (mechanical, B-7).** Unfinished work must be reachable from the to-do. A vault page carrying a residual declares `open_loop: <one line>` in its frontmatter, and `tools/open_loops.py` FAILS the audit unless `docs/state/current_status.md` wikilinks that page; a page marked `status: shipped` (or `archived`) may not declare one. Runs on EVERY push — a diff-scoped check would never see the page that *dropped* the link. **Rationale:** `NEXT` was defined as "needs owner infra / a decision", so an unblocked engineering residual had no lane (not NOW, not NEXT) and survived only inside `docs/ideas/`, invisible to every "is the to-do clear?" check — that is exactly how the §9 relative-time residual sat. The new `READY` lane + this check close it. Never trust `status:` alone as a signal: nearly every vault page says `active` (measured 2026-07-10: 65 of 80), so the field carries almost no information.
 
 ---
 
@@ -150,7 +153,7 @@ Points 1-9 are the original audit. Points 10-15 were codified in PR-C7.0.5 after
 
 Full version: `docs/architecture/calendar_pipeline.md`.
 
-1. **bill_tracker.py (backend) + `web/` (React+Vite+TS SPA → Cloudflare Pages)** — the lobbyist PRODUCT. `bill_tracker.py` writes the `Bill_Tracker` tab; the SPA reads it via gviz. The old `pages/v2_shadow_test.py` + `backend_worker.py` ("Mastermind Ghost Worker") path is **PAUSED/legacy**, not the product.
+1. **bill_tracker.py (backend) + `web/` (React+Vite+TS SPA → Cloudflare Workers static-assets, `wrangler.toml` `[assets]`)** — the lobbyist PRODUCT. `bill_tracker.py` writes the `Bill_Tracker` tab; the SPA reads it via gviz. The old `pages/v2_shadow_test.py` + `backend_worker.py` ("Mastermind Ghost Worker") path is **PAUSED/legacy**, not the product.
 2. **calendar_worker.py + test_auto_calender.py** — calendar subsystem ("Mastermind Ghost Worker 2"); merges into the product at the calendar↔product merge once at 100% accuracy.
 3. **pages/ray2.py** (+ `calendar_xray.py` backup) — X-Ray diagnostic. Streamlit serves `pages/ray2.py`. Root `calendar_xray.py` is diff-identical backup. `xray.py` is deprecated.
 

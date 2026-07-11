@@ -140,12 +140,32 @@ h2, h3 { margin: 0; }
 .panel { background: var(--surface); border-radius: var(--radius); padding: var(--s4); box-shadow: var(--shadow-sm); }
 .cols { display: grid; grid-template-columns: 1.5fr 1fr; gap: var(--s4); align-items: start; }
 @media (max-width: 900px) { .cols { grid-template-columns: 1fr; } }
+/* Landing top block (owner 2026-07-09): give it a DEFINITE height ending ~2/3 down the screen (the sticky
+   header eats ~130px), so "The pipeline" below always peeks into the bottom third — a first-time visitor sees
+   there's more to scroll to. The two panels must `flex` inside that height (flex-basis 0 + min-height 0) or
+   they render at full content height and paint over the timeline; `overflow:hidden` on the container is the
+   backstop. On narrow screens the columns stack, so everything reverts to natural flow. */
+.landing-top { height: calc(66vh - 130px); min-height: 300px; align-items: stretch; overflow: hidden; }
+.landing-top > div { display: flex; flex-direction: column; min-height: 0; }
+.landing-top > div > .panel { flex: 1 1 0; min-height: 0; overflow-y: auto; }
+.landing-top .daycol { flex: 1 1 0; min-height: 0; max-height: none; }
+@media (max-width: 900px) {
+  .landing-top { height: auto; min-height: 0; overflow: visible; }
+  .landing-top > div { display: block; }
+  .landing-top > div > .panel { overflow: visible; }
+  .landing-top .daycol { max-height: 360px; }
+}
 
 /* ── What's-new feed ── */
 .feedday { margin: 0 0 var(--s2); font-weight: 700; color: var(--ink); font-size: 13px; }
-.feedrow { display: grid; grid-template-columns: 60px 1fr; gap: var(--s3); padding: 9px var(--s1); cursor: pointer; border-radius: 6px; }
+.feedrow { display: grid; grid-template-columns: 68px 60px 1fr; gap: var(--s3); padding: 9px var(--s1); cursor: pointer; border-radius: 6px; }
 .feedrow + .feedrow { border-top: 1px solid var(--line); }
 .feedrow:hover { background: var(--surface-2); }
+/* The time of the MEETING this action happened in — a fixed leftmost column so times line up and scan in one
+   vertical sweep. Administrative actions (referral, printing, filing) have no meeting, so they show a muted
+   "—" rather than a guessed clock. Accent-coloured to match the calendar, where the time is also the accent. */
+.feedrow .ftime { color: var(--accent); font-weight: 700; font-size: 12px; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.feedrow .ftime.none { color: var(--ink-faint); font-weight: 600; }   /* administrative action — no meeting clock */
 .feedrow .fnum { font-weight: 800; }
 .feedrow .fact { color: var(--ink); }
 
@@ -196,16 +216,28 @@ h2, h3 { margin: 0; }
 .cal-mtg.floor .cal-mtg-t { font-size: 10px; font-weight: 700; color: var(--ink-faint); }
 .cal-mtg.floor .cal-mtg-c { text-align: center; font-size: 9.5px; font-weight: 800; text-transform: uppercase; letter-spacing: .4px; color: var(--ink-faint); }
 .cal-mtg.floor .cal-mtg-h.has:hover { background: var(--surface-2); }
-.cal-mtg-top { display: flex; align-items: baseline; justify-content: space-between; gap: var(--s2); }
-.cal-mtg-t { font-weight: 800; font-size: 11.5px; color: var(--ink); }
+/* Owner 2026-07-09 (Option A): the TIME carries the one accent colour; committee names read as dark ink.
+   Chamber is no longer colour-coded — the name already says "House…"/"Senate…", so colouring it was
+   decoration you had to decode (docs/design: a signal must vary to exist). Floor markers stay grey by FORM. */
+.cal-mtg-top { display: flex; align-items: baseline; justify-content: space-between; gap: var(--s2); flex-wrap: wrap; }
+.cal-mtg-t { font-weight: 800; font-size: 11.5px; color: var(--accent); }
 .cal-mtg-t.tba { font-weight: 700; color: var(--ink-faint); font-style: italic; }
-.cal-mtg-c { font-weight: 600; font-size: 11.5px; line-height: 1.3; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+/* An UNPLACEABLE meeting's "time" is a long relative phrase ("30 minutes after adjournment of…"). Give the
+   badge its own line so that phrase gets the full column width and stays readable (owner 2026-07-09). */
+.cal-mtg.unres .cal-mtg-unres { flex: 1 1 100%; }
+.cal-mtg.unres .cal-mtg-t { font-weight: 700; font-size: 11px; color: var(--o-carry); line-height: 1.35; }
+.cal-mtg-c { font-weight: 600; font-size: 11.5px; line-height: 1.3; color: var(--ink); display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
 .cal-mtg-c.open { -webkit-line-clamp: unset; overflow: visible; }   /* expanded → show the full committee name */
 .cal-mtg-n { font-size: 10px; font-weight: 700; color: var(--ink-faint); white-space: nowrap; }
 .cal-bills { display: flex; flex-wrap: wrap; gap: 3px; padding: 0 7px 6px; }
 .cal-bchip { border: 0; background: var(--surface); color: var(--ink-soft); border-radius: 5px; padding: 2px 6px; font-size: 10.5px; font-weight: 700; }
 .cal-bchip.on { background: var(--accent-soft); color: var(--accent); cursor: pointer; }
 .cal-more { border: 0; background: transparent; color: var(--accent); font-size: 10.5px; font-weight: 700; padding: 2px 4px; }
+/* Meeting + agenda links in the expanded card — plain text links (no pill), quiet until hovered. */
+.cal-links { display: flex; flex-wrap: wrap; gap: 12px; padding: 2px 8px 8px; }
+.cal-link { font-size: 11px; font-weight: 700; color: var(--accent); text-decoration: none; }
+.cal-link:hover { text-decoration: underline; }
+.cal-link.none { color: var(--ink-faint); font-weight: 600; font-style: italic; cursor: default; }
 .cal-legend { margin-top: var(--s4); font-size: 12px; line-height: 1.6; }
 
 /* ── Calendar relayout (owner 2026-06-30): 7-day WEEK VIEW primary + compact month grid ALONGSIDE ── */
@@ -248,7 +280,7 @@ h2, h3 { margin: 0; }
 .mini-cell.cross .mini-d { color: var(--o-vetoed); font-weight: 800; }
 .mini-d { font-size: 11px; font-weight: 700; color: var(--ink-soft); line-height: 1; }
 .mini-dots { display: inline-flex; gap: 1px; }
-.mini-dot { width: 3px; height: 3px; border-radius: 50%; }
+.mini-dot { width: 3px; height: 3px; border-radius: 50%; background: var(--ink-faint); }  /* count is the signal, not hue */
 .cal-mini-legend { display: flex; flex-direction: column; gap: 3px; margin-top: var(--s2); font-size: 10.5px; }
 .cal-mini-legend .swatch { display: inline-block; width: 9px; height: 9px; border-radius: 3px; vertical-align: -1px; margin-right: 5px; }
 .cal-mini-legend .swatch.band { background: var(--accent-soft); }
@@ -463,3 +495,23 @@ a.hl-vverify:hover { text-decoration: underline; }
 .hl-rawk { color: var(--ink-faint); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .hl-rawv { font-weight: 700; font-variant-numeric: tabular-nums; }
 .hl-foot { margin-top: var(--s4); font-size: 12px; line-height: 1.6; }
+
+/* ── Transient refresh notice ──────────────────────────────────────────────────────────────────
+   A momentary "why did this just change" cue after a background refresh (NOT a persistent pill, NOT a
+   freshness readout — that's the TrustHeader). Quiet floating line, bottom-centre, self-dismissing. */
+.refresh-note {
+  position: fixed; left: 50%; bottom: 22px; transform: translateX(-50%);
+  z-index: 60; max-width: min(92vw, 460px); pointer-events: none;  /* a passive cue — never blocks a click */
+  background: var(--surface); color: var(--ink);
+  font-size: 13px; font-weight: 600; line-height: 1.3;
+  padding: 9px 15px; border-radius: 8px;                 /* a plain toast rectangle — deliberately NOT a pill */
+  box-shadow: var(--shadow-lg); border: 1px solid var(--line);
+  animation: refresh-in var(--fade-ms, 400ms) ease-out both;
+}
+.refresh-note.leaving { animation: refresh-out var(--fade-ms, 400ms) ease-in both; }
+@keyframes refresh-in  { from { opacity: 0; transform: translate(-50%, 8px); } to { opacity: 1; transform: translate(-50%, 0); } }
+@keyframes refresh-out { from { opacity: 1; transform: translate(-50%, 0); } to { opacity: 0; transform: translate(-50%, 8px); } }
+@media (prefers-reduced-motion: reduce) {
+  .refresh-note, .refresh-note.leaving { animation: none; }
+  .refresh-note.leaving { opacity: 0; }                  /* still disappears, just no slide */
+}

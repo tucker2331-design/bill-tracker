@@ -48,6 +48,9 @@ export interface Meeting {
                          // could NOT be resolved — position unknown, so it surfaces at the TOP of the day,
                          // highlighted, instead of a silently-wrong end-of-day slot (§7.2, "never pretend")
   bills: AgendaItem[];   // real bills on the agenda (deduped; empty for skeleton/commission meetings)
+  agendaUrl: string;     // the agenda PDF (worker col P) — "" when LIS hasn't posted one (common for FUTURE
+                         // meetings: the livestream link exists before the agenda does → card says "not posted yet")
+  meetingUrl: string;    // the livestream / "View Meeting" link (worker col Q) — "" when none
 }
 
 export interface CalendarData {
@@ -72,7 +75,10 @@ export const CROSSOVER_BY_SESSION: Record<string, string> = {
 const SHEET1_TAB = "Sheet1";
 // Col O = TimeClass (worker §7.2: concrete | relative_resolved | relative_unresolved | ""). Empty until the
 // worker's first post-migration cycle — an empty/unknown value simply means "no flag" (no highlight).
-const PROJECTION = "select A,B,C,D,E,F,G,J,L,O"; // Date,Time,SortTime,Status,Committee,Bill,Outcome,Origin,LegEventRoute,TimeClass
+// P = AgendaURL, Q = MeetingURL (worker's additive display-link columns, docs/ideas/meeting_agenda_links).
+// Empty until the worker's first post-deploy cycle writes them — an empty value just means "no link" (Standard
+// #3: honest-absent, never a dead link). Additive at the END so A–O indices are unchanged.
+const PROJECTION = "select A,B,C,D,E,F,G,J,L,O,P,Q"; // …,TimeClass,AgendaURL,MeetingURL
 const FETCH_TIMEOUT_MS = 30000;               // the projected Sheet1 is ~5 MB
 
 const META_ORIGINS = new Set(["system_alert", "system_metrics"]);
@@ -183,6 +189,14 @@ export function loadCalendar(): Promise<CalendarData> {
   return _calPromise;
 }
 
+// Drop the session cache so the NEXT loadCalendar()/loadCalendarFreshness() re-fetches. Called by the
+// freshness-gate (App) only when Sheet1!AA1 has actually advanced — components re-run their loadCalendar
+// effect off the App's refresh tick and get the new payload. (docs/ideas/auto_refresh_on_new_data)
+export function invalidateCalendar(): void {
+  _calPromise = null;
+  _calFreshPromise = null;
+}
+
 async function _loadCalendar(): Promise<CalendarData> {
   const url = `https://docs.google.com/spreadsheets/d/${SPREADSHEET_ID}/gviz/tq?tqx=out:csv&sheet=${SHEET1_TAB}&tq=${encodeURIComponent(PROJECTION)}`;
   // Just the calendar payload — freshness (AA1) is read separately by loadCalendarFreshness() for the
@@ -198,7 +212,8 @@ async function _loadCalendar(): Promise<CalendarData> {
   }
 
   // Group rows into meetings keyed by (day, committee, time). Projected cols:
-  // 0 Date · 1 Time · 2 SortTime · 3 Status · 4 Committee · 5 Bill · 6 Outcome · 7 Origin · 8 LegEventRoute · 9 TimeClass
+  // 0 Date · 1 Time · 2 SortTime · 3 Status · 4 Committee · 5 Bill · 6 Outcome · 7 Origin · 8 LegEventRoute
+  // · 9 TimeClass · 10 AgendaURL · 11 MeetingURL
   const groups = new Map<string, Meeting>();
   // Per-meeting cancellation judgement (meeting-level, not row-level): was any row CANCELLED, and did any
   // row record a real meeting action? A meeting is dropped only when cancelled AND no real action occurred.
@@ -229,12 +244,16 @@ async function _loadCalendar(): Promise<CalendarData> {
       // or guessed time; superseded below by a concrete time (L194) or LIS's verbatim Description (L203+).
       m = { dateKey: dk, committee, chamber, kind, time: concrete ? cleanTime(rawTime) : "Time TBA",
         tba: !concrete, minutes: toMinutes(sortTime, rawTime),
-        unresolved: (r[9] || "").trim().toLowerCase() === "relative_unresolved", bills: [] };
+        unresolved: (r[9] || "").trim().toLowerCase() === "relative_unresolved", bills: [],
+        agendaUrl: (r[10] || "").trim(), meetingUrl: (r[11] || "").trim() };
       groups.set(key, m);
       flags.set(key, { cancelled: false, held: false });
     } else if (concrete && m.tba) {
       m.time = cleanTime(rawTime); m.tba = false; m.minutes = toMinutes(sortTime, rawTime); // a real time supersedes TBA
     }
+    // Links live on the meeting's own rows; adopt from whichever row carries them (rows arrive in any order).
+    if (!m.agendaUrl && (r[10] || "").trim()) m.agendaUrl = (r[10] || "").trim();
+    if (!m.meetingUrl && (r[11] || "").trim()) m.meetingUrl = (r[11] || "").trim();
     // Any row of the meeting carrying the worker's relative_unresolved flag marks the whole meeting —
     // the class is uniform per (date, committee) by construction, but rows can arrive in any order.
     if ((r[9] || "").trim().toLowerCase() === "relative_unresolved") m.unresolved = true;
