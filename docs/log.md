@@ -8,6 +8,15 @@ status: active
 
 Append-only, reverse-chronological (newest at top). Each entry opens with `## [YYYY-MM-DD] <kind> | <title>` so `grep "^## \[" log.md | head -20` gives a parseable timeline.
 
+## [2026-07-11] verify | Hotfix confirmed healthy — known-good FULL recompute = meeting_unsourced 0, clean write
+
+The post-hotfix worker cycle (21:36) was a FULL recompute (shared_changed=True, 3645 recomputed) and wrote
+Sheet1 cleanly at `meeting_unsourced=0`, breaker clear (W1 empty), red ring gone — only the benign blank-rows
+INFO note remains. Known-good full-recompute is now 0 on BOTH the 17:05 and 21:36 cycles, so the re-ship's 66
+was more likely a real effect than cache-warmth noise — the offline STM diagnosis (good-vs-new on frozen
+inputs) is the way to settle it definitively before agenda-cols/§9 re-attempt. (One transient Google Sheets
+503 on the first re-trigger — retried, unrelated.)
+
 ## [2026-07-11] fix | WORKER HOTFIX — revert agenda-cols worker (re-ship also tripped the breaker; §9 was NOT the cause)
 
 The re-ship (#212, agenda cols, §9 reverted) tripped the breaker on its first full recompute at
