@@ -22,14 +22,17 @@ const addDays = (d: Date, n: number) => { const x = new Date(d); x.setDate(x.get
 const weekStartOf = (d: Date) => addDays(d, -d.getDay()); // Sunday on/before d
 const BILL_CAP = 16; // floor sessions can carry a few hundred bills — show a sample, expand on demand
 
-// A quiet density cue per mini-month day: up to three neutral dots. The COUNT is the signal, so the dots are
-// one muted colour — chamber-tinting them was a hue that varied without meaning anything here (owner Option A,
-// 2026-07-09; docs/design: a signal must vary to exist).
+// A quiet density cue per mini-month day: up to a few chamber-tinted dots (Senate indigo / House teal /
+// other grey). Position/number carry the data; color stays muted (Munzner: hue is the redundant cue).
 function DensityDots({ meetings }: { meetings: Meeting[] }) {
   const dots = meetings.slice(0, 3);
   return (
     <span className="mini-dots">
-      {dots.map((_, i) => <span key={i} className="mini-dot" />)}
+      {dots.map((m, i) => (
+        <span key={i} className="mini-dot" style={{
+          background: m.chamber === "Senate" ? "var(--senate)" : m.chamber === "House" ? "var(--house)" : "var(--ink-faint)",
+        }} />
+      ))}
     </span>
   );
 }
@@ -42,11 +45,8 @@ function MeetingRow({ m, billMap, onOpen }: {
 }) {
   const [open, setOpen] = useState(false);
   const [all, setAll] = useState(false);
+  const side = m.chamber === "Senate" ? "var(--senate)" : m.chamber === "House" ? "var(--house)" : "var(--ink-faint)";
   const hasBills = m.bills.length > 0;
-  // A meeting is FUTURE if its day is today or later — an agenda that isn't there yet is "not posted yet"
-  // (it drops shortly before the meeting), vs a PAST meeting where a missing agenda simply isn't linked.
-  const isFuture = m.dateKey >= dayKey(new Date());
-  const hasLinks = !!(m.agendaUrl || m.meetingUrl);
   const shown = all ? m.bills : m.bills.slice(0, BILL_CAP);
   const extra = m.bills.length - shown.length;
   // A FLOOR session marker (chamber convening / recessing / adjourning) is session context, not a committee
@@ -70,12 +70,12 @@ function MeetingRow({ m, billMap, onOpen }: {
       {(() => {
         const p = /^((?:House|Senate|Joint)[^-]+?)\s*-\s*(.+)$/.exec(m.committee);
         return p ? (
-          <span className={`cal-mtg-c${open ? " open" : ""}`} title={m.committee}>
+          <span className={`cal-mtg-c${open ? " open" : ""}`} title={m.committee} style={isFloor ? undefined : { color: side }}>
             <span className="cal-sub-parent">{p[1].trim()}</span>
             <span className="cal-sub-name">↳ {p[2].trim()}</span>
           </span>
         ) : (
-          <span className={`cal-mtg-c${open ? " open" : ""}`} title={m.committee}>{m.committee}</span>
+          <span className={`cal-mtg-c${open ? " open" : ""}`} title={m.committee} style={isFloor ? undefined : { color: side }}>{m.committee}</span>
         );
       })()}
     </>
@@ -98,27 +98,12 @@ function MeetingRow({ m, billMap, onOpen }: {
           {extra > 0 && <button className="cal-more" onClick={() => setAll(true)}>+{extra} more</button>}
         </div>
       )}
-      {/* Meeting + agenda links (docs/ideas/meeting_agenda_links). Only when present — a dead/empty link is
-          never rendered (Standard #3, honest-absent). For a FUTURE meeting whose livestream exists but whose
-          agenda isn't posted yet, say so; a PAST meeting with no agenda link just shows the watch link. */}
-      {open && (hasLinks || (isFuture && m.meetingUrl)) && (
-        <div className="cal-links">
-          {m.agendaUrl ? (
-            <a className="cal-link" href={m.agendaUrl} target="_blank" rel="noopener noreferrer">📄 Agenda</a>
-          ) : (isFuture && m.meetingUrl) ? (
-            <span className="cal-link none">Agenda not posted yet</span>
-          ) : null}
-          {m.meetingUrl && (
-            <a className="cal-link" href={m.meetingUrl} target="_blank" rel="noopener noreferrer">▶ Watch meeting</a>
-          )}
-        </div>
-      )}
     </div>
   );
 }
 
-export function Calendar({ bills, sessionCode, onOpen, calRefresh = 0 }: {
-  bills: Bill[]; sessionCode: string; onOpen: (b: Bill) => void; calRefresh?: number;
+export function Calendar({ bills, sessionCode, onOpen }: {
+  bills: Bill[]; sessionCode: string; onOpen: (b: Bill) => void;
 }) {
   const [cal, setCal] = useState<CalendarData | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -129,7 +114,7 @@ export function Calendar({ bills, sessionCode, onOpen, calRefresh = 0 }: {
     let alive = true;
     loadCalendar().then((d) => alive && setCal(d)).catch((e) => alive && setError(String(e?.message || e)));
     return () => { alive = false; };
-  }, [calRefresh]); // re-run when the freshness-gate invalidated the shared calendar cache
+  }, []);
 
   // Bill lookup so a meeting's agenda chip can open the full card (when we carry that bill).
   const billMap = useMemo(() => {
@@ -314,12 +299,11 @@ export function Calendar({ bills, sessionCode, onOpen, calRefresh = 0 }: {
         </aside>
       </div>
 
-      {/* The "● Senate / ● House" key is gone with the chamber colour-coding (owner Option A, 2026-07-09) —
-          a legend for a colour nothing uses would be a lie. The committee name states its own chamber. */}
       <p className="muted cal-legend">
         Committee &amp; floor meetings with their resolved times, from the calendar subsystem
         (<b>{cal.totalMeetings.toLocaleString()}</b> across {cal.minKey} → {cal.maxKey}). Administrative
-        actions live in the bill history, not here.
+        actions live in the bill history, not here. <span style={{ color: "var(--senate)" }}>● Senate</span>{" "}
+        <span style={{ color: "var(--house)" }}>● House</span>.
       </p>
     </div>
   );

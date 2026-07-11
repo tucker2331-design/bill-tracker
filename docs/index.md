@@ -1,6 +1,6 @@
 ---
 tags: [index, meta]
-updated: 2026-07-10
+updated: 2026-07-04
 status: active
 ---
 
@@ -103,9 +103,7 @@ Links use Obsidian `[[wikilink]]` format. Obsidian resolves by filename; path-qu
 - [[ideas/product_roadmap]] — **post-accuracy direction: reviewer swap (A), product vision → LIS data inventory → UI design (B), 2027-gated items (C). The anti-looping plan.**
 - [[ideas/product_vision]] — **LOCKED B1 product spec: four lenses, crossover-lane timeline, bill card, trust layer ("never pretend to know"). Build the front end toward this.**
 - [[ideas/lis_data_inventory]] — **B2: feature → LIS data → have it?/ingest it. The completeness gap, the feed-skew map, and the DB-expansion decisions (owner §7 questions).**
-- [[ideas/calendar_chain_ordering]] — **SHIPPED 2026-07-10:** relative meeting chains resolve per-date; §9 anchor ladder placed the residual unplaceables (19→1, the survivor a correct refusal) and §9d fixed two live mis-anchors in `_committee_parent`.
-- [[ideas/meeting_agenda_links]] — **SHIPPED 2026-07-10:** agenda-PDF + livestream links on every meeting (future & past); label-based extraction (0 video-host mis-picks, was 89×), additive Sheet1 columns, drift canary, front-end card links + "agenda not posted yet" for future meetings.
-- [[ideas/auto_refresh_on_new_data]] — **SHIPPED 2026-07-10:** freshness-gated background refresh (poll ~40 B stamp cells on interval+focus; full-fetch only on a timestamp advance) + a transient `RefreshNotice` toast. No more manual reload.
+- [[ideas/calendar_chain_ordering]] — **PLAN (queued): resolve "after committee X" meeting chains so they order correctly (worker `build_time_graph` fix; Section-9-validated). Owner-requested full plan before starting.**
 - [[ideas/multi_state_data_strategy]] — **VISION (owner 2026-06-24/25): scaling past VA — bulk-as-truth (PA hourly bulk → macro/trends DB) + a provisional, session-gated speed layer the bulk continuously GRADES (→ self-healing architecture); on-demand "latest" button; split stores by purpose; per-state source manifest. With my challenges + the owner's decisions.**
 - [[ideas/multi_state_org_structure]] — **PLAN (owner 2026-06-25): clean organization for 50 states — `core/` + `states/<code>/` code layout, one sheet/tab naming convention, `<state>_` workflows, branch pruning, shared-vs-per-state brain tags, per-state front-end config. Sequenced AFTER VA finishes.**
 - [[ideas/self_healing_classification]] — **PARKED design (owner 2026-06-29): route on structural PROOF, LIS's own calendar/minutes GRADE + auto-correct, LEARN the fixes (auto-maintained dictionary). 3 owner corrections locked: (1) Prove-to-HIDE — unproven meeting-kind rows → visible Suspense lane, never the Ledger (no flooding); (2) canonical-ONLY learning (EventCode/StatusID, never free text); (3) STRUCTURAL-integrity breaker, NOT a quantity/delta count. The 50-state scale unlock, sequenced after VA.**

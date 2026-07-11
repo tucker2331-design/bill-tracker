@@ -1,6 +1,6 @@
 ---
 tags: [state, live, debt, anti-pattern]
-updated: 2026-07-10
+updated: 2026-07-07
 status: active
 ---
 
@@ -199,70 +199,6 @@ events_rows.append([
 **Why deferred:** PR #147 is a **proven behavior-preserving MOVE** (660-line body verified line-for-line identical). Fixing these here would (a) break the pure-move guarantee, (b) risk a behavior change in production-validated code, (c) muddy an extraction PR. They predate #147 (the move only made the diff visible).
 
 **Fix plan:** a separate, focused PR — first DATA-CONFIRM whether each flagged field is ever actually NaN at that point (don't change classification on a hunch — Standard #7); fix only the ones that are real, each with a before/after on the live metric. Do this AFTER the incremental-STM differential oracle exists, so any change is provably output-identical.
-
----
-
-## 11. `calendar_worker.py:1797` — `TERMINAL_DESCRIPTION_PATTERNS = ()` is empty, so its branch has NEVER fired
-
-**Severity:** `WARN` (dead path, not wrong data). **Status:** ✅ RESOLVED 2026-07-10 — DELETED (not populated).
-The terminal-skip was text-based + fail-unsafe + redundant with the TTL/hash gates + never fired in 2+ months;
-removed the constant, the function, and the dead skip. `IsTerminal` column kept in the persisted schema
-(dropping it is a migration) but always `False`. If ever needed, rebuild structurally (terminal-EventCode set +
-drift alert). See [[failures/assumptions_audit#103]].
-
-`_is_terminal_description()` guards with `if not TERMINAL_DESCRIPTION_PATTERNS or not description: return False`.
-The tuple is empty and has been since PR-C7, whose note reads *"Populate in PR-C7.2 after observing real LIS
-API response shapes from PR-C7's first cold-start."* **PR-C7.2 never happened.** So every call short-circuits
-to `False`, and whatever the function was meant to catch has been silently uncaught for the life of the code.
-
-This is the pre-push audit **#12 (fallback-liveness)** shape in its purest form: a defensive branch that is
-100% dead, indistinguishable at a glance from a branch that simply never matches. The empty-tuple guard even
-*reads* like careful defensive programming — that's what makes it invisible.
-
-**Fix (choose one, don't leave it):** populate the tuple from observed LIS response shapes (the cold-start
-happened long ago — the shapes are knowable now), **or delete the constant and the branch.** A dead branch that
-looks alive is worse than no branch. Tracked in [[state/current_status]] READY.
-
----
-
-## 12. `calendar_worker.py:1951` — `_clean_legevent_cell` heals silently; a schema change would not surface
-
-**Severity:** `INFO` (visibility gap, no bad data). **Status:** ✅ RESOLVED 2026-07-10 — `_LEGEVENT_HEAL`
-counts the stringified-null heal ("None"/"null"/"nan" → "") with `cells_seen` as denominator; a routine
-`None`→"" is NOT counted (would drown the signal). `_load_legevent_cache` emits an INFO `DATA_ANOMALY` on a
-flood (≥100 cells AND ≥1% share). Golden-tested (`test_clean_legevent_cell.py`). See [[architecture/scalability_audit]].
-
-The function normalizes LIS's JSON-`null` structural fields (`ChamberCode` / `ReferenceType` / `ActorType` /
-`Status` / `EventCode`) so a naive `str(None)` can't produce the truthy sentinel `"None"`. Correct, and it
-runs on every cell. But it **increments no counter**: `grep -c "legevent_normalized" calendar_worker.py` → `0`.
-
-If LIS changed a field's shape upstream and began emitting nulls where it never did before, the heal would
-absorb the entire change and nothing would ever say so. The heal is right; the *silence* is the debt — a
-successful repair that reports nothing is indistinguishable from no repair being needed.
-
-**Fix:** count normalizations per cycle and route the count through the existing source-miss/alert surface, per
-[[workflow/source_miss_visibility]] (the counter needs a denominator: normalized / total cells inspected).
-
----
-
-## 13. Schedule-loop bill-extraction FETCH still uses the first-href heuristic (~89 non-agenda fetches/cycle)
-
-**Severity:** `INFO` (accuracy/LIS-budget, not corruption). **Status:** OPEN — surfaced 2026-07-10 during the
-meeting-links build; the DISPLAY path was fixed, this FETCH path was deliberately left for a separate change.
-
-The schedule loop computes `agenda_url` with `re.search(r'href=…')` + `any(x in raw_desc for x in
-["agenda","docket","info"])` and feeds it to `extract_rogue_agenda` to pull the meeting's bills. Measured live:
-that first-href picks a **registration/webinar/video page 89×** per full cycle (the word "info" matches
-"Committee Info", then the first href is a granicus/webinarjam URL). The worker then fetches that page and
-regexes `[HS][BJR]\d+` out of whatever text it finds — wasted off-site fetches (LIS-safety guardrail #4) and a
-small risk of attributing a wrong page's bill numbers. The new label-based `_extract_meeting_links` already
-computes the CORRECT agenda URL for DISPLAY; the fix is to also drive the FETCH from it — but preserve the 194
-legitimate committee-info **rogue-nav** cases (where following the committee homepage IS how the agenda is
-found). Because this changes which bills land on a meeting (Section-9-adjacent), it needs its own measured
-before/after, not a bundled change. See [[ideas/meeting_agenda_links]] §2.
-
-**Fix:** prefer `_extract_meeting_links(raw_desc)`'s agenda URL for the fetch; fall back to a committee-info
-link (rogue-nav) only when there's no direct agenda; never fetch a registration/video host for bills.
 
 ---
 
