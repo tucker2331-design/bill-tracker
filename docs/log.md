@@ -8,6 +8,27 @@ status: active
 
 Append-only, reverse-chronological (newest at top). Each entry opens with `## [YYYY-MM-DD] <kind> | <title>` so `grep "^## \[" log.md | head -20` gives a parseable timeline.
 
+## [2026-07-11] pr | #211 MERGED then REVERTED — §9 change regressed `meeting_unsourced` 0→66; witness fix kept
+
+A large PR (§9 anchor ladder + `_committee_parent` multiset fix, meeting/agenda links, auto-refresh, de-AI
+polish, B-7 stranded-work guard, gspread-6 witness fix, + folded-in Gemini/CodeRabbit reviews) merged to main
+(`775e074`) with all CI green. The FIRST full-recompute worker cycle on the new code tripped the circuit
+breaker: **`meeting_unsourced` 0→66** (`Metrics_History`: 0 every prior cycle), `sourced_convene` −1,275,
+`floor_anchor_miss` +693. The breaker refused the Sheet1 overwrite → **no bad data shipped**, live site held on
+last-known-good.
+
+Root: the §9 validation gate (`validate_relative_chains.py`) checked SCHEDULE-level resolution
+(`relative_unresolved` 19→1, SAFETY 0/2,889) but NOT the BILL-ACTION-level metric `meeting_unsourced` that
+actually defines §9 success — a blind spot. Resolving relative meetings to different times/committees shifted
+downstream bill-action sourcing. Details: [[failures/assumptions_audit#101]].
+
+**Action:** reverted the merge (`756ca47`) to restore known-good main, then re-applied ONLY the isolated,
+unrelated **witness gspread-6 fix** (`d1fa46d`, [[failures/assumptions_audit#100]]) so the daily
+"Couldn't auto-move Schedule_Witness" CRITICAL stays fixed. Triggered a clean worker run to resume writes.
+The §9 + agenda + auto-refresh + frontend + B-7 work is preserved in git (merge `775e074`) for a corrected
+re-merge once the `meeting_unsourced` regression is diagnosed and the gate extended to cover it. See
+[[state/current_status]] NOW.
+
 ## [2026-07-07] pr | #209 MERGED — Health alerts = STATE not stream + witness auto-shard (zero-touch) + de-AI pass
 
 **MERGED to main (squash) 2026-07-07** after Gemini fold-in: Gemini caught a CRITICAL in the auto-shard —
