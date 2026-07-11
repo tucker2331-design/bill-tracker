@@ -8,6 +8,28 @@ status: active
 
 Append-only, reverse-chronological (newest at top). Each entry opens with `## [YYYY-MM-DD] <kind> | <title>` so `grep "^## \[" log.md | head -20` gives a parseable timeline.
 
+## [2026-07-11] fix | WORKER HOTFIX — revert agenda-cols worker (re-ship also tripped the breaker; §9 was NOT the cause)
+
+The re-ship (#212, agenda cols, §9 reverted) tripped the breaker on its first full recompute at
+`meeting_unsourced=66` — the SAME number the §9 merge hit. So §9 was never the cause: `build_time_graph`
+was proven byte-identical to known-good (0 diffs), the agenda cols are additive + applied to `final_df`
+AFTER `meeting_unsourced` is counted in `_append_event`, and the terminal-skip deletion is a no-op
+(`IsTerminal` FALSE for all 3,645 bills). By elimination the worker CODE is innocent; the 0-vs-66 difference
+tracks the **LegEvent cache state** (500-bill/cycle refresh cap → off-season a full recompute's
+`meeting_unsourced` depends on cache warmth). Leading hypothesis: off-season cache-warmth fluctuation +
+too-tight breaker `Y2=0` baseline, NOT a regression ([[failures/assumptions_audit#101]]).
+
+Action: reverted ONLY `calendar_worker.py` to known-good (version `2026-07-07.1`, WITH the witness fix) so
+cycles go incremental and reuse the healthy `meeting_unsourced=0` state — breaker stops tripping, red ring
+stops, site updates. Kept the breaker-SAFE frontend (auto-refresh, Option-A, agenda card scaffold) + B-7 guard
++ witness fix — all LIVE. Removed the two worker-only tests (`test_meeting_links`, `test_clean_legevent_cell`)
+whose subjects are reverted + unregistered from CI.
+
+Deferred (safe in git, `775e074` / `7671e18`): the agenda-links WORKER columns + §9 anchor ladder. Both wait on
+an OFFLINE STM diagnosis (good-vs-new on frozen identical LegEvent-cache inputs) to settle cache-warmth vs real
+gap, plus a breaker off-season-baseline review. Lesson: two wrong diagnoses (§9, then agenda) — a metric moving
+under a code change is not proof the code caused it; hold the inputs constant before attributing.
+
 ## [2026-07-11] pr | RE-SHIP: #211 minus §9 — agenda links + auto-refresh + witness + B-7 shipped, §9 held back
 
 After reverting #211 for the `meeting_unsourced` 0→66 regression (entry below), reconstructed "the merge minus
