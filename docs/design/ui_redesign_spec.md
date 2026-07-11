@@ -1,6 +1,6 @@
 ---
 tags: [design, ui, redesign, web, owner-feedback]
-updated: 2026-06-22
+updated: 2026-07-10
 status: active
 ---
 
@@ -12,9 +12,13 @@ status: active
 > **spine** (continuous centerline + nodes, no boxes); **crossover shrunk** to a thin dashed seam; new
 > **tinted cool canvas** (not white/cream) + elevated cards + muted palette + spacing/type scales +
 > weight-based hierarchy + shadows-over-borders. Build clean, screenshot-verified, zero console errors.
-> **Remaining:** item **4 (Floor stage)** — deferred until the backend emits a floor/passed-chamber signal
-> (an always-empty node would mislead); items **6–7 (Search overflow + chamber-toggle bug + facet counts)**
-> — next PR (box text-overflow is already fixed globally by the new `.cat` 2-line clamp).
+> **✅ item 4 (Floor stage) — SHIPPED (verified 2026-07-10).** No longer blocked: `bill_tracker.py` derives a
+> STRUCTURAL floor signal (`floor_house`/`floor_senate` = ""|"passed"|"defeated", from LIS's controlled floor
+> vocabulary, `bill_tracker.py:459-476`) and writes it to Bill_Tracker cols 16/17; the SPA reads it
+> (`gviz.ts`), `deriveStage`/`furthestStage` place a bill at Floor via it, and the Timeline renders `floor1`
+> ("Floor") + `floor2` ("Floor · 2nd") nodes. Live data confirms it is populated, not the empty node we feared:
+> House floor passed=2,345 / defeated=5, Senate passed=2,007 / defeated=6 (of 3,645 bills). Items **6–7 (Search
+> overflow + chamber-toggle + facet counts)** shipped in the #210 Search rebuild.
 
 
 Direct feedback on the v1 front end ([[design/information_display]] is the principle layer; this is the

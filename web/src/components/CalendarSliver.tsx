@@ -9,7 +9,7 @@ import { loadCalendar, type Meeting } from "../data/calendar";
 // list, which is empty off-season and never held the non-bill meetings (caucuses, commissions, interim
 // committee meetings) that the LIS + Calendar-page views show. That mismatch is why this used to read "no
 // meetings" while the Calendar tab showed a full week (owner 2026-07-08).
-export function CalendarSliver({ bills, onOpen }: { bills: Bill[]; onOpen: (b: Bill) => void }) {
+export function CalendarSliver({ bills, onOpen, calRefresh = 0 }: { bills: Bill[]; onOpen: (b: Bill) => void; calRefresh?: number }) {
   const today = new Date();
   const dow = today.toLocaleDateString("en-US", { weekday: "long" });
   const head = today.toLocaleDateString("en-US", { month: "short", day: "numeric" });
@@ -23,7 +23,7 @@ export function CalendarSliver({ bills, onOpen }: { bills: Bill[]; onOpen: (b: B
       .then((cal) => { if (alive) setMeetings(cal.byDay.get(todayKey) ?? []); })
       .catch((e) => { if (alive) setErr(String(e?.message || e)); });
     return () => { alive = false; };
-  }, [todayKey]);
+  }, [todayKey, calRefresh]); // calRefresh bumps when the freshness-gate invalidated the shared calendar cache
 
   const byBill = new Map(bills.map((b) => [b.bill, b])); // open a bill from an agenda item
 

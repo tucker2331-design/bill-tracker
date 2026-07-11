@@ -1,12 +1,211 @@
 ---
 tags: [log, meta]
-updated: 2026-06-21
+updated: 2026-07-10
 status: active
 ---
 
 # Project Log
 
 Append-only, reverse-chronological (newest at top). Each entry opens with `## [YYYY-MM-DD] <kind> | <title>` so `grep "^## \[" log.md | head -20` gives a parseable timeline.
+
+## [2026-07-10] work | Probed the auto-refresh problem (owner: "tired of manually refreshing")
+
+Owner asked to probe + queue a fix for having to manually reload when new data lands, noting a past
+frustrating Streamlit auto-refresh attempt. Probed it (measure-first) and scoped it in
+[[ideas/auto_refresh_on_new_data]]:
+
+- **Confirmed the gap on the PRODUCT surface** (not just the X-Ray): `App.tsx` loads once on mount (`[]` deps),
+  `loadCalendar()` memoizes for the page's life, and there is NO interval/focus/poll anywhere. New worker data
+  shows only after a hard browser reload.
+- **The Streamlit pain is moot.** That frustration was Streamlit's rerun model (`st_autorefresh`, `st.rerun()`
+  loops, cache-vs-rerun fights, lost widget state). The product is a React SPA now, where background refresh
+  without losing UI state is a standard `setInterval`/focus + `fetch` + `setState`.
+- **Measured the costs** (live): Bill_Tracker full = 6.7 MB/3.9 s; Sheet1 calendar = 5.7 MB/1.2 s; the
+  freshness cells (`AA1`, bill `dataAsOf`) = ~40 B/0.3 s. The 40 B-to-check vs 12 MB-to-load asymmetry is the
+  whole design → recommend **freshness-gated** refresh (poll the cheap cells on a 90 s interval + window-focus;
+  full re-fetch only when a timestamp advances). Off-season an idle tab costs a few bytes/min and never
+  re-downloads; in-session it catches a write within ~90 s with ONE big fetch.
+- Rejected alternatives with reasons (naive interval = 12 MB/tick; SSE/WebSocket = infra for a poll-sized
+  problem — there is no app server, gviz reads Sheets directly). One owner UX call: hot-swap vs "new data" pill
+  on Search/Calendar.
+
+Queued in READY; unblocked once the swap-vs-pill choice is made. The B-7 guard required the new page be linked
+from current_status before the audit would pass — worked as designed.
+
+## [2026-07-10] work | B-4 — CLAUDE.md volatile-facts audit; caught a wrong deploy target
+
+Audited CLAUDE.md for drift-prone facts. All 11 file references, 15 doc references, 8 key-code-concept
+function names, the CI workflow references, and every cited audit number RESOLVE. Fixed the audit intro to
+list point 16 (stranded-work) among the checks that FAIL CI. Two real drifts found and corrected:
+
+- **Deploy target was WRONG.** CLAUDE.md said the SPA ships to "Cloudflare **Pages**"; `wrangler.toml` has
+  `[assets] directory=./dist` + `not_found_handling=single-page-application` — it is **Cloudflare Workers
+  static-assets** (matches current_status). Every session read the wrong platform. Now corrected + cites the
+  config file so it can't silently drift again.
+- **My own stale count.** The point-16 rationale said "60 of 62 pages say active"; recount is 65 of 80 (I added
+  pages today). Generalized to "nearly every page (65 of 80), so the field carries almost no information" — the
+  point, not a number that rots. Ironic in a volatile-facts audit; exactly why B-4 exists.
+
+S-3 (attic-move deprecated root files) deliberately NOT done: it breaks the paused worker's manual dispatch, so
+it needs an explicit owner "yes, break it" — not a blanket-authority change. NEXT is now owner-gated only
+(C-8 LegiScan key; multi-state per the one-state-at-a-time directive; S-3 owner call).
+
+## [2026-07-10] work | Floor stage (ui_redesign_spec item 4) was already shipped — B-7 guard caught the stale loop
+
+The new `tools/open_loops.py` flagged `design/ui_redesign_spec.md` as carrying an unfinished `open_loop`
+("Item 4 Floor stage — BLOCKED until the backend emits a floor signal"). Investigated instead of assuming:
+the signal EXISTS and the node is LIVE. `bill_tracker.py:459-476` derives `floor_house`/`floor_senate`
+(""|"passed"|"defeated") structurally from LIS's controlled floor vocabulary and writes them to Bill_Tracker
+cols 16/17; `gviz.ts` reads them; `deriveStage`/`furthestStage` place a bill at Floor; the Timeline renders
+`floor1` ("Floor") + `floor2` ("Floor · 2nd"). Live data confirms it is populated, not the empty node the
+spec feared: House floor passed=2,345 / defeated=5, Senate passed=2,007 / defeated=6 (of 3,645). Closed the
+stale open_loop. This is the SHIPPED-but-looks-open mirror of the §9 case — and the guard surfaced it the
+same day it was built, which is the whole point: it forces a look, and the look resolves it either way.
+
+READY lane is now empty; every vault `open_loop` is resolved.
+
+## [2026-07-10] work | Meeting + agenda links SHIPPED (future & past) — owner ask, built & verified
+
+Owner: "meeting links and agendas are expected on both future and past meetings — almost more importantly the
+future ones." Built end-to-end:
+
+- WORKER: `_extract_meeting_links(raw_desc)` — classifies the Schedule `Description` anchors by LABEL with
+  BeautifulSoup (the HTML is malformed; regex mis-segments it). Returns (agenda, livestream, unknown_labels).
+  Wired into the schedule loop → additive `AgendaURL`/`MeetingURL` columns on Sheet1. De-risked the "migration":
+  it is NOT the AD1 off-grid pattern — Sheet1 columns are dynamic (final_df), the write is rectangular A1:Q
+  (17 cols, inside the 29-col grid), state cells at S+ untouched. + a drift canary (INFO) for labels matching
+  neither agenda/meeting nor a known-benign supporting label (Standard #1).
+- FRONT-END: projection gains cols P,Q; the Calendar expand-card renders "📄 Agenda" + "▶ Watch meeting" when
+  present, "Agenda not posted yet" for a FUTURE meeting whose agenda hasn't dropped, and nothing when neither
+  exists (honest-absent). Restrained text links, no pills. target=_blank + rel=noopener noreferrer.
+- MEASURED (live): agenda_url points at a video host 0× (was 89× with the old first-href heuristic); 1,181
+  agendas + 1,478 livestreams extracted; drift canary reports ~12 ambiguous labels (presentations/testimony).
+- VERIFIED: golden test (`test_meeting_links.py`, 13 cases) + browser preview drove all three link states with
+  synthetic data (agenda+watch / future "not posted yet" / none), correct hrefs + safety attrs, no console errors.
+
+Left as a tracked follow-up ([[state/open_anti_patterns]] #13): the bill-extraction FETCH still uses the old
+first-href heuristic (89 non-agenda fetches/cycle). That changes which bills land on a meeting, so it's a
+separate measured change — not bundled into the display feature.
+
+## [2026-07-10] work | Health red-ring investigated → live gspread-6 shard bug fixed; auto-refresh built
+
+Owner: "you seem to be missing the rest of the to do list — I had a screenshot of a Health alert and asked you
+to investigate." Correct — I had closed the AD1 ticket (#99) without re-measuring, and the CRITICAL was still
+firing. Pulled Metrics_History live: "Couldn't auto-move Schedule_Witness" firing multiple times a day, every
+day, with the error TEXT changed on 07-10 to `'HTTPClient' object has no attribute 'open_by_key'`. Root cause:
+the witness grew past 6M cells so the shard finally TRIGGERED and hit gspread 6.x, where `Spreadsheet.client`
+is the HTTPClient transport (no open_by_key). Fixed with a version-safe `_open_book_by_key` across all 4 sites
+(witness shard ×3 + session-archive rollover). Golden-tested both gspread generations. → [[failures/assumptions_audit#104]].
+
+Then built the auto-refresh (owner ask, refined this session): freshness-gated background refresh + a TRANSIENT
+notice. Owner corrected my pill-vs-swap framing — "do neither; just a quick thing that goes away, only to tell
+a person WHY the site changed, not how fresh the data is." Built `RefreshNotice` as a plain self-dismissing
+toast (not a pill), separate from the header's freshness readout. Browser-verified end-to-end: fires on a real
+stamp change with the right per-feed label, no formatting false-positive (caught + fixed a Date-vs-raw-string
+seed bug in the test), quiet at steady state, and it doesn't poll a hidden tab. → [[ideas/auto_refresh_on_new_data]].
+
+The through-line the owner named: a "fixed" ticket is a hypothesis until the live signal is re-measured. Their
+"it's still red" beat my "I fixed it."
+
+## [2026-07-10] pr | #211 OPENED — §9 anchor ladder + landing/calendar polish + brain stranded-work guard
+
+https://github.com/tucker2331-design/bill-tracker/pull/211 — 6 commits off `claude/calendar-landing-polish`.
+Worker §9 (relative_unresolved 19→1, SAFETY 0/2,889) + §9d two live mis-anchors + READY debts; web landing/
+calendar Option-A polish; brain B-7 stranded-work guard (`tools/open_loops.py`, pre-push point 16). Awaiting
+bot review (Codex/Gemini/CodeRabbit) — fold in per [[workflow/bot_review_fold_in]] on the commits, not replies.
+
+## [2026-07-10] work | READY debts cleared — measure-first decided each one
+
+Owner: "dont stop until everything on the to do is done." Worked the unblocked READY lane. Two of three
+items resolved by BUILDING, one resolved by MEASURING that there was nothing to build.
+
+- **Dead `TERMINAL_DESCRIPTION_PATTERNS = ()` — DELETED, not populated.** The terminal-skip optimization was
+  text-based (fail-unsafe: a mislabeled-terminal bill silently stops updating), never fired since PR-C7
+  (empty allowlist), and redundant with the TTL-fresh + hash-unchanged gates. Removed the constant, the
+  function, and the dead skip; kept the `IsTerminal` persisted column (dropping it is a migration) honestly
+  always False. → [[failures/assumptions_audit#103]], [[state/open_anti_patterns]] #11.
+- **`_clean_legevent_cell` silent heal — COUNTER ADDED.** `_LEGEVENT_HEAL{sentinel, cells_seen}` counts the
+  stringified-null heal (drift canary, near-zero baseline) with a denominator; `_load_legevent_cache` emits an
+  INFO DATA_ANOMALY on a flood. A routine `None`→"" is NOT counted (would drown the signal). New golden test
+  `test_clean_legevent_cell.py`. → [[state/open_anti_patterns]] #12.
+- **HISTORY-vs-LegEvent date drift — MEASURED AWAY, not built.** The scalability_audit's "3 date-drift rows"
+  were from 2026-06-03; Section 9 hit 0 on 2026-06-06. Re-measured the full live Sheet1 (37,826 rows,
+  untruncated): of 17,018 meeting-route rows, **0 have empty Time and 0 are NO_SCHEDULE_MATCH.** The 283
+  sentinel-SortTime meeting rows are all the §9 relative-*chain* unplaceables (which show a time), not
+  date-drift victims. Building a LegEvent-date reconciliation into the Section-9-critical time engine to fix
+  ZERO failing rows would be a Standard #7 violation. Approach preserved in [[architecture/scalability_audit]]
+  for if it ever recurs; unbuilt by design.
+- **CI gap closed:** `anchor_ladder_test.py` + `witness_shard_test.py` (both pure, both previously unregistered)
+  and the new `test_clean_legevent_cell.py` added to `golden_tests.yml`.
+
+The through-line: "done" is not always "built." Two of these three were correctly resolved by deleting or by
+measuring, not by adding code — the measure-first discipline decided each one.
+
+## [2026-07-10] process | B-7 — the to-do had no lane for unblocked work, so unblocked work vanished
+
+Owner: *"how did it end up we had like half scoped something like this and just let it sit when we thought
+our to-dos had been cleared?"* Root-caused, and the answer was structural rather than human.
+
+`state/current_status.md` is the to-do. Its queue heading read **"NEXT (needs owner infra / a decision — then
+I execute)"**. So a plain unfinished engineering residual — blocked on nobody, just not done — belonged to no
+lane: not NOW (not being worked), not NEXT (nothing waiting on the owner). It survived only inside a plan page
+in `ideas/`, which nothing forces a session to re-read. The §9 relative-time residual (19 measured, scoped,
+written down) sat there for a week while every "is the to-do clear?" check honestly answered *yes*.
+
+`status:` frontmatter could not have caught it either — **60 of 62 vault pages say `active`**. A signal that
+never varies is not a signal.
+
+**Fixed the mechanism, not the instance:**
+- New **READY** lane in `state/current_status.md` — unblocked work I can execute without the owner.
+- New `open_loop: <one line>` frontmatter key on any page carrying a residual.
+- New `tools/open_loops.py` enforcing two invariants: a page declaring `open_loop:` **must** be wikilinked from
+  `current_status.md`; a page marked `status: shipped` **may not** declare one. Wired into
+  `tools/prepush_audit.py` as **point 16**, running on every push (a diff-scoped check would never see the page
+  that *dropped* the link). Verified it actually fails: removing one wikilink turns the audit red.
+
+**Sweep results** (every `deferred|awaiting|not yet|revisit|TODO` in the vault, checked against the code):
+- `architecture/post_c8_hardening.md` — all three solutions **shipped**; the page still read as an open plan.
+  Marked `status: shipped` with a verification banner. (The mirror image: a done page that looks undone.)
+- `ideas/calendar_chain_ordering.md` — §7.2 front-end surfacing **shipped** (`calendar.ts:272` sorts
+  unresolved first). Corrected my own frontmatter, which had claimed it remained.
+- `architecture/scalability_audit.md` — 2 genuine latent debts → `open_loop:` + READY.
+- `design/ui_redesign_spec.md` — item 4 Floor stage, blocked on a backend signal → `open_loop:` + READY.
+- **`calendar_worker.py:1797` `TERMINAL_DESCRIPTION_PATTERNS = ()`** — empty tuple, so `_is_terminal_description`
+  has short-circuited to `False` on *every call since PR-C7*. It was to be populated "in PR-C7.2"; PR-C7.2 never
+  came. Dead branch that reads like careful defensive code → [[state/open_anti_patterns]] #11.
+- **`_clean_legevent_cell` heals silently** (0 counters) → [[state/open_anti_patterns]] #12.
+- The rest (`copatrons_backfill`, subject-search, 50-state DB) are **decisions with written rationale**, not
+  strandings. Left alone.
+
+Near-miss worth recording: the first sweep grep used `--include=*.md`, which zsh rejected, printing nothing.
+"No output" read as "absent" and I nearly reported three shipped solutions as unbuilt. Same class as the
+`limit 900` gviz truncation ([[failures/assumptions_audit#95]]): **a tool that silently returns nothing is not
+evidence of absence.** Re-ran without the flag; all three were present.
+
+## [2026-07-10] pr | §9 anchor ladder + two live mis-anchors in `_committee_parent` (branch `claude/calendar-landing-polish`)
+
+Placed the residual unplaceable meetings **structurally** (owner: *"solve it forever, don't patch it"*), and
+fixed two pre-existing mis-anchors found while doing it.
+
+- **Anchor ladder** — three strictly-additive rungs (sibling overlap · `"full committee"` → own parent ·
+  no-body-named → own chamber's floor marker, verb-selected). Each fires only after every rung above returns
+  `None`, so the Section-9 safety gate holds **by construction**: an already-resolved row is unreachable from
+  the new code. Rung 7 is guarded — a phrase that names a body nobody matched must never fall through to the
+  floor ([[failures/assumptions_audit#70]] class).
+- **§9d-i** — `_committee_parent` compared token **SETS**. LIS names a subcommittee by repeating the
+  distinctive word ("…Natural Resources **Agriculture** Subcommittee"), so the child's token set equalled its
+  parent's and they were indistinguishable. Now **multiset** containment. → [[failures/assumptions_audit#100]]
+- **§9d-ii** — the alphabetical tie-break was a guess wearing a determinism costume: `"Subcommittee #2"`
+  reduces to `{2}`, which fits House Public Safety's #2 as well as the referring committee's own. It was right
+  4/4 times *only because `"labor" < "public"`*. A bare ordinal is a self-lineage reference → scope it; still
+  tied ⇒ **refuse**. → [[failures/assumptions_audit#101]]
+- **Telemetry** read 3 unplaceable where 1 was true (counted synthetic `"house"`/`"the house"` aliases and
+  re-walked non-memoized refusals). One `_bump()` chokepoint. → [[failures/assumptions_audit#102]]
+
+Gates (live Schedule API, 3,533 rows / 447 dates): SAFETY **0 / 2,889** published-clock rows move ·
+RESOLUTION `relative_unresolved` **19 → 1** · §9d rescan **209 matches: 207 identical, 2 corrected, 0 lost** ·
+118 pure-logic checks. The one survivor is a **correct refusal**: `2025-02-22 house convenes` anchors to the
+2024 Special Session's recess — a different session, no node in that day's graph.
 
 ## [2026-07-07] pr | #209 MERGED — Health alerts = STATE not stream + witness auto-shard (zero-touch) + de-AI pass
 

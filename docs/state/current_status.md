@@ -1,6 +1,6 @@
 ---
 tags: [state, live]
-updated: 2026-07-06
+updated: 2026-07-10
 status: active
 ---
 
@@ -11,12 +11,18 @@ status: active
 **Project goal:** Calendar 100% accuracy vs LIS website. Metric: [[testing/crossover_week_baseline|X-Ray Section 9 bug count]] → 0 + unclassified → 0. **Achieved + holding (Section 9 = 0 since 2026-06-06).**
 **Benchmark window:** Full 2026 VA GA session (2026-01-14 → 2026-05-01). **VA GA is ADJOURNED — HISTORY is static until the 2027 session. Pre-launch: lobbyists are not using the product yet.**
 
-> **MOVE-only page (B-1, 2026-07-06):** ≤3 items in NOW, the ordered queue in NEXT, ≤5 one-liners in RECENTLY
-> LANDED. Finishing a task MOVES its line NOW→RECENTLY LANDED and evicts the oldest; nothing is appended
-> below. Full history: [[log]] (PR-by-PR) + [[state/status_archive_2026H1]] (frozen pre-B-1 narrative).
+> **MOVE-only page (B-1, 2026-07-06):** ≤3 items in NOW, the ordered queue in NEXT/READY, ≤5 one-liners in
+> RECENTLY LANDED. Finishing a task MOVES its line NOW→RECENTLY LANDED and evicts the oldest; nothing is
+> appended below. Full history: [[log]] (PR-by-PR) + [[state/status_archive_2026H1]] (frozen pre-B-1 narrative).
+>
+> **READY exists because NEXT was defined as "needs owner infra / a decision" (2026-07-10).** That left
+> unblocked engineering residuals with NO lane — not NOW, not NEXT — so they survived only inside plan pages
+> in `ideas/` and were invisible to every "is the to-do clear?" check. That is exactly how the §9 relative-time
+> residual sat for a week. Enforced by `tools/open_loops.py`: a page declaring `open_loop:` in its frontmatter
+> MUST be wikilinked from this page, and a page marked `status: shipped` may not declare one.
 
 ## NOW
-- **De-AI visual pass — IN PROGRESS (owner 2026-07-07: "colored boxes scream AI built all over our site").** Done + merged (#209): Health alerts + header/breaker/skew "colored boxes" → restrained status dots; doctrine [[design/dashboard_and_visual_language]]. **Awaiting owner's pick** among 4 editorial, container-free bill-outcome-chip mocks (colored value · colored bill number · colored small caps · ledger list) — once chosen, extend across Today/Search/Calendar in a follow-up PR. Bill outcome chips + scope toggle deliberately NOT touched yet (functional color = owner's call).
+- **PR [#211](https://github.com/tucker2331-design/bill-tracker/pull/211) OPEN** (`claude/calendar-landing-polish`, 6 commits) — §9 anchor ladder + `_committee_parent` multiset/lineage fix + READY debts + Option-A calendar/landing polish + B-7 stranded-work guard. Gates: SAFETY 0/2,889 clocks move · `relative_unresolved` 19→1 (survivor is a correct refusal) · full pure-logic suite + open_loops green. **Next: fold in bot reviews on the commits** per [[workflow/bot_review_fold_in]], then merge.
 
 ## NEXT (needs owner infra / a decision — then I execute)
 1. ~~Enable A-2 Part 2 manually~~ **NO LONGER OWNER-GATED — the worker auto-shards the witness itself at 6M** (`_autoshard_witness_if_full`, zero-touch, fail-closed). Nothing for the owner to run. `archive.py shard-witness` + `WITNESS_WORKBOOK=ops` remain as manual overrides only. [[audits/fable_2026-07/autonomy_upgrades]].
@@ -26,15 +32,20 @@ status: active
    - CA + FL research → [[audits/fable_2026-07/multistate_ingestion_ca_fl]]
    - 50-state decoupling (CDN inversion + Omni-Schema + Fleet) → [[audits/fable_2026-07/50_state_scaling_architecture]]
    - NY is the live 2nd state (its own brain: [[ny/state/current_status]]); C-8 Part 2 (LegiScan oracle) is its next step.
-4. Optional/low-value: **S-3** (attic-move deprecated repo-root files — cosmetic, breaks the paused worker's manual dispatch; do only if you want the cleanup); **B-4 finish** (audit CLAUDE.md's remaining volatile facts).
+4. Optional/low-value: **S-3** (attic-move deprecated repo-root files — cosmetic, **but it breaks the paused worker's manual dispatch**, so it needs an explicit owner "yes, break it"; not done on blanket authority). ~~B-4 finish~~ **DONE 2026-07-10** (CLAUDE.md volatile-facts audit — all file/doc/function refs verified; fixed two real drifts: deploy target said "Cloudflare Pages", is Workers static-assets per `wrangler.toml`; stale page-count).
 - Also open (owner-triggered): `/code-review ultra`; co-patrons backfill (scoped, deferred — [[ideas/copatrons_backfill]]).
 
+## READY (unblocked — no owner input needed; I can execute any of these)
+*The lane that did not exist until 2026-07-10. Every `open_loop:` page in the vault must appear here (or in
+NOW/NEXT), or `tools/open_loops.py` fails the pre-push audit.*
+- **Empty.** The auto-refresh item shipped this session (see RECENTLY LANDED).
+
 ## RECENTLY LANDED (newest first; full detail in [[log]])
-- **2026-07-07 — #209 MERGED: alerts = STATE not stream (self-clearing) + witness auto-shard (zero-touch) + de-AI pass** — alerts rebuilt (verdict + active-only + collapsed per-category cleared history; 300→18 conditions on live data); `_autoshard_witness_if_full` relocates the witness to VA·Ops itself at 6M (copy-verify-then-delete, fail-closed, 17 tests); severity/breaker/skew/header pills → status dots. Gemini fold-in fixed a CRITICAL recovery-gate bug ([[failures/assumptions_audit]] #98, = pre-push #11) + a regex-`\b` collapse bug ([[failures/gemini_review_patterns]] #51/#52), both tested.
-- **2026-07-07 — Health-tab honesty MERGED (#206+#207) + A-2 Part 2 phase 2 (#208) + backlog audited clean** — alerts honest/layman-clear, ring no longer yellows for the experimental engine, capacity audit recommends the shard; witness-shard actuator flag-gated + safe-by-default (`archive.py shard-witness` + `WITNESS_WORKBOOK=ops`); code-debt backlog paid down.
-- **2026-07-06 — brain hygiene: B-2 · B-3 · B-6 + C-8 re-measured** — B-3 machine `tools/prepush_audit.py` (fails an output-value change with no version bump; runs in CI, #205 merged); B-2 generated `## Index` for the two case-law files (`tools/reindex_caselaw.py`); B-6 vault hygiene (0 orphans); C-8 NY re-measured (already hardened; oracle owner-gated).
-- **2026-07-06 — brain hygiene: B-1 · B-5 · S-6 · B-4(partial)** — current_status restructured (NOW/NEXT/RECENTLY, history → [[state/status_archive_2026H1]]); [[workflow/reasoning_doctrine]] added to session-start reads; stale next_session archived; CLAUDE.md cadence de-drifted.
-- **2026-07-06 — A-2 Part 1 · S-1 · S-2 MERGED** (#202 rollover snapshot verify · #203 single env-first LIS key source · #204 worker golden + pure-logic tests now run in CI); **A-1 MERGED** (#201) self-extending session auth removes the Jan-2027 halt. *(Earlier: 2026-07-05/06 owner UI + cadence #197–#200 + Cloudflare #199; 2026-07-04 Fable audit [[audits/fable_2026-07/README]]; older → [[state/status_archive_2026H1]].)*
+- **2026-07-10 — meeting + agenda links SHIPPED (future & past)** — worker `_extract_meeting_links` (label-based BeautifulSoup) → additive `AgendaURL`/`MeetingURL` Sheet1 columns (safe A1:Q write, NOT the AD1 pattern) + a drift canary; the Calendar card shows "📄 Agenda"/"▶ Watch meeting", "agenda not posted yet" for future meetings, nothing when absent. Live: 0 video-host mis-picks (was 89×). Golden-tested + browser-verified. Fetch-path 89-mis-fetch left as [[state/open_anti_patterns]] #13. [[ideas/meeting_agenda_links]].
+- **2026-07-10 — auto-refresh SHIPPED: no more manual reload** — freshness-gated background refresh (poll the two ~40 B stamp cells on a 90 s interval + window-focus; full re-fetch ONLY when a timestamp advances, so an idle off-season tab costs a few bytes/min) + a transient `RefreshNotice` toast that explains a change and self-dismisses (owner: not a pill, not a silent swap). Browser-verified. [[ideas/auto_refresh_on_new_data]].
+- **2026-07-10 — witness auto-shard CRITICAL fixed (the daily red ring): gspread 6.x `sheet.client.open_by_key` → `'HTTPClient' has no attribute`** — the owner's "almost every day a ring is red" was a REAL live bug, not the closed AD1 ticket: the witness grew past 6M cells so the shard triggered and hit a gspread-6 API break EVERY cycle. Version-safe `_open_book_by_key` across all 4 sites (shard + session-archive rollover). [[failures/assumptions_audit#104]].
+- **2026-07-10 — READY debts cleared: dead terminal-skip deleted · silent-heal counter added · date-drift measured away** — `TERMINAL_DESCRIPTION_PATTERNS`/`_is_terminal_legevent_description` DELETED (text-based, fail-unsafe, never fired since PR-C7; [[failures/assumptions_audit#103]]); `_clean_legevent_cell` now counts stringified-null heals + alerts on a flood ([[state/open_anti_patterns]] #12); HISTORY-vs-LegEvent date-drift **measured to 0 live rows** on the full 37,826-row sheet (0 meeting rows empty-time or NO_SCHEDULE_MATCH) — NOT built, it's a Section-9-critical time-engine change with no failing row to justify it ([[architecture/scalability_audit]]). Two new pure tests wired into CI.
+- **2026-07-10 — §9 anchor ladder + two live mis-anchors fixed (pushed, PR pending)** — `relative_unresolved` 19→1 (survivor is a *correct* refusal: a 2025 row anchored to a prior session's recess). Found + fixed two pre-existing `_committee_parent` defects: token **sets** collapsed LIS's repeated-word subcommittee naming into its own parent, and the "deterministic" **alphabetical tie-break** was a coin flip that resolved correctly only because `"labor" < "public"`. Measured 209 matches → 207 identical, 2 corrected, 0 lost. [[failures/assumptions_audit#100]] / [[#101]] / [[#102]], [[ideas/calendar_chain_ordering]] §9d.
 
 ## Watch items
 - **Gemini Code Assist bot sunsets 2026-07-17** (consumer install blocked since 06-18; still reviewing PRs until then). Replacement bench (CodeRabbit + Qodo + Codex) already live. No action unless a gap appears after 07-17.
