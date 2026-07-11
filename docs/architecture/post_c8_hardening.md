@@ -1,10 +1,18 @@
 ---
 tags: [architecture, plan, hardening, post-c8, standards]
-updated: 2026-06-12
-status: active
+updated: 2026-07-10
+status: shipped  # all 3 solutions verified in code 2026-07-10 (see banner)
 ---
 
 # Post-C8.4 Hardening — three grounded, to-standard solutions
+
+> **✅ ALL THREE SHIPPED — verified in code 2026-07-10.** This page read as an open plan for weeks after the
+> work had actually landed, which is the mirror image of a plan page hiding *unfinished* work: both make
+> "what's left?" unanswerable. Verified present:
+> `validate_governor_eventcodes` + `KNOWN_GOVERNOR_EVENTCODES` (`structural_router.py`, `test_governor_eventcode_drift.py`)
+> · structural `meeting_unsourced` keyed on `LegEventRoute == "meeting"` (`calendar_worker.py:4908`, the
+> `MEETING_VERB_TOKENS` proxy is gone) · the rolling `unconfirmed` baseline (Y3 spike alert).
+> Kept for the design rationale, not as a to-do. See [[state/current_status]].
 
 The three items deferred at the end of PR-C8.4 ([[state/current_status]]). Each is designed to
 meet the [[../CLAUDE|engineering standards]] (zero-assumptions, structural-determinism, self-

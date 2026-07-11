@@ -57,10 +57,13 @@ jobs:
             test_compute_effective_scrape_end.py \
             test_pr_c3_helper_v2.py \
             test_refid_shape_drift.py \
+            test_clean_legevent_cell.py \
+            test_meeting_links.py \
             cadence_test.py \
             lis_authorization_test.py \
             session_rollover_test.py \
-            health_gap_test.py; do
+            health_gap_test.py \
+            witness_shard_test.py; do
             echo "::group::$t"
             if python3 -u "$t"; then echo "PASS  $t"; else echo "FAIL  $t"; fail=1; fi
             echo "::endgroup::"
