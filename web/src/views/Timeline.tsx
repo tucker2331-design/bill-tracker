@@ -136,9 +136,11 @@ export function Timeline({ bills, onOpen }: { bills: Bill[]; onOpen: (b: Bill) =
       <div className="spine-legend">
         <span><span className="swatch" style={{ background: "var(--senate)" }} />Senate · above</span>
         <span><span className="swatch" style={{ background: "var(--house)" }} />House · below</span>
-        {/* Owner 2026-07-03: the ✕ counts confused against the end-of-spine "Died" number (✕712 > 811?).
-            The ✕s include BOTH terminal kinds, so state the math explicitly: all ✕ = Died + Carried over. */}
-        <span><span className="swatch" style={{ background: "var(--o-dead)" }} />✕ died <em>or</em> carried over at that stage — all ✕ sum to {(outcome.dead + outcome.carried).toLocaleString()} ({outcome.dead.toLocaleString()} died + {outcome.carried.toLocaleString()} carried over)</span>
+        {/* Owner 2026-07-12: the inline "all ✕ sum to 1,253 (811 died + 442 carried over)" math read as
+            confusing/redundant — the Outcome tiles already show the Died / Carried-over totals. Cut it; the
+            legend just says what a ✕ MEANS. (Prior note: the per-stage ✕ once confused vs the end "Died"
+            number, which the explicit totals tried to reconcile — the tiles do that job better.) */}
+        <span><span className="swatch" style={{ background: "var(--o-dead)" }} />✕ = a bill that ended here (died or carried over)</span>
         <span className="muted">Position is progress — a bill crosses the line at crossover; the spine ends in the decided outcome.</span>
       </div>
 
