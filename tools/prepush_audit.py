@@ -4,7 +4,7 @@
 Prose rules fire only when the model THINKS to apply them — PR #189 (Fable's own) shipped an
 output-affecting change with no WORKER_OUTPUT_LOGIC_VERSION bump; a bot caught it a PR later
 (assumptions_audit #96). This script mechanically enforces the checkable subset against a diff, so the
-miss fails CI without any bot. Stdlib-only EXCEPT the pyflakes undefined-name gate (audit #104), which
+miss fails CI without any bot. Stdlib-only EXCEPT the pyflakes undefined-name gate (audit #105), which
 is required only when the diff touches .py files (structural_tests.yml installs it).
 
 Usage:
@@ -182,7 +182,7 @@ Judgment-only points (the script can't check these — confirm each):
 
 
 def check_undefined_names(files, fails):
-    """Point 17 (audit #104) — pyflakes 'undefined name' gate on changed worker .py files.
+    """Point 17 (audit #105) — pyflakes 'undefined name' gate on changed worker .py files.
 
     An UnboundLocalError (a name referenced before its later assignment in the same function) is
     invisible to py_compile and to golden tests that never execute the enclosing loop — it shipped
@@ -200,7 +200,7 @@ def check_undefined_names(files, fails):
         import pyflakes  # noqa: F401 — presence check only; we shell out for clean per-file output
     except ImportError:
         fails.append("[17] pyflakes is not installed but the diff touches .py files — the undefined-name "
-                     "gate (audit #104) cannot run. Install it: python3 -m pip install pyflakes")
+                     "gate (audit #105) cannot run. Install it: python3 -m pip install pyflakes")
         return
     # "./"-prefix any path starting with "-" so it can't parse as a CLI flag (paths come from the
     # PR diff, which an external contributor controls — CodeRabbit #214).
@@ -214,7 +214,7 @@ def check_undefined_names(files, fails):
             if "undefined name '" in ln or "referenced before assignment" in ln]
     for h in hits:
         fails.append(f"[17] pyflakes: {h} — a runtime NameError/UnboundLocalError waiting in a code "
-                     f"path py_compile can't see (audit #104).")
+                     f"path py_compile can't see (audit #105).")
 
 
 def check_open_loops(fails):

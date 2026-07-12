@@ -69,7 +69,7 @@ def notify_slack(text):
 # 2026-07-04.1: date-aware SortTime resolver (#189) + the TimeClass column (#193) both change
 # Sheet1 output — force a recompute so cached/incremental paths can't serve pre-change rows
 # (Qodo #193; #189 omitted this bump, caught here).
-WORKER_OUTPUT_LOGIC_VERSION = "2026-07-12.1"   # agenda-links re-ship, FIXED: the 0→66 regression was an UnboundLocalError in the schedule loop mislabeled as an API failure (audit #104), never §9/cache-warmth
+WORKER_OUTPUT_LOGIC_VERSION = "2026-07-12.2"   # §9 anchor ladder re-merge (SortTimes for implicit-anchor relative meetings change) — exonerated by audit #105; the 0→66 was an UnboundLocalError in the agenda block, never §9
 
 
 def _sha(*parts):
@@ -2917,6 +2917,16 @@ def parse_24h_time(raw_time, parent_time_24h=None):
     except Exception:
         return "23:59"
 
+# Which §9 anchor rung placed each relative row, so a NEW LIS phrasing surfaces as a METRIC instead of
+# silently rotting back to the 23:59/06:00 sentinel (Standard #4). Reset per build_time_graph() run and
+# folded into SYSTEM_METRICS; `anchor_unresolved` is the one to watch — a rise means LIS said something
+# structurally new. calendar_chain_ordering §9.
+# LIS's self-reference phrasings: the phrase points at the node's OWN parent, not at a proper body.
+# Compiled once — `resolve_node` runs per meeting per day.
+_SELF_REF_RE = re.compile(r"\b(?:full|the)\s+committee\b", re.I)
+
+ANCHOR_RUNG_COUNTS = {}
+
 
 def _resolve_one_day(day_rows):
     """Resolve the relative-time graph for ONE day's schedule rows → {name_lower: "HH:MM"}.
@@ -2957,9 +2967,15 @@ def _resolve_one_day(day_rows):
             elif name not in raw_times:
                 raw_times[name] = t_val             # empty / TBA (first non-concrete wins)
 
+    # Synthetic lookup ALIASES of the convene node — "…after the House" must find a node named "the house".
+    # They are extra KEYS onto one meeting, not extra meetings, so §9 telemetry must never count them (a
+    # single unplaceable convene row otherwise reports as three).
+    _alias_keys = set()
     for k, v in list(raw_times.items()):
-        if "house convenes" in k or "house chamber" in k: raw_times["house"] = v; raw_times["the house"] = v
-        if "senate convenes" in k or "senate chamber" in k: raw_times["senate"] = v; raw_times["the senate"] = v
+        if "house convenes" in k or "house chamber" in k:
+            raw_times["house"] = v; raw_times["the house"] = v; _alias_keys |= {"house", "the house"}
+        if "senate convenes" in k or "senate chamber" in k:
+            raw_times["senate"] = v; raw_times["the senate"] = v; _alias_keys |= {"senate", "the senate"}
 
     # The day's committee-name VOCABULARY — every token appearing in some schedule node
     # this day. A relative phrase's reference is filtered down to its intersection with
@@ -2973,6 +2989,17 @@ def _resolve_one_day(day_rows):
         day_vocab |= set(normalize_room_key(p).split())
 
     resolved_times = {}
+    _counted = set()   # (rung, node) already tallied — the canary counts MEETINGS, not resolve_node calls
+
+    def _bump(rung, name_key):
+        # §9 telemetry. Two things would otherwise inflate it above the real meeting count: the synthetic
+        # convene aliases above, and the fact that a REFUSED node is never memoized into resolved_times, so
+        # every later resolve_node() re-walks it. A numerator that outruns its denominator is precisely the
+        # metric Standard #7 forbids — the canary has to mean "unplaceable meetings", or it means nothing.
+        if name_key in _alias_keys or (rung, name_key) in _counted:
+            return
+        _counted.add((rung, name_key))
+        ANCHOR_RUNG_COUNTS[rung] = ANCHOR_RUNG_COUNTS.get(rung, 0) + 1
     def _adjourned_key(chamber):
         # The published "[chamber] adjourned" session marker whose ScheduleTime
         # is a concrete clock time (e.g. OwnerName "Senate adjourned" → "5:19 PM").
@@ -2983,41 +3010,147 @@ def _resolve_one_day(day_rows):
                      if chamber in k and "adjourn" in k
                      and not any(x in str(v).lower() for x in ["after", "upon", "minute", "hour", "recess"])
                      and not _is_non_concrete_time(v)), None)
+    def _recess_key(chamber):
+        # Twin of _adjourned_key for the published "[chamber] recessed until …" marker, whose
+        # ScheduleTime IS a concrete clock ("2:10 PM"). Same concreteness guard so a relative/TBA
+        # marker is never used as an anchor. A day can publish SEVERAL recesses; take the EARLIEST
+        # concrete one — "upon recess" means the first recess, and picking by dict order would be
+        # arbitrary. calendar_chain_ordering §9c.
+        cands = [(parse_24h_time(v), k) for k, v in raw_times.items()
+                 if chamber in k and "recess" in k
+                 and not _is_relative_time_text(v) and not _is_non_concrete_time(v)]
+        cands = [(t, k) for t, k in cands if t != "23:59"]
+        return min(cands)[1] if cands else None
+
+    def _own_chamber(self_key):
+        # The meeting's OWN chamber, read off its structural name prefix. Used ONLY when the phrase names
+        # NO body ("30 minutes after adjournment") — LIS omits the chamber because a Senate
+        # committee's "adjournment" can only mean the Senate's. calendar_chain_ordering §9c.
+        n = normalize_room_key(self_key)
+        if n.startswith("senate"): return "senate"
+        if n.startswith("house"): return "house"
+        return None
+
+    def _parent_of(self_key):
+        # A "Parent - Sub" node carries its own parent IN ITS NAME ("senate general laws and
+        # technology-housing"). Split on the first hyphen separator; accept the parent only if it is
+        # a real node THIS day — never invent an anchor. calendar_chain_ordering §9b.
+        head = re.split(r'\s*-\s*', self_key, maxsplit=1)[0].strip()
+        return head if head and head != self_key and head in raw_times else None
+
+    # Dependency-GRAMMAR words stripped from a phrase's REFERENCE tokens (they describe the timing
+    # relationship, not the committee). Monitored assumption (CodeRabbit, PR #211): these are stripped from
+    # the reference but NOT from node names, so a hypothetical future VA committee whose distinctive token IS
+    # one of these ("…the Recess Committee") could lose that token from the reference and mis-anchor without
+    # `anchor_unresolved` catching it. No such VA committee exists today (the words are procedural, not
+    # subject-matter); revisit if the committee list ever adopts one. Standard #1 accepts this as documented.
+    _GRAMMAR = {"adjournment", "adjourned", "session", "recess", "meeting"}
+
+    def _reference_of(rl):
+        # The raw text of the body a relative phrase points at ("…after <THIS>"), minus LIS's trailing
+        # "(Agenda)/(View Meeting)" boilerplate.
+        m = re.search(r'(?:immediately\s+)?(?:upon|after|following)\s+(?:the\s+)?(.*)$', rl, re.I)
+        return re.sub(r'\(.*', '', m.group(1) if m else rl)
+
+    def _ref_token_list(rl):
+        # The committee-distinctive tokens of the body named in a relative phrase, KEEPING multiplicity.
+        # Intersected with day_vocab so LIS UI-caption noise ("Committee Info", and any FUTURE caption) is
+        # dropped STRUCTURALLY, with no hand-curated denylist to rot (CodeRabbit #189). The explicit strip
+        # removes dependency-GRAMMAR words that are also node tokens ("adjourned"/"recess"/…) — they
+        # describe the timing relationship, not the committee.
+        return [t for t in normalize_room_key(_reference_of(rl)).split()
+                if t in day_vocab and t not in _GRAMMAR]
+
+    def _ref_tokens(rl):
+        return set(_ref_token_list(rl))
+
+    def _names_a_body(rl):
+        # Does the phrase point at SOME body at all? Deliberately NOT intersected with day_vocab: a
+        # committee we don't recognise ("after the Committee on Nothing At All") still NAMES one, and must
+        # therefore never fall through to the chamber-floor rung — that would silently mis-anchor it to a
+        # clock hours away. Only a phrase naming nothing ("30 minutes after adjournment") may use rung 7.
+        # "full" is excluded so the self-reference "full committee" is handled by rung 6, not counted here.
+        return bool(set(normalize_room_key(_reference_of(rl)).split()) - _GRAMMAR - {"full"})
+
     def _committee_parent(self_key, rl):
         # §3.2/§8 — resolve a COMMITTEE named in the relative phrase to that committee's
         # node THIS day: "…adjournment of the House Appropriations Committee" → the
         # "house appropriations" node, so a subcommittee anchors to its PARENT committee
         # instead of the chamber FLOOR (the mis-anchor that sorted subcommittees before
         # their parent). normalize_room_key strips filler ("committee/of/the/and") so
-        # the short reference's tokens are a subset of the full node's tokens; pick the
-        # node whose tokens COVER the reference, most-specific first, alphabetical
-        # tie-break (deterministic). Returns None for a BARE chamber reference
-        # ("adjournment of the House" — no committee-distinctive token) so those still
-        # fall through to the floor-adjourned anchor below.
-        m = re.search(r'(?:immediately\s+)?(?:upon|after|following)\s+(?:the\s+)?(.*)$', rl, re.I)
-        ref = m.group(1) if m else rl
-        ref = re.sub(r'\(.*', '', ref)   # the reference ends at the trailing "(Agenda)…" boilerplate
-        # Keep only tokens that actually name a committee THIS day (intersect with
-        # day_vocab) — LIS UI-caption noise ("Committee Info", and any future caption)
-        # is dropped structurally, so a new LIS token can't break the match or mis-anchor
-        # the row to the floor (CodeRabbit #189, calendar_chain_ordering §8). The small
-        # explicit strip removes the dependency-GRAMMAR words that ARE also node tokens
-        # ("adjourned"/"session"/"recess") — they describe the timing relationship, not
-        # the committee — so a bare "adjournment of the House" stays a bare-chamber ref.
-        ref_tokens = (set(normalize_room_key(ref).split()) & day_vocab) - {
-            "adjournment", "adjourned", "session", "recess", "meeting"}
-        if not (ref_tokens - {"house", "senate", "joint"}):
+        # the short reference's tokens are contained in the full node's tokens; pick the
+        # node that COVERS the reference, most-specific first. Returns None for a BARE
+        # chamber reference ("adjournment of the House" — no committee-distinctive token)
+        # so those still fall through to the floor-adjourned anchor below.
+        #
+        # §9d — containment is on the MULTISET, and an unresolved tie REFUSES. The old code compared
+        # token SETS and broke ties alphabetically. Both were wrong, and measurably so (209 live matches,
+        # 2 mis-anchored):
+        #   · SET containment collapses the repetition LIS uses to name a subcommittee — "House
+        #     Agriculture, Chesapeake and Natural Resources AGRICULTURE Subcommittee" has the same token
+        #     SET as its own parent committee, so the child was indistinguishable from the parent.
+        #     As a MULTISET, "agriculture ×2" fits only the subcommittee.
+        #   · ALPHABETICAL tie-break is a coin flip wearing a determinism costume: "Subcommittee #2"
+        #     (tokens: {2}) matched House Public Safety's Subcommittee #2 exactly as well as the referring
+        #     committee's own. It picked correctly only because "labor" sorts before "public". A bare
+        #     ordinal is a SELF-LINEAGE reference — scope it to the node's own committee, and if that
+        #     still leaves two candidates, refuse. Standard #3: honest-absent beats plausible-wrong.
+        ref_list = _ref_token_list(rl)
+        if not (set(ref_list) - {"house", "senate", "joint"}):
             return None
-        best = None
+        ref_mult = Counter(ref_list)
+        cands = []
         for p in raw_times:
             if p == self_key:
                 continue
-            p_tokens = set(normalize_room_key(p).split())
-            if p_tokens and ref_tokens.issubset(p_tokens):
-                extra = len(p_tokens - ref_tokens)
-                if best is None or extra < best[1] or (extra == best[1] and p < best[0]):
-                    best = (p, extra)
-        return best[0] if best else None
+            p_mult = Counter(normalize_room_key(p).split())
+            if p_mult and all(p_mult[t] >= n for t, n in ref_mult.items()):
+                cands.append((sum(p_mult.values()) - sum(ref_mult.values()), p))
+        if not cands:
+            return None
+        best_extra = min(e for e, _ in cands)
+        tied = [p for e, p in cands if e == best_extra]
+        if len(tied) > 1:
+            lineage = re.split(r'\s*-\s*', self_key, maxsplit=1)[0].strip()
+            # Compare the candidate's parent HEAD exactly (same convention as _sibling_overlap below) —
+            # a bare prefix test would let "house rules and judiciary - sub 2" pass as "house rules"
+            # lineage (Gemini #215; unreachable in VA's committee names today, but the exact form costs
+            # nothing and the failure mode was mis-anchor, not refusal).
+            same_lineage = [p for p in tied
+                            if re.split(r'\s*-\s*', p, maxsplit=1)[0].strip() == lineage]
+            tied = same_lineage if len(same_lineage) == 1 else tied
+        return tied[0] if len(tied) == 1 else None
+
+    def _sibling_overlap(self_key, ref_tokens):
+        # §9a2 — the strict subset match above fails when LIS's reference carries a token the node
+        # does NOT have: "…after GENERAL Government and Capital Outlay Subcommittee" vs the real node
+        # "House Appropriations - Government and Capital Outlay". Fall back to best TOKEN OVERLAP,
+        # scoped to this node's SIBLINGS (same parent prefix), requiring ≥2 shared distinctive tokens
+        # AND a strictly unique winner — a tie REFUSES rather than guesses (Standard #3).
+        if not ref_tokens:
+            return None
+        parent = re.split(r'\s*-\s*', self_key, maxsplit=1)[0].strip()
+        scored = []
+        for p in raw_times:
+            # Skip self AND the parent itself: the parent's hyphen-less key is its own head, so it
+            # scores as a "sibling" and can tie against (or outscore) the real sibling. The parent is
+            # never this rung's answer — a phrase naming the parent resolves on the named-body or
+            # self-reference rungs above (Gemini #215).
+            if p == self_key or p == parent:
+                continue
+            # A sibling shares this node's EXACT parent — compare the parent HEAD, not a prefix, so
+            # "House Rules" doesn't pull in "House Rules and Judiciary" as a false sibling (Gemini medium).
+            if re.split(r'\s*-\s*', p, maxsplit=1)[0].strip() != parent:
+                continue
+            ov = len(ref_tokens & set(normalize_room_key(p).split()))
+            if ov >= 2:
+                scored.append((-ov, p))
+        if not scored:
+            return None
+        scored.sort()
+        if len(scored) > 1 and scored[0][0] == scored[1][0]:
+            return None      # ambiguous overlap → stay unresolved (honest) rather than mis-anchor
+        return scored[0][1]
     def resolve_node(name_key, visited=None):
         if visited is None: visited = set()
         if name_key in resolved_times: return resolved_times[name_key]
@@ -3055,6 +3188,39 @@ def _resolve_one_day(day_rows):
                 elif "house adjourns" in rl or "adjournment of the house" in rl: found_parent = "house convenes"
                 elif "recess" in rl and "house" in rl: found_parent = next((k for k, v in raw_times.items() if "recess" in v.lower() and "house" in k.lower()), None)
                 elif "recess" in rl and "senate" in rl: found_parent = next((k for k, v in raw_times.items() if "recess" in v.lower() and "senate" in k.lower()), None)
+
+            # ── §9 ANCHOR LADDER: the residual 19 unplaceables all share ONE root — the anchor is
+            # IMPLICIT, and every rung above needs an explicitly-named body. These three rungs read the
+            # anchor off STRUCTURE (the day's node set, the "Parent - Sub" name lineage, the node's own
+            # chamber) — no phrase list to rot. STRICTLY ADDITIVE: each fires only when every rung above
+            # returned None, so an already-resolved row can never move (the Section-9 safety gate holds
+            # by construction, not by a diff). Refusal is always an option: unmatched stays unresolved.
+            if not found_parent:
+                # (5) SIBLING near-miss: the reference carries a token the node lacks ("GENERAL
+                #     Government and Capital Outlay" vs the node "Government and Capital Outlay").
+                found_parent = _sibling_overlap(name_key, _ref_tokens(rl))
+                if found_parent: _bump("anchor_sibling", name_key)
+            if not found_parent and _SELF_REF_RE.search(rl):
+                # (6) SELF-REFERENCE: "upon adjournment of full committee" names no proper body — the
+                #     parent is already encoded in this node's own "Parent - Sub" name.
+                found_parent = _parent_of(name_key)
+                if found_parent: _bump("anchor_parent", name_key)
+            if (not found_parent and ("adjourn" in rl or "recess" in rl)
+                    and not _SELF_REF_RE.search(rl) and not _names_a_body(rl)):
+                # (7) NO BODY NAMED ("30 minutes after adjournment", "Upon Recess") → this meeting's OWN
+                #     chamber's published floor marker, choosing adjourned-vs-recessed by the phrase's own
+                #     verb. No cross-verb fallback: if the verb's marker wasn't published, stay unresolved
+                #     rather than substitute a recess for an adjournment (they are different events).
+                #     The two guards are load-bearing, not defensive: a phrase that DOES name a body
+                #     ("of full committee", "after the Committee on X") has already had its rung try and
+                #     fail. Falling through to the floor would anchor it to a clock HOURS away — the
+                #     mis-anchor class of assumptions_audit #70. Only a phrase naming nothing may land here.
+                ch = _own_chamber(name_key)
+                if ch:
+                    found_parent = _recess_key(ch) if ("recess" in rl and "adjourn" not in rl) else _adjourned_key(ch)
+                    if found_parent: _bump("anchor_chamber", name_key)
+            if not found_parent:
+                _bump("anchor_unresolved", name_key)
 
             if found_parent:
                 parent_time = resolve_node(found_parent, visited)
@@ -3096,6 +3262,7 @@ def build_time_graph(schedules):
     colliding across all 443 dates. The caller keys the lookup by (date_str, name)
     with the SAME whitespace-collapsed lower-casing used here. Rows with an unparseable
     ScheduleDate are skipped — the caller drops them from the write window too."""
+    ANCHOR_RUNG_COUNTS.clear()   # per-run telemetry: which §9 rung placed each relative row
     by_date = defaultdict(list)
     for m in schedules:
         d = pd.to_datetime(m.get('ScheduleDate', ''), errors='coerce')
@@ -3107,7 +3274,6 @@ def build_time_graph(schedules):
         for name, t in _resolve_one_day(day_rows).items():
             resolved[(date_str, name)] = t
     return resolved
-
 
 def extract_rogue_agenda(url, session, target_date_dt=None, depth=0):
     # Returns (bills, is_corrupt, fetch_ok). fetch_ok is True ONLY when a parse
@@ -5567,6 +5733,13 @@ def run_calendar_update():
             if sched_res.status_code == 200:
                 schedules = sched_res.json().get('Schedules', []) if isinstance(sched_res.json(), dict) else sched_res.json()
                 resolved_parent_map = build_time_graph(schedules)
+                # §9 rung telemetry → SYSTEM_METRICS (calendar_chain_ordering §9, Standard #4): which anchor
+                # rung placed each relative meeting. `anchor_unresolved` is the standing drift canary — a rise
+                # above its steady state (1: the cross-session 2025-02-22 refusal) means LIS coined a phrasing
+                # the ladder can't place, surfacing as a METRIC instead of a silent 23:59. The #211 merge
+                # documented this fold but never implemented it (doc/code gap closed on the re-merge).
+                for _rung in ("anchor_sibling", "anchor_parent", "anchor_chamber", "anchor_unresolved"):
+                    source_miss_counts[_rung] = ANCHOR_RUNG_COUNTS.get(_rung, 0)
                 # FLAGGED last-resort derivation maps (assumptions_audit #76):
                 # each committee's modal standing schedule pattern + per-date
                 # adjourned clocks, used only when a committee met but published
@@ -5661,7 +5834,7 @@ def run_calendar_update():
                     # above — that one is kept ONLY as the bill-extraction FETCH target and mis-picks a
                     # video/registration page ~89× live; a separate follow-up). A future meeting often has the
                     # livestream but no agenda yet → agenda_display is "" and the card says "not posted yet".
-                    # PLACEMENT IS LOAD-BEARING (audit #104): this block MUST sit AFTER normalized_name's
+                    # PLACEMENT IS LOAD-BEARING (audit #105): this block MUST sit AFTER normalized_name's
                     # final (post-LOCAL_LEXICON) binding above — the key must match the Committee value the
                     # skeleton rows carry, AND an earlier placement referenced normalized_name before
                     # assignment (UnboundLocalError on the first meeting), which the schedule-loop except
@@ -5963,7 +6136,7 @@ def run_calendar_update():
             push_system_alert(f"🚨 LIS Schedule API failed during run: {e}. Times may be stale or unavailable.", status="OFFLINE")
         except Exception as e:
             # ANY other exception in this ~400-line block is a WORKER CODE BUG, not an API failure — do NOT
-            # let it wear the OFFLINE costume. Audit #104: an UnboundLocalError in the schedule loop was
+            # let it wear the OFFLINE costume. Audit #105: an UnboundLocalError in the schedule loop was
             # alerted as "LIS Schedule API failed" for THREE merges; everyone read it as a transient LIS
             # outage while it silently gutted api_schedule_map/convene_times (meeting_unsourced 0→66,
             # breaker trips, two wrong diagnoses). Behavior stays fail-open (cycle continues on cached
