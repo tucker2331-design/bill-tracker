@@ -3180,7 +3180,8 @@ def extract_rogue_agenda(url, session, target_date_dt=None, depth=0):
 # so we parse with BeautifulSoup, never a regex over the raw string. Structural, no hand-curated URL rules.
 _LINK_AGENDA_RE  = re.compile(r"\bagenda\b|\bdocket\b", re.I)
 _LINK_MEETING_RE = re.compile(
-    r"view\s+meeting|livestream|live\s+stream|watch\w*|video|stream\w*", re.I)  # incl. watching/streaming (CodeRabbit)
+    r"\b(?:view\s+meeting|livestream|live\s+stream|watch\w*|video|stream\w*)\b", re.I)  # incl. watching/streaming
+    # (CodeRabbit); \b-wrapped so "preVIEW MEETING"/"downSTREAM" can't false-positive (Gemini #214)
 # KNOWN supporting labels we deliberately DON'T surface (committee homepages, materials, signup, notices).
 # Broad word-patterns, not an exact list to rot; the typo "Subommittee" (LIS's own, ×17) is covered by
 # `sub\w*mittee`. A label matching NONE of agenda/meeting/benign is reported as drift (Standard #1).
@@ -3215,6 +3216,14 @@ def _extract_meeting_links(raw_desc):
         if not href:
             continue
         label = re.sub(r"\s+", " ", a.get_text(" ", strip=True)).strip().lower().strip("() ")
+        if not re.match(r"https?://", href, re.I):
+            # Non-absolute href (root-relative / mailto / javascript). Measured 2026-07-12: 0 of 3,042 live
+            # anchors — every LIS link is absolute today. A relative href written to the sheet would resolve
+            # against the SPA's own domain (a broken link), and prefixing a guessed base domain is exactly the
+            # hardcoded-value rot Standard #1 forbids. So: never surface it as a link; report it through the
+            # drift canary instead, so if LIS ever starts publishing relative links a human sees it (Gemini #214).
+            unknown.append(f"non-absolute href: {label or href[:40]}")
+            continue
         is_agenda = bool(_LINK_AGENDA_RE.search(label))
         is_meeting = bool(_LINK_MEETING_RE.search(label))
         if is_agenda and not agenda:
@@ -5659,10 +5668,13 @@ def run_calendar_update():
                     # mislabeled as an LIS API failure and killed the whole loop → meeting_unsourced 0→66,
                     # three reverted merges (#211/#212). pyflakes in prepush_audit.py now gates this class.
                     agenda_display, meeting_display, _link_unknown = _extract_meeting_links(raw_desc)
-                    # KEEP the first non-empty link per (date, committee): LIS can publish several Schedule
-                    # rows for one meeting (e.g. a skeleton row with no links after the real one), and a later
-                    # empty row must not clobber links an earlier row already found (CodeRabbit MAJOR; mirrors
-                    # the "don't overwrite a concrete time with a non-concrete one" guard on api_schedule_map).
+                    # KEEP the LATEST non-empty link per (date, committee): LIS can publish several Schedule
+                    # rows for one meeting, and a later EMPTY row must not clobber links an earlier row found
+                    # (CodeRabbit MAJOR on #211; mirrors the "don't overwrite a concrete time with a
+                    # non-concrete one" guard on api_schedule_map). Between two NON-empty links the later row
+                    # deliberately wins — LIS re-publishes a meeting's row when its agenda is revised, and the
+                    # fresher link is the correct one (Gemini #214 flagged comment/code disagreement; the CODE
+                    # was right, the comment said "first" — fixed the comment, kept the semantics).
                     _mk = (date_str, normalized_name.strip())
                     _prev_a, _prev_m = _meeting_links.get(_mk, ("", ""))
                     _meeting_links[_mk] = (agenda_display or _prev_a, meeting_display or _prev_m)
@@ -5957,11 +5969,15 @@ def run_calendar_update():
             # breaker trips, two wrong diagnoses). Behavior stays fail-open (cycle continues on cached
             # times, breaker still guards the write) but the alert is now self-describing: exception TYPE +
             # the exact code line, severity CRITICAL, category UNKNOWN → human review (Standard #4).
-            _frame = traceback.extract_tb(sys.exc_info()[2])[-1]
-            print(f"🐛 WORKER BUG in schedule ingestion ({type(e).__name__} at {_frame.filename.rsplit('/', 1)[-1]}:{_frame.lineno}): {e}")
+            # Defensive frame extraction (Gemini #214): a crash inside the crash-handler would trade the
+            # fail-open degrade for a hard worker failure. e.__traceback__ is guarded, frames may be empty.
+            _frames = traceback.extract_tb(e.__traceback__) if e.__traceback__ else []
+            _lineno = _frames[-1].lineno if _frames else "?"
+            _srcline = (_frames[-1].line or "").strip()[:80] if _frames else ""
+            print(f"🐛 WORKER BUG in schedule ingestion ({type(e).__name__} at line {_lineno}): {e}")
             push_system_alert(
-                f"🐛 WORKER CODE BUG in schedule ingestion — {type(e).__name__} at line {_frame.lineno} "
-                f"(`{(_frame.line or '').strip()[:80]}`): {e}. This is NOT an LIS outage; schedule-derived "
+                f"🐛 WORKER CODE BUG in schedule ingestion — {type(e).__name__} at line {_lineno} "
+                f"(`{_srcline}`): {e}. This is NOT an LIS outage; schedule-derived "
                 f"data (times/convene anchors/skeleton rows) is degraded this cycle and the breaker may trip. "
                 f"Fix the code — this will NOT self-heal.",
                 status="CRITICAL", category="UNKNOWN", severity="CRITICAL",
@@ -7841,11 +7857,15 @@ def run_calendar_update():
             if not final_df.empty:
                 if "Committee" not in final_df.columns:
                     final_df["Committee"] = ""
-                _links_series = final_df.apply(
-                    lambda r: _meeting_links.get((str(r.get("Date", "")), str(r.get("Committee", "")).strip()), ("", "")),
-                    axis=1)
-                final_df["AgendaURL"] = [t[0] for t in _links_series]
-                final_df["MeetingURL"] = [t[1] for t in _links_series]
+                if "Date" not in final_df.columns:
+                    final_df["Date"] = ""
+                # zip over the two column Series, not .apply(axis=1) — ~61k rows/cycle, and per-row Series
+                # materialization is the dominant cost of the row-wise form (Gemini #214, repo perf rule).
+                _links_pairs = [_meeting_links.get((d, c), ("", ""))
+                                for d, c in zip(final_df["Date"].astype(str),
+                                                final_df["Committee"].astype(str).str.strip())]
+                final_df["AgendaURL"] = [t[0] for t in _links_pairs]
+                final_df["MeetingURL"] = [t[1] for t in _links_pairs]
                 # Force the two new columns to the END, existing order preserved (front-end reads by letter).
                 _rest = [c for c in final_df.columns if c not in ("AgendaURL", "MeetingURL")]
                 final_df = final_df[_rest + ["AgendaURL", "MeetingURL"]]

@@ -64,4 +64,18 @@ ok(a == "" and m == "" and u == [], "no anchors → empties")
 a, m, u = cw._extract_meeting_links("")
 ok(a == "" and m == "" and u == [], "empty description → empties")
 
+# 10. Non-absolute href (root-relative/mailto) → never surfaced as a link, reported via the drift canary.
+#     Measured 2026-07-12: 0/3,042 live anchors are non-absolute; this guards the day LIS changes that
+#     (a relative href written to the sheet would break against the SPA's own domain). Gemini #214 fold-in.
+a, m, u = cw._extract_meeting_links('<a href="/schedule/agenda.pdf">(Agenda)</a>')
+ok(a == "" and m == "", f"root-relative href never surfaced -> a={a!r} m={m!r}")
+ok(u == ["non-absolute href: agenda"], f"root-relative href reported as drift -> {u}")
+
+# 11. Word-boundary guard on the meeting regex: "Preview Meeting"/"Downstream" must NOT classify as a
+#     livestream (the label is drift, not a meeting link). Gemini #214 fold-in.
+a, m, u = cw._extract_meeting_links('<a href="https://x/y">(Preview Meeting Notes)</a>')
+ok(m == "", f"'preview meeting' must not match view-meeting -> m={m!r}")
+a, m, u = cw._extract_meeting_links(f'<a href="{V}">(View Meeting)</a>')
+ok(m == V, "real '(View Meeting)' still matches with boundaries")
+
 print(f"ALL {_checks} meeting-link tests passed")
