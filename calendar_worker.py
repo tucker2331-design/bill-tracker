@@ -12,6 +12,7 @@ import re
 import io
 import csv
 import tempfile
+import traceback
 import urllib.parse
 from collections import Counter, defaultdict
 from concurrent.futures import ThreadPoolExecutor
@@ -68,7 +69,7 @@ def notify_slack(text):
 # 2026-07-04.1: date-aware SortTime resolver (#189) + the TimeClass column (#193) both change
 # Sheet1 output — force a recompute so cached/incremental paths can't serve pre-change rows
 # (Qodo #193; #189 omitted this bump, caught here).
-WORKER_OUTPUT_LOGIC_VERSION = "2026-07-07.1"
+WORKER_OUTPUT_LOGIC_VERSION = "2026-07-12.1"   # agenda-links re-ship, FIXED: the 0→66 regression was an UnboundLocalError in the schedule loop mislabeled as an API failure (audit #104), never §9/cache-warmth
 
 
 def _sha(*parts):
@@ -1788,13 +1789,6 @@ def _workbook_cell_headroom(spreadsheet, col_count):
     except Exception:
         return None
     return max(0, (LEGEVENT_WORKBOOK_CELL_CEILING - total_cells) // max(1, col_count))
-# Terminal-event detection: bills whose latest event matches one of these
-# substrings (case-insensitive, against the LegEvent Description field) are
-# considered finished and skipped on refresh. Initially empty pending review
-# of actual API response shapes; populate after first production cycle.
-# Adding a substring here MUST verify it cannot occur in non-terminal events
-# (same precedence concerns as the X-Ray's classify_action substring lists).
-TERMINAL_DESCRIPTION_PATTERNS: tuple[str, ...] = ()
 
 
 def _hash_history_rows_for_bill(rows: list[tuple]) -> str:
@@ -1809,25 +1803,6 @@ def _hash_history_rows_for_bill(rows: list[tuple]) -> str:
     items = sorted(f"{d}\x00{o}\x00{r}" for d, o, r in rows)
     payload = "\x01".join(items)
     return hashlib.sha256(payload.encode("utf-8")).hexdigest()
-
-
-def _is_terminal_legevent_description(description: str) -> bool:
-    """True if `description` matches any TERMINAL_DESCRIPTION_PATTERNS substring.
-
-    Used to short-circuit refresh on bills that cannot mutate further. Empty
-    pattern set returns False for everything (safe default — every bill
-    refreshes on TTL/hash signal until terminal patterns are populated).
-
-    Gemini PR-C7 medium review: lowercase patterns at check time so a
-    future maintainer adding (e.g.) "Approved by Governor" to the
-    constant — the natural casing — doesn't silently fail the substring
-    match against the lowercased description. Defensive, no behavior
-    change while the constant is empty.
-    """
-    if not TERMINAL_DESCRIPTION_PATTERNS or not description:
-        return False
-    lower = description.lower()
-    return any(p.lower() in lower for p in TERMINAL_DESCRIPTION_PATTERNS)
 
 
 def _get_or_create_legevent_tabs(sheet, push_alert):
@@ -1948,6 +1923,20 @@ def _get_or_create_legevent_tabs(sheet, push_alert):
     return (_open_or_create(LEGEVENT_BILLS_TAB), _open_or_create(LEGEVENT_EVENTS_TAB))
 
 
+# Per-cycle heal telemetry (cleared at the top of _load_legevent_cache). `sentinel` = stringified-null heals
+# ("None"/"null"/"nan" → ""), the drift canary; `cells_seen` = the denominator. See _clean_legevent_cell.
+#
+# SCOPE (monitored assumption, Gemini review PR #211): the canary is evaluated over the LOAD path only, and
+# that is complete for what it measures. A stringified-null SENTINEL can only originate from a PERSISTED cell
+# that once held the literal string "None" (an old pre-heal cache row) — i.e. the load path. The fresh-API
+# path receives JSON `null` → Python `None`, which `_clean_legevent_cell` collapses via its `v is None`
+# branch WITHOUT counting a sentinel (that would be routine null-handling, not drift). So the fresh path
+# cannot produce a stringified sentinel; there is nothing on it for the canary to miss. (If LIS ever literally
+# sent the JSON string "None" on the fresh path — a near-impossible repr artifact — it would heal on persist
+# and vanish as ""; that residual gap is accepted, not silently unknown.)
+_LEGEVENT_HEAL = {"sentinel": 0, "cells_seen": 0}
+
+
 def _clean_legevent_cell(v):
     """Normalize a nullable LIS structural field to a clean string.
 
@@ -1970,11 +1959,22 @@ def _clean_legevent_cell(v):
     cache-loaded and fresh-API events route IDENTICALLY. Never apply to
     Description (free text may legitimately contain the word "None"); VoteTally
     is guarded separately on persist (list/dict coercion).
+
+    Telemetry (2026-07-10): the STRINGIFIED-sentinel heal ("None"/"null"/"nan" → "") is counted in
+    ``_LEGEVENT_HEAL``. A real ``None`` → "" is routine null-handling (governor events legitimately null
+    ChamberCode on every cycle) and is NOT the anomaly, so it is not counted — only ``cells_seen`` is, as the
+    denominator (Standard #7). The stringified sentinel should be near-ZERO in steady state: fresh API sends
+    real null, persist writes "". A non-zero, rising count is a canary — an upstream schema change that began
+    stringifying nulls, or a bulk load of pre-heal cache rows. Surfaced by ``_load_legevent_cache``.
     """
+    _LEGEVENT_HEAL["cells_seen"] += 1
     if v is None:
         return ""
     s = str(v).strip()
-    return "" if s.lower() in ("none", "null", "nan") else s
+    if s.lower() in ("none", "null", "nan"):
+        _LEGEVENT_HEAL["sentinel"] += 1
+        return ""
+    return s
 
 
 def _load_legevent_cache(bills_ws, events_ws, push_alert, active_session=None):
@@ -1999,6 +1999,8 @@ def _load_legevent_cache(bills_ws, events_ws, push_alert, active_session=None):
     """
     bills_meta: dict = {}
     events_cache: dict = {}
+    _LEGEVENT_HEAL["sentinel"] = 0   # per-cycle: reset before this cycle's load-path heals are tallied
+    _LEGEVENT_HEAL["cells_seen"] = 0
     if bills_ws is None or events_ws is None:
         return bills_meta, events_cache
 
@@ -2118,6 +2120,21 @@ def _load_legevent_cache(bills_ws, events_ws, push_alert, active_session=None):
                 "CommitteeName": (_clean_legevent_cell(row[ei_committee]) if (0 <= ei_committee < row_len) else "?"),
             })
 
+    # Surface the silent heal (scalability_audit latent debt): a stringified-null flood means either an
+    # upstream schema change or a bulk migration of pre-heal cache rows — either way a human should see it.
+    # Near-zero is healthy; the denominator (cells_seen) keeps it honest (Standard #7). Threshold is a small
+    # absolute floor AND a 1% share so a handful of legacy rows during a one-time migration doesn't cry wolf,
+    # but a systematic flood does. INFO, not WARN: it's an observability signal, not a data-integrity break.
+    _healed, _seen = _LEGEVENT_HEAL["sentinel"], _LEGEVENT_HEAL["cells_seen"]
+    if _healed >= 100 and _seen and _healed >= 0.01 * _seen:
+        push_alert(
+            f"_clean_legevent_cell healed {_healed} stringified-null cells "
+            f"({_healed / _seen:.1%} of {_seen} structural cells loaded). Expected ~0 in steady state — "
+            f"check for an upstream LIS schema change or a large pre-heal cache still migrating.",
+            status="INFO", category="DATA_ANOMALY", severity="INFO",
+            dedup_key="legevent_sentinel_heal_flood",
+        )
+
     return bills_meta, events_cache
 
 
@@ -2161,7 +2178,7 @@ def _build_legevent_refresh_queue(
     tier_a: list = []  # uncached (no cached events)
     tier_b: list = []  # hash-changed
     tier_c: list = []  # TTL-expired
-    skipped_terminal = 0
+    skipped_terminal = 0  # retained as a telemetry slot (always 0 since terminal-skip removed 2026-07-10)
     skipped_fresh = 0
     schema_backfill = 0  # PR-C7.1v: bills re-queued to migrate a "?" structural column
 
@@ -2180,12 +2197,11 @@ def _build_legevent_refresh_queue(
         # committee action from a floor one), so the row is stuck at
         # NO_SCHEDULE_MATCH FOREVER even though its meeting time exists (HB438's
         # report sibling is 8:00 AM; HB246's 4/22 convene is 12:00 PM; HB447's is
-        # 10:00 AM). Such a bill is otherwise skipped — by IsTerminal OR (the case
-        # MEASURED here: 500 bills / 12,793 events) by the TTL "fresh" gate,
-        # because persist bumps FetchedAtUTC without a re-fetch, so the "?" rows
-        # look perpetually fresh and never re-qualify. Detect the incomplete
-        # column DIRECTLY and re-queue ONCE, BEFORE the terminal/TTL skips, so it
-        # migrates regardless of those states. Bounded (only "?" rows),
+        # 10:00 AM). Such a bill is otherwise skipped (the case MEASURED here: 500
+        # bills / 12,793 events) by the TTL "fresh" gate, because persist bumps
+        # FetchedAtUTC without a re-fetch, so the "?" rows look perpetually fresh
+        # and never re-qualify. Detect the incomplete column DIRECTLY and re-queue
+        # ONCE, BEFORE the TTL skip, so it migrates regardless. Bounded (only "?" rows),
         # deterministic (one fetch each), self-clearing (a real API fetch writes
         # the value). The recovery was verified correct on fresh API data — the
         # ONLY gap was the unmigrated cache.
@@ -2194,9 +2210,8 @@ def _build_legevent_refresh_queue(
             tier_b.append(bill)
             schema_backfill += 1
             continue
-        if cached.get("IsTerminal"):
-            skipped_terminal += 1
-            continue
+        # (terminal-skip removed 2026-07-10 — see _hydrate_legevent_cache's IsTerminal note; a bill that
+        #  can't mutate is already caught by the hash-unchanged + TTL-fresh gates below, no text guess.)
         if cached.get("LastHistoryHash") != current_hash:
             tier_b.append(bill)
             continue
@@ -2284,18 +2299,22 @@ def _hydrate_legevent_cache(
             latest = max(events, key=lambda e: str(e.get("EventDate") or ""))
             latest_desc = str(latest.get("Description") or "")
             latest_date = str(latest.get("EventDate") or "")[:10]
-            is_terminal = _is_terminal_legevent_description(latest_desc)
         else:
             latest_desc = ""
             latest_date = ""
-            is_terminal = False
 
         bills_meta[cache_key] = {
             "LastHistoryHash": current_hashes.get(bill, ""),
             "FetchedAtUTC":    now_utc.isoformat().replace("+00:00", "Z"),
             "LatestEventType": latest_desc[:200],  # truncate against runaway descriptions
             "LatestEventDate": latest_date,
-            "IsTerminal":      is_terminal,
+            # IsTerminal is retained in the persisted schema (dropping a stored column is a migration) but
+            # is now ALWAYS False. The terminal-skip optimization was removed 2026-07-10: it was TEXT-based
+            # (fail-unsafe — a mislabeled-terminal bill silently stops updating, a lobbyist accuracy loss),
+            # its pattern list had stayed empty since PR-C7 so it never once fired, and the TTL-fresh +
+            # hash-unchanged gates already skip steady-state bills. If a fetch-budget need ever appears,
+            # rebuild it STRUCTURALLY (a terminal-EventCode set + a drift alert). See assumptions_audit #103.
+            "IsTerminal":      False,
         }
     return fetches
 
@@ -2898,6 +2917,7 @@ def parse_24h_time(raw_time, parent_time_24h=None):
     except Exception:
         return "23:59"
 
+
 def _resolve_one_day(day_rows):
     """Resolve the relative-time graph for ONE day's schedule rows → {name_lower: "HH:MM"}.
 
@@ -3088,6 +3108,7 @@ def build_time_graph(schedules):
             resolved[(date_str, name)] = t
     return resolved
 
+
 def extract_rogue_agenda(url, session, target_date_dt=None, depth=0):
     # Returns (bills, is_corrupt, fetch_ok). fetch_ok is True ONLY when a parse
     # branch completed cleanly, so the caller can safely cache the result. A
@@ -3150,6 +3171,59 @@ def extract_rogue_agenda(url, session, target_date_dt=None, depth=0):
         print(f"⚠️ Agenda extraction failed for {url}: {e}")
         # fetch_ok stays False -> caller won't cache; bills found so far still flow this cycle
     return sorted(list(found_bills)), False, fetch_ok
+
+
+# ── Meeting + agenda link extraction (docs/ideas/meeting_agenda_links) ─────────────────────────────
+# LIS buries the agenda-PDF and the livestream links inside the Schedule API's `Description` HTML, as anchors
+# whose LABEL is the only thing distinguishing "(Agenda)" from "(View Meeting)" from "(Registration)". The
+# Description HTML is MALFORMED (unbalanced parens, anchors nested inside anchor text — measured 2026-07-10),
+# so we parse with BeautifulSoup, never a regex over the raw string. Structural, no hand-curated URL rules.
+_LINK_AGENDA_RE  = re.compile(r"\bagenda\b|\bdocket\b", re.I)
+_LINK_MEETING_RE = re.compile(
+    r"view\s+meeting|livestream|live\s+stream|watch\w*|video|stream\w*", re.I)  # incl. watching/streaming (CodeRabbit)
+# KNOWN supporting labels we deliberately DON'T surface (committee homepages, materials, signup, notices).
+# Broad word-patterns, not an exact list to rot; the typo "Subommittee" (LIS's own, ×17) is covered by
+# `sub\w*mittee`. A label matching NONE of agenda/meeting/benign is reported as drift (Standard #1).
+_LINK_BENIGN_RE  = re.compile(
+    r"\binfo\b|materials|registration|\bnotice\b|bulletin|direction|\bmap\b|comment|zoom|access|"
+    r"sub\w*mittee|committee", re.I)
+
+
+def _extract_meeting_links(raw_desc):
+    """(agenda_url, meeting_url, unknown_labels) parsed from a Schedule `Description`'s anchors, by LABEL.
+
+    - agenda_url : the first anchor labelled like an agenda/docket. A combined "(Agenda and View Meeting)"
+                   fills BOTH roles (one href, two labels).
+    - meeting_url: the first anchor labelled like a livestream/"View Meeting".
+    - unknown_labels: labels matching NEITHER agenda/meeting NOR a known-benign supporting label — the drift
+                   canary. If LIS introduces a NEW agenda/meeting label we don't recognise, it surfaces here
+                   instead of a link silently going missing.
+
+    A FUTURE meeting typically has the livestream link but no agenda yet (agendas post shortly before) — that
+    is the honest ("", meeting_url) result, and the caller/front-end renders "agenda not posted yet", never a
+    dead link. Pure: no network. Never raises."""
+    if not raw_desc or "<a" not in raw_desc.lower():
+        return "", "", []
+    try:
+        soup = BeautifulSoup(raw_desc, "html.parser")
+    except Exception:
+        return "", "", []
+    agenda = meeting = ""
+    unknown = []
+    for a in soup.find_all("a"):
+        href = (a.get("href") or "").strip()
+        if not href:
+            continue
+        label = re.sub(r"\s+", " ", a.get_text(" ", strip=True)).strip().lower().strip("() ")
+        is_agenda = bool(_LINK_AGENDA_RE.search(label))
+        is_meeting = bool(_LINK_MEETING_RE.search(label))
+        if is_agenda and not agenda:
+            agenda = href
+        if is_meeting and not meeting:
+            meeting = href
+        if not is_agenda and not is_meeting and not _LINK_BENIGN_RE.search(label):
+            unknown.append(label)
+    return agenda, meeting, unknown
 
 
 # ── Agenda-parse cache (speed audit, 2026-06-15) ──────────────────────────────
@@ -5472,6 +5546,10 @@ def run_calendar_update():
     _witness_deltas = []  # list of dicts; written after live try/except
     _witness_run_id = os.environ.get("GITHUB_RUN_ID", "local")
     _witness_seen_at_utc = _cycle_start_utc.strftime("%Y-%m-%dT%H:%M:%SZ")
+    # Meeting/agenda DISPLAY links, populated in the schedule loop and consumed by the final_df post-pass.
+    # Initialised HERE (above the api_is_online gate) so the post-pass never NameErrors when the API is offline.
+    _meeting_links = {}
+    _link_unknown_labels = set()
 
     if api_is_online:
         print("📡 Downloading Live API Schedule & Agendas...")
@@ -5486,7 +5564,7 @@ def run_calendar_update():
                 # no per-meeting entry (e.g. SJ209's 3/10 P&E meeting).
                 committee_modal_standing, adjourned_clock_by_date = _build_standing_schedule_maps(
                     schedules, test_start_date, test_end_date)
-                
+
                 for meeting in schedules:
                     meeting_date = pd.to_datetime(meeting.get('ScheduleDate', '1970-01-01'), errors='coerce')
                     # Upper bound is effective_scrape_end (NOT test_end_date) so OFF-SEASON interim meetings
@@ -5534,7 +5612,7 @@ def run_calendar_update():
                     link_match = re.search(r'href=[\'"]?([^\'" >]+)', raw_desc)
                     if link_match and any(x in raw_desc.lower() for x in ["agenda", "docket", "info"]):
                         agenda_url = link_match.group(1)
-                    
+
                     # Date-aware lookup (calendar_chain_ordering §8): build_time_graph now
                     # keys by (date, name) so a committee's SortTime is resolved within THIS
                     # day's graph, not a name-only value collided across all its dates.
@@ -5568,6 +5646,29 @@ def run_calendar_update():
                                 if not leftovers: normalized_name = api_name; break
 
                     map_key = f"{date_str}_{normalized_name.strip()}"
+
+                    # DISPLAY links for the calendar card (docs/ideas/meeting_agenda_links): the agenda PDF +
+                    # the livestream, classified by anchor LABEL (BeautifulSoup, not the first-href heuristic
+                    # above — that one is kept ONLY as the bill-extraction FETCH target and mis-picks a
+                    # video/registration page ~89× live; a separate follow-up). A future meeting often has the
+                    # livestream but no agenda yet → agenda_display is "" and the card says "not posted yet".
+                    # PLACEMENT IS LOAD-BEARING (audit #104): this block MUST sit AFTER normalized_name's
+                    # final (post-LOCAL_LEXICON) binding above — the key must match the Committee value the
+                    # skeleton rows carry, AND an earlier placement referenced normalized_name before
+                    # assignment (UnboundLocalError on the first meeting), which the schedule-loop except
+                    # mislabeled as an LIS API failure and killed the whole loop → meeting_unsourced 0→66,
+                    # three reverted merges (#211/#212). pyflakes in prepush_audit.py now gates this class.
+                    agenda_display, meeting_display, _link_unknown = _extract_meeting_links(raw_desc)
+                    # KEEP the first non-empty link per (date, committee): LIS can publish several Schedule
+                    # rows for one meeting (e.g. a skeleton row with no links after the real one), and a later
+                    # empty row must not clobber links an earlier row already found (CodeRabbit MAJOR; mirrors
+                    # the "don't overwrite a concrete time with a non-concrete one" guard on api_schedule_map).
+                    _mk = (date_str, normalized_name.strip())
+                    _prev_a, _prev_m = _meeting_links.get(_mk, ("", ""))
+                    _meeting_links[_mk] = (agenda_display or _prev_a, meeting_display or _prev_m)
+                    if _link_unknown:
+                        _link_unknown_labels.update(_link_unknown)
+
                     # PR-C8.1b (SHADOW): record this entry's structural ScheduleTypeID so
                     # _append_event can stamp ScheduleClass on the matching row (no API_Cache
                     # migration). Same (date_committee) key the row will look up.
@@ -5843,9 +5944,29 @@ def run_calendar_update():
                             sched["Time"] = best_times[map_key]["Time"]
                             sched["SortTime"] = best_times[map_key]["SortTime"]
 
-        except Exception as e:
+        except (requests.RequestException, json.JSONDecodeError) as e:
+            # A genuine upstream failure (network/HTTP/JSON) — the fetch or its parse broke. Degrade to
+            # cached times (fail-open) and say so.
             print(f"🚨 API Schedule failed: {e}")
             push_system_alert(f"🚨 LIS Schedule API failed during run: {e}. Times may be stale or unavailable.", status="OFFLINE")
+        except Exception as e:
+            # ANY other exception in this ~400-line block is a WORKER CODE BUG, not an API failure — do NOT
+            # let it wear the OFFLINE costume. Audit #104: an UnboundLocalError in the schedule loop was
+            # alerted as "LIS Schedule API failed" for THREE merges; everyone read it as a transient LIS
+            # outage while it silently gutted api_schedule_map/convene_times (meeting_unsourced 0→66,
+            # breaker trips, two wrong diagnoses). Behavior stays fail-open (cycle continues on cached
+            # times, breaker still guards the write) but the alert is now self-describing: exception TYPE +
+            # the exact code line, severity CRITICAL, category UNKNOWN → human review (Standard #4).
+            _frame = traceback.extract_tb(sys.exc_info()[2])[-1]
+            print(f"🐛 WORKER BUG in schedule ingestion ({type(e).__name__} at {_frame.filename.rsplit('/', 1)[-1]}:{_frame.lineno}): {e}")
+            push_system_alert(
+                f"🐛 WORKER CODE BUG in schedule ingestion — {type(e).__name__} at line {_frame.lineno} "
+                f"(`{(_frame.line or '').strip()[:80]}`): {e}. This is NOT an LIS outage; schedule-derived "
+                f"data (times/convene anchors/skeleton rows) is degraded this cycle and the breaker may trip. "
+                f"Fix the code — this will NOT self-heal.",
+                status="CRITICAL", category="UNKNOWN", severity="CRITICAL",
+                dedup_key="schedule_ingestion_code_bug",
+            )
 
     # ================================================================
     # PR-C2 Part B: write Schedule_Witness change-feed (append-only)
@@ -7268,6 +7389,27 @@ def run_calendar_update():
             status="INFO", category="DATA_ANOMALY", severity="INFO",
             dedup_key="history_blank_rows_summary")
 
+    # Meeting/agenda-link DRIFT canary (docs/ideas/meeting_agenda_links, Standard #1): the label→link
+    # classifier recognises agenda/livestream/benign-supporting labels structurally. A label matching NONE of
+    # those is reported here — if LIS coins a NEW agenda/meeting label, an operator sees it instead of a link
+    # silently going missing. INFO (an observability signal, not a fault); a handful of ambiguous
+    # "presentation"/"testimony" labels is normal.
+    source_miss_counts["agenda_link_unknown_labels"] = len(_link_unknown_labels)
+    # The denominator pair (Standard #7): how many (date, committee) meetings carry at least one display
+    # link this cycle vs all meetings seen. Live steady-state ≈ 1,181 agendas + 1,478 livestreams (measured
+    # 2026-07-10); a collapse to 0 while meetings_seen holds = the extractor broke (or the label scheme
+    # drifted past the canary), visible from the SYSTEM_METRICS row without scanning Sheet1.
+    source_miss_counts["agenda_links_meetings"] = sum(1 for _a, _m in _meeting_links.values() if _a or _m)
+    source_miss_counts["agenda_links_meetings_seen"] = len(_meeting_links)
+    if _link_unknown_labels:
+        _sample = ", ".join(sorted(_link_unknown_labels)[:8])
+        push_system_alert(
+            f"{len(_link_unknown_labels)} unrecognised meeting-link label(s) in the Schedule feed this cycle "
+            f"(sample: {_sample}). Not surfaced as agenda/meeting links. If any looks like a real agenda or "
+            f"livestream, its label pattern needs adding to _extract_meeting_links; otherwise benign.",
+            status="INFO", category="DATA_ANOMALY", severity="INFO",
+            dedup_key="agenda_link_unknown_labels")
+
     # Encoded as a JSON-in-outcome alert row with Bill="SYSTEM_METRICS" so
     # X-Ray Section 0 can parse it. One-liner summary also goes to stdout
     # so it lands in worker logs.
@@ -7690,6 +7832,23 @@ def run_calendar_update():
                     }])
                     final_df = pd.concat([final_df, cache_alert], ignore_index=True)
                     final_df = final_df.fillna("")
+
+            # ── Meeting/agenda DISPLAY links (docs/ideas/meeting_agenda_links) ──
+            # Attach the two additive columns keyed by (Date, Committee) — the meeting's own rows carry its
+            # links; other rows (bill actions, system) get "". ADDITIVE + LAST so the front-end's column-letter
+            # reads (A–O) never shift, and the write stays A1:Q — inside the 29-col grid, state cells (S+)
+            # untouched. NOT the AD1 off-grid pattern (assumptions_audit #99); measured safe 2026-07-10.
+            if not final_df.empty:
+                if "Committee" not in final_df.columns:
+                    final_df["Committee"] = ""
+                _links_series = final_df.apply(
+                    lambda r: _meeting_links.get((str(r.get("Date", "")), str(r.get("Committee", "")).strip()), ("", "")),
+                    axis=1)
+                final_df["AgendaURL"] = [t[0] for t in _links_series]
+                final_df["MeetingURL"] = [t[1] for t in _links_series]
+                # Force the two new columns to the END, existing order preserved (front-end reads by letter).
+                _rest = [c for c in final_df.columns if c not in ("AgendaURL", "MeetingURL")]
+                final_df = final_df[_rest + ["AgendaURL", "MeetingURL"]]
 
             sheet_data = [final_df.columns.values.tolist()] + final_df.values.tolist()
             # Unconditional (before the breaker if/else) so this timing prints even on a

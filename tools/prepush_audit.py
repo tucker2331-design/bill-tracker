@@ -4,7 +4,8 @@
 Prose rules fire only when the model THINKS to apply them — PR #189 (Fable's own) shipped an
 output-affecting change with no WORKER_OUTPUT_LOGIC_VERSION bump; a bot caught it a PR later
 (assumptions_audit #96). This script mechanically enforces the checkable subset against a diff, so the
-miss fails CI without any bot. Stdlib-only (runs in structural_tests.yml alongside the golden tests).
+miss fails CI without any bot. Stdlib-only EXCEPT the pyflakes undefined-name gate (audit #104), which
+is required only when the diff touches .py files (structural_tests.yml installs it).
 
 Usage:
   python3 tools/prepush_audit.py                       # diff origin/main...HEAD (the PR)
@@ -180,6 +181,36 @@ Judgment-only points (the script can't check these — confirm each):
       as a separate flag if so (audit #53/#15)."""
 
 
+def check_undefined_names(files, fails):
+    """Point 17 (audit #104) — pyflakes 'undefined name' gate on changed worker .py files.
+
+    An UnboundLocalError (a name referenced before its later assignment in the same function) is
+    invisible to py_compile and to golden tests that never execute the enclosing loop — it shipped
+    THREE times as the meeting_unsourced 0→66 regression, wearing an 'LIS API failed' costume from a
+    broad except. `python3 -m pyflakes` flags it statically as `undefined name 'X'`. Only that message
+    class fails (unused-import / f-string chatter stays advisory noise we ignore); only .py files in
+    the diff are scanned, so doc-only pushes never need pyflakes installed. Fail-closed: if a worker
+    .py changed and pyflakes is missing, the audit FAILS with the install command — a gate that can be
+    absent silently is not a gate."""
+    changed_py = [fd.path for fd in files.values()
+                  if fd.path.endswith(".py") and os.path.isfile(fd.path)]
+    if not changed_py:
+        return
+    try:
+        import pyflakes  # noqa: F401 — presence check only; we shell out for clean per-file output
+    except ImportError:
+        fails.append("[17] pyflakes is not installed but the diff touches .py files — the undefined-name "
+                     "gate (audit #104) cannot run. Install it: python3 -m pip install pyflakes")
+        return
+    r = subprocess.run([sys.executable, "-m", "pyflakes", *changed_py],
+                       capture_output=True, text=True)
+    hits = [ln for ln in r.stdout.splitlines()
+            if "undefined name" in ln or "referenced before assignment" in ln]
+    for h in hits:
+        fails.append(f"[17] pyflakes: {h} — a runtime NameError/UnboundLocalError waiting in a code "
+                     f"path py_compile can't see (audit #104).")
+
+
 def check_open_loops(fails):
     """Point 16 — unfinished work must be reachable from the to-do (tools/open_loops.py).
 
@@ -219,6 +250,7 @@ def main():
     output_change, bumped = check_version_bump(files, fails)
     check_ray2_backup(files, fails)
     check_forbidden(files, fails)
+    check_undefined_names(files, fails)
     check_open_loops(fails)
     warn_lines = warns(files)
 
