@@ -3431,8 +3431,9 @@ def _agenda_fetch_target(raw_desc):
     rogue = ""
     for a in soup.find_all("a"):
         href = (a.get("href") or "").strip()
-        if not href or not re.match(r"https?://", href, re.I):
-            continue                                     # skip empty + non-absolute (same guard as DISPLAY)
+        if not href or not href.lower().startswith(("http://", "https://")):
+            continue    # skip empty + non-absolute (behaviourally == the DISPLAY guard; startswith on the
+                        # per-anchor hot loop avoids re-running the regex engine — Gemini #217)
         label = re.sub(r"\s+", " ", a.get_text(" ", strip=True)).strip().lower().strip("() ")
         if _LINK_AGENDA_RE.search(label):
             return href                                  # direct agenda/docket — best target, take immediately
