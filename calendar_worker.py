@@ -69,7 +69,7 @@ def notify_slack(text):
 # 2026-07-04.1: date-aware SortTime resolver (#189) + the TimeClass column (#193) both change
 # Sheet1 output — force a recompute so cached/incremental paths can't serve pre-change rows
 # (Qodo #193; #189 omitted this bump, caught here).
-WORKER_OUTPUT_LOGIC_VERSION = "2026-07-12.2"   # §9 anchor ladder re-merge (SortTimes for implicit-anchor relative meetings change) — exonerated by audit #104; the 0→66 was an UnboundLocalError in the agenda block, never §9
+WORKER_OUTPUT_LOGIC_VERSION = "2026-07-12.2"   # §9 anchor ladder re-merge (SortTimes for implicit-anchor relative meetings change) — exonerated by audit #105; the 0→66 was an UnboundLocalError in the agenda block, never §9
 
 
 def _sha(*parts):
@@ -5825,7 +5825,7 @@ def run_calendar_update():
                     # above — that one is kept ONLY as the bill-extraction FETCH target and mis-picks a
                     # video/registration page ~89× live; a separate follow-up). A future meeting often has the
                     # livestream but no agenda yet → agenda_display is "" and the card says "not posted yet".
-                    # PLACEMENT IS LOAD-BEARING (audit #104): this block MUST sit AFTER normalized_name's
+                    # PLACEMENT IS LOAD-BEARING (audit #105): this block MUST sit AFTER normalized_name's
                     # final (post-LOCAL_LEXICON) binding above — the key must match the Committee value the
                     # skeleton rows carry, AND an earlier placement referenced normalized_name before
                     # assignment (UnboundLocalError on the first meeting), which the schedule-loop except
@@ -6127,7 +6127,7 @@ def run_calendar_update():
             push_system_alert(f"🚨 LIS Schedule API failed during run: {e}. Times may be stale or unavailable.", status="OFFLINE")
         except Exception as e:
             # ANY other exception in this ~400-line block is a WORKER CODE BUG, not an API failure — do NOT
-            # let it wear the OFFLINE costume. Audit #104: an UnboundLocalError in the schedule loop was
+            # let it wear the OFFLINE costume. Audit #105: an UnboundLocalError in the schedule loop was
             # alerted as "LIS Schedule API failed" for THREE merges; everyone read it as a transient LIS
             # outage while it silently gutted api_schedule_map/convene_times (meeting_unsourced 0→66,
             # breaker trips, two wrong diagnoses). Behavior stays fail-open (cycle continues on cached
