@@ -31,7 +31,7 @@ jobs:
         with:
           python-version: '3.10'
       - name: Install pyflakes (undefined-name gate, audit #104)
-        run: python3 -m pip install --quiet pyflakes
+        run: python3 -m pip install --quiet "pyflakes==3.4.0"  # pinned: the audit matches message wording (CodeRabbit #214)
       - name: Machine pre-push audit (mechanical 15-point subset)
         run: |
           if [ -n "${{ github.base_ref }}" ]; then

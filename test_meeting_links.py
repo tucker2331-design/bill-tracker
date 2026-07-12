@@ -63,6 +63,8 @@ a, m, u = cw._extract_meeting_links("30 minutes after adjournment")
 ok(a == "" and m == "" and u == [], "no anchors → empties")
 a, m, u = cw._extract_meeting_links("")
 ok(a == "" and m == "" and u == [], "empty description → empties")
+a, m, u = cw._extract_meeting_links(None)
+ok(a == "" and m == "" and u == [], "None description → empties (locks the falsy-guard contract)")
 
 # 10. Non-absolute href (root-relative/mailto) → never surfaced as a link, reported via the drift canary.
 #     Measured 2026-07-12: 0/3,042 live anchors are non-absolute; this guards the day LIS changes that

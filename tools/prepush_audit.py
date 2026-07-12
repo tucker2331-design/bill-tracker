@@ -202,10 +202,16 @@ def check_undefined_names(files, fails):
         fails.append("[17] pyflakes is not installed but the diff touches .py files — the undefined-name "
                      "gate (audit #104) cannot run. Install it: python3 -m pip install pyflakes")
         return
-    r = subprocess.run([sys.executable, "-m", "pyflakes", *changed_py],
+    # "./"-prefix any path starting with "-" so it can't parse as a CLI flag (paths come from the
+    # PR diff, which an external contributor controls — CodeRabbit #214).
+    safe_paths = [p if not p.startswith("-") else os.path.join(".", p) for p in changed_py]
+    r = subprocess.run([sys.executable, "-m", "pyflakes", *safe_paths],
                        capture_output=True, text=True)
+    # Match the QUOTED form `undefined name 'x'` — the bare substring also matches pyflakes' F403
+    # wording ("unable to detect undefined names"), which would fail pushes on any star-import
+    # (CodeRabbit #214). Wording is pinned by pyflakes==3.4.0 in structural_tests.yml.
     hits = [ln for ln in r.stdout.splitlines()
-            if "undefined name" in ln or "referenced before assignment" in ln]
+            if "undefined name '" in ln or "referenced before assignment" in ln]
     for h in hits:
         fails.append(f"[17] pyflakes: {h} — a runtime NameError/UnboundLocalError waiting in a code "
                      f"path py_compile can't see (audit #104).")
