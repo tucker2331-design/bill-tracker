@@ -1,10 +1,19 @@
 ---
 tags: [ideas, calendar, lis, links, plan]
-updated: 2026-07-10
+updated: 2026-07-12
 status: shipped
 ---
 
-# Meeting + agenda links — ✅ SHIPPED 2026-07-10 (both future & past)
+# Meeting + agenda links — ✅ SHIPPED (re-shipped 2026-07-12 after the #211/#212 reverts)
+
+> **Re-ship note (2026-07-12):** the 2026-07-10 ship was reverted twice — the capture block referenced
+> `normalized_name` before its binding in the schedule loop (`UnboundLocalError` → mislabeled as an LIS API
+> outage → `meeting_unsourced` 0→66 breaker trips; [[failures/assumptions_audit#105]]). Re-shipped FIXED in
+> [PR #214](https://github.com/tucker2331-design/bill-tracker/pull/214) — the block now sits AFTER the final
+> post-lexicon `normalized_name` binding (placement is load-bearing: the key must match the skeleton rows'
+> `Committee`). Live verified: `agenda_links_meetings=859/1,684` in SYSTEM_METRICS, real PDFs/livestreams on
+> Sheet1 rows, `meeting_unsourced=0`.
+
 
 > **SHIPPED & browser-verified.** Worker: `_extract_meeting_links` (label-based, BeautifulSoup) →
 > additive `AgendaURL`/`MeetingURL` columns on Sheet1 (safe rectangular write, §4) + a drift canary for

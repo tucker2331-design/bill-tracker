@@ -1,6 +1,6 @@
 ---
 tags: [state, live, debt, anti-pattern]
-updated: 2026-07-07
+updated: 2026-07-12
 status: active
 ---
 
@@ -211,6 +211,16 @@ desc says `agenda|docket|info`) picks a registration/webinar/video page **89×**
 fetches it and regexes bills out — wasted off-site fetches + a wrong-page-bills risk. Fix: drive the FETCH from
 `_extract_meeting_links` too, preserving the 194 legitimate committee-info rogue-nav cases. Because it changes which
 bills land on a meeting (Section-9-adjacent), it needs its own before/after. See [[ideas/meeting_agenda_links]] §2.
+
+---
+
+## 14. `calendar_worker.py` schedule block — one broad `except Exception` labeled EVERY failure "LIS Schedule API failed"
+
+**Status:** resolved-in-PR#214 (2026-07-12). The except is SPLIT: `requests.RequestException`/`json.JSONDecodeError` keep the OFFLINE degrade; any OTHER exception now alerts `CRITICAL`/`UNKNOWN` with the exception type + code line + "this is NOT an LIS outage… will NOT self-heal".
+
+**Severity:** `CRITICAL` — not data loss, but a diagnosis-poisoning mislabel: the ~400-line schedule ingestion block funneled every exception (including a plain `UnboundLocalError` from a code bug) into `push_system_alert(..., status="OFFLINE")` with an "API failed" message. That costume drove THREE wrong diagnoses and three reverted merges on the `meeting_unsourced` 0→66 regression before the alert text itself (which literally named the unbound variable) was read as evidence. See [[failures/assumptions_audit#105]].
+
+**The general rule it violated:** Standard #4's category system exists so a signal's CATEGORY carries causal information. A handler that catches `Exception` may only claim causes it can distinguish — everything else routes to `UNKNOWN` → human review.
 
 ---
 

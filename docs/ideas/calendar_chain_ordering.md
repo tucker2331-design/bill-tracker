@@ -1,21 +1,22 @@
 ---
 tags: [ideas, calendar, worker, time-resolution, plan, structural]
-updated: 2026-07-10
-open_loop: §9 anchor ladder redo — reverted (regressed meeting_unsourced); needs an STM-level meeting_unsourced gate
-status: active  # §9 anchor ladder REVERTED 2026-07-11 (regressed meeting_unsourced 0→66, audit #101); needs an STM-level gate before re-attempt
+updated: 2026-07-12
+status: shipped  # §9 anchor ladder RE-MERGED 2026-07-12 (PR #215) — exonerated of the 0→66 (audit #105: an UnboundLocalError in the agenda block, not §9)
 premise-revised: 2026-07-02  # §1-§6 premise ("chains stranded at 23:59, additive gate tweak") FALSIFIED — see §8
 implemented: 2026-07-03  # DATE-AWARE refactor shipped in PR #189 — see §8 tail
 ---
 
 # Plan — Resolve "after committee X" meeting CHAINS (calendar ordering)
 
-> **⛔ §9 ANCHOR LADDER REVERTED 2026-07-11.** It shipped in PR #211, then the first full-recompute cycle tripped the
-> circuit breaker: `meeting_unsourced` **0→66** (the core §9 accuracy metric). Root cause + diagnosis:
-> [[failures/assumptions_audit#101]]. The validation gate checked `relative_unresolved` (19→1) but NOT the
-> downstream `meeting_unsourced` — the blind spot. **Before re-attempting:** build an STM-level
-> `meeting_unsourced` diff (good-vs-new on a live replay) and decide whether the 66 are a routing gap the §9
-> resolution EXPOSED or a mis-resolution. Everything ELSE from #211 (agenda links, auto-refresh, witness fix,
-> B-7) was re-shipped WITHOUT §9. The reverted §9 work is in git (merge `775e074`).
+> **✅ §9 ANCHOR LADDER RE-MERGED 2026-07-12 ([PR #215](https://github.com/tucker2331-design/bill-tracker/pull/215)).**
+> The 2026-07-11 revert blamed §9 for the `meeting_unsourced` 0→66 breaker trip — that diagnosis was WRONG
+> ([[failures/assumptions_audit#105]]): the regression was an `UnboundLocalError` in the agenda-links block
+> (fixed in #214); the re-ship WITHOUT §9 tripped identically, exonerating the ladder. The re-merge also
+> closed a #211 doc/code gap: the rung telemetry (`anchor_sibling/parent/chamber/unresolved`) is now actually
+> folded into SYSTEM_METRICS — `anchor_unresolved` (steady state **1**, the cross-session 2025-02-22 refusal)
+> is the standing drift canary. Re-validated at merge: SAFETY 0/2,889 published clocks move, RESOLUTION
+> 449/450, rung telemetry `chamber 16 · parent 3 · sibling 1 · unresolved 1`, plus two Gemini tie-break
+> hardenings (exact parent-HEAD lineage match; parent excluded from the sibling rung) measured behavior-neutral.
 
 Owner re-raised twice (2026-06-23): committee meetings scheduled *"Immediately after the Transportation and
 Public Safety Subcommittee"* / *"1/2 hour after adjournment of the House"* currently **pile up at the end of

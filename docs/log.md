@@ -8,6 +8,32 @@ status: active
 
 Append-only, reverse-chronological (newest at top). Each entry opens with `## [YYYY-MM-DD] <kind> | <title>` so `grep "^## \[" log.md | head -20` gives a parseable timeline.
 
+## [2026-07-12] pr | #215 MERGED — §9 anchor ladder re-merged (exonerated) + rung telemetry actually folded into SYSTEM_METRICS
+
+The §9 anchor ladder is live again ([PR #215](https://github.com/tucker2331-design/bill-tracker/pull/215)),
+re-validated at merge: SAFETY 0/2,889 published clocks move, RESOLUTION 449/450 relative rows concrete, rung
+telemetry `chamber 16 · parent 3 · sibling 1 · unresolved 1`. Closed a #211 doc/code gap (the rung counters
+were documented as "folded into SYSTEM_METRICS" but no fold site existed — `anchor_unresolved` is now a real
+standing drift canary, steady state 1). Gemini fold-in: exact parent-HEAD lineage match in `_committee_parent`
++ parent excluded from the sibling rung — both re-measured behavior-neutral on live data. Renumbered the new
+UnboundLocalError lesson to audit #105 (#104 was already the gspread entry in the reverted docs, now restored).
+`WORKER_OUTPUT_LOGIC_VERSION=2026-07-12.2`.
+
+## [2026-07-12] pr | #214 MERGED — agenda links re-shipped; the 0→66 regression ROOT-CAUSED: an UnboundLocalError wearing an API-outage costume
+
+The three-revert mystery is solved ([[failures/assumptions_audit#105]]): the agenda-links capture block
+referenced `normalized_name` 26 lines before its binding → `UnboundLocalError` on the first meeting row →
+the schedule block's broad `except` alerted it as "LIS Schedule API failed" (OFFLINE) → schedule ingestion
+died (skeleton rows −2,713, `timeclass_*` absent, convene anchors lost) → `meeting_unsourced=66`, breaker
+trip. All three trip cycles carry the literal alert row in `Metrics_History`; §9 and cache-warmth were both
+innocent; the breaker was right every time. Shipped in [#214](https://github.com/tucker2331-design/bill-tracker/pull/214):
+the placement fix, the SPLIT except (a code bug now alerts CRITICAL/UNKNOWN with type+line — no more OFFLINE
+costume), pre-push check 17 (pyflakes `undefined name` gate; flags the original at 5625:38; pinned 3.4.0 in
+CI), `agenda_links_meetings(+_seen)` counters. Live post-merge cycle verified: `meeting_unsourced=0`, rows
+61,047, `agenda_links_meetings=859/1,684`, real agenda PDFs + livestreams on Sheet1 rows, breaker clear.
+Bot fold-ins: [[failures/gemini_review_patterns]] #55 (substring filter collides with sibling message wording)
++ #56 (bots re-post stale reviews). `WORKER_OUTPUT_LOGIC_VERSION=2026-07-12.1`.
+
 ## [2026-07-11] verify | Hotfix confirmed healthy — known-good FULL recompute = meeting_unsourced 0, clean write
 
 The post-hotfix worker cycle (21:36) was a FULL recompute (shared_changed=True, 3645 recomputed) and wrote

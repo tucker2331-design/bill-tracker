@@ -1,18 +1,28 @@
 ---
 tags: [failure, handoff, calendar, breaker, section-9]
-updated: 2026-07-11
-status: active
-open_loop: meeting_unsourced 0→66 on full recompute blocks agenda-cols + §9 re-merge — needs an offline STM diff on frozen inputs
+updated: 2026-07-12
+status: archived
 ---
 
-# HANDOFF — the `meeting_unsourced` 0→66 regression (blocks agenda-cols + §9)
+# ✅ RESOLVED — the `meeting_unsourced` 0→66 regression (was an UnboundLocalError, audit #105)
 
-> **One-paragraph pickup:** Re-merging EITHER the §9 anchor ladder OR the agenda-links worker columns makes the
-> next FULL recompute compute `meeting_unsourced=66` (the §9-accuracy metric; steady state is 0), which trips
-> the circuit breaker → Sheet1 write skipped → no data lost, but nothing ships and the breaker CRITICAL returns.
-> The worker on `main` is REVERTED to known-good and is HEALTHY (`meeting_unsourced=0`, verified on a full
-> recompute 2026-07-11 21:36). The reverted work is safe in git. The task: find WHY the 66 appear and either fix
-> the cause or recalibrate the breaker, then re-merge.
+> **RESOLUTION (2026-07-12):** the 66 was never §9, never the agenda-column semantics, never cache warmth.
+> The agenda-links capture block referenced `normalized_name` **26 lines before its binding** in the schedule
+> loop → `UnboundLocalError` on the first meeting row → swallowed by the schedule block's broad
+> `except Exception` and alerted as *"🚨 LIS Schedule API failed during run: local variable 'normalized_name'
+> referenced before assignment"* (status=OFFLINE) — the production alert stream NAMED the bug on all three
+> trip cycles, and every diagnosis pass read it as a transient LIS outage. With the schedule loop dead:
+> skeleton rows −2,713, `timeclass_*` absent, convene anchors lost (`sourced_convene` −1,278), 66
+> meeting-routed actions unsourced, breaker trip. Full post-mortem: [[failures/assumptions_audit#105]].
+>
+> **Fixed + hardened in [PR #214](https://github.com/tucker2331-design/bill-tracker/pull/214)** (placement
+> after the binding; the except SPLIT so a code bug alerts CRITICAL/UNKNOWN with type+line instead of wearing
+> the OFFLINE costume; pyflakes `undefined name` gate = pre-push check 17 — it flags the original at 5625:38).
+> **§9 re-merged in [PR #215](https://github.com/tucker2331-design/bill-tracker/pull/215)** (exonerated; plus
+> the rung-telemetry→SYSTEM_METRICS fold #211 documented but never implemented). Both verified on live
+> post-merge cycles: `meeting_unsourced=0`, breaker clear, agenda links populated (859/1,684 meetings).
+> The offline STM-diff test prescribed below was never needed — **reading the trip cycles' alert stream in
+> `Metrics_History` was the 30-minute shortcut**. Kept below as the historical record of the wrong turns.
 
 ## State of the world (2026-07-11)
 
