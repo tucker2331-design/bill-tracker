@@ -3112,7 +3112,12 @@ def _resolve_one_day(day_rows):
         tied = [p for e, p in cands if e == best_extra]
         if len(tied) > 1:
             lineage = re.split(r'\s*-\s*', self_key, maxsplit=1)[0].strip()
-            same_lineage = [p for p in tied if p == lineage or p.startswith(lineage)]
+            # Compare the candidate's parent HEAD exactly (same convention as _sibling_overlap below) —
+            # a bare prefix test would let "house rules and judiciary - sub 2" pass as "house rules"
+            # lineage (Gemini #215; unreachable in VA's committee names today, but the exact form costs
+            # nothing and the failure mode was mis-anchor, not refusal).
+            same_lineage = [p for p in tied
+                            if re.split(r'\s*-\s*', p, maxsplit=1)[0].strip() == lineage]
             tied = same_lineage if len(same_lineage) == 1 else tied
         return tied[0] if len(tied) == 1 else None
 
@@ -3127,7 +3132,11 @@ def _resolve_one_day(day_rows):
         parent = re.split(r'\s*-\s*', self_key, maxsplit=1)[0].strip()
         scored = []
         for p in raw_times:
-            if p == self_key:
+            # Skip self AND the parent itself: the parent's hyphen-less key is its own head, so it
+            # scores as a "sibling" and can tie against (or outscore) the real sibling. The parent is
+            # never this rung's answer — a phrase naming the parent resolves on the named-body or
+            # self-reference rungs above (Gemini #215).
+            if p == self_key or p == parent:
                 continue
             # A sibling shares this node's EXACT parent — compare the parent HEAD, not a prefix, so
             # "House Rules" doesn't pull in "House Rules and Judiciary" as a false sibling (Gemini medium).
