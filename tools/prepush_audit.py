@@ -33,6 +33,7 @@ OUTPUT_VALUE_ANCHORS = (
     "build_time_graph", "_resolve_one_day", "parse_24h_time", "_committee_parent",
     "_build_standing_schedule_maps", "_derive_standing_committee_time", "_parse_relative_offset_minutes",
     "_is_relative_time_text", "_plausible_meeting_time", "find_api_schedule_match",
+    "_agenda_fetch_target", "extract_rogue_agenda",
     "_resolve_via_legislation_event_api", "resolve_committee_from_refid",
     "classify_action", "route_event", "_route_for_row",
 )

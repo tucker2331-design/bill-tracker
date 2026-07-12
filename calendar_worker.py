@@ -69,7 +69,7 @@ def notify_slack(text):
 # 2026-07-04.1: date-aware SortTime resolver (#189) + the TimeClass column (#193) both change
 # Sheet1 output — force a recompute so cached/incremental paths can't serve pre-change rows
 # (Qodo #193; #189 omitted this bump, caught here).
-WORKER_OUTPUT_LOGIC_VERSION = "2026-07-12.2"   # §9 anchor ladder re-merge (SortTimes for implicit-anchor relative meetings change) — exonerated by audit #105; the 0→66 was an UnboundLocalError in the agenda block, never §9
+WORKER_OUTPUT_LOGIC_VERSION = "2026-07-12.3"   # label-based agenda-FETCH target (open_anti_patterns #13): which bills attach to ~97 meetings changes, so incremental/Stage-2 cache must invalidate
 
 
 def _sha(*parts):
@@ -3401,6 +3401,46 @@ def _extract_meeting_links(raw_desc):
     return agenda, meeting, unknown
 
 
+# Committee-homepage labels that extract_rogue_agenda can MINE for the date's agenda (the ~194 legitimate
+# "rogue-nav" cases where VA committees self-host their dockets — House/Senate Appropriations). Distinct from
+# the DISPLAY benign set: for the FETCH these ARE a valid fallback target. "registration"/"materials"/"notice"
+# deliberately absent — a webinar signup or a budget-hearing bulletin is never a bill docket.
+_LINK_ROGUE_NAV_RE = re.compile(r"\binfo\b|sub\w*mittee|committee", re.I)
+
+
+def _agenda_fetch_target(raw_desc):
+    """The URL to FETCH for agenda bill-extraction (feeds extract_rogue_agenda), chosen by anchor LABEL —
+    NOT the old first-href heuristic that grabbed a livestream/registration page ~89×/cycle and regexed bill
+    numbers out of it (open_anti_patterns #13; measured 298 old targets on a video/registration host).
+
+    Priority, by label:
+      1. a real **agenda/docket** anchor → the direct target (a `.PDF` blob or an agenda page). Best; take it.
+      2. else a **committee-/subcommittee-info** homepage → the rogue-nav fallback; extract_rogue_agenda mines
+         it for the target date's agenda (the ~194 self-hosted-docket cases). Keep scanning for a direct
+         agenda first — a real agenda anchor always wins over a homepage.
+      3. else "" — a livestream / registration / public-hearing-notice page is NEVER a bill source.
+
+    Pure (no network), never raises. Mirrors _extract_meeting_links' parser so DISPLAY and FETCH agree on
+    what an "agenda" anchor is."""
+    if not raw_desc or "<a" not in raw_desc.lower():
+        return ""
+    try:
+        soup = BeautifulSoup(raw_desc, "html.parser")
+    except Exception:
+        return ""
+    rogue = ""
+    for a in soup.find_all("a"):
+        href = (a.get("href") or "").strip()
+        if not href or not re.match(r"https?://", href, re.I):
+            continue                                     # skip empty + non-absolute (same guard as DISPLAY)
+        label = re.sub(r"\s+", " ", a.get_text(" ", strip=True)).strip().lower().strip("() ")
+        if _LINK_AGENDA_RE.search(label):
+            return href                                  # direct agenda/docket — best target, take immediately
+        if not rogue and not _LINK_MEETING_RE.search(label) and _LINK_ROGUE_NAV_RE.search(label):
+            rogue = href                                 # remember a committee homepage; a direct agenda beats it
+    return rogue
+
+
 # ── Agenda-parse cache (speed audit, 2026-06-15) ──────────────────────────────
 # extract_rogue_agenda fetches + PDF-parses a committee's agenda every cycle. For
 # a meeting that already happened the docket is IMMUTABLE, yet the worker re-
@@ -5790,10 +5830,14 @@ def run_calendar_update():
                     # tell whether LIS has migrated schemas without spamming logs.
                     location_val, _loc_key_fired = _extract_meeting_location(meeting)
                     
-                    agenda_url = None
-                    link_match = re.search(r'href=[\'"]?([^\'" >]+)', raw_desc)
-                    if link_match and any(x in raw_desc.lower() for x in ["agenda", "docket", "info"]):
-                        agenda_url = link_match.group(1)
+                    # Bill-extraction FETCH target — chosen by anchor LABEL (open_anti_patterns #13, resolved).
+                    # The old `first href when the desc mentions agenda|docket|info` heuristic pointed at a
+                    # livestream/registration page on ~298 rows and regexed bill numbers out of it (wrong-page
+                    # bills + wasted off-site fetches). _agenda_fetch_target takes the real agenda/docket anchor,
+                    # falling back to a committee homepage for the self-hosted-docket cases, never a video/notice.
+                    # Measured 2026-07-12: 82 rows retarget video/homepage→the real agenda PDF, 15 stop fetching a
+                    # registration/notice page, 0 real committee agendas lost. Empty string ⇒ no fetch below.
+                    agenda_url = _agenda_fetch_target(raw_desc) or None
 
                     # Date-aware lookup (calendar_chain_ordering §8): build_time_graph now
                     # keys by (date, name) so a committee's SortTime is resolved within THIS
