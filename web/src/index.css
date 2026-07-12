@@ -138,6 +138,26 @@ h2, h3 { margin: 0; }
 /* ── Section headers / layout ── */
 .h { font-size: 12px; font-weight: 700; color: var(--ink-faint); text-transform: uppercase; letter-spacing: .6px; margin: 0 0 var(--s3); }
 .panel { background: var(--surface); border-radius: var(--radius); padding: var(--s4); box-shadow: var(--shadow-sm); }
+
+/* ── Scroll affordance (owner 2026-07-12: "indicate there's more before you attempt it") ──
+   A soft fade appears at an edge ONLY when there's more content that way, and vanishes at the ends — so a
+   first-time visitor sees the bottom of the feed / day-column dissolving under an edge = "scroll for more".
+   Pure CSS (Lea Verou's four-layer technique), no JS, no scroll listeners, no DOM/flex changes:
+   the two "cover" layers are background-attachment:local (they travel WITH the content and mask the shadow at
+   the very top / very bottom), the two "shadow" layers are :scroll (pinned to the scroll viewport's edges).
+   The covers fade from the panel's own surface colour, so the effect is theme-agnostic (single light theme
+   today). Applied only to the two internally-scrolling panels, never to static .panel blocks. */
+.scroll-hint {
+  background-image:
+    linear-gradient(var(--surface) 30%, rgba(255, 255, 255, 0)),                     /* top cover   (local)  */
+    linear-gradient(rgba(255, 255, 255, 0), var(--surface) 70%),                     /* bottom cover(local)  */
+    radial-gradient(farthest-side at 50% 0, rgba(20, 28, 48, .16), rgba(20, 28, 48, 0)),   /* top shadow (scroll) */
+    radial-gradient(farthest-side at 50% 100%, rgba(20, 28, 48, .16), rgba(20, 28, 48, 0)); /* bot shadow (scroll) */
+  background-position: top, bottom, top, bottom;
+  background-size: 100% 30px, 100% 30px, 100% 15px, 100% 15px;
+  background-repeat: no-repeat;
+  background-attachment: local, local, scroll, scroll;
+}
 .cols { display: grid; grid-template-columns: 1.5fr 1fr; gap: var(--s4); align-items: start; }
 @media (max-width: 900px) { .cols { grid-template-columns: 1fr; } }
 /* Landing top block (owner 2026-07-09): give it a DEFINITE height ending ~2/3 down the screen (the sticky

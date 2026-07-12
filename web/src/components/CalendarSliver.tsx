@@ -33,7 +33,7 @@ export function CalendarSliver({ bills, onOpen, calRefresh = 0 }: { bills: Bill[
         <div className="dow">{dow}</div>
         <div className="dnum">{head}</div>
       </div>
-      <div className="dcbody">
+      <div className="dcbody scroll-hint">
         {err ? (
           <div className="dcempty">Couldn't load today's calendar.<br /><span className="muted">See the Calendar tab.</span></div>
         ) : meetings === null ? (
