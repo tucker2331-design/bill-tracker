@@ -108,7 +108,7 @@ export function Landing({ bills, onOpen, calRefresh = 0 }: { bills: Bill[]; onOp
               <button disabled={dayIdx <= 0} onClick={() => setDayIdx((i) => Math.max(0, i - 1))}>Newer →</button>
             </div>
           </div>
-          <div className="panel">
+          <div className="panel scroll-hint">
             {/* Off-season honesty (owner 2026-07-03/08): the feed opens on the newest day WITH bill actions;
                 when that isn't recent, the header says so plainly (no box) — the date is the latest in data. */}
             <p className="feedday">
