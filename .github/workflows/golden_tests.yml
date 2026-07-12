@@ -63,7 +63,8 @@ jobs:
             lis_authorization_test.py \
             session_rollover_test.py \
             health_gap_test.py \
-            witness_shard_test.py; do
+            witness_shard_test.py \
+            anchor_ladder_test.py; do
             echo "::group::$t"
             if python3 -u "$t"; then echo "PASS  $t"; else echo "FAIL  $t"; fail=1; fi
             echo "::endgroup::"
