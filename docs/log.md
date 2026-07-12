@@ -19,6 +19,19 @@ standing drift canary, steady state 1). Gemini fold-in: exact parent-HEAD lineag
 UnboundLocalError lesson to audit #105 (#104 was already the gspread entry in the reverted docs, now restored).
 `WORKER_OUTPUT_LOGIC_VERSION=2026-07-12.2`.
 
+## [2026-07-12] pr | #217 MERGED — label-based agenda-FETCH target (the last VA queue item; Section-9-adjacent)
+
+The bill-extraction FETCH no longer mines livestream/registration pages for bill numbers. `_agenda_fetch_target`
+(label-based, mirrors `_extract_meeting_links`) replaces the first-href heuristic: real agenda/docket anchor →
+committee homepage fallback → nothing (never a video/notice). Measured live before/after (session 20261, 3,533
+rows): old heuristic on a video/registration host **298×**; new selector **retargets 82** (→ the real agenda PDF),
+**drops 15** (registration/hearing-notice), **0** real committee agendas lost (the blob "drops" are budget-hearing
+bulletins). `WORKER_OUTPUT_LOGIC_VERSION` → `2026-07-12.3`; 8 golden cases (29 total); prepush output-anchors +2.
+Gemini fold-in: `startswith` over `re.match` on the per-anchor hot loop. Closes [[state/open_anti_patterns]] #13 —
+**the VA to-do is now clear.** Also this session: [[scroll-affordance PR #216]] merged (CSS scroll cue, Gemini +
+CodeRabbit folded in), and the owner's Google Drive was reorganized (4 live sheets grouped + the production sheet
+renamed off "Test Mastermind" → "VA · Live").
+
 ## [2026-07-12] pr | #214 MERGED — agenda links re-shipped; the 0→66 regression ROOT-CAUSED: an UnboundLocalError wearing an API-outage costume
 
 The three-revert mystery is solved ([[failures/assumptions_audit#105]]): the agenda-links capture block

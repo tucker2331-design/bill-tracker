@@ -23,11 +23,11 @@ status: shipped
 > states. Live extraction check: agenda_url points at a video host **0×** (was 89× with the old first-href
 > heuristic); 1,181 agendas + 1,478 livestreams extracted, drift canary reports only ~12 ambiguous labels.
 >
-> **One follow-up left (NOT this feature):** the worker's bill-extraction FETCH (`agenda_url` at the schedule
-> loop, feeding `extract_rogue_agenda`) still uses the old first-href heuristic and so fetches a
-> registration/video page ~89× per cycle to regex bills out of it. That's a bill-extraction accuracy/LIS-budget
-> issue on a different path — deliberately left untouched here (changing which bills get extracted is a
-> separate, measured change). Tracked in [[state/open_anti_patterns]] #13.
+> **Follow-up ✅ DONE (PR #217, 2026-07-12):** the bill-extraction FETCH now uses `_agenda_fetch_target`
+> (label-based, mirrors this feature's `_extract_meeting_links`) instead of the first-href heuristic. Measured
+> live: 82 rows retarget a video/homepage → the real agenda PDF, 15 stop fetching a registration/notice page,
+> 0 real committee agendas lost. `WORKER_OUTPUT_LOGIC_VERSION` → `2026-07-12.3`. See [[state/open_anti_patterns]]
+> #13 (now resolved) + [[failures/assumptions_audit#105]] neighbours in [[log]].
 
 # Meeting + agenda links — the original scope (now shipped)
 

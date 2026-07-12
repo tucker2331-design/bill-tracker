@@ -202,15 +202,20 @@ events_rows.append([
 
 ---
 
-## 13. Schedule-loop bill-extraction FETCH still uses the first-href heuristic (~89 non-agenda fetches/cycle)
+## 13. Schedule-loop bill-extraction FETCH used the first-href heuristic (mined livestream/registration pages for bills)
 
-**Severity:** `INFO` (accuracy/LIS-budget, not corruption). **Status:** OPEN — surfaced during the meeting-links
-build (PR #211, re-shipped 2026-07-11); the DISPLAY path uses the correct label-based `_extract_meeting_links`,
-this FETCH path was left for a separate measured change. The schedule loop's `agenda_url` (first `href` when the
-desc says `agenda|docket|info`) picks a registration/webinar/video page **89×** per cycle, then `extract_rogue_agenda`
-fetches it and regexes bills out — wasted off-site fetches + a wrong-page-bills risk. Fix: drive the FETCH from
-`_extract_meeting_links` too, preserving the 194 legitimate committee-info rogue-nav cases. Because it changes which
-bills land on a meeting (Section-9-adjacent), it needs its own before/after. See [[ideas/meeting_agenda_links]] §2.
+**Severity:** `INFO` (accuracy/LIS-budget, not corruption). **Status:** RESOLVED-in-PR#217 (2026-07-12). The
+first-href `agenda_url` heuristic is replaced by `_agenda_fetch_target(raw_desc)`, which selects the FETCH
+target by anchor LABEL (mirroring the DISPLAY parser `_extract_meeting_links`): a real agenda/docket anchor
+wins, else a committee-/subcommittee-info homepage (the rogue-nav fallback `extract_rogue_agenda` mines),
+else nothing — a livestream/registration/notice page is never a bill source. **Measured before/after on live
+data (session 20261, 3,533 rows):** the old heuristic sat on a video/registration host on **298** rows; the
+new selector **retargets 82** rows (video/homepage → the real agenda PDF), **drops 15** (registration/
+hearing-notice → no fetch), and loses **0** real committee agendas (the blob "drops" are budget-hearing
+*bulletins*, correctly excluded — not dockets). `WORKER_OUTPUT_LOGIC_VERSION` bumped to `2026-07-12.3`
+(bills-per-meeting changes on ~97 meetings); `_agenda_fetch_target` + `extract_rogue_agenda` registered in
+the prepush audit's output-value anchors; 8 golden cases added (`test_meeting_links.py`, 29 total). Original
+scoping: [[ideas/meeting_agenda_links]] §2.
 
 ---
 
