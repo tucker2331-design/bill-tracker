@@ -101,6 +101,7 @@ Links use Obsidian `[[wikilink]]` format. Obsidian resolves by filename; path-qu
 
 ## Ideas / Deferred Work
 - [[ny/ideas/data_inventory]] — New York source inventory and unresolved meeting/calendar questions
+- [[ideas/lobbyist_jtbd_ideation]] — **EXPANSIVE zoom-out (2026-07-13, owner-requested): the lobbyist/bill-writer job map (JTBD + year-in-the-life + Kano + premortem), ~30 feature ideas A1–G2, competitive white space, business models, and a strawman shortlist — awaiting owner NARROWING.**
 - [[ideas/product_roadmap]] — **post-accuracy direction: reviewer swap (A), product vision → LIS data inventory → UI design (B), 2027-gated items (C). The anti-looping plan.**
 - [[ideas/product_vision]] — **LOCKED B1 product spec: four lenses, crossover-lane timeline, bill card, trust layer ("never pretend to know"). Build the front end toward this.**
 - [[ideas/lis_data_inventory]] — **B2: feature → LIS data → have it?/ingest it. The completeness gap, the feed-skew map, and the DB-expansion decisions (owner §7 questions).**

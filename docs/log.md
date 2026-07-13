@@ -19,6 +19,16 @@ standing drift canary, steady state 1). Gemini fold-in: exact parent-HEAD lineag
 UnboundLocalError lesson to audit #105 (#104 was already the gspread entry in the reverted docs, now restored).
 `WORKER_OUTPUT_LOGIC_VERSION=2026-07-12.2`.
 
+## [2026-07-13] decision | Zoom-out ideation session — the lobbyist job map + commercial moat (owner-requested)
+
+Owner: "assume the role of an experienced lobbyist and bill writer… be expansive… we can narrow in."
+Ran JTBD + year-in-the-life + Kano + working-backwards + premortem against fresh competitive research
+(Quorum/FiscalNote/Plural/USLege/VPAP + bill-passage-prediction literature). Output: [[ideas/lobbyist_jtbd_ideation]]
+— 4 personas, the VA annual cycle's pains, ~30 ideas in 7 buckets (session-sprint tools, text intelligence,
+relationship layer, prediction, client workflow, coverage expansion, trust-as-moat), the white-space analysis
+(deep-single-state + provable accuracy + contract-lobbyist segment vs enterprise incumbents), business-model
+sketches, premortem, and a 6-item strawman shortlist. NEXT: owner narrows.
+
 ## [2026-07-12] pr | #218 MERGED — scroll cue made VISIBLE + pipeline legend simplified (owner UI feedback)
 
 Owner couldn't see the #216 scroll affordance on the live site — the CSS-only scroll-shadow deployed fine but
