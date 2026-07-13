@@ -322,17 +322,25 @@ over-simplify FOR them; give them the same professional-grade information, just 
 - **Bill card Next-meeting: OPTION 2** — the enriched in-place row (when · room · committee · agenda/watch
   links · countdown as muted text), taking the amber row tint inside ~48h. Mockups:
   https://claude.ai/code/artifact/f1ef8d4e-ed6e-455a-be80-72bed4d02b44
-- **Amber collision resolved: the CALENDAR yields.** `.cal-mtg.unres` (unplaceable meetings) currently uses
-  the same `--o-carry-bg` amber fill — but amber's declared meaning is "pending/caution", and unplaceable is
-  honest-ABSENCE, which is quiet everywhere else on the site ("none scheduled", "—", "agenda not posted
-  yet"). Post-§9 the in-window unresolved count is 0 live, so the state is nearly extinct anyway. Build task:
-  demote unplaceable to the muted-italic TBA treatment (keep label + tooltip, drop the fill + ⚠), freeing
-  amber to mean exactly one thing.
+- **Amber collision — OPEN, owner decides which yields (PROCESS CORRECTION 2026-07-13: I banked my
+  recommendation as a locked build task without approval — owner: "don't do that without permission again."
+  A recommendation is NOT a decision; design changes to live surfaces need explicit owner sign-off before
+  entering the build list.)** The fact: `.cal-mtg.unres` (calendar unplaceable meetings) and the chosen
+  card Option 2 row both use `--o-carry-bg` amber. Options on the table: (A) unplaceable KEEPS its
+  visibility but changes clothes — e.g. a dashed border (uncertainty encoded structurally, no color spent),
+  ⚠ + label retained; (B) unplaceable goes quiet (muted-italic TBA treatment) — grounded in post-§9 live
+  data (in-window unresolved = 0) but reduces a trust-flag's visibility; (C) the card row moves off amber
+  instead (e.g. accent-soft). Data point, not a decision: the unplaceable state is nearly extinct post-§9.
+- **Crossed-over chip → neutral grey: CONFIRMED by owner 2026-07-13** (was Senate-purple in BillCard.tsx,
+  violating one-meaning-per-color). Goes in the card-build PR.
 - **Option 3 top strip: DELAYED** — decent idea, unclear use case; revisit later.
 - **Patron on list cards: P1** — patron surname next to the bill number (`SB204 · Deeds`), not a tag.
 - **Two-step unstar: APPROVED** as mocked (confirm popover, default = Keep tracking).
 - **Flagged product drift (needs owner confirm):** the live card's "crossed over" chip reuses the SENATE
   purple (`chip senate` in BillCard.tsx) — violates one-meaning-per-color; should be the neutral grey status
   chip. One-line fix, bundle with the card build.
-- Ledger v2 (register pattern, monochrome) delivered: https://claude.ai/code/artifact/17b5817d-247c-4007-9da8-45eeb093ab56
-  — awaiting owner verdict alongside the ordering/scoping conversation.
+- Ledger v2 (register pattern, monochrome): https://claude.ai/code/artifact/17b5817d-247c-4007-9da8-45eeb093ab56
+  — a SEPARATE artifact from the card mockups; owner initially only saw the card one (two links in one
+  message = one gets lost; surface separate deliverables separately). "Ledger" = internal feature name
+  (append-only record of every change, before→after — the accounting sense, on-brand with bank-grade);
+  the user-facing tab in the mock is just "Changes". Awaiting owner verdict.
