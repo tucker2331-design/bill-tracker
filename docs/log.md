@@ -19,6 +19,18 @@ standing drift canary, steady state 1). Gemini fold-in: exact parent-HEAD lineag
 UnboundLocalError lesson to audit #105 (#104 was already the gspread entry in the reverted docs, now restored).
 `WORKER_OUTPUT_LOGIC_VERSION=2026-07-12.2`.
 
+## [2026-07-12] pr | #218 MERGED — scroll cue made VISIBLE + pipeline legend simplified (owner UI feedback)
+
+Owner couldn't see the #216 scroll affordance on the live site — the CSS-only scroll-shadow deployed fine but
+was too subtle to read (a failed affordance is no affordance). Replaced with an obvious cue: content fades into
+the panel surface + a bobbing `⌄` chevron, shown ONLY while the panel can scroll down and gone at the bottom
+(`useScrollCue`: scroll + ResizeObserver + MutationObserver). Bots (Gemini + CodeRabbit, Major) caught that a
+lone ResizeObserver misses content swaps in a height-constrained panel (feed paging / async load) — folded in
+the MutationObserver, verified in isolation (content grew with no scroll/resize → cue recomputed on). Also cut
+the confusing pipeline legend math ("all ✕ sum to 1,253 (811 died + 442 carried over)") → "✕ = a bill that
+ended here (died or carried over)"; the Outcome tiles already carry the totals. **Live-verified on the deployed
+site** (screenshot): fade + chevron render when the feed overflows, hidden when it fits; legend updated.
+
 ## [2026-07-12] pr | #217 MERGED — label-based agenda-FETCH target (the last VA queue item; Section-9-adjacent)
 
 The bill-extraction FETCH no longer mines livestream/registration pages for bill numbers. `_agenda_fetch_target`
