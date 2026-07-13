@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import type { Bill } from "../data/types";
 import { dayKey } from "../data/dates";
 import { loadCalendar, type Meeting } from "../data/calendar";
+import { useScrollCue } from "./useScrollCue";
 
 // Today's calendar as a paper-planner day column (owner request): the day-of-week + numerical date at the
 // head, the day's meetings down it. It reads the SAME source as the Calendar tab — the full LIS schedule via
@@ -26,6 +27,7 @@ export function CalendarSliver({ bills, onOpen, calRefresh = 0 }: { bills: Bill[
   }, [todayKey, calRefresh]); // calRefresh bumps when the freshness-gate invalidated the shared calendar cache
 
   const byBill = new Map(bills.map((b) => [b.bill, b])); // open a bill from an agenda item
+  const cue = useScrollCue<HTMLDivElement>();   // "more below" cue when the day has more meetings than fit
 
   return (
     <div className="daycol">
@@ -33,7 +35,7 @@ export function CalendarSliver({ bills, onOpen, calRefresh = 0 }: { bills: Bill[
         <div className="dow">{dow}</div>
         <div className="dnum">{head}</div>
       </div>
-      <div className="dcbody scroll-hint">
+      <div className="dcbody" ref={cue.ref}>
         {err ? (
           <div className="dcempty">Couldn't load today's calendar.<br /><span className="muted">See the Calendar tab.</span></div>
         ) : meetings === null ? (
@@ -64,6 +66,8 @@ export function CalendarSliver({ bills, onOpen, calRefresh = 0 }: { bills: Bill[
           </div>
         ))}
       </div>
+      {/* "more below" cue — fade + bobbing chevron, only while the day column can scroll down (owner 2026-07-12) */}
+      <div className={`scrollcue${cue.hasMore ? " on" : ""}`} aria-hidden="true"><span>⌄</span></div>
     </div>
   );
 }

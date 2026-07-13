@@ -6,6 +6,7 @@ import { OutcomeChip } from "../components/common";
 import { CalendarSliver } from "../components/CalendarSliver";
 import { loadCalendar } from "../data/calendar";
 import { Timeline } from "./Timeline";
+import { useScrollCue } from "../components/useScrollCue";
 
 // A bill ACTION carries no time of its own — LIS history rows are date-only. The TIME of an action is the time
 // of the meeting it happened in, which is exactly what the calendar subsystem resolves. So we join
@@ -50,6 +51,7 @@ export function Landing({ bills, onOpen, calRefresh = 0 }: { bills: Bill[]; onOp
 
   const [dayIdx, setDayIdx] = useState(0);
   const [nowMs] = useState(() => Date.now()); // stable per mount — for the off-season "staleness" check below
+  const feedCue = useScrollCue<HTMLDivElement>();   // drives the "more below" cue on the What's-new panel
 
   // Build the (day, bill, action) → meeting-time index from the calendar (cached load, shared with the sliver).
   const [times, setTimes] = useState<TimeIndex | null>(null);
@@ -100,7 +102,7 @@ export function Landing({ bills, onOpen, calRefresh = 0 }: { bills: Bill[]; onOp
       {/* Capped to ~2/3 of the viewport so the pipeline below always PEEKS into the bottom third — a
           first-time visitor can see there's more to scroll to (owner 2026-07-09). Panels scroll internally. */}
       <div className="cols landing-top">
-        <div>
+        <div className="scrollhost">
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
             <h2 className="h">What's new</h2>
             <div className="filters" style={{ margin: 0 }}>
@@ -108,7 +110,7 @@ export function Landing({ bills, onOpen, calRefresh = 0 }: { bills: Bill[]; onOp
               <button disabled={dayIdx <= 0} onClick={() => setDayIdx((i) => Math.max(0, i - 1))}>Newer →</button>
             </div>
           </div>
-          <div className="panel scroll-hint">
+          <div className="panel" ref={feedCue.ref}>
             {/* Off-season honesty (owner 2026-07-03/08): the feed opens on the newest day WITH bill actions;
                 when that isn't recent, the header says so plainly (no box) — the date is the latest in data. */}
             <p className="feedday">
@@ -129,6 +131,9 @@ export function Landing({ bills, onOpen, calRefresh = 0 }: { bills: Bill[]; onOp
               );
             })}
           </div>
+          {/* Visible "more below" cue — a fade + a bobbing chevron, shown only while the feed can scroll down
+              and gone at the bottom (owner 2026-07-12). Overlays the panel's bottom edge; clicks pass through. */}
+          <div className={`scrollcue${feedCue.hasMore ? " on" : ""}`} aria-hidden="true"><span>⌄</span></div>
         </div>
 
         <div>
