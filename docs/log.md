@@ -19,6 +19,18 @@ standing drift canary, steady state 1). Gemini fold-in: exact parent-HEAD lineag
 UnboundLocalError lesson to audit #105 (#104 was already the gspread entry in the reverted docs, now restored).
 `WORKER_OUTPUT_LOGIC_VERSION=2026-07-12.2`.
 
+## [2026-07-13] decision | Ideation round 2 — the volunteer-advocacy-org persona (owner feedback)
+
+Owner feedback on the zoom-out: A/C/D perfect (A's 10 PM docket claim flagged as unmeasured → witness-
+histogram measurement queued), B/F explained deeper, E = single-org first (matches locked B1), G challenged
+on credibility ("will the trust claim hold up?") → three pre-launch requirements logged (public days-since-
+incident metric, quiet-by-default user health, hardening gate incl. 2027 cold-start). THE BIG REFRAME: the
+real client is an advocacy org that writes/supports its own bills, staffed by volunteers/young people →
+new V-series feature set in [[ideas/lobbyist_jtbd_ideation]] §8a (Play-Caller action windows, plain-English
+mode, constituent matching, war room, verified fact sheets, momentum cards, org-as-drafter kit). Positioning:
+"the experienced lobbyist they don't have" — intelligence+guidance for non-experts, a category neither
+enterprise incumbents nor mass-advocacy megaphones own.
+
 ## [2026-07-13] decision | Zoom-out ideation session — the lobbyist job map + commercial moat (owner-requested)
 
 Owner: "assume the role of an experienced lobbyist and bill writer… be expansive… we can narrow in."

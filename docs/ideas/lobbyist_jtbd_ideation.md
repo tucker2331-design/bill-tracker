@@ -215,3 +215,54 @@ status: active
 
 See also [[ideas/product_vision]] (locked B1), [[ideas/product_roadmap]], [[ideas/multi_state_data_strategy]],
 [[ideas/multi_state_org_structure]], [[architecture/session_archive]] (the analytics substrate), [[state/current_status]].
+
+---
+
+## 8. OWNER FEEDBACK ROUND 1 (2026-07-13) + the persona that changes the picture
+
+Owner verdicts: **A/C/D perfect** (A's "10 PM docket drop" was UNMEASURED illustration — flagged for a real
+measurement: a small tool reading `Schedule_Witness` seen-at timestamps → hour-of-day histogram of docket
+changes; doubles as a sales slide). **B/F good, explained further** (see response in session; substitute-
+redlining and code-section-watch land hardest for a bill-WRITING org; F3 regulations make the product
+year-round). **E: single-org FIRST** — perfect the current org's experience, multi-client/commercial later
+(matches locked B1 §9; keep the `position` column so it's never a retrofit). **G challenged:** "every time
+I get on the site there's a potential issue — will it hold up?" Answer logged: the DATA claim held (breaker
+kept all three 66-incidents out of production; Section 9=0 since 06-06), but owner-perception = customer-
+perception → three pre-launch requirements: (1) an honest public "days since data incident" metric with a
+strict definition; (2) quiet-by-default user-facing health (operator depth stays in the tab); (3) a
+hardening gate — N clean weeks + surviving the 2027 cold-start — before any paying user.
+
+### 8a. THE REFRAMED PRIMARY PERSONA: the advocacy org that lobbies for itself
+The owner's actual client: an org that supports AND WRITES bills, staffed heavily by **volunteers and
+young/inexperienced people**. Not a lobbyist with clients — the client doing its own lobbying without the
+experience. Product job: **be the experienced lobbyist they don't have.** Incumbents assume expertise;
+mass-advocacy tools (VoterVoice/Capitol Canary/New Mode) are megaphones not brains. The white space:
+intelligence + GUIDANCE for non-experts. "Makes a volunteer 80% as effective as a pro."
+
+Feature set (V-series, volunteer-org edition — C/D reframed to their strongest form):
+- **V1. The Play-Caller** — per tracked bill: where it sits, WHO decides next (the committee roster), the
+  ACTION WINDOW (docket time − now), and what to do (contact list / testify sign-up how-to / attend or
+  watch via our livestream links). The stage machine already knows the state; map state→playbook.
+- **V2. Plain-English mode** — every history action translated ("Passed by indefinitely (8-Y 7-N)" → "❌ the
+  committee voted 8–7 to kill this bill; usually final for the year"). One mapping table over the
+  structural router's verdicts. Tiny cost, category-defining for this persona.
+- **V3. Constituent matching** — volunteer address → their legislators → intersect with the deciding
+  committee → "Sen. X is YOUR senator AND sits on the deciding committee — your call counts double."
+  Converts a volunteer corps into targeted constituent pressure (the highest-leverage contact type).
+- **V4. The war room** — committee math (needs 8/15; 5-6-4 solid/against/unknown) + a red/yellow/green
+  whip board volunteers update from the hallway; coordinator watches the gap close. (C2+C3 volunteer-tuned.)
+- **V5. Verified fact sheet + talking points** — org lead pins ONE approved one-pager per bill; the facts
+  (status/votes/next step) render from verified data. Trust layer as a safety rail against volunteers
+  misstating facts to members' offices.
+- **V6. After-the-hearing recap** — same-day plain-English "what happened to our bill at 8:14 AM"
+  (actions+times we already have; F1 clips later).
+- **V7. Volunteer task routing** — assignments (cover this hearing / call these 5), checklists, call
+  outcomes feeding V4. Lightweight; not a CRM.
+- **V8. Shareable momentum cards** — "cleared committee 12–10, two steps from the Governor" social-ready;
+  recruits volunteers, feeds donors, markets the platform.
+- **V9. The org-as-drafter kit** — patron scouting (C5) for "who carries our bill," substitute redlining on
+  THEIR OWN bill (B1), defensive code-section radar (B2), deadline math (D3).
+
+Commercial note: advocacy orgs/nonprofits vastly outnumber pro shops and are priced out of incumbents;
+the owner's org is the live design partner for the 2027 session. This persona also strengthens the free-
+tier ubiquity wedge (§5).
