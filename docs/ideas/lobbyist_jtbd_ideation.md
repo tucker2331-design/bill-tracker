@@ -316,3 +316,23 @@ over-simplify FOR them; give them the same professional-grade information, just 
 **Next step agreed:** order the to-do and scope the first items. Candidate order for that conversation:
 (1) card Now→Next [pick mockup] · (2) change ledger · (3) parity sentinel + incident counter ·
 (4) war-room scoping [needs shared-watchlist infra decision] · then V6 text ingestion.
+
+### 8c. MOCKUP DECISIONS LOCKED (owner, 2026-07-13)
+
+- **Bill card Next-meeting: OPTION 2** — the enriched in-place row (when · room · committee · agenda/watch
+  links · countdown as muted text), taking the amber row tint inside ~48h. Mockups:
+  https://claude.ai/code/artifact/f1ef8d4e-ed6e-455a-be80-72bed4d02b44
+- **Amber collision resolved: the CALENDAR yields.** `.cal-mtg.unres` (unplaceable meetings) currently uses
+  the same `--o-carry-bg` amber fill — but amber's declared meaning is "pending/caution", and unplaceable is
+  honest-ABSENCE, which is quiet everywhere else on the site ("none scheduled", "—", "agenda not posted
+  yet"). Post-§9 the in-window unresolved count is 0 live, so the state is nearly extinct anyway. Build task:
+  demote unplaceable to the muted-italic TBA treatment (keep label + tooltip, drop the fill + ⚠), freeing
+  amber to mean exactly one thing.
+- **Option 3 top strip: DELAYED** — decent idea, unclear use case; revisit later.
+- **Patron on list cards: P1** — patron surname next to the bill number (`SB204 · Deeds`), not a tag.
+- **Two-step unstar: APPROVED** as mocked (confirm popover, default = Keep tracking).
+- **Flagged product drift (needs owner confirm):** the live card's "crossed over" chip reuses the SENATE
+  purple (`chip senate` in BillCard.tsx) — violates one-meaning-per-color; should be the neutral grey status
+  chip. One-line fix, bundle with the card build.
+- Ledger v2 (register pattern, monochrome) delivered: https://claude.ai/code/artifact/17b5817d-247c-4007-9da8-45eeb093ab56
+  — awaiting owner verdict alongside the ordering/scoping conversation.
