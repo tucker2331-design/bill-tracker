@@ -266,3 +266,53 @@ Feature set (V-series, volunteer-org edition — C/D reframed to their strongest
 Commercial note: advocacy orgs/nonprofits vastly outnumber pro shops and are priced out of incumbents;
 the owner's org is the live design partner for the 2027 session. This persona also strengthens the free-
 tier ubiquity wedge (§5).
+
+### 8b. OWNER FEEDBACK ROUND 3 (2026-07-13) — verdicts on the V-series + two elevations
+
+Correction from the owner: the volunteers are inexperienced at LOBBYING, not unintelligent — don't
+over-simplify FOR them; give them the same professional-grade information, just complete.
+
+- **V2 plain-English translations → LATER + MAJOR REWORK.** Owner's objection is exactly our own
+  silent-fallback doctrine: hand-phrasing per circumstance is endless, and an action WITHOUT a translation
+  (unseen phrasing) breaks the dependency the feature created — a missing translation is a silent source-miss
+  that trains reliance then betrays it. Do not ship until coverage is structural (translations keyed to the
+  router's verdicts/EventCodes with a drift canary, and a designed honest-absent state), not text-matched.
+- **V1 Play-Caller → REJECTED as prescriptive automation; KERNEL KEPT.** "Too dynamic to have code telling
+  you what to do next" — humans in the loop make the judgment calls (call vs I'll-be-there-tomorrow etc.).
+  The kept kernel: the BILL CARD's existing "Where it is" + skeletal "Next meeting" rows grow into a real
+  **Now → Next** section (location + docket time + room + agenda/watch links + honest-absent). Four mockups
+  delivered for owner choice: https://claude.ai/code/artifact/f1ef8d4e-ed6e-455a-be80-72bed4d02b44
+  (A quiet block · B twin cells · C journey strip · D imminent banner; recommendation A+D). Data already
+  exists (calendar meetings carry bills/times/links; card has `bill.upcoming`).
+- **V3 constituent matching → DELAYED** (org may already use a mass-advocacy tool with this; requires
+  volunteers' home addresses = privacy friction). Behind features with proven in-house use cases; ahead of
+  individual-lobbyist-only features.
+- **V4 war room → owner wants mechanics explained** (done in session; manual-first whip board, org-entered
+  intel PARTITIONED from LIS-verified truth — two visibly different data classes on one page). Scoping open.
+- **V5 fact sheet → "we basically already have this"** — correct: the verified-data half IS the product;
+  the only new piece is org-AUTHORED pinned talking points. Fold that small piece into V4's scoping.
+- **V6 substitute redlining → GO, with the owner's constraint understood:** NOT an AI feature. The core is a
+  DETERMINISTIC text diff of two LIS-published versions (git-diff-style, reproducible, no model). Optional
+  AI summary on top can come later or never. Real cost = ingesting bill text versions (a new source surface).
+- **V7 → ELEVATED: THE CHANGE LEDGER.** Owner: What's-new shows new actions by day but can't surface a
+  1-count vote correction or a time change — lobbyists shouldn't have to eyeball the timeline for diffs.
+  Feature: one place listing EVERY delta with precision and a timestamp — new actions, EDITED history rows
+  (LIS corrections — per-bill `LastHistoryHash` infra already detects change; extend to row-level diff),
+  schedule time/room/cancellation deltas (Schedule_Witness already logs these), docket adds/drops, vote
+  tally changes. Client-side "since you last looked" scoping via localStorage marker (no accounts needed).
+  Bonus surface: "LIS revised this vote 12-9 → 12-10" correction alerts — trust-building + genuinely novel.
+- **V8 momentum cards → PARKED** (owner unconvinced automated graphics motivate).
+- **G expansion → keep the 4 rings** (owner explicitly: don't simplify health yet). **Days-since-incident
+  counter: GO — and the PARITY REFRAME (owner, verbatim goal):** "ensure my lobbyists see EVERYTHING they
+  could see on the state legislative website." A FLAGGED gap is nearly as costly as an unflagged error —
+  both send users back to LIS. So the trust layer's claim expands from "never wrong" to "never less than
+  LIS": a continuous **LIS-parity sentinel** (bill-count parity, meeting parity, per-bill action-row parity
+  via the existing hashes, vote parity) feeding a user-visible parity statement ("3,645/3,645 bills ·
+  1,684/1,684 meetings · verified N min ago") + the incident counter counts BOTH accuracy incidents AND
+  parity gaps, + track degraded-minutes (time any user-visible surface showed less than LIS).
+- **Infra note surfaced by V4/V7 scoping:** stars/tracking are currently per-browser localStorage; a SHARED
+  org watchlist (and any org-authored content) needs a small write path — the first feature to force one.
+
+**Next step agreed:** order the to-do and scope the first items. Candidate order for that conversation:
+(1) card Now→Next [pick mockup] · (2) change ledger · (3) parity sentinel + incident counter ·
+(4) war-room scoping [needs shared-watchlist infra decision] · then V6 text ingestion.

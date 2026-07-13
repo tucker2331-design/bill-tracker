@@ -19,6 +19,19 @@ standing drift canary, steady state 1). Gemini fold-in: exact parent-HEAD lineag
 UnboundLocalError lesson to audit #105 (#104 was already the gspread entry in the reverted docs, now restored).
 `WORKER_OUTPUT_LOGIC_VERSION=2026-07-12.2`.
 
+## [2026-07-13] decision | Ideation round 3 — V-series verdicts; two elevations (change ledger, LIS parity)
+
+Owner triaged the V-series: plain-English → later+rework (coverage/fallback dependency = our own
+silent-fallback doctrine applied to UX); Play-Caller → rejected as prescriptive, kernel kept as the bill-card
+Now→Next section (4 mockups delivered: https://claude.ai/code/artifact/f1ef8d4e-ed6e-455a-be80-72bed4d02b44);
+constituent matching → delayed (privacy + possible incumbent tool); war room → explain-then-scope; fact
+sheet → data-half already IS the product; substitute diff → GO as DETERMINISTIC diff (no AI dependency);
+momentum cards → parked. Two ELEVATIONS: (1) the CHANGE LEDGER — row-level "what changed since you last
+looked" incl. LIS corrections (hash infra exists) + schedule deltas (witness exists); (2) the PARITY
+REFRAME — goal is "everything LIS has, always": LIS-parity sentinel + public days-since-incident counter
+counting accuracy AND parity incidents. Keep the 4 health rings. Full detail
+[[ideas/lobbyist_jtbd_ideation]] §8b. Next: order the to-do + scope first items.
+
 ## [2026-07-13] decision | Ideation round 2 — the volunteer-advocacy-org persona (owner feedback)
 
 Owner feedback on the zoom-out: A/C/D perfect (A's 10 PM docket claim flagged as unmeasured → witness-
