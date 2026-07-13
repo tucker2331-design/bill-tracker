@@ -1,6 +1,6 @@
 ---
 tags: [design, health, frontend, ui]
-updated: 2026-07-07
+updated: 2026-07-13
 status: active
 ---
 
@@ -104,6 +104,36 @@ Reserved-colour, three tiers of meaning — keep the box on every tag; grey is t
 Open A/B calls put to the owner: Dead's red (muted brick vs same-as-veto), Carried-over weight (soft tint vs
 solid amber), To-governor (grey vs blue tint). Implement on `.chip` once chosen — applies to every tag,
 boxes kept.
+
+## The change-register pattern (researched 2026-07-13 — after a mockup regression)
+
+**The failure that forced this section:** the first Change-Ledger mockup put a differently-coloured pastel
+kind-chip on every row (EDITED amber, MOVED indigo, NEW green, CANCELLED red…) — a verbatim reproduction of
+tell #1 above, caught by the owner on sight ("8 different colors… visual nightmare screaming vibe code").
+The lesson is procedural, not just aesthetic: **mockups obey the same doctrine as shipped UI — read this
+page BEFORE drawing, not after.** A concept sketch that breaks the canon anchors the wrong design in
+everyone's head.
+
+**The pattern, from the registers that do it right** (bank/brokerage statements; Stripe's events log;
+GitHub's audit log; git diff / track-changes; Gmail's read/unread boundary):
+1. **A register is a lookup table** (Few P11) — rows are ROUTINE by definition, so rows are grey by
+   definition. If every row announced itself, the view would have no signal at all.
+2. **The change itself is the data-ink** (Tufte P1): struck-through old value → bold new value. That IS the
+   display; a coloured badge restating "this row changed" is redundant ink.
+3. **Kind/category = a fixed-width small-caps TEXT column** (typography, not fills) — it keeps the vertical
+   scanning job without spending colour.
+4. **Reuse the product's own row anatomy** — our What's-new feedrow (68px accent time · bold bill number ·
+   plain text · hairline separators) is already the house language for "a thing happened at a time"; a second
+   feed must not invent a second language. Day headers reuse `drill-grouphdr`.
+5. **The unread boundary is position + a whispered hairline label** ("seen on your last visit"), like
+   Gmail's — never a coloured band.
+6. **Provenance notes ("LIS revised this record") are quiet italic text** — noteworthy, not an alarm; a
+   filter pill is how you hunt them. Colour stays reserved for the app's standing meanings (amber =
+   pending/caution, red = dead/veto/stale, accent = links/times/active state).
+
+Applied: Change-Ledger mockup v2 (https://claude.ai/code/artifact/17b5817d-247c-4007-9da8-45eeb093ab56) and
+the de-chipped bill-card Next-meeting mockups (countdown = plain muted text; urgency = the two EARNED amber
+states, row-tint + <48h banner, same precedent as the provisional pin row).
 
 ## Standing rule
 New health/status UI starts **calm-by-default**: a verdict, a short active list, a collapsed history. New

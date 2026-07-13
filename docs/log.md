@@ -19,6 +19,17 @@ standing drift canary, steady state 1). Gemini fold-in: exact parent-HEAD lineag
 UnboundLocalError lesson to audit #105 (#104 was already the gspread entry in the reverted docs, now restored).
 `WORKER_OUTPUT_LOGIC_VERSION=2026-07-12.2`.
 
+## [2026-07-13] design | Mockup regression caught by owner — the change-register pattern codified
+
+The first Change-Ledger mockup reproduced AI-tell #1 (rainbow pastel kind-chips on routine rows) despite the
+canon sitting in the vault — owner rejected it on sight. Re-read [[design/dashboard_and_visual_language]] +
+[[design/information_display]], researched register archetypes (bank statements, Stripe events, GitHub audit
+log, git diff, Gmail's unread boundary), codified "The change-register pattern" into the visual-language page,
+and rebuilt: Ledger v2 is a monochrome register on the product's own feedrow anatomy (accent time · small-caps
+grey kind column · struck-old→bold-new as the only emphasis); the card mockups were de-chipped (countdown =
+muted text; urgency = the two earned amber states). Procedural rule added: mockups obey the canon — read the
+design pages BEFORE drawing.
+
 ## [2026-07-13] decision | Ideation round 3 — V-series verdicts; two elevations (change ledger, LIS parity)
 
 Owner triaged the V-series: plain-English → later+rework (coverage/fallback dependency = our own
