@@ -1,0 +1,106 @@
+{
+  "_doc": "The LIS API + blob endpoints THIS product consumes. The endpoint audit (endpoint_audit.py) diffs the live LIS SPA bundle's route list against `consumed` + `acknowledged_ignore`; any LIS route in NEITHER is reported as parity drift (something on the state site we neither read nor have deliberately parked). Route keys are the `/<Area>/api/<method>` path, compared CASE-INSENSITIVELY (LIS ships mixed casing, e.g. getlegislationeventtypereferencesasync vs GetLegislationEventTypeReferencesAsync). Update `consumed` when the worker/tracker starts reading a new endpoint (that IS an output-affecting change — say so in the PR). Keep `acknowledged_ignore` reasons honest and specific.",
+  "consumed": [
+    { "route": "/Schedule/api/GetScheduleListAsync", "by": "calendar_worker.py", "purpose": "meeting schedule + times + agenda/livestream links" },
+    { "route": "/Committee/api/GetCommitteeListAsync", "by": "calendar_worker.py", "purpose": "authoritative committee list (H##/S## codes)" },
+    { "route": "/Session/api/GetSessionListAsync", "by": "calendar_worker.py + bill_tracker.py", "purpose": "session lifecycle / active session" },
+    { "route": "/Legislation/api/GetLegislationSessionListAsync", "by": "calendar_worker.py", "purpose": "per-session legislation list" },
+    { "route": "/Legislation/api/GetLegislationStatusListAsync", "by": "bill_tracker.py", "purpose": "bill status list (the product's status column)" },
+    { "route": "/LegislationEvent/api/GetPublicLegislationEventHistoryListAsync", "by": "calendar_worker.py", "purpose": "structural per-bill event history (the §9 time-recovery classifier of record)" },
+    { "route": "/LegislationEvent/api/GetLegislationEventTypeReferencesAsync", "by": "calendar_worker.py", "purpose": "EventType reference (admin-recovery of date-drifted governor/conference rows)" },
+    { "route": "/LegislationVersion/api/GetLegislationVersionbyBillNumberAsync", "by": "bill_tracker.py", "purpose": "bill version lookup" }
+  ],
+  "consumed_blobs": [
+    "https://lis.blob.core.windows.net/lisfiles/{code}/HISTORY.CSV",
+    "https://lis.blob.core.windows.net/lisfiles/{code}/DOCKET.CSV",
+    "https://lis.blob.core.windows.net/lisfiles/{code}/VOTE.CSV",
+    "https://lis.blob.core.windows.net/lisfiles/{code}/BILLS.CSV"
+  ],
+  "acknowledged_ignore": {
+    "_doc": "LIS routes we KNOW exist and deliberately don't consume, with the reason. Two buckets: (1) non-public write/admin/partner surfaces (LIS staff tools — never a lobbyist data source); (2) public-read endpoints we've evaluated and PARKED (each is a future-product candidate — cross-referenced to the idea page). A route matching the write/admin patterns below is auto-classified as bucket-1 and needs no explicit entry; list here only the public-read parks + anything the pattern misses.",
+    "write_admin_patterns": [
+      "save", "create", "delete", "publish", "update", "upload", "process",
+      "admin", "partner", "preview", "filegeneration", "todogeturl", "join", "complete", "votemotion",
+      "management", "sendprint", "sharereport", "clearcache"
+    ],
+    "non_public_areas": [
+      "Authentication", "User", "Personnel", "Contact", "Organization", "PrintDocuments",
+      "LegislationCollections", "LegislationCommunications", "CalendarFileGeneration",
+      "CommunicationFileGeneration", "LegislationFileGeneration", "VoteFileGeneration", "Notification"
+    ],
+    "reference_suffixes": [
+      "referencesasync", "referenceasync", "typesasync", "typereferencesasync", "typelistasync",
+      "criteriatypesasync", "rolesasync", "roletypelistasync", "dispositionsreferenceasync",
+      "sponsortypelistasync", "actionlistasync", "linksasync", "hitcountsasync"
+    ],
+    "public_read_parked": [
+      { "route": "/Legislation/api/GetFiscalImpactStatements", "reason": "fiscal-note watcher — parked feature B7 ([[ideas/lobbyist_jtbd_ideation]] §3B)" },
+      { "route": "/LegislationSummary/api/GetLegislationSummaryListAsync", "reason": "AI-summary/catchline lie-detector inputs — parked B3" },
+      { "route": "/LegislationSummary/api/GetLegislationSummaryByIDAsync", "reason": "per-bill summary — parked B3" },
+      { "route": "/LegislationText/api/getlegislationtextlistasync", "reason": "bill text — substitute redline needs this — parked B1/B6" },
+      { "route": "/LegislationText/api/GetLegislationTextByIDAsync", "reason": "bill text by id — parked B1/B6" },
+      { "route": "/LegislationPatron/api/GetLegislationPatronListAsync", "reason": "co-patrons — parked ([[ideas/copatrons_backfill]])" },
+      { "route": "/LegislationPatron/api/GetLegislationPatronsByIdAsync", "reason": "per-bill patrons/co-patrons — parked copatrons" },
+      { "route": "/Member/api/GetMemberListAsync", "reason": "legislator dossier + constituent matching — parked C1/V3" },
+      { "route": "/Member/api/GetMembersContactInformationListAsync", "reason": "member contact info — constituent-contact feature — parked V3" },
+      { "route": "/Member/api/GetMemberByIdAsync", "reason": "per-member dossier — parked C1" },
+      { "route": "/Member/api/GetMemberNumberListAsync", "reason": "member number list — parked C1" },
+      { "route": "/MembersByCommittee/api/GetCommitteeMembersListAsync", "reason": "committee rosters — whip board / committee math — parked C2/C3/V4" },
+      { "route": "/MemberVoteSearch/api/GetMemberVoteListAsync", "reason": "member vote records — dossier/prediction — parked C1/D" },
+      { "route": "/MinutesBook/api/GetPublishedMinutesBookListAsync", "reason": "official committee minutes — reconciliation ORACLE (tools/reconciliation already uses the MinutesBook independently); not a product-display source" },
+      { "route": "/MinutesBook/api/GetCommitteeMinutesSummaryAsync", "reason": "minutes summary — reconciliation-adjacent, parked" },
+      { "route": "/Vote/api/GetVoteByIdAsync", "reason": "vote detail by id — we get tallies from VOTE.CSV; per-vote detail parked" },
+      { "route": "/Vote/api/GetVoteListAsync", "reason": "vote list — VOTE.CSV covers tallies; parked" },
+      { "route": "/LegislationSubject/api/GetSubjectReferencesAsync", "reason": "subject/topic taxonomy — topic filtering feature — parked" },
+      { "route": "/Legislation/api/GetLegislationAmendmentListAsync", "reason": "amendments list — amendment tracking — parked B" },
+      { "route": "/Legislation/api/GetConferenceLegislationListAsync", "reason": "conference bills — parked" },
+      { "route": "/Legislation/api/GetLegislationByIdAsync", "reason": "per-bill detail — we assemble from CSVs; parked" },
+      { "route": "/Legislation/api/GetLegislationClassesAsync", "reason": "bill class reference — parked" },
+      { "route": "/LegislationEvent/api/GetLegislationEventHistoryListAsync", "reason": "NON-public event history (auth); the PUBLIC variant is consumed" },
+      { "route": "/Schedule/api/GetMeetingRoomsReferenceAsync", "reason": "room reference — we display the room from the schedule row; parked" },
+      { "route": "/Schedule/api/GetScheduleTypesReferenceAsync", "reason": "schedule-type reference — parked" },
+
+      { "route": "/AdvancedLegislationSearch/api/GetLegislationListAsync", "reason": "LIS advanced-search backend; we run our own faceted Search over the bulk CSV data — parity is at the DATA level, not the search-endpoint level" },
+      { "route": "/AdvancedLegislationSearch/api/GetLegislativeNumbersAsync", "reason": "search autocomplete backend — our Search covers this" },
+      { "route": "/AdvancedLegislationSearch/api/GetIntroductionDateListAsync", "reason": "search facet backend — parked" },
+      { "route": "/AdvancedLegislationSearch/api/GetMostFrequentLegislationsAsync", "reason": "'trending bills' backend — a possible delighter; parked" },
+
+      { "route": "/Calendar/api/GetCalendarListAsync", "reason": "FLOOR calendar (daily floor agenda / bills up for a floor vote) — a real gap: /Schedule covers COMMITTEE meetings, this is the Floor stage. Floor actions currently reach us via HISTORY.CSV; a dedicated floor-calendar ingest is a parked feature (product_vision Floor stage)" },
+      { "route": "/Calendar/api/GetDocketListAsync", "reason": "floor DOCKET list — same Floor-stage park as GetCalendarListAsync" },
+      { "route": "/Calendar/api/GetCalendarsByIdAsync", "reason": "floor calendar by id — Floor-stage park" },
+      { "route": "/Calendar/api/GetDocketsByIdAsync", "reason": "floor docket by id — Floor-stage park" },
+      { "route": "/Calendar/api/GetCalendarAssignmentAsync", "reason": "clerk calendar-assignment view — staff-adjacent; Floor-stage park" },
+      { "route": "/Calendar/api/GetCalendarPatronListAsync", "reason": "floor-calendar patron list — Floor-stage park" },
+
+      { "route": "/Committee/api/GetCommitteesAsync", "reason": "committee-list variant; we consume GetCommitteeListAsync (the authoritative list)" },
+      { "route": "/Committee/api/getCommitteeByIdAsync", "reason": "committee detail by id; list is consumed" },
+
+      { "route": "/Legislation/api/GetLegislationByLegislationIDsAsync", "reason": "bulk bill lookup by internal id — we assemble bills from the CSVs; parked" },
+      { "route": "/Legislation/api/GetLegislationIdsListAsync", "reason": "id list — CSV-derived; parked" },
+      { "route": "/Legislation/api/GetLegislationStatusHistoryByLegislationIDAsync", "reason": "per-bill status history — consumed structurally via HISTORY.CSV + the LegislationEvent history; parked as a redundant surface" },
+
+      { "route": "/LegislationEvent/api/GetLegislationEventByLegislationIDAsync", "reason": "NON-public event history by id (auth); the PUBLIC variant is consumed" },
+      { "route": "/LegislationEvent/api/GetLegislationEventListAsync", "reason": "NON-public event list (auth); public variant consumed" },
+
+      { "route": "/LegislationPatron/api/GetLegislationPatronsWithChangesByIdAsync", "reason": "patron changes over time — co-patron feature adjacent; parked ([[ideas/copatrons_backfill]])" },
+      { "route": "/LegislationText/api/GetLegislationVersionListAsync", "reason": "bill text version list — substitute-diff input; parked B1/B6" },
+      { "route": "/LegislationVersion/api/GetLegislationVersionbyLegislationIDAsync", "reason": "version by internal id; we consume the by-bill-number variant" },
+
+      { "route": "/Member/api/GetCommitteesListAsync", "reason": "a member's committee memberships — legislator dossier; parked C1" },
+
+      { "route": "/MinutesBook/api/GetPublishedMinutesBookListAsync-note", "reason": "see GetPublishedMinutesBookListAsync above; the MinutesBook family is the independent reconciliation ORACLE (tools/reconciliation), not a product-display source" },
+      { "route": "/MinutesBook/api/GetMinutesBookAsync", "reason": "official minutes book — reconciliation oracle input; parked (not a display source)" },
+      { "route": "/MinutesBook/api/GetChairReportAsync", "reason": "committee chair's report — minutes-adjacent; reconciliation-oracle family; parked" },
+      { "route": "/MinutesBook/api/GetChairReportLinks", "reason": "chair-report links — minutes family; parked" },
+      { "route": "/MinutesBook/api/GetMinutesbookInteractiveCalendarAsync", "reason": "minutes interactive calendar — minutes family; parked" },
+
+      { "route": "/Session/api/GetSessionByCodeAsync", "reason": "session lookup variant; we consume GetSessionListAsync" },
+      { "route": "/Session/api/GetSessionByIdAsync", "reason": "session by id variant; list consumed" },
+      { "route": "/Session/api/GetSessionShallowListAsync", "reason": "shallow session list variant; full list consumed" },
+      { "route": "/Session/api/getDefaultSessionAsync", "reason": "default-session helper; we derive the active session from the list" },
+
+      { "route": "/Statistics/api/getchamberstatisticsasync", "reason": "aggregate chamber statistics — a possible prediction/analytics input (D-series); parked" },
+      { "route": "/Statistics/api/getcommitteestatisticsasync", "reason": "aggregate committee statistics — analytics input; parked" }
+    ]
+  }
+}
