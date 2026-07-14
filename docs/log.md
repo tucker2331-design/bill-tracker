@@ -19,6 +19,21 @@ standing drift canary, steady state 1). Gemini fold-in: exact parent-HEAD lineag
 UnboundLocalError lesson to audit #105 (#104 was already the gspread entry in the reverted docs, now restored).
 `WORKER_OUTPUT_LOGIC_VERSION=2026-07-12.2`.
 
+## [2026-07-13] pr | #219 MERGED — the card bundle LIVE (Next-meeting row, dashed unplaceable, grey crossover, patron, 2-step untrack)
+
+All five owner-locked decisions shipped in one PR and verified ON PRODUCTION: HB463's list card reads
+"HB463 · Cohen" and its card shows "Tue, Jul 21 · 10:00 AM · in 7 days — VA FOIA Advisory Council ·
+📄 Agenda · ▶ Watch live" (a real interim meeting; real links) — the trip to the Calendar tab is gone.
+Amber row fires only <48h of a CONCRETE clock (minutesUntil goldens: TBA/unresolved/past → null); the
+calendar's unplaceable marker moved to the dashed border (amber = ONE meaning site-wide now); crossed-over
+chip → neutral grey; two-step untrack verified incl. the multi-star capture-phase fix (Gemini caught one
+confirm sticking open when clicking another bill's star). Fold-ins: parseLisDate reuse ×3, capture-phase
+click-outside, patron regex hoist. Console clean, tsc clean, both bot rounds green.
+
+**HANDOFF: the next work is specced for Opus in [[audits/build_wave_2026-07/README]]** — Change Ledger
+(L1 differ → L2 Changes tab), parity sentinel + days-since-incident counter (P1–P3), war-room scoping
+memo (owner-gated), witness histogram. Owner directive: Fable plans, Opus executes.
+
 ## [2026-07-13] design | Mockup regression caught by owner — the change-register pattern codified
 
 The first Change-Ledger mockup reproduced AI-tell #1 (rainbow pastel kind-chips on routine rows) despite the
