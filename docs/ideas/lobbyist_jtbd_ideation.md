@@ -344,3 +344,31 @@ over-simplify FOR them; give them the same professional-grade information, just 
   message = one gets lost; surface separate deliverables separately). "Ledger" = internal feature name
   (append-only record of every change, before→after — the accounting sense, on-brand with bank-grade);
   the user-facing tab in the mock is just "Changes". Awaiting owner verdict.
+
+### 8d. ROUND 4 (owner, 2026-07-13) — amber resolved, ledger concerns answered
+
+- **Amber collision: OPTION A CHOSEN by owner** — calendar unplaceable keeps ⚠ + label + top-of-day sort but
+  moves to a **dashed border** (form encodes "position uncertain"), zero color; amber becomes exclusively
+  "pending — act soon" (card Option 2 row). Mockup delivered (before/after, verbatim calendar CSS):
+  https://claude.ai/code/artifact/f1ef8d4e-ed6e-455a-be80-72bed4d02b44 — awaiting owner eyes before it
+  enters the build bundle.
+- **Ledger concern 1 — data-to-text sustainability ("massive pain / unmappable concepts"):** answered
+  structurally. The ledger does NOT translate LIS's unbounded prose (that was V2's fatal flaw). Its kind
+  vocabulary is OUR OWN differ's closed set — one template per detectable delta (~6: history row added /
+  row content changed / schedule time changed / docketed / off docket / cancelled), each existing because a
+  specific field in OUR schema changed. The payload is QUOTED raw data (old → new verbatim; action text
+  verbatim), never paraphrased — no dictionary to maintain. Unknown-shape fallback: a change the differ
+  can't classify renders the honest generic row ("record changed — view card") + fires a drift canary
+  (same pattern as the agenda-label canary). Unmappable-concept-looks-cheap is structurally excluded:
+  worst case is generic-but-true.
+- **Ledger concern 2 — "these rows all have times but our data rarely does":** the time column is
+  DETECTION time (when our worker cycle saw the delta) — always available, it's our own clock; LIS history
+  being date-only is exactly why detection time is what's printed. Two honesty notes for the build: label
+  it so nobody reads it as "when LIS acted" (bounded by cycle cadence, ~15 min in-session); and consider
+  muted grey (not accent) for detection times so the accent-time slot keeps meaning "a real meeting clock"
+  as in What's-new.
+- **Ledger concern 3 — "how do you know my computer from someone else's":** today, per-browser
+  localStorage (same mechanism as stars) — it knows the BROWSER, not the person; devices don't sync;
+  a shared computer shares the marker. Ship honest ("since you last looked on this device"), upgrade to
+  per-person when the shared-watchlist identity decision lands (already queued). Ledger verdict otherwise:
+  owner likes it ("looks good, almost too good").
