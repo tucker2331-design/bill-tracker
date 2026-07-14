@@ -27,7 +27,7 @@ function ordinal(n: number): string {
 }
 
 // "Stuart" stays "Stuart"; a future full "Richard H. Stuart" (or one carrying "(S0078)") shows "Stuart".
+const PATRON_ID_SUFFIX = /\s*\([^)]*\)\s*$/;   // module scope — not recompiled per card (CodeRabbit #219)
 function patronShort(p: string): string {
-  const words = p.replace(/\s*\([^)]*\)\s*$/, "").trim().split(/\s+/);
-  return words[words.length - 1] || "";
+  return p.replace(PATRON_ID_SUFFIX, "").trim().split(/\s+/).at(-1) || "";
 }

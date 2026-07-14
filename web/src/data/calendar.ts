@@ -325,11 +325,11 @@ export function nextMeetingFor(cal: CalendarData, bill: string, todayKey: string
 // (we won't claim urgency for a time we can't place — §7 honesty).
 export function minutesUntil(m: Meeting, now: Date): number | null {
   if (m.tba || m.unresolved) return null;
-  const [y, mo, d] = m.dateKey.split("-").map(Number);
-  if (!y || !mo || !d) return null;
+  const day = parseLisDate(m.dateKey);   // local-safe + rollover-rejecting (Gemini #219: reuse, don't re-split)
+  if (!day) return null;
   const clock = clockMinutes(m.time);
   if (clock === null) return null; // relative phrase ("30 min after adjournment…") — real but not a clock
-  const when = new Date(y, mo - 1, d, Math.floor(clock / 60), clock % 60);
+  const when = new Date(day.getFullYear(), day.getMonth(), day.getDate(), Math.floor(clock / 60), clock % 60);
   const diff = Math.round((when.getTime() - now.getTime()) / 60000);
   return diff >= 0 ? diff : null;
 }

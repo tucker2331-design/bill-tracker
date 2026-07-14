@@ -3,7 +3,7 @@ import type { Bill } from "../data/types";
 import { OutcomeChip, ChamberChip, Star } from "./common";
 import { lisBillUrl } from "../config";
 import { loadCalendar, nextMeetingFor, minutesUntil, type Meeting as CalMeeting } from "../data/calendar";
-import { dayKey } from "../data/dates";
+import { dayKey, parseLisDate } from "../data/dates";
 
 // The bill card — every fact tied to its source location so they correlate (vision §6), with the
 // recovered pin (§5) and the deterministic LIS link. Used as a modal over any view.
@@ -47,8 +47,8 @@ export function BillCard({ bill, sessionCode, onClose }: { bill: Bill; sessionCo
     minsAway < 48 * 60 ? `in ${Math.round(minsAway / 60)} hours` :
     `in ${Math.round(minsAway / (24 * 60))} days`;
   const mtgDate = (m: CalMeeting) => {
-    const [y, mo, d] = m.dateKey.split("-").map(Number);
-    return new Date(y, (mo || 1) - 1, d || 1).toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" });
+    const d = parseLisDate(m.dateKey);   // local-safe + rollover-rejecting (Gemini #219: reuse, don't re-split)
+    return d ? d.toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" }) : m.dateKey;
   };
 
   return (

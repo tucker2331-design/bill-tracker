@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { Bill, Outcome } from "../data/types";
 import { useScope, useStarred, toggleTracked, type Scope } from "../state/tracking";
 import { STALE_AFTER_HOURS } from "../config";
@@ -24,16 +24,20 @@ export function Star({ id }: { id: string }) {
   // silently dropping a tracked bill is state destruction. Starring stays one click. The confirm's
   // default (autofocused) button is "Keep tracking", so Enter/space can't destroy state either.
   const [confirming, setConfirming] = useState(false);
+  const wrapRef = useRef<HTMLSpanElement>(null);
   useEffect(() => {
     if (!confirming) return;
-    const dismiss = () => setConfirming(false);
-    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") dismiss(); };
-    window.addEventListener("click", dismiss);
+    // CAPTURE-phase + containment check (Gemini #219): the wrapper's bubbling stopPropagation (needed so a
+    // star click doesn't open the bill card) would otherwise let a click on ANOTHER bill's star leave this
+    // confirm stuck open — capture runs before any stopPropagation can swallow the event.
+    const onDoc = (e: MouseEvent) => { if (!wrapRef.current?.contains(e.target as Node)) setConfirming(false); };
+    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") setConfirming(false); };
+    window.addEventListener("click", onDoc, { capture: true });
     window.addEventListener("keydown", onKey);
-    return () => { window.removeEventListener("click", dismiss); window.removeEventListener("keydown", onKey); };
+    return () => { window.removeEventListener("click", onDoc, { capture: true }); window.removeEventListener("keydown", onKey); };
   }, [confirming]);
   return (
-    <span className="starwrap" onClick={(e) => e.stopPropagation()}>
+    <span className="starwrap" ref={wrapRef} onClick={(e) => e.stopPropagation()}>
       <button
         className={`star ${on ? "on" : ""}`}
         aria-pressed={on}
