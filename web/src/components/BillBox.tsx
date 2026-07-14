@@ -8,7 +8,9 @@ export function BillBox({ bill, onOpen }: { bill: Bill; onOpen: (b: Bill) => voi
       onKeyDown={(e) => { if (e.target === e.currentTarget && (e.key === "Enter" || e.key === " ")) { e.preventDefault(); onOpen(bill); } }}>
       <Star id={bill.bill} />
       <div style={{ minWidth: 0 }}>
-        <div className="num">{bill.bill}</div>
+        {/* patron beside the number (owner P1, 2026-07-13) — part of the bill's identity, zero extra height.
+            bill.patron is a surname today (types.ts); if it ever becomes a full name, show the last word. */}
+        <div className="num">{bill.bill}{bill.patron && <span className="patron"> · {patronShort(bill.patron)}</span>}</div>
         <div className="cat" title={bill.title}>{bill.title}</div>
       </div>
       <div className="meta">
@@ -22,4 +24,10 @@ export function BillBox({ bill, onOpen }: { bill: Bill; onOpen: (b: Bill) => voi
 function ordinal(n: number): string {
   const s = ["th", "st", "nd", "rd"], v = n % 100;
   return n + (s[(v - 20) % 10] || s[v] || s[0]);
+}
+
+// "Stuart" stays "Stuart"; a future full "Richard H. Stuart" (or one carrying "(S0078)") shows "Stuart".
+const PATRON_ID_SUFFIX = /\s*\([^)]*\)\s*$/;   // module scope — not recompiled per card (CodeRabbit #219)
+function patronShort(p: string): string {
+  return p.replace(PATRON_ID_SUFFIX, "").trim().split(/\s+/).at(-1) || "";
 }

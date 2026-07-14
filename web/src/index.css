@@ -100,6 +100,7 @@ h2, h3 { margin: 0; }
 .chip.senate { background: var(--senate-bg); color: var(--senate); }
 .chip.house { background: var(--house-bg); color: var(--house); }
 .chip.referral { background: var(--neutral-bg); color: var(--neutral); }   /* referral count = grey (was tan, colliding with carried-over) */
+.chip.crossed { background: var(--neutral-bg); color: var(--neutral); }    /* crossed over = grey routine status (owner 2026-07-13; was senate-purple, violating one-meaning-per-color) */
 .chip.provisional { background: #f6efdc; color: #8a6a14; }
 
 /* ── Bill box (the one reused component) — bordered by shadow + spacing, not a hard rule ── */
@@ -108,10 +109,19 @@ h2, h3 { margin: 0; }
   transition: box-shadow .12s, transform .12s; }   /* no side bar — owner 2026-07-08: no side bars anywhere */
 .billbox:hover { box-shadow: var(--shadow); transform: translateY(-1px); }
 .billbox .num { font-weight: 800; }
+.billbox .num .patron { color: var(--ink-faint); font-weight: 600; font-size: 12px; }   /* owner P1: patron beside the number */
 .billbox .cat { color: var(--ink); overflow: hidden; text-overflow: ellipsis; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; line-height: 1.35; }
 .billbox .meta { display: flex; gap: 5px; align-items: center; flex-wrap: wrap; justify-content: flex-end; max-width: 168px; }
 .star { border: 0; background: transparent; font-size: 17px; line-height: 1; color: var(--ink-faint); padding: 0 2px; }
 .star.on { color: #e0a500; }
+/* Two-step untrack confirm (owner 2026-07-13) — anchored to the star; default button = Keep tracking. */
+.starwrap { position: relative; display: inline-block; }
+.star-confirm { position: absolute; top: 24px; left: -8px; z-index: 30; background: var(--surface); border-radius: 8px;
+  box-shadow: var(--shadow-lg); padding: 10px 12px; width: 210px; font-size: 13px; display: block; }
+.star-confirm .btns { display: flex; gap: 8px; margin-top: 9px; }
+.star-confirm button { font: inherit; border-radius: 6px; padding: 5px 10px; font-weight: 600; font-size: 12.5px; cursor: pointer; }
+.star-confirm .keep { border: 0; background: var(--accent); color: #fff; }
+.star-confirm .untrack { border: 1px solid var(--line-strong); background: var(--surface); color: var(--ink-soft); }
 .billgrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: var(--s2); }
 /* Drill-down grouping: a sticky-ish committee header over each cluster so a big stage reads House/Senate → committee → sub. */
 .drill-group { margin-bottom: var(--s4); }
@@ -128,6 +138,12 @@ h2, h3 { margin: 0; }
 .metarow { display: grid; grid-template-columns: 132px 1fr; gap: 4px var(--s3); padding: 7px 0; }
 .metarow + .metarow { border-top: 1px solid var(--line); }
 .metarow .k { color: var(--ink-faint); font-weight: 600; font-size: 12px; text-transform: uppercase; letter-spacing: .3px; }
+/* Next-meeting row inside 48h of a CONCRETE clock — the one amber "pending/caution" urgency state on the
+   card (owner Option 2, 2026-07-13; same hue family as the provisional pin). Amber means exactly this,
+   site-wide — the calendar's unplaceable marker moved OFF amber to the dashed border below. */
+.metarow.next-soon { background: var(--o-carry-bg); margin: 0 -8px; padding: 7px 8px; border-radius: 6px; }
+.metarow.next-soon .k { color: #87680a; }
+.soon-ink { color: #87680a; }
 .histtable { width: 100%; border-collapse: collapse; margin-top: var(--s2); }
 .histtable th { text-align: left; color: var(--ink-faint); font-size: 11px; text-transform: uppercase; letter-spacing: .4px; padding: 5px 6px; }
 .histtable th.date, .histtable td.date { text-align: right; }
@@ -222,10 +238,12 @@ h2, h3 { margin: 0; }
 .cal-jump.cross { color: var(--o-vetoed); }
 /* compact meeting card (bills behind a dropdown) — fits a narrow week column */
 .cal-mtg { border-radius: 5px; background: var(--surface-2); overflow: hidden; }   /* no left side-strip — chamber cue is the name color (owner 2026-06-30) */
-/* §7.2 unplaceable meeting: caution TINT (the WARN hue, whole-surface — never a side strip) + a small badge.
-   These sort to the top of their day; the flag says "position unknown", not "something is wrong". */
-.cal-mtg.unres { background: var(--o-carry-bg); }
-.cal-mtg-unres { font-size: 9.5px; font-weight: 800; letter-spacing: .3px; text-transform: uppercase; color: var(--o-carry); white-space: nowrap; }
+/* §7.2 unplaceable meeting — Option A (owner 2026-07-13): a DASHED border, zero color. The dashed line is
+   the visual grammar of "position not fixed"; the ⚠ badge + top-of-day sort keep the visibility. Amber was
+   retired here because it collided with the bill card's next-meeting urgency row — amber now means exactly
+   one thing site-wide (pending/act-soon), and the dashed border means exactly one thing (can't be placed). */
+.cal-mtg.unres { background: var(--surface-2); border: 1.5px dashed var(--line-strong); }
+.cal-mtg-unres { font-size: 9.5px; font-weight: 800; letter-spacing: .3px; text-transform: uppercase; color: var(--ink-soft); white-space: nowrap; }
 /* Subcommittee lineage: muted parent line + "↳ sub" so interleaved same-time families stay readable. */
 .cal-sub-parent { display: block; color: var(--ink-faint); font-weight: 600; font-size: 10px; line-height: 1.25; }
 .cal-sub-name { display: block; }
@@ -249,7 +267,7 @@ h2, h3 { margin: 0; }
 /* An UNPLACEABLE meeting's "time" is a long relative phrase ("30 minutes after adjournment of…"). Give the
    badge its own line so that phrase gets the full column width and stays readable (owner 2026-07-09). */
 .cal-mtg.unres .cal-mtg-unres { flex: 1 1 100%; }
-.cal-mtg.unres .cal-mtg-t { font-weight: 700; font-size: 11px; color: var(--o-carry); line-height: 1.35; }
+.cal-mtg.unres .cal-mtg-t { font-weight: 700; font-size: 11px; color: var(--ink-soft); font-style: italic; line-height: 1.35; }
 .cal-mtg-c { font-weight: 600; font-size: 11.5px; line-height: 1.3; color: var(--ink); display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
 .cal-mtg-c.open { -webkit-line-clamp: unset; overflow: visible; }   /* expanded → show the full committee name */
 .cal-mtg-n { font-size: 10px; font-weight: 700; color: var(--ink-faint); white-space: nowrap; }

@@ -1,3 +1,4 @@
+import { useEffect, useRef, useState } from "react";
 import type { Bill, Outcome } from "../data/types";
 import { useScope, useStarred, toggleTracked, type Scope } from "../state/tracking";
 import { STALE_AFTER_HOURS } from "../config";
@@ -19,16 +20,43 @@ export function ChamberChip({ chamber }: { chamber: Bill["chamber"] }) {
 export function Star({ id }: { id: string }) {
   const starred = useStarred();
   const on = starred.has(id);
+  // Two-step UNtrack (owner 2026-07-13): a lit star no longer untracks on a single click — a misclick
+  // silently dropping a tracked bill is state destruction. Starring stays one click. The confirm's
+  // default (autofocused) button is "Keep tracking", so Enter/space can't destroy state either.
+  const [confirming, setConfirming] = useState(false);
+  const wrapRef = useRef<HTMLSpanElement>(null);
+  useEffect(() => {
+    if (!confirming) return;
+    // CAPTURE-phase + containment check (Gemini #219): the wrapper's bubbling stopPropagation (needed so a
+    // star click doesn't open the bill card) would otherwise let a click on ANOTHER bill's star leave this
+    // confirm stuck open — capture runs before any stopPropagation can swallow the event.
+    const onDoc = (e: MouseEvent) => { if (!wrapRef.current?.contains(e.target as Node)) setConfirming(false); };
+    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") setConfirming(false); };
+    window.addEventListener("click", onDoc, { capture: true });
+    window.addEventListener("keydown", onKey);
+    return () => { window.removeEventListener("click", onDoc, { capture: true }); window.removeEventListener("keydown", onKey); };
+  }, [confirming]);
   return (
-    <button
-      className={`star ${on ? "on" : ""}`}
-      aria-pressed={on}
-      aria-label={on ? "Tracking — click to untrack" : "Track this bill"}
-      title={on ? "Tracking — click to untrack" : "Track this bill"}
-      onClick={(e) => { e.stopPropagation(); toggleTracked(id); }}
-    >
-      {on ? "★" : "☆"}
-    </button>
+    <span className="starwrap" ref={wrapRef} onClick={(e) => e.stopPropagation()}>
+      <button
+        className={`star ${on ? "on" : ""}`}
+        aria-pressed={on}
+        aria-label={on ? "Tracking — click to untrack" : "Track this bill"}
+        title={on ? "Tracking — click to untrack" : "Track this bill"}
+        onClick={() => { if (!on) { toggleTracked(id); return; } setConfirming((c) => !c); }}
+      >
+        {on ? "★" : "☆"}
+      </button>
+      {confirming && (
+        <span className="star-confirm" role="alertdialog" aria-label={`Stop tracking ${id}?`}>
+          <b>Stop tracking {id}?</b>
+          <span className="btns">
+            <button className="keep" autoFocus onClick={() => setConfirming(false)}>Keep tracking</button>
+            <button className="untrack" onClick={() => { toggleTracked(id); setConfirming(false); }}>Untrack</button>
+          </span>
+        </span>
+      )}
+    </span>
   );
 }
 
