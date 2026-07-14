@@ -24,7 +24,8 @@ def ok(cond, msg):
         raise AssertionError(msg)
 
 
-MANIFEST = json.load(open(os.path.join("tools", "parity", "consumed_endpoints.json")))
+with open(os.path.join("tools", "parity", "consumed_endpoints.json"), encoding="utf-8") as _f:
+    MANIFEST = json.load(_f)
 
 # 1. Classifier buckets a synthetic route set correctly (pure, no network).
 synthetic = {
@@ -48,7 +49,8 @@ c2 = ea.classify({"/schedule/API/getschedulelistasync"}, MANIFEST)
 ok("/schedule/API/getschedulelistasync" in c2["consumed"], "consumed match must be case-insensitive")
 
 # 3. THE COVERAGE GUARANTEE: the committed manifest fully covers today's frozen LIS surface → new == 0.
-snapshot = set(json.load(open(os.path.join("tools", "parity", "testdata_live_routes_snapshot.json"))))
+with open(os.path.join("tools", "parity", "testdata_live_routes_snapshot.json"), encoding="utf-8") as _f:
+    snapshot = set(json.load(_f))
 c3 = ea.classify(snapshot, MANIFEST)
 ok(c3["new"] == [], f"manifest no longer covers the LIS surface — untriaged routes: {c3['new'][:10]}")
 ok(len(c3["consumed"]) >= 8, f"expected >=8 consumed routes, got {len(c3['consumed'])}")
