@@ -302,3 +302,34 @@ async function _loadCalendar(): Promise<CalendarData> {
     totalMeetings,
   };
 }
+
+// ── The bill card's "Next meeting" join (owner Option 2, 2026-07-13) ─────────────────────────────
+// The Bill_Tracker tab's `upcoming` JSON carries only {date, committee}; the calendar rows carry the
+// meeting's TIME, agenda/livestream links, and honesty flags. Joining here gives the card the full
+// answer ("Thu, Feb 19 · 8:00 AM · agenda · watch") without a second data source: the earliest meeting
+// on TODAY or later whose agenda lists this bill. Same-day meetings already past their clock still
+// count until midnight — "it met at 8 AM today" is next-meeting info, not history, until the day ends.
+// Returns null when nothing is scheduled (the card renders today's honest "none scheduled").
+export function nextMeetingFor(cal: CalendarData, bill: string, todayKey: string): Meeting | null {
+  const keys = [...cal.byDay.keys()].filter((k) => k >= todayKey).sort();
+  for (const k of keys) {
+    for (const m of cal.byDay.get(k)!) {
+      if (m.bills.some((a) => a.bill === bill)) return m;
+    }
+  }
+  return null;
+}
+
+// Minutes from `now` until a meeting's clock — null when the meeting has no concrete clock (TBA /
+// unresolved) or is already past. Drives the card's <48h amber state; a non-clock never goes amber
+// (we won't claim urgency for a time we can't place — §7 honesty).
+export function minutesUntil(m: Meeting, now: Date): number | null {
+  if (m.tba || m.unresolved) return null;
+  const [y, mo, d] = m.dateKey.split("-").map(Number);
+  if (!y || !mo || !d) return null;
+  const clock = clockMinutes(m.time);
+  if (clock === null) return null; // relative phrase ("30 min after adjournment…") — real but not a clock
+  const when = new Date(y, mo - 1, d, Math.floor(clock / 60), clock % 60);
+  const diff = Math.round((when.getTime() - now.getTime()) / 60000);
+  return diff >= 0 ? diff : null;
+}
