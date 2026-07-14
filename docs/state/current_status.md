@@ -32,6 +32,7 @@ status: active
    - 50-state decoupling (CDN inversion + Omni-Schema + Fleet) → [[audits/fable_2026-07/50_state_scaling_architecture]]
    - NY is the live 2nd state (its own brain: [[ny/state/current_status]]); C-8 Part 2 (LegiScan oracle) is its next step.
 4. Optional/low-value: **S-3** (attic-move deprecated repo-root files — cosmetic, breaks the paused worker's manual dispatch; do only if you want the cleanup); **B-4 finish** (audit CLAUDE.md's remaining volatile facts).
+5. **War room + shared watchlist** — 5 owner decisions block the build (IA, write-path Worker+D1 vs Sheets, identity, MVP cut, star↔position UX): [[ideas/war_room_scoping]] (TASK 3 of the build wave; memo done, awaiting decisions).
 - Also open (owner-triggered): `/code-review ultra`; co-patrons backfill (scoped, deferred — [[ideas/copatrons_backfill]]).
 
 ## RECENTLY LANDED (newest first; full detail in [[log]])
