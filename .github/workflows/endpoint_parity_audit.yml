@@ -1,0 +1,39 @@
+name: 🛰️ LIS Endpoint Parity Audit
+
+# Weekly read-only sweep of the LIS SPA's API surface: extracts every /<Area>/api/<Method> route the state
+# site references and diffs it against tools/parity/consumed_endpoints.json. A route on LIS that we neither
+# consume nor have acknowledged (with a reason) is reported — the "unknown-unknown" parity catcher behind
+# the owner's goal "lobbyists must see everything they could see on the state site"
+# (docs/ideas/lobbyist_jtbd_ideation §8b, docs/audits/build_wave_2026-07 TASK 2 P2).
+#
+# LIS load: this hits only the STATIC SPA shell + its JS chunks (a few hundred KB), never a LIS DATA API.
+# Negligible + read-only, so it does NOT need the calendar-worker concurrency group.
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "27 8 * * 1"   # Mondays 08:27 UTC (~4am ET; quiet; off the worker + pruner slots)
+
+permissions:
+  contents: read
+
+jobs:
+  audit:
+    name: Endpoint parity audit
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false   # read-only; never pushes to the repo
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install gspread google-auth   # only for the alert write; the audit itself is stdlib-only
+      - name: Run endpoint parity audit
+        env:
+          GCP_CREDENTIALS: ${{ secrets.GCP_CREDENTIALS }}
+        run: python3 tools/parity/endpoint_audit.py
