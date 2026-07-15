@@ -39,6 +39,7 @@ Links use Obsidian `[[wikilink]]` format. Obsidian resolves by filename; path-qu
 ## Workflow & Protocols (how we work)
 - [[ny/workflow/source_scoping_protocol]] — New York source-scoping protocol: scope, plan, test, then promote
 - [[ny/workflow/owner_setup]] — New York owner setup checklist for API key, sheet, and secrets
+- [[workflow/hardening_is_non_negotiable]] — **owner rule: a new direction NEVER leaves in-flight work unhardened; standard-quality is the default, never traded for 'where the energy is'.**
 - [[workflow/reasoning_doctrine]] — **session-start read: the 8 process moves that produce bank-grade work here (measure-first · verify-the-row · fail-open · confirm-before-advance · no silent fallback · structural-not-text · notify-only · write-back)**
 - [[workflow/three_phase_protocol]] — context routing → pre-push audit → write-back mandate
 - [[workflow/branching_rules]] — when to reuse vs create a branch (PR state decides)
@@ -57,6 +58,7 @@ Links use Obsidian `[[wikilink]]` format. Obsidian resolves by filename; path-qu
 - [[architecture/post_c8_hardening]] — **ACTIVE: three grounded post-C8.4 hardening solutions (G-code drift alert, structural meeting_unsourced, unconfirmed rolling baseline)**
 - [[architecture/pr_c8_structural_classification]] — close the 16% structurally; hard rules + gates for the implementing model
 - [[architecture/incident_counter]] — **the 'N days since a data incident' counter: mechanism BUILT+proven (9 goldens); DEFINITION + public display + guard-wiring are owner decisions (inside)**
+- [[architecture/strategic_tools_placement]] — **DECISION (research-grounded): the strategic/whip tools live on a DEDICATED surface entered FROM the bill card, never ON it (the card is already the drill terminus); focus+context split.**
 - [[architecture/change_ledger]] — **the Changes tab: differ BUILT+proven (19 goldens); live wiring + tab 2027-in-session-gated (validation plan inside)**
 - [[architecture/calendar_pipeline]] — LIS → worker → Sheet1 data flow + resolution priorities
 - [[architecture/relative_time_chain_resolution]] — **PLANNED: order "after committee X" subcommittee chains structurally (build_time_graph fix; Section-9-sensitive; full plan before starting)**
@@ -106,6 +108,7 @@ Links use Obsidian `[[wikilink]]` format. Obsidian resolves by filename; path-qu
 - [[ny/ideas/data_inventory]] — New York source inventory and unresolved meeting/calendar questions
 - [[ideas/lobbyist_jtbd_ideation]] — **EXPANSIVE zoom-out (2026-07-13, owner-requested): the lobbyist/bill-writer job map (JTBD + year-in-the-life + Kano + premortem), ~30 feature ideas A1–G2, competitive white space, business models, and a strawman shortlist — awaiting owner NARROWING.**
 - [[ideas/product_roadmap]] — **post-accuracy direction: reviewer swap (A), product vision → LIS data inventory → UI design (B), 2027-gated items (C). The anti-looping plan.**
+- [[ideas/product_identity]] — **▶️ THE NORTH STAR ABOVE THE SPECS: what this fundamentally is — a multi-state legislative OPERATING SYSTEM (brain-in-HQ + operators) over owned, health-verified data; the 3 pillars; the origin story; the per-state-sites + exec-master-site topology; VA-gold-standard-first sequencing.**
 - [[ideas/product_vision]] — **LOCKED B1 product spec: four lenses, crossover-lane timeline, bill card, trust layer ("never pretend to know"). Build the front end toward this.**
 - [[ideas/lis_data_inventory]] — **B2: feature → LIS data → have it?/ingest it. The completeness gap, the feed-skew map, and the DB-expansion decisions (owner §7 questions).**
 - [[ideas/calendar_chain_ordering]] — **PLAN (queued): resolve "after committee X" meeting chains so they order correctly (worker `build_time_graph` fix; Section-9-validated). Owner-requested full plan before starting.**

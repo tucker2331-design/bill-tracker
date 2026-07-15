@@ -16,6 +16,13 @@ status: active
 > below. Full history: [[log]] (PR-by-PR) + [[state/status_archive_2026H1]] (frozen pre-B-1 narrative).
 
 ## NOW
+- **PRODUCT IDENTITY banked (2026-07-15): [[ideas/product_identity]]** — the north star above the specs (a
+  multi-state legislative operating system; 3 pillars: complete health-verified data · strategic tools ·
+  team coordination; brain-in-HQ + operators; per-state sites + an exec-gated master site LATER). **Sequencing
+  (owner-locked): finish VA to the gold standard ENTIRELY, then dupe per state — touch nothing else until
+  then.** New standing rule: [[workflow/hardening_is_non_negotiable]] (a direction never leaves in-flight work
+  unhardened). Design decision: strategic/whip tools go on a DEDICATED surface, not the crowded bill card
+  ([[architecture/strategic_tools_placement]]).
 - **BUILD WAVE executed ([[audits/build_wave_2026-07/README]]) — everything shippable shipped; the rest is
   honestly gated.** Merged this session: endpoint-parity audit (#220/#221), docket-drop histogram (#222),
   Change-Ledger differ + 26 goldens (#223/#224, [[architecture/change_ledger]]), incident-counter mechanism +

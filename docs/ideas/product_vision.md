@@ -6,6 +6,10 @@ status: active
 
 # Product Vision (B1) — the lobbyist platform
 
+> **Zoom out first:** [[ideas/product_identity]] is the layer above this — what the whole product IS (a
+> multi-state legislative operating system; 3 pillars; the origin story). This page is the LOCKED VA
+> front-end spec (pillar 1's four lenses); the strategic tools + war room (pillars 2/3) derive from identity.
+
 This is the **locked** product vision from the 2026-06-18 design sessions. It defines what we
 build the front end toward. Phase B of [[ideas/product_roadmap]]. The hardest design problem
 (the two chambers) is solved; the screens and rules below are decided. Change only with a new
