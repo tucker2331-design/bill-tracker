@@ -1,0 +1,44 @@
+name: 📊 Docket-drop Histogram (on demand)
+
+# Prints the ET hour-of-day distribution of Schedule_Witness deltas — "when does LIS post/alter committee
+# dockets?" — replacing the illustrative "10 PM" claim with real data (build-wave TASK 4a). On-demand only:
+# the 2026 session is past the witness's 90-day retention, so the meaningful measurement happens when this is
+# re-run DURING the 2027 session. Read-only; shares the worker concurrency group for exclusive tab access
+# (it reads the same Schedule_Witness the worker appends to).
+
+on:
+  workflow_dispatch:
+    inputs:
+      witness_workbook:
+        description: "Where the witness lives: 'live' or 'ops' (auto-sharded default is ops)"
+        required: false
+        default: "ops"
+
+concurrency:
+  group: calendar-worker
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  histogram:
+    name: Docket-drop histogram
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install gspread google-auth
+      - name: Print docket-drop histogram
+        env:
+          GCP_CREDENTIALS: ${{ secrets.GCP_CREDENTIALS }}
+          WITNESS_WORKBOOK: ${{ github.event.inputs.witness_workbook }}
+        run: python3 tools/parity/witness_histogram.py

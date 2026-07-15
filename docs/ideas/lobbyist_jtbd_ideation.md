@@ -44,8 +44,14 @@ status: active
   strategy memos. *Pain: triage — catchlines lie; reading 500 bills to find the 40 that matter.*
 - **Session (Jan–Mar, 46/60 days):** THE sprint. Dockets drop late night for 7:30 AM subcommittees;
   amendments and substitutes rewrite bills mid-flight; crossover guillotine; floor calendars; conference
-  committees. *Pains: minutes matter; docket-drop at 10 PM; two hearings at once; the substitute nobody
-  read; whip counts by hand; testimony prep at midnight.*
+  committees. *Pains: minutes matter; the late-evening docket drop (see the measurement note below); two
+  hearings at once; the substitute nobody read; whip counts by hand; testimony prep at midnight.*
+  > **Measurement note (2026-07-14, honesty):** the specific "10 PM" was an ILLUSTRATION, never measured.
+  > `tools/parity/witness_histogram.py` + `.github/workflows/witness_histogram.yml` are built to measure it
+  > from `Schedule_Witness` (ET hour-of-day of every ADDED/CHANGED delta). It could NOT produce the number
+  > now: the 2026 session is past the witness's 90-day retention AND the witness auto-sharded to VA·Ops.
+  > **Re-run it during the 2027 session to replace "late night" with the real distribution.** Until then the
+  > product copy must say "late evening", not a fabricated clock time (A2 below).
 - **Reconvened/veto session (Apr):** governor's amendments + vetoes, override math. *Pain: amendment
   text drops late; override whip counts.*
 - **Post-session:** client final reports, VA lobbyist disclosure filings, campaign season. *Pain: the
@@ -58,8 +64,8 @@ status: active
   agenda PDF." We already resolve meeting times (incl. "15 min after adjournment" chains) better than
   anyone. *(performance→delighter at our precision)*
 - **A2. The Tonight Brief** — auto evening digest: everything docketed tomorrow across tracked bills,
-  times/rooms/agenda links/livestreams, collisions flagged. The 10 PM anxiety-killer. *(delighter; the
-  daily habit hook)*
+  times/rooms/agenda links/livestreams, collisions flagged. The late-evening anxiety-killer (the exact drop
+  hour is `witness_histogram.py`'s 2027 measurement — don't hardcode "10 PM"). *(delighter; the daily habit hook)*
 - **A3. Hearing-collision radar** — two tracked bills, same time, different rooms → surfaced with which
   is likelier to actually be reached (agenda position!we have AgendaOrder). *(delighter)*
 - **A4. Provable freshness SLA** — "data as of X min ago" is already built; make LATENCY a marketed,
@@ -219,6 +225,9 @@ See also [[ideas/product_vision]] (locked B1), [[ideas/product_roadmap]], [[idea
 ---
 
 ## 8. OWNER FEEDBACK ROUND 1 (2026-07-13) + the persona that changes the picture
+
+**[2026-07-14: the "10 PM" claim is now corrected in §2 above + the measurement tool `witness_histogram.py`
+built (runs in-season 2027); product copy says "late evening" until measured.]**
 
 Owner verdicts: **A/C/D perfect** (A's "10 PM docket drop" was UNMEASURED illustration — flagged for a real
 measurement: a small tool reading `Schedule_Witness` seen-at timestamps → hour-of-day histogram of docket
