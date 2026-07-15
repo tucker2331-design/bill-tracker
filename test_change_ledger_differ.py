@@ -100,4 +100,16 @@ alld = (differ.diff_history(rows, rows + [H("HB9", "2026-03-01", "r9", "Z")])
 for x in alld:
     ok(x["kind"] in differ.KINDS, f"stray kind escaped the closed set: {x['kind']}")
 
+# 14. Defensive inputs (Gemini #223): None / empty / malformed non-dict elements never crash — they're
+#     simply not diffed (a wholesale-bad snapshot is caught by the drift canary at the live layer).
+ok(differ.diff_history(None, None) == [], "None history inputs → []")
+ok(all(x["kind"] == "history_added" for x in differ.diff_history([], rows)), "empty prev → all-added")
+ok(differ.diff_history([None, "x", 3], rows) == differ.diff_history([], rows), "malformed prev rows skipped")
+ok(differ.diff_schedule(None, None) == [], "None schedule inputs → []")
+ok(differ.diff_schedule([{"date": "d", "committee": "c", "time": "8:00 AM"}], ["junk", None]) == [],
+   "malformed schedule rows skipped (no crash)")
+ok(differ.diff_docket(None, None) == [], "None docket inputs → []")
+ok(differ.diff_docket({("d", "c"): ["HB1"]}, {"bad-key": ["HB2"], ("d", "c"): ["HB1"]}) == [],
+   "malformed docket key skipped; unchanged real key → no deltas")
+
 print(f"ALL {_checks} change-ledger differ tests passed")

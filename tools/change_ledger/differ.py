@@ -36,6 +36,15 @@ def _delta(kind, *, bill="", committee="", date="", refid="", old="", new=""):
             "refid": refid, "old": old, "new": new}
 
 
+def _dict_rows(rows):
+    """Defensive input coercion (Gemini #223): None → [], and skip any non-dict element so a malformed
+    snapshot/cache row can never crash the differ (it just isn't diffed — the drift canary at the live
+    layer catches a wholesale-bad snapshot). Applied at the top of every diff_* entry point."""
+    if not rows:
+        return []
+    return [r for r in rows if isinstance(r, dict)]
+
+
 # ── History rows ──────────────────────────────────────────────────────────────────────────────────────
 # A history row is a mapping with keys: bill, date, refid, action. Extra keys are ignored (source-agnostic).
 def _hist_key(row):
@@ -50,6 +59,8 @@ def _hist_key(row):
 
 def diff_history(prev, curr):
     """prev/curr: iterables of history-row dicts {bill,date,refid,action}. → deltas (added/edited/removed)."""
+    prev, curr = _dict_rows(prev), _dict_rows(curr)
+
     def _index(rows):
         m = {}
         for r in rows:                        # last-writer-wins: identical keys are the same action
@@ -83,6 +94,7 @@ def _mtg_key(m):
 
 def diff_schedule(prev, curr):
     """Time moves + cancellations on the SAME meeting (identity = date+committee)."""
+    prev, curr = _dict_rows(prev), _dict_rows(curr)
     pmap = {_mtg_key(m): m for m in prev}
     out = []
     for m in curr:
@@ -109,12 +121,16 @@ def diff_schedule(prev, curr):
 # A docket is a mapping (date, committee) -> iterable of bill ids.
 def diff_docket(prev, curr):
     """Bills added to / removed from a meeting's agenda. prev/curr: {(date,committee): [bills]}."""
+    prev, curr = (prev or {}), (curr or {})
     out = []
     keys = set(prev) | set(curr)
     for key in keys:
+        # a key must be a (date, committee) 2-tuple; skip anything malformed rather than crash on unpack.
+        if not (isinstance(key, tuple) and len(key) == 2):
+            continue
         date, committee = key
-        pb = {str(b).strip() for b in prev.get(key, [])}
-        cb = {str(b).strip() for b in curr.get(key, [])}
+        pb = {str(b).strip() for b in (prev.get(key) or [])}
+        cb = {str(b).strip() for b in (curr.get(key) or [])}
         for b in sorted(cb - pb):
             out.append(_delta("docket_added", bill=b, committee=committee, date=date))
         for b in sorted(pb - cb):
