@@ -48,6 +48,12 @@ status: active
 - **2026-07-07 — #209 MERGED: alerts = STATE not stream (self-clearing) + witness auto-shard (zero-touch) + de-AI pass** — alerts rebuilt (verdict + active-only + collapsed per-category cleared history; 300→18 conditions on live data); `_autoshard_witness_if_full` relocates the witness to VA·Ops itself at 6M (copy-verify-then-delete, fail-closed, 17 tests); severity/breaker/skew/header pills → status dots. Gemini fold-in fixed a CRITICAL recovery-gate bug ([[failures/assumptions_audit]] #98, = pre-push #11) + a regex-`\b` collapse bug ([[failures/gemini_review_patterns]] #51/#52), both tested.
 
 ## Watch items
+- **⏰ 2027 SESSION OPEN → activate the gated build-wave features.** When the worker detects the 2027 regular
+  session (session rollover), the Change-Ledger live feed + Changes tab become validatable and the docket-drop
+  histogram becomes measurable. To do at session open: (1) dry-run `tools/change_ledger/` per
+  [[architecture/change_ledger]]'s validation plan, verify rows vs LIS, then ship the Changes tab; (2) re-run
+  `witness_histogram.yml` for the real docket-drop hour → update [[ideas/lobbyist_jtbd_ideation]] §2/A2. This
+  is the standing reminder the "2027-gated" work points back to.
 - **Gemini Code Assist bot sunsets 2026-07-17** (consumer install blocked since 06-18; still reviewing PRs until then). Replacement bench (CodeRabbit + Qodo + Codex) already live. No action unless a gap appears after 07-17.
 
 ## What changes this page
