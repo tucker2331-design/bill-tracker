@@ -19,6 +19,34 @@ standing drift canary, steady state 1). Gemini fold-in: exact parent-HEAD lineag
 UnboundLocalError lesson to audit #105 (#104 was already the gspread entry in the reverted docs, now restored).
 `WORKER_OUTPUT_LOGIC_VERSION=2026-07-12.2`.
 
+## [2026-07-15] session | BUILD WAVE executed — 6 PRs; ledger differ + incident mechanism proven, live-wiring honestly 2027-gated
+
+Fable executed the build wave ([[audits/build_wave_2026-07/README]]) end to end. Shipped + merged:
+- **#220/#221 — LIS endpoint-parity audit** (TASK 2 P2): `tools/parity/endpoint_audit.py` + manifest + weekly
+  workflow + 9 goldens. LIS exposes ~249 API routes; we consume 8; the 51 parked ones ARE the product's
+  expansion map (fiscal notes, bill text, member contacts, floor calendar, minutes oracle…). Converges to
+  new=0. Fold-in: IGNORECASE + utf-8.
+- **#222 — docket-drop histogram** (TASK 4a): `tools/parity/witness_histogram.py` + on-demand workflow.
+  HONEST correction: the "10 PM" claim was unmeasured and CAN'T be measured now (2026 session past the
+  witness's 90-day retention + sharded to VA·Ops) → measures in-season 2027; brain copy now says "late
+  evening". Fold-in: or-[], exit-code-on-failure, skipped-count, kinds-mix.
+- **#223/#224 — Change Ledger differ** (TASK 1 L1): `tools/change_ledger/differ.py`, pure + 26 goldens, keyed
+  on structural identity so a vote-tally correction is a true history_EDITED (same refid), not remove+add;
+  no-refid changes honestly surface as add+remove. Live wiring + the Changes tab are **2027-in-season-gated**
+  (a change-feed can't be validated on static data; a hollow empty tab pre-launch is dishonest) — full plan
+  in [[architecture/change_ledger]] (isolation-first: a workflow_run-after-worker job, worker UNTOUCHED).
+  Fold-in: defensive input guards.
+- **#225 — incident-counter mechanism** (TASK 2 P1): `tools/incident_log/log.py` (fail-open record_incident,
+  genesis-aware days_since) + 9 goldens + [[architecture/incident_counter]]. DEFINITION + public display +
+  guard-wiring are owner decisions (surfaced, not guessed) — unverifiable writes into the accuracy sentinel
+  would violate verify-the-row.
+- **TASK 3 (war-room memo)** → [[ideas/war_room_scoping]] (5 owner decisions, no build).
+
+Meta-lesson reinforced: the worker was NOT touched by any of this (the accuracy path literally cannot
+regress); every Sheets-writing/in-season feature was either shipped read-only, or built-proven-core +
+airtight-spec with its validation gate documented, rather than shipped blind. No local creds → all Sheets
+writes are CI-gated; stated honestly on each PR.
+
 ## [2026-07-13] pr | #219 MERGED — the card bundle LIVE (Next-meeting row, dashed unplaceable, grey crossover, patron, 2-step untrack)
 
 All five owner-locked decisions shipped in one PR and verified ON PRODUCTION: HB463's list card reads
