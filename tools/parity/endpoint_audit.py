@@ -36,7 +36,7 @@ from pathlib import Path
 LIS_ROOT = "https://lis.virginia.gov"
 MANIFEST = Path(__file__).with_name("consumed_endpoints.json")
 UA = {"User-Agent": "va-bill-tracker parity-audit (contact: tucker2331@gmail.com)"}
-ROUTE_RE = re.compile(r"/[A-Za-z][A-Za-z0-9]*/api/[A-Za-z][A-Za-z0-9]*")
+ROUTE_RE = re.compile(r"/[A-Za-z][A-Za-z0-9]*/api/[A-Za-z][A-Za-z0-9]*", re.IGNORECASE)  # a /API/ variant must not be silently missed (Gemini #220)
 SCRIPT_SRC_RE = re.compile(r'<script[^>]+src="([^"]+)"')
 
 
@@ -112,7 +112,7 @@ def main() -> int:
     ap.add_argument("--root", default=LIS_ROOT)
     ns = ap.parse_args()
 
-    manifest = json.loads(MANIFEST.read_text())
+    manifest = json.loads(MANIFEST.read_text(encoding="utf-8"))   # em-dashes in the JSON reasons (Gemini #220)
     routes, chunks = extract_routes_from_bundles(ns.root)
     if not routes:
         # No routes parsed: either LIS is down or restructured its bundles. Either is worth a WARN, but not
