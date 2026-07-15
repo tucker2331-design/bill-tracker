@@ -56,6 +56,7 @@ Links use Obsidian `[[wikilink]]` format. Obsidian resolves by filename; path-qu
 - [[ny/architecture/calendar_source_options]] — New York calendar source options
 - [[architecture/post_c8_hardening]] — **ACTIVE: three grounded post-C8.4 hardening solutions (G-code drift alert, structural meeting_unsourced, unconfirmed rolling baseline)**
 - [[architecture/pr_c8_structural_classification]] — close the 16% structurally; hard rules + gates for the implementing model
+- [[architecture/change_ledger]] — **the Changes tab: differ BUILT+proven (19 goldens); live wiring + tab 2027-in-session-gated (validation plan inside)**
 - [[architecture/calendar_pipeline]] — LIS → worker → Sheet1 data flow + resolution priorities
 - [[architecture/relative_time_chain_resolution]] — **PLANNED: order "after committee X" subcommittee chains structurally (build_time_graph fix; Section-9-sensitive; full plan before starting)**
 - [[architecture/alerting]] — bug-notification protocol: in-sheet `SYSTEM_ALERT` / GitHub failure email / Slack ops channel; which tripwire fires when, and how to wire Slack

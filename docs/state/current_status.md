@@ -16,11 +16,12 @@ status: active
 > below. Full history: [[log]] (PR-by-PR) + [[state/status_archive_2026H1]] (frozen pre-B-1 narrative).
 
 ## NOW
-- **BUILD WAVE (2026-07-13): execute [[audits/build_wave_2026-07/README]] top-to-bottom** — the owner-locked
-  execution spec from the Fable ideation cycle (Fable plans / Opus executes). Order: Change Ledger L1
-  (worker differ + Change_Ledger tab) → L2 (the Changes tab, register design LOCKED) → incident counter P1 →
-  witness histogram 4a → endpoint audit P2 → war-room scoping memo (owner-gated decisions). Standing rules
-  at the top of that page are mandatory — recommendation ≠ decision, register/canon design, pyflakes gate.
+- **BUILD WAVE in progress ([[audits/build_wave_2026-07/README]]).** DONE + merged: war-room scoping memo
+  (#TASK3 → [[ideas/war_room_scoping]]), endpoint-parity audit (#220/#221), docket-drop histogram tool
+  (#222). Change-Ledger **differ built + 19 goldens** ([[architecture/change_ledger]]); its live wiring + the
+  Changes tab are **2027-in-season-gated** (can't validate a change-feed on static off-season data — validation
+  plan in that page). LEFT: incident-counter P1, then the 2027-gated ledger activation. Standing rules at the
+  top of the build-wave page are mandatory (recommendation ≠ decision · register/canon design · pyflakes gate).
 - **VA accuracy state: CLEAR + holding (2026-07-12).** The 0→66 regression is root-caused and closed ([[failures/assumptions_audit#105]] — an `UnboundLocalError` in the agenda block wearing an API-outage costume; §9 and cache-warmth both innocent). All four deferred pieces shipped + live-verified: agenda/meeting links (#214), §9 anchor ladder re-merge (#215), the scroll affordance (#216), and the last engineering residual — the label-based agenda-FETCH target (#217, [[state/open_anti_patterns]] #13, now resolved). No open VA engineering items; the only open PR is the Codex NY-probe (#175, NY). **Standing watch each cycle:** `meeting_unsourced=0`, breaker clear, `anchor_unresolved` stays 1, agenda/link drift canaries quiet. Everything below in NEXT is owner-gated (infra/decision), not blocked on me.
 
 ## NEXT (needs owner infra / a decision — then I execute)
