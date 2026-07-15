@@ -37,7 +37,10 @@ CLASSES = ("accuracy", "parity_gap", "degraded", GENESIS_CLASS)
 # ── pure, unit-tested ───────────────────────────────────────────────────────────────────────────────────
 def _parse_iso(s):
     try:
-        return datetime.strptime(str(s).strip()[:19], "%Y-%m-%dT%H:%M:%S").replace(tzinfo=timezone.utc)
+        # tolerate a space separator ("2026-07-01 00:00:00") as well as ISO "T" — a manual edit or another
+        # tool may write either, and mis-parsing an incident's timestamp must not silently drop it (Gemini #225).
+        return datetime.strptime(str(s).strip()[:19].replace(" ", "T"),
+                                 "%Y-%m-%dT%H:%M:%S").replace(tzinfo=timezone.utc)
     except (ValueError, TypeError):
         return None
 
@@ -48,7 +51,11 @@ def latest_incident_end(rows, *, include_genesis=True):
     as the epoch when include_genesis=True. Returns a tz-aware datetime or None."""
     best = None
     for r in rows:
-        if len(r) < len(HEADER):
+        # only indices 0/1/2 are read here; requiring the full HEADER width (5) would SKIP a real incident
+        # whose trailing optional cols (Summary/DetectedBy) were trimmed by Sheets — and then the counter would
+        # read "N days" while an incident exists (a silent UNDER-report of the trust metric). Match the >=3
+        # rule used by days_since_last_incident (Gemini #225 — the important consistency fix).
+        if len(r) < 3:
             continue
         cls = str(r[2]).strip()
         if cls == GENESIS_CLASS and not include_genesis:
@@ -74,10 +81,13 @@ def _open_tab():
     import gspread
     from google.oauth2.service_account import Credentials
     gc = gspread.authorize(Credentials.from_service_account_info(json.loads(creds), scopes=SCOPES))
+    import gspread.exceptions
     sh = gc.open_by_key(SPREADSHEET_ID)
     try:
         return sh.worksheet(INCIDENT_TAB)
-    except Exception:
+    except gspread.exceptions.WorksheetNotFound:
+        # ONLY create on a genuine not-found — catching broad Exception would treat a rate-limit/network/
+        # credential error as "absent" and then add_worksheet fails confusingly (Gemini #225).
         ws = sh.add_worksheet(title=INCIDENT_TAB, rows=200, cols=len(HEADER))
         ws.update("A1", [HEADER])
         # genesis epoch so the counter is meaningful from day one
