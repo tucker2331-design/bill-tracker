@@ -69,4 +69,14 @@ ok(log._parse_iso("2026-07-10 09:30:00") is not None, "space-separated ISO must 
 ok(log._parse_iso("2026-07-10 09:30:00") == log._parse_iso("2026-07-10T09:30:00Z"), "space == T parse")
 ok(log._parse_iso("garbage") is None, "unparseable → None, no raise")
 
+# 11. Skipped-row VISIBILITY (CodeRabbit #226): an EMPTY row is silent padding; a non-empty but unusable
+#     (< 3 cols) row is a DATA ANOMALY surfaced via the `malformed` collector, never silently dropped.
+mal = []
+rows = [ROW("2026-07-01T00:00:00Z", "", "_genesis"),
+        ["", "", ""],                       # empty padding → silent, NOT collected
+        ["partial-junk", "x"]]              # len 2, has data → malformed, collected
+latest = log.latest_incident_end(rows, malformed=mal)
+ok(mal == [["partial-junk", "x"]], f"non-empty unreadable row surfaced; empty row silent -> {mal}")
+ok(log.days_since(latest, NOW) == 19, "genesis still counted alongside the malformed collection")
+
 print(f"ALL {_checks} incident-log tests passed")
