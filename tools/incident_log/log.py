@@ -37,18 +37,34 @@ CLASSES = ("accuracy", "parity_gap", "degraded", GENESIS_CLASS)
 # ── pure, unit-tested ───────────────────────────────────────────────────────────────────────────────────
 def _parse_iso(s):
     try:
-        return datetime.strptime(str(s).strip()[:19], "%Y-%m-%dT%H:%M:%S").replace(tzinfo=timezone.utc)
+        # tolerate a space separator ("2026-07-01 00:00:00") as well as ISO "T" — a manual edit or another
+        # tool may write either, and mis-parsing an incident's timestamp must not silently drop it (Gemini #225).
+        return datetime.strptime(str(s).strip()[:19].replace(" ", "T"),
+                                 "%Y-%m-%dT%H:%M:%S").replace(tzinfo=timezone.utc)
     except (ValueError, TypeError):
         return None
 
 
-def latest_incident_end(rows, *, include_genesis=True):
+def latest_incident_end(rows, *, include_genesis=True, malformed=None):
     """Given Incident_Log data rows (lists aligned to HEADER, header excluded), return the most recent
     EndUTC (falling back to StartUTC when an incident is still open/instantaneous). A `_genesis` row counts
-    as the epoch when include_genesis=True. Returns a tz-aware datetime or None."""
+    as the epoch when include_genesis=True. Returns a tz-aware datetime or None.
+
+    Skipped-row visibility (Standard #9 / CodeRabbit #226): a truly-EMPTY row (Sheets appends blank padding
+    at the grid's end) is legitimately skipped, silently. A row that HAS data but is unusable (< 3 cols, so
+    Start/End/Class can't all be read) is a DATA ANOMALY — a malformed incident row that could hide a real
+    incident and make the trust counter lie. Those are collected into the caller-supplied `malformed` list so
+    the caller can raise a categorized alert; never dropped silently."""
     best = None
     for r in rows:
-        if len(r) < len(HEADER):
+        if not any(str(c).strip() for c in r):
+            continue                       # empty Sheets padding — not an incident, no alert warranted
+        # only indices 0/1/2 are read here; requiring the full HEADER width (5) would SKIP a real incident
+        # whose trailing optional cols (Summary/DetectedBy) were trimmed by Sheets — the under-report bug
+        # (Gemini #225). >=3 matches days_since_last_incident.
+        if len(r) < 3:
+            if malformed is not None:
+                malformed.append(r)        # has data but unreadable → surfaced, not silently swallowed
             continue
         cls = str(r[2]).strip()
         if cls == GENESIS_CLASS and not include_genesis:
@@ -77,7 +93,9 @@ def _open_tab():
     sh = gc.open_by_key(SPREADSHEET_ID)
     try:
         return sh.worksheet(INCIDENT_TAB)
-    except Exception:
+    except gspread.exceptions.WorksheetNotFound:   # gspread.__init__ binds .exceptions; no extra import (Gemini #226)
+        # ONLY create on a genuine not-found — catching broad Exception would treat a rate-limit/network/
+        # credential error as "absent" and then add_worksheet fails confusingly (Gemini #225).
         ws = sh.add_worksheet(title=INCIDENT_TAB, rows=200, cols=len(HEADER))
         ws.update("A1", [HEADER])
         # genesis epoch so the counter is meaningful from day one
@@ -113,7 +131,13 @@ def days_since_last_incident():
         print("[incident_log] no creds; run in CI.")
         return
     rows = ws.get_all_values() or []
-    latest = latest_incident_end(rows[1:])
+    malformed = []
+    latest = latest_incident_end(rows[1:], malformed=malformed)
+    if malformed:
+        # a non-empty unreadable row could be a real incident the counter is now ignoring — make it loud
+        # (Standard #9: no silent skip on the trust path).
+        print(f"⚠️ [DATA_ANOMALY] Incident_Log has {len(malformed)} unreadable non-empty row(s) — a real "
+              f"incident could be hidden from the counter; fix the row(s): {malformed[:3]}")
     n = days_since(latest, datetime.now(timezone.utc))
     if n is None:
         print("Incident_Log is empty (no genesis) — seed it first.")

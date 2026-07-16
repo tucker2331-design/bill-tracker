@@ -56,4 +56,27 @@ ok(log.record_incident("not_a_class", "x", "test") is False, "unknown incident c
 os.environ.pop("GCP_CREDENTIALS", None)
 ok(log.record_incident("accuracy", "test summary", "unit-test") is False, "no-creds record → False, no raise")
 
+# 9. THE UNDER-REPORT BUG (Gemini #225): a real incident whose trailing optional cols (Summary/DetectedBy)
+#    were trimmed by Sheets — length 3, not 5 — MUST still be counted, or the counter reads "safe" while an
+#    incident exists. Under the old `< len(HEADER)` guard this row was skipped; it must count now.
+rows = [ROW("2026-07-01T00:00:00Z", "", "_genesis"),
+        ["2026-07-15T00:00:00Z", "2026-07-15T02:00:00Z", "accuracy"]]  # len 3, trailing cols trimmed
+ok(log.days_since(log.latest_incident_end(rows), NOW) == 5,
+   f"trimmed-length real incident must be counted (was the under-report bug) -> {log.days_since(log.latest_incident_end(rows), NOW)}")
+
+# 10. Space-separated timestamps parse (Gemini #225): a manual edit / other tool may not use the 'T'.
+ok(log._parse_iso("2026-07-10 09:30:00") is not None, "space-separated ISO must parse")
+ok(log._parse_iso("2026-07-10 09:30:00") == log._parse_iso("2026-07-10T09:30:00Z"), "space == T parse")
+ok(log._parse_iso("garbage") is None, "unparseable → None, no raise")
+
+# 11. Skipped-row VISIBILITY (CodeRabbit #226): an EMPTY row is silent padding; a non-empty but unusable
+#     (< 3 cols) row is a DATA ANOMALY surfaced via the `malformed` collector, never silently dropped.
+mal = []
+rows = [ROW("2026-07-01T00:00:00Z", "", "_genesis"),
+        ["", "", ""],                       # empty padding → silent, NOT collected
+        ["partial-junk", "x"]]              # len 2, has data → malformed, collected
+latest = log.latest_incident_end(rows, malformed=mal)
+ok(mal == [["partial-junk", "x"]], f"non-empty unreadable row surfaced; empty row silent -> {mal}")
+ok(log.days_since(latest, NOW) == 19, "genesis still counted alongside the malformed collection")
+
 print(f"ALL {_checks} incident-log tests passed")
