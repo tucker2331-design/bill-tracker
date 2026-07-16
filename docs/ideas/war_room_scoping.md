@@ -202,3 +202,53 @@ user across devices (so whip attribution means something). It also solves, with 
 long-standing requirement that the **master/HQ site be gated to the owner + a few execs**
 ([[ideas/product_identity]] topology) — one auth story for both, free at our size.
 
+## OWNER DECISIONS — 2026-07-16 (round 2)
+
+### ✅ D3 — Identity: DECIDED = Cloudflare Access; name-pick is DEAD
+Owner rule, verbatim intent: *"name pick is an extra step no one wants to do — it needs to be **automatic or
+not exist**."* That kills option (B) outright and is a good general principle: **an identity mechanism that
+asks the user to do clerical work every time is not an identity mechanism.** Remaining: (A) none, or
+(C) Access. Owner: *"yeah if the cloudflare login is free and will stay logged in like other sites (ie not a
+constant pain in the ass re-logging in / verifying)."*
+
+**VERIFIED 2026-07-16 (Cloudflare docs, not assumed):** Access session duration is **configurable from 15
+minutes to 1 MONTH**, default 24h, settable globally / per-application / per-policy. **We set it to 1 month.**
+So the real UX is: click the link → email → 6-digit code → **stay logged in for a month** → one code again.
+After first login it IS automatic (a session cookie), satisfying the owner's rule.
+**Honest caveat, stated not buried:** 1 month is the MAXIMUM — this is not "logged in forever" like Gmail. A
+volunteer re-enters an emailed code roughly once a month. Mild, non-zero. If even that is too much, the
+fallback is (A) none (an unguessable link, no identity, no attribution).
+
+### ⚠️ STANDING CONCERN — the free-tier cap risk (owner, 2026-07-16)
+Owner: *"this whole cloudflare limits thing is slightly worrying — we need to be really careful and aware of
+that and constantly on the lookout for a free alternative without caps."*
+
+**Honest finding: a "free, uncapped" hosted store does not exist** — someone pays for the servers, so every
+free tier caps or carries rug-pull risk. Surveyed: Supabase free (pauses on inactivity), Neon free (0.5 GB,
+autosuspend), Turso (plans changed), self-hosted SQLite on a ~$5/mo VPS (uncapped but costs money + ops),
+GitHub-as-store (free but hostile to concurrent writes), Sheets (what we use — also capped: API quotas + the
+10M-cell ceiling we already manage). None is free + uncapped + good.
+
+**So the protection is NOT finding an uncapped mirage — it is these three rules, which are now design law:**
+1. **PORTABILITY is the real insurance.** D1 is plain **SQLite** — export/migrate is trivial. If Cloudflare
+   ever changes terms, we lift the file to any SQLite host, a VPS, or back to Sheets. Keep the schema plain
+   (no vendor-specific features) so this stays a one-day move, never a rewrite. This is the strongest answer
+   to the owner's worry.
+2. **A USAGE CANARY, same discipline as the LIS-safety guardrails.** Measure real daily writes/reads against
+   the cap and alert at ~25% — we must never be *surprised* by a cap. (Also catches a runaway-bug write storm,
+   which is the ONLY realistic way we hit 100k writes/day at our size.)
+3. **DECOUPLING (already the design).** A cap hit degrades the war room ONLY; the read product (gviz) is
+   untouched and the accuracy path never depends on it.
+
+**Scale reality check that bounds the whole worry:** our need is ~hundreds of writes/day against a 100,000/day
+cap (~100× headroom), and even if it ever went paid, a workload this small costs a few dollars — the downside
+is bounded and tiny. The risk is a *terms change*, and portability (rule 1) is what neutralizes that.
+
+### 📐 PROCESS — mock up the war room BEFORE any code (owner, 2026-07-16)
+Owner: *"once you get to the war room do a mock up before you start writing code so I can get an idea of what
+we are working with."* Standing requirement. **But the honest sequence is: the product-architecture synthesis
+FIRST, then the mockup, then code** — because DECISION 1 (does the war room get its own tab, or live inside an
+existing surface?) is exactly what the synthesis answers, and a mockup would otherwise have to *assume* the
+answer and bake in the "mosh of features" the owner warned about. Mockups obey the design canon
+([[design/dashboard_and_visual_language]] — read it before drawing).
+
