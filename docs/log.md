@@ -8,6 +8,20 @@ status: active
 
 Append-only, reverse-chronological (newest at top). Each entry opens with `## [YYYY-MM-DD] <kind> | <title>` so `grep "^## \[" log.md | head -20` gives a parseable timeline.
 
+## [2026-07-16] pr | #226 MERGED — standards audit repaired the incident-log (owner: "are you sure everything is up to standard?")
+
+Owner challenged whether the build wave was actually hardened. Audit found the ONE real gap: #225
+(incident-log) had merged past 3 Gemini findings (1 commit, no fold-in). Real bug: the "days since a data
+incident" counter required a full-width row, but Sheets trims trailing-empty cells, so an incident logged
+without a summary read back short and was SKIPPED — the counter could show "safe" while an incident existed
+(a silent under-report of the exact trust metric the feature exists for). #226 fixed it + folded the review
+in full: len>=3 consistency; narrow WorksheetNotFound; space-separated timestamp parse; and (round-2
+CodeRabbit Critical) the malformed-row skip on the trust path is now VISIBLE (empty=silent padding,
+non-empty-unreadable=collected + DATA_ANOMALY alert, Standard #9). 9→15 goldens, each proving the old code
+failed. Everything else in the wave (#219 live-verified, #220/#221 parity, #222 histogram, #223/#224 differ
+26 goldens) held up. Process lesson reinforced: [[workflow/hardening_is_non_negotiable]] — "done" means
+bot-folded + tested, and never merge before reading the review, even under "go fast".
+
 ## [2026-07-12] pr | #215 MERGED — §9 anchor ladder re-merged (exonerated) + rung telemetry actually folded into SYSTEM_METRICS
 
 The §9 anchor ladder is live again ([PR #215](https://github.com/tucker2331-design/bill-tracker/pull/215)),
