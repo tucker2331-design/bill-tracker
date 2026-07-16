@@ -151,3 +151,54 @@ The position control lives on the war-room row primarily, mirrored on the bill c
 Once these are answered, this page becomes the build spec (or a new `docs/architecture/war_room.md` does).
 No code until then. See also [[ideas/lobbyist_jtbd_ideation]] §8a/§8b, [[audits/build_wave_2026-07/README]],
 [[ideas/product_vision]] §9 (clients/positions were parked here from the start).
+
+---
+
+## OWNER DECISIONS — 2026-07-16 (updates the five asks above)
+
+### ✅ D5 — Star ↔ position: DECIDED = option (A), per the owner, verbatim intent
+> *"the star simply signifies if it's one we are tracking and involved with or not. the level of involvement —
+> whether wrote it / support it / hate it — is a different question."*
+
+**Locked:** the **star is a binary "are we tracking/involved with this"** toggle. **Position** (wrote it /
+support / oppose / watch / amend) is a **separate attribute** of a tracked bill, never conflated with the star
+and never implied by it. A bill can be tracked with no position yet. This matches the shipped two-step-untrack
+copy and [[ideas/product_vision]] §9's parked `position` column.
+
+### ✅ D2 — Write path: DECIDED = Cloudflare Worker + D1, conditional on "free + will hold up" — VERIFIED
+Owner: *"i guess the cloudflare thing assuming its free and will hold up for what we need it for."* Verified
+against Cloudflare's current published limits (2026-07-16) rather than assumed:
+
+| D1 free plan | Limit | Our realistic need (war room) |
+|---|---|---|
+| Rows **written**/day | **100,000** | watchlist + positions + whip marks ≈ **low hundreds/day** at peak |
+| Rows **read**/day | **5,000,000** | see the read-budget note below |
+| **Storage** total | **5 GB** | thousands of rows ≈ **single-digit MB** |
+
+**Verdict: holds with ~100× headroom**, even at 10 states. Three honest caveats recorded so they're designed
+for, not discovered:
+1. **Over-limit = ERRORS, not surprise billing.** D1 returns errors when the daily cap is hit (it does not
+   silently bill). Good for a free product — but it means the war room MUST fail-open and MUST NOT be able to
+   break the READ product. This is exactly why the write path stays decoupled from the gviz read path.
+2. **Reads deserve one design thought at scale.** A naive "re-read the whole watchlist on every page load"
+   (500 rows × many loads × many users) climbs toward the 5M/day read cap. Mitigation is ordinary (read once
+   per session / cache at the edge) — not a blocker, just a rule to write down now.
+3. Limits reset daily 00:00 UTC.
+
+### 🔄 D3 — Identity: REOPENED — the rejection was based on my bad explanation, not the facts
+Owner: *"3 won't work — most people use this from a link on their browser + that requires a web app and
+appstore approval which we never planned for."* **Correction: NONE of the identity options require an app,
+an app store, or an install.** All three are plain-browser, link-first:
+- **(A) none** — shared unguessable link; no attribution.
+- **(B) name-pick per device** — a dropdown stored in the browser. Works from a link, BUT it identifies the
+  *browser*, not the person: two devices = two picks, a shared computer misattributes, and it is honor-system.
+- **(C) Cloudflare Access** — **verified 2026-07-16: browser-based, NO client software or end-user install**;
+  free for **up to 50 users**; login via **one-time PIN emailed to the user** (or a third-party SSO). The
+  flow is literally: click the link → type your email → paste the 6-digit code → you're in.
+
+**Revised recommendation: (C).** The owner's own constraint — *"most people use this from a link on their
+browser"* — is precisely how Access works, and unlike (B) it gives REAL per-person identity that follows a
+user across devices (so whip attribution means something). It also solves, with the same mechanism, the
+long-standing requirement that the **master/HQ site be gated to the owner + a few execs**
+([[ideas/product_identity]] topology) — one auth story for both, free at our size.
+
