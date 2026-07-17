@@ -2,7 +2,7 @@
 tags: [design, research, information-architecture, object-page, bill-page, war-room]
 updated: 2026-07-17
 status: active
-open_loop: Two residuals — the roster ROW (LIS member + our whip mark in one row) defeats the region-level trust partition and is unresolved pending the mockup (§5); and Prater's OOUX book/course is still unread in full (§7), with the ORCA object-map exercise waiting on roster data that is not ingested at all today.
+open_loop: One design residual + one paid-source gap. (1) The roster ROW (LIS member + our whip mark in the same row) defeats the region-level trust partition and is unresolved pending the mockup (§5). (2) Prater's OOUX book/course + Wroblewski's and Norman's books are PAID and unread (§7) — the load-bearing principles are digested from the authors' free primary sources; buy before the war-room BUILD if the object model gets contested. The ORCA artifacts this page recommends (Nested-Object Matrix, CTA Matrix) are not yet produced.
 ---
 
 # The central-object page — research digest (the canon gap this fills)
@@ -56,6 +56,39 @@ who-can-do-what — directly relevant to org-vs-LIS data classes and the Access 
 Sources: [What is OOUX](https://ooux.com/what-is-ooux) · [Intro to OOUX + how to do it](https://ooux.com/resources/an-introduction-to-object-oriented-ux-and-how-to-do-it) ·
 [Prater on ORCA](https://sophiavux.medium.com/in-the-approach-to-ooux-that-i-teach-we-call-the-process-orca-e226dfdd015a) ·
 [LogRocket: OOUX structured approach](https://blog.logrocket.com/ux-design/object-oriented-ux-ooux/)
+
+### 1b. ORCA in depth — and **the answer to "what IS the bill page?"**
+
+ORCA is **15 steps in 4 rounds** ([Prater — Introducing ORCA](https://medium.com/design-bootcamp/introducing-orca-the-third-diamond-in-your-ux-process-23a1babb0389)):
+
+| Round | What it produces | What it gives US |
+|---|---|---|
+| **1 · Discovery** | noun foraging → **Nested-Object Matrix** (objects × objects, relationships in the intersections — "a scalable entity-relationship diagram") → **Object Map** | the Bill/Meeting/Committee/Member/Position/Contact structure |
+| **2 · Requirements** | Object Guides (glossaries), relationship **cardinality** (average AND max connections — *"which can impact performance"*), CTA matrix → object-oriented user stories | e.g. *a Committee has ~15 Members; a Bill has 1 deciding Committee* — the numbers that decide whether a roster previews or inlines |
+| **3 · Prioritization** | **downgrading / eliminating OBJECTS**, navigation flows, interaction phasing, attribute ranking | **this is how the MVP cut should be made** — by demoting objects, not by shortening a feature list (D4 in [[ideas/war_room_scoping]] is still open, and this is the tool for it) |
+| **4 · Representation** | **"cards, details, lists, landing pages"** → prototypes | ⬇︎ the finding below |
+
+**→ "The bill page" is not a new invention — it's the Bill object's DETAIL representation.** Round 4 says every
+core object gets *several* representations: a **card**, a **detail**, a **list**, sometimes a **landing page**.
+Our product today has built the Bill's **card** and its **lists** (Today / Search / Calendar) and has simply
+**never built its detail**. So the question isn't "should we add a bill page?" — it's "why does our core object
+have no detail view?", which is also why a bill has no URL. The card↔page relationship is settled by the same
+step: they are **two representations of one object**, which is exactly what Salesforce's compact layout
+enforces mechanically (§2.1). *Nothing is replaced.* (The companion test, from LogRocket: a **nested object**
+— hierarchical, recognizable, carrying its own CTAs — **requires its own detail view**; a mere attribute does
+not. Bill passes on every count.)
+
+**→ The Nested-Object Matrix drives NAVIGATION** — relationships "pave the way for navigation paths." This is
+the honest tool for the tab-vs-region question (§5), rather than reasoning from analogy to other products.
+
+**→ The CTA Matrix is an "object-by-role matrix with actions in the intersections" — i.e. it *is* a permission
+model.** This independently corroborates §5's finding that the trust boundary and the Access boundary coincide:
+ask "which roles may act on which objects" and the org-owned objects separate themselves out. It is also the
+artifact to produce before writing a single D1 route.
+
+**Caveat on this pass:** ORCA's *structure* is digested from Prater's own primary material; her **book and
+paid course remain unread** (see §7) — the workshop-level mechanics of running an Object Map session are not
+reproduced here.
 
 ---
 
@@ -210,15 +243,30 @@ Everything above is the *skeleton*; the visual treatment still obeys [[design/da
 (registers are monochrome, colour is reserved, routine is grey) and [[design/information_display]].
 
 ## 7. Reading queue — state after this pass
+
+**The queue is closed to the extent freely-available primary sources allow.** What remains unread is unread
+because it is **paid**, not because it was skipped — stated plainly so nobody mistakes this digest for the books.
+
 - ✅ **Jira / Linear / GitHub issue anatomy** — done (§4). Resolved the sidebar question by re-framing it as
   control-vs-content; Atlassian's published spec is the citable primary source.
 - ✅ **Provenance-in-UI literature** — searched (§5). **Does not transfer** (analytic ≠ source provenance);
   logged so the search isn't re-run. The partition resolves from Munzner + P10/P17/P19 instead.
-- ⏳ **Sophia Prater — *Object-Oriented UX*** — the ORCA **method** is digested from her own primary material
-  (§1) and is what this page applies; the **book/course in full** is still unread. Worth doing the object-map
-  exercise properly for Bill/Meeting/Committee/Member/Position/Contact when the roster data exists — today
-  **zero** member/committee roster is ingested, which is the hard blocker under the whip board anyway
-  ([[ideas/war_room_scoping]]).
+- ✅ **Prater — the ORCA process** (§1b) — the 4 rounds / 15 steps, Nested-Object Matrix, CTA Matrix, Object
+  Map, and Round 4's card/detail/list/landing representations, from her own primary writing. **This pass
+  answered "what IS the bill page?"** — the Bill object's *detail representation*, the one representation of
+  our core object we never built.
+- ✅ **Norman — signifiers** and ✅ **Wroblewski — form design** → distilled to [[design/information_display]]
+  §5c/P21–P22 (the product's first WRITE surface had no canon at all).
+- 🔒 **PAID, still unread — Prater's *Object-Oriented UX* book + OOUX course.** The workshop mechanics (how to
+  actually run an Object Map / Nested-Object Matrix session) are not reproduced in her free material. Not a
+  blocker for the mockup; worth the owner's money before the *build* if the object model gets contested.
+- 🔒 **PAID — Wroblewski's *Web Form Design*** (the book) and Norman's *Design of Everyday Things* (the book).
+  The load-bearing principles are from the authors' own free primary sources; the books add depth, not
+  contradiction.
+
+**Correction banked (2026-07-17):** an earlier note in this vault said roster data was "zero ingested" in a way
+that implied unavailability. Precisely: **we ingest none of it, but it is confirmed AVAILABLE on our LIS key**
+([[architecture/strategic_tools_placement]]) — an unbuilt ingest, not a missing source.
 
 See also [[design/information_display]] (the rules), [[design/reading_notes]] (the quantitative canon),
 [[architecture/strategic_tools_placement]], [[ideas/war_room_scoping]], [[ideas/product_identity]].

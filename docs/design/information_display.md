@@ -28,7 +28,8 @@ are already textbook; this page sharpens them and catches where the current buil
 | **Hearst — *Search User Interfaces* (Ch1 + Ch8 Flamenco)** | ✅ **deep-read 2026-06-23** ([[design/reading_notes]]) | 7 SUI guidelines; faceted nav: integrate browse+search, fluid refine/expand, **avoid empty result sets**, **facet counts as scent**, per-facet removable chips, recognition>recall |
 | Gestalt / typography / WCAG | ✅ baseline | proximity, alignment, hierarchy, tabular figures, never color-alone, contrast, focus |
 | **Prater (OOUX/ORCA) · Salesforce record page · NN/G tabs · Jira issue view · provenance-in-UI** | ✅ **deep-read 2026-07-17** ([[design/object_page_patterns]]) | the **central-object page** — objects-not-features, compact layout (card↔page one source), next-steps vs past-activity, when tabs fail, control-vs-content (the sidebar question), **§5b/P20 the provenance partition** |
-| *(next)* Norman — *Design of Everyday Things*; Wroblewski — forms/mobile | ⏳ queued | affordances, input design |
+| **Norman — affordances vs *signifiers*** ([jnd.org](https://jnd.org/signifiers-not-affordances/)) | ✅ **read 2026-07-17** | **§5c/P21** — discoverability comes from signifiers, not affordances; names the scroll-cue failure we already shipped a fix for |
+| **Wroblewski — web form design** ([label placement](https://www.lukew.com/ff/entry.asp?504) · [layout](https://www.lukew.com/ff/entry.asp?1502)) | ✅ **read 2026-07-17** | **§5c/P22** — the product's FIRST input surface (the war room); label placement, primary-vs-secondary action weight, no decoration |
 
 ---
 
@@ -160,6 +161,34 @@ see [[design/object_page_patterns]] §5), so the rule is derived from the canon 
   Access/write boundary at the same line ([[design/object_page_patterns]] §5–6). The unresolved edge is a row
   that mixes both (a committee roster: LIS member + our whip mark) — there the rule is **no single cell blends
   the two**; a given piece of text is either sourced or asserted, never both.
+
+## 5c. Interaction & input — the canon for the product's first WRITE surface
+
+Everything above governs *display*. The war room is the first thing in this product a human **types into**
+([[ideas/war_room_scoping]]), and we had no rules for it. These two close that gap.
+
+- **P21 · Affordance ≠ signifier. Discoverability comes from the SIGNIFIER.** Norman coined "signifier"
+  precisely because designers kept building real affordances nobody could see: *"affordances define what
+  actions are possible; signifiers specify how people discover those possibilities… signifiers are of far more
+  importance to designers than are affordances."* The design question is never "can this be done?" but **"is
+  there a perceptible signal that the right user will discover it?"**
+  → **THIS PRODUCT — we have already paid for this lesson.** The scrollable panels on the landing page were
+  genuinely scrollable (the affordance existed) and the owner reported *"i dont see any indication that there
+  is more info scrollable"* — an affordance with **no signifier**. The CSS-only shadow failed for the same
+  reason; the visible fade + chevron (#216) is the signifier. **Rule: every interactive region must carry a
+  perceptible signal, and "it works if you try it" is not a design.** Applies next to the war room's
+  editable cells — an org position that only reveals itself as editable on hover is the same bug.
+- **P22 · Form design: top-align labels; weight the primary action; never decorate an input.** Wroblewski, on
+  eye-tracking (Penzo): **top-aligned labels are fastest** — they "only require a single eye fixation to take
+  in both input label & field"; **left-aligned are slowest** by fixation count, but are the right choice
+  "when you want users to carefully consider each input" or scan unfamiliar/optional fields; right-aligned
+  save vertical space at the cost of a ragged left edge. **Primary actions** (save/submit) get stronger visual
+  weight (colour/bold/fill) and align with the inputs; **secondary actions are de-emphasised** to prevent
+  mis-clicks. And his echo of P1/P2: *"information consists of differences that make a difference"* —
+  backgrounds and rules around inputs impair scanning.
+  → **THIS PRODUCT:** the war room's note/position inputs use **top-aligned labels**; the whip board — where a
+  volunteer should *deliberately* consider each member — is the documented exception where **left-aligned**
+  earns its cost. One primary action per surface, everything else quiet. No boxes-around-boxes (P7).
 
 ---
 

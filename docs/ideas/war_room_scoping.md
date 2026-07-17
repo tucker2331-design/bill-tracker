@@ -2,7 +2,7 @@
 tags: [ideas, product, war-room, watchlist, infra, scoping, owner-decision]
 updated: 2026-07-17
 status: active
-open_loop: Decisions largely banked (D5 star=binary; D2 write-path=Worker+D1; identity=Access 1-month, no name-pick; IA has a RECOMMENDATION awaiting the owner from [[design/object_page_patterns]] — war room as a REGION of the bill page, not a tab). Build now blocked on the MOCKUP (owner rule: mock up before code), on member/committee ROSTER ingestion (zero ingested today), and on the MVP cut.
+open_loop: Decisions largely banked (D5 star=binary; D2 write-path=Worker+D1; identity=Access 1-month, no name-pick; IA has a RECOMMENDATION awaiting the owner from [[design/object_page_patterns]] — war room as a REGION of the bill page, not a tab). Build now blocked on the MOCKUP (owner rule: mock up before code), on member/committee ROSTER ingestion (we ingest none of it, though it is confirmed AVAILABLE on our LIS key — an unbuilt ingest, not a missing source), and on the MVP cut (D4 — ORCA says cut by downgrading OBJECTS, not by trimming features).
 ---
 
 # War room + shared watchlist — scoping memo (owner decisions required)

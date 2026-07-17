@@ -8,6 +8,55 @@ status: active
 
 Append-only, reverse-chronological (newest at top). Each entry opens with `## [YYYY-MM-DD] <kind> | <title>` so `grep "^## \[" log.md | head -20` gives a parseable timeline.
 
+## [2026-07-17] research | reading queue CLOSED — "the bill page" is the Bill object's DETAIL representation
+
+Owner: *"what is the bill page? also finish reading before the mock up."* Both fair hits. I had been using
+"the bill page" as if it were established vocabulary for something that **does not exist**, and the reading
+queue still had three ⏳ items.
+
+**The honest answer to the question.** There is no bill page. A bill's only representation today is the
+**card** (inside Today/Calendar/Search); it expands in place and the drill ends there. **Verified against the
+code, not assumed:** no router dependency, no `pushState`, no hash routing, no `<Route>` in `web/src` — so a
+bill has **no URL** and the org cannot link one. What IS decided is
+[[architecture/strategic_tools_placement]] (2026-07-15): the whip/committee tools live on "a dedicated surface
+entered FROM the card, never ON it" — that decision created the need for a container but never named it or
+pinned its shape ("a per-bill (or per-committee) workspace"). "Bill page" was my name for that container, and
+saying "the war room is a region of the bill page" stacked an undecided container plus an unproven claim into
+one phrase and presented it as a finding. Corrected.
+
+**Then the reading answered it properly** (§1b of [[design/object_page_patterns]]). ORCA's **Round 4 —
+Representation** produces "cards, details, lists, landing pages": every core object gets *several*
+representations. We built the Bill's **card** and its **lists** and **never built its detail**. So the real
+question is not "should we add a page?" but **"why does our core object have no detail view?"** — which is the
+same reason it has no URL. The card↔page relation is settled by the same step: two representations of one
+object, nothing replaced.
+
+Two more ORCA transfers: the **Nested-Object Matrix** ("relationships pave the way for navigation paths") is
+the honest tool for the tab-vs-region question instead of my reasoning-by-analogy; and the **CTA Matrix**
+(object × role, actions in the intersections) **is a permission model**, independently corroborating that the
+trust boundary and the Access boundary coincide. Produce both before writing a D1 route. Round 3 also says the
+**MVP cut (D4, still open) should be made by downgrading/eliminating OBJECTS**, not by shortening a feature list.
+
+**The gap that mattered most was one I hadn't ranked:** the war room is the product's **first surface anyone
+types into**, and we had **zero input canon**. Now closed — [[design/information_display]] §5c:
+- **P21 · affordance ≠ signifier** (Norman). *"Signifiers are of far more importance to designers than are
+  affordances."* **We already paid for this lesson:** the landing-page panels were genuinely scrollable and the
+  owner said *"i dont see any indication that there is more info scrollable"* — a real affordance with no
+  signifier; the CSS-only shadow failed the same way; the fade+chevron (#216) was the signifier. The rule now
+  has a name and applies next to the war room's editable cells.
+- **P22 · form design** (Wroblewski/Penzo eye-tracking): top-aligned labels are fastest (one fixation covers
+  label+field); left-aligned are slowest by fixation count but right when the user *should* deliberate over
+  each input — the documented exception for the whip board; primary action gets weight, secondary is quiet;
+  no decoration around inputs.
+
+**Two corrections to my own prior claims:** (1) roster data — I said "zero ingested" in a way that implied
+unavailable; precisely, we ingest none of it but it is **confirmed AVAILABLE on our LIS key**. An unbuilt
+ingest, not a missing source. (2) The queue is now closed **to the limit of free primary sources** — Prater's
+book/course, Wroblewski's and Norman's books are **paid and unread**, marked 🔒 rather than pretended away.
+
+Residual (open_loop): the **roster ROW** still defeats the region-level trust partition (LIS member + our whip
+mark in one row) — a mockup question. Next: the mockup.
+
 ## [2026-07-17] research | central-object page canon gap FILLED — the war room is a REGION, not a tab
 
 Owner's instruction: *"use your existing research on design, look in the brain, then look for new research…
