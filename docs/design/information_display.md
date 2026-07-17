@@ -161,6 +161,20 @@ see [[design/object_page_patterns]] §5), so the rule is derived from the canon 
   at the same line ([[design/object_page_patterns]] §5–6). **The partition is spatial at whatever level the data
   mixes** — page *regions* for a homogeneous zone, *column groups* (a vertical rule + per-group headers) where a
   single row must carry both, as in a committee roster. A **cell** never blends them.
+- **P20b · Amber marks "we could be WRONG in a way you can't check" — not "we computed it."** (Refined 2026-07-17
+  after the War Room v2 review.) If every computed value gets the provisional chip, amber becomes noise and stops
+  meaning anything (the rainbow failure, one hue at a time). **Arithmetic is exact** — `5 of 15`, a party ×
+  position cross-tab, a days-remaining count — and takes **no marker**; its honesty rides on its inputs, which are
+  already labeled by zone. **Deterministic procedure** ("still to clear: full committee → 3 floor readings") is
+  likewise unmarked. **Amber is for the probabilistic**: text-similarity matches, model predictions — claims whose
+  error the reader cannot audit from the screen.
+- **P20c · Trace every claim to a source, mechanically — writing the rule down does NOT install it.** Proven the
+  hard way (see [[log]] 2026-07-17): two messages after documenting that *"a column headed 'similar bills' smuggles
+  a derived claim into a sourced group"*, the same session shipped *"every Republican who has voted on **this
+  issue** voted no"* into a mockup as if it were fact. *"This issue"* has **no endpoint** — it's a judgment. The
+  check that works is the audit, not the intention: **for each claim on a surface, name the endpoint or delete the
+  claim.** Corollary (Standard #7): if the source is *"a model"*, there must be a measurement plan before it is
+  ever drawn — a column on a mockup is a promise.
 - **P20a · There are THREE classes, not two** (found by drawing — [[design/object_page_patterns]] §5b):
   **sourced** (an official system recorded it — VA LIS *or another state's*) → plain text, source named;
   **derived** (*our software's claim about* facts — "94% same text as TX HB2060") → **the existing

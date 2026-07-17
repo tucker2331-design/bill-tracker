@@ -8,6 +8,64 @@ status: active
 
 Append-only, reverse-chronological (newest at top). Each entry opens with `## [YYYY-MM-DD] <kind> | <title>` so `grep "^## \[" log.md | head -20` gives a parseable timeline.
 
+## [2026-07-17] design | War Room mockup v3 — owner review caught me walking into my OWN trap
+
+Mockup: https://claude.ai/code/artifact/ef78b6ce-4d68-410d-918d-20db9ad6605c (v3). Still nothing built.
+
+**Owner's v2 review, question by question — every one landed:**
+
+1. **"where did and where will you expect this to come from each time"** — answered from the P2 endpoint
+   inventory (`tools/parity/consumed_endpoints.json`), not from guesswork. Real, named, already-catalogued:
+   rosters/party/district = `/MembersByCommittee/GetCommitteeMembersListAsync` + `/Member/GetMemberByIdAsync`
+   (parked C2/C3); per-member votes = `/MemberVoteSearch/GetMemberVoteListAsync` (parked C1/D); versions =
+   `/LegislationText/GetLegislationVersionListAsync` (parked B1); fiscal = `/Legislation/GetFiscalImpactStatements`
+   (parked B7). Already ingested: `DOCKET.CSV`, Schedule, `HISTORY.CSV`. **Genuinely unknown: whether the roster
+   endpoint returns a CHAIR/ROLE field — needs a probe** (the whole whip board leans on it). Companion-bill
+   sourcing also unknown.
+
+2. **I WALKED INTO MY OWN TRAP — the headline lesson.** Two messages after writing that *"a column headed
+   'similar bills' smuggles a derived claim into a sourced group"*, I wrote **"every Republican who has voted on
+   THIS ISSUE before voted no"** and presented it as fact. *"This issue"* is a judgment — no endpoint returns it;
+   somebody has to decide which bills count, and that somebody is us. **Deleted.** The roster now cites votes on a
+   *named* bill only. Lesson: writing a rule down does not install it — the trap fires inside the same artifact
+   that documents it, so the check has to be mechanical (trace every claim to an endpoint), not a good intention.
+
+3. **The predicted-lean column: cut. I had no plan.** Owner asked "how will you do that." Honest answer: the
+   80–90% roll-call accuracy in [[ideas/lobbyist_jtbd_ideation]] C2 is academic work on full-chamber votes with
+   ideology scores + sponsorship networks — not VA committee votes. Doing it here = historical roll calls, member
+   ideal points, topic coding, calibration. That's a project, not a column. **Standard #7 ("if you can't measure
+   it you can't ship it") should have stopped me at the drawing stage.**
+
+4. **"I don't like the chunk of text, it's telling instead of showing"** — correct, and it violated our own P1/P11.
+   The vote-math paragraph is now a **2×3 party × position cross-tab**. The finding IS the shape: the Republican
+   row shows **0** under Yes; the Democrat row is spent (5 of 6). No narration needed.
+
+5. **"why is a democrat button missing… is that intentional?"** — **No: it was bias, not intent.** I picked the
+   facets that fit the story I was telling (R matters), which is how a tool starts arguing with its user. Violated
+   Hearst P13 (show facet values + counts). Facets are symmetric now.
+
+6. **"what is 'the bill itself — text & money', I'm confused"** — bad title; owner decoded it unaided as *edits to
+   the bill*. Renamed **"How the text has changed"**; the fiscal note (the thing making the title vague) moved up
+   to the header as a plain fact. **"Compare" → "What changed."**
+
+7. **"I don't know why introduced is in there"** — justified rather than dropped: it's the **baseline the org
+   endorsed**, and the real question is *"how far has this drifted from the bill we backed?"* — which only works if
+   you can compare TO it, which v2 never offered. Added that one link. Its lack of a "what changed" (nothing
+   precedes it) is now stated in the row instead of left as a silent inconsistency.
+
+8. **"tight but possible" deleted** — editorialising. The clock states the deadline + what's left to clear; whether
+   that's tight is the owner's call, not the software's ([[ideas/product_identity]]: stop at the judgment line).
+
+**Refinement to the three-class model (§5b):** amber must NOT mark everything computed, or amber becomes noise.
+**Arithmetic** (5 of 15; the cross-tab) is exact and needs no marker. **Amber = we could be wrong in a way you
+can't check** — probabilistic claims (text similarity, vote prediction). The deadline's remaining-steps is
+deterministic procedure, so it lost its amber chip too.
+
+**Self-caught before publishing:** v2's party math was **arithmetically impossible** — I wrote "only 3 of the 7
+unknowns are R" when 5-of-6-Democrats-yes leaves just 1 D, forcing 6 R unknowns. Now the whip numbers are
+**verified by script**, not by eye (the cross-tab's margins reconcile against the bar and the roster). A whip board
+that can't count is worse than no whip board.
+
 ## [2026-07-17] design | War Room mockup v1 — drawing RESOLVED the roster row and FALSIFIED the two-class model
 
 Mockup: https://claude.ai/code/artifact/ef78b6ce-4d68-410d-918d-20db9ad6605c — two screens (the War Room tab =
