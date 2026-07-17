@@ -314,6 +314,12 @@ calendar-UX surveys — agenda-vs-grid, overflow, today/selected differentiation
   — "allowed not to know; never to pretend").
 
 ## Reading / discovery queue (read as the relevant feature comes up)
+
+**NOTE (2026-07-16): a canon GAP was found + filled — see [[design/object_page_patterns]].** Everything in
+this file is *quantitative display* (Tufte/Few/Munzner) + *search* (Hearst). None of it covers "a central
+object with many capabilities attached" (the bill page / war room). That literature — OOUX/ORCA, CRM record
+pages, NN/G tab rules — now lives in its own digest.
+
 **Owner-requested 2026-06-23 (digest + bank notes when reached — "so the brain keeps growing"):**
 - **David McCandless — *Information is Beautiful*** — the popular infographic-design canon (visual
   storytelling, color, the "beautiful = designed" bar). Directly counters the "screams-AI / stale / generic"
