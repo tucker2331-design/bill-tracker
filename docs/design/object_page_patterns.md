@@ -1,7 +1,8 @@
 ---
 tags: [design, research, information-architecture, object-page, bill-page, war-room]
-updated: 2026-07-16
+updated: 2026-07-17
 status: active
+open_loop: Two residuals — the roster ROW (LIS member + our whip mark in one row) defeats the region-level trust partition and is unresolved pending the mockup (§5); and Prater's OOUX book/course is still unread in full (§7), with the ORCA object-map exercise waiting on roster data that is not ingested at all today.
 ---
 
 # The central-object page — research digest (the canon gap this fills)
@@ -108,42 +109,116 @@ Source: [NN/G — Tabs, Used Right](https://www.nngroup.com/articles/tabs-used-r
 
 ---
 
-## 4. Our own constraint the prior art does NOT solve — the trust partition
+## 4. Jira / GitHub / Linear — the modern issue anatomy, and **the sidebar question resolved**
 
-CRMs have ONE truth (everything in the record is the org's own data). **We have two**, and blending them is
-forbidden: **LIS-verified fact vs org-entered intel** must stay visibly distinct
-([[ideas/lobbyist_jtbd_ideation]] §8b V4; [[ideas/product_identity]]). So we cannot simply copy Salesforce's
-activity timeline and interleave "Maya called the aide" into the LIS action history — that would blend the
-two classes in one stream. The bill page needs the two as **separate, visually-classed streams** (or one
-stream with an unmistakable class distinction). **This is the one place we must design past the prior art,
-not adopt it.**
+Atlassian publishes Jira's issue-view anatomy as an explicit spec, which makes it the most quotable version
+of the pattern GitHub and Linear also converge on:
+
+- **Main left column** — the object's narrative/content, with an **activity feed at the bottom**: "a list of
+  changes, updates, and comments on an issue," toggleable between history / transitions / comments.
+- **Right sidebar** — the **fields** (status, assignee, priority, labels), plus **glances** (compact
+  summaries that expand) and **collapsible context panels** for secondary information.
+- **Top right** — the issue **actions**.
+- An explicit placement rule: context panels and glances belong **exclusively** on the right; don't use them
+  "if you want to add app information to the left side."
+
+**→ THE SIDEBAR-VS-INLINE DECISION — the answer is that the question was mis-framed.** These tools put
+attributes in a right sidebar because *their attributes are editable controls* — the sidebar is a **control
+panel** and the main column is the **narrative**. The split isn't attribute-vs-content; it's
+**control-vs-content**. That cuts our case cleanly, because our attributes divide on exactly that line:
+
+| Our attribute | Nature | Where the prior art puts it |
+|---|---|---|
+| bill #, patron, chamber, location, stage, crossed-over | **read-only LIS fact** | Salesforce **highlights strip**, pinned (§2) — not a control panel |
+| our position, tracked/star | **editable org control** | Jira-style **fields region** |
+
+So **we do not need a generic attribute sidebar.** Read-only facts go to the pinned highlights strip; the
+only things that behave like Jira's sidebar fields are the org's own editable attributes — which §5 already
+requires to live in their own region anyway. The two rules land on the same layout instead of fighting.
+
+Source: [Atlassian — Jira issue view design guidelines](https://developer.atlassian.com/cloud/jira/platform/issue-view/)
 
 ---
 
-## 5. Synthesis — the shape the research implies for the bill page
+## 5. The trust partition — the prior art does NOT solve it, but **our own canon does**
 
-Not a decision (owner's call), but this is where the four sources converge:
+CRMs have ONE truth (everything in the record is the org's own data). **We have two**, and blending them is
+forbidden: **LIS-verified fact vs org-entered intel** must stay visibly distinct
+([[ideas/lobbyist_jtbd_ideation]] §8b V4; [[ideas/product_identity]]). We cannot copy Salesforce's activity
+timeline and interleave "Maya called the aide" into the LIS action history — that blends the two classes in
+one stream. Jira has the same single-truth assumption (its activity feed mixes system transitions and human
+comments freely, because both are Jira's own data).
+
+**Searched the provenance-in-UI literature for prior art; it does not transfer.** The nearest hit,
+[ProvenanceLens](https://arxiv.org/abs/2505.11784) (2026), argues provenance should be a **user-controlled
+attribute mapped onto ordinary visual channels (color, size, filter, sort)** rather than hardwired — but its
+"provenance" is **analytic** provenance (recency/frequency of *your own interactions*), not **source**
+provenance (*who asserted this fact*). Different problem; recording it so nobody re-runs this search. The one
+transferable half — *provenance is an encodable attribute, so pick its channel deliberately* — points
+straight back at Munzner, who is **already in our canon**. So the decision is derivable from rules we hold:
+
+- **Opacity/dimming is WRONG here.** (The one live pattern the search surfaced — AI tools render unverified
+  blocks at 70% opacity until approved.) It says *provisional / lower-confidence*. Org intel is neither: it's
+  the org's hard-won, highest-value data. Dimming it inverts the emphasis (P10 — spend ink on what must be
+  noticed) and asserts something false about it.
+- **Color is WRONG here.** P10 reserves saturated color for attention/exception states (stale, dead, deadline).
+  The org layer is not an exception — it's a permanent half of the page. Spending the attention channel on an
+  always-on structural distinction burns the one signal we've reserved.
+- **Position/spatial grouping is RIGHT.** It's Munzner's **top-ranked** channel, it's the canon's preferred
+  grouping device (P17 — group by proximity and whitespace, not lines), it's always-on without ever shouting,
+  and it leaves color free. Plus a **text label** per region, because P19 forbids encoding by anything alone.
+
+**→ THE RULE: LIS fact and org intel never share a region.** The partition is spatial and labeled — and it
+rides on a layout convention (§4) users already know, so it costs nothing to learn.
+
+**The bonus finding — the trust line and the permission line are the SAME line.** The org region is exactly
+what Access gates and what the write path (Worker+D1) writes; the LIS region is public and read-only. One
+boundary, drawn once, carries both the trust partition and the security model — and a viewer can *see* which
+part is org-private. Prater called this shot: §1's "CTAs settle permissions early" predicts precisely this
+(the objects the org can act on are the org's objects). **This also answers the owner's open question about
+whether the war room is its own tab: it isn't — the war room *is* the org-owned region of the bill page.**
+
+**The one honestly-unresolved spot — the committee roster.** It's the hard case: a Member is LIS fact, but our
+whip mark on that member is org intel, and they meet *in the same row*. Spatial partition works at the region
+level and breaks down at the row level. The rule that must hold is **no single cell blends the two — any given
+piece of text is either sourced or asserted, never both**. How the row expresses that is a **mockup question**,
+flagged here rather than hand-waved.
+
+---
+
+## 6. Synthesis — the shape the research implies for the bill page
+
+Not a decision (owner's call), but this is where the five sources converge:
 
 - **Card stays** = the compact layout's fast, in-context preview (§2.1). Additive page, nothing removed.
-- **Bill page** = an **object page**: pinned **highlights strip** (the same compact layout) → then sections
-  that are **related objects**, previewed not inlined (§2.3):
-  - **Next** (the Meeting object — shipped Now→Next) and **History** (Action objects) = the next/past split (§2.2)
-  - **Committee & members** (Committee + Member objects, with vote-history attributes) = the "war room" count
-  - **Our position + our contacts** (our attribute + Contact objects) — **visually partitioned** as org data (§4)
-  - later: **Versions**, **Documents** (fiscal), **related Bills** (companions) — each a related object, each
-    with an obvious home, none of them a bolt-on
-- **Single scrolling column with sections, not tabs** (§3) — because the hearing-prep case is a comparison case.
+- **Bill page** = an **object page**, in two labeled regions split by trust (§5):
+  - **LIS region (public, read-only):** pinned **highlights strip** = the compact layout, the same field set
+    the card renders (§2.1, §4) → **Next** (the Meeting object — shipped Now→Next) and **History** (Action
+    objects), which is Salesforce's next-steps/past-activity split (§2.2) and Jira's activity feed (§4).
+  - **Org region (Access-gated, writable) — this IS the war room:** our **position** (an editable attribute,
+    the one thing that behaves like a Jira sidebar field, §4) + our **contacts** (Contact objects) +
+    **committee & members** with whip marks (the roster row being the open question, §5).
+  - later: **Versions**, **Documents** (fiscal), **related Bills** (companions) — each a related object with
+    an obvious home in the LIS region, none of them a bolt-on (§1).
+- **Related objects preview, they don't inline** (§2.3) — the committee's 15 members don't all render by default.
+- **Single scrolling column with sections, not tabs** (§3) — the hearing-prep case is a comparison case
+  (time + roster + position at once), which is exactly where NN/G says tabs fail.
 - **A bill gets a URL** — the present-day gap (no routing exists at all; the org coordinates by text and cannot
   link a bill today). This is the strongest *current* reason for the page, independent of future features.
 
 Everything above is the *skeleton*; the visual treatment still obeys [[design/dashboard_and_visual_language]]
 (registers are monochrome, colour is reserved, routine is grey) and [[design/information_display]].
 
-## 6. Added to the reading queue by this pass
-- **Sophia Prater — *Object-Oriented UX*** (the book / OOUX course material) — read in full when the bill page
-  is built; the ORCA object-map exercise is worth doing properly for Bill/Meeting/Committee/Member/Position/Contact.
-- **Jira / Linear / GitHub issue anatomy** — the modern "central object + attribute sidebar + activity stream"
-  variants; mine for the sidebar-vs-inline attribute decision.
+## 7. Reading queue — state after this pass
+- ✅ **Jira / Linear / GitHub issue anatomy** — done (§4). Resolved the sidebar question by re-framing it as
+  control-vs-content; Atlassian's published spec is the citable primary source.
+- ✅ **Provenance-in-UI literature** — searched (§5). **Does not transfer** (analytic ≠ source provenance);
+  logged so the search isn't re-run. The partition resolves from Munzner + P10/P17/P19 instead.
+- ⏳ **Sophia Prater — *Object-Oriented UX*** — the ORCA **method** is digested from her own primary material
+  (§1) and is what this page applies; the **book/course in full** is still unread. Worth doing the object-map
+  exercise properly for Bill/Meeting/Committee/Member/Position/Contact when the roster data exists — today
+  **zero** member/committee roster is ingested, which is the hard blocker under the whip board anyway
+  ([[ideas/war_room_scoping]]).
 
 See also [[design/information_display]] (the rules), [[design/reading_notes]] (the quantitative canon),
 [[architecture/strategic_tools_placement]], [[ideas/war_room_scoping]], [[ideas/product_identity]].

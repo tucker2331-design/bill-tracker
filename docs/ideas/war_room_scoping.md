@@ -1,8 +1,8 @@
 ---
 tags: [ideas, product, war-room, watchlist, infra, scoping, owner-decision]
-updated: 2026-07-13
+updated: 2026-07-17
 status: active
-open_loop: five owner decisions (IA, write-path, identity, MVP cut, star↔position UX) block the war-room build
+open_loop: Decisions largely banked (D5 star=binary; D2 write-path=Worker+D1; identity=Access 1-month, no name-pick; IA answered by [[design/object_page_patterns]] — the war room is a REGION of the bill page, not a tab). Build now blocked on the MOCKUP (owner rule: mock up before code), on member/committee ROSTER ingestion (zero ingested today), and on the MVP cut.
 ---
 
 # War room + shared watchlist — scoping memo (owner decisions required)

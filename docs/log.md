@@ -8,6 +8,46 @@ status: active
 
 Append-only, reverse-chronological (newest at top). Each entry opens with `## [YYYY-MM-DD] <kind> | <title>` so `grep "^## \[" log.md | head -20` gives a parseable timeline.
 
+## [2026-07-17] research | central-object page canon gap FILLED — the war room is a REGION, not a tab
+
+Owner's instruction: *"use your existing research on design, look in the brain, then look for new research…
+you're only as smart as every smart human, and every smart human wrote shit down in books"* — then, when I
+offered to start drawing: *"finish reading first."* So the reading finished before any mockup.
+
+Landed in [[design/object_page_patterns]] (+ the actionable rule distilled to [[design/information_display]]
+§5b/P20, canon table row added). Five sources: OOUX/ORCA (Prater), the Salesforce record page, NN/G on tabs,
+Atlassian's published Jira issue-view spec, and the provenance-in-UI literature.
+
+Four findings that change what we build:
+1. **Our "13 per-bill features" are mostly OBJECTS and relationships, not features** (OOUX). That's the real
+   answer to "won't the workspace become the new junk drawer?" — structure by nouns and new capability lands
+   as a new related object/attribute with an obvious home. Structure by features and it silts up.
+2. **The sidebar-vs-inline question was mis-framed.** Jira/GitHub/Linear split **control vs content**, not
+   attribute vs content. Our read-only LIS facts → the pinned highlights strip (Salesforce "compact layout",
+   which also VALIDATES the card↔page one-source rule — the card **stays**); only our editable org attributes
+   behave like Jira sidebar fields. No generic attribute sidebar needed.
+3. **The provenance literature does NOT transfer** — [ProvenanceLens](https://arxiv.org/abs/2505.11784) studies
+   *analytic* provenance (recency/frequency of your own clicks), not *source* provenance. Logged so nobody
+   re-runs the search. The partition instead resolves from canon we already hold: **position, not colour or
+   opacity** (opacity would falsely read "provisional" about the org's highest-value intel; colour is reserved
+   by P10 for exceptions, and the org layer is permanent, not exceptional).
+4. **The trust line and the permission line are the SAME line** — the org region is exactly what Access gates
+   and what Worker+D1 writes; the LIS region is public/read-only. One boundary carries both. This answers the
+   owner's open question (*"i'm not sure if it gets its own tab or stays on the home page"*): **the war room
+   isn't a tab — it's the org-owned REGION of the bill page.** Prater predicted it ("CTAs settle permissions
+   early"). NN/G independently forbids tabs here anyway: hearing prep needs time + roster + position at once,
+   which is the comparison case tabs fail.
+
+Honest residuals: Prater's book/course still unread in full (the ORCA method is digested from her primary
+material and is what the page applies) — worth the full object-map exercise when roster data exists, and
+**zero member/committee roster is ingested today**, the hard blocker under the whip board. And one genuinely
+unresolved spot flagged rather than hand-waved: a **committee roster row mixes LIS fact (the member) with org
+intel (our whip mark) in the same row** — spatial partition works at region level, breaks at row level. Rule
+that must hold: no single cell blends the two. That's a mockup question.
+
+Next: the mockup, per the owner's standing rule (*"once you get to the war room do a mock up before you start
+writing code"*).
+
 ## [2026-07-16] pr | #226 MERGED — standards audit repaired the incident-log (owner: "are you sure everything is up to standard?")
 
 Owner challenged whether the build wave was actually hardened. Audit found the ONE real gap: #225

@@ -27,6 +27,7 @@ are already textbook; this page sharpens them and catches where the current buil
 | **Munzner — *Visualization Analysis & Design* (Ch5 Marks & Channels)** | ✅ **deep-read 2026-06-23** ([[design/reading_notes]]) | **encoding-channel effectiveness ranking** (position > length > area > color); expressiveness/effectiveness; separable channels; popout — justifies the timeline + calendar encodings |
 | **Hearst — *Search User Interfaces* (Ch1 + Ch8 Flamenco)** | ✅ **deep-read 2026-06-23** ([[design/reading_notes]]) | 7 SUI guidelines; faceted nav: integrate browse+search, fluid refine/expand, **avoid empty result sets**, **facet counts as scent**, per-facet removable chips, recognition>recall |
 | Gestalt / typography / WCAG | ✅ baseline | proximity, alignment, hierarchy, tabular figures, never color-alone, contrast, focus |
+| **Prater (OOUX/ORCA) · Salesforce record page · NN/G tabs · Jira issue view · provenance-in-UI** | ✅ **deep-read 2026-07-17** ([[design/object_page_patterns]]) | the **central-object page** — objects-not-features, compact layout (card↔page one source), next-steps vs past-activity, when tabs fail, control-vs-content (the sidebar question), **§5b/P20 the provenance partition** |
 | *(next)* Norman — *Design of Everyday Things*; Wroblewski — forms/mobile | ⏳ queued | affordances, input design |
 
 ---
@@ -139,6 +140,26 @@ arbitrary.
   → chamber = position + color + (on the card) a label; outcome = tint + **text label**; the
   `:focus-visible` ring shipped in the foundation — keep it on every interactive element. Verify
   blue(Senate)/red(House) are distinguishable under deuteranopia (position saves us, but check contrast).
+
+## 5b. Provenance — the two-truths rule (the product's own constraint)
+
+Unlike every CRM/issue-tracker this product resembles, we carry **two classes of truth**: **LIS-verified fact**
+and **org-entered intel**. Blending them is forbidden ([[ideas/lobbyist_jtbd_ideation]] §8b V4). The
+provenance-in-UI literature does not solve this (it studies *analytic* provenance, not *source* provenance —
+see [[design/object_page_patterns]] §5), so the rule is derived from the canon above:
+
+- **P20 · Partition provenance by POSITION, never by color or opacity; label both regions.** Source is an
+  encodable attribute, so choose its channel deliberately (Munzner). **Opacity is wrong** — it reads
+  "provisional/low-confidence", which is false about the org's own highest-value intel and inverts the
+  emphasis (P10). **Color is wrong** — P10 reserves saturation for attention/exception states, and the org
+  layer is a permanent half of the page, not an exception; spending the attention channel on an always-on
+  distinction burns it. **Position is right** — Munzner's top-ranked channel, the canon's preferred grouping
+  device (P17: proximity/whitespace, not lines), always-on without shouting, and it leaves color free. Add a
+  **text label** per region (P19 — never encode by one cue alone).
+  → **THIS PRODUCT:** LIS fact and org intel **never share a region**. On the bill page this draws the
+  Access/write boundary at the same line ([[design/object_page_patterns]] §5–6). The unresolved edge is a row
+  that mixes both (a committee roster: LIS member + our whip mark) — there the rule is **no single cell blends
+  the two**; a given piece of text is either sourced or asserted, never both.
 
 ---
 
