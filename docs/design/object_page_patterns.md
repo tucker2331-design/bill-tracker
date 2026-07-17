@@ -2,7 +2,7 @@
 tags: [design, research, information-architecture, object-page, bill-page, war-room]
 updated: 2026-07-17
 status: active
-open_loop: One design residual + one paid-source gap. (1) The roster ROW (LIS member + our whip mark in the same row) defeats the region-level trust partition and is unresolved pending the mockup (§5). (2) Prater's OOUX book/course + Wroblewski's and Norman's books are PAID and unread (§7) — the load-bearing principles are digested from the authors' free primary sources; buy before the war-room BUILD if the object model gets contested. The ORCA artifacts this page recommends (Nested-Object Matrix, CTA Matrix) are not yet produced.
+open_loop: Mockup v1 is drawn (https://claude.ai/code/artifact/ef78b6ce-4d68-410d-918d-20db9ad6605c) and resolved the roster row (§5a) + found a THIRD truth-class (§5b) — awaiting owner review. Still open: (1) the mockup's 4 flagged questions (the "similar bills" derived-claim trap, percent-match honesty, follow-up state, 6-of-15 preview vs all); (2) the ORCA artifacts this page recommends — Nested-Object Matrix (navigation) + CTA Matrix (permissions) — are NOT yet produced, and the CTA Matrix should precede any D1 route; (3) Prater's/Wroblewski's/Norman's books are PAID and unread (§7). Hard blocker under the whole picture: member/committee ROSTER ingestion does not exist (data available on our key, uncollected).
 ---
 
 # The central-object page — research digest (the canon gap this fills)
@@ -211,11 +211,37 @@ part is org-private. Prater called this shot: §1's "CTAs settle permissions ear
 (the objects the org can act on are the org's objects). **This also answers the owner's open question about
 whether the war room is its own tab: it isn't — the war room *is* the org-owned region of the bill page.**
 
-**The one honestly-unresolved spot — the committee roster.** It's the hard case: a Member is LIS fact, but our
-whip mark on that member is org intel, and they meet *in the same row*. Spatial partition works at the region
-level and breaks down at the row level. The rule that must hold is **no single cell blends the two — any given
-piece of text is either sourced or asserted, never both**. How the row expresses that is a **mockup question**,
-flagged here rather than hand-waved.
+### 5a. RESOLVED by the mockup — the roster row (the divider rotates)
+
+The hard case was: a Member is LIS fact, our whip mark on that member is org intel, and they meet *in the same
+row*, so region-level spatial partition breaks down. **Drawing it solved it** (mockup v1, 2026-07-17): **the
+divider does not have to be horizontal.** In a roster table it runs **vertically, between column groups** —
+LIS-sourced columns left, ours right, one `--line-strong` rule between, each group carrying its own header
+(`FROM LIS · verified` / `OURS · what we believe`). Same principle (position, labeled, no colour spent),
+rotated 90°.
+
+**The generalized rule:** *the partition is spatial at whatever level the data mixes* — page **regions** where a
+zone is homogeneous, **column groups** where a single row must carry both classes. What never happens is a
+**cell** blending them.
+
+### 5b. The mockup BROKE the two-class model — there are THREE (found 2026-07-17)
+
+Drawing the cross-state section falsified "LIS fact vs org intel." A third class was hiding inside "fact":
+
+| Class | What it is | Example | Treatment |
+|---|---|---|---|
+| **Sourced** | a fact recorded by an official system — VA LIS **and other states' systems** | "Passed House 54-Y 45-N"; "TX HB2060 died in Senate committee" | plain text, source named |
+| **Derived** | **our software's CLAIM about** facts — nobody recorded it, we computed it | "94% same text as TX HB2060"; "similar bills" | **the existing `.chip.provisional` amber** — the product ALREADY has this treatment for inferred meeting times |
+| **Asserted** | what the org believes; no source, by design | "Deeds is a yes" | the `OURS` zone / column group |
+
+**Why this matters more than a taxonomy tidy-up:** collapsing *derived* into *sourced* would let **a computed
+guess wear a recorded vote's clothes** — precisely what the trust layer exists to prevent (Standard #3:
+structural determinism on the lobbyist path, "never a probabilistic guess"). The fix required no invention: the
+amber provisional treatment is already shipped and already means exactly "we inferred this."
+
+**Consequence for the roster:** a column headed *"similar bills"* would be a **derived** claim smuggled into a
+**sourced** column group. The mockup therefore names the specific bill (`Vote on SB1047` — a fact) instead. The
+open question of whether that scales is flagged on the mockup.
 
 ---
 

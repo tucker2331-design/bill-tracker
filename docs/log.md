@@ -8,6 +8,46 @@ status: active
 
 Append-only, reverse-chronological (newest at top). Each entry opens with `## [YYYY-MM-DD] <kind> | <title>` so `grep "^## \[" log.md | head -20` gives a parseable timeline.
 
+## [2026-07-17] design | War Room mockup v1 — drawing RESOLVED the roster row and FALSIFIED the two-class model
+
+Mockup: https://claude.ai/code/artifact/ef78b6ce-4d68-410d-918d-20db9ad6605c — two screens (the War Room tab =
+your bills; one bill's workspace), drawn in the product's real `web/src/index.css` tokens. **Nothing built.**
+
+**Owner corrections that reshaped this** (all taken): (1) **"call it the war room"** — "bill page" is dead as a
+name; it's micro-specific data you don't get on LIS, including **cross-state**. (2) **"we have a bills tab, it's
+called Search"** — which is exactly why my name confused. (3) **My "two places" argument was WRONG** — I had
+assumed a War Room tab could only hold org data, so you'd go elsewhere for the hearing time. False: the tab
+shows whatever context it needs. There is no split. Retracted. (4) Owner picked **"your bills → drill in"**, and
+killed the all-bills-dashboard option with a better reason than I had: **the landing timeline already IS the
+portfolio view.**
+
+**Two findings the drawing produced that the arguing did not:**
+
+1. **The roster row is SOLVED — the divider rotates** ([[design/object_page_patterns]] §5a). I'd said a member's
+   name (LIS fact) and our whip mark (ours) can't be separated because they share a row. Wrong: the rule runs
+   **vertically between column groups**, not horizontally across the page. Facts left, ours right, labeled
+   headers on each group. Same principle, 90°. Generalized: **the partition is spatial at whatever level the
+   data mixes — regions for a homogeneous zone, column groups for a mixed row; never a mixed cell.**
+2. **THE TWO-CLASS MODEL WAS WRONG — there are THREE** ([[design/object_page_patterns]] §5b,
+   [[design/information_display]] §P20a). Drawing the cross-state table exposed it: *"94% same text as TX
+   HB2060"* is **not** a fact anyone recorded (it's our computation) and **not** org opinion. Collapsing
+   **derived** into **sourced** would let a computed guess wear a recorded vote's clothes — the precise failure
+   Standard #3 exists to prevent. **Sourced** (VA LIS *or another state's system*) = plain text, source named;
+   **derived** = the **already-shipped `.chip.provisional` amber** (it already means "we inferred this" for
+   meeting times); **asserted** = the OURS zone. No invention required — the treatment existed.
+   *Trap this creates:* a column headed **"similar bills"** smuggles a derived claim into a sourced group. The
+   mockup names the specific bill (`Vote on SB1047`) instead; whether that scales is flagged for the owner.
+
+**Process note (the canon earned its keep):** read [[design/dashboard_and_visual_language]] + `index.css`
+BEFORE drawing this time — the rule written after the last mockup regression ("mockups obey the same doctrine as
+shipped UI; read this page BEFORE drawing, not after"). Result: grey-by-default register, zero rainbow, colour
+spent only on the star and the earned amber. Also self-caught a mangled dark-theme hex (`#79melt`) and
+static-verified the build: tags balanced, no undefined tokens, colspans consistent, and the vote bar strictly
+proportional (33.3/20/46.7 = exactly 5/3/7 of 15 → lie factor 1.0, P3).
+
+**Still true and unglamorous:** we ingest **no member/committee roster at all**. The whip board is drawn on data
+we don't collect. That ingest is the real work; the screen is the easy part.
+
 ## [2026-07-17] research | reading queue CLOSED — "the bill page" is the Bill object's DETAIL representation
 
 Owner: *"what is the bill page? also finish reading before the mock up."* Both fair hits. I had been using

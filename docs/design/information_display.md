@@ -157,10 +157,17 @@ see [[design/object_page_patterns]] §5), so the rule is derived from the canon 
   distinction burns it. **Position is right** — Munzner's top-ranked channel, the canon's preferred grouping
   device (P17: proximity/whitespace, not lines), always-on without shouting, and it leaves color free. Add a
   **text label** per region (P19 — never encode by one cue alone).
-  → **THIS PRODUCT:** LIS fact and org intel **never share a region**. On the bill page this draws the
-  Access/write boundary at the same line ([[design/object_page_patterns]] §5–6). The unresolved edge is a row
-  that mixes both (a committee roster: LIS member + our whip mark) — there the rule is **no single cell blends
-  the two**; a given piece of text is either sourced or asserted, never both.
+  → **THIS PRODUCT:** the classes **never share a region**; in the War Room this draws the Access/write boundary
+  at the same line ([[design/object_page_patterns]] §5–6). **The partition is spatial at whatever level the data
+  mixes** — page *regions* for a homogeneous zone, *column groups* (a vertical rule + per-group headers) where a
+  single row must carry both, as in a committee roster. A **cell** never blends them.
+- **P20a · There are THREE classes, not two** (found by drawing — [[design/object_page_patterns]] §5b):
+  **sourced** (an official system recorded it — VA LIS *or another state's*) → plain text, source named;
+  **derived** (*our software's claim about* facts — "94% same text as TX HB2060") → **the existing
+  `.chip.provisional` amber**, which already means "we inferred this" for meeting times; **asserted** (the org's
+  belief) → the OURS zone. Collapsing *derived* into *sourced* lets **a computed guess wear a recorded vote's
+  clothes** — the exact failure the trust layer exists to prevent (Standard #3). Beware a column headed
+  "similar bills": the *similarity* is derived even when the *votes* are sourced.
 
 ## 5c. Interaction & input — the canon for the product's first WRITE surface
 
