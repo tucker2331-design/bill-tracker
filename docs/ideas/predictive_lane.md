@@ -57,6 +57,91 @@ odds at the individual level). This is the one the owner means by "carefully."
 
 ---
 
+## What statistics each tier actually uses (owner asked: "what stats?")
+
+### Tier 2 — deterministic math (no statistics; exact arithmetic on known facts)
+Nothing here is estimated, so nothing needs a confidence interval.
+- **Committee vote math:** `need = the committee's reporting threshold` (majority of its members, per the
+  committee's own rule) · `have = confirmed-yes count` · `gap = need − have` · the **party × position cross-tab**
+  (already exact on mockup v3) · quorum. Inputs: the probed roster ([[architecture/roster_and_votes_ingestion]])
+  + the org's reads.
+- **Deadline math:** `legislative days remaining` to crossover/sine die (from our calendar) vs `procedural steps
+  remaining` (from the bill's stage in our state machine: substitute → full-committee report → N floor readings →
+  other chamber…). "Needs 4 steps in 9 legislative days."
+- **Docket position** (`#4 of 12`) — an ordinal fact from `DOCKET.CSV`.
+- Correctness is *checkable*; zero calibration burden. This ships first because it can't be wrong.
+
+### Tier 1 — measured history (honest descriptive statistics; these become Tier 3's inputs)
+- **Proportions with denominators** (Standard #7): committee kill/report rate = `reported / referred`; patron pass
+  rate = `passed / patroned`; per-stage survival = `advanced / reached-stage`.
+- **Confidence via the Wilson score interval** — chosen deliberately over the normal approximation because it
+  stays honest at **small n and extreme proportions**, and many committee × subject cells are thin. A rate is
+  shown with its interval, never bare.
+- **Sample-size guard:** below a threshold n, show **"thin data,"** not a false-precise percentage
+  (honest-absent beats plausible-wrong — our standing doctrine).
+- **Reference-class distributions** ("bills like this": same subject × committee × patron-party) — a base rate
+  about a *class*, never a claim about *this* bill.
+
+### Tier 3 — the composite (a probability, built to be TAKEN APART)
+See the next section — the owner's decomposition requirement decides the model class here.
+
+---
+
+## The decomposition requirement — a number you can take apart (owner 2026-07-17)
+
+> Owner: *"we definitely shouldn't only give a number… we should see what stats make up that final number,
+> because one could be particularly relevant — like the committee pass rate is high so it's counter-weighting the
+> fact that every member is likely to vote no, so it ends somewhere in the middle. That's important context."*
+
+This is exactly right, and it is not a UI preference — **it dictates which kind of model we are allowed to
+build.** The owner's counter-weighting example (a positive committee-history term fighting a negative whip term,
+netting to the middle) is only visible if the model is **additive**: the final score is a **sum of signed
+component contributions**, each individually meaningful and displayable.
+
+**The literature backs this exactly** (grounding, per our "digest the text" doctrine):
+- **Cynthia Rudin, *"Stop Explaining Black Box Machine Learning Models for High Stakes Decisions and Use
+  Interpretable Models Instead"* (Nature Machine Intelligence, 2019).** For high-stakes decisions, use models
+  that are **interpretable by construction** — do NOT ship a black box and bolt a post-hoc "explanation" onto it,
+  because the explanation can be *unfaithful* (it may not reflect what the model actually did). **For a
+  trust-moat product, an explanation that could be wrong is worse than none** — it's the slop we sell against,
+  wearing a lab coat. [paper](https://www.researchgate.net/publication/333069815)
+- **The Explainable Boosting Machine (EBM / GA2M)** — Lou, Caruana, Gehrke, Hooker; Microsoft
+  [InterpretML](https://github.com/interpretml/interpret). A **glass-box additive model**: *"as accurate as
+  gradient boosting, as interpretable as linear regression."* Each feature's contribution `f_j` is individually
+  plottable — the model IS its own honest breakdown. This is the technique that makes the owner's requirement
+  native instead of bolted-on.
+
+**So the model class is chosen by the trust requirement, not by accuracy-chasing:** a **glass-box additive model
+(GAM / EBM), never a black box** (gradient boosting, neural net). We give up a hypothetical accuracy sliver we
+don't need, and in exchange every prediction decomposes faithfully.
+
+**The elegant structural fact — Tiers 1 & 2 ARE the inputs to Tier 3.** The composite survival number is a
+transparent sum of the very things we already ship as standalone honest facts:
+
+```
+survival log-odds = baseline
+  + f_committee( this committee's historical report rate for this bill type )   ← Tier 1 base rate
+  + f_whip( confirmed-yes fraction, unknowns, party composition vs threshold )   ← Tier 2 math + org reads
+  + f_patron( this patron's win rate here )                                      ← Tier 1 base rate
+  + f_deadline( legislative days remaining vs steps needed )                     ← Tier 2 math
+  + f_companion( companion alive / advancing / dead )                            ← structural fact
+  + f_stage( survival hazard at the current stage )                             ← Tier 1 base rate
+  [ + f_memberlean(...) ONLY if the roll-call sub-model clears calibration ]
+```
+
+Reading the owner's scenario straight off it: `f_committee` is **positive** (this committee passes most of what
+it hears), `f_whip` is **negative** (the confirmed count is short and the unknowns lean the wrong way), and the
+net lands near 0.5 — *and the user sees both terms and their signs,* not just the 0.5. **The decomposition is
+not a second feature; it is the components showing through the sum.** Which is also why we build bottom-up: the
+components are independently valuable and honest, so they ship first and stand alone; the composite is added last
+as their faithful sum, never as a box that replaces them.
+
+**Display law** (also lands in [[design/information_display]]): a composite prediction is **never shown as a lone
+number.** It shows its **signed component contributions**, each with the **evidence behind it** (the base rate +
+its n, or the exact math), so a user can see *which* factor is driving it and *what* is fighting *what*. The
+composite is the DERIVED class (amber); its components decompose back into SOURCED facts, DETERMINISTIC math, and
+ORG reads — so the breakdown literally re-separates the three trust classes ([[design/information_display]] §P20a).
+
 ## The non-negotiable gate for Tier 3 — the calibration harness
 If we ever show a probability, **it must be calibrated, and we must prove it continuously.** When we say 70%, the
 thing must happen ~70% of the time. This is not optional polish; it is the difference between us and the slop.
@@ -93,10 +178,12 @@ ships last, after the calibration harness proves out, not in the first build.**
 1. **Ingest roster + votes** ([[architecture/roster_and_votes_ingestion]]) — everything below needs it.
 2. **Tier 2 (deterministic math)** — committee math + deadline math. Zero risk, already designed.
 3. **Tier 1 (measured history)** — mortality tables, base rates, patron scouting. Our archive's payoff; pure
-   measurement. Big commercial differentiator, low trust risk.
+   measurement. Big commercial differentiator, low trust risk. **These are also Tier 3's input features**, so
+   building them first is not just risk-ordering — it's assembling the composite's parts as shippable facts.
 4. **Build the calibration harness** against the archive — *before* any model ships. This is the gate.
-5. **Tier 3 (individual prediction)** — only if step 4 clears the bar, shipped as amber/derived, interval-not-
-   point, unknowns-only, with the Health-tab calibration SLA and self-suppression.
+5. **Tier 3 (composite, glass-box)** — only if step 4 clears the bar. A **GAM/EBM additive model** whose terms
+   are the Tier-1/Tier-2 quantities from steps 2–3; shown as amber/derived, **decomposed by default** (never a
+   lone number), interval-not-point, unknowns-only, with the Health-tab calibration SLA and self-suppression.
 
 The owner's "go for the max while it's shut down" makes this the right time to build the *substrate* (1) and the
 *honest tiers* (2–3) and the *harness* (4) fully — and to let the calibration numbers, not a launch deadline,

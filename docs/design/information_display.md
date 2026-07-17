@@ -183,6 +183,22 @@ see [[design/object_page_patterns]] §5), so the rule is derived from the canon 
   clothes** — the exact failure the trust layer exists to prevent (Standard #3). Beware a column headed
   "similar bills": the *similarity* is derived even when the *votes* are sourced.
 
+## 5d. Composite scores — never a lone number (the decomposition law)
+
+**P23 · A computed score is shown WITH its faithful decomposition — signed component contributions, each with the
+evidence behind it — never as a bare number.** (Owner 2026-07-17, on the predictive lane: *"we shouldn't only
+give a number… one component could be particularly relevant — the committee pass rate is high, counter-weighting
+that the members lean no, so it lands in the middle; that's important context."*) A single number hides the
+*fight between its parts* — exactly the context a user needs. This forces a modeling constraint, not just a
+layout: the model must be **interpretable by construction** (a **glass-box additive model / GAM / EBM**), because
+a post-hoc "explanation" of a black box can be **unfaithful** (Rudin 2019), and for a trust-moat product an
+explanation that might be wrong is worse than none.
+→ **THIS PRODUCT:** every Tier-3 prediction ([[ideas/predictive_lane]]) renders as its **breakdown by default** —
+each factor's contribution, its sign (what's pushing up vs down), and the base-rate + n or exact math under it.
+The composite is the **DERIVED** class (amber, §P20a); its components decompose back into SOURCED facts,
+DETERMINISTIC math, and ORG reads — so the breakdown **re-separates the three trust classes**. Same instinct as
+Tufte's graphical integrity (show the whole, show the parts) and P6 (never a number without its context).
+
 ## 5c. Interaction & input — the canon for the product's first WRITE surface
 
 Everything above governs *display*. The war room is the first thing in this product a human **types into**
