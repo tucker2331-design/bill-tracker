@@ -7,11 +7,22 @@ open_loop: Decisions largely banked (D5 star=binary; D2 write-path=Worker+D1; id
 
 # War room + shared watchlist — scoping memo (owner decisions required)
 
+> **⚠️ READ THE BOTTOM FIRST — most of these decisions are now MADE.** The five "DECISION" sections below are
+> the **original memo as written on 2026-07-13**; their *Recommendation* lines are **historical, and several
+> were overruled**. The owner's actual calls live in **[[#OWNER DECISIONS — 2026-07-16]]** and
+> **[[#OWNER DECISIONS — 2026-07-16 (round 2)]]** at the foot of this page, and those SUPERSEDE anything above.
+> Most important trap: **D3's "name-pick" recommendation is DEAD** (owner: *"it needs to be automatic or not
+> exist"*) — identity is **Cloudflare Access**. Do not build from a Recommendation line without checking its
+> decision block.
+>
 > **This is a DECISION MEMO, not a build.** TASK 3 of [[audits/build_wave_2026-07/README]]. It exists because
 > the war room is the first feature that needs a **write path** (org state shared across people/devices) and
-> a notion of **identity** — architectural forks only the owner can call. Nothing here is built until the
-> five decisions below are made. Context: the reframed primary persona (an advocacy org lobbying for its own
-> bills, staffed by volunteers) in [[ideas/lobbyist_jtbd_ideation]] §8a/§8b.
+> a notion of **identity** — architectural forks only the owner can call. Context: the reframed primary persona
+> (an advocacy org lobbying for its own bills, staffed by volunteers) in [[ideas/lobbyist_jtbd_ideation]] §8a/§8b.
+>
+> **Still open:** the **MVP cut** (D4), the **IA** (D1 — a recommendation now grounded in
+> [[design/object_page_patterns]]: the war room as the org-owned *region* of the bill page rather than a new
+> tab, which would retire D1's option (A)), and the **mockup** that must precede any code.
 
 ## What the war room IS (recap, so the decisions have a referent)
 
