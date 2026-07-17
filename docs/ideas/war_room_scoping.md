@@ -2,7 +2,7 @@
 tags: [ideas, product, war-room, watchlist, infra, scoping, owner-decision]
 updated: 2026-07-17
 status: active
-open_loop: Decisions largely banked (D5 star=binary; D2 write-path=Worker+D1; identity=Access 1-month, no name-pick; IA has a RECOMMENDATION awaiting the owner from [[design/object_page_patterns]] — war room as a REGION of the bill page, not a tab). Build now blocked on the MOCKUP (owner rule: mock up before code), on member/committee ROSTER ingestion (we ingest none of it, though it is confirmed AVAILABLE on our LIS key — an unbuilt ingest, not a missing source), and on the MVP cut (D4 — ORCA says cut by downgrading OBJECTS, not by trimming features).
+open_loop: Decisions banked (D5 star=binary; D2 write-path=Worker+D1; D3 identity=Access 1-month, no name-pick). IA DECIDED by owner 2026-07-17: the War Room is its OWN tab, "your bills → drill in" (not a region of a bill page — that recommendation was retracted). Mockup v3 drawn + approved ([[design/object_page_patterns]]). Roster/vote data SCOPED + probe-confirmed ([[architecture/roster_and_votes_ingestion]]). STILL OPEN: the MVP cut (D4 — ORCA says cut by downgrading OBJECTS); the votes store (D1 vs blob); companion-bill sourcing; and the predictive Tier-3 go/no-go ([[ideas/predictive_lane]]).
 ---
 
 # War room + shared watchlist — scoping memo (owner decisions required)

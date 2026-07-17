@@ -8,6 +8,44 @@ status: active
 
 Append-only, reverse-chronological (newest at top). Each entry opens with `## [YYYY-MM-DD] <kind> | <title>` so `grep "^## \[" log.md | head -20` gives a parseable timeline.
 
+## [2026-07-17] scoping | Roster/vote ingest PROBED LIVE — every War Room unknown resolved structurally + the predictive lane opened
+
+Owner: *"finish scoping it for the committee chair etc remaining items, then let's talk about some of the
+predictive stuff… I'm not planning on giving this site to anybody soon so might as well do it all now, go for
+the max while it's shut down for building."*
+
+**Measure-first, not guess:** hit the LIVE LIS API (session 20261, public `WebAPIKey`) to resolve the flagged
+unknowns instead of assuming. Every one came back **structural** (Standard #3), fully documented in the new
+[[architecture/roster_and_votes_ingestion]]:
+- **The chair question — ANSWERED.** `MembersByCommittee/GetCommitteeMembersListAsync` (`committeeID` required,
+  not `committeeNumber`) returns **`CommitteeRoleTitle`** — vocab on H21 = `{Chair:1, Vice-Chair:1, Member:29}`,
+  plus `CommitteeRoleID`, `VotingSequence`, `Seniority`. The mockup's chair badge is a field read, not a heuristic.
+- **Party/district** — `Member/GetMemberByIdAsync` carries `PartyCode`, `DistrictName`, `ChamberName`, GAB
+  email/phone. `GetMemberListAsync` returns the whole chamber in one 64 KB call (efficient path).
+- **Member votes** — `MemberVoteSearch/GetMemberVoteListAsync` returns **3,005 rows for ONE member/session** with
+  `ResponseCode` (the member's own Y/N), `LegislationNumber` (structural bill link), `VoteType`
+  (Committee vs Floor), `ClassificationName` (filter out Attendance/quorum), tallies, dates. The roster's
+  "Vote on [named bill]" column is a structural filter — exactly why the deleted "voted on this issue" was right
+  to delete.
+
+**Architecture finding that changes storage:** ~140 members × ~3,000 votes × ~24 fields ≈ **10M cells from votes
+alone** — past the Sheets ceiling C-8 flags, in one session. **Member votes cannot be a Sheets tab** → D1 (the
+org write-path store) or an Azure-blob-style derived mirror; owner/architecture call, recorded open. Also worth
+checking whether the `VOTE.CSV` blob we ALREADY fetch carries per-member roll calls (1 blob beats 140 API calls,
+guardrail #1). Still genuinely unknown: **companion-bill sourcing** (no endpoint named — flag, don't fake).
+
+**Then opened the predictive lane** ([[ideas/predictive_lane]]) as the owner asked — a discussion, not a build.
+Core tension: we sell AGAINST slop on "we don't guess," and a prediction is a guess. Resolution = three tiers of
+increasing risk: **(1) measured history** (base rates with a denominator — our archive's payoff, low risk, just
+counting); **(2) deterministic math** (deadline/committee arithmetic — zero risk, already on the mockup);
+**(3) individual behavioral prediction** (roll-call per member — the dangerous one). Tier 3 is NOT off-limits but
+must be EARNED behind a **calibration harness**: backtest the 2020–26 archive, publish a reliability diagram +
+Brier score, a Health-tab calibration SLA that self-suppresses on drift, ship the interval not the false point,
+and predict ONLY empty cells (never overwrite a human's confirmed read — the "makes you dumber" defuse). The
+three-class visual model already has a home for it (amber = DERIVED). Recommended sequence: ingest → Tier 2 →
+Tier 1 → build the harness → Tier 3 only if it clears. **Tier-3 go/no-go is explicitly the owner's decision**,
+recommendation "build the harness first and let the calibration numbers vote."
+
 ## [2026-07-17] design | War Room mockup v3 — owner review caught me walking into my OWN trap
 
 Mockup: https://claude.ai/code/artifact/ef78b6ce-4d68-410d-918d-20db9ad6605c (v3). Still nothing built.
