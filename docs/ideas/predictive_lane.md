@@ -119,15 +119,19 @@ don't need, and in exchange every prediction decomposes faithfully.
 transparent sum of the very things we already ship as standalone honest facts:
 
 ```
-survival log-odds = baseline
+WINNABILITY log-odds = baseline           (the TERRAIN — does NOT include your outreach; see the reframe above)
   + f_committee( this committee's historical report rate for this bill type )   ← Tier 1 base rate
-  + f_whip( confirmed-yes fraction, unknowns, party composition vs threshold )   ← Tier 2 math + org reads
-  + f_patron( this patron's win rate here )                                      ← Tier 1 base rate
-  + f_deadline( legislative days remaining vs steps needed )                     ← Tier 2 math
-  + f_companion( companion alive / advancing / dead )                            ← structural fact
+  + f_patron( pass-rate in THIS committee, majority/minority, on-committee? )    ← Tier 1 base rate
+  + f_topic( how the deciding members voted on this SUBJECT CODE before )        ← SOURCED (LIS subject taxonomy)
+  + f_momentum( moving through stages vs stalled; late-substitute meaning )      ← procedural, NOT raw days
+  + f_companion( companion alive / advancing / dead )                           ← structural fact
   + f_stage( survival hazard at the current stage )                             ← Tier 1 base rate
   [ + f_memberlean(...) ONLY if the roll-call sub-model clears calibration ]
+
+YOUR GRIP (separate axis) = confirmed votes / needed · contacts made · amendments landed   ← moves with YOUR work
 ```
+**Note the whip count moved OUT of winnability** — it's the "your grip" axis, per the reframe. Winnability is the
+terrain; grip is your position on it; the tool's value is the *gap* between them (winnable but unworked = act).
 
 Reading the owner's scenario straight off it: `f_committee` is **positive** (this committee passes most of what
 it hears), `f_whip` is **negative** (the confirmed count is short and the unknowns lean the wrong way), and the
@@ -141,6 +145,61 @@ number.** It shows its **signed component contributions**, each with the **evide
 its n, or the exact math), so a user can see *which* factor is driving it and *what* is fighting *what*. The
 composite is the DERIVED class (amber); its components decompose back into SOURCED facts, DETERMINISTIC math, and
 ORG reads — so the breakdown literally re-separates the three trust classes ([[design/information_display]] §P20a).
+
+## Owner course-correction 2026-07-17 — I narrowed too fast; these are conceptual, still open
+
+The owner (rightly) stopped a premature narrowing into a feature spec and surfaced four flaws + a reframe. Banked
+as OPEN thinking, not decided design.
+
+### The reframe: TERRAIN vs YOUR POSITION (the whip-count-zero flaw)
+**The flaw:** folding the whip count into a single "chance of passing" number means that a bill you haven't
+worked yet reads `0 confirmed votes` → looks *impossible* → the tool discourages the very work it exists to
+prompt. That is the classic **absence-of-evidence vs evidence-of-absence** error (same family as the brain's
+sentinel-value/`Optional` confusions, [[failures/assumptions_audit]] #53): "we haven't asked anyone" is being
+scored identically to "we asked and they're against it." **Wrong, and backwards for the user's job.**
+
+**The fix — two axes, never collapsed into one:**
+- **Winnability (the terrain):** how passable is this bill *on its own merits* — committee, patron, path,
+  topic history, companion. **Structural; does NOT move when you do outreach.**
+- **Your grip (your position):** how locked-down is it — confirmed votes, contacts made, amendments landed.
+  **Moves with your work; starts empty and that's fine.**
+
+A bill that is **high winnability + low grip** is the **best use of your time** — the opposite of "impossible."
+Collapsing the two axes into one number destroys exactly the signal a lobbyist needs: *where does my effort have
+leverage?* The tool's job is to point at winnable bills you haven't locked down, not to hand out fate scores.
+
+### Time-to-crossover is NOT a monotonic negative
+Raw "days left" as a downward weight is naive (owner: a bill heard late may just need *last-minute revisions* —
+which could mean "one typo from a yes" **or** "needs major surgery to survive"; opposite signs, same day count).
+The clock is **Tier-2 deterministic info** ("9 days, needs 4 steps — tight"), but as a **predictive weight** it's
+wrong. The real signal is **procedural momentum / stall detection** (is it moving through stages at a healthy
+clip or parked?), and the *meaning of a late substitute* is partly readable from the **version diff** (a typo
+fix vs a gut-and-replace — text intelligence, [[ideas/lobbyist_jtbd_ideation]] §B). Do not ship "deadline" as a
+raw model feature.
+
+### "How members voted on a topic" — SOURCED, not a similarity guess (probe 2026-07-17)
+The topic question was the derived-claim trap again ("similar bills" = a judgment). **Resolved by probe:** LIS
+publishes a **structural subject taxonomy** — `LegislationSubject/api/GetSubjectReferencesAsync` returns 505
+subjects, each with `SubjectIndexID` + `SubjectNumber` (e.g. "Abortion" = 3005). So *"how did this member vote on
+bills carrying subject X"* is a **structural filter on a code**, not a text-similarity guess — clean, sourced,
+Standard #3. (Still to find: the bill→subject linkage route; the taxonomy itself is confirmed. Recorded in
+[[architecture/roster_and_votes_ingestion]].)
+
+### "Patron track record" — say exactly which signal
+Vague before. Concretely, the structural, meaningful patron signals: **pass-rate in THIS committee** (does this
+patron have juice with this chair?), **majority-vs-minority party**, **whether the patron sits on / chairs the
+deciding committee**, **seniority/leadership**. All Tier-1 base rates with denominators + Wilson intervals; guard
+against thin per-patron n. NOT "vibes about the patron."
+
+### Display — not "a number with 3 bars" (owner: that doesn't sound great)
+Concept to develop, not a decided widget. The reframe suggests the display should be **a map of where the bill
+can die and where you have leverage**, not a gauge:
+- Show the bill's **path as a sequence of gates** (subcommittee → committee → floor → other chamber → governor).
+  Each gate carries its own structural odds *and* flags whether it's a place your effort moves the needle. Bills
+  die at **specific chokepoints**; a path-of-gates mirrors how they actually die and turns a score into *where to
+  push* — and it decomposes *natively* (each gate is a component) instead of stapling bars under a number.
+- Overlay the **two axes** (winnability vs your grip) so a glance says "winnable, unworked → go."
+- This is a *sketch direction*; other framings are open. Draw 2–3 and react, don't commit.
 
 ## The non-negotiable gate for Tier 3 — the calibration harness
 If we ever show a probability, **it must be calibrated, and we must prove it continuously.** When we say 70%, the

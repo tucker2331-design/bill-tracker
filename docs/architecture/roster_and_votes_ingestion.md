@@ -79,6 +79,15 @@ deleted ([[design/information_display]] §P20c).
 
 ---
 
+### 4. Subject taxonomy (topic) — `LegislationSubject/api/GetSubjectReferencesAsync` (probed 2026-07-17)
+Returns **505 structural subjects**, each `{SubjectIndexID, Subject, SubjectNumber}` (e.g. `Abortion` → 3005).
+**→ "How did this member vote on this TOPIC" is a structural filter on a subject code, not a text-similarity
+guess** — this is what keeps the predictive lane's topic feature on the sourced side of the trust line
+([[ideas/predictive_lane]]). **Still to find:** the bill→subject linkage route (the taxonomy is confirmed; the
+per-bill subject list endpoint returned 404 on the two spellings tried — needs one more probe, likely a
+`LegislationSubject` route with a `legislationID` param spelled differently, or subjects inline on a bill-detail
+call not yet located).
+
 ## The one storage finding that changes the architecture
 **Member votes CANNOT live in Google Sheets.** ~140 members × ~3,000 votes/session × ~24 fields ≈ **10M cells
 from votes alone** — at or past the Sheets ceiling that [[audits/fable_2026-07/codebase_longevity_audit]] (C-8)
