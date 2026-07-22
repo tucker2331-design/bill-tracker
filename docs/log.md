@@ -8,6 +8,43 @@ status: active
 
 Append-only, reverse-chronological (newest at top). Each entry opens with `## [YYYY-MM-DD] <kind> | <title>` so `grep "^## \[" log.md | head -20` gives a parseable timeline.
 
+## [2026-07-17] strategy | Owner stress-tested the moat — archive decomposed into 3 layers, multi-state downgraded, the COUNTER unblocked
+
+Owner pushed on all four moats; three of the four pushes changed the doc ([[ideas/moat_and_competition]] revised):
+
+1. **"Couldn't someone hit the API endpoints and get the same data? Couldn't a $20 Claude subscription
+   reverse-engineer the backend? Even if true, how valuable is it?"** — **Partially right; the archive claim
+   was decomposed into three layers:** the **facts layer** (votes/actions/outcomes) is COMMODITY — public keys,
+   legacylis CSVs, anyone can pull it; the owner's intuition is correct and the doc now says so. The
+   **observation layer** (docket-drop timing, schedule moves, LIS's silent revisions — the event log the API
+   cannot serve retroactively) is the truly non-replayable asset: *you can clone the state, you cannot clone the
+   log*. The **correctness layer** (105-lesson case law) is replayable in principle but SESSION-GATED — Claude
+   compresses coding time, not calendar time; a clone rediscovers our bugs by shipping wrong data to real users
+   during real sessions. Honest downgrade: the pipeline itself is copyable in ~1–2 sessions; the moat is a
+   **head start, not a wall**, and the backend's value is realized only when converted upstairs (observation →
+   exclusive features; correctness → proof; facts → calibrated-and-proven base rates).
+2. Switching-cost moat — owner: "good, known strategy." Unchanged.
+3. **"A 50-state clone can [do cross-state intel]" — conceded, DOWNGRADED.** Quorum/FiscalNote are already
+   50-state; breadth is THEIR moat. Our own §4 competitive read said their weakness: shallow depth. Repositioned:
+   breadth = table stakes to eventually reach; the differentiator vs breadth-players is **depth × observation ×
+   proof**, state by state. Depth-first isn't just the owner's sequencing preference — it's the only lane where
+   neither the student clone nor the incumbent can meet us.
+4. **"We need to PROVE it — remember the counter" → the incident counter is UNBLOCKED.** The owner's sentence
+   *"how long data holds clean before intervention"* IS the definition (manual interventions count as incidents
+   — if we had to intervene, it didn't hold clean). Display Health-first; guards = sentinel/tripwire/
+   reconciliation. [[architecture/incident_counter]] updated: wiring is now a READY build task; first step is a
+   scratch-workbook env override so the write-path is verifiable (audit #74) without polluting the real ledger;
+   **seed genesis EARLY — every un-seeded day is thrown-away provable trust.** Strategic upgrade: counted trust
+   (a dated ledger a late entrant cannot backfill) vs claimed trust.
+
+Also banked: the owner's **add-vs-resist line** — "more value doesn't always come from adding more, but in some
+cases it does; this is one of them; be conscious of that line." Made explicit in the moat doc: ADD depth on the
+insight stack (momentum, topic-code histories, patron × committee, notice-window signals — compounding); RESIST
+surface-stack additions (panels/chips/tabs — dilution). And the owner **ratified the signal set** (momentum,
+topic voting history, patron voting history: "this is where the value is") — [[ideas/predictive_lane]] now
+carries the endorsement plus a defensibility annotation per signal (commodity-but-proven vs
+exclusive-observation), which is why the witness/change-ledger infra is strategy, not plumbing.
+
 ## [2026-07-17] scoping | Roster/vote ingest PROBED LIVE — every War Room unknown resolved structurally + the predictive lane opened
 
 Owner: *"finish scoping it for the committee chair etc remaining items, then let's talk about some of the

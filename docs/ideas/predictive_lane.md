@@ -191,6 +191,26 @@ patron have juice with this chair?), **majority-vs-minority party**, **whether t
 deciding committee**, **seniority/leadership**. All Tier-1 base rates with denominators + Wilson intervals; guard
 against thin per-patron n. NOT "vibes about the patron."
 
+### OWNER ENDORSEMENT 2026-07-17 — the value core, named
+> Owner: *"momentum, topic voting history, patron voting history are all smart good ideas that really level us
+> up. **This is where the value is** — and I don't want to say more value always comes from adding more, but in
+> some cases it does; this is one of them. Be conscious of that line."*
+
+So the signal set is owner-ratified as the product's value center — deepen HERE (see the add-vs-resist line in
+[[ideas/moat_and_competition]]). One strategic annotation per signal (from the moat stress-test): which are
+**commodity facts anyone can recompute** (our edge = being *first + proven/calibrated*) vs **observation-layer
+signals no late entrant can backfill** (our edge = *exclusive data*):
+
+| Signal | Substrate | Defensibility |
+|---|---|---|
+| Topic voting history (subject-code filter) | facts (replayable) | first + proven |
+| Patron × committee record | facts (replayable) | first + proven |
+| Committee base rates | facts (replayable) | first + proven |
+| **Momentum / stall detection** | **partly the observation layer** (stage dates are facts; docket-drop timing, schedule volatility, late-substitute behavior are OURS alone) | **exclusive — nobody can backfill watching** |
+| Notice-window stats ("this committee posts agendas ~9h ahead") | **observation layer** | **exclusive** |
+
+The exclusive rows are why the witness/change-ledger infrastructure is strategy, not plumbing.
+
 ### Display — not "a number with 3 bars" (owner: that doesn't sound great)
 Concept to develop, not a decided widget. The reframe suggests the display should be **a map of where the bill
 can die and where you have leverage**, not a gauge:

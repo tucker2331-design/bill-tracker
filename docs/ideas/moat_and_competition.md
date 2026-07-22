@@ -25,30 +25,65 @@ Anything whose whole value is "we display the bills" is table stakes within a ye
 tracker UI is the moat is planning to lose. **We should assume the read layer gets copied and build the moat
 somewhere a weekend project structurally cannot reach.**
 
-## The four moats (ordered by durability), and why each resists a vibe-coded clone
-1. **The compounding clean archive — the strongest.** Every session we run, we accumulate a *reconciled,
-   outcome-labeled, structurally-clean* record of what actually happened — not LIS's raw feed, but our verified
-   work product. A new entrant starts at **zero history** and cannot buy ours (LIS gives raw data to everyone;
-   the *cleaned, labeled, multi-year* archive is ours alone). This is both a moat and a product: it's what makes
-   [[ideas/predictive_lane]] Tier-1 base rates and Tier-3 predictions credible. **You cannot vibe-code the past.**
-   It only gets deeper, never shallower — time is on our side, which is exactly what "build it all now while it's
-   shut down" is buying.
-2. **The War Room as system-of-record — the switching-cost moat.** The moment an org logs its positions,
-   contacts, whip counts, and hallway intel into our tool, *that becomes their institutional memory*
-   ([[ideas/war_room_scoping]], [[architecture/roster_and_votes_ingestion]]). Leaving for a competitor means
-   abandoning their own accumulated work. The read layer is copyable; **an org's own intel living in our system
-   is not.** This is the classic "become where the work lives, not just where the data is read" moat, and the
-   clone has none of it.
-3. **Multi-state coverage → data-network effects.** Cross-state model-bill intelligence ("this VA bill is the
-   ALEC/industry template that passed in TX and died in CO") is only possible with breadth, and **each state
-   added makes every other state's analysis richer**. A single-state student project structurally can't produce
-   it. Coverage compounds ([[ideas/product_identity]] multi-state thesis, [[audits/fable_2026-07/50_state_scaling_architecture]]).
-4. **Provable trust as brand — and it STRENGTHENS as competitors multiply.** Counter-intuitive but central: as
-   AI slop floods every category, *verifiable* honesty becomes scarce and therefore valuable. Our whole stack is
-   built to be the provably-honest one — data-health surfaced, sources labeled, the three trust classes, the
-   glass-box decomposable predictions ([[design/information_display]] §P20a/§P23), "we tell you when we're
-   guessing." The rise of vibe-coded slop **raises** the premium on that stance rather than eroding it. It's a
-   positioning moat: *we become the one you can trust with a decision that costs real money.*
+## The four moats — REVISED 2026-07-17 after owner stress-test (the honest version)
+
+> Owner's challenge on #1: *"couldn't someone hit all the API endpoints and get close to the exact same data?…
+> couldn't someone with a $20 Claude subscription reverse-engineer [the backend]? even if true, how valuable is
+> it?"* — **Partially right, and the claim needed decomposing.** The archive is NOT one asset; it's three layers
+> with very different defensibility:
+
+1. **The archive — three layers, only one truly non-replayable.**
+   - **Facts layer (votes, actions, outcomes, rosters): COMMODITY — the owner's intuition is correct.** Anyone
+     can hit the same endpoints (the keys are public) and pull the same current-state facts, and pre-2025
+     history is downloadable from legacylis CSVs. If our claim were "we have the votes," it would be near-worthless.
+   - **Observation layer (the event log): NON-REPLAYABLE — this is the real asset.** The LIS API serves *what is
+     true NOW*; it does not serve *what it said yesterday*. Docket-drop timing (the 11 PM drop for the 7:30 AM
+     sub), schedule moves, cancellations, TBA-resolution timing, and LIS's own silent revisions (tally
+     corrections — once revised, the old value is GONE from the API forever; our change-differ exists because we
+     caught this) can only be captured by **having been watching**. The Schedule_Witness + change ledger are that
+     watcher. A 2028 entrant cannot query the past's *behavior* into existence at any price. **You can clone the
+     state; you cannot clone the log.**
+   - **Correctness layer (the case law — 105 audited assumptions): replayable in principle, SESSION-GATED in
+     practice.** Yes, a $20 Claude subscription reverse-engineers our *code shape* in days. What it cannot
+     compress is **calendar time**: our edge-case knowledge was earned by living through session pathologies
+     (crossover-week concentration, docket chaos, LIS quirks), and a clone rediscovers those bugs only by
+     running through the same sessions — likely shipping wrong data to real users while learning, which spends
+     the one thing this market punishes. The moat here is a **head start measured in sessions, not a wall.**
+   - **"Even if true, how valuable is it?" — the honest answer: the backend alone, modestly.** Its value is
+     realized only when converted upstairs: (a) the observation layer feeds the features nobody else can build
+     (notice-window stats, schedule-volatility, revision-rate — exactly the momentum signals in
+     [[ideas/predictive_lane]]); (b) the correctness layer + counter produce **proof** (#4 below); (c) the facts
+     layer, though commodity, becomes differentiating only as **calibrated, proven** base rates. The pipeline is
+     an enabler; the value capture is in the insight + workflow layers. Plan assuming the pipeline itself is
+     copyable within ~1–2 sessions of competitor effort.
+2. **The War Room as system-of-record — the switching-cost moat.** *(Owner: "good and a known marketing
+   strategy" — confirmed, unchanged.)* Once an org logs its positions, contacts, whip counts, and hallway intel
+   here, that's their institutional memory; leaving means abandoning it. The read layer is copyable; **an org's
+   own intel living in our system is not.**
+3. **Multi-state coverage — DOWNGRADED from "moat" to "necessity + clone-filter" (owner: "a 50-state clone
+   can").** Correct: Quorum/FiscalNote are *already* 50-state — breadth is **their** moat, not ours, and a
+   well-funded entrant can buy breadth too. What breadth-holders demonstrably lack (our own competitive read,
+   [[ideas/lobbyist_jtbd_ideation]] §4: "50-state breadth with **shallow depth**") is the depth stack. So the
+   honest positioning: **breadth is table stakes we must eventually reach; the differentiator vs breadth-players
+   is depth × observation × proof, replicated state by state.** Depth-first (VA gold standard, then dupe) is not
+   just the owner's sequencing preference — it's the only lane where neither the student clone nor the 50-state
+   incumbent can meet us.
+4. **Provable trust as brand — with the emphasis on PROVABLE (owner: "we need to prove it — remember the
+   counter").** As AI slop floods the category, *verifiable* honesty gets scarcer and more valuable. But
+   "verifiable" requires the receipt: the **days-clean counter** ([[architecture/incident_counter]]) — mechanism
+   built, wiring now UNBLOCKED by the owner's directive; the definition is the owner's own sentence: **"how long
+   data holds clean before intervention."** Every day the counter ticks is accumulated, dated, public-able
+   evidence a late entrant cannot backfill — a trust ledger with the same can't-vibe-code-the-past property as
+   the observation layer. Claimed trust is marketing; **counted trust is a moat.**
+
+## Where to ADD vs where to RESIST (owner principle, 2026-07-17)
+> Owner: *"I don't want to say more value always comes from adding more — but in some cases it does. This is one
+> of them. Be conscious of that line."*
+The line, made explicit: **ADD depth on the insight stack** (momentum, topic-code voting histories, patron ×
+committee records, notice-window/volatility signals — each new signal compounds the archive's value and rides
+existing rails). **RESIST additions on the surface stack** (new panels, chips, tabs — the junk-drawer gradient
+the object-page work exists to prevent). More *signals* into the same honest structures = compounding; more
+*widgets* = dilution. When evaluating any addition, ask which stack it lands on.
 
 ## The flywheel (why the moats compound instead of just stacking)
 ```

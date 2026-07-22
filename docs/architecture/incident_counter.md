@@ -1,8 +1,8 @@
 ---
 tags: [architecture, trust, incident, health, parity, plan, owner-decision]
-updated: 2026-07-15
+updated: 2026-07-17
 status: active
-open_loop: incident DEFINITION + public-vs-Health display + which guards write are owner decisions — mechanism built, wiring gated on them
+open_loop: UNBLOCKED 2026-07-17 (owner directive "we need to prove it — remember the counter") — definition = the owner's own sentence, display = Health-first, guards = the three named. WIRING IS NOW A READY BUILD TASK; the write-path must be made verifiable via a scratch-workbook env override (audit #74) before the guard one-liners land. Public promotion of the number stays a later owner call.
 ---
 
 # Incident counter + LIS-parity — architecture & the owner decisions that gate it
@@ -22,26 +22,38 @@ The trust claim expands from "never wrong" to **"never less than LIS"** ([[ideas
   unverifiable write into the accuracy sentinel (a critical guard) violates "verify the row"
   ([[failures/assumptions_audit#74]]) and risks destabilizing the guard.
 
-## The owner decisions (each blocks the wiring)
+## The owner decisions — RESOLVED 2026-07-17 (owner: "we need to prove it — remember the counter we were
+## gonna start, to track how long data holds clean before intervention")
 
-1. **The incident DEFINITION (exact wording — needed before anything public).** Draft (from §8b), three classes:
-   - `accuracy` — wrong data was visible on the product (an accuracy-sentinel FAIL / a breaker bypass).
+1. **The incident DEFINITION — the owner's own sentence IS the definition: *"how long data holds clean before
+   intervention."*** An incident = any event where the data did **not** hold clean on its own. The three classes
+   implement it, with one addition the owner's word "intervention" makes explicit:
+   - `accuracy` — wrong data was visible on the product (sentinel FAIL / breaker bypass), **or a human had to
+     manually correct product data** — if we had to intervene, it did not hold clean; the intervention is the
+     incident even if no user saw the error.
    - `parity_gap` — content on LIS not visible here for > 1 worker cycle (P2/P3 parity checks).
    - `degraded` — a user-visible degraded state (stale banner / missing panel) lasting > 60 min.
-   Owner: approve/adjust the wording + the thresholds (">1 cycle", ">60 min").
-2. **Public vs Health-only.** Ship the counter on the **Health (operator) tab first** (recommended — it's
-   honest but unpolished), and only promote it to the public **trust header** once the owner blesses the
-   definition and a clean baseline exists. (Owner already said keep the 4 Health rings — this is additive.)
-3. **Which guards WRITE incidents.** The unambiguous three: `accuracy_sentinel` FAIL, `completeness_tripwire`
-   FAIL, `reconciliation` mismatch. Owner: confirm this set (each wiring is a fail-open one-liner:
-   `record_incident("accuracy", summary, "accuracy_sentinel")` inside the tool's existing FAIL path).
+2. **Display: Health-tab first** (the recommended path, now adopted). Public/trust-header promotion remains a
+   **later owner call** once a clean baseline exists — the counter must earn its way to the marketing surface.
+3. **Guards that WRITE: the named three** — `accuracy_sentinel` FAIL, `completeness_tripwire` FAIL,
+   `reconciliation` mismatch — each a fail-open one-liner in the existing FAIL path. Manual interventions are
+   logged by hand (a CLI helper: `python3 -m tools.incident_log.log record accuracy "…" manual`).
 
-## Wiring plan (mechanical, once decisions are made)
-- Seed the genesis row (one CI run of `days_since_last_incident()` auto-creates the tab + epoch).
+## Wiring plan (now a READY build task — next engineering PR)
+- **First, make the write-path verifiable (audit #74 gate):** add an env override for `SPREADSHEET_ID` in
+  `tools/incident_log/log.py` so the full `record_incident` → row → `days_since` loop is exercised against a
+  **scratch workbook** in CI — a synthetic incident must never pollute (and reset!) the real days-clean ledger.
+  This was the honest reason wiring was deferred; the override closes it.
+- Seed the genesis row (one CI run of `days_since_last_incident()` auto-creates the tab + epoch). **The genesis
+  date is when "days clean" starts counting — every day earlier is provable trust we're not banking. Seed early.**
 - Add the fail-open `record_incident(...)` call to each approved guard's FAIL branch (never the success path).
+- Add the manual-intervention CLI subcommand (the owner's "intervention" class of incident needs a hand-loggable path).
 - Frontend: a Health-tab line reading `Incident_Log` via gviz (VA·Live, gviz-readable) →
   "N days since a data incident"; red only if an incident is currently OPEN. (Later: the same value in the
   trust header on owner approval.)
+- **Why this matters beyond the feature** ([[ideas/moat_and_competition]] #4): the counter is the *receipt* that
+  turns claimed trust into counted trust — accumulated, dated evidence a late entrant cannot backfill. It has
+  the same can't-vibe-code-the-past property as the observation layer. Every un-seeded day is thrown-away moat.
 
 ## Parity feeders (P2/P3 — separately tracked)
 - **P2 endpoint audit** — SHIPPED (#220/#221, `tools/parity/endpoint_audit.py`): catches LIS API routes we
