@@ -8,6 +8,41 @@ status: active
 
 Append-only, reverse-chronological (newest at top). Each entry opens with `## [YYYY-MM-DD] <kind> | <title>` so `grep "^## \[" log.md | head -20` gives a parseable timeline.
 
+## [2026-07-17] scoping | Counter scoped to build-ready (fire drills, not sandboxes) + text-similarity RUSHED and scoped
+
+Owner set the build order: **counter first** ("scope it sufficiently — you already found a few possible
+issues"), then **text similarity** ("a lobbyist informed me [it] could be very helpful in the coming weeks —
+rush it in a restaurant way, not a sacrificing-quality way"), then continue the strategy conversation.
+
+**Counter — the owner corrected my verification design, and the correction is better.** I had proposed a
+scratch-workbook env override so a synthetic incident couldn't reset the real days-clean clock. Owner: *"don't
+build fake sandboxes to avoid resetting the timer — figure out a workaround that still allows us to use the real
+data."* Replacement: **fire-drill rows** — a `_drill` class written to the REAL ledger through the ENTIRE
+production write path, structurally excluded from the clock exactly as `_genesis` already is. Stronger than the
+sandbox (it proves the production workbook/permissions/quota, not a copy), leaves an honest visible record that
+the alarm is tested, and a scheduled monthly drill makes "the write path works" a standing guarantee — a missing
+drill row is itself an alert. **Scoping pass 2 found 8 more issues** ([[architecture/incident_counter]]), the
+big three: (1) **incident flood** — a 3-day outage would naively write ~100 rows for one event; fixed with
+open-incident semantics (append only if no open incident of same Class+DetectedBy; the guard CLOSES its own
+incident on next PASS — recovery detection free); (2) **guard credentials** — checked, not assumed: all three
+guard workflows (`accuracy_sentinel`, `completeness_tripwire`, `legevent_reconcile`) run creds-free today, so
+wiring writes is a security-posture decision (recommended: extend the existing secret, least-privilege noted);
+(3) **the denominator** — "N days clean" must render as "N days clean · monitoring for M days" (Standard #7
+applied to our own trust number). Genesis seeds the SAME DAY as the PR.
+
+**Text similarity — scoped to mechanical ([[architecture/text_similarity]]), and the owner's corpus question
+answered:** cross-state comparison is NOT impossible, but you can only compare against text you have — which
+does NOT mean 50 ingests: **LegiScan** (one aggregator contract, full texts, free tier) is the corpus source,
+and its API key is **dual-use — it's already the named blocker for C-8 Part 2's NY oracle.** One owner action,
+two workstreams. Probed live: **VA full text is inline** (`GetLegislationTextByIDAsync` → `DraftText`, via the
+version-list route the worker already consumes) — and the payload embeds vacode-section hyperlinks, so the
+future watch-a-code-section feature (B2) gets its substrate free. Algorithm: normalize → shingle → MinHash/LSH →
+Jaccard; **coarse labels only** (P20b); thresholds **calibrated on VA companion pairs** (a labeled ground-truth
+set we already own) vs random pairs, separation published in the PR — if known-same can't be separated from
+known-different, we say so and stop. Runs as an offline tool + workflow, never inside the worker. Steps 1–3
+(VA ingest, core, calibration) have ZERO external dependencies. **Owner blockers, flagged:** the LegiScan key +
+terms check, and WHICH states the lobbyist wants compared.
+
 ## [2026-07-17] strategy | Owner stress-tested the moat — archive decomposed into 3 layers, multi-state downgraded, the COUNTER unblocked
 
 Owner pushed on all four moats; three of the four pushes changed the doc ([[ideas/moat_and_competition]] revised):
