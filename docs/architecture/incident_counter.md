@@ -66,6 +66,37 @@ The owner's own summary is the standard: *"the solution is probably it not fucki
 the alarm system gets the same engineering bar as the data: calibrated thresholds, partitioned classes, no
 independent display judgment, and a false red counts against us on our own ledger.
 
+## Owner follow-ups 2026-07-25 — the two holes in the law, closed
+
+**1. "Matches LIS" — matches WHICH LIS? (the exec verifies against the WEBSITE; we check the data service).**
+Never promise what we don't measure:
+- **Today's field wording (precise):** *"matches LIS's data service — the same source the LIS website renders
+  from."* True and verifiable: the modern lis.virginia.gov is itself an API client (a SPA calling the same
+  gateway with the public key that ships in its pages — [[knowledge/lis_api_authorization]]), so
+  website≈API by construction FOR SPA-RENDERED SURFACES. But LIS runs multiple surfaces (API · Azure CSVs ·
+  minutes · legacy pages) and our own telemetry proves they can disagree with each other (the 07-25 flags-vs-
+  strings event; feed-skew monitoring exists for exactly this) — so the website claim stays UNMADE until measured.
+- **The upgrade path is P3 (sampled DOM parity), promoted from parked → W8:** headlessly load actual LIS
+  website pages for a sample of bills on a schedule, diff what the PAGE shows vs what WE show. Then "matches
+  the LIS website" becomes a measured, sampled, dated claim — the exec's own verification, automated. An
+  API↔website divergence caught by P3 is displayed as which-LIS-surface-says-what (the 07-25 pattern), not
+  hidden inside a single "LIS" word.
+
+**2. Non-disagreement reds carry the SAME self-diagnosis — by construction, not by good intentions.**
+"What disagrees with what" fits one failure shape; red also fires for staleness, upstream outage, breaker
+halts, invariant violations, parity gaps. Rule: **alarm classes are a CLOSED SET, and a class cannot ship
+without its schema** (same closed-vocabulary discipline as the differ's KINDS / the incident CLASSES). Every
+schema answers the same three questions, class-specifically:
+| Class | What happened | Scope + denominator | The client verdict ("is what I see trustworthy?") |
+|---|---|---|---|
+| check disagreement | which value vs which check | N of M | "published output matches LIS's data service: YES/NO" |
+| staleness | which worker, silent since when | which tabs affected | "nothing shown is wrong; actions after HH:MM may be missing" |
+| breaker halt | which anomaly tripped | update halted, display intact | "we refused to write suspect data — showing last-known-good as of HH:MM" |
+| upstream outage | which LIS feed, failing how | which data would refresh | "LIS stopped answering; serving verified cache from HH:MM" |
+| invariant violation | which write-time rule | N rows quarantined of M | "affected rows withheld, not shown wrong" |
+| parity gap | what LIS has that we lack | N items, where | "nothing shown is wrong; something may be MISSING — listed" |
+Free-text alarms on the client surface are forbidden; a new failure shape requires a new schema'd class first.
+
 ## Verification design — FIRE DRILLS, not sandboxes (owner correction 2026-07-17)
 
 > Owner: *"don't build fake sandboxes to avoid resetting the timer — figure out a workaround that still allows

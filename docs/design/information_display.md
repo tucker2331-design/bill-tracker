@@ -215,6 +215,14 @@ pedantic internal disagreement." The Health tab is **client-facing for executive
   [[architecture/incident_counter]]) — the alarm system is product, held to the data's standard.
 - Structural corollary: display bands derive from the **same verified verdicts** that write the ledger — a
   frontend judgment that can go red while every guard passes is a second, unaudited alarm system.
+- **P24a (owner follow-ups, same day): the claim names its surface, and every alarm class has a schema.**
+  (1) "Matches LIS" must say *which* LIS — today the honest field is *"matches LIS's data service (the same
+  source the website renders from)"*; the website-itself claim stays unmade until P3 DOM sampling measures it
+  (never promise what we don't measure — LIS's own surfaces demonstrably disagree with each other).
+  (2) Non-disagreement reds (staleness, outage, breaker, invariant, parity gap) carry the same three-field
+  self-diagnosis **by construction**: alarm classes are a closed set, each with a design-time schema answering
+  what happened · scope with denominator · "is what I see still trustworthy?" — free-text alarms on the client
+  surface are forbidden. Schema table in [[architecture/incident_counter]].
 
 ## 5c. Interaction & input — the canon for the product's first WRITE surface
 

@@ -8,6 +8,27 @@ status: active
 
 Append-only, reverse-chronological (newest at top). Each entry opens with `## [YYYY-MM-DD] <kind> | <title>` so `grep "^## \[" log.md | head -20` gives a parseable timeline.
 
+## [2026-07-25] doctrine | Owner's two follow-up holes closed: "matches WHICH LIS?" (→ P3 promoted to W8) + schema'd alarm classes for every red shape
+
+**Hole 1 — the exec verifies against the WEBSITE; we check the data service.** Owner: *"sure it matches the
+API, but is the API what's feeding the LIS website 100% of the time? How can we make that promise?"* Answer
+banked: never promise what we don't measure. Today's field wording is the precise truth — "matches LIS's data
+service (the same source the website renders from)"; the website≈API inference is well-grounded (lis.virginia.gov
+is itself a SPA client of the same gateway — the public key ships in its pages) but LIS runs multiple surfaces
+and our own telemetry proves they can disagree (07-25 flags-vs-strings; feed-skew). The measured upgrade is
+**P3 sampled DOM parity — promoted from parked to W8**: headless-load real LIS bill pages on a schedule, diff
+the PAGE vs our product; then "matches the LIS website" is a sampled, dated, measured claim — the exec's own
+verification, automated. Divergence displays as which-LIS-surface-says-what.
+
+**Hole 2 — reds that aren't disagreements.** Owner: *"did you consider a scenario where we get a red alert and
+it's not a disagreement… will it still have that level of detail?"* Yes — by construction, not intention:
+**alarm classes are a CLOSED SET and a class cannot ship without its schema** (the differ-KINDS discipline
+applied to alarms). Every schema answers what happened · scope+denominator · the generalized client verdict
+("is what I see still trustworthy?" — staleness: "nothing shown is wrong; actions after HH:MM may be missing";
+breaker: "we refused to write suspect data — last-known-good as of HH:MM"). Free-text alarms on the client
+surface are forbidden. Schema table in [[architecture/incident_counter]]; P24a added to
+[[design/information_display]].
+
 ## [2026-07-25] doctrine | Owner REVERSED my incident ruling: a false alarm IS an incident (the client's chair decides) + Health tab declared client-facing
 
 I had ruled the false red ring "not an incident — no guard failed; the counter design passed its first test."
