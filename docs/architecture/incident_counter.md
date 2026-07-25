@@ -163,25 +163,57 @@ is what makes it work for the unanticipated signal (P25):
 *everything* → the whole surface is unverified → the streak breaks. That's deliberately expensive, so checks
 get built to localize. (This is the metric driving the right engineering, Standard #7.)
 
-**4. Tri-state display — the third state is the missing piece.** Binary green/red forced the false choice that
-started all this:
-   - **Verified clean** — checks passed, published output confirmed.
-   - **UNVERIFIED** *(new)* — "we cannot currently confirm this; resolving." Distinct from red, **not** a claim
-     of correctness, and per §1 it is honestly time-stamped ("unverified since HH:MM"). Affected rows are
-     **marked in place, never hidden** (B's surviving half; Standard #3).
-   - **RED** — published output verifiably wrong (`impeached == TRUE`), unchanged from P24.
+**4. TWO states, not three — unverified IS red (corrected 2026-07-25 after owner review).** I proposed a third
+"unverified" colour; the owner killed it: *"unverified might as well be red — we can't assume it's ok until
+it's not; we have to assume it's not ok until we can verify it is."* **He is right, and this was ALREADY our
+doctrine — I should have cited it, not treated it as a new preference:** Standard #2 (*"circuit breakers: on
+anomalous data, stop and alert — don't write bad data"*), plus *"allowed not to know, never pretend"*
+(`web/src/data/gviz.ts`) and *"honest-absent beats plausible-wrong"* (`tools/change_ledger/differ.py`).
+Fail-closed is the house posture; a softer third colour contradicted it.
+   - **The decisive structural argument:** the ledger already treats unverified as **not clean** (it breaks the
+     streak). A display that showed it as something gentler would be a *second judgment about the same state* —
+     precisely the two-alarm-systems bug that caused 2026-07-25. **One truth pipeline means: if it breaks the
+     streak, it is red.**
+   - So: **green = verified clean. Everything else = red.** *Why* it's red (wrong / unverified / source
+     unreachable) is carried in the record's fields, never in a softer colour.
+   - Affected rows are still **marked in place, never hidden** (Standard #3, "never a hidden row").
+   - Cry-wolf risk is not reintroduced: the 2026-07-25 case resolves to `impeached = FALSE` **automatically**,
+     so it never reaches red. Red becomes rare *by making verification work*, not by softening the colour.
 
 **5. Escalation is by DURATION, not by default.** The resolver retries on the worker's cadence. Only if an
 unknown survives **N cycles** does it reach the owner — as a fully-documented dossier (what fired, affected
 rows, what the resolver tried, why it failed), never as a raw "please look at this." **The system does the
 investigation; the human only ever makes a judgment call.**
 
-**What would make E wrong / residual risk (protocol step 4):** if the authoritative source is *itself*
-unreachable, the resolver cannot conclude — that correctly stays UNVERIFIED (breaking the streak during an LIS
-outage, which is honest but will make the counter look worse than "our" reliability). Accepted deliberately:
-the client's question is *"can I trust what I see right now?"*, and during an upstream outage the honest answer
-is "we can't currently verify it." **The runner-up (D, two counters) handles that case more flatteringly — and
-we reject it because flattering our own metric is exactly what the counter exists not to do.**
+### 3b. WHAT can the resolver actually check? (owner: *"what source is it verifying against — didn't you say
+### you had to scrape to get the LIS website?"*) — a real hole in my §3 wording
+
+**Caught correctly.** I wrote "re-fetch from the authoritative source," but our own brain says the **website**
+is the authoritative tiebreaker ([[knowledge/lis_dom_scraping]]) — and the website is behind the SPA wall
+(headless Chrome only, audit-only by our own rule). **Re-fetching the same API that fed us in the first place
+is partly CIRCULAR**: it proves our pipeline didn't mangle the data; it cannot prove the API matched reality.
+Stating the verification's real reach, honestly tiered:
+
+| Tier | What it checks | Automatic? | What it PROVES / does NOT prove |
+|---|---|---|---|
+| **1 · pipeline fidelity** | re-fetch the affected rows from the same feed; diff against our published values | ✅ yes | proves **our** transformation/staleness/dropped-row bugs are absent. **Circular** for source truth — does not prove LIS was right. |
+| **2 · cross-surface reconciliation** | compare LIS's *independent* surfaces against each other — API vs BILLS/HISTORY/VOTE CSVs vs **MinutesBook** (already our reconciliation oracle, `tools/reconciliation/`) | ✅ yes | **genuinely independent within LIS.** Catches source self-contradiction (exactly 2026-07-25) and resolves via the structural oracle (Standard #3). This is the real verification. |
+| **3 · website DOM** | what an exec would see on lis.virginia.gov | ❌ **no** — SPA wall + our own audit-only rule | the only thing that could support a "matches the website" claim; **available solely as a periodic, owner-gated audit (W8)** |
+
+**Consequences, adopted:**
+- **"Verified clean" now has an exact, narrow meaning:** *our pipeline faithfully reflects LIS's data service,
+  and LIS's own surfaces agree with each other.* Nothing broader is claimed — matching §1's downgrade.
+- **An unknown that only tier 3 could settle CANNOT be auto-resolved → it stays red** until the sampled DOM
+  audit or a human decision clears it. Fail-closed, per Standard #2. Honest, and it correctly prices the
+  website gap instead of hiding it.
+- Tier 2 is the load-bearing tier and it **already exists** in our reconciliation tooling — the resolver wires
+  up machinery we own rather than inventing a new oracle.
+
+**What would make E wrong / residual risk (protocol step 4):** if LIS is *unreachable*, the resolver cannot
+conclude, so the streak breaks during an upstream outage — worse-looking than "our" reliability. Accepted
+deliberately: the client's question is *"can I trust what I see right now?"*, and during an outage the honest
+answer is "we can't verify it right now." **The runner-up (D, two counters) flatters us in that case — rejected,
+because flattering our own metric is exactly what the counter exists not to do.**
 
 ## Verification design — FIRE DRILLS, not sandboxes (owner correction 2026-07-17)
 

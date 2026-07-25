@@ -8,6 +8,37 @@ status: active
 
 Append-only, reverse-chronological (newest at top). Each entry opens with `## [YYYY-MM-DD] <kind> | <title>` so `grep "^## \[" log.md | head -20` gives a parseable timeline.
 
+## [2026-07-25] correction | Tri-state KILLED (fail-closed was already doctrine) + the resolver's real reach stated (the circularity hole)
+
+Two owner corrections on the §3 design, both landing:
+
+**1. "Unverified might as well be red… we have to assume it's not ok until we can verify it is" — and: "don't
+say I made it a rule because you don't follow those anyway; something along those lines was in the rules
+already."** He is right on both halves. **The doctrine already existed and I should have cited it instead of
+crediting him:** Standard #2 — *"Circuit breakers: on anomalous data, stop and alert — don't write bad data"*;
+plus *"allowed not to know, never pretend"* (`web/src/data/gviz.ts`) and *"honest-absent beats plausible-wrong"*
+(`tools/change_ledger/differ.py`). My third "unverified" colour softened a fail-closed house rule. **Killed —
+the surface is BINARY: green = verified clean, everything else red.** The decisive structural argument (not
+just deference): the ledger *already* counts unverified as not-clean, so a gentler display state would be a
+**second judgment about the same state** — exactly the two-alarm-systems bug that produced 2026-07-25. One
+truth pipeline: if it breaks the streak, it is red. Cry-wolf isn't reintroduced, because Friday's case now
+auto-resolves to `impeached=FALSE` and never reaches red — **red gets rare by making verification work, not by
+softening the colour.** *Meta-lesson: the gap here is never missing rules, it is me not applying the ones we
+have — which is what [[workflow/design_proposal_protocol]] exists to force.*
+
+**2. "What source is it verifying against — didn't you say you had to scrape to get the LIS website?" — a real
+hole in my wording.** I wrote "re-fetch from the authoritative source," but our own vault names the **website**
+as the authoritative tiebreaker, and it's behind the SPA wall (audit-only). **Re-fetching the same API that fed
+us is partly CIRCULAR** — it proves our pipeline, not the source. Now tiered honestly
+([[architecture/incident_counter]] §3b): **tier 1** pipeline fidelity (automatic; catches our own
+transformation/staleness bugs; circular for source truth) · **tier 2** cross-surface reconciliation between
+LIS's *independent* surfaces — API vs the CSVs vs **MinutesBook**, machinery `tools/reconciliation/` already
+owns — which is the load-bearing tier and catches source self-contradiction (2026-07-25) · **tier 3** the
+rendered website, **not automatic**, owner-gated audit only (W8). Consequences adopted: **"verified clean" now
+means exactly "our pipeline faithfully reflects LIS's data service AND LIS's own surfaces agree"** — nothing
+broader; and **an unknown only tier 3 could settle stays RED** rather than being quietly assumed fine. New
+canon rule **P25c: state what your verification actually reaches.**
+
 ## [2026-07-25] process + design | "You are looping" → the design-proposal protocol; UNKNOWN breaks the streak and the SYSTEM resolves it
 
 **The process criticism, and it's the important one.** Owner: *"I think you are looping. Instead of shooting at

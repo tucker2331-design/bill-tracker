@@ -231,12 +231,21 @@ pedantic internal disagreement." The Health tab is **client-facing for executive
   *generated* from those fields. An unforeseen signal degrades into honesty instead of silence or a false
   alarm, and a new check ships without anyone writing a sentence. Generalizes beyond alarms to every data→text
   surface we build.
-- **P25a · The trust surface is TRI-state, and "we don't know" is never silent, never green, never red.**
-  (Owner 2026-07-25: *"an UNKNOWN is still a violation."*) **Verified clean** (checks passed, output confirmed)
-  · **UNVERIFIED** (*"we cannot currently confirm this; resolving"* — time-stamped, affected rows **marked in
-  place, never hidden** per Standard #3) · **RED** (`impeached == TRUE`, published output verifiably wrong).
-  Binary green/red is what forced the false choice behind the 2026-07-25 failure. **An unverified state counts
-  against the days-clean ledger** — we never bank a day we couldn't verify.
+- **P25a · The trust surface is BINARY and fail-closed: green means VERIFIED clean; everything else is red.**
+  This is not a new preference — it is **Standard #2** (*"circuit breakers: on anomalous data, stop and alert —
+  don't write bad data"*) plus *"allowed not to know, never pretend"* and *"honest-absent beats
+  plausible-wrong"*, applied to the trust surface. **Unverified is red**: we assume not-OK until we can verify
+  OK, never the reverse. A softer third state would also be a *second judgment* about a state the ledger
+  already counts as not-clean — the two-alarm-systems bug that caused 2026-07-25. *Why* it is red (wrong /
+  unverified / source unreachable) lives in the record's fields, never in a gentler colour. Affected rows are
+  **marked in place, never hidden** (Standard #3). Red stays rare by **making verification work**, not by
+  softening the colour.
+- **P25c · State what your verification actually reaches.** "Verified" must name its tier, because re-checking
+  the *same* feed that fed you is partly circular — it proves your pipeline, not the source. Ours:
+  **(1)** pipeline fidelity (automatic; catches our bugs), **(2)** cross-surface reconciliation between the
+  source's *independent* surfaces (automatic; the real verification), **(3)** the rendered website (**not**
+  automatic — SPA wall, audit-only). A question only tier 3 could settle stays **red**, never quietly assumed
+  fine. See [[architecture/incident_counter]] §3b.
 - **P25b · Resolution is the SYSTEM's job, not a human's.** (Owner: *"don't just send a bunch of alerts to a
   human — I'm the only human."* Also Standard #8.) An unknown triggers **automatic targeted re-verification**
   of the affected rows against the authoritative source; a human is reached only after N failed cycles, and
