@@ -199,6 +199,23 @@ The composite is the **DERIVED** class (amber, §P20a); its components decompose
 DETERMINISTIC math, and ORG reads — so the breakdown **re-separates the three trust classes**. Same instinct as
 Tufte's graphical integrity (show the whole, show the parts) and P6 (never a number without its context).
 
+## 5e. The client-facing alarm law (owner criticism, 2026-07-25 — after the false red Accuracy ring)
+
+**P24 · On a client-facing trust surface, RED means "our published output is verifiably wrong" — nothing else —
+and every alarm self-diagnoses in structured fields, not prose.** Born from a real failure: LIS batch-updated
+its carryover flags without its status strings; our published value stayed CORRECT, but an internal consistency
+check tripped a red Accuracy ring, and the owner-as-client couldn't tell "everything is broken" from "a
+pedantic internal disagreement." The Health tab is **client-facing for executives** (owner decision), so:
+- A check disagreement that does **not** impeach the published value is a quieter class — never red-accuracy.
+- Every alarm row carries: **what disagrees with what** (published value vs which check) · **scope with its
+  denominator** (443 of 3,633) · **"published output matches LIS: YES/NO"** — the one field a client actually
+  needs. No jargon, no AI-generated prose (owner: "don't translate data issues to English, but I don't want an
+  AI to have to diagnose it every time").
+- **A false red is an INCIDENT** on our own days-clean ledger (`false_alarm` class,
+  [[architecture/incident_counter]]) — the alarm system is product, held to the data's standard.
+- Structural corollary: display bands derive from the **same verified verdicts** that write the ledger — a
+  frontend judgment that can go red while every guard passes is a second, unaudited alarm system.
+
 ## 5c. Interaction & input — the canon for the product's first WRITE surface
 
 Everything above governs *display*. The war room is the first thing in this product a human **types into**

@@ -22,22 +22,49 @@ The trust claim expands from "never wrong" to **"never less than LIS"** ([[ideas
   unverifiable write into the accuracy sentinel (a critical guard) violates "verify the row"
   ([[failures/assumptions_audit#74]]) and risks destabilizing the guard.
 
-## The owner decisions — RESOLVED 2026-07-17 (owner: "we need to prove it — remember the counter we were
-## gonna start, to track how long data holds clean before intervention")
+## The owner decisions — RESOLVED 2026-07-17, definition AMENDED 2026-07-25
 
-1. **The incident DEFINITION — the owner's own sentence IS the definition: *"how long data holds clean before
-   intervention."*** An incident = any event where the data did **not** hold clean on its own. The three classes
-   implement it, with one addition the owner's word "intervention" makes explicit:
+1. **The incident DEFINITION — the owner's sentence, now covering the whole trust EXPERIENCE:** *"how long data
+   holds clean before intervention"* — where "clean" is judged **from the client's chair, not the pipeline's.**
+   Owner correction 2026-07-25 (after the false red Accuracy ring): *"that incident absolutely has to affect
+   the clean ledger, because it sent off a red accuracy alarm… imagine you're the lobbyist I sold this to."*
+   **A false alarm on the trust surface IS an incident** — the client cannot (and must not need to) distinguish
+   "the data is wrong" from "the alarm is wrong"; either way the product broke its promise that morning. Classes:
    - `accuracy` — wrong data was visible on the product (sentinel FAIL / breaker bypass), **or a human had to
-     manually correct product data** — if we had to intervene, it did not hold clean; the intervention is the
-     incident even if no user saw the error.
+     manually correct product data**.
    - `parity_gap` — content on LIS not visible here for > 1 worker cycle (P2/P3 parity checks).
    - `degraded` — a user-visible degraded state (stale banner / missing panel) lasting > 60 min.
-2. **Display: Health-tab first** (the recommended path, now adopted). Public/trust-header promotion remains a
-   **later owner call** once a clean baseline exists — the counter must earn its way to the marketing surface.
-3. **Guards that WRITE: the named three** — `accuracy_sentinel` FAIL, `completeness_tripwire` FAIL,
-   `reconciliation` mismatch — each a fail-open one-liner in the existing FAIL path. Manual interventions are
-   logged by hand (a CLI helper: `python3 -m tools.incident_log.log record accuracy "…" manual`).
+   - **`false_alarm` (NEW, 2026-07-25)** — the trust surface showed red without a verified underlying data
+     failure. The alarm system is part of the product and is held to the same standard as the data.
+   **The 2026-07-25 outcome-drift event is the ledger's FIRST incident** — recorded as `false_alarm` at
+   seeding, with its honest (approximate, and marked approximate) start date. The counter's story begins by
+   telling the truth about itself.
+2. **Display: Health-tab first — and the Health tab is CLIENT-FACING (owner 2026-07-25):** executives at client
+   orgs get it ("other executives deserve to know the health of the data and the details"); their staff
+   generally don't. This sets the tab's register: an alarm must be **self-diagnosing to a non-engineer
+   executive** — structured facts, never internal jargon, never AI prose (owner: "don't translate data issues
+   to English, but I don't want an AI to have to diagnose it every time").
+3. **Guards that WRITE: the named three** for data incidents (fail-open one-liners in FAIL paths) + the manual
+   CLI for interventions and `false_alarm` entries. **Structural rule added (the real fix): the display bands
+   and the incident ledger must derive from the SAME verified verdicts** — the Health page may never carry an
+   independent judgment that can go red while every guard passes, which is precisely what happened on
+   2026-07-25. One truth pipeline: checks → verdicts → (display AND ledger). A band that can diverge from the
+   guards is a second, unaudited alarm system, and it will eventually cry wolf.
+
+## What RED means on the client-facing trust surface (the alarm law, owner criticism 2026-07-25)
+The owner's two-part criticism, turned into design law:
+1. **"If it was truly a false alarm it shouldn't have sent accuracy red."** → **Red accuracy = the product's
+   published output is wrong, verified.** An internal consistency check that disagrees WITHOUT impeaching the
+   published value (2026-07-25: our published `carried_over` matched LIS's own flags — the check was between
+   LIS's two internal fields) is a **different, quieter class** — visible, never red-accuracy.
+2. **"I couldn't tell whether everything was wrong or a minor disagreement matching what LIS itself shows."**
+   → every alarm row must carry, as **structured fields, not prose**: (a) **what disagrees with what** (our
+   published value vs which check); (b) **scope with denominator** (443 of 3,633); (c) **the verdict a client
+   actually needs: "published output matches LIS: YES/NO."** If that last field is YES, the alarm is by
+   definition not red-accuracy (see 1).
+The owner's own summary is the standard: *"the solution is probably it not fucking up in the first place"* —
+the alarm system gets the same engineering bar as the data: calibrated thresholds, partitioned classes, no
+independent display judgment, and a false red counts against us on our own ledger.
 
 ## Verification design — FIRE DRILLS, not sandboxes (owner correction 2026-07-17)
 

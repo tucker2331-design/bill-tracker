@@ -8,6 +8,30 @@ status: active
 
 Append-only, reverse-chronological (newest at top). Each entry opens with `## [YYYY-MM-DD] <kind> | <title>` so `grep "^## \[" log.md | head -20` gives a parseable timeline.
 
+## [2026-07-25] doctrine | Owner REVERSED my incident ruling: a false alarm IS an incident (the client's chair decides) + Health tab declared client-facing
+
+I had ruled the false red ring "not an incident — no guard failed; the counter design passed its first test."
+**Owner reversed it, with the argument that settles the definition:** *"that incident absolutely has to affect
+the clean ledger, because it sent off a red accuracy alarm. Imagine you're the lobbyist I sold this to — you
+wake up, check it's safe to use, see a red accuracy alarm… I intend on giving [executives at client orgs] the
+health tab."* The counter measures the **trust experience**, not pipeline internals — a client cannot and must
+not need to distinguish "data wrong" from "alarm wrong"; either way the promise broke that morning. Changes:
+- **New `false_alarm` incident class**; the 2026-07-25 event becomes **the ledger's first incident at seeding**
+  (approximate start, marked approximate). The counter's story begins by telling the truth about itself.
+- **The alarm law** (new P24 in [[design/information_display]]; full text in [[architecture/incident_counter]]):
+  on the client-facing trust surface, **red = published output verifiably wrong, only**; a check disagreement
+  that doesn't impeach the published value is a quieter class; every alarm row carries structured fields —
+  what-vs-what · N of M · **"published output matches LIS: YES/NO"** — readable by a non-engineer executive,
+  no AI diagnosis required (owner: "the solution is probably it not fucking up in the first place").
+- **Structural fix so it can't recur:** display bands must derive from the SAME verified verdicts that write
+  the ledger (one truth pipeline). The 07-25 failure was exactly a frontend band with independent judgment
+  going red while every guard passed — a second, unaudited alarm system.
+- **Product decision banked: the Health tab is CLIENT-FACING for executives** at client orgs (their staff
+  generally without) — sets its register permanently: structured facts a non-engineer can act on.
+- Process lesson for me, owner's framing: transparency to clients means the trust surface is judged as
+  PRODUCT, by client experience — I graded my own design by its internal logic and called a client-visible
+  failure a pass. The client's chair is the test bench.
+
 ## [2026-07-25] diagnosis | Owner screenshots: red Accuracy ring DIAGNOSED (LIS interim carryover batch, not our drift) + 2 UI bugs + a surfacing gap → W0
 
 Owner reported: calendar week-view scrolls with a day cut off despite free margins; the Accuracy ring's 1-critical
