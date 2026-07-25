@@ -8,6 +8,46 @@ status: active
 
 Append-only, reverse-chronological (newest at top). Each entry opens with `## [YYYY-MM-DD] <kind> | <title>` so `grep "^## \[" log.md | head -20` gives a parseable timeline.
 
+## [2026-07-25] architecture | "How do you choose the authoritative source — in EVERY scenario?" → the precedence ladder is a house rule; the bill path has NO provenance
+
+Owner's sharpest question of the session. Answer, after checking existing machinery first (the protocol step I
+keep skipping): **we already have the right pattern and it's ours — the calendar subsystem — and the bill path
+never inherited it.** New page: [[architecture/source_precedence]].
+
+**The prior art:** [[architecture/calendar_pipeline]]'s two ladders (committee: refid→lexicon→memory; time: 7
+rungs ending in an explicit `NO_SCHEDULE_MATCH`), and the four properties that make them trustworthy rather
+than opinionated — a per-row **`Origin`** stamp (49 usages in `calendar_worker.py`), an **explicit terminal
+rung** (honest unknown, never a silent guess), a **stated principle** (*"a concrete ScheduleTime always wins —
+the resolver never re-derives a time LIS published"*), and **measurement** (*"0 of 2,889 published-clock keys
+resolve to a derived time"* + per-rung counters).
+
+**Generalized into four principles** — precedence must be DERIVED from a property of the value, never a
+hardcoded table of source names (Standard #1 forbids hardcoding the derivable; #8 forbids maintenance tables):
+published>derived · structural>text (#3) · system-of-record-for-this-field>incidental mention · **corroboration
+raises confidence but never creates authority** (mirrors of one upstream agreeing is correlated error, not
+evidence — which is why majority-vote was rejected).
+
+**The honest answer to "every scenario": the ladder does NOT need a winner for every pair — it needs a default
+for the pairs it can't justify.** Two published, structural, equally-system-of-record sources disagreeing →
+the code **does not invent a winner**; it falls to the terminal rung → **unverified → red, both values shown**.
+Novel disagreements degrade into visible honesty instead of a coin flip wearing a rule's clothing. And **a rung
+may only exist if MEASURED against the archive** (the "0 of 2,889" model), re-measured continuously, alerting
+on degradation — we don't assert which source is more trustworthy, we measure it and publish the track record.
+
+**The gap this exposed — the bill path is a generation behind the calendar:** no documented ladder (an implicit
+`flags→keyword`), no terminal rung, no measurement, and **`source` is the literal constant `"LIS"`** —
+provenance in name only. By our own doctrine (`tools/open_loops.py`: *"a signal that never varies is not a
+signal"*, written about `status: active`) it carries zero information. **This is the root cause of
+2026-07-25**: with no `Origin` on the outcome, the adjudication verdict had nowhere to live, so it was
+discarded and only a bare mismatch rate survived. **Fix is one field, not a subsystem:**
+`outcome_origin ∈ {structural_flag, keyword_fallback, unresolved}` — which simultaneously makes
+`published_output_impeached` derivable downstream, makes the 12 oracle-less bills visibly unverified, and puts
+the bill path on the calendar's proven pattern. Folded into W0c.
+
+Rejected with the killing rule: static per-pair table (#1/#8) · newest-wins (recency≠authority) ·
+majority vote (correlated mirrors) · never-choose (honest but discards measurable knowledge — survives as the
+terminal rung, not as the whole rule).
+
 ## [2026-07-25] correction | "Wasn't Friday exactly a cross-verification check?" — YES. The bug is DISCARDING the verdict, and the metric is aimed at the wrong population
 
 Owner: *"do we not already cross verify our sources? and what was the event Friday — I thought that event was
