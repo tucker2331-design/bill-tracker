@@ -146,6 +146,8 @@ clean."** An unresolved unknown is logged as an OPEN incident of class `unverifi
 is strictly more honest than the old rule and satisfies correction (1): we never bank an unverifiable day.
 
 **2. The system resolves it — the targeted re-verification loop (satisfies correction (2) + Standard #8).**
+*(Scoped down by §3c: this loop is the FALLBACK for signals that arrive without a verdict. Most of our checks —
+including the one that fired on 2026-07-25 — already computed the answer and discarded it. Fix that first.)*
 Any check that fires must name its **affected rows** (already required: `scope_n`/`scope_of`). The resolver then
 does automatically what a human would do, and it needs **no understanding of the signal's semantics** — which
 is what makes it work for the unanticipated signal (P25):
@@ -208,6 +210,52 @@ Stating the verification's real reach, honestly tiered:
   website gap instead of hiding it.
 - Tier 2 is the load-bearing tier and it **already exists** in our reconciliation tooling — the resolver wires
   up machinery we own rather than inventing a new oracle.
+
+### 3c. We ALREADY cross-verify — and 2026-07-25 WAS a cross-check working. The bug is DISCARDING its verdict.
+*(Owner, 2026-07-25: "do we not already cross verify our sources? and what was the event Friday — I thought
+that event was exactly that, a disagreement of sources in a cross-verification check?" **Correct on both, and
+it means my §3 resolver was over-designed for this class.**)*
+
+**Yes — cross-verification is already everywhere:** `tools/reconciliation/reconcile_votes.py` (MinutesBook as
+an independent oracle), `tools/verification/accuracy_sentinel.py`, `completeness_tripwire.py`, the upstream
+vocabulary watchers (status/governor/refid/schedule/reference drift), feed-skew, and the very check that fired
+Friday. **Friday was not a missing check — it was a check doing its job.**
+
+**The actual defect, visible in `bill_tracker.py` at the moment of adjudication:**
+```python
+if structural_outcome:
+    outcome = structural_outcome            # ← WE PUBLISH THE ORACLE'S VALUE
+    if keyword_outcome != structural_outcome:
+        outcome_mismatches.append(bill)     # ← we record ONLY "they disagreed", throwing away the fact
+                                            #    that the published value IS the oracle's
+else:
+    outcome = keyword_outcome               # ← no oracle opinion exists: the GENUINELY unverified case
+```
+At that line the pipeline provably knows all three things needed: the sources disagree, which one is
+authoritative (Standard #3), and **which one we published**. So `published_output_impeached = FALSE` is
+*derivable right there* — no re-fetch, no new subsystem. It is then **discarded**, and downstream only a bare
+mismatch *rate* survives, which trips a threshold and renders red.
+
+**→ The primary fix is far cheaper than my resolver: carry the verdict forward.** Every check that adjudicates
+between sources must emit `published_output_impeached` alongside its count. The re-verification loop (§3
+point 2) remains, but only as the **fallback** for signals that arrive *without* an adjudication (a late
+discrepancy, a stale-cache question, an anomaly nobody resolved at write time). I proposed new machinery
+without first checking whether existing machinery already had the answer — exactly the step
+[[workflow/design_proposal_protocol]] step 1 exists to force.
+
+**And the metric is pointed at the WRONG POPULATION — the finding that falls out of the same code (live data,
+2026-07-25):**
+| Population | Count | Verification status | Alarmed? |
+|---|---|---|---|
+| Published the **structural oracle's** value | **3,633** | verified by definition | — |
+| …of those, whose status *string* also disagreed | **443** | **still verified** (we published the oracle) | 🔴 **RED — the alarm fired HERE** |
+| **No structural flag existed** → published the keyword guess | **12** | **genuinely UNVERIFIED — no oracle confirmation** | ❌ **nothing fires** |
+
+**The alarm fired on the most-verified population and is silent on the only unverified one.** Under the new
+fail-closed rule (P25a) those 12 are exactly what should be visible — flagless bills where we published a
+derived guess no oracle confirmed. **W0c is therefore re-aimed:** not merely "partition the mismatch metric,"
+but **retire the bare mismatch rate as an alarm** (it measures LIS's internal consistency, not our accuracy —
+keep it as a visible upstream-drift observation) and **alarm on the unverified population instead**.
 
 **What would make E wrong / residual risk (protocol step 4):** if LIS is *unreachable*, the resolver cannot
 conclude, so the streak breaks during an upstream outage — worse-looking than "our" reliability. Accepted

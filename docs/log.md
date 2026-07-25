@@ -8,6 +8,37 @@ status: active
 
 Append-only, reverse-chronological (newest at top). Each entry opens with `## [YYYY-MM-DD] <kind> | <title>` so `grep "^## \[" log.md | head -20` gives a parseable timeline.
 
+## [2026-07-25] correction | "Wasn't Friday exactly a cross-verification check?" — YES. The bug is DISCARDING the verdict, and the metric is aimed at the wrong population
+
+Owner: *"do we not already cross verify our sources? and what was the event Friday — I thought that event was
+exactly that, a disagreement of sources in a cross-verification check?"* **Right on both counts, and it shrinks
+my §3 design.**
+
+**We already cross-verify, extensively:** `tools/reconciliation/reconcile_votes.py` (MinutesBook as an
+independent oracle), `accuracy_sentinel`, `completeness_tripwire`, the five upstream vocabulary watchers,
+feed-skew — and the outcome check that fired Friday. **Friday was a cross-check doing its job**, not a missing
+capability. So proposing a new "auto-resolver" as the primary fix was over-design: I did not first check
+whether existing machinery already produced the answer ([[workflow/design_proposal_protocol]] step 1 —
+the step I wrote yesterday and then skipped).
+
+**The real defect, at `bill_tracker.py`'s adjudication line:** when a structural flag exists we set
+`outcome = structural_outcome` (we publish the ORACLE's value) and then append only the bill number to
+`outcome_mismatches`. At that moment the pipeline provably knows the three things that matter — the sources
+disagree · which is authoritative · **which one we published** — so `published_output_impeached = FALSE` is
+derivable *right there*, with no re-fetch. It is discarded; only a bare mismatch **rate** flows downstream,
+trips a threshold, and renders red. **→ Primary fix is cheap: every adjudicating check emits
+`published_output_impeached` with its count. The re-verification loop is demoted to the FALLBACK** for signals
+that arrive without an adjudication.
+
+**The finding that fell out — the metric is aimed at the wrong population** (live data): **3,633** bills
+published the structural oracle's value (verified by definition); **443** of those also had a disagreeing
+status string — **still verified**, and this is where the RED fired; **12** bills had *no* structural flag, so
+we published a keyword-derived guess **no oracle ever confirmed — genuinely unverified, and nothing alarms on
+them.** The alarm is loud on the most-verified population and silent on the only unverified one. Under
+fail-closed (P25a) it should be the reverse. **W0c re-aimed:** carry the verdict forward · **retire the bare
+mismatch rate as an alarm** (it measures LIS's internal consistency, not our accuracy — keep it visible as
+upstream-drift observation) · **alarm on the unverified 12 instead**.
+
 ## [2026-07-25] correction | Tri-state KILLED (fail-closed was already doctrine) + the resolver's real reach stated (the circularity hole)
 
 Two owner corrections on the §3 design, both landing:
