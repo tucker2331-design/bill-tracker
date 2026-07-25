@@ -215,14 +215,23 @@ pedantic internal disagreement." The Health tab is **client-facing for executive
   [[architecture/incident_counter]]) — the alarm system is product, held to the data's standard.
 - Structural corollary: display bands derive from the **same verified verdicts** that write the ledger — a
   frontend judgment that can go red while every guard passes is a second, unaudited alarm system.
-- **P24a (owner follow-ups, same day): the claim names its surface, and every alarm class has a schema.**
-  (1) "Matches LIS" must say *which* LIS — today the honest field is *"matches LIS's data service (the same
-  source the website renders from)"*; the website-itself claim stays unmade until P3 DOM sampling measures it
-  (never promise what we don't measure — LIS's own surfaces demonstrably disagree with each other).
-  (2) Non-disagreement reds (staleness, outage, breaker, invariant, parity gap) carry the same three-field
-  self-diagnosis **by construction**: alarm classes are a closed set, each with a design-time schema answering
-  what happened · scope with denominator · "is what I see still trustworthy?" — free-text alarms on the client
-  surface are forbidden. Schema table in [[architecture/incident_counter]].
+- **P24a · Name the surface you actually checked.** "Matches LIS" is not a claim — *which* LIS? The honest
+  field is **"matches LIS's API + CSV data service."** We do **not** claim website parity: our own
+  [[knowledge/lis_dom_scraping]] records that *"the Schedule API has gaps"* and *"the website is the
+  tiebreaker."* A website claim requires a dated, sampled DOM audit and may only ever be stated as a receipt
+  ("last audit: N bills, DATE, X discrepancies"), never as a standing promise. **Never promise what we don't
+  measure — not even in a parenthetical.**
+- **P25 · NEVER pre-assign text to anticipated signals — render text FROM structural fields.** (Owner, twice:
+  *"the signal we will get is the one we don't expect, not the one we've already scoped for"*; earlier, on the
+  change register: *"requires us to know every possible data point and have corresponding text — a massive
+  sustainability problem."*) A lookup table of per-case prose fails three ways: it can't cover the
+  unanticipated case, it force-fits novel signals into the nearest wrong bucket, and it grows forever.
+  **The inversion:** one universal record — `check` · `observed`/`expected`/`threshold` · `scope_n` of
+  `scope_of` · `surface` · **`published_output_impeached: TRUE/FALSE/UNKNOWN`** — and the display is
+  *generated* from those fields. **Colour is computed: RED requires `impeached == TRUE`; `UNKNOWN` is never
+  red and routes to human review** (Standard #4). An unforeseen signal then degrades into honest
+  "unclassified — under review" instead of silence or a false alarm, and a new check ships without anyone
+  writing a sentence. Generalizes beyond alarms to every data→text surface we build.
 
 ## 5c. Interaction & input — the canon for the product's first WRITE surface
 

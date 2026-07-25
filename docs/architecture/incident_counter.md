@@ -66,36 +66,57 @@ The owner's own summary is the standard: *"the solution is probably it not fucki
 the alarm system gets the same engineering bar as the data: calibrated thresholds, partitioned classes, no
 independent display judgment, and a false red counts against us on our own ledger.
 
-## Owner follow-ups 2026-07-25 — the two holes in the law, closed
+## Owner follow-ups 2026-07-25 — both my answers were WRONG; corrected here
 
-**1. "Matches LIS" — matches WHICH LIS? (the exec verifies against the WEBSITE; we check the data service).**
-Never promise what we don't measure:
-- **Today's field wording (precise):** *"matches LIS's data service — the same source the LIS website renders
-  from."* True and verifiable: the modern lis.virginia.gov is itself an API client (a SPA calling the same
-  gateway with the public key that ships in its pages — [[knowledge/lis_api_authorization]]), so
-  website≈API by construction FOR SPA-RENDERED SURFACES. But LIS runs multiple surfaces (API · Azure CSVs ·
-  minutes · legacy pages) and our own telemetry proves they can disagree with each other (the 07-25 flags-vs-
-  strings event; feed-skew monitoring exists for exactly this) — so the website claim stays UNMADE until measured.
-- **The upgrade path is P3 (sampled DOM parity), promoted from parked → W8:** headlessly load actual LIS
-  website pages for a sample of bills on a schedule, diff what the PAGE shows vs what WE show. Then "matches
-  the LIS website" becomes a measured, sampled, dated claim — the exec's own verification, automated. An
-  API↔website divergence caught by P3 is displayed as which-LIS-surface-says-what (the 07-25 pattern), not
-  hidden inside a single "LIS" word.
+### 1. "Matches LIS" — my claim was unsubstantiated, and the brain already said so
+I wrote that the website "renders from the same source" we check, inferring it from the SPA's public key. Owner
+pushed back: *"you say it feeds the site but I just feel like this claim might be unsubstantiated… I don't know
+if CSV + API is as reliable as the front-end actual site — we haven't proved that, nor that it directly feeds
+it like you claim."* **He is right, and [[knowledge/lis_dom_scraping]] contains the refutation in our own
+words:** *"LIS website is the **authoritative source** for calendar accuracy. **Schedule API has gaps.** …When
+accuracy questions cross what the APIs can answer, **the website is the tiebreaker**."* We have known since
+April 2026 that the API is **not** equivalent to the site — the entire crossover audit exists because of it.
+- What the public key actually proves: the SPA calls *some* LIS gateway endpoints. It does **not** prove that
+  every displayed field comes from the endpoints we consume, nor equal timeliness, nor equal completeness.
+- **Therefore the claim is downgraded to what we measure and nothing more:** *"matches LIS's API + CSV data
+  service."* **We do not claim website parity**, and the "same source the website renders from" phrasing is
+  struck. If we cannot measure it, we do not say it — including in a parenthetical.
 
-**2. Non-disagreement reds carry the SAME self-diagnosis — by construction, not by good intentions.**
-"What disagrees with what" fits one failure shape; red also fires for staleness, upstream outage, breaker
-halts, invariant violations, parity gaps. Rule: **alarm classes are a CLOSED SET, and a class cannot ship
-without its schema** (same closed-vocabulary discipline as the differ's KINDS / the incident CLASSES). Every
-schema answers the same three questions, class-specifically:
-| Class | What happened | Scope + denominator | The client verdict ("is what I see trustworthy?") |
-|---|---|---|---|
-| check disagreement | which value vs which check | N of M | "published output matches LIS's data service: YES/NO" |
-| staleness | which worker, silent since when | which tabs affected | "nothing shown is wrong; actions after HH:MM may be missing" |
-| breaker halt | which anomaly tripped | update halted, display intact | "we refused to write suspect data — showing last-known-good as of HH:MM" |
-| upstream outage | which LIS feed, failing how | which data would refresh | "LIS stopped answering; serving verified cache from HH:MM" |
-| invariant violation | which write-time rule | N rows quarantined of M | "affected rows withheld, not shown wrong" |
-| parity gap | what LIS has that we lack | N items, where | "nothing shown is wrong; something may be MISSING — listed" |
-Free-text alarms on the client surface are forbidden; a new failure shape requires a new schema'd class first.
+### 1b. W8 (DOM parity) — RE-SCOPED, because the wall is real and our own rule forbids the naive version
+Owner: *"we have had problems with there being a wall where a non-human user can't see the LIS site."* Correct
+and documented ([[knowledge/lis_dom_scraping]]): lis.virginia.gov is a React SPA — a plain fetch returns a ~3 KB
+shell with **no data**; only a real browser (headless Chrome, `--headless=new --dump-dom`, ~15–25 s/page, 1–5 %
+hydration failures) sees content. **And that same page states the rule I violated when I proposed W8: *"Don't
+scrape real-time… DOM scraping is for one-time audits against frozen historical windows."*** So:
+- W8 is **not** a monitor and cannot underwrite a continuous promise. It is a **periodic, small-sample,
+  point-in-time AUDIT** (owner-approved cadence, tiny N, jittered, obeying the probe protocol).
+- The strongest honest artifact it can produce is a **dated, sampled parity receipt** — *"last website audit:
+  N bills, DATE, X discrepancies"* — never a standing "we match the website" claim.
+- **Owner sign-off + a terms review are prerequisites**, not details. Until then the claim stays as in §1.
+
+### 2. Pre-writing text per anticipated signal — a REPEAT anti-pattern; the design is inverted
+Owner: *"this 'what happened' thing is assigning texts to signals, which I think is a bad habit, because the
+signal we will get is the one we don't expect, not the one we've already scoped for."* **Correct, and this is
+the SECOND time he has made this exact criticism** (first: the change-ledger register — *"a lot of data-to-text
+going on, which requires us to know every possible data point and have corresponding text; sounds like a
+massive sustainability problem"*). It went unrecorded, so I rebuilt it. The per-class prose table is **struck**.
+**The inversion — ONE universal alarm record; text is RENDERED from fields, never looked up per signal:**
+| Field | Meaning | When the signal is unanticipated |
+|---|---|---|
+| `check` | which check emitted it (identifier, not prose) | always present — whatever fired knows its own name |
+| `observed` / `expected` / `threshold` | the raw values that tripped it | always present — a check that can't say this is unshippable |
+| `scope_n` / `scope_of` | the count **and its denominator** (Standard #7) | present, or explicitly `unknown` |
+| `surface` | which LIS surface was compared (§1) | present — never the bare word "LIS" |
+| **`published_output_impeached`** | **TRUE / FALSE / UNKNOWN — the tri-state that drives colour** | **UNKNOWN** |
+- **Colour is computed, not authored: RED requires `published_output_impeached == TRUE`.** `UNKNOWN` is never
+  red — it routes to **human review** (Standard #4's `UNKNOWN` category, the existing doctrine) and displays as
+  an honest *"unclassified — under review"*. An unanticipated signal therefore degrades into **honesty**, not
+  into silence and not into a false red.
+- **This alone would have prevented 2026-07-25:** our published value matched LIS's own flags, so
+  `published_output_impeached` = FALSE → structurally incapable of turning the ring red.
+- **No enumeration treadmill:** a new check ships by filling fields it already has. Nobody writes a sentence.
+- Free-text prose on the client surface remains forbidden — but the replacement is a *rendered record*, not a
+  bigger dictionary of pre-written cases.
 
 ## Verification design — FIRE DRILLS, not sandboxes (owner correction 2026-07-17)
 

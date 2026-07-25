@@ -8,6 +8,45 @@ status: active
 
 Append-only, reverse-chronological (newest at top). Each entry opens with `## [YYYY-MM-DD] <kind> | <title>` so `grep "^## \[" log.md | head -20` gives a parseable timeline.
 
+## [2026-07-25] correction | BOTH my follow-up answers were wrong — the brain refuted one and the owner caught a REPEAT anti-pattern
+
+Owner pushed on yesterday's two "closures." Both of my answers failed; recording precisely why.
+
+**1. "The API feeds the website" was UNSUBSTANTIATED — and our own brain says the opposite.** I inferred
+website≈API from the SPA's public key. Owner: *"you say it feeds the site but this claim might be
+unsubstantiated… we haven't proved that, nor that it directly feeds it like you claim."* Correct.
+[[knowledge/lis_dom_scraping]] (April 2026, our own words): *"LIS website is the **authoritative source** for
+calendar accuracy. **Schedule API has gaps.** …the website is the **tiebreaker**."* We have known for months
+that the API is NOT equivalent to the site — the whole crossover DOM audit exists because of it. The public key
+proves only that the SPA calls *some* gateway endpoints; not equal coverage, not equal timeliness. **Claim
+downgraded to "matches LIS's API + CSV data service"; the "same source the website renders from" phrasing is
+struck.** Lesson: *the brain already contained the disproof of the thing I asserted from inference* — check
+the vault before making a trust claim, especially one we'd repeat to a client.
+
+**1b. The DOM "wall" is real AND I proposed something our own rules forbid.** Owner: *"we have had problems
+with there being a wall where a non-human user can't see the LIS site."* Documented: the site is a React SPA —
+plain fetch returns a ~3 KB shell with no data; only headless Chrome renders it (~15–25 s/page, 1–5 % hydration
+failures). Worse, the same page states *"Don't scrape real-time… DOM scraping is for one-time audits against
+frozen historical windows"* — and I had proposed W8 as a **scheduled monitor**. **W8 re-scoped to a periodic,
+tiny-sample, point-in-time AUDIT, owner-gated (sign-off + terms review), producing a dated receipt, never a
+standing website-parity claim.** Removed from the executable wave.
+
+**2. Pre-assigning text to anticipated signals — a REPEAT criticism I should never have re-committed.** Owner:
+*"assigning texts to signals is a bad habit, because the signal we will get is the one we don't expect, not the
+one we've already scoped for."* He made the SAME point earlier about the change-ledger register (*"requires us
+to know every possible data point and have corresponding text — a massive sustainability problem"*) — **it was
+never written to the vault, so I rebuilt the anti-pattern as a per-class schema table.** Now recorded as a
+first-class rule, **P25 in [[design/information_display]]**: never pre-write per-signal prose; **render text
+FROM a universal structural record** (`check` · `observed`/`expected`/`threshold` · `scope_n` of `scope_of` ·
+`surface` · **`published_output_impeached: TRUE/FALSE/UNKNOWN`**). **Colour is computed: RED requires
+`impeached==TRUE`; UNKNOWN is never red and routes to human review (Standard #4).** An unforeseen signal
+degrades into honest *"unclassified — under review"* instead of silence or a false alarm; a new check ships
+without anyone authoring a sentence. **This design alone would have made 2026-07-25 structurally impossible**
+(our value matched LIS's flags → `impeached=FALSE` → cannot be red).
+
+**Meta-lesson (the one that caused the repeat): unrecorded owner feedback WILL recur.** Verbal corrections must
+land in the vault the day they're given, or the next session rebuilds the same mistake with fresh confidence.
+
 ## [2026-07-25] doctrine | Owner's two follow-up holes closed: "matches WHICH LIS?" (→ P3 promoted to W8) + schema'd alarm classes for every red shape
 
 **Hole 1 — the exec verifies against the WEBSITE; we check the data service.** Owner: *"sure it matches the
