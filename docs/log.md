@@ -8,6 +8,21 @@ status: active
 
 Append-only, reverse-chronological (newest at top). Each entry opens with `## [YYYY-MM-DD] <kind> | <title>` so `grep "^## \[" log.md | head -20` gives a parseable timeline.
 
+## [2026-07-25] plan | The MAINTENANCE WAVE list written (owner: "clear list I've seen in writing before you start") + the per-state scanner rule made standing
+
+Owner clarified the LegiScan-loosening mechanism into a standing rule: **every state's onboarding to-do gets a
+native TEXT SCANNER, each one retiring that state's LegiScan slice — VA added first** (its routes are already
+probe-confirmed). Recorded: [[state/current_status]] W2 (VA, active), [[ny/state/current_status]] #6 (NY,
+queued after C-8 Part 2 since one LegiScan key feeds both), and the rule text itself so future state onboarding
+checklists inherit it. Owner also asked for the site link + the LegiScan registration link (delivered in-chat)
+and for the scoping safety precautions to become to-do items (→ W6).
+
+**The wave (W1–W7), written to [[state/current_status]] for owner sign-off BEFORE execution:** W1 counter PR ·
+W2 VA text scanner · W3 similarity core + companion calibration · W4 companion detection data · W5 VOTE.CSV
+per-member check · W6 LegiScan no-key prep (seam + terms stub + at-key-time checklist) · W7 B-4 CLAUDE.md
+volatile-facts audit. Parked with reasons: war-room UI/write-path/roster ingest (votes-store owner call +
+the visionary conversation), predictive tiers, 2027-gated items, S-3. Execution starts on the owner's go.
+
 ## [2026-07-25] compliance + decisions | Owner PAUSE on API probing → full audit (clean) + probe protocol; LegiScan-temporary, all-states, companion tracker BANKED
 
 **The pause:** owner — *"don't go blindly hitting API endpoints… in Virginia there's strict rules… we are only
