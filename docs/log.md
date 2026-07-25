@@ -8,6 +8,40 @@ status: active
 
 Append-only, reverse-chronological (newest at top). Each entry opens with `## [YYYY-MM-DD] <kind> | <title>` so `grep "^## \[" log.md | head -20` gives a parseable timeline.
 
+## [2026-07-25] compliance + decisions | Owner PAUSE on API probing → full audit (clean) + probe protocol; LegiScan-temporary, all-states, companion tracker BANKED
+
+**The pause:** owner — *"don't go blindly hitting API endpoints… in Virginia there's strict rules… we are only
+allowed to go back like a year or two — double check me."* **Audit run, in full:** every LIS call this session
+was `sessionCode=20261` (the active authorized session), every route public-read (nothing matching the
+write/admin patterns in the endpoint inventory), ~two dozen one-off GETs total, zero pre-2025 parameters, zero
+unauthorized-blob HEADs (the November mistake, not repeated). The legacylis homepage fetch is the channel LIS
+itself directs pre-2025 users to; nothing was extracted. **Owner's memory double-checked: CORRECT** —
+[[knowledge/lis_api_authorization]]: API = 2025/2026 session data ONLY (20251/20261 + probe-verified active),
+pre-2025 = legacylis CSV, never the API. Gap the pause exposed: workers are code-gated, manual probes were
+discipline-gated → **probe protocol added to [[knowledge/lis_api_safety]]** (authorized sessions only ·
+public-read only · minimal volume · logged in the write-back).
+
+**Owner decisions banked into [[architecture/text_similarity]]:**
+1. **LegiScan = TEMPORARY** (owner's proposal, verbatim reasoning recorded): outsource the small corpus piece
+   while org-scale, behind a `corpus_source` seam (Standard #6) so replacement is mechanical; exit criteria =
+   monetization (non-commercial tier) OR native state onboarding, slice by slice. Never on the accuracy path.
+2. **States: ALL 50** ("free and sustainable" made true by design): weekly bulk dataset checks + metadata
+   prefilter (`title/subjects/sasts`) → text fetch only for shortlisted candidates; fetched text cached forever
+   in an append-only corpus store (not Sheets). Verify-at-key-time flag: do LegiScan dataset archives embed
+   texts or only doc_id refs.
+3. **Historical depth YES; Virginia's "extent" IS the authorization rule:** other states' history via LegiScan
+   datasets (~2009+); VA 2025/2026 via the API (probed, inline); VA pre-2025 NEVER via the API — legacylis is
+   the blessed channel (probed 2026-07-25: site up, bulk CSV/download area UNLOCATED from the homepage, two
+   guessed paths 404 — recorded as unknown, not assumed); LegiScan's own VA-historical datasets are the
+   no-conflict alternative (their service, their terms — does not touch VA's toolset).
+4. **Companion tracker PROMOTED to a feature** (owner: "think about how important that info is"): companion's
+   current stage (sourced) + chamber-to-chamber text-drift label (derived/amber — "in sync" / "diverged: Senate
+   version dropped the private right of action"); post-crossover drift IS the negotiation state (is a
+   conference fight coming; which version to defend). Detection = LegiScan `sasts` × our similarity detector,
+   each validating the other — **this RESOLVES the companion-sourcing unknown** in
+   [[architecture/roster_and_votes_ingestion]]. Calibration stays honest: ~20 hand-labeled 2026 pairs first,
+   `sasts` as the independent check set.
+
 ## [2026-07-17] scoping | Counter scoped to build-ready (fire drills, not sandboxes) + text-similarity RUSHED and scoped
 
 Owner set the build order: **counter first** ("scope it sufficiently — you already found a few possible

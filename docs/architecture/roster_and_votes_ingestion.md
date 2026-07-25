@@ -129,9 +129,10 @@ not the War Room. Record each new state's roster/vote endpoints as a sibling of 
 ---
 
 ## Still genuinely unknown (do not pretend otherwise)
-1. **Companion-bill sourcing** (mockup's "Companion SB402"). No endpoint named for it in the inventory; may be
-   derivable from patron + identical-title, or from a LegislationRelationship-type route not yet probed. **Flag,
-   don't fake.**
+1. **Companion-bill sourcing — RESOLVED 2026-07-25** (two independent paths, each validating the other):
+   LegiScan's structural `sasts` (same-as) linkage + our own similarity detector (companions are near-identical
+   same-session opposite-chamber pairs). Promoted to a full companion-tracker feature — progress + text-drift,
+   chamber to chamber — specced in [[architecture/text_similarity]].
 2. **The votes store** — (A) vs (B) above is unresolved and is an owner/architecture decision.
 3. **Worker placement** — does roster/vote ingest extend `calendar_worker.py` (shares the session gate + cache
    infra) or stand up as its own scheduled worker (cleaner isolation, its own cadence)? Leaning own-worker

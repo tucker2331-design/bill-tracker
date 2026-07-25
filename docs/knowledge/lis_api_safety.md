@@ -37,6 +37,21 @@ a fixed 3h/6h: both workers fire fast and self-throttle to real meeting windows 
 slow when quiet), so the "raise cadence only fast, only when active" posture is now the running
 behavior, not a fixed conservative floor. The original guidance is preserved below for context.
 
+## Manual probe protocol (added 2026-07-25 — owner pause: "don't go blindly hitting API endpoints")
+
+The WORKERS are gated in code (`lis_authorization.py` — an unauthorized session physically raises). Ad-hoc
+scoping probes run by a human or an LLM session are NOT code-gated — they rely on discipline, and discipline
+must be written down. **Every manual probe against LIS (or any state's source) must satisfy ALL of:**
+1. **Authorized sessions only** — `sessionCode` ∈ the authorized set ([[knowledge/lis_api_authorization]]:
+   currently 20251/20261 + the probe-verified active session). Pre-2025 VA = legacylis only, NEVER the API.
+2. **Public-read routes only** — nothing matching the write/admin/partner patterns in
+   `tools/parity/consumed_endpoints.json`. If unsure which class a route is, don't call it — check the inventory first.
+3. **Minimal volume** — single GETs, no loops, no bulk re-downloads; a scoping question should cost < a dozen
+   requests. If it needs more, it isn't a probe — design it as a proper ingest with guardrails #1–#5.
+4. **Logged in the write-back** — the session's [[log]] entry names what was probed and with which session code,
+   so the next session can audit instead of trusting. (Precedent: the 2026-07-17/25 scoping probes — all 20261,
+   all public-read, ~two dozen GETs total, audited on owner request.)
+
 ## Cadence policy: meeting-driven, not clock-driven (owner proposal, 2026-06-17)
 The right design is **not** "fast during business hours" — it's **fast only when a real
 meeting is on the calendar**:
