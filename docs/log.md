@@ -8,6 +8,47 @@ status: active
 
 Append-only, reverse-chronological (newest at top). Each entry opens with `## [YYYY-MM-DD] <kind> | <title>` so `grep "^## \[" log.md | head -20` gives a parseable timeline.
 
+## [2026-07-25] diagnosis | Owner screenshots: red Accuracy ring DIAGNOSED (LIS interim carryover batch, not our drift) + 2 UI bugs + a surfacing gap → W0
+
+Owner reported: calendar week-view scrolls with a day cut off despite free margins; the Accuracy ring's 1-critical
+click lands in the wrong spot; "looks like our counter is going to start over already lol." Diagnosed all three
+from live data before theorizing (lesson #105 applied — read the data first).
+
+**The 12.2% outcome drift — root-caused from the live sheet, and the product surface is CORRECT.** Pulled the
+completeness JSON (Bill_Tracker!T1, gviz): 443 mismatches / 3,633 structural = 12.19%. Pulled the 443:
+**every one** is `status_lis='In Committee'` + structural outcome `carried_over` — and the status distribution
+shows exactly 443 'In Committee' bills, i.e. the ENTIRE class mismatches. What happened: **LIS ran its interim
+carryover batch on the structural flags (BILLS.CSV `Carried_over`) while leaving the display strings
+untouched.** LIS's own two fields disagree with each other. Structural-first won: the product shows
+`carried_over` (the oracle's answer) — **no wrong data reached a lobbyist**. The keyword path cannot be "fixed"
+to match: "In Committee" genuinely contains no carryover information. So this is the KNOWN-benign class — the
+code's own steady-state comment names "one benign 'In House'+Carried_over edge bill (~0.03%)" — scaled ×443 by
+an upstream batch, not parsing drift. **Metric-design lesson (audits #53/#14/#15 family): the mismatch metric
+CONFLATES two classes** — (A) flag-present + string-non-terminal = "the string lacks info the flags have"
+(benign, expected at interim, will recur every year) vs (B) string maps to a DIFFERENT terminal outcome than
+the flags (real drift — the thing the alarm exists for). Fix (W0c): partition the numerator; class A counted
+visibly but unalarmed; class B keeps the >1% CRITICAL. A cycle-stable trip was once again a calibration bug,
+not a transient — pre-push #14 called it.
+
+**"Counter starts over lol" — no, and that's the design passing its first live test:** no guard failed
+(reconciliation + sentinel both PASSED — the ring's own Verified line says so; the data held clean per the
+owner's definition). Only a frontend display band went red. Incidents are written by verified GUARDS, never by
+display bands — a false CRITICAL cannot pollute the days-clean ledger. Had we wired incidents off the bands,
+today would have seeded a false incident.
+
+**W0a calendar width:** `.main{max-width:1180px}` minus the 236px month-picker leaves ~880px for 7 day columns
+→ overflow-x scroll with Sunday/Saturday clipped, while the viewport has huge unused margins. Widen the
+container for the Calendar tab + make 7 columns fit.
+
+**W0b ring anchor:** both accuracy vitals hardcode `anchor:"hl-sec-accuracy"`, but the ring aggregates metrics
+that RENDER under Pipeline health (Outcome drift, line ~401) — so the click lands on the green §9 section while
+the red metric sits a section below. Fix: per-metric ids; ring scrolls to its worst failing metric.
+
+**W0d (found during diagnosis): `bill_tracker._alert` writes to Slack+stdout ONLY** — no sheet — so its >1%
+drift WARN structurally CANNOT reach the Health alerts panel (which reads Metrics_History). The panel said "All
+clear — 3 routine notes" under a red ring. Standard #4 gap: the bill worker's alerts need a destination the
+panel reads.
+
 ## [2026-07-25] plan | The MAINTENANCE WAVE list written (owner: "clear list I've seen in writing before you start") + the per-state scanner rule made standing
 
 Owner clarified the LegiScan-loosening mechanism into a standing rule: **every state's onboarding to-do gets a
