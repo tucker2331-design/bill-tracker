@@ -36,6 +36,10 @@ The trust claim expands from "never wrong" to **"never less than LIS"** ([[ideas
    - `degraded` — a user-visible degraded state (stale banner / missing panel) lasting > 60 min.
    - **`false_alarm` (NEW, 2026-07-25)** — the trust surface showed red without a verified underlying data
      failure. The alarm system is part of the product and is held to the same standard as the data.
+   - **`unverified` (NEW, 2026-07-25, owner: "an UNKNOWN is still a violation")** — a signal fired whose impact
+     on published output could not be determined. **Opens immediately and breaks the streak**; the auto-resolver
+     (§3) closes it without human involvement in the normal case. The ledger therefore measures **days we could
+     VERIFY clean** — we never bank a day we couldn't check.
    **The 2026-07-25 outcome-drift event is the ledger's FIRST incident** — recorded as `false_alarm` at
    seeding, with its honest (approximate, and marked approximate) start date. The counter's story begins by
    telling the truth about itself.
@@ -108,15 +112,76 @@ massive sustainability problem"*). It went unrecorded, so I rebuilt it. The per-
 | `scope_n` / `scope_of` | the count **and its denominator** (Standard #7) | present, or explicitly `unknown` |
 | `surface` | which LIS surface was compared (§1) | present — never the bare word "LIS" |
 | **`published_output_impeached`** | **TRUE / FALSE / UNKNOWN — the tri-state that drives colour** | **UNKNOWN** |
-- **Colour is computed, not authored: RED requires `published_output_impeached == TRUE`.** `UNKNOWN` is never
-  red — it routes to **human review** (Standard #4's `UNKNOWN` category, the existing doctrine) and displays as
-  an honest *"unclassified — under review"*. An unanticipated signal therefore degrades into **honesty**, not
-  into silence and not into a false red.
+- **Colour is computed, not authored** — see §3 for the tri-state rule (my first version said "UNKNOWN routes
+  to human review"; the owner correctly killed that — it violated Standard #8 and mis-stated the ledger).
 - **This alone would have prevented 2026-07-25:** our published value matched LIS's own flags, so
   `published_output_impeached` = FALSE → structurally incapable of turning the ring red.
 - **No enumeration treadmill:** a new check ships by filling fields it already has. Nobody writes a sentence.
 - Free-text prose on the client surface remains forbidden — but the replacement is a *rendered record*, not a
   bigger dictionary of pre-written cases.
+
+---
+
+## 3. UNKNOWN: it breaks the streak, and the SYSTEM resolves it — not a human
+*(Written under [[workflow/design_proposal_protocol]] — competing options, self-audited, before presenting.)*
+
+**Two owner corrections that set the constraints:**
+1. *"An UNKNOWN is still a violation and will reset the counter if we don't know if it's causing a serious data
+   issue or if it's minor."* → **we may never bank a clean day we cannot verify.**
+2. *"Don't just send a bunch of alerts to a human to fix — I'm the only human and I'm busy auditing you."* →
+   **"escalate to a person" is not a resolution strategy** (it was also a naked Standard #8 violation).
+
+### The candidates, audited against our own rules
+| # | Design | Audit verdict |
+|---|---|---|
+| A | **Route UNKNOWN to human review** (my rejected first answer) | ❌ **Standard #8** (zero routine human maintenance) — and the owner is a single bottleneck, so it doesn't scale past one unknown/week. Dead. |
+| B | **Quarantine: hide affected rows until verified** | ❌ **Standard #3** — the lobbyist surface must be complete, *"never a hidden row."* Hiding trades a visible unknown for an invisible one. Dead as stated; its useful half (**mark, don't hide**) survives into E. |
+| C | **Fail-closed: treat every UNKNOWN as impeached → RED** | ❌ **P24** (red = verifiably wrong) and it re-creates the 2026-07-25 cry-wolf failure; the counter could never accumulate, killing the moat ([[ideas/moat_and_competition]] #4). Dead as a *display* rule — but its conservatism is correct for the **ledger**, which is where E puts it. |
+| D | **Two counters** ("days verified clean" + "days since a confirmed error") | ⚠️ Honest but **fails the client test**: an exec reading two trust numbers must arbitrate between them. One number, one meaning. Rejected as over-engineering; the detail belongs in the incident row, not a second headline. |
+| **E** | **AUTO-RESOLVER + tri-state display + UNKNOWN breaks the streak** | ✅ **Winner** — detailed below. |
+
+### E — the design
+**1. UNKNOWN breaks the streak, immediately.** The ledger's meaning sharpens to **"days we could VERIFY
+clean."** An unresolved unknown is logged as an OPEN incident of class `unverified` the moment it appears. This
+is strictly more honest than the old rule and satisfies correction (1): we never bank an unverifiable day.
+
+**2. The system resolves it — the targeted re-verification loop (satisfies correction (2) + Standard #8).**
+Any check that fires must name its **affected rows** (already required: `scope_n`/`scope_of`). The resolver then
+does automatically what a human would do, and it needs **no understanding of the signal's semantics** — which
+is what makes it work for the unanticipated signal (P25):
+   - re-fetch those specific records from the authoritative source(s);
+   - diff them against **our published values**;
+   - **match → `impeached = FALSE`** → incident auto-closes as benign, with its evidence attached;
+   - **mismatch → `impeached = TRUE`** → RED, real `accuracy` incident, breaker/quarantine path;
+   - **the source contradicts ITSELF** (exactly 2026-07-25: LIS's flags vs LIS's strings) → resolve against the
+     **structural oracle** per Standard #3 → we matched it → FALSE, auto-closed, evidence: *"we match LIS's
+     structural flags; LIS's own display string disagrees with them."* **Friday's incident would have
+     self-diagnosed in one cycle, with no human and no red ring.**
+   - Cost is bounded by the affected set, not the corpus; it reuses the reconciliation machinery we already own.
+
+**3. A check that cannot name its affected rows cannot ship.** If scope is unknowable, the honest scope is
+*everything* → the whole surface is unverified → the streak breaks. That's deliberately expensive, so checks
+get built to localize. (This is the metric driving the right engineering, Standard #7.)
+
+**4. Tri-state display — the third state is the missing piece.** Binary green/red forced the false choice that
+started all this:
+   - **Verified clean** — checks passed, published output confirmed.
+   - **UNVERIFIED** *(new)* — "we cannot currently confirm this; resolving." Distinct from red, **not** a claim
+     of correctness, and per §1 it is honestly time-stamped ("unverified since HH:MM"). Affected rows are
+     **marked in place, never hidden** (B's surviving half; Standard #3).
+   - **RED** — published output verifiably wrong (`impeached == TRUE`), unchanged from P24.
+
+**5. Escalation is by DURATION, not by default.** The resolver retries on the worker's cadence. Only if an
+unknown survives **N cycles** does it reach the owner — as a fully-documented dossier (what fired, affected
+rows, what the resolver tried, why it failed), never as a raw "please look at this." **The system does the
+investigation; the human only ever makes a judgment call.**
+
+**What would make E wrong / residual risk (protocol step 4):** if the authoritative source is *itself*
+unreachable, the resolver cannot conclude — that correctly stays UNVERIFIED (breaking the streak during an LIS
+outage, which is honest but will make the counter look worse than "our" reliability). Accepted deliberately:
+the client's question is *"can I trust what I see right now?"*, and during an upstream outage the honest answer
+is "we can't currently verify it." **The runner-up (D, two counters) handles that case more flatteringly — and
+we reject it because flattering our own metric is exactly what the counter exists not to do.**
 
 ## Verification design — FIRE DRILLS, not sandboxes (owner correction 2026-07-17)
 

@@ -228,10 +228,20 @@ pedantic internal disagreement." The Health tab is **client-facing for executive
   unanticipated case, it force-fits novel signals into the nearest wrong bucket, and it grows forever.
   **The inversion:** one universal record — `check` · `observed`/`expected`/`threshold` · `scope_n` of
   `scope_of` · `surface` · **`published_output_impeached: TRUE/FALSE/UNKNOWN`** — and the display is
-  *generated* from those fields. **Colour is computed: RED requires `impeached == TRUE`; `UNKNOWN` is never
-  red and routes to human review** (Standard #4). An unforeseen signal then degrades into honest
-  "unclassified — under review" instead of silence or a false alarm, and a new check ships without anyone
-  writing a sentence. Generalizes beyond alarms to every data→text surface we build.
+  *generated* from those fields. An unforeseen signal degrades into honesty instead of silence or a false
+  alarm, and a new check ships without anyone writing a sentence. Generalizes beyond alarms to every data→text
+  surface we build.
+- **P25a · The trust surface is TRI-state, and "we don't know" is never silent, never green, never red.**
+  (Owner 2026-07-25: *"an UNKNOWN is still a violation."*) **Verified clean** (checks passed, output confirmed)
+  · **UNVERIFIED** (*"we cannot currently confirm this; resolving"* — time-stamped, affected rows **marked in
+  place, never hidden** per Standard #3) · **RED** (`impeached == TRUE`, published output verifiably wrong).
+  Binary green/red is what forced the false choice behind the 2026-07-25 failure. **An unverified state counts
+  against the days-clean ledger** — we never bank a day we couldn't verify.
+- **P25b · Resolution is the SYSTEM's job, not a human's.** (Owner: *"don't just send a bunch of alerts to a
+  human — I'm the only human."* Also Standard #8.) An unknown triggers **automatic targeted re-verification**
+  of the affected rows against the authoritative source; a human is reached only after N failed cycles, and
+  then with a finished dossier, never a raw signal. **"Route to human review" is not a design** — it is the
+  absence of one. Full mechanism: [[architecture/incident_counter]] §3.
 
 ## 5c. Interaction & input — the canon for the product's first WRITE surface
 

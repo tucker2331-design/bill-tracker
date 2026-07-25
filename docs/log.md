@@ -8,6 +8,43 @@ status: active
 
 Append-only, reverse-chronological (newest at top). Each entry opens with `## [YYYY-MM-DD] <kind> | <title>` so `grep "^## \[" log.md | head -20` gives a parseable timeline.
 
+## [2026-07-25] process + design | "You are looping" → the design-proposal protocol; UNKNOWN breaks the streak and the SYSTEM resolves it
+
+**The process criticism, and it's the important one.** Owner: *"I think you are looping. Instead of shooting at
+the wall, research, come up with competing ideas, run them through our rules and checklists before I see
+anything. There's no reason I should need to call you out on obvious things."* True: 2026-07-25 was four rounds
+of present → get corrected → patch, and **every correction was derivable from rules already in this vault** —
+a false alarm being an incident (honesty doctrine), the API≠website claim ([[knowledge/lis_dom_scraping]]),
+text-per-signal (his own earlier unrecorded criticism), "don't route to a human" (**Standard #8**), "UNKNOWN is
+still a violation" (honesty doctrine). I owned every one of those rules and applied none of them to my own
+proposal. → **[[workflow/design_proposal_protocol]]**: research the vault first · ≥2 genuinely competing designs
+· self-audit each against the 8 Standards + design canon + reasoning doctrine + case law · kill your own
+favourite (state what would make it wrong) · present the vetted winner **with the rejected options and the rule
+that killed each**. One-line test: *"which of our own written rules would catch this if the owner ran the
+checklist on it?"* The owner's time is the scarcest resource here; spending it on checklist items is the waste.
+
+**Applied immediately to the two design corrections** (competing options + audit recorded in
+[[architecture/incident_counter]] §3 — the artifact of the protocol being followed):
+- **`unverified` is a new incident class that BREAKS THE STREAK** (owner: *"an UNKNOWN is still a violation…
+  if we don't know if it's causing a serious data issue or if it's minor"*). The ledger's meaning sharpens to
+  **"days we could VERIFY clean"** — we never bank an unverifiable day. Strictly more honest than the old rule.
+- **The auto-resolver replaces "route to human review"** (owner: *"don't just send a bunch of alerts to a human
+  to fix — I'm the only human and I'm busy auditing you"*; also a naked **Standard #8** violation). An unknown
+  triggers automatic targeted re-verification of the **affected rows** against the authoritative source —
+  semantics-agnostic, so it works for the signal we never scoped (P25). Match → auto-close benign with
+  evidence; mismatch → real `accuracy` incident; **source contradicts itself** → resolve against the structural
+  oracle (Standard #3). **2026-07-25 would have self-diagnosed in one cycle, no human, no red ring.** Escalation
+  is by DURATION (N failed cycles) and arrives as a finished dossier, never a raw signal. A check that can't
+  name its affected rows can't ship.
+- **Tri-state trust surface (P25a):** verified clean · **UNVERIFIED** (time-stamped; affected rows **marked in
+  place, never hidden** — Standard #3) · RED (`impeached==TRUE` only). Binary green/red was what forced the
+  false choice behind Friday's failure.
+- Rejected, with the rule that killed each: human review (#8) · hide-affected-rows (#3 "never a hidden row") ·
+  fail-closed-all-unknowns-red (P24, re-creates cry-wolf, kills the counter's moat value) · two counters (fails
+  the client test — an exec shouldn't arbitrate between two trust numbers). **Named residual risk:** during an
+  LIS outage the resolver can't conclude, so the streak breaks on upstream failure — accepted deliberately,
+  because the flattering alternative is exactly what the counter exists not to do.
+
 ## [2026-07-25] correction | BOTH my follow-up answers were wrong — the brain refuted one and the owner caught a REPEAT anti-pattern
 
 Owner pushed on yesterday's two "closures." Both of my answers failed; recording precisely why.

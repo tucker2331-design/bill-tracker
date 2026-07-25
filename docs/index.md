@@ -40,6 +40,7 @@ Links use Obsidian `[[wikilink]]` format. Obsidian resolves by filename; path-qu
 - [[ny/workflow/source_scoping_protocol]] — New York source-scoping protocol: scope, plan, test, then promote
 - [[ny/workflow/owner_setup]] — New York owner setup checklist for API key, sheet, and secrets
 - [[workflow/hardening_is_non_negotiable]] — **owner rule: a new direction NEVER leaves in-flight work unhardened; standard-quality is the default, never traded for 'where the energy is'.**
+- [[workflow/design_proposal_protocol]] — **▶️ ANTI-LOOPING RULE (owner 2026-07-25: "you are looping… come up with competing ideas, run them through our rules and checklists before I see anything"). Mandatory before ANY design reaches the owner: research the VAULT first, generate ≥2 real competing designs, self-audit every candidate against the 8 Standards + design canon + reasoning doctrine + case law, kill your own favourite, then present the vetted winner WITH the rejected options and the rule that killed each. The owner audits reasoning, never missed checklist items.**
 - [[workflow/reasoning_doctrine]] — **session-start read: the 8 process moves that produce bank-grade work here (measure-first · verify-the-row · fail-open · confirm-before-advance · no silent fallback · structural-not-text · notify-only · write-back)**
 - [[workflow/three_phase_protocol]] — context routing → pre-push audit → write-back mandate
 - [[workflow/branching_rules]] — when to reuse vs create a branch (PR state decides)
