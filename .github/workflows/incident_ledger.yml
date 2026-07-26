@@ -1,0 +1,66 @@
+name: 🧯 Incident ledger (fire drill + status)
+
+# THE DAYS-CLEAN LEDGER's own keeper. Two jobs, both against the REAL ledger:
+#
+#   * FIRE DRILL (monthly + on demand) — owner 2026-07-25: "don't build fake sandboxes to avoid resetting the
+#     timer; figure out a workaround that still allows us to use the real data." So instead of a scratch
+#     workbook, a `_drill` row runs the ENTIRE production write path against the real Incident_Log and is
+#     excluded from the clock exactly as `_genesis` is. Like a fire drill: the real alarm rings, everyone
+#     really walks out, nobody logs a fire. This proves the real workbook, permissions and quota — a copy
+#     proves none of those. The drill row is READ BACK before the job passes ("it didn't raise" is not proof).
+#     A FAILING drill is the alarm's alarm: it means the next real incident would silently fail to record.
+#
+#   * STATUS — prints the counter the way the Health tab shows it, verdict WITH its denominator ("N days clean
+#     · monitoring for M days"), and shouts if any row is unreadable (a hidden incident would make the counter
+#     lie). Also the job that SEEDS genesis on first run: every un-seeded day is provable trust thrown away.
+#
+# Design + rejected alternatives: docs/architecture/incident_counter.md
+
+on:
+  schedule:
+    # 06:17 UTC on the 1st — an odd minute, not :00 (jitter, LIS-safety guardrail #2 habit; this hits Sheets
+    # only, but the habit stays). Monthly is enough: the drill answers "does the write path still work",
+    # which changes on deploys, not hourly.
+    - cron: "17 6 1 * *"
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: "drill (write+read-back a _drill row) or status (print the counter)"
+        required: false
+        default: drill
+        type: choice
+        options: [drill, status]
+
+permissions:
+  contents: read      # least-privilege: only needs checkout; the ledger is written via GCP_CREDENTIALS
+
+concurrency:
+  # Never let two runs interleave a read-modify-write on the same tab.
+  group: incident-ledger
+  cancel-in-progress: false
+
+jobs:
+  ledger:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install Sheets client
+        run: pip install --quiet gspread google-auth
+      - name: Fire drill / status against the REAL ledger
+        env:
+          GCP_CREDENTIALS: ${{ secrets.GCP_CREDENTIALS }}
+        run: |
+          set -euo pipefail
+          MODE="${{ github.event.inputs.mode || 'drill' }}"
+          # Status first: it creates the tab + seeds genesis if this is the very first run, so a drill on a
+          # virgin workbook still has an epoch to be measured against.
+          python3 -m tools.incident_log.log status
+          if [ "$MODE" = "drill" ]; then
+            python3 -m tools.incident_log.log drill
+          fi
+          # Print the resulting counter either way, so the run's log IS the receipt.
+          python3 -m tools.incident_log.log status

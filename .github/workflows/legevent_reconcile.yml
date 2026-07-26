@@ -29,5 +29,11 @@ jobs:
         with:
           python-version: "3.11"
       - name: Reconcile committee reports vs official minutes
+        env:
+          # W1.4 — an authorised WRITER of the days-clean incident ledger, so it needs the same Sheets secret
+          # ~20 other workflows already use. Least-privilege: the guard's own reads stay on public gviz; these
+          # creds only append/close a row in Incident_Log, and every ledger call is fail-open so a credential
+          # problem can never change this guard's verdict.
+          GCP_CREDENTIALS: ${{ secrets.GCP_CREDENTIALS }}
         run: |
           python3 tools/reconciliation/reconcile_votes.py --max-drift "${{ github.event.inputs.max_drift || '1.0' }}"

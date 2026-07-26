@@ -27,5 +27,11 @@ jobs:
         with:
           python-version: "3.11"
       - name: Verify every LIS committee meeting is covered by Sheet1
+        env:
+          # W1.4 — an authorised WRITER of the days-clean incident ledger, so it needs the same Sheets secret
+          # ~20 other workflows already use. Least-privilege: the guard's own reads stay on public gviz; these
+          # creds only append/close a row in Incident_Log, and every ledger call is fail-open so a credential
+          # problem can never change this guard's verdict.
+          GCP_CREDENTIALS: ${{ secrets.GCP_CREDENTIALS }}
         run: |
           python3 tools/verification/completeness_tripwire.py --session "${{ github.event.inputs.session || '20261' }}"

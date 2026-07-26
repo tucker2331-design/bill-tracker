@@ -69,6 +69,48 @@ def _d10(s):
     return ""
 
 
+# ── days-clean ledger (W1.4) ────────────────────────────────────────────────────────────────────────────
+# One of the three authorised WRITERS of the incident ledger. FAIL-OPEN by construction: this guard must fail
+# on DATA, never on bookkeeping, so an unavailable ledger can never change its verdict.
+_LEDGER_DETECTOR = "completeness_tripwire"
+
+
+def _ledger_api():
+    """Import the ledger REGARDLESS of how this guard was invoked.
+
+    The workflows run `python3 tools/<dir>/<guard>.py`, which puts that subdirectory on `sys.path` — NOT the
+    repo root — so a bare `from tools.incident_log.log import …` raises ModuleNotFoundError. The fail-open
+    handlers below would have swallowed it and the ledger would have been silently non-functional forever:
+    every guard reporting success at recording nothing. Verified by probe, not assumed; regression-tested in
+    test_incident_log_wiring.py.
+    """
+    import os
+    import sys
+    root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+    if root not in sys.path:
+        sys.path.insert(0, root)
+    from tools.incident_log.log import close_incident, record_incident
+    return record_incident, close_incident
+
+
+def _ledger(cls, summary):
+    """Open an incident. Deduped inside the ledger: a multi-cycle outage stays ONE incident (W1.2)."""
+    try:
+        record_incident, _ = _ledger_api()
+        record_incident(cls, summary, _LEDGER_DETECTOR)
+    except Exception as e:
+        print(f"⚠️ [completeness_tripwire] could not record the incident (non-fatal): {e}")
+
+
+def _ledger_close(cls):
+    """Close this guard's own open incident — the recovery signal."""
+    try:
+        _, close_incident = _ledger_api()
+        close_incident(cls, _LEDGER_DETECTOR)
+    except Exception as e:
+        print(f"⚠️ [completeness_tripwire] could not close the incident (non-fatal): {e}")
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--session", default="20261")
@@ -175,8 +217,11 @@ def main():
         print(f"\n🚨 COMPLETENESS GAP — {len(gaps)} LIS committee meeting(s) absent from Sheet1 (possible hidden meeting):")
         for code, d in gaps[:25]:
             print(f"    {d}  committee {code}")
+        _ledger("parity_gap", f"{len(gaps)} LIS committee meeting(s) absent from Sheet1 "
+                              f"(e.g. {[f'{c}@{d}' for c, d in gaps[:3]]})")
         return 1
     print("\n✅ COMPLETE — every committee meeting on the LIS calendar is covered by Sheet1.")
+    _ledger_close("parity_gap")
     return 0
 
 
