@@ -67,7 +67,8 @@ jobs:
             anchor_ladder_test.py \
             test_endpoint_audit.py \
             test_change_ledger_differ.py \
-            test_incident_log.py; do
+            test_incident_log.py \
+            test_bill_outcome_provenance.py; do
             echo "::group::$t"
             if python3 -u "$t"; then echo "PASS  $t"; else echo "FAIL  $t"; fail=1; fi
             echo "::endgroup::"

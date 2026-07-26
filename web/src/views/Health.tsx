@@ -5,7 +5,7 @@ import { bandTone, type Band } from "../components/bands";
 import { HealthVitals, type Vital, type VitalSeg, type VitalVerify } from "../components/HealthVitals";
 import { loadHealth, type HealthData, type HealthAlert } from "../data/health";
 import { loadVerification, type GuardRun, type GuardState } from "../data/verification";
-import { loadHistory, seriesFor, seriesForPct, type HistoryData } from "../data/history";
+import { loadHistory, seriesFor, seriesForPct, type HistoryData, type AlertSource } from "../data/history";
 
 // Alert presentation (owner 2026-07-07: the feed "needs real thinking and fixing" + "colored boxes scream
 // AI"). See docs/design/dashboard_and_visual_language.md. Severity now rides a small status DOT, not a
@@ -33,20 +33,22 @@ const conditionStem = (msg: string) =>
 
 // One recurring CONDITION, grouped from many raw firings. lastTs drives liveness (active vs self-cleared);
 // count is how many cycles it fired; message is the newest (cleaned) representative text.
-type Cond = { key: string; severity: string; category: string; message: string; count: number; firstTs: number; lastTs: number };
+type Cond = { key: string; severity: string; category: string; message: string; count: number; firstTs: number; lastTs: number; source: AlertSource };
 interface AlertModel { latestCycleTs: number; active: Cond[]; resolved: Cond[]; needsLook: Cond[]; notes: Cond[]; }
 
-function groupConditions(rows: { severity: string; category: string; message: string; ts: number }[]): Cond[] {
+function groupConditions(rows: { severity: string; category: string; message: string; ts: number; source: AlertSource }[]): Cond[] {
   const byKey = new Map<string, Cond>();
   for (const a of rows) {
-    const key = `${a.severity}|${a.category}|${conditionStem(a.message)}`;
+    // Source is part of the identity: the same wording from two workers is two conditions, judged against
+    // two different cadences (see AlertSource in data/history.ts).
+    const key = `${a.source}|${a.severity}|${a.category}|${conditionStem(a.message)}`;
     const e = byKey.get(key);
     if (e) {
       e.count++;
       e.firstTs = Math.min(e.firstTs, a.ts);
       if (a.ts >= e.lastTs) { e.lastTs = a.ts; e.message = cleanMessage(a.message); }
     } else {
-      byKey.set(key, { key, severity: a.severity, category: a.category, message: cleanMessage(a.message), count: 1, firstTs: a.ts, lastTs: a.ts });
+      byKey.set(key, { key, severity: a.severity, category: a.category, message: cleanMessage(a.message), count: 1, firstTs: a.ts, lastTs: a.ts, source: a.source });
     }
   }
   return [...byKey.values()];
@@ -134,6 +136,7 @@ export function Health({ completeness, dataAsOf }: { completeness: Completeness 
   const completePct = universe > 0 ? (100 * written) / universe : 0;
   const patronPct = written > 0 ? (100 * (c?.patron_present ?? 0)) / written : 0;
   const driftPct = (c?.outcome_keyword_mismatch_rate ?? 0) * 100;
+  const unverifiedTerminal = c?.outcome_unverified_terminal ?? 0;
   const billFreshH = hoursSince(dataAsOf);
 
   // ── Calendar-subsystem signals (Sheet1) ──
@@ -197,7 +200,13 @@ export function Health({ completeness, dataAsOf }: { completeness: Completeness 
     const ACTIVE_TOL_MS = 6 * 60 * 1000; // "this cycle" window — well under the ~15-min in-window cadence
     const conds = groupConditions(hist.alerts);
     const byActivity = (a: Cond, b: Cond) => SEV_RANK(a.severity) - SEV_RANK(b.severity) || b.lastTs - a.lastTs;
-    const isActive = (c: Cond) => c.lastTs >= latestCycleTs - ACTIVE_TOL_MS;
+    // Judge each condition against the clock of the worker that RAISED it (W0d). The two workers run on
+    // different cadences, so a single global "latest cycle" would mark every bill-worker alert resolved as
+    // soon as the calendar worker ticked — the alert would appear and vanish without ever being actionable.
+    // Fall back to the global timestamp when that worker has no heartbeat yet (pre-first-run), which is the
+    // old behaviour and never fabricates freshness.
+    const cycleFor = (c: Cond) => hist.cycleTs[c.source] || latestCycleTs;
+    const isActive = (c: Cond) => c.lastTs >= cycleFor(c) - ACTIVE_TOL_MS;
     const active = conds.filter(isActive).sort(byActivity);
     const resolved = conds.filter((c) => !isActive(c)).sort((a, b) => b.lastTs - a.lastTs);
     // "Needs a look" = only genuinely actionable, currently-live signals. A benign INFO note (blank upstream
@@ -210,8 +219,8 @@ export function Health({ completeness, dataAsOf }: { completeness: Completeness 
   // ── At-a-glance vitals: roll the gauges below into four category rings. Each segment's tone comes from
   // `bandTone` over the SAME bands the matching gauge uses, so the donut and the detail never disagree; a
   // segment whose backend payload is absent is "unknown" (grey), never a false green. ──
-  const sv = (label: string, value: number, bands: Band[], known: boolean): VitalSeg =>
-    ({ label, tone: known ? bandTone(value, bands) : "unknown" });
+  const sv = (label: string, value: number, bands: Band[], known: boolean, anchor?: string): VitalSeg =>
+    ({ label, tone: known ? bandTone(value, bands) : "unknown", anchor });
   // The ring reflects the SAME currently-active conditions the feed shows (self-cleared ones don't count).
   // Prefer the history-derived model; fall back to the latest cycle's live alerts when the trend store isn't
   // up yet. Only actionable CRITICAL/WARN move the ring — a benign INFO note never turns Stability amber.
@@ -263,22 +272,29 @@ export function Health({ completeness, dataAsOf }: { completeness: Completeness 
   // there's no oracle (Freshness), and each Status rollup jumps to its own detail section when non-green.
   const vitals: Vital[] = [
     { name: "Accuracy", segs: [
-      sv("Section-9 · meeting actions without a time", section9 ?? 0, lower(0.5, 25, 50), section9 != null),
-      sv("Outcome drift · keyword↔structural", driftPct, lower(0.1, 1, 2), c?.outcome_keyword_mismatch_rate != null),
+      sv("Section-9 · meeting actions without a time", section9 ?? 0, lower(0.5, 25, 50), section9 != null, "hl-m-section9"),
+      // OUR accuracy, not LIS's internal consistency. `outcome_keyword_mismatch_rate` used to sit here and
+      // is what turned this ring RED on 2026-07-25 while every published value was correct: it measures
+      // LIS's status string disagreeing with LIS's own flags, and we publish the flag. It now renders as an
+      // upstream observation below (no danger band, no ring). What belongs here is a value WE got wrong or
+      // cannot vouch for: `impeached`, and bills whose own status says SETTLED yet carry no structural flag
+      // (no legitimate steady state → an absolute floor; the in-progress population is deliberately absent).
+      sv("Outcomes published wrong", c?.outcome_impeached ?? 0, lower(0.5, 1, 5), c?.outcome_impeached != null, "hl-m-impeached"),
+      sv("Settled bills with no structural flag", unverifiedTerminal, lower(0.5, 5, 25), c?.outcome_unverified_terminal != null, "hl-m-unverified"),
     ], verify: vitalVerify(["accuracy_sentinel.yml", "legevent_reconcile.yml"]), verifyApplies: true, anchor: "hl-sec-accuracy" },
     { name: "Completeness", segs: [
-      sv("Bill completeness · records vs universe", completePct, higher(98, 99.99, 100), !!c && universe > 0),
-      sv("History-vs-universe anomalies", anomalies, lower(0.5, 5, 20), !!c),
-      sv("Patron coverage", patronPct, higher(98, 99.99, 100), !!c && written > 0),
-      sv("Unclassified share · router blank", unclassPct, lower(8, 15, 25), !!h && total > 0),
+      sv("Bill completeness · records vs universe", completePct, higher(98, 99.99, 100), !!c && universe > 0, "hl-m-complete"),
+      sv("History-vs-universe anomalies", anomalies, lower(0.5, 5, 20), !!c, "hl-m-anomalies"),
+      sv("Patron coverage", patronPct, higher(98, 99.99, 100), !!c && written > 0, "hl-m-patron"),
+      sv("Unclassified share · router blank", unclassPct, lower(8, 15, 25), !!h && total > 0, "hl-m-unclass"),
     ], verify: vitalVerify(["completeness_tripwire.yml"]), verifyApplies: true, anchor: "hl-sec-accuracy" },
     { name: "Freshness", segs: [
       sv("Bill backend clock", billFreshH, lower(6, 12, 24), !!dataAsOf),
       sv("Calendar clock", calFreshH, lower(6, 12, 24), !!h?.calendarFreshness),
     ], verifyApplies: false, anchor: "hl-sec-freshness" },
     { name: "Stability", segs: [
-      { label: "Circuit breaker", tone: !h ? "unknown" : breakerOk ? "good" : "danger" },
-      sv("Write-time invariant violations", violations ?? 0, lower(0.5, 49, 60), violations != null),
+      { label: "Circuit breaker", tone: !h ? "unknown" : breakerOk ? "good" : "danger", anchor: "hl-sec-status" },
+      sv("Write-time invariant violations", violations ?? 0, lower(0.5, 49, 60), violations != null, "hl-m-invariants"),
       { label: "Active alerts", tone: !h ? "unknown" : critCount ? "danger" : warnCount ? "warn" : "good" },
     ], verify: vitalVerify(["sustainability_audit.yml"]), verifyApplies: true, anchor: "hl-sec-alerts" },
   ];
@@ -289,7 +305,7 @@ export function Health({ completeness, dataAsOf }: { completeness: Completeness 
       <HealthVitals vitals={vitals} />
 
       {/* ── System status: the breaker + the TWO freshnesses (different workers) ── */}
-      <div className="hl-status">
+      <div className="hl-status" id="hl-sec-status">
         {!h ? (
           // Don't claim "armed" before the calendar-worker payload loads — that's a false green when we
           // simply don't know yet (CodeRabbit #167; "never pretend"). Show the unknown state instead.
@@ -336,17 +352,23 @@ export function Health({ completeness, dataAsOf }: { completeness: Completeness 
       <h2 className="h" id="hl-sec-accuracy">Accuracy &amp; completeness — the lobbyist-facing guarantees</h2>
       <div className="hl-gauges">
         {h ? (
-          <BulletGraph label="Section-9 accuracy · meeting actions without a time" value={section9 ?? 0}
+          <BulletGraph id="hl-m-section9" label="Section-9 accuracy · meeting actions without a time" value={section9 ?? 0}
             max={50} target={0} bands={lower(0.5, 25, 50)} spark={spark("meeting_unsourced")}
             sub="0 = every meeting action has a time (the project goal)" />
         ) : <CalLoading err={hErr} />}
         {/* Bill-backend gauges only render when the completeness payload is present — a null payload must NOT
             display as a real 0% / 0 (that would read as a false danger; "allowed not to know, never pretend"). */}
         {c ? (<>
-          <BulletGraph label="Bill completeness · records written vs LIS universe" value={completePct}
+          <BulletGraph id="hl-m-complete" label="Bill completeness · records written vs LIS universe" value={completePct}
             max={100} target={100} bands={higher(98, 99.99, 100)} unit="%" format={oneDp}
             sub={`${written.toLocaleString()} of ${universe.toLocaleString()} bills${anomalies ? ` · ${anomalies} in-history-not-in-universe` : ""}`} />
-          <BulletGraph label="History-vs-universe anomalies" value={anomalies}
+          <BulletGraph id="hl-m-impeached" label="Outcomes published wrong" value={c.outcome_impeached ?? 0}
+            max={5} target={0} bands={lower(0.5, 1, 5)}
+            sub="values we published that a later check proved incorrect — the only thing that turns this ring red" />
+          <BulletGraph id="hl-m-unverified" label="Settled bills with no structural flag" value={unverifiedTerminal}
+            max={25} target={0} bands={lower(0.5, 5, 25)}
+            sub={`of ${(c.outcome_unverified ?? 0).toLocaleString()} flagless bills; the other ${(c.outcome_unverified_absent ?? 0).toLocaleString()} are still in progress, so no flag is owed yet`} />
+          <BulletGraph id="hl-m-anomalies" label="History-vs-universe anomalies" value={anomalies}
             max={20} target={0} bands={lower(0.5, 5, 20)} sub="bills seen in HISTORY but absent from the universe (scariest silent gap)" />
         </>) : <p className="muted">Bill-backend signals unavailable (no completeness payload in Bill_Tracker R1).</p>}
       </div>
@@ -393,23 +415,27 @@ export function Health({ completeness, dataAsOf }: { completeness: Completeness 
       <h2 className="h">Pipeline health</h2>
       <div className="hl-gauges">
         {h ? (
-          <BulletGraph label="Write-time invariant violations" value={violations ?? 0}
+          <BulletGraph id="hl-m-invariants" label="Write-time invariant violations" value={violations ?? 0}
             max={60} target={0} bands={lower(0.5, 49, 60)} spark={spark("invariant_violations")}
             sub="rows that failed a schema/Origin invariant at write (breaker trips at ≥50)" />
         ) : <CalLoading err={hErr} />}
         {c?.outcome_keyword_mismatch_rate != null && (
-          <BulletGraph label="Outcome drift · keyword↔structural mismatch" value={driftPct}
-            max={2} target={0} bands={lower(0.1, 1, 2)} unit="%" format={oneDp}
-            sub="self-calibrating reconciliation vs LIS's own flags (steady ≈ 0.03%)" />
+          // UPSTREAM observation, deliberately NOT an accuracy alarm: this is LIS's status string
+          // disagreeing with LIS's own flags, and we publish the flag. On 2026-07-25 LIS batch-flagged
+          // carryover without updating its strings and this read 12.2% — every published value correct.
+          // Flat-good bands so it can be watched without ever colouring a verdict.
+          <BulletGraph id="hl-m-drift" label="Upstream: LIS status text vs LIS's own flags" value={driftPct}
+            max={25} target={0} bands={[{ upto: 25, tone: "good" }]} unit="%" format={oneDp}
+            sub={`${(c.outcome_keyword_mismatches ?? 0).toLocaleString()} bills where LIS's two fields disagree — we publish the flag, so nothing we show is affected`} />
         )}
         {h && total > 0 && (
-          <BulletGraph label="Unclassified share · router returned blank" value={unclassPct}
+          <BulletGraph id="hl-m-unclass" label="Unclassified share · router returned blank" value={unclassPct}
             max={25} target={0} bands={lower(8, 15, 25)} unit="%" format={oneDp}
             spark={hist ? seriesForPct(hist, "legevent_route_blank", "total_processed") : []}
             sub={`${(m.legevent_route_blank ?? 0).toLocaleString()} of ${total.toLocaleString()} rows (floor/skeleton rows are legitimately blank)`} />
         )}
         {c && (
-          <BulletGraph label="Patron coverage" value={patronPct}
+          <BulletGraph id="hl-m-patron" label="Patron coverage" value={patronPct}
             max={100} target={100} bands={higher(98, 99.99, 100)} unit="%" format={oneDp}
             sub={`${(c.patron_present ?? 0).toLocaleString()} of ${written.toLocaleString()} bills with a chief patron`} />
         )}
@@ -419,6 +445,15 @@ export function Health({ completeness, dataAsOf }: { completeness: Completeness 
             currently-active conditions, then a collapsed self-cleared history. See
             docs/design/dashboard_and_visual_language.md. ── */}
       <h2 className="h" id="hl-sec-alerts">Alerts</h2>
+      {/* The trend store decides whether a condition is still ACTIVE, so an incomplete one can make a live
+          alert look self-resolved. If any row was undateable, say so here rather than presenting a feed we
+          know is partial as though it were whole (Standard #9). */}
+      {hist && hist.malformedRows > 0 && (
+        <p className="muted" style={{ marginTop: 0 }}>
+          ⚠ {hist.malformedRows} unreadable row(s) in the alert history — this feed may be incomplete, so a
+          condition shown as resolved could still be active.
+        </p>
+      )}
       {!h ? <CalLoading err={hErr} /> : (
         <div style={{ marginBottom: 18 }}>
           <AlertsPanel model={alertModel} liveAlerts={h.alerts} />
@@ -532,7 +567,11 @@ function AlertsPanel({ model, liveAlerts }: { model: AlertModel | null; liveAler
   if (model) {
     ({ needsLook, notes, resolved } = model);
   } else {
-    const rows = liveAlerts.map((a) => ({ severity: a.severity, category: a.category, message: a.message, ts: Date.parse(a.date) || nowMs }));
+    // `liveAlerts` is the calendar worker's own SYSTEM_ALERT rows from Sheet1 (see data/health.ts) — that
+    // tab has exactly one writer, so tagging them "calendar" is a structural fact, not a guess. The bill
+    // worker's alerts never reach this fallback path: they arrive only via Metrics_History, i.e. the
+    // `model` branch above (W0d). Without this the two workers' alerts would share one cadence judgement.
+    const rows = liveAlerts.map((a) => ({ severity: a.severity, category: a.category, message: a.message, ts: Date.parse(a.date) || nowMs, source: "calendar" as AlertSource }));
     const conds = groupConditions(rows).sort((a, b) => SEV_RANK(a.severity) - SEV_RANK(b.severity) || b.lastTs - a.lastTs);
     needsLook = conds.filter((c) => c.severity === "CRITICAL" || c.severity === "WARN");
     notes = conds.filter((c) => c.severity === "INFO" || c.severity === "UNKNOWN");

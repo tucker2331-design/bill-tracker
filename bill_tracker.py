@@ -61,14 +61,121 @@ BILL_LIST_URL = "https://lis.virginia.gov/Legislation/api/getlegislationsessionl
 _TALLY_RE = re.compile(r'(\d+-Y\s+\d+-N(?:\s+\d+-A\w*)?)', re.IGNORECASE)
 
 
+# W0d — alerts raised here previously went ONLY to stdout + Slack, so they could never reach the Health
+# tab's alert panel (which reads the append-only Metrics_History tab). On 2026-07-25 that produced the
+# worst possible pairing: a RED accuracy ring with the panel underneath it reporting "All clear". Buffered
+# here, flushed once per cycle by `flush_alerts_to_metrics_history` — one batched append, and only when
+# something actually fired.
+_ALERT_BUFFER = []
+METRICS_HISTORY_TAB = "Metrics_History"
+METRICS_HISTORY_HEADER = ["RunTimestampUTC", "Status", "Origin", "Outcome"]
+# Distinct origins from the calendar worker's system_alert/system_metrics: the two workers run on DIFFERENT
+# cadences, so the Health tab must judge "is this alert still live?" against the cadence of the worker that
+# RAISED it. Sharing one origin would have made every bill alert look instantly resolved.
+BILL_ALERT_ORIGIN = "bill_system_alert"
+BILL_METRICS_ORIGIN = "bill_system_metrics"
+
+
 def _alert(severity, category, message):
-    """Categorized, self-describing alert (Standard #4) → Slack if configured; always printed."""
+    """Categorized, self-describing alert (Standard #4) → Slack if configured; always printed; and buffered
+    for Metrics_History so it reaches the Health tab's alert panel (W0d)."""
     line = f"🚨 {severity} [BILL_TRACKER/{category}] {message}"
     print(line)
+    # Same tagged shape the front end already parses: "[SEV:CATEGORY] message" (web/src/data/history.ts).
+    _ALERT_BUFFER.append((str(severity).upper(), f"[{str(severity).upper()}:{str(category).upper()}] {message}"))
     try:
         notify_slack(line)
     except Exception as _slack_err:   # never swallow silently — the alert path itself must be visible
         print(f"⚠️ notify_slack failed for the above alert: {_slack_err}")
+
+
+def flush_alerts_to_metrics_history(sheet, completeness=None):
+    """Append this cycle's buffered alerts + ONE heartbeat row to Metrics_History.
+
+    FAIL-OPEN (mirrors the calendar worker's contract): the alert ledger must never break the run that
+    produced the data. The heartbeat is written even when nothing fired — it is how the Health tab knows
+    THIS worker's latest cycle, so a bill alert is judged live/resolved against the bill worker's own clock
+    rather than the calendar worker's (which ticks far more often)."""
+    stamp = datetime.datetime.now(pytz.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    beat = {}
+    if completeness:
+        # A few numbers worth trending; kept small (this row is appended every cycle, ~45d retention).
+        for k in ("records_written", "universe_count", "outcome_unverified", "outcome_impeached",
+                  "outcome_keyword_mismatches", "patron_present"):
+            v = completeness.get(k)
+            if isinstance(v, int):
+                beat[k] = v
+    rows = [[stamp, "OK", BILL_METRICS_ORIGIN, json.dumps(beat, ensure_ascii=False)]]
+    rows += [[stamp, sev, BILL_ALERT_ORIGIN, msg] for sev, msg in _ALERT_BUFFER]
+    try:
+        try:
+            ws = sheet.worksheet(METRICS_HISTORY_TAB)
+        except gspread.exceptions.WorksheetNotFound:
+            ws = sheet.add_worksheet(title=METRICS_HISTORY_TAB, rows=1000, cols=len(METRICS_HISTORY_HEADER))
+            ws.update(values=[METRICS_HISTORY_HEADER], range_name="A1")
+        ws.append_rows(rows, value_input_option="RAW")
+        print(f"📈 Metrics_History: +{len(rows)} row(s) from the bill worker "
+              f"({len(_ALERT_BUFFER)} alert(s) + 1 heartbeat).")
+    except Exception as _mh_err:   # fail-open: never break the cycle over the alert ledger
+        print(f"⚠️ [BILL_TRACKER] Metrics_History append failed (non-fatal): {_mh_err}")
+    finally:
+        _ALERT_BUFFER.clear()
+
+
+# Outcome-provenance vocabulary (docs/architecture/source_precedence). CLOSED set: which rung produced the
+# published outcome. `unresolved` is reserved for a future tie (two equally-authoritative sources disagreeing
+# with no principle to discriminate) — measured at zero today across 37,832 calendar rows and 3,645 bills, and
+# it exists so that case degrades into a visible honest state instead of an invented winner.
+OUTCOME_ORIGINS = ("structural_flag", "keyword_fallback", "unresolved")
+
+# The closed set of outcomes meaning the bill's fate is SETTLED. Used to split the flagless population into
+# ABSENT (still in progress → LIS has no terminal flag because there is no terminal fact yet: correct
+# upstream behaviour, disclosed with its denominator, never alarmed) vs a genuine ANOMALY (the status says
+# decided while LIS's own flags say nothing — real drift worth hearing about). Deriving the expectation from
+# the bill's own settled-ness is STRUCTURAL and self-maintaining; the alternative — muting alerts for the
+# first N days of a session — is a clock-based guess that mutes real failures in that window and needs a
+# human to re-tune every year (Standards #1/#8). Owner-raised 2026-07-26.
+# Membership is asserted against `_derive_outcome`'s full vocabulary by test_bill_outcome_provenance.py, so
+# a new outcome value cannot silently land on the wrong side of this split.
+_TERMINAL_OUTCOMES = frozenset({"signed", "vetoed", "dead", "carried_over", "awaiting_governor"})
+
+# Alarm floors for the UNVERIFIED-population delta guard (see `unverified_jump_is_alarming`).
+_UNVERIFIED_ABS_JUMP = 25   # bills appearing in one cycle
+_UNVERIFIED_MIN_BASE = 10   # below this, a "doubling" is noise, not signal
+
+
+def unverified_jump_is_alarming(prior, current, prior_universe=None, current_universe=None):
+    """Should a rise in the UNVERIFIED population raise an alarm? Pure + golden-tested.
+
+    UNVERIFIED = bills where no structural flag exists, so we publish a text-derived outcome no oracle
+    confirms. A DELTA guard, never an absolute floor: the population is legitimately large early in a
+    session and ~0 off-season, so a fixed threshold either screams every January or never fires
+    (pre-push #14 — prefer delta-vs-baseline for metrics whose floor depends on system behaviour).
+
+    THE CALIBRATION THAT MATTERS (pre-push #14, caught while auditing this very change): a raw count delta
+    would fire every session opening, when thousands of NEW bills are introduced before LIS has assigned
+    any flags — expected behaviour, not an anomaly. So growth that the UNIVERSE explains is subtracted: we
+    alarm on unverified rising FASTER than the bill universe. Session start (+3,000 bills, +3,000
+    unverified) is silent; LIS dropping flags on bills it already flagged (+500 unverified, +0 universe)
+    is loud — which is the failure we actually want to hear about.
+
+    `prior is None` (first run / unreadable prior payload) → False: no baseline means no comparison, which
+    is honest rather than a fabricated one. Universe figures are optional; when absent the guard falls back
+    to the raw delta (still correct, just less specific).
+    """
+    if prior is None or current <= prior:
+        return False
+    unexplained = current - prior
+    if prior_universe is not None and current_universe is not None:
+        # Only the growth the universe does NOT explain counts. Clamped at 0 — a shrinking universe must
+        # never manufacture a negative allowance and turn a benign cycle into an alarm.
+        unexplained -= max(0, current_universe - prior_universe)
+        if unexplained <= 0:
+            return False
+    # BOTH tests run on the UNEXPLAINED growth. Testing the second against the raw `current` was a bug the
+    # goldens caught: at session start the raw count is huge for a legitimate reason, so a raw "has it
+    # doubled?" fired even when the universe fully explained the rise.
+    return unexplained >= _UNVERIFIED_ABS_JUMP or unexplained >= max(prior, _UNVERIFIED_MIN_BASE)
 
 
 def _clean_bill(bill):
@@ -406,7 +513,11 @@ def build_bill_records(http_session, session_code):
     docket_unparseable, docket_rows_total = 0, 0   # the metric + its denominator (Standard #7)
     outcome_structural, outcome_keyword, patron_present = 0, 0, 0   # trust counters (coverage of the bulk join)
     patron_fullname_universe = 0   # bills whose chief-patron FULL name came from the universe (vs BILLS.CSV surname)
-    outcome_mismatches = []   # self-calibrating drift: keyword-derived outcome ≠ LIS's structural flags
+    outcome_mismatches = []   # LIS-internal: its status STRING disagrees with its own FLAGS (we publish the flag)
+    unverified_bills = []     # no structural flag exists → we published a text-derived value NO oracle confirms
+    # …of those, the ones whose own status says the bill is SETTLED. A flagless in-progress bill is ABSENT
+    # (nothing to flag yet); a flagless SETTLED bill is the real anomaly. This is the alarm's population.
+    unverified_terminal_bills = []
     # Floor-passage self-calibration (Standard #1): among fully-passed BILLS (HB/SB — resolutions are
     # single-chamber and excluded), how many DON'T show both floor passages? Should be ~0; a rising rate
     # means LIS drifted its "passed House/Senate" action vocabulary. floor_both_expected is the denominator.
@@ -433,15 +544,42 @@ def build_bill_records(http_session, session_code):
         meta = bills_meta.get(bill)
         structural_outcome = _outcome_from_flags(meta)   # STRUCTURAL-first (Standard #3)
         keyword_outcome = _derive_outcome(raw_status)    # always computed — also the reconciliation probe
+        # PROVENANCE (W0c, docs/architecture/source_precedence): record WHICH RUNG produced the published
+        # outcome, the same way the calendar stamps `Origin` on every row. Without this the adjudication
+        # verdict — "the sources disagreed AND we published the oracle's value" — was computed here and then
+        # THROWN AWAY, leaving only a bare mismatch rate downstream. That discarded verdict is the root cause
+        # of the 2026-07-25 false red: the rate tripped a threshold even though every published value was the
+        # authoritative one. With the origin on the row, `published_output_impeached` is derivable downstream
+        # for free, and the genuinely-unverified rows stop being invisible.
         if structural_outcome:
             outcome, outcome_structural = structural_outcome, outcome_structural + 1
+            outcome_origin = "structural_flag"   # published LIS's OWN flag = the oracle ⇒ NOT impeached
             # Self-calibrating runtime check (Standard #1): LIS's OWN flags are the oracle. A keyword
-            # outcome that disagrees means our status-string logic has drifted from LIS reality (this
-            # is what would have caught the "Continued"→carried_over bug) — surfaced as a rate, alerted.
+            # outcome that disagrees means the status STRING and the FLAGS disagree — an observation about
+            # LIS's internal consistency, NOT about our accuracy (we published the flag). See the completeness
+            # payload comment: this is deliberately no longer an accuracy alarm.
             if keyword_outcome != structural_outcome:
                 outcome_mismatches.append(bill)
         else:
+            # No oracle exists for this bill: we publish a value derived from LIS's status TEXT that nothing
+            # structural confirms. This is the genuinely UNVERIFIED population (fail-closed doctrine — the
+            # one the surface must disclose), and it is what the alarm now watches.
             outcome, outcome_keyword = keyword_outcome, outcome_keyword + 1   # flagless (early-stage) bill
+            outcome_origin = "keyword_fallback"
+            unverified_bills.append(bill)
+            # ABSENT vs UNVERIFIED, decided STRUCTURALLY rather than by a clock (owner 2026-07-26: "is there
+            # a better way to account for recently introduced / never-made-it-past-prefile bills than
+            # silencing alerts the first couple of days?"). A bill still in progress HAS no terminal
+            # disposition, so LIS having no terminal flag for it is correct upstream behaviour, not a gap —
+            # counting it as unverified would permanently inflate the population and, under fail-closed,
+            # keep the days-clean ledger pinned at zero (docs/architecture/source_precedence.md).
+            # The expectation comes from our OWN already-computed derivation, not new text parsing and not a
+            # date window: `_TERMINAL_OUTCOMES` is the closed set of dispositions that mean the bill's fate
+            # is settled. Non-terminal → ABSENT (expected, disclosed with its denominator, no alarm).
+            # Terminal-per-the-status-string but NO structural flag → a real anomaly: LIS says the bill is
+            # decided while its own flags don't, which is precisely the drift worth hearing about.
+            if keyword_outcome in _TERMINAL_OUTCOMES:
+                unverified_terminal_bills.append(bill)
         # Chief patron: PREFER the bill-universe payload's OWN Patrons list — LIS's authoritative field,
         # carrying the FULL name ("Jeion A. Ward") + member number, vs BILLS.CSV's surname-only ("Ward").
         # Same call we already make (zero extra LIS traffic). BILLS.CSV is the fallback if LIS ever drops
@@ -469,6 +607,7 @@ def build_bill_records(http_session, session_code):
             "title": str(item.get("Description", "") or "").strip(),
             "status_lis": raw_status,                                # authoritative, always shown
             "outcome": outcome,                                      # structural-first, keyword fallback
+            "outcome_origin": outcome_origin,                        # WHICH rung produced it (provenance)
             "patron": patron,                                        # chief patron FULL name (universe payload; BILLS.CSV surname fallback)
             "patron_id": patron_id,
             "chamber": position["current_chamber"],
@@ -511,12 +650,34 @@ def build_bill_records(http_session, session_code):
         # to surnames (a display regression, not a data loss — surfaced, per Standard #7).
         "patron_fullname_universe": patron_fullname_universe,
         "patron_fullname_universe_rate": round(patron_fullname_universe / len(records), 4) if records else 0.0,
-        # Self-calibrating outcome check (replaces a hardcoded status vocabulary): among bills LIS gives
-        # structural flags for, how often does our keyword logic disagree? Expressed as a RATE with its
-        # denominator (Standard #7); a rising rate = our status-string handling has drifted from LIS.
+        # ── LIS-INTERNAL consistency observation (NOT an accuracy metric — re-aimed 2026-07-25) ──────────
+        # Among bills LIS gives structural flags for, how often does LIS's own status STRING disagree with
+        # LIS's own FLAGS? We publish the flag (the oracle), so a disagreement here does NOT impeach our
+        # output — it reports that LIS's two surfaces disagree with each other. On 2026-07-25 this read
+        # 12.2% (443/3,633: LIS batch-marked interim carryover in the flags and left the strings alone) and
+        # tripped a RED accuracy ring while every published value was correct. It is deliberately no longer
+        # an alarm; `outcome_impeached` below is the accuracy-bearing number.
         "outcome_keyword_mismatches": len(outcome_mismatches),
         "outcome_keyword_mismatch_rate": round(len(outcome_mismatches) / outcome_structural, 4) if outcome_structural else 0.0,
         "outcome_mismatch_sample": sorted(outcome_mismatches)[:10],
+        # ── The ACCURACY-bearing numbers (what the trust surface must key on) ────────────────────────────
+        # impeached = we published a value the authoritative source contradicts. Structurally 0 here: every
+        # flagged bill publishes the flag itself, so our value cannot disagree with the oracle. Emitted
+        # explicitly (rather than left implicit) so the surface reads a VERDICT, not a raw disagreement rate.
+        "outcome_impeached": 0,
+        # UNVERIFIED = we published a text-derived outcome that NO oracle confirms (flagless bills). This is
+        # the population fail-closed doctrine says to disclose — and the one nothing alarmed on before.
+        "outcome_unverified": outcome_keyword,
+        "outcome_unverified_rate": round(outcome_keyword / len(records), 4) if records else 0.0,
+        "outcome_unverified_sample": sorted(unverified_bills)[:10],
+        # The unverified population SPLIT by whether a flag was ever owed (structural, not clock-based):
+        #   absent   = still in progress → LIS has no terminal fact to flag yet. Expected; disclosed, never alarmed.
+        #   terminal = its own status says SETTLED, yet no structural flag exists → the real anomaly.
+        # This is what lets a session opening (+thousands of new in-progress bills) stay silent without
+        # muting anything, and it needs no annual re-tuning (Standards #1/#8).
+        "outcome_unverified_terminal": len(unverified_terminal_bills),
+        "outcome_unverified_terminal_sample": sorted(unverified_terminal_bills)[:10],
+        "outcome_unverified_absent": outcome_keyword - len(unverified_terminal_bills),
         # Floor-passage coverage + self-calibrating reconciliation (Timeline Floor stages). The mismatch
         # rate is the share of fully-passed BILLS not showing both floor passages — a drift signal on LIS's
         # "passed House/Senate" vocabulary; steady ≈ 0 on 2026 data.
@@ -541,7 +702,16 @@ def build_bill_records(http_session, session_code):
 
 def write_bill_tracker(records, completeness):
     """Write records + a completeness summary to the Bill_Tracker tab (create if missing).
-    Resizes the grid first — gspread.update does NOT auto-expand and errors past the grid."""
+    Resizes the grid first — gspread.update does NOT auto-expand and errors past the grid.
+
+    RETURNS `(prior_unverified, prior_universe, sheet)`:
+      * `prior_unverified`, `prior_universe` — last cycle's counts (read from T1 *before* the overwrite), or
+        None when there is no usable prior payload. The caller uses it as the baseline for the
+        unverified-population delta guard — a fixed threshold can't work there (the population is
+        legitimately large in-session, ~0 off-season). None means "no baseline", and the caller then
+        declines to alarm rather than inventing a comparison.
+      * `sheet` — the already-authorized workbook handle, so the end-of-cycle Metrics_History flush (W0d)
+        reuses this connection instead of re-authenticating."""
     creds_json = os.environ.get("GCP_CREDENTIALS")
     if not creds_json:
         raise RuntimeError("GCP_CREDENTIALS not set")
@@ -555,16 +725,17 @@ def write_bill_tracker(records, completeness):
     header = ["Bill", "Title", "Status (LIS)", "Outcome", "Patron", "Patron ID", "Chamber",
               "Crossed Over", "Last Committee", "Referrals", "Last Action", "Latest Vote (JSON)",
               "Upcoming (JSON)", "History (JSON)", "Data As Of (UTC)", "Source",
-              "House Floor", "Senate Floor"]
+              "House Floor", "Senate Floor", "Outcome Origin"]
     rows = [header] + [[
         r["bill"], r["title"], r["status_lis"], r["outcome"], r["patron"], r["patron_id"], r["chamber"],
         "yes" if r["crossed_over"] else "no", r["last_committee"], r["referral_count"], r["last_action_date"],
         json.dumps(r["latest_vote"], ensure_ascii=False), json.dumps(r["upcoming"], ensure_ascii=False),
         json.dumps(r["history"], ensure_ascii=False), r["data_as_of_utc"], r["source"],
-        r["floor_house"], r["floor_senate"],
+        r["floor_house"], r["floor_senate"], r["outcome_origin"],
     ] for r in records]
-    # 18 data cols (A..R); the completeness summary lives at T1 (col 20); the cadence last-run marker (U1,
-    # col 21, guardrail #5 — this worker's OWN throttle clock) sits one further right, clear of the data.
+    # 19 data cols (A..S — "Outcome Origin" took the former empty spacer at S, so every A..R index the
+    # front end reads is unchanged); the completeness summary still lives at T1 (col 20); the cadence
+    # last-run marker (U1, col 21, guardrail #5 — this worker's OWN throttle clock) sits clear of the data.
     completeness_cell, need_rows, need_cols = "T1", len(rows) + 50, 21
 
     try:
@@ -573,6 +744,40 @@ def write_bill_tracker(records, completeness):
             ws.resize(rows=max(ws.row_count, need_rows), cols=max(ws.col_count, need_cols))
     except gspread.exceptions.WorksheetNotFound:
         ws = sheet.add_worksheet(title=BILL_TRACKER_TAB, rows=need_rows, cols=need_cols)
+
+    # Read the PRIOR completeness payload before clearing — this is the only moment last cycle's numbers
+    # are still on the sheet. Wrapped: a missing/garbled prior payload must never block today's write.
+    prior_unverified = None
+    prior_universe = None
+    try:
+        _raw_prior = ws.acell(completeness_cell).value
+        if _raw_prior:
+            _prior = json.loads(_raw_prior)
+            _pv = _prior.get("outcome_unverified")
+            if isinstance(_pv, int):
+                prior_unverified = _pv
+            _pu = _prior.get("universe_count")
+            if isinstance(_pu, int):
+                prior_universe = _pu
+    except (gspread.exceptions.APIError, ValueError, TypeError, AttributeError) as _prior_err:
+        # Categorized + visible (Standard #4) — never a bare except, never silent. No baseline this cycle.
+        print(f"ℹ️  [BILL_TRACKER] no usable prior completeness payload ({type(_prior_err).__name__}: "
+              f"{_prior_err}) — the unverified-delta guard has no baseline this cycle and will not alarm.")
+
+    # Write-time invariant on the new provenance column, mirroring the calendar worker's I2 and the lesson
+    # of audit #176 (a producer emitted an Origin the validator didn't know, and a false alarm fired
+    # forever). Here the failure would be quieter and worse: an unregistered origin means the trust surface
+    # cannot tell whether those rows are oracle-confirmed. Counted + alerted, never silently written.
+    _bad_origins = {}
+    for _r in records:
+        _o = _r.get("outcome_origin")
+        if _o not in OUTCOME_ORIGINS:
+            _bad_origins[_o] = _bad_origins.get(_o, 0) + 1
+    if _bad_origins:
+        _alert("CRITICAL", "DATA_ANOMALY",
+               f"unregistered outcome_origin value(s) {_bad_origins} across {sum(_bad_origins.values())} "
+               f"of {len(records)} bills — the trust surface cannot classify those rows as verified or not. "
+               f"Register the value in OUTCOME_ORIGINS or fix the producer.")
 
     ws.clear()
     # One batched write: rows + the completeness summary (front-end trust header) + the guardrail-#5 last-run
@@ -585,6 +790,33 @@ def write_bill_tracker(records, completeness):
         {"range": cadence.BILL_LAST_RUN_CELL,
          "values": [[datetime.datetime.now(pytz.utc).strftime("%Y-%m-%dT%H:%M:%SZ")]]},
     ])
+    return prior_unverified, prior_universe, sheet
+
+
+def _flush_best_effort(sheet=None, completeness=None):
+    """Get this cycle's buffered alerts to Metrics_History from ANY exit path, opening a connection if the
+    cycle died before one existed.
+
+    WHY (CodeRabbit #227, P2): the normal flush sits at the very end of `run_bill_tracker`, so every early
+    `return` — a failed session discovery, an authorization halt — buffered a CRITICAL alert and then
+    dropped it. Those are precisely the cycles the Health panel most needs to describe: the tab would show
+    a stale "all clear" while the worker had actually refused to run. Same class as W0d itself (an alert
+    that structurally cannot reach the surface), just on the failure paths.
+
+    FAIL-OPEN: reporting must never mask the condition being reported, so every error here is printed and
+    swallowed — the caller's own control flow (`return` / `raise`) is untouched.
+    """
+    try:
+        if sheet is None:
+            creds = os.environ.get("GCP_CREDENTIALS")
+            if not creds:
+                return                      # local/dev run with no creds: stdout already carried the alert
+            gc = gspread.authorize(Credentials.from_service_account_info(
+                json.loads(creds), scopes=["https://www.googleapis.com/auth/spreadsheets"]))
+            sheet = gc.open_by_key(SPREADSHEET_ID)
+        flush_alerts_to_metrics_history(sheet, completeness)
+    except Exception as flush_err:
+        print(f"⚠️ [BILL_TRACKER] could not report this cycle to Metrics_History: {flush_err}")
 
 
 def run_bill_tracker():
@@ -596,6 +828,7 @@ def run_bill_tracker():
         if not ok or not info or not info.get("code"):
             _alert("CRITICAL", "API_FAILURE",
                    "could not derive the active session; skipped (kept last-known-good).")
+            _flush_best_effort()          # the panel must SAY the worker refused to run (CodeRabbit #227)
             return
         session_code = str(info["code"])
 
@@ -606,10 +839,11 @@ def run_bill_tracker():
         proceed, halt_reason = session_follow_gate(session_code, http_session)
         if not proceed:
             _alert("CRITICAL", "API_FAILURE", f"LIS authorization halt — session {session_code}: {halt_reason}")
+            _flush_best_effort()          # ditto: an authorization halt must reach the Health tab
             return
 
         records, completeness = build_bill_records(http_session, session_code)
-        write_bill_tracker(records, completeness)
+        prior_unverified, prior_universe, _sheet = write_bill_tracker(records, completeness)
         crossed = sum(1 for r in records if r["crossed_over"])
         print(f"✅ Bill_Tracker written: {len(records)} bills "
               f"({completeness['prefiled_no_history']} prefiled-no-history, {crossed} crossed over, "
@@ -624,15 +858,44 @@ def run_bill_tracker():
             _alert("WARN", "DATA_ANOMALY",
                    f"{len(completeness['in_history_not_in_universe'])} bills in HISTORY but absent from "
                    f"the universe: {completeness['in_history_not_in_universe'][:10]}")
-        # Self-calibrating outcome drift (Standard #1): LIS's OWN structural flags are the oracle for our
-        # keyword logic. A spike in disagreement means our status-string handling has drifted from LIS —
-        # no hardcoded vocabulary to maintain. >1% is the alert floor (the steady-state residual is one
-        # benign "In House"+Carried_over edge bill, ~0.03%).
+        # ── RE-AIMED 2026-07-25 (docs/architecture/source_precedence, incident_counter §3c) ──────────────
+        # The keyword-vs-structural mismatch RATE is no longer an alarm. It measures LIS's INTERNAL
+        # consistency (its status STRING vs its own FLAGS), not our accuracy: on a mismatch we publish the
+        # FLAG — the oracle — so our output is not impeached. Alarming on it produced a RED accuracy ring on
+        # 2026-07-25 (12.2%, 443/3,633) when LIS batch-marked interim carryover in the flags without touching
+        # the strings, while every value we published was correct. It stays VISIBLE as an upstream-drift
+        # observation (printed + in the payload); it no longer claims our data is wrong.
         if completeness["outcome_keyword_mismatch_rate"] > 0.01:
+            print(f"ℹ️  [BILL_TRACKER/upstream-observation] LIS status-string vs LIS-flag disagreement "
+                  f"{completeness['outcome_keyword_mismatch_rate']:.2%} "
+                  f"({completeness['outcome_keyword_mismatches']} of {completeness['outcome_structural']}, "
+                  f"e.g. {completeness['outcome_mismatch_sample']}). We publish the FLAG, so no published "
+                  f"value is impeached — this reports LIS disagreeing with itself, not a defect in our data.")
+        # What DOES deserve an alarm: the genuinely UNVERIFIED population — bills with no structural flag,
+        # where we publish a text-derived outcome NO oracle confirms (fail-closed doctrine). The rule itself
+        # lives in `unverified_jump_is_alarming` (pure + golden-tested); `prior_unverified` is last cycle's
+        # value, read from the sheet before the overwrite.
+        if unverified_jump_is_alarming(prior_unverified, completeness["outcome_unverified"],
+                                       prior_universe, completeness.get("universe_count")):
             _alert("WARN", "DATA_ANOMALY",
-                   f"keyword-vs-structural outcome mismatch {completeness['outcome_keyword_mismatch_rate']:.2%} "
-                   f"({completeness['outcome_keyword_mismatches']} bills, e.g. {completeness['outcome_mismatch_sample']}) "
-                   f"— the keyword fallback has drifted from LIS's structural flags; review _derive_outcome.")
+                   f"UNVERIFIED outcomes jumped {prior_unverified} → {completeness['outcome_unverified']} "
+                   f"of {completeness['records_written']} bills "
+                   f"(e.g. {completeness['outcome_unverified_sample']}) — these publish a text-derived "
+                   f"outcome no structural flag confirms. A jump means LIS stopped emitting flags for a "
+                   f"population it used to flag; check BILLS.CSV coverage.")
+        # The SHARP half of the same signal, and the reason this needs no start-of-session muting: a bill
+        # whose own status says it is SETTLED but which carries no structural flag. Unlike the population
+        # above, this one has no legitimate steady state — a settled bill always has a disposition — so it
+        # takes an ABSOLUTE floor rather than a delta, and it cannot be inflated by a wave of newly
+        # introduced (in-progress) bills. Owner-raised 2026-07-26: the structural alternative to silencing
+        # alerts for the first days of a session.
+        if completeness["outcome_unverified_terminal"]:
+            _alert("WARN", "DATA_ANOMALY",
+                   f"{completeness['outcome_unverified_terminal']} bill(s) read as SETTLED by LIS's status "
+                   f"but carry no structural flag "
+                   f"(e.g. {completeness['outcome_unverified_terminal_sample']}) — LIS's own status and "
+                   f"flags disagree about whether these are decided; we published the text-derived outcome, "
+                   f"which nothing structural confirms.")
         # BILLS.CSV TOTAL failure (fetch empty or bill column undetected) — distinct from partial
         # under-coverage: every bill lost its patron + structural outcome this cycle (CodeRabbit #162).
         if completeness["bills_meta_rows"] == 0 and completeness["records_written"] > 0:
@@ -644,8 +907,17 @@ def run_bill_tracker():
             _alert("WARN", "DATA_ANOMALY",
                    f"patron missing for {completeness['patron_missing']}/{completeness['records_written']} "
                    f"bills — BILLS.CSV partially under-covered the universe (schema/join issue).")
+        # Flush the cycle's alerts + heartbeat LAST, once every check above has had its say (W0d). Placed
+        # here rather than inside write_bill_tracker because the alert checks run AFTER the write.
+        flush_alerts_to_metrics_history(_sheet, completeness)
     except Exception as e:
         _alert("CRITICAL", "API_FAILURE", f"bill_tracker cycle failed: {type(e).__name__}: {e}")
+        # A cycle that DIED is exactly when the Health tab most needs to say so. Pre-push audit #11: the
+        # recovery-carrying side effect must not sit behind a gate that can stay permanently true — an early
+        # failure (before the sheet is opened) would otherwise be permanently unable to report itself, which
+        # is the silent-death case. So if no connection exists yet, open one; the whole path is wrapped, and
+        # `raise` still fires, so a failure to report can never mask the original failure.
+        _flush_best_effort(locals().get("_sheet"))
         raise
 
 

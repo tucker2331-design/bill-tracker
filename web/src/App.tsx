@@ -142,7 +142,8 @@ export default function App() {
         </nav>
       </div>
 
-      <main className="main">
+      {/* Calendar needs the wider container (7 day columns + month picker); see `.main-wide` in index.css. */}
+      <main className={tab === "calendar" ? "main main-wide" : "main"}>
         {error && <p className="center-msg" style={{ color: "var(--stale)" }}>
           Couldn't load data: {error}<br /><span className="muted">The Mastermind DB sheet must be link-readable for gviz.</span>
         </p>}

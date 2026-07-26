@@ -20,6 +20,8 @@ const TONE_INK: Record<BandTone, string> = {
 };
 
 export interface BulletGraphProps {
+  /** DOM id so a Vitals ring can scroll straight to the metric that is actually failing (F-3c / W0b). */
+  id?: string;
   label: string;
   value: number;
   max: number;
@@ -32,7 +34,7 @@ export interface BulletGraphProps {
   sparkLowerBetter?: boolean; // polarity for the trend tint (default true: rising = worse)
 }
 
-export function BulletGraph({ label, value, max, target, bands, format, unit, sub, spark, sparkLowerBetter = true }: BulletGraphProps) {
+export function BulletGraph({ id, label, value, max, target, bands, format, unit, sub, spark, sparkLowerBetter = true }: BulletGraphProps) {
   const safeMax = max > 0 ? max : 1;
   const pct = (v: number) => Math.max(0, Math.min(1, v / safeMax)) * 100;
   const sorted = [...bands].sort((a, b) => a.upto - b.upto);
@@ -48,7 +50,7 @@ export function BulletGraph({ label, value, max, target, bands, format, unit, su
   });
 
   return (
-    <div className="bg-row" role="group"
+    <div className="bg-row" id={id} role="group"
       aria-label={`${label}: ${fmt(value)}${u} — ${tone}${target != null ? `, target ${fmt(target)}${u}` : ""}`}>
       <div className="bg-head">
         <span className="bg-label">{label}</span>

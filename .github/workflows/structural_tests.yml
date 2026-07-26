@@ -41,6 +41,29 @@ jobs:
             python3 tools/prepush_audit.py --range HEAD~1..HEAD
           fi
 
+  # The FRONTEND BUILD — the exact command Cloudflare runs on deploy (`tsc -b && vite build`).
+  # WHY THIS JOB EXISTS (added 2026-07-26): PR #227 had three green CI checks while the Cloudflare
+  # "Workers Builds" check FAILED on a real TypeScript error, so the fix silently never reached the live
+  # site and the owner refreshed a stale page. Nothing in CI compiled `web/` at all — `tsc -b` (project
+  # build) also catches errors a bare `tsc --noEmit` can miss. Deploy-blocking failures must surface HERE,
+  # in the repo's own checks, not only in the host's dashboard after merge.
+  web-build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      - name: Install (clean, lockfile-exact)
+        run: npm ci --prefix web
+      - name: Build exactly as the deploy does
+        run: npm run build --prefix web
+
   structural-tests:
     runs-on: ubuntu-latest
     timeout-minutes: 10
