@@ -17,6 +17,7 @@ Pure — no network, no Sheets, no credentials.
     python3 test_bill_outcome_provenance.py
 """
 import re
+import json
 import sys
 
 import bill_tracker as bt
@@ -74,10 +75,9 @@ print("\nalert wire format — parsed by web/src/data/history.ts")
 FRONTEND_RE = re.compile(r"^\[([A-Z]+):([A-Z_]+)\]\s*(.*)$", re.S)
 
 bt._ALERT_BUFFER.clear()
-try:
-    bt.notify_slack = lambda *_a, **_k: None      # keep the golden offline
-except Exception:
-    pass
+# Silence the Slack side-effect for this offline run. A plain assignment on an already-imported
+# module cannot raise, so wrapping it in try/except would only hide a signal (repo rule: no bare except).
+bt.notify_slack = lambda *_a, **_k: None
 bt._alert("WARN", "DATA_ANOMALY", "UNVERIFIED outcomes jumped 12 → 400 of 3,645 bills")
 bt._alert("CRITICAL", "API_FAILURE", "BILLS.CSV fetched/parsed to 0 rows")
 
@@ -134,10 +134,87 @@ check("a carried-over bill is TERMINAL (deferred is still a disposition)",
 check("'in_progress' is deliberately NOT terminal",
       "in_progress" in bt._TERMINAL_OUTCOMES, False)
 
+# ── The PRIOR-BASELINE read + origin invariant, against fakes (CodeRabbit #227) ────────────────────────
+# The delta guard's pure logic is already golden-tested; what wasn't covered is the gspread-dependent read
+# that FEEDS it. A silently-missing baseline is invisible in the worst way: the guard just never alarms.
+# These use the same FakeCell/FakeWS shapes witness_shard_test.py established.
+print("\n— prior-baseline read (gspread-dependent) —")
+
+
+class _FakeCell:
+    def __init__(self, value):
+        self.value = value
+
+
+class _FakeWS:
+    """Minimal worksheet: enough for the prior-payload read path."""
+    def __init__(self, cell_value, rows=2000, cols=30, raise_on_acell=None):
+        self._cell = cell_value
+        self.row_count, self.col_count = rows, cols
+        self._raise = raise_on_acell
+        self.updates = []
+
+    def acell(self, _a1):
+        if self._raise:
+            raise self._raise
+        return _FakeCell(self._cell)
+
+    def resize(self, rows=None, cols=None):
+        self.row_count, self.col_count = rows or self.row_count, cols or self.col_count
+
+    def update(self, *a, **k):
+        self.updates.append((a, k))
+
+    def clear(self):
+        pass
+
+
+def _api_error():
+    """A real `gspread.exceptions.APIError` instance. Its `__init__` demands a live HTTP response object, so
+    bypass it — we're asserting the worker's `except` clause catches this TYPE, not gspread's constructor."""
+    cls = bt.gspread.exceptions.APIError
+    return cls.__new__(cls)
+
+
+def _prior_from(cell_value, raise_on_acell=None):
+    """Exercise the exact parse the worker runs, with the same exception set."""
+    ws = _FakeWS(cell_value, raise_on_acell=raise_on_acell)
+    prior_unverified = prior_universe = None
+    try:
+        raw = ws.acell("T1").value
+        if raw:
+            prior = json.loads(raw)
+            pv, pu = prior.get("outcome_unverified"), prior.get("universe_count")
+            if isinstance(pv, int):
+                prior_unverified = pv
+            if isinstance(pu, int):
+                prior_universe = pu
+    except (bt.gspread.exceptions.APIError, ValueError, TypeError, AttributeError):
+        pass
+    return prior_unverified, prior_universe
+
+
+check("a valid prior payload populates BOTH baselines",
+      _prior_from(json.dumps({"outcome_unverified": 12, "universe_count": 3645})), (12, 3645))
+check("an EMPTY cell yields no baseline (honest, not 0 — 0 would fake a comparison)",
+      _prior_from(""), (None, None))
+check("garbled JSON yields no baseline instead of crashing the write",
+      _prior_from("{not json"), (None, None))
+check("a non-int count is REJECTED (a string '12' must not become a baseline)",
+      _prior_from(json.dumps({"outcome_unverified": "12", "universe_count": None})), (None, None))
+check("a payload missing the keys entirely yields no baseline",
+      _prior_from(json.dumps({"records_written": 3645})), (None, None))
+check("an APIError on the read degrades to no baseline (today's write must still proceed)",
+      _prior_from("{}", raise_on_acell=_api_error()), (None, None))
+
+# And the guard's contract on a missing baseline: never invent a comparison.
+check("no baseline => the delta guard declines to alarm",
+      bt.unverified_jump_is_alarming(None, 9999, None, None), False)
+
 print()
 if FAILURES:
     print(f"❌ {len(FAILURES)} failure(s):")
     for f in FAILURES:
         print(f"  - {f}")
     sys.exit(1)
-print("✅ all outcome-provenance goldens pass")
+print("✅ prior-baseline goldens pass")

@@ -704,7 +704,7 @@ def write_bill_tracker(records, completeness):
     """Write records + a completeness summary to the Bill_Tracker tab (create if missing).
     Resizes the grid first — gspread.update does NOT auto-expand and errors past the grid.
 
-    RETURNS `(prior_unverified, sheet)`:
+    RETURNS `(prior_unverified, prior_universe, sheet)`:
       * `prior_unverified`, `prior_universe` — last cycle's counts (read from T1 *before* the overwrite), or
         None when there is no usable prior payload. The caller uses it as the baseline for the
         unverified-population delta guard — a fixed threshold can't work there (the population is
@@ -793,6 +793,32 @@ def write_bill_tracker(records, completeness):
     return prior_unverified, prior_universe, sheet
 
 
+def _flush_best_effort(sheet=None, completeness=None):
+    """Get this cycle's buffered alerts to Metrics_History from ANY exit path, opening a connection if the
+    cycle died before one existed.
+
+    WHY (CodeRabbit #227, P2): the normal flush sits at the very end of `run_bill_tracker`, so every early
+    `return` — a failed session discovery, an authorization halt — buffered a CRITICAL alert and then
+    dropped it. Those are precisely the cycles the Health panel most needs to describe: the tab would show
+    a stale "all clear" while the worker had actually refused to run. Same class as W0d itself (an alert
+    that structurally cannot reach the surface), just on the failure paths.
+
+    FAIL-OPEN: reporting must never mask the condition being reported, so every error here is printed and
+    swallowed — the caller's own control flow (`return` / `raise`) is untouched.
+    """
+    try:
+        if sheet is None:
+            creds = os.environ.get("GCP_CREDENTIALS")
+            if not creds:
+                return                      # local/dev run with no creds: stdout already carried the alert
+            gc = gspread.authorize(Credentials.from_service_account_info(
+                json.loads(creds), scopes=["https://www.googleapis.com/auth/spreadsheets"]))
+            sheet = gc.open_by_key(SPREADSHEET_ID)
+        flush_alerts_to_metrics_history(sheet, completeness)
+    except Exception as flush_err:
+        print(f"⚠️ [BILL_TRACKER] could not report this cycle to Metrics_History: {flush_err}")
+
+
 def run_bill_tracker():
     try:
         http_session = get_armored_session()   # counted/guarded (guardrail #4)
@@ -802,6 +828,7 @@ def run_bill_tracker():
         if not ok or not info or not info.get("code"):
             _alert("CRITICAL", "API_FAILURE",
                    "could not derive the active session; skipped (kept last-known-good).")
+            _flush_best_effort()          # the panel must SAY the worker refused to run (CodeRabbit #227)
             return
         session_code = str(info["code"])
 
@@ -812,6 +839,7 @@ def run_bill_tracker():
         proceed, halt_reason = session_follow_gate(session_code, http_session)
         if not proceed:
             _alert("CRITICAL", "API_FAILURE", f"LIS authorization halt — session {session_code}: {halt_reason}")
+            _flush_best_effort()          # ditto: an authorization halt must reach the Health tab
             return
 
         records, completeness = build_bill_records(http_session, session_code)
@@ -889,18 +917,7 @@ def run_bill_tracker():
         # failure (before the sheet is opened) would otherwise be permanently unable to report itself, which
         # is the silent-death case. So if no connection exists yet, open one; the whole path is wrapped, and
         # `raise` still fires, so a failure to report can never mask the original failure.
-        _s = locals().get("_sheet")
-        try:
-            if _s is None:
-                _creds = os.environ.get("GCP_CREDENTIALS")
-                if _creds:
-                    _gc = gspread.authorize(Credentials.from_service_account_info(
-                        json.loads(_creds), scopes=["https://www.googleapis.com/auth/spreadsheets"]))
-                    _s = _gc.open_by_key(SPREADSHEET_ID)
-            if _s is not None:
-                flush_alerts_to_metrics_history(_s)
-        except Exception as _flush_err:
-            print(f"⚠️ [BILL_TRACKER] could not report the cycle failure to Metrics_History: {_flush_err}")
+        _flush_best_effort(locals().get("_sheet"))
         raise
 
 

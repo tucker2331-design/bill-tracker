@@ -99,9 +99,13 @@ function Donut({ v }: { v: Vital }) {
   const statusTitle = nonGreen.length
     ? `${v.name} · ${nonGreen.map((s) => `${s.label} (${TONE_WORD[s.tone]})`).join(", ")} — click to see the detail below`
     : `${v.name}: all ${n} check${n === 1 ? "" : "s"} green`;
-  const target = pickDrillTarget(segs, v.anchor);
-  const drillable = nonGreen.length > 0 && !!target;
+  // Resolve the target ON CLICK, never during render (CodeRabbit #227): a gauge that hasn't committed to
+  // the DOM yet has no id, so a render-time resolution captures the fallback and keeps sending the user to
+  // the wrong section even after the real target mounts. Eligibility is optimistic — any declared anchor
+  // counts — so the control's affordance doesn't flicker while the payloads load.
+  const drillable = nonGreen.length > 0 && (nonGreen.some((s) => s.anchor) || !!v.anchor);
   const drill = () => {
+    const target = pickDrillTarget(segs, v.anchor);
     const el = target ? document.getElementById(target) : null;
     if (!el) return;
     // Honour reduced-motion (WCAG 2.3.3): an instant jump for users who asked for less animation.

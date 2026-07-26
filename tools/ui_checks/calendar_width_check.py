@@ -16,18 +16,75 @@ the interaction. Keep the constants below in sync with web/src/index.css (the te
 """
 import sys
 
-# ── the CSS constants this check mirrors (web/src/index.css) ────────────────────────────────────────────
-MAIN_MAX = 1180          # .main max-width
-MAIN_WIDE_MAX = 1560     # .main.main-wide max-width (Calendar only)
-MAIN_PAD = 24 * 2        # .main horizontal padding (var(--s5) each side)
-MINI_W = 236             # .cal-week-layout second column (month picker)
-LAYOUT_GAP = 16          # .cal-week-layout gap (var(--s4))
-COL_GAP = 8              # .cal-week gap (var(--s2))
-STACK_AT = 1020          # <= this viewport width, the picker stacks BELOW (single-column layout)
+# ── the geometry, PARSED FROM THE REAL SOURCES (never hand-copied) ──────────────────────────────────────
+# CodeRabbit #227 (Major) — and our own Standard #1: "never hardcode values derivable from an authoritative
+# source at runtime." Hand-copied constants let a later CSS tweak leave this check green while the rendered
+# calendar clips. Everything below is read out of web/src/index.css and Calendar.tsx, and a missing value is
+# a hard FAILURE (never a silent default that would fake a pass).
+import os
+import re
+
+ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+CSS = os.path.join(ROOT, "web", "src", "index.css")
+TSX = os.path.join(ROOT, "web", "src", "views", "Calendar.tsx")
 DAYS = 7
 
-# --cal-day-min steps: (max viewport width, min column px). None = no upper bound (the default).
-DAY_MIN_STEPS = [(820, 80), (1140, 96), (1280, 112), (1500, 132), (None, 158)]
+
+def _read(path):
+    with open(path, encoding="utf-8") as fh:
+        return fh.read()
+
+
+def _need(match, what, path):
+    if not match:
+        raise SystemExit(f"❌ calendar_width_check: could not parse {what} from {os.path.relpath(path, ROOT)} "
+                         f"— the layout moved; update this parser rather than the expectation.")
+    return match
+
+
+def _px(name, pattern, text, path, group=1):
+    return int(_need(re.search(pattern, text), name, path).group(group))
+
+
+def load_geometry():
+    css, tsx = _read(CSS), _read(TSX)
+    # spacing scale → the gap variables resolve through it
+    scale = dict(re.findall(r"(--s\d):\s*(\d+)px", css))
+    if not {"--s2", "--s4", "--s5"} <= set(scale):
+        raise SystemExit("❌ calendar_width_check: spacing scale (--s2/--s4/--s5) not found in index.css")
+
+    g = {
+        "MAIN_MAX": _px("`.main` max-width", r"\.main\s*\{[^}]*?max-width:\s*(\d+)px", css, CSS),
+        "MAIN_WIDE_MAX": _px("`.main.main-wide` max-width",
+                             r"\.main\.main-wide\s*\{[^}]*?max-width:\s*(\d+)px", css, CSS),
+        "MAIN_PAD": int(scale["--s5"]) * 2,
+        "MINI_W": _px("`.cal-week-layout` picker column",
+                      r"\.cal-week-layout\s*\{[^}]*?grid-template-columns:\s*1fr\s+(\d+)px", css, CSS),
+        "LAYOUT_GAP": int(scale["--s4"]),
+        "COL_GAP": int(scale["--s2"]),
+        "STACK_AT": _px("the single-column stack breakpoint",
+                        r"@media\s*\(max-width:\s*(\d+)px\)\s*\{\s*\.cal-week-layout", css, CSS),
+    }
+    # the inline fallback in Calendar.tsx IS the design minimum — parse it, don't assume it
+    default_min = int(_need(re.search(r"minmax\(var\(--cal-day-min,\s*(\d+)px\)", tsx),
+                            "the --cal-day-min fallback", TSX).group(1))
+    steps = [(int(w), int(px)) for w, px in
+             re.findall(r"@media\s*\(max-width:\s*(\d+)px\)\s*\{\s*\.cal-week\s*\{\s*--cal-day-min:\s*(\d+)px", css)]
+    if not steps:
+        raise SystemExit("❌ calendar_width_check: no --cal-day-min steps found in index.css")
+    g["DAY_MIN_STEPS"] = sorted(steps) + [(None, default_min)]
+    return g
+
+
+G = load_geometry()
+MAIN_MAX = G["MAIN_MAX"]
+MAIN_WIDE_MAX = G["MAIN_WIDE_MAX"]
+MAIN_PAD = G["MAIN_PAD"]
+MINI_W = G["MINI_W"]
+LAYOUT_GAP = G["LAYOUT_GAP"]
+COL_GAP = G["COL_GAP"]
+STACK_AT = G["STACK_AT"]
+DAY_MIN_STEPS = G["DAY_MIN_STEPS"]
 
 
 def day_min(viewport):

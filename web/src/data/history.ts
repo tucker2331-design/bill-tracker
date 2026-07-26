@@ -30,9 +30,12 @@ export interface HistoryData {
   /** Latest cycle timestamp PER WORKER, so "is this still live?" is asked of the right clock. */
   cycleTs: Record<AlertSource, number>;
   available: boolean;          // false = tab absent / unreadable (UI shows "populating", never fake-green)
+  /** Rows that carried data but no parseable timestamp. >0 means this history may be INCOMPLETE, which can
+   *  make a still-active alert condition look self-resolved — so it is surfaced, never silently dropped. */
+  malformedRows: number;
 }
 
-const EMPTY: HistoryData = { metricSeries: [], alerts: [], cycleTs: { calendar: 0, bill: 0 }, available: false };
+const EMPTY: HistoryData = { metricSeries: [], alerts: [], cycleTs: { calendar: 0, bill: 0 }, available: false, malformedRows: 0 };
 
 const gvizUrl = () =>
   `https://docs.google.com/spreadsheets/d/${SPREADSHEET_ID}/gviz/tq?tqx=out:csv&sheet=${TAB}&tq=${encodeURIComponent(QUERY)}`;
@@ -87,10 +90,21 @@ async function _loadHistory(): Promise<HistoryData> {
   const metricSeries: MetricPoint[] = [];
   const alerts: HistAlert[] = [];
   const cycleTs: Record<AlertSource, number> = { calendar: 0, bill: 0 };
+  // A row we cannot date is NOT silently dropped (Standard #9 / source-miss visibility, CodeRabbit #227).
+  // Dropping them quietly can hand the UI a PARTIAL history, and this store is what decides whether an
+  // alert condition is still active — so missing cycles can make a live condition look self-resolved.
+  // The header row is EXPECTED and identified structurally by its first cell; anything else that fails to
+  // parse is a data anomaly, counted here and surfaced by the caller rather than assumed benign.
+  let malformedRows = 0;
   for (const r of rows) {
     const tsRaw = (r[0] || "").trim();
     const ts = Date.parse(tsRaw);
-    if (!Number.isFinite(ts)) continue; // skip a header or unparseable row, never guess a timestamp
+    if (!Number.isFinite(ts)) {
+      const isHeader = tsRaw === "RunTimestampUTC";          // the worker's own header, structurally known
+      const isBlank = r.every((c) => !(c || "").trim());     // trailing grid padding from Sheets
+      if (!isHeader && !isBlank) malformedRows++;
+      continue;                                              // never guess a timestamp
+    }
     const status = (r[1] || "").trim();
     const origin = (r[2] || "").trim();
     const outcome = (r[3] || "").trim();
@@ -120,7 +134,14 @@ async function _loadHistory(): Promise<HistoryData> {
       cycleTs.bill = Math.max(cycleTs.bill, ts);
     }
   }
-  return { metricSeries, alerts, cycleTs, available: metricSeries.length > 0 || alerts.length > 0 };
+  if (malformedRows) {
+    // Categorised + visible, never swallowed: the trend store is optional chrome, but a partial one can
+    // mis-report an ACTIVE condition as resolved, so the count travels with the data for the UI to show.
+    console.warn(`[WARN:DATA_ANOMALY] Metrics_History: ${malformedRows} undateable row(s) skipped — the ` +
+                 `trend/alert history may be incomplete, which can make a live condition look resolved.`);
+  }
+  return { metricSeries, alerts, cycleTs, malformedRows,
+           available: metricSeries.length > 0 || alerts.length > 0 };
 }
 
 // The series for one metric key, OLDEST→NEWEST (sparkline draws left=old → right=now). Points where the

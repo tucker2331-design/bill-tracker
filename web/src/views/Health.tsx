@@ -136,6 +136,7 @@ export function Health({ completeness, dataAsOf }: { completeness: Completeness 
   const completePct = universe > 0 ? (100 * written) / universe : 0;
   const patronPct = written > 0 ? (100 * (c?.patron_present ?? 0)) / written : 0;
   const driftPct = (c?.outcome_keyword_mismatch_rate ?? 0) * 100;
+  const unverifiedTerminal = c?.outcome_unverified_terminal ?? 0;
   const billFreshH = hoursSince(dataAsOf);
 
   // ── Calendar-subsystem signals (Sheet1) ──
@@ -272,7 +273,14 @@ export function Health({ completeness, dataAsOf }: { completeness: Completeness 
   const vitals: Vital[] = [
     { name: "Accuracy", segs: [
       sv("Section-9 · meeting actions without a time", section9 ?? 0, lower(0.5, 25, 50), section9 != null, "hl-m-section9"),
-      sv("Outcome drift · keyword↔structural", driftPct, lower(0.1, 1, 2), c?.outcome_keyword_mismatch_rate != null, "hl-m-drift"),
+      // OUR accuracy, not LIS's internal consistency. `outcome_keyword_mismatch_rate` used to sit here and
+      // is what turned this ring RED on 2026-07-25 while every published value was correct: it measures
+      // LIS's status string disagreeing with LIS's own flags, and we publish the flag. It now renders as an
+      // upstream observation below (no danger band, no ring). What belongs here is a value WE got wrong or
+      // cannot vouch for: `impeached`, and bills whose own status says SETTLED yet carry no structural flag
+      // (no legitimate steady state → an absolute floor; the in-progress population is deliberately absent).
+      sv("Outcomes published wrong", c?.outcome_impeached ?? 0, lower(0.5, 1, 5), c?.outcome_impeached != null, "hl-m-impeached"),
+      sv("Settled bills with no structural flag", unverifiedTerminal, lower(0.5, 5, 25), c?.outcome_unverified_terminal != null, "hl-m-unverified"),
     ], verify: vitalVerify(["accuracy_sentinel.yml", "legevent_reconcile.yml"]), verifyApplies: true, anchor: "hl-sec-accuracy" },
     { name: "Completeness", segs: [
       sv("Bill completeness · records vs universe", completePct, higher(98, 99.99, 100), !!c && universe > 0, "hl-m-complete"),
@@ -285,7 +293,7 @@ export function Health({ completeness, dataAsOf }: { completeness: Completeness 
       sv("Calendar clock", calFreshH, lower(6, 12, 24), !!h?.calendarFreshness),
     ], verifyApplies: false, anchor: "hl-sec-freshness" },
     { name: "Stability", segs: [
-      { label: "Circuit breaker", tone: !h ? "unknown" : breakerOk ? "good" : "danger" },
+      { label: "Circuit breaker", tone: !h ? "unknown" : breakerOk ? "good" : "danger", anchor: "hl-sec-status" },
       sv("Write-time invariant violations", violations ?? 0, lower(0.5, 49, 60), violations != null, "hl-m-invariants"),
       { label: "Active alerts", tone: !h ? "unknown" : critCount ? "danger" : warnCount ? "warn" : "good" },
     ], verify: vitalVerify(["sustainability_audit.yml"]), verifyApplies: true, anchor: "hl-sec-alerts" },
@@ -297,7 +305,7 @@ export function Health({ completeness, dataAsOf }: { completeness: Completeness 
       <HealthVitals vitals={vitals} />
 
       {/* ── System status: the breaker + the TWO freshnesses (different workers) ── */}
-      <div className="hl-status">
+      <div className="hl-status" id="hl-sec-status">
         {!h ? (
           // Don't claim "armed" before the calendar-worker payload loads — that's a false green when we
           // simply don't know yet (CodeRabbit #167; "never pretend"). Show the unknown state instead.
@@ -354,6 +362,12 @@ export function Health({ completeness, dataAsOf }: { completeness: Completeness 
           <BulletGraph id="hl-m-complete" label="Bill completeness · records written vs LIS universe" value={completePct}
             max={100} target={100} bands={higher(98, 99.99, 100)} unit="%" format={oneDp}
             sub={`${written.toLocaleString()} of ${universe.toLocaleString()} bills${anomalies ? ` · ${anomalies} in-history-not-in-universe` : ""}`} />
+          <BulletGraph id="hl-m-impeached" label="Outcomes published wrong" value={c.outcome_impeached ?? 0}
+            max={5} target={0} bands={lower(0.5, 1, 5)}
+            sub="values we published that a later check proved incorrect — the only thing that turns this ring red" />
+          <BulletGraph id="hl-m-unverified" label="Settled bills with no structural flag" value={unverifiedTerminal}
+            max={25} target={0} bands={lower(0.5, 5, 25)}
+            sub={`of ${(c.outcome_unverified ?? 0).toLocaleString()} flagless bills; the other ${(c.outcome_unverified_absent ?? 0).toLocaleString()} are still in progress, so no flag is owed yet`} />
           <BulletGraph id="hl-m-anomalies" label="History-vs-universe anomalies" value={anomalies}
             max={20} target={0} bands={lower(0.5, 5, 20)} sub="bills seen in HISTORY but absent from the universe (scariest silent gap)" />
         </>) : <p className="muted">Bill-backend signals unavailable (no completeness payload in Bill_Tracker R1).</p>}
@@ -406,9 +420,13 @@ export function Health({ completeness, dataAsOf }: { completeness: Completeness 
             sub="rows that failed a schema/Origin invariant at write (breaker trips at ≥50)" />
         ) : <CalLoading err={hErr} />}
         {c?.outcome_keyword_mismatch_rate != null && (
-          <BulletGraph id="hl-m-drift" label="Outcome drift · keyword↔structural mismatch" value={driftPct}
-            max={2} target={0} bands={lower(0.1, 1, 2)} unit="%" format={oneDp}
-            sub="self-calibrating reconciliation vs LIS's own flags (steady ≈ 0.03%)" />
+          // UPSTREAM observation, deliberately NOT an accuracy alarm: this is LIS's status string
+          // disagreeing with LIS's own flags, and we publish the flag. On 2026-07-25 LIS batch-flagged
+          // carryover without updating its strings and this read 12.2% — every published value correct.
+          // Flat-good bands so it can be watched without ever colouring a verdict.
+          <BulletGraph id="hl-m-drift" label="Upstream: LIS status text vs LIS's own flags" value={driftPct}
+            max={25} target={0} bands={[{ upto: 25, tone: "good" }]} unit="%" format={oneDp}
+            sub={`${(c.outcome_keyword_mismatches ?? 0).toLocaleString()} bills where LIS's two fields disagree — we publish the flag, so nothing we show is affected`} />
         )}
         {h && total > 0 && (
           <BulletGraph id="hl-m-unclass" label="Unclassified share · router returned blank" value={unclassPct}
@@ -427,6 +445,15 @@ export function Health({ completeness, dataAsOf }: { completeness: Completeness 
             currently-active conditions, then a collapsed self-cleared history. See
             docs/design/dashboard_and_visual_language.md. ── */}
       <h2 className="h" id="hl-sec-alerts">Alerts</h2>
+      {/* The trend store decides whether a condition is still ACTIVE, so an incomplete one can make a live
+          alert look self-resolved. If any row was undateable, say so here rather than presenting a feed we
+          know is partial as though it were whole (Standard #9). */}
+      {hist && hist.malformedRows > 0 && (
+        <p className="muted" style={{ marginTop: 0 }}>
+          ⚠ {hist.malformedRows} unreadable row(s) in the alert history — this feed may be incomplete, so a
+          condition shown as resolved could still be active.
+        </p>
+      )}
       {!h ? <CalLoading err={hErr} /> : (
         <div style={{ marginBottom: 18 }}>
           <AlertsPanel model={alertModel} liveAlerts={h.alerts} />

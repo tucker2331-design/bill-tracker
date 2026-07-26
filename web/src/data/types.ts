@@ -64,8 +64,20 @@ export interface Completeness {
   outcome_keyword_fallback?: number;
   patron_present?: number;
   patron_missing?: number;
+  // LIS's status STRING disagreeing with LIS's own FLAGS. We publish the flag (the oracle), so this measures
+  // UPSTREAM internal consistency — NOT our accuracy. It must never drive the Accuracy ring: doing so is what
+  // turned the ring red on 2026-07-25 while every published value was correct.
   outcome_keyword_mismatches?: number;
   outcome_keyword_mismatch_rate?: number;
+  // OUR accuracy signals (W0c). `impeached` = we published a value later shown wrong. `unverified` = we
+  // published a text-derived outcome no structural flag confirms; split into `_terminal` (its own status says
+  // SETTLED yet no flag exists — the real anomaly, no legitimate steady state) and `_absent` (still in
+  // progress, so no flag is owed yet — expected, disclosed, never alarmed).
+  outcome_impeached?: number;
+  outcome_unverified?: number;
+  outcome_unverified_rate?: number;
+  outcome_unverified_terminal?: number;
+  outcome_unverified_absent?: number;
   checked_at_utc?: string;
   session_code?: string;   // authoritative 5-digit code if the backend stamps it (preferred over inference)
 }
