@@ -8,6 +8,40 @@ status: active
 
 Append-only, reverse-chronological (newest at top). Each entry opens with `## [YYYY-MM-DD] <kind> | <title>` so `grep "^## \[" log.md | head -20` gives a parseable timeline.
 
+## [2026-07-25] measurement | "How often does the tie happen — if it's chronic the counter is unlivable" → MEASURED: zero ties, but absence is 16.31% and must not count
+
+Owner: *"How often do you expect that equal-competing-data scenario to play out? That would reset our counter,
+and if it's a chronic condition that would make it unlivable."* Measured instead of estimated (Standard #7;
+pre-push #14). **Live product data, 37,832 calendar rows:** `convene_anchor` 45.30% · `api_schedule` 31.19% ·
+`legislation_event`+others 1.78% · `admin_default`+`executive_default` **5.42% (no time expected by design)** ·
+`floor_miss`+`journal_default` **16.31% (terminal rung)**.
+
+**Decisive finding: there is NO conflict/tie Origin at all — zero rows in 37,832.** That exposed a distinction
+I had been blurring: **ladders resolve SCARCITY** (which source *has* the value; the terminal rung means
+"nobody published one" → **ABSENT**), while **adjudication resolves CONFLICT** (two sources differ — Friday's
+case, and it was settled by a principle, not a tie). **True ties observed: zero** — not in 37,832 calendar
+rows, not in the 3,645-bill outcome path (443 conflicts, all discriminated). Structural, not luck: our sources
+are **asymmetric**, so a genuine tie needs two *equally* authoritative *structural* sources for the same field.
+**The owner's feared chronic condition is therefore not the tie.**
+
+**But the worry was correct, aimed one square over: ABSENCE is the chronic population** (16.31% + the 12
+flagless bills), and a naive "any unresolved breaks the streak" rule would indeed be unlivable. **Resolved with
+a distinction the project already enforces:** §9 counts *meeting* actions without times as bugs while
+administrative actions legitimately have none — and §9 sits at **0** even with 16.31% of rows on terminal
+rungs. Generalized into the ledger's scope boundary: **absent** (no source published; we published nothing) =
+disclosed gap with a denominator, **not** an incident · **unverified** (we published something no oracle
+confirms) = counts · **conflict-unresolved** = counts (zero observed) · **impeached** = red. Plus pre-push
+#14's own rule: a known/explained/**bounded** unverified population is a standing disclosure and the incident
+fires on **deviation from baseline**, not existence. This does not soften "unknown is a violation" — the client
+is shown the exact scope ("12 of 3,645 carry a text-derived outcome LIS hasn't confirmed"), which is the
+opposite of assuming it's fine. **And a chronic TIE would be a bug, not a livable state** — recurring ties mean
+the ladder lacks a principle for that pair, and breaking the streak is exactly the pressure that forces us to
+add and measure one.
+
+**Honest open item:** §9=0 proves the accuracy-critical population resolves, but I have NOT cross-tabulated
+Origin against the meeting-action classifier to prove all 6,170 terminal-rung rows fall outside it. That
+cross-tab is W0c's first calibration step — measure before setting any threshold.
+
 ## [2026-07-25] architecture | "How do you choose the authoritative source — in EVERY scenario?" → the precedence ladder is a house rule; the bill path has NO provenance
 
 Owner's sharpest question of the session. Answer, after checking existing machinery first (the protocol step I

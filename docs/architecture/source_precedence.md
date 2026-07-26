@@ -61,6 +61,58 @@ pointed inward — [[ideas/moat_and_competition]].)
 | **Never choose; publish every disagreement as unverified** | ⚠️ Honest but discards justified knowledge (structural-over-text is a *good, measurable* rule) and would have marked 443 rows unverified on 2026-07-25. **Correct as the DEFAULT, wrong as the only rule** — it survives as the terminal rung. |
 | **Property-derived ladder + honest terminal + measured rungs** | ✅ **Adopted** — generalizes the calendar's proven pattern; degrades safely on the unanticipated case. |
 
+## How often does the "equal competing sources" tie actually happen? — MEASURED, 2026-07-25
+> **Owner:** *"How often do you expect that equal-competing-data scenario to play out? Because that would reset
+> our counter, and if it's a chronic condition that would make it unlivable."* Correct worry, and our own rules
+> say measure it, don't estimate it (Standard #7; pre-push #14 — *"grep every threshold against the new
+> steady-state and flag any that would trip on healthy operation"*). Live product data, **37,832 calendar rows**:
+
+| Origin (which rung produced the value) | Rows | Share |
+|---|---|---|
+| `convene_anchor` | 17,137 | 45.30 % |
+| `api_schedule` | 11,798 | 31.19 % |
+| `legislation_event` + `scheduled_future` + `derived_standing` | 673 | 1.78 % |
+| `admin_default` + `executive_default` (**no time expected** by design) | 2,052 | 5.42 % |
+| `floor_miss` + `journal_default` (**terminal rung — nobody had a value**) | 6,170 | 16.31 % |
+
+**The decisive finding: there is no "conflict" or "tie" Origin at all — zero rows in 37,832.** That is
+structural, not luck, and it separates two things I had been blurring:
+- **Ladders resolve SCARCITY** — *which source has the value*. Their terminal rung means **"nobody published
+  one"** → the value is **ABSENT**, not disputed.
+- **Adjudication resolves CONFLICT** — *two sources have it and differ*. That is Friday's case, and it was
+  **resolved by a principle** (structural>text), not a tie.
+
+**True ties observed to date: zero.** Not in 37,832 calendar rows; not in the 3,645-bill outcome path (443
+conflicts, **all** discriminated by a principle). The reason is structural: our sources are **asymmetric** —
+one is always more structural, or the system of record for that field. A genuine tie needs two *equally*
+authoritative *structural* sources for the *same* field, which is a rare shape. **So the tie case is not the
+chronic risk.**
+
+**The real chronic population is ABSENCE, and it is large** — 16.31 % terminal-rung + the 12 flagless bills.
+A naive "any unresolved → break the streak" rule would indeed be unlivable, exactly as the owner predicted.
+**The resolution is a distinction we already enforce elsewhere** — §9 (the project's own accuracy metric)
+counts *meeting* actions without times as bugs while administrative actions legitimately have none, and it
+sits at **0** even with 16.31 % of rows on terminal rungs. Generalized:
+| State | Meaning | Counts against the ledger? |
+|---|---|---|
+| **Absent** | no source published a value; **we published nothing** | ❌ no — disclosed with its denominator |
+| **Unverified** | **we published a value** no oracle confirms (the 12 flagless bills) | ⚠️ yes — but see baseline rule |
+| **Conflict-unresolved** | two sources differ, no principle discriminates | ✅ yes (zero observed) |
+| **Impeached** | published value verifiably wrong | ✅ yes — red |
+
+**The livability guarantee (pre-push #14's own rule): a known, explained, BOUNDED unverified population is a
+disclosed limitation shown with its denominator; the incident fires on DEVIATION FROM BASELINE, not on
+existence.** *"Prefer delta-vs-rolling-baseline thresholds for metrics whose floor depends on system
+behavior."* This does not soften the owner's rule — the client is told the exact scope ("12 of 3,645 carry a
+text-derived outcome LIS hasn't structurally confirmed"), which is the opposite of assuming it's fine.
+**And a chronic TIE would be a bug, not a condition to live with:** recurring ties mean the ladder is missing a
+principle for that pair, and breaking the streak is precisely the pressure that forces us to add and measure
+one.
+
+**Open calibration item (honest gap):** §9 = 0 proves the accuracy-critical population is fully resolved, but I
+have **not** cross-tabulated Origin against the meeting-action classifier to prove all 6,170 terminal-rung rows
+fall outside it. That cross-tab is the first calibration step of W0c — measure before setting any threshold.
+
 ## The concrete gap this exposes — the bill path is a generation behind
 | | Calendar path | Bill/outcome path |
 |---|---|---|

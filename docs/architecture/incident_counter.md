@@ -40,6 +40,14 @@ The trust claim expands from "never wrong" to **"never less than LIS"** ([[ideas
      on published output could not be determined. **Opens immediately and breaks the streak**; the auto-resolver
      (§3) closes it without human involvement in the normal case. The ledger therefore measures **days we could
      VERIFY clean** — we never bank a day we couldn't check.
+     **Scope boundary (measured 2026-07-25, [[architecture/source_precedence]]):** *absence* is not
+     *unverification*. If **no source published a value and we published nothing**, that is a disclosed gap
+     (shown with its denominator), not an incident — the precedent is §9 itself, which counts meeting actions
+     without times as bugs while administrative actions legitimately have none, and sits at 0 while 16.31 % of
+     calendar rows land on a terminal rung. `unverified` means **we published something no oracle confirms**.
+     And per pre-push #14, a known/explained/**bounded** unverified population is a standing disclosure; the
+     incident fires on **deviation from its baseline**, not on its existence — otherwise a permanent structural
+     gap would make the counter unlivable (the owner's exact objection, which is why this boundary exists).
    **The 2026-07-25 outcome-drift event is the ledger's FIRST incident** — recorded as `false_alarm` at
    seeding, with its honest (approximate, and marked approximate) start date. The counter's story begins by
    telling the truth about itself.
