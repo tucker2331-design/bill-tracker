@@ -5,7 +5,7 @@ import { bandTone, type Band } from "../components/bands";
 import { HealthVitals, type Vital, type VitalSeg, type VitalVerify } from "../components/HealthVitals";
 import { loadHealth, type HealthData, type HealthAlert } from "../data/health";
 import { loadVerification, type GuardRun, type GuardState } from "../data/verification";
-import { loadHistory, seriesFor, seriesForPct, type HistoryData } from "../data/history";
+import { loadHistory, seriesFor, seriesForPct, type HistoryData, type AlertSource } from "../data/history";
 
 // Alert presentation (owner 2026-07-07: the feed "needs real thinking and fixing" + "colored boxes scream
 // AI"). See docs/design/dashboard_and_visual_language.md. Severity now rides a small status DOT, not a
@@ -33,20 +33,22 @@ const conditionStem = (msg: string) =>
 
 // One recurring CONDITION, grouped from many raw firings. lastTs drives liveness (active vs self-cleared);
 // count is how many cycles it fired; message is the newest (cleaned) representative text.
-type Cond = { key: string; severity: string; category: string; message: string; count: number; firstTs: number; lastTs: number };
+type Cond = { key: string; severity: string; category: string; message: string; count: number; firstTs: number; lastTs: number; source: AlertSource };
 interface AlertModel { latestCycleTs: number; active: Cond[]; resolved: Cond[]; needsLook: Cond[]; notes: Cond[]; }
 
-function groupConditions(rows: { severity: string; category: string; message: string; ts: number }[]): Cond[] {
+function groupConditions(rows: { severity: string; category: string; message: string; ts: number; source: AlertSource }[]): Cond[] {
   const byKey = new Map<string, Cond>();
   for (const a of rows) {
-    const key = `${a.severity}|${a.category}|${conditionStem(a.message)}`;
+    // Source is part of the identity: the same wording from two workers is two conditions, judged against
+    // two different cadences (see AlertSource in data/history.ts).
+    const key = `${a.source}|${a.severity}|${a.category}|${conditionStem(a.message)}`;
     const e = byKey.get(key);
     if (e) {
       e.count++;
       e.firstTs = Math.min(e.firstTs, a.ts);
       if (a.ts >= e.lastTs) { e.lastTs = a.ts; e.message = cleanMessage(a.message); }
     } else {
-      byKey.set(key, { key, severity: a.severity, category: a.category, message: cleanMessage(a.message), count: 1, firstTs: a.ts, lastTs: a.ts });
+      byKey.set(key, { key, severity: a.severity, category: a.category, message: cleanMessage(a.message), count: 1, firstTs: a.ts, lastTs: a.ts, source: a.source });
     }
   }
   return [...byKey.values()];
@@ -197,7 +199,13 @@ export function Health({ completeness, dataAsOf }: { completeness: Completeness 
     const ACTIVE_TOL_MS = 6 * 60 * 1000; // "this cycle" window — well under the ~15-min in-window cadence
     const conds = groupConditions(hist.alerts);
     const byActivity = (a: Cond, b: Cond) => SEV_RANK(a.severity) - SEV_RANK(b.severity) || b.lastTs - a.lastTs;
-    const isActive = (c: Cond) => c.lastTs >= latestCycleTs - ACTIVE_TOL_MS;
+    // Judge each condition against the clock of the worker that RAISED it (W0d). The two workers run on
+    // different cadences, so a single global "latest cycle" would mark every bill-worker alert resolved as
+    // soon as the calendar worker ticked — the alert would appear and vanish without ever being actionable.
+    // Fall back to the global timestamp when that worker has no heartbeat yet (pre-first-run), which is the
+    // old behaviour and never fabricates freshness.
+    const cycleFor = (c: Cond) => hist.cycleTs[c.source] || latestCycleTs;
+    const isActive = (c: Cond) => c.lastTs >= cycleFor(c) - ACTIVE_TOL_MS;
     const active = conds.filter(isActive).sort(byActivity);
     const resolved = conds.filter((c) => !isActive(c)).sort((a, b) => b.lastTs - a.lastTs);
     // "Needs a look" = only genuinely actionable, currently-live signals. A benign INFO note (blank upstream
