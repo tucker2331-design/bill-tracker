@@ -113,6 +113,61 @@ fail-closed (P25a) it should be the reverse. **W0c re-aimed:** carry the verdict
 mismatch rate as an alarm** (it measures LIS's internal consistency, not our accuracy — keep it visible as
 upstream-drift observation) · **alarm on the unverified 12 instead**.
 
+## [2026-07-26] wave | W0 + W1 MERGED, W5 measured (votes are already in a blob), W6/W7 landed
+
+**W0 (#227) MERGED — and the reason the owner still saw the old calendar was a CI GAP, not a missing fix.**
+Three checks were green while Cloudflare's `Workers Builds` FAILED on a real TypeScript error: **nothing in CI
+compiled `web/` at all**, and `tsc -b` catches errors a bare `tsc --noEmit` misses. So the branch sat unmerged
+and the deploy never happened. Added a `web-build` job running the exact deploy command — a deploy-blocking
+failure now surfaces in the repo's own checks instead of only in the host's dashboard after merge.
+
+Also in #227: the calendar's clipped day (three interacting constants — a wider container scoped to that view,
+a *stepped* per-day minimum, an earlier stack point for the month picker) with
+`tools/ui_checks/calendar_width_check.py` asserting the geometry across **every width 320–2560px**. That check
+found two bands I'd have missed (861–1019, then 1081–1131), and after a CodeRabbit finding it now **parses
+`index.css` + `Calendar.tsx` instead of hand-copying constants** (Standard #1) — negative-tested: narrowing
+`.main-wide` to 1200px makes it fail, restoring makes it pass.
+
+**Nine bot findings folded in; the most important one kept the false-red alive.** The frontend was *still*
+feeding LIS-internal drift into the ACCURACY ring with danger bands, so the 2026-07-25 failure could have
+recurred in the UI after the backend was fixed. Drift is now an upstream observation with flat-good bands
+("we publish the flag, so nothing we show is affected"); the Accuracy ring carries what WE got wrong. Also:
+buffered alerts were dropped on early returns (a failed session discovery or an authorization halt never
+reached the panel — the W0d bug on exactly the cycles that matter most), and `history.ts` silently discarded
+undateable rows, which can make a live condition look self-resolved.
+
+**Absent vs unverified, decided STRUCTURALLY (owner's question about prefiled/new bills).** Expectation now
+comes from the bill's own settled-ness, not a clock: in-progress → ABSENT (no flag owed yet, disclosed, never
+alarmed); its own status says SETTLED yet no structural flag → the real anomaly, on an ABSOLUTE floor since it
+has no legitimate steady state. A session opening (+thousands of in-progress bills) stays silent **without
+muting anything**, and it needs no annual re-tuning. Goldens pin every value `_derive_outcome` can emit to one
+side of the split, so a new upstream outcome fails the test rather than silently ending the alarm.
+
+**W1 (#228) MERGED — the days-clean ledger.** `_drill` / `false_alarm` / `unverified` classes; open-incident
+dedup so a 3-day outage is ONE row closed on recovery-PASS; `monitoring_days` denominator; the three guards
+wired (sentinel→accuracy, tripwire→parity_gap, reconcile→accuracy via the independent MinutesBook oracle);
+monthly fire-drill workflow that seeds genesis and reads its own row back. **A bug I caught in my own review:**
+the workflows run the guards as *scripts*, so `sys.path[0]` is the guard's directory and a bare `from tools.…`
+import raises `ModuleNotFoundError` — which the fail-open handler would have swallowed, leaving the ledger
+**silently recording nothing forever** while every guard reported success. `test_incident_log_wiring.py` now
+spawns each guard exactly as CI does, and asserts the naive import really does fail so the fix can't rot.
+
+**W5 MEASURED — the per-member votes are ALREADY in a blob we download.** `VOTE.CSV` (3.8 MB, 11,175 rows,
+fetched conditionally every cycle) *is* the roll call: `voteID, H0056, N, H0108, Y, …`, and its member numbers
+are the SAME namespace as the roster API's `MemberNumber`. **The whip board's vote history therefore costs ZERO
+additional LIS requests** — it retires the ~140-call `/MemberVoteSearch/` plan entirely. Caveat recorded: the
+file is ragged and the code's own comments note pandas mangles it to zero ids, so it must be read with
+`csv.reader` on raw bytes; vote vocabulary `Y/N/X` to be validated at parse time, not assumed.
+
+**W6 — the compliance gate written BEFORE the first request** ([[knowledge/legiscan_terms]]): terms quotes,
+scope allowlist, rate limit, attribution, conditional-fetch field, and the volume question the 50-state design
+hangs on (do dataset archives embed full text, or only `doc_id` refs?). Owner-blocked on the key; the discipline
+is the same one that kept the VA integration clean — never assume an API returning data implies authorization.
+
+**W7 — CLAUDE.md de-drift.** Three sources disagreed about the pre-push audit's size: CLAUDE.md said 16 points,
+CI said "15-point", the script implements 17. Reconciled, and **point 17 (the pyflakes undefined-name gate) is
+now documented** — it had been enforced since audit #105 without ever being listed.
+
 ## [2026-07-25] correction | Tri-state KILLED (fail-closed was already doctrine) + the resolver's real reach stated (the circularity hole)
 
 Two owner corrections on the §3 design, both landing:
