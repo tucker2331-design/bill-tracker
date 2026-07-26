@@ -16,7 +16,7 @@ on:
   workflow_dispatch: {}
 
 jobs:
-  # B-3: the mechanical half of the 15-point pre-push audit — enforces what a bot caught on #189 a PR late
+  # B-3: the mechanical half of the 17-point pre-push audit — enforces what a bot caught on #189 a PR late
   # (an output-value change with no WORKER_OUTPUT_LOGIC_VERSION bump). Stdlib-only, so it rides the fast lane.
   prepush-audit:
     runs-on: ubuntu-latest
@@ -32,7 +32,7 @@ jobs:
           python-version: '3.10'
       - name: Install pyflakes (undefined-name gate, audit #105)
         run: python3 -m pip install --quiet "pyflakes==3.4.0"  # pinned: the audit matches message wording (CodeRabbit #214)
-      - name: Machine pre-push audit (mechanical 15-point subset)
+      - name: Machine pre-push audit (mechanical subset)
         run: |
           if [ -n "${{ github.base_ref }}" ]; then
             git fetch -q origin "${{ github.base_ref }}"

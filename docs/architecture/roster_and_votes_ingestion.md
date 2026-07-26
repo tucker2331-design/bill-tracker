@@ -88,6 +88,36 @@ per-bill subject list endpoint returned 404 on the two spellings tried — needs
 `LegislationSubject` route with a `legislationID` param spelled differently, or subjects inline on a bill-detail
 call not yet located).
 
+## W5 MEASURED 2026-07-26 — the per-member votes are ALREADY IN A BLOB WE DOWNLOAD
+
+The open question was whether to add ~140 per-member API calls. **Answer: no — we already have the data.**
+`VOTE.CSV` (`lisfiles/20261/VOTE.CSV`, 3.8 MB, 11,175 rows, fetched conditionally EVERY cycle by
+`calendar_worker`) is a ragged CSV whose rows are exactly a roll call:
+
+```
+26110000, H0056, N, H0108, Y, H0124, N, H0136, N, H0173, Y, H0206, X, …
+   ^voteID  ^member ^vote  (member, vote) pairs repeat to the end of the row
+```
+
+- **Member numbers are the SAME namespace as the roster API's `MemberNumber`** (`H0285` etc., confirmed in
+  both probes), so the join needs no mapping table.
+- **The whip board's vote history therefore costs ZERO additional LIS requests** — it is a re-parse of bytes
+  we already pull, under the existing 304/conditional-fetch cache (guardrail #1: fetch less, cache more).
+  This retires the `/MemberVoteSearch/…` dependency for *history*; that endpoint stays useful only for
+  ad-hoc single-member queries.
+- The full join is entirely structural: **VOTE.CSV** (voteID → member → Y/N/X) × **HISTORY** (refid = voteID →
+  bill) × **roster API** (MemberNumber → name/party/district/role). The worker already builds `_vote_id_set`
+  from this very file, so the parse is proven.
+- **Caveat to respect when building:** the file is RAGGED and the code comments already record that
+  pandas/`safe_fetch_csv` silently mangles it to zero usable ids — it must be read with `csv.reader` on raw
+  bytes. Vote values seen: `Y`, `N`, `X` (X = not voting / abstain); treat the vocabulary as a closed set
+  validated at parse time, not assumed.
+
+**Consequence for the storage decision below:** the volume estimate that made this "not a Sheets tab" was
+based on ~3,000 vote rows per member. That still holds for a *materialised* per-member view, but we no longer
+need to *fetch* it — so the store only has to hold what we choose to derive, which makes the D1-vs-blob
+choice cheaper either way.
+
 ## The one storage finding that changes the architecture
 **Member votes CANNOT live in Google Sheets.** ~140 members × ~3,000 votes/session × ~24 fields ≈ **10M cells
 from votes alone** — at or past the Sheets ceiling that [[audits/fable_2026-07/codebase_longevity_audit]] (C-8)

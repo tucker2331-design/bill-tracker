@@ -76,7 +76,7 @@ Nothing learned in a session may be lost. Route every artifact to the right page
 
 ---
 
-## Pre-Push Audit (16 points)
+## Pre-Push Audit (17 points)
 
 Before every commit. Full version in `docs/workflow/three_phase_protocol.md`. **The mechanical half is now
 enforced by a script (B-3): run `python3 tools/prepush_audit.py` before commit; CI runs it on every PR
@@ -102,6 +102,11 @@ Points 1-9 are the original audit. Points 10-15 were codified in PR-C7.0.5 after
 13. **Dead-Path Resurrection Check.** When dropping a fallback or simplifying a defensive pattern, grep EVERY function-scope variable that was bound only on the path being removed. Confirm each is either re-bound unconditionally on the surviving path or no longer referenced downstream. Removing dead code can resurrect previously-dead error paths. See `docs/failures/assumptions_audit.md` #52 (Codex fold-in).
 14. **Threshold Calibration Check.** Whenever a PR's diff is architecturally significant (changes the worker's row processing pipeline, classifier, recovery surface, or breaker inputs), grep every existing absolute threshold against the new steady-state and flag any that would now trip on healthy operation. Treat any cycle-stable breaker trip as a CRITICAL calibration bug, not a transient. Prefer delta-vs-rolling-baseline thresholds for metrics whose floor depends on system behavior. See `docs/failures/assumptions_audit.md` #53.
 15. **Sentinel-Value Collision Check.** For any state cell read or persisted-value load with a default-on-failure path, ask: *"is the default ever a legitimate runtime value?"* If yes, track presence as a separate boolean flag (not encoded by the value being zero / empty / etc.). Same root class as `Optional` / `Maybe`-type-confusion bugs. See `docs/failures/assumptions_audit.md` #53 (Codex P2 fold-in).
+17. **Undefined-Name Gate (mechanical, audit #105).** `tools/prepush_audit.py` runs `python3 -m pyflakes` on
+    changed worker `.py` files and FAILS on `undefined name`. **Why it exists:** the 0→66 regression was an
+    `UnboundLocalError` inside a broad `except`, so it reached production wearing an API-outage costume and
+    survived three wrong diagnoses. Pyflakes catches that class statically, before a cycle ever runs.
+
 16. **Stranded-Work Check (mechanical, B-7).** Unfinished work must be reachable from the to-do. A vault page carrying a residual declares `open_loop: <one line>` in its frontmatter, and `tools/open_loops.py` FAILS the audit unless `docs/state/current_status.md` wikilinks that page; a page marked `status: shipped` (or `archived`) may not declare one. Runs on EVERY push — a diff-scoped check would never see the page that *dropped* the link. **Rationale:** `NEXT` was defined as "needs owner infra / a decision", so an unblocked engineering residual had no lane (not NOW, not NEXT) and survived only inside `docs/ideas/`, invisible to every "is the to-do clear?" check — that is exactly how the §9 relative-time residual sat. The new `READY` lane + this check close it. Never trust `status:` alone as a signal: nearly every vault page says `active` (measured 2026-07-10: 65 of 80), so the field carries almost no information.
 
 ---
