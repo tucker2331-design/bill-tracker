@@ -243,9 +243,10 @@ export function Calendar({ bills, sessionCode, onOpen, calRefresh = 0 }: {
           gridTemplateColumns: weekDays.map((d) => {
             const wknd = d.getDay() === 0 || d.getDay() === 6;
             const has = (byDay.get(dayKey(d))?.length ?? 0) > 0;
-            // Readable min width so work-day columns never crush; the week scrolls horizontally if the
-            // viewport is too narrow to fit them (you still see ~5 work days, then scroll for the rest).
-            return wknd && !has ? "minmax(40px,0.4fr)" : "minmax(158px,1fr)";
+            // Readable min width so work-day columns never crush. The minimum comes from `--cal-day-min`
+            // (index.css) so it can STEP DOWN on narrower viewports instead of clipping a day behind a
+            // scrollbar — a hidden day is a P12 violation at any width (owner-reported 2026-07-25).
+            return wknd && !has ? "minmax(40px,0.4fr)" : "minmax(var(--cal-day-min,158px),1fr)";
           }).join(" "),
         }}>
           {weekDays.map((d) => {

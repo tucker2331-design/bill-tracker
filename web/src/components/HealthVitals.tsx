@@ -12,7 +12,12 @@
 // the bullet graphs below. Channels used for the popout: saturated hue against a muted field (Few 7.1.5).
 
 export type VTone = "good" | "warn" | "danger" | "unknown";
-export interface VitalSeg { label: string; tone: VTone; }
+// `anchor` = the id of the element where THIS metric actually renders. A ring aggregates metrics that live in
+// DIFFERENT detail sections (e.g. Accuracy carries §9, which renders under "Accuracy & completeness", AND
+// outcome drift, which renders under "Pipeline health"), so a single ring-level anchor sent the user to a
+// passing section while the failing metric sat further down — owner-reported 2026-07-25. Per-segment anchors
+// let the click land on the metric that is actually failing.
+export interface VitalSeg { label: string; tone: VTone; anchor?: string; }
 // Optional INDEPENDENT-verification badge merged onto a donut (vision §7 trust layer). The 5-layer durability
 // guard cross-checks our self-reported numbers against OUTSIDE sources (LIS's own calendar / the MinutesBook);
 // surfacing its verdict ON the matching dial — instead of a separate panel — says "here's the rollup AND an
@@ -58,6 +63,31 @@ function statusLine(segs: VitalSeg[]): string {
   return "All clear";
 }
 
+/** Which element should a ring's Status line scroll to?
+ *
+ * A ring aggregates metrics that render in DIFFERENT detail sections — Accuracy carries §9 (under "Accuracy &
+ * completeness") AND outcome drift (under "Pipeline health", ~660px further down). The old code always jumped
+ * to one hardcoded section anchor, so a ring reading "1 critical" landed the user on a PASSING metric while
+ * the failing one sat off-screen below (owner-reported 2026-07-25).
+ *
+ * Rule: go to the WORST failing segment that declares an anchor which actually exists on the page; otherwise
+ * fall back to the ring's section anchor. Exported and pure (with `exists` injectable) so the choice is
+ * testable without depending on browser scroll behaviour — `behavior:"smooth"` is a no-op in some automation
+ * engines, which would otherwise make this logic unverifiable.
+ */
+export function pickDrillTarget(
+  segs: VitalSeg[],
+  fallbackAnchor?: string,
+  exists: (id: string) => boolean = (id) =>
+    typeof document === "undefined" || !!document.getElementById(id),
+): string | undefined {
+  const worstFirst = segs
+    .filter((s) => s.tone !== "good")
+    .sort((a, b) => RANK[b.tone] - RANK[a.tone]);
+  const seg = worstFirst.find((s) => s.anchor && exists(s.anchor));
+  return seg?.anchor ?? fallbackAnchor;
+}
+
 function Donut({ v }: { v: Vital }) {
   const { segs } = v;
   const n = segs.length;
@@ -69,9 +99,15 @@ function Donut({ v }: { v: Vital }) {
   const statusTitle = nonGreen.length
     ? `${v.name} · ${nonGreen.map((s) => `${s.label} (${TONE_WORD[s.tone]})`).join(", ")} — click to see the detail below`
     : `${v.name}: all ${n} check${n === 1 ? "" : "s"} green`;
-  const drillable = nonGreen.length > 0 && !!v.anchor;
+  const target = pickDrillTarget(segs, v.anchor);
+  const drillable = nonGreen.length > 0 && !!target;
   const drill = () => {
-    if (v.anchor) document.getElementById(v.anchor)?.scrollIntoView({ behavior: "smooth", block: "start" });
+    const el = target ? document.getElementById(target) : null;
+    if (!el) return;
+    // Honour reduced-motion (WCAG 2.3.3): an instant jump for users who asked for less animation.
+    const reduce = typeof window !== "undefined"
+      && window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
+    el.scrollIntoView({ behavior: reduce ? "auto" : "smooth", block: "start" });
   };
   // Expose the verification provenance to screen-readers + non-hover (touch) devices, not only the hover
   // `title` (CodeRabbit #183). Flatten the multi-line title into one spoken sentence.

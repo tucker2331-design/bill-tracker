@@ -210,8 +210,8 @@ export function Health({ completeness, dataAsOf }: { completeness: Completeness 
   // ── At-a-glance vitals: roll the gauges below into four category rings. Each segment's tone comes from
   // `bandTone` over the SAME bands the matching gauge uses, so the donut and the detail never disagree; a
   // segment whose backend payload is absent is "unknown" (grey), never a false green. ──
-  const sv = (label: string, value: number, bands: Band[], known: boolean): VitalSeg =>
-    ({ label, tone: known ? bandTone(value, bands) : "unknown" });
+  const sv = (label: string, value: number, bands: Band[], known: boolean, anchor?: string): VitalSeg =>
+    ({ label, tone: known ? bandTone(value, bands) : "unknown", anchor });
   // The ring reflects the SAME currently-active conditions the feed shows (self-cleared ones don't count).
   // Prefer the history-derived model; fall back to the latest cycle's live alerts when the trend store isn't
   // up yet. Only actionable CRITICAL/WARN move the ring — a benign INFO note never turns Stability amber.
@@ -263,14 +263,14 @@ export function Health({ completeness, dataAsOf }: { completeness: Completeness 
   // there's no oracle (Freshness), and each Status rollup jumps to its own detail section when non-green.
   const vitals: Vital[] = [
     { name: "Accuracy", segs: [
-      sv("Section-9 · meeting actions without a time", section9 ?? 0, lower(0.5, 25, 50), section9 != null),
-      sv("Outcome drift · keyword↔structural", driftPct, lower(0.1, 1, 2), c?.outcome_keyword_mismatch_rate != null),
+      sv("Section-9 · meeting actions without a time", section9 ?? 0, lower(0.5, 25, 50), section9 != null, "hl-m-section9"),
+      sv("Outcome drift · keyword↔structural", driftPct, lower(0.1, 1, 2), c?.outcome_keyword_mismatch_rate != null, "hl-m-drift"),
     ], verify: vitalVerify(["accuracy_sentinel.yml", "legevent_reconcile.yml"]), verifyApplies: true, anchor: "hl-sec-accuracy" },
     { name: "Completeness", segs: [
-      sv("Bill completeness · records vs universe", completePct, higher(98, 99.99, 100), !!c && universe > 0),
-      sv("History-vs-universe anomalies", anomalies, lower(0.5, 5, 20), !!c),
-      sv("Patron coverage", patronPct, higher(98, 99.99, 100), !!c && written > 0),
-      sv("Unclassified share · router blank", unclassPct, lower(8, 15, 25), !!h && total > 0),
+      sv("Bill completeness · records vs universe", completePct, higher(98, 99.99, 100), !!c && universe > 0, "hl-m-complete"),
+      sv("History-vs-universe anomalies", anomalies, lower(0.5, 5, 20), !!c, "hl-m-anomalies"),
+      sv("Patron coverage", patronPct, higher(98, 99.99, 100), !!c && written > 0, "hl-m-patron"),
+      sv("Unclassified share · router blank", unclassPct, lower(8, 15, 25), !!h && total > 0, "hl-m-unclass"),
     ], verify: vitalVerify(["completeness_tripwire.yml"]), verifyApplies: true, anchor: "hl-sec-accuracy" },
     { name: "Freshness", segs: [
       sv("Bill backend clock", billFreshH, lower(6, 12, 24), !!dataAsOf),
@@ -278,7 +278,7 @@ export function Health({ completeness, dataAsOf }: { completeness: Completeness 
     ], verifyApplies: false, anchor: "hl-sec-freshness" },
     { name: "Stability", segs: [
       { label: "Circuit breaker", tone: !h ? "unknown" : breakerOk ? "good" : "danger" },
-      sv("Write-time invariant violations", violations ?? 0, lower(0.5, 49, 60), violations != null),
+      sv("Write-time invariant violations", violations ?? 0, lower(0.5, 49, 60), violations != null, "hl-m-invariants"),
       { label: "Active alerts", tone: !h ? "unknown" : critCount ? "danger" : warnCount ? "warn" : "good" },
     ], verify: vitalVerify(["sustainability_audit.yml"]), verifyApplies: true, anchor: "hl-sec-alerts" },
   ];
@@ -336,17 +336,17 @@ export function Health({ completeness, dataAsOf }: { completeness: Completeness 
       <h2 className="h" id="hl-sec-accuracy">Accuracy &amp; completeness — the lobbyist-facing guarantees</h2>
       <div className="hl-gauges">
         {h ? (
-          <BulletGraph label="Section-9 accuracy · meeting actions without a time" value={section9 ?? 0}
+          <BulletGraph id="hl-m-section9" label="Section-9 accuracy · meeting actions without a time" value={section9 ?? 0}
             max={50} target={0} bands={lower(0.5, 25, 50)} spark={spark("meeting_unsourced")}
             sub="0 = every meeting action has a time (the project goal)" />
         ) : <CalLoading err={hErr} />}
         {/* Bill-backend gauges only render when the completeness payload is present — a null payload must NOT
             display as a real 0% / 0 (that would read as a false danger; "allowed not to know, never pretend"). */}
         {c ? (<>
-          <BulletGraph label="Bill completeness · records written vs LIS universe" value={completePct}
+          <BulletGraph id="hl-m-complete" label="Bill completeness · records written vs LIS universe" value={completePct}
             max={100} target={100} bands={higher(98, 99.99, 100)} unit="%" format={oneDp}
             sub={`${written.toLocaleString()} of ${universe.toLocaleString()} bills${anomalies ? ` · ${anomalies} in-history-not-in-universe` : ""}`} />
-          <BulletGraph label="History-vs-universe anomalies" value={anomalies}
+          <BulletGraph id="hl-m-anomalies" label="History-vs-universe anomalies" value={anomalies}
             max={20} target={0} bands={lower(0.5, 5, 20)} sub="bills seen in HISTORY but absent from the universe (scariest silent gap)" />
         </>) : <p className="muted">Bill-backend signals unavailable (no completeness payload in Bill_Tracker R1).</p>}
       </div>
@@ -393,23 +393,23 @@ export function Health({ completeness, dataAsOf }: { completeness: Completeness 
       <h2 className="h">Pipeline health</h2>
       <div className="hl-gauges">
         {h ? (
-          <BulletGraph label="Write-time invariant violations" value={violations ?? 0}
+          <BulletGraph id="hl-m-invariants" label="Write-time invariant violations" value={violations ?? 0}
             max={60} target={0} bands={lower(0.5, 49, 60)} spark={spark("invariant_violations")}
             sub="rows that failed a schema/Origin invariant at write (breaker trips at ≥50)" />
         ) : <CalLoading err={hErr} />}
         {c?.outcome_keyword_mismatch_rate != null && (
-          <BulletGraph label="Outcome drift · keyword↔structural mismatch" value={driftPct}
+          <BulletGraph id="hl-m-drift" label="Outcome drift · keyword↔structural mismatch" value={driftPct}
             max={2} target={0} bands={lower(0.1, 1, 2)} unit="%" format={oneDp}
             sub="self-calibrating reconciliation vs LIS's own flags (steady ≈ 0.03%)" />
         )}
         {h && total > 0 && (
-          <BulletGraph label="Unclassified share · router returned blank" value={unclassPct}
+          <BulletGraph id="hl-m-unclass" label="Unclassified share · router returned blank" value={unclassPct}
             max={25} target={0} bands={lower(8, 15, 25)} unit="%" format={oneDp}
             spark={hist ? seriesForPct(hist, "legevent_route_blank", "total_processed") : []}
             sub={`${(m.legevent_route_blank ?? 0).toLocaleString()} of ${total.toLocaleString()} rows (floor/skeleton rows are legitimately blank)`} />
         )}
         {c && (
-          <BulletGraph label="Patron coverage" value={patronPct}
+          <BulletGraph id="hl-m-patron" label="Patron coverage" value={patronPct}
             max={100} target={100} bands={higher(98, 99.99, 100)} unit="%" format={oneDp}
             sub={`${(c.patron_present ?? 0).toLocaleString()} of ${written.toLocaleString()} bills with a chief patron`} />
         )}
