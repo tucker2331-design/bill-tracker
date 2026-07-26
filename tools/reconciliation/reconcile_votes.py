@@ -54,6 +54,48 @@ def _norm(s):
     # validated against known-good data before its signal is trusted.)
     return re.sub(r'[^a-z0-9]', '', str(s).lower())  # "(13-Y 0-N 1-A)" -> "13y0n1a"
 
+# ── days-clean ledger (W1.4) ────────────────────────────────────────────────────────────────────────────
+# One of the three authorised WRITERS of the incident ledger. FAIL-OPEN by construction: this guard must fail
+# on DATA, never on bookkeeping, so an unavailable ledger can never change its verdict.
+_LEDGER_DETECTOR = "reconcile_votes"
+
+
+def _ledger_api():
+    """Import the ledger REGARDLESS of how this guard was invoked.
+
+    The workflows run `python3 tools/<dir>/<guard>.py`, which puts that subdirectory on `sys.path` — NOT the
+    repo root — so a bare `from tools.incident_log.log import …` raises ModuleNotFoundError. The fail-open
+    handlers below would have swallowed it and the ledger would have been silently non-functional forever:
+    every guard reporting success at recording nothing. Verified by probe, not assumed; regression-tested in
+    test_incident_log_wiring.py.
+    """
+    import os
+    import sys
+    root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+    if root not in sys.path:
+        sys.path.insert(0, root)
+    from tools.incident_log.log import close_incident, record_incident
+    return record_incident, close_incident
+
+
+def _ledger(cls, summary):
+    """Open an incident. Deduped inside the ledger: a multi-cycle outage stays ONE incident (W1.2)."""
+    try:
+        record_incident, _ = _ledger_api()
+        record_incident(cls, summary, _LEDGER_DETECTOR)
+    except Exception as e:
+        print(f"⚠️ [reconcile_votes] could not record the incident (non-fatal): {e}")
+
+
+def _ledger_close(cls):
+    """Close this guard's own open incident — the recovery signal."""
+    try:
+        _, close_incident = _ledger_api()
+        close_incident(cls, _LEDGER_DETECTOR)
+    except Exception as e:
+        print(f"⚠️ [reconcile_votes] could not close the incident (non-fatal): {e}")
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--max-drift", type=float, default=1.0)
@@ -174,6 +216,14 @@ def main():
             print(f"    {bill:8s} {date:11s} {core}")
     ok = drift_pct <= args.max_drift
     print(f"\n  {'PASS' if ok else 'FAIL — DRIFT EXCEEDS THRESHOLD'}")
+    # Mis-attribution means a WRONG committee reached the product, so this is an `accuracy` incident, not a
+    # parity gap. MinutesBook is an INDEPENDENT LIS surface, which is what makes this tier-2 verification
+    # rather than the circular re-read of our own feed (docs/architecture/incident_counter.md §3b).
+    if ok:
+        _ledger_close("accuracy")
+    else:
+        _ledger("accuracy", f"vote mis-attribution drift {drift_pct:.2f}% exceeds {args.max_drift:.2f}% "
+                            f"vs the MinutesBook oracle ({drift} row(s))")
     return 0 if ok else 1
 
 if __name__ == "__main__":

@@ -32,4 +32,9 @@ jobs:
           # Optional: posts a specific Slack alert on FAIL (dormant if unset; the
           # non-zero exit already emails via GitHub). See docs/architecture/alerting.md.
           SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+          # W1.4 — this guard is an authorised WRITER of the days-clean incident ledger, so it needs the
+          # same Sheets secret ~20 other workflows already use. Least-privilege note: the guard's own reads
+          # stay on public gviz; these creds are used ONLY to append/close a row in Incident_Log, and every
+          # ledger call is fail-open so a credential problem can never change the guard's verdict.
+          GCP_CREDENTIALS: ${{ secrets.GCP_CREDENTIALS }}
         run: python3 tools/verification/accuracy_sentinel.py

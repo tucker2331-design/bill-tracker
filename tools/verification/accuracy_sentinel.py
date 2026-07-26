@@ -114,6 +114,48 @@ def _is_system_row(source):
     return str(source).strip().upper() == "SYSTEM"
 
 
+# ── days-clean ledger (W1.4) ────────────────────────────────────────────────────────────────────────────
+# One of the three authorised WRITERS of the incident ledger. FAIL-OPEN by construction: this guard must fail
+# on DATA, never on bookkeeping, so an unavailable ledger can never change its verdict.
+_LEDGER_DETECTOR = "accuracy_sentinel"
+
+
+def _ledger_api():
+    """Import the ledger REGARDLESS of how this guard was invoked.
+
+    The workflows run `python3 tools/<dir>/<guard>.py`, which puts that subdirectory on `sys.path` — NOT the
+    repo root — so a bare `from tools.incident_log.log import …` raises ModuleNotFoundError. The fail-open
+    handlers below would have swallowed it and the ledger would have been silently non-functional forever:
+    every guard reporting success at recording nothing. Verified by probe, not assumed; regression-tested in
+    test_incident_log_wiring.py.
+    """
+    import os
+    import sys
+    root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+    if root not in sys.path:
+        sys.path.insert(0, root)
+    from tools.incident_log.log import close_incident, record_incident
+    return record_incident, close_incident
+
+
+def _ledger(cls, summary):
+    """Open an incident. Deduped inside the ledger: a multi-cycle outage stays ONE incident (W1.2)."""
+    try:
+        record_incident, _ = _ledger_api()
+        record_incident(cls, summary, _LEDGER_DETECTOR)
+    except Exception as e:
+        print(f"⚠️ [accuracy_sentinel] could not record the incident (non-fatal): {e}")
+
+
+def _ledger_close(cls):
+    """Close this guard's own open incident — the recovery signal."""
+    try:
+        _, close_incident = _ledger_api()
+        close_incident(cls, _LEDGER_DETECTOR)
+    except Exception as e:
+        print(f"⚠️ [accuracy_sentinel] could not close the incident (non-fatal): {e}")
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--min-rows", type=int, default=5000, help="partial-sheet floor (lesson #75)")
@@ -288,8 +330,12 @@ def main():
         # exit below already escalates to a GitHub Actions failure email; this adds
         # a faster, specific channel naming the breached invariant(s).
         _notify_slack(f"🚨 *Accuracy Sentinel FAILED* (calendar) — {len(failed)} invariant(s): {', '.join(failed)}")
+        _ledger("accuracy", f"{len(failed)} accuracy invariant(s) breached: {', '.join(failed)}")
         return 1
     print("\n✅ SENTINEL PASS — all accuracy invariants hold.")
+    # Whoever detects a failure declares its end: on a PASS we close our own open incident, which is all the
+    # recovery detection the ledger needs (docs/architecture/incident_counter.md §3).
+    _ledger_close("accuracy")
     return 0
 
 

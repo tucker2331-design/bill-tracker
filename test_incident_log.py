@@ -79,4 +79,54 @@ latest = log.latest_incident_end(rows, malformed=mal)
 ok(mal == [["partial-junk", "x"]], f"non-empty unreadable row surfaced; empty row silent -> {mal}")
 ok(log.days_since(latest, NOW) == 19, "genesis still counted alongside the malformed collection")
 
+
+# ── W1: the counter means "days we could VERIFY clean" ─────────────────────────────────────────────────
+# 12. FIRE DRILLS (owner: "don't build fake sandboxes to avoid resetting the timer"). A `_drill` row runs the
+#     real write path against the real ledger, so it MUST NOT move the clock or the incident count — exactly
+#     like `_genesis`. If this ever regressed, testing the alarm would burn the streak and nobody would test it.
+rows = [ROW("2026-07-01T00:00:00Z", "", "_genesis"),
+        ROW("2026-07-18T09:00:00Z", "2026-07-18T09:00:00Z", "_drill")]
+ok(log.days_since(log.latest_incident_end(rows), NOW) == 19,
+   "a fire drill does NOT reset the clock (genesis still the epoch)")
+st = log.counter_state(rows, NOW)
+ok(st["incidents_ever"] == 0, "a drill is not counted as an incident")
+ok(st["last_drill_days"] == 2, f"the drill IS dated for the staleness signal -> {st['last_drill_days']}")
+ok(log.counter_state([ROW("2026-07-01T00:00:00Z", "", "_genesis")], NOW)["last_drill_days"] is None,
+   "no drill on record reads as None (an unproven write path), never as 0")
+
+# 13. THE DENOMINATOR (Standard #7 applied to our own trust number): "N days clean" alone is meaningless, and
+#     a young counter must not masquerade as a long record.
+ok(log.monitoring_days([ROW("2026-07-01T00:00:00Z", "", "_genesis")], NOW) == 19,
+   "monitoring_days measures from genesis")
+ok(log.monitoring_days([ROW("2026-07-05T00:00:00Z", "", "accuracy")], NOW) is None,
+   "no genesis => monitoring window is UNKNOWN, not a fabricated number")
+
+# 14. OPEN-INCIDENT DEDUP (W1.2) — the flood fix. A 3-day outage fails ~100 cycles; without this the ledger
+#     would show 100 incidents for ONE event and lie in the pessimistic direction.
+outage = [ROW("2026-07-01T00:00:00Z", "", "_genesis"),
+          ROW("2026-07-19T00:00:00Z", "", "accuracy", "sentinel FAIL", "accuracy_sentinel")]
+ok(log.has_open(outage, "accuracy", "accuracy_sentinel"), "an unclosed incident reads as OPEN")
+ok(not log.has_open(outage, "accuracy", "completeness_tripwire"),
+   "dedup is per-DETECTOR: another guard may still open its own incident for the same class")
+ok(not log.has_open(outage, "parity_gap", "accuracy_sentinel"),
+   "dedup is per-CLASS: the same guard may open a different class")
+closed = [ROW("2026-07-01T00:00:00Z", "", "_genesis"),
+          ROW("2026-07-19T00:00:00Z", "2026-07-19T06:00:00Z", "accuracy", "recovered", "accuracy_sentinel")]
+ok(not log.has_open(closed, "accuracy", "accuracy_sentinel"),
+   "once EndUTC is filled the incident is no longer open (recovery detection is free)")
+
+# 15. WHILE AN INCIDENT IS OPEN the clock reads from its START, so the counter cannot claim clean days during
+#     an ongoing failure (fail-closed).
+ok(log.days_since(log.latest_incident_end(outage), NOW) == 1,
+   "an OPEN incident dates the clock from StartUTC, so the streak is broken now")
+ok(log.counter_state(outage, NOW)["open_now"] == ["accuracy"], "the open class is reported for the red state")
+
+# 16. The new classes exist and are CLOSED — `unverified` (an unknown is a violation) and `false_alarm` (a red
+#     ring with no data failure under it is still a broken promise). A typo must not invent a class.
+for cls in ("unverified", "false_alarm"):
+    ok(cls in log.CLASSES, f"{cls} is a recognised class")
+ok(log.record_incident("nope", "x", "y") is False, "an unknown class is refused, not coerced")
+ok(log.NON_INCIDENT_CLASSES == frozenset({"_genesis", "_drill"}),
+   "only genesis + drill are excluded from the clock — every real class counts")
+
 print(f"ALL {_checks} incident-log tests passed")
