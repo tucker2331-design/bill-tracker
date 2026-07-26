@@ -99,6 +99,41 @@ check("Metrics_History header matches the calendar worker's schema",
       bt.METRICS_HISTORY_HEADER, ["RunTimestampUTC", "Status", "Origin", "Outcome"])
 bt._ALERT_BUFFER.clear()
 
+# ── ABSENT vs UNVERIFIED: the split must be STRUCTURAL, never clock-based (owner 2026-07-26) ───────────
+# A flagless bill that is still in progress is ABSENT (LIS has no terminal fact to flag yet) and must never
+# alarm — otherwise every session opening, when thousands of new bills arrive unflagged, screams. A flagless
+# bill whose own status says it is SETTLED is the real anomaly. These goldens pin that boundary so nobody
+# "fixes" a noisy January by muting alerts for the first N days instead.
+print("\n— absent-vs-unverified split —")
+check("_TERMINAL_OUTCOMES is a closed frozenset (a typo can't silently widen it)",
+      isinstance(bt._TERMINAL_OUTCOMES, frozenset), True)
+
+# Every value _derive_outcome can EMIT must land deliberately on one side of the split — this is the guard
+# the module comment promises. A new outcome added upstream fails here instead of defaulting to "not
+# terminal" (which would silently stop alarming on a real settled-but-flagless bill).
+emitted = {bt._derive_outcome(s) for s in
+           ("", "Introduced", "In Committee", "Passed", "Failed", "Incorporated", "Continued",
+            "Acts of Assembly Chapter", "Governor's Veto", "Approved", "Awaiting Governor")}
+known = bt._TERMINAL_OUTCOMES | {"in_progress"}
+check("every outcome _derive_outcome emits is classified by the split (no silent default)",
+      sorted(emitted - known), [])
+
+# The specific shapes that matter, asserted by NAME so the intent survives a refactor.
+check("an in-progress bill is ABSENT, not unverified-terminal",
+      bt._derive_outcome("In Committee") in bt._TERMINAL_OUTCOMES, False)
+check("a freshly introduced bill is ABSENT (this is the session-opening wave)",
+      bt._derive_outcome("Introduced") in bt._TERMINAL_OUTCOMES, False)
+check("a dead bill is TERMINAL (settled → a flag is owed)",
+      bt._derive_outcome("Failed") in bt._TERMINAL_OUTCOMES, True)
+check("a signed bill is TERMINAL",
+      bt._derive_outcome("Acts of Assembly Chapter") in bt._TERMINAL_OUTCOMES, True)
+check("a vetoed bill is TERMINAL",
+      bt._derive_outcome("Governor's Veto") in bt._TERMINAL_OUTCOMES, True)
+check("a carried-over bill is TERMINAL (deferred is still a disposition)",
+      bt._derive_outcome("Continued") in bt._TERMINAL_OUTCOMES, True)
+check("'in_progress' is deliberately NOT terminal",
+      "in_progress" in bt._TERMINAL_OUTCOMES, False)
+
 print()
 if FAILURES:
     print(f"❌ {len(FAILURES)} failure(s):")

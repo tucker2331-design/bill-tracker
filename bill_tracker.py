@@ -128,6 +128,17 @@ def flush_alerts_to_metrics_history(sheet, completeness=None):
 # it exists so that case degrades into a visible honest state instead of an invented winner.
 OUTCOME_ORIGINS = ("structural_flag", "keyword_fallback", "unresolved")
 
+# The closed set of outcomes meaning the bill's fate is SETTLED. Used to split the flagless population into
+# ABSENT (still in progress → LIS has no terminal flag because there is no terminal fact yet: correct
+# upstream behaviour, disclosed with its denominator, never alarmed) vs a genuine ANOMALY (the status says
+# decided while LIS's own flags say nothing — real drift worth hearing about). Deriving the expectation from
+# the bill's own settled-ness is STRUCTURAL and self-maintaining; the alternative — muting alerts for the
+# first N days of a session — is a clock-based guess that mutes real failures in that window and needs a
+# human to re-tune every year (Standards #1/#8). Owner-raised 2026-07-26.
+# Membership is asserted against `_derive_outcome`'s full vocabulary by test_bill_outcome_provenance.py, so
+# a new outcome value cannot silently land on the wrong side of this split.
+_TERMINAL_OUTCOMES = frozenset({"signed", "vetoed", "dead", "carried_over", "awaiting_governor"})
+
 # Alarm floors for the UNVERIFIED-population delta guard (see `unverified_jump_is_alarming`).
 _UNVERIFIED_ABS_JUMP = 25   # bills appearing in one cycle
 _UNVERIFIED_MIN_BASE = 10   # below this, a "doubling" is noise, not signal
@@ -504,6 +515,9 @@ def build_bill_records(http_session, session_code):
     patron_fullname_universe = 0   # bills whose chief-patron FULL name came from the universe (vs BILLS.CSV surname)
     outcome_mismatches = []   # LIS-internal: its status STRING disagrees with its own FLAGS (we publish the flag)
     unverified_bills = []     # no structural flag exists → we published a text-derived value NO oracle confirms
+    # …of those, the ones whose own status says the bill is SETTLED. A flagless in-progress bill is ABSENT
+    # (nothing to flag yet); a flagless SETTLED bill is the real anomaly. This is the alarm's population.
+    unverified_terminal_bills = []
     # Floor-passage self-calibration (Standard #1): among fully-passed BILLS (HB/SB — resolutions are
     # single-chamber and excluded), how many DON'T show both floor passages? Should be ~0; a rising rate
     # means LIS drifted its "passed House/Senate" action vocabulary. floor_both_expected is the denominator.
@@ -553,6 +567,19 @@ def build_bill_records(http_session, session_code):
             outcome, outcome_keyword = keyword_outcome, outcome_keyword + 1   # flagless (early-stage) bill
             outcome_origin = "keyword_fallback"
             unverified_bills.append(bill)
+            # ABSENT vs UNVERIFIED, decided STRUCTURALLY rather than by a clock (owner 2026-07-26: "is there
+            # a better way to account for recently introduced / never-made-it-past-prefile bills than
+            # silencing alerts the first couple of days?"). A bill still in progress HAS no terminal
+            # disposition, so LIS having no terminal flag for it is correct upstream behaviour, not a gap —
+            # counting it as unverified would permanently inflate the population and, under fail-closed,
+            # keep the days-clean ledger pinned at zero (docs/architecture/source_precedence.md).
+            # The expectation comes from our OWN already-computed derivation, not new text parsing and not a
+            # date window: `_TERMINAL_OUTCOMES` is the closed set of dispositions that mean the bill's fate
+            # is settled. Non-terminal → ABSENT (expected, disclosed with its denominator, no alarm).
+            # Terminal-per-the-status-string but NO structural flag → a real anomaly: LIS says the bill is
+            # decided while its own flags don't, which is precisely the drift worth hearing about.
+            if keyword_outcome in _TERMINAL_OUTCOMES:
+                unverified_terminal_bills.append(bill)
         # Chief patron: PREFER the bill-universe payload's OWN Patrons list — LIS's authoritative field,
         # carrying the FULL name ("Jeion A. Ward") + member number, vs BILLS.CSV's surname-only ("Ward").
         # Same call we already make (zero extra LIS traffic). BILLS.CSV is the fallback if LIS ever drops
@@ -643,6 +670,14 @@ def build_bill_records(http_session, session_code):
         "outcome_unverified": outcome_keyword,
         "outcome_unverified_rate": round(outcome_keyword / len(records), 4) if records else 0.0,
         "outcome_unverified_sample": sorted(unverified_bills)[:10],
+        # The unverified population SPLIT by whether a flag was ever owed (structural, not clock-based):
+        #   absent   = still in progress → LIS has no terminal fact to flag yet. Expected; disclosed, never alarmed.
+        #   terminal = its own status says SETTLED, yet no structural flag exists → the real anomaly.
+        # This is what lets a session opening (+thousands of new in-progress bills) stay silent without
+        # muting anything, and it needs no annual re-tuning (Standards #1/#8).
+        "outcome_unverified_terminal": len(unverified_terminal_bills),
+        "outcome_unverified_terminal_sample": sorted(unverified_terminal_bills)[:10],
+        "outcome_unverified_absent": outcome_keyword - len(unverified_terminal_bills),
         # Floor-passage coverage + self-calibrating reconciliation (Timeline Floor stages). The mismatch
         # rate is the share of fully-passed BILLS not showing both floor passages — a drift signal on LIS's
         # "passed House/Senate" vocabulary; steady ≈ 0 on 2026 data.
@@ -820,6 +855,19 @@ def run_bill_tracker():
                    f"(e.g. {completeness['outcome_unverified_sample']}) — these publish a text-derived "
                    f"outcome no structural flag confirms. A jump means LIS stopped emitting flags for a "
                    f"population it used to flag; check BILLS.CSV coverage.")
+        # The SHARP half of the same signal, and the reason this needs no start-of-session muting: a bill
+        # whose own status says it is SETTLED but which carries no structural flag. Unlike the population
+        # above, this one has no legitimate steady state — a settled bill always has a disposition — so it
+        # takes an ABSOLUTE floor rather than a delta, and it cannot be inflated by a wave of newly
+        # introduced (in-progress) bills. Owner-raised 2026-07-26: the structural alternative to silencing
+        # alerts for the first days of a session.
+        if completeness["outcome_unverified_terminal"]:
+            _alert("WARN", "DATA_ANOMALY",
+                   f"{completeness['outcome_unverified_terminal']} bill(s) read as SETTLED by LIS's status "
+                   f"but carry no structural flag "
+                   f"(e.g. {completeness['outcome_unverified_terminal_sample']}) — LIS's own status and "
+                   f"flags disagree about whether these are decided; we published the text-derived outcome, "
+                   f"which nothing structural confirms.")
         # BILLS.CSV TOTAL failure (fetch empty or bill column undetected) — distinct from partial
         # under-coverage: every bill lost its patron + structural outcome this cycle (CodeRabbit #162).
         if completeness["bills_meta_rows"] == 0 and completeness["records_written"] > 0:

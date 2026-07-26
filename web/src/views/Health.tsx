@@ -540,7 +540,11 @@ function AlertsPanel({ model, liveAlerts }: { model: AlertModel | null; liveAler
   if (model) {
     ({ needsLook, notes, resolved } = model);
   } else {
-    const rows = liveAlerts.map((a) => ({ severity: a.severity, category: a.category, message: a.message, ts: Date.parse(a.date) || nowMs }));
+    // `liveAlerts` is the calendar worker's own SYSTEM_ALERT rows from Sheet1 (see data/health.ts) — that
+    // tab has exactly one writer, so tagging them "calendar" is a structural fact, not a guess. The bill
+    // worker's alerts never reach this fallback path: they arrive only via Metrics_History, i.e. the
+    // `model` branch above (W0d). Without this the two workers' alerts would share one cadence judgement.
+    const rows = liveAlerts.map((a) => ({ severity: a.severity, category: a.category, message: a.message, ts: Date.parse(a.date) || nowMs, source: "calendar" as AlertSource }));
     const conds = groupConditions(rows).sort((a, b) => SEV_RANK(a.severity) - SEV_RANK(b.severity) || b.lastTs - a.lastTs);
     needsLook = conds.filter((c) => c.severity === "CRITICAL" || c.severity === "WARN");
     notes = conds.filter((c) => c.severity === "INFO" || c.severity === "UNKNOWN");
