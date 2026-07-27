@@ -75,7 +75,21 @@ status: active
   [[architecture/change_ledger]]'s validation plan, verify rows vs LIS, then ship the Changes tab; (2) re-run
   `witness_histogram.yml` for the real docket-drop hour → update [[ideas/lobbyist_jtbd_ideation]] §2/A2. This
   is the standing reminder the "2027-gated" work points back to.
-- **Gemini Code Assist bot sunsets 2026-07-17** (consumer install blocked since 06-18; still reviewing PRs until then). Replacement bench (CodeRabbit + Qodo + Codex) already live. No action unless a gap appears after 07-17.
+- **⚠️ REVIEWER BENCH IS DOWN TO ONE — audited 2026-07-27.** Evidence from PR #232's own comments:
+  **Gemini** — *"the consumer version of Gemini Code Assist on GitHub has been sunset"* → **dead**.
+  **Codex** — *"You have reached your Codex usage limits for code reviews"* → **out of quota** (it said this
+  again after an explicit `@codex review`). **Qodo** — *"reviews are paused because your trial has…"* →
+  **the permanent free tier is gone**; it is a 14-day trial now. **CodeRabbit** — *"Review limit reached…
+  next review available in 3 minutes"* → **alive but rate-limited** (free tier ≈ 4 PR reviews/hour, 200
+  files/hour), and it is the ONLY one left.
+  **Consequence I caused: PR #232 merged with ZERO review coverage** — I opened three PRs in quick succession
+  and outran the one remaining reviewer. Re-requested after the fact.
+  **Rule going forward: space PRs to CodeRabbit's cadence, and never merge on green CI alone when the review
+  slot was skipped** — CI proves the tests pass, not that the design is right.
+  **Free options for a PRIVATE repo (researched 2026-07-27):** *PR-Agent* (open-source, self-hosted, no
+  licensing cost) and *Semgrep* (security-focused, free ≤10 contributors) are the only genuinely free adds;
+  *Sourcery* is free for OPEN-SOURCE repos only and *Greptile* has no free tier, so neither helps us.
+- ~~**Gemini Code Assist bot sunsets 2026-07-17**~~ (consumer install blocked since 06-18; still reviewing PRs until then). Replacement bench (CodeRabbit + Qodo + Codex) already live. No action unless a gap appears after 07-17.
 
 ## What changes this page
 Anything that changes "what is Tucker working on right now?" — opening/closing/merging a PR, shifting the goal, pausing/resuming a thread. Updated every session per the MOVE-only rule above; historical narrative goes to [[log]], never here.
