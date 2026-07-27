@@ -110,7 +110,7 @@ live). **Rule now: a reviewer is not listed until its own pricing/listing page h
 | Tool | Method | Verified how | Limits |
 |---|---|---|---|
 | **CodeRabbit** | LLM | we use it daily | free tier covers private repos; ~4 PR reviews/hr, 200 files/hr |
-| **Gemini Code Assist** | LLM | Google docs: *"no charges … during Preview"* | free in preview; needs a Cloud project + Developer Connect |
+| **Gemini Code Assist** | LLM | Google docs + **connected 2026-07-27** | free in preview. Setup gotchas, both hit: the connection must be created **from the Agents & Tools page** (one made directly in Developer Connect is invisible to Code Assist), and it must live in **`us-east1`** — a `us-east4` connection simply never appears in the dropdown. The **old consumer GitHub App must be uninstalled**: it keeps posting "has been sunset" on every PR, which reads exactly like the new one working. |
 | **Semgrep** | rules/AST | free ≤10 contributors on private repos | security + our own house rules |
 | **mypy** | type checker | open source, runs in our CI | scoped to new modules, widening |
 | **pyflakes** | static analysis | already in the pre-push audit | undefined names (audit #105) |
