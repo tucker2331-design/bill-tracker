@@ -18,6 +18,7 @@ judgment-only points (the human still owns those). See CLAUDE.md "Pre-Push Audit
 """
 import argparse
 import os
+import re
 import subprocess
 import sys
 
@@ -240,6 +241,50 @@ def check_open_loops(fails):
                      f"      {detail or r.stdout.strip() or r.stderr.strip()}")
 
 
+# CLAUDE.md forbids itself from carrying a worker cadence ("do NOT hardcode a worker interval here — it
+# drifts"). These catch a claim sneaking back in: a bare cron expression, or prose asserting an interval for
+# a worker/cycle/cron. Deliberately narrow — "every action", "every state", "every cycle" must NOT match, or
+# the check would fire on ordinary English and get muted, which is worse than not having it.
+_CLAUDE_CRON_RE = re.compile(r"`?\*/\d+\s+[\d*/,-]+\s+[\d*/,-]+\s+[\d*/,-]+\s+[\d*/,-]+`?")
+_CLAUDE_CADENCE_RE = re.compile(
+    r"every\s+~?\d+\s*(?:min(?:ute)?s?|h(?:ours?|rs?)?)\b"      # "every 15 min", "every 3 hours"
+    r"|\b\d+\s*(?:min(?:ute)?|h(?:our)?)\s*(?:cron|cadence|interval)\b"   # "6h cron"
+    r"|\b(?:cron|cadence|interval)\s*(?:of|:)?\s*~?\d+\s*(?:min|h)\b",
+    re.I)
+
+
+def check_claude_md_cadence(fails):
+    """Point B-4 (mechanical half) — CLAUDE.md must not re-acquire a hardcoded worker cadence.
+
+    WHY: CLAUDE.md is read FIRST every session, so a stale fact there installs a false prior before anything
+    else is read. It once claimed "every 15min" while the calendar worker was on 3h and the bill worker on
+    6h. The prose fix was made in 2026-07-07; this is the guard that keeps it fixed, because the same drift
+    will otherwise return the next time someone documents a schedule in the most convenient place.
+
+    Runs on EVERY push (not diff-scoped): the regression is a line being ADDED to a file that may not
+    otherwise be in the diff, and the file is small enough that scanning it always is free.
+    The authoritative per-job cadence ledger is docs/knowledge/lis_api_safety.md.
+    """
+    path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "CLAUDE.md")
+    try:
+        with open(path, encoding="utf-8") as fh:
+            lines = fh.readlines()
+    except OSError as e:
+        fails.append(f"CLAUDE.md could not be read for the cadence-drift check ({e}).")
+        return
+    hits = []
+    for i, line in enumerate(lines, 1):
+        # The rule's own statement names the thing it forbids; don't flag the prohibition itself.
+        if "do NOT hardcode" in line or "cadence ledger" in line:
+            continue
+        if _CLAUDE_CRON_RE.search(line) or _CLAUDE_CADENCE_RE.search(line):
+            hits.append(f"line {i}: {line.strip()[:100]}")
+    if hits:
+        fails.append("CLAUDE.md has re-acquired a hardcoded cadence/interval (it drifts, and it is read "
+                     "FIRST every session — keep it in docs/knowledge/lis_api_safety.md instead):\n      "
+                     + "\n      ".join(hits))
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--base", default="origin/main")
@@ -259,6 +304,7 @@ def main():
     check_forbidden(files, fails)
     check_undefined_names(files, fails)
     check_open_loops(fails)
+    check_claude_md_cadence(fails)
     warn_lines = warns(files)
 
     print(f"prepush_audit: {len(files)} file(s) in diff; "
