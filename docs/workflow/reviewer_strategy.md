@@ -134,6 +134,26 @@ are relying on. They are listed below only so nobody re-proposes them.
 | **Greptile** | no free tier at all | pricing page |
 | **LlamaPReview** | free private reviews end May 2026 | its own site |
 
+### The MARKETPLACE SWEEP — the registry itself, not a blogger's shortlist (2026-07-27)
+The owner pushed for the complete pass rather than a sample. Walked GitHub Marketplace's own **Code review**
+category (popularity-sorted, so the meaningful names are front-loaded) and checked every AI PR reviewer on it:
+
+| App on Marketplace | Verdict | Verified |
+|---|---|---|
+| **CodeRabbit** | ✅ **free, private repos** | in use |
+| Codacy | ❌ free = IDE-only / OSS-only | pricing page |
+| DeepSource | ❌ public repos only | pricing page |
+| Sourcery | ❌ OSS only | pricing page |
+| Qodo | ❌ tier withdrawn | its own PR comment |
+| **cubic** | ❌ **free = PUBLIC repos only; 14-day trial for private** | pricing, 07-27 |
+| **Bito** | ❌ **free = PR *summaries* only; review is a 14-day trial** | pricing, 07-27 |
+| Codecov · Graphite · Mergify · Datadog · Linear · Asana · WIP · What The Diff | n/a — coverage, merge queues, monitoring, PR descriptions; not PR reviewers | listing |
+| CodeFactor · Qlty · CodeScene | static-analysis/quality — Semgrep's category, not CodeRabbit's | listing |
+
+**Result: CodeRabbit is the ONLY free-for-private AI PR reviewer in the Marketplace's code-review category.**
+Honest bound: page 1 of 15, popularity-sorted. The tail is dominated by non-review tools, but it was not
+walked exhaustively.
+
 **The honest headline: for a PRIVATE repo there are exactly TWO genuinely free LLM reviewers — CodeRabbit and
 Gemini.** Everything else marketed as "free" is public-repo-only, a trial, or bring-your-own-key. A bench of
 five is still reachable, but only by counting METHODS (LLM + rules + types + static + project invariants),
