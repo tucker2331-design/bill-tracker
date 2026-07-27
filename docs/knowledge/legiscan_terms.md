@@ -92,6 +92,36 @@ States") and must never inherit the verified treatment ([[design/information_dis
 you actually checked; P25c: state what your verification reaches). Cross-state rows are **sourced-at-one-remove**,
 and a cross-state claim we cannot verify stays visibly unverified rather than quietly presented as fact.
 
+## LIVE PROBE FINDINGS — 2026-07-27 (measured in CI, 3 requests total, key never left the runner)
+Run via `.github/workflows/openstates_probe.yml` (manual dispatch, read-only, budgeted).
+
+| Question | Answer | Consequence |
+|---|---|---|
+| Does the key authenticate? | **Yes** | after two of OUR bugs were fixed first — see below |
+| Does a bill carry `versions`? | **Yes — 3 for VA HB176**, matching what LIS reports for the same bill | good cross-check of both sources |
+| **Is bill text INLINE?** | **NO — `text_is_inline: false`** | **the decisive one, see below** |
+| What do versions carry instead? | 2 links per version, media types **`application/pdf`** and **`text/html`** | text lives in linked DOCUMENTS, not the JSON |
+| Budget spend | 1 request per run; 399/400 remaining | the guard reports honestly |
+
+**→ The API returns POINTERS to documents, not text.** So cross-state text costs a document fetch per version
+*on top of* the API call — and those fetches hit each state's own servers, which is a second politeness
+surface, not a freebie. This is exactly the caveat the desk research flagged as "often links rather than
+inline"; it is now **measured**, not assumed.
+
+**OPEN, and it needs NO key (so it is not blocked):** do the **bulk** per-session JSON archives embed full
+text, or the same links? The desk research said they include text; the API's behaviour makes that worth
+verifying directly before any corpus design is finalised. Bulk files need no API key and cost no API budget.
+
+### Two of OUR bugs the probe caught before any corpus work (both would have been mis-read as upstream faults)
+1. **`InvalidHeader`** — the pasted secret carried whitespace; an HTTP header value containing whitespace is
+   illegal, and `requests` raises an error that reads like a network fault. Fixed by stripping the key and
+   validating its SHAPE with a self-describing error (Standard #4). *Never diagnose "their API is down"
+   before checking your own header.*
+2. **A 200 answering the WRONG QUESTION** — v3 wants `?include=sources&include=versions` **repeated**; the
+   indexed form (`include0=`) is *silently ignored*. The request succeeded, returned a valid bill, and simply
+   omitted the versions, so the probe reported `versions_present: false` — which looked like a finding about
+   the API rather than a bug in how we asked. **A successful response can still be the wrong question.**
+
 ## Standing rules once live (unchanged in spirit from the LegiScan draft)
 - **Cache fetched text permanently** in our own corpus store (append-only, not Sheets); re-fetch only on a
   changed hash. This respects the source and makes our archive independent of it over time.
