@@ -62,13 +62,29 @@ class RequestBudget:
         return time.strftime("%Y-%m-%d", time.gmtime(self._now()))
 
     def _load(self):
+        """Resume today's spend. ABSENT and CORRUPT are different events and must not share a handler
+        (our own Semgrep house rule caught this file swallowing both — Standard #4).
+
+        * absent  → first run of the day. Expected; silent.
+        * corrupt → the day's spend count was LOST, so this process starts from zero and could push us past
+          the provider's daily limit without knowing. That is exactly the runaway the budget exists to
+          prevent, so it is announced loudly rather than passed over.
+        """
         try:
             with open(self._path, encoding="utf-8") as fh:
                 d = json.load(fh)
-            if d.get("day") == self._today() and isinstance(d.get("count"), int):
-                return d["day"], d["count"]
-        except (OSError, ValueError, TypeError):
-            pass                      # unreadable/absent state → start the day at zero, never crash a run
+        except FileNotFoundError:
+            return self._today(), 0            # expected on the first call of a day
+        except (OSError, ValueError) as e:
+            print(f"⚠️ [openstates_budget] spend file unreadable ({type(e).__name__}: {e}) — today's count "
+                  f"is LOST and restarts at 0. If a run already spent requests today, the provider's daily "
+                  f"limit could be exceeded; verify before a large batch.")
+            return self._today(), 0
+        if isinstance(d, dict) and d.get("day") == self._today() and isinstance(d.get("count"), int):
+            return d["day"], d["count"]
+        if isinstance(d, dict) and d.get("day") not in (None, self._today()):
+            return self._today(), 0            # yesterday's file: a normal rollover, not an anomaly
+        print(f"⚠️ [openstates_budget] spend file has an unexpected shape — today's count restarts at 0.")
         return self._today(), 0
 
     def _save(self):
