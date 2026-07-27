@@ -7,6 +7,29 @@ open_loop: Decisions banked (D5 star=binary; D2 write-path=Worker+D1; D3 identit
 
 # War room + shared watchlist — scoping memo (owner decisions required)
 
+## MOCKUP v4 — owner change list, queued 2026-07-27 (do NOT ship a v3.5; fold these in with the prediction menu)
+Owner reviewed v3 and asked for these together with the prediction display, in ONE next mockup:
+
+1. **Delete "Still to clear: full committee → 3 floor readings."** Reads as a description, not data.
+2. **Replace "Need 8 of 15 · 5 yes…" with an actual DATA POINT that integrates the threshold.** Owner: make it
+   "not look like a description". Direction: put the threshold ON the bar as a marker — the bar already shows
+   yes/no/unknown proportions, so a line at the 8-of-15 position turns prose into a readable position.
+   The number stops being narrated and becomes something you *see*.
+3. **Bill number → patron separator: dash, not a dot.** `HB463 — Cohen`, so it reads as *attributed to*
+   rather than two adjacent facts. (Note: this reverses the v1 "· Cohen" styling; it is a deliberate change,
+   not drift.)
+4. **Co-patrons behind a disclosure on the patron** — on the main bill AND the companion row. Rationale
+   (owner): *"so the lobbyists can see who supports it and get a more rounded view of the bills progress."*
+   Co-patron count is a real support signal, not decoration. **Sourcing: `/LegislationPatron/api/
+   GetLegislationPatronListAsync` is in the endpoint inventory, currently PARKED** — this promotes it. See
+   [[ideas/copatrons_backfill]].
+5. **Fix the "OURS" zone rule alignment** — the divider next to the label is off-centre. Not intentional.
+6. **Rename the "Elsewhere" section** and **link the bill TEXT** on each cross-state row, so a lobbyist can
+   *read* the other state's bill rather than only seeing a similarity label.
+7. **The prediction menu** — the open item below; the reason v4 waits.
+
+**Why one mockup:** owner, 2026-07-27 — *"don't do two micro versions."* Ship v4 once, with prediction in it.
+
 > **⚠️ READ THE BOTTOM FIRST — most of these decisions are now MADE.** The five "DECISION" sections below are
 > the **original memo as written on 2026-07-13**; their *Recommendation* lines are **historical, and several
 > were overruled**. The owner's actual calls live in **[[#OWNER DECISIONS — 2026-07-16]]** and
