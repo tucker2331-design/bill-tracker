@@ -1,0 +1,77 @@
+name: 🛡️ Code Scan (Semgrep + mypy — the DETERMINISTIC reviewers)
+
+# WHY THIS EXISTS (docs/workflow/reviewer_strategy.md)
+# Our LLM reviewers are correlated with each other: similar architectures, overlapping training, similar
+# blind spots. Stacking more of them has diminishing returns — they miss the SAME bugs. Catch rate rises
+# with DIVERSITY OF METHOD, and these two fail differently from every LLM:
+#   * they are DETERMINISTIC — the same code gives the same answer every run. They cannot have an off day,
+#     cannot be rate-limited, and cannot get distracted by a large diff (all three happened to us in July).
+#   * they cover our two measured blind spots: across 56 recorded bot findings, SECURITY was ~0 and TYPE
+#     errors were caught only where a test happened to execute the line.
+#
+# Semgrep runs the community security rules PLUS .semgrep/house-rules.yml, which encodes OUR doctrine
+# (no silent failure, no naive datetimes, no un-timed HTTP). The pre-push audit currently hunts those with
+# grep, which matches TEXT and so cannot distinguish real code from the same words in a comment; Semgrep
+# matches the parsed AST, so it is the same rules stated correctly.
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read          # least-privilege: read the code, report via the job log. No token writes.
+
+concurrency:
+  group: code-scan-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  semgrep:
+    name: Semgrep (security + house rules)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+      - name: Install Semgrep
+        run: pip install --quiet semgrep
+      # BASELINE ADOPTION — the only way a new scanner survives contact with an existing codebase.
+      # The house rules find 55 real violations in code written before they existed. Blocking on those would
+      # fail every PR on day one, and a check that always fails gets muted — which protects nothing. So:
+      #   * on a PR: only findings NEW relative to the merge base block. Existing debt is reported, not fatal.
+      #   * the debt is real and tracked (docs/state/open_anti_patterns.md), paid down deliberately.
+      # This is the same staged discipline as mypy's scope below: meaningful from day one, widening over time.
+      - name: House rules — NEW violations block
+        if: github.event_name == 'pull_request'
+        run: |
+          git fetch --quiet origin ${{ github.base_ref }}
+          semgrep --config .semgrep/house-rules.yml --error --metrics=off \
+                  --baseline-commit "origin/${{ github.base_ref }}" .
+      - name: House rules — full inventory (report-only, so the debt stays visible)
+        run: semgrep --config .semgrep/house-rules.yml --metrics=off . || true
+      # Community security rules REPORT ONLY for now: they are unproven against this codebase, and a new
+      # scanner that fails the build on day one gets muted — which is worse than not running it. Promote to
+      # blocking once the baseline is clean (docs/workflow/reviewer_strategy.md §5).
+      - name: Security rules (report-only until the baseline is clean)
+        run: semgrep --config p/security-audit --config p/secrets --metrics=off . || true
+
+  mypy:
+    name: mypy (types — the hole pyflakes cannot see)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+      - name: Install mypy
+        run: pip install --quiet mypy types-requests
+      # Scoped to tools/ deliberately. The workers are large, old, and untyped; pointing a type checker at
+      # them on day one produces hundreds of findings that nobody reads. tools/ is new, small, and where the
+      # next code lands — so the check is meaningful immediately and the scope widens as the debt is paid.
+      # (Same staged-adoption reasoning as the security rules above.)
+      - name: Type-check tools/
+        run: mypy --config-file mypy.ini tools/text_corpus/ tools/change_ledger/ tools/incident_log/

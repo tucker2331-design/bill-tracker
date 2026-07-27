@@ -39,6 +39,20 @@ import os
 import sys
 from datetime import datetime, timezone
 
+
+def _raw_value_input_option():
+    """gspread 6 types `value_input_option` as a ValueInputOption enum; earlier versions took the plain
+    string "RAW". Resolve whichever this environment provides so the call is correct under both and a
+    version bump cannot silently change how values are parsed on write."""
+    try:
+        from gspread.utils import ValueInputOption
+        return ValueInputOption.raw
+    except (ImportError, AttributeError):
+        return "RAW"
+
+
+_RAW = _raw_value_input_option()
+
 # An env override exists ONLY so a human can point a manual run at a scratch workbook. The automated
 # verification path deliberately does NOT use it — see the fire-drill note above.
 SPREADSHEET_ID = os.environ.get("INCIDENT_LOG_SPREADSHEET_ID",
@@ -167,7 +181,7 @@ def last_drill(rows, now):
 
 def counter_state(rows, now):
     """Everything the Health line needs, computed once: the honest verdict WITH its denominator."""
-    malformed = []
+    malformed: list = []
     latest = latest_incident_end(rows, malformed=malformed)
     return {
         "days_clean": days_since(latest, now),
@@ -200,10 +214,15 @@ def _open_tab(create=True):
         if not create:
             return None
         ws = sh.add_worksheet(title=INCIDENT_TAB, rows=200, cols=len(HEADER))
-        ws.update("A1", [HEADER])
+        # gspread 6 signature is update(values, range_name) — the OPPOSITE of the pre-6 order. Calling it
+        # positionally as ("A1", [HEADER]) passes the range as the values and vice versa, so the genesis row
+        # would have failed the first time the ledger was ever created. Caught by mypy, not by any reviewer
+        # (docs/workflow/reviewer_strategy.md — the deterministic-checker argument, demonstrated).
+        # Keyword args make the call correct under either version.
+        ws.update(values=[HEADER], range_name="A1")
         # Genesis epoch, so the counter is meaningful from day one.
         ws.append_row([_now(), "", GENESIS_CLASS, "Incident monitoring began.", "incident_log.setup"],
-                      value_input_option="RAW")
+                      value_input_option=_RAW)
         return ws
 
 

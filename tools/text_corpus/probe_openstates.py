@@ -29,7 +29,7 @@ def main():
         print(f"❌ {KEY_ENV} not in the environment. In CI, pass it via `env:` from the repository secret.")
         return 1
 
-    findings = {}
+    findings: dict = {}
     try:
         # A single, deliberately boring lookup: one known VA bill from the session we already work with.
         # (Jurisdiction/session naming is Open States' own, which is part of what we're measuring.)

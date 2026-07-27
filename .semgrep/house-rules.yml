@@ -1,0 +1,114 @@
+rules:
+  # ── OUR OWN DOCTRINE, mechanically enforced ────────────────────────────────────────────────────────
+  # These encode rules the pre-push audit currently hunts with `grep`. grep matches TEXT, so it cannot tell
+  # a real `except: pass` from that string inside a comment or a docstring — it produces both false alarms
+  # and false confidence. Semgrep matches the parsed CODE, so these are the same rules stated correctly.
+  # Sources: CLAUDE.md Standards #2/#4/#9, docs/workflow/source_miss_visibility.md.
+
+  - id: bare-except-pass
+    languages: [python]
+    severity: ERROR
+    message: >-
+      Silent failure: this swallows an exception with no alert, counter, or log. Standard #4 requires every
+      exception to produce a visible, categorized signal. Either handle it and SAY so, or let it raise.
+    patterns:
+      - pattern-either:
+          - pattern: |
+              try:
+                  ...
+              except ...:
+                  pass
+          - pattern: |
+              try:
+                  ...
+              except:
+                  pass
+
+  - id: bare-except-continue
+    languages: [python]
+    severity: ERROR
+    message: >-
+      A bare `continue` in an exception handler drops a row with no counter. Standard #9 (source-miss
+      visibility): a skipped row must be counted and surfaced, never silently discarded.
+    pattern: |
+      try:
+          ...
+      except ...:
+          continue
+
+  - id: broad-except-without-logging
+    languages: [python]
+    severity: WARNING
+    message: >-
+      `except Exception` that neither logs, alerts, nor re-raises. This is the shape that let the 0→66
+      regression wear an API-outage costume for three sessions (assumptions_audit #105). Name what failed.
+    patterns:
+      - pattern: |
+          try:
+              ...
+          except Exception:
+              ...
+      - pattern-not: |
+          try:
+              ...
+          except Exception as $E:
+              ...
+              print(...)
+              ...
+      - pattern-not: |
+          try:
+              ...
+          except Exception as $E:
+              ...
+              raise
+      - pattern-not: |
+          try:
+              ...
+          except Exception as $E:
+              ...
+              $ALERT(...)
+              ...
+
+  - id: hardcoded-api-key-literal
+    languages: [python]
+    severity: WARNING
+    message: >-
+      A credential-shaped literal. Ours are public SPA-class keys with env-first overrides by design
+      (lis_authorization.py), so this may be intentional — but every new one must be a deliberate, reviewed
+      choice, not a paste. Prefer os.environ with a documented fallback.
+    pattern-regex: '["''][0-9A-Fa-f]{8}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{12}["'']'
+
+  - id: datetime-now-without-timezone
+    languages: [python]
+    severity: WARNING
+    message: >-
+      Naive datetime. This project runs on UTC runners against an America/New_York legislature; a naive
+      `now()` produced a real off-by-one-day bug (gemini_review_patterns #38/#47). Pass a tzinfo.
+    patterns:
+      - pattern-either:
+          - pattern: datetime.datetime.now()
+          - pattern: datetime.now()
+          - pattern: datetime.date.today()
+          - pattern: date.today()
+
+  - id: requests-without-timeout
+    languages: [python]
+    severity: ERROR
+    message: >-
+      HTTP call with no timeout — it can hang a scheduled worker indefinitely. Every upstream call in this
+      repo must be bounded (knowledge/lis_api_safety.md).
+    patterns:
+      - pattern-either:
+          - pattern: requests.get(...)
+          - pattern: requests.post(...)
+          - pattern: requests.head(...)
+          - pattern: requests.request(...)
+      - pattern-not: requests.get(..., timeout=$T, ...)
+      - pattern-not: requests.post(..., timeout=$T, ...)
+      - pattern-not: requests.head(..., timeout=$T, ...)
+      - pattern-not: requests.request(..., timeout=$T, ...)
+    # NOTE: deliberately matches only the `requests.<verb>` module-level form. An earlier version also
+    # matched `$S.get(...)` to catch Session objects — and fired 425 times, because that pattern matches
+    # EVERY `dict.get()` in the codebase. A rule with a 400-strong false-positive tail is worse than no
+    # rule: it gets muted, and then it protects nothing. Session-object calls are covered by the
+    # `get_armored_session()` helper, which sets timeouts centrally.
