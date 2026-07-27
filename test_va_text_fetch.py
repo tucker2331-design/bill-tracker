@@ -1,6 +1,5 @@
 #!/usr/bin/env python3
 """Goldens for the VA text fetcher (W2). Offline: a fake HTTP layer, a temp corpus dir, no network."""
-import json
 import os
 import shutil
 import sys
