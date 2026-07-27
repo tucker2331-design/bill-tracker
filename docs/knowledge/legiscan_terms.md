@@ -108,9 +108,17 @@ Run via `.github/workflows/openstates_probe.yml` (manual dispatch, read-only, bu
 surface, not a freebie. This is exactly the caveat the desk research flagged as "often links rather than
 inline"; it is now **measured**, not assumed.
 
-**OPEN, and it needs NO key (so it is not blocked):** do the **bulk** per-session JSON archives embed full
-text, or the same links? The desk research said they include text; the API's behaviour makes that worth
-verifying directly before any corpus design is finalised. Bulk files need no API key and cost no API budget.
+**CORRECTION 2026-07-27 — bulk downloads are NOT anonymous.** I previously wrote that the bulk files need no
+registration. Checked directly: `/data/session-csv/` and `/data/session-json/` redirect anonymous visitors to
+`/accounts/login/`. **They require a logged-in account.** The owner has one (it issued the API key), so this
+is not a personal blocker — but it changes the AUTOMATION story: an unattended CI job cannot simply `curl` a
+bulk file the way it can hit an API with a header key. Options, none yet chosen:
+  (a) a session-authenticated download (cookie/credential handling in CI — more moving parts, more secrets);
+  (b) an owner-run manual download, committed/uploaded once per session — crude but honest, and per-session
+      cadence makes it viable (bulk archives refresh weekly, not hourly);
+  (c) per-state native scanners (the standing rule anyway) — no aggregator at all.
+**Still unverified because of the login wall: whether bulk archives embed full TEXT or the same document
+links.** Do not design the corpus path until this is answered.
 
 ### Two of OUR bugs the probe caught before any corpus work (both would have been mis-read as upstream faults)
 1. **`InvalidHeader`** — the pasted secret carried whitespace; an HTTP header value containing whitespace is
