@@ -63,26 +63,38 @@ def compare(text_a, text_b, k=SHINGLE_K):
         "containment_a_in_b": round(containment(sa, sb), 4),
         "containment_b_in_a": round(containment(sb, sa), 4),
         "label": label_for(j),
-        # The absorbed case: A is (nearly) inside B while Jaccard says otherwise.
-        "absorbed": containment(sa, sb) >= NEAR_IDENTICAL and j < SUBSTANTIAL,
+        # The absorbed case, in BOTH directions. This checked only `A in B` — so a Senate bill lifted whole
+        # into a House omnibus scored `weak` and the pair was missed, while the mirror image was caught.
+        # An asymmetric test on a symmetric relationship is a silent half-blindness (CodeRabbit, PR #233).
+        "absorbed": (containment(sa, sb) >= NEAR_IDENTICAL or containment(sb, sa) >= NEAR_IDENTICAL)
+                    and j < SUBSTANTIAL,
     }
 
 
 def candidate_pairs(bills):
-    """STRUCTURAL signal only. `bills` = iterable of (bill_id, title). Returns [(house, senate, title)].
+    """STRUCTURAL signal only. Returns [(house, senate, title)].
+
+    `bills` = iterable of `(bill_id, title)` or `(bill_id, title, session_code)`. The stated rule is "same
+    SESSION, opposite chambers, identical title", but the 2-tuple form carries no session — so a caller
+    mixing sessions would pair a 2025 HB with a 2026 SB on a recycled title, which is a real risk because
+    bill titles repeat across sessions constantly (CodeRabbit, PR #233). When the 3-tuple form is used the
+    session is part of the grouping key and cross-session pairing becomes impossible; the 2-tuple form is
+    still accepted for single-session callers and treated as one implicit session.
 
     Deterministic ordering so a run is reproducible and diffable. A title shared by more than two bills is
     NOT silently collapsed to one pair — every cross-chamber combination is emitted, because picking one
     arbitrarily would hide a real 3-way relationship (honest-absent beats plausible-wrong).
     """
     by_title: dict = {}
-    for bill_id, title in bills:
-        key = (title or "").strip().lower()
-        if not key or not bill_id:
+    for row in bills:
+        bill_id, title = row[0], row[1]
+        session = row[2] if len(row) > 2 else ""      # "" = one implicit session (single-session caller)
+        key = ((title or "").strip().lower(), str(session).strip())
+        if not key[0] or not bill_id:
             continue
         by_title.setdefault(key, []).append(bill_id.strip())
     out = []
-    for title, ids in by_title.items():
+    for (title, _session), ids in by_title.items():
         house = sorted({b for b in ids if b.upper().startswith("HB")})
         senate = sorted({b for b in ids if b.upper().startswith("SB")})
         for h in house:

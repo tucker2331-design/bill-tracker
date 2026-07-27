@@ -52,6 +52,25 @@ check("containment sees it", cmp_["containment_a_in_b"] >= C.NEAR_IDENTICAL, Tru
 res = C.detect([("HB4", "SB4", "t")], {"HB4": BODY, "SB4": omnibus})
 check("so the pair is CONFIRMED on containment, not missed", res[0]["verdict"], "confirmed")
 
+print("\n— absorption is SYMMETRIC (CodeRabbit, PR #233) —")
+# The relationship "one bill is contained in the other" has no direction. Checking only A-in-B meant a
+# Senate bill lifted into a House omnibus scored `weak` while the mirror image was caught — half-blind.
+check("Senate absorbed into a House omnibus is caught too",
+      C.compare(omnibus, BODY)["absorbed"], True)
+check("...and so is the reverse (unchanged)", C.compare(BODY, omnibus)["absorbed"], True)
+res = C.detect([("HB6", "SB6", "t")], {"HB6": omnibus, "SB6": BODY})
+check("the reversed pair is CONFIRMED, not weak", res[0]["verdict"], "confirmed")
+
+print("\n— pairing is SESSION-SCOPED (CodeRabbit, PR #233) —")
+# Bill titles repeat across sessions constantly, so a caller mixing sessions would otherwise pair a 2025 HB
+# with a 2026 SB on a recycled title.
+check("identical titles in DIFFERENT sessions do not pair",
+      C.candidate_pairs([("HB1", "same title", "20251"), ("SB1", "same title", "20261")]), [])
+check("identical titles in the SAME session still pair",
+      len(C.candidate_pairs([("HB1", "same title", "20261"), ("SB1", "same title", "20261")])), 1)
+check("the 2-tuple form still works for single-session callers",
+      len(C.candidate_pairs([("HB1", "same title"), ("SB1", "same title")])), 1)
+
 print("\n— honesty defaults —")
 check("two empty texts are NOT called identical", C.compare("", "")["jaccard"], 0.0)
 res = C.detect([("HB5", "SB5", "t")], {"HB5": "", "SB5": ""})
