@@ -23,29 +23,12 @@ status: active
   then.** New standing rule: [[workflow/hardening_is_non_negotiable]] (a direction never leaves in-flight work
   unhardened). Design decision: strategic/whip tools go on a DEDICATED surface, not the crowded bill card
   ([[architecture/strategic_tools_placement]]).
-- **WAR ROOM BUILD-OUT UNDERWAY (owner 2026-07-17: "go for the max while it's shut down for building").** Mockup v3 owner-approved; roster/vote ingest **SCOPED via live LIS probe** — chair (`CommitteeRoleTitle`), party (`PartyCode`), district, and member votes (`ResponseCode`+`LegislationNumber`) ALL confirmed structural ([[architecture/roster_and_votes_ingestion]]). Storage finding: member votes exceed the Sheets 10M-cell ceiling → D1/blob, not a tab. **Predictive lane opened as a 3-tier plan** ([[ideas/predictive_lane]]): measured-history + deterministic-math build first; individual prediction (Tier 3) gated behind a calibration harness, owner's go/no-go. **THE MAINTENANCE WAVE (owner-approved list, 2026-07-25 — "knock out everything that isn't the visionary war-room stuff"; execute top to bottom):**
-  **DONE + MERGED 2026-07-26:** W0 (#227 — calendar clipping · ring anchor · outcome provenance · bill-worker
-  alerts reach Health · **plus a CI gap: nothing compiled `web/`, so a TS error failed only Cloudflare's build
-  and the fix sat unmerged — a `web-build` job now runs the exact deploy command**), W1 (#228 — the days-clean
-  ledger: `_drill`/`false_alarm`/`unverified` classes, open-incident dedup, three guards wired, monthly
-  fire-drill workflow; **caught in my own review: the guards run as scripts so a bare `from tools.…` import
-  raised ModuleNotFoundError, which fail-open would have swallowed — the ledger would have recorded NOTHING
-  forever**), W5 (#229 — **`VOTE.CSV` already contains per-member roll calls**, so the whip board's vote
-  history costs ZERO extra LIS requests; the ~140-call plan is retired), W6 (#229 — [[knowledge/legiscan_terms]]
-  compliance gate written BEFORE any request), W7 (#229 — CLAUDE.md said 16 audit points, CI said 15, the script
-  does 17; reconciled + point 17 documented).
-  **REMAINING in the wave — the text-similarity block (owner-rushed, lobbyist-informed):**
-    **W2. VA native text scanner** — first per-state scanner; retires VA's LegiScan slice. Routes probe-confirmed
-    (`GetLegislationVersionbyBillNumberAsync` → `GetLegislationTextByIDAsync` → `DraftText` inline, plus free
-    vacode-section links). Zero external dependencies. Spec: [[architecture/text_similarity]].
-    **W3. Similarity core + companion calibration** — pure/offline: normalize → shingle → MinHash/LSH → Jaccard,
-    **coarse labels only** (P20b), thresholds fit and PROVEN on VA companion pairs vs random pairs; stop honestly
-    if known-same can't separate from known-different. Zero external dependencies.
-    **W4. Companion detection data layer** — VA cross-chamber near-identical pairs (`sasts` × our detector,
-    cross-validating). Data only; UI belongs to the war-room build.
-    **W8. Sampled DOM parity audit** — owner-gated (sign-off + terms review); periodic tiny-sample AUDIT, never a
-    monitor, producing a dated receipt ([[architecture/incident_counter]] §1b).
-    **Owner-side unblocks:** the LegiScan key (dual-use with the NY oracle) + which states to compare.
+- **WAR ROOM BUILD-OUT UNDERWAY (owner 2026-07-17: "go for the max while it's shut down for building").** Mockup v3 owner-approved; roster/vote ingest **SCOPED via live LIS probe** — chair (`CommitteeRoleTitle`), party (`PartyCode`), district, and member votes (`ResponseCode`+`LegislationNumber`) ALL confirmed structural ([[architecture/roster_and_votes_ingestion]]). Storage finding: member votes exceed the Sheets 10M-cell ceiling → D1/blob, not a tab. **Predictive lane opened as a 3-tier plan** ([[ideas/predictive_lane]]): measured-history + deterministic-math build first; individual prediction (Tier 3) gated behind a calibration harness, owner's go/no-go. **MAINTENANCE WAVE — COMPLETE 2026-07-27.** Every item merged to main, each with green CI, goldens, and (where the rate limit allowed) a bot review folded in.
+  **W0** owner-reported bugs — calendar clipping fixed + LIVE, accuracy ring lands on the failing metric, `outcome_origin` provenance so the adjudication verdict survives, bill-worker alerts reach the Health panel (#227).
+  **W1** incident counter — scoped build-ready in [[architecture/incident_counter]]: fire-drill verification on the REAL ledger, open-incident dedup, `unverified`/`false_alarm` classes, the auto-resolver, tri→binary fail-closed display. **NOT YET BUILT — this is the top of the next queue.**
+  **W2** VA native text scanner (#232) · **W3** comparer CALIBRATED on real bills (+0.846 separation) · **W4** companion detection + drift (#233) — remaining text-corpus residuals tracked in [[architecture/text_similarity]] (cross-state corpus is blocked on Open States' bulk downloads requiring a login; VA-only work is done) · **W5** VOTE.CSV answered — the whole per-member matrix (318,282 pairs) is already in a blob we fetch · **W6** Open States adopted over LegiScan (public domain, no attestation) with a hard request budget · **W7** CLAUDE.md cadence-drift guard.
+  **Reviewer bench rebuilt** ([[workflow/reviewer_strategy]]): Semgrep + mypy added as deterministic layers — mypy immediately caught a gspread signature bug that would have broken the trust counter's first write, and the house rules caught our own new code swallowing a corrupt-file error (#234). **Gemini is permanently OUT** — Google shut the free consumer GitHub reviewer down 2026-07-17; review is enterprise-paid only. **CodeRabbit is the only free LLM reviewer for a private repo.**
+  **NEXT:** (1) build W1 the incident counter · (2) the War Room mockup → build · (3) roster/vote ingest.
 - **VA accuracy state: CLEAR + holding (2026-07-12).** The 0→66 regression is root-caused and closed ([[failures/assumptions_audit#105]] — an `UnboundLocalError` in the agenda block wearing an API-outage costume; §9 and cache-warmth both innocent). All four deferred pieces shipped + live-verified: agenda/meeting links (#214), §9 anchor ladder re-merge (#215), the scroll affordance (#216), and the last engineering residual — the label-based agenda-FETCH target (#217, [[state/open_anti_patterns]] #13, now resolved). No open VA engineering items; the only open PR is the Codex NY-probe (#175, NY). **Standing watch each cycle:** `meeting_unsourced=0`, breaker clear, `anchor_unresolved` stays 1, agenda/link drift canaries quiet. Everything below in NEXT is owner-gated (infra/decision), not blocked on me.
 
 ## NEXT (needs owner infra / a decision — then I execute)
