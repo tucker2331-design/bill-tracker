@@ -105,12 +105,15 @@ class OpenStates:
 
     # ── the few targeted lookups we actually need ──────────────────────────────────────────────────────
     def bill(self, state, session, bill_id, include=("sources", "versions")):
-        """One bill. `include=versions` is what carries text links — the field the corpus design hangs on."""
-        params = {}
-        for i, inc in enumerate(include):
-            params[f"include{i}"] = inc
-        # the v3 route is /bills/{jurisdiction}/{session}/{bill_id}
-        return self.get(f"/bills/{state}/{session}/{bill_id}", **params)
+        """One bill. `include=versions` carries the text links — the field the corpus design hangs on.
+
+        v3 expects `include` REPEATED (`?include=sources&include=versions`), not indexed (`include0=`,
+        `include1=`). The indexed form is silently ignored: the request SUCCEEDS, returns a valid bill, and
+        simply omits the versions — so the first probe reported `versions_present: false`, which read like a
+        finding *about the API* rather than a bug in how we asked. Passing a list makes requests emit the
+        repeated form. Lesson worth keeping: a 200 response can still be the wrong question asked.
+        """
+        return self.get(f"/bills/{state}/{session}/{bill_id}", include=list(include))
 
     def budget_snapshot(self):
         return self._budget.snapshot()
