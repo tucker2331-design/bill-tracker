@@ -64,12 +64,16 @@ class FakeHTTP:
 
 
 print("— authorization is asserted BEFORE any request —")
+# Catch the SPECIFIC exception, not any. A bare `except Exception` here would pass even if construction
+# failed for an unrelated reason (a typo, a missing import) — it would assert "something went wrong"
+# rather than "the authorization gate refused it". Our own Semgrep house rule flagged the broad form on
+# this very file, and narrowing it made the test stricter rather than merely quieter.
 try:
     R.RosterFetcher("20241", FakeHTTP())
     blocked = False
-except Exception:
+except PermissionError:
     blocked = True
-check("a pre-2025 session is refused at construction", blocked, True)
+check("a pre-2025 session is refused at construction, by the AUTHORIZATION gate specifically", blocked, True)
 check("an authorized session constructs", bool(R.RosterFetcher("20261", FakeHTTP())), True)
 
 print("\n— the whole chamber in ONE call —")
