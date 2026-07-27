@@ -57,6 +57,45 @@ odds at the individual level). This is the one the owner means by "carefully."
 
 ---
 
+## REFRAME 2026-07-27 — this is an ENTITY-STATISTICS LAYER, not a prediction widget
+
+> Owner: *"you are thinking too small… we are talking about using the data we aggregate to then collect stats
+> that can apply across the board. Maybe individual reps have their stats and committees have their stats and
+> subject areas have theirs — there is so much data to derive and dig into."*
+
+**He is right, and it reframes the whole lane.** I had been designing a per-bill prediction display. The real
+thing is: **every OBJECT in our model accumulates a measured profile from the archive**, and a per-bill
+prediction is just one derived VIEW over those profiles — not the product.
+
+**Why this is the right frame, three ways:**
+1. **It is Tier 1, not Tier 3.** Entity stats are COUNTING with denominators — measurement, our strongest and
+   lowest-risk ground. It needs no calibration harness and carries no "the model said so" risk. The dangerous
+   tier stays optional on top.
+2. **It completes the OOUX finding.** [[design/object_page_patterns]] §1b established that every core object
+   gets card / list / **detail** representations, and that we had never built the DETAIL for anything. This is
+   what fills them: a Member page, a Committee page, a Subject page — each one an object's profile.
+3. **It unifies ideas the vault already had scattered** — C1 legislator dossier, C3 committee math, C5 patron
+   scouting, D2 committee mortality tables, D4 "bills like this" — which were five features. They are one
+   layer applied to five objects.
+
+**The objects and the stats each would carry (sketch, not a spec):**
+
+| Object | Measured profile (all from the archive, all with denominators) |
+|---|---|
+| **Member** | vote record by subject code · party-line rate · how often they break with their chair · committee attendance · patron win-rate |
+| **Committee** | report vs kill rate (overall and by subject) · how long bills sit before action · docket size and drop timing · amend-vs-pass-clean rate |
+| **Subject** | pass rate by topic · which committees receive them · which patrons carry them successfully |
+| **Patron** | win-rate overall, **by committee**, by subject · co-patron network · majority/minority effect |
+| **Bill** | survival by stage · the composite (Tier 3, gated) |
+
+**The strategic weight:** this is the archive moat ([[ideas/moat_and_competition]] #1) turned into product. A
+competitor can clone the bill list in a weekend; they cannot compute "this patron is 2-for-11 in this
+committee" without our years of reconciled history. **Entity stats are the most defensible surface we have.**
+
+**Open, and the reason this is a discussion not a build:** which objects get a detail page FIRST, what belongs
+on each, and how a profile stays honest at small n (a member with 3 relevant votes must not display a 33% rate
+as if it meant something — the Wilson interval + thin-data guard from §Tier 1 apply to every cell here).
+
 ## What statistics each tier actually uses (owner asked: "what stats?")
 
 ### Tier 2 — deterministic math (no statistics; exact arithmetic on known facts)
