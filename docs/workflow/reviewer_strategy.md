@@ -75,6 +75,9 @@ twice), and the deterministic layers below are **additive on top rather than com
 gspread signature bug that two LLM reviews had walked past, which no third LLM would likely have found either.
 So the plan is BOTH: keep every free LLM reviewer we can get, AND add the deterministic floor. Not either/or.
 
+**Verification note:** enabling the agent is not complete until **Save** is pressed on its settings page — the
+toggle alone does not persist, and a PR pushed before that gets no review (observed 2026-07-27).
+
 **Practical consequence:** CodeRabbit's rate limit is a real single-point-of-failure. A backup LLM reviewer is
 not redundancy for its own sake — it is coverage, and it is what keeps a rate-limited hour from shipping an
 unreviewed PR (which happened on #232).
@@ -100,6 +103,87 @@ more METHODS**:
 because they fail *differently* from everything we run. That is not an argument against adding LLM reviewers
 (§3 settles that: add every free one), it is an argument for not stopping there.
 
+## 3c. VERIFIED AUDIT — every candidate checked against its OWN pricing page (2026-07-27)
+
+The owner called out a real pattern: I had been quoting comparison blogs and vendor round-ups, which are
+marketing, and got three things wrong in a row (Gitar's "free", Git AutoReview being a bot, Gemini being
+live). **Rule now: a reviewer is not listed until its own pricing/listing page has been read directly.**
+
+### ✅ FREE for a PRIVATE repo — verified
+| Tool | Method | Verified how | Limits |
+|---|---|---|---|
+| **CodeRabbit** | LLM | we use it daily | free tier covers private repos; ~4 PR reviews/hr, 200 files/hr |
+| ~~**Gemini Code Assist**~~ | LLM | ❌ **ABANDONED 2026-07-27 — hit a PAYWALL** | free in preview. Setup gotchas, both hit: the connection must be created **from the Agents & Tools page** (one made directly in Developer Connect is invisible to Code Assist), and it must live in **`us-east1`** — a `us-east4` connection simply never appears in the dropdown. The **old consumer GitHub App must be uninstalled**: it keeps posting "has been sunset" on every PR, which reads exactly like the new one working. |
+| **Semgrep** | rules/AST | free ≤10 contributors on private repos | security + our own house rules |
+| **mypy** | type checker | open source, runs in our CI | scoped to new modules, widening |
+| **pyflakes** | static analysis | already in the pre-push audit | undefined names (audit #105) |
+| **`prepush_audit.py`** | project invariants | ours | the checks no vendor has |
+
+**OWNER RULE 2026-07-27: trials and BYOK are NOT reviewers.** *"Limit that list to no free trials or bring
+your own keys — we both know those aren't even considered."* Correct: a 14-day trial is a countdown to an
+outage, and BYOK just relocates the bill. Neither is a standing reviewer, so neither belongs on a bench we
+are relying on. They are listed below only so nobody re-proposes them.
+
+### ❌ NOT free for a private repo — each verified, with the disqualifier
+| Tool | Reality | How verified |
+|---|---|---|
+| **Codacy** | free tiers are **IDE-only or open-source-only**; private repos + AI PR review start at the paid Team plan | its own pricing page, 2026-07-27 |
+| **DeepSource** | free plan is **public repositories only**; AI review is pay-as-you-go even there | its own pricing page, 2026-07-27 |
+| **Gitar** | **14-day trial**, not free — despite round-ups claiming "unlimited private repos at no cost" | **owner checked** |
+| **Git AutoReview** | a **VS Code extension**, not a GitHub App — BYOK, human presses publish | its marketplace listing |
+| **Qodo** | permanent free tier withdrawn; trial expired on our repo | its own comment on PR #232 |
+| **Codex** | usage limits exhausted | its own comment on PR #233 |
+| **Sourcery** | free for open-source only | pricing page |
+| **Greptile** | no free tier at all | pricing page |
+| **LlamaPReview** | free private reviews end May 2026 | its own site |
+
+### The MARKETPLACE SWEEP — the registry itself, not a blogger's shortlist (2026-07-27)
+The owner pushed for the complete pass rather than a sample. Walked GitHub Marketplace's own **Code review**
+category (popularity-sorted, so the meaningful names are front-loaded) and checked every AI PR reviewer on it:
+
+| App on Marketplace | Verdict | Verified |
+|---|---|---|
+| **CodeRabbit** | ✅ **free, private repos** | in use |
+| Codacy | ❌ free = IDE-only / OSS-only | pricing page |
+| DeepSource | ❌ public repos only | pricing page |
+| Sourcery | ❌ OSS only | pricing page |
+| Qodo | ❌ tier withdrawn | its own PR comment |
+| **cubic** | ❌ **free = PUBLIC repos only; 14-day trial for private** | pricing, 07-27 |
+| **Bito** | ❌ **free = PR *summaries* only; review is a 14-day trial** | pricing, 07-27 |
+| Codecov · Graphite · Mergify · Datadog · Linear · Asana · WIP · What The Diff | n/a — coverage, merge queues, monitoring, PR descriptions; not PR reviewers | listing |
+| CodeFactor · Qlty · CodeScene | static-analysis/quality — Semgrep's category, not CodeRabbit's | listing |
+
+**Result: CodeRabbit is the ONLY free-for-private AI PR reviewer in the Marketplace's code-review category.**
+Honest bound: page 1 of 15, popularity-sorted. The tail is dominated by non-review tools, but it was not
+walked exhaustively.
+
+### ❌ GEMINI — ABANDONED at the paywall (2026-07-27)
+After connecting Developer Connect (us-east1), enabling the Code Review agent and saving, the flow ended at a
+**"Get Gemini Code Assist subscription"** purchase page: **$22.80/user/month** (first 50 users free for the
+first month), or $19 annual. The product it sells is described as *"Gemini in IDE code completion and Gemini
+in Cloud console chat"* — arguably NOT the GitHub review agent, but the flow would not complete without it.
+
+**RESOLVED 2026-07-27 — the paywall is real and permanent.** Google's own deprecation notice: the consumer
+version was deprecated 2026-06-18 and **shut down 2026-07-17**, and *"the enterprise version of Gemini Code
+Assist on GitHub is not affected"* — i.e. **GitHub code review now exists ONLY in the paid enterprise tier.**
+We hit this ten days after the shutdown. There is no free path; the "free during Preview" wording applies to
+the enterprise setup flow, not to a free tier. **Gemini is permanently out for a free private repo.**
+
+**Three sources that did not reconcile at the time:** Google's docs say GitHub review is free during Preview; the sunset
+notice says only the enterprise tier survives; the console asks for money. **I could not resolve which is
+true, and I had already been wrong about Gemini three times that day** (the us-east1 region requirement, a
+false "it's live" call caused by the dead consumer app's tombstone, and two wrong console paths). Correct call
+was to stop rather than spend on a fourth guess.
+
+**Cost of the attempt: ~2 hours of owner time for a SECOND opinion.** Recorded so nobody re-runs the loop.
+The same session's real quality gains came from elsewhere: mypy caught a gspread signature bug that would
+have broken the trust counter's first write (two LLM reviews had read that file), and CodeRabbit caught a
+one-directional absorption bug plus a session-scoping gap on PR #233.
+
+**REVISED headline: for a PRIVATE repo there is exactly ONE genuinely free LLM reviewer — CodeRabbit.** Everything else marketed as "free" is public-repo-only, a trial, or bring-your-own-key. A bench of
+five is still reachable, but only by counting METHODS (LLM + rules + types + static + project invariants),
+which is what §3b argued for anyway — and that bench is now assembled and running.
+
 ## 4. The free plan (private repo — most "free" tiers are open-source-only and don't apply)
 
 **Tier 1 — free, uncorrelated, highest value:**
@@ -118,6 +202,14 @@ because they fail *differently* from everything we run. That is not an argument 
    known bugs into our code and reports what fraction our tests catch. That yields a *real percentage for our
    codebase*, not a vendor's marketing figure, and it directly answers "how far can we push toward 100%?"
    It also grades the reviewers: seed N mutants, open a PR, count what each layer flags.
+
+**Vendor "free" claims must be VERIFIED, not read (owner 2026-07-27).** I surfaced **Gitar** from a search
+result claiming *"unlimited private repositories at no cost"* — the owner checked and it is a **14-day
+trial**. The claim came from vendor comparison pages, which are marketing. **Rule: no reviewer goes on the
+plan until its pricing page is read directly, and "free" is recorded with its expiry.**
+- **Gitar** — ❌ 14-day trial, not free (owner-verified).
+- **LlamaPReview** — ❌ free private-repo reviews end May 2026.
+- **Git AutoReview** — 🟡 free tier of 10 reviews/day; owner installed it 2026-07-27, connection pending.
 
 **Rejected, with the reason:** *Sourcery* (free only for open-source), *Greptile* (no free tier), *Qodo*
 (permanent free tier withdrawn). Adding a paid seat is a real option later, but the free ceiling is not yet

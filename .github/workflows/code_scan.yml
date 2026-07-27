@@ -32,7 +32,12 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
+      # fetch-depth: 0 is REQUIRED for --baseline-commit. actions/checkout defaults to a shallow clone, so
+      # `git diff origin/main --merge-base` fails with "no merge base found" — which is exactly how this
+      # job failed on its first real PR (#233). Full history is the only way the baseline can be computed.
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
       - uses: actions/setup-python@v5
         with:
           python-version: '3.10'
