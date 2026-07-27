@@ -100,6 +100,40 @@ more METHODS**:
 because they fail *differently* from everything we run. That is not an argument against adding LLM reviewers
 (§3 settles that: add every free one), it is an argument for not stopping there.
 
+## 3c. VERIFIED AUDIT — every candidate checked against its OWN pricing page (2026-07-27)
+
+The owner called out a real pattern: I had been quoting comparison blogs and vendor round-ups, which are
+marketing, and got three things wrong in a row (Gitar's "free", Git AutoReview being a bot, Gemini being
+live). **Rule now: a reviewer is not listed until its own pricing/listing page has been read directly.**
+
+### ✅ FREE for a PRIVATE repo — verified
+| Tool | Method | Verified how | Limits |
+|---|---|---|---|
+| **CodeRabbit** | LLM | we use it daily | free tier covers private repos; ~4 PR reviews/hr, 200 files/hr |
+| **Gemini Code Assist** | LLM | Google docs: *"no charges … during Preview"* | free in preview; needs a Cloud project + Developer Connect |
+| **Semgrep** | rules/AST | free ≤10 contributors on private repos | security + our own house rules |
+| **mypy** | type checker | open source, runs in our CI | scoped to new modules, widening |
+| **pyflakes** | static analysis | already in the pre-push audit | undefined names (audit #105) |
+| **`prepush_audit.py`** | project invariants | ours | the checks no vendor has |
+
+### ❌ NOT free for a private repo — each verified, with the disqualifier
+| Tool | Reality | How verified |
+|---|---|---|
+| **Codacy** | free tiers are **IDE-only or open-source-only**; private repos + AI PR review start at the paid Team plan | its own pricing page, 2026-07-27 |
+| **DeepSource** | free plan is **public repositories only**; AI review is pay-as-you-go even there | its own pricing page, 2026-07-27 |
+| **Gitar** | **14-day trial**, not free — despite round-ups claiming "unlimited private repos at no cost" | **owner checked** |
+| **Git AutoReview** | a **VS Code extension**, not a GitHub App — BYOK, human presses publish | its marketplace listing |
+| **Qodo** | permanent free tier withdrawn; trial expired on our repo | its own comment on PR #232 |
+| **Codex** | usage limits exhausted | its own comment on PR #233 |
+| **Sourcery** | free for open-source only | pricing page |
+| **Greptile** | no free tier at all | pricing page |
+| **LlamaPReview** | free private reviews end May 2026 | its own site |
+
+**The honest headline: for a PRIVATE repo there are exactly TWO genuinely free LLM reviewers — CodeRabbit and
+Gemini.** Everything else marketed as "free" is public-repo-only, a trial, or bring-your-own-key. A bench of
+five is still reachable, but only by counting METHODS (LLM + rules + types + static + project invariants),
+which is what §3b argued for anyway — and that bench is now assembled and running.
+
 ## 4. The free plan (private repo — most "free" tiers are open-source-only and don't apply)
 
 **Tier 1 — free, uncorrelated, highest value:**
