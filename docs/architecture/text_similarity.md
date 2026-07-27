@@ -109,6 +109,34 @@ chamber and not the other tells you whether a conference fight is coming and whi
   detector is *tested against* labels, not circularly generated from them; `sasts` provides an independent
   check set.
 
+## W3 CALIBRATED ON REAL BILLS — 2026-07-27 (measured, not asserted)
+
+Ground truth came from **our own data**: 388 cross-chamber same-title pairs in `Bill_Tracker` — real
+House↔Senate companions, not invented examples. Fetched full text for a random **12 pairs (24 bills, 203
+versions)** via the native VA scanner and compared richest-version to richest-version.
+
+| Population | min | median | max |
+|---|---|---|---|
+| **known companion pairs** (n=12) | **0.857** | 0.991 | 1.000 |
+| random cross-pairs (n=80) | 0.000 | 0.001 | **0.011** |
+
+**Separation gap: +0.846.** Four pairs scored a perfect **1.000** — byte-identical after normalization, which
+is exactly what a chamber-mirrored companion should be, and is direct evidence the normalizer is neither
+lossy nor over-aggressive.
+
+**What this licenses, and what it does not.** Any cut between ~0.02 and ~0.85 separates this sample perfectly,
+so the exact threshold is not delicate — that insensitivity is itself the finding. Adopted with margin:
+**near-identical ≥ 0.80**, **substantial 0.50–0.80**, **partial 0.15–0.50** (also consult containment, which
+catches a small bill absorbed into an omnibus), **unrelated < 0.15**. **Honest limit: n=12 same-session VA
+pairs.** Cross-STATE text will differ more (different drafting conventions, different code citations), so
+these thresholds are validated for the VA companion case ONLY and must be re-measured before any cross-state
+label ships.
+
+**Backfill sizing, discovered in the same run:** 24 bills carried **203 versions** (~8.5 each), costing 227
+requests. A full-session backfill is therefore ~3,645 bills → **≈35,000 requests**, which the scanner's
+9,000-per-run cap deliberately refuses to do in one pass. That is the guard working: a backfill must be
+chunked and paced across runs rather than hammering LIS in a single burst.
+
 ## The algorithm (quality path, deliberately boring)
 1. **Normalize:** strip HTML/anchors, drop state-specific boilerplate (enacting clauses, numbering formats
    differ per state), lowercase, collapse whitespace. Normalization quality is 80% of similarity quality.
