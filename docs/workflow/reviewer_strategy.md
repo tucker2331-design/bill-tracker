@@ -75,6 +75,9 @@ twice), and the deterministic layers below are **additive on top rather than com
 gspread signature bug that two LLM reviews had walked past, which no third LLM would likely have found either.
 So the plan is BOTH: keep every free LLM reviewer we can get, AND add the deterministic floor. Not either/or.
 
+**Verification note:** enabling the agent is not complete until **Save** is pressed on its settings page — the
+toggle alone does not persist, and a PR pushed before that gets no review (observed 2026-07-27).
+
 **Practical consequence:** CodeRabbit's rate limit is a real single-point-of-failure. A backup LLM reviewer is
 not redundancy for its own sake — it is coverage, and it is what keeps a rate-limited hour from shipping an
 unreviewed PR (which happened on #232).
