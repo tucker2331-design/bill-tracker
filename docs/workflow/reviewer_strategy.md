@@ -116,6 +116,11 @@ live). **Rule now: a reviewer is not listed until its own pricing/listing page h
 | **pyflakes** | static analysis | already in the pre-push audit | undefined names (audit #105) |
 | **`prepush_audit.py`** | project invariants | ours | the checks no vendor has |
 
+**OWNER RULE 2026-07-27: trials and BYOK are NOT reviewers.** *"Limit that list to no free trials or bring
+your own keys — we both know those aren't even considered."* Correct: a 14-day trial is a countdown to an
+outage, and BYOK just relocates the bill. Neither is a standing reviewer, so neither belongs on a bench we
+are relying on. They are listed below only so nobody re-proposes them.
+
 ### ❌ NOT free for a private repo — each verified, with the disqualifier
 | Tool | Reality | How verified |
 |---|---|---|
