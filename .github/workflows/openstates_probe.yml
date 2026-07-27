@@ -1,0 +1,36 @@
+name: 🔎 Open States Probe (read-only, budgeted)
+
+# Manual dispatch ONLY — never scheduled. This spends a handful of the account's 500/day allowance to
+# verify the key authenticates and to MEASURE the payload shape (versions/text links) that the corpus
+# design depends on. Read-only: no Sheets credentials are passed, and the tool has no write verbs.
+#
+# The key lives only here, as a repository secret, so it is never read on a developer machine. The probe
+# never prints it and redacts it from any error text before display.
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read      # least-privilege: checkout only; no token writes anywhere
+
+concurrency:
+  group: openstates-probe
+  cancel-in-progress: false     # never cancel mid-flight — a killed run could leave the budget mis-counted
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+      - name: Install requests
+        run: pip install --quiet requests
+      - name: Probe (budgeted, read-only)
+        env:
+          OPENSTATES_API_KEY: ${{ secrets.OPENSTATES_API_KEY }}
+          PYTHONUNBUFFERED: "1"
+        run: python3 -u tools/text_corpus/probe_openstates.py

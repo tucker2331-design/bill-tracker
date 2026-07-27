@@ -74,10 +74,14 @@ Operative wording, quoted:
   and the wording must credit the source WITHOUT implying they endorse us.**
 - **Commercial use:** no restriction stated. Nothing to attest to, nothing to re-check at monetization.
 - **Derivative works:** permitted (our similarity labels are fine), subject to the no-endorsement rule.
-- **Monitoring / limits:** *"Open States may monitor usage of the service to improve the service or to ensure
-  compliance"*, and access may be blocked where a user *"attempted to exceed or circumvent these limits."*
-  No published numbers. **→ Our own politeness charter ([[knowledge/lis_api_safety]]) applies in full:
-  bulk-first, conditional fetch, hard per-cycle cap, jitter. Absence of a stated limit is not permission.**
+- **Monitoring / limits — REAL NUMBERS, owner-reported from the account page 2026-07-27:**
+  **500 requests per DAY, paced at 1 request per SECOND.** The ToS additionally reserves the right to block a
+  user who *"attempted to exceed or circumvent these limits."*
+  **→ This settles the architecture: the API is for TARGETED lookups only; the CORPUS must come from bulk
+  downloads.** 500/day is ~0.35 req/min sustained — a single state's bills would consume months of quota via
+  the API, while one bulk file costs zero API calls. Our own ceilings sit deliberately BELOW theirs
+  (guardrail #4: a hard cap independent of cadence logic, so a bug can never spike us into a ban):
+  **400 req/day (80% of theirs) and 1.2s spacing (20% slower than required).**
 - **⚠️ Warranty:** *"provides the Services 'as-is' and on an 'as-available' basis"*, with
   *"no warranty that the Services will be error free."*
 
