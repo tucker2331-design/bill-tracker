@@ -86,6 +86,7 @@ jobs:
             test_openstates_budget.py \
             test_va_text_fetch.py \
             test_companions.py \
+            test_counter_display.py \
             test_route_event.py \
             test_classify_action.py \
             test_classify_refid.py \
