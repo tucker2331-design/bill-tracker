@@ -21,10 +21,30 @@ states the response **cannot be edited after submission**. The two required decl
 
 | Survey question | Answer the free tier requires | Why that is a problem HERE |
 |---|---|---|
-| Commercial or **non-commercial** use? | Non-Commercial | [[ideas/moat_and_competition]] places revenue in the workflow + insight layers. Attesting non-commercial while building toward selling is a compliance conflict, not a formality. |
-| Derivative works internal-only or **externally published**? | Internal Use Only | Cross-state comparison is *displayed to users* in the War Room's "Elsewhere" zone — externally published by construction. |
+| Commercial or **non-commercial** use? | Non-Commercial | A cost to SEQUENCE, not a permanent bar — see the owner correction below. We would have had to fully transition off before charging anyone. |
+| Derivative works internal-only or **externally published**? | Internal Use Only | **The binding one.** Cross-state comparison is *displayed to users* in the War Room's "Elsewhere" zone — externally published by construction, and that conflicts from day one, free or paid. |
 
-### The structural lesson (generalize this): a licence attestation is NOT a swappable dependency
+### OWNER CORRECTION 2026-07-27 — I overclaimed; here is the accurate version
+Owner: *"idk if this LegiScan form would've totally prevented us from using our site for compensation — I
+think we would've had to just make the full transition off the LegiScan API before we could monetize."*
+**He is right, and my "compliance conflict" framing was too absolute on that axis.** A non-commercial
+attestation governs the *use*: use it non-commercially now, stop using it before charging anyone, and there is
+no violation. That is literally the exit criterion I wrote on 07-25 ("monetization → replace that slice"). I
+should have said "a cost to sequence" rather than implying a permanent bar. Correction recorded.
+
+**What survives the correction, and it is the sharper half:**
+1. **"Internal Use Only" bites IMMEDIATELY, not at monetization.** Cross-state comparison renders in the War
+   Room's Elsewhere zone — shown to users outside our org. That is externally published *while still free*, so
+   this conflict is day one, not deferred. The commercial question was never the binding one.
+2. **The exit cost is UNKNOWN, and that is on me** — LegiScan's terms page returned 403 to me, so I never read
+   the redistribution/derived-data clauses. "Transition off" might mean swapping a fetcher, or it might mean
+   purging cached text and any similarity labels derived from it. I do not know which, and I should not
+   pretend a cost I never measured is either small or prohibitive.
+3. **It is moot anyway:** Open States is better on every axis we care about (public domain, no attestation,
+   full text, bulk-friendly), so declining LegiScan gives up nothing. The decision stands on the alternative's
+   merits, not on the severity of the LegiScan terms.
+
+### The structural lesson (still stands, restated precisely): a licence attestation is not a swappable dependency
 The 2026-07-25 decision banked LegiScan as *"temporary, behind a `corpus_source` seam, swap it out later."*
 That reasoning is sound for a **technical** dependency — an API shape can be adapted away. It does **not** hold
 for a **legal** one: you remain bound by what you attested, and the exit is not a refactor, it is a terms
@@ -45,11 +65,28 @@ The process point stands on its own too: **an AI must not draft or mediate the o
 - **We will attribute them even though it is optional** — it costs nothing and it is the right posture toward
   a civic-data commons we benefit from.
 
-### Owner-gated before the first byte (diligence, NOT an attestation)
-- [ ] Read [Terms of Use](https://open.pluralpolicy.com/tos/) and paste the relevant wording here with the date.
-- [ ] Record any politeness/rate expectation for bulk downloads, then set our own ceiling *below* it
-      (mirrors LIS-safety guardrail #4 — a hard cap independent of cadence logic).
-- [ ] Note their preferred attribution wording, and decide where it renders **before** shipping the feature.
+### Terms of Use — READ AND RECORDED 2026-07-27 (https://open.pluralpolicy.com/tos/)
+Operative wording, quoted:
+- **Data licence:** *"We make no copyright claim over any of the data we collect & publish"* — effectively
+  public domain.
+- **Attribution:** *"No attribution is required for using data obtained via Open States"* — but
+  *"no affiliation or endorsement may be implied on your derivative product."* **→ We attribute voluntarily,
+  and the wording must credit the source WITHOUT implying they endorse us.**
+- **Commercial use:** no restriction stated. Nothing to attest to, nothing to re-check at monetization.
+- **Derivative works:** permitted (our similarity labels are fine), subject to the no-endorsement rule.
+- **Monitoring / limits:** *"Open States may monitor usage of the service to improve the service or to ensure
+  compliance"*, and access may be blocked where a user *"attempted to exceed or circumvent these limits."*
+  No published numbers. **→ Our own politeness charter ([[knowledge/lis_api_safety]]) applies in full:
+  bulk-first, conditional fetch, hard per-cycle cap, jitter. Absence of a stated limit is not permission.**
+- **⚠️ Warranty:** *"provides the Services 'as-is' and on an 'as-available' basis"*, with
+  *"no warranty that the Services will be error free."*
+
+**The warranty clause has a TRUST-MODEL consequence, not just a legal one.** Open States data is *sourced from
+another state's official record, at one remove, from a provider who explicitly disclaims accuracy* — it is NOT
+the same epistemic class as our LIS-verified Virginia data. It must be labeled with its provenance ("via Open
+States") and must never inherit the verified treatment ([[design/information_display]] P24a: name the surface
+you actually checked; P25c: state what your verification reaches). Cross-state rows are **sourced-at-one-remove**,
+and a cross-state claim we cannot verify stays visibly unverified rather than quietly presented as fact.
 
 ## Standing rules once live (unchanged in spirit from the LegiScan draft)
 - **Cache fetched text permanently** in our own corpus store (append-only, not Sheets); re-fetch only on a
