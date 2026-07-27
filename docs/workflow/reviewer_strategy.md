@@ -163,7 +163,13 @@ After connecting Developer Connect (us-east1), enabling the Code Review agent an
 first month), or $19 annual. The product it sells is described as *"Gemini in IDE code completion and Gemini
 in Cloud console chat"* — arguably NOT the GitHub review agent, but the flow would not complete without it.
 
-**Three sources that do not reconcile:** Google's docs say GitHub review is free during Preview; the sunset
+**RESOLVED 2026-07-27 — the paywall is real and permanent.** Google's own deprecation notice: the consumer
+version was deprecated 2026-06-18 and **shut down 2026-07-17**, and *"the enterprise version of Gemini Code
+Assist on GitHub is not affected"* — i.e. **GitHub code review now exists ONLY in the paid enterprise tier.**
+We hit this ten days after the shutdown. There is no free path; the "free during Preview" wording applies to
+the enterprise setup flow, not to a free tier. **Gemini is permanently out for a free private repo.**
+
+**Three sources that did not reconcile at the time:** Google's docs say GitHub review is free during Preview; the sunset
 notice says only the enterprise tier survives; the console asks for money. **I could not resolve which is
 true, and I had already been wrong about Gemini three times that day** (the us-east1 region requirement, a
 false "it's live" call caused by the dead consumer app's tombstone, and two wrong console paths). Correct call
