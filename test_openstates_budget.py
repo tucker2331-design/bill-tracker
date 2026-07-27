@@ -100,6 +100,20 @@ with open(bad, "w", encoding="utf-8") as fh:
 b3 = B.RequestBudget(state_path=bad, now=Clock().now, sleep=lambda _s: None)
 check("garbled state starts the day at zero instead of raising", b3.snapshot()["used"], 0)
 
+# ABSENT vs CORRUPT are different events (our own Semgrep house rule caught them sharing a handler).
+# A missing file is the first run of the day. A CORRUPT one means the day's spend was LOST, so we could
+# blow past the provider's daily limit without knowing — that must be announced, never passed over.
+import io, contextlib  # noqa: E402
+_buf = io.StringIO()
+with contextlib.redirect_stdout(_buf):
+    B.RequestBudget(state_path=bad, now=Clock().now, sleep=lambda _s: None)
+check("a CORRUPT spend file warns loudly (the count was lost)", "unreadable" in _buf.getvalue(), True)
+_buf2 = io.StringIO()
+_missing = os.path.join(tempfile.mkdtemp(), "nope.json")
+with contextlib.redirect_stdout(_buf2):
+    B.RequestBudget(state_path=_missing, now=Clock().now, sleep=lambda _s: None)
+check("an ABSENT file is silent (expected on the first run of a day)", _buf2.getvalue().strip(), "")
+
 # ── Client key handling (found by the first live probe, 2026-07-27) ────────────────────────────────────
 # A secret pasted into a UI very often carries a trailing newline. An HTTP header value containing
 # whitespace is illegal, and requests raises a cryptic `InvalidHeader` that reads like a network fault —
