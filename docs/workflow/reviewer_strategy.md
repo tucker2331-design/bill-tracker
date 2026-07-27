@@ -119,6 +119,14 @@ because they fail *differently* from everything we run. That is not an argument 
    codebase*, not a vendor's marketing figure, and it directly answers "how far can we push toward 100%?"
    It also grades the reviewers: seed N mutants, open a PR, count what each layer flags.
 
+**Vendor "free" claims must be VERIFIED, not read (owner 2026-07-27).** I surfaced **Gitar** from a search
+result claiming *"unlimited private repositories at no cost"* — the owner checked and it is a **14-day
+trial**. The claim came from vendor comparison pages, which are marketing. **Rule: no reviewer goes on the
+plan until its pricing page is read directly, and "free" is recorded with its expiry.**
+- **Gitar** — ❌ 14-day trial, not free (owner-verified).
+- **LlamaPReview** — ❌ free private-repo reviews end May 2026.
+- **Git AutoReview** — 🟡 free tier of 10 reviews/day; owner installed it 2026-07-27, connection pending.
+
 **Rejected, with the reason:** *Sourcery* (free only for open-source), *Greptile* (no free tier), *Qodo*
 (permanent free tier withdrawn). Adding a paid seat is a real option later, but the free ceiling is not yet
 reached — Tier 1 is unbuilt.
