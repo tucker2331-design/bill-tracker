@@ -2,7 +2,7 @@
 tags: [architecture, ingestion, roster, votes, war-room, scoping]
 updated: 2026-07-17
 status: active
-open_loop: SCOPED, not built. Endpoints + fields all probe-confirmed structural (chair/party/district/votes). Unresolved before build — (1) companion-bill sourcing has no confirmed endpoint; (2) the votes store must NOT be Sheets (volume blows the 10M-cell ceiling) — D1 vs Azure-blob-mirror is an owner/architecture call; (3) whether roster/vote ingest lives in calendar_worker or its own worker.
+open_loop: SCOPED, not built. W5 ANSWERED 2026-07-27 — VOTE.CSV already carries the entire per-member matrix (318,282 pairs, 147 members, 9,129 votes) in a blob we already fetch, so ZERO per-member API calls are needed and the storage estimate drops ~10x. Remaining: confirm the VoteNumber→bill join. Endpoints + fields all probe-confirmed structural (chair/party/district/votes). Unresolved before build — (1) companion-bill sourcing has no confirmed endpoint; (2) the votes store must NOT be Sheets (volume blows the 10M-cell ceiling) — D1 vs Azure-blob-mirror is an owner/architecture call; (3) whether roster/vote ingest lives in calendar_worker or its own worker.
 ---
 
 # Roster & member-vote ingestion — scoping (the data under the War Room)
@@ -117,6 +117,40 @@ The open question was whether to add ~140 per-member API calls. **Answer: no —
 based on ~3,000 vote rows per member. That still holds for a *materialised* per-member view, but we no longer
 need to *fetch* it — so the store only has to hold what we choose to derive, which makes the D1-vs-blob
 choice cheaper either way.
+
+## W5 ANSWERED — VOTE.CSV already carries the WHOLE per-member matrix (measured 2026-07-27)
+
+The open question was whether the `VOTE.CSV` blob we **already download every cycle** carries per-member roll
+calls, or only tallies. **It carries all of them.** Measured on session 20261:
+
+| Measure | Value |
+|---|---|
+| votes | **9,129** |
+| **member-vote pairs** | **318,282** |
+| distinct members | **147** |
+| response vocabulary | `Y` 237,742 · `N` 67,235 · `X` 12,808 · `A` 497 |
+| rows with an unpaired tail | **0** (the format is clean) |
+| blob size | 3.9 MB |
+
+**Format:** ragged CSV — each row is `VoteNumber, member, response, member, response, …`, e.g.
+`26110000, H0056, N, H0108, Y, …`. The member ids are `MemberNumber` values (`H0056`), the same key the
+Member API returns — so the join to party/district/committee-role is structural, no name matching.
+
+**Consequences, all good:**
+1. **147 per-member API calls avoided entirely.** The earlier scoping assumed we might need one call per
+   member; the answer is zero — this is a blob we already fetch, under the existing conditional-fetch/304
+   path (guardrail #1). The marginal upstream cost of the whole vote matrix is **nothing**.
+2. **The storage sizing was overstated.** I previously estimated "~140 members × ~3,000 votes × ~24 fields ≈
+   10M cells" from the API's per-vote payload shape. The blob's actual content is **318k member-vote pairs of
+   3 fields** (vote, member, response) — about **1M cells**, not 10M. Still not a Sheets tab (it would consume
+   a tenth of the workbook ceiling for one session, and grows every session), but the D1-vs-blob decision is
+   now about query needs and multi-session growth, not an emergency.
+3. **`X` and `A` are part of the vocabulary** (12,808 + 497 rows): not-voting and abstain. A whip board must
+   render those honestly rather than folding them into "no" — they are exactly the members most worth a call.
+
+**Still to verify before building on it:** whether `VoteNumber` joins to the bill/committee context we need
+(`VOTE.CSV` gives the roll call; the bill linkage may live in `HISTORY.CSV` or the vote-detail route). One
+structural join to confirm — not a blocker, but do not assume it.
 
 ## The one storage finding that changes the architecture
 **Member votes CANNOT live in Google Sheets.** ~140 members × ~3,000 votes/session × ~24 fields ≈ **10M cells
