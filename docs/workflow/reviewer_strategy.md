@@ -49,7 +49,37 @@ Category distribution of what the bots caught (keyword frequency across the 56):
 strong exactly where our doctrine is strong (honesty, denominators, silent failure) and near-blind where we
 have no coverage at all.
 
-## 3. The strategic insight: stacking LLM reviewers has DIMINISHING returns
+## 3. CORRECTED 2026-07-27 — the owner was right, and our own history proves it
+
+I claimed LLM reviewers are correlated enough that stacking them has strongly diminishing returns. **The owner
+pushed back — "historically different reviewers actually caught different bugs, sometimes we had 4+ running
+all finding different things, check the brain and verify" — and the record backs him, not me.**
+
+Measured in [[failures/gemini_review_patterns]]:
+
+| PR | What happened |
+|---|---|
+| **#214** | **CodeRabbit found #55, Gemini found #56 — two DIFFERENT bugs on the same PR** |
+| **#211** | CodeRabbit found #53 AND #54 (two distinct bugs the others didn't) |
+| **#209** | Gemini found #51 (CRITICAL) and #52 (HIGH) |
+| **#177** | Qodo alone found the regex-namespace bug |
+| **#178** | CodeRabbit + Qodo overlapped on one — **and Qodo separately found #49/#50** |
+| **#161** | Gemini + Qodo overlapped on the ET/UTC bug |
+
+**Overlap exists (2 documented cases) but complementarity is MORE common.** So the correlation is *partial*,
+not near-total: each added reviewer really did contribute unique catches. **More reviewers is genuinely
+better** — my "diminishing returns" framing overstated a real effect into a wrong conclusion.
+
+**What survives, restated honestly:** the returns diminish *somewhat* (two bots did duplicate each other
+twice), and the deterministic layers below are **additive on top rather than competing** — mypy caught a
+gspread signature bug that two LLM reviews had walked past, which no third LLM would likely have found either.
+So the plan is BOTH: keep every free LLM reviewer we can get, AND add the deterministic floor. Not either/or.
+
+**Practical consequence:** CodeRabbit's rate limit is a real single-point-of-failure. A backup LLM reviewer is
+not redundancy for its own sake — it is coverage, and it is what keeps a rate-limited hour from shipping an
+unreviewed PR (which happened on #232).
+
+## 3b. Why the deterministic layers still rank high (unchanged)
 This is the core answer to *"how do we get from ~50% toward 100%?"*
 
 **LLM reviewers are highly correlated with each other.** Similar architectures, overlapping training data,
