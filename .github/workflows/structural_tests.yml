@@ -82,6 +82,7 @@ jobs:
           fail=0
           for t in \
             test_origin_registry_sync.py \
+            test_text_normalize.py \
             test_route_event.py \
             test_classify_action.py \
             test_classify_refid.py \
