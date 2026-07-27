@@ -86,6 +86,11 @@ status: active
   and outran the one remaining reviewer. Re-requested after the fact.
   **Rule going forward: space PRs to CodeRabbit's cadence, and never merge on green CI alone when the review
   slot was skipped** — CI proves the tests pass, not that the design is right.
+  **Full strategy + the measurement plan: [[workflow/reviewer_strategy]]** — key finding: LLM reviewers are
+  CORRELATED, so stacking them has diminishing returns; catch rate rises with DIVERSITY OF METHOD. Our own
+  56-lesson record shows the real gaps are **security (≈0 findings), performance (1), concurrency (3)**, so
+  the ranked free adds are **Semgrep (security) + mypy (types) ABOVE another LLM bot**, plus **mutation
+  testing** as the only honest way to answer "what IS our catch rate?". All three await an owner decision.
   **Free options for a PRIVATE repo (researched 2026-07-27):** *PR-Agent* (open-source, self-hosted, no
   licensing cost) and *Semgrep* (security-focused, free ≤10 contributors) are the only genuinely free adds;
   *Sourcery* is free for OPEN-SOURCE repos only and *Greptile* has no free tier, so neither helps us.
