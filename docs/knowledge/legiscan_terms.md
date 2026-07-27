@@ -1,61 +1,75 @@
 ---
-tags: [knowledge, api, compliance, legiscan, corpus, rule]
-updated: 2026-07-26
-status: stub
-open_loop: BLOCKED on the owner registering a LegiScan API key — until then the terms wording below is UNVERIFIED (recorded from public docs, not from the account's own terms page) and no LegiScan request may be made. Fill in the verified quotes + the dataset-vs-doc_id answer at key time.
+tags: [knowledge, api, compliance, legiscan, corpus, rule, decision]
+updated: 2026-07-27
+status: active
 ---
 
-# LegiScan — authorization & terms (the corpus source for cross-state text)
+# Cross-state text corpus — why LegiScan is OFF the plan, and what replaced it
 
 Sibling of [[knowledge/lis_api_authorization]]. That page governs Virginia's own API; this one governs the
-**aggregator** we use TEMPORARILY for other states' bill text ([[architecture/text_similarity]]).
+**aggregator** for other states' bill text ([[architecture/text_similarity]]).
 
-> **⚠️ STUB — nothing may be fetched yet.** Written before the key exists so that the compliance step happens
-> *before* the first request, not after. The brain's standing rule (from
-> [[knowledge/lis_api_authorization]] §"onboarding state #2"): **capture a source's authorization window and
-> terms BEFORE pulling any of its data, and never assume that an API returning data implies authorization to
-> use it.** The same discipline that kept the VA integration clean applies to a third party.
+## DECISION 2026-07-27 — REVERSES the 2026-07-25 "temporary LegiScan" plan. Corpus = Open States (Plural Open).
 
-## Why LegiScan at all, and why TEMPORARILY
-Owner decision, 2026-07-25: *"relying on LegiScan long-term is probably not the best idea… but at our limited,
-organization-specific scale it doesn't hurt to temporarily use it until we can establish an independent
-replacement… quietly outsourcing a small part of our backend so we can focus on the features that make our
-site stand out."* Recorded in full at [[architecture/text_similarity]] §"OWNER DECISIONS".
+**Owner, on reaching LegiScan's API survey:** *"LegiScan seems a bit too much honestly. It's not that I can't
+and won't do this, it's that it's asking for an excessive amount of information and compliance with a number
+of rules and laws that I'm not comfortable engaging with via an AI."*
 
-**The discipline that makes a temporary dependency safe:**
-1. **Seam** — every LegiScan touch sits behind a `corpus_source` contract (fetcher + field map), exactly like
-   the VA source seam, so replacing it is mechanical rather than a rewrite (Standard #6).
-2. **Exit criteria, either one fires → that slice is replaced:**
-   - **monetization** — the free tier is non-commercial; re-read the terms *the day we charge anyone*;
-   - **native onboarding** — each state we ingest natively retires its LegiScan slice, one state at a time
-     (VA's own native scanner is W2; NY's is queued at [[ny/state/current_status]] #6).
-3. **Never on the accuracy path** — the lobbyist-facing VA data must never depend on a third party. LegiScan
-   feeds a *comparison* feature; if it vanishes, cross-state context degrades and nothing else does.
+**The concern is correct, and it is sharper than "too much paperwork."** The free "public service" key is not a
+config value — it is gated behind a **binding attestation made by the owner personally**, on a form that
+states the response **cannot be edited after submission**. The two required declarations:
 
-## To fill in AT KEY TIME (each is a hard prerequisite, not a nicety)
-- [ ] **Quote the actual terms** from the account's own terms page (not a blog or these notes): commercial-use
-      wording, attribution requirement, redistribution/caching limits, rate limits, and whether derived data
-      (our similarity labels) is restricted. Paste the quotes here with the date read.
-- [ ] **Answer the volume question the design hangs on:** do the bulk **dataset archives** (`getDatasetList` /
-      `getDataset`) embed **full bill texts**, or only `doc_id` references that each need a `getBillText` call?
-      This decides whether "all 50 states" is a few hundred requests a month or a few hundred thousand
-      ([[architecture/text_similarity]] §"corpus at 50-state scale"). **Do not guess — measure one state.**
-- [ ] **Record the rate limit + the free-tier query allowance**, then set our own ceiling *below* it, mirroring
-      LIS-safety guardrail #4 (a hard per-cycle cap independent of the cadence logic, so a bug can't spike us).
-- [ ] **Conditional fetch**: check whether the API exposes ETag/`Last-Modified` or a `dataset_hash`; if so, use
-      it (guardrail #1 — never re-download unchanged data). LegiScan publishes a per-dataset hash, so a
-      change-detection path likely exists; confirm the field name.
-- [ ] **Attribution**: if required, decide where it renders on the product surface *before* shipping the
-      feature, not as a retrofit.
+| Survey question | Answer the free tier requires | Why that is a problem HERE |
+|---|---|---|
+| Commercial or **non-commercial** use? | Non-Commercial | [[ideas/moat_and_competition]] places revenue in the workflow + insight layers. Attesting non-commercial while building toward selling is a compliance conflict, not a formality. |
+| Derivative works internal-only or **externally published**? | Internal Use Only | Cross-state comparison is *displayed to users* in the War Room's "Elsewhere" zone — externally published by construction. |
 
-## Standing rules once live
-- **Authorized scope is per-state-per-session, enforced in code** the way `lis_authorization.py` does it — one
-  module, one allowlist, a runtime assert on every call path. Do not scatter the scope check.
-- **Cache fetched text permanently** in our own corpus store (append-only, not Sheets) and re-fetch only on a
-  changed hash: this both respects the source and makes our archive independent of it over time — the slow
-  path to not needing them at all.
-- **A LegiScan outage must be a visible degraded state**, never a silent gap in cross-state results
-  ([[design/information_display]] P25a: fail-closed, say what we cannot currently verify).
+### The structural lesson (generalize this): a licence attestation is NOT a swappable dependency
+The 2026-07-25 decision banked LegiScan as *"temporary, behind a `corpus_source` seam, swap it out later."*
+That reasoning is sound for a **technical** dependency — an API shape can be adapted away. It does **not** hold
+for a **legal** one: you remain bound by what you attested, and the exit is not a refactor, it is a terms
+violation already committed. **Prefer a licence that requires no attestation over a seam that lets you swap
+the code.** The owner's instinct here protected the monetization path the seam could not have.
+
+The process point stands on its own too: **an AI must not draft or mediate the owner's legal declarations.**
+
+## The replacement: Open States / Plural Open (verified 2026-07-27)
+- **Bulk per-session JSON downloads include FULL BILL TEXT.** (The CSV variant is metadata-only — take JSON.)
+- **Public-domain dedication:** *"data is provided under a public domain dedication but attribution is greatly
+  appreciated and very helpful."* No commercial restriction to attest to → no conflict with monetizing later.
+- **No registration, no survey, no attestation** for the bulk downloads.
+- Coverage: all 50 states + DC + PR. An API v3 exists (simple key) but **bulk is the right path anyway** — it
+  matches guardrail #1 (fetch less, cache more) far better than per-bill calls.
+- Sources: [bulk data](https://open.pluralpolicy.com/data/) · [docs](https://docs.openstates.org/) ·
+  [API v3](https://docs.openstates.org/api-v3/)
+- **We will attribute them even though it is optional** — it costs nothing and it is the right posture toward
+  a civic-data commons we benefit from.
+
+### Owner-gated before the first byte (diligence, NOT an attestation)
+- [ ] Read [Terms of Use](https://open.pluralpolicy.com/tos/) and paste the relevant wording here with the date.
+- [ ] Record any politeness/rate expectation for bulk downloads, then set our own ceiling *below* it
+      (mirrors LIS-safety guardrail #4 — a hard cap independent of cadence logic).
+- [ ] Note their preferred attribution wording, and decide where it renders **before** shipping the feature.
+
+## Standing rules once live (unchanged in spirit from the LegiScan draft)
+- **Cache fetched text permanently** in our own corpus store (append-only, not Sheets); re-fetch only on a
+  changed hash. This respects the source and makes our archive independent of it over time.
+- **Conditional fetch** — use ETag/`Last-Modified`/content hash; never re-download unchanged data (guardrail #1).
+- **Never on the accuracy path.** The lobbyist-facing VA data must never depend on a third party; this feeds a
+  *comparison* feature, so if it vanishes cross-state context degrades and nothing else does.
+- **An outage is a visible degraded state**, never a silent gap ([[design/information_display]] P25a).
+- **The per-state native scanner rule still stands**: each state we ingest natively retires its aggregator
+  slice (VA's is W2; NY's is queued at [[ny/state/current_status]] #6). The aggregator is scaffolding.
+
+## What this changes in the plan
+- **W2/W3/W4 are unaffected and need NO external corpus at all** — Virginia-only (our own text ingest, the
+  comparer, House↔Senate companion detection). The near-term lobbyist value ships with zero outside dependency.
+- **W6 re-aimed:** the `corpus_source` seam stays (it is how native scanners retire aggregator slices), but the
+  adapter targets Open States bulk JSON and the "at-key-time checklist" collapses — there is no key.
+- **`LEGISCAN_API_KEY` is not needed.** Verified zero references outside docs, so the reversal costs nothing.
+- **NY's independent oracle (C-8 Part 2) loses its assumed source** — it was scoped around a LegiScan key.
+  Re-scope against Open States' NY data: same public-domain terms, and it stays genuinely independent of
+  OpenLeg. Logged in [[ny/state/current_status]].
 
 See also [[architecture/text_similarity]], [[knowledge/lis_api_authorization]], [[knowledge/lis_api_safety]],
-[[ideas/moat_and_competition]] (why the dependency is acceptable *now* and must not become permanent).
+[[ideas/moat_and_competition]].

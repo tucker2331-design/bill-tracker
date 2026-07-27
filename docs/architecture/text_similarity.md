@@ -2,7 +2,7 @@
 tags: [architecture, text-intelligence, similarity, cross-state, rush, scoping]
 updated: 2026-07-17
 status: active
-open_loop: RUSHED to front of line behind the counter. Owner decisions 2026-07-25 banked — LegiScan TEMPORARY (seam + exit criteria), ALL states (two-stage corpus design), historical depth YES (VA pre-2025 never via the API; legacylis CSV/text location UNLOCATED — probe flagged; LegiScan VA-historical is the no-conflict channel), companion tracker PROMOTED to a feature (progress + chamber-to-chamber drift; resolves the companion-sourcing unknown via sasts + our detector). Remaining owner blocker: the LegiScan key + terms check (dual-use with the NY oracle). Verify-at-key-time: whether dataset archives embed full texts or only doc_id references.
+open_loop: CORPUS SOURCE CHANGED 2026-07-27 — LegiScan is OFF the plan (its free key requires a binding non-commercial + internal-use-only attestation that conflicts with monetization and cannot be edited after submission); replaced by Open States/Plural Open bulk JSON (full text, PUBLIC DOMAIN, no registration or survey). See [[knowledge/legiscan_terms]]. W2/W3/W4 are VA-only and need NO external corpus at all. RUSHED to front of line behind the counter. Owner decisions 2026-07-25 banked — LegiScan TEMPORARY (seam + exit criteria), ALL states (two-stage corpus design), historical depth YES (VA pre-2025 never via the API; legacylis CSV/text location UNLOCATED — probe flagged; LegiScan VA-historical is the no-conflict channel), companion tracker PROMOTED to a feature (progress + chamber-to-chamber drift; resolves the companion-sourcing unknown via sasts + our detector). Remaining owner blocker: the LegiScan key + terms check (dual-use with the NY oracle). Verify-at-key-time: whether dataset archives embed full texts or only doc_id references.
 ---
 
 # Bill-text similarity — rush scoping (front of line after the counter)
@@ -13,7 +13,7 @@ open_loop: RUSHED to front of line behind the counter. Owner decisions 2026-07-2
 
 ## OWNER DECISIONS 2026-07-25 (supersede the open items below where they overlap)
 
-1. **LegiScan = TEMPORARY, by explicit owner proposal.** *"Relying on LegiScan long-term is probably not the
+1. **~~LegiScan = TEMPORARY~~ — REVERSED 2026-07-27, see [[knowledge/legiscan_terms]]. A licence attestation is not a swappable dependency; the corpus is now Open States (public domain, no attestation). The original reasoning is preserved below because the *seam* discipline it produced still applies to the new source.** Original owner proposal: *"Relying on LegiScan long-term is probably not the
    best idea — but at our limited, organization-specific scale it doesn't hurt to temporarily use it until we
    can establish an independent replacement… quietly outsourcing a small part of our backend so we can focus on
    the features that make our site stand out."* Banked as the decision, with the discipline that makes it safe:
@@ -38,11 +38,11 @@ state's bill text on our side. The good news is that does **NOT** mean building 
 
 | Corpus source | What it gives | Cost / terms | Verdict |
 |---|---|---|---|
-| **LegiScan API** | 50-state bills incl. **full texts** (base64 via `getBillText`), one contract | free tier ~30k queries/mo; **key = 5-min registration; terms check required** (free tier is non-commercial — fine pre-revenue, re-check at monetization) | **RECOMMENDED.** And it's **dual-use**: a LegiScan key is ALREADY the named blocker for C-8 Part 2 (the NY independent oracle, [[state/current_status]] NEXT #2). One owner action unblocks two workstreams. |
-| **Open States (Plural)** | bulk downloads + API v3, permissive terms | free; text is often *links* rather than inline | the fallback / supplement — better terms at monetization, weaker inline-text coverage |
+| ~~**LegiScan API**~~ | 50-state bills incl. full texts | free tier ~30k queries/mo — **but the key requires a BINDING, uneditable attestation of non-commercial + internal-use-only** | ❌ **REJECTED 2026-07-27** ([[knowledge/legiscan_terms]]): both required answers contradict this product's direction, and a licence attestation — unlike an API shape — cannot be swapped out behind a seam. |
+| **Open States / Plural Open** | bulk per-session **JSON incl. FULL TEXT** (CSV variant is metadata-only), all 50 states + DC + PR | free, **public-domain dedication**, **no registration, no survey, no attestation** | ✅ **ADOPTED.** Verified 2026-07-27. Bulk-first also matches guardrail #1 far better than per-bill calls. We attribute voluntarily. |
 | Per-state native APIs | deepest quality (our VA/NY pattern) | one integration per state | the LONG-term multi-state path — NOT a rush prerequisite |
 
-**Solution shape:** one aggregator contract (LegiScan) gives the corpus for *any* target state now; native
+**Solution shape:** one aggregator (Open States bulk JSON) gives the corpus for *any* target state now; native
 ingests replace it state-by-state as we onboard them for real. Per the brain's standing rule
 ([[knowledge/lis_api_authorization]] §"onboarding state #2"): capture the aggregator's authorization terms as a
 sibling knowledge page **before** the first pull.

@@ -79,7 +79,11 @@ witness or anchor sources until validated.
 3. Scope durable terminal-outcome parity for bills currently counted as `unknown_structural`, without status-text inference.
 4. Build a session-rollover plan before the next New York legislative session.
 5. Revisit cadence after frontend and incremental-update scoping.
-6. **Native TEXT SCANNER (standing per-state rule, owner 2026-07-25):** every state's onboarding includes a
-   native bill-text ingest that retires that state's LegiScan corpus slice ([[architecture/text_similarity]]).
-   NY's source is OpenLeg's bill-text payloads (same API we already consume) — scope after C-8 Part 2 (the
-   LegiScan-oracle step), since the same key feeds both.
+6. **C-8 Part 2 oracle — RE-SCOPE (2026-07-27):** it was scoped around a LegiScan key, which is now off the
+   plan ([[knowledge/legiscan_terms]] — the free key demands a non-commercial/internal-use attestation that
+   conflicts with monetization). Re-scope the independent oracle against **Open States bulk NY data**
+   (public domain, no registration) — still genuinely independent of OpenLeg, which is the whole point.
+7. **Native TEXT SCANNER (standing per-state rule, owner 2026-07-25):** every state's onboarding includes a
+   native bill-text ingest that retires that state's AGGREGATOR corpus slice ([[architecture/text_similarity]]).
+   NY's source is OpenLeg's bill-text payloads (same API we already consume). Independent of #6 now that the
+   shared-key assumption is gone.

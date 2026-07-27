@@ -361,6 +361,40 @@ drift WARN structurally CANNOT reach the Health alerts panel (which reads Metric
 clear — 3 routine notes" under a red ring. Standard #4 gap: the bill worker's alerts need a destination the
 panel reads.
 
+## [2026-07-27] decision | LegiScan REJECTED on compliance grounds — corpus is Open States (public domain, no attestation)
+
+Owner, on reaching LegiScan's API survey: *"LegiScan seems a bit too much honestly. It's not that I can't and
+won't do this, it's that it's asking for an excessive amount of information and compliance with a number of
+rules and laws that I'm not comfortable engaging with via an AI."* **Correct, and sharper than a paperwork
+objection.** The free "public service" key is gated behind a **binding attestation by the owner personally**
+on a form that **cannot be edited after submission**, and its two required answers are exactly wrong for this
+product: **non-commercial** (we are building toward revenue — [[ideas/moat_and_competition]]) and **internal
+use only** (cross-state comparison renders in the War Room's Elsewhere zone — externally published by
+construction).
+
+**The structural lesson, now recorded as doctrine ([[knowledge/legiscan_terms]]): a licence attestation is NOT
+a swappable dependency.** On 2026-07-25 I banked LegiScan as "temporary, behind a `corpus_source` seam, swap
+later." That reasoning holds for a TECHNICAL dependency — an API shape can be adapted away. It does not hold
+for a LEGAL one: you stay bound by what you attested, and the exit is not a refactor, it is a violation
+already committed. **Prefer a licence needing no attestation over a seam that lets you swap the code.** The
+owner's instinct protected the monetization path the seam could not have. Corollary also banked: **an AI must
+not draft or mediate the owner's legal declarations.**
+
+**Replacement verified 2026-07-27 — Open States / Plural Open:** bulk per-session **JSON includes FULL BILL
+TEXT** (CSV variant is metadata-only), all 50 states + DC + PR, **public-domain dedication** ("attribution is
+greatly appreciated"), and **no registration, survey, or attestation** for the bulk downloads. Bulk-first also
+suits guardrail #1 better than per-bill calls. We will attribute voluntarily. Still owner-gated before the
+first byte: read the ToS and record rate/attribution expectations — diligence, not a declaration.
+
+**Cost of the reversal: zero.** Verified no code references `LEGISCAN_API_KEY` (docs only). Knock-ons handled:
+`text_similarity` corpus table flipped (LegiScan struck with the reason, Open States adopted); NY's C-8 Part 2
+oracle re-scoped onto Open States NY data (it had assumed the LegiScan key) and decoupled from the NY text
+scanner, since the shared-key assumption is gone.
+
+**And the thing worth repeating: W2/W3/W4 need NO external corpus at all.** VA text ingest, the comparer, and
+House↔Senate companion detection are Virginia-only. The near-term lobbyist value ships with zero third-party
+dependency and zero terms exposure.
+
 ## [2026-07-25] plan | The MAINTENANCE WAVE list written (owner: "clear list I've seen in writing before you start") + the per-state scanner rule made standing
 
 Owner clarified the LegiScan-loosening mechanism into a standing rule: **every state's onboarding to-do gets a
