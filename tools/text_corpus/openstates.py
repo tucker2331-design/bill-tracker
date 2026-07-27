@@ -32,13 +32,24 @@ TIMEOUT_S = 30
 ATTRIBUTION = "Bill text and cross-state data via Open States (openstates.org)."
 
 
+def _header_safe(value):
+    """True when `value` is usable as an HTTP header value: printable ASCII, no whitespace/control chars.
+    Checks the SHAPE only — the value itself is never returned, logged, or included in a message."""
+    return bool(value) and all(32 < ord(ch) < 127 for ch in value)
+
+
 class OpenStatesError(Exception):
     """A failure the caller should surface, never swallow. Carries no key material."""
 
 
 class OpenStates:
     def __init__(self, api_key=None, budget=None, session=None):
-        self._key = api_key or os.environ.get(KEY_ENV) or ""
+        # STRIP the key. A secret pasted into a UI or piped from a file very often carries a trailing
+        # newline; an HTTP header value containing whitespace is illegal, and requests raises a cryptic
+        # `InvalidHeader` that looks like a network fault rather than a formatting one. Found by the very
+        # first live probe run (2026-07-27) — the failure mode is silent-looking and would otherwise have
+        # been mis-diagnosed as "the key is bad" or "their API is down".
+        self._key = (api_key if api_key is not None else os.environ.get(KEY_ENV) or "").strip()
         self._budget = budget or RequestBudget()
         self._session = session
         # Presence is tracked as a BOOLEAN, not by truthiness of the value elsewhere in the code
@@ -65,6 +76,13 @@ class OpenStates:
             raise OpenStatesError(
                 f"{KEY_ENV} is not set — refusing to call the API. (Set it as a GitHub Actions "
                 f"repository secret; corpus work should use bulk downloads, which need no key.)")
+        # Fail with a SELF-DESCRIBING error (Standard #4) rather than letting the HTTP layer raise an
+        # opaque InvalidHeader. Never echo the value — only its shape.
+        if not _header_safe(self._key):
+            raise OpenStatesError(
+                f"{KEY_ENV} contains characters that are illegal in an HTTP header (whitespace or a control "
+                f"character), so no request was attempted. Length after trimming: {len(self._key)}. "
+                f"Re-set the secret without a trailing newline; value NOT logged.")
         self._budget.spend(1)                    # blocks for spacing, raises at the ceiling
         url = f"{BASE}{path}"
         try:

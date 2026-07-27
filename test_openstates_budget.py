@@ -100,8 +100,36 @@ with open(bad, "w", encoding="utf-8") as fh:
 b3 = B.RequestBudget(state_path=bad, now=Clock().now, sleep=lambda _s: None)
 check("garbled state starts the day at zero instead of raising", b3.snapshot()["used"], 0)
 
+# ── Client key handling (found by the first live probe, 2026-07-27) ────────────────────────────────────
+# A secret pasted into a UI very often carries a trailing newline. An HTTP header value containing
+# whitespace is illegal, and requests raises a cryptic `InvalidHeader` that reads like a network fault —
+# so this class of failure gets mis-diagnosed as "bad key" or "their API is down". Pinned here.
+print("\n— client key handling —")
+sys.path.insert(0, "tools/text_corpus")
+import openstates as OS  # noqa: E402
+
+check("a trailing newline is stripped, not passed into the header",
+      OS.OpenStates(api_key="abc123\n").has_key, True)
+check("surrounding whitespace is stripped", OS.OpenStates(api_key="  abc123  ")._key, "abc123")
+check("an all-whitespace key reads as ABSENT, not present-but-broken",
+      OS.OpenStates(api_key="   \n").has_key, False)
+check("header-safety accepts a normal key", OS._header_safe("abc123-XYZ_789"), True)
+check("header-safety rejects an interior space", OS._header_safe("abc 123"), False)
+check("header-safety rejects a control character", OS._header_safe("abc\x01def"), False)
+check("header-safety rejects non-ASCII", OS._header_safe("abcé"), False)
+
+_c = OS.OpenStates(api_key="bad key")
+try:
+    _c.get("/anything")
+    _raised = "none"
+except OS.OpenStatesError as e:
+    _raised = str(e)
+check("an unusable key raises a SELF-DESCRIBING error before any request is attempted",
+      "illegal in an HTTP header" in _raised, True)
+check("...and the error never echoes the key value", "bad key" in _raised, False)
+
 print()
 if FAILURES:
     print(f"❌ {len(FAILURES)} failure(s): {FAILURES}")
     sys.exit(1)
-print("✅ all Open States budget goldens pass")
+print("✅ all Open States budget + client goldens pass")
