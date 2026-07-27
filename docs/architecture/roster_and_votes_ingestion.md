@@ -2,7 +2,7 @@
 tags: [architecture, ingestion, roster, votes, war-room, scoping]
 updated: 2026-07-17
 status: active
-open_loop: SCOPED, not built. Endpoints + fields all probe-confirmed structural (chair/party/district/votes). Unresolved before build — (1) companion-bill sourcing has no confirmed endpoint; (2) the votes store must NOT be Sheets (volume blows the 10M-cell ceiling) — D1 vs Azure-blob-mirror is an owner/architecture call; (3) whether roster/vote ingest lives in calendar_worker or its own worker.
+open_loop: SCOPED, not built. W5 CLOSED (re-measured 2026-07-27: 9,129 votes / 318,282 member-vote pairs / 147 members / vocab Y,N,X,A / 0 malformed) — the matrix is already in a blob we fetch, so ZERO per-member API calls, and the storage estimate drops ~10x to ~1M cells. Endpoints + fields all probe-confirmed structural (chair/party/district/votes). Unresolved before build — (1) companion-bill sourcing has no confirmed endpoint; (2) the votes store must NOT be Sheets (volume blows the 10M-cell ceiling) — D1 vs Azure-blob-mirror is an owner/architecture call; (3) whether roster/vote ingest lives in calendar_worker or its own worker.
 ---
 
 # Roster & member-vote ingestion — scoping (the data under the War Room)
@@ -110,8 +110,28 @@ The open question was whether to add ~140 per-member API calls. **Answer: no —
   from this very file, so the parse is proven.
 - **Caveat to respect when building:** the file is RAGGED and the code comments already record that
   pandas/`safe_fetch_csv` silently mangles it to zero usable ids — it must be read with `csv.reader` on raw
-  bytes. Vote values seen: `Y`, `N`, `X` (X = not voting / abstain); treat the vocabulary as a closed set
-  validated at parse time, not assumed.
+  bytes.
+
+**RE-MEASURED 2026-07-27 (exact counts, session 20261):**
+
+| Measure | Value |
+|---|---|
+| votes (roll calls) | **9,129** |
+| **member-vote pairs** | **318,282** |
+| distinct members | **147** |
+| rows with an unpaired tail | **0** — the format is clean |
+| response vocabulary | `Y` 237,742 · `N` 67,235 · `X` 12,808 · **`A` 497** |
+| avg members per vote | 34.9 |
+
+Two corrections this measurement forces:
+1. **The vocabulary is `Y/N/X/A`, not `Y/N/X`** — `A` (abstain, 497 rows) was missing from the earlier note.
+   Treat it as a closed set **validated at parse time**; an unseen fifth value must alert, not be dropped.
+   A whip board must render `X` and `A` honestly rather than folding them into "no" — those members are
+   exactly the ones worth a call.
+2. **The storage estimate was ~10× too high.** The earlier "~10M cells" came from the API's per-vote payload
+   shape; the blob's real content is 318k pairs of 3 fields ≈ **1M cells**. Still not a Sheets tab (a tenth of
+   the workbook ceiling for ONE session, growing every session), but D1-vs-blob is now a query-and-growth
+   decision rather than an emergency.
 
 **Consequence for the storage decision below:** the volume estimate that made this "not a Sheets tab" was
 based on ~3,000 vote rows per member. That still holds for a *materialised* per-member view, but we no longer
