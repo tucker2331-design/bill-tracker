@@ -6,6 +6,7 @@ import { HealthVitals, type Vital, type VitalSeg, type VitalVerify } from "../co
 import { loadHealth, type HealthData, type HealthAlert } from "../data/health";
 import { loadVerification, type GuardRun, type GuardState } from "../data/verification";
 import { loadHistory, seriesFor, seriesForPct, type HistoryData, type AlertSource } from "../data/history";
+import { loadCounter, type CounterState } from "../data/incidents";
 
 // Alert presentation (owner 2026-07-07: the feed "needs real thinking and fixing" + "colored boxes scream
 // AI"). See docs/design/dashboard_and_visual_language.md. Severity now rides a small status DOT, not a
@@ -125,6 +126,14 @@ export function Health({ completeness, dataAsOf }: { completeness: Completeness 
     return () => { alive = false; };
   }, []);
   const spark = (key: string) => (hist ? seriesFor(hist, key) : []);
+  // The days-clean counter — the visible artifact of the trust promise. Optional chrome: a failed load
+  // leaves the line absent rather than blanking the tab or showing a number we cannot support.
+  const [counter, setCounter] = useState<CounterState | null>(null);
+  useEffect(() => {
+    let alive = true;
+    loadCounter().then((c) => alive && setCounter(c)).catch(() => alive && setCounter(null));
+    return () => { alive = false; };
+  }, []);
 
   if (!completeness && !h && !hErr) return <p className="center-msg">Loading operator health…</p>;
 
@@ -302,6 +311,37 @@ export function Health({ completeness, dataAsOf }: { completeness: Completeness 
   return (
     <div>
       <h2 className="h">At a glance</h2>
+      {/* The trust counter. Rules from docs/architecture/incident_counter.md, and each is load-bearing:
+          · the DENOMINATOR always rides along — "47 days clean" alone cannot be judged (Standard #7)
+          · an OPEN incident makes it red and says so; the clock reads from that incident's start
+          · an unseeded ledger says exactly that, never a reassuring 0 ("allowed not to know, never pretend")
+          · a stale/absent fire drill is surfaced — an untested alarm is not a working alarm */}
+      {counter?.available && (
+        <p className="muted" style={{ marginTop: -6, marginBottom: 14 }}>
+          {counter.openNow.length > 0 ? (
+            <span style={{ color: "var(--stale)", fontWeight: 600 }}>
+              ▲ An incident is OPEN right now ({counter.openNow.join(", ")}) — the days-clean clock has reset.
+            </span>
+          ) : (
+            <>
+              <b style={{ color: "var(--ink)" }}>{counter.daysClean ?? "—"} days</b> since a data incident
+              {counter.monitoringDays != null && <> · monitoring for <b style={{ color: "var(--ink)" }}>{counter.monitoringDays}</b> days</>}
+              {counter.incidentsEver > 0 && <> · {counter.incidentsEver} recorded ever</>}
+            </>
+          )}
+          {counter.lastDrillDays != null
+            ? <> · last alarm test {counter.lastDrillDays}d ago</>
+            : <> · <span title="A fire drill exercises the real write path. Without one, the alarm is untested.">alarm never tested</span></>}
+          {counter.malformedRows > 0 && (
+            <> · <span style={{ color: "var(--stale)" }}>⚠ {counter.malformedRows} unreadable row(s) — an incident could be hidden</span></>
+          )}
+        </p>
+      )}
+      {counter && !counter.available && (
+        <p className="muted" style={{ marginTop: -6, marginBottom: 14 }}>
+          Days-clean counter not yet seeded — the ledger has no epoch, so there is no honest number to show.
+        </p>
+      )}
       <HealthVitals vitals={vitals} />
 
       {/* ── System status: the breaker + the TWO freshnesses (different workers) ── */}
