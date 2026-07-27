@@ -2,7 +2,7 @@
 tags: [workflow, review, quality, strategy, measurement]
 updated: 2026-07-27
 status: active
-open_loop: Strategy set, NOT yet implemented. Owner decisions needed on the two free adds (PR-Agent self-hosted, Semgrep) and on running the mutation-testing baseline that would give us a real catch-rate number instead of a guess.
+open_loop: Semgrep + mypy SHIPPED 2026-07-27 (mypy caught a real gspread bug on its first run). PR-Agent DROPPED (needs a paid model key). Remaining: connect Gemini as the backup LLM reviewer (owner is in the console), and run the mutation-testing baseline that would give a real catch-rate number instead of a guess.
 ---
 
 # Reviewer strategy — how to actually raise the catch rate (not just add more bots)
@@ -79,14 +79,12 @@ So the plan is BOTH: keep every free LLM reviewer we can get, AND add the determ
 not redundancy for its own sake — it is coverage, and it is what keeps a rate-limited hour from shipping an
 unreviewed PR (which happened on #232).
 
-## 3b. Why the deterministic layers still rank high (unchanged)
-This is the core answer to *"how do we get from ~50% toward 100%?"*
+## 3b. Why the deterministic layers ALSO rank high (both, not either/or)
 
-**LLM reviewers are highly correlated with each other.** Similar architectures, overlapping training data,
-similar reasoning failure modes. Four LLM reviewers do not give 4 independent 50% draws — they miss largely
-*the same* bugs. Adding a fifth LLM buys progressively less.
-
-**Catch rate rises with the DIVERSITY OF METHOD, not the count of reviewers.** Uncorrelated detectors:
+LLM reviewers are *partially* correlated (§3) — they duplicate each other sometimes and complement each other
+more often, so keep every free one. But the deterministic layers cover ground **no** LLM reliably reaches, and
+they never have an off day. The answer to *"how do we get from ~50% toward 100%?"* is **more reviewers AND
+more METHODS**:
 
 | Layer | Method | Catches what LLMs miss | Ours today |
 |---|---|---|---|
@@ -98,8 +96,9 @@ similar reasoning failure modes. Four LLM reviewers do not give 4 independent 50
 | **LLM review** | semantic/intent | design smells, missing edge cases, "this reads wrong" | 🟡 CodeRabbit only, rate-limited |
 | **Human** | judgment | is this the right thing to build | ✅ owner |
 
-**→ The highest-value additions are NOT another LLM reviewer.** They are the two empty rows: a security
-scanner and a Python type checker — because they fail *differently* from everything we already run.
+**→ The two empty rows are the highest-value NEW capability** — a security scanner and a Python type checker —
+because they fail *differently* from everything we run. That is not an argument against adding LLM reviewers
+(§3 settles that: add every free one), it is an argument for not stopping there.
 
 ## 4. The free plan (private repo — most "free" tiers are open-source-only and don't apply)
 
@@ -108,9 +107,11 @@ scanner and a Python type checker — because they fail *differently* from every
    deterministic, zero overlap with LLM review.
 2. **mypy** (open source, free) — fills the **type** hole. Our Python is untyped; pyflakes catches undefined
    names but not type misuse. Start `--ignore-missing-imports` on `tools/` only, widen gradually.
-3. **PR-Agent** (open-source, self-hostable, no licensing cost) — restores a **second LLM opinion** without a
-   vendor quota. Correlated with CodeRabbit, so ranked below 1–2 despite being the obvious "replace the bot"
-   answer.
+3. ~~**PR-Agent**~~ — **DROPPED 2026-07-27.** The software is open source, but it requires an LLM API key, so
+   every review costs tokens. I had listed it as "free"; that was wrong. **Gemini replaces it** as the backup
+   LLM reviewer: genuinely free (Google Cloud preview + a $300/90-day trial credit, and the owner confirmed
+   billing must be MANUALLY enabled before anything can charge), and historically our single best performer
+   at 14 recorded findings.
 
 **Tier 2 — free, and it's the measurement the owner is really asking for:**
 4. **Mutation testing** (`mutmut` / `cosmic-ray`, free) — **this is our own reviewer benchmark.** It injects
