@@ -75,7 +75,7 @@ def candidate_pairs(bills):
     NOT silently collapsed to one pair — every cross-chamber combination is emitted, because picking one
     arbitrarily would hide a real 3-way relationship (honest-absent beats plausible-wrong).
     """
-    by_title = {}
+    by_title: dict = {}
     for bill_id, title in bills:
         key = (title or "").strip().lower()
         if not key or not bill_id:
