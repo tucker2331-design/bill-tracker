@@ -113,7 +113,7 @@ live). **Rule now: a reviewer is not listed until its own pricing/listing page h
 | Tool | Method | Verified how | Limits |
 |---|---|---|---|
 | **CodeRabbit** | LLM | we use it daily | free tier covers private repos; ~4 PR reviews/hr, 200 files/hr |
-| **Gemini Code Assist** | LLM | Google docs + **connected 2026-07-27** | free in preview. Setup gotchas, both hit: the connection must be created **from the Agents & Tools page** (one made directly in Developer Connect is invisible to Code Assist), and it must live in **`us-east1`** — a `us-east4` connection simply never appears in the dropdown. The **old consumer GitHub App must be uninstalled**: it keeps posting "has been sunset" on every PR, which reads exactly like the new one working. |
+| ~~**Gemini Code Assist**~~ | LLM | ❌ **ABANDONED 2026-07-27 — hit a PAYWALL** | free in preview. Setup gotchas, both hit: the connection must be created **from the Agents & Tools page** (one made directly in Developer Connect is invisible to Code Assist), and it must live in **`us-east1`** — a `us-east4` connection simply never appears in the dropdown. The **old consumer GitHub App must be uninstalled**: it keeps posting "has been sunset" on every PR, which reads exactly like the new one working. |
 | **Semgrep** | rules/AST | free ≤10 contributors on private repos | security + our own house rules |
 | **mypy** | type checker | open source, runs in our CI | scoped to new modules, widening |
 | **pyflakes** | static analysis | already in the pre-push audit | undefined names (audit #105) |
@@ -157,8 +157,24 @@ category (popularity-sorted, so the meaningful names are front-loaded) and check
 Honest bound: page 1 of 15, popularity-sorted. The tail is dominated by non-review tools, but it was not
 walked exhaustively.
 
-**The honest headline: for a PRIVATE repo there are exactly TWO genuinely free LLM reviewers — CodeRabbit and
-Gemini.** Everything else marketed as "free" is public-repo-only, a trial, or bring-your-own-key. A bench of
+### ❌ GEMINI — ABANDONED at the paywall (2026-07-27)
+After connecting Developer Connect (us-east1), enabling the Code Review agent and saving, the flow ended at a
+**"Get Gemini Code Assist subscription"** purchase page: **$22.80/user/month** (first 50 users free for the
+first month), or $19 annual. The product it sells is described as *"Gemini in IDE code completion and Gemini
+in Cloud console chat"* — arguably NOT the GitHub review agent, but the flow would not complete without it.
+
+**Three sources that do not reconcile:** Google's docs say GitHub review is free during Preview; the sunset
+notice says only the enterprise tier survives; the console asks for money. **I could not resolve which is
+true, and I had already been wrong about Gemini three times that day** (the us-east1 region requirement, a
+false "it's live" call caused by the dead consumer app's tombstone, and two wrong console paths). Correct call
+was to stop rather than spend on a fourth guess.
+
+**Cost of the attempt: ~2 hours of owner time for a SECOND opinion.** Recorded so nobody re-runs the loop.
+The same session's real quality gains came from elsewhere: mypy caught a gspread signature bug that would
+have broken the trust counter's first write (two LLM reviews had read that file), and CodeRabbit caught a
+one-directional absorption bug plus a session-scoping gap on PR #233.
+
+**REVISED headline: for a PRIVATE repo there is exactly ONE genuinely free LLM reviewer — CodeRabbit.** Everything else marketed as "free" is public-repo-only, a trial, or bring-your-own-key. A bench of
 five is still reachable, but only by counting METHODS (LLM + rules + types + static + project invariants),
 which is what §3b argued for anyway — and that bench is now assembled and running.
 
