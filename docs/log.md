@@ -3018,3 +3018,6 @@ Owner asked why the brain is read but not applied at output time. Diagnosis: the
 
 ## [2026-07-27] doc | va_build_queue — the VA backlog from the design block
 Ordered: mockups (call sheet first) → probes → foundations → data → display. Involved REPLACES the top tracking tier (not an addition); second oppose tier OPEN. Redistricting probe scoped — the cheap check first: an effective DATE may make the shapefile question moot. Periodic re-confirm ships regardless.
+
+## [2026-07-27] probe | P1 + P2 resolved — both gating probes cleared
+P1: bill↔subject index is `POST AdvancedLegislationSearch/api/GetLegislationListAsync` {SessionID, SubjectIndexID}; counts free in X-Pagination; 204-on-empty trap; caught that "Privacy · 3421" was fabricated. P2: Census Geocoder returns all 3 districts keyless, and the layer-name vintage IS the redistricting signal — no shapefile. M1/M3/M4 unblocked.

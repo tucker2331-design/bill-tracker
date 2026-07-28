@@ -22,15 +22,7 @@ the draw. Everything else follows dependency order: an item a probe could invali
 `LegislationSubject/api/GetSubjectReferencesAsync` returns **505 subjects**, each with `SubjectIndexID` +
 `SubjectNumber` (e.g. Abortion = 3005). That is the **dictionary of categories**.
 
-**What is NOT yet confirmed: the index.** The dictionary tells us the categories exist; it does not tell us
-*which bills carry which category*. Those are two different endpoints. We have the list of all subjects — we
-have not yet found the route that answers *"HB463 carries subject 3421"* or its inverse *"list every bill
-under 3421."*
-
-**Owner is right that the categorisation exists** — LIS displays subjects on bill pages, so the data is real.
-**I over-stated the risk earlier by saying four features "change shape if it doesn't exist."** They almost
-certainly do exist. The honest statement: **the data is near-certain, the route and its authorisation are
-unverified**, and unverified is unverified — that is the rule that caught the 2020 error. Expect a quick win.
+*(Was: the index — which bills carry which subject — was unfound. Resolved below.)*
 
 **RESOLVED.** The index is `POST AdvancedLegislationSearch/api/GetLegislationListAsync` with
 `{"SessionID": 59, "SubjectIndexID": n}` — the subject→bills inverse, which is the direction we wanted.
@@ -44,7 +36,7 @@ Databases (644), Information Management and Technology (758). **M1/M4 must use a
 
 ⚠ **M1 (call sheet) and M4 are UNBLOCKED.**
 
-### P2. Address → district lookup **and** the re-ask signal — gates **M3 (account setup)**
+### ~~P2. Address → district lookup + the re-ask signal~~ — ✅ **RESOLVED 2026-07-27**
 Owner: *"we just need to know when to ask them to put their new districts in… that said I sort of wanted a
 way they could put their address in and see that info pop up to then be manually put in. so check for both."*
 
@@ -62,8 +54,22 @@ way they could put their address in and see that info pop up to then be manually
 move while the number stays "23", so redistricting is **invisible to everything we currently ingest.** That
 gap was mine: I proposed an event-triggered re-confirm without naming a source.
 
-**Ships regardless of outcome:** the **6-month periodic re-confirm** needs no external source. Never let this
-probe block accounts.
+**RESOLVED — one federal API answers both halves, no key, stores nothing.** Census Geocoder
+(`geocoding.geo.census.gov`) returned all three districts in a single verified call: Senate 14, House 78,
+Congressional 4. Full spec: [[knowledge/district_lookup]].
+
+**The re-ask signal turned out to need no new source at all.** The district-layer NAME carries the map
+vintage — `2024 State Legislative Districts`. Geocode **one fixed public address** (the Capitol) on a slow
+cron and watch that year; when it changes, prompt everyone to re-confirm. Zero PII, one call, **no
+shapefile** — the reframe (*we need a date, not geometry*) ended the probe, so **TIGER/Line is not needed**.
+
+**Scales free:** the same endpoint returns state legislative districts for every state (Standard #6) — state
+#2 inherits it unchanged.
+
+**Small open item:** confirm CORS allows a browser-side call. If not, proxy via the Worker and use-and-drop
+the address in the same request — never a log line, never a row.
+
+⚠ **M3 (account setup) is UNBLOCKED.** The 6-month periodic re-confirm remains the floor and runs regardless.
 
 ### P3. VPAP terms of service — human read; gates the money row on **M1**
 `vpap.org` returned **403 to automated fetching**; terms could not be read programmatically and were not
