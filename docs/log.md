@@ -3015,3 +3015,6 @@ Pre-2026-04-08 PR history is captured in the [[testing/crossover_week_baseline]]
 
 ## [2026-07-27] doc | proposal_audit — the missing gate before output is shown
 Owner asked why the brain is read but not applied at output time. Diagnosis: the 17-point audit gates COMMITS; nothing gated PROPOSALS, and in a design phase proposals ARE the output. Six failures this session, all against rules already read. New [[workflow/proposal_audit]] — 7 checks, must be shown filled in. Also: P26 amended (fraction outright; guard/threshold/Wilson deleted for counts) and P26.4 struck ("too few" label).
+
+## [2026-07-27] doc | va_build_queue — the VA backlog from the design block
+Ordered: mockups (call sheet first) → probes → foundations → data → display. Involved REPLACES the top tracking tier (not an addition); second oppose tier OPEN. Redistricting probe scoped — the cheap check first: an effective DATE may make the shapefile question moot. Periodic re-confirm ships regardless.

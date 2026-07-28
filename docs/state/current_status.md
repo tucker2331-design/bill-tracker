@@ -33,7 +33,10 @@ status: active
 - **VA accuracy state: CLEAR + holding (2026-07-12).** The 0→66 regression is root-caused and closed ([[failures/assumptions_audit#105]] — an `UnboundLocalError` in the agenda block wearing an API-outage costume; §9 and cache-warmth both innocent). All four deferred pieces shipped + live-verified: agenda/meeting links (#214), §9 anchor ladder re-merge (#215), the scroll affordance (#216), and the last engineering residual — the label-based agenda-FETCH target (#217, [[state/open_anti_patterns]] #13, now resolved). No open VA engineering items; the only open PR is the Codex NY-probe (#175, NY). **Standing watch each cycle:** `meeting_unsourced=0`, breaker clear, `anchor_unresolved` stays 1, agenda/link drift canaries quiet. Everything below in NEXT is owner-gated (infra/decision), not blocked on me.
 
 ## NEXT (needs owner infra / a decision — then I execute)
+
+- **VA build queue** — the ordered backlog from the 2026-07-27 War Room design block: [[state/va_build_queue]]. Top item is the CALL SHEET mockup; first probe is the bill→subject linkage (C1); the tracking-ladder second-oppose-tier (B0) needs an owner call before the write path.
 1. ~~Enable A-2 Part 2 manually~~ **NO LONGER OWNER-GATED — the worker auto-shards the witness itself at 6M** (`_autoshard_witness_if_full`, zero-touch, fail-closed). Nothing for the owner to run. `archive.py shard-witness` + `WITNESS_WORKBOOK=ops` remain as manual overrides only. [[audits/fable_2026-07/autonomy_upgrades]].
+
 2. **C-8 Part 2** — NY independent oracle (reconciliation) ([[audits/fable_2026-07/codebase_longevity_audit]]). **RE-SCOPE NEEDED (2026-07-27): it assumed a LegiScan key, and LegiScan is rejected** ([[knowledge/legiscan_terms]] — its free key demands a non-commercial + internal-use-only attestation). Re-point at **Open States** NY data (public domain, key already set as `OPENSTATES_API_KEY`). No longer owner-blocked.
 3. **Multi-state — ONE STATE AT A TIME (owner directive 2026-07-07; notes preserved, do NOT lose):** tackle each new state as its own scoped project. Notes are banked and safe:
    - PA ingestion plan → [[audits/fable_2026-07/multistate_ingestion_pa]]

@@ -325,6 +325,10 @@ where that signal comes from.** Owner caught it. Recording the state honestly:
 Owner: *"for status of tracking we need an involved status which should replace the highest status now and
 will basically indicate we played a role in the introduction and/or writing of that bill text."*
 
+**REVISED by owner same day: it REPLACES the top tier, it is not an addition.** *"I don't want too many
+options then they lose their meaning."* Ladder = Involved / Supporting / Watching / Opposing (+ one more
+oppose flavour, OPEN — see [[state/va_build_queue]] B0). The full ladder and the open question live there.
+
 **This is different in kind from the levels below it and that matters:**
 - The other tracking levels are an **intensity dial** — how much attention we're paying.
 - **"Involved" is a claim of fact** — we wrote it, or we got it introduced. Not a priority setting.
