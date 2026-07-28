@@ -48,6 +48,32 @@ def test_returns_structured_fields_never_a_sentence():
         assert not (isinstance(v, str) and " " in v.strip() and len(v) > 40)
     assert set(d) == {"changed","chair_changed","majority_changed","from","to"}
 
+class _FakeFetcher:
+    session_code = "20261"
+    def __init__(self, members): self._m = members
+    def members(self): return self._m
+
+
+def test_chamber_counts_only_SEATED_members():
+    """REGRESSION. members() returns everyone who SERVED, not everyone SEATED. Measured on 20261: 106 House
+    people vs 100 seats, the extras being Outgoing/Inactive. Counting them inflates the denominator in
+    `seats * 2 > total` and can erase a real majority."""
+    from composition import chamber_composition
+    mem = {}
+    for i in range(51): mem[f"H{i:04d}"] = {"chamber": "H", "party": "D", "status": "Active"}
+    for i in range(51, 100): mem[f"H{i:04d}"] = {"chamber": "H", "party": "R", "status": "Active"}
+    for i in range(100, 106): mem[f"H{i:04d}"] = {"chamber": "H", "party": "R", "status": "Outgoing"}
+    c = chamber_composition(_FakeFetcher(mem), "H")
+    assert c["seats_total"] == 100 and c["served_not_seated"] == 6
+    assert c["majority_party"] == "D" and c["majority_seats"] == 51
+    # The bug this guards, and it is worse than a wrong denominator: with the 6 departed Republicans
+    # counted, the chamber reads R 55 of 106 -- the majority FLIPS from D to R. A control filter built on
+    # that would attribute Democratic-majority sessions to Republican control.
+    bugged = chamber_composition(_FakeFetcher(mem), "H", seated_only=False)
+    assert bugged["seats_total"] == 106
+    assert bugged["majority_party"] == "R" and bugged["majority_seats"] == 55
+
+
 def test_pooling_fails_closed_on_error():
     """We cannot prove the composition held, so we must not pool silently."""
     assert pooling_is_safe({"breaks": [], "errors": []}) is True

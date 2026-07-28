@@ -121,6 +121,59 @@ def scan(fetchers: dict, committee_ids) -> dict:
     return out
 
 
+# Only these members hold a seat. MEASURED 2026-07-27 and this is not cosmetic:
+# `members()` returns everyone who SERVED in the session, not everyone SEATED. For 20261 that is
+# 106 House / 42 Senate people against 100 / 40 actual seats -- the extras are `Outgoing` (6) and
+# `Inactive` (2). Filtering to Active yields EXACTLY 100 and 40.
+#
+# Why it is a correctness bug and not a rounding detail: the majority test is `seats * 2 > total`. The
+# 20251 House was D51-R49 -- a two-seat margin. Inflating `total` with departed members can push a real
+# majority below the threshold and report NO majority where one exists, or shift which party leads.
+SEATED_STATUSES = frozenset({"Active"})
+
+
+def chamber_composition(fetcher, chamber_code: str, *, seated_only: bool = True) -> dict:
+    """E3 — the CHAMBER's party split for one session. The control filter (V1) needs this, not just the
+    committee split: a subject profile pools bills across many committees, so the meaningful regime for it
+    is who controlled the chamber.
+
+    `chamber_code` is "H" or "S". Members with no party are counted separately, never folded into a side.
+    Non-seated members are counted in `served_not_seated` rather than dropped silently.
+    """
+    counts: dict = {}
+    not_seated = 0
+    for m in fetcher.members().values():
+        if (m.get("chamber") or "").upper() != chamber_code.upper():
+            continue
+        if seated_only and (m.get("status") or "").strip() not in SEATED_STATUSES:
+            not_seated += 1
+            continue
+        party = (m.get("party") or "").strip() or "?"
+        counts[party] = counts.get(party, 0) + 1
+    party, seats, total = _majority(counts)
+    return {
+        "chamber_code": chamber_code.upper(),
+        "session_code": fetcher.session_code,
+        "party_counts": counts,
+        "majority_party": party,
+        "majority_seats": seats,
+        "seats_total": total,
+        "served_not_seated": not_seated,
+    }
+
+
+def detect_chamber_break(a: dict, b: dict) -> dict:
+    """Same contract as `detect_break` but chamber-scoped: only the majority can change (no chair)."""
+    changed = a.get("majority_party") != b.get("majority_party")
+    return {
+        "changed": bool(changed),
+        "chair_changed": False,
+        "majority_changed": changed,
+        "from": {k: a.get(k) for k in ("session_code", "majority_party", "majority_seats", "seats_total")},
+        "to": {k: b.get(k) for k in ("session_code", "majority_party", "majority_seats", "seats_total")},
+    }
+
+
 def pooling_is_safe(scan_entry: dict) -> bool:
     """True when a figure may be pooled across the scanned window WITHOUT showing a split.
 

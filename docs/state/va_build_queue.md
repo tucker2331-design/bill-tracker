@@ -196,8 +196,16 @@ computable — without it that relationship is unrepresentable.
   Returns **structured fields, never a sentence** (P25 — the caller renders one invariant template), counts
   unknown-party members in the total but never lets them form a majority, reports present→absent chair as a
   real change, and `pooling_is_safe()` **fails closed** on any read error.
-- **E3. Per-session CHAMBER majority, stored** — committees are done (E2). Chamber-level still needs the same
-  treatment for the control filter (V1).
+- ~~**E3. Per-session CHAMBER majority**~~ — ✅ **BUILT 2026-07-27.** `chamber_composition()` +
+  `detect_chamber_break()` in the same module. **Measured:** 20251 H **D51–R49**, S **D21–R19**; 20261 H
+  **D63–R37**, S **D21–R19**. **No chamber majority break across the authorised window** — D held both
+  chambers in both sessions.
+  **Building it caught a correctness bug in my own first version.** `members()` returns everyone who
+  **served**, not everyone **seated** — 20261 returned 106 House / 42 Senate people against 100 / 40 real
+  seats, the extras being `Outgoing` (6) and `Inactive` (2). Since the majority test is `seats*2 > total`,
+  the inflated denominator is not cosmetic: in the regression test, counting 6 departed Republicans **flips
+  a D 51-seat majority into an R one**. Now filtered to `status == "Active"` (exactly 100 and 40), with
+  non-seated members **counted in `served_not_seated`, never dropped silently**.
 - **E4. Coverage window as data** on every stat, so `(2025–2026)` is derived, never typed.
 - ~~**E5. Text-diff percentage**~~ — ✅ **BUILT 2026-07-27.** `tools/text_corpus/textdiff.py` + 9 tests.
   **Removes three claims from the DERIVED (amber) class into exact math:** companion drift, version drift,
