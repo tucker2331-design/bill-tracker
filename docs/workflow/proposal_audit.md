@@ -44,7 +44,7 @@ unsourced comparisons, forgotten research, misapplied tests.
 audit and SHOW IT FILLED IN.** Not "considered" — printed, with the answer next to each line. An unshown
 audit did not happen.
 
-### The 7 checks
+### The 8 checks
 
 1. **SOURCE — every number.** For each figure: where does it come from, and are we *authorized* to have it?
    Any date range, count, or rate that cannot name its source and its authorization is **deleted, not
@@ -64,7 +64,11 @@ audit did not happen.
 6. **ARITHMETIC — do the numbers actually add up?** Compute every total, split, and complement rather than
    writing a plausible-looking figure. Mockup numbers get checked like production numbers, because an example
    that cannot exist teaches the wrong shape. (Origin: the party-math error; `38 + 6 + 9 ≠ 38`.)
-7bis. **VISUAL CONFORMANCE — added 2026-07-27, after the audit failed to catch a violation.** Grey by
+7. **PERSONA — who is this for?** The primary user is [[ideas/lobbyist_jtbd_ideation]] §8a: **an advocacy org
+   lobbying for itself, staffed by volunteers and inexperienced people.** A screen that assumes expert
+   vocabulary or expert inference is aimed at the wrong person, however correct it is.
+
+8. **VISUAL CONFORMANCE — added 2026-07-27, after the audit failed to catch a violation.** Grey by
    default; colour only for the standing meanings (amber = caution, red = dead/stale, accent = links / times
    / active state). **No coloured bands or accent rails on cards** — forbidden by
    [[design/dashboard_and_visual_language]] rule 5 *and* a known AI design tell. Category/state is a
@@ -75,10 +79,6 @@ audit did not happen.
    prior art on features. **Nothing looked at the pixels.** The audit was blind to an entire class of
    violation it was supposed to prevent, and the same publish also carried colour-chip provenance tags and a
    red tone column. One miss surfaced three.
-
-7. **PERSONA — who is this for?** The primary user is [[ideas/lobbyist_jtbd_ideation]] §8a: **an advocacy org
-   lobbying for itself, staffed by volunteers and inexperienced people.** A screen that assumes expert
-   vocabulary or expert inference is aimed at the wrong person, however correct it is.
 
 ## ENFORCEMENT — a hook, not this page (owner correction, same day)
 
@@ -100,7 +100,7 @@ Two distinct errors, worth separating:
 
 | Event | Fires | Injects |
 |---|---|---|
-| `PreToolUse` matcher `Artifact` | the instant a mockup/artifact is about to publish | the full 7 checks |
+| `PreToolUse` matcher `Artifact` | the instant a mockup/artifact is about to publish | the full 8 checks |
 | `UserPromptSubmit` | every turn | a one-line compact form |
 
 The harness executes this, not me. It does not depend on my remembering to consult a page, it costs the owner
@@ -117,7 +117,7 @@ it fires.*
 
 ## Why this is not just more process
 
-Five of the seven checks are answerable in one line each, and the audit is only run at proposal boundaries —
+Six of the eight checks are answerable in one line each, and the audit is only run at proposal boundaries —
 not per message. The cost is small and bounded. The failure it prevents is the expensive kind: **the owner
 spending his review time catching invented facts**, which is the one job he cannot delegate and the one this
 project's standards exist to make unnecessary.
