@@ -286,3 +286,63 @@ existing surface?) is exactly what the synthesis answers, and a mockup would oth
 answer and bake in the "mosh of features" the owner warned about. Mockups obey the design canon
 ([[design/dashboard_and_visual_language]] — read it before drawing).
 
+
+---
+
+## Accounts, districts, and the "Involved" status (owner, 2026-07-27)
+
+### Identity + districts — we never hold an address
+Login with Google (or equivalent), 30-day session ([[ideas/predictive_lane]] D3). On first login we ask:
+1. **What to call you** — first name, used when a volunteer identifies themselves to a member's office.
+2. **Their districts** — state house, state senate, federal house.
+
+**We ask for DISTRICTS, not addresses.** Owner: *"no one wants to give away their address, it's weird,
+especially to a vibe coded site… that way I don't ever have to keep anybody's personal data nor imply I want
+it."* If a user doesn't know their districts, an address lookup resolves them — **resolve and discard, never
+persist.** "We don't store addresses" must be architecturally true, not a promise in a policy.
+
+- **Federal house district: collect, do not display.** Used by the Mastermind federal product; asking once
+  beats a second popup later.
+- **Notice copy:** ONE short line — *"info used for legislative advocacy optimization"* — not a per-field
+  disclosure. Owner: house district is the least invasive thing we ask for.
+- **Re-confirm every 6 months** from signup, at login: *"still your districts?"* with a change affordance.
+  Plus a manual edit path in account settings (name, districts).
+
+### OPEN — the redistricting trigger has NO SOURCE YET (do not build on it)
+I proposed an event-triggered re-confirm ("when new maps take effect, everyone re-confirms") **without naming
+where that signal comes from.** Owner caught it. Recording the state honestly:
+
+- **The roster CANNOT detect it.** `roster.py` gives district *numbers* and who holds them. A boundary can move
+  while the number stays "23" — invisible to us. Do not assume the roster covers this.
+- **Candidates to VERIFY (none confirmed):** Census TIGER/Line state-legislative-district files (SLDU/SLDL);
+  the Virginia Redistricting Commission / Division of Legislative Services. Each needs a probe for
+  availability, update cadence, and terms — the same diligence LIS got ([[knowledge/lis_api_authorization]]).
+- **Decision for now: ship the 6-month periodic re-confirm ALONE.** It needs no external source and it
+  eventually catches a boundary change anyway. The event trigger is an enhancement gated on a real source,
+  not a requirement. **Better to ship the mechanism that needs nothing than to block on one I invented.**
+
+### NEW STATUS — "Involved" (replaces the top tracking level)
+Owner: *"for status of tracking we need an involved status which should replace the highest status now and
+will basically indicate we played a role in the introduction and/or writing of that bill text."*
+
+**This is different in kind from the levels below it and that matters:**
+- The other tracking levels are an **intensity dial** — how much attention we're paying.
+- **"Involved" is a claim of fact** — we wrote it, or we got it introduced. Not a priority setting.
+- It is **ORG-ASSERTED** (P20a): LIS cannot confirm we drafted anything, so it lives below the trust rule with
+  our other intel, never presented as a sourced fact.
+
+**It unlocks a stat we otherwise could not compute.** "Has this legislator ever carried a bill of ours?"
+requires knowing which bills are ours *by authorship* — which is exactly what Involved records. Without it,
+that relationship is unrepresentable. So it is not just a label; it is the input to the relational stats
+below.
+
+### Call sheet — requirements (owner, to be mocked next)
+Not a phone script. **It must serve an in-person office visit as well as a call.** Content is an assembly of
+stats we already compute — no generated prose, so it does not violate P25:
+- **Relational, and this is the point:** how often they voted with us (`k of n`) · whether they have ever
+  carried a bill of ours (needs Involved) · how many times we have contacted them, **by whom**, and when ·
+  the outcome/tone of the last contact.
+- **Behavioural:** how often they cross party lines · their record on this bill's subject code · their
+  record before the committee holding this bill.
+- Owner's framing: *"relational info is important in politics."* The sheet's job is to walk in already
+  knowing the relationship, not to be told what to say.
