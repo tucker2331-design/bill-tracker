@@ -92,7 +92,7 @@ Aggregators exist because the primary source is inconvenient, not because it is 
 
 ## M · MOCKUPS — design only, no code
 
-### M1. THE CALL SHEET ← first mockup *(needs P1; P3 optional)*
+### ~~M1. THE CALL SHEET~~ — ✅ **DRAWN 2026-07-27** · https://claude.ai/code/artifact/d44f5427-ce9c-4647-beea-595b685d71c3
 What a volunteer opens **in the hallway or outside an office door.** Owner: *"we don't just want info on the
 legislator, otherwise we would go to their profile."*
 
@@ -109,6 +109,19 @@ Must carry:
 - **Cross-aisle tendency** — how often they break with their party.
 - Serves an **in-person office visit** as much as a phone call.
 - No generated prose (P25). Every line is an assembly of numbers we already compute.
+
+**DRAWN on REAL data** — SB615 *Consumer Data Protection Act; online device pricing*, patron Sen. Stella G.
+Pekarsky, before **Senate General Laws and Technology** (id 33, **16 members**, chair **Jeremy S. McPike**),
+subject **Consumer Protection (75)** with **17 bills** in 2026. All fetched live from the authorised session
+while drawing. Every figure is tagged `LIS` (fetched) or `EXAMPLE` (needs E1/F2).
+
+**Real data surfaced a fact I would not have invented:** the patron **sits on the committee hearing her own
+bill.** It is now a line on the sheet.
+
+**The proposal-audit hook fired on this publish and caught two real defects** — first time the enforcement
+worked on live output: (a) a zone header read *"How he handles bills like this"* — **"like this" is the
+derived-claim tripwire** — now *"On Consumer Protection bills"*; (b) the contact stat said **3 contacts**
+while the log showed **2 rows**. Both fixed pre-publish.
 
 ### M2. Position + tracking ladder popup *(unblocked — the enum is settled, see D1)*
 ### M3. Account setup flow — name + 3 districts + address escape hatch *(needs P2)*
@@ -173,7 +186,15 @@ computable — without it that relationship is unrepresentable.
 - **E5. Text-diff percentage** — one number serving companion drift, version drift and cross-state
   similarity. `tools/text_corpus/normalize.py` already normalises; the ratio sits on top. Removes three amber
   claims from the product.
-- **E6. Co-patrons** — `/LegislationPatron/…`, inventoried, not built.
+- **E6. Co-patrons** — **PARTIALLY PROBED 2026-07-27, param form UNRESOLVED.** The bill-search response
+  carries **chief patron ONLY** (verified: 0 of 108 sampled bills had >1 patron), so co-patrons really are
+  absent from the route we now use. The bundle shows the right endpoint is
+  `LegislationPatron/api/GetLegislationPatronsByIdAsync`, returning `{Patrons:[…]}` where
+  `DisplayName == "(Chief Patron)"` marks the chief and **the remainder ARE the co-patrons**. Tried
+  `?sessionCode&legislationID`, `?legislationID`, `/{id}` — all 404.
+  `GetLegislationPatronListAsync` returns **400** on the same params (route exists, params wrong) and is the
+  *member→bills* direction, not bill→patrons. **Stopped rather than brute-force the parameter space** (owner
+  rule). Next: find the bundle's fetch helper to see how it composes the query.
 
 ---
 
