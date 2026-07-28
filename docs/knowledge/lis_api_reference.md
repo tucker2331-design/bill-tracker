@@ -116,6 +116,46 @@ PR-C3+)_ are queued for integration.
   2. **The ministerial law** ([[failures/assumptions_audit#67]]) uses per-EventCode timestamp/vote behavior from the cache; the reference's canonical descriptions make it auditable.
 - **Further standardization opportunities (not yet built):** (a) an EventCode drift monitor — alert when a data EventCode is absent from this reference (LIS added a new type), the EventCode analogue of `validate_status_grouping`; (b) extend recovery to re-anchor a row to its authoritative LegEvent date (fixes the date-drift at the join key, not just the route).
 
+
+### Bill ↔ subject LINKAGE — RESOLVED 2026-07-27 (queue item P1)
+
+**The dictionary and the index are two different endpoints.** `LegislationSubject` has exactly ONE method
+(`GetSubjectReferencesAsync`) — it is the *dictionary* of categories and contains no bill data. The *index*
+(which bills carry which subject) lives on the search service:
+
+```
+POST https://lis.virginia.gov/AdvancedLegislationSearch/api/GetLegislationListAsync
+     WebAPIKey: <LIS_PUBLIC_API_KEY>
+     Content-Type: application/json; charset=utf-8
+     X-Pagination: {"PageNumber":1,"PageSize":50}
+     body: {"SessionID": 59, "SubjectIndexID": 503}
+```
+
+- **`SessionID` (numeric), NOT `SessionCode`.** 20251 → 57, 20261 → 59 (derive at runtime from
+  `Session/api/GetSessionListAsync`; never hardcode — Standard #1/#5).
+- **Response `X-Pagination` header** carries `TotalCount`/`TotalPages`/`HasNext` — the count is available
+  without walking pages, which is exactly what the Search facet counts need (PL-2 information scent).
+- **⚠ Zero results return HTTP 204 with an EMPTY BODY, not 200 with `[]`.** A naive `json.loads(resp)` raises.
+  Read `TotalCount` from the header and treat 204 as a legitimate empty set — **not** an error and **not** a
+  missing subject. Same class as the sentinel-value confusions in [[failures/assumptions_audit]] #53.
+- **Verified 2026-07-27** on session 20261: baseline (session only) = 2,836 bills; 20251 = 1,989. Of 12
+  sampled subjects, 10 returned bills (Absentee Ballots 503 → 11, Administration of Government 2 → 108,
+  Insurance 38 → 62, Internet 1080 → 6, …). Two returned 0 (Abortion 502, Constitutional Officers 624) —
+  genuinely empty for that session, confirmed against a working baseline.
+- The dictionary entry shape is `{"SubjectIndexID": int, "Subject": str, "SubjectNumber": str}` — **505
+  entries**, `SubjectIndexID` range 1–1224, all unique. **`SubjectIndexID` is the join key**, not
+  `SubjectNumber`.
+- Discovery method (no blind probing): the LIS SPA bundle at `/static/js/main.*.chunk.js` declares its own
+  API surface and the search-criteria field names. Read the client, then make one well-formed call.
+
+**⚠ CORRECTION — there is NO "Privacy" subject.** Mockups v5–v8 used `Privacy · 3421`; **both the name and
+the code were fabricated by me**, and the probe caught it. The real analogues are **Consumer Protection (75)**,
+**Databases (644)**, **Information Management and Technology (758)**. Any mockup or spec referencing subject
+3421 must be corrected.
+
+**Unblocks:** Search subject facet + its counts, the Subject profile, the call-sheet subject row, and the
+War-Room "voted on bills in this category" column.
+
 ## Currently integrated endpoints (used by `calendar_worker.py`)
 
 ### Session API

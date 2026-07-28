@@ -17,7 +17,7 @@ the draw. Everything else follows dependency order: an item a probe could invali
 
 ## P · PROBES THAT GATE A MOCKUP — run first, each is small
 
-### P1. Bill → subject linkage — gates **M1 (call sheet)**, M4, and the Subject profile
+### ~~P1. Bill → subject linkage~~ — ✅ **RESOLVED 2026-07-27**
 **What is already CONFIRMED:** LIS publishes a structural subject taxonomy —
 `LegislationSubject/api/GetSubjectReferencesAsync` returns **505 subjects**, each with `SubjectIndexID` +
 `SubjectNumber` (e.g. Abortion = 3005). That is the **dictionary of categories**.
@@ -32,8 +32,17 @@ under 3421."*
 certainly do exist. The honest statement: **the data is near-certain, the route and its authorisation are
 unverified**, and unverified is unverified — that is the rule that caught the 2020 error. Expect a quick win.
 
-Probe: find the bill→subject route (or the subject→bills inverse), confirm it is inside the 2025/2026
-authorised surface, record it in [[knowledge/lis_api_reference]].
+**RESOLVED.** The index is `POST AdvancedLegislationSearch/api/GetLegislationListAsync` with
+`{"SessionID": 59, "SubjectIndexID": n}` — the subject→bills inverse, which is the direction we wanted.
+Verified on both authorised sessions. **Counts arrive free in the `X-Pagination` header**, so the Search
+facet counts (V2) need no extra query design. **Trap recorded: zero results are HTTP 204 with an empty
+body**, not `200 []`. Full spec: [[knowledge/lis_api_reference]].
+
+**It also caught a fabrication of mine:** there is **no "Privacy" subject** — mockups v5–v8 used
+`Privacy · 3421` and I invented both the name and the number. Real analogues: Consumer Protection (75),
+Databases (644), Information Management and Technology (758). **M1/M4 must use a real subject.**
+
+⚠ **M1 (call sheet) and M4 are UNBLOCKED.**
 
 ### P2. Address → district lookup **and** the re-ask signal — gates **M3 (account setup)**
 Owner: *"we just need to know when to ask them to put their new districts in… that said I sort of wanted a
