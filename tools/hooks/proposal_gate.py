@@ -21,12 +21,16 @@ FULL = """PROPOSAL AUDIT — run before this artifact is published, and show it 
 4 TEST APPLIED  invoked a multi-clause rule? Evaluate EVERY clause, not the one that gets your answer.
 5 NO PROSE PER CASE  P25. One invariant template with substituted values, or nothing.
 6 ARITHMETIC  compute every total, split and complement. Mockup numbers get checked like real ones.
-7 PERSONA     advocacy org lobbying for itself, staffed by volunteers (jtbd 8a) -- not an expert."""
+7 PERSONA     advocacy org lobbying for itself, staffed by volunteers (jtbd 8a) -- not an expert.
+8 VISUAL      grey by default; colour ONLY for the standing meanings (amber=caution, red=dead/stale,
+              accent=links/times/active). NO coloured bands or accent rails on cards (doctrine rule 5, and
+              an AI tell). Category/state = small-caps TEXT column, not a filled chip."""
 
 TERSE = ("Proposal audit is live (docs/workflow/proposal_audit.md). If this turn produces a mockup, "
          "stat list, feature proposal or recommendation: source every number (LIS = 2025/26 only), "
          "label claim class, check docs/ for prior decisions, apply every clause of any rule you cite, "
-         "no prose-per-case, verify the arithmetic, and write for a volunteer rather than an expert.")
+         "no prose-per-case, verify the arithmetic, write for a volunteer rather than an expert, and keep "
+         "the visual grey-by-default -- no coloured bands or accent rails, colour only for standing meanings.")
 
 def main() -> int:
     try:

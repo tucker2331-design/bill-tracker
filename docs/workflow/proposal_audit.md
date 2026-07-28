@@ -64,6 +64,18 @@ audit did not happen.
 6. **ARITHMETIC — do the numbers actually add up?** Compute every total, split, and complement rather than
    writing a plausible-looking figure. Mockup numbers get checked like production numbers, because an example
    that cannot exist teaches the wrong shape. (Origin: the party-math error; `38 + 6 + 9 ≠ 38`.)
+7bis. **VISUAL CONFORMANCE — added 2026-07-27, after the audit failed to catch a violation.** Grey by
+   default; colour only for the standing meanings (amber = caution, red = dead/stale, accent = links / times
+   / active state). **No coloured bands or accent rails on cards** — forbidden by
+   [[design/dashboard_and_visual_language]] rule 5 *and* a known AI design tell. Category/state is a
+   small-caps TEXT column, never a filled chip (rule 3); provenance is quiet text, not a badge (rule 6).
+
+   **Why this check exists:** the owner spotted an accent rail on the M1 call sheet and asked how it got
+   through. It got through because **checks 1–7 are all about DATA** — source, claim class, arithmetic,
+   prior art on features. **Nothing looked at the pixels.** The audit was blind to an entire class of
+   violation it was supposed to prevent, and the same publish also carried colour-chip provenance tags and a
+   red tone column. One miss surfaced three.
+
 7. **PERSONA — who is this for?** The primary user is [[ideas/lobbyist_jtbd_ideation]] §8a: **an advocacy org
    lobbying for itself, staffed by volunteers and inexperienced people.** A screen that assumes expert
    vocabulary or expert inference is aimed at the wrong person, however correct it is.
