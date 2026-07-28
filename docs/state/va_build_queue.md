@@ -199,9 +199,18 @@ computable — without it that relationship is unrepresentable.
 - **E3. Per-session CHAMBER majority, stored** — committees are done (E2). Chamber-level still needs the same
   treatment for the control filter (V1).
 - **E4. Coverage window as data** on every stat, so `(2025–2026)` is derived, never typed.
-- **E5. Text-diff percentage** — one number serving companion drift, version drift and cross-state
-  similarity. `tools/text_corpus/normalize.py` already normalises; the ratio sits on top. Removes three amber
-  claims from the product.
+- ~~**E5. Text-diff percentage**~~ — ✅ **BUILT 2026-07-27.** `tools/text_corpus/textdiff.py` + 9 tests.
+  **Removes three claims from the DERIVED (amber) class into exact math:** companion drift, version drift,
+  cross-state similarity. "High overlap" was our unauditable judgement; a diff percentage is deterministic
+  arithmetic on two texts we hold.
+  Distinct from `normalize`'s jaccard/containment — those compare **shingle sets** ("was this drafted from
+  that?"); this compares **sequences** ("how much changed?"). Both are wanted.
+  **Missing text returns `None`, never 0% and never 100%** — absence of a side is evidence of neither
+  sameness nor difference (same sentinel trap as audit #53). `difference_label()` emits the number and its
+  unit only — **no banding** ("minor edits" / "substantial rewrite" would re-introduce exactly the
+  interpretation the owner removed).
+  `drift_from_introduced()` is one comparison, **not a sum of steps** — summing double-counts twice-edited
+  text and can exceed 100%.
 - **E6. Co-patrons** — **PARTIALLY PROBED 2026-07-27, param form UNRESOLVED.** The bill-search response
   carries **chief patron ONLY** (verified: 0 of 108 sampled bills had >1 patron), so co-patrons really are
   absent from the route we now use. The bundle shows the right endpoint is
