@@ -162,3 +162,43 @@ to fix it instead of building it to a groundbreakingly sustainable level."* Stra
   (the multi-state "bulk grades the scraper" pattern, applied to VA classification). **Sequence:** surface
   first (visibility = confidence), then reconciliation→auto-correct, then shrink the curated groupings
   against the loop. This is the real sustainability track, logged so it isn't lost. See [[ideas/multi_state_data_strategy]].
+
+---
+
+## AUTH DECISION 2026-07-27 — Cloudflare Access REJECTED on pricing model, not price
+
+**I proposed Cloudflare Access for the F2 write path and did not check how it is priced against our user
+base. The owner caught it:** *"there's a 50 seat limit tho… that limits us to 1 person per state at the
+fewest."*
+
+**Verified:** Zero Trust free covers **50 users**; beyond that, Standard is **$7/user/month**, no cap.
+
+| Scenario | Users | Annual |
+|---|---|---|
+| one org, 60 volunteers | 60 | $840 |
+| 5 states × 30 volunteers | 150 | $8,400 |
+| 50 states × 20 volunteers | 1,000 | **$79,800** |
+
+**The problem is the pricing MODEL, not the number.** Access is built for employees reaching internal tools,
+so per-seat pricing matches a fixed headcount. **Our users are volunteers at customer orgs** — the count
+grows with adoption, so our cost would scale linearly with our own success, against the segment
+[[ideas/lobbyist_jtbd_ideation]] §8a describes as *priced out of incumbents*. A cost curve that punishes
+adoption is disqualifying regardless of the rate.
+
+### DECISION: application-level auth in the Worker (Sign in with Google), not network-level access control
+- **No per-user cost.** Workers and D1 are priced on requests and storage, not seats.
+- **It is not extra work.** We need a `users` table regardless — the interaction log is worthless without
+  knowing *who* made contact ("Tom — Mar 3"). App-level auth is that table, done properly.
+- **Security is equivalent for our purposes:** we verify Google's signed ID token against Google's published
+  keys, exactly as Access verifies its own tokens against Cloudflare's.
+- **What we give up:** Access's admin UI for managing who is allowed, its audit log, and device-posture
+  checks. We rebuild the allow-list ourselves — but that list is org membership, which is product data we
+  own anyway, not infrastructure config.
+
+**Access may still be right later for a small internal admin surface** (a handful of staff, well under 50).
+It is wrong for the volunteer-facing path, which is the whole product.
+
+**Generalised lesson — a third instance of the same failure.** I recommended a dependency without checking
+its terms against our situation: LegiScan (attestation), VPAP (sub-licensing), now Access (per-seat). Each
+time the owner asked the question I should have. **Add to the vendor checklist: how does this price, and
+does the cost curve bend with OUR growth?** Free-at-our-size is not the same as free-at-our-shape.
