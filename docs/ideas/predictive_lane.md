@@ -137,6 +137,39 @@ most actionable line a lobbyist can be handed — legislators answer to constitu
 also PII-adjacent, so it needs a deliberate handling decision (what is stored, who sees it, retention) before
 it is built. Flagged, not designed.
 
+### IA DECISION (owner lean, 2026-07-27) — SEARCH becomes the entity finder; profiles live there
+Owner: *"a legislator's profile — the entire history of our interactions, our comments, prediction on their
+vote and their actual vote — is a lot and belongs in its own page… you can search a legislator already, might
+as well put their page there too, keep it simple. If we do that then maybe we should be able to search
+committees and subjects there etc, so it's all in one place and it keeps the site compact with everything
+having a purpose that's used regularly."*
+
+**This is the cleanest resolution available and it needs no new tab.** Search is currently bill-only; it
+becomes the **object finder** for every entity we model. Each object then has exactly one detail home,
+reachable from Search or by clicking the entity's name anywhere it appears.
+
+**The split it produces:**
+- **War Room** carries only the stats that help you *work a bill right now* — chair, party math, alignment,
+  the whip board. It stays a working surface.
+- **The entity page** carries the comprehensive profile — full interaction history with comments, our
+  predicted vote vs their actual vote, the complete voting record, the stat set from the audit above.
+
+**Why it is right (not just convenient):** it is the OOUX pattern completing itself
+([[design/object_page_patterns]] §1b) — every core object gets card / list / **detail**, and one finder
+surfaces them all. It also honours the owner's standing anti-sprawl rule (*"we have a bills tab, it's called
+Search"*) rather than adding a tab per object type.
+
+**Consequences to design for, all real:**
+1. **Search results become MIXED-TYPE.** A query can match a bill, a member, a committee and a subject at
+   once. Results must group by type without making the common case (bill lookup) slower.
+2. **Routing is now unavoidable and bigger than first scoped.** The vault already records that `web/` has NO
+   routing and a bill therefore has no URL. Every entity now needs one.
+3. **The trust partition governs the profile page too** — a member page mixes LIS fact, our derived stats,
+   and org-private intel (contacts, alignment) on one surface. Same three-class rule as the War Room
+   ([[design/information_display]] P20a).
+4. **Which stats are "War Room relevant" vs "profile only" is itself a design decision** — and the mockup is
+   where it gets made, not before.
+
 ### BACKTESTING — which stats actually matter (owner: "I don't want that to be a feature, I'm curious")
 Owner: *"with historical data you can see the actual outcome so you can see what we would have predicted and
 what actually happened… maybe we can do something once we know which stats matter more if any."*
