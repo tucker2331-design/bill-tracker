@@ -187,10 +187,17 @@ computable — without it that relationship is unrepresentable.
   counted and categorised by id shape, never dropped.
   `agreement()` encodes the rule that **an absence is not a disagreement** — a vote not cast leaves both
   numerator and denominator alone.
-- **E2. Composition-break detection** — diff `chair_of()` / `party_split()` across sessions; where they
-  differ a pooled figure must show its split. **Correctness requirement, not a feature.**
-- **E3. Per-session chamber majority, stored** — the control filter needs it; `party_split()` covers
-  committees, chamber needs the same.
+- ~~**E2. Composition-break detection**~~ — ✅ **BUILT 2026-07-27.** `tools/roster/composition.py` + 9 tests.
+  **MEASURED across the two authorised sessions: 6 of 25 committees broke** — *all six are chair changes,
+  **zero** majority flips.* Examples: General Laws and Technology (33) **Ebbin → McPike**; Education and
+  Health (25) **Hashmi → Favola**; Health and Human Services (197) **Sickles → Willett**.
+  **This settles the owner's "is it a chronic condition?" worry with a number:** pooling is safe for **19 of
+  25** committees and unsafe for 6 — frequent enough to matter, rare enough to be livable.
+  Returns **structured fields, never a sentence** (P25 — the caller renders one invariant template), counts
+  unknown-party members in the total but never lets them form a majority, reports present→absent chair as a
+  real change, and `pooling_is_safe()` **fails closed** on any read error.
+- **E3. Per-session CHAMBER majority, stored** — committees are done (E2). Chamber-level still needs the same
+  treatment for the control filter (V1).
 - **E4. Coverage window as data** on every stat, so `(2025–2026)` is derived, never typed.
 - **E5. Text-diff percentage** — one number serving companion drift, version drift and cross-state
   similarity. `tools/text_corpus/normalize.py` already normalises; the ratio sits on top. Removes three amber
