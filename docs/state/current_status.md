@@ -34,7 +34,12 @@ status: active
 
 ## NEXT (needs owner infra / a decision — then I execute)
 
-- **VA build queue** — the ordered backlog from the 2026-07-27 War Room design block: [[state/va_build_queue]]. Top item is the CALL SHEET mockup; first probe is the bill→subject linkage (C1); the tracking-ladder second-oppose-tier (B0) needs an owner call before the write path.
+- **VA build queue** — [[state/va_build_queue]]. **2026-07-27: all 3 gating probes RESOLVED, M1 drawn, and E1/E2/E3/E5 built.** What remains needs the owner:
+  - **F2 write path** (Cloudflare Worker + D1 + Access) and **F3 accounts** (Google OAuth) need infra only you can provision. Everything org-asserted — positions, notes, contacts — is blocked on F2.
+  - **F1 routing** — `web/` has no router; 6 routes needed. Pure code, but large enough to deserve its own focused session/PR.
+  - **D2 MVP cut** — your call. ORCA says cut by downgrading OBJECTS, not by trimming features.
+  - **C2 Open States** bulk download needs a login. **C1 legacylis** CSV is unprobed and unblocked — good next task.
+  - **E6 co-patrons** — endpoint identified, parameter form unresolved; stopped rather than brute-force it.
 1. ~~Enable A-2 Part 2 manually~~ **NO LONGER OWNER-GATED — the worker auto-shards the witness itself at 6M** (`_autoshard_witness_if_full`, zero-touch, fail-closed). Nothing for the owner to run. `archive.py shard-witness` + `WITNESS_WORKBOOK=ops` remain as manual overrides only. [[audits/fable_2026-07/autonomy_upgrades]].
 
 2. **C-8 Part 2** — NY independent oracle (reconciliation) ([[audits/fable_2026-07/codebase_longevity_audit]]). **RE-SCOPE NEEDED (2026-07-27): it assumed a LegiScan key, and LegiScan is rejected** ([[knowledge/legiscan_terms]] — its free key demands a non-commercial + internal-use-only attestation). Re-point at **Open States** NY data (public domain, key already set as `OPENSTATES_API_KEY`). No longer owner-blocked.

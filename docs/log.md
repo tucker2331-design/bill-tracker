@@ -3021,3 +3021,6 @@ Ordered: mockups (call sheet first) → probes → foundations → data → disp
 
 ## [2026-07-27] probe | P1 + P2 resolved — both gating probes cleared
 P1: bill↔subject index is `POST AdvancedLegislationSearch/api/GetLegislationListAsync` {SessionID, SubjectIndexID}; counts free in X-Pagination; 204-on-empty trap; caught that "Privacy · 3421" was fabricated. P2: Census Geocoder returns all 3 districts keyless, and the layer-name vintage IS the redistricting signal — no shapefile. M1/M3/M4 unblocked.
+
+## [2026-07-27] work | probes P1-P3 resolved; E1/E2/E3/E5 built; M1 drawn
+All three gating probes cleared: subject linkage (AdvancedLegislationSearch + SubjectIndexID), districts (Census Geocoder, keyless, layer-vintage IS the redistricting signal), campaign finance (ELECT bulk CSVs 1999-now replace VPAP). Built: vote_history (318,264 member votes, zero extra requests), composition (6 of 25 committees broke; seat-vs-served bug caught), textdiff (3 claims out of the amber class). M1 call sheet drawn on real LIS data; the proposal-audit hook caught 2 defects pre-publish.
