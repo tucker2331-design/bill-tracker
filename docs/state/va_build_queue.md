@@ -176,8 +176,17 @@ computable — without it that relationship is unrepresentable.
 
 ## E · DATA LAYER
 
-- **E1. Vote-history join** — `VOTE.CSV` already holds every member-vote pair; parse to per-member records.
-  Zero extra API calls. Feeds nearly every number on the call sheet.
+- ~~**E1. Vote-history join**~~ — ✅ **BUILT 2026-07-27.** `tools/votes/vote_history.py` + 9 structural
+  tests. Zero extra LIS requests — a re-parse of a blob the worker already downloads.
+  **Measured (20261):** 11,175 rows · **9,129 with per-member detail** · **318,264 member votes** ·
+  147 distinct members. Roster reconciliation: 148 members vs 147 voters — **exactly one (`H0368`) never
+  voted, zero orphan votes**, so the MemberNumber join is clean.
+  **The finding that matters for the product:** 2,046 roll calls carry **no per-member detail**, and that is
+  mostly *correct* — 1,245 are `VSV*` voice/standing votes, which have no roll call **by nature**. Treating
+  them as a parse failure invents a bug; treating them as "no votes" understates a member's record. They are
+  counted and categorised by id shape, never dropped.
+  `agreement()` encodes the rule that **an absence is not a disagreement** — a vote not cast leaves both
+  numerator and denominator alone.
 - **E2. Composition-break detection** — diff `chair_of()` / `party_split()` across sessions; where they
   differ a pooled figure must show its split. **Correctness requirement, not a feature.**
 - **E3. Per-session chamber majority, stored** — the control filter needs it; `party_split()` covers
