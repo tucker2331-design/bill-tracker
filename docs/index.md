@@ -44,6 +44,7 @@ Links use Obsidian `[[wikilink]]` format. Obsidian resolves by filename; path-qu
 - [[workflow/design_proposal_protocol]] — **▶️ ANTI-LOOPING RULE (owner 2026-07-25: "you are looping… come up with competing ideas, run them through our rules and checklists before I see anything"). Mandatory before ANY design reaches the owner: research the VAULT first, generate ≥2 real competing designs, self-audit every candidate against the 8 Standards + design canon + reasoning doctrine + case law, kill your own favourite, then present the vetted winner WITH the rejected options and the rule that killed each. The owner audits reasoning, never missed checklist items.**
 - [[workflow/reasoning_doctrine]] — **session-start read: the 8 process moves that produce bank-grade work here (measure-first · verify-the-row · fail-open · confirm-before-advance · no silent fallback · structural-not-text · notify-only · write-back)**
 - [[workflow/three_phase_protocol]] — context routing → pre-push audit → write-back mandate
+- [[workflow/proposal_audit]] — the 7-point gate BEFORE any mockup/proposal is shown (the pre-push audit only gates commits)
 - [[workflow/branching_rules]] — when to reuse vs create a branch (PR state decides)
 - [[workflow/push_and_pr]] — after every commit: push, open PR, return link
 - [[workflow/deploy_cloudflare_pages]] — **the decided host: React+Vite → Cloudflare Pages; repo is prepped (_redirects, node pin), owner does the 5-min dashboard Git-connect (exact settings inside)**

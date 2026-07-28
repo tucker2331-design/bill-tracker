@@ -271,17 +271,38 @@ Sources: [Gigerenzer — What are natural frequencies?](http://library.mpib-berl
 disappears when the sample cannot support it.**
 1. **Always show "k of n".** *"Voted with us 7 of 9 times."* This is the primary form at ANY n — not a
    fallback for small samples. It carries its own denominator, so P6 is satisfied by construction.
-2. **A percentage may accompany it ONLY to enable comparison across different denominators** (ranking
-   committees by kill rate). It never replaces the frequency.
-3. **Below the sample threshold, the percentage is SUPPRESSED entirely** — the owner's rule, and correct: a
-   percentage on n=1 implies a precision that does not exist. "1 of 1" is honest; "100%" is a lie of format.
-4. **Below an even lower floor, say so in words** — "too few to judge (2 of 3)" — rather than presenting a
-   number that invites a conclusion.
-5. **The interval, where shown, is the Wilson score interval** (honest at small n and at extreme
-   proportions — see [[ideas/predictive_lane]] Tier 1), never the normal approximation.
-6. **The threshold itself must be measured, not chosen by feel** — set it from the backtest, where we can see
-   at what n a stat stops being noise. Until that measurement exists, the threshold is provisional and must
-   be labelled as such.
+2. **AMENDED by the owner 2026-07-27 — the fraction wins outright; there is no percentage companion for
+   counts.** Owner: *"I thought you ended up saying the fraction is the best choice regardless after doing
+   some research? If that's the case stick with it and we don't need a data guard — just percentages for
+   specific things like change to bill text where it makes sense."* **Correct, and it follows from clause 1
+   rather than softening it.** If "k of n" is the better form *at every sample size*, a percentage companion
+   is never the better form, so the "companion for comparison" carve-out was me hedging against my own
+   finding.
+3. **A percentage is reserved for quantities that are NOT counts of events** — where no natural-frequency
+   form exists because there is nothing to count. The live case: **text difference** ("11% different"), a
+   ratio of continuous measures. If you *can* say "k of n," you must.
+4. **~~Below an even lower floor, say so in words~~ — STRUCK by the owner, 2026-07-27.** The original clause
+   said to print "too few to judge (2 of 3)". Owner: *"don't say too few, they know that."* **He is right and
+   the clause contradicted clause 1:** if "k of n" is genuinely self-describing, then `0 of 2` already tells a
+   reader the sample is thin — the added words are the product editorialising about a number it just showed.
+   **The rule is now: show the frequency, suppress the percentage, add nothing.** The denominator is the
+   guard; a label on top of it is redundant at best and condescending at worst. (Same family as P25 — no
+   text-per-signal. Prose generated per case is a maintenance surface and an interpretation the user did not
+   ask for.)
+5. **~~Wilson score interval~~ — MOOT for counts under the amendment.** A confidence interval is a statement
+   about an estimated *proportion*; if we never render a proportion for a count, there is nothing to put an
+   interval on. `1 of 6` needs no error bar — it is the raw observation, not an estimate. Wilson survives only
+   if a percentage is ever shown for a count, which clause 2 now forbids.
+6. **~~The threshold must be measured by the backtest~~ — DELETED. There is no threshold anymore.** The
+   suppression rule existed to decide *when* to hide a percentage; with no percentage on counts there is no
+   switch to calibrate. **This removes real machinery from the build:** no threshold constant, no per-stat
+   tuning, no "is n big enough" branch at every render site, and one fewer thing the backtest must answer.
+   The denominator does the whole job, unconditionally.
+
+**Net effect of the 2026-07-27 amendment:** the statistical-honesty layer collapses from "frequency +
+percentage + threshold + suppression + interval" to **one rule — print `k of n`**. Simpler to build, nothing
+to calibrate, and impossible to get wrong at a render site. A rare case where the honest form is also the
+cheap one.
 
 **Why this belongs in the canon and not just the stats page:** it generalises. Any rate this product ever
 shows — completeness, accuracy, calibration, alignment — obeys it. It is P6 ("never a number without its

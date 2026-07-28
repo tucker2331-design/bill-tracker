@@ -3012,3 +3012,6 @@ Session marker fallback now overwrites non-concrete placeholder times. `_is_non_
 ## Earlier entries
 
 Pre-2026-04-08 PR history is captured in the [[testing/crossover_week_baseline]] progress tracker table and in numbered entries in [[failures/assumptions_audit]]. This log was backfilled starting 2026-04-16 and is append-only from that date forward.
+
+## [2026-07-27] doc | proposal_audit — the missing gate before output is shown
+Owner asked why the brain is read but not applied at output time. Diagnosis: the 17-point audit gates COMMITS; nothing gated PROPOSALS, and in a design phase proposals ARE the output. Six failures this session, all against rules already read. New [[workflow/proposal_audit]] — 7 checks, must be shown filled in. Also: P26 amended (fraction outright; guard/threshold/Wilson deleted for counts) and P26.4 struck ("too few" label).

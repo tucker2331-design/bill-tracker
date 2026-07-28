@@ -422,3 +422,87 @@ we don't ship it, and that refusal is itself on-brand. But that's the owner's ca
 
 See also [[architecture/roster_and_votes_ingestion]], [[ideas/product_identity]], [[ideas/lobbyist_jtbd_ideation]]
 §C/§D, [[design/information_display]] §P20a–c, [[ideas/war_room_scoping]].
+
+---
+
+## SUBJECT IS AN OBJECT WITH A PROFILE (owner correction, 2026-07-27)
+
+**I got this wrong in war-room mockup v6/v7.** I ran the LogRocket nested-object test ("hierarchical,
+recognizable, carrying its own CTAs → own detail view; a mere attribute does not") and ruled **Subject** an
+attribute because it has no actions of its own — so I made it a filter only. The owner rejected that: *"yes a
+subject has a profile we should be able to see how many bills have been entered under this subject whether
+dems or reps carried those bills how many were successful."*
+
+**Why my reasoning was wrong:** I weighted the CTA clause and ignored the rest of the test. A subject is
+hierarchical (the LIS taxonomy is a tree), recognizable (a lobbyist works *in* a subject area), and — the part
+I missed — **it carries content of its own**: an aggregate view over a class of bills that exists nowhere else
+in the product. "Has few buttons" is not "is an attribute." A thing can deserve a page because of what it
+*shows*, not only what it *does*.
+
+**Consequence:** Subject is a filter AND a profile. Both. The dropdown stays (505 values, browsable per
+Hearst); the profile is what you land on when you follow the subject itself.
+
+### Subject profile — the candidate stat list (to be cut by the backtest, not by taste)
+All obey P26 (count + denominator first), all carry a coverage window, all respect the authorized data window
+([[knowledge/lis_api_authorization]] — 2025–2026 via API; earlier only via `legacylis.virginia.gov` CSV), and
+all are subject to the composition-break rule below.
+
+**Volume and outcome**
+- Bills carrying this subject · per session and pooled
+- Reported vs died in committee · passed vs failed on floor · signed vs vetoed
+- Survival by stage (the hazard curve: of N introduced, how many clear committee, crossover, the second
+  chamber, the governor)
+
+**Who carries them (the owner's ask)**
+- Patron party split: how many bills carried by D vs R
+- **Success rate BY patron party** — the interesting cell, and the one most likely to be confounded by
+  chamber control; must respect the control filter
+- Which patrons carry the most / succeed the most in this subject
+- Majority-party patron vs minority-party patron success
+
+**Where they go**
+- Which committees receive them (concentration — is this subject owned by one committee?)
+- Report rate per receiving committee (the D2 committee-mortality table, sliced by subject)
+- Chamber-of-origin split
+
+**What happens to the text**
+- Substitute / amendment rate — do bills in this subject get rewritten before passing?
+- Median versions before passage
+
+**Ours (org-private)**
+- Bills we hold a position on in this subject · support / oppose / watching
+- Our win rate in this subject
+
+**Cross-state (Open States, unverified)**
+- How many other states have similar bills live this cycle
+
+### The two-axis filter (owner, 2026-07-27) — window AND control, applied together
+*"as sessions build up we might not only want to change the window but also see what it was like under dem vs
+republican control — like two different filters that can be applied at the same time."*
+
+Two independent, simultaneously-applied filters on every entity profile and every stat block:
+1. **Window** — which sessions (this session · both authorized · a custom span as the archive grows)
+2. **Control** — chamber/committee majority party during the period (all · D majority · R majority)
+
+They AND together. The second is not cosmetic: it is the **principled resolution** of the composition-break
+problem — selecting a control regime removes the confound instead of merely warning about it. Expect n to
+collapse under a control filter in the early years; the thin-data guard governs, and that is the honest
+answer, not a reason to hide the filter.
+
+### Composition-break banner — ONE fixed template, zero text dictionary (owner constraint)
+Owner: *"i want to make sure that everything is basically staying the same except the numbers bill by bill so
+theres no dictionary of text or anything to manage or match to numbers."*
+
+This is [[design/information_display]] **P25 (no text-per-signal)** applied to statistics. The banner is a
+**single invariant sentence** with data-substituted values — never a lookup table of situation → prose:
+
+> Composition changed between these sessions. Chair: `{a}` → `{b}` · majority `{p} {x}–{y}` → `{q} {m}–{n}`.
+
+Detection is structural, from data we already ingest: `roster.py` `chair_of()` and `party_split()` per
+committee per session ([[architecture/roster_and_votes_ingestion]]). If either differs across the selected
+window, the banner renders and every pooled figure must also show its per-regime split. No per-case wording,
+nothing to maintain, and it scales to 50 states unchanged — the same sentence, different names.
+
+**This is a correctness requirement, not a feature.** A pooled rate across a regime change can sit in a range
+neither regime ever occupied; rendering it as one silent average is a Standard #7 violation (a metric whose
+denominator hides a partition).
