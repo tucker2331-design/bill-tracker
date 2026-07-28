@@ -71,12 +71,22 @@ the address in the same request — never a log line, never a row.
 
 ⚠ **M3 (account setup) is UNBLOCKED.** The 6-month periodic re-confirm remains the floor and runs regardless.
 
-### P3. VPAP terms of service — human read; gates the money row on **M1**
-`vpap.org` returned **403 to automated fetching**; terms could not be read programmatically and were not
-worked around. Search results indicate the site advertises RSS/API/downloads. **A human reads the terms before
-any scoping** — the same diligence LIS got. Feeds the campaign-finance / gift-disclosure overlay (ideation C1),
-absent from every mockup so far. Only *adds* a row to the call sheet, so it is the least blocking of the
-three — but cheaper to answer before drawing than after.
+### ~~P3. VPAP terms of service~~ — ✅ **RESOLVED 2026-07-27 — VPAP not needed**
+Owner reported VPAP prohibits sub-licensing, and asked the right question: **where do THEY get it?**
+
+**Answer: the Virginia Department of Elections publishes the filings itself** —
+`https://apps.elections.virginia.gov/SBE_CSV/CF/<YYYY_MM>/`, monthly CSVs **1999 → 2026_07**, no key, no
+registration, refreshed daily. VPAP is an aggregator of this. Verified live; full spec in
+[[knowledge/campaign_finance_source]].
+
+**Their terms govern their compilation, not the public record underneath it** — so the restriction simply
+does not reach us. And ELECT is *better* sourcing: the filings themselves rather than someone else's
+normalisation (Standard #3), no intermediary who can change terms, and history back to 1999.
+
+**Standing rule this establishes:** when an aggregator's terms block us, find the agency they file with.
+Aggregators exist because the primary source is inconvenient, not because it is closed.
+
+⚠ **M1's money row is UNBLOCKED** — no owner action needed after all.
 
 ---
 

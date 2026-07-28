@@ -47,6 +47,7 @@ Links use Obsidian `[[wikilink]]` format. Obsidian resolves by filename; path-qu
 - [[workflow/proposal_audit]] — the 7-point gate BEFORE any mockup/proposal is shown (the pre-push audit only gates commits)
 - [[state/va_build_queue]] — ordered VA backlog from the War Room design block (mockups → probes → foundations)
 - [[knowledge/district_lookup]] — address→district (Census, no key) + the redistricting signal from the layer vintage
+- [[knowledge/campaign_finance_source]] — ELECT bulk CSVs (1999→now) replace VPAP; the "go to the agency, not the aggregator" rule
 - [[workflow/branching_rules]] — when to reuse vs create a branch (PR state decides)
 - [[workflow/push_and_pr]] — after every commit: push, open PR, return link
 - [[workflow/deploy_cloudflare_pages]] — **the decided host: React+Vite → Cloudflare Pages; repo is prepped (_redirects, node pin), owner does the 5-min dashboard Git-connect (exact settings inside)**
