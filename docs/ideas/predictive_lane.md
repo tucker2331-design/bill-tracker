@@ -105,10 +105,65 @@ trust-partition stakes: a member profile now mixes LIS fact, our derived stats, 
 page, so the three-class partition ([[design/information_display]] P20a) governs it exactly as it does the
 War Room.
 
+### ORG-RELATIVE STATS — the third proprietary layer (owner 2026-07-27)
+Two more owner additions, and together with contact history + constituent mapping they are the **only**
+non-public data we will hold:
+- **Interaction log with a TREND, not just a count** — *"a log of the interactions so we can see most of them
+  are negative or most are positive."* A relationship trajectory per member. This is knowledge a lobbyist
+  normally carries in their head and the org LOSES when that person leaves.
+- **ALIGNMENT: how often a member voted with US** — with the bills we support and against the ones we oppose.
+  Owner's framing, and it is the strongest member stat proposed so far: more useful to the team than any
+  party-line rate, because it is measured against *their* agenda. **Nobody else can compute it**, because
+  nobody else knows the org's positions.
+
+**This is why POSITION must exist, and it revisits D5.** The owner previously locked *"the star simply
+signifies if it's one we're tracking… the level of involvement is a different question."* That still holds —
+but alignment **cannot be computed without knowing which side we are on**, so position is now a DATA
+REQUIREMENT surfacing, not UI creep.
+
+**Owner's design (adopted as the direction):** clicking the star opens a popup — the same pattern as the
+two-step untrack already shipped — carrying (a) **position** and (b) **tracking level** (watching / high
+alert / involved; names TBD). The card shows ONE symbol reflecting position, never two. Nothing new is added
+to the card, which answers the owner's own crowding concern.
+
+**The design catch that must not be missed: a NEUTRAL position is mandatory.** If the popup forces
+favor-or-oppose on every tracked bill, users will pick arbitrarily on bills they are merely watching, and
+those fake positions **poison the alignment stat** — the exact number the feature exists to produce. So:
+favor / oppose / watching-no-position, and only the first two count toward alignment. (Same family as the
+absent-vs-unverified rule: a forced value is worse than an honest blank.)
+
 **Constituent mapping deserves its own note:** "three of your members live in Newman's district" is the single
 most actionable line a lobbyist can be handed — legislators answer to constituents, not to advocates. It is
 also PII-adjacent, so it needs a deliberate handling decision (what is stored, who sees it, retention) before
 it is built. Flagged, not designed.
+
+### BACKTESTING — which stats actually matter (owner: "I don't want that to be a feature, I'm curious")
+Owner: *"with historical data you can see the actual outcome so you can see what we would have predicted and
+what actually happened… maybe we can do something once we know which stats matter more if any."*
+
+**This is not a feature — it is how we decide which stats deserve to EXIST.** Every stat listed above is
+currently a guess about what matters. A backtest converts that guess into a measurement: committee kill rate
+may separate outcomes cleanly while party-line rate turns out to be noise. Two disciplines make it honest,
+both borrowed from the similarity calibration:
+1. **Point-in-time only.** Compute each stat using ONLY what was known on that date — no peeking at later
+   data. A leak makes every stat look predictive.
+2. **Accept the answer**, including "most of these predict nothing." That result is a WIN: it tells us what
+   not to build and what not to show.
+
+**Source (owner: "either Open States or legacy, doesn't matter to me"):** use BOTH, for different jobs —
+**Open States** for the cross-state backtest, because uniform data is what makes states comparable; **VA's
+legacy channel** for Virginia depth, since it is the authoritative record. Neither blocks the other. Note the
+hard constraint: our LIS API authorization is 2025/2026 only, so multi-session history CANNOT come from it.
+
+### PER-STATE TUNING — with the guardrail that keeps it maintainable
+Owner: *"this might be something we have to tune per state and then… when we have a bulk amount of states do
+a master test and see what stats stand out."* Agreed, with one rule: **stat DEFINITIONS stay identical across
+states; only CALIBRATION is per-state.** Fifty states with fifty different definitions is fifty things to
+maintain — precisely what Standard #8 forbids. Same recipe everywhere, locally measured numbers.
+
+**The master test is the real payoff:** run across states it reveals which stats are UNIVERSAL versus which
+are Virginia quirks. That distinction is only visible in aggregate, and it is exactly the kind of knowledge a
+single-state competitor can never derive.
 
 **Open, and the reason this is a discussion not a build:** which objects get a detail page FIRST, what belongs
 on each, and how a profile stays honest at small n (a member with 3 relevant votes must not display a 33% rate
