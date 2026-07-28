@@ -88,9 +88,27 @@ prediction is just one derived VIEW over those profiles — not the product.
 | **Patron** | win-rate overall, **by committee**, by subject · co-patron network · majority/minority effect |
 | **Bill** | survival by stage · the composite (Tier 3, gated) |
 
-**The strategic weight:** this is the archive moat ([[ideas/moat_and_competition]] #1) turned into product. A
-competitor can clone the bill list in a weekend; they cannot compute "this patron is 2-for-11 in this
-committee" without our years of reconciled history. **Entity stats are the most defensible surface we have.**
+**OWNER CORRECTION 2026-07-27 — I overclaimed the moat again.** Owner: *"you said someone can't do this
+without archive but we don't have any data that's not public already since we are starting fresh."* **Right.**
+Everything we hold today is public and re-derivable by anyone with the same API keys. The archive becomes
+defensible *over time* (that is the "can't clone the log" argument) — **it is not defensible today**, and I
+stated a future state in the present tense. Entity stats built purely on public data are **replicable**, and
+the honest edge there is being *first, correct, and calibrated*, not exclusive.
+
+**But the owner's own additions ARE the exclusive layer**, and that is the important find:
+- **Contact history** — who from the org reached which member or staffer, when, and what came back.
+- **Constituent mapping** — which of the org's own people/supporters live in which district.
+Neither is public. Neither is scrapeable. Both exist the moment the org starts recording them, with **no
+multi-year wait**. **This — not the public archive — is the proprietary data layer**, and it is why those two
+belong on the Member profile as first-class fields rather than as an afterthought. It also raises the
+trust-partition stakes: a member profile now mixes LIS fact, our derived stats, and org-private intel on one
+page, so the three-class partition ([[design/information_display]] P20a) governs it exactly as it does the
+War Room.
+
+**Constituent mapping deserves its own note:** "three of your members live in Newman's district" is the single
+most actionable line a lobbyist can be handed — legislators answer to constituents, not to advocates. It is
+also PII-adjacent, so it needs a deliberate handling decision (what is stored, who sees it, retention) before
+it is built. Flagged, not designed.
 
 **Open, and the reason this is a discussion not a build:** which objects get a detail page FIRST, what belongs
 on each, and how a profile stays honest at small n (a member with 3 relevant votes must not display a 33% rate
