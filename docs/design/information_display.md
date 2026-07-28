@@ -252,6 +252,41 @@ pedantic internal disagreement." The Health tab is **client-facing for executive
   then with a finished dossier, never a raw signal. **"Route to human review" is not a design** — it is the
   absence of one. Full mechanism: [[architecture/incident_counter]] §3.
 
+## 5e. Statistical honesty — how a rate is allowed to appear (P26)
+
+Owner, 2026-07-27: *"1/1 doesn't mean much… maybe there's a threshold where until you get at least x data
+points, instead of showing a percentage it shows a fraction, so it's very clear whether it's relevant."*
+**Researched — and the evidence supports something stronger than a small-n fallback.**
+
+**The finding (Gigerenzer, natural frequencies):** *"31 out of 100"* is comprehended better than *"31%"* —
+**at every sample size, not just small ones.** Natural frequencies are cardinal numbers, so they are easier to
+reason with than percentages or fractions; the research records that 10-year-olds solve inference problems
+presented as frequencies that trained professionals get wrong when the same problems are stated as
+probabilities. A percentage silently *discards the denominator*, which is the very thing that tells a reader
+whether to believe it.
+Sources: [Gigerenzer — What are natural frequencies?](http://library.mpib-berlin.mpg.de/ft/gg/gg_what_2011.pdf) ·
+[BMJ/《Reckoning with Risk》 summary](https://www.juliantalbot.com/post/2017/08/08/risk-communication-using-natural-frequencies)
+
+**P26 · A rate is shown as a NATURAL FREQUENCY first; the percentage is the optional companion, and it
+disappears when the sample cannot support it.**
+1. **Always show "k of n".** *"Voted with us 7 of 9 times."* This is the primary form at ANY n — not a
+   fallback for small samples. It carries its own denominator, so P6 is satisfied by construction.
+2. **A percentage may accompany it ONLY to enable comparison across different denominators** (ranking
+   committees by kill rate). It never replaces the frequency.
+3. **Below the sample threshold, the percentage is SUPPRESSED entirely** — the owner's rule, and correct: a
+   percentage on n=1 implies a precision that does not exist. "1 of 1" is honest; "100%" is a lie of format.
+4. **Below an even lower floor, say so in words** — "too few to judge (2 of 3)" — rather than presenting a
+   number that invites a conclusion.
+5. **The interval, where shown, is the Wilson score interval** (honest at small n and at extreme
+   proportions — see [[ideas/predictive_lane]] Tier 1), never the normal approximation.
+6. **The threshold itself must be measured, not chosen by feel** — set it from the backtest, where we can see
+   at what n a stat stops being noise. Until that measurement exists, the threshold is provisional and must
+   be labelled as such.
+
+**Why this belongs in the canon and not just the stats page:** it generalises. Any rate this product ever
+shows — completeness, accuracy, calibration, alignment — obeys it. It is P6 ("never a number without its
+context") sharpened into a specific, checkable format rule.
+
 ## 5c. Interaction & input — the canon for the product's first WRITE surface
 
 Everything above governs *display*. The war room is the first thing in this product a human **types into**
