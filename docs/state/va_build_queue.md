@@ -6,163 +6,173 @@ status: active
 
 # VA build queue — everything decided in the 2026-07-27 design block
 
-Virginia only. Built from the War Room / entity-stats / Search design session. `current_status.md` stays
-MOVE-only (NOW ≤3); **this is the ordered backlog those three are drawn from.**
+Virginia only. `current_status.md` stays MOVE-only (NOW ≤3); **this is the ordered backlog those three are
+drawn from.**
 
-Ordering rule: **mockups first** (they cost nothing and change what gets built), **then probes** (they can
-delete work), **then foundations**, then the layers that sit on them. An item that a probe could invalidate
-never precedes that probe.
+**Ordering rule (owner, 2026-07-27):** *"put the scoping that ensures the mockups are even possible ahead of
+the mockup."* So **probes that gate a mockup run first** — drawing a screen whose data may not exist wastes
+the draw. Everything else follows dependency order: an item a probe could invalidate never precedes it.
 
 ---
 
-## A · MOCKUPS — design only, no code
+## P · PROBES THAT GATE A MOCKUP — run first, each is small
 
-### A1. THE CALL SHEET ← top of the queue
-The thing a volunteer opens **in the hallway or outside an office door.** Owner: *"we don't just want info on
-the legislator, otherwise we would go to their profile."*
+### P1. Bill → subject linkage — gates **M1 (call sheet)**, M4, and the Subject profile
+**What is already CONFIRMED:** LIS publishes a structural subject taxonomy —
+`LegislationSubject/api/GetSubjectReferencesAsync` returns **505 subjects**, each with `SubjectIndexID` +
+`SubjectNumber` (e.g. Abortion = 3005). That is the **dictionary of categories**.
 
-**The defining constraint: it is the INTERSECTION of member × THIS bill × subject, not a member profile.**
-A profile answers "who is this person"; the call sheet answers "what do I need to know about this person *for
-this bill, right now*." If a fact would read the same on any bill, it probably belongs on the profile instead.
+**What is NOT yet confirmed: the index.** The dictionary tells us the categories exist; it does not tell us
+*which bills carry which category*. Those are two different endpoints. We have the list of all subjects — we
+have not yet found the route that answers *"HB463 carries subject 3421"* or its inverse *"list every bill
+under 3421."*
+
+**Owner is right that the categorisation exists** — LIS displays subjects on bill pages, so the data is real.
+**I over-stated the risk earlier by saying four features "change shape if it doesn't exist."** They almost
+certainly do exist. The honest statement: **the data is near-certain, the route and its authorisation are
+unverified**, and unverified is unverified — that is the rule that caught the 2020 error. Expect a quick win.
+
+Probe: find the bill→subject route (or the subject→bills inverse), confirm it is inside the 2025/2026
+authorised surface, record it in [[knowledge/lis_api_reference]].
+
+### P2. Address → district lookup **and** the re-ask signal — gates **M3 (account setup)**
+Owner: *"we just need to know when to ask them to put their new districts in… that said I sort of wanted a
+way they could put their address in and see that info pop up to then be manually put in. so check for both."*
+
+**Two separate questions, both required:**
+1. **Address → districts** (the escape hatch, now a confirmed requirement not a nicety): a lookup that takes
+   an address and returns state house / state senate / federal house districts, which the user then **enters
+   manually**. Resolve and discard — the address is never stored. Candidates to verify: Census Geocoder,
+   Google Civic Information, Open States people-by-location. Check terms and cost for each.
+2. **The re-ask signal** — *when* do we prompt for new districts? **Check the cheap thing first:** we need a
+   **date**, not geometry. If new maps carry a publishable effective date anywhere (VA Redistricting
+   Commission / Division of Legislative Services), the shapefile question is moot and the probe ends. Only if
+   no date is obtainable, look at Census TIGER/Line SLDU/SLDL vintages as a diffable proxy.
+
+**Why this needed a probe at all:** `roster.py` returns district *numbers* and who holds them — a boundary can
+move while the number stays "23", so redistricting is **invisible to everything we currently ingest.** That
+gap was mine: I proposed an event-triggered re-confirm without naming a source.
+
+**Ships regardless of outcome:** the **6-month periodic re-confirm** needs no external source. Never let this
+probe block accounts.
+
+### P3. VPAP terms of service — human read; gates the money row on **M1**
+`vpap.org` returned **403 to automated fetching**; terms could not be read programmatically and were not
+worked around. Search results indicate the site advertises RSS/API/downloads. **A human reads the terms before
+any scoping** — the same diligence LIS got. Feeds the campaign-finance / gift-disclosure overlay (ideation C1),
+absent from every mockup so far. Only *adds* a row to the call sheet, so it is the least blocking of the
+three — but cheaper to answer before drawing than after.
+
+---
+
+## M · MOCKUPS — design only, no code
+
+### M1. THE CALL SHEET ← first mockup *(needs P1; P3 optional)*
+What a volunteer opens **in the hallway or outside an office door.** Owner: *"we don't just want info on the
+legislator, otherwise we would go to their profile."*
+
+**Defining constraint: the INTERSECTION of member × THIS bill × subject — not a member profile.** A profile
+answers *who is this person*; the call sheet answers *what do I need to know about this person, for this bill,
+right now.* **Test: if a fact would read the same on any bill, it belongs on the profile instead.**
 
 Must carry:
-- **Which bill we're advocating for**, and which side we're on — the sheet is meaningless without it.
-- **Subject-specific record** — how they vote on bills in *this* category (`k of n`, subject code).
-- **This committee** — their record on the committee currently holding the bill.
-- **Relational** (the part that makes it ours): voted with us `k of n` · has carried a bill of ours
-  (needs [[#B0-involved-status|Involved]]) · contacts: how many, **by whom**, when, and how the last one went.
+- **Which bill we are advocating for, and which side we are on** — the sheet is meaningless without it.
+- **Subject-specific record** — how they vote on bills in *this* category (`k of n`). *(needs P1)*
+- **This committee** — their record before the committee currently holding the bill.
+- **Relational — the part that makes it ours:** voted with us `k of n` · has carried a bill of ours (needs the
+  Involved status, D1) · contacts: how many, **by whom**, when, and how the last one went.
 - **Cross-aisle tendency** — how often they break with their party.
 - Serves an **in-person office visit** as much as a phone call.
 - No generated prose (P25). Every line is an assembly of numbers we already compute.
 
-### A2. Position + tracking ladder — the popup, with the ladder below settled first
-### A3. Account setup flow — name + 3 districts, and the 6-month re-confirm
-### A4. Bill card / War Room with the new statuses rendered
+### M2. Position + tracking ladder popup *(unblocked — the enum is settled, see D1)*
+### M3. Account setup flow — name + 3 districts + address escape hatch *(needs P2)*
+### M4. Bill card / War Room rendering the new statuses *(needs P1 for the subject column)*
 
 ---
 
-## B · DECISIONS TO SETTLE (no research needed, just a call)
+## D · DECISIONS
 
-### B0. The tracking ladder — Involved REPLACES the top tier, it is not an addition
-Owner: *"I don't want too many options then they lose their meaning."* Settled:
+### D1. The tracking ladder — SETTLED (owner, 2026-07-27)
+"Involved" **replaces** the top tier; it is not an addition. *"I don't want too many options then they lose
+their meaning."* **Oppose stays one layer** — the symmetric-authorship idea (an "Amending" mirror) is dropped.
 
-| Tier | Meaning | Class |
-|---|---|---|
-| **Involved** | we wrote it and/or got it introduced | org-asserted |
-| **Supporting** | actively working for it | org-asserted |
-| **Watching** | tracking, no position | org-asserted |
-| **Opposing** | actively working against it | org-asserted |
+| Tier | Meaning |
+|---|---|
+| **Involved** | we wrote it and/or got it introduced |
+| **Supporting** | actively working for it |
+| **Watching** | tracking, no position |
+| **Opposing** | actively working against it |
 
-**OPEN — the second oppose tier.** Owner: *"the disagree with version maybe like two different versions of
-that, not much."* The honest difficulty: **"Involved" has no clean mirror.** Its positive meaning is
-*authorship*, and the opposing-side equivalent of authorship is writing the substitute or amendment that guts
-a bill — a real lobbying activity, but arguably a different axis rather than a stronger flavour of "Opposing."
-Two candidate shapes, owner picks:
-- **(a) symmetric authorship** — *Amending* as the oppose-side top tier (we're writing the changes), or
-- **(b) intensity only** — *Opposing* plus a lighter *Concerned* for "we don't like it but aren't working it."
+All four are **org-asserted** (P20a) — LIS cannot confirm we drafted anything, so they live below the trust
+rule with our other intel, never rendered as sourced fact. **This is the enum; the write path (F2) can now
+proceed.** "Involved" is also the only thing that makes *"has this member carried a bill of ours?"*
+computable — without it that relationship is unrepresentable.
 
-Do not build the write path until this is chosen; it is the enum.
-
-### B1. MVP cut (D4) — ORCA says cut by downgrading OBJECTS, not by trimming features.
+### D2. MVP cut — ORCA says cut by downgrading OBJECTS, not by trimming features. Open.
 
 ---
 
-## C · PROBES — each can delete or reshape work below it. Run before building on them.
+## F · FOUNDATIONS
 
-### C1. Bill → subject linkage  ← **highest-value probe**
-The 505-subject taxonomy is confirmed (`SubjectIndexID`), **the route that maps a bill to its subject codes is
-not found.** Gates: the Search subject facet, the War Room "on privacy bills" column, the entire Subject
-profile, and the subject half of the call sheet. **If it doesn't exist, four features change shape.**
-
-### C2. Redistricting signal — scoping (owner asked for this explicitly)
-**Why it needs a probe at all:** `roster.py` returns district *numbers* and who holds them. A boundary can
-move while the number stays "23" — so redistricting is **invisible to every source we currently ingest.** I
-proposed an event-triggered re-confirm without a source; this is that debt.
-
-Scope of the probe — answer for each candidate, then stop:
-1. **Census TIGER/Line state legislative districts (SLDU/SLDL)** — does it publish VA upper/lower district
-   boundaries, on what cadence, under what terms, and is there a stable version/vintage field we could diff?
-2. **Virginia Redistricting Commission / Division of Legislative Services** — is there a machine-readable
-   boundary or effective-date publication, or is it PDF/press only?
-3. **Is a boundary file even needed?** A cheaper signal may exist: a published *effective date* for new maps.
-   We do not need geometry — we only need to know **when to re-ask users**. If a date is obtainable, the
-   entire shapefile question is moot. **Check this one first; it may end the probe.**
-
-**Decision already made regardless of outcome:** ship the **6-month periodic re-confirm alone** — it needs no
-external source and eventually catches a boundary change anyway. The event trigger is an enhancement, never a
-blocker. Do not let this probe hold up accounts.
-
-### C3. VPAP terms of service — human read required
-`vpap.org` returned **403 to automated fetching**, so its terms could not be read programmatically and were
-not worked around. Search results indicate the site advertises RSS/API/downloads. **A human must read the
-terms before any scoping**, same diligence LIS got. Feeds the campaign-finance / gift-disclosure overlay
-(ideation C1), which is currently absent from every mockup.
-
-### C4. `legacylis.virginia.gov` CSV — the only lawful pre-2025 route
-**Promoted from "someday" by the composition finding.** With only 2025–2026 authorized, a chair or majority
-change *between those two sessions* leaves **one session** of valid history for that committee. This path is
-the difference between a stats layer that means something and one that doesn't.
-
-### C5. Open States bulk download — blocked on a login. Gates cross-state comparison.
+- **F1. Routing** — `web/` has **no router at all**. Six routes: detail + list for legislator, committee,
+  subject. Nothing with a URL works until this lands.
+- **F2. Write path** — Worker + D1 + Cloudflare Access. Everything org-asserted needs it: the ladder, notes,
+  contacts, the interaction log. **The call sheet is a read surface over data that does not exist yet.**
+- **F3. Accounts** — Google login, 30-day session. Ask **what to call you** (first name, for office calls) +
+  **state house / state senate / federal house** districts. Never store an address. Federal district
+  collected, not displayed (Mastermind uses it). One notice line: *"info used for legislative advocacy
+  optimization."* 6-month re-confirm at login + manual edit in account settings.
 
 ---
 
-## D · FOUNDATIONS — gate large amounts of the above
+## C · REMAINING PROBES (do not gate a mockup)
 
-### D1. Routing — `web/` has **no router at all**
-Six routes: **detail + list** for legislator, committee, and subject. Nothing with a URL works until this
-lands. (Subject needs both — it is a filter *and* a profile.)
-
-### D2. Write path — Worker + D1 + Cloudflare Access
-Everything org-asserted depends on it: the ladder (B0), notes, contacts, the interaction log. **The call sheet
-is a read surface over data that does not exist yet.**
-
-### D3. Accounts — Google login, 30-day session
-Ask: **what to call you** (first name, for office calls) + **state house, state senate, federal house
-districts**. Never store an address; the lookup resolves and discards. Federal district collected, not
-displayed (Mastermind uses it). One notice line: *"info used for legislative advocacy optimization."*
-6-month re-confirm at login + manual edit in account settings.
+- **C1. `legacylis.virginia.gov` CSV** — the only lawful pre-2025 route. **Promoted from "someday" by the
+  composition finding:** with two authorised sessions, a chair or majority change between them leaves **one
+  session** of valid history for that committee. The difference between a stats layer that means something
+  and one that does not.
+- **C2. Open States bulk download** — blocked on a login. Gates cross-state comparison.
 
 ---
 
 ## E · DATA LAYER
 
-- **E1. Vote-history join** — `VOTE.CSV` already holds every member-vote pair; needs parsing to per-member
-  records. Zero extra API calls. Feeds nearly every stat on the call sheet.
+- **E1. Vote-history join** — `VOTE.CSV` already holds every member-vote pair; parse to per-member records.
+  Zero extra API calls. Feeds nearly every number on the call sheet.
 - **E2. Composition-break detection** — diff `chair_of()` / `party_split()` across sessions; where they
-  differ, a pooled figure must show its split. **Correctness requirement, not a feature.**
+  differ a pooled figure must show its split. **Correctness requirement, not a feature.**
 - **E3. Per-session chamber majority, stored** — the control filter needs it; `party_split()` covers
-  committees, chamber needs the same treatment.
+  committees, chamber needs the same.
 - **E4. Coverage window as data** on every stat, so `(2025–2026)` is derived, never typed.
-- **E5. Text-diff percentage** — one number serving companion drift, version drift, and cross-state
-  similarity. `tools/text_corpus/normalize.py` already normalizes; the ratio sits on top. Removes three amber
+- **E5. Text-diff percentage** — one number serving companion drift, version drift and cross-state
+  similarity. `tools/text_corpus/normalize.py` already normalises; the ratio sits on top. Removes three amber
   claims from the product.
 - **E6. Co-patrons** — `/LegislationPatron/…`, inventoried, not built.
 
 ---
 
-## F · DISPLAY
+## V · DISPLAY
 
-- **F1. Window × control dual filter** — applied together and independent. Expect `n` to collapse under a
-  control filter in early years; that is the honest answer, not a reason to hide the control.
-- **F2. Search: per-value facet counts** computed against the current filter state, which is what makes
-  zero-count disabling work. Query-shape requirement, not styling.
-- **F3. Search empty state = browse index** — four object rows with counts; `ours` is the only subdivision.
-- **F4. Subject profile page** (stat list banked in [[ideas/predictive_lane]]).
-- **F5. `k of n` everywhere** — no percentage on counts, no threshold, no interval. One rule.
+- **V1. Window × control dual filter** — applied together, independent. Expect `n` to collapse under a control
+  filter in early years; that is the honest answer, not a reason to hide the control.
+- **V2. Search per-value facet counts** against the current filter state — what makes zero-count disabling
+  work. Query-shape requirement, not styling.
+- **V3. Search empty state = browse index** — four object rows with counts; `ours` the only subdivision.
+- **V4. Subject profile page** — stat list banked in [[ideas/predictive_lane]].
+- **V5. `k of n` everywhere** — no percentage on counts, no threshold, no interval. One rule.
 
 ---
 
-## G · RECORDED, NOT QUEUED
+## R · RECORDED, NOT QUEUED
 
-- **G1. The backtest** — settles which stats carry signal. Both PROVISIONAL blocks wait on it. Not a blocker
-  for the mockups.
-- **G2. Mobile** — deliberately deferred (owner). **The specific problem, recorded so nobody assumes it is a
-  CSS afternoon:** the trust partition is a *vertical rule between column groups* — a horizontal device. On a
-  narrow screen the LIS columns collapse, so the partition does not get cramped, it **disappears**, and "ours"
-  silently becomes the whole table. A mobile pass must re-invent the partition vertically.
-- **G3. Tier-3 individual prediction** — owner go/no-go, gated on the calibration harness. No model output
-  ships before it.
-- **G4. Not in any mockup yet, from [[ideas/lobbyist_jtbd_ideation]]:** VPAP money overlay (C1), influence
-  pathfinding / co-patron network (C4), the pinned verified fact sheet (V5), constituent-×-committee
+- **R1. The backtest** — settles which stats carry signal. Both PROVISIONAL blocks wait on it. Not a blocker
+  for mockups.
+- **R2. Mobile** — deferred (owner). **Why it is not a CSS afternoon:** the trust partition is a *vertical
+  rule between column groups* — a horizontal device. On a narrow screen the LIS columns collapse, so the
+  partition does not compress, it **disappears**, and "ours" silently becomes the whole table. A mobile pass
+  must re-invent the partition vertically.
+- **R3. Tier-3 individual prediction** — owner go/no-go, gated on the calibration harness.
+- **R4. In the vault, in no mockup yet** ([[ideas/lobbyist_jtbd_ideation]]): VPAP money overlay (C1),
+  influence pathfinding / co-patron network (C4), pinned verified fact sheet (V5), constituent-×-committee
   intersection (V3), after-hearing recap (V6).
