@@ -40,7 +40,8 @@ from normalize import normalize
 _AUTOJUNK = False
 
 
-def difference_pct(text_a: str, text_b: str, *, already_normalized: bool = False) -> float | None:
+def difference_pct(text_a: str | None, text_b: str | None, *,
+                   already_normalized: bool = False) -> float | None:
     """Percent of the text that differs, 0.0–100.0. Returns **None when it cannot be computed.**
 
     None, never 0.0 and never 100.0, when either side is missing or empty. This is the same rule
@@ -56,7 +57,9 @@ def difference_pct(text_a: str, text_b: str, *, already_normalized: bool = False
     wa, wb = a.split(), b.split()
     if not wa or not wb:
         return None
-    ratio = SequenceMatcher(_AUTOJUNK and None, wa, wb, autojunk=_AUTOJUNK).ratio()
+    # isjunk=None (no element is "junk"); autojunk off per the note above. `_AUTOJUNK and None`
+    # sat here and evaluated to False -- a bogus isjunk value that mypy caught and no test could.
+    ratio = SequenceMatcher(None, wa, wb, autojunk=_AUTOJUNK).ratio()
     return round((1.0 - ratio) * 100.0, 1)
 
 

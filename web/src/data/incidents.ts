@@ -5,7 +5,7 @@
 // "days we could VERIFY clean", not "days nobody complained". An unresolved unknown counts against it.
 //
 // Row shape: StartUTC | EndUTC | Class | Summary | DetectedBy
-import { SPREADSHEET_ID } from "../config";
+import { SPREADSHEET_ID, headerMatches } from "../config";
 import { parseCsv } from "./gviz";
 
 const TAB = "Incident_Log";
@@ -14,6 +14,20 @@ const TAB = "Incident_Log";
 // exercising the real write path — neither is an incident, so neither may break the streak.
 const GENESIS = "_genesis";
 const DRILL = "_drill";
+
+// The tab's header, exactly. THIS IS A CORRECTNESS GUARD, NOT A NICETY.
+//
+// gviz answers a request for a MISSING tab with HTTP 200 and the CSV of the FIRST sheet — no error, no
+// flag. On 2026-07-28 that shipped to production: `Incident_Log` did not exist, gviz served 11.2 MB of the
+// calendar instead, and column 2 (`SortTime`) became the incident CLASS. The Health tab announced ~3,645
+// simultaneous open incidents, one per meeting time. The old guard only caught HTML error pages, so a
+// wrong-sheet response — plausible CSV — sailed straight through. Textbook silent fallback.
+//
+// So we verify we are reading the sheet we asked for, structurally (Standard #3): if the header is not
+// ours, we did not get our tab, and NOTHING may be parsed from it.
+const EXPECTED_HEADER = ["StartUTC", "EndUTC", "Class"] as const;
+
+const isOurHeader = (row: string[] | undefined): boolean => headerMatches(row, EXPECTED_HEADER);
 
 export interface CounterState {
   /** Days since the last incident ended, or since monitoring began. null = no epoch yet (unseeded). */
@@ -29,12 +43,17 @@ export interface CounterState {
   malformedRows: number;
   /** false = the tab does not exist yet. The UI must say "not yet seeded", never a fake green. */
   available: boolean;
+  /** true = we received a sheet that is NOT Incident_Log. A DEFECT to surface, not an empty state. */
+  wrongSheet: boolean;
 }
 
 const EMPTY: CounterState = {
   daysClean: null, monitoringDays: null, incidentsEver: 0, openNow: [],
-  lastDrillDays: null, malformedRows: 0, available: false,
+  lastDrillDays: null, malformedRows: 0, available: false, wrongSheet: false,
 };
+
+/** Distinct from EMPTY: "we read the wrong sheet" is a bug to fix, not "nothing has happened yet". */
+const WRONG_SHEET: CounterState = { ...EMPTY, wrongSheet: true };
 
 const parseIso = (s: string): number | null => {
   const t = Date.parse((s || "").trim().replace(" ", "T"));
@@ -45,6 +64,17 @@ const wholeDays = (fromMs: number, nowMs: number) =>
   Math.max(0, Math.floor((nowMs - fromMs) / 86_400_000));
 
 export function counterFromRows(rows: string[][], now: Date = new Date()): CounterState {
+  // Refuse to interpret a sheet that is not ours. Returning WRONG_SHEET rather than parsing is the whole
+  // lesson of the 2026-07-28 defect: garbage that parses is more dangerous than garbage that throws.
+  //
+  // NO rows at all and rows with the WRONG header are different conditions and must not collapse:
+  //   - empty  => the tab exists but nothing has been written. "Not yet seeded" — benign, nothing to fix.
+  //   - wrong  => we were handed some other sheet. A DEFECT — the days-clean figure is unknown, not clean.
+  // Merging them would either cry wolf on a fresh install or hide a real misread behind a calm message.
+  const firstNonBlank = rows.find((r) => r.some((c) => (c || "").trim()));
+  if (firstNonBlank === undefined) return EMPTY;
+  if (!isOurHeader(firstNonBlank)) return WRONG_SHEET;
+
   const nowMs = now.getTime();
   let latestEnd: number | null = null;   // last time we were known-clean (an incident's end, or genesis)
   let genesis: number | null = null;
@@ -95,6 +125,7 @@ export function counterFromRows(rows: string[][], now: Date = new Date()): Count
     lastDrillDays: lastDrill === null ? null : wholeDays(lastDrill, nowMs),
     malformedRows,
     available: genesis !== null || incidentsEver > 0,
+    wrongSheet: false,
   };
 }
 

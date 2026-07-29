@@ -8,30 +8,44 @@ import { useScope, useStarred } from "./state/tracking";
 import { ScopeSwitch, TrustHeader } from "./components/common";
 import { ErrorBoundary } from "./components/ErrorBoundary";
 import { RefreshNotice } from "./components/RefreshNotice";
+import { SignIn } from "./components/SignIn";
+import { FirstRun } from "./components/FirstRun";
+import { apiFetch, useIdentity } from "./state/auth";
 import { BillCard } from "./components/BillCard";
 import { Landing } from "./views/Landing";
 import { Calendar } from "./views/Calendar";
 import { Search } from "./views/Search";
 import { Health } from "./views/Health";
+import { WarRoom } from "./views/WarRoom";
+import { useRoute, navigate, tabPath, linkProps, detailPath, type TabId } from "./state/router";
 
 // Freshness-gate cadence: poll the two ~22-byte stamp cells this often (and on window-focus). Well under any
 // worker cadence, and cheap enough that an idle off-season tab costs a few bytes a minute. (auto_refresh doc)
 const POLL_MS = 90_000;
 
 // No standalone Timeline tab — the timeline lives on the landing (owner, 2026-06-23: redundant).
-type Tab = "today" | "calendar" | "search" | "health";
-const TABS: { id: Tab; label: string }[] = [
+// Tab identity now comes from the URL (state/router.ts) rather than useState — every tab is linkable.
+const TABS: { id: TabId; label: string }[] = [
   { id: "today", label: "Today" },
   { id: "calendar", label: "Calendar" },
   { id: "search", label: "Search" },
+  { id: "warroom", label: "War Room" },
   { id: "health", label: "Health" },
 ];
 
 export default function App() {
   const [data, setData] = useState<BillData | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [tab, setTab] = useState<Tab>("today");
-  const [selected, setSelected] = useState<Bill | null>(null);
+  const [route] = useRoute();
+  // The tab is derived from the route. A detail/list route keeps the surrounding chrome on its parent tab so
+  // the nav never blanks out while a bill card is open.
+  const tab: TabId = route.kind === "tab" ? route.tab : "search";
+  // `selected` is DERIVED from the route, not stored. Two sources of truth for "which bill is open" would
+  // drift the moment someone used Back, and the card would outlive its URL.
+  const selected: Bill | null =
+    route.kind === "detail" && route.entity === "bills" && data
+      ? data.bills.find((b) => b.bill === route.id) ?? null
+      : null;
   // The calendar subsystem's own freshness (Sheet1!AA1) — undefined until loaded, null when unreadable.
   // Surfaced in the top trust header next to the bill clock so the two feeds' cadences read cohesively.
   const [calendarAsOf, setCalendarAsOf] = useState<Date | null | undefined>(undefined);
@@ -44,6 +58,23 @@ export default function App() {
   const [refresh, setRefresh] = useState<{ token: number; label: string }>({ token: 0, label: "" });
   const [scope] = useScope();
   const starred = useStarred();
+  const identity = useIdentity();
+  // undefined = not asked yet · null = signed in with NO profile (show first-run) · object = has one.
+  // Three states, not two: "we have not checked" must never look like "they have no profile", or the form
+  // flashes on every load for people who already filled it in.
+  const [profile, setProfile] = useState<Record<string, unknown> | null | undefined>(undefined);
+
+  useEffect(() => {
+    if (!identity) { setProfile(undefined); return; }   // signed out => back to "not asked"
+    let alive = true;
+    apiFetch("/api/me")
+      .then((r) => (r.ok ? r.json() : Promise.reject(new Error(`HTTP ${r.status}`))))
+      .then((d) => { if (alive) setProfile(d?.profile ?? null); })
+      // Surfaced, never swallowed. On failure we leave it `undefined` so the form does NOT appear -- showing
+      // it after a failed read would ask a user to re-enter a profile they may already have.
+      .catch((e) => { console.error("profile load failed:", e); if (alive) setProfile(undefined); });
+    return () => { alive = false; };
+  }, [identity]);
 
   // The last-seen freshness STAMPS. These hold the RAW cell strings ONLY (never a Date round-trip): the poll
   // compares them against the raw cells it re-reads, so any formatting difference (e.g. "…54Z" vs a Date's
@@ -120,7 +151,9 @@ export default function App() {
     [data, scope, starred]
   );
 
-  const open = (b: Bill) => setSelected(b);
+  // Opening a bill pushes /bills/:number so the card is linkable and Back closes it. The card itself stays
+  // a modal — this changes the URL, not the interaction.
+  const open = (b: Bill) => navigate(detailPath("bills", b.bill));
 
   return (
     <div className="app">
@@ -131,13 +164,14 @@ export default function App() {
           <ScopeSwitch />
           <div className="spacer" />
           {data && <TrustHeader dataAsOf={data.dataAsOf} calendarAsOf={calendarAsOf} completeness={data.completeness} shown={visible.length} />}
+          <SignIn />
         </header>
 
         <nav className="nav">
           {TABS.map((t) => (
-            <button key={t.id} className={tab === t.id ? "active" : ""} onClick={() => setTab(t.id)}>
+            <a key={t.id} className={tab === t.id ? "active" : ""} {...linkProps(tabPath(t.id))}>
               {t.label}
-            </button>
+            </a>
           ))}
         </nav>
       </div>
@@ -155,13 +189,18 @@ export default function App() {
                 so it gets the FULL bill set for the agenda→card lookup, not the pre-scoped `visible`. */}
             {tab === "calendar" && <Calendar bills={data.bills} sessionCode={data.sessionCode} onOpen={open} calRefresh={calRefresh} />}
             {tab === "search" && <Search bills={visible} onOpen={open} />}
+            {tab === "warroom" && <WarRoom bills={data.bills} starred={starred} />}
             {tab === "health" && <Health completeness={data.completeness} dataAsOf={data.dataAsOf} />}
           </ErrorBoundary>
         )}
       </main>
 
+      {identity && profile === null && (
+        <FirstRun onDone={() => setProfile({ display_name: identity.name })} />
+      )}
+
       {selected && data && (
-        <BillCard bill={selected} sessionCode={data.sessionCode} onClose={() => setSelected(null)} />
+        <BillCard bill={selected} sessionCode={data.sessionCode} onClose={() => window.history.back()} />
       )}
 
       {/* Transient "why did this just change" cue after a background refresh — self-dismisses.

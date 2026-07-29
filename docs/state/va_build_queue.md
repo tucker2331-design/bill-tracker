@@ -124,7 +124,9 @@ derived-claim tripwire** — now *"On Consumer Protection bills"*; (b) the conta
 while the log showed **2 rows**. Both fixed pre-publish.
 
 ### M2. Position + tracking ladder popup *(unblocked — the enum is settled, see D1)*
-### M3. Account setup flow — name + 3 districts + address escape hatch *(needs P2)*
+### ~~M3. Account setup flow~~ — ✅ **BUILT, not just drawn** (`components/FirstRun.tsx`). The mockup step
+was skipped deliberately: the form is four fields and one escape hatch, so drawing it first would have cost
+a round-trip to learn nothing the build did not.
 ### M4. Bill card / War Room rendering the new statuses *(needs P1 for the subject column)*
 
 ---
@@ -153,11 +155,31 @@ computable — without it that relationship is unrepresentable.
 
 ## F · FOUNDATIONS
 
-- **F1. Routing** — `web/` has **no router at all**. Six routes: detail + list for legislator, committee,
-  subject. Nothing with a URL works until this lands.
-- **F2. Write path** — Worker + D1 + Cloudflare Access. Everything org-asserted needs it: the ladder, notes,
-  contacts, the interaction log. **The call sheet is a read surface over data that does not exist yet.**
-- **F3. Accounts** — Google login, 30-day session. Ask **what to call you** (first name, for office calls) +
+- ~~**F1. Routing**~~ — ✅ **BUILT + BROWSER-VERIFIED 2026-07-28.** `web/src/state/router.ts` (~70 lines,
+  **no new dependency** — this app has two runtime deps and the route set is flat; a router library would
+  triple that and add an upgrade treadmill, Standard #8). Routes: the five tabs plus list + detail for bills,
+  legislators, committees, subjects. `parseRoute`/`routePath` sit adjacent and a round-trip test proves
+  `parse(path(r)) === r` for all 13. **The War Room tab now exists** and renders tracked bills from real data.
+  Verified in a browser, not just typechecked: deep link opens the right bill, Back closes it, unknown routes
+  fall back without blanking, a nonexistent bill id does not crash, nav links are real `<a href>` so
+  middle-click and copy-link work, zero console errors, no overflow at 1280 or 700px.
+- **F2. Write path** — ⏳ **PR #237, schema LIVE.** Migration applied to the remote D1 2026-07-28; both
+  constraints verified against the real database (`stance='bogus'` → CHECK failure; missing `state` → NOT NULL
+  failure). Worker API + **Google ID-token verification** built (Access rejected on its per-seat pricing
+  model — [[architecture/verification_durability]]). Remaining: merge, then the front-end sign-in button —
+  the lock is installed, the door is not yet hung.
+- ~~**F3. Accounts**~~ — ✅ **BUILT 2026-07-28.** Sign-in (`web/src/state/auth.ts` + `components/SignIn.tsx`,
+  verified live: button renders, zero console errors, **no token in localStorage** — held in memory only, so
+  one XSS cannot steal an identity that outlives the tab). **First-run form built** — display name + three districts, which is what turns
+  "Saved as tucker2331@gmail.com" into "Saved as Tucker".
+  **The privacy property is topology, not policy:** the Census lookup runs in the BROWSER, so the address
+  never reaches our infrastructure and there is no code path on our side that could store one — the only
+  occurrence of the word "address" in `worker/index.js` is the comment explaining its absence. Verified
+  against the live Census API with two real addresses (Capitol → 14/78/4, Arlington → 40/2/8) so it cannot
+  be returning a canned answer.
+  **The profile gate has three states, not two** — `undefined` (not checked) / `null` (no profile) /
+  object. Collapsing the first two would flash the form on every load for people who already filled it in.
+  Original scope below. Ask **what to call you** (first name, for office calls) +
   **state house / state senate / federal house** districts. Never store an address. Federal district
   collected, not displayed (Mastermind uses it). One notice line: *"info used for legislative advocacy
   optimization."* 6-month re-confirm at login + manual edit in account settings.
@@ -166,10 +188,22 @@ computable — without it that relationship is unrepresentable.
 
 ## C · REMAINING PROBES (do not gate a mockup)
 
-- **C1. `legacylis.virginia.gov` CSV** — the only lawful pre-2025 route. **Promoted from "someday" by the
-  composition finding:** with two authorised sessions, a chair or majority change between them leaves **one
-  session** of valid history for that committee. The difference between a stats layer that means something
-  and one that does not.
+- **C1. `legacylis.virginia.gov` CSV** — **PROBED 2026-07-27. NO BULK CSV ROUTE FOUND. This is a bad
+  result and it matters.**
+  What is there: `legacylis.virginia.gov` is live and serves the **2024 session** (`ses=241`) as
+  **CGI-generated HTML pages** (`/cgi-bin/legp604.exe?241+…`) — bill tracking, committees, members,
+  calendars, statistics. Every link on the home page is a page, not a file. `SiteInformation/csvinfo.html`
+  404s. The DLAS "data center" page is network infrastructure, not data distribution.
+  **The LIS Developers Portal says pre-2025 data should come from "legacylis.virginia.gov via CSV
+  download", but I could not find where that download lives.** Stopped rather than brute-force URLs — that
+  is the blind-probing the owner has ruled out twice.
+  **Why this is worse than an inconvenience:** the only alternative visible today is scraping those CGI
+  pages, which is **text parsing on the lobbyist path — forbidden by Standard #3**, not merely undesirable.
+  So the honest position is: **we may be stuck at two sessions of history**, which means a committee with a
+  composition break (6 of 25 — E2) has ONE usable session, and the stats layer stays thin until either
+  (a) the CSV route is found, or (b) LIS authorises earlier sessions on the new API.
+  **NEXT — owner-actionable, not another probe:** ask DLAS directly where the historical CSVs are. They are
+  the publisher; one email settles what an afternoon of guessing will not.
 - **C2. Open States bulk download** — blocked on a login. Gates cross-state comparison.
 
 ---
@@ -206,7 +240,14 @@ computable — without it that relationship is unrepresentable.
   the inflated denominator is not cosmetic: in the regression test, counting 6 departed Republicans **flips
   a D 51-seat majority into an R one**. Now filtered to `status == "Active"` (exactly 100 and 40), with
   non-seated members **counted in `served_not_seated`, never dropped silently**.
-- **E4. Coverage window as data** on every stat, so `(2025–2026)` is derived, never typed.
+- ~~**E4. Coverage window as data**~~ — ✅ **BUILT 2026-07-28.** `tools/votes/coverage.py` + 10 tests.
+  A window is computed **from the rows a figure was actually derived from** and travels with it, so
+  `(2025–2026)` can never be a literal that was true the day it was typed — the same class as the fabricated
+  `(2020–2026)`. **Zero rows yields `None`, never a plausible span**: "no data" and "data covering 2025–2026"
+  must not render identically. `exceeds_authorized()` turns a pre-2025 claim into a detectable compliance
+  fault rather than a display quirk, and the authorised set is **imported** from `lis_authorization.py`
+  rather than copied — the code gate caught that duplication on first write, and a compliance rule that can
+  drift silently is the worst possible thing to have two copies of.
 - ~~**E5. Text-diff percentage**~~ — ✅ **BUILT 2026-07-27.** `tools/text_corpus/textdiff.py` + 9 tests.
   **Removes three claims from the DERIVED (amber) class into exact math:** companion drift, version drift,
   cross-state similarity. "High overlap" was our unauditable judgement; a diff percentage is deterministic
@@ -239,7 +280,13 @@ computable — without it that relationship is unrepresentable.
   work. Query-shape requirement, not styling.
 - **V3. Search empty state = browse index** — four object rows with counts; `ours` the only subdivision.
 - **V4. Subject profile page** — stat list banked in [[ideas/predictive_lane]].
-- **V5. `k of n` everywhere** — no percentage on counts, no threshold, no interval. One rule.
+- ~~**V5. `k of n` everywhere**~~ — ✅ **BUILT 2026-07-28.** `web/src/data/frequency.ts` + 15 tests.
+  Implements P26 **as amended**, not as originally written — no percentage companion, no sample threshold,
+  no "too few" label, no Wilson interval. All six clauses were re-read against the canon before writing,
+  not recalled. A test asserts the formatter **has no code path that can emit a `%`**.
+  `n = 0` returns null rather than `"0 of 0"`: no observations is a different claim from zero successes,
+  and the caller must render absence as absence. `complement()` exists because the owner asked for "voted
+  against us" explicitly — burying it in a subtraction hides the more actionable half.
 
 ---
 

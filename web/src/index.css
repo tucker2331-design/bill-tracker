@@ -575,3 +575,82 @@ a.hl-vverify:hover { text-decoration: underline; }
   .refresh-note, .refresh-note.leaving { animation: none; }
   .refresh-note.leaving { opacity: 0; }                  /* still disappears, just no slide */
 }
+
+/* ── War Room list (F1) ────────────────────────────────────────────────────────────────────────────────
+   One row per tracked bill, soonest hearing first. Uses the product's own row anatomy — bold number,
+   dimmed patron, plain title, hairline separators — rather than inventing a second list language
+   (dashboard_and_visual_language rule 4). Rows are real <a> elements so middle-click and "copy link" work. */
+.wr-list { background: var(--surface); border-radius: var(--radius); box-shadow: var(--shadow-sm); overflow: hidden; }
+.wr-row {
+  display: grid;
+  grid-template-columns: 88px minmax(90px, 140px) minmax(0, 1fr) minmax(120px, 200px) minmax(110px, 190px);
+  gap: var(--s3);
+  align-items: baseline;
+  padding: 11px var(--s4);
+  border-top: 1px solid var(--line);
+  color: inherit;
+  text-decoration: none;
+}
+.wr-row:first-child { border-top: 0; }
+/* Uniform row height. MEASURED, not guessed: the tracker carries 25 distinct committee names and the
+   longest — "Senate Agriculture, Conservation and Natural Resources" — needs 363px on one line, which the
+   row cannot afford. Truncating it was the alternative and it is the wrong thing to lose: WHERE a bill sits
+   is the column a tracked-bill list exists for. So names may wrap to two lines and every row reserves that
+   height, which removes the raggedness without removing information. */
+.wr-row { min-height: 62px; }
+.wr-row:hover { background: var(--surface-2); }
+.wr-num { font-weight: 800; font-variant-numeric: tabular-nums; }
+.wr-patron { color: var(--ink-soft); font-size: 12.5px; font-weight: 600; }
+/* The title is the row's flexible column; clip rather than wrap so every row stays one scan-height. */
+.wr-title { color: var(--ink-soft); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.wr-where, .wr-when { color: var(--ink-faint); font-size: 12.5px; }
+
+/* Below the comfortable 5-column width the grid stops being a table and becomes two stacked lines.
+   The trust partition is not involved here, so a reflow is safe — see the mobile note in the queue (R2)
+   for why that is NOT true of the roster table. */
+@media (max-width: 820px) {
+  .wr-row { grid-template-columns: 78px minmax(0, 1fr); row-gap: 2px; }
+  .wr-patron { grid-column: 2; }
+  .wr-title, .wr-where, .wr-when { grid-column: 2; }
+}
+
+/* ── Sign-in (F3) ──────────────────────────────────────────────────────────────────────────────────────
+   Sits in the trust header beside the freshness clocks. Deliberately quiet: identity is context, not an
+   action the user came here to take, so it spends no colour (dashboard_and_visual_language). */
+.signin { display: inline-flex; align-items: center; gap: var(--s2); font-size: 13px; }
+.signin-who { color: var(--ink); font-weight: 650; }
+.signin-out {
+  border: 1px solid var(--line-strong); background: var(--surface); border-radius: var(--radius-sm);
+  padding: 3px 10px; font-size: 12.5px; font-weight: 600; color: var(--ink-soft);
+}
+.signin-out:hover { color: var(--ink); }
+
+/* ── First run (F3) ────────────────────────────────────────────────────────────────────────────────────
+   Reuses `.cardwrap`/`.card` so it is the same modal anatomy as the bill card — a second dialog language
+   would be the inconsistency (dashboard_and_visual_language rule 4). No colour is spent: the only emphasis
+   is the primary button's filled ink, matching `.filters button.on`. */
+.fr-card { max-width: 460px; display: flex; flex-direction: column; gap: var(--s4); }
+.fr-h { margin: 0; font-size: 18px; font-weight: 800; letter-spacing: -.2px; }
+.fr-field { display: flex; flex-direction: column; gap: 6px; }
+.fr-label { font-size: 11px; font-weight: 800; letter-spacing: .5px; text-transform: uppercase; color: var(--ink-faint); }
+.fr-hint { font-size: 12px; color: var(--ink-faint); line-height: 1.45; }
+.fr-err { font-size: 12.5px; color: var(--stale); }
+.fr-card input {
+  border: 1px solid var(--line-strong); border-radius: var(--radius-sm); padding: 8px 11px;
+  font-size: 14px; background: var(--surface); width: 100%;
+}
+.fr-districts { display: grid; grid-template-columns: repeat(3, 1fr); gap: var(--s2); }
+.fr-districts label { display: flex; flex-direction: column; gap: 3px; }
+.fr-districts span { font-size: 11.5px; color: var(--ink-soft); }
+.fr-link { background: none; border: 0; padding: 0; font-size: 12.5px; color: var(--accent); text-align: left; }
+.fr-lookup { display: flex; flex-direction: column; gap: 6px; }
+.fr-lookup-row { display: flex; gap: var(--s2); }
+.fr-btn {
+  border: 1px solid var(--line-strong); background: var(--surface); border-radius: var(--radius-sm);
+  padding: 8px 14px; font-size: 13px; font-weight: 650; color: var(--ink-soft); white-space: nowrap;
+}
+.fr-btn:disabled { opacity: .5; }
+.fr-primary { background: var(--ink); border-color: var(--ink); color: #fff; }
+.fr-foot { display: flex; align-items: center; justify-content: space-between; gap: var(--s3);
+  border-top: 1px solid var(--line); padding-top: var(--s3); }
+@media (max-width: 480px) { .fr-districts { grid-template-columns: 1fr; } }

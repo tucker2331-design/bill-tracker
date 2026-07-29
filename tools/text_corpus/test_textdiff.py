@@ -14,7 +14,9 @@ def test_identical_is_zero():
 
 
 def test_edit_lands_strictly_between_zero_and_hundred():
-    assert 0.0 < difference_pct(A, B) < 100.0
+    d = difference_pct(A, B)
+    assert d is not None
+    assert 0.0 < d < 100.0
 
 
 def test_missing_side_is_None_not_zero_and_not_hundred():
@@ -56,6 +58,7 @@ def test_drift_is_one_comparison_not_a_sum():
           {"label": "Engrossed", "text": A}]
     steps = compare_versions(vs)
     drift = drift_from_introduced(vs)
+    assert drift is not None
     assert drift["pct"] == 0.0                     # ended where it started
     assert sum(s["pct"] for s in steps) > 0.0      # but the path was not zero
     assert drift["from"] == "Introduced" and drift["to"] == "Engrossed"

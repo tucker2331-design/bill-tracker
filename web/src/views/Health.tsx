@@ -305,6 +305,23 @@ export function Health({ completeness, dataAsOf }: { completeness: Completeness 
       { label: "Circuit breaker", tone: !h ? "unknown" : breakerOk ? "good" : "danger", anchor: "hl-sec-status" },
       sv("Write-time invariant violations", violations ?? 0, lower(0.5, 49, 60), violations != null, "hl-m-invariants"),
       { label: "Active alerts", tone: !h ? "unknown" : critCount ? "danger" : warnCount ? "warn" : "good" },
+      // THE INCIDENT LEDGER IS A RING INPUT (owner, 2026-07-28). Before this, the rings were computed purely
+      // from live metrics and knew nothing about the ledger, so the page could show four green rings directly
+      // above "an incident is OPEN right now". The owner's argument is the correct one: an incident severe
+      // enough to reset the days-clean clock is BY DEFINITION something a ring should not call healthy.
+      // Two independent verdicts about the same question will eventually contradict; the fix is to make one
+      // an input to the other rather than to hope they agree.
+      //
+      // FAIL-CLOSED on all three non-clean states -- open, unreadable, and unseeded are each "we cannot say
+      // this is clean", and none of them may render green.
+      {
+        label: "Incident ledger",
+        tone: !counter ? "unknown"
+          : counter.openNow.length > 0 ? "danger"
+          : counter.wrongSheet ? "unknown"
+          : !counter.available ? "unknown"
+          : "good",
+      },
     ], verify: vitalVerify(["sustainability_audit.yml"]), verifyApplies: true, anchor: "hl-sec-alerts" },
   ];
 
@@ -320,7 +337,12 @@ export function Health({ completeness, dataAsOf }: { completeness: Completeness 
         <p className="muted" style={{ marginTop: -6, marginBottom: 14 }}>
           {counter.openNow.length > 0 ? (
             <span style={{ color: "var(--stale)", fontWeight: 600 }}>
-              ▲ An incident is OPEN right now ({counter.openNow.join(", ")}) — the days-clean clock has reset.
+              {/* Cap the list. On 2026-07-28 a wrong-sheet read produced ~3,645 "classes" and this line
+                  rendered every one of them, burying the actual message. A count carries the signal; the
+                  first few carry the detail. */}
+              ▲ {counter.openNow.length === 1 ? "An incident is" : `${counter.openNow.length} incidents are`} OPEN
+              right now ({counter.openNow.slice(0, 3).join(", ")}
+              {counter.openNow.length > 3 && ` +${counter.openNow.length - 3} more`}) — the days-clean clock has reset.
             </span>
           ) : (
             <>
@@ -337,7 +359,16 @@ export function Health({ completeness, dataAsOf }: { completeness: Completeness 
           )}
         </p>
       )}
-      {counter && !counter.available && (
+      {counter?.wrongSheet && (
+        <p className="muted" style={{ marginTop: -6, marginBottom: 14 }}>
+          <span style={{ color: "var(--stale)", fontWeight: 600 }}>
+            ▲ The incident ledger could not be read — the response was not the Incident_Log tab.
+          </span>{" "}
+          Treat the days-clean figure as unknown, not clean. (gviz answers a missing tab with the first
+          sheet, HTTP 200, so this is a real defect rather than an empty state.)
+        </p>
+      )}
+      {counter && !counter.available && !counter.wrongSheet && (
         <p className="muted" style={{ marginTop: -6, marginBottom: 14 }}>
           Days-clean counter not yet seeded — the ledger has no epoch, so there is no honest number to show.
         </p>

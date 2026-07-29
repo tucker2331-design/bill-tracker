@@ -17,6 +17,27 @@
 name = "bill-tracker"
 compatibility_date = "2025-01-01"
 
+# F2 (2026-07-27): the site was ASSETS-ONLY. Adding `main` means this Worker now runs for every request
+# that does not match a static asset -- including deep links like /search, which previously relied on
+# `not_found_handling` alone. worker/index.js therefore delegates everything except /api/* back to
+# env.ASSETS, which is what preserves the SPA behaviour. Do not remove that delegation.
+main = "worker/index.js"
+
 [assets]
 directory = "./dist"
 not_found_handling = "single-page-application"
+# Named binding so the Worker can hand non-API requests back to the static asset server.
+binding = "ASSETS"
+
+# D1 — created 2026-07-27, region ENAM. `database_id` is an IDENTIFIER, not a credential; Cloudflare's own
+# docs check it in. No secret belongs in this file.
+# Google sign-in. The client ID is a PUBLIC identifier -- it ships in the page for every "Sign in with
+# Google" button on the web, so it belongs in committed config. The client SECRET is for a different flow
+# (authorization code) that we deliberately do not use, and no secret belongs in this file.
+[vars]
+GOOGLE_CLIENT_ID = "831223695835-cqd2fmjq3l61jc1t6pr9elobra0imhf5.apps.googleusercontent.com"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "bill-tracker-db"
+database_id = "f859c3f5-e167-49a0-9e23-f4e53da59455"
