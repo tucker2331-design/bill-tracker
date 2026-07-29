@@ -422,3 +422,37 @@ Check 17's pyflakes gate matched `"undefined name"` — which is also a substrin
 
 ## 56. Bots Re-Post Their Full Prior Review on a New Push — Verify Line-Level Novelty Before Re-Folding (Gemini on #214, 2026-07-12)
 After the first fold-in push, Gemini re-posted all five original comments verbatim (same findings, same lines) alongside CodeRabbit's genuinely new ones. Treating them as fresh findings would have re-litigated already-folded work. **Pre-push check:** on a re-review, diff the new comments against the prior round by (path, line, claim) and fold only the novel ones — note the skip reason for the rest.
+
+---
+
+## 2026-07-28 — PR #237 (F2 write path). Two reviewers, one real hole, one useful "trivial".
+
+**The finding that mattered was mine to have caught: I gated the MUTATIONS and left the READS open.**
+`GET /api/positions` and `GET /api/interactions` required no identity. That protects org data from being
+*changed* while leaving it readable to anyone who guesses a URL — and those rows are our stances plus who
+spoke to which legislator and how it went. **For this product disclosure is the worse failure: a leaked whip
+count is a leaked strategy.** The mental slip is worth naming because it generalises — *"auth" got filed
+under "writes"* the moment I wrote the comment `---- mutations: identity required ----`, and after that the
+read paths simply never came up. A section header became a boundary I stopped questioning.
+
+**Rule:** on any endpoint touching org-private data, state the auth decision for READS explicitly, even when
+the answer is "same as writes". A default inherited from a comment is not a decision.
+
+### The most valuable note was labelled *Trivial*
+> "Tests hit the live Google JWKS endpoint, and there's no success-path assertion."
+
+Twelve tests, all green, all proving **rejection**. A verifier that returned `null` unconditionally would
+have passed every one of them and the feature would have been dead on arrival. This is the "passes for the
+wrong reason" class I had been careful about elsewhere the same day — I checked that the *unknown-kid* case
+failed for the right reason, and never noticed the suite had no positive case at all. **Severity labels are
+the bot's guess at blast radius, not at insight. Read the Trivials.**
+
+### Two Gemini findings were STALE, and checking cost nothing
+"No JWT signature verification" and "unpadded `atob`" both described the Cloudflare Access stub this branch
+had already replaced. **Verified by grep before dismissing** — `crypto.subtle.verify` present, padding
+present. A stale finding dismissed from memory is indistinguishable from a real one ignored.
+
+### The gate was swallowing its own failures
+Both hook commands ended `2>/dev/null || true`, so a broken gate silently did not run. **The
+silent-fallback anti-pattern, living inside the tool built to catch silent fallbacks.** Worth remembering
+that a safety mechanism is code too, and inherits none of its own protection by virtue of being one.

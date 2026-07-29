@@ -38,9 +38,20 @@ process itself: if I can't measure it, I can't claim it works.
 | 07-28 | M2 shapes | drew ▲●▼ from memory; v4 had settled **★ support · ⊘ oppose · ◇ watching** | **MISSED — ran and ignored** | owner caught it. Check 0 asks "what governs this" — a drawn mockup existed and I recalled instead of opening it |
 | 07-28 | Health tab | `Incident_Log` absent; gviz served Sheet1, so ~3,645 meeting times rendered as open incidents | **MISSED — not covered** | owner saw it live. No gate runs on the deployed product |
 | 07-28 | `WarRoom.tsx` | markup referenced `.wr-*` classes that did not exist in the stylesheet | **CAUGHT** (browser verification) | found by rendering it, not by reading it |
+| 07-28 | `worker/index.js` | **read routes unauthenticated** — org positions and contact history readable by anyone with the URL | **MISSED — no check** | CodeRabbit. "Auth" got filed under "writes" by a section comment and the read paths never came up |
+| 07-28 | `worker/test_auth.mjs` | 12 tests, all proving REJECTION — a verifier returning null always would have passed every one | **MISSED — no check** | CodeRabbit, labelled *Trivial*. The most useful note of the set |
+| 07-28 | `.claude/settings.json` | gate commands ended `2>/dev/null \|\| true` — a broken gate silently did not run | **MISSED — no check** | CodeRabbit. Silent fallback inside the tool built to catch silent fallbacks |
 | 07-27 | `worker/auth.js` | `authenticatedEmail` had to go sync→async; a missed `await` returns a Promise, which is TRUTHY, authenticating everyone | **CAUGHT** (code gate, PROPAGATION) | gate fired on the Write, I grepped call sites first and awaited it |
 
-**Standing at 2026-07-28:** 4 caught · 4 missed with the gate running · 3 never covered.
+**Standing at 2026-07-28 (end of session):** 4 caught by the gate · 7 missed with the gate running · 3 never
+covered. **The bots caught 3 of those 7, including the only security hole.**
+
+**What the bot round says that the gate cannot.** Checks 0–9 test a proposal against *rules we already
+wrote down*. None of them ask "what did you not think of" — and all three bot findings were exactly that:
+an unauthenticated read path, a test suite with no positive case, and a swallowed failure in the gate's own
+wiring. **A checklist cannot find an omission it does not enumerate.** That is the structural argument for
+keeping reviewers in the loop rather than treating the gate as sufficient, and it is why the two
+mechanisms are not redundant.
 
 **The M2 shapes miss is the worst kind so far — "ran and ignored".** The gate fired, check 0 asked *what
 governs this and have I read it*, a prior mockup had settled the vocabulary, and I drew from memory anyway.
