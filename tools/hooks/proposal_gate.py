@@ -52,10 +52,24 @@ TERSE = ("Proposal audit is live (docs/workflow/proposal_audit.md). If this turn
          "the visual grey-by-default -- no coloured bands or accent rails, colour only for standing meanings.")
 
 def main() -> int:
+    """Emit the right gate for the event.
+
+    A MALFORMED PAYLOAD IS AN ERROR, NOT A NORMAL EVENT (CodeRabbit, 2026-07-28). The old code coerced
+    unparseable stdin to `{}` and then inferred an event name from it, so a broken hook contract would have
+    quietly delivered the wrong guidance forever -- the silent-fallback anti-pattern living inside the tool
+    built to catch it. We now fail LOUDLY on stderr and exit non-zero; the harness surfaces that, which is
+    the only way a dead gate becomes visible.
+    """
+    raw = sys.stdin.read()
     try:
-        event = json.load(sys.stdin)
-    except (json.JSONDecodeError, ValueError):
-        event = {}
+        event = json.loads(raw) if raw.strip() else {}
+    except (json.JSONDecodeError, ValueError) as exc:
+        print(f"proposal_gate: unparseable hook payload ({exc}); gate did NOT run", file=sys.stderr)
+        return 1
+    if not isinstance(event, dict):
+        print(f"proposal_gate: hook payload was {type(event).__name__}, expected object; gate did NOT run",
+              file=sys.stderr)
+        return 1
     name = event.get("hook_event_name") or ("PreToolUse" if event.get("tool_name") else "UserPromptSubmit")
     tool = event.get("tool_name") or ""
     if name == "PreToolUse":

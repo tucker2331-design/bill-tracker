@@ -6,7 +6,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "python3 \"${CLAUDE_PROJECT_DIR:-.}/tools/hooks/proposal_gate.py\" 2>/dev/null || true",
+            "command": "python3 \"${CLAUDE_PROJECT_DIR:-.}/tools/hooks/proposal_gate.py\"",
             "timeout": 10,
             "statusMessage": "Proposal audit"
           }
@@ -17,7 +17,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "python3 \"${CLAUDE_PROJECT_DIR:-.}/tools/hooks/proposal_gate.py\" 2>/dev/null || true",
+            "command": "python3 \"${CLAUDE_PROJECT_DIR:-.}/tools/hooks/proposal_gate.py\"",
             "timeout": 10,
             "statusMessage": "Code gate"
           }
@@ -29,7 +29,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "python3 \"${CLAUDE_PROJECT_DIR:-.}/tools/hooks/proposal_gate.py\" 2>/dev/null || true",
+            "command": "python3 \"${CLAUDE_PROJECT_DIR:-.}/tools/hooks/proposal_gate.py\"",
             "timeout": 10
           }
         ]

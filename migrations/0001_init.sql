@@ -19,7 +19,9 @@
 -- it must fail loudly rather than silently land in Virginia's data.
 
 CREATE TABLE IF NOT EXISTS positions (
-  state        TEXT NOT NULL,
+  -- Exactly two UPPERCASE letters. Without this, 'VA' / 'va' / 'Va' become three separate partitions of the
+  -- same state and every count silently splits (CodeRabbit, 2026-07-28).
+  state        TEXT NOT NULL CHECK (state GLOB '[A-Z][A-Z]'),
   session_code TEXT NOT NULL,          -- session ids are per-state; '20261' means nothing without the state
   bill_number  TEXT NOT NULL,
   -- involved = we wrote it and/or got it introduced. A claim of fact, org-asserted, never shown as sourced.
@@ -30,12 +32,20 @@ CREATE TABLE IF NOT EXISTS positions (
 );
 
 CREATE TABLE IF NOT EXISTS interactions (
-  id            INTEGER PRIMARY KEY AUTOINCREMENT,
-  state         TEXT NOT NULL,
+  -- INTEGER PRIMARY KEY, not AUTOINCREMENT (Gemini, 2026-07-28). In SQLite the bare form is an alias for
+  -- rowid and is free; AUTOINCREMENT adds a `sqlite_sequence` table plus a write on every insert, and its
+  -- only guarantee is that ids are never REUSED after deletion. We do not need that: interaction ids are
+  -- internal handles, never printed, never referenced externally. SQLite's own docs advise against it
+  -- unless the no-reuse guarantee is required.
+  id            INTEGER PRIMARY KEY,
+  state         TEXT NOT NULL CHECK (state GLOB '[A-Z][A-Z]'),
   member_number TEXT NOT NULL,
   session_code  TEXT NOT NULL,
   bill_number   TEXT,                       -- NULL = a general contact, not tied to one bill
-  occurred_on   TEXT NOT NULL,              -- ISO date; the day it happened, not when it was logged
+  -- ISO date, enforced. A TEXT column happily stores 'yesterday' or '3/5/26', both of which sort wrong and
+  -- would quietly reorder the call sheet's "newest first" (CodeRabbit, 2026-07-28). Shape is checked here;
+  -- calendar validity (no 2026-02-31) is the writer's job, but shape alone kills the sorting bug.
+  occurred_on   TEXT NOT NULL CHECK (occurred_on GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]'),
   actor         TEXT NOT NULL,              -- who from the org made contact
   tone          TEXT NOT NULL CHECK (tone IN ('positive','neutral','negative')),
   note          TEXT,
@@ -47,9 +57,9 @@ CREATE INDEX IF NOT EXISTS idx_interactions_member ON interactions (state, membe
 CREATE INDEX IF NOT EXISTS idx_interactions_bill   ON interactions (state, session_code, bill_number);
 
 CREATE TABLE IF NOT EXISTS users (
-  email                  TEXT PRIMARY KEY,  -- from the Access JWT; we never store a password
+  email                  TEXT PRIMARY KEY,  -- verified Google identity; we never store a password
   display_name           TEXT,              -- what to call them when they phone an office
-  home_state             TEXT,              -- which state's site this person belongs to
+  home_state             TEXT CHECK (home_state IS NULL OR home_state GLOB '[A-Z][A-Z]'),
   district_house         TEXT,
   district_senate        TEXT,
   district_congress      TEXT,              -- collected for the federal product, not displayed here

@@ -14,9 +14,11 @@
  * sign-in, which has no per-seat cost and which we needed anyway, because the interaction log is worthless
  * without knowing WHO made contact.
  *
- * Every mutating request requires a verified identity; `authenticatedEmail()` returns null on any failure
- * and callers reject on null. An unauthenticated write path that silently accepts data is worse than no
- * write path, because the bad data outlives the mistake.
+ * EVERY /api route except /health requires a verified identity -- reads included. `authenticatedEmail()`
+ * returns null on any failure and the handler rejects on null. Two distinct reasons, both load-bearing:
+ * an unauthenticated WRITE path silently accepts data that outlives the mistake, and an unauthenticated
+ * READ path discloses the org's stances and its contact history to anyone who guesses a URL. For this
+ * product disclosure is the worse of the two -- a leaked whip count is a leaked strategy.
  */
 
 import { verifyGoogleIdToken } from "./auth.js";
@@ -65,6 +67,14 @@ async function handleApi(request, env, url) {
 
   if (!env.DB) return json({ error: "database binding missing" }, 500);
 
+  // AUTHENTICATION GATES EVERY ROUTE BELOW, READS INCLUDED (CodeRabbit, 2026-07-28 — a real hole I shipped).
+  // Positions and interactions are ORG-PRIVATE: our stance on a bill, and who from the org spoke to which
+  // legislator and how it went. I had gated only the mutations, which protects the data from being CHANGED
+  // while leaving it readable by anyone who guessed the URL. For this product, disclosure is the worse
+  // failure -- a leaked whip count is a leaked strategy.
+  const email = await authenticatedEmail(request, env);
+  if (!email) return json({ error: "not authenticated" }, 401);
+
   // `state` is required on EVERY route. It is never defaulted to 'VA': a caller that forgets it must get a
   // 400, not silently read or write Virginia's data (migrations/0001_init.sql).
   const state = url.searchParams.get("state");
@@ -90,10 +100,6 @@ async function handleApi(request, env, url) {
     ).bind(state, member).all();
     return json({ interactions: results ?? [] });
   }
-
-  // ---- mutations: identity required, no exceptions ----
-  const email = await authenticatedEmail(request, env);
-  if (!email) return json({ error: "not authenticated" }, 401);
 
   if (request.method === "PUT" && path === "/positions") {
     const body = await request.json().catch(() => null);
