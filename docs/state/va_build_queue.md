@@ -124,7 +124,9 @@ derived-claim tripwire** — now *"On Consumer Protection bills"*; (b) the conta
 while the log showed **2 rows**. Both fixed pre-publish.
 
 ### M2. Position + tracking ladder popup *(unblocked — the enum is settled, see D1)*
-### M3. Account setup flow — name + 3 districts + address escape hatch *(needs P2)*
+### ~~M3. Account setup flow~~ — ✅ **BUILT, not just drawn** (`components/FirstRun.tsx`). The mockup step
+was skipped deliberately: the form is four fields and one escape hatch, so drawing it first would have cost
+a round-trip to learn nothing the build did not.
 ### M4. Bill card / War Room rendering the new statuses *(needs P1 for the subject column)*
 
 ---
@@ -166,10 +168,17 @@ computable — without it that relationship is unrepresentable.
   failure). Worker API + **Google ID-token verification** built (Access rejected on its per-seat pricing
   model — [[architecture/verification_durability]]). Remaining: merge, then the front-end sign-in button —
   the lock is installed, the door is not yet hung.
-- **F3. Accounts** — ⏳ **sign-in BUILT 2026-07-28** (`web/src/state/auth.ts` + `components/SignIn.tsx`,
+- ~~**F3. Accounts**~~ — ✅ **BUILT 2026-07-28.** Sign-in (`web/src/state/auth.ts` + `components/SignIn.tsx`,
   verified live: button renders, zero console errors, **no token in localStorage** — held in memory only, so
-  one XSS cannot steal an identity that outlives the tab). **Still to build: the first-run form** — display
-  name + three districts, which is what turns "Saved as tucker2331@gmail.com" into "Saved as Tucker".
+  one XSS cannot steal an identity that outlives the tab). **First-run form built** — display name + three districts, which is what turns
+  "Saved as tucker2331@gmail.com" into "Saved as Tucker".
+  **The privacy property is topology, not policy:** the Census lookup runs in the BROWSER, so the address
+  never reaches our infrastructure and there is no code path on our side that could store one — the only
+  occurrence of the word "address" in `worker/index.js` is the comment explaining its absence. Verified
+  against the live Census API with two real addresses (Capitol → 14/78/4, Arlington → 40/2/8) so it cannot
+  be returning a canned answer.
+  **The profile gate has three states, not two** — `undefined` (not checked) / `null` (no profile) /
+  object. Collapsing the first two would flash the form on every load for people who already filled it in.
   Original scope below. Ask **what to call you** (first name, for office calls) +
   **state house / state senate / federal house** districts. Never store an address. Federal district
   collected, not displayed (Mastermind uses it). One notice line: *"info used for legislative advocacy
@@ -271,7 +280,13 @@ computable — without it that relationship is unrepresentable.
   work. Query-shape requirement, not styling.
 - **V3. Search empty state = browse index** — four object rows with counts; `ours` the only subdivision.
 - **V4. Subject profile page** — stat list banked in [[ideas/predictive_lane]].
-- **V5. `k of n` everywhere** — no percentage on counts, no threshold, no interval. One rule.
+- ~~**V5. `k of n` everywhere**~~ — ✅ **BUILT 2026-07-28.** `web/src/data/frequency.ts` + 15 tests.
+  Implements P26 **as amended**, not as originally written — no percentage companion, no sample threshold,
+  no "too few" label, no Wilson interval. All six clauses were re-read against the canon before writing,
+  not recalled. A test asserts the formatter **has no code path that can emit a `%`**.
+  `n = 0` returns null rather than `"0 of 0"`: no observations is a different claim from zero successes,
+  and the caller must render absence as absence. `complement()` exists because the owner asked for "voted
+  against us" explicitly — burying it in a subtraction hides the more actionable half.
 
 ---
 
