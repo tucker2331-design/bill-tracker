@@ -166,10 +166,22 @@ computable — without it that relationship is unrepresentable.
 
 ## C · REMAINING PROBES (do not gate a mockup)
 
-- **C1. `legacylis.virginia.gov` CSV** — the only lawful pre-2025 route. **Promoted from "someday" by the
-  composition finding:** with two authorised sessions, a chair or majority change between them leaves **one
-  session** of valid history for that committee. The difference between a stats layer that means something
-  and one that does not.
+- **C1. `legacylis.virginia.gov` CSV** — **PROBED 2026-07-27. NO BULK CSV ROUTE FOUND. This is a bad
+  result and it matters.**
+  What is there: `legacylis.virginia.gov` is live and serves the **2024 session** (`ses=241`) as
+  **CGI-generated HTML pages** (`/cgi-bin/legp604.exe?241+…`) — bill tracking, committees, members,
+  calendars, statistics. Every link on the home page is a page, not a file. `SiteInformation/csvinfo.html`
+  404s. The DLAS "data center" page is network infrastructure, not data distribution.
+  **The LIS Developers Portal says pre-2025 data should come from "legacylis.virginia.gov via CSV
+  download", but I could not find where that download lives.** Stopped rather than brute-force URLs — that
+  is the blind-probing the owner has ruled out twice.
+  **Why this is worse than an inconvenience:** the only alternative visible today is scraping those CGI
+  pages, which is **text parsing on the lobbyist path — forbidden by Standard #3**, not merely undesirable.
+  So the honest position is: **we may be stuck at two sessions of history**, which means a committee with a
+  composition break (6 of 25 — E2) has ONE usable session, and the stats layer stays thin until either
+  (a) the CSV route is found, or (b) LIS authorises earlier sessions on the new API.
+  **NEXT — owner-actionable, not another probe:** ask DLAS directly where the historical CSVs are. They are
+  the publisher; one email settles what an afternoon of guessing will not.
 - **C2. Open States bulk download** — blocked on a login. Gates cross-state comparison.
 
 ---
