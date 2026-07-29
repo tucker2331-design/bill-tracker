@@ -8,6 +8,7 @@ import { useScope, useStarred } from "./state/tracking";
 import { ScopeSwitch, TrustHeader } from "./components/common";
 import { ErrorBoundary } from "./components/ErrorBoundary";
 import { RefreshNotice } from "./components/RefreshNotice";
+import { SignIn } from "./components/SignIn";
 import { BillCard } from "./components/BillCard";
 import { Landing } from "./views/Landing";
 import { Calendar } from "./views/Calendar";
@@ -144,6 +145,7 @@ export default function App() {
           <ScopeSwitch />
           <div className="spacer" />
           {data && <TrustHeader dataAsOf={data.dataAsOf} calendarAsOf={calendarAsOf} completeness={data.completeness} shown={visible.length} />}
+          <SignIn />
         </header>
 
         <nav className="nav">

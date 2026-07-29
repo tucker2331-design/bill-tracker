@@ -4,6 +4,16 @@
 export const SPREADSHEET_ID = "1PQDtaTTUeYv781bx4_ZiehcvbEmUt8t7jFmZYJoJGKM";
 export const BILL_TRACKER_TAB = "Bill_Tracker";
 
+// Google sign-in. PUBLIC by design — a client id ships in the page for every "Sign in with Google" button
+// on the web, exactly like SPREADSHEET_ID above. It lives here rather than in a VITE_ env var because this
+// app has no .env pattern at all: introducing one would mean a build-time setting in Cloudflare's dashboard
+// that has to be remembered on every redeploy and every new environment, and whose absence fails at RUNTIME
+// with a blank button. A committed constant cannot be forgotten.
+// The client SECRET belongs to an authorization-code flow we deliberately do not use, and is nowhere in this
+// repo. Must match GOOGLE_CLIENT_ID in wrangler.toml — the Worker checks the token's `aud` against it.
+export const GOOGLE_CLIENT_ID =
+  "831223695835-cqd2fmjq3l61jc1t6pr9elobra0imhf5.apps.googleusercontent.com";
+
 // gviz CSV endpoint for a tab (matches pages/ray2.py load_sheet_df).
 export const gvizCsvUrl = (tab: string) =>
   `https://docs.google.com/spreadsheets/d/${SPREADSHEET_ID}/gviz/tq?tqx=out:csv&sheet=${encodeURIComponent(tab)}`;
