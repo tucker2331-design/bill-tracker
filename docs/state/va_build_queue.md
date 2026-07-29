@@ -163,11 +163,12 @@ computable — without it that relationship is unrepresentable.
   Verified in a browser, not just typechecked: deep link opens the right bill, Back closes it, unknown routes
   fall back without blanking, a nonexistent bill id does not crash, nav links are real `<a href>` so
   middle-click and copy-link work, zero console errors, no overflow at 1280 or 700px.
-- **F2. Write path** — ⏳ **PR #237, schema LIVE.** Migration applied to the remote D1 2026-07-28; both
+- ~~**F2. Write path**~~ — ✅ **MERGED 2026-07-29 (#237).** Schema live; Migration applied to the remote D1 2026-07-28; both
   constraints verified against the real database (`stance='bogus'` → CHECK failure; missing `state` → NOT NULL
   failure). Worker API + **Google ID-token verification** built (Access rejected on its per-seat pricing
-  model — [[architecture/verification_durability]]). Remaining: merge, then the front-end sign-in button —
-  the lock is installed, the door is not yet hung.
+  model — [[architecture/verification_durability]]). Sign-in shipped with it, so the door is hung. **Remaining before it carries
+  real data: the D1 second-oppose-tier decision (the enum), and wiring the War Room's position control to
+  `PUT /api/positions`.**
 - ~~**F3. Accounts**~~ — ✅ **BUILT 2026-07-28.** Sign-in (`web/src/state/auth.ts` + `components/SignIn.tsx`,
   verified live: button renders, zero console errors, **no token in localStorage** — held in memory only, so
   one XSS cannot steal an identity that outlives the tab). **First-run form built** — display name + three districts, which is what turns

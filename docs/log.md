@@ -3024,3 +3024,6 @@ P1: bill↔subject index is `POST AdvancedLegislationSearch/api/GetLegislationLi
 
 ## [2026-07-27] work | probes P1-P3 resolved; E1/E2/E3/E5 built; M1 drawn
 All three gating probes cleared: subject linkage (AdvancedLegislationSearch + SubjectIndexID), districts (Census Geocoder, keyless, layer-vintage IS the redistricting signal), campaign finance (ELECT bulk CSVs 1999-now replace VPAP). Built: vote_history (318,264 member votes, zero extra requests), composition (6 of 25 committees broke; seat-vs-served bug caught), textdiff (3 claims out of the amber class). M1 call sheet drawn on real LIS data; the proposal-audit hook caught 2 defects pre-publish.
+
+## [2026-07-29] pr | F2 write path + F1 routing + F3 sign-in — MERGED (#237)
+D1 schema live (constraints verified against the remote db), Worker API with Google ID-token verification (21 tests incl. success path + tamper), routing with the War Room tab (browser-verified), first-run profile (name + districts, address never stored — topology not policy), health wrong-sheet fix, k-of-n formatter, coverage windows, composition detection, vote history, text diff. CodeRabbit + Gemini findings folded in; the real one was unauthenticated READ routes.
