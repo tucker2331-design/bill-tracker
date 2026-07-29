@@ -11,6 +11,17 @@
             "statusMessage": "Proposal audit"
           }
         ]
+      },
+      {
+        "matcher": "Write|Edit|NotebookEdit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 \"${CLAUDE_PROJECT_DIR:-.}/tools/hooks/proposal_gate.py\" 2>/dev/null || true",
+            "timeout": 10,
+            "statusMessage": "Code gate"
+          }
+        ]
       }
     ],
     "UserPromptSubmit": [
