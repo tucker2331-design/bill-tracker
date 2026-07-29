@@ -12,6 +12,28 @@ export const BILL_TRACKER_TAB = "Bill_Tracker";
 // deletion rather than a hunt.
 export const APP_STATE = "VA";
 
+// The product name. ⚠ Same Standard #6 seam as APP_STATE: it is state-specific and appears in the browser
+// title, the header brand and the sign-in gate. One constant so state #2 changes it once, not three times.
+export const APP_NAME = "VA Bill Tracker";
+
+// ── THE SIGN-IN GATE ───────────────────────────────────────────────────────────────────────────────────
+// When true, the whole app is behind sign-in: nobody sees a bill until we know who they are, which is what
+// makes the name and districts collectable at all (owner, 2026-07-29). A floating optional button gets
+// ignored, and then every interaction is logged against nobody.
+//
+// FLIP THIS ONE LINE TO FALSE DURING TESTING and the gate lifts — the app renders as it did before, so
+// incremental changes can be checked without re-authenticating every reload. Deliberately a single boolean
+// in committed config rather than an env var or a URL parameter:
+//   • an env var means a build setting that differs between machines and can be silently wrong in prod
+//   • a URL parameter (?nogate) would be a PRODUCTION BYPASS anyone could type — a gate with a documented
+//     back door is not a gate
+// A committed constant is visible in every diff and in code review, so it cannot be off by accident.
+//
+// ⚠ This gates the UI ONLY. The Worker independently rejects every unauthenticated /api request (401), so
+// flipping this false does NOT expose org data — it just stops the browser from asking who you are. The
+// server is the boundary; this is the front door.
+export const REQUIRE_SIGN_IN = false;
+
 // Google sign-in. PUBLIC by design — a client id ships in the page for every "Sign in with Google" button
 // on the web, exactly like SPREADSHEET_ID above. It lives here rather than in a VITE_ env var because this
 // app has no .env pattern at all: introducing one would mean a build-time setting in Cloudflare's dashboard

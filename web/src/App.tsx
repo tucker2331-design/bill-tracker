@@ -9,6 +9,7 @@ import { ScopeSwitch, TrustHeader } from "./components/common";
 import { ErrorBoundary } from "./components/ErrorBoundary";
 import { RefreshNotice } from "./components/RefreshNotice";
 import { SignIn } from "./components/SignIn";
+import { SignInGate } from "./components/SignInGate";
 import { FirstRun } from "./components/FirstRun";
 import { apiFetch, useIdentity } from "./state/auth";
 import { BillCard } from "./components/BillCard";
@@ -156,6 +157,7 @@ export default function App() {
   const open = (b: Bill) => navigate(detailPath("bills", b.bill));
 
   return (
+    <SignInGate>
     <div className="app">
       {/* one sticky container so the nav never overlaps a wrapped topbar (no hard-coded offset) */}
       <div className="appheader">
@@ -207,5 +209,6 @@ export default function App() {
           key={token} remounts it per refresh so each notice restarts its fade cleanly. */}
       <RefreshNotice key={refresh.token} token={refresh.token} label={refresh.label} />
     </div>
+    </SignInGate>
   );
 }

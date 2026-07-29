@@ -6650,9 +6650,33 @@ def run_calendar_update():
         except Exception as _ve:
             push_system_alert(f"VOTE.CSV fetch failed ({_ve}); refid vote-join unavailable (shadow telemetry).",
                               status="WARN", category="API_FAILURE", severity="WARN", dedup_key="vote_csv_fail")
-        if len(_vote_id_set) < 50:  # a real session publishes hundreds; thin => degraded evidence
-            push_system_alert(f"VOTE.CSV returned {len(_vote_id_set)} roll-call ids (<50); refid "
-                              f"vote-join evidence degraded this cycle (shadow telemetry only).",
+        # THIN-VOTE GUARD — RECALIBRATED 2026-07-29 (owner-reported chronic alert; pre-push audit #14).
+        #
+        # This was `len(_vote_id_set) < 50`, an ABSOLUTE floor. The 20261→20262 rollover made it fire every
+        # cycle: a session that has just begun legitimately has almost no roll calls, and the alert cannot
+        # clear until the new session accumulates 50 — i.e. a chronic warning that says nothing.
+        # A permanent alert is worse than no alert, because it teaches the reader to ignore the panel.
+        #
+        # MEASURED on both authorised sessions rather than guessed:
+        #   20261 (complete) : 1,606 numeric vote ids over 65,414 history rows  (ratio 0.0246)
+        #   20262 (fresh)    :    18 numeric vote ids over  1,318 history rows  (ratio 0.0137)
+        # The RATIOS are the same order — it is the absolute count that differs, which is precisely what a
+        # young session looks like and precisely what the old threshold could not tell from a broken feed.
+        #
+        # So the condition this alert actually guards is "VOTE.CSV came back truncated while the session is
+        # demonstrably active", which needs BOTH terms:
+        #   • the session is underway   -> history rows past a floor well above a fresh session's ~1.3k
+        #   • votes are absent for that activity -> ratio far below the ~0.014–0.025 a real session sustains
+        # A truncated fetch mid-session drives the ratio toward 0 and still fires. A young session does not.
+        _VOTE_SESSION_UNDERWAY_ROWS = 5_000     # 20262 sat at 1,318; 20261 at 65,414
+        _VOTE_MIN_RATIO = 0.005                 # a third of the lowest ratio actually observed
+        _hist_rows = len(df_past)
+        _vote_ratio = (len(_vote_id_set) / _hist_rows) if _hist_rows else 0.0
+        if _hist_rows >= _VOTE_SESSION_UNDERWAY_ROWS and _vote_ratio < _VOTE_MIN_RATIO:
+            push_system_alert(f"VOTE.CSV returned {len(_vote_id_set)} roll-call ids against {_hist_rows:,} "
+                              f"history rows (ratio {_vote_ratio:.4f}, expected ≳{_VOTE_MIN_RATIO}); the "
+                              f"session is active so this reads as a truncated feed, not a young session. "
+                              f"refid vote-join evidence degraded this cycle (shadow telemetry only).",
                               status="WARN", category="API_FAILURE", severity="WARN", dedup_key="vote_csv_thin")
         print(f"🗳️  VOTE.CSV roll-call ids: {len(_vote_id_set)} (refid vote-join index)")
         _refid_fanout = {}

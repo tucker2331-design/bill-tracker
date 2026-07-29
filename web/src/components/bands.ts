@@ -8,11 +8,30 @@ export interface Band { upto: number; tone: BandTone; } // ranges ascending by `
 // The qualitative status a value lands in, given its bands. The overview donut derives each segment's
 // tone from this same helper the gauge uses, so the at-a-glance ring and the detail bar can never
 // disagree. (sorted ascending; the last band's tone is the fallback for values above every threshold.)
+/**
+ * The trust surface is BINARY (P25a, and the owner again 2026-07-29: *"no yellow — if it has a chance of
+ * being wrong then it might as well be wrong"*).
+ *
+ * The band presets still declare three zones because the BOUNDARIES are meaningful and calibrated, but an
+ * amber reading is collapsed to danger before it reaches the screen. The canon's reason is sharper than
+ * taste: a softer third state is *a second judgment about a state the ledger already counts as not-clean* —
+ * the two-alarm-systems bug of 2026-07-25. Green means verified clean; anything else is red, and WHY it is
+ * red lives in the record's fields, never in a gentler colour.
+ *
+ * Red stays rare by making verification work, not by softening the colour.
+ */
+const BINARY: Record<BandTone, BandTone> = {
+  good: "good",
+  warn: "danger",   // ← the collapse
+  danger: "danger",
+};
+
 export function bandTone(value: number, bands: Band[]): BandTone {
   const sorted = [...bands].sort((a, b) => a.upto - b.upto);
   // Empty bands = a miswired config, not a healthy reading — fail loud rather than report a false
   // "good" that a gauge/donut would render green (CodeRabbit #167; "never pretend"). Every caller
   // passes a non-empty lower()/higher() literal, so this never fires in practice.
   if (sorted.length === 0) throw new Error("bandTone requires at least one band");
-  return (sorted.find((b) => value <= b.upto) ?? sorted[sorted.length - 1]).tone;
+  const raw = (sorted.find((b) => value <= b.upto) ?? sorted[sorted.length - 1]).tone;
+  return BINARY[raw];
 }
