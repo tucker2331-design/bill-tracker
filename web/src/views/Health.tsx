@@ -320,7 +320,12 @@ export function Health({ completeness, dataAsOf }: { completeness: Completeness 
         <p className="muted" style={{ marginTop: -6, marginBottom: 14 }}>
           {counter.openNow.length > 0 ? (
             <span style={{ color: "var(--stale)", fontWeight: 600 }}>
-              ▲ An incident is OPEN right now ({counter.openNow.join(", ")}) — the days-clean clock has reset.
+              {/* Cap the list. On 2026-07-28 a wrong-sheet read produced ~3,645 "classes" and this line
+                  rendered every one of them, burying the actual message. A count carries the signal; the
+                  first few carry the detail. */}
+              ▲ {counter.openNow.length === 1 ? "An incident is" : `${counter.openNow.length} incidents are`} OPEN
+              right now ({counter.openNow.slice(0, 3).join(", ")}
+              {counter.openNow.length > 3 && ` +${counter.openNow.length - 3} more`}) — the days-clean clock has reset.
             </span>
           ) : (
             <>
@@ -337,7 +342,16 @@ export function Health({ completeness, dataAsOf }: { completeness: Completeness 
           )}
         </p>
       )}
-      {counter && !counter.available && (
+      {counter?.wrongSheet && (
+        <p className="muted" style={{ marginTop: -6, marginBottom: 14 }}>
+          <span style={{ color: "var(--stale)", fontWeight: 600 }}>
+            ▲ The incident ledger could not be read — the response was not the Incident_Log tab.
+          </span>{" "}
+          Treat the days-clean figure as unknown, not clean. (gviz answers a missing tab with the first
+          sheet, HTTP 200, so this is a real defect rather than an empty state.)
+        </p>
+      )}
+      {counter && !counter.available && !counter.wrongSheet && (
         <p className="muted" style={{ marginTop: -6, marginBottom: 14 }}>
           Days-clean counter not yet seeded — the ledger has no epoch, so there is no honest number to show.
         </p>
