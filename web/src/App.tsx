@@ -9,6 +9,8 @@ import { ScopeSwitch, TrustHeader } from "./components/common";
 import { ErrorBoundary } from "./components/ErrorBoundary";
 import { RefreshNotice } from "./components/RefreshNotice";
 import { SignIn } from "./components/SignIn";
+import { FirstRun } from "./components/FirstRun";
+import { apiFetch, useIdentity } from "./state/auth";
 import { BillCard } from "./components/BillCard";
 import { Landing } from "./views/Landing";
 import { Calendar } from "./views/Calendar";
@@ -56,6 +58,23 @@ export default function App() {
   const [refresh, setRefresh] = useState<{ token: number; label: string }>({ token: 0, label: "" });
   const [scope] = useScope();
   const starred = useStarred();
+  const identity = useIdentity();
+  // undefined = not asked yet · null = signed in with NO profile (show first-run) · object = has one.
+  // Three states, not two: "we have not checked" must never look like "they have no profile", or the form
+  // flashes on every load for people who already filled it in.
+  const [profile, setProfile] = useState<Record<string, unknown> | null | undefined>(undefined);
+
+  useEffect(() => {
+    if (!identity) { setProfile(undefined); return; }   // signed out => back to "not asked"
+    let alive = true;
+    apiFetch("/api/me")
+      .then((r) => (r.ok ? r.json() : Promise.reject(new Error(`HTTP ${r.status}`))))
+      .then((d) => { if (alive) setProfile(d?.profile ?? null); })
+      // Surfaced, never swallowed. On failure we leave it `undefined` so the form does NOT appear -- showing
+      // it after a failed read would ask a user to re-enter a profile they may already have.
+      .catch((e) => { console.error("profile load failed:", e); if (alive) setProfile(undefined); });
+    return () => { alive = false; };
+  }, [identity]);
 
   // The last-seen freshness STAMPS. These hold the RAW cell strings ONLY (never a Date round-trip): the poll
   // compares them against the raw cells it re-reads, so any formatting difference (e.g. "…54Z" vs a Date's
@@ -175,6 +194,10 @@ export default function App() {
           </ErrorBoundary>
         )}
       </main>
+
+      {identity && profile === null && (
+        <FirstRun onDone={() => setProfile({ display_name: identity.name })} />
+      )}
 
       {selected && data && (
         <BillCard bill={selected} sessionCode={data.sessionCode} onClose={() => window.history.back()} />

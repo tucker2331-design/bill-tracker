@@ -4,6 +4,14 @@
 export const SPREADSHEET_ID = "1PQDtaTTUeYv781bx4_ZiehcvbEmUt8t7jFmZYJoJGKM";
 export const BILL_TRACKER_TAB = "Bill_Tracker";
 
+// The state this deployment serves. ⚠ Standard #6 seam, flagged deliberately rather than buried: ONE
+// deployment is meant to serve every state with `state` as a data dimension (migrations/0001_init.sql),
+// so this constant is the temporary stand-in for "which state is this user in", NOT a licence to hardcode
+// 'VA' at call sites. Every write already carries `state` explicitly; when state #2 lands this becomes a
+// value on the user's profile and this constant disappears. Keeping it in ONE place is what makes that a
+// deletion rather than a hunt.
+export const APP_STATE = "VA";
+
 // Google sign-in. PUBLIC by design — a client id ships in the page for every "Sign in with Google" button
 // on the web, exactly like SPREADSHEET_ID above. It lives here rather than in a VITE_ env var because this
 // app has no .env pattern at all: introducing one would mean a build-time setting in Cloudflare's dashboard

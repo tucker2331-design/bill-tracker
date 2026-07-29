@@ -48,6 +48,10 @@ function readClaims(jwt: string): { email?: string; name?: string; given_name?: 
 }
 
 let scriptPromise: Promise<void> | null = null;
+// Google's library warns that repeated initialize() calls mean "only the last instance will be used", which
+// is the kind of last-writer-wins behaviour that produces an unreproducible sign-in bug. React StrictMode
+// re-runs effects in dev, so this WILL happen without a guard. Initialise once per page.
+let initialised = false;
 
 /** Load Google's script once. Rejects on failure so the caller can say "sign-in unavailable" out loud. */
 function loadGsi(): Promise<void> {
@@ -78,7 +82,9 @@ export async function initSignIn(target: HTMLElement): Promise<void> {
   const g = (window as unknown as { google?: any }).google;
   if (!g?.accounts?.id) throw new Error("Google sign-in did not initialise");
 
-  g.accounts.id.initialize({
+  if (!initialised) {
+    initialised = true;
+    g.accounts.id.initialize({
     client_id: GOOGLE_CLIENT_ID,
     callback: (res: { credential?: string }) => {
       const token = res?.credential;
@@ -88,9 +94,12 @@ export async function initSignIn(target: HTMLElement): Promise<void> {
       current = { email: c.email, name: c.given_name || c.name || c.email, token };
       emit();
     },
-    auto_select: false,
-    cancel_on_tap_outside: true,
-  });
+      auto_select: false,
+      cancel_on_tap_outside: true,
+    });
+  }
+  // renderButton is idempotent per element and must run even when initialize() was skipped, otherwise a
+  // remount (StrictMode, or a sign-out) leaves an empty slot where the button should be.
   g.accounts.id.renderButton(target, { theme: "outline", size: "large", text: "signin_with" });
 }
 

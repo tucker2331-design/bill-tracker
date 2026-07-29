@@ -166,7 +166,11 @@ computable — without it that relationship is unrepresentable.
   failure). Worker API + **Google ID-token verification** built (Access rejected on its per-seat pricing
   model — [[architecture/verification_durability]]). Remaining: merge, then the front-end sign-in button —
   the lock is installed, the door is not yet hung.
-- **F3. Accounts** — Google login, 30-day session. Ask **what to call you** (first name, for office calls) +
+- **F3. Accounts** — ⏳ **sign-in BUILT 2026-07-28** (`web/src/state/auth.ts` + `components/SignIn.tsx`,
+  verified live: button renders, zero console errors, **no token in localStorage** — held in memory only, so
+  one XSS cannot steal an identity that outlives the tab). **Still to build: the first-run form** — display
+  name + three districts, which is what turns "Saved as tucker2331@gmail.com" into "Saved as Tucker".
+  Original scope below. Ask **what to call you** (first name, for office calls) +
   **state house / state senate / federal house** districts. Never store an address. Federal district
   collected, not displayed (Mastermind uses it). One notice line: *"info used for legislative advocacy
   optimization."* 6-month re-confirm at login + manual edit in account settings.

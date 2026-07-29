@@ -132,6 +132,50 @@ async function handleApi(request, env, url) {
     return json({ ok: true }, 201);
   }
 
+  // ---- the signed-in user's own profile ----
+  // Scoped to `email` from the VERIFIED token, never from the body: a client must not be able to read or
+  // write another person's profile by naming them.
+  if (path === "/me") {
+    if (request.method === "GET") {
+      const row = await env.DB.prepare(
+        `SELECT email, display_name, home_state, district_house, district_senate, district_congress,
+                districts_confirmed_at
+           FROM users WHERE email = ?`,
+      ).bind(email).first();
+      // A first-time user is NOT an error -- `profile: null` means "ask them", which is what the UI needs
+      // to distinguish from "we failed to load".
+      return json({ profile: row ?? null });
+    }
+
+    if (request.method === "PUT") {
+      const body = await request.json().catch(() => null);
+      const name = (body?.display_name ?? "").trim();
+      if (!name) return json({ error: "display_name is required" }, 400);
+
+      // Districts are stored as the user CONFIRMED them. We never store an address; the Census lookup that
+      // helps them find these runs in their browser and its input is discarded
+      // (docs/knowledge/district_lookup.md). There is deliberately nowhere here to put one.
+      const dist = (v) => {
+        const t = String(v ?? "").trim();
+        return t === "" ? null : t;
+      };
+      const st = String(body?.home_state ?? "").trim().toUpperCase();
+      if (st && !/^[A-Z]{2}$/.test(st)) return json({ error: "home_state must be a 2-letter code" }, 400);
+
+      const now = new Date().toISOString();
+      await env.DB.prepare(
+        `INSERT INTO users (email, display_name, home_state, district_house, district_senate,
+                            district_congress, districts_confirmed_at, created_at)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)
+         ON CONFLICT(email) DO UPDATE SET
+           display_name = ?2, home_state = ?3, district_house = ?4, district_senate = ?5,
+           district_congress = ?6, districts_confirmed_at = ?7`,
+      ).bind(email, name, st || null, dist(body?.district_house), dist(body?.district_senate),
+             dist(body?.district_congress), now, now).run();
+      return json({ ok: true, confirmed_at: now });
+    }
+  }
+
   return json({ error: "not found" }, 404);
 }
 
