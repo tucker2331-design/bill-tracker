@@ -31,6 +31,12 @@ binding = "ASSETS"
 
 # D1 — created 2026-07-27, region ENAM. `database_id` is an IDENTIFIER, not a credential; Cloudflare's own
 # docs check it in. No secret belongs in this file.
+# Google sign-in. The client ID is a PUBLIC identifier -- it ships in the page for every "Sign in with
+# Google" button on the web, so it belongs in committed config. The client SECRET is for a different flow
+# (authorization code) that we deliberately do not use, and no secret belongs in this file.
+[vars]
+GOOGLE_CLIENT_ID = "831223695835-cqd2fmjq3l61jc1t6pr9elobra0imhf5.apps.googleusercontent.com"
+
 [[d1_databases]]
 binding = "DB"
 database_name = "bill-tracker-db"

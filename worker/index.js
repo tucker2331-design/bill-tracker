@@ -14,10 +14,12 @@
  * sign-in, which has no per-seat cost and which we needed anyway, because the interaction log is worthless
  * without knowing WHO made contact.
  *
- * Until that lands, `authenticatedEmail()` returns null and every mutating request is REJECTED. An
- * unauthenticated write path that silently accepts data is worse than no write path, because the bad data
- * outlives the mistake.
+ * Every mutating request requires a verified identity; `authenticatedEmail()` returns null on any failure
+ * and callers reject on null. An unauthenticated write path that silently accepts data is worse than no
+ * write path, because the bad data outlives the mistake.
  */
+
+import { verifyGoogleIdToken } from "./auth.js";
 
 const JSON_HEADERS = { "content-type": "application/json; charset=utf-8" };
 
@@ -29,19 +31,21 @@ const STANCES = new Set(["involved", "supporting", "watching", "opposing"]);
 const TONES = new Set(["positive", "neutral", "negative"]);
 
 /**
- * The signed-in user's email, or null.
+ * The signed-in user's verified email, or null.
  *
- * NOT YET IMPLEMENTED — deliberately returns null so every write is rejected. The replacement is Google
- * sign-in: verify the ID token's signature against Google's published JWKS, check `aud` matches our client
- * id and `iss` is accounts.google.com, then read the `email` claim.
+ * ASYNC — verification fetches Google's signing keys. Every call site must await it; a forgotten await
+ * yields a Promise, which is truthy, and would let EVERY request through as authenticated. That is the
+ * failure mode this comment exists to prevent.
  *
  * Callers MUST treat null as "reject", never as "anonymous is fine" — the sentinel-collision trap
- * (assumptions_audit #53) applied to auth: absence of an identity must not read as a valid one. Returning
- * null from an unimplemented function is the fail-closed default; a stub that returned a placeholder
- * identity would silently open the write path.
+ * (assumptions_audit #53) applied to auth: absence of an identity must not read as a valid one.
  */
-function authenticatedEmail(request, env) {
-  return null;
+async function authenticatedEmail(request, env) {
+  if (!env.GOOGLE_CLIENT_ID) return null;          // unconfigured => nobody is authenticated
+  const header = request.headers.get("Authorization") || "";
+  const token = header.startsWith("Bearer ") ? header.slice(7).trim() : "";
+  if (!token) return null;
+  return verifyGoogleIdToken(token, env.GOOGLE_CLIENT_ID);
 }
 
 async function handleApi(request, env, url) {
@@ -52,9 +56,10 @@ async function handleApi(request, env, url) {
     return json({
       ok: true,
       db: Boolean(env.DB),
-      // Writes are impossible until Google sign-in lands. Reported so a half-configured deploy is
-      // visible rather than quiet, and so nobody mistakes 401s for a bug.
-      auth_configured: false,
+      // Whether writes are possible at all, so a half-configured deploy is visible rather than quiet.
+      // Reports CONFIGURATION, never the caller's own auth state -- a health endpoint must not become an
+      // oracle for probing whether a given token is valid.
+      auth_configured: Boolean(env.GOOGLE_CLIENT_ID),
     });
   }
 
@@ -87,7 +92,7 @@ async function handleApi(request, env, url) {
   }
 
   // ---- mutations: identity required, no exceptions ----
-  const email = authenticatedEmail(request, env);
+  const email = await authenticatedEmail(request, env);
   if (!email) return json({ error: "not authenticated" }, 401);
 
   if (request.method === "PUT" && path === "/positions") {

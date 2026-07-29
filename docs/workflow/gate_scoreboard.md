@@ -35,8 +35,15 @@ process itself: if I can't measure it, I can't claim it works.
 | 07-27 | Access recommendation | per-seat pricing vs a volunteer user base | **MISSED — no check** | owner caught it → added check 9 (DEPENDENCY) |
 | 07-27 | `migrations/0001_init.sql` | no `state` column — VA-only schema (Standard #6) | **MISSED — not covered** | owner's naming question caught it → wired the CODE gate |
 | 07-27 | `worker/index.js` | schema gained `state`, queries never updated | **MISSED — not covered** | I caught it, but only while fixing the above |
+| 07-27 | `worker/auth.js` | `authenticatedEmail` had to go sync→async; a missed `await` returns a Promise, which is TRUTHY, authenticating everyone | **CAUGHT** (code gate, PROPAGATION) | gate fired on the Write, I grepped call sites first and awaited it |
 
-**Standing at 2026-07-27:** 2 caught · 3 missed with the gate running · 2 never covered.
+**Standing at 2026-07-27:** 3 caught · 3 missed with the gate running · 2 never covered.
+
+**First catch by the new CODE gate, and it was the exact class it was added for.** Making auth verification
+async changed `authenticatedEmail` from sync to async. A forgotten `await` returns a Promise — which is
+**truthy** — so `if (!email) return 401` would never fire and every request would authenticate. The gate's
+PROPAGATION line fired on the Write, I grepped the call sites before editing, and the one site was awaited.
+That is the same failure shape as the `state`-column miss, caught this time instead of shipped.
 
 ## What the ledger says, read honestly
 
