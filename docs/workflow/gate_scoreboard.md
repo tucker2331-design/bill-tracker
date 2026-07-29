@@ -35,9 +35,24 @@ process itself: if I can't measure it, I can't claim it works.
 | 07-27 | Access recommendation | per-seat pricing vs a volunteer user base | **MISSED — no check** | owner caught it → added check 9 (DEPENDENCY) |
 | 07-27 | `migrations/0001_init.sql` | no `state` column — VA-only schema (Standard #6) | **MISSED — not covered** | owner's naming question caught it → wired the CODE gate |
 | 07-27 | `worker/index.js` | schema gained `state`, queries never updated | **MISSED — not covered** | I caught it, but only while fixing the above |
+| 07-28 | M2 shapes | drew ▲●▼ from memory; v4 had settled **★ support · ⊘ oppose · ◇ watching** | **MISSED — ran and ignored** | owner caught it. Check 0 asks "what governs this" — a drawn mockup existed and I recalled instead of opening it |
+| 07-28 | Health tab | `Incident_Log` absent; gviz served Sheet1, so ~3,645 meeting times rendered as open incidents | **MISSED — not covered** | owner saw it live. No gate runs on the deployed product |
+| 07-28 | `WarRoom.tsx` | markup referenced `.wr-*` classes that did not exist in the stylesheet | **CAUGHT** (browser verification) | found by rendering it, not by reading it |
 | 07-27 | `worker/auth.js` | `authenticatedEmail` had to go sync→async; a missed `await` returns a Promise, which is TRUTHY, authenticating everyone | **CAUGHT** (code gate, PROPAGATION) | gate fired on the Write, I grepped call sites first and awaited it |
 
-**Standing at 2026-07-27:** 3 caught · 3 missed with the gate running · 2 never covered.
+**Standing at 2026-07-28:** 4 caught · 4 missed with the gate running · 3 never covered.
+
+**The M2 shapes miss is the worst kind so far — "ran and ignored".** The gate fired, check 0 asked *what
+governs this and have I read it*, a prior mockup had settled the vocabulary, and I drew from memory anyway.
+That is not a gap in the checklist; it is me treating the checklist as a formality. **Recording it as the
+distinct category it is, because a scoreboard that blurs "no check existed" into "I skipped the check" would
+hide the only failure mode the gate cannot fix by growing.**
+
+**The Health-tab miss names a surface still uncovered: the DEPLOYED PRODUCT.** Gates run on my writes and my
+publishes. Nothing looks at what is actually live, so a defect that shipped before the gates existed sat
+there until the owner opened the page. A rendering check would have caught it in seconds — which is also how
+the `.wr-*` missing-CSS bug was caught, and that one is the first catch credited to *running the thing*
+rather than reading it.
 
 **First catch by the new CODE gate, and it was the exact class it was added for.** Making auth verification
 async changed `authenticatedEmail` from sync to async. A forgotten `await` returns a Promise — which is
