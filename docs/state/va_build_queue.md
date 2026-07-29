@@ -153,10 +153,19 @@ computable — without it that relationship is unrepresentable.
 
 ## F · FOUNDATIONS
 
-- **F1. Routing** — `web/` has **no router at all**. Six routes: detail + list for legislator, committee,
-  subject. Nothing with a URL works until this lands.
-- **F2. Write path** — Worker + D1 + Cloudflare Access. Everything org-asserted needs it: the ladder, notes,
-  contacts, the interaction log. **The call sheet is a read surface over data that does not exist yet.**
+- ~~**F1. Routing**~~ — ✅ **BUILT + BROWSER-VERIFIED 2026-07-28.** `web/src/state/router.ts` (~70 lines,
+  **no new dependency** — this app has two runtime deps and the route set is flat; a router library would
+  triple that and add an upgrade treadmill, Standard #8). Routes: the five tabs plus list + detail for bills,
+  legislators, committees, subjects. `parseRoute`/`routePath` sit adjacent and a round-trip test proves
+  `parse(path(r)) === r` for all 13. **The War Room tab now exists** and renders tracked bills from real data.
+  Verified in a browser, not just typechecked: deep link opens the right bill, Back closes it, unknown routes
+  fall back without blanking, a nonexistent bill id does not crash, nav links are real `<a href>` so
+  middle-click and copy-link work, zero console errors, no overflow at 1280 or 700px.
+- **F2. Write path** — ⏳ **PR #237, schema LIVE.** Migration applied to the remote D1 2026-07-28; both
+  constraints verified against the real database (`stance='bogus'` → CHECK failure; missing `state` → NOT NULL
+  failure). Worker API + **Google ID-token verification** built (Access rejected on its per-seat pricing
+  model — [[architecture/verification_durability]]). Remaining: merge, then the front-end sign-in button —
+  the lock is installed, the door is not yet hung.
 - **F3. Accounts** — Google login, 30-day session. Ask **what to call you** (first name, for office calls) +
   **state house / state senate / federal house** districts. Never store an address. Federal district
   collected, not displayed (Mastermind uses it). One notice line: *"info used for legislative advocacy
@@ -218,7 +227,14 @@ computable — without it that relationship is unrepresentable.
   the inflated denominator is not cosmetic: in the regression test, counting 6 departed Republicans **flips
   a D 51-seat majority into an R one**. Now filtered to `status == "Active"` (exactly 100 and 40), with
   non-seated members **counted in `served_not_seated`, never dropped silently**.
-- **E4. Coverage window as data** on every stat, so `(2025–2026)` is derived, never typed.
+- ~~**E4. Coverage window as data**~~ — ✅ **BUILT 2026-07-28.** `tools/votes/coverage.py` + 10 tests.
+  A window is computed **from the rows a figure was actually derived from** and travels with it, so
+  `(2025–2026)` can never be a literal that was true the day it was typed — the same class as the fabricated
+  `(2020–2026)`. **Zero rows yields `None`, never a plausible span**: "no data" and "data covering 2025–2026"
+  must not render identically. `exceeds_authorized()` turns a pre-2025 claim into a detectable compliance
+  fault rather than a display quirk, and the authorised set is **imported** from `lis_authorization.py`
+  rather than copied — the code gate caught that duplication on first write, and a compliance rule that can
+  drift silently is the worst possible thing to have two copies of.
 - ~~**E5. Text-diff percentage**~~ — ✅ **BUILT 2026-07-27.** `tools/text_corpus/textdiff.py` + 9 tests.
   **Removes three claims from the DERIVED (amber) class into exact math:** companion drift, version drift,
   cross-state similarity. "High overlap" was our unauditable judgement; a diff percentage is deterministic
