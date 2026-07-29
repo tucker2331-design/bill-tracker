@@ -305,6 +305,23 @@ export function Health({ completeness, dataAsOf }: { completeness: Completeness 
       { label: "Circuit breaker", tone: !h ? "unknown" : breakerOk ? "good" : "danger", anchor: "hl-sec-status" },
       sv("Write-time invariant violations", violations ?? 0, lower(0.5, 49, 60), violations != null, "hl-m-invariants"),
       { label: "Active alerts", tone: !h ? "unknown" : critCount ? "danger" : warnCount ? "warn" : "good" },
+      // THE INCIDENT LEDGER IS A RING INPUT (owner, 2026-07-28). Before this, the rings were computed purely
+      // from live metrics and knew nothing about the ledger, so the page could show four green rings directly
+      // above "an incident is OPEN right now". The owner's argument is the correct one: an incident severe
+      // enough to reset the days-clean clock is BY DEFINITION something a ring should not call healthy.
+      // Two independent verdicts about the same question will eventually contradict; the fix is to make one
+      // an input to the other rather than to hope they agree.
+      //
+      // FAIL-CLOSED on all three non-clean states -- open, unreadable, and unseeded are each "we cannot say
+      // this is clean", and none of them may render green.
+      {
+        label: "Incident ledger",
+        tone: !counter ? "unknown"
+          : counter.openNow.length > 0 ? "danger"
+          : counter.wrongSheet ? "unknown"
+          : !counter.available ? "unknown"
+          : "good",
+      },
     ], verify: vitalVerify(["sustainability_audit.yml"]), verifyApplies: true, anchor: "hl-sec-alerts" },
   ];
 

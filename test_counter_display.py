@@ -36,36 +36,53 @@ ts = re.sub(r": string\[\]", "", ts)
 ts = re.sub(r"\(s: string\)", "(s)", ts)
 ts = re.sub(r"\(fromMs: number, nowMs: number\)", "(fromMs, nowMs)", ts)
 ts = re.sub(r"\(c: string\)", "(c)", ts)
+# Added 2026-07-28 with the wrong-sheet guard: `as const` and the header-check annotations.
+ts = re.sub(r"\s+as const", "", ts)
+# ORDER-INDEPENDENT: the generic `: string[]` rule above may already have run, leaving
+# `(row | undefined): boolean`. Match on what survives, not on the original source.
+ts = re.sub(r"\(row(?:: string\[\])? \| undefined\)(?:: boolean)?", "(row)", ts)
+# headerMatches moved to config.ts (shared, so every gviz reader can guard). Inline it for this harness.
+ts = "const headerMatches = (row, expected) => !!row && expected.every((h, i) => (row[i] || \"\").trim() === h);\n" + ts
 ts = re.sub(r"^interface CounterState \{[\s\S]*?\n\}\n", "", ts, flags=re.M)
 ts = re.sub(r"^\s*/\*\*[\s\S]*?\*/\s*$", "", ts, flags=re.M)
 
 CASES = """
 const NOW = new Date("2026-07-27T12:00:00Z");
+// The real tab's header. counterFromRows refuses to interpret a sheet that does not start with this --
+// gviz answers a MISSING tab with the first sheet's CSV, and on 2026-07-28 that shipped as ~3,645 phantom
+// open incidents. Goldens must therefore look like the real tab, header included.
+const H = ["StartUTC","EndUTC","Class","Summary","DetectedBy"];
 const out = [];
 const t = (name, rows, want) => {
   const got = counterFromRows(rows, NOW);
   out.push({name, got, want});
 };
 // genesis only -> clean since genesis, no incidents
-t("genesis only", [["2026-07-01T00:00:00Z","","_genesis","began","setup"]],
+t("genesis only", [H, ["2026-07-01T00:00:00Z","","_genesis","began","setup"]],
   {daysClean:26, monitoringDays:26, incidentsEver:0, open:0});
 // a CLOSED incident resets the clock to its END
-t("closed incident", [["2026-07-01T00:00:00Z","","_genesis","x","s"],
+t("closed incident", [H, ["2026-07-01T00:00:00Z","","_genesis","x","s"],
                       ["2026-07-20T00:00:00Z","2026-07-22T00:00:00Z","accuracy","bad","sentinel"]],
   {daysClean:5, monitoringDays:26, incidentsEver:1, open:0});
 // an OPEN incident reads from its START and reports itself open
-t("open incident", [["2026-07-01T00:00:00Z","","_genesis","x","s"],
+t("open incident", [H, ["2026-07-01T00:00:00Z","","_genesis","x","s"],
                     ["2026-07-25T00:00:00Z","","accuracy","bad","sentinel"]],
   {daysClean:2, monitoringDays:26, incidentsEver:1, open:1});
 // a DRILL must NOT break the streak
-t("drill does not reset", [["2026-07-01T00:00:00Z","","_genesis","x","s"],
+t("drill does not reset", [H, ["2026-07-01T00:00:00Z","","_genesis","x","s"],
                            ["2026-07-26T00:00:00Z","2026-07-26T00:00:00Z","_drill","fire drill","cron"]],
   {daysClean:26, monitoringDays:26, incidentsEver:0, open:0});
 // unseeded -> null, never a reassuring 0
 t("unseeded is null", [], {daysClean:null, monitoringDays:null, incidentsEver:0, open:0});
 // a short row WITH data is malformed, not silently dropped
-t("short row counted", [["2026-07-01T00:00:00Z","","_genesis","x","s"], ["oops"]],
+t("short row counted", [H, ["2026-07-01T00:00:00Z","","_genesis","x","s"], ["oops"]],
   {daysClean:26, monitoringDays:26, incidentsEver:0, open:0, malformed:1});
+// THE 2026-07-28 REGRESSION: gviz served Sheet1 for the missing Incident_Log tab. `SortTime` values were
+// read as incident classes and every meeting time became an open incident. Nothing may be parsed from a
+// sheet that is not ours.
+t("wrong sheet parses nothing", [["Date","Time","SortTime","Status","Committee"],
+                                 ["2025-11-03","2:00 PM","14:00","","Virginia Land Conservation Foundation"]],
+  {daysClean:null, monitoringDays:null, incidentsEver:0, open:0});
 console.log(JSON.stringify(out));
 """
 
