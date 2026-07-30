@@ -339,3 +339,59 @@ appear, THAT alerts (the alarm's alarm).
 
 See also [[audits/build_wave_2026-07/README]] (TASK 2), [[ideas/lobbyist_jtbd_ideation]] §8b,
 [[architecture/verification_durability]] (the guards that would write here).
+
+---
+
+## 2026-07-29 — "the Health tab has alerts, which resets our counter". It does not. Here is the proof.
+
+> Owner: *"health tab has alerts which resets are counter. that really sucks and im really dissapointed. how
+> where we not able to see this coming down the pipeline to prevent it? … we need them to resolve by
+> themselves if they are really nothing but we need to be 100% confident in that mechanism."*
+
+**The inference was reasonable and the conclusion is wrong — alerts and incidents are separate systems, and
+only one of them touches the clock.** Verified rather than asserted:
+
+### 1. An alert cannot open an incident
+`record_incident` is called from exactly three files — `accuracy_sentinel.py`, `completeness_tripwire.py`,
+`reconcile_votes.py` — and in every case only on a breached **invariant**. The sentinel's gated invariants
+are: SECTION 9 (meeting without time) · UNCLASSIFIED rows · UNCONFIRMED lane · DERIVED volume · FLOOR partial
+sheet · ROUTER RESOLUTION collapse · STRUCTURAL COVERAGE drop · STALENESS.
+
+**None of the four alerts on the tab that day is one of those.** They come from `push_system_alert`, which
+writes to the alert feed and never to `Incident_Log`. Two separate surfaces, one clock.
+
+### 2. Every incident writer closes symmetrically — so incidents self-resolve
+Measured, `record_incident` vs `close_incident` per file: sentinel 4/4 · tripwire 4/4 · reconcile 4/4.
+The rule in the sentinel says it plainly: *"Whoever detects a failure declares its end: on a PASS we close
+our own open incident, which is all the recovery detection the ledger needs."* **No human closes anything.**
+
+### 3. Alerts self-resolve too, by a different mechanism
+`Health.tsx` judges a condition ACTIVE only if it fired in the most recent cycle **of the worker that raised
+it** (`c.lastTs >= cycleFor(c) - ACTIVE_TOL_MS`). Stop re-pushing it and it moves to "resolved" on the next
+tick. Per-worker clocks matter: a single global "latest cycle" would mark every bill-worker alert resolved
+the instant the calendar worker ticked.
+
+**So the answer to "100% confident in that mechanism" is: both layers already clear themselves, and the
+clock is only touched by invariants that are checked every cycle and closed on the next pass.**
+
+### What WAS real: a chronic alert, which is a different problem
+`VOTE.CSV returned 18 roll-call ids (<50)` fired every cycle after the **20261 → 20262 rollover**. An
+absolute floor of 50 cannot distinguish a truncated feed from a session three days old. **A permanent alert
+is worse than no alert — it teaches the reader to ignore the panel**, which is how a real one gets missed.
+
+Recalibrated against both authorised sessions rather than a guess:
+
+| session | numeric vote ids | history rows | ratio |
+|---|---|---|---|
+| 20261 (complete) | 1,606 | 65,414 | 0.0246 |
+| 20262 (fresh) | 18 | 1,318 | 0.0137 |
+
+The **ratios are the same order** — only the absolute count differs, which is exactly what a young session
+looks like. The alert now requires BOTH *the session is underway* (history ≥ 5,000 rows) AND *votes are
+absent for that activity* (ratio < 0.005). A truncation mid-session drives the ratio toward zero and still
+fires; a young session never does.
+
+**The generalisable lesson, and it is pre-push audit #14 restated:** an absolute threshold on a quantity that
+grows over a session's life will eventually spend part of every session in a false alarm. The session
+lifecycle is a denominator, and Standard #7 applies to alert thresholds exactly as it applies to displayed
+metrics.
