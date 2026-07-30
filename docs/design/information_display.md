@@ -1,6 +1,6 @@
 ---
 tags: [design, ui, information-display, reference, web]
-updated: 2026-06-23
+updated: 2026-07-30
 status: active
 ---
 
@@ -298,6 +298,47 @@ disappears when the sample cannot support it.**
    switch to calibrate. **This removes real machinery from the build:** no threshold constant, no per-stat
    tuning, no "is n big enough" branch at every render site, and one fewer thing the backtest must answer.
    The denominator does the whole job, unconditionally.
+
+---
+
+## 5f. Many relevant numbers, and who is allowed to rank them (P27)
+
+**The owner's dilemma, verbatim (2026-07-30):** *"we are going to have a lot of information that can become
+numbing because its all relevent but you dont know which matters more and you definetely dont want the code or
+ai telling you that either its a hard dilema, think on it."*
+
+It is a real dilemma and both obvious answers are wrong. **Ranking by importance** requires a judgement the
+system cannot support and would be trusted anyway, because a sorted list reads as authoritative. **Showing
+everything flat** produces the numbness he named. A third option — let the user configure the order — just
+moves the work onto the user and most will never touch it.
+
+**P27 · When many figures are equally relevant, the system may impose structure on them, but it may NOT
+impose priority. Three devices give structure without a ranking claim.**
+
+1. **Group by the QUESTION the user is asking, not by the type of the metric.** Nobody asks "what are the
+   stats" — a lobbyist asks *can this get out of here* and *where do I have leverage*. Figures under one
+   question are peers and are comparable to each other; the grouping is semantic, not a priority claim.
+   Realised with [[design/information_display]] P17 — separated by **space, not lines or boxes**.
+2. **Rank by CHANGE, never by importance.** *"This moved since you last looked"* is an observable fact.
+   *"This matters most"* is a judgement. A change strip at the top of a view is therefore honest in a way that
+   a sorted list is not, and it solves the actual problem — the returning user's real question is "what is
+   different", not "what is important".
+3. **Let the denominator rank itself** (P26). Put `2 of 15` beside `96 of 214` and the reader sees which is
+   thin with no flag, no colour, and no annotation. **This is the honest version of the thing the owner feared
+   the AI would do:** the format carries reliability, so nothing has to be labelled weak.
+
+**Corollary — an ABSENCE is set in words, not as a zero.** *"nobody has spoken to the chair"*, not `0 contacts`.
+A zero reads as a small number and slides past; a word stops the eye. This is the one place the layout may
+exert emphasis, and it is legitimate because it emphasises a **factual property** (something is missing)
+rather than a judgement about importance — and because absences are, in practice, the actionable cells.
+
+**Corollary — no composite score.** A single "chance of passing" number would rank on the user's behalf, would
+become the only thing anyone reads, and would hide every honest figure behind a guess. Forbidden on the
+lobbyist surface for the same reason text parsing is (Standard #3): it is a probabilistic claim wearing the
+clothes of a fact.
+
+**Applied in:** the War Room stage panel (M6). **Related:** P17 (proximity), P18 (progressive disclosure),
+P15 (two type sizes carry the reading order), P26 (natural frequencies).
 
 **Net effect of the 2026-07-27 amendment:** the statistical-honesty layer collapses from "frequency +
 percentage + threshold + suppression + interval" to **one rule — print `k of n`**. Simpler to build, nothing
