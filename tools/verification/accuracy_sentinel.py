@@ -203,7 +203,15 @@ def main():
         return r[i] if 0 <= i < len(r) else ""
 
     total = meeting = mwt = unclass = unconfirmed = derived = system = routed = executive = 0
+    # Rows the router COULD resolve: history-derived (Source=CSV). Schedule/docket rows describe meetings
+    # that have not happened, so a blank route on them is correct, not a miss.
+    routable = 0
+    # Meetings that have not happened yet and legitimately carry no time. Tracked apart from `mwt` so the
+    # gate judges only actions that HAVE happened, while the count stays visible rather than vanishing.
+    mwt_future = 0
     s9_rows, uc_rows, unconf_rows = [], [], []
+    s9_future_rows = []
+    _TODAY = time.strftime("%Y-%m-%d", time.gmtime())   # UTC, matching the sheet's date strings
     latest_date = ""  # newest action Date seen (ISO sorts lexically) — for the staleness gate
     for r in rows[1:]:
         if not any(x.strip() for x in r):
@@ -215,8 +223,21 @@ def main():
         _d = cell(r, "Date").strip()
         if len(_d) == 10 and _d[4] == "-" and _d > latest_date:  # YYYY-MM-DD, lexical max
             latest_date = _d
-        if str(cell(r, "LegEventRoute")).strip():
-            routed += 1  # structurally resolved by the router (non-blank route)
+        # ROUTER RESOLUTION NEEDS THE RIGHT DENOMINATOR (2026-07-30, and Standard #7 verbatim: "your metric
+        # must have a denominator"). It was routed/ALL rows, which includes SCHEDULE and DOCKET entries --
+        # meetings that have not happened, so there is no event to route and there never will be until they
+        # do. Measured on the live sheet: Source=CSV routes 862/863 = 99.9%, while api_schedule (2,661 rows)
+        # and DOCKET (1,061) route 0/… by nature. Dividing by everything gave 23.9%.
+        #
+        # That is worse than a false alarm, it is a BLIND one: sitting permanently under the 70% gate, the
+        # number could not move if the router genuinely collapsed. On the honest denominator a total failure
+        # reads 99.9% -> 0%. Narrowing the denominator makes this guard MORE sensitive, not softer -- which
+        # is the only reason it is allowed to change at all (the doctrine forbids softening an alarm).
+        _routable = str(cell(r, "Source")).strip().upper() == "CSV"
+        if _routable:
+            routable += 1
+            if str(cell(r, "LegEventRoute")).strip():
+                routed += 1  # structurally resolved by the router (non-blank route)
         cls = classify_action(cell(r, "Outcome"), cell(r, "LegEventRoute"), cell(r, "RefidClass"), cell(r, "ScheduleClass"))
         has_time = normalize_time(cell(r, "Time")) not in placeholder
         if cell(r, "Origin") == "derived_standing":
@@ -224,9 +245,26 @@ def main():
         if cls == "meeting":
             meeting += 1
             if not has_time:
-                mwt += 1
-                if len(s9_rows) < 15:
-                    s9_rows.append((cell(r, "Bill"), cell(r, "Date"), cell(r, "Committee"), cell(r, "Outcome")[:50]))
+                # FUTURE MEETINGS ARE NOT SECTION-9 BUGS (2026-07-30). The rule in CLAUDE.md is precise about
+                # this and the check was not: "every action that HAPPENED in a meeting must show the time of
+                # that meeting". A meeting scheduled for November, read in July, has no time because LIS has
+                # not set one -- that is the truth, not a missing value we failed to capture.
+                #
+                # Conflating the two made the sentinel FAIL on 6 rows that were all correct ("Annual Meeting
+                # of Senate Finance and Appropriations Committee", 2026-11-19/20, status Scheduled), which
+                # opens an incident and resets the days-clean clock for a non-defect. A trust counter that
+                # resets on correct data is worse than no counter.
+                #
+                # Counted separately, never dropped (Standard #4): a future meeting that STAYS time-less
+                # after its date passes becomes a real Section-9 row on the next run, automatically.
+                if _d and len(_d) == 10 and _d > _TODAY:
+                    mwt_future += 1
+                    if len(s9_future_rows) < 15:
+                        s9_future_rows.append((cell(r, "Bill"), _d, cell(r, "Committee"), cell(r, "Outcome")[:50]))
+                else:
+                    mwt += 1
+                    if len(s9_rows) < 15:
+                        s9_rows.append((cell(r, "Bill"), cell(r, "Date"), cell(r, "Committee"), cell(r, "Outcome")[:50]))
         elif cls == "unclassified":
             unclass += 1
             if len(uc_rows) < 15:
@@ -251,6 +289,11 @@ def main():
                 print(f"        - {ex}")
 
     gate("SECTION 9 (meeting without time)", mwt, args.section9_max, s9_rows)
+    if mwt_future:
+        # Reported, never gated. These become real Section-9 rows automatically once their date passes.
+        print(f"  [note] {mwt_future} FUTURE meeting(s) without a time — not yet due, excluded from the gate:")
+        for ex in s9_future_rows[:5]:
+            print(f"        - {ex}")
     gate("UNCLASSIFIED legislative rows", unclass, args.unclassified_max, uc_rows)
     gate("UNCONFIRMED (surfaced fail-safe lane)", unconfirmed, args.unconfirmed_max, unconf_rows)
     floor_ok = total >= args.min_rows
@@ -266,7 +309,7 @@ def main():
     #      is the honest "we replaced the 16% text with structure" number (~99.8%); only the
     #      'unconfirmed' fail-safe lane is uncovered. (PR-C8.3: the headline the owner expected —
     #      the old "83.8%" was only metric (a) and undersold the structural work.)
-    resolution = (routed / total) if total else 0.0
+    resolution = (routed / routable) if routable else 0.0
     res_ok = resolution >= args.min_resolution
     print(f"  [{'PASS' if res_ok else 'FAIL'}] ROUTER RESOLUTION (LegEventRoute): {resolution:.1%} (min {args.min_resolution:.0%}) "
           f"— un-gameable mass-degradation guard")
