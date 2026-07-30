@@ -46,6 +46,7 @@ Links use Obsidian `[[wikilink]]` format. Obsidian resolves by filename; path-qu
 - [[workflow/three_phase_protocol]] — context routing → pre-push audit → write-back mandate
 - [[workflow/proposal_audit]] — the 7-point gate BEFORE any mockup/proposal is shown (the pre-push audit only gates commits)
 - [[workflow/gate_scoreboard]] — is the self-check working? caught vs missed, including the misses
+- [[state/va_todo_2026-07-30]] — the current VA to-do, ordered by what unblocks what
 - [[state/va_build_queue]] — ordered VA backlog from the War Room design block (mockups → probes → foundations)
 - [[knowledge/district_lookup]] — address→district (Census, no key) + the redistricting signal from the layer vintage
 - [[knowledge/campaign_finance_source]] — ELECT bulk CSVs (1999→now) replace VPAP; the "go to the agency, not the aggregator" rule
