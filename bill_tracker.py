@@ -447,6 +447,37 @@ def build_bill_records(http_session, session_code):
         raise RuntimeError("bill universe came back empty — refusing to overwrite with nothing "
                            "(fail-safe: keep last-known-good).")
 
+    # 1b) LEGISLATION CLASS — one extra POST, all bills in a single page.
+    #
+    # WHY A SECOND CALL: the universe endpoint above carries `LegislationTypeCode` (R/B/J) which separates
+    # resolutions from bills but NOT a commending resolution from a substantive one — SR2001 ("2026 Special
+    # Session I operating resolution") is `R` exactly like "Commending the Petersburg High School boys'
+    # basketball team". Only `LegislationClass` splits them. Verified 2026-07-30 against session 20262.
+    #
+    # WHY IT MATTERS: that session is 215 commending + 80 memorial = 295 of 300 ceremonial. Without this the
+    # 5 real bills are buried. The regular session 20261 sampled 100 and had ZERO ceremonial, so this can
+    # never quietly filter real work in a normal session.
+    #
+    # FAIL-OPEN: a failure here leaves every class blank and the UI shows one ungrouped list — the product
+    # it is today. It must NEVER block the write, because a grouping nicety is not worth losing a cycle.
+    bill_class = {}
+    try:
+        _cls_resp = http_session.post(
+            "https://lis.virginia.gov/AdvancedLegislationSearch/api/GetLegislationListAsync",
+            headers={**HEADERS, "Content-Type": "application/json; charset=utf-8",
+                     "X-Pagination": json.dumps({"PageNumber": 1, "PageSize": 1000})},
+            json={"SessionCode": blob_code}, timeout=30)
+        if _cls_resp.status_code == 200 and _cls_resp.content[:1] == b"{":
+            for _b in (_cls_resp.json().get("Legislations") or []):
+                _n = str(_b.get("LegislationNumber") or "").strip()
+                _c = str(_b.get("LegislationClass") or "").strip()
+                if _n and _c:
+                    bill_class[_n] = _c
+        print(f"📑 LegislationClass: {len(bill_class)} of {len(universe)} bills classified")
+    except Exception as _cls_err:
+        # Surfaced, never swallowed (Standard #4). A blank class is an honest absence, not a wrong label.
+        print(f"⚠️  LegislationClass fetch failed ({_cls_err}); bills will carry no class this cycle.")
+
     # 2) HISTORY (guarded) → per-bill rows WITH the refid (needed for the structural position).
     hist_df = safe_fetch_csv(f"https://lis.blob.core.windows.net/lisfiles/{blob_code}/HISTORY.CSV")
     if hist_df.empty:
@@ -622,6 +653,9 @@ def build_bill_records(http_session, session_code):
             "history": [{"action": r["action"], "date": r["date"]} for r in rows],  # UI doesn't need refids
             "data_as_of_utc": now_utc,                               # trust: freshness
             "source": "LIS",                                         # trust: provenance
+            # LIS's own class. Blank when the class call failed — the UI then shows one ungrouped list
+            # rather than guessing, because a wrong label is worse than no label.
+            "legislation_class": bill_class.get(bill, ""),
         })
 
     # 5) COMPLETENESS (the top trust signal, free).
@@ -722,21 +756,29 @@ def write_bill_tracker(records, completeness):
     # House Floor / Senate Floor are APPENDED (cols Q,R) so the existing A..P column indices the front
     # end reads stay stable; the completeness summary moves right (T1) to stay clear of the widened data.
     # Values: "passed" (cleared that floor) | "defeated" (reached that floor, voted down) | "" (no floor event).
+    # "Class" is LIS's own LegislationClass (Legislation / Commending Resolution / Memorial Resolution /
+    # Budget / Procedural). APPENDED at T so every A..S index the front end reads stays put; the
+    # completeness payload moves one right to U. Measured 2026-07-30: session 20262 is 215 commending +
+    # 80 memorial = 295 of 300 ceremonial, so without this column a special session buries its 5 real
+    # bills. Structural field, never a keyword match on the title (Standard #3).
     header = ["Bill", "Title", "Status (LIS)", "Outcome", "Patron", "Patron ID", "Chamber",
               "Crossed Over", "Last Committee", "Referrals", "Last Action", "Latest Vote (JSON)",
               "Upcoming (JSON)", "History (JSON)", "Data As Of (UTC)", "Source",
-              "House Floor", "Senate Floor", "Outcome Origin"]
+              "House Floor", "Senate Floor", "Outcome Origin", "Class"]
     rows = [header] + [[
         r["bill"], r["title"], r["status_lis"], r["outcome"], r["patron"], r["patron_id"], r["chamber"],
         "yes" if r["crossed_over"] else "no", r["last_committee"], r["referral_count"], r["last_action_date"],
         json.dumps(r["latest_vote"], ensure_ascii=False), json.dumps(r["upcoming"], ensure_ascii=False),
         json.dumps(r["history"], ensure_ascii=False), r["data_as_of_utc"], r["source"],
-        r["floor_house"], r["floor_senate"], r["outcome_origin"],
+        r["floor_house"], r["floor_senate"], r["outcome_origin"], r.get("legislation_class", ""),
     ] for r in records]
     # 19 data cols (A..S — "Outcome Origin" took the former empty spacer at S, so every A..R index the
     # front end reads is unchanged); the completeness summary still lives at T1 (col 20); the cadence
     # last-run marker (U1, col 21, guardrail #5 — this worker's OWN throttle clock) sits clear of the data.
-    completeness_cell, need_rows, need_cols = "T1", len(rows) + 50, 21
+    # Completeness moves T -> U with the appended Class column. The FRONT END no longer depends on this
+    # position: it locates the payload by CONTENT (the cell that parses as JSON carrying `universe_count`),
+    # so a future column can be appended without a coordinated front-end change. See web/src/data/gviz.ts.
+    completeness_cell, need_rows, need_cols = "U1", len(rows) + 50, 22
 
     try:
         ws = sheet.worksheet(BILL_TRACKER_TAB)

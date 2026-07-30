@@ -2,6 +2,7 @@ import { useMemo, useState } from "react";
 import type { Bill, Chamber } from "../data/types";
 import { deriveStage, furthestStage, stageSide, STAGE_ORDER, type Stage } from "../data/derive";
 import { BillBox } from "../components/BillBox";
+import { isCeremonial, splitByClass, ceremonialLabel } from "../data/billclass";
 
 // The crossover-lane pipeline (vision §3b) as a smooth integrated SPINE. Owner 2026-06-30: failure and the
 // terminal outcomes must live IN the pipeline geometry, not a separate box below it. So death is shown WHERE
@@ -185,10 +186,18 @@ export function Timeline({ bills, onOpen }: { bills: Bill[]; onOpen: (b: Bill) =
           </div>
           {(() => { let shown = 0; return drillGroups.map((g) => {
             if (shown >= DRILL_CAP) return null;
-            const slice = g.bills.slice(0, DRILL_CAP - shown); shown += slice.length;
+            // SUBSTANTIVE FIRST, within the cap. The drill-down is capped, so in a session that is 98%
+            // commending resolutions the cap would fill with ceremony and the real bills would never render
+            // — the exact "digging through them for a real bill" problem. Ordering by class costs nothing
+            // and guarantees the bills that matter are the ones that survive the cap.
+            const ordered = [...g.bills].sort((a, b) => Number(isCeremonial(a)) - Number(isCeremonial(b)));
+            const slice = ordered.slice(0, DRILL_CAP - shown); shown += slice.length;
+            const gSplit = splitByClass(g.bills);
             return (
               <div key={g.committee} className="drill-group">
-                <div className="drill-grouphdr">{g.committee} <span className="muted">· {g.bills.length}{slice.length < g.bills.length ? ` (showing first ${slice.length})` : ""}</span></div>
+                <div className="drill-grouphdr">{g.committee} <span className="muted">· {g.bills.length}{slice.length < g.bills.length ? ` (showing first ${slice.length})` : ""}
+                  {/* Counted in place, never removed: the reader can see WHY a group is large. */}
+                  {gSplit.ceremonial.length > 0 && <> · incl. {ceremonialLabel(gSplit)}</>}</span></div>
                 <div className="billgrid">
                   {slice.map((b) => <BillBox key={b.bill} bill={b} onOpen={onOpen} />)}
                 </div>

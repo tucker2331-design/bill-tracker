@@ -42,10 +42,28 @@ function jsonOr<T>(raw: string | undefined, fallback: T): T {
 const COL = {
   bill: 0, title: 1, status: 2, outcome: 3, patron: 4, patronId: 5, chamber: 6, crossed: 7,
   lastCommittee: 8, referrals: 9, lastAction: 10, latestVote: 11, upcoming: 12, history: 13,
-  dataAsOf: 14, source: 15, floorHouse: 16, floorSenate: 17,
+  dataAsOf: 14, source: 15, floorHouse: 16, floorSenate: 17, legislationClass: 19,
 } as const;
-const COMPLETENESS_COL = 19;         // T (S=18 is the empty spacer)
-const LEGACY_COMPLETENESS_COL = 17;  // R — the pre-Floor-columns position, read as a migration fallback
+
+/**
+ * Find the completeness payload by CONTENT, not by column position.
+ *
+ * It has moved twice now (R -> T -> U) as columns were appended, and each move needed a coordinated
+ * front-end change plus a positional fallback chain that silently reads the WRONG cell if it ever
+ * misses — `header[17]` is "Senate Floor" today, which would parse as null and look like "no payload".
+ *
+ * Locating it structurally ends that class of bug: scan the header row for the one cell that parses as an
+ * object carrying `universe_count`. A future column can be appended with no front-end change at all.
+ * (Standard #3 — structural identity over a hopeful index.)
+ */
+function findCompleteness(header: string[]): Completeness | null {
+  for (const cell of header) {
+    if (!cell || cell.length < 2 || !cell.includes("universe_count")) continue;
+    const parsed = jsonOr<Completeness | null>(cell, null);
+    if (parsed && typeof (parsed as Completeness).universe_count === "number") return parsed;
+  }
+  return null;
+}
 
 // Validate a floor cell against the known enum — an unrecognized value (schema drift, the pre-migration
 // empty column) reads as "" (no floor event), never a guessed stage ("allowed not to know, never pretend").
@@ -95,6 +113,7 @@ function toBill(r: string[]): Bill | null {
     lastAction: (r[COL.lastAction] || "").trim(),
     history: jsonOr<HistoryRow[]>(r[COL.history], []),
     dataAsOf: (r[COL.dataAsOf] || "").trim(),
+    legislationClass: (r[COL.legislationClass] || "").trim(),
     source: (r[COL.source] || "LIS").trim(),
   };
 }
@@ -136,7 +155,7 @@ export async function loadBillData(): Promise<BillData> {
   // migration window — after this front-end deploys but BEFORE the bill worker first rewrites the sheet
   // with the appended Passed House/Senate cols, completeness is still at R. `||` picks whichever cell holds
   // the JSON; jsonOr returns null for a non-JSON cell (a stray "yes"/"no"), so it can't misparse.
-  const completeness = jsonOr<Completeness | null>(header[COMPLETENESS_COL] || header[LEGACY_COMPLETENESS_COL], null);
+  const completeness = findCompleteness(header);
 
   const bills: Bill[] = [];
   for (let i = 1; i < rows.length; i++) {

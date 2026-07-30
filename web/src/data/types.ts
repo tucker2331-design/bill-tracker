@@ -44,6 +44,8 @@ export interface Bill {
   lastAction: string;      // date of the most recent history row
   history: HistoryRow[];   // [{action, date}] — newest-handling is the UI's job
   dataAsOf: string;        // ISO UTC the record was built
+  /** LIS's own LegislationClass. "" when the class call failed — an honest blank, never a guess. */
+  legislationClass: string;
   source: string;          // "LIS"
 }
 

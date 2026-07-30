@@ -1,6 +1,7 @@
 import { useMemo, useState } from "react";
 import type { Bill, Outcome, Chamber } from "../data/types";
 import { BillBox } from "../components/BillBox";
+import { splitByClass, ceremonialLabel } from "../data/billclass";
 
 type Sort = "bill" | "recent";
 type Ch = "" | Chamber;
@@ -20,6 +21,43 @@ const billOrigin = (b: Bill): Chamber => (b.bill.charAt(0).toUpperCase() === "H"
 
 // Faceted search (Hearst): one bar for known-item lookup + stacking filter chips for browse. Filters AND
 // across categories; the outcome chips OR within their group (a bill has one outcome).
+/**
+ * The bill grid, with LIS's ceremonial resolutions collapsed behind a disclosure.
+ *
+ * COLLAPSED, NEVER HIDDEN. The count stays on screen and one click opens them, so nobody has to trust that
+ * we filtered correctly — they can look. Silently dropping 90 rows would be the same silent-fallback sin the
+ * rest of this codebase is built against.
+ *
+ * The header only appears when there is actually something to separate: a regular session has zero
+ * ceremonial bills, and a lone "Bills" heading over every result would be noise.
+ */
+function ClassGrouped({ bills, onOpen }: { bills: Bill[]; onOpen: (b: Bill) => void }) {
+  const [showCeremonial, setShowCeremonial] = useState(false);
+  const split = splitByClass(bills);
+  const grid = (rows: Bill[]) => (
+    <div className="billgrid">{rows.map((b) => <BillBox key={b.bill} bill={b} onOpen={onOpen} />)}</div>
+  );
+  if (split.ceremonial.length === 0) return grid(split.substantive);
+  return (
+    <>
+      <div className="grouphdr"><span className="gt">Bills</span>
+        <span className="gc">{split.substantive.length.toLocaleString()}</span><span className="grule" /></div>
+      {split.substantive.length > 0
+        ? grid(split.substantive)
+        : <p className="muted" style={{ margin: "4px 0 0" }}>No substantive bills on this page.</p>}
+
+      <div className="grouphdr"><span className="gt">Commending &amp; memorial</span>
+        <span className="gc">{split.ceremonial.length.toLocaleString()}</span><span className="grule" />
+        <button className="gtoggle" onClick={() => setShowCeremonial((v) => !v)}>
+          {showCeremonial ? "hide" : "show"}
+        </button></div>
+      {showCeremonial
+        ? grid(split.ceremonial)
+        : <p className="muted" style={{ margin: "4px 0 0", fontSize: 12.5 }}>{ceremonialLabel(split)}</p>}
+    </>
+  );
+}
+
 export function Search({ bills, onOpen }: { bills: Bill[]; onOpen: (b: Bill) => void }) {
   const [q, setQ] = useState("");
   const [originCh, setOriginCh] = useState<Ch>("");   // where the bill STARTED (id prefix)
@@ -93,9 +131,7 @@ export function Search({ bills, onOpen }: { bills: Bill[]; onOpen: (b: Bill) => 
         {results.length.toLocaleString()} bill(s)
         {results.length > PAGE_SIZE && <> · showing {firstIdx.toLocaleString()}–{lastIdx.toLocaleString()}</>}
       </div>
-      <div className="billgrid">
-        {pageRows.map((b) => <BillBox key={b.bill} bill={b} onOpen={onOpen} />)}
-      </div>
+      <ClassGrouped bills={pageRows} onOpen={onOpen} />
       {results.length === 0 && <p className="center-msg">No bills match. Try the Full GA scope or clear filters.</p>}
       {totalPages > 1 && (
         <div className="pager">
