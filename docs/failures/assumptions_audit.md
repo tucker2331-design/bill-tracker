@@ -892,3 +892,48 @@
 - **Context:** the `meeting_unsourced` 0→66 breaker trips that reverted #211 and the #212 re-ship. Three successive diagnoses were wrong (§9 cascade → agenda-code semantics → off-season LegEvent-cache warmth), each argued from the diff's *intended dataflow* ("the agenda columns are purely additive, applied AFTER the metric is counted"). The actual cause: the agenda-links capture block referenced `normalized_name` **26 lines before its binding** in the schedule loop → `UnboundLocalError` on the FIRST meeting row → swallowed by the schedule block's ~400-line `except Exception`, which printed and alerted **"🚨 LIS Schedule API failed during run: local variable 'normalized_name' referenced before assignment"** with `status=OFFLINE` — so every reader (including three sessions of me) pattern-matched it to a transient LIS outage. With the loop dead: skeleton rows −2,713 (`rows_appended` 61,047→58,334), `timeclass_*` counters absent entirely, live convene anchors lost (`sourced_convene` −1,278, `floor_anchor_miss` +693), and 66 meeting-routed bill actions couldn't source a time. All three 66-cycles (07-11 16:24, 17:48, 21:13) carry that exact alert row in `Metrics_History`; no healthy cycle does. §9 was fully innocent (the 24 re-timed build_time_graph meetings and the "cascade" story in #101's diagnostic were real measurements of an irrelevant mechanism); cache warmth was innocent too.
 - **Fix (#214):** (1) capture block moved AFTER `normalized_name`'s final post-lexicon binding (where its key also matches the skeleton rows' `Committee`); (2) the schedule `except` SPLIT — `requests.RequestException`/`json.JSONDecodeError` keep the OFFLINE degrade, ANY other exception now alerts `CRITICAL`/`UNKNOWN` with exception type + line + "this is NOT an LIS outage… will NOT self-heal"; (3) **pre-push audit check 17**: pyflakes `undefined name` gate on changed .py files (verified it flags the original at `5625:38`; pinned pyflakes==3.4.0 in CI); (4) `agenda_links_meetings(+_seen)` counters so the live verify reads off SYSTEM_METRICS. Verified on the first post-merge cycle: `meeting_unsourced=0`, rows 61,047, timeclass present, 859/1,684 meetings carrying links, breaker clear. §9 re-merged separately (#215) after exoneration.
 - **Generalization:** (1) **When a metric moves under a code change, read the trip cycles' ALERT STREAM before theorizing** — the failure signature (which counters vanished vs shifted vs held) localizes the dead code region; `Metrics_History` held everything needed for a 30-minute diagnosis, days later. (2) **A broad `except` around a large block converts EVERY code bug into the one failure mode the handler was written for** — the handler's message is a claim about causes it cannot know; route unexpected exception TYPES to a distinct CRITICAL/UNKNOWN signal (Standard #4's "UNKNOWN → human review" exists precisely for this). (3) **Reading a diff for intended dataflow misses crash paths** — a use-before-assignment is invisible to py_compile and to golden tests that never execute the enclosing loop, and cheap static analysis (pyflakes) sees it; it is now mechanical (check 17). (4) The breaker was right all three times — a cycle-stable trip is a REAL regression (re-confirming #101's own lesson against its own "recalibrate the breaker baseline" hypothesis).
+
+---
+
+## #106 — A rare ministerial EventCode can never be detected as ministerial, so it routes as a meeting
+
+**Symptom.** The Accuracy Sentinel's SECTION 9 gate failed on one row every cycle:
+`HB30 · 2026-06-19 · Ledger Updates · "H Budget amendments available (HB30)"` — routed `meeting`, no time.
+
+**The chain, each link measured rather than assumed:**
+
+1. `route_event` reaches its middle bucket and finds `Status == ""`. Blank Status returns
+   `RouteVerdict("meeting", "status_in_session")` **unconditionally**.
+2. That rule is CORRECT and must not be changed. Measured against live LIS data (749 events over 18 bills,
+   session 20251): **91 blank-Status events carry no real time, and they are genuine floor actions** —
+   "Read third time", "Rules suspended", "Passed by for the day", "Reading waived Block Vote (39-Y 0-N)".
+   **I proposed routing blank+untimed to admin and this measurement killed it**: the change would have
+   misrouted all 91. The existing design comment was right and my hypothesis was wrong.
+3. The purpose-built escape is `recover_admin_route`, which looks the outcome up in LIS's OWN EventType
+   reference and asserts admin only for G-prefix or **ministerial** codes. "Budget amendments available"
+   *is* in the reference — codes **H4002 / S4002** — so the lookup succeeds.
+4. **It fails at the last step.** `compute_ministerial_eventcodes` requires `MINISTERIAL_MIN_SAMPLES = 20`
+   occurrences in the session before a code may be called ministerial. Counted in 20261 HISTORY:
+   **13 occurrences total** (5×HB30, 3×SB30, 2×HB29, 2×SB29, 1×). Below the floor, so H4002 never qualifies,
+   so the recovery cannot fire, so blank Status wins and the row is a meeting with no time.
+
+**The lesson, and it generalises past this row.** The sample floor exists for a good reason — you cannot
+conclude "this code is never timed" from two observations. But it has a **systematic blind spot: a code that
+is genuinely ministerial AND genuinely rare can never clear it.** The floor filters on *frequency* when the
+property it is protecting is *confidence*, and for 13-of-13 untimed-and-unvoted the confidence is already
+high. Budget-bill events are the obvious population here: procedurally distinctive and only a handful per
+session, so every one of them is exposed to the same misroute.
+
+**NOT fixed unilaterally — this is a safety threshold and the owner should weigh it.** Options:
+- **(a)** lower `MINISTERIAL_MIN_SAMPLES`. Simple, but weakens every code's evidence bar at once.
+- **(b)** add a second qualifying path: fewer than `min_samples` occurrences **but** 100% untimed, 100%
+  unvoted, and ≥3 samples. Keeps the strong bar for ambiguous codes while letting an unambiguous rare one
+  through. **Recommended** — it changes the rule from "seen often" to "seen consistently", which is what the
+  guard actually cares about.
+- **(c)** accept it: 1 row of 1,345 meeting rows is 99.93%. Rejected — the stated goal is a bug count of 0,
+  and a permanently-failing sentinel resets the trust clock every cycle, which costs more than the row.
+
+**Cross-refs:** the same *shape* as audit #14 (threshold calibration) and the 2026-07-29/30 wave — VOTE.CSV's
+absolute `<50`, the FLOOR guard's `min 5000`, and ROUTER RESOLUTION's whole-population denominator. Four
+guards in three days, all correct in intent, all measuring against a constant that stops describing reality
+once the session's shape changes.
