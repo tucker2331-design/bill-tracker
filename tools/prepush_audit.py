@@ -241,6 +241,36 @@ def check_open_loops(fails):
                      f"      {detail or r.stdout.strip() or r.stderr.strip()}")
 
 
+def check_caselaw_index(fails):
+    """Point B-2 — an audit entry must actually reach the generated `## Index`.
+
+    WHY: CLAUDE.md already requires re-running reindex_caselaw.py after adding an entry, but that was
+    discipline, not enforcement — and the script itself used to skip a malformed header silently. Entries
+    #106 and #107 were written as `## #106 — Title` instead of `## 106. Title`, were dropped from the Index,
+    and the script reported `unchanged … (105 entries indexed)`. An entry missing from the Index is invisible
+    to the "have we seen this failure before?" grep that these files exist for — the lesson is written down
+    and still lost.
+
+    Runs on EVERY push, not diff-scoped: a malformed entry committed earlier stays broken until something
+    looks, and this costs one subprocess. Delegates to reindex_caselaw.py so the invariant has exactly one
+    implementation (same pattern as check_open_loops)."""
+    tool = os.path.join(os.path.dirname(os.path.abspath(__file__)), "reindex_caselaw.py")
+    if not os.path.isfile(tool):
+        fails.append("tools/reindex_caselaw.py is missing — the case-law index invariant is unenforced.")
+        return
+    try:
+        # --check: report only. The audit must never repair what it is auditing — regenerating a stale
+        # index here would let "I forgot to re-run it" pass CI silently.
+        r = subprocess.run([sys.executable, tool, "--check"], capture_output=True, text=True, timeout=30)
+    except subprocess.TimeoutExpired:
+        fails.append("caselaw_index: tools/reindex_caselaw.py did not finish within 30s (filesystem stall?).")
+        return
+    if r.returncode != 0:
+        detail = "\n      ".join(line.strip() for line in r.stdout.splitlines() if line.strip().startswith("•"))
+        fails.append("caselaw_index: an audit entry will never reach the Index (header must be `## N. Lesson`).\n"
+                     f"      {detail or r.stdout.strip() or r.stderr.strip()}")
+
+
 # CLAUDE.md forbids itself from carrying a worker cadence ("do NOT hardcode a worker interval here — it
 # drifts"). These catch a claim sneaking back in: a bare cron expression, or prose asserting an interval for
 # a worker/cycle/cron. Deliberately narrow — "every action", "every state", "every cycle" must NOT match, or
@@ -293,17 +323,21 @@ def main():
     ns = ap.parse_args()
 
     diff = _get_diff(ns)
-    if not diff.strip():
-        print("prepush_audit: empty diff — nothing to check.")
-        return 0
-    files = _parse(diff)
+    files = _parse(diff) if diff.strip() else {}
 
     fails = []
+    # DIFF-SCOPED checks — they inspect what changed, so an empty diff genuinely has nothing to say.
     output_change, bumped = check_version_bump(files, fails)
     check_ray2_backup(files, fails)
     check_forbidden(files, fails)
     check_undefined_names(files, fails)
+    # REPO-WIDE checks — these must run even when the diff is EMPTY. They each document themselves as
+    # running on every push, and they did not: the default base is `origin/main...HEAD`, so a tree whose
+    # commits are already pushed produced an empty diff and the old early-return skipped all three. The
+    # failure modes they exist for (a page that stopped being linked, an entry that never reached the
+    # Index) are states of the repo, not lines in a diff — they are exactly the things a diff cannot see.
     check_open_loops(fails)
+    check_caselaw_index(fails)
     check_claude_md_cadence(fails)
     warn_lines = warns(files)
 
