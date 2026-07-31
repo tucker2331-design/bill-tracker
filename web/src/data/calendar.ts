@@ -17,6 +17,7 @@ export { classifyMeetingKind, collapseFloorSessions } from "./agenda";
 export type { MeetingKind, AgendaItem, Meeting, SessionMarker } from "./agenda";
 import { classifyMeetingKind, collapseFloorSessions } from "./agenda";
 import type { MeetingKind, Meeting } from "./agenda";
+import type { Chamber } from "./types";
 
 export interface CalendarData {
   byDay: Map<string, Meeting[]>;  // dateKey -> meetings (sorted by time)
