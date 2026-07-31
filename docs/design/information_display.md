@@ -1,6 +1,6 @@
 ---
 tags: [design, ui, information-display, reference, web]
-updated: 2026-07-30
+updated: 2026-07-31
 status: active
 ---
 
@@ -319,13 +319,36 @@ impose priority. Three devices give structure without a ranking claim.**
    stats" — a lobbyist asks *can this get out of here* and *where do I have leverage*. Figures under one
    question are peers and are comparable to each other; the grouping is semantic, not a priority claim.
    Realised with [[design/information_display]] P17 — separated by **space, not lines or boxes**.
-2. **Rank by CHANGE, never by importance.** *"This moved since you last looked"* is an observable fact.
-   *"This matters most"* is a judgement. A change strip at the top of a view is therefore honest in a way that
-   a sorted list is not, and it solves the actual problem — the returning user's real question is "what is
-   different", not "what is important".
+2. **~~Rank by CHANGE, never by importance.~~ — the PRINCIPLE stands, the CHANGE STRIP is STRUCK
+   (owner, 2026-07-31).** The reasoning was sound — *"this moved since you last looked"* is an observable fact
+   and *"this matters most"* is a judgement — but the device I built from it was not. Owner, on the M6 strip:
+   *"don't know where since you last looked came from but looks like a lot of data to text going on and I
+   don't think we need it."*
+   **He is right, and it is a P25 violation I shipped while citing P25 elsewhere on the same page.** A strip
+   that renders *"a co-patron signed on · Deeds moved to lean-yes · 2 days to the hearing"* is
+   **generated prose, a different sentence per case** — the exact maintenance surface and unrequested
+   interpretation P25 exists to forbid. Ranking by change is fine; **narrating the change in sentences is
+   not.** If a change device returns, it must be structural (a marked row, a count) and not composed text.
+   **Lesson, generalised:** citing a rule in one place does not install it in the next. Two devices on one
+   surface, one obeying P25 and one breaking it, means the rule was applied as a label rather than as a check
+   (same failure mode as P20c).
 3. **Let the denominator rank itself** (P26). Put `2 of 15` beside `96 of 214` and the reader sees which is
    thin with no flag, no colour, and no annotation. **This is the honest version of the thing the owner feared
    the AI would do:** the format carries reliability, so nothing has to be labelled weak.
+4. **DEFAULT to the un-confounded cohort; disclose the pooled figure, never the reverse** (owner, 2026-07-31:
+   *"include a window that's the chair of the committee currently's leadership… so instead of just D or R you
+   can see the stats under the chair's current leadership"*). Once the current regime is **selectable**,
+   leaving the pooled number as the headline is indefensible — the pooled number is the one that averages two
+   different committees together. So the headline figure is scoped to the sitting chair
+   (`63 of 121 under Suetterlein`) and the pooled figure moves to the sub-line
+   (`96 of 214 across both chairs`). **Both are visible; the honest one leads.**
+   **This is not a priority claim and so does not violate the section's own rule** — it is a *correctness*
+   default about which population a rate describes, not a claim that one figure matters more than another.
+   It also puts P26 to work automatically: scoping to the current chair shrinks `n`, and a thin
+   `1 of 2` announces its own thinness with no flag.
+   **Generalises past chairs:** any figure whose population changed composition mid-window defaults to the
+   current composition. Requires per-session composition stored, not computed at read time — see
+   [[architecture/roster_and_votes_ingestion]].
 
 **Corollary — an ABSENCE is set in words, not as a zero.** *"nobody has spoken to the chair"*, not `0 contacts`.
 A zero reads as a small number and slides past; a word stops the eye. This is the one place the layout may
@@ -336,6 +359,15 @@ rather than a judgement about importance — and because absences are, in practi
 become the only thing anyone reads, and would hide every honest figure behind a guess. Forbidden on the
 lobbyist surface for the same reason text parsing is (Standard #3): it is a probabilistic claim wearing the
 clothes of a fact.
+
+**Corollary — a role vocabulary is READ from the source, never kept on our side.** Owner asked whether
+legislators can back a bill without being a co-patron. The honest answer is that LIS carries the role as
+`DisplayName` on each patron entry, we have confirmed `(Chief Patron)` and that the remainder are co-patrons,
+and we have **not** enumerated the rest because the endpoint's parameter form is unresolved
+([[ideas/copatrons_backfill]]). **So the UI groups by whatever `DisplayName` comes back and prints it
+verbatim.** A hardcoded "co-patrons" section plus a separate "signatories" section would be a lookup table of
+wording (P25) *and* a guess about a fact we can simply read. It also ports to 50 states, where the role
+vocabulary differs — Standard #6.
 
 **Applied in:** the War Room stage panel (M6). **Related:** P17 (proximity), P18 (progressive disclosure),
 P15 (two type sizes carry the reading order), P26 (natural frequencies).
