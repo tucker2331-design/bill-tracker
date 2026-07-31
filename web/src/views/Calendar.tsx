@@ -47,12 +47,12 @@ function MeetingRow({ m, billMap, onOpen }: {
   // (it drops shortly before the meeting), vs a PAST meeting where a missing agenda simply isn't linked.
   const isFuture = m.dateKey >= dayKey(new Date());
   const hasLinks = !!(m.agendaUrl || m.meetingUrl);
-  const shown = all ? m.bills : m.bills.slice(0, BILL_CAP);
-  const extra = m.bills.length - shown.length;
   // A FLOOR session marker (chamber convening / recessing / adjourning) is session context, not a committee
   // meeting the lobbyist tracks — render it quiet + centered + uppercase, distinct by FORM, not a colored bar
   // (owner 2026-06-30). It keeps the bill dropdown because a convening carries the day's floor calendar.
   const isFloor = m.kind === "floor";
+  const shown = all ? m.bills : m.bills.slice(0, BILL_CAP);
+  const extra = m.bills.length - shown.length;
   const head = (
     <>
       <span className="cal-mtg-top">
@@ -96,6 +96,15 @@ function MeetingRow({ m, billMap, onOpen }: {
             );
           })}
           {extra > 0 && <button className="cal-more" onClick={() => setAll(true)}>+{extra} more</button>}
+        </div>
+      )}
+      {/* A collapsed sitting's own shape: when it recessed, when it adjourned. Quiet, inside the card —
+          these used to be full sibling cards, which gave a recess the same weight as a committee hearing. */}
+      {open && m.markers.length > 1 && (
+        <div className="cal-markers">
+          {m.markers.map((k, i) => (
+            <div key={i} className="cal-marker"><span className="cal-marker-t">{k.time}</span> {k.label}</div>
+          ))}
         </div>
       )}
       {/* Meeting + agenda links (docs/ideas/meeting_agenda_links). Only when present — a dead/empty link is

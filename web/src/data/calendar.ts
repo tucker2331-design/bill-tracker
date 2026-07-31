@@ -10,48 +10,13 @@
 import { parseCsv } from "./gviz";
 import { SPREADSHEET_ID } from "../config";
 import { parseLisDate, dayKey } from "./dates";
-import type { Chamber } from "./types";
 
-export type MeetingKind = "floor" | "committee";
-
-// Floor SESSION MARKERS (a chamber convening / reconvening / recessing / adjourning) vs actual committee
-// meetings. DISPLAY-ONLY heuristic: it only chooses how a row is STYLED (quiet session tissue vs a meeting
-// card) — it never hides, drops, or re-counts a row, so it is NOT the structural-completeness path Standard
-// #3 governs (a misclassification shows the wrong style, never wrong/missing data). There is no structural
-// floor/committee field in Sheet1 (LIS encodes it only in the meeting NAME), and the calendar WORKER already
-// floor-detects on these same LIS verbs — this mirrors that classification, it doesn't invent one.
-//   ASSUMES: LIS names floor markers with convene/reconvene/adjourn/recess (+ conjugations) — e.g.
-//     "House Convenes", "Senate adjourned", "House recessed until…". Caucuses ("Rural Caucus") are group
-//     meetings, not floor markers, so they stay "committee" (no verb match).
-//   BREAKS: a committee whose name contained one of those WHOLE words would misclassify (none in the VA
-//     committee list today); the pattern is word-bounded + conjugation-explicit to avoid substring over-match
-//     (Gemini/Qodo #186). The relative-time "…after adjournment of X" phrase lives in the TIME field, not the
-//     name, so a relative-timed committee meeting is never misread as floor.
-// Pure + exported so the classification is one testable place (CodeRabbit #186); web/ has no unit runner yet
-// (the CI structural tests are Python-only), so it's covered by tsc + the live preview for now.
-const FLOOR_MARKER = /\b(?:re)?conven(?:es?|ed)\b|\badjourn(?:s|ed)?\b|\brecess(?:es|ed)?\b/i;
-export function classifyMeetingKind(committee: string): MeetingKind {
-  return FLOOR_MARKER.test(committee) ? "floor" : "committee";
-}
-
-export interface AgendaItem { bill: string; action: string; }
-
-export interface Meeting {
-  dateKey: string;       // local YYYY-MM-DD
-  committee: string;     // chamber-qualified meeting name ("House Appropriations", "Senate Convenes")
-  chamber: Chamber | null;
-  kind: MeetingKind;
-  time: string;          // display, e.g. "9:00 AM" — or "Time TBA" when no concrete time is published
-  tba: boolean;          // true when LIS published the meeting but no concrete time (never hidden — §7)
-  minutes: number;       // sort key — minutes past midnight (from the worker's SortTime, the authority)
-  unresolved: boolean;   // worker TimeClass=relative_unresolved: LIS gives only a relative time whose anchor
-                         // could NOT be resolved — position unknown, so it surfaces at the TOP of the day,
-                         // highlighted, instead of a silently-wrong end-of-day slot (§7.2, "never pretend")
-  bills: AgendaItem[];   // real bills on the agenda (deduped; empty for skeleton/commission meetings)
-  agendaUrl: string;     // the agenda PDF (worker col P) — "" when LIS hasn't posted one (common for FUTURE
-                         // meetings: the livestream link exists before the agenda does → card says "not posted yet")
-  meetingUrl: string;    // the livestream / "View Meeting" link (worker col Q) — "" when none
-}
+// The pure agenda rules live in ./agenda (no runtime imports, so the goldens can run the REAL code).
+// Re-exported here so every existing importer of calendar.ts keeps working unchanged.
+export { classifyMeetingKind, collapseFloorSessions } from "./agenda";
+export type { MeetingKind, AgendaItem, Meeting, SessionMarker } from "./agenda";
+import { classifyMeetingKind, collapseFloorSessions } from "./agenda";
+import type { MeetingKind, Meeting } from "./agenda";
 
 export interface CalendarData {
   byDay: Map<string, Meeting[]>;  // dateKey -> meetings (sorted by time)
@@ -245,7 +210,7 @@ async function _loadCalendar(): Promise<CalendarData> {
       m = { dateKey: dk, committee, chamber, kind, time: concrete ? cleanTime(rawTime) : "Time TBA",
         tba: !concrete, minutes: toMinutes(sortTime, rawTime),
         unresolved: (r[9] || "").trim().toLowerCase() === "relative_unresolved", bills: [],
-        agendaUrl: (r[10] || "").trim(), meetingUrl: (r[11] || "").trim() };
+        agendaUrl: (r[10] || "").trim(), meetingUrl: (r[11] || "").trim(), markers: [] };
       groups.set(key, m);
       flags.set(key, { cancelled: false, held: false });
     } else if (concrete && m.tba) {
@@ -285,6 +250,9 @@ async function _loadCalendar(): Promise<CalendarData> {
     m.bills.sort((a, b) => a.bill.localeCompare(b.bill, undefined, { numeric: true }));
     (byDay.get(m.dateKey) ?? byDay.set(m.dateKey, []).get(m.dateKey)!).push(m);
   }
+  // Collapse each chamber's convene/recess/adjourn markers into ONE session card per day BEFORE sorting,
+  // so a day shows the sittings and the hearings rather than a stack of parliamentary tissue.
+  for (const [dk, ms] of byDay) byDay.set(dk, collapseFloorSessions(ms));
   for (const ms of byDay.values()) {
     // UNRESOLVED-relative meetings surface at the TOP of the day (owner 2026-06-30, §7.2): their real
     // position is unknowable, so an honest "we can't place this" slot beats a silently-wrong 23:59 one.

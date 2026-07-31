@@ -286,6 +286,19 @@ h2, h3 { margin: 0; }
 .cal-bchip { border: 0; background: var(--surface); color: var(--ink-soft); border-radius: 5px; padding: 2px 6px; font-size: 10.5px; font-weight: 700; }
 .cal-bchip.on { background: var(--accent-soft); color: var(--accent); cursor: pointer; }
 .cal-more { border: 0; background: transparent; color: var(--accent); font-size: 10.5px; font-weight: 700; padding: 2px 4px; }
+/* The floor session's nested disclosure — bills that moved a procedural step with no recorded vote.
+   Deliberately QUIETER than the voted chips above it (ink-faint, no accent): it is a way in, not a
+   competing signal. One hairline separates it, since it sits inside an already-expanded card. */
+.cal-novote { padding: 0 7px 6px; }
+.cal-novote-h { border: 0; background: transparent; color: var(--ink-faint); font-size: 10.5px;
+  font-weight: 700; padding: 3px 0; text-align: left; width: 100%; border-top: 1px solid var(--line); cursor: pointer; }
+.cal-novote-h:hover { color: var(--ink-soft); }
+.cal-novote .cal-bills { padding: 2px 0 0; }
+/* A collapsed sitting's recesses/adjournment — timing detail INSIDE the session card. Deliberately the
+   quietest text on the card: it is context for the sitting, not an event competing with a hearing. */
+.cal-markers { padding: 2px 8px 6px; display: flex; flex-direction: column; gap: 2px; }
+.cal-marker { font-size: 10px; color: var(--ink-faint); line-height: 1.35; }
+.cal-marker-t { font-variant-numeric: tabular-nums; font-weight: 700; }
 /* Meeting + agenda links in the expanded card — plain text links (no pill), quiet until hovered. */
 .cal-links { display: flex; flex-wrap: wrap; gap: 12px; padding: 2px 8px 8px; }
 .cal-link { font-size: 11px; font-weight: 700; color: var(--accent); text-decoration: none; }
