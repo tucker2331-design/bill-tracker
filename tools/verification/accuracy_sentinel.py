@@ -12,8 +12,12 @@ invariants:
 
   1. SECTION 9   meeting-classified rows WITHOUT a time            == 0   (the goal)
   2. UNCLASSIFIED real legislative rows the classifier can't place == 0   (the goal's 2nd half)
-  3. FLOOR       legislative row count >= MIN_ROWS                        (partial/empty-sheet guard, lesson #75:
-                 "Section 9 = 0 on a 277-row sheet" -- a collapsed sheet must FAIL, not pass)
+  3. BALANCE     rows_in == rows_written + every counted drop            == exact  (row-conservation guard,
+                 lesson #75: "Section 9 = 0 on a 277-row sheet" -- a collapsed sheet must FAIL, not pass.
+                 REPLACED the old `>= MIN_ROWS` floor 2026-07-31: that threshold depended on how busy the
+                 session was and was false-alarming on a COMPLETE 3,615-row special session. The identity
+                 needs no constant and is strictly stronger -- a truncation leaving 6,000 rows passed the
+                 floor and fails this.)
   4. DERIVED     flagged assumed-time rows <= DERIVED_MAX                 (over-derivation guard, G2)
 
 System rows (SYSTEM_ALERT / SYSTEM_METRICS / Committee "System Status") are
@@ -21,7 +25,7 @@ EXCLUDED -- they are the worker's own diagnostics, not legislative actions.
 
 Exit 0 = all invariants hold; non-zero = regression (the scheduled workflow then
 fails and alerts). No secrets -- reads the live sheet via the public gviz CSV.
-Usage: python3 tools/verification/accuracy_sentinel.py [--min-rows 5000] [--derived-max 25]
+Usage: python3 tools/verification/accuracy_sentinel.py [--derived-max 25]
 """
 import sys
 import io
@@ -158,7 +162,6 @@ def _ledger_close(cls):
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("--min-rows", type=int, default=5000, help="partial-sheet floor (lesson #75)")
     ap.add_argument("--derived-max", type=int, default=25, help="over-derivation guard (G2)")
     ap.add_argument("--section9-max", type=int, default=0)
     ap.add_argument("--unclassified-max", type=int, default=0)
@@ -209,6 +212,10 @@ def main():
     # Meetings that have not happened yet and legitimately carry no time. Tracked apart from `mwt` so the
     # gate judges only actions that HAVE happened, while the count stays visible rather than vanishing.
     mwt_future = 0
+    # The worker's SYSTEM_METRICS payload, if present. `None` means "we could not read the worker's own
+    # accounting" — which the BALANCE gate treats as a FAILURE, not as an all-clear (fail closed: the
+    # absence of evidence that rows survived is not evidence that they did).
+    metrics = None
     s9_rows, uc_rows, unconf_rows = [], [], []
     s9_future_rows = []
     _TODAY = time.strftime("%Y-%m-%d", time.gmtime())   # UTC, matching the sheet's date strings
@@ -218,6 +225,13 @@ def main():
             continue
         if _is_system_row(cell(r, "Source")):
             system += 1
+            # The worker's own per-cycle counters ride in the SYSTEM_METRICS row's Outcome as JSON.
+            # They carry the row-conservation terms the BALANCE invariant below needs.
+            if str(cell(r, "Origin")).strip() == "system_metrics":
+                try:
+                    metrics = json.loads(cell(r, "Outcome"))
+                except (ValueError, TypeError):
+                    metrics = None   # malformed → BALANCE reports "unavailable" and fails, never passes
             continue
         total += 1
         _d = cell(r, "Date").strip()
@@ -296,10 +310,54 @@ def main():
             print(f"        - {ex}")
     gate("UNCLASSIFIED legislative rows", unclass, args.unclassified_max, uc_rows)
     gate("UNCONFIRMED (surfaced fail-safe lane)", unconfirmed, args.unconfirmed_max, unconf_rows)
-    floor_ok = total >= args.min_rows
-    print(f"  [{'PASS' if floor_ok else 'FAIL'}] FLOOR (legislative rows): {total} (min {args.min_rows}) — partial/empty-sheet guard")
-    if not floor_ok:
-        failed.append("FLOOR (partial sheet — lesson #75)")
+    # ── BALANCE: the conservation identity that REPLACED the magic floor (2026-07-31) ──────────────
+    # The old gate asked "are there >= 5,000 rows?" — a question whose answer depends on how busy the
+    # session is, not on whether anything was lost. It was FALSE-ALARMING on this very sheet: 3,615 rows
+    # is the complete 2026 special session (300 bills), and the guard called it a partial sheet.
+    # Owner, verbatim: "you are just guessing based on one or two sessions worth of data and even if we
+    # could use historical it's not enough because the past doesn't repeat itself."
+    #
+    # The ABC "Balance" question instead: can every row be ACCOUNTED for?
+    #     rows_in == rows_written + placeholder_dups + key_dups + out_of_window
+    # The worker computes this per cycle and publishes the residual. It is provably right on day 1 and
+    # day 90, at ANY size, with NO constant to calibrate — and it is strictly STRONGER than the floor:
+    # a truncation that still left 6,000 rows passed `>= 5000` and fails this.
+    if metrics is None:
+        print("  [FAIL] BALANCE (row conservation): SYSTEM_METRICS row absent or unparseable — "
+              "the worker's own accounting could not be read")
+        failed.append("BALANCE (worker accounting unreadable)")
+    elif "balance_residual" not in metrics and "worker_version" not in metrics:
+        # MIGRATION WINDOW, and it is identifiable rather than assumed: a worker that publishes the
+        # counters also stamps `worker_version`. Neither key present => this sheet was written before the
+        # change shipped, so there is nothing to reconcile yet. Reported, never silent — but not a gate
+        # failure, because a guaranteed-red gate for a whole cron cycle is a gate people learn to ignore.
+        print("  [note] BALANCE (row conservation): sheet predates the conservation counters — "
+              "the next worker cycle publishes them; gate arms itself then")
+    elif "balance_residual" not in metrics:
+        # A CURRENT worker ran (it stamped its version) and still published no residual. That is a real
+        # fault, not a migration artifact — an absent counter is not a zero one (audit #53).
+        print(f"  [FAIL] BALANCE (row conservation): worker {metrics.get('worker_version')} published no "
+              "`balance_residual` — the conservation counters did not run")
+        failed.append("BALANCE (current worker published no counters)")
+    else:
+        residual = metrics.get("balance_residual", 0)
+        rows_in = metrics.get("rows_final", 0) + residual + sum(
+            metrics.get(k, 0) for k in ("dropped_placeholder_dup", "dropped_key_dup", "dropped_out_of_window"))
+        bal_ok = residual == 0
+        print(f"  [{'PASS' if bal_ok else 'FAIL'}] BALANCE (row conservation): {rows_in} in → "
+              f"{metrics.get('rows_final', 0)} written + "
+              f"{metrics.get('dropped_placeholder_dup', 0)} placeholder-dup + "
+              f"{metrics.get('dropped_key_dup', 0)} key-dup + "
+              f"{metrics.get('dropped_out_of_window', 0)} out-of-window; "
+              f"unaccounted = {residual} (must be 0) — replaces the old --min-rows floor")
+        if not bal_ok:
+            failed.append("BALANCE (rows vanished between the pipeline and the sheet)")
+    # EMPTY-SHEET guard retained, but as an identity rather than a guess: a sheet with zero legislative
+    # rows is broken at any session size. This is the one thing the balance cannot catch — a pipeline that
+    # correctly accounts for having produced nothing still balances.
+    if total == 0:
+        print("  [FAIL] NON-EMPTY: 0 legislative rows on the sheet")
+        failed.append("NON-EMPTY (sheet carries no legislative rows)")
     gate("DERIVED volume (over-derivation guard)", derived, args.derived_max, None)
     # TWO complementary positive-health metrics (anti-homework-grading, Gemini #78):
     #  (a) ROUTER RESOLUTION = LegEventRoute / rows — how far the ORIGINAL structural router

@@ -69,7 +69,7 @@ def notify_slack(text):
 # 2026-07-04.1: date-aware SortTime resolver (#189) + the TimeClass column (#193) both change
 # Sheet1 output — force a recompute so cached/incremental paths can't serve pre-change rows
 # (Qodo #193; #189 omitted this bump, caught here).
-WORKER_OUTPUT_LOGIC_VERSION = "2026-07-12.3"   # label-based agenda-FETCH target (open_anti_patterns #13): which bills attach to ~97 meetings changes, so incremental/Stage-2 cache must invalidate
+WORKER_OUTPUT_LOGIC_VERSION = "2026-07-31.1"   # ABC row-conservation counters + worker_version stamped into SYSTEM_METRICS (audit #96: the metrics row is worker OUTPUT, so its content changing is an output-value change)
 
 
 def _sha(*parts):
@@ -4684,6 +4684,19 @@ def run_calendar_update():
         # Orthogonal tag counters (overlap with the above)
         "unsourced_anchor": 0,      # Memory Anchor committee fallback applied
         "dropped_ephemeral": 0,     # Post-loop ephemeral filter drops (subset of unsourced_*)
+        # === ABC row-conservation terms (2026-07-31) ===
+        # Registered here so the keys ALWAYS exist: if a cycle dies before the balance block, they publish
+        # as 0 alongside rows_final=0, which reads as "nothing was written" — not as "all rows accounted
+        # for". A key that only appears on success would make its own absence look like health.
+        "dropped_placeholder_dup": 0,  # "No agenda listed." placeholder rows removed as duplicates
+        "dropped_key_dup": 0,          # (Date,Committee,Bill) dedup drops
+        "dropped_out_of_window": 0,    # rows outside the investigation viewport
+        "rows_final": 0,               # rows actually written to Sheet1
+        "balance_residual": 0,         # rows_in - rows_final - accounted drops; MUST be 0
+        # Stamped so a READER can tell "this sheet predates the counters" from "a current worker ran and
+        # failed to count". Without it, both look identical (a missing key) and the only safe reading is
+        # to fail — which would mean a guaranteed-red gate for the whole migration window.
+        "worker_version": WORKER_OUTPUT_LOGIC_VERSION,
         # PR-C1: write-time chokepoint telemetry (see _append_event below)
         "invariant_violations": 0,  # Rows that failed I1/I2/I3 at append time
         "meeting_unsourced": 0,     # Meeting-verb outcome with Origin in {journal_default, floor_miss}
@@ -7977,7 +7990,19 @@ def run_calendar_update():
             final_df.loc[journal_mask, 'Committee'] = '📋 Ledger Updates'
             print(f"📋 Collapsed {int(journal_mask.sum())} unsourced/admin rows into Ledger Updates blocks.")
 
+        # === ABC "Audit": count EVERY row this pipeline removes ==========================
+        # Until now the three reductions below (placeholder-dedup, key-dedup, viewport slice) removed
+        # rows with NO counter, so `rows_appended` (counted pre-filter) could never be reconciled against
+        # what reached the sheet. That missing arithmetic is exactly why the sentinel needed a magic
+        # `--min-rows 5000` floor: with no way to ASK "did every row arrive or get accounted for?", the
+        # only available question was "does it look big enough?" — a question whose answer depends on how
+        # busy the session is, and which is false-alarming right now on a complete 3,615-row special
+        # session. Counting each drop makes the conservation identity assertable and deletes the guess.
+        _rows_before_reductions = len(final_df)
+
+        _n = len(final_df)
         final_df = final_df[~((final_df['Bill'] == "No agenda listed.") & final_df.duplicated(subset=['Date', 'Committee', 'Time'], keep=False))]
+        source_miss_counts["dropped_placeholder_dup"] = _n - len(final_df)
         # Deterministic dedup: keep='last' must NOT depend on pandas' unstable sort.
         # A row-unique tiebreaker (_dedup_order = append order) totally orders the
         # rows, so the survivor of any (Date,Committee,Bill) group is fixed. Today
@@ -7987,7 +8012,9 @@ def run_calendar_update():
         final_df = final_df.reset_index(drop=True)
         final_df['_dedup_order'] = final_df.index  # 0..N-1 after reset_index — the append-order tiebreaker
         final_df = final_df.sort_values(by=['Date', 'Committee', 'Bill', 'Source', '_dedup_order'])
+        _n = len(final_df)
         final_df = final_df.drop_duplicates(subset=['Date', 'Committee', 'Bill'], keep='last')
+        source_miss_counts["dropped_key_dup"] = _n - len(final_df)
         final_df = final_df.drop(columns=['_dedup_order'])
         final_df = final_df.fillna("")
 
@@ -8006,7 +8033,56 @@ def run_calendar_update():
         system_origins = {'system_alert', 'system_metrics'}
         in_window = (final_df['Date'] >= scrape_start_str) & (final_df['Date'] <= scrape_end_str)
         is_system = final_df['Origin'].isin(system_origins)
+        _n = len(final_df)
         final_df = final_df[in_window | is_system]
+        source_miss_counts["dropped_out_of_window"] = _n - len(final_df)
+
+        # === ABC "Balance": the conservation identity that replaces the magic floor ==============
+        # Every row entering this stage must leave it accounted for — written, or removed by exactly
+        # one of the three counted reductions. This is provably true on day 1 of a session and on day
+        # 90, at ANY size, with NO constant to calibrate, and it is strictly STRONGER than the floor:
+        # a truncation that still left 6,000 rows passes `>= 5000` and fails this.
+        # Reported (not raised) so a counting bug can never suppress a cycle's output — the sentinel
+        # gates on it from SYSTEM_METRICS, where a non-zero residual is the alarm.
+        _reductions = (source_miss_counts["dropped_placeholder_dup"]
+                       + source_miss_counts["dropped_key_dup"]
+                       + source_miss_counts["dropped_out_of_window"])
+        source_miss_counts["rows_final"] = len(final_df)
+        source_miss_counts["balance_residual"] = _rows_before_reductions - len(final_df) - _reductions
+
+        # The SYSTEM_METRICS row was serialized ~150 lines ABOVE (it has to be — it is itself a row in
+        # final_df), so every key set in this block would publish as a stale 0. That is the exact trap the
+        # `unconfirmed` note in the source_miss_counts init warns about, and it would have made the whole
+        # identity unobservable while looking fine. Re-serialize the row IN PLACE now that the balance is
+        # known. Fail-open: a patch failure must never lose the cycle's output, but it must not pass
+        # silently either — an un-patched row would publish balance_residual=0, i.e. "all rows accounted
+        # for", which is precisely the false all-clear this guard exists to prevent.
+        try:
+            _mrow = final_df['Origin'] == 'system_metrics'
+            if _mrow.any():
+                final_df.loc[_mrow, 'Outcome'] = json.dumps(source_miss_counts, separators=(',', ':'))
+            else:
+                push_system_alert(
+                    "No SYSTEM_METRICS row present at balance time — the row-conservation counters "
+                    "were not published this cycle.",
+                    status="WARN", category="DATA_ANOMALY", severity="WARN",
+                    dedup_key="balance_metrics_row_missing")
+        except Exception as _bal_err:
+            push_system_alert(
+                f"Failed to publish row-conservation counters into SYSTEM_METRICS ({_bal_err}) — "
+                f"balance_residual will read as a stale 0 this cycle, which must NOT be read as "
+                f"'all rows accounted for'.",
+                status="WARN", category="DATA_ANOMALY", severity="WARN",
+                dedup_key="balance_metrics_patch_fail")
+
+        if source_miss_counts["balance_residual"] != 0:
+            push_system_alert(
+                f"Row conservation FAILED: {_rows_before_reductions} rows entered the final stage, "
+                f"{len(final_df)} were written, {_reductions} were accounted for as drops — "
+                f"{source_miss_counts['balance_residual']} row(s) unaccounted for. Rows vanished "
+                f"between the pipeline and the sheet.",
+                status="ALERT", category="DATA_ANOMALY", severity="CRITICAL",
+                dedup_key="balance_residual")
 
         # Persist the settled-agenda parse cache (speed audit). Independent of
         # final_df, so it runs even on an empty-output cycle. Fail-safe inside.
