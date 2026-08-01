@@ -64,7 +64,7 @@ export function BillCard({ bill, sessionCode, onClose }: { bill: Bill; sessionCo
         </header>
         <div className="body">
           <div style={{ marginBottom: 12, display: "flex", gap: 6, flexWrap: "wrap", alignItems: "center" }}>
-            <OutcomeChip outcome={bill.outcome} />
+            <OutcomeChip outcome={bill.outcome} bill={bill} />
             {/* neutral grey (owner 2026-07-13): a routine status milestone — the purple MEANS Senate
                 everywhere else, and one-meaning-per-color is the doctrine (was `chip senate`). */}
             {bill.crossedOver && <span className="chip crossed">crossed over</span>}

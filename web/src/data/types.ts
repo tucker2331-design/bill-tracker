@@ -82,6 +82,10 @@ export interface Completeness {
   outcome_unverified_absent?: number;
   checked_at_utc?: string;
   session_code?: string;   // authoritative 5-digit code if the backend stamps it (preferred over inference)
+  // LIS's OWN words for the session ("2026 Special Session I") from Session/api/GetSessionListAsync's
+  // DisplayName + SessionYear. Optional: absent on a pre-migration sheet, or "" when the lookup failed —
+  // both mean "show the raw code", never "invent a label from the code's last digit".
+  session_display?: string;
 }
 
 export interface BillData {

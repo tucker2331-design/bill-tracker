@@ -447,6 +447,30 @@ def build_bill_records(http_session, session_code):
         raise RuntimeError("bill universe came back empty — refusing to overwrite with nothing "
                            "(fail-safe: keep last-known-good).")
 
+    # 1a) Session DISPLAY NAME — FAIL-OPEN. A label is cosmetic; the bill data is not. If this lookup
+    # fails the sheet still writes and the front end falls back to showing the raw session code, which is
+    # honest. Never invent the label from the code's digits (see the completeness comment below).
+    session_display = ""
+    try:
+        _sresp = http_session.get("https://lis.virginia.gov/Session/api/GetSessionListAsync",
+                                  headers=HEADERS, timeout=30)
+        _sresp.raise_for_status()
+        _sdata = _sresp.json()
+        _slist = _sdata if isinstance(_sdata, list) else next(
+            (v for v in _sdata.values() if isinstance(v, list)), [])
+        for _s in _slist:
+            if str(_s.get("SessionCode", "")).strip() == blob_code:
+                _name, _year = str(_s.get("DisplayName", "")).strip(), _s.get("SessionYear")
+                if _name and _year:
+                    session_display = f"{_year} {_name}"
+                break
+        if not session_display:
+            print(f"⚠️ Session {blob_code} not found in GetSessionListAsync (or it carried no "
+                  f"DisplayName/SessionYear) — the header will show the raw code.")
+    except Exception as _sess_err:
+        print(f"⚠️ Session display-name lookup failed ({_sess_err}) — the header will show the raw code. "
+              f"Bill data is unaffected.")
+
     # 1b) LEGISLATION CLASS — one extra POST, all bills in a single page.
     #
     # WHY A SECOND CALL: the universe endpoint above carries `LegislationTypeCode` (R/B/J) which separates
@@ -661,6 +685,16 @@ def build_bill_records(http_session, session_code):
     # 5) COMPLETENESS (the top trust signal, free).
     history_bills = set(hist_by_bill)
     completeness = {
+        # Human-readable session, STRUCTURAL not inferred: `Session/api/GetSessionListAsync` carries
+        # `DisplayName` ("Regular Session" / "Special Session I") and `SessionYear`, so the label is LIS's
+        # own words. The tempting shortcut — read the last digit of "20262" and call anything != 1 a special
+        # session — is an inference about a code format nobody promised us (Standard #1/#3). Empty string
+        # when the lookup fails; the front end then shows the raw code rather than a guess.
+        "session_display": session_display,
+        # The AUTHORITATIVE session code. The front end previously had to infer it as `${year}1`, which is
+        # wrong for every special session — measured 2026-07-31: the live sheet holds session 20262 and the
+        # inference produced "20261", so bill links pointed at the wrong session entirely.
+        "session_code": blob_code,
         "universe_count": len(universe_bills),
         "records_written": len(records),
         "history_bills": len(history_bills),

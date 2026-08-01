@@ -9,8 +9,34 @@ const OUTCOME_LABEL: Record<Outcome, string> = {
   dead: "Dead", carried_over: "Carried over", in_progress: "In progress",
 };
 
-export function OutcomeChip({ outcome }: { outcome: Outcome }) {
-  return <span className={`chip ${outcome}`}>{OUTCOME_LABEL[outcome]}</span>;
+/**
+ * How far has a bill actually got? "In progress" covers everything from "filed yesterday" to "passed both
+ * chambers and waiting on enrollment", which is the complaint: a volunteer reads it as "nothing has
+ * happened" and misses that the bill is one step from law.
+ *
+ * STRUCTURAL, not text (Standard #3): `floorHouse`/`floorSenate` are validated enums the worker writes from
+ * LIS's own floor columns — this is set logic on two fields, never a scan of the status prose. Only
+ * `in_progress` is refined; a bill that is Signed or Dead has a terminal answer already, and appending
+ * "passed the House" to it would be noise.
+ */
+export function progressLabel(bill: Pick<Bill, "outcome" | "floorHouse" | "floorSenate">): string {
+  if (bill.outcome !== "in_progress") return OUTCOME_LABEL[bill.outcome];
+  const h = bill.floorHouse === "passed";
+  const s = bill.floorSenate === "passed";
+  if (h && s) return "Passed both chambers";
+  if (h) return "Passed the House";
+  if (s) return "Passed the Senate";
+  return OUTCOME_LABEL.in_progress;
+}
+
+/**
+ * `bill` refines the label with floor progress. Without it the chip falls back to the plain outcome word —
+ * which is what the Landing legend wants, since there it labels the OUTCOME CATEGORY itself, not one bill.
+ */
+export function OutcomeChip({ outcome, bill }: {
+  outcome: Outcome; bill?: Pick<Bill, "outcome" | "floorHouse" | "floorSenate">;
+}) {
+  return <span className={`chip ${outcome}`}>{bill ? progressLabel(bill) : OUTCOME_LABEL[outcome]}</span>;
 }
 
 export function ChamberChip({ chamber }: { chamber: Bill["chamber"] }) {
@@ -83,8 +109,8 @@ export function relativeTime(d: Date | null): { text: string; stale: boolean } {
   return { text: `${Math.round(hrs / 24)} days ago`, stale };
 }
 
-export function TrustHeader({ dataAsOf, calendarAsOf, completeness, shown }: {
-  dataAsOf: Date | null; calendarAsOf?: Date | null; completeness: Completeness | null; shown: number;
+export function TrustHeader({ dataAsOf, calendarAsOf, completeness }: {
+  dataAsOf: Date | null; calendarAsOf?: Date | null; completeness: Completeness | null;
 }) {
   const fresh = relativeTime(dataAsOf);
   const cal = calendarAsOf !== undefined ? relativeTime(calendarAsOf) : null;
@@ -93,6 +119,13 @@ export function TrustHeader({ dataAsOf, calendarAsOf, completeness, shown }: {
   const anomalies = completeness?.in_history_not_in_universe?.length ?? 0;
   // Completeness is the top trust signal: do we have every bill LIS has?
   const complete = universe != null && written != null && universe === written && anomalies === 0;
+  // Which session are these numbers about? ONLY from what the backend STAMPED — LIS's own DisplayName,
+  // else the authoritative code. Never the front end's inferred `${year}1`: measured 2026-07-31, that
+  // inference reads "20261" while the sheet holds session 20262, so printing it would label special-session
+  // data with the regular session's name. A missing label renders nothing, which is honest; a confidently
+  // wrong one is the failure this masthead exists to prevent.
+  const sessionLabel = (completeness?.session_display || "").trim()
+    || (completeness?.session_code ? `Session ${completeness.session_code}` : "");
   // Masthead of numbers (owner 2026-07-08): the two freshness clocks (bill backend 6h · calendar subsystem 3h
   // are separate workers, shown side by side) + the tracking count, organized with thin dividers — no dots,
   // no verdict text. Each value is dark ink; a STALE clock (or an incomplete count) turns its VALUE red — a
@@ -115,7 +148,9 @@ export function TrustHeader({ dataAsOf, calendarAsOf, completeness, shown }: {
           Tracking <b className={complete ? "" : "stale"}>{written?.toLocaleString()} / {universe.toLocaleString()}</b>
         </span>
       </>)}
-      <span className="tr-showing">Showing {shown.toLocaleString()}</span>
+      {sessionLabel && (
+        <span className="tr-showing" title={`Session ${completeness?.session_code ?? ""}`}>{sessionLabel}</span>
+      )}
     </div>
   );
 }

@@ -15,7 +15,7 @@ export function BillBox({ bill, onOpen }: { bill: Bill; onOpen: (b: Bill) => voi
       </div>
       <div className="meta">
         {bill.referrals > 1 && <span className="chip referral">{ordinal(bill.referrals)} ref</span>}
-        <OutcomeChip outcome={bill.outcome} />
+        <OutcomeChip outcome={bill.outcome} bill={bill} />
       </div>
     </div>
   );

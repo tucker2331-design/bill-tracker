@@ -1,6 +1,6 @@
 ---
 tags: [knowledge, lis, api]
-updated: 2026-06-03
+updated: 2026-07-31
 status: active
 ---
 
@@ -167,6 +167,13 @@ War-Room "voted on bills in this category" column.
 - `SessionEvents` contain: `EventName`, `ActualDate`, `ProjectedDate`.
 - Event types: "Session Start", "Adjournment", "Prefile Date", "Reconvene".
 - 2026 Regular Session: `SessionID=59`, `SessionCode="20261"`.
+- **`DisplayName` + `SessionType` were UNDOCUMENTED here until 2026-07-31** — the response also carries
+  `DisplayName` ("Regular Session" / "Special Session I"), `SessionType` ("Regular"/"Special"),
+  `SessionTypeID`, and `SessionYear`. **This is the authoritative human label for a session**, so the
+  front-end masthead shows `f"{SessionYear} {DisplayName}"` instead of inferring one.
+  **Do NOT derive the label from the code's last digit** ("20262" → special): that is an inference about a
+  format nobody promised, and LIS publishes the answer. Probed live 2026-07-31: `20261` → "Regular Session",
+  `20262` → "Special Session I" (`IsActive=True`).
 
 ### Committee API
 
