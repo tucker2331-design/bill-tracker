@@ -73,6 +73,40 @@ rests on measurement, not only on principle.
 district, the bill's own attributes, or its filing timing survived a clean test. See
 [[testing/calibration_ledger]] for all 47.
 
+## CORRECTION 2026-08-01 — I was too dismissive about committee rates
+
+**Owner: *"weren't you saying committee pass rates are widely different in the House? isn't that data worth
+knowing if one of our bills is in a low or high pass rate committee?"* He is right and I conflated two
+different things.**
+
+House committee rates in 2024 range **45% to 84%** — a 39-point spread:
+
+| House committee | 2023 | 2024 |
+|---|---|---|
+| Finance | 46% (n=85) | **45%** (n=96) |
+| Courts of Justice | 62% | 58% |
+| Public Safety | 48% | 60% |
+| Appropriations | 65% | 71% |
+| Education | 53% | 77% |
+| General Laws | 63% | **84%** |
+
+**That spread is real and a lobbyist should absolutely see it.** A bill in House Finance is in a very
+different place than one in General Laws.
+
+**Why it still scores badly as a PREDICTOR (+1.6% alone, House-only, drift-corrected):** the rates do not
+hold their positions well between sessions — **r = +0.44 (n=11)**. Almost every committee rose in 2024 with
+the chamber's overall rate, and the ordering only partly persisted. Finance stayed harsh; Transportation
+went 52% → 76% and General Laws 63% → 84%.
+
+**So both are true, and I stated only one:**
+- **As a FACT about last session** — "House Finance reported 43 of 96" — it is accurate, useful, and
+  belongs on the panel.
+- **As a GUIDE to this session** — it is shaky, because a committee's rate moves a lot year to year.
+
+**"Weak predictor" is not "not worth showing."** A lobbyist asking *"is this committee a graveyard?"* is
+asking a descriptive question about the venue, not asking us to forecast their bill. Ship the number with
+its denominator and its session label; do not imply it carries forward.
+
 ## The honest caveats
 - **Two sessions.** The gap replicated across one flip; that is encouraging, not conclusive.
 - **"Got out of committee" is derived** from `Last_*_actid` ending in `94` ("Left in <committee>"), verified

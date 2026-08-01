@@ -34,6 +34,11 @@ status: active
 
 ## NEXT (needs owner infra / a decision — then I execute)
 
+- **⚠️ LIS ToS §2: "personal and non-commercial use only"** ([[knowledge/lis_tos_commercial_use]], owner
+  supplied the text 2026-08-01). We disqualified LegiScan for this exact clause. §6 contemplates paid
+  access, so a commercial arrangement likely exists — **one question to DLAS settles it.** Pre-revenue
+  blocker, not a stop-work order.
+
 - **VA build queue** — [[state/va_build_queue]]. **2026-07-27: all 3 gating probes RESOLVED, M1 drawn, and E1/E2/E3/E5 built.** What remains needs the owner:
   - **F2 write path** (Cloudflare Worker + D1 + Access) and **F3 accounts** (Google OAuth) need infra only you can provision. Everything org-asserted — positions, notes, contacts — is blocked on F2.
   - **F1 routing** — `web/` has no router; 6 routes needed. Pure code, but large enough to deserve its own focused session/PR.

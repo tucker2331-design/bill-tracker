@@ -84,6 +84,7 @@ Links use Obsidian `[[wikilink]]` format. Obsidian resolves by filename; path-qu
 
 ## Domain Knowledge
 - [[knowledge/history_refid_namespace]] — refid = typed namespace (vote-join, batch-notice law); VOTE/BILLS.CSV; SPA-shell false-200s
+- [[knowledge/lis_tos_commercial_use]] — **⚠️ ToS §2 restricts the API to PERSONAL AND NON-COMMERCIAL use. We rejected LegiScan for the same clause. Needs a DLAS answer before revenue. Owner decision.**
 - [[knowledge/lis_api_authorization]] — **RULE: LIS API authorized for 2025/2026 ONLY; pre-2025 via legacylis CSV**
 - [[testing/calibration_corrections]] — **the audit trail: 4 method bugs found and fixed, incl. the null model crediting base-rate drift as skill. Read before quoting any calibration number.**
 - [[testing/calibration_ledger]] — **EVERY stat tested + verdict. GREP THIS BEFORE PROPOSING A STAT — 37 tested, 7 usable, 4 disqualified as invalid measurements.**
