@@ -1,6 +1,6 @@
 ---
 tags: [state, live]
-updated: 2026-07-15
+updated: 2026-07-31
 status: active
 ---
 
@@ -54,6 +54,7 @@ status: active
 - Also open (owner-triggered): `/code-review ultra`; co-patrons backfill (scoped, deferred — [[ideas/copatrons_backfill]]).
 
 ## RECENTLY LANDED (newest first; full detail in [[log]])
+- **2026-07-31 — pre-calibration block cleared.** FLOOR magic number replaced by an ABC **conservation identity** (`rows_in == written + placeholder_dup + key_dup + out_of_window`) — it was false-alarming on a COMPLETE 3,615-row special session; three pipeline reductions were previously uncounted, which is why no identity was possible. **Archive is now a self-extending CHAIN** (`capacity.py` + `registry.py`, 53 tests, jurisdiction-keyed): measured 8 sessions/workbook ≈ 4 years, worker refuses rather than failing mid-copy. Masthead shows the **session** (LIS `DisplayName`, newly documented) instead of "Showing N"; floor progress reads **"Passed the House"**. Audits [[failures/assumptions_audit|#107]] (substituted spec) and **#108** (inferred session code, wrong for every special session).
 - **2026-07-13 — BUILD WAVE executed ([[audits/build_wave_2026-07/README]]): endpoint-parity audit (#220/#221), docket-drop histogram (#222), Change-Ledger differ + 26 goldens (#223/#224), incident-counter mechanism + 9 goldens (#225), war-room memo. Worker untouched.** Gated remainder now tracked in NEXT: Change-Ledger live feed + Changes tab → 2027-in-season; incident-counter wiring → owner decisions.
 - **2026-07-13 — #219 MERGED: the card bundle LIVE + the Opus build-wave spec banked.** Next-meeting row (Option 2) verified on prod (HB463 · Cohen → "Tue, Jul 21 · 10:00 AM · in 7 days" + real agenda/livestream links); dashed unplaceable (amber = one meaning now); grey crossover chip; patron on list cards; two-step untrack (+ multi-star capture fix). Execution queue for the next sessions: [[audits/build_wave_2026-07/README]].
 - **2026-07-12 — #217 MERGED (VA queue emptied): label-based agenda-FETCH target.** The bill-extraction FETCH stopped mining livestream/registration pages — `_agenda_fetch_target` selects by label (real agenda → committee homepage → nothing). Live before/after: 82 retargeted to the real agenda PDF, 15 registration/notice pages dropped, 0 real agendas lost. `WORKER_OUTPUT_LOGIC_VERSION`→`2026-07-12.3`; closes [[state/open_anti_patterns]] #13. Also #216 (scroll affordance) merged + the owner's Drive reorganized (production sheet renamed off "Test Mastermind").
