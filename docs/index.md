@@ -84,6 +84,7 @@ Links use Obsidian `[[wikilink]]` format. Obsidian resolves by filename; path-qu
 
 ## Domain Knowledge
 - [[knowledge/history_refid_namespace]] — refid = typed namespace (vote-join, batch-notice law); VOTE/BILLS.CSV; SPA-shell false-200s
+- [[legal/open_data_law_landscape]] — **open-data law: no general doctrine, VA's 2018 Open Data Act died 22-0 and excluded the legislature by design, other states ahead. Groundwork if a bill is ever drafted.**
 - [[knowledge/lis_tos_legal_analysis]] — **the doctrines around the LIS terms: Georgia v. PRO (no copyright in legislative works), Feist, contract-not-copyright, contra proferentem, and the VA FOIA commercial-use right. Not legal advice; written to sharpen the DLAS question.**
 - [[knowledge/lis_tos_commercial_use]] — **⚠️ ToS §2 restricts the API to PERSONAL AND NON-COMMERCIAL use. We rejected LegiScan for the same clause. Needs a DLAS answer before revenue. Owner decision.**
 - [[knowledge/lis_api_authorization]] — **RULE: LIS API authorized for 2025/2026 ONLY; pre-2025 via legacylis CSV**
