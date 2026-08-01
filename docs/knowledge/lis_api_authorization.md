@@ -1,6 +1,6 @@
 ---
 tags: [knowledge, api, compliance, lis, rule]
-updated: 2026-07-05
+updated: 2026-08-01
 status: active
 ---
 
@@ -50,12 +50,37 @@ without a human). A-1 fixes this **zero-touch and ban-safe** (PR #201, [[audits/
   all operate on the **active session only** (currently `20261`); the session code is derived
   at runtime from `Session/api/GetSessionListAsync` and never hardcoded to an old session.
 - **One past violation, now remediated:** `tools/edge_case_replay/schedule_replay.py` (the
-  Phase-C multi-session replay) had queried the new Schedule API for seven **pre-2025**
+  Phase-C multi-session replay) had queried the new Schedule API for **eight** **pre-2025**
   sessions (`20242, 20241, 20231, 20221, 20212, 20211, 20202, 20201`). It was a one-time,
   read-only, internal edge-case test — nothing redistributed, nothing in the pipeline — but
   it was outside this authorization. **Fixed 2026-06-09:** the tool is now pinned to
   `LIS_API_AUTHORIZED_SESSIONS = {"20261","20251"}` with a runtime `assert`, so it cannot
   re-violate; pre-2025 format-variety testing must repoint to `legacylis.virginia.gov` CSVs.
+
+## Discovery + contact record (added 2026-08-01, so this is never re-litigated from memory)
+
+- **The 2026-06-09 violation was SELF-DISCOVERED** in our own compliance audit. **There is no record of any
+  notice, warning, or contact from LIS or DLAS** — not before, not since. Checked 2026-08-01.
+- **Why it happened, kept because the cause is the reusable part:** the API does not enforce this. A valid
+  key will happily serve 2020 data. The boundary is terms-of-use, not technical, so nothing fails loudly —
+  the discipline has to be ours, which is exactly why the runtime `assert` now exists.
+
+### Endpoint-scope note — `GetSessionListAsync` returns the full catalog and cannot be scoped
+
+`Session/api/GetSessionListAsync` takes **no session parameter**. It returns every session (59 of them,
+back to 1994) on every call. The production workers must call it to derive the active session, so calling
+it is the documented compliant design and is unavoidable.
+
+**Consequence to be honest about:** any caller receives the pre-2025 catalog whether or not they want it.
+Reading session *metadata* from that response (which sessions exist, their names and years) is not the
+same as extracting pre-2025 legislative *data* — bills, votes, history, members — which is what the
+authorization governs and which we do not do. Recorded here so a future session does not mistake the
+unavoidable catalog read for a breach, and equally does not use it as cover for a real one.
+
+**Done 2026-08-01 in this project:** `GetSessionListAsync` (no param, used for the 2026 session
+DisplayName), `GetLegislationEventTypeReferencesAsync?sessionCode=20261`, and blob reads under
+`lisfiles/20261/`. All authorized. Pre-2025 came exclusively from
+[[knowledge/legacylis_csv_route]], the channel the Developers Portal names.
 
 ## When onboarding state #2 (50-state scaling)
 Every state will have its own data-use terms. Before pulling any state's data, capture its
