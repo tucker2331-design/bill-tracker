@@ -429,7 +429,68 @@
    "verdict_out_of_committee": "HARMFUL",
    "verdict_passed": "HARMFUL",
    "note": "Corrected form of `patron_floor_win_rate`. prior-session votes. -5.6%/-2.8% = HARMFUL. Settled."
+  },
+  "dls_tag": {
+   "round": 3,
+   "survived": 0.7,
+   "passed": 1.8,
+   "note": "ADHD round. ADHD/lobbyist frame's strongest tell \u2014 the DLS drafting clause after the final semicolon ('; penalty', '; report'). 13 buckets, real variation, no signal.",
+   "verdict": "NOISE",
+   "verdict_out_of_committee": "NOISE",
+   "verdict_passed": "NOISE"
+  },
+  "same_day_batch": {
+   "round": 3,
+   "survived": 1.0,
+   "passed": 0.1,
+   "note": "ADHD round. How many bills the patron filed the same day.",
+   "verdict": "NOISE",
+   "verdict_out_of_committee": "NOISE",
+   "verdict_passed": "NOISE"
+  },
+  "names_locality": {
+   "round": 3,
+   "survived": 0.1,
+   "passed": 0.4,
+   "note": "ADHD round. Catchline names a County/City/Town (a 'courtesy bill'). Only 34 of 2,284, so thin either way.",
+   "verdict": "NOISE",
+   "verdict_out_of_committee": "NOISE",
+   "verdict_passed": "NOISE"
+  },
+  "patron_absence": {
+   "round": 3,
+   "survived": -0.9,
+   "passed": -0.2,
+   "note": "ADHD round. Share of X/A (not voting / abstain) responses. Proposed INDEPENDENTLY by three frames; dead.",
+   "verdict": "NOISE",
+   "verdict_out_of_committee": "NOISE",
+   "verdict_passed": "NOISE"
+  },
+  "filing_recency_band": {
+   "round": 3,
+   "survived": 0.3,
+   "passed": -0.0,
+   "note": "ADHD round. When in the filing window the bill was introduced, as a percentile of HB/SB only. Raw rates 81/82/73/77% \u2014 real variation, non-monotonic, no usable signal.",
+   "verdict": "NOISE",
+   "verdict_out_of_committee": "NOISE",
+   "verdict_passed": "NOISE"
+  },
+  "catchline_segments": {
+   "round": 3,
+   "survived": -0.1,
+   "passed": 0.0,
+   "note": "ADHD round. Semicolon count in the catchline. NO VARIATION: 2,274 of 2,284 have exactly 2 segments, so the 'omnibus catchline' tell does not exist in VA data.",
+   "verdict": "NOISE",
+   "verdict_out_of_committee": "NOISE",
+   "verdict_passed": "NOISE"
   }
  },
- "how_to_read": "Scores are per OUTCOME and do not transfer between them. 'survived' = got out of committee. 'passed' = passed its chamber of origin. Before proposing any stat, grep this file: if it is here, it has been tested and the result stands unless the METHOD changes (new sessions, a fixed definition, or a corrected leak)."
+ "how_to_read": "Scores are per OUTCOME and do not transfer between them. 'survived' = got out of committee. 'passed' = passed its chamber of origin. Before proposing any stat, grep this file: if it is here, it has been tested and the result stands unless the METHOD changes (new sessions, a fixed definition, or a corrected leak).",
+ "blocked_not_tested": {
+  "section_citations": "Needs the count of Code of Virginia sections a bill touches. The CATCHLINE contains no \u00a7 symbols (0 of 2,284) and full bill text is not published in bulk. NOT TESTED \u2014 do not record as dead.",
+  "draft_lead_time": "Needs the gap between drafting and filing. Full_text_date1 IS the introduction date by construction in every row, so this dataset contains no drafting timeline at all. NOT TESTED.",
+  "prior_session_recurrence": "Needs a prior session for the TRAINING year too. With only 2023+2024 usable (2022 is partial), the training year has no prior and the feature is constant in training. Needs a THIRD complete session. NOT TESTED.",
+  "fiscal_note_footprint": "Needs History_description parsing for impact-statement rows; deferred, and would need a structural source before shipping.",
+  "cross_chamber_companion": "Needs text similarity across chambers; the similarity tooling exists (W2/W3/W4) but catchline-only matching is weak. Deferred."
+ }
 }
