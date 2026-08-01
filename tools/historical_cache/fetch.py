@@ -70,7 +70,12 @@ SESSIONS = {
 # Summaries.csv (~3 MB/session of bill text) is NOT cached: no calibration question needs it, and it is
 # the single largest file. Add it deliberately if the text-similarity work ever wants historical depth.
 FILES = ["Bills.csv", "History.csv", "Vote.csv", "Members.csv",
-         "Committees.csv", "CommitteeMembers.csv", "Sponsors.csv"]
+         "Committees.csv", "CommitteeMembers.csv", "Sponsors.csv",
+         # SUBJECT LINKAGE — legacy-only. Measured 2026-08-01: CIBILLSUBJECTS.CSV 404s on the modern blob
+         # (both cases), so the vault's "no subject blob exists" is correct for the CURRENT session but
+         # wrong for history. These two files are the only bill->subject source we have anywhere, which
+         # makes caching them the difference between a subject analysis being possible and impossible.
+         "CiBillSubjects.csv", "CiParentChildSubjects.csv"]
 
 POLITE_DELAY_S = 0.5
 
@@ -109,12 +114,16 @@ def read_cached(code: str, name: str) -> str:
 
 def fetch() -> int:
     man = load_manifest()
-    got = skipped = failed = 0
+    got = skipped = failed = absent = 0
     for code in SESSIONS:
         os.makedirs(os.path.join(CACHE_DIR, code), exist_ok=True)
         for name in FILES:
             key = f"{code}/{name}"
-            if os.path.exists(_local(code, name)) and key in man["files"]:
+            rec = man["files"].get(key)
+            if rec and rec.get("absent"):
+                skipped += 1
+                continue
+            if os.path.exists(_local(code, name)) and rec:
                 skipped += 1
                 continue
             url = f"{BASE}/{code}/{name}"
@@ -122,7 +131,23 @@ def fetch() -> int:
                 with urllib.request.urlopen(urllib.request.Request(url, headers=UA), timeout=120) as r:
                     raw = r.read()
                     last_mod = r.headers.get("Last-Modified", "")
-            except (urllib.error.HTTPError, urllib.error.URLError, TimeoutError) as exc:
+            except urllib.error.HTTPError as exc:
+                if exc.code == 404:
+                    # A file the publisher simply does not produce for this session is NOT a failure —
+                    # 242 (a special session) has no subject files. Recorded as absent so re-runs neither
+                    # retry it nor report a permanent error. Distinguishing "not published" from "fetch
+                    # broke" matters: conflating them makes the tool cry wolf until nobody reads its exit
+                    # code, and THAT is how a real fetch failure gets ignored.
+                    man["files"][key] = {"url": url, "absent": True, "http": 404,
+                                         "checked_utc": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())}
+                    print(f"  --   {key}: not published for this session (404)")
+                    absent += 1
+                    time.sleep(POLITE_DELAY_S)
+                    continue
+                print(f"  FAIL {key}: {exc}")
+                failed += 1
+                continue
+            except (urllib.error.URLError, TimeoutError) as exc:
                 # Counted and named, never a silent skip (Standard #4).
                 print(f"  FAIL {key}: {exc}")
                 failed += 1
@@ -139,7 +164,7 @@ def fetch() -> int:
             time.sleep(POLITE_DELAY_S)
     man["sessions"] = SESSIONS
     save_manifest(man)
-    print(f"\nfetched {got}, already cached {skipped}, failed {failed}")
+    print(f"\nfetched {got}, already cached {skipped}, not published {absent}, failed {failed}")
     return 1 if failed else 0
 
 
@@ -150,6 +175,8 @@ def verify(check_remote: bool = False) -> int:
         return 1
     bad = 0
     for key, rec in sorted(man["files"].items()):
+        if rec.get("absent"):
+            continue          # nothing to hash; its absence is a recorded fact, not a cached file
         code, name = key.split("/", 1)
         try:
             raw = read_cached(code, name).encode("utf-8", "replace")
@@ -182,7 +209,8 @@ def verify(check_remote: bool = False) -> int:
             except Exception as exc:
                 print(f"  remote check unavailable for {key}: {exc}")
             time.sleep(POLITE_DELAY_S)
-    print(f"\n{len(man['files']) - bad} of {len(man['files'])} files verified"
+    checked = sum(1 for r in man["files"].values() if not r.get("absent"))
+    print(f"\n{checked - bad} of {checked} files verified"
           f"{' (incl. remote size check)' if check_remote else ''}")
     return 1 if bad else 0
 

@@ -1,10 +1,24 @@
 ---
 tags: [ideas, va, patrons, lis, deferred, plan]
 updated: 2026-07-04
-status: planned
+status: superseded
 ---
 
-# Co-patrons — sourcing confirmed non-trivial; scoped plan (deferred)
+# Co-patrons — SUPERSEDED 2026-08-01: it is one bulk CSV
+
+> **STOP. Do not execute the plan below.** `Sponsors.csv` is a bulk blob
+> (`lisfiles/20261/Sponsors.csv`, 1.05 MB, HTTP 200) carrying `MEMBER_NAME, MEMBER_ID, BILL_NUMBER,
+> PATRON_TYPE` — 18,221 rows across 3,595 bills, with a structural coded `PATRON_TYPE` vocabulary
+> (`1001 - Chief Patron` appears exactly 3,595 times, 1:1 with the bills). **No endpoint discovery, no
+> ~148 calls, no cadence decision.**
+>
+> **Why it was missed:** the blob is case-inconsistent (`BILLS.CSV` works, `Bills.csv` 404s;
+> `Sponsors.csv` works, `SPONSORS.CSV` 404s), and we only ever knew of 4 files where the publisher lists
+> 17. See [[knowledge/legacylis_csv_route]].
+>
+> The Phase-0 / guardrail analysis below is retained only as a record of what was believed.
+
+
 
 The last VA product data item. **Chief patron is DONE** (full name, free from the universe payload —
 PR #195). Co-patrons are a genuine bounded-backfill FEATURE, not a quick add. This page records exactly

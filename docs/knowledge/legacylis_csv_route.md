@@ -85,3 +85,66 @@ were already the fallback and neither is now urgent.
    modern one, so a future sweep cannot silently widen it.
 4. **Cache locally.** These files are static — a session that ended in 2024 will not change — so fetch once
    and keep. Re-downloading on every backtest run is load DLAS should not have to absorb.
+
+---
+
+## The bigger finding: we were using 4 of the publisher's 17 files
+
+Enumerating the legacy page's full file list against the **modern** blob (authorized session `20261` only)
+found **9 bulk files we have never used**. Measured 2026-08-01:
+
+| file | bytes (20261) | what it unblocks |
+|---|---|---|
+| **`Sponsors.csv`** | 1,054,196 | **CO-PATRONS — see below** |
+| `Summaries.csv` | 4,253,875 | bill summaries in bulk |
+| `VoteStatements.csv` | 372,074 | recorded vote explanations |
+| `Amendments.csv` | 59,804 | amendment records |
+| `SubCommitteeMembers.csv` | 13,963 | subcommittee rosters |
+| `SUBDOCKET.CSV` | 12,595 | subcommittee dockets |
+| `Members.csv` | 6,705 | member roster (bulk) |
+| `CommitteeMembers.csv` | 6,520 | committee rosters (bulk) |
+| `Committees.csv` | 1,858 | committee list (bulk) |
+
+**The blob is CASE-INCONSISTENT and that is why these were missed.** `BILLS.CSV` works and `Bills.csv`
+404s; `Sponsors.csv` works and `SPONSORS.CSV` 404s. There is no single casing rule — each filename must be
+tried as the publisher writes it. Anyone probing with one convention concludes the file does not exist.
+
+**Genuinely absent from the modern blob** (both casings): `CIBILLSUBJECTS`, `CIPARENTCHILDSUBJECTS`,
+`FISCALIMPACTSTATEMENTS`, `SECTION`.
+
+### `Sponsors.csv` closes E6 (co-patrons)
+
+[[ideas/copatrons_backfill]] scoped co-patrons as blocked on DOM-discovering a `LegislationByMember`
+endpoint, then ~148 throttled calls per backfill, with a cadence decision needed before shipping.
+**It is one bulk CSV we already had access to.**
+
+Schema: `MEMBER_NAME, MEMBER_ID, BILL_NUMBER, PATRON_TYPE`. Measured on `241`: **18,221 rows across 3,595
+bills**, and `PATRON_TYPE` is a **structural coded vocabulary**, not prose:
+
+```
+1001 - Chief Patron            3,595   (exactly one per bill — 1:1 with the bill count, which validates the file)
+1999 - Co-Patron              10,694
+2999 - Co-Patron               2,901
+1041 - Chief Co-Patron           766
+2041 - Chief Co-Patron           143
+1051 - Incorporated Chief Co-Patron  28
+…plus 1042/1043/1044/1002/1003/2099/1004/1005
+```
+
+Patrons per bill: 1,805 bills have one, 614 have two, 273 have three; the maximum is **HJ0302 with 140**.
+
+**This also answers the owner's question about legislators backing a bill without being a co-patron**
+(2026-07-31: *"isn't there a way for legislators to show support for a bill without being a co patron? like
+it's like being a signature"*). The answer is in the vocabulary: VA distinguishes **Chief Patron**, **Chief
+Co-Patron**, **Co-Patron**, and **Incorporated Chief Co-Patron**. The M6 patron dropdown should render
+whatever roles the data carries rather than a hardcoded two-way split — that ports to 50 states unchanged.
+
+**Verify before building:** `Sponsors.csv` was confirmed present on `20261` by HEAD. Its schema was read
+from the cached `241` copy. Confirm the modern file's header matches before wiring it into `bill_tracker`.
+
+### Subject linkage exists ONLY in history
+
+`CiBillSubjects.csv` is **404 on the modern blob but present on legacy** (`231` 314,409 bytes; `241`
+361,270). So [[knowledge/lis_api_reference]]'s "no subject blob exists" is **correct for the current
+session and wrong for history**. Both subject files are now cached for `231`/`241`; `242` does not publish
+them. A historical subject analysis is possible; a live one still needs the per-bill endpoint.

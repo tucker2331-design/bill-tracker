@@ -7,6 +7,20 @@
    "sha256": "6d355294efb1ee2e92fb817a67794d8a8af46e3b3855f5ed32b75e4d083cdb3e",
    "url": "https://legacylis.virginia.gov/SiteInformation/csv/231/Bills.csv"
   },
+  "231/CiBillSubjects.csv": {
+   "bytes": 314409,
+   "fetched_utc": "2026-08-01T16:49:11Z",
+   "last_modified": "Mon, 04 Dec 2023 23:50:46 GMT",
+   "sha256": "55be49db4c3511565f446c1b3a90941bac4a4248d5fc2c17237cca0ced76c70c",
+   "url": "https://legacylis.virginia.gov/SiteInformation/csv/231/CiBillSubjects.csv"
+  },
+  "231/CiParentChildSubjects.csv": {
+   "bytes": 26614,
+   "fetched_utc": "2026-08-01T16:49:12Z",
+   "last_modified": "Mon, 04 Dec 2023 23:50:46 GMT",
+   "sha256": "d33c8c8a1830180c1ae9b36f5d0794590b1066e3ec7f7ca01729474d5975c6ec",
+   "url": "https://legacylis.virginia.gov/SiteInformation/csv/231/CiParentChildSubjects.csv"
+  },
   "231/CommitteeMembers.csv": {
    "bytes": 6790,
    "fetched_utc": "2026-08-01T06:13:34Z",
@@ -56,6 +70,20 @@
    "sha256": "ca0d173d272676d114e242dfe6e4dafd0159ac67db2b123b36d4f9b5b06fd624",
    "url": "https://legacylis.virginia.gov/SiteInformation/csv/241/Bills.csv"
   },
+  "241/CiBillSubjects.csv": {
+   "bytes": 361270,
+   "fetched_utc": "2026-08-01T16:49:14Z",
+   "last_modified": "Fri, 20 Sep 2024 21:07:58 GMT",
+   "sha256": "5158fb7842249ba747e22db5533853f71a983850ca3d8435528899a9972b5322",
+   "url": "https://legacylis.virginia.gov/SiteInformation/csv/241/CiBillSubjects.csv"
+  },
+  "241/CiParentChildSubjects.csv": {
+   "bytes": 26614,
+   "fetched_utc": "2026-08-01T16:49:15Z",
+   "last_modified": "Fri, 20 Sep 2024 21:07:58 GMT",
+   "sha256": "d33c8c8a1830180c1ae9b36f5d0794590b1066e3ec7f7ca01729474d5975c6ec",
+   "url": "https://legacylis.virginia.gov/SiteInformation/csv/241/CiParentChildSubjects.csv"
+  },
   "241/CommitteeMembers.csv": {
    "bytes": 7060,
    "fetched_utc": "2026-08-01T06:13:47Z",
@@ -104,6 +132,18 @@
    "last_modified": "Mon, 23 Sep 2024 00:47:03 GMT",
    "sha256": "e53c6b65f4706eb667c5f10f64b84187b9a459ca4dd1bbdd5156827aed417f5a",
    "url": "https://legacylis.virginia.gov/SiteInformation/csv/242/Bills.csv"
+  },
+  "242/CiBillSubjects.csv": {
+   "absent": true,
+   "checked_utc": "2026-08-01T17:06:35Z",
+   "http": 404,
+   "url": "https://legacylis.virginia.gov/SiteInformation/csv/242/CiBillSubjects.csv"
+  },
+  "242/CiParentChildSubjects.csv": {
+   "absent": true,
+   "checked_utc": "2026-08-01T17:06:36Z",
+   "http": 404,
+   "url": "https://legacylis.virginia.gov/SiteInformation/csv/242/CiParentChildSubjects.csv"
   },
   "242/CommitteeMembers.csv": {
    "bytes": 7060,
