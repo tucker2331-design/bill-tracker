@@ -72,10 +72,14 @@ Our internal records from June 2026 quoted this as "2025 and 2026 session data o
 
 **We could not independently retrieve the Terms of Service page.** The LIS site is a JavaScript application and the terms link does not resolve to a fetchable URL. **The clause text in §2 above is as supplied by the author from the terms presented at API registration.** Anyone relying on this memo should confirm the current text directly. Note that §1 permits DLAS to change the terms at any time.
 
+**A material fact bearing on all of this, verified 1 August 2026:** several classes of public record appear to be published **only** through the API. We probed both bulk-download hosts for any CSV equivalent of the API's `Schedule` and `Calendar` services — committee meeting times, floor calendars, chamber minutes, full bill text — and found none. Comparing the portal's 30+ API services against the 17 published CSV files, at least eight record classes have no bulk equivalent.
+
+This weakens the characterisation of the API as a mere convenience layered over otherwise-public files, and it is the point most worth putting to DLAS. It also means our §9 continuity hedge does not cover meeting-schedule data, which the calendar feature depends on.
+
 **Three questions we are not qualified to answer:**
 
 1. **What "non-commercial" means here.** The term is not defined in the agreement. A narrow reading (do not resell the data) and a broad reading (no revenue-adjacent use at all) are both available on the text.
-2. **Whether the restriction reaches the bulk CSV downloads.** Virginia also publishes the same records as static CSV files requiring no key, no registration, and no acceptance of terms. Whether those fall within "the Services" is a real question. **We are not treating them as exempt.**
+2. **Whether the restriction reaches the bulk CSV downloads.** Virginia also publishes many of the same records as static CSV files requiring no key, no registration, and no acceptance of terms. Whether those fall within "the Services" is a real question. **We are not treating them as exempt.**
 3. **Whether a terms-of-service clause can narrow a statutory FOIA right.** FOIA grants a right to records; the terms govern a service. They are not formally in conflict, but the interaction is not something we should resolve internally.
 
 ---
@@ -109,7 +113,13 @@ This is a business-continuity risk rather than a legal one, and it exists whethe
 | **C** | Do both — ask DLAS first, brief counsel with their answer | Both | A now, B on their reply |
 | **D** | Do nothing until we decide to charge | None | Deferred |
 
-**On Option A:** because §6 already contemplates paid access, the productive question is not *"may we use this commercially"* — FOIA already permits commercial use of the records — but *"what is the correct channel and licence for a commercial user."* That is a question a help desk can answer. Contact: helpdesk@dlas.virginia.gov, (804) 786-9631.
+**On Option A:** because §6 already contemplates paid access, the productive question is not *"may we use this commercially"* — FOIA already permits commercial use of the records — but *"what is the correct channel and licence for a commercial user."*
+
+Given the finding in §5, the enquiry is strongest phrased factually:
+
+> "Several record classes — committee schedules, floor calendars, bill text — appear to be published only through the API. If the API terms restrict use to personal and non-commercial purposes, what is the intended channel for a commercial user to obtain those records?"
+
+That is answerable without requiring DLAS to concede anything. Contact: helpdesk@dlas.virginia.gov, (804) 786-9631.
 
 ---
 

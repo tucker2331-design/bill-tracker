@@ -128,6 +128,64 @@ Points of comparison worth noting:
 **The honest read: gatekeeping a public record behind a non-commercial term is legally *permissible*
 (contract, not copyright) and normatively awkward — and Virginia is neither the worst nor the best.**
 
+## 6b. The exclusivity point — the strongest version of the argument (added 2026-08-01)
+
+**Owner's question:** if the API carries fresher and better-formatted data than the CSVs, can DLAS still
+call it a mere "convenience" and say the public record lives in the CSVs?
+
+**First, the formatting half of the question: legally irrelevant, both ways.** Nice formatting is not
+protected — a chronological action list has almost no original "selection or arrangement" under *Feist*,
+and under *Georgia v. PRO* legislative work carries no copyright regardless. **But formatting is also not
+what the restriction rests on.** The ToS is a contract about a service, not a claim of ownership, so
+whether the output is tidy changes nothing. Set it aside.
+
+**The freshness half is real but is the weaker argument.** MEASURED from LIS's own documentation: the bulk
+CSVs are *"updated once an hour during Session"*, and `History.csv` *"once a day, overnight."* The API is
+continuous. So the CSV channel lags. A DLAS lawyer answers this easily: **FOIA is a request-and-response
+regime with a 5-working-day window (Va. Code § 2.2-3704), not an obligation to operate a real-time feed.**
+Latency alone does not establish denial of a record.
+
+**The EXCLUSIVITY point is the strong one, and it is a fact, not a theory.**
+
+**VERIFIED 2026-08-01: several whole classes of public record are published ONLY through the gated API.**
+Probed both bulk hosts for any CSV equivalent of the API's `Schedule` / `Calendar` services —
+`Schedule.csv`, `Calendar.csv`, `Meetings.csv`, `MinutesBook.csv`, `Statistics.csv`, in both casings, on
+`lis.blob.core.windows.net` and `legacylis.virginia.gov`. **All 404.**
+
+Comparing the portal's 30+ API services against the 17 published CSVs, these record classes have **no bulk
+equivalent at all**: `Schedule` (committee meeting times and locations), `Calendar` (floor calendars),
+`MinutesBook`, `LegislationText` (full bill text — `Summaries.csv` is not the text), `LegislationVersion`,
+`LegislationEvent`, `MemberVoteSearch`, `Statistics`.
+
+**This matters to us concretely: the entire calendar product depends on `Schedule`, and there is no CSV
+fallback for it.** The §9 termination hedge does not cover this data class.
+
+**So the sharpened argument is not about speed or polish, it is about availability:**
+
+> Virginia FOIA says purpose is irrelevant to entitlement and commercial use is permitted
+> (§ 2.2-3704.A; *Associated Tax Service v. Fitzpatrick*). Meeting schedules are public records. They are
+> published in exactly one place — an API whose terms exclude commercial use. A commercial user therefore
+> has no route to that record class except individual FOIA requests, on a 5-working-day clock, for a
+> calendar that changes daily. That is not a workable channel for that record.
+
+**The honest counterarguments, which a DLAS lawyer would raise and which we should not pretend away:**
+
+1. **FOIA obliges disclosure, not delivery mechanisms.** No court has held that FOIA requires an agency to
+   run an API, and a slow channel is not a closed one.
+2. **The ToS restricts use of the SERVICE, not of the records.** On that reading nothing stops a commercial
+   user from FOIA-ing the same schedules; the terms simply do not grant the convenient route.
+3. **We have not found a case holding that differential channel quality by purpose violates FOIA.** The
+   argument is principled and untested, not settled.
+
+**Which is exactly why this belongs in a question to DLAS rather than an assertion.** The productive form:
+
+> *"Several record classes — committee schedules, floor calendars, bill text — appear to be published only
+> through the API. If the API terms exclude commercial use, what is the intended channel for a commercial
+> user to obtain those records?"*
+
+That is answerable, factual, and does not require them to concede anything. **An agency asked that question
+usually has an answer, because the alternative reading is one they would rather not defend.**
+
 ## 7. What a lawyer would actually tell you to do
 
 1. **Do not rely on any of the above as a defence.** Arguable is not safe.
