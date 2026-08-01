@@ -6,7 +6,7 @@
   "WEAK": "2-5%",
   "NOISE": "-1 to 2%",
   "HARMFUL": "<-1%",
-  "DISQUALIFIED": "invalid measurement, score meaningless",
+  "DISQUALIFIED": "invalid measurement; see superseded_by for the corrected test and its result",
   "CONDITIONAL": "helps one outcome, harms the other"
  },
  "base_rates": {
@@ -22,9 +22,10 @@
    "survived": 32.8,
    "passed": 77.9,
    "verdict": "DISQUALIFIED",
-   "note": "LEAKAGE \u2014 a bill acquires text versions BY advancing (substitute/engrossed/enrolled). 1 version passed 3%, 4 versions passed 100%. Scores are meaningless.",
+   "note": "RETESTED PROPERLY 2026-08-01 \u2014 counting only versions dated ON OR BEFORE introduction (knowable at filing). +0.5%/+1.3% = NOISE. The original +77.9% was 100% leakage. No gem; settled.",
    "verdict_out_of_committee": "DISQUALIFIED",
-   "verdict_passed": "DISQUALIFIED"
+   "verdict_passed": "DISQUALIFIED",
+   "superseded_by": "text_versions_at_intro"
   },
   "patron_floor_win_rate": {
    "round": 2,
@@ -33,9 +34,10 @@
    "survived": 5.5,
    "passed": 9.0,
    "verdict": "DISQUALIFIED",
-   "note": "CONTAMINATED \u2014 used same-session votes. Prior-session: -5.6%.",
+   "note": "RETESTED PROPERLY 2026-08-01 \u2014 prior-session votes. -5.6%/-2.8% = HARMFUL. Settled.",
    "verdict_out_of_committee": "DISQUALIFIED",
-   "verdict_passed": "DISQUALIFIED"
+   "verdict_passed": "DISQUALIFIED",
+   "superseded_by": "patron_prior_floor_win_rate"
   },
   "patron_in_majority": {
    "round": 1,
@@ -84,9 +86,10 @@
    "survived": 6.5,
    "passed": 6.8,
    "verdict": "DISQUALIFIED",
-   "note": "CONTAMINATED \u2014 used same-session votes. Prior-session: -2.0%. Do not re-test as-is.",
+   "note": "RETESTED PROPERLY 2026-08-01 \u2014 prior-session votes. -2.0%/-1.9% = HARMFUL. Settled.",
    "verdict_out_of_committee": "DISQUALIFIED",
-   "verdict_passed": "DISQUALIFIED"
+   "verdict_passed": "DISQUALIFIED",
+   "superseded_by": "patron_prior_loyalty"
   },
   "majority_copatron_share": {
    "round": 2,
@@ -115,9 +118,10 @@
    "survived": 6.0,
    "passed": 5.0,
    "verdict": "DISQUALIFIED",
-   "note": "CONTAMINATED \u2014 used same-session votes. Prior-session: -23.3% (committee rosters change between sessions).",
+   "note": "RETESTED PROPERLY 2026-08-01 \u2014 PRIOR-session votes against the CURRENT committee roster (both knowable when the bill is referred). -17.1%/+1.6% = HARMFUL. Settled.",
    "verdict_out_of_committee": "DISQUALIFIED",
-   "verdict_passed": "DISQUALIFIED"
+   "verdict_passed": "DISQUALIFIED",
+   "superseded_by": "patron_agrees_with_current_cmte"
   },
   "patron_matches_cmte_majority": {
    "round": 1,
@@ -389,6 +393,42 @@
    "verdict": "HARMFUL",
    "verdict_out_of_committee": "HARMFUL",
    "verdict_passed": "HARMFUL"
+  },
+  "text_versions_at_intro": {
+   "round": 3,
+   "survived": 0.5,
+   "passed": 1.3,
+   "verdict": "NOISE",
+   "verdict_out_of_committee": "NOISE",
+   "verdict_passed": "NOISE",
+   "note": "Corrected form of `text_versions`. counting only versions dated ON OR BEFORE introduction (knowable at filing). +0.5%/+1.3% = NOISE. The original +77.9% was 100% leakage. No gem; settled."
+  },
+  "patron_agrees_with_current_cmte": {
+   "round": 3,
+   "survived": -17.1,
+   "passed": 1.6,
+   "verdict": "NOISE",
+   "verdict_out_of_committee": "HARMFUL",
+   "verdict_passed": "NOISE",
+   "note": "Corrected form of `patron_agrees_with_cmte`. PRIOR-session votes against the CURRENT committee roster (both knowable when the bill is referred). -17.1%/+1.6% = HARMFUL. Settled."
+  },
+  "patron_prior_loyalty": {
+   "round": 3,
+   "survived": -2.0,
+   "passed": -1.9,
+   "verdict": "HARMFUL",
+   "verdict_out_of_committee": "HARMFUL",
+   "verdict_passed": "HARMFUL",
+   "note": "Corrected form of `patron_party_loyalty`. prior-session votes. -2.0%/-1.9% = HARMFUL. Settled."
+  },
+  "patron_prior_floor_win_rate": {
+   "round": 3,
+   "survived": -5.6,
+   "passed": -2.8,
+   "verdict": "HARMFUL",
+   "verdict_out_of_committee": "HARMFUL",
+   "verdict_passed": "HARMFUL",
+   "note": "Corrected form of `patron_floor_win_rate`. prior-session votes. -5.6%/-2.8% = HARMFUL. Settled."
   }
  },
  "how_to_read": "Scores are per OUTCOME and do not transfer between them. 'survived' = got out of committee. 'passed' = passed its chamber of origin. Before proposing any stat, grep this file: if it is here, it has been tested and the result stands unless the METHOD changes (new sessions, a fixed definition, or a corrected leak)."
