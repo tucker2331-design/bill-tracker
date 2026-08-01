@@ -88,6 +88,30 @@ were already the fallback and neither is now urgent.
 
 ---
 
+## EXHAUSTIVE search for older sessions — closed 2026-08-01, do not repeat
+
+Browsed the site directly. Its own text: *"Session years 1994 to 2024 will be available here on legacy
+LIS"*, and the session dropdown lists **all 50+ sessions back to 1994**. So the DATA is published — as
+CGI-rendered HTML pages. **The CSVs are not.**
+
+Every path form was tried, on both hosts:
+
+| form tried | example | result |
+|---|---|---|
+| `<yy>1` / `<yy>2` / `<yy>3` | `/csv/201/`, `/csv/202/` | 404 (swept 2000–2024) |
+| 4-digit | `/csv/20201/` | 404 |
+| the site's own INTERNAL session ids (from its dropdown: 2024=73, 2020=64) | `/csv/64/` | 404 |
+| same, on `lis.virginia.gov` | `/csv/64/` | **403** — that host forbids the directory outright |
+
+**Conclusion: the CSV files are only retained for roughly the last three sessions.** The page itself says
+they are *"updated hourly during session"*, which fits — they look like a live artifact of an active
+session rather than a permanent archive.
+
+**Therefore: getting pre-2022 data is a REQUEST, not a probe.** The DLAS help desk is printed on the
+download page (helpdesk@dlas.virginia.gov, 804-786-9631). Scraping the CGI pages is the only technical
+alternative and it is text parsing — permitted for internal diagnostics, forbidden on the lobbyist path
+(Standard #3). **Do not spend more time searching for a URL. It is not there.**
+
 ## The bigger finding: we were using 4 of the publisher's 17 files
 
 Enumerating the legacy page's full file list against the **modern** blob (authorized session `20261` only)
