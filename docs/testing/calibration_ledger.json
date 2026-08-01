@@ -1,0 +1,395 @@
+{
+ "generated": "2026-08-01",
+ "method": "fit 2023 -> predict 2024; real bills (HB/SB) only; score = % reduction in mean absolute error vs predicting the session base rate. Positive = better than guessing. Negative = WORSE than guessing.",
+ "thresholds": {
+  "USABLE": ">=5%",
+  "WEAK": "2-5%",
+  "NOISE": "-1 to 2%",
+  "HARMFUL": "<-1%",
+  "DISQUALIFIED": "invalid measurement, score meaningless",
+  "CONDITIONAL": "helps one outcome, harms the other"
+ },
+ "base_rates": {
+  "survived_2023": 0.699,
+  "passed_2023": 0.541,
+  "resolutions_pass": 0.916
+ },
+ "stats": {
+  "text_versions": {
+   "round": 2,
+   "buckets": 4,
+   "unseen_pct": 0,
+   "survived": 32.8,
+   "passed": 77.9,
+   "verdict": "DISQUALIFIED",
+   "note": "LEAKAGE \u2014 a bill acquires text versions BY advancing (substitute/engrossed/enrolled). 1 version passed 3%, 4 versions passed 100%. Scores are meaningless.",
+   "verdict_out_of_committee": "DISQUALIFIED",
+   "verdict_passed": "DISQUALIFIED"
+  },
+  "patron_floor_win_rate": {
+   "round": 2,
+   "buckets": 3,
+   "unseen_pct": 0,
+   "survived": 5.5,
+   "passed": 9.0,
+   "verdict": "DISQUALIFIED",
+   "note": "CONTAMINATED \u2014 used same-session votes. Prior-session: -5.6%.",
+   "verdict_out_of_committee": "DISQUALIFIED",
+   "verdict_passed": "DISQUALIFIED"
+  },
+  "patron_in_majority": {
+   "round": 1,
+   "buckets": 3,
+   "unseen_pct": 0,
+   "survived": 5.4,
+   "passed": 7.9,
+   "verdict": "USABLE",
+   "verdict_out_of_committee": "USABLE",
+   "verdict_passed": "USABLE"
+  },
+  "committee": {
+   "round": 1,
+   "buckets": 24,
+   "unseen_pct": 16,
+   "survived": 7.2,
+   "passed": 3.8,
+   "verdict": "USABLE",
+   "verdict_out_of_committee": "USABLE",
+   "verdict_passed": "WEAK"
+  },
+  "bill_type": {
+   "round": 1,
+   "buckets": 2,
+   "unseen_pct": 0,
+   "survived": 6.9,
+   "passed": 1.3,
+   "verdict": "USABLE",
+   "verdict_out_of_committee": "USABLE",
+   "verdict_passed": "NOISE"
+  },
+  "chamber": {
+   "round": 1,
+   "buckets": 2,
+   "unseen_pct": 0,
+   "survived": 6.9,
+   "passed": 1.3,
+   "verdict": "USABLE",
+   "verdict_out_of_committee": "USABLE",
+   "verdict_passed": "NOISE"
+  },
+  "patron_party_loyalty": {
+   "round": 2,
+   "buckets": 4,
+   "unseen_pct": 0,
+   "survived": 6.5,
+   "passed": 6.8,
+   "verdict": "DISQUALIFIED",
+   "note": "CONTAMINATED \u2014 used same-session votes. Prior-session: -2.0%. Do not re-test as-is.",
+   "verdict_out_of_committee": "DISQUALIFIED",
+   "verdict_passed": "DISQUALIFIED"
+  },
+  "majority_copatron_share": {
+   "round": 2,
+   "buckets": 4,
+   "unseen_pct": 0,
+   "survived": 6.7,
+   "passed": 5.3,
+   "verdict": "USABLE",
+   "verdict_out_of_committee": "USABLE",
+   "verdict_passed": "USABLE"
+  },
+  "patron_volume": {
+   "round": 1,
+   "buckets": 4,
+   "unseen_pct": 0,
+   "survived": 6.4,
+   "passed": 0.8,
+   "verdict": "USABLE",
+   "verdict_out_of_committee": "USABLE",
+   "verdict_passed": "NOISE"
+  },
+  "patron_agrees_with_cmte": {
+   "round": 2,
+   "buckets": 4,
+   "unseen_pct": 0,
+   "survived": 6.0,
+   "passed": 5.0,
+   "verdict": "DISQUALIFIED",
+   "note": "CONTAMINATED \u2014 used same-session votes. Prior-session: -23.3% (committee rosters change between sessions).",
+   "verdict_out_of_committee": "DISQUALIFIED",
+   "verdict_passed": "DISQUALIFIED"
+  },
+  "patron_matches_cmte_majority": {
+   "round": 1,
+   "buckets": 3,
+   "unseen_pct": 0,
+   "survived": 2.9,
+   "passed": 5.4,
+   "verdict": "USABLE",
+   "verdict_out_of_committee": "WEAK",
+   "verdict_passed": "USABLE"
+  },
+  "subject_primary": {
+   "round": 1,
+   "buckets": 88,
+   "unseen_pct": 8,
+   "survived": 2.8,
+   "passed": 3.9,
+   "verdict": "WEAK",
+   "verdict_out_of_committee": "WEAK",
+   "verdict_passed": "WEAK"
+  },
+  "member_id_band": {
+   "round": 2,
+   "buckets": 4,
+   "unseen_pct": 0,
+   "survived": 3.6,
+   "passed": 2.5,
+   "verdict": "WEAK",
+   "verdict_out_of_committee": "WEAK",
+   "verdict_passed": "WEAK"
+  },
+  "cmte_prior_on_this_subject": {
+   "round": 1,
+   "buckets": 4,
+   "unseen_pct": 0,
+   "survived": 3.5,
+   "passed": 1.9,
+   "verdict": "WEAK",
+   "verdict_out_of_committee": "WEAK",
+   "verdict_passed": "NOISE"
+  },
+  "subject_cmte_match": {
+   "round": 2,
+   "buckets": 3,
+   "unseen_pct": 0,
+   "survived": 2.7,
+   "passed": 0.5,
+   "verdict": "WEAK",
+   "verdict_out_of_committee": "WEAK",
+   "verdict_passed": "NOISE"
+  },
+  "cmte_load": {
+   "round": 2,
+   "buckets": 3,
+   "unseen_pct": 0,
+   "survived": 2.7,
+   "passed": 1.6,
+   "verdict": "WEAK",
+   "verdict_out_of_committee": "WEAK",
+   "verdict_passed": "NOISE"
+  },
+  "patron_on_cmte": {
+   "round": 1,
+   "buckets": 2,
+   "unseen_pct": 0,
+   "survived": 1.2,
+   "passed": 2.6,
+   "verdict": "WEAK",
+   "verdict_out_of_committee": "NOISE",
+   "verdict_passed": "WEAK"
+  },
+  "patron_prior_in_this_cmte": {
+   "round": 1,
+   "buckets": 3,
+   "unseen_pct": 0,
+   "survived": -6.2,
+   "passed": 2.3,
+   "verdict": "CONDITIONAL",
+   "verdict_out_of_committee": "HARMFUL",
+   "verdict_passed": "WEAK",
+   "note": "Helps on one outcome and is WORSE THAN GUESSING on the other \u2014 only ever usable for the outcome it was validated on, never as a general stat."
+  },
+  "patron_bill_rank": {
+   "round": 2,
+   "buckets": 4,
+   "unseen_pct": 0,
+   "survived": 2.3,
+   "passed": 0.2,
+   "verdict": "WEAK",
+   "verdict_out_of_committee": "WEAK",
+   "verdict_passed": "NOISE"
+  },
+  "patron_district_band": {
+   "round": 2,
+   "buckets": 5,
+   "unseen_pct": 0,
+   "survived": 1.6,
+   "passed": -0.0,
+   "verdict": "NOISE",
+   "verdict_out_of_committee": "NOISE",
+   "verdict_passed": "NOISE"
+  },
+  "patron_generosity": {
+   "round": 2,
+   "buckets": 3,
+   "unseen_pct": 0,
+   "survived": 1.5,
+   "passed": -0.9,
+   "verdict": "NOISE",
+   "verdict_out_of_committee": "NOISE",
+   "verdict_passed": "NOISE"
+  },
+  "patron_prior_rate": {
+   "round": 1,
+   "buckets": 3,
+   "unseen_pct": 34,
+   "survived": -2.5,
+   "passed": 1.0,
+   "verdict": "HARMFUL",
+   "verdict_out_of_committee": "HARMFUL",
+   "verdict_passed": "NOISE"
+  },
+  "bipartisan_copatrons": {
+   "round": 1,
+   "buckets": 3,
+   "unseen_pct": 0,
+   "survived": -0.3,
+   "passed": 0.8,
+   "verdict": "NOISE",
+   "verdict_out_of_committee": "NOISE",
+   "verdict_passed": "NOISE"
+  },
+  "cmte_member_copatrons": {
+   "round": 2,
+   "buckets": 2,
+   "unseen_pct": 0,
+   "survived": -0.2,
+   "passed": 0.7,
+   "verdict": "NOISE",
+   "verdict_out_of_committee": "NOISE",
+   "verdict_passed": "NOISE"
+  },
+  "patron_prior_on_this_subject": {
+   "round": 2,
+   "buckets": 3,
+   "unseen_pct": 0,
+   "survived": -1.0,
+   "passed": 0.7,
+   "verdict": "NOISE",
+   "verdict_out_of_committee": "NOISE",
+   "verdict_passed": "NOISE"
+  },
+  "patron_count": {
+   "round": 1,
+   "buckets": 4,
+   "unseen_pct": 0,
+   "survived": 0.3,
+   "passed": 0.6,
+   "verdict": "NOISE",
+   "verdict_out_of_committee": "NOISE",
+   "verdict_passed": "NOISE"
+  },
+  "committee_size": {
+   "round": 1,
+   "buckets": 2,
+   "unseen_pct": 0,
+   "survived": -0.4,
+   "passed": 0.5,
+   "verdict": "NOISE",
+   "verdict_out_of_committee": "NOISE",
+   "verdict_passed": "NOISE"
+  },
+  "copatron_district_spread": {
+   "round": 2,
+   "buckets": 4,
+   "unseen_pct": 0,
+   "survived": 0.0,
+   "passed": 0.5,
+   "verdict": "NOISE",
+   "verdict_out_of_committee": "NOISE",
+   "verdict_passed": "NOISE"
+  },
+  "cross_chamber_copatrons": {
+   "round": 1,
+   "buckets": 2,
+   "unseen_pct": 0,
+   "survived": -0.2,
+   "passed": 0.4,
+   "verdict": "NOISE",
+   "verdict_out_of_committee": "NOISE",
+   "verdict_passed": "NOISE"
+  },
+  "money_committee": {
+   "round": 1,
+   "buckets": 2,
+   "unseen_pct": 0,
+   "survived": 0.1,
+   "passed": 0.4,
+   "verdict": "NOISE",
+   "verdict_out_of_committee": "NOISE",
+   "verdict_passed": "NOISE"
+  },
+  "emergency": {
+   "round": 1,
+   "buckets": 2,
+   "unseen_pct": 0,
+   "survived": 0.1,
+   "passed": 0.3,
+   "verdict": "NOISE",
+   "verdict_out_of_committee": "NOISE",
+   "verdict_passed": "NOISE"
+  },
+  "prefiled": {
+   "round": 1,
+   "buckets": 2,
+   "unseen_pct": 0,
+   "survived": 0.0,
+   "passed": 0.1,
+   "verdict": "NOISE",
+   "verdict_out_of_committee": "NOISE",
+   "verdict_passed": "NOISE"
+  },
+  "subject_count": {
+   "round": 1,
+   "buckets": 3,
+   "unseen_pct": 0,
+   "survived": -0.2,
+   "passed": 0.1,
+   "verdict": "NOISE",
+   "verdict_out_of_committee": "NOISE",
+   "verdict_passed": "NOISE"
+  },
+  "has_chief_copatron": {
+   "round": 1,
+   "buckets": 2,
+   "unseen_pct": 0,
+   "survived": -2.2,
+   "passed": -0.1,
+   "verdict": "HARMFUL",
+   "verdict_out_of_committee": "HARMFUL",
+   "verdict_passed": "NOISE"
+  },
+  "patron_network_breadth": {
+   "round": 2,
+   "buckets": 3,
+   "unseen_pct": 0,
+   "survived": -0.4,
+   "passed": -0.1,
+   "verdict": "NOISE",
+   "verdict_out_of_committee": "NOISE",
+   "verdict_passed": "NOISE"
+  },
+  "bipartisan_chief_pair": {
+   "round": 2,
+   "buckets": 3,
+   "unseen_pct": 0,
+   "survived": -2.9,
+   "passed": -0.3,
+   "verdict": "HARMFUL",
+   "verdict_out_of_committee": "HARMFUL",
+   "verdict_passed": "NOISE"
+  },
+  "patron_party": {
+   "round": 1,
+   "buckets": 4,
+   "unseen_pct": 0,
+   "survived": -7.4,
+   "passed": -2.5,
+   "verdict": "HARMFUL",
+   "verdict_out_of_committee": "HARMFUL",
+   "verdict_passed": "HARMFUL"
+  }
+ },
+ "how_to_read": "Scores are per OUTCOME and do not transfer between them. 'survived' = got out of committee. 'passed' = passed its chamber of origin. Before proposing any stat, grep this file: if it is here, it has been tested and the result stands unless the METHOD changes (new sessions, a fixed definition, or a corrected leak)."
+}

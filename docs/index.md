@@ -85,6 +85,7 @@ Links use Obsidian `[[wikilink]]` format. Obsidian resolves by filename; path-qu
 ## Domain Knowledge
 - [[knowledge/history_refid_namespace]] — refid = typed namespace (vote-join, batch-notice law); VOTE/BILLS.CSV; SPA-shell false-200s
 - [[knowledge/lis_api_authorization]] — **RULE: LIS API authorized for 2025/2026 ONLY; pre-2025 via legacylis CSV**
+- [[testing/calibration_ledger]] — **EVERY stat tested + verdict. GREP THIS BEFORE PROPOSING A STAT — 37 tested, 7 usable, 4 disqualified as invalid measurements.**
 - [[testing/calibration_scope]] — **calibration method + the challenges to it; the measured finding that the committee stat is REAL in the House (+40% vs null) and near-worthless in the Senate (+12%)**
 - [[knowledge/legacylis_csv_route]] — **the pre-2025 CSV route, FOUND 2026-08-01 (`SiteInformation/ftp.html`, not `csvinfo.html`). Complete 2023 + 2024 sessions, schema byte-identical to the modern blob. Calibration base 2 → 4 sessions. No pre-2025 docket.**
 - [[knowledge/legiscan_terms]] — **STUB + COMPLIANCE GATE: the temporary cross-state corpus source. Terms/scope/rate-limit/attribution must be captured BEFORE the first request (the rule that kept the VA integration clean, applied to a third party). Owner-blocked on the API key; includes the volume question the 50-state design hangs on (do dataset archives embed full text or only doc_id refs?).**
