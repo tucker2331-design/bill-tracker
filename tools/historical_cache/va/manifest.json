@@ -1,0 +1,158 @@
+{
+ "files": {
+  "231/Bills.csv": {
+   "bytes": 1077565,
+   "fetched_utc": "2026-08-01T06:13:24Z",
+   "last_modified": "Thu, 02 Nov 2023 06:47:29 GMT",
+   "sha256": "6d355294efb1ee2e92fb817a67794d8a8af46e3b3855f5ed32b75e4d083cdb3e",
+   "url": "https://legacylis.virginia.gov/SiteInformation/csv/231/Bills.csv"
+  },
+  "231/CommitteeMembers.csv": {
+   "bytes": 6790,
+   "fetched_utc": "2026-08-01T06:13:34Z",
+   "last_modified": "Mon, 04 Dec 2023 23:50:57 GMT",
+   "sha256": "c2693a9d6631c1b958c81a36fe2c7bf34faea5963d60f0ca125da3cbb69b48e5",
+   "url": "https://legacylis.virginia.gov/SiteInformation/csv/231/CommitteeMembers.csv"
+  },
+  "231/Committees.csv": {
+   "bytes": 1958,
+   "fetched_utc": "2026-08-01T06:13:33Z",
+   "last_modified": "Mon, 04 Dec 2023 23:50:57 GMT",
+   "sha256": "0036f5c24e06ed7f8a2b6365a3ee8a4dbdeb91e3cb820a78f65035a998a657c8",
+   "url": "https://legacylis.virginia.gov/SiteInformation/csv/231/Committees.csv"
+  },
+  "231/History.csv": {
+   "bytes": 3123704,
+   "fetched_utc": "2026-08-01T06:13:26Z",
+   "last_modified": "Thu, 02 Nov 2023 06:00:07 GMT",
+   "sha256": "2b482ad2f5354140db89a96e1fc92470dcc37e189e244625aafc0f79396e5c97",
+   "url": "https://legacylis.virginia.gov/SiteInformation/csv/231/History.csv"
+  },
+  "231/Members.csv": {
+   "bytes": 7670,
+   "fetched_utc": "2026-08-01T06:13:32Z",
+   "last_modified": "Mon, 04 Dec 2023 23:50:57 GMT",
+   "sha256": "dd3dec41238562248df18a8b88af102ae56f5472909324c52c3a895b569608d3",
+   "url": "https://legacylis.virginia.gov/SiteInformation/csv/231/Members.csv"
+  },
+  "231/Sponsors.csv": {
+   "bytes": 1159808,
+   "fetched_utc": "2026-08-01T06:13:36Z",
+   "last_modified": "Mon, 04 Dec 2023 23:50:45 GMT",
+   "sha256": "0da95d200e85e5adb0b2c95e2e8e339b6579b453568d5c8c88992453f6bf2813",
+   "url": "https://legacylis.virginia.gov/SiteInformation/csv/231/Sponsors.csv"
+  },
+  "231/Vote.csv": {
+   "bytes": 3141386,
+   "fetched_utc": "2026-08-01T06:13:32Z",
+   "last_modified": "Thu, 02 Nov 2023 06:00:07 GMT",
+   "sha256": "9a1f02f3f9f44b76316be154902ed450091411afc3f1b33ba06e40524b6cf034",
+   "url": "https://legacylis.virginia.gov/SiteInformation/csv/231/Vote.csv"
+  },
+  "241/Bills.csv": {
+   "bytes": 1261279,
+   "fetched_utc": "2026-08-01T06:13:38Z",
+   "last_modified": "Tue, 12 Nov 2024 13:46:06 GMT",
+   "sha256": "ca0d173d272676d114e242dfe6e4dafd0159ac67db2b123b36d4f9b5b06fd624",
+   "url": "https://legacylis.virginia.gov/SiteInformation/csv/241/Bills.csv"
+  },
+  "241/CommitteeMembers.csv": {
+   "bytes": 7060,
+   "fetched_utc": "2026-08-01T06:13:47Z",
+   "last_modified": "Tue, 12 Nov 2024 14:34:21 GMT",
+   "sha256": "c6302af6092068b68ea924f56d9024c74e9680e75d99eb8add04a7bac51b9d9c",
+   "url": "https://legacylis.virginia.gov/SiteInformation/csv/241/CommitteeMembers.csv"
+  },
+  "241/Committees.csv": {
+   "bytes": 1884,
+   "fetched_utc": "2026-08-01T06:13:46Z",
+   "last_modified": "Tue, 12 Nov 2024 14:34:20 GMT",
+   "sha256": "30ddb4e11b870365b2310c126a3b22b77128e14f4773deebaaebaf2ec49ccb18",
+   "url": "https://legacylis.virginia.gov/SiteInformation/csv/241/Committees.csv"
+  },
+  "241/History.csv": {
+   "bytes": 3684363,
+   "fetched_utc": "2026-08-01T06:13:41Z",
+   "last_modified": "Tue, 12 Nov 2024 07:00:04 GMT",
+   "sha256": "59cd263cb69e68ffab3f5b7f72288face9454c69031970404eecb09b598053ba",
+   "url": "https://legacylis.virginia.gov/SiteInformation/csv/241/History.csv"
+  },
+  "241/Members.csv": {
+   "bytes": 7668,
+   "fetched_utc": "2026-08-01T06:13:46Z",
+   "last_modified": "Tue, 12 Nov 2024 14:34:21 GMT",
+   "sha256": "d5e3db17f5f3c38a834a2cf1b234635f5c4620ed639956690687ccc9417b91b4",
+   "url": "https://legacylis.virginia.gov/SiteInformation/csv/241/Members.csv"
+  },
+  "241/Sponsors.csv": {
+   "bytes": 1294132,
+   "fetched_utc": "2026-08-01T06:13:49Z",
+   "last_modified": "Tue, 12 Nov 2024 14:33:55 GMT",
+   "sha256": "a5bd716121e40918f8400b8032c34a95737ed889021d49d7dd48685b402159b9",
+   "url": "https://legacylis.virginia.gov/SiteInformation/csv/241/Sponsors.csv"
+  },
+  "241/Vote.csv": {
+   "bytes": 3814378,
+   "fetched_utc": "2026-08-01T06:13:45Z",
+   "last_modified": "Tue, 12 Nov 2024 07:00:04 GMT",
+   "sha256": "f6c430a79c3ac42ba8bd0e19b42703bb56d9df18f8db693b139232511d3d4019",
+   "url": "https://legacylis.virginia.gov/SiteInformation/csv/241/Vote.csv"
+  },
+  "242/Bills.csv": {
+   "bytes": 82642,
+   "fetched_utc": "2026-08-01T06:13:50Z",
+   "last_modified": "Mon, 23 Sep 2024 00:47:03 GMT",
+   "sha256": "e53c6b65f4706eb667c5f10f64b84187b9a459ca4dd1bbdd5156827aed417f5a",
+   "url": "https://legacylis.virginia.gov/SiteInformation/csv/242/Bills.csv"
+  },
+  "242/CommitteeMembers.csv": {
+   "bytes": 7060,
+   "fetched_utc": "2026-08-01T06:13:53Z",
+   "last_modified": "Mon, 23 Sep 2024 01:30:49 GMT",
+   "sha256": "c6302af6092068b68ea924f56d9024c74e9680e75d99eb8add04a7bac51b9d9c",
+   "url": "https://legacylis.virginia.gov/SiteInformation/csv/242/CommitteeMembers.csv"
+  },
+  "242/Committees.csv": {
+   "bytes": 1884,
+   "fetched_utc": "2026-08-01T06:13:53Z",
+   "last_modified": "Mon, 23 Sep 2024 01:30:49 GMT",
+   "sha256": "30ddb4e11b870365b2310c126a3b22b77128e14f4773deebaaebaf2ec49ccb18",
+   "url": "https://legacylis.virginia.gov/SiteInformation/csv/242/Committees.csv"
+  },
+  "242/History.csv": {
+   "bytes": 80751,
+   "fetched_utc": "2026-08-01T06:13:50Z",
+   "last_modified": "Sun, 22 Sep 2024 06:00:00 GMT",
+   "sha256": "492c902cf4bd856542b9318e034e58c5871de8121a3d0301721546bb3045e674",
+   "url": "https://legacylis.virginia.gov/SiteInformation/csv/242/History.csv"
+  },
+  "242/Members.csv": {
+   "bytes": 7614,
+   "fetched_utc": "2026-08-01T06:13:52Z",
+   "last_modified": "Mon, 23 Sep 2024 01:30:49 GMT",
+   "sha256": "665bb72fbc30793b6a8837f90ced28957de833068fbe4a28f9db16e074a3e0be",
+   "url": "https://legacylis.virginia.gov/SiteInformation/csv/242/Members.csv"
+  },
+  "242/Sponsors.csv": {
+   "bytes": 116191,
+   "fetched_utc": "2026-08-01T06:13:54Z",
+   "last_modified": "Mon, 23 Sep 2024 01:30:25 GMT",
+   "sha256": "c5a36e15bfb006b69083296f09de6b725120476ace43100000b808fe19704c52",
+   "url": "https://legacylis.virginia.gov/SiteInformation/csv/242/Sponsors.csv"
+  },
+  "242/Vote.csv": {
+   "bytes": 45344,
+   "fetched_utc": "2026-08-01T06:13:51Z",
+   "last_modified": "Sun, 22 Sep 2024 06:00:06 GMT",
+   "sha256": "9300d77032a6d18fd71eed5e9ae27d043969634557d71df2bd37ecf4545cef8c",
+   "url": "https://legacylis.virginia.gov/SiteInformation/csv/242/Vote.csv"
+  }
+ },
+ "jurisdiction": "VA",
+ "sessions": {
+  "231": "2023 Regular Session",
+  "241": "2024 Regular Session",
+  "242": "2024 Special Session I"
+ },
+ "source": "https://legacylis.virginia.gov/SiteInformation/csv"
+}
