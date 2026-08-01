@@ -6,7 +6,20 @@ status: active
 
 # LIS API Authorization Rule (2025/2026 only)
 
-**RULE (from the LIS Developers Portal, `lis.virginia.gov/developers`, read 2026-06-09):**
+**⚠️ WORDING CHANGED — re-read 2026-08-01. The portal now says "from 2025 onward", not "2025 and 2026
+only".** Current text, verified live:
+
+> "API usage is authorized and validated for **session data from 2025 onward**. The General Assembly has
+> not authorized the usage of data from sessions prior to 2025 to be extracted with this API toolset. If
+> you require data prior to the 2025 session, please use **legacylis.virginia.gov** via CSV download. Once
+> the General Assembly has authorized the data for use, you will be notified."
+
+The forward bound is now **open-ended**, which is what the A-1 auto-follow design already assumed — so the
+workers were right by accident, and are now right on the record too. The pre-2025 prohibition is unchanged.
+**ToS §1 lets DLAS change terms at any time, so any quote here has a shelf life; re-read before relying on
+it in anything that leaves this repo.**
+
+**PRIOR RULE (as read 2026-06-09) — superseded, kept so the change is visible:**
 
 > "API usage is authorized and validated for **2025 and 2026 session data only**. The
 > General Assembly has **not** authorized the usage of data from sessions **prior to
