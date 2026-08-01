@@ -33,6 +33,14 @@ import sys
 import gspread
 from google.oauth2.service_account import Credentials
 
+# This module is executed as a script (`python3 tools/session_archive/archive.py`), which puts its own
+# directory on sys.path — but NOT when it is imported from elsewhere. Insert explicitly so both work; the
+# sentinel's _ledger_api documents the same trap, where the bare import raised ModuleNotFoundError and a
+# fail-open handler swallowed it into silence.
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import capacity      # noqa: E402  (path must be set first)
+import registry      # noqa: E402
+
 MAIN_ID = "1PQDtaTTUeYv781bx4_ZiehcvbEmUt8t7jFmZYJoJGKM"       # VA · Live
 ARCHIVE_ID = "1AA-dCUDAPvq59Hv01DqteEquBJ1kkqI0QR5ECd10QeA"   # VA · Archive
 OPS_ID = "1X7wa4brFROP9Bn81Esf4z3zjlxTZvpKeUdPWpyBkD3c"        # VA · Ops (A-2 Part 2 shard target)
@@ -62,7 +70,7 @@ def _open():
         print(f"ERROR: cannot open the ARCHIVE workbook ({ARCHIVE_ID}). Is it shared with the "
               f"service account as Editor? Underlying error: {exc}", file=sys.stderr)
         sys.exit(1)
-    return main, archive
+    return gc, main, archive
 
 
 def _snapshot_dim_mismatch(src_rows, src_cols, arch_rows, arch_cols):
@@ -121,15 +129,121 @@ def verify(main, archive):
     return 0
 
 
-def snapshot_session(main, archive):
+def _registry_ws(gc):
+    """The Archive_Registry worksheet in VA·Ops, created with its header on first use.
+
+    Ops, not an archive workbook: the archives are the things that fill up and get replaced, so an index
+    living inside one would roll away with it and the chain would lose its head."""
+    ops = gc.open_by_key(OPS_ID)
+    try:
+        return ops.worksheet(registry.REGISTRY_TAB)
+    except gspread.exceptions.WorksheetNotFound:
+        ws = ops.add_worksheet(title=registry.REGISTRY_TAB, rows=200, cols=len(registry.REGISTRY_HEADER))
+        ws.update(values=[registry.REGISTRY_HEADER], range_name="A1")
+        print(f"📒 Created {registry.REGISTRY_TAB} in {ops.title}.")
+        return ws
+
+
+def _used_cells(book):
+    """Allocated cells across every tab of a workbook — what Sheets actually bills against the 10M cap."""
+    return capacity.workbook_cells((w.row_count, w.col_count) for w in book.worksheets())
+
+
+def _create_next_archive(gc, title, share_with):
+    """Create the next workbook in the chain and share it so a HUMAN can still open it.
+
+    UNVERIFIED FROM HERE: this repo has no credentials in the dev environment, so the create call has never
+    been executed. The known risk is that a service account may have no Drive storage quota of its own, in
+    which case `gc.create` fails — so the caller treats failure as a hard stop with a specific remedy, and
+    never as "carry on with the full workbook".
+
+    The share is NOT optional. A workbook created by the service account is owned by the service account and
+    is invisible to the owner until shared — an archive nobody can open is not an archive.
+    """
+    book = gc.create(title)
+    book.share(share_with, perm_type="user", role="writer", notify=False)
+    print(f"🆕 Created archive workbook '{title}' ({book.id}) and shared it with {share_with}.")
+    return book
+
+
+def snapshot_session(main, archive, gc=None):
     code = (os.environ.get("SESSION_CODE") or "").strip()
     if not code:
         print("ERROR: SESSION_CODE not set (e.g. 20261).", file=sys.stderr)
         return 1
+    juris = (os.environ.get("JURISDICTION") or "VA").strip().upper()
     sheet1 = main.worksheet("Sheet1")
     name = f"Session_{code}"
-    verified_rows = _copy_tab(sheet1, archive, name)   # copies AND confirms it landed intact (raises otherwise)
-    print(f"✅ Snapshotted live Sheet1 -> archive '{name}' (~{verified_rows:,} rows, snapshot verified).")
+
+    # Pre-registry path: without a gspread client we cannot read the chain, so behave exactly as before
+    # rather than guessing. Callers that want rollover pass gc.
+    if gc is None:
+        verified_rows = _copy_tab(sheet1, archive, name)
+        print(f"✅ Snapshotted live Sheet1 -> archive '{name}' (~{verified_rows:,} rows, snapshot verified).")
+        return 0
+
+    reg_ws = _registry_ws(gc)
+    records, malformed = registry.parse_rows(reg_ws.get_all_values())
+    if malformed:
+        # Counted and surfaced, never silently skipped (Standard #4). Not fatal: a malformed row cannot
+        # make a VALID row wrong, and refusing to archive would be the worse failure.
+        print(f"⚠️  {registry.REGISTRY_TAB}: {malformed} malformed row(s) ignored — they name no "
+              f"jurisdiction/session/workbook. Archiving continues on the valid rows.")
+
+    if registry.already_archived(records, juris, code):
+        where = registry.find_session(records, juris, code)
+        print(f"✅ {juris} session {code} is already archived in {where} — nothing to do (idempotent).")
+        return 0
+
+    # Where should it go? The registry is the authority; GENESIS_ARCHIVE seeds an EMPTY registry only.
+    active_id = registry.resolve_active(records, juris)
+    if active_id is None:
+        genesis = registry.GENESIS_ARCHIVE.get(juris)
+        if not genesis:
+            print(f"ERROR: no archive is registered for jurisdiction {juris} and there is no genesis "
+                  f"workbook for it. Refusing to guess a destination.", file=sys.stderr)
+            return 1
+        active_id, active_title = genesis
+        print(f"📒 Registry has no {juris} rows yet — seeding the chain from {active_title} ({active_id}).")
+    else:
+        active_title = next((r.get("WorkbookTitle") for r in records
+                             if r.get("WorkbookId") == active_id and r.get("WorkbookTitle")), active_id)
+
+    dest = archive if active_id == archive.id else gc.open_by_key(active_id)
+
+    # THE ROLL DECISION — "does the incoming session fit?", not "is it 80% full?" (see capacity.py).
+    incoming = capacity.cells(sheet1.row_count, sheet1.col_count)
+    used = _used_cells(dest)
+    print(f"📏 {capacity.describe(used, incoming)}")
+    if capacity.should_roll(used, incoming):
+        share_with = (os.environ.get("ARCHIVE_SHARE_WITH") or "").strip()
+        if not share_with:
+            # Fail closed: creating a workbook nobody can open would "succeed" while losing the archive
+            # to a service account's private Drive.
+            print("ERROR: the active archive is full and ARCHIVE_SHARE_WITH is not set, so a new archive "
+                  "workbook would be invisible to you. Set it to the account that should own access.",
+                  file=sys.stderr)
+            return 1
+        title = registry.next_title(records, juris, f"{juris} · Archive")
+        try:
+            dest = _create_next_archive(gc, title, share_with)
+        except Exception as exc:
+            print(f"ERROR: could not create the next archive workbook '{title}': {exc}\n"
+                  f"       The current archive cannot fit session {code}, so this is a HARD STOP — "
+                  f"writing anyway would fail at the 10M cell cap mid-copy.\n"
+                  f"       If this is a Drive storage-quota error, the service account cannot own files; "
+                  f"create '{title}' manually, share it with the service account as Editor, and add a "
+                  f"{registry.REGISTRY_TAB} row for it.", file=sys.stderr)
+            return 1
+        active_id, active_title = dest.id, title
+
+    verified_rows = _copy_tab(sheet1, dest, name)   # copies AND confirms it landed intact (raises otherwise)
+    # Only NOW is the session safely archived, so only now does the registry claim it exists.
+    reg_ws.append_row(registry.new_row(juris, code, active_id, active_title,
+                                       sheet1.row_count, sheet1.col_count),
+                      value_input_option="RAW")
+    print(f"✅ Snapshotted live Sheet1 -> '{active_title}' tab '{name}' "
+          f"(~{verified_rows:,} rows, snapshot verified, registry updated).")
     return 0
 
 
@@ -183,12 +297,17 @@ def shard_witness(main, archive):
 
 def main_():
     mode = (os.environ.get("MODE") or (sys.argv[1] if len(sys.argv) > 1 else "verify")).strip().lower()
-    main, archive = _open()
-    dispatch = {"verify": verify, "snapshot-session": snapshot_session, "migrate-c7": migrate_c7,
-                "shard-witness": shard_witness}
+    gc, main, archive = _open()
+    dispatch = {"verify": verify, "migrate-c7": migrate_c7, "shard-witness": shard_witness}
+    # snapshot-session is the only mode that needs the CLIENT (to read the registry and, when the active
+    # archive is full, to create the next workbook in the chain). Passed explicitly rather than widening
+    # every handler's signature with a parameter three of them would ignore.
+    if mode == "snapshot-session":
+        return snapshot_session(main, archive, gc)
     fn = dispatch.get(mode)
     if not fn:
-        print(f"ERROR: unknown MODE {mode!r} (verify | snapshot-session | migrate-c7).", file=sys.stderr)
+        print(f"ERROR: unknown MODE {mode!r} (verify | snapshot-session | migrate-c7 | shard-witness).",
+              file=sys.stderr)
         return 1
     return fn(main, archive)
 

@@ -3626,10 +3626,40 @@ def _open_book_by_key(sheet, key):
     return gspread.Spreadsheet(client, {"id": key})        # gspread ≥6: mirror Client.open_by_key exactly
 
 
+def _archive_capacity_check(archive, source_ws):
+    """(fits, human_message, low_headroom) for putting `source_ws` into `archive`.
+
+    Delegates the arithmetic to tools/session_archive/capacity.py rather than restating it — a second copy
+    of a threshold is how `pages/ray2.py` and `calendar_xray.py` drift (pre-push audit point 4), and this
+    number decides whether an archive happens at all.
+
+    RETURNS the low-headroom signal instead of alerting: `push_system_alert` is a NESTED function inside the
+    main cycle, so it does not exist at module scope. Calling it here raises NameError — and this path runs
+    once per SESSION ROLLOVER, so that would have sat undetected for months before failing at the worst
+    possible moment. Exactly audit #105's shape; caught by the pyflakes gate (point 17).
+    """
+    import sys as _sys
+    import os as _os
+    _cap_dir = _os.path.join(_os.path.dirname(_os.path.abspath(__file__)), "tools", "session_archive")
+    if _cap_dir not in _sys.path:
+        _sys.path.insert(0, _cap_dir)
+    import capacity as _capacity
+
+    used = _capacity.workbook_cells((w.row_count, w.col_count) for w in archive.worksheets())
+    incoming = _capacity.cells(source_ws.row_count, source_ws.col_count)
+    msg = _capacity.describe(used, incoming)
+    if _capacity.should_roll(used, incoming):
+        return False, msg, True
+    # One session of headroom is ~6 months of lead time — the difference between a planned rollover and an
+    # outage at session open.
+    return True, msg, _capacity.headroom_sessions(used, incoming) <= 1
+
+
 def _archive_completed_session(sheet, worksheet, old_code):
     """Snapshot the live Sheet1 (`worksheet`, already fetched by the caller) into the
     archive workbook as ``Session_<old_code>``, replacing any existing snapshot of that
-    session (idempotent). Returns ``(target_tab_name, verified_row_count)``; raises on
+    session (idempotent). Returns ``(target_tab_name, verified_row_count, capacity_warning)`` where the
+    warning is "" unless the archive is down to its last session of room; raises on
     failure OR on a failed post-copy verification (the caller decides whether to advance
     the marker — it does NOT advance on a raise).
 
@@ -3640,6 +3670,32 @@ def _archive_completed_session(sheet, worksheet, old_code):
     tools/session_archive/archive.py."""
     archive = _open_book_by_key(sheet, SESSION_ARCHIVE_ID)
     target = f"Session_{old_code}"
+
+    # CAPACITY PRE-CHECK (2026-07-31). The archive workbook has its own 10M-cell cap and holds 8 sessions
+    # of this size (tools/session_archive/capacity.py has the measured arithmetic). Virginia runs ~2
+    # sessions a year, so this workbook fills around 2030 — and the failure mode is already on record from
+    # 2026-04-28: APIError [400] "would increase the number of cells above the limit of 10000000", thrown
+    # at the write AFTER the whole pipeline ran.
+    #
+    # Checking BEFORE the copy makes that failure survivable. Raising here means the caller does not
+    # advance the session marker, so the completed session stays un-overwritten and can be archived once a
+    # human (or `archive.py snapshot-session`, which CAN roll to a new workbook) makes room. Writing into a
+    # workbook that cannot hold it would fail mid-copy and leave a partial snapshot.
+    try:
+        _cap_ok, _cap_msg, _cap_low = _archive_capacity_check(archive, worksheet)
+    except Exception as _cap_err:
+        # A capacity check that cannot RUN must not block archiving — the copy still verifies itself, and a
+        # blocked archive is worse than an unchecked one. But it must be visible, so the warning rides back
+        # to the caller (which owns the alert channel) rather than being printed and forgotten.
+        _cap_ok, _cap_msg, _cap_low = True, f"capacity pre-check unavailable ({_cap_err})", True
+    if not _cap_ok:
+        raise RuntimeError(
+            f"Archive workbook cannot fit session {old_code}: {_cap_msg}. REFUSING to copy — a partial "
+            f"snapshot would be worse than none, and the session marker is not advanced, so nothing is "
+            f"lost. Run `archive.py snapshot-session` (it rolls to a new archive workbook), or create the "
+            f"next archive manually and add an Archive_Registry row for it.")
+    print(f"📏 Archive capacity: {_cap_msg}")
+
     try:
         old_id = archive.worksheet(target).id
     except gspread.exceptions.WorksheetNotFound:
@@ -3653,7 +3709,7 @@ def _archive_completed_session(sheet, worksheet, old_code):
         "fields": "title"}})
     archive.batch_update({"requests": requests})
     verified_rows = _verify_archived_snapshot(archive, target, worksheet)   # raises if the snapshot is bad
-    return target, verified_rows
+    return target, verified_rows, (_cap_msg if _cap_low else "")
 
 
 # ── A-2 Part 2 · zero-touch witness shard (Standard #8: the system moves its own data, never pings a human) ──
@@ -5379,7 +5435,16 @@ def run_calendar_update():
         raise
     if _sheet_session and _sheet_session != ACTIVE_SESSION:
         try:
-            _archived_to, _archived_rows = _archive_completed_session(sheet, worksheet, _sheet_session)
+            _archived_to, _archived_rows, _cap_warn = _archive_completed_session(sheet, worksheet, _sheet_session)
+            if _cap_warn:
+                # Emitted HERE because push_system_alert is nested in this function and does not exist at
+                # module scope — the archive helpers return the signal rather than reaching for it.
+                push_system_alert(
+                    f"Archive workbook is nearly full — {_cap_warn}. The NEXT session will not fit. Roll "
+                    f"to a new archive workbook before then (`archive.py snapshot-session` does this "
+                    f"automatically, creating and registering the next book in the chain).",
+                    status="WARN", category="DATA_ANOMALY", severity="WARN",
+                    dedup_key="archive_capacity_low")
         except Exception as _arch_err:
             print(f"🛑 Session-rollover archive of {_sheet_session} FAILED: {_arch_err}. Failing the "
                   f"cycle so Sheet1 (still the completed session) is not overwritten; retried next cycle.")
