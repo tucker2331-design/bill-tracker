@@ -107,6 +107,36 @@ went 52% → 76% and General Laws 63% → 84%.
 asking a descriptive question about the venue, not asking us to forecast their bill. Ship the number with
 its denominator and its session label; do not imply it carries forward.
 
+## WITHIN-SESSION TEST 2026-08-01 — the owner's context hypothesis, tested
+
+**Owner: *"it might be a valid predictor if we limit the data to sessions that match the set-up of party
+control of chamber and committee."*** Correct instinct, and directly testable — but not by matching
+sessions (we have exactly one session of each House control). **Split a SINGLE session instead:** learn on
+the bills filed first, predict the ones filed later. Same majority, same chairs, same rules, by
+construction.
+
+| | House 2023 (R control) | House 2024 (D control) |
+|---|---|---|
+| **patron in majority** | **+9.8%** | **+10.1%** |
+| patron matches committee majority | +7.4% | +10.1% |
+| **committee identity** | **+1.9%** | **+4.3%** |
+| subject | +1.8% | +1.3% |
+
+**Two findings, and the first answers the owner's question directly.**
+
+1. **Committee identity stays WEAK even with political context held perfectly constant** — +1.9% and
+   +4.3%. The hypothesis was that year-to-year instability was hiding real committee signal. It was not:
+   remove the instability entirely and the signal is still small. **Committee remains a fact worth showing,
+   not a predictor.**
+
+2. **`patron_in_majority` holds at ~10% in BOTH sessions, under BOTH parties, within a fixed context.**
+   +9.8% under Republican control and +10.1% under Democratic control. This is the strongest validation the
+   finding has received — it is not an artifact of the flip, of drift between sessions, or of pooling.
+
+**Senate: still unusable at this stage.** Its within-session base rate moves 84% → 99% (2023) because
+late-filed Senate bills almost all survive, which is what produced a nonsense −58% for committee. In 2024
+it is 99% → 98% with almost no variance. Confirmed a third way.
+
 ## The honest caveats
 - **Two sessions.** The gap replicated across one flip; that is encouraging, not conclusive.
 - **"Got out of committee" is derived** from `Last_*_actid` ending in `94` ("Left in <committee>"), verified
