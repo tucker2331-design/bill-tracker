@@ -557,5 +557,69 @@
     "caveat": "n=42, small by construction: requiring divergence AND both-minority chiefs AND differing co-patron status is restrictive. The split is lopsided enough that chance is an unlikely explanation, but re-check as sessions accumulate rather than treating it as settled."
    }
   }
+ },
+ "findings_2026_08_02": {
+  "_pool": "22,659 HB/SB across 18 Open States sessions (2023S1 excluded as a duplicate of 2023). Companion pairing = exact title OR same subject-half + >=0.6 title-token overlap; recall measured at 92-95% vs abstract-derived truth. 4,424 pairs, 925 divergent.",
+  "co_patron_dose_response": {
+   "0 majority co-patrons": "2,226 of 7,218 (31%)",
+   "1": "361 of 629 (57%)",
+   "2-3": "149 of 232 (64%)",
+   "4-9": "53 of 78 (68%)",
+   "read": "The FIRST majority co-patron does most of the work: +26 points. After that, diminishing returns."
+  },
+  "co_patron_by_chamber": {
+   "House none": "1,040 of 4,158 (25%)",
+   "House has one": "302 of 530 (57%)",
+   "Senate none": "1,186 of 3,060 (39%)",
+   "Senate has one": "278 of 426 (65%)",
+   "read": "Bigger lever in the House (+32) than the Senate (+26) \u2014 consistent with the House being the real filter."
+  },
+  "seniority": {
+   "co-patron mid 3-7yr": "297 of 429 (69%)",
+   "co-patron veteran 8yr+": "40 of 70 (57%)",
+   "co-patron junior 0-2yr": "243 of 457 (53%)",
+   "patron mid 3-7yr": "1,281 of 3,001 (43%)",
+   "patron veteran 8yr+": "268 of 738 (36%)",
+   "patron junior 0-2yr": "1,257 of 4,435 (28%)",
+   "read": "Mid-career outperforms veterans in BOTH roles. Unexplained; possibly veterans in the minority carry harder bills."
+  },
+  "money_committee_MYTH": {
+   "sent to Finance/Approps": "92 of 174 (53%)",
+   "identical twin sent elsewhere": "96 of 174 (55%)",
+   "read": "NO EFFECT with content held constant. Money committees are where expensive bills go, not where bills die."
+  },
+  "negative_space_minority_bills": {
+   "H Rules": "12 of 170 (7%)",
+   "H Militia, Police and Public Safety": "10 of 109 (9%)",
+   "H Privileges and Elections": "33 of 241 (14%)",
+   "H Commerce and Labor": "28 of 198 (14%)",
+   "S the Judiciary": "135 of 236 (57%)",
+   "S Local Government": "109 of 196 (56%)",
+   "S Rehabilitation and Social Services": "108 of 199 (54%)",
+   "read": "Eightfold spread. Every worst is House, every best is Senate."
+  },
+  "reintroduction": {
+   "failed bills": "11,545",
+   "came back later": "3,885 (34%)",
+   "of those eventually passed": "1,331 (34%)",
+   "all-bill baseline": "49%",
+   "read": "One in three failed bills returns; one in three of those wins. But a returning bill passes BELOW the overall baseline \u2014 coming back is not the same as winning."
+  },
+  "governor": {
+   "sent back with recommendations": 920,
+   "recommendation adopted": "508 (55%)",
+   "vetoed": 471,
+   "veto sustained": "317 (67%)",
+   "override attempted": 28,
+   "read": "The amendment power is used TWICE as often as the veto, and works more than half the time. The reconvened session matters more than the veto."
+  },
+  "where_to_file": {
+   "H Commerce and Labor vs S Commerce and Labor": "25-3 House",
+   "H Finance vs S Finance": "1-10 Senate",
+   "H Counties/Cities/Towns vs S Local Government": "15-39 Senate",
+   "H Health/Welfare vs S Rehab/Social Services": "3-13 Senate",
+   "H Courts of Justice vs S Courts of Justice": "32-24 House",
+   "read": "Same bill, both chambers, one committee passed and its counterpart killed. Directly actionable filing advice."
+  }
  }
 }
