@@ -543,7 +543,19 @@
    },
    "why_it_matters": "The only finding so far that names an ACTION rather than describing a situation. Recruiting a majority co-patron, or getting a majority member to carry the companion, is something an advocacy org can actually do.",
    "caveat": "CORRELATIONAL. Bills that attract majority co-patrons may be less partisan to begin with, so the co-patron could be a symptom of an easy bill rather than a cause of the win. TESTABLE against the 504 divergent companion pairs, where text is held constant.",
-   "status": "needs the confound test before it goes in front of a user"
+   "status": "confound test PASSED \u2014 cleared for use, with n=42 stated alongside it",
+   "confound_test": {
+    "measured": "2026-08-02",
+    "design": "Divergent companion pairs (one side passed, one died) where BOTH chief patrons are in the minority and the two sides DIFFER in whether they have a majority-party co-patron. Text identical, chief-patron standing identical \u2014 co-patron composition is the only thing left.",
+    "n": 42,
+    "result": {
+     "survivor had a majority co-patron": "32 of 42 (76%)",
+     "survivor lacked one": "10 of 42 (24%)",
+     "null": "50%"
+    },
+    "verdict": "SURVIVES. The 61%-vs-31% headline is not merely a symptom of easy bills attracting co-patrons \u2014 with the bill held literally identical, the version carrying a majority co-patron won 3 times in 4.",
+    "caveat": "n=42, small by construction: requiring divergence AND both-minority chiefs AND differing co-patron status is restrictive. The split is lopsided enough that chance is an unlikely explanation, but re-check as sessions accumulate rather than treating it as settled."
+   }
   }
  }
 }
