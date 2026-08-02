@@ -691,6 +691,29 @@
    "Elections": "majority 34/64 (53%) \u00b7 minority 10/50 (20%) \u2014 33 pts",
    "Counties, Cities, and Towns": "majority 84/134 (63%) \u00b7 minority 32/97 (33%) \u2014 30 pts",
    "read": "THE AUTHORITATIVE VERSION of the topic finding. Two sessions, LIS's own taxonomy, and it produces a cleaner and larger set of usable categories than 18 sessions of derived labels."
+  },
+  "incorporation_who_survives_a_merge": {
+   "pool": "677 absorbed->survivor pairs, found from LIS's own explicit action text ('Incorporated by ... (HB158-McClure)'). 18 sessions.",
+   "co_patron_count": {
+    "raw": "survivor had more co-patrons 520 of 573 (91%)",
+    "confound": "69% of the time the ABSORBED bill's patron becomes a co-patron of the survivor, mechanically inflating the count",
+    "corrected": "with absorbed patrons removed: 389 of 470 (83%)",
+    "verdict": "SURVIVES the confound"
+   },
+   "standing": {
+    "minority absorbed -> majority survivor": 173,
+    "majority absorbed -> minority survivor": 37,
+    "read": "Of 210 cross-standing merges, the majority patron's version wins 82%."
+   },
+   "seniority": "survivor more senior 178 of 315 (57%) \u2014 near noise",
+   "THE_INSIGHT": "Co-patron COUNT is NOISE for predicting whether a bill passes (+0.3%, tested and filed as noise) but 83% for predicting WHICH of two competing bills is chosen. It is a SELECTION signal, not a survival signal \u2014 it does not help a bill pass, but when two versions are on the table it decides whose name stays on the one that moves.",
+   "war_room_use": "If a competing bill exists on the same subject, co-patron count is the thing that decides which version survives the merge. That is actionable and it is invisible in any single-bill view."
+  },
+  "_LEAKAGE_CAUGHT_NOT_REPORTED": {
+   "re_referral": "59% vs 0% \u2014 passing REQUIRES a second-chamber referral, so re-referral is downstream of the outcome",
+   "amended_or_substituted": "81% vs 25% \u2014 bills get amended because they are moving",
+   "subcommittee": "56% vs 38% \u2014 softer, but a bill that dies on arrival never reaches subcommittee",
+   "note": "All three caught BEFORE being reported as findings. Same class as text_versions. Recorded so nobody re-derives them and gets excited."
   }
  }
 }
