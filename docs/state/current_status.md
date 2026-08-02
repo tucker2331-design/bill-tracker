@@ -34,6 +34,12 @@ status: active
 
 ## NEXT (needs owner infra / a decision — then I execute)
 
+- **📊 HISTORICAL DATA — SOLVED, pending one owner step: [[knowledge/openstates_bulk_va]].** Open States
+  publishes **20 Virginia sessions (2017–2027) under CC0 with no commercial restriction** — against the 3
+  LIS still serves. Takes the calibration base from 2 usable sessions to ~10, and takes the *historical*
+  half of the product off the disputed LIS channel entirely. **Owner must create a free account**
+  (assistants may not register). **Then: measure fidelity against our cached LIS 2023/2024 BEFORE trusting
+  any pre-2023 session** — it is a scraped compilation, not the authoritative record.
 - **⚠️ LIS ToS §2: "personal and non-commercial use only"** ([[knowledge/lis_tos_commercial_use]], owner
   supplied the text 2026-08-01). We disqualified LegiScan for this exact clause. §6 contemplates paid
   access, so a commercial arrangement likely exists — **one question to DLAS settles it.** Pre-revenue
