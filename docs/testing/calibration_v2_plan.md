@@ -4,137 +4,147 @@ updated: 2026-08-02
 status: active
 ---
 
-# What we want to LEARN from 20 sessions
+# The instrument: same words, opposite fates
 
-**This replaces a first draft that was methodology dressed as a plan.** The owner's correction:
-*"I'm not looking to continually test hypotheses, I'm trying to find what's informative."* Right. The
-questions come first; the tests are whatever answers them.
+## Why the previous drafts were wrong
 
----
+Draft 1 was a methodology. Draft 2 was ten questions, most of them descriptive ("where do bills die") —
+true, obvious, and not worth 20 sessions to establish.
 
-## The reframe that changes the analysis
+**What survived review was one question — "what gets a minority bill through?" — and the reason it is the
+right shape generalises:** it fixes a population that is alike in one important way, then asks what
+separates the winners inside it. It can be run forever, against any pool, and it ends in an action.
 
-Owner: *"10 years of dem control over Finance won't tell you a lot about the next year under republican
-control."*
-
-**A committee is not a stable object.** "House Finance" under one majority and the same committee under the
-other are different rooms sharing a name. Every number we have pooled across sessions has been averaging
-over that — which is why a committee's rate looked stable-ish year to year (r ≈ +0.44) and useless as a
-predictor. **It was measuring a thing that does not persist.**
-
-**So the unit of analysis is not the committee. It is the committee-under-a-regime.** That single change
-makes several questions below answerable that were not before, and it is the thing 20 sessions buys.
+**This draft is built on that shape, and on the strongest version of it available.**
 
 ---
 
-## The questions, ranked by how much the answer would change what a lobbyist does
+## The core idea
 
-### 1. Where do bills actually die, and does that move?
-Committee, origin floor, second chamber, conference, Governor. **The whole funnel, per session.** Everyone
-"knows" bills die in committee — nobody has the number, and nobody knows whether it shifts under divided
-government or in an election year.
-**Why it matters:** it tells you where to spend a week. If 70% of loss is one stage, everything else is
-theatre.
+Bills differ in a thousand ways at once, so any comparison is confounded by content. A parking-fee bill and
+an abortion bill have different fates for reasons no feature list will capture.
 
-### 2. How much of a committee's behaviour is the COMMITTEE, and how much is who runs it?
-The owner's question, made measurable. Decompose the variation in pass rates into committee identity,
-control regime, and the interaction.
-**Why it matters:** if control explains most of it, the useful fact is *"who runs this room"* and committee
-reputation is close to noise. If committee identity survives across flips, then committees have durable
-characters and *"Finance is a graveyard"* is real institutional knowledge. **These lead to opposite advice.**
+**Unless the words are the same.**
 
-### 3. What gets a minority-patron bill through?
-The single most actionable question we have. Minority patrons run 30–54% depending on chamber and year —
-so **thousands of minority bills DID pass.** What separates them?
-**Why it matters:** every other finding tells someone their situation. This one tells them what to do about
-it.
+When two bills carry the same text and one passes while the other dies, **content is held constant and
+whatever differs is what mattered.** That is as close to a controlled experiment as this domain allows.
 
-### 4. Do bills come back — and do they win the second time?
-**Only possible with 20 sessions, and never considered before.** Match bills across sessions by patron and
-title similarity: how often is a failed bill reintroduced, and does reintroduction improve its odds? Does a
-bill that died in committee twice ever pass?
-**Why it matters:** it reframes a loss. "Bills like yours pass on the second attempt X of Y times" is a
-completely different conversation from "it died."
+**MEASURED, all 11 regular sessions 2017–2027:**
 
-### 5. Does bipartisan support actually work, or is it theatre?
-Round 1 found co-patron *count* worthless and majority-share useful. With 20 sessions this can be asked
-properly: does a minority bill with majority co-patrons beat a minority bill without, **within the same
-committee and regime**?
-**Why it matters:** recruiting co-patrons is one of the few things an advocate can actually change.
+| | |
+|---|---|
+| companion pairs (same session, both chambers, same title) | **3,139** |
+| of those, both chambers passed it | 1,820 |
+| both chambers killed it | 815 |
+| **DIVERGED — one lived, one died** | **504 (16%)** |
 
-### 6. Which committees are genuinely different from each other?
-Not "what is each rate" — **which differences are large and repeated enough to act on.** Most probably are
-not, and saying so is worth as much as ranking them.
-**Why it matters:** stops us shipping 25 numbers that are one number plus noise.
+**504 natural experiments.** Same text, same session, same political weather, same week — and opposite
+outcomes. Every one of those pairs is a direct question: *what was different about the room?*
 
-### 7. Does subject matter independent of politics?
-Do some policy areas die at high rates under every regime? That is the difference between a hostile
-committee and a hostile topic.
-**Why it matters:** if it is the topic, changing venue or sponsor will not save the bill.
-
-### 8. Does timing matter?
-Filing date, docket position, where in the session a bill is heard, the crossover cliff.
-**Why it matters:** it is advice you can act on before the session starts.
-
-### 9. Does divided government change the legislature's own behaviour?
-Governor's party vs each chamber. Do committees kill more when a veto is likely?
-**Why it matters:** it tells you whether a session is worth fighting or waiting out.
-
-### 10. What happens to "continued to next session" bills?
-LIS code `40` — 281 bills in the 2024 House alone. Is continuation a soft kill or a real second chance?
-**Why it matters:** it is currently invisible in our product and it is a large population.
+Per session it runs 27–70 divergent pairs, so this supports cutting by chamber, by committee, by patron
+standing, and still leaves something to count.
 
 ---
 
-## What 20 sessions makes newly possible
+## What this instrument answers that nothing else can
 
-| | with 2 sessions | with 20 |
-|---|---|---|
-| Control regimes | 1 per chamber | **several, repeated** — Q2 becomes answerable |
-| Bills across sessions | impossible | **Q4 becomes possible at all** |
-| Rare events (conference, veto override) | too few | enough to count |
-| Committee × regime cells | ~1 bill each | real samples |
-| Governor's party | constant | varies |
+Each of these is the same question asked of a different slice. None has a fixed answer; all are re-runnable
+against every new session.
 
----
+**Direction of failure**
+- When a pair diverges, which chamber kills it more often? Is that stable across control regimes, or does
+  it follow whoever is in the majority?
 
-## How each answer gets used
+**Venue**
+- Which committee pairs reliably diverge — where the House committee passes what the Senate committee kills,
+  or the reverse? **That is a map of where to file a bill**, and it is derived from cases where the bill
+  itself was identical.
 
-**Not everything worth knowing goes on the panel.** Three different destinations, and being explicit stops
-us building UI for insights that belong in a briefing:
+**Patron**
+- In a divergent pair, is the surviving side more often the majority-standing patron? **This tests the
+  majority-standing finding with content perfectly controlled** — the strongest available check on the one
+  result that has survived every correction so far.
+- Does the more senior patron survive? The one who files fewer bills? The one on the deciding committee?
 
-- **On the bill panel** — facts about *this* bill's situation. Q1, Q3, Q5.
-- **In a strategy briefing** — how the institution behaves. Q2, Q6, Q7, Q9. The owner's colleague
-  conversation.
-- **Nowhere, deliberately** — anything that is real but too weak to act on. Saying so is a result.
+**Sequence**
+- Does the chamber that acts FIRST do better or worse? Does a bill that has already passed one chamber fare
+  better in the second than an identical bill starting fresh?
 
----
-
-## The three ways this gets it wrong, and the guards
-
-Round 1's bugs are documented in [[testing/calibration_corrections]] and
-[[testing/calibration_correction_committee_outcome]]; the guards are mechanical and stay. The **conceptual**
-risks for a descriptive study are different from a predictive one:
-
-1. **Finding a pattern, then explaining it.** With 20 sessions and 40 stats there are thousands of
-   comparisons; some will look striking by chance. **Guard: any finding must hold in a majority of
-   independent regimes, not merely in the pooled data.** A pattern that appears in one regime is a lead,
-   not a result.
-2. **Averaging over a thing that changed.** The whole reason for this rewrite. **Guard: no number is
-   reported pooled across a control flip without also being reported split.**
-3. **Confusing "true" with "useful".** A 3-point difference can be real and worthless.
-   **Guard: every finding states the effect SIZE in natural frequencies, and anything under ~10 points is
-   labelled as not actionable regardless of how solid it is.**
+**The negative space**
+- Are there committees that never kill a bill their counterpart passed? Or that always do?
 
 ---
 
-## What I need from you before starting
+## The other pools, and what each holds constant
 
-1. **Are these the right questions?** They are my list, not yours — you know what a lobbyist actually asks.
-2. **Which three matter most?** I would start with Q1 (the funnel), Q2 (committee vs control), and Q3
-   (what gets minority bills through) — Q1 because everything else is framed by it, Q2 because it decides
-   whether committee stats are knowledge or noise, Q3 because it is the only one that ends in an action.
-3. **Anything obviously missing** that a lobbyist would want and I have not thought of.
+| pool | holds constant | isolates | status |
+|---|---|---|---|
+| **Companions** | text, session, climate, timing | chamber, committee, patron | **3,139 pairs — measured, viable** |
+| **Reintroductions** | text, roughly | regime, patron, timing, Governor | needs cross-session matching (see limits) |
+| **Incorporations** — LIS says so explicitly (*"Incorporated by Public Safety (HB158-McClure)"*) | subject and intent | **whose version survives** | not yet counted; a direct test of patron influence |
+| **Copycats** (same session, unrelated patrons) | subject | venue vs sponsor | not yet counted |
 
-**Nothing runs until this list is right.** Getting the questions wrong is more expensive than any bug in
-answering them.
+**Reintroduction must match on TEXT, not patron.** Owner: *"patrons will leave or give up on a bill and
+someone else will pick it up with minor adjustments."* Matching on patron would discard exactly the cases
+where the handoff IS the variable — and a bill that changes hands and then passes is one of the most
+informative rows in the dataset.
+
+---
+
+## Limits found while checking whether this was feasible at all
+
+**1. There is no full bill text for history.** Open States `bill_versions.csv` is metadata; the actual text
+lives behind `bill_version_links.csv` URLs pointing at legacylis CGI pages. Fetching 20 sessions of those
+would be scraping at scale — not acceptable, and not necessary.
+
+**2. Abstracts are unusable as a spine.** Coverage measured per session: 100% for 2020, 2022, 2024–2027;
+**31–35% for 2017–2019; ZERO for 2023.** Median length also drops from ~480 to ~185 characters after 2024,
+so the field changed. Usable as a supplement where present, never as the matching key.
+
+**3. Titles are the only universal key — 100% coverage in every session**, median ~60 characters, and
+Virginia's convention makes them substantive: *"Elections; early voting."* / *"Imprisonment; consecutive
+terms."* The existing companion detector already treats identical title as its structural signal
+([[architecture/text_similarity]]), and the 3,139 figure above is built on it.
+
+**4. The comparer's threshold is NOT validated for this use.** `tools/text_corpus/companions.py` calibrated
+`NEAR_IDENTICAL = 0.80` on **n=12, one session, full text**, and its own docstring says to re-measure before
+reusing it. Cross-session reintroductions are edited more heavily than same-session companions. **That
+recalibration is a prerequisite for the reintroduction pool, not for companions.**
+
+**5. A defect in the source, found by checking.** The `VA_2023S1` archive contains **3,082 bills — an exact
+duplicate of the 2023 regular session's identifier set**, relabelled. Treating it as a separate session
+would silently double-count an entire session. **Every archive's identifier set must be checked for overlap
+against its neighbours before use.**
+
+---
+
+## On pooling — correcting a guard I got wrong
+
+A previous draft said a finding *"must hold in a majority of independent regimes."* **That is backwards.**
+Context is not noise to be generalised over; **the context is frequently the finding.** "Minority bills die
+in House Courts and survive in House Transportation" is not a failure to generalise, it is the answer.
+
+**The rule instead: every finding carries its pool, and the pool is part of the claim.** Never "minority
+bills pass 30% of the time" — always "minority-patron House bills, divided control, passed 30% (n = …)".
+A number without its pool is not weaker, it is a different and false claim.
+
+**The real risk is slicing until something looks interesting.** Two honest guards:
+1. **Pools are defined by something structural** — chamber, regime, committee, text-match — and defined
+   before the outcome is looked at. Never "the bills that did well".
+2. **Report counts, and report how many pools were examined.** Five of forty committees showing an effect is
+   a different claim from five of five.
+
+---
+
+## What to do first
+
+1. **Verify no other archive is a duplicate** (limit 5). One pass over 20 identifier sets. Cheap, and
+   everything downstream is wrong without it.
+2. **The 504 divergent pairs, by patron standing.** The tightest available test of the only finding that
+   has survived every correction, with content controlled.
+3. **The 504 by committee pair** — the where-to-file map.
+4. **Count the incorporation pool**, which is a second natural experiment nobody has looked at.
+
+**Still open to you:** other Virginia situations where the words stay put and the circumstances move —
+budget amendments, a bill appearing in both a regular and a special session, carry-overs that get
+re-referred. Each is another pool, and you will know ones I do not.
