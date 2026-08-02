@@ -620,6 +620,32 @@
    "H Health/Welfare vs S Rehab/Social Services": "3-13 Senate",
    "H Courts of Justice vs S Courts of Justice": "32-24 House",
    "read": "Same bill, both chambers, one committee passed and its counterpart killed. Directly actionable filing advice."
+  },
+  "topic_source": "Virginia titles are 'Topic; what it does.' The subject-half is LIS's own drafting convention, available on all 22,659 bills \u2014 7,825 distinct topics. Not our invention, and it needs no separate subject file (Open States publishes none).",
+  "committee_rate_varies_BY_TOPIC": {
+   "H Finance": "overall 37% \u2014 real property tax 63%, state income tax 19% (38 of 198). 44-pt spread.",
+   "S Education and Health": "overall 52% \u2014 school boards 62%, certificate of public need 20%. 42-pt spread.",
+   "S Privileges and Elections": "overall 38% \u2014 voter registration 50%, absentee voting 25%.",
+   "read": "A committee's headline rate is often misleading. Validation signal: certificate-of-public-need surfacing as the worst topic in its committee is a well-known VA fight the method found unprompted."
+  },
+  "minority_penalty_VARIES_BY_TOPIC": {
+   "fatal": {
+    "firearms": "majority 34/84 (40%) vs minority 2/85 (2%)",
+    "absentee voting": "30/56 (54%) vs 10/84 (12%)",
+    "electric utilities": "83/149 (56%) vs 13/92 (14%)",
+    "elections": "37/70 (53%) vs 8/41 (20%)"
+   },
+   "barely matters": {
+    "alcoholic beverage control": "75/130 (58%) vs 43/86 (50%) \u2014 8 pts",
+    "public schools": "43/81 (53%) vs 25/60 (42%) \u2014 11 pts",
+    "income tax, state": "35/147 (24%) vs 10/125 (8%) \u2014 16 pts, but BOTH sides are low"
+   },
+   "read": "THE STRONGEST WAR-ROOM FINDING SO FAR. The minority penalty is not a constant \u2014 it runs from 38 points (firearms: 2 of 85 in 18 sessions) to 8 points (ABC). Tells an advocate when patron party is the whole game and when it is nearly irrelevant.",
+   "caveat": "Topic pooled across committees and chambers; minimum 40 bills per side. Not yet split by control regime."
+  },
+  "_answered": {
+   "house_volume_confound": "Rates were used throughout, not counts, so raw volume is normalised (House 4,677 minority bills vs Senate 3,477; 25% vs 39%).",
+   "co_patron_moderate_bill_confound": "Ruled out by the identical-text test \u2014 32 of 42 divergent pairs, same bill on both sides."
   }
  }
 }
