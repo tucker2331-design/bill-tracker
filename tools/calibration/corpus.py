@@ -52,6 +52,20 @@ def _load(zf, suffix):
 # double-count a whole session. Verified 2026-08-02.
 SKIP = {"VA_2023S1.zip"}
 
+# Chamber control is PINNED to the historical record, not derived. Deriving it from the sponsoring roster
+# got 2 of 11 sessions wrong (2022 Senate, 2023 both chambers) because a near-tied chamber cannot survive
+# the few percent of members whose party will not resolve by name. Same failure as the earlier
+# voting-bloc derivation, which inverted the 2023 House 52-48. Every majority/minority label in every
+# finding rides on this table, so it is data, not inference.
+CONTROL = {
+    2017: ("Republican", "Republican"), 2018: ("Republican", "Republican"),
+    2019: ("Republican", "Republican"), 2020: ("Democratic", "Democratic"),
+    2021: ("Democratic", "Democratic"), 2022: ("Republican", "Democratic"),
+    2023: ("Republican", "Democratic"), 2024: ("Democratic", "Democratic"),
+    2025: ("Democratic", "Democratic"), 2026: ("Democratic", "Democratic"),
+    2027: ("Democratic", "Democratic"),
+}
+
 def build():
     party = _party_lookup()
     sessions, bills = {}, []
@@ -76,14 +90,9 @@ def build():
             if not bid: continue
             if str(r.get("primary")).lower() in ("true", "1"): chief.setdefault(bid, r["name"])
             else: cops[bid].append(r["name"])
-        maj = {}
-        for ch in "HS":
-            d, seen = collections.Counter(), set()
-            for bid, nm in chief.items():
-                if bid[0] == ch and nm not in seen:
-                    seen.add(nm); p = party(nm)
-                    if p: d[p] += 1
-            if d: maj[ch] = d.most_common(1)[0][0]
+        if year not in CONTROL:
+            continue                      # a session with no pinned control is SKIPPED, never guessed
+        maj = {"H": CONTROL[year][0], "S": CONTROL[year][1]}
         for nm in set(chief.values()):
             first_seen.setdefault(nm, year)
             first_seen[nm] = min(first_seen[nm], year)

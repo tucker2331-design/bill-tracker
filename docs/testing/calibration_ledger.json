@@ -646,6 +646,32 @@
   "_answered": {
    "house_volume_confound": "Rates were used throughout, not counts, so raw volume is normalised (House 4,677 minority bills vs Senate 3,477; 25% vs 39%).",
    "co_patron_moderate_bill_confound": "Ruled out by the identical-text test \u2014 32 of 42 divergent pairs, same bill on both sides."
+  },
+  "_CONTROL_CORRECTION": {
+   "found": "2026-08-02",
+   "bug": "Chamber control was DERIVED by counting distinct chief patrons by party. It got 2 of 11 sessions wrong \u2014 2022 Senate (said Republican, was Democratic) and 2023 (said House Democratic, was Republican; Senate unresolved). A near-tied chamber cannot survive the few percent of members whose party will not resolve by name. Same failure mode as the earlier voting-bloc derivation that inverted the 2023 House 52-48.",
+   "fix": "CONTROL is now a pinned table from the historical record in corpus.py, and a session with no pinned entry is SKIPPED rather than guessed.",
+   "impact": "Small \u2014 2 of 18 sessions. Every headline held: co-patron lever 61%/31% -> 60%/29%; firearms minority 2 of 85 -> 2 of 91 (2%); ABC penalty 8 -> 11 points. Ordering and magnitudes unchanged.",
+   "lesson": "Any aggregate built from a name-matched party label is unreliable where the margin is thin. Validate the aggregate against a known truth, not the per-item match rate."
+  },
+  "co_patron_lever_by_topic": {
+   "works": {
+    "public schools": "31% -> 73% (14/45 -> 11/15)",
+    "health insurance": "23% -> 62% (16/70 -> 10/16)",
+    "state income tax": "5% -> 29% (5/108 -> 5/17)"
+   },
+   "does_not": {
+    "electric utilities": "15% -> 10% (12/82 -> 1/10) \u2014 no lift"
+   },
+   "UNAVAILABLE": {
+    "firearms": "ZERO minority-patron firearms bills acquired a majority co-patron in 18 sessions"
+   },
+   "read": "IMPORTANT TEMPERING of the headline lever. It works on consensus-adjacent topics and is either useless or entirely unavailable on the genuinely partisan ones. Nobody crosses the aisle on guns, so the best advice we have does not exist where an advocate needs it most."
+  },
+  "symmetry_across_control_INCONCLUSIVE": {
+   "design": "Same topic, House only, minority side, compared under Republican rule (2017-19, 2022-23) and Democratic rule (2020-21, 2024-27).",
+   "result": "Only 6 House topics clear 15 minority bills under BOTH parties, and they are mixed: ABC 55% under R vs 30% under D; electric utilities 26% under R vs 9% under D. Firearms does not qualify at all.",
+   "verdict": "INCONCLUSIVE and recorded as such. 18 sessions is not enough to separate 'the institution penalises the minority' from 'this particular minority'. Not fixable by more slicing."
   }
  }
 }
