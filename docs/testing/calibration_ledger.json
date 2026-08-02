@@ -672,6 +672,25 @@
    "design": "Same topic, House only, minority side, compared under Republican rule (2017-19, 2022-23) and Democratic rule (2020-21, 2024-27).",
    "result": "Only 6 House topics clear 15 minority bills under BOTH parties, and they are mixed: ABC 55% under R vs 30% under D; electric utilities 26% under R vs 9% under D. Firearms does not qualify at all.",
    "verdict": "INCONCLUSIVE and recorded as such. 18 sessions is not enough to separate 'the institution penalises the minority' from 'this particular minority'. Not fixable by more slicing."
+  },
+  "_TOPIC_SOURCE_CORRECTION": {
+   "found": "2026-08-02, owner challenge: 'where are you getting these topics, are these the topics that LIS assigns? otherwise isnt this kind of useless because it relies on you deriving the topic?'",
+   "answer": "He was right. The earlier 'topics' were MINE \u2014 the title's subject-half, split at the semicolon. 7,825 distinct fragments, a long tail rather than a taxonomy.",
+   "LIS_has_a_real_one": "CiBillSubjects.csv \u2014 1,561 distinct subjects, ~2 per bill, full coverage. Cached for 231 and 241.",
+   "head_to_head": "Same 2 sessions, same bills, same method, only the label differs. LIS subjects: 15 topics clear 25+ bills per side. Title-derived: ZERO. The derived version only ever 'worked' because pooling 18 sessions accumulated enough per fragment.",
+   "consequence": "All earlier topic-level numbers (firearms 2/91, ABC 48%) are DERIVED-LABEL results and are demoted. Not deleted \u2014 they used a consistent label across 18 sessions \u2014 but they must not be presented as LIS subject categories.",
+   "coverage_limit": "LIS subjects exist for 2023 and 2024 only. A learned title-phrase -> LIS-subject bridge covers just 42% of the other 18,166 bills, so it is not a basis for a user-facing number.",
+   "fix": "Ask DLAS for CiBillSubjects.csv for older sessions \u2014 small, specific, and it unlocks topic analysis across the whole window."
+  },
+  "minority_penalty_by_LIS_SUBJECT_2023_2024": {
+   "pool": "4,345 bills with both a LIS subject and resolved standing (2023 + 2024)",
+   "Appropriations": "majority 37/52 (71%) \u00b7 minority 7/50 (14%) \u2014 57 pts",
+   "Crimes and Offenses Generally": "majority 64/90 (71%) \u00b7 minority 16/95 (17%) \u2014 54 pts",
+   "Criminal Procedure": "majority 49/59 (83%) \u00b7 minority 14/36 (39%) \u2014 44 pts",
+   "Education": "majority 81/130 (62%) \u00b7 minority 30/110 (27%) \u2014 35 pts",
+   "Elections": "majority 34/64 (53%) \u00b7 minority 10/50 (20%) \u2014 33 pts",
+   "Counties, Cities, and Towns": "majority 84/134 (63%) \u00b7 minority 32/97 (33%) \u2014 30 pts",
+   "read": "THE AUTHORITATIVE VERSION of the topic finding. Two sessions, LIS's own taxonomy, and it produces a cleaner and larger set of usable categories than 18 sessions of derived labels."
   }
  }
 }
