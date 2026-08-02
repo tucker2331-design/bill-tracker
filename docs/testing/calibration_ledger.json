@@ -492,5 +492,58 @@
   "prior_session_recurrence": "Needs a prior session for the TRAINING year too. With only 2023+2024 usable (2022 is partial), the training year has no prior and the feature is constant in training. Needs a THIRD complete session. NOT TESTED.",
   "fiscal_note_footprint": "Needs History_description parsing for impact-statement rows; deferred, and would need a structural source before shipping.",
   "cross_chamber_companion": "Needs text similarity across chambers; the similarity tooling exists (W2/W3/W4) but catchline-only matching is weak. Deferred."
+ },
+ "natural_experiments": {
+  "companion_divergent_majority_standing": {
+   "measured": "2026-08-02",
+   "design": "Companion pairs = same session, both chambers, identical title. DIVERGENT = one side passed, the other did not. Content is held constant, so the surviving side's advantage is attributable to what differs (chamber, committee, patron).",
+   "pool": "11 regular sessions 2017-2027, Open States bulk CSV",
+   "pairs_total": 3139,
+   "both_passed": 1820,
+   "both_died": 815,
+   "diverged": 504,
+   "result": {
+    "majority_patron_side_survived": "408 of 694 (59%)",
+    "minority_patron_side_survived": "165 of 419 (39%)",
+    "gap_points": 20
+   },
+   "caveats": [
+    "136 sides had no resolvable party or chamber majority",
+    "some title groups hold 3+ bills, so side-counts exceed 2x the pair count",
+    "chamber majority derived from the distinct sponsoring roster, not an external roster"
+   ],
+   "why_it_matters": "Every prior test of majority standing had bill CONTENT as a confound. Here the text is identical, so this is the cleanest confirmation available."
+  }
+ },
+ "open_questions": {
+  "Q3_what_gets_a_minority_bill_through": {
+   "measured": "2026-08-02",
+   "pool": "8,154 minority-patron HB/SB, 11 regular sessions 2017-2027, Open States",
+   "base_rate": "2,805 of 8,154 passed (34%)",
+   "findings": {
+    "majority_co_patron": {
+     "with": "580 of 956 (61%)",
+     "without": "2,225 of 7,198 (31%)",
+     "note": "doubles the rate"
+    },
+    "dose_response": {
+     "all co-patrons in majority": "264 of 401 (66%)",
+     "some": "316 of 555 (57%)",
+     "none": "1,523 of 4,909 (31%)"
+    },
+    "companion_patron": {
+     "majority-patron companion": "404 of 709 (57%)",
+     "minority-patron companion": "617 of 1,462 (42%)",
+     "no companion": "1,784 of 5,983 (30%)"
+    },
+    "chamber": {
+     "Senate": "1,464 of 3,477 (42%)",
+     "House": "1,341 of 4,677 (29%)"
+    }
+   },
+   "why_it_matters": "The only finding so far that names an ACTION rather than describing a situation. Recruiting a majority co-patron, or getting a majority member to carry the companion, is something an advocacy org can actually do.",
+   "caveat": "CORRELATIONAL. Bills that attract majority co-patrons may be less partisan to begin with, so the co-patron could be a symptom of an easy bill rather than a cause of the win. TESTABLE against the 504 divergent companion pairs, where text is held constant.",
+   "status": "needs the confound test before it goes in front of a user"
+  }
  }
 }
