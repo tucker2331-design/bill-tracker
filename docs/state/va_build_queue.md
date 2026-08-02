@@ -199,7 +199,11 @@ computable — without it that relationship is unrepresentable.
   **Gap: `Docket.csv` is header-only (40 bytes) for every legacy session** — no pre-2025 docket history.
   Full detail + usage rules: [[knowledge/legacylis_csv_route]]. This unblocks the backtest (§4 of
   [[state/va_todo_2026-07-30]]): calibration base 2 sessions → 4.
-- **C2. Open States bulk download** — **still needs a free login, but the entry buried the lede.** Behind it:
+- ~~**C2. Open States bulk download**~~ — ✅ **NOT BLOCKED, AND NEVER WAS.** The login is a **free account**
+  (the owner already had one; the CSV downloaded immediately on 2026-08-01). Terms verified clean — no
+  commercial restriction, no attestation, *"we make no copyright claim over any of the data."* The
+  concerning-terms memory belongs to **LegiScan**, which was rejected the same day Open States was ADOPTED.
+  Behind it:
   **20 VIRGINIA SESSIONS, 2017–2027**, under a **CC0 public-domain** dedication with **no commercial
   restriction** — against the three sessions LIS itself still publishes. This is the historical-data answer.
   Owner must register (assistants may not create accounts). **Fidelity against our cached LIS 2023/2024 must

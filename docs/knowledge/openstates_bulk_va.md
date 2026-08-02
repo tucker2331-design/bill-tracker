@@ -63,10 +63,39 @@ for old sessions. LIS publishes neither historically ([[knowledge/legacylis_csv_
 header-only for every legacy session), so if Open States has them it unlocks a class of analysis currently
 impossible.
 
-## Why this was not found sooner
+## Terms — VERIFIED CLEAN 2026-08-01 (owner supplied the full text)
 
-[[state/va_build_queue]] C2 recorded it as *"Open States bulk download needs a login"* and stopped there.
-**True, and it buried the lede** — the entry never recorded that behind that login sit 20 Virginia sessions
-under a licence with no commercial restriction. A blocker was logged; the size of the prize behind it was
-not. Same shape as [[failures/assumptions_audit]] #109: a negative result recorded without recording what
-was on the other side of it.
+The Open States Terms of Service (effective 2021-09-15) contain **no commercial restriction of any kind**:
+
+> **Attribution** — "No attribution is required for using data obtained via Open States. **We make no
+> copyright claim over any of the data we collect & publish.** Of course, attribution is always appreciated
+> but no affiliation or endorsement may be implied on your derivative product."
+
+There is no non-commercial clause, no personal-use clause, and no attestation. The remaining provisions are
+ordinary: right to rate-limit, termination at their discretion, warranty disclaimer, indemnity, DC law.
+**Nothing here conflicts with a commercial product.** We attribute voluntarily anyway.
+
+## Why this was not used sooner — a bookkeeping failure, not a terms problem
+
+**The owner remembered a concerning terms clause and dropped the source. That memory is real but it
+attached to the WRONG source.**
+
+- **LegiScan was rejected** on 2026-07-27 — its free key requires *"a BINDING, uneditable attestation of
+  non-commercial + internal-use-only"* ([[knowledge/legiscan_terms]]). **That is the concerning clause.**
+- **Open States was ADOPTED in the same decision**, and [[architecture/text_similarity]] records it
+  verified that day as *"public-domain dedication, no registration, no survey, no attestation."*
+
+The two were evaluated side by side in one sitting, and the rejection stuck to both in memory.
+
+**And the "login" note was narrower than it read.** The JSON bulk download needs no registration; the
+**CSV** variant does. [[state/va_build_queue]] C2 recorded *"Open States bulk download needs a login"*
+without that distinction, and without noting that the login is a **free account** — which the owner already
+had. On 2026-08-01 he opened the CSV page and the download started immediately, no gate.
+
+**So the source was approved on 2026-07-27 and simply never fetched.** Five days of "blocked on historical
+data" sat on top of a two-minute download, because a line reading *"needs a login"* was filed as a blocker
+rather than as a task.
+
+**Lesson, same family as [[failures/assumptions_audit]] #109:** a note recording an obstacle must also
+record its SIZE. "Needs a login" and "needs a negotiated licence" read identically in a queue and are
+nothing alike. Write the cost, not just the existence, of a barrier.
