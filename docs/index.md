@@ -88,6 +88,7 @@ Links use Obsidian `[[wikilink]]` format. Obsidian resolves by filename; path-qu
 - [[knowledge/lis_tos_legal_analysis]] — **the doctrines around the LIS terms: Georgia v. PRO (no copyright in legislative works), Feist, contract-not-copyright, contra proferentem, and the VA FOIA commercial-use right. Not legal advice; written to sharpen the DLAS question.**
 - [[knowledge/lis_tos_commercial_use]] — **⚠️ ToS §2 restricts the API to PERSONAL AND NON-COMMERCIAL use. We rejected LegiScan for the same clause. Needs a DLAS answer before revenue. Owner decision.**
 - [[knowledge/lis_api_authorization]] — **RULE: LIS API authorized for 2025/2026 ONLY; pre-2025 via legacylis CSV**
+- [[testing/calibration_correction_committee_outcome]] — **⚠️ the committee outcome was wrong (1 of 8 terminal codes). The 'Senate does not filter' conclusion is WITHDRAWN — it shows +23/+25%. Caught by the Open States cross-check.**
 - [[testing/calibration_corrections]] — **the audit trail: 4 method bugs found and fixed, incl. the null model crediting base-rate drift as skill. Read before quoting any calibration number.**
 - [[testing/calibration_ledger]] — **EVERY stat tested + verdict. GREP THIS BEFORE PROPOSING A STAT — 37 tested, 7 usable, 4 disqualified as invalid measurements.**
 - [[testing/calibration_scope]] — **calibration method + the challenges to it; the measured finding that the committee stat is REAL in the House (+40% vs null) and near-worthless in the Senate (+12%)**

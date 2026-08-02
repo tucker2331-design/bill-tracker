@@ -1,0 +1,122 @@
+{
+ "2017": {
+  "bytes": 35693132,
+  "fetched_utc": "2026-08-02T16:10:50Z",
+  "sha256": "6884a02b2ad1c22a56271633e50fc10773b9c8aa55bcceab2a1199ba3b3f46fd",
+  "url": "https://data.openstates.org/csv/latest/VA_2017_csv_4KRlBQdaGViyAEQsoVXmq8.zip"
+ },
+ "2018": {
+  "bytes": 38181699,
+  "fetched_utc": "2026-08-02T16:11:00Z",
+  "sha256": "d7d0434636e6f70a1107847099ddf58f7c6bad9a357b4bfff6a535408b6e0c77",
+  "url": "https://data.openstates.org/csv/latest/VA_2018_csv_5JgroUEJeq5e0PueLLR17b.zip"
+ },
+ "2018S1": {
+  "bytes": 677227,
+  "fetched_utc": "2026-08-02T16:11:01Z",
+  "sha256": "4cca12f27fe02d727f7e0233a121e508a77a579e3ed0952692f22d1d5683a84c",
+  "url": "https://data.openstates.org/csv/latest/VA_2018specialI_csv_21grhk1A9l1S1vlxVT1DvG.zip"
+ },
+ "2018S2": {
+  "bytes": 65063,
+  "fetched_utc": "2026-08-02T16:11:02Z",
+  "sha256": "7d48effea1339cd04fcad8b1ad7b03a518aa8fb8a07bce88045700f343ea1539",
+  "url": "https://data.openstates.org/csv/latest/VA_2018specialII_csv_qVMGXzlQlUrMSJkGcyfCC.zip"
+ },
+ "2019": {
+  "bytes": 39124049,
+  "fetched_utc": "2026-08-02T16:11:14Z",
+  "sha256": "a1f043491c37978494c2d2cb55d67791f6bd3eff13f0b16b2b60f437f7b7cbf3",
+  "url": "https://data.openstates.org/csv/latest/VA_2019_csv_48wBjGNiwj34I0kcC70DqM.zip"
+ },
+ "2019S1": {
+  "bytes": 508755,
+  "fetched_utc": "2026-08-02T16:11:16Z",
+  "sha256": "797724b95366f014af1c766de9dbf87436c07e5a30584977dfb2712c75f4483e",
+  "url": "https://data.openstates.org/csv/latest/VA_2019specialI_csv_2b4d51NliQAAKA4EG3zAoJ.zip"
+ },
+ "2020": {
+  "bytes": 88856735,
+  "fetched_utc": "2026-08-02T16:11:42Z",
+  "sha256": "a419f1a3c5921601a1e3932b29300d2c31e6533d9feef2f5ef9de62c47dcc312",
+  "url": "https://data.openstates.org/csv/latest/VA_2020_csv_6JgipNJvlx55R3z07Ttiss.zip"
+ },
+ "2020S1": {
+  "bytes": 6742207,
+  "fetched_utc": "2026-08-02T16:11:45Z",
+  "sha256": "5babde9f06f5c1d74fb6e291e07952214187ca2bf6522ebb1426a4773377f35c",
+  "url": "https://data.openstates.org/csv/latest/VA_2020specialI_csv_3IA0EYJ7VAkZwuFSxu6Ccj.zip"
+ },
+ "2021": {
+  "bytes": 54045508,
+  "fetched_utc": "2026-08-02T16:12:01Z",
+  "sha256": "34b93f80caf80ab60eb17c5b73ccfcdff6851b6ef5c825215454027b40289d98",
+  "url": "https://data.openstates.org/csv/latest/VA_2021_csv_6VKn2syWz9KfjBHYLJqVUc.zip"
+ },
+ "2021S2": {
+  "bytes": 482370,
+  "fetched_utc": "2026-08-02T16:12:02Z",
+  "sha256": "6b41287e01133fa5b2f629a6854a439a18fb6ea605e7bcec1dfac80428a1331d",
+  "url": "https://data.openstates.org/csv/latest/VA_2021S2_csv_3ASj9k9HsyBhuvzY1x7bec.zip"
+ },
+ "2022": {
+  "bytes": 81173538,
+  "fetched_utc": "2026-08-02T16:12:39Z",
+  "sha256": "4a1d823daa73678cdaa98111bfb7701f37178c0fa368247c0d2f932b429cf6dc",
+  "url": "https://data.openstates.org/csv/latest/VA_2022_csv_5lvZYzrzxH68TwVUd6j2rL.zip"
+ },
+ "2022S1": {
+  "bytes": 1657428,
+  "fetched_utc": "2026-08-02T16:12:42Z",
+  "sha256": "e55a4a2abc7fbaf17b4ddf67e53b31787ab8314da24491e81554114002914568",
+  "url": "https://data.openstates.org/csv/latest/VA_2022S1_csv_1jTHZtmRpH4h7u68nuAMkU.zip"
+ },
+ "2023": {
+  "bytes": 21197518,
+  "fetched_utc": "2026-08-02T16:13:13Z",
+  "sha256": "c6850553130cf101ce604134479cc4170a2d5ce58affc3e81cd19bd54a57d15c",
+  "url": "https://data.openstates.org/csv/latest/VA_2023_csv_6otD9PK6aRD4WjomAj0XdN.zip"
+ },
+ "2023S1": {
+  "bytes": 20765869,
+  "fetched_utc": "2026-08-02T16:13:26Z",
+  "sha256": "69c161ef4bc47ed2efd435aeddfd02017a4a43635b5e1ea5719e5a81d84d67dc",
+  "url": "https://data.openstates.org/csv/latest/VA_2023S1_csv_71Rm2vb8FXphWiWUTOsmvS.zip"
+ },
+ "2024": {
+  "bytes": 91852732,
+  "fetched_utc": "2026-08-02T16:14:03Z",
+  "sha256": "22631504d92d94de9a8001a7fdc4911b707b0ef039a9a96f645641ffd3427de2",
+  "url": "https://data.openstates.org/csv/latest/VA_2024_csv_6FFTKnoJrmW22ASybh48ii.zip"
+ },
+ "2024S1": {
+  "bytes": 711358,
+  "fetched_utc": "2026-08-02T16:14:04Z",
+  "sha256": "4a7eddb0cadd4d4ed98da80f6d0c20e936ab55ef94d33ee9e16ff29ea9e7c203",
+  "url": "https://data.openstates.org/csv/latest/VA_2024S1_csv_3Rm9TP79Ks2sMLWLUxcWpC.zip"
+ },
+ "2025": {
+  "bytes": 89012426,
+  "fetched_utc": "2026-08-02T16:14:49Z",
+  "sha256": "0473c1d44f4f9208c03f4fdd62d5e1b114fd53096aa354221d891d42eef5dce8",
+  "url": "https://data.openstates.org/csv/latest/VA_2025_csv_7i4oVDRQR7C3WZSYlbtkO3.zip"
+ },
+ "2026": {
+  "bytes": 98706304,
+  "fetched_utc": "2026-08-02T16:15:41Z",
+  "sha256": "c5bb7517d1b7fd1f3852ef3b3d3268ce37359a21b1b20cf81b55a0742d0f8a57",
+  "url": "https://data.openstates.org/csv/latest/VA_2026_csv_2qUBs5DCT9OsfONOd03jx3.zip"
+ },
+ "2026S1": {
+  "bytes": 1384800,
+  "fetched_utc": "2026-08-02T16:15:42Z",
+  "sha256": "da75645e46dc4bdfd8501eb2337cada296b7afd149886e290443f30649f58078",
+  "url": "https://data.openstates.org/csv/latest/VA_2026S1_csv_d0dI9TTF1aSzBIOArmDnM.zip"
+ },
+ "2027": {
+  "bytes": 2360867,
+  "fetched_utc": "2026-08-02T16:16:07Z",
+  "sha256": "8ba4c1a3e87eeb94694cb9e98638ebed6e3f433d68eb4e5ad29335fb8ff748b3",
+  "url": "https://data.openstates.org/csv/latest/VA_2027_csv_LqkbalXLsnXWLqgzcSTZt.zip"
+ }
+}

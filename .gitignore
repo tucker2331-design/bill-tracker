@@ -15,3 +15,10 @@ web/.npm-cache/
 
 # root build shim output (Cloudflare Pages)
 /dist
+
+# Open States bulk session archives — ~500 MB of .zip, re-downloadable from the manifest.
+# The MANIFEST is committed (url + sha256 per session) so the set is reproducible and verifiable;
+# the payload is not, because a repo is the wrong home for half a gigabyte of regenerable input.
+# Contrast tools/historical_cache/va/ (the LIS CSVs) which IS committed at 1.6 MB gzipped.
+tools/historical_cache/openstates_va/*.zip
+tools/historical_cache/openstates_va/extracted/

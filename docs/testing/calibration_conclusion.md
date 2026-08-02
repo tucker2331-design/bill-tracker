@@ -1,10 +1,23 @@
 ---
 tags: [testing, calibration, conclusion, war-room, product]
-updated: 2026-08-01
+updated: 2026-08-02
 status: active
 ---
 
-# What the calibration actually found
+# ⚠️ SUPERSEDED IN PART — read this first
+
+**2026-08-02: an independent cross-check against Open States overturned the Senate half of this page.**
+The "got out of committee" outcome was derived from a LIS rule that counted only ONE of eight terminal
+action codes, and the Senate uses a different one. See [[testing/calibration_correction_committee_outcome]].
+
+**What survives:** the House finding, slightly changed (+35% / +31% corrected, was +33% / +35%).
+**What does NOT:** every statement below that the Senate committee stage "does not filter". It filters
+heavily, and shows a majority-standing gap of **+23% / +25%**.
+
+Everything below is left intact as the record of what was believed, and why.
+
+---
+
 
 47 stats tested. The headline for most of the exercise was *"almost nothing predicts."* **That was wrong,
 and it was wrong for a specific, correctable reason: every stat was tested in isolation.**
