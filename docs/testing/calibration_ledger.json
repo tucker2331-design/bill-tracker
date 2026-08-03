@@ -714,6 +714,38 @@
    "amended_or_substituted": "81% vs 25% \u2014 bills get amended because they are moving",
    "subcommittee": "56% vs 38% \u2014 softer, but a bill that dies on arrival never reaches subcommittee",
    "note": "All three caught BEFORE being reported as findings. Same class as text_versions. Recorded so nobody re-derives them and gets excited."
+  },
+  "WAITING_TIME_the_first_live_signal": {
+   "why_it_is_different": "Every other finding is STATIC \u2014 patron party, committee, chamber and topic are fixed on day one, so they are useful once and then wallpaper. This one CHANGES during the session, which is what a war room is for.",
+   "definition": "Days from a bill's own introduction to the committee's first recorded decision (reported / PBI / tabled / stricken / continued / incorporated). A bill never decided counts as unheard at every N \u2014 that is the modal death and it must not be excluded.",
+   "all_bills": {
+    "baseline": "11,028 of 22,659 (49%)",
+    "not heard by day 7": "48%",
+    "day 21": "40%",
+    "day 28": "34%",
+    "day 35": "31%",
+    "day 42+": "30% (flat)"
+   },
+   "minority": {
+    "baseline": "2,700 of 8,170 (33%)",
+    "day 21": "27%",
+    "day 28": "22%",
+    "day 35": "19%",
+    "day 42+": "19%"
+   },
+   "majority": {
+    "baseline": "6,877 of 11,826 (58%)",
+    "day 21": "51%",
+    "day 28": "47%",
+    "day 35": "44%",
+    "day 42+": "43%"
+   },
+   "read": "Roughly halves. A minority-patron bill unheard after five weeks passes 19% of the time. Flattens after day 35 \u2014 beyond that, more waiting does not make it worse, it is already bad.",
+   "war_room_use": "The only stat found so far that a war room can raise UNPROMPTED: 'HB1234 has sat 24 days without a committee decision; bills in that position pass 34%.' Updates weekly, needs no user input.",
+   "two_errors_fixed_getting_here": [
+    "Session-day was measured from the earliest PREFILING date (November), not from convening, so 'day 7' was mid-prefile and the curve was meaningless.",
+    "The pool was conditioned on span>=N, i.e. on the bill still being alive at N \u2014 which is the thing being measured. It produced a spurious U-shape rising to 77%."
+   ]
   }
  }
 }
