@@ -770,6 +770,28 @@
    "how_to_use_it": "INTERNAL CALIBRATION ONLY. Standard #3 bars a derived label from the lobbyist-facing path; a predicted subject must never be shown to a user as if LIS assigned it.",
    "statistical_caveat": "~23% label error ATTENUATES effects toward zero. So a finding that survives noisy labels is real but UNDERSTATED, and a null is not proof of absence. Directionally safe, magnitudes conservative.",
    "unlocks": "Subject-level analysis across 18 sessions instead of 2 \u2014 the difference between 4,345 bills and 22,659."
+  },
+  "subject_classifier_ATTEMPTS": {
+   "goal": "Owner asked for 95%+ accuracy at 100% coverage. NOT REACHED \u2014 best blended ~91%.",
+   "tried_in_order": {
+    "NB on title tokens": "75%",
+    "+ head words, bigrams, whole head phrase": "83%",
+    "+ roll 654 subjects to 43 top-level parents via CiParentChildSubjects": "85.4%",
+    "+ averaged perceptron instead of NB": "85.4%",
+    "+ abstracts where they exist (2024)": "86.6%",
+    "head-phrase exact lookup": "96.1% accurate but reaches only 41% of unlabelled bills",
+    "+ fuzzy head match (>=0.6 token overlap)": "reach rises to 51%"
+   },
+   "binding_constraint": "4,345 labelled examples, 43 classes, ~60 characters of text per bill, no embeddings available. Six approaches converge at 85-87% for the modelled portion.",
+   "doors_checked_and_shut": {
+    "more labels from the authorized API": "AdvancedLegislationSearch returns 28 fields for 20261 and NONE is a subject. The per-bill LegislationSubject service would be ~3,600 calls \u2014 ban risk, already ruled out in the vault.",
+    "semantic embeddings": "no sklearn or transformer library in this environment"
+   },
+   "RECOMMENDED_INSTEAD": "Ship LOOKUP ONLY: 51% of bills at 96% accuracy, and leave the remainder UNLABELLED rather than wrongly labelled. ~9,600 confident labels plus 4,345 real ones. A 15% error rate silently attenuates every subject finding toward zero; an honest gap does not.",
+   "reopen_if": "DLAS supplies CiBillSubjects for more sessions (triples the training set), or an embedding model becomes available."
+  },
+  "_scope_confirmation": {
+   "resolutions_excluded": "VERIFIED 2026-08-02 at the owner's request. corpus.py filters to `^[HS]B ` \u2014 the corpus holds 13,968 HB and 8,691 SB and ZERO HJ/SJ/HR/SR. Every finding in this file is substantive bills only; commending and memorial resolutions never entered any denominator."
   }
  }
 }
