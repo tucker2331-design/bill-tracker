@@ -792,6 +792,42 @@
   },
   "_scope_confirmation": {
    "resolutions_excluded": "VERIFIED 2026-08-02 at the owner's request. corpus.py filters to `^[HS]B ` \u2014 the corpus holds 13,968 HB and 8,691 SB and ZERO HJ/SJ/HR/SR. Every finding in this file is substantive bills only; commending and memorial resolutions never entered any denominator."
+  },
+  "subject_coverage_IS_BIASED_do_not_extend": {
+   "question": "Owner, 2026-08-02: 'can we be sure the data you did collect isnt concentrated in a certain area... the ones you dont want to touch are a concentration of something that would inform our data.'",
+   "answer": "HE WAS RIGHT. The reachable half is not a random sample, and the recommendation to ship lookup-only is WITHDRAWN.",
+   "bias_1_temporal": {
+    "2023": "92% reachable",
+    "2024": "90%",
+    "2022": "49%",
+    "2025": "52%",
+    "2026": "42%",
+    "2017": "34%",
+    "2018": "35%",
+    "2019": "37%",
+    "2020": "38%",
+    "2021": "43%",
+    "read": "Reachability tracks whether we hold real labels for that session. Subject analysis across 18 sessions would be dominated by two recent ones."
+   },
+   "bias_2_outcome": {
+    "reachable pass rate": "46%",
+    "unreachable": "51%",
+    "read": "Five-point gap. The bills we cannot label pass MORE, so any subject pass-rate would run low."
+   },
+   "bias_3_content_DECISIVE": {
+    "most common unreachable topics": [
+     "Electric utility regulation (35)",
+     "Unemployment compensation (31)",
+     "Hate crimes (27)",
+     "Parole (24)",
+     "Firearm transfers (22)",
+     "Grand larceny (20)",
+     "Casino gaming (18)"
+    ],
+    "read": "These are the CONTESTED areas \u2014 firearms, hate crimes, parole, utilities \u2014 which is exactly where the largest minority penalties were found. Extending coverage with this gap would systematically underweight contentious policy and make the legislature look more consensual than it is."
+   },
+   "DECISION": "Subject-level findings are CONFINED to 2023-2024, where real LIS labels exist and coverage is complete. Do NOT extend subject analysis to other sessions using predicted or looked-up labels. Findings that do not use subjects (standing, committee, chamber, co-patron, waiting time) are unaffected and remain on all 18 sessions.",
+   "reopen_if": "DLAS supplies CiBillSubjects for more sessions \u2014 which would close the gap rather than paper over it."
   }
  }
 }
