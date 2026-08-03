@@ -746,6 +746,30 @@
     "Session-day was measured from the earliest PREFILING date (November), not from convening, so 'day 7' was mid-prefile and the curve was meaningless.",
     "The pool was conditioned on span>=N, i.e. on the bill still being alive at N \u2014 which is the thing being measured. It produced a spurious U-shape rising to 77%."
    ]
+  },
+  "minority_penalty_IS_INSTITUTIONAL": {
+   "corrects": "An earlier entry called this INCONCLUSIVE. That was wrong \u2014 I had only tested it BY TOPIC, where buckets were too thin, then generalised the failure to the whole question. The overall test needs no topics and has ample data.",
+   "House": {
+    "under Republican rule": "majority 1,600/2,823 (57%) vs minority 656/2,337 (28%) \u2014 +29 pts",
+    "under Democratic rule": "majority 2,795/4,766 (59%) vs minority 682/2,383 (29%) \u2014 +30 pts",
+    "verdict": "+29 vs +30. The House treats the minority the same regardless of who runs it. Per-session gaps run +21 to +39 across all nine with no party pattern. THIS IS THE INSTITUTION, NOT THE PARTY."
+   },
+   "Senate": {
+    "under Republican rule": "majority 612/1,488 (41%) vs minority 362/1,295 (28%) \u2014 +13 pts",
+    "under Democratic rule": "majority 1,870/2,749 (68%) vs minority 1,000/2,155 (46%) \u2014 +22 pts",
+    "verdict": "NOT symmetric, and the base levels differ sharply (41% vs 68% for majority patrons). Report separately; do not average with the House."
+   }
+  },
+  "subject_classifier_solution": {
+   "problem": "LIS subject codes exist for 2023-2024 only. The owner will not contact DLAS before commercial launch, so the gap cannot be closed by asking.",
+   "solution": "Train on the 4,345 bills where BOTH the title and LIS's real subjects are known, then label the other ~18,000. Naive Bayes over title tokens.",
+   "measured": {
+    "all 610 subjects": "top-1 75%, top-3 88% (random ~0.2%)",
+    "the 62 subjects with 40+ bills \u2014 the only ones with enough volume to analyse": "top-1 77%, top-3 89% (random ~1.6%)"
+   },
+   "how_to_use_it": "INTERNAL CALIBRATION ONLY. Standard #3 bars a derived label from the lobbyist-facing path; a predicted subject must never be shown to a user as if LIS assigned it.",
+   "statistical_caveat": "~23% label error ATTENUATES effects toward zero. So a finding that survives noisy labels is real but UNDERSTATED, and a null is not proof of absence. Directionally safe, magnitudes conservative.",
+   "unlocks": "Subject-level analysis across 18 sessions instead of 2 \u2014 the difference between 4,345 bills and 22,659."
   }
  }
 }
