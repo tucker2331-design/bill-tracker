@@ -788,7 +788,26 @@
     "semantic embeddings": "no sklearn or transformer library in this environment"
    },
    "RECOMMENDED_INSTEAD": "Ship LOOKUP ONLY: 51% of bills at 96% accuracy, and leave the remainder UNLABELLED rather than wrongly labelled. ~9,600 confident labels plus 4,345 real ones. A 15% error rate silently attenuates every subject finding toward zero; an honest gap does not.",
-   "reopen_if": "DLAS supplies CiBillSubjects for more sessions (triples the training set), or an embedding model becomes available."
+   "reopen_if": "DLAS supplies CiBillSubjects for more sessions (triples the training set), or an embedding model becomes available.",
+   "round_2_after_owner_pushback": {
+    "owner": "'we arent done with the subjects... im sure there are better ways you just need to stop giving up so fast.' Fair. Eight more approaches, including his suggestion of training an agent.",
+    "results": {
+     "nearest-neighbour on FULL title (not just head)": "97.9% at 55% coverage \u2014 best precision found",
+     "self-training, 5 rounds, pool 2,890 -> 7,473": "97.5% at 59% \u2014 converged; 75% of older bills still unreachable",
+     "subject NAME matched against the title (zero-shot)": "56-62% \u2014 discarded",
+     "averaged perceptron, 43 top-level classes": "85.4% at 100%",
+     "LLM (me) classifying semantically, blind, n=40": "80%",
+     "LLM (me) using the CODE-LOCATION rule, blind, n=25": "76%"
+    },
+    "THE_STRUCTURAL_FINDING": "LIS does not classify by topic. It classifies by which Title of the Code of Virginia a bill amends \u2014 Wetlands sits under Fisheries (Title 28.2), Kratom under Professions (54.1), epinephrine-in-schools under Education (22.1). Discovered by examining my own errors.",
+    "but_the_rule_does_not_generalise": "Knowing it did NOT improve accuracy (76% vs 80%). The residual misses are conventions, not logic: Shenandoah River State Park -> Property and Conveyances, not Conservation; American Revolution 250 Commission -> General Assembly; Eviction Diversion -> Housing, not Property. There is no learnable rule for those.",
+    "why_the_LLM_loses_to_the_model": "The task is not understanding language, it is reproducing one cataloguer's choices. A model fitted to that cataloguer beats semantic reasoning about the subject matter.",
+    "also_found": {
+     "Section.csv": "EXISTS on legacylis for 221/231/241 and carries BOTH CodeSection and a Subjects column \u2014 a second subject source, but for the same three sessions, so it does not extend coverage.",
+     "abstracts as a code-citation source": "DEAD END \u2014 only 1% of 2020 abstracts and 0% of 2022 contain a \u00a7 citation."
+    },
+    "CONCLUSION_UNCHANGED_BUT_NOW_EARNED": "High precision at partial coverage is the best available. Combined with the measured coverage bias toward contested topics, subject analysis stays confined to 2023-2024."
+   }
   },
   "_scope_confirmation": {
    "resolutions_excluded": "VERIFIED 2026-08-02 at the owner's request. corpus.py filters to `^[HS]B ` \u2014 the corpus holds 13,968 HB and 8,691 SB and ZERO HJ/SJ/HR/SR. Every finding in this file is substantive bills only; commending and memorial resolutions never entered any denominator."
