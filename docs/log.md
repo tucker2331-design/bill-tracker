@@ -1,12 +1,41 @@
 ---
 tags: [log, meta]
-updated: 2026-06-21
+updated: 2026-08-04
 status: active
 ---
 
 # Project Log
 
 Append-only, reverse-chronological (newest at top). Each entry opens with `## [YYYY-MM-DD] <kind> | <title>` so `grep "^## \[" log.md | head -20` gives a parseable timeline.
+
+## [2026-08-04] measurement | Subject labels extended 2 sessions -> 18, and four ways the test flattered itself
+
+`CiBillSubjects.csv` is published for 2023/2024 only, capping every subject-cut finding at 2 of 18 sessions.
+`tools/calibration/subject_label.py` now labels **14,839 of 22,659 bills (65%)** at **96.9%** cold-session
+accuracy (a session with NO abstracts — the floor case) and **95.2%** on abstract-bearing sessions, which are
+75% of the corpus. Reproducible: verified under two `PYTHONHASHSEED` values after `Counter.most_common()`
+tie-breaking was found to make two identical runs disagree.
+
+**None of the accuracy came from a better classifier.** Threshold tuning was exhausted early (48
+combinations, frontier flat at 43-58% coverage). It came from (a) treating agreement between five
+independent routes as the confidence signal — 3-route agreement 97.5% vs 96.4% for the best single route —
+and (b) using the publisher's own subject vocabulary: a bill whose catalogue head IS an LIS subject name
+files at **98.9%** with no training example.
+
+**That last route answered the owner's coverage-bias worry**, which was correct: labelled coverage had been
+hate crimes 24%, abortion 32%, marijuana 31% — the politically loaded areas where the biggest effects live.
+Now 93% / 77% / 33%. **Marijuana is recorded as an open gap, not smoothed over.**
+
+**Four measurement failures, all in [[failures/assumptions_audit]] #112:** a random held-out split was worth
+6 free points (companions leak the answer); self-training through the 100%-reliable companion route scored
+83.3% once it fed on its own guesses; the only available cold test could not see the abstract route at all
+(2023 has zero abstracts) and implied it was worthless when it was worth +6 points of coverage; and the
+write gate was reading +/-2 points of single-fold sampling noise, which I "fixed" with a safety margin that
+cost 7 points of corpus before pooling removed the noise entirely.
+
+**Payoff:** the minority-patron penalty **by topic across 18 sessions**, 25 topics clearing `verify.check()`
+— Public Service Companies 63%->17% (46pt) down to Alcoholic Beverage Control 61%->46% (14pt).
+See [[testing/subject_labels]].
 
 ## [2026-07-25] measurement | "How often does the tie happen — if it's chronic the counter is unlivable" → MEASURED: zero ties, but absence is 16.31% and must not count
 

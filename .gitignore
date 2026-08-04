@@ -22,3 +22,6 @@ web/.npm-cache/
 # Contrast tools/historical_cache/va/ (the LIS CSVs) which IS committed at 1.6 MB gzipped.
 tools/historical_cache/openstates_va/*.zip
 tools/historical_cache/openstates_va/extracted/
+
+# Derived cache — rebuilt by tools/calibration/subjects.py --refresh, never a source of truth
+.subjects_cache.pkl
