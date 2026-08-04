@@ -48,6 +48,7 @@ from __future__ import annotations
 import collections
 import csv
 import io
+import json
 import os
 import pickle
 import re
@@ -59,9 +60,15 @@ sys.path.insert(0, _HERE)
 
 CACHE = os.path.join(_HERE, ".subjects_cache.pkl")
 
-# The two sessions that publish subject files. PINNED, not discovered: 242 (2024 special) 404s on both
+# The two sessions that publish subject FILES. PINNED, not discovered: 242 (2024 special) 404s on both
 # subject CSVs, and no other session publishes them at all. A loop that "finds" more is a bug.
 LABELLED = {"2023": "231", "2024": "241"}
+
+# 2025/2026 have no subject blob (measured 404, both casings) — their linkage exists only through the
+# search API, backfilled once by tools/historical_cache/lis_subjects.py. Read from that cache if present;
+# its ABSENCE is normal and simply means the seed is the two CSV sessions. Never fetched at import time.
+API_SUBJECTS = os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                            "..", "historical_cache", "va_subjects", "bill_subjects.json.gz")
 
 ABS_KEEP = 12            # rarest-N abstract tokens kept per bill (see build())
 STOP = set("the of and for to in a an or by on with certain relating act other generally".split())
@@ -91,6 +98,22 @@ def committee(rec) -> str:
 
 def _billkey(b: str) -> str:
     return re.sub(r"\s+", "", b).upper()
+
+
+def _lis_code_to_corpus_session(code: str):
+    """LIS session code -> Open States corpus session, or None if it cannot be mapped.
+
+    They are NOT the same string, and the mismatch is silent: LIS writes `20251` (year + session-type
+    digit), the corpus writes `2025`. Joining on the raw code matched ZERO of 4,247 rows and reported a
+    perfectly healthy '+0 added' — the exact shape of failure this repo keeps relearning, where a broken
+    join looks identical to an empty source.
+
+    Only the REGULAR session (type digit 1) is mapped. A special session would be `20252` on the LIS side
+    and `2025S1` on the corpus side, and the numbering does not correspond position-for-position, so it is
+    returned as None (counted by the caller) rather than guessed."""
+    if len(code) == 5 and code.isdigit() and code[4] == "1":
+        return code[:4]
+    return None
 
 
 def _abstracts():
@@ -140,6 +163,16 @@ def build():
             parents.add(r["Parent_Subject"].strip())
 
     def roll(s):
+        """Walk a leaf subject up to its topmost ancestor.
+
+        The result is NOT required to be one of the 43 names that appear as a parent in the hierarchy
+        file. Requiring that discarded **56% of all subject mentions** — and not at random: the discarded
+        set was Unemployment Compensation, Marijuana, Zoning, Workers' Compensation, Police, Local
+        Government, Firearms. Rolling 654 leaves up to 43 parents was meant to fight sparsity, but the
+        hierarchy file only covers the subjects that HAPPEN to be children of something, so every subject
+        that is already top-level was being deleted rather than kept.
+
+        A subject with no parent IS its own top-level subject. That is what this returns."""
         seen = set()
         while s in parent and s not in seen:
             seen.add(s)
@@ -154,7 +187,7 @@ def build():
     vocab = {}
     for nm in set(parent) | set(parent.values()):
         top = roll(nm)
-        if top in parents:
+        if top:
             k = re.sub(r"\s+", " ", re.sub(r"[^a-z0-9 ]", " ", nm.lower())).strip()
             if k:
                 vocab.setdefault(k, top)
@@ -171,9 +204,45 @@ def build():
             continue
         ss = raw.get((code, _billkey(r["bill"])))
         if ss:
-            t = {roll(s) for s in ss} & parents
+            t = {roll(s) for s in ss}
             if t:
                 truth[(r["session"], r["bill"])] = t
+
+    # 2025/2026 ground truth from the API backfill, rolled up through the SAME parent map so the two
+    # sources produce identical label vocabularies. A subject name the map does not recognise is COUNTED,
+    # never silently dropped — a quiet mismatch between the API's vocabulary and the CSV's would shrink the
+    # seed invisibly, which is the failure mode this whole subsystem exists to avoid.
+    api_added = 0
+    if os.path.exists(API_SUBJECTS):
+        import gzip
+        with gzip.open(API_SUBJECTS, "rt", encoding="utf-8") as fh:
+            api = json.load(fh)
+        bykey = {(r["session"], _billkey(r["bill"])): r for r in bills}
+        unmatched_sessions = collections.Counter()
+        for k, names in api.items():
+            code, bill = k.split("|", 1)
+            sess = _lis_code_to_corpus_session(code)
+            if sess is None:
+                unmatched_sessions[code] += 1
+                continue
+            r = bykey.get((sess, _billkey(bill)))
+            if r is None:
+                continue                      # resolutions and non-HB/SB rows are out of corpus by design
+            t = set()
+            for nm in names:
+                t.add(roll(nm.strip()))
+            key = (r["session"], r["bill"])
+            if t and key not in truth:
+                truth[key] = t
+                api_added += 1
+        if unmatched_sessions:
+            print(f"  NOTE: {sum(unmatched_sessions.values()):,} API rows in unmappable sessions "
+                  f"{dict(unmatched_sessions)} (special sessions are not joined).")
+        if api and not api_added:
+            raise RuntimeError(
+                f"the API subject cache holds {len(api):,} rows but NONE joined to the corpus. A join that "
+                f"matches nothing is a BUG, not an empty source — it previously reported a healthy "
+                f"'+0 added' while the session codes silently disagreed (LIS 20251 vs corpus 2025).")
 
     for r in bills:
         r["cm"] = committee(r)
@@ -198,7 +267,9 @@ def build():
 
     n_abs = sum(1 for r in bills if r["a"])
     return {"bills": bills, "truth": truth, "parents": parents,
-            "vocab": vocab, "n_abstracts": n_abs}
+            "vocab": vocab, "n_abstracts": n_abs,
+            "seed_sessions": sorted({k[0] for k in truth}),
+            "api_seed_added": api_added}
 
 
 def load_subjects(refresh: bool = False):
@@ -215,6 +286,7 @@ if __name__ == "__main__":
     d = load_subjects(refresh="--refresh" in sys.argv)
     B, T = d["bills"], d["truth"]
     print(f"bills {len(B):,}   ground-truth labelled {len(T):,}   top-level subjects {len(d['parents'])}")
+    print(f"seed sessions {d['seed_sessions']}  (+{d['api_seed_added']:,} from the LIS API backfill)")
     print(f"with an abstract {d['n_abstracts']:,} ({d['n_abstracts']/len(B):.0%})")
     n = collections.Counter(len(v) for v in T.values())
     print("subjects per bill:", ", ".join(f"{k}:{v:,}" for k, v in sorted(n.items())[:6]))

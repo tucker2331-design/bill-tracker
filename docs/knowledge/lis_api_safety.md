@@ -1,6 +1,6 @@
 ---
 tags: [knowledge, api, lis, rule, sustainability, cadence]
-updated: 2026-07-05
+updated: 2026-08-04
 status: active
 ---
 
@@ -10,6 +10,41 @@ Sibling of [[knowledge/lis_api_authorization]]: that page governs **what** we ma
 (2025/2026 sessions only); **this** page governs **how hard and how often** — the rule
 that keeps us a welcome, invisible API consumer for years of unattended operation, with
 nothing to explain to LIS and no path to a ban.
+
+## ⚠ EPISTEMIC STATUS — added 2026-08-04, after the owner caught this page being misused
+
+**Owner, 2026-08-04:** *"i asked you a question about what lis will accept and you refrenced one of our own
+rules that was mostly a assumption like do we know lis is looking to ban bots specifically?"*
+
+**He is right, and the correction belongs at the top of this page.** Asked what LIS would tolerate, I quoted
+THIS DOCUMENT back as if it were evidence. It is not. Everything below the ToS line is **our own reasoning
+about what a government API might dislike** — a self-imposed posture, never validated against anything DLAS
+has said or done.
+
+**What is actually EVIDENCE (checked 2026-08-04):**
+- **ToS §4** — no "unreasonable or disproportionately large load." Real contract text. The only hard anchor,
+  and it is undefined.
+- **ToS §9** — at-will termination. Real, and the reason caution is rational for a single-source dependency.
+- **DLAS's own stated purpose** — its LIS project page says web services exist so *"programmers can use LIS
+  data in their own environments."* They built an API, issue keys, and ask which organization you represent.
+  **That is an invitation to programmatic use.** It cuts AGAINST the bots-are-suspicious framing.
+- **No published rate limit exists** — not on the Developers Portal, not on dlas.virginia.gov, not in the
+  registration material, not findable by search (2026-08-04).
+- **Zero enforcement history** — no notice, warning, or contact from LIS or DLAS, ever, including after the
+  self-identified pre-2025 violation ([[knowledge/lis_api_authorization]]). We have never even seen a 429.
+
+**What is ASSUMPTION (ours, unvalidated):**
+- that a metronome pattern reads as a bot and raises risk
+- that the pattern matters more than the volume
+- that LIS monitors consumer behaviour at all
+- every specific cadence number below
+
+**How to use this page correctly.** It is a **risk posture we chose**, and a good one: the downside of being
+wrong is losing the only source of Virginia's legislative record, against an at-will termination clause. Cheap
+insurance. But **never cite it as an answer to "what will LIS accept."** That question has exactly one
+authoritative answer and it is DLAS's help desk (helpdesk@dlas.virginia.gov, 804-786-9631) — deferred by owner
+decision until commercial launch, to avoid drawing attention pre-launch. Until then the honest answer is
+*"unknown; here is our conservative guess and here is what it is based on."*
 
 ## The standing rule (non-negotiable)
 > **Every interaction with LIS — or any upstream source, for any of the 50 states — must
