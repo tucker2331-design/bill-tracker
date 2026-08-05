@@ -8,6 +8,38 @@ status: active
 
 Append-only, reverse-chronological (newest at top). Each entry opens with `## [YYYY-MM-DD] <kind> | <title>` so `grep "^## \[" log.md | head -20` gives a parseable timeline.
 
+## [2026-08-04] measurement | Subjects: two label spaces, union 72%, and the rollup that was deleting Firearms
+
+**Backfill.** 2025/2026 subject linkage pulled once from the LIS search API — 915 requests (505 subjects
+for 2026, 410 for 2025; the index is keyed BY SUBJECT, not by bill), 5 chunks, **zero retries, zero
+failures, zero 429s**. Ground truth 3,854 -> **6,520 bills**, seed 2 sessions -> 4.
+
+**The real defect it surfaced.** Rolling 654 subject leaves up to the 43 hierarchy PARENTS was
+**deleting** every subject that was already top-level — 56% of all subject mentions, and specifically
+**Firearms, Marijuana, Zoning, Workers' Compensation, Police, Unemployment Compensation, Abortion**. The
+owner had asked twice whether coverage hid "a concentration of something that would inform our data." It
+did, and the cause was one `& parents` filter.
+
+Keeping only the fine space instead cost 68% -> 50% corpus coverage (469 classes make the routes
+disagree). So **both** are kept, each through the identical pipeline, each gated separately:
+coarse 43 classes / 97.8% cold / 67%; fine 458 classes / 99.8% cold / 50%; **union 72%** — above either
+alone and above the 65% before this work, so specificity did not cost the average.
+
+**Every accuracy now ships with a null baseline** (11.4% fine, 13.5% coarse). The metric gets easier as
+true sets grow, and fine's 99.8% vs coarse's 97.8% is mostly 2.31 subjects/bill vs 1.36 — not model
+quality. Reporting the 99.8% as an improvement would have been trivially easy and wrong.
+
+**Also fixed:** the same subject counted twice under two spellings ("Counties, Cities, **and** Towns" vs
+without the Oxford comma — n=293 and n=269, two answers, one question); and thin topics were being HIDDEN
+when they should be shown with denominators — **Firearms is 82/94 majority vs 1/21 minority**, the largest
+gap in the corpus, and it was suppressed by the n>=40 gate.
+
+**Three bugs in the backfill tool itself:** `HasNext` never goes false (~800 wasted requests before it was
+caught), the hard request ceiling did not count inside the loop that ran away, and the corpus join matched
+ZERO of 4,247 rows while reporting a healthy "+0 added" (LIS `20251` vs corpus `2025`).
+
+Audits [[failures/assumptions_audit|#113]] and **#114**. See [[testing/subject_labels]].
+
 ## [2026-08-04] measurement | Subject labels extended 2 sessions -> 18, and four ways the test flattered itself
 
 `CiBillSubjects.csv` is published for 2023/2024 only, capping every subject-cut finding at 2 of 18 sessions.

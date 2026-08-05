@@ -96,6 +96,12 @@ def committee(rec) -> str:
     return "?"
 
 
+def _subject_key(name: str) -> str:
+    """Punctuation- and case-insensitive key for a subject NAME, used only to detect that two spellings
+    are the same subject."""
+    return re.sub(r"\s+", " ", re.sub(r"[^a-z0-9 ]", " ", (name or "").lower())).strip()
+
+
 def _billkey(b: str) -> str:
     return re.sub(r"\s+", "", b).upper()
 
@@ -197,16 +203,64 @@ def build():
         for r in csv.DictReader(io.StringIO(read_cached(code, "CiBillSubjects.csv"))):
             raw[(code, _billkey(r["Bill_Number"]))].add(r["Subject_Name"].strip())
 
-    truth = {}
+    # THE TWO ERAS SPELL THE SAME SUBJECT DIFFERENTLY. The 2023/24 CSVs write "Counties, Cities, and
+    # Towns"; the 2025/26 API writes "Counties, Cities and Towns" — one Oxford comma apart. Left alone
+    # they become two separate topics, and the minority-penalty table printed BOTH, with different
+    # denominators (293 and 269) and different answers, for one question. Same for "Study Commissions,
+    # Committees, and Reports".
+    #
+    # So subject names are canonicalised on a punctuation-insensitive key, and the winning spelling is
+    # the one seen most often — a deterministic rule, with the name itself as the tie-break so the choice
+    # cannot vary between runs.
+    _spellings = collections.Counter()
+    for code in LABELLED.values():
+        for r in csv.DictReader(io.StringIO(read_cached(code, "CiBillSubjects.csv"))):
+            _spellings[r["Subject_Name"].strip()] += 1
+    if os.path.exists(API_SUBJECTS):
+        import gzip as _gz
+        with _gz.open(API_SUBJECTS, "rt", encoding="utf-8") as _fh:
+            for _names in json.load(_fh).values():
+                for _n in _names:
+                    _spellings[_n.strip()] += 1
+    _by_key = collections.defaultdict(list)
+    for _n in _spellings:
+        _by_key[_subject_key(_n)].append(_n)
+    _canon_of = {_k: min(_g, key=lambda x: (-_spellings[x], x)) for _k, _g in _by_key.items()}
+
+    def canon(name):
+        return _canon_of.get(_subject_key(name), name)
+
+    # TWO label spaces, built from the same source in the same pass. They answer different questions and
+    # neither dominates, which is why both are kept rather than one being chosen:
+    #
+    #   FINE   — the top-level LIS subject itself ("Firearms", "Marijuana", "Unemployment Compensation").
+    #            ~469 classes. What a topic cut needs; a "gun bills" stat is meaningless without it.
+    #   COARSE — that subject rolled to one of the 43 names that appear as a PARENT in the hierarchy file.
+    #            Broad, dense, and what a whole-corpus cut wants.
+    #
+    # The earlier code kept only COARSE and, fatally, DROPPED any bill whose subjects had no parent —
+    # which deleted Firearms, Marijuana, Zoning, Workers' Compensation, Police and Unemployment
+    # Compensation outright, 56% of all subject mentions. Then keeping only FINE halved corpus coverage
+    # (68% -> 50%), because 469 classes make the routes disagree far more often.
+    #
+    # So a bill carries whichever of the two it qualifies for, and the pipeline is run once per space.
+    truth, truth_coarse = {}, {}
+
+    def _record(key, subs):
+        fine = {canon(roll(x)) for x in subs}
+        if fine:
+            truth[key] = fine
+        coarse = {x for x in fine if x in parents}
+        if coarse:
+            truth_coarse[key] = coarse
+
     for r in bills:
         code = LABELLED.get(r["session"])
         if not code:
             continue
         ss = raw.get((code, _billkey(r["bill"])))
         if ss:
-            t = {roll(s) for s in ss}
-            if t:
-                truth[(r["session"], r["bill"])] = t
+            _record((r["session"], r["bill"]), ss)
 
     # 2025/2026 ground truth from the API backfill, rolled up through the SAME parent map so the two
     # sources produce identical label vocabularies. A subject name the map does not recognise is COUNTED,
@@ -228,13 +282,11 @@ def build():
             r = bykey.get((sess, _billkey(bill)))
             if r is None:
                 continue                      # resolutions and non-HB/SB rows are out of corpus by design
-            t = set()
-            for nm in names:
-                t.add(roll(nm.strip()))
             key = (r["session"], r["bill"])
-            if t and key not in truth:
-                truth[key] = t
-                api_added += 1
+            if key not in truth:
+                before = len(truth)
+                _record(key, [n.strip() for n in names])
+                api_added += len(truth) - before
         if unmatched_sessions:
             print(f"  NOTE: {sum(unmatched_sessions.values()):,} API rows in unmappable sessions "
                   f"{dict(unmatched_sessions)} (special sessions are not joined).")
@@ -266,7 +318,7 @@ def build():
             r["a"] = frozenset(sorted(r["a"], key=lambda w: (df[w], w))[:ABS_KEEP])
 
     n_abs = sum(1 for r in bills if r["a"])
-    return {"bills": bills, "truth": truth, "parents": parents,
+    return {"bills": bills, "truth": truth, "truth_coarse": truth_coarse, "parents": parents,
             "vocab": vocab, "n_abstracts": n_abs,
             "seed_sessions": sorted({k[0] for k in truth}),
             "api_seed_added": api_added}
@@ -285,7 +337,11 @@ def load_subjects(refresh: bool = False):
 if __name__ == "__main__":
     d = load_subjects(refresh="--refresh" in sys.argv)
     B, T = d["bills"], d["truth"]
-    print(f"bills {len(B):,}   ground-truth labelled {len(T):,}   top-level subjects {len(d['parents'])}")
+    fine_space = len({x for v in T.values() for x in v})
+    coarse_space = len({x for v in d["truth_coarse"].values() for x in v})
+    print(f"bills {len(B):,}")
+    print(f"  FINE   ground truth {len(T):,} bills across {fine_space} subjects")
+    print(f"  COARSE ground truth {len(d['truth_coarse']):,} bills across {coarse_space} subjects")
     print(f"seed sessions {d['seed_sessions']}  (+{d['api_seed_added']:,} from the LIS API backfill)")
     print(f"with an abstract {d['n_abstracts']:,} ({d['n_abstracts']/len(B):.0%})")
     n = collections.Counter(len(v) for v in T.values())

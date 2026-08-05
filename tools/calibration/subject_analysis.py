@@ -41,16 +41,30 @@ import verify                                # noqa: E402
 
 LABELS = os.path.join(os.path.dirname(os.path.abspath(__file__)), "subject_labels.json")
 MIN_POOL = 40            # a topic-by-standing cell below this cannot carry a rate
+THIN_MIN = 15            # below this even a raw fraction is too thin to be worth a reader's attention
 
 
-def load_labels():
+def load_labels(space="coarse"):
+    """`space` selects which label set to analyse.
+
+      coarse — 43 broad subjects, 68% of the corpus. Use for whole-corpus cuts.
+      fine   — 469 actual LIS subjects, 50% of the corpus. The ONLY space that can answer a topic
+               question ("how do firearms bills fare"), because the coarse rollup does not contain
+               Firearms, Marijuana, Zoning, Workers' Compensation, Police or Unemployment Compensation
+               at all — they have no parent in the hierarchy file and were being deleted outright.
+
+    Neither dominates and they are NOT interchangeable. A fine-space accuracy is also not comparable to a
+    coarse-space one: bills carry ~2.5 fine subjects vs ~1.3 coarse, and the metric ("predicted subject is
+    in the true set") gets easier as true sets grow. Always read accuracy against `null_baseline`."""
     if not os.path.exists(LABELS):
         raise FileNotFoundError(f"{LABELS} missing — run `subject_label.py --write` first.")
     with open(LABELS, encoding="utf-8") as fh:
         d = json.load(fh)
-    lab = {tuple(k.split("|", 1)): set(v) for k, v in d["labels"].items()}
-    truth = {tuple(k.split("|", 1)) for k in d["ground_truth"]}
-    return lab, truth, d["measured"]
+    if space not in ("fine", "coarse"):
+        raise ValueError(f"space must be 'fine' or 'coarse', got {space!r}")
+    lab = {tuple(k.split("|", 1)): set(v) for k, v in d[f"labels_{space}"].items()}
+    truth = {tuple(k.split("|", 1)) for k in d[f"ground_truth_{space}"]}
+    return lab, truth, d["measured"][space]
 
 
 def bias(bills, lab):
@@ -82,10 +96,14 @@ def bias(bills, lab):
 def main() -> int:
     d = load_subjects()
     bills = d["bills"]
-    lab, truth, measured = load_labels()
-    print(f"labels: cold-session {measured['cold_session_accuracy']:.1%} accurate "
-          f"at {measured['cold_session_coverage']:.0%} coverage "
-          f"(abstract sessions {measured['abstract_session_coverage']:.0%})\n")
+    space = "fine" if "--fine" in sys.argv else "coarse"
+    lab, truth, measured = load_labels(space)
+    print(f"[{space.upper()} space — {measured['classes']} subjects, "
+          f"{measured['subjects_per_bill']} per bill]")
+    print(f"cold-session {measured['cold_session_accuracy']:.1%} accurate at "
+          f"{measured['cold_session_coverage']:.0%} coverage; "
+          f"null baseline {measured['null_baseline']:.1%}; "
+          f"corpus {measured['corpus_coverage']:.0%}\n")
 
     if "--bias" in sys.argv:
         bias(bills, lab)
@@ -123,7 +141,38 @@ def main() -> int:
     for gap, s, pm, pn, n, _nm in out:
         print(f"  {s[:32]:<32}{pm:>11.0%}{pn:>12.0%}{gap*100:>9.0f}pt{n:>8,}")
     print(f"\n{len(out)} topics passed the verification gate, of {len(bysub)} with any labels.")
-    print(f"Pools below n={MIN_POOL} per standing, or failing verify.check(), are omitted — not zero.")
+
+    # BELOW THE POWER BAR — printed, not hidden, and never mixed in with the table above.
+    # Omitting them entirely was the wrong call: the owner's own example of a useful stat was
+    # "2/198 minority patron gun bills pass" (2026-08-02) — a raw fraction with its denominator. A thin
+    # pool is not a false finding, it is a finding whose denominator the reader must see. What would be
+    # dishonest is printing a RATE for n=3 as though it were comparable to a rate for n=880, so these
+    # carry counts rather than percentages and are labelled as directional.
+    thin = []
+    for s_, pool in bysub.items():
+        maj = [x for x in pool if x["standing"] == "majority"]
+        mino = [x for x in pool if x["standing"] == "minority"]
+        if not maj or not mino:
+            continue
+        if len(maj) >= MIN_POOL and len(mino) >= MIN_POOL and not verify.check(
+                pool, key=lambda x: x["standing"], outcome="passed", minn=MIN_POOL, label=s_):
+            continue
+        pm = sum(1 for x in maj if x["passed"])
+        pn = sum(1 for x in mino if x["passed"])
+        if len(mino) >= THIN_MIN:
+            # ranked by EFFECT SIZE, not sample size: a thin pool is only worth a reader's attention if
+            # the gap in it is large. Sorting by n instead buried the biggest gap in the corpus
+            # (Firearms, 87% vs 5%) below a dozen unremarkable ones.
+            gap = (pm / len(maj)) - (pn / len(mino))
+            thin.append((gap, s_, pm, len(maj), pn, len(mino)))
+    thin.sort(reverse=True)
+    if thin:
+        print(f"\nDIRECTIONAL ONLY — below the n>={MIN_POOL}-per-standing bar. Counts, not rates.")
+        print(f"  {'topic':<32}{'majority passed':>18}{'minority passed':>18}")
+        for _g, s_, pm, nm, pn, nmin in thin[:14]:
+            print(f"  {s_[:30]:<32}{f'{pm}/{nm}':>18}{f'{pn}/{nmin}':>18}")
+        print(f"  ({len(thin)} topics shown of those with >={THIN_MIN} minority bills; treat as a lead to "
+              f"confirm, never as a published rate.)")
     return 0
 
 
