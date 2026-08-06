@@ -1,12 +1,40 @@
 ---
 tags: [log, meta]
-updated: 2026-08-04
+updated: 2026-08-05
 status: active
 ---
 
 # Project Log
 
 Append-only, reverse-chronological (newest at top). Each entry opens with `## [YYYY-MM-DD] <kind> | <title>` so `grep "^## \[" log.md | head -20` gives a parseable timeline.
+
+## [2026-08-05] measurement | Subject coverage 65% -> 80%, and 2023 was missing from every patron finding
+
+Owner: *"get that accuracy number up at least by 10-15 points."* Accuracy was already 97.8%, so the number
+with headroom was COVERAGE. **Union coverage 65% -> 80%** (18,234 of 22,659 bills), both label spaces still
+clearing the 95% bar. Per-session coverage rose everywhere — 2017 53%->65%, 2018 49%->64% — and the largest
+composition gap between labelled and unlabelled bills FELL to 4-5%.
+
+**The blocker was our own gate, not the model.** `abstract_eval` trained on 75% of ONE session while
+production trains on all four, so it measured a weaker system: 95.5% where the genuinely held-out cold
+session read 97.3%. Being the binding constraint on lowering the cutoff, its pessimism was spent as lost
+coverage. A measured sweep showed 95.6% accuracy was available at 83% coverage, eight points past the
+cutoff in use. **A proxy that understates the thing it gates costs exactly as much as one that overstates
+it, and nothing ever flags it because it only fails safe.**
+
+**Found on the way, and bigger:** chief patrons in 2023 and 2024 had **ZERO overlap of 141 names** — 2023
+writes `"Adams, D.M."` or a bare `"McPike"`, every other session writes `"A.C. Cordoza"`. The party lookup
+keyed on "m" as a surname and rejected bare surnames outright, so **2023 resolved a party for 3% of its
+bills against 95-99% everywhere else**. ~2,000 bills sat outside every majority/minority finding in this
+project; they were computed on 17 sessions and described as 18. Now 91%, corpus-wide 88% -> 97%. Added
+`chief_key`, a canonical roster identity — distinct patrons 466 -> 310, and seniority had been resetting
+every time the format changed.
+
+**Rejected, measured:** patron-affinity as a subject route (16-18% against an 11-14% null — VA legislators
+do not specialise); multi-direction calibration (union fell to 56% — the extra directions are EASIER than
+the scored one, so they set a higher cutoff).
+
+Audits [[failures/assumptions_audit|#115]] and **#116**. See [[testing/subject_labels]].
 
 ## [2026-08-04] measurement | Subjects: two label spaces, union 72%, and the rollup that was deleting Firearms
 

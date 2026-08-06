@@ -18,29 +18,93 @@ PEOPLE = os.path.join(HERE, "..", "historical_cache", "va", "openstates_va_peopl
 CACHE = os.path.join(HERE, "corpus_cache.pkl")
 SUF = {"jr", "sr", "ii", "iii", "iv", "md", "dr"}
 
-def _tk(s): return [t for t in re.sub(r"[^A-Za-z]", " ", s or "").lower().split() if t and t not in SUF]
+def _surname_first(s):
+    """Rewrite "Adams, D.M." -> "D.M. Adams", leaving "Norment, Jr." alone.
+
+    THE SESSIONS DO NOT AGREE ON NAME FORMAT. 2023 writes patrons surname-first ("Adams, D.M."); every
+    other session writes them given-name-first ("A.C. Cordoza"). Overlap between 2023 and 2024 chief
+    patrons was **ZERO of 141**, and because `_tk` just splits on non-letters, "Adams, D.M." tokenised to
+    ["adams","d","m"] and the party lookup keyed on "m" as the surname. Result: **2023 resolved a party
+    for 3% of its bills against 95-99% everywhere else**, so ~2,000 bills silently vanished from every
+    majority/minority finding — the split was computed, reported, and believed on 17 sessions while
+    looking like 18.
+
+    A comma is NOT sufficient to detect the format: "Thomas K. Norment, Jr." is given-name-first with a
+    suffix. Only swap when the text after the comma is not a suffix."""
+    if "," not in (s or ""):
+        return s
+    head, _, tail = s.partition(",")
+    tail_tokens = [t for t in re.sub(r"[^A-Za-z]", " ", tail).lower().split() if t]
+    if tail_tokens and all(t in SUF for t in tail_tokens):
+        return s                      # "Norment, Jr." — a suffix, already given-name-first
+    return f"{tail.strip()} {head.strip()}".strip()
+
+
+def _tk(s):
+    s = _surname_first(s)
+    return [t for t in re.sub(r"[^A-Za-z]", " ", s or "").lower().split() if t and t not in SUF]
 def norm(t): return re.sub(r"\s+", " ", (t or "").strip().lower().rstrip("."))
 def subj(t): return norm((t or "").split(";")[0])
 def toks(t): return set(re.findall(r"[a-z]{3,}", (t or "").lower()))
 
 def _party_lookup():
+    """Returns (party, person) resolvers. `person` maps any spelling of a patron to ONE canonical roster
+    name, which is what makes a patron comparable ACROSS sessions.
+
+    Storing the raw string does not: 2023 writes "McPike", 2024 writes "Jeremy S. McPike", and chief-patron
+    overlap between the two sessions was ZERO of 141. Anything keyed on patron identity across sessions —
+    seniority, a patron's track record, subject affinity — silently sees every legislator as a new person
+    each year."""
     people = json.load(open(PEOPLE))
     fg, fam = {}, collections.defaultdict(list)
+    canon_fg, canon_fam = {}, collections.defaultdict(list)
     for nm, rec in people.items():
         t = _tk(nm)
         if len(t) >= 2:
             p = rec["party"] if isinstance(rec, dict) else rec
             fg[(t[-1], t[0])] = p
             fam[t[-1]].append((t[0], p))
+            canon_fg[(t[-1], t[0])] = nm
+            canon_fam[t[-1]].append((t[0], nm))
     def party(nm):
         t = _tk(nm)
-        if len(t) < 2: return None
+        if not t:
+            return None
+        # SURNAME ONLY. 2023 writes many chief patrons as a bare surname ("McPike", "Deeds", "Bell"),
+        # where every other session writes a full name. The old `len(t) < 2` guard rejected all of them
+        # outright, which is why 2023 resolved a party for 3% of its bills against 95-99% elsewhere and
+        # ~2,000 bills sat outside every majority/minority finding without appearing to.
+        # Resolved ONLY when the surname is unique in the roster — an ambiguous surname returns None
+        # rather than picking one, because a wrong party silently flips a bill's `standing`.
+        if len(t) == 1:
+            c = fam.get(t[0], [])
+            parties = {p for _g, p in c}
+            return parties.pop() if len(parties) == 1 else None
         if (t[-1], t[0]) in fg: return fg[(t[-1], t[0])]
         c = fam.get(t[-1], [])
         if len(c) == 1: return c[0][1]
         h = {p for g, p in c if g[:1] == t[0][:1]}
         return h.pop() if len(h) == 1 else None
-    return party
+
+    def person(nm):
+        """Canonical roster name, or None when the spelling is genuinely ambiguous (fail closed — a wrong
+        identity merges two legislators' records, which is worse than leaving one unresolved)."""
+        t = _tk(nm)
+        if not t:
+            return None
+        if len(t) == 1:
+            c = canon_fam.get(t[0], [])
+            names = {n for _g, n in c}
+            return names.pop() if len(names) == 1 else None
+        if (t[-1], t[0]) in canon_fg:
+            return canon_fg[(t[-1], t[0])]
+        c = canon_fam.get(t[-1], [])
+        if len(c) == 1:
+            return c[0][1]
+        h = {n for g, n in c if g[:1] == t[0][:1]}
+        return h.pop() if len(h) == 1 else None
+
+    return party, person
 
 def _load(zf, suffix):
     z = zipfile.ZipFile(os.path.join(D, zf))
@@ -67,7 +131,7 @@ CONTROL = {
 }
 
 def build():
-    party = _party_lookup()
+    party, person = _party_lookup()
     sessions, bills = {}, []
     first_seen = {}                       # member -> earliest session year, for seniority
     order = sorted(f for f in os.listdir(D) if f.endswith(".zip") and f not in SKIP)
@@ -93,9 +157,13 @@ def build():
         if year not in CONTROL:
             continue                      # a session with no pinned control is SKIPPED, never guessed
         maj = {"H": CONTROL[year][0], "S": CONTROL[year][1]}
+        # Keyed on the CANONICAL person, not the raw spelling. Keyed on the raw string, "McPike" (2023)
+        # and "Jeremy S. McPike" (2024) are two different legislators, so seniority resets for most of the
+        # chamber every time the source changes name format — and every session reads as full of freshmen.
         for nm in set(chief.values()):
-            first_seen.setdefault(nm, year)
-            first_seen[nm] = min(first_seen[nm], year)
+            key = person(nm) or nm
+            first_seen.setdefault(key, year)
+            first_seen[key] = min(first_seen[key], year)
         real = [x for x in b if re.match(r"^[HS]B ", x["identifier"])]
         # companion pairing: exact title, else same subject-half + >=0.6 title token overlap
         bys = collections.defaultdict(list)
@@ -118,13 +186,14 @@ def build():
                 "session": code, "year": year, "bill": bid, "chamber": bid[0],
                 "title": x["title"], "passed": bid in passed,
                 "chief": nm, "chief_party": party(nm) if nm else None,
+                "chief_key": person(nm) if nm else None,
                 "majority": maj.get(bid[0]),
                 "cops": cops[bid], "cop_parties": [party(c) for c in cops[bid]],
                 "companion": comp.get(bid),
                 "actions": acts[bid],
             })
     for r in bills:
-        r["chief_first_year"] = first_seen.get(r["chief"])
+        r["chief_first_year"] = first_seen.get(r.get("chief_key") or r["chief"])
         r["standing"] = (None if not (r["chief_party"] and r["majority"])
                          else ("majority" if r["chief_party"] == r["majority"] else "minority"))
     return {"sessions": sessions, "bills": bills, "first_seen": first_seen}

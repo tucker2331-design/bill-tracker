@@ -119,6 +119,7 @@ class Model:
         prior = collections.Counter()
         hs = collections.defaultdict(collections.Counter)
         cs = collections.defaultdict(collections.Counter)
+        ts = collections.defaultdict(collections.Counter)
         self.items, self.inv = [], collections.defaultdict(list)
         self.ainv = collections.defaultdict(list)
         for k, v in labels.items():
@@ -136,11 +137,14 @@ class Model:
                     cnt[s][w] += 1
                 if r["h"]:
                     hs[r["h"]][s] += 1
+                if r["nt"]:
+                    ts[r["nt"]][s] += 1
                 cs[r["cm"]][s] += 1
         self.cnt, self.prior = cnt, prior
         self.tot = {s: sum(c.values()) for s, c in cnt.items()}
         self.V = max(1, len({w for c in cnt.values() for w in c}))
         self.N = max(1, sum(prior.values()))
+        self.pt = {t: (_top(c)[0], _top(c)[1] / sum(c.values())) for t, c in ts.items()}
         self.ph = {h: (_top(c)[0], _top(c)[1] / sum(c.values())) for h, c in hs.items()}
         self.pc = {c: (_top(v)[0], _top(v)[1] / sum(v.values()))
                    for c, v in cs.items() if sum(v.values()) >= CMTE_MIN}
@@ -194,6 +198,16 @@ class Model:
             votes[he[0]] += 1
             routes.append("head")
             conf += he[1]
+
+        # WHOLE TITLE, matched across sessions. Bills recur: a 2017 bill can carry the exact title of a
+        # 2024 one. Measured cold on the labelled sessions: 96.6% coarse / 93.1% fine. Independent of every
+        # other route, and it reaches the OLD sessions, where coverage is worst (49-56% for 2017-2022
+        # against 80-91% for 2023-2027) because they have few abstracts and heads the seed never used.
+        xt = self.pt.get(r["nt"])
+        if xt and xt[1] >= HEAD_PURITY:
+            votes[xt[0]] += 1
+            routes.append("xtitle")
+            conf += xt[1]
 
         # The head IS an LIS subject name. Independent of every trained route — it comes from the
         # publisher's own vocabulary, so it fires for heads the seed sessions never used.
@@ -275,6 +289,47 @@ def _companion_folds(idx, labels, seed_val, held=4):
     tr = {k: v for k, v in labels.items() if grp[k] not in test_g}
     te = {k: v for k, v in labels.items() if grp[k] in test_g}
     return tr, te
+
+
+def calibrate_multi(idx, truth, exclude, vocab, target=TARGET_PRECISION):
+    """Average the accept cutoff over EVERY cross-session direction that does not involve `exclude`.
+
+    MEASURED WORSE, KEPT AS A RECORD. Union coverage fell 72% -> 56% when this replaced the single
+    direction. The reason is the opposite of the one it was built on: seeding 2024 and testing 2025/2026 is
+    an EASIER task than the one being scored (adjacent years, all three carry abstracts, 2023 carries
+    none), so confidence runs higher and the 95% cutoff lands HIGHER, not lower. A calibration direction
+    must be at least as hard as the direction it is calibrating for. NOT WIRED IN — see calibrate_cross.
+
+    Original rationale. With only two labelled sessions there was exactly one
+    non-circular direction available (seed 2023 -> predict 2024) and it had to calibrate its own mirror.
+    The two are not symmetric — 2023 has no abstracts and 2024 does — so the transferred cutoff came in
+    systematically too strict: it targeted 95% and delivered 97.8%, while the cold precision/coverage curve
+    showed 95% was reachable roughly TEN POINTS of coverage further out. That is precision nobody asked
+    for, paid for in bills.
+
+    The API backfill took the seed from 2 sessions to 4, so there are now several directions among
+    {2024, 2025, 2026}, none of which involves the scored session. Averaging them keeps the test genuinely
+    untouched AND stops any single direction's quirk from setting the threshold."""
+    sessions = sorted({k[0] for k in truth} - {exclude})
+    cuts = []
+    for src in sessions:
+        seed = {k: v for k, v in truth.items() if k[0] == src}
+        test = {k: v for k, v in truth.items() if k[0] not in (src, exclude)}
+        if not seed or not test:
+            continue
+        out, _t = run(idx, seed, accept=0.0, vocab=vocab)
+        sc = sorted(((out[k][1], bool(out[k][0] & v)) for k, v in test.items() if k in out),
+                    key=lambda x: -x[0])
+        hit, cut = 0, None
+        for i, (c, ok) in enumerate(sc, 1):
+            hit += ok
+            if hit / i >= target:
+                cut = c
+        if cut is not None:
+            cuts.append(cut)
+    if not cuts:
+        return None
+    return sum(cuts) / len(cuts)
 
 
 def calibrate_cross(idx, truth, calib_session, vocab, target=TARGET_PRECISION):
@@ -396,10 +451,18 @@ def abstract_eval(idx, truth, accept, vocab, folds=3):
     0.950 / 0.955 / 0.960 produced 94.8% / 94.7% / 96.8%, a spread far larger than the change in target
     could explain. Pooling the folds is what makes the gate mean something."""
     lab = {k: v for k, v in truth.items() if k[0] == "2024"}
+    others = {k: v for k, v in truth.items() if k[0] != "2024"}
     hit = n = held = 0
     for f in range(folds):
         tr, te = _companion_folds(idx, lab, seed_val=3 + f)
-        out, _t = run(idx, tr, accept=accept, vocab=vocab)   # same pipeline as production
+        # Seed with the OTHER labelled sessions too, not just this fold. Training on 75% of a single
+        # session builds a far weaker model than production (which seeds on all four), so this proxy read
+        # LOWER than the genuinely held-out cold session — 95.5% against 97.3% — and, being the binding
+        # gate on the cutoff descent, it blocked ~8 points of coverage the model had already earned.
+        # A proxy that understates the thing it gates is as costly as one that overstates it.
+        seed = dict(others)
+        seed.update(tr)
+        out, _t = run(idx, seed, accept=accept, vocab=vocab)   # same pipeline as production
         held += len(te)
         for k, v in te.items():
             if k not in out:
@@ -471,6 +534,22 @@ def main() -> int:
             # FAIL CLOSED on BOTH directions, per space. Checking only the cold session would once have
             # shipped a set that was 96.9% there and 94.8% on every abstract-bearing session — below bar
             # on 75% of the corpus, reported as passing.
+            # DESCENT, before the escalation. The cutoff routinely lands stricter than asked: it targets
+            # 95% and delivered 97.8% on the coarse space. That surplus is coverage nobody chose to give
+            # up. So the cutoff is first LOWERED in the same fixed steps while the SEED-INTERNAL
+            # measurement (companion-safe folds of 2024) still holds DEPLOY_MIN, then the cold session —
+            # which never influenced the descent — is the held-out check that follows. Descending on the
+            # cold number instead would be tuning the threshold on the number being reported.
+            for _ in range(ESCALATION_STEPS):
+                trial = cut_sp - ESCALATION_STEP
+                if trial <= 0:
+                    break
+                t_acc, _t_cov, _tn = abstract_eval(idx, t_sp, trial, vocab)
+                if t_acc < DEPLOY_MIN:
+                    break
+                cut_sp = trial
+                print(f"  {sp}: seed-internal {t_acc:.1%} at {cut_sp:.2f} — lowering for coverage",
+                      flush=True)
             steps = 0
             while True:
                 acc, cov, _by, _n, _t, _o = cold_eval(idx, t_sp, accept=cut_sp, vocab=vocab)

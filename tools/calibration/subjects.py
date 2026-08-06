@@ -301,6 +301,8 @@ def build():
         r["h"] = head(r["title"])
         r["t"] = tok(r["title"])
         r["a"] = tok(abst.get((r["session"], r["bill"]), ""))
+        # normalised WHOLE title, for cross-session recurrence (see subject_label's `xtitle` route)
+        r["nt"] = re.sub(r"\s+", " ", re.sub(r"[^a-z0-9 ]", " ", (r["title"] or "").lower())).strip()
 
     # Keep only the RAREST tokens of each abstract. Two reasons, both measured:
     #   COST — a full abstract carries ~60 tokens against a title's ~5, and the nearest-neighbour scan is
