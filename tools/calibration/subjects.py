@@ -230,6 +230,42 @@ def build():
     def canon(name):
         return _canon_of.get(_subject_key(name), name)
 
+    # ---- LEXICAL TAXONOMY MATCH (the `lex` route) -------------------------------------------------
+    # The vocabulary route only ever fired when a bill's catalogue head EXACTLY equalled a subject name,
+    # and it was built from the parent-child file alone: 494 names of the 2,655 LIS actually uses. That
+    # left the taxonomy itself almost unused as evidence.
+    #
+    # This matches the LONGEST subject name appearing anywhere in the title, which is what finally reaches
+    # the singletons: 68% of unlabelled bills have a catalogue head seen <=3 times in 22,659 bills, so
+    # there is no sibling bill to learn from — but "Naloxone" and "Death penalty" ARE LIS subjects, and a
+    # bill does not need a neighbour to be filed under one.
+    #
+    # Confidence is the MEASURED precision of that kind of match, not a guess (fine space, against real
+    # LIS labels): 1 word 72.1%, 2 words 89.2%, 3 words 93.9%, 4+ words 96.0%; at the title start 90.5%
+    # against 73.9% later. A single common word buried mid-title is genuinely weak evidence and is
+    # dropped; everything else is weighted by how specific the match was.
+    lex_tab = {}
+    for nm in sorted(_spellings):
+        k = _subject_key(nm)
+        if k and len(k) >= 5:
+            lex_tab.setdefault(k, canon(roll(nm)))
+    _maxw = max((len(k.split()) for k in lex_tab), default=1)
+    LEX_CONF = {1: 0.72, 2: 0.89, 3: 0.94}
+
+    def _lex(title):
+        w = _subject_key(title).split()
+        for size in range(min(_maxw, len(w)), 0, -1):
+            for i in range(len(w) - size + 1):
+                hit = lex_tab.get(" ".join(w[i:i + size]))
+                if hit is not None:
+                    if size == 1 and i > 0:
+                        return None          # 73.9% — too weak to be worth a vote
+                    conf = LEX_CONF.get(size, 0.96)
+                    if i == 0 and size == 1:
+                        conf = 0.81          # measured: a one-word match AT the head
+                    return hit, conf
+        return None
+
     # TWO label spaces, built from the same source in the same pass. They answer different questions and
     # neither dominates, which is why both are kept rather than one being chosen:
     #
@@ -303,6 +339,7 @@ def build():
         r["a"] = tok(abst.get((r["session"], r["bill"]), ""))
         # normalised WHOLE title, for cross-session recurrence (see subject_label's `xtitle` route)
         r["nt"] = re.sub(r"\s+", " ", re.sub(r"[^a-z0-9 ]", " ", (r["title"] or "").lower())).strip()
+        r["lx"] = _lex(r["title"])
 
     # Keep only the RAREST tokens of each abstract. Two reasons, both measured:
     #   COST — a full abstract carries ~60 tokens against a title's ~5, and the nearest-neighbour scan is

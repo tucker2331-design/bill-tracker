@@ -1,12 +1,41 @@
 ---
 tags: [log, meta]
-updated: 2026-08-05
+updated: 2026-08-07
 status: active
 ---
 
 # Project Log
 
 Append-only, reverse-chronological (newest at top). Each entry opens with `## [YYYY-MM-DD] <kind> | <title>` so `grep "^## \[" log.md | head -20` gives a parseable timeline.
+
+## [2026-08-07] measurement | Subject coverage 81% at >=95%, 91% with a stated second tier
+
+Owner ruled the DLAS request out: *"find a authentic solution of your own and execute."*
+
+**The gap was never a tuning problem.** Of 4,425 unlabelled bills, 90% sat in 2017-2022 and **68% had a
+catalogue head appearing <=3 times in all 22,659 bills — 34% exactly once**. Every route works by finding a
+SIMILAR labelled bill, so a singleton is invisible to all of them by construction.
+
+**The fix was the publisher's own vocabulary, which was 81% unused.** The `vocab` route only fired on an
+EXACT head match and was built from the parent-child file alone — 494 names of the 2,655 LIS uses. The new
+`lex` route matches the longest subject name appearing anywhere in the title: "Naloxone" is an LIS subject
+whether or not any other bill mentions it. Confidence is the measured precision of each match shape (1 word
+mid-title 73.9%, dropped; 4+ words 96.0%).
+
+**A route may only vote for a label its space contains.** Ungated, `lex` raised the fine space but dropped
+union coverage 80% -> 77% — in the 43-class coarse space a hit on "Naloxone" is unrepresentable, so it only
+splits agreement. Gating `lex` and `vocab` to the training labels recovered it.
+
+**Tier B, and its label verified.** What survives is genuinely ambiguous, so it is labelled at a stated ~90%
+in separate keys, never merged by default. Tuned only on the seed-internal measure, coarse tier B delivered
+**89.3% cold under a 90% label** — audit #116 recurring inside its own fix. A binding held-out check now
+raises the cutoff until the claimed number clears (coarse 1.91 / 90.3%).
+
+**Rejected, measured:** taxonomy-over-abstracts (57-72% — abstracts mention subjects incidentally), patron
+affinity (16-18% vs an 11-14% null), multi-direction calibration (union fell to 56%).
+
+**Tier A 81% (18,436 bills); with tier B 91% (20,544).** From 65% at session start, no external request.
+Audit [[failures/assumptions_audit|#117]]. See [[testing/subject_labels]].
 
 ## [2026-08-05] measurement | Subject coverage 65% -> 80%, and 2023 was missing from every patron finding
 

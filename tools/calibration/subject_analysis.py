@@ -26,7 +26,9 @@ Every rate goes through `verify.check()` before it is printed. Nothing that fail
 
 Usage:
     python3 tools/calibration/subject_analysis.py --bias      # coverage audit; run this first
-    python3 tools/calibration/subject_analysis.py             # the findings
+    python3 tools/calibration/subject_analysis.py             # the findings (tier A, >=95%)
+    python3 tools/calibration/subject_analysis.py --fine      # by real LIS subject, for topic cuts
+    python3 tools/calibration/subject_analysis.py --tier-b    # add the ~90% long tail, clearly flagged
 """
 from __future__ import annotations
 
@@ -44,7 +46,7 @@ MIN_POOL = 40            # a topic-by-standing cell below this cannot carry a ra
 THIN_MIN = 15            # below this even a raw fraction is too thin to be worth a reader's attention
 
 
-def load_labels(space="coarse"):
+def load_labels(space="coarse", tier="a"):
     """`space` selects which label set to analyse.
 
       coarse — 43 broad subjects, 68% of the corpus. Use for whole-corpus cuts.
@@ -63,6 +65,12 @@ def load_labels(space="coarse"):
     if space not in ("fine", "coarse"):
         raise ValueError(f"space must be 'fine' or 'coarse', got {space!r}")
     lab = {tuple(k.split("|", 1)): set(v) for k, v in d[f"labels_{space}"].items()}
+    if tier == "b":
+        # TIER B IS ADDITIVE AND SEPARATELY MEASURED. It is never folded in by default: those bills are
+        # the long tail whose titles are near-unique in the corpus, carried at ~90% rather than the 95%
+        # bar. Mixing them into a table silently would restate a weaker number as a strong one.
+        for k, v in d.get(f"labels_{space}_tier_b", {}).items():
+            lab.setdefault(tuple(k.split("|", 1)), set(v))
     truth = {tuple(k.split("|", 1)) for k in d[f"ground_truth_{space}"]}
     return lab, truth, d["measured"][space]
 
@@ -97,13 +105,22 @@ def main() -> int:
     d = load_subjects()
     bills = d["bills"]
     space = "fine" if "--fine" in sys.argv else "coarse"
-    lab, truth, measured = load_labels(space)
+    tier = "b" if "--tier-b" in sys.argv else "a"
+    lab, truth, measured = load_labels(space, tier)
     print(f"[{space.upper()} space — {measured['classes']} subjects, "
           f"{measured['subjects_per_bill']} per bill]")
     print(f"cold-session {measured['cold_session_accuracy']:.1%} accurate at "
           f"{measured['cold_session_coverage']:.0%} coverage; "
           f"null baseline {measured['null_baseline']:.1%}; "
-          f"corpus {measured['corpus_coverage']:.0%}\n")
+          f"corpus {measured['corpus_coverage']:.0%}")
+    if tier == "b":
+        tb = measured.get("tier_b", {})
+        if "cold_session_accuracy" in tb:
+            print(f"INCLUDING TIER B: +{tb['bills_added']:,} bills at {tb['cold_session_accuracy']:.1%} "
+                  f"(the long-tail set — weaker, and every rate below is now a MIXED-quality rate)")
+        else:
+            print(f"tier B requested but empty: {tb.get('note','-')}")
+    print()
 
     if "--bias" in sys.argv:
         bias(bills, lab)

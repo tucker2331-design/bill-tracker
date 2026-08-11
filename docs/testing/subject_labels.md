@@ -1,6 +1,6 @@
 ---
 tags: [testing, calibration, subjects, war-room, method]
-updated: 2026-08-05
+updated: 2026-08-07
 status: active
 ---
 
@@ -17,9 +17,10 @@ sessions**, up from 3,854 across 2.
 
 | space | classes | subj/bill | cold-session acc | null | corpus |
 |---|---|---|---|---|---|
-| **coarse** | 43 | 1.36 | **95.8%** @ 63% | 13.5% | **76%** |
-| **fine** | 458 | 2.31 | **97.6%** @ 26% | 11.4% | **55%** |
-| **union** | — | — | — | — | **80%** (18,234 bills) |
+| **coarse** | 43 | 1.36 | **95.1%** @ 65% | 13.5% | **77%** |
+| **fine** | 458 | 2.31 | **96.1%** @ 40% | 11.4% | **61%** |
+| **union (tier A)** | — | — | — | — | **81%** (18,436 bills) |
+| **+ tier B (~90%)** | — | — | coarse 90.3% / fine 91.8% | — | **91%** (20,544 bills) |
 
 **Read every accuracy against its null baseline.** The metric ("is the predicted subject in the true set")
 gets easier as true sets grow, so fine's 99.8% and coarse's 97.8% are NOT comparable — most of that gap is
@@ -75,7 +76,7 @@ Run: `python3 tools/calibration/subject_analysis.py [--fine] [--bias]`.
 
 1. **Topic-specific pools are thin.** Firearms has 21 minority-patron bills. Directional only; a published
    rate needs a bigger denominator.
-2. **20% of the corpus carries no label at all.** Unlabelled is a countable gap, never a default subject —
+2. **TWO TIERS. Tier A (>=95%) covers 81%; tier B adds 10% at ~90% and is NEVER merged by default** — pass `--tier-b`, which warns that every rate becomes mixed-quality. 9% carries no label at all. Unlabelled is a countable gap, never a default subject —
    `predict()` fails closed rather than assigning a most-common fallback.
 3. **2023 has no abstracts**; 2017-2019 have 43-53%. Coverage is lowest there (49-56%).
 4. **Coverage is bimodal by topic**, not uniform: most catalogue heads sit near 100%, a minority near zero.
@@ -91,5 +92,5 @@ the code-location rule **76%**, structural routes **95%+**.
 
 [[failures/assumptions_audit]] #112 (four ways the test flattered itself), #113 (`HasNext` lied, ~800
 wasted requests), #114 (the rollup deleted the interesting topics), #115 (2023 missing from every patron
-finding — name format), #116 (a pessimistic proxy was paying its margin in coverage).
+finding — name format), #116 (a pessimistic proxy was paying its margin in coverage), #117 (the long tail needed the taxonomy, not better tuning).
 [[knowledge/lis_api_safety]] · [[testing/calibration_ledger]] · [[knowledge/legacylis_csv_route]]
