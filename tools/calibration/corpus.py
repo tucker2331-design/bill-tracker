@@ -41,8 +41,16 @@ def _surname_first(s):
 
 
 def _tk(s):
+    """Name tokens. HYPHENS ARE PART OF A SURNAME, not a separator.
+
+    Splitting on them merged distinct legislators: "Convirs-Fowler" tokenised to ["convirs","fowler"], so
+    its last token matched "Fowler" and **Kelly Convirs-Fowler's roll-call votes were being counted as
+    Kelly Fowler's** — 13,056 vote rows against 7,883 real roll calls, two House Democrats collapsed into
+    one person. Virginia's roster carries several (Filler-Corn, Bennett-Parker, Keys-Gamarra, Crockett-
+    Stark), so this is not a one-off."""
     s = _surname_first(s)
-    return [t for t in re.sub(r"[^A-Za-z]", " ", s or "").lower().split() if t and t not in SUF]
+    s = re.sub(r"[^A-Za-z-]", " ", s or "")
+    return [t.strip("-") for t in s.lower().split() if t.strip("-") and t.strip("-") not in SUF]
 def norm(t): return re.sub(r"\s+", " ", (t or "").strip().lower().rstrip("."))
 def subj(t): return norm((t or "").split(";")[0])
 def toks(t): return set(re.findall(r"[a-z]{3,}", (t or "").lower()))

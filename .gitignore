@@ -25,3 +25,6 @@ tools/historical_cache/openstates_va/extracted/
 
 # Derived cache — rebuilt by tools/calibration/subjects.py --refresh, never a source of truth
 .subjects_cache.pkl
+
+# derived vote cache (255 MB, rebuilt by tools/calibration/votes.py --refresh)
+tools/calibration/.votes_cache.pkl

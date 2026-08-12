@@ -8,6 +8,36 @@ status: active
 
 Append-only, reverse-chronological (newest at top). Each entry opens with `## [YYYY-MM-DD] <kind> | <title>` so `grep "^## \[" log.md | head -20` gives a parseable timeline.
 
+## [2026-08-07] measurement | PERSUADABILITY — the first member-level indicator, from 2.69M unused votes
+
+Owner asked for a real competitive edge rather than more descriptive findings. The groundbreak was not a
+technique: **`_vote_people.csv` has been in every session archive the whole time — 2,688,366 individual
+member votes across 69,422 roll calls — and had never been read.** Every finding to date describes bills,
+and nobody lobbies a bill.
+
+**The indicator: persuadability = within-cohort z-score of a member's defection rate.** The obvious version
+is useless — raw defection just ranks minority House members, because position dominates temperament
+(House minority 5.8% vs majority 1.2%; Senate 2.0% vs 0.7%), and excess-in-percentage-points still surfaces
+zero Senators. Comparing a member only against the same chamber / party-status / year fixes it.
+
+**Validated as a TRAIT, which is the whole point:** predicts NEXT year at **r = 0.68** (n=602 member-pairs);
+bottom quartile z = -0.63 the following year against +0.90 for the top. Persuasion is **concentrated** — the
+top 20 members are **42%** of all defections, so the list is short enough to act on.
+
+**Three data defects fixed to get there,** all found by checking an odd number rather than by a failing test:
+a **hyphen merged two legislators** (Convirs-Fowler's votes counted as Fowler's — 13,056 rows against 7,883
+roll calls, structurally impossible); **33% of roll calls had a blank venue** because Open States org ids are
+global but each archive ships only its own; and **146,220 unresolvable voter names -> 2,821**, all now the
+literal string "Mr. Speaker". Missing parties are derived and **validated at 99.5%**.
+
+**Limit stated up front: Open States captures NO committee roll calls for Virginia** (0 of 69,422). Most
+bills die in committee, so this measures the floor while the decisive venue stays dark.
+
+Also refreshed every headline finding on the corrected corpus (2023 included for the first time): minority
+penalty **59% vs 34% = 25pt** on 21,760 bills; House 30pt, Senate 20pt.
+
+Audit [[failures/assumptions_audit|#118]]. See [[testing/persuadability]].
+
 ## [2026-08-07] measurement | Subject coverage 81% at >=95%, 91% with a stated second tier
 
 Owner ruled the DLAS request out: *"find a authentic solution of your own and execute."*
