@@ -49,6 +49,10 @@ validation. The once-daily workflow schedule is live on `main` as of PR #170
 - Manual GitHub Actions workflow: `New York Calendar Probe` runs the read-only
   probe with `NY_OPENLEG_API_KEY` and uploads the JSON report as an artifact.
   It has no Google Sheets credentials and no schedule.
+- Live secret-backed combined calendar probe passed on `main` in GitHub Actions
+  run `28182914032`: 390 rows across OpenLeg Senate agenda meetings plus
+  Assembly agenda/floor sources, zero source errors, zero health findings, and
+  zero time-bucket denominator drift.
 - Live Assembly probe validation passed on 2026-06-25: 365 rows across agenda
   index, floor index, agenda-detail sample, and floor-detail sample sources;
   zero source errors; zero health findings; zero time-bucket denominator drift.
@@ -74,8 +78,10 @@ witness or anchor sources until validated.
 
 ## Next steps
 
-1. Dispatch `New York Calendar Probe` against OpenLeg with `NY_OPENLEG_API_KEY`, then record Senate agenda coverage metrics from the JSON artifact.
-2. Design the first NY calendar worker from the validated probe contract before promoting any non-empty `Upcoming JSON`.
+1. Design the first NY calendar worker from the validated probe contract before promoting any non-empty `Upcoming JSON`.
+2. Decide whether `openleg_agenda_meetings` rows with `no_clock_source`
+   become review-only committee agenda anchors or require a second Senate
+   calendar endpoint probe for clocked events.
 3. Scope durable terminal-outcome parity for bills currently counted as `unknown_structural`, without status-text inference.
 4. Build a session-rollover plan before the next New York legislative session.
 5. Revisit cadence after frontend and incremental-update scoping.
