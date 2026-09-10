@@ -1,5 +1,47 @@
 {
  "files": {
+  "20251/HISTORY.CSV": {
+   "bytes": 3937016,
+   "fetched_utc": "2026-09-10T04:06:25Z",
+   "last_modified": "Thu, 20 Nov 2025 02:00:30 GMT",
+   "sha256": "825599d55dc6312224030603d7a56ad187a6b448ad4a5a12b3e2bcdd76010f13",
+   "url": "https://lis.blob.core.windows.net/lisfiles/20251/HISTORY.CSV"
+  },
+  "20251/Members.csv": {
+   "bytes": 6345,
+   "fetched_utc": "2026-09-10T04:06:26Z",
+   "last_modified": "Wed, 07 Jan 2026 20:00:02 GMT",
+   "sha256": "d6727ba38bde4f1782c29d5b184522452cd77807f36155624b9cb8891050cbce",
+   "url": "https://lis.blob.core.windows.net/lisfiles/20251/Members.csv"
+  },
+  "20251/VOTE.CSV": {
+   "bytes": 2743110,
+   "fetched_utc": "2026-09-10T04:06:24Z",
+   "last_modified": "Wed, 07 Jan 2026 20:00:46 GMT",
+   "sha256": "947d75248ab3f1b3c5de4b8abc4352835a48afbc5926a30d646e8e4e2e380ad8",
+   "url": "https://lis.blob.core.windows.net/lisfiles/20251/VOTE.CSV"
+  },
+  "20261/HISTORY.CSV": {
+   "bytes": 4738051,
+   "fetched_utc": "2026-09-10T04:06:28Z",
+   "last_modified": "Wed, 29 Jul 2026 01:00:34 GMT",
+   "sha256": "46a19424314bd70a17657f7031b32483428670b237d739ee6bf8762de6cd95c2",
+   "url": "https://lis.blob.core.windows.net/lisfiles/20261/HISTORY.CSV"
+  },
+  "20261/Members.csv": {
+   "bytes": 6705,
+   "fetched_utc": "2026-09-10T04:06:29Z",
+   "last_modified": "Thu, 10 Sep 2026 00:00:00 GMT",
+   "sha256": "19c17cbf077dadc0878bc3c6cdbebba4f388a7d4a0ecc1e3ea08143f5053605d",
+   "url": "https://lis.blob.core.windows.net/lisfiles/20261/Members.csv"
+  },
+  "20261/VOTE.CSV": {
+   "bytes": 3948313,
+   "fetched_utc": "2026-09-10T04:06:27Z",
+   "last_modified": "Thu, 10 Sep 2026 00:01:08 GMT",
+   "sha256": "cbf0ae5d4f93dff2304faf511dd5f8e97f2517b9a2de0c6e9938bd0c7d2d74d0",
+   "url": "https://lis.blob.core.windows.net/lisfiles/20261/VOTE.CSV"
+  },
   "231/Bills.csv": {
    "bytes": 1077565,
    "fetched_utc": "2026-08-01T06:13:24Z",
@@ -190,6 +232,8 @@
  },
  "jurisdiction": "VA",
  "sessions": {
+  "20251": "2025 Regular Session",
+  "20261": "2026 Regular Session",
   "231": "2023 Regular Session",
   "241": "2024 Regular Session",
   "242": "2024 Special Session I"

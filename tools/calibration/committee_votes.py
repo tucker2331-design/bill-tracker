@@ -50,9 +50,35 @@ _HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, _HERE)
 sys.path.insert(0, os.path.join(_HERE, "..", "historical_cache"))
 
-# PINNED to what the legacy cache actually holds. Not discovered by a loop: a session without these files
-# must be an explicit absence, never a silently empty result.
-SESSIONS = {"231": "2023", "241": "2024"}
+# PINNED per session, and the two ERAS do not agree on anything but the idea. Not discovered by a loop: a
+# session without these files must be an explicit absence, never a silently empty result.
+#
+#   file names   legacy writes Vote.csv / History.csv / Members.csv
+#                modern writes VOTE.CSV / HISTORY.CSV / Members.csv   (casing is PER FILE, no rule)
+#   member key   legacy Members.csv has MBR_MBRID (H108, unpadded) -> needs normalising against the
+#                zero-padded ids in the vote rows; modern has NO MBR_MBRID at all, only MBR_MBRNO,
+#                which is already padded and matches raw. Reading MBR_MBRID on a modern file is a KeyError,
+#                not a silent miss — which is the good outcome.
+#   vote id      legacy "H0101V0001" ENCODES the venue (chamber, committee, subcommittee) and gives a free
+#                structural cross-check on the description. Modern "2510002" encodes none of it, so the
+#                cross-check is UNAVAILABLE there and is recorded as unavailable rather than faked.
+#   refid        legacy History_refid holds vote ids only. Modern OVERLOADS the column — bill numbers,
+#                PDF filenames, subcommittee codes AND vote ids all appear in it, so a modern refid counts
+#                only when it actually matches a vote id.
+SESSIONS = {
+    "231":   {"year": "2023", "era": "legacy",
+              "vote": "Vote.csv", "history": "History.csv", "members": "Members.csv",
+              "member_col": "MBR_MBRID", "id_encodes_venue": True},
+    "241":   {"year": "2024", "era": "legacy",
+              "vote": "Vote.csv", "history": "History.csv", "members": "Members.csv",
+              "member_col": "MBR_MBRID", "id_encodes_venue": True},
+    "20251": {"year": "2025", "era": "modern",
+              "vote": "VOTE.CSV", "history": "HISTORY.CSV", "members": "Members.csv",
+              "member_col": "MBR_MBRNO", "id_encodes_venue": False},
+    "20261": {"year": "2026", "era": "modern",
+              "vote": "VOTE.CSV", "history": "HISTORY.CSV", "members": "Members.csv",
+              "member_col": "MBR_MBRNO", "id_encodes_venue": False},
+}
 
 _MID = re.compile(r"^([HS])0*(\d+)$")
 
@@ -66,16 +92,34 @@ def _norm_member(mid: str) -> str:
 def _venue(desc: str) -> str:
     """Which room this vote happened in, from the history description LIS writes beside it.
 
-    Text-derived and therefore INTERNAL DIAGNOSTIC ONLY (Standard #3) — it never reaches a lobbyist-facing
-    surface. The structural cross-check is the vote id's own prefix; disagreements are counted by `load()`
-    rather than silently resolved."""
+    ORDER IS THE WHOLE RULE, most specific first: a subcommittee line also contains the word "committee",
+    and a committee line ("Reported from Finance") sits in the same sentence space as a floor line
+    ("Passed House"). Checked in the wrong order every rule collapses into one bucket.
+
+    A PRECEDENCE BUG lived in the first version: `if "vote:" in d or "passage" in d and "reported" not in d`
+    parses as `("vote:" in d) or (("passage" in d) and ...)`, and it looked for "passage" where LIS
+    actually writes "passed". 4,915 modern floor votes fell through to "other" as a result — "Read third
+    time and passed House", "Passed Senate", "Constitutional reading dispensed".
+
+    Text-derived, therefore INTERNAL DIAGNOSTIC ONLY (Standard #3): it never reaches a lobbyist-facing
+    surface, and in the legacy era it is cross-checked against the vote id's own structure.
+    """
     d = (desc or "").lower()
-    if "subcommittee" in d:
+    if "subcommittee" in d or " sub:" in d:
         return "subcommittee"
-    if "vote:" in d or "passage" in d and "reported" not in d:
-        return "floor"
-    if "reported from" in d or "committee" in d or "continued to" in d or "laid on the table" in d:
-        return "committee"
+    # A COMMITTEE ROOM acts ON a bill and names itself: "Reported from Finance", "Passed by indefinitely
+    # in Courts of Justice". These must be tested BEFORE the floor markers, because "passed by
+    # indefinitely in X" contains "passed".
+    for marker in ("reported from", "passed by indefinitely in", "tabled in", "stricken from docket by",
+                   "continued to", "left in", "incorporated by", "failed to report", "rereferred to",
+                   "referred to committee", "assigned "):
+        if marker in d:
+            return "committee"
+    for marker in ("passed house", "passed senate", "read third time", "constitutional reading",
+                   "agreed to by house", "agreed to by senate", "concurred in", "vote:",
+                   "failed to pass", "defeated by", "conference report agreed"):
+        if marker in d:
+            return "floor"
     return "other"
 
 
@@ -95,23 +139,24 @@ def load():
     from fetch import read_cached
 
     out = {"votes": [], "events": {}, "members": {}, "counters": collections.Counter()}
-    for code, year in SESSIONS.items():
+    for code, cfg in SESSIONS.items():
+        year = cfg["year"]
         members = {}
-        for r in csv.DictReader(io.StringIO(read_cached(code, "Members.csv"))):
-            members[_norm_member(r["MBR_MBRID"])] = {
+        for r in csv.DictReader(io.StringIO(read_cached(code, cfg["members"]))):
+            members[_norm_member(r[cfg["member_col"]])] = {
                 "name": r["MBR_NAME"].strip(), "chamber": r["MBR_HOU"].strip(), "session": year}
         out["members"].update({(year, k): v for k, v in members.items()})
 
         # bill + venue for each vote id
         ref = {}
-        for r in csv.DictReader(io.StringIO(read_cached(code, "History.csv"))):
+        for r in csv.DictReader(io.StringIO(read_cached(code, cfg["history"]))):
             rid = (r.get("History_refid") or "").strip()
             if not rid:
                 continue
             ref[rid] = {"bill": r["Bill_id"].strip(), "date": r.get("History_date", "").strip(),
                         "desc": r.get("History_description", "").strip()}
 
-        for line in read_cached(code, "Vote.csv").splitlines():
+        for line in read_cached(code, cfg["vote"]).splitlines():
             if not line.strip():
                 continue
             parts = [p.strip().strip('"') for p in line.split(",")]
@@ -125,8 +170,14 @@ def load():
                 out["counters"]["vote_without_history_row"] += 1
                 continue
             venue = _venue(meta["desc"])
-            structural = _venue_from_id(vid)
-            if venue == "other":
+            structural = _venue_from_id(vid) if cfg["id_encodes_venue"] else None
+            if structural is None:
+                # Modern vote ids carry no venue. The cross-check is UNAVAILABLE, not passing — recorded
+                # so nobody later reads "no disagreements" as "verified".
+                if venue == "other":
+                    out["counters"][f"venue_unknown_no_structural_check_{cfg['era']}"] += 1
+                    continue
+            elif venue == "other":
                 venue = structural
                 out["counters"]["venue_from_id_fallback"] += 1
             elif venue != structural:
@@ -152,7 +203,9 @@ def load():
             yes = sum(1 for _m, r_ in cast if r_ == "Y")
             out["events"][(year, vid)] = {
                 "session": year, "bill": meta["bill"], "date": meta["date"], "desc": meta["desc"],
-                "venue": venue, "structural_venue": structural, "chamber": vid[0],
+                "venue": venue, "structural_venue": structural,
+                "chamber": vid[0] if vid[0] in "HS" else (members[cast[0][0]]["chamber"] if cast else "?"),
+                "era": cfg["era"],
                 "yes": yes, "no": len(cast) - yes, "n": len(cast),
                 "margin": abs(yes - (len(cast) - yes)),
                 "result": "pass" if yes > len(cast) - yes else "fail",
@@ -161,6 +214,7 @@ def load():
                 out["votes"].append({"session": year, "vote_id": vid, "member": mid,
                                      "name": members[mid]["name"], "chamber": members[mid]["chamber"],
                                      "opt": "yes" if resp == "Y" else "no", "venue": venue,
+                                     "era": cfg["era"],
                                      "bill": meta["bill"], "n": len(cast),
                                      "margin": abs(yes - (len(cast) - yes))})
     return out
@@ -252,7 +306,7 @@ def main() -> int:
     d = load()
     E, V = d["events"], d["votes"]
     print(f"committee-era roll calls {len(E):,}   member-votes {len(V):,}   "
-          f"sessions {sorted(SESSIONS.values())}")
+          f"sessions {sorted(c['year'] for c in SESSIONS.values())}")
     print(f"bills covered: {len({e['bill'] for e in E.values()}):,}")
     by = collections.Counter(e["venue"] for e in E.values())
     print("\nroll calls BY VENUE:")

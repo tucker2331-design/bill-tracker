@@ -33,7 +33,8 @@ SESSIONS below is a PINNED allowlist for the same reason `LIS_HISTORICAL_AUTHORI
 widens the set by editing a loop bound. See docs/knowledge/legacylis_csv_route.md.
 
 Usage:
-  python3 tools/historical_cache/fetch.py fetch    # download what is missing (idempotent)
+  python3 tools/historical_cache/fetch.py fetch          # legacy CSVs (pre-2025)
+  python3 tools/historical_cache/fetch.py fetch-modern   # VOTE/HISTORY/Members for authorized sessions
   python3 tools/historical_cache/fetch.py verify   # re-hash local files
   python3 tools/historical_cache/fetch.py verify --check-remote
 """
@@ -77,6 +78,21 @@ FILES = ["Bills.csv", "History.csv", "Vote.csv", "Members.csv",
          # makes caching them the difference between a subject analysis being possible and impossible.
          "CiBillSubjects.csv", "CiParentChildSubjects.csv"]
 
+# THE MODERN BLOB, for the sessions LIS authorizes (2025 onward). Committee + subcommittee roll calls
+# exist here exactly as they do in the legacy CSVs, so extending [[testing/kill_points]] from 2 sessions
+# to 4 is a fetch, not a new capability.
+#
+# FILENAME CASING IS PER-FILE AND MUST NOT BE GUESSED. Probed 2026-09-10 on 20251:
+#     VOTE.CSV     200        Vote.csv     404
+#     HISTORY.CSV  200        History.csv  404
+#     MEMBERS.CSV  404        Members.csv  200
+# There is no rule — each name is spelled as the publisher spells it. Anyone probing with one convention
+# concludes the file does not exist (this is why 9 bulk files went unused for months; see
+# docs/knowledge/legacylis_csv_route.md).
+MODERN_BASE = "https://lis.blob.core.windows.net/lisfiles"
+MODERN_SESSIONS = {"20251": "2025 Regular Session", "20261": "2026 Regular Session"}
+MODERN_FILES = ["VOTE.CSV", "HISTORY.CSV", "Members.csv"]
+
 POLITE_DELAY_S = 0.5
 
 
@@ -110,6 +126,46 @@ def read_cached(code: str, name: str) -> str:
         raise FileNotFoundError(f"{path} is not cached — run `fetch.py fetch` first.")
     with gzip.open(path, "rt", encoding="utf-8", errors="replace") as fh:
         return fh.read()
+
+
+def fetch_modern() -> int:
+    """Cache VOTE/HISTORY/Members for the AUTHORIZED modern sessions. Gated on
+    `assert_lis_authorized` per session — a code outside the allowlist raises rather than fetching."""
+    import sys as _sys
+    _sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", ".."))
+    from lis_authorization import assert_lis_authorized
+
+    man = load_manifest()
+    got = skipped = failed = 0
+    for code in MODERN_SESSIONS:
+        assert_lis_authorized(code)
+        os.makedirs(os.path.join(CACHE_DIR, code), exist_ok=True)
+        for name in MODERN_FILES:
+            key = f"{code}/{name}"
+            if os.path.exists(_local(code, name)) and man["files"].get(key):
+                skipped += 1
+                continue
+            url = f"{MODERN_BASE}/{code}/{name}"
+            try:
+                with urllib.request.urlopen(urllib.request.Request(url, headers=UA), timeout=180) as r:
+                    raw = r.read()
+                    last_mod = r.headers.get("Last-Modified", "")
+            except (urllib.error.HTTPError, urllib.error.URLError, TimeoutError) as exc:
+                print(f"  FAIL {key}: {exc}")
+                failed += 1
+                continue
+            with gzip.open(_local(code, name), "wb", compresslevel=9) as fh:
+                fh.write(raw)
+            man["files"][key] = {"url": url, "bytes": len(raw), "sha256": _sha256(raw),
+                                 "last_modified": last_mod,
+                                 "fetched_utc": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())}
+            print(f"  ok   {key}: {len(raw):,} bytes -> {os.path.getsize(_local(code, name)):,} gz")
+            got += 1
+            time.sleep(POLITE_DELAY_S)
+    man.setdefault("sessions", {}).update(MODERN_SESSIONS)
+    save_manifest(man)
+    print(f"\nfetched {got}, already cached {skipped}, failed {failed}")
+    return 1 if failed else 0
 
 
 def fetch() -> int:
@@ -219,6 +275,8 @@ def main() -> int:
     mode = sys.argv[1] if len(sys.argv) > 1 else "verify"
     if mode == "fetch":
         return fetch()
+    if mode == "fetch-modern":
+        return fetch_modern()
     if mode == "verify":
         return verify("--check-remote" in sys.argv)
     print(f"unknown mode {mode!r} (fetch | verify [--check-remote])", file=sys.stderr)

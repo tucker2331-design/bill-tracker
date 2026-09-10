@@ -1,6 +1,6 @@
 ---
 tags: [testing, calibration, votes, war-room, indicator, committee]
-updated: 2026-09-09
+updated: 2026-09-10
 status: active
 ---
 
@@ -12,11 +12,14 @@ status: active
 
 | venue kind | venues (n>=40 bills) | share of bills that ever reach a floor vote |
 |---|---|---|
-| **subcommittee** | 15 | **44% – 73%** |
-| committee | 27 | 67% – 93% |
+| **subcommittee** | 16 | **39% – 68%** |
+| committee | 35 | 59% – 89% |
 
-House Finance subcommittee sends **44%** of the bills it votes on onward. House Courts of Justice
-*committee* sends **93%**. That is the spread a lobbyist needs before deciding where to spend a session.
+House Communications & Technology subcommittee sends **39%** of the bills it votes on onward; House
+Finance subcommittee, **40%**. Full committees run 59-89%. That spread is what a lobbyist needs before
+deciding where to spend a session.
+
+**Four sessions: 2023, 2024, 2025, 2026** — 28,769 roll calls over 4,510 bills.
 
 ## Why nobody else has this
 
@@ -25,16 +28,16 @@ Virginia**: 0 of its 69,422 vote events have a committee classification. Its dat
 the floor.
 
 LIS publishes committee AND subcommittee votes itself, in `Vote.csv`, and this project had never opened
-the file. **6,743 committee roll calls and 2,860 subcommittee roll calls**, linked to bills.
+the file. **13,486 committee roll calls and 5,706 subcommittee roll calls**, linked to bills.
 
 ## The decisive room is eight people
 
 Measured across every recorded subcommittee roll call:
 
 - median panel size: **8 members**
-- **27% are decided by 2 votes or fewer** (763 of 2,860)
-- a bill that wins at least one subcommittee vote reaches a floor vote **66%** of the time; one that loses
-  every subcommittee vote, **14%** (n = 2,408 / 85, passes `verify.check`)
+- **19% are decided by 2 votes or fewer** (1,111 of 5,706)
+- a bill that wins at least one subcommittee vote reaches a floor vote **59%** of the time; one that loses
+  every subcommittee vote, **12%** (n = 4,909 / 114, passes `verify.check`)
 
 **So the pivotal quantity in Virginia legislating is routinely one or two people in a room of eight.**
 
@@ -70,15 +73,26 @@ python3 tools/calibration/committee_votes.py --venues     # per-venue survival t
 
 ## Limits — read before quoting any number
 
-1. **2023 and 2024 only.** These files exist solely in the legacy CSV cache. The modern blob publishes
-   `VOTE.CSV` for authorized sessions and the calendar worker already consumes it, so extending to
-   2025/2026 is a fetch, not a new capability. Pre-2023 exists on no route we have.
+1. **2023-2026 only.** 2023/2024 come from the legacy CSV cache, 2025/2026 from the modern blob (fetched
+   2026-09-10, 6 files, zero failures, under the [[knowledge/lis_api_safety]] guardrails). **Pre-2023
+   exists on no route we have** — the legacy CSVs are retained for roughly the last three sessions.
+   THE TWO ERAS AGREE ON ALMOST NOTHING: file casing is per-file with no rule (`VOTE.CSV` but
+   `Members.csv`); the member key is `MBR_MBRID` in legacy and `MBR_MBRNO` in modern, which does not
+   exist in the other; legacy vote ids encode the venue and modern ones do not; and modern
+   `History_refid` is OVERLOADED with bill numbers, PDF names and subcommittee codes alongside vote ids.
 2. **1,274 of 9,559 roll calls in 241 are published with no member detail** — the vote exists, the names
    were never released. Counted separately from parse failures so neither can hide inside the other.
-3. **Venue is text-derived, structurally cross-checked.** `History_description` names the room; the vote
-   id's own prefix (`H0101` = House committee 01, subcommittee 01) is the structural check. 274
-   disagreements are counted rather than silently resolved. Internal diagnostic only (Standard #3).
-4. Committee **names** are scraped for readability only. Grouping is always on the structural code.
+3. **Venue is text-derived, and cross-checkable ONLY in the legacy era.** `History_description` names the
+   room; the legacy vote id's prefix (`H0101` = House committee 01, subcommittee 01) is the structural
+   check, and 227 disagreements are counted rather than resolved. **Modern vote ids carry no venue, so
+   there the check is UNAVAILABLE — recorded as unavailable, never reported as passing.** Internal
+   diagnostic only (Standard #3).
+4. **The venue classifier's ORDER is the whole rule** — a subcommittee line also says "committee", and
+   "passed by indefinitely in Finance" contains "passed". The first version had a Python precedence bug
+   (`a or b and c`) and searched for "passage" where LIS writes "passed", dropping 4,915 modern floor
+   votes into "other". Fixing it cut the structural-fallback count from 4,456 to 793, i.e. the text rule
+   now agrees with the structural check nearly everywhere it can be checked.
+5. Committee **names** are scraped for readability only. Grouping is always on the structural code.
 
 ## The join, verified not assumed
 
