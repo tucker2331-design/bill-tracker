@@ -2,7 +2,6 @@
 tags: [testing, calibration, votes, war-room, indicator, moat]
 updated: 2026-09-10
 status: active
-open_loop: committee_votes member NAMES are raw Members.csv strings, so one member can appear twice ("Green, W. Chad" and "W. Chad Green"); the member-level layer must route through corpus's canonical resolver before it ships.
 ---
 
 # The venue effect: what a room does to a bill, with content held constant
@@ -87,12 +86,13 @@ Inside those rooms, members are **not** monolithic: no-vote rates on content-con
 **0% to 64%** across 150 members with >=60 votes cast. That is the actionable end — which specific member
 in the room is gettable, joined to [[testing/persuadability]].
 
-**IT IS NOT READY.** `committee_votes` carries the RAW `Members.csv` name string, so one legislator can
-appear twice — measured: *"Green, W. Chad"* (47/104) and *"W. Chad Green"* (34/80) are one person, split.
-This is the same name-format class that hid 2,000 bills from every patron finding
-([[failures/assumptions_audit]] #115) and merged two legislators via a hyphen (#118). **The member layer
-must route through `corpus`'s canonical resolver before any of it ships.** The venue finding above is
-bill-level and unaffected.
+**FIXED 2026-09-10.** `committee_votes` carried the RAW `Members.csv` string, so *"Green, W. Chad"*
+(47/104) and *"W. Chad Green"* (34/80) were one legislator split in two — the same class that hid 2,000
+bills from every patron finding ([[failures/assumptions_audit]] #115) and merged two legislators via a
+hyphen (#118). Identity now routes through `corpus`'s resolver and FAILS CLOSED: an unresolvable name keeps
+its own raw string rather than being guessed into someone else's record, and the 11 remaining are counted.
+**216 distinct identities; 85 members now have enough votes in both conditions to compute the panel
+effect**, which is what makes "who is gettable in THIS room" a real column.
 
 ## Running it
 

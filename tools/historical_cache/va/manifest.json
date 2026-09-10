@@ -1,5 +1,12 @@
 {
  "files": {
+  "20251/DOCKET.CSV": {
+   "bytes": 66417,
+   "fetched_utc": "2026-09-10T05:11:09Z",
+   "last_modified": "Fri, 17 Apr 2026 15:00:00 GMT",
+   "sha256": "1d673b377fcd6efe557f5bbfc8be5c5bcb669596b154d5a4f1f7647a2c5f751d",
+   "url": "https://lis.blob.core.windows.net/lisfiles/20251/DOCKET.CSV"
+  },
   "20251/HISTORY.CSV": {
    "bytes": 3937016,
    "fetched_utc": "2026-09-10T04:06:25Z",
@@ -14,12 +21,26 @@
    "sha256": "d6727ba38bde4f1782c29d5b184522452cd77807f36155624b9cb8891050cbce",
    "url": "https://lis.blob.core.windows.net/lisfiles/20251/Members.csv"
   },
+  "20251/SUBDOCKET.CSV": {
+   "bytes": 11240,
+   "fetched_utc": "2026-09-10T05:11:10Z",
+   "last_modified": "Fri, 17 Apr 2026 15:00:01 GMT",
+   "sha256": "aa35b64a0ccfb75cef8dcd5a8a68bf844795a28aec30c9cda5c190ea429f40ba",
+   "url": "https://lis.blob.core.windows.net/lisfiles/20251/SUBDOCKET.CSV"
+  },
   "20251/VOTE.CSV": {
    "bytes": 2743110,
    "fetched_utc": "2026-09-10T04:06:24Z",
    "last_modified": "Wed, 07 Jan 2026 20:00:46 GMT",
    "sha256": "947d75248ab3f1b3c5de4b8abc4352835a48afbc5926a30d646e8e4e2e380ad8",
    "url": "https://lis.blob.core.windows.net/lisfiles/20251/VOTE.CSV"
+  },
+  "20261/DOCKET.CSV": {
+   "bytes": 78367,
+   "fetched_utc": "2026-09-10T05:11:11Z",
+   "last_modified": "Thu, 10 Sep 2026 00:00:00 GMT",
+   "sha256": "904d12aba7c295dd72d2a35219b94195371bc96a0ce23eacfec38d2d4f6a20b1",
+   "url": "https://lis.blob.core.windows.net/lisfiles/20261/DOCKET.CSV"
   },
   "20261/HISTORY.CSV": {
    "bytes": 4738051,
@@ -34,6 +55,13 @@
    "last_modified": "Thu, 10 Sep 2026 00:00:00 GMT",
    "sha256": "19c17cbf077dadc0878bc3c6cdbebba4f388a7d4a0ecc1e3ea08143f5053605d",
    "url": "https://lis.blob.core.windows.net/lisfiles/20261/Members.csv"
+  },
+  "20261/SUBDOCKET.CSV": {
+   "bytes": 12595,
+   "fetched_utc": "2026-09-10T05:11:11Z",
+   "last_modified": "Thu, 10 Sep 2026 00:00:00 GMT",
+   "sha256": "0d0c1ffa22fd4d3066e54f793aaf413eea4f0085c1d061fe21a9e5698b53cfa7",
+   "url": "https://lis.blob.core.windows.net/lisfiles/20261/SUBDOCKET.CSV"
   },
   "20261/VOTE.CSV": {
    "bytes": 3948313,
