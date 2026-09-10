@@ -77,8 +77,12 @@ SOURCES = [
     {"slug": "yano-2012-bill-survival-committee", "kind": "peer-reviewed",
      "title": "Textual Predictors of Bill Survival in Congressional Committees",
      "who": "Yano, Smith, Wilkerson — NAACL 2012",
-     "url": "https://aclanthology.org/N12-1033.pdf",
-     "why": "Predicts the COMMITTEE stage specifically — 'one of the most precarious and least understood "
+     "url": "https://homes.cs.washington.edu/~nasmith/papers/yano+smith+wilkerson.naacl12.pdf",
+     "why": "NOTE: first cited with the WRONG URL (N12-1033), which fetched a STYLOMETRY paper about "
+            "detecting non-native English writers. A wrong source in a reading list is worse than a "
+            "missing one because it reads as evidence; caught only by grepping the cached text for the "
+            "claim it was supposed to support. Corrected to Smith's own copy. "
+            "Predicts the COMMITTEE stage specifically — 'one of the most precarious and least understood "
             "stages in a bill's life'. The direct precedent for [[testing/kill_points]]."},
     {"slug": "nay-2016-arxiv-preprint", "kind": "peer-reviewed",
      "title": "Predicting and Understanding Law-Making with Word Vectors and an Ensemble Model (preprint)",

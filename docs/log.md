@@ -8,6 +8,42 @@ status: active
 
 Append-only, reverse-chronological (newest at top). Each entry opens with `## [YYYY-MM-DD] <kind> | <title>` so `grep "^## \[" log.md | head -20` gives a parseable timeline.
 
+## [2026-09-10] measurement | VENUE EFFECT — the companion bill is a free control group
+
+Owner: *"an argument for something that genuinely would be hard to create a replacement for ... combining
+sources in ways humans couldnt."*
+
+**THE ARGUMENT COMES FROM THE LITERATURE, NOT FROM US.** Yano, Smith & Wilkerson (NAACL 2012), the
+standard reference on committee outcomes, calls the stage consideration *"behind closed doors"* and models
+it from sponsor + referral + text. Eidelman et al. (COLING 2018) predict floor action across **1.3M bills
+in 50 states**, rank committee information their **most predictive feature**, and still only have the
+committee ASSIGNMENT. Nobody has the votes: **Open States carries 0 committee roll calls for Virginia of
+69,422 vote events.** LIS publishes them and [[testing/kill_points]] reads 19,192.
+
+**THE DESIGN: THE LEGISLATURE RUNS THE EXPERIMENT ON ITSELF.** Virginia files companion bills — identical
+text, both chambers, same week. When one dies and the twin lives, content/session/climate/calendar are all
+held constant and **only the room differs**. **272 of 1,443 cross-chamber pairs diverged (19%), and the
+chamber split on them is 50/50** — "the House kills more" explains nothing; the variance is at the ROOM.
+
+**Content-controlled kill rate** (5,829 observations where the twin survived): base **7%** full committee,
+**12%** subcommittee — against **31% for House Privileges & Elections subcommittee**, identical text faring
+four times worse than where its twin went. **Permutation p = 0.037** over 49 venues, shuffled WITHIN kind
+so it cannot be passed by rediscovering that subcommittees kill more.
+
+**CIRCULARITY CAUGHT MID-ANALYSIS AND IT WAS ENORMOUS:** scoring a bill by its LAST pre-floor venue is
+nearly the definition of where it died, and gave an **82%** subcommittee base rate. Counting a bill as seen
+by EVERY venue that voted on it gives **12%** — the circular version was seven times the honest one, and
+looked like the best result of the session. Same family as the 98% caught in #119, two days earlier.
+
+**A WRONG SOURCE IN THE READING LIST**, caught only by grepping the cached text for the claim it was meant
+to support: Yano et al. was cited at ACL id `N12-1033`, which is a **stylometry paper about detecting
+non-native English writers**, sitting in the corpus as 9,469 words of apparent evidence. A wrong source is
+worse than a missing one — it reads as support and its word count reads as diligence. Corrected to N12-1097.
+
+**AND THE NAME BUG A THIRD TIME:** the member layer (no-vote rates 0-64% across 150 members in those rooms)
+is real but NOT shipped — raw `Members.csv` strings split *"Green, W. Chad"* and *"W. Chad Green"* into two
+legislators. Declared an open loop. Audit [[failures/assumptions_audit|#120]]. See [[testing/venue_effect]].
+
 ## [2026-09-10] research | Literature corpus: 15 sources, 182,968 words, and three hits on shipped work
 
 Owner: *"collect literature titles essays interviews etc ... at least 10 from varying sources and

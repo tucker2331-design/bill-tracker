@@ -154,11 +154,11 @@
   "yano-2012-bill-survival-committee": {
    "fetched": "2026-09-10",
    "kind": "peer-reviewed",
-   "sha256": "8d5500500bf13037",
+   "sha256": "6fa4946ef9b49afe",
    "title": "Textual Predictors of Bill Survival in Congressional Committees",
-   "url": "https://aclanthology.org/N12-1033.pdf",
+   "url": "https://homes.cs.washington.edu/~nasmith/papers/yano+smith+wilkerson.naacl12.pdf",
    "who": "Yano, Smith, Wilkerson \u2014 NAACL 2012",
-   "words": 9469
+   "words": 6548
   }
  }
 }
