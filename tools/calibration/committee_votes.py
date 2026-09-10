@@ -135,16 +135,45 @@ def _venue_from_id(vid: str) -> str:
     return "subcommittee"
 
 
+def _canonical():
+    """Resolve a `Members.csv` name string to ONE canonical person.
+
+    The raw string is not an identity. Measured: `"Green, W. Chad"` and `"W. Chad Green"` are the same
+    legislator, and counted separately they split his record in two (47/104 and 34/80). This is the third
+    appearance of the name-format class in this project — it hid 2,000 bills from every patron finding
+    (#115) and merged two legislators through a hyphen (#118) — so identity goes through `corpus`'s
+    resolver, which already handles surname-first, bare surnames, initials and hyphens.
+
+    FAILS CLOSED: an unresolvable name keeps its raw string as its own key rather than being dropped or
+    guessed into someone else's record, and the count of those is reported."""
+    import corpus as C
+    _party, person = C._party_lookup()
+    unresolved = collections.Counter()
+
+    def canon(raw):
+        p = person(raw)
+        if p:
+            return p, True
+        unresolved[raw] += 1
+        return raw.strip(), False
+
+    return canon, unresolved
+
+
 def load():
     from fetch import read_cached
+    canon, unresolved = _canonical()
 
-    out = {"votes": [], "events": {}, "members": {}, "counters": collections.Counter()}
+    out = {"votes": [], "events": {}, "members": {}, "counters": collections.Counter(),
+           "unresolved_names": unresolved}
     for code, cfg in SESSIONS.items():
         year = cfg["year"]
         members = {}
         for r in csv.DictReader(io.StringIO(read_cached(code, cfg["members"]))):
+            nm, ok = canon(r["MBR_NAME"])
             members[_norm_member(r[cfg["member_col"]])] = {
-                "name": r["MBR_NAME"].strip(), "chamber": r["MBR_HOU"].strip(), "session": year}
+                "name": nm, "raw_name": r["MBR_NAME"].strip(), "resolved": ok,
+                "chamber": r["MBR_HOU"].strip(), "session": year}
         out["members"].update({(year, k): v for k, v in members.items()})
 
         # bill + venue for each vote id
