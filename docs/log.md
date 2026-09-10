@@ -44,6 +44,35 @@ worse than a missing one — it reads as support and its word count reads as dil
 is real but NOT shipped — raw `Members.csv` strings split *"Green, W. Chad"* and *"W. Chad Green"* into two
 legislators. Declared an open loop. Audit [[failures/assumptions_audit|#120]]. See [[testing/venue_effect]].
 
+## [2026-09-10] measurement | The partisan temperature — one dimension under the room and the patron
+
+Owner pushed back on depth and read one finding backwards from me — correctly.
+
+**VOICE VOTES ARE A SIGNAL, NOT A GAP.** I shipped "87% of committee kills leave no roll call" as a
+transparency defect. Owner: *"it means the mass majority of the committee agreed, otherwise they would
+record it."* Tested: of 92 recorded failed room votes, **0% are unanimous and 53% are within two votes**,
+median margin 2. Recording tracks CONTEST. So the inversion is the product: **a recorded vote means
+somebody in the room fought for your bill**, and minority bills die by voice 73% of the time against 52%
+for majority — they die without anyone forcing a count. I described a fact about the WORLD as a defect of
+the SOURCE.
+
+**A TEMPTING SCENARIO THAT WAS FAKE.** Bridge-builders are real (0.0%-31.9% cross-party rate across 168
+members on 5,270 opposed roll calls), and "a bridge-builder sits in your room" looked worth **+36 points**
+for minority bills. It is **+0 within the same room** (99% vs 98%, n=12,836). The tell was that it helped
+majority and minority EQUALLY — bridge-builders sit in particular rooms, so present-vs-absent compared
+rooms, not members.
+
+**THE REAL INTERACTION.** The minority penalty is not a constant 25pt: **6-47pt by room** (permutation
+p=0.001, 28 rooms) and **4-47pt by subject**. House Public Safety 47pt vs Senate Local Government 6pt;
+within the House alone the spread is still 29pt. Public Service Companies 47pt vs **Agriculture 4pt**.
+
+**AND THEY ARE ONE DIMENSION.** How often a subject produces a party-line room vote correlates with how
+much the patron's party costs on it: **r = 0.68** (n=24, leave-one-out 0.64-0.73, permutation p<0.0005).
+One number per subject — its partisan temperature — predicts both how the room splits and whether the
+patron matters, knowable before any vote.
+
+Audits [[failures/assumptions_audit|#123-126]].
+
 ## [2026-09-10] research | Literature corpus: 15 sources, 182,968 words, and three hits on shipped work
 
 Owner: *"collect literature titles essays interviews etc ... at least 10 from varying sources and
