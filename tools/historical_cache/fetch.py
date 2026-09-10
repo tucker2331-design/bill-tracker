@@ -91,7 +91,8 @@ FILES = ["Bills.csv", "History.csv", "Vote.csv", "Members.csv",
 # docs/knowledge/legacylis_csv_route.md).
 MODERN_BASE = "https://lis.blob.core.windows.net/lisfiles"
 MODERN_SESSIONS = {"20251": "2025 Regular Session", "20261": "2026 Regular Session"}
-MODERN_FILES = ["VOTE.CSV", "HISTORY.CSV", "Members.csv", "DOCKET.CSV", "SUBDOCKET.CSV"]
+MODERN_FILES = ["VOTE.CSV", "HISTORY.CSV", "Members.csv", "DOCKET.CSV", "SUBDOCKET.CSV",
+                "Sponsors.csv"]
 # DOCKET/SUBDOCKET are the committee AGENDAS -- which bills a room scheduled, and when. They are EMPTY
 # (40 bytes, header only) for every legacy session, so this is 2025-onward only; that gap is why
 # [[testing/kill_points]] can measure what a room DID but not what it declined to schedule.

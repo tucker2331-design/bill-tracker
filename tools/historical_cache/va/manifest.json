@@ -28,6 +28,13 @@
    "sha256": "aa35b64a0ccfb75cef8dcd5a8a68bf844795a28aec30c9cda5c190ea429f40ba",
    "url": "https://lis.blob.core.windows.net/lisfiles/20251/SUBDOCKET.CSV"
   },
+  "20251/Sponsors.csv": {
+   "bytes": 1097441,
+   "fetched_utc": "2026-09-10T23:25:50Z",
+   "last_modified": "Wed, 07 Jan 2026 20:00:02 GMT",
+   "sha256": "8fadda0cfc5479128a79288f7583d6b84c807e437d41f1f522d04d4ef7700675",
+   "url": "https://lis.blob.core.windows.net/lisfiles/20251/Sponsors.csv"
+  },
   "20251/VOTE.CSV": {
    "bytes": 2743110,
    "fetched_utc": "2026-09-10T04:06:24Z",
@@ -62,6 +69,13 @@
    "last_modified": "Thu, 10 Sep 2026 00:00:00 GMT",
    "sha256": "0d0c1ffa22fd4d3066e54f793aaf413eea4f0085c1d061fe21a9e5698b53cfa7",
    "url": "https://lis.blob.core.windows.net/lisfiles/20261/SUBDOCKET.CSV"
+  },
+  "20261/Sponsors.csv": {
+   "bytes": 1054382,
+   "fetched_utc": "2026-09-10T23:25:51Z",
+   "last_modified": "Thu, 10 Sep 2026 00:00:02 GMT",
+   "sha256": "05f09eb505793640bcb5c9bb335579e45f7b935457dabd7331da582a0c042ea6",
+   "url": "https://lis.blob.core.windows.net/lisfiles/20261/Sponsors.csv"
   },
   "20261/VOTE.CSV": {
    "bytes": 3948313,
