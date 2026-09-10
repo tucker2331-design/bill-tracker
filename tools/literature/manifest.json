@@ -1,0 +1,164 @@
+{
+ "sources": {
+  "annual-review-how-lobbying-matters": {
+   "checked": "2026-09-10",
+   "error": "HTTP Error 403: Forbidden",
+   "url": "https://www.annualreviews.org/content/journals/10.1146/annurev-polisci-033123-124920"
+  },
+  "bgov-lobbying-state-vs-federal": {
+   "fetched": "2026-09-10",
+   "kind": "practitioner",
+   "sha256": "b3f1d874fb44b3ac",
+   "title": "Lobbying State Governments vs. the Federal Government",
+   "url": "https://about.bgov.com/insights/public-affairs-strategies/lobbying-state-governments-vs-the-federal-government/",
+   "who": "Bloomberg Government",
+   "words": 1138
+  },
+  "butler-miller-does-lobbying-affect-bill-advancement": {
+   "fetched": "2026-09-10",
+   "kind": "peer-reviewed",
+   "sha256": "fa2a4d704d2ccfa4",
+   "title": "Does Lobbying Affect Bill Advancement? Evidence from Three State Legislatures",
+   "url": "https://www.davidryanmiller.com/files/LobbyingImpact.pdf",
+   "who": "Daniel M. Butler, David R. Miller \u2014 Political Research Quarterly, 2022",
+   "words": 10465
+  },
+  "crs-lobbying-disclosure-act-at-20": {
+   "checked": "2026-09-10",
+   "error": "HTTP Error 403: Forbidden",
+   "url": "https://www.congress.gov/crs-product/R44292"
+  },
+  "drutman-dissertation-business-of-lobbying": {
+   "fetched": "2026-09-10",
+   "kind": "peer-reviewed",
+   "sha256": "424299e8b2f635a2",
+   "title": "The Business of America is Lobbying: The Expansion of Corporate Political Activity and the Future of American Pluralism (dissertation)",
+   "url": "https://escholarship.org/content/qt1mh761v2/qt1mh761v2_noSplash_c46add0559320655f6691c997d1b10ec.pdf",
+   "who": "Lee Drutman \u2014 UC Berkeley PhD dissertation",
+   "words": 65890
+  },
+  "eidelman-2018-how-predictable-is-your-state": {
+   "fetched": "2026-09-10",
+   "kind": "peer-reviewed",
+   "sha256": "fa899bb40f9c3354",
+   "title": "How Predictable is Your State? Leveraging Lexical and Contextual Information for Predicting Legislative Floor Action at the State Level",
+   "url": "https://aclanthology.org/C18-1013.pdf",
+   "who": "Eidelman, Kornilova, Argyle (FiscalNote) \u2014 COLING 2018",
+   "words": 8918
+  },
+  "harvard-three-essays-on-lobbying": {
+   "fetched": "2026-09-10",
+   "kind": "peer-reviewed",
+   "sha256": "b76b4be5e489cdc0",
+   "title": "Three Essays on Lobbying (PhD dissertation)",
+   "url": "https://dash.harvard.edu/server/api/core/bitstreams/9f8d0eb3-f563-449b-a6f2-c986eb8933bf/content",
+   "who": "Harvard University \u2014 DASH open repository",
+   "words": 52540
+  },
+  "house-oral-history": {
+   "fetched": "2026-09-10",
+   "kind": "interview",
+   "sha256": "629cda52ef846ea8",
+   "title": "Oral History Program \u2014 U.S. House of Representatives",
+   "url": "https://history.house.gov/About/Oral-History/Program-Overview/",
+   "who": "Office of the Historian, U.S. House",
+   "words": 851
+  },
+  "kwak-2026-gatekeepers-subcommittee": {
+   "checked": "2026-09-10",
+   "error": "HTTP Error 403: Forbidden",
+   "url": "https://onlinelibrary.wiley.com/doi/full/10.1111/lsq.70072"
+  },
+  "nay-2016-arxiv-preprint": {
+   "fetched": "2026-09-10",
+   "kind": "peer-reviewed",
+   "sha256": "cfc30d16a3482f27",
+   "title": "Predicting and Understanding Law-Making with Word Vectors and an Ensemble Model (preprint)",
+   "url": "https://arxiv.org/abs/1607.02109",
+   "who": "John J. Nay \u2014 arXiv 1607.02109",
+   "words": 744
+  },
+  "nay-2017-predicting-law-making": {
+   "fetched": "2026-09-10",
+   "kind": "peer-reviewed",
+   "sha256": "37783e0b4e2ef197",
+   "title": "Predicting and understanding law-making with word vectors and an ensemble model",
+   "url": "https://pmc.ncbi.nlm.nih.gov/articles/PMC5425031/",
+   "who": "John J. Nay \u2014 PLOS ONE, 2017",
+   "words": 6916
+  },
+  "opensecrets-lobbying-timeline": {
+   "checked": "2026-09-10",
+   "error": "HTTP Error 403: Forbidden",
+   "url": "https://www.opensecrets.org/resources/learn/lobbying_timeline"
+  },
+  "plural-how-to-lobby-state-level": {
+   "fetched": "2026-09-10",
+   "kind": "practitioner",
+   "sha256": "7fcf959e01906653",
+   "title": "How to Lobby at the State Level",
+   "url": "https://pluralpolicy.com/blog/how-to-lobby-at-the-state-level/",
+   "who": "Plural Policy (vendor)",
+   "words": 2091
+  },
+  "quorum-state-lobbying-new-legislatures": {
+   "fetched": "2026-09-10",
+   "kind": "practitioner",
+   "sha256": "c738a159dd0c37b1",
+   "title": "State Lobbying Strategy: Tips for New Legislatures",
+   "url": "https://www.quorum.us/blog/prepping-for-new-faces-state-legislatures/",
+   "who": "Quorum (vendor)",
+   "words": 8229
+  },
+  "rvahub-2017-unrecorded-subcommittee-votes": {
+   "fetched": "2026-09-10",
+   "kind": "journalism",
+   "sha256": "9ac697bb94fa8bc7",
+   "title": "Most House bills died on unrecorded votes in 2017 General Assembly session",
+   "url": "https://rvahub.com/2017/03/06/interactive-house-bills-died-unrecorded-votes-2017-general-assembly-session/",
+   "who": "RVAHub / VCU Capital News Service, 2017",
+   "words": 1062
+  },
+  "senate-oral-history": {
+   "fetched": "2026-09-10",
+   "kind": "interview",
+   "sha256": "b3d76975b5ffb253",
+   "title": "Oral History Project \u2014 U.S. Senate Historical Office",
+   "url": "https://www.senate.gov/history/oralhistory.htm",
+   "who": "U.S. Senate Historical Office",
+   "words": 2988
+  },
+  "shor-kistner-comparing-leviathans": {
+   "fetched": "2026-09-10",
+   "kind": "peer-reviewed",
+   "sha256": "dc8daddaadfc2cae",
+   "title": "Comparing Leviathans: Agenda Influence in State Legislatures, 2011 to 2023",
+   "url": "https://priceschool.usc.edu/wp-content/uploads/2024/10/Shor-and-Kistner.pdf",
+   "who": "Shor & Kistner \u2014 USC Price School",
+   "words": 9452
+  },
+  "va-general-assembly-glossary": {
+   "fetched": "2026-09-10",
+   "kind": "government",
+   "sha256": "5ce5004af0c7ab25",
+   "title": "Glossary & Legislative Terms \u2014 Virginia General Assembly",
+   "url": "https://vga.virginia.gov/learn/glossary-legislative-terms/",
+   "who": "Virginia General Assembly (official)",
+   "words": 2215
+  },
+  "virginia-mercury-alive-and-dead-2026": {
+   "checked": "2026-09-10",
+   "error": "HTTP Error 403: Forbidden",
+   "url": "https://virginiamercury.com/2026/02/18/whats-alive-and-whats-dead-at-the-virginia-general-assemblys-2026-midway-point/"
+  },
+  "yano-2012-bill-survival-committee": {
+   "fetched": "2026-09-10",
+   "kind": "peer-reviewed",
+   "sha256": "8d5500500bf13037",
+   "title": "Textual Predictors of Bill Survival in Congressional Committees",
+   "url": "https://aclanthology.org/N12-1033.pdf",
+   "who": "Yano, Smith, Wilkerson \u2014 NAACL 2012",
+   "words": 9469
+  }
+ }
+}

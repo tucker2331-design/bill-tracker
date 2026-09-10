@@ -1,12 +1,43 @@
 ---
 tags: [log, meta]
-updated: 2026-09-09
+updated: 2026-09-10
 status: active
 ---
 
 # Project Log
 
 Append-only, reverse-chronological (newest at top). Each entry opens with `## [YYYY-MM-DD] <kind> | <title>` so `grep "^## \[" log.md | head -20` gives a parseable timeline.
+
+## [2026-09-10] research | Literature corpus: 15 sources, 182,968 words, and three hits on shipped work
+
+Owner: *"collect literature titles essays interviews etc ... at least 10 from varying sources and
+perspectives and medium types ... at least 3 need to be 10k words+."*
+
+**Delivered: 15 sources fetched to text (182,968 words), 3 over 10,000 words** — Drutman's full Berkeley
+dissertation (65,890), a Harvard *Three Essays on Lobbying* dissertation (52,540), and Butler & Miller on
+state bill advancement (10,465). Mixed by medium: 8 peer-reviewed, 3 practitioner, 2 interview, 1
+journalism, 1 government, plus 3 book-length works documented separately.
+
+**Three sources land directly on findings we already shipped:**
+- **Eidelman, Kornilova & Argyle (COLING 2018)** predict floor action across **1.3M bills, 50 states + DC**
+  at 85.9% accuracy and rank **committee information the MOST predictive feature, sponsor second, bill
+  text only a modest gain.** That is [[testing/kill_points]] + [[testing/subject_labels]] arrived at
+  independently on 60x our corpus.
+- **Nay (PLOS ONE 2017)**, ~70k bills: **sponsor's party-in-majority is feature #1, cosponsor count #3** —
+  replicating our 25pt minority penalty and the co-patron effect on a different legislature.
+- **RVAHub/VCU 2017:** of 571 failed VA House bills, **more than two-thirds were killed on UNRECORDED
+  subcommittee voice votes.** Those cannot appear in `Vote.csv`, so our recorded subcommittee roll calls
+  are a SUBSET — the gate is NARROWER than we measured, not wider.
+
+**And one that would reframe the product:** Baumgartner et al. (2009), 98 sampled issues — ~60% of
+lobbying campaigns produced no policy change and **resources explain under 5% of the variance.** If that
+transfers to Virginia, what we sell is not money or volume but knowing where the veto points are.
+
+**5 sources 403-blocked and recorded as UNREAD** rather than dropped; costliest is Kwak (LSQ 2026), the
+one theoretical treatment of subcommittees as a distinct gatekeeping venue.
+
+Corpus is fetched but **not yet read end-to-end** — the digest pass is the declared open loop.
+See [[testing/literature]].
 
 ## [2026-09-09] measurement | KILL POINTS — the subcommittee is the gate, and it was in a file we already had
 

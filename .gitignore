@@ -28,3 +28,6 @@ tools/historical_cache/openstates_va/extracted/
 
 # derived vote cache (255 MB, rebuilt by tools/calibration/votes.py --refresh)
 tools/calibration/.votes_cache.pkl
+
+# fetched third-party literature texts (10 MB, rebuildable via tools/literature/corpus.py)
+tools/literature/sources/
