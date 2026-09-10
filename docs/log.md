@@ -1,12 +1,40 @@
 ---
 tags: [log, meta]
-updated: 2026-08-07
+updated: 2026-09-09
 status: active
 ---
 
 # Project Log
 
 Append-only, reverse-chronological (newest at top). Each entry opens with `## [YYYY-MM-DD] <kind> | <title>` so `grep "^## \[" log.md | head -20` gives a parseable timeline.
+
+## [2026-09-09] measurement | KILL POINTS — the subcommittee is the gate, and it was in a file we already had
+
+[[testing/persuadability]] shipped with an honest limit: Open States carries **0 committee roll calls of
+its 69,422** for Virginia, so it measured the floor while the deciding room stayed dark. The next move was
+not a better method — it was checking whether that venue existed in something already cached. It did.
+**`Vote.csv` holds 6,743 committee and 2,860 subcommittee roll calls** for 2023-2024, linkable to bills,
+and had never been opened.
+
+**THE FINDING: the subcommittee is the gate; the full committee ratifies.** Of bills voted on in a venue,
+the share ever reaching a floor vote is **44-73% across 15 subcommittees** but **67-93% across 27
+committees**. House Finance subcommittee passes 44% onward; House Courts of Justice committee, 93%.
+
+**The decisive room is eight people.** Median subcommittee panel = 8, and **27% of subcommittee roll calls
+are decided by 2 votes or fewer**. Winning one subcommittee vote -> 66% reach the floor; losing them all ->
+14% (n=2,408/85, passes `verify.check`).
+
+**Two traps caught before publishing.** The join is a **zero-match trap** — `Members.csv` writes `H108`,
+`Vote.csv` writes `H0108`, so raw they match **0 of 141** and return an empty result rather than an error
+(third occurrence of this shape; see #114). And scoring venue depth against `passed` gives a meaningless
+**98%**, because in the first chamber the floor roll call IS the passage vote — the outcome was rewritten
+to "reached a floor vote", a separate later event.
+
+**Why the 2-session limit matters less than it looks:** committee votes exist for 2023-24 only, but
+**same member, committee vs floor defection is 2.6% vs 2.9%, r=0.72 (n=183)** — so the nine-session floor
+persuadability score is a validated proxy for committee behaviour.
+
+Audit [[failures/assumptions_audit|#119]]. See [[testing/kill_points]].
 
 ## [2026-08-07] measurement | PERSUADABILITY — the first member-level indicator, from 2.69M unused votes
 
