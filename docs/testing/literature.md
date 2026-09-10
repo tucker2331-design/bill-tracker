@@ -2,7 +2,6 @@
 tags: [testing, research, war-room, literature, method]
 updated: 2026-09-10
 status: active
-open_loop: The 15 cached sources (182,968 words) are fetched but NOT yet read end-to-end; the digest pass and its findings are still to come.
 ---
 
 # The reading list: what the field already knows
@@ -112,12 +111,32 @@ A reading list that silently omits what it could not read is worse than one that
 | Virginia Mercury, *What's alive and what's dead at the 2026 midway point* | 403 |
 | OpenSecrets, *Lobbying Timeline* | 403 |
 
-## Next
+## The digest — what it changed
 
-The corpus is fetched but **not yet read end-to-end**. The digest pass should ask of each source:
-1. Which of our shipped findings does it confirm, contradict, or already supersede?
-2. Which signal does it name that we do not yet compute?
-3. What has already been TRIED AND FAILED, so we do not spend a week on it?
+**THE CENTRAL FINDING REPLICATES, INDEPENDENTLY.** Butler & Miller, on the full universe of proposals in
+THREE state legislatures: *"lobbying does not buy the votes of legislators on the committees of
+jurisdiction for each bill, but lobbying does strongly predict what bills make it onto the agenda."*
+
+We reached the same conclusion from a completely different direction — decomposing Virginia outcomes into
+terminal events and finding timing beats votes **4.8 : 1**. They had lobbying-position data and no
+committee roll calls; we had committee roll calls and no lobbying positions. **Different data, different
+method, same answer.** That is the strongest evidence available that this is not a Virginia artifact.
+
+**KILLING IS 2.4x EASIER THAN PASSING.** Same paper: one-sided lobbying FOR a bill is worth **+11
+percentage points** of enactment probability; one-sided lobbying AGAINST is worth **-26**. A defensive
+client and an offensive client are not running the same play at different odds — they are running
+different games.
+
+**THE ACTION IS BEFORE THE FLOOR.** Shor & Kistner find agenda-control effects **1.5-2x larger for
+pre-final-passage votes than for final passage**, and that minority-sponsored bills are the ones most
+likely to roll a majority. Consistent with [[testing/kill_points]]: the floor is where outcomes are
+ratified, not decided.
+
+**A WRONG SOURCE, caught by grepping for the claim it was cited for.** Yano et al. was first cited at ACL
+id `N12-1033`, which is a **stylometry paper about detecting non-native English writers** — 9,469 words
+sitting in the corpus as apparent evidence. Corrected to `N12-1097`. **Verify a fetched source says what
+you cited it for before counting it as read**; a wrong source reads as support and its word count reads as
+diligence.
 
 ## Related
 
