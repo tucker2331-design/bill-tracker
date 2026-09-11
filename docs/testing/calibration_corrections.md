@@ -128,3 +128,39 @@ not another probe. See [[knowledge/legacylis_csv_route]] and [[knowledge/lis_api
 3. **The Senate committee stage does not filter** (99% got out in 2024). Descriptive, not predictive, and
    worth telling a user plainly.
 4. **No per-bill probability.** Reinforced, not weakened, by these corrections.
+
+---
+
+## Correction 5 — the cross-party co-patron lever was measuring co-patrons that arrived AFTER the bill moved
+
+**The claim.** "One cross-party co-patron is worth +18 to +26 points; same-party co-patrons are worth
+zero." Published in commit `530fffc` and repeated as the headline lobbyist lever on 2026-09-11.
+
+**The bug — three layers.**
+
+1. **Open States sponsorship rows carry no date.** The co-patron list is a terminal snapshot, and the
+   action stream records no co-patron additions. Nothing in that source can tell you when a name arrived.
+2. **Names demonstrably arrive mid-session.** When a committee incorporates bill A into bill B, A's chief
+   patron becomes a co-patron of B **69% of the time** (459/669). LIS even has a type for it:
+   `Incorporated Chief Co-Patron`. The predictor was partly post-treatment.
+3. **The accumulation control fails.** Pile-on is party-blind, so same-party co-patrons should show the
+   same effect — and they do: **+12 to +16 points in every within-patron design**, against a claimed zero.
+   "Any co-patron at all" is worth +16 to +18.
+
+**The fix.** LIS's authoritative record separates `Chief Co-Patron` (named on the introduced bill,
+rule-limited to ~4) from `Co-Patron` (signed on later, up to 99). Tested on the two authorised sessions
+from the on-disk cache (no new requests; 16,675 rows, 100% joined):
+
+| | majority patron | minority patron |
+|---|---|---|
+| cross-party premium over same-party, both pre-treatment | **+4 pt, p = 0.39** | **+11 pt, p = 0.20** |
+| ANY chief co-patron at introduction vs none | +23 pt, p < 1e-16 | +14 pt, p = 7.6e-04 |
+
+**What survives.** Co-patron presence **at introduction** is worth 14-23 points and is **party-blind**. It
+is pre-treatment, so it is not accumulation — but it is still selection, and it is a signal, not a lever.
+
+**The lesson, and it is not new here.** The five earlier padding bugs were joins that silently dropped
+rows. This is the same family one level up: **a predictor that is not fixed before the outcome is not a
+predictor.** Before any feature enters a claim, ask when its value was set. If the source cannot answer
+that, the source cannot support the claim. Full working: [[testing/carrier_effect]].
+
