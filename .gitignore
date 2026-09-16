@@ -31,3 +31,8 @@ tools/calibration/.votes_cache.pkl
 
 # fetched third-party literature texts (10 MB, rebuildable via tools/literature/corpus.py)
 tools/literature/sources/
+
+# ELECT campaign-finance CSVs — ~60 MB and growing, re-downloadable from a documented
+# public directory (apps.elections.virginia.gov/SBE_CSV/CF/<YYYY_MM>/). The FETCHER is
+# committed; the bytes are not. Same rule as the Open States session archives.
+tools/historical_cache/va_finance/
