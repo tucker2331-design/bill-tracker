@@ -51,6 +51,34 @@ the bill changed" would hide.
 What makes the finding credible despite that is corroboration from an independent design:
 [[testing/venue_effect]] holds text **exactly** constant across chambers and finds the same thing.
 
+## How much discretion is there? — measured, and it narrows the claim
+
+The venue effect is only a lever if the room is not predetermined. Measured three ways, tightening each
+time, and **the answer depends entirely on how tightly you define "the same bill":**
+
+| grouping | groups | went to >1 room | median top-room share |
+|---|---|---|---|
+| our 39 coarse subjects (chamber × subject, ≥60 bills) | 45 cells | 76% show real spread | **58%** |
+| the bill's own title subject clause (≥6 bills) | 106 | 69% | **89%** |
+| **character-identical full title** (≥2 bills) | 390 | **28%** | **100%** |
+
+**The coarse-label version overstates it.** At the exact-title level, referral is largely determined:
+roughly seven in ten identical bills go to exactly one room.
+
+**That cuts a specific way, and the direction matters.** It argues *against* "the same bill can land
+anywhere" — and *for* the drafting reading, because a room determined by content is a room that changes
+when the content changes. What is NOT measured here is how far a drafter can actually move it; the
+identical-title design cannot see that by construction.
+
+When identical bills *did* split, the rooms differed by a median of **10 points**:
+
+| title | rooms | their pass rates |
+|---|---|---|
+| abortion; born alive infant, treatment and care | H08 / H24 | 72% / 66% |
+| restricted driver's license; issuance for mul… | S03 / S11 | 59% / 75% |
+| judges; maximum number in each judicial district | S03 / S13 | 59% / 70% |
+| virginia economic development partnership auth… | H02 / H11 | 54% / 69% |
+
 ## What it means for the War Room
 
 Jurisdiction follows the code section a bill amends, and that is a drafting decision made before filing.
@@ -63,8 +91,10 @@ subcommittee.
 ## Limits
 
 1. The tight control is underpowered (p = 0.07). Treat the magnitude as 10–18 points, not a point estimate.
-2. Referral is the clerk's call. A lobbyist influences it through drafting, not by asking — and how reliably
-   drafting steers jurisdiction is not measured here.
+2. **Referral is mostly determined by the bill.** Seven in ten character-identical bills go to one room, so
+   "shop the same bill to a friendlier committee" is not the lever — redrafting toward a different
+   jurisdiction is. **How far drafting can actually move the room is NOT measured**, and the identical-title
+   design cannot measure it.
 3. Room rates are first-committee pass rates over 2023–2026, the span of the committee-vote corpus.
 4. `S5V` / `S4V` style codes are floor-vote venues appearing as a first stop; they are left in the table
    rather than filtered, because filtering on a code pattern we have not verified would be a guess.
