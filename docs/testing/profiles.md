@@ -25,7 +25,7 @@ someone can be moved.
 |---|---|---|---|
 | **partisan gap** (majority-patron pass rate minus minority-patron) | **+4 to +65 pts** | +34 | whether this room is survivable for your side at all |
 | **dies on a record** (share of deaths with a recorded fatal vote) | **42% to 100%** | 75% | whether you are fighting a vote or a clock |
-| **rewrite rate** (share of reported bills carrying a substitute or amendment) | **35% to 71%** | 55% | whether to bring finished text or expect a rewrite |
+| ~~rewrite rate~~ | ~~35% to 71%~~ | ~~55%~~ | **RETRACTED — does not persist across eras (r = 0.25). See [[testing/panel_audit]].** |
 | **unanimity** (share of roll calls with no dissent) | **34% to 79%** | 61% | whether this room argues or rubber-stamps |
 
 The partisan gap is the headline. **S07 treats minority patrons within 4 points of majority ones. H18 is
@@ -79,6 +79,13 @@ Share of their own co-patroned bills carrying a cross-party name. **0% to 100%, 
 
 The share of their filing sitting in one subject. **Median 18%**, but Joe McNamara is 55% Taxation and
 Terry Austin 43% Motor Vehicles. Tells a lobbyist who already owns their subject.
+
+## Backtested — and one dimension removed
+
+[[testing/panel_audit]] re-measured every number on held-out years. **Dies-on-a-record (r = 0.79) and
+unanimity (r = 0.77) hold. The partisan gap holds directionally (r = 0.54) but moves a median of 11 points
+between eras — recompute it per session, never quote it from history. The rewrite rate does NOT hold
+(r = 0.25) and is retracted.**
 
 ## Limits
 
