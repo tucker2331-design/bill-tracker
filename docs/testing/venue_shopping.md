@@ -26,11 +26,11 @@ group's own filings fared on each side.
 
 | control | friendlier room | harsher room | gap | p |
 |---|---|---|---|---|
-| subject clause (loose) | 65% (612) | 54% (652) | **+11** | 7.0e-05 |
-| exact title (tight) | 54% (101) | 41% (94) | +13 | 7.0e-02 |
-| **+ same patron** | 68% (225) | 53% (217) | **+15** | 8.9e-04 |
-| + same standing | 62% (484) | 53% (523) | +10 | 2.1e-03 |
-| **+ same YEAR** | 62% (197) | 44% (193) | **+18** | 2.7e-04 |
+| subject clause (loose) | 62% (660) | 54% (478) | **+8** | 4.7e-03 |
+| exact title (tight) | 54% (82) | 42% (71) | +11 | 1.6e-01 |
+| **+ same patron** | 68% (173) | 53% (139) | **+15** | 6.9e-03 |
+| + same standing | 60% (495) | 54% (407) | +6 | 7.1e-02 *(now marginal)* |
+| **+ same YEAR** | 62% (183) | 41% (178) | **+21** | 5.2e-05 |
 
 Sign tests agree: on the loose cut, 120 groups did better in the friendlier room against 62 worse
 (p = 2.4e-05); same-patron, 51 against 18 (p = 1.2e-04).
@@ -38,7 +38,7 @@ Sign tests agree: on the loose cut, 120 groups did better in the friendlier room
 **The year control is the one that matters.** Two filings of one idea usually sit in different years with
 possibly different patrons, so the naive version could be the regime effect
 ([[testing/bill_mix_confound]]) wearing a costume. Holding the year fixed — same year, same chamber, same
-subject, different room — the effect is **+18 points**, the largest of any cut. It is not the calendar and
+subject, different room — the effect is **+21 points**, the largest of any cut. It is not the calendar and
 it is not the patron's party.
 
 ## The honest weak spot
@@ -87,6 +87,10 @@ the odds, and the largest single move available.**
 
 It pairs with [[testing/committee_seat]]: choose the room, then choose a carrier who sits on its
 subcommittee.
+
+> **Recomputed 2026-09-16** after fixing the Senate room-code split (see [[testing/profiles]]). The key
+> same-year control got **stronger** (+18 → +21); the same-standing arm weakened to +6 and is now marginal
+> at p = 0.07, so it no longer carries weight on its own.
 
 ## Limits
 

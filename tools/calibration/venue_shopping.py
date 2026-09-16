@@ -55,7 +55,7 @@ def build():
             continue
         d = e.get("date") or "~"
         if d < first[k][1]:
-            first[k] = (key[1][:3], d)
+            first[k] = (CV.room_code(key[1]), d)
     rows = {k: v[0] for k, v in first.items() if v[0] and k in cb}
     tot = collections.defaultdict(lambda: [0, 0])
     for k, com in rows.items():

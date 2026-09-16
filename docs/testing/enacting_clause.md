@@ -65,14 +65,18 @@ both the measurement and the period.
 | chamber | Code Titles (≥25 bills) | median top-committee share | Titles routing ≥80% to one room |
 |---|---|---|---|
 | **House** | 23 | **79%** | **10 of 23 (43%)** |
-| Senate | 19 | 47% | 3 of 19 (16%) |
+| Senate | 19 | **70%** | **6 of 19 (32%)** |
 
 House examples: Title **58.1** (Taxation) → **H10, 84%**. Title **46.2** (Motor Vehicles) → **H19, 89%**.
 Title **32.1** (Health) → **H24, 88%**. Title **22.1** (Education) → **H09, 81%**.
 
-**In the House, the Code Title a bill amends largely decides its committee.** That is the drafting lever
-from [[testing/venue_shopping]], sourced from the bill's own clause rather than inferred. The Senate routes
-far more loosely, so the lever is chamber-specific.
+**In both chambers, the Code Title a bill amends largely decides its committee.** That is the drafting
+lever from [[testing/venue_shopping]], sourced from the bill's own clause rather than inferred. Senate
+examples: Title **22.1** → **S04, 90%**; **18.2** → **S13, 86%**; **58.1** → **S05, 77%**.
+
+> **Corrected 2026-09-16.** The Senate first read as routing "far more loosely" (median 47%). That was the
+> Senate room-code split — `S1V` vs `S01` keyed as two rooms (see [[testing/profiles]]). Normalised, the
+> Senate median is **70%**, close behind the House.
 
 Where one Title does route to several rooms, the spread for a minority patron is a **median of 15 points**.
 

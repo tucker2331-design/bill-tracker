@@ -89,6 +89,25 @@ def _norm_member(mid: str) -> str:
     return f"{m.group(1)}{int(m.group(2))}" if m else (mid or "").strip()
 
 
+
+_ROOMV = re.compile(r"^([HS])(\d)V$")
+
+
+def room_code(vote_id: str) -> str:
+    """Committee identity from a vote id — NORMALISED across the two encodings LIS uses.
+
+    In 2026 the Senate began writing `S1V674` where earlier sessions wrote `S01...`, and the naive
+    `vote_id[:3]` key therefore SPLIT ONE COMMITTEE IN TWO: `S01` lost its 2026 bills while `S1V`
+    appeared as a brand-new room with no history. Verified by roster overlap between the pairs —
+    S5V/S05 100%, S8V/S08 94%, S1V/S01 88%, S2V/S02 88%, S4V/S04 88%, S7V/S07 78%, S9V/S09 67%.
+
+    Same class as the five padding bugs in [[failures/assumptions_audit]]: two spellings of one
+    structural identifier, joining to nothing, failing silently."""
+    head = (vote_id or "")[:3]
+    m = _ROOMV.match(head)
+    return f"{m.group(1)}0{m.group(2)}" if m else head
+
+
 def _venue(desc: str) -> str:
     """Which room this vote happened in, from the history description LIS writes beside it.
 

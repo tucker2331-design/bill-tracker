@@ -23,24 +23,32 @@ someone can be moved.
 
 | | range | median | what it tells a lobbyist |
 |---|---|---|---|
-| **partisan gap** (majority-patron pass rate minus minority-patron) | **+4 to +65 pts** | +34 | whether this room is survivable for your side at all |
+| **partisan gap** (majority-patron pass rate minus minority-patron) | **+12 to +65 pts** | +34 | whether this room is survivable for your side at all |
 | **dies on a record** (share of deaths with a recorded fatal vote) | **42% to 100%** | 75% | whether you are fighting a vote or a clock |
 | ~~rewrite rate~~ | ~~35% to 71%~~ | ~~55%~~ | **RETRACTED — does not persist across eras (r = 0.25). See [[testing/panel_audit]].** |
 | **unanimity** (share of roll calls with no dissent) | **34% to 79%** | 61% | whether this room argues or rubber-stamps |
 
-The partisan gap is the headline. **S07 treats minority patrons within 4 points of majority ones. H18 is
-65 points apart** (79% vs 14%). Those two rooms are different countries, and nothing published anywhere
-says so.
+The partisan gap is the headline. **S07 is 12 points apart; H18 is 65** (79% vs 14%). Those two rooms are
+different countries, and nothing published anywhere says so.
+
+> **Corrected 2026-09-16.** The first version of this table read S07 at +4 and listed `S4V`/`S5V` as
+> separate rooms. They are not rooms — **in 2026 the Senate began writing vote ids as `S1V…` where earlier
+> sessions wrote `S01…`**, and keying on `vote_id[:3]` split every Senate committee in two: the numeric
+> room lost its 2026 bills while the V-form appeared as a brand-new room with no history. Verified by
+> roster overlap (S5V/S05 **100%**, S8V/S08 94%, S1V/S01 88%). `CV.room_code()` now normalises it. Same
+> class as the five padding bugs in [[failures/assumptions_audit]]: two spellings of one structural
+> identifier, joining to nothing, failing silently.
 
 | room | bills | passes | maj | min | gap | dies on a record | rewrites | unanimous |
 |---|---|---|---|---|---|---|---|---|
 | H18 | 185 | 51% | 79% | 14% | **+65** | 86% | 43% | 34% |
 | H15 | 235 | 64% | 88% | 25% | +63 | 80% | 51% | 34% |
+| S08 | 125 | 54% | 75% | 20% | +55 | 76% | 46% | 33% |
 | H10 | 268 | 46% | 65% | 19% | +46 | 75% | 53% | 48% |
 | H02 | 220 | 54% | 66% | 28% | +39 | **95%** | 47% | **79%** |
-| S02 | 214 | 67% | 73% | 53% | +20 | 77% | **71%** | 54% |
+| S05 | 368 | 54% | 69% | 31% | +38 | 94% | 56% | 64% |
 | S11 | 169 | 75% | 81% | 68% | +13 | 42% | 48% | 66% |
-| S07 | 121 | 67% | 70% | 66% | **+4** | 70% | 36% | 56% |
+| S07 | 163 | 69% | 75% | 63% | **+12** | 72% | 35% | 55% |
 
 ## A verb-form bug found writing this — audit point #1
 

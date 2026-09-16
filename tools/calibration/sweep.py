@@ -72,7 +72,7 @@ def context():
             continue
         d = e.get("date") or "~"
         if d < first[k][2]:
-            first[k] = (key[1][:3], body if len(body) > 3 else None, d)
+            first[k] = (CV.room_code(key[1]), body if len(body) > 3 else None, d)
     return c, cb, lab, first, submemb
 
 

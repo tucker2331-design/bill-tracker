@@ -67,7 +67,7 @@ def rooms(cb):
         k = _bk(e["session"], e.get("bill"))
         if not k or k not in cb:
             continue
-        com = key[1][:3]; d = e.get("date") or "~"
+        com = CV.room_code(key[1]); d = e.get("date") or "~"
         if d < first[k][1]:
             first[k] = (com, d)
         acts[k].append((com, e["desc"], e.get("margin"), e.get("n")))

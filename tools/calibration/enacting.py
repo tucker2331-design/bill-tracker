@@ -76,7 +76,7 @@ def build():
             continue
         d = e.get("date") or "~"
         if d < first[k][1]:
-            first[k] = (key[1][:3], d)
+            first[k] = (CV.room_code(key[1]), d)
     rows = []
     for zf in ARCHIVES:
         path = os.path.join(D, zf)
