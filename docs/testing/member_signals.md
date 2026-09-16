@@ -109,10 +109,52 @@ reciprocal observations:
 agreement would explain, gives the identical −4. So there is neither a trade nor an agreement effect: a
 prior favour does no work at all.
 
+## 5. Attendance — real, stable-ish, and NOT strategic
+
+The first member-level measure on this page with genuine usable spread. Committee membership is derived
+from roll calls (anyone who voted in that room that session), and a roster-seat counts as missed when that
+member cast no yes/no on that roll call.
+
+**298,644 roster-seats; a yes/no was cast on 94% of them. The overall no-show rate is 6%** — but the
+spread across members runs **0% to 36%**.
+
+| member | party | misses | of | rate | on CLOSE votes (≤2) |
+|---|---|---|---|---|---|
+| Lynwood Lewis | D | 247 | 687 | 36% | — |
+| Tim Griffin | R | 146 | 456 | 32% | 5% (42) |
+| Glenn R. Davis | R | 153 | 618 | 25% | **37% (134)** |
+| Elizabeth Bennett-Parker | D | 443 | 1,814 | 24% | 35% (222) |
+| Jeion Ward | D | 396 | 1,674 | 24% | 32% (204) |
+| *median member* | | | | **3%** | |
+| Filler-Corn, Reid, Obenshain, Green | | 0 | | **0%** | 0% |
+
+**It is a trait.** Split-half r = 0.98; across eras (2023–24 vs 2025–26) **r = 0.36**. The gap between
+those two is itself informative: the measure is near-deterministic inside a period, but members change
+between them — new assignments, leadership roles, life.
+
+**It is NOT strategic.** Members do not duck hard votes:
+
+| roll call type | absence rate | seats |
+|---|---|---|
+| unanimous | 5.8% | 178,007 |
+| contested (a caucus split) | 5.5% | 65,855 |
+| decided by ≤2 votes | 6.6% | 27,693 |
+
+Contested minus unanimous is **−0.3 points**, and within-member the shift is **−0.5 points** with 95
+members more absent against 105 less. Scheduling and diligence, not tactics.
+
+**What it is good for.** Not persuasion — vote counting. In an eight-person room where
+[[testing/rooms]] found 37% of kills are decided by two votes or fewer, a member who misses a third of
+close votes changes the arithmetic of a whip count, and no one publishes this.
+
 ## What this leaves for the War Room
 
-One line, and it needs no machinery: **when this room splits, here is how often each member goes with their
-own side.** Everything more elaborate than that either collapses into it or fails.
+Two lines, neither needing any machinery:
+
+1. **When this room splits, here is how often each member goes with their own side.**
+2. **Here is how often each member shows up at all** — and for close votes specifically.
+
+Everything more elaborate than that either collapses into one of them or fails.
 
 ## Limits
 
