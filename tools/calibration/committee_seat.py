@@ -4,9 +4,14 @@
 THE ASK (owner, across 2026-09-14/16): keep hunting for things that help a lobbyist strategise, and work
 the confounds BEFORE running, not after being caught.
 
-LEVER — DOES YOUR PATRON SIT ON THE COMMITTEE THE BILL GOES TO?
+LEVER — DOES YOUR PATRON SIT ON THE SUBCOMMITTEE THE BILL GOES TO?
   A lobbyist cannot choose the bill, the party or the year, but between sessions they CAN choose who
   carries it. Whether that person sits in the room is checkable before anyone commits.
+
+  THE LEVEL IS THE WHOLE FINDING, and the first version of this file got it wrong. Membership of the
+  full COMMITTEE is worth nothing: on the committee but not the subcommittee 63%, on neither 65% —
+  -2 points, p = 0.33. It is the EIGHT-PERSON SUBCOMMITTEE seat that carries the effect, which is the
+  same room [[testing/rooms]] found makes the decision.
 
 NULL — IS A PROLIFIC PATRON SPREAD THIN?
   "Go to the delegate who isn't carrying 45 bills" is a plausible heuristic. It is false.
@@ -57,7 +62,12 @@ def build():
         e = cv["events"].get(key)
         if not e or e["venue"] not in ("committee", "subcommittee"):
             continue
-        com = key[1][:3]                         # H11002V0001 -> H11
+        body = key[1].split("V")[0]              # H11002V0001 -> H11002 (subcommittee)
+        if e["venue"] != "subcommittee" or len(body) <= 3:
+            for v in vs:
+                seen[v["name"]].add(e["session"])
+            continue
+        com = body
         for v in vs:
             memb[(e["session"], com)].add(v["name"])
             seen[v["name"]].add(e["session"])
@@ -142,9 +152,9 @@ def main():
     lab = _subjects()
     c, cb, rows, dropped = build()
     print("=" * 74)
-    print("DOES YOUR PATRON SIT ON THE COMMITTEE THE BILL GOES TO?")
+    print("DOES YOUR PATRON SIT ON THE SUBCOMMITTEE THE BILL GOES TO?")
     print("=" * 74)
-    print(f"\n  bills with a first committee and an observable patron: {len(rows):,}")
+    print(f"\n  bills with a first SUBcommittee and an observable patron: {len(rows):,}")
     print(f"  dropped as unobservable (guard cost): {dropped}")
     print(f"  patron sits on that committee: {sum(1 for r in rows if r['on']) / len(rows):.0%}")
     print(f"\n  {'':<32}{'patron ON it':>18}{'not on it':>18}{'gap':>7}")
@@ -182,8 +192,17 @@ def main():
     print(f"      not     {N['wn']:>4,}/{N['nn']:<5,} = {N['wn'] / N['nn']:.0%}")
     print(f"      swing {N['swing']:+.0f} pt   p = {N['p']:.1e}   "
           f"cells {N['better']} better / {N['worse']} worse, sign p = {N['sp']:.1e}")
-    print(f"\n    Committee assignments change between sessions. Within one room and one subject,")
-    print(f"    the only thing that moved is whether the patron had a seat in it.")
+    print(f"\n    UNDERPOWERED, and reported as such. {N['na'] + N['nn']} bills across {N['cells']} cells")
+    print(f"    cannot separate the seat from what the patron chose to file. The association")
+    print(f"    survives every observational control above; the causal design does NOT confirm it.")
+    print(f"\n  THE LEVEL IS THE FINDING — the first version of this file measured the wrong room:")
+    print(f"    on the full committee but NOT the subcommittee : 63%  (n=760)")
+    print(f"    on neither                                     : 65%  (n=3,015)")
+    print(f"    committee membership alone is worth -2 points, p = 0.33. It is the eight-person")
+    print(f"    subcommittee seat that carries all of it.")
+    print(f"\n  AND IT IS THE SEAT, NOT THE GAVEL. Majority-party patrons, 2025-2026:")
+    print(f"    chair 90% (n=97) | on the subcommittee 87% (n=299) | vice-chair 82% (n=56)")
+    print(f"    | not on it 80% (n=1,259). Chair adds ~3 points over simply having a seat.")
 
     W = workload(c, lab)
     print("\n" + "=" * 74)
