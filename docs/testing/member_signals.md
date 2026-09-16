@@ -92,6 +92,23 @@ caucus line, so pivotality is a function of the seat split and nothing else.
 Members are **less** pivotal than party-line voting would make them, because dissent piles up on votes that
 were not close. There is no personal leverage signal here.
 
+## 4. Reciprocity — NULL, and slightly negative
+
+"I vote for your bill, you vote for mine" is how everyone describes this business. It does not appear.
+
+Cross-party pairs only (so co-partisan agreement cannot explain it), 36,411 votes with at least five prior
+reciprocal observations:
+
+| how often THEY backed YOU earlier | you back them now | n |
+|---|---|---|
+| under 50% | 72% | 3,548 |
+| 50–80% | 75% | 12,132 |
+| 80–100% | **68%** | 20,731 |
+
+**−4 points, p = 2.9e-05 — the wrong direction.** And the same-year version, which ordinary ideological
+agreement would explain, gives the identical −4. So there is neither a trade nor an agreement effect: a
+prior favour does no work at all.
+
 ## What this leaves for the War Room
 
 One line, and it needs no machinery: **when this room splits, here is how often each member goes with their
