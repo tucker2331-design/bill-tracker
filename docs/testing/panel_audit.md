@@ -60,7 +60,50 @@ recomputed on the current session, never carried forward.
 Where it *does* speak strongly it is right: bills it called very hard passed **17%** against a 70% base
 rate; bills it called very good passed **93%**. But that is 20 bills out of 624 in 2026.
 
-## 4. The honest verdict
+## 4. The cold-start objection — measured
+
+**Owner:** *"recalculating every session is only good in retrospect. its no good if the committee is
+entirely new and we dont have any data on them."*
+
+Three separate things were conflated, and they resolve differently.
+
+**New MEMBERS — not the problem.** After the November 2023 election the median room kept only **43%** of
+its members; **33% of room-sessions have more than half new faces.** But carrying the room's previous gap
+forward is **no less accurate when the room churns** — median error 10 points when ≥50% of members are new
+against 9 points for a stable room, and the own-history correlation is if anything higher (r = 0.76 on 14
+churned rooms vs 0.52 on 31 stable ones; both thin). **A room behaves like the room, not like its roster.**
+
+**Composition does NOT substitute for history.** Predicting a room's gap from who sits in it fails: party
+ratio **r = 0.17**, mean prior member loyalty **r = −0.19**. The room's own prior gap gives **r = 0.59**.
+There is no composition-based cold start to fall back on.
+
+**New COMMITTEES — a real hole, and rare.** Committees are long-standing institutions here; of 37 observed,
+the genuinely new ones are **H14, H24 and S13, all first appearing in 2024** after the post-election
+reorganisation. Those have no history and nothing substitutes for it. The honest handling is an explicit
+"no read yet" state, never a borrowed number.
+
+## 5. Readiness — the briefing generated for a live session
+
+2026 treated as if it had not happened; every number fitted on ≤2025.
+
+| the briefing can say… | share of 2,326 bills |
+|---|---|
+| which room it went to | **86%** |
+| the carrier's track record | **89%** |
+| that room's record for this patron's side | 63% |
+| kills by vote or by clock / argues or rubber-stamps | 64% |
+| which subcommittee, and whether the patron sits on it | **42%** |
+| **both a room read and a carrier record** | **55%** |
+| **nothing at all** | **14%** |
+
+**It separates.** Against a 2026 base rate of 70%: the worst quarter of briefings passed **41%**, the best
+quarter **85%**.
+
+**The partisan gap is the weakest piece.** Its 2026 error was a **median of 16 points** across 14 rooms —
+worse than the 9-point carry-forward error over the longer window. **Show it as a coarse label, never as a
+number.**
+
+## 6. The honest verdict
 
 **Worth keeping:**
 1. **Carrier lift.** A 73-point range (−42 to +31), split-half r = 0.75, across eras r = 0.48, 6.1× the
