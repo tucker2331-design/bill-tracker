@@ -50,11 +50,20 @@ LIS = os.path.join(HERE, "..", "historical_cache", "va")
 # Every wording the sessions actually use, and the " in <committee>" tail is what separates a real
 # carryover from a move to a special session.
 CONT = re.compile(r"^continued to (?:\d{4}|next session)\b.*\bin\b", re.I)
+# NOT a carryover: "Continued to 2021 Sp. Sess. 1 in Education and Health" moves the bill to a session
+# convening DAYS later. There are 340, they pass, and they drag the recovery rate from 0.9% to 13.3%.
+# This module is only safe without the guard by accident of its even-year session filter — make it explicit.
+SPSESS = re.compile(r"sp\.?\s*sess", re.I)
 LEFT = re.compile(r"\bleft in\b", re.I)
 # A later action that is not the continuance restating itself, and not paperwork.
 NOISE = re.compile(r"impact statement|bill text|blank action|left in|acts of assembly", re.I)
 SELF = re.compile(r"^subcommittee recommends continu|^continued to", re.I)
 PAIRS = [("2018", "2019"), ("2020", "2021"), ("2022", "2023"), ("2024", "2025"), ("2026", "2027")]
+
+
+def _carryover(desc):
+    """A real carryover, with the special-session look-alike excluded."""
+    return bool(CONT.search(desc)) and not SPSESS.search(desc)
 
 
 def _by_session():
@@ -69,7 +78,7 @@ def recovery(B):
     tot, gaps = 0, []
     for s, _ in PAIRS:
         for r in B[s].values():
-            i = [j for j, x in enumerate(r["actions"]) if CONT.search(x[1])]
+            i = [j for j, x in enumerate(r["actions"]) if _carryover(x[1])]
             if not i:
                 continue
             i = i[-1]
@@ -87,7 +96,7 @@ def openstates_is_blind(B):
     out = []
     for a, b in PAIRS[:-1]:
         car = [r for r in B[a].values()
-               if any(CONT.search(x[1]) for x in r["actions"])
+               if any(_carryover(x[1]) for x in r["actions"])
                and r["bill"] in B[b] and B[b][r["bill"]]["title"] == r["title"]]
         upd = sum(1 for r in car if any(x[0][:4] >= b for x in B[b][r["bill"]]["actions"]))
         out.append((a, b, len(car), upd))

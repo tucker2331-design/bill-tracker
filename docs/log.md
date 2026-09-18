@@ -8,6 +8,25 @@ status: active
 
 Append-only, reverse-chronological (newest at top). Each entry opens with `## [YYYY-MM-DD] <kind> | <title>` so `grep "^## \[" log.md | head -20` gives a parseable timeline.
 
+## [2026-09-18] design | the tag vocabulary, measured
+
+Owner on the mockup's two hand-written footnotes: *"how possibly could we compute this much text instantly
+for every scenario… is there any other tags that should go in the spot of the continued notification?"*
+Right — a tag written for one bill is a caption. [[testing/bill_states]] replaces judgement with the
+measured list: 8 states, covering 2026 exactly, one template (`{state} · {k} of {n} came back`), amber
+where the record shows bills rarely leave the state. Amber fires on 588 of 2,366 (24.9%).
+
+**A circularity caught mid-analysis.** "Bills whose LAST committee action is a continuance" returns
+**0 of 1,352** and is tautological — a continued bill later reported leaves the bucket by succeeding.
+Ever-in-state returns **12 of 1,367**. Same family as the enacting-clause outcome leak.
+
+**Sp. Sess. guard** folded back into `continuance.py`: 340 `Continued to 2021 Sp. Sess. 1` rows are not
+carryovers and drag the rate 0.9% -> 13.3%. The module was safe only by accident of its session filter.
+
+**And one column rename deleted a paragraph.** "Voted with the motion" needed three sentences because a yes
+on a motion to table is a vote to kill; `No votes cast, 2026` needs none. The footnote existed because the
+column was badly named.
+
 ## [2026-09-18] finding | a continuance is a soft kill with a twelve-day clock
 
 Owner on the SB 552 mockup: *"dont feel like i learned anything from the mock up and its also not within
