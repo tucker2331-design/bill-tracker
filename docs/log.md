@@ -8,6 +8,28 @@ status: active
 
 Append-only, reverse-chronological (newest at top). Each entry opens with `## [YYYY-MM-DD] <kind> | <title>` so `grep "^## \[" log.md | head -20` gives a parseable timeline.
 
+## [2026-09-18] finding | a continuance is a soft kill with a twelve-day clock
+
+Owner on the SB 552 mockup: *"dont feel like i learned anything from the mock up and its also not within
+the current warroom mockup we agreed on."* Both fair. The panel was base rates about categories, and it had
+abandoned the owner-approved v4 shell for a flat signal table.
+
+**New finding ([[testing/continuance]]).** Of 1,346 bills continued by a committee 2018-2026, **25 ever
+moved again — every one within 12 days**, always by `Reconsidered by <committee>` while the room was still
+sitting. LIS: **0 of 333** bills continued out of 2024 has a single 2025 action, and all 333 carry
+`Left in <committee>` dated 18-19 Nov 2024. Coverage: 429 live bills, 18% of the 2026 session.
+
+**The artefact that almost shipped as the finding.** Open States never updates a carried-over record, so
+its "0 of 901 passed next session" is an unreachable numerator wearing an authoritative denominator. The
+**capability check** on the second source is what rescues it: 132 of 169 non-continued 2024-active bills DO
+act in 2025 in the same LIS file. Same class as the false-200 trap and the enacting-clause outcome leak.
+
+**Audit point #1, third time.** 2026 writes `Continued to next session in Rules`; earlier sessions write
+`Continued to 2025 in Finance`. A 2026-only pattern reports a clean 0 for every prior session.
+
+Mockup rebuilt inside the approved v4 shell on a LIVE bill — HB 1515 (data-centre moratorium, sitting in
+House Rules right now): https://claude.ai/artifact/77fFnunDuwuniiXVGMXhKq
+
 ## [2026-09-10] measurement | VENUE EFFECT — the companion bill is a free control group
 
 Owner: *"an argument for something that genuinely would be hard to create a replacement for ... combining

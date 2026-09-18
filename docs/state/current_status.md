@@ -67,6 +67,8 @@ status: active
 ## READY
 - [[testing/venue_effect]] — route the member layer through the canonical patron resolver, then ship 'who in this room is gettable'.
 - [[testing/literature]] — the 15-source corpus is fetched but not read end-to-end; run the digest pass.
+- [[testing/continuance]] — the `Left in <committee>` date is observed for ONE cycle (18-19 Nov 2024). Re-read `20261/HISTORY.CSV` in Nov 2026 for the second observation before the page ever prints it as a deadline.
+- [[knowledge/campaign_finance_ingest]] — the ELECT committee->legislator join resolves only 54 of 158 sitting patrons; needs a join on committee identity, not the free-text office field.
 
 ## RECENTLY LANDED (newest first; full detail in [[log]])
 - **2026-09-10 — THE CHAIR, and two more kills ([[failures/assumptions_audit|#132-134]]).** Unblocked the chair thread with one authorized fetch (987 roster rows, `CommitteeRoleTitle`). **The room follows the gavel:** on close votes the chair is on the winning side 89.5% vs 53.9% for a rank member, and **with the chair's own vote REMOVED it is 84.5% vs 42.6%** (p<0.000001) — influence, not seat arithmetic. Anticipation ruled out: the roster says the chair votes **FIRST** (median sequence 1, 0% vote last). **And the chair is beaten only by their own caucus — 68 of 69 losses involved their own party splitting** (Fisher p<0.00000001). Working the opposition against a hostile chair is near-useless. **TWO KILLS:** the named chair-breaker list does NOT carry forward (top-8 overlap 3/8, p=0.154) so it is a group tendency not a targeting list; and the partisan-temperature idea is dead in both directions — pooled hot vs cold subjects give 84% vs 75%, Fisher p=0.184, **no difference**. The patron matters the same everywhere.
