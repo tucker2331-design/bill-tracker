@@ -24,15 +24,37 @@ interesting case.
 | Re-referred | grey | 2,363 | 1,467 — **62%** | 0.2% |
 | Left in committee | grey · terminal | 6,728 | 0 | 19.3% |
 | Incorporated into another | grey · pointer | 672 | 0 | 3.6% |
-| Failed to report | **amber** | 245 | 6 — 2.4% | 1.1% |
-| Tabled | **amber** | 1,303 | 13 — 1.0% | 4.8% |
-| Continued to next session | **amber** | 1,367 | 12 — 0.9% | 18.0% |
-| Stricken from the docket | **amber** | 287 | 0 | 1.0% |
+| Failed to report | plain | 245 | 6 — 2.4% | 1.1% |
+| Tabled | plain | 1,303 | 13 — 1.0% | 4.8% |
+| Continued to next session | plain | 1,367 | 12 — 0.9% | 18.0% |
+| Stricken from the docket | plain | 287 | 0 | 1.0% |
 | (no committee action yet) | grey | — | — | 1.5% |
 
-**The rule, stated once so no page has to argue it:** *amber means the record shows bills rarely leave this
-state; grey means they do.* Every bill carries exactly one tag (the vocabulary covers 2026 exactly — a
-vocabulary with a hole renders a blank tag on a real bill). Amber fires on **588 of 2,366 = 24.9%**.
+**The rule, stated once so no page has to argue it:** *the tag always carries the count behind it.* Every
+bill gets exactly one (the vocabulary covers 2026 exactly — a vocabulary with a hole renders a blank tag on
+a real bill).
+
+### ⚠️ CORRECTED 2026-09-19 — the first version spent colour, and colour was already spoken for
+
+v1 of this page turned four of the eight tags **amber**. Owner: *"are colors really necessary do they
+conflict with other aspects of the system would they scare lobbyists off unnecessarily?"* Yes to all three,
+and **two standing rules already said so**:
+
+1. **[[design/information_display]] P20b** — *"Arithmetic is exact — `5 of 15`, a days-remaining count — and
+   takes **no marker**… Amber is for the probabilistic."* `12 of 1,367` is a tally anyone can recheck. It is
+   not a guess, so it gets no amber. **P20b was written after the War Room v2 review saying exactly this**,
+   and the very next War Room mockup did it again — the P20c lesson (*writing the rule down does not install
+   it*) reproduced a third time.
+2. **[[design/dashboard_and_visual_language]], outcome-tag doctrine (2026-07-08)** — *"Soft tint =
+   significant but still pending. **Carried over = amber (still alive, just deferred — not red)**."* The
+   product had **already** spent amber on this exact state, with the **opposite** meaning. One colour, one
+   state, two contradictory readings: amber would have told a lobbyist *"deferred, still alive"* in one place
+   and *"dead end"* in another.
+
+**The fix costs nothing, because the number was always doing the work.** `Continued · 12 of 1,367 came back`
+needs no colour to land. The state tag is now encoded by **position** (first in the row) and **weight**
+(full ink against muted siblings) — Munzner's channel ranking puts position above colour, and P19 forbids
+encoding by colour alone anyway. **The page now spends no colour at all.**
 
 **The tag text is one template:** `{state} · {k} of {n} came back`. Nothing is written per bill.
 `Left in committee` and `Incorporated` are grey because they are not warnings: the first is LIS's own

@@ -8,6 +8,23 @@ status: active
 
 Append-only, reverse-chronological (newest at top). Each entry opens with `## [YYYY-MM-DD] <kind> | <title>` so `grep "^## \[" log.md | head -20` gives a parseable timeline.
 
+## [2026-09-19] correction | the tag colour was already spoken for
+
+Owner: *"are colors really necessary do they conflict with other aspects of the system would they scare
+lobbyists off unnecessarily and what purpose do they serve."* Yes, yes, yes, and none. Two standing rules
+already forbade it and I had read neither before drawing:
+
+- **P20b** ([[design/information_display]]): *"Arithmetic is exact… and takes NO marker. Amber is for the
+  probabilistic."* `12 of 1,367` is a tally anyone can recheck. **P20b was itself written after the War Room
+  v2 review to stop this**, so this is P20c (*writing the rule down does not install it*) for the third time.
+- **Outcome-tag doctrine, 2026-07-08** ([[design/dashboard_and_visual_language]]): *"Carried over = amber
+  (still alive, just deferred — not red)."* The product had already spent amber on this exact state with the
+  **opposite** meaning.
+
+Fixed by removing colour entirely — the state tag is encoded by position (first) and weight (full ink vs
+muted siblings), per Munzner's channel ranking and P19. The War Room page now spends **no colour at all**,
+and nothing was lost: the count was always what carried the meaning.
+
 ## [2026-09-18] design | the tag vocabulary, measured
 
 Owner on the mockup's two hand-written footnotes: *"how possibly could we compute this much text instantly
