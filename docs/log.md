@@ -8,6 +8,24 @@ status: active
 
 Append-only, reverse-chronological (newest at top). Each entry opens with `## [YYYY-MM-DD] <kind> | <title>` so `grep "^## \[" log.md | head -20` gives a parseable timeline.
 
+## [2026-09-22] finding | silence, priced by week — and a silent corpus gap that cost 16 points
+
+Owner: *"keep looking for stuff that isnt surface level."* Two results.
+
+**[[failures/openstates_committee_gap]] — the corpus has NO committee-stage actions before 2020.**
+`Reported from` is 0% in 2017/2018/2019 and 56-65% every year after; `Passed by indefinitely` and
+`Failed to report` are 0% in all three. Nothing looks broken — the bills are present and the passage flag
+is intact — but `Left in committee` survives at full strength, so the early years contribute **kills
+without reports** under a full-looking denominator. Cost: **Re-referred recovery published at 62.1% is
+78.2%**; the other seven rows of [[testing/bill_states]] moved under a point. `assert_years` now RAISES.
+
+**[[testing/clock]] — the first thing found that the action list cannot carry.** Of bills still unheard,
+the share ever reported: base 63% → wk2 58% → wk3 53% → **wk4 35% → wk5 3%**. Week 2 carries almost
+nothing, so "get heard early" is not it — **an empty history in week 2 and in week 4 look identical on
+screen and mean opposite things.** The cliff moves with session length, so the week is derived, never
+hardcoded (Standard #1). Room version: never-acts-at-all, 0% to 23%, H Rules worst, and independent of both
+stats already on the page (r=+0.08, r=-0.38).
+
 ## [2026-09-22] design | the drawer — nulls as the trust asset; and re-docketing retired
 
 Owner killed the re-docketing lead on **reasoning, not statistics**: *"if it makes it to a second agenda

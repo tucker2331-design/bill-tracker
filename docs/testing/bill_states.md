@@ -18,17 +18,23 @@ interesting case.
 
 ## The vocabulary
 
-| a bill that was **ever**… | tag | bills | later got a floor passage vote | 2026 share |
+| a bill that was **ever**… | the record | bills | later got a floor passage vote | 2026 share |
 |---|---|---|---|---|
-| Reported to the floor | grey | 8,859 | 7,968 — **90%** | 50.5% |
-| Re-referred | grey | 2,363 | 1,467 — **62%** | 0.2% |
-| Left in committee | grey · terminal | 6,728 | 0 | 19.3% |
-| Incorporated into another | grey · pointer | 672 | 0 | 3.6% |
-| Failed to report | plain | 245 | 6 — 2.4% | 1.1% |
-| Tabled | plain | 1,303 | 13 — 1.0% | 4.8% |
-| Continued to next session | plain | 1,367 | 12 — 0.9% | 18.0% |
-| Stricken from the docket | plain | 287 | 0 | 1.0% |
-| (no committee action yet) | grey | — | — | 1.5% |
+| Reported to the floor | moves | 8,860 | 7,969 — **90%** | 50.5% |
+| Re-referred | moves | 1,669 | 1,305 — **78%** | 0.2% |
+| Left in committee | ends | 4,543 | 0 | 19.3% |
+| Incorporated into another | ends · pointer | 664 | 0 | 3.6% |
+| Failed to report | rarely leaves | 245 | 6 — 2.4% | 1.1% |
+| Tabled | rarely leaves | 1,240 | 12 — 1.0% | 4.8% |
+| Continued to next session | rarely leaves | 1,348 | 12 — 0.9% | 18.0% |
+| Stricken from the docket | rarely leaves | 256 | 0 | 1.0% |
+| (no committee action yet) | — | — | — | 1.5% |
+
+> **⚠️ CORRECTED 2026-09-22 — the window is 2020-2026, not 2017-2026.** The corpus has **no committee-stage
+> actions before 2020** and the gap is silent: the bills are present and the passage flag is intact, so the
+> early years contributed kills without reports. It cost **16 points on one row** — Re-referred was
+> published at 62.1% and is 78.2% on the years that have the record. The other seven rows moved under a
+> point. See [[failures/openstates_committee_gap]]; `bill_states.assert_years` now fails loud.
 
 **The rule, stated once so no page has to argue it:** *the tag always carries the count behind it.* Every
 bill gets exactly one (the vocabulary covers 2026 exactly — a vocabulary with a hole renders a blank tag on
