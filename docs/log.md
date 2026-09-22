@@ -8,6 +8,21 @@ status: active
 
 Append-only, reverse-chronological (newest at top). Each entry opens with `## [YYYY-MM-DD] <kind> | <title>` so `grep "^## \[" log.md | head -20` gives a parseable timeline.
 
+## [2026-09-22] design | the drawer — nulls as the trust asset; and re-docketing retired
+
+Owner killed the re-docketing lead on **reasoning, not statistics**: *"if it makes it to a second agenda
+then it didnt fail the first which is a good sign and we can easily see it in the bill action history."*
+Correct, and a sharper test than the four statistical limits I had listed — those would have sent it back
+for more data; this sends it to the bin. **A finding has to tell you something the action list does not
+already say.** [[testing/redocketing]] archived, kept for the record.
+
+His idea in the same message is the good one: *"weve disproved a lot more then we proved which is useful in
+its own right… a drop down that says everything statistically validated and something about what we are
+intentionally not showing and the stat proving why."* Built as [[testing/what_we_left_off]] and shipped
+collapsed on the War Room. Framed by [[failures/assumptions_audit|#136]]: an identical-text minority bill
+dies **on the clock 69%** of the time, not on a vote — which is why so many roll-call measures came back
+empty. Carries the chair retraction (−1.4pt, p=0.98) with withdrawn items left visible.
+
 ## [2026-09-19] correction | the tag colour was already spoken for
 
 Owner: *"are colors really necessary do they conflict with other aspects of the system would they scare

@@ -67,7 +67,6 @@ status: active
 ## READY
 - [[testing/venue_effect]] — route the member layer through the canonical patron resolver, then ship 'who in this room is gettable'.
 - [[testing/literature]] — the 15-source corpus is fetched but not read end-to-end; run the digest pass.
-- [[testing/redocketing]] — a LEAD, not a finding: being put back on a House subcommittee agenda runs +26pt for a minority patron (64% vs 38%), but it is two sessions, House-only, subcommittee-only, swings 2.6x between years, and the chair confound is uncontrolled. Keep OFF the War Room.
 - [[testing/continuance]] — the `Left in <committee>` date is observed for ONE cycle (18-19 Nov 2024). Re-read `20261/HISTORY.CSV` in Nov 2026 for the second observation before the page ever prints it as a deadline.
 - [[knowledge/campaign_finance_ingest]] — the ELECT committee->legislator join resolves only 54 of 158 sitting patrons; needs a join on committee identity, not the free-text office field.
 

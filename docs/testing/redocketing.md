@@ -1,11 +1,24 @@
 ---
 tags: [testing, calibration, docket, war-room, lead]
 updated: 2026-09-22
-status: active
-open_loop: A LEAD, NOT A FINDING. Two sessions only (the action is LIS-only, so the authorization gate caps it at 2025/2026), House-only, subcommittee-only, and the pooled effect swings 2.6x between the two years. Needs (a) the 2027 session or the legacyLIS CSV route for more years, (b) a selection control for "the chair re-docketed it because he wants it". Do NOT put it on the War Room until both clear.
+status: archived
+retired: 2026-09-22 — owner killed it on reasoning, not statistics. Superseded by [[testing/what_we_left_off]]. (was: A LEAD, NOT A FINDING. Two sessions only (the action is LIS-only, so the authorization gate caps it at 2025/2026), House-only, subcommittee-only, and the pooled effect swings 2.6x between the two years. Needs (a) the 2027 session or the legacyLIS CSV route for more years, (b) a selection control for "the chair re-docketed it because he wants it". Do NOT put it on the War Room until both clear.)
 ---
 
-# Being put back on the agenda — a lead worth one more session
+# Being put back on the agenda — RETIRED, it was surface level
+
+> **RETIRED 2026-09-22, and not on statistical grounds.** Owner: *"if it makes it to a second agenda then
+> it didnt fail the first which is a good sign and we can easily see it in the bill action history."*
+> That is the whole effect. Surviving the first meeting **is** the good news; the second agenda is a
+> consequence of it, not information on top of it, and a lobbyist reads it off the history for free.
+> **A finding has to tell you something the action list does not already say.** No amount of confound
+> control would have rescued this, which is why the objection lands harder than the four statistical
+> limits below — those would have sent it back for more data, this sends it to the bin.
+>
+> The member-level scoreboard at the foot of this page is the part worth keeping; it now lives in
+> [[testing/what_we_left_off]].
+
+## The original write-up, kept for the record
 
 Owner, 2026-09-22, on the current War Room: *"the only portion… weve been able to upgrade to give real
 unique insight to lobbyists which frankly is still pretty surface level."* Correct. This is the one live
