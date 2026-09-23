@@ -8,6 +8,21 @@ status: active
 
 Append-only, reverse-chronological (newest at top). Each entry opens with `## [YYYY-MM-DD] <kind> | <title>` so `grep "^## \[" log.md | head -20` gives a parseable timeline.
 
+## [2026-09-23] finding | committees remember ideas — and the clock downgraded
+
+Owner: *"so your big finding is longer sessions means bills have more time to get heard? please be serious."*
+Correct — the clock cliff is the crossover deadline restated; [[testing/clock]] downgraded. The fault was
+method: one-variable cross-tabs. Switched to proper tools (numpy logistic regression with Hessian SEs —
+[[testing/second_chamber]] — and a paired, confound-separating design).
+
+**[[testing/room_memory]]:** same idea, same first committee, party held fixed — a room that killed an idea
+kills it again 80% vs 26% (exact title, OR 10.8). The 'bad ideas are bad everywhere' confound is beaten
+directly: same room OR 15.2 vs a different room 5.5 (z=+2.49, p=0.013); stable across eras; a new carrier of
+the same party still meets it (OR 3.6). Once a room has said no, moving rooms barely helps (85% -> 81%).
+
+**[[testing/second_chamber]]:** one asymmetry (surplus cross-party votes buy nothing in a chamber your party
+runs) and a trap — the floor-vote file misses 997 second-chamber passages; a true 83.6% read as 49%.
+
 ## [2026-09-22] finding | silence, priced by week — and a silent corpus gap that cost 16 points
 
 Owner: *"keep looking for stuff that isnt surface level."* Two results.

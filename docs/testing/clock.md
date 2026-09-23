@@ -4,7 +4,14 @@ updated: 2026-09-22
 status: active
 ---
 
-# Silence, priced by week — bills die on the clock, so measure the clock
+# Silence, priced by week — mostly the crossover deadline, restated
+
+> **DOWNGRADED 2026-09-23.** Owner: *"so your big finding is longer sessions means bills have more time to get
+> heard? please be serious."* Correct. The cliff is the crossover deadline, which is a published rule, and the
+> week-2-to-4 gradient is what a deadline does to a queue. The survival table stays as a description; it is not
+> a finding. The one piece that is not a restatement — **how often a room never acts at all (0–23%)**, which
+> is independent of the room's no-vote rate (r = +0.08) — stays on the War Room. See [[testing/room_memory]]
+> for what the same session turned up once the method changed.
 
 Owner, 2026-09-22: *"keep looking for stuff that isnt surface level."* The test he set a message earlier is
 the right one: **a finding has to tell you something the action list does not already say.**
