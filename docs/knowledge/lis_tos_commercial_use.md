@@ -39,6 +39,41 @@ restriction we are operating under.** That inconsistency is the finding.
 **This is not a distinction anyone here should rule on.** It is written down so the question asked of DLAS
 is precise rather than vague.
 
+## The four words are four DIFFERENT limits (owner asked, 2026-09-23)
+
+| term | what it restricts | where this project meets it |
+|---|---|---|
+| **personal** | WHO uses it — an individual, not an organization | LIS API §2 |
+| **non-commercial** | WHETHER money is involved | LIS API §2 |
+| **internal use only** | WHO SEES the output | LegiScan attestation — rejected for exactly this ([[knowledge/legiscan_terms]]) |
+| **enterprise / per-seat / free tier** | HOW MANY users before it costs money — a price, not a use rule | Cloudflare Access, 50 free seats — replaced by app-level sign-in ([[architecture/verification_durability]]) |
+
+**They are independent.** A nonprofit is non-commercial but not personal. A freelancer is personal but commercial.
+**§2 requires BOTH "personal" AND "non-commercial"**, so the line is crossed at whichever comes first — and
+**"personal" ends before "non-commercial" does: when an organization uses the tool for its work, even for
+free.** The memo ([[legal/memo_lis_terms_2026-08-01]]) frames the trigger as *first revenue*; the earlier and
+more likely trigger is **first org rollout to its volunteers.** (Both words are undefined in the ToS, so this is
+the plain reading, not a ruling — and registration asking for an organization cuts the other way.)
+
+## What sits on which channel — the structural map at scale (2026-09-23)
+
+| product piece | data channel | terms exposure |
+|---|---|---|
+| every historical statistic and calibration finding | Open States bulk CSV | **none** — CC0 |
+| War Room room stats, roll calls 2025/26 | LIS blob CSVs (no key, no assent) | **unclear**, probably outside §2 — unconfirmed |
+| **calendar — meeting schedules** | LIS `Schedule` API — **no CSV equivalent exists** | **§2**, no alternative channel |
+| **Virginia bill text** ("Tried before", VA half) | LIS `LegislationText` API — **no CSV equivalent** | **§2**, no alternative channel *unless* Open States bulk JSON embeds VA text |
+| other states' outcomes / metadata | Open States | none — CC0 |
+| other states' bill TEXT | each state's own site (Open States links, does not host) | per-state terms, unchecked |
+
+**Structural verdict:** the choices made so far do not trap the product — the historical layer is CC0, and
+LegiScan and Access were both caught before signing. **The one real dependency is a licence, not code:**
+schedules and Virginia bill text exist only behind §2, so the calendar and the VA half of "Tried before" cannot
+scale commercially without a DLAS answer. §6 contemplates paid access, so a route likely exists.
+
+**Correction to 2026-09-23 (same day):** the "Tried before" terms note in [[architecture/text_similarity]] called
+the feature clean after checking only Open States. The Virginia half runs on the LIS text API and sits under §2.
+
 ## The owner's objections, recorded because they are reasonable and should be put to DLAS
 
 1. *"When I got my API key they asked which organization I was with"* — registration contemplating an

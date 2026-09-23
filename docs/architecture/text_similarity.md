@@ -29,7 +29,7 @@ the same committee** (OR 15.2 vs 5.5, p = 0.013). Measured on TITLES; re-run on 
 - **Match words stay amber** — the one amber use P20b sanctions on the War Room (a similarity match is our
   probabilistic claim). Everything else on the page spends no colour.
 
-**TERMS, stated precisely (owner asked):** Open States **metadata** (which states, outcomes, dates) is CC0 — clean
+**TERMS — CORRECTED same day:** the **Virginia half** runs on the LIS `LegislationText` API, which has no CSV equivalent and sits under the ToS §2 *personal and non-commercial* clause ([[knowledge/lis_tos_commercial_use]]) — the note below originally checked only Open States. Open States **metadata** (which states, outcomes, dates) is CC0 — clean
 for commercial use. But the probe measured that Open States returns **links to bill text, not the text**; the
 text lives on **each state's own website under that state's own terms**. So the text half is a per-state terms
 question, and a politeness surface on 50 servers. **Deciding question, not yet answered:** does the Open States
