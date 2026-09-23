@@ -11,6 +11,30 @@ open_loop: CORPUS SOURCE CHANGED 2026-07-27 — LegiScan is OFF the plan (its fr
 > helpful in the coming weeks — rush it in a restaurant way, not a sacrificing-quality way."* Front of the
 > queue behind the counter. This page is the sufficient-scoping pass so the build is mechanical.
 
+## OWNER DECISIONS 2026-09-23 — "Tried before", two halves, and statistical backing
+
+**Now statistically justified for Virginia** by [[testing/room_memory]]: a room that killed an idea kills it
+again ~80% of the time; one that cleared it, ~26% (exact title, OR 10.8) — and the effect is **~3× stronger in
+the same committee** (OR 15.2 vs 5.5, p = 0.013). Measured on TITLES; re-run on TEXT before quoting it for text.
+
+- **Layout (owner):** one War Room section, two halves — **Virginia** (this bill vs earlier VA text) and
+  **Other states**. Rows sort by match strength; the calibrated thresholds above decide what shows by default,
+  with *partial* behind "more". Mockup: https://claude.ai/artifact/77fFnunDuwuniiXVGMXhKq (v7, example rows).
+- **Committee on every VA row**, and a short grey tag — `Same committee · 3×` — only where it applies (owner:
+  *"something short… that appears where relevent so we dont scare away lobbyists"*).
+- **Other states is a motivator, not a model.** Owner: measuring whether other states predict VA *"would require
+  a extensive system of evaluation"*; the value is *"telling legislators that more moderate or even red states
+  have passed a policy already."* **Design catch (P20c):** show the **party that controlled the legislature**
+  that passed it — a sourced fact — never a label calling a state "red" or "moderate", which is a judgment.
+- **Match words stay amber** — the one amber use P20b sanctions on the War Room (a similarity match is our
+  probabilistic claim). Everything else on the page spends no colour.
+
+**TERMS, stated precisely (owner asked):** Open States **metadata** (which states, outcomes, dates) is CC0 — clean
+for commercial use. But the probe measured that Open States returns **links to bill text, not the text**; the
+text lives on **each state's own website under that state's own terms**. So the text half is a per-state terms
+question, and a politeness surface on 50 servers. **Deciding question, not yet answered:** does the Open States
+**bulk JSON** embed full text? It sits behind the owner's login, so one manual download answers it.
+
 ## OWNER DECISIONS 2026-07-25 (supersede the open items below where they overlap)
 
 1. **~~LegiScan = TEMPORARY~~ — REVERSED 2026-07-27, see [[knowledge/legiscan_terms]]. A licence attestation is not a swappable dependency; the corpus is now Open States (public domain, no attestation). The original reasoning is preserved below because the *seam* discipline it produced still applies to the new source.** Original owner proposal: *"Relying on LegiScan long-term is probably not the
