@@ -2,7 +2,7 @@
 tags: [testing, calibration, carryover, committee, war-room, lever]
 updated: 2026-09-18
 status: active
-open_loop: The `Left in <committee>` date is observed for ONE cycle (18-19 Nov 2024). Re-read 20261/HISTORY.CSV in Nov 2026 for a second observation before the War Room ever prints it as a published deadline.
+open_loop: FORWARD TEST FROZEN 2026-09-24 — 430 bills continued out of 2026, prediction "<= ~1% get any committee action in 2027", sha256 622702cd…f975294ff (tools/calibration/frozen/continued_2026_to_2027.json). Score with `freeze_2027.py --score <20271 HISTORY.CSV>` after the 2027 session convenes; also check the second "Left in" date (Nov 2026) before any page prints it as a deadline.
 ---
 
 # A continuance is a soft kill with a twelve-day clock
@@ -80,6 +80,14 @@ whose idea has to be refiled. Coverage is 429 bills, 18% of the 2026 session.
 **Still open:** the "Left in" date is observed for **one** cycle (Nov 2024). Whether that is a fixed rule
 or a clerk's scheduling is not established, so the page says *"on last cycle's timing"* and never prints a
 deadline as though it were published. Second observation arrives Nov 2026 — check `20261/HISTORY.CSV` then.
+
+## Forward test — frozen before the outcome exists (2026-09-24)
+
+Every other number here was scored in hindsight. This one is written down first: `tools/calibration/freeze_2027.py`
+froze the **430 bills continued out of 2026** (157 in Senate Finance and Appropriations, 37 Courts of Justice,
+30 House Rules…) with the prediction **"at most ~1% get any committee action in the 2027 session"**, sha256
+`622702cd32cea66dec7b7a88f346ee2213d42bc3e21b2baac9a8060f975294ff`. The file refuses to be overwritten.
+Scoring reads the 2027 history and compares; nothing about the prediction is recomputed.
 
 Related: [[testing/venue_shopping]] (the room is worth +18 with the year held fixed), [[testing/rooms]],
 [[testing/panel_audit]].

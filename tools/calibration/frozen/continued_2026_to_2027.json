@@ -1,0 +1,2158 @@
+{
+ "bills": [
+  {
+   "bill": "HB1003",
+   "committee": "Transportation",
+   "continued_on": "2/10/2026"
+  },
+  {
+   "bill": "HB1008",
+   "committee": "Finance and Appropriations",
+   "continued_on": "3/3/2026"
+  },
+  {
+   "bill": "HB1016",
+   "committee": "Finance and Appropriations",
+   "continued_on": "3/3/2026"
+  },
+  {
+   "bill": "HB1017",
+   "committee": "Education",
+   "continued_on": "2/4/2026"
+  },
+  {
+   "bill": "HB1018",
+   "committee": "Rules",
+   "continued_on": "2/6/2026"
+  },
+  {
+   "bill": "HB1021",
+   "committee": "Counties, Cities and Towns",
+   "continued_on": "2/6/2026"
+  },
+  {
+   "bill": "HB1023",
+   "committee": "Education",
+   "continued_on": "2/11/2026"
+  },
+  {
+   "bill": "HB1027",
+   "committee": "Courts of Justice",
+   "continued_on": "2/11/2026"
+  },
+  {
+   "bill": "HB1035",
+   "committee": "Public Safety",
+   "continued_on": "2/13/2026"
+  },
+  {
+   "bill": "HB1044",
+   "committee": "General Laws",
+   "continued_on": "1/29/2026"
+  },
+  {
+   "bill": "HB1058",
+   "committee": "Counties, Cities and Towns",
+   "continued_on": "1/30/2026"
+  },
+  {
+   "bill": "HB1070",
+   "committee": "Courts of Justice",
+   "continued_on": "3/4/2026"
+  },
+  {
+   "bill": "HB1074",
+   "committee": "Finance",
+   "continued_on": "2/11/2026"
+  },
+  {
+   "bill": "HB1075",
+   "committee": "Commerce and Labor",
+   "continued_on": "3/2/2026"
+  },
+  {
+   "bill": "HB1091",
+   "committee": "Agriculture, Chesapeake and Natural Resources",
+   "continued_on": "2/11/2026"
+  },
+  {
+   "bill": "HB1099",
+   "committee": "Education",
+   "continued_on": "2/4/2026"
+  },
+  {
+   "bill": "HB11",
+   "committee": "Health and Human Services",
+   "continued_on": "1/27/2026"
+  },
+  {
+   "bill": "HB1110",
+   "committee": "Finance and Appropriations",
+   "continued_on": "3/4/2026"
+  },
+  {
+   "bill": "HB1112",
+   "committee": "Counties, Cities and Towns",
+   "continued_on": "1/30/2026"
+  },
+  {
+   "bill": "HB1114",
+   "committee": "Finance and Appropriations",
+   "continued_on": "3/6/2026"
+  },
+  {
+   "bill": "HB1122",
+   "committee": "Counties, Cities and Towns",
+   "continued_on": "2/13/2026"
+  },
+  {
+   "bill": "HB1132",
+   "committee": "Finance",
+   "continued_on": "2/11/2026"
+  },
+  {
+   "bill": "HB1133",
+   "committee": "Finance",
+   "continued_on": "2/11/2026"
+  },
+  {
+   "bill": "HB114",
+   "committee": "Finance and Appropriations",
+   "continued_on": "3/6/2026"
+  },
+  {
+   "bill": "HB1142",
+   "committee": "Finance and Appropriations",
+   "continued_on": "3/3/2026"
+  },
+  {
+   "bill": "HB1143",
+   "committee": "Transportation",
+   "continued_on": "2/5/2026"
+  },
+  {
+   "bill": "HB1162",
+   "committee": "Public Safety",
+   "continued_on": "2/13/2026"
+  },
+  {
+   "bill": "HB1171",
+   "committee": "Education and Health",
+   "continued_on": "3/5/2026"
+  },
+  {
+   "bill": "HB1181",
+   "committee": "General Laws",
+   "continued_on": "1/29/2026"
+  },
+  {
+   "bill": "HB1183",
+   "committee": "Education",
+   "continued_on": "2/4/2026"
+  },
+  {
+   "bill": "HB1192",
+   "committee": "Rules",
+   "continued_on": "2/6/2026"
+  },
+  {
+   "bill": "HB1193",
+   "committee": "Education",
+   "continued_on": "2/11/2026"
+  },
+  {
+   "bill": "HB1195",
+   "committee": "Education",
+   "continued_on": "2/11/2026"
+  },
+  {
+   "bill": "HB1196",
+   "committee": "General Laws",
+   "continued_on": "2/12/2026"
+  },
+  {
+   "bill": "HB121",
+   "committee": "Labor and Commerce",
+   "continued_on": "2/10/2026"
+  },
+  {
+   "bill": "HB1223",
+   "committee": "Health and Human Services",
+   "continued_on": "2/12/2026"
+  },
+  {
+   "bill": "HB1230",
+   "committee": "Finance",
+   "continued_on": "2/11/2026"
+  },
+  {
+   "bill": "HB1232",
+   "committee": "Rules",
+   "continued_on": "2/6/2026"
+  },
+  {
+   "bill": "HB1238",
+   "committee": "Agriculture, Conservation and Natural Resources",
+   "continued_on": "2/24/2026"
+  },
+  {
+   "bill": "HB1249",
+   "committee": "Finance and Appropriations",
+   "continued_on": "3/6/2026"
+  },
+  {
+   "bill": "HB1252",
+   "committee": "General Laws",
+   "continued_on": "2/3/2026"
+  },
+  {
+   "bill": "HB1257",
+   "committee": "Communications, Technology and Innovation",
+   "continued_on": "2/2/2026"
+  },
+  {
+   "bill": "HB1261",
+   "committee": "Communications, Technology and Innovation",
+   "continued_on": "2/2/2026"
+  },
+  {
+   "bill": "HB1264",
+   "committee": "Public Safety",
+   "continued_on": "2/6/2026"
+  },
+  {
+   "bill": "HB1268",
+   "committee": "Rules",
+   "continued_on": "1/27/2026"
+  },
+  {
+   "bill": "HB127",
+   "committee": "Finance and Appropriations",
+   "continued_on": "3/3/2026"
+  },
+  {
+   "bill": "HB1274",
+   "committee": "Counties, Cities and Towns",
+   "continued_on": "2/13/2026"
+  },
+  {
+   "bill": "HB1276",
+   "committee": "Commerce and Labor",
+   "continued_on": "3/9/2026"
+  },
+  {
+   "bill": "HB1280",
+   "committee": "Finance and Appropriations",
+   "continued_on": "3/4/2026"
+  },
+  {
+   "bill": "HB1293",
+   "committee": "Rules",
+   "continued_on": "2/6/2026"
+  },
+  {
+   "bill": "HB1294",
+   "committee": "Communications, Technology and Innovation",
+   "continued_on": "2/2/2026"
+  },
+  {
+   "bill": "HB1295",
+   "committee": "Communications, Technology and Innovation",
+   "continued_on": "2/2/2026"
+  },
+  {
+   "bill": "HB1299",
+   "committee": "Courts of Justice",
+   "continued_on": "3/9/2026"
+  },
+  {
+   "bill": "HB13",
+   "committee": "Finance",
+   "continued_on": "2/11/2026"
+  },
+  {
+   "bill": "HB1310",
+   "committee": "Education",
+   "continued_on": "2/4/2026"
+  },
+  {
+   "bill": "HB1314",
+   "committee": "Courts of Justice",
+   "continued_on": "1/28/2026"
+  },
+  {
+   "bill": "HB1315",
+   "committee": "Public Safety",
+   "continued_on": "2/13/2026"
+  },
+  {
+   "bill": "HB1317",
+   "committee": "Appropriations",
+   "continued_on": "2/9/2026"
+  },
+  {
+   "bill": "HB1319",
+   "committee": "Finance and Appropriations",
+   "continued_on": "3/3/2026"
+  },
+  {
+   "bill": "HB1324",
+   "committee": "Labor and Commerce",
+   "continued_on": "2/12/2026"
+  },
+  {
+   "bill": "HB1330",
+   "committee": "Finance and Appropriations",
+   "continued_on": "3/6/2026"
+  },
+  {
+   "bill": "HB1331",
+   "committee": "Education",
+   "continued_on": "2/11/2026"
+  },
+  {
+   "bill": "HB1332",
+   "committee": "Appropriations",
+   "continued_on": "2/11/2026"
+  },
+  {
+   "bill": "HB134",
+   "committee": "Finance and Appropriations",
+   "continued_on": "3/4/2026"
+  },
+  {
+   "bill": "HB1340",
+   "committee": "Appropriations",
+   "continued_on": "2/6/2026"
+  },
+  {
+   "bill": "HB1345",
+   "committee": "Education and Health",
+   "continued_on": "3/5/2026"
+  },
+  {
+   "bill": "HB1346",
+   "committee": "Courts of Justice",
+   "continued_on": "2/11/2026"
+  },
+  {
+   "bill": "HB1356",
+   "committee": "Agriculture, Chesapeake and Natural Resources",
+   "continued_on": "2/11/2026"
+  },
+  {
+   "bill": "HB1364",
+   "committee": "Rules",
+   "continued_on": "2/6/2026"
+  },
+  {
+   "bill": "HB1367",
+   "committee": "Finance and Appropriations",
+   "continued_on": "3/3/2026"
+  },
+  {
+   "bill": "HB1371",
+   "committee": "Transportation",
+   "continued_on": "2/12/2026"
+  },
+  {
+   "bill": "HB1372",
+   "committee": "Appropriations",
+   "continued_on": "2/13/2026"
+  },
+  {
+   "bill": "HB1373",
+   "committee": "Finance and Appropriations",
+   "continued_on": "3/6/2026"
+  },
+  {
+   "bill": "HB1375",
+   "committee": "Agriculture, Chesapeake and Natural Resources",
+   "continued_on": "2/11/2026"
+  },
+  {
+   "bill": "HB1376",
+   "committee": "Counties, Cities and Towns",
+   "continued_on": "1/30/2026"
+  },
+  {
+   "bill": "HB1378",
+   "committee": "Finance and Appropriations",
+   "continued_on": "3/3/2026"
+  },
+  {
+   "bill": "HB1379",
+   "committee": "Labor and Commerce",
+   "continued_on": "2/12/2026"
+  },
+  {
+   "bill": "HB1383",
+   "committee": "Education and Health",
+   "continued_on": "3/5/2026"
+  },
+  {
+   "bill": "HB1388",
+   "committee": "Public Safety",
+   "continued_on": "2/13/2026"
+  },
+  {
+   "bill": "HB1390",
+   "committee": "Appropriations",
+   "continued_on": "2/13/2026"
+  },
+  {
+   "bill": "HB1394",
+   "committee": "Counties, Cities and Towns",
+   "continued_on": "2/6/2026"
+  },
+  {
+   "bill": "HB1396",
+   "committee": "Finance and Appropriations",
+   "continued_on": "3/4/2026"
+  },
+  {
+   "bill": "HB1398",
+   "committee": "Finance and Appropriations",
+   "continued_on": "3/9/2026"
+  },
+  {
+   "bill": "HB1409",
+   "committee": "General Laws",
+   "continued_on": "2/12/2026"
+  },
+  {
+   "bill": "HB1410",
+   "committee": "Education",
+   "continued_on": "2/9/2026"
+  },
+  {
+   "bill": "HB1413",
+   "committee": "Courts of Justice",
+   "continued_on": "3/9/2026"
+  },
+  {
+   "bill": "HB1424",
+   "committee": "Agriculture, Chesapeake and Natural Resources",
+   "continued_on": "2/11/2026"
+  },
+  {
+   "bill": "HB1429",
+   "committee": "General Laws",
+   "continued_on": "2/5/2026"
+  },
+  {
+   "bill": "HB143",
+   "committee": "General Laws",
+   "continued_on": "2/5/2026"
+  },
+  {
+   "bill": "HB1430",
+   "committee": "Counties, Cities and Towns",
+   "continued_on": "2/6/2026"
+  },
+  {
+   "bill": "HB1436",
+   "committee": "Agriculture, Chesapeake and Natural Resources",
+   "continued_on": "2/4/2026"
+  },
+  {
+   "bill": "HB1451",
+   "committee": "Labor and Commerce",
+   "continued_on": "2/10/2026"
+  },
+  {
+   "bill": "HB1456",
+   "committee": "Rules",
+   "continued_on": "2/6/2026"
+  },
+  {
+   "bill": "HB1458",
+   "committee": "Rules",
+   "continued_on": "2/6/2026"
+  },
+  {
+   "bill": "HB1465",
+   "committee": "Finance and Appropriations",
+   "continued_on": "3/4/2026"
+  },
+  {
+   "bill": "HB1473",
+   "committee": "Education",
+   "continued_on": "2/11/2026"
+  },
+  {
+   "bill": "HB1475",
+   "committee": "Finance and Appropriations",
+   "continued_on": "3/4/2026"
+  },
+  {
+   "bill": "HB1485",
+   "committee": "Finance and Appropriations",
+   "continued_on": "3/9/2026"
+  },
+  {
+   "bill": "HB1495",
+   "committee": "Finance and Appropriations",
+   "continued_on": "3/4/2026"
+  },
+  {
+   "bill": "HB1497",
+   "committee": "Appropriations",
+   "continued_on": "2/11/2026"
+  },
+  {
+   "bill": "HB150",
+   "committee": "Courts of Justice",
+   "continued_on": "2/23/2026"
+  },
+  {
+   "bill": "HB1502",
+   "committee": "Finance and Appropriations",
+   "continued_on": "3/4/2026"
+  },
+  {
+   "bill": "HB1506",
+   "committee": "Courts of Justice",
+   "continued_on": "2/11/2026"
+  },
+  {
+   "bill": "HB1507",
+   "committee": "General Laws",
+   "continued_on": "2/10/2026"
+  },
+  {
+   "bill": "HB1508",
+   "committee": "Finance and Appropriations",
+   "continued_on": "3/4/2026"
+  },
+  {
+   "bill": "HB1509",
+   "committee": "General Laws",
+   "continued_on": "2/10/2026"
+  },
+  {
+   "bill": "HB1515",
+   "committee": "Rules",
+   "continued_on": "2/6/2026"
+  },
+  {
+   "bill": "HB152",
+   "committee": "Rules",
+   "continued_on": "2/6/2026"
+  },
+  {
+   "bill": "HB1520",
+   "committee": "General Laws",
+   "continued_on": "2/10/2026"
+  },
+  {
+   "bill": "HB1521",
+   "committee": "Communications, Technology and Innovation",
+   "continued_on": "2/2/2026"
+  },
+  {
+   "bill": "HB159",
+   "committee": "General Laws and Technology",
+   "continued_on": "2/25/2026"
+  },
+  {
+   "bill": "HB160",
+   "committee": "General Laws",
+   "continued_on": "1/22/2026"
+  },
+  {
+   "bill": "HB162",
+   "committee": "Privileges and Elections",
+   "continued_on": "2/6/2026"
+  },
+  {
+   "bill": "HB166",
+   "committee": "Counties, Cities and Towns",
+   "continued_on": "1/30/2026"
+  },
+  {
+   "bill": "HB175",
+   "committee": "Finance and Appropriations",
+   "continued_on": "3/3/2026"
+  },
+  {
+   "bill": "HB183",
+   "committee": "Finance and Appropriations",
+   "continued_on": "2/25/2026"
+  },
+  {
+   "bill": "HB189",
+   "committee": "Education and Health",
+   "continued_on": "3/5/2026"
+  },
+  {
+   "bill": "HB192",
+   "committee": "Courts of Justice",
+   "continued_on": "1/28/2026"
+  },
+  {
+   "bill": "HB197",
+   "committee": "Courts of Justice",
+   "continued_on": "1/28/2026"
+  },
+  {
+   "bill": "HB203",
+   "committee": "Rules",
+   "continued_on": "2/6/2026"
+  },
+  {
+   "bill": "HB219",
+   "committee": "Transportation",
+   "continued_on": "1/29/2026"
+  },
+  {
+   "bill": "HB235",
+   "committee": "Privileges and Elections",
+   "continued_on": "2/13/2026"
+  },
+  {
+   "bill": "HB240",
+   "committee": "Courts of Justice",
+   "continued_on": "2/11/2026"
+  },
+  {
+   "bill": "HB243",
+   "committee": "Finance",
+   "continued_on": "2/11/2026"
+  },
+  {
+   "bill": "HB244",
+   "committee": "Finance and Appropriations",
+   "continued_on": "3/9/2026"
+  },
+  {
+   "bill": "HB251",
+   "committee": "Courts of Justice",
+   "continued_on": "2/13/2026"
+  },
+  {
+   "bill": "HB260",
+   "committee": "Finance and Appropriations",
+   "continued_on": "3/6/2026"
+  },
+  {
+   "bill": "HB263",
+   "committee": "Education and Health",
+   "continued_on": "2/19/2026"
+  },
+  {
+   "bill": "HB268",
+   "committee": "Finance and Appropriations",
+   "continued_on": "3/3/2026"
+  },
+  {
+   "bill": "HB269",
+   "committee": "Transportation",
+   "continued_on": "2/5/2026"
+  },
+  {
+   "bill": "HB271",
+   "committee": "Finance and Appropriations",
+   "continued_on": "3/9/2026"
+  },
+  {
+   "bill": "HB278",
+   "committee": "Counties, Cities and Towns",
+   "continued_on": "1/23/2026"
+  },
+  {
+   "bill": "HB28",
+   "committee": "Privileges and Elections",
+   "continued_on": "2/24/2026"
+  },
+  {
+   "bill": "HB294",
+   "committee": "Finance and Appropriations",
+   "continued_on": "3/4/2026"
+  },
+  {
+   "bill": "HB297",
+   "committee": "Health and Human Services",
+   "continued_on": "2/10/2026"
+  },
+  {
+   "bill": "HB300",
+   "committee": "Education and Health",
+   "continued_on": "2/26/2026"
+  },
+  {
+   "bill": "HB302",
+   "committee": "Transportation",
+   "continued_on": "2/3/2026"
+  },
+  {
+   "bill": "HB314",
+   "committee": "General Laws",
+   "continued_on": "2/10/2026"
+  },
+  {
+   "bill": "HB324",
+   "committee": "Appropriations",
+   "continued_on": "2/6/2026"
+  },
+  {
+   "bill": "HB326",
+   "committee": "Finance and Appropriations",
+   "continued_on": "3/6/2026"
+  },
+  {
+   "bill": "HB334",
+   "committee": "Finance and Appropriations",
+   "continued_on": "3/9/2026"
+  },
+  {
+   "bill": "HB339",
+   "committee": "Finance and Appropriations",
+   "continued_on": "3/9/2026"
+  },
+  {
+   "bill": "HB349",
+   "committee": "Finance and Appropriations",
+   "continued_on": "3/4/2026"
+  },
+  {
+   "bill": "HB35",
+   "committee": "Rehabilitation and Social Services",
+   "continued_on": "3/6/2026"
+  },
+  {
+   "bill": "HB354",
+   "committee": "Finance and Appropriations",
+   "continued_on": "3/6/2026"
+  },
+  {
+   "bill": "HB359",
+   "committee": "Appropriations",
+   "continued_on": "2/11/2026"
+  },
+  {
+   "bill": "HB362",
+   "committee": "Appropriations",
+   "continued_on": "2/9/2026"
+  },
+  {
+   "bill": "HB364",
+   "committee": "Courts of Justice",
+   "continued_on": "2/4/2026"
+  },
+  {
+   "bill": "HB368",
+   "committee": "Finance and Appropriations",
+   "continued_on": "3/6/2026"
+  },
+  {
+   "bill": "HB370",
+   "committee": "Counties, Cities and Towns",
+   "continued_on": "1/23/2026"
+  },
+  {
+   "bill": "HB372",
+   "committee": "Finance",
+   "continued_on": "2/11/2026"
+  },
+  {
+   "bill": "HB377",
+   "committee": "General Laws",
+   "continued_on": "2/10/2026"
+  },
+  {
+   "bill": "HB382",
+   "committee": "Finance and Appropriations",
+   "continued_on": "3/4/2026"
+  },
+  {
+   "bill": "HB389",
+   "committee": "Agriculture, Chesapeake and Natural Resources",
+   "continued_on": "1/28/2026"
+  },
+  {
+   "bill": "HB393",
+   "committee": "Finance and Appropriations",
+   "continued_on": "3/3/2026"
+  },
+  {
+   "bill": "HB406",
+   "committee": "Appropriations",
+   "continued_on": "2/13/2026"
+  },
+  {
+   "bill": "HB415",
+   "committee": "Rules",
+   "continued_on": "2/6/2026"
+  },
+  {
+   "bill": "HB419",
+   "committee": "Counties, Cities and Towns",
+   "continued_on": "1/30/2026"
+  },
+  {
+   "bill": "HB42",
+   "committee": "Courts of Justice",
+   "continued_on": "2/11/2026"
+  },
+  {
+   "bill": "HB420",
+   "committee": "Labor and Commerce",
+   "continued_on": "1/29/2026"
+  },
+  {
+   "bill": "HB421",
+   "committee": "Courts of Justice",
+   "continued_on": "2/4/2026"
+  },
+  {
+   "bill": "HB428",
+   "committee": "Education",
+   "continued_on": "2/4/2026"
+  },
+  {
+   "bill": "HB441",
+   "committee": "Courts of Justice",
+   "continued_on": "3/5/2026"
+  },
+  {
+   "bill": "HB448",
+   "committee": "Finance and Appropriations",
+   "continued_on": "2/25/2026"
+  },
+  {
+   "bill": "HB463",
+   "committee": "General Laws",
+   "continued_on": "1/29/2026"
+  },
+  {
+   "bill": "HB464",
+   "committee": "General Laws",
+   "continued_on": "2/12/2026"
+  },
+  {
+   "bill": "HB470",
+   "committee": "Finance and Appropriations",
+   "continued_on": "3/4/2026"
+  },
+  {
+   "bill": "HB485",
+   "committee": "Rules",
+   "continued_on": "2/6/2026"
+  },
+  {
+   "bill": "HB487",
+   "committee": "Finance and Appropriations",
+   "continued_on": "3/4/2026"
+  },
+  {
+   "bill": "HB49",
+   "committee": "Finance and Appropriations",
+   "continued_on": "2/25/2026"
+  },
+  {
+   "bill": "HB493",
+   "committee": "Privileges and Elections",
+   "continued_on": "2/13/2026"
+  },
+  {
+   "bill": "HB495",
+   "committee": "Education and Health",
+   "continued_on": "3/5/2026"
+  },
+  {
+   "bill": "HB496",
+   "committee": "Counties, Cities and Towns",
+   "continued_on": "2/6/2026"
+  },
+  {
+   "bill": "HB500",
+   "committee": "Finance and Appropriations",
+   "continued_on": "3/3/2026"
+  },
+  {
+   "bill": "HB503",
+   "committee": "Labor and Commerce",
+   "continued_on": "2/12/2026"
+  },
+  {
+   "bill": "HB504",
+   "committee": "Finance",
+   "continued_on": "2/11/2026"
+  },
+  {
+   "bill": "HB509",
+   "committee": "Counties, Cities and Towns",
+   "continued_on": "1/23/2026"
+  },
+  {
+   "bill": "HB514",
+   "committee": "Finance and Appropriations",
+   "continued_on": "3/3/2026"
+  },
+  {
+   "bill": "HB548",
+   "committee": "Finance and Appropriations",
+   "continued_on": "3/6/2026"
+  },
+  {
+   "bill": "HB551",
+   "committee": "General Laws",
+   "continued_on": "2/10/2026"
+  },
+  {
+   "bill": "HB560",
+   "committee": "Finance and Appropriations",
+   "continued_on": "3/3/2026"
+  },
+  {
+   "bill": "HB563",
+   "committee": "Finance",
+   "continued_on": "2/11/2026"
+  },
+  {
+   "bill": "HB568",
+   "committee": "Education",
+   "continued_on": "2/4/2026"
+  },
+  {
+   "bill": "HB57",
+   "committee": "Finance and Appropriations",
+   "continued_on": "2/25/2026"
+  },
+  {
+   "bill": "HB587",
+   "committee": "Transportation",
+   "continued_on": "2/3/2026"
+  },
+  {
+   "bill": "HB591",
+   "committee": "Finance and Appropriations",
+   "continued_on": "3/9/2026"
+  },
+  {
+   "bill": "HB604",
+   "committee": "Courts of Justice",
+   "continued_on": "2/4/2026"
+  },
+  {
+   "bill": "HB607",
+   "committee": "Rules",
+   "continued_on": "1/27/2026"
+  },
+  {
+   "bill": "HB609",
+   "committee": "Finance",
+   "continued_on": "2/11/2026"
+  },
+  {
+   "bill": "HB611",
+   "committee": "Counties, Cities and Towns",
+   "continued_on": "1/30/2026"
+  },
+  {
+   "bill": "HB613",
+   "committee": "Education and Health",
+   "continued_on": "3/5/2026"
+  },
+  {
+   "bill": "HB621",
+   "committee": "General Laws",
+   "continued_on": "2/12/2026"
+  },
+  {
+   "bill": "HB623",
+   "committee": "Public Safety",
+   "continued_on": "1/23/2026"
+  },
+  {
+   "bill": "HB635",
+   "committee": "Communications, Technology and Innovation",
+   "continued_on": "2/9/2026"
+  },
+  {
+   "bill": "HB638",
+   "committee": "Communications, Technology and Innovation",
+   "continued_on": "2/9/2026"
+  },
+  {
+   "bill": "HB641",
+   "committee": "Finance",
+   "continued_on": "2/11/2026"
+  },
+  {
+   "bill": "HB66",
+   "committee": "Finance and Appropriations",
+   "continued_on": "3/6/2026"
+  },
+  {
+   "bill": "HB661",
+   "committee": "Finance and Appropriations",
+   "continued_on": "3/6/2026"
+  },
+  {
+   "bill": "HB68",
+   "committee": "Finance",
+   "continued_on": "1/28/2026"
+  },
+  {
+   "bill": "HB689",
+   "committee": "Labor and Commerce",
+   "continued_on": "2/12/2026"
+  },
+  {
+   "bill": "HB703",
+   "committee": "Finance",
+   "continued_on": "2/11/2026"
+  },
+  {
+   "bill": "HB707",
+   "committee": "General Laws and Technology",
+   "continued_on": "2/25/2026"
+  },
+  {
+   "bill": "HB71",
+   "committee": "Privileges and Elections",
+   "continued_on": "2/13/2026"
+  },
+  {
+   "bill": "HB720",
+   "committee": "Finance",
+   "continued_on": "2/11/2026"
+  },
+  {
+   "bill": "HB723",
+   "committee": "Counties, Cities and Towns",
+   "continued_on": "2/6/2026"
+  },
+  {
+   "bill": "HB742",
+   "committee": "General Laws",
+   "continued_on": "1/27/2026"
+  },
+  {
+   "bill": "HB752",
+   "committee": "Courts of Justice",
+   "continued_on": "2/11/2026"
+  },
+  {
+   "bill": "HB757",
+   "committee": "Labor and Commerce",
+   "continued_on": "2/12/2026"
+  },
+  {
+   "bill": "HB763",
+   "committee": "Labor and Commerce",
+   "continued_on": "2/12/2026"
+  },
+  {
+   "bill": "HB777",
+   "committee": "Finance and Appropriations",
+   "continued_on": "3/6/2026"
+  },
+  {
+   "bill": "HB778",
+   "committee": "Counties, Cities and Towns",
+   "continued_on": "2/6/2026"
+  },
+  {
+   "bill": "HB79",
+   "committee": "General Laws",
+   "continued_on": "2/12/2026"
+  },
+  {
+   "bill": "HB80",
+   "committee": "Finance and Appropriations",
+   "continued_on": "3/4/2026"
+  },
+  {
+   "bill": "HB81",
+   "committee": "Health and Human Services",
+   "continued_on": "2/5/2026"
+  },
+  {
+   "bill": "HB83",
+   "committee": "Communications, Technology and Innovation",
+   "continued_on": "2/2/2026"
+  },
+  {
+   "bill": "HB839",
+   "committee": "Rules",
+   "continued_on": "2/6/2026"
+  },
+  {
+   "bill": "HB841",
+   "committee": "Education and Health",
+   "continued_on": "3/5/2026"
+  },
+  {
+   "bill": "HB842",
+   "committee": "General Laws",
+   "continued_on": "1/29/2026"
+  },
+  {
+   "bill": "HB85",
+   "committee": "Education",
+   "continued_on": "1/28/2026"
+  },
+  {
+   "bill": "HB852",
+   "committee": "Finance and Appropriations",
+   "continued_on": "3/3/2026"
+  },
+  {
+   "bill": "HB853",
+   "committee": "Courts of Justice",
+   "continued_on": "2/11/2026"
+  },
+  {
+   "bill": "HB855",
+   "committee": "Finance and Appropriations",
+   "continued_on": "3/4/2026"
+  },
+  {
+   "bill": "HB856",
+   "committee": "Rules",
+   "continued_on": "2/6/2026"
+  },
+  {
+   "bill": "HB858",
+   "committee": "Rules",
+   "continued_on": "2/6/2026"
+  },
+  {
+   "bill": "HB863",
+   "committee": "Courts of Justice",
+   "continued_on": "2/4/2026"
+  },
+  {
+   "bill": "HB865",
+   "committee": "Finance and Appropriations",
+   "continued_on": "3/4/2026"
+  },
+  {
+   "bill": "HB868",
+   "committee": "Privileges and Elections",
+   "continued_on": "2/6/2026"
+  },
+  {
+   "bill": "HB869",
+   "committee": "General Laws",
+   "continued_on": "2/5/2026"
+  },
+  {
+   "bill": "HB873",
+   "committee": "Education",
+   "continued_on": "2/4/2026"
+  },
+  {
+   "bill": "HB881",
+   "committee": "Counties, Cities and Towns",
+   "continued_on": "1/30/2026"
+  },
+  {
+   "bill": "HB885",
+   "committee": "Finance and Appropriations",
+   "continued_on": "3/3/2026"
+  },
+  {
+   "bill": "HB886",
+   "committee": "Courts of Justice",
+   "continued_on": "2/11/2026"
+  },
+  {
+   "bill": "HB890",
+   "committee": "Rules",
+   "continued_on": "2/6/2026"
+  },
+  {
+   "bill": "HB9",
+   "committee": "Rules",
+   "continued_on": "2/6/2026"
+  },
+  {
+   "bill": "HB900",
+   "committee": "Finance",
+   "continued_on": "2/11/2026"
+  },
+  {
+   "bill": "HB906",
+   "committee": "Rules",
+   "continued_on": "2/6/2026"
+  },
+  {
+   "bill": "HB914",
+   "committee": "Counties, Cities and Towns",
+   "continued_on": "2/6/2026"
+  },
+  {
+   "bill": "HB917",
+   "committee": "Health and Human Services",
+   "continued_on": "1/27/2026"
+  },
+  {
+   "bill": "HB918",
+   "committee": "Rules",
+   "continued_on": "2/6/2026"
+  },
+  {
+   "bill": "HB92",
+   "committee": "Finance and Appropriations",
+   "continued_on": "3/4/2026"
+  },
+  {
+   "bill": "HB922",
+   "committee": "Counties, Cities and Towns",
+   "continued_on": "1/30/2026"
+  },
+  {
+   "bill": "HB926",
+   "committee": "Counties, Cities and Towns",
+   "continued_on": "1/30/2026"
+  },
+  {
+   "bill": "HB929",
+   "committee": "Courts of Justice",
+   "continued_on": "3/9/2026"
+  },
+  {
+   "bill": "HB935",
+   "committee": "Labor and Commerce",
+   "continued_on": "2/10/2026"
+  },
+  {
+   "bill": "HB944",
+   "committee": "Finance and Appropriations",
+   "continued_on": "3/9/2026"
+  },
+  {
+   "bill": "HB946",
+   "committee": "Finance",
+   "continued_on": "2/11/2026"
+  },
+  {
+   "bill": "HB949",
+   "committee": "Labor and Commerce",
+   "continued_on": "2/3/2026"
+  },
+  {
+   "bill": "HB958",
+   "committee": "Finance and Appropriations",
+   "continued_on": "3/3/2026"
+  },
+  {
+   "bill": "HB96",
+   "committee": "Appropriations",
+   "continued_on": "2/6/2026"
+  },
+  {
+   "bill": "HB960",
+   "committee": "Finance and Appropriations",
+   "continued_on": "3/3/2026"
+  },
+  {
+   "bill": "HB978",
+   "committee": "Finance",
+   "continued_on": "2/11/2026"
+  },
+  {
+   "bill": "HB979",
+   "committee": "Finance",
+   "continued_on": "2/11/2026"
+  },
+  {
+   "bill": "HB994",
+   "committee": "Finance and Appropriations",
+   "continued_on": "3/6/2026"
+  },
+  {
+   "bill": "HB997",
+   "committee": "Labor and Commerce",
+   "continued_on": "2/12/2026"
+  },
+  {
+   "bill": "SB101",
+   "committee": "Finance and Appropriations",
+   "continued_on": "2/5/2026"
+  },
+  {
+   "bill": "SB102",
+   "committee": "Finance and Appropriations",
+   "continued_on": "2/3/2026"
+  },
+  {
+   "bill": "SB103",
+   "committee": "Finance and Appropriations",
+   "continued_on": "2/3/2026"
+  },
+  {
+   "bill": "SB110",
+   "committee": "Finance and Appropriations",
+   "continued_on": "2/3/2026"
+  },
+  {
+   "bill": "SB113",
+   "committee": "Finance and Appropriations",
+   "continued_on": "2/3/2026"
+  },
+  {
+   "bill": "SB114",
+   "committee": "Finance and Appropriations",
+   "continued_on": "2/3/2026"
+  },
+  {
+   "bill": "SB116",
+   "committee": "Counties, Cities and Towns",
+   "continued_on": "2/27/2026"
+  },
+  {
+   "bill": "SB139",
+   "committee": "Finance and Appropriations",
+   "continued_on": "1/28/2026"
+  },
+  {
+   "bill": "SB143",
+   "committee": "Finance and Appropriations",
+   "continued_on": "1/20/2026"
+  },
+  {
+   "bill": "SB145",
+   "committee": "Courts of Justice",
+   "continued_on": "1/28/2026"
+  },
+  {
+   "bill": "SB147",
+   "committee": "Finance and Appropriations",
+   "continued_on": "2/10/2026"
+  },
+  {
+   "bill": "SB148",
+   "committee": "Finance and Appropriations",
+   "continued_on": "1/28/2026"
+  },
+  {
+   "bill": "SB154",
+   "committee": "Finance and Appropriations",
+   "continued_on": "2/3/2026"
+  },
+  {
+   "bill": "SB155",
+   "committee": "Rules",
+   "continued_on": "3/6/2026"
+  },
+  {
+   "bill": "SB159",
+   "committee": "Finance and Appropriations",
+   "continued_on": "2/3/2026"
+  },
+  {
+   "bill": "SB174",
+   "committee": "Finance and Appropriations",
+   "continued_on": "2/3/2026"
+  },
+  {
+   "bill": "SB187",
+   "committee": "Finance and Appropriations",
+   "continued_on": "1/20/2026"
+  },
+  {
+   "bill": "SB192",
+   "committee": "Finance and Appropriations",
+   "continued_on": "2/12/2026"
+  },
+  {
+   "bill": "SB202",
+   "committee": "Privileges and Elections",
+   "continued_on": "1/27/2026"
+  },
+  {
+   "bill": "SB205",
+   "committee": "Finance and Appropriations",
+   "continued_on": "2/12/2026"
+  },
+  {
+   "bill": "SB208",
+   "committee": "Finance and Appropriations",
+   "continued_on": "2/4/2026"
+  },
+  {
+   "bill": "SB21",
+   "committee": "Rules",
+   "continued_on": "3/6/2026"
+  },
+  {
+   "bill": "SB211",
+   "committee": "Finance and Appropriations",
+   "continued_on": "1/20/2026"
+  },
+  {
+   "bill": "SB217",
+   "committee": "Finance and Appropriations",
+   "continued_on": "2/10/2026"
+  },
+  {
+   "bill": "SB222",
+   "committee": "Rehabilitation and Social Services",
+   "continued_on": "1/30/2026"
+  },
+  {
+   "bill": "SB228",
+   "committee": "Finance and Appropriations",
+   "continued_on": "2/12/2026"
+  },
+  {
+   "bill": "SB231",
+   "committee": "Finance and Appropriations",
+   "continued_on": "2/3/2026"
+  },
+  {
+   "bill": "SB232",
+   "committee": "General Laws and Technology",
+   "continued_on": "2/4/2026"
+  },
+  {
+   "bill": "SB236",
+   "committee": "Finance and Appropriations",
+   "continued_on": "2/3/2026"
+  },
+  {
+   "bill": "SB237",
+   "committee": "General Laws and Technology",
+   "continued_on": "2/4/2026"
+  },
+  {
+   "bill": "SB241",
+   "committee": "Education and Health",
+   "continued_on": "1/29/2026"
+  },
+  {
+   "bill": "SB243",
+   "committee": "Finance and Appropriations",
+   "continued_on": "2/12/2026"
+  },
+  {
+   "bill": "SB259",
+   "committee": "Finance and Appropriations",
+   "continued_on": "2/10/2026"
+  },
+  {
+   "bill": "SB263",
+   "committee": "General Laws and Technology",
+   "continued_on": "1/21/2026"
+  },
+  {
+   "bill": "SB265",
+   "committee": "Courts of Justice",
+   "continued_on": "2/16/2026"
+  },
+  {
+   "bill": "SB266",
+   "committee": "Agriculture, Conservation and Natural Resources",
+   "continued_on": "2/3/2026"
+  },
+  {
+   "bill": "SB268",
+   "committee": "Finance and Appropriations",
+   "continued_on": "1/28/2026"
+  },
+  {
+   "bill": "SB269",
+   "committee": "Communications, Technology and Innovation",
+   "continued_on": "3/2/2026"
+  },
+  {
+   "bill": "SB274",
+   "committee": "Appropriations",
+   "continued_on": "2/25/2026"
+  },
+  {
+   "bill": "SB275",
+   "committee": "Finance and Appropriations",
+   "continued_on": "2/12/2026"
+  },
+  {
+   "bill": "SB284",
+   "committee": "Finance and Appropriations",
+   "continued_on": "2/10/2026"
+  },
+  {
+   "bill": "SB287",
+   "committee": "Finance and Appropriations",
+   "continued_on": "2/10/2026"
+  },
+  {
+   "bill": "SB296",
+   "committee": "Counties, Cities and Towns",
+   "continued_on": "2/20/2026"
+  },
+  {
+   "bill": "SB300",
+   "committee": "Rules",
+   "continued_on": "3/6/2026"
+  },
+  {
+   "bill": "SB304",
+   "committee": "Finance and Appropriations",
+   "continued_on": "2/3/2026"
+  },
+  {
+   "bill": "SB318",
+   "committee": "Counties, Cities and Towns",
+   "continued_on": "2/20/2026"
+  },
+  {
+   "bill": "SB328",
+   "committee": "Counties, Cities and Towns",
+   "continued_on": "2/20/2026"
+  },
+  {
+   "bill": "SB336",
+   "committee": "Rules",
+   "continued_on": "3/6/2026"
+  },
+  {
+   "bill": "SB339",
+   "committee": "Labor and Commerce",
+   "continued_on": "3/5/2026"
+  },
+  {
+   "bill": "SB345",
+   "committee": "Courts of Justice",
+   "continued_on": "3/2/2026"
+  },
+  {
+   "bill": "SB349",
+   "committee": "General Laws and Technology",
+   "continued_on": "2/11/2026"
+  },
+  {
+   "bill": "SB350",
+   "committee": "Privileges and Elections",
+   "continued_on": "2/27/2026"
+  },
+  {
+   "bill": "SB353",
+   "committee": "Finance and Appropriations",
+   "continued_on": "2/12/2026"
+  },
+  {
+   "bill": "SB355",
+   "committee": "Local Government",
+   "continued_on": "2/2/2026"
+  },
+  {
+   "bill": "SB356",
+   "committee": "Finance and Appropriations",
+   "continued_on": "2/12/2026"
+  },
+  {
+   "bill": "SB363",
+   "committee": "Finance and Appropriations",
+   "continued_on": "2/3/2026"
+  },
+  {
+   "bill": "SB365",
+   "committee": "General Laws and Technology",
+   "continued_on": "2/4/2026"
+  },
+  {
+   "bill": "SB369",
+   "committee": "Courts of Justice",
+   "continued_on": "3/2/2026"
+  },
+  {
+   "bill": "SB376",
+   "committee": "Courts of Justice",
+   "continued_on": "3/2/2026"
+  },
+  {
+   "bill": "SB380",
+   "committee": "Finance and Appropriations",
+   "continued_on": "2/3/2026"
+  },
+  {
+   "bill": "SB392",
+   "committee": "Appropriations",
+   "continued_on": "3/9/2026"
+  },
+  {
+   "bill": "SB393",
+   "committee": "Finance and Appropriations",
+   "continued_on": "2/10/2026"
+  },
+  {
+   "bill": "SB4",
+   "committee": "Finance and Appropriations",
+   "continued_on": "2/10/2026"
+  },
+  {
+   "bill": "SB406",
+   "committee": "Courts of Justice",
+   "continued_on": "2/9/2026"
+  },
+  {
+   "bill": "SB412",
+   "committee": "Finance and Appropriations",
+   "continued_on": "2/12/2026"
+  },
+  {
+   "bill": "SB414",
+   "committee": "Finance and Appropriations",
+   "continued_on": "2/11/2026"
+  },
+  {
+   "bill": "SB415",
+   "committee": "Finance and Appropriations",
+   "continued_on": "2/11/2026"
+  },
+  {
+   "bill": "SB417",
+   "committee": "Finance and Appropriations",
+   "continued_on": "2/10/2026"
+  },
+  {
+   "bill": "SB419",
+   "committee": "Finance and Appropriations",
+   "continued_on": "2/3/2026"
+  },
+  {
+   "bill": "SB42",
+   "committee": "Rules",
+   "continued_on": "3/6/2026"
+  },
+  {
+   "bill": "SB422",
+   "committee": "Finance and Appropriations",
+   "continued_on": "2/10/2026"
+  },
+  {
+   "bill": "SB452",
+   "committee": "Finance and Appropriations",
+   "continued_on": "2/3/2026"
+  },
+  {
+   "bill": "SB456",
+   "committee": "Finance and Appropriations",
+   "continued_on": "2/11/2026"
+  },
+  {
+   "bill": "SB466",
+   "committee": "Commerce and Labor",
+   "continued_on": "2/12/2026"
+  },
+  {
+   "bill": "SB467",
+   "committee": "Commerce and Labor",
+   "continued_on": "2/9/2026"
+  },
+  {
+   "bill": "SB468",
+   "committee": "Finance and Appropriations",
+   "continued_on": "2/11/2026"
+  },
+  {
+   "bill": "SB472",
+   "committee": "Finance and Appropriations",
+   "continued_on": "2/11/2026"
+  },
+  {
+   "bill": "SB473",
+   "committee": "Agriculture, Conservation and Natural Resources",
+   "continued_on": "2/10/2026"
+  },
+  {
+   "bill": "SB474",
+   "committee": "Finance and Appropriations",
+   "continued_on": "2/3/2026"
+  },
+  {
+   "bill": "SB475",
+   "committee": "Finance and Appropriations",
+   "continued_on": "2/11/2026"
+  },
+  {
+   "bill": "SB481",
+   "committee": "Finance and Appropriations",
+   "continued_on": "2/11/2026"
+  },
+  {
+   "bill": "SB482",
+   "committee": "Rules",
+   "continued_on": "3/6/2026"
+  },
+  {
+   "bill": "SB485",
+   "committee": "Rules",
+   "continued_on": "3/6/2026"
+  },
+  {
+   "bill": "SB503",
+   "committee": "Commerce and Labor",
+   "continued_on": "2/12/2026"
+  },
+  {
+   "bill": "SB509",
+   "committee": "Commerce and Labor",
+   "continued_on": "2/9/2026"
+  },
+  {
+   "bill": "SB510",
+   "committee": "Finance and Appropriations",
+   "continued_on": "2/11/2026"
+  },
+  {
+   "bill": "SB519",
+   "committee": "Rules",
+   "continued_on": "3/6/2026"
+  },
+  {
+   "bill": "SB521",
+   "committee": "Agriculture, Conservation and Natural Resources",
+   "continued_on": "2/3/2026"
+  },
+  {
+   "bill": "SB523",
+   "committee": "Appropriations",
+   "continued_on": "2/25/2026"
+  },
+  {
+   "bill": "SB525",
+   "committee": "Local Government",
+   "continued_on": "2/2/2026"
+  },
+  {
+   "bill": "SB533",
+   "committee": "Privileges and Elections",
+   "continued_on": "1/20/2026"
+  },
+  {
+   "bill": "SB534",
+   "committee": "Education and Health",
+   "continued_on": "2/5/2026"
+  },
+  {
+   "bill": "SB538",
+   "committee": "Public Safety",
+   "continued_on": "2/27/2026"
+  },
+  {
+   "bill": "SB539",
+   "committee": "Finance and Appropriations",
+   "continued_on": "2/11/2026"
+  },
+  {
+   "bill": "SB541",
+   "committee": "Rules",
+   "continued_on": "3/6/2026"
+  },
+  {
+   "bill": "SB564",
+   "committee": "Appropriations",
+   "continued_on": "3/9/2026"
+  },
+  {
+   "bill": "SB570",
+   "committee": "Courts of Justice",
+   "continued_on": "2/11/2026"
+  },
+  {
+   "bill": "SB571",
+   "committee": "Finance and Appropriations",
+   "continued_on": "2/3/2026"
+  },
+  {
+   "bill": "SB578",
+   "committee": "General Laws and Technology",
+   "continued_on": "2/11/2026"
+  },
+  {
+   "bill": "SB579",
+   "committee": "Courts of Justice",
+   "continued_on": "2/11/2026"
+  },
+  {
+   "bill": "SB586",
+   "committee": "Communications, Technology and Innovation",
+   "continued_on": "2/23/2026"
+  },
+  {
+   "bill": "SB590",
+   "committee": "Finance and Appropriations",
+   "continued_on": "1/28/2026"
+  },
+  {
+   "bill": "SB601",
+   "committee": "Finance and Appropriations",
+   "continued_on": "1/28/2026"
+  },
+  {
+   "bill": "SB604",
+   "committee": "Finance and Appropriations",
+   "continued_on": "2/10/2026"
+  },
+  {
+   "bill": "SB606",
+   "committee": "Appropriations",
+   "continued_on": "3/9/2026"
+  },
+  {
+   "bill": "SB61",
+   "committee": "Finance and Appropriations",
+   "continued_on": "2/10/2026"
+  },
+  {
+   "bill": "SB611",
+   "committee": "Finance and Appropriations",
+   "continued_on": "2/3/2026"
+  },
+  {
+   "bill": "SB614",
+   "committee": "Rehabilitation and Social Services",
+   "continued_on": "1/30/2026"
+  },
+  {
+   "bill": "SB615",
+   "committee": "General Laws and Technology",
+   "continued_on": "1/28/2026"
+  },
+  {
+   "bill": "SB617",
+   "committee": "Agriculture, Conservation and Natural Resources",
+   "continued_on": "2/3/2026"
+  },
+  {
+   "bill": "SB618",
+   "committee": "Courts of Justice",
+   "continued_on": "2/4/2026"
+  },
+  {
+   "bill": "SB624",
+   "committee": "Courts of Justice",
+   "continued_on": "2/2/2026"
+  },
+  {
+   "bill": "SB629",
+   "committee": "Finance and Appropriations",
+   "continued_on": "2/10/2026"
+  },
+  {
+   "bill": "SB631",
+   "committee": "Courts of Justice",
+   "continued_on": "2/4/2026"
+  },
+  {
+   "bill": "SB638",
+   "committee": "Finance and Appropriations",
+   "continued_on": "2/11/2026"
+  },
+  {
+   "bill": "SB639",
+   "committee": "Education and Health",
+   "continued_on": "2/12/2026"
+  },
+  {
+   "bill": "SB642",
+   "committee": "Appropriations",
+   "continued_on": "3/2/2026"
+  },
+  {
+   "bill": "SB65",
+   "committee": "Privileges and Elections",
+   "continued_on": "1/27/2026"
+  },
+  {
+   "bill": "SB668",
+   "committee": "Finance and Appropriations",
+   "continued_on": "2/11/2026"
+  },
+  {
+   "bill": "SB670",
+   "committee": "Transportation",
+   "continued_on": "3/5/2026"
+  },
+  {
+   "bill": "SB672",
+   "committee": "Finance and Appropriations",
+   "continued_on": "2/3/2026"
+  },
+  {
+   "bill": "SB674",
+   "committee": "Finance and Appropriations",
+   "continued_on": "1/28/2026"
+  },
+  {
+   "bill": "SB675",
+   "committee": "Finance and Appropriations",
+   "continued_on": "2/3/2026"
+  },
+  {
+   "bill": "SB678",
+   "committee": "Finance and Appropriations",
+   "continued_on": "2/10/2026"
+  },
+  {
+   "bill": "SB684",
+   "committee": "Finance and Appropriations",
+   "continued_on": "2/10/2026"
+  },
+  {
+   "bill": "SB689",
+   "committee": "Courts of Justice",
+   "continued_on": "3/2/2026"
+  },
+  {
+   "bill": "SB694",
+   "committee": "Finance and Appropriations",
+   "continued_on": "1/28/2026"
+  },
+  {
+   "bill": "SB7",
+   "committee": "Finance and Appropriations",
+   "continued_on": "1/20/2026"
+  },
+  {
+   "bill": "SB700",
+   "committee": "Finance and Appropriations",
+   "continued_on": "2/12/2026"
+  },
+  {
+   "bill": "SB702",
+   "committee": "Finance and Appropriations",
+   "continued_on": "2/5/2026"
+  },
+  {
+   "bill": "SB708",
+   "committee": "Education and Health",
+   "continued_on": "2/12/2026"
+  },
+  {
+   "bill": "SB709",
+   "committee": "General Laws and Technology",
+   "continued_on": "2/4/2026"
+  },
+  {
+   "bill": "SB710",
+   "committee": "Finance and Appropriations",
+   "continued_on": "1/27/2026"
+  },
+  {
+   "bill": "SB715",
+   "committee": "Finance and Appropriations",
+   "continued_on": "2/10/2026"
+  },
+  {
+   "bill": "SB717",
+   "committee": "Counties, Cities and Towns",
+   "continued_on": "2/20/2026"
+  },
+  {
+   "bill": "SB721",
+   "committee": "Finance and Appropriations",
+   "continued_on": "2/12/2026"
+  },
+  {
+   "bill": "SB728",
+   "committee": "Education and Health",
+   "continued_on": "2/12/2026"
+  },
+  {
+   "bill": "SB729",
+   "committee": "Finance and Appropriations",
+   "continued_on": "2/3/2026"
+  },
+  {
+   "bill": "SB730",
+   "committee": "Finance and Appropriations",
+   "continued_on": "2/11/2026"
+  },
+  {
+   "bill": "SB737",
+   "committee": "General Laws and Technology",
+   "continued_on": "2/11/2026"
+  },
+  {
+   "bill": "SB739",
+   "committee": "Finance and Appropriations",
+   "continued_on": "2/11/2026"
+  },
+  {
+   "bill": "SB740",
+   "committee": "Finance and Appropriations",
+   "continued_on": "2/12/2026"
+  },
+  {
+   "bill": "SB741",
+   "committee": "Finance and Appropriations",
+   "continued_on": "2/11/2026"
+  },
+  {
+   "bill": "SB746",
+   "committee": "Courts of Justice",
+   "continued_on": "2/11/2026"
+  },
+  {
+   "bill": "SB747",
+   "committee": "Finance and Appropriations",
+   "continued_on": "1/28/2026"
+  },
+  {
+   "bill": "SB750",
+   "committee": "Finance and Appropriations",
+   "continued_on": "2/3/2026"
+  },
+  {
+   "bill": "SB751",
+   "committee": "Commerce and Labor",
+   "continued_on": "2/12/2026"
+  },
+  {
+   "bill": "SB760",
+   "committee": "Finance and Appropriations",
+   "continued_on": "2/11/2026"
+  },
+  {
+   "bill": "SB762",
+   "committee": "Finance and Appropriations",
+   "continued_on": "2/10/2026"
+  },
+  {
+   "bill": "SB763",
+   "committee": "Finance",
+   "continued_on": "2/25/2026"
+  },
+  {
+   "bill": "SB768",
+   "committee": "Finance and Appropriations",
+   "continued_on": "2/11/2026"
+  },
+  {
+   "bill": "SB773",
+   "committee": "Finance and Appropriations",
+   "continued_on": "2/12/2026"
+  },
+  {
+   "bill": "SB775",
+   "committee": "Finance and Appropriations",
+   "continued_on": "2/11/2026"
+  },
+  {
+   "bill": "SB782",
+   "committee": "Commerce and Labor",
+   "continued_on": "2/2/2026"
+  },
+  {
+   "bill": "SB786",
+   "committee": "Finance and Appropriations",
+   "continued_on": "2/5/2026"
+  },
+  {
+   "bill": "SB787",
+   "committee": "Finance and Appropriations",
+   "continued_on": "2/12/2026"
+  },
+  {
+   "bill": "SB791",
+   "committee": "Rehabilitation and Social Services",
+   "continued_on": "2/13/2026"
+  },
+  {
+   "bill": "SB792",
+   "committee": "Agriculture, Conservation and Natural Resources",
+   "continued_on": "2/3/2026"
+  },
+  {
+   "bill": "SB793",
+   "committee": "Finance and Appropriations",
+   "continued_on": "2/11/2026"
+  },
+  {
+   "bill": "SB796",
+   "committee": "Communications, Technology and Innovation",
+   "continued_on": "3/2/2026"
+  },
+  {
+   "bill": "SB798",
+   "committee": "Courts of Justice",
+   "continued_on": "2/11/2026"
+  },
+  {
+   "bill": "SB8",
+   "committee": "Finance and Appropriations",
+   "continued_on": "1/28/2026"
+  },
+  {
+   "bill": "SB80",
+   "committee": "Finance and Appropriations",
+   "continued_on": "2/11/2026"
+  },
+  {
+   "bill": "SB808",
+   "committee": "Education and Health",
+   "continued_on": "2/5/2026"
+  },
+  {
+   "bill": "SB811",
+   "committee": "Education and Health",
+   "continued_on": "2/12/2026"
+  },
+  {
+   "bill": "SB814",
+   "committee": "Agriculture, Conservation and Natural Resources",
+   "continued_on": "1/27/2026"
+  },
+  {
+   "bill": "SB821",
+   "committee": "Courts of Justice",
+   "continued_on": "2/11/2026"
+  },
+  {
+   "bill": "SB829",
+   "committee": "Finance and Appropriations",
+   "continued_on": "2/3/2026"
+  },
+  {
+   "bill": "SB831",
+   "committee": "Finance and Appropriations",
+   "continued_on": "2/12/2026"
+  },
+  {
+   "bill": "SB833",
+   "committee": "Finance and Appropriations",
+   "continued_on": "2/11/2026"
+  },
+  {
+   "bill": "SB9",
+   "committee": "Finance and Appropriations",
+   "continued_on": "1/20/2026"
+  },
+  {
+   "bill": "SB90",
+   "committee": "Finance and Appropriations",
+   "continued_on": "2/10/2026"
+  },
+  {
+   "bill": "SB92",
+   "committee": "Finance and Appropriations",
+   "continued_on": "2/11/2026"
+  },
+  {
+   "bill": "SB93",
+   "committee": "Finance and Appropriations",
+   "continued_on": "2/5/2026"
+  },
+  {
+   "bill": "SB97",
+   "committee": "Appropriations",
+   "continued_on": "3/9/2026"
+  },
+  {
+   "bill": "SB99",
+   "committee": "Finance and Appropriations",
+   "continued_on": "2/11/2026"
+  }
+ ],
+ "claim": "bill_states: Continued - 12 of 1,348 came back",
+ "frozen_on": "2026-09-24",
+ "n": 430,
+ "prediction": "<= ~1% of these bills get any committee action in the 2027 session"
+}

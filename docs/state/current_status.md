@@ -66,7 +66,7 @@ status: active
 
 ## READY
 - [[testing/room_memory]] — committees remember ideas (OR 15.2 same room vs 5.5 elsewhere, p=0.013). Needs the owner's Standard #3 call on exact-title equality, and a demo bill with a prior attempt (HB 1515 has none).
-- [[testing/continuance]] — the `Left in <committee>` date is observed for ONE cycle (18-19 Nov 2024). Re-read `20261/HISTORY.CSV` in Nov 2026 for the second observation before the page ever prints it as a deadline.
+- [[testing/continuance]] — FORWARD TEST FROZEN 2026-09-24 (430 bills, predict <=~1% move in 2027). Score after the 2027 session convenes; check the Nov 2026 "Left in" date first.
 - [[knowledge/campaign_finance_ingest]] — the ELECT committee->legislator join resolves only 54 of 158 sitting patrons; needs a join on committee identity, not the free-text office field.
 
 ## RECENTLY LANDED (newest first; full detail in [[log]])
