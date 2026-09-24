@@ -2,8 +2,24 @@
 tags: [knowledge, campaign-finance, elect, money, sources, join, open-loop]
 updated: 2026-09-16
 status: active
-open_loop: The committee->legislator join is unsolved. OfficeSought is blank on ~1,000 reports/month and IsGeneralAssembly is a dead column, so only 34% of sitting legislators match. Closing it needs a join on committee identity, not office text.
+open_loop: Join now 120 of 148 sitting members (81%, no known wrong matches), up from 54. The 28 still missing are almost all first elected 2024-25 — only Oct 2023 and Jan 2024 filings are cached. Closing it needs 2025 Report.csv files (~6 MB each, ELECT, keyless) — a download awaiting the owner's OK.
 ---
+
+> **UPDATE 2026-09-24 — the join, re-diagnosed and rebuilt (`finance.committees` + `finance.join_members`).**
+> The old diagnosis was wrong: blank offices do NOT drop legislators — only 7 candidate committees ever file
+> one (the ~5,000 blanks are PACs). The real traps, all measured:
+> 1. **`OfficeSought` has 28 spellings** of the two chambers ("Delegate", "State Senator", "Senate",
+>    "Hous of Delegates", "…– Old", "…– 2001 LD Lines"), plus bare **"SD"/"HD"** (Bagby, Carroll Foy,
+>    VanValkenburg). The two canonical strings cover ~44% of reports. Audit point #1 again.
+> 2. **"0.00" in `OfficeSought`** on some report types (Knight, Leftwich) — a placeholder, not a column shift
+>    (39 fields, correct). Kept as chamber-unknown and matched on NAME ALONE, flagged.
+> 3. **A surname-only fallback produced wrong people** — Gretchen Bulova got David Bulova's committee, Nicole
+>    Cole got Joshua Cole's, Wren Williams got LeOtis Williams's. Removed: a first name must agree (exact,
+>    3-letter prefix, or a short explicit nickname list). A donor record on the wrong legislator is worse
+>    than a gap.
+> **Result: 120 of 148 sitting members, 0 ambiguous, 0 known wrong** (12/12 random spot-checks, all 9
+> first-name-differs cases verified as nicknames). Missing = members first elected 2024–25 plus chamber
+> switchers (Guzman, Srinivasan, Bennett-Parker last filed for their previous chamber).
 
 # ELECT campaign finance — what is in the files, and the join that is not solved
 

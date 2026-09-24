@@ -2,7 +2,7 @@
 tags: [knowledge, compliance, legal, lis, terms, blocker, owner-decision]
 updated: 2026-08-01
 status: active
-open_loop: LIS API ToS restricts the Services to "personal and non-commercial use only" while this project is a commercial product. Needs a DLAS answer on commercial terms before launch. Owner decision, not an engineering one.
+open_loop: LIS API ToS restricts the Services to "personal and non-commercial use only". OWNER DECISION 2026-09-24 — no organizational or commercial use of any kind until an API arrangement with DLAS exists (the real-time API is the product's edge over CSV-only trackers); grant funding being explored to open that deal. Not an engineering item.
 ---
 
 # LIS API Terms of Service — the non-commercial clause (owner-supplied 2026-08-01)
@@ -38,6 +38,16 @@ restriction we are operating under.** That inconsistency is the finding.
 
 **This is not a distinction anyone here should rule on.** It is written down so the question asked of DLAS
 is precise rather than vague.
+
+## OWNER DECISION 2026-09-24 — the line is the API deal, not revenue and not org rollout
+
+> *"there is no reality in my understanding where it goes online for organizational/commerical use without
+> something worked out for api usage bc thats where we get our real time data from, otherwise ours would be no
+> better then those that rely on csv."*
+
+So the "personal ends at org rollout" distinction below is **moot in practice**: nothing leaves personal use
+before a DLAS arrangement. Funding for that deal (grants) is being explored and is not a code concern. The
+structural map below stands as the record of *why* the API is the gate.
 
 ## The four words are four DIFFERENT limits (owner asked, 2026-09-23)
 
