@@ -1,6 +1,6 @@
 ---
 tags: [testing, research, war-room, literature, method]
-updated: 2026-09-10
+updated: 2026-09-24
 status: active
 ---
 
@@ -137,6 +137,24 @@ id `N12-1033`, which is a **stylometry paper about detecting non-native English 
 sitting in the corpus as apparent evidence. Corrected to `N12-1097`. **Verify a fetched source says what
 you cited it for before counting it as read**; a wrong source reads as support and its word count reads as
 diligence.
+
+## Digest pass 2 — every finding banked since 09-10, checked against all 15 sources (2026-09-24)
+
+**Method, stated so it is not oversold:** a keyed pass, not a cover-to-cover read. Each banked finding was
+turned into search terms, run across all 15 texts (hit matrix below), and every hit read in context.
+**Nothing in the corpus contradicts a banked finding.** Four sources sharpen one.
+
+| our finding | what the literature says | verdict |
+|---|---|---|
+| **Continuance is a soft kill** ([[testing/continuance]]) | Virginia's OWN glossary: carry over *"provides for its reconsideration at the next regular Session."* | **The official vocabulary promises the opposite of the record** (0 of 333 reconsidered). That is the strongest argument yet for the tag: a volunteer who reads the glossary is told the bill is alive. |
+| **Chair effect retracted** ([[failures/assumptions_audit]] #135) | Yano et al. (Congress): *sponsor is the committee's chair* weight **0.098**, against **0.233** for *sponsor in the majority AND on the committee* | **Consistent.** The office adds little beyond being a majority member of the room — which is also our subcommittee-seat finding (+11). |
+| **Donor alignment does not move votes** (+3.9 pt) | You (Harvard): contributions predict **contacts**, and *"past contributions are a much stronger predictor of current contacts than concurrent contributions."* Butler & Miller: lobbying predicts the **agenda**, not committee votes. | **Explains our null rather than contradicting it.** Money buys access upstream of the vote; measuring it at the vote was measuring the wrong place — the same reason roll-call measures keep coming back empty (#136, 69% of deaths on the clock). |
+| **Room memory** ([[testing/room_memory]]) | Butler & Miller control for *"whether the bill was introduced in a previous session"* as a confounder; the coefficient is not printed in the text. | **Supportive in design, no number to compare.** No source measures cross-session memory at the room level — this appears to be ours. |
+| **Companion filed** (23 pt) · **patron on the subcommittee** (+11) | Eidelman's 1.3M-bill feature set includes *sponsors bicameral* and *number of sponsors on the committee*. | Known features, independently chosen — consistent. |
+| **Cross-state "Tried before"** | Butler & Miller cite Hertel-Fernandez (2014), *Who Passes Business's "Model Bills"?* — model bills pass more in low-capacity legislatures. | **A documented lead for the owner's cross-state half. Not in the corpus — unread.** |
+
+**Gaps, recorded:** no source studies carry-over outcomes, electoral vulnerability at state level, or
+cross-session room behaviour. Those findings stand on our data alone.
 
 ## Related
 

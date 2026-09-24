@@ -8,6 +8,21 @@ status: active
 
 Append-only, reverse-chronological (newest at top). Each entry opens with `## [YYYY-MM-DD] <kind> | <title>` so `grep "^## \[" log.md | head -20` gives a parseable timeline.
 
+## [2026-09-24] queue | finance join rebuilt, two READY items closed, owner decision on the API gate
+
+Owner: *"there is no reality… where it goes online for organizational/commerical use without something worked
+out for api usage… finish the work in the que."* Decision recorded in [[knowledge/lis_tos_commercial_use]].
+
+- **[[knowledge/campaign_finance_ingest]] — 54 → 120 of 148 sitting members, 0 known wrong.** The old
+  diagnosis (blank offices) was wrong: 28 spellings of the two chambers plus bare "SD"/"HD", a "0.00"
+  placeholder office, and a surname-only fallback that assigned three committees to the WRONG PEOPLE (Bulova,
+  Cole, Williams). Remaining 28 need 2025 filings — a download awaiting the owner's OK.
+- **[[testing/venue_effect]] closed.** The resolver fix shipped 09-10; "who is gettable" resolved to the raw
+  no-vote count ([[testing/member_signals]]: ship the count, not a score), already the War Room column.
+- **[[testing/literature]] closed.** Keyed pass of every finding since 09-10 against all 15 sources: nothing
+  contradicts; Virginia's own glossary promises continued bills are *reconsidered* (0 of 333 were); You
+  (Harvard) explains the donor null — money predicts contacts, i.e. access upstream of the vote.
+
 ## [2026-09-23] finding | committees remember ideas — and the clock downgraded
 
 Owner: *"so your big finding is longer sessions means bills have more time to get heard? please be serious."*

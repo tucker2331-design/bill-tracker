@@ -65,8 +65,6 @@ status: active
 - Also open (owner-triggered): `/code-review ultra`. ~~co-patrons backfill~~ — superseded, see above.
 
 ## READY
-- [[testing/venue_effect]] — route the member layer through the canonical patron resolver, then ship 'who in this room is gettable'.
-- [[testing/literature]] — the 15-source corpus is fetched but not read end-to-end; run the digest pass.
 - [[testing/room_memory]] — committees remember ideas (OR 15.2 same room vs 5.5 elsewhere, p=0.013). Needs the owner's Standard #3 call on exact-title equality, and a demo bill with a prior attempt (HB 1515 has none).
 - [[testing/continuance]] — the `Left in <committee>` date is observed for ONE cycle (18-19 Nov 2024). Re-read `20261/HISTORY.CSV` in Nov 2026 for the second observation before the page ever prints it as a deadline.
 - [[knowledge/campaign_finance_ingest]] — the ELECT committee->legislator join resolves only 54 of 158 sitting patrons; needs a join on committee identity, not the free-text office field.
