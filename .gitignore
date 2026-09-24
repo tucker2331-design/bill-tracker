@@ -36,3 +36,6 @@ tools/literature/sources/
 # public directory (apps.elections.virginia.gov/SBE_CSV/CF/<YYYY_MM>/). The FETCHER is
 # committed; the bytes are not. Same rule as the Open States session archives.
 tools/historical_cache/va_finance/
+
+# derived content-vote cache, rebuilt by tools/calibration/content_votes.py
+tools/calibration/content_votes_cache.pkl

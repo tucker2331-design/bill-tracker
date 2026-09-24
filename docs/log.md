@@ -8,6 +8,16 @@ status: active
 
 Append-only, reverse-chronological (newest at top). Each entry opens with `## [YYYY-MM-DD] <kind> | <title>` so `grep "^## \[" log.md | head -20` gives a parseable timeline.
 
+## [2026-09-24] finding | content predicts which opposite-party legislator crosses
+
+Owner asked for controversy measured from content *"historically and relative to individual politicans"*,
+multi-signal. [[testing/content_votes]]: 1.33M legislator votes, four layers (what we knew / bill controversy /
+party on this content / this legislator on this content), earlier years only, scored on unseen 2025-26.
+Opposite-party legislators on contested bills: AUC 0.508 -> 0.699. Ranked pre-vote: 12% -> 90% backing across
+fifths. Ranking not probability; ~13% coverage; summaries not text. Traps: Open States vote labels unusable,
+Open States DOES have committee roll calls, a mask-index scoring bug, and `party_map.json` quarantined (three
+Republicans listed as Democrats, unused).
+
 ## [2026-09-24] finding | room memory holds on CONTENT; finance parked; Open States terms read in full
 
 Owner: titles are *"performative and often hide the real controversial text"*; *"if its irrelevent then why keep

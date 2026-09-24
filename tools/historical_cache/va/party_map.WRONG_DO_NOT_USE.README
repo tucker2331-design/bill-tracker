@@ -1,0 +1,4 @@
+QUARANTINED 2026-09-24. party_map.json (name-keyed) lists three Republicans as Democrats:
+Les Adams, Tim Anderson, John McGuire. Checked against openstates_va_people.json: 107 agree, 3 wrong.
+No code reads it (features.py reads party_<code>.json, which verified 135/135 and 137/137).
+Kept, not deleted, so the error is inspectable. Do not use.
