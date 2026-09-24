@@ -1,10 +1,11 @@
 ---
 tags: [knowledge, campaign-finance, elect, money, sources, join, open-loop]
 updated: 2026-09-16
-status: active
-open_loop: Join now 120 of 148 sitting members (81%, no known wrong matches), up from 54. The 28 still missing are almost all first elected 2024-25 — only Oct 2023 and Jan 2024 filings are cached. Closing it needs 2025 Report.csv files (~6 MB each, ELECT, keyless) — a download awaiting the owner's OK.
+status: archived
 ---
 
+> **PARKED 2026-09-24 — owner: *"if its irrelevent then why keep gathering data?"*** Correct: money moves access, not votes ([[testing/money_and_vulnerability]] +3.9 pt; You, Harvard, in [[testing/literature]]), and nothing on the War Room uses it. The join work below is kept so it is not redone if a use appears; no further data is gathered.
+>
 > **UPDATE 2026-09-24 — the join, re-diagnosed and rebuilt (`finance.committees` + `finance.join_members`).**
 > The old diagnosis was wrong: blank offices do NOT drop legislators — only 7 candidate committees ever file
 > one (the ~5,000 blanks are PACs). The real traps, all measured:

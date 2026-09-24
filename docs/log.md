@@ -8,6 +8,23 @@ status: active
 
 Append-only, reverse-chronological (newest at top). Each entry opens with `## [YYYY-MM-DD] <kind> | <title>` so `grep "^## \[" log.md | head -20` gives a parseable timeline.
 
+## [2026-09-24] finding | room memory holds on CONTENT; finance parked; Open States terms read in full
+
+Owner: titles are *"performative and often hide the real controversial text"*; *"if its irrelevent then why keep
+gathering data?"*; re-read Open States terms for the personal distinction.
+
+- **[[testing/room_memory]] on content.** Official LIS summaries (already cached) with the title stripped,
+  each bill vs its most similar earlier summary. Same room, standing fixed: ≥0.50 similarity → a room that killed
+  it kills it again ~91%, one that cleared it ~30% — **and it holds with titles DIFFERENT**. Room vs idea:
+  same committee OR 14.9 vs different 3.2, **p = 2.5e-06** (titles: p = 0.013). Tag becomes ~5×. Carryover-twin
+  artefact caught again (99.0% → 94.5%).
+- **Campaign finance parked** — money moves access, not votes; nothing on the War Room uses it.
+- **Open States terms read in full**: no personal/commercial/org/enterprise clause at all. Real risks: at-will
+  termination by a commercial competitor (Plural), terms can change, and *who uses the service* may be shared
+  with funders.
+- **Virginia bill text is also on the keyless LIS blob** (`/files/<id>.HTML`, linked from Open States) — not
+  API-only. Not fetched; ~20k files is an LIS-load question for the owner.
+
 ## [2026-09-24] queue | finance join rebuilt, two READY items closed, owner decision on the API gate
 
 Owner: *"there is no reality… where it goes online for organizational/commerical use without something worked

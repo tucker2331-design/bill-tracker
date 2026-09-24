@@ -2,10 +2,35 @@
 tags: [testing, calibration, war-room, committee, history, lever]
 updated: 2026-09-23
 status: active
-open_loop: Not yet on the War Room. Needs (1) the owner's call on whether exact-title EQUALITY of an official LIS field counts as structural identity under Standard #3 (argued yes below; the subject-clause rule is text parsing and stays internal), (2) a demo bill that HAS a prior attempt — HB 1515 has none.
+open_loop: CONTENT VERSION SUPERSEDES TITLES (2026-09-24, tools/calibration/summary_memory.py). Before the War Room, (1) re-measure on FULL bill text once fetched (summaries are a proxy), (2) calibrate display thresholds on the summary-similarity scale (not the VA-companion text scale).
 ---
 
 # Committees remember ideas
+
+> **SUPERSEDED ON CONTENT, 2026-09-24.** Owner: *"the titles mean nothing they are performative and often hide
+> the real controversial text."* Re-tested on the official LIS **summary as introduced** (already in the cached
+> Open States zips, title text stripped out), each bill against its most similar earlier summary,
+> `tools/calibration/summary_memory.py`. Same first committee, patron standing held fixed:
+>
+> | summary similarity | room killed it before → dies again | room cleared it before → dies | OR | …with titles DIFFERENT |
+> |---|---|---|---|---|
+> | 0.80+ | 94.5% | 42.9% | 20.4 | 93% vs 30%, OR 23.6 |
+> | 0.50–0.80 | 90.1% | 29.2% | 20.2 | 91% vs 33%, OR 16.9 |
+> | 0.30–0.50 | 91.2% | 45.9% | 11.5 | 92% vs 46%, OR 12.7 |
+> | 0.15–0.30 | 82.6% | 29.0% | 11.2 | 80% vs 31%, OR 8.8 |
+> | 0.05–0.15 | 78.0% | 46.0% | 4.1 | 76% vs 47%, OR 3.6 |
+>
+> **It holds when the titles differ, so it is the content.** The room effect is far clearer than on titles:
+> similarity ≥ 0.15, **same committee OR 14.9 [9.3–23.9] vs different committee 3.2 [2.1–5.0], z = +4.71,
+> p = 2.5e-06** (titles gave p = 0.013). Stable across eras: 16.7 (2021–22), 16.2 (2024–26). **The War Room
+> tag becomes `Same committee · ~5×`, not 3×.**
+>
+> **An artefact caught on the way:** the first run read **99.0%** at ≥ 0.80 — carryover twins (a bill continued
+> 2024 → 2025 appears in both files with the same summary, and Open States never updates the second copy).
+> Excluded; the band drops to 94.5% on n = 73. Same artefact as [[testing/continuance]], second time.
+> 2023 has no summaries in the source and is excluded both as a matched and as an earlier bill.
+
+## The title version (kept for the record; not the product basis)
 
 Owner, 2026-09-23: *"so your big finding is longer sessions means bills have more time to get heard? please
 be serious."* Fair — the clock result was mostly the crossover deadline restated ([[testing/clock]]). This is

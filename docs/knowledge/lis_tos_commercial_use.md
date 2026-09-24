@@ -69,12 +69,22 @@ the plain reading, not a ruling — and registration asking for an organization 
 
 | product piece | data channel | terms exposure |
 |---|---|---|
-| every historical statistic and calibration finding | Open States bulk CSV | **none** — CC0 |
+| every historical statistic and calibration finding | Open States bulk CSV | **none** — terms re-read IN FULL 2026-09-24 (effective 2021-09-15): no personal / non-commercial / organization / enterprise / internal-use / redistribution clause of any kind; API, bulk and website under one set of terms. See the notes below the table |
 | War Room room stats, roll calls 2025/26 | LIS blob CSVs (no key, no assent) | **unclear**, probably outside §2 — unconfirmed |
 | **calendar — meeting schedules** | LIS `Schedule` API — **no CSV equivalent exists** | **§2**, no alternative channel |
-| **Virginia bill text** ("Tried before", VA half) | LIS `LegislationText` API — **no CSV equivalent** | **§2**, no alternative channel *unless* Open States bulk JSON embeds VA text |
+| **Virginia bill text** ("Tried before", VA half) | LIS `LegislationText` API — **but also** static HTML files on the keyless blob, `lis.blob.core.windows.net/files/<id>.HTML`, which Open States' own `bill_version_links` point to (found 2026-09-24, not yet fetched) | same **"unclear"** class as the blob CSVs, not §2-only. Fetching ~20k files is an LIS-load question — owner's OK first |
 | other states' outcomes / metadata | Open States | none — CC0 |
 | other states' bill TEXT | each state's own site (Open States links, does not host) | per-state terms, unchecked |
+
+**Open States terms, read in full 2026-09-24 — the clauses that DO matter:** (1) *"terminate or deny you access
+… at any time for any other reason in our sole discretion"* — the same at-will risk as LIS §9, from a source now
+run by **Plural, a commercial competitor**; keep downloaded data cached so we never depend on re-fetching;
+(2) terms may change at any time and continued use is acceptance — **re-read before any commercial step**;
+(3) *"no affiliation or endorsement may be implied"* — attribution must credit without implying endorsement;
+(4) you warrant your use *"will not infringe … intellectual property rights of any third party"* — relevant only
+to other states' bill TEXT, which lives on the states' own sites; (5) **privacy: *"Information on who uses our
+Services … may be shared with third parties for the purpose of securing funding."*** Contact details are not
+shared, but the fact that we use it could be. Relevant to the owner's wish to stay low-profile.
 
 **Structural verdict:** the choices made so far do not trap the product — the historical layer is CC0, and
 LegiScan and Access were both caught before signing. **The one real dependency is a licence, not code:**
