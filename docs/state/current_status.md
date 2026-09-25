@@ -65,6 +65,7 @@ status: active
 - Also open (owner-triggered): `/code-review ultra`. ~~co-patrons backfill~~ — superseded, see above.
 
 ## READY
+- [[testing/first_vote]] — first-vote model at 86.2% (base 73.9%), other-party 80.7%, party position 84.0% on 2025; full-text layer next, then 2026 scored once.
 - [[testing/content_votes]] — content predicts which opposite-party legislator crosses (AUC 0.51 -> 0.70, held out). Next: full text, wider coverage, owner's Tier-3 call on display.
 - [[testing/room_memory]] — committees remember ideas (OR 15.2 same room vs 5.5 elsewhere, p=0.013). Needs the owner's Standard #3 call on exact-title equality, and a demo bill with a prior attempt (HB 1515 has none).
 - [[testing/continuance]] — FORWARD TEST FROZEN 2026-09-24 (430 bills, predict <=~1% move in 2027). Score after the 2027 session convenes; check the Nov 2026 "Left in" date first.

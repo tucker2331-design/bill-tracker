@@ -39,3 +39,9 @@ tools/historical_cache/va_finance/
 
 # derived content-vote cache, rebuilt by tools/calibration/content_votes.py
 tools/calibration/content_votes_cache.pkl
+
+# fetched bill text corpus (large, re-creatable, never a source of truth)
+.va_text_corpus/
+
+# derived first-vote cache
+tools/calibration/first_vote_cache.pkl

@@ -7,6 +7,14 @@ open_loop: Research result, NOT a feature. Before anything reaches the War Room 
 
 # Controversy measured from content — per bill, per party, per legislator
 
+> ## ⚠️ CORRECTION 2026-09-25 — 1,262 roll calls had their direction read backwards
+> The ANTI rule contained "failed", "defeated" and "reject", so *"Failed to report (defeated) (6-Y 8-N)"* was
+> treated as a kill motion and every ballot flipped — 2.7% of roll calls, concentrated in the CLOSE votes.
+> Those words describe the outcome of a motion to report or pass, where Y is still FOR the bill. Fixed
+> (ANTI = table / indefinitely / strike / continue only; substitute rejections set aside as procedural).
+> **Every number moved UP:** all votes 0.907 → 0.913 ranking, 90.3% → 91.2% accuracy; other-party first vote
+> 0.716 → **0.744**, 61.4% → **66.7%** accuracy vs a 55.9% baseline. Tables below are the pre-fix run, kept.
+>
 > ## ROUND 2 (2026-09-25) — accuracy, and every ingredient added and removed
 > Owner: *"whats the accuracy? is the info you are inputing the important info? how does the accuracy
 > changing adding and removing."* Three new ingredients (co-patrons from the legislator's party; the

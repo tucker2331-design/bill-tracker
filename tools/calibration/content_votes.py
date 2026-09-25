@@ -36,11 +36,16 @@ PARTIES = ("Democratic", "Republican")
 # Open States' own vote labels are unusable: EVERY 2024 roll call is classified "['passage']" (including
 # "Subcommittee recommends reporting") and every 2025 one is "[]". So venue and DIRECTION are read from the
 # motion text. Direction is the contested.py trick: a YES on "laying on the table" is a vote to KILL.
+# DIRECTION BUG FIXED 2026-09-25: "failed", "defeated" and "reject" were in ANTI, so "Failed to report
+# (defeated) (6-Y 8-N)" was read as a KILL motion and every ballot's direction flipped -- 1,262 roll calls
+# (2.7%), concentrated in the CLOSE votes. Those words describe the OUTCOME of a motion to report or pass,
+# where Y is still FOR the bill. ANTI is now only motions whose YES means kill.
 ANTI = re.compile(r"laying on the table|\btabled?\b|passing by indefinitely|passed by indefinitely|strik|"
-                  r"continu|failed|defeated|reject", re.I)
-PRO = re.compile(r"report|passed|passage|agreed to|adopt", re.I)
+                  r"continu", re.I)
+PRO = re.compile(r"report|passed|passage|agreed to|adopt|defeated", re.I)
 PROCEDURAL = re.compile(r"constitutional reading|reading of|rules suspended|reconsider|engross|"
-                        r"passed by for the day|motion to|take up|recommit|conference|governor", re.I)
+                        r"passed by for the day|motion to|take up|recommit|conference|governor|"
+                        r"substitute rejected|amendment rejected|vote:\s*rejected", re.I)
 
 
 def venue(t):
