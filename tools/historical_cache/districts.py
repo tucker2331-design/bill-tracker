@@ -37,7 +37,13 @@ ACS_YEAR = "2023"
 # B03002 = race/ethnicity; B19013 = median household income; B15003 = educational attainment
 ACS_VARS = ("NAME", "B03002_001E", "B03002_003E", "B03002_004E", "B03002_012E",
             "B19013_001E", "B15003_001E", "B15003_022E", "B15003_023E",
-            "B15003_024E", "B15003_025E")
+            "B15003_024E", "B15003_025E",
+            # added 2026-09-26: poverty (B17001), home ownership (B25003), median age (B01002)
+            "B17001_001E", "B17001_002E", "B25003_001E", "B25003_002E", "B01002_001E")
+# The Census API now REQUIRES a key (the "no key under 500/day" note above is out of date -- measured
+# 2026-09-16: HTTP 200 with an HTML "Missing Key" page, the same false-200 trap the vault documents for LIS).
+# Read from the environment ONLY; never printed, logged, cached, or committed.
+CENSUS_KEY_ENV = "CENSUS_API_KEY"
 
 
 def _get(url, headers=None, timeout=45):
@@ -80,13 +86,25 @@ def fetch_acs():
         if os.path.exists(path):
             print(f"  cached acs {tag}")
             continue
-        q = urllib.parse.urlencode({"get": ",".join(ACS_VARS), "for": f"{layer}:*", "in": "state:51"})
+        key = (os.environ.get(CENSUS_KEY_ENV) or "").strip()
+        if not key:
+            print(f"  FAIL acs {tag}: set {CENSUS_KEY_ENV} in your environment first")
+            return 1
+        q = urllib.parse.urlencode({"get": ",".join(ACS_VARS), "for": f"{layer}:*", "in": "state:51",
+                                    "key": key})
         st, raw = _get(f"https://api.census.gov/data/{ACS_YEAR}/acs/acs5?{q}",
                        {"User-Agent": "va-bill-tracker/1.0 (research)"})
         if st != 200:
             print(f"  FAIL acs {tag}: HTTP {st}")
             return 1
-        rows = json.loads(raw)
+        try:
+            rows = json.loads(raw)                 # a 200 carrying an HTML page is a FAILURE, not data
+        except ValueError:
+            print(f"  FAIL acs {tag}: HTTP 200 but not JSON (bad/missing key page?) -- nothing cached")
+            return 1
+        if not isinstance(rows, list) or len(rows) < 10:
+            print(f"  FAIL acs {tag}: unexpected payload shape -- nothing cached")
+            return 1
         with gzip.open(path, "wt", encoding="utf-8") as fh:
             json.dump(rows, fh)
         print(f"  acs {tag}: {len(rows) - 1} districts cached")
@@ -95,9 +113,10 @@ def fetch_acs():
 
 
 def main():
-    print("LIS member lists (2 requests, authorization-gated):")
-    if fetch_members():
-        return 1
+    if "--acs-only" not in sys.argv:
+        print("LIS member lists (2 requests, authorization-gated):")
+        if fetch_members():
+            return 1
     print("Census ACS by state legislative district (2 requests, public domain):")
     return fetch_acs()
 
