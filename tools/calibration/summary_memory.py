@@ -33,7 +33,7 @@ def summaries():
     out = {}
     for z in sorted(glob.glob(os.path.join(ZIPS, "VA_20*.zip"))):
         s = os.path.basename(z)[3:-4]
-        if not s[:4].isdigit() or int(s[:4]) < 2020 or "S" in s:
+        if not s[:4].isdigit() or int(s[:4]) < 2017 or "S" in s:
             continue
         zf = zipfile.ZipFile(z)
         names = zf.namelist()

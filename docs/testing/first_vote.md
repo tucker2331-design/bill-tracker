@@ -54,6 +54,37 @@ legislator-on-subject records: 85.9% vs 86.2%, within noise. Bill-level signals 
 close to call". The confidence cutoff is fixed on 2025 and carried unchanged into the 2026 test — choosing it on
 2026 would be tuning on the answer.
 
+## The plateau — tested from every direction (2026-09-25/26)
+
+Owner: *"look into more to close this gap… consider things like district location composition… see if you
+can 2x it."* Every attempt, same protocol (tune 2025, 2026 locked):
+
+| added | all | other-party | party position | hardest third |
+|---|---|---|---|---|
+| (tuned model) | **86.2%** | 80.7% | 84.0% | — |
+| subject labels (85% coverage) | 85.9% | 79.9% | 83.2% | — |
+| actual subcommittee, this-session room, legislator×patron, companion's vote | 85.8% | 80.1% | 83.3% | 66.8% |
+| full-text structural flags (2025 layer) | 84.9% | 78.7% | 82.8% | 66.8% |
+| full-text similar bills (47% coverage) | 85.1% | 79.2% | 82.6% | 67.5% |
+| ideal points, per chamber (district proxy) | 85.6% | 79.4% | 83.5% | 66.3% |
+| + 2019 training year | 85.6% | 79.6% | 83.4% | 67.2% |
+| training on fewer years | 84.6–85.1% | — | — | — |
+
+**Every idea lands within ±0.6 of 86%.** The remaining error is almost entirely *which way a party goes on this
+bill in this room* (ceiling with perfect party positions 97.3%). That is decided in caucus and is not in any public
+record we hold. **The hardest third sits at 66–68% — inside the owner's 60–70% target.**
+
+**Ideal points, face validity:** per chamber (a combined fit let the House swamp the Senate and made every
+"moderate" a senator near zero). Dimension 1 separates the parties 100%; the most moderate include the 2024
+swing-seat senators (Perry, Pekarsky, VanValkenburg) and, historically, Petersen/Lewis (D) and Vogel/Hanger (R).
+
+**2017–18 excluded from training:** their committee roll calls carry counts but no names, so each bill's first
+NAMED vote is its floor vote — 166,000 floor ballots that would have been over half the training set.
+
+**What could still move party positions (each needs the owner):** an LLM reading each bill for its political
+charge (~10k API calls, cost); Census district composition (a free key only the owner can register); the org's
+own positions and contact notes (caucus-level information the public record lacks).
+
 ## Traps caught, all before any number was reported
 1. **Direction bug — 1,262 roll calls (2.7%) read backwards.** "Failed to report (defeated)" was treated as a kill
    motion. Fixing it moved every number up.

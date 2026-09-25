@@ -29,7 +29,10 @@ import summary_memory as SM
 
 ZIPS = os.path.join(HERE, "..", "historical_cache", "openstates_va")
 CACHE = os.path.join(HERE, "content_votes_cache.pkl")
-YEARS = ("2020", "2021", "2022", "2024", "2025", "2026")   # 2023 has no summaries in the source
+YEARS = ("2017", "2018", "2019", "2020", "2021", "2022", "2024", "2025", "2026")
+# 2023 has no legislator-level votes in this source (vote_people.csv absent) and no summaries.
+# 2017-19 lack committee ACTIONS (openstates_committee_gap) but their VOTE files carry committee and
+# subcommittee roll calls -- votes are usable, action-derived features are thinner.
 PARTIES = ("Democratic", "Republican")
 
 
