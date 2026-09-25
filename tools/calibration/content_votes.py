@@ -105,6 +105,11 @@ def floor_votes():
         for r in rd("_votes.csv"):
             if ident.get(r["bill_id"], "")[:3] not in ("HB ", "SB "):
                 continue
+            # CARRYOVER LEAK: the 2025 file re-carries 584 roll calls DATED 2024 (bills continued out of 2024
+            # bring their history). Kept, the same vote sits in the 2024 TRAINING set and the 2025 TEST set.
+            if (r["start_date"] or "")[:4] != s[:4]:
+                skipped["other-year (carryover copy)"] += 1
+                continue
             t = r["motion_text"] or ""
             if PROCEDURAL.search(t):
                 skipped["procedural"] += 1
@@ -287,3 +292,104 @@ def evaluate(rows):
             pr = 1 / (1 + np.exp(-(Xt @ beta)))
         res[name] = (fit, pr)
     return train, test, res
+
+
+# ------------------------------------------------------------------------------------------------------
+# ROUND 2 — every ingredient, added and removed one at a time (owner, 2026-09-25: "whats the accuracy? is the
+# info you are inputing the important info? how does the accuracy changing adding and removing")
+# New ingredients, all knowable before the vote in question:
+#   COP   co-patrons from the legislator's own party; the legislator IS a patron/co-patron
+#   STAGE this bill's EARLIER roll calls: the legislator's own earlier vote on it, and how opposed it was
+# ------------------------------------------------------------------------------------------------------
+def run2():
+    d = build()
+    corpus = {(r["session"], r["bill"]): r for r in load()["bills"]}
+    party, person = _party_lookup()
+    summ = SM.summaries()
+    nb = neighbours({k: v for k, v in corpus.items() if k[0] in YEARS}, summ)
+    by_bill = collections.defaultdict(list)
+    for s, b, vid, date, ven, ballots in d["rolls"]:
+        opp = 1 - sum(sup for *_x, sup in ballots) / len(ballots)
+        maj = {}
+        for p in PARTIES:
+            xs = [sup for _w, pp, sup in ballots if pp == p]
+            if xs:
+                maj[p] = sum(xs) / len(xs) >= 0.5
+        by_bill[(s, b)].append((date or "", vid, ven, ballots, maj, opp))
+    for k in by_bill:
+        by_bill[k].sort()
+    defect = collections.defaultdict(collections.Counter)
+    for (s, b), rcs in by_bill.items():
+        for _dt, vid, ven, ballots, maj, opp in rcs:
+            for who, pp, sup in ballots:
+                if pp in maj:
+                    defect[int(s[:4])][(who, "n")] += 1
+                    defect[int(s[:4])][(who, "d")] += sup != maj[pp]
+    pd_cache = {}
+    def prior_defect(who, yr):
+        if (who, yr) not in pd_cache:
+            n = sum(defect[y][(who, "n")] for y in defect if y < yr)
+            dd = sum(defect[y][(who, "d")] for y in defect if y < yr)
+            pd_cache[(who, yr)] = (dd + 1) / (n + 20)
+        return pd_cache[(who, yr)]
+    rows = []
+    for (s, b), rcs in by_bill.items():
+        bill = corpus.get((s, b))
+        if not bill or bill["chief_party"] not in PARTIES or not bill["standing"]:
+            continue
+        yr = int(s[:4])
+        patrons = {person(bill["chief"]) or bill["chief"]} | {person(c) or c for c in bill["cops"]}
+        cop_party = collections.Counter(p for p in bill["cop_parties"] if p in PARTIES)
+        n_opp_w = n_rc = 0.0
+        party_sup = {p: [0.0, 0.0] for p in PARTIES}
+        mem_sup = collections.defaultdict(lambda: [0.0, 0.0])
+        for c, j in nb.get((s, b), []):
+            for _dt, vid, ven, ballots, maj, opp in by_bill.get(c, []):
+                n_opp_w += opp * j; n_rc += j
+                for who, pp, sup in ballots:
+                    party_sup[pp][0] += sup * j; party_sup[pp][1] += j
+                    mem_sup[who][0] += sup * j; mem_sup[who][1] += j
+        c_opp = n_opp_w / n_rc if n_rc else None
+        seen = {}                                  # who -> their most recent earlier vote on THIS bill
+        prev_opp = None
+        for i, (_dt, vid, ven, ballots, maj, opp) in enumerate(rcs):
+            for who, pp, sup in ballots:
+                ps = party_sup[pp]
+                c_party = ps[0] / ps[1] if ps[1] else None
+                ms = mem_sup.get(who)
+                if c_party is not None and ms and ms[1] > 0:
+                    dev = (ms[0] + SHRINK * c_party) / (ms[1] + SHRINK) - c_party; has_mem = 1
+                else:
+                    dev, has_mem = 0.0, 0
+                own_cop = cop_party.get(pp, 0) + (1 if pp == bill["chief_party"] else 0)
+                rows.append({
+                    "yr": yr, "y": int(sup), "same": int(pp == bill["chief_party"]),
+                    "maj": int(bill["standing"] == "majority"), "defect": prior_defect(who, yr),
+                    "ven_sub": int(ven == "sub"), "ven_com": int(ven == "com"),
+                    "has_c": int(c_opp is not None and c_party is not None),
+                    "c_opp": c_opp or 0.0, "c_party": c_party if c_party is not None else 0.5,
+                    "dev": dev, "has_mem": has_mem,
+                    "is_patron": int(who in patrons), "own_party_cops": min(own_cop, 10) / 10,
+                    "any_own_cop": int(cop_party.get(pp, 0) > 0 and pp != bill["chief_party"]),
+                    "first_vote": int(i == 0), "has_prev_self": int(who in seen),
+                    "prev_self": int(seen.get(who, 0)), "prev_opp": prev_opp if prev_opp is not None else 0.0,
+                    "opp_actual": opp,
+                })
+            for who, pp, sup in ballots:
+                seen[who] = sup
+            prev_opp = opp
+    return rows
+
+
+GROUPS = {
+    "party & standing":        lambda r: [r["same"], r["maj"], r["same"] * r["maj"]],
+    "venue":                   lambda r: [r["ven_sub"], r["ven_com"]],
+    "general defection rate":  lambda r: [r["defect"], r["same"] * r["defect"]],
+    "bill controversy (content)": lambda r: [r["has_c"], r["has_c"] * r["c_opp"]],
+    "party on this content":   lambda r: [r["has_c"] * r["c_party"], r["has_c"] * r["c_party"] * r["same"]],
+    "legislator on this content": lambda r: [r["has_mem"] * r["dev"], r["has_mem"]],
+    "co-patrons":              lambda r: [r["is_patron"], r["own_party_cops"], r["any_own_cop"],
+                                          r["any_own_cop"] * (1 - r["same"])],
+    "earlier votes on this bill": lambda r: [r["first_vote"], r["has_prev_self"], r["has_prev_self"] * r["prev_self"],
+                                             (1 - r["first_vote"]) * r["prev_opp"]],
+}

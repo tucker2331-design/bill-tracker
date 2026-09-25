@@ -51,7 +51,7 @@ def _logit(X, y, names, max_iter, tol, ridge):
     else:
         raise RuntimeError("logit did not converge")
     p = 1.0 / (1.0 + np.exp(-(X @ b)))
-    H = X.T @ (X * (p * (1 - p))[:, None])
+    H = X.T @ (X * (p * (1 - p))[:, None]) + ridge * np.eye(X.shape[1])
     se = _finite(np.sqrt(np.diag(np.linalg.inv(H))), "standard errors")
     eps = 1e-12
     ll = float(np.sum(y * np.log(p + eps) + (1 - y) * np.log(1 - p + eps)))
