@@ -36,6 +36,24 @@ calling party positions ~97% right.**
 | two-stage (party → member) | 85.3% | 80.2% | 83.2% — not better |
 | *always guess the common answer* | *73.9%* | *57.4%* | |
 
+## Subject labels — no gain (tested 2026-09-25)
+Coarse subjects cover 85% of bills (vs 20–32% for similar-bill content), added as party-on-subject and
+legislator-on-subject records: 85.9% vs 86.2%, within noise. Bill-level signals have plateaued near 86%.
+
+## Breaking 95 the way a product can — confident calls (2025, tuning year)
+
+| call only the most confident… | all legislators | other-party |
+|---|---|---|
+| 30% | **99.2%** | 96.8% |
+| 50% | 97.8% | 93.9% |
+| 60% | 96.4% | 91.1% |
+| 80% | 91.8% | 84.9% |
+| 100% | 85.9% | 79.9% |
+
+**95%+ accuracy on 67% of all first-vote ballots and 45% of other-party ballots**, with the rest flagged "too
+close to call". The confidence cutoff is fixed on 2025 and carried unchanged into the 2026 test — choosing it on
+2026 would be tuning on the answer.
+
 ## Traps caught, all before any number was reported
 1. **Direction bug — 1,262 roll calls (2.7%) read backwards.** "Failed to report (defeated)" was treated as a kill
    motion. Fixing it moved every number up.

@@ -100,6 +100,12 @@ def features():
     pat = collections.Counter()                          # (patron, same, 'n'|'s')
     mroom = collections.Counter()                        # (who, room, 'n'|'s')
     first_sup = {}                                       # (s,b) -> {party: support share} at first vote
+    import json
+    SUBJ = {}
+    for k, v in json.load(open(os.path.join(HERE, "subject_labels.json")))["labels_coarse"].items():
+        ss, bb = k.split("|", 1); SUBJ[(ss, bb)] = v
+    sp = collections.Counter()                           # (subject, voter party, patron party, 'n'|'s')
+    msub = collections.Counter()                         # (who, subject, same, 'n'|'s')
     rows = []
     for date in sorted(events):
         todays = events[date]
@@ -178,9 +184,16 @@ def features():
                    "senior": min(int(s[:4]) - (bill.get("chief_first_year") or int(s[:4])), 30) / 30,
                    "n_cops": min(len(bill["cops"]), 40) / 40,
                    "pat_in_room": int(mroom[(P, R, "n")] > 0)}
+            subs = SUBJ.get((s, b), [])
+            def _sp(pp):
+                n_ = sum(sp[(x, pp, bill["chief_party"], "n")] for x in subs)
+                s_ = sum(sp[(x, pp, bill["chief_party"], "s")] for x in subs)
+                return _rate(s_, n_, .75, 20), math.log1p(n_)
             for who, pp, sup in ballots:
                 same = int(pp == bill["chief_party"])
                 cp = psup[pp][0] / psup[pp][1] if psup[pp][1] else None
+                sub_rate, sub_n = _sp(pp)
+                mn = sum(msub[(who, x, same, "n")] for x in subs); ms_ = sum(msub[(who, x, same, "s")] for x in subs)
                 ms = msup.get(who)
                 dev = ((ms[0] + 3 * cp) / (ms[1] + 3) - cp) if (cp is not None and ms and ms[1]) else 0.0
                 rows.append({
@@ -204,6 +217,8 @@ def features():
                     "rm_other": (rm[[q for q in PARTIES if q != pp][0]][0] / rm[[q for q in PARTIES if q != pp][0]][1])
                                 if rm[[q for q in PARTIES if q != pp][0]][1] else 0.5,
                     **pre,
+                    "subj_has": int(bool(subs)), "subj_party": sub_rate, "subj_n": sub_n,
+                    "msubj": _rate(ms_, mn, sub_rate, 5), "msubj_n": math.log1p(mn),
                     "room": R, "who": who, "bill": (s, b), "party": pp,
                 })
         # 2) then learn from EVERY roll call of the day
@@ -221,8 +236,12 @@ def features():
                 continue
             R = first_room(bill) or "?"
             P = person(bill["chief"]) or bill["chief"]
+            subs = SUBJ.get((s, b), [])
             for who, pp, sup in ballots:
                 same = int(pp == bill["chief_party"])
+                for x in subs:
+                    sp[(x, pp, bill["chief_party"], "n")] += 1; sp[(x, pp, bill["chief_party"], "s")] += sup
+                    msub[(who, x, same, "n")] += 1; msub[(who, x, same, "s")] += sup
                 if ven in ("sub", "com"):
                     room[(R, same, "n")] += 1; room[(R, same, "s")] += sup
                     mroom[(who, R, "n")] += 1; mroom[(who, R, "s")] += sup
@@ -235,7 +254,7 @@ NUM = ["same", "maj", "chamber_S", "ven_sub", "ven_com", "defect", "room_rate", 
        "mroom_rate", "mroom_n", "has_c", "c_opp", "c_party", "dev", "has_mem", "is_patron", "own_cops",
        "other_cops", "companion", "rm_has", "rm_party", "rm_other", "n_actions", "fiscal", "sub_offered",
        "n_refs", "wait", "day", "senior", "n_cops", "pat_in_room", "dup_sim", "dup_maj_other", "dup_same_pat",
-       "comp_sim", "txt_has", "txt_party", "txt_other"]
+       "comp_sim", "txt_has", "txt_party", "txt_other", "subj_has", "subj_party", "subj_n", "msubj", "msubj_n"]
 GROUPS = {
     "party & standing": ["same", "maj", "chamber_S"],
     "venue": ["ven_sub", "ven_com"],
@@ -250,6 +269,7 @@ GROUPS = {
     "patron seniority & seat on committee": ["senior", "pat_in_room"],
     "duplicates & companion match": ["dup_sim", "dup_maj_other", "dup_same_pat", "comp_sim"],
     "summary words (party-position classifier)": ["txt_has", "txt_party", "txt_other"],
+    "subject (party and legislator)": ["subj_has", "subj_party", "subj_n", "msubj", "msubj_n"],
 }
 
 
@@ -369,10 +389,7 @@ def tune2():
     rows = pickle.load(open(ROWS, "rb"))
     tr = [r for r in rows if r["yr"] in (2020, 2021, 2022, 2024)]
     va = [r for r in rows if r["yr"] == 2025]
-    for kw in ({"depth": 3, "lr": .05}, {"depth": 4, "lr": .05}, {"depth": 5, "lr": .05}, {"depth": 6, "lr": .03}):
-        p, _, (m1, m2) = two_stage(tr, va, **kw)
-        scorecard(p, va, f"TWO-STAGE {kw} ({len(m1.trees)}+{len(m2.trees)})")
-    for kw in ({"depth": 5, "lr": .05}, {"depth": 6, "lr": .03}):
+    for kw in ({"depth": 6, "lr": .03},):
         p, _, m = fit_predict("gbm", NUM, tr, va, **kw)
         scorecard(p, va, f"ONE-STAGE GBM {kw} ({len(m.trees)})")
 
