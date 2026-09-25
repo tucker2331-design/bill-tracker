@@ -7,6 +7,32 @@ open_loop: Research result, NOT a feature. Before anything reaches the War Room 
 
 # Controversy measured from content — per bill, per party, per legislator
 
+> ## ROUND 2 (2026-09-25) — accuracy, and every ingredient added and removed
+> Owner: *"whats the accuracy? is the info you are inputing the important info? how does the accuracy
+> changing adding and removing."* Three new ingredients (co-patrons from the legislator's party; the
+> legislator IS a patron; **earlier roll calls on this same bill**). `content_votes_ablate.py`. Held out on
+> 2025–26, threshold chosen on training data only.
+>
+> **Two leaks fixed first:** (1) 1,816 roll calls re-carried into the next session's file with the prior
+> year's DATE — the same vote sat in 2024 training and 2025 test; (2) the integer-mask scoring bug, a second
+> time (it printed "0% support" on first votes; true 57%).
+>
+> | population | ranking (0.5 = guess) | balanced accuracy | accuracy | "always guess the common answer" |
+> |---|---|---|---|---|
+> | all votes (n = 372,940) | 0.907 | 83.6% | 90.3% | 84.6% |
+> | other-party legislators | 0.889 | 83.6% | 83.6% | 71.1% |
+> | **other-party, FIRST vote on the bill** (n = 18,197) | **0.716** | **65.3%** | 61.4% | 56.8% |
+>
+> **Remove one ingredient (other-party all / other-party first vote):** earlier votes on this bill **0.889 →
+> 0.699** / 0.716 → 0.642 · venue 0.905 / **→ 0.575** · co-patrons 0.885 / 0.699 · bill controversy 0.886 /
+> 0.699 · legislator on content 0.888 / 0.709 · party on content 0.888 / 0.713 · **general defection rate: no
+> change (0.888 / 0.718)**.
+>
+> **Read plainly:** most of the headline accuracy is *how they already voted on this same bill* — useful
+> (stage tracking) but visible in the vote record. **The valuable prediction — the first vote, before anyone
+> has voted — is 0.72 ranking / 65% balanced.** Venue matters most there; each content ingredient adds
+> ~0.01–0.02; a legislator's general habit of crossing adds nothing.
+
 Owner, 2026-09-24: *"one of the biggest confounds is simply text at all… if there was a way to know just how
 controversial something is historically and relative to individual politicans it would be the golden ticket…
 its based on more then one stat."*

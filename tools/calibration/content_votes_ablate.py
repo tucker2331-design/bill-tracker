@@ -1,3 +1,5 @@
+# Add-one / remove-one ablation for content_votes.run2(). Reads the rows pickle from the scratch path below;
+# regenerate it with content_votes.run2() and pickle.dump if missing.
 import sys,pickle,numpy as np,time; sys.path.insert(0,'/Users/tuckerward/Documents/Projects/bill-tracker/tools/calibration')
 import content_votes as CVT, stats
 rows=pickle.load(open('/private/tmp/claude-501/-Users-tuckerward-Documents-Projects-bill-tracker/d2c029e9-acd9-410e-81ec-5347fd755620/scratchpad/cv_rows2.pkl','rb'))
