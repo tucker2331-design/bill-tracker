@@ -214,6 +214,12 @@ the rule exists because the same bug nearly shipped twice (completeness moved
 onto U1 in July; the co-patron column would have landed on U1 in September).
 The front end finds completeness by content, so it never cared where it sits.
 
+**`Bill_Summaries` tab (2026-09-28).** One row per LIS summary version (`Bill`,
+`Summary Type`, `Stage Rank`, `Summary`), `F1` = content hash (identical cycles
+skip the ~3.8 MB rewrite). The bill card queries it one bill at a time
+(`select A,B,C,D where A = 'HB1'`) and verifies the header — gviz serves the
+first sheet for a missing tab. An empty Summaries.csv leaves the tab untouched.
+
 ### State Cell `Sheet1!W1` — durable breaker trip record (PR-C1 review-fix)
 
 JSON-encoded record written on circuit-breaker trip so the trip survives

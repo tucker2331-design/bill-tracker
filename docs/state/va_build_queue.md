@@ -273,6 +273,14 @@ computable — without it that relationship is unrepresentable.
   *member→bills* direction, not bill→patrons. **Stopped rather than brute-force the parameter space** (owner
   rule). Next: find the bundle's fetch helper to see how it composes the query.
 
+- **E7. Bill summaries in the app** — ✅ **BUILT 2026-09-28** (branch `claude/summaries-in-app`, stacked on E6):
+  bulk `Summaries.csv` (LIS staff summaries, every version) → its OWN tab `Bill_Summaries` (one row per version:
+  bill, LIS type verbatim, stage rank, plain text), read LAZILY per bill when a card opens — 3.8 MB of text must
+  not ride on the ~7 MB main load. The file is sorted by doc id, not date (114 of 1,307 multi-version bills out of
+  lifecycle order), so "latest" uses a rank over LIS's own 5-value `SUMMARY_TYPE` vocabulary; an unknown type is
+  published unranked and never promoted. Tags stripped server-side; rendered as text. Content hash in `F1` skips
+  identical rewrites. Measured 20261: 5,776 versions on 3,637 bills, 0 unknown types, 0 bad ids.
+
 ---
 
 ## V · DISPLAY

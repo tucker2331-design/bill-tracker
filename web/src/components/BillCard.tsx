@@ -4,6 +4,7 @@ import { OutcomeChip, ChamberChip, Star } from "./common";
 import { lisBillUrl } from "../config";
 import { loadCalendar, nextMeetingFor, minutesUntil, type Meeting as CalMeeting } from "../data/calendar";
 import { dayKey, parseLisDate } from "../data/dates";
+import { loadSummary, typeLabel, type SummaryResult, type SummaryVersion } from "../data/summaries";
 
 // The bill card — every fact tied to its source location so they correlate (vision §6), with the
 // recovered pin (§5) and the deterministic LIS link. Used as a modal over any view.
@@ -70,6 +71,8 @@ export function BillCard({ bill, sessionCode, onClose }: { bill: Bill; sessionCo
             {bill.crossedOver && <span className="chip crossed">crossed over</span>}
             {bill.referrals > 1 && <span className="chip referral">{bill.referrals} referrals</span>}
           </div>
+
+          <Summary key={bill.bill} bill={bill.bill} lisUrl={lisBillUrl(sessionCode, bill.bill)} />
 
           <div className="metarow"><span className="k">Status (LIS)</span><span>{bill.statusLis || "—"}</span></div>
           <div className="metarow"><span className="k">Where it is</span>
@@ -160,5 +163,55 @@ function Copatrons({ list }: { list: Bill["copatrons"] }) {
         </button>
       )}
     </span>
+  );
+}
+
+// LIS's own summary (staff-written, not ours). CLOSED by default (owner 2026-09-28): the catchline under the bill
+// number is already the short summary, so the full text is one tap away rather than on the card. It is fetched
+// only when first opened, so a card that is never expanded costs no request. Three states, never merged:
+// loading, "no summary from LIS", "not available right now".
+function Summary({ bill, lisUrl }: { bill: string; lisUrl: string }) {
+  const [res, setRes] = useState<SummaryResult | undefined>(undefined);
+  const [opened, setOpened] = useState(false);
+  const [showOthers, setShowOthers] = useState(false);
+  useEffect(() => {
+    if (!opened) return;
+    // Keyed by bill at the call site, so a new bill remounts with fresh state (no reset-in-effect).
+    let alive = true;
+    loadSummary(bill).then((r) => { if (alive) setRes(r); });
+    return () => { alive = false; };
+  }, [bill, opened]);
+
+  let body;
+  if (res === undefined) body = <p className="muted sum-text">Loading summary…</p>;
+  else if (res.status === "unavailable") body = <p className="muted sum-text">Summary not available right now.</p>;
+  else if (res.status === "none") body = <p className="muted sum-text">LIS has no summary for this bill.</p>;
+  else {
+    body = (
+      <>
+        <div className="muted sum-label">{typeLabel(res.latest.type)}</div>
+        <p className="sum-text">{res.latest.text}</p>
+        {res.others.length > 0 && (
+          <button type="button" className="gtoggle" onClick={() => setShowOthers(!showOthers)}>
+            {showOthers ? "hide earlier versions" : `earlier versions (${res.others.length})`}
+          </button>
+        )}
+        {showOthers && res.others.map((o: SummaryVersion, i: number) => (
+          <div key={i} className="sum-other">
+            <div className="muted sum-label">{typeLabel(o.type)}</div>
+            <p className="sum-text">{o.text}</p>
+          </div>
+        ))}
+      </>
+    );
+  }
+  return (
+    <details className="sum" onToggle={(e) => { if ((e.currentTarget as HTMLDetailsElement).open) setOpened(true); }}>
+      <summary>Full summary</summary>
+      <div className="sum-body">
+        {body}
+        <a href={lisUrl} target="_blank" rel="noopener noreferrer">Full bill text on LIS ↗</a>
+      </div>
+    </details>
   );
 }

@@ -8,6 +8,14 @@ status: active
 
 Append-only, reverse-chronological (newest at top). Each entry opens with `## [YYYY-MM-DD] <kind> | <title>` so `grep "^## \[" log.md | head -20` gives a parseable timeline.
 
+## [2026-09-28] build | bill summaries in the app (Summaries.csv → Bill_Summaries tab → bill card)
+
+Marketability queue item. LIS's own staff summaries, every version, on a separate tab read lazily per bill (the main
+sheet is already 6.9 MB; summaries add 3.8 MB). Latest = highest rank over LIS's 5-value SUMMARY_TYPE vocabulary,
+because the file is ordered by doc id, not date (114 of 1,307 multi-version bills would show a stale version if we
+took the last row). Three states on the card: summary / "LIS has no summary" / "not available right now". Stacked on
+the co-patrons PR. [[state/va_build_queue]] E7 · [[architecture/calendar_pipeline]].
+
 ## [2026-09-28] build | co-patrons in the app (Sponsors.csv → Bill_Tracker col U → bill card)
 
 Marketability queue item. One bulk `Sponsors.csv` read per cycle (same `lisfiles` host + guard as BILLS/HISTORY/DOCKET).
