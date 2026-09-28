@@ -87,7 +87,9 @@ def _rate(s, n, prior, a):
     return (s + a * prior) / (n + a)
 
 
-def features():
+def features(future=None):
+    """future: optional [(session, bill, venue, [(who, party)], date)] -- votes that have NOT happened, scored
+    from the state after the LAST recorded day (y = -1). Used for forward predictions (e.g. 2027 carryovers)."""
     """Replay every roll call in DATE order. Features for a bill's first vote are computed from the state
     BEFORE that day; the state is updated only after every first vote of the day has been featurised."""
     D = assemble()
@@ -125,9 +127,8 @@ def features():
                     sr = m.group(1).strip()
         return f"{first_room(bill) or '?'}/{sr}" if sr else None
     rows = []
-    for date in sorted(events):
-        todays = events[date]
-        # 1) featurise today's FIRST votes from yesterday's state
+    def _featurise(date, todays):
+        """One day's FIRST votes, from the state as it stands (yesterday's). Also used for FUTURE votes."""
         for s, b, i, ven, ballots in todays:
             if i != 0:
                 continue
@@ -233,7 +234,7 @@ def features():
                 ms = msup.get(who)
                 dev = ((ms[0] + 3 * cp) / (ms[1] + 3) - cp) if (cp is not None and ms and ms[1]) else 0.0
                 rows.append({
-                    "yr": int(s[:4]), "y": int(sup), "same": same, "maj": int(bill["standing"] == "majority"),
+                    "yr": int(s[:4]), "y": int(sup) if sup is not None else -1, "same": same, "maj": int(bill["standing"] == "majority"),
                     "chamber_S": int(bill["chamber"] == "S"),
                     "ven_sub": int(ven == "sub"), "ven_com": int(ven == "com"),
                     "defect": _rate(defect[(who, "d")], defect[(who, "n")], .05, 20),
@@ -272,6 +273,11 @@ def features():
                     "msubj": _rate(ms_, mn, sub_rate, 5), "msubj_n": math.log1p(mn),
                     "room": R, "who": who, "bill": (s, b), "party": pp,
                 })
+
+    for date in sorted(events):
+        todays = events[date]
+        # 1) featurise today's FIRST votes from yesterday's state
+        _featurise(date, todays)
         # 2) then learn from EVERY roll call of the day
         for s, b, i, ven, ballots in todays:
             bill = corpus.get((s, b))
@@ -307,6 +313,9 @@ def features():
                     mroom[(who, R, "n")] += 1; mroom[(who, R, "s")] += sup
                 if i == 0:
                     pat[(P, same, "n")] += 1; pat[(P, same, "s")] += sup
+    if future:
+        for fs, fb, fven, members, fdate in future:
+            _featurise(fdate, [(fs, fb, 0, fven, [(w, p_, None) for w, p_ in members])])
     return rows
 
 
