@@ -1,6 +1,6 @@
 ---
 tags: [state, live]
-updated: 2026-09-10
+updated: 2026-09-28
 status: active
 ---
 
@@ -33,6 +33,11 @@ status: active
 - **VA accuracy state: CLEAR + holding (2026-07-12).** The 0→66 regression is root-caused and closed ([[failures/assumptions_audit#105]] — an `UnboundLocalError` in the agenda block wearing an API-outage costume; §9 and cache-warmth both innocent). All four deferred pieces shipped + live-verified: agenda/meeting links (#214), §9 anchor ladder re-merge (#215), the scroll affordance (#216), and the last engineering residual — the label-based agenda-FETCH target (#217, [[state/open_anti_patterns]] #13, now resolved). No open VA engineering items; the only open PR is the Codex NY-probe (#175, NY). **Standing watch each cycle:** `meeting_unsourced=0`, breaker clear, `anchor_unresolved` stays 1, agenda/link drift canaries quiet. Everything below in NEXT is owner-gated (infra/decision), not blocked on me.
 
 ## NEXT (needs owner infra / a decision — then I execute)
+
+- **👥 Team positions are built but locked until you add your team (one command).** Before this, any Google
+  account could have read your positions; now only listed emails can. Run `npx wrangler secret put TEAM_EMAILS`
+  and paste comma-separated emails. Until then the app says "Team positions aren't set up yet".
+  [[architecture/verification_durability]] · [[failures/assumptions_audit]] #142.
 
 - **📊 HISTORICAL DATA — SOLVED, pending one owner step: [[knowledge/openstates_bulk_va]].** Open States
   publishes **20 Virginia sessions (2017–2027) under CC0 with no commercial restriction** — against the 3

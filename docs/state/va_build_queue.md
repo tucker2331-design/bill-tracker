@@ -1,6 +1,6 @@
 ---
 tags: [state, queue, product, war-room, virginia]
-updated: 2026-07-27
+updated: 2026-09-28
 status: active
 ---
 
@@ -123,7 +123,7 @@ worked on live output: (a) a zone header read *"How he handles bills like this"*
 derived-claim tripwire** — now *"On Consumer Protection bills"*; (b) the contact stat said **3 contacts**
 while the log showed **2 rows**. Both fixed pre-publish.
 
-### M2. Position + tracking ladder popup *(unblocked — the enum is settled, see D1)*
+### M2. Position + tracking ladder popup *(unblocked — the enum is settled, see D1)* — **built inline instead of as a popup, 2026-09-28**, following M3's precedent: four text options on the bill card, nothing to lay out that the build did not answer. Owner may still want the popup form; say so and it moves.
 ### ~~M3. Account setup flow~~ — ✅ **BUILT, not just drawn** (`components/FirstRun.tsx`). The mockup step
 was skipped deliberately: the form is four fields and one escape hatch, so drawing it first would have cost
 a round-trip to learn nothing the build did not.
@@ -166,9 +166,12 @@ computable — without it that relationship is unrepresentable.
 - ~~**F2. Write path**~~ — ✅ **MERGED 2026-07-29 (#237).** Schema live; Migration applied to the remote D1 2026-07-28; both
   constraints verified against the real database (`stance='bogus'` → CHECK failure; missing `state` → NOT NULL
   failure). Worker API + **Google ID-token verification** built (Access rejected on its per-seat pricing
-  model — [[architecture/verification_durability]]). Sign-in shipped with it, so the door is hung. **Remaining before it carries
-  real data: the D1 second-oppose-tier decision (the enum), and wiring the War Room's position control to
-  `PUT /api/positions`.**
+  model — [[architecture/verification_durability]]). Sign-in shipped with it, so the door is hung. **2026-09-28: position control WIRED**
+  (branch `claude/team-positions`): bill card "Our position" row (the four D1 stances as grey text, current one
+  in ink, click again to clear → new `DELETE /api/positions`), and a stance column in the War Room list. The
+  "second oppose tier" note here was stale — D1 settled it (oppose stays one layer). **Also closed a hole:
+  any Google account passed auth** — now a `TEAM_EMAILS` secret gate ([[failures/assumptions_audit]] #142).
+  **Owner step before it carries real data: set `TEAM_EMAILS`.**
 - ~~**F3. Accounts**~~ — ✅ **BUILT 2026-07-28.** Sign-in (`web/src/state/auth.ts` + `components/SignIn.tsx`,
   verified live: button renders, zero console errors, **no token in localStorage** — held in memory only, so
   one XSS cannot steal an identity that outlives the tab). **First-run form built** — display name + three districts, which is what turns

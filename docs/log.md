@@ -1,12 +1,20 @@
 ---
 tags: [log, meta]
-updated: 2026-09-10
+updated: 2026-09-28
 status: active
 ---
 
 # Project Log
 
 Append-only, reverse-chronological (newest at top). Each entry opens with `## [YYYY-MM-DD] <kind> | <title>` so `grep "^## \[" log.md | head -20` gives a parseable timeline.
+
+## [2026-09-28] build | team positions wired + team gate on the API
+
+Marketability "team tools" item. Bill card gets an "Our position" row (Involved / Supporting / Watching / Opposing,
+D1's settled enum, grey text; click again clears via a new `DELETE /api/positions`); War Room list shows the stance.
+While wiring it: **any Google account passed the API's auth** — identity was checked, membership never was. Added a
+fail-closed `TEAM_EMAILS` secret gate (`worker/team.js`, 19 tests; Worker tests now run in CI). Owner must set the
+secret before positions carry data. [[failures/assumptions_audit]] #142 · [[architecture/verification_durability]].
 
 ## [2026-09-24] finding | content predicts which opposite-party legislator crosses
 

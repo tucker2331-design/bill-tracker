@@ -191,7 +191,7 @@ export default function App() {
                 so it gets the FULL bill set for the agenda→card lookup, not the pre-scoped `visible`. */}
             {tab === "calendar" && <Calendar bills={data.bills} sessionCode={data.sessionCode} onOpen={open} calRefresh={calRefresh} />}
             {tab === "search" && <Search bills={visible} onOpen={open} />}
-            {tab === "warroom" && <WarRoom bills={data.bills} starred={starred} />}
+            {tab === "warroom" && <WarRoom bills={data.bills} starred={starred} sessionCode={data.sessionCode} />}
             {tab === "health" && <Health completeness={data.completeness} dataAsOf={data.dataAsOf} />}
           </ErrorBoundary>
         )}

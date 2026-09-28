@@ -10,8 +10,9 @@
 
 import type { Bill } from "../data/types";
 import { detailPath, linkProps } from "../state/router";
+import { PositionTag } from "../components/PositionControl";
 
-export function WarRoom({ bills, starred }: { bills: Bill[]; starred: Set<string> }) {
+export function WarRoom({ bills, starred, sessionCode }: { bills: Bill[]; starred: Set<string>; sessionCode: string }) {
   const ours = bills.filter((b) => starred.has(b.bill));
 
   if (ours.length === 0) {
@@ -47,6 +48,7 @@ export function WarRoom({ bills, starred }: { bills: Bill[]; starred: Set<string
           return (
             <a key={b.bill} className="wr-row" {...linkProps(detailPath("bills", b.bill))}>
               <span className="wr-num">{b.bill}</span>
+              <PositionTag bill={b.bill} sessionCode={sessionCode} />
               <span className="wr-patron">— {b.patron}</span>
               <span className="wr-title">{b.title}</span>
               <span className="wr-where">

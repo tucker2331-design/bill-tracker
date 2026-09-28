@@ -1,6 +1,6 @@
 ---
 tags: [architecture, verification, reliability, durability, standards]
-updated: 2026-06-07
+updated: 2026-09-28
 status: active
 ---
 
@@ -164,6 +164,15 @@ to fix it instead of building it to a groundbreakingly sustainable level."* Stra
   against the loop. This is the real sustainability track, logged so it isn't lost. See [[ideas/multi_state_data_strategy]].
 
 ---
+
+## TEAM GATE 2026-09-28 — identity is not membership
+
+A verified Google token says who someone is. The org-private routes (`/positions`, `/interactions`) also need
+to know they are on the team, so `worker/team.js` checks the email against the `TEAM_EMAILS` Worker secret.
+It fails closed, and the three answers stay distinct: *not set up yet* vs *not on this team* vs *member*. The
+UI shows a different sentence for each. `/me` is open to any signed-in person because it is their own row.
+**Owner step:** `npx wrangler secret put TEAM_EMAILS` (comma-separated emails). Until then, positions answer
+"not set up yet". Why it exists: [[failures/assumptions_audit]] #142.
 
 ## AUTH DECISION 2026-07-27 — Cloudflare Access REJECTED on pricing model, not price
 
