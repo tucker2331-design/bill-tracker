@@ -64,11 +64,11 @@ def main():
         final[re.match(r"[A-Z]+\d+", u["range"]).group(0)] = u["values"]
     survived = []
     for cell, vals in final.items():
-        try:
-            if json.loads(vals[0][0]).get("universe_count") == 1:
-                survived.append(cell)
-        except (ValueError, TypeError, AttributeError, IndexError):
-            pass
+        top = vals[0][0] if vals and vals[0] else None
+        # Only a JSON object can be the payload; the timestamp and the header grid are skipped by SHAPE, not by
+        # swallowing a parse error (house rule: no silent except).
+        if isinstance(top, str) and top.startswith("{") and json.loads(top).get("universe_count") == 1:
+            survived.append(cell)
     check("the completeness payload SURVIVES the batch (last write per cell wins)", len(survived) == 1,
           f"final cells {list(final)}")
     check("the prior-payload read is the cell the payload survives at", bool(survived) and survived[0] in ws.read,
