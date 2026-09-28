@@ -1,6 +1,6 @@
 ---
 tags: [state, queue, product, war-room, virginia]
-updated: 2026-07-27
+updated: 2026-09-28
 status: active
 ---
 
@@ -263,7 +263,7 @@ computable — without it that relationship is unrepresentable.
   interpretation the owner removed).
   `drift_from_introduced()` is one comparison, **not a sum of steps** — summing double-counts twice-edited
   text and can exceed 100%.
-- **E6. Co-patrons** — **PARTIALLY PROBED 2026-07-27, param form UNRESOLVED.** The bill-search response
+- **E6. Co-patrons** — ✅ **BUILT 2026-09-28** (branch `claude/copatrons-in-app`): bulk `Sponsors.csv` → column U (JSON, LIS role verbatim, chief excluded, LIS order); bill card shows it grouped by role, folds past 6; "not available" when the source was down, never "none". Measured on 20261: 15,875 rows, 12,230 co-patron entries on 1,640 bills, 0 unknown roles. *History below kept.* ~~**PARTIALLY PROBED 2026-07-27, param form UNRESOLVED.**~~ The bill-search response
   carries **chief patron ONLY** (verified: 0 of 108 sampled bills had >1 patron), so co-patrons really are
   absent from the route we now use. The bundle shows the right endpoint is
   `LegislationPatron/api/GetLegislationPatronsByIdAsync`, returning `{Patrons:[…]}` where
