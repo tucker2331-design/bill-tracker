@@ -29,6 +29,7 @@ source before ingest (see docs/ideas/lis_data_inventory.md §6).
 See docs/ideas/product_vision.md, docs/ideas/product_roadmap.md §B0, docs/ideas/lis_data_inventory.md.
 """
 import os
+import hashlib
 import re
 import json
 import time
@@ -38,6 +39,7 @@ import datetime
 import gspread
 import pytz
 import pandas as pd
+from html.parser import HTMLParser
 from google.oauth2.service_account import Credentials
 
 import cadence   # LIS-safety guardrail #5 — the SHARED cadence decision (same signal the calendar worker maintains)
@@ -406,6 +408,110 @@ def _build_copatrons(blob_code):
             order = 10**6                           # unordered rows sort last, still shown
         out.setdefault(b, []).append((order, {"name": nm.strip(), "member_id": mid.strip(), "role": role}))
     return {b: [x for _o, x in sorted(v, key=lambda t: t[0])] for b, v in out.items()}, stats
+
+
+# LIS's SUMMARY_TYPE vocabulary (Summaries.csv), measured on 20261 (5,776 rows): introduced 3,637, passed 1,156,
+# passed House 528, passed Senate 341, enacted with Governor's recommendation 114. The file is sorted by document
+# id, NOT by date (114 of 1,307 multi-version bills are out of lifecycle order in file order), so "the latest
+# summary" needs this rank. Same-rank ties (passed House / passed Senate) keep file order. A type outside this
+# map is still published, with an EMPTY rank, and counted -- the app never picks it as "latest" on a guess.
+SUMMARY_STAGE_RANK = {
+    "SUMMARY AS INTRODUCED": 0,
+    "SUMMARY AS PASSED HOUSE": 1,
+    "SUMMARY AS PASSED SENATE": 1,
+    "SUMMARY AS PASSED": 2,
+    "SUMMARY AS ENACTED WITH GOVERNOR'S RECOMMENDATION": 3,
+}
+BILL_SUMMARIES_TAB = "Bill_Summaries"
+BILL_SUMMARIES_HEADER = ["Bill", "Summary Type", "Stage Rank", "Summary"]
+# Content hash of the last rows written, in a metadata cell clear of the data (A..D). Summaries barely change
+# once a session ends, and the tab is ~3.8 MB: an identical cycle skips the rewrite instead of re-sending it
+# every 15 minutes in-window. Any read failure falls through to a full write (fail toward freshness).
+BILL_SUMMARIES_HASH_CELL = "F1"
+_SUM_BILL_RE = re.compile(r"^([A-Z]+)0*(\d+)$")
+
+
+class _TextOnly(HTMLParser):
+    """LIS summaries are small HTML fragments (<p class=sumtext><b>Catchline.</b> ...). Keep the text, drop every
+    tag -- the app renders plain text, so nothing from the feed is ever injected as markup."""
+    def __init__(self):
+        super().__init__(convert_charrefs=True)
+        self.parts = []
+
+    def handle_data(self, data):
+        self.parts.append(data)
+
+
+def _summary_text(fragment):
+    p = _TextOnly()
+    p.feed(fragment or "")
+    p.close()
+    return " ".join("".join(p.parts).split())
+
+
+def _build_summaries(blob_code):
+    """BULK ingest of Summaries.csv (one guarded blob; ETag-cached, so a steady cycle is a 304) -> (rows for the
+    Bill_Summaries tab, stats). One row per summary version: [bill, LIS type verbatim, stage rank or "", plain
+    text]. Bill ids are LIS's zero-padded form (HB0001) normalized to the tracker's (HB1) -- an id that doesn't
+    fit the prefix+digits shape is counted and skipped, never guessed."""
+    stats = {"rows": 0, "bills": 0, "skipped_bad_bill": 0, "unknown_types": 0, "empty_text": 0}
+    df = safe_fetch_csv(f"https://lis.blob.core.windows.net/lisfiles/{blob_code}/Summaries.csv")
+    if df.empty:
+        return [], stats
+    cols = {c.lower(): c for c in df.columns}
+    need = ("sum_bilno", "summary_type", "summary_text")
+    if not all(c in cols for c in need):
+        stats["missing_columns"] = [c for c in need if c not in cols]
+        return [], stats
+    stats["rows"] = len(df)
+    out, bills = [], set()
+    for raw_bill, typ, html in zip(df[cols["sum_bilno"]].astype(str), df[cols["summary_type"]].astype(str),
+                                   df[cols["summary_text"]].astype(str)):
+        m = _SUM_BILL_RE.match(raw_bill.replace(" ", "").upper())
+        if not m:
+            stats["skipped_bad_bill"] += 1          # counted (source-miss visibility), never silent
+            continue
+        bill = f"{m.group(1)}{int(m.group(2))}"
+        typ = typ.strip()
+        rank = SUMMARY_STAGE_RANK.get(typ)
+        if rank is None:
+            stats["unknown_types"] += 1
+        text = _summary_text(html)
+        if not text:
+            stats["empty_text"] += 1
+            continue
+        bills.add(bill)
+        out.append([bill, typ, "" if rank is None else rank, text])
+    stats["bills"] = len(bills)
+    return out, stats
+
+
+def write_bill_summaries(sheet, rows, stats):
+    """Replace the Bill_Summaries tab. The app reads it LAZILY (one bill per query, when a bill card opens), so
+    the ~3.8 MB of summary text never rides on the main Bill_Tracker load (already ~7 MB).
+
+    A failed/empty fetch leaves the tab UNTOUCHED (last good summaries stay; summaries almost never change after
+    passage) and the caller alerts -- clearing it would turn an LIS hiccup into "no summary" on every bill."""
+    if not rows:
+        return False
+    grid = [BILL_SUMMARIES_HEADER] + rows
+    digest = hashlib.sha256(json.dumps(grid, ensure_ascii=False).encode("utf-8")).hexdigest()
+    try:
+        ws = sheet.worksheet(BILL_SUMMARIES_TAB)
+        try:
+            if ws.acell(BILL_SUMMARIES_HASH_CELL).value == digest:
+                return False                                   # identical to what is already published
+        except gspread.exceptions.APIError as _hash_err:
+            print(f"ℹ️  [BILL_TRACKER] {BILL_SUMMARIES_TAB} hash unreadable ({_hash_err}); rewriting.")
+        need_cols = _col_number(BILL_SUMMARIES_HASH_CELL)
+        if ws.row_count < len(grid) + 50 or ws.col_count < need_cols:
+            ws.resize(rows=max(ws.row_count, len(grid) + 50), cols=max(ws.col_count, need_cols))
+    except gspread.exceptions.WorksheetNotFound:
+        ws = sheet.add_worksheet(title=BILL_SUMMARIES_TAB, rows=len(grid) + 50, cols=_col_number(BILL_SUMMARIES_HASH_CELL))
+    ws.clear()
+    ws.batch_update([{"range": "A1", "values": grid},
+                     {"range": BILL_SUMMARIES_HASH_CELL, "values": [[digest]]}])
+    return True
 
 
 def _derive_position(rows, bill):
@@ -1015,7 +1121,30 @@ def run_bill_tracker():
             return
 
         records, completeness = build_bill_records(http_session, session_code)
+        # Summaries (one guarded bulk blob) go to their OWN tab, read lazily by the bill card -- built before the
+        # main write so their counts ride in this cycle's completeness payload.
+        summary_rows, summary_stats = _build_summaries(completeness["session_code"])
+        completeness.update({"summary_rows": summary_stats["rows"], "summary_bills": summary_stats["bills"],
+                             "summary_skipped_bad_bill": summary_stats["skipped_bad_bill"],
+                             "summary_unknown_types": summary_stats["unknown_types"],
+                             "summary_empty_text": summary_stats["empty_text"]})
         prior_unverified, prior_universe, _sheet = write_bill_tracker(records, completeness)
+        if not summary_rows:
+            _alert("WARN", "API_FAILURE",
+                   f"Summaries.csv unavailable or unreadable ({summary_stats}); {BILL_SUMMARIES_TAB} left as last "
+                   f"cycle's -- bill cards keep showing the previous summaries.")
+        else:
+            try:
+                write_bill_summaries(_sheet, summary_rows, summary_stats)
+            except (gspread.exceptions.APIError, gspread.exceptions.GSpreadException) as _sum_err:
+                # Enrichment only: the bill record is already written. Categorized + visible, never silent.
+                _alert("WARN", "API_FAILURE", f"{BILL_SUMMARIES_TAB} write failed ({type(_sum_err).__name__}: "
+                                              f"{_sum_err}); bill cards keep last cycle's summaries.")
+            if summary_stats["unknown_types"] or summary_stats["skipped_bad_bill"]:
+                _alert("WARN", "DATA_ANOMALY",
+                       f"Summaries.csv drift: {summary_stats['unknown_types']} row(s) with a SUMMARY_TYPE outside "
+                       f"{sorted(SUMMARY_STAGE_RANK)} (published unranked), {summary_stats['skipped_bad_bill']} "
+                       f"with a bill id we could not read (skipped).")
         crossed = sum(1 for r in records if r["crossed_over"])
         print(f"✅ Bill_Tracker written: {len(records)} bills "
               f"({completeness['prefiled_no_history']} prefiled-no-history, {crossed} crossed over, "

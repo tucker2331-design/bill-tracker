@@ -155,6 +155,13 @@ h2, h3 { margin: 0; }
 .metarow.next-soon { background: var(--o-carry-bg); margin: 0 -8px; padding: 7px 8px; border-radius: 6px; }
 .metarow.next-soon .k { color: #87680a; }
 /* Co-patrons: one line per LIS role group, grey role label; long lists fold behind the plain text toggle. */
+/* LIS summary on the bill card: plain paragraph, grey stage label, no box. */
+.sum { margin: 0 0 12px; }
+.sum-head { display: flex; justify-content: space-between; gap: var(--s3); align-items: baseline; font-size: 12px; }
+.sum-head a { white-space: nowrap; }
+.sum-label { font-size: 12px; font-weight: 600; }
+.sum-text { margin: 4px 0 6px; line-height: 1.5; max-width: 68ch; }
+.sum-other { margin-top: 8px; padding-top: 8px; border-top: 1px solid var(--line); }
 .copatrons { display: flex; flex-direction: column; gap: 2px; align-items: flex-start; }
 .soon-ink { color: #87680a; }
 .histtable { width: 100%; border-collapse: collapse; margin-top: var(--s2); }

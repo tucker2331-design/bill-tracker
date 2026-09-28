@@ -4,6 +4,7 @@ import { OutcomeChip, ChamberChip, Star } from "./common";
 import { lisBillUrl } from "../config";
 import { loadCalendar, nextMeetingFor, minutesUntil, type Meeting as CalMeeting } from "../data/calendar";
 import { dayKey, parseLisDate } from "../data/dates";
+import { loadSummary, typeLabel, type SummaryResult, type SummaryVersion } from "../data/summaries";
 
 // The bill card — every fact tied to its source location so they correlate (vision §6), with the
 // recovered pin (§5) and the deterministic LIS link. Used as a modal over any view.
@@ -70,6 +71,8 @@ export function BillCard({ bill, sessionCode, onClose }: { bill: Bill; sessionCo
             {bill.crossedOver && <span className="chip crossed">crossed over</span>}
             {bill.referrals > 1 && <span className="chip referral">{bill.referrals} referrals</span>}
           </div>
+
+          <Summary key={bill.bill} bill={bill.bill} lisUrl={lisBillUrl(sessionCode, bill.bill)} />
 
           <div className="metarow"><span className="k">Status (LIS)</span><span>{bill.statusLis || "—"}</span></div>
           <div className="metarow"><span className="k">Where it is</span>
@@ -160,5 +163,59 @@ function Copatrons({ list }: { list: Bill["copatrons"] }) {
         </button>
       )}
     </span>
+  );
+}
+
+// LIS's own summary (staff-written, not ours), loaded when the card opens. The latest stage is shown with its
+// LIS label; earlier versions fold away. Long summaries clamp with a plain toggle. Three states, never merged:
+// loading, "no summary from LIS", "not available right now".
+const SUMMARY_CLAMP = 600;
+function Summary({ bill, lisUrl }: { bill: string; lisUrl: string }) {
+  const [res, setRes] = useState<SummaryResult | undefined>(undefined);
+  const [full, setFull] = useState(false);
+  const [showOthers, setShowOthers] = useState(false);
+  useEffect(() => {
+    // Keyed by bill at the call site, so a new bill remounts with fresh state (no reset-in-effect).
+    let alive = true;
+    loadSummary(bill).then((r) => { if (alive) setRes(r); });
+    return () => { alive = false; };
+  }, [bill]);
+
+  const link = <a href={lisUrl} target="_blank" rel="noopener noreferrer">Full text on LIS ↗</a>;
+  let body;
+  if (res === undefined) body = <p className="muted sum-text">Loading summary…</p>;
+  else if (res.status === "unavailable") body = <p className="muted sum-text">Summary not available right now.</p>;
+  else if (res.status === "none") body = <p className="muted sum-text">LIS has no summary for this bill.</p>;
+  else {
+    const t = res.latest.text;
+    const clamped = !full && t.length > SUMMARY_CLAMP;
+    body = (
+      <>
+        <p className="sum-text">
+          {clamped ? `${t.slice(0, t.lastIndexOf(" ", SUMMARY_CLAMP))}…` : t}
+          {t.length > SUMMARY_CLAMP && <> <button type="button" className="gtoggle" onClick={() => setFull(!full)}>{full ? "show less" : "show more"}</button></>}
+        </p>
+        {res.others.length > 0 && (
+          <button type="button" className="gtoggle" onClick={() => setShowOthers(!showOthers)}>
+            {showOthers ? "hide earlier versions" : `earlier versions (${res.others.length})`}
+          </button>
+        )}
+        {showOthers && res.others.map((o: SummaryVersion, i: number) => (
+          <div key={i} className="sum-other">
+            <div className="muted sum-label">{typeLabel(o.type)}</div>
+            <p className="sum-text">{o.text}</p>
+          </div>
+        ))}
+      </>
+    );
+  }
+  return (
+    <section className="sum" aria-label="Summary">
+      <div className="sum-head">
+        <span className="muted sum-label">{res && res.status === "ok" ? typeLabel(res.latest.type) : "Summary"}</span>
+        {link}
+      </div>
+      {body}
+    </section>
   );
 }
