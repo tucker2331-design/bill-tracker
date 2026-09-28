@@ -166,35 +166,31 @@ function Copatrons({ list }: { list: Bill["copatrons"] }) {
   );
 }
 
-// LIS's own summary (staff-written, not ours), loaded when the card opens. The latest stage is shown with its
-// LIS label; earlier versions fold away. Long summaries clamp with a plain toggle. Three states, never merged:
+// LIS's own summary (staff-written, not ours). CLOSED by default (owner 2026-09-28): the catchline under the bill
+// number is already the short summary, so the full text is one tap away rather than on the card. It is fetched
+// only when first opened, so a card that is never expanded costs no request. Three states, never merged:
 // loading, "no summary from LIS", "not available right now".
-const SUMMARY_CLAMP = 600;
 function Summary({ bill, lisUrl }: { bill: string; lisUrl: string }) {
   const [res, setRes] = useState<SummaryResult | undefined>(undefined);
-  const [full, setFull] = useState(false);
+  const [opened, setOpened] = useState(false);
   const [showOthers, setShowOthers] = useState(false);
   useEffect(() => {
+    if (!opened) return;
     // Keyed by bill at the call site, so a new bill remounts with fresh state (no reset-in-effect).
     let alive = true;
     loadSummary(bill).then((r) => { if (alive) setRes(r); });
     return () => { alive = false; };
-  }, [bill]);
+  }, [bill, opened]);
 
-  const link = <a href={lisUrl} target="_blank" rel="noopener noreferrer">Full text on LIS ↗</a>;
   let body;
   if (res === undefined) body = <p className="muted sum-text">Loading summary…</p>;
   else if (res.status === "unavailable") body = <p className="muted sum-text">Summary not available right now.</p>;
   else if (res.status === "none") body = <p className="muted sum-text">LIS has no summary for this bill.</p>;
   else {
-    const t = res.latest.text;
-    const clamped = !full && t.length > SUMMARY_CLAMP;
     body = (
       <>
-        <p className="sum-text">
-          {clamped ? `${t.slice(0, t.lastIndexOf(" ", SUMMARY_CLAMP))}…` : t}
-          {t.length > SUMMARY_CLAMP && <> <button type="button" className="gtoggle" onClick={() => setFull(!full)}>{full ? "show less" : "show more"}</button></>}
-        </p>
+        <div className="muted sum-label">{typeLabel(res.latest.type)}</div>
+        <p className="sum-text">{res.latest.text}</p>
         {res.others.length > 0 && (
           <button type="button" className="gtoggle" onClick={() => setShowOthers(!showOthers)}>
             {showOthers ? "hide earlier versions" : `earlier versions (${res.others.length})`}
@@ -210,12 +206,12 @@ function Summary({ bill, lisUrl }: { bill: string; lisUrl: string }) {
     );
   }
   return (
-    <section className="sum" aria-label="Summary">
-      <div className="sum-head">
-        <span className="muted sum-label">{res && res.status === "ok" ? typeLabel(res.latest.type) : "Summary"}</span>
-        {link}
+    <details className="sum" onToggle={(e) => { if ((e.currentTarget as HTMLDetailsElement).open) setOpened(true); }}>
+      <summary>Full summary</summary>
+      <div className="sum-body">
+        {body}
+        <a href={lisUrl} target="_blank" rel="noopener noreferrer">Full bill text on LIS ↗</a>
       </div>
-      {body}
-    </section>
+    </details>
   );
 }
