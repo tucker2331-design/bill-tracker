@@ -1,8 +1,8 @@
 ---
 tags: [testing, calibration, prediction, members, war-room]
-updated: 2026-09-25
+updated: 2026-09-28
 status: active
-open_loop: IN PROGRESS. Full-text layer waits on the 2025-26 introduced-text fetch (text_corpus/blob_text.py, owner-approved, paced). After it — freeze choices, score 2026 ONCE (it has never been loaded into a model). Display is the owner's Tier-3 call.
+open_loop: IN PROGRESS. (1) Score the locked 2026 test once. (2) Carried-over bills (e.g. HB 1515) have no summary-wording score (txt_has=0), which shifts their guesses 10-17 points — score them before any member card ships. Display is the owner's call (War Room v10 mockup).
 ---
 
 # Predicting every legislator's FIRST vote on a bill
@@ -115,3 +115,31 @@ Black-majority Chesapeake district.
    years; 2025's did not. The tree over-trusted them (85.6 → 82.7). Fixed with an expanding window everywhere.
 5. **Where the misses are:** unanimous tablings of ordinary bills (the patron's own party votes to table — not
    explained by duplicates, tested) and party-line splits on majority bills. Those are the targets for text.
+
+## How sure, in words a volunteer can use (2026-09-28)
+
+Accuracy by how far the model leans, 2025 first votes (17,553 ballots, held out of training; 2025 was also the
+tuning year, so read these as slightly optimistic until the locked 2026 check runs):
+
+| label | how far it leans | share of calls | right |
+|---|---|---|---|
+| Likely | 80%+ either way | 70% | 94 of 100 |
+| Leans | 60–80% | 20% | about 70 of 100 |
+| Toss-up | 40–60% | 10% | 57 of 100 |
+
+The War Room shows only the label; the "How sure is this?" sheet shows this table. No per-member percentages.
+
+## Why a member gets their guess — `why_member.py` (2026-09-28)
+
+Owner: the two raw counts on the member card were odd to an amateur and "not enough evidence." Each reason now
+carries a direction and a size, measured by swapping that reason's inputs for 300 real same-party ballots
+(method and the failed first attempt are in the script's docstring). HB 1515, first vote assumed Jan 2027:
+
+- **The bill's own situation dominates for everyone.** No co-patrons / no Senate companion: −6 to −10 points per
+  member. Sitting in a subcommittee, carried over: −10 to −16 (depends on the assumed vote date). The first is the
+  one factor an org can change.
+- Personal factors are small: Kilgore's overall record −3; the four Democrats: committee record −1 to −5, similar
+  bills +4, overall record up to +6, patron record +2. District: 0 for all five.
+- **Data gap found:** HB 1515 has no summary-wording score (`txt_has = 0`), and the missing score moves the
+  Democrats' guesses by +10 to +17 — an artifact, not a reason. It is kept off the card and disclosed in the
+  "How sure" sheet. Fix: score carried-over bills' summaries (open loop below).

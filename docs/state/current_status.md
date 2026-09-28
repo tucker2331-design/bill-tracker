@@ -1,6 +1,6 @@
 ---
 tags: [state, live]
-updated: 2026-09-10
+updated: 2026-09-28
 status: active
 ---
 
@@ -33,6 +33,12 @@ status: active
 - **VA accuracy state: CLEAR + holding (2026-07-12).** The 0→66 regression is root-caused and closed ([[failures/assumptions_audit#105]] — an `UnboundLocalError` in the agenda block wearing an API-outage costume; §9 and cache-warmth both innocent). All four deferred pieces shipped + live-verified: agenda/meeting links (#214), §9 anchor ladder re-merge (#215), the scroll affordance (#216), and the last engineering residual — the label-based agenda-FETCH target (#217, [[state/open_anti_patterns]] #13, now resolved). No open VA engineering items; the only open PR is the Codex NY-probe (#175, NY). **Standing watch each cycle:** `meeting_unsourced=0`, breaker clear, `anchor_unresolved` stays 1, agenda/link drift canaries quiet. Everything below in NEXT is owner-gated (infra/decision), not blocked on me.
 
 ## NEXT (needs owner infra / a decision — then I execute)
+
+- **🎨 Site-wide design refresh — MOCKUPS FIRST, and only with the owner's explicit go-ahead** (owner 2026-09-28:
+  "wait until later ... ask explicit permission we should do mock ups first"). Direction: the War Room v10 look
+  (iOS grouped lists, sheets for detail, no initials), keeping every screen's location and abilities the same.
+  Also pending the owner's review of v10: the contact log gains "who was contacted" (legislator picker) and "how"
+  (call / meeting / email) — not built until approved. Member-card data: [[testing/first_vote]].
 
 - **📊 HISTORICAL DATA — SOLVED, pending one owner step: [[knowledge/openstates_bulk_va]].** Open States
   publishes **20 Virginia sessions (2017–2027) under CC0 with no commercial restriction** — against the 3

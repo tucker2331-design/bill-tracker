@@ -8,6 +8,15 @@ status: active
 
 Append-only, reverse-chronological (newest at top). Each entry opens with `## [YYYY-MM-DD] <kind> | <title>` so `grep "^## \[" log.md | head -20` gives a parseable timeline.
 
+## [2026-09-28] design | War Room v10 — member cards that say how much each reason matters
+
+Owner feedback on v9: drop the initials; the team section mixed "our position" with an unclear contact log; the
+member card's two raw counts were odd to an amateur and too little evidence. v10: position and contact log are
+separate groups, each contact names who was reached, by whom, and how; the member card starts from the party
+base rate and lists every measured reason with a direction and a strength, plus a "checked, doesn't change the
+guess" list. Method saved as `tools/calibration/why_member.py`; findings in [[testing/first_vote]]. Site-wide
+refresh waits for the owner's permission and mockups ([[state/current_status]]).
+
 ## [2026-09-24] finding | content predicts which opposite-party legislator crosses
 
 Owner asked for controversy measured from content *"historically and relative to individual politicans"*,
