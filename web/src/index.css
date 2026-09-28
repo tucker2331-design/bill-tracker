@@ -154,6 +154,8 @@ h2, h3 { margin: 0; }
    site-wide — the calendar's unplaceable marker moved OFF amber to the dashed border below. */
 .metarow.next-soon { background: var(--o-carry-bg); margin: 0 -8px; padding: 7px 8px; border-radius: 6px; }
 .metarow.next-soon .k { color: #87680a; }
+/* Co-patrons: one line per LIS role group, grey role label; long lists fold behind the plain text toggle. */
+.copatrons { display: flex; flex-direction: column; gap: 2px; align-items: flex-start; }
 .soon-ink { color: #87680a; }
 .histtable { width: 100%; border-collapse: collapse; margin-top: var(--s2); }
 .histtable th { text-align: left; color: var(--ink-faint); font-size: 11px; text-transform: uppercase; letter-spacing: .4px; padding: 5px 6px; }

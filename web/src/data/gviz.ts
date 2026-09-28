@@ -1,5 +1,5 @@
 import { gvizCsvUrl, BILL_TRACKER_TAB } from "../config";
-import type { Bill, BillData, Completeness, FloorEvent, HistoryRow, LatestVote, Meeting, Outcome, Chamber } from "./types";
+import type { Bill, BillData, Completeness, Copatron, FloorEvent, HistoryRow, LatestVote, Meeting, Outcome, Chamber } from "./types";
 
 // --- CSV (RFC4180) parser ----------------------------------------------------------------------
 // gviz `tqx=out:csv` quotes any field containing a comma/quote/newline and escapes quotes as "".
@@ -42,7 +42,7 @@ function jsonOr<T>(raw: string | undefined, fallback: T): T {
 const COL = {
   bill: 0, title: 1, status: 2, outcome: 3, patron: 4, patronId: 5, chamber: 6, crossed: 7,
   lastCommittee: 8, referrals: 9, lastAction: 10, latestVote: 11, upcoming: 12, history: 13,
-  dataAsOf: 14, source: 15, floorHouse: 16, floorSenate: 17, legislationClass: 19,
+  dataAsOf: 14, source: 15, floorHouse: 16, floorSenate: 17, legislationClass: 19, copatrons: 20,
 } as const;
 
 /**
@@ -81,6 +81,18 @@ const floorEvent = (v: string | undefined): FloorEvent => {
   return "";
 };
 
+// Co-patrons cell: "" (or a missing column on an older sheet) = UNKNOWN -> null; "[]" = LIS lists none.
+// Anything unparseable is also null (unknown), never an empty list — "none" is a claim, so it needs the data.
+function copatrons(raw: string | undefined): Copatron[] | null {
+  const t = (raw || "").trim();
+  if (!t) return null;
+  const parsed = jsonOr<unknown>(t, null);
+  if (!Array.isArray(parsed)) return null;
+  return parsed
+    .filter((p): p is { name: string; member_id?: string; role?: string } => !!p && typeof p.name === "string")
+    .map((p) => ({ name: p.name, memberId: p.member_id || "", role: p.role || "" }));
+}
+
 const OUTCOMES = new Set<Outcome>([
   "signed", "vetoed", "dead", "carried_over", "awaiting_governor", "in_progress",
 ]);
@@ -114,6 +126,7 @@ function toBill(r: string[]): Bill | null {
     history: jsonOr<HistoryRow[]>(r[COL.history], []),
     dataAsOf: (r[COL.dataAsOf] || "").trim(),
     legislationClass: (r[COL.legislationClass] || "").trim(),
+    copatrons: copatrons(r[COL.copatrons]),
     source: (r[COL.source] || "LIS").trim(),
   };
 }

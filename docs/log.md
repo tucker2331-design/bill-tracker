@@ -1,12 +1,21 @@
 ---
 tags: [log, meta]
-updated: 2026-09-10
+updated: 2026-09-28
 status: active
 ---
 
 # Project Log
 
 Append-only, reverse-chronological (newest at top). Each entry opens with `## [YYYY-MM-DD] <kind> | <title>` so `grep "^## \[" log.md | head -20` gives a parseable timeline.
+
+## [2026-09-28] build | co-patrons in the app (Sponsors.csv → Bill_Tracker col U → bill card)
+
+Marketability queue item. One bulk `Sponsors.csv` read per cycle (same `lisfiles` host + guard as BILLS/HISTORY/DOCKET).
+Measured 20261: 15,875 rows → 12,230 co-patron entries on 1,640 bills; roles verbatim (Chief Co-Patron / Co-Patron /
+Offered / Incorporated Chief Co-Patron), 0 outside the measured vocabulary. Unknown (source down) is an empty cell and
+shows "not available", never "none". Metadata cells moved to a reserved zone (cadence Z1, completeness AA1) with an
+import-time check that no data column reaches it — the co-patron column would otherwise have landed on U1, the same
+collision as PR #238. Stacked on #238. [[architecture/calendar_pipeline]] · [[state/va_build_queue]] E6.
 
 ## [2026-09-24] finding | content predicts which opposite-party legislator crosses
 
