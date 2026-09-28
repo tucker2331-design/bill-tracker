@@ -39,9 +39,10 @@ status: active
   anyone with the sheet id (it is in the public repo). [[architecture/verification_durability]] ·
   [[failures/assumptions_audit]] #142.
 - **📝 Contact log (name · date · note per bill) needs one command after merge:**
-  `npx wrangler d1 migrations apply bill-tracker-db --remote` (makes tone and legislator optional; table is empty).
-- **📧 Alerts to users need one yes: $5/month Workers Paid for Cloudflare Email Service** (3,000 emails/mo
-  included, then $0.35 per 1,000; no new vendor). Compared against Resend and SES in [[state/va_build_queue]] E8.
+  `npx wrangler d1 migrations apply bill-tracker-db --remote` (0002: tone and legislator optional; 0003: the Slack
+  alert snapshot table).
+- **💬 Slack alerts are built (free) — two owner steps:** make a Slack incoming webhook for your channel, then
+  `npx wrangler secret put SLACK_WEBHOOK_URL`. Alerts cover bills your team has a position on. [[state/va_build_queue]] E8.
 
 - **📊 HISTORICAL DATA — SOLVED, pending one owner step: [[knowledge/openstates_bulk_va]].** Open States
   publishes **20 Virginia sessions (2017–2027) under CC0 with no commercial restriction** — against the 3

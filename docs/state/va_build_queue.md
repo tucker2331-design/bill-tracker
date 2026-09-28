@@ -289,19 +289,16 @@ computable — without it that relationship is unrepresentable.
   `tone` and `member_number` optional (a row must still name a bill or a legislator) and adds `created_by` (the
   verified email of whoever typed it, separate from the name of who made the contact). 19 rule tests + the
   migration applied to a scratch SQLite with every constraint exercised. **Owner step: apply migration 0002.**
-- **E8. Alerts to users (email) — SCOPED 2026-09-28, needs an owner decision (a paid dependency).**
-  What it does: when a tracked bill gets a hearing date, a vote, or a new status, email the people tracking it.
-  The trigger already exists — every cycle rewrites Bill_Tracker, so a diff against the last cycle is the event
-  list. Only the SENDER is missing. Dependency audit (#9), terms and pricing read 2026-09-28:
-  | option | cost at our shape | curve vs our growth |
-  |---|---|---|
-  | **Cloudflare Email Service** (same account as the Worker + D1) | Workers Paid $5/mo minimum; 3,000 emails/mo included, then $0.35 per 1,000 | per email, not per seat — grows with alert volume, not with volunteers |
-  | Resend | free 3,000/mo but **100/day cap**; Pro $20/mo for 50,000 | a hearing day for a busy coalition can pass 100 in an hour |
-  | Amazon SES (à la carte) | $0.10 per 1,000, no monthly fee | cheapest per email; a second cloud account and a separate sending setup |
-  **Recommendation: Cloudflare Email Service** — no new vendor or account, and cost tracks emails sent rather
-  than seats. **Owner decision:** approve the $5/month Workers Paid plan (it also lifts Worker limits). Then I
-  build: a per-user "email me" toggle (D1), a cycle-to-cycle diff, one digest per person per cycle, and an
-  unsubscribe link in every mail.
+- **E8. Alerts — ✅ BUILT 2026-09-28 as a free SLACK digest** (owner: *"figured out with slack instead to keep it
+  free"*; the email options below are kept as the record). `worker/alerts.js` on a 15-minute Cron Trigger (free
+  plan): for every bill the team has a position on in the sheet's CURRENT session, compare LIS status / latest vote /
+  next hearing with the last run (D1 `alert_state`, migration 0003) and post ONE templated digest to a Slack channel
+  via an incoming webhook. First sight of a bill is recorded silently (no flood on deploy); the snapshot advances only
+  after Slack accepts the post (a refused post retries next cycle); column moves or a missing session make it refuse
+  to run rather than guess. 20 tests. **Owner steps:** create a Slack incoming webhook for a channel, then
+  `npx wrangler secret put SLACK_WEBHOOK_URL`; the migrations command also applies 0003.
+  *Record — email options considered:* Cloudflare Email Service ($5/mo Workers Paid, 3,000/mo included, then $0.35
+  per 1,000), Resend (free 3,000/mo but 100/day), Amazon SES ($0.10 per 1,000).
 
 ---
 
