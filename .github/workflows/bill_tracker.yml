@@ -7,7 +7,7 @@ name: 🗂️ Bill Tracker
 # EQUALIZED with the calendar worker in-window (owner 2026-07-05):
 #   - cron '*/15 * * * *' = every 15 min at :00/:15/:30/:45. This only OFFERS a tick; bill_tracker.py
 #     (_scheduled_gate → _cadence_should_run) self-throttles against the SHARED meeting signal (Sheet1!AC1,
-#     maintained by the calendar worker) + this worker's own last-run marker (Bill_Tracker!U1):
+#     maintained by the calendar worker) + this worker's own last-run marker (Bill_Tracker!Z1; U1 until 2026-09-28):
 #       • meeting ACTIVE  → run every ~15 min, the SAME track as the calendar worker (floor votes / committee
 #         report outcomes post DURING a meeting and are as time-sensitive as the calendar itself).
 #       • meeting on the forward calendar but not now → ~hourly.
@@ -16,7 +16,7 @@ name: 🗂️ Bill Tracker
 #   - OWN concurrency group (NOT the calendar lock anymore). Rationale: the calendar worker runs back-to-back
 #     ~19-min cycles IN a meeting window, so sharing its lock would STARVE this worker (it could never reach
 #     the 15-min track the owner wants). Running the two in parallel is still ban-safe: this is a LIGHT job
-#     (~5 guarded LIS reads, mostly 304s), both workers share the .lis_blob_cache (guardrail #1 → the 4.7 MB
+#     (~6 guarded LIS reads, mostly 304s), both workers share the .lis_blob_cache (guardrail #1 → the 4.7 MB
 #     HISTORY isn't double-downloaded even when they overlap), both jitter 0–180s (never the same instant),
 #     both honor the per-cycle request cap (#4), and each runs on a DIFFERENT GitHub runner IP. Two light,
 #     jittered, conditional, capped consumers ≈ one analyst with a couple of tabs open — not a ban pattern.
@@ -24,7 +24,7 @@ name: 🗂️ Bill Tracker
 #   - Off-window ticks EXIT after a Sheets read (ZERO LIS). Manual dispatch bypasses every gate (immediate).
 on:
   schedule:
-    - cron: '*/15 * * * *'        # every 15 min; the worker self-throttles per guardrail #5 (AC1 + U1)
+    - cron: '*/15 * * * *'        # every 15 min; the worker self-throttles per guardrail #5 (AC1 + Z1)
   workflow_dispatch:              # manual "Run Now" — bypasses quiet hours + cadence + jitter
 
 permissions:
