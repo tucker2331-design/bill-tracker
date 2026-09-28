@@ -266,7 +266,7 @@ computable — without it that relationship is unrepresentable.
   interpretation the owner removed).
   `drift_from_introduced()` is one comparison, **not a sum of steps** — summing double-counts twice-edited
   text and can exceed 100%.
-- **E6. Co-patrons** — **PARTIALLY PROBED 2026-07-27, param form UNRESOLVED.** The bill-search response
+- **E6. Co-patrons** — ✅ **BUILT 2026-09-28** (branch `claude/copatrons-in-app`): bulk `Sponsors.csv` → column U (JSON, LIS role verbatim, chief excluded, LIS order); bill card shows it grouped by role, folds past 6; "not available" when the source was down, never "none". Measured on 20261: 15,875 rows, 12,230 co-patron entries on 1,640 bills, 0 unknown roles. *History below kept.* ~~**PARTIALLY PROBED 2026-07-27, param form UNRESOLVED.**~~ The bill-search response
   carries **chief patron ONLY** (verified: 0 of 108 sampled bills had >1 patron), so co-patrons really are
   absent from the route we now use. The bundle shows the right endpoint is
   `LegislationPatron/api/GetLegislationPatronsByIdAsync`, returning `{Patrons:[…]}` where
@@ -276,6 +276,13 @@ computable — without it that relationship is unrepresentable.
   *member→bills* direction, not bill→patrons. **Stopped rather than brute-force the parameter space** (owner
   rule). Next: find the bundle's fetch helper to see how it composes the query.
 
+- **E7. Bill summaries in the app** — ✅ **BUILT 2026-09-28** (branch `claude/summaries-in-app`, stacked on E6):
+  bulk `Summaries.csv` (LIS staff summaries, every version) → its OWN tab `Bill_Summaries` (one row per version:
+  bill, LIS type verbatim, stage rank, plain text), read LAZILY per bill when a card opens — 3.8 MB of text must
+  not ride on the ~7 MB main load. The file is sorted by doc id, not date (114 of 1,307 multi-version bills out of
+  lifecycle order), so "latest" uses a rank over LIS's own 5-value `SUMMARY_TYPE` vocabulary; an unknown type is
+  published unranked and never promoted. Tags stripped server-side; rendered as text. Content hash in `F1` skips
+  identical rewrites. Measured 20261: 5,776 versions on 3,637 bills, 0 unknown types, 0 bad ids.
 - **E8. Alerts to users (email) — SCOPED 2026-09-28, needs an owner decision (a paid dependency).**
   What it does: when a tracked bill gets a hearing date, a vote, or a new status, email the people tracking it.
   The trigger already exists — every cycle rewrites Bill_Tracker, so a diff against the last cycle is the event

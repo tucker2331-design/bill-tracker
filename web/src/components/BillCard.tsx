@@ -5,6 +5,7 @@ import { lisBillUrl } from "../config";
 import { PositionControl } from "./PositionControl";
 import { loadCalendar, nextMeetingFor, minutesUntil, type Meeting as CalMeeting } from "../data/calendar";
 import { dayKey, parseLisDate } from "../data/dates";
+import { loadSummary, typeLabel, type SummaryResult, type SummaryVersion } from "../data/summaries";
 
 // The bill card — every fact tied to its source location so they correlate (vision §6), with the
 // recovered pin (§5) and the deterministic LIS link. Used as a modal over any view.
@@ -72,10 +73,13 @@ export function BillCard({ bill, sessionCode, onClose }: { bill: Bill; sessionCo
             {bill.referrals > 1 && <span className="chip referral">{bill.referrals} referrals</span>}
           </div>
 
+          <Summary key={bill.bill} bill={bill.bill} lisUrl={lisBillUrl(sessionCode, bill.bill)} />
+
           <div className="metarow"><span className="k">Status (LIS)</span><span>{bill.statusLis || "—"}</span></div>
           <div className="metarow"><span className="k">Where it is</span>
             <span>{bill.lastCommittee ? `${bill.lastCommittee}` : `${bill.chamber} (no current committee)`}</span></div>
           <div className="metarow"><span className="k">Patron</span><span>{bill.patron || "—"}{bill.patronId ? ` (${bill.patronId})` : ""}</span></div>
+          <div className="metarow"><span className="k">Co-patrons</span><Copatrons list={bill.copatrons} /></div>
           <div className="metarow"><span className="k">Latest vote</span>
             <span>{v.tally ? <>{v.tally} <span className="muted">— {v.location || "Floor"}{v.date ? `, ${v.date}` : ""}</span></> : <span className="muted">no recorded vote</span>}</span></div>
           <div className={`metarow${soon ? " next-soon" : ""}`}><span className="k">Next meeting</span>
@@ -128,5 +132,90 @@ export function BillCard({ bill, sessionCode, onClose }: { bill: Bill; sessionCo
         </div>
       </div>
     </div>
+  );
+}
+
+// Co-patrons, grouped by LIS's own role label (verbatim, in the order LIS lists them — chief co-patrons
+// come first there). Long lists (a commending resolution can carry 140+) show the first few and fold the
+// rest behind a plain disclosure. null = the source was unavailable: say so, never "none".
+const COPATRON_PREVIEW = 6;
+function Copatrons({ list }: { list: Bill["copatrons"] }) {
+  const [open, setOpen] = useState(false);
+  if (list === null) return <span className="muted">not available right now</span>;
+  if (list.length === 0) return <span className="muted">none</span>;
+  const groups: { role: string; names: string[] }[] = [];
+  for (const c of list) {
+    const g = groups.find((x) => x.role === c.role);
+    if (g) g.names.push(c.name); else groups.push({ role: c.role, names: [c.name] });
+  }
+  let budget = open ? Infinity : COPATRON_PREVIEW;
+  return (
+    <span className="copatrons">
+      {groups.map((g) => {
+        if (budget <= 0) return null;
+        const shown = g.names.slice(0, budget);
+        budget -= shown.length;
+        return (
+          <span key={g.role} className="cp-group">
+            <span className="muted">{g.role || "Patron"} ({g.names.length}): </span>{shown.join(", ")}
+          </span>
+        );
+      })}
+      {list.length > COPATRON_PREVIEW && (
+        <button type="button" className="gtoggle" onClick={() => setOpen(!open)}>
+          {open ? "show fewer" : `show all ${list.length}`}
+        </button>
+      )}
+    </span>
+  );
+}
+
+// LIS's own summary (staff-written, not ours). CLOSED by default (owner 2026-09-28): the catchline under the bill
+// number is already the short summary, so the full text is one tap away rather than on the card. It is fetched
+// only when first opened, so a card that is never expanded costs no request. Three states, never merged:
+// loading, "no summary from LIS", "not available right now".
+function Summary({ bill, lisUrl }: { bill: string; lisUrl: string }) {
+  const [res, setRes] = useState<SummaryResult | undefined>(undefined);
+  const [opened, setOpened] = useState(false);
+  const [showOthers, setShowOthers] = useState(false);
+  useEffect(() => {
+    if (!opened) return;
+    // Keyed by bill at the call site, so a new bill remounts with fresh state (no reset-in-effect).
+    let alive = true;
+    loadSummary(bill).then((r) => { if (alive) setRes(r); });
+    return () => { alive = false; };
+  }, [bill, opened]);
+
+  let body;
+  if (res === undefined) body = <p className="muted sum-text">Loading summary…</p>;
+  else if (res.status === "unavailable") body = <p className="muted sum-text">Summary not available right now.</p>;
+  else if (res.status === "none") body = <p className="muted sum-text">LIS has no summary for this bill.</p>;
+  else {
+    body = (
+      <>
+        <div className="muted sum-label">{typeLabel(res.latest.type)}</div>
+        <p className="sum-text">{res.latest.text}</p>
+        {res.others.length > 0 && (
+          <button type="button" className="gtoggle" onClick={() => setShowOthers(!showOthers)}>
+            {showOthers ? "hide earlier versions" : `earlier versions (${res.others.length})`}
+          </button>
+        )}
+        {showOthers && res.others.map((o: SummaryVersion, i: number) => (
+          <div key={i} className="sum-other">
+            <div className="muted sum-label">{typeLabel(o.type)}</div>
+            <p className="sum-text">{o.text}</p>
+          </div>
+        ))}
+      </>
+    );
+  }
+  return (
+    <details className="sum" onToggle={(e) => { if ((e.currentTarget as HTMLDetailsElement).open) setOpened(true); }}>
+      <summary>Full summary</summary>
+      <div className="sum-body">
+        {body}
+        <a href={lisUrl} target="_blank" rel="noopener noreferrer">Full bill text on LIS ↗</a>
+      </div>
+    </details>
   );
 }

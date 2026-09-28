@@ -16,6 +16,23 @@ While wiring it: **any Google account passed the API's auth** — identity was c
 fail-closed `TEAM_EMAILS` secret gate (`worker/team.js`, 19 tests; Worker tests now run in CI). Owner must set the
 secret before positions carry data. [[failures/assumptions_audit]] #142 · [[architecture/verification_durability]].
 
+## [2026-09-28] build | bill summaries in the app (Summaries.csv → Bill_Summaries tab → bill card)
+
+Marketability queue item. LIS's own staff summaries, every version, on a separate tab read lazily per bill (the main
+sheet is already 6.9 MB; summaries add 3.8 MB). Latest = highest rank over LIS's 5-value SUMMARY_TYPE vocabulary,
+because the file is ordered by doc id, not date (114 of 1,307 multi-version bills would show a stale version if we
+took the last row). Three states on the card: summary / "LIS has no summary" / "not available right now". Stacked on
+the co-patrons PR. [[state/va_build_queue]] E7 · [[architecture/calendar_pipeline]].
+
+## [2026-09-28] build | co-patrons in the app (Sponsors.csv → Bill_Tracker col U → bill card)
+
+Marketability queue item. One bulk `Sponsors.csv` read per cycle (same `lisfiles` host + guard as BILLS/HISTORY/DOCKET).
+Measured 20261: 15,875 rows → 12,230 co-patron entries on 1,640 bills; roles verbatim (Chief Co-Patron / Co-Patron /
+Offered / Incorporated Chief Co-Patron), 0 outside the measured vocabulary. Unknown (source down) is an empty cell and
+shows "not available", never "none". Metadata cells moved to a reserved zone (cadence Z1, completeness AA1) with an
+import-time check that no data column reaches it — the co-patron column would otherwise have landed on U1, the same
+collision as PR #238. Stacked on #238. [[architecture/calendar_pipeline]] · [[state/va_build_queue]] E6.
+
 ## [2026-09-24] finding | content predicts which opposite-party legislator crosses
 
 Owner asked for controversy measured from content *"historically and relative to individual politicans"*,

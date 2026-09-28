@@ -40,7 +40,11 @@ import pytz
 # --- structural constants -------------------------------------------------------------------------------
 
 CADENCE_STATE_CELL = "AC1"           # calendar worker's Sheet1: the shared cadence-state JSON (this module)
-BILL_LAST_RUN_CELL = "U1"            # bill worker's Bill_Tracker tab: its OWN last-full-run marker (UTC iso)
+# Bill worker's Bill_Tracker tab: its OWN last-full-run marker (UTC iso). Lives in the tab's RESERVED METADATA
+# ZONE (row 1, Z onward), clear of the data columns: at U1 it sat in the next free data column, and the U1
+# completeness collision (2026-09-28) plus the co-patron column (which lands at U) both hit it. bill_tracker
+# asserts at import that no data column reaches this zone.
+BILL_LAST_RUN_CELL = "Z1"
 
 # final_df Origins that carry a CONCRETE, real meeting time (not an administrative/placeholder row). Mirrors
 # the _CONCRETE set in calendar_worker.run_calendar_update — keep in sync (both derive "a real meeting").

@@ -29,6 +29,7 @@ source before ingest (see docs/ideas/lis_data_inventory.md §6).
 See docs/ideas/product_vision.md, docs/ideas/product_roadmap.md §B0, docs/ideas/lis_data_inventory.md.
 """
 import os
+import hashlib
 import re
 import json
 import time
@@ -38,17 +39,42 @@ import datetime
 import gspread
 import pytz
 import pandas as pd
+from html.parser import HTMLParser
 from google.oauth2.service_account import Credentials
 
 import cadence   # LIS-safety guardrail #5 — the SHARED cadence decision (same signal the calendar worker maintains)
 
-# The completeness payload's cell. MUST differ from every other cell this worker writes on the same tab --
-# above all cadence.BILL_LAST_RUN_CELL (see the collision note in write_bill_tracker). Checked at import, so a
-# future edit that re-collides fails at import time on the first run rather than silently for months.
-COMPLETENESS_CELL = "V1"
-if COMPLETENESS_CELL == cadence.BILL_LAST_RUN_CELL:
-    raise RuntimeError(f"Bill_Tracker cell collision: completeness and the cadence marker are both "
-                       f"{COMPLETENESS_CELL}; one would overwrite the other every cycle")
+# Bill_Tracker tab layout. Data columns run A.. from the left; row-1 METADATA cells (the completeness payload +
+# the cadence last-run marker) live in a RESERVED ZONE starting at Z, with blank columns between as headroom.
+# History of why this is a rule and not a convention: completeness moved T -> U on 2026-07-30 ONTO the cadence
+# marker's U1 and was erased every cycle for two months (fixed 2026-09-28); then the co-patron column was about
+# to land on U1 again. Both were the same bug: a new data column (or payload) walking into a metadata cell.
+# The checks below run at IMPORT, so a layout that collides fails on the first run, never silently.
+BILL_TRACKER_HEADER = ["Bill", "Title", "Status (LIS)", "Outcome", "Patron", "Patron ID", "Chamber",
+                       "Crossed Over", "Last Committee", "Referrals", "Last Action", "Latest Vote (JSON)",
+                       "Upcoming (JSON)", "History (JSON)", "Data As Of (UTC)", "Source",
+                       "House Floor", "Senate Floor", "Outcome Origin", "Class", "Co-Patrons (JSON)"]
+COMPLETENESS_CELL = "AA1"
+METADATA_CELLS = {"completeness": COMPLETENESS_CELL, "cadence_last_run": cadence.BILL_LAST_RUN_CELL}
+
+
+def _col_number(cell):
+    """'AA1' -> 27 (1-based column of an A1 reference)."""
+    letters = re.match(r"^([A-Z]+)\d+$", cell)
+    if not letters:
+        raise ValueError(f"not an A1 cell reference: {cell!r}")
+    n = 0
+    for ch in letters.group(1):
+        n = n * 26 + (ord(ch) - 64)
+    return n
+
+
+if len(set(METADATA_CELLS.values())) != len(METADATA_CELLS):
+    raise RuntimeError(f"Bill_Tracker cell collision: two metadata values share a cell {METADATA_CELLS}; "
+                       f"one would overwrite the other every cycle")
+if min(_col_number(c) for c in METADATA_CELLS.values()) <= len(BILL_TRACKER_HEADER):
+    raise RuntimeError(f"Bill_Tracker layout collision: {len(BILL_TRACKER_HEADER)} data columns reach the "
+                       f"metadata zone {METADATA_CELLS}; move the metadata cells right before adding a column")
 
 # Reuse the worker's proven, guarded primitives + structural resolvers — single source of truth.
 from calendar_worker import (
@@ -337,6 +363,157 @@ def _build_bills_meta(blob_code):
     return meta, len(df), skipped_no_bill
 
 
+# LIS's PATRON_TYPE vocabulary (Sponsors.csv), measured on 20261: "Chief Patron" 3,645, "Co-Patron" 11,040,
+# "Chief Co-Patron" 948, "Offered" 220, "Incorporated Chief Co-Patron" 22. The role is published VERBATIM; we
+# never interpret it. Anything outside this set is COUNTED (copatron_unknown_roles), not dropped or guessed.
+KNOWN_PATRON_ROLES = frozenset({"Chief Patron", "Chief Co-Patron", "Co-Patron", "Offered",
+                                "Incorporated Chief Co-Patron"})
+
+
+def _build_copatrons(blob_code):
+    """BULK ingest of Sponsors.csv (one guarded blob, same host and guard as BILLS/HISTORY/DOCKET; never
+    per-bill) -> ({clean_bill: [{name, member_id, role}]}, stats). The chief patron is EXCLUDED here (the record
+    already carries it); everyone else is listed in LIS's own order (the numeric prefix of PATRON_TYPE).
+
+    Replaces the E6 plan: the per-bill LegislationPatron endpoint's parameters were never resolved, and this
+    bulk file carries the same list structurally. Enrichment only: an empty/failed fetch returns ({}, stats with
+    rows=0) and the caller alerts; a bill with no co-patrons gets [] (an honest empty, not a failure)."""
+    stats = {"rows": 0, "skipped_no_bill": 0, "unknown_roles": 0}
+    df = safe_fetch_csv(f"https://lis.blob.core.windows.net/lisfiles/{blob_code}/Sponsors.csv")
+    if df.empty:
+        return {}, stats
+    cols = {c.lower(): c for c in df.columns}
+    need = ("bill_number", "member_name", "member_id", "patron_type")
+    if not all(c in cols for c in need):
+        stats["missing_columns"] = [c for c in need if c not in cols]
+        return {}, stats
+    stats["rows"] = len(df)
+    out = {}
+    for b, nm, mid, pt in zip(df[cols["bill_number"]].map(_clean_bill),
+                              df[cols["member_name"]].fillna("").astype(str),
+                              df[cols["member_id"]].fillna("").astype(str),
+                              df[cols["patron_type"]].fillna("").astype(str)):
+        if not b:
+            stats["skipped_no_bill"] += 1          # counted (source-miss visibility), never silent
+            continue
+        order_s, _sep, role = pt.strip().partition(" - ")
+        role = role.strip() or pt.strip()
+        if role not in KNOWN_PATRON_ROLES:
+            stats["unknown_roles"] += 1            # published verbatim anyway; the counter surfaces drift
+        if role == "Chief Patron":
+            continue
+        try:
+            order = int(order_s)
+        except ValueError:
+            order = 10**6                           # unordered rows sort last, still shown
+        out.setdefault(b, []).append((order, {"name": nm.strip(), "member_id": mid.strip(), "role": role}))
+    return {b: [x for _o, x in sorted(v, key=lambda t: t[0])] for b, v in out.items()}, stats
+
+
+# LIS's SUMMARY_TYPE vocabulary (Summaries.csv), measured on 20261 (5,776 rows): introduced 3,637, passed 1,156,
+# passed House 528, passed Senate 341, enacted with Governor's recommendation 114. The file is sorted by document
+# id, NOT by date (114 of 1,307 multi-version bills are out of lifecycle order in file order), so "the latest
+# summary" needs this rank. Same-rank ties (passed House / passed Senate) keep file order. A type outside this
+# map is still published, with an EMPTY rank, and counted -- the app never picks it as "latest" on a guess.
+SUMMARY_STAGE_RANK = {
+    "SUMMARY AS INTRODUCED": 0,
+    "SUMMARY AS PASSED HOUSE": 1,
+    "SUMMARY AS PASSED SENATE": 1,
+    "SUMMARY AS PASSED": 2,
+    "SUMMARY AS ENACTED WITH GOVERNOR'S RECOMMENDATION": 3,
+}
+BILL_SUMMARIES_TAB = "Bill_Summaries"
+BILL_SUMMARIES_HEADER = ["Bill", "Summary Type", "Stage Rank", "Summary"]
+# Content hash of the last rows written, in a metadata cell clear of the data (A..D). Summaries barely change
+# once a session ends, and the tab is ~3.8 MB: an identical cycle skips the rewrite instead of re-sending it
+# every 15 minutes in-window. Any read failure falls through to a full write (fail toward freshness).
+BILL_SUMMARIES_HASH_CELL = "F1"
+_SUM_BILL_RE = re.compile(r"^([A-Z]+)0*(\d+)$")
+
+
+class _TextOnly(HTMLParser):
+    """LIS summaries are small HTML fragments (<p class=sumtext><b>Catchline.</b> ...). Keep the text, drop every
+    tag -- the app renders plain text, so nothing from the feed is ever injected as markup."""
+    def __init__(self):
+        super().__init__(convert_charrefs=True)
+        self.parts = []
+
+    def handle_data(self, data):
+        self.parts.append(data)
+
+
+def _summary_text(fragment):
+    p = _TextOnly()
+    p.feed(fragment or "")
+    p.close()
+    return " ".join("".join(p.parts).split())
+
+
+def _build_summaries(blob_code):
+    """BULK ingest of Summaries.csv (one guarded blob; ETag-cached, so a steady cycle is a 304) -> (rows for the
+    Bill_Summaries tab, stats). One row per summary version: [bill, LIS type verbatim, stage rank or "", plain
+    text]. Bill ids are LIS's zero-padded form (HB0001) normalized to the tracker's (HB1) -- an id that doesn't
+    fit the prefix+digits shape is counted and skipped, never guessed."""
+    stats = {"rows": 0, "bills": 0, "skipped_bad_bill": 0, "unknown_types": 0, "empty_text": 0}
+    df = safe_fetch_csv(f"https://lis.blob.core.windows.net/lisfiles/{blob_code}/Summaries.csv")
+    if df.empty:
+        return [], stats
+    cols = {c.lower(): c for c in df.columns}
+    need = ("sum_bilno", "summary_type", "summary_text")
+    if not all(c in cols for c in need):
+        stats["missing_columns"] = [c for c in need if c not in cols]
+        return [], stats
+    stats["rows"] = len(df)
+    out, bills = [], set()
+    for raw_bill, typ, html in zip(df[cols["sum_bilno"]].astype(str), df[cols["summary_type"]].astype(str),
+                                   df[cols["summary_text"]].astype(str)):
+        m = _SUM_BILL_RE.match(raw_bill.replace(" ", "").upper())
+        if not m:
+            stats["skipped_bad_bill"] += 1          # counted (source-miss visibility), never silent
+            continue
+        bill = f"{m.group(1)}{int(m.group(2))}"
+        typ = typ.strip()
+        rank = SUMMARY_STAGE_RANK.get(typ)
+        if rank is None:
+            stats["unknown_types"] += 1
+        text = _summary_text(html)
+        if not text:
+            stats["empty_text"] += 1
+            continue
+        bills.add(bill)
+        out.append([bill, typ, "" if rank is None else rank, text])
+    stats["bills"] = len(bills)
+    return out, stats
+
+
+def write_bill_summaries(sheet, rows, stats):
+    """Replace the Bill_Summaries tab. The app reads it LAZILY (one bill per query, when a bill card opens), so
+    the ~3.8 MB of summary text never rides on the main Bill_Tracker load (already ~7 MB).
+
+    A failed/empty fetch leaves the tab UNTOUCHED (last good summaries stay; summaries almost never change after
+    passage) and the caller alerts -- clearing it would turn an LIS hiccup into "no summary" on every bill."""
+    if not rows:
+        return False
+    grid = [BILL_SUMMARIES_HEADER] + rows
+    digest = hashlib.sha256(json.dumps(grid, ensure_ascii=False).encode("utf-8")).hexdigest()
+    try:
+        ws = sheet.worksheet(BILL_SUMMARIES_TAB)
+        try:
+            if ws.acell(BILL_SUMMARIES_HASH_CELL).value == digest:
+                return False                                   # identical to what is already published
+        except gspread.exceptions.APIError as _hash_err:
+            print(f"ℹ️  [BILL_TRACKER] {BILL_SUMMARIES_TAB} hash unreadable ({_hash_err}); rewriting.")
+        need_cols = _col_number(BILL_SUMMARIES_HASH_CELL)
+        if ws.row_count < len(grid) + 50 or ws.col_count < need_cols:
+            ws.resize(rows=max(ws.row_count, len(grid) + 50), cols=max(ws.col_count, need_cols))
+    except gspread.exceptions.WorksheetNotFound:
+        ws = sheet.add_worksheet(title=BILL_SUMMARIES_TAB, rows=len(grid) + 50, cols=_col_number(BILL_SUMMARIES_HASH_CELL))
+    ws.clear()
+    ws.batch_update([{"range": "A1", "values": grid},
+                     {"range": BILL_SUMMARIES_HASH_CELL, "values": [[digest]]}])
+    return True
+
+
 def _derive_position(rows, bill):
     """STRUCTURAL position from refids only (rows oldest→newest). All CERTAIN facts — never a guess:
       - chamber: the chamber of the most recent committee action (origin until it crosses).
@@ -565,6 +742,12 @@ def build_bill_records(http_session, session_code):
                     docket_by_bill.setdefault(b, []).append({"date": str(dt).strip(), "committee": str(cm).strip()})
     # 5) BILLS.CSV (one guarded BULK blob) → chief patron + structural outcome flags for every bill.
     bills_meta, bills_meta_rows, bills_skipped_no_bill = _build_bills_meta(blob_code)
+    # 5b) Sponsors.csv (one guarded BULK blob) -> co-patrons for every bill.
+    copatrons_by_bill, copatron_stats = _build_copatrons(blob_code)
+    if copatron_stats["rows"] == 0:
+        _alert("WARN", "API_FAILURE",
+               f"Sponsors.csv unavailable or unreadable for {blob_code} ({copatron_stats}); co-patrons published "
+               f"empty this cycle -- the rest of the record is unaffected.")
 
     # Virginia-local (ET) date — NOT the runner's UTC date. An evening run on a UTC CI box would
     # otherwise treat tomorrow as "today" and drop a meeting still scheduled for today in ET
@@ -688,6 +871,10 @@ def build_bill_records(http_session, session_code):
             # LIS's own class. Blank when the class call failed — the UI then shows one ungrouped list
             # rather than guessing, because a wrong label is worse than no label.
             "legislation_class": bill_class.get(bill, ""),
+            # [{name, member_id, role}] in LIS's order, chief patron excluded. [] = LIS lists none; None = unknown
+            # (Sponsors.csv down this cycle) -- written as an EMPTY cell so the app says "not available" rather
+            # than "none". The two must never collapse into one value (pre-push audit #15).
+            "copatrons": copatrons_by_bill.get(bill, []) if copatron_stats["rows"] else None,
         })
 
     # 5) COMPLETENESS (the top trust signal, free).
@@ -717,6 +904,13 @@ def build_bill_records(http_session, session_code):
         # BILLS.CSV bulk-join coverage (trust: did the patron/outcome enrichment actually reach the bills?)
         "bills_meta_rows": bills_meta_rows,
         "bills_skipped_no_bill": bills_skipped_no_bill,   # malformed BILLS.CSV rows (no bill id), counted
+        # Sponsors.csv (co-patrons). copatron_rows == 0 means the source was down, so an empty co-patron list
+        # that cycle is "unknown", not "none"; unknown_roles counts PATRON_TYPE values outside the measured
+        # vocabulary (published verbatim anyway -- the count is the drift signal).
+        "copatron_rows": copatron_stats["rows"],
+        "copatron_bills": sum(1 for r in records if r["copatrons"]),   # None (unknown) counts as 0 here
+        "copatron_skipped_no_bill": copatron_stats["skipped_no_bill"],
+        "copatron_unknown_roles": copatron_stats["unknown_roles"],
         "outcome_structural": outcome_structural,
         "outcome_keyword_fallback": outcome_keyword,
         "patron_present": patron_present,
@@ -781,7 +975,7 @@ def write_bill_tracker(records, completeness):
     Resizes the grid first — gspread.update does NOT auto-expand and errors past the grid.
 
     RETURNS `(prior_unverified, prior_universe, sheet)`:
-      * `prior_unverified`, `prior_universe` — last cycle's counts (read from T1 *before* the overwrite), or
+      * `prior_unverified`, `prior_universe` — last cycle's counts (read from the completeness cell *before* the overwrite), or
         None when there is no usable prior payload. The caller uses it as the baseline for the
         unverified-population delta guard — a fixed threshold can't work there (the population is
         legitimately large in-session, ~0 off-season). None means "no baseline", and the caller then
@@ -796,36 +990,31 @@ def write_bill_tracker(records, completeness):
     sheet = gc.open_by_key(SPREADSHEET_ID)
 
     # House Floor / Senate Floor are APPENDED (cols Q,R) so the existing A..P column indices the front
-    # end reads stay stable; the completeness summary moves right (T1) to stay clear of the widened data.
+    # end reads stay stable; the metadata cells sit in the reserved zone clear of the data.
     # Values: "passed" (cleared that floor) | "defeated" (reached that floor, voted down) | "" (no floor event).
     # "Class" is LIS's own LegislationClass (Legislation / Commending Resolution / Memorial Resolution /
     # Budget / Procedural). APPENDED at T so every A..S index the front end reads stays put; the
     # completeness payload moves one right to U. Measured 2026-07-30: session 20262 is 215 commending +
     # 80 memorial = 295 of 300 ceremonial, so without this column a special session buries its 5 real
     # bills. Structural field, never a keyword match on the title (Standard #3).
-    header = ["Bill", "Title", "Status (LIS)", "Outcome", "Patron", "Patron ID", "Chamber",
-              "Crossed Over", "Last Committee", "Referrals", "Last Action", "Latest Vote (JSON)",
-              "Upcoming (JSON)", "History (JSON)", "Data As Of (UTC)", "Source",
-              "House Floor", "Senate Floor", "Outcome Origin", "Class"]
+    header = BILL_TRACKER_HEADER
     rows = [header] + [[
         r["bill"], r["title"], r["status_lis"], r["outcome"], r["patron"], r["patron_id"], r["chamber"],
         "yes" if r["crossed_over"] else "no", r["last_committee"], r["referral_count"], r["last_action_date"],
         json.dumps(r["latest_vote"], ensure_ascii=False), json.dumps(r["upcoming"], ensure_ascii=False),
         json.dumps(r["history"], ensure_ascii=False), r["data_as_of_utc"], r["source"],
         r["floor_house"], r["floor_senate"], r["outcome_origin"], r.get("legislation_class", ""),
+        "" if r.get("copatrons") is None else json.dumps(r["copatrons"], ensure_ascii=False),
     ] for r in records]
-    # 19 data cols (A..S — "Outcome Origin" took the former empty spacer at S, so every A..R index the
-    # front end reads is unchanged); the completeness summary still lives at T1 (col 20); the cadence
-    # last-run marker (U1, col 21, guardrail #5 — this worker's OWN throttle clock) sits clear of the data.
-    # Completeness is at V1 (it briefly sat at U1 and collided with the cadence marker -- see below). The FRONT END no longer depends on this
-    # position: it locates the payload by CONTENT (the cell that parses as JSON carrying `universe_count`),
-    # so a future column can be appended without a coordinated front-end change. See web/src/data/gviz.ts.
-    # COLLISION FIXED 2026-09-28: completeness moved T -> U on 2026-07-30 (d7d55df) ONTO cadence's
-    # BILL_LAST_RUN_CELL (U1). The batch below writes completeness to U1 and then the last-run timestamp to U1,
-    # so for two months every cycle (a) erased the trust payload the front end reads and (b) left the
-    # unverified-delta guard with no baseline -- it read a timestamp, hit ValueError, and declined to alarm,
-    # silently, every run. Completeness now sits at V1; the assert makes a recurrence impossible to ship.
-    completeness_cell, need_rows, need_cols = COMPLETENESS_CELL, len(rows) + 50, 23
+    if any(len(row) != len(header) for row in rows):     # a row/header drift would shift every column after it
+        raise RuntimeError(f"Bill_Tracker row width != header width ({len(header)}); refusing to write a "
+                           f"shifted sheet")
+    # Data A..U (U = co-patrons, appended so every A..T index the front end reads stays put). The row-1
+    # metadata cells live in the reserved zone (Z1 cadence marker, AA1 completeness -- see BILL_TRACKER_HEADER
+    # and the import-time checks). The FRONT END finds completeness by CONTENT (the cell that parses as JSON
+    # carrying `universe_count`), so moving it needs no front-end change. See web/src/data/gviz.ts.
+    completeness_cell, need_rows = COMPLETENESS_CELL, len(rows) + 50
+    need_cols = max(_col_number(c) for c in METADATA_CELLS.values())
 
     try:
         ws = sheet.worksheet(BILL_TRACKER_TAB)
@@ -870,8 +1059,8 @@ def write_bill_tracker(records, completeness):
 
     ws.clear()
     # One batched write: rows + the completeness summary (front-end trust header) + the guardrail-#5 last-run
-    # marker (U1). U1 is written ONLY on a successful cycle (we only reach here on success), so a failed run
-    # leaves the prior U1 → the next scheduled tick sees a stale marker and is eligible to run (fail-toward-
+    # marker (cadence.BILL_LAST_RUN_CELL, Z1). It is written ONLY on a successful cycle (we only reach here on success), so a failed run
+    # leaves the prior marker → the next scheduled tick sees a stale marker and is eligible to run (fail-toward-
     # freshness). Same write-on-success discipline as the calendar worker's AA1/AC1.
     ws.batch_update([
         {"range": "A1", "values": rows},
@@ -932,7 +1121,30 @@ def run_bill_tracker():
             return
 
         records, completeness = build_bill_records(http_session, session_code)
+        # Summaries (one guarded bulk blob) go to their OWN tab, read lazily by the bill card -- built before the
+        # main write so their counts ride in this cycle's completeness payload.
+        summary_rows, summary_stats = _build_summaries(completeness["session_code"])
+        completeness.update({"summary_rows": summary_stats["rows"], "summary_bills": summary_stats["bills"],
+                             "summary_skipped_bad_bill": summary_stats["skipped_bad_bill"],
+                             "summary_unknown_types": summary_stats["unknown_types"],
+                             "summary_empty_text": summary_stats["empty_text"]})
         prior_unverified, prior_universe, _sheet = write_bill_tracker(records, completeness)
+        if not summary_rows:
+            _alert("WARN", "API_FAILURE",
+                   f"Summaries.csv unavailable or unreadable ({summary_stats}); {BILL_SUMMARIES_TAB} left as last "
+                   f"cycle's -- bill cards keep showing the previous summaries.")
+        else:
+            try:
+                write_bill_summaries(_sheet, summary_rows, summary_stats)
+            except (gspread.exceptions.APIError, gspread.exceptions.GSpreadException) as _sum_err:
+                # Enrichment only: the bill record is already written. Categorized + visible, never silent.
+                _alert("WARN", "API_FAILURE", f"{BILL_SUMMARIES_TAB} write failed ({type(_sum_err).__name__}: "
+                                              f"{_sum_err}); bill cards keep last cycle's summaries.")
+            if summary_stats["unknown_types"] or summary_stats["skipped_bad_bill"]:
+                _alert("WARN", "DATA_ANOMALY",
+                       f"Summaries.csv drift: {summary_stats['unknown_types']} row(s) with a SUMMARY_TYPE outside "
+                       f"{sorted(SUMMARY_STAGE_RANK)} (published unranked), {summary_stats['skipped_bad_bill']} "
+                       f"with a bill id we could not read (skipped).")
         crossed = sum(1 for r in records if r["crossed_over"])
         print(f"✅ Bill_Tracker written: {len(records)} bills "
               f"({completeness['prefiled_no_history']} prefiled-no-history, {crossed} crossed over, "
@@ -987,6 +1199,10 @@ def run_bill_tracker():
                    f"which nothing structural confirms.")
         # BILLS.CSV TOTAL failure (fetch empty or bill column undetected) — distinct from partial
         # under-coverage: every bill lost its patron + structural outcome this cycle (CodeRabbit #162).
+        if completeness["copatron_unknown_roles"]:
+            _alert("WARN", "DATA_ANOMALY",
+                   f"{completeness['copatron_unknown_roles']} Sponsors.csv row(s) carry a PATRON_TYPE outside "
+                   f"{sorted(KNOWN_PATRON_ROLES)} -- published verbatim; LIS may have added a patron role.")
         if completeness["bills_meta_rows"] == 0 and completeness["records_written"] > 0:
             _alert("WARN", "API_FAILURE",
                    "BILLS.CSV fetched/parsed to 0 rows — patron + structural outcome UNAVAILABLE this "
@@ -1012,10 +1228,10 @@ def run_bill_tracker():
 
 def _cadence_should_run():
     """Guardrail #5 for the bill worker: consult the SHARED meeting-window signal (Sheet1!AC1, maintained by
-    the calendar worker) plus this worker's OWN last-run marker (Bill_Tracker!U1) to decide fast vs slow.
+    the calendar worker) plus this worker's OWN last-run marker (Bill_Tracker!Z1) to decide fast vs slow.
 
     Returns True to PROCEED, False to SKIP. Reads Sheets only — ZERO LIS on a skip. FAILS OPEN (returns True)
-    on ANY error, and on a missing/unreadable AC1 (empty state → EMPTY tier) or missing U1 (→ no marker →
+    on ANY error, and on a missing/unreadable AC1 (empty state → EMPTY tier) or missing Z1 (→ no marker →
     run): a cadence read problem must never silence the worker (Standard #4, fail-toward-freshness). Pure
     decision logic lives in cadence.py (unit-tested); this is just the I/O wrapper.
     """
@@ -1033,7 +1249,7 @@ def _cadence_should_run():
         except gspread.exceptions.WorksheetNotFound:
             last_raw = None   # tab not created yet (first deploy) → no marker → run (expected, benign)
         except Exception as _u1_err:
-            # A REAL Sheets/API error reading U1 (not just first-deploy): don't swallow it silently (Qodo
+            # A REAL Sheets/API error reading Z1 (not just first-deploy): don't swallow it silently (Qodo
             # #198). Surface it, then still default to "no marker → run" (fail-toward-freshness).
             print(f"⚠️ Cadence: couldn't read {BILL_TRACKER_TAB}!{cadence.BILL_LAST_RUN_CELL} "
                   f"({type(_u1_err).__name__}: {_u1_err}) — treating as no marker (will run).")
