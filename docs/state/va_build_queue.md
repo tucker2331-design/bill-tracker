@@ -123,7 +123,7 @@ worked on live output: (a) a zone header read *"How he handles bills like this"*
 derived-claim tripwire** — now *"On Consumer Protection bills"*; (b) the contact stat said **3 contacts**
 while the log showed **2 rows**. Both fixed pre-publish.
 
-### M2. Position + tracking ladder popup *(unblocked — the enum is settled, see D1)*
+### M2. Position + tracking ladder popup *(unblocked — the enum is settled, see D1)* — **built inline instead of as a popup, 2026-09-28**, following M3's precedent: four text options on the bill card, nothing to lay out that the build did not answer. Owner may still want the popup form; say so and it moves.
 ### ~~M3. Account setup flow~~ — ✅ **BUILT, not just drawn** (`components/FirstRun.tsx`). The mockup step
 was skipped deliberately: the form is four fields and one escape hatch, so drawing it first would have cost
 a round-trip to learn nothing the build did not.
@@ -166,9 +166,12 @@ computable — without it that relationship is unrepresentable.
 - ~~**F2. Write path**~~ — ✅ **MERGED 2026-07-29 (#237).** Schema live; Migration applied to the remote D1 2026-07-28; both
   constraints verified against the real database (`stance='bogus'` → CHECK failure; missing `state` → NOT NULL
   failure). Worker API + **Google ID-token verification** built (Access rejected on its per-seat pricing
-  model — [[architecture/verification_durability]]). Sign-in shipped with it, so the door is hung. **Remaining before it carries
-  real data: the D1 second-oppose-tier decision (the enum), and wiring the War Room's position control to
-  `PUT /api/positions`.**
+  model — [[architecture/verification_durability]]). Sign-in shipped with it, so the door is hung. **2026-09-28: position control WIRED**
+  (branch `claude/team-positions`): bill card "Our position" row (the four D1 stances as grey text, current one
+  in ink, click again to clear → new `DELETE /api/positions`), and a stance column in the War Room list. The
+  "second oppose tier" note here was stale — D1 settled it (oppose stays one layer). **Also closed a hole:
+  any Google account passed auth** — now a `TEAM_EMAILS` secret gate ([[failures/assumptions_audit]] #142).
+  **Owner step before it carries real data: set `TEAM_EMAILS`.**
 - ~~**F3. Accounts**~~ — ✅ **BUILT 2026-07-28.** Sign-in (`web/src/state/auth.ts` + `components/SignIn.tsx`,
   verified live: button renders, zero console errors, **no token in localStorage** — held in memory only, so
   one XSS cannot steal an identity that outlives the tab). **First-run form built** — display name + three districts, which is what turns
@@ -280,6 +283,19 @@ computable — without it that relationship is unrepresentable.
   lifecycle order), so "latest" uses a rank over LIS's own 5-value `SUMMARY_TYPE` vocabulary; an unknown type is
   published unranked and never promoted. Tags stripped server-side; rendered as text. Content hash in `F1` skips
   identical rewrites. Measured 20261: 5,776 versions on 3,637 bills, 0 unknown types, 0 bad ids.
+- **E8. Alerts to users (email) — SCOPED 2026-09-28, needs an owner decision (a paid dependency).**
+  What it does: when a tracked bill gets a hearing date, a vote, or a new status, email the people tracking it.
+  The trigger already exists — every cycle rewrites Bill_Tracker, so a diff against the last cycle is the event
+  list. Only the SENDER is missing. Dependency audit (#9), terms and pricing read 2026-09-28:
+  | option | cost at our shape | curve vs our growth |
+  |---|---|---|
+  | **Cloudflare Email Service** (same account as the Worker + D1) | Workers Paid $5/mo minimum; 3,000 emails/mo included, then $0.35 per 1,000 | per email, not per seat — grows with alert volume, not with volunteers |
+  | Resend | free 3,000/mo but **100/day cap**; Pro $20/mo for 50,000 | a hearing day for a busy coalition can pass 100 in an hour |
+  | Amazon SES (à la carte) | $0.10 per 1,000, no monthly fee | cheapest per email; a second cloud account and a separate sending setup |
+  **Recommendation: Cloudflare Email Service** — no new vendor or account, and cost tracks emails sent rather
+  than seats. **Owner decision:** approve the $5/month Workers Paid plan (it also lifts Worker limits). Then I
+  build: a per-user "email me" toggle (D1), a cycle-to-cycle diff, one digest per person per cycle, and an
+  unsubscribe link in every mail.
 
 ---
 
