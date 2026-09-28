@@ -142,10 +142,15 @@ def features():
             no_w = w = 0.0
             psup = {p: [0.0, 0.0] for p in PARTIES}
             msup = collections.defaultdict(lambda: [0.0, 0.0])
+            mcnt = collections.defaultdict(lambda: [0, 0])      # integer: similar bills this member backed / voted
             for c, j in nb.get((s, b), []):
+                seen_c = set()
                 for cd, _vo, _vid, _ven, cb in rc.get(c, []):
                     if not cd or cd >= date:
                         continue
+                    for who2, _pp2, sup2 in cb:
+                        if (who2, c) not in seen_c:
+                            seen_c.add((who2, c)); mcnt[who2][1] += 1; mcnt[who2][0] += sup2
                     opp = 1 - sum(x[2] for x in cb) / len(cb)
                     no_w += opp * j; w += j
                     for who, pp, sup in cb:
@@ -254,6 +259,11 @@ def features():
                     "subroom_n": math.log1p(subroom[(SR, same, "n")]) if SR else 0.0,
                     "ses_rate": _rate(sroom_ses[(s, RK, same, "s")], sroom_ses[(s, RK, same, "n")], .85 if same else .55, 10),
                     "ses_n": math.log1p(sroom_ses[(s, RK, same, "n")]),
+                    # raw counts kept for the lobbyist-facing REASON tags (targets.py) -- a tag must carry "k of n"
+                    "k_mpat": mpat[(who, P, "s")], "n_mpat": mpat[(who, P, "n")],
+                    "k_sim": mcnt[who][0], "n_sim": mcnt[who][1],
+                    "k_mroom": mroom[(who, R, "s")], "n_mroom": mroom[(who, R, "n")],
+                    "k_msubj": ms_, "n_msubj": mn,
                     "mpat_rate": _rate(mpat[(who, P, "s")], mpat[(who, P, "n")], .85 if same else .55, 5),
                     "mpat_n": math.log1p(mpat[(who, P, "n")]),
                     "mdef_ses": _rate(mdef_ses[(s, who, "d")], mdef_ses[(s, who, "n")], .05, 20),
@@ -663,3 +673,102 @@ def add_ideal(rows):
 IP_COLS = ["ip_has", "ip_m1", "ip_m2", "ip_b1", "ip_b2", "ip_dist", "ip_toward", "ip_spread", "ip_bhas", "ip_n"]
 NUM = NUM + IP_COLS
 GROUPS["ideal points (legislator & bill position)"] = IP_COLS
+
+
+# ------------------------------------------------------------------------------------------------------
+# DISTRICT COMPOSITION (Census ACS 2023 5-year, 2022 maps). Owner, 2026-09-25: "consider things like district
+# location composition etc to decide this person simply would never vote this way". The 2022 maps took effect
+# with the 2023 elections, so these join ONLY to sessions 2024+; a member whose last district was on the old
+# map is not joined (their number means a different place).
+# ------------------------------------------------------------------------------------------------------
+def districts():
+    import gzip, json
+    from corpus import PEOPLE
+    base = os.path.join(HERE, "..", "historical_cache", "va_districts")
+    acs = {}
+    for tag, ch in (("lower", "H"), ("upper", "S")):
+        rows = json.load(gzip.open(os.path.join(base, f"acs_{tag}.json.gz"), "rt"))
+        h = rows[0]
+        for r in rows[1:]:
+            d = dict(zip(h, r)); f = lambda k: float(d[k]) if d[k] not in (None, "", "-666666666") else float("nan")
+            pop = f("B03002_001E"); ed = f("B15003_001E"); pv = f("B17001_001E"); hh = f("B25003_001E")
+            acs[(ch, int(d[h[-1]]))] = {
+                "d_white": f("B03002_003E") / pop, "d_black": f("B03002_004E") / pop,
+                "d_hisp": f("B03002_012E") / pop, "d_income": f("B19013_001E") / 1e5,
+                "d_college": sum(f(k) for k in ("B15003_022E", "B15003_023E", "B15003_024E", "B15003_025E")) / ed,
+                "d_poverty": f("B17001_002E") / pv, "d_owner": f("B25003_002E") / hh, "d_age": f("B01002_001E") / 100}
+    # WHICH DISTRICT each member holds: NOT the people file -- it mixes old- and new-map numbers for SITTING
+    # members (Sickles is listed as 43, his pre-2022 district; he holds 17), which would put about half the
+    # legislature in the wrong place. Instead: the ELECT candidate filings for the Nov 2023 elections (run on
+    # the 2022 maps), joined to LIS Members.csv by finance.join_members. Verified: Sickles 17, Kilgore 45,
+    # Shin 8, Tran 18. Zero LIS requests; members not in those filings get no district (flagged d_has=0).
+    import csv as _csv
+    sys.path.insert(0, os.path.join(HERE, "..", "historical_cache"))
+    import finance as F
+    _party, person = _party_lookup()
+    coms = F.committees(["2023_10", "2024_01"])
+    who = {}
+    for sess in ("20251", "20261"):
+        with gzip.open(os.path.join(HERE, "..", "historical_cache", "va", sess, "Members.csv.gz"), "rt") as fh:
+            mem = [(r["MBR_HOU"], r["MBR_NAME"].strip()) for r in _csv.DictReader(fh)]
+        m, _a, _x = F.join_members(coms, mem)
+        for (ch, nm), code in m.items():
+            c = coms[code]
+            # office_unreadable ("0.00") rows cannot be checked for an old-map marker, so their district is
+            # untrustworthy: Barry Knight's filing says 81 (old map) and joined him to a Black-majority
+            # Chesapeake district. Excluded, not guessed.
+            if c["old_map"] or not c["district"] or c.get("office_unreadable"):
+                continue
+            key = person(nm) or nm
+            who.setdefault(key, acs.get((ch, c["district"])))
+    return who
+
+
+DIST_COLS = ["d_has", "d_white", "d_black", "d_hisp", "d_income", "d_college", "d_poverty", "d_owner", "d_age"]
+
+
+def add_districts(rows):
+    W = districts()
+    for r in rows:
+        v = W.get(r["who"]) if r["yr"] >= 2024 else None
+        if v and all(x == x for x in v.values()):
+            r["d_has"] = 1; r.update(v)
+        else:
+            r["d_has"] = 0; r.update({c: 0.0 for c in DIST_COLS[1:]})
+    return rows
+
+
+NUM = NUM + DIST_COLS
+GROUPS["district composition (Census)"] = DIST_COLS
+
+
+ROOM_AGG = ["mpat_rate", "msubj", "mroom_rate", "dev", "ip_m1", "d_college", "d_white", "defect"]
+
+
+def add_room_aggregates(rows):
+    """The room decides as a GROUP. For each first vote, the average record of the members of EACH side who
+    are seated in this room (patron's party / the other party): on this patron, this subject, this room,
+    similar bills, their map position, their districts. Specific to these people on this day -- sharper than
+    the committee's all-time record or the party's chamber-wide stance. Roster = members voting."""
+    g = collections.defaultdict(list)
+    for r in rows:
+        g[r["bill"]].append(r)
+    for rs in g.values():
+        agg = {}
+        for side in (1, 0):
+            mem = [r for r in rs if r["same"] == side]
+            for c in ROOM_AGG:
+                agg[(side, c)] = float(np.mean([r[c] for r in mem])) if mem else 0.0
+            agg[(side, "n")] = len(mem)
+        for r in rs:
+            for c in ROOM_AGG:
+                r["ra_own_" + c] = agg[(r["same"], c)]
+                r["ra_oth_" + c] = agg[(1 - r["same"], c)]
+            r["ra_own_n"] = agg[(r["same"], "n")]; r["ra_oth_n"] = agg[(1 - r["same"], "n")]
+            r["ra_margin"] = agg[(1, "n")] - agg[(0, "n")]      # patron's side minus the other side, seats
+    return rows
+
+
+RA_COLS = [f"ra_{s}_{c}" for s in ("own", "oth") for c in ROOM_AGG] + ["ra_own_n", "ra_oth_n", "ra_margin"]
+NUM = NUM + RA_COLS
+GROUPS["the room's members, as a group"] = RA_COLS

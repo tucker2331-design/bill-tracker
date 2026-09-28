@@ -85,6 +85,27 @@ NAMED vote is its floor vote — 166,000 floor ballots that would have been over
 charge (~10k API calls, cost); Census district composition (a free key only the owner can register); the org's
 own positions and contact notes (caucus-level information the public record lacks).
 
+## Round 3 (2026-09-28) — aimed at the hardest third, owner target >80%
+
+| added | all | hardest third |
+|---|---|---|
+| Census district composition (2022 maps, joined via 2023 ELECT filings) | 85.5% | 67.0% |
+| "by request" bills (read from the printed bill) | — | hypothesis false: own party backed them 95% |
+| attribute scan for consensus kills (companion ahead, duplicates, fiscal, co-patrons…) | — | nothing separates; best "no co-patrons" 18% vs 8% |
+| **the room's seated members as a group** (each side's record on patron / subject / similar bills / map / districts) | **86.1%** | **67.8%** — best so far, rank 0.914 |
+| what this room did EARLIER THE SAME DAY (LIS vote-id order) | 86.4% | 68.7% — live-hearing only, not pre-meeting |
+
+**Verdict:** ~20 ingredients tested; the hardest third moves inside 66–69%. It is the bills whose party position is
+set in caucus, which no public record carries. What could still move it needs the owner: an LLM reading each bill
+for its political charge (API spend), and the org's own positions/contact notes.
+
+**District join, done right.** The people file mixes old- and new-map district numbers for SITTING members
+(Sickles listed at old 43; he holds 17) — joining on it put about half the legislature in the wrong place (the
+sanity check had Mark Sickles among the least college-educated districts). Districts now come from the Nov 2023
+ELECT candidate filings (2022 maps) via `finance.join_members`: Sickles 17, Kilgore 45, Shin 8, Tran 18.
+Filings whose office reads "0.00" are excluded — Barry Knight's said 81 (old map) and joined him to a
+Black-majority Chesapeake district.
+
 ## Traps caught, all before any number was reported
 1. **Direction bug — 1,262 roll calls (2.7%) read backwards.** "Failed to report (defeated)" was treated as a kill
    motion. Fixing it moved every number up.
