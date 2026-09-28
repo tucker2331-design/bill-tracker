@@ -8,6 +8,12 @@ status: active
 
 Append-only, reverse-chronological (newest at top). Each entry opens with `## [YYYY-MM-DD] <kind> | <title>` so `grep "^## \[" log.md | head -20` gives a parseable timeline.
 
+## [2026-09-28] build | Slack alerts (free) for the team's bills
+
+Replaces the email plan per owner. Worker Cron Trigger every 15 min → diff the team's position bills (current session
+only) against D1 `alert_state` → one templated digest to a Slack incoming webhook. Silent first sight, retry on a
+refused post, refuses to run on column drift or a missing session. [[state/va_build_queue]] E8.
+
 ## [2026-09-28] build | contact log on the bill card (name · date · note)
 
 Owner priority over positions. Bill card "Contacts" list + a three-field form. Migration 0002 relaxes `tone` (never

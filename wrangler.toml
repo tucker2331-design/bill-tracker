@@ -39,8 +39,17 @@ GOOGLE_CLIENT_ID = "831223695835-cqd2fmjq3l61jc1t6pr9elobra0imhf5.apps.googleuse
 # The ONE spreadsheet /api/sheet may read (worker/sheets.js). An identifier, not a credential -- the credential
 # is the GCP_SA_JSON secret. Must match web/src/config.ts SPREADSHEET_ID until that constant is retired.
 SPREADSHEET_ID = "1PQDtaTTUeYv781bx4_ZiehcvbEmUt8t7jFmZYJoJGKM"
+# Which state's bills the Bill_Tracker tab holds -- the Slack digest filters team positions by it (Standard #6:
+# a config value, not a literal inside the code). worker/alerts.js.
+BILL_TRACKER_STATE = "VA"
 
 [[d1_databases]]
 binding = "DB"
 database_name = "bill-tracker-db"
 database_id = "f859c3f5-e167-49a0-9e23-f4e53da59455"
+
+# Slack digest (worker/alerts.js): every 15 minutes, compare the team's bills with the last run and post what
+# changed. Free on the Workers Free plan. Needs the SLACK_WEBHOOK_URL secret; without it each run logs
+# "not configured" and does nothing.
+[triggers]
+crons = ["*/15 * * * *"]

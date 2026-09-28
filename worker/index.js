@@ -25,6 +25,7 @@ import { verifyGoogleIdToken } from "./auth.js";
 import { membership, teamGate } from "./team.js";
 import { handleSheet } from "./sheets.js";
 import { validateContact } from "./contacts.js";
+import { runAlerts } from "./alerts.js";
 
 const JSON_HEADERS = { "content-type": "application/json; charset=utf-8" };
 
@@ -68,6 +69,8 @@ async function handleApi(request, env, url) {
       // How /api/sheet reads the Google Sheet: "service_account" (the sheet can be private) or "none" (works
       // only while the sheet is still link-shared). Configuration only, never the caller's state.
       sheet_auth: env.GCP_SA_JSON ? "service_account" : "none",
+      // Whether the 15-minute Slack digest can run (worker/alerts.js). Configuration only.
+      alerts_configured: Boolean(env.SLACK_WEBHOOK_URL && env.BILL_TRACKER_STATE),
     });
   }
 
@@ -230,5 +233,16 @@ export default {
     }
     // EVERYTHING else is the SPA. This is the line that keeps the existing site working.
     return env.ASSETS.fetch(request);
+  },
+
+  // Cron Trigger (wrangler.toml [triggers]): the Slack digest. A failure is logged with its stack and re-thrown
+  // so Cloudflare records the run as failed (visible in the dashboard) -- never swallowed.
+  async scheduled(event, env, ctx) {
+    try {
+      await runAlerts(env);
+    } catch (err) {
+      console.error("alerts_error", err && err.stack ? err.stack : String(err));
+      throw err;
+    }
   },
 };
