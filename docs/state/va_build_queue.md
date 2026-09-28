@@ -276,6 +276,20 @@ computable — without it that relationship is unrepresentable.
   *member→bills* direction, not bill→patrons. **Stopped rather than brute-force the parameter space** (owner
   rule). Next: find the bundle's fetch helper to see how it composes the query.
 
+- **E8. Alerts to users (email) — SCOPED 2026-09-28, needs an owner decision (a paid dependency).**
+  What it does: when a tracked bill gets a hearing date, a vote, or a new status, email the people tracking it.
+  The trigger already exists — every cycle rewrites Bill_Tracker, so a diff against the last cycle is the event
+  list. Only the SENDER is missing. Dependency audit (#9), terms and pricing read 2026-09-28:
+  | option | cost at our shape | curve vs our growth |
+  |---|---|---|
+  | **Cloudflare Email Service** (same account as the Worker + D1) | Workers Paid $5/mo minimum; 3,000 emails/mo included, then $0.35 per 1,000 | per email, not per seat — grows with alert volume, not with volunteers |
+  | Resend | free 3,000/mo but **100/day cap**; Pro $20/mo for 50,000 | a hearing day for a busy coalition can pass 100 in an hour |
+  | Amazon SES (à la carte) | $0.10 per 1,000, no monthly fee | cheapest per email; a second cloud account and a separate sending setup |
+  **Recommendation: Cloudflare Email Service** — no new vendor or account, and cost tracks emails sent rather
+  than seats. **Owner decision:** approve the $5/month Workers Paid plan (it also lifts Worker limits). Then I
+  build: a per-user "email me" toggle (D1), a cycle-to-cycle diff, one digest per person per cycle, and an
+  unsubscribe link in every mail.
+
 ---
 
 ## V · DISPLAY
