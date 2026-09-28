@@ -647,6 +647,31 @@ a.hl-vverify:hover { text-decoration: underline; }
 .pos-opt:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .pos-meta { font-size: 12px; }
 .pos-err { font-size: 12px; color: var(--ink); }
+/* Contacts on the bill card: a plain list (who · when · note) and a form that only appears when asked for. */
+.cl { margin-top: 16px; }
+.cl-head { display: flex; align-items: baseline; justify-content: space-between; gap: var(--s3); }
+.cl-head .h { margin-bottom: 6px; }
+.cl-list { list-style: none; margin: 0; padding: 0; }
+.cl-list li { display: grid; grid-template-columns: minmax(80px, max-content) 56px minmax(0, 1fr); gap: 2px 12px; padding: 7px 0; border-top: 1px solid var(--line); font-size: 13px; }
+.cl-list li:first-child { border-top: 0; }
+.cl-who { font-weight: 600; }
+.cl-when { font-variant-numeric: tabular-nums; }
+.cl-note { color: var(--ink-soft); overflow-wrap: anywhere; }
+.cl-empty, .cl-foot { font-size: 12.5px; margin: 4px 0; }
+.cl-foot { font-size: 11.5px; }
+.cl-form { display: grid; grid-template-columns: minmax(0, 1fr) 150px; gap: 8px 12px; margin: 4px 0 10px; padding: 10px 0; border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); }
+.cl-form label { display: flex; flex-direction: column; gap: 3px; font-size: 11px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; color: var(--ink-faint); }
+.cl-form input, .cl-form textarea { font: inherit; font-size: 13px; letter-spacing: normal; text-transform: none; color: var(--ink); padding: 6px 8px; border: 1px solid var(--line); border-radius: 4px; background: var(--surface); }
+.cl-note-field { grid-column: 1 / -1; }
+.cl-actions { grid-column: 1 / -1; display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }
+.cl-save { font: inherit; font-size: 13px; font-weight: 600; padding: 5px 14px; border-radius: 4px; border: 1px solid var(--ink); background: var(--ink); color: var(--surface); cursor: pointer; }
+.cl-save:disabled { opacity: .45; cursor: default; }
+.cl-err { font-size: 12px; color: var(--ink); }
+@media (max-width: 560px) {
+  .cl-list li { grid-template-columns: 1fr auto; }
+  .cl-note { grid-column: 1 / -1; }
+  .cl-form { grid-template-columns: 1fr; }
+}
 
 /* Below the comfortable 5-column width the grid stops being a table and becomes two stacked lines.
    The trust partition is not involved here, so a reflow is safe — see the mobile note in the queue (R2)

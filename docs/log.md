@@ -8,6 +8,11 @@ status: active
 
 Append-only, reverse-chronological (newest at top). Each entry opens with `## [YYYY-MM-DD] <kind> | <title>` so `grep "^## \[" log.md | head -20` gives a parseable timeline.
 
+## [2026-09-28] build | contact log on the bill card (name · date · note)
+
+Owner priority over positions. Bill card "Contacts" list + a three-field form. Migration 0002 relaxes `tone` (never
+defaulted to neutral) and `member_number` (bill OR legislator required), adds `created_by`. [[state/va_build_queue]] E9.
+
 ## [2026-09-28] build | the whole app is private — data behind the team gate
 
 Owner: gate everything to "me and whoever I add" (LIS ToS). The UI gate existed but the browser read the sheet
