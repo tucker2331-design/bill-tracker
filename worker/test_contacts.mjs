@@ -1,0 +1,31 @@
+/** Contact-log rules (worker/contacts.js). Run: node worker/test_contacts.mjs */
+import { validateContact, isIsoDay } from "./contacts.js";
+let pass = 0, fail = 0;
+const is = (name, got, want) => {
+  const ok = JSON.stringify(got) === JSON.stringify(want);
+  console.log(`  ${ok ? "ok  " : "FAIL"} ${name}${ok ? "" : ` (got ${JSON.stringify(got)}, want ${JSON.stringify(want)})`}`);
+  ok ? pass++ : fail++;
+};
+const good = { state: "VA", session_code: "20261", bill_number: "HB1515", occurred_on: "2026-09-02", actor: "Dana R.", note: "Met the LA; asked for the fiscal note." };
+const ok = validateContact(good, "tucker@example.org", "2026-09-28T12:00:00Z");
+is("name + date + note on a bill is enough", ok.error, undefined);
+is("tone absent stays NULL (never 'neutral')", ok.row.tone, null);
+is("created_by is the VERIFIED caller", ok.row.created_by, "tucker@example.org");
+is("created_by ignores the body", validateContact({ ...good, created_by: "evil@x" }, "tucker@example.org", "t").row.created_by, "tucker@example.org");
+is("actor is the typed name", ok.row.actor, "Dana R.");
+is("no legislator needed", ok.row.member, null);
+is("no bill AND no legislator -> refused", typeof validateContact({ ...good, bill_number: "" }, "e", "t").error, "string");
+is("legislator without a bill is fine", validateContact({ ...good, bill_number: "", member_number: "H0344" }, "e", "t").error, undefined);
+is("missing note -> refused", typeof validateContact({ ...good, note: "  " }, "e", "t").error, "string");
+is("missing name -> refused", typeof validateContact({ ...good, actor: "" }, "e", "t").error, "string");
+is("bad date shape -> refused", typeof validateContact({ ...good, occurred_on: "9/2/26" }, "e", "t").error, "string");
+is("impossible day -> refused", typeof validateContact({ ...good, occurred_on: "2026-02-31" }, "e", "t").error, "string");
+is("bad tone -> refused", typeof validateContact({ ...good, tone: "meh" }, "e", "t").error, "string");
+is("real tone kept", validateContact({ ...good, tone: "positive" }, "e", "t").row.tone, "positive");
+is("lowercase state -> refused", typeof validateContact({ ...good, state: "va" }, "e", "t").error, "string");
+is("huge note -> refused", typeof validateContact({ ...good, note: "x".repeat(2001) }, "e", "t").error, "string");
+is("null body -> refused", typeof validateContact(null, "e", "t").error, "string");
+is("leap day exists", isIsoDay("2028-02-29"), true);
+is("non-leap Feb 29 does not", isIsoDay("2026-02-29"), false);
+console.log(`\n${fail ? `${fail} FAILED` : "ALL PASS"} (${pass} ok)`);
+process.exit(fail ? 1 : 0);

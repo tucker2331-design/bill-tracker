@@ -3,6 +3,7 @@ import type { Bill } from "../data/types";
 import { OutcomeChip, ChamberChip, Star } from "./common";
 import { lisBillUrl } from "../config";
 import { PositionControl } from "./PositionControl";
+import { ContactLog } from "./ContactLog";
 import { loadCalendar, nextMeetingFor, minutesUntil, type Meeting as CalMeeting } from "../data/calendar";
 import { dayKey, parseLisDate } from "../data/dates";
 import { loadSummary, typeLabel, type SummaryResult, type SummaryVersion } from "../data/summaries";
@@ -104,6 +105,8 @@ export function BillCard({ bill, sessionCode, onClose }: { bill: Bill; sessionCo
 
           <div className="metarow"><span className="k">Our position</span>
             <PositionControl bill={bill.bill} sessionCode={sessionCode} /></div>
+
+          <ContactLog key={bill.bill} bill={bill.bill} sessionCode={sessionCode} />
 
           <h3 className="h" style={{ marginTop: 16 }}>History</h3>
           <table className="histtable">

@@ -38,6 +38,8 @@ status: active
   → set the Google Sheet to Restricted → Streamlit secret + private. Until step 4 the data is still readable by
   anyone with the sheet id (it is in the public repo). [[architecture/verification_durability]] ·
   [[failures/assumptions_audit]] #142.
+- **📝 Contact log (name · date · note per bill) needs one command after merge:**
+  `npx wrangler d1 migrations apply bill-tracker-db --remote` (makes tone and legislator optional; table is empty).
 - **📧 Alerts to users need one yes: $5/month Workers Paid for Cloudflare Email Service** (3,000 emails/mo
   included, then $0.35 per 1,000; no new vendor). Compared against Resend and SES in [[state/va_build_queue]] E8.
 
