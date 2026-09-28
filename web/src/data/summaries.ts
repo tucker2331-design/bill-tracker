@@ -8,7 +8,8 @@
 //   unavailable — the tab is missing / the wrong tab came back / the fetch failed. Shown as "not available",
 //                 never as "none" — gviz serves the FIRST sheet for a missing tab (config.headerMatches).
 import { parseCsv } from "./gviz";
-import { SPREADSHEET_ID, headerMatches } from "../config";
+import { sheetUrl, headerMatches } from "../config";
+import { apiFetch } from "../state/auth";
 
 const TAB = "Bill_Summaries";
 const EXPECTED_HEADER = ["Bill", "Summary Type", "Stage Rank", "Summary"] as const;
@@ -60,12 +61,12 @@ export function loadSummary(bill: string): Promise<SummaryResult> {
 
 async function _load(id: string): Promise<SummaryResult> {
   const q = `select A,B,C,D where A = '${id}'`;
-  const url = `https://docs.google.com/spreadsheets/d/${SPREADSHEET_ID}/gviz/tq?tqx=out:csv&sheet=${TAB}&tq=${encodeURIComponent(q)}`;
+  const url = sheetUrl(TAB, { tq: q });
   const ctrl = new AbortController();
   const timer = setTimeout(() => ctrl.abort(), FETCH_TIMEOUT_MS);
   let text: string;
   try {
-    const res = await fetch(url, { cache: "no-store", signal: ctrl.signal });
+    const res = await apiFetch(url, { cache: "no-store", signal: ctrl.signal });
     if (!res.ok) return { status: "unavailable" };
     text = await res.text();
   } finally {

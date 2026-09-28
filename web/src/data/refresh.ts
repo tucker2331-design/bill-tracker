@@ -1,4 +1,5 @@
-import { SPREADSHEET_ID, BILL_TRACKER_TAB } from "../config";
+import { sheetUrl, BILL_TRACKER_TAB } from "../config";
+import { apiFetch } from "../state/auth";
 
 // The CHEAP half of the freshness-gate (docs/ideas/auto_refresh_on_new_data): a single-cell read (~22 bytes)
 // that tells us whether a feed was rewritten, WITHOUT re-downloading the 6.7 MB bill payload or the 5.7 MB
@@ -16,12 +17,11 @@ const SHEET1 = "Sheet1";
 const CELL_TIMEOUT_MS = 10000;
 
 async function readCell(tab: string, cell: string): Promise<string> {
-  const url = `https://docs.google.com/spreadsheets/d/${SPREADSHEET_ID}/gviz/tq?tqx=out:csv`
-    + `&sheet=${encodeURIComponent(tab)}&headers=0&range=${cell}`;
+  const url = sheetUrl(tab, { headers: "0", range: cell });
   const ctrl = new AbortController();
   const timer = setTimeout(() => ctrl.abort(), CELL_TIMEOUT_MS);
   try {
-    const res = await fetch(url, { cache: "no-store", signal: ctrl.signal });
+    const res = await apiFetch(url, { cache: "no-store", signal: ctrl.signal });
     if (!res.ok) return "";
     // gviz CSV wraps a single value in quotes ("…"); strip one surrounding pair.
     return (await res.text()).trim().replace(/^"(.*)"$/s, "$1").trim();
