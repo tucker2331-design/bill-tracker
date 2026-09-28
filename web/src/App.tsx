@@ -34,7 +34,14 @@ const TABS: { id: TabId; label: string }[] = [
   { id: "health", label: "Health" },
 ];
 
+// The gate sits OUTSIDE everything that loads data (owner 2026-09-28: the whole app is private). AppMain — and so
+// every sheet read — mounts only once someone is signed in; signing out unmounts it. Every read now goes through
+// the Worker (/api/sheet), which checks the sign-in AND the team list, so this is the front door AND the lock.
 export default function App() {
+  return <SignInGate><AppMain /></SignInGate>;
+}
+
+function AppMain() {
   const [data, setData] = useState<BillData | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [route] = useRoute();
@@ -157,7 +164,6 @@ export default function App() {
   const open = (b: Bill) => navigate(detailPath("bills", b.bill));
 
   return (
-    <SignInGate>
     <div className="app">
       {/* one sticky container so the nav never overlaps a wrapped topbar (no hard-coded offset) */}
       <div className="appheader">
@@ -209,6 +215,5 @@ export default function App() {
           key={token} remounts it per refresh so each notice restarts its fade cleanly. */}
       <RefreshNotice key={refresh.token} token={refresh.token} label={refresh.label} />
     </div>
-    </SignInGate>
   );
 }

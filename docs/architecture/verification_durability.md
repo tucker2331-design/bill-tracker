@@ -165,6 +165,32 @@ to fix it instead of building it to a groundbreakingly sustainable level."* Stra
 
 ---
 
+## THE WHOLE APP IS PRIVATE 2026-09-28 — the data goes through the gate, not around it
+
+Owner: *"i need the whole thing gate kept for now only to me and who ever else i add."* The reason is LIS ToS §2
+([[knowledge/lis_tos_commercial_use]]): republishing LIS-derived data on the open web is the thing to avoid.
+
+**Before:** the sign-in screen existed (`REQUIRE_SIGN_IN`, off), but the browser read the Google Sheet directly
+over public gviz, and the sheet id is in the public repo. A gate on the UI over a public sheet is a curtain.
+
+**Now:**
+1. `REQUIRE_SIGN_IN = true`, and the gate wraps the component that loads data, so nothing is fetched before
+   sign-in (verified in the browser: zero sheet requests on the sign-in screen).
+2. Every sheet read (bills, summaries, calendar, freshness stamps, Health, history, incidents — 7 readers) goes
+   to `GET /api/sheet`, which checks the Google token AND the `TEAM_EMAILS` list, then re-issues the same gviz
+   query for the one configured spreadsheet (`worker/sheets.js`, 31 tests). Zero direct Google calls remain.
+3. With the `GCP_SA_JSON` secret set, that read carries a read-only service-account token, so the sheet itself
+   can have link-sharing turned OFF. `/api/health` reports `sheet_auth` so the mode is never a guess.
+4. The internal Streamlit pages (X-Ray, calendar entry) read through `sheet_csv.py` — same CSV, plus the token
+   when `GCP_CREDENTIALS` is in their secrets — so they survive the sheet going private.
+
+**Owner steps, in this order** (reversing 3 and 4 breaks the app until 3 is done):
+1. `npx wrangler secret put TEAM_EMAILS` — your email(s), comma-separated.
+2. `npx wrangler secret put GCP_SA_JSON` — paste the same service-account JSON the GitHub workers use.
+3. Deploy (merge), then check `/api/health` says `"sheet_auth":"service_account"`.
+4. Google Sheet → Share → General access → **Restricted** (the service account stays as an editor).
+5. Streamlit: add `GCP_CREDENTIALS` to the app's secrets, and set the app to private in its sharing settings.
+
 ## TEAM GATE 2026-09-28 — identity is not membership
 
 A verified Google token says who someone is. The org-private routes (`/positions`, `/interactions`) also need

@@ -8,6 +8,13 @@ status: active
 
 Append-only, reverse-chronological (newest at top). Each entry opens with `## [YYYY-MM-DD] <kind> | <title>` so `grep "^## \[" log.md | head -20` gives a parseable timeline.
 
+## [2026-09-28] build | the whole app is private — data behind the team gate
+
+Owner: gate everything to "me and whoever I add" (LIS ToS). The UI gate existed but the browser read the sheet
+over public gviz with the id in the public repo. Now every read goes through `GET /api/sheet` (sign-in + team
+list, service-account token), `REQUIRE_SIGN_IN = true`, and Streamlit reads via `sheet_csv.py`. Five owner steps
+listed in [[architecture/verification_durability]].
+
 ## [2026-09-28] build | team positions wired + team gate on the API
 
 Marketability "team tools" item. Bill card gets an "Our position" row (Involved / Supporting / Watching / Opposing,

@@ -32,7 +32,7 @@ export const APP_NAME = "VA Bill Tracker";
 // ⚠ This gates the UI ONLY. The Worker independently rejects every unauthenticated /api request (401), so
 // flipping this false does NOT expose org data — it just stops the browser from asking who you are. The
 // server is the boundary; this is the front door.
-export const REQUIRE_SIGN_IN = false;
+export const REQUIRE_SIGN_IN = true;
 
 // Google sign-in. PUBLIC by design — a client id ships in the page for every "Sign in with Google" button
 // on the web, exactly like SPREADSHEET_ID above. It lives here rather than in a VITE_ env var because this
@@ -44,9 +44,16 @@ export const REQUIRE_SIGN_IN = false;
 export const GOOGLE_CLIENT_ID =
   "831223695835-cqd2fmjq3l61jc1t6pr9elobra0imhf5.apps.googleusercontent.com";
 
-// gviz CSV endpoint for a tab (matches pages/ray2.py load_sheet_df).
-export const gvizCsvUrl = (tab: string) =>
-  `https://docs.google.com/spreadsheets/d/${SPREADSHEET_ID}/gviz/tq?tqx=out:csv&sheet=${encodeURIComponent(tab)}`;
+// Every sheet read goes through the Worker's data gate (worker/sheets.js): the app never talks to Google
+// directly any more, so the sheet itself can be made private. Same gviz CSV comes back; parsers are unchanged.
+// Fetch it with apiFetch (state/auth.ts), which attaches the sign-in token — a plain fetch gets a 401.
+export const sheetUrl = (tab: string, opts: { tq?: string; range?: string; headers?: string } = {}) => {
+  const q = new URLSearchParams({ tab });
+  if (opts.tq != null) q.set("tq", opts.tq);
+  if (opts.range != null) q.set("range", opts.range);
+  if (opts.headers != null) q.set("headers", opts.headers);
+  return `/api/sheet?${q.toString()}`;
+};
 
 /**
  * gviz's most dangerous behaviour, in one place so every reader can guard against it.

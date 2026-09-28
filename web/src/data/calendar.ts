@@ -8,7 +8,8 @@
 // the landing fast). A meeting = a (date, committee, time) where people were in a room; the Ledger-Updates
 // collapse (admin actions, no time) and the executive/meta rows are NOT meetings and are excluded.
 import { parseCsv } from "./gviz";
-import { SPREADSHEET_ID } from "../config";
+import { sheetUrl } from "../config";
+import { apiFetch } from "../state/auth";
 import { parseLisDate, dayKey } from "./dates";
 
 // The pure agenda rules live in ./agenda (no runtime imports, so the goldens can run the REAL code).
@@ -106,7 +107,7 @@ async function fetchText(url: string, timeoutMs: number): Promise<string> {
   const ctrl = new AbortController();
   const timer = setTimeout(() => ctrl.abort(), timeoutMs);
   try {
-    const res = await fetch(url, { cache: "no-store", signal: ctrl.signal });
+    const res = await apiFetch(url, { cache: "no-store", signal: ctrl.signal });
     if (!res.ok) throw new Error(`gviz fetch failed: HTTP ${res.status}`);
     return await res.text();
   } catch (e) {
@@ -120,7 +121,7 @@ async function fetchText(url: string, timeoutMs: number): Promise<string> {
 // the stable contract documented for exactly this. Optional: failure must not block the calendar.
 async function fetchFreshness(): Promise<Date | null> {
   try {
-    const url = `https://docs.google.com/spreadsheets/d/${SPREADSHEET_ID}/gviz/tq?tqx=out:csv&sheet=${SHEET1_TAB}&headers=0&range=AA1`;
+    const url = sheetUrl(SHEET1_TAB, { headers: "0", range: "AA1" });
     const txt = await fetchText(url, 8000);
     const cell = (parseCsv(txt)?.[0]?.[0] || "").trim();
     const d = cell ? new Date(cell) : null;
@@ -164,7 +165,7 @@ export function invalidateCalendar(): void {
 }
 
 async function _loadCalendar(): Promise<CalendarData> {
-  const url = `https://docs.google.com/spreadsheets/d/${SPREADSHEET_ID}/gviz/tq?tqx=out:csv&sheet=${SHEET1_TAB}&tq=${encodeURIComponent(PROJECTION)}`;
+  const url = sheetUrl(SHEET1_TAB, { tq: PROJECTION });
   // Just the calendar payload — freshness (AA1) is read separately by loadCalendarFreshness() for the
   // header, so it's no longer awaited here (was a redundant AA1 fetch coupling this load's latency to it).
   const text = await fetchText(url, FETCH_TIMEOUT_MS);

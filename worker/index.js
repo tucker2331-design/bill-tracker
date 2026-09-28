@@ -23,6 +23,7 @@
 
 import { verifyGoogleIdToken } from "./auth.js";
 import { membership, teamGate } from "./team.js";
+import { handleSheet } from "./sheets.js";
 
 const JSON_HEADERS = { "content-type": "application/json; charset=utf-8" };
 
@@ -64,10 +65,12 @@ async function handleApi(request, env, url) {
       // oracle for probing whether a given token is valid.
       auth_configured: Boolean(env.GOOGLE_CLIENT_ID),
       team_configured: membership("", env) !== "not_configured",
+      // How /api/sheet reads the Google Sheet: "service_account" (the sheet can be private) or "none" (works
+      // only while the sheet is still link-shared). Configuration only, never the caller's state.
+      sheet_auth: env.GCP_SA_JSON ? "service_account" : "none",
     });
   }
 
-  if (!env.DB) return json({ error: "database binding missing" }, 500);
 
   // AUTHENTICATION GATES EVERY ROUTE BELOW, READS INCLUDED (CodeRabbit, 2026-07-28 — a real hole I shipped).
   // Positions and interactions are ORG-PRIVATE: our stance on a bill, and who from the org spoke to which
@@ -82,6 +85,11 @@ async function handleApi(request, env, url) {
   // 403 carries a machine-readable reason so the UI can say "not set up yet" vs "not on this team".
   const denied = teamGate(path, email, env);
   if (denied) return json(denied.body, denied.status);
+
+  // Every read of the Google Sheet (bills, calendar, health) — the data itself is behind the team gate now.
+  if (request.method === "GET" && path === "/sheet") return handleSheet(url, env);
+
+  if (!env.DB) return json({ error: "database binding missing" }, 500);
 
   // `state` is required on EVERY route. It is never defaulted to 'VA': a caller that forgets it must get a
   // 400, not silently read or write Virginia's data (migrations/0001_init.sql).

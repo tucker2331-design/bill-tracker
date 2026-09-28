@@ -36,6 +36,9 @@ binding = "ASSETS"
 # (authorization code) that we deliberately do not use, and no secret belongs in this file.
 [vars]
 GOOGLE_CLIENT_ID = "831223695835-cqd2fmjq3l61jc1t6pr9elobra0imhf5.apps.googleusercontent.com"
+# The ONE spreadsheet /api/sheet may read (worker/sheets.js). An identifier, not a credential -- the credential
+# is the GCP_SA_JSON secret. Must match web/src/config.ts SPREADSHEET_ID until that constant is retired.
+SPREADSHEET_ID = "1PQDtaTTUeYv781bx4_ZiehcvbEmUt8t7jFmZYJoJGKM"
 
 [[d1_databases]]
 binding = "DB"

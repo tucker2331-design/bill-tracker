@@ -5,7 +5,8 @@
 // "days we could VERIFY clean", not "days nobody complained". An unresolved unknown counts against it.
 //
 // Row shape: StartUTC | EndUTC | Class | Summary | DetectedBy
-import { SPREADSHEET_ID, headerMatches } from "../config";
+import { sheetUrl, headerMatches } from "../config";
+import { apiFetch } from "../state/auth";
 import { parseCsv } from "./gviz";
 
 const TAB = "Incident_Log";
@@ -130,9 +131,9 @@ export function counterFromRows(rows: string[][], now: Date = new Date()): Count
 }
 
 export async function loadCounter(): Promise<CounterState> {
-  const url = `https://docs.google.com/spreadsheets/d/${SPREADSHEET_ID}/gviz/tq?tqx=out:csv&sheet=${TAB}`;
+  const url = sheetUrl(TAB);
   try {
-    const res = await fetch(url, { cache: "no-store" });
+    const res = await apiFetch(url, { cache: "no-store" });
     if (!res.ok) return EMPTY;
     const txt = await res.text();
     // A missing tab comes back as an HTML error page, not CSV — that is "not seeded yet", not a failure.

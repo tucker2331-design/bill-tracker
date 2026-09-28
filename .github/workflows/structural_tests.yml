@@ -65,7 +65,7 @@ jobs:
         run: npm run build --prefix web
       # The Worker's auth + team gate had tests but no runner. Stdlib node only, no network.
       - name: Worker tests (auth, team gate)
-        run: node worker/test_auth.mjs && node worker/test_team.mjs
+        run: node worker/test_auth.mjs && node worker/test_team.mjs && node worker/test_sheets.mjs
 
   structural-tests:
     runs-on: ubuntu-latest

@@ -1,4 +1,5 @@
-import { gvizCsvUrl, BILL_TRACKER_TAB } from "../config";
+import { sheetUrl, BILL_TRACKER_TAB } from "../config";
+import { apiFetch } from "../state/auth";
 import type { Bill, BillData, Completeness, Copatron, FloorEvent, HistoryRow, LatestVote, Meeting, Outcome, Chamber } from "./types";
 
 // --- CSV (RFC4180) parser ----------------------------------------------------------------------
@@ -148,7 +149,7 @@ export async function loadBillData(): Promise<BillData> {
   const timer = setTimeout(() => ctrl.abort(), FETCH_TIMEOUT_MS);
   let text: string;
   try {
-    const res = await fetch(gvizCsvUrl(BILL_TRACKER_TAB), { cache: "no-store", signal: ctrl.signal });
+    const res = await apiFetch(sheetUrl(BILL_TRACKER_TAB), { cache: "no-store", signal: ctrl.signal });
     if (!res.ok) throw new Error(`gviz fetch failed: HTTP ${res.status}`);
     text = await res.text();
   } catch (e) {
