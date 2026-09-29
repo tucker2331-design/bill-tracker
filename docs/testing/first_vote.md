@@ -2,7 +2,7 @@
 tags: [testing, calibration, prediction, members, war-room]
 updated: 2026-09-28
 status: active
-open_loop: IN PROGRESS. (1) Score the locked 2026 test once. (2) Carried-over bills (e.g. HB 1515) have no summary-wording score (txt_has=0), which shifts their guesses 10-17 points — score them before any member card ships. Display is the owner's call (War Room v10 mockup).
+open_loop: Modelling exhausted (six rounds, see Verdict). Remaining: score the locked 2026 test once; carried-over bills lack a summary-wording score (HB 1515) — fix before member cards ship; the bill-level consensus-kill warning and co-patron pattern are ready to design into the War Room (owner decision).
 ---
 
 # Predicting every legislator's FIRST vote on a bill
@@ -255,3 +255,28 @@ data: 2023 is missing from training (Open States has no 2023 committee record), 
 (`va/231/Vote.csv`: 8,071 roll calls with member-level ballots, committee votes included). Adding it needs a
 refid→bill/date/motion join through History.csv and a member-ID→name join; by the earlier "+2019" test, one extra
 year is worth about a point on the hardest third, not a step change.
+
+**2023 added from LIS legacy files** (`add_2023.py`): 5,679 roll calls on 1,719 bills joined (Vote.csv → History.csv
+refid → bill/date/motion, same direction and venue rules as every other year, 2022 carryover lines dropped); 136 of 141
+members resolved through a suffix/nickname/first-last/unique-surname cascade (5 counted as unresolved, never guessed);
+2023 co-patrons from LIS Sponsors.csv (971 bills) so 2023 does not masquerade as a no-co-patron year. Result:
+
+| | 2024 all / hard | 2025 all / hard (fixed set) |
+|---|---|---|
+| original pipeline (no 2023) | 84.36 / 64.86 | 86.09 / 67.77 |
+| 2023 in the features' history only | 84.36 / 64.85 | 86.08 / 67.71 |
+| 2023 in history AND trained on | 84.36 / 64.86 | 86.14 / 67.90 |
+
+Noise-level (+0.05 / +0.13 on 2025, nothing on 2024). **One more year of data does not move it either.**
+
+## Verdict after six rounds (2026-09-29)
+
+Every reasonable option inside our own data has been tested under one protocol (choose on 2024, score once on 2025,
+2026 locked): new features (~25), relationship networks, member × content latent factors (first votes and all
+526k contested ballots), deeper combinations, alternative model classes and blends, regime weighting, per-chamber
+models, two-level structure, label cleaning, and an additional year of data. The hardest third stays 66–68%; overall
+86%. The remaining error is how each party lines up on a specific bill in a specific room — decided privately, not
+recorded in any public vote. What can still move it is NEW information: the team's own contact log and positions,
+and (owner's call, later) reading bill content. Meanwhile two findings ARE usable now: the per-member labels are well
+calibrated (Likely 94 / Leans ~70 / Toss-up 57 in 100), and consensus kills can be flagged at the bill level (4× base
+rate in the top 10%), with the co-patron pattern holding within patrons (p ≈ 6×10⁻¹²).
