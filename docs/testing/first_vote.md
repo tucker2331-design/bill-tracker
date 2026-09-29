@@ -230,3 +230,28 @@ catch 41% of all of them. New traces (twin advanced, patron's past kill rate, fi
 so each member's single most likely vote is still yes. The miss is genuine uncertainty (the patron's private decision),
 not a modelling gap. The value is a **bill-level warning** ("bills like this die quietly about 1 in 3 times"), not a
 different member guess.
+
+## Round 6 (2026-09-29) — the remaining broad families
+
+**Co-patrons, same-patron test** (`copatron_same_patron.py`). 167 patrons had subcommittee bills both with and without
+co-patrons. Their bills WITHOUT co-patrons died unanimously 20.4% (2,374 bills) vs 6.9% WITH (2,673); within-patron
+difference +13.6 points; 112 patrons worse off without, 31 better, 24 tied — sign test p ≈ 6×10⁻¹². "Weaker
+patrons" is ruled out as the explanation. Still not proof that ADDING a co-patron causes survival (patrons may
+recruit co-patrons for their strongest bills), but strong enough to show lobbyists as an observed pattern.
+
+| tried (settings fixed on 2024) | 2024 all / hard | 2025 all / hard (fixed set) | verdict |
+|---|---|---|---|
+| baseline GBM | 84.36 / 64.86 | 86.09 / 67.77 | — |
+| regime-matched training (years with the same House majority counted twice) | 84.36 / 64.85 | 85.57 / 66.19 | worse |
+| separate House and Senate models | 84.20 / 64.56 | 85.21 / 65.24 | worse |
+| logistic regression alone | 82.72 / 61.31 | 84.28 / 63.75 | worse |
+| GBM + logistic blend | 84.04 / 63.90 | 85.66 / 66.50 | worse |
+| two-level: bill consensus-kill risk (expanding window) fed to the member model | +0.11 / +0.34 | −0.02 / −0.07 | noise |
+| cleaner labels: train without strike-from-docket votes (scored on ALL votes) | +0.24 / +0.72 | −0.39 / −1.18 | does not replicate |
+
+**Verdict after rounds 1–6:** every reasonable modelling and feature family has now been tested against the same
+protocol. None moves the hardest third outside 66–68% on 2025. The only untried lever inside our own data is MORE
+data: 2023 is missing from training (Open States has no 2023 committee record), but LIS's own 2023 files are cached
+(`va/231/Vote.csv`: 8,071 roll calls with member-level ballots, committee votes included). Adding it needs a
+refid→bill/date/motion join through History.csv and a member-ID→name join; by the earlier "+2019" test, one extra
+year is worth about a point on the hardest third, not a step change.
