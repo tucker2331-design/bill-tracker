@@ -335,3 +335,22 @@ that is a claim about every idea, not a measurement. What IS measured:
 4. ~35 approaches across seven rounds, one protocol, all inside ±0.6 of 86% overall.
 Remaining room for a breakthrough is therefore confined to information NOT in the public record about how each party
 will line up on a specific bill — which is what the team's contact log captures.
+
+## Who sets the party lineup — and the one public trace we hold (2026-09-29)
+
+Owner: "how do you know its about party line up ... who are the party decision makers behind the scenes what other
+sources". **How we know:** with each party's position known, member accuracy is 97.3% — individual defection costs ~3
+points, so ~11 of the 14-point gap is the party's position on the bill. **Who sets it (roles):** caucus leadership
+(Speaker / majority leaders / president pro tem / minority leaders, in private caucus), committee and subcommittee
+chairs (what is heard and when; money-committee chairs most of all), the Governor's office, state agencies (fiscal
+impact statements) and local-government associations (VACo, VML), and stakeholder deals.
+
+**Committee chairs as co-sponsors** (`chairs_as_sponsors.py`; roles exist only in the authorized 2025–26 rosters, so
+the test is 5-fold by bill WITHIN 2025 — weaker than year-ahead). Descriptive: bills with a chair among the sponsors
+get 82% yes (69% without); other party 64% (54%); and the model is WORSE on the other party there (75.7% vs 82.3%).
+Predictive: base 87.68% → +chairs 87.65%; other-party 83.50% → 83.11%. **No gain** — the model already carries it
+through patron standing and co-patron counts.
+
+**Sources that could reveal lineups before a vote, not yet collected:** interest-group support/oppose lists, the
+Governor's legislative agenda, agency positions in fiscal impact statements (full text), news coverage; and the
+team's own contact notes (being built — the most direct).
