@@ -280,3 +280,38 @@ recorded in any public vote. What can still move it is NEW information: the team
 and (owner's call, later) reading bill content. Meanwhile two findings ARE usable now: the per-member labels are well
 calibrated (Likely 94 / Leans ~70 / Toss-up 57 in 100), and consensus kills can be flagged at the bill level (4× base
 rate in the top 10%), with the co-patron pattern holding within patrons (p ≈ 6×10⁻¹²).
+
+## The ceiling, measured — and the hard third reverse-engineered (2026-09-29)
+
+Owner: "would a statistician stop here? ... if we know what composes that final 30% can we reasonably predict when
+a bill will end up in it?"
+
+**1. Natural-experiment ceiling** (`twin_ceiling.py`). 734 pairs of near-identical bills (summary Jaccard ≥ 0.8) voted
+separately — almost all House/Senate twins in the same session. Using one twin's ACTUAL first vote to call the other's
+party positions (a cheat no forecast has):
+
+| pairs | both parties match | patron's party | other party |
+|---|---|---|---|
+| all 734 | 75% | 88% | 80% |
+| opposite chambers (697) | 76% | 90% | 81% |
+| same venue AND same patron standing (75) | 87% | 91% | 91% |
+
+Our model calls other-party members right 80% of the time on 2025 — **at the level of the identical-bill oracle.**
+Bill content cannot say more than this; the rest depends on the particular room, people and day.
+
+**2. The hard third by vote SHAPE** (`vote_shapes.py`, bill-level, train ≤2024, test 2025, 1,624 bills):
+
+| shape | share | AUC | top-10% flagged are this shape |
+|---|---|---|---|
+| everyone for | 48% | 0.83 | 93% |
+| straight party line | 24% | 0.80 | 64% |
+| everyone against (consensus kill) | 9% | 0.85 | 33% |
+| **mixed split** (members break from their party) | 19% | **0.58** | 30% |
+
+Shape guessed right 59% overall (48% by always guessing "everyone for"); 83% on the quarter of bills it is surest
+about. **Mixed splits are the irreducible core** — near-unpredictable before the meeting, and 28% of the hard-third
+misses. Consensus kills are detectable but top out at 1-in-3, so they belong on the bill as a risk, not in a guess.
+
+**Verdict:** stopping is now justified by measurement, not by exhaustion. The model is at the identical-bill ceiling;
+the residual is mixed splits (unknowable from public data) plus consensus kills (a bill-level risk). New information —
+the team's contact notes — is the only lever left, and it targets exactly the mixed-split members.
