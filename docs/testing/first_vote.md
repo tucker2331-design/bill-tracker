@@ -354,3 +354,24 @@ through patron standing and co-patron counts.
 **Sources that could reveal lineups before a vote, not yet collected:** interest-group support/oppose lists, the
 Governor's legislative agenda, agency positions in fiscal impact statements (full text), news coverage; and the
 team's own contact notes (being built — the most direct).
+
+## Round 8 (2026-09-29) — chairs 2019–2025, public attention, personal profile
+
+| tried (year-ahead: choose 2024, score 2025) | 2024 all / hard | 2025 all / hard (fixed) | verdict |
+|---|---|---|---|
+| baseline | 84.36 / 64.86 | 86.09 / 67.77 | — |
+| **committee chairs 2019–2025** from LIS legacy session pages (`legacy_chairs.py`; 25 committees × 7 sessions; validated vs the 2025 API roster: 20/23 exact, the 3 differences are real mid-year personnel changes); inputs: hearing chair is a sponsor, chairs among sponsors, voting member chairs/vice-chairs | 84.19 / 64.36 | 86.04 / 67.61 | no gain — confirms the within-2025 result with the stronger test |
+| **news coverage, Cardinal News** mentions before the vote (`news_mentions.py`; 80–194 bills/session, 3.3% of 2025 ballots) | 84.29 / 64.65 | 86.19 / 68.06 | noise-level; too few covered bills |
+| **legislative attention** — same-topic bills filed this session, by party, bipartisan filing, near-twins by other patrons (`legislative_attention.py`) | 84.47 / 65.18 | 85.97 / 67.41 | does not replicate |
+| **personal profile** — member's own filing and co-sponsoring on the topic (earlier sessions and now), topic specialisation, tenure, own bill pass rate (`personal_profile.py`) | 84.31 / 64.71 | 86.14 / 67.92 | noise |
+
+**Descriptive finding that supports the public-attention hypothesis:** 2025 bills covered by Cardinal News before the
+vote are more contested (57% yes vs 74%; other party 42% vs 58%) and the model is much worse on them (76.4% vs 86.4%).
+Attention marks exactly the bills the model struggles with — but one outlet covers too few bills to help the totals.
+
+**Public-attention sources checked:** Virginia Mercury, Blue Virginia, WRIC, WSLS, Virginia Business — robots.txt blocks
+Anthropic crawlers (respected). Bearing Drift, WTVR, WHRO, WTKR, NBC29, The Richmonder — allowed but no article API.
+Virginia Scope — allowed, API, small archive (not yet used). GDELT DOC API — works back to 2017 but rate-limited us
+twice even at 8 s spacing; GDELT asks heavy users to use its bulk "web ngrams" dataset instead (a large download —
+needs the owner's go-ahead). Google Trends — no permitted automated access. Per-bill public comments — not published.
+Speaking on bills — no floor transcripts; committee minutes only in the 2025–26 data (within-year only).
