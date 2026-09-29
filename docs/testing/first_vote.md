@@ -164,3 +164,21 @@ designed out:** a model trained on public data may remember how a 2019–2025 bi
 backtests look better than reality. Mitigate by sending only the summary text (no bill number, year, patron) and
 asking about content, not outcome; the only fully clean test is the 2027 session. Needs the owner's go-ahead (spend
 + an API key).
+
+## Round 5 (2026-09-28) — owner: "exhaust the options ... complicated statistics a statistician would"
+
+**Where the misses are (2025, error analysis):** by motion — "strike from the docket" is called right only 39% of
+the time (522 ballots) and unanimous kills 54%; they are 22% of the hardest-third misses. Patron-requested
+withdrawals are rare (~30 bills/session in LIS history), so they are not the main story.
+
+| tried | 2025 all | hardest third | verdict |
+|---|---|---|---|
+| baseline GBM | 86.09% | 67.77% | — |
+| **co-sponsorship relationships** (member↔patron co-sponsorship in earlier years, reciprocity, ties to this bill's coalition, co-sponsors seated in the room) | 85.95% | 66.91% | no gain |
+| same, **size-weighted ties** (a shared 3-sponsor bill counts far more than a 60-sponsor one, Fowler-style) | 86.11% | 67.87% | noise |
+| **member × bill latent factors** stacked on the GBM (supervised ideal points: member position = personal + district/party projection; bill location from summary words, subject, committee, patron) | 84.65% | 64.66% | **hurts** — overfits to training bills. Learning curve on 2024 with stronger regularisation: never above the GBM at any step (84.36% → flat or down) |
+
+**Reading:** the GBM already searches combinations of up to six inputs; the question the owner raised — identity ×
+content combinations ("this member × this kind of bill") — was tested directly by the factor model and does not
+generalise from first votes alone (too few ballots per member). Next: the same axes learned from ALL contested
+roll calls (floor + committee, earlier years) as a single feature — `text_ideal.py`.
