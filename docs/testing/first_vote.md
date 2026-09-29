@@ -182,3 +182,14 @@ withdrawals are rare (~30 bills/session in LIS history), so they are not the mai
 content combinations ("this member × this kind of bill") — was tested directly by the factor model and does not
 generalise from first votes alone (too few ballots per member). Next: the same axes learned from ALL contested
 roll calls (floor + committee, earlier years) as a single feature — `text_ideal.py`.
+
+| tried | 2025 all | hardest third (fixed set) | verdict |
+|---|---|---|---|
+| **text-linked ideal points from ALL contested roll calls** (15,763 roll calls, 526k ballots, earlier years only; bill placed by its content) as a GBM feature | 85.94% | 67.30% | no gain (2024: 84.33 vs 84.36) |
+| **deeper combinations** — trees combining 8–10 inputs instead of 6, slower learning, more rounds (4 settings) | 85.76–86.00% | 66.76–67.49% | no gain; every deeper setting ties or loses on 2024 AND 2025 |
+
+**Round-5 verdict (broad tests, each rules out a family):** relationship data, member×content interactions (from
+first votes or from every vote), and deeper feature combinations all leave the hardest third at 67–68%. The
+information that decides those votes — how each party will line up on this bill in this room — is not in the
+public voting record, however it is combined. What can still move it is NEW information, not new maths:
+the team's own contact log and positions (now being built), and (owner's call, later) reading bill content.
