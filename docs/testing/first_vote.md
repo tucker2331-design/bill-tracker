@@ -193,3 +193,40 @@ first votes or from every vote), and deeper feature combinations all leave the h
 information that decides those votes — how each party will line up on this bill in this room — is not in the
 public voting record, however it is combined. What can still move it is NEW information, not new maths:
 the team's own contact log and positions (now being built), and (owner's call, later) reading bill content.
+
+## Consensus kills — what they are and whether we can see them coming (2026-09-29)
+
+Owner: "22% of the hard misses are unanimous kills or strike from the dockets ... dig more into that, how does that
+happen in what scenario and could we predict it?" Scripts: `consensus_kills.py` (diagnosis), `consensus_kill_model.py`
+(prediction). Data: first votes 2019–2025 (2023 excluded as elsewhere).
+
+**What they are.** 918 of 9,344 first votes (9.8%) end with every member against the bill. 73% are in subcommittees;
+none are full-committee first votes (full-committee kills are voice votes, no roll call). How they die: tabled 32%,
+stricken from the docket 30% (almost always the patron pulling it), continued 17%, passed by indefinitely 9%;
+"sent to study with a letter" only 3%; "incorporated into another bill" ~0%.
+
+**Theory rejected:** "killed because a twin carried the idea" is FALSE — bills whose near-twin had already advanced
+were killed LESS (5.7% vs 8.9%, 2025).
+
+**The pattern — co-patrons, not party.** In a subcommittee:
+
+| bill | consensus-kill rate |
+|---|---|
+| no co-patrons, minority patron | 21.2% (1,169 bills) |
+| no co-patrons, majority patron | 19.6% (1,211) |
+| at least one co-patron | 6.9% (2,691) |
+| 5+ co-patrons | 4.3% (1,074) |
+| co-patrons from both parties | 5.3% (495) |
+
+81% of strikes and 69–82% of every kill type are bills with no co-patrons. **Correlation, not proof:** bills without
+co-patrons may be weaker or placeholder bills; the same-patron check (a patron's bills with vs without co-patrons) is
+the next test before telling anyone "add co-patrons."
+
+**Predictable in advance, from inputs we already have.** Bill-level model, trained ≤2024, tested on 2025 (1,624 bills,
+142 kills): AUC 0.85; the 10% of bills it flags most are consensus kills 36% of the time (4× the 8.7% base rate) and
+catch 41% of all of them. New traces (twin advanced, patron's past kill rate, filing order, day of session) add nothing.
+
+**Why the member model still misses them — and why that is correct.** Even the riskiest bills die only about 1 in 3,
+so each member's single most likely vote is still yes. The miss is genuine uncertainty (the patron's private decision),
+not a modelling gap. The value is a **bill-level warning** ("bills like this die quietly about 1 in 3 times"), not a
+different member guess.
