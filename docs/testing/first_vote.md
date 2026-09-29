@@ -143,3 +143,24 @@ carries a direction and a size, measured by swapping that reason's inputs for 30
 - **Data gap found:** HB 1515 has no summary-wording score (`txt_has = 0`), and the missing score moves the
   Democrats' guesses by +10 to +17 — an artifact, not a reason. It is kept off the card and disclosed in the
   "How sure" sheet. Fix: score carried-over bills' summaries (open loop below).
+
+## Round 4 (2026-09-28) — owner: "getting that 67 number up"
+
+Protocol: choices fixed on 2024 (model trained 2019–2022), applied unchanged to 2025. 2026 stays locked.
+
+| tried | 2025 all | 2025 hardest third | verdict |
+|---|---|---|---|
+| baseline | 86.1% | 67.8% | — |
+| **missing inputs** — do ballots lacking a wording score / content / districts go wrong more? | — | with 67.5% vs without 68.1% (wording) | **no**: missing data is not where the misses are, so filling gaps won't lift it |
+| party consistency — blend each member's guess toward party-mates' on the same vote (a=0.2) | 86.2% | 68.0% | noise (+0.1 / +0.2) |
+| per-slice thresholds (other-party × subcommittee) | 85.4% | 70.5% | **rejected — a metric trap.** Moving thresholds changes WHICH ballots count as "hardest"; the headline rose while overall accuracy fell 0.7 points |
+
+**Where the hard third lives:** 72% are other-party ballots (vs 48% overall) and 69% are subcommittee votes (vs 42%).
+
+**The one untested lever — an LLM reading each bill for its political charge.** Cost, checked 2026-09-28
+(Anthropic price list; Batch API is half price): ~11,600 summaries × ~400 input + ~60 output tokens ≈ **$4 on
+Haiku 4.5, $8 on Sonnet 5.5, roughly $40–60 on Opus 5.5** (its thinking is always on). **Leakage risk that must be
+designed out:** a model trained on public data may remember how a 2019–2025 bill actually fared, which would make
+backtests look better than reality. Mitigate by sending only the summary text (no bill number, year, patron) and
+asking about content, not outcome; the only fully clean test is the 2027 session. Needs the owner's go-ahead (spend
++ an API key).
