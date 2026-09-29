@@ -315,3 +315,23 @@ misses. Consensus kills are detectable but top out at 1-in-3, so they belong on 
 **Verdict:** stopping is now justified by measurement, not by exhaustion. The model is at the identical-bill ceiling;
 the residual is mixed splits (unknowable from public data) plus consensus kills (a bill-level risk). New information —
 the team's contact notes — is the only lever left, and it targets exactly the mixed-split members.
+
+## Last two families (2026-09-29) and the bounded claim
+
+| tried | 2025 all | hard (fixed) | mixed-split votes | verdict |
+|---|---|---|---|---|
+| baseline | 86.09 | 67.77 | 76.14 | — |
+| **district × topic** — raw subject one-hots so trees can form (district profile × topic) combinations; aimed at mixed splits (`topic_x_district.py`) | 85.85 | 67.05 | 76.01 | no gain, even on mixed splits |
+| **agenda position / docket length** (2025 DOCKET + SUBDOCKET; only 638 of 1,663 first votes match a listing) | — | — | — | last third of agenda 5.1% consensus kills vs 2.4% first third = ~6 bills; noise |
+
+**The bounded claim (what the measurements support — and what they do not).** Not "no breakthrough is possible" —
+that is a claim about every idea, not a measurement. What IS measured:
+1. Individual defection from one's own party costs ~3 points (perfect party positions → 97.3%). The rest of the
+   86 → 97 gap is predicting each party's position.
+2. Our party-position accuracy (84%) already exceeds the concordance of near-identical bills voted in the other
+   chamber (75% both parties; 734 pairs) — i.e. it beats a forecast that has the answer for an identical bill.
+3. Of the four vote shapes, three are predictable (AUC 0.80–0.85); mixed splits (19% of bills) sit at AUC 0.58 and
+   did not move under any member, district, topic, network or latent-factor representation tried.
+4. ~35 approaches across seven rounds, one protocol, all inside ±0.6 of 86% overall.
+Remaining room for a breakthrough is therefore confined to information NOT in the public record about how each party
+will line up on a specific bill — which is what the team's contact log captures.
