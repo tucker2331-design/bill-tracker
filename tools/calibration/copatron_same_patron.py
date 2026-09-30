@@ -1,7 +1,9 @@
 """Same-patron test: within each patron, subcommittee first votes with vs without co-patrons."""
 import sys, collections, numpy as np
 sys.path.insert(0, "tools/calibration")
-exec(open("tools/calibration/consensus_kills.py").read().split('print(f"first votes')[0])   # builds R
+_ns = {}
+exec(open("tools/calibration/consensus_kills.py").read().split('print(f"first votes')[0], _ns)   # builds R
+R = _ns["R"]      # bound explicitly: a name created only inside exec() is invisible to pyflakes (audit #105)
 sub = [r for r in R if r["ven"] == "sub"]
 g = collections.defaultdict(lambda: {True: [], False: []})
 for r in sub: g[r["b"]["chief"]][bool(r["b"]["cops"])].append(r["ukill"])
@@ -18,6 +20,6 @@ print(f"  within-patron difference (weighted): {w_diff/w:+.1%} points more kills
 # sign test across patrons: how many patrons lose MORE of their no-co-patron bills
 more = sum(np.mean(d[False]) > np.mean(d[True]) for d in both.values()); less = sum(np.mean(d[False]) < np.mean(d[True]) for d in both.values())
 from math import comb
-n = more + less; k = max(more, less)
+n = int(more + less); k = int(max(more, less))   # numpy int64 made 2 ** n overflow to 0 -> printed p = inf
 p = 2 * sum(comb(n, i) for i in range(k, n + 1)) / 2 ** n
 print(f"  patrons worse off without co-patrons: {more}, better off: {less}, tied: {len(both)-n}  (sign test p = {p:.2g})")

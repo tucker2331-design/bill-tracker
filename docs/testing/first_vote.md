@@ -387,3 +387,54 @@ Speaking on bills — no floor transcripts; committee minutes only in the 2025�
   the "plateau" band. Acceptance from now on: paired, bill-clustered log loss pooled over rolling-origin years, z ≥ 3.
 - **The co-patron finding survives a leak check** (`copatron_leak_check.py`): 0 of 1,663 2025 bills gained co-patrons
   after filing; 19.8% vs 6.0% using co-patrons at filing.
+
+## The locked 2026 test — scored once (2026-09-29)
+
+Rules frozen and committed first (`frozen/prereg_2026.json`, sha 7895dc13, commit e487e5b), then scored once
+(`prereg_2026.py --score` → `frozen/score_2026.json`). Model trained on 2019–2022, 2024, 2025. 22,163 ballots on
+1,989 bills; 95% intervals by bill-clustered bootstrap.
+
+| measure | 2026 | 95% | pre-registered expectation |
+|---|---|---|---|
+| accuracy | **85.9%** | 84.9–86.8 | 84.4–86.1 across 2021–2025 — **held** |
+| other-party accuracy | 78.9% | 77.3–80.6 | |
+| party position right | 82.6% | 81.7–83.5 | |
+| room outcome right | **91.5%** | 90.5–92.4 | 88.4% on 2025 |
+| log loss (logit baseline 0.426) | 0.312 | 0.298–0.326 | |
+| hardest third (diagnostic) | 65.9% | 63.7–68.2 | |
+| always "yes" | 73.5% | | |
+
+**The labels, as a volunteer reads them (2026):**
+
+| label | share of calls | right | 2025 validation |
+|---|---|---|---|
+| Likely | 72% | **95 in 100** (94.2–95.6) | 93.6–95.3 — held |
+| Leans | 20% | **66 in 100** (63.2–68.4) | 67.5–73.4 — **came in lower** |
+| Toss-up | 8% | **54 in 100** (50.5–57.9) | 53.6–61.2 — held |
+
+Any wording that says Leans is right "about 70 in 100" should say **about 2 in 3**. (Checked: the app shows no
+label percentages today.) By chamber: House 82.5%, Senate 89.2%; subcommittee votes 81.3%.
+
+## Party positions first — rejected (2026-09-29, `theta.py`)
+
+The panel's Θ: predict each party's position per bill directly (one row per bill × side), derive members as
+q(1−d) + (1−q)d. Rolling origin 2021/2022/2024/2025 against the one-stage model:
+
+| | party position right (one-stage → Θ) | member log loss (one-stage → Θ) |
+|---|---|---|
+| 2021 | 83.7 → 83.7 | 0.328 → 0.330 |
+| 2022 | 82.4 → 82.3 | 0.354 → 0.365 |
+| 2024 | 81.2 → 80.8 | 0.345 → 0.355 |
+| 2025 | 83.9 → 82.6 | 0.317 → 0.334 |
+
+Pooled per-bill log-loss: **z = −7.6 (worse)**; averaging the two: z = −2.0. Larger trees chosen on 2024 (80.5–80.8%)
+do not close it. **The member model already calls party positions as well as a model built only for them**, and
+deriving members from the party loses the member-level cues. Kept as a negative result.
+
+## GDELT news attention — no gain; bulk download stopped (2026-09-29, `gdelt_effect.py`)
+
+2025 pilot (GKG bulk, 74 session days, 26,621 Virginia-legislature articles after dropping 1,503 West Virginia
+articles — audit #141). Articles name people and themes, not bills (22 bill numbers in URLs). Inputs dated before
+the decision: patron mentions, member mentions, topic-word volume (all-time and last 14 days). Stacked on the
+existing models, 5 folds by bill: **ballots z = 0.9, fate z = 1.1 — no gain.** Rule written before running: more
+years (~40 GB each) only if z ≥ 3 — so **no further download.**

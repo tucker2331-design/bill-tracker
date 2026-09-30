@@ -14,7 +14,7 @@ Output: va_gdelt/gkg_{YYYYMMDD}.jsonl.gz, one line per kept article. Resumable: 
 Run: python3 tools/historical_cache/gdelt_gkg_stream.py 2025-01-01 2025-03-15
 """
 from __future__ import annotations
-import csv, datetime as dt, gzip, io, json, os, sys, time, zipfile
+import csv, datetime as dt, gzip, io, json, os, re, sys, time, zipfile
 import requests
 
 csv.field_size_limit(10**8)
@@ -25,7 +25,9 @@ ORGS = ("general assembly", "house of delegates", "virginia senate", "senate of 
 
 def keep(row):
     locs = row[10] if len(row) > 10 else ""
-    if "USVA" not in locs and "Virginia, United States" not in locs:
+    # "Virginia, United States" is a SUBSTRING of "West Virginia, United States": the first pilot kept 1,503 West
+    # Virginia articles that way (audit #141). Match the ADM1 code, or the name only when not preceded by "West ".
+    if "USVA" not in locs and not re.search(r"(?<!West )Virginia, United States", locs):
         return False
     themes = (row[7] if len(row) > 7 else "") + (row[8] if len(row) > 8 else "")
     orgs = (row[13] if len(row) > 13 else "").lower()
