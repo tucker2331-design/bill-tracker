@@ -8,6 +8,14 @@ status: active
 
 Append-only, reverse-chronological (newest at top). Each entry opens with `## [YYYY-MM-DD] <kind> | <title>` so `grep "^## \[" log.md | head -20` gives a parseable timeline.
 
+## [2026-09-29] research | five-perspective panel on the prediction model
+
+Lobbyist, mathematician, statistician, marketing officer and "genius" each researched and wrote a memo, then rebutted
+the others. Converged: stop ballot-feature hunting, score locked 2026 once with pre-registered metrics, re-pose the
+target as bill fate + party positions + room outcome, put the bill at the top of the War Room, retire "break 95" /
+"hardest third >80%", and treat human information as the only step change. Corrections logged in
+[[testing/first_vote]]. Full record: [[testing/panel_2026-09-29]].
+
 ## [2026-09-28] design | War Room v10 — member cards that say how much each reason matters
 
 Owner feedback on v9: drop the initials; the team section mixed "our position" with an unclear contact log; the

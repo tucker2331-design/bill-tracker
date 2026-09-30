@@ -1,0 +1,27 @@
+RA in NUM: True n features 93 train 84495 test 17553
+fit1 267
+fit2 586
+bills 1624 ballots/bill 10.808497536945813
+always-yes rate 0.7385062382498718 base brier 0.19311477431589538 base logloss 0.5746135534701369
+baseline {'acc': np.float64(0.8609), 'other': np.float64(0.8018), 'hard': np.float64(0.6777), 'brier': np.float64(0.0993), 'logloss': np.float64(0.3169)}
+no-RA    {'acc': np.float64(0.8542), 'other': np.float64(0.793), 'hard': np.float64(0.6643), 'brier': np.float64(0.1017), 'logloss': np.float64(0.3232)}
+fixed-hard: base 0.6776619381302341 noRA 0.6573235344385575 disagree share 0.03401128012305589
+naive 95% half-width acc (pp) 0.5118867690158037
+Likely share 0.704 acc 0.944 mean conf 0.938 n 12355
+Leans share 0.201 acc 0.705 mean conf 0.704 n 3533
+Toss-up share 0.095 acc 0.573 mean conf 0.55 n 1665
+ECE(10 bins) 0.0152
+acc            2.5% 0.8498  97.5% 0.8717  sd 0.0056
+other          2.5% 0.7838  97.5% 0.8192  sd 0.0091
+hard           2.5% 0.6545  97.5% 0.7026  sd 0.0124
+brier          2.5% 0.0932  97.5% 0.1056  sd 0.0032
+logloss        2.5% 0.3003  97.5% 0.3344  sd 0.0087
+d_acc          2.5% 0.0024  97.5% 0.0114  sd 0.0023
+d_hardfixed    2.5% 0.0073  97.5% 0.0345  sd 0.0069
+d_ll           2.5% 0.0030  97.5% 0.0096  sd 0.0017
+acc_Likely     2.5% 0.9360  97.5% 0.9526  sd 0.0043
+acc_Leans      2.5% 0.6747  97.5% 0.7336  sd 0.0151
+acc_Toss-up    2.5% 0.5362  97.5% 0.6122  sd 0.0196
+design effect (var ratio) acc 4.618015031677813
+point deltas: acc 0.0067794678972255 hardfixed 0.02033840369167661 ll 0.006334430280273307
+done 595

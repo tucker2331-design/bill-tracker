@@ -375,3 +375,15 @@ Virginia Scope — allowed, API, small archive (not yet used). GDELT DOC API —
 twice even at 8 s spacing; GDELT asks heavy users to use its bulk "web ngrams" dataset instead (a large download —
 needs the owner's go-ahead). Google Trends — no permitted automated access. Per-bill public comments — not published.
 Speaking on bills — no floor transcripts; committee minutes only in the 2025–26 data (within-year only).
+
+## Corrections from the five-perspective panel (2026-09-29) — see [[testing/panel_2026-09-29]]
+
+- **The twin "ceiling" is an interval, not a ceiling** (Cover–Hart): content-only accuracy on joint party positions
+  lies between 75% and ~86% (other party 80–89%). Earlier lines above saying "bill content cannot say more" and
+  "stopping is justified by measurement" are withdrawn.
+- **Use the leave-one-out 96.4%** (copy one party-mate's actual ballot) in place of the 97.3% party-position figure.
+- **2025 is a validation year** (≈35 approaches scored on it); only the locked 2026 score is a clean test.
+- **"No gain" = no gain ≥ ~0.65 points** (80% power); the hardest third's year-to-year spread (64.9–68.9) is wider than
+  the "plateau" band. Acceptance from now on: paired, bill-clustered log loss pooled over rolling-origin years, z ≥ 3.
+- **The co-patron finding survives a leak check** (`copatron_leak_check.py`): 0 of 1,663 2025 bills gained co-patrons
+  after filing; 19.8% vs 6.0% using co-patrons at filing.
