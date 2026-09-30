@@ -8,6 +8,13 @@ status: active
 
 Append-only, reverse-chronological (newest at top). Each entry opens with `## [YYYY-MM-DD] <kind> | <title>` so `grep "^## \[" log.md | head -20` gives a parseable timeline.
 
+## [2026-09-29] decision | panel follow-up — contact log out of the model, UI unchanged
+
+Owner: contact log stays out of the model (separate future item; if contact shows a party-line whip the model is
+redundant for that bill anyway). UI stays as is — the "bill at the top of the War Room" restructure is not adopted.
+Surviving plan: lock scoring + score 2026 once; bill-fate model; party-position model; multi-year acceptance rule;
+GDELT test. See [[testing/panel_2026-09-29]] § Owner decisions.
+
 ## [2026-09-29] research | five-perspective panel on the prediction model
 
 Lobbyist, mathematician, statistician, marketing officer and "genius" each researched and wrote a memo, then rebutted
