@@ -5,8 +5,9 @@ build something accurate where it is least useful, test dynamically, and try to 
 
 PROTOCOL (borrowed from how model builders evaluate):
   train   first votes of 2020, 2021, 2022, 2024        (history for each = strictly before that vote)
-  tune    2025  -- every feature / model choice is judged here
-  TEST    2026  -- locked; scored ONCE, after all choices are frozen (see --final)
+  valid.  2025  -- every feature / model choice was judged here (~35 approaches), so it is a VALIDATION year,
+                   not a test year (five-perspective panel, 2026-09-29); its numbers are slightly optimistic
+  TEST    2026  -- locked; rules pre-registered in frozen/prereg_2026.json, scored ONCE by prereg_2026.py
   slices  always reported: same-party vs OTHER-party legislators, venue, and a party-position score,
           so a gain on the easy majority of ballots cannot hide a loss where it matters.
 Every feature is knowable before the vote: earlier years, or earlier DATES in the same session.
