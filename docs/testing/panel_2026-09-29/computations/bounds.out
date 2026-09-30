@@ -1,0 +1,17 @@
+rows 290182 years [(2017, 81528), (2018, 84443), (2019, 14840), (2020, 21806), (2021, 9753), (2022, 18407), (2024, 19689), (2025, 17553), (2026, 22163)]
+fit done 269s  n=17553 bills=1624
+acc 0.8609  E[max(p,1-p)] 0.8543  logloss 0.3169 (base-rate 0.5746)  brier 0.0993 (base 0.1931)
+hardest third acc 0.6777  E[max] there 0.6727  p-range 0.827
+acc SE naive 0.0026  cluster 0.0054  deff 4.23  95%CI [0.85028308 0.87060318]
+hard-third (fixed set) cluster SE 0.0120 CI [0.65469886 0.70067856]
+noRA: acc 0.8542 logloss 0.3232 hard(fixed) 0.6573
+paired acc diff full-noRA +0.0068 SE 0.0024 CI [0.00205523 0.01134977]
+paired logloss gain full-vs-noRA +0.0063 SE 0.0017 CI [0.00292962 0.01002749]
+decisions that differ: 597 of 17553
+ROOM outcome (majority yes at first vote): base pass 0.735; model right 0.8836 of 1624 rooms
+party groups 3245 mean size 5.41; party-position right unweighted 0.8391, ballot-weighted 0.8683
+ballots in missed party groups 0.1317; share of all member errors there 0.8460
+rooms with margin <=1 vote (|yes-no|<=1): 0.039; <=3: 0.265
+elapsed 2432s
+ROLLING 2021: n 9753 base-yes 0.760 acc 0.8539 hard 0.6616 logloss 0.3278
+ROLLING 2022: n 18407 base-yes 0.728 acc 0.8492 hard 0.6885 logloss 0.3537

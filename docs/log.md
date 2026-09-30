@@ -8,6 +8,38 @@ status: active
 
 Append-only, reverse-chronological (newest at top). Each entry opens with `## [YYYY-MM-DD] <kind> | <title>` so `grep "^## \[" log.md | head -20` gives a parseable timeline.
 
+## [2026-09-29] research | panel plan executed — 2026 scored once, bill-fate model, four sources tested
+
+2026 locked test scored against a spec committed first: 85.9% (84.9–86.8). Bill-fate model accepted (rolling z 14.5;
+2026 AUC 0.80 vs 0.68). Rejected: party-positions-first (z −7.6), GDELT (no gain; download stopped), House written
+testimony (z −2.9). VALCV scorecard positions positive but unproven (z 1.3). New: `prereg_2026.py`, `fate.py`,
+`accept.py`, `theta.py`, `gdelt_effect.py`, `stakeholder_effect.py`, `hodspeak_comments.py`, `va_positions.py`.
+Audit #141 (West Virginia substring). See [[testing/panel_2026-09-29]], [[testing/bill_fate]].
+
+## [2026-09-29] decision | panel follow-up — contact log out of the model, UI unchanged
+
+Owner: contact log stays out of the model (separate future item; if contact shows a party-line whip the model is
+redundant for that bill anyway). UI stays as is — the "bill at the top of the War Room" restructure is not adopted.
+Surviving plan: lock scoring + score 2026 once; bill-fate model; party-position model; multi-year acceptance rule;
+GDELT test. See [[testing/panel_2026-09-29]] § Owner decisions.
+
+## [2026-09-29] research | five-perspective panel on the prediction model
+
+Lobbyist, mathematician, statistician, marketing officer and "genius" each researched and wrote a memo, then rebutted
+the others. Converged: stop ballot-feature hunting, score locked 2026 once with pre-registered metrics, re-pose the
+target as bill fate + party positions + room outcome, put the bill at the top of the War Room, retire "break 95" /
+"hardest third >80%", and treat human information as the only step change. Corrections logged in
+[[testing/first_vote]]. Full record: [[testing/panel_2026-09-29]].
+
+## [2026-09-28] design | War Room v10 — member cards that say how much each reason matters
+
+Owner feedback on v9: drop the initials; the team section mixed "our position" with an unclear contact log; the
+member card's two raw counts were odd to an amateur and too little evidence. v10: position and contact log are
+separate groups, each contact names who was reached, by whom, and how; the member card starts from the party
+base rate and lists every measured reason with a direction and a strength, plus a "checked, doesn't change the
+guess" list. Method saved as `tools/calibration/why_member.py`; findings in [[testing/first_vote]]. Site-wide
+refresh waits for the owner's permission and mockups ([[state/current_status]]).
+
 ## [2026-09-24] finding | content predicts which opposite-party legislator crosses
 
 Owner asked for controversy measured from content *"historically and relative to individual politicans"*,

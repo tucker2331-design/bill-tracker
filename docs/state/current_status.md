@@ -1,6 +1,6 @@
 ---
 tags: [state, live]
-updated: 2026-09-10
+updated: 2026-09-29
 status: active
 ---
 
@@ -34,6 +34,12 @@ status: active
 
 ## NEXT (needs owner infra / a decision — then I execute)
 
+- **🎨 Site-wide design refresh — MOCKUPS FIRST, and only with the owner's explicit go-ahead** (owner 2026-09-28:
+  "wait until later ... ask explicit permission we should do mock ups first"). Direction: the War Room v10 look
+  (iOS grouped lists, sheets for detail, no initials), keeping every screen's location and abilities the same.
+  Also pending the owner's review of v10: the contact log gains "who was contacted" (legislator picker) and "how"
+  (call / meeting / email) — not built until approved. Member-card data: [[testing/first_vote]].
+
 - **📊 HISTORICAL DATA — SOLVED, pending one owner step: [[knowledge/openstates_bulk_va]].** Open States
   publishes **20 Virginia sessions (2017–2027) under CC0 with no commercial restriction** — against the 3
   LIS still serves. Takes the calibration base from 2 usable sessions to ~10, and takes the *historical*
@@ -65,18 +71,18 @@ status: active
 - Also open (owner-triggered): `/code-review ultra`. ~~co-patrons backfill~~ — superseded, see above.
 
 ## READY
-- [[testing/first_vote]] — first-vote model at 86.2% (base 73.9%), other-party 80.7%, party position 84.0% on 2025; full-text layer next, then 2026 scored once.
+- [[testing/first_vote]] · [[testing/bill_fate]] — **2026 locked test scored once: 85.9% (84.9–86.8), room outcome 91.5%, Leans 66 in 100 (lower than validation).** Bill-fate model accepted (2026: advance AUC 0.80 vs 0.68). Open: HB 1515 carried-over bills lack a wording score; confidence-rank labels idea awaits an owner mockup decision ([[ideas/future_improvements]]); 2027 forward test.
 - [[testing/content_votes]] — content predicts which opposite-party legislator crosses (AUC 0.51 -> 0.70, held out). Next: full text, wider coverage, owner's Tier-3 call on display.
 - [[testing/room_memory]] — committees remember ideas (OR 15.2 same room vs 5.5 elsewhere, p=0.013). Needs the owner's Standard #3 call on exact-title equality, and a demo bill with a prior attempt (HB 1515 has none).
 - [[testing/continuance]] — FORWARD TEST FROZEN 2026-09-24 (430 bills, predict <=~1% move in 2027). Score after the 2027 session convenes; check the Nov 2026 "Left in" date first.
 - [[knowledge/campaign_finance_ingest]] — the ELECT committee->legislator join resolves only 54 of 158 sitting patrons; needs a join on committee identity, not the free-text office field.
 
 ## RECENTLY LANDED (newest first; full detail in [[log]])
+- **2026-09-29 — THE PANEL PLAN, EXECUTED ([[testing/panel_2026-09-29]]).** 2026 scored once against a committed spec: 85.9%. Bill-fate model built and accepted (z = 14.5; 2026 locked AUC 0.80). Party-positions-first rejected (z −7.6); GDELT, House testimony rejected; VALCV positions positive but unproven. Contact log kept out of the model and UI unchanged, per owner.
 - **2026-09-10 — THE CHAIR, and two more kills ([[failures/assumptions_audit|#132-134]]).** Unblocked the chair thread with one authorized fetch (987 roster rows, `CommitteeRoleTitle`). **The room follows the gavel:** on close votes the chair is on the winning side 89.5% vs 53.9% for a rank member, and **with the chair's own vote REMOVED it is 84.5% vs 42.6%** (p<0.000001) — influence, not seat arithmetic. Anticipation ruled out: the roster says the chair votes **FIRST** (median sequence 1, 0% vote last). **And the chair is beaten only by their own caucus — 68 of 69 losses involved their own party splitting** (Fisher p<0.00000001). Working the opposition against a hostile chair is near-useless. **TWO KILLS:** the named chair-breaker list does NOT carry forward (top-8 overlap 3/8, p=0.154) so it is a group tendency not a targeting list; and the partisan-temperature idea is dead in both directions — pooled hot vs cold subjects give 84% vs 75%, Fisher p=0.184, **no difference**. The patron matters the same everywhere.
 - **2026-09-10 — DOUBT SWEEP + the most actionable finding yet ([[failures/assumptions_audit|#128-129]]).** Four attacks on the surviving claims: the patron effect gets STRONGER on exact-title-only pairs (**85%**, fuzzy was diluting it); 4:1 timing-over-votes is stable at **4.0x** across kill definitions and only collapses if carry-overs count as losses — but carry-over votes are **75% decided by 10+ votes**, i.e. consensus deferrals, so state it as a range; filing more bills does **not** dilute (40% at 1-5 vs 48-50% at 11-25); seniority is **not** a majority proxy and survives paired text+standing control (59/41, p=0.043). **THE HEADLINE: do not refile your own bill.** Refiling passes 15% vs a 49% base. Same patron again **10%**; handed to a **majority patron 29%**. Holding previous standing constant: was-minority refiled by minority **6%**, by a MAJORITY patron **41%** — same title, ~7x. Stable in all three eras, passes the gate, and **32% of refiles already take this path**. Caveat: a majority patron choosing to adopt is itself a quality signal, so part of the 41% is selection.
 - **2026-09-10 — TEXT-CONTROLLED: what survives and what I RETRACTED ([[failures/assumptions_audit|#127]]).** Owner: *"we want to know thats bc of text and not... just the difference between a good and bad bill attempt."* Correct — the subject-level penalty was omitted-variable bias on CONTENT. **The test: 1,226 identical-text companion pairs with one MAJORITY and one MINORITY patron.** Of 317 that diverged, the majority patron's version won **257-60 (81%), p<0.00001** — and it is NOT a chamber effect (76% when they sat in the House, 87% in the Senate, both p<0.000001). **RETRACTED: the 4pt-vs-47pt subject variation and the r=0.68 'partisan temperature'** — per-subject the spread is within binomial noise (p=0.690), and **Agriculture, the exact case raised, has ZERO divergent pairs.** Underpowered, not disproven. Patron effect and ROOM effect survive text control; subject variation does not.
 - **2026-09-10 — THE PARTISAN TEMPERATURE: one dimension under everything ([[failures/assumptions_audit|#123-126]]).** Owner read the voice-vote finding backwards from me and was RIGHT: recorded room kills are **0% unanimous and 53% within 2 votes**, so recording tracks CONTEST — a voice kill means the room agreed, and **a recorded vote means someone fought for your bill**. Minority bills die by voice 73% vs 52%. **Real interaction found:** the minority penalty is not 25pt everywhere, it runs **6-47pt by room** (p=0.001) and **4-47pt by subject** — House Public Safety 47pt vs Senate Local Government 6pt; Public Service Companies 47pt vs Agriculture **4pt**. **And both are ONE dimension:** how often a subject produces a party-line room vote correlates with its minority penalty at **r=0.68** (leave-one-out 0.64-0.73, permutation p<0.0005). Knowable from the subject before any vote. **Killed a tempting fake:** 'a bridge-builder in your room' looked worth +36pt but is **+0 within the same room** — it was comparing rooms, and the tell was that it helped majority and minority equally.
-- **2026-09-10 — VENUE EFFECT: the companion bill is a free control group ([[testing/venue_effect]]).** The literature models the committee stage from OUTSIDE the room — Yano et al. call it *"behind closed doors"*; Eidelman et al. rank committee info the top feature across 1.3M bills but only have the ASSIGNMENT. Nobody has the votes (**Open States: 0 committee roll calls of 69,422**). We read 19,192. **Design:** VA files identical text in both chambers, so when one dies and the twin lives, only the ROOM differs. **272 of 1,443 pairs diverged (19%), chamber split 50/50** — so "the House kills more" explains nothing. Content-controlled kill rate: base 7% committee / 12% subcommittee, but **House P&E subcommittee 31%**, permutation **p=0.037** across 49 venues shuffled within kind. **Circularity caught mid-analysis:** scoring by LAST pre-floor venue gave 82% — seven times the honest 12%. **OPEN LOOP:** the member layer (no-vote rates 0-64% across 150 members) is NOT ready — raw `Members.csv` names split one legislator in two, the #115/#118 name bug a third time. Audit [[failures/assumptions_audit|#120]].
 
 ## Watch items
 - **⏰ 2027 SESSION OPEN → activate the gated build-wave features.** When the worker detects the 2027 regular

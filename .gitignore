@@ -45,3 +45,7 @@ tools/calibration/content_votes_cache.pkl
 
 # derived first-vote cache
 tools/calibration/first_vote_cache.pkl
+
+# VALCV scorecard PDFs (5-48 MB each), re-downloadable by tools/historical_cache/va_positions.py;
+# the parsed positions (va_positions/valcv.json) are committed.
+tools/historical_cache/va_positions/valcv_pdf/
