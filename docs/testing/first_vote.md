@@ -502,8 +502,11 @@ Findings that changed the card:
   Kilgore = how Republicans in THIS subcommittee voted this year (a room fact). Retitled to what it is.
 - At ±2 the evidence sometimes pointed the other way (Sullivan: backed 91 of 93 of Shin's bills, below the typical 97,
   yet +2.3 toward yes) — interactions. Display threshold raised to 3 in 100.
-- **Open:** Kilgore's `ses_rate` is 0.262 in the model; the raw 2026 count is 17 of 44 (smoothed 0.417). The card
-  shows the raw count; the gap is unexplained — check `sroom_ses` keying before the card ships.
+- **Resolved:** Kilgore's `ses_rate` (0.262) is keyed by (session, room, same-side) with NO party, so it pools BOTH
+  parties' votes on the other party's bills in the Studies Subcommittee: 17 of 76 in 2026 (R on D bills 17/44 + D on R
+  bills 0/32), smoothed (17+5.5)/(76+10) = 0.262. Likewise `subroom_rate` (0.439) = own-party support there, 94 of 233
+  across 2024 and 2026. The card's evidence lines now describe the room ("crosses party lines", "own party's bills"),
+  not one party — the first draft said "Republicans backed 17 of 44", which was not what the model uses.
 
 **How a "determinant" is measured here:** a reason counts only if (1) it moves the guess when swapped for real peers'
 values, (2) the member actually has data for it, and (3) as a new input it improves year-ahead forecasts across
