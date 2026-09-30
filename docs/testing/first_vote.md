@@ -475,3 +475,36 @@ Public comment volume and its support/oppose wording say nothing the model does 
 vote. One organization's stated position points the right way on the bills it covers, but a single scorecard is too
 thin to prove it; many organizations' lists together might be — none other found in machine-readable form that
 allows automated access (Family Foundation blocks Anthropic crawlers; VPAP and NFIB refuse automated requests).
+
+## Do members vote for bills like the ones they sponsor? (2026-09-30, `similar_sponsor.py`)
+
+Owner: *"are members votes at all correlated to wether they have introduced similar language or introduce in the same
+topic?"* 2021/2022/2024/2025 first votes, dated before each vote; model predictions are year-ahead (`accept.py`).
+
+| member … | patron's party: yes rate (n) | other party: yes rate (n) | model's miss | adds to forecasts? |
+|---|---|---|---|---|
+| sponsored a near-identical bill (summary match ≥ 0.30) | 90.8% (422) vs 87.3% | 61.0% (82) vs 57.9% | ≈ 0 | no, z = −0.8 |
+| filed a bill on the same topic before | 87.4% (18,517) vs 87.3% | 57.1% (16,756) vs 58.9% | ≈ 0 | no, z = −4.1 |
+
+Sponsoring near-identical wording goes with ~3 points more yes, but it is rare (0.8% of votes) and the model already
+gets those votes right. Filing on the same topic tells nothing. (Round 8's personal-profile test agrees.)
+
+## Member-card reasons: what each one really rests on (2026-09-30, `why_member.py`)
+
+Owner: strength words unclear ("idk what you have some of"); "not clear why those specifically matter". `why_member.py`
+now reports, per reason, every input's own swap effect plus the member's value and the typical peer value.
+Findings that changed the card:
+- **Two HB 1515 reasons were absences, not findings.** "Similar earlier bills" (+3.5 to +4.0) and "wording" (+10 to
+  +18) came only from HB 1515 HAVING NO similar bills with votes / no wording score — the swap measured "peers had
+  data". Both now flagged `absent` and moved to Checked. **Method lesson: a swap-based reason must check the no-data
+  flags before it is shown.**
+- "Overall voting record" was three different things: Tran/Helmer = length of record (~3,500 contested votes vs ~370);
+  Kilgore = how Republicans in THIS subcommittee voted this year (a room fact). Retitled to what it is.
+- At ±2 the evidence sometimes pointed the other way (Sullivan: backed 91 of 93 of Shin's bills, below the typical 97,
+  yet +2.3 toward yes) — interactions. Display threshold raised to 3 in 100.
+- **Open:** Kilgore's `ses_rate` is 0.262 in the model; the raw 2026 count is 17 of 44 (smoothed 0.417). The card
+  shows the raw count; the gap is unexplained — check `sroom_ses` keying before the card ships.
+
+**How a "determinant" is measured here:** a reason counts only if (1) it moves the guess when swapped for real peers'
+values, (2) the member actually has data for it, and (3) as a new input it improves year-ahead forecasts across
+2022/2024/2025 (z ≥ 3). Descriptive gaps without (3) are "the model already knows".

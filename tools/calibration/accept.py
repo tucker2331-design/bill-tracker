@@ -75,7 +75,9 @@ def stacked_year_ahead(signal, label, only_covered=False, ridge=1.0):
         y = np.array([r["y"] for r in te], float)
         preds = []
         for Xtr, Xte, nm in ((Xa, lg[:, None], ["lg"]), (Xb, np.column_stack([lg, F]), ["lg"] + names)):
-            f = ST.logit(Xtr, ya, nm, ridge=ridge)
+            # tol 1e-7 / 200 steps: stats.logit's default 1e-9 is below float precision on ~50k ballots and a rare
+            # 0/1 input (similar_sponsor.py) made Newton oscillate there -- "did not converge" with no real problem
+            f = ST.logit(Xtr, ya, nm, ridge=ridge, tol=1e-7, max_iter=200)
             b = np.array([f[n][0] for n in ["const"] + nm])
             with np.errstate(all="ignore"):
                 preds.append(1 / (1 + np.exp(-(np.column_stack([np.ones(len(Xte)), Xte]) @ b))))

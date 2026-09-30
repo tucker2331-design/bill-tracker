@@ -66,11 +66,37 @@ for r in fut:
             if c in col: xs[:, col[c]] = samp[:, col[c]]
         return float(m.predict(xs).mean())
     eff = {g: round(p - swapped(REASONS[g]), 3) for g in REASONS}
+    # EVIDENCE per reason (owner 2026-09-30: "not clear why those specifically matter"): the ONE input inside the
+    # reason that moves the guess most on its own, with this member's value and the typical value among the same
+    # real peers. A reason whose inputs are all "no data" flags (has_c / has_mem / txt_has / subj_has / d_has /
+    # ip_has = 0) is an ABSENCE, not a finding -- the swap then measures "peers had data", so it is marked.
+    ABSENT = {"similar": ["has_c", "has_mem"], "wording": ["txt_has"], "subject": ["subj_has"], "district": ["d_has"]}
+    evid = {}
+    for g in REASONS:
+        cols = [c for c in REASONS[g] if c in col]
+        per = {c: p - swapped([c]) for c in cols}
+        top = max(per, key=lambda c: abs(per[c]))
+        evid[g] = {"input": top, "effect": round(per[top], 3), "member": round(float(x[col[top]]), 3),
+                   "all": {c: [round(per[c], 3), round(float(x[col[c]]), 3), round(float(samp[:, col[c]].mean()), 3)]
+                           for c in cols if abs(per[c]) >= 0.01},
+                   "typical": round(float(samp[:, col[top]].mean()), 3),
+                   "absent": all(x[col[f]] == 0 for f in ABSENT.get(g, [])) if g in ABSENT else False}
     anchor = round(swapped([c for g in MEMBER for c in REASONS[g]]), 3)          # a real peer, on THIS bill
     peer_all = round(float(m.predict(samp).mean()), 3)                             # real peers, their own bills
     out.append({"who": r["who"], "party": r["party"], "same": r["same"], "p": round(p, 3), "anchor": anchor,
-        "peer_all": peer_all, "effects": eff,
+        "peer_all": peer_all, "effects": eff, "evidence": evid,
         "counts": {k: [r.get("k_" + k), r.get("n_" + k)] for k in ("mpat", "mroom", "sim", "msubj")},
         "defect": round(r["defect"], 3), "backing_vals": {c: r.get(c) for c in ["own_cops","other_cops","n_cops","companion","comp_has"]},
         "path_vals": {c: r.get(c) for c in ["ven_sub","n_actions","fiscal","sub_offered","n_refs","wait","day"]}, "txt_party": round(float(r.get("txt_party", 0)), 3), "txt_has": r.get("txt_has")})
+# EVIDENCE for the "overall voting record" reason (owner 2026-09-30: show why a reason matters, not prose): where the
+# member's votes place them among their own party's House members on the left-right map (ideal points fitted on
+# earlier years only, first_vote.ideal_points). 0 = furthest left, 100 = furthest right.
+IP = FV.ideal_points()
+house26 = {(r["who"], r["party"]) for r in rows if r["yr"] == 2026 and r["y"] >= 0 and not r["chamber_S"]}
+for o in out:
+    pts = IP.get(2026, {})
+    peers = sorted(pts[w][0] for w, pp in house26 if pp == o["party"] and w in pts)
+    me = pts.get(o["who"])
+    o["ip_right_of"] = (round(100 * sum(v < me[0] for v in peers) / len(peers)) if me and peers else None)
+    o["ip_peers"] = len(peers)
 print(json.dumps(out, indent=1))
