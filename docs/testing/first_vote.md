@@ -459,3 +459,19 @@ and same-session splits are easier than a first committee vote scored on a later
 most-sure 10% of calls right 99.5 in 100 · 2nd 98.8 · 3rd 98.4 · 4th 96.0 · 5th 95.4 · 6th 91.8 · 7th 86.3 ·
 8th 74.5 · 9th 63.7 · least-sure 10% 54.3. The cut points were drawn within 2026 itself; for live use they must be
 fixed from earlier years, then checked on the next session.
+
+## Stakeholder lineups — association positions and House written testimony (2026-09-29, `stakeholder_effect.py`)
+
+Owner cleared both. Tested with the new acceptance rule (`accept.py`: fitted on earlier years' out-of-sample
+predictions, scored on the next year, pooled 2022/2024/2025, per bill, accept at z ≥ 3). Neither was tested on bill
+fate: testimony exists only once a bill is on an agenda, and scorecards pick bills after the session.
+
+| source | coverage | effect on covered ballots | pooled |
+|---|---|---|---|
+| **VALCV scorecard positions** (Support/Oppose, 2019–2025; `va_positions.py`) | 26–29 bills a year, ~1.7% of ballots | accuracy 77.3→82.4 (2022), 84.9→87.5 (2024), 84.4→84.8 (2025) | z = 1.3 — **not proven** (too few bills; direction positive) |
+| **HODSpeak written testimony** (counts only; `hodspeak_comments.py`; 2021/22/24/25: 1,336–2,828 bills with comments a year, 7,420–34,789 comments) | ~50% of ballots (bills on a House agenda) | accuracy 78.7→77.9, 79.1→78.9, 80.1→80.0 | z = −2.9 — **rejected** (slightly worse) |
+
+Public comment volume and its support/oppose wording say nothing the model does not already know about how members
+vote. One organization's stated position points the right way on the bills it covers, but a single scorecard is too
+thin to prove it; many organizations' lists together might be — none other found in machine-readable form that
+allows automated access (Family Foundation blocks Anthropic crawlers; VPAP and NFIB refuse automated requests).

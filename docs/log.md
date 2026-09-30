@@ -8,6 +8,14 @@ status: active
 
 Append-only, reverse-chronological (newest at top). Each entry opens with `## [YYYY-MM-DD] <kind> | <title>` so `grep "^## \[" log.md | head -20` gives a parseable timeline.
 
+## [2026-09-29] research | panel plan executed — 2026 scored once, bill-fate model, four sources tested
+
+2026 locked test scored against a spec committed first: 85.9% (84.9–86.8). Bill-fate model accepted (rolling z 14.5;
+2026 AUC 0.80 vs 0.68). Rejected: party-positions-first (z −7.6), GDELT (no gain; download stopped), House written
+testimony (z −2.9). VALCV scorecard positions positive but unproven (z 1.3). New: `prereg_2026.py`, `fate.py`,
+`accept.py`, `theta.py`, `gdelt_effect.py`, `stakeholder_effect.py`, `hodspeak_comments.py`, `va_positions.py`.
+Audit #141 (West Virginia substring). See [[testing/panel_2026-09-29]], [[testing/bill_fate]].
+
 ## [2026-09-29] decision | panel follow-up — contact log out of the model, UI unchanged
 
 Owner: contact log stays out of the model (separate future item; if contact shows a party-line whip the model is
