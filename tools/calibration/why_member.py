@@ -18,22 +18,14 @@ sys.path.insert(0, "tools/calibration")
 import first_vote as FV, gbm
 from corpus import _party_lookup
 
-REASONS = {
-  "party":     ["same", "maj", "chamber_S"],
-  "patron":    ["mpat_rate", "mpat_n", "pat_rate", "pat_n", "senior", "pat_in_room"],
-  "committee": ["mroom_rate", "mroom_n", "room_rate", "room_n", "is_subroom", "subroom_rate", "subroom_n"] + [c for c in FV.NUM if c.startswith("ra_") or c.startswith("rm_")],
-  "similar":   ["has_c", "c_opp", "c_party", "dev", "has_mem", "dup_sim", "dup_maj_other", "dup_same_pat", "comp_sim"],
-  "subject":   ["subj_has", "subj_party", "subj_n", "msubj", "msubj_n"],
-  "wording":   ["txt_has", "txt_party", "txt_other"],
-  "record":    ["defect", "mdef_ses", "ses_rate", "ses_n"] + FV.IP_COLS,
-  "district":  FV.DIST_COLS,
-  # the bill's own situation -- where it sits, how it has moved, who signed on (same for every member)
-  "bill":      ["ven_sub", "ven_com", "n_actions", "fiscal", "sub_offered", "n_refs", "wait", "day",
-                "own_cops", "other_cops", "n_cops", "companion", "is_patron", "comp_has", "comp_party"],
-  "backing":   ["own_cops", "other_cops", "n_cops", "companion", "comp_has", "comp_party", "is_patron"],
-  "path":      ["ven_sub", "ven_com", "n_actions", "fiscal", "sub_offered", "n_refs", "wait", "day"],
-}
-MEMBER = [g for g in REASONS if g not in ("bill", "backing", "path", "party")]
+# Reason groups = reason_gate.GROUPS (owner 2026-09-30: a card may show only reasons that pass three checks; the
+# third -- better next-year forecasts -- is tested per group in reason_gate.py, so the card must use the same groups).
+import reason_gate as RG
+REASONS = dict(RG.GROUPS)
+SHARED_GROUPS = {"co-patrons & companion", "the bill's own history before the vote", "venue",
+                 "patron seniority & seat on committee", "duplicates & companion match", "the bill's subject",
+                 "summary words (party-position classifier)", "the companion bill's earlier vote"}
+MEMBER = [g for g in REASONS if g not in SHARED_GROUPS and g != "party & standing"]
 party, person = _party_lookup()
 names = ["Rip Sullivan", "Cliff Hayes", "Kathy Tran", "Dan Helmer", "Terry Kilgore"]
 members = [(person(n) or n, party(n)) for n in names]
@@ -70,7 +62,13 @@ for r in fut:
     # reason that moves the guess most on its own, with this member's value and the typical value among the same
     # real peers. A reason whose inputs are all "no data" flags (has_c / has_mem / txt_has / subj_has / d_has /
     # ip_has = 0) is an ABSENCE, not a finding -- the swap then measures "peers had data", so it is marked.
-    ABSENT = {"similar": ["has_c", "has_mem"], "wording": ["txt_has"], "subject": ["subj_has"], "district": ["d_has"]}
+    ABSENT = {"content (bill, party, legislator)": ["has_c", "has_mem"],
+              "summary words (party-position classifier)": ["txt_has"], "the bill's subject": ["subj_has"],
+              "district composition (Census)": ["d_has"], "ideal points (legislator & bill position)": ["ip_has"],
+              "room memory (similar bills, this room)": ["rm_has"], "the companion bill's earlier vote": ["comp_has"],
+              "duplicates & companion match": ["dup_sim"], "the legislator on this patron's bills": ["mpat_n"],
+              "legislator in this committee": ["mroom_n"], "the legislator on this subject": ["msubj_n"],
+              "this subcommittee's record": ["is_subroom"], "this room, this session": ["ses_n"]}
     evid = {}
     for g in REASONS:
         cols = [c for c in REASONS[g] if c in col]

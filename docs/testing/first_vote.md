@@ -511,3 +511,30 @@ Findings that changed the card:
 **How a "determinant" is measured here:** a reason counts only if (1) it moves the guess when swapped for real peers'
 values, (2) the member actually has data for it, and (3) as a new input it improves year-ahead forecasts across
 2022/2024/2025 (z ≥ 3). Descriptive gaps without (3) are "the model already knows".
+
+## Which reasons may appear on a member card — the three-check gate (2026-09-30, `reason_gate.py`)
+
+Owner: a "Leans yes" card showed only reasons for no — because the party starting point had been removed (owner
+2026-09-28: "what does a republican on a dem bill like idk why im being shown that"). Fix: the card now opens with
+**"Where the guess starts"** (Democrats on a Democrat's bill: 87 in 100 vote yes; Republicans: 62 in 100; first votes
+2019–2025), and every reason is a push away from that. Owner then asked for more reasons meeting the three checks.
+
+Check 3 was run two ways over 2021/2022/2024/2025 (year-ahead, per-bill paired log loss, pooled z ≥ 3):
+**leave-one-out** (what a group adds that nothing else carries) and **add-to-base** (party & standing + venue, plus
+the group — does it carry information at all).
+
+| reason group | leave-one-out z | add-to-base z | card |
+|---|---|---|---|
+| where the vote happens (sub vs full committee) | 23.2 | (base) | shown |
+| co-patrons & companion | 7.7 | 11.0 | shown |
+| how members voted on similar earlier bills | 3.1 | 8.6 | shown when data exists |
+| the companion bill's earlier vote | 1.2 | 7.3 | shown |
+| similar bills in this room (room memory) | 0.2 | 4.9 | shown |
+| the room's members as a group | 2.1 | 3.1 | shown (marginal; negative in 2021–22) |
+| party & standing | −1.4 (carried by room records) | (base) | the starting point |
+| 16 others — incl. waiting time, committee/subcommittee records, own voting record, patron's record, district, subject, ideal points, summary words | < 3 both ways | | never shown as a reason |
+
+**HB 1515 cards after the gate:** Democrats start at 87 → subcommittee vote −8 to −13, no co-patrons −7 to −9 →
+Leans yes. Kilgore starts at 62 → subcommittee −12, no co-patrons −5, only Republican voting there +7 (lone
+Republicans in a subcommittee backed Democrats' bills 39 of 71 times vs 51 in 100 with other Republicans; thin) →
+Toss-up. Dropped from cards: "carried over, waiting", "this subcommittee's record", "long voting record".
