@@ -438,3 +438,24 @@ articles — audit #141). Articles name people and themes, not bills (22 bill nu
 the decision: patron mentions, member mentions, topic-word volume (all-time and last 14 days). Stacked on the
 existing models, 5 folds by bill: **ballots z = 0.9, fate z = 1.1 — no gain.** Rule written before running: more
 years (~40 GB each) only if z ≥ 3 — so **no further download.**
+
+## How this compares to anyone else's published number (2026-09-29)
+
+No product publishes member-level accuracy. FiscalNote and Skopos claim 93–99% on whether a BILL passes, which is
+mostly the base rate (most bills die); Plural and Quorum make no accuracy claim ([[testing/panel_2026-09-29]],
+marketing memo). The closest published research:
+
+| study | what it predicts | tested on | accuracy | "always yes" | errors removed |
+|---|---|---|---|---|---|
+| **this model** | VA committee/subcommittee **first votes** | a later, locked year (2026) | **85.9%** | 73.5% | **47%** |
+| [Kornilova et al. 2018](https://aclanthology.org/P18-2081/) | US Congress roll calls | later session 2013-14 / 2015-16 | 83.6% / 71.9% | 65.9% / 61.1% | 52% / 28% |
+| [Budhwar 2018](https://digitalcommons.calpoly.edu/theses/1818/) | California legislators, from floor speech | same session | up to 83% | not reported | — |
+| [Political Actor Agent, AAAI-25](https://ojs.aaai.org/index.php/AAAI/article/download/32017/34172) | US House floor votes | random split of the same sessions | 91.8% | not comparable | — |
+
+Different tasks, so no clean ranking: same class as the best forward-tested research, not provably ahead. Floor votes
+and same-session splits are easier than a first committee vote scored on a later year.
+
+**How sure, by confidence rank (2026 locked test; deciles are arithmetic on the pre-registered risk–coverage curve):**
+most-sure 10% of calls right 99.5 in 100 · 2nd 98.8 · 3rd 98.4 · 4th 96.0 · 5th 95.4 · 6th 91.8 · 7th 86.3 ·
+8th 74.5 · 9th 63.7 · least-sure 10% 54.3. The cut points were drawn within 2026 itself; for live use they must be
+fixed from earlier years, then checked on the next session.
