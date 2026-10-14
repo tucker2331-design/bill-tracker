@@ -20,7 +20,9 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 SRC = os.path.join(HERE, "..", "historical_cache", "va_transcripts")
 # text can sit on the timestamp line itself ("00:00:06.000 --> 00:00:08.000 >> IF YOU WOULD...") or on the lines below
 CUE = re.compile(r"(\d\d):(\d\d):(\d\d)\.\d+ --> \S+([^\n]*)\n((?:(?!\d\d:\d\d:\d\d\.\d+ -->)[^\n]*\n?)*)")
-BILL = re.compile(r"\b(HOUSE|SENATE) BILL(?: NUMBER)? (\d{1,4})\b")
+# 2019-era captions are upper case with '>>' speaker marks; 2023+ captions are mixed case with no '>>' and can split
+# "House Bill" / "1104" across two caption lines -- so text is upper-cased and each line is read with the previous one
+BILL = re.compile(r"\b(?:(HOUSE|SENATE) BILL(?: NUMBER)?|(H|S)\.? ?B\.?) ?(\d{1,4})\b")
 MEMBER = re.compile(r"\b(?:DELEGATE|SENATOR|DEL\.|SEN\.) ([A-Z][A-Z'\-]{2,})")
 MOTIONS = {"report": r"MOVE(?:D)? (?:TO |THAT WE )?REPORT|MOTION TO REPORT",
            "table": r"LAY (?:IT )?ON THE TABLE|MOTION TO TABLE|TABLE THE BILL",
@@ -40,11 +42,16 @@ def segment(text):
     segs = collections.defaultdict(lambda: {"seconds": 0, "words": 0, "turns": 0, "public": 0, "oppose": 0,
                                             "support": 0, "questions": 0, "members": set(),
                                             **{f"m_{k}": 0 for k in MOTIONS}})
-    cur = None; prev_t = None
+    cur = None; prev_t = None; prev_line = ""
+    has_marks = ">>" in text
     for t, line in cues(text):
-        named = BILL.findall(line)
+        line = line.upper()
+        joined = (prev_line[-20:] + " " + line) if prev_line else line
+        named = BILL.findall(joined)
+        prev_line = line
         if named:
-            ch, num = named[-1]
+            long_, short, num = named[-1]
+            ch = long_ or ("HOUSE" if short == "H" else "SENATE")
             cur = f"{'HB' if ch == 'HOUSE' else 'SB'} {int(num)}"
         if cur is None:
             prev_t = t; continue
@@ -52,7 +59,9 @@ def segment(text):
         if prev_t is not None and 0 <= t - prev_t <= 120:
             s["seconds"] += t - prev_t
         prev_t = t
-        s["words"] += len(line.split()); s["turns"] += line.count(">>")
+        s["words"] += len(line.split())
+        # speaker turns: '>>' marks where the captions have them, otherwise a member recognized by name
+        s["turns"] += line.count(">>") if has_marks else len(MEMBER.findall(line))
         s["public"] += len(re.findall(r"MY NAME IS", line))
         s["oppose"] += len(re.findall(r"IN OPPOSITION|OPPOSE[DS]? (?:TO )?(?:THE|THIS) BILL|SPEAK(?:ING)? AGAINST", line))
         s["support"] += len(re.findall(r"IN SUPPORT|SUPPORT (?:OF )?(?:THE|THIS) BILL|SPEAK(?:ING)? FOR", line))

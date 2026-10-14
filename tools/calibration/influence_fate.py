@@ -36,6 +36,7 @@ from corpus import load, _party_lookup
 CH = os.path.join(HERE, "..", "historical_cache", "va_chairs")
 CODE = {2019: "191", 2020: "201", 2021: "211", 2022: "221", 2023: "231", 2024: "241", 2025: "251"}
 nrm = lambda s: re.sub(r"[^a-z ]", "", (s or "").lower().replace("&", "and")).strip()
+LAW = re.compile(r"approved by governor|^acts of assembly chapter|^governor.?s action.*approved", re.I)   # corpus "passed" = had a passage vote, NOT law
 PASS_CH = re.compile(r"^(read third time and )?passed (house|senate)\b", re.I)
 
 
@@ -74,7 +75,8 @@ def build():
     eff = collections.defaultdict(lambda: [0, 0, 0])          # n, passed chamber, law
     for b in allb:
         c = norm(b["chief"]); e = eff[(c, int(b["session"]))]
-        e[0] += 1; e[1] += any(PASS_CH.match(t.strip()) for _d, t, _c in b["actions"]); e[2] += bool(b["passed"])
+        e[0] += 1; e[1] += any(PASS_CH.match(t.strip()) for _d, t, _c in b["actions"])
+        e[2] += any(LAW.search(t.strip()) for _d, t, _c in b["actions"])    # was b["passed"]: that flag is a passage VOTE
     # chairs: (year, "H:committee") -> chair name, matched to legislators who sponsored bills that year
     names_y = collections.defaultdict(set)
     for b in allb:

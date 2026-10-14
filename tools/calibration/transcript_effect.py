@@ -20,6 +20,7 @@ import first_vote as FV
 from corpus import load
 
 SEG = os.path.join(HERE, "..", "historical_cache", "va_transcripts", "segments.json")
+LAW = re.compile(r"approved by governor|^acts of assembly chapter|^governor.?s action.*approved", re.I)   # corpus "passed" = had a passage vote, NOT law
 PASS_CH = re.compile(r"^(read third time and )?passed (house|senate)\b", re.I)
 
 
@@ -46,7 +47,7 @@ def main():
             same_day = [x for x in rc.get(k, []) if x[0] == m["date"]]
             origin = (bill.startswith("HB") and m["chamber"] == "H") or (bill.startswith("SB") and m["chamber"] == "S")
             rows.append({"k": k, "meet": ident, "origin": origin, "f": f, "bill": b, "vote": same_day[0] if same_day else None,
-                         "law": bool(b["passed"]), "passed_ch": any(PASS_CH.match(t.strip()) for _d, t, _c in b["actions"])})
+                         "law": any(LAW.search(t.strip()) for _d, t, _c in b["actions"]), "passed_ch": any(PASS_CH.match(t.strip()) for _d, t, _c in b["actions"])})
     print(f"bill segments matched to bills: {len(rows)}; with a recorded vote that same day: "
           f"{sum(r['vote'] is not None for r in rows)}; unmatched {dict(unmatched)}")
     by = collections.Counter((r["k"][0], r["meet"].split("-")[1]) for r in rows)
@@ -68,7 +69,10 @@ def main():
     # 2. next stages, for bills the meeting reported (bill went on: a later action exists)
     print("\n2. AFTER THE COMMITTEE: bills heard in their OWN chamber with a recorded vote that day (forward-looking;\n"
           "   a bill heard in the other chamber has already passed its own, so it is excluded)")
-    voted_origin = [r for r in voted if r["origin"]]
+    # only bills the committee PASSED that day (most ballots yes): a bill killed at the meeting obviously goes no further,
+    # and long contested debate goes with kills -- conditioning on "advanced" is what makes this forward-looking
+    voted_origin = [r for r in voted if r["origin"] and np.mean([s_ for _w, _p, s_ in r["vote"][4]]) > .5]
+    print(f"   bills passed by the committee that day: {len(voted_origin)}")
     for lab, test in (("public opposition stated", lambda f: f["oppose"] > 0), ("long debate (> 10 min)", lambda f: f["seconds"] > 600),
                       ("members of the public spoke", lambda f: f["public"] > 0)):
         a = [r for r in voted_origin if test(r["f"])]; b = [r for r in voted_origin if not test(r["f"])]

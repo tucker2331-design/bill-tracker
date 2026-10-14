@@ -82,3 +82,31 @@ party. **Year-ahead, added to the fate model: z = 3.1 — passes, barely** (gain
 | "Bipartisan Co-Sponsor Ratio 79%" | co-patrons at filing, own and other party | real: the co-patrons group passes both forecasting tests (z 7.7 / 11.0, [[testing/first_vote]]); no co-patrons: 20 vs 6 in 100 die without a single yes |
 | "CBO Fiscal Score Favorability 64%" | DPB fiscal impact statement | **having** a statement says nothing (z 0.6 with a fair cutoff; the first run's z 10.1 was a leak — [[failures/assumptions_audit]] #142). What the statement **says** (the cost) is untested — needs the documents |
 | "Influence 96/100" | legislative effectiveness (CEL method) | rebuilt; adds nothing to fate forecasts (z 1.6) |
+
+## What is said in committee (Internet Archive captions, `transcripts.py` / `transcript_effect.py`, 2026-10-14)
+
+303 meetings collected (caption text only); 204 session meetings; **3,205 bill debates matched to bills** (2026 House
+1,843; 2026 Senate 975; Senate 2019–2025 387); 1,424 with a recorded vote the same day. Parser note: 2019 captions are
+upper case with `>>` speaker marks, 2023+ captions are mixed case without them and split "House Bill / 1104" across
+lines — the first parser found bills in 2 meetings, the fixed one in 162.
+
+**1. Debate vs the room's vote that day** (median): unanimous yes 1.0 min, 3 turns, public speakers in 5%; party-line
+1.9 min, 5 turns, 12%; mixed split 2.1 min, 7 turns, 10%. Contested votes get about twice the airtime.
+
+**2. Forward-looking — bills the committee PASSED, heard in their own chamber (649):**
+
+| at the committee hearing | passed full chamber | became law |
+|---|---|---|
+| public opposition stated | 85% vs 92% | 59% vs 67% |
+| debate over 10 minutes | 87% vs 91% | 53% vs 68% |
+| members of the public spoke | 82% vs 92% | 54% vs 68% |
+
+Holds within committee-vote shape, smaller: unanimous-yes bills with stated public opposition became law 67% vs 76%
+(58 vs 304 bills); split-vote bills where the public spoke 44% vs 57% (54 vs 233). Consistent, small samples — a signal,
+not a proven effect. Not tested as a model input: the coverage is mostly 2026, the locked test year.
+
+**3. Who speaks:** legislators named in a bill's debate broke from their party's majority that day 5.2% of the time
+(24 of 460) vs 2.7% for everyone else (816 of 30,415) — engagement goes with defection (same meeting, descriptive).
+
+**Definition trap fixed:** the corpus `passed` flag means "had a passage vote", not "became law" (2025: 1,139 vs 721).
+`transcript_effect.py` and `influence_fate.py` (effectiveness record) now read the Governor's approval / chapter.
