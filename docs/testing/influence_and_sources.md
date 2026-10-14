@@ -2,7 +2,7 @@
 tags: [testing, calibration, sources, compliance, fate, influence]
 updated: 2026-10-14
 status: active
-open_loop: Testimony re-collected with each organization's side (va_hodspeak_v2) -- run testimony_lineup.py when the collection finishes; fiscal-statement AMOUNTS need the owner's OK to fetch statement documents from LIS (2025/26 only); money ties need more ELECT months downloaded (owner OK).
+open_loop: Fiscal-statement collection (2025/26, fiscal_statements.py) running -- parse and run fiscal_effect.py when done.
 ---
 
 # Influence, relationships and outside sources (2026-10-14)
@@ -110,3 +110,22 @@ not a proven effect. Not tested as a model input: the coverage is mostly 2026, t
 
 **Definition trap fixed:** the corpus `passed` flag means "had a passage vote", not "became law" (2025: 1,139 vs 721).
 `transcript_effect.py` and `influence_fate.py` (effectiveness record) now read the Governor's approval / chapter.
+
+## Testimony by WHO and WHICH SIDE (`testimony_lineup.py`, 2026-10-14)
+
+HODSpeak re-collected 2021/2022/2024/2025 with each organization's side (1,404 House meetings; organization names and
+counts only). Each organization's lean is LEARNED from earlier years — how Democrats and Republicans actually voted on
+bills it supported vs opposed — never assigned by hand (375 organizations with a lean for 2022, 564 for 2024, 735 for 2025).
+
+| test | result |
+|---|---|
+| **does the bill get out of committee** — House bills with testimony before their first decision (2022: 1,167; 2024: 1,446; 2025: 1,075), stacked on fate.py year-ahead | **ACCEPT, z = 3.9**, gain in every year (+0.028 / +0.007 / +0.003) |
+| member votes, year-ahead stacked (5.9–11.9% of ballots carry a known lineup) | z = 0.8 — no gain |
+| lineup vs the actual party gap at the first vote (214 bills) | r = 0.45 |
+| two-sided fights (organizations on both sides, 25 bills) vs one-sided (189) | mean |party gap| 0.77 vs 0.55 |
+
+**The stakeholder lineup predicts whether a bill MOVES, not how members vote** — the panel's prediction from Butler &
+Miller (lobbying predicts agenda progress, not committee votes). The earlier "no influence" result came from counting
+comments; who is on which side is what carries the signal.
+
+**Effectiveness record, rerun with the true "became law" (Governor's approval / chapter):** z = 2.4 — still no.

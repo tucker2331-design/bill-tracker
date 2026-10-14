@@ -71,7 +71,7 @@ status: active
 - Also open (owner-triggered): `/code-review ultra`. ~~co-patrons backfill~~ — superseded, see above.
 
 ## READY
-- [[testing/influence_and_sources]] — transcripts exist but every copy is robots/terms-blocked; relationships add nothing to fate forecasts, but **the chair co-sponsoring the bill: 92% vs 70% advance, same patron**. Open: testimony lineup test (collection running), fiscal-statement amounts and more ELECT months need owner OK.
+- [[testing/influence_and_sources]] — transcripts exist but every copy is robots/terms-blocked; relationships add nothing to fate forecasts, but **the chair co-sponsoring the bill: 92% vs 70% advance, same patron**. **Testimony lineup predicts whether a bill gets out of committee (z = 3.9).** Open: fiscal-statement cost analysis (collection running).
 - [[testing/first_vote]] · [[testing/bill_fate]] — **2026 locked test scored once: 85.9% (84.9–86.8), room outcome 91.5%, Leans 66 in 100 (lower than validation).** Bill-fate model accepted (2026: advance AUC 0.80 vs 0.68). Open: HB 1515 carried-over bills lack a wording score; confidence-rank labels idea awaits an owner mockup decision ([[ideas/future_improvements]]); 2027 forward test.
 - [[testing/content_votes]] — content predicts which opposite-party legislator crosses (AUC 0.51 -> 0.70, held out). Next: full text, wider coverage, owner's Tier-3 call on display.
 - [[testing/room_memory]] — committees remember ideas (OR 15.2 same room vs 5.5 elsewhere, p=0.013). Needs the owner's Standard #3 call on exact-title equality, and a demo bill with a prior attempt (HB 1515 has none).
