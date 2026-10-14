@@ -23,7 +23,8 @@ import requests
 
 BASE = "https://hodspeak.house.virginia.gov"
 OUT = os.path.join(os.path.dirname(os.path.abspath(__file__)), "va_hodspeak")
-UA = {"User-Agent": "bill-tracker research (tucker2331@gmail.com)"}
+# a fresh connection per request: pooled keep-alive connections went stale on a flaky network (2026-10-14)
+UA = {"User-Agent": "bill-tracker research (tucker2331@gmail.com)", "Connection": "close"}
 SUP = re.compile(r"\b(i support|we support|support (this|hb|sb|the bill)|supportive|in (strong )?favor|vote yes|"
                  r"vote for|please pass|urge (you|the committee)? ?to (pass|support|vote yes|report)|endorse)", re.I)
 OPP = re.compile(r"\b(oppos\w*|against|vote no|vote against|reject|do not (support|pass)|please vote no|"

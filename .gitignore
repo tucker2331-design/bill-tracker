@@ -52,3 +52,9 @@ tools/historical_cache/va_positions/valcv_pdf/
 
 # first-vote feature table and test caches (rebuilt by first_vote.rebuild_rows / accept.py / reason_gate.py)
 tools/calibration/.cache/
+
+# DPB fiscal impact statement PDFs (2025/26), re-downloadable by tools/historical_cache/fiscal_statements.py; parsed fields committed
+tools/historical_cache/va_fiscal/pdf/
+
+# Internet Archive caption files (public meetings), re-downloadable by tools/historical_cache/ia_transcripts.py; parsed segments committed
+tools/historical_cache/va_transcripts/raw/

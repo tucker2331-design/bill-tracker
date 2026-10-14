@@ -16,6 +16,7 @@ numbers ... what is a cbo fiscal score favorability and the other scores ... can
 
 | source | what it has | access | used? |
 |---|---|---|---|
+| **Internet Archive — "virginiageneralassembly" collection** | 1,083 committee/floor meetings 2008–2026 with **closed-caption text files** (2026 House: 143 items; Senate 2023–25: ~127) | robots.txt disallows only /control/ and /report/; advancedsearch + metadata are its public programmatic interface | **Yes — caption text only, never video** (`ia_transcripts.py`) |
 | House committee video (Sliq Harmony, `sg001-harmony.sliq.net/00304`) | every House committee/subcommittee meeting since 2020; the platform supports captions | robots.txt **`Disallow: /` for all** | **No** — one page was read before the rule was seen; nothing more |
 | Senate committee video (Granicus, `virginia-senate.granicus.com`) | Senate meetings since 2017 | robots.txt **`Disallow: /` for all** | **No** |
 | Senate YouTube channel | the same video, auto-captions | YouTube terms: captions only through its API, and caption download is for the video's owner | **No** |
@@ -27,9 +28,14 @@ numbers ... what is a cbo fiscal score favorability and the other scores ... can
 | Fiscal impact statements (Dept. of Planning and Budget) | the cost of each bill | dates are in HISTORY.CSV (already held); the documents are on LIS (`BillHistoryReferences`) | dates used; **amounts need the owner's OK** (LIS API, 2025/26 only) |
 | ELECT campaign finance | contributions, incl. member-to-member giving | agency files, no key (see [[knowledge/campaign_finance_source]]) | only 2023-10 and 2024-01 held; more months need the owner's OK to download |
 
-**Transcripts exist** (video archives on both sides) but every copy sits behind a robots rule or platform terms that
-forbid automated collection. The legitimate routes: ask the House and Senate clerks for caption text, or include it in
-the DLAS arrangement ([[knowledge/lis_tos_commercial_use]]).
+**Transcripts — the workaround (2026-10-14).** The official hosts forbid automated collection, but the **Internet Archive**
+mirrors General Assembly meetings with the broadcast closed captions (upper case, `>>` at each speaker change, bills read
+as "SENATE BILL 1265"). `ia_transcripts.py` takes the caption text only; `transcripts.py` cuts each meeting into per-bill
+segments (minutes debated, speaker turns, public speakers, stated support/opposition, legislators named, motions heard);
+`transcript_effect.py` tests them. Coverage is the Archive's, not ours: dense for the 2026 House and 2023–25 Senate.
+
+**Campaign finance:** ELECT (`apps.elections.virginia.gov`) now answers "Access Denied" to automated requests, even for
+robots.txt — treated as a refusal; not worked around. Money ties use the two months already held (2023 election).
 
 ## Relationships and influence → does the bill get out of its first committee? (`influence_fate.py`)
 
@@ -55,11 +61,24 @@ The model already carries most of this through patron standing, the patron's own
 The relationship history does not matter; the chair's name on this bill does. Still an association (a chair may sign on
 to a patron's strongest bill) — same caveat as co-patrons ([[testing/first_vote]]).
 
+## Chair ALIGNMENT, measured from the chair's own record (`chair_alignment.py`, 2026-10-14)
+
+Owner: "chair alignment is how much the chair aligns with the bill". Inputs, earlier sessions only: the chair's yes rate
+on this patron's earlier bills, on near-identical earlier bills, the chair–sponsors distance on the left-right map, same
+party. **Year-ahead, added to the fate model: z = 3.1 — passes, barely** (gain in 2022, 2024, 2025; loss in 2023).
+
+| same patron, same session, bills before differently-aligned chairs | result |
+|---|---|
+| chair backed ≥ 75% of this patron's earlier bills | 72% vs 63% advanced; patrons better 172, worse 158 (p = 0.47) — no clear within-patron effect |
+| chair backed ≥ 75% of near-identical earlier bills | 9 bills — too few |
+| **money:** the chair's campaign gave to the patron's (2024–25 bills, 533 member-to-member gifts) | 72% vs 70%; better 12, worse 5 (p = 0.14) — leans positive, unproven |
+| **money:** the two campaigns share ≥ 5% of donors | 71% vs 63%; better 49, worse 37 (p = 0.24) — leans positive, unproven |
+
 ## Gemini's three "scores", replicated with real data
 
 | Gemini's score | Virginia's real version | finding |
 |---|---|---|
-| "Committee Chair Alignment 88%" | chair co-sponsors the bill / has backed the patron | co-sponsoring THIS bill: +22 points within patron (above); past backing: nothing |
+| "Committee Chair Alignment 88%" | the chair's own record on this patron's and similar bills, distance on the left-right map | small but real: passes the forecast test at z = 3.1. Separately, the chair CO-SPONSORING the bill: +22 points within patron |
 | "Bipartisan Co-Sponsor Ratio 79%" | co-patrons at filing, own and other party | real: the co-patrons group passes both forecasting tests (z 7.7 / 11.0, [[testing/first_vote]]); no co-patrons: 20 vs 6 in 100 die without a single yes |
 | "CBO Fiscal Score Favorability 64%" | DPB fiscal impact statement | **having** a statement says nothing (z 0.6 with a fair cutoff; the first run's z 10.1 was a leak — [[failures/assumptions_audit]] #142). What the statement **says** (the cost) is untested — needs the documents |
 | "Influence 96/100" | legislative effectiveness (CEL method) | rebuilt; adds nothing to fate forecasts (z 1.6) |
