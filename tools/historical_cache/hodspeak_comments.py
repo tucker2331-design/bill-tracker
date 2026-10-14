@@ -63,20 +63,24 @@ def parse_meeting(page):
         if not m:
             continue
         c = collections.Counter(); orgs = collections.Counter()
+        stance_by_org = collections.defaultdict(lambda: [0, 0, 0])      # org -> [support, oppose, unclear]
         for head, text in COMMENT.findall(card):
             c["comments"] += 1
             t = html.unescape(re.sub(r"<[^>]+>", " ", text))
             s_, o_ = bool(SUP.search(t)), bool(OPP.search(t))
-            c["support" if s_ and not o_ else "oppose" if o_ and not s_ else "unclear"] += 1
+            stance = "support" if s_ and not o_ else "oppose" if o_ and not s_ else "unclear"
+            c[stance] += 1
             org = re.search(r'Organization:</span>\s*<span class="infoText">\s*([^<]*?)\s*</span>', head)
             if org and org.group(1).strip():
                 c["with_org"] += 1
                 name = html.unescape(org.group(1).strip())
                 if ORGWORD.search(name) and not PERSONAL.search(name) and len(name) <= 120:
                     orgs[name] += 1
+                    stance_by_org[name][("support", "oppose", "unclear").index(stance)] += 1
         # a card can carry only an attachment (0 typed comments) -- every key is written, zeros included
         bills[m.group(1)] = {**{k: c[k] for k in ("comments", "with_org", "support", "oppose", "unclear")},
-                             "attachments": card.count("active_storage/blobs"), "orgs": dict(orgs)}
+                             "attachments": card.count("active_storage/blobs"), "orgs": dict(orgs),
+                             "org_stances": dict(stance_by_org)}
     return bills
 
 
@@ -115,4 +119,8 @@ def main(years):
 
 
 if __name__ == "__main__":
-    main([int(a) for a in sys.argv[1:]])
+    # --v2 (2026-10-14): re-collect into va_hodspeak_v2 with each ORGANIZATION's side (org_stances); the original
+    # va_hodspeak (counts only) is kept unchanged because earlier results were computed from it.
+    if "--v2" in sys.argv:
+        OUT = OUT + "_v2"
+    main([int(a) for a in sys.argv[1:] if a.isdigit()])
