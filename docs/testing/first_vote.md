@@ -577,3 +577,11 @@ P8 is text-derived (summary words): internal research until the owner's Standard
 | **P8 built INTO the member model** (`gbm_words.py`; word scores as two more inputs, each year from earlier years only) | **ACCEPT, z 5.6**; accuracy 84.92→85.01 / 84.36→85.09 / 86.09→86.38; hardest third 68.85→69.13 / 64.86→67.06 / 67.77→68.62 (2022/2024/2025) |
 | P8c with two-word phrases, in the model | z 6.8 on log loss, but hardest third 68.85→68.82 / 64.86→67.07 / 67.77→67.58 — less consistent than single words |
 | R1 mixed-split words × member's defection rate | reject, z −2.1 |
+| **P8 in the model, scored on 2026** (trained 2019–2025, never used to choose it) | **does NOT replicate:** accuracy 85.86→85.42; hardest third 65.90→64.56; other party 78.94→77.79; z −0.2 |
+
+**Verdict on the consensus words:** two ways of using the same signal disagree on the fresh year. As a simple stacked
+adjustment on top of the model it replicated on 2026 (hardest third 66.29→67.04, z 4.0); as raw inputs inside the
+trees it did not (64.56 vs 65.90). The trees overfit the word scores to the earlier years; a one-coefficient-per-input
+linear layer generalised. If the signal is used at all, it is the stacked form — and it is still a small lift
+(+0.75 points on the hardest third) that needs the owner's Standard #3 call (text-derived). The hardest third remains
+what it was: half of it consensus votes the model hedges on, the other half party positions decided privately.
