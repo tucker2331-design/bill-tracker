@@ -538,3 +538,42 @@ the group — does it carry information at all).
 Leans yes. Kilgore starts at 62 → subcommittee −12, no co-patrons −5, only Republican voting there +7 (lone
 Republicans in a subcommittee backed Democrats' bills 39 of 71 times vs 51 in 100 with other Republicans; thin) →
 Toss-up. Dropped from cards: "carried over, waiting", "this subcommittee's record", "long voting record".
+
+## The hardest third, attacked directly (2026-10-15)
+
+Owner: "keep digging on the hard 1/3 ... use the 85% we have in the training ... predict it will be party line ...
+categorize that hard 1/3 ... try more than one or two hypotheses." Every test: year-ahead (fit on earlier years, score
+2022/2024/2025, pooled per bill, z ≥ 3), the FIXED hardest third reported (`accept.py` now prints it).
+
+**What the hardest third is made of** (2021/2022/2024/2025 pooled; `shape_first.py`, `hard_third_more.py diag`):
+
+| cut | share of the hard third | model right there |
+|---|---|---|
+| actual vote shape: everyone yes / party line / mixed split / everyone no | 36.5% / 25.2% / 23.9% / 14.4% | 72.8% / 73.7% / 60.2% / 51.5% |
+| voter: other party / patron's party | 70.2% / 29.8% | 66.4% / 68.3% |
+| venue: subcommittee / committee / floor | 62.9% / 23.6% / 13.6% | 66.0% / 70.0% / 66.3% |
+| **the room's outcome was still called right / missed** | **80.1% / 19.9%** | 71.8% / 47.3% |
+
+Half the hard third ends unanimous: the model hedged on bills the room agreed on. And 80% of the hard third sits in rooms
+whose OUTCOME we called right — those member misses do not change the result.
+
+| hypothesis | result |
+|---|---|
+| H1 bill viability (fate model) × side | reject, z −2.4 |
+| H2 the chair (co-sponsors; record on this patron) × side | reject, z −2.0 |
+| H3 fiscal cost × side (fit 2025 → score 2026) | reject, z −2.3 |
+| H4 domain scores (VALCV) | not run — built from the same roll calls the model already uses |
+| H5 what members said on the topic in earlier committee debates (2026, time-forward) | reject, z −5.0 — captions show who was called on, not their side |
+| H6 this session's party lines on the topic × side | reject, z 1.4 |
+| shape forecast (party line / mixed / unanimous) × side | reject, z −0.8; shape model 52–61% vs 45–49% base; "vote with your party" on predicted party-line hard ballots 71.7% vs model 74.2% |
+| P5/P6 this session: patron's bills, member on this patron's bills | reject, z 0.4 |
+| P9 recalibration by side × venue | reject, z −2.5 |
+| P10 the room's habit of unanimity | reject, z −1.6 |
+| P8b words that go with the other party voting yes | reject, z 0.8 |
+| **P8 consensus words** — per-word log-odds of unanimous-yes / unanimous-no first votes, learned from earlier years, on the summary AS INTRODUCED + title | **ACCEPT, z 4.2**; hardest third 68.9→69.5 (2022), 65.1→67.0 (2024), 67.9→68.8 (2025) |
+| **P8 replicated on 2026** (never used to choose it) | **accuracy 85.99 → 86.24; hardest third 66.29 → 67.04; z 4.0** |
+
+P8 is text-derived (summary words): internal research until the owner's Standard #3 call.
+| **P8 built INTO the member model** (`gbm_words.py`; word scores as two more inputs, each year from earlier years only) | **ACCEPT, z 5.6**; accuracy 84.92→85.01 / 84.36→85.09 / 86.09→86.38; hardest third 68.85→69.13 / 64.86→67.06 / 67.77→68.62 (2022/2024/2025) |
+| P8c with two-word phrases, in the model | z 6.8 on log loss, but hardest third 68.85→68.82 / 64.86→67.07 / 67.77→67.58 — less consistent than single words |
+| R1 mixed-split words × member's defection rate | reject, z −2.1 |

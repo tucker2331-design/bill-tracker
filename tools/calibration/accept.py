@@ -88,9 +88,12 @@ def stacked_year_ahead(signal, label, only_covered=False, ridge=1.0):
             g[b_] += a - c
         d = np.array(list(g.values())); diffs.append(d)
         r0 = ((p0 >= .5) == (y == 1)); r1 = ((p1 >= .5) == (y == 1))
+        # the owner's target: the FIXED hardest third (least confident third under the base model, chosen before the signal)
+        hard = np.argsort(np.abs(p - .5))[:len(p) // 3]
+        hard_line = f"; hardest third {r0[hard].mean():.4f} -> {r1[hard].mean():.4f}"
         lines.append(f"    {t}: covered ballots {cov.sum()} ({cov.mean():.1%}) on {len({str(r['bill']) for r, c in zip(te, cov) if c})} "
                      f"bills; accuracy covered {r0[cov].mean() if cov.any() else float('nan'):.4f} -> "
-                     f"{r1[cov].mean() if cov.any() else float('nan'):.4f}; per-bill log-loss gain {d.mean():+.5f}")
+                     f"{r1[cov].mean() if cov.any() else float('nan'):.4f}; per-bill log-loss gain {d.mean():+.5f}" + hard_line)
     g, z = pooled(diffs)
     print(f"{label}")
     print("\n".join(lines))
