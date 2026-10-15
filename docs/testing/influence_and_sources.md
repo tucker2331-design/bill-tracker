@@ -138,4 +138,4 @@ comments; who is on which side is what carries the signal.
 | chair co-sponsors the bill | **2026, never used to choose it** | **91% vs 73%; 43 better, 7 worse, p = 2e-7 — replicates** |
 | chair alignment (chair's own record vs the bill) | **2026, trained 2020–2025** | **z = 3.2 on 2,325 bills — replicates** |
 | contentious hearing → less often law | one row per bill, controlling for unanimous vote, patron's party, chamber | odds ratios 0.62–0.72, **p = 0.07–0.17 — not established**; 383 of 467 bills are the 2026 House, the Senate has too few |
-| testimony lineup → bill fate | 2026 replication | pending (2026 House testimony being collected) |
+| testimony lineup → bill fate | **2026, never used to choose it** (1,407 House bills, 822 organizations with a learned lean) | **does NOT replicate: gain −0.004 on 2026.** The gain shrank every year (2022 +0.028, 2024 +0.007, 2025 +0.003, 2026 −0.004); pooled with 2026 z = 3.3. **Not established** — the z = 3.9 result above stands as measured but did not carry forward |
