@@ -99,6 +99,11 @@ def build():
             raw = (v.get("chairs") or ([v["chair"]] if v.get("chair") else []))
             got = [match(s, yr, ch) for s, _ in raw]
             chair[(yr, f"{ch}:{name}")] = next((g for g in got if g), None)
+    # 2026: the authorized LIS roster (va_rosters/20261.json.gz, role == "Chair") -- full names, no surname matching needed
+    import gzip
+    for r_ in json.load(gzip.open(os.path.join(HERE, "..", "historical_cache", "va_rosters", "20261.json.gz")))["rows"]:
+        if r_["role"] == "Chair":
+            chair.setdefault((2026, f"{r_['committee_no'][0]}:{nrm(r_['committee_name'])}"), norm(r_["member_name"]))
     print(f"chairs matched {sum(v is not None for v in chair.values())} of {len(chair)}; unmatched by pool size {dict(miss)}")
     return norm, pty, edges_y, eff, chair
 

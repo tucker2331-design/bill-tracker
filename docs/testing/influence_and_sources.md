@@ -129,3 +129,13 @@ Miller (lobbying predicts agenda progress, not committee votes). The earlier "no
 comments; who is on which side is what carries the signal.
 
 **Effectiveness record, rerun with the true "became law" (Governor's approval / chapter):** z = 2.4 — still no.
+
+## Does it hold beyond the sample? (2026-10-14, `replicate_2026.py`, `.cache/transcript_check.py`)
+
+| finding | check | result |
+|---|---|---|
+| chair co-sponsors the bill | each year separately, same patron | 2020 85% vs 66% (26 better / 6 worse) · 2021 98 vs 87 (18/1) · 2022 84 vs 56 (20/4) · 2024 90 vs 69 (38/6) · 2025 98 vs 77 (38/1) — every year p < 0.002 (2023: no patron with both kinds) |
+| chair co-sponsors the bill | **2026, never used to choose it** | **91% vs 73%; 43 better, 7 worse, p = 2e-7 — replicates** |
+| chair alignment (chair's own record vs the bill) | **2026, trained 2020–2025** | **z = 3.2 on 2,325 bills — replicates** |
+| contentious hearing → less often law | one row per bill, controlling for unanimous vote, patron's party, chamber | odds ratios 0.62–0.72, **p = 0.07–0.17 — not established**; 383 of 467 bills are the 2026 House, the Senate has too few |
+| testimony lineup → bill fate | 2026 replication | pending (2026 House testimony being collected) |

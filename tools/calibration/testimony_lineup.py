@@ -27,7 +27,7 @@ import numpy as np
 import accept as AC, first_vote as FV
 
 SRC = os.path.join(HERE, "..", "historical_cache", "va_hodspeak_v2")
-YEARS = (2021, 2022, 2024, 2025)
+YEARS = tuple(int(y) for y in os.environ.get("LINEUP_YEARS", "2021,2022,2024,2025").split(","))
 SHRINK = 3.0
 
 
@@ -129,7 +129,7 @@ def fate_test():
     import fate as FT, stats as ST
     C = cards(); D_ = FV.assemble(); PY = party_yes(D_["rc"])
     Lby = {y: leans(C, PY, y) for y in YEARS}
-    R, _ = FT.bills(); R = [r for r in R if r["standing"] in ("majority", "minority")]
+    R, _ = FT.bills(tuple(range(2020, max(YEARS) + 1))); R = [r for r in R if r["standing"] in ("majority", "minority")]
     F = FT.featurise(R); cols = sorted(F[0]); X = np.array([[f[c] for c in cols] for f in F], float)
     Y = np.array([FT.MCLASSES.index(FT._m(r)) for r in R]); yr = np.array([r["year"] for r in R])
     def decided(r):
