@@ -2,7 +2,7 @@
 tags: [testing, calibration, sources, compliance, fate, influence]
 updated: 2026-10-14
 status: active
-open_loop: Fiscal-statement collection (2025/26, fiscal_statements.py) running -- parse and run fiscal_effect.py when done.
+open_loop: 38 of 1,578 2026 fiscal statements still unfetched (repeated connection drops); rerun fiscal_statements.py fetch 2026, then parse + fiscal_effect.py to confirm nothing moves.
 ---
 
 # Influence, relationships and outside sources (2026-10-14)
@@ -139,3 +139,21 @@ comments; who is on which side is what carries the signal.
 | chair alignment (chair's own record vs the bill) | **2026, trained 2020–2025** | **z = 3.2 on 2,325 bills — replicates** |
 | contentious hearing → less often law | one row per bill, controlling for unanimous vote, patron's party, chamber | odds ratios 0.62–0.72, **p = 0.07–0.17 — not established**; 383 of 467 bills are the 2026 House, the Senate has too few |
 | testimony lineup → bill fate | **2026, never used to choose it** (1,407 House bills, 822 organizations with a learned lean) | **does NOT replicate: gain −0.004 on 2026.** The gain shrank every year (2022 +0.028, 2024 +0.007, 2025 +0.003, 2026 −0.004); pooled with 2026 z = 3.3. **Not established** — the z = 3.9 result above stands as measured but did not carry forward |
+
+## Do bills that COST money fail more? (`fiscal_statements.py`, `fiscal_effect.py`, 2026-10-15)
+
+First Department of Planning and Budget statement per bill, 2025 (1,320) and 2026 (1,540 of 1,578), fetched under
+assert_lis_authorized with the five guardrails; counted only if published before the committee's first decision (1,705
+bills). **Answer: cost barely matters at the first committee, and matters a lot afterwards.**
+
+| | out of the first committee | passed its chamber |
+|---|---|---|
+| majority patron: no state cost / under $1M / $1–10M / over $10M a year | 74% / 74% / 76% / 68% | **72% / 65% / 59% / 45%** |
+| minority patron: same bands | 48% / 42% / 44% / 48% | **43% / 29% / 22% / 21%** |
+| budget amendment needed vs not (majority / minority) | 71 vs 78 / 35 vs 47 | **57 vs 76 / 20 vs 39** |
+| same patron, same session: costing $1M+ vs no state cost | 63% vs 68% (p = 0.31) | **41% vs 61%; 32 patrons worse, 11 better, p = 0.002** |
+| per year, passed chamber | | 2025: 41% vs 55% (12 worse / 5 better); 2026: 43% vs 64% (20 worse / 6 better, p = 0.009) |
+
+Costly bills clear the policy committee as often as free ones, then die later — in the money committees (Appropriations
+/ Finance), which is where a cost lands. For a volunteer: a bill with a large fiscal note needs a budget strategy, not
+just votes in the first committee.
