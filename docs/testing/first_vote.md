@@ -585,3 +585,28 @@ trees it did not (64.56 vs 65.90). The trees overfit the word scores to the earl
 linear layer generalised. If the signal is used at all, it is the stacked form — and it is still a small lift
 (+0.75 points on the hardest third) that needs the owner's Standard #3 call (text-derived). The hardest third remains
 what it was: half of it consensus votes the model hedges on, the other half party positions decided privately.
+
+## New techniques for member votes and the room result (2026-10-16, `levers.py`)
+
+Owner: "try things in ways you dont normally ... to make a llm accurate they use thousands of tuned levers." Only numpy
+is installed (no downloads without the owner's OK), so every technique is written in numpy. One frame for all:
+CHOOSE (learn 2019–2022, score 2024), CONFIRM (learn to 2024, score 2025), REPEAT (learn to 2025, score 2026, the
+already-scored test year). Measures: member accuracy, FIXED hardest third, room result (most members yes).
+
+| technique (2024 choose unless noted) | member | hardest third | room |
+|---|---|---|---|
+| base (locked model) 2024 / 2025 / 2026 | 84.36 / 86.09 / 85.86 | 64.86 / 67.77 / 65.90 | 87.38 / 88.36 / 91.45 |
+| **bagging: 8 trees, each on 50% of rows and 50% of inputs** — 2024 / 2025 / 2026 | **84.75 / 86.26 / 86.29** | **66.02 / 68.26 / 67.17** | 87.60 / 88.30 / **91.86** |
+| bagging: 5 trees, 70% rows / 60% inputs — 2024 / 2025 / 2026 | 84.62 / 86.07 / 86.22 | 65.64 / 67.70 / 66.97 | 87.65 / 88.79 / 91.75 |
+| bagging: 10 trees, 70% / 60% | 84.61 | 65.60 | 87.81 |
+| direct room model (bill-level "most vote yes"), members shifted 30% toward it — 2024 / 2025 / 2026 | 84.67 / 85.03 / 85.24 | 65.81 / 64.57 / 64.04 | 87.92 / 89.53 / 91.40 |
+| direct room model + bagging — 2024 / 2025 / 2026 | 84.81 / 85.27 / 85.76 | 66.20 / 65.36 / 65.60 | 88.36 / 89.35 / 91.50 |
+| joint room model (second stage reads the other members' first-stage predictions) | 84.42 | 65.05 | 87.10 |
+| larger trees, tighter limits / deeper / slower+longer / more weight on uncertain votes | 83.85–84.23 | 63.32–64.47 | 86.89–87.81 |
+| neural network with learned member / patron / committee codes (after fixing a scaling fault) | 81.85 (blend 30%: 84.40) | 59.80 (64.99) | 84.43 (86.67) |
+
+**Result:** bagging with 50% rows and 50% inputs improves member votes AND the hardest third in all three years
+(+0.39 / +0.17 / +0.43 member; +1.16 / +0.49 / +1.27 hardest third), and the room result in two of three (2026 91.45 →
+91.86). Per-year z +1.5 / +0.5 / +3.8 (combined ≈ 3.3). It changes HOW the model is trained, not what it reads — no new
+data, no text. Because 2026 has now been used, the next clean test is a frozen forward test on 2027.
+The direct room model helps the room result in 2024 and 2025 but hurts member votes and adds nothing in 2026 — not adopted.
