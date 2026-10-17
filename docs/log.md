@@ -8,6 +8,9 @@ status: active
 
 Append-only, reverse-chronological (newest at top). Each entry opens with `## [YYYY-MM-DD] <kind> | <title>` so `grep "^## \[" log.md | head -20` gives a parseable timeline.
 
+## [2026-10-17] research | second model family — bagged trees + 20% linear lifts all three measures in all three years
+Smooth penalised logistic (hinges, 8 products, × side) blended 20% with bagged trees: member 85.12/86.33/86.50, hardest third 67.12/68.47/67.82, room 87.92/88.85/92.11 (2024/2025/2026). Per-member layer, recency weights, more bags rejected. Adoption + frozen 2027 test awaits the owner. Details in [[testing/first_vote]].
+
 ## [2026-10-16] research | public traces of private decisions — six tested, none adds
 Leaders' co-sponsorship, draft order, bargaining, governor's party, voter's seat margin, patron's seat margin. All reject or untestable (`private_traces.py`; details in [[testing/first_vote]]). Election margins added from the Wikipedia API (`election_margins.py`). Bagging remains the only gain; adoption awaits the owner.
 

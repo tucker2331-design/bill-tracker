@@ -631,3 +631,31 @@ co-patrons, the member's history, the district and the room; these traces repeat
 that helps (bagging, above) changes how the model learns, not what it reads.
 Source note: election margins come from the Wikipedia API (`tools/historical_cache/election_margins.py`, 6 requests,
 robots.txt has no rule against this agent; numbers cite the Department of Elections).
+
+## A second model family in the blend (2026-10-17, `levers.py linear` / `blend`)
+
+The trees cut each input into steps. A penalised logistic model draws smooth slopes instead: every input standardised,
+3 bends per input (hinges at training quantiles), products of the 8 strongest inputs, and every term crossed with the
+voter's side (own party / other party). Same inputs as the locked model — no new data, no new text. It fits in
+seconds, so its settings were searched on CHOOSE (2024) only; 2025 and 2026 were scored once per finalist.
+Blends are averaged in log-odds, 80% trees / 20% linear (weight chosen on 2024; 0.2–0.3 is flat).
+
+| model (2024 / 2025 / 2026) | member | hardest third | room | z (log loss, per bill) |
+|---|---|---|---|---|
+| locked trees (base) | 84.36 / 86.09 / 85.86 | 64.86 / 67.77 / 65.90 | 87.38 / 88.36 / 91.45 | — |
+| linear model alone (3 bends, 8 products) | 84.24 / 86.04 / 86.47 | 65.41 / 67.68 / 67.75 | 88.03 / 89.04 / 91.96 | −2.0 / −3.8 / −0.2 |
+| base trees + 20% linear (no products) | 84.80 / 86.13 / 86.24 | 66.17 / 67.89 / 67.04 | 87.27 / 88.85 / 91.86 | **+7.0 / +3.2 / +4.9** |
+| base trees + 20% linear (8 products) | 84.97 / 86.06 / 86.33 | 66.69 / 67.66 / 67.31 | 87.54 / 88.92 / 91.80 | **+6.9 / +5.2 / +7.2** |
+| **bagged trees + 20% linear (8 products)** | **85.12 / 86.33 / 86.50** | **67.12 / 68.47 / 67.82** | **87.92 / 88.85 / 92.11** | +5.0 / +2.5 / +6.2 |
+| … plus one shift per member × side and per committee in the linear model | 85.14 (2024) | 67.19 | 87.81 | +4.9 — no gain, not kept |
+
+**Result:** the best candidate is bagged trees + 20% linear model. It improves member votes, the hardest third AND the
+room result in every one of the three years: +0.76 / +0.24 / +0.64 member, +2.26 / +0.70 / +1.92 hardest third, +0.54
+/ +0.49 / +0.66 room. The 2025 log-loss z (2.5) is under 3; the base-trees blend passes z ≥ 3 in all three years but
+lifts accuracy less. Several finalists were scored on 2025/2026, so those years are no longer clean — a frozen 2027
+forward test is the only clean confirmation left.
+
+Also tested and not kept (2024 choose): 16 bags (z 1.5, no better than 8); 400 rounds per bag (z 2.2); 30% of inputs per
+tree (z −4.0); 30% of rows (z 1.1); depth 5 (z 0.6); recent years weighted more, 0.85 or 0.7 per year back (z 0.7 /
+0.3). A per-member correction layer on the base predictions (own shift per side and own confidence, ridge 3–100)
+lifted 2026 accuracy a little but worsened 2026 log loss at every penalty (z −2.4 to −2.9): not kept (`member_layer.py`).

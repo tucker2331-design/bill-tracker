@@ -26,7 +26,14 @@ import first_vote as FV, gbm, accept as AC
 SPLITS = {"choose": ((2019, 2020, 2021, 2022), 2024), "confirm": ((2019, 2020, 2021, 2022, 2024), 2025),
           "repeat": ((2019, 2020, 2021, 2022, 2024, 2025), 2026)}
 OUT = os.path.join(HERE, ".cache", "levers.jsonl")
+PRED = os.path.join(HERE, ".cache", "levers_preds")
+CUR_SPLIT = None
 _rows = None
+
+
+def _key(settings):
+    import hashlib
+    return hashlib.sha1(json.dumps(settings, sort_keys=True).encode()).hexdigest()[:10]
 
 
 def rows():
@@ -71,10 +78,15 @@ def run(name, fn, settings, splits=("choose",)):
         tr = [r for r in rows() if r["yr"] in trn]; te_b, p0 = base_p(sp)
         te = [r for r in rows() if r["yr"] == ty]
         assert [r["who"] for r in te] == [r["who"] for r in te_b], "row order must match the cached base predictions"
+        global CUR_SPLIT
+        CUR_SPLIT = sp
         t0 = time.time(); p1 = fn(tr, te, settings)
         m0, m1 = metrics(p0, te, p0), metrics(p1, te, p0); g, z = per_bill_gain(p0, p1, te)
         rec = {"technique": name, "settings": settings, "split": sp, "base": m0, "new": m1, "gain": g, "z": z,
                "seconds": round(time.time() - t0)}
+        # keep the predictions so blends of two techniques cost seconds, not another 30-minute refit
+        os.makedirs(PRED, exist_ok=True)
+        np.save(os.path.join(PRED, f"{name}_{sp}_{_key(settings)}.npy"), p1)
         with open(OUT, "a") as fh:
             fh.write(json.dumps(rec) + "\n")
         print(f"{name} {json.dumps(settings)} [{sp} {ty}] member {m0['acc']:.4f}->{m1['acc']:.4f}  hard {m0['hard']:.4f}->"
@@ -115,9 +127,12 @@ def gbm_fn(tr, te, s):
     X = lambda rs: np.array([[r[c] for c in FV.NUM] for r in rs], float)
     Xtr, ytr, Xte = X(tr), np.array([r["y"] for r in tr], float), X(te)
     w = None
+    if s.get("recency"):                         # L8: recent years count more (members, chairs, majority change)
+        last = max(r["yr"] for r in tr)
+        w = np.array([s["recency"] ** (last - r["yr"]) for r in tr], float); w *= len(w) / w.sum()
     if s.get("hard_weight"):                     # L6: weight uncertain training votes more (from a quick pilot model)
         pilot = gbm.GBM(depth=4, lr=.1, rounds=80).fit(Xtr, ytr).predict(Xtr)
-        w = 1 + s["hard_weight"] * (1 - 2 * np.abs(pilot - .5))
+        w = (1 if w is None else w) * (1 + s["hard_weight"] * (1 - 2 * np.abs(pilot - .5)))
     preds = []
     for b in range(s.get("bags", 1)):
         m = GBMX(depth=s.get("depth", 6), lr=s.get("lr", .03), rounds=s.get("rounds", 260), lam=s.get("lam", 5.0),
@@ -262,8 +277,84 @@ def direct_fn(tr, te, s):
     return p
 
 
+# ---------------- L7: a different model family -- penalised logistic with hinges (a smooth additive model) ----------------
+def linear_fn(tr, te, s):
+    """Every input standardised, plus `hinges` piecewise-linear bends per input at training quantiles (an additive
+    model, like a GAM), each also crossed with the voter's side (+1 own party, -1 other). Ridge `lam`, penalised Newton.
+    Trees cut inputs into steps; this family draws smooth slopes -- its errors differ, which is what a blend needs."""
+    def feats(rs, ref=None):
+        X = np.array([[r[c] for c in FV.NUM] for r in rs], float)
+        if ref is None:
+            mu, sd = X.mean(0), X.std(0); sd = np.where(sd < 1e-6, 1.0, sd)
+            Z = np.clip((X - mu) / sd, -10, 10)
+            knots = [np.unique(np.quantile(Z[:, j], np.linspace(0, 1, s.get("hinges", 0) + 2)[1:-1])) for j in range(Z.shape[1])]
+            ref = (mu, sd, knots)
+        mu, sd, knots = ref
+        Z = np.clip((X - mu) / sd, -10, 10)
+        cols = [Z] + [np.maximum(Z[:, j:j + 1] - k, 0) for j in range(Z.shape[1]) for k in knots[j]]
+        F = np.column_stack(cols); side = np.array([1.0 if r["same"] else -1.0 for r in rs])[:, None]
+        return np.column_stack([np.ones(len(rs)), F, F * side]), ref
+    Xtr, ref = feats(tr); Xte, _ = feats(te, ref); y = np.array([r["y"] for r in tr], float)
+    def newton(X):
+        pen = np.full(X.shape[1], s.get("lam", 10.0)); pen[0] = 1e-6; b = np.zeros(X.shape[1])
+        for _it in range(60):
+            p = 1 / (1 + np.exp(-np.clip(X @ b, -30, 30)))
+            step = np.linalg.solve(X.T @ (X * (p * (1 - p))[:, None]) + np.diag(pen), X.T @ (y - p) - pen * b)
+            b += step
+            if np.max(np.abs(step)) < 1e-6:
+                return b
+        raise RuntimeError("linear model did not converge in 60 Newton steps")
+    b = newton(Xtr)
+    if s.get("pairs"):
+        # L7b: products of the k plain inputs with the largest first-pass weight (own + side terms), each pair x side
+        # layout from feats(): [const | Z (k inputs) + hinges (m cols in all) | the same m cols x side]
+        k = len(FV.NUM); m = (Xtr.shape[1] - 1) // 2
+        w = np.abs(b[1:1 + k]) + np.abs(b[1 + m:1 + m + k])
+        top = np.argsort(-w)[:s["pairs"]]
+        def pairs(X):
+            Z = X[:, 1:1 + k][:, top]
+            return np.column_stack([Z[:, i] * Z[:, j] for i in range(len(top)) for j in range(i + 1, len(top))])
+        side_tr = np.array([1.0 if r["same"] else -1.0 for r in tr])[:, None]
+        side_te = np.array([1.0 if r["same"] else -1.0 for r in te])[:, None]
+        Ptr, Pte = pairs(Xtr), pairs(Xte)
+        Xtr = np.column_stack([Xtr, Ptr, Ptr * side_tr]); Xte = np.column_stack([Xte, Pte, Pte * side_te])
+        b = newton(Xtr)
+    if s.get("ids"):
+        # L7c: one shift per member x side and per committee (room), learned with the same ridge (unseen -> 0)
+        keys = collections.Counter([("m", r["who"], r["same"]) for r in tr] + [("c", r["room"]) for r in tr])
+        col = {k_: i for i, k_ in enumerate(k_ for k_, c in keys.items() if c >= s["ids"])}
+        def onehot(rs):
+            O = np.zeros((len(rs), len(col)))
+            for i, r in enumerate(rs):
+                for k_ in (("m", r["who"], r["same"]), ("c", r["room"])):
+                    if k_ in col:
+                        O[i, col[k_]] = 1
+            return O
+        Xtr = np.column_stack([Xtr, onehot(tr)]); Xte = np.column_stack([Xte, onehot(te)])
+        b = newton(Xtr)
+    return 1 / (1 + np.exp(-np.clip(Xte @ b, -30, 30)))
+
+
+# ---------------- blends of saved predictions (seconds, no refit) ----------------
+def blend_fn(tr, te, s):
+    """s = {"parts": [[name, settings, weight], ...]}; name "base" = the locked model. Averaged in log-odds."""
+    lo = lambda p: np.log(np.clip(p, 1e-6, 1 - 1e-6) / (1 - np.clip(p, 1e-6, 1 - 1e-6)))
+    tot = 0.0; wsum = 0.0
+    for name, st, w in s["parts"]:
+        if name == "base":
+            p = base_p(CUR_SPLIT)[1]
+        else:
+            f = os.path.join(PRED, f"{name}_{CUR_SPLIT}_{_key(st)}.npy")
+            if not os.path.exists(f):
+                raise FileNotFoundError(f"no saved predictions for {name} {st} on {CUR_SPLIT} -- run it first")
+            p = np.load(f)
+        tot = tot + w * lo(p); wsum += w
+    return 1 / (1 + np.exp(-tot / wsum))
+
+
 if __name__ == "__main__":
     name = sys.argv[1]; settings = json.loads(sys.argv[2]) if len(sys.argv) > 2 else {}
     splits = tuple(sys.argv[3].split(",")) if len(sys.argv) > 3 else ("choose",)
-    fn = {"gbm": gbm_fn, "room": room_fn, "mlp": mlp_fn, "direct": direct_fn}[name]
+    fn = {"gbm": gbm_fn, "room": room_fn, "mlp": mlp_fn, "direct": direct_fn, "linear": linear_fn,
+          "blend": blend_fn}[name]
     run(name, fn, settings, splits)
