@@ -1,8 +1,8 @@
 ---
 tags: [testing, calibration, prediction, members, war-room]
-updated: 2026-09-25
+updated: 2026-09-28
 status: active
-open_loop: IN PROGRESS. Full-text layer waits on the 2025-26 introduced-text fetch (text_corpus/blob_text.py, owner-approved, paced). After it — freeze choices, score 2026 ONCE (it has never been loaded into a model). Display is the owner's Tier-3 call.
+open_loop: Modelling exhausted (six rounds, see Verdict). Remaining: score the locked 2026 test once; carried-over bills lack a summary-wording score (HB 1515) — fix before member cards ship; the bill-level consensus-kill warning and co-patron pattern are ready to design into the War Room (owner decision).
 ---
 
 # Predicting every legislator's FIRST vote on a bill
@@ -115,3 +115,547 @@ Black-majority Chesapeake district.
    years; 2025's did not. The tree over-trusted them (85.6 → 82.7). Fixed with an expanding window everywhere.
 5. **Where the misses are:** unanimous tablings of ordinary bills (the patron's own party votes to table — not
    explained by duplicates, tested) and party-line splits on majority bills. Those are the targets for text.
+
+## How sure, in words a volunteer can use (2026-09-28)
+
+Accuracy by how far the model leans, 2025 first votes (17,553 ballots, held out of training; 2025 was also the
+tuning year, so read these as slightly optimistic until the locked 2026 check runs):
+
+| label | how far it leans | share of calls | right |
+|---|---|---|---|
+| Likely | 80%+ either way | 70% | 94 of 100 |
+| Leans | 60–80% | 20% | about 70 of 100 |
+| Toss-up | 40–60% | 10% | 57 of 100 |
+
+The War Room shows only the label; the "How sure is this?" sheet shows this table. No per-member percentages.
+
+## Why a member gets their guess — `why_member.py` (2026-09-28)
+
+Owner: the two raw counts on the member card were odd to an amateur and "not enough evidence." Each reason now
+carries a direction and a size, measured by swapping that reason's inputs for 300 real same-party ballots
+(method and the failed first attempt are in the script's docstring). HB 1515, first vote assumed Jan 2027:
+
+- **The bill's own situation dominates for everyone.** No co-patrons / no Senate companion: −6 to −10 points per
+  member. Sitting in a subcommittee, carried over: −10 to −16 (depends on the assumed vote date). The first is the
+  one factor an org can change.
+- Personal factors are small: Kilgore's overall record −3; the four Democrats: committee record −1 to −5, similar
+  bills +4, overall record up to +6, patron record +2. District: 0 for all five.
+- **Data gap found:** HB 1515 has no summary-wording score (`txt_has = 0`), and the missing score moves the
+  Democrats' guesses by +10 to +17 — an artifact, not a reason. It is kept off the card and disclosed in the
+  "How sure" sheet. Fix: score carried-over bills' summaries (open loop below).
+
+## Round 4 (2026-09-28) — owner: "getting that 67 number up"
+
+Protocol: choices fixed on 2024 (model trained 2019–2022), applied unchanged to 2025. 2026 stays locked.
+
+| tried | 2025 all | 2025 hardest third | verdict |
+|---|---|---|---|
+| baseline | 86.1% | 67.8% | — |
+| **missing inputs** — do ballots lacking a wording score / content / districts go wrong more? | — | with 67.5% vs without 68.1% (wording) | **no**: missing data is not where the misses are, so filling gaps won't lift it |
+| party consistency — blend each member's guess toward party-mates' on the same vote (a=0.2) | 86.2% | 68.0% | noise (+0.1 / +0.2) |
+| per-slice thresholds (other-party × subcommittee) | 85.4% | 70.5% | **rejected — a metric trap.** Moving thresholds changes WHICH ballots count as "hardest"; the headline rose while overall accuracy fell 0.7 points |
+
+**Where the hard third lives:** 72% are other-party ballots (vs 48% overall) and 69% are subcommittee votes (vs 42%).
+
+**The one untested lever — an LLM reading each bill for its political charge.** Cost, checked 2026-09-28
+(Anthropic price list; Batch API is half price): ~11,600 summaries × ~400 input + ~60 output tokens ≈ **$4 on
+Haiku 4.5, $8 on Sonnet 5.5, roughly $40–60 on Opus 5.5** (its thinking is always on). **Leakage risk that must be
+designed out:** a model trained on public data may remember how a 2019–2025 bill actually fared, which would make
+backtests look better than reality. Mitigate by sending only the summary text (no bill number, year, patron) and
+asking about content, not outcome; the only fully clean test is the 2027 session. Needs the owner's go-ahead (spend
++ an API key).
+
+## Round 5 (2026-09-28) — owner: "exhaust the options ... complicated statistics a statistician would"
+
+**Where the misses are (2025, error analysis):** by motion — "strike from the docket" is called right only 39% of
+the time (522 ballots) and unanimous kills 54%; they are 22% of the hardest-third misses. Patron-requested
+withdrawals are rare (~30 bills/session in LIS history), so they are not the main story.
+
+| tried | 2025 all | hardest third | verdict |
+|---|---|---|---|
+| baseline GBM | 86.09% | 67.77% | — |
+| **co-sponsorship relationships** (member↔patron co-sponsorship in earlier years, reciprocity, ties to this bill's coalition, co-sponsors seated in the room) | 85.95% | 66.91% | no gain |
+| same, **size-weighted ties** (a shared 3-sponsor bill counts far more than a 60-sponsor one, Fowler-style) | 86.11% | 67.87% | noise |
+| **member × bill latent factors** stacked on the GBM (supervised ideal points: member position = personal + district/party projection; bill location from summary words, subject, committee, patron) | 84.65% | 64.66% | **hurts** — overfits to training bills. Learning curve on 2024 with stronger regularisation: never above the GBM at any step (84.36% → flat or down) |
+
+**Reading:** the GBM already searches combinations of up to six inputs; the question the owner raised — identity ×
+content combinations ("this member × this kind of bill") — was tested directly by the factor model and does not
+generalise from first votes alone (too few ballots per member). Next: the same axes learned from ALL contested
+roll calls (floor + committee, earlier years) as a single feature — `text_ideal.py`.
+
+| tried | 2025 all | hardest third (fixed set) | verdict |
+|---|---|---|---|
+| **text-linked ideal points from ALL contested roll calls** (15,763 roll calls, 526k ballots, earlier years only; bill placed by its content) as a GBM feature | 85.94% | 67.30% | no gain (2024: 84.33 vs 84.36) |
+| **deeper combinations** — trees combining 8–10 inputs instead of 6, slower learning, more rounds (4 settings) | 85.76–86.00% | 66.76–67.49% | no gain; every deeper setting ties or loses on 2024 AND 2025 |
+
+**Round-5 verdict (broad tests, each rules out a family):** relationship data, member×content interactions (from
+first votes or from every vote), and deeper feature combinations all leave the hardest third at 67–68%. The
+information that decides those votes — how each party will line up on this bill in this room — is not in the
+public voting record, however it is combined. What can still move it is NEW information, not new maths:
+the team's own contact log and positions (now being built), and (owner's call, later) reading bill content.
+
+## Consensus kills — what they are and whether we can see them coming (2026-09-29)
+
+Owner: "22% of the hard misses are unanimous kills or strike from the dockets ... dig more into that, how does that
+happen in what scenario and could we predict it?" Scripts: `consensus_kills.py` (diagnosis), `consensus_kill_model.py`
+(prediction). Data: first votes 2019–2025 (2023 excluded as elsewhere).
+
+**What they are.** 918 of 9,344 first votes (9.8%) end with every member against the bill. 73% are in subcommittees;
+none are full-committee first votes (full-committee kills are voice votes, no roll call). How they die: tabled 32%,
+stricken from the docket 30% (almost always the patron pulling it), continued 17%, passed by indefinitely 9%;
+"sent to study with a letter" only 3%; "incorporated into another bill" ~0%.
+
+**Theory rejected:** "killed because a twin carried the idea" is FALSE — bills whose near-twin had already advanced
+were killed LESS (5.7% vs 8.9%, 2025).
+
+**The pattern — co-patrons, not party.** In a subcommittee:
+
+| bill | consensus-kill rate |
+|---|---|
+| no co-patrons, minority patron | 21.2% (1,169 bills) |
+| no co-patrons, majority patron | 19.6% (1,211) |
+| at least one co-patron | 6.9% (2,691) |
+| 5+ co-patrons | 4.3% (1,074) |
+| co-patrons from both parties | 5.3% (495) |
+
+81% of strikes and 69–82% of every kill type are bills with no co-patrons. **Correlation, not proof:** bills without
+co-patrons may be weaker or placeholder bills; the same-patron check (a patron's bills with vs without co-patrons) is
+the next test before telling anyone "add co-patrons."
+
+**Predictable in advance, from inputs we already have.** Bill-level model, trained ≤2024, tested on 2025 (1,624 bills,
+142 kills): AUC 0.85; the 10% of bills it flags most are consensus kills 36% of the time (4× the 8.7% base rate) and
+catch 41% of all of them. New traces (twin advanced, patron's past kill rate, filing order, day of session) add nothing.
+
+**Why the member model still misses them — and why that is correct.** Even the riskiest bills die only about 1 in 3,
+so each member's single most likely vote is still yes. The miss is genuine uncertainty (the patron's private decision),
+not a modelling gap. The value is a **bill-level warning** ("bills like this die quietly about 1 in 3 times"), not a
+different member guess.
+
+## Round 6 (2026-09-29) — the remaining broad families
+
+**Co-patrons, same-patron test** (`copatron_same_patron.py`). 167 patrons had subcommittee bills both with and without
+co-patrons. Their bills WITHOUT co-patrons died unanimously 20.4% (2,374 bills) vs 6.9% WITH (2,673); within-patron
+difference +13.6 points; 112 patrons worse off without, 31 better, 24 tied — sign test p ≈ 6×10⁻¹². "Weaker
+patrons" is ruled out as the explanation. Still not proof that ADDING a co-patron causes survival (patrons may
+recruit co-patrons for their strongest bills), but strong enough to show lobbyists as an observed pattern.
+
+| tried (settings fixed on 2024) | 2024 all / hard | 2025 all / hard (fixed set) | verdict |
+|---|---|---|---|
+| baseline GBM | 84.36 / 64.86 | 86.09 / 67.77 | — |
+| regime-matched training (years with the same House majority counted twice) | 84.36 / 64.85 | 85.57 / 66.19 | worse |
+| separate House and Senate models | 84.20 / 64.56 | 85.21 / 65.24 | worse |
+| logistic regression alone | 82.72 / 61.31 | 84.28 / 63.75 | worse |
+| GBM + logistic blend | 84.04 / 63.90 | 85.66 / 66.50 | worse |
+| two-level: bill consensus-kill risk (expanding window) fed to the member model | +0.11 / +0.34 | −0.02 / −0.07 | noise |
+| cleaner labels: train without strike-from-docket votes (scored on ALL votes) | +0.24 / +0.72 | −0.39 / −1.18 | does not replicate |
+
+**Verdict after rounds 1–6:** every reasonable modelling and feature family has now been tested against the same
+protocol. None moves the hardest third outside 66–68% on 2025. The only untried lever inside our own data is MORE
+data: 2023 is missing from training (Open States has no 2023 committee record), but LIS's own 2023 files are cached
+(`va/231/Vote.csv`: 8,071 roll calls with member-level ballots, committee votes included). Adding it needs a
+refid→bill/date/motion join through History.csv and a member-ID→name join; by the earlier "+2019" test, one extra
+year is worth about a point on the hardest third, not a step change.
+
+**2023 added from LIS legacy files** (`add_2023.py`): 5,679 roll calls on 1,719 bills joined (Vote.csv → History.csv
+refid → bill/date/motion, same direction and venue rules as every other year, 2022 carryover lines dropped); 136 of 141
+members resolved through a suffix/nickname/first-last/unique-surname cascade (5 counted as unresolved, never guessed);
+2023 co-patrons from LIS Sponsors.csv (971 bills) so 2023 does not masquerade as a no-co-patron year. Result:
+
+| | 2024 all / hard | 2025 all / hard (fixed set) |
+|---|---|---|
+| original pipeline (no 2023) | 84.36 / 64.86 | 86.09 / 67.77 |
+| 2023 in the features' history only | 84.36 / 64.85 | 86.08 / 67.71 |
+| 2023 in history AND trained on | 84.36 / 64.86 | 86.14 / 67.90 |
+
+Noise-level (+0.05 / +0.13 on 2025, nothing on 2024). **One more year of data does not move it either.**
+
+## Verdict after six rounds (2026-09-29)
+
+Every reasonable option inside our own data has been tested under one protocol (choose on 2024, score once on 2025,
+2026 locked): new features (~25), relationship networks, member × content latent factors (first votes and all
+526k contested ballots), deeper combinations, alternative model classes and blends, regime weighting, per-chamber
+models, two-level structure, label cleaning, and an additional year of data. The hardest third stays 66–68%; overall
+86%. The remaining error is how each party lines up on a specific bill in a specific room — decided privately, not
+recorded in any public vote. What can still move it is NEW information: the team's own contact log and positions,
+and (owner's call, later) reading bill content. Meanwhile two findings ARE usable now: the per-member labels are well
+calibrated (Likely 94 / Leans ~70 / Toss-up 57 in 100), and consensus kills can be flagged at the bill level (4× base
+rate in the top 10%), with the co-patron pattern holding within patrons (p ≈ 6×10⁻¹²).
+
+## The ceiling, measured — and the hard third reverse-engineered (2026-09-29)
+
+Owner: "would a statistician stop here? ... if we know what composes that final 30% can we reasonably predict when
+a bill will end up in it?"
+
+**1. Natural-experiment ceiling** (`twin_ceiling.py`). 734 pairs of near-identical bills (summary Jaccard ≥ 0.8) voted
+separately — almost all House/Senate twins in the same session. Using one twin's ACTUAL first vote to call the other's
+party positions (a cheat no forecast has):
+
+| pairs | both parties match | patron's party | other party |
+|---|---|---|---|
+| all 734 | 75% | 88% | 80% |
+| opposite chambers (697) | 76% | 90% | 81% |
+| same venue AND same patron standing (75) | 87% | 91% | 91% |
+
+Our model calls other-party members right 80% of the time on 2025 — **at the level of the identical-bill oracle.**
+Bill content cannot say more than this; the rest depends on the particular room, people and day.
+
+**2. The hard third by vote SHAPE** (`vote_shapes.py`, bill-level, train ≤2024, test 2025, 1,624 bills):
+
+| shape | share | AUC | top-10% flagged are this shape |
+|---|---|---|---|
+| everyone for | 48% | 0.83 | 93% |
+| straight party line | 24% | 0.80 | 64% |
+| everyone against (consensus kill) | 9% | 0.85 | 33% |
+| **mixed split** (members break from their party) | 19% | **0.58** | 30% |
+
+Shape guessed right 59% overall (48% by always guessing "everyone for"); 83% on the quarter of bills it is surest
+about. **Mixed splits are the irreducible core** — near-unpredictable before the meeting, and 28% of the hard-third
+misses. Consensus kills are detectable but top out at 1-in-3, so they belong on the bill as a risk, not in a guess.
+
+**Verdict:** stopping is now justified by measurement, not by exhaustion. The model is at the identical-bill ceiling;
+the residual is mixed splits (unknowable from public data) plus consensus kills (a bill-level risk). New information —
+the team's contact notes — is the only lever left, and it targets exactly the mixed-split members.
+
+## Last two families (2026-09-29) and the bounded claim
+
+| tried | 2025 all | hard (fixed) | mixed-split votes | verdict |
+|---|---|---|---|---|
+| baseline | 86.09 | 67.77 | 76.14 | — |
+| **district × topic** — raw subject one-hots so trees can form (district profile × topic) combinations; aimed at mixed splits (`topic_x_district.py`) | 85.85 | 67.05 | 76.01 | no gain, even on mixed splits |
+| **agenda position / docket length** (2025 DOCKET + SUBDOCKET; only 638 of 1,663 first votes match a listing) | — | — | — | last third of agenda 5.1% consensus kills vs 2.4% first third = ~6 bills; noise |
+
+**The bounded claim (what the measurements support — and what they do not).** Not "no breakthrough is possible" —
+that is a claim about every idea, not a measurement. What IS measured:
+1. Individual defection from one's own party costs ~3 points (perfect party positions → 97.3%). The rest of the
+   86 → 97 gap is predicting each party's position.
+2. Our party-position accuracy (84%) already exceeds the concordance of near-identical bills voted in the other
+   chamber (75% both parties; 734 pairs) — i.e. it beats a forecast that has the answer for an identical bill.
+3. Of the four vote shapes, three are predictable (AUC 0.80–0.85); mixed splits (19% of bills) sit at AUC 0.58 and
+   did not move under any member, district, topic, network or latent-factor representation tried.
+4. ~35 approaches across seven rounds, one protocol, all inside ±0.6 of 86% overall.
+Remaining room for a breakthrough is therefore confined to information NOT in the public record about how each party
+will line up on a specific bill — which is what the team's contact log captures.
+
+## Who sets the party lineup — and the one public trace we hold (2026-09-29)
+
+Owner: "how do you know its about party line up ... who are the party decision makers behind the scenes what other
+sources". **How we know:** with each party's position known, member accuracy is 97.3% — individual defection costs ~3
+points, so ~11 of the 14-point gap is the party's position on the bill. **Who sets it (roles):** caucus leadership
+(Speaker / majority leaders / president pro tem / minority leaders, in private caucus), committee and subcommittee
+chairs (what is heard and when; money-committee chairs most of all), the Governor's office, state agencies (fiscal
+impact statements) and local-government associations (VACo, VML), and stakeholder deals.
+
+**Committee chairs as co-sponsors** (`chairs_as_sponsors.py`; roles exist only in the authorized 2025–26 rosters, so
+the test is 5-fold by bill WITHIN 2025 — weaker than year-ahead). Descriptive: bills with a chair among the sponsors
+get 82% yes (69% without); other party 64% (54%); and the model is WORSE on the other party there (75.7% vs 82.3%).
+Predictive: base 87.68% → +chairs 87.65%; other-party 83.50% → 83.11%. **No gain** — the model already carries it
+through patron standing and co-patron counts.
+
+**Sources that could reveal lineups before a vote, not yet collected:** interest-group support/oppose lists, the
+Governor's legislative agenda, agency positions in fiscal impact statements (full text), news coverage; and the
+team's own contact notes (being built — the most direct).
+
+## Round 8 (2026-09-29) — chairs 2019–2025, public attention, personal profile
+
+| tried (year-ahead: choose 2024, score 2025) | 2024 all / hard | 2025 all / hard (fixed) | verdict |
+|---|---|---|---|
+| baseline | 84.36 / 64.86 | 86.09 / 67.77 | — |
+| **committee chairs 2019–2025** from LIS legacy session pages (`legacy_chairs.py`; 25 committees × 7 sessions; validated vs the 2025 API roster: 20/23 exact, the 3 differences are real mid-year personnel changes); inputs: hearing chair is a sponsor, chairs among sponsors, voting member chairs/vice-chairs | 84.19 / 64.36 | 86.04 / 67.61 | no gain — confirms the within-2025 result with the stronger test |
+| **news coverage, Cardinal News** mentions before the vote (`news_mentions.py`; 80–194 bills/session, 3.3% of 2025 ballots) | 84.29 / 64.65 | 86.19 / 68.06 | noise-level; too few covered bills |
+| **legislative attention** — same-topic bills filed this session, by party, bipartisan filing, near-twins by other patrons (`legislative_attention.py`) | 84.47 / 65.18 | 85.97 / 67.41 | does not replicate |
+| **personal profile** — member's own filing and co-sponsoring on the topic (earlier sessions and now), topic specialisation, tenure, own bill pass rate (`personal_profile.py`) | 84.31 / 64.71 | 86.14 / 67.92 | noise |
+
+**Descriptive finding that supports the public-attention hypothesis:** 2025 bills covered by Cardinal News before the
+vote are more contested (57% yes vs 74%; other party 42% vs 58%) and the model is much worse on them (76.4% vs 86.4%).
+Attention marks exactly the bills the model struggles with — but one outlet covers too few bills to help the totals.
+
+**Public-attention sources checked:** Virginia Mercury, Blue Virginia, WRIC, WSLS, Virginia Business — robots.txt blocks
+Anthropic crawlers (respected). Bearing Drift, WTVR, WHRO, WTKR, NBC29, The Richmonder — allowed but no article API.
+Virginia Scope — allowed, API, small archive (not yet used). GDELT DOC API — works back to 2017 but rate-limited us
+twice even at 8 s spacing; GDELT asks heavy users to use its bulk "web ngrams" dataset instead (a large download —
+needs the owner's go-ahead). Google Trends — no permitted automated access. Per-bill public comments — not published.
+Speaking on bills — no floor transcripts; committee minutes only in the 2025–26 data (within-year only).
+
+## Corrections from the five-perspective panel (2026-09-29) — see [[testing/panel_2026-09-29]]
+
+- **The twin "ceiling" is an interval, not a ceiling** (Cover–Hart): content-only accuracy on joint party positions
+  lies between 75% and ~86% (other party 80–89%). Earlier lines above saying "bill content cannot say more" and
+  "stopping is justified by measurement" are withdrawn.
+- **Use the leave-one-out 96.4%** (copy one party-mate's actual ballot) in place of the 97.3% party-position figure.
+- **2025 is a validation year** (≈35 approaches scored on it); only the locked 2026 score is a clean test.
+- **"No gain" = no gain ≥ ~0.65 points** (80% power); the hardest third's year-to-year spread (64.9–68.9) is wider than
+  the "plateau" band. Acceptance from now on: paired, bill-clustered log loss pooled over rolling-origin years, z ≥ 3.
+- **The co-patron finding survives a leak check** (`copatron_leak_check.py`): 0 of 1,663 2025 bills gained co-patrons
+  after filing; 19.8% vs 6.0% using co-patrons at filing.
+
+## The locked 2026 test — scored once (2026-09-29)
+
+Rules frozen and committed first (`frozen/prereg_2026.json`, sha 7895dc13, commit e487e5b), then scored once
+(`prereg_2026.py --score` → `frozen/score_2026.json`). Model trained on 2019–2022, 2024, 2025. 22,163 ballots on
+1,989 bills; 95% intervals by bill-clustered bootstrap.
+
+| measure | 2026 | 95% | pre-registered expectation |
+|---|---|---|---|
+| accuracy | **85.9%** | 84.9–86.8 | 84.4–86.1 across 2021–2025 — **held** |
+| other-party accuracy | 78.9% | 77.3–80.6 | |
+| party position right | 82.6% | 81.7–83.5 | |
+| room outcome right | **91.5%** | 90.5–92.4 | 88.4% on 2025 |
+| log loss (logit baseline 0.426) | 0.312 | 0.298–0.326 | |
+| hardest third (diagnostic) | 65.9% | 63.7–68.2 | |
+| always "yes" | 73.5% | | |
+
+**The labels, as a volunteer reads them (2026):**
+
+| label | share of calls | right | 2025 validation |
+|---|---|---|---|
+| Likely | 72% | **95 in 100** (94.2–95.6) | 93.6–95.3 — held |
+| Leans | 20% | **66 in 100** (63.2–68.4) | 67.5–73.4 — **came in lower** |
+| Toss-up | 8% | **54 in 100** (50.5–57.9) | 53.6–61.2 — held |
+
+Any wording that says Leans is right "about 70 in 100" should say **about 2 in 3**. (Checked: the app shows no
+label percentages today.) By chamber: House 82.5%, Senate 89.2%; subcommittee votes 81.3%.
+
+## Party positions first — rejected (2026-09-29, `theta.py`)
+
+The panel's Θ: predict each party's position per bill directly (one row per bill × side), derive members as
+q(1−d) + (1−q)d. Rolling origin 2021/2022/2024/2025 against the one-stage model:
+
+| | party position right (one-stage → Θ) | member log loss (one-stage → Θ) |
+|---|---|---|
+| 2021 | 83.7 → 83.7 | 0.328 → 0.330 |
+| 2022 | 82.4 → 82.3 | 0.354 → 0.365 |
+| 2024 | 81.2 → 80.8 | 0.345 → 0.355 |
+| 2025 | 83.9 → 82.6 | 0.317 → 0.334 |
+
+Pooled per-bill log-loss: **z = −7.6 (worse)**; averaging the two: z = −2.0. Larger trees chosen on 2024 (80.5–80.8%)
+do not close it. **The member model already calls party positions as well as a model built only for them**, and
+deriving members from the party loses the member-level cues. Kept as a negative result.
+
+## GDELT news attention — no gain; bulk download stopped (2026-09-29, `gdelt_effect.py`)
+
+2025 pilot (GKG bulk, 74 session days, 26,621 Virginia-legislature articles after dropping 1,503 West Virginia
+articles — audit #141). Articles name people and themes, not bills (22 bill numbers in URLs). Inputs dated before
+the decision: patron mentions, member mentions, topic-word volume (all-time and last 14 days). Stacked on the
+existing models, 5 folds by bill: **ballots z = 0.9, fate z = 1.1 — no gain.** Rule written before running: more
+years (~40 GB each) only if z ≥ 3 — so **no further download.**
+
+## How this compares to anyone else's published number (2026-09-29)
+
+No product publishes member-level accuracy. FiscalNote and Skopos claim 93–99% on whether a BILL passes, which is
+mostly the base rate (most bills die); Plural and Quorum make no accuracy claim ([[testing/panel_2026-09-29]],
+marketing memo). The closest published research:
+
+| study | what it predicts | tested on | accuracy | "always yes" | errors removed |
+|---|---|---|---|---|---|
+| **this model** | VA committee/subcommittee **first votes** | a later, locked year (2026) | **85.9%** | 73.5% | **47%** |
+| [Kornilova et al. 2018](https://aclanthology.org/P18-2081/) | US Congress roll calls | later session 2013-14 / 2015-16 | 83.6% / 71.9% | 65.9% / 61.1% | 52% / 28% |
+| [Budhwar 2018](https://digitalcommons.calpoly.edu/theses/1818/) | California legislators, from floor speech | same session | up to 83% | not reported | — |
+| [Political Actor Agent, AAAI-25](https://ojs.aaai.org/index.php/AAAI/article/download/32017/34172) | US House floor votes | random split of the same sessions | 91.8% | not comparable | — |
+
+Different tasks, so no clean ranking: same class as the best forward-tested research, not provably ahead. Floor votes
+and same-session splits are easier than a first committee vote scored on a later year.
+
+**How sure, by confidence rank (2026 locked test; deciles are arithmetic on the pre-registered risk–coverage curve):**
+most-sure 10% of calls right 99.5 in 100 · 2nd 98.8 · 3rd 98.4 · 4th 96.0 · 5th 95.4 · 6th 91.8 · 7th 86.3 ·
+8th 74.5 · 9th 63.7 · least-sure 10% 54.3. The cut points were drawn within 2026 itself; for live use they must be
+fixed from earlier years, then checked on the next session.
+
+## Stakeholder lineups — association positions and House written testimony (2026-09-29, `stakeholder_effect.py`)
+
+Owner cleared both. Tested with the new acceptance rule (`accept.py`: fitted on earlier years' out-of-sample
+predictions, scored on the next year, pooled 2022/2024/2025, per bill, accept at z ≥ 3). Neither was tested on bill
+fate: testimony exists only once a bill is on an agenda, and scorecards pick bills after the session.
+
+| source | coverage | effect on covered ballots | pooled |
+|---|---|---|---|
+| **VALCV scorecard positions** (Support/Oppose, 2019–2025; `va_positions.py`) | 26–29 bills a year, ~1.7% of ballots | accuracy 77.3→82.4 (2022), 84.9→87.5 (2024), 84.4→84.8 (2025) | z = 1.3 — **not proven** (too few bills; direction positive) |
+| **HODSpeak written testimony** (counts only; `hodspeak_comments.py`; 2021/22/24/25: 1,336–2,828 bills with comments a year, 7,420–34,789 comments) | ~50% of ballots (bills on a House agenda) | accuracy 78.7→77.9, 79.1→78.9, 80.1→80.0 | z = −2.9 — **rejected** (slightly worse) |
+
+Public comment volume and its support/oppose wording say nothing the model does not already know about how members
+vote. One organization's stated position points the right way on the bills it covers, but a single scorecard is too
+thin to prove it; many organizations' lists together might be — none other found in machine-readable form that
+allows automated access (Family Foundation blocks Anthropic crawlers; VPAP and NFIB refuse automated requests).
+
+## Do members vote for bills like the ones they sponsor? (2026-09-30, `similar_sponsor.py`)
+
+Owner: *"are members votes at all correlated to wether they have introduced similar language or introduce in the same
+topic?"* 2021/2022/2024/2025 first votes, dated before each vote; model predictions are year-ahead (`accept.py`).
+
+| member … | patron's party: yes rate (n) | other party: yes rate (n) | model's miss | adds to forecasts? |
+|---|---|---|---|---|
+| sponsored a near-identical bill (summary match ≥ 0.30) | 90.8% (422) vs 87.3% | 61.0% (82) vs 57.9% | ≈ 0 | no, z = −0.8 |
+| filed a bill on the same topic before | 87.4% (18,517) vs 87.3% | 57.1% (16,756) vs 58.9% | ≈ 0 | no, z = −4.1 |
+
+Sponsoring near-identical wording goes with ~3 points more yes, but it is rare (0.8% of votes) and the model already
+gets those votes right. Filing on the same topic tells nothing. (Round 8's personal-profile test agrees.)
+
+## Member-card reasons: what each one really rests on (2026-09-30, `why_member.py`)
+
+Owner: strength words unclear ("idk what you have some of"); "not clear why those specifically matter". `why_member.py`
+now reports, per reason, every input's own swap effect plus the member's value and the typical peer value.
+Findings that changed the card:
+- **Two HB 1515 reasons were absences, not findings.** "Similar earlier bills" (+3.5 to +4.0) and "wording" (+10 to
+  +18) came only from HB 1515 HAVING NO similar bills with votes / no wording score — the swap measured "peers had
+  data". Both now flagged `absent` and moved to Checked. **Method lesson: a swap-based reason must check the no-data
+  flags before it is shown.**
+- "Overall voting record" was three different things: Tran/Helmer = length of record (~3,500 contested votes vs ~370);
+  Kilgore = how Republicans in THIS subcommittee voted this year (a room fact). Retitled to what it is.
+- At ±2 the evidence sometimes pointed the other way (Sullivan: backed 91 of 93 of Shin's bills, below the typical 97,
+  yet +2.3 toward yes) — interactions. Display threshold raised to 3 in 100.
+- **Resolved:** Kilgore's `ses_rate` (0.262) is keyed by (session, room, same-side) with NO party, so it pools BOTH
+  parties' votes on the other party's bills in the Studies Subcommittee: 17 of 76 in 2026 (R on D bills 17/44 + D on R
+  bills 0/32), smoothed (17+5.5)/(76+10) = 0.262. Likewise `subroom_rate` (0.439) = own-party support there, 94 of 233
+  across 2024 and 2026. The card's evidence lines now describe the room ("crosses party lines", "own party's bills"),
+  not one party — the first draft said "Republicans backed 17 of 44", which was not what the model uses.
+
+**How a "determinant" is measured here:** a reason counts only if (1) it moves the guess when swapped for real peers'
+values, (2) the member actually has data for it, and (3) as a new input it improves year-ahead forecasts across
+2022/2024/2025 (z ≥ 3). Descriptive gaps without (3) are "the model already knows".
+
+## Which reasons may appear on a member card — the three-check gate (2026-09-30, `reason_gate.py`)
+
+Owner: a "Leans yes" card showed only reasons for no — because the party starting point had been removed (owner
+2026-09-28: "what does a republican on a dem bill like idk why im being shown that"). Fix: the card now opens with
+**"Where the guess starts"** (Democrats on a Democrat's bill: 87 in 100 vote yes; Republicans: 62 in 100; first votes
+2019–2025), and every reason is a push away from that. Owner then asked for more reasons meeting the three checks.
+
+Check 3 was run two ways over 2021/2022/2024/2025 (year-ahead, per-bill paired log loss, pooled z ≥ 3):
+**leave-one-out** (what a group adds that nothing else carries) and **add-to-base** (party & standing + venue, plus
+the group — does it carry information at all).
+
+| reason group | leave-one-out z | add-to-base z | card |
+|---|---|---|---|
+| where the vote happens (sub vs full committee) | 23.2 | (base) | shown |
+| co-patrons & companion | 7.7 | 11.0 | shown |
+| how members voted on similar earlier bills | 3.1 | 8.6 | shown when data exists |
+| the companion bill's earlier vote | 1.2 | 7.3 | shown |
+| similar bills in this room (room memory) | 0.2 | 4.9 | shown |
+| the room's members as a group | 2.1 | 3.1 | shown (marginal; negative in 2021–22) |
+| party & standing | −1.4 (carried by room records) | (base) | the starting point |
+| 16 others — incl. waiting time, committee/subcommittee records, own voting record, patron's record, district, subject, ideal points, summary words | < 3 both ways | | never shown as a reason |
+
+**HB 1515 cards after the gate:** Democrats start at 87 → subcommittee vote −8 to −13, no co-patrons −7 to −9 →
+Leans yes. Kilgore starts at 62 → subcommittee −12, no co-patrons −5, only Republican voting there +7 (lone
+Republicans in a subcommittee backed Democrats' bills 39 of 71 times vs 51 in 100 with other Republicans; thin) →
+Toss-up. Dropped from cards: "carried over, waiting", "this subcommittee's record", "long voting record".
+
+## The hardest third, attacked directly (2026-10-15)
+
+Owner: "keep digging on the hard 1/3 ... use the 85% we have in the training ... predict it will be party line ...
+categorize that hard 1/3 ... try more than one or two hypotheses." Every test: year-ahead (fit on earlier years, score
+2022/2024/2025, pooled per bill, z ≥ 3), the FIXED hardest third reported (`accept.py` now prints it).
+
+**What the hardest third is made of** (2021/2022/2024/2025 pooled; `shape_first.py`, `hard_third_more.py diag`):
+
+| cut | share of the hard third | model right there |
+|---|---|---|
+| actual vote shape: everyone yes / party line / mixed split / everyone no | 36.5% / 25.2% / 23.9% / 14.4% | 72.8% / 73.7% / 60.2% / 51.5% |
+| voter: other party / patron's party | 70.2% / 29.8% | 66.4% / 68.3% |
+| venue: subcommittee / committee / floor | 62.9% / 23.6% / 13.6% | 66.0% / 70.0% / 66.3% |
+| **the room's outcome was still called right / missed** | **80.1% / 19.9%** | 71.8% / 47.3% |
+
+Half the hard third ends unanimous: the model hedged on bills the room agreed on. And 80% of the hard third sits in rooms
+whose OUTCOME we called right — those member misses do not change the result.
+
+| hypothesis | result |
+|---|---|
+| H1 bill viability (fate model) × side | reject, z −2.4 |
+| H2 the chair (co-sponsors; record on this patron) × side | reject, z −2.0 |
+| H3 fiscal cost × side (fit 2025 → score 2026) | reject, z −2.3 |
+| H4 domain scores (VALCV) | not run — built from the same roll calls the model already uses |
+| H5 what members said on the topic in earlier committee debates (2026, time-forward) | reject, z −5.0 — captions show who was called on, not their side |
+| H6 this session's party lines on the topic × side | reject, z 1.4 |
+| shape forecast (party line / mixed / unanimous) × side | reject, z −0.8; shape model 52–61% vs 45–49% base; "vote with your party" on predicted party-line hard ballots 71.7% vs model 74.2% |
+| P5/P6 this session: patron's bills, member on this patron's bills | reject, z 0.4 |
+| P9 recalibration by side × venue | reject, z −2.5 |
+| P10 the room's habit of unanimity | reject, z −1.6 |
+| P8b words that go with the other party voting yes | reject, z 0.8 |
+| **P8 consensus words** — per-word log-odds of unanimous-yes / unanimous-no first votes, learned from earlier years, on the summary AS INTRODUCED + title | **ACCEPT, z 4.2**; hardest third 68.9→69.5 (2022), 65.1→67.0 (2024), 67.9→68.8 (2025) |
+| **P8 replicated on 2026** (never used to choose it) | **accuracy 85.99 → 86.24; hardest third 66.29 → 67.04; z 4.0** |
+
+P8 is text-derived (summary words): internal research until the owner's Standard #3 call.
+| **P8 built INTO the member model** (`gbm_words.py`; word scores as two more inputs, each year from earlier years only) | **ACCEPT, z 5.6**; accuracy 84.92→85.01 / 84.36→85.09 / 86.09→86.38; hardest third 68.85→69.13 / 64.86→67.06 / 67.77→68.62 (2022/2024/2025) |
+| P8c with two-word phrases, in the model | z 6.8 on log loss, but hardest third 68.85→68.82 / 64.86→67.07 / 67.77→67.58 — less consistent than single words |
+| R1 mixed-split words × member's defection rate | reject, z −2.1 |
+| **P8 in the model, scored on 2026** (trained 2019–2025, never used to choose it) | **does NOT replicate:** accuracy 85.86→85.42; hardest third 65.90→64.56; other party 78.94→77.79; z −0.2 |
+
+**Verdict on the consensus words:** two ways of using the same signal disagree on the fresh year. As a simple stacked
+adjustment on top of the model it replicated on 2026 (hardest third 66.29→67.04, z 4.0); as raw inputs inside the
+trees it did not (64.56 vs 65.90). The trees overfit the word scores to the earlier years; a one-coefficient-per-input
+linear layer generalised. If the signal is used at all, it is the stacked form — and it is still a small lift
+(+0.75 points on the hardest third) that needs the owner's Standard #3 call (text-derived). The hardest third remains
+what it was: half of it consensus votes the model hedges on, the other half party positions decided privately.
+
+## New techniques for member votes and the room result (2026-10-16, `levers.py`)
+
+Owner: "try things in ways you dont normally ... to make a llm accurate they use thousands of tuned levers." Only numpy
+is installed (no downloads without the owner's OK), so every technique is written in numpy. One frame for all:
+CHOOSE (learn 2019–2022, score 2024), CONFIRM (learn to 2024, score 2025), REPEAT (learn to 2025, score 2026, the
+already-scored test year). Measures: member accuracy, FIXED hardest third, room result (most members yes).
+
+| technique (2024 choose unless noted) | member | hardest third | room |
+|---|---|---|---|
+| base (locked model) 2024 / 2025 / 2026 | 84.36 / 86.09 / 85.86 | 64.86 / 67.77 / 65.90 | 87.38 / 88.36 / 91.45 |
+| **bagging: 8 trees, each on 50% of rows and 50% of inputs** — 2024 / 2025 / 2026 | **84.75 / 86.26 / 86.29** | **66.02 / 68.26 / 67.17** | 87.60 / 88.30 / **91.86** |
+| bagging: 5 trees, 70% rows / 60% inputs — 2024 / 2025 / 2026 | 84.62 / 86.07 / 86.22 | 65.64 / 67.70 / 66.97 | 87.65 / 88.79 / 91.75 |
+| bagging: 10 trees, 70% / 60% | 84.61 | 65.60 | 87.81 |
+| direct room model (bill-level "most vote yes"), members shifted 30% toward it — 2024 / 2025 / 2026 | 84.67 / 85.03 / 85.24 | 65.81 / 64.57 / 64.04 | 87.92 / 89.53 / 91.40 |
+| direct room model + bagging — 2024 / 2025 / 2026 | 84.81 / 85.27 / 85.76 | 66.20 / 65.36 / 65.60 | 88.36 / 89.35 / 91.50 |
+| joint room model (second stage reads the other members' first-stage predictions) | 84.42 | 65.05 | 87.10 |
+| larger trees, tighter limits / deeper / slower+longer / more weight on uncertain votes | 83.85–84.23 | 63.32–64.47 | 86.89–87.81 |
+| neural network with learned member / patron / committee codes (after fixing a scaling fault) | 81.85 (blend 30%: 84.40) | 59.80 (64.99) | 84.43 (86.67) |
+
+**Result:** bagging with 50% rows and 50% inputs improves member votes AND the hardest third in all three years
+(+0.39 / +0.17 / +0.43 member; +1.16 / +0.49 / +1.27 hardest third), and the room result in two of three (2026 91.45 →
+91.86). Per-year z +1.5 / +0.5 / +3.8 (combined ≈ 3.3). It changes HOW the model is trained, not what it reads — no new
+data, no text. Because 2026 has now been used, the next clean test is a frozen forward test on 2027.
+The direct room model helps the room result in 2024 and 2025 but hurts member votes and adds nothing in 2026 — not adopted.
+
+## Public traces of private decisions (2026-10-16, `private_traces.py`)
+
+Owner: "we need to learn how to derive the private decisions from public data." A private decision often leaves a
+public trace before the vote. Six traces, each a stacked layer on the locked member model (fit on earlier years,
+score 2022/2024/2025, pooled per bill, accept at z ≥ 3, fixed hardest third shown).
+
+| trace (the private decision → its public mark) | result |
+|---|---|
+| A. Leaders back the bill → Rules committee members / Rules chair sign as co-patrons | reject, z −2.1 |
+| B. The bill was planned early → rank of the draft request number in its session | reject, z 0.0 |
+| C. Bargaining before the vote → passed by for the day, substitute, earlier hearing | **not testable:** under 0.5% of ballots carry any such action before the FIRST vote; the fit did not converge on so few |
+| D. The governor's agenda → governor's party vs voter and patron | reject, z −10.3 |
+| E. Close seats get a pass to break from the party → voter's last general-election margin (Wikipedia election boxes, 94–98% of ballots matched) | reject, z −1.9; hardest third 68.85→68.69 / 65.05→64.64 / 67.92→67.89 |
+| F. Leaders give easy bills to members in close seats → PATRON's last margin | reject, z 0.8; hardest third +0.08 / +0.47 / +0.09 |
+
+**Result:** none of the six traces adds to what the model already reads. The model already carries the patron, the
+co-patrons, the member's history, the district and the room; these traces repeat that information. The one change
+that helps (bagging, above) changes how the model learns, not what it reads.
+Source note: election margins come from the Wikipedia API (`tools/historical_cache/election_margins.py`, 6 requests,
+robots.txt has no rule against this agent; numbers cite the Department of Elections).
+
+## A second model family in the blend (2026-10-17, `levers.py linear` / `blend`)
+
+The trees cut each input into steps. A penalised logistic model draws smooth slopes instead: every input standardised,
+3 bends per input (hinges at training quantiles), products of the 8 strongest inputs, and every term crossed with the
+voter's side (own party / other party). Same inputs as the locked model — no new data, no new text. It fits in
+seconds, so its settings were searched on CHOOSE (2024) only; 2025 and 2026 were scored once per finalist.
+Blends are averaged in log-odds, 80% trees / 20% linear (weight chosen on 2024; 0.2–0.3 is flat).
+
+| model (2024 / 2025 / 2026) | member | hardest third | room | z (log loss, per bill) |
+|---|---|---|---|---|
+| locked trees (base) | 84.36 / 86.09 / 85.86 | 64.86 / 67.77 / 65.90 | 87.38 / 88.36 / 91.45 | — |
+| linear model alone (3 bends, 8 products) | 84.24 / 86.04 / 86.47 | 65.41 / 67.68 / 67.75 | 88.03 / 89.04 / 91.96 | −2.0 / −3.8 / −0.2 |
+| base trees + 20% linear (no products) | 84.80 / 86.13 / 86.24 | 66.17 / 67.89 / 67.04 | 87.27 / 88.85 / 91.86 | **+7.0 / +3.2 / +4.9** |
+| base trees + 20% linear (8 products) | 84.97 / 86.06 / 86.33 | 66.69 / 67.66 / 67.31 | 87.54 / 88.92 / 91.80 | **+6.9 / +5.2 / +7.2** |
+| **bagged trees + 20% linear (8 products)** | **85.12 / 86.33 / 86.50** | **67.12 / 68.47 / 67.82** | **87.92 / 88.85 / 92.11** | +5.0 / +2.5 / +6.2 |
+| … plus one shift per member × side and per committee in the linear model | 85.14 (2024) | 67.19 | 87.81 | +4.9 — no gain, not kept |
+
+**Result:** the best candidate is bagged trees + 20% linear model. It improves member votes, the hardest third AND the
+room result in every one of the three years: +0.76 / +0.24 / +0.64 member, +2.26 / +0.70 / +1.92 hardest third, +0.54
+/ +0.49 / +0.66 room. The 2025 log-loss z (2.5) is under 3; the base-trees blend passes z ≥ 3 in all three years but
+lifts accuracy less. Several finalists were scored on 2025/2026, so those years are no longer clean — a frozen 2027
+forward test is the only clean confirmation left.
+
+Also tested and not kept (2024 choose): 16 bags (z 1.5, no better than 8); 400 rounds per bag (z 2.2); 30% of inputs per
+tree (z −4.0); 30% of rows (z 1.1); depth 5 (z 0.6); recent years weighted more, 0.85 or 0.7 per year back (z 0.7 /
+0.3). A per-member correction layer on the base predictions (own shift per side and own confidence, ridge 3–100)
+lifted 2026 accuracy a little but worsened 2026 log loss at every penalty (z −2.4 to −2.9): not kept (`member_layer.py`).

@@ -5,8 +5,9 @@ build something accurate where it is least useful, test dynamically, and try to 
 
 PROTOCOL (borrowed from how model builders evaluate):
   train   first votes of 2020, 2021, 2022, 2024        (history for each = strictly before that vote)
-  tune    2025  -- every feature / model choice is judged here
-  TEST    2026  -- locked; scored ONCE, after all choices are frozen (see --final)
+  valid.  2025  -- every feature / model choice was judged here (~35 approaches), so it is a VALIDATION year,
+                   not a test year (five-perspective panel, 2026-09-29); its numbers are slightly optimistic
+  TEST    2026  -- locked; rules pre-registered in frozen/prereg_2026.json, scored ONCE by prereg_2026.py
   slices  always reported: same-party vs OTHER-party legislators, venue, and a party-position score,
           so a gain on the easy majority of ballots cannot hide a loss where it matters.
 Every feature is knowable before the vote: earlier years, or earlier DATES in the same session.
@@ -421,7 +422,17 @@ def tune():
     return rows
 
 
-ROWS = "/private/tmp/claude-501/-Users-tuckerward-Documents-Projects-bill-tracker/d2c029e9-acd9-410e-81ec-5347fd755620/scratchpad/fv_rows.pkl"
+# The feature table lives in a gitignored cache INSIDE the repo. It used to sit in a session temp folder, which the OS
+# wiped between sessions (2026-10-14) -- rebuild with `python3 first_vote.py --rebuild-rows` (replays every vote).
+CACHE_DIR = os.path.join(HERE, ".cache")
+ROWS = os.path.join(CACHE_DIR, "fv_rows.pkl")
+
+
+def rebuild_rows():
+    rows = add_room_aggregates(add_districts(add_ideal(add_text(features()))))
+    os.makedirs(CACHE_DIR, exist_ok=True)
+    pickle.dump(rows, open(ROWS, "wb"))
+    return rows
 
 
 BILL_COLS = [c for c in NUM if c not in ("defect", "mroom_rate", "mroom_n", "dev", "has_mem", "is_patron")]

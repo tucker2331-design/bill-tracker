@@ -45,3 +45,16 @@ tools/calibration/content_votes_cache.pkl
 
 # derived first-vote cache
 tools/calibration/first_vote_cache.pkl
+
+# VALCV scorecard PDFs (5-48 MB each), re-downloadable by tools/historical_cache/va_positions.py;
+# the parsed positions (va_positions/valcv.json) are committed.
+tools/historical_cache/va_positions/valcv_pdf/
+
+# first-vote feature table and test caches (rebuilt by first_vote.rebuild_rows / accept.py / reason_gate.py)
+tools/calibration/.cache/
+
+# DPB fiscal impact statement PDFs (2025/26), re-downloadable by tools/historical_cache/fiscal_statements.py; parsed fields committed
+tools/historical_cache/va_fiscal/pdf/
+
+# Internet Archive caption files (public meetings), re-downloadable by tools/historical_cache/ia_transcripts.py; parsed segments committed
+tools/historical_cache/va_transcripts/raw/

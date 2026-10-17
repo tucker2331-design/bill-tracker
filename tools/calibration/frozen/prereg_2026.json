@@ -1,0 +1,188 @@
+{
+ "baselines": [
+  "always yes",
+  "logistic regression on party & standing + venue (first_vote.GROUPS)"
+ ],
+ "code_sha256": {
+  "first_vote.py": "1bca03e4b6621271f1e9d0f49a7f7d3f0b08373bc0515e5dec4c4d05653a0435",
+  "gbm.py": "6112966ff67d61e9f3687dfdd48eafb5e237e5fce166f7dd9027790a84dec099"
+ },
+ "decision": "yes if p >= 0.5",
+ "expected_from_validation": {
+  "Leans_2025_95": [
+   0.675,
+   0.734
+  ],
+  "Likely_2025_95": [
+   0.936,
+   0.953
+  ],
+  "Tossup_2025_95": [
+   0.536,
+   0.612
+  ],
+  "accuracy_2021_2025_range": [
+   0.8436,
+   0.8609
+  ],
+  "accuracy_2025_bill_clustered_95": [
+   0.85,
+   0.872
+  ],
+  "note": "written BEFORE scoring; 2026 inside these ranges = the validation numbers held",
+  "room_outcome_2025": 0.884
+ },
+ "features": [
+  "same",
+  "maj",
+  "chamber_S",
+  "ven_sub",
+  "ven_com",
+  "defect",
+  "room_rate",
+  "room_n",
+  "pat_rate",
+  "pat_n",
+  "mroom_rate",
+  "mroom_n",
+  "has_c",
+  "c_opp",
+  "c_party",
+  "dev",
+  "has_mem",
+  "is_patron",
+  "own_cops",
+  "other_cops",
+  "companion",
+  "rm_has",
+  "rm_party",
+  "rm_other",
+  "n_actions",
+  "fiscal",
+  "sub_offered",
+  "n_refs",
+  "wait",
+  "day",
+  "senior",
+  "n_cops",
+  "pat_in_room",
+  "dup_sim",
+  "dup_maj_other",
+  "dup_same_pat",
+  "comp_sim",
+  "txt_has",
+  "txt_party",
+  "txt_other",
+  "subj_has",
+  "subj_party",
+  "subj_n",
+  "msubj",
+  "msubj_n",
+  "is_subroom",
+  "subroom_rate",
+  "subroom_n",
+  "ses_rate",
+  "ses_n",
+  "mpat_rate",
+  "mpat_n",
+  "mdef_ses",
+  "comp_has",
+  "comp_party",
+  "ip_has",
+  "ip_m1",
+  "ip_m2",
+  "ip_b1",
+  "ip_b2",
+  "ip_dist",
+  "ip_toward",
+  "ip_spread",
+  "ip_bhas",
+  "ip_n",
+  "d_has",
+  "d_white",
+  "d_black",
+  "d_hisp",
+  "d_income",
+  "d_college",
+  "d_poverty",
+  "d_owner",
+  "d_age",
+  "ra_own_mpat_rate",
+  "ra_own_msubj",
+  "ra_own_mroom_rate",
+  "ra_own_dev",
+  "ra_own_ip_m1",
+  "ra_own_d_college",
+  "ra_own_d_white",
+  "ra_own_defect",
+  "ra_oth_mpat_rate",
+  "ra_oth_msubj",
+  "ra_oth_mroom_rate",
+  "ra_oth_dev",
+  "ra_oth_ip_m1",
+  "ra_oth_d_college",
+  "ra_oth_d_white",
+  "ra_oth_defect",
+  "ra_own_n",
+  "ra_oth_n",
+  "ra_margin"
+ ],
+ "frozen_on": "2026-09-29",
+ "goals_retired": [
+  "break 95",
+  "hardest third > 80%"
+ ],
+ "intervals": {
+  "B": 2000,
+  "method": "bill-clustered bootstrap (resample bills with replacement)",
+  "seed": 2026
+ },
+ "known_gaps": [
+  "carried-over bills have no summary-wording score (txt_has=0), e.g. HB 1515"
+ ],
+ "labels": {
+  "Leans": "0.10 <= |p-0.5| < 0.30",
+  "Likely": "|p-0.5| >= 0.30",
+  "Toss-up": "|p-0.5| < 0.10"
+ },
+ "metrics": {
+  "accuracy": "share of ballots called right",
+  "brier": "mean (p-y)^2",
+  "hardest_third": "accuracy on the third of ballots nearest p=0.5 (diagnostic only, no target)",
+  "label_calibration": "accuracy and share within each label",
+  "log_loss": "mean -[y ln p + (1-y) ln(1-p)], p clipped to [1e-6, 1-1e-6]",
+  "other_party_accuracy": "ballots where the voter is not of the patron's party",
+  "party_position_accuracy": "per (bill, voter-is-patron's-party) group: mean p >= .5 vs mean y >= .5",
+  "risk_coverage": "accuracy of the most-confident k% of ballots, k = 10..100 step 10, all and other-party",
+  "room_outcome_accuracy": "per bill: sum p > n/2 vs yes-count > n/2",
+  "slices": [
+   "all",
+   "other-party",
+   "same-party",
+   "subcommittee",
+   "committee",
+   "floor",
+   "House",
+   "Senate"
+  ]
+ },
+ "model": {
+  "class": "gbm.GBM",
+  "depth": 6,
+  "early_stopping": "none",
+  "lr": 0.03,
+  "rounds": 260
+ },
+ "rows_file_sha256": "0d5c870efecc8641360c63049632736b6aca73e37b819d53b915e98cc2a4053f",
+ "target": "each legislator's ballot at a bill's FIRST recorded roll call (sub, committee or floor), HB/SB with a resolved patron party; rows built by first_vote.features() replaying day by day",
+ "test_year": 2026,
+ "train_years": [
+  2019,
+  2020,
+  2021,
+  2022,
+  2024,
+  2025
+ ],
+ "why": "2025 judged ~35 approaches (validation year); 2026 is the only clean external score"
+}
