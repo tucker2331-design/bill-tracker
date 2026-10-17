@@ -8,6 +8,9 @@ status: active
 
 Append-only, reverse-chronological (newest at top). Each entry opens with `## [YYYY-MM-DD] <kind> | <title>` so `grep "^## \[" log.md | head -20` gives a parseable timeline.
 
+## [2026-10-16] research | public traces of private decisions — six tested, none adds
+Leaders' co-sponsorship, draft order, bargaining, governor's party, voter's seat margin, patron's seat margin. All reject or untestable (`private_traces.py`; details in [[testing/first_vote]]). Election margins added from the Wikipedia API (`election_margins.py`). Bagging remains the only gain; adoption awaits the owner.
+
 ## [2026-09-29] research | panel plan executed — 2026 scored once, bill-fate model, four sources tested
 
 2026 locked test scored against a spec committed first: 85.9% (84.9–86.8). Bill-fate model accepted (rolling z 14.5;

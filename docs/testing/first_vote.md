@@ -610,3 +610,24 @@ already-scored test year). Measures: member accuracy, FIXED hardest third, room 
 91.86). Per-year z +1.5 / +0.5 / +3.8 (combined ≈ 3.3). It changes HOW the model is trained, not what it reads — no new
 data, no text. Because 2026 has now been used, the next clean test is a frozen forward test on 2027.
 The direct room model helps the room result in 2024 and 2025 but hurts member votes and adds nothing in 2026 — not adopted.
+
+## Public traces of private decisions (2026-10-16, `private_traces.py`)
+
+Owner: "we need to learn how to derive the private decisions from public data." A private decision often leaves a
+public trace before the vote. Six traces, each a stacked layer on the locked member model (fit on earlier years,
+score 2022/2024/2025, pooled per bill, accept at z ≥ 3, fixed hardest third shown).
+
+| trace (the private decision → its public mark) | result |
+|---|---|
+| A. Leaders back the bill → Rules committee members / Rules chair sign as co-patrons | reject, z −2.1 |
+| B. The bill was planned early → rank of the draft request number in its session | reject, z 0.0 |
+| C. Bargaining before the vote → passed by for the day, substitute, earlier hearing | **not testable:** under 0.5% of ballots carry any such action before the FIRST vote; the fit did not converge on so few |
+| D. The governor's agenda → governor's party vs voter and patron | reject, z −10.3 |
+| E. Close seats get a pass to break from the party → voter's last general-election margin (Wikipedia election boxes, 94–98% of ballots matched) | reject, z −1.9; hardest third 68.85→68.69 / 65.05→64.64 / 67.92→67.89 |
+| F. Leaders give easy bills to members in close seats → PATRON's last margin | reject, z 0.8; hardest third +0.08 / +0.47 / +0.09 |
+
+**Result:** none of the six traces adds to what the model already reads. The model already carries the patron, the
+co-patrons, the member's history, the district and the room; these traces repeat that information. The one change
+that helps (bagging, above) changes how the model learns, not what it reads.
+Source note: election margins come from the Wikipedia API (`tools/historical_cache/election_margins.py`, 6 requests,
+robots.txt has no rule against this agent; numbers cite the Department of Elections).
