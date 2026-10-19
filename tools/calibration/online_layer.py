@@ -66,6 +66,8 @@ def main():
     rc = FV.assemble()["rc"]; pooled = collections.defaultdict(list)
     for split in ("choose", "confirm", "repeat"):
         te, p0, p1 = G.load(split)
+        if os.environ.get("ONLINE_BASE"):            # stack on another saved prediction, e.g. the weekly linear refit
+            p1 = np.load(os.path.join(L.PRED, os.environ["ONLINE_BASE"].format(split=split) + ".npy"))
         y = np.array([r["y"] for r in te], float)
         lg = np.log(np.clip(p1, 1e-6, 1 - 1e-6) / (1 - np.clip(p1, 1e-6, 1 - 1e-6)))
         X = design(te, lg); day = np.array([rc[r["bill"]][0][0] for r in te])

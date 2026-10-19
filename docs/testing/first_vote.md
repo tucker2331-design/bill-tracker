@@ -705,3 +705,11 @@ Against the old locked model on 2026: member 85.86 → 87.09, hardest third 65.9
 A lighter version (one shift and slope per party × side, refit daily on the base predictions) also helps every year
 but less (pooled z 5.2). No leak: each week uses only votes from earlier weeks, and a bill has one first vote.
 2025/2026 have been seen many times; the 2027 forward test is the clean check. Not yet approved by the owner.
+
+Also tested on top of the weekly refit (2026-10-19), chosen on 2024, not adopted:
+- larger linear share (0.4 / 0.5): 2024 member 85.13 / 85.11 vs 85.31 at 0.3 — worse on the choose year.
+- per-party session shift stacked on top (`ONLINE_BASE=... online_layer.py party`, ridge 30): room +0.44 / +0.49 /
+  +0.85 (2024/2025/2026) but member +0.15 / +0.04 / +0.01 and pooled z +0.9 — a candidate for the room result only.
+- bagged trees refit once at mid-session on the first half (`midsession_trees.py`, second half scored): member
+  −0.35 / +1.12 / +0.69 — hurts the choose year, rejected (the session-learning gain shows again in 2025/2026).
+- bagged trees depth 4 (400 rounds) / depth 8 (min leaf 60), 2024: z +0.4 / +1.7 — no better than depth 6.
