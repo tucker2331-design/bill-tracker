@@ -659,3 +659,49 @@ Also tested and not kept (2024 choose): 16 bags (z 1.5, no better than 8); 400 r
 tree (z −4.0); 30% of rows (z 1.1); depth 5 (z 0.6); recent years weighted more, 0.85 or 0.7 per year back (z 0.7 /
 0.3). A per-member correction layer on the base predictions (own shift per side and own confidence, ridge 3–100)
 lifted 2026 accuracy a little but worsened 2026 log loss at every penalty (z −2.4 to −2.9): not kept (`member_layer.py`).
+
+## Owner approved the blend (2026-10-19) — frozen copy, gains counted, and the session learning itself
+
+**Approved:** bagged trees + 20% linear model. Frozen as `tools/calibration/blend_2027.py` (copy of the research code;
+verified identical to the research predictions on 2026, max difference 0.0, accuracy 86.50%).
+
+**What the gain is in votes and bills (`gains.py`, adopted blend vs the old locked model):**
+
+| year | votes fixed / broken / net | bill results fixed / broken / net |
+|---|---|---|
+| 2024 | 390 / 241 / +149 of 19,689 | 24 / 14 / +10 of 1,830 |
+| 2025 | 269 / 228 / +41 of 17,553 | 17 / 9 / +8 of 1,624 |
+| 2026 | 378 / 236 / +142 of 22,163 | 23 / 10 / +13 of 1,989 |
+
+Every changed vote is in the hardest third (changes happen only near 50/50).
+
+**What we can and cannot predict (misses left, 2026; same pattern 2024/2025):**
+
+| actual vote shape | patron's own party | other party |
+|---|---|---|
+| unanimous yes | 99.8% right | 91.2% right (12% of misses) |
+| party line | 97.6% | 69.1% (24% of misses) |
+| mixed split | 88.7% | 64.7% (24% of misses) |
+| unanimous no | **36.1%** (22% of misses) | 89.9% |
+
+"Unanimous no" first votes are mostly NOT defeats: the motion text is "subcommittee recommends striking from the docket"
+(61–73 bills a year), "laying on the table" (47–86) or "continued to next session" — mostly the patron's own choice.
+Public traces of that choice (near-copy voted first, the patron's past withdrawals, the patron's bill count) were
+tested (`withdraw_probe.py`): too rare or too weak, z −2.8, rejected.
+
+**The session learning itself (`online_layer.py`, `online_relinear.py`).** The model learns from earlier years only;
+but every vote cast earlier in the same session is public before the next one. Before each session week, the linear
+half of the blend is refit on earlier years + this session's earlier votes (weight 3), and blended 70/30 with the
+bagged trees. Below 3,000 session votes it uses earlier years only (without that gate, 2024's second week was refit on
+11 easy week-one bills and broke 21 room calls). Settings chosen on 2024:
+
+| year | member | hardest third | room | z |
+|---|---|---|---|---|
+| 2024 | 85.12 → 85.31 | 67.12 → 67.71 | 87.92 → 88.25 | +6.7 |
+| 2025 | 86.33 → 86.85 | 68.47 → 70.02 | 88.85 → 89.41 | +9.2 |
+| 2026 | 86.50 → 87.09 | 67.82 → 69.58 | 92.11 → 92.66 | +9.8 |
+
+Against the old locked model on 2026: member 85.86 → 87.09, hardest third 65.90 → 69.58, room 91.45 → 92.66.
+A lighter version (one shift and slope per party × side, refit daily on the base predictions) also helps every year
+but less (pooled z 5.2). No leak: each week uses only votes from earlier weeks, and a bill has one first vote.
+2025/2026 have been seen many times; the 2027 forward test is the clean check. Not yet approved by the owner.

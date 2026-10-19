@@ -8,6 +8,9 @@ status: active
 
 Append-only, reverse-chronological (newest at top). Each entry opens with `## [YYYY-MM-DD] <kind> | <title>` so `grep "^## \[" log.md | head -20` gives a parseable timeline.
 
+## [2026-10-19] research | blend approved + frozen; gains counted; weekly session refit lifts all three measures every year
+Owner approved bagged trees + 20% linear (frozen `blend_2027.py`, verified identical). Net +142 votes / +13 bill results on 2026. Misses left mapped by vote shape; 'unanimous no' first votes are mostly patron withdrawals (strike / table), traces rejected. Weekly refit of the linear half on the session's earlier votes (gated at 3,000 votes): 2026 member 87.09, hardest third 69.58, room 92.66; z 6.7/9.2/9.8. Awaiting owner approval. [[testing/first_vote]].
+
 ## [2026-10-17] research | second model family — bagged trees + 20% linear lifts all three measures in all three years
 Smooth penalised logistic (hinges, 8 products, × side) blended 20% with bagged trees: member 85.12/86.33/86.50, hardest third 67.12/68.47/67.82, room 87.92/88.85/92.11 (2024/2025/2026). Per-member layer, recency weights, more bags rejected. Adoption + frozen 2027 test awaits the owner. Details in [[testing/first_vote]].
 

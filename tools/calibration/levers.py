@@ -295,11 +295,12 @@ def linear_fn(tr, te, s):
         F = np.column_stack(cols); side = np.array([1.0 if r["same"] else -1.0 for r in rs])[:, None]
         return np.column_stack([np.ones(len(rs)), F, F * side]), ref
     Xtr, ref = feats(tr); Xte, _ = feats(te, ref); y = np.array([r["y"] for r in tr], float)
+    sw = np.ones(len(tr)) if s.get("sample_w") is None else np.asarray(s["sample_w"], float)   # online refits weight the session
     def newton(X):
         pen = np.full(X.shape[1], s.get("lam", 10.0)); pen[0] = 1e-6; b = np.zeros(X.shape[1])
         for _it in range(60):
             p = 1 / (1 + np.exp(-np.clip(X @ b, -30, 30)))
-            step = np.linalg.solve(X.T @ (X * (p * (1 - p))[:, None]) + np.diag(pen), X.T @ (y - p) - pen * b)
+            step = np.linalg.solve(X.T @ (X * (sw * p * (1 - p))[:, None]) + np.diag(pen), X.T @ (sw * (y - p)) - pen * b)
             b += step
             if np.max(np.abs(step)) < 1e-6:
                 return b
