@@ -713,3 +713,28 @@ Also tested on top of the weekly refit (2026-10-19), chosen on 2024, not adopted
 - bagged trees refit once at mid-session on the first half (`midsession_trees.py`, second half scored): member
   −0.35 / +1.12 / +0.69 — hurts the choose year, rejected (the session-learning gain shows again in 2025/2026).
 - bagged trees depth 4 (400 rounds) / depth 8 (min leaf 60), 2024: z +0.4 / +1.7 — no better than depth 6.
+
+## Locked 2027 forward test + can we see a bill being dropped? (2026-10-20)
+
+**Owner approved arm B** ("if they are going to consistently improve accuracy then yes" — it did, all three years).
+`frozen/prereg_2027.json` (sha256 baff9d0a…) locks two arms in `blend_2027.py`: A = bagged trees + 20% linear; B = A
+with the weekly session refit. Both verified identical to the research predictions on 2026 (difference 0.0). Reference
+= the old locked model. Training years 2019–2026 (a first freeze wrongly listed 2017–18, which have no member names;
+caught before any score, deleted and re-frozen the same day). `--score` refuses until 2027 rows exist.
+
+**Can we predict that a bill will be struck, tabled or continued at its first vote?** (`drop_model.py`; bill-level
+trees, each year learned from earlier years only; target = unanimous-no first vote)
+
+| year | drops | ranking AUC | top 10% riskiest bills: share dropped / drops held | top 20%: drops held |
+|---|---|---|---|---|
+| 2022 | 179 of 1,650 | 0.81 | 34% / 56 | 92 (51%) |
+| 2024 | 214 of 1,830 | 0.84 | 43% / 79 | 124 (58%) |
+| 2025 | 142 of 1,624 | 0.85 | 33% / 54 | 82 (58%) |
+| 2026 | 207 of 1,989 | 0.92 | 60% / 118 | 162 (78%) |
+
+**Result:** partly. The risk can be RANKED — the riskiest tenth of bills is dropped 3–6 times as often as the base rate
+(9–12%) — but it can rarely be CALLED: only 7–48 bills a year reach P ≥ 0.5. "Continued to next session" (long
+sessions only) is the most visible; "struck at the patron's request" the least (the private decision). The new
+inputs (even-year session, committee and patron drop history, bill counts) add almost nothing over the member model's
+own inputs (AUC +0.00 to +0.01), and P(drop) as an input to member votes does not help (stacked, z −0.1, rejected).
+Use: a watch list for volunteers ("high risk of being dropped at first hearing"), not a change to vote calls.

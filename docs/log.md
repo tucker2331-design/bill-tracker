@@ -8,6 +8,9 @@ status: active
 
 Append-only, reverse-chronological (newest at top). Each entry opens with `## [YYYY-MM-DD] <kind> | <title>` so `grep "^## \[" log.md | head -20` gives a parseable timeline.
 
+## [2026-10-20] research | 2027 forward test frozen (arms A + B); drop risk rankable, not callable
+Owner approved the weekly session refit. `prereg_2027.json` locks arm A (blend) and arm B (blend + weekly refit), both verified identical to research. Drop model (struck/tabled/continued at first vote): AUC 0.81–0.92, top 10% risk holds 31–57% of drops, but few bills reach P ≥ .5; no gain to member votes. [[testing/first_vote]].
+
 ## [2026-10-19] research | blend approved + frozen; gains counted; weekly session refit lifts all three measures every year
 Owner approved bagged trees + 20% linear (frozen `blend_2027.py`, verified identical). Net +142 votes / +13 bill results on 2026. Misses left mapped by vote shape; 'unanimous no' first votes are mostly patron withdrawals (strike / table), traces rejected. Weekly refit of the linear half on the session's earlier votes (gated at 3,000 votes): 2026 member 87.09, hardest third 69.58, room 92.66; z 6.7/9.2/9.8. Awaiting owner approval. [[testing/first_vote]].
 

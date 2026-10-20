@@ -6,6 +6,10 @@ A copy of levers.py's GBMX and linear_fn at commit b8433fa, so research may keep
   80%  bagged trees: 8 x GBMX(depth 6, lr .03, 260 rounds, 50% rows, 50% inputs per tree, seeds 0..7), averaged
   20%  penalised logistic: inputs standardised, 3 hinges per input, 8 strongest-input products, all x voter side, ridge 10
 Selected on 2024; 2025 and 2026 seen (docs/testing/first_vote.md "A second model family in the blend").
+
+ARM B (owner 2026-10-20: "if they are going to consistently improve accuracy then yes") = predict_online(): the same
+bagged trees, but the linear half is refit before every session WEEK on earlier years + that session's votes from
+earlier weeks (weight 3; only once >= 3,000 session votes exist), blended 70/30 (online_relinear.py, chosen on 2024).
 """
 from __future__ import annotations
 import os, sys, collections
@@ -16,6 +20,7 @@ import first_vote as FV, gbm
 TREES = {"depth": 6, "lr": .03, "rounds": 260, "subsample": .5, "colsample": .5, "bags": 8}
 LINEAR = {"hinges": 3, "lam": 10, "pairs": 8}
 W_LINEAR = 0.2
+ONLINE = {"session_weight": 3.0, "min_session_votes": 3000, "linear_share": 0.3}
 
 
 class GBMX(gbm.GBM):
@@ -64,11 +69,12 @@ def linear_fn(tr, te, s):
         F = np.column_stack(cols); side = np.array([1.0 if r["same"] else -1.0 for r in rs])[:, None]
         return np.column_stack([np.ones(len(rs)), F, F * side]), ref
     Xtr, ref = feats(tr); Xte, _ = feats(te, ref); y = np.array([r["y"] for r in tr], float)
+    sw = np.ones(len(tr)) if s.get("sample_w") is None else np.asarray(s["sample_w"], float)   # arm B weights the session
     def newton(X):
         pen = np.full(X.shape[1], s.get("lam", 10.0)); pen[0] = 1e-6; b = np.zeros(X.shape[1])
         for _it in range(60):
             p = 1 / (1 + np.exp(-np.clip(X @ b, -30, 30)))
-            step = np.linalg.solve(X.T @ (X * (p * (1 - p))[:, None]) + np.diag(pen), X.T @ (y - p) - pen * b)
+            step = np.linalg.solve(X.T @ (X * (sw * p * (1 - p))[:, None]) + np.diag(pen), X.T @ (sw * (y - p)) - pen * b)
             b += step
             if np.max(np.abs(step)) < 1e-6:
                 return b
@@ -112,3 +118,26 @@ def predict(tr, te):
     pl = linear_fn(tr, te, LINEAR)
     lo = lambda p: np.log(np.clip(p, 1e-6, 1 - 1e-6) / (1 - np.clip(p, 1e-6, 1 - 1e-6)))
     return 1 / (1 + np.exp(-((1 - W_LINEAR) * lo(pt) + W_LINEAR * lo(pl))))
+
+
+def _week(d):
+    import datetime
+    x = datetime.date.fromisoformat(d[:10]); return (x - datetime.timedelta(days=x.weekday())).isoformat()
+
+
+def predict_online(tr, te, vote_date):
+    """Arm B. vote_date(row) -> ISO date of the row's first vote. Each week sees only earlier weeks of the session."""
+    X = lambda rs: np.array([[r[c] for c in FV.NUM] for r in rs], float)
+    Xtr, ytr, Xte = X(tr), np.array([r["y"] for r in tr], float), X(te)
+    pt = np.mean([GBMX(depth=TREES["depth"], lr=TREES["lr"], rounds=TREES["rounds"], subsample=TREES["subsample"],
+                       colsample=TREES["colsample"], seed=b).fit(Xtr, ytr).predict(Xte) for b in range(TREES["bags"])], axis=0)
+    wk = np.array([_week(vote_date(r)) for r in te]); pl = np.zeros(len(te))
+    for w in sorted(set(wk)):
+        past = np.where(wk < w)[0]; now = np.where(wk == w)[0]
+        if len(past) < ONLINE["min_session_votes"]:
+            past = past[:0]
+        sw = np.concatenate([np.ones(len(tr)), np.full(len(past), ONLINE["session_weight"])])
+        pl[now] = linear_fn(tr + [te[i] for i in past], [te[i] for i in now], dict(LINEAR, sample_w=sw))
+    lo = lambda p: np.log(np.clip(p, 1e-6, 1 - 1e-6) / (1 - np.clip(p, 1e-6, 1 - 1e-6)))
+    a = ONLINE["linear_share"]
+    return 1 / (1 + np.exp(-((1 - a) * lo(pt) + a * lo(pl))))
