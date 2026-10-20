@@ -29,6 +29,13 @@ def design(te, lg):
 
 
 def _design_mode(te, lg, MODE):
+    if MODE == "vch":
+        # side x venue x chamber intercepts (12) + one slope per side (2)
+        X = np.zeros((len(te), 14))
+        for i, r in enumerate(te):
+            s_ = 0 if r["same"] else 1; v = 0 if r["ven_sub"] else 1 if r["ven_com"] else 2; c = int(r["chamber_S"])
+            X[i, s_ * 6 + v * 2 + c] = 1; X[i, 12 + s_] = lg[i]
+        return X
     if MODE == "party":
         # group = voter's party x side (D own / D other / R own / R other): intercept and slope per group
         X = np.zeros((len(te), 8))
@@ -46,9 +53,10 @@ def _design_mode(te, lg, MODE):
     return X
 
 
-MODE = "both" if "both" in sys.argv else "party" if "party" in sys.argv else "venue"
+MODE = "vch" if "vch" in sys.argv else "both" if "both" in sys.argv else "party" if "party" in sys.argv else "venue"
 PRIOR = {"party": np.array([0, 0, 0, 0, 1, 1, 1, 1], float), "venue": np.array([0, 0, 1, 1, 0, 0, 0, 0], float),
-         "both": np.array([0, 0, 0, 0, 1, 1, 1, 1, 0, 0, 0, 0], float)}[MODE]
+         "both": np.array([0, 0, 0, 0, 1, 1, 1, 1, 0, 0, 0, 0], float),
+         "vch": np.array([0] * 12 + [1, 1], float)}[MODE]
 
 
 def fit(X, y, lam):

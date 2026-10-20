@@ -14,7 +14,9 @@ HERE = os.path.dirname(os.path.abspath(__file__)); sys.path.insert(0, HERE)
 import numpy as np
 import levers as L, first_vote as FV, gains as G, accept as AC
 
-LIN = {"hinges": 3, "lam": 10, "pairs": 8}
+import json as _json
+LIN = dict({"hinges": 3, "lam": 10, "pairs": 8}, **_json.loads(os.environ.get("ONLINE_LIN", "{}")))   # research overrides
+TAG = os.environ.get("ONLINE_TAG", "")
 BAG = {"depth": 6, "subsample": 0.5, "colsample": 0.5, "bags": 8}
 
 
@@ -54,8 +56,8 @@ def main(W, share):
         for r, a, c in zip(te, AC._ll(p1, y), AC._ll(p2, y)):
             d[str(r["bill"])] += a - c
         d = np.array(list(d.values())); pooled.append(d)
-        np.save(os.path.join(L.PRED, f"online_relinear_{split}_W{W}_s{share}_m{MIN}.npy"), p2)
-        print(f"{ty} W={W} share={share} min={MIN}: member {r1.mean():.4f}->{r2.mean():.4f}  hardest third {r1[hard].mean():.4f}->"
+        np.save(os.path.join(L.PRED, f"online_relinear_{split}_W{W}_s{share}_m{MIN}{TAG}.npy"), p2)
+        print(f"{ty} W={W} share={share} min={MIN} {TAG}: member {r1.mean():.4f}->{r2.mean():.4f}  hardest third {r1[hard].mean():.4f}->"
               f"{r2[hard].mean():.4f}  room {room(p1):.4f}->{room(p2):.4f}  z {d.mean() / (d.std(ddof=1) / math.sqrt(len(d))):+.1f}",
               flush=True)
     d = np.concatenate(pooled)

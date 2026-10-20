@@ -738,3 +738,18 @@ sessions only) is the most visible; "struck at the patron's request" the least (
 inputs (even-year session, committee and patron drop history, bill counts) add almost nothing over the member model's
 own inputs (AUC +0.00 to +0.01), and P(drop) as an input to member votes does not help (stacked, z −0.1, rejected).
 Use: a watch list for volunteers ("high risk of being dropped at first hearing"), not a change to vote calls.
+
+## On top of arm B: more session learning (2026-10-20) — big gains in 2025/2026, a small loss in 2024
+
+| method (on arm B) | 2024 member / hardest third | 2025 | 2026 | verdict |
+|---|---|---|---|---|
+| session booster: 15–100 shallow trees fit each week on this session's earlier votes, starting from B (`session_booster.py`) | −0.02 to −0.34 / −0.1 to −1.0 | +0.4 to +0.8 / +1.1 to +2.4 | +0.0 to +0.6 / +0.1 to +1.7 | not adopted: loses on 2024 in every version |
+| best of those (15 trees, depth 2, lr .05) | 85.31→85.28 / 67.71→67.62 | 86.85→87.31 / 70.02→71.41 | 87.09→87.38 / 69.58→70.46 | pooled z +8.7; 2024 z −1.1 |
+| member × side and committee offsets inside the weekly refit | 85.17–85.20 (vs 85.31) | = | — | worse on 2024, stopped |
+| per-side × venue × chamber session shift (`online_layer.py vch`) | 85.29 / 67.64 at best | ≈ 0 | +0.04 / +0.12 | no gain |
+
+**Why 2024 differs:** the booster only starts after 3,000 session votes. In 2024 that is the week of 29 January, and its
+lesson from the first three weeks did not carry into the next one (net −14 votes that week; +0 in crossover week). In
+2025 (+103 votes) and 2026 (+91) the drift held through the session. The method helps when a session's mood is
+steady and does nothing or slightly harms when it turns. Recorded as a candidate; not adopted (rule: choose year
+must not lose).
