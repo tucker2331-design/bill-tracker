@@ -300,7 +300,10 @@ def linear_fn(tr, te, s):
         Z = np.clip((X - mu) / sd, -10, 10)
         cols = [Z] + [np.maximum(Z[:, j:j + 1] - k, 0) for j in range(Z.shape[1]) for k in knots[j]]
         F = np.column_stack(cols); side = np.array([1.0 if r["same"] else -1.0 for r in rs])[:, None]
-        return np.column_stack([np.ones(len(rs)), F, F * side]), ref
+        extra = []
+        for v in s.get("cross", []):               # L7d: extra slope sets, e.g. chamber_S / ven_sub (+1 / -1 coded)
+            z = np.array([1.0 if r[v] else -1.0 for r in rs])[:, None]; extra.append(F * z)
+        return np.column_stack([np.ones(len(rs)), F, F * side] + extra), ref
     Xtr, ref = feats(tr); Xte, _ = feats(te, ref); y = np.array([r["y"] for r in tr], float)
     sw = np.ones(len(tr)) if s.get("sample_w") is None else np.asarray(s["sample_w"], float)   # online refits weight the session
     def newton(X):

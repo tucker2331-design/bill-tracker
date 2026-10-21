@@ -790,3 +790,16 @@ Against the old locked model on 2026: member 85.86 → 87.22, hardest third 65.9
   Without the summary-word inputs the linear model falls 86.47→84.32 on 2026 — they stay (Standard #3 call pending).
 - **Committee docket position**: DOCKET.CSV lists bills in bill-number order, not agenda order — not measurable.
 - **Campaign money**: parked by the owner 2026-09-24 (money moves access, not votes) — not re-tested.
+- **Position scores updated during the session** (`online_ip.py`; SVD recomputed weekly with this session's contested
+  roll calls, so new members — 25% of 2024's votes, 9% of 2026's — get a position): member −0.08 / −0.03 / −0.03
+  vs arm B. The trees already lean on other inputs when a member has no position. Rejected.
+- **Separate linear slopes by chamber or by venue** (`levers.py linear cross`): chamber −0.33 / +0.03 / +0.42 member
+  vs the plain linear model; venue −0.08 / −0.52 / +0.22. Lose on 2024. Rejected.
+
+**Where we stand (old locked model → arm C, room by the count rule):**
+
+| year | member | hardest third | room |
+|---|---|---|---|
+| 2024 | 84.36 → 85.32 | 64.86 → 67.73 | 87.38 → 88.36 |
+| 2025 | 86.09 → 87.25 | 67.77 → 71.15 | 88.36 → 91.01 |
+| 2026 | 85.86 → 87.22 | 65.90 → 69.97 | 91.45 → 93.16 |
