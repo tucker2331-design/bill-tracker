@@ -803,3 +803,47 @@ Against the old locked model on 2026: member 85.86 → 87.22, hardest third 65.9
 | 2024 | 84.36 → 85.32 | 64.86 → 67.73 | 87.38 → 88.36 |
 | 2025 | 86.09 → 87.25 | 67.77 → 71.15 | 88.36 → 91.01 |
 | 2026 | 85.86 → 87.22 | 65.90 → 69.97 | 91.45 → 93.16 |
+
+## Know when we will be wrong — "can't call" (2026-10-21, `abstain.py`)
+
+Owner: *"limiting the scenarios we guess wrong is supremely important so if there is a 30% we cant guess right we
+should try to then predict that we cant predict it instead of allowing our model to knowingly fail."*
+
+**Rule:** call a member's vote only when arm C's chance of yes is ≤ 20% or ≥ 80% (the existing "Likely" label);
+otherwise show "can't call". Cutoff fixed on EARLIER years (for a 95% target), then applied unchanged:
+
+| year | votes called | calls right | "can't call" | those would have been right |
+|---|---|---|---|---|
+| 2025 (cutoff from 2024) | 71.3% | 95.1% | 28.7% | 67.7% |
+| 2026 (cutoff from 2024–25) | 73.1% | 95.6% | 26.9% | 64.6% |
+
+A second model that predicts "arm C will be wrong" (confidence, disagreement between the two halves, booster shift,
+drop risk, all inputs) is NO better than arm C's own confidence (2025: 67.4% called at 95.5%; 2026: 74.2% at 95.4%) —
+the blend is already honest about its own doubt.
+
+**Who is "can't call" (2026):** 46% of other-party votes vs 12% of the patron's party; 39% of subcommittee votes vs
+17% committee / floor. By actual outcome: 35% unanimous yes, 25% party line, 23% mixed, 16% unanimous no. It is a
+**party-block** statement: on 94% of (bill × party) blocks either every member is called or none is.
+
+**Bill result:** calling the most confident 80% of bills → 98.2% right; 90% → 96.6%; all → 93.2%.
+
+**Progress in these terms (votes called at ≥ 80% / ≤ 20%, and how often those calls are right):**
+
+| year | old model | arm C |
+|---|---|---|
+| 2024 | 64.0% called, 94.77% right | 65.9%, 95.09% |
+| 2025 | 70.4%, 94.44% | 71.0%, 95.16% |
+| 2026 | 72.0%, 94.90% | 72.6%, 95.68% |
+
+**Where the confident WRONG calls are (arm C, calls outside 20–80%):** 637 / 603 / 695 wrong calls (2024 / 2025 / 2026,
+vs ~813 for the old model on 2026), on 251 / 219 / 267 bills; 42–54 bills carry 5+ each and hold 38–46% of them —
+whole rooms that surprise. Largest groups: the patron's own party called yes on a bill then struck / tabled
+unanimously (215 / 170 / 123), and mixed splits (both sides called yes, part voted no).
+
+Tried to move those into "can't call", none kept:
+- **Specialist model trained only on earlier years' uncertain votes** (`specialist.py`, re-scores 20–80% votes):
+  calls more votes but MORE wrong calls (2026: 695 → 817; member 87.22 → 87.29, hardest third up, 2024/2025 down). Rejected.
+- **Drop-risk flag** (own-party yes calls on the riskiest 10% of bills → can't call): removes 21 / 5 / 8 wrong calls vs
+  10 / 7 / 4 for removing the same number of least-confident calls. Too few votes affected, not consistent. Rejected.
+- **Error model** (above): no better than confidence.
+- **Three-part blend** (+ depth-8 bagged trees): member −0.02 / +0.01 / +0.09 vs arm A. Not worth its cost.
