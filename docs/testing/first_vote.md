@@ -775,3 +775,18 @@ Never worse in any year — the owner's condition ("if they are going to consist
 Frozen as an addendum before any 2027 data: `frozen/prereg_2027_addendum.json` (arm C + the count rule; the original
 A/B spec is untouched and its hash is paired in). The frozen copy reproduces the research predictions exactly (0.0).
 Against the old locked model on 2026: member 85.86 → 87.22, hardest third 65.90 → 69.97, room 91.45 → 93.16.
+
+## Tested 2026-10-21, not kept
+
+- **Train on later committee votes too** (`fv_all.py` builds 270,145 later sub/committee ballots with the same inputs;
+  first-vote rows verified identical, 0 differences; `later_votes.py`). Single locked trees, later votes weighted 0.3:
+  member 84.36→84.55 (2024) but 86.09→85.49 (2025) and 85.86→85.55 (2026). Later votes behave differently. Rejected.
+  The linear half on the same rows: 2024 +0.2, 2025 −0.1 vs the linear model alone — rejected.
+- **Adaptive weekly blend share** (pick the linear share that did best on earlier weeks): 2024 member −0.2 / −0.16. Rejected.
+- **Who surprises the model this session** (`session_resid.py`: running errors per member, committee and patron, per
+  side, self-checked): the self-check switched it on in 1 of 18 weeks; no change. Rejected.
+- **Prune an input group** (linear model, each of 16 groups dropped in turn): no group helps when dropped in all three
+  years. Largest losses when dropped: summary words (−0.6 / −1.3 / −2.2 member), venue, co-patrons, the room's members.
+  Without the summary-word inputs the linear model falls 86.47→84.32 on 2026 — they stay (Standard #3 call pending).
+- **Committee docket position**: DOCKET.CSV lists bills in bill-number order, not agenda order — not measurable.
+- **Campaign money**: parked by the owner 2026-09-24 (money moves access, not votes) — not re-tested.

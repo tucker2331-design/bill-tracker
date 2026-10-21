@@ -123,8 +123,14 @@ class GBMX(gbm.GBM):
         return 1 / (1 + np.exp(-F))
 
 
+def cols_of(s):
+    """FV.NUM minus s["drop"] (research: test a model without some inputs)."""
+    return [c for c in FV.NUM if c not in s.get("drop", [])]
+
+
 def gbm_fn(tr, te, s):
-    X = lambda rs: np.array([[r[c] for c in FV.NUM] for r in rs], float)
+    C = cols_of(s)
+    X = lambda rs: np.array([[r[c] for c in C] for r in rs], float)
     Xtr, ytr, Xte = X(tr), np.array([r["y"] for r in tr], float), X(te)
     w = None
     if s.get("recency"):                         # L8: recent years count more (members, chairs, majority change)
@@ -282,8 +288,9 @@ def linear_fn(tr, te, s):
     """Every input standardised, plus `hinges` piecewise-linear bends per input at training quantiles (an additive
     model, like a GAM), each also crossed with the voter's side (+1 own party, -1 other). Ridge `lam`, penalised Newton.
     Trees cut inputs into steps; this family draws smooth slopes -- its errors differ, which is what a blend needs."""
+    C = cols_of(s)
     def feats(rs, ref=None):
-        X = np.array([[r[c] for c in FV.NUM] for r in rs], float)
+        X = np.array([[r[c] for c in C] for r in rs], float)
         if ref is None:
             mu, sd = X.mean(0), X.std(0); sd = np.where(sd < 1e-6, 1.0, sd)
             Z = np.clip((X - mu) / sd, -10, 10)
@@ -309,7 +316,7 @@ def linear_fn(tr, te, s):
     if s.get("pairs"):
         # L7b: products of the k plain inputs with the largest first-pass weight (own + side terms), each pair x side
         # layout from feats(): [const | Z (k inputs) + hinges (m cols in all) | the same m cols x side]
-        k = len(FV.NUM); m = (Xtr.shape[1] - 1) // 2
+        k = len(C); m = (Xtr.shape[1] - 1) // 2
         w = np.abs(b[1:1 + k]) + np.abs(b[1 + m:1 + m + k])
         top = np.argsort(-w)[:s["pairs"]]
         def pairs(X):
