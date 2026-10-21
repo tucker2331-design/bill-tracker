@@ -753,3 +753,25 @@ lesson from the first three weeks did not carry into the next one (net −14 vot
 2025 (+103 votes) and 2026 (+91) the drift held through the session. The method helps when a session's mood is
 steady and does nothing or slightly harms when it turns. Recorded as a candidate; not adopted (rule: choose year
 must not lose).
+
+## Two more gains that never lose a year (2026-10-21)
+
+**1. Room result: count the members called yes.** A bill was called "passes" when the members' chances summed past
+half the room. Counting the members whose own call is yes is better for arm B in every year — 88.25→88.36 (2024),
+89.41→90.27 (2025), 92.66→92.91 (2026) — and it matches what a volunteer sees on the member cards. (Old model and arm A:
+better in 4 of 6, the two losses 1 bill each.)
+
+**2. Self-checked session booster (arm C, `booster_2027.py`).** The booster that lost on 2024 now checks itself first:
+each week it learns from the session before LAST week and is scored on last week; only if that helped does it touch
+this week. It switched on in 1 of 6 weeks (2024), 2 of 4 (2025), 3 of 8 (2026). Chosen on 2024 (30 trees, depth 2):
+
+| year | member (B → C) | hardest third | room | z |
+|---|---|---|---|---|
+| 2024 | 85.31 → 85.32 | 67.71 → 67.73 | 88.25 → 88.25 | +2.0 |
+| 2025 | 86.85 → 87.25 | 70.02 → 71.15 | 89.41 → 89.59 | +6.2 |
+| 2026 | 87.09 → 87.22 | 69.58 → 69.97 | 92.66 → 93.16 | +5.7 |
+
+Never worse in any year — the owner's condition ("if they are going to consistently improve accuracy then yes").
+Frozen as an addendum before any 2027 data: `frozen/prereg_2027_addendum.json` (arm C + the count rule; the original
+A/B spec is untouched and its hash is paired in). The frozen copy reproduces the research predictions exactly (0.0).
+Against the old locked model on 2026: member 85.86 → 87.22, hardest third 65.90 → 69.97, room 91.45 → 93.16.

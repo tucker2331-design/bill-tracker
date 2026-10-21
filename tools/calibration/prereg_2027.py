@@ -18,6 +18,7 @@ import numpy as np
 
 SPEC = os.path.join(HERE, "frozen", "prereg_2027.json")
 SCORE = os.path.join(HERE, "frozen", "score_2027.json")
+ADDENDUM = os.path.join(HERE, "frozen", "prereg_2027_addendum.json")   # arm C + room count rule, frozen 2026-10-21
 CODE = ("blend_2027.py", "first_vote.py", "gbm.py", "prereg_2026.py")
 TEST = 2027
 
@@ -59,6 +60,25 @@ def freeze():
     print(f"froze -> {SPEC}\nsha256 {hashlib.sha256(blob).hexdigest()}")
 
 
+def freeze_addendum():
+    """Arm C (booster_2027.predict_boosted) and the room 'count of yes calls' rule, added before any 2027 data.
+    The original spec is untouched; its hash is recorded here so the two stay paired."""
+    import first_vote as FV, booster_2027 as BC
+    if os.path.exists(ADDENDUM):
+        raise SystemExit(f"already frozen: {ADDENDUM}")
+    rows = [r for r in pickle.load(open(FV.ROWS, "rb")) if r["y"] >= 0]
+    if any(r["yr"] == TEST for r in rows):
+        raise SystemExit("2027 rows already exist -- too late for a forward-test addendum")
+    spec = {"frozen_on": datetime.date.today().isoformat(), "pairs_with_sha256": hashlib.sha256(open(SPEC, "rb").read()).hexdigest(),
+            "arm_C": {"fn": "booster_2027.predict_boosted", "boost": BC.BOOST},
+            "code_sha256": {f: _sha(os.path.join(HERE, f)) for f in ("booster_2027.py",)},
+            "room_count_rule": "per bill: number of members with p >= 0.5 > n/2 (vs the sum-of-p rule in _metrics)",
+            "expected_from_2024_2026": {"C_member": [0.8532, 0.8725], "C_hard": [0.6773, 0.7115]}}
+    blob = json.dumps(spec, indent=1, sort_keys=True).encode()
+    open(ADDENDUM, "wb").write(blob)
+    print(f"froze -> {ADDENDUM}\nsha256 {hashlib.sha256(blob).hexdigest()}")
+
+
 def score():
     import first_vote as FV, gbm, blend_2027 as B, prereg_2026 as P6
     if os.path.exists(SCORE):
@@ -77,17 +97,31 @@ def score():
         raise SystemExit("no 2027 rows yet -- rebuild rows after the 2027 session (first_vote.rebuild_rows)")
     rc = FV.assemble()["rc"]
     X = lambda rs: np.array([[r[c] for c in FV.NUM] for r in rs], float)
+    add = json.loads(open(ADDENDUM).read()) if os.path.exists(ADDENDUM) else None
+    if add:
+        for f, h in add["code_sha256"].items():
+            if _sha(os.path.join(HERE, f)) != h:
+                raise SystemExit(f"{f} changed since the addendum -- refusing to score")
     preds = {"reference": gbm.GBM(depth=6, lr=.03, rounds=260).fit(X(tr), np.array([r["y"] for r in tr], float)).predict(X(te)),
              "A": B.predict(tr, te), "B": B.predict_online(tr, te, lambda r: rc[r["bill"]][0][0])}
+    if add:
+        import booster_2027 as BC
+        preds["C"] = BC.boost(te, preds["B"], [r["y"] for r in te], lambda r: rc[r["bill"]][0][0])
     y = np.array([r["y"] for r in te], float)
     bill = np.array([f'{r["bill"][0]}|{r["bill"][1]}' for r in te]); same = np.array([bool(r["same"]) for r in te])
     ven = np.array(["sub" if r["ven_sub"] else "com" if r["ven_com"] else "floor" for r in te])
     cham = np.array(["S" if r["chamber_S"] else "H" for r in te])
     doc = {"scored_on": datetime.date.today().isoformat(), "spec_sha256": hashlib.sha256(spec_blob).hexdigest(),
            "arms": {k: P6._metrics(p, y, bill, same, ven, cham) for k, p in preds.items()}}
+    gb = {}
+    for i, b_ in enumerate(bill):
+        gb.setdefault(b_, []).append(i)
+    for k, p in preds.items():
+        doc["arms"][k]["room_count_rule"] = float(np.mean([((p[I] >= .5).sum() > len(I) / 2) == (y[I].sum() > len(I) / 2)
+                                                         for I in map(np.array, gb.values())]))
     open(SCORE, "w").write(json.dumps(doc, indent=1, sort_keys=True))
     print(json.dumps(doc, indent=1, sort_keys=True))
 
 
 if __name__ == "__main__":
-    {"--freeze": freeze, "--score": score}[sys.argv[1]]()
+    {"--freeze": freeze, "--freeze-addendum": freeze_addendum, "--score": score}[sys.argv[1]]()

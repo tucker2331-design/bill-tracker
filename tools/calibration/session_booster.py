@@ -14,6 +14,7 @@ import levers as L, first_vote as FV, gains as G, accept as AC, gbm
 from online_relinear import week
 
 MIN = 3000
+GATED = os.environ.get("BOOST_GATED") == "1"
 BASE = "online_relinear_{split}_W3.0_s0.3_m3000"
 
 
@@ -42,12 +43,24 @@ def main(rounds, depth, lr):
         lg = np.log(np.clip(pB, 1e-6, 1 - 1e-6) / (1 - np.clip(pB, 1e-6, 1 - 1e-6)))
         X = np.array([[r[c] for c in FV.NUM] for r in te], float); y = np.array([r["y"] for r in te], float)
         wk = np.array([week(rc[r["bill"]][0][0]) for r in te]); F = lg.copy()
-        for w in sorted(set(wk)):
+        weeks = sorted(set(wk)); used = 0
+        for j, w in enumerate(weeks):
             past = wk < w; now = wk == w
             if past.sum() < MIN:
                 continue
+            if GATED:
+                # self-check (fail-open to B): learn on the weeks before last week, score last week; apply only if
+                # that would have helped. Uses nothing from week w.
+                prev = wk == weeks[j - 1]; early = wk < weeks[j - 1]
+                if early.sum() < MIN:
+                    continue
+                chk = Offset(depth=depth, lr=lr, rounds=rounds, min_h=50.0).fit_from(X[early], y[early], lg[early])
+                q = 1 / (1 + np.exp(-(lg[prev] + chk.delta(X[prev]))))
+                if AC._ll(q, y[prev]).mean() >= AC._ll(pB[prev], y[prev]).mean():
+                    continue
             m = Offset(depth=depth, lr=lr, rounds=rounds, min_h=50.0).fit_from(X[past], y[past], lg[past])
-            F[now] = lg[now] + m.delta(X[now])
+            F[now] = lg[now] + m.delta(X[now]); used += 1
+        print(f"  {L.SPLITS[split][1]}: booster applied in {used} of {len(weeks)} weeks", flush=True)
         p2 = 1 / (1 + np.exp(-F))
         hard = np.argsort(np.abs(p0 - .5))[:len(y) // 3]
         g = collections.defaultdict(list)
@@ -59,12 +72,12 @@ def main(rounds, depth, lr):
         for r, a, c in zip(te, AC._ll(pB, y), AC._ll(p2, y)):
             d[str(r["bill"])] += a - c
         d = np.array(list(d.values())); pooled.append(d)
-        np.save(os.path.join(L.PRED, f"session_booster_{split}_r{rounds}_d{depth}_lr{lr}.npy"), p2)
-        print(f"{L.SPLITS[split][1]} r{rounds} d{depth} lr{lr}: member {r1.mean():.4f}->{r2.mean():.4f}  hardest third "
+        np.save(os.path.join(L.PRED, f"session_booster_{split}_r{rounds}_d{depth}_lr{lr}{'_gated' if GATED else ''}.npy"), p2)
+        print(f"{L.SPLITS[split][1]} r{rounds} d{depth} lr{lr}{' gated' if GATED else ''}: member {r1.mean():.4f}->{r2.mean():.4f}  hardest third "
               f"{r1[hard].mean():.4f}->{r2[hard].mean():.4f}  room {room(pB):.4f}->{room(p2):.4f}  "
               f"z {d.mean() / (d.std(ddof=1) / math.sqrt(len(d))):+.1f}", flush=True)
     d = np.concatenate(pooled)
-    print(f"POOLED r{rounds} d{depth} lr{lr}: z {d.mean() / (d.std(ddof=1) / math.sqrt(len(d))):+.1f}")
+    print(f"POOLED r{rounds} d{depth} lr{lr}{' gated' if GATED else ''}: z {d.mean() / (d.std(ddof=1) / math.sqrt(len(d))):+.1f}")
 
 
 if __name__ == "__main__":
