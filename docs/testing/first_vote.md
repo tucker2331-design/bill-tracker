@@ -866,3 +866,12 @@ statement, several adding health-insurance coverage requirements; (3) Republican
 without dissent where Democrats were called no. In each case the bill's SUBJECT decides; the model reads subject
 through coarse labels and summary-word scores (its strongest input group). The largest lever left is a better reading
 of what the bill does — text-derived, so it needs the owner's Standard #3 call.
+- **Fine subject labels** (`fine_subjects.py`; 458 fine LIS-style subjects vs the 43 coarse ones; party and member
+  support by fine subject from earlier years, × side): z 0.6, rejected (coverage 49–100% of ballots; the coarse labels
+  plus the summary-word scores already carry it).
+- **Calibration of confident calls is sound** (2024–2026, calls ≥ 80% yes, by chamber × side): actual yes rate meets
+  or beats the predicted rate in 11 of 12 cells (exception: Senate other party 2026, 91.9% predicted vs 90.3%). Wrong
+  calls are missing information, not over-confidence.
+
+**Every structural (non-text) source tried for the wrong calls has now failed.** Left: a better reading of what each bill
+does (text-derived — owner's Standard #3 call), or information not public before the vote.
