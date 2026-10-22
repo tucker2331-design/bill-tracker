@@ -875,3 +875,22 @@ of what the bill does — text-derived, so it needs the owner's Standard #3 call
 
 **Every structural (non-text) source tried for the wrong calls has now failed.** Left: a better reading of what each bill
 does (text-derived — owner's Standard #3 call), or information not public before the vote.
+
+## House subcommittees — the accuracy gap (2026-10-22)
+
+Every subcommittee first vote is in the House; most full-committee first votes are in the Senate (84–89%). 11–13% of
+subcommittee first votes are unanimous no (patron drops: strike / table / continue); full committees have none.
+
+| year | subcommittee (all) | subcommittee without unanimous-no bills | full committee | sub wrong calls on unanimous-no bills |
+|---|---|---|---|---|
+| 2024 | 77.8% | 83.5% | 93.4% | 224 of 351 |
+| 2025 | 81.1% | 86.4% | 92.4% | 175 of 327 |
+| 2026 | 84.4% | 88.2% | 89.6% | 106 of 261 |
+
+Patron drops are about half the gap. Tested, none kept:
+- drop risk on subcommittee votes only (`sub_probe.py drop`): z −1.2
+- the member's own record inside THIS subcommittee (`sub_probe.py memsub`): z 0.4
+- a model trained on subcommittee votes only (`sub_model.py only`): member +0.03 / −0.23 / +0.17, wrong calls UP
+  329→403 / 320→349 / 293→369
+- subcommittee votes weighted ×3 in training (`sub_model.py weight 3`): member +0.21 / −0.10 / +0.39, wrong calls
+  329→337 / 320→350 / 293→299
