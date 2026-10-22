@@ -847,3 +847,22 @@ Tried to move those into "can't call", none kept:
   10 / 7 / 4 for removing the same number of least-confident calls. Too few votes affected, not consistent. Rejected.
 - **Error model** (above): no better than confidence.
 - **Three-part blend** (+ depth-8 bagged trees): member −0.02 / +0.01 / +0.09 vs arm A. Not worth its cost.
+
+## Fewer wrong calls — 2026-10-22
+
+- **Co-sponsorship ties** (`cosponsor_ties.py`: bills the voter signed with this bill's patron / sponsors, earlier
+  sessions + this session before the vote, × side): z −4.0, rejected — the member's record on this patron's bills
+  (mpat) already carries it.
+- **A separate cutoff per group** (side × venue, each fixed on earlier years): at the SAME number of calls it makes
+  MORE wrong calls (95% target: 452 vs 448 in 2025, 501 vs 475 in 2026; 97%: 210 vs 162, 279 vs 261). The model's
+  confidence is honest in every group; one cutoff is right.
+- **Conclusion so far:** the ranking by confidence is already near the best possible abstention for what the model
+  knows. Fewer wrong calls now needs NEW information, not a better cutoff.
+
+**What the worst wrong calls are (2026, the 25 bills with most):** (1) Senate committee votes that split on party lines
+9–6 on Democratic bills (landlord–tenant, Human Rights Act, casinos, procurement) where every Republican was called
+yes; (2) House subcommittees tabling or striking Democratic bills without dissent — most with a fiscal impact
+statement, several adding health-insurance coverage requirements; (3) Republican criminal-penalty bills that passed
+without dissent where Democrats were called no. In each case the bill's SUBJECT decides; the model reads subject
+through coarse labels and summary-word scores (its strongest input group). The largest lever left is a better reading
+of what the bill does — text-derived, so it needs the owner's Standard #3 call.
