@@ -953,3 +953,31 @@ written before any run (owner: *"minimize this possible statistically as much as
   locked model's residual from earlier years): z −0.9 (K = 20); K = 10 did not converge. Rejected.
 - **Study announced**: the LIS subject index lists only 20 study resolutions (HJ/SJ) across 2025–26 — too rare to
   explain the drops. Not pursued.
+
+## Negative z values — are they "reverse" signals? (2026-10-23, `rerun_no2021.py`)
+
+Owner: *"is there anyway you can use these negative z values like maybe for reverse stats since they are strong in
+the other direction"*. A negative z does NOT mean "strong the other way": the stacked test learns each signal's
+direction from the earlier years, so a signal that is reliably reversed gets a negative weight and a POSITIVE z.
+Negative z = the direction learned from earlier years did not hold the next year. Checking why (per-year fits):
+
+| signal | 2021 | 2022 | 2024 | 2025 |
+|---|---|---|---|---|
+| co-sponsor tie with patron (other party) | −0.16 | +0.05 | +0.30 | +0.04 |
+| fund load × cost (other party) | −0.18 | 0.00 | +0.03 | +0.08 |
+| voter in the governor's party | −0.68 | +0.35 | +0.09 | +0.40 |
+
+**2021 — the COVID session (House met virtually) — runs backwards on almost everything**, and every stacked test
+learned its first weights from 2021. Rule fixed BEFORE re-running, applied to every rejected signal alike: learn from
+2022 onward only; score 2024 + 2025 (accept at z ≥ 3); 2026 as replication.
+
+Result: **none passes.** Pooled z (2024+2025) / 2026 replication: governor × trifecta +0.6 / +4.5 (but 2026 accuracy
+down — the trifecta weight cannot be learned: the only earlier trifecta year in the frame is 2021); co-sponsor ties
+−0.2 / +0.2; fund load −1.5 / +0.5; big fight +0.9 / +0.5 (2024 alone +4.6); election +0.8 / −6.0; low numbers 0.0 /
+−2.3; fine subjects −0.8 / +1.9; subcommittee drop risk +2.2 / +3.5 (closest); member-in-subcommittee +1.3 / +2.6;
+patron drops −2.3 / +1.2; drop model +0.7 / −4.0; **patron chairs the committee** (new, `chair_patron.py`) −1.7 /
++5.9. Removing 2021 changed directions but not the verdicts: the signals are unstable year to year, not reversed.
+Also re-run without 2021: draft order −1.4 / +0.5; governor's party −0.3 / +1.7; election margin −1.1 / +1.0;
+**docket load** (new, `docket_load.py`: bills on that day's docket, earlier dockets without a vote; 2025–26 only)
++0.4 / −4.0. Leaders (Rules members as co-patrons) cannot be fitted — one input nearly separates the votes and
+stats.logit's Newton steps (penalty in the Hessian, not the gradient) do not settle; recorded, not forced.
