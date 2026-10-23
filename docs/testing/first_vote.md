@@ -927,3 +927,29 @@ no bill number / patron / year). Owner approved spending the Claude API credit (
 (2026-10-23). Waiting on: the `anthropic` package install OK, the owner's API key set in his terminal, the model choice
 (pilot of 100 bills on Opus 5.5 and Haiku 5.5 first). Leak risk: model training data runs to mid-2026; mitigated by
 stripping identifiers; only the 2027 forward test is fully clean.
+
+### AI bill-reading test — ON HOLD until every non-AI option is used (owner 2026-10-23)
+
+Budget: the $100 is Claude Code cloud-session credit; ~$10 regular API credit would cover a ~$1 pilot. Leak plan,
+written before any run (owner: *"minimize this possible statistically as much as possible"*):
+1. **Blind input.** Title + summary only — no bill number, patron, co-patrons, year, dates, committee, or votes.
+2. **Ask about content, never outcome.** "How would most Democrats / Republicans on a committee view this bill?",
+   not "did it pass".
+3. **Memorization probe.** Separately ask the model to state each bill's outcome. If it beats what the text alone
+   predicts (the locked model's own text-only score), it remembers — measure that rate, and drop the bills it
+   "knows" from the evaluation.
+4. **Exposure split.** Compare the gain on low-exposure bills (subcommittee votes, no news mentions in our GDELT
+   counts, unanimous) with high-exposure bills (floor fights, news coverage). A gain that lives only on famous bills
+   is memory, not reading.
+5. **Era split.** Compare gains on 2019–2021 with 2024–2026; a much larger gain on the years nearest the model's
+   training cut-off is a warning.
+6. **Clean test.** Freeze the ratings recipe before the 2027 session; only 2027 is fully free of memory.
+
+**More non-AI tests (2026-10-23), none kept:**
+- **Code of Virginia chapter** a bill amends (`code_sections.py`; enacting clause of the 2025–26 introduced text, 69% of
+  bills parsed; this side's and this member's earlier support on the same chapter, self-checked weekly layer on arm C):
+  switched on in 0 of 4 weeks (2025) and 2 of 8 (2026); 2026 member 87.22→87.19, wrong calls 695→692. No gain.
+- **Issue-adjusted ideal points** (`issue_points.py`; each member's own slope on 20 summary topics, learned on the
+  locked model's residual from earlier years): z −0.9 (K = 20); K = 10 did not converge. Rejected.
+- **Study announced**: the LIS subject index lists only 20 study resolutions (HJ/SJ) across 2025–26 — too rare to
+  explain the drops. Not pursued.
