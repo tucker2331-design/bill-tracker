@@ -894,3 +894,36 @@ Patron drops are about half the gap. Tested, none kept:
   329→403 / 320→349 / 293→369
 - subcommittee votes weighted ×3 in training (`sub_model.py weight 3`): member +0.21 / −0.10 / +0.39, wrong calls
   329→337 / 320→350 / 293→299
+
+## The owner's strategic-calculation traces (2026-10-23, `strategy_traces.py`)
+
+Owner: *"most bills are shot down … bc of a strategic calculation balancing polarities"* — budget amendment on the same
+idea, a study announced, a near-copy by another member, the patron on the record, the general fund already packed,
+election years, a big fight on one issue holding up related bills, leadership priorities filed first (HB1 = minimum wage).
+
+| trace | measure (all before the vote) | result |
+|---|---|---|
+| leadership bills first | bill number ≤ 25 × majority patron × side | z −0.2. Low numbers exist only in EVEN years (odd sessions continue the numbering); 37–42 bills; already called well (2024 94.0%, 2026 86.4%) |
+| a big fight holds up related bills | party-line share of this session's earlier first votes on the same subject × side / minority | z +1.3, reject |
+| the general fund is packed | fiscal-impact bills already passed this session in this chamber × this bill has a cost × side; + even (budget) year | z −4.1, reject |
+| election years | House, odd years × side × close seat | z −5.7 — but only 2021 and 2025 are election years in the frame; too few to learn from |
+| a veto comes back | exact title of a bill vetoed in the two previous sessions | see below |
+| near-copy by another member | tested before (`withdraw_probe.py`, `dup_*` inputs) | rare at first votes |
+| study announced | joint "study" resolutions are not in the corpus (HB/SB only); "passed by with letter" in 2–40 bills a year | not testable yet |
+| budget amendment | members' budget amendments are not ingested (a separate LIS budget system) | needs a source check first |
+
+**A vetoed bill comes back (2026):** 78 bills carried exactly the title of a bill vetoed in 2024–25 (70 with a first
+vote; 69 Democratic — the governor changed party). Half split on party lines; Republicans voted yes 32% vs 48%
+predicted, called right only 63%. Earlier years have few such refiles (7 in 2024), so the weight can only be learned
+inside the session: being tested as an input to the weekly refit (`veto_refile.py`).
+- **Veto refile as an input to the weekly refit** (`veto_refile.py`, exact title of a bill vetoed in the two previous
+  sessions, arm B with one extra input): on the refile votes 85.5→74.2% (2024, 62 votes), 84.6→85.9% (2025, 234),
+  86.2→87.8% (2026, 788); overall member −0.03 / −0.02 / +0.01, wrong calls 637→638 / 604→603 / 747→743; z −0.1 /
+  +0.5 / +2.1. Too small and not consistent — not adopted. The signal is real in 2026 but the linear half (30% of the
+  blend) moves too little to fix it.
+
+**Next: the bill-reading test** (Claude rates each bill's likely reception by each party from title + summary only,
+no bill number / patron / year). Owner approved spending the Claude API credit ($100) and an internal-only text test
+(2026-10-23). Waiting on: the `anthropic` package install OK, the owner's API key set in his terminal, the model choice
+(pilot of 100 bills on Opus 5.5 and Haiku 5.5 first). Leak risk: model training data runs to mid-2026; mitigated by
+stripping identifiers; only the 2027 forward test is fully clean.

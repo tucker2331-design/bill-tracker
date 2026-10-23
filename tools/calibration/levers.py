@@ -125,7 +125,7 @@ class GBMX(gbm.GBM):
 
 def cols_of(s):
     """FV.NUM minus s["drop"] (research: test a model without some inputs)."""
-    return [c for c in FV.NUM if c not in s.get("drop", [])]
+    return [c for c in FV.NUM if c not in s.get("drop", [])] + list(s.get("extra", []))
 
 
 def gbm_fn(tr, te, s):
