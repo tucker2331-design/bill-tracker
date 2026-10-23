@@ -981,3 +981,28 @@ Also re-run without 2021: draft order −1.4 / +0.5; governor's party −0.3 / +
 **docket load** (new, `docket_load.py`: bills on that day's docket, earlier dockets without a vote; 2025–26 only)
 +0.4 / −4.0. Leaders (Rules members as co-patrons) cannot be fitted — one input nearly separates the votes and
 stats.logit's Newton steps (penalty in the Hessian, not the gradient) do not settle; recorded, not forced.
+
+## Members' budget amendments (2026-10-23, `historical_cache/budget_amendments.py`, `budget_signal.py`)
+
+Policy check first ([[knowledge/budget_portal]]): DLAS site, no robots.txt, LIS rules applied (2025/2026 only;
+personal research use per the owner's 2026-09-24 ToS decision); 4 page requests with all five guardrails (cached,
+jittered 4–9 s, backoff + stop, cap 12, one-off off-session). 3,693 member requests parsed; **1,001 name a bill**
+("Placeholder Amendment for HB 551", "(SB 283)"). Used only for votes on/after the day each chamber's requests became
+public (House 2025-01-17 / 2026-01-22; Senate 2025-01-15 / 2026-01-21, LIS "Budget amendments available").
+
+| year | named bills: passed / unanimous no / arm C right | not named: passed / unanimous no / arm C right |
+|---|---|---|
+| 2025 | 81% / 7% / 89.3% | 72% / 9% / 86.8% |
+| 2026 | 75% / 11% / 86.9% | 77% / 10% / 87.3% |
+
+Named bills are NOT dropped more often — members file budget amendments for bills they keep pushing, not instead of
+them — and the model already calls them as well as the rest. Stacked (learned on 2025): 2026 z −0.8. Rejected.
+
+**Carried-over bills** (in a 2025 first vote, first action before Nov 2024): only 6 bills — too few. Not pursued.
+
+**Non-AI list, closed out (2026-10-23).** Owner's ideas: budget amendment ✗, study announced (20 resolutions) ✗,
+near-copy ✗, patron on record (no pre-vote source), general fund ✗, election years ✗, big fight ✗, leadership
+numbers ✗. Mine: co-sponsor ties ✗, fine subjects ✗, Code chapters ✗, issue-adjusted ideal points ✗, session
+mood per member / committee / venue ✗, subcommittee-only models ✗, specialist ✗, error model ✗, deeper / more trees ✗,
+later committee votes ✗, online position scores ✗, chair-patron ✗, docket load ✗, carried-over ✗, veto refile ✗;
+and every rejected signal re-tested without 2021 ✗. What remains is the AI bill-reading test (leak plan above).
