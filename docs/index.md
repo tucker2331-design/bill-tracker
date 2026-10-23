@@ -197,3 +197,4 @@ The codebase itself (`calendar_worker.py`, `pages/ray2.py`, etc.) is the raw lay
 - **Cross-reference instead of duplicate.** If information belongs on page A, reference it from page B with a wikilink rather than copy-pasting.
 - **Update on touch.** Whenever a page is read in service of a task, update the `updated:` field if the content needs refreshing.
 - **New lessons → new pages.** Each post-mortem or framework insight gets its own page in `failures/`, then a link from the index.
+- [[knowledge/budget_portal]] — LIS budget portal: web service returns empty member-amendment lists; data only on HTML pages (2026-10-23)
