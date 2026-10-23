@@ -1006,3 +1006,36 @@ numbers ✗. Mine: co-sponsor ties ✗, fine subjects ✗, Code chapters ✗, is
 mood per member / committee / venue ✗, subcommittee-only models ✗, specialist ✗, error model ✗, deeper / more trees ✗,
 later committee votes ✗, online position scores ✗, chair-patron ✗, docket load ✗, carried-over ✗, veto refile ✗;
 and every rejected signal re-tested without 2021 ✗. What remains is the AI bill-reading test (leak plan above).
+
+## Statistical determination — calls with a guarantee (2026-10-23, `guaranteed_calls.py`)
+
+From the selective-prediction literature (risk–coverage, El-Yaniv & Wiener; conformal risk control / Learn-then-Test,
+Angelopoulos & Bates): choose the loosest cutoff whose error among calls is ≤ 5% with 95% confidence on the
+calibration years (exact binomial upper bound), then apply it unchanged.
+
+| year (calibrated on) | rule | called | right | wrong calls |
+|---|---|---|---|---|
+| 2025 (2024) | "Likely" band (≥ 80% / ≤ 20%) | 71.0% | 95.2% | 603 |
+| 2025 (2024) | guaranteed cutoff (|p − .5| ≥ .31) | 69.6% | 95.5% | 555 |
+| 2026 (2024–25) | "Likely" band | 72.6% | 95.7% | 695 |
+| 2026 (2024–25) | guaranteed cutoff (≥ .31) | 71.5% | 95.9% | 649 |
+
+The target held in both later years; ~7% fewer wrong calls for ~1 point fewer calls.
+
+**Per group, the 95% is an average.** Under one cutoff, calls are right: full committee own party 98–99%; full
+committee other party 91–95%; subcommittee own party 92–97%; **subcommittee other party 91–92%**. A per-group
+guarantee (Mondrian; Bonferroni scan) finds NO cutoff that guarantees 95% for other-party subcommittee votes or floor
+votes — even the most confident calls there include patron drops and surprises. For volunteers, a call's reliability
+depends on where the vote happens.
+
+**Combination of every weak signal** (`mega_stack.py`, 14 signal families, no-2021 rule): one ridge layer — 2024
+−0.03, 2025 −0.45 member, pooled z −3.5; reject (the ridge-100 fit did not converge). Residual trees over all signals
++ member inputs: see below.
+
+Literature consulted: [Gerrish & Blei — issue-adjusted ideal points](https://www.cs.columbia.edu/~blei/papers/GerrishBlei2011.pdf);
+[Kraft et al. — embedding model for roll calls](https://mirror.aclweb.org/emnlp2016/program/979.html);
+[Eidelman et al. 2018 — state floor action, text + context +18%](https://ar5iv.labs.arxiv.org/html/1806.05284);
+[Selective conformal risk control](https://arxiv.org/pdf/2512.12844).
+Residual trees over all signals + member inputs (60 rounds, depth 3): member 84.36→84.08 / 86.09→86.03 /
+85.86→86.81, wrong calls 658→797 / 687→737 / 814→1,029 (it calls more and errs more); pooled z −1.8, 2026 +5.9.
+Rejected — combining the weak signals adds noise, not signal, on the years that choose.
