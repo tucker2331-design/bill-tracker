@@ -6,7 +6,10 @@ status: active
 
 # Project Log
 
-Append-only, reverse-chronological (newest at top). Each entry opens with `## [YYYY-MM-DD] <kind> | <title>` so `grep "^## \[" log.md | head -20` gives a parseable timeline.
+Append-only, reverse-chronological (newest at top). Each entry opens with `## [2026-10-24] design | War Room mockup: call only when sure — 3 display options for owner review
+Owner: "we should only call the ones we are really confident in." HB 1515 mockup (same URL, v8): Likely/Leans/Toss-up replaced by Call (chance ≥ 81 or ≤ 19 in 100, cutoff from `guaranteed_calls.py`) vs Can't call; options A (call or can't call), B (+ lean), C (grouped + subcommittee reliability). 2026 counts: 15,201 of 15,850 calls right; can't-call guesses 4,130 of 6,313. Awaiting the owner's pick.
+
+## [YYYY-MM-DD] <kind> | <title>` so `grep "^## \[" log.md | head -20` gives a parseable timeline.
 
 ## [2026-10-20] research | 2027 forward test frozen (arms A + B); drop risk rankable, not callable
 Owner approved the weekly session refit. `prereg_2027.json` locks arm A (blend) and arm B (blend + weekly refit), both verified identical to research. Drop model (struck/tabled/continued at first vote): AUC 0.81–0.92, top 10% risk holds 31–57% of drops, but few bills reach P ≥ .5; no gain to member votes. [[testing/first_vote]].
