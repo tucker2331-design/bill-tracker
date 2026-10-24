@@ -29,7 +29,17 @@ def _logit(X, y, names, ridge):
             return ST.logit(X, y, names, ridge=rr, tol=1e-7, max_iter=300), k
         except RuntimeError:
             continue
-    raise RuntimeError("logit did not converge even at 100x ridge")
+    # last resort: a properly penalised Newton fit (penalty in the gradient as well as the Hessian; stats.logit puts it
+    # in the Hessian only, so sparse / near-separating inputs never settle). Same output shape as stats.logit.
+    Xc = np.column_stack([np.ones(len(y)), np.asarray(X, float)]); b = np.zeros(Xc.shape[1])
+    pen = np.full(len(b), ridge); pen[0] = 1e-6
+    for _ in range(100):
+        pr = 1 / (1 + np.exp(-np.clip(Xc @ b, -30, 30)))
+        st = np.linalg.solve(Xc.T @ (Xc * (pr * (1 - pr))[:, None]) + np.diag(pen), Xc.T @ (y - pr) - pen * b)
+        b += st
+        if np.max(np.abs(st)) < 1e-7:
+            return {n: (float(v), float("nan"), float("nan"), float("nan")) for n, v in zip(["const"] + list(names), b)}, 3
+    raise RuntimeError("logit did not converge even with the penalised fallback")
 
 
 def evaluate(signal, label, ridge=10.0):
@@ -59,7 +69,7 @@ def evaluate(signal, label, ridge=10.0):
         hard = np.argsort(np.abs(p - .5))[:len(p) // 3]
         r0 = (p0 >= .5) == (y == 1); r1 = (p1 >= .5) == (y == 1)
         lines.append(f"    {t}: member {r0.mean():.4f}->{r1.mean():.4f}  hardest third {r0[hard].mean():.4f}->{r1[hard].mean():.4f}  "
-                     f"z {d.mean() / (d.std(ddof=1) / math.sqrt(len(d))):+.1f}{'  [RIDGE RAISED x' + str(10 ** bumps) + ']' if bumps else ''}  weights " +
+                     f"z {d.mean() / (d.std(ddof=1) / math.sqrt(len(d))):+.1f}{('  [PENALISED FALLBACK]' if bumps == 3 else '  [RIDGE RAISED x' + str(10 ** bumps) + ']') if bumps else ''}  weights " +
                      ", ".join(f"{n} {f[n][0]:+.2f}" for n in names))
     d = np.concatenate([diffs[2024], diffs[2025]]); z = d.mean() / (d.std(ddof=1) / math.sqrt(len(d)))
     print(label); print("\n".join(lines))

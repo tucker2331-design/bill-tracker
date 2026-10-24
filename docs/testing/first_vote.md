@@ -1055,3 +1055,16 @@ ACS 2023 for 2024+) and new measures (industry: farming/mining, manufacturing, p
 veterans, foreign born, unemployed, transit, renters; land area for density). Variable codes checked identical in
 2021 and 2023. **Blocked on a key:** the Census API now redirects keyless requests to missing_key.html (2026-10-24);
 the script reads CENSUS_API_KEY from the owner's own terminal (never stored).
+
+**Geography** (`geo_signal.py`; Census Gazetteer national files, Virginia rows; 4 downloads, public domain, no key):
+district interior points + land area, previous maps for 2020–23 and 2022 maps for 2024+; members placed by the
+election that seated them (92–98% of votes; patron distance 81–93%). Inputs: within 40 km of the patron, log
+distance, log land area (rural), × side. Weights are steady — other-party members near the patron lean yes (+0.35 /
++0.31 / +0.06) — but the gain is small: pooled z +0.5, 2026 −0.2. Rejected (the model already places members through
+ideal points and district make-up).
+
+**District make-up × bill subject** (`district_subject.py`; 6 district measures × the 10 commonest subject groups ×
+side, 2024+): 2025 z −1.0, 2026 −3.3. Rejected. (`rerun_no2021.py` gained a properly penalised fallback fit, used
+only when stats.logit fails — marked in the output.)
+
+**Not usable:** Census Reporter's data API (robots.txt `Disallow: /`); the Census API without the owner's key.
