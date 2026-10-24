@@ -4,31 +4,20 @@
     "type": "split",
     "children": [
       {
-        "id": "3a68c80aabba379e",
+        "id": "ad88723fea9c6b5b",
         "type": "tabs",
         "children": [
           {
-            "id": "c66816d2bf23bf24",
+            "id": "0ee47fa4bf05f19e",
             "type": "leaf",
             "state": {
-              "type": "graph",
+              "type": "empty",
               "state": {},
-              "icon": "lucide-git-fork",
-              "title": "Graph view"
-            }
-          },
-          {
-            "id": "ccccab0f08d65711",
-            "type": "leaf",
-            "state": {
-              "type": "graph",
-              "state": {},
-              "icon": "lucide-git-fork",
-              "title": "Graph view"
+              "icon": "lucide-file",
+              "title": "New tab"
             }
           }
-        ],
-        "currentTab": 1
+        ]
       }
     ],
     "direction": "vertical"
@@ -190,8 +179,12 @@
       "bases:Create new base": false
     }
   },
-  "active": "ccccab0f08d65711",
+  "active": "ca25216fa2345032",
   "lastOpenFiles": [
+    "Untitled",
+    "Untitled 1.canvas",
+    "Untitled.canvas",
+    "state/current_status.md",
     "workflow/reviewer_strategy.md",
     "failures/legacy_calendar_versions.md",
     "workflow/zero_routine_maintenance.md",

@@ -1,0 +1,28 @@
+{
+ "arm_C": {
+  "boost": {
+   "depth": 2,
+   "lr": 0.05,
+   "min_h": 50.0,
+   "min_session_votes": 3000,
+   "rounds": 30
+  },
+  "fn": "booster_2027.predict_boosted"
+ },
+ "code_sha256": {
+  "booster_2027.py": "d2c05e8c7aa53b44c228a85ef3d1b330ea208bef78a85e0cc35017db884d07c4"
+ },
+ "expected_from_2024_2026": {
+  "C_hard": [
+   0.6773,
+   0.7115
+  ],
+  "C_member": [
+   0.8532,
+   0.8725
+  ]
+ },
+ "frozen_on": "2026-10-21",
+ "pairs_with_sha256": "baff9d0a9addb1414bd2d0115266c78f2603febf0bf00952d1dfacf351321f90",
+ "room_count_rule": "per bill: number of members with p >= 0.5 > n/2 (vs the sum-of-p rule in _metrics)"
+}

@@ -1,0 +1,181 @@
+{
+ "arms": {
+  "A": {
+   "fn": "blend_2027.predict",
+   "linear": {
+    "hinges": 3,
+    "lam": 10,
+    "pairs": 8
+   },
+   "trees": {
+    "bags": 8,
+    "colsample": 0.5,
+    "depth": 6,
+    "lr": 0.03,
+    "rounds": 260,
+    "subsample": 0.5
+   },
+   "w_linear": 0.2
+  },
+  "B": {
+   "fn": "blend_2027.predict_online",
+   "linear": {
+    "hinges": 3,
+    "lam": 10,
+    "pairs": 8
+   },
+   "online": {
+    "linear_share": 0.3,
+    "min_session_votes": 3000,
+    "session_weight": 3.0
+   },
+   "trees": {
+    "bags": 8,
+    "colsample": 0.5,
+    "depth": 6,
+    "lr": 0.03,
+    "rounds": 260,
+    "subsample": 0.5
+   }
+  },
+  "reference": {
+   "depth": 6,
+   "fn": "gbm.GBM",
+   "lr": 0.03,
+   "rounds": 260
+  }
+ },
+ "code_sha256": {
+  "blend_2027.py": "4ff7b04a1101030c20972094307b6a3876d0baf88a1ea102ff628bacdb6854f7",
+  "first_vote.py": "2435caad7603bb31873d135c22bc8efae5c31ccf498405a892749d1e1298b4c8",
+  "gbm.py": "6112966ff67d61e9f3687dfdd48eafb5e237e5fce166f7dd9027790a84dec099",
+  "prereg_2026.py": "fc6d95c0deec77764770983b2427bbe0b947f7bb948164fb6ac8766e2f266d67"
+ },
+ "expected_from_2024_2026": {
+  "A_hard": [
+   0.6712,
+   0.6847
+  ],
+  "A_member": [
+   0.8512,
+   0.865
+  ],
+  "B_hard": [
+   0.6771,
+   0.7002
+  ],
+  "B_member": [
+   0.8531,
+   0.8709
+  ]
+ },
+ "features": [
+  "same",
+  "maj",
+  "chamber_S",
+  "ven_sub",
+  "ven_com",
+  "defect",
+  "room_rate",
+  "room_n",
+  "pat_rate",
+  "pat_n",
+  "mroom_rate",
+  "mroom_n",
+  "has_c",
+  "c_opp",
+  "c_party",
+  "dev",
+  "has_mem",
+  "is_patron",
+  "own_cops",
+  "other_cops",
+  "companion",
+  "rm_has",
+  "rm_party",
+  "rm_other",
+  "n_actions",
+  "fiscal",
+  "sub_offered",
+  "n_refs",
+  "wait",
+  "day",
+  "senior",
+  "n_cops",
+  "pat_in_room",
+  "dup_sim",
+  "dup_maj_other",
+  "dup_same_pat",
+  "comp_sim",
+  "txt_has",
+  "txt_party",
+  "txt_other",
+  "subj_has",
+  "subj_party",
+  "subj_n",
+  "msubj",
+  "msubj_n",
+  "is_subroom",
+  "subroom_rate",
+  "subroom_n",
+  "ses_rate",
+  "ses_n",
+  "mpat_rate",
+  "mpat_n",
+  "mdef_ses",
+  "comp_has",
+  "comp_party",
+  "ip_has",
+  "ip_m1",
+  "ip_m2",
+  "ip_b1",
+  "ip_b2",
+  "ip_dist",
+  "ip_toward",
+  "ip_spread",
+  "ip_bhas",
+  "ip_n",
+  "d_has",
+  "d_white",
+  "d_black",
+  "d_hisp",
+  "d_income",
+  "d_college",
+  "d_poverty",
+  "d_owner",
+  "d_age",
+  "ra_own_mpat_rate",
+  "ra_own_msubj",
+  "ra_own_mroom_rate",
+  "ra_own_dev",
+  "ra_own_ip_m1",
+  "ra_own_d_college",
+  "ra_own_d_white",
+  "ra_own_defect",
+  "ra_oth_mpat_rate",
+  "ra_oth_msubj",
+  "ra_oth_mroom_rate",
+  "ra_oth_dev",
+  "ra_oth_ip_m1",
+  "ra_oth_d_college",
+  "ra_oth_d_white",
+  "ra_oth_defect",
+  "ra_own_n",
+  "ra_oth_n",
+  "ra_margin"
+ ],
+ "frozen_on": "2026-10-20",
+ "metrics": "prereg_2026._metrics: accuracy, log loss, other-party, room result, hardest third, labels, slices",
+ "primary": "member accuracy, hardest third, room result -- arm vs reference, same ballots",
+ "test_year": 2027,
+ "train_rows_sha256": "5430df3fc23a39991b2627c7d0f1ae814bbdc456e99be4586bfc173ef6e52e0d",
+ "train_years": [
+  2019,
+  2020,
+  2021,
+  2022,
+  2024,
+  2025,
+  2026
+ ]
+}

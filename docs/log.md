@@ -6,7 +6,57 @@ status: active
 
 # Project Log
 
-Append-only, reverse-chronological (newest at top). Each entry opens with `## [YYYY-MM-DD] <kind> | <title>` so `grep "^## \[" log.md | head -20` gives a parseable timeline.
+Append-only, reverse-chronological (newest at top). Each entry opens with `## [2026-10-24] decision | War Room: option A — "call or can't call"
+Owner: "A is fine." Mockup v9 (same URL): review switch removed; rows read Yes / No / Can't call (call only at a chance ≥ 81 or ≤ 19 in 100). Replaces the Likely / Leans / Toss-up labels.
+
+## [2026-10-24] design | War Room mockup: call only when sure — 3 display options for owner review
+Owner: "we should only call the ones we are really confident in." HB 1515 mockup (same URL, v8): Likely/Leans/Toss-up replaced by Call (chance ≥ 81 or ≤ 19 in 100, cutoff from `guaranteed_calls.py`) vs Can't call; options A (call or can't call), B (+ lean), C (grouped + subcommittee reliability). 2026 counts: 15,201 of 15,850 calls right; can't-call guesses 4,130 of 6,313. Awaiting the owner's pick.
+
+## [YYYY-MM-DD] <kind> | <title>` so `grep "^## \[" log.md | head -20` gives a parseable timeline.
+
+## [2026-10-20] research | 2027 forward test frozen (arms A + B); drop risk rankable, not callable
+Owner approved the weekly session refit. `prereg_2027.json` locks arm A (blend) and arm B (blend + weekly refit), both verified identical to research. Drop model (struck/tabled/continued at first vote): AUC 0.81–0.92, top 10% risk holds 31–57% of drops, but few bills reach P ≥ .5; no gain to member votes. [[testing/first_vote]].
+
+## [2026-10-19] research | blend approved + frozen; gains counted; weekly session refit lifts all three measures every year
+Owner approved bagged trees + 20% linear (frozen `blend_2027.py`, verified identical). Net +142 votes / +13 bill results on 2026. Misses left mapped by vote shape; 'unanimous no' first votes are mostly patron withdrawals (strike / table), traces rejected. Weekly refit of the linear half on the session's earlier votes (gated at 3,000 votes): 2026 member 87.09, hardest third 69.58, room 92.66; z 6.7/9.2/9.8. Awaiting owner approval. [[testing/first_vote]].
+
+## [2026-10-17] research | second model family — bagged trees + 20% linear lifts all three measures in all three years
+Smooth penalised logistic (hinges, 8 products, × side) blended 20% with bagged trees: member 85.12/86.33/86.50, hardest third 67.12/68.47/67.82, room 87.92/88.85/92.11 (2024/2025/2026). Per-member layer, recency weights, more bags rejected. Adoption + frozen 2027 test awaits the owner. Details in [[testing/first_vote]].
+
+## [2026-10-16] research | public traces of private decisions — six tested, none adds
+Leaders' co-sponsorship, draft order, bargaining, governor's party, voter's seat margin, patron's seat margin. All reject or untestable (`private_traces.py`; details in [[testing/first_vote]]). Election margins added from the Wikipedia API (`election_margins.py`). Bagging remains the only gain; adoption awaits the owner.
+
+## [2026-09-29] research | panel plan executed — 2026 scored once, bill-fate model, four sources tested
+
+2026 locked test scored against a spec committed first: 85.9% (84.9–86.8). Bill-fate model accepted (rolling z 14.5;
+2026 AUC 0.80 vs 0.68). Rejected: party-positions-first (z −7.6), GDELT (no gain; download stopped), House written
+testimony (z −2.9). VALCV scorecard positions positive but unproven (z 1.3). New: `prereg_2026.py`, `fate.py`,
+`accept.py`, `theta.py`, `gdelt_effect.py`, `stakeholder_effect.py`, `hodspeak_comments.py`, `va_positions.py`.
+Audit #141 (West Virginia substring). See [[testing/panel_2026-09-29]], [[testing/bill_fate]].
+
+## [2026-09-29] decision | panel follow-up — contact log out of the model, UI unchanged
+
+Owner: contact log stays out of the model (separate future item; if contact shows a party-line whip the model is
+redundant for that bill anyway). UI stays as is — the "bill at the top of the War Room" restructure is not adopted.
+Surviving plan: lock scoring + score 2026 once; bill-fate model; party-position model; multi-year acceptance rule;
+GDELT test. See [[testing/panel_2026-09-29]] § Owner decisions.
+
+## [2026-09-29] research | five-perspective panel on the prediction model
+
+Lobbyist, mathematician, statistician, marketing officer and "genius" each researched and wrote a memo, then rebutted
+the others. Converged: stop ballot-feature hunting, score locked 2026 once with pre-registered metrics, re-pose the
+target as bill fate + party positions + room outcome, put the bill at the top of the War Room, retire "break 95" /
+"hardest third >80%", and treat human information as the only step change. Corrections logged in
+[[testing/first_vote]]. Full record: [[testing/panel_2026-09-29]].
+
+## [2026-09-28] design | War Room v10 — member cards that say how much each reason matters
+
+Owner feedback on v9: drop the initials; the team section mixed "our position" with an unclear contact log; the
+member card's two raw counts were odd to an amateur and too little evidence. v10: position and contact log are
+separate groups, each contact names who was reached, by whom, and how; the member card starts from the party
+base rate and lists every measured reason with a direction and a strength, plus a "checked, doesn't change the
+guess" list. Method saved as `tools/calibration/why_member.py`; findings in [[testing/first_vote]]. Site-wide
+refresh waits for the owner's permission and mockups ([[state/current_status]]).
 
 ## [2026-09-24] finding | content predicts which opposite-party legislator crosses
 

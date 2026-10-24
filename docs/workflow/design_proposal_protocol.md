@@ -1,6 +1,6 @@
 ---
 tags: [workflow, process, design, review, owner-rule]
-updated: 2026-07-25
+updated: 2026-09-30
 status: active
 ---
 
@@ -49,6 +49,18 @@ better. A proposal with no acknowledged weakness has not been audited.
 **5. Present the VETTED result** — the winner, the rejected alternatives *with the rule that killed each*, and
 the residual risk. The owner audits **reasoning**, not spelling. He should be able to disagree with a
 conclusion, never to catch a missed checklist item.
+
+## New features go INTO the existing mockup, never a new screen (owner, 2026-09-30)
+
+> *"this mock up is pretty new outside of the design language my understanding is you would work features into the
+> existing design not just redesign everytime we have a new feature and subsequently forget some of the things we
+> spent time arranging and re working"*
+
+What happened: asked to show sure-vs-unsure member guesses, I published a fresh standalone page
+(`Vote Confidence Mockup`) instead of editing the owner-approved War Room (HB 1515,
+https://claude.ai/artifact/311hd8hv1eaQpSmntDQDVE). A new screen silently drops everything already arranged.
+**Rule:** read the live War Room artifact first, change only the sections the feature touches, republish to the SAME
+URL, and say exactly which lines changed. A separate page only when the owner asks for one.
 
 ## The one-line test
 > **Before presenting: "Which of our own written rules would catch this if the owner ran the checklist on it?"**

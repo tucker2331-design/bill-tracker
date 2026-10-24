@@ -1,0 +1,45 @@
+{
+ "baseline": "class rates by patron standing x chamber x session length (training years, Laplace)",
+ "code_sha256": {
+  "fate.py": "631adeed56042ea231cb5db43e0fbbd97502e77ceaf46f6e4f3a56738c5d64f6",
+  "gbm.py": "6112966ff67d61e9f3687dfdd48eafb5e237e5fce166f7dd9027790a84dec099"
+ },
+ "expected_from_validation_2025": {
+  "advance_auc": 0.809,
+  "log_loss_baseline": 1.0064,
+  "log_loss_model": 0.9621,
+  "quiet_death_auc": 0.801
+ },
+ "frozen_on": "2026-09-29",
+ "intervals": {
+  "B": 2000,
+  "method": "bootstrap over bills",
+  "seed": 2026
+ },
+ "metrics": [
+  "multiclass log loss (model, baseline, paired gain + bootstrap 95%)",
+  "top-class accuracy",
+  "AUC of P(ADVANCED)",
+  "AUC of P(CONTINUED or NEVER)",
+  "P(ADVANCED) calibration in bands <20 / 20-40 / 40-60 / 60-80 / 80+ : share that advanced"
+ ],
+ "model": {
+  "blend_with_baseline": 0.5,
+  "one_vs_rest_gbm": {
+   "depth": 3,
+   "lr": 0.05,
+   "rounds": 100
+  }
+ },
+ "note": "2026 is an even (long) session: continuances happen again (0% in 2021/2023/2025)",
+ "target": "fate at the first committee in the origin chamber, 6 classes ADVANCED,KILLED,CONTINUED,WITHDRAWN,MERGED,NEVER",
+ "test_year": 2026,
+ "train_years": [
+  2020,
+  2021,
+  2022,
+  2023,
+  2024,
+  2025
+ ]
+}

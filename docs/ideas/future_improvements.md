@@ -321,3 +321,12 @@ VOTE.CSV id set). Measured MORE precise (drops non-session Sunday false-positive
 path.** The only remaining verb lists are in OFFLINE standalone tools (their own copies, not
 imports): `tools/crossover_audit/diff_sheet1.py` and `tools/meeting_bug_triage/`. Migrating those
 is optional (offline, not the lobbyist/worker path).
+
+## [2026-09-29] Confidence rank on each member guess (owner idea)
+
+Owner: *"label what percentile of confidence they are at ... so we know where to spend more and less time."* Show each
+guess's rank among all calls ("among our surest 30%") with its measured hit rate, instead of three labels. 2026 locked
+test by decile: 99.5 / 98.8 / 98.4 / 96.0 / 95.4 / 91.8 / 86.3 / 74.5 / 63.7 / 54.3 in 100 ([[testing/first_vote]]).
+Caveats: (1) rank says how sure we are of the vote, NOT whether a call can change it — nothing measures movability;
+(2) cut points must be frozen from earlier years; (3) conflicts with the standing "labels only, no per-member
+percentages" rule and the owner's "UI is fine for now" — mockup + owner decision before any build.

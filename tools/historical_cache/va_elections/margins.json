@@ -1,0 +1,2896 @@
+{
+ "2019": {
+  "H": {
+   "Alex Askew": {
+    "district": 85,
+    "margin": 0.0343,
+    "party": "Democratic",
+    "uncontested": false
+   },
+   "Alfonso Lopez": {
+    "district": 49,
+    "margin": 0.6832,
+    "party": "Democratic",
+    "uncontested": false
+   },
+   "Amanda Batten": {
+    "district": 96,
+    "margin": 0.0613,
+    "party": "Republican",
+    "uncontested": false
+   },
+   "Barry Knight": {
+    "district": 81,
+    "margin": 0.0437,
+    "party": "Republican",
+    "uncontested": false
+   },
+   "Betsy Carr": {
+    "district": 69,
+    "margin": 1.0,
+    "party": "Democratic",
+    "uncontested": true
+   },
+   "Bobby Orrock": {
+    "district": 54,
+    "margin": 0.1603,
+    "party": "Republican",
+    "uncontested": false
+   },
+   "Buddy Fowler": {
+    "district": 55,
+    "margin": 0.2026,
+    "party": "Republican",
+    "uncontested": false
+   },
+   "Carrie Coyner": {
+    "district": 62,
+    "margin": 0.1039,
+    "party": "Republican",
+    "uncontested": false
+   },
+   "Charles Poindexter": {
+    "district": 9,
+    "margin": 1.0,
+    "party": "Republican",
+    "uncontested": true
+   },
+   "Charniele Herring": {
+    "district": 46,
+    "margin": 1.0,
+    "party": "Democratic",
+    "uncontested": true
+   },
+   "Chris Collins": {
+    "district": 29,
+    "margin": 1.0,
+    "party": "Republican",
+    "uncontested": true
+   },
+   "Chris Head": {
+    "district": 17,
+    "margin": 1.0,
+    "party": "Republican",
+    "uncontested": true
+   },
+   "Chris Hurst": {
+    "district": 12,
+    "margin": 0.0718,
+    "party": "Democratic",
+    "uncontested": false
+   },
+   "Chris Runion": {
+    "district": 25,
+    "margin": 0.1817,
+    "party": "Republican",
+    "uncontested": false
+   },
+   "Cia Price": {
+    "district": 95,
+    "margin": 1.0,
+    "party": "Democratic",
+    "uncontested": true
+   },
+   "Cliff Hayes Jr.": {
+    "district": 77,
+    "margin": 1.0,
+    "party": "Democratic",
+    "uncontested": true
+   },
+   "Clint Jenkins": {
+    "district": 76,
+    "margin": 0.1283,
+    "party": "Democratic",
+    "uncontested": false
+   },
+   "Dan Helmer": {
+    "district": 40,
+    "margin": 0.0479,
+    "party": "Democratic",
+    "uncontested": false
+   },
+   "Danica Roem": {
+    "district": 13,
+    "margin": 0.1206,
+    "party": "Democratic",
+    "uncontested": false
+   },
+   "Danny Marshall": {
+    "district": 14,
+    "margin": 0.2266,
+    "party": "Republican",
+    "uncontested": false
+   },
+   "Dave LaRock": {
+    "district": 33,
+    "margin": 0.1363,
+    "party": "Republican",
+    "uncontested": false
+   },
+   "David Bulova": {
+    "district": 37,
+    "margin": 1.0,
+    "party": "Democratic",
+    "uncontested": true
+   },
+   "David Reid": {
+    "district": 32,
+    "margin": 1.0,
+    "party": "Democratic",
+    "uncontested": true
+   },
+   "Dawn Adams": {
+    "district": 68,
+    "margin": 0.0933,
+    "party": "Democratic",
+    "uncontested": false
+   },
+   "Delores McQuinn": {
+    "district": 70,
+    "margin": 1.0,
+    "party": "Democratic",
+    "uncontested": true
+   },
+   "Don Scott": {
+    "district": 80,
+    "margin": 0.4282,
+    "party": "Democratic",
+    "uncontested": false
+   },
+   "Eileen Filler-Corn": {
+    "district": 41,
+    "margin": 0.5363,
+    "party": "Democratic",
+    "uncontested": false
+   },
+   "Elizabeth Guzm\u00e1n": {
+    "district": 31,
+    "margin": 0.0542,
+    "party": "Democratic",
+    "uncontested": false
+   },
+   "Emily Brewer": {
+    "district": 64,
+    "margin": 0.2037,
+    "party": "Republican",
+    "uncontested": false
+   },
+   "Glenn Davis": {
+    "district": 84,
+    "margin": 0.0242,
+    "party": "Republican",
+    "uncontested": false
+   },
+   "Hala Ayala": {
+    "district": 51,
+    "margin": 0.0925,
+    "party": "Democratic",
+    "uncontested": false
+   },
+   "Ibraheem Samirah": {
+    "district": 86,
+    "margin": 1.0,
+    "party": "Democratic",
+    "uncontested": true
+   },
+   "Israel O'Quinn": {
+    "district": 5,
+    "margin": 1.0,
+    "party": "Republican",
+    "uncontested": true
+   },
+   "James Edmunds": {
+    "district": 60,
+    "margin": 0.326,
+    "party": "Republican",
+    "uncontested": false
+   },
+   "Jason Miyares": {
+    "district": 82,
+    "margin": 0.1853,
+    "party": "Republican",
+    "uncontested": false
+   },
+   "Jay Jones": {
+    "district": 89,
+    "margin": 1.0,
+    "party": "Democratic",
+    "uncontested": true
+   },
+   "Jay Leftwich": {
+    "district": 78,
+    "margin": 1.0,
+    "party": "Republican",
+    "uncontested": true
+   },
+   "Jeff Bourne": {
+    "district": 71,
+    "margin": 0.7702,
+    "party": "Democratic",
+    "uncontested": false
+   },
+   "Jeff Campbell": {
+    "district": 6,
+    "margin": 0.5394,
+    "party": "Republican",
+    "uncontested": false
+   },
+   "Jeion Ward": {
+    "district": 92,
+    "margin": 1.0,
+    "party": "Democratic",
+    "uncontested": true
+   },
+   "Jennifer Carroll Foy": {
+    "district": 2,
+    "margin": 0.2199,
+    "party": "Democratic",
+    "uncontested": false
+   },
+   "John Avoli": {
+    "district": 20,
+    "margin": 0.1712,
+    "party": "Republican",
+    "uncontested": false
+   },
+   "John McGuire": {
+    "district": 56,
+    "margin": 0.2207,
+    "party": "Republican",
+    "uncontested": false
+   },
+   "Joseph Lindsey": {
+    "district": 90,
+    "margin": 1.0,
+    "party": "Democratic",
+    "uncontested": true
+   },
+   "Joseph McNamara": {
+    "district": 8,
+    "margin": 0.3289,
+    "party": "Republican",
+    "uncontested": false
+   },
+   "Joshua Cole": {
+    "district": 28,
+    "margin": 0.0406,
+    "party": "Democratic",
+    "uncontested": false
+   },
+   "Karrie Delaney": {
+    "district": 67,
+    "margin": 1.0,
+    "party": "Democratic",
+    "uncontested": true
+   },
+   "Kathleen Murphy": {
+    "district": 34,
+    "margin": 1.0,
+    "party": "Democratic",
+    "uncontested": true
+   },
+   "Kathy Byron": {
+    "district": 22,
+    "margin": 0.3809,
+    "party": "Republican",
+    "uncontested": false
+   },
+   "Kathy Tran": {
+    "district": 42,
+    "margin": 0.1945,
+    "party": "Democratic",
+    "uncontested": false
+   },
+   "Kaye Kory": {
+    "district": 38,
+    "margin": 1.0,
+    "party": "Democratic",
+    "uncontested": true
+   },
+   "Keith Hodges": {
+    "district": 98,
+    "margin": 0.3802,
+    "party": "Republican",
+    "uncontested": false
+   },
+   "Kelly Convirs\u2013Fowler": {
+    "district": 21,
+    "margin": 0.0927,
+    "party": "Democratic",
+    "uncontested": false
+   },
+   "Ken Plum": {
+    "district": 36,
+    "margin": 1.0,
+    "party": "Democratic",
+    "uncontested": true
+   },
+   "Kirk Cox": {
+    "district": 66,
+    "margin": 0.0464,
+    "party": "Republican",
+    "uncontested": false
+   },
+   "Lamont Bagby": {
+    "district": 74,
+    "margin": 1.0,
+    "party": "Democratic",
+    "uncontested": true
+   },
+   "Lashrecse Aird": {
+    "district": 63,
+    "margin": 0.1085,
+    "party": "Democratic",
+    "uncontested": false
+   },
+   "Lee Carter": {
+    "district": 50,
+    "margin": 0.0681,
+    "party": "Democratic",
+    "uncontested": false
+   },
+   "Lee Ware": {
+    "district": 65,
+    "margin": 0.3019,
+    "party": "Republican",
+    "uncontested": false
+   },
+   "Les Adams": {
+    "district": 16,
+    "margin": 0.4983,
+    "party": "Republican",
+    "uncontested": false
+   },
+   "Luke Torian": {
+    "district": 52,
+    "margin": 0.4661,
+    "party": "Democratic",
+    "uncontested": false
+   },
+   "Marcus Simon": {
+    "district": 53,
+    "margin": 1.0,
+    "party": "Democratic",
+    "uncontested": true
+   },
+   "Margaret Ransone": {
+    "district": 99,
+    "margin": 0.2495,
+    "party": "Republican",
+    "uncontested": false
+   },
+   "Mark Cole": {
+    "district": 88,
+    "margin": 0.1155,
+    "party": "Republican",
+    "uncontested": false
+   },
+   "Mark Keam": {
+    "district": 35,
+    "margin": 1.0,
+    "party": "Democratic",
+    "uncontested": true
+   },
+   "Mark Levine": {
+    "district": 45,
+    "margin": 1.0,
+    "party": "Democratic",
+    "uncontested": true
+   },
+   "Mark Sickles": {
+    "district": 43,
+    "margin": 0.5816,
+    "party": "Democratic",
+    "uncontested": false
+   },
+   "Martha Mugler": {
+    "district": 91,
+    "margin": 0.0974,
+    "party": "Democratic",
+    "uncontested": false
+   },
+   "Matt Fariss": {
+    "district": 59,
+    "margin": 0.2656,
+    "party": "Republican",
+    "uncontested": false
+   },
+   "Michael Mullin": {
+    "district": 93,
+    "margin": 0.1144,
+    "party": "Democratic",
+    "uncontested": false
+   },
+   "Michael Webert": {
+    "district": 18,
+    "margin": 0.2163,
+    "party": "Republican",
+    "uncontested": false
+   },
+   "Nancy Guy": {
+    "district": 83,
+    "margin": 0.0012,
+    "party": "Democratic",
+    "uncontested": false
+   },
+   "Nick Freitas": {
+    "district": 30,
+    "margin": 0.1433,
+    "party": "Republican",
+    "uncontested": false
+   },
+   "Nick Rush": {
+    "district": 7,
+    "margin": 0.3358,
+    "party": "Republican",
+    "uncontested": false
+   },
+   "Patrick Hope": {
+    "district": 47,
+    "margin": 1.0,
+    "party": "Democratic",
+    "uncontested": true
+   },
+   "Paul Krizek": {
+    "district": 44,
+    "margin": 0.4154,
+    "party": "Democratic",
+    "uncontested": false
+   },
+   "Rip Sullivan": {
+    "district": 48,
+    "margin": 1.0,
+    "party": "Democratic",
+    "uncontested": true
+   },
+   "Rob Bell": {
+    "district": 58,
+    "margin": 0.2504,
+    "party": "Republican",
+    "uncontested": false
+   },
+   "Robert Bloxom Jr.": {
+    "district": 100,
+    "margin": 0.0385,
+    "party": "Republican",
+    "uncontested": false
+   },
+   "Rodney Willett": {
+    "district": 73,
+    "margin": 0.0454,
+    "party": "Democratic",
+    "uncontested": false
+   },
+   "Ronnie Campbell": {
+    "district": 24,
+    "margin": 0.3343,
+    "party": "Republican",
+    "uncontested": false
+   },
+   "Roslyn Tyler": {
+    "district": 75,
+    "margin": 0.0209,
+    "party": "Democratic",
+    "uncontested": false
+   },
+   "Roxann Robinson": {
+    "district": 27,
+    "margin": 0.0062,
+    "party": "Republican",
+    "uncontested": false
+   },
+   "Sally Hudson": {
+    "district": 57,
+    "margin": 1.0,
+    "party": "Democratic",
+    "uncontested": true
+   },
+   "Sam Rasoul": {
+    "district": 11,
+    "margin": 1.0,
+    "party": "Democratic",
+    "uncontested": true
+   },
+   "Schuyler VanValkenburg": {
+    "district": 72,
+    "margin": 0.0663,
+    "party": "Democratic",
+    "uncontested": false
+   },
+   "Scott Wyatt": {
+    "district": 97,
+    "margin": 0.3542,
+    "party": "Republican",
+    "uncontested": false
+   },
+   "Shelly Simonds": {
+    "district": 94,
+    "margin": 0.1746,
+    "party": "Democratic",
+    "uncontested": false
+   },
+   "Steve Heretick": {
+    "district": 79,
+    "margin": 1.0,
+    "party": "Democratic",
+    "uncontested": true
+   },
+   "Suhas Subramanyam": {
+    "district": 87,
+    "margin": 0.2411,
+    "party": "Democratic",
+    "uncontested": false
+   },
+   "Terry Austin": {
+    "district": 19,
+    "margin": 1.0,
+    "party": "Republican",
+    "uncontested": true
+   },
+   "Terry Kilgore": {
+    "district": 1,
+    "margin": 1.0,
+    "party": "Republican",
+    "uncontested": true
+   },
+   "Todd Gilbert": {
+    "district": 15,
+    "margin": 0.4889,
+    "party": "Republican",
+    "uncontested": false
+   },
+   "Tommy Wright": {
+    "district": 61,
+    "margin": 0.3374,
+    "party": "Republican",
+    "uncontested": false
+   },
+   "Tony Wilt": {
+    "district": 26,
+    "margin": 0.0815,
+    "party": "Republican",
+    "uncontested": false
+   },
+   "Vivian Watts": {
+    "district": 39,
+    "margin": 0.3702,
+    "party": "Democratic",
+    "uncontested": false
+   },
+   "Wendell Walker": {
+    "district": 23,
+    "margin": 0.2801,
+    "party": "Republican",
+    "uncontested": false
+   },
+   "Wendy Gooditis": {
+    "district": 10,
+    "margin": 0.0469,
+    "party": "Democratic",
+    "uncontested": false
+   },
+   "Will Morefield": {
+    "district": 3,
+    "margin": 1.0,
+    "party": "Republican",
+    "uncontested": true
+   },
+   "William Wampler III": {
+    "district": 4,
+    "margin": 0.2594,
+    "party": "Republican",
+    "uncontested": false
+   }
+  },
+  "S": {
+   "Adam Ebbin": {
+    "district": 30,
+    "margin": 1.0,
+    "party": "Democratic",
+    "uncontested": true
+   },
+   "Amanda Chase": {
+    "district": 11,
+    "margin": 0.0928,
+    "party": "Republican",
+    "uncontested": false
+   },
+   "Barbara Favola": {
+    "district": 31,
+    "margin": 1.0,
+    "party": "Democratic",
+    "uncontested": true
+   },
+   "Ben Chafin": {
+    "district": 38,
+    "margin": 0.2845,
+    "party": "Republican",
+    "uncontested": false
+   },
+   "Bill DeSteph": {
+    "district": 8,
+    "margin": 0.0436,
+    "party": "Republican",
+    "uncontested": false
+   },
+   "Bill Stanley": {
+    "district": 20,
+    "margin": 0.4167,
+    "party": "Republican",
+    "uncontested": false
+   },
+   "Bryce Reeves": {
+    "district": 17,
+    "margin": 0.0348,
+    "party": "Republican",
+    "uncontested": false
+   },
+   "Chap Petersen": {
+    "district": 34,
+    "margin": 1.0,
+    "party": "Democratic",
+    "uncontested": true
+   },
+   "Creigh Deeds": {
+    "district": 25,
+    "margin": 0.3546,
+    "party": "Democratic",
+    "uncontested": false
+   },
+   "Dave Marsden": {
+    "district": 37,
+    "margin": 1.0,
+    "party": "Democratic",
+    "uncontested": true
+   },
+   "David Suetterlein": {
+    "district": 19,
+    "margin": 0.4296,
+    "party": "Republican",
+    "uncontested": false
+   },
+   "Dick Saslaw": {
+    "district": 35,
+    "margin": 1.0,
+    "party": "Democratic",
+    "uncontested": true
+   },
+   "Emmett Hanger": {
+    "district": 24,
+    "margin": 0.4291,
+    "party": "Republican",
+    "uncontested": false
+   },
+   "Frank Ruff": {
+    "district": 15,
+    "margin": 0.3675,
+    "party": "Republican",
+    "uncontested": false
+   },
+   "George Barker": {
+    "district": 39,
+    "margin": 0.3174,
+    "party": "Democratic",
+    "uncontested": false
+   },
+   "Ghazala Hashmi": {
+    "district": 10,
+    "margin": 0.0812,
+    "party": "Democratic",
+    "uncontested": false
+   },
+   "Janet Howell": {
+    "district": 32,
+    "margin": 0.4745,
+    "party": "Democratic",
+    "uncontested": false
+   },
+   "Jen Kiggans": {
+    "district": 7,
+    "margin": 0.0087,
+    "party": "Republican",
+    "uncontested": false
+   },
+   "Jennifer Boysko": {
+    "district": 33,
+    "margin": 0.2993,
+    "party": "Democratic",
+    "uncontested": false
+   },
+   "Jeremy McPike": {
+    "district": 29,
+    "margin": 1.0,
+    "party": "Democratic",
+    "uncontested": true
+   },
+   "Jill Vogel": {
+    "district": 27,
+    "margin": 0.2855,
+    "party": "Republican",
+    "uncontested": false
+   },
+   "Joe Morrissey": {
+    "district": 16,
+    "margin": 0.3031,
+    "party": "Democratic",
+    "uncontested": false
+   },
+   "John Bell": {
+    "district": 13,
+    "margin": 0.0862,
+    "party": "Democratic",
+    "uncontested": false
+   },
+   "John Cosgrove": {
+    "district": 14,
+    "margin": 0.2059,
+    "party": "Republican",
+    "uncontested": false
+   },
+   "Lionell Spruill": {
+    "district": 5,
+    "margin": 0.6059,
+    "party": "Democratic",
+    "uncontested": false
+   },
+   "Louise Lucas": {
+    "district": 18,
+    "margin": 1.0,
+    "party": "Democratic",
+    "uncontested": true
+   },
+   "Lynwood Lewis": {
+    "district": 6,
+    "margin": 0.195,
+    "party": "Democratic",
+    "uncontested": false
+   },
+   "Mamie Locke": {
+    "district": 2,
+    "margin": 1.0,
+    "party": "Democratic",
+    "uncontested": true
+   },
+   "Mark Lewis Jr.": {
+    "district": 9,
+    "margin": 1.0,
+    "party": "Libertarian Party (United States)",
+    "uncontested": true
+   },
+   "Mark Obenshain": {
+    "district": 26,
+    "margin": 0.2994,
+    "party": "Republican",
+    "uncontested": false
+   },
+   "Mark Peake": {
+    "district": 22,
+    "margin": 0.2567,
+    "party": "Republican",
+    "uncontested": false
+   },
+   "Monty Mason": {
+    "district": 1,
+    "margin": 1.0,
+    "party": "Democratic",
+    "uncontested": true
+   },
+   "Richard Stuart": {
+    "district": 28,
+    "margin": 0.1503,
+    "party": "Republican",
+    "uncontested": false
+   },
+   "Ryan McDougle": {
+    "district": 4,
+    "margin": 0.2632,
+    "party": "Republican",
+    "uncontested": false
+   },
+   "Scott Surovell": {
+    "district": 36,
+    "margin": 1.0,
+    "party": "Democratic",
+    "uncontested": true
+   },
+   "Siobhan Dunnavant": {
+    "district": 12,
+    "margin": 0.0171,
+    "party": "Republican",
+    "uncontested": false
+   },
+   "Stephen Newman": {
+    "district": 23,
+    "margin": 1.0,
+    "party": "Republican",
+    "uncontested": true
+   },
+   "Steven Nelson": {
+    "district": 21,
+    "margin": 1.0,
+    "party": "Independent (politician) ",
+    "uncontested": true
+   },
+   "Todd Pillion": {
+    "district": 40,
+    "margin": 0.5316,
+    "party": "Republican",
+    "uncontested": false
+   },
+   "Tommy Norment": {
+    "district": 3,
+    "margin": 0.238,
+    "party": "Republican",
+    "uncontested": false
+   }
+  }
+ },
+ "2021": {
+  "H": {
+   "A.C. Cordoza": {
+    "district": 91,
+    "margin": 0.0034,
+    "party": "Republican",
+    "uncontested": false
+   },
+   "Alfonso Lopez": {
+    "district": 49,
+    "margin": 0.5727,
+    "party": "Democratic",
+    "uncontested": false
+   },
+   "Amanda Batten": {
+    "district": 96,
+    "margin": 0.116,
+    "party": "Republican",
+    "uncontested": false
+   },
+   "Angelia Williams Graves": {
+    "district": 90,
+    "margin": 0.2921,
+    "party": "Democratic",
+    "uncontested": false
+   },
+   "Anne Ferrell Tata": {
+    "district": 82,
+    "margin": 0.188,
+    "party": "Republican",
+    "uncontested": false
+   },
+   "Barry Knight": {
+    "district": 81,
+    "margin": 0.1601,
+    "party": "Republican",
+    "uncontested": false
+   },
+   "Betsy Carr": {
+    "district": 69,
+    "margin": 0.7067,
+    "party": "Democratic",
+    "uncontested": false
+   },
+   "Bill Wiley": {
+    "district": 29,
+    "margin": 0.3319,
+    "party": "Republican",
+    "uncontested": false
+   },
+   "Bobby Orrock": {
+    "district": 54,
+    "margin": 0.2185,
+    "party": "Republican",
+    "uncontested": false
+   },
+   "Briana Sewell": {
+    "district": 51,
+    "margin": 0.0694,
+    "party": "Democratic",
+    "uncontested": false
+   },
+   "Buddy Fowler": {
+    "district": 55,
+    "margin": 0.2778,
+    "party": "Republican",
+    "uncontested": false
+   },
+   "Caitlin Coakley": {
+    "district": 65,
+    "margin": 1.0,
+    "party": "Democratic",
+    "uncontested": true
+   },
+   "Candi King": {
+    "district": 2,
+    "margin": 0.1467,
+    "party": "Democratic",
+    "uncontested": false
+   },
+   "Carrie Coyner": {
+    "district": 62,
+    "margin": 0.1304,
+    "party": "Republican",
+    "uncontested": false
+   },
+   "Charniele Herring": {
+    "district": 46,
+    "margin": 1.0,
+    "party": "Democratic",
+    "uncontested": true
+   },
+   "Chris Head": {
+    "district": 17,
+    "margin": 1.0,
+    "party": "Republican",
+    "uncontested": true
+   },
+   "Chris Runion": {
+    "district": 25,
+    "margin": 0.2455,
+    "party": "Republican",
+    "uncontested": false
+   },
+   "Cia Price": {
+    "district": 95,
+    "margin": 0.2728,
+    "party": "Democratic",
+    "uncontested": false
+   },
+   "Cliff Hayes Jr.": {
+    "district": 77,
+    "margin": 0.2253,
+    "party": "Democratic",
+    "uncontested": false
+   },
+   "Clint Jenkins": {
+    "district": 76,
+    "margin": 0.094,
+    "party": "Democratic",
+    "uncontested": false
+   },
+   "Dan Helmer": {
+    "district": 40,
+    "margin": 0.0539,
+    "party": "Democratic",
+    "uncontested": false
+   },
+   "Danica Roem": {
+    "district": 13,
+    "margin": 0.0863,
+    "party": "Democratic",
+    "uncontested": false
+   },
+   "Danny Marshall": {
+    "district": 14,
+    "margin": 0.3131,
+    "party": "Republican",
+    "uncontested": false
+   },
+   "Dave LaRock": {
+    "district": 33,
+    "margin": 0.1651,
+    "party": "Republican",
+    "uncontested": false
+   },
+   "David Bulova": {
+    "district": 37,
+    "margin": 0.3373,
+    "party": "Democratic",
+    "uncontested": false
+   },
+   "David Reid": {
+    "district": 32,
+    "margin": 0.1813,
+    "party": "Democratic",
+    "uncontested": false
+   },
+   "Dawn Adams": {
+    "district": 68,
+    "margin": 0.0633,
+    "party": "Democratic",
+    "uncontested": false
+   },
+   "Delores McQuinn": {
+    "district": 70,
+    "margin": 0.4414,
+    "party": "Democratic",
+    "uncontested": false
+   },
+   "Don Scott": {
+    "district": 80,
+    "margin": 0.3243,
+    "party": "Democratic",
+    "uncontested": false
+   },
+   "Eileen Filler-Corn": {
+    "district": 41,
+    "margin": 0.3054,
+    "party": "Democratic",
+    "uncontested": false
+   },
+   "Elizabeth Bennett-Parker": {
+    "district": 45,
+    "margin": 0.4776,
+    "party": "Democratic",
+    "uncontested": false
+   },
+   "Elizabeth Guzm\u00e1n": {
+    "district": 31,
+    "margin": 0.0424,
+    "party": "Democratic",
+    "uncontested": false
+   },
+   "Emily Brewer": {
+    "district": 64,
+    "margin": 0.3004,
+    "party": "Republican",
+    "uncontested": false
+   },
+   "Glenn Davis": {
+    "district": 84,
+    "margin": 0.1146,
+    "party": "Republican",
+    "uncontested": false
+   },
+   "Israel O'Quinn": {
+    "district": 5,
+    "margin": 1.0,
+    "party": "Republican",
+    "uncontested": true
+   },
+   "James Edmunds": {
+    "district": 60,
+    "margin": 1.0,
+    "party": "Republican",
+    "uncontested": true
+   },
+   "Jason Ballard": {
+    "district": 12,
+    "margin": 0.1055,
+    "party": "Republican",
+    "uncontested": false
+   },
+   "Jay Jones": {
+    "district": 89,
+    "margin": 0.6017,
+    "party": "Democratic",
+    "uncontested": false
+   },
+   "Jay Leftwich": {
+    "district": 78,
+    "margin": 0.3215,
+    "party": "Republican",
+    "uncontested": false
+   },
+   "Jeff Bourne": {
+    "district": 71,
+    "margin": 0.7156,
+    "party": "Democratic",
+    "uncontested": false
+   },
+   "Jeff Campbell": {
+    "district": 6,
+    "margin": 1.0,
+    "party": "Republican",
+    "uncontested": true
+   },
+   "Jeion Ward": {
+    "district": 92,
+    "margin": 0.4784,
+    "party": "Democratic",
+    "uncontested": false
+   },
+   "John Avoli": {
+    "district": 20,
+    "margin": 0.2752,
+    "party": "Republican",
+    "uncontested": false
+   },
+   "John McGuire": {
+    "district": 56,
+    "margin": 0.2343,
+    "party": "Republican",
+    "uncontested": false
+   },
+   "Joseph McNamara": {
+    "district": 8,
+    "margin": 0.4254,
+    "party": "Republican",
+    "uncontested": false
+   },
+   "Karen Greenhalgh": {
+    "district": 85,
+    "margin": 0.0045,
+    "party": "Republican",
+    "uncontested": false
+   },
+   "Karrie Delaney": {
+    "district": 67,
+    "margin": 0.2147,
+    "party": "Democratic",
+    "uncontested": false
+   },
+   "Kathleen Murphy": {
+    "district": 34,
+    "margin": 0.1427,
+    "party": "Democratic",
+    "uncontested": false
+   },
+   "Kathy Byron": {
+    "district": 22,
+    "margin": 0.4717,
+    "party": "Republican",
+    "uncontested": false
+   },
+   "Kathy Tran": {
+    "district": 42,
+    "margin": 0.2021,
+    "party": "Democratic",
+    "uncontested": false
+   },
+   "Kaye Kory": {
+    "district": 38,
+    "margin": 0.3816,
+    "party": "Democratic",
+    "uncontested": false
+   },
+   "Keith Hodges": {
+    "district": 98,
+    "margin": 0.4401,
+    "party": "Republican",
+    "uncontested": false
+   },
+   "Kelly Convirs-Fowler": {
+    "district": 21,
+    "margin": 0.0115,
+    "party": "Democratic",
+    "uncontested": false
+   },
+   "Ken Plum": {
+    "district": 36,
+    "margin": 0.436,
+    "party": "Democratic",
+    "uncontested": false
+   },
+   "Kim Taylor": {
+    "district": 63,
+    "margin": 0.0155,
+    "party": "Republican",
+    "uncontested": false
+   },
+   "Lamont Bagby": {
+    "district": 74,
+    "margin": 0.457,
+    "party": "Democratic",
+    "uncontested": false
+   },
+   "Les Adams": {
+    "district": 16,
+    "margin": 0.4006,
+    "party": "Republican",
+    "uncontested": false
+   },
+   "Luke Torian": {
+    "district": 52,
+    "margin": 0.4036,
+    "party": "Democratic",
+    "uncontested": false
+   },
+   "Marcus Simon": {
+    "district": 53,
+    "margin": 0.4417,
+    "party": "Democratic",
+    "uncontested": false
+   },
+   "Margaret Ransone": {
+    "district": 99,
+    "margin": 0.3088,
+    "party": "Republican",
+    "uncontested": false
+   },
+   "Marie March": {
+    "district": 7,
+    "margin": 0.3181,
+    "party": "Republican",
+    "uncontested": false
+   },
+   "Mark Keam": {
+    "district": 35,
+    "margin": 0.3764,
+    "party": "Democratic",
+    "uncontested": false
+   },
+   "Mark Sickles": {
+    "district": 43,
+    "margin": 0.4052,
+    "party": "Democratic",
+    "uncontested": false
+   },
+   "Matt Fariss": {
+    "district": 59,
+    "margin": 0.3239,
+    "party": "Republican",
+    "uncontested": false
+   },
+   "Michael Mullin": {
+    "district": 93,
+    "margin": 0.0327,
+    "party": "Democratic",
+    "uncontested": false
+   },
+   "Michael Webert": {
+    "district": 18,
+    "margin": 0.3203,
+    "party": "Republican",
+    "uncontested": false
+   },
+   "Michelle Maldonado": {
+    "district": 50,
+    "margin": 0.0962,
+    "party": "Democratic",
+    "uncontested": false
+   },
+   "Mike Cherry": {
+    "district": 66,
+    "margin": 0.0492,
+    "party": "Republican",
+    "uncontested": false
+   },
+   "Nadarius Clark": {
+    "district": 79,
+    "margin": 0.1249,
+    "party": "Democratic",
+    "uncontested": false
+   },
+   "Nick Freitas": {
+    "district": 30,
+    "margin": 0.3102,
+    "party": "Republican",
+    "uncontested": false
+   },
+   "Otto Wachsmann": {
+    "district": 75,
+    "margin": 0.0518,
+    "party": "Republican",
+    "uncontested": false
+   },
+   "Patrick Hope": {
+    "district": 47,
+    "margin": 0.5685,
+    "party": "Democratic",
+    "uncontested": false
+   },
+   "Paul Krizek": {
+    "district": 44,
+    "margin": 0.3566,
+    "party": "Democratic",
+    "uncontested": false
+   },
+   "Phillip Scott": {
+    "district": 88,
+    "margin": 0.1663,
+    "party": "Republican",
+    "uncontested": false
+   },
+   "Rip Sullivan": {
+    "district": 48,
+    "margin": 0.446,
+    "party": "Democratic",
+    "uncontested": false
+   },
+   "Rob Bell": {
+    "district": 58,
+    "margin": 0.2654,
+    "party": "Republican",
+    "uncontested": false
+   },
+   "Robert Bloxom Jr.": {
+    "district": 100,
+    "margin": 0.1314,
+    "party": "Republican",
+    "uncontested": false
+   },
+   "Rodney Willett": {
+    "district": 73,
+    "margin": 0.0504,
+    "party": "Democratic",
+    "uncontested": false
+   },
+   "Ronnie Campbell": {
+    "district": 24,
+    "margin": 0.4647,
+    "party": "Republican",
+    "uncontested": false
+   },
+   "Roxann Robinson": {
+    "district": 27,
+    "margin": 0.0363,
+    "party": "Republican",
+    "uncontested": false
+   },
+   "Sally Hudson": {
+    "district": 57,
+    "margin": 0.573,
+    "party": "Democratic",
+    "uncontested": false
+   },
+   "Sam Rasoul": {
+    "district": 11,
+    "margin": 0.292,
+    "party": "Democratic",
+    "uncontested": false
+   },
+   "Schuyler VanValkenburg": {
+    "district": 72,
+    "margin": 0.0615,
+    "party": "Democratic",
+    "uncontested": false
+   },
+   "Scott Wyatt": {
+    "district": 97,
+    "margin": 0.4523,
+    "party": "Republican",
+    "uncontested": false
+   },
+   "Shelly Simonds": {
+    "district": 94,
+    "margin": 0.1223,
+    "party": "Democratic",
+    "uncontested": false
+   },
+   "Suhas Subramanyam": {
+    "district": 87,
+    "margin": 0.17,
+    "party": "Democratic",
+    "uncontested": false
+   },
+   "Tara Durant": {
+    "district": 28,
+    "margin": 0.0202,
+    "party": "Republican",
+    "uncontested": false
+   },
+   "Terry Austin": {
+    "district": 19,
+    "margin": 0.5873,
+    "party": "Republican",
+    "uncontested": false
+   },
+   "Terry Kilgore": {
+    "district": 1,
+    "margin": 1.0,
+    "party": "Republican",
+    "uncontested": true
+   },
+   "Tim Anderson": {
+    "district": 83,
+    "margin": 0.0235,
+    "party": "Republican",
+    "uncontested": false
+   },
+   "Todd Gilbert": {
+    "district": 15,
+    "margin": 0.5557,
+    "party": "Republican",
+    "uncontested": false
+   },
+   "Tommy Wright": {
+    "district": 61,
+    "margin": 0.372,
+    "party": "Republican",
+    "uncontested": false
+   },
+   "Tony Wilt": {
+    "district": 26,
+    "margin": 0.1868,
+    "party": "Republican",
+    "uncontested": false
+   },
+   "Vivian Watts": {
+    "district": 39,
+    "margin": 0.3322,
+    "party": "Democratic",
+    "uncontested": false
+   },
+   "Wendell Walker": {
+    "district": 23,
+    "margin": 0.334,
+    "party": "Republican",
+    "uncontested": false
+   },
+   "Wendy Gooditis": {
+    "district": 10,
+    "margin": 0.0197,
+    "party": "Democratic",
+    "uncontested": false
+   },
+   "Will Morefield": {
+    "district": 3,
+    "margin": 1.0,
+    "party": "Republican",
+    "uncontested": true
+   },
+   "Will Wampler": {
+    "district": 4,
+    "margin": 1.0,
+    "party": "Republican",
+    "uncontested": true
+   },
+   "Wren Williams": {
+    "district": 9,
+    "margin": 0.5369,
+    "party": "Republican",
+    "uncontested": false
+   }
+  }
+ },
+ "2023": {
+  "H": {
+   "A.C. Cordoza": {
+    "district": 86,
+    "margin": 0.1289,
+    "party": "Republican",
+    "uncontested": false
+   },
+   "Adele McClure": {
+    "district": 2,
+    "margin": 1.0,
+    "party": "Democratic",
+    "uncontested": true
+   },
+   "Alex Askew": {
+    "district": 95,
+    "margin": 1.0,
+    "party": "Democratic",
+    "uncontested": true
+   },
+   "Alfonso Lopez": {
+    "district": 3,
+    "margin": 0.6534,
+    "party": "Democratic",
+    "uncontested": false
+   },
+   "Amanda Batten": {
+    "district": 71,
+    "margin": 0.0187,
+    "party": "Republican",
+    "uncontested": false
+   },
+   "Amy Laufer": {
+    "district": 55,
+    "margin": 0.229,
+    "party": "Democratic",
+    "uncontested": false
+   },
+   "Anne Ferrell Tata": {
+    "district": 99,
+    "margin": 0.1468,
+    "party": "Republican",
+    "uncontested": false
+   },
+   "Atoosa Reaser": {
+    "district": 27,
+    "margin": 0.1496,
+    "party": "Democratic",
+    "uncontested": false
+   },
+   "Barry Knight": {
+    "district": 98,
+    "margin": 1.0,
+    "party": "Republican",
+    "uncontested": true
+   },
+   "Baxter Ennis": {
+    "district": 89,
+    "margin": 0.018,
+    "party": "Republican",
+    "uncontested": false
+   },
+   "Betsy Carr": {
+    "district": 78,
+    "margin": 1.0,
+    "party": "Democratic",
+    "uncontested": true
+   },
+   "Bill Wiley": {
+    "district": 32,
+    "margin": 0.2191,
+    "party": "Republican",
+    "uncontested": false
+   },
+   "Bobby Orrock": {
+    "district": 66,
+    "margin": 0.1151,
+    "party": "Republican",
+    "uncontested": false
+   },
+   "Bonita Anthony": {
+    "district": 92,
+    "margin": 0.5618,
+    "party": "Democratic",
+    "uncontested": false
+   },
+   "Briana Sewell": {
+    "district": 25,
+    "margin": 0.2373,
+    "party": "Democratic",
+    "uncontested": false
+   },
+   "Buddy Fowler": {
+    "district": 59,
+    "margin": 0.1652,
+    "party": "Republican",
+    "uncontested": false
+   },
+   "Candi King": {
+    "district": 23,
+    "margin": 0.3642,
+    "party": "Democratic",
+    "uncontested": false
+   },
+   "Carrie Coyner": {
+    "district": 75,
+    "margin": 0.058,
+    "party": "Republican",
+    "uncontested": false
+   },
+   "Chad Green": {
+    "district": 69,
+    "margin": 1.0,
+    "party": "Republican",
+    "uncontested": true
+   },
+   "Charniele Herring": {
+    "district": 4,
+    "margin": 1.0,
+    "party": "Democratic",
+    "uncontested": true
+   },
+   "Chris Obenshain": {
+    "district": 41,
+    "margin": 0.0074,
+    "party": "Republican",
+    "uncontested": false
+   },
+   "Chris Runion": {
+    "district": 35,
+    "margin": 1.0,
+    "party": "Republican",
+    "uncontested": true
+   },
+   "Cia Price": {
+    "district": 85,
+    "margin": 1.0,
+    "party": "Democratic",
+    "uncontested": true
+   },
+   "Cliff Hayes Jr.": {
+    "district": 91,
+    "margin": 0.4117,
+    "party": "Democratic",
+    "uncontested": false
+   },
+   "Dan Helmer": {
+    "district": 10,
+    "margin": 0.1923,
+    "party": "Democratic",
+    "uncontested": false
+   },
+   "Danny Marshall": {
+    "district": 49,
+    "margin": 1.0,
+    "party": "Republican",
+    "uncontested": true
+   },
+   "David Bulova": {
+    "district": 11,
+    "margin": 0.4168,
+    "party": "Democratic",
+    "uncontested": false
+   },
+   "David Owen": {
+    "district": 57,
+    "margin": 0.02,
+    "party": "Republican",
+    "uncontested": false
+   },
+   "David Reid": {
+    "district": 28,
+    "margin": 0.2282,
+    "party": "Democratic",
+    "uncontested": false
+   },
+   "Debra Gardner": {
+    "district": 76,
+    "margin": 0.2797,
+    "party": "Democratic",
+    "uncontested": false
+   },
+   "Delores McQuinn": {
+    "district": 81,
+    "margin": 1.0,
+    "party": "Democratic",
+    "uncontested": true
+   },
+   "Delores Riley Oates": {
+    "district": 31,
+    "margin": 0.2523,
+    "party": "Republican",
+    "uncontested": false
+   },
+   "Destiny Levere Bolling": {
+    "district": 80,
+    "margin": 1.0,
+    "party": "Democratic",
+    "uncontested": true
+   },
+   "Don Scott": {
+    "district": 88,
+    "margin": 0.3315,
+    "party": "Democratic",
+    "uncontested": false
+   },
+   "Elizabeth Bennett-Parker": {
+    "district": 5,
+    "margin": 1.0,
+    "party": "Democratic",
+    "uncontested": true
+   },
+   "Ellen Campbell": {
+    "district": 36,
+    "margin": 0.2027,
+    "party": "Republican",
+    "uncontested": false
+   },
+   "Eric Zehr": {
+    "district": 51,
+    "margin": 0.5139,
+    "party": "Republican",
+    "uncontested": false
+   },
+   "Geary Higgins": {
+    "district": 30,
+    "margin": 0.0642,
+    "party": "Republican",
+    "uncontested": false
+   },
+   "Hillary Pugh Kent": {
+    "district": 67,
+    "margin": 0.3172,
+    "party": "Republican",
+    "uncontested": false
+   },
+   "Holly Seibold": {
+    "district": 12,
+    "margin": 1.0,
+    "party": "Democratic",
+    "uncontested": true
+   },
+   "Ian Lovejoy": {
+    "district": 22,
+    "margin": 0.0462,
+    "party": "Republican",
+    "uncontested": false
+   },
+   "Irene Shin": {
+    "district": 8,
+    "margin": 0.3579,
+    "party": "Democratic",
+    "uncontested": false
+   },
+   "Israel O'Quinn": {
+    "district": 44,
+    "margin": 1.0,
+    "party": "Republican",
+    "uncontested": true
+   },
+   "Jackie Glass": {
+    "district": 93,
+    "margin": 0.5222,
+    "party": "Democratic",
+    "uncontested": false
+   },
+   "Jason Ballard": {
+    "district": 42,
+    "margin": 1.0,
+    "party": "Republican",
+    "uncontested": true
+   },
+   "Jay Leftwich": {
+    "district": 90,
+    "margin": 0.2628,
+    "party": "Republican",
+    "uncontested": false
+   },
+   "Jed Arnold": {
+    "district": 46,
+    "margin": 1.0,
+    "party": "Republican",
+    "uncontested": true
+   },
+   "Jeion Ward": {
+    "district": 87,
+    "margin": 0.5562,
+    "party": "Democratic",
+    "uncontested": false
+   },
+   "Joe McNamara": {
+    "district": 40,
+    "margin": 0.1966,
+    "party": "Republican",
+    "uncontested": false
+   },
+   "Josh Thomas": {
+    "district": 21,
+    "margin": 0.0363,
+    "party": "Democratic",
+    "uncontested": false
+   },
+   "Joshua Cole": {
+    "district": 65,
+    "margin": 0.0602,
+    "party": "Democratic",
+    "uncontested": false
+   },
+   "Kannan Srinivasan": {
+    "district": 26,
+    "margin": 0.2215,
+    "party": "Democratic",
+    "uncontested": false
+   },
+   "Karen Keys-Gamarra": {
+    "district": 7,
+    "margin": 0.4694,
+    "party": "Democratic",
+    "uncontested": false
+   },
+   "Karrie Delaney": {
+    "district": 9,
+    "margin": 0.2256,
+    "party": "Democratic",
+    "uncontested": false
+   },
+   "Kathy Tran": {
+    "district": 18,
+    "margin": 0.3165,
+    "party": "Democratic",
+    "uncontested": false
+   },
+   "Katrina Callsen": {
+    "district": 54,
+    "margin": 1.0,
+    "party": "Democratic",
+    "uncontested": true
+   },
+   "Keith Hodges": {
+    "district": 68,
+    "margin": 1.0,
+    "party": "Republican",
+    "uncontested": true
+   },
+   "Kelly Convirs-Fowler": {
+    "district": 96,
+    "margin": 0.1402,
+    "party": "Democratic",
+    "uncontested": false
+   },
+   "Kim Taylor": {
+    "district": 82,
+    "margin": 0.0027,
+    "party": "Republican",
+    "uncontested": false
+   },
+   "Laura Jane Cohen": {
+    "district": 15,
+    "margin": 0.2403,
+    "party": "Democratic",
+    "uncontested": false
+   },
+   "Lee Ware": {
+    "district": 72,
+    "margin": 0.3637,
+    "party": "Republican",
+    "uncontested": false
+   },
+   "Les Adams": {
+    "district": 48,
+    "margin": 1.0,
+    "party": "Republican",
+    "uncontested": true
+   },
+   "Luke Torian": {
+    "district": 24,
+    "margin": 1.0,
+    "party": "Democratic",
+    "uncontested": true
+   },
+   "Marcus Simon": {
+    "district": 13,
+    "margin": 0.5903,
+    "party": "Democratic",
+    "uncontested": false
+   },
+   "Mark Earley Jr.": {
+    "district": 73,
+    "margin": 0.0903,
+    "party": "Republican",
+    "uncontested": false
+   },
+   "Mark Sickles": {
+    "district": 17,
+    "margin": 1.0,
+    "party": "Democratic",
+    "uncontested": true
+   },
+   "Marty Martinez": {
+    "district": 29,
+    "margin": 0.1513,
+    "party": "Democratic",
+    "uncontested": false
+   },
+   "Michael Feggans": {
+    "district": 97,
+    "margin": 0.0485,
+    "party": "Democratic",
+    "uncontested": false
+   },
+   "Michael Jones": {
+    "district": 77,
+    "margin": 1.0,
+    "party": "Democratic",
+    "uncontested": true
+   },
+   "Michael Webert": {
+    "district": 61,
+    "margin": 0.306,
+    "party": "Republican",
+    "uncontested": false
+   },
+   "Michelle Maldonado": {
+    "district": 20,
+    "margin": 0.1351,
+    "party": "Democratic",
+    "uncontested": false
+   },
+   "Mike Cherry": {
+    "district": 74,
+    "margin": 1.0,
+    "party": "Republican",
+    "uncontested": true
+   },
+   "Nadarius Clark": {
+    "district": 84,
+    "margin": 0.0619,
+    "party": "Democratic",
+    "uncontested": false
+   },
+   "Nick Freitas": {
+    "district": 62,
+    "margin": 0.2346,
+    "party": "Republican",
+    "uncontested": false
+   },
+   "Otto Wachsmann": {
+    "district": 83,
+    "margin": 0.1694,
+    "party": "Republican",
+    "uncontested": false
+   },
+   "Patrick Hope": {
+    "district": 1,
+    "margin": 1.0,
+    "party": "Democratic",
+    "uncontested": true
+   },
+   "Paul Krizek": {
+    "district": 16,
+    "margin": 1.0,
+    "party": "Democratic",
+    "uncontested": true
+   },
+   "Paul Milde": {
+    "district": 64,
+    "margin": 0.0907,
+    "party": "Republican",
+    "uncontested": false
+   },
+   "Phil Hernandez": {
+    "district": 94,
+    "margin": 0.1163,
+    "party": "Democratic",
+    "uncontested": false
+   },
+   "Philip Scott": {
+    "district": 63,
+    "margin": 1.0,
+    "party": "Republican",
+    "uncontested": true
+   },
+   "Rae Cousins": {
+    "district": 79,
+    "margin": 1.0,
+    "party": "Democratic",
+    "uncontested": true
+   },
+   "Rip Sullivan": {
+    "district": 6,
+    "margin": 0.2417,
+    "party": "Democratic",
+    "uncontested": false
+   },
+   "Robert Bloxom Jr.": {
+    "district": 100,
+    "margin": 0.1943,
+    "party": "Republican",
+    "uncontested": false
+   },
+   "Rodney Willett": {
+    "district": 58,
+    "margin": 0.0905,
+    "party": "Democratic",
+    "uncontested": false
+   },
+   "Rozia Henson": {
+    "district": 19,
+    "margin": 1.0,
+    "party": "Democratic",
+    "uncontested": true
+   },
+   "Sam Rasoul": {
+    "district": 38,
+    "margin": 1.0,
+    "party": "Democratic",
+    "uncontested": true
+   },
+   "Scott Wyatt": {
+    "district": 60,
+    "margin": 0.3504,
+    "party": "Republican",
+    "uncontested": false
+   },
+   "Shelly Simonds": {
+    "district": 70,
+    "margin": 0.1726,
+    "party": "Democratic",
+    "uncontested": false
+   },
+   "Terry Austin": {
+    "district": 37,
+    "margin": 0.3875,
+    "party": "Republican",
+    "uncontested": false
+   },
+   "Terry Kilgore": {
+    "district": 45,
+    "margin": 1.0,
+    "party": "Republican",
+    "uncontested": true
+   },
+   "Tim Griffin": {
+    "district": 53,
+    "margin": 0.4165,
+    "party": "Republican",
+    "uncontested": false
+   },
+   "Todd Gilbert": {
+    "district": 33,
+    "margin": 0.5566,
+    "party": "Republican",
+    "uncontested": false
+   },
+   "Tom Garrett": {
+    "district": 56,
+    "margin": 1.0,
+    "party": "Republican",
+    "uncontested": true
+   },
+   "Tommy Wright": {
+    "district": 50,
+    "margin": 0.3208,
+    "party": "Republican",
+    "uncontested": false
+   },
+   "Tony Wilt": {
+    "district": 34,
+    "margin": 0.1385,
+    "party": "Republican",
+    "uncontested": false
+   },
+   "Vivian Watts": {
+    "district": 14,
+    "margin": 0.3922,
+    "party": "Democratic",
+    "uncontested": false
+   },
+   "Wendell Walker": {
+    "district": 52,
+    "margin": 0.0902,
+    "party": "Republican",
+    "uncontested": false
+   },
+   "Will Davis": {
+    "district": 39,
+    "margin": 1.0,
+    "party": "Republican",
+    "uncontested": true
+   },
+   "Will Morefield": {
+    "district": 43,
+    "margin": 0.7111,
+    "party": "Republican",
+    "uncontested": false
+   },
+   "Wren Williams": {
+    "district": 47,
+    "margin": 0.5261,
+    "party": "Republican",
+    "uncontested": false
+   }
+  },
+  "S": {
+   "Aaron Rouse": {
+    "district": 22,
+    "margin": 0.1036,
+    "party": "Democratic",
+    "uncontested": false
+   },
+   "Adam Ebbin": {
+    "district": 39,
+    "margin": 0.5712,
+    "party": "Democratic",
+    "uncontested": false
+   },
+   "Angelia Williams Graves": {
+    "district": 21,
+    "margin": 0.5602,
+    "party": "Democratic",
+    "uncontested": false
+   },
+   "Barbara Favola": {
+    "district": 40,
+    "margin": 0.6234,
+    "party": "Democratic",
+    "uncontested": false
+   },
+   "Bill DeSteph": {
+    "district": 20,
+    "margin": 0.1402,
+    "party": "Republican",
+    "uncontested": false
+   },
+   "Bill Stanley": {
+    "district": 7,
+    "margin": 0.5156,
+    "party": "Republican",
+    "uncontested": false
+   },
+   "Bryce Reeves": {
+    "district": 28,
+    "margin": 0.2844,
+    "party": "Republican",
+    "uncontested": false
+   },
+   "Chris Head": {
+    "district": 3,
+    "margin": 0.3193,
+    "party": "Republican",
+    "uncontested": false
+   },
+   "Christie Craig": {
+    "district": 19,
+    "margin": 0.1654,
+    "party": "Republican",
+    "uncontested": false
+   },
+   "Creigh Deeds": {
+    "district": 11,
+    "margin": 0.3139,
+    "party": "Democratic",
+    "uncontested": false
+   },
+   "Danica Roem": {
+    "district": 30,
+    "margin": 0.0385,
+    "party": "Democratic",
+    "uncontested": false
+   },
+   "Danny Diggs": {
+    "district": 24,
+    "margin": 0.0108,
+    "party": "Republican",
+    "uncontested": false
+   },
+   "Dave Marsden": {
+    "district": 35,
+    "margin": 0.3573,
+    "party": "Democratic",
+    "uncontested": false
+   },
+   "Dave Suetterlein": {
+    "district": 4,
+    "margin": 0.0667,
+    "party": "Republican",
+    "uncontested": false
+   },
+   "Emily Brewer": {
+    "district": 17,
+    "margin": 0.0484,
+    "party": "Republican",
+    "uncontested": false
+   },
+   "Frank Ruff": {
+    "district": 9,
+    "margin": 1.0,
+    "party": "Republican",
+    "uncontested": true
+   },
+   "Ghazala Hashmi": {
+    "district": 15,
+    "margin": 0.2479,
+    "party": "Democratic",
+    "uncontested": false
+   },
+   "Glen Sturtevant": {
+    "district": 12,
+    "margin": 0.0973,
+    "party": "Republican",
+    "uncontested": false
+   },
+   "Jennifer Boysko": {
+    "district": 38,
+    "margin": 0.3731,
+    "party": "Democratic",
+    "uncontested": false
+   },
+   "Jennifer Carroll Foy": {
+    "district": 33,
+    "margin": 0.2607,
+    "party": "Democratic",
+    "uncontested": false
+   },
+   "Jeremy McPike": {
+    "district": 29,
+    "margin": 0.1289,
+    "party": "Democratic",
+    "uncontested": false
+   },
+   "John McGuire": {
+    "district": 10,
+    "margin": 1.0,
+    "party": "Republican",
+    "uncontested": true
+   },
+   "Lamont Bagby": {
+    "district": 14,
+    "margin": 1.0,
+    "party": "Democratic",
+    "uncontested": true
+   },
+   "Lashrecse Aird": {
+    "district": 13,
+    "margin": 0.1984,
+    "party": "Democratic",
+    "uncontested": false
+   },
+   "Louise Lucas": {
+    "district": 18,
+    "margin": 0.1823,
+    "party": "Democratic",
+    "uncontested": false
+   },
+   "Mamie Locke": {
+    "district": 23,
+    "margin": 1.0,
+    "party": "Democratic",
+    "uncontested": true
+   },
+   "Mark Obenshain": {
+    "district": 2,
+    "margin": 0.4081,
+    "party": "Republican",
+    "uncontested": false
+   },
+   "Mark Peake": {
+    "district": 8,
+    "margin": 0.4035,
+    "party": "Republican",
+    "uncontested": false
+   },
+   "Richard Stuart": {
+    "district": 25,
+    "margin": 0.2374,
+    "party": "Republican",
+    "uncontested": false
+   },
+   "Russet Perry": {
+    "district": 31,
+    "margin": 0.0572,
+    "party": "Democratic",
+    "uncontested": false
+   },
+   "Ryan McDougle": {
+    "district": 26,
+    "margin": 0.2436,
+    "party": "Republican",
+    "uncontested": false
+   },
+   "Saddam Azlan Salim": {
+    "district": 37,
+    "margin": 0.3793,
+    "party": "Democratic",
+    "uncontested": false
+   },
+   "Schuyler VanValkenburg": {
+    "district": 16,
+    "margin": 0.0954,
+    "party": "Democratic",
+    "uncontested": false
+   },
+   "Scott Surovell": {
+    "district": 34,
+    "margin": 0.3989,
+    "party": "Democratic",
+    "uncontested": false
+   },
+   "Stella Pekarsky": {
+    "district": 36,
+    "margin": 0.2214,
+    "party": "Democratic",
+    "uncontested": false
+   },
+   "Suhas Subramanyam": {
+    "district": 32,
+    "margin": 0.217,
+    "party": "Democratic",
+    "uncontested": false
+   },
+   "Tara Durant": {
+    "district": 27,
+    "margin": 0.0178,
+    "party": "Republican",
+    "uncontested": false
+   },
+   "Timmy French": {
+    "district": 1,
+    "margin": 0.2742,
+    "party": "Republican",
+    "uncontested": false
+   },
+   "Todd Pillion": {
+    "district": 6,
+    "margin": 1.0,
+    "party": "Republican",
+    "uncontested": true
+   },
+   "Travis Hackworth": {
+    "district": 5,
+    "margin": 0.3375,
+    "party": "Republican",
+    "uncontested": false
+   }
+  }
+ },
+ "2025": {
+  "H": {
+   "Adele McClure": {
+    "district": 2,
+    "margin": 0.6323,
+    "party": "Democratic",
+    "uncontested": false
+   },
+   "Alex Askew": {
+    "district": 95,
+    "margin": 1.0,
+    "party": "Democratic",
+    "uncontested": true
+   },
+   "Alfonso Lopez": {
+    "district": 3,
+    "margin": 1.0,
+    "party": "Democratic",
+    "uncontested": true
+   },
+   "Amy Laufer": {
+    "district": 55,
+    "margin": 1.0,
+    "party": "Democratic",
+    "uncontested": true
+   },
+   "Anne Ferrell Tata": {
+    "district": 99,
+    "margin": 0.0792,
+    "party": "Republican",
+    "uncontested": false
+   },
+   "Atoosa Reaser": {
+    "district": 23,
+    "margin": 0.3119,
+    "party": "Democratic",
+    "uncontested": false
+   },
+   "Barry Knight": {
+    "district": 98,
+    "margin": 0.1346,
+    "party": "Republican",
+    "uncontested": false
+   },
+   "Betsy Carr": {
+    "district": 78,
+    "margin": 0.6155,
+    "party": "Democratic",
+    "uncontested": false
+   },
+   "Bill Wiley": {
+    "district": 32,
+    "margin": 0.1611,
+    "party": "Republican",
+    "uncontested": false
+   },
+   "Bonita Anthony": {
+    "district": 92,
+    "margin": 0.6119,
+    "party": "Democratic",
+    "uncontested": false
+   },
+   "Briana Sewell": {
+    "district": 25,
+    "margin": 1.0,
+    "party": "Democratic",
+    "uncontested": true
+   },
+   "Buddy Fowler": {
+    "district": 59,
+    "margin": 0.1383,
+    "party": "Republican",
+    "uncontested": false
+   },
+   "Candi King": {
+    "district": 23,
+    "margin": 0.5267,
+    "party": "Democratic",
+    "uncontested": false
+   },
+   "Charniele Herring": {
+    "district": 4,
+    "margin": 1.0,
+    "party": "Democratic",
+    "uncontested": true
+   },
+   "Chris Runion": {
+    "district": 35,
+    "margin": 0.4505,
+    "party": "Republican",
+    "uncontested": false
+   },
+   "Cia Price": {
+    "district": 85,
+    "margin": 1.0,
+    "party": "Democratic",
+    "uncontested": true
+   },
+   "Cliff Hayes Jr.": {
+    "district": 91,
+    "margin": 1.0,
+    "party": "Democratic",
+    "uncontested": true
+   },
+   "Dan Helmer": {
+    "district": 10,
+    "margin": 0.3505,
+    "party": "Democratic",
+    "uncontested": false
+   },
+   "David A. Reid": {
+    "district": 28,
+    "margin": 0.3479,
+    "party": "Democratic",
+    "uncontested": false
+   },
+   "David Bulova": {
+    "district": 11,
+    "margin": 0.4721,
+    "party": "Democratic",
+    "uncontested": false
+   },
+   "Debra Gardner": {
+    "district": 76,
+    "margin": 0.3756,
+    "party": "Democratic",
+    "uncontested": false
+   },
+   "Delores McQuinn": {
+    "district": 81,
+    "margin": 1.0,
+    "party": "Democratic",
+    "uncontested": true
+   },
+   "Delores Riley Oates": {
+    "district": 31,
+    "margin": 0.1969,
+    "party": "Republican",
+    "uncontested": false
+   },
+   "Destiny LeVere Bolling": {
+    "district": 80,
+    "margin": 1.0,
+    "party": "Democratic",
+    "uncontested": true
+   },
+   "Don Scott": {
+    "district": 88,
+    "margin": 1.0,
+    "party": "Democratic",
+    "uncontested": true
+   },
+   "Elizabeth Bennett-Parker": {
+    "district": 5,
+    "margin": 1.0,
+    "party": "Democratic",
+    "uncontested": true
+   },
+   "Elizabeth Guzm\u00e1n": {
+    "district": 22,
+    "margin": 0.0995,
+    "party": "Democratic",
+    "uncontested": false
+   },
+   "Ellen Campbell": {
+    "district": 36,
+    "margin": 0.1541,
+    "party": "Republican",
+    "uncontested": false
+   },
+   "Eric Philips": {
+    "district": 48,
+    "margin": 0.2909,
+    "party": "Republican",
+    "uncontested": false
+   },
+   "Eric Zehr": {
+    "district": 51,
+    "margin": 0.5098,
+    "party": "Republican",
+    "uncontested": false
+   },
+   "Hillary Pugh Kent": {
+    "district": 67,
+    "margin": 0.2429,
+    "party": "Republican",
+    "uncontested": false
+   },
+   "Holly Seibold": {
+    "district": 12,
+    "margin": 0.5342,
+    "party": "Democratic",
+    "uncontested": false
+   },
+   "Irene Shin": {
+    "district": 8,
+    "margin": 0.4833,
+    "party": "Democratic",
+    "uncontested": false
+   },
+   "Israel O'Quinn": {
+    "district": 44,
+    "margin": 0.5405,
+    "party": "Republican",
+    "uncontested": false
+   },
+   "JJ Singh": {
+    "district": 26,
+    "margin": 0.3911,
+    "party": "Democratic",
+    "uncontested": false
+   },
+   "Jackie Glass": {
+    "district": 93,
+    "margin": 1.0,
+    "party": "Democratic",
+    "uncontested": true
+   },
+   "Jason Ballard": {
+    "district": 42,
+    "margin": 0.2535,
+    "party": "Republican",
+    "uncontested": false
+   },
+   "Jay Leftwich": {
+    "district": 90,
+    "margin": 0.1886,
+    "party": "Republican",
+    "uncontested": false
+   },
+   "Jeion Ward": {
+    "district": 87,
+    "margin": 0.5948,
+    "party": "Democratic",
+    "uncontested": false
+   },
+   "Jessica Anderson": {
+    "district": 71,
+    "margin": 0.0653,
+    "party": "Democratic",
+    "uncontested": false
+   },
+   "Joe McNamara": {
+    "district": 40,
+    "margin": 0.0592,
+    "party": "Republican",
+    "uncontested": false
+   },
+   "John McAuliff": {
+    "district": 30,
+    "margin": 0.0193,
+    "party": "Democratic",
+    "uncontested": false
+   },
+   "Josh Thomas": {
+    "district": 21,
+    "margin": 0.171,
+    "party": "Democratic",
+    "uncontested": false
+   },
+   "Joshua Cole": {
+    "district": 65,
+    "margin": 0.1799,
+    "party": "Democratic",
+    "uncontested": false
+   },
+   "Justin Pence": {
+    "district": 33,
+    "margin": 0.4714,
+    "party": "Republican",
+    "uncontested": false
+   },
+   "Kacey Carnegie": {
+    "district": 89,
+    "margin": 0.0943,
+    "party": "Democratic",
+    "uncontested": false
+   },
+   "Karen Hamilton": {
+    "district": 62,
+    "margin": 0.1672,
+    "party": "Republican",
+    "uncontested": false
+   },
+   "Karen Keys-Gamarra": {
+    "district": 7,
+    "margin": 0.5098,
+    "party": "Democratic",
+    "uncontested": false
+   },
+   "Karrie Delaney": {
+    "district": 9,
+    "margin": 0.3813,
+    "party": "Democratic",
+    "uncontested": false
+   },
+   "Kathy Tran": {
+    "district": 18,
+    "margin": 0.4473,
+    "party": "Democratic",
+    "uncontested": false
+   },
+   "Katrina Callsen": {
+    "district": 54,
+    "margin": 1.0,
+    "party": "Democratic",
+    "uncontested": true
+   },
+   "Keith Hodges": {
+    "district": 68,
+    "margin": 0.3524,
+    "party": "Republican",
+    "uncontested": false
+   },
+   "Kelly Convirs-Fowler": {
+    "district": 96,
+    "margin": 0.2087,
+    "party": "Democratic",
+    "uncontested": false
+   },
+   "Kimberly Pope Adams": {
+    "district": 82,
+    "margin": 0.078,
+    "party": "Democratic",
+    "uncontested": false
+   },
+   "Laura Jane Cohen": {
+    "district": 15,
+    "margin": 0.3508,
+    "party": "Democratic",
+    "uncontested": false
+   },
+   "Lee Ware": {
+    "district": 72,
+    "margin": 0.2563,
+    "party": "Republican",
+    "uncontested": false
+   },
+   "Leslie Mehta": {
+    "district": 73,
+    "margin": 0.0366,
+    "party": "Democratic",
+    "uncontested": false
+   },
+   "Lily Franklin": {
+    "district": 41,
+    "margin": 0.0671,
+    "party": "Democratic",
+    "uncontested": false
+   },
+   "Lindsey Dougherty": {
+    "district": 75,
+    "margin": 0.0613,
+    "party": "Democratic",
+    "uncontested": false
+   },
+   "Luke Torian": {
+    "district": 24,
+    "margin": 1.0,
+    "party": "Democratic",
+    "uncontested": true
+   },
+   "Madison Whittle": {
+    "district": 49,
+    "margin": 0.0602,
+    "party": "Republican",
+    "uncontested": false
+   },
+   "Marcus Simon": {
+    "district": 13,
+    "margin": 0.5741,
+    "party": "Democratic",
+    "uncontested": false
+   },
+   "Mark Downey": {
+    "district": 69,
+    "margin": 0.0331,
+    "party": "Democratic",
+    "uncontested": false
+   },
+   "Mark Sickles": {
+    "district": 17,
+    "margin": 0.5534,
+    "party": "Democratic",
+    "uncontested": false
+   },
+   "Marty Martinez": {
+    "district": 29,
+    "margin": 0.2596,
+    "party": "Democratic",
+    "uncontested": false
+   },
+   "May Nivar": {
+    "district": 57,
+    "margin": 0.1125,
+    "party": "Democratic",
+    "uncontested": false
+   },
+   "Michael Feggans": {
+    "district": 97,
+    "margin": 0.1502,
+    "party": "Democratic",
+    "uncontested": false
+   },
+   "Michael Jones": {
+    "district": 77,
+    "margin": 0.5714,
+    "party": "Democratic",
+    "uncontested": false
+   },
+   "Michael Webert": {
+    "district": 61,
+    "margin": 0.2363,
+    "party": "Republican",
+    "uncontested": false
+   },
+   "Michelle Maldonado": {
+    "district": 20,
+    "margin": 0.4827,
+    "party": "Democratic",
+    "uncontested": false
+   },
+   "Mike Cherry": {
+    "district": 74,
+    "margin": 0.0506,
+    "party": "Republican",
+    "uncontested": false
+   },
+   "Mitchell Cornett": {
+    "district": 46,
+    "margin": 0.5521,
+    "party": "Republican",
+    "uncontested": false
+   },
+   "Nadarius Clark": {
+    "district": 84,
+    "margin": 0.2051,
+    "party": "Democratic",
+    "uncontested": false
+   },
+   "Nicole Cole": {
+    "district": 66,
+    "margin": 0.0439,
+    "party": "Democratic",
+    "uncontested": false
+   },
+   "Otto Wachsmann": {
+    "district": 83,
+    "margin": 0.0904,
+    "party": "Republican",
+    "uncontested": false
+   },
+   "Patrick Hope": {
+    "district": 1,
+    "margin": 0.6335,
+    "party": "Democratic",
+    "uncontested": false
+   },
+   "Paul Krizek": {
+    "district": 16,
+    "margin": 0.4416,
+    "party": "Democratic",
+    "uncontested": false
+   },
+   "Phil Hernandez": {
+    "district": 94,
+    "margin": 0.2268,
+    "party": "Democratic",
+    "uncontested": false
+   },
+   "Phil Scott": {
+    "district": 63,
+    "margin": 0.1192,
+    "party": "Republican",
+    "uncontested": false
+   },
+   "Rae Cousins": {
+    "district": 79,
+    "margin": 0.8475,
+    "party": "Democratic",
+    "uncontested": false
+   },
+   "Rip Sullivan": {
+    "district": 6,
+    "margin": 0.3361,
+    "party": "Democratic",
+    "uncontested": false
+   },
+   "Robert Bloxom Jr.": {
+    "district": 100,
+    "margin": 0.0587,
+    "party": "Republican",
+    "uncontested": false
+   },
+   "Rodney Willett": {
+    "district": 58,
+    "margin": 0.2291,
+    "party": "Democratic",
+    "uncontested": false
+   },
+   "Rozia Henson": {
+    "district": 19,
+    "margin": 1.0,
+    "party": "Democratic",
+    "uncontested": true
+   },
+   "Sam Rasoul": {
+    "district": 38,
+    "margin": 0.4003,
+    "party": "Democratic",
+    "uncontested": false
+   },
+   "Scott Wyatt": {
+    "district": 60,
+    "margin": 0.2808,
+    "party": "Republican",
+    "uncontested": false
+   },
+   "Shelly Simonds": {
+    "district": 70,
+    "margin": 0.2907,
+    "party": "Democratic",
+    "uncontested": false
+   },
+   "Stacey Carroll": {
+    "district": 64,
+    "margin": 0.065,
+    "party": "Democratic",
+    "uncontested": false
+   },
+   "Terry Austin": {
+    "district": 37,
+    "margin": 0.402,
+    "party": "Republican",
+    "uncontested": false
+   },
+   "Terry Kilgore": {
+    "district": 36,
+    "margin": 0.6647,
+    "party": "Republican",
+    "uncontested": false
+   },
+   "Tim Griffin": {
+    "district": 53,
+    "margin": 0.3912,
+    "party": "Republican",
+    "uncontested": false
+   },
+   "Tom Garrett": {
+    "district": 56,
+    "margin": 0.2178,
+    "party": "Republican",
+    "uncontested": false
+   },
+   "Tommy Wright": {
+    "district": 50,
+    "margin": 0.2304,
+    "party": "Republican",
+    "uncontested": false
+   },
+   "Tony Wilt": {
+    "district": 34,
+    "margin": 0.0089,
+    "party": "Republican",
+    "uncontested": false
+   },
+   "Virgil Thornton Sr.": {
+    "district": 86,
+    "margin": 0.0796,
+    "party": "Democratic",
+    "uncontested": false
+   },
+   "Vivian Watts": {
+    "district": 14,
+    "margin": 0.4768,
+    "party": "Democratic",
+    "uncontested": false
+   },
+   "Wendell Walker": {
+    "district": 52,
+    "margin": 0.117,
+    "party": "Republican",
+    "uncontested": false
+   },
+   "Will Davis": {
+    "district": 39,
+    "margin": 0.4272,
+    "party": "Republican",
+    "uncontested": false
+   },
+   "Will Morefield": {
+    "district": 43,
+    "margin": 0.6613,
+    "party": "Republican",
+    "uncontested": false
+   },
+   "Wren Williams": {
+    "district": 47,
+    "margin": 0.4889,
+    "party": "Republican",
+    "uncontested": false
+   }
+  }
+ }
+}
