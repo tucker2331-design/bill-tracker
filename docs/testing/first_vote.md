@@ -1039,3 +1039,19 @@ Literature consulted: [Gerrish & Blei — issue-adjusted ideal points](https://w
 Residual trees over all signals + member inputs (60 rounds, depth 3): member 84.36→84.08 / 86.09→86.03 /
 85.86→86.81, wrong calls 658→797 / 687→737 / 814→1,029 (it calls more and errs more); pooled z −1.8, 2026 +5.9.
 Rejected — combining the weak signals adds noise, not signal, on the years that choose.
+
+## External signals — round 1 (2026-10-24)
+
+Owner: *"weve gone real deep on the internals but not the externals ... 30 tests just isnt enough to call it quits on."*
+
+**Member background** (`historical_cache/member_bio.py` via the Wikipedia API, ~25 requests; `member_bio_signal.py`):
+224 members elected 2019–2025, 219 with a page; lawyers 36, military service 30, women 31, birth year 161; only 67
+pages list an occupation field (health 5, farmer 5, educator 8 — too few). 93–99% of 2020–2026 votes matched.
+Inputs: lawyer × Courts of Justice room, lawyer, military, woman, age, educator / health / farmer × their committee,
+each × side. No-2021 rule: 2024 z −4.0, 2025 +1.5 → pooled −2.5; 2026 −1.1. Rejected.
+
+**District make-up, extended** (`historical_cache/districts_ext.py`): both maps (ACS 2021 for sessions 2020–23,
+ACS 2023 for 2024+) and new measures (industry: farming/mining, manufacturing, public administration; armed forces,
+veterans, foreign born, unemployed, transit, renters; land area for density). Variable codes checked identical in
+2021 and 2023. **Blocked on a key:** the Census API now redirects keyless requests to missing_key.html (2026-10-24);
+the script reads CENSUS_API_KEY from the owner's own terminal (never stored).
