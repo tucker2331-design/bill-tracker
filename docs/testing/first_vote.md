@@ -1186,3 +1186,17 @@ level, and no more wrong calls at the same number of calls (22 vs 23; hardest bi
 (separate Opus run): recognized 0 of 100 bills** — a self-report, so weak evidence; the exposure split (famous vs
 obscure bills) and a year-ahead fit are the next checks. Haiku and Sonnet add nothing.
 **Status: promising pilot on 100 bills, NOT established.** Text-derived — internal only (Standard #3).
+
+**AI reading — year-ahead check (2026-10-24, `llm_ahead.py`).** Opus rated 150 + 150 "can't call"-heavy bills from 2025 /
+2026 (same blinding, 0 numbers / years visible); memory probe: 4 of 300 recognized (B176, B282, B283, B391 — excluded).
+Protocol notes: one probe agent ran one shell command (printed a template; no reads / network) against instructions;
+rating agents used 3 tool calls (a second read of the long file). Weights learned on the 2024 ratings, on top of ARM C:
+- Both party ratings: 2025 member 74.6→74.2%, 2026 73.0→71.2%; calls at equal wrong calls +8 / +14 votes. Fails.
+- Why: the Democratic weight flips sign by year (+0.92 / −0.88 / −0.48 within 2024 / 2025 / 2026); the Republican weight is
+  stable (+1.25 / +1.13 / +0.87).
+- **Republican rating only** (2024 weight +1.25): 2025 member 74.5→76.7%, Republican votes 69.8→75.9%, calls at equal
+  wrong calls 553→586 (38→41%); 2026 72.8→72.5%, Republican votes 66.3→65.1%, 560→570. Helps 2025, not 2026 (first
+  trifecta year: the 2024 weight overshoots — within 2026 it is +0.87).
+**Verdict: a real but unstable signal; not adopted.** A stable weight needs ratings for many more bills per year
+(~5,000 bills for 2024–26 ≈ $37 in Opus batch API by the earlier estimate — over the owner's $5 cap; or ~50 helper-agent
+runs on the subscription). Text-derived: internal only.
