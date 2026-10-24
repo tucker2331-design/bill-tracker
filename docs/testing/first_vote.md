@@ -1068,3 +1068,14 @@ side, 2024+): 2025 z −1.0, 2026 −3.3. Rejected. (`rerun_no2021.py` gained a 
 only when stats.logit fails — marked in the output.)
 
 **Not usable:** Census Reporter's data API (robots.txt `Disallow: /`); the Census API without the owner's key.
+
+**District make-up, extended — fetched and tested (2026-10-24).** Owner saved the Census key in ~/.zshrc; the fetch ran
+in the owner's terminal tab (8 Census requests; key never seen). 17 measures on both maps (ACS 2021 → sessions
+2020–23, ACS 2023 → 2024+), 92–98% of votes placed. (a) As a stacked layer × side (`district_ext_signal.py`): 2024 z
+−4.6, 2025 +1.3, pooled −3.7; 2026 −2.9 — rejected. (b) Inside the linear half of arm A (`district_ext_model.py`):
+member +0.02 / +0.06 / 0.00, wrong calls +3 / +1 / −1 — no gain.
+(c) **The voter's district resembles the patron's** (`district_pair.py pair_mode`; similarity over the 17 measures,
+× side): on the locked model **passes** — 2024 z +5.1, 2025 +1.1, pooled +3.2; member +0.11 / +0.08, hardest third
++0.33 / +0.22 — but 2026 replication z −0.3. On top of arm C (layer learned on earlier years' arm C predictions):
+member +0.01 / +0.19, but WRONG CALLS UP 670→686 (2025) and 742→783 (2026), z +0.6 / −1.7. Not adopted — the owner's
+first rule is fewer wrong calls. (d) District × subject, all years: pooled z −6.3, rejected.

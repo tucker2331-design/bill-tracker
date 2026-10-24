@@ -26,10 +26,10 @@ DETAIL = ["NAME", "B01003_001E", "B03002_001E", "B03002_003E", "B03002_004E", "B
 PROFILE = ["DP03_0033PE", "DP03_0035PE", "DP03_0045PE", "DP03_0006PE", "DP02_0070PE", "DP02_0094PE", "DP03_0005PE",
            "DP03_0021PE", "DP04_0047PE"]
 GEO = {"lower": "state legislative district (lower chamber)", "upper": "state legislative district (upper chamber)"}
-GAZ = {("2023", "lower"): "https://www2.census.gov/geo/docs/maps-data/data/gazetteer/2023_Gazetteer/2023_gaz_sldl_51.txt",
-       ("2023", "upper"): "https://www2.census.gov/geo/docs/maps-data/data/gazetteer/2023_Gazetteer/2023_gaz_sldu_51.txt",
-       ("2021", "lower"): "https://www2.census.gov/geo/docs/maps-data/data/gazetteer/2021_Gazetteer/2021_gaz_sldl_51.txt",
-       ("2021", "upper"): "https://www2.census.gov/geo/docs/maps-data/data/gazetteer/2021_Gazetteer/2021_gaz_sldu_51.txt"}
+# land area: the Gazetteer files geo_signal.py already saved (Virginia rows of the national files; the per-state
+# file names used at first do not exist for legislative districts -- 404)
+GAZ = {("2023", "lower"): "gaz_2023_H.txt", ("2023", "upper"): "gaz_2023_S.txt",
+       ("2021", "lower"): "gaz_2021_H.txt", ("2021", "upper"): "gaz_2021_S.txt"}
 
 
 KEY = os.environ.get("CENSUS_API_KEY")   # owner's key: set ONLY in the owner's terminal, never in files / git / chat
@@ -65,7 +65,7 @@ def fetch():
                 for rec in js[1:]:
                     d = dict(zip(head, rec)); key = d[geo]
                     rows.setdefault(key, {}).update(d)
-            g = get(GAZ[(year, ch)]).text; n += 1
+            g = open(os.path.join(OUT, GAZ[(year, ch)])).read()
             lines = g.strip().splitlines(); h = [x.strip() for x in lines[0].split("\t")]
             for line in lines[1:]:
                 d = dict(zip(h, [x.strip() for x in line.split("\t")]))
