@@ -1165,3 +1165,24 @@ until the owner OKs the `anthropic` install, the API key in his terminal, and th
 **Refit cadence for arm B** (`online_relinear.py`, ONLINE_STEP_DAYS): weekly (adopted) 85.31 / 86.85 / 87.09 member;
 every 3 days 85.29 / 86.89 / 87.02; daily 85.28 / 86.83 / 87.08 (2024 / 2025 / 2026). Equal within noise; weekly
 stays (best on the choose year).
+
+## AI bill-reading pilot — RUN (2026-10-24, `llm_pilot.py`, `llm_pilot_eval.py`)
+
+Owner: *"lets run the 1 dollar test first comparing haiku and opus, or even sonnet ... dont use more then 5 dollars."*
+No API key was available (the owner's $10 is subscription extra usage, not API credit), so the ratings were made by
+Claude Code helper agents on the chosen model (subscription usage; ~82k tokens per model run, ~330k in all), each
+allowed to read only the blinded bill file (2 tool calls each). 100 bills from 2024 (choose year), neutral ids
+B001–B100, no bill number / year / name in any text (checked 0 of 100). Evaluation on those bills' 2024 first votes
+(812 member votes; party blocks), the rating's weight fit leave-one-bill-out:
+
+| model | rank corr. with party's actual yes share (arm A: +0.51) | party majority right (arm A 74.0%) | member votes right (arm A 77.2%) | wrong calls at arm A's 344 calls (arm A 23) |
+|---|---|---|---|---|
+| Haiku 5.5 | +0.24 | 73.0% | 77.1% | — |
+| Sonnet 5.5 | +0.32 | 73.0% | 76.4% | — |
+| **Opus 5.5** | **+0.38** | **77.0%** | **80.0%** | **22** |
+
+Opus: +2.8 points on member votes on these mostly hardest-third bills, log loss 0.521 → 0.500 at the party-block
+level, and no more wrong calls at the same number of calls (22 vs 23; hardest bills 18 vs 20). **Memorization probe
+(separate Opus run): recognized 0 of 100 bills** — a self-report, so weak evidence; the exposure split (famous vs
+obscure bills) and a year-ahead fit are the next checks. Haiku and Sonnet add nothing.
+**Status: promising pilot on 100 bills, NOT established.** Text-derived — internal only (Standard #3).
