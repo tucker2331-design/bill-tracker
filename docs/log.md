@@ -6,7 +6,10 @@ status: active
 
 # Project Log
 
-Append-only, reverse-chronological (newest at top). Each entry opens with `## [2026-10-24] design | War Room mockup: call only when sure — 3 display options for owner review
+Append-only, reverse-chronological (newest at top). Each entry opens with `## [2026-10-24] decision | War Room: option A — "call or can't call"
+Owner: "A is fine." Mockup v9 (same URL): review switch removed; rows read Yes / No / Can't call (call only at a chance ≥ 81 or ≤ 19 in 100). Replaces the Likely / Leans / Toss-up labels.
+
+## [2026-10-24] design | War Room mockup: call only when sure — 3 display options for owner review
 Owner: "we should only call the ones we are really confident in." HB 1515 mockup (same URL, v8): Likely/Leans/Toss-up replaced by Call (chance ≥ 81 or ≤ 19 in 100, cutoff from `guaranteed_calls.py`) vs Can't call; options A (call or can't call), B (+ lean), C (grouped + subcommittee reliability). 2026 counts: 15,201 of 15,850 calls right; can't-call guesses 4,130 of 6,313. Awaiting the owner's pick.
 
 ## [YYYY-MM-DD] <kind> | <title>` so `grep "^## \[" log.md | head -20` gives a parseable timeline.
