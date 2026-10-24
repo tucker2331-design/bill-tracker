@@ -19,7 +19,7 @@ import numpy as np
 import accept as AC, stats as ST
 
 lo = lambda p: np.log(np.clip(p, 1e-6, 1 - 1e-6) / (1 - np.clip(p, 1e-6, 1 - 1e-6)))
-FIT_YEARS = (2022, 2024, 2025)
+FIT_YEARS = (2022, 2023, 2024, 2025) if os.environ.get("FIT2023") == "1" else (2022, 2024, 2025)
 
 
 def _logit(X, y, names, ridge):
@@ -45,6 +45,8 @@ def _logit(X, y, names, ridge):
 def evaluate(signal, label, ridge=10.0):
     B = {t: v for t, v in AC.base_preds().items() if t >= 2022}
     B[2026] = pickle.load(open(os.path.join(HERE, ".cache", "p2026.pkl"), "rb"))
+    if os.environ.get("FIT2023") == "1":                 # build_2023.py: 2023 as a further learning year
+        B[2023] = pickle.load(open(os.path.join(HERE, ".cache", "p2023.pkl"), "rb"))
     data = {}
     for t, (te, p) in B.items():
         S = [signal(r) for r in te]; names = sorted(S[0])

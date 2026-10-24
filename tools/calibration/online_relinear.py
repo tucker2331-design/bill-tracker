@@ -16,12 +16,18 @@ import levers as L, first_vote as FV, gains as G, accept as AC
 
 import json as _json
 LIN = dict({"hinges": 3, "lam": 10, "pairs": 8}, **_json.loads(os.environ.get("ONLINE_LIN", "{}")))   # research overrides
-TAG = os.environ.get("ONLINE_TAG", "")
+TAG = os.environ.get("ONLINE_TAG", "") + (f"_step{os.environ.get('ONLINE_STEP_DAYS')}" if os.environ.get("ONLINE_STEP_DAYS") else "")
 BAG = {"depth": 6, "subsample": 0.5, "colsample": 0.5, "bags": 8}
 
 
+STEP = int(os.environ.get("ONLINE_STEP_DAYS", "0"))   # 0 = calendar weeks (adopted); n = refit every n days
+
+
 def week(d):
-    x = datetime.date.fromisoformat(d[:10]); return (x - datetime.timedelta(days=x.weekday())).isoformat()
+    x = datetime.date.fromisoformat(d[:10])
+    if STEP:
+        return (x - datetime.timedelta(days=(x.toordinal() % STEP))).isoformat()
+    return (x - datetime.timedelta(days=x.weekday())).isoformat()
 
 
 MIN = int(os.environ.get("ONLINE_MIN", "0"))

@@ -1079,3 +1079,85 @@ member +0.02 / +0.06 / 0.00, wrong calls +3 / +1 / −1 — no gain.
 +0.33 / +0.22 — but 2026 replication z −0.3. On top of arm C (layer learned on earlier years' arm C predictions):
 member +0.01 / +0.19, but WRONG CALLS UP 670→686 (2025) and 742→783 (2026), z +0.6 / −1.7. Not adopted — the owner's
 first rule is fewer wrong calls. (d) District × subject, all years: pooled z −6.3, rejected.
+
+## Combinations — what the model misses in a cell (2026-10-24, `combo_cells.py`)
+
+Owner: *"if the district is all rich white people and its in northern virginia do we think they are for or against
+data centers ... brain storm deeper then your singular tests and run in parallel."*
+Method (residual target encoding, year-ahead): district TYPES (k-means on the 17 measures, both maps pooled; 6 or 10
+types) and REGIONS (k-means on district location, 7); for a cell — e.g. district type × subject × side — the locked
+model's average miss (actual − predicted) in that cell from EARLIER years only (2021 excluded), shrunk toward 0;
+that miss is the input. Tested with the no-2021 frame. NOTE: 2024 learns from 2022 only, whose inputs are empty
+(nothing before 2022 in the tables), so the 2024 line never moves — the real tests are 2025 and 2026.
+
+| cell | 2025 z | 2026 z |
+|---|---|---|
+| district type (6) × subject × side | +0.5 | +1.0 |
+| district type (10) × subject × side | +0.1 | +1.3 |
+| region × subject × side | +0.3 | +1.3 |
+| district type × summary topic × side | −3.9 | +2.4 |
+| district type × committee × side | −0.7 | −1.2 |
+| voter's region × patron's region × subject × side | +1.2 | +1.3 |
+| district type × voter party × patron party × subject | +1.1 | +1.2 |
+| **member × subject × side** (shrink 30 / 10 / 100) | **+1.7 / +2.2 / +1.0** | **+2.4 / +2.6 / +2.2** |
+| member × patron | +1.6 | +1.7 |
+| member × committee × side | +0.1 | +1.8 |
+| **patron × subject × side** | **+2.7** | +0.9 |
+| **committee × subject × side** | **+2.0** | +0.6 |
+| patron × committee × side | +1.8 | +1.5 |
+| all positive families together (shrink 30 / 10) | −0.2 / +0.7 | +1.5 / +2.1 |
+
+**Reading:** the identity cells (member / patron / committee × subject) point the same way in BOTH years — real
+signal, but each is short of z 3 with only 2022 + 2024 as history. Next: 2023 rebuilt from LIS legacy files
+(`build_2023.py`) as one more history and learning year (FIT2023=1), which also gives 2024 a real test.
+
+**With 2023 rebuilt** (`build_2023.py`: LIS legacy 2023, 17,255 ballots on 1,569 bills, locked model 86.5%) as a further
+history + learning year (FIT2023=1): the identity families together (member / patron / committee × subject, member ×
+patron, member × committee, patron × committee; shrink 10) lift accuracy in ALL three years — member +0.14 / +0.26 /
++0.18, hardest third +0.47 / +0.77 / +0.54 (2024 / 2025 / 2026), z +0.3 / +2.9 / +2.0, pooled 2.3. **But on top of
+arm C** they add nothing and raise wrong calls (670→733, 742→784); member × subject alone +0.05 / +0.03 member, wrong
+calls 670→684 / 742→744; patron × subject +0.04 / +0.13, 670→670 / 742→757. Arm C's weekly session learning already
+holds most of it. Not adopted.
+
+**Third model family — "who with whom on what"** (`cell_rates.py`; shrunk yes-rates in 9 identity cells from strictly
+earlier days, ridge logistic): alone 74.4 / 77.0 / 77.3%; blended into arm A it lowers accuracy (2024 −0.04 to −0.6) and
+log loss (z −2.5 to −10); fewer wrong calls only because it makes fewer confident calls. Rejected.
+
+**Adaptive "can't call" cutoff** (`adaptive_calls.py`, adaptive conformal inference, daily updates toward ≤4.5% wrong):
+at the SAME number of calls it makes MORE wrong calls than the fixed cutoff in every setting (e.g. 2025: 596 vs 546).
+**Block-coherence rule** (also require the party block's average to be confident): 593 / 557 / 655 vs 584 / 555 / 649
+wrong at equal calls. Both rejected — the member's own confidence is the best abstention signal we have.
+
+## Is a third model the best use of time? Theory check (2026-10-24)
+
+Owner: *"spend time thinking and researching studies our history etc staticians and their theories as well as
+political ones to decide if the 3rd model is the best of your time."*
+
+1. **Ensemble theory** (Krogh–Vedelsby ambiguity decomposition and its classification analogues): a blend beats its
+   members only when a member is BOTH reasonably accurate AND makes different mistakes; correlated errors cancel the
+   benefit. Our record fits exactly: the linear half (84% alone, a different functional form) helped; the "who with
+   whom" cell-rate model (74–77%, built from the same identity information the trees already read) did not. **Another
+   family on the same inputs is not worth the time; a third family must bring NEW information.**
+2. **Roll-call ceilings**: DW-NOMINATE classifies ~83–85% of US House votes (secondary source; Poole & Rosenthal);
+   Snyder & Groseclose show classification understates hidden party pressure. Our 87% (first votes, committees
+   included) is at or above the usual ceiling for vote-history methods.
+3. **Political science — negative agenda control** (Cox & McCubbins; state tests by Cox, Kousser & McCubbins; Shor &
+   Kistner): majority parties mostly act by BLOCKING bills before a vote (not heard, struck, tabled); interest-group
+   pressure can sometimes override the gate (Kistner & Shor). That is our hardest residual — patron drops and
+   party-line kills decided in private — and it matches our testimony-lineup result (helped 2022–25 bill fate, not 2026).
+4. **Decision:** stop building models on the same inputs. The largest untried lever is new information about the bill
+   itself — text-based models gain most in the literature (Gerrish & Blei; Kraft et al.; Eidelman et al. 2018 for
+   state floor action) — i.e. the AI bill-reading pilot, with the written leak controls.
+
+Sources: [Kistner & Shor slides](https://uh.edu/hobby/cpp/events/eitm/papers/slides-for-cantu-conference-kistner.pdf),
+[Shor & Kistner](https://priceschool.usc.edu/wp-content/uploads/2008/08/Shor-and-Kistner.pdf),
+[Stanford: institutional foundations of majority party power](https://purl.stanford.edu/dy798kq4055),
+[Cox, Kousser & McCubbins notes](https://adambrown.info/p/notes/cox_kousser_and_mccubbins_party_power_or_preferences_quasi_experimental_evidence_from_american_state_legislatures),
+[Partition decomposition for roll calls](https://arxiv.org/pdf/1108.2805), [Bowdoin DW-NOMINATE report](https://www.bowdoin.edu/student-fellowships/recent-winners/_pdf/peterson-lierin.pdf),
+[Diversity and degrees of freedom in regression ensembles](https://arxiv.org/pdf/1803.00314), [Ensemble diversity & bias-variance](https://metricgate.com/blogs/ensemble-diversity-bias-variance/).
+
+**AI pilot prepared, not run** (`llm_pilot.py build`): 100 bills from 2024 (50 hardest-third, 50 random; subcommittee
+votes), blinded title + summary (checked: 0 of 200 model-visible texts contain a bill number or year), a content
+rating request + a separate memorization probe per bill, structured JSON output, Batch API. Estimate (not measured):
+~64k input / ~60k output tokens → Opus 5.5 ≈ $0.73, Haiku 5.5 ≈ $0.02 with Batch. `submit` deliberately not wired
+until the owner OKs the `anthropic` install, the API key in his terminal, and the model.
