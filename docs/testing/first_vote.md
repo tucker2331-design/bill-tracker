@@ -1161,3 +1161,7 @@ votes), blinded title + summary (checked: 0 of 200 model-visible texts contain a
 rating request + a separate memorization probe per bill, structured JSON output, Batch API. Estimate (not measured):
 ~64k input / ~60k output tokens → Opus 5.5 ≈ $0.73, Haiku 5.5 ≈ $0.02 with Batch. `submit` deliberately not wired
 until the owner OKs the `anthropic` install, the API key in his terminal, and the model.
+
+**Refit cadence for arm B** (`online_relinear.py`, ONLINE_STEP_DAYS): weekly (adopted) 85.31 / 86.85 / 87.09 member;
+every 3 days 85.29 / 86.89 / 87.02; daily 85.28 / 86.83 / 87.08 (2024 / 2025 / 2026). Equal within noise; weekly
+stays (best on the choose year).
