@@ -1223,3 +1223,14 @@ OWN votes on the 6 most similar earlier bills, with the whole-room and own-party
   +2.5 / −0.5 points. **Unstable; not adopted.**
 Next: ask at the block level (does each party in the room vote mostly yes?) with the room's own history on similar bills,
 and use the research survey (`docs/research/legislator_vote_prediction_survey.md`) to set the criteria.
+
+**Block-level AI trial (2026-10-25, `llm_block.py`, Opus helper agents, instructions `.cache/llm_block/instructions_v1.md`).**
+Packet = blinded bill + room facts + THIS room's tallies on the 8 most similar earlier bills + the 4 most similar bills
+voted earlier this session + the room's kill count so far; asked: chance each party block mostly votes yes.
+2025, 59 clean bills (B139 dropped: its own result was visible in a batch-mate's packet), 344 can't-call votes:
+arm C 64.8%, AI alone 60.8%, **equal average of AI and arm C 69.2% (+4.4; 90% range −1.1 to +10.4)**. Same pattern as the
+member-level trial (+4.4 on 180 votes). The AI alone is worse; its errors differ from the model's, so the average helps.
+**FROZEN before the 2026 run (written before any 2026 answer exists):** instructions v1 unchanged; member chance =
+equal log-odds average of arm C and the AI's block chance; scored on every 2026 can't-call vote of the 147 pilot bills;
+recognized bills dropped; batches built so that no packet shows the tally of a batch-mate. Pass = gain > 0 with the
+90% bill-resampled range above 0, and no more wrong calls at arm C's own number of calls.
