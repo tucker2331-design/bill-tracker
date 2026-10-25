@@ -1207,3 +1207,19 @@ votes) / 61.2% (2026, 950); with Opus's Republican rating 68.0% / 60.5%. Next: g
 uses (patron party and majority status, committee, governor's party, this committee's votes on similar bills this
 session — all public before the vote), ask it directly how each party block votes, score on can't-call votes only,
 year-ahead, same memory probe; 100 can't-call blocks from 2025 first — after the owner's 5-hour usage window resets.
+
+**Hard third, member-centric (2026-10-25, owner: "idk that its abt the lobbyist as much as the rep").**
+`tools/calibration/llm_member.py` builds one blinded packet per bill (296 bills, 1,841 "can't call" votes, the same
+pilot bills): the bill, the room, and one anonymous card per unsure member (party, district, record, and the member's
+OWN votes on the 6 most similar earlier bills, with the whole-room and own-party tallies; all strictly before the vote).
+- **Opus trial, 30 bills of 2025 (180 votes):** arm C 60.6%, AI alone 55.6%, AI + arm C 65.0% (too few votes to trust).
+  The AI's misses come in whole blocks: rooms that killed a bill unanimously, which it read as yes.
+- **Where the hard third really is (`can't call` votes, all bills):** knowing only the member's PARTY-BLOCK majority on
+  the bill would be right 95.5% (2025) / 94.3% (2026). Knowing the room majority: 69.8% / 70.8%. So the hard third is a
+  question about how each party block in the room votes on the bill (two answers per bill), not about the member.
+  14–16% of these votes are on rooms that voted unanimously NO; arm C is right on 46% of them.
+- **Non-AI bar, `knn_own.py`:** own votes on similar bills (share, departure from party, share of those bills the room
+  killed) on top of arm C. Fit 2025 → test 2026: 62.4 → 64.8%. Fit 2026 → test 2025: 67.8 → 66.3%. Killed-share alone:
+  +2.5 / −0.5 points. **Unstable; not adopted.**
+Next: ask at the block level (does each party in the room vote mostly yes?) with the room's own history on similar bills,
+and use the research survey (`docs/research/legislator_vote_prediction_survey.md`) to set the criteria.
