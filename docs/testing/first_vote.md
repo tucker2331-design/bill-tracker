@@ -1243,3 +1243,9 @@ stable across years, and unanimous kills stay below 50% for every method. Resear
 ([[research/legislator_vote_prediction_survey]], ~70 sources) finds no published method near 80% on a hard subset; its
 top ideas (outcome-type first, patron kill history, even-year continuation, by-request, co-patron ties, election margins,
 chair cues, own-vote retrieval) were already tested here and add nothing or are unstable.
+
+**Coverage test (2026-10-25, `llm_cover.py`) — FROZEN before the last 89 2025 answers arrived.** Why: ranked by
+confidence, arm C + AI got the top 100 of 950 hard 2026 votes 92% right (arm C's own ranking: 70%), weight taken from
+2025; reverse direction 2026 → 2025 newly calls 68 of 344 at 85.3%. 2025 had too few votes (344) to set a guaranteed
+cutoff, so the AI rates the other 89 pilot bills of 2025. Rule: weight AND cutoff (95% Clopper-Pearson bound, ≥81 right
+in 100 — the same rule as all calls) learned on 2025 only; applied unchanged to 2026; PASS if calls > 0 and ≥81% right.
