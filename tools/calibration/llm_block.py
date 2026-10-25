@@ -127,6 +127,12 @@ def score(tag="v1"):
         for nm, p in (("arm C", pc), ("AI block chance", pa), ("AI + arm C (equal)", pm)):
             r = (p >= .5) == (y == 1); c = np.abs(p - .5) >= .31
             print(f"  {nm:20s} right {r.mean():.3f}  calls {c.sum():4d} ({c.mean():.0%}) right {r[c].mean() if c.any() else float('nan'):.3f} wrong {(c & ~r).sum()}")
+        d = ((pm >= .5) == (y == 1)).astype(float) - ((pc >= .5) == (y == 1)); bills = np.array([x[0] for x in D]); ub = sorted(set(bills))
+        grp = {b: d[bills == b] for b in ub}; rng = np.random.default_rng(0)
+        g = np.array([np.concatenate([grp[ub[j]] for j in rng.choice(len(ub), len(ub))]).mean() for _ in range(4000)])
+        lo5, hi95 = np.percentile(g, [5, 95])
+        print(f"  gain of the average {d.mean():+.3f}; 90% bill-resampled range {lo5:+.3f} .. {hi95:+.3f}; resamples with no gain {(g <= 0).mean():.1%}"
+              f"  -> {'PASS' if d.mean() > 0 and lo5 > 0 else 'FAIL'} (frozen rule)")
 
 
 if __name__ == "__main__":

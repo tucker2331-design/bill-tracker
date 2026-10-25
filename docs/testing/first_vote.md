@@ -1234,3 +1234,12 @@ member-level trial (+4.4 on 180 votes). The AI alone is worse; its errors differ
 equal log-odds average of arm C and the AI's block chance; scored on every 2026 can't-call vote of the 147 pilot bills;
 recognized bills dropped; batches built so that no packet shows the tally of a batch-mate. Pass = gain > 0 with the
 90% bill-resampled range above 0, and no more wrong calls at arm C's own number of calls.
+**2026 RESULT (frozen rule, 147 bills, 950 can't-call votes, 0 recognized):** arm C 61.2%, AI block chance alone 65.1%,
+equal average 63.4% — gain +2.2, 90% range −2.4 to +6.8 (21.6% of resamples no gain). **FAIL; not adopted.**
+New calls made by the average: 36 of 950 (35 right); 2025 15 (12 right). By the room's real result (2026): unanimous NO
+304 votes — arm C 38%, AI 48%, average 46%; unanimous YES 186 — 75 / 69 / 66%; split 460 — 70 / 75 / 74%.
+Reading: the AI, given the room's history, reads split votes and kills a little better than the model, but it is not
+stable across years, and unanimous kills stay below 50% for every method. Research survey
+([[research/legislator_vote_prediction_survey]], ~70 sources) finds no published method near 80% on a hard subset; its
+top ideas (outcome-type first, patron kill history, even-year continuation, by-request, co-patron ties, election margins,
+chair cues, own-vote retrieval) were already tested here and add nothing or are unstable.

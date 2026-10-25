@@ -6,7 +6,13 @@ status: active
 
 # Project Log
 
-Append-only, reverse-chronological (newest at top). Each entry opens with `## [2026-10-24] decision | War Room: option A — "call or can't call"
+Append-only, reverse-chronological (newest at top). Each entry opens with `## [2026-10-25] research | hard third: member- and block-level AI tests; literature survey
+- Hard third is a party-block question: knowing each party block's majority would get 94-96% of can't-call votes right.
+- Block-level AI (Opus helper agents, room-history packets): 2025 +4.3, 2026 +2.2 (90% range includes 0) — FAIL by the frozen rule; not adopted.
+- Own-vote nearest-bill signal (non-AI): unstable across years; not adopted.
+- New page [[research/legislator_vote_prediction_survey]].
+
+## [2026-10-24] decision | War Room: option A — "call or can't call"
 Owner: "A is fine." Mockup v9 (same URL): review switch removed; rows read Yes / No / Can't call (call only at a chance ≥ 81 or ≤ 19 in 100). Replaces the Likely / Leans / Toss-up labels.
 
 ## [2026-10-24] design | War Room mockup: call only when sure — 3 display options for owner review
