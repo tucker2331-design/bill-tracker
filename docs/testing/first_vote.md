@@ -1200,3 +1200,10 @@ rating agents used 3 tool calls (a second read of the long file). Weights learne
 **Verdict: a real but unstable signal; not adopted.** A stable weight needs ratings for many more bills per year
 (~5,000 bills for 2024–26 ≈ $37 in Opus batch API by the earlier estimate — over the owner's $5 cap; or ~50 helper-agent
 runs on the subscription). Text-derived: internal only.
+
+**Hard third only (owner 2026-10-25: "exclusively targeting the last 1/3 ... llms should be able to predict outcomes with
+a accuracy over 80% in that final 1/3").** On "can't call" votes of the rated bills, arm C is right 64.5% (2025, 891
+votes) / 61.2% (2026, 950); with Opus's Republican rating 68.0% / 60.5%. Next: give the model the context a lobbyist
+uses (patron party and majority status, committee, governor's party, this committee's votes on similar bills this
+session — all public before the vote), ask it directly how each party block votes, score on can't-call votes only,
+year-ahead, same memory probe; 100 can't-call blocks from 2025 first — after the owner's 5-hour usage window resets.
