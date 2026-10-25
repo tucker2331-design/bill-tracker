@@ -1249,3 +1249,13 @@ confidence, arm C + AI got the top 100 of 950 hard 2026 votes 92% right (arm C's
 2025; reverse direction 2026 → 2025 newly calls 68 of 344 at 85.3%. 2025 had too few votes (344) to set a guaranteed
 cutoff, so the AI rates the other 89 pilot bills of 2025. Rule: weight AND cutoff (95% Clopper-Pearson bound, ≥81 right
 in 100 — the same rule as all calls) learned on 2025 only; applied unchanged to 2026; PASS if calls > 0 and ≥81% right.
+**COVERAGE RESULT (frozen rule):** 2025 now 148 bills / 884 can't-call votes; weight +0.44 (2026 alone would pick
++0.46 — stable). **No cutoff on 2025 passes the 81-in-100 guarantee → 0 calls on 2026 → FAIL.** Diagnosis only (not a
+new verdict): ranked by confidence, arm C + AI beats arm C's own ranking in both years — 2025 top 50/100/150 82/80/77%
+(arm C 72/71/69%), 2026 98/90/82% (74/70/71%). The signal is consistent; 884 votes are too few to certify it.
+Open: rate ALL 1,147 can't-call bills of 2025 (~115 helper-agent batches ≈ 1.6 five-hour windows, no money) so the
+cutoff can be certified on 2025, then re-score 2026 unchanged. Packet defect to fix first: some Senate committee votes
+are labelled "floor" (venue flags), noticed by three agents; it does not change the frozen 2026 answers.
+Also rejected today (non-AI, year-ahead both ways): summary set-phrases (commission recommendation and "identical to"
+bills are never killed unanimously but are rare; overall +0.9 / −1.0), this-session patron / room kill traces
+(−0.5 / −1.6).
