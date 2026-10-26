@@ -51,6 +51,8 @@ def build():
 def load():
     import glob
     ids = json.load(open(os.path.join(OUT, "ids.json"))); out = {}; bad = 0
+    lf = os.path.join(OUT, "leak_ids.json")                       # summaries that name the bill that absorbed this one
+    leak = set(json.load(open(lf))) if os.path.exists(lf) else set()
     for f in glob.glob(os.path.join(OUT, "answers_*.jsonl")):
         for line in open(f):
             line = line.strip()
@@ -59,7 +61,7 @@ def load():
                     d = json.loads(line)
                 except json.JSONDecodeError:
                     bad += 1; continue                             # counted below
-                if d.get("id") in ids:
+                if d.get("id") in ids and d["id"] not in leak:
                     out[tuple(ids[d["id"]])] = d
     if bad:
         print(f"rubric: {bad} unreadable answer lines skipped")

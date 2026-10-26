@@ -1281,3 +1281,21 @@ bills are never killed unanimously but are rare; overall +0.9 / −1.0), this-se
 - **Next (running):** AI as a measuring tool — a fixed checklist (party support, consensus, set-aside risk, cost,
   mandates, study, crime, technical, local, topic) for all 3,613 first-voted 2025–26 bills from the official
   introduced summaries (LIS `Summaries.csv`, now cached), learned on one year and scored on the other (`rubric_eval.py`).
+
+**AI as a measuring tool — checklist (2026-10-26, `llm_rubric.py` + `rubric_eval.py`). FIRST AI RESULT THAT HOLDS
+BOTH WAYS.** Opus helper agents read only the blinded official summary as introduced (LIS `Summaries.csv`, cached) for
+every first-voted 2025–26 bill and fill a fixed checklist (party support D / R, consensus, set-aside risk, cost,
+program, business / locality / insurance mandate, study, crime, technical, local, topic). A ridge logistic on top of
+arm C learns, from ONE year, how each item × voter party / same-party-as-patron / majority moves the vote; scored on
+the OTHER year. Left out: 8 bills the AI recognized; 6 summaries that name the bill that absorbed them (LIS appends
+"incorporated into …" to some introduced summaries — found by an agent; `leak_ids.json`).
+| interim, 2,516 of 3,613 bills rated (~70% of votes) | all votes | hard third | calls at equal wrong calls |
+|---|---|---|---|
+| learn 2025 → score 2026 | 87.22 → **88.42%** | 65.4 → **69.3%** | 15,850 → **16,460** |
+| learn 2026 → score 2025 | 87.25 → **88.22%** | 68.4 → **71.6%** | 12,224 → **12,648** |
+Log loss 0.288 → 0.272 / 0.299 → 0.282. **Control:** checklists shuffled between bills → −0.11 to +0.02 (no gain), so
+the gain is the content. Stable carriers: own-party support (+0.80 / +0.68), consensus (+0.58 / +0.73), consensus ×
+same-party (−0.41 / −0.38), own support × majority (+0.36 / +0.36). **Memory check (partial):** gain on bills with no
+co-patrons (low profile) +1.4 / +1.5 both years; larger outside House subcommittees (+2.0 to +2.6 vs +0.5 to +0.7) —
+content or memory, not separable here; the 2027 session is the clean test. Remaining 1,000 bills to rate next window.
+Text-derived: INTERNAL ONLY until the owner's Standard #3 call.
