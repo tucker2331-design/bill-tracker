@@ -1259,3 +1259,25 @@ are labelled "floor" (venue flags), noticed by three agents; it does not change 
 Also rejected today (non-AI, year-ahead both ways): summary set-phrases (commission recommendation and "identical to"
 bills are never killed unanimously but are rare; overall +0.9 / −1.0), this-session patron / room kill traces
 (−0.5 / −1.6).
+
+**2026-10-26 round.**
+- **Pooled coverage arm (`llm_pool.py`):** weight and cutoff learned on 2025 + 2026 rated bills (1,834 can't-call
+  votes): weight +0.45, cutoff |p−.5| ≥ .34 passes the 81-in-100 guarantee → 179 new calls (9.8% of hard votes), 87.2%
+  right (2025 81%, 2026 93%). **Frozen for 2027** in `frozen/prereg_2027_ai.json` (instructions, packet builder and
+  scorer pinned by sha256). Not a gain on any scored year yet — the 2027 session is the test.
+- **Where the AI fails (`llm_block_errors.py`, 425 blocks):** the patron's own party when it holds the majority voted
+  yes on only 38% of these hard bills (84 blocks) — the majority killing its own members' bills, mostly unanimously;
+  AI and arm C both ~50% there. Unanimous kills are 31% of blocks; AI 52% right on them.
+- **Packets v2 (`llm_block2.py`):** + committee / subcommittee names, the bill's own record before the vote, session
+  type, Virginia-practice notes. 2025, 129 clean bills: block accuracy 61.1% (v1) → 61.7% (v2); answers correlate 0.91
+  with v1; "killed" chance 36 on killed bills vs 30 otherwise. **No better; not run on 2026.**
+- **Same-meeting twins (`sameday_twin.py`):** near-identical bill heard in the same room the same day — no signal
+  (year-ahead 62.4 → 62.4 / 67.8 → 67.6). Rejected.
+- **Data bug found:** ~940 first votes 2019–2026 (mostly Senate committees, 10–14 ballots, "Passed by indefinitely in
+  …") are labelled "floor" in the roll-call venue. Fixed in v2 packets only; a separate task will fix the source and
+  re-measure the member model.
+- **Leak control:** an agent reading two pack files can see a batch-mate's tally across files — 19 2025 bills dropped
+  from the v1/v2 comparison for that reason. Packing rule: keep linked bills apart per AGENT, not per file.
+- **Next (running):** AI as a measuring tool — a fixed checklist (party support, consensus, set-aside risk, cost,
+  mandates, study, crime, technical, local, topic) for all 3,613 first-voted 2025–26 bills from the official
+  introduced summaries (LIS `Summaries.csv`, now cached), learned on one year and scored on the other (`rubric_eval.py`).
