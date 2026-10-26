@@ -1,0 +1,14 @@
+{
+ "frozen": "2026-10-26",
+ "name": "arm D: block-level AI on can't-call votes",
+ "rule": "for each can't-call vote of arm C (|p-.5|<.31): p = sigmoid(logit(pC) + w*logit(AI block chance)); call if |p-.5| >= cutoff",
+ "w": 0.45,
+ "cutoff": 0.34,
+ "learned_on": "2025 + 2026 pilot bills (295 bills, 1,834 can't-call votes; B139 and 4 recognized bills excluded)",
+ "learn_result": "179 calls (9.8%), 87.2% right; 2025 81%, 2026 93%",
+ "pass_2027": "calls > 0 and right >= 81% on 2027 can't-call votes of AI-rated bills; same packet builder and instructions; recognized bills dropped",
+ "model": "claude opus (helper agents)",
+ "instructions_sha256": "8df9fbbbfa9668aebeaa6c4346632a5eb8f27ab957af762ccc0ae8d20cb7798a",
+ "packet_builder_sha256": "22e1126a15b44f6f981360e1d0e461e23c5b524ed81f3e7b4e40408aadde9c49",
+ "scorer_sha256": "c10dd1b0c35a7a94e5154b29e298042ab1f721eea3c603d7c5a5ea8b43704680"
+}

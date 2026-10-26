@@ -6,7 +6,11 @@ status: active
 
 # Project Log
 
-Append-only, reverse-chronological (newest at top). Each entry opens with `## [2026-10-25] research | hard third: member- and block-level AI tests; literature survey
+Append-only, reverse-chronological (newest at top). Each entry opens with `## [2026-10-26] incident | AI helper agents overran into paid extra usage ($10.73 > $5 cap)
+- Stale usage meter; 7 agents in parallel. Owner told. Rules: [[workflow/ai_usage_budget]].
+- Also: Summaries.csv (2025/26, authorized) cached, 2 requests; pooled AI coverage arm frozen for 2027 (frozen/prereg_2027_ai.json); v2 block prompt no better than v1.
+
+## [2026-10-25] research | hard third: member- and block-level AI tests; literature survey
 - Hard third is a party-block question: knowing each party block's majority would get 94-96% of can't-call votes right.
 - Block-level AI (Opus helper agents, room-history packets): 2025 +4.3, 2026 +2.2 (90% range includes 0) — FAIL by the frozen rule; not adopted.
 - Own-vote nearest-bill signal (non-AI): unstable across years; not adopted.
