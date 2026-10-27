@@ -69,6 +69,7 @@ jobs:
             test_change_ledger_differ.py \
             test_incident_log.py \
             test_incident_log_wiring.py \
+            test_trust_surface_guard.py \
             test_bill_outcome_provenance.py; do
             echo "::group::$t"
             if python3 -u "$t"; then echo "PASS  $t"; else echo "FAIL  $t"; fail=1; fi
