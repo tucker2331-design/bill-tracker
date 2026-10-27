@@ -214,6 +214,7 @@ def _open_tab(create=True):
         if not create:
             return None
         ws = sh.add_worksheet(title=INCIDENT_TAB, rows=200, cols=len(HEADER))
+        print(f"🆕 [incident_log] {INCIDENT_TAB} was ABSENT — created it and seeded the genesis epoch.")
         # gspread 6 signature is update(values, range_name) — the OPPOSITE of the pre-6 order. Calling it
         # positionally as ("A1", [HEADER]) passes the range as the values and vice versa, so the genesis row
         # would have failed the first time the ledger was ever created. Caught by mypy, not by any reviewer
@@ -301,10 +302,20 @@ def run_drill(note="scheduled fire drill"):
 
 
 def status(now=None):
-    """Print the counter the way the Health tab shows it: the verdict WITH its denominator."""
-    ws = _open_tab(create=False)
+    """Print the counter the way the Health tab shows it: the verdict WITH its denominator.
+
+    SEEDS on first run (creates the tab + genesis), as the workflow documents. It used `create=False` until
+    2026-10-26, and that one flag kept the ledger from ever existing: the workflow runs `status` FIRST under
+    `set -e`, a missing tab returned None -> exit 1, so the drill that would also have created the tab never ran.
+    Three monthly runs (Aug-Oct 2026) failed identically while the Health tab correctly showed "unknown". The old
+    message also merged two different failures ("no creds (or tab absent)"), which is why nobody saw it.
+    """
+    if not os.environ.get("GCP_CREDENTIALS"):
+        print("[incident_log] NO CREDENTIALS (GCP_CREDENTIALS is unset) — the ledger is only reachable in CI.")
+        return None
+    ws = _open_tab(create=True)
     if ws is None:
-        print("[incident_log] no creds (or tab absent); run in CI.")
+        print(f"❌ [incident_log] could not open or create {INCIDENT_TAB} although credentials are set.")
         return None
     st = counter_state(_data_rows(ws), now or datetime.now(timezone.utc))
     if st["malformed_rows"]:
