@@ -6,7 +6,10 @@ status: active
 
 # Project Log
 
-Append-only, reverse-chronological (newest at top). Each entry opens with `## [YYYY-MM-DD] <kind> | <title>` so `grep "^## \[" log.md | head -20` gives a parseable timeline.
+Append-only, reverse-chronological (newest at top). Each entry opens with `## [2026-10-26] pr | #246 opened — incident ledger never existed (status() refused to seed); fix + golden
+- Health tab: "incident ledger could not be read" — gviz served the calendar for the missing Incident_Log tab. Monthly ledger runs Aug–Oct all failed at the first step. [[failures/assumptions_audit]] #141. Companion: #238 (completeness payload overwritten in U1) still open.
+
+## [YYYY-MM-DD] <kind> | <title>` so `grep "^## \[" log.md | head -20` gives a parseable timeline.
 
 ## [2026-09-24] finding | content predicts which opposite-party legislator crosses
 
