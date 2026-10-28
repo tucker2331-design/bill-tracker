@@ -58,3 +58,5 @@ tools/historical_cache/va_fiscal/pdf/
 
 # Internet Archive caption files (public meetings), re-downloadable by tools/historical_cache/ia_transcripts.py; parsed segments committed
 tools/historical_cache/va_transcripts/raw/
+tools/calibration/content_votes_cache_venuefix.pkl
+tools/calibration/first_vote_cache_venuefix.pkl

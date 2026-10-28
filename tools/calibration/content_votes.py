@@ -28,7 +28,16 @@ from corpus import load, _party_lookup
 import summary_memory as SM
 
 ZIPS = os.path.join(HERE, "..", "historical_cache", "openstates_va")
-CACHE = os.path.join(HERE, "content_votes_cache.pkl")
+# VENUE_FIX=1 (opt-in, 2026-10-27): venue from the BALLOT COUNT, not the motion text. The text rule labels 2,086
+# committee roll calls "floor" (Senate committee motions say "Passed by indefinitely in Finance and Appropriations",
+# never "committee") and 116 floor votes "committee" ("Committee substitute agreed to"). Off by default because
+# frozen/prereg_2027*.json pin the training rows built from the text rule; the fix writes its own cache.
+VENUE_FIX = os.environ.get("VENUE_FIX") == "1"
+CACHE = os.path.join(HERE, "content_votes_cache_venuefix.pkl" if VENUE_FIX else "content_votes_cache.pkl")
+# Measured 2017-2026: committee/subcommittee roll calls carry at most 22 resolved ballots, floor roll calls at least 30
+# (Senate floor with absences/abstentions); NONE land in 23-29. VA-specific constants: floor_votes() counts every roll
+# call in that gap, so a bigger committee or a thinner floor cannot slip through silently.
+ROOM_MAX, FLOOR_MIN = 22, 30
 YEARS = ("2017", "2018", "2019", "2020", "2021", "2022", "2024", "2025", "2026")
 # 2023 has no legislator-level votes in this source (vote_people.csv absent) and no summaries.
 # 2017-19 lack committee ACTIONS (openstates_committee_gap) but their VOTE files carry committee and
@@ -51,8 +60,12 @@ PROCEDURAL = re.compile(r"constitutional reading|reading of|rules suspended|reco
                         r"substitute rejected|amendment rejected|vote:\s*rejected", re.I)
 
 
-def venue(t):
+def venue(t, n_ballots=None):
     tl = t.lower()
+    if VENUE_FIX and n_ballots is not None:
+        if n_ballots > ROOM_MAX:
+            return "floor"
+        return "sub" if "subcommittee" in tl else "com"
     if "subcommittee" in tl:
         return "sub"
     if "reported from" in tl or "committee" in tl:
@@ -143,7 +156,10 @@ def floor_votes():
             ppl[r["vote_event_id"]].append((who, pp, (r["option"] == "yes") != v[1]))
         for vid, (v, anti) in votes.items():
             if len(ppl[vid]) >= 5:
-                out.append((s, ident[v["bill_id"]], vid, v["start_date"], venue(v["motion_text"]), ppl[vid]))
+                nb = len(ppl[vid])
+                if VENUE_FIX and ROOM_MAX < nb < FLOOR_MIN:
+                    skipped["venue: ballot count in the room/floor gap (check ROOM_MAX)"] += 1
+                out.append((s, ident[v["bill_id"]], vid, v["start_date"], venue(v["motion_text"], nb if VENUE_FIX else None), ppl[vid]))
     return out, unresolved, skipped
 
 

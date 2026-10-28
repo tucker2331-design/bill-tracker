@@ -34,6 +34,7 @@ status: active
 
 ## NEXT (needs owner infra / a decision — then I execute)
 
+- **🖼️ Site redesign demo — FINAL for now (v8, owner 2026-10-27)**: https://claude.ai/artifact/NrFnTFW9MEB3yhnL52GxKg (Today with 5 pipeline options incl. the Gemini round, Calendar, Search with bill pages, sorted War Room list, visual Health). **Do not implement until the owner directs it** ("once we have spare compute"). The artifact is the source of truth (the build files were in a session scratchpad). Pipeline notes: [[design/pipeline_brief]].
 - **🎨 Site-wide design refresh — MOCKUPS FIRST, and only with the owner's explicit go-ahead** (owner 2026-09-28:
   "wait until later ... ask explicit permission we should do mock ups first"). Direction: the War Room v10 look
   (iOS grouped lists, sheets for detail, no initials), keeping every screen's location and abilities the same.

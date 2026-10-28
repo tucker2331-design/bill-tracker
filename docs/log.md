@@ -6,7 +6,19 @@ status: active
 
 # Project Log
 
-Append-only, reverse-chronological (newest at top). Each entry opens with `## [2026-10-26] incident | AI helper agents overran into paid extra usage ($10.73 > $5 cap)
+Append-only, reverse-chronological (newest at top). Each entry opens with `## [2026-10-27] research | Venue leak found and fixed; 2027 addendum frozen; "pulled off the block" rejected
+- Roll-call venue read from motion text labelled Senate committee KILL motions "floor" -> leaked the outcome ([[failures/assumptions_audit]] #143). Ballot-count venue (opt-in VENUE_FIX); honest arm C 83.7% / 84.9% (2025/2026).
+- AI checklist still gains on the honest baseline (+1.1 / +1.4 all votes, +3.0 / +3.4 hard third). frozen/prereg_2027_venuefix.json frozen before any 2027 data.
+- Block-vote idea rejected (`block_vote.py`). War Room replay mockup corrected (v9). Details: [[testing/first_vote]].
+
+## [2026-10-27] decision | Site redesign demo frozen as final for now (v8)
+- Health: days clean left, four rings centred right. Owner will direct the real-site build when compute allows. Link: https://claude.ai/artifact/NrFnTFW9MEB3yhnL52GxKg
+
+## [2026-10-27] decision | Pipeline redesign handed to a fresh model
+- Three rounds of pipeline concepts (session map; 5 restyles; committee braid + 4 add-ons) missed. Only the subway and the committee braid read as improvements.
+- Diagnosis + Gemini brief: [[design/pipeline_brief]]. Also this session: Health mockup re-audited against the no-yellow rule (P25a), P24–P26; gauges now dials; War Room list sorted least-likely-to-pass first (2026 replay).
+
+## [2026-10-26] incident | AI helper agents overran into paid extra usage ($10.73 > $5 cap)
 - Stale usage meter; 7 agents in parallel. Owner told. Rules: [[workflow/ai_usage_budget]].
 - Also: Summaries.csv (2025/26, authorized) cached, 2 requests; pooled AI coverage arm frozen for 2027 (frozen/prereg_2027_ai.json); v2 block prompt no better than v1.
 

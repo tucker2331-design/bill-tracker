@@ -1299,3 +1299,46 @@ same-party (−0.41 / −0.38), own support × majority (+0.36 / +0.36). **Memor
 co-patrons (low profile) +1.4 / +1.5 both years; larger outside House subcommittees (+2.0 to +2.6 vs +0.5 to +0.7) —
 content or memory, not separable here; the 2027 session is the clean test. Remaining 1,000 bills to rate next window.
 Text-derived: INTERNAL ONLY until the owner's Standard #3 call.
+
+**"Pulled off the block" (Gemini suggestion; `block_vote.py`, 2026-10-27). REJECTED.** LIS records "Block Vote" only
+on Senate FLOOR actions; no committee action carries it and committee report votes never share a vote id across
+bills, so the committee version Gemini described is not observable in any source we may use. The floor version is
+forward-looking (second reading comes on an earlier day than the passage roll call) and was tested on 2025–26:
+- LIS labels Senate second-reading blocks only from 2026 (2025: none) — a recording change, so it cannot be learned
+  year-ahead.
+- 2026: bills read in the block were contested MORE often (241 of 481) than bills read on their own (65 of 246) —
+  second reading is a formality the Senate blocks wholesale.
+- Committee report unanimous: 14 of 246 (block) vs 8 of 180 (own) contested; report had a No: 227 of 235 vs 54 of 57.
+  The committee tally already carries the signal; block status adds nothing.
+
+**Venue label fixed — and the member-model headline drops (`venue_fix.py`, 2026-10-27; case law #143).** The roll-call
+venue was read from the motion text, so 2,086 Senate committee kill motions ("Passed by indefinitely in …",
+"Continued to … in …") were labelled "floor" — a label that told the model a kill motion had been made. Ballot count
+instead (committee ≤ 22, floor ≥ 30, none between), same reference model (depth 6, lr .03, 260 rounds), year-ahead:
+| | old (leaky) venue | fixed venue |
+|---|---|---|
+| 2025 (learn 2019–24) | 86.09% · hard third 67.77% · 12,133 calls, 642 wrong | **81.25% · 64.38% · 9,002 calls, 657 wrong** |
+| 2026 (learn 2019–25) | 85.86% · 65.90% · 15,712 calls, 771 wrong | **83.41% · 64.02% · 14,000 calls, 857 wrong** |
+First votes labelled "floor" by the old rule: 1,895 ballots in 2025 (29% for the bill) and 2,234 in 2026 (20%), vs
+90% / 86% on "committee". **Every member-model figure in this file before this entry used the leaky venue**, including
+arms A/B/C, the hard-third work and the AI checklist gain (measured on top of arm C). The frozen 2027 arms use it too —
+their 2027 scores will be inflated the same way, because 2027 rows are built after the fact from the same motion text.
+War Room replay redone with the fixed venue (reference model, learned 2019–2025; Senate Education and Health, 2–8 Feb
+2026, 48 bills): 14 bills short of a majority in called yes — 6 of them failed; 34 with enough — 1 failed. The leaky
+version had put exactly the 6 failures at the top; now they sit inside the top 14 (the top two, SB 721 and SB 740,
+passed). Mockup v9 corrected.
+
+**Honest baseline + addendum (2026-10-27, owner: "if you think its best then your clear to proceed").** Arm C's frozen
+code (`booster_2027.predict_boosted`) on the fixed-venue rows (`venue_fix.py armc`), year-ahead; "can't call" = |p−.5| < .31:
+| | member | can't-call third | calls (wrong) |
+|---|---|---|---|
+| 2025 (learn 2019–24) | **83.68%** | 69.18% | 10,295 (628) |
+| 2026 (learn 2019–25) | **84.91%** | 67.35% | 14,096 (710) |
+AI checklist on top of the honest arm C (`venue_fix.py rubric`, 2,695 checklists, ~74% of votes), learned on one year:
+| | all votes | hard third | calls at equal wrong |
+|---|---|---|---|
+| learn 2025 → score 2026 | 84.91 → **86.03%** | 67.35 → **70.39%** | 14,096 → **15,035** |
+| learn 2026 → score 2025 | 83.68 → **85.07%** | 69.18 → **72.57%** | 10,295 → **11,247** |
+The checklist gain holds (slightly larger) once the leak is gone. **Frozen:** `frozen/prereg_2027_venuefix.json`
+(sha256 0467645…), pairing with the three earlier 2027 files; arms C_fixed and reference_fixed on VENUE_FIX rows. The
+original arms stay as registered and will be reported with the leak caveat.
