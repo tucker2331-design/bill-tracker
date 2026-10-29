@@ -8,6 +8,13 @@ status: active
 
 Append-only, reverse-chronological (newest at top). Each entry opens with `## [YYYY-MM-DD] <kind> | <title>` so `grep "^## \[" log.md | head -20` gives a parseable timeline.
 
+## [2026-10-29] pr | #246 merged — incident ledger seed + Gemini fold-in
+- Gemini (medium): `status()` crashed with a raw traceback if `_open_tab(create=True)` raised (bad creds JSON, gspread, network). Now caught, categorized `API_FAILURE`, exit 1 — same fail-safe shape as `record_incident`/`close_incident`.
+- Also repaired this page's header: the #246-opened entry had been spliced into the middle of the intro sentence.
+
+## [2026-10-26] pr | #246 opened — incident ledger never existed (status() refused to seed); fix + golden
+- Health tab: "incident ledger could not be read" — gviz served the calendar for the missing Incident_Log tab. Monthly ledger runs Aug–Oct all failed at the first step. [[failures/assumptions_audit]] #141. Companion: #238 (completeness payload overwritten in U1) still open.
+
 ## [2026-09-24] finding | content predicts which opposite-party legislator crosses
 
 Owner asked for controversy measured from content *"historically and relative to individual politicans"*,
