@@ -223,8 +223,8 @@ def _workflow_states():
     except RuntimeError as e:
         print(f"⚠️ [trust_surface] could not read workflow states ({e}); treating every scheduled job as active")
         return {}
-    return {os.path.basename(w.get("path", "")): (w.get("state", ""), _parse_ts((w.get("created_at") or "")[:19] + "Z"))
-            for w in wfs}
+    born = lambda w: _parse_ts(w["created_at"][:19] + "Z") if w.get("created_at") else None   # noqa: E731
+    return {os.path.basename(w.get("path", "")): (w.get("state", ""), born(w)) for w in wfs}
 
 
 def check_workflows(now):
