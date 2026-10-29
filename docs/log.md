@@ -8,6 +8,12 @@ status: active
 
 Append-only, reverse-chronological (newest at top). Each entry opens with `## [YYYY-MM-DD] <kind> | <title>` so `grep "^## \[" log.md | head -20` gives a parseable timeline.
 
+## [2026-10-29] pr | #244 — Slack alerts: two Codex P1s (it never ran on real data) + Gemini
+- A column-select gviz answer has no header row, so checking its row 0 threw on EVERY configured run. The layout is now
+  checked on the real row 1; every select row is data. The test fake had returned a header there — it now mirrors the wire.
+- `alert_state` is keyed by `(state, session_code, bill_number)`: HB1 of a new session gets a silent first sighting. 0003
+  was still an unapplied owner step, so the key was fixed in place. Writes go in D1 batches of at most 100. 24 tests.
+
 ## [2026-10-29] pr | #243 — contact log: bot fold-in (Codex P2 x2, Gemini)
 - The server refuses a future `occurred_on` (UTC date + 1 day of slack), not only the form's `max`; 5 tests.
 - Deploy-order safety: Workers Builds deploys on merge but migration 0002 is applied by hand, so until it is, a missing
@@ -45,6 +51,12 @@ Append-only, reverse-chronological (newest at top). Each entry opens with `## [Y
 
 ## [2026-10-26] pr | #246 opened — incident ledger never existed (status() refused to seed); fix + golden
 - Health tab: "incident ledger could not be read" — gviz served the calendar for the missing Incident_Log tab. Monthly ledger runs Aug–Oct all failed at the first step. [[failures/assumptions_audit]] #141. Companion: #238 (completeness payload overwritten in U1) still open.
+
+## [2026-09-28] build | Slack alerts (free) for the team's bills
+
+Replaces the email plan per owner. Worker Cron Trigger every 15 min → diff the team's position bills (current session
+only) against D1 `alert_state` → one templated digest to a Slack incoming webhook. Silent first sight, retry on a
+refused post, refuses to run on column drift or a missing session. [[state/va_build_queue]] E8.
 
 ## [2026-09-28] build | contact log on the bill card (name · date · note)
 
