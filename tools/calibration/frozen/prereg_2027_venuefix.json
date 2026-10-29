@@ -1,0 +1,54 @@
+{
+ "arms": {
+  "C_fixed": {
+   "fn": "booster_2027.predict_boosted",
+   "rows": "VENUE_FIX"
+  },
+  "reference_fixed": {
+   "depth": 6,
+   "fn": "gbm.GBM",
+   "lr": 0.03,
+   "rounds": 260,
+   "rows": "VENUE_FIX"
+  }
+ },
+ "code_sha256": {
+  "blend_2027.py": "4ff7b04a1101030c20972094307b6a3876d0baf88a1ea102ff628bacdb6854f7",
+  "booster_2027.py": "d2c05e8c7aa53b44c228a85ef3d1b330ea208bef78a85e0cc35017db884d07c4",
+  "content_votes.py": "262c880e787eca27fe4da40ee7b92553e2d3cd046b6292af2ff570ad00eef956",
+  "first_vote.py": "2435caad7603bb31873d135c22bc8efae5c31ccf498405a892749d1e1298b4c8",
+  "gbm.py": "6112966ff67d61e9f3687dfdd48eafb5e237e5fce166f7dd9027790a84dec099",
+  "venue_fix.py": "e9bc5341e445840a1cc01d8579e56bf353ba6b67b4a47e5e3eb50c5eee537302"
+ },
+ "expected_from_2025_2026": {
+  "confirm": {
+   "call_wrong": 628,
+   "calls": 10295,
+   "hard": 0.6918,
+   "member": 0.8368,
+   "n": 17553
+  },
+  "repeat": {
+   "call_wrong": 710,
+   "calls": 14096,
+   "hard": 0.6735,
+   "member": 0.8491,
+   "n": 22163
+  }
+ },
+ "frozen_on": "2026-10-27",
+ "pairs_with_sha256": {
+  "prereg_2027.json": "baff9d0a9addb1414bd2d0115266c78f2603febf0bf00952d1dfacf351321f90",
+  "prereg_2027_addendum.json": "1102161783d697429742d0e24d4b907113b1f18e3d3371f5114d25f48a69f50b",
+  "prereg_2027_ai.json": "ba530de154cc483513c48b2be3df397d6a165f8226118c33701e947bdaaba84c"
+ },
+ "primary": "member accuracy, hardest third (|p-.5| < .31), calls and wrong calls -- C_fixed vs reference_fixed",
+ "rows": "content_votes VENUE_FIX=1, rebuilt by venue_fix.rebuild (first_vote caches *_venuefix)",
+ "test_year": 2027,
+ "train_rows_sha256": "fd9e6b9bd56aac18d37fc5362896317b306f9d2e250dc106ef2e07502d8d0da7",
+ "venue_rule": {
+  "floor_min": 30,
+  "room_max": 22
+ },
+ "why": "case law #143: the registered rows read venue from the motion text, which encodes the outcome (Senate committee kill motions labelled floor). These arms use the ballot-count venue."
+}

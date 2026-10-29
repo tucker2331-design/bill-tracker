@@ -1,0 +1,1 @@
+<AmendmentItemsWebService xmlns="http://schemas.datacontract.org/2004/07/" xmlns:i="http://www.w3.org/2001/XMLSchema-instance"><Amendments><PartsWS><PartNumber>0</PartNumber><PartDescription i:nil="true"/><SecretariatList i:nil="true"/></PartsWS></Amendments></AmendmentItemsWebService>

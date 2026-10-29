@@ -6,7 +6,90 @@ status: active
 
 # Project Log
 
-Append-only, reverse-chronological (newest at top). Each entry opens with `## [YYYY-MM-DD] <kind> | <title>` so `grep "^## \[" log.md | head -20` gives a parseable timeline.
+Append-only, reverse-chronological (newest at top). Each entry opens with `## [2026-10-27] research | Venue leak found and fixed; 2027 addendum frozen; "pulled off the block" rejected
+- Roll-call venue read from motion text labelled Senate committee KILL motions "floor" -> leaked the outcome ([[failures/assumptions_audit]] #146, filed as #143 before renumbering). Ballot-count venue (opt-in VENUE_FIX); honest arm C 83.7% / 84.9% (2025/2026).
+- AI checklist still gains on the honest baseline (+1.1 / +1.4 all votes, +3.0 / +3.4 hard third). frozen/prereg_2027_venuefix.json frozen before any 2027 data.
+- Block-vote idea rejected (`block_vote.py`). War Room replay mockup corrected (v9). Details: [[testing/first_vote]].
+
+## [2026-10-27] decision | Site redesign demo frozen as final for now (v8)
+- Health: days clean left, four rings centred right. Owner will direct the real-site build when compute allows. Link: https://claude.ai/artifact/NrFnTFW9MEB3yhnL52GxKg
+
+## [2026-10-27] decision | Pipeline redesign handed to a fresh model
+- Three rounds of pipeline concepts (session map; 5 restyles; committee braid + 4 add-ons) missed. Only the subway and the committee braid read as improvements.
+- Diagnosis + Gemini brief: [[design/pipeline_brief]]. Also this session: Health mockup re-audited against the no-yellow rule (P25a), P24–P26; gauges now dials; War Room list sorted least-likely-to-pass first (2026 replay).
+
+## [2026-10-26] incident | AI helper agents overran into paid extra usage ($10.73 > $5 cap)
+- Stale usage meter; 7 agents in parallel. Owner told. Rules: [[workflow/ai_usage_budget]].
+- Also: Summaries.csv (2025/26, authorized) cached, 2 requests; pooled AI coverage arm frozen for 2027 (frozen/prereg_2027_ai.json); v2 block prompt no better than v1.
+
+## [2026-10-25] research | hard third: member- and block-level AI tests; literature survey
+- Hard third is a party-block question: knowing each party block's majority would get 94-96% of can't-call votes right.
+- Block-level AI (Opus helper agents, room-history packets): 2025 +4.3, 2026 +2.2 (90% range includes 0) — FAIL by the frozen rule; not adopted.
+- Own-vote nearest-bill signal (non-AI): unstable across years; not adopted.
+- New page [[research/legislator_vote_prediction_survey]].
+
+## [2026-10-24] decision | War Room: option A — "call or can't call"
+Owner: "A is fine." Mockup v9 (same URL): review switch removed; rows read Yes / No / Can't call (call only at a chance ≥ 81 or ≤ 19 in 100). Replaces the Likely / Leans / Toss-up labels.
+
+## [2026-10-24] design | War Room mockup: call only when sure — 3 display options for owner review
+Owner: "we should only call the ones we are really confident in." HB 1515 mockup (same URL, v8): Likely/Leans/Toss-up replaced by Call (chance ≥ 81 or ≤ 19 in 100, cutoff from `guaranteed_calls.py`) vs Can't call; options A (call or can't call), B (+ lean), C (grouped + subcommittee reliability). 2026 counts: 15,201 of 15,850 calls right; can't-call guesses 4,130 of 6,313. Awaiting the owner's pick.
+
+## [YYYY-MM-DD] <kind> | <title>` so `grep "^## \[" log.md | head -20` gives a parseable timeline.
+
+## [2026-10-20] research | 2027 forward test frozen (arms A + B); drop risk rankable, not callable
+Owner approved the weekly session refit. `prereg_2027.json` locks arm A (blend) and arm B (blend + weekly refit), both verified identical to research. Drop model (struck/tabled/continued at first vote): AUC 0.81–0.92, top 10% risk holds 31–57% of drops, but few bills reach P ≥ .5; no gain to member votes. [[testing/first_vote]].
+
+## [2026-10-19] research | blend approved + frozen; gains counted; weekly session refit lifts all three measures every year
+Owner approved bagged trees + 20% linear (frozen `blend_2027.py`, verified identical). Net +142 votes / +13 bill results on 2026. Misses left mapped by vote shape; 'unanimous no' first votes are mostly patron withdrawals (strike / table), traces rejected. Weekly refit of the linear half on the session's earlier votes (gated at 3,000 votes): 2026 member 87.09, hardest third 69.58, room 92.66; z 6.7/9.2/9.8. Awaiting owner approval. [[testing/first_vote]].
+
+## [2026-10-17] research | second model family — bagged trees + 20% linear lifts all three measures in all three years
+Smooth penalised logistic (hinges, 8 products, × side) blended 20% with bagged trees: member 85.12/86.33/86.50, hardest third 67.12/68.47/67.82, room 87.92/88.85/92.11 (2024/2025/2026). Per-member layer, recency weights, more bags rejected. Adoption + frozen 2027 test awaits the owner. Details in [[testing/first_vote]].
+
+## [2026-10-16] research | public traces of private decisions — six tested, none adds
+Leaders' co-sponsorship, draft order, bargaining, governor's party, voter's seat margin, patron's seat margin. All reject or untestable (`private_traces.py`; details in [[testing/first_vote]]). Election margins added from the Wikipedia API (`election_margins.py`). Bagging remains the only gain; adoption awaits the owner.
+
+## [2026-09-29] research | panel plan executed — 2026 scored once, bill-fate model, four sources tested
+
+2026 locked test scored against a spec committed first: 85.9% (84.9–86.8). Bill-fate model accepted (rolling z 14.5;
+2026 AUC 0.80 vs 0.68). Rejected: party-positions-first (z −7.6), GDELT (no gain; download stopped), House written
+testimony (z −2.9). VALCV scorecard positions positive but unproven (z 1.3). New: `prereg_2026.py`, `fate.py`,
+`accept.py`, `theta.py`, `gdelt_effect.py`, `stakeholder_effect.py`, `hodspeak_comments.py`, `va_positions.py`.
+Audit #144 (West Virginia substring). See [[testing/panel_2026-09-29]], [[testing/bill_fate]].
+
+## [2026-09-29] decision | panel follow-up — contact log out of the model, UI unchanged
+
+Owner: contact log stays out of the model (separate future item; if contact shows a party-line whip the model is
+redundant for that bill anyway). UI stays as is — the "bill at the top of the War Room" restructure is not adopted.
+Surviving plan: lock scoring + score 2026 once; bill-fate model; party-position model; multi-year acceptance rule;
+GDELT test. See [[testing/panel_2026-09-29]] § Owner decisions.
+
+## [2026-09-29] research | five-perspective panel on the prediction model
+
+Lobbyist, mathematician, statistician, marketing officer and "genius" each researched and wrote a memo, then rebutted
+the others. Converged: stop ballot-feature hunting, score locked 2026 once with pre-registered metrics, re-pose the
+target as bill fate + party positions + room outcome, put the bill at the top of the War Room, retire "break 95" /
+"hardest third >80%", and treat human information as the only step change. Corrections logged in
+[[testing/first_vote]]. Full record: [[testing/panel_2026-09-29]].
+
+## [2026-09-28] design | War Room v10 — member cards that say how much each reason matters
+
+Owner feedback on v9: drop the initials; the team section mixed "our position" with an unclear contact log; the
+member card's two raw counts were odd to an amateur and too little evidence. v10: position and contact log are
+separate groups, each contact names who was reached, by whom, and how; the member card starts from the party
+base rate and lists every measured reason with a direction and a strength, plus a "checked, doesn't change the
+guess" list. Method saved as `tools/calibration/why_member.py`; findings in [[testing/first_vote]]. Site-wide
+refresh waits for the owner's permission and mockups ([[state/current_status]]).
+
+## [2026-10-29] pr | #245 — member explanations: Semgrep gate cleared, bot fold-in, case law renumbered
+- CI was red on 9 Semgrep house-rule findings. Fixed in the two unpinned files (prereg_2027.py: America/New_York date;
+  rerun_no2021.py: the retry says so). The three files pinned by sha256 in tools/calibration/frozen/*.json (fate.py,
+  prereg_2026.py, venue_fix.py) are excluded from that ONE rule in .semgrep/house-rules.yml with the reason; all pinned
+  hashes re-checked unchanged.
+- why_member: the peer anchor swaps only MEASURED member-varying inputs (Codex P2); no same-party/side peers -> an explicit
+  error row, never invented peers (Gemini high); dead code removed.
+- Case law: this branch's #141/#142/#143 are now **#144** (GDELT West Virginia), **#145** (fiscal-statement mirage),
+  **#146** (venue leak). The frozen venue_fix.py / prereg_2027_venuefix.json still say "case law #143"; both #143 and
+  #146 carry a note saying so.
 
 ## [2026-10-29] pr | #247 — trust-surface guard (watches every scheduled job + the bill payload)
 - Opened from `claude/health-tab-watchers`. Bot fold-in: liveness ignores cancelled/skipped runs; verdicts use SCHEDULED
