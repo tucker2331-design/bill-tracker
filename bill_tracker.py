@@ -42,6 +42,14 @@ from google.oauth2.service_account import Credentials
 
 import cadence   # LIS-safety guardrail #5 — the SHARED cadence decision (same signal the calendar worker maintains)
 
+# The completeness payload's cell. MUST differ from every other cell this worker writes on the same tab --
+# above all cadence.BILL_LAST_RUN_CELL (see the collision note in write_bill_tracker). Checked at import, so a
+# future edit that re-collides fails at import time on the first run rather than silently for months.
+COMPLETENESS_CELL = "V1"
+if COMPLETENESS_CELL == cadence.BILL_LAST_RUN_CELL:
+    raise RuntimeError(f"Bill_Tracker cell collision: completeness and the cadence marker are both "
+                       f"{COMPLETENESS_CELL}; one would overwrite the other every cycle")
+
 # Reuse the worker's proven, guarded primitives + structural resolvers — single source of truth.
 from calendar_worker import (
     safe_fetch_csv,
@@ -809,10 +817,15 @@ def write_bill_tracker(records, completeness):
     # 19 data cols (A..S — "Outcome Origin" took the former empty spacer at S, so every A..R index the
     # front end reads is unchanged); the completeness summary still lives at T1 (col 20); the cadence
     # last-run marker (U1, col 21, guardrail #5 — this worker's OWN throttle clock) sits clear of the data.
-    # Completeness moves T -> U with the appended Class column. The FRONT END no longer depends on this
+    # Completeness is at V1 (it briefly sat at U1 and collided with the cadence marker -- see below). The FRONT END no longer depends on this
     # position: it locates the payload by CONTENT (the cell that parses as JSON carrying `universe_count`),
     # so a future column can be appended without a coordinated front-end change. See web/src/data/gviz.ts.
-    completeness_cell, need_rows, need_cols = "U1", len(rows) + 50, 22
+    # COLLISION FIXED 2026-09-28: completeness moved T -> U on 2026-07-30 (d7d55df) ONTO cadence's
+    # BILL_LAST_RUN_CELL (U1). The batch below writes completeness to U1 and then the last-run timestamp to U1,
+    # so for two months every cycle (a) erased the trust payload the front end reads and (b) left the
+    # unverified-delta guard with no baseline -- it read a timestamp, hit ValueError, and declined to alarm,
+    # silently, every run. Completeness now sits at V1; the assert makes a recurrence impossible to ship.
+    completeness_cell, need_rows, need_cols = COMPLETENESS_CELL, len(rows) + 50, 23
 
     try:
         ws = sheet.worksheet(BILL_TRACKER_TAB)
