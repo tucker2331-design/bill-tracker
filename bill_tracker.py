@@ -377,20 +377,22 @@ def _build_copatrons(blob_code):
     bulk file carries the same list structurally. Enrichment only: an empty/failed fetch returns ({}, stats with
     rows=0) and the caller alerts; a bill with no co-patrons gets [] (an honest empty, not a failure)."""
     stats = {"rows": 0, "skipped_no_bill": 0, "unknown_roles": 0}
-    df = safe_fetch_csv(f"https://lis.blob.core.windows.net/lisfiles/{blob_code}/Sponsors.csv")
+    df = safe_fetch_csv(f"https://lis.blob.core.windows.net/lisfiles/{blob_code}/Sponsors.csv",
+                        markers=(b"BILL_NUMBER", b"PATRON_TYPE"))
     if df.empty:
         return {}, stats
-    cols = {c.lower(): c for c in df.columns}
-    need = ("bill_number", "member_name", "member_id", "patron_type")
+    # case- and underscore-insensitive, so BILL_NUMBER / BillNumber / bill_number all resolve (Gemini #239)
+    cols = {c.lower().replace("_", ""): c for c in df.columns}
+    need = ("billnumber", "membername", "memberid", "patrontype")
     if not all(c in cols for c in need):
         stats["missing_columns"] = [c for c in need if c not in cols]
         return {}, stats
     stats["rows"] = len(df)
     out = {}
-    for b, nm, mid, pt in zip(df[cols["bill_number"]].map(_clean_bill),
-                              df[cols["member_name"]].fillna("").astype(str),
-                              df[cols["member_id"]].fillna("").astype(str),
-                              df[cols["patron_type"]].fillna("").astype(str)):
+    for b, nm, mid, pt in zip(df[cols["billnumber"]].map(_clean_bill),
+                              df[cols["membername"]].fillna("").astype(str),
+                              df[cols["memberid"]].fillna("").astype(str),
+                              df[cols["patrontype"]].fillna("").astype(str)):
         if not b:
             stats["skipped_no_bill"] += 1          # counted (source-miss visibility), never silent
             continue
