@@ -8,6 +8,12 @@ status: active
 
 Append-only, reverse-chronological (newest at top). Each entry opens with `## [YYYY-MM-DD] <kind> | <title>` so `grep "^## \[" log.md | head -20` gives a parseable timeline.
 
+## [2026-10-29] incident | the guard's first run opened a FALSE never_run incident on itself — fixed
+- #247's first (dispatched) run judged `trust_surface_guard.yml` on SCHEDULED runs only, found none, and recorded an
+  `unverified` incident (`trust_surface:workflow:trust_surface_guard.yml`). A false alarm is an incident (P24), so the
+  row stays; it closes on the next guard run. Fix: a workflow younger than its cron's grace (GitHub's own `created_at`)
+  is `not_yet_due`, not `never_run`; unknown birth gets no allowance. 32 goldens.
+
 ## [2026-10-29] pr | #247 — trust-surface guard (watches every scheduled job + the bill payload)
 - Opened from `claude/health-tab-watchers`. Bot fold-in: liveness ignores cancelled/skipped runs; verdicts use SCHEDULED
   runs plus an explicit `DISPATCH_IS_PRODUCTION` set (only `incident_ledger.yml`) so a diagnostic dispatch can't close a

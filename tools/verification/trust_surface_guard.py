@@ -43,7 +43,9 @@ STATUS_TAB = "Guard_Status"
 STATUS_HEADER = ["CheckedUTC", "Check", "Label", "State", "SinceUTC", "LastSuccessUTC", "FailuresInARow",
                  "ExpectedEvery", "Detail", "URL"]
 DETECTOR = "trust_surface"
-STATES_OK = {"ok", "disabled", "running"}   # disabled = switched off on purpose; running = first run in progress
+STATES_OK = {"ok", "disabled", "running", "not_yet_due"}
+# disabled = switched off on purpose; running = first run in progress; not_yet_due = a NEW workflow whose first
+# scheduled fire has not come round yet (its own file is younger than the grace its cron allows).
 # Liveness and recovery are judged on SCHEDULED runs only: a manual dispatch can be a diagnostic that skips the
 # production write (ny_bill_tracker.yml's check-config / dry-run), and its success must not close a production
 # failure (Codex #247). The exception is a workflow whose EVERY dispatch runs the same production path as its
@@ -160,8 +162,9 @@ def production_runs(runs, fn):
     return [r for r in runs if r.get("event") == "schedule" or fn in DISPATCH_IS_PRODUCTION]
 
 
-def judge_runs(runs, period, now):
-    """Pure verdict over newest-first completed/in-progress runs. Returns dict (no I/O; unit-tested)."""
+def judge_runs(runs, period, now, born=None):
+    """Pure verdict over newest-first completed/in-progress runs. Returns dict (no I/O; unit-tested).
+    `born` = when GitHub first saw the workflow file (None if unknown -> no allowance, fail-closed)."""
     done = [r for r in runs if r.get("status") == "completed"]
     last_success = next((_parse_ts(r.get("created_at")) for r in done if r.get("conclusion") == "success"), None)
     fails = 0
@@ -192,6 +195,11 @@ def judge_runs(runs, period, now):
         # incident here would put a false alarm on the ledger on day one. GitHub's job timeout ends a stuck run,
         # after which a real verdict follows.
         state, since, detail = "running", None, "first run in progress"
+    elif not done and born is not None and now - born < grace:
+        # 2026-10-29: the guard's own first DISPATCHED run saw no SCHEDULED run of itself (dispatches are filtered
+        # out above) and opened a false never_run incident. A workflow younger than its grace has simply not been
+        # due yet. Born is GitHub's own created_at for the file; unknown -> this branch never fires.
+        state, since, detail = "not_yet_due", None, f"new: first scheduled run due by {_iso(born + grace)}"
     elif not done:
         state, since, detail = "never_run", None, "no completed run on record"
     elif last_success is None:
@@ -208,20 +216,22 @@ def judge_runs(runs, period, now):
 
 
 def _workflow_states():
-    """{file: state} from GitHub (active / disabled_manually / disabled_inactivity ...). {} if unreachable."""
+    """{file: (state, created_at)} from GitHub (active / disabled_manually / disabled_inactivity ...; created_at
+    as a datetime or None). {} if unreachable."""
     try:
         wfs = _gh("/actions/workflows?per_page=100").get("workflows", [])
     except RuntimeError as e:
         print(f"⚠️ [trust_surface] could not read workflow states ({e}); treating every scheduled job as active")
         return {}
-    return {os.path.basename(w.get("path", "")): w.get("state", "") for w in wfs}
+    return {os.path.basename(w.get("path", "")): (w.get("state", ""), _parse_ts((w.get("created_at") or "")[:19] + "Z"))
+            for w in wfs}
 
 
 def check_workflows(now):
     rows = []
     states = _workflow_states()
     for fn, name, cron, why in scheduled_workflows():
-        st = states.get(fn, "active")
+        st, born = states.get(fn, ("active", None))
         if st and st != "active":
             # Switched off deliberately (e.g. the paused legacy worker): shown, never an incident. NOTE GitHub's
             # own `disabled_inactivity` (60 days without a push) also lands here -- shown, so it cannot hide.
@@ -241,7 +251,7 @@ def check_workflows(now):
             continue
         try:
             runs = _gh(f"/actions/workflows/{fn}/runs?per_page=30").get("workflow_runs", [])
-            v = judge_runs(production_runs(runs, fn), period, now)
+            v = judge_runs(production_runs(runs, fn), period, now, born=born)
         except RuntimeError as e:
             v = {"state": "unknown", "since": None, "last_success": None, "fails": 0,
                  "detail": f"could not read run history: {e}"[:300], "url": ""}
