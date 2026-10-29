@@ -130,7 +130,12 @@ export async function apiFetch(path: string, init: RequestInit = {}): Promise<Re
   if (!current) throw new Error("not signed in");
   const headers = new Headers(init.headers);
   headers.set("Authorization", `Bearer ${current.token}`);
-  return fetch(path, { ...init, headers });
+  const res = await fetch(path, { ...init, headers });
+  // A 401 means the Google ID token expired (about an hour) or was revoked. Treat it as a closed session so the
+  // sign-in gate reopens, instead of every background read failing behind a screen that still looks signed in
+  // (Codex #242). 403 (signed in, not on the team) is a different answer and is left to the caller.
+  if (res.status === 401) signOut();
+  return res;
 }
 
 /** For tests and for the sign-out path. Not exported through the barrel. */

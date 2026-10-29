@@ -1,6 +1,6 @@
 ---
 tags: [state, live]
-updated: 2026-09-10
+updated: 2026-09-28
 status: active
 ---
 
@@ -33,6 +33,15 @@ status: active
 - **VA accuracy state: CLEAR + holding (2026-07-12).** The 0→66 regression is root-caused and closed ([[failures/assumptions_audit#105]] — an `UnboundLocalError` in the agenda block wearing an API-outage costume; §9 and cache-warmth both innocent). All four deferred pieces shipped + live-verified: agenda/meeting links (#214), §9 anchor ladder re-merge (#215), the scroll affordance (#216), and the last engineering residual — the label-based agenda-FETCH target (#217, [[state/open_anti_patterns]] #13, now resolved). No open VA engineering items; the only open PR is the Codex NY-probe (#175, NY). **Standing watch each cycle:** `meeting_unsourced=0`, breaker clear, `anchor_unresolved` stays 1, agenda/link drift canaries quiet. Everything below in NEXT is owner-gated (infra/decision), not blocked on me.
 
 ## NEXT (needs owner infra / a decision — then I execute)
+
+- **🔒 The whole app goes private — 5 owner steps, in order:** team list secret → service-account secret → merge
+  → set the Google Sheet to Restricted → Streamlit secret + private. Until step 4 the data is still readable by
+  anyone with the sheet id (it is in the public repo). [[architecture/verification_durability]] ·
+  [[failures/assumptions_audit]] #143.
+- **📝 Contact log (name · date · note per bill) needs one command after merge:**
+  `npx wrangler d1 migrations apply bill-tracker-db --remote` (makes tone and legislator optional; table is empty).
+- **📧 Alerts to users need one yes: $5/month Workers Paid for Cloudflare Email Service** (3,000 emails/mo
+  included, then $0.35 per 1,000; no new vendor). Compared against Resend and SES in [[state/va_build_queue]] E8.
 
 - **📊 HISTORICAL DATA — SOLVED, pending one owner step: [[knowledge/openstates_bulk_va]].** Open States
   publishes **20 Virginia sessions (2017–2027) under CC0 with no commercial restriction** — against the 3

@@ -1,12 +1,87 @@
 ---
 tags: [log, meta]
-updated: 2026-09-10
+updated: 2026-09-28
 status: active
 ---
 
 # Project Log
 
 Append-only, reverse-chronological (newest at top). Each entry opens with `## [YYYY-MM-DD] <kind> | <title>` so `grep "^## \[" log.md | head -20` gives a parseable timeline.
+
+## [2026-10-29] pr | #243 — contact log: bot fold-in (Codex P2 x2, Gemini)
+- The server refuses a future `occurred_on` (UTC date + 1 day of slack), not only the form's `max`; 5 tests.
+- Deploy-order safety: Workers Builds deploys on merge but migration 0002 is applied by hand, so until it is, a missing
+  `created_by` column answers a categorized 503 naming `0002_contact_log.sql` instead of an anonymous 500.
+- The "Who" name fills in once identity loads and never overwrites what was typed.
+
+## [2026-10-29] pr | #242 — private app: bot fold-in (Codex P1 + P2, Gemini high; two Gemini mediums declined)
+- An expired Google ID token (~1 h) now signs out on the first 401, so the gate asks for a fresh one instead of every
+  background read failing behind a screen that still looks signed in.
+- `/api/health` says `sheet_auth_configured` (a bad/revoked/unshared key still reads as configured); the owner's readiness
+  step now checks `x-sheet-auth: service_account` on a real `/api/sheet` read. `sheet_csv` caches SA creds per process.
+- Declined: broad except in `calendar_xray.py` / `pages/ray2.py` — the failure is already a loud traceback, and those
+  files stay untouched this run (replied on both threads).
+
+## [2026-10-29] pr | #241 — team positions: Codex fold-in; case-law entry renumbered #142 -> #143
+- A failed positions load now retries when the bill or War Room mounts again (it stuck until a reload). The War Room no
+  longer says positions are missing. "Identity is not membership" is now [[failures/assumptions_audit]] **#143**
+  (#142 went to #238's cell collision).
+
+## [2026-10-29] pr | #240 — summaries: bot fold-in (Codex x3, Gemini x3)
+- Summaries.csv passes its own fetch markers (`SUM_BILNO`/`SUMMARY_TYPE`) — same root cause as #239's Sponsors P1.
+- `write_bill_summaries` never clears first: overwrite in place, blank the stale tail, THEN stamp the hash; a failed write
+  leaves the last good tab and an old hash (golden covers it). Missing cells are `""` not `"nan"`. The app evicts a cached
+  "unavailable" so a reopen retries; empty CSV body guarded. One outdated thread (clamp code no longer exists).
+
+## [2026-10-29] pr | #239 — co-patrons: Sponsors.csv had been read as EMPTY by the guarded fetch (Codex P1)
+- `safe_fetch_csv` accepted a 200 only if the body held `BillNumber`/`HistoryDate`/`Committee`; Sponsors.csv's header is `MEMBER_NAME,MEMBER_ID,BILL_NUMBER,PATRON_TYPE`, so every live fetch returned an empty frame and co-patrons would have published blank. Per-schema `markers` (default unchanged). Golden `test_copatrons_fetch.py` runs the REAL fetch on the cached 20261 bytes: 15,875 rows, 1,640 bills. Gemini: case/underscore-insensitive columns; '2 of 4' when truncated.
+
+## [2026-10-29] pr | #238 merged — completeness payload no longer overwritten by the cadence marker
+- Case-law entry renumbered #141 -> **#142** (main took #141 via #246). Gemini's header-overlap guard is #239's import-time layout check (replied on the thread).
+
+## [2026-10-29] pr | #246 merged — incident ledger seed + Gemini fold-in
+- Gemini (medium): `status()` crashed with a raw traceback if `_open_tab(create=True)` raised (bad creds JSON, gspread, network). Now caught, categorized `API_FAILURE`, exit 1 — same fail-safe shape as `record_incident`/`close_incident`.
+- Also repaired this page's header: the #246-opened entry had been spliced into the middle of the intro sentence.
+
+## [2026-10-26] pr | #246 opened — incident ledger never existed (status() refused to seed); fix + golden
+- Health tab: "incident ledger could not be read" — gviz served the calendar for the missing Incident_Log tab. Monthly ledger runs Aug–Oct all failed at the first step. [[failures/assumptions_audit]] #141. Companion: #238 (completeness payload overwritten in U1) still open.
+
+## [2026-09-28] build | contact log on the bill card (name · date · note)
+
+Owner priority over positions. Bill card "Contacts" list + a three-field form. Migration 0002 relaxes `tone` (never
+defaulted to neutral) and `member_number` (bill OR legislator required), adds `created_by`. [[state/va_build_queue]] E9.
+
+## [2026-09-28] build | the whole app is private — data behind the team gate
+
+Owner: gate everything to "me and whoever I add" (LIS ToS). The UI gate existed but the browser read the sheet
+over public gviz with the id in the public repo. Now every read goes through `GET /api/sheet` (sign-in + team
+list, service-account token), `REQUIRE_SIGN_IN = true`, and Streamlit reads via `sheet_csv.py`. Five owner steps
+listed in [[architecture/verification_durability]].
+
+## [2026-09-28] build | team positions wired + team gate on the API
+
+Marketability "team tools" item. Bill card gets an "Our position" row (Involved / Supporting / Watching / Opposing,
+D1's settled enum, grey text; click again clears via a new `DELETE /api/positions`); War Room list shows the stance.
+While wiring it: **any Google account passed the API's auth** — identity was checked, membership never was. Added a
+fail-closed `TEAM_EMAILS` secret gate (`worker/team.js`, 19 tests; Worker tests now run in CI). Owner must set the
+secret before positions carry data. [[failures/assumptions_audit]] #142 · [[architecture/verification_durability]].
+
+## [2026-09-28] build | bill summaries in the app (Summaries.csv → Bill_Summaries tab → bill card)
+
+Marketability queue item. LIS's own staff summaries, every version, on a separate tab read lazily per bill (the main
+sheet is already 6.9 MB; summaries add 3.8 MB). Latest = highest rank over LIS's 5-value SUMMARY_TYPE vocabulary,
+because the file is ordered by doc id, not date (114 of 1,307 multi-version bills would show a stale version if we
+took the last row). Three states on the card: summary / "LIS has no summary" / "not available right now". Stacked on
+the co-patrons PR. [[state/va_build_queue]] E7 · [[architecture/calendar_pipeline]].
+
+## [2026-09-28] build | co-patrons in the app (Sponsors.csv → Bill_Tracker col U → bill card)
+
+Marketability queue item. One bulk `Sponsors.csv` read per cycle (same `lisfiles` host + guard as BILLS/HISTORY/DOCKET).
+Measured 20261: 15,875 rows → 12,230 co-patron entries on 1,640 bills; roles verbatim (Chief Co-Patron / Co-Patron /
+Offered / Incorporated Chief Co-Patron), 0 outside the measured vocabulary. Unknown (source down) is an empty cell and
+shows "not available", never "none". Metadata cells moved to a reserved zone (cadence Z1, completeness AA1) with an
+import-time check that no data column reaches it — the co-patron column would otherwise have landed on U1, the same
+collision as PR #238. Stacked on #238. [[architecture/calendar_pipeline]] · [[state/va_build_queue]] E6.
 
 ## [2026-09-24] finding | content predicts which opposite-party legislator crosses
 

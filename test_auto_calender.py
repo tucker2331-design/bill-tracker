@@ -12,17 +12,22 @@ st.sidebar.info("🔥 Firehose Mode Active: Displaying all tracked legislative d
 
 test_start_date = datetime(2026, 2, 9)
 
+import io
+from sheet_csv import fetch_sheet_csv
+
 # --- DATA CONNECTION ---
 SHEET_ID = "1PQDtaTTUeYv781bx4_ZiehcvbEmUt8t7jFmZYJoJGKM"
-SHEET_URL = f"https://docs.google.com/spreadsheets/d/{SHEET_ID}/gviz/tq?tqx=out:csv&sheet=Sheet1"
 
-@st.cache_data(ttl=60) 
+@st.cache_data(ttl=60)
 def load_calendar_data():
+    # Read through sheet_csv so this page survives the sheet going private (owner 2026-09-28): same CSV, plus a
+    # read-only service-account token when the GCP_CREDENTIALS secret is set.
     try:
-        df = pd.read_csv(f"{SHEET_URL}&cache_buster={datetime.now().timestamp()}")
-        return df
-    except Exception as e:
-        st.error(f"Database Access Error. Ensure the Google Sheet is set to 'Anyone with the link can view'.")
+        text, _url, _auth = fetch_sheet_csv(SHEET_ID, "Sheet1")
+        return pd.read_csv(io.StringIO(text))
+    except Exception as e:  # noqa: BLE001 -- shown to the operator, never swallowed
+        st.error(f"Database Access Error ({type(e).__name__}: {e}). If the sheet is private, add the "
+                 f"GCP_CREDENTIALS secret to this Streamlit app.")
         return pd.DataFrame()
 
 final_df = load_calendar_data()

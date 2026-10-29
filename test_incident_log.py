@@ -130,3 +130,19 @@ ok(log.NON_INCIDENT_CLASSES == frozenset({"_genesis", "_drill"}),
    "only genesis + drill are excluded from the clock — every real class counts")
 
 print(f"ALL {_checks} incident-log tests passed")
+
+# 2026-10-26 regression: `status` must SEED a missing tab (create=True). It used create=False, so the workflow's
+# first step (status, under `set -e`) exited 1 on the virgin workbook and the ledger was never created.
+_seen = []
+_orig_open = log._open_tab
+log._open_tab = lambda create=True: _seen.append(create)   # returns None: we only check the flag it was asked for
+os.environ["GCP_CREDENTIALS"] = "{}"
+try:
+    log.status(NOW)
+finally:
+    log._open_tab = _orig_open
+    del os.environ["GCP_CREDENTIALS"]
+ok(_seen == [True], f"status() must open the ledger with create=True (seed on first run) -> {_seen}")
+_seen.clear()
+ok(log.status(NOW) is None and _seen == [], "status() without credentials must not touch Sheets")
+print(f"incident_log seed regression: OK")
