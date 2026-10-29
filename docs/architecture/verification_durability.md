@@ -180,14 +180,17 @@ over public gviz, and the sheet id is in the public repo. A gate on the UI over 
    to `GET /api/sheet`, which checks the Google token AND the `TEAM_EMAILS` list, then re-issues the same gviz
    query for the one configured spreadsheet (`worker/sheets.js`, 31 tests). Zero direct Google calls remain.
 3. With the `GCP_SA_JSON` secret set, that read carries a read-only service-account token, so the sheet itself
-   can have link-sharing turned OFF. `/api/health` reports `sheet_auth` so the mode is never a guess.
+   can have link-sharing turned OFF. `/api/health` reports `sheet_auth_configured` (configuration only) and
+   every `/api/sheet` answer carries `x-sheet-auth` (what the read actually used), so the mode is never a guess.
 4. The internal Streamlit pages (X-Ray, calendar entry) read through `sheet_csv.py` — same CSV, plus the token
    when `GCP_CREDENTIALS` is in their secrets — so they survive the sheet going private.
 
 **Owner steps, in this order** (reversing 3 and 4 breaks the app until 3 is done):
 1. `npx wrangler secret put TEAM_EMAILS` — your email(s), comma-separated.
 2. `npx wrangler secret put GCP_SA_JSON` — paste the same service-account JSON the GitHub workers use.
-3. Deploy (merge), then check `/api/health` says `"sheet_auth":"service_account"`.
+3. Deploy (merge), then sign in to the app and check, in the browser's network tab, that a `/api/sheet`
+   response carries `x-sheet-auth: service_account`. That is a REAL read with the key; `/api/health`'s
+   `sheet_auth_configured` only says the secret is set, not that it works.
 4. Google Sheet → Share → General access → **Restricted** (the service account stays as an editor).
 5. Streamlit: add `GCP_CREDENTIALS` to the app's secrets, and set the app to private in its sharing settings.
 

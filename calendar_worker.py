@@ -2730,7 +2730,7 @@ def _write_blob_cache(url, etag, body):
             except Exception:
                 pass
 
-def safe_fetch_csv(url, attempts=3):
+def safe_fetch_csv(url, attempts=3, markers=(b'BillNumber', b'HistoryDate', b'Committee')):
     """Fetch a LIS blob CSV (HISTORY.CSV / DOCKET.CSV) with completeness guards.
 
     Reliability fix (assumptions_audit #68): the previous version did a single
@@ -2793,7 +2793,10 @@ def safe_fetch_csv(url, attempts=3):
                 last_err = f"HTTP {res.status_code}"
                 continue
             # Marker check applies to BOTH fresh AND reused bytes — a junk cache falls back.
-            if b'BillNumber' not in body and b'HistoryDate' not in body and b'Committee' not in body:
+            # `markers` is per-schema: the default fits HISTORY/DOCKET/BILLS; Sponsors.csv / Summaries.csv use
+            # UPPER_SNAKE headers (BILL_NUMBER, SUM_BILNO) and pass their own, or a valid 200 reads as "not a
+            # CSV" and returns empty every cycle (Codex #239/#240).
+            if not any(m in body for m in markers):
                 if from_cache:
                     cached_etag, cached_body = None, None  # cached body is junk → unconditional retry
                     last_err = "cached body failed CSV marker check"
