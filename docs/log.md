@@ -91,6 +91,15 @@ refresh waits for the owner's permission and mockups ([[state/current_status]]).
   **#146** (venue leak). The frozen venue_fix.py / prereg_2027_venuefix.json still say "case law #143"; both #143 and
   #146 carry a note saying so.
 
+## [2026-10-29] pr | #247 — trust-surface guard (watches every scheduled job + the bill payload)
+- Opened from `claude/health-tab-watchers`. Bot fold-in: liveness ignores cancelled/skipped runs; verdicts use SCHEDULED
+  runs plus an explicit `DISPATCH_IS_PRODUCTION` set (only `incident_ledger.yml`) so a diagnostic dispatch can't close a
+  production failure; the guard judges its own past runs and its first run reads `running` (no day-one false alarm);
+  malformed YAML/cron are reported rows; the ledger import fails open, loudly.
+- Found while merging: once the sheet is Restricted (#242 owner steps), an anonymous gviz read returns Google's sign-in
+  page — the bill-payload check now reads with the service account. Goldens job now installs pyyaml. 28 goldens.
+- Live dry run (GitHub side) 2026-10-29: 16 checks; `incident_ledger.yml` now OK after the first successful drill.
+
 ## [2026-10-29] pr | #244 — Slack alerts: two Codex P1s (it never ran on real data) + Gemini
 - A column-select gviz answer has no header row, so checking its row 0 threw on EVERY configured run. The layout is now
   checked on the real row 1; every select row is data. The test fake had returned a header there — it now mirrors the wire.
