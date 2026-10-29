@@ -313,7 +313,11 @@ def status(now=None):
     if not os.environ.get("GCP_CREDENTIALS"):
         print("[incident_log] NO CREDENTIALS (GCP_CREDENTIALS is unset) — the ledger is only reachable in CI.")
         return None
-    ws = _open_tab(create=True)
+    try:
+        ws = _open_tab(create=True)
+    except Exception as e:   # bad creds JSON / gspread / network: categorized + exit 1, not a raw traceback (Gemini #246)
+        print(f"❌ [API_FAILURE] [incident_log] could not open or create {INCIDENT_TAB}: {e}")
+        return None
     if ws is None:
         print(f"❌ [incident_log] could not open or create {INCIDENT_TAB} although credentials are set.")
         return None
