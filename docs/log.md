@@ -8,6 +8,19 @@ status: active
 
 Append-only, reverse-chronological (newest at top). Each entry opens with `## [YYYY-MM-DD] <kind> | <title>` so `grep "^## \[" log.md | head -20` gives a parseable timeline.
 
+## [2026-10-29] pr | #239 — co-patrons: Sponsors.csv had been read as EMPTY by the guarded fetch (Codex P1)
+- `safe_fetch_csv` accepted a 200 only if the body held `BillNumber`/`HistoryDate`/`Committee`; Sponsors.csv's header is `MEMBER_NAME,MEMBER_ID,BILL_NUMBER,PATRON_TYPE`, so every live fetch returned an empty frame and co-patrons would have published blank. Per-schema `markers` (default unchanged). Golden `test_copatrons_fetch.py` runs the REAL fetch on the cached 20261 bytes: 15,875 rows, 1,640 bills. Gemini: case/underscore-insensitive columns; '2 of 4' when truncated.
+
+## [2026-10-29] pr | #238 merged — completeness payload no longer overwritten by the cadence marker
+- Case-law entry renumbered #141 -> **#142** (main took #141 via #246). Gemini's header-overlap guard is #239's import-time layout check (replied on the thread).
+
+## [2026-10-29] pr | #246 merged — incident ledger seed + Gemini fold-in
+- Gemini (medium): `status()` crashed with a raw traceback if `_open_tab(create=True)` raised (bad creds JSON, gspread, network). Now caught, categorized `API_FAILURE`, exit 1 — same fail-safe shape as `record_incident`/`close_incident`.
+- Also repaired this page's header: the #246-opened entry had been spliced into the middle of the intro sentence.
+
+## [2026-10-26] pr | #246 opened — incident ledger never existed (status() refused to seed); fix + golden
+- Health tab: "incident ledger could not be read" — gviz served the calendar for the missing Incident_Log tab. Monthly ledger runs Aug–Oct all failed at the first step. [[failures/assumptions_audit]] #141. Companion: #238 (completeness payload overwritten in U1) still open.
+
 ## [2026-09-28] build | co-patrons in the app (Sponsors.csv → Bill_Tracker col U → bill card)
 
 Marketability queue item. One bulk `Sponsors.csv` read per cycle (same `lisfiles` host + guard as BILLS/HISTORY/DOCKET).
