@@ -16,6 +16,13 @@ export function isIsoDay(s) {
   return !Number.isNaN(d.getTime()) && d.toISOString().slice(0, 10) === s;
 }
 
+/** The latest date a contact can carry: the server's UTC date plus one day. */
+export function latestAllowedDay(nowIso) {
+  const d = new Date(nowIso);
+  d.setUTCDate(d.getUTCDate() + 1);
+  return d.toISOString().slice(0, 10);
+}
+
 /** -> { error } or { row } with every column the INSERT needs. `email` is the VERIFIED caller, never the body. */
 export function validateContact(body, email, nowIso) {
   if (!body || typeof body !== "object") return { error: "body must be JSON" };
@@ -26,6 +33,9 @@ export function validateContact(body, email, nowIso) {
   const bill = str(body.bill_number) || null, member = str(body.member_number) || null;
   if (!bill && !member) return { error: "a bill_number or a member_number is required" };
   if (!isIsoDay(body.occurred_on)) return { error: "occurred_on must be a real date, YYYY-MM-DD" };
+  // A contact already happened: no future dates, enforced HERE too, not only by the form's `max` (Codex #243).
+  // One day of slack, because the caller's local date can run ahead of the server's UTC date (UTC+14 at most).
+  if (body.occurred_on > latestAllowedDay(nowIso)) return { error: "occurred_on cannot be in the future" };
   const actor = str(body.actor);
   if (!actor) return { error: "a name is required (who made the contact)" };
   if (actor.length > MAX_NAME) return { error: `name must be at most ${MAX_NAME} characters` };

@@ -65,9 +65,9 @@ export function WarRoom({ bills, starred, sessionCode }: { bills: Bill[]; starre
       {/* Say what is missing, in the place where it is missing. A screen that quietly omits the whip board
           reads as "there is no whip board"; this reads as "it is coming and here is what it waits on". */}
       <p className="muted" style={{ marginTop: 18, fontSize: 13 }}>
-        Positions, the whip board and contact history are not here yet — they need the write path
-        (PR&nbsp;#237) and the per-member vote join. Nothing on this page is a placeholder: every value shown
-        is read from the tracker.
+        The whip board and contact history are not here yet — they need the per-member vote join and the
+        contact log. Nothing on this page is a placeholder: every value shown is read from the tracker or
+        your team's positions.
       </p>
     </div>
   );
