@@ -379,20 +379,22 @@ def _build_copatrons(blob_code):
     bulk file carries the same list structurally. Enrichment only: an empty/failed fetch returns ({}, stats with
     rows=0) and the caller alerts; a bill with no co-patrons gets [] (an honest empty, not a failure)."""
     stats = {"rows": 0, "skipped_no_bill": 0, "unknown_roles": 0}
-    df = safe_fetch_csv(f"https://lis.blob.core.windows.net/lisfiles/{blob_code}/Sponsors.csv")
+    df = safe_fetch_csv(f"https://lis.blob.core.windows.net/lisfiles/{blob_code}/Sponsors.csv",
+                        markers=(b"BILL_NUMBER", b"PATRON_TYPE"))
     if df.empty:
         return {}, stats
-    cols = {c.lower(): c for c in df.columns}
-    need = ("bill_number", "member_name", "member_id", "patron_type")
+    # case- and underscore-insensitive, so BILL_NUMBER / BillNumber / bill_number all resolve (Gemini #239)
+    cols = {c.lower().replace("_", ""): c for c in df.columns}
+    need = ("billnumber", "membername", "memberid", "patrontype")
     if not all(c in cols for c in need):
         stats["missing_columns"] = [c for c in need if c not in cols]
         return {}, stats
     stats["rows"] = len(df)
     out = {}
-    for b, nm, mid, pt in zip(df[cols["bill_number"]].map(_clean_bill),
-                              df[cols["member_name"]].fillna("").astype(str),
-                              df[cols["member_id"]].fillna("").astype(str),
-                              df[cols["patron_type"]].fillna("").astype(str)):
+    for b, nm, mid, pt in zip(df[cols["billnumber"]].map(_clean_bill),
+                              df[cols["membername"]].fillna("").astype(str),
+                              df[cols["memberid"]].fillna("").astype(str),
+                              df[cols["patrontype"]].fillna("").astype(str)):
         if not b:
             stats["skipped_no_bill"] += 1          # counted (source-miss visibility), never silent
             continue
@@ -455,7 +457,8 @@ def _build_summaries(blob_code):
     text]. Bill ids are LIS's zero-padded form (HB0001) normalized to the tracker's (HB1) -- an id that doesn't
     fit the prefix+digits shape is counted and skipped, never guessed."""
     stats = {"rows": 0, "bills": 0, "skipped_bad_bill": 0, "unknown_types": 0, "empty_text": 0}
-    df = safe_fetch_csv(f"https://lis.blob.core.windows.net/lisfiles/{blob_code}/Summaries.csv")
+    df = safe_fetch_csv(f"https://lis.blob.core.windows.net/lisfiles/{blob_code}/Summaries.csv",
+                        markers=(b"SUM_BILNO", b"SUMMARY_TYPE"))   # its own schema markers (Codex #240)
     if df.empty:
         return [], stats
     cols = {c.lower(): c for c in df.columns}
@@ -465,8 +468,10 @@ def _build_summaries(blob_code):
         return [], stats
     stats["rows"] = len(df)
     out, bills = [], set()
-    for raw_bill, typ, html in zip(df[cols["sum_bilno"]].astype(str), df[cols["summary_type"]].astype(str),
-                                   df[cols["summary_text"]].astype(str)):
+    # fillna first: a bare astype(str) turns a missing cell into the literal "nan" (Gemini #240)
+    for raw_bill, typ, html in zip(df[cols["sum_bilno"]].fillna("").astype(str),
+                                   df[cols["summary_type"]].fillna("").astype(str),
+                                   df[cols["summary_text"]].fillna("").astype(str)):
         m = _SUM_BILL_RE.match(raw_bill.replace(" ", "").upper())
         if not m:
             stats["skipped_bad_bill"] += 1          # counted (source-miss visibility), never silent
@@ -508,9 +513,15 @@ def write_bill_summaries(sheet, rows, stats):
             ws.resize(rows=max(ws.row_count, len(grid) + 50), cols=max(ws.col_count, need_cols))
     except gspread.exceptions.WorksheetNotFound:
         ws = sheet.add_worksheet(title=BILL_SUMMARIES_TAB, rows=len(grid) + 50, cols=_col_number(BILL_SUMMARIES_HASH_CELL))
-    ws.clear()
-    ws.batch_update([{"range": "A1", "values": grid},
-                     {"range": BILL_SUMMARIES_HASH_CELL, "values": [[digest]]}])
+    # Never clear first (Codex #240): if the write failed after a clear, the tab would sit EMPTY while the caller
+    # believes the last good summaries survive. Overwrite in place (one atomic call), THEN blank any stale tail
+    # rows, and only THEN stamp the hash -- so a failure at either step leaves an old hash, and the next cycle
+    # rewrites instead of skipping a half-replaced tab.
+    ws.batch_update([{"range": "A1", "values": grid}])
+    last_col = re.sub(r"\d+", "", gspread.utils.rowcol_to_a1(1, len(BILL_SUMMARIES_HEADER)))
+    if ws.row_count > len(grid):
+        ws.batch_clear([f"A{len(grid) + 1}:{last_col}{ws.row_count}"])
+    ws.update(values=[[digest]], range_name=BILL_SUMMARIES_HASH_CELL)
     return True
 
 

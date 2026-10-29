@@ -51,8 +51,12 @@ export function loadSummary(bill: string): Promise<SummaryResult> {
   if (hit) return hit;
   const p = _load(id).catch((e) => {
     console.warn(`Summaries: read failed for ${id}`, e);
-    _cache.delete(id);                     // a transient failure must not stick for the session
     return { status: "unavailable" } as SummaryResult;
+  }).then((r) => {
+    // an "unavailable" answer (a 503, a tab that does not exist yet, a thrown read) must not stick for the
+    // session: evict it so reopening the bill retries (Codex #240). Real answers stay cached.
+    if (r.status === "unavailable") _cache.delete(id);
+    return r;
   });
   _cache.set(id, p);
   return p;
@@ -72,7 +76,7 @@ async function _load(id: string): Promise<SummaryResult> {
     clearTimeout(timer);
   }
   const rows = parseCsv(text);
-  if (!headerMatches(rows[0], EXPECTED_HEADER)) return { status: "unavailable" };
+  if (rows.length === 0 || !headerMatches(rows[0], EXPECTED_HEADER)) return { status: "unavailable" };   // empty body (Gemini #240)
   const versions: SummaryVersion[] = rows.slice(1)
     .filter((r) => (r[0] || "").trim() === id && (r[3] || "").trim() !== "")
     .map((r) => {
