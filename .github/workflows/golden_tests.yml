@@ -71,6 +71,7 @@ jobs:
             test_incident_log_wiring.py \
             test_bill_outcome_provenance.py \
             test_bill_tracker_cells.py \
+            test_bill_summaries.py \
             test_copatrons_fetch.py; do
             echo "::group::$t"
             if python3 -u "$t"; then echo "PASS  $t"; else echo "FAIL  $t"; fail=1; fi
