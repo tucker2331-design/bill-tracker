@@ -18,6 +18,7 @@ if str(_REPO_ROOT) not in sys.path:
 
 import pandas as pd
 import requests
+from sheet_csv import fetch_sheet_csv
 import streamlit as st
 from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
@@ -93,10 +94,10 @@ def normalize_time(value: str) -> str:
 
 
 def load_sheet_df(http: requests.Session, sheet_id: str) -> tuple[pd.DataFrame, str]:
-    url = f"https://docs.google.com/spreadsheets/d/{sheet_id}/gviz/tq?tqx=out:csv&sheet=Sheet1"
-    res = http.get(url, timeout=15)
-    res.raise_for_status()
-    return pd.read_csv(io.StringIO(res.text)), url
+    # Same gviz CSV as before, now with a read-only service-account token when GCP_CREDENTIALS is configured,
+    # so X-Ray keeps working after the sheet is made private (owner 2026-09-28). The auth mode is shown.
+    text, url, auth = fetch_sheet_csv(sheet_id, "Sheet1", http=http, timeout=15)
+    return pd.read_csv(io.StringIO(text)), f"{url}  [auth: {auth}]"
 
 
 def load_lis_schedule(http: requests.Session, session_code: str, api_key: str) -> tuple[pd.DataFrame, str]:
@@ -227,6 +228,8 @@ if mode == "Live fetch":
             st.error(f"Failed to load Sheet1 (network/http): {exc}")
         except (pd.errors.ParserError, UnicodeDecodeError) as exc:
             st.error(f"Failed to parse Sheet1 CSV: {exc}")
+        except RuntimeError as exc:  # the sheet answered with something that is not CSV (private, no token)
+            st.error(f"Sheet1 is not readable: {exc}")
 
     with c2:
         st.subheader("2) LIS Schedule Connectivity")

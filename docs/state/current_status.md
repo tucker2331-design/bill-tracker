@@ -1,6 +1,6 @@
 ---
 tags: [state, live]
-updated: 2026-09-29
+updated: 2026-10-29
 status: active
 ---
 
@@ -34,6 +34,15 @@ status: active
 
 ## NEXT (needs owner infra / a decision — then I execute)
 
+- **🔒 The whole app goes private — 5 owner steps, in order:** team list secret → service-account secret → merge
+  → set the Google Sheet to Restricted → Streamlit secret + private. Until step 4 the data is still readable by
+  anyone with the sheet id (it is in the public repo). [[architecture/verification_durability]] ·
+  [[failures/assumptions_audit]] #143.
+- **📝 Contact log (name · date · note per bill) needs one command after merge:**
+  `npx wrangler d1 migrations apply bill-tracker-db --remote` (0002: tone and legislator optional; 0003: the Slack
+  alert snapshot table).
+- **💬 Slack alerts are built (free) — two owner steps:** make a Slack incoming webhook for your channel, then
+  `npx wrangler secret put SLACK_WEBHOOK_URL`. Alerts cover bills your team has a position on. [[state/va_build_queue]] E8.
 - **🖼️ Site redesign demo — FINAL for now (v8, owner 2026-10-27)**: https://claude.ai/artifact/NrFnTFW9MEB3yhnL52GxKg (Today with 5 pipeline options incl. the Gemini round, Calendar, Search with bill pages, sorted War Room list, visual Health). **Do not implement until the owner directs it** ("once we have spare compute"). The artifact is the source of truth (the build files were in a session scratchpad). Pipeline notes: [[design/pipeline_brief]].
 - **🎨 Site-wide design refresh — MOCKUPS FIRST, and only with the owner's explicit go-ahead** (owner 2026-09-28:
   "wait until later ... ask explicit permission we should do mock ups first"). Direction: the War Room v10 look

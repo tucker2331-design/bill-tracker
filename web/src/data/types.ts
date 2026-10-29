@@ -46,7 +46,16 @@ export interface Bill {
   dataAsOf: string;        // ISO UTC the record was built
   /** LIS's own LegislationClass. "" when the class call failed — an honest blank, never a guess. */
   legislationClass: string;
+  /** Co-patrons from LIS's Sponsors.csv, in LIS's order, chief patron excluded. [] = LIS lists none;
+   *  null = unknown (the source was down that cycle, or the sheet predates the column) — never shown as "none". */
+  copatrons: Copatron[] | null;
   source: string;          // "LIS"
+}
+
+export interface Copatron {
+  name: string;
+  memberId: string;        // LIS member number, e.g. "H0297"
+  role: string;            // LIS's PATRON_TYPE, verbatim ("Chief Co-Patron", "Co-Patron", "Offered", ...)
 }
 
 // The completeness / trust payload written to R1 of the tab.

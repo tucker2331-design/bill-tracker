@@ -13,7 +13,7 @@ states). Budget amendment necessary: yes / no.
 Outcomes: (1) gets out of the FIRST committee (fate.py), (2) passes its chamber (any later stage counts: money bills
 are re-referred to Appropriations / Finance and many die THERE, after the first committee).
 Comparisons: by patron standing; and SAME PATRON, SAME SESSION (a patron's costly bills vs their no-cost bills).
-Timing rule (audit #142): a statement counts as known only if published before the committee's first decision.
+Timing rule (audit #145): a statement counts as known only if published before the committee's first decision.
 """
 from __future__ import annotations
 import sys, os, re, json, gzip, csv, collections

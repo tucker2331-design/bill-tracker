@@ -10,8 +10,9 @@
 
 import type { Bill } from "../data/types";
 import { detailPath, linkProps } from "../state/router";
+import { PositionTag } from "../components/PositionControl";
 
-export function WarRoom({ bills, starred }: { bills: Bill[]; starred: Set<string> }) {
+export function WarRoom({ bills, starred, sessionCode }: { bills: Bill[]; starred: Set<string>; sessionCode: string }) {
   const ours = bills.filter((b) => starred.has(b.bill));
 
   if (ours.length === 0) {
@@ -47,6 +48,7 @@ export function WarRoom({ bills, starred }: { bills: Bill[]; starred: Set<string
           return (
             <a key={b.bill} className="wr-row" {...linkProps(detailPath("bills", b.bill))}>
               <span className="wr-num">{b.bill}</span>
+              <PositionTag bill={b.bill} sessionCode={sessionCode} />
               <span className="wr-patron">— {b.patron}</span>
               <span className="wr-title">{b.title}</span>
               <span className="wr-where">
@@ -63,9 +65,9 @@ export function WarRoom({ bills, starred }: { bills: Bill[]; starred: Set<string
       {/* Say what is missing, in the place where it is missing. A screen that quietly omits the whip board
           reads as "there is no whip board"; this reads as "it is coming and here is what it waits on". */}
       <p className="muted" style={{ marginTop: 18, fontSize: 13 }}>
-        Positions, the whip board and contact history are not here yet — they need the write path
-        (PR&nbsp;#237) and the per-member vote join. Nothing on this page is a placeholder: every value shown
-        is read from the tracker.
+        The whip board and contact history are not here yet — they need the per-member vote join and the
+        contact log. Nothing on this page is a placeholder: every value shown is read from the tracker or
+        your team's positions.
       </p>
     </div>
   );

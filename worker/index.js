@@ -22,6 +22,10 @@
  */
 
 import { verifyGoogleIdToken } from "./auth.js";
+import { membership, teamGate } from "./team.js";
+import { handleSheet } from "./sheets.js";
+import { validateContact } from "./contacts.js";
+import { runAlerts } from "./alerts.js";
 
 const JSON_HEADERS = { "content-type": "application/json; charset=utf-8" };
 
@@ -30,7 +34,6 @@ const json = (body, status = 200) =>
 
 /** Closed vocabularies. A value outside these is a 400, never a silent coercion. */
 const STANCES = new Set(["involved", "supporting", "watching", "opposing"]);
-const TONES = new Set(["positive", "neutral", "negative"]);
 
 /**
  * The signed-in user's verified email, or null.
@@ -62,10 +65,16 @@ async function handleApi(request, env, url) {
       // Reports CONFIGURATION, never the caller's own auth state -- a health endpoint must not become an
       // oracle for probing whether a given token is valid.
       auth_configured: Boolean(env.GOOGLE_CLIENT_ID),
+      team_configured: membership("", env) !== "not_configured",
+      // Whether /api/sheet is CONFIGURED to read with a service account. Configured is not working (a bad key,
+      // a revoked account, or one never shared on the sheet all still say true) -- the proof is a real read:
+      // /api/sheet answers with `x-sheet-auth: service_account` (Codex #242). Configuration only.
+      sheet_auth_configured: env.GCP_SA_JSON ? "service_account" : "none",
+      // Whether the 15-minute Slack digest can run (worker/alerts.js). Configuration only.
+      alerts_configured: Boolean(env.SLACK_WEBHOOK_URL && env.BILL_TRACKER_STATE),
     });
   }
 
-  if (!env.DB) return json({ error: "database binding missing" }, 500);
 
   // AUTHENTICATION GATES EVERY ROUTE BELOW, READS INCLUDED (CodeRabbit, 2026-07-28 — a real hole I shipped).
   // Positions and interactions are ORG-PRIVATE: our stance on a bill, and who from the org spoke to which
@@ -74,6 +83,17 @@ async function handleApi(request, env, url) {
   // failure -- a leaked whip count is a leaked strategy.
   const email = await authenticatedEmail(request, env);
   if (!email) return json({ error: "not authenticated" }, 401);
+
+  // TEAM GATE for the org-private routes (positions, interactions). Identity is not membership: without this,
+  // any Google account could read the org's stances. /me stays open -- it is scoped to the caller's own row.
+  // 403 carries a machine-readable reason so the UI can say "not set up yet" vs "not on this team".
+  const denied = teamGate(path, email, env);
+  if (denied) return json(denied.body, denied.status);
+
+  // Every read of the Google Sheet (bills, calendar, health) — the data itself is behind the team gate now.
+  if (request.method === "GET" && path === "/sheet") return handleSheet(url, env);
+
+  if (!env.DB) return json({ error: "database binding missing" }, 500);
 
   // `state` is required on EVERY route. It is never defaulted to 'VA': a caller that forgets it must get a
   // 400, not silently read or write Virginia's data (migrations/0001_init.sql).
@@ -88,18 +108,41 @@ async function handleApi(request, env, url) {
     return json({ positions: results ?? [] });
   }
 
-  if (request.method === "GET" && path === "/interactions") {
+  // Deploy order safety (Codex #243): Workers Builds deploys on merge, but migration 0002 (created_by) is applied
+  // by hand. Until it is, the contact queries fail on the missing column -- answer a categorized 503 that names
+  // the fix instead of an anonymous 500. Every other error still propagates to the categorized outer handler.
+  const needsMigration = (e) => /no such column:?\s*created_by/i.test(String(e?.message || e));
+  const migrationAnswer = () => json({ error: "the contact log needs database migration 0002_contact_log.sql",
+                                      category: "DATA_ANOMALY", needs_migration: "0002_contact_log.sql" }, 503);
+
+  async function getInteractions() {
+    // Two views of the same log: one legislator (the call sheet) or one bill (the bill card). Newest first either
+    // way; a member_number is only unique WITHIN a state, and a bill number only within a state + session.
     const member = url.searchParams.get("member_number");
-    if (!state || !member) return json({ error: "state and member_number are required" }, 400);
-    // Newest first: the call sheet shows recent contact, and the list must stay readable once it scrolls.
-    // A member_number is only unique WITHIN a state, so the state must be in the WHERE clause.
-    const { results } = await env.DB.prepare(
-      `SELECT id, session_code, bill_number, occurred_on, actor, tone, note
-         FROM interactions WHERE state = ? AND member_number = ?
-         ORDER BY occurred_on DESC, id DESC LIMIT 200`,
-    ).bind(state, member).all();
-    return json({ interactions: results ?? [] });
+    const bill = url.searchParams.get("bill_number");
+    const session = url.searchParams.get("session");
+    const cols = "id, member_number, session_code, bill_number, occurred_on, actor, tone, note, created_by";
+    if (state && member) {
+      const { results } = await env.DB.prepare(
+        `SELECT ${cols} FROM interactions WHERE state = ? AND member_number = ?
+          ORDER BY occurred_on DESC, id DESC LIMIT 200`,
+      ).bind(state, member).all();
+      return json({ interactions: results ?? [] });
+    }
+    if (state && session && bill) {
+      const { results } = await env.DB.prepare(
+        `SELECT ${cols} FROM interactions WHERE state = ? AND session_code = ? AND bill_number = ?
+          ORDER BY occurred_on DESC, id DESC LIMIT 200`,
+      ).bind(state, session, bill).all();
+      return json({ interactions: results ?? [] });
+    }
+    return json({ error: "state and member_number, or state, session and bill_number, are required" }, 400);
   }
+
+  if (request.method === "GET" && path === "/interactions") {
+    try { return await getInteractions(); } catch (e) { if (needsMigration(e)) return migrationAnswer(); throw e; }
+  }
+
 
   if (request.method === "PUT" && path === "/positions") {
     const body = await request.json().catch(() => null);
@@ -117,20 +160,32 @@ async function handleApi(request, env, url) {
     return json({ ok: true });
   }
 
-  if (request.method === "POST" && path === "/interactions") {
-    const body = await request.json().catch(() => null);
-    if (!body?.state || !body?.member_number || !body?.session_code || !body?.occurred_on) {
-      return json({ error: "state, member_number, session_code and occurred_on are required" }, 400);
-    }
-    if (!TONES.has(body.tone)) return json({ error: `tone must be one of ${[...TONES].join(", ")}` }, 400);
+  if (request.method === "DELETE" && path === "/positions") {
+    const session = url.searchParams.get("session");
+    const bill = url.searchParams.get("bill_number");
+    if (!state || !session || !bill) return json({ error: "state, session and bill_number are required" }, 400);
     await env.DB.prepare(
-      `INSERT INTO interactions
-         (state, member_number, session_code, bill_number, occurred_on, actor, tone, note, created_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-    ).bind(body.state, body.member_number, body.session_code, body.bill_number ?? null, body.occurred_on,
-           body.actor || email, body.tone, body.note ?? null, new Date().toISOString()).run();
-    return json({ ok: true }, 201);
+      "DELETE FROM positions WHERE state = ? AND session_code = ? AND bill_number = ?",
+    ).bind(state, session, bill).run();
+    return json({ ok: true });
   }
+
+  if (request.method === "POST" && path === "/interactions") {
+    const v = validateContact(await request.json().catch(() => null), email, new Date().toISOString());
+    if (v.error) return json({ error: v.error }, 400);
+    const r = v.row;
+    let res;
+    try {
+      res = await env.DB.prepare(
+      `INSERT INTO interactions
+         (state, member_number, session_code, bill_number, occurred_on, actor, tone, note, created_at, created_by)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    ).bind(r.state, r.member, r.session, r.bill, r.occurred_on, r.actor, r.tone, r.note, r.created_at,
+           r.created_by).run();
+    } catch (e) { if (needsMigration(e)) return migrationAnswer(); throw e; }
+    return json({ ok: true, id: res?.meta?.last_row_id ?? null }, 201);
+  }
+
 
   // ---- the signed-in user's own profile ----
   // Scoped to `email` from the VERIFIED token, never from the body: a client must not be able to read or
@@ -193,5 +248,16 @@ export default {
     }
     // EVERYTHING else is the SPA. This is the line that keeps the existing site working.
     return env.ASSETS.fetch(request);
+  },
+
+  // Cron Trigger (wrangler.toml [triggers]): the Slack digest. A failure is logged with its stack and re-thrown
+  // so Cloudflare records the run as failed (visible in the dashboard) -- never swallowed.
+  async scheduled(event, env, ctx) {
+    try {
+      await runAlerts(env);
+    } catch (err) {
+      console.error("alerts_error", err && err.stack ? err.stack : String(err));
+      throw err;
+    }
   },
 };

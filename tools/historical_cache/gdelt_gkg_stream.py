@@ -26,7 +26,7 @@ ORGS = ("general assembly", "house of delegates", "virginia senate", "senate of 
 def keep(row):
     locs = row[10] if len(row) > 10 else ""
     # "Virginia, United States" is a SUBSTRING of "West Virginia, United States": the first pilot kept 1,503 West
-    # Virginia articles that way (audit #141). Match the ADM1 code, or the name only when not preceded by "West ".
+    # Virginia articles that way (audit #144). Match the ADM1 code, or the name only when not preceded by "West ".
     if "USVA" not in locs and not re.search(r"(?<!West )Virginia, United States", locs):
         return False
     themes = (row[7] if len(row) > 7 else "") + (row[8] if len(row) > 8 else "")

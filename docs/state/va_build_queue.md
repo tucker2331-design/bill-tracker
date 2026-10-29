@@ -1,6 +1,6 @@
 ---
 tags: [state, queue, product, war-room, virginia]
-updated: 2026-07-27
+updated: 2026-09-28
 status: active
 ---
 
@@ -123,7 +123,7 @@ worked on live output: (a) a zone header read *"How he handles bills like this"*
 derived-claim tripwire** — now *"On Consumer Protection bills"*; (b) the contact stat said **3 contacts**
 while the log showed **2 rows**. Both fixed pre-publish.
 
-### M2. Position + tracking ladder popup *(unblocked — the enum is settled, see D1)*
+### M2. Position + tracking ladder popup *(unblocked — the enum is settled, see D1)* — **built inline instead of as a popup, 2026-09-28**, following M3's precedent: four text options on the bill card, nothing to lay out that the build did not answer. Owner may still want the popup form; say so and it moves.
 ### ~~M3. Account setup flow~~ — ✅ **BUILT, not just drawn** (`components/FirstRun.tsx`). The mockup step
 was skipped deliberately: the form is four fields and one escape hatch, so drawing it first would have cost
 a round-trip to learn nothing the build did not.
@@ -166,9 +166,12 @@ computable — without it that relationship is unrepresentable.
 - ~~**F2. Write path**~~ — ✅ **MERGED 2026-07-29 (#237).** Schema live; Migration applied to the remote D1 2026-07-28; both
   constraints verified against the real database (`stance='bogus'` → CHECK failure; missing `state` → NOT NULL
   failure). Worker API + **Google ID-token verification** built (Access rejected on its per-seat pricing
-  model — [[architecture/verification_durability]]). Sign-in shipped with it, so the door is hung. **Remaining before it carries
-  real data: the D1 second-oppose-tier decision (the enum), and wiring the War Room's position control to
-  `PUT /api/positions`.**
+  model — [[architecture/verification_durability]]). Sign-in shipped with it, so the door is hung. **2026-09-28: position control WIRED**
+  (branch `claude/team-positions`): bill card "Our position" row (the four D1 stances as grey text, current one
+  in ink, click again to clear → new `DELETE /api/positions`), and a stance column in the War Room list. The
+  "second oppose tier" note here was stale — D1 settled it (oppose stays one layer). **Also closed a hole:
+  any Google account passed auth** — now a `TEAM_EMAILS` secret gate ([[failures/assumptions_audit]] #143).
+  **Owner step before it carries real data: set `TEAM_EMAILS`.**
 - ~~**F3. Accounts**~~ — ✅ **BUILT 2026-07-28.** Sign-in (`web/src/state/auth.ts` + `components/SignIn.tsx`,
   verified live: button renders, zero console errors, **no token in localStorage** — held in memory only, so
   one XSS cannot steal an identity that outlives the tab). **First-run form built** — display name + three districts, which is what turns
@@ -263,7 +266,7 @@ computable — without it that relationship is unrepresentable.
   interpretation the owner removed).
   `drift_from_introduced()` is one comparison, **not a sum of steps** — summing double-counts twice-edited
   text and can exceed 100%.
-- **E6. Co-patrons** — **PARTIALLY PROBED 2026-07-27, param form UNRESOLVED.** The bill-search response
+- **E6. Co-patrons** — ✅ **BUILT 2026-09-28** (branch `claude/copatrons-in-app`): bulk `Sponsors.csv` → column U (JSON, LIS role verbatim, chief excluded, LIS order); bill card shows it grouped by role, folds past 6; "not available" when the source was down, never "none". Measured on 20261: 15,875 rows, 12,230 co-patron entries on 1,640 bills, 0 unknown roles. *History below kept.* ~~**PARTIALLY PROBED 2026-07-27, param form UNRESOLVED.**~~ The bill-search response
   carries **chief patron ONLY** (verified: 0 of 108 sampled bills had >1 patron), so co-patrons really are
   absent from the route we now use. The bundle shows the right endpoint is
   `LegislationPatron/api/GetLegislationPatronsByIdAsync`, returning `{Patrons:[…]}` where
@@ -272,6 +275,30 @@ computable — without it that relationship is unrepresentable.
   `GetLegislationPatronListAsync` returns **400** on the same params (route exists, params wrong) and is the
   *member→bills* direction, not bill→patrons. **Stopped rather than brute-force the parameter space** (owner
   rule). Next: find the bundle's fetch helper to see how it composes the query.
+
+- **E7. Bill summaries in the app** — ✅ **BUILT 2026-09-28** (branch `claude/summaries-in-app`, stacked on E6):
+  bulk `Summaries.csv` (LIS staff summaries, every version) → its OWN tab `Bill_Summaries` (one row per version:
+  bill, LIS type verbatim, stage rank, plain text), read LAZILY per bill when a card opens — 3.8 MB of text must
+  not ride on the ~7 MB main load. The file is sorted by doc id, not date (114 of 1,307 multi-version bills out of
+  lifecycle order), so "latest" uses a rank over LIS's own 5-value `SUMMARY_TYPE` vocabulary; an unknown type is
+  published unranked and never promoted. Tags stripped server-side; rendered as text. Content hash in `F1` skips
+  identical rewrites. Measured 20261: 5,776 versions on 3,637 bills, 0 unknown types, 0 bad ids.
+- **E9. Contact log on the bill card — ✅ BUILT 2026-09-28** (branch `claude/contact-log`). Owner: *"what's more
+  important is ... a simple name date and note so whoever is using knows who contacted."* Bill card → "Contacts":
+  who · when · note, newest first; "Log a contact" opens a three-field form (name pre-filled). Migration 0002 makes
+  `tone` and `member_number` optional (a row must still name a bill or a legislator) and adds `created_by` (the
+  verified email of whoever typed it, separate from the name of who made the contact). 19 rule tests + the
+  migration applied to a scratch SQLite with every constraint exercised. **Owner step: apply migration 0002.**
+- **E8. Alerts — ✅ BUILT 2026-09-28 as a free SLACK digest** (owner: *"figured out with slack instead to keep it
+  free"*; the email options below are kept as the record). `worker/alerts.js` on a 15-minute Cron Trigger (free
+  plan): for every bill the team has a position on in the sheet's CURRENT session, compare LIS status / latest vote /
+  next hearing with the last run (D1 `alert_state`, migration 0003) and post ONE templated digest to a Slack channel
+  via an incoming webhook. First sight of a bill is recorded silently (no flood on deploy); the snapshot advances only
+  after Slack accepts the post (a refused post retries next cycle); column moves or a missing session make it refuse
+  to run rather than guess. 24 tests. **Owner steps:** create a Slack incoming webhook for a channel, then
+  `npx wrangler secret put SLACK_WEBHOOK_URL`; the migrations command also applies 0003.
+  *Record — email options considered:* Cloudflare Email Service ($5/mo Workers Paid, 3,000/mo included, then $0.35
+  per 1,000), Resend (free 3,000/mo but 100/day), Amazon SES ($0.10 per 1,000).
 
 ---
 

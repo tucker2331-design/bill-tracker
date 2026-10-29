@@ -80,7 +80,7 @@ party. **Year-ahead, added to the fate model: z = 3.1 — passes, barely** (gain
 |---|---|---|
 | "Committee Chair Alignment 88%" | the chair's own record on this patron's and similar bills, distance on the left-right map | small but real: passes the forecast test at z = 3.1. Separately, the chair CO-SPONSORING the bill: +22 points within patron |
 | "Bipartisan Co-Sponsor Ratio 79%" | co-patrons at filing, own and other party | real: the co-patrons group passes both forecasting tests (z 7.7 / 11.0, [[testing/first_vote]]); no co-patrons: 20 vs 6 in 100 die without a single yes |
-| "CBO Fiscal Score Favorability 64%" | DPB fiscal impact statement | **having** a statement says nothing (z 0.6 with a fair cutoff; the first run's z 10.1 was a leak — [[failures/assumptions_audit]] #142). What the statement **says** (the cost) is untested — needs the documents |
+| "CBO Fiscal Score Favorability 64%" | DPB fiscal impact statement | **having** a statement says nothing (z 0.6 with a fair cutoff; the first run's z 10.1 was a leak — [[failures/assumptions_audit]] #145). What the statement **says** (the cost) is untested — needs the documents |
 | "Influence 96/100" | legislative effectiveness (CEL method) | rebuilt; adds nothing to fate forecasts (z 1.6) |
 
 ## What is said in committee (Internet Archive captions, `transcripts.py` / `transcript_effect.py`, 2026-10-14)

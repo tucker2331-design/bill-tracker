@@ -434,7 +434,7 @@ deriving members from the party loses the member-level cues. Kept as a negative 
 ## GDELT news attention — no gain; bulk download stopped (2026-09-29, `gdelt_effect.py`)
 
 2025 pilot (GKG bulk, 74 session days, 26,621 Virginia-legislature articles after dropping 1,503 West Virginia
-articles — audit #141). Articles name people and themes, not bills (22 bill numbers in URLs). Inputs dated before
+articles — audit #144). Articles name people and themes, not bills (22 bill numbers in URLs). Inputs dated before
 the decision: patron mentions, member mentions, topic-word volume (all-time and last 14 days). Stacked on the
 existing models, 5 folds by bill: **ballots z = 0.9, fate z = 1.1 — no gain.** Rule written before running: more
 years (~40 GB each) only if z ≥ 3 — so **no further download.**
@@ -1311,7 +1311,7 @@ forward-looking (second reading comes on an earlier day than the passage roll ca
 - Committee report unanimous: 14 of 246 (block) vs 8 of 180 (own) contested; report had a No: 227 of 235 vs 54 of 57.
   The committee tally already carries the signal; block status adds nothing.
 
-**Venue label fixed — and the member-model headline drops (`venue_fix.py`, 2026-10-27; case law #143).** The roll-call
+**Venue label fixed — and the member-model headline drops (`venue_fix.py`, 2026-10-27; case law #146).** The roll-call
 venue was read from the motion text, so 2,086 Senate committee kill motions ("Passed by indefinitely in …",
 "Continued to … in …") were labelled "floor" — a label that told the model a kill motion had been made. Ballot count
 instead (committee ≤ 22, floor ≥ 30, none between), same reference model (depth 6, lr .03, 260 rounds), year-ahead:

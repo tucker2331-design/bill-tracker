@@ -7,7 +7,8 @@
 // gviz failure is normal — BOTH degrade to an EMPTY history (the UI shows "trend will populate"), never a
 // fabricated series and never a thrown error that blanks the live Health tab.
 import { parseCsv } from "./gviz";
-import { SPREADSHEET_ID } from "../config";
+import { sheetUrl } from "../config";
+import { apiFetch } from "../state/auth";
 
 const TAB = "Metrics_History";
 const FETCH_TIMEOUT_MS = 12000;
@@ -38,13 +39,13 @@ export interface HistoryData {
 const EMPTY: HistoryData = { metricSeries: [], alerts: [], cycleTs: { calendar: 0, bill: 0 }, available: false, malformedRows: 0 };
 
 const gvizUrl = () =>
-  `https://docs.google.com/spreadsheets/d/${SPREADSHEET_ID}/gviz/tq?tqx=out:csv&sheet=${TAB}&tq=${encodeURIComponent(QUERY)}`;
+  sheetUrl(TAB, { tq: QUERY });
 
 async function fetchText(u: string): Promise<string> {
   const ctrl = new AbortController();
   const timer = setTimeout(() => ctrl.abort(), FETCH_TIMEOUT_MS);
   try {
-    const res = await fetch(u, { cache: "no-store", signal: ctrl.signal });
+    const res = await apiFetch(u, { cache: "no-store", signal: ctrl.signal });
     if (!res.ok) throw new Error(`gviz fetch failed: HTTP ${res.status}`);
     return await res.text();
   } finally {
