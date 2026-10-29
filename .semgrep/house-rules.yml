@@ -84,6 +84,14 @@ rules:
     message: >-
       Naive datetime. This project runs on UTC runners against an America/New_York legislature; a naive
       `now()` produced a real off-by-one-day bug (gemini_review_patterns #38/#47). Pass a tzinfo.
+    paths:
+      # Byte-frozen research code: tools/calibration/frozen/*.json pin these files by sha256 (pre-registered
+      # forecasts). Editing them, even to add a tzinfo, breaks the pre-registration. Their naive date only
+      # stamps a "frozen_on" field; they are never on the lobbyist path. Unfrozen files are NOT exempt.
+      exclude:
+        - tools/calibration/fate.py
+        - tools/calibration/prereg_2026.py
+        - tools/calibration/venue_fix.py
     patterns:
       - pattern-either:
           - pattern: datetime.datetime.now()

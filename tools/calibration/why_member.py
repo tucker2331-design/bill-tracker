@@ -41,16 +41,29 @@ Xtr = X(tr)
 key = lambda r: (r["party"], r["same"])
 groups = collections.defaultdict(list)
 for i, r in enumerate(tr): groups[key(r)].append(i)
-typ = {k: Xtr[v].mean(axis=0) for k, v in groups.items()}
-def rate(rs, k, n):
-    v = [r[k] / r[n] for r in rs if r.get(n, 0) >= 5]
-    return round(float(np.mean(v)), 3) if v else None
+# The peer ANCHOR swaps only inputs that belong to the MEMBER, so the current bill's inputs stay fixed (Codex #245:
+# the MEMBER reason groups also hold bill/room-level columns -- room_rate, pat_rate, ip_b*, ra_* -- and swapping those
+# made hybrids of this bill and 300 unrelated ones). Member-varying is MEASURED, not named: a column qualifies when
+# it takes more than one value among the members of the same (bill, room) vote in at least half of those votes.
+votes_ = collections.defaultdict(list)
+for i, r in enumerate(tr): votes_[(r["bill"], r["room"])].append(i)
+multi = [v for v in votes_.values() if len(v) > 1]
+MEMBER_COLS = [c for g in MEMBER for c in REASONS[g] if c in col
+               and sum(len(set(Xtr[v, col[c]])) > 1 for v in multi) >= 0.5 * len(multi)]
+print(f"anchor swaps {len(MEMBER_COLS)} member-varying inputs of "
+      f"{sum(c in col for g in MEMBER for c in REASONS[g])} in the member reasons ({len(multi)} votes measured)",
+      file=sys.stderr)
 rng = np.random.default_rng(7)
 K = 300
 out = []
 for r in fut:
     x = X([r])[0]; p = float(m.predict(x[None])[0])
     idx = groups[key(r)]
+    if not idx:   # no real peer of this party on this side: say so on the row, never invent a peer (Gemini #245)
+        print(f"no training peers for {r['who']} {key(r)} -- no reasons computed", file=sys.stderr)
+        out.append({"who": r["who"], "party": r["party"], "same": r["same"], "p": round(p, 3), "anchor": None,
+                    "error": "no same-party, same-side peers in training"})
+        continue
     samp = Xtr[rng.choice(idx, size=min(K, len(idx)), replace=False)]     # REAL ballots, same party & side
     def swapped(cols_list):
         xs = np.repeat(x[None], len(samp), axis=0)
@@ -79,7 +92,7 @@ for r in fut:
                            for c in cols if abs(per[c]) >= 0.01},
                    "typical": round(float(samp[:, col[top]].mean()), 3),
                    "absent": all(x[col[f]] == 0 for f in ABSENT.get(g, [])) if g in ABSENT else False}
-    anchor = round(swapped([c for g in MEMBER for c in REASONS[g]]), 3)          # a real peer, on THIS bill
+    anchor = round(swapped(MEMBER_COLS), 3)          # a real peer, on THIS bill
     peer_all = round(float(m.predict(samp).mean()), 3)                             # real peers, their own bills
     out.append({"who": r["who"], "party": r["party"], "same": r["same"], "p": round(p, 3), "anchor": anchor,
         "peer_all": peer_all, "effects": eff, "evidence": evid,

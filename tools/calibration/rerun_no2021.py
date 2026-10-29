@@ -27,8 +27,8 @@ def _logit(X, y, names, ridge):
     for k, rr in enumerate((ridge, ridge * 10, ridge * 100)):
         try:
             return ST.logit(X, y, names, ridge=rr, tol=1e-7, max_iter=300), k
-        except RuntimeError:
-            continue
+        except RuntimeError as e:   # a retry, not a dropped row — but said out loud (Standard #9)
+            print(f"  logit did not converge at ridge {rr:g}: {e}; retrying", file=sys.stderr)
     # last resort: a properly penalised Newton fit (penalty in the gradient as well as the Hessian; stats.logit puts it
     # in the Hessian only, so sparse / near-separating inputs never settle). Same output shape as stats.logit.
     Xc = np.column_stack([np.ones(len(y)), np.asarray(X, float)]); b = np.zeros(Xc.shape[1])

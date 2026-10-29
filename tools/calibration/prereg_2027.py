@@ -15,12 +15,18 @@ from __future__ import annotations
 import sys, os, json, hashlib, pickle, datetime
 HERE = os.path.dirname(os.path.abspath(__file__)); sys.path.insert(0, HERE)
 import numpy as np
+from zoneinfo import ZoneInfo
 
 SPEC = os.path.join(HERE, "frozen", "prereg_2027.json")
 SCORE = os.path.join(HERE, "frozen", "score_2027.json")
 ADDENDUM = os.path.join(HERE, "frozen", "prereg_2027_addendum.json")   # arm C + room count rule, frozen 2026-10-21
 CODE = ("blend_2027.py", "first_vote.py", "gbm.py", "prereg_2026.py")
 TEST = 2027
+
+
+def _today_ny():
+    """The legislature's calendar date (America/New_York), not the UTC runner's — house rule, audit #38/#47."""
+    return datetime.datetime.now(ZoneInfo("America/New_York")).date().isoformat()
 
 
 def _sha(path):
@@ -43,7 +49,7 @@ def freeze():
     rows = [r for r in pickle.load(open(FV.ROWS, "rb")) if r["y"] >= 0]
     if any(r["yr"] == TEST for r in rows):
         raise SystemExit("2027 rows already exist -- freezing now would not be a forward test")
-    spec = {"frozen_on": datetime.date.today().isoformat(), "test_year": TEST,
+    spec = {"frozen_on": _today_ny(), "test_year": TEST,
             # 2019+ as in every research split (levers.SPLITS): 2017-18 roll calls carry no member names
             "train_years": sorted({r["yr"] for r in rows if r["yr"] >= 2019}),
             "arms": {"A": {"fn": "blend_2027.predict", "trees": B.TREES, "linear": B.LINEAR, "w_linear": B.W_LINEAR},
@@ -69,7 +75,7 @@ def freeze_addendum():
     rows = [r for r in pickle.load(open(FV.ROWS, "rb")) if r["y"] >= 0]
     if any(r["yr"] == TEST for r in rows):
         raise SystemExit("2027 rows already exist -- too late for a forward-test addendum")
-    spec = {"frozen_on": datetime.date.today().isoformat(), "pairs_with_sha256": hashlib.sha256(open(SPEC, "rb").read()).hexdigest(),
+    spec = {"frozen_on": _today_ny(), "pairs_with_sha256": hashlib.sha256(open(SPEC, "rb").read()).hexdigest(),
             "arm_C": {"fn": "booster_2027.predict_boosted", "boost": BC.BOOST},
             "code_sha256": {f: _sha(os.path.join(HERE, f)) for f in ("booster_2027.py",)},
             "room_count_rule": "per bill: number of members with p >= 0.5 > n/2 (vs the sum-of-p rule in _metrics)",
@@ -111,7 +117,7 @@ def score():
     bill = np.array([f'{r["bill"][0]}|{r["bill"][1]}' for r in te]); same = np.array([bool(r["same"]) for r in te])
     ven = np.array(["sub" if r["ven_sub"] else "com" if r["ven_com"] else "floor" for r in te])
     cham = np.array(["S" if r["chamber_S"] else "H" for r in te])
-    doc = {"scored_on": datetime.date.today().isoformat(), "spec_sha256": hashlib.sha256(spec_blob).hexdigest(),
+    doc = {"scored_on": _today_ny(), "spec_sha256": hashlib.sha256(spec_blob).hexdigest(),
            "arms": {k: P6._metrics(p, y, bill, same, ven, cham) for k, p in preds.items()}}
     gb = {}
     for i, b_ in enumerate(bill):
