@@ -4,7 +4,8 @@
 // ~5 MB full sheet) plus `range=` reads for the AA1 freshness + W1 breaker-trip cells. Auth-free gviz, no
 // new backend. These are operational metrics the worker already emits (Standard #4 self-describing errors).
 import { parseCsv } from "./gviz";
-import { SPREADSHEET_ID } from "../config";
+import { sheetUrl } from "../config";
+import { apiFetch } from "../state/auth";
 
 const SHEET1 = "Sheet1";
 const FETCH_TIMEOUT_MS = 12000;
@@ -27,14 +28,13 @@ export interface HealthData {
   sessionActive: boolean | null;             // Sheet1!S1 — "ACTIVE"/"ADJOURNED"; null = unreadable (never assume)
 }
 
-const gvizUrl = (params: string) =>
-  `https://docs.google.com/spreadsheets/d/${SPREADSHEET_ID}/gviz/tq?tqx=out:csv&sheet=${SHEET1}&${params}`;
+const gvizUrl = (opts: { tq?: string; range?: string; headers?: string }) => sheetUrl(SHEET1, opts);
 
 async function fetchText(u: string): Promise<string> {
   const ctrl = new AbortController();
   const timer = setTimeout(() => ctrl.abort(), FETCH_TIMEOUT_MS);
   try {
-    const res = await fetch(u, { cache: "no-store", signal: ctrl.signal });
+    const res = await apiFetch(u, { cache: "no-store", signal: ctrl.signal });
     if (!res.ok) throw new Error(`gviz fetch failed: HTTP ${res.status}`);
     return await res.text();
   } finally {
@@ -85,12 +85,12 @@ export function loadHealth(): Promise<HealthData> {
 
 async function _loadHealth(): Promise<HealthData> {
   const [metaTxt, aa1Txt, w1Txt, s1Txt] = await Promise.all([
-    fetchText(gvizUrl(`tq=${encodeURIComponent(META_QUERY)}`)),
+    fetchText(gvizUrl({ tq: META_QUERY })),
     // The freshness + breaker + session cells are optional: a failed read must not blank the whole tab.
     // Surface a console warning (Standard #4: optional ≠ silent) and fall back to "unknown"/healthy.
-    fetchText(gvizUrl("range=AA1&headers=0")).catch((e) => { console.warn("Health: AA1 freshness read failed", e); return ""; }),
-    fetchText(gvizUrl("range=W1&headers=0")).catch((e) => { console.warn("Health: W1 breaker read failed", e); return ""; }),
-    fetchText(gvizUrl("range=S1&headers=0")).catch((e) => { console.warn("Health: S1 session read failed", e); return ""; }),
+    fetchText(gvizUrl({ range: "AA1", headers: "0" })).catch((e) => { console.warn("Health: AA1 freshness read failed", e); return ""; }),
+    fetchText(gvizUrl({ range: "W1", headers: "0" })).catch((e) => { console.warn("Health: W1 breaker read failed", e); return ""; }),
+    fetchText(gvizUrl({ range: "S1", headers: "0" })).catch((e) => { console.warn("Health: S1 session read failed", e); return ""; }),
   ]);
 
   // Shape guard: a 200 that isn't our CSV (an HTML login/error page) must not parse to a silent empty set.

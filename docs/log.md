@@ -8,6 +8,14 @@ status: active
 
 Append-only, reverse-chronological (newest at top). Each entry opens with `## [YYYY-MM-DD] <kind> | <title>` so `grep "^## \[" log.md | head -20` gives a parseable timeline.
 
+## [2026-10-29] pr | #242 — private app: bot fold-in (Codex P1 + P2, Gemini high; two Gemini mediums declined)
+- An expired Google ID token (~1 h) now signs out on the first 401, so the gate asks for a fresh one instead of every
+  background read failing behind a screen that still looks signed in.
+- `/api/health` says `sheet_auth_configured` (a bad/revoked/unshared key still reads as configured); the owner's readiness
+  step now checks `x-sheet-auth: service_account` on a real `/api/sheet` read. `sheet_csv` caches SA creds per process.
+- Declined: broad except in `calendar_xray.py` / `pages/ray2.py` — the failure is already a loud traceback, and those
+  files stay untouched this run (replied on both threads).
+
 ## [2026-10-29] pr | #241 — team positions: Codex fold-in; case-law entry renumbered #142 -> #143
 - A failed positions load now retries when the bill or War Room mounts again (it stuck until a reload). The War Room no
   longer says positions are missing. "Identity is not membership" is now [[failures/assumptions_audit]] **#143**
@@ -31,6 +39,13 @@ Append-only, reverse-chronological (newest at top). Each entry opens with `## [Y
 
 ## [2026-10-26] pr | #246 opened — incident ledger never existed (status() refused to seed); fix + golden
 - Health tab: "incident ledger could not be read" — gviz served the calendar for the missing Incident_Log tab. Monthly ledger runs Aug–Oct all failed at the first step. [[failures/assumptions_audit]] #141. Companion: #238 (completeness payload overwritten in U1) still open.
+
+## [2026-09-28] build | the whole app is private — data behind the team gate
+
+Owner: gate everything to "me and whoever I add" (LIS ToS). The UI gate existed but the browser read the sheet
+over public gviz with the id in the public repo. Now every read goes through `GET /api/sheet` (sign-in + team
+list, service-account token), `REQUIRE_SIGN_IN = true`, and Streamlit reads via `sheet_csv.py`. Five owner steps
+listed in [[architecture/verification_durability]].
 
 ## [2026-09-28] build | team positions wired + team gate on the API
 
