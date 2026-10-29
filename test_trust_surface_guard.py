@@ -96,4 +96,10 @@ ok(rows["ok.yml"] == ("0 1 * * *", ""), f"a normal workflow still parses: {rows}
 ok(T.judge_runs([run(0.05, None, status="in_progress")], timedelta(hours=6), NOW)["state"] == "running",
    "the guard's own first run (in progress, nothing completed) is not a failure")
 ok("running" in T.STATES_OK, "running opens no incident")
+# 2026-10-29 live false alarm: a brand-new workflow, dispatched once (filtered out), no scheduled run yet.
+six = timedelta(hours=6)
+ok(T.judge_runs([], six, NOW, born=NOW - timedelta(hours=1))["state"] == "not_yet_due", "new workflow, not yet due")
+ok("not_yet_due" in T.STATES_OK, "not_yet_due opens no incident")
+ok(T.judge_runs([], six, NOW, born=NOW - timedelta(days=3))["state"] == "never_run", "old workflow that never ran is still never_run")
+ok(T.judge_runs([], six, NOW)["state"] == "never_run", "unknown birth -> no allowance (fail-closed)")
 print(f"ALL {_checks} trust-surface guard tests passed")
