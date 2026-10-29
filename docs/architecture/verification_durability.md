@@ -201,7 +201,7 @@ to know they are on the team, so `worker/team.js` checks the email against the `
 It fails closed, and the three answers stay distinct: *not set up yet* vs *not on this team* vs *member*. The
 UI shows a different sentence for each. `/me` is open to any signed-in person because it is their own row.
 **Owner step:** `npx wrangler secret put TEAM_EMAILS` (comma-separated emails). Until then, positions answer
-"not set up yet". Why it exists: [[failures/assumptions_audit]] #142.
+"not set up yet". Why it exists: [[failures/assumptions_audit]] #143.
 
 ## AUTH DECISION 2026-07-27 — Cloudflare Access REJECTED on pricing model, not price
 

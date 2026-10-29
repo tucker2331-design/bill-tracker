@@ -37,7 +37,7 @@ status: active
 - **🔒 The whole app goes private — 5 owner steps, in order:** team list secret → service-account secret → merge
   → set the Google Sheet to Restricted → Streamlit secret + private. Until step 4 the data is still readable by
   anyone with the sheet id (it is in the public repo). [[architecture/verification_durability]] ·
-  [[failures/assumptions_audit]] #142.
+  [[failures/assumptions_audit]] #143.
 - **📝 Contact log (name · date · note per bill) needs one command after merge:**
   `npx wrangler d1 migrations apply bill-tracker-db --remote` (makes tone and legislator optional; table is empty).
 - **📧 Alerts to users need one yes: $5/month Workers Paid for Cloudflare Email Service** (3,000 emails/mo
