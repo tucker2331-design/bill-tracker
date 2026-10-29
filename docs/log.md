@@ -80,6 +80,17 @@ base rate and lists every measured reason with a direction and a strength, plus 
 guess" list. Method saved as `tools/calibration/why_member.py`; findings in [[testing/first_vote]]. Site-wide
 refresh waits for the owner's permission and mockups ([[state/current_status]]).
 
+## [2026-10-29] build | War Room calls pipeline (Phase B2): frozen arm C on venue-fixed rows -> private tab
+- `tools/calibration/serve_calls.py` + `.github/workflows/war_room_calls.yml` (manual dispatch). Rows = venue_fix's
+  ballot-count rebuild (never the text venue, case law #146); model = `booster_2027.predict_boosted`; the pinned hashes in
+  `frozen/prereg_2027_venuefix.json` are re-checked first and a mismatch serves NOTHING. A call only at |p-.5| >= .31;
+  evidence = the model's own k-of-n inputs (this patron's bills, this room, similar bills, this subject), measured before
+  the vote. Off-season: 2026 replay with the actual ballot alongside. One row per bill in `War_Room_Calls` (VA·Live is at
+  ~75% of the cell cap, so not one row per ballot); read only via the signed-in Worker.
+- Sources: Open States zips via a new `fetch.py fetch-openstates` mode (there was no zip fetcher in the repo -- the
+  manifest was committed by hand; the new mode REFUSES bytes that differ from it), committed LIS 2025/2026 cache (no new
+  LIS request), ELECT Report.csv x2 via the existing `finance.fetch`. 13 goldens (`test_serve_calls.py`).
+
 ## [2026-10-29] pr | #245 — member explanations: Semgrep gate cleared, bot fold-in, case law renumbered
 - CI was red on 9 Semgrep house-rule findings. Fixed in the two unpinned files (prereg_2027.py: America/New_York date;
   rerun_no2021.py: the retry says so). The three files pinned by sha256 in tools/calibration/frozen/*.json (fate.py,

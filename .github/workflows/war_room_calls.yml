@@ -1,0 +1,50 @@
+name: 🎯 War Room calls (frozen arm C, venue-fixed rows)
+
+# Serves the War Room's member calls to the PRIVATE sheet tab `War_Room_Calls`, which the app reads only through
+# the signed-in Worker (/api/sheet). Off-season this is the 2026 REPLAY (train 2019-2025, predict every 2026 first
+# vote, the actual ballot alongside). Model, rows and the call rule are pinned by
+# tools/calibration/frozen/prereg_2027_venuefix.json; serve_calls.py re-checks the pinned hashes and serves NOTHING
+# on a mismatch. No AI checklist on this path (Standard #3).
+#
+# Sources, all public and already used by the research code: Open States VA session zips (CC0; fetched from the
+# pinned manifest, sha256-checked), the committed LIS 2025/2026 CSV cache (no new LIS request is made), and two ELECT
+# campaign-finance Report.csv months (member districts). If any source is unreachable the job fails and the tab
+# keeps its last served state; the page shows "can't call" for any bill it has no call for -- never a guess.
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read      # least-privilege: checkout only; the tab is written with GCP_CREDENTIALS
+
+concurrency:
+  group: war-room-calls
+  cancel-in-progress: false
+
+jobs:
+  serve:
+    runs-on: ubuntu-latest
+    timeout-minutes: 300
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install
+        run: pip install --quiet numpy gspread google-auth
+      - name: Restore the Open States zips (pinned bytes; ~670 MB)
+        uses: actions/cache@v4
+        with:
+          path: tools/historical_cache/openstates_va/*.zip
+          key: openstates-va-${{ hashFiles('tools/historical_cache/openstates_va/manifest.json') }}
+      - name: Fetch any missing zip, refusing bytes that differ from the manifest
+        run: python3 tools/historical_cache/fetch.py fetch-openstates
+      - name: Fetch the two ELECT Report.csv months the district join reads
+        run: |
+          cd tools/historical_cache
+          python3 -c "import finance as F, sys; sys.exit(F.fetch('2023_10', ('Report.csv',)) or F.fetch('2024_01', ('Report.csv',)))"
+      - name: Rebuild venue-fixed rows, replay 2026 with frozen arm C, write the tab
+        env:
+          GCP_CREDENTIALS: ${{ secrets.GCP_CREDENTIALS }}
+          PYTHONUNBUFFERED: "1"
+        run: python3 -u tools/calibration/serve_calls.py
