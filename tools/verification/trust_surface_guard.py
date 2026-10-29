@@ -226,16 +226,23 @@ def check_workflows(now):
 
 
 # ── 2. the bill backend's check results reached the live sheet ─────────────────────────────────────────────
+def _json_obj(c):
+    """The cell as a JSON object, or None when it is brace-shaped but not JSON (the caller keeps looking)."""
+    try:
+        v = json.loads(c)
+    except ValueError:
+        return None
+    return v if isinstance(v, dict) else None
+
+
 def payload_in_header(cells):
     """True when one header cell is JSON carrying `universe_count` — found by CONTENT, like the front end."""
     for c in cells:
         c = (c or "").strip()
         if c.startswith("{") and '"universe_count"' in c:
-            try:
-                if isinstance(json.loads(c).get("universe_count"), int):
-                    return True
-            except ValueError:
-                continue                               # a brace-shaped cell that is not JSON: keep looking
+            obj = _json_obj(c)
+            if obj is not None and isinstance(obj.get("universe_count"), int):
+                return True
     return False
 
 
