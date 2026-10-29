@@ -4,11 +4,9 @@ import { deriveStage, furthestStage, stageSide, STAGE_ORDER, type Stage } from "
 import { BillBox } from "../components/BillBox";
 import { isCeremonial, splitByClass, ceremonialLabel } from "../data/billclass";
 
-// The crossover-lane pipeline (vision §3b) as a smooth integrated SPINE. Owner 2026-06-30: failure and the
-// terminal outcomes must live IN the pipeline geometry, not a separate box below it. So death is shown WHERE
-// it happened — a "✕ stranded here" sub-count at each stage — and the governor node BRANCHES into the decided
-// outcomes (✓ Signed / ⧗ Awaiting / ▲ Vetoed), with veto reserved the attention color. Click any count to
-// drill into those bills.
+// The pipeline (vision §3b), drawn as the SUBWAY (owner-approved v9, 2026-10-27). The counting is unchanged from
+// the spine it replaces: still-here per stage per side, "✕ ended here" per stage per side, and the outcome fork.
+// Death is shown WHERE it happened, and every count opens the same grouped bill list.
 // The spine's SHORT display labels, over the single-sourced STAGE_ORDER (CodeRabbit #191: the order must
 // never fork from derive.ts — only the compact wording is local to this view).
 const SPINE_LABEL: Record<Stage, string> = {
@@ -94,90 +92,20 @@ export function Timeline({ bills, onOpen }: { bills: Bill[]; onOpen: (b: Bill) =
   }
 
   const openDrill = (k: string, n: number) => n > 0 && setDrill(k);
-  const kbd = (k: string, n: number) => (e: React.KeyboardEvent) => {
-    if (n > 0 && (e.key === "Enter" || e.key === " ")) { e.preventDefault(); setDrill(k); }
-  };
-
-  // One side's counts at a stage: the advancing number + a small "✕ stranded here" sub-count (dead/carried
-  // that died at this stage), so failure reads at the stage it occurred instead of a footnote below.
-  const Count = ({ stage, side }: { stage: Stage; side: Chamber }) => {
-    const kk = `${stage}|${side}`;
-    const n = alive[kk] || 0;
-    const dead = stranded[kk] || 0;
-    const aliveKey = `alive|${kk}`, deadKey = `stranded|${kk}`;
-    const stageLabel = COLUMNS.find((c) => c.stage === stage)?.label ?? stage;
-    return (
-      <div className="scount">
-        <span className={`count ${side === "Senate" ? "s" : "h"} ${n === 0 ? "zero" : ""}`}
-          onClick={() => openDrill(aliveKey, n)} role={n > 0 ? "button" : undefined} tabIndex={n > 0 ? 0 : undefined}
-          onKeyDown={kbd(aliveKey, n)}
-          aria-label={n > 0 ? `${side} advancing at ${stageLabel}: ${n} bills — list them` : `${side} advancing at ${stageLabel}: 0`}>{n}</span>
-        {dead > 0 && (
-          <span className="scount-dead" onClick={() => openDrill(deadKey, dead)} role="button" tabIndex={0}
-            onKeyDown={kbd(deadKey, dead)}
-            aria-label={`${side} died or carried over at ${stageLabel}: ${dead} bills — list them`}>✕{dead}</span>
-        )}
-        <span className="countlbl">{side}</span>
-      </div>
-    );
-  };
-
-  const OutBtn = ({ kind, label }: { kind: OutKind; label: string }) => {
-    const n = outcome[kind]; const key = `out|${kind}`;
-    return (
-      <button type="button" className={`out-btn ${kind}${n === 0 ? " zero" : ""}`} disabled={n === 0}
-        onClick={() => openDrill(key, n)} aria-label={`${label}: ${n} bills${n > 0 ? " — list them" : ""}`}>
-        <span className="out-n">{n}</span><span className="out-l">{label}</span>
-      </button>
-    );
-  };
+  // Every count on the map is a real control: click / Enter / Space opens the same grouped list the old spine did.
+  const hit = (k: string, n: number, label: string) => n > 0 ? {
+    "data-k": k, role: "button", tabIndex: 0, "aria-label": `${label}: ${n} bills — list them`,
+    onClick: () => openDrill(k, n),
+    onKeyDown: (e: React.KeyboardEvent) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); openDrill(k, n); } },
+  } : { "aria-label": `${label}: 0` };
 
   return (
     <div>
-      <div className="spine-legend">
-        <span><span className="swatch" style={{ background: "var(--senate)" }} />Senate · above</span>
-        <span><span className="swatch" style={{ background: "var(--house)" }} />House · below</span>
-        {/* Owner 2026-07-12: the inline "all ✕ sum to 1,253 (811 died + 442 carried over)" math read as
-            confusing/redundant — the Outcome tiles already show the Died / Carried-over totals. Cut it; the
-            legend just says what a ✕ MEANS. (Prior note: the per-stage ✕ once confused vs the end "Died"
-            number, which the explicit totals tried to reconcile — the tiles do that job better.) */}
-        <span><span className="swatch" style={{ background: "var(--o-dead)" }} />✕ = a bill that ended here (died or carried over)</span>
-        <span className="muted">Position is progress — a bill crosses the line at crossover; the spine ends in the decided outcome.</span>
+      <div className="subway" aria-label="Where every bill stands">
+        <svg viewBox="0 0 1060 410" role="img" aria-label="Pipeline: two lines, one per starting chamber, that swap tracks at crossover and meet at the Governor">
+          <SubwayMap alive={alive} stranded={stranded} outcome={outcome} hit={hit} />
+        </svg>
       </div>
-
-      <div className="spine">
-        {/* Stage names as a clear HEADER row above the spine — kept OFF the count area so they no longer
-            collide with the SENATE / HOUSE labels (owner 2026-06-30). */}
-        <div className="stage-heads">
-          {COLUMNS.map((c) => <div key={c.stage} className="stage-head">{c.stage === "governor" ? "Outcome" : c.label}</div>)}
-        </div>
-        <div className="spine-body">
-          <div className="track" />
-          <div className="seam" style={{ left: "50%" }}><span className="seamlbl">CROSSOVER</span></div>
-          <div className="snodes">
-            {COLUMNS.map((c) => c.stage === "governor" ? (
-              <div className="snode outcome" key="gov">
-                {/* Order (owner 2026-07-08): Awaiting in the MIDDLE, Carried over under Signed, Vetoed just
-                    above Dead — so the fork reads good→pending→bad top to bottom. */}
-                <div className="out-fork">
-                  <OutBtn kind="signed" label="Signed" />
-                  <OutBtn kind="carried" label="Carried over" />
-                  <OutBtn kind="awaiting" label="Awaiting" />
-                  <OutBtn kind="vetoed" label="Vetoed" />
-                  <OutBtn kind="dead" label="Died" />
-                </div>
-              </div>
-            ) : (
-              <div className="snode" key={c.stage}>
-                <div className="above"><Count stage={c.stage} side="Senate" /></div>
-                <div className="dot" />
-                <div className="below"><Count stage={c.stage} side="House" /></div>
-              </div>
-            ))}
-          </div>
-        </div>
-      </div>
-
       {drill && (
         <div style={{ marginTop: "var(--s5)" }}>
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "var(--s2)" }}>
@@ -210,6 +138,83 @@ export function Timeline({ bills, onOpen }: { bills: Bill[]; onOpen: (b: Bill) =
         </div>
       )}
     </div>
+  );
+}
+
+// ── The subway (v9, owner-approved 2026-10-27; built on real data 2026-10-29) ────────────────────────────────────
+// Two LINES, one per chamber a bill STARTED in. Before crossover each runs on its own chamber's track; at crossover
+// they swap tracks (a House bill is heard on the Senate side afterwards — the Timeline's "side" semantics, so every
+// station count is exactly the old spine's alive[stage|side]). "✕ N" branches off a station = bills that ENDED there
+// (died or carried over). The lines meet at the Governor, which forks into signed / awaiting / vetoed.
+// Colour: the two lines are greys (they only need telling apart); colour is reserved for standing meanings —
+// red = ended / vetoed, amber = carried over, accent = awaiting, near-white = signed. Geometry from the mockup.
+const SX: Partial<Record<Stage, number>> = { prefiled: 90, committee1: 230, floor1: 370, committee2: 570, floor2: 710 };
+const Y_SENATE = 140, Y_HOUSE = 280, GX = 840, GY = 210;
+const LINE_SENATE = "#C9D0D4", LINE_HOUSE = "#6E787E";   // the Senate-started and House-started lines
+const OUT_COLOR: Record<"signed" | "awaiting" | "vetoed", string> = { signed: "var(--o-signed)", awaiting: "var(--accent)", vetoed: "var(--red)" };
+type Hit = (k: string, n: number, label: string) => Record<string, unknown>;
+
+function SubwayMap({ alive, stranded, outcome, hit }: {
+  alive: Record<string, number>; stranded: Record<string, number>; outcome: Record<OutKind, number>; hit: Hit;
+}) {
+  const n = (v: number) => v.toLocaleString();
+  const stations = COLUMNS.filter((c) => c.stage !== "governor");
+  return (
+    <g className="sw">
+      <line x1="470" x2="470" y1="52" y2="352" stroke="var(--line-strong)" strokeDasharray="4 5" />
+      <text x="470" y="368" className="sw-th" textAnchor="middle">Crossover</text>
+      <text x="24" y={Y_SENATE - 50} className="sw-th">Senate</text>
+      <text x="24" y={Y_HOUSE + 66} className="sw-th">House</text>
+      {/* the Senate-started line: Senate track, swaps to the House track at crossover, ends at the Governor */}
+      <path d={`M20 ${Y_SENATE} H410 C470 ${Y_SENATE} 470 ${Y_HOUSE} 530 ${Y_HOUSE} H760 C805 ${Y_HOUSE} 805 ${GY} ${GX} ${GY}`}
+        fill="none" stroke={LINE_SENATE} strokeWidth="6" strokeLinecap="round" />
+      <path d={`M20 ${Y_HOUSE} H410 C470 ${Y_HOUSE} 470 ${Y_SENATE} 530 ${Y_SENATE} H760 C805 ${Y_SENATE} 805 ${GY} ${GX} ${GY}`}
+        fill="none" stroke={LINE_HOUSE} strokeWidth="6" strokeLinecap="round" />
+      {stations.map(({ stage, label }) => {
+        const x = SX[stage]!;
+        return (
+          <g key={stage}>
+            <text x={x} y="40" className="sw-th" textAnchor="middle">{label}</text>
+            {(["Senate", "House"] as Chamber[]).map((side) => {
+              const y = side === "Senate" ? Y_SENATE : Y_HOUSE, up = side === "Senate";
+              const post = stage === "committee2" || stage === "floor2";
+              const line = (side === "Senate") !== post ? LINE_SENATE : LINE_HOUSE;   // which line runs here
+              const kk = `${stage}|${side}`, still = alive[kk] || 0, ended = stranded[kk] || 0, dy = up ? 34 : -34;
+              return (
+                <g key={side}>
+                  <circle cx={x} cy={y} r="10" fill="var(--surface)" stroke={line} strokeWidth="4" />
+                  <text x={x} y={up ? y - 24 : y + 38} textAnchor="middle" className={`sw-n${still ? "" : " zero"}`}
+                    {...hit(`alive|${kk}`, still, `${side} · ${label} · still here`)}>{n(still)}</text>
+                  {ended > 0 && <>
+                    <line x1={x} y1={y} x2={x + 20} y2={y + dy} stroke="var(--red)" strokeOpacity=".7" strokeWidth="3" strokeLinecap="round" />
+                    <text x={x + 26} y={y + dy + (up ? 10 : 0)} className="sw-e"
+                      {...hit(`stranded|${kk}`, ended, `${side} · ${label} · ended here`)}>✕ {n(ended)}</text>
+                  </>}
+                </g>
+              );
+            })}
+          </g>
+        );
+      })}
+      <circle cx={GX} cy={GY} r="16" fill="var(--surface)" stroke="var(--o-signed)" strokeWidth="4" />
+      <text x={GX} y="40" className="sw-th" textAnchor="middle">Governor</text>
+      {([["signed", 150, "Signed"], ["awaiting", 210, "Awaiting"], ["vetoed", 270, "Vetoed"]] as const).map(([o, y, label]) => (
+        <g key={o}>
+          <path d={`M${GX + 16} ${GY} C${GX + 40} ${GY} ${GX + 40} ${y} ${GX + 66} ${y}`} fill="none" stroke={OUT_COLOR[o]} strokeWidth="3" />
+          <text x={GX + 74} y={y + 6}>
+            <tspan className={`sw-m${outcome[o] ? "" : " zero"}`} {...hit(`out|${o}`, outcome[o], label)}>{n(outcome[o])}</tspan>
+            <tspan className="sw-l" dx="8">{label}</tspan>
+          </text>
+        </g>
+      ))}
+      <text x="20" y="392" className="sw-l">Ended along the line:</text>
+      <text x="150" y="392" className="sw-carry" {...hit("out|carried", outcome.carried, "Carried over")}>{n(outcome.carried)} carried over</text>
+      <text x="290" y="392" className="sw-e" {...hit("out|dead", outcome.dead, "Died")}>{n(outcome.dead)} died</text>
+      <line x1="560" x2="590" y1="388" y2="388" stroke={LINE_SENATE} strokeWidth="5" />
+      <text x="598" y="392" className="sw-l">started in the Senate</text>
+      <line x1="760" x2="790" y1="388" y2="388" stroke={LINE_HOUSE} strokeWidth="5" />
+      <text x="798" y="392" className="sw-l">started in the House</text>
+    </g>
   );
 }
 

@@ -70,17 +70,23 @@ function AppMain() {
   // undefined = not asked yet · null = signed in with NO profile (show first-run) · object = has one.
   // Three states, not two: "we have not checked" must never look like "they have no profile", or the form
   // flashes on every load for people who already filled it in.
-  const [profile, setProfile] = useState<Record<string, unknown> | null | undefined>(undefined);
+  // Keyed by WHO it was read for, and derived: a sign-out (or a different person) reads as "not asked" without a
+  // setState inside the effect (react-hooks/set-state-in-effect).
+  const [profileFor, setProfileFor] = useState<{ email: string; profile: Record<string, unknown> | null } | null>(null);
+  const profile = identity && profileFor?.email === identity.email ? profileFor.profile : undefined;
+  const setProfile = (p: Record<string, unknown> | null | undefined) =>
+    setProfileFor(identity && p !== undefined ? { email: identity.email, profile: p } : null);
 
   useEffect(() => {
-    if (!identity) { setProfile(undefined); return; }   // signed out => back to "not asked"
+    if (!identity) return;                               // signed out => profile derives to "not asked"
+    const email = identity.email;
     let alive = true;
     apiFetch("/api/me")
       .then((r) => (r.ok ? r.json() : Promise.reject(new Error(`HTTP ${r.status}`))))
-      .then((d) => { if (alive) setProfile(d?.profile ?? null); })
+      .then((d) => { if (alive) setProfileFor({ email, profile: d?.profile ?? null }); })
       // Surfaced, never swallowed. On failure we leave it `undefined` so the form does NOT appear -- showing
       // it after a failed read would ask a user to re-enter a profile they may already have.
-      .catch((e) => { console.error("profile load failed:", e); if (alive) setProfile(undefined); });
+      .catch((e) => { console.error("profile load failed:", e); if (alive) setProfileFor(null); });
     return () => { alive = false; };
   }, [identity]);
 

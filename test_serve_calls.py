@@ -52,6 +52,11 @@ ok(tran["ev"]["mpat"] == [61, 62] and tran["ev"]["sim"] == [0, 0], f"evidence is
 ok(tot["ballots"] == 5 and tot["yes"] == 3 and tot["no"] == 1 and tot["right"] == 3 and tot["wrong"] == 1,
    f"run totals count the wrong call: {dict(tot)}")
 
+# a vote that has not happened yet (live mode, y = -1): no actual, and it never scores a call right or wrong
+rows2, tot2 = S.bill_rows([ballot("Tran", -1)], [0.95])
+ok(json.loads(rows2[0][10])[0]["actual"] == "" and tot2["right"] == 0 and tot2["wrong"] == 0 and tot2["yes"] == 1,
+   f"an unvoted ballot is called but not scored: {dict(tot2)}")
+
 # a changed pinned file serves nothing
 real = S.SPEC
 tmp = ""

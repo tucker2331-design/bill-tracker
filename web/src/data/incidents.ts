@@ -46,11 +46,19 @@ export interface CounterState {
   available: boolean;
   /** true = we received a sheet that is NOT Incident_Log. A DEFECT to surface, not an empty state. */
   wrongSheet: boolean;
+  /** The last STRIP_DAYS days, oldest first: "unmeasured" before genesis, "incident" when any incident was open
+   *  that day, else "clean". The Health tab's 90-day strip — same rows as the counter, so they cannot disagree. */
+  strip: DayState[];
 }
+
+export type DayState = "clean" | "incident" | "unmeasured";
+export const STRIP_DAYS = 90;
+
+const UNMEASURED: DayState[] = Array(STRIP_DAYS).fill("unmeasured");
 
 const EMPTY: CounterState = {
   daysClean: null, monitoringDays: null, incidentsEver: 0, openNow: [],
-  lastDrillDays: null, malformedRows: 0, available: false, wrongSheet: false,
+  lastDrillDays: null, malformedRows: 0, available: false, wrongSheet: false, strip: UNMEASURED,
 };
 
 /** Distinct from EMPTY: "we read the wrong sheet" is a bug to fix, not "nothing has happened yet". */
@@ -83,6 +91,7 @@ export function counterFromRows(rows: string[][], now: Date = new Date()): Count
   let incidentsEver = 0;
   let malformedRows = 0;
   const openNow: string[] = [];
+  const spans: [number, number][] = [];   // [start, end] of every real incident (end = now while still open)
 
   for (const r of rows) {
     // Sheets pads the grid with blank rows; those are not data and warrant no alarm.
@@ -107,6 +116,7 @@ export function counterFromRows(rows: string[][], now: Date = new Date()): Count
     if (!cls) { malformedRows++; continue; }                  // data present, but unclassifiable
 
     incidentsEver++;
+    if (start !== null) spans.push([start, end ?? nowMs]);
     if (end === null) {
       openNow.push(cls);            // still open — the clock reads from its START, and the surface is red
       if (start !== null && (latestEnd === null || start > latestEnd)) latestEnd = start;
@@ -127,7 +137,19 @@ export function counterFromRows(rows: string[][], now: Date = new Date()): Count
     malformedRows,
     available: genesis !== null || incidentsEver > 0,
     wrongSheet: false,
+    strip: dayStrip(spans, genesis, nowMs),
   };
+}
+
+/** One state per UTC day for the last STRIP_DAYS days (oldest first). Pure. */
+export function dayStrip(spans: [number, number][], genesis: number | null, nowMs: number): DayState[] {
+  const DAY = 86_400_000;
+  const today0 = Math.floor(nowMs / DAY) * DAY;
+  return Array.from({ length: STRIP_DAYS }, (_, i) => {
+    const d0 = today0 - (STRIP_DAYS - 1 - i) * DAY, d1 = d0 + DAY;
+    if (genesis === null || d1 <= genesis) return "unmeasured";
+    return spans.some(([a, b]) => a < d1 && b >= d0) ? "incident" : "clean";
+  });
 }
 
 export async function loadCounter(): Promise<CounterState> {

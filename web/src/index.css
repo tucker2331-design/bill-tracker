@@ -4,50 +4,36 @@
    greys, a spacing + type scale, hierarchy by weight+color (not size), depth via shadow over borders.
    Owner pref: the canvas is a real COLOR, not white/cream — a calm cool ground that cuts fatigue and
    lets crisp cards float above it. */
+/* v9 design language (owner-approved mockup, 2026-10-27; built 2026-10-29). A DARK single theme, like the HB 1515
+   War Room page. Grey by default; colour ONLY for standing meanings — accent = moving / links / times / active,
+   amber = carried over / caution, red = dead / vetoed / failing. State is small-caps TEXT, never a filled chip.
+   Layout rules below are unchanged from the light theme; only tokens, type, surfaces and depth moved. */
 :root {
-  /* canvas + surfaces — a cool tinted ground; cards are elevated and lighter (depth = closer) */
-  --canvas: #e7eaf2;          /* the app background — calm cool slate, NOT white/cream */
-  --canvas-2: #dfe3ee;        /* a slightly deeper band (sticky bars) */
-  --surface: #ffffff;         /* elevated cards/panels float above the canvas */
-  --surface-2: #f3f5fa;       /* recessed fills inside a surface (rows, headers) */
+  --canvas: #0B0D0E;   --canvas-2: rgba(11,13,14,.86);   --surface: #1A1E20;   --surface-2: #22272A;
+  --fill: #2A3034;     --fill-on: #3A4146;                /* segmented controls / pills, and their selected state */
+  --ink: #F0F2F3;      --ink-soft: #A6AFB4;   --ink-faint: #727B80;
+  --line: rgba(255,255,255,.08);   --line-strong: rgba(255,255,255,.14);
+  --accent: #86B6D3;   --accent-soft: rgba(134,182,211,.14);
+  --amber: #D9B26A;    --red: #E0796B;
+  /* outcomes: text colour only (no fills) — signed reads near-white, the rest take their standing meaning */
+  --o-signed: #E6EAEC; --o-signed-bg: transparent;
+  --o-vetoed: var(--red);   --o-vetoed-bg: transparent;
+  --o-await: var(--accent); --o-await-bg: transparent;
+  --o-dead: var(--red);     --o-dead-bg: transparent;
+  --o-carry: var(--amber);  --o-carry-bg: transparent;
+  --o-prog: var(--ink-soft); --o-prog-bg: transparent;
+  --neutral: var(--ink-soft); --neutral-bg: transparent;
+  /* chambers: position is the cue (Senate above, House below), so no chamber hue */
+  --senate: var(--ink-soft); --senate-bg: var(--surface-2); --house: var(--ink-soft); --house-bg: var(--surface-2);
+  --stale: var(--red); --ok: var(--ink-soft);
+  --bg-good: transparent; --bg-warn: transparent; --bg-danger: rgba(224,121,107,.18);
 
-  /* ink — cool-tinted greys, 3 levels for hierarchy (RUI: de-emphasize, don't enlarge) */
-  --ink: #1b2236;             /* primary */
-  --ink-soft: #586074;        /* secondary */
-  --ink-faint: #8b93a6;       /* tertiary / labels */
-  --line: #e6e9f1;            /* hairline on surfaces (lightest means that works) */
-  --line-strong: #d2d7e3;
-
-  --accent: #3a55c8;          /* one confident indigo-blue (not default #00f) */
-  --accent-soft: #e9edfb;
-
-  /* outcomes — muted EXCEPT the attention states (vetoed). One meaning per color (Few 7.1.5). */
-  --o-signed: #1d8f57;   --o-signed-bg: #e4f3ea;
-  --o-vetoed: #d2403a;   --o-vetoed-bg: #fbe9e8;   /* attention */
-  --o-await:  #3a55c8;   --o-await-bg:  #e9edfb;
-  --o-dead:   #b85b56;   --o-dead-bg:   #f5e7e6;   /* died/failed = a PALE red — distinct from veto's bright attention red */
-  --o-carry:  #96820c;   --o-carry-bg:  #f8f1cc;   /* carried over = YELLOW (also the WARN/caution hue — one meaning: pending/caution) */
-  --o-prog:   #515a70;   --o-prog-bg:   #e8ebf3;
-  --neutral:  #6b7280;   --neutral-bg:  #eef0f4;   /* neutral GREY — unknown states + referral count (were overloaded onto grey --o-dead) */
-
-  /* chambers — muted indigo (Senate, above) vs muted teal (House, below); position is the real cue */
-  --senate: #5b50a6;     --senate-bg: #ece9f7;
-  --house:  #2a7d8c;     --house-bg:  #e1f0f2;
-
-  --stale: #d2403a;      --ok: #1d8f57;
-
-  /* bullet-graph qualitative bands (subtle — the measure bar must dominate; danger = the RPM redline) */
-  --bg-good: #eaf5ef;    --bg-warn: #f7f0de;    --bg-danger: #fdeceb;
-
-  /* spacing scale (RUI ~25% steps) */
   --s1: 4px; --s2: 8px; --s3: 12px; --s4: 16px; --s5: 24px; --s6: 32px; --s7: 48px; --s8: 64px;
-  /* radii + depth (two-part shadows; cards pop off the tinted canvas) */
-  --radius: 10px; --radius-sm: 7px;
-  --shadow-sm: 0 1px 2px rgba(22,30,55,.07);
-  --shadow: 0 1px 2px rgba(22,30,55,.06), 0 8px 20px rgba(22,30,55,.07);
-  --shadow-lg: 0 2px 6px rgba(22,30,55,.08), 0 22px 48px rgba(22,30,55,.16);
+  --radius: 14px; --radius-sm: 9px;
+  --shadow-sm: none; --shadow: none; --shadow-lg: 0 20px 60px rgba(0,0,0,.55);
 
-  font-family: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "SF Pro Display", system-ui, "Segoe UI", Roboto, "Helvetica Neue", sans-serif;
+  color-scheme: dark;
 }
 
 * { box-sizing: border-box; }
@@ -87,7 +73,7 @@ h2, h3 { margin: 0; }
 /* ── Scope switch ── */
 .scope { display: inline-flex; border-radius: 999px; overflow: hidden; background: var(--surface); box-shadow: var(--shadow-sm); }
 .scope button { border: 0; background: transparent; padding: 6px var(--s3); font-weight: 600; color: var(--ink-soft); }
-.scope button.on { background: var(--accent); color: #fff; }
+.scope button.on { background: var(--fill-on); color: var(--ink); box-shadow: 0 1px 3px rgba(0,0,0,.35); }
 
 /* ── Trust header — a masthead of numbers, thin dividers, no dots (owner 2026-07-08, docs/design) ── */
 .trust { display: flex; align-items: center; gap: var(--s3); font-size: 13px; color: var(--ink-soft); flex-wrap: wrap; }
@@ -98,21 +84,21 @@ h2, h3 { margin: 0; }
 .trust .tr-showing { color: var(--ink-faint); white-space: nowrap; }
 
 /* ── Chips ── */
-.chip { display: inline-flex; align-items: center; gap: 5px; padding: 2px 8px; border-radius: 4px; font-size: 11px; font-weight: 600; letter-spacing: .2px; white-space: nowrap; }
-/* Outcome tags — RESERVED colour (owner 2026-07-08, see docs/design/dashboard_and_visual_language.md).
-   Finality is the FILL: SOLID = a final verdict, TINT = still in play. Disposition is the HUE. Everything
-   routine stays grey — no rainbow of pastel fills (the #1 "AI-generated" tell). */
-.chip.signed { background: var(--o-signed); color: #fff; }             /* final: became law */
-.chip.dead { background: #d2403a; color: #fff; }                       /* final: truly dead — takes the strong red */
-.chip.vetoed { background: #fbdedb; color: #bf352f; }                  /* NOT final: likely dead but overridable → lighter red tint */
-.chip.carried_over { background: #f4e7c1; color: #87680a; }            /* NOT final: deferred to next session → amber, not red */
+.chip { display: inline-flex; align-items: center; gap: 5px; padding: 0; background: transparent; font-size: 11px; font-weight: 700;
+  text-transform: uppercase; letter-spacing: .06em; white-space: nowrap; }
+/* Outcome tags — RESERVED colour, as small-caps TEXT (v9; the 2026-07-08 fills are retired). The hue is the
+   standing meaning; everything routine stays grey — no rainbow, no fills (the #1 "AI-generated" tell). */
+.chip.signed { color: var(--o-signed); }
+.chip.dead { color: var(--o-dead); }
+.chip.vetoed { color: var(--o-vetoed); }
+.chip.carried_over { color: var(--o-carry); }
 .chip.awaiting_governor { background: var(--neutral-bg); color: var(--neutral); }  /* in process → grey */
 .chip.in_progress { background: var(--neutral-bg); color: var(--neutral); }        /* in process → grey */
 .chip.senate { background: var(--senate-bg); color: var(--senate); }
 .chip.house { background: var(--house-bg); color: var(--house); }
 .chip.referral { background: var(--neutral-bg); color: var(--neutral); }   /* referral count = grey (was tan, colliding with carried-over) */
 .chip.crossed { background: var(--neutral-bg); color: var(--neutral); }    /* crossed over = grey routine status (owner 2026-07-13; was senate-purple, violating one-meaning-per-color) */
-.chip.provisional { background: #f6efdc; color: #8a6a14; }
+.chip.provisional { color: var(--amber); }
 
 /* ── Bill box (the one reused component) — bordered by shadow + spacing, not a hard rule ── */
 .billbox { display: grid; grid-template-columns: auto 1fr auto; gap: var(--s2) var(--s3); align-items: center;
@@ -124,14 +110,14 @@ h2, h3 { margin: 0; }
 .billbox .cat { color: var(--ink); overflow: hidden; text-overflow: ellipsis; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; line-height: 1.35; }
 .billbox .meta { display: flex; gap: 5px; align-items: center; flex-wrap: wrap; justify-content: flex-end; max-width: 168px; }
 .star { border: 0; background: transparent; font-size: 17px; line-height: 1; color: var(--ink-faint); padding: 0 2px; }
-.star.on { color: #e0a500; }
+.star.on { color: var(--amber); }
 /* Two-step untrack confirm (owner 2026-07-13) — anchored to the star; default button = Keep tracking. */
 .starwrap { position: relative; display: inline-block; }
 .star-confirm { position: absolute; top: 24px; left: -8px; z-index: 30; background: var(--surface); border-radius: 8px;
   box-shadow: var(--shadow-lg); padding: 10px 12px; width: 210px; font-size: 13px; display: block; }
 .star-confirm .btns { display: flex; gap: 8px; margin-top: 9px; }
 .star-confirm button { font: inherit; border-radius: 6px; padding: 5px 10px; font-weight: 600; font-size: 12.5px; cursor: pointer; }
-.star-confirm .keep { border: 0; background: var(--accent); color: #fff; }
+.star-confirm .keep { border: 0; background: var(--accent); color: var(--canvas); }
 .star-confirm .untrack { border: 1px solid var(--line-strong); background: var(--surface); color: var(--ink-soft); }
 .billgrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: var(--s2); }
 /* Drill-down grouping: a sticky-ish committee header over each cluster so a big stage reads House/Senate → committee → sub. */
@@ -139,7 +125,7 @@ h2, h3 { margin: 0; }
 .drill-grouphdr { font-size: 12px; font-weight: 800; color: var(--ink-soft); letter-spacing: .2px; padding: 4px 2px 7px; border-bottom: 1px solid var(--line); margin-bottom: var(--s2); }
 
 /* ── Bill card (modal) ── */
-.cardwrap { position: fixed; inset: 0; background: rgba(20,28,48,.42); display: flex; justify-content: center; align-items: flex-start; padding: 40px 16px; z-index: 50; overflow: auto; }
+.cardwrap { position: fixed; inset: 0; background: rgba(0,0,0,.55); display: flex; justify-content: center; align-items: flex-start; padding: 40px 16px; z-index: 50; overflow: auto; }
 .card { background: var(--surface); border-radius: 14px; width: 640px; max-width: 100%; box-shadow: var(--shadow-lg); overflow: hidden; }
 .card header { display: flex; align-items: flex-start; gap: var(--s3); padding: var(--s4) var(--s5); border-bottom: 1px solid var(--line); }
 .card header .num { font-size: 20px; font-weight: 800; }
@@ -153,7 +139,7 @@ h2, h3 { margin: 0; }
    card (owner Option 2, 2026-07-13; same hue family as the provisional pin). Amber means exactly this,
    site-wide — the calendar's unplaceable marker moved OFF amber to the dashed border below. */
 .metarow.next-soon { background: var(--o-carry-bg); margin: 0 -8px; padding: 7px 8px; border-radius: 6px; }
-.metarow.next-soon .k { color: #87680a; }
+.metarow.next-soon .k { color: var(--amber); }
 /* Co-patrons: one line per LIS role group, grey role label; long lists fold behind the plain text toggle. */
 /* LIS summary on the bill card: a closed disclosure (the catchline above is the short version). */
 .sum { margin: 0 0 12px; }
@@ -167,7 +153,7 @@ h2, h3 { margin: 0; }
 .sum-text { margin: 4px 0 8px; line-height: 1.5; max-width: 68ch; }
 .sum-other { margin-top: 8px; padding-top: 8px; border-top: 1px solid var(--line); }
 .copatrons { display: flex; flex-direction: column; gap: 2px; align-items: flex-start; }
-.soon-ink { color: #87680a; }
+.soon-ink { color: var(--amber); }
 .histtable { width: 100%; border-collapse: collapse; margin-top: var(--s2); }
 .histtable th { text-align: left; color: var(--ink-faint); font-size: 11px; text-transform: uppercase; letter-spacing: .4px; padding: 5px 6px; }
 .histtable th.date, .histtable td.date { text-align: right; }
@@ -235,7 +221,7 @@ h2, h3 { margin: 0; }
 
 /* ── Calendar sliver (today, a paper-planner day column) ── */
 .daycol { background: var(--surface); border-radius: var(--radius); box-shadow: var(--shadow-sm); overflow: hidden; display: flex; flex-direction: column; max-height: 360px; }
-.daycol .dchead { padding: 10px var(--s4); background: var(--accent); color: #fff; }
+.daycol .dchead { padding: 10px var(--s4); background: var(--surface-2); color: var(--ink); }
 .daycol .dchead .dow { font-size: 11px; text-transform: uppercase; letter-spacing: 1px; opacity: .85; font-weight: 700; }
 .daycol .dchead .dnum { font-size: 24px; font-weight: 800; line-height: 1.05; }
 .daycol .dcbody { overflow-y: auto; padding: var(--s2); }
@@ -376,50 +362,21 @@ h2, h3 { margin: 0; }
 .cal-mini-legend .swatch.band { background: var(--accent-soft); }
 .cal-mini-legend .swatch.focus { border: 2px solid var(--accent); }
 
-/* ── Timeline — a smooth, integrated SPINE (not boxes) ── */
-.spine-legend { display: flex; gap: var(--s5); align-items: center; margin: 0 0 var(--s2); font-size: 12.5px; color: var(--ink-soft); flex-wrap: wrap; }
-.spine-legend .swatch { display: inline-block; width: 10px; height: 10px; border-radius: 3px; vertical-align: -1px; margin-right: 6px; }
-.spine { position: relative; background: var(--surface); border-radius: var(--radius); box-shadow: var(--shadow-sm); padding: var(--s4); }
-/* stage names as a clear HEADER row, evenly over the columns — no longer collide with the count labels */
-.stage-heads { display: flex; margin-bottom: var(--s2); }
-.stage-head { flex: 1; text-align: center; font-size: 12px; font-weight: 800; color: var(--ink); letter-spacing: -.1px; }
-.spine-body { position: relative; }
-.spine-body .track { position: absolute; left: var(--s3); right: var(--s3); top: 50%; height: 2px;
-  background: linear-gradient(90deg, var(--line-strong), var(--ink-faint), var(--line-strong)); transform: translateY(-1px); }
-.spine-body .seam { position: absolute; top: 14px; bottom: 14px; width: 0; border-left: 2px dashed var(--o-vetoed); }
-.spine-body .seam .seamlbl { position: absolute; top: -6px; left: 50%; transform: translateX(-50%); white-space: nowrap;
-  font-size: 9.5px; font-weight: 800; letter-spacing: 1.5px; color: var(--o-vetoed); background: var(--surface); padding: 0 5px; }
-.snodes { position: relative; display: flex; align-items: stretch; }
-.snode { flex: 1; display: flex; flex-direction: column; align-items: center; min-height: 150px; position: relative; }
-.snode .above { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: flex-end; padding-bottom: 14px; }
-.snode .dot { width: 11px; height: 11px; border-radius: 50%; background: var(--surface); border: 2px solid var(--ink-faint); z-index: 1; }
-.snode .below { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: flex-start; padding-top: 14px; }
-.count { font-size: 25px; font-weight: 800; line-height: 1; cursor: pointer; }
-.count.s { color: var(--senate); } .count.h { color: var(--house); }
-.count.zero { color: var(--line-strong); cursor: default; }
-.countlbl { font-size: 9.5px; color: var(--ink-faint); margin-top: 4px; text-transform: uppercase; letter-spacing: .4px; }
-/* per-side count + a small "✕ stranded here" sub-count so failure reads AT the stage it occurred (owner 2026-06-30) */
-.scount { display: flex; flex-direction: column; align-items: center; }
-.scount-dead { font-size: 12px; font-weight: 800; color: var(--o-dead); cursor: pointer; margin-top: 3px; line-height: 1; }  /* dead = the pale red, not the bright attention red */
-.scount-dead:hover { text-decoration: underline; }
-/* the governor node BRANCHES into the decided outcomes — integrated into the spine, not a separate box */
-.snode.outcome .out-fork { flex: 1; display: flex; flex-direction: column; align-items: stretch; justify-content: center; gap: 5px; width: 100%; padding: 0 2px; }
-.out-btn { display: flex; align-items: baseline; gap: 6px; border: 0; background: var(--neutral-bg); border-radius: 4px; padding: 4px 8px; cursor: pointer; text-align: left; }
-.out-btn:hover:not(:disabled) { box-shadow: var(--shadow-sm); }
-.out-btn:disabled { opacity: .5; cursor: default; }
-.out-btn .out-n { font-size: 16px; font-weight: 800; font-variant-numeric: tabular-nums; color: var(--neutral); }
-.out-btn .out-l { font-size: 10.5px; font-weight: 700; color: var(--neutral); text-transform: uppercase; letter-spacing: .3px; }
-/* Reserved colour, matching the bill tags (docs/design): SOLID fill = a final verdict, TINT = still in play,
-   GREY = routine (Awaiting). Same hues + finality logic as `.chip`, so the pipeline reads consistently. */
-.out-btn.signed { background: var(--o-signed); }                                        /* final: became law */
-.out-btn.signed .out-n, .out-btn.signed .out-l { color: #fff; }
-.out-btn.dead { background: #d2403a; }                                                  /* final: truly dead — the strong red */
-.out-btn.dead .out-n, .out-btn.dead .out-l { color: #fff; }
-.out-btn.vetoed { background: #fbdedb; }                                                /* not final: overridable → red tint */
-.out-btn.vetoed .out-n, .out-btn.vetoed .out-l { color: #bf352f; }
-.out-btn.carried { background: #f4e7c1; }                                               /* not final: deferred → amber */
-.out-btn.carried .out-n, .out-btn.carried .out-l { color: #87680a; }
-.out-btn.awaiting { background: var(--neutral-bg); }                                    /* in process → grey */
+/* ── Pipeline — the SUBWAY (v9). Drawn in SVG; the map keeps its geometry and scrolls inside its own panel on a
+   narrow screen, so the page itself never scrolls sideways. Every count is a real button (focus ring shown). ── */
+.subway { background: var(--surface); border-radius: var(--radius); padding: 14px 10px; overflow-x: auto; }
+.subway svg { display: block; width: 100%; min-width: 760px; height: auto; }
+.subway text { font-family: inherit; }
+.subway .sw-th { fill: var(--ink-faint); font-size: 11px; letter-spacing: .06em; text-transform: uppercase; }
+.subway .sw-n { fill: var(--ink); font-size: 20px; font-weight: 700; }
+.subway .sw-m { fill: var(--ink); font-size: 15px; font-weight: 600; }
+.subway .sw-n.zero, .subway .sw-m.zero { fill: var(--ink-faint); }
+.subway .sw-l { fill: var(--ink-soft); font-size: 12px; }
+.subway .sw-e { fill: var(--red); font-size: 12.5px; }
+.subway .sw-carry { fill: var(--amber); font-size: 12.5px; }
+.subway [data-k] { cursor: pointer; }
+.subway [data-k]:hover { text-decoration: underline; }
+.subway [data-k]:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 
 /* ── Search / misc ── */
 .searchbar { display: flex; gap: var(--s2); margin-bottom: var(--s3); }
@@ -427,7 +384,7 @@ h2, h3 { margin: 0; }
 .filters { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: var(--s4); }
 .filters button { border: 1px solid transparent; background: var(--surface); border-radius: 999px; padding: 6px 12px; font-weight: 600; color: var(--ink-soft); font-size: 12.5px; box-shadow: var(--shadow-sm); }
 .filters button:hover { color: var(--ink); }
-.filters button.on { background: var(--ink); color: #fff; }
+.filters button.on { background: var(--ink); color: var(--canvas); }
 .filters .fcount { opacity: .6; font-weight: 700; margin-left: 4px; }
 .muted { color: var(--ink-faint); }
 .center-msg { text-align: center; color: var(--ink-soft); padding: var(--s8) var(--s5); }
@@ -718,7 +675,7 @@ a.hl-vverify:hover { text-decoration: underline; }
   padding: 8px 14px; font-size: 13px; font-weight: 650; color: var(--ink-soft); white-space: nowrap;
 }
 .fr-btn:disabled { opacity: .5; }
-.fr-primary { background: var(--ink); border-color: var(--ink); color: #fff; }
+.fr-primary { background: var(--ink); border-color: var(--ink); color: var(--canvas); }
 .fr-foot { display: flex; align-items: center; justify-content: space-between; gap: var(--s3);
   border-top: 1px solid var(--line); padding-top: var(--s3); }
 @media (max-width: 480px) { .fr-districts { grid-template-columns: 1fr; } }
@@ -747,3 +704,149 @@ a.hl-vverify:hover { text-decoration: underline; }
 .grouphdr .gc { font-size: 11.5px; color: var(--ink-faint); font-variant-numeric: tabular-nums; }
 .grouphdr .grule { flex: 1; height: 1px; background: var(--line-strong); }
 .gtoggle { background: none; border: 0; padding: 0; font-size: 12px; font-weight: 600; color: var(--accent); }
+
+/* ── v9 design language: surfaces, type, controls (2026-10-29). Placed LAST so equal-specificity rules win
+   without !important. Layout is untouched — this only changes how the existing layout looks. ── */
+html, body { background: var(--canvas); }
+body { font-size: 15px; letter-spacing: -.01em; line-height: 1.4; }
+.appheader { backdrop-filter: saturate(1.6) blur(18px); -webkit-backdrop-filter: saturate(1.6) blur(18px);
+  border-bottom: .5px solid var(--line-strong); }
+.brand { font-weight: 700; letter-spacing: -.015em; }
+.nav a, .nav button { font-weight: 500; }
+.nav a.active, .nav button.active { font-weight: 600; }
+.scope { background: var(--fill); border: 0; padding: 2px; border-radius: 9px; }
+.scope button { border-radius: 7px; color: var(--ink); background: transparent; }
+h2.h, h3.h, .h { color: var(--ink-soft); font-weight: 500; font-size: 13px; letter-spacing: .02em; }
+.panel { border: 0; }
+.filters button { background: var(--fill); border: 0; color: var(--ink); box-shadow: none; }
+input, select, textarea { background: var(--surface); color: var(--ink); border: 0; border-radius: 11px; }
+input::placeholder, textarea::placeholder { color: var(--ink-faint); }
+.signin, .signin * { color-scheme: dark; }
+
+/* ── War Room list (v9). One card per tracked bill, grouped by when it is next heard. Grey by default; accent =
+   times / links; amber = carried over; red = dead / vetoed. The member bar: called yes (light), called no (mid),
+   can't call (dark), and a tick at the yes votes needed. ── */
+.wl-head { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 10px; }
+.wl .seg { display: inline-flex; flex-wrap: wrap; background: var(--fill); border-radius: 9px; padding: 2px; }
+.wl .seg button { border: 0; background: none; color: var(--ink); padding: 5px 11px; border-radius: 7px; font-size: 13px; }
+.wl .seg button.on { background: var(--fill-on); font-weight: 600; }
+.wl-grp { margin-top: 24px; font-size: 13px; color: var(--ink-soft); text-transform: uppercase; letter-spacing: .03em;
+  display: flex; justify-content: space-between; align-items: baseline; gap: 10px; }
+.wl-grp .n { text-transform: none; letter-spacing: 0; color: var(--ink-faint); }
+.wl-week { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 4px; margin-top: 10px; }
+.wl-wd { background: var(--surface); border-radius: 10px; padding: 8px 6px; min-height: 58px; font-size: 12px; color: var(--ink-faint); min-width: 0; }
+.wl-wd b { display: block; color: var(--ink-soft); font-size: 12px; font-weight: 600; }
+.wl-wd .hit { display: block; margin-top: 5px; color: var(--accent); font-weight: 600; overflow-wrap: anywhere; }
+.wl-cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 330px), 1fr)); gap: 12px; margin-top: 10px; }
+.wl-card { display: block; background: var(--surface); border-radius: 14px; padding: 14px 16px; color: inherit; min-width: 0; text-decoration: none; }
+.wl-card:hover { background: #20252A; text-decoration: none; }
+.wl-card .l1 { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; }
+.wl-card .num { font-weight: 700; font-size: 17px; }
+.wl-card .pat { color: var(--ink-soft); font-size: 14px; }
+.wl-card .ttl { margin-top: 4px; font-size: 14px; line-height: 1.35; overflow-wrap: anywhere; }
+.wl-card .kv { display: grid; grid-template-columns: 72px minmax(0, 1fr); gap: 4px 10px; margin: 10px 0 0; font-size: 13px; }
+.wl-card .kv dt { color: var(--ink-faint); } .wl-card .kv dd { margin: 0; color: var(--ink-soft); overflow-wrap: anywhere; }
+.wl-card .kv dd.when { color: var(--accent); font-weight: 600; }
+.wl-card .ml { display: flex; flex-wrap: wrap; gap: 2px 10px; }
+.wl-card .bar { position: relative; display: flex; height: 8px; gap: 2px; margin-top: 4px; }
+.wl-card .bar i { display: block; border-radius: 2px; }
+.wl .sw { display: inline-block; width: 10px; height: 8px; border-radius: 2px; margin-right: 4px; }
+.wl .yes { background: #E6EAEC; } .wl .no { background: #7E888E; } .wl .cant { background: var(--fill-on); }
+.wl-card .bar .need, .wl .sw.tick { position: absolute; top: -3px; bottom: -3px; width: 2px; background: var(--ink); border-radius: 1px; }
+.wl .sw.tick { position: static; display: inline-block; height: 12px; vertical-align: -2px; }
+.wl-key { display: flex; flex-wrap: wrap; gap: 4px 14px; font-size: 12px; color: var(--ink-faint); margin-top: 8px; }
+.wl-card .team { display: flex; flex-wrap: wrap; gap: 4px 12px; margin-top: 10px; padding-top: 10px; border-top: .5px solid var(--line);
+  font-size: 12.5px; color: var(--ink-soft); }
+.wl-card .team:has(.wr-pos:empty) .wr-pos { display: none; }
+.wl-why { margin-top: 28px; background: var(--surface); border-radius: 14px; padding: 14px 16px; font-size: 13px; color: var(--ink-soft); line-height: 1.5; }
+.wl-why b { color: var(--ink); }
+@media (max-width: 560px) { .wl-week { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
+
+/* ── Member calls with evidence, on the bill page (P23). Calls are small-caps text; a member opens to the
+   model's own inputs as k-of-n. ── */
+.mc-sum { margin: 4px 0 8px; color: var(--ink-soft); font-size: 13px; }
+.mc-sub { margin: 10px 0 4px; font-size: 12px; color: var(--ink-faint); text-transform: uppercase; letter-spacing: .05em; }
+.mc-m { border-top: .5px solid var(--line); }
+.mc-m > summary { display: flex; justify-content: space-between; gap: 10px; padding: 8px 0; cursor: pointer; list-style: none; }
+.mc-m > summary::-webkit-details-marker { display: none; }
+.mc-call { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .06em; color: var(--ink-faint); }
+.mc-call.on { color: var(--ink); }
+.mc-ev { display: grid; gap: 3px; padding: 0 0 10px; font-size: 13px; color: var(--ink-soft); }
+.mc-ev div { display: flex; justify-content: space-between; gap: 10px; }
+.mc-ev b { color: var(--ink); font-weight: 600; }
+.mc-foot { margin: 8px 0 0; font-size: 12.5px; color: var(--ink-faint); }
+
+/* ── Health (v9). Binary: grey = verified clean, red = anything else. WHY it is red is a small-caps field. ── */
+.hx { --gz: #2C3236; }
+.hx .red { color: var(--red); }
+.hx .st { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .06em; color: var(--ink-soft); white-space: nowrap; }
+.hx .st.red { color: var(--red); }
+.hx .lbl { font-size: 12px; color: var(--ink-soft); text-transform: uppercase; letter-spacing: .05em; font-weight: 500; }
+.hx-verdict { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px 18px; font-size: 14px; color: var(--ink-soft); }
+.hx-verdict b { color: var(--ink); font-weight: 600; }
+.hx-verdict .sub { font-size: 12.5px; color: var(--ink-faint); }
+.hx-tile { background: var(--surface); border-radius: 14px; padding: 14px 16px; min-width: 0; }
+.hx-sec { margin-top: 28px; font-size: 13px; color: var(--ink-soft); text-transform: uppercase; letter-spacing: .03em;
+  display: flex; justify-content: space-between; align-items: baseline; gap: 10px; }
+.hx-sec .n { text-transform: none; letter-spacing: 0; color: var(--ink-faint); }
+.hx-sec + .hx-tile, .hx-sec + .hx-row { margin-top: 12px; }
+.hx-row { display: grid; gap: 12px; }
+.hx-r3 { grid-template-columns: repeat(auto-fit, minmax(min(100%, 290px), 1fr)); }
+/* at a glance: days clean on the LEFT, the four rings centred on the RIGHT */
+.hx-glance { display: grid; grid-template-columns: minmax(150px, 1fr) minmax(0, 4fr); align-items: center; background: var(--surface);
+  border-radius: 14px; margin-top: 12px; padding: 18px 8px; }
+.hx-glance .g { display: flex; flex-direction: column; align-items: center; text-align: center; gap: 3px; padding: 0 8px; min-width: 0; }
+.hx-glance .days .big { font-size: 40px; font-weight: 700; letter-spacing: -.02em; line-height: 1; margin-bottom: 6px; }
+.hx-rings { display: flex; justify-content: center; flex-wrap: wrap; gap: 16px 36px; border-left: .5px solid var(--line); padding-left: 8px; }
+.hx-rings .g { width: 130px; }
+.hx-glance .gfx { height: 64px; margin-bottom: 6px; }
+.hx-glance .gn { font-weight: 600; font-size: 15px; }
+.hx-glance .gc { font-size: 13px; color: var(--ink-soft); }
+.hx-glance .gv { font-size: 12px; color: var(--ink-faint); }
+.hx-glance .gc.red, .hx-glance .gv.red { color: var(--red); }
+@media (max-width: 760px) { .hx-glance { grid-template-columns: 1fr; row-gap: 18px; } .hx-rings { border-left: 0; padding-left: 0; } }
+/* problems: one row of fields per not-clean check */
+.hx-tw { overflow-x: auto; }
+.hx-ptab { width: 100%; border-collapse: collapse; font-size: 13px; }
+.hx-ptab th { font-weight: 500; color: var(--ink-faint); text-align: left; padding: 0 10px 6px 0; font-size: 12px; white-space: nowrap; }
+.hx-ptab td { padding: 9px 10px 9px 0; border-top: .5px solid var(--line); color: var(--ink-soft); vertical-align: middle; }
+.hx-ptab td:first-child { color: var(--ink); font-weight: 600; }
+.hx-ptab .num { white-space: nowrap; }
+/* dials */
+.hx-gauge { display: grid; grid-template-columns: 120px minmax(0, 1fr); gap: 4px 14px; align-items: center; }
+.hx-gauge svg text { fill: var(--ink-faint); font-size: 10px; }
+.hx-gauge .nm { font-size: 13.5px; color: var(--ink-soft); }
+.hx-gauge .val { font-size: 22px; font-weight: 700; letter-spacing: -.015em; margin-top: 2px; }
+.hx-gauge .val.red { color: var(--red); }
+.hx-gauge .foot { font-size: 11.5px; color: var(--ink-faint); margin-top: 2px; }
+.hx-gauge.unk { background-image: repeating-linear-gradient(135deg, transparent 0 5px, rgba(224,121,107,.07) 5px 10px); }
+/* job-run grid + 90-day strip: one cell per run / per day */
+.hx-beat { display: grid; grid-template-columns: minmax(0, 1fr) auto 72px; gap: 6px 14px; align-items: center; padding: 7px 0; }
+.hx-beat + .hx-beat { border-top: .5px solid var(--line); }
+.hx-beat .jn { font-size: 14px; min-width: 0; overflow-wrap: anywhere; }
+.hx-beat .jn.red { color: var(--red); }
+.hx-beat .ls { font-size: 12px; color: var(--ink-faint); text-align: right; }
+.hx-beat .runs { display: flex; gap: 3px; }
+.hx-beat .runs i, .hx-legend i, .hx-strip i { display: inline-block; width: 12px; height: 12px; border-radius: 3px; box-shadow: inset 0 0 0 1px var(--gz); }
+.hx-strip { display: grid; grid-template-columns: repeat(90, minmax(0, 1fr)); gap: 2px; }
+.hx-strip i { width: auto; height: 22px; background: var(--gz); box-shadow: none; }
+.hx i.p { background: #5D676D; box-shadow: none; }
+.hx i.f { background: var(--red); box-shadow: none; }
+.hx i.u { background-image: repeating-linear-gradient(135deg, transparent 0 3px, rgba(255,255,255,.08) 3px 6px); background-color: transparent; }
+.hx-strip i.u { background-color: var(--surface-2); }
+.hx-legend { display: flex; flex-wrap: wrap; gap: 4px 14px; margin-top: 8px; font-size: 12px; color: var(--ink-faint); }
+.hx-legend i { width: 10px; height: 10px; margin-right: 5px; vertical-align: -1px; }
+/* watchers + rows by class */
+.hx-ticks { display: grid; gap: 6px; margin-top: 10px; font-size: 13.5px; color: var(--ink-soft); }
+.hx-ticks b { display: inline-block; width: 18px; color: var(--ink-soft); }
+.hx-ticks b.red { color: var(--red); }
+.hx-stack { display: flex; height: 12px; border-radius: 4px; overflow: hidden; background: var(--gz); margin-top: 12px; gap: 1px; }
+.hx-stack span { display: block; height: 100%; }
+/* alerts, folded */
+.hx-alerts > summary { cursor: pointer; list-style: none; font-size: 13.5px; color: var(--ink-soft); padding: 4px 0; }
+.hx-alerts > summary::-webkit-details-marker { display: none; }
+.hx-alerts + .hx-alerts { margin-top: 8px; padding-top: 8px; border-top: .5px solid var(--line); }
+.hx-alerts .panel { margin-top: 8px; background: var(--surface-2); }
+.hx-raw { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 4px 16px; margin-top: 10px; font-size: 12px; }
+.hx-raw div { display: flex; justify-content: space-between; gap: 8px; border-bottom: .5px solid var(--line); padding: 3px 0; }
+.hx-raw span { color: var(--ink-faint); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

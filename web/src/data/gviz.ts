@@ -153,7 +153,7 @@ export async function loadBillData(): Promise<BillData> {
     if (!res.ok) throw new Error(`gviz fetch failed: HTTP ${res.status}`);
     text = await res.text();
   } catch (e) {
-    throw new Error(ctrl.signal.aborted ? `data request timed out after ${FETCH_TIMEOUT_MS / 1000}s` : String((e as Error)?.message || e));
+    throw new Error(ctrl.signal.aborted ? `data request timed out after ${FETCH_TIMEOUT_MS / 1000}s` : String((e as Error)?.message || e), { cause: e });
   } finally {
     clearTimeout(timer);
   }

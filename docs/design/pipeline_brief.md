@@ -1,11 +1,16 @@
 ---
 tags: [design, timeline, pipeline, brief, owner-feedback]
-updated: 2026-10-27
-status: active
-open_loop: Demo frozen as final for now (v8); when the owner directs the build, pick among subway / braid / custody matrix / bullseye / territory map and build it on real data.
+updated: 2026-10-29
+status: shipped
 ---
 
 # Pipeline (Timeline) redesign — what the owner wants, and a brief for a fresh model
+
+> **BUILT 2026-10-29 — the SUBWAY, on real data** (owner brief: "Pipeline = the SUBWAY", mockup v9). Two lines (bills
+> that started in the Senate / the House) swap tracks at crossover and meet at the Governor; still-here counts at the
+> stations, "✕ N ended here" branches, signed / awaiting / vetoed, carried-over and died totals. Same counting and drill
+> lists as the spine it replaced (`deriveStage` / `furthestStage` / `stageSide`); no option switcher.
+> `web/src/views/Timeline.tsx`. The other candidates below stay as the record.
 
 ## What went wrong in three rounds (2026-10-27)
 

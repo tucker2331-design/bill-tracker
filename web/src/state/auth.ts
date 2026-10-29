@@ -79,7 +79,7 @@ function loadGsi(): Promise<void> {
 export async function initSignIn(target: HTMLElement): Promise<void> {
   if (!GOOGLE_CLIENT_ID) throw new Error("GOOGLE_CLIENT_ID is not set in web/src/config.ts");
   await loadGsi();
-  const g = (window as unknown as { google?: any }).google;
+  const g = gsi();
   if (!g?.accounts?.id) throw new Error("Google sign-in did not initialise");
 
   if (!initialised) {
@@ -103,8 +103,18 @@ export async function initSignIn(target: HTMLElement): Promise<void> {
   g.accounts.id.renderButton(target, { theme: "outline", size: "large", text: "signin_with" });
 }
 
+/** The slice of Google Identity Services this file uses — typed, so a renamed call fails the build, not the user. */
+interface GsiId {
+  initialize: (o: Record<string, unknown>) => void;
+  renderButton: (el: HTMLElement, o: Record<string, unknown>) => void;
+  disableAutoSelect?: () => void;
+}
+function gsi(): { accounts?: { id?: GsiId } } | undefined {
+  return (window as unknown as { google?: { accounts?: { id?: GsiId } } }).google;
+}
+
 export function signOut(): void {
-  const g = (window as unknown as { google?: any }).google;
+  const g = gsi();
   try { g?.accounts?.id?.disableAutoSelect?.(); } catch { /* best effort; local state is what matters */ }
   current = null;
   emit();

@@ -36,6 +36,13 @@ ts = re.sub(r": string\[\]", "", ts)
 ts = re.sub(r"\(s: string\)", "(s)", ts)
 ts = re.sub(r"\(fromMs: number, nowMs: number\)", "(fromMs, nowMs)", ts)
 ts = re.sub(r"\(c: string\)", "(c)", ts)
+# Added 2026-10-29 with the 90-day strip (dayStrip / DayState).
+ts = re.sub(r"^export type DayState = .*$", "", ts, flags=re.M)
+ts = ts.replace("export const STRIP_DAYS", "const STRIP_DAYS")
+ts = re.sub(r": \[number, number\]\[\]", "", ts)
+ts = re.sub(r"\): DayState\[\]", ")", ts)
+ts = re.sub(r": DayState\[\]", "", ts)
+ts = re.sub(r"nowMs: number\)", "nowMs)", ts)
 # Added 2026-07-28 with the wrong-sheet guard: `as const` and the header-check annotations.
 ts = re.sub(r"\s+as const", "", ts)
 # ORDER-INDEPENDENT: the generic `: string[]` rule above may already have run, leaving
@@ -83,6 +90,13 @@ t("short row counted", [H, ["2026-07-01T00:00:00Z","","_genesis","x","s"], ["oop
 t("wrong sheet parses nothing", [["Date","Time","SortTime","Status","Committee"],
                                  ["2025-11-03","2:00 PM","14:00","","Virginia Land Conservation Foundation"]],
   {daysClean:null, monitoringDays:null, incidentsEver:0, open:0});
+// the 90-day strip, from the same rows (2026-10-29)
+const D = 86400000, nowMs = NOW.getTime();
+const strip = dayStrip([[nowMs - 3 * D, nowMs - 2 * D]], nowMs - 10 * D, nowMs);
+out.push({name: "strip", got: {len: strip.length, first: strip[0], tail: strip.slice(-4).join(",")},
+          want: {len: 90, first: "unmeasured", tail: "incident,incident,clean,clean"}});
+const openNow = counterFromRows([H, ["2026-07-01T00:00:00Z","","_genesis","x","s"], ["2026-07-27T06:00:00Z","","accuracy","bad","s"]], NOW);
+out.push({name: "strip marks an open incident today", got: {today: openNow.strip[89]}, want: {today: "incident"}});
 console.log(JSON.stringify(out));
 """
 
@@ -101,12 +115,15 @@ if res.returncode != 0:
 FAIL = []
 for c in json.loads(res.stdout):
     g, w = c["got"], c["want"]
-    checks = [("daysClean", g["daysClean"], w["daysClean"]),
-              ("monitoringDays", g["monitoringDays"], w["monitoringDays"]),
-              ("incidentsEver", g["incidentsEver"], w["incidentsEver"]),
-              ("open", len(g["openNow"]), w["open"])]
-    if "malformed" in w:
-        checks.append(("malformedRows", g["malformedRows"], w["malformed"]))
+    if "daysClean" not in w:   # a plain field-by-field case (the 90-day strip)
+        checks = [(k, g.get(k), v) for k, v in w.items()]
+    else:
+        checks = [("daysClean", g["daysClean"], w["daysClean"]),
+                  ("monitoringDays", g["monitoringDays"], w["monitoringDays"]),
+                  ("incidentsEver", g["incidentsEver"], w["incidentsEver"]),
+                  ("open", len(g["openNow"]), w["open"])]
+        if "malformed" in w:
+            checks.append(("malformedRows", g["malformedRows"], w["malformed"]))
     ok = all(a == b for _n, a, b in checks)
     print(f"  {'✓' if ok else '✗'} {c['name']}")
     if not ok:

@@ -80,6 +80,25 @@ base rate and lists every measured reason with a direction and a strength, plus 
 guess" list. Method saved as `tools/calibration/why_member.py`; findings in [[testing/first_vote]]. Site-wide
 refresh waits for the owner's permission and mockups ([[state/current_status]]).
 
+## [2026-10-29] pr | v9 redesign — every screen; War Room calls served; Health rebuilt
+- **Theme:** dark v9 tokens set in `index.css` (not an override layer); state as small-caps text, colour only for standing
+  meanings (accent #86B6D3, amber #D9B26A, red #E0796B). Today / Calendar / Search / bill page: restyle only, same layout.
+- **Pipeline = the subway** (`Timeline.tsx`): same counting and drill lists as the spine; no switcher.
+- **War Room list:** next 7 days / later / nothing scheduled / decided; least-likely-to-pass first; member bar from the
+  served `War_Room_Calls` (read via /api/sheet); team row from positions + contacts. Bill page lists each member's call
+  with k-of-n evidence (P23/P26). 19 goldens (`warroom.regression.mjs`).
+- **Health:** one instrument list -> rings / problems / dials; unconfirmed is RED; freshness limit = max(6 h, 2x median,
+  1.5x largest gap) of each worker's Metrics_History heartbeats; `Guard_Status` job grid; 90-day strip from Incident_Log.
+  21 goldens. Old BulletGraph/HealthVitals/bands retired.
+- **B1 confirmed live:** Incident_Log seeded (genesis + drill, read back), Guard_Status created (16 checks), Bill_Tracker
+  payload rewritten at AA1 after a dispatched bill run (3,645 of 3,645).
+- **B2 served (2026 replay, frozen arm C, venue-fixed rows):** 1,989 bills, 22,163 ballots, 14,092 called, 13,393 right,
+  8,071 can't call. Frozen expectation 14,096 called / 13,386 right — a 4-call drift, flagged `matches_frozen: false`.
+- Browser pass (fixture built from the committed 2026 LIS cache; titles/outcomes/chances are fixture values) at 1440 and
+  390 px: no page errors, no console errors, no sideways scroll. It caught a real bug — duplicate sibling keys on the bill
+  card (#150). ESLint now 0 (was 14 pre-existing). 19 stray ' 2' duplicate files removed. Case law #147-#150.
+  Screenshots: `docs/testing/redesign_v9/`.
+
 ## [2026-10-29] build | War Room calls pipeline (Phase B2): frozen arm C on venue-fixed rows -> private tab
 - `tools/calibration/serve_calls.py` + `.github/workflows/war_room_calls.yml` (manual dispatch). Rows = venue_fix's
   ballot-count rebuild (never the text venue, case law #146); model = `booster_2027.predict_boosted`; the pinned hashes in

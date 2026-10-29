@@ -51,7 +51,7 @@ export function Landing({ bills, onOpen, calRefresh = 0 }: { bills: Bill[]; onOp
 
   const [dayIdx, setDayIdx] = useState(0);
   const [nowMs] = useState(() => Date.now()); // stable per mount — for the off-season "staleness" check below
-  const feedCue = useScrollCue<HTMLDivElement>();   // drives the "more below" cue on the What's-new panel
+  const [feedRef, feedHasMore] = useScrollCue<HTMLDivElement>();   // drives the "more below" cue on the What's-new panel
 
   // Build the (day, bill, action) → meeting-time index from the calendar (cached load, shared with the sliver).
   const [times, setTimes] = useState<TimeIndex | null>(null);
@@ -110,7 +110,7 @@ export function Landing({ bills, onOpen, calRefresh = 0 }: { bills: Bill[]; onOp
               <button disabled={dayIdx <= 0} onClick={() => setDayIdx((i) => Math.max(0, i - 1))}>Newer →</button>
             </div>
           </div>
-          <div className="panel" ref={feedCue.ref}>
+          <div className="panel" ref={feedRef}>
             {/* Off-season honesty (owner 2026-07-03/08): the feed opens on the newest day WITH bill actions;
                 when that isn't recent, the header says so plainly (no box) — the date is the latest in data. */}
             <p className="feedday">
@@ -133,7 +133,7 @@ export function Landing({ bills, onOpen, calRefresh = 0 }: { bills: Bill[]; onOp
           </div>
           {/* Visible "more below" cue — a fade + a bobbing chevron, shown only while the feed can scroll down
               and gone at the bottom (owner 2026-07-12). Overlays the panel's bottom edge; clicks pass through. */}
-          <div className={`scrollcue${feedCue.hasMore ? " on" : ""}`} aria-hidden="true"><span>⌄</span></div>
+          <div className={`scrollcue${feedHasMore ? " on" : ""}`} aria-hidden="true"><span>⌄</span></div>
         </div>
 
         <div>

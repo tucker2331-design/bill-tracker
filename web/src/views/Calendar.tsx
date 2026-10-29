@@ -180,9 +180,13 @@ export function Calendar({ bills, sessionCode, onOpen, calRefresh = 0 }: {
 
   // The mini month follows the focused day (so a week-arrow page or a Today/Crossover jump re-centers the
   // mini), but stays independently browsable between focus changes via its own arrows.
-  useEffect(() => {
+  // Adjusted WHILE rendering when the focus changes (React's documented pattern), not in an effect: an effect
+  // would render once with the stale month and then cascade a second render (react-hooks/set-state-in-effect).
+  const [miniFor, setMiniFor] = useState<string | null>(null);
+  if (focusedDay !== miniFor) {               // track every change, a cleared focus included (Gemini #250)
+    setMiniFor(focusedDay);
     if (focusedDay) setMiniMonth(ymOf(focusedDay));
-  }, [focusedDay]);
+  }
 
   if (error) return (
     <p className="center-msg" style={{ color: "var(--stale)" }}>

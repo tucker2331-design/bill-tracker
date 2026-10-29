@@ -111,7 +111,7 @@ async function fetchText(url: string, timeoutMs: number): Promise<string> {
     if (!res.ok) throw new Error(`gviz fetch failed: HTTP ${res.status}`);
     return await res.text();
   } catch (e) {
-    throw new Error(ctrl.signal.aborted ? `calendar request timed out after ${timeoutMs / 1000}s` : String((e as Error)?.message || e));
+    throw new Error(ctrl.signal.aborted ? `calendar request timed out after ${timeoutMs / 1000}s` : String((e as Error)?.message || e), { cause: e });
   } finally {
     clearTimeout(timer);
   }
