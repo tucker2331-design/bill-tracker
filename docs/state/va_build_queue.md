@@ -170,7 +170,7 @@ computable — without it that relationship is unrepresentable.
   (branch `claude/team-positions`): bill card "Our position" row (the four D1 stances as grey text, current one
   in ink, click again to clear → new `DELETE /api/positions`), and a stance column in the War Room list. The
   "second oppose tier" note here was stale — D1 settled it (oppose stays one layer). **Also closed a hole:
-  any Google account passed auth** — now a `TEAM_EMAILS` secret gate ([[failures/assumptions_audit]] #142).
+  any Google account passed auth** — now a `TEAM_EMAILS` secret gate ([[failures/assumptions_audit]] #143).
   **Owner step before it carries real data: set `TEAM_EMAILS`.**
 - ~~**F3. Accounts**~~ — ✅ **BUILT 2026-07-28.** Sign-in (`web/src/state/auth.ts` + `components/SignIn.tsx`,
   verified live: button renders, zero console errors, **no token in localStorage** — held in memory only, so
