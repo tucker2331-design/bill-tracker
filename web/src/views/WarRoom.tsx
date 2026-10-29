@@ -1,74 +1,165 @@
-// The War Room — your tracked bills, drilled in. Queue item F1/M4.
+// The War Room list — your tracked bills, one card each, grouped by when they are next heard (v9, owner-approved
+// 2026-10-27; built 2026-10-29). Each card answers four questions at a glance: where is it, when is it heard next,
+// how is that room called to vote, what has my team done.
 //
-// SCOPE OF THIS FILE, STATED PLAINLY SO IT IS NOT MISREAD AS FINISHED:
-// this is the READ half. Positions, contacts, the whip board and the call sheet all live behind the write
-// path (F2, PR #237) and the vote-history join (E1) — neither is wired to the front end yet. What ships here
-// is the list that gives every tracked bill a URL, plus the honest statement of what is not built.
-//
-// It deliberately shows NOTHING it cannot source. No placeholder "0 of 15" whip counts, no invented
-// positions: an example that cannot exist teaches the wrong shape (proposal audit check 1).
-
+// Sources, and nothing else: status / where / next hearing / last action = LIS (the same fields as the bill page);
+// the member bar = the served calls (frozen arm C, private War_Room_Calls tab — a call only at |p-.5| >= .31,
+// otherwise "can't call"); position and contacts = your team's own entries (#241 / #243). A bill with no served
+// calls shows "can't call", never a guess. Grey by default; accent = times / links; amber = carried over;
+// red = dead / vetoed. State is small-caps text.
+import { useEffect, useMemo, useState } from "react";
 import type { Bill } from "../data/types";
 import { detailPath, linkProps } from "../state/router";
 import { PositionTag } from "../components/PositionControl";
+import { usePositions, STANCES, STANCE_LABEL, type Stance } from "../state/positions";
+import { loadContacts, type ContactsResult } from "../state/contacts";
+import { dayKey } from "../data/dates";
+import {
+  loadCalls, callsFor, groupOf, sortGroup, dateKeyOf, WR_GROUPS, type BillCalls, type CallsLoad, type WrGroup,
+} from "../data/warroom";
+
+const shortDate = (key: string) => {
+  const [y, m, d] = key.split("-").map(Number);
+  return y ? new Date(y, m - 1, d).toLocaleDateString(undefined, { day: "numeric", month: "short", year: "numeric" }) : key;
+};
+const stClass = (o: Bill["outcome"]) =>
+  o === "carried_over" ? " amber" : o === "dead" || o === "vetoed" ? " red" : o === "signed" ? " ink" : "";
 
 export function WarRoom({ bills, starred, sessionCode }: { bills: Bill[]; starred: Set<string>; sessionCode: string }) {
-  const ours = bills.filter((b) => starred.has(b.bill));
+  const [calls, setCalls] = useState<CallsLoad | undefined>(undefined);
+  const [filter, setFilter] = useState<Stance | "all">("all");
+  const positions = usePositions(sessionCode);
+  useEffect(() => { let alive = true; loadCalls().then((r) => { if (alive) setCalls(r); }); return () => { alive = false; }; }, []);
 
-  if (ours.length === 0) {
-    return (
-      <div>
-        <p className="center-msg">
-          No bills tracked yet. Star a bill in Search or Today and it appears here.
-        </p>
-      </div>
-    );
+  const today = dayKey(new Date());
+  const ours = bills.filter((b) => starred.has(b.bill)
+    && (filter === "all" || positions.byBill.get(b.bill)?.stance === filter));
+  const byBill = calls?.status === "ok" ? calls.byBill : null;
+
+  const groups = useMemo(() => {
+    const g: Record<WrGroup, { bill: string; calls: BillCalls | null }[]> = { next7: [], later: [], none: [], decided: [] };
+    for (const b of ours) g[groupOf(b.outcome, b.upcoming[0]?.date ?? "", today)].push({ bill: b.bill, calls: byBill ? callsFor(byBill, b.bill, sessionCode) : null });
+    return (Object.keys(g) as WrGroup[]).reduce((acc, k) => ({ ...acc, [k]: sortGroup(g[k], k) }), g);
+  }, [ours, byBill, sessionCode, today]);
+  const billOf = useMemo(() => new Map(bills.map((b) => [b.bill, b])), [bills]);
+
+  if (bills.filter((b) => starred.has(b.bill)).length === 0) {
+    return <p className="center-msg">No bills tracked yet. Star a bill in Search or Today and it appears here.</p>;
   }
 
-  // Soonest meeting first — a bill being heard on Tuesday outranks one with no date. Bills with no upcoming
-  // meeting sort last rather than being hidden; "nothing scheduled" is a state you need to see.
-  const sorted = [...ours].sort((a, b) => {
-    const am = a.upcoming[0]?.date ?? "";
-    const bm = b.upcoming[0]?.date ?? "";
-    if (am && bm) return am.localeCompare(bm);
-    if (am) return -1;
-    if (bm) return 1;
-    return a.bill.localeCompare(b.bill, undefined, { numeric: true });
-  });
+  // the coming week, day by day: which of your bills are heard (the same next-hearing field the groups use)
+  const week = Array.from({ length: 7 }, (_, i) => { const d = new Date(); d.setDate(d.getDate() + i); return dayKey(d); });
+  const heardOn = (k: string) => ours.filter((b) => dateKeyOf(b.upcoming[0]?.date) === k).map((b) => b.bill);
+  const s = calls?.status === "ok" ? calls.summary : null;
 
   return (
-    <div>
-      <div className="muted" style={{ marginBottom: 10 }}>
-        {sorted.length} bill{sorted.length === 1 ? "" : "s"} tracked · soonest hearing first
+    <div className="wl">
+      <div className="wl-head">
+        <span className="seg" role="group" aria-label="Filter by your position">
+          {(["all", ...STANCES] as const).map((k) => (
+            <button key={k} type="button" className={filter === k ? "on" : ""} aria-pressed={filter === k}
+              onClick={() => setFilter(k)}>{k === "all" ? "All" : STANCE_LABEL[k]}</button>
+          ))}
+        </span>
       </div>
 
-      <div className="wr-list">
-        {sorted.map((b) => {
-          const next = b.upcoming[0];
-          return (
-            <a key={b.bill} className="wr-row" {...linkProps(detailPath("bills", b.bill))}>
-              <span className="wr-num">{b.bill}</span>
-              <PositionTag bill={b.bill} sessionCode={sessionCode} />
-              <span className="wr-patron">— {b.patron}</span>
-              <span className="wr-title">{b.title}</span>
-              <span className="wr-where">
-                {b.lastCommittee || (b.outcome === "in_progress" ? "Floor" : "—")}
-              </span>
-              <span className="wr-when">
-                {next ? `${next.date}${next.committee ? ` · ${next.committee}` : ""}` : "nothing scheduled"}
-              </span>
-            </a>
-          );
+      <div className="wl-grp"><span>This week · your bills</span>
+        <span className="n">{week.reduce((t, k) => t + heardOn(k).length, 0)} hearings</span></div>
+      <div className="wl-week">
+        {week.map((k) => {
+          const [y, m, d] = k.split("-").map(Number);
+          const day = new Date(y, m - 1, d).toLocaleDateString(undefined, { weekday: "short", day: "numeric" });
+          return <div key={k} className="wl-wd"><b>{day}</b>{heardOn(k).map((n) => <span key={n} className="hit">{n}</span>)}</div>;
         })}
       </div>
 
-      {/* Say what is missing, in the place where it is missing. A screen that quietly omits the whip board
-          reads as "there is no whip board"; this reads as "it is coming and here is what it waits on". */}
-      <p className="muted" style={{ marginTop: 18, fontSize: 13 }}>
-        The whip board and contact history are not here yet — they need the per-member vote join and the
-        contact log. Nothing on this page is a placeholder: every value shown is read from the tracker or
-        your team's positions.
-      </p>
+      {WR_GROUPS.map(({ id, label }) => groups[id].length > 0 && (
+        <section key={id}>
+          <div className="wl-grp"><span>{label}</span><span className="n">{groups[id].length}</span></div>
+          {(id === "next7" || id === "later") && <BarKey />}
+          <div className="wl-cards">
+            {groups[id].map(({ bill, calls: c }) => <Card key={bill} b={billOf.get(bill)!} calls={c} sessionCode={sessionCode} />)}
+          </div>
+        </section>
+      ))}
+
+      <div className="wl-why">
+        <b>Order inside each group.</b> Least likely to pass first: most called-yes votes still needed to reach a
+        majority, then most called no, then most can't call. A bill that already has enough called yes goes to the
+        bottom. Nothing scheduled and Decided keep bill-number order.
+        <br /><br /><b>Where each card's facts come from.</b> Status, where it is, next hearing and last action: LIS.
+        Members: the vote model's calls for the room's first vote — yes or no only when the chance is at least
+        81 in 100 either way, otherwise can't call.
+        {s ? <> In the {s.testYear} replay, calls were right {s.calledRight.toLocaleString()} of {s.called.toLocaleString()};
+          {" "}{s.cantCall.toLocaleString()} of {s.ballots.toLocaleString()} votes were can't call.</>
+          : <> No calls are served right now, so every member reads can't call.</>}
+        {" "}Position and contacts: your team's own entries.
+      </div>
+    </div>
+  );
+}
+
+function BarKey() {
+  return (
+    <div className="wl-key">
+      <span><span className="sw yes" />called yes</span><span><span className="sw no" />called no</span>
+      <span><span className="sw cant" />can't call</span><span><span className="sw tick" />yes votes needed</span>
+    </div>
+  );
+}
+
+function Card({ b, calls, sessionCode }: { b: Bill; calls: BillCalls | null; sessionCode: string }) {
+  const next = b.upcoming[0];
+  const last = b.history.length ? b.history[b.history.length - 1] : null;
+  return (
+    <a className="wl-card" {...linkProps(detailPath("bills", b.bill))}>
+      <div className="l1">
+        <span><span className="num">{b.bill}</span> <span className="pat">· {b.patron}</span></span>
+        <span className={`st${stClass(b.outcome)}`}>{b.statusLis || b.outcome.replace("_", " ")}</span>
+      </div>
+      <div className="ttl">{b.title}</div>
+      <dl className="kv">
+        <dt>Where</dt><dd>{b.lastCommittee || "—"}</dd>
+        {next && <><dt>Next</dt><dd className="when">{shortDate(dateKeyOf(next.date)) || next.date}{next.committee ? ` · ${next.committee}` : ""}</dd></>}
+        <dt>Last</dt><dd>{last ? `${shortDate(dateKeyOf(last.date)) || last.date} · ${last.action}` : "—"}</dd>
+        {b.outcome !== "signed" && b.outcome !== "vetoed" && <><dt>Members</dt><dd><MemberBar c={calls} /></dd></>}
+      </dl>
+      <TeamRow bill={b.bill} sessionCode={sessionCode} />
+    </a>
+  );
+}
+
+function MemberBar({ c }: { c: BillCalls | null }) {
+  if (!c) return <span className="ml"><span>can't call · no member calls for this bill</span></span>;
+  const tick = c.ballots ? (100 * c.yesNeeded) / c.ballots : 0;
+  return (
+    <>
+      <span className="ml">
+        <span>{c.calledYes} yes · {c.calledNo} no · {c.cantCall} can't call</span>
+        <span>needs {c.yesNeeded} of {c.ballots}</span>
+      </span>
+      <span className="bar" aria-hidden="true">
+        {c.calledYes > 0 && <i className="yes" style={{ flex: c.calledYes }} />}
+        {c.calledNo > 0 && <i className="no" style={{ flex: c.calledNo }} />}
+        {c.cantCall > 0 && <i className="cant" style={{ flex: c.cantCall }} />}
+        <span className="need" style={{ left: `${tick}%` }} />
+      </span>
+    </>
+  );
+}
+
+// The team's own facts for the bill. An absence is set in words, not as a zero (P27 corollary).
+function TeamRow({ bill, sessionCode }: { bill: string; sessionCode: string }) {
+  const [res, setRes] = useState<ContactsResult | undefined>(undefined);
+  useEffect(() => { let alive = true; loadContacts(sessionCode, bill).then((r) => { if (alive) setRes(r); }); return () => { alive = false; }; }, [bill, sessionCode]);
+  const contacts = res?.status === "ok" ? res.contacts : null;
+  const lastOn = contacts && contacts.length ? contacts.map((c) => c.occurredOn).sort().slice(-1)[0] : "";
+  return (
+    <div className="team">
+      <PositionTag bill={bill} sessionCode={sessionCode} />
+      <span>{contacts === null ? (res ? "contacts unavailable" : "") : contacts.length
+        ? `${contacts.length} contact${contacts.length === 1 ? "" : "s"} logged · last ${shortDate(lastOn)}`
+        : "no contacts logged"}</span>
     </div>
   );
 }

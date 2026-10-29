@@ -19,7 +19,7 @@ const OUTCOME_LABEL: Record<Outcome, string> = {
  * `in_progress` is refined; a bill that is Signed or Dead has a terminal answer already, and appending
  * "passed the House" to it would be noise.
  */
-export function progressLabel(bill: Pick<Bill, "outcome" | "floorHouse" | "floorSenate">): string {
+function progressLabel(bill: Pick<Bill, "outcome" | "floorHouse" | "floorSenate">): string {
   if (bill.outcome !== "in_progress") return OUTCOME_LABEL[bill.outcome];
   const h = bill.floorHouse === "passed";
   const s = bill.floorSenate === "passed";
@@ -99,7 +99,7 @@ export function ScopeSwitch() {
   );
 }
 
-export function relativeTime(d: Date | null): { text: string; stale: boolean } {
+function relativeTime(d: Date | null): { text: string; stale: boolean } {
   if (!d) return { text: "unknown", stale: true };
   const ms = Date.now() - d.getTime();
   const hrs = ms / 3.6e6;

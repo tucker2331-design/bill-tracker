@@ -1,16 +1,22 @@
-import { useEffect, useState } from "react";
+// Health (v9, owner-approved 2026-10-27; built 2026-10-29). Visual-first, and audited against docs/design:
+//  * ONE instrument list (data/health_rules.ts) feeds the rings, the problems table and the dials — the overview
+//    cannot disagree with the detail.
+//  * BINARY (P25a, owner "no yellow"): grey = verified clean, RED = anything else — wrong, unconfirmed, unreadable.
+//    WHY it is red is a small-caps text field, never a softer colour. Unconfirmed is red, never grey.
+//  * P26: counts as "k of n"; a coverage metric is shown as the count of what is MISSING.
+//  * P24/P25: problems are rows of structural fields (check, state, since, affects, published values wrong, fix).
+//  * The freshness limits follow each worker's observed write rhythm (Metrics_History heartbeats), not a fixed 6 h.
+import { useEffect, useMemo, useState } from "react";
 import type { Completeness } from "../data/types";
-import { BulletGraph } from "../components/BulletGraph";
-import { bandTone, type Band } from "../components/bands";
-import { HealthVitals, type Vital, type VitalSeg, type VitalVerify } from "../components/HealthVitals";
 import { loadHealth, type HealthData, type HealthAlert } from "../data/health";
-import { loadVerification, type GuardRun, type GuardState } from "../data/verification";
-import { loadHistory, seriesFor, seriesForPct, type HistoryData, type AlertSource } from "../data/history";
+import { loadVerification, type GuardRun } from "../data/verification";
+import { loadHistory, type HistoryData, type AlertSource } from "../data/history";
 import { loadCounter, type CounterState } from "../data/incidents";
+import { loadGuardStatus, loadRuns, GUARD_OK, type GuardLoad, type RunMark } from "../data/guards";
+import {
+  isClean, rings, dialPos, rhythmLimitHours, verdictOf, type Instrument, type Impeach, type RingExtra, type Category,
+} from "../data/health_rules";
 
-// Alert presentation (owner 2026-07-07: the feed "needs real thinking and fixing" + "colored boxes scream
-// AI"). See docs/design/dashboard_and_visual_language.md. Severity now rides a small status DOT, not a
-// saturated pill; the plain word is kept only for the hover title / screen readers.
 const SEV_WORD: Record<string, string> = { CRITICAL: "Needs a look", WARN: "Heads up", INFO: "FYI" };
 const sevWord = (s: string) => SEV_WORD[(s || "").toUpperCase()] ?? s;
 const sevDot = (s: string) => (s === "CRITICAL" ? "crit" : s === "WARN" ? "warn" : s === "INFO" ? "info" : "unknown");
@@ -69,32 +75,7 @@ const CATEGORY_LABEL: Record<string, string> = {
 };
 const catLabel = (c: string) => CATEGORY_LABEL[(c || "").toUpperCase()] ?? (c || "Other");
 
-// The operator / Health tab (vision §3f + §7): the trust signals the system ALREADY produces, as Few
-// bullet graphs with danger bands (PL-8 / owner's "RPM redline"). Bill-backend signals arrive via props
-// (App loaded Bill_Tracker R1); calendar-subsystem signals load here from Sheet1 (lightweight, health.ts).
-// "Allowed not to know; never to pretend." Access-gated to the owner + a few (Cloudflare Access — see
-// docs/design/health_operator_tab.md). Calibration: bands from the worker's breaker thresholds + steady state.
-
-// Band presets. lowerBetter: good→warn→DANGER (danger on the right; the bar grows INTO the redline).
-const lower = (good: number, warn: number, max: number): Band[] =>
-  [{ upto: good, tone: "good" }, { upto: warn, tone: "warn" }, { upto: max, tone: "danger" }];
-// higherBetter: DANGER→warn→good (danger on the left; the bar fills toward the good target on the right).
-const higher = (danger: number, warn: number, max = 100): Band[] =>
-  [{ upto: danger, tone: "danger" }, { upto: warn, tone: "warn" }, { upto: max, tone: "good" }];
-
-// Feed-skew is dominated by the BILL backend's clock vs the calendar worker's ~15min. A HEALTHY skew is up
-// to ~6h BY DESIGN; derive the chip thresholds from that cadence so it only warns when the skew exceeds what
-// the cadence explains (was a flat 3h/8h → amber during every normal bill cycle). [code-review finding #1]
-// HEURISTIC (Standard #1): ASSUMES bill_tracker.yml stays on its 6h cron (`40 */6 * * *`); it BREAKS (false
-// "in sync" or false "lagging") if that cron changes; there is no runtime cross-check — this is a UI display
-// band, not a data-path heuristic — so if the cron cadence changes, update BILL_CADENCE_H to match it.
-const BILL_CADENCE_H = 6;
-const SKEW_OK_H = BILL_CADENCE_H + 1;        // ≤7h: within one bill cycle (+1h jitter/queue) = healthy
-const SKEW_WARN_H = BILL_CADENCE_H * 2 + 1;  // ≤13h: bill backend missed a scheduled run; >13h = stalled
-
 const hoursSince = (d: Date | null) => (d ? (Date.now() - d.getTime()) / 3.6e6 : NaN);
-const hrs = (n: number) => (Number.isFinite(n) ? `${n.toFixed(1)}` : "—");
-const oneDp = (n: number) => n.toFixed(1);
 const agoText = (d: Date | null) => {
   if (!d) return "";
   const h = (Date.now() - d.getTime()) / 3.6e6;
@@ -102,481 +83,307 @@ const agoText = (d: Date | null) => {
   if (h < 24) return `${Math.round(h)}h ago`;
   return `${Math.round(h / 24)}d ago`;
 };
+const n = (v: number) => v.toLocaleString();
+const shortDay = (d: Date | null) => d ? d.toLocaleDateString(undefined, { day: "numeric", month: "short" }) : "—";
+// Guard_Status is rewritten every 6 h; three missed runs (with GitHub's schedule slippage) means the watcher itself
+// has stopped — a problem in its own right, since nothing else would notice.
+const GUARD_STALE_H = 18;
+// Which independent guard checks each category ("outside check"); Freshness has none.
+const OUTSIDE: Partial<Record<Category, string>> = {
+  Accuracy: "accuracy_sentinel.yml", Completeness: "completeness_tripwire.yml", Stability: "sustainability_audit.yml",
+};
+
+interface Problem { check: string; state: string; since: string; affects: string; wrong: Impeach; fix: { text: string; url: string } | null }
 
 export function Health({ completeness, dataAsOf }: { completeness: Completeness | null; dataAsOf: Date | null }) {
   const [h, setH] = useState<HealthData | null>(null);
   const [hErr, setHErr] = useState<string | null>(null);
+  const [guards, setGuards] = useState<GuardRun[] | null>(null);
+  const [hist, setHist] = useState<HistoryData | null>(null);
+  const [counter, setCounter] = useState<CounterState | null>(null);
+  const [gs, setGs] = useState<GuardLoad | null>(null);
+  const [runs, setRuns] = useState<Record<string, RunMark[] | null>>({});
   useEffect(() => {
     let alive = true;
     loadHealth().then((d) => alive && setH(d)).catch((e) => alive && setHErr(String(e?.message || e)));
-    return () => { alive = false; };
-  }, []);
-  const [guards, setGuards] = useState<GuardRun[] | null>(null);
-  useEffect(() => {
-    let alive = true;
     loadVerification().then((d) => alive && setGuards(d)).catch(() => alive && setGuards([]));
-    return () => { alive = false; };
-  }, []);
-  // Per-cycle trend store (Metrics_History). Optional chrome: a null/empty result leaves the gauges as
-  // point-in-time only (no sparkline), never blanks the tab.
-  const [hist, setHist] = useState<HistoryData | null>(null);
-  useEffect(() => {
-    let alive = true;
     loadHistory().then((d) => alive && setHist(d)).catch(() => alive && setHist(null));
-    return () => { alive = false; };
-  }, []);
-  const spark = (key: string) => (hist ? seriesFor(hist, key) : []);
-  // The days-clean counter — the visible artifact of the trust promise. Optional chrome: a failed load
-  // leaves the line absent rather than blanking the tab or showing a number we cannot support.
-  const [counter, setCounter] = useState<CounterState | null>(null);
-  useEffect(() => {
-    let alive = true;
     loadCounter().then((c) => alive && setCounter(c)).catch(() => alive && setCounter(null));
+    loadGuardStatus().then((g) => {
+      if (!alive) return;
+      setGs(g);
+      if (g.status !== "ok") return;
+      for (const r of g.rows) {
+        if (!r.check.startsWith("workflow:")) continue;
+        const file = r.check.slice("workflow:".length);
+        loadRuns(file).then((m) => { if (alive) setRuns((x) => ({ ...x, [file]: m })); });
+      }
+    });
     return () => { alive = false; };
   }, []);
 
-  if (!completeness && !h && !hErr) return <p className="center-msg">Loading operator health…</p>;
+  // ── THE ONE LIST ──
+  const c = completeness, m = h?.metrics ?? {};
+  const universe = c?.universe_count ?? 0, written = c?.records_written ?? 0, total = m.total_processed ?? 0;
+  const billLimit = rhythmLimitHours(hist?.beats.bill ?? []), calLimit = rhythmLimitHours(hist?.beats.calendar ?? []);
+  const num = (v: unknown) => (typeof v === "number" && Number.isFinite(v) ? v : null);
+  const insts: Instrument[] = useMemo(() => [
+    { id: "s9", cat: "Accuracy", name: "Meeting actions without a time", value: num(m.meeting_unsourced), limit: 0, max: 50, impeaches: "yes" },
+    { id: "wrong", cat: "Accuracy", name: "Outcomes published wrong", value: num(c?.outcome_impeached), limit: 0, max: 5, impeaches: "yes" },
+    { id: "noflag", cat: "Accuracy", name: "Settled bills with no flag", value: num(c?.outcome_unverified_terminal), limit: 0, max: 25, impeaches: "unknown" },
+    { id: "missing", cat: "Completeness", name: "Bills missing from our list", value: c && universe > 0 ? universe - written : null, of: universe || undefined, limit: 0, max: 20, impeaches: "no" },
+    { id: "hist", cat: "Completeness", name: "Bills in history, not in the bill list", value: c ? c.in_history_not_in_universe?.length ?? 0 : null, limit: 0, max: 20, impeaches: "no" },
+    { id: "patron", cat: "Completeness", name: "Bills with no chief patron", value: c && written > 0 ? c.patron_missing ?? written - (c.patron_present ?? 0) : null, of: written || undefined, limit: 0, max: 20, impeaches: "no" },
+    // the old 8% band, expressed as the count it allows out of this cycle's rows
+    { id: "unclass", cat: "Completeness", name: "Rows with no class", value: h && total > 0 ? m.legevent_route_blank ?? 0 : null, of: total || undefined, limit: Math.floor(0.08 * total), max: Math.floor(0.25 * total) || 1, impeaches: "no" },
+    { id: "billage", cat: "Freshness", name: "Bill data age", value: dataAsOf ? +hoursSince(dataAsOf).toFixed(1) : null, limit: billLimit, max: billLimit * 4, unit: "h", impeaches: "no" },
+    { id: "calage", cat: "Freshness", name: "Calendar data age", value: h?.calendarFreshness ? +hoursSince(h.calendarFreshness).toFixed(1) : null, limit: calLimit, max: calLimit * 4, unit: "h", impeaches: "no" },
+    { id: "inv", cat: "Stability", name: "Rows failing a format rule at write", value: num(m.invariant_violations), limit: 0, max: 60, impeaches: "no", note: "breaker trips at 50" },
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  ], [c, h, dataAsOf, billLimit, calLimit]);
 
-  // ── Bill-backend signals (props) ──
-  const c = completeness;
-  const universe = c?.universe_count ?? 0;
-  const written = c?.records_written ?? 0;
-  const anomalies = c?.in_history_not_in_universe?.length ?? 0;
-  const completePct = universe > 0 ? (100 * written) / universe : 0;
-  const patronPct = written > 0 ? (100 * (c?.patron_present ?? 0)) / written : 0;
-  const driftPct = (c?.outcome_keyword_mismatch_rate ?? 0) * 100;
-  const unverifiedTerminal = c?.outcome_unverified_terminal ?? 0;
-  const billFreshH = hoursSince(dataAsOf);
-
-  // ── Calendar-subsystem signals (Sheet1) ──
-  const m = h?.metrics ?? {};
-  const total = m.total_processed ?? 0;
-  const section9 = m.meeting_unsourced;          // the core accuracy metric
-  const violations = m.invariant_violations;
-  const unclassPct = total > 0 ? (100 * (m.legevent_route_blank ?? 0)) / total : 0;
-  const calFreshH = hoursSince(h?.calendarFreshness ?? null);
-  const breakerOk = h ? !h.breakerTrip : true;
-
-  // ── Upstream-vocabulary CANARIES (green-state). The worker records each drift monitor's outcome into
-  // SYSTEM_METRICS: -1 = couldn't determine (unknown), 0 = ran clean, N = N novel value(s) = drift. Surfacing
-  // the GREEN state (not just the drift alert) proves the watchers are ALIVE — silence could also mean a dead
-  // canary. A missing key (older worker) and -1 both render "unknown", never a false ✓. ──
-  const canaryDefs: { key: string; label: string }[] = [
-    { key: "canary_status_grouping", label: "Legislation status vocabulary" },
-    { key: "canary_governor_eventcodes", label: "Governor action codes" },
-    { key: "canary_refid_shape", label: "Refid namespaces" },
-    { key: "canary_scheduletype", label: "Schedule types" },
-    { key: "canary_referencetype", label: "Reference types" },
-  ];
-  const canaries = canaryDefs.map(({ key, label }) => {
-    const v = m[key];
-    const state = v == null || v < 0 ? "unknown" : v === 0 ? "clean" : "drift";
-    return { label, state, count: state === "drift" ? v : 0 };
-  });
-
-  // ── Feed-skew: the two subsystems write on independent clocks (bill backend vs calendar worker). A large
-  // gap means the picture is internally inconsistent — a bill's history moved but the calendar hasn't caught
-  // up (or vice-versa). Computed from the two freshness clocks the tab already has (front-end only — the
-  // deeper per-source skew is scoped as a follow-up). Only meaningful when BOTH clocks are known. ──
-  const feedSkewH = Number.isFinite(billFreshH) && Number.isFinite(calFreshH) ? Math.abs(billFreshH - calFreshH) : NaN;
-
-  // ── Source-feed freshness (the grounded "per-bill freshness"): age of the HISTORY.CSV blob the bill
-  // data is bulk re-derived from. The worker writes minutes; -1 / absent = unknown (older worker or no
-  // Last-Modified this cycle) and must NOT render as a fresh 0. ──
-  const blobAgeMin = m.history_blob_age_min;
-  const blobAgeKnown = typeof blobAgeMin === "number" && blobAgeMin >= 0;
-  const blobAgeH = blobAgeKnown ? blobAgeMin / 60 : NaN;
-  // Source-feed severity is meaningful ONLY during an ACTIVE session: off-season HISTORY.CSV legitimately
-  // doesn't change (no new actions), so a large blob age is EXPECTED, not a fault. The gauge is HIDDEN when
-  // sessionActive is null (Sheet1!S1 unreadable) — see its render guard — because BulletGraph has no neutral
-  // tone and an all-good band on an UNKNOWN session would be a false-green (CodeRabbit + Qodo #182). So these
-  // bands are only used for the two KNOWN states: ACTIVE → redline, ADJOURNED → all-good (honest: we KNOW the
-  // blob is meant to be static off-season). HEURISTIC (Standard #1): the in-session 12/24/48h redline is
-  // PROVISIONAL — LIS's real HISTORY.CSV refresh cadence isn't measured yet; it BREAKS (false-warn) if LIS
-  // refreshes slower than ~12h in-season; REFINE once Metrics_History has real blob-age data. [finding #3]
-  const sessionActive = h?.sessionActive ?? null;
-  const blobAgeBands: Band[] = sessionActive === true ? lower(12, 24, 48) : [{ upto: 1e9, tone: "good" }];
-
-  // ── Alert MODEL: state, not stream (docs/design/dashboard_and_visual_language.md). Metrics_History is an
-  // append-only per-cycle log; a real dashboard shows what's TRUE NOW. We group raw firings into CONDITIONS
-  // (by severity+category+normalized stem) and derive liveness from the latest cycle: a condition is ACTIVE
-  // iff it fired in the most recent cycle, else it has SELF-RESOLVED and moves to the collapsed history.
-  // This is the self-clearing the owner asked for — no worker change, no human "acknowledge". ──
-  const alertModel: AlertModel | null = (() => {
+  // ── alert state (unchanged model: self-clearing conditions, judged on each worker's own clock) ──
+  const alertModel: AlertModel | null = useMemo(() => {
     if (!hist?.available) return null;
-    // The newest cycle in the store (system_metrics + system_alert rows share the cycle timestamp).
     const latestCycleTs = Math.max(0, ...hist.metricSeries.map((p) => p.ts), ...hist.alerts.map((a) => a.ts));
-    const ACTIVE_TOL_MS = 6 * 60 * 1000; // "this cycle" window — well under the ~15-min in-window cadence
+    const ACTIVE_TOL_MS = 6 * 60 * 1000;
     const conds = groupConditions(hist.alerts);
     const byActivity = (a: Cond, b: Cond) => SEV_RANK(a.severity) - SEV_RANK(b.severity) || b.lastTs - a.lastTs;
-    // Judge each condition against the clock of the worker that RAISED it (W0d). The two workers run on
-    // different cadences, so a single global "latest cycle" would mark every bill-worker alert resolved as
-    // soon as the calendar worker ticked — the alert would appear and vanish without ever being actionable.
-    // Fall back to the global timestamp when that worker has no heartbeat yet (pre-first-run), which is the
-    // old behaviour and never fabricates freshness.
-    const cycleFor = (c: Cond) => hist.cycleTs[c.source] || latestCycleTs;
-    const isActive = (c: Cond) => c.lastTs >= cycleFor(c) - ACTIVE_TOL_MS;
+    const cycleFor = (x: Cond) => hist.cycleTs[x.source] || latestCycleTs;
+    const isActive = (x: Cond) => x.lastTs >= cycleFor(x) - ACTIVE_TOL_MS;
     const active = conds.filter(isActive).sort(byActivity);
-    const resolved = conds.filter((c) => !isActive(c)).sort((a, b) => b.lastTs - a.lastTs);
-    // "Needs a look" = only genuinely actionable, currently-live signals. A benign INFO note (blank upstream
-    // rows, an overnight cadence gap) is NOT a call to action — it shows quietly, never in the verdict count.
-    const needsLook = active.filter((c) => c.severity === "CRITICAL" || c.severity === "WARN");
-    const notes = active.filter((c) => c.severity === "INFO" || c.severity === "UNKNOWN");
+    const resolved = conds.filter((x) => !isActive(x)).sort((a, b) => b.lastTs - a.lastTs);
+    const needsLook = active.filter((x) => x.severity === "CRITICAL" || x.severity === "WARN");
+    const notes = active.filter((x) => x.severity === "INFO" || x.severity === "UNKNOWN");
     return { latestCycleTs, active, resolved, needsLook, notes };
-  })();
+  }, [hist]);
+  const liveNeedsLook = alertModel ? alertModel.needsLook.length : (h?.alerts ?? []).filter((a) => a.severity === "CRITICAL" || a.severity === "WARN").length;
 
-  // ── At-a-glance vitals: roll the gauges below into four category rings. Each segment's tone comes from
-  // `bandTone` over the SAME bands the matching gauge uses, so the donut and the detail never disagree; a
-  // segment whose backend payload is absent is "unknown" (grey), never a false green. ──
-  const sv = (label: string, value: number, bands: Band[], known: boolean, anchor?: string): VitalSeg =>
-    ({ label, tone: known ? bandTone(value, bands) : "unknown", anchor });
-  // The ring reflects the SAME currently-active conditions the feed shows (self-cleared ones don't count).
-  // Prefer the history-derived model; fall back to the latest cycle's live alerts when the trend store isn't
-  // up yet. Only actionable CRITICAL/WARN move the ring — a benign INFO note never turns Stability amber.
-  const critCount = alertModel ? alertModel.needsLook.filter((c) => c.severity === "CRITICAL").length
-    : h ? h.alerts.filter((a) => a.severity === "CRITICAL").length : 0;
-  const warnCount = alertModel ? alertModel.needsLook.filter((c) => c.severity === "WARN").length
-    : h ? h.alerts.filter((a) => a.severity === "WARN").length : 0;
+  if (!completeness && !h && !hErr) return <p className="center-msg">Loading health…</p>;
 
-  // Independent-verification badge per dial (replaces the standalone "Are we right?" panel). Each category
-  // rolls up the guards that cross-check it against an OUTSIDE source (LIS calendar / MinutesBook); shows the
-  // worst-of status, with the source + cadence + last-run in the HOVER title so the bare freshness no longer
-  // reads as "stale" on the face. A category with no guard (Freshness) gets no badge; while guards load → none.
-  const VRANK: Record<GuardState, number> = { pass: 0, unknown: 1, running: 2, fail: 3 };
-  const vitalVerify = (keys: string[]): VitalVerify | undefined => {
-    if (!guards) return undefined;                         // still loading → no badge yet
-    const gs = guards.filter((g) => keys.includes(g.key));
-    // vitalVerify is only ever called with REAL guard keys, so an empty match means verification LOADED but
-    // returned nothing (GitHub Actions unreachable → guards === []). Show "— unverifiable" rather than drop
-    // the badge, which would falsely read as "this dial has no independent check" ("never pretend" — CodeRabbit #183).
-    if (gs.length === 0) return { state: "unknown", text: "— unverifiable", title: "Independent verification unavailable — couldn't reach GitHub Actions.", url: null };
-    const worstG = gs.reduce((w, g) => (VRANK[g.status] > VRANK[w.status] ? g : w), gs[0]);
-    const anyStale = gs.some((g) => g.stale && g.status === "pass");
-    const state: VitalVerify["state"] =
-      worstG.status === "fail" ? "fail"
-      : worstG.status === "running" ? "running"
-      : worstG.status === "unknown" ? "unknown"
-      : anyStale ? "stale" : "pass";
-    // NAME the check on the badge face (owner 2026-07-03: "what does 'independently confirmed' mean —
-    // how can Stability be confirmed WITH a warning?"). The generic wording read as "everything on this
-    // ring is fine," contradicting a live amber segment. The badge covers only the named OUTSIDE
-    // cross-check (e.g. the sustainability audit); the ring segments above are the LIVE internal signals
-    // — two different things, so say which one this is.
-    // A NON-pass badge names only the guard(s) actually IN the worst state (Qodo + CodeRabbit #192):
-    // with two guards on a dial, "✕ A + B check FAILED" would smear a passing B with A's failure.
-    const names = gs.map((g) => g.label).join(" + ");
-    const worstNames = gs.filter((g) => g.status === worstG.status).map((g) => g.label).join(" + ");
-    const text =
-      state === "fail" ? `✕ ${worstNames} check FAILED`
-      : state === "running" ? `${worstNames} check running…`
-      : state === "unknown" ? "— unverifiable"
-      : state === "stale" ? `✓ ${names} check passed · re-check overdue`
-      : `✓ ${names} check passed`;
-    const title = gs.map((g) => `${g.label} (${g.cadence}${g.lastRun ? `, ${agoText(g.lastRun)}` : ", never run"}): ${g.proves}`).join("\n")
-      + "\n\nThis badge reports the named OUTSIDE cross-check only; the ring above shows the live internal signals — a warning there and a passing check here can coexist.";
-    return { state, text, title, url: worstG.url };
-  };
-
-  // `verifyApplies` + `anchor` drive F-3 (see HealthVitals): the outside-check line is explicit even where
-  // there's no oracle (Freshness), and each Status rollup jumps to its own detail section when non-green.
-  const vitals: Vital[] = [
-    { name: "Accuracy", segs: [
-      sv("Section-9 · meeting actions without a time", section9 ?? 0, lower(0.5, 25, 50), section9 != null, "hl-m-section9"),
-      // OUR accuracy, not LIS's internal consistency. `outcome_keyword_mismatch_rate` used to sit here and
-      // is what turned this ring RED on 2026-07-25 while every published value was correct: it measures
-      // LIS's status string disagreeing with LIS's own flags, and we publish the flag. It now renders as an
-      // upstream observation below (no danger band, no ring). What belongs here is a value WE got wrong or
-      // cannot vouch for: `impeached`, and bills whose own status says SETTLED yet carry no structural flag
-      // (no legitimate steady state → an absolute floor; the in-progress population is deliberately absent).
-      sv("Outcomes published wrong", c?.outcome_impeached ?? 0, lower(0.5, 1, 5), c?.outcome_impeached != null, "hl-m-impeached"),
-      sv("Settled bills with no structural flag", unverifiedTerminal, lower(0.5, 5, 25), c?.outcome_unverified_terminal != null, "hl-m-unverified"),
-    ], verify: vitalVerify(["accuracy_sentinel.yml", "legevent_reconcile.yml"]), verifyApplies: true, anchor: "hl-sec-accuracy" },
-    { name: "Completeness", segs: [
-      sv("Bill completeness · records vs universe", completePct, higher(98, 99.99, 100), !!c && universe > 0, "hl-m-complete"),
-      sv("History-vs-universe anomalies", anomalies, lower(0.5, 5, 20), !!c, "hl-m-anomalies"),
-      sv("Patron coverage", patronPct, higher(98, 99.99, 100), !!c && written > 0, "hl-m-patron"),
-      sv("Unclassified share · router blank", unclassPct, lower(8, 15, 25), !!h && total > 0, "hl-m-unclass"),
-    ], verify: vitalVerify(["completeness_tripwire.yml"]), verifyApplies: true, anchor: "hl-sec-accuracy" },
-    { name: "Freshness", segs: [
-      sv("Bill backend clock", billFreshH, lower(6, 12, 24), !!dataAsOf),
-      sv("Calendar clock", calFreshH, lower(6, 12, 24), !!h?.calendarFreshness),
-    ], verifyApplies: false, anchor: "hl-sec-freshness" },
-    { name: "Stability", segs: [
-      { label: "Circuit breaker", tone: !h ? "unknown" : breakerOk ? "good" : "danger", anchor: "hl-sec-status" },
-      sv("Write-time invariant violations", violations ?? 0, lower(0.5, 49, 60), violations != null, "hl-m-invariants"),
-      { label: "Active alerts", tone: !h ? "unknown" : critCount ? "danger" : warnCount ? "warn" : "good" },
-      // THE INCIDENT LEDGER IS A RING INPUT (owner, 2026-07-28). Before this, the rings were computed purely
-      // from live metrics and knew nothing about the ledger, so the page could show four green rings directly
-      // above "an incident is OPEN right now". The owner's argument is the correct one: an incident severe
-      // enough to reset the days-clean clock is BY DEFINITION something a ring should not call healthy.
-      // Two independent verdicts about the same question will eventually contradict; the fix is to make one
-      // an input to the other rather than to hope they agree.
-      //
-      // FAIL-CLOSED on all three non-clean states -- open, unreadable, and unseeded are each "we cannot say
-      // this is clean", and none of them may render green.
-      {
-        label: "Incident ledger",
-        tone: !counter ? "unknown"
-          : counter.openNow.length > 0 ? "danger"
-          : counter.wrongSheet ? "unknown"
-          : !counter.available ? "unknown"
-          : "good",
-      },
-    ], verify: vitalVerify(["sustainability_audit.yml"]), verifyApplies: true, anchor: "hl-sec-alerts" },
+  const ledgerOk = !!counter && counter.available && !counter.wrongSheet && counter.malformedRows === 0;
+  const extras: RingExtra[] = [
+    { cat: "Stability", name: "Circuit breaker armed", ok: !!h && !h.breakerTrip },
+    { cat: "Stability", name: "No alert needs a look", ok: hist !== null && liveNeedsLook === 0 },
+    { cat: "Stability", name: "Incident ledger readable, nothing open", ok: ledgerOk && counter!.openNow.length === 0 },
   ];
+  const ring = rings(insts, extras);
+
+  // ── problems: every not-clean check, as fields ──
+  const problems: Problem[] = [];
+  const guardRows = gs?.status === "ok" ? gs.rows : [];
+  const checkedAt = guardRows.reduce<Date | null>((a, r) => (r.checked && (!a || r.checked > a) ? r.checked : a), null);
+  if (gs && gs.status !== "ok") problems.push({ check: "Watched jobs (Guard_Status)", state: "unreadable", since: "this read", affects: "every scheduled job", wrong: "unknown", fix: null });
+  else if (gs && hoursSince(checkedAt) > GUARD_STALE_H) problems.push({ check: "Trust-surface guard", state: "stale", since: shortDay(checkedAt), affects: "every scheduled job", wrong: "unknown", fix: null });
+  for (const r of guardRows) {
+    if (GUARD_OK.has(r.state)) continue;
+    const [name, proves] = r.label.split(" — ");
+    problems.push({ check: name, state: r.state.replace(/_/g, " "), since: shortDay(r.since), affects: proves || r.detail || "—",
+      wrong: "unknown", fix: r.url ? { text: "latest run", url: r.url } : null });
+  }
+  if (!ledgerOk) problems.push({ check: "Incident ledger", state: counter?.wrongSheet ? "wrong sheet" : counter?.available ? "unreadable rows" : "unreadable", since: "this read", affects: "days clean", wrong: "unknown", fix: null });
+  for (const i of insts) {
+    if (isClean(i)) continue;
+    problems.push({ check: i.name, state: i.value === null ? "no result" : "over limit", since: "this read",
+      affects: i.value === null ? i.cat.toLowerCase() : `${fmtVal(i)} · limit ${fmtLimit(i)}`,
+      wrong: i.value === null ? "unknown" : i.impeaches, fix: null });
+  }
+  const v = verdictOf(insts, problems.map((p) => p.wrong));
 
   return (
-    <div>
-      <h2 className="h">At a glance</h2>
-      {/* The trust counter. Rules from docs/architecture/incident_counter.md, and each is load-bearing:
-          · the DENOMINATOR always rides along — "47 days clean" alone cannot be judged (Standard #7)
-          · an OPEN incident makes it red and says so; the clock reads from that incident's start
-          · an unseeded ledger says exactly that, never a reassuring 0 ("allowed not to know, never pretend")
-          · a stale/absent fire drill is surfaced — an untested alarm is not a working alarm */}
-      {counter?.available && (
-        <p className="muted" style={{ marginTop: -6, marginBottom: 14 }}>
-          {counter.openNow.length > 0 ? (
-            <span style={{ color: "var(--stale)", fontWeight: 600 }}>
-              {/* Cap the list. On 2026-07-28 a wrong-sheet read produced ~3,645 "classes" and this line
-                  rendered every one of them, burying the actual message. A count carries the signal; the
-                  first few carry the detail. */}
-              ▲ {counter.openNow.length === 1 ? "An incident is" : `${counter.openNow.length} incidents are`} OPEN
-              right now ({counter.openNow.slice(0, 3).join(", ")}
-              {counter.openNow.length > 3 && ` +${counter.openNow.length - 3} more`}) — the days-clean clock has reset.
-            </span>
-          ) : (
-            <>
-              <b style={{ color: "var(--ink)" }}>{counter.daysClean ?? "—"} days</b> since a data incident
-              {counter.monitoringDays != null && <> · monitoring for <b style={{ color: "var(--ink)" }}>{counter.monitoringDays}</b> days</>}
-              {counter.incidentsEver > 0 && <> · {counter.incidentsEver} recorded ever</>}
-            </>
-          )}
-          {counter.lastDrillDays != null
-            ? <> · last alarm test {counter.lastDrillDays}d ago</>
-            : <> · <span title="A fire drill exercises the real write path. Without one, the alarm is untested.">alarm never tested</span></>}
-          {counter.malformedRows > 0 && (
-            <> · <span style={{ color: "var(--stale)" }}>⚠ {counter.malformedRows} unreadable row(s) — an incident could be hidden</span></>
-          )}
-        </p>
-      )}
-      {counter?.wrongSheet && (
-        <p className="muted" style={{ marginTop: -6, marginBottom: 14 }}>
-          <span style={{ color: "var(--stale)", fontWeight: 600 }}>
-            ▲ The incident ledger could not be read — the response was not the Incident_Log tab.
-          </span>{" "}
-          Treat the days-clean figure as unknown, not clean. (gviz answers a missing tab with the first
-          sheet, HTTP 200, so this is a real defect rather than an empty state.)
-        </p>
-      )}
-      {counter && !counter.available && !counter.wrongSheet && (
-        <p className="muted" style={{ marginTop: -6, marginBottom: 14 }}>
-          Days-clean counter not yet seeded — the ledger has no epoch, so there is no honest number to show.
-        </p>
-      )}
-      <HealthVitals vitals={vitals} />
-
-      {/* ── System status: the breaker + the TWO freshnesses (different workers) ── */}
-      <div className="hl-status" id="hl-sec-status">
-        {!h ? (
-          // Don't claim "armed" before the calendar-worker payload loads — that's a false green when we
-          // simply don't know yet (CodeRabbit #167; "never pretend"). Show the unknown state instead.
-          <span className="hl-breaker unknown">● Circuit breaker — awaiting calendar worker</span>
-        ) : (
-          <span className={`hl-breaker ${breakerOk ? "ok" : "trip"}`}>
-            {breakerOk ? "● Circuit breaker armed" : "▲ BREAKER TRIPPED"}
-          </span>
-        )}
-        {h && !breakerOk && h.breakerTrip && (
-          <span className="muted" style={{ fontSize: 12 }}>
-            tripped {String((h.breakerTrip as { trip_utc?: string }).trip_utc ?? "")} — Sheet1 holds last-known-good
-          </span>
-        )}
+    <div className="hx">
+      <div className="hx-verdict">
+        <span className={`st${v.clean ? "" : " red"}`}>{v.clean ? "verified clean" : "not verified clean"}</span>
+        <span><b>{v.problems}</b> open problems</span>
+        <span><b>{v.wrong}</b> published values known wrong</span>
+        <span><b>{v.noResult}</b> instruments with no result</span>
+        <span className="sub">as of {new Date().toLocaleDateString(undefined, { day: "numeric", month: "short", year: "numeric" })}</span>
       </div>
 
-      {/* The old standalone "Are we right? · independent verification" panel was MERGED onto the at-a-glance
-          dials above (each donut now carries an "independently confirmed" trust line from the same guards) —
-          it read as a second data readout next to the gauges; on the dial it reads as "an outside source
-          agrees." See HealthVitals `verify` + `vitalVerify` above. */}
-
-      {/* ── Upstream watchers (drift-canary GREEN-STATE): the five vocabulary monitors that catch LIS
-            changing its own codes/shapes. They alert on drift; this shows the ALL-CLEAR too, so silence is
-            "actively checked" not "the canary died." "?" = the worker couldn't determine it this cycle. ── */}
-      <h2 className="h">Upstream watchers {h && <span className="muted" style={{ textTransform: "none", letterSpacing: 0 }}>· is LIS still speaking our language?</span>}</h2>
-      {h ? (
-        <div className="hl-canaries panel">
-          {canaries.map((cn) => (
-            <div key={cn.label} className={`hl-canary ${cn.state}`}>
-              <span className="hl-cdot" aria-hidden="true" />
-              <span className="hl-clabel">{cn.label}</span>
-              <span className="hl-cstat">
-                {cn.state === "clean" ? "✓ no drift" : cn.state === "drift" ? `▲ ${cn.count} new value${cn.count === 1 ? "" : "s"}` : "? not checked"}
-              </span>
-            </div>
-          ))}
-          <div className="hl-vfoot muted">
-            Each watcher diffs LIS's live vocabulary against the structural router's. A “?” means the worker
-            couldn't reach the upstream list this cycle — never read it as healthy.
-          </div>
-        </div>
-      ) : <CalLoading err={hErr} />}
-
-      <h2 className="h" id="hl-sec-accuracy">Accuracy &amp; completeness — the lobbyist-facing guarantees</h2>
-      <div className="hl-gauges">
-        {h ? (
-          <BulletGraph id="hl-m-section9" label="Section-9 accuracy · meeting actions without a time" value={section9 ?? 0}
-            max={50} target={0} bands={lower(0.5, 25, 50)} spark={spark("meeting_unsourced")}
-            sub="0 = every meeting action has a time (the project goal)" />
-        ) : <CalLoading err={hErr} />}
-        {/* Bill-backend gauges only render when the completeness payload is present — a null payload must NOT
-            display as a real 0% / 0 (that would read as a false danger; "allowed not to know, never pretend"). */}
-        {c ? (<>
-          <BulletGraph id="hl-m-complete" label="Bill completeness · records written vs LIS universe" value={completePct}
-            max={100} target={100} bands={higher(98, 99.99, 100)} unit="%" format={oneDp}
-            sub={`${written.toLocaleString()} of ${universe.toLocaleString()} bills${anomalies ? ` · ${anomalies} in-history-not-in-universe` : ""}`} />
-          <BulletGraph id="hl-m-impeached" label="Outcomes published wrong" value={c.outcome_impeached ?? 0}
-            max={5} target={0} bands={lower(0.5, 1, 5)}
-            sub="values we published that a later check proved incorrect — the only thing that turns this ring red" />
-          <BulletGraph id="hl-m-unverified" label="Settled bills with no structural flag" value={unverifiedTerminal}
-            max={25} target={0} bands={lower(0.5, 5, 25)}
-            sub={`of ${(c.outcome_unverified ?? 0).toLocaleString()} flagless bills; the other ${(c.outcome_unverified_absent ?? 0).toLocaleString()} are still in progress, so no flag is owed yet`} />
-          <BulletGraph id="hl-m-anomalies" label="History-vs-universe anomalies" value={anomalies}
-            max={20} target={0} bands={lower(0.5, 5, 20)} sub="bills seen in HISTORY but absent from the universe (scariest silent gap)" />
-        </>) : <p className="muted">Bill-backend signals unavailable (no completeness payload in Bill_Tracker R1).</p>}
-      </div>
-
-      <h2 className="h" id="hl-sec-freshness">Freshness — two workers, two clocks</h2>
-      <div className="hl-gauges">
-        {dataAsOf ? (
-          <BulletGraph label="Bill backend · hours since last good run" value={billFreshH}
-            max={24} target={0} bands={lower(6, 12, 24)} unit=" h" format={hrs}
-            sub={c?.checked_at_utc || dataAsOf.toISOString()} />
-        ) : <p className="muted">Bill-backend freshness unknown (no timestamp).</p>}
-        {h ? (
-          <BulletGraph label="Calendar subsystem · hours since last good cycle" value={calFreshH}
-            max={24} target={0} bands={lower(6, 12, 24)} unit=" h" format={hrs}
-            sub={h.calendarFreshness?.toISOString() || "Sheet1!AA1 unreadable"} />
-        ) : <CalLoading err={hErr} />}
-        {/* Source feed: HISTORY.CSV's OWN age. Bills are bulk re-derived from this blob, so they can't go
-            stale one-at-a-time — they go stale TOGETHER when LIS stops refreshing the blob, which the two
-            cycle clocks above can't see (a green cycle over a stale source). This is the grounded form of
-            "per-bill freshness." Only shown when the worker reported a Last-Modified (>= 0). */}
-        {/* Render only when we can MEANINGFULLY interpret the blob age — i.e., the session state is KNOWN.
-            When sessionActive is null (Sheet1!S1 unreadable) the gauge's meaning is undetermined and an
-            all-good band would be a false-green (BulletGraph has no neutral tone), so hide it — never pretend
-            (the value is uninterpretable without session context anyway). [CodeRabbit + Qodo #182] */}
-        {h && blobAgeKnown && sessionActive !== null && (
-          <BulletGraph label="Source feed · HISTORY.CSV blob age (hours since LIS refreshed it)" value={blobAgeH}
-            max={48} target={0} bands={blobAgeBands} unit=" h" format={hrs}
-            spark={spark("history_blob_age_min").filter((v) => v >= 0)}
-            sub={sessionActive
-              ? "in-session: stale here while the cycle clocks are green = LIS stopped feeding us (provisional bands; refine once the blob's refresh cadence is measured)"
-              : "off-season: HISTORY.CSV legitimately doesn't change (no new actions) — shown for reference, not alarmed"} />
-        )}
-      </div>
-      {/* Feed-skew: the gap BETWEEN the two clocks. Small = the subsystems agree on "now"; large = one feed
-          lagged the other and the picture is momentarily inconsistent. Only shown when both clocks are known. */}
-      {Number.isFinite(feedSkewH) && (
-        <div className={`hl-skew ${feedSkewH <= SKEW_OK_H ? "ok" : feedSkewH <= SKEW_WARN_H ? "warn" : "danger"}`}>
-          <span className="hl-skewdot" aria-hidden="true" />
-          Feed-skew · the two clocks are <strong>{hrs(feedSkewH)} h</strong> apart
-          <span className="muted"> — {feedSkewH <= SKEW_OK_H ? "in sync (the bill backend refreshes every 6h)" : feedSkewH <= SKEW_WARN_H ? "the bill backend is overdue for its 6h refresh" : "a subsystem has stalled — one clock is far behind the other"}</span>
-        </div>
-      )}
-
-      <h2 className="h">Pipeline health</h2>
-      <div className="hl-gauges">
-        {h ? (
-          <BulletGraph id="hl-m-invariants" label="Write-time invariant violations" value={violations ?? 0}
-            max={60} target={0} bands={lower(0.5, 49, 60)} spark={spark("invariant_violations")}
-            sub="rows that failed a schema/Origin invariant at write (breaker trips at ≥50)" />
-        ) : <CalLoading err={hErr} />}
-        {c?.outcome_keyword_mismatch_rate != null && (
-          // UPSTREAM observation, deliberately NOT an accuracy alarm: this is LIS's status string
-          // disagreeing with LIS's own flags, and we publish the flag. On 2026-07-25 LIS batch-flagged
-          // carryover without updating its strings and this read 12.2% — every published value correct.
-          // Flat-good bands so it can be watched without ever colouring a verdict.
-          <BulletGraph id="hl-m-drift" label="Upstream: LIS status text vs LIS's own flags" value={driftPct}
-            max={25} target={0} bands={[{ upto: 25, tone: "good" }]} unit="%" format={oneDp}
-            sub={`${(c.outcome_keyword_mismatches ?? 0).toLocaleString()} bills where LIS's two fields disagree — we publish the flag, so nothing we show is affected`} />
-        )}
-        {h && total > 0 && (
-          <BulletGraph id="hl-m-unclass" label="Unclassified share · router returned blank" value={unclassPct}
-            max={25} target={0} bands={lower(8, 15, 25)} unit="%" format={oneDp}
-            spark={hist ? seriesForPct(hist, "legevent_route_blank", "total_processed") : []}
-            sub={`${(m.legevent_route_blank ?? 0).toLocaleString()} of ${total.toLocaleString()} rows (floor/skeleton rows are legitimately blank)`} />
-        )}
-        {c && (
-          <BulletGraph id="hl-m-patron" label="Patron coverage" value={patronPct}
-            max={100} target={100} bands={higher(98, 99.99, 100)} unit="%" format={oneDp}
-            sub={`${(c.patron_present ?? 0).toLocaleString()} of ${written.toLocaleString()} bills with a chief patron`} />
-        )}
-      </div>
-
-      {/* ── Alerts: STATE, not stream. A verdict line answers "do I need to do anything?", then only the
-            currently-active conditions, then a collapsed self-cleared history. See
-            docs/design/dashboard_and_visual_language.md. ── */}
-      <h2 className="h" id="hl-sec-alerts">Alerts</h2>
-      {/* The trend store decides whether a condition is still ACTIVE, so an incomplete one can make a live
-          alert look self-resolved. If any row was undateable, say so here rather than presenting a feed we
-          know is partial as though it were whole (Standard #9). */}
-      {hist && hist.malformedRows > 0 && (
-        <p className="muted" style={{ marginTop: 0 }}>
-          ⚠ {hist.malformedRows} unreadable row(s) in the alert history — this feed may be incomplete, so a
-          condition shown as resolved could still be active.
-        </p>
-      )}
-      {!h ? <CalLoading err={hErr} /> : (
-        <div style={{ marginBottom: 18 }}>
-          <AlertsPanel model={alertModel} liveAlerts={h.alerts} />
-        </div>
-      )}
-
-      {/* ── Structural classification distribution (drift in the router is visible) ── */}
-      {h && total > 0 && (
-        <>
-          <h2 className="h">Where the rows went · structural router</h2>
-          <div className="hl-dist panel" style={{ marginBottom: 18 }}>
-            {([
-              ["meeting", m.legevent_route_meeting ?? 0, "var(--ok)"],
-              ["admin", m.legevent_route_admin ?? 0, "var(--ink-soft)"],
-              ["executive", m.legevent_route_executive ?? 0, "var(--o-await)"],
-              ["blank", m.legevent_route_blank ?? 0, "var(--ink-faint)"],
-            ] as const).map(([k, v, col]) => (
-              <div key={k} className="hl-distrow">
-                <span className="hl-distk">{k}</span>
-                <span className="hl-distbar"><span style={{ width: `${(100 * v) / total}%`, background: col }} /></span>
-                <span className="hl-distv">{v.toLocaleString()} · {((100 * v) / total).toFixed(1)}%</span>
+      <div className="hx-glance">
+        <DaysClean counter={counter} />
+        <div className="hx-rings">
+          {ring.map((r) => {
+            const guard = OUTSIDE[r.cat] ? guards?.find((g) => g.key === OUTSIDE[r.cat]) : undefined;
+            const outside = !OUTSIDE[r.cat] ? { text: "no outside check", red: false }
+              : guard && guard.status === "pass" && !guard.stale ? { text: "outside check ✓", red: false }
+              : { text: `outside check ${guard ? (guard.stale ? "stale" : guard.status) : "unknown"}`, red: true };
+            return (
+              <div className="g" key={r.cat}>
+                <RingSvg segs={r.segs.map((s) => s.ok)} />
+                <div className="gn">{r.cat}</div>
+                <div className={`gc${r.ok < r.total ? " red" : ""}`}>{r.ok} of {r.total} clean</div>
+                <div className={`gv${outside.red ? " red" : ""}`}>{outside.text}</div>
               </div>
-            ))}
-          </div>
-        </>
-      )}
+            );
+          })}
+        </div>
+      </div>
 
-      {/* ── Raw counters for deep inspection ── */}
-      {h && Object.keys(m).length > 0 && (
-        <details className="hl-raw">
-          <summary>Raw SYSTEM_METRICS · {Object.keys(m).length} counters</summary>
-          <div className="hl-rawgrid">
-            {Object.entries(m).map(([k, v]) => (
-              <div key={k} className="hl-rawcell"><span className="hl-rawk">{k}</span><span className="hl-rawv">{v.toLocaleString()}</span></div>
-            ))}
-          </div>
+      <div className="hx-sec"><span>Open problems</span><span className="n">{problems.length}</span></div>
+      <div className="hx-tile hx-tw">
+        {problems.length === 0 ? <p className="muted" style={{ margin: 0 }}>Nothing open.</p> : (
+          <table className="hx-ptab">
+            <thead><tr><th>Check</th><th>State</th><th>Since</th><th>Affects</th><th>Published values wrong</th><th>Fix</th></tr></thead>
+            <tbody>{problems.map((p, k) => (
+              <tr key={k}><td>{p.check}</td><td><span className="st red">{p.state}</span></td><td className="num">{p.since}</td>
+                <td>{p.affects}</td><td><span className={`st${p.wrong === "no" ? "" : " red"}`}>{p.wrong}</span></td>
+                <td>{p.fix ? <a href={p.fix.url} target="_blank" rel="noopener noreferrer">{p.fix.text} ↗</a> : "—"}</td></tr>
+            ))}</tbody>
+          </table>
+        )}
+      </div>
+
+      <div className="hx-sec"><span>Instruments</span><span className="n">needle in grey = fine · needle in red = over the limit</span></div>
+      <div className="hx-row hx-r3">{insts.map((i) => <Dial key={i.id} i={i} />)}</div>
+
+      <div className="hx-sec"><span>Scheduled jobs · last 10 runs</span>
+        <span className="n">{guardRows.filter((r) => r.check.startsWith("workflow:")).length} jobs + {guardRows.filter((r) => !r.check.startsWith("workflow:")).length} check · {guardRows.filter((r) => !GUARD_OK.has(r.state)).length} not ok</span></div>
+      <div className="hx-tile hx-beats">
+        {gs?.status !== "ok" ? <p className="red" style={{ margin: 0 }}>Job list unreadable.</p> : guardRows.map((r) => {
+          const file = r.check.startsWith("workflow:") ? r.check.slice(9) : "";
+          const marks = file ? runs[file] : undefined;
+          const bad = !GUARD_OK.has(r.state);
+          return (
+            <div className="hx-beat" key={r.check}>
+              <span className={`jn${bad ? " red" : ""}`}>{r.label.split(" — ")[0]}{r.state === "disabled" ? " · switched off" : ""}</span>
+              <span className="runs" aria-label={marks ? `last runs: ${marks.join(", ")}` : "run history unavailable"}>
+                {Array.from({ length: 10 }, (_, k) => {
+                  const mk = marks ? marks[9 - k] : undefined;   // oldest left, newest right
+                  return <i key={k} className={mk === "pass" ? "p" : mk === "fail" ? "f" : marks === null ? "u" : ""} />;
+                })}
+              </span>
+              <span className="ls">{r.lastSuccess ? agoText(r.lastSuccess) : "never"}</span>
+            </div>
+          );
+        })}
+      </div>
+      <div className="hx-legend"><span><i className="p" />passed</span><span><i className="f" />failed</span><span><i />no run</span><span><i className="u" />history unreadable</span></div>
+
+      <div className="hx-sec"><span>Last 90 days</span><span className="n">{counter?.monitoringDays != null ? `monitoring for ${counter.monitoringDays} of 90` : "record not started"}</span></div>
+      <div className="hx-tile">
+        <div className="hx-strip">{(counter?.strip ?? []).map((d, k) => <i key={k} className={d === "incident" ? "f" : d === "unmeasured" ? "u" : ""} />)}</div>
+        <div className="hx-legend"><span><i />clean</span><span><i className="f" />incident</span><span><i className="u" />not measured</span></div>
+      </div>
+
+      <div className="hx-row hx-r3" style={{ marginTop: 28 }}>
+        <Watchers h={h} c={c} />
+        <RowsByClass m={m} total={total} known={!!h} />
+      </div>
+
+      <div className="hx-tile" style={{ marginTop: 12 }}>
+        <details className="hx-alerts">
+          <summary><span className="lbl">Alerts</span> {liveNeedsLook ? <span className="red">{liveNeedsLook} need a look</span> : "nothing needs your attention"}
+            {alertModel && <span className="muted"> · {alertModel.notes.length} notes · {alertModel.resolved.length} cleared</span>} ›</summary>
+          <AlertsPanel model={alertModel} liveAlerts={h?.alerts ?? []} />
         </details>
-      )}
-
-      <p className="muted hl-foot">
-        Operator view (vision §3f) — the diagnostics the workers already emit, read live from the sheet.
-        Bands are calibrated from the worker's breaker thresholds + steady state, not magic numbers.
-        {hErr && <span style={{ color: "var(--stale)" }}> · calendar signals unavailable: {hErr}</span>}
-      </p>
+        <details className="hx-alerts">
+          <summary><span className="lbl">Raw system counters</span> {Object.keys(m).length} ›</summary>
+          <div className="hx-raw">{Object.entries(m).sort(([a], [b]) => a.localeCompare(b)).map(([k, val]) => (
+            <div key={k}><span>{k}</span><b>{n(val)}</b></div>))}</div>
+        </details>
+        {hErr && <p className="red" style={{ marginBottom: 0 }}>Calendar signals unavailable: {hErr}</p>}
+      </div>
     </div>
   );
 }
 
-function CalLoading({ err }: { err: string | null }) {
-  return err
-    ? <p className="muted" style={{ color: "var(--stale)" }}>Calendar signals unavailable: {err}</p>
-    : <p className="muted">Loading calendar-subsystem signals…</p>;
+const fmtVal = (i: Instrument) => i.value === null ? "?" : i.unit ? `${i.value} h` : i.of ? `${n(i.value)} of ${n(i.of)}` : n(i.value);
+const fmtLimit = (i: Instrument) => i.unit ? `${+i.limit.toFixed(1)} h` : i.of ? `${n(i.limit)} of ${n(i.of)}` : n(i.limit);
+
+function DaysClean({ counter }: { counter: CounterState | null }) {
+  const unread = !counter || !counter.available || counter.wrongSheet;
+  return (
+    <div className="g days">
+      <div className="big">{unread ? "?" : counter!.daysClean ?? "?"}</div>
+      <div className="gn">Days clean</div>
+      {unread ? <div className="gc red">{counter?.wrongSheet ? "wrong sheet read" : "ledger unreadable"}</div> : <>
+        <div className="gc">monitoring for {counter!.monitoringDays ?? "?"} days</div>
+        {counter!.openNow.length > 0 && <div className="gc red">{counter!.openNow.length} open now</div>}
+        <div className={`gv${counter!.lastDrillDays === null ? " red" : ""}`}>{counter!.lastDrillDays === null ? "alarm never tested" : `last drill ${counter!.lastDrillDays} d ago`}</div>
+      </>}
+    </div>
+  );
+}
+
+function RingSvg({ segs }: { segs: boolean[] }) {
+  const r = 22, circ = 2 * Math.PI * r, gap = segs.length > 1 ? 3 : 0, seg = circ / Math.max(1, segs.length);
+  return (
+    <svg width="64" height="64" viewBox="0 0 56 56" aria-hidden="true" className="gfx">
+      {segs.map((ok, k) => (
+        <circle key={k} r={r} cx="28" cy="28" fill="none" stroke={ok ? "#6E787E" : "var(--red)"} strokeWidth="7"
+          strokeDasharray={`${seg - gap} ${circ - seg + gap}`} strokeDashoffset={-k * seg} transform="rotate(-90 28 28)" />
+      ))}
+    </svg>
+  );
+}
+
+// A dial like a car's rev counter: grey arc = 0 up to the limit, red arc = past the limit, needle = now.
+const ARC = (f: number): [number, number] => { const a = Math.PI * (1 - f); return [60 + 46 * Math.cos(a), 56 - 46 * Math.sin(a)]; };
+const arcPath = (f0: number, f1: number) => { const [x0, y0] = ARC(f0), [x1, y1] = ARC(f1); return `M${x0.toFixed(1)} ${y0.toFixed(1)} A46 46 0 0 1 ${x1.toFixed(1)} ${y1.toFixed(1)}`; };
+
+function Dial({ i }: { i: Instrument }) {
+  const known = i.value !== null, ok = isClean(i), [nx, ny] = ARC(dialPos(i));
+  return (
+    <div className={`hx-tile hx-gauge${known ? "" : " unk"}`} role="img"
+      aria-label={`${i.name}: ${known ? fmtVal(i) : "no result"}; limit ${fmtLimit(i)}; ${ok ? "fine" : known ? "over the limit" : "unconfirmed"}`}>
+      <svg width="120" height="72" viewBox="0 0 120 72" aria-hidden="true">
+        <path d={arcPath(0, 0.6)} fill="none" stroke="#4A5257" strokeWidth="9" />
+        <path d={arcPath(0.6, 1)} fill="none" stroke="var(--red)" strokeOpacity=".75" strokeWidth="9" />
+        {known ? <>
+          <line x1="60" y1="56" x2={(60 + (nx - 60) * 0.82).toFixed(1)} y2={(56 + (ny - 56) * 0.82).toFixed(1)}
+            stroke={ok ? "var(--ink)" : "var(--red)"} strokeWidth="3" strokeLinecap="round" />
+          <circle cx="60" cy="56" r="4" fill={ok ? "var(--ink)" : "var(--red)"} />
+        </> : <text x="60" y="50" textAnchor="middle" fontSize="20" fontWeight="700" fill="var(--red)">?</text>}
+        <text x="4" y="70">0</text>
+        <text x="118" y="70" textAnchor="end">{i.unit ? `${Math.round(i.max)} h` : n(i.max)}</text>
+      </svg>
+      <div style={{ minWidth: 0 }}>
+        <div className="nm">{i.name}</div>
+        <div className={`val${known && !ok ? " red" : ""}`}>{known ? fmtVal(i) : "?"}</div>
+        <div className="foot">limit {fmtLimit(i)}{i.note ? ` · ${i.note}` : ""} {!known ? <span className="st red">no result</span> : !ok ? <span className="st red">over limit</span> : null}</div>
+      </div>
+    </div>
+  );
+}
+
+const CANARIES: [string, string][] = [
+  ["canary_status_grouping", "Legislation status vocabulary"], ["canary_governor_eventcodes", "Governor action codes"],
+  ["canary_refid_shape", "Refid namespaces"], ["canary_scheduletype", "Schedule types"], ["canary_referencetype", "Reference types"],
+];
+
+function Watchers({ h, c }: { h: HealthData | null; c: Completeness | null }) {
+  const m = h?.metrics ?? {};
+  const rows: { label: string; mark: string; red: boolean }[] = CANARIES.map(([k, label]) => {
+    const val = m[k];
+    return val == null || val < 0 ? { label, mark: "?", red: true } : val === 0 ? { label, mark: "✓", red: false } : { label: `${label} · ${val} new`, mark: "✕", red: true };
+  });
+  rows.push(!h ? { label: "Circuit breaker", mark: "?", red: true } : h.breakerTrip ? { label: "Circuit breaker tripped", mark: "✕", red: true } : { label: "Circuit breaker armed", mark: "✓", red: false });
+  // LIS disagreeing with ITSELF (status text vs its own flags). We publish the flag, so this never impeaches a
+  // published value — it is an upstream observation, shown as its count.
+  const mm = c?.outcome_keyword_mismatches, of = (c?.outcome_structural ?? 0) + (c?.outcome_keyword_fallback ?? 0);
+  rows.push(mm == null ? { label: "LIS status text vs its own flags", mark: "?", red: true }
+    : { label: `LIS status text vs its own flags · ${n(mm)} of ${n(of)} differ`, mark: mm ? "≠" : "✓", red: false });
+  return (
+    <div className="hx-tile">
+      <div className="lbl">Upstream watchers · is LIS still speaking our language?</div>
+      <div className="hx-ticks">{rows.map((r) => <div key={r.label}><b className={r.red ? "red" : ""}>{r.mark}</b>{r.label}</div>)}</div>
+    </div>
+  );
+}
+
+function RowsByClass({ m, total, known }: { m: Record<string, number>; total: number; known: boolean }) {
+  const parts: [string, number, string][] = [["meeting", m.legevent_route_meeting ?? 0, "#9AA3A8"], ["admin", m.legevent_route_admin ?? 0, "#5D676D"],
+    ["executive", m.legevent_route_executive ?? 0, "#C9D0D4"], ["no class", m.legevent_route_blank ?? 0, "#3A4146"]];
+  return (
+    <div className="hx-tile">
+      <div className="lbl">Where the rows went · of {known ? n(total) : "?"}</div>
+      {!known || total === 0 ? <p className="red">No result.</p> : <>
+        <div className="hx-stack">{parts.map(([k, val, col]) => <span key={k} style={{ width: `${(100 * val) / total}%`, background: col }} title={`${k}: ${n(val)}`} />)}</div>
+        <div className="hx-legend">{parts.map(([k, val, col]) => <span key={k}><i style={{ background: col }} />{k} {n(val)}</span>)}</div>
+      </>}
+    </div>
+  );
 }
 
 // One active condition row: a small dot carries severity, the sentence stays neutral, meta recedes right.
@@ -676,3 +483,4 @@ function AlertsPanel({ model, liveAlerts }: { model: AlertModel | null; liveAler
     </div>
   );
 }
+

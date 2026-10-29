@@ -27,7 +27,7 @@ export function CalendarSliver({ bills, onOpen, calRefresh = 0 }: { bills: Bill[
   }, [todayKey, calRefresh]); // calRefresh bumps when the freshness-gate invalidated the shared calendar cache
 
   const byBill = new Map(bills.map((b) => [b.bill, b])); // open a bill from an agenda item
-  const cue = useScrollCue<HTMLDivElement>();   // "more below" cue when the day has more meetings than fit
+  const [cueRef, cueHasMore] = useScrollCue<HTMLDivElement>();   // "more below" cue when the day has more meetings than fit
 
   return (
     <div className="daycol">
@@ -35,7 +35,7 @@ export function CalendarSliver({ bills, onOpen, calRefresh = 0 }: { bills: Bill[
         <div className="dow">{dow}</div>
         <div className="dnum">{head}</div>
       </div>
-      <div className="dcbody" ref={cue.ref}>
+      <div className="dcbody" ref={cueRef}>
         {err ? (
           <div className="dcempty">Couldn't load today's calendar.<br /><span className="muted">See the Calendar tab.</span></div>
         ) : meetings === null ? (
@@ -67,7 +67,7 @@ export function CalendarSliver({ bills, onOpen, calRefresh = 0 }: { bills: Bill[
         ))}
       </div>
       {/* "more below" cue — fade + bobbing chevron, only while the day column can scroll down (owner 2026-07-12) */}
-      <div className={`scrollcue${cue.hasMore ? " on" : ""}`} aria-hidden="true"><span>⌄</span></div>
+      <div className={`scrollcue${cueHasMore ? " on" : ""}`} aria-hidden="true"><span>⌄</span></div>
     </div>
   );
 }

@@ -30,13 +30,17 @@ export interface HistoryData {
   alerts: HistAlert[];         // newest-first, from both workers (see `source`)
   /** Latest cycle timestamp PER WORKER, so "is this still live?" is asked of the right clock. */
   cycleTs: Record<AlertSource, number>;
+  /** EVERY cycle timestamp per worker (newest first) — the observed write rhythm the freshness limit is
+   *  calibrated on (a fixed 6 h limit false-alarmed off-season, when the bill worker writes ~6-hourly). */
+  beats: Record<AlertSource, number[]>;
   available: boolean;          // false = tab absent / unreadable (UI shows "populating", never fake-green)
   /** Rows that carried data but no parseable timestamp. >0 means this history may be INCOMPLETE, which can
    *  make a still-active alert condition look self-resolved — so it is surfaced, never silently dropped. */
   malformedRows: number;
 }
 
-const EMPTY: HistoryData = { metricSeries: [], alerts: [], cycleTs: { calendar: 0, bill: 0 }, available: false, malformedRows: 0 };
+const EMPTY: HistoryData = { metricSeries: [], alerts: [], cycleTs: { calendar: 0, bill: 0 }, beats: { calendar: [], bill: [] },
+  available: false, malformedRows: 0 };
 
 const gvizUrl = () =>
   sheetUrl(TAB, { tq: QUERY });
@@ -91,6 +95,7 @@ async function _loadHistory(): Promise<HistoryData> {
   const metricSeries: MetricPoint[] = [];
   const alerts: HistAlert[] = [];
   const cycleTs: Record<AlertSource, number> = { calendar: 0, bill: 0 };
+  const beatSet: Record<AlertSource, Set<number>> = { calendar: new Set(), bill: new Set() };
   // A row we cannot date is NOT silently dropped (Standard #9 / source-miss visibility, CodeRabbit #227).
   // Dropping them quietly can hand the UI a PARTIAL history, and this store is what decides whether an
   // alert condition is still active — so missing cycles can make a live condition look self-resolved.
@@ -120,6 +125,8 @@ async function _loadHistory(): Promise<HistoryData> {
         source,
       });
     };
+    if (origin === "system_metrics") beatSet.calendar.add(ts);
+    else if (origin === "bill_system_metrics") beatSet.bill.add(ts);
     if (origin === "system_metrics") {
       metricSeries.push({ ts, metrics: parseMetrics(outcome) });
       cycleTs.calendar = Math.max(cycleTs.calendar, ts);
@@ -141,7 +148,9 @@ async function _loadHistory(): Promise<HistoryData> {
     console.warn(`[WARN:DATA_ANOMALY] Metrics_History: ${malformedRows} undateable row(s) skipped — the ` +
                  `trend/alert history may be incomplete, which can make a live condition look resolved.`);
   }
-  return { metricSeries, alerts, cycleTs, malformedRows,
+  const newestFirst = (x: Set<number>) => [...x].sort((a, b) => b - a);
+  const beats = { calendar: newestFirst(beatSet.calendar), bill: newestFirst(beatSet.bill) };
+  return { metricSeries, alerts, cycleTs, beats, malformedRows,
            available: metricSeries.length > 0 || alerts.length > 0 };
 }
 

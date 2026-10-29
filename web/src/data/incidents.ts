@@ -5,6 +5,7 @@
 // "days we could VERIFY clean", not "days nobody complained". An unresolved unknown counts against it.
 //
 // Row shape: StartUTC | EndUTC | Class | Summary | DetectedBy
+import { dayStrip, STRIP_DAYS, type DayState } from "./health_rules";
 import { sheetUrl, headerMatches } from "../config";
 import { apiFetch } from "../state/auth";
 import { parseCsv } from "./gviz";
@@ -46,11 +47,17 @@ export interface CounterState {
   available: boolean;
   /** true = we received a sheet that is NOT Incident_Log. A DEFECT to surface, not an empty state. */
   wrongSheet: boolean;
+  /** The last STRIP_DAYS days, oldest first: "unmeasured" before genesis, "incident" when any incident was open
+   *  that day, else "clean". The Health tab's 90-day strip — same rows as the counter, so they cannot disagree. */
+  strip: DayState[];
 }
+export type { DayState };
+
+const UNMEASURED: DayState[] = Array(STRIP_DAYS).fill("unmeasured");
 
 const EMPTY: CounterState = {
   daysClean: null, monitoringDays: null, incidentsEver: 0, openNow: [],
-  lastDrillDays: null, malformedRows: 0, available: false, wrongSheet: false,
+  lastDrillDays: null, malformedRows: 0, available: false, wrongSheet: false, strip: UNMEASURED,
 };
 
 /** Distinct from EMPTY: "we read the wrong sheet" is a bug to fix, not "nothing has happened yet". */
@@ -83,6 +90,7 @@ export function counterFromRows(rows: string[][], now: Date = new Date()): Count
   let incidentsEver = 0;
   let malformedRows = 0;
   const openNow: string[] = [];
+  const spans: [number, number][] = [];   // [start, end] of every real incident (end = now while still open)
 
   for (const r of rows) {
     // Sheets pads the grid with blank rows; those are not data and warrant no alarm.
@@ -107,6 +115,7 @@ export function counterFromRows(rows: string[][], now: Date = new Date()): Count
     if (!cls) { malformedRows++; continue; }                  // data present, but unclassifiable
 
     incidentsEver++;
+    if (start !== null) spans.push([start, end ?? nowMs]);
     if (end === null) {
       openNow.push(cls);            // still open — the clock reads from its START, and the surface is red
       if (start !== null && (latestEnd === null || start > latestEnd)) latestEnd = start;
@@ -127,6 +136,7 @@ export function counterFromRows(rows: string[][], now: Date = new Date()): Count
     malformedRows,
     available: genesis !== null || incidentsEver > 0,
     wrongSheet: false,
+    strip: dayStrip(spans, genesis, nowMs),
   };
 }
 

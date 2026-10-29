@@ -31,5 +31,7 @@ export function useScrollCue<T extends HTMLElement>() {
       mo.disconnect();
     };
   }, []);
-  return { ref, hasMore };
+  // A tuple, not an object: returning the ref inside an object made every `.hasMore` read look like a ref read
+  // during render to the React compiler (react-hooks/refs).
+  return [ref, hasMore] as const;
 }

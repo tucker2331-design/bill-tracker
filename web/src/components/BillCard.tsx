@@ -4,6 +4,7 @@ import { OutcomeChip, ChamberChip, Star } from "./common";
 import { lisBillUrl } from "../config";
 import { PositionControl } from "./PositionControl";
 import { ContactLog } from "./ContactLog";
+import { MemberCalls } from "./MemberCalls";
 import { loadCalendar, nextMeetingFor, minutesUntil, type Meeting as CalMeeting } from "../data/calendar";
 import { dayKey, parseLisDate } from "../data/dates";
 import { loadSummary, typeLabel, type SummaryResult, type SummaryVersion } from "../data/summaries";
@@ -102,6 +103,8 @@ export function BillCard({ bill, sessionCode, onClose }: { bill: Bill; sessionCo
                 <span className="muted">none scheduled</span>
               )}
             </span></div>
+
+          <MemberCalls bill={bill.bill} sessionCode={sessionCode} />
 
           <div className="metarow"><span className="k">Our position</span>
             <PositionControl bill={bill.bill} sessionCode={sessionCode} /></div>

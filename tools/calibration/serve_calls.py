@@ -76,11 +76,11 @@ def bill_rows(te, p):
         for r, pr in sorted(lst, key=lambda t: t[0]["who"]):
             c = call_of(pr)
             members.append({"who": r["who"], "party": r["party"], "p": round(pr, 3), "call": c,
-                            "actual": "yes" if r["y"] == 1 else "no",
+                            "actual": "" if r["y"] < 0 else "yes" if r["y"] == 1 else "no",   # "" = not voted yet (live mode)
                             "ev": {k: [int(r.get(f"k_{k}") or 0), int(r.get(f"n_{k}") or 0)] for k, _ in EVIDENCE}})
             tot["ballots"] += 1
             tot[c] += 1
-            if c != "cant_call":
+            if c != "cant_call" and r["y"] >= 0:   # only a recorded ballot can score a call
                 tot["right" if (c == "yes") == (r["y"] == 1) else "wrong"] += 1
         n = len(members)
         out.append([bill.replace(" ", ""), sess, lst[0][0]["room"], lst[0][0].get("date", ""), n, n // 2 + 1,
