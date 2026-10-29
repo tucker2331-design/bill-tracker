@@ -77,18 +77,3 @@ export function verdictOf(insts: Instrument[], problemImpeach: Impeach[]): Verdi
     noResult: insts.filter((i) => i.value === null).length,
   };
 }
-
-// ── the 90-day strip (used by data/incidents.ts on the same ledger rows as the counter) ──
-export type DayState = "clean" | "incident" | "unmeasured";
-export const STRIP_DAYS = 90;
-
-/** One state per UTC day for the last STRIP_DAYS days (oldest first). Pure. */
-export function dayStrip(spans: [number, number][], genesis: number | null, nowMs: number): DayState[] {
-  const DAY = 86_400_000;
-  const today0 = Math.floor(nowMs / DAY) * DAY;
-  return Array.from({ length: STRIP_DAYS }, (_, i) => {
-    const d0 = today0 - (STRIP_DAYS - 1 - i) * DAY, d1 = d0 + DAY;
-    if (genesis === null || d1 <= genesis) return "unmeasured";
-    return spans.some(([a, b]) => a < d1 && b >= d0) ? "incident" : "clean";
-  });
-}

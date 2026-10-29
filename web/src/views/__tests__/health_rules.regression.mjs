@@ -1,11 +1,11 @@
 /**
  * Health rules — binary clean, unconfirmed = red, rings from the same list as the dials, dial geometry, the
- * rhythm-calibrated freshness limit, and the 90-day strip.
+ * rhythm-calibrated freshness limit.
  *
  * Run:  node web/tools/ts2mjs.mjs web/src/data/health_rules.ts /tmp/health_rules.mjs \
  *         && node web/src/views/__tests__/health_rules.regression.mjs
  */
-import { isClean, rings, dialPos, rhythmLimitHours, verdictOf, dayStrip, STRIP_DAYS } from "/tmp/health_rules.mjs";
+import { isClean, rings, dialPos, rhythmLimitHours, verdictOf } from "/tmp/health_rules.mjs";
 let pass = 0, fail = 0;
 const is = (n, g, w) => { const ok = JSON.stringify(g) === JSON.stringify(w);
   console.log(`  ${ok ? "ok  " : "FAIL"} ${n}${ok ? "" : `  got ${JSON.stringify(g)} want ${JSON.stringify(w)}`}`); ok ? pass++ : fail++; };
@@ -45,13 +45,7 @@ is("one long gap widens the limit to 1.5x it", rhythmLimitHours(withGap), 33);
 is("nothing open -> clean", verdictOf(insts, []).clean, true);
 is("verdict counts", verdictOf(insts, ["yes", "unknown", "no"]), { clean: false, problems: 3, wrong: 1, noResult: 1 });
 
-// ---- 90-day strip from the ledger rows the counter reads
-const D = 86_400_000;
-const strip = dayStrip([[now - 3 * D, now - 2 * D]], now - 10 * D, now);
-is("strip length", strip.length, STRIP_DAYS);
-is("before genesis = not measured", strip[0], "unmeasured");
-is("incident days marked", strip.slice(-4), ["incident", "incident", "clean", "clean"]);
-is("an incident still open (end = now) marks today", dayStrip([[now - 3600e3, now]], now - 10 * D, now)[STRIP_DAYS - 1], "incident");
+// (the 90-day strip lives with the counter in incidents.ts; its goldens are in test_counter_display.py)
 
 console.log(`\n${fail ? `${fail} FAILED` : "ALL PASS"} (${pass} ok)`);
 process.exit(fail ? 1 : 0);

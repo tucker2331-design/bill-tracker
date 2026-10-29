@@ -5,7 +5,6 @@
 // "days we could VERIFY clean", not "days nobody complained". An unresolved unknown counts against it.
 //
 // Row shape: StartUTC | EndUTC | Class | Summary | DetectedBy
-import { dayStrip, STRIP_DAYS, type DayState } from "./health_rules";
 import { sheetUrl, headerMatches } from "../config";
 import { apiFetch } from "../state/auth";
 import { parseCsv } from "./gviz";
@@ -51,7 +50,9 @@ export interface CounterState {
    *  that day, else "clean". The Health tab's 90-day strip — same rows as the counter, so they cannot disagree. */
   strip: DayState[];
 }
-export type { DayState };
+
+export type DayState = "clean" | "incident" | "unmeasured";
+export const STRIP_DAYS = 90;
 
 const UNMEASURED: DayState[] = Array(STRIP_DAYS).fill("unmeasured");
 
@@ -138,6 +139,17 @@ export function counterFromRows(rows: string[][], now: Date = new Date()): Count
     wrongSheet: false,
     strip: dayStrip(spans, genesis, nowMs),
   };
+}
+
+/** One state per UTC day for the last STRIP_DAYS days (oldest first). Pure. */
+export function dayStrip(spans: [number, number][], genesis: number | null, nowMs: number): DayState[] {
+  const DAY = 86_400_000;
+  const today0 = Math.floor(nowMs / DAY) * DAY;
+  return Array.from({ length: STRIP_DAYS }, (_, i) => {
+    const d0 = today0 - (STRIP_DAYS - 1 - i) * DAY, d1 = d0 + DAY;
+    if (genesis === null || d1 <= genesis) return "unmeasured";
+    return spans.some(([a, b]) => a < d1 && b >= d0) ? "incident" : "clean";
+  });
 }
 
 export async function loadCounter(): Promise<CounterState> {
