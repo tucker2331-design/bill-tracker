@@ -25,6 +25,7 @@ import { verifyGoogleIdToken } from "./auth.js";
 import { membership, teamGate } from "./team.js";
 import { handleSheet } from "./sheets.js";
 import { validateContact } from "./contacts.js";
+import { runAlerts } from "./alerts.js";
 
 const JSON_HEADERS = { "content-type": "application/json; charset=utf-8" };
 
@@ -69,6 +70,8 @@ async function handleApi(request, env, url) {
       // a revoked account, or one never shared on the sheet all still say true) -- the proof is a real read:
       // /api/sheet answers with `x-sheet-auth: service_account` (Codex #242). Configuration only.
       sheet_auth_configured: env.GCP_SA_JSON ? "service_account" : "none",
+      // Whether the 15-minute Slack digest can run (worker/alerts.js). Configuration only.
+      alerts_configured: Boolean(env.SLACK_WEBHOOK_URL && env.BILL_TRACKER_STATE),
     });
   }
 
@@ -245,5 +248,16 @@ export default {
     }
     // EVERYTHING else is the SPA. This is the line that keeps the existing site working.
     return env.ASSETS.fetch(request);
+  },
+
+  // Cron Trigger (wrangler.toml [triggers]): the Slack digest. A failure is logged with its stack and re-thrown
+  // so Cloudflare records the run as failed (visible in the dashboard) -- never swallowed.
+  async scheduled(event, env, ctx) {
+    try {
+      await runAlerts(env);
+    } catch (err) {
+      console.error("alerts_error", err && err.stack ? err.stack : String(err));
+      throw err;
+    }
   },
 };
