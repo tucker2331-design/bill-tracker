@@ -4,6 +4,16 @@ updated: 2026-06-27
 status: active
 ---
 
+> **▶️ REBUILT TO v9 2026-10-29** (owner brief; mockup v9). Supersedes the bullet graphs, donuts and "unknown = grey"
+> below — **unconfirmed now shows RED, never grey** (P25a, owner "no yellow"). One instrument list
+> (`web/src/data/health_rules.ts`) feeds the four rings, the problems table and the dial gauges, so the overview cannot
+> disagree with the detail. Layout: verdict line · days clean (left) + 4 rings (right) · problems as fields (check, state,
+> since, affects, published values wrong, fix) · dials (grey arc to the limit, red beyond, needle; coverage metrics shown
+> as counts of what is missing) · job-run grid (`Guard_Status` + GitHub runs) · 90-day strip (Incident_Log) · upstream
+> watchers · rows by class as counts · alerts folded. **Freshness limits follow each worker's observed write rhythm**
+> (Metrics_History heartbeats: max(6 h, 2× median gap, 1.5× largest gap) — the trust-surface guard's rule); a fixed 6 h
+> limit false-alarmed every night off-season. 21 goldens (`health_rules.regression.mjs`).
+>
 > **▶️ BUILT 2026-06-24** (`claude/health-tab`, verified live): `web/src/components/BulletGraph.tsx`
 > (reusable Few bullet graph w/ danger bands), `web/src/data/health.ts` (lightweight `tq WHERE`
 > operator-signal loader — ~2 KB, not the 5 MB sheet), `web/src/views/Health.tsx` (9 prioritized gauges +
