@@ -182,6 +182,15 @@ export function Health({ completeness, dataAsOf }: { completeness: Completeness 
       wrong: "unknown", fix: r.url ? { text: "latest run", url: r.url } : null });
   }
   if (!ledgerOk) problems.push({ check: "Incident ledger", state: counter?.wrongSheet ? "wrong sheet" : counter?.available ? "unreadable rows" : "unreadable", since: "this read", affects: "days clean", wrong: "unknown", fix: null });
+  // Every ring input that is not clean is ALSO a problem row (Codex #250): the verdict must never read clean beside
+  // a red ring. Same fields, one row per input.
+  else if (counter!.openNow.length > 0) problems.push({ check: "Open incident", state: "open", since: "—", affects: counter!.openNow.join(", "), wrong: "unknown", fix: null });
+  if (!h) problems.push({ check: "Circuit breaker", state: "no result", since: "this read", affects: "every write", wrong: "unknown", fix: null });
+  else if (h.breakerTrip) problems.push({ check: "Circuit breaker", state: "tripped", since: "this read", affects: "every write", wrong: "unknown", fix: null });
+  if (hist === null || !hist.available) problems.push({ check: "Alert history", state: "unreadable", since: "this read", affects: "alerts", wrong: "unknown", fix: null });
+  else if (hist.malformedRows > 0) problems.push({ check: "Alert history", state: "incomplete", since: "this read",
+    affects: `${n(hist.malformedRows)} undateable rows — a live alert could read as cleared`, wrong: "unknown", fix: null });
+  if (liveNeedsLook > 0) problems.push({ check: "Alerts", state: "need a look", since: "this read", affects: `${liveNeedsLook} condition${liveNeedsLook === 1 ? "" : "s"}`, wrong: "unknown", fix: null });
   for (const i of insts) {
     if (isClean(i)) continue;
     problems.push({ check: i.name, state: i.value === null ? "no result" : "over limit", since: "this read",
@@ -274,7 +283,8 @@ export function Health({ completeness, dataAsOf }: { completeness: Completeness 
       <div className="hx-tile" style={{ marginTop: 12 }}>
         <details className="hx-alerts">
           <summary><span className="lbl">Alerts</span> {liveNeedsLook ? <span className="red">{liveNeedsLook} need a look</span> : "nothing needs your attention"}
-            {alertModel && <span className="muted"> · {alertModel.notes.length} notes · {alertModel.resolved.length} cleared</span>} ›</summary>
+            {alertModel && <span className="muted"> · {alertModel.notes.length} notes · {alertModel.resolved.length} cleared</span>}
+            {hist && hist.malformedRows > 0 && <span className="red"> · history incomplete ({n(hist.malformedRows)} undateable rows)</span>} ›</summary>
           <AlertsPanel model={alertModel} liveAlerts={h?.alerts ?? []} />
         </details>
         <details className="hx-alerts">
