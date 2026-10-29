@@ -43,8 +43,15 @@ STATUS_TAB = "Guard_Status"
 STATUS_HEADER = ["CheckedUTC", "Check", "Label", "State", "SinceUTC", "LastSuccessUTC", "FailuresInARow",
                  "ExpectedEvery", "Detail", "URL"]
 DETECTOR = "trust_surface"
-SELF = "trust_surface_guard.yml"            # cannot judge its own liveness; the Health tab ages CheckedUTC
-STATES_OK = {"ok", "disabled"}     # disabled = switched off on purpose: shown, not an incident
+STATES_OK = {"ok", "disabled", "running"}   # disabled = switched off on purpose; running = first run in progress
+# Liveness and recovery are judged on SCHEDULED runs only: a manual dispatch can be a diagnostic that skips the
+# production write (ny_bill_tracker.yml's check-config / dry-run), and its success must not close a production
+# failure (Codex #247). The exception is a workflow whose EVERY dispatch runs the same production path as its
+# schedule -- listed here explicitly, with the reason, so it is a decision on record and never a default.
+DISPATCH_IS_PRODUCTION = {
+    "incident_ledger.yml",   # both modes (drill, status) read/write the REAL ledger with the same code as the cron
+}
+NOT_EVIDENCE = ("skipped", "cancelled")
 
 # What each job PROVES, in plain words for the client-facing tab. OPTIONAL: a job missing here is still
 # checked and shown under its workflow name — this dict only improves wording, it never gates coverage.
@@ -83,6 +90,8 @@ def _parse_ts(s):
 # ── 1. scheduled workflows, found from their own files ──────────────────────────────────────────────────────
 def cron_period(expr):
     """Nominal period of a 5-field cron, from its structure. Returns (timedelta, label) or (None, why)."""
+    if not isinstance(expr, str):                   # YAML can hand back an int/bool for a malformed cron (Gemini #247)
+        return None, f"unreadable cron {expr!r}"
     f = expr.split()
     if len(f) != 5:
         return None, f"unreadable cron {expr!r}"
@@ -114,8 +123,11 @@ def scheduled_workflows(wf_dir=None):
         try:
             with open(os.path.join(wf_dir, fn)) as fh:
                 doc = yaml.safe_load(fh) or {}
-        except yaml.YAMLError as e:
-            out.append((fn, fn, None, f"workflow file does not parse ({type(e).__name__}); GitHub cannot run it"))
+        except (yaml.YAMLError, OSError) as e:
+            out.append((fn, fn, None, f"workflow file does not parse or read ({type(e).__name__}); GitHub cannot run it"))
+            continue                                   # reported as an `unknown` row, never dropped
+        if not isinstance(doc, dict):                  # a list/string at top level is not a workflow (Gemini #247)
+            out.append((fn, fn, None, f"workflow file is a {type(doc).__name__}, not a mapping; GitHub cannot run it"))
             continue                                   # reported as an `unknown` row, never dropped
         on = doc.get("on", doc.get(True))           # PyYAML reads the bare key `on` as boolean True
         sched = on.get("schedule") if isinstance(on, dict) else None
@@ -142,6 +154,12 @@ def _gh(path):
     raise RuntimeError(f"GitHub API {path}: {last}")
 
 
+def production_runs(runs, fn):
+    """The runs that are evidence about the PRODUCTION path: scheduled runs, plus every dispatch of a workflow in
+    DISPATCH_IS_PRODUCTION. Pure; unit-tested."""
+    return [r for r in runs if r.get("event") == "schedule" or fn in DISPATCH_IS_PRODUCTION]
+
+
 def judge_runs(runs, period, now):
     """Pure verdict over newest-first completed/in-progress runs. Returns dict (no I/O; unit-tested)."""
     done = [r for r in runs if r.get("status") == "completed"]
@@ -150,10 +168,13 @@ def judge_runs(runs, period, now):
     for r in done:
         if r.get("conclusion") == "success":
             break
-        if r.get("conclusion") in ("skipped", "cancelled"):
+        if r.get("conclusion") in NOT_EVIDENCE:
             continue                                   # not evidence either way
         fails += 1
-    latest = _parse_ts(done[0].get("created_at")) if done else None
+    # Liveness comes from SUBSTANTIVE runs only: a cancelled/skipped run proves nothing ran, so it must not refresh
+    # the overdue clock (Codex #247 -- a daily job cancelled every day would otherwise read ok forever).
+    real = [r for r in done if r.get("conclusion") not in NOT_EVIDENCE]
+    latest = _parse_ts(real[0].get("created_at")) if real else None
     first_fail = None
     if fails:
         streak = [r for r in done if r.get("conclusion") not in ("success", "skipped", "cancelled")][:fails]
@@ -166,7 +187,12 @@ def judge_runs(runs, period, now):
     gaps = sorted((a - b) for a, b in zip(times, times[1:]) if a > b)
     observed = [gaps[len(gaps) // 2] * 2, gaps[-1] * 1.5] if gaps else []
     grace = max([period * 2, timedelta(hours=2)] + observed)
-    if not done:
+    if not done and any(r.get("status") in ("in_progress", "queued") for r in runs):
+        # First run ever, happening now (the guard's own first cycle sees exactly this). Not a failure -- opening an
+        # incident here would put a false alarm on the ledger on day one. GitHub's job timeout ends a stuck run,
+        # after which a real verdict follows.
+        state, since, detail = "running", None, "first run in progress"
+    elif not done:
         state, since, detail = "never_run", None, "no completed run on record"
     elif last_success is None:
         state, since = "never_succeeded", _parse_ts(done[-1].get("created_at"))
@@ -195,8 +221,6 @@ def check_workflows(now):
     rows = []
     states = _workflow_states()
     for fn, name, cron, why in scheduled_workflows():
-        if fn == SELF:
-            continue                                   # its own liveness is judged by the Health tab (CheckedUTC age)
         st = states.get(fn, "active")
         if st and st != "active":
             # Switched off deliberately (e.g. the paused legacy worker): shown, never an incident. NOTE GitHub's
@@ -217,7 +241,7 @@ def check_workflows(now):
             continue
         try:
             runs = _gh(f"/actions/workflows/{fn}/runs?per_page=30").get("workflow_runs", [])
-            v = judge_runs(runs, period, now)
+            v = judge_runs(production_runs(runs, fn), period, now)
         except RuntimeError as e:
             v = {"state": "unknown", "since": None, "last_success": None, "fails": 0,
                  "detail": f"could not read run history: {e}"[:300], "url": ""}
@@ -307,7 +331,12 @@ def write_status(rows, now):
 
 def ledger(rows):
     sys.path.insert(0, ROOT)
-    from tools.incident_log.log import close_incident, record_incident
+    try:
+        from tools.incident_log.log import close_incident, record_incident
+    except ImportError as e:   # fail-open on bookkeeping, but loudly: Guard_Status is already written (Gemini #247)
+        print(f"❌ [API_FAILURE] [trust_surface] cannot import the incident log ({e}); the ledger was NOT updated "
+              f"for {len(rows)} check(s).")
+        return
     for r in rows:
         det = f"{DETECTOR}:{r['check']}"
         try:

@@ -70,4 +70,30 @@ ok(T._iso(rows[0]["since"]) == "2026-10-20T00:00:00Z", f"since carried ({rows[0]
 rows = T._carry_since([{"check": "bill_backend_checks", "state": "ok", "since": NOW}], prior)
 ok(rows[0]["since"] is None, "an OK check has no since")
 
+
+# --- bot fold-ins on #247 ---
+# Codex: a cancelled/skipped run must not refresh liveness. Daily job, last success 121 h ago, cancelled every 24 h since.
+v = T.judge_runs([run(1, "cancelled"), run(25, "cancelled"), run(49, "cancelled"), run(73, "cancelled"),
+                  run(97, "cancelled"), run(121, "success")], day, NOW)
+ok(v["state"] == "overdue", f"cancellations do not keep a stalled job ok: {v['state']}")
+# Codex: a diagnostic dispatch must not close a production failure.
+ev = lambda r, e: {**r, "event": e}  # noqa: E731
+hist = [ev(run(1, "success"), "workflow_dispatch"), ev(run(3, "failure"), "schedule"), ev(run(27, "success"), "schedule")]
+ok(T.judge_runs(T.production_runs(hist, "ny_bill_tracker.yml"), day, NOW)["state"] == "failing",
+   "a successful check-config dispatch does not erase a failed scheduled write")
+ok(T.judge_runs(T.production_runs(hist, "incident_ledger.yml"), day, NOW)["state"] == "ok",
+   "a workflow whose dispatch IS production work may recover by dispatch")
+# Gemini: malformed inputs are reported, never a crash.
+ok(T.cron_period(15)[0] is None and T.cron_period(None)[0] is None, "non-string cron -> unreadable, not a crash")
+import tempfile  # noqa: E402
+d = tempfile.mkdtemp()
+open(os.path.join(d, "list.yml"), "w").write("- just\n- a list\n")
+open(os.path.join(d, "ok.yml"), "w").write("name: x\non:\n  schedule:\n    - cron: '0 1 * * *'\n")
+rows = {fn: (cron, why) for fn, _n, cron, why in T.scheduled_workflows(d)}
+ok(rows["list.yml"][0] is None and "not a mapping" in rows["list.yml"][1], f"top-level list reported: {rows}")
+ok(rows["ok.yml"] == ("0 1 * * *", ""), f"a normal workflow still parses: {rows}")
+
+ok(T.judge_runs([run(0.05, None, status="in_progress")], timedelta(hours=6), NOW)["state"] == "running",
+   "the guard's own first run (in progress, nothing completed) is not a failure")
+ok("running" in T.STATES_OK, "running opens no incident")
 print(f"ALL {_checks} trust-surface guard tests passed")
