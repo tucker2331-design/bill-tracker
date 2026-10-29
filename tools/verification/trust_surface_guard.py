@@ -270,6 +270,21 @@ def payload_in_header(cells):
     return False
 
 
+def _sheet_token():
+    """A read-only bearer token from GCP_CREDENTIALS, or None without credentials. The app went private (#242): once
+    the sheet is Restricted, an anonymous gviz read gets Google's sign-in page, and this check would raise a false
+    `unknown` every run. Same credentials the ledger write already uses."""
+    raw = os.environ.get("GCP_CREDENTIALS")
+    if not raw:
+        return None
+    from google.auth.transport.requests import Request
+    from google.oauth2.service_account import Credentials
+    creds = Credentials.from_service_account_info(
+        json.loads(raw), scopes=["https://www.googleapis.com/auth/spreadsheets.readonly"])
+    creds.refresh(Request())
+    return creds.token
+
+
 def check_bill_payload(now):
     import csv
     import io
@@ -277,8 +292,17 @@ def check_bill_payload(now):
            f"&range=A1:AF1&headers=0")
     base = {"check": "bill_backend_checks", "label": "Bill backend check results reach the live sheet",
             "every": "each bill cycle", "last_success": None, "fails": 0, "url": ""}
+    req = urllib.request.Request(url)
     try:
-        with urllib.request.urlopen(url, timeout=60) as r:
+        tok = _sheet_token()
+    except Exception as e:   # bad JSON, missing google-auth, refresh refused (revoked key): categorized, read anyway
+        print(f"⚠️ [API_FAILURE] [trust_surface] service-account token unavailable ({type(e).__name__}: {e}); "
+              f"reading the sheet without one")
+        tok = None
+    if tok:
+        req.add_header("Authorization", f"Bearer {tok}")
+    try:
+        with urllib.request.urlopen(req, timeout=60) as r:
             txt = r.read().decode("utf-8", "replace")
         header = next(csv.reader(io.StringIO(txt)), [])
     except (urllib.error.URLError, TimeoutError) as e:
