@@ -22,6 +22,7 @@
  */
 
 import { verifyGoogleIdToken } from "./auth.js";
+import { membership, teamGate } from "./team.js";
 
 const JSON_HEADERS = { "content-type": "application/json; charset=utf-8" };
 
@@ -62,6 +63,7 @@ async function handleApi(request, env, url) {
       // Reports CONFIGURATION, never the caller's own auth state -- a health endpoint must not become an
       // oracle for probing whether a given token is valid.
       auth_configured: Boolean(env.GOOGLE_CLIENT_ID),
+      team_configured: membership("", env) !== "not_configured",
     });
   }
 
@@ -74,6 +76,12 @@ async function handleApi(request, env, url) {
   // failure -- a leaked whip count is a leaked strategy.
   const email = await authenticatedEmail(request, env);
   if (!email) return json({ error: "not authenticated" }, 401);
+
+  // TEAM GATE for the org-private routes (positions, interactions). Identity is not membership: without this,
+  // any Google account could read the org's stances. /me stays open -- it is scoped to the caller's own row.
+  // 403 carries a machine-readable reason so the UI can say "not set up yet" vs "not on this team".
+  const denied = teamGate(path, email, env);
+  if (denied) return json(denied.body, denied.status);
 
   // `state` is required on EVERY route. It is never defaulted to 'VA': a caller that forgets it must get a
   // 400, not silently read or write Virginia's data (migrations/0001_init.sql).
@@ -114,6 +122,16 @@ async function handleApi(request, env, url) {
        DO UPDATE SET stance = ?4, updated_at = ?5, updated_by = ?6`,
     ).bind(body.state, body.session_code, body.bill_number, body.stance,
            new Date().toISOString(), email).run();
+    return json({ ok: true });
+  }
+
+  if (request.method === "DELETE" && path === "/positions") {
+    const session = url.searchParams.get("session");
+    const bill = url.searchParams.get("bill_number");
+    if (!state || !session || !bill) return json({ error: "state, session and bill_number are required" }, 400);
+    await env.DB.prepare(
+      "DELETE FROM positions WHERE state = ? AND session_code = ? AND bill_number = ?",
+    ).bind(state, session, bill).run();
     return json({ ok: true });
   }
 

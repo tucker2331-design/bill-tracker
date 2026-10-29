@@ -634,6 +634,19 @@ a.hl-vverify:hover { text-decoration: underline; }
 /* The title is the row's flexible column; clip rather than wrap so every row stays one scan-height. */
 .wr-title { color: var(--ink-soft); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .wr-where, .wr-when { color: var(--ink-faint); font-size: 12.5px; }
+/* Team position: small-caps text under the bill number, grey — an org entry, never a coloured chip. */
+.wr-pos { grid-column: 1; grid-row: 2; font-size: 10.5px; letter-spacing: .07em; text-transform: uppercase; font-weight: 600; color: var(--ink-soft); }
+.wr-pos:empty { display: none; }
+/* "Our position" on the bill card: four text options, the current one in full ink. */
+.pos { display: flex; flex-direction: column; gap: 4px; align-items: flex-start; }
+.pos-row { display: flex; flex-wrap: wrap; gap: 4px 14px; }
+.pos-opt { background: none; border: 0; padding: 2px 0; font: inherit; font-size: 11.5px; letter-spacing: .07em; text-transform: uppercase; font-weight: 600; color: var(--ink-faint); cursor: pointer; border-bottom: 1px solid transparent; }
+.pos-opt:hover:not(:disabled) { color: var(--ink-soft); }
+.pos-opt.on { color: var(--ink); border-bottom-color: var(--ink); }
+.pos-opt:disabled { cursor: progress; }
+.pos-opt:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.pos-meta { font-size: 12px; }
+.pos-err { font-size: 12px; color: var(--ink); }
 
 /* Below the comfortable 5-column width the grid stops being a table and becomes two stacked lines.
    The trust partition is not involved here, so a reflow is safe — see the mobile note in the queue (R2)

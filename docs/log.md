@@ -8,6 +8,11 @@ status: active
 
 Append-only, reverse-chronological (newest at top). Each entry opens with `## [YYYY-MM-DD] <kind> | <title>` so `grep "^## \[" log.md | head -20` gives a parseable timeline.
 
+## [2026-10-29] pr | #241 — team positions: Codex fold-in; case-law entry renumbered #142 -> #143
+- A failed positions load now retries when the bill or War Room mounts again (it stuck until a reload). The War Room no
+  longer says positions are missing. "Identity is not membership" is now [[failures/assumptions_audit]] **#143**
+  (#142 went to #238's cell collision).
+
 ## [2026-10-29] pr | #240 — summaries: bot fold-in (Codex x3, Gemini x3)
 - Summaries.csv passes its own fetch markers (`SUM_BILNO`/`SUMMARY_TYPE`) — same root cause as #239's Sponsors P1.
 - `write_bill_summaries` never clears first: overwrite in place, blank the stale tail, THEN stamp the hash; a failed write
@@ -26,6 +31,14 @@ Append-only, reverse-chronological (newest at top). Each entry opens with `## [Y
 
 ## [2026-10-26] pr | #246 opened — incident ledger never existed (status() refused to seed); fix + golden
 - Health tab: "incident ledger could not be read" — gviz served the calendar for the missing Incident_Log tab. Monthly ledger runs Aug–Oct all failed at the first step. [[failures/assumptions_audit]] #141. Companion: #238 (completeness payload overwritten in U1) still open.
+
+## [2026-09-28] build | team positions wired + team gate on the API
+
+Marketability "team tools" item. Bill card gets an "Our position" row (Involved / Supporting / Watching / Opposing,
+D1's settled enum, grey text; click again clears via a new `DELETE /api/positions`); War Room list shows the stance.
+While wiring it: **any Google account passed the API's auth** — identity was checked, membership never was. Added a
+fail-closed `TEAM_EMAILS` secret gate (`worker/team.js`, 19 tests; Worker tests now run in CI). Owner must set the
+secret before positions carry data. [[failures/assumptions_audit]] #142 · [[architecture/verification_durability]].
 
 ## [2026-09-28] build | bill summaries in the app (Summaries.csv → Bill_Summaries tab → bill card)
 
