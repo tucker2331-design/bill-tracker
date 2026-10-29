@@ -70,7 +70,9 @@ export function usePositions(session: string) {
   const key = identity && session ? `${identity.email}|${session}` : "";
   useEffect(() => {
     if (!key) { if (snap.key !== "" || snap.status !== "signed_out") set({ status: "signed_out", byBill: EMPTY, key: "" }); return; }
-    if (snap.key !== key) void load(key, session);
+    // reload on a new person/session, and RETRY after a failed load -- otherwise a transient error sticks
+    // until a page reload or sign-out (Codex #241)
+    if (snap.key !== key || snap.status === "error") void load(key, session);
   }, [key, session]);
   return useSyncExternalStore(subscribe, () => snap);
 }
