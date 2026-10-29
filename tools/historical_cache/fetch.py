@@ -277,15 +277,57 @@ def verify(check_remote: bool = False) -> int:
     return 1 if bad else 0
 
 
+# Open States bulk session zips (CC0; docs/knowledge/openstates_bulk_va.md). Gitignored (~670 MB), so CI fetches them
+# from the PINNED manifest written when they were first downloaded. The manifest is the pin: a file whose sha256 or
+# size differs is REFUSED, never re-pinned -- upstream regenerating a zip would otherwise swap the training data under
+# a frozen model without anyone noticing (the pre-registration hashes pin the CODE and rows, not this download).
+OPENSTATES_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "openstates_va")
+OPENSTATES_MANIFEST = os.path.join(OPENSTATES_DIR, "manifest.json")
+
+
+def fetch_openstates() -> int:
+    with open(OPENSTATES_MANIFEST) as fh:
+        man = json.load(fh)
+    bad = got = kept = 0
+    for key, rec in sorted(man.items()):
+        dest = os.path.join(OPENSTATES_DIR, f"VA_{key}.zip")
+        if os.path.exists(dest):
+            with open(dest, "rb") as fh:
+                if _sha256(fh.read()) == rec["sha256"]:
+                    kept += 1
+                    continue                     # already pinned bytes on disk (e.g. restored from the CI cache)
+            os.remove(dest)                      # wrong bytes on disk: never keep them
+        try:
+            req = urllib.request.Request(rec["url"], headers=UA)
+            with urllib.request.urlopen(req, timeout=120) as r:
+                raw = r.read()
+        except (urllib.error.URLError, TimeoutError) as e:
+            print(f"  FAILED  {key}: {e}")
+            bad += 1
+            continue                             # counted in `bad`, reported below, and the run exits 1
+        if len(raw) != rec["bytes"] or _sha256(raw) != rec["sha256"]:
+            print(f"  REFUSED {key}: {len(raw):,} bytes / sha256 {_sha256(raw)[:12]} differ from the pinned manifest")
+            bad += 1
+            continue                             # counted in `bad`; a changed upstream file is never used
+        with open(dest, "wb") as fh:
+            fh.write(raw)
+        got += 1
+        time.sleep(POLITE_DELAY_S)
+    print(f"Open States: {got} fetched, {kept} already on disk, {bad} failed or refused, of {len(man)} pinned")
+    return 1 if bad else 0
+
+
 def main() -> int:
     mode = sys.argv[1] if len(sys.argv) > 1 else "verify"
     if mode == "fetch":
         return fetch()
+    if mode == "fetch-openstates":
+        return fetch_openstates()
     if mode == "fetch-modern":
         return fetch_modern()
     if mode == "verify":
         return verify("--check-remote" in sys.argv)
-    print(f"unknown mode {mode!r} (fetch | verify [--check-remote])", file=sys.stderr)
+    print(f"unknown mode {mode!r} (fetch | fetch-modern | fetch-openstates | verify [--check-remote])", file=sys.stderr)
     return 1
 
 
