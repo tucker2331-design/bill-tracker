@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import json
 import os
+import threading
 
 import requests
 
@@ -38,15 +39,23 @@ def _credential_info():
     return json.loads(sec) if isinstance(sec, str) else dict(sec)
 
 
+_lock = threading.Lock()
+_CREDS = None   # cached per process: Streamlit reruns call this on every page interaction (Gemini #242)
+
+
 def _token():
+    global _CREDS
     info = _credential_info()
     if not info:
         return None
     from google.oauth2.service_account import Credentials
     from google.auth.transport.requests import Request
-    creds = Credentials.from_service_account_info(info, scopes=SCOPES)
-    creds.refresh(Request())
-    return creds.token
+    with _lock:
+        if _CREDS is None:
+            _CREDS = Credentials.from_service_account_info(info, scopes=SCOPES)
+        if not _CREDS.valid:            # refresh only when missing or expired, not on every rerun
+            _CREDS.refresh(Request())
+        return _CREDS.token
 
 
 def fetch_sheet_csv(sheet_id: str, tab: str, http: requests.Session | None = None, timeout: int = 20):

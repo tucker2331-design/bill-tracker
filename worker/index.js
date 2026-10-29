@@ -65,9 +65,10 @@ async function handleApi(request, env, url) {
       // oracle for probing whether a given token is valid.
       auth_configured: Boolean(env.GOOGLE_CLIENT_ID),
       team_configured: membership("", env) !== "not_configured",
-      // How /api/sheet reads the Google Sheet: "service_account" (the sheet can be private) or "none" (works
-      // only while the sheet is still link-shared). Configuration only, never the caller's state.
-      sheet_auth: env.GCP_SA_JSON ? "service_account" : "none",
+      // Whether /api/sheet is CONFIGURED to read with a service account. Configured is not working (a bad key,
+      // a revoked account, or one never shared on the sheet all still say true) -- the proof is a real read:
+      // /api/sheet answers with `x-sheet-auth: service_account` (Codex #242). Configuration only.
+      sheet_auth_configured: env.GCP_SA_JSON ? "service_account" : "none",
     });
   }
 
