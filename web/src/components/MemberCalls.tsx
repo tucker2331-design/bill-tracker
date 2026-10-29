@@ -51,7 +51,7 @@ function Member({ m }: { m: MemberCall }) {
         <div><span>chance of a yes</span><b>{Math.round(m.p * 100)} in 100</b></div>
         {m.actual && <div><span>recorded vote</span><b>{m.actual}</b></div>}
         {EVIDENCE.map(([k, label]) => {
-          const [yes, of] = m.ev[k] ?? [0, 0];
+          const [yes, of] = Array.isArray(m.ev[k]) ? m.ev[k] : [0, 0];   // malformed evidence reads as none, never a crash (Gemini #250)
           return <div key={k}><span>{label}</span><b>{of ? `yes on ${yes} of ${of}` : "none before"}</b></div>;
         })}
       </div>

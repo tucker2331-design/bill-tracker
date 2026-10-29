@@ -183,9 +183,9 @@ export function Calendar({ bills, sessionCode, onOpen, calRefresh = 0 }: {
   // Adjusted WHILE rendering when the focus changes (React's documented pattern), not in an effect: an effect
   // would render once with the stale month and then cascade a second render (react-hooks/set-state-in-effect).
   const [miniFor, setMiniFor] = useState<string | null>(null);
-  if (focusedDay && focusedDay !== miniFor) {
+  if (focusedDay !== miniFor) {               // track every change, a cleared focus included (Gemini #250)
     setMiniFor(focusedDay);
-    setMiniMonth(ymOf(focusedDay));
+    if (focusedDay) setMiniMonth(ymOf(focusedDay));
   }
 
   if (error) return (

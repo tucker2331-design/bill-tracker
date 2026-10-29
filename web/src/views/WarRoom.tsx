@@ -31,8 +31,8 @@ export function WarRoom({ bills, starred, sessionCode }: { bills: Bill[]; starre
   useEffect(() => { let alive = true; loadCalls().then((r) => { if (alive) setCalls(r); }); return () => { alive = false; }; }, []);
 
   const today = dayKey(new Date());
-  const ours = bills.filter((b) => starred.has(b.bill)
-    && (filter === "all" || positions.byBill.get(b.bill)?.stance === filter));
+  const ours = useMemo(() => bills.filter((b) => starred.has(b.bill)
+    && (filter === "all" || positions.byBill.get(b.bill)?.stance === filter)), [bills, starred, filter, positions.byBill]);
   const byBill = calls?.status === "ok" ? calls.byBill : null;
 
   const groups = useMemo(() => {

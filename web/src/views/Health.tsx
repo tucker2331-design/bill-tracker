@@ -127,7 +127,8 @@ export function Health({ completeness, dataAsOf }: { completeness: Completeness 
   const universe = c?.universe_count ?? 0, written = c?.records_written ?? 0, total = m.total_processed ?? 0;
   const billLimit = rhythmLimitHours(hist?.beats.bill ?? []), calLimit = rhythmLimitHours(hist?.beats.calendar ?? []);
   const num = (v: unknown) => (typeof v === "number" && Number.isFinite(v) ? v : null);
-  const insts: Instrument[] = useMemo(() => [
+  // Rebuilt every render (ten objects): the data ages read the clock, so a memo kept them stale (Gemini #250).
+  const insts: Instrument[] = [
     { id: "s9", cat: "Accuracy", name: "Meeting actions without a time", value: num(m.meeting_unsourced), limit: 0, max: 50, impeaches: "yes" },
     { id: "wrong", cat: "Accuracy", name: "Outcomes published wrong", value: num(c?.outcome_impeached), limit: 0, max: 5, impeaches: "yes" },
     { id: "noflag", cat: "Accuracy", name: "Settled bills with no flag", value: num(c?.outcome_unverified_terminal), limit: 0, max: 25, impeaches: "unknown" },
@@ -139,8 +140,7 @@ export function Health({ completeness, dataAsOf }: { completeness: Completeness 
     { id: "billage", cat: "Freshness", name: "Bill data age", value: dataAsOf ? +hoursSince(dataAsOf).toFixed(1) : null, limit: billLimit, max: billLimit * 4, unit: "h", impeaches: "no" },
     { id: "calage", cat: "Freshness", name: "Calendar data age", value: h?.calendarFreshness ? +hoursSince(h.calendarFreshness).toFixed(1) : null, limit: calLimit, max: calLimit * 4, unit: "h", impeaches: "no" },
     { id: "inv", cat: "Stability", name: "Rows failing a format rule at write", value: num(m.invariant_violations), limit: 0, max: 60, impeaches: "no", note: "breaker trips at 50" },
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  ], [c, h, dataAsOf, billLimit, calLimit]);
+  ];
 
   // ── alert state (unchanged model: self-clearing conditions, judged on each worker's own clock) ──
   const alertModel: AlertModel | null = useMemo(() => {
