@@ -37,7 +37,7 @@ status: active
 - **👥 Team positions are built but locked until you add your team (one command).** Before this, any Google
   account could have read your positions; now only listed emails can. Run `npx wrangler secret put TEAM_EMAILS`
   and paste comma-separated emails. Until then the app says "Team positions aren't set up yet".
-  [[architecture/verification_durability]] · [[failures/assumptions_audit]] #142.
+  [[architecture/verification_durability]] · [[failures/assumptions_audit]] #143.
 - **📧 Alerts to users need one yes: $5/month Workers Paid for Cloudflare Email Service** (3,000 emails/mo
   included, then $0.35 per 1,000; no new vendor). Compared against Resend and SES in [[state/va_build_queue]] E8.
 
