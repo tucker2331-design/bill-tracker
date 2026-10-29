@@ -21,6 +21,8 @@ const TAB = "Bill_Tracker";
 // Column letters in Bill_Tracker (bill_tracker.BILL_TRACKER_HEADER): A Bill, C Status (LIS), K Last Action,
 // L Latest Vote (JSON), M Upcoming (JSON). A header check below refuses to run if these ever move.
 const SELECT = "select A,C,K,L,M";
+const D1_BATCH_MAX = 100;
+const SELECT_COLS = [0, 2, 10, 11, 12];   // the same columns as SELECT, 0-based, for the layout check on row 1
 const EXPECTED_HEADER = ["Bill", "Status (LIS)", "Last Action", "Latest Vote (JSON)", "Upcoming (JSON)"];
 
 /** Minimal RFC 4180 parser (gviz quotes every field; JSON cells contain commas and doubled quotes). */
@@ -103,8 +105,16 @@ export async function runAlerts(env, now = new Date()) {
   if (!head.ok || !/text\/csv/i.test(head.headers.get("content-type") || "")) {
     throw new Error(`alerts: could not read the Bill_Tracker header row (HTTP ${head.status})`);
   }
-  const session = sessionFromHeaderRow(parseCsv(await head.text())[0]);
+  const headerCells = parseCsv(await head.text())[0] || [];
+  const session = sessionFromHeaderRow(headerCells);
   if (!session) throw new Error("alerts: Bill_Tracker carries no session_code — refusing to mix sessions");
+  // Validate the column layout HERE, on the real row 1. A column-select gviz answer carries no header row (it
+  // starts at the first matching DATA row -- web/src/data/health.ts documents the same wire), so checking the
+  // select's row 0 made every configured run throw before seeding a single snapshot (Codex P1 #244).
+  const layout = SELECT_COLS.map((i) => (headerCells[i] || "").trim());
+  if (EXPECTED_HEADER.some((h, j) => layout[j] !== h)) {
+    throw new Error(`alerts: Bill_Tracker columns moved (got ${JSON.stringify(layout)}) — refusing to guess`);
+  }
 
   const { results: pos } = await env.DB.prepare(
     "SELECT bill_number, stance FROM positions WHERE state = ? AND session_code = ?").bind(state, session).all();
@@ -120,15 +130,17 @@ export async function runAlerts(env, now = new Date()) {
     const res = await fetch(gvizUrl(env.SPREADSHEET_ID, { tab: TAB, tq }), auth);
     const type = res.headers.get("content-type") || "";
     if (!res.ok || !/text\/csv/i.test(type)) throw new Error(`alerts: sheet read failed (HTTP ${res.status}, ${type})`);
-    const grid = parseCsv(await res.text());
-    const header = (grid[0] || []).map((h) => h.trim());
-    if (EXPECTED_HEADER.some((h, j) => header[j] !== h)) {
-      throw new Error(`alerts: Bill_Tracker columns moved (got ${JSON.stringify(header)}) — refusing to guess`);
+    // Every row is data. A label row, should gviz ever emit one, is our own header ("Bill") and is not a bill id.
+    for (const r of parseCsv(await res.text())) {
+      const id = (r[0] || "").trim();
+      if (id && id !== EXPECTED_HEADER[0]) rows.set(id, snapshotOf(r));
     }
-    for (const r of grid.slice(1)) if (r[0]) rows.set(r[0].trim(), snapshotOf(r));
   }
 
-  const { results: seen } = await env.DB.prepare("SELECT bill_number, snapshot FROM alert_state WHERE state = ?").bind(state).all();
+  // Snapshots are per SESSION: bill numbers restart each session, so HB1 of 2027 must never be compared with
+  // HB1 of 2026 (Codex P1 #244) -- a new session's bills get the silent first sighting.
+  const { results: seen } = await env.DB.prepare(
+    "SELECT bill_number, snapshot FROM alert_state WHERE state = ? AND session_code = ?").bind(state, session).all();
   const prevOf = Object.fromEntries((seen || []).map((s) => [s.bill_number, parseJson(s.snapshot, null)]));
 
   const changes = [];
@@ -150,10 +162,11 @@ export async function runAlerts(env, now = new Date()) {
 
   const stamp = now.toISOString();
   const stmts = [...rows].map(([bill, cur]) => env.DB.prepare(
-    `INSERT INTO alert_state (state, bill_number, snapshot, updated_at) VALUES (?1, ?2, ?3, ?4)
-     ON CONFLICT(state, bill_number) DO UPDATE SET snapshot = ?3, updated_at = ?4`,
-  ).bind(state, bill, JSON.stringify(cur), stamp));
-  if (stmts.length) await env.DB.batch(stmts);
+    `INSERT INTO alert_state (state, session_code, bill_number, snapshot, updated_at) VALUES (?1, ?2, ?3, ?4, ?5)
+     ON CONFLICT(state, session_code, bill_number) DO UPDATE SET snapshot = ?4, updated_at = ?5`,
+  ).bind(state, session, bill, JSON.stringify(cur), stamp));
+  // D1 caps a batch at 100 statements; a team tracking more bills than that must not fail the cron (Gemini #244).
+  for (let i = 0; i < stmts.length; i += D1_BATCH_MAX) await env.DB.batch(stmts.slice(i, i + D1_BATCH_MAX));
 
   const summary = { session, watched: bills.length, found: rows.size, alerted: changes.length, missing: bills.length - rows.size };
   console.log("alerts:", JSON.stringify(summary));

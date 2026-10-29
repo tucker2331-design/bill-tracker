@@ -32,13 +32,14 @@ function fakeDb(positions) {
       const st = { sql, args: [], bind(...a) { st.args = a; return st; },
         async all() {
           if (sql.includes("FROM positions")) return { results: positions.filter((p) => p.state === st.args[0] && p.session_code === st.args[1]) };
-          if (sql.includes("FROM alert_state")) return { results: [...alertState].map(([bill_number, snapshot]) => ({ bill_number, snapshot })) };
+          if (sql.includes("FROM alert_state")) return { results: [...alertState].filter(([k]) => k.startsWith(`${st.args[1]}|`)).map(([k, snapshot]) => ({ bill_number: k.split("|")[1], snapshot })) };
           return { results: [] };
         },
-        async run() { alertState.set(st.args[1], st.args[2]); } };
+        async run() { alertState.set(`${st.args[1]}|${st.args[2]}`, st.args[3]); } };
       return st;
     },
-    async batch(stmts) { for (const s of stmts) await s.run(); },
+    batches: [],
+    async batch(stmts) { if (stmts.length > 100) throw new Error("D1: too many statements in one batch"); this.batches.push(stmts.length); for (const s of stmts) await s.run(); },
   };
 }
 
@@ -47,7 +48,8 @@ globalThis.fetch = async (url, init = {}) => {
   const u = String(url);
   if (u.startsWith("https://hooks.slack.test")) { slackPosts.push(JSON.parse(init.body).text); return new Response("ok", { status: slackOk ? 200 : 500 }); }
   const p = new URL(u).searchParams;
-  const body = p.get("range") ? csv([headerRow]) : csv([["Bill", "Status (LIS)", "Last Action", "Latest Vote (JSON)", "Upcoming (JSON)"], ...sheetRows]);
+  // Wire-accurate: a column-select answer has NO header row, it starts at the first matching data row (Codex #244).
+  const body = p.get("range") ? csv([headerRow]) : csv(sheetRows);
   return new Response(body, { status: 200, headers: { "content-type": "text/csv" } });
 };
 const positions = [
@@ -55,11 +57,15 @@ const positions = [
   { state: "VA", session_code: "20251", bill_number: "HB1", stance: "opposing" },   // an OLD session: must be ignored
 ];
 const env = { DB: fakeDb(positions), SLACK_WEBHOOK_URL: "https://hooks.slack.test/x", SPREADSHEET_ID: "S", BILL_TRACKER_STATE: "VA" };
-headerRow = ["Bill", "Title", JSON.stringify({ universe_count: 1, session_code: "20261" })];
+// the REAL Bill_Tracker row 1 shape: A..T data headers, metadata cells further right
+const REAL_HEADER = ["Bill", "Title", "Status (LIS)", "Outcome", "Patron", "Patron ID", "Chamber", "Crossed Over",
+  "Last Committee", "Referrals", "Last Action", "Latest Vote (JSON)", "Upcoming (JSON)"];
+const payload = (sess) => JSON.stringify({ universe_count: 1, session_code: sess });
+headerRow = [...REAL_HEADER, "", payload("20261")];
 sheetRows = [row];
 
 let r = await runAlerts(env);
-is("first run seeds silently", [r.alerted, slackPosts.length, env.DB.alertState.has("HB1515")], [0, 0, true]);
+is("first run seeds silently (select has no header row)", [r.alerted, slackPosts.length, env.DB.alertState.has("20261|HB1515")], [0, 0, true]);
 is("old-session position ignored", r.watched, 1);
 r = await runAlerts(env);
 is("nothing changed -> nothing sent", [r.alerted, slackPosts.length], [0, 0]);
@@ -71,10 +77,29 @@ sheetRows = [["HB1515", "Passed House", "1/25/2027", row[3], "[]"]];
 slackOk = false;
 let threw = false; try { await runAlerts(env); } catch { threw = true; }
 is("Slack refusal throws", threw, true);
-is("…and the snapshot is NOT advanced (retried next cycle)", JSON.parse(env.DB.alertState.get("HB1515")).status, "Reported from Rules");
+is("…and the snapshot is NOT advanced (retried next cycle)", JSON.parse(env.DB.alertState.get("20261|HB1515")).status, "Reported from Rules");
 slackOk = true;
 r = await runAlerts(env);
-is("retry succeeds next cycle", [r.alerted, JSON.parse(env.DB.alertState.get("HB1515")).status], [1, "Passed House"]);
+is("retry succeeds next cycle", [r.alerted, JSON.parse(env.DB.alertState.get("20261|HB1515")).status], [1, "Passed House"]);
+// a NEW session reusing a bill number: first sighting again, never compared with last session's HB1515
+positions.push({ state: "VA", session_code: "20271", bill_number: "HB1515", stance: "supporting" });
+headerRow = [...REAL_HEADER, "", payload("20271")];
+sheetRows = [["HB1515", "Prefiled", "12/1/2026", "", "[]"]];
+slackPosts = [];
+r = await runAlerts(env);
+is("new session, same number -> silent first sighting (Codex #244)", [r.alerted, slackPosts.length, env.DB.alertState.has("20271|HB1515")], [0, 0, true]);
+is("…and the old session's snapshot is untouched", JSON.parse(env.DB.alertState.get("20261|HB1515")).status, "Passed House");
+// a moved column is caught on row 1
+headerRow = [...REAL_HEADER.slice(0, 2), "Outcome", ...REAL_HEADER.slice(3), "", payload("20271")];
+threw = false; try { await runAlerts(env); } catch { threw = true; }
+is("a moved column -> refuses to guess", threw, true);
+// more than 100 watched bills: chunked batches
+headerRow = [...REAL_HEADER, "", payload("20271")];
+for (let i = 1; i <= 150; i++) positions.push({ state: "VA", session_code: "20271", bill_number: `SB${i}`, stance: "watching" });
+sheetRows = Array.from({ length: 150 }, (_, i) => [`SB${i + 1}`, "Prefiled", "12/1/2026", "", "[]"]).concat([["HB1515", "Prefiled", "12/1/2026", "", "[]"]]);
+env.DB.batches.length = 0;
+r = await runAlerts(env);
+is("151 bills -> batches of at most 100 (Gemini #244)", env.DB.batches, [100, 51]);
 headerRow = ["Bill", "Title"];
 threw = false; try { await runAlerts(env); } catch { threw = true; }
 is("no session in the sheet -> refuses to run", threw, true);
