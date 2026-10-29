@@ -743,8 +743,6 @@ input::placeholder, textarea::placeholder { color: var(--ink-faint); }
 .wl-card .l1 { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; }
 .wl-card .num { font-weight: 700; font-size: 17px; }
 .wl-card .pat { color: var(--ink-soft); font-size: 14px; }
-.wl-card .st { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .06em; color: var(--ink-soft); text-align: right; }
-.wl-card .st.amber { color: var(--amber); } .wl-card .st.red { color: var(--red); } .wl-card .st.ink { color: var(--o-signed); }
 .wl-card .ttl { margin-top: 4px; font-size: 14px; line-height: 1.35; overflow-wrap: anywhere; }
 .wl-card .kv { display: grid; grid-template-columns: 72px minmax(0, 1fr); gap: 4px 10px; margin: 10px 0 0; font-size: 13px; }
 .wl-card .kv dt { color: var(--ink-faint); } .wl-card .kv dd { margin: 0; color: var(--ink-soft); overflow-wrap: anywhere; }

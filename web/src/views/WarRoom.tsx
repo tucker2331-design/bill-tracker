@@ -14,6 +14,7 @@ import { PositionTag } from "../components/PositionControl";
 import { usePositions, STANCES, STANCE_LABEL, type Stance } from "../state/positions";
 import { loadContacts, type ContactsResult } from "../state/contacts";
 import { dayKey } from "../data/dates";
+import { OutcomeChip } from "../components/common";
 import {
   loadCalls, callsFor, groupOf, sortGroup, dateKeyOf, WR_GROUPS, type BillCalls, type CallsLoad, type WrGroup,
 } from "../data/warroom";
@@ -22,8 +23,6 @@ const shortDate = (key: string) => {
   const [y, m, d] = key.split("-").map(Number);
   return y ? new Date(y, m - 1, d).toLocaleDateString(undefined, { day: "numeric", month: "short", year: "numeric" }) : key;
 };
-const stClass = (o: Bill["outcome"]) =>
-  o === "carried_over" ? " amber" : o === "dead" || o === "vetoed" ? " red" : o === "signed" ? " ink" : "";
 
 export function WarRoom({ bills, starred, sessionCode }: { bills: Bill[]; starred: Set<string>; sessionCode: string }) {
   const [calls, setCalls] = useState<CallsLoad | undefined>(undefined);
@@ -51,6 +50,8 @@ export function WarRoom({ bills, starred, sessionCode }: { bills: Bill[]; starre
   const week = Array.from({ length: 7 }, (_, i) => { const d = new Date(); d.setDate(d.getDate() + i); return dayKey(d); });
   const heardOn = (k: string) => ours.filter((b) => dateKeyOf(b.upcoming[0]?.date) === k).map((b) => b.bill);
   const s = calls?.status === "ok" ? calls.summary : null;
+  // the bar key is said once, above the first group whose cards carry a member bar
+  const firstBarGroup = WR_GROUPS.find(({ id }) => id !== "decided" ? groups[id].length > 0 : groups.decided.some((x) => !["signed", "vetoed"].includes(billOf.get(x.bill)!.outcome)))?.id;
 
   return (
     <div className="wl">
@@ -64,7 +65,7 @@ export function WarRoom({ bills, starred, sessionCode }: { bills: Bill[]; starre
       </div>
 
       <div className="wl-grp"><span>This week · your bills</span>
-        <span className="n">{week.reduce((t, k) => t + heardOn(k).length, 0)} hearings</span></div>
+        <span className="n">{(() => { const h = week.reduce((t, k) => t + heardOn(k).length, 0); return `${h} hearing${h === 1 ? "" : "s"}`; })()}</span></div>
       <div className="wl-week">
         {week.map((k) => {
           const [y, m, d] = k.split("-").map(Number);
@@ -76,7 +77,7 @@ export function WarRoom({ bills, starred, sessionCode }: { bills: Bill[]; starre
       {WR_GROUPS.map(({ id, label }) => groups[id].length > 0 && (
         <section key={id}>
           <div className="wl-grp"><span>{label}</span><span className="n">{groups[id].length}</span></div>
-          {(id === "next7" || id === "later") && <BarKey />}
+          {id === firstBarGroup && <BarKey />}
           <div className="wl-cards">
             {groups[id].map(({ bill, calls: c }) => <Card key={bill} b={billOf.get(bill)!} calls={c} sessionCode={sessionCode} />)}
           </div>
@@ -115,7 +116,7 @@ function Card({ b, calls, sessionCode }: { b: Bill; calls: BillCalls | null; ses
     <a className="wl-card" {...linkProps(detailPath("bills", b.bill))}>
       <div className="l1">
         <span><span className="num">{b.bill}</span> <span className="pat">· {b.patron}</span></span>
-        <span className={`st${stClass(b.outcome)}`}>{b.statusLis || b.outcome.replace("_", " ")}</span>
+        <OutcomeChip outcome={b.outcome} bill={b} />
       </div>
       <div className="ttl">{b.title}</div>
       <dl className="kv">

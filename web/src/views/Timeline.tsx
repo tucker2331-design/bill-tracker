@@ -102,7 +102,7 @@ export function Timeline({ bills, onOpen }: { bills: Bill[]; onOpen: (b: Bill) =
   return (
     <div>
       <div className="subway" aria-label="Where every bill stands">
-        <svg viewBox="0 0 1000 410" role="img" aria-label="Pipeline: two lines, one per starting chamber, that swap tracks at crossover and meet at the Governor">
+        <svg viewBox="0 0 1060 410" role="img" aria-label="Pipeline: two lines, one per starting chamber, that swap tracks at crossover and meet at the Governor">
           <SubwayMap alive={alive} stranded={stranded} outcome={outcome} hit={hit} />
         </svg>
       </div>
@@ -197,12 +197,14 @@ function SubwayMap({ alive, stranded, outcome, hit }: {
         );
       })}
       <circle cx={GX} cy={GY} r="16" fill="var(--surface)" stroke="var(--o-signed)" strokeWidth="4" />
-      <text x={GX} y={GY + 40} className="sw-th" textAnchor="middle">Governor</text>
+      <text x={GX} y="40" className="sw-th" textAnchor="middle">Governor</text>
       {([["signed", 150, "Signed"], ["awaiting", 210, "Awaiting"], ["vetoed", 270, "Vetoed"]] as const).map(([o, y, label]) => (
         <g key={o}>
           <path d={`M${GX + 16} ${GY} C${GX + 40} ${GY} ${GX + 40} ${y} ${GX + 66} ${y}`} fill="none" stroke={OUT_COLOR[o]} strokeWidth="3" />
-          <text x={GX + 74} y={y + 6} className={`sw-m${outcome[o] ? "" : " zero"}`} {...hit(`out|${o}`, outcome[o], label)}>{n(outcome[o])}</text>
-          <text x={GX + 74 + 12 + 9 * n(outcome[o]).length} y={y + 5} className="sw-l">{label}</text>
+          <text x={GX + 74} y={y + 6}>
+            <tspan className={`sw-m${outcome[o] ? "" : " zero"}`} {...hit(`out|${o}`, outcome[o], label)}>{n(outcome[o])}</tspan>
+            <tspan className="sw-l" dx="8">{label}</tspan>
+          </text>
         </g>
       ))}
       <text x="20" y="392" className="sw-l">Ended along the line:</text>

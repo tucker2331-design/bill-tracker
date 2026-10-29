@@ -75,7 +75,7 @@ export function BillCard({ bill, sessionCode, onClose }: { bill: Bill; sessionCo
             {bill.referrals > 1 && <span className="chip referral">{bill.referrals} referrals</span>}
           </div>
 
-          <Summary key={bill.bill} bill={bill.bill} lisUrl={lisBillUrl(sessionCode, bill.bill)} />
+          <Summary key={`summary-${bill.bill}`} bill={bill.bill} lisUrl={lisBillUrl(sessionCode, bill.bill)} />
 
           <div className="metarow"><span className="k">Status (LIS)</span><span>{bill.statusLis || "—"}</span></div>
           <div className="metarow"><span className="k">Where it is</span>
@@ -109,7 +109,7 @@ export function BillCard({ bill, sessionCode, onClose }: { bill: Bill; sessionCo
           <div className="metarow"><span className="k">Our position</span>
             <PositionControl bill={bill.bill} sessionCode={sessionCode} /></div>
 
-          <ContactLog key={bill.bill} bill={bill.bill} sessionCode={sessionCode} />
+          <ContactLog key={`contacts-${bill.bill}`} bill={bill.bill} sessionCode={sessionCode} />
 
           <h3 className="h" style={{ marginTop: 16 }}>History</h3>
           <table className="histtable">
