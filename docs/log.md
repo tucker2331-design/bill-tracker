@@ -8,6 +8,12 @@ status: active
 
 Append-only, reverse-chronological (newest at top). Each entry opens with `## [YYYY-MM-DD] <kind> | <title>` so `grep "^## \[" log.md | head -20` gives a parseable timeline.
 
+## [2026-10-29] pr | #243 — contact log: bot fold-in (Codex P2 x2, Gemini)
+- The server refuses a future `occurred_on` (UTC date + 1 day of slack), not only the form's `max`; 5 tests.
+- Deploy-order safety: Workers Builds deploys on merge but migration 0002 is applied by hand, so until it is, a missing
+  `created_by` column answers a categorized 503 naming `0002_contact_log.sql` instead of an anonymous 500.
+- The "Who" name fills in once identity loads and never overwrites what was typed.
+
 ## [2026-10-29] pr | #242 — private app: bot fold-in (Codex P1 + P2, Gemini high; two Gemini mediums declined)
 - An expired Google ID token (~1 h) now signs out on the first 401, so the gate asks for a fresh one instead of every
   background read failing behind a screen that still looks signed in.
@@ -39,6 +45,11 @@ Append-only, reverse-chronological (newest at top). Each entry opens with `## [Y
 
 ## [2026-10-26] pr | #246 opened — incident ledger never existed (status() refused to seed); fix + golden
 - Health tab: "incident ledger could not be read" — gviz served the calendar for the missing Incident_Log tab. Monthly ledger runs Aug–Oct all failed at the first step. [[failures/assumptions_audit]] #141. Companion: #238 (completeness payload overwritten in U1) still open.
+
+## [2026-09-28] build | contact log on the bill card (name · date · note)
+
+Owner priority over positions. Bill card "Contacts" list + a three-field form. Migration 0002 relaxes `tone` (never
+defaulted to neutral) and `member_number` (bill OR legislator required), adds `created_by`. [[state/va_build_queue]] E9.
 
 ## [2026-09-28] build | the whole app is private — data behind the team gate
 

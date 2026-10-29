@@ -283,6 +283,12 @@ computable — without it that relationship is unrepresentable.
   lifecycle order), so "latest" uses a rank over LIS's own 5-value `SUMMARY_TYPE` vocabulary; an unknown type is
   published unranked and never promoted. Tags stripped server-side; rendered as text. Content hash in `F1` skips
   identical rewrites. Measured 20261: 5,776 versions on 3,637 bills, 0 unknown types, 0 bad ids.
+- **E9. Contact log on the bill card — ✅ BUILT 2026-09-28** (branch `claude/contact-log`). Owner: *"what's more
+  important is ... a simple name date and note so whoever is using knows who contacted."* Bill card → "Contacts":
+  who · when · note, newest first; "Log a contact" opens a three-field form (name pre-filled). Migration 0002 makes
+  `tone` and `member_number` optional (a row must still name a bill or a legislator) and adds `created_by` (the
+  verified email of whoever typed it, separate from the name of who made the contact). 19 rule tests + the
+  migration applied to a scratch SQLite with every constraint exercised. **Owner step: apply migration 0002.**
 - **E8. Alerts to users (email) — SCOPED 2026-09-28, needs an owner decision (a paid dependency).**
   What it does: when a tracked bill gets a hearing date, a vote, or a new status, email the people tracking it.
   The trigger already exists — every cycle rewrites Bill_Tracker, so a diff against the last cycle is the event

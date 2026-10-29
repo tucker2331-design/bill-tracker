@@ -24,6 +24,7 @@
 import { verifyGoogleIdToken } from "./auth.js";
 import { membership, teamGate } from "./team.js";
 import { handleSheet } from "./sheets.js";
+import { validateContact } from "./contacts.js";
 
 const JSON_HEADERS = { "content-type": "application/json; charset=utf-8" };
 
@@ -32,7 +33,6 @@ const json = (body, status = 200) =>
 
 /** Closed vocabularies. A value outside these is a 400, never a silent coercion. */
 const STANCES = new Set(["involved", "supporting", "watching", "opposing"]);
-const TONES = new Set(["positive", "neutral", "negative"]);
 
 /**
  * The signed-in user's verified email, or null.
@@ -105,18 +105,41 @@ async function handleApi(request, env, url) {
     return json({ positions: results ?? [] });
   }
 
-  if (request.method === "GET" && path === "/interactions") {
+  // Deploy order safety (Codex #243): Workers Builds deploys on merge, but migration 0002 (created_by) is applied
+  // by hand. Until it is, the contact queries fail on the missing column -- answer a categorized 503 that names
+  // the fix instead of an anonymous 500. Every other error still propagates to the categorized outer handler.
+  const needsMigration = (e) => /no such column:?\s*created_by/i.test(String(e?.message || e));
+  const migrationAnswer = () => json({ error: "the contact log needs database migration 0002_contact_log.sql",
+                                      category: "DATA_ANOMALY", needs_migration: "0002_contact_log.sql" }, 503);
+
+  async function getInteractions() {
+    // Two views of the same log: one legislator (the call sheet) or one bill (the bill card). Newest first either
+    // way; a member_number is only unique WITHIN a state, and a bill number only within a state + session.
     const member = url.searchParams.get("member_number");
-    if (!state || !member) return json({ error: "state and member_number are required" }, 400);
-    // Newest first: the call sheet shows recent contact, and the list must stay readable once it scrolls.
-    // A member_number is only unique WITHIN a state, so the state must be in the WHERE clause.
-    const { results } = await env.DB.prepare(
-      `SELECT id, session_code, bill_number, occurred_on, actor, tone, note
-         FROM interactions WHERE state = ? AND member_number = ?
-         ORDER BY occurred_on DESC, id DESC LIMIT 200`,
-    ).bind(state, member).all();
-    return json({ interactions: results ?? [] });
+    const bill = url.searchParams.get("bill_number");
+    const session = url.searchParams.get("session");
+    const cols = "id, member_number, session_code, bill_number, occurred_on, actor, tone, note, created_by";
+    if (state && member) {
+      const { results } = await env.DB.prepare(
+        `SELECT ${cols} FROM interactions WHERE state = ? AND member_number = ?
+          ORDER BY occurred_on DESC, id DESC LIMIT 200`,
+      ).bind(state, member).all();
+      return json({ interactions: results ?? [] });
+    }
+    if (state && session && bill) {
+      const { results } = await env.DB.prepare(
+        `SELECT ${cols} FROM interactions WHERE state = ? AND session_code = ? AND bill_number = ?
+          ORDER BY occurred_on DESC, id DESC LIMIT 200`,
+      ).bind(state, session, bill).all();
+      return json({ interactions: results ?? [] });
+    }
+    return json({ error: "state and member_number, or state, session and bill_number, are required" }, 400);
   }
+
+  if (request.method === "GET" && path === "/interactions") {
+    try { return await getInteractions(); } catch (e) { if (needsMigration(e)) return migrationAnswer(); throw e; }
+  }
+
 
   if (request.method === "PUT" && path === "/positions") {
     const body = await request.json().catch(() => null);
@@ -145,19 +168,21 @@ async function handleApi(request, env, url) {
   }
 
   if (request.method === "POST" && path === "/interactions") {
-    const body = await request.json().catch(() => null);
-    if (!body?.state || !body?.member_number || !body?.session_code || !body?.occurred_on) {
-      return json({ error: "state, member_number, session_code and occurred_on are required" }, 400);
-    }
-    if (!TONES.has(body.tone)) return json({ error: `tone must be one of ${[...TONES].join(", ")}` }, 400);
-    await env.DB.prepare(
+    const v = validateContact(await request.json().catch(() => null), email, new Date().toISOString());
+    if (v.error) return json({ error: v.error }, 400);
+    const r = v.row;
+    let res;
+    try {
+      res = await env.DB.prepare(
       `INSERT INTO interactions
-         (state, member_number, session_code, bill_number, occurred_on, actor, tone, note, created_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-    ).bind(body.state, body.member_number, body.session_code, body.bill_number ?? null, body.occurred_on,
-           body.actor || email, body.tone, body.note ?? null, new Date().toISOString()).run();
-    return json({ ok: true }, 201);
+         (state, member_number, session_code, bill_number, occurred_on, actor, tone, note, created_at, created_by)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    ).bind(r.state, r.member, r.session, r.bill, r.occurred_on, r.actor, r.tone, r.note, r.created_at,
+           r.created_by).run();
+    } catch (e) { if (needsMigration(e)) return migrationAnswer(); throw e; }
+    return json({ ok: true, id: res?.meta?.last_row_id ?? null }, 201);
   }
+
 
   // ---- the signed-in user's own profile ----
   // Scoped to `email` from the VERIFIED token, never from the body: a client must not be able to read or
