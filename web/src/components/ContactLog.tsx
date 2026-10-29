@@ -20,6 +20,10 @@ export function ContactLog({ bill, sessionCode }: { bill: string; sessionCode: s
   const [note, setNote] = useState("");
   const [saving, setSaving] = useState(false);
   const [err, setErr] = useState("");
+  // identity can arrive after mount: prefill the name once it does, but never overwrite what was typed (Gemini #243)
+  const [touched, setTouched] = useState(false);
+  const signedName = identity?.name ?? "";
+  if (signedName && !touched && actor !== signedName) setActor(signedName);
 
   useEffect(() => {
     let alive = true;
@@ -67,7 +71,7 @@ export function ContactLog({ bill, sessionCode }: { bill: string; sessionCode: s
       {open && (
         <form className="cl-form" onSubmit={(e) => { e.preventDefault(); void save(); }}>
           <label htmlFor="cl-actor">Who
-            <input id="cl-actor" value={actor} onChange={(e) => setActor(e.target.value)} maxLength={80} required />
+            <input id="cl-actor" value={actor} onChange={(e) => { setTouched(true); setActor(e.target.value); }} maxLength={80} required />
           </label>
           <label htmlFor="cl-day">When
             <input id="cl-day" type="date" value={day} max={todayLocal()} onChange={(e) => setDay(e.target.value)} required />

@@ -105,7 +105,14 @@ async function handleApi(request, env, url) {
     return json({ positions: results ?? [] });
   }
 
-  if (request.method === "GET" && path === "/interactions") {
+  // Deploy order safety (Codex #243): Workers Builds deploys on merge, but migration 0002 (created_by) is applied
+  // by hand. Until it is, the contact queries fail on the missing column -- answer a categorized 503 that names
+  // the fix instead of an anonymous 500. Every other error still propagates to the categorized outer handler.
+  const needsMigration = (e) => /no such column:?\s*created_by/i.test(String(e?.message || e));
+  const migrationAnswer = () => json({ error: "the contact log needs database migration 0002_contact_log.sql",
+                                      category: "DATA_ANOMALY", needs_migration: "0002_contact_log.sql" }, 503);
+
+  async function getInteractions() {
     // Two views of the same log: one legislator (the call sheet) or one bill (the bill card). Newest first either
     // way; a member_number is only unique WITHIN a state, and a bill number only within a state + session.
     const member = url.searchParams.get("member_number");
@@ -127,6 +134,10 @@ async function handleApi(request, env, url) {
       return json({ interactions: results ?? [] });
     }
     return json({ error: "state and member_number, or state, session and bill_number, are required" }, 400);
+  }
+
+  if (request.method === "GET" && path === "/interactions") {
+    try { return await getInteractions(); } catch (e) { if (needsMigration(e)) return migrationAnswer(); throw e; }
   }
 
 
@@ -160,12 +171,15 @@ async function handleApi(request, env, url) {
     const v = validateContact(await request.json().catch(() => null), email, new Date().toISOString());
     if (v.error) return json({ error: v.error }, 400);
     const r = v.row;
-    const res = await env.DB.prepare(
+    let res;
+    try {
+      res = await env.DB.prepare(
       `INSERT INTO interactions
          (state, member_number, session_code, bill_number, occurred_on, actor, tone, note, created_at, created_by)
        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     ).bind(r.state, r.member, r.session, r.bill, r.occurred_on, r.actor, r.tone, r.note, r.created_at,
            r.created_by).run();
+    } catch (e) { if (needsMigration(e)) return migrationAnswer(); throw e; }
     return json({ ok: true, id: res?.meta?.last_row_id ?? null }, 201);
   }
 
