@@ -46,7 +46,7 @@ jobs:
       - name: Install worker deps
         run: |
           python -m pip install --upgrade pip
-          pip install pandas requests gspread google-auth pytz beautifulsoup4 pdfplumber
+          pip install pandas requests gspread google-auth pytz beautifulsoup4 pdfplumber pyyaml
       - name: Run golden + pure-logic tests
         env:
           PYTHONUNBUFFERED: "1"
@@ -69,6 +69,7 @@ jobs:
             test_change_ledger_differ.py \
             test_incident_log.py \
             test_incident_log_wiring.py \
+            test_trust_surface_guard.py \
             test_bill_outcome_provenance.py \
             test_bill_tracker_cells.py \
             test_bill_summaries.py \

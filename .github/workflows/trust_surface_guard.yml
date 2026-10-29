@@ -1,0 +1,41 @@
+name: 🔭 Trust-surface guard (watches the watchers)
+
+# The watcher of the watchers (docs/architecture/incident_counter.md, "one truth pipeline"). Every 6 hours:
+#   * every SCHEDULED workflow in this repo (found from its own cron, so new jobs are covered automatically):
+#     last success, failures in a row, overdue against its own observed rhythm, never-succeeded;
+#   * the bill backend's check results present in the live Bill_Tracker header.
+# Writes the verdicts to the `Guard_Status` tab (the Health tab reads it) AND opens / closes `unverified`
+# incidents in the days-clean ledger from the SAME verdicts, so the page and the ledger cannot disagree.
+# Why it exists: the incident-ledger job failed on every run for three months and nothing showed it
+# (assumptions_audit #141); the bill backend's check results went missing on 2026-07-30 (PR #238).
+# Reads GitHub's own run history (read-only token) and the public sheet; writes only Guard_Status + the ledger.
+
+on:
+  schedule:
+    - cron: "37 */6 * * *"   # every 6 h at :37 (an odd minute, off the workers' slots)
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: read          # to read run history of the other workflows
+
+concurrency:
+  group: trust-surface-guard
+  cancel-in-progress: false
+
+jobs:
+  guard:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install clients
+        run: pip install --quiet gspread google-auth pyyaml
+      - name: Judge every scheduled job + the bill backend's check results
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GCP_CREDENTIALS: ${{ secrets.GCP_CREDENTIALS }}
+        run: python3 tools/verification/trust_surface_guard.py
