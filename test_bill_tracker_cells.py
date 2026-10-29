@@ -5,7 +5,9 @@ Regression for the 2026-07-30 -> 2026-09-28 collision: completeness moved T -> U
 BILL_LAST_RUN_CELL (U1), so the batch wrote the trust payload to U1 and then overwrote it with a timestamp --
 every cycle, silently. Runs the REAL write_bill_tracker against a fake gspread, captures the batch ranges,
 and checks (1) no two ranges share a top-left cell, (2) the completeness payload survives as the value at
-its cell, (3) the prior-payload read happens at the same cell the payload is written to.
+its cell, (3) the prior-payload read happens at the same cell the payload is written to, (4) no data column
+reaches a metadata cell (the co-patron column would have landed on U1 again), (5) the co-patron column is
+written as JSON at the header's position.
 
 Run: python3 test_bill_tracker_cells.py
 """
@@ -48,7 +50,8 @@ def main():
     rec = {"bill": "HB1", "title": "t", "status_lis": "s", "outcome": "in_progress", "outcome_origin": "keyword_fallback",
            "patron": "p", "patron_id": "H1", "chamber": "House", "crossed_over": False, "floor_house": "",
            "floor_senate": "", "last_committee": "", "referral_count": 0, "latest_vote": {}, "upcoming": [],
-           "last_action_date": "", "history": [], "data_as_of_utc": "x", "source": "LIS", "legislation_class": ""}
+           "last_action_date": "", "history": [], "data_as_of_utc": "x", "source": "LIS", "legislation_class": "",
+           "copatrons": [{"name": "A B", "member_id": "H0001", "role": "Co-Patron"}]}
     comp = {"universe_count": 1, "records_written": 1}
     with mock.patch.dict(os.environ, {"GCP_CREDENTIALS": "{}"}), \
          mock.patch.object(bt, "Credentials") as C, mock.patch.object(bt.gspread, "authorize") as A:
@@ -73,6 +76,17 @@ def main():
           f"final cells {list(final)}")
     check("the prior-payload read is the cell the payload survives at", bool(survived) and survived[0] in ws.read,
           f"read {ws.read}, payload at {survived}")
+    data_cols = len(bt.BILL_TRACKER_HEADER)
+    meta_cols = {k: bt._col_number(c) for k, c in bt.METADATA_CELLS.items()}
+    check("no data column reaches a metadata cell", all(n > data_cols for n in meta_cols.values()),
+          f"{data_cols} data columns vs metadata {meta_cols}")
+    grid = final.get("A1", [[]])
+    check("row 1 header and every data row are the header's width", all(len(r) == data_cols for r in grid),
+          f"widths {[len(r) for r in grid]}")
+    ci = bt.BILL_TRACKER_HEADER.index("Co-Patrons (JSON)")
+    check("co-patrons written as JSON at the header's column",
+          len(grid) > 1 and json.loads(grid[1][ci]) == rec["copatrons"], f"row {grid[1:2]}")
+    check("_col_number reads multi-letter columns", bt._col_number("AA1") == 27 and bt._col_number("Z1") == 26)
     print(f"\n{'ALL PASS' if not FAILS else str(FAILS) + ' FAILED'}")
     return 1 if FAILS else 0
 

@@ -1,6 +1,6 @@
 ---
 tags: [architecture, calendar, pipeline, worker]
-updated: 2026-06-28
+updated: 2026-09-28
 status: active
 ---
 
@@ -198,14 +198,21 @@ baseline eligibility** (fail-toward-freshness); a future `lfr` → run (never
 trapped below a floor — audit #15). Pure logic + parsing live in `cadence.py`
 (unit-tested `cadence_test.py`); `AC1` shares the AA/AB grid widen (col 29).
 
-### State Cell `Bill_Tracker!U1` — bill worker's cadence marker (PR #198)
+### State Cell `Bill_Tracker!Z1` — bill worker's cadence marker (PR #198; moved U1 → Z1 2026-09-28)
 
 The bill worker's OWN last-full-run timestamp (UTC iso), written in its
-`batch_update` on success (col 21, clear of the A–R data + the T1 completeness
-summary). It reads the SHARED `Sheet1!AC1` window signal for the tier but
-throttles against U1 (its own clock), so the two workers' cadences are
-independent while keying off one activity signal. Missing U1 (first deploy) →
-no marker → run.
+`batch_update` on success. It reads the SHARED `Sheet1!AC1` window signal for the tier but
+throttles against Z1 (its own clock), so the two workers' cadences are
+independent while keying off one activity signal. Missing Z1 (first deploy, and
+the first cycle after the move) → no marker → run.
+
+**Bill_Tracker layout rule (2026-09-28).** Data columns run from A (A–U today;
+U = co-patrons JSON). Row-1 metadata lives in a **reserved zone from Z**: Z1 =
+cadence marker, AA1 = completeness payload. `bill_tracker.py` checks at import
+that the metadata cells are distinct and that no data column reaches the zone —
+the rule exists because the same bug nearly shipped twice (completeness moved
+onto U1 in July; the co-patron column would have landed on U1 in September).
+The front end finds completeness by content, so it never cared where it sits.
 
 ### State Cell `Sheet1!W1` — durable breaker trip record (PR-C1 review-fix)
 

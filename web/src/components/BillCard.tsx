@@ -75,6 +75,7 @@ export function BillCard({ bill, sessionCode, onClose }: { bill: Bill; sessionCo
           <div className="metarow"><span className="k">Where it is</span>
             <span>{bill.lastCommittee ? `${bill.lastCommittee}` : `${bill.chamber} (no current committee)`}</span></div>
           <div className="metarow"><span className="k">Patron</span><span>{bill.patron || "—"}{bill.patronId ? ` (${bill.patronId})` : ""}</span></div>
+          <div className="metarow"><span className="k">Co-patrons</span><Copatrons list={bill.copatrons} /></div>
           <div className="metarow"><span className="k">Latest vote</span>
             <span>{v.tally ? <>{v.tally} <span className="muted">— {v.location || "Floor"}{v.date ? `, ${v.date}` : ""}</span></> : <span className="muted">no recorded vote</span>}</span></div>
           <div className={`metarow${soon ? " next-soon" : ""}`}><span className="k">Next meeting</span>
@@ -124,5 +125,42 @@ export function BillCard({ bill, sessionCode, onClose }: { bill: Bill; sessionCo
         </div>
       </div>
     </div>
+  );
+}
+
+// Co-patrons, grouped by LIS's own role label (verbatim, in the order LIS lists them — chief co-patrons
+// come first there). Long lists (a commending resolution can carry 140+) show the first few and fold the
+// rest behind a plain disclosure. null = the source was unavailable: say so, never "none".
+const COPATRON_PREVIEW = 6;
+function Copatrons({ list }: { list: Bill["copatrons"] }) {
+  const [open, setOpen] = useState(false);
+  if (list === null) return <span className="muted">not available right now</span>;
+  if (list.length === 0) return <span className="muted">none</span>;
+  const groups: { role: string; names: string[] }[] = [];
+  for (const c of list) {
+    const g = groups.find((x) => x.role === c.role);
+    if (g) g.names.push(c.name); else groups.push({ role: c.role, names: [c.name] });
+  }
+  let budget = open ? Infinity : COPATRON_PREVIEW;
+  return (
+    <span className="copatrons">
+      {groups.map((g) => {
+        if (budget <= 0) return null;
+        const shown = g.names.slice(0, budget);
+        budget -= shown.length;
+        // "2 of 4" while truncated, so the count never claims names that are not on screen (Gemini #239)
+        const count = shown.length < g.names.length ? `${shown.length} of ${g.names.length}` : `${g.names.length}`;
+        return (
+          <span key={g.role} className="cp-group">
+            <span className="muted">{g.role || "Patron"} ({count}): </span>{shown.join(", ")}
+          </span>
+        );
+      })}
+      {list.length > COPATRON_PREVIEW && (
+        <button type="button" className="gtoggle" onClick={() => setOpen(!open)}>
+          {open ? "show fewer" : `show all ${list.length}`}
+        </button>
+      )}
+    </span>
   );
 }
