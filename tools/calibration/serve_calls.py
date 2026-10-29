@@ -52,7 +52,7 @@ def _sha(path):
 
 def pinned_code_ok():
     """Every file the frozen spec pins must hash to its pin. Returns (ok, [mismatches])."""
-    with open(SPEC) as fh:
+    with open(SPEC, encoding="utf-8") as fh:
         spec = json.load(fh)
     bad = [f for f, h in spec["code_sha256"].items() if _sha(os.path.join(HERE, f)) != h]
     return not bad, bad
@@ -131,7 +131,7 @@ def main(argv):
     p = BC.predict_boosted(tr, te, vd)
     out, tot = bill_rows(te, p)
     called = tot["yes"] + tot["no"]
-    with open(SPEC) as fh:
+    with open(SPEC, encoding="utf-8") as fh:
         expect = json.load(fh)["expected_from_2025_2026"]["repeat"]
     summary = {
         "model": "arm C (booster_2027.predict_boosted), frozen 2026-10-21", "rows": "VENUE_FIX (ballot-count venue)",

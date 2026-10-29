@@ -286,7 +286,7 @@ OPENSTATES_MANIFEST = os.path.join(OPENSTATES_DIR, "manifest.json")
 
 
 def fetch_openstates() -> int:
-    with open(OPENSTATES_MANIFEST) as fh:
+    with open(OPENSTATES_MANIFEST, encoding="utf-8") as fh:
         man = json.load(fh)
     bad = got = kept = 0
     for key, rec in sorted(man.items()):

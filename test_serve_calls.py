@@ -54,17 +54,20 @@ ok(tot["ballots"] == 5 and tot["yes"] == 3 and tot["no"] == 1 and tot["right"] =
 
 # a changed pinned file serves nothing
 real = S.SPEC
+tmp = ""
 try:
-    spec = json.load(open(real))
+    with open(real, encoding="utf-8") as fh:
+        spec = json.load(fh)
     spec["code_sha256"] = {"booster_2027.py": "0" * 64}
     tmp = os.path.join(os.path.dirname(real), "..", ".cache_test_spec.json")
-    json.dump(spec, open(tmp, "w"))
+    with open(tmp, "w", encoding="utf-8") as fh:
+        json.dump(spec, fh)
     S.SPEC = tmp
     good, bad = S.pinned_code_ok()
     ok(not good and bad == ["booster_2027.py"], "a hash mismatch is refused")
 finally:
     S.SPEC = real
-    if os.path.exists(tmp):
+    if tmp and os.path.exists(tmp):
         os.remove(tmp)
 ok(S.pinned_code_ok() == (True, []), "the committed pins match the committed code")
 print(f"ALL {_n} serve-calls tests passed")
