@@ -170,7 +170,7 @@ computable — without it that relationship is unrepresentable.
   (branch `claude/team-positions`): bill card "Our position" row (the four D1 stances as grey text, current one
   in ink, click again to clear → new `DELETE /api/positions`), and a stance column in the War Room list. The
   "second oppose tier" note here was stale — D1 settled it (oppose stays one layer). **Also closed a hole:
-  any Google account passed auth** — now a `TEAM_EMAILS` secret gate ([[failures/assumptions_audit]] #142).
+  any Google account passed auth** — now a `TEAM_EMAILS` secret gate ([[failures/assumptions_audit]] #143).
   **Owner step before it carries real data: set `TEAM_EMAILS`.**
 - ~~**F3. Accounts**~~ — ✅ **BUILT 2026-07-28.** Sign-in (`web/src/state/auth.ts` + `components/SignIn.tsx`,
   verified live: button renders, zero console errors, **no token in localStorage** — held in memory only, so
@@ -295,7 +295,7 @@ computable — without it that relationship is unrepresentable.
   next hearing with the last run (D1 `alert_state`, migration 0003) and post ONE templated digest to a Slack channel
   via an incoming webhook. First sight of a bill is recorded silently (no flood on deploy); the snapshot advances only
   after Slack accepts the post (a refused post retries next cycle); column moves or a missing session make it refuse
-  to run rather than guess. 20 tests. **Owner steps:** create a Slack incoming webhook for a channel, then
+  to run rather than guess. 24 tests. **Owner steps:** create a Slack incoming webhook for a channel, then
   `npx wrangler secret put SLACK_WEBHOOK_URL`; the migrations command also applies 0003.
   *Record — email options considered:* Cloudflare Email Service ($5/mo Workers Paid, 3,000/mo included, then $0.35
   per 1,000), Resend (free 3,000/mo but 100/day), Amazon SES ($0.10 per 1,000).
