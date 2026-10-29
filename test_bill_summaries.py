@@ -63,23 +63,36 @@ def main():
 
     class WS:
         row_count, col_count = 10, 4
-        def __init__(self): self.cells, self.batches, self.cleared = {}, [], 0
+        def __init__(self): self.cells, self.batches, self.cleared, self.calls = {}, [], 0, []
         def acell(self, a1): return mock.Mock(value=self.cells.get(a1))
         def resize(self, rows, cols): self.row_count, self.col_count = rows, cols
         def clear(self): self.cleared += 1; self.cells = {}
         def batch_update(self, ups):
-            self.batches.append(ups)
-            for u in ups: self.cells[u["range"]] = u["values"][0][0] if u["range"] != "A1" else u["values"]
+            self.batches.append(ups); self.calls.append("data")
+            for u in ups: self.cells[u["range"]] = u["values"]
+        def batch_clear(self, ranges): self.calls.append("tail")
+        def update(self, values, range_name): self.calls.append("hash"); self.cells[range_name] = values[0][0]
     ws = WS(); sheet2 = mock.Mock(); sheet2.worksheet.return_value = ws
     first = bt.write_bill_summaries(sheet2, rows, st)
-    ranges = [u["range"] for u in ws.batches[-1]] if ws.batches else []
-    check("first write: data + hash in ONE batch", first is True and ranges == ["A1", bt.BILL_SUMMARIES_HASH_CELL], f"{ranges}")
+    check("first write: data, then stale tail, then hash -- never a clear (Codex #240)",
+          first is True and ws.cleared == 0 and ws.calls == ["data", "tail", "hash"], f"{ws.calls}")
     check("hash cell sits clear of the data columns",
           bt._col_number(bt.BILL_SUMMARIES_HASH_CELL) > len(bt.BILL_SUMMARIES_HEADER))
     second = bt.write_bill_summaries(sheet2, rows, st)
-    check("identical cycle skips the rewrite", second is False and ws.cleared == 1 and len(ws.batches) == 1)
+    check("identical cycle skips the rewrite", second is False and len(ws.batches) == 1)
     third = bt.write_bill_summaries(sheet2, rows[:-1], st)
-    check("changed content rewrites", third is True and ws.cleared == 2)
+    check("changed content rewrites", third is True and len(ws.batches) == 2)
+
+    class FailingWS(WS):
+        def batch_update(self, ups): raise RuntimeError("transient Sheets error")
+    fws = FailingWS(); fws.cells = {"A1": "old summaries"}; sheet3 = mock.Mock(); sheet3.worksheet.return_value = fws
+    raised = False
+    try:
+        bt.write_bill_summaries(sheet3, rows, st)
+    except RuntimeError:
+        raised = True   # the caller catches + alerts; what matters is the tab
+    check("a failed write raises and leaves the old tab, no new hash",
+          raised and fws.cells == {"A1": "old summaries"}, f"{fws.cells}")
 
     ts = open("web/src/data/summaries.ts").read()
     m = re.search(r"EXPECTED_HEADER = \[([^\]]*)\]", ts)
