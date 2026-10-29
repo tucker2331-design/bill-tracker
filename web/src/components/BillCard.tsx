@@ -155,9 +155,11 @@ function Copatrons({ list }: { list: Bill["copatrons"] }) {
         if (budget <= 0) return null;
         const shown = g.names.slice(0, budget);
         budget -= shown.length;
+        // "2 of 4" while truncated, so the count never claims names that are not on screen (Gemini #239)
+        const count = shown.length < g.names.length ? `${shown.length} of ${g.names.length}` : `${g.names.length}`;
         return (
           <span key={g.role} className="cp-group">
-            <span className="muted">{g.role || "Patron"} ({g.names.length}): </span>{shown.join(", ")}
+            <span className="muted">{g.role || "Patron"} ({count}): </span>{shown.join(", ")}
           </span>
         );
       })}
