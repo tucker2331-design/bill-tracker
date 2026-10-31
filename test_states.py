@@ -44,7 +44,8 @@ check("VA bill link", va.bill_url("20261", "HB1515") == "https://lis.virginia.go
 check("VA two-chamber bills are HB/SB only",
       [b for b in ("HB1", "SB2", "HJ3", "SR4") if va.two_chamber_bill_re.match(b)] == ["HB1", "SB2"])
 
-ts = open(os.path.join(HERE, "web", "src", "states", "va.ts")).read()
+with open(os.path.join(HERE, "web", "src", "states", "va.ts"), encoding="utf-8") as _f:
+    ts = _f.read()
 ts_stages = re.findall(r'\{ id: "([a-z0-9]+)"', ts)
 check("Python and SPA agree on VA stage ids", ts_stages == [s.id for s in va.stages], f"{ts_stages}")
 check("Python and SPA agree on the code", f'code: "{va.code}"' in ts)

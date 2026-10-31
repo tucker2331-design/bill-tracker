@@ -11,6 +11,7 @@ Append-only, reverse-chronological (newest at top). Each entry opens with `## [2
 - Goldens: `test_state_va_goldens.py` (real 2026 HISTORY/DOCKET/Sponsors, SHA-256 of all output, captured pre-split), `va.regression.mjs` (39), `test_states.py` (Python↔SPA agreement). [[architecture/multi_state_config]].
 - Found, not fixed (no-behaviour-change PR): DOCKET `Bill_no` never matched → `upcoming` always empty ([[state/open_anti_patterns]] #15); queued as its own task.
 - #251 merged (War Room bill page).
+- Fold-in (Gemini on #252): explicit UTF-8 on the golden/test file reads and writes (3 findings). Declined: moving the SPA golden off `/tmp` — every web golden and the CI job use `/tmp` (Linux runners), so one test diverging would split the convention. Codex: no findings.
 
 ## [2026-10-31] pr | War Room bill page; bill card back to LIS facts; masthead "Tracking" fix
 - War Room list cards open `/war-room/<bill>` ([[ideas/war_room_scoping]]): Status · Members · Your position · Contact log · More. Sections with no source omitted.

@@ -143,12 +143,12 @@ def main():
     }
     if "--write" in sys.argv:
         os.makedirs(os.path.dirname(GOLDEN), exist_ok=True)
-        with open(GOLDEN, "w") as f:
+        with open(GOLDEN, "w", encoding="utf-8") as f:
             json.dump(summary, f, indent=1, sort_keys=True, ensure_ascii=False)
             f.write("\n")
         print(f"wrote {GOLDEN}: {digest} ({summary['records']} records)")
         return 0
-    with open(GOLDEN) as f:
+    with open(GOLDEN, encoding="utf-8") as f:
         want = json.load(f)
     fails = 0
     for k in ("records", "calls", "outcomes", "sample", "sha256"):
