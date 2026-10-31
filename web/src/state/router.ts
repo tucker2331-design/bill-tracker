@@ -14,67 +14,9 @@
 // objects have no URLs. Nothing can be linked, bookmarked, or shared until they do.
 
 import { useCallback, useEffect, useState } from "react";
+import { parseRoute, routePath, type Route } from "./routes";
 
-/** The tabs that existed before routing. Kept as-is so nothing about them changes except the URL. */
-export const TAB_IDS = ["today", "calendar", "search", "warroom", "health"] as const;
-export type TabId = (typeof TAB_IDS)[number];
-
-/** Entity kinds that have their own pages. `subject` is a filter AND a profile (owner, 2026-07-27). */
-export const ENTITY_KINDS = ["bills", "legislators", "committees", "subjects"] as const;
-export type EntityKind = (typeof ENTITY_KINDS)[number];
-
-export type Route =
-  | { kind: "tab"; tab: TabId }
-  | { kind: "list"; entity: EntityKind }
-  | { kind: "detail"; entity: EntityKind; id: string };
-
-const TAB_PATH: Record<TabId, string> = {
-  today: "/",
-  calendar: "/calendar",
-  search: "/search",
-  warroom: "/war-room",
-  health: "/health",
-};
-
-const PATH_TAB = new Map<string, TabId>(
-  (Object.entries(TAB_PATH) as [TabId, string][]).map(([t, p]) => [p, t]),
-);
-
-export const HOME: Route = { kind: "tab", tab: "today" };
-
-/**
- * Parse a pathname into a Route. Unknown paths fall back to HOME rather than throwing.
- *
- * A 404 view is deliberately NOT introduced here: the server already serves index.html for any path, so an
- * unknown path is a typo or a stale link, and dropping the user on Today is friendlier than a dead end. If
- * that ever hides a real broken link, the fix is a 404 view, not a silent redirect — noted so the choice is
- * revisitable rather than invisible.
- */
-export function parseRoute(pathname: string): Route {
-  const clean = pathname.replace(/\/+$/, "") || "/";
-  const tab = PATH_TAB.get(clean);
-  if (tab) return { kind: "tab", tab };
-
-  const parts = clean.split("/").filter(Boolean);
-  const entity = parts[0] as EntityKind | undefined;
-  if (!entity || !(ENTITY_KINDS as readonly string[]).includes(entity)) return HOME;
-
-  // Ids are decoded here so callers never see percent-encoding. A committee id may contain a space.
-  if (parts.length === 1) return { kind: "list", entity };
-  if (parts.length === 2) return { kind: "detail", entity, id: decodeURIComponent(parts[1]) };
-  return HOME;
-}
-
-/** Build a path from a Route. The inverse of parseRoute — kept adjacent so they cannot drift apart. */
-export function routePath(r: Route): string {
-  if (r.kind === "tab") return TAB_PATH[r.tab];
-  if (r.kind === "list") return `/${r.entity}`;
-  return `/${r.entity}/${encodeURIComponent(r.id)}`;
-}
-
-export const tabPath = (t: TabId) => TAB_PATH[t];
-export const detailPath = (entity: EntityKind, id: string) =>
-  routePath({ kind: "detail", entity, id });
+export * from "./routes";
 
 /** Imperative navigation. Exported for handlers that are not links. */
 export function navigate(to: Route | string, opts: { replace?: boolean } = {}): void {

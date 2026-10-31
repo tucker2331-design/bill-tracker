@@ -70,6 +70,8 @@ jobs:
           node web/src/data/__tests__/warroom.regression.mjs
           node web/tools/ts2mjs.mjs web/src/data/health_rules.ts /tmp/health_rules.mjs
           node web/src/views/__tests__/health_rules.regression.mjs
+          node web/tools/ts2mjs.mjs web/src/state/routes.ts /tmp/routes.mjs
+          node web/src/state/__tests__/routes.regression.mjs
       # The Worker's auth + team gate had tests but no runner. Stdlib node only, no network.
       - name: Worker tests (auth, team gate)
         run: node worker/test_auth.mjs && node worker/test_team.mjs && node worker/test_sheets.mjs && node worker/test_contacts.mjs && node worker/test_alerts.mjs
