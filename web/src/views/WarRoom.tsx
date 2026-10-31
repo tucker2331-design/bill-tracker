@@ -15,6 +15,7 @@ import { usePositions, STANCES, STANCE_LABEL, type Stance } from "../state/posit
 import { loadContacts, type ContactsResult } from "../state/contacts";
 import { dayKey } from "../data/dates";
 import { OutcomeChip } from "../components/common";
+import { SOURCE } from "../config";
 import {
   loadCalls, callsFor, groupOf, sortGroup, dateKeyOf, WR_GROUPS, type BillCalls, type CallsLoad, type WrGroup,
 } from "../data/warroom";
@@ -88,7 +89,7 @@ export function WarRoom({ bills, starred, sessionCode }: { bills: Bill[]; starre
         <b>Order inside each group.</b> Least likely to pass first: most called-yes votes still needed to reach a
         majority, then most called no, then most can't call. A bill that already has enough called yes goes to the
         bottom. Nothing scheduled and Decided keep bill-number order.
-        <br /><br /><b>Where each card's facts come from.</b> Status, where it is, next hearing and last action: LIS.
+        <br /><br /><b>Where each card's facts come from.</b> Status, where it is, next hearing and last action: {SOURCE}.
         Members: the vote model's calls for the room's first vote — yes or no only when the chance is at least
         81 in 100 either way, otherwise can't call.
         {s ? <> In the {s.testYear} replay, calls were right {s.calledRight.toLocaleString()} of {s.called.toLocaleString()};

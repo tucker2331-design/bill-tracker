@@ -72,6 +72,8 @@ jobs:
           node web/src/views/__tests__/health_rules.regression.mjs
           node web/tools/ts2mjs.mjs web/src/state/routes.ts /tmp/routes.mjs
           node web/src/state/__tests__/routes.regression.mjs
+          node web/tools/ts2mjs.mjs web/src/states/va.ts /tmp/va_state.mjs
+          node web/src/states/__tests__/va.regression.mjs
       # The Worker's auth + team gate had tests but no runner. Stdlib node only, no network.
       - name: Worker tests (auth, team gate)
         run: node worker/test_auth.mjs && node worker/test_team.mjs && node worker/test_sheets.mjs && node worker/test_contacts.mjs && node worker/test_alerts.mjs
@@ -104,7 +106,8 @@ jobs:
             test_classify_action.py \
             test_classify_refid.py \
             test_classify_schedule_type.py \
-            test_governor_eventcode_drift.py; do
+            test_governor_eventcode_drift.py \
+            test_states.py; do
             echo "::group::$t"
             if python3 -u "$t"; then echo "PASS  $t"; else echo "FAIL  $t"; fail=1; fi
             echo "::endgroup::"

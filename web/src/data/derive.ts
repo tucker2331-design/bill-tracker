@@ -1,4 +1,5 @@
 import type { Bill, Chamber } from "./types";
+import { originChamber } from "../states";
 import type { Scope } from "../state/tracking";
 import { dateSort } from "./dates";
 
@@ -28,7 +29,7 @@ export interface StageCell { stage: Stage; side: Chamber; crossed: boolean; deci
 // A floor event of EITHER kind (passed OR defeated) means the bill reached that floor — a defeat is a
 // floor death, so its ✕ belongs at Floor, not Committee. Checked furthest→nearest.
 export function furthestStage(b: Bill): Stage {
-  const origin: Chamber = b.bill[0]?.toUpperCase() === "S" ? "Senate" : "House";
+  const origin: Chamber = originChamber(b.bill) ?? "House";
   const floorOrigin = origin === "House" ? b.floorHouse : b.floorSenate;
   const floorSecond = origin === "House" ? b.floorSenate : b.floorHouse;
   if (floorSecond) return "floor2";                // reached the SECOND chamber's floor (passed or defeated there)
@@ -43,7 +44,7 @@ export function furthestStage(b: Bill): Stage {
 // chamber=origin but stage=committee2, which would key an impossible cell like `committee2|House`
 // for an HB (committee2 IS the second chamber's committee). Lane semantics: where the stage lives.
 export function stageSide(b: Bill, stage: Stage): Chamber {
-  const origin: Chamber = b.bill[0]?.toUpperCase() === "S" ? "Senate" : "House";
+  const origin: Chamber = originChamber(b.bill) ?? "House";
   return stage === "committee2" || stage === "floor2"
     ? (origin === "House" ? "Senate" : "House")
     : origin;

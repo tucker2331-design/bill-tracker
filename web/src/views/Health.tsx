@@ -6,6 +6,7 @@
 //  * P26: counts as "k of n"; a coverage metric is shown as the count of what is MISSING.
 //  * P24/P25: problems are rows of structural fields (check, state, since, affects, published values wrong, fix).
 //  * The freshness limits follow each worker's observed write rhythm (Metrics_History heartbeats), not a fixed 6 h.
+import { SOURCE } from "../config";
 import { useEffect, useMemo, useState } from "react";
 import type { Completeness } from "../data/types";
 import { loadHealth, type HealthData, type HealthAlert } from "../data/health";
@@ -372,11 +373,11 @@ function Watchers({ h, c }: { h: HealthData | null; c: Completeness | null }) {
   // LIS disagreeing with ITSELF (status text vs its own flags). We publish the flag, so this never impeaches a
   // published value — it is an upstream observation, shown as its count.
   const mm = c?.outcome_keyword_mismatches, of = (c?.outcome_structural ?? 0) + (c?.outcome_keyword_fallback ?? 0);
-  rows.push(mm == null ? { label: "LIS status text vs its own flags", mark: "?", red: true }
-    : { label: `LIS status text vs its own flags · ${n(mm)} of ${n(of)} differ`, mark: mm ? "≠" : "✓", red: false });
+  rows.push(mm == null ? { label: `${SOURCE} status text vs its own flags`, mark: "?", red: true }
+    : { label: `${SOURCE} status text vs its own flags · ${n(mm)} of ${n(of)} differ`, mark: mm ? "≠" : "✓", red: false });
   return (
     <div className="hx-tile">
-      <div className="lbl">Upstream watchers · is LIS still speaking our language?</div>
+      <div className="lbl">Upstream watchers · is {SOURCE} still speaking our language?</div>
       <div className="hx-ticks">{rows.map((r) => <div key={r.label}><b className={r.red ? "red" : ""}>{r.mark}</b>{r.label}</div>)}</div>
     </div>
   );

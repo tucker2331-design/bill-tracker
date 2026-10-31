@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import type { Bill, Outcome } from "../data/types";
 import { useScope, useStarred, toggleTracked, type Scope } from "../state/tracking";
-import { STALE_AFTER_HOURS } from "../config";
+import { STALE_AFTER_HOURS, SOURCE } from "../config";
 import type { Completeness } from "../data/types";
 
 const OUTCOME_LABEL: Record<Outcome, string> = {
@@ -147,8 +147,8 @@ export function TrustHeader({ dataAsOf, calendarAsOf, completeness, tracked }: {
       </>)}
       {universe != null && (<>
         <span className="tr-div" aria-hidden="true" />
-        <span className="tr-item" title={`Bills we hold vs bills LIS lists this session: ${written}/${universe}; ${anomalies} in-history-not-in-universe`}>
-          LIS bills <b className={complete ? "" : "stale"}>{written?.toLocaleString()} / {universe.toLocaleString()}</b>
+        <span className="tr-item" title={`Bills we hold vs bills ${SOURCE} lists this session: ${written}/${universe}; ${anomalies} in-history-not-in-universe`}>
+          {SOURCE} bills <b className={complete ? "" : "stale"}>{written?.toLocaleString()} / {universe.toLocaleString()}</b>
         </span>
       </>)}
       {tracked !== undefined && (<>

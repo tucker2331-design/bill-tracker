@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import type { Bill } from "../data/types";
 import { OutcomeChip, ChamberChip, Star } from "./common";
-import { lisBillUrl } from "../config";
+import { sourceBillUrl, SOURCE } from "../config";
 import { useStarred } from "../state/tracking";
 import { linkProps, warRoomBillPath } from "../state/router";
 import { loadCalendar, nextMeetingFor, minutesUntil, type Meeting as CalMeeting } from "../data/calendar";
@@ -52,9 +52,9 @@ export function BillCard({ bill, sessionCode, onClose }: { bill: Bill; sessionCo
             {bill.referrals > 1 && <span className="chip referral">{bill.referrals} referrals</span>}
           </div>
 
-          <Summary key={`summary-${bill.bill}`} bill={bill.bill} lisUrl={lisBillUrl(sessionCode, bill.bill)} />
+          <Summary key={`summary-${bill.bill}`} bill={bill.bill} lisUrl={sourceBillUrl(sessionCode, bill.bill)} />
 
-          <div className="metarow"><span className="k">Status (LIS)</span><span>{bill.statusLis || "—"}</span></div>
+          <div className="metarow"><span className="k">Status ({SOURCE})</span><span>{bill.statusLis || "—"}</span></div>
           <div className="metarow"><span className="k">Where it is</span>
             <span>{bill.lastCommittee ? `${bill.lastCommittee}` : `${bill.chamber} (no current committee)`}</span></div>
           <div className="metarow"><span className="k">Patron</span><span>{bill.patron || "—"}{bill.patronId ? ` (${bill.patronId})` : ""}</span></div>
@@ -83,8 +83,8 @@ export function BillCard({ bill, sessionCode, onClose }: { bill: Bill; sessionCo
           </table>
 
           <div className="card-links">
-            <a href={lisBillUrl(sessionCode, bill.bill)} target="_blank" rel="noopener noreferrer">
-              View on LIS ↗
+            <a href={sourceBillUrl(sessionCode, bill.bill)} target="_blank" rel="noopener noreferrer">
+              View on {SOURCE} ↗
             </a>
             {tracked && <a className="card-wr" {...linkProps(warRoomBillPath(bill.bill))}>Open in War Room →</a>}
           </div>
@@ -205,7 +205,7 @@ export function Summary({ bill, lisUrl }: { bill: string; lisUrl: string }) {
   let body;
   if (res === undefined) body = <p className="muted sum-text">Loading summary…</p>;
   else if (res.status === "unavailable") body = <p className="muted sum-text">Summary not available right now.</p>;
-  else if (res.status === "none") body = <p className="muted sum-text">LIS has no summary for this bill.</p>;
+  else if (res.status === "none") body = <p className="muted sum-text">{SOURCE} has no summary for this bill.</p>;
   else {
     body = (
       <>
@@ -230,7 +230,7 @@ export function Summary({ bill, lisUrl }: { bill: string; lisUrl: string }) {
       <summary>Full summary</summary>
       <div className="sum-body">
         {body}
-        <a href={lisUrl} target="_blank" rel="noopener noreferrer">Full bill text on LIS ↗</a>
+        <a href={lisUrl} target="_blank" rel="noopener noreferrer">Full bill text on {SOURCE} ↗</a>
       </div>
     </details>
   );

@@ -1,3 +1,4 @@
+import { STATE, originChamber } from "../states";
 import { sheetUrl, BILL_TRACKER_TAB } from "../config";
 import { apiFetch } from "../state/auth";
 import type { Bill, BillData, Completeness, Copatron, FloorEvent, HistoryRow, LatestVote, Meeting, Outcome, Chamber } from "./types";
@@ -107,7 +108,7 @@ function toBill(r: string[]): Bill | null {
   // prefix (H*/S*) rather than blind-defaulting to House and skewing the lane counts (CodeRabbit #164).
   const chamber: Chamber = chamberRaw === "Senate" || chamberRaw === "House"
     ? chamberRaw
-    : (bill[0]?.toUpperCase() === "S" ? "Senate" : "House");
+    : (originChamber(bill) ?? "House");
   return {
     bill,
     title: (r[COL.title] || "").trim(),
@@ -128,7 +129,7 @@ function toBill(r: string[]): Bill | null {
     dataAsOf: (r[COL.dataAsOf] || "").trim(),
     legislationClass: (r[COL.legislationClass] || "").trim(),
     copatrons: copatrons(r[COL.copatrons]),
-    source: (r[COL.source] || "LIS").trim(),
+    source: (r[COL.source] || STATE.sourceName).trim(),
   };
 }
 

@@ -30,6 +30,7 @@ See docs/ideas/product_vision.md, docs/ideas/product_roadmap.md §B0, docs/ideas
 """
 import os
 import hashlib
+import importlib
 import re
 import json
 import time
@@ -42,6 +43,7 @@ import pandas as pd
 from html.parser import HTMLParser
 from google.oauth2.service_account import Credentials
 
+import states   # Standard #6: every Virginia assumption lives in states/va.py, not in this pipeline
 import cadence   # LIS-safety guardrail #5 — the SHARED cadence decision (same signal the calendar worker maintains)
 
 # Bill_Tracker tab layout. Data columns run A.. from the left; row-1 METADATA cells (the completeness payload +
@@ -76,22 +78,31 @@ if min(_col_number(c) for c in METADATA_CELLS.values()) <= len(BILL_TRACKER_HEAD
     raise RuntimeError(f"Bill_Tracker layout collision: {len(BILL_TRACKER_HEADER)} data columns reach the "
                        f"metadata zone {METADATA_CELLS}; move the metadata cells right before adding a column")
 
-# Reuse the worker's proven, guarded primitives + structural resolvers — single source of truth.
-from calendar_worker import (
-    safe_fetch_csv,
-    get_armored_session,
-    get_active_session_info,
-    build_committee_maps,           # populates the global COMMITTEE_CODE_MAP …
-    resolve_committee_from_refid,   # … which this reads (refid -> committee name + direct/vote source)
-    notify_slack,
-    session_follow_gate,            # A-1: ban-safe auto-follow of the active session (shared with the worker)
-    HEADERS,
-    SPREADSHEET_ID,
-)
-from lis_authorization import normalize_session_code  # is_authorized_session now via session_follow_gate (A-1)
+# The legislature this process serves. Selected by BILL_STATE (default VA — the only state this pipeline's LIS
+# adapter speaks today). An unknown code fails CLOSED at import (states.get_state raises): never Virginia's rules
+# applied to another state's data.
+STATE = states.get_state(os.environ.get("BILL_STATE", "VA"))
+
+# Reuse the worker's proven, guarded primitives + structural resolvers — single source of truth — through the
+# STATE's source adapter (states/va_lis.py for Virginia), so this pipeline never imports a state's modules by name.
+_ADAPTER = importlib.import_module(STATE.adapter)
+safe_fetch_csv = _ADAPTER.safe_fetch_csv
+get_armored_session = _ADAPTER.get_armored_session
+get_active_session_info = _ADAPTER.get_active_session_info
+build_committee_maps = _ADAPTER.build_committee_maps            # populates the global COMMITTEE_CODE_MAP …
+resolve_committee_from_refid = _ADAPTER.resolve_committee_from_refid   # … which this reads (refid -> committee)
+notify_slack = _ADAPTER.notify_slack
+session_follow_gate = _ADAPTER.session_follow_gate              # A-1: ban-safe auto-follow of the active session
+HEADERS = _ADAPTER.HEADERS
+SPREADSHEET_ID = _ADAPTER.SPREADSHEET_ID
+normalize_session_code = _ADAPTER.normalize_session_code   # the state's session-code format (LIS: 5-digit "20261")
 
 BILL_TRACKER_TAB = "Bill_Tracker"
-BILL_LIST_URL = "https://lis.virginia.gov/Legislation/api/getlegislationsessionlistasync"
+BILL_LIST_URL = STATE.urls["bill_list"]
+
+
+def _blob_url(blob_code, name):
+    return STATE.urls["blob"].format(session=blob_code, file=name)
 _TALLY_RE = re.compile(r'(\d+-Y\s+\d+-N(?:\s+\d+-A\w*)?)', re.IGNORECASE)
 
 
@@ -244,14 +255,13 @@ def _parse_date(s):
 # path below is the FALLBACK for a bill absent from BILLS.CSV (consuming the controlled Status string,
 # never free description text). "carried_over" is distinct from "dead": a continued bill returns next
 # session — the PR1 keyword set wrongly folded "Continued" into in_progress/dead.
-_OUTCOME_SIGNED = ("approved", "acts of assembly", "chapter")
-_OUTCOME_VETOED = ("veto",)
-_OUTCOME_CARRIED = ("carried over", "continued")   # carried over to the next session — NOT dead/failed
-_OUTCOME_DEAD = ("passed by indefinitely", "stricken", "left in", "failed", "tabled",
-                 "incorporated", "withdrawn", "no action")
-_OUTCOME_AWAITING = ("enrolled", "pending governor", "awaiting governor", "communicated to governor",
-                     "governor's action")   # NOTE: "passed" handled separately — a single-chamber
-                                            # "Passed House"/"Passed Senate" is mid-process, not awaiting
+# The vocabulary itself is the STATE's (states/va.py `outcome_vocab`); only the precedence lives here.
+_OUTCOME_SIGNED = tuple(STATE.outcome_vocab["signed"])
+_OUTCOME_VETOED = tuple(STATE.outcome_vocab["vetoed"])
+_OUTCOME_CARRIED = tuple(STATE.outcome_vocab["carried_over"])   # carried over to the next session — NOT dead/failed
+_OUTCOME_DEAD = tuple(STATE.outcome_vocab["dead"])
+_OUTCOME_AWAITING = tuple(STATE.outcome_vocab["awaiting_governor"])   # NOTE: "passed" handled separately — a
+                                            # single-chamber "Passed House"/"Passed Senate" is mid-process
 
 # Per-chamber FLOOR outcome (for the Timeline's Floor stages). LIS records floor events in its OWN
 # controlled action vocabulary, which NAMES the chamber — consuming those controlled phrases (never free
@@ -265,10 +275,11 @@ _OUTCOME_AWAITING = ("enrolled", "pending governor", "awaiting governor", "commu
 #     was "Defeated by Senate," reconsidered, and SIGNED — which is also why passage WINS over defeat).
 # Validated self-calibrating vs the structural outcome (Standard #1): 1157/1157 fully-passed BILLS show
 # both chambers passed; 0 died/carried bills show both.
-_PASS_HOUSE_RE = re.compile(r"\bpassed house\b|\bagreed to by house\b", re.I)
-_PASS_SENATE_RE = re.compile(r"\bpassed senate\b|\bagreed to by senate\b", re.I)
-_DEFEAT_HOUSE_RE = re.compile(r"\bdefeated by house\b", re.I)
-_DEFEAT_SENATE_RE = re.compile(r"\bdefeated by senate\b", re.I)
+# The phrases are the STATE's (states/va.py `floor_patterns`).
+_PASS_HOUSE_RE = STATE.floor_patterns["House"]["passed"]
+_PASS_SENATE_RE = STATE.floor_patterns["Senate"]["passed"]
+_DEFEAT_HOUSE_RE = STATE.floor_patterns["House"]["defeated"]
+_DEFEAT_SENATE_RE = STATE.floor_patterns["Senate"]["defeated"]
 
 
 def _outcome_from_flags(meta):
@@ -330,7 +341,7 @@ def _build_bills_meta(blob_code):
     incl. resolutions that chapter without a Governor's signature). Enrichment only: on an empty/failed
     fetch or a missing bill column, returns ({}, 0, 0) and the caller fails soft (keyword-only outcome,
     empty patron) AND alerts on the total-failure case (bills_meta_rows == 0)."""
-    df = safe_fetch_csv(f"https://lis.blob.core.windows.net/lisfiles/{blob_code}/BILLS.CSV")
+    df = safe_fetch_csv(_blob_url(blob_code, "BILLS.CSV"))
     if df.empty:
         return {}, 0, 0
     cols = {c.lower(): c for c in df.columns}
@@ -379,7 +390,7 @@ def _build_copatrons(blob_code):
     bulk file carries the same list structurally. Enrichment only: an empty/failed fetch returns ({}, stats with
     rows=0) and the caller alerts; a bill with no co-patrons gets [] (an honest empty, not a failure)."""
     stats = {"rows": 0, "skipped_no_bill": 0, "unknown_roles": 0}
-    df = safe_fetch_csv(f"https://lis.blob.core.windows.net/lisfiles/{blob_code}/Sponsors.csv",
+    df = safe_fetch_csv(_blob_url(blob_code, "Sponsors.csv"),
                         markers=(b"BILL_NUMBER", b"PATRON_TYPE"))
     if df.empty:
         return {}, stats
@@ -417,13 +428,7 @@ def _build_copatrons(blob_code):
 # id, NOT by date (114 of 1,307 multi-version bills are out of lifecycle order in file order), so "the latest
 # summary" needs this rank. Same-rank ties (passed House / passed Senate) keep file order. A type outside this
 # map is still published, with an EMPTY rank, and counted -- the app never picks it as "latest" on a guess.
-SUMMARY_STAGE_RANK = {
-    "SUMMARY AS INTRODUCED": 0,
-    "SUMMARY AS PASSED HOUSE": 1,
-    "SUMMARY AS PASSED SENATE": 1,
-    "SUMMARY AS PASSED": 2,
-    "SUMMARY AS ENACTED WITH GOVERNOR'S RECOMMENDATION": 3,
-}
+SUMMARY_STAGE_RANK = dict(STATE.summary_stage_rank)   # the vocabulary is the STATE's (states/va.py)
 BILL_SUMMARIES_TAB = "Bill_Summaries"
 BILL_SUMMARIES_HEADER = ["Bill", "Summary Type", "Stage Rank", "Summary"]
 # Content hash of the last rows written, in a metadata cell clear of the data (A..D). Summaries barely change
@@ -457,7 +462,7 @@ def _build_summaries(blob_code):
     text]. Bill ids are LIS's zero-padded form (HB0001) normalized to the tracker's (HB1) -- an id that doesn't
     fit the prefix+digits shape is counted and skipped, never guessed."""
     stats = {"rows": 0, "bills": 0, "skipped_bad_bill": 0, "unknown_types": 0, "empty_text": 0}
-    df = safe_fetch_csv(f"https://lis.blob.core.windows.net/lisfiles/{blob_code}/Summaries.csv",
+    df = safe_fetch_csv(_blob_url(blob_code, "Summaries.csv"),
                         markers=(b"SUM_BILNO", b"SUMMARY_TYPE"))   # its own schema markers (Codex #240)
     if df.empty:
         return [], stats
@@ -525,6 +530,19 @@ def write_bill_summaries(sheet, rows, stats):
     return True
 
 
+def _chamber_of(ident, kind):
+    """Chamber named by a bill number's or refid's prefix letter, from the STATE's chamber map. An unknown prefix
+    is a contract break: alerted (DATA_ANOMALY) and then given the map's LAST chamber — exactly the pre-split
+    behaviour ("not H" read as Senate), so the split changes no VA output while the anomaly becomes visible."""
+    prefix = str(ident)[:1].upper()
+    if prefix in STATE.chambers:
+        return STATE.chambers[prefix]
+    fallback = list(STATE.chambers.values())[-1]
+    _alert("WARN", "DATA_ANOMALY", f"{STATE.code}: {kind} {ident!r} has no known chamber prefix "
+                                   f"{sorted(STATE.chambers)}; placed in {fallback}")
+    return fallback
+
+
 def _derive_position(rows, bill):
     """STRUCTURAL position from refids only (rows oldest→newest). All CERTAIN facts — never a guess:
       - chamber: the chamber of the most recent committee action (origin until it crosses).
@@ -532,7 +550,7 @@ def _derive_position(rows, bill):
       - last_committee: the committee of its most recent committee-bearing refid.
       - referral_count: distinct sequential committees it was REFERRED to (refid_direct), i.e. how many
         committees it has moved through (the 1st/2nd/3rd-referral badge)."""
-    origin = "House" if bill.startswith("H") else "Senate"
+    origin = _chamber_of(bill, "bill")
     last_committee, current_chamber, crossed = "", origin, False
     referred = []
     for r in rows:
@@ -540,7 +558,7 @@ def _derive_position(rows, bill):
         name, source = resolve_committee_from_refid(refid)
         if not name:
             continue   # non-committee action (floor/admin) — no position info; the row is still kept in `history`
-        chamber = "House" if refid[:1].upper() == "H" else "Senate"
+        chamber = _chamber_of(refid, "refid")
         current_chamber, last_committee = chamber, name
         if chamber != origin:
             crossed = True
@@ -648,7 +666,7 @@ def build_bill_records(http_session, session_code):
     # honest. Never invent the label from the code's digits (see the completeness comment below).
     session_display = ""
     try:
-        _sresp = http_session.get("https://lis.virginia.gov/Session/api/GetSessionListAsync",
+        _sresp = http_session.get(STATE.urls["session_list"],
                                   headers=HEADERS, timeout=30)
         _sresp.raise_for_status()
         _sdata = _sresp.json()
@@ -683,7 +701,7 @@ def build_bill_records(http_session, session_code):
     bill_class = {}
     try:
         _cls_resp = http_session.post(
-            "https://lis.virginia.gov/AdvancedLegislationSearch/api/GetLegislationListAsync",
+            STATE.urls["legislation_search"],
             headers={**HEADERS, "Content-Type": "application/json; charset=utf-8",
                      "X-Pagination": json.dumps({"PageNumber": 1, "PageSize": 1000})},
             json={"SessionCode": blob_code}, timeout=30)
@@ -699,7 +717,7 @@ def build_bill_records(http_session, session_code):
         print(f"⚠️  LegislationClass fetch failed ({_cls_err}); bills will carry no class this cycle.")
 
     # 2) HISTORY (guarded) → per-bill rows WITH the refid (needed for the structural position).
-    hist_df = safe_fetch_csv(f"https://lis.blob.core.windows.net/lisfiles/{blob_code}/HISTORY.CSV")
+    hist_df = safe_fetch_csv(_blob_url(blob_code, "HISTORY.CSV"))
     if hist_df.empty:
         raise RuntimeError("HISTORY.CSV came back empty — refusing to overwrite with empty histories "
                            "(fail-safe: keep last-known-good).")
@@ -738,7 +756,7 @@ def build_bill_records(http_session, session_code):
 
     # 4) DOCKET (guarded) → upcoming committee meetings per bill. Empty off-season is correct, not an error.
     docket_by_bill = {}
-    doc_df = safe_fetch_csv(f"https://lis.blob.core.windows.net/lisfiles/{blob_code}/DOCKET.CSV")
+    doc_df = safe_fetch_csv(_blob_url(blob_code, "DOCKET.CSV"))
     if not doc_df.empty:
         dcols = {c.lower(): c for c in doc_df.columns}
         dbill = next((dcols[c] for c in ("billnumber", "bill_number", "bill_id", "bill") if c in dcols), None)
@@ -762,8 +780,8 @@ def build_bill_records(http_session, session_code):
 
     # Virginia-local (ET) date — NOT the runner's UTC date. An evening run on a UTC CI box would
     # otherwise treat tomorrow as "today" and drop a meeting still scheduled for today in ET
-    # (Gemini/Qodo #161). Matches the repo's America/New_York convention (calendar_worker).
-    today = datetime.datetime.now(pytz.timezone("America/New_York")).date()
+    # (Gemini/Qodo #161). The legislature's own zone comes from the STATE (VA: America/New_York).
+    today = datetime.datetime.now(pytz.timezone(STATE.timezone)).date()
 
     now_utc = datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
     records, universe_bills, skipped_universe = [], set(), 0
@@ -855,7 +873,7 @@ def build_bill_records(http_session, session_code):
         floor_senate_bills += floor["senate"] == "passed"
         # Self-calibrating reconciliation: a fully-passed BILL (HB/SB, not a single-chamber resolution)
         # must have cleared BOTH floors. Count the exceptions as a rate (Standard #1/#7).
-        if outcome in ("awaiting_governor", "signed", "vetoed") and re.match(r"^[HS]B", bill):
+        if outcome in ("awaiting_governor", "signed", "vetoed") and STATE.two_chamber_bill_re.match(bill):
             floor_both_expected += 1
             if not (floor["house"] == "passed" and floor["senate"] == "passed"):
                 floor_both_missing += 1
@@ -878,7 +896,7 @@ def build_bill_records(http_session, session_code):
             "last_action_date": rows[-1]["date"] if rows else "",
             "history": [{"action": r["action"], "date": r["date"]} for r in rows],  # UI doesn't need refids
             "data_as_of_utc": now_utc,                               # trust: freshness
-            "source": "LIS",                                         # trust: provenance
+            "source": STATE.source_name,                             # trust: provenance
             # LIS's own class. Blank when the class call failed — the UI then shows one ungrouped list
             # rather than guessing, because a wrong label is worse than no label.
             "legislation_class": bill_class.get(bill, ""),
@@ -1267,7 +1285,7 @@ def _cadence_should_run():
             last_raw = None
         run, tier, why = cadence.decide(
             raw_state, datetime.datetime.now(pytz.utc),
-            datetime.datetime.now(pytz.timezone("America/New_York")),
+            datetime.datetime.now(pytz.timezone(STATE.timezone)),
             cadence.BILL_TIER_FLOORS, last_run_utc=cadence.parse_marker(last_raw))
         print(f"⏱️ Cadence gate (guardrail #5): {why}")
         return run
@@ -1301,7 +1319,7 @@ def _scheduled_gate():
     if os.environ.get("GITHUB_EVENT_NAME", "") != "schedule":
         return True
     quiet_start_et, quiet_end_et = 23, 6
-    et_hour = datetime.datetime.now(pytz.timezone("America/New_York")).hour
+    et_hour = datetime.datetime.now(pytz.timezone(STATE.timezone)).hour
     in_quiet = ((et_hour >= quiet_start_et or et_hour < quiet_end_et)   # midnight-spanning window
                 if quiet_start_et > quiet_end_et else (quiet_start_et <= et_hour < quiet_end_et))
     if in_quiet:
