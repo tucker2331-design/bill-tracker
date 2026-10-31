@@ -3,6 +3,7 @@
 // labelled as such (P20a), never styled like LIS data.
 import { useEffect, useState } from "react";
 import { useIdentity } from "../state/auth";
+import { SOURCE } from "../config";
 import { addContact, loadContacts, todayLocal, type ContactsResult } from "../state/contacts";
 
 const shortDate = (iso: string) => {
@@ -90,7 +91,7 @@ export function ContactLog({ bill, sessionCode }: { bill: string; sessionCode: s
         </form>
       )}
       {list}
-      <p className="muted cl-foot">Your team's entries, not from LIS.</p>
+      <p className="muted cl-foot">Your team's entries, not from {SOURCE}.</p>
     </section>
   );
 }

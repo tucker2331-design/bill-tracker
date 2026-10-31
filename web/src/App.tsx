@@ -19,6 +19,8 @@ import { Search } from "./views/Search";
 import { Health } from "./views/Health";
 import { WarRoom } from "./views/WarRoom";
 import { WarRoomBill } from "./views/WarRoomBill";
+import { APP_NAME } from "./config";
+import { STATE } from "./states";
 import { useRoute, navigate, tabPath, linkProps, detailPath, tabOf, type TabId } from "./state/router";
 
 // Freshness-gate cadence: poll the two ~22-byte stamp cells this often (and on window-focus). Well under any
@@ -176,7 +178,7 @@ function AppMain() {
       {/* one sticky container so the nav never overlaps a wrapped topbar (no hard-coded offset) */}
       <div className="appheader">
         <header className="topbar">
-          <div className="brand">VA Bill Tracker</div>
+          <div className="brand">{APP_NAME}</div>
           <ScopeSwitch />
           <div className="spacer" />
           {data && <TrustHeader dataAsOf={data.dataAsOf} calendarAsOf={calendarAsOf} completeness={data.completeness}
@@ -198,7 +200,7 @@ function AppMain() {
         {error && <p className="center-msg" style={{ color: "var(--stale)" }}>
           Couldn't load data: {error}<br /><span className="muted">The Mastermind DB sheet must be link-readable for gviz.</span>
         </p>}
-        {!data && !error && <p className="center-msg">Loading the General Assembly…</p>}
+        {!data && !error && <p className="center-msg">Loading {STATE.legislatureName}…</p>}
         {data && (
           <ErrorBoundary resetKey={warRoomBill ? `warroom/${warRoomBill}` : tab}>
             {tab === "today" && <Landing bills={visible} onOpen={open} calRefresh={calRefresh} />}

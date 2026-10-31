@@ -7,6 +7,7 @@
 // gviz `tq` projection — ~5 MB vs ~9 MB full — and lazy-load it ONLY when the Calendar tab opens (keeps
 // the landing fast). A meeting = a (date, committee, time) where people were in a room; the Ledger-Updates
 // collapse (admin actions, no time) and the executive/meta rows are NOT meetings and are excluded.
+import { STATE } from "../states";
 import { parseCsv } from "./gviz";
 import { sheetUrl } from "../config";
 import { apiFetch } from "../state/auth";
@@ -35,9 +36,8 @@ export interface CalendarData {
 // published VA session calendar. We only ever mark a date we actually know — a wrong guillotine would
 // mislead (vision §7, "never pretend"). TODO(backend): have bill_tracker stamp the session's crossover
 // date into the completeness payload so this becomes structural instead of a constant.
-export const CROSSOVER_BY_SESSION: Record<string, string> = {
-  "20261": "2026-02-17", // 2026 Regular Session — Tue Feb 17 (last day to act in house of origin)
-};
+// The dates are the STATE's (web/src/states/) — empty for a legislature with no crossover deadline.
+export const CROSSOVER_BY_SESSION: Record<string, string> = STATE.crossoverBySession;
 
 const SHEET1_TAB = "Sheet1";
 // Col O = TimeClass (worker §7.2: concrete | relative_resolved | relative_unresolved | ""). Empty until the
@@ -62,7 +62,7 @@ const CANCELLED_STATUS = "cancelled";
 const MEETING_ROUTE = "meeting"; // the subsystem's verdict that a real gathering/vote happened in this row
 // A time is non-concrete (can't place a meeting by clock time) for these worker placeholders.
 const NON_CONCRETE = new Set(["", "nan", "none", "time tba", "tba", "journal entry", "ledger"]);
-const BILL_RE = /^[HS][BJR]\d+$/; // VA bill ids: HB/SB/HJ/SJ/HR/SR + number (skeleton rows hold addresses)
+const BILL_RE = STATE.billIdPattern; // the state's bill ids (skeleton rows hold addresses, not bills)
 
 function isConcreteTime(time: string): boolean {
   const t = time.trim().toLowerCase();

@@ -7,6 +7,8 @@
 // "trust me, it's verified" into "here's the independent proof, refreshed on schedule." Layer 1 (the
 // in-cycle circuit breaker) is the live chip elsewhere on the tab; this covers layers 2–5.
 
+import { STATE } from "../states";
+
 const REPO = "tucker2331-design/bill-tracker";
 
 export type GuardState = "pass" | "fail" | "running" | "unknown";
@@ -25,7 +27,7 @@ export interface GuardRun {
 // The four session-agnostic guards (layers 2–5). Order = strongest "are we right?" first.
 const GUARDS: { key: string; label: string; proves: string; cadence: "daily" | "weekly"; staleDays: number }[] = [
   { key: "completeness_tripwire.yml", label: "Completeness", cadence: "weekly", staleDays: 9,
-    proves: "no hidden meeting — every meeting on LIS's own calendar appears in our data" },
+    proves: `no hidden meeting — every meeting on ${STATE.sourceName}'s own calendar appears in our data` },
   { key: "legevent_reconcile.yml", label: "Reconciliation", cadence: "weekly", staleDays: 9,
     proves: "our committee votes match the official MinutesBook — a source the pipeline never touches" },
   { key: "accuracy_sentinel.yml", label: "Accuracy sentinel", cadence: "daily", staleDays: 2,

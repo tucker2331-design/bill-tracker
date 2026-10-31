@@ -1,3 +1,4 @@
+import { SOURCE } from "../config";
 import { useEffect, useMemo, useState } from "react";
 import type { Bill } from "../data/types";
 import { loadCalendar, CROSSOVER_BY_SESSION, type CalendarData, type Meeting } from "../data/calendar";
@@ -59,7 +60,7 @@ function MeetingRow({ m, billMap, onOpen }: {
         {/* §7.2 (owner 2026-06-30): an UNRESOLVED relative time can't be placed on the clock — flag it
             honestly ("position unknown") instead of letting it sit in a silently-wrong slot. The meeting
             is already sorted to the top of its day by calendar.ts. */}
-        {m.unresolved && <span className="cal-mtg-unres" title="LIS lists this meeting only relative to another event whose time is unknown — we can't place it on the clock, so it's surfaced first.">⚠ unplaceable</span>}
+        {m.unresolved && <span className="cal-mtg-unres" title={`${SOURCE} lists this meeting only relative to another event whose time is unknown — we can't place it on the clock, so it's surfaced first.`}>⚠ unplaceable</span>}
         <span className={`cal-mtg-t${m.tba ? " tba" : ""}`}>{m.time}</span>
         <span className="cal-mtg-n">{hasBills ? m.bills.length : ""}{open ? " ▴" : " ▾"}</span>
       </span>

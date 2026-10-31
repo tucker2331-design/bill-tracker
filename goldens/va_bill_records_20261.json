@@ -1,0 +1,594 @@
+{
+ "calls": [
+  [
+   "GET",
+   "https://lis.virginia.gov/Legislation/api/getlegislationsessionlistasync",
+   {
+    "sessionCode": "20261"
+   }
+  ],
+  [
+   "GET",
+   "https://lis.virginia.gov/Session/api/GetSessionListAsync",
+   null
+  ],
+  [
+   "POST",
+   "https://lis.virginia.gov/AdvancedLegislationSearch/api/GetLegislationListAsync",
+   {
+    "SessionCode": "20261"
+   }
+  ],
+  [
+   "BLOB",
+   "https://lis.blob.core.windows.net/lisfiles/20261/HISTORY.CSV"
+  ],
+  [
+   "BLOB",
+   "https://lis.blob.core.windows.net/lisfiles/20261/DOCKET.CSV"
+  ],
+  [
+   "BLOB",
+   "https://lis.blob.core.windows.net/lisfiles/20261/BILLS.CSV"
+  ],
+  [
+   "BLOB",
+   "https://lis.blob.core.windows.net/lisfiles/20261/Sponsors.csv"
+  ]
+ ],
+ "outcomes": {
+  "awaiting_governor": 609,
+  "carried_over": 745,
+  "dead": 565,
+  "in_progress": 433,
+  "signed": 676,
+  "vetoed": 617
+ },
+ "records": 3645,
+ "sample": [
+  {
+   "bill": "HB1",
+   "chamber": "Senate",
+   "copatrons": [
+    {
+     "member_id": "H0297",
+     "name": "Elizabeth R. Guzman",
+     "role": "Chief Co-Patron"
+    },
+    {
+     "member_id": "H0366",
+     "name": "Phil M. Hernandez",
+     "role": "Chief Co-Patron"
+    },
+    {
+     "member_id": "H0375",
+     "name": "Adele Y. McClure",
+     "role": "Chief Co-Patron"
+    },
+    {
+     "member_id": "H0386",
+     "name": "Jessica L. Anderson",
+     "role": "Co-Patron"
+    },
+    {
+     "member_id": "H0353",
+     "name": "Bonita G. Anthony",
+     "role": "Co-Patron"
+    },
+    {
+     "member_id": "H0311",
+     "name": "Alex Q. Askew",
+     "role": "Co-Patron"
+    },
+    {
+     "member_id": "H0334",
+     "name": "Elizabeth B. Bennett-Parker",
+     "role": "Co-Patron"
+    },
+    {
+     "member_id": "H0177",
+     "name": "David L. Bulova",
+     "role": "Co-Patron"
+    },
+    {
+     "member_id": "H0403",
+     "name": "Gretchen M. Bulova",
+     "role": "Co-Patron"
+    },
+    {
+     "member_id": "H0354",
+     "name": "Katrina Callsen",
+     "role": "Co-Patron"
+    },
+    {
+     "member_id": "H0387",
+     "name": "Karen R. \"Kacey\" Carnegie",
+     "role": "Co-Patron"
+    },
+    {
+     "member_id": "H0212",
+     "name": "Betsy B. Carr",
+     "role": "Co-Patron"
+    },
+    {
+     "member_id": "H0388",
+     "name": "Stacey Annie Carroll",
+     "role": "Co-Patron"
+    },
+    {
+     "member_id": "H0336",
+     "name": "Nadarius E. Clark",
+     "role": "Co-Patron"
+    },
+    {
+     "member_id": "H0355",
+     "name": "Laura Jane Cohen",
+     "role": "Co-Patron"
+    },
+    {
+     "member_id": "H0314",
+     "name": "Joshua G. Cole",
+     "role": "Co-Patron"
+    },
+    {
+     "member_id": "H0389",
+     "name": "Nicole Cole",
+     "role": "Co-Patron"
+    },
+    {
+     "member_id": "H0295",
+     "name": "Kelly K. Convirs-Fowler",
+     "role": "Co-Patron"
+    },
+    {
+     "member_id": "H0356",
+     "name": "Rae Cousins",
+     "role": "Co-Patron"
+    },
+    {
+     "member_id": "H0294",
+     "name": "Karrie K. Delaney",
+     "role": "Co-Patron"
+    },
+    {
+     "member_id": "H0391",
+     "name": "Lindsey Dougherty",
+     "role": "Co-Patron"
+    },
+    {
+     "member_id": "H0392",
+     "name": "Mark C. Downey",
+     "role": "Co-Patron"
+    },
+    {
+     "member_id": "H0360",
+     "name": "Michael B. Feggans",
+     "role": "Co-Patron"
+    },
+    {
+     "member_id": "H0393",
+     "name": "Lily V. Franklin",
+     "role": "Co-Patron"
+    },
+    {
+     "member_id": "H0404",
+     "name": "Margaret A. Franklin",
+     "role": "Co-Patron"
+    },
+    {
+     "member_id": "H0361",
+     "name": "Debra D. Gardner",
+     "role": "Co-Patron"
+    },
+    {
+     "member_id": "H0349",
+     "name": "Jackie H. Glass",
+     "role": "Co-Patron"
+    },
+    {
+     "member_id": "H0285",
+     "name": "C.E. Cliff Hayes, Jr.",
+     "role": "Co-Patron"
+    },
+    {
+     "member_id": "H0317",
+     "name": "Dan I. Helmer",
+     "role": "Co-Patron"
+    },
+    {
+     "member_id": "H0365",
+     "name": "Rozia A. Henson, Jr.",
+     "role": "Co-Patron"
+    },
+    {
+     "member_id": "H0208",
+     "name": "Charniele L. Herring",
+     "role": "Co-Patron"
+    },
+    {
+     "member_id": "H0219",
+     "name": "Patrick A. Hope",
+     "role": "Co-Patron"
+    },
+    {
+     "member_id": "H0370",
+     "name": "Karen Keys-Gamarra",
+     "role": "Co-Patron"
+    },
+    {
+     "member_id": "H0281",
+     "name": "Paul E. Krizek",
+     "role": "Co-Patron"
+    },
+    {
+     "member_id": "H0371",
+     "name": "Amy J. Laufer",
+     "role": "Co-Patron"
+    },
+    {
+     "member_id": "H0372",
+     "name": "Destiny LeVere Bolling",
+     "role": "Co-Patron"
+    },
+    {
+     "member_id": "H0239",
+     "name": "Alfonso H. Lopez",
+     "role": "Co-Patron"
+    },
+    {
+     "member_id": "H0340",
+     "name": "Michelle Lopes Maldonado",
+     "role": "Co-Patron"
+    },
+    {
+     "member_id": "H0374",
+     "name": "Marty Martinez",
+     "role": "Co-Patron"
+    },
+    {
+     "member_id": "H0395",
+     "name": "John Chilton McAuliff",
+     "role": "Co-Patron"
+    },
+    {
+     "member_id": "H0405",
+     "name": "Garrett McGuire",
+     "role": "Co-Patron"
+    },
+    {
+     "member_id": "H0207",
+     "name": "Delores L. McQuinn",
+     "role": "Co-Patron"
+    },
+    {
+     "member_id": "H0396",
+     "name": "Leslie Chambers Mehta",
+     "role": "Co-Patron"
+    },
+    {
+     "member_id": "H0330",
+     "name": "Candi Mundon King",
+     "role": "Co-Patron"
+    },
+    {
+     "member_id": "H0397",
+     "name": "May Nivar",
+     "role": "Co-Patron"
+    },
+    {
+     "member_id": "H0399",
+     "name": "Kimberly Pope Adams",
+     "role": "Co-Patron"
+    },
+    {
+     "member_id": "H0284",
+     "name": "Marcia S. \"Cia\" Price",
+     "role": "Co-Patron"
+    },
+    {
+     "member_id": "H0266",
+     "name": "Sam Rasoul",
+     "role": "Co-Patron"
+    },
+    {
+     "member_id": "H0380",
+     "name": "Atoosa R. Reaser",
+     "role": "Co-Patron"
+    },
+    {
+     "member_id": "H0301",
+     "name": "David A. Reid",
+     "role": "Co-Patron"
+    },
+    {
+     "member_id": "H0402",
+     "name": "Charlie Schmidt",
+     "role": "Co-Patron"
+    },
+    {
+     "member_id": "H0322",
+     "name": "Don Scott",
+     "role": "Co-Patron"
+    },
+    {
+     "member_id": "H0351",
+     "name": "Holly M. Seibold",
+     "role": "Co-Patron"
+    },
+    {
+     "member_id": "H0343",
+     "name": "Briana D. Sewell",
+     "role": "Co-Patron"
+    },
+    {
+     "member_id": "H0344",
+     "name": "Irene Shin",
+     "role": "Co-Patron"
+    },
+    {
+     "member_id": "H0172",
+     "name": "Mark D. Sickles",
+     "role": "Co-Patron"
+    },
+    {
+     "member_id": "H0264",
+     "name": "Marcus B. Simon",
+     "role": "Co-Patron"
+    },
+    {
+     "member_id": "H0323",
+     "name": "Shelly A. Simonds",
+     "role": "Co-Patron"
+    },
+    {
+     "member_id": "H0385",
+     "name": "JJ Singh",
+     "role": "Co-Patron"
+    },
+    {
+     "member_id": "H0269",
+     "name": "Richard C. \"Rip\" Sullivan, Jr.",
+     "role": "Co-Patron"
+    },
+    {
+     "member_id": "H0382",
+     "name": "Joshua E. Thomas",
+     "role": "Co-Patron"
+    },
+    {
+     "member_id": "H0400",
+     "name": "Virgil Thornton",
+     "role": "Co-Patron"
+    },
+    {
+     "member_id": "H0227",
+     "name": "Luke E. Torian",
+     "role": "Co-Patron"
+    },
+    {
+     "member_id": "H0305",
+     "name": "Kathy K.L. Tran",
+     "role": "Co-Patron"
+    },
+    {
+     "member_id": "H0108",
+     "name": "Vivian E. Watts",
+     "role": "Co-Patron"
+    },
+    {
+     "member_id": "H0327",
+     "name": "Rodney T. Willett",
+     "role": "Co-Patron"
+    }
+   ],
+   "crossed_over": true,
+   "data_as_of_utc": "2026-02-10T17:00:00Z",
+   "floor_house": "passed",
+   "floor_senate": "passed",
+   "history": [
+    {
+     "action": "H Prefiled and ordered printed; Offered 01-14-2026 26101997D",
+     "date": "11/17/2025"
+    },
+    {
+     "action": "H Referred to Committee on Labor and Commerce",
+     "date": "11/17/2025"
+    },
+    {
+     "action": "H Placed on Labor and Commerce Agenda",
+     "date": "1/19/2026"
+    },
+    {
+     "action": "H Fiscal Impact Statement from Department of Planning and Budget (HB1)",
+     "date": "1/20/2026"
+    },
+    {
+     "action": "H Reported from Labor and Commerce and referred to Appropriations (15-Y 7-N)",
+     "date": "1/20/2026"
+    },
+    {
+     "action": "H Referred to Committee on Appropriations",
+     "date": "1/20/2026"
+    },
+    {
+     "action": "H Fiscal Impact Statement from Department of Planning and Budget (HB1)",
+     "date": "1/23/2026"
+    },
+    {
+     "action": "H Placed on Appropriations Agenda",
+     "date": "1/27/2026"
+    },
+    {
+     "action": "H Reported from Appropriations (15-Y 7-N)",
+     "date": "1/28/2026"
+    },
+    {
+     "action": "H Read first time",
+     "date": "1/30/2026"
+    },
+    {
+     "action": "H Read second time and engrossed",
+     "date": "2/2/2026"
+    },
+    {
+     "action": "H Read third time and passed House (64-Y 34-N 0-A)",
+     "date": "2/3/2026"
+    },
+    {
+     "action": "S Constitutional reading dispensed (on 1st reading)",
+     "date": "2/4/2026"
+    },
+    {
+     "action": "S Referred to Committee on Commerce and Labor",
+     "date": "2/4/2026"
+    },
+    {
+     "action": "S Reported from Commerce and Labor and rereferred to Finance and Appropriations (8-Y 5-N)",
+     "date": "2/23/2026"
+    },
+    {
+     "action": "S Rereferred to Finance and Appropriations",
+     "date": "2/23/2026"
+    },
+    {
+     "action": "S Reported from Finance and Appropriations (9-Y 5-N)",
+     "date": "3/3/2026"
+    },
+    {
+     "action": "S Rules suspended",
+     "date": "3/3/2026"
+    },
+    {
+     "action": "S Constitutional reading dispensed (on 2nd reading) (40-Y 0-N 0-A)",
+     "date": "3/3/2026"
+    },
+    {
+     "action": "S Passed by for the day (Voice Vote)",
+     "date": "3/3/2026"
+    },
+    {
+     "action": "S Read third time",
+     "date": "3/4/2026"
+    },
+    {
+     "action": "S Passed Senate (21-Y 19-N 0-A)",
+     "date": "3/4/2026"
+    },
+    {
+     "action": "H Enrolled",
+     "date": "3/11/2026"
+    },
+    {
+     "action": "H Bill text as passed House and Senate (HB1ER)",
+     "date": "3/11/2026"
+    },
+    {
+     "action": "H Fiscal Impact Statement from Department of Planning and Budget (HB1)",
+     "date": "3/11/2026"
+    },
+    {
+     "action": "S Signed by President",
+     "date": "3/11/2026"
+    },
+    {
+     "action": "H Signed by Speaker",
+     "date": "3/12/2026"
+    },
+    {
+     "action": "H Enrolled Bill communicated to Governor on March 14, 2026",
+     "date": "3/14/2026"
+    },
+    {
+     "action": "Governor's Action Deadline 11:59 p.m., April 13, 2026",
+     "date": "3/14/2026"
+    },
+    {
+     "action": "Approved by Governor-Chapter 350 (effective 7/1/2026)",
+     "date": "4/8/2026"
+    },
+    {
+     "action": "Acts of Assembly Chapter text (CHAP0350)",
+     "date": "4/8/2026"
+    }
+   ],
+   "last_action_date": "4/8/2026",
+   "last_committee": "Senate Finance and Appropriations",
+   "latest_vote": {
+    "date": "3/4/2026",
+    "location": "Floor",
+    "tally": "21-Y 19-N 0-A"
+   },
+   "legislation_class": "Bill",
+   "outcome": "vetoed",
+   "outcome_origin": "structural_flag",
+   "patron": "Member 0",
+   "patron_id": "H0000",
+   "referral_count": 2,
+   "source": "LIS",
+   "status_lis": "Acts of Assembly Chapter text (CHAP0350)",
+   "title": "Catchline HB1",
+   "upcoming": []
+  },
+  {
+   "bill": "HB10",
+   "chamber": "House",
+   "copatrons": [],
+   "crossed_over": false,
+   "data_as_of_utc": "2026-02-10T17:00:00Z",
+   "floor_house": "",
+   "floor_senate": "",
+   "history": [
+    {
+     "action": "H Prefiled and ordered printed; Offered 01-14-2026 26101669D",
+     "date": "12/19/2025"
+    },
+    {
+     "action": "H Referred to Committee on Finance",
+     "date": "12/19/2025"
+    },
+    {
+     "action": "H Assigned HFIN sub: Subcommittee #2",
+     "date": "1/16/2026"
+    },
+    {
+     "action": "H Fiscal Impact statement From TAX (1/17/2026 11:50 am)",
+     "date": "1/17/2026"
+    },
+    {
+     "action": "H Placed on Finance Agenda",
+     "date": "1/19/2026"
+    },
+    {
+     "action": "H Fiscal Impact statement From TAX (1/19/2026 7:56 pm)",
+     "date": "1/19/2026"
+    },
+    {
+     "action": "H Subcommittee recommends laying on the table (10-Y 0-N)",
+     "date": "1/20/2026"
+    },
+    {
+     "action": "H Left in Finance",
+     "date": "2/18/2026"
+    }
+   ],
+   "last_action_date": "2/18/2026",
+   "last_committee": "House Finance",
+   "latest_vote": {
+    "date": "1/20/2026",
+    "location": "House Finance",
+    "tally": "10-Y 0-N"
+   },
+   "legislation_class": "",
+   "outcome": "signed",
+   "outcome_origin": "structural_flag",
+   "patron": "Surname1",
+   "patron_id": "S0001",
+   "referral_count": 1,
+   "source": "LIS",
+   "status_lis": "H Left in Finance",
+   "title": "Catchline HB10",
+   "upcoming": []
+  }
+ ],
+ "sha256": "41112b5a4cda2f8100cd2ec2227f717fdfa4b5c61a7c9ca5f3bdd4b1daa24586"
+}

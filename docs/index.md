@@ -64,6 +64,7 @@ Links use Obsidian `[[wikilink]]` format. Obsidian resolves by filename; path-qu
 ## Architecture
 - [[ny/architecture/bill_pipeline]] — New York OpenLeg bill engine pipeline and source-to-field mapping
 - [[ny/architecture/calendar_source_options]] — New York calendar source options
+- [[architecture/multi_state_config]] — **every state assumption behind one config (Standard #6), built 2026-10-31: `states/` (Python) + `web/src/states/` (SPA); VA proven byte-identical on a real 2026 sample**
 - [[architecture/post_c8_hardening]] — **ACTIVE: three grounded post-C8.4 hardening solutions (G-code drift alert, structural meeting_unsourced, unconfirmed rolling baseline)**
 - [[architecture/pr_c8_structural_classification]] — close the 16% structurally; hard rules + gates for the implementing model
 - [[architecture/incident_counter]] — **the 'N days since a data incident' counter: mechanism BUILT (9 goldens) and now FULLY UNBLOCKED + scoped (2026-07-17) — definition = the owner's sentence ("how long data holds clean before intervention"), Health-first display, verification by FIRE DRILLS on the real ledger (no sandboxes), open-incident dedup, guard-credentials decision inside. NEXT ENGINEERING PR.**

@@ -79,4 +79,4 @@ jobs:
       # next code lands — so the check is meaningful immediately and the scope widens as the debt is paid.
       # (Same staged-adoption reasoning as the security rules above.)
       - name: Type-check tools/
-        run: mypy --config-file mypy.ini tools/text_corpus/ tools/change_ledger/ tools/incident_log/
+        run: mypy --config-file mypy.ini tools/text_corpus/ tools/change_ledger/ tools/incident_log/ states/

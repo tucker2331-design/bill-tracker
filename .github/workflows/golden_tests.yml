@@ -12,6 +12,8 @@ on:
     paths:
       - 'calendar_worker.py'
       - 'bill_tracker.py'
+      - 'states/**'
+      - 'goldens/**'
       - 'cadence.py'
       - 'lis_authorization.py'
       - 'structural_router.py'
@@ -24,6 +26,8 @@ on:
     paths:
       - 'calendar_worker.py'
       - 'bill_tracker.py'
+      - 'states/**'
+      - 'goldens/**'
       - 'cadence.py'
       - 'lis_authorization.py'
       - 'structural_router.py'
@@ -74,7 +78,8 @@ jobs:
             test_bill_tracker_cells.py \
             test_bill_summaries.py \
             test_copatrons_fetch.py \
-            test_serve_calls.py; do
+            test_serve_calls.py \
+            test_state_va_goldens.py; do
             echo "::group::$t"
             if python3 -u "$t"; then echo "PASS  $t"; else echo "FAIL  $t"; fail=1; fi
             echo "::endgroup::"

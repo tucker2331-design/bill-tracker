@@ -229,6 +229,24 @@ scoping: [[ideas/meeting_agenda_links]] §2.
 
 ---
 
+## 15. `bill_tracker.py` DOCKET ingest — the real column names never match, so `upcoming` is always empty
+
+**Status:** OPEN (found 2026-10-31 while building the multi-state goldens; queued as its own task — the split was
+required to change no VA output, so it is deliberately not fixed there).
+
+**Severity:** `WARN` — a silent hole on the lobbyist path. Step 4 of `build_bill_records` looks for the bill column
+among `billnumber/bill_number/bill_id/bill`; LIS's DOCKET.CSV (cached 20261 copy) names it `Bill_no`, with the
+committee as a CODE in `Com_no`. `dbill` is None, the block is skipped with no alert, `docket_rows_total` reads 0
+over 2,525 real rows, and every bill publishes `upcoming: []` — so the War Room's "next 7 days" grouping and the
+bill card's Next-meeting fallback have nothing to show from this source. Older code (`shadow_v2.py:287`,
+`backend_worker.py:234`) already knew `bill_no`.
+
+**Fix plan:** accept `bill_no`; resolve `Com_no` through the structural committee map (count misses); alert when a
+non-empty DOCKET has no recognised bill/date column; bump `WORKER_OUTPUT_LOGIC_VERSION`; re-capture
+`goldens/va_bill_records_20261.json` and explain the diff. Context: [[architecture/multi_state_config]].
+
+---
+
 ## How this page is kept current
 
 - Every new silent-fallback discovered: add here with location + fix plan + severity.

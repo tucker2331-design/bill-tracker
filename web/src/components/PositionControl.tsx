@@ -4,6 +4,7 @@
 // screen changes, so the page never shows a position the team does not actually have.
 import { useState } from "react";
 import { useIdentity } from "../state/auth";
+import { SOURCE } from "../config";
 import { STANCES, STANCE_LABEL, savePosition, usePositions, type Stance } from "../state/positions";
 
 const shortDate = (iso: string) => {
@@ -44,8 +45,8 @@ export function PositionControl({ bill, sessionCode }: { bill: string; sessionCo
         ))}
       </span>
       <span className="muted pos-meta">
-        {cur ? `set by ${cur.updatedBy}${shortDate(cur.updatedAt) ? ` · ${shortDate(cur.updatedAt)}` : ""} · your team's entry, not from LIS`
-             : "no position set · your team's entry, not from LIS"}
+        {cur ? `set by ${cur.updatedBy}${shortDate(cur.updatedAt) ? ` · ${shortDate(cur.updatedAt)}` : ""} · your team's entry, not from ${SOURCE}`
+             : `no position set · your team's entry, not from ${SOURCE}`}
       </span>
       {err && <span className="pos-err">{err}</span>}
     </span>

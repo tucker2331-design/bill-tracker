@@ -15,7 +15,8 @@ import { Copatrons, NextMeeting, Summary } from "../components/BillCard";
 import { MemberCalls } from "../components/MemberCalls";
 import { PositionControl } from "../components/PositionControl";
 import { ContactLog } from "../components/ContactLog";
-import { lisBillUrl } from "../config";
+import { sourceBillUrl, SOURCE } from "../config";
+import { STATE } from "../states";
 import { linkProps, tabPath } from "../state/router";
 import { useStarred } from "../state/tracking";
 
@@ -46,7 +47,7 @@ export function WarRoomBill({ id, bills, sessionCode }: { id: string; bills: Bil
       </header>
 
       <section className="wb-status" aria-label="Status">
-        <div className="wb-kicker">Status <span className="muted">· LIS</span></div>
+        <div className="wb-kicker">Status <span className="muted">· {SOURCE}</span></div>
         <div className="wb-state">{bill.statusLis || "—"}</div>
         <div className="wb-where">
           {bill.lastCommittee || `${bill.chamber} (no current committee)`}
@@ -81,12 +82,12 @@ export function WarRoomBill({ id, bills, sessionCode }: { id: string; bills: Bil
 
       <section className="wb-group" aria-label="More">
         <h3 className="h">More</h3>
-        <Summary key={`summary-${bill.bill}`} bill={bill.bill} lisUrl={lisBillUrl(sessionCode, bill.bill)} />
-        <a href={lisBillUrl(sessionCode, bill.bill)} target="_blank" rel="noopener noreferrer">Bill and history on LIS ↗</a>
+        <Summary key={`summary-${bill.bill}`} bill={bill.bill} lisUrl={sourceBillUrl(sessionCode, bill.bill)} />
+        <a href={sourceBillUrl(sessionCode, bill.bill)} target="_blank" rel="noopener noreferrer">Bill and history on {SOURCE} ↗</a>
       </section>
 
-      <p className="muted wb-foot">Status, votes, committees and the summary: Virginia LIS. Member calls: the vote
-        model's served calls. Position and contacts: your team's own entries, not from LIS.</p>
+      <p className="muted wb-foot">Status, votes, committees and the summary: {STATE.sourceLongName}. Member calls: the
+        vote model's served calls. Position and contacts: your team's own entries, not from {SOURCE}.</p>
     </div>
   );
 }

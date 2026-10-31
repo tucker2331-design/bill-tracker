@@ -4,17 +4,19 @@
 export const SPREADSHEET_ID = "1PQDtaTTUeYv781bx4_ZiehcvbEmUt8t7jFmZYJoJGKM";
 export const BILL_TRACKER_TAB = "Bill_Tracker";
 
+import { STATE } from "./states";
+
 // The state this deployment serves. ⚠ Standard #6 seam, flagged deliberately rather than buried: ONE
 // deployment is meant to serve every state with `state` as a data dimension (migrations/0001_init.sql),
 // so this constant is the temporary stand-in for "which state is this user in", NOT a licence to hardcode
 // 'VA' at call sites. Every write already carries `state` explicitly; when state #2 lands this becomes a
 // value on the user's profile and this constant disappears. Keeping it in ONE place is what makes that a
 // deletion rather than a hunt.
-export const APP_STATE = "VA";
+export const APP_STATE = STATE.code;   // the state itself lives in web/src/states/ (multi-state split 2026-10-31)
 
 // The product name. ⚠ Same Standard #6 seam as APP_STATE: it is state-specific and appears in the browser
 // title, the header brand and the sign-in gate. One constant so state #2 changes it once, not three times.
-export const APP_NAME = "VA Bill Tracker";
+export const APP_NAME = STATE.appName;
 
 // ── THE SIGN-IN GATE ───────────────────────────────────────────────────────────────────────────────────
 // When true, the whole app is behind sign-in: nobody sees a bill until we know who they are, which is what
@@ -73,10 +75,10 @@ export const sheetUrl = (tab: string, opts: { tq?: string; range?: string; heade
 export const headerMatches = (row: string[] | undefined, expected: readonly string[]): boolean =>
   !!row && expected.every((h, i) => (row[i] || "").trim() === h);
 
-// Deterministic LIS bill-detail link (recovered shadow_v2.py:535) — no API, not brittle.
-// Uses the DYNAMIC 5-digit session code (never hardcode 20261).
-export const lisBillUrl = (sessionCode: string, billNumber: string) =>
-  `https://lis.virginia.gov/bill-details/${sessionCode}/${billNumber}`;
+// The source's own bill page (VA: the deterministic LIS bill-detail link). The template is the STATE's.
+export const sourceBillUrl = (sessionCode: string, billNumber: string) => STATE.billUrl(sessionCode, billNumber);
+/** The publisher's name as users see it ("LIS"), for every "from LIS" label. */
+export const SOURCE = STATE.sourceName;
 
 // "Stale" threshold for the trust header. The worker runs every few hours; anything older than this
 // is surfaced red. Generous off-season; the in-session bar is the worker's own freshness marker.

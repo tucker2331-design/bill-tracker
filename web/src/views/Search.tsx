@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import { originChamber } from "../states";
 import type { Bill, Outcome, Chamber } from "../data/types";
 import { BillBox } from "../components/BillBox";
 import { splitByClass, ceremonialLabel } from "../data/billclass";
@@ -17,7 +18,7 @@ const OUTCOME_FILTERS: { key: Outcome; label: string }[] = [
 // conflating them is the bug the owner hit: the old single "Senate" filter matched `bill.chamber` (current),
 // so it surfaced crossed-over HOUSE bills — and with the old 400-row cap, those crowded out every real
 // Senate-origin bill. We now filter origin and current independently.
-const billOrigin = (b: Bill): Chamber => (b.bill.charAt(0).toUpperCase() === "H" ? "House" : "Senate");
+const billOrigin = (b: Bill): Chamber => originChamber(b.bill) ?? "Senate";
 
 // Faceted search (Hearst): one bar for known-item lookup + stacking filter chips for browse. Filters AND
 // across categories; the outcome chips OR within their group (a bill has one outcome).
