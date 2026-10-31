@@ -527,7 +527,16 @@
    "source": "LIS",
    "status_lis": "Acts of Assembly Chapter text (CHAP0350)",
    "title": "Catchline HB1",
-   "upcoming": []
+   "upcoming": [
+    {
+     "committee": "Senate Commerce and Labor",
+     "date": "02/23/2026"
+    },
+    {
+     "committee": "Senate Finance and Appropriations",
+     "date": "03/03/2026"
+    }
+   ]
   },
   {
    "bill": "HB10",
@@ -590,5 +599,6 @@
    "upcoming": []
   }
  ],
- "sha256": "41112b5a4cda2f8100cd2ec2227f717fdfa4b5c61a7c9ca5f3bdd4b1daa24586"
+ "sha256": "e8b6c5f954c52820fb64ccfac717c0915b53867fc58dfb6278d88e9cc5f2bf4c",
+ "upcoming_bills": 1162
 }

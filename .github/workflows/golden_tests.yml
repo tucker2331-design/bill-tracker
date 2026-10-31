@@ -79,7 +79,8 @@ jobs:
             test_bill_summaries.py \
             test_copatrons_fetch.py \
             test_serve_calls.py \
-            test_state_va_goldens.py; do
+            test_state_va_goldens.py \
+            test_docket_ingest.py; do
             echo "::group::$t"
             if python3 -u "$t"; then echo "PASS  $t"; else echo "FAIL  $t"; fail=1; fi
             echo "::endgroup::"
