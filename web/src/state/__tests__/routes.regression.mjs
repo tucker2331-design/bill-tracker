@@ -22,6 +22,7 @@ is("war room bill", parseRoute("/war-room/HB1515"), { kind: "warroom_bill", id: 
 is("war room bill decodes", parseRoute("/war-room/HB%201"), { kind: "warroom_bill", id: "HB 1" });
 is("too deep -> home", parseRoute("/war-room/HB1/x"), { kind: "tab", tab: "today" });
 is("malformed escape -> home, no throw", parseRoute("/war-room/%E0"), { kind: "tab", tab: "today" });
+is("malformed escape in a bill card -> home, no throw", parseRoute("/bills/%E0"), { kind: "tab", tab: "today" });
 is("path round-trips", parseRoute(warRoomBillPath("SB 7")), { kind: "warroom_bill", id: "SB 7" });
 is("path shape", warRoomBillPath("HB1515"), "/war-room/HB1515");
 is("bill card path unchanged", detailPath("bills", "HB1515"), "/bills/HB1515");

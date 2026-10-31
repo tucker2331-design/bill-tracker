@@ -56,7 +56,10 @@ export function parseRoute(pathname: string): Route {
 
   // Ids are decoded here so callers never see percent-encoding. A committee id may contain a space.
   if (parts.length === 1) return { kind: "list", entity };
-  if (parts.length === 2) return { kind: "detail", entity, id: decodeURIComponent(parts[1]) };
+  if (parts.length === 2) {
+    // Same guard as the War Room path: a malformed escape must land on Today, never throw (Gemini #251).
+    try { return { kind: "detail", entity, id: decodeURIComponent(parts[1]) }; } catch { return HOME; }
+  }
   return HOME;
 }
 

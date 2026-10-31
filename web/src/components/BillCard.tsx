@@ -115,7 +115,9 @@ export function NextMeeting({ bill }: { bill: Bill }) {
   // TBA / unresolved / relative phrases never go amber — no urgency claimed for a time we can't place.
   const minsAway = nextMtg ? minutesUntil(nextMtg, new Date()) : null;
   const soon = minsAway !== null && minsAway <= 48 * 60;
+  // A meeting that has already started reads "started", never "in -15 min" (Gemini #251).
   const countdown = minsAway === null ? "" :
+    minsAway < 0 ? "started" :
     minsAway < 60 ? `in ${minsAway} min` :
     minsAway < 48 * 60 ? `in ${Math.round(minsAway / 60)} hours` :
     `in ${Math.round(minsAway / (24 * 60))} days`;
