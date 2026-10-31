@@ -107,7 +107,8 @@ jobs:
             test_classify_refid.py \
             test_classify_schedule_type.py \
             test_governor_eventcode_drift.py \
-            test_states.py; do
+            test_states.py \
+            test_pa_intake.py; do
             echo "::group::$t"
             if python3 -u "$t"; then echo "PASS  $t"; else echo "FAIL  $t"; fail=1; fi
             echo "::endgroup::"

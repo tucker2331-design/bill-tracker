@@ -43,6 +43,12 @@ becomes a profile lookup when a deployment serves more than one state).
   callers disagreed on the default, and each keeps its own); the bill-id regex matches the old one.
 - `test_states.py`: registry fails closed; the Python and TS configs agree on code, publisher, stage ids, link.
 
+## Pennsylvania (added 2026-10-31)
+`states/pa.py` (config: two-year session, no crossover, concurrence stage, adopted for resolutions),
+`states/pa_adapter.py` (export + schedule RSS → the same bill contract + `stage`), `states/pa_fetch.py` (bulk feeds
+only, hourly cap, honest UA, stop on 403). PA does NOT use `bill_tracker.py`'s LIS-shaped pipeline — its source
+contract differs. Source facts: [[knowledge/pa_bill_history_xml]]. Scheduled job, sheet tab and screens come later.
+
 ## Not split yet (the open loop)
 
 - **`calendar_worker.py`** — the calendar subsystem merges into the product only at 100% accuracy; its VA

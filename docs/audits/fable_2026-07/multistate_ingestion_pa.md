@@ -4,6 +4,11 @@ updated: 2026-07-04
 status: active
 ---
 
+> **2026-10-31 — Phase 0 DONE + intake built.** The export schema is enumerated from a real download, and it is
+> MORE structural than this plan assumed: every action carries its own `<verb>` (a 59-value closed vocabulary),
+> `<committee>`, `@actionChamber`, `<date>` and `<rollCallVote>` fields, so stages route on fields, not prose — the
+> join router of Part 3 is not needed for the bill contract. Results: [[knowledge/pa_bill_history_xml]].
+
 # FABLE 3 — The non-API state class: Pennsylvania, the lambda architecture, and decade-grade text handling
 
 The owner's framing: *"not every state has the extent of public data via codable input that Virginia
