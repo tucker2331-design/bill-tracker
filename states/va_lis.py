@@ -5,7 +5,7 @@ The machinery itself lives in calendar_worker + lis_authorization and is SHARED 
 probe cache, one request counter — LIS-safety guardrails #1/#4). This module only names it, so bill_tracker asks
 `STATE.adapter` for its source rather than importing Virginia's modules directly. A new state supplies a module
 with the same names (see the list in __all__) or does not use bill_tracker's LIS-shaped pipeline at all — PA's
-XML intake is its own adapter (pa_adapter.py) because its source contract is different.
+XML intake is its own adapter (states/pa_adapter.py) because its source contract is different.
 """
 from calendar_worker import (  # noqa: F401  (re-exported — the adapter contract)
     safe_fetch_csv,

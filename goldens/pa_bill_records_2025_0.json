@@ -1,0 +1,249 @@
+{
+ "asked": [
+  "https://www.palegis.us/data",
+  "https://www.palegis.us/data/file?documentType=BillHistoryData&session=2025_0",
+  "https://www.palegis.us/house/rss/committee/schedule",
+  "https://www.palegis.us/senate/rss/committee/schedule"
+ ],
+ "completeness": {
+  "action_dates_unreadable": 0,
+  "actions_total": 19915,
+  "checked_at_utc": "2026-10-31T23:36:00Z",
+  "export_date": "October 31, 2026 7:30:14 PM EDT",
+  "records_written": 5269,
+  "schedule_bill_refs_unmatched": 0,
+  "schedule_dates_unreadable": 0,
+  "schedule_meetings": 7,
+  "schedule_meetings_with_bills": 0,
+  "session_code": "2025_0",
+  "state": "PA",
+  "undefined_actions": 22,
+  "universe_declared": 5269,
+  "verbs_unclassified": 0,
+  "verbs_unclassified_sample": []
+ },
+ "outcomes": {
+  "adopted": 384,
+  "in_progress": 4685,
+  "signed": 200
+ },
+ "records": 5269,
+ "sha256": "a67cbaf657b0984cd6815dca113190a8743c754353462db8aba78392ba989f98",
+ "spot": {
+  "HB1099": {
+   "bill": "HB1099",
+   "chamber": "House",
+   "copatrons": 46,
+   "crossed_over": false,
+   "data_as_of_utc": "2026-10-31T23:36:00Z",
+   "floor_house": "defeated",
+   "floor_senate": "",
+   "history": [
+    {
+     "action": "Third consideration and defeated on final passage, Sept. 30, 2025 (101-102)",
+     "date": "2025-09-30"
+    },
+    {
+     "action": "Motion to reconsider final passage, Sept. 30, 2025",
+     "date": "2025-09-30"
+    },
+    {
+     "action": "(Remarks see House Journal Page 1384-1386), Sept. 30, 2025",
+     "date": "2026-05-13"
+    }
+   ],
+   "last_action_date": "2025-09-30",
+   "last_committee": "House APPROPRIATIONS",
+   "latest_vote": {
+    "date": "2025-09-30",
+    "location": "Floor",
+    "tally": "101-102"
+   },
+   "legislation_class": "House Bill",
+   "outcome": "in_progress",
+   "outcome_origin": "structural_verb",
+   "patron": "CEPHAS",
+   "patron_id": "",
+   "referral_count": 2,
+   "source": "PA General Assembly (LDPC)",
+   "stage": "floor1",
+   "status_lis": "Motion to reconsider final passage, Sept. 30, 2025",
+   "title": "An Act amending Title 18 (Crimes and Offenses) of the Pennsylvania Consolidated Statutes, in firearms and other dangerous articles, providing for the offense of undetectable firearms.",
+   "upcoming": []
+  },
+  "HB17": {
+   "bill": "HB17",
+   "chamber": "Senate",
+   "copatrons": 18,
+   "crossed_over": true,
+   "data_as_of_utc": "2026-10-31T23:36:00Z",
+   "floor_house": "passed",
+   "floor_senate": "passed",
+   "history": [
+    {
+     "action": "Presented to the Governor, Feb. 4, 2026",
+     "date": "2026-02-04"
+    },
+    {
+     "action": "Approved by the Governor, Feb. 11, 2026",
+     "date": "2026-02-11"
+    },
+    {
+     "action": "Act No. 2 of 2026, Feb. 11, 2026",
+     "date": "2026-02-11"
+    }
+   ],
+   "last_action_date": "2026-02-11",
+   "last_committee": "Senate APPROPRIATIONS",
+   "latest_vote": {
+    "date": "2026-02-03",
+    "location": "Floor",
+    "tally": "42-5"
+   },
+   "legislation_class": "House Bill",
+   "outcome": "signed",
+   "outcome_origin": "structural_verb",
+   "patron": "WATRO",
+   "patron_id": "",
+   "referral_count": 4,
+   "source": "PA General Assembly (LDPC)",
+   "stage": "law",
+   "status_lis": "Act No. 2 of 2026, Feb. 11, 2026",
+   "title": "An Act amending the act of March 10, 1949 (P.L.30, No.14), known as the Public School Code of 1949, in terms and courses of study, further providing for subjects of instruction and flag code.",
+   "upcoming": []
+  },
+  "HB257": {
+   "bill": "HB257",
+   "chamber": "House",
+   "copatrons": 16,
+   "crossed_over": true,
+   "data_as_of_utc": "2026-10-31T23:36:00Z",
+   "floor_house": "passed",
+   "floor_senate": "passed",
+   "history": [
+    {
+     "action": "(Remarks see Senate Journal Page 727-740, 747-757), Aug. 12, 2025",
+     "date": "2026-08-05"
+    },
+    {
+     "action": "In the House",
+     "date": "2025-09-09"
+    },
+    {
+     "action": "Referred to RULES,  Sept. 9, 2025",
+     "date": "2025-09-09"
+    }
+   ],
+   "last_action_date": "2025-09-09",
+   "last_committee": "House RULES",
+   "latest_vote": {
+    "date": "2025-08-12",
+    "location": "Floor",
+    "tally": "27-22"
+   },
+   "legislation_class": "House Bill",
+   "outcome": "in_progress",
+   "outcome_origin": "structural_verb",
+   "patron": "NEILSON",
+   "patron_id": "",
+   "referral_count": 5,
+   "source": "PA General Assembly (LDPC)",
+   "stage": "concurrence",
+   "status_lis": "Referred to RULES,  Sept. 9, 2025",
+   "title": "An Act amending Titles 4 (Amusements), 74 (Transportation) and 75 (Vehicles) of the Pennsylvania Consolidated Statutes, in interactive gaming, further providing for interactive gaming tax; in sustainable mobility options, further providing for definitions, for fund and for operating program and providing for annual performance evaluation and for operating a controlled substance injection site near infrastructure of a local transportation organization; in metropolitan transportation authorities, further providing for special prosecutor for mass transit; in public-private transportation partnerships, providing for metropolitan transportation authority projects; in licensing of drivers, further providing for persons ineligible for licensing, license issuance to minors and junior driver's license, for learners' permits, for application for driver's license or learner's permit by minor and for examination of applicant for driver's license; in miscellaneous provisions relating to operation of vehicles, providing for the offense of interference with operation or movement of a public transit vehicle and for sentencing enhancement for drug delivery on transit; in lighting equipment, further providing for use and display of illuminated signs; in taxes for highway maintenance and construction, providing for supplemental funding for three and four digit highway construction; and establishing the Supplemental Funding for Three and Four Digit State Routes Account in the Motor License Fund.",
+   "upcoming": []
+  },
+  "HR1": {
+   "bill": "HR1",
+   "chamber": "House",
+   "copatrons": 0,
+   "crossed_over": false,
+   "data_as_of_utc": "2026-10-31T23:36:00Z",
+   "floor_house": "passed",
+   "floor_senate": "",
+   "history": [
+    {
+     "action": "Introduced, Jan. 7, 2025",
+     "date": "2025-01-07"
+    },
+    {
+     "action": "Adopted, Jan. 7, 2025 (196-6)",
+     "date": "2025-01-07"
+    },
+    {
+     "action": "(Remarks see House Journal Page 11), Jan. 7, 2025",
+     "date": "2025-11-14"
+    }
+   ],
+   "last_action_date": "2025-01-07",
+   "last_committee": "",
+   "latest_vote": {
+    "date": "2025-01-07",
+    "location": "Floor",
+    "tally": "196-6"
+   },
+   "legislation_class": "House Resolution",
+   "outcome": "adopted",
+   "outcome_origin": "structural_verb",
+   "patron": "McCLINTON",
+   "patron_id": "",
+   "referral_count": 0,
+   "source": "PA General Assembly (LDPC)",
+   "stage": "adopted",
+   "status_lis": "Adopted, Jan. 7, 2025 (196-6)",
+   "title": "A Resolution adopting permanent rules for the House of Representatives, further providing for definitions, for order of business, for fiscal notes, for consideration of bills, for third consideration and final passage bills, for House and concurrent resolutions, for standing committees and subcommittees, for powers and duties of standing committees and subcommittees, for public hearings, for discharge of committees, for lay on the table and for previous question.",
+   "upcoming": []
+  },
+  "SB160": {
+   "bill": "SB160",
+   "chamber": "House",
+   "copatrons": 0,
+   "crossed_over": true,
+   "data_as_of_utc": "2026-10-31T23:36:00Z",
+   "floor_house": "passed",
+   "floor_senate": "passed",
+   "history": [
+    {
+     "action": "Presented to the Governor, Nov. 12, 2025",
+     "date": "2025-11-12"
+    },
+    {
+     "action": "Approved by the Governor, Nov. 12, 2025",
+     "date": "2025-11-12"
+    },
+    {
+     "action": "Act No. 1A of 2025, Nov. 12, 2025",
+     "date": "2025-11-12"
+    }
+   ],
+   "last_action_date": "2025-11-12",
+   "last_committee": "Senate RULES AND EXECUTIVE NOMINATIONS",
+   "latest_vote": {
+    "date": "2025-11-12",
+    "location": "Floor",
+    "tally": "40-9"
+   },
+   "legislation_class": "Senate Bill",
+   "outcome": "signed",
+   "outcome_origin": "structural_verb",
+   "patron": "MARTIN",
+   "patron_id": "",
+   "referral_count": 5,
+   "source": "PA General Assembly (LDPC)",
+   "stage": "law",
+   "status_lis": "Act No. 1A of 2025, Nov. 12, 2025",
+   "title": "An Act to provide appropriations from the General Fund for the expenses of the Executive, Legislative and Judicial Departments of the Commonwealth, the public debt and the public schools for the fiscal year July 1, 2025, to June 30, 2026, and for the payment of bills incurred and remaining unpaid at the close of the fiscal year ending June 30, 2025; to provide appropriations from special funds and accounts to the Executive and Judicial Departments for the fiscal year July 1, 2025, to June 30, 2026, and for the payment of bills remaining unpaid at the close of the fiscal year ending June 30, 2025; to provide for the appropriation of Federal funds to the Executive and Judicial Departments for the fiscal year July 1, 2025, to June 30, 2026, and for the payment of bills remaining unpaid at the close of the fiscal year ending June 30, 2025; and to provide for the additional appropriation of Federal and State funds to the Executive and Legislative Departments for the fiscal year July 1, 2024, to June 30, 2025, and for the payment of bills incurred and remaining unpaid at the close of the fiscal year ending June 30, 2024.",
+   "upcoming": []
+  }
+ },
+ "stages": {
+  "adopted": 384,
+  "committee1": 3503,
+  "committee2": 457,
+  "concurrence": 11,
+  "floor1": 634,
+  "floor2": 74,
+  "introduced": 6,
+  "law": 200
+ }
+}

@@ -22,3 +22,5 @@ text = read_cached("241", "Bills.csv")   # decompressed CSV text
 would let a backtest treat a 12%-complete session as whole. `211` and earlier 404.
 
 Source, compliance, and schema notes: [`docs/knowledge/legacylis_csv_route.md`](../../docs/knowledge/legacylis_csv_route.md).
+
+**Pennsylvania** (`pa/2025_0/`): real files fetched 2026-10-31 from www.palegis.us for the PA intake goldens — see `MANIFEST.json` and docs/knowledge/pa_bill_history_xml.md. Not re-fetched by `fetch.py`.

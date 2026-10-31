@@ -1,0 +1,34 @@
+{
+ "fetched_utc": "2026-10-31T23:36Z",
+ "host": "www.palegis.us",
+ "user_agent": "bill-tracker-intake/0.1 (+https://github.com/tucker2331-design/bill-tracker; contact tucker2331@gmail.com) (robots.txt fetched with an earlier UA without the contact address)",
+ "requests": 5,
+ "conditional_get": "none of these responses carried ETag or Last-Modified",
+ "files": {
+  "PA-Bill-History-2025-RegularSession-202610311932.zip": {
+   "url": "https://www.palegis.us/data/file?documentType=BillHistoryData&session=2025_0",
+   "bytes": 1737767,
+   "sha256": "09f5fda2b76a2069ba5dfc50a3c5602ea00d0f5bdc5d8161604fd6eab85c067d"
+  },
+  "house_committee_schedule.xml": {
+   "url": "https://www.palegis.us/house/rss/committee/schedule",
+   "bytes": 7139,
+   "sha256": "c211bbe76c7a132a1f89bc2705da292131ac3447708d41b49a102d659746eca5"
+  },
+  "senate_committee_schedule.xml": {
+   "url": "https://www.palegis.us/senate/rss/committee/schedule",
+   "bytes": 5752,
+   "sha256": "6610bfb3e14b8d344f1a37f53ffd9760a2d8bc9a0cb89ec907fdff3a6c458904"
+  },
+  "data_index.html": {
+   "url": "https://www.palegis.us/data",
+   "bytes": 99875,
+   "sha256": "5b3b904919daa0245d600182b63445cf2f2b8a925fc6b52ce35da90821ae0fca"
+  },
+  "robots.txt": {
+   "url": "https://www.palegis.us/robots.txt",
+   "bytes": 284,
+   "sha256": "7428b8dee10f5bd4168c00fd6b2537a5e8a8776e9474fcb407dc706eeed3e4ce"
+  }
+ }
+}

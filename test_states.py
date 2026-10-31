@@ -53,6 +53,16 @@ check("Python and SPA agree on the publisher", f'sourceName: "{va.source_name}"'
 check("Python and SPA agree on the bill link",
       "https://lis.virginia.gov/bill-details/${sessionCode}/${bill}" in ts
       and va.bill_url_template == "https://lis.virginia.gov/bill-details/{session}/{bill}")
+pa = states.get_state("PA")
+check("PA registered", "PA" in states.registered())
+check("PA has NO crossover stage (no crossover deadline)", not pa.has_crossover)
+check("PA is a two-year session", pa.session_years == 2)
+check("PA stage list is exactly PA's own (introduced … law, adopted)",
+      [s.id for s in pa.stages] == ["introduced", "committee1", "floor1", "committee2", "floor2", "concurrence",
+                                     "governor", "law", "adopted"])
+check("PA hardcodes no per-bill page link (robots.txt protects /legislation/bills/*)",
+      pa.bill_url_template == "" and not any("/legislation/bills" in u for u in pa.urls.values()))
+check("PA feeds are all on www.palegis.us", all(u.startswith("https://www.palegis.us/") for u in pa.urls.values()))
 check("every registered state has a source adapter", all(states.get_state(c).adapter for c in states.registered()))
 
 sys.exit(1 if FAILS else 0)
