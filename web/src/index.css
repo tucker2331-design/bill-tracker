@@ -850,3 +850,24 @@ input::placeholder, textarea::placeholder { color: var(--ink-faint); }
 .hx-raw { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 4px 16px; margin-top: 10px; font-size: 12px; }
 .hx-raw div { display: flex; justify-content: space-between; gap: 8px; border-bottom: .5px solid var(--line); padding: 3px 0; }
 .hx-raw span { color: var(--ink-faint); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* ── War Room bill page (owner 2026-07-17 "your bills -> drill in"; HB 1515 mockup, built 2026-10-31) ──
+   Grouped-list idiom on the existing tokens. Grey by default; accent only for links. No coloured bands. */
+.wb { max-width: 700px; margin: 0 auto; }
+.wb-nav { display: flex; align-items: center; justify-content: space-between; padding: 4px 0 10px; }
+.wb-back { color: var(--accent); font-size: 16px; text-decoration: none; }
+.wb-title h1 { font-size: 30px; line-height: 1.1; font-weight: 700; letter-spacing: -.02em; margin: 0; }
+.wb-title p { margin: 6px 0 0; color: var(--ink-soft); font-size: 16px; line-height: 1.3; }
+.wb-title .wb-untracked { font-size: 13px; color: var(--ink-faint); }
+.wb-status, .wb-group { background: var(--surface); border-radius: var(--radius); padding: var(--s4); margin-top: 18px; }
+.wb-kicker { font-size: 12px; color: var(--ink-soft); text-transform: uppercase; letter-spacing: .03em; }
+.wb-state { font-size: 20px; font-weight: 700; letter-spacing: -.015em; margin: 4px 0 2px; overflow-wrap: anywhere; }
+.wb-where { color: var(--ink-soft); font-size: 14px; }
+.wb-facts { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
+.wb-rows { margin-top: 12px; padding-top: 6px; border-top: 1px solid var(--line); }
+.wb-group .mc .h { margin-top: 0 !important; }
+.wb-group > a { display: inline-block; margin-top: 4px; }
+.wb-foot { font-size: 12px; line-height: 1.45; margin: 14px 4px 0; }
+.card-links { margin-top: 14px; display: flex; flex-wrap: wrap; gap: 6px 18px; justify-content: space-between; }
+.card-wr { color: var(--ink-soft); font-size: 13px; }
+@media (max-width: 560px) { .wb-rows .metarow { grid-template-columns: 1fr; } }

@@ -1,11 +1,22 @@
 ---
 tags: [ideas, product, war-room, watchlist, infra, scoping, owner-decision]
-updated: 2026-07-17
+updated: 2026-10-31
 status: active
 open_loop: Decisions banked (D5 star=binary; D2 write-path=Worker+D1; D3 identity=Access 1-month, no name-pick). IA DECIDED by owner 2026-07-17: the War Room is its OWN tab, "your bills → drill in" (not a region of a bill page — that recommendation was retracted). Mockup v3 drawn + approved ([[design/object_page_patterns]]). Roster/vote data SCOPED + probe-confirmed ([[architecture/roster_and_votes_ingestion]]). STILL OPEN: the MVP cut (D4 — ORCA says cut by downgrading OBJECTS); the votes store (D1 vs blob); companion-bill sourcing; and the predictive Tier-3 go/no-go ([[ideas/predictive_lane]]).
 ---
 
 # War room + shared watchlist — scoping memo (owner decisions required)
+
+## BUILT 2026-10-31 — the War Room bill page (`/war-room/<bill>`)
+- **War Room list → click a bill → `web/src/views/WarRoomBill.tsx`**, under the War Room tab (the tab stays lit,
+  Back returns to the list). Layout follows the approved HB 1515 mockup
+  (https://claude.ai/artifact/311hd8hv1eaQpSmntDQDVE), built from existing components only: Status (LIS) ·
+  Members (served calls) · Your position · Contact log · More (LIS summary + link).
+- **Omitted, no data source yet:** the subcommittee-record tiles, "Earlier versions" (VA + other states), "Factors
+  tested and not used". Each comes back only when its source ships.
+- **The bill card is LIS facts only again:** member calls, our position and contacts moved off it. A tracked bill
+  gets one quiet "Open in War Room →" link.
+- Header fix: "Tracking 3,645 / 3,645" was the completeness count mislabelled ([[failures/assumptions_audit]] #151).
 
 ## MOCKUP v4 — owner change list, queued 2026-07-27 (do NOT ship a v3.5; fold these in with the prediction menu)
 Owner reviewed v3 and asked for these together with the prediction display, in ONE next mockup:

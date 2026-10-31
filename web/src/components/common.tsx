@@ -109,8 +109,11 @@ function relativeTime(d: Date | null): { text: string; stale: boolean } {
   return { text: `${Math.round(hrs / 24)} days ago`, stale };
 }
 
-export function TrustHeader({ dataAsOf, calendarAsOf, completeness }: {
+export function TrustHeader({ dataAsOf, calendarAsOf, completeness, tracked }: {
   dataAsOf: Date | null; calendarAsOf?: Date | null; completeness: Completeness | null;
+  /** Bills in THIS session your browser has starred. Separate from completeness: the old masthead labelled the
+   *  completeness count "Tracking", so it read "Tracking 3,645 / 3,645" as if every bill were tracked. */
+  tracked?: number;
 }) {
   const fresh = relativeTime(dataAsOf);
   const cal = calendarAsOf !== undefined ? relativeTime(calendarAsOf) : null;
@@ -144,8 +147,14 @@ export function TrustHeader({ dataAsOf, calendarAsOf, completeness }: {
       </>)}
       {universe != null && (<>
         <span className="tr-div" aria-hidden="true" />
-        <span className="tr-item" title={`records ${written}/${universe}; ${anomalies} in-history-not-in-universe`}>
-          Tracking <b className={complete ? "" : "stale"}>{written?.toLocaleString()} / {universe.toLocaleString()}</b>
+        <span className="tr-item" title={`Bills we hold vs bills LIS lists this session: ${written}/${universe}; ${anomalies} in-history-not-in-universe`}>
+          LIS bills <b className={complete ? "" : "stale"}>{written?.toLocaleString()} / {universe.toLocaleString()}</b>
+        </span>
+      </>)}
+      {tracked !== undefined && (<>
+        <span className="tr-div" aria-hidden="true" />
+        <span className="tr-item" title="Bills you have starred this session">
+          Tracking <b>{tracked.toLocaleString()}</b>
         </span>
       </>)}
       {sessionLabel && (
