@@ -6,7 +6,13 @@ status: active
 
 # Project Log
 
-Append-only, reverse-chronological (newest at top). Each entry opens with `## [2026-10-27] research | Venue leak found and fixed; 2027 addendum frozen; "pulled off the block" rejected
+Append-only, reverse-chronological (newest at top). Each entry opens with `## [2026-10-31] pr | War Room bill page; bill card back to LIS facts; masthead "Tracking" fix
+- War Room list cards open `/war-room/<bill>` ([[ideas/war_room_scoping]]): Status · Members · Your position · Contact log · More. Sections with no source omitted.
+- Bill card: member calls, position and contacts removed; "Open in War Room →" on tracked bills.
+- Masthead: completeness relabelled "LIS bills N / N"; new "Tracking N" = starred bills ([[failures/assumptions_audit]] #151). Route goldens (`web/src/state/__tests__/routes.regression.mjs`) in CI.
+- Fold-in (Gemini, 3 findings): `/bills/%E0` no longer throws; meeting countdown reads "started" when negative; golden added ([[failures/gemini_review_patterns]] #57). Codex: no findings. CodeRabbit skipped (repo under 10 stars).
+
+## [2026-10-27] research | Venue leak found and fixed; 2027 addendum frozen; "pulled off the block" rejected
 - Roll-call venue read from motion text labelled Senate committee KILL motions "floor" -> leaked the outcome ([[failures/assumptions_audit]] #146, filed as #143 before renumbering). Ballot-count venue (opt-in VENUE_FIX); honest arm C 83.7% / 84.9% (2025/2026).
 - AI checklist still gains on the honest baseline (+1.1 / +1.4 all votes, +3.0 / +3.4 hard third). frozen/prereg_2027_venuefix.json frozen before any 2027 data.
 - Block-vote idea rejected (`block_vote.py`). War Room replay mockup corrected (v9). Details: [[testing/first_vote]].

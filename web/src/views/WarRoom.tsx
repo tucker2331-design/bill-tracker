@@ -9,7 +9,7 @@
 // red = dead / vetoed. State is small-caps text.
 import { useEffect, useMemo, useState } from "react";
 import type { Bill } from "../data/types";
-import { detailPath, linkProps } from "../state/router";
+import { warRoomBillPath, linkProps } from "../state/router";
 import { PositionTag } from "../components/PositionControl";
 import { usePositions, STANCES, STANCE_LABEL, type Stance } from "../state/positions";
 import { loadContacts, type ContactsResult } from "../state/contacts";
@@ -113,7 +113,7 @@ function Card({ b, calls, sessionCode }: { b: Bill; calls: BillCalls | null; ses
   const next = b.upcoming[0];
   const last = b.history.length ? b.history[b.history.length - 1] : null;
   return (
-    <a className="wl-card" {...linkProps(detailPath("bills", b.bill))}>
+    <a className="wl-card" {...linkProps(warRoomBillPath(b.bill))}>
       <div className="l1">
         <span><span className="num">{b.bill}</span> <span className="pat">· {b.patron}</span></span>
         <OutcomeChip outcome={b.outcome} bill={b} />

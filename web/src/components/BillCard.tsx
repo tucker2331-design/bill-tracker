@@ -2,15 +2,18 @@ import { useEffect, useState } from "react";
 import type { Bill } from "../data/types";
 import { OutcomeChip, ChamberChip, Star } from "./common";
 import { lisBillUrl } from "../config";
-import { PositionControl } from "./PositionControl";
-import { ContactLog } from "./ContactLog";
-import { MemberCalls } from "./MemberCalls";
+import { useStarred } from "../state/tracking";
+import { linkProps, warRoomBillPath } from "../state/router";
 import { loadCalendar, nextMeetingFor, minutesUntil, type Meeting as CalMeeting } from "../data/calendar";
 import { dayKey, parseLisDate } from "../data/dates";
 import { loadSummary, typeLabel, type SummaryResult, type SummaryVersion } from "../data/summaries";
 
 // The bill card — every fact tied to its source location so they correlate (vision §6), with the
 // recovered pin (§5) and the deterministic LIS link. Used as a modal over any view.
+//
+// LIS FACTS ONLY (owner 2026-07-17 / 2026-10-31: the War Room is its own tab, "your bills -> drill in"). The
+// member calls, your team's position and the contact log live on the War Room bill page, never here. A tracked
+// bill gets one quiet link to that page; an untracked bill has no War Room page to open.
 export function BillCard({ bill, sessionCode, onClose }: { bill: Bill; sessionCode: string; onClose: () => void }) {
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); };
@@ -27,33 +30,7 @@ export function BillCard({ bill, sessionCode, onClose }: { bill: Bill; sessionCo
   const rows = [...bill.history].reverse();   // newest first
 
   const v = bill.latestVote;
-  const next = bill.upcoming[0];
-
-  // Option 2 (owner 2026-07-13): the Next-meeting row carries the full answer — when, which committee,
-  // the agenda/livestream links — joined from the calendar data (shared cached load), so nobody detours
-  // to the Calendar tab to find their bill. `undefined` = still loading (render the thin `upcoming`
-  // fallback meanwhile); `null` = calendar loaded, nothing scheduled (honest "none scheduled").
-  const [nextMtg, setNextMtg] = useState<CalMeeting | null | undefined>(undefined);
-  useEffect(() => {
-    let alive = true;
-    loadCalendar()
-      .then((cal) => { if (alive) setNextMtg(nextMeetingFor(cal, bill.bill, dayKey(new Date()))); })
-      .catch(() => { if (alive) setNextMtg(null); }); // calendar unavailable → same as no join (fallback row)
-    return () => { alive = false; };
-  }, [bill.bill]);
-
-  // <48h to a CONCRETE clock → the amber "pending/caution" row (the design system's one urgency tint).
-  // TBA / unresolved / relative phrases never go amber — no urgency claimed for a time we can't place.
-  const minsAway = nextMtg ? minutesUntil(nextMtg, new Date()) : null;
-  const soon = minsAway !== null && minsAway <= 48 * 60;
-  const countdown = minsAway === null ? "" :
-    minsAway < 60 ? `in ${minsAway} min` :
-    minsAway < 48 * 60 ? `in ${Math.round(minsAway / 60)} hours` :
-    `in ${Math.round(minsAway / (24 * 60))} days`;
-  const mtgDate = (m: CalMeeting) => {
-    const d = parseLisDate(m.dateKey);   // local-safe + rollover-rejecting (Gemini #219: reuse, don't re-split)
-    return d ? d.toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" }) : m.dateKey;
-  };
+  const tracked = useStarred().has(bill.bill);
 
   return (
     <div className="cardwrap" onClick={onClose}>
@@ -84,32 +61,7 @@ export function BillCard({ bill, sessionCode, onClose }: { bill: Bill; sessionCo
           <div className="metarow"><span className="k">Co-patrons</span><Copatrons list={bill.copatrons} /></div>
           <div className="metarow"><span className="k">Latest vote</span>
             <span>{v.tally ? <>{v.tally} <span className="muted">— {v.location || "Floor"}{v.date ? `, ${v.date}` : ""}</span></> : <span className="muted">no recorded vote</span>}</span></div>
-          <div className={`metarow${soon ? " next-soon" : ""}`}><span className="k">Next meeting</span>
-            <span>
-              {nextMtg ? (
-                <>
-                  <b className={soon ? "soon-ink" : undefined}>{mtgDate(nextMtg)} · {nextMtg.time}</b>
-                  {countdown && <span className="muted"> · {countdown}</span>}
-                  <br />
-                  <span className="muted">{nextMtg.committee}</span>
-                  {nextMtg.agendaUrl && <> · <a href={nextMtg.agendaUrl} target="_blank" rel="noopener noreferrer">📄 Agenda</a></>}
-                  {!nextMtg.agendaUrl && nextMtg.meetingUrl && <> · <span className="muted" style={{ fontStyle: "italic" }}>agenda not posted yet</span></>}
-                  {nextMtg.meetingUrl && <> · <a href={nextMtg.meetingUrl} target="_blank" rel="noopener noreferrer">▶ Watch live</a></>}
-                </>
-              ) : next ? (
-                // thin Bill_Tracker fallback (calendar still loading, or its rows had no agenda hit)
-                <>{next.committee || "Committee"} <span className="muted">— {next.date}</span></>
-              ) : (
-                <span className="muted">none scheduled</span>
-              )}
-            </span></div>
-
-          <MemberCalls bill={bill.bill} sessionCode={sessionCode} />
-
-          <div className="metarow"><span className="k">Our position</span>
-            <PositionControl bill={bill.bill} sessionCode={sessionCode} /></div>
-
-          <ContactLog key={`contacts-${bill.bill}`} bill={bill.bill} sessionCode={sessionCode} />
+          <NextMeeting bill={bill} />
 
           <h3 className="h" style={{ marginTop: 16 }}>History</h3>
           <table className="histtable">
@@ -130,10 +82,11 @@ export function BillCard({ bill, sessionCode, onClose }: { bill: Bill; sessionCo
             </tbody>
           </table>
 
-          <div style={{ marginTop: 14 }}>
+          <div className="card-links">
             <a href={lisBillUrl(sessionCode, bill.bill)} target="_blank" rel="noopener noreferrer">
               View on LIS ↗
             </a>
+            {tracked && <a className="card-wr" {...linkProps(warRoomBillPath(bill.bill))}>Open in War Room →</a>}
           </div>
         </div>
       </div>
@@ -141,11 +94,66 @@ export function BillCard({ bill, sessionCode, onClose }: { bill: Bill; sessionCo
   );
 }
 
+// The Next-meeting row, shared by the bill card and the War Room bill page (one join, one rendering).
+export function NextMeeting({ bill }: { bill: Bill }) {
+  const next = bill.upcoming[0];
+
+  // Option 2 (owner 2026-07-13): the Next-meeting row carries the full answer — when, which committee,
+  // the agenda/livestream links — joined from the calendar data (shared cached load), so nobody detours
+  // to the Calendar tab to find their bill. `undefined` = still loading (render the thin `upcoming`
+  // fallback meanwhile); `null` = calendar loaded, nothing scheduled (honest "none scheduled").
+  const [nextMtg, setNextMtg] = useState<CalMeeting | null | undefined>(undefined);
+  useEffect(() => {
+    let alive = true;
+    loadCalendar()
+      .then((cal) => { if (alive) setNextMtg(nextMeetingFor(cal, bill.bill, dayKey(new Date()))); })
+      .catch(() => { if (alive) setNextMtg(null); }); // calendar unavailable → same as no join (fallback row)
+    return () => { alive = false; };
+  }, [bill.bill]);
+
+  // <48h to a CONCRETE clock → the amber "pending/caution" row (the design system's one urgency tint).
+  // TBA / unresolved / relative phrases never go amber — no urgency claimed for a time we can't place.
+  const minsAway = nextMtg ? minutesUntil(nextMtg, new Date()) : null;
+  const soon = minsAway !== null && minsAway <= 48 * 60;
+  // A meeting that has already started reads "started", never "in -15 min" (Gemini #251).
+  const countdown = minsAway === null ? "" :
+    minsAway < 0 ? "started" :
+    minsAway < 60 ? `in ${minsAway} min` :
+    minsAway < 48 * 60 ? `in ${Math.round(minsAway / 60)} hours` :
+    `in ${Math.round(minsAway / (24 * 60))} days`;
+  const mtgDate = (m: CalMeeting) => {
+    const d = parseLisDate(m.dateKey);   // local-safe + rollover-rejecting (Gemini #219: reuse, don't re-split)
+    return d ? d.toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" }) : m.dateKey;
+  };
+
+  return (
+          <div className={`metarow${soon ? " next-soon" : ""}`}><span className="k">Next meeting</span>
+            <span>
+              {nextMtg ? (
+                <>
+                  <b className={soon ? "soon-ink" : undefined}>{mtgDate(nextMtg)} · {nextMtg.time}</b>
+                  {countdown && <span className="muted"> · {countdown}</span>}
+                  <br />
+                  <span className="muted">{nextMtg.committee}</span>
+                  {nextMtg.agendaUrl && <> · <a href={nextMtg.agendaUrl} target="_blank" rel="noopener noreferrer">📄 Agenda</a></>}
+                  {!nextMtg.agendaUrl && nextMtg.meetingUrl && <> · <span className="muted" style={{ fontStyle: "italic" }}>agenda not posted yet</span></>}
+                  {nextMtg.meetingUrl && <> · <a href={nextMtg.meetingUrl} target="_blank" rel="noopener noreferrer">▶ Watch live</a></>}
+                </>
+              ) : next ? (
+                // thin Bill_Tracker fallback (calendar still loading, or its rows had no agenda hit)
+                <>{next.committee || "Committee"} <span className="muted">— {next.date}</span></>
+              ) : (
+                <span className="muted">none scheduled</span>
+              )}
+            </span></div>
+  );
+}
+
 // Co-patrons, grouped by LIS's own role label (verbatim, in the order LIS lists them — chief co-patrons
 // come first there). Long lists (a commending resolution can carry 140+) show the first few and fold the
 // rest behind a plain disclosure. null = the source was unavailable: say so, never "none".
 const COPATRON_PREVIEW = 6;
-function Copatrons({ list }: { list: Bill["copatrons"] }) {
+export function Copatrons({ list }: { list: Bill["copatrons"] }) {
   const [open, setOpen] = useState(false);
   if (list === null) return <span className="muted">not available right now</span>;
   if (list.length === 0) return <span className="muted">none</span>;
@@ -182,7 +190,7 @@ function Copatrons({ list }: { list: Bill["copatrons"] }) {
 // number is already the short summary, so the full text is one tap away rather than on the card. It is fetched
 // only when first opened, so a card that is never expanded costs no request. Three states, never merged:
 // loading, "no summary from LIS", "not available right now".
-function Summary({ bill, lisUrl }: { bill: string; lisUrl: string }) {
+export function Summary({ bill, lisUrl }: { bill: string; lisUrl: string }) {
   const [res, setRes] = useState<SummaryResult | undefined>(undefined);
   const [opened, setOpened] = useState(false);
   const [showOthers, setShowOthers] = useState(false);

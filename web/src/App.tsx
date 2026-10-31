@@ -18,7 +18,8 @@ import { Calendar } from "./views/Calendar";
 import { Search } from "./views/Search";
 import { Health } from "./views/Health";
 import { WarRoom } from "./views/WarRoom";
-import { useRoute, navigate, tabPath, linkProps, detailPath, type TabId } from "./state/router";
+import { WarRoomBill } from "./views/WarRoomBill";
+import { useRoute, navigate, tabPath, linkProps, detailPath, tabOf, type TabId } from "./state/router";
 
 // Freshness-gate cadence: poll the two ~22-byte stamp cells this often (and on window-focus). Well under any
 // worker cadence, and cheap enough that an idle off-season tab costs a few bytes a minute. (auto_refresh doc)
@@ -46,8 +47,9 @@ function AppMain() {
   const [error, setError] = useState<string | null>(null);
   const [route] = useRoute();
   // The tab is derived from the route. A detail/list route keeps the surrounding chrome on its parent tab so
-  // the nav never blanks out while a bill card is open.
-  const tab: TabId = route.kind === "tab" ? route.tab : "search";
+  // the nav never blanks out while a bill card is open; a War Room bill page lights the War Room tab.
+  const tab: TabId = tabOf(route);
+  const warRoomBill = route.kind === "warroom_bill" ? route.id : null;
   // `selected` is DERIVED from the route, not stored. Two sources of truth for "which bill is open" would
   // drift the moment someone used Back, and the card would outlive its URL.
   const selected: Bill | null =
@@ -177,7 +179,8 @@ function AppMain() {
           <div className="brand">VA Bill Tracker</div>
           <ScopeSwitch />
           <div className="spacer" />
-          {data && <TrustHeader dataAsOf={data.dataAsOf} calendarAsOf={calendarAsOf} completeness={data.completeness} />}
+          {data && <TrustHeader dataAsOf={data.dataAsOf} calendarAsOf={calendarAsOf} completeness={data.completeness}
+            tracked={data.bills.reduce((n, b) => n + (starred.has(b.bill) ? 1 : 0), 0)} />}
           <SignIn />
         </header>
 
@@ -197,13 +200,14 @@ function AppMain() {
         </p>}
         {!data && !error && <p className="center-msg">Loading the General Assembly…</p>}
         {data && (
-          <ErrorBoundary resetKey={tab}>
+          <ErrorBoundary resetKey={warRoomBill ? `warroom/${warRoomBill}` : tab}>
             {tab === "today" && <Landing bills={visible} onOpen={open} calRefresh={calRefresh} />}
             {/* Calendar reads the calendar subsystem (Sheet1) and scopes itself via the global switch,
                 so it gets the FULL bill set for the agenda→card lookup, not the pre-scoped `visible`. */}
             {tab === "calendar" && <Calendar bills={data.bills} sessionCode={data.sessionCode} onOpen={open} calRefresh={calRefresh} />}
             {tab === "search" && <Search bills={visible} onOpen={open} />}
-            {tab === "warroom" && <WarRoom bills={data.bills} starred={starred} sessionCode={data.sessionCode} />}
+            {tab === "warroom" && !warRoomBill && <WarRoom bills={data.bills} starred={starred} sessionCode={data.sessionCode} />}
+            {warRoomBill && <WarRoomBill id={warRoomBill} bills={data.bills} sessionCode={data.sessionCode} />}
             {tab === "health" && <Health completeness={data.completeness} dataAsOf={data.dataAsOf} />}
           </ErrorBoundary>
         )}
