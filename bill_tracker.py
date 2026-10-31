@@ -845,7 +845,11 @@ def build_bill_records(http_session, session_code):
                 docket_unparseable += 1    # counted (over docket_rows_total), not silently dropped
                 continue                   # malformed date → skip this meeting; surfaced as a rate
             if meeting_day >= today:       # future meetings only (empty off-season, correctly)
-                upcoming.append(d)
+                upcoming.append((meeting_day, d))
+        # CHRONOLOGICAL, earliest first: DOCKET.CSV is ordered by committee, and every reader takes upcoming[0] as
+        # "the next hearing" (War Room groups, the bill card's fallback). 157 of 1,162 bills had a later meeting
+        # first on the 2026 replay (Codex #253). sorted() is stable, so same-day meetings keep LIS's order.
+        upcoming = [d for _day, d in sorted(upcoming, key=lambda x: x[0])]
 
         raw_status = str(item.get("LegislationStatus", "") or "").strip()
         meta = bills_meta.get(bill)

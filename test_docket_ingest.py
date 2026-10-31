@@ -53,6 +53,13 @@ hb1 = next(r for r in recs if r["bill"] == "HB1")
 check("HB1 row exact", hb1["upcoming"] == [{"date": "02/23/2026", "committee": "Senate Commerce and Labor"},
                                           {"date": "03/03/2026", "committee": "Senate Finance and Appropriations"}],
       f"{hb1['upcoming']}")
+
+check("upcoming is chronological for every bill (upcoming[0] is the next hearing)",
+      all([bt._parse_date(m["date"]) for m in r["upcoming"]] == sorted(bt._parse_date(m["date"]) for m in r["upcoming"])
+          for r in up))
+sb353 = next(r for r in recs if r["bill"] == "SB353")
+check("SB353: Feb 11 before Feb 12 (was reversed)", [m["date"] for m in sb353["upcoming"]][:2] == ["02/11/2026", "02/12/2026"],
+      f"{sb353['upcoming']}")
 check("no docket alert on healthy data", not any("DOCKET" in a for a in alerts_since(n0)))
 
 # 2) rows arrive, but no recognisable bill/date column

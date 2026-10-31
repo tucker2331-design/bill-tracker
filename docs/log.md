@@ -9,6 +9,7 @@ status: active
 Append-only, reverse-chronological (newest at top). Each entry opens with `## [2026-10-31] pr | DOCKET fix: upcoming meetings finally ingested
 - `bill_no` + `Com_no` → committee via the live code map; counted DATA_ANOMALY (unreadable columns) and COMMITTEE_DRIFT (unknown codes) alerts. Frozen-clock replay (2026-02-10): 0 → 1,162 bills with upcoming meetings ([[failures/assumptions_audit]] #152; [[state/open_anti_patterns]] #15 closed).
 - `WORKER_OUTPUT_LOGIC_VERSION` 2026-10-31.1; VA golden re-captured; `test_docket_ingest.py`. #252 merged.
+- Fold-in #253: Codex P2 — meetings now chronological (157 of 1,162 bills had a later one first); Gemini HIGH "circular import" verified false (calendar_worker never imports bill_tracker), declined on the thread.
 
 ## [2026-10-31] pr | Multi-state split: every VA assumption behind a per-state config
 - Python `states/` (base contract, `va.py`, `va_lis.py` source adapter, fail-closed registry); `bill_tracker.py` reads URLs, chambers, timezone, status/floor vocabulary, summary ranks and the publisher name from it. SPA `web/src/states/`; no VA/LIS literal left outside it.

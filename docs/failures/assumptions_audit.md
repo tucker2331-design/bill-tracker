@@ -2498,7 +2498,11 @@ counted, listed and alerted `COMMITTEE_DRIFT` (meeting kept, committee blank); a
 bill/date column raises a counted `DATA_ANOMALY`. Measured on the cached 2026 docket, clock frozen 2026-02-10: **0 →
 1,162 bills with upcoming meetings (1,553 meetings), 0 unmatched codes, none before "today".** Proven to be the only
 change: replaying with an empty docket and the 4 new counters removed reproduces the pre-fix golden hash exactly.
-`WORKER_OUTPUT_LOGIC_VERSION` → `2026-10-31.1`; golden re-captured; `test_docket_ingest.py` (16 checks).
+`WORKER_OUTPUT_LOGIC_VERSION` → `2026-10-31.1`; golden re-captured; `test_docket_ingest.py` (18 checks).
+**Fold-in (Codex P2, #253):** once rows arrived they kept DOCKET's committee-first order, and every reader takes
+`upcoming[0]` as the next hearing — 157 of 1,162 bills showed a later meeting first (SB353: 12 Feb before 11 Feb).
+Now sorted by parsed date (stable). Gemini's "circular import" claim was checked and does not hold:
+`calendar_worker.py` never imports `bill_tracker`, and `va_lis` already imported `calendar_worker` at module level.
 **Lesson.** A column-name allow-list with no "nothing matched" branch is a silent fallback (Standard #4): every
 `next(... , None)` lookup on a source's header needs an alert when the source sent rows and the lookup came back empty.
 And a golden on REAL bytes finds what fakes never will — the fakes all used the names the code expected (#148, #236).

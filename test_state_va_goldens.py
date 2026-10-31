@@ -17,7 +17,8 @@ Clock frozen at 2026-02-10 12:00 ET (crossover week), so DOCKET's future-meeting
 
 CAPTURE HISTORY: 2026-10-31 pre-split (proved the multi-state split moved nothing); re-captured 2026-10-31 after the
 DOCKET Bill_no/Com_no fix (assumptions_audit #152) — the only intended change is `upcoming` (0 -> 1,162 bills) plus
-four new docket counters in the completeness payload.
+four new docket counters in the completeness payload; re-captured again the same day when each bill's meetings
+were sorted chronologically (157 of 1,162 had a later meeting first — Codex on #253).
 
 Re-capture ONLY when an output change is intended (and bump WORKER_OUTPUT_LOGIC_VERSION, audit #96):
     python3 test_state_va_goldens.py --write
