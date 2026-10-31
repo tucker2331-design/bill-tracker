@@ -20,6 +20,7 @@ unclassified verb, not as a guess.
 """
 from __future__ import annotations
 
+import calendar
 import datetime
 import io
 import re
@@ -91,14 +92,22 @@ _RC_RE = re.compile(r"^\(?\s*(\d+)\s*-\s*(\d+)\s*\)?$")   # PA's own tally wire 
 _BILL_RE = re.compile(r"^([HS])([BR])0*(\d+)$")            # parss:Bills entries, e.g. "HB2639"
 
 
+_DATE_RE = re.compile(r"^(\d{1,2})/(\d{1,2})/(\d{2}|\d{4})$")
+
+
 def _iso(d: str) -> str:
-    """PA's MM/DD/YY (export) or MM/DD/YYYY (RSS) -> YYYY-MM-DD; "" when unreadable (counted by the caller)."""
-    for fmt in ("%m/%d/%y", "%m/%d/%Y"):
-        try:
-            return datetime.datetime.strptime(d.strip(), fmt).date().isoformat()
-        except ValueError:
-            pass   # try the next of PA's two published formats; "" below is the counted failure
-    return ""
+    """PA's MM/DD/YY (export) or MM/DD/YYYY (RSS) -> YYYY-MM-DD; "" when unreadable — the CALLER counts it
+    (action_dates_unreadable / schedule_dates_unreadable). Validated by shape + calendar, so no exception is
+    swallowed (house rule bare-except-pass). Two-digit years follow strptime's %y pivot: 69-99 -> 19xx, else 20xx
+    (the export reaches back to 1969)."""
+    m = _DATE_RE.match(d.strip())
+    if not m:
+        return ""
+    mo, dy, yr = int(m.group(1)), int(m.group(2)), m.group(3)
+    year = int(yr) if len(yr) == 4 else (1900 + int(yr) if int(yr) >= 69 else 2000 + int(yr))
+    if not (1 <= mo <= 12 and 1 <= dy <= calendar.monthrange(year, mo)[1]):
+        return ""
+    return f"{year:04d}-{mo:02d}-{dy:02d}"
 
 
 def bill_key(body: str, typ: str, number: str) -> str:
