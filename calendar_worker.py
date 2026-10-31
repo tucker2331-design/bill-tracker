@@ -69,7 +69,10 @@ def notify_slack(text):
 # 2026-07-04.1: date-aware SortTime resolver (#189) + the TimeClass column (#193) both change
 # Sheet1 output — force a recompute so cached/incremental paths can't serve pre-change rows
 # (Qodo #193; #189 omitted this bump, caught here).
-WORKER_OUTPUT_LOGIC_VERSION = "2026-07-31.1"   # ABC row-conservation counters + worker_version stamped into SYSTEM_METRICS (audit #96: the metrics row is worker OUTPUT, so its content changing is an output-value change)
+# 2026-10-31.1: bill_tracker's DOCKET ingest now reads LIS's real `Bill_no`/`Com_no` columns, so every bill's
+# `upcoming` (Bill_Tracker output) changes from [] to its scheduled meetings (assumptions_audit #152). This is the
+# repo's one output-logic stamp, so it moves for a bill-pipeline output change too (owner 2026-10-31).
+WORKER_OUTPUT_LOGIC_VERSION = "2026-10-31.1"   # DOCKET Bill_no/Com_no ingest (bill_tracker upcoming meetings); prior: 2026-07-31.1 ABC row-conservation counters
 
 
 def _sha(*parts):

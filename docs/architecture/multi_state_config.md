@@ -52,7 +52,8 @@ becomes a profile lookup when a deployment serves more than one state).
   crossover (PA) needs its own drawing; `STATE.stages` already says whether a crossover exists.
 - **The `Bill_Tracker` column header "Status (LIS)"** is a sheet contract; renaming it is a coordinated
   backend+SPA migration, not part of a no-behaviour-change split.
-- Found while building the goldens (not caused by the split): DOCKET.CSV's `Bill_no` column is never matched,
-  so `upcoming` is always empty — [[state/open_anti_patterns]].
+- Found while building the goldens (not caused by the split): DOCKET.CSV's `Bill_no` column was never matched,
+  so `upcoming` was always empty — FIXED right after the split ([[failures/assumptions_audit]] #152); the golden was
+  re-captured then, and the only change is `upcoming` + four docket counters.
 
 See also [[audits/fable_2026-07/50_state_scaling_architecture]], [[audits/fable_2026-07/multistate_ingestion_pa]].

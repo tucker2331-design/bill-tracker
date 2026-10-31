@@ -96,6 +96,7 @@ session_follow_gate = _ADAPTER.session_follow_gate              # A-1: ban-safe 
 HEADERS = _ADAPTER.HEADERS
 SPREADSHEET_ID = _ADAPTER.SPREADSHEET_ID
 normalize_session_code = _ADAPTER.normalize_session_code   # the state's session-code format (LIS: 5-digit "20261")
+committee_name_for_code = _ADAPTER.committee_name_for_code   # committee CODE -> name, read live (DOCKET's Com_no)
 
 BILL_TRACKER_TAB = "Bill_Tracker"
 BILL_LIST_URL = STATE.urls["bill_list"]
@@ -755,20 +756,51 @@ def build_bill_records(http_session, session_code):
                f"committee map build failed ({type(_cm_err).__name__}: {_cm_err}); using static fallback.")
 
     # 4) DOCKET (guarded) → upcoming committee meetings per bill. Empty off-season is correct, not an error.
+    #
+    # LIS's real DOCKET.CSV header is `Com_no, Doc_date, Doc_no, Bill_no` (cached 20261 copy, 2,525 rows). Until
+    # 2026-10-31 the bill lookup lacked `bill_no`, so the whole block was skipped WITHOUT an alert and every bill
+    # published `upcoming: []` (open_anti_patterns #15, assumptions_audit #152). The committee arrives as a CODE
+    # (`Com_no`, e.g. "S01"), resolved STRUCTURALLY through the committee code map — never by text.
     docket_by_bill = {}
+    docket_rows_raw = 0                     # rows LIS sent (the denominator for the two counters below)
+    docket_columns_unrecognised = 0         # 1 when rows arrived but no bill/date column was recognised
+    docket_committee_unmatched = 0          # docket rows whose committee code the map could not name
+    docket_unmatched_codes = set()
     doc_df = safe_fetch_csv(_blob_url(blob_code, "DOCKET.CSV"))
     if not doc_df.empty:
+        docket_rows_raw = len(doc_df)
         dcols = {c.lower(): c for c in doc_df.columns}
-        dbill = next((dcols[c] for c in ("billnumber", "bill_number", "bill_id", "bill") if c in dcols), None)
+        dbill = next((dcols[c] for c in ("billnumber", "bill_number", "bill_id", "bill_no", "bill") if c in dcols), None)
         ddate = next((dcols[c] for c in ("meetingdate", "meeting_date", "docketdate", "date", "doc_date") if c in dcols), None)
         dcomm = next((dcols[c] for c in ("committeename", "committee_name", "committee", "ownername", "description") if c in dcols), None)
+        dcode = next((dcols[c] for c in ("com_no", "committeenumber", "committee_number", "committee_code") if c in dcols), None)
         if dbill and ddate:
             dbills = doc_df[dbill].map(_clean_bill)
             ddates = doc_df[ddate].fillna("").astype(str)
             dcomms = doc_df[dcomm].fillna("").astype(str) if dcomm else [""] * len(doc_df)
-            for b, dt, cm in zip(dbills, ddates, dcomms):
+            dcodes = doc_df[dcode].fillna("").astype(str) if dcode else [""] * len(doc_df)
+            for b, dt, cm, code in zip(dbills, ddates, dcomms, dcodes):
                 if b:
-                    docket_by_bill.setdefault(b, []).append({"date": str(dt).strip(), "committee": str(cm).strip()})
+                    committee = str(cm).strip()
+                    code = str(code).strip().upper()
+                    if not committee and code:
+                        committee = committee_name_for_code(code)
+                        if not committee:
+                            # Published with a blank committee (the date still stands) and COUNTED — a new
+                            # committee LIS created mid-session, or a map that failed to rebuild.
+                            docket_committee_unmatched += 1
+                            docket_unmatched_codes.add(code)
+                    docket_by_bill.setdefault(b, []).append({"date": str(dt).strip(), "committee": committee})
+        else:
+            docket_columns_unrecognised = 1
+            _alert("WARN", "DATA_ANOMALY",
+                   f"DOCKET.CSV for {blob_code} has {docket_rows_raw} rows but no recognisable bill/date column "
+                   f"(cols={list(doc_df.columns)}); every bill publishes NO upcoming meetings this cycle. LIS "
+                   f"likely renamed its docket columns — update the column names in bill_tracker step 4.")
+    if docket_committee_unmatched:
+        _alert("WARN", "COMMITTEE_DRIFT",
+               f"DOCKET.CSV: {docket_committee_unmatched} of {docket_rows_raw} rows carry committee codes the "
+               f"committee map cannot name ({sorted(docket_unmatched_codes)[:10]}); published with a blank committee.")
     # 5) BILLS.CSV (one guarded BULK blob) → chief patron + structural outcome flags for every bill.
     bills_meta, bills_meta_rows, bills_skipped_no_bill = _build_bills_meta(blob_code)
     # 5b) Sponsors.csv (one guarded BULK blob) -> co-patrons for every bill.
@@ -930,6 +962,13 @@ def build_bill_records(http_session, session_code):
         "docket_unparseable_dates": docket_unparseable,
         "docket_rows_total": docket_rows_total,
         "docket_unparseable_rate": round(docket_unparseable / docket_rows_total, 4) if docket_rows_total else 0.0,
+        # DOCKET ingest health (assumptions_audit #152). rows_raw = what LIS sent; columns_unrecognised = 1 means
+        # rows arrived but none could be read (so every `upcoming` is empty); committee_unmatched counts rows whose
+        # Com_no code the committee map could not name (the codes are listed so the drift is diagnosable).
+        "docket_rows_raw": docket_rows_raw,
+        "docket_columns_unrecognised": docket_columns_unrecognised,
+        "docket_committee_unmatched": docket_committee_unmatched,
+        "docket_committee_unmatched_codes": sorted(docket_unmatched_codes)[:20],
         # BILLS.CSV bulk-join coverage (trust: did the patron/outcome enrichment actually reach the bills?)
         "bills_meta_rows": bills_meta_rows,
         "bills_skipped_no_bill": bills_skipped_no_bill,   # malformed BILLS.CSV rows (no bill id), counted

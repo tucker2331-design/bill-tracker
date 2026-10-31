@@ -15,6 +15,10 @@ INPUT (real, cached, authorized 2026 session — tools/historical_cache/va/20261
   golden then claims to check — the golden checks that the code's OUTPUT did not move, nothing more.
 Clock frozen at 2026-02-10 12:00 ET (crossover week), so DOCKET's future-meeting filter is exercised.
 
+CAPTURE HISTORY: 2026-10-31 pre-split (proved the multi-state split moved nothing); re-captured 2026-10-31 after the
+DOCKET Bill_no/Com_no fix (assumptions_audit #152) — the only intended change is `upcoming` (0 -> 1,162 bills) plus
+four new docket counters in the completeness payload.
+
 Re-capture ONLY when an output change is intended (and bump WORKER_OUTPUT_LOGIC_VERSION, audit #96):
     python3 test_state_va_goldens.py --write
 
@@ -110,8 +114,10 @@ class _FrozenDT(_dt.datetime):
         return FROZEN.astimezone(tz) if tz else FROZEN.replace(tzinfo=None)
 
 
-def run():
+def run(overrides=None):
+    """`overrides` replaces named blobs (e.g. {"DOCKET.CSV": df}) — used by test_docket_ingest.py."""
     blobs, universe = _inputs()
+    blobs.update(overrides or {})
     calls = []
 
     def fake_fetch(url, **kw):
@@ -140,6 +146,7 @@ def main():
         "outcomes": {k: sum(1 for r in out["records"] if r["outcome"] == k)
                      for k in sorted({r["outcome"] for r in out["records"]})},
         "sample": out["records"][:2],
+        "upcoming_bills": sum(1 for r in out["records"] if r["upcoming"]),   # 0 before the DOCKET fix (#152)
     }
     if "--write" in sys.argv:
         os.makedirs(os.path.dirname(GOLDEN), exist_ok=True)
@@ -151,9 +158,9 @@ def main():
     with open(GOLDEN, encoding="utf-8") as f:
         want = json.load(f)
     fails = 0
-    for k in ("records", "calls", "outcomes", "sample", "sha256"):
+    for k in ("records", "calls", "outcomes", "sample", "upcoming_bills", "sha256"):
         ok = json.dumps(summary[k], sort_keys=True, default=str) == json.dumps(want[k], sort_keys=True, default=str)
-        print(("PASS " if ok else "FAIL ") + f"VA {SESSION} {k} byte-identical to the pre-split capture")
+        print(("PASS " if ok else "FAIL ") + f"VA {SESSION} {k} byte-identical to {os.path.relpath(GOLDEN, HERE)}")
         fails += 0 if ok else 1
     if summary["records"] < 3000:
         print(f"FAIL sample too small to mean anything: {summary['records']} records")

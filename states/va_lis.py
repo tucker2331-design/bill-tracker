@@ -19,7 +19,16 @@ from calendar_worker import (  # noqa: F401  (re-exported — the adapter contra
     SPREADSHEET_ID,
 )
 from lis_authorization import normalize_session_code  # noqa: F401  (5-digit LIS session code, e.g. "20261")
+import calendar_worker as _cw
+
+
+def committee_name_for_code(code):
+    """LIS committee CODE ("S01") -> chamber-qualified name ("Senate Agriculture, ..."), or "" when unknown.
+
+    Reads calendar_worker.COMMITTEE_CODE_MAP at CALL time: build_committee_maps() REBINDS that global from the
+    Committee API each cycle, so a name imported once at module load would keep serving the static fallback."""
+    return _cw.COMMITTEE_CODE_MAP.get(str(code).strip().upper(), "")
 
 __all__ = ["safe_fetch_csv", "get_armored_session", "get_active_session_info", "build_committee_maps",
            "resolve_committee_from_refid", "notify_slack", "session_follow_gate", "HEADERS", "SPREADSHEET_ID",
-           "normalize_session_code"]
+           "normalize_session_code", "committee_name_for_code"]

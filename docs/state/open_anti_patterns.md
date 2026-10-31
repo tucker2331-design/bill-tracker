@@ -231,8 +231,9 @@ scoping: [[ideas/meeting_agenda_links]] §2.
 
 ## 15. `bill_tracker.py` DOCKET ingest — the real column names never match, so `upcoming` is always empty
 
-**Status:** OPEN (found 2026-10-31 while building the multi-state goldens; queued as its own task — the split was
-required to change no VA output, so it is deliberately not fixed there).
+**Status:** resolved-in-PR (the DOCKET-fix PR after #252, 2026-10-31) — `bill_no` + live `Com_no` resolution + counted
+`DATA_ANOMALY`/`COMMITTEE_DRIFT` alerts; 0 → 1,162 bills with upcoming meetings on the frozen-clock replay
+([[failures/assumptions_audit]] #152). Found 2026-10-31 while building the multi-state goldens.
 
 **Severity:** `WARN` — a silent hole on the lobbyist path. Step 4 of `build_bill_records` looks for the bill column
 among `billnumber/bill_number/bill_id/bill`; LIS's DOCKET.CSV (cached 20261 copy) names it `Bill_no`, with the
