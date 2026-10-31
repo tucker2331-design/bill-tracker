@@ -45,6 +45,11 @@ lastUpdate>` (2,757 HB · 1,427 SB · 673 HR · 412 SR). Per bill: `body` (H/S),
   200 `Act No.` actions exactly.
 - **Journal-remarks rows** (`(Remarks see House/Senate Journal Page`, 1,450 rows) carry the FILING date, not the
   event date (HB1099: a 2025-09-30 vote filed 2026-05-13) — kept in history, never used as status.
+- **Reconsideration voids a result:** three verbs reconsider a vote (SB49: defeated 10 Jun 2026, reconsidered
+  16 Jun; SR1: adopted, reconsidered, adopted again). The earlier floor result is cleared until a new vote.
+- **`<subType>` matters for resolutions:** R = simple (1,073), **C = concurrent (12)** — a concurrent resolution
+  needs BOTH chambers (HR25 was adopted by the House only and is not final). Bills: B 4,035 · A 81 · J 68.
+- **Sponsor `sequenceNumber` runs past 99** (5 values 100-104, HR561 has 104 sponsors) — sort numerically.
 - **Concurrence rounds are real and common:** after both floors pass, an amended bill is referred back to the
   origin chamber's RULES committee (HB257, HB559, HB1042, HB1667, …) — a referral that is NOT a new first committee.
 
@@ -52,4 +57,4 @@ lastUpdate>` (2,757 HB · 1,427 SB · 673 HR · 412 SR). Per bill: `body` (H/S),
 Two-year session; **no crossover stage**; stages `introduced → committee1 → floor1 → committee2 → floor2 →
 concurrence → governor → law`, plus `adopted` for a simple resolution. Stages only move forward. Nothing is
 declared dead or carried over inside an open session. Measured: committee1 3,503 · floor1 634 · committee2 457 ·
-adopted 385 · law 200 · floor2 73 · concurrence 11 · introduced 6.
+adopted 384 · law 200 · floor2 74 · concurrence 11 · introduced 6.

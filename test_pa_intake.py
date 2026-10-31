@@ -190,6 +190,21 @@ def main():
     check("schedule read: 7 meetings, none listing bills yet",
           comp["schedule_meetings"] == 7 and comp["schedule_meetings_with_bills"] == 0)
     check("no upcoming meeting invented", not any(r["upcoming"] for r in recs))
+    by = {r["bill"]: r for r in recs}
+    check("SB49: a reconsidered defeat no longer stands (Codex #254)",
+          by["SB49"]["floor_senate"] == "" and by["SB49"]["outcome"] == "in_progress")
+    check("SR1: adopted, reconsidered, adopted again -> adopted", by["SR1"]["outcome"] == "adopted")
+    concurrent = [by[A.bill_key(b.findtext("body"), b.findtext("type"), b.findtext("number"))]
+                  for b in root.iter("bill") if b.findtext("subType") == "C"]
+    check("HR25 (concurrent, House only) is NOT final", by["HR25"]["outcome"] == "in_progress" and len(concurrent) == 12)
+    check("a concurrent resolution is adopted only with both chambers",
+          all(r["floor_house"] == r["floor_senate"] == "passed" for r in concurrent if r["outcome"] == "adopted"))
+    big = max(root.iter("bill"), key=lambda b: len(list(b.iter("sponsor"))))
+    nums = [int(s.get("sequenceNumber")) for s in big.iter("sponsor")]
+    rb = by[A.bill_key(big.findtext("body"), big.findtext("type"), big.findtext("number"))]
+    want = [s.text.strip() for s in sorted(big.iter("sponsor"), key=lambda s: int(s.get("sequenceNumber")))]
+    check(f"co-sponsors in NUMERIC order past 99 ({rb['bill']}, {max(nums)} sponsors)",
+          max(nums) > 99 and [rb["patron"]] + [c["name"] for c in rb["copatrons"]] == want)
     check("history keeps every action", sum(len(r["history"]) for r in recs) == comp["actions_total"] == 19915)
     check("contract keys match VA's record + stage", set(recs[0]) == {
         "bill", "title", "status_lis", "stage", "outcome", "outcome_origin", "patron", "patron_id", "chamber",

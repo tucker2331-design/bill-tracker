@@ -23,12 +23,12 @@
   "verbs_unclassified_sample": []
  },
  "outcomes": {
-  "adopted": 385,
-  "in_progress": 4684,
+  "adopted": 384,
+  "in_progress": 4685,
   "signed": 200
  },
  "records": 5269,
- "sha256": "ccaa27498e1dc69c0f281031567638547133c97e461631225b3ad3e322d055c6",
+ "sha256": "a67cbaf657b0984cd6815dca113190a8743c754353462db8aba78392ba989f98",
  "spot": {
   "HB1099": {
    "bill": "HB1099",
@@ -237,12 +237,12 @@
   }
  },
  "stages": {
-  "adopted": 385,
+  "adopted": 384,
   "committee1": 3503,
   "committee2": 457,
   "concurrence": 11,
   "floor1": 634,
-  "floor2": 73,
+  "floor2": 74,
   "introduced": 6,
   "law": 200
  }

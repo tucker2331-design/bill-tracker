@@ -47,9 +47,11 @@ VERB_CLASS: Dict[str, str] = {
     "Amended on second consideration,": "floor", "Amended on third consideration,": "floor", "Amended,": "floor",
     "Laid on the table,": "floor", "Removed from table,": "floor",
     "Laid on the table (Pursuant to House Rule 71),": "floor", "Laid on the table (Pursuant to Senate Rule 9),": "floor",
-    "Vote on final passage reconsidered,": "floor",
-    "Vote by which this bill was defeated on final passage, reconsidered,": "floor",
-    "Vote by which this resolution was adopted, reconsidered,": "floor",
+    # a reconsidered vote VOIDS that chamber's earlier result until a new vote is recorded (SB49: defeated 10 Jun
+    # 2026, reconsidered 16 Jun; SR1: adopted, reconsidered, adopted again — Codex on #254)
+    "Vote on final passage reconsidered,": "reconsidered",
+    "Vote by which this bill was defeated on final passage, reconsidered,": "reconsidered",
+    "Vote by which this resolution was adopted, reconsidered,": "reconsidered",
     "Resolution to discharge committee from further consideration of this bill presented,": "floor",
     "Resolution to discharge committee from further consideration of this bill dropped from calendar,": "floor",
     "Motion to revert to Prior Printer's No.": "floor",
@@ -145,7 +147,8 @@ def parse_schedule(rss: bytes, chamber: str) -> List[dict]:
     ns = "{https://www.legis.state.pa.us/RSS}"
     out = []
     for it in ET.fromstring(rss).iter("item"):
-        g = lambda k: (it.findtext(ns + k) or "").strip()   # noqa: E731
+        def g(k, it=it):
+            return (it.findtext(ns + k) or "").strip()
         bills = [b.strip() for b in g("Bills").split(",") if b.strip()]
         out.append({"chamber": chamber, "date": _iso(g("MeetingDate")), "date_raw": g("MeetingDate"),
                     "time": g("MeetingTime"), "committee": g("Committee"), "location": g("Location"),
@@ -167,6 +170,10 @@ def build_records(export: ET.Element, meetings: List[dict], today: datetime.date
         bill = bill_key(body, typ, num)
         origin = _CHAMBER.get(body, "")
         is_resolution = typ == "R"
+        # A CONCURRENT resolution (<subType>C</subType>, 12 on 2025_0) must be adopted by BOTH chambers; a simple one
+        # ends at adoption in its own chamber (HR25 was adopted by the House only — not final; Codex on #254).
+        concurrent = is_resolution and (b.findtext("subType") or "").strip() == "C"
+        adopted_in = set()
         history, latest_vote = [], {"tally": "", "location": "", "date": ""}
         chamber, crossed, last_committee = origin, False, ""
         referred: List[str] = []
@@ -223,8 +230,10 @@ def build_records(export: ET.Element, meetings: List[dict], today: datetime.date
                     floor[act_ch] = "defeated"
             elif cls == "adopted" and act_ch:
                 floor[act_ch] = "passed"
-                if is_resolution:
-                    outcome, stage = "adopted", _advance(stage, "adopted")
+                adopted_in.add(act_ch)
+            elif cls == "reconsidered" and act_ch:
+                floor[act_ch] = ""            # the earlier result no longer stands
+                adopted_in.discard(act_ch)
             elif cls == "arrived" and act_ch:
                 # arriving in the SECOND chamber starts its committee stage; arriving BACK in the origin chamber is
                 # the concurrence round.
@@ -235,12 +244,17 @@ def build_records(export: ET.Element, meetings: List[dict], today: datetime.date
                 stage, outcome = _advance(stage, "governor"), "awaiting_governor"
             elif cls in ("approved", "act"):
                 stage, outcome = _advance(stage, "law"), "signed"
+        if is_resolution and adopted_in >= ({"House", "Senate"} if concurrent else {origin}):
+            outcome, stage = "adopted", _advance(stage, "adopted")
         # Both floors passed = the bill is past floor2 even before any concurrence/enrolment action is recorded.
         if not is_resolution and floor["House"] == "passed" and floor["Senate"] == "passed":
             stage = _advance(stage, "concurrence")
         type_el = b.find("type")
         legislation_class = type_el.get("description", "") if type_el is not None else ""
-        sponsors = sorted(b.iter("sponsor"), key=lambda s: s.get("sequenceNumber", ""))
+        # NUMERIC order: sequence numbers run past 99 (5 sponsors are 100-104), so a string sort misorders them
+        # (Gemini on #254). A non-numeric number sorts last rather than first, so it can never become the chief.
+        sponsors = sorted(b.iter("sponsor"), key=lambda s: (0, int(s.get("sequenceNumber", "")))
+                          if s.get("sequenceNumber", "").isdigit() else (1, 0))
         chief = sponsors[0] if sponsors else None
         last_action = status
         records.append({
