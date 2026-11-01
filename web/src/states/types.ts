@@ -36,6 +36,8 @@ export interface StateConfig {
     summaries: boolean;    // the source's summary text on the bill card
     health: "full" | "intake";   // full = VA's guard/calendar Health; intake = the state's own intake checks
   };
+  /** A sentence under the Calendar about what it can and cannot show for this state ("" = none). */
+  calendarNote: string;
   /** Health "intake" rows: a completeness-payload key, its label, and the most that is still clean (grey). */
   intakeChecks: { key: string; label: string; limit: number }[];
 }

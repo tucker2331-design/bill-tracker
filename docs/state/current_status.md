@@ -1,6 +1,6 @@
 ---
 tags: [state, live]
-updated: 2026-10-31
+updated: 2026-11-01
 status: active
 ---
 
@@ -33,6 +33,18 @@ status: active
 - **VA accuracy state: CLEAR + holding (2026-07-12).** The 0→66 regression is root-caused and closed ([[failures/assumptions_audit#105]] — an `UnboundLocalError` in the agenda block wearing an API-outage costume; §9 and cache-warmth both innocent). All four deferred pieces shipped + live-verified: agenda/meeting links (#214), §9 anchor ladder re-merge (#215), the scroll affordance (#216), and the last engineering residual — the label-based agenda-FETCH target (#217, [[state/open_anti_patterns]] #13, now resolved). No open VA engineering items; the only open PR is the Codex NY-probe (#175, NY). **Standing watch each cycle:** `meeting_unsourced=0`, breaker clear, `anchor_unresolved` stays 1, agenda/link drift canaries quiet. Everything below in NEXT is owner-gated (infra/decision), not blocked on me.
 
 ## NEXT (needs owner infra / a decision — then I execute)
+
+- **🇵🇦 PA screens, items 3-5 of the owner's 2026-11-01 list (1 War Room + 2 Calendar are done, #258/#259):**
+  **3. What's new, one line per bill** (`SB509 (In the House) Referred to Transportation`) — **needs a decision:** the
+  Bill_Tracker history rows carry only `{action, date}` (`bill_tracker.py` ~l.930: "UI doesn't need refids"), so the SPA
+  has NO structural "where it was before the action" for Virginia. It must come from the backend (HISTORY's refid →
+  committee/chamber, the same resolver the pipeline uses) — either a new per-row field in Bill_Tracker (changes VA's
+  data output, which the owner wants byte-identical) or a separate additive tab. PA can derive it in `pa_adapter.py`
+  (`@actionChamber` + `<committee>`). **4. Health for PA** on the designed VA Health screen; retire `HealthIntake.tsx`.
+  **5. PA leftovers:** "Status (LIS)" / "Mastermind DB sheet" wording (App.tsx, Calendar.tsx error lines); the 22
+  `undefined_actions` in the intake. **Deploy PA** after each merge: `npm run build:pa` then
+  `npx wrangler deploy --config wrangler.pa.toml` — not possible from a cloud session (no Cloudflare credentials;
+  `*.workers.dev` outside its network policy). [[architecture/multi_state_config]] · [[knowledge/pa_bill_history_xml]].
 
 - **🔒 The whole app goes private — 5 owner steps, in order:** team list secret → service-account secret → merge
   → set the Google Sheet to Restricted → Streamlit secret + private. Until step 4 the data is still readable by
@@ -91,11 +103,14 @@ status: active
 - [[knowledge/campaign_finance_ingest]] — the ELECT committee->legislator join resolves only 54 of 158 sitting patrons; needs a join on committee identity, not the free-text office field.
 
 ## RECENTLY LANDED (newest first; full detail in [[log]])
+- **2026-11-01 — PA War Room + PA Calendar** (#258, #259). War Room without vote predictions, with committee rosters
+  from PA's own bulk RSS (0 of 5,184 bills unmatched); Calendar from the schedule RSS + 214 past session days from the
+  export's floor actions. Why the 7 meetings list no bills: hearings, agencies and unannounced slots in the lull
+  ([[knowledge/pa_bill_history_xml]]). Case law #154.
 - **2026-10-31 — Pennsylvania intake + DOCKET fix.** PA export → the bill contract with PA's own stages (no crossover), goldens on a real sample ([[knowledge/pa_bill_history_xml]]); VA bills now carry their upcoming meetings ([[failures/assumptions_audit|#152]]).
 - **2026-10-31 — Multi-state split (Standard #6)** — every VA assumption in the bill pipeline and the SPA now lives in `states/va.py` / `web/src/states/va.ts`; goldens prove VA output byte-identical on 3,645 real 2026 bills ([[architecture/multi_state_config]]). The DOCKET bug it surfaced is fixed: 0 → 1,162 bills with upcoming meetings on the frozen-clock replay ([[failures/assumptions_audit|#152]]).
 - **2026-10-31 — War Room bill page built** (`/war-room/<bill>`, [[ideas/war_room_scoping]]); the bill card is LIS facts only again; the masthead's "Tracking 3,645 / 3,645" was the completeness count mislabelled — fixed ([[failures/assumptions_audit|#151]]).
 - **2026-10-29 — THE RUN: app stack merged, Health unblocked, War Room calls SERVED, v9 redesign.** Merged #246 (ledger seeded; first drill read back), #238-#244 (private app + team positions + contact log + Slack alerts), #247/#248 (trust-surface guard), #245, #249. War Room calls: frozen arm C on venue-fixed rows, 2026 replay — **22,163 ballots, 14,092 called, 13,393 right, 8,071 can't call** (frozen expectation 14,096 / 13,386: a 4-call drift, stamped `matches_frozen: false`). Redesign: dark v9 theme, the subway, the War Room list, Health rebuilt. Case law #147-#150.
-- **2026-09-29 — THE PANEL PLAN, EXECUTED ([[testing/panel_2026-09-29]]).** 2026 scored once against a committed spec: 85.9%. Bill-fate model built and accepted (z = 14.5; 2026 locked AUC 0.80). Party-positions-first rejected (z −7.6); GDELT, House testimony rejected; VALCV positions positive but unproven. Contact log kept out of the model and UI unchanged, per owner.
 
 ## Watch items
 - **⏰ 2027 SESSION OPEN → activate the gated build-wave features.** When the worker detects the 2027 regular

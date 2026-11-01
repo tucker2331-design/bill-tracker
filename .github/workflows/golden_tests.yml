@@ -86,7 +86,8 @@ jobs:
             test_state_va_goldens.py \
             test_docket_ingest.py \
             test_pa_bill_tracker.py \
-            test_pa_roster.py; do
+            test_pa_roster.py \
+            test_pa_calendar.py; do
             echo "::group::$t"
             if python3 -u "$t"; then echo "PASS  $t"; else echo "FAIL  $t"; fail=1; fi
             echo "::endgroup::"

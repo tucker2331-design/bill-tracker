@@ -30,5 +30,6 @@ export const VA: StateConfig = {
   // 5-digit session code (never hardcode 20261).
   billUrl: (sessionCode, bill) => `https://lis.virginia.gov/bill-details/${sessionCode}/${bill}`,
   features: { calendar: true, timeline: true, warroom: true, predictions: true, committeeRoster: false, summaries: true, health: "full" },
+  calendarNote: "",
   intakeChecks: [],
 };

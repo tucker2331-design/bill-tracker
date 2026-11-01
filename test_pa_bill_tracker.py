@@ -52,9 +52,9 @@ class Sheet:
 
 
 NOW = datetime.datetime(2026, 10, 31, 23, 36, tzinfo=datetime.timezone.utc)
-records, comp, roster = J.build(S.SampleFetcher(), now=NOW)
+records, comp, roster, calendar = J.build(S.SampleFetcher(), now=NOW)
 sheet = Sheet()
-J.write(records, comp, sheet, roster)
+J.write(records, comp, sheet, roster, calendar)
 bt = sheet.tabs["Bill_Tracker"]
 rows = bt.cells["A1"]
 check("same header as Virginia's Bill_Tracker", rows[0] == bill_rows.BILL_TRACKER_HEADER)
@@ -86,7 +86,7 @@ class RosterDown(S.SampleFetcher):
         return super().get(url)
 
 
-r2, c2, ro2 = J.build(RosterDown(), now=NOW)
+r2, c2, ro2, cal2 = J.build(RosterDown(), now=NOW)
 check("a broken roster feed never holds back the bills (published as roster_status)",
       len(r2) == 5269 and ro2 is None and c2["roster_status"] == "unavailable: URLError")
 s2 = Sheet()
@@ -106,5 +106,14 @@ try:
     check("a 403 on a roster feed still stops the whole run (owner rule)", False)
 except J.pa_fetch.FeedRefused:
     check("a 403 on a roster feed still stops the whole run (owner rule)", True)
+# Calendar (Sheet1 in the layout the Calendar screen reads)
+ct = sheet.tabs.get("Sheet1")
+check("Sheet1 calendar tab written in the calendar subsystem's header",
+      ct is not None and ct.cells["A1"][0] == J.pa_calendar.SHEET1_HEADER and ct.cells["AA1"] == [[payload["checked_at_utc"]]])
+check("calendar: 5 meetings (7 listed, 2 duplicates), none with bills, 214 past session days",
+      (payload["calendar_meetings"], payload["calendar_meetings_duplicate"], payload["calendar_meetings_without_bills"],
+       payload["calendar_session_days"]) == (5, 2, 5, 214))
+check("a roster outage keeps the calendar (source names instead of display names)",
+      cal2 is not None and any(r[4] == "HOUSE APPROPRIATIONS" for r in cal2[1:]))
 check("nothing written for Virginia (no VA sheet id read)", "SPREADSHEET_ID" not in J.__dict__)
 sys.exit(1 if FAILS else 0)

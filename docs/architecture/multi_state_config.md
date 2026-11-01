@@ -52,7 +52,7 @@ contract differs. Source facts: [[knowledge/pa_bill_history_xml]]. Scheduled job
 ## Pennsylvania site (built 2026-11-01) — a separate site, same code
 - **Build-time state:** `VITE_STATE=PA` (`npm run build:pa` → `dist-pa/`); unset = Virginia. No switcher; a screen is
   shown or hidden only by `STATE.features` (PA: Search, bill card, Today's What's new + Tracking, intake Health,
-  War Room without predictions (2026-11-01); Calendar and Timeline hidden). PA's Health (`views/HealthIntake.tsx`) shows only PA's own intake checks.
+  War Room without predictions and Calendar (2026-11-01); Timeline hidden). PA's Health (`views/HealthIntake.tsx`) shows only PA's own intake checks.
 - **Its own Worker:** `wrangler.pa.toml` — name `bill-tracker-pa`, its own D1 (`bill-tracker-pa-db`), its own secrets,
   its own `SPREADSHEET_ID`. Same `worker/index.js`.
 - **Its own job:** `pa_bill_tracker.yml` (hourly, weekdays) runs `pa_bill_tracker.py` on the existing fetch rules and
@@ -77,6 +77,20 @@ contract differs. Source facts: [[knowledge/pa_bill_history_xml]]. Scheduled job
 - Position and contact log: the same components, PA's own D1 (`bill-tracker-pa-db`), rows keyed `state = 'PA'`.
 - A state with no summaries and no per-bill link hides the bill page's "More" box instead of leaving it empty.
 - Goldens: `test_pa_roster.py` (real feeds), `roster.regression.mjs`, `pa.regression.mjs`, `test_pa_bill_tracker.py`.
+
+## PA Calendar (built 2026-11-01) — the VA Calendar screen, fed by a small PA job
+- `states/pa_calendar.py`, called by `pa_bill_tracker.py` (no split of `calendar_worker.py`), writes PA's `Sheet1` in the
+  calendar subsystem's own 17-column layout + the freshness stamp at AA1, so `web/src/data/calendar.ts` reads it unchanged.
+- **Committee meetings** from the schedule RSS (the intake's parse is reused — no new request). Bills come only from the
+  `Bills` field; a meeting with none is written once with `DiagnosticHint=no_bills_listed`, and the card says
+  "<source> lists no bills for this meeting (yet)" — on both sites (owner rule: never an unexplained empty card).
+  Committee names via the roster key (exact); agencies keep their own names. Agency meetings listed in both feeds: once.
+- **Session days (past only)** from the export: a (chamber, date) with floor business (`FLOOR_CLASSES`), written as
+  "<Chamber> Convened" (the screen's floor marker) with each bill's own `<fullAction>`. Rule 71 / Senate Rule 9 automatic
+  tablings are excluded — measured: 13 House "days" had nothing else, one a Sunday. Sample: 214 days (House 119,
+  Senate 95). No future session day is invented (none is published; `calendarNote` says so under the Calendar).
+- Goldens: `test_pa_calendar.py` (real sample), `agenda.regression.mjs` (now in CI), `pa.regression.mjs`,
+  `test_pa_bill_tracker.py`.
 
 ## Not split yet (the open loop)
 

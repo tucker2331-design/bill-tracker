@@ -1,4 +1,5 @@
 import { SOURCE } from "../config";
+import { STATE } from "../states";
 import { useEffect, useMemo, useState } from "react";
 import type { Bill } from "../data/types";
 import { loadCalendar, CROSSOVER_BY_SESSION, type CalendarData, type Meeting } from "../data/calendar";
@@ -62,7 +63,7 @@ function MeetingRow({ m, billMap, onOpen }: {
             is already sorted to the top of its day by calendar.ts. */}
         {m.unresolved && <span className="cal-mtg-unres" title={`${SOURCE} lists this meeting only relative to another event whose time is unknown — we can't place it on the clock, so it's surfaced first.`}>⚠ unplaceable</span>}
         <span className={`cal-mtg-t${m.tba ? " tba" : ""}`}>{m.time}</span>
-        <span className="cal-mtg-n">{hasBills ? m.bills.length : ""}{open ? " ▴" : " ▾"}</span>
+        <span className="cal-mtg-n">{hasBills ? m.bills.length : isFloor ? "" : "no bills"}{open ? " ▴" : " ▾"}</span>
       </span>
       {/* Subcommittee LINEAGE cue (owner 2026-07-03): when two same-time parents' subcommittees tie and
           interleave in the time-sorted day, the family link must stay readable. The chamber-qualified name
@@ -98,6 +99,10 @@ function MeetingRow({ m, billMap, onOpen }: {
           })}
           {extra > 0 && <button className="cal-more" onClick={() => setAll(true)}>+{extra} more</button>}
         </div>
+      )}
+      {/* A meeting with no bill list says so (owner 2026-11-01: never an unexplained empty card). */}
+      {open && !hasBills && !isFloor && (
+        <div className="cal-links"><span className="cal-link none">{SOURCE} lists no bills for this meeting{isFuture ? " yet" : ""}.</span></div>
       )}
       {/* A collapsed sitting's own shape: when it recessed, when it adjourned. Quiet, inside the card —
           these used to be full sibling cards, which gave a recess the same weight as a committee hearing. */}
@@ -336,6 +341,7 @@ export function Calendar({ bills, sessionCode, onOpen, calRefresh = 0 }: {
         (<b>{cal.totalMeetings.toLocaleString()}</b> across {cal.minKey} → {cal.maxKey}). Administrative
         actions live in the bill history, not here.
       </p>
+      {STATE.calendarNote && <p className="muted cal-legend">{STATE.calendarNote}</p>}
     </div>
   );
 }
