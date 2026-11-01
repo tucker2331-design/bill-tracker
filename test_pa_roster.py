@@ -15,7 +15,6 @@ INVARIANTS (from the feeds themselves, independent of the golden):
 Re-capture ONLY for an intended output change:  python3 test_pa_roster.py --write
 """
 import collections
-import datetime
 import hashlib
 import json
 import os
