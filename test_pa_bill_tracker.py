@@ -57,7 +57,9 @@ sheet = Sheet()
 J.write(records, comp, sheet, roster, calendar, where_grid)
 bt = sheet.tabs["Bill_Tracker"]
 rows = bt.cells["A1"]
-check("same header as Virginia's Bill_Tracker", rows[0] == bill_rows.BILL_TRACKER_HEADER)
+check("same columns as Virginia's Bill_Tracker; column C names PA's source, not LIS",
+      rows[0][:2] + rows[0][3:] == bill_rows.BILL_TRACKER_HEADER[:2] + bill_rows.BILL_TRACKER_HEADER[3:]
+      and rows[0][2] == "Status (PA General Assembly)" and bill_rows.BILL_TRACKER_HEADER[2] == "Status (LIS)")
 check("every row is the header's width", all(len(r) == len(rows[0]) for r in rows))
 check("one row per PA record (5,269)", len(rows) - 1 == len(records) == 5269)
 payload = json.loads(bt.cells["AA1"][0][0])

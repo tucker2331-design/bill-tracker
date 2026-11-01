@@ -12,9 +12,13 @@ BILL_TRACKER_HEADER = ["Bill", "Title", "Status (LIS)", "Outcome", "Patron", "Pa
                        "House Floor", "Senate Floor", "Outcome Origin", "Class", "Co-Patrons (JSON)"]
 
 
-def bill_tracker_rows(records):
-    """Header + one row per record, in BILL_TRACKER_HEADER order. Raises on a width drift (a shifted sheet)."""
-    header = BILL_TRACKER_HEADER
+def bill_tracker_rows(records, status_label=None):
+    """Header + one row per record, in BILL_TRACKER_HEADER order. Raises on a width drift (a shifted sheet).
+    `status_label` renames column C for another state's sheet (PA: "Status (PA General Assembly)"); the site reads
+    columns by POSITION, so only the label changes. Virginia passes nothing and keeps "Status (LIS)" byte-identical."""
+    header = list(BILL_TRACKER_HEADER)
+    if status_label:
+        header[2] = status_label
     rows = [header] + [[
         r["bill"], r["title"], r["status_lis"], r["outcome"], r["patron"], r["patron_id"], r["chamber"],
         "yes" if r["crossed_over"] else "no", r["last_committee"], r["referral_count"], r["last_action_date"],

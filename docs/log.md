@@ -8,6 +8,9 @@ status: active
 
 Append-only, reverse-chronological (newest at top). Each entry opens with `## [YYYY-MM-DD] <type> | <title>`.
 
+## [2026-11-01] pr | PA leftovers (item 5)
+- PA's sheet labels column C "Status (PA General Assembly)" (VA unchanged; the site reads by position). The "Mastermind DB sheet" wording went in #264. The 22 `undefined_actions` investigated: real uncoded motions, none moves a bill wrongly ([[knowledge/pa_bill_history_xml]]).
+
 ## [2026-11-01] pr | One Health screen for both states (item 4)
 - PA's Health = Virginia's design fed by PA's own checks; VA-only parts hidden; `HealthIntake.tsx` retired. A heartbeat-only Metrics_History now reads as available ([[failures/assumptions_audit]] #157).
 

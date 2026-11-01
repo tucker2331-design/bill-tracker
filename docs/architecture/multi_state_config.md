@@ -117,7 +117,9 @@ contract differs. Source facts: [[knowledge/pa_bill_history_xml]]. Scheduled job
   with the same golden-first method (capture, move, prove identical).
 - **The Timeline drawing** (`web/src/views/Timeline.tsx`) is two lanes that swap at crossover. A state with no
   crossover (PA) needs its own drawing; `STATE.stages` already says whether a crossover exists.
-- **The `Bill_Tracker` column header "Status (LIS)"** is a sheet contract; renaming it is a coordinated
+- ~~**The `Bill_Tracker` column header "Status (LIS)"**~~ RESOLVED 2026-11-01: the site reads columns by position, so
+  PA's sheet labels column C "Status (PA General Assembly)" (`bill_rows.bill_tracker_rows(status_label=…)`); Virginia's
+  header is unchanged. Original note: a sheet contract; renaming it is a coordinated
   backend+SPA migration, not part of a no-behaviour-change split.
 - Found while building the goldens (not caused by the split): DOCKET.CSV's `Bill_no` column was never matched,
   so `upcoming` was always empty — FIXED right after the split ([[failures/assumptions_audit]] #152); the golden was
