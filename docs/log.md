@@ -8,6 +8,9 @@ status: active
 
 Append-only, reverse-chronological (newest at top). Each entry opens with `## [YYYY-MM-DD] <type> | <title>`.
 
+## [2026-11-01] decision | PA deploys itself from main
+- Owner connected `bill-tracker-pa` to Cloudflare Workers Builds (main; build `npm run build:pa`; deploy with `--config wrangler.pa.toml`; preview builds off). First automatic build (#262) Ready. The earlier PA versions were manual Wrangler deploys from the owner's computer.
+
 ## [2026-11-01] pr | PA deploy config: real sheet + D1 ids in wrangler.pa.toml
 - The placeholders would have made a Git-connected Cloudflare build deploy a PA site with no data. Owner supplied the ids; `bill-tracker-pa` is being connected to Workers Builds (main), so PA deploys itself on merge like VA.
 

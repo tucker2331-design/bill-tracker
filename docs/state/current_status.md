@@ -37,11 +37,7 @@ status: active
 - **🇵🇦 PA screens, items 3-5 of the owner's 2026-11-01 list (1 War Room + 2 Calendar merged #258/#259; 3 built):**
   **3. What's new — DONE (#260, #261):** one line per bill on both sites; VA brackets on 100% of rows (refid first, LIS chamber code second, validated each run). **4. Health for PA** on the designed VA Health screen; retire `HealthIntake.tsx`.
   **5. PA leftovers:** "Status (LIS)" / "Mastermind DB sheet" wording (App.tsx, Calendar.tsx error lines); the 22
-  `undefined_actions` in the intake. **Deploy PA** after each merge: `npm run build:pa` then
-  `npx wrangler deploy --config wrangler.pa.toml` — not possible from a cloud session (no Cloudflare credentials;
-  `*.workers.dev` outside its network policy). **2026-11-01: real PA sheet + D1 ids committed to `wrangler.pa.toml`;
-  owner connecting `bill-tracker-pa` to Cloudflare Workers Builds (branch main) so PA deploys itself like VA.**
-  [[architecture/multi_state_config]] · [[knowledge/pa_bill_history_xml]].
+  `undefined_actions` in the intake. **PA deploys itself (2026-11-01):** `bill-tracker-pa` is connected to Cloudflare Workers Builds on `main` (build `npm run build:pa`, deploy `npx wrangler deploy --config wrangler.pa.toml`, preview builds OFF); first automatic build Ready. Never merge a Cloudflare "update wrangler.toml name" PR — `wrangler.toml` is VA's. [[architecture/multi_state_config]] · [[knowledge/pa_bill_history_xml]].
 
 - **🔒 The whole app goes private — 5 owner steps, in order:** team list secret → service-account secret → merge
   → set the Google Sheet to Restricted → Streamlit secret + private. Until step 4 the data is still readable by
