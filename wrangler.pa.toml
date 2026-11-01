@@ -1,8 +1,8 @@
 # Pennsylvania's site — a SEPARATE Worker from Virginia's (owner 2026-11-01): its own name/address, its own D1
 # database, its own secrets, its own spreadsheet. Same code (worker/index.js + the SPA built with VITE_STATE=PA).
 #
-# Build:   npm run build:pa          (writes ./dist-pa)
-# Deploy:  npx wrangler deploy --config wrangler.pa.toml
+# Deploy:  automatic — Cloudflare Workers Builds on bill-tracker-pa, connected to `main` (owner 2026-11-01):
+#          build `npm run build:pa`, deploy `npx wrangler deploy --config wrangler.pa.toml`. Manual: the same two.
 # Owner-only setup (passwords/accounts) is listed in docs/architecture/multi_state_config.md → "Pennsylvania site".
 name = "bill-tracker-pa"
 compatibility_date = "2025-01-01"
@@ -17,15 +17,15 @@ binding = "ASSETS"
 # Same Google sign-in client as Virginia (the Worker checks the token's audience against it). If you create a
 # separate OAuth client for PA, put its id here AND in web/src/config.ts GOOGLE_CLIENT_ID for the PA build.
 GOOGLE_CLIENT_ID = "831223695835-cqd2fmjq3l61jc1t6pr9elobra0imhf5.apps.googleusercontent.com"
-# OWNER: paste the Pennsylvania spreadsheet's id here (the sheet pa_bill_tracker.yml writes to).
-SPREADSHEET_ID = "REPLACE_WITH_PA_SPREADSHEET_ID"
+# The Pennsylvania spreadsheet (the sheet pa_bill_tracker.yml writes to). Not a secret: access is the sheet's sharing
+# setting + the Worker's sign-in check, exactly as for Virginia.
+SPREADSHEET_ID = "1ubknsyuzd0Oxl1t9t5FebcNa26zZzCqBnW-N_-sfaAg"
 BILL_TRACKER_STATE = "PA"
 
 [[d1_databases]]
 binding = "DB"
 database_name = "bill-tracker-pa-db"
-# OWNER: `npx wrangler d1 create bill-tracker-pa-db`, then paste the printed database_id here.
-database_id = "REPLACE_WITH_PA_D1_DATABASE_ID"
+database_id = "44bae9f4-a21c-43f2-9585-50d1a825e730"
 
 [triggers]
 crons = ["*/15 * * * *"]

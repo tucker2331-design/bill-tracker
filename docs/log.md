@@ -6,9 +6,14 @@ status: active
 
 # Project Log
 
-Append-only, reverse-chronological (newest at top). Each entry opens with `## [2026-11-01] pr | What's new: Virginia brackets on every line
+Append-only, reverse-chronological (newest at top). Each entry opens with `## [YYYY-MM-DD] <type> | <title>`.
+
+## [2026-11-01] pr | PA deploy config: real sheet + D1 ids in wrangler.pa.toml
+- The placeholders would have made a Git-connected Cloudflare build deploy a PA site with no data. Owner supplied the ids; `bill-tracker-pa` is being connected to Workers Builds (main), so PA deploys itself on merge like VA.
+
+## [2026-11-01] pr | What's new: Virginia brackets on every line
 - Census fold-in: 6 code-only LIS rows ("S ") had leaked into "No chamber"; the code is now captured before the strip and a raw-form census is a golden ([[failures/assumptions_audit]] #155). Census-guard fix list added to [[state/current_status]].
-- Owner: "100% accuracy, consistency, and coverage". VA where = committee refid (10,011) → LIS's own chamber code (51,237) → "No chamber" where LIS lists none (4,166); 0 unknown; refid vs code checked every run (0 disagree), alerted if not. [[architecture/multi_state_config]].
+- Owner: "100% accuracy, consistency, and coverage". VA where = committee refid (10,011) → LIS's own chamber code (51,243) → "No chamber" where LIS lists none (4,160); 0 unknown; refid vs code checked every run (0 disagree), alerted if not. [[architecture/multi_state_config]].
 
 ## [2026-11-01] pr | What's new: one line per bill, with where the action happened (both sites)
 - `Action_Where` side tab (Bill_Tracker byte-identical). VA: own-committee-refid only — 10,011/65,414 rows, 100% agreeing with LIS's chamber letter; forward-carried position rejected (wrong on 12,454/61,248). PA: `@actionChamber` + structural short line. Owner decision pending on LIS's chamber-letter code. [[architecture/multi_state_config]].
