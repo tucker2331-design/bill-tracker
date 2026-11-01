@@ -35,9 +35,7 @@ status: active
 ## NEXT (needs owner infra / a decision — then I execute)
 
 - **🇵🇦 PA screens, items 3-5 of the owner's 2026-11-01 list (1 War Room + 2 Calendar merged #258/#259; 3 built):**
-  **3. What's new — BUILT (#260):** one line per bill on both sites via an additive `Action_Where` tab. **Owner
-  decision:** VA brackets cover only 15% of rows structurally (100% correct); LIS's leading "H "/"S " chamber letter
-  would cover all — is it a field (allowed) or text (forbidden)? **4. Health for PA** on the designed VA Health screen; retire `HealthIntake.tsx`.
+  **3. What's new — DONE (#260, #261):** one line per bill on both sites; VA brackets on 100% of rows (refid first, LIS chamber code second, validated each run). **4. Health for PA** on the designed VA Health screen; retire `HealthIntake.tsx`.
   **5. PA leftovers:** "Status (LIS)" / "Mastermind DB sheet" wording (App.tsx, Calendar.tsx error lines); the 22
   `undefined_actions` in the intake. **Deploy PA** after each merge: `npm run build:pa` then
   `npx wrangler deploy --config wrangler.pa.toml` — not possible from a cloud session (no Cloudflare credentials;

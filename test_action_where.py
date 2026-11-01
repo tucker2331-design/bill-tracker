@@ -38,15 +38,12 @@ with open(G.GOLDEN, encoding="utf-8") as f:
 aw, recs = ex["action_where"], {r["bill"]: r for r in out["records"]}
 check("VA: one code string per bill, one code per history row",
       set(aw) == set(recs) and all(len(aw[b]) == len(recs[b]["history"]) for b in aw))
-known = agree = 0
-for b, codes in aw.items():
-    for c, h in zip(codes, recs[b]["history"]):
-        if c != action_where.UNKNOWN:
-            known += 1
-            agree += h["action"][:1] == c
-check("VA: 10,011 rows placed, every one agreeing with LIS's own chamber letter", (known, agree) == (10011, 10011),
-      f"{known} placed, {agree} agree")
-check("VA: only H / S / - codes", set("".join(aw.values())) <= {"H", "S", "-"})
+st = ex["action_where_stats"]
+check("VA: every row placed — 10,011 by refid, 51,237 by LIS's chamber code, 4,166 where LIS lists none, 0 unknown",
+      (st.get("action_where_structural"), st.get("action_where_lis_code"), st.get("action_where_no_chamber", 0),
+       st.get("action_where_unknown", 0)) == (10011, 51237, 4166, 0), json.dumps(st))
+check("VA: refid and LIS code never disagree (0)", st.get("action_where_disagree", 0) == 0)
+check("VA: only H / S / 0 codes", set("".join(aw.values())) <= {"H", "S", "0"})
 va_grid = action_where.rows_for(aw)
 
 # --- Pennsylvania ---

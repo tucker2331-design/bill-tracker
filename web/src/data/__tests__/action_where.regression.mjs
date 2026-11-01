@@ -29,6 +29,7 @@ is("VA: code column stripped, where from the tab",
 is("VA: the action's raw text is kept for the meeting-time join", feedLines(vaDay, va.byBill, /^[HS] /)[0].action, vaDay[0].action);
 is("no tab -> no bracket, never a guessed one", feedLines(vaDay, null, /^[HS] /)[0].where, "");
 is("unknown code (-) -> no bracket", feedLines([{ bill: "X1", idx: 0, action: "a", n: 1 }], new Map([["X1", { where: "-", short: null }]]), null)[0].where, "");
+is("source lists no chamber -> says so", feedLines([{ bill: "HB1", idx: 0, action: "Acts of Assembly Chapter text (CHAP0350)", n: 1 }], new Map([["HB1", { where: "0", short: null }]]), /^[HS] /)[0].where, "No chamber");
 is("Governor", feedLines([{ bill: "HB17", idx: 0, action: "Approved by the Governor", n: 1 }], new Map([["HB17", { where: "G", short: null }]]), null)[0].where, "With the Governor");
 is("a where-string from another snapshot (length differs) is not used (Codex #260)",
    feedLines([{ bill: "SB509", idx: 3, action: "Referred to TRANSPORTATION", n: 5 }], pa.byBill, null).map((l) => [l.where, l.text]),
