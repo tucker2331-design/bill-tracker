@@ -9,7 +9,15 @@ export function ClampedTitle({ text, className = "" }: { text: string; className
   const [cut, setCut] = useState(false);
   useLayoutEffect(() => {
     const el = ref.current;
-    if (el && !open) setCut(el.scrollHeight > el.clientHeight + 1);
+    if (!el || open) return;
+    const measure = () => setCut(el.scrollHeight > el.clientHeight + 1);
+    measure();
+    // Re-measure when the box resizes (a phone rotating, a narrower window): a title that fitted can become cut
+    // (Codex #265). ResizeObserver is in every browser the site supports; without it the first measure stands.
+    if (typeof ResizeObserver === "undefined") return;
+    const ro = new ResizeObserver(measure);
+    ro.observe(el);
+    return () => ro.disconnect();
   }, [text, open]);
   const toggle = (e: React.MouseEvent) => { e.preventDefault(); e.stopPropagation(); setOpen((o) => !o); };
   return (
