@@ -6,7 +6,11 @@ status: active
 
 # Project Log
 
-Append-only, reverse-chronological (newest at top). Each entry opens with `## [2026-11-01] pr | PA War Room without vote predictions
+Append-only, reverse-chronological (newest at top). Each entry opens with `## [2026-11-01] pr | PA Calendar
+- Diagnosis (one hand check of the Senate schedule page): the 7 empty meetings are 2 unannounced Appropriations slots, 1 public hearing and 4 agency-meeting listings (2 meetings × both feeds) in the post-election lull — not a broken feed; a populated `Bills` field is still unproven until session ([[knowledge/pa_bill_history_xml]]).
+- `states/pa_calendar.py` → PA `Sheet1` in the calendar layout (5 meetings + 214 past session days from floor actions; Rule 71 tablings excluded). `features.calendar` on for PA; "no bills listed" said on the card; a note that future session days are not published. [[architecture/multi_state_config]].
+
+## [2026-11-01] pr | PA War Room without vote predictions
 - palegis.us DOES publish committee rosters as bulk RSS (`/{house,senate}/rss/committee/assignments` + `/session/members`); 4 polite requests, samples committed with the manifest. `states/pa_roster.py` → `Committee_Roster` tab (1,026 seats, 250 members, 54 committees); every bill's current committee found ([[knowledge/pa_bill_history_xml]]).
 - SPA: `features.predictions` / `features.committeeRoster`; VA renders unchanged. Position + contact log now have a PA home. Goldens: `test_pa_roster.py`, `roster.regression.mjs`. [[architecture/multi_state_config]].
 - Fold-in (Codex #258 P2): adopted resolutions now group as Decided in the War Room; Search gains an "Adopted" filter where the state has that stage ([[failures/assumptions_audit]] #154).

@@ -89,6 +89,11 @@ is("empty day", collapseFloorSessions([]), []);
 is("House Convenes is floor", classifyMeetingKind("House Convenes"), "floor");
 is("Senate adjourned is floor", classifyMeetingKind("Senate adjourned"), "floor");
 is("a real committee is not floor", classifyMeetingKind("Senate General Laws and Technology"), "committee");
+// PA (2026-11-01): a past session day is written as "<Chamber> Convened" (pa_calendar.py); the agency meetings keep
+// their own names and must stay committee-kind so their "no bills" note shows.
+is("PA session day (House Convened) is floor", classifyMeetingKind("House Convened"), "floor");
+is("PA agency meeting is not floor", classifyMeetingKind("INDEPENDENT REGULATORY REVIEW COMMISSION"), "committee");
+is("PA Call of Chair committee is not floor", classifyMeetingKind("House Appropriations"), "committee");
 is("a caucus is not floor", classifyMeetingKind("Rural Caucus"), "committee");
 
 console.log(`\n${pass} of ${pass + fail} passed`);

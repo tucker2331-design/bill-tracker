@@ -26,7 +26,10 @@ export const PA: StateConfig = {
   crossoverBySession: {},
   // robots.txt protects /legislation/bills/* and no page URL is verified, so no per-bill link is guessed.
   billUrl: () => "",
-  features: { calendar: false, timeline: false, warroom: true, predictions: false, committeeRoster: true, summaries: false, health: "intake" },
+  features: { calendar: true, timeline: false, warroom: true, predictions: false, committeeRoster: true, summaries: false, health: "intake" },
+  // PA publishes no feed of FUTURE session days (2026-11-01), so a session day is shown once the export records it.
+  calendarNote: "Committee meetings come from the PA General Assembly's committee schedules. Session days are shown "
+    + "once they have happened, from the floor actions in the bill history: no future list of session days is published.",
   intakeChecks: [
     { key: "verbs_unclassified", label: "Actions with an action type we do not recognise", limit: 0 },
     { key: "action_dates_unreadable", label: "Actions with an unreadable date", limit: 0 },

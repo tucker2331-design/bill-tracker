@@ -94,6 +94,12 @@ _RC_RE = re.compile(r"^\(?\s*(\d+)\s*-\s*(\d+)\s*\)?$")   # PA's own tally wire 
 _BILL_RE = re.compile(r"^([HS])([BR])0*(\d+)$")            # parss:Bills entries, e.g. "HB2639"
 
 
+def normalize_bill_ref(ref: str) -> Optional[str]:
+    """A schedule `Bills` entry ("HB2639", "HB02639") -> the record key ("HB2639"); None when it is not a bill id."""
+    mm = _BILL_RE.match(ref.upper())   # the same rule the next-meeting join uses in build_records
+    return f"{mm.group(1)}{mm.group(2)}{int(mm.group(3))}" if mm else None
+
+
 _DATE_RE = re.compile(r"^(\d{1,2})/(\d{1,2})/(\d{2}|\d{4})$")
 
 
@@ -325,6 +331,12 @@ def build_records(export: ET.Element, meetings: List[dict], today: datetime.date
 
 def run_intake(fetcher, session: Optional[str], today: datetime.date, now_utc: str):
     """Fetch (politely) and build. `session=None` discovers the current regular session from the data page."""
+    records, comp, _export, _meetings = run_intake_full(fetcher, session, today, now_utc)
+    return records, comp
+
+
+def run_intake_full(fetcher, session: Optional[str], today: datetime.date, now_utc: str):
+    """run_intake, also handing back the parsed export and schedule (the calendar job reuses them: no new request)."""
     if session is None:
         session = current_regular_session(fetcher.get(PA.urls["data_index"]).decode("utf-8", "replace"))
     export = read_export(fetcher.get(PA.urls["bill_history"].format(session=session)))
@@ -335,4 +347,4 @@ def run_intake(fetcher, session: Optional[str], today: datetime.date, now_utc: s
     if comp["records_written"] != comp["universe_declared"]:
         raise ValueError(f"PA export declares {comp['universe_declared']} documents but {comp['records_written']} "
                          f"parsed — refusing to publish a partial universe (fail closed)")
-    return records, comp
+    return records, comp, export, meetings

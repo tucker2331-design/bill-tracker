@@ -32,6 +32,24 @@ Adapter: `states/pa_adapter.py`; fetcher: `states/pa_fetch.py`; config: `states/
 | Members | `/{house,senate}/rss/session/members` | RSS, one `<item>` per member, same `memberId` in `<link>`, `<parss:Party>` (D/R), addresses. Party joins on memberId (all 250 agree with the assignments title, checked in `test_pa_roster.py`). |
 | Others (not used yet) | `/{house,senate}/rss/session/{votes,calendar,journals,amendments,…}` | per publication |
 
+## Why 0 of the 7 scheduled meetings list bills (diagnosed 2026-11-01)
+Checked by hand, once: the Senate meeting-schedule page (`/senate/committees/meeting-schedule`, the RSS items' own
+`<link>`; 1 request, honest UA) — the same meetings, with descriptions the RSS does not carry. The 7 RSS entries are:
+- **2 × House Appropriations, "Call of Chair"** (9 and 10 Nov) — PA's to-be-announced slot; no agenda posted yet.
+- **1 × Senate Transportation, 13 Nov, at an airport boardroom** — the page calls it a *"public hearing on aviation
+  investment and reform"*: a hearing takes testimony and votes on no bills.
+- **4 × legislative AGENCIES, each listed in BOTH chambers' feeds** — IRRC (19 Nov; its agenda is *regulations*, not
+  bills) and the Center for Rural Pennsylvania board (17 Dec). The page files them under "Meetings of legislative
+  agencies"; they never carry bills.
+
+**Verdict:** not a broken feed and not "agenda not posted" across the board — the list is all hearings, agency meetings
+and two unannounced Appropriations slots, in the post-election lull (election 3 Nov 2026). Whether the `Bills` field is
+populated for a voting meeting is still UNPROVEN (no populated example seen; archive.org is outside this
+environment's network policy) — capture an in-session schedule in January 2027 (open loop above).
+**No future session days are published as a feed:** the data page lists none, and the session-calendar RSS
+(`/{house,senate}/rss/session/calendar`, fetched once 2026-11-01: 36 / 37 items) lists the bills for "the next session
+day" without that day's date. So the PA calendar shows session days once the export records floor business.
+
 ## Committee roster join (2026-11-01)
 The export's `<committee>` ("AGING AND OLDER ADULT SERVICES") and the roster feed ("Aging & Older Adult Services") name
 the same room. PA publishes no committee id, so `committee_key` = exact equality after ONE fixed mapping (upper case,
