@@ -345,7 +345,9 @@ def short_line(part: dict, committee_display: Dict[str, str]) -> Tuple[str, bool
     Returns (line, used_full_action). An all-capitals verb or committee is lowered after its first letter
     (display only; nothing is decided from the text)."""
     verb = part["verb"].rstrip(", ").strip()
-    if verb.endswith(_NUMBER_IN_PROSE) or not verb:
+    # PA's own "Undefined Action" label carries no meaning; the description says what happened (Codex #260:
+    # HB1099 "Motion to reconsider final passage") — keep the source line.
+    if verb.endswith(_NUMBER_IN_PROSE) or not verb or VERB_CLASS.get(part["verb"]) == "undefined":
         return part["full"], True
     if verb.isupper():
         verb = verb[0] + verb[1:].lower()

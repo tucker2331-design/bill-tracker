@@ -90,13 +90,13 @@ export function tallyOutcomes(bills: Bill[]): OutcomeTally {
 }
 
 // Flatten every bill's history into a dated feed (newest first) for the "what's new" lens.
-export interface FeedItem { bill: string; title: string; action: string; date: string; sortKey: number; idx: number; }
+export interface FeedItem { bill: string; title: string; action: string; date: string; sortKey: number; idx: number; n: number; }
 
 export function buildFeed(bills: Bill[]): FeedItem[] {
   const items: FeedItem[] = [];
   for (const b of bills) {
     b.history.forEach((h, idx) => {
-      items.push({ bill: b.bill, title: b.title, action: h.action, date: h.date, sortKey: dateSort(h.date), idx });
+      items.push({ bill: b.bill, title: b.title, action: h.action, date: h.date, sortKey: dateSort(h.date), idx, n: b.history.length });
     });
   }
   items.sort((a, b) => b.sortKey - a.sortKey);

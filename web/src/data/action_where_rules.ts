@@ -40,7 +40,7 @@ export function sentenceCase(s: string): string {
   return t === t.toUpperCase() && /[A-Z]/.test(t) ? t[0] + t.slice(1).toLowerCase() : t[0].toUpperCase() + t.slice(1);
 }
 
-export interface FeedLineIn { bill: string; idx: number; action: string }
+export interface FeedLineIn { bill: string; idx: number; action: string; n: number }   // n = the bill's history length
 export interface FeedLine { bill: string; where: string; text: string; action: string; others: number }
 
 /**
@@ -58,8 +58,10 @@ export function feedLines(items: FeedLineIn[], where: Map<string, BillWhere> | n
   const out: FeedLine[] = [];
   for (const it of latest.values()) {
     const w = where?.get(it.bill);
-    const code = w && w.where.length > it.idx ? w.where[it.idx] : "";
-    const own = w?.short?.[it.idx];
+    // the codes must describe THIS history: a length mismatch means a different snapshot — not used (Codex #260)
+    const same = !!w && w.where.length === it.n;
+    const code = same ? w!.where[it.idx] : "";
+    const own = same ? w!.short?.[it.idx] : undefined;
     const text = own ?? (stripCode ? it.action.replace(stripCode, "") : it.action);
     out.push({ bill: it.bill, where: WHERE_LABEL[code] ?? "", text: sentenceCase(text), action: it.action,
       others: (count.get(it.bill) ?? 1) - 1 });

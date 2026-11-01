@@ -62,8 +62,13 @@ check("PA: SB509's last line is 'Referred to Transportation', in the House",
 hb17 = json.loads(row["HB17"][2])
 check("PA: the Governor's actions are G; a verb whose number is in the prose keeps the source line",
       row["HB17"][1][-3:] == "GGG" and hb17[-1].startswith("Act No. 2 of 2026"))
-check("PA: no short line carries a date unless it is the source line kept whole",
-      all(", 202" not in ln for b in row for ln in json.loads(row[b][2] or "[]") if "No." not in ln and "Page" not in ln))
+hb1099 = json.loads(row["HB1099"][2])
+check("PA: an 'Undefined Action' keeps the source's description (Codex #260)",
+      any(ln.startswith("Motion to reconsider final passage") for ln in hb1099))
+hist = {r["bill"]: [h["action"] for h in r["history"]] for r in _r}
+built = [ln for b in row for ln, full in zip(json.loads(row[b][2] or "[]"), hist[b]) if ln != full]
+check("PA: every line BUILT from structure carries no date (kept-whole source lines excepted)",
+      len(built) > 15000 and not any(", 202" in ln or ", 201" in ln for ln in built), f"{len(built)} built")
 
 got = {"va": hashlib.sha256(json.dumps(va_grid).encode()).hexdigest(),
        "pa": hashlib.sha256(json.dumps(pa_grid).encode()).hexdigest(),
