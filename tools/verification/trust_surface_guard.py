@@ -67,7 +67,6 @@ PROVES = {
     "incident_ledger.yml": "the days-clean record can still be written (monthly fire drill)",
     "legevent_reconcile.yml": "our committee votes match the official minutes",
     "metrics_history_retention.yml": "the trend history stays within its size limit",
-    "ny_bill_tracker.yml": "the New York bill list is refreshed",
     "stm_order_invariance.yml": "results do not depend on the order data arrives in",
     "sustainability_audit.yml": "capacity, schema drift, retention and duplicate checks",
     "witness_retention.yml": "the change record stays within its size limit",
@@ -119,6 +118,9 @@ def cron_period(expr):
 # running; each state's site shows its own checks.
 OTHER_STATE_JOBS = {
     "pa_bill_tracker.yml": "Pennsylvania's site (own spreadsheet, own Health) — owner 2026-11-01",
+    # New York's bill job ran on Virginia's Health tab and counted toward Virginia's days clean (owner 2026-11-01:
+    # take it off; assumptions_audit #153). Its workflow and its own CI keep running unchanged.
+    "ny_bill_tracker.yml": "New York's pipeline — not Virginia's trust surface (owner 2026-11-01)",
 }
 
 
@@ -392,6 +394,15 @@ def ledger(rows):
                 record_incident("unverified", f"{r['label']}: {r['state']}{since} — {r['detail']}", det)
         except Exception as e:            # fail-open: bookkeeping must never stop the status write
             print(f"⚠️ [trust_surface] ledger write failed for {det} (non-fatal): {e}")
+    # RETIRE incidents of jobs taken off Virginia's trust surface (OTHER_STATE_JOBS). They are no longer in `rows`,
+    # so without this an incident opened before the exclusion would stay open on Virginia's ledger forever, its only
+    # recovery path removed (Codex #256). close_incident is a no-op when nothing is open, so this is safe every run.
+    for fn in OTHER_STATE_JOBS:
+        det = f"{DETECTOR}:workflow:{fn}"
+        try:
+            close_incident("unverified", det)
+        except Exception as e:            # fail-open, loudly, like the loop above
+            print(f"⚠️ [trust_surface] could not retire {det} (non-fatal): {e}")
 
 
 def main(argv):

@@ -6,7 +6,11 @@ status: active
 
 # Project Log
 
-Append-only, reverse-chronological (newest at top). Each entry opens with `## [2026-11-01] pr | Pennsylvania as its own site (same code, built per state)
+Append-only, reverse-chronological (newest at top). Each entry opens with `## [2026-11-01] pr | New York off Virginia's Health / days clean
+- `ny_bill_tracker.yml` added to `trust_surface_guard.OTHER_STATE_JOBS`: no longer on Virginia's Guard_Status or days-clean ledger; the NY workflow and its CI keep running ([[failures/assumptions_audit]] #153). #255 merged.
+- Not done (budget): splitting `calendar_worker.py` by state — still the open loop on [[architecture/multi_state_config]].
+
+## [2026-11-01] pr | Pennsylvania as its own site (same code, built per state)
 - `VITE_STATE=PA` build, `wrangler.pa.toml` (own Worker/D1/secrets/sheet), `pa_bill_tracker.yml` + `pa_bill_tracker.py` (own sheet, VA's layout via `bill_rows.py`), PA intake Health, `adopted` outcome. PA job kept off VA's trust surface. UA contact = repo URL. [[architecture/multi_state_config]].
 - Fold-in (Codex on #255): the War Room link is hidden where War Room is off; adopted resolutions are counted in "Where the bills stand" (384 on the PA sample were missing).
 
