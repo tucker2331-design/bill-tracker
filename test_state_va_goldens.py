@@ -115,7 +115,7 @@ class _FrozenDT(_dt.datetime):
         return FROZEN.astimezone(tz) if tz else FROZEN.replace(tzinfo=None)
 
 
-def run(overrides=None):
+def run(overrides=None, extras=None):
     """`overrides` replaces named blobs (e.g. {"DOCKET.CSV": df}) — used by test_docket_ingest.py."""
     blobs, universe = _inputs()
     blobs.update(overrides or {})
@@ -132,7 +132,7 @@ def run(overrides=None):
     with mock.patch.object(bt, "safe_fetch_csv", fake_fetch), \
          mock.patch.object(bt, "build_committee_maps", lambda *a, **k: None), \
          mock.patch.object(bt, "datetime", fake_datetime):
-        records, completeness = bt.build_bill_records(_Http(universe, calls), SESSION)
+        records, completeness = bt.build_bill_records(_Http(universe, calls), SESSION, extras)
     out = {"records": records, "completeness": completeness, "calls": calls}
     blob = json.dumps(out, sort_keys=True, ensure_ascii=False, default=str).encode()
     return out, hashlib.sha256(blob).hexdigest()

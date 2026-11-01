@@ -52,9 +52,9 @@ class Sheet:
 
 
 NOW = datetime.datetime(2026, 10, 31, 23, 36, tzinfo=datetime.timezone.utc)
-records, comp, roster, calendar = J.build(S.SampleFetcher(), now=NOW)
+records, comp, roster, calendar, where_grid = J.build(S.SampleFetcher(), now=NOW)
 sheet = Sheet()
-J.write(records, comp, sheet, roster, calendar)
+J.write(records, comp, sheet, roster, calendar, where_grid)
 bt = sheet.tabs["Bill_Tracker"]
 rows = bt.cells["A1"]
 check("same header as Virginia's Bill_Tracker", rows[0] == bill_rows.BILL_TRACKER_HEADER)
@@ -86,7 +86,7 @@ class RosterDown(S.SampleFetcher):
         return super().get(url)
 
 
-r2, c2, ro2, cal2 = J.build(RosterDown(), now=NOW)
+r2, c2, ro2, cal2, _wg2 = J.build(RosterDown(), now=NOW)
 check("a broken roster feed never holds back the bills (published as roster_status)",
       len(r2) == 5269 and ro2 is None and c2["roster_status"] == "unavailable: URLError")
 s2 = Sheet()

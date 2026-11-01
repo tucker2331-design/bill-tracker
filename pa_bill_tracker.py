@@ -21,6 +21,8 @@ import xml.etree.ElementTree as ET
 
 import pytz
 
+import action_where
+
 from bill_rows import BILL_TRACKER_HEADER, bill_tracker_rows
 from states import get_state
 from states import pa_adapter, pa_calendar, pa_fetch, pa_roster
@@ -40,7 +42,9 @@ ORIGIN = "bill_system_metrics"       # the bill worker's heartbeat origin, so He
 def build(fetcher, now=None):
     now = now or datetime.datetime.now(datetime.timezone.utc)
     today = now.astimezone(pytz.timezone(PA.timezone)).date()
-    records, comp, export, meetings = pa_adapter.run_intake_full(fetcher, None, today, now.strftime("%Y-%m-%dT%H:%M:%SZ"))
+    extras: dict = {}
+    records, comp, export, meetings = pa_adapter.run_intake_full(fetcher, None, today, now.strftime("%Y-%m-%dT%H:%M:%SZ"),
+                                                                 extras)
     year = int(comp["session_code"].split("_")[0])
     comp.update({
         # the keys the site's header + Health already read for Virginia
@@ -64,11 +68,21 @@ def build(fetcher, now=None):
     # intake already parsed; the roster only supplies display names, so a missing roster keeps the source's names.
     calendar, cstats = pa_calendar.build_calendar(export, meetings, roster, {r["bill"] for r in records})
     comp.update(cstats)
+    # What's new: where each action happened (@actionChamber) + a short line from the structural fields.
+    display = {x["key"]: x["committee"] for x in (roster or [])}
+    where, short, from_full = {}, {}, 0
+    for bill, parts in extras.get("action_parts", {}).items():
+        where[bill] = "".join(p["where"] for p in parts)
+        lines = [pa_adapter.short_line(p, display) for p in parts]
+        short[bill] = [ln for ln, _ in lines]
+        from_full += sum(1 for _, f in lines if f)
+    comp.update({"action_where_unknown": sum(c.count(action_where.UNKNOWN) for c in where.values()),
+                 "action_short_from_full_action": from_full})
     comp["requests_made"] = getattr(fetcher, "requests_made", None)
-    return records, comp, roster, calendar
+    return records, comp, roster, calendar, action_where.rows_for(where, short)
 
 
-def write(records, comp, sheet, roster=None, calendar=None):
+def write(records, comp, sheet, roster=None, calendar=None, where_grid=None):
     import gspread
     rows = bill_tracker_rows(records)
     need_rows, need_cols = len(rows) + 50, 27   # AA = column 27
@@ -94,6 +108,13 @@ def write(records, comp, sheet, roster=None, calendar=None):
         # AA1 = the calendar's freshness clock (the site's header reads it, as it does Virginia's Sheet1!AA1)
         cw.batch_update([{"range": "A1", "values": calendar},
                          {"range": COMPLETENESS_CELL, "values": [[comp["checked_at_utc"]]]}])
+    if where_grid is not None:
+        try:
+            action_where.write(sheet, where_grid)   # enrichment: never blocks the roster, calendar or heartbeat
+        except (gspread.exceptions.APIError, gspread.exceptions.GSpreadException) as e:
+            comp["action_where_status"] = f"write failed: {type(e).__name__}"   # rides in the heartbeat below
+            print(f"::warning::PA {action_where.ACTION_WHERE_TAB} write failed ({type(e).__name__}: {e}); "
+                  f"What's new shows actions without where they happened (Gemini #260)")
     if roster is not None:
         rrows = pa_roster.roster_rows(roster)
         try:
@@ -111,14 +132,14 @@ def write(records, comp, sheet, roster=None, calendar=None):
         mh.update(values=[METRICS_HEADER], range_name="A1")
     beat = {k: comp[k] for k in ("records_written", "universe_count", "verbs_unclassified", "undefined_actions",
                                  "action_dates_unreadable", "schedule_bill_refs_unmatched", "requests_made")}
-    beat.update({k: comp[k] for k in ("roster_status", "bills_committee_without_roster", "calendar_meetings",
+    beat.update({k: comp[k] for k in ("roster_status", "action_where_status", "bills_committee_without_roster", "calendar_meetings",
                                       "calendar_meetings_without_bills", "calendar_session_days") if k in comp})
     mh.append_rows([[comp["checked_at_utc"], "OK", ORIGIN, json.dumps(beat, ensure_ascii=False)]])
 
 
 def main(argv):
     fetcher = pa_fetch.PoliteFetcher(os.environ.get("PA_CACHE_DIR", ".pa_cache"))
-    records, comp, roster, calendar = build(fetcher)
+    records, comp, roster, calendar, where_grid = build(fetcher)
     print(json.dumps({k: v for k, v in comp.items() if k != "verbs_unclassified_sample"}, ensure_ascii=False))
     if comp["verbs_unclassified"]:
         # Counted and published, never guessed — but a new verb is PA changing its vocabulary: say so loudly.
@@ -134,7 +155,7 @@ def main(argv):
     from google.oauth2.service_account import Credentials
     gc = gspread.authorize(Credentials.from_service_account_info(
         json.loads(creds), scopes=["https://www.googleapis.com/auth/spreadsheets"]))
-    write(records, comp, gc.open_by_key(sid), roster, calendar)
+    write(records, comp, gc.open_by_key(sid), roster, calendar, where_grid)
     print(f"wrote {len(records)} PA records to {TAB} (sheet {sid[:6]}…)")
     return 0
 

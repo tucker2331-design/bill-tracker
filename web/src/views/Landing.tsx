@@ -6,6 +6,7 @@ import { parseLisDate, dateSort, dayKey } from "../data/dates";
 import { OutcomeChip } from "../components/common";
 import { CalendarSliver } from "../components/CalendarSliver";
 import { loadCalendar } from "../data/calendar";
+import { loadActionWhere, feedLines, type BillWhere } from "../data/action_where";
 import { Timeline } from "./Timeline";
 import { useScrollCue } from "../components/useScrollCue";
 
@@ -50,6 +51,15 @@ export function Landing({ bills, onOpen, calRefresh = 0 }: { bills: Bill[]; onOp
     return [...m.entries()].sort((a, b) => dateSort(b[0]) - dateSort(a[0]));
   }, [feed]);
 
+  // Where each action happened (Action_Where tab). null until loaded or when unavailable: lines then carry no
+  // "(where)" — never a guessed one.
+  const [where, setWhere] = useState<Map<string, BillWhere> | null>(null);
+  useEffect(() => {
+    let alive = true;
+    loadActionWhere().then((r) => { if (alive) setWhere(r.status === "ok" ? r.byBill : null); });
+    return () => { alive = false; };
+  }, [bills]);
+
   const [dayIdx, setDayIdx] = useState(0);
   const [nowMs] = useState(() => Date.now()); // stable per mount — for the off-season "staleness" check below
   const [feedRef, feedHasMore] = useScrollCue<HTMLDivElement>();   // drives the "more below" cue on the What's-new panel
@@ -93,8 +103,10 @@ export function Landing({ bills, onOpen, calRefresh = 0 }: { bills: Bill[]; onOp
   // actions carry no clock, so they follow in their original order — we never invent a time to sort by. Not a
   // useMemo: this sits after an early return, and a conditional hook would break the rules of hooks. A single
   // day's actions are bounded, so the sort is trivial. No row cap either — the panel scrolls (never cut data).
+  // One line per bill (owner 2026-11-01): its latest action that day, with where it happened.
+  const lines = feedLines(items, where, STATE.actionCodePrefix);
   const ordered = (() => {
-    const rows = items.map((it) => ({ it, t: timeFor(curDay, it.bill, it.action) }));
+    const rows = lines.map((it) => ({ it, t: timeFor(curDay, it.bill, it.action) }));
     const timed = rows.filter((r) => r.t).sort((a, b) => b.t!.minutes - a.t!.minutes);
     return [...timed, ...rows.filter((r) => !r.t)];
   })();
@@ -118,7 +130,7 @@ export function Landing({ bills, onOpen, calRefresh = 0 }: { bills: Bill[]; onOp
             <p className="feedday">
               {isStale
                 ? <>No bill action since <strong>{dayLabel}</strong></>
-                : <>{dayLabel} <span className="muted">· {items.length} action{items.length === 1 ? "" : "s"}</span></>}
+                : <>{dayLabel} <span className="muted">· {lines.length} bill{lines.length === 1 ? "" : "s"}</span></>}
             </p>
             {items.length === 0 && <p className="muted" style={{ padding: "8px 4px" }}>No actions on this day.</p>}
             {ordered.map(({ it, t }, i) => {
@@ -128,7 +140,7 @@ export function Landing({ bills, onOpen, calRefresh = 0 }: { bills: Bill[]; onOp
                   onKeyDown={(e) => { if (b && (e.key === "Enter" || e.key === " ")) { e.preventDefault(); onOpen(b); } }}>
                   <span className={`ftime${t ? "" : " none"}`} title={t ? "Time of the meeting this action happened in" : "Administrative action — no meeting time"}>{t?.time ?? "—"}</span>
                   <span className="fnum">{it.bill}</span>
-                  <span className="fact">{it.action}</span>
+                  <span className="fact">{it.where && <span className="muted">({it.where}) </span>}{it.text}</span>
                 </div>
               );
             })}

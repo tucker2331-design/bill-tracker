@@ -92,6 +92,23 @@ contract differs. Source facts: [[knowledge/pa_bill_history_xml]]. Scheduled job
 - Goldens: `test_pa_calendar.py` (real sample), `agenda.regression.mjs` (now in CI), `pa.regression.mjs`,
   `test_pa_bill_tracker.py`.
 
+## What's new — one line per bill, both sites (built 2026-11-01)
+- Form (owner): `SB509 (In the House) Referred to Transportation` — the bill's latest action that day, where it happened,
+  sentence case, no date. Full history stays on the bill card.
+- **Data: a separate, additive `Action_Where` tab** (`action_where.py`; Bill | Where | Short), one code per history row
+  (H / S / G / `-`). Chosen over a new Bill_Tracker field: Virginia's Bill_Tracker stays byte-identical (golden passes
+  with the side output on), and the site reads one small tab.
+- **Virginia: structural only, so partial.** A code exists only where the row's OWN committee refid names a committee —
+  10,011 of 65,414 rows (2026), each agreeing with LIS's own leading chamber letter (10,011/10,011). Carrying the
+  committee position forward was measured and REJECTED: wrong on 12,454 of 61,248 rows (enrolment/signing in the
+  House after a Senate committee). So most VA lines show no bracket. **Owner decision pending:** LIS prefixes every
+  description with a one-letter chamber code ("H "/"S "); if that fixed-position code counts as a field (like the
+  "display a field verbatim" ruling in [[log]] 2026-06), VA gets full coverage at 100% agreement.
+- **Pennsylvania:** `@actionChamber` (0 unknown) + a short line from verb + committee (roster name) + tally; verbs whose
+  number sits in the prose ("Act No.", "Journal Page", "Prior Printer's No.") keep the source line (1,672 rows).
+- Display: VA's "H "/"S " code column is removed for display only (`StateConfig.actionCodePrefix`), never read for where.
+- Goldens: `test_action_where.py`, `action_where.regression.mjs`.
+
 ## Not split yet (the open loop)
 
 - **`calendar_worker.py`** — the calendar subsystem merges into the product only at 100% accuracy; its VA

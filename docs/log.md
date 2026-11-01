@@ -6,7 +6,11 @@ status: active
 
 # Project Log
 
-Append-only, reverse-chronological (newest at top). Each entry opens with `## [2026-11-01] pr | PA Calendar
+Append-only, reverse-chronological (newest at top). Each entry opens with `## [2026-11-01] pr | What's new: one line per bill, with where the action happened (both sites)
+- `Action_Where` side tab (Bill_Tracker byte-identical). VA: own-committee-refid only — 10,011/65,414 rows, 100% agreeing with LIS's chamber letter; forward-carried position rejected (wrong on 12,454/61,248). PA: `@actionChamber` + structural short line. Owner decision pending on LIS's chamber-letter code. [[architecture/multi_state_config]].
+- Fold-in (Codex #260, 2 × P2): PA's `Undefined Action` keeps the source description (HB1099 "Motion to reconsider final passage"); the where-tab is re-read on every bill refresh and a code string whose length differs from the bill's history is not used (no cross-snapshot join).
+
+## [2026-11-01] pr | PA Calendar
 - Diagnosis (one hand check of the Senate schedule page): the 7 empty meetings are 2 unannounced Appropriations slots, 1 public hearing and 4 agency-meeting listings (2 meetings × both feeds) in the post-election lull — not a broken feed; a populated `Bills` field is still unproven until session ([[knowledge/pa_bill_history_xml]]).
 - `states/pa_calendar.py` → PA `Sheet1` in the calendar layout (5 meetings + 214 past session days from floor actions; Rule 71 tablings excluded). `features.calendar` on for PA; "no bills listed" said on the card; a note that future session days are not published. [[architecture/multi_state_config]].
 
