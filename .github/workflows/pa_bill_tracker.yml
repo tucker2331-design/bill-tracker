@@ -1,0 +1,50 @@
+name: PA bill tracker (Pennsylvania site)
+
+# Pennsylvania's own scheduled job: the PA intake (states/pa_*) written to PA's OWN spreadsheet (PA_SPREADSHEET_ID).
+# Fetch rules (owner 2026-10-31): bulk feeds only, at most one request per URL per hour, one at a time, honest UA,
+# stop on 403. The export updates hourly on weekdays, so this runs hourly on weekdays and never faster; the fetch
+# cache persists between runs (actions/cache) so the hourly cap holds across runs too.
+# NOT part of Virginia's trust surface: trust_surface_guard.OTHER_STATE_JOBS excludes it from VA's days-clean count.
+on:
+  schedule:
+    - cron: "23 * * * 1-5"
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: "write = production write; dry-run = fetch + build only"
+        default: dry-run
+        type: choice
+        options: [dry-run, write]
+
+concurrency:
+  group: pa-bill-tracker      # one run at a time: one request at a time to www.palegis.us
+  cancel-in-progress: false
+
+jobs:
+  intake:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+      - run: pip install --quiet gspread google-auth pytz
+      - name: Restore the fetch cache (keeps the hourly cap across runs)
+        uses: actions/cache@v4
+        with:
+          path: .pa_cache
+          key: pa-fetch-${{ github.run_id }}
+          restore-keys: pa-fetch-
+      - name: Run the PA intake
+        env:
+          PYTHONUNBUFFERED: "1"
+          PA_CACHE_DIR: .pa_cache
+          PA_SPREADSHEET_ID: ${{ secrets.PA_SPREADSHEET_ID }}
+          GCP_CREDENTIALS: ${{ secrets.GCP_CREDENTIALS }}
+        run: |
+          if [ "${{ github.event_name }}" = "schedule" ] || [ "${{ inputs.mode }}" = "write" ]; then
+            python3 pa_bill_tracker.py
+          else
+            python3 pa_bill_tracker.py --dry-run
+          fi

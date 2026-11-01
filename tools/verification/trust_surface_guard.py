@@ -113,6 +113,15 @@ def cron_period(expr):
     return timedelta(hours=1), "hourly"
 
 
+# Jobs that belong to ANOTHER state's product. Virginia's trust surface (Guard_Status + the days-clean ledger) is
+# about Virginia: another state's job failing is that state's incident, never Virginia's. Listed by name with the
+# reason, so the exclusion is a decision on record (and test_trust_surface_guard.py pins it). Their own CI keeps
+# running; each state's site shows its own checks.
+OTHER_STATE_JOBS = {
+    "pa_bill_tracker.yml": "Pennsylvania's site (own spreadsheet, own Health) — owner 2026-11-01",
+}
+
+
 def scheduled_workflows(wf_dir=None):
     """[(file, name, cron)] for every workflow whose `on:` has an active `schedule:` (comments ignored).
     A file that does not parse is returned with cron=None: GitHub cannot run it either, so it is reported."""
@@ -134,7 +143,7 @@ def scheduled_workflows(wf_dir=None):
         on = doc.get("on", doc.get(True))           # PyYAML reads the bare key `on` as boolean True
         sched = on.get("schedule") if isinstance(on, dict) else None
         crons = [s.get("cron") for s in (sched or []) if isinstance(s, dict) and s.get("cron")]
-        if crons:
+        if crons and fn not in OTHER_STATE_JOBS:
             out.append((fn, str(doc.get("name") or fn), crons[0], ""))
     return out
 

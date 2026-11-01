@@ -121,8 +121,9 @@ def fetch_rules():
         f = F.PoliteFetcher(tmp, opener=opener, clock=lambda: t[0], sleep=lambda s: t.__setitem__(0, t[0] + s))
         url = "https://www.palegis.us/house/rss/committee/schedule"
         f.get(url)
-        check("honest User-Agent with a contact address, sent as-is",
-              calls[0][1] == F.USER_AGENT and "contact" in F.USER_AGENT and "Mozilla" not in F.USER_AGENT)
+        check("honest User-Agent naming the repo as contact, sent as-is",
+              calls[0][1] == F.USER_AGENT and "github.com/tucker2331-design/bill-tracker" in F.USER_AGENT
+              and "Mozilla" not in F.USER_AGENT and "@" not in F.USER_AGENT)
         t[0] += 3599
         f.get(url)
         check("same URL inside the hour -> served from cache, no request", len(calls) == 1)

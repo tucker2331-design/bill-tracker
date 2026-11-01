@@ -6,7 +6,11 @@ status: active
 
 # Project Log
 
-Append-only, reverse-chronological (newest at top). Each entry opens with `## [2026-10-31] pr | Pennsylvania intake (no predictions)
+Append-only, reverse-chronological (newest at top). Each entry opens with `## [2026-11-01] pr | Pennsylvania as its own site (same code, built per state)
+- `VITE_STATE=PA` build, `wrangler.pa.toml` (own Worker/D1/secrets/sheet), `pa_bill_tracker.yml` + `pa_bill_tracker.py` (own sheet, VA's layout via `bill_rows.py`), PA intake Health, `adopted` outcome. PA job kept off VA's trust surface. UA contact = repo URL. [[architecture/multi_state_config]].
+- Fold-in (Codex on #255): the War Room link is hidden where War Room is off; adopted resolutions are counted in "Where the bills stand" (384 on the PA sample were missing).
+
+## [2026-10-31] pr | Pennsylvania intake (no predictions)
 - robots.txt checked (UserWay-only group; owner confirmed). 5 polite requests to www.palegis.us; real samples committed with a manifest (`tools/historical_cache/pa/2025_0/`).
 - `states/pa.py` + `pa_adapter.py` + `pa_fetch.py`: the export's 59-verb closed vocabulary → the VA bill contract + PA's own stages (two-year session, no crossover, concurrence, adopted). 5,269/5,269 documents; 0 unclassified verbs; signed 200 = 200 "Act No." actions.
 - Goldens + fetch-rule tests: `test_pa_intake.py` (30). Source facts: [[knowledge/pa_bill_history_xml]]. #253 merged.

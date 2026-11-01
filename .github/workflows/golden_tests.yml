@@ -14,6 +14,8 @@ on:
       - 'bill_tracker.py'
       - 'states/**'
       - 'goldens/**'
+      - 'pa_bill_tracker.py'
+      - 'bill_rows.py'
       - 'cadence.py'
       - 'lis_authorization.py'
       - 'structural_router.py'
@@ -28,6 +30,8 @@ on:
       - 'bill_tracker.py'
       - 'states/**'
       - 'goldens/**'
+      - 'pa_bill_tracker.py'
+      - 'bill_rows.py'
       - 'cadence.py'
       - 'lis_authorization.py'
       - 'structural_router.py'
@@ -80,7 +84,8 @@ jobs:
             test_copatrons_fetch.py \
             test_serve_calls.py \
             test_state_va_goldens.py \
-            test_docket_ingest.py; do
+            test_docket_ingest.py \
+            test_pa_bill_tracker.py; do
             echo "::group::$t"
             if python3 -u "$t"; then echo "PASS  $t"; else echo "FAIL  $t"; fail=1; fi
             echo "::endgroup::"

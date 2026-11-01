@@ -63,6 +63,10 @@ check("PA stage list is exactly PA's own (introduced … law, adopted)",
 check("PA hardcodes no per-bill page link (robots.txt protects /legislation/bills/*)",
       pa.bill_url_template == "" and not any("/legislation/bills" in u for u in pa.urls.values()))
 check("PA feeds are all on www.palegis.us", all(u.startswith("https://www.palegis.us/") for u in pa.urls.values()))
+with open(os.path.join(HERE, "web", "src", "states", "pa.ts"), encoding="utf-8") as _f:
+    pa_ts = _f.read()
+check("Python and SPA agree on PA stage ids", re.findall(r'\{ id: "([a-z0-9]+)"', pa_ts) == [s.id for s in pa.stages])
+check("Python and SPA agree on PA's code", f'code: "{pa.code}"' in pa_ts)
 check("every registered state has a source adapter", all(states.get_state(c).adapter for c in states.registered()))
 
 sys.exit(1 if FAILS else 0)

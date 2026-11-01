@@ -7,7 +7,7 @@
     ETag or Last-Modified (measured 2026-10-31), so conditional GET is impossible and the cap is time-based: a URL
     fetched in the last `min_interval` seconds (default 3600) is served from the on-disk cache, no request at all.
   * ONE REQUEST AT A TIME. A process-wide lock; callers fetch sequentially.
-  * AN HONEST USER-AGENT with a contact address. Never altered, never a browser string.
+  * AN HONEST USER-AGENT naming the project and its public repo as the contact. Never altered, never a browser string.
   * A 403 (or 401/429) STOPS the intake: `FeedRefused` is raised, nothing is retried, no header is changed. A human
     decides what happens next (owner rule).
 """
@@ -23,7 +23,7 @@ import urllib.error
 import urllib.request
 from typing import Callable, Optional
 
-USER_AGENT = "bill-tracker-intake/0.1 (+https://github.com/tucker2331-design/bill-tracker; contact tucker2331@gmail.com)"
+USER_AGENT = "bill-tracker-intake/0.1 (+https://github.com/tucker2331-design/bill-tracker)"   # contact = the repo (owner 2026-11-01)
 DEFAULT_MIN_INTERVAL = 3600
 
 # The only URLs this fetcher will request (anchored; www.palegis.us only).

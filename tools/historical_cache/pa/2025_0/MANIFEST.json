@@ -1,7 +1,7 @@
 {
  "fetched_utc": "2026-10-31T23:36Z",
  "host": "www.palegis.us",
- "user_agent": "bill-tracker-intake/0.1 (+https://github.com/tucker2331-design/bill-tracker; contact tucker2331@gmail.com) (robots.txt fetched with an earlier UA without the contact address)",
+ "user_agent": "bill-tracker-intake/0.1 (+https://github.com/tucker2331-design/bill-tracker) \u2014 the 2026-10-31 fetches also carried a contact email, since replaced by the repo URL (owner 2026-11-01)",
  "requests": 5,
  "conditional_get": "none of these responses carried ETag or Last-Modified",
  "files": {

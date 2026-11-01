@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { STATE } from "../states";
 import type { Bill } from "../data/types";
 import { OutcomeChip, ChamberChip, Star } from "./common";
 import { sourceBillUrl, SOURCE } from "../config";
@@ -52,7 +53,7 @@ export function BillCard({ bill, sessionCode, onClose }: { bill: Bill; sessionCo
             {bill.referrals > 1 && <span className="chip referral">{bill.referrals} referrals</span>}
           </div>
 
-          <Summary key={`summary-${bill.bill}`} bill={bill.bill} lisUrl={sourceBillUrl(sessionCode, bill.bill)} />
+          {STATE.features.summaries && <Summary key={`summary-${bill.bill}`} bill={bill.bill} lisUrl={sourceBillUrl(sessionCode, bill.bill)} />}
 
           <div className="metarow"><span className="k">Status ({SOURCE})</span><span>{bill.statusLis || "—"}</span></div>
           <div className="metarow"><span className="k">Where it is</span>
@@ -83,10 +84,10 @@ export function BillCard({ bill, sessionCode, onClose }: { bill: Bill; sessionCo
           </table>
 
           <div className="card-links">
-            <a href={sourceBillUrl(sessionCode, bill.bill)} target="_blank" rel="noopener noreferrer">
+            {sourceBillUrl(sessionCode, bill.bill) && <a href={sourceBillUrl(sessionCode, bill.bill)} target="_blank" rel="noopener noreferrer">
               View on {SOURCE} ↗
-            </a>
-            {tracked && <a className="card-wr" {...linkProps(warRoomBillPath(bill.bill))}>Open in War Room →</a>}
+            </a>}
+            {tracked && STATE.features.warroom && <a className="card-wr" {...linkProps(warRoomBillPath(bill.bill))}>Open in War Room →</a>}
           </div>
         </div>
       </div>
@@ -102,8 +103,10 @@ export function NextMeeting({ bill }: { bill: Bill }) {
   // the agenda/livestream links — joined from the calendar data (shared cached load), so nobody detours
   // to the Calendar tab to find their bill. `undefined` = still loading (render the thin `upcoming`
   // fallback meanwhile); `null` = calendar loaded, nothing scheduled (honest "none scheduled").
-  const [nextMtg, setNextMtg] = useState<CalMeeting | null | undefined>(undefined);
+  // No calendar on this state's site → "null" from the start (the thin `upcoming` fallback renders), no Sheet1 read.
+  const [nextMtg, setNextMtg] = useState<CalMeeting | null | undefined>(STATE.features.calendar ? undefined : null);
   useEffect(() => {
+    if (!STATE.features.calendar) return;
     let alive = true;
     loadCalendar()
       .then((cal) => { if (alive) setNextMtg(nextMeetingFor(cal, bill.bill, dayKey(new Date()))); })

@@ -96,7 +96,7 @@ function copatrons(raw: string | undefined): Copatron[] | null {
 }
 
 const OUTCOMES = new Set<Outcome>([
-  "signed", "vetoed", "dead", "carried_over", "awaiting_governor", "in_progress",
+  "signed", "vetoed", "dead", "carried_over", "awaiting_governor", "in_progress", "adopted",
 ]);
 
 function toBill(r: string[]): Bill | null {
