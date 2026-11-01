@@ -77,3 +77,16 @@ export function verdictOf(insts: Instrument[], problemImpeach: Impeach[]): Verdi
     noResult: insts.filter((i) => i.value === null).length,
   };
 }
+
+/** Freshness limit for a job that runs only on some UTC weekdays (PA: Mon–Fri, cron "23 * * * 1-5"): the base limit
+ *  plus ONLY the hours the schedule itself skipped since the last scheduled day — so a weekend never reads stale,
+ *  and a job that stops on a weekday is flagged after `baseH` (Codex #266: a learned rhythm that includes the 49 h
+ *  weekend gap relaxed the limit to ~73 h, hiding a Monday failure). Pure: `now` is passed in. */
+export function scheduleLimitHours(now: Date, activeDaysUTC: number[], baseH: number): number {
+  if (!activeDaysUTC.length) return baseH;
+  let idle = 0;
+  const t = new Date(now.getTime());
+  // walk back to the most recent scheduled day; whole skipped hours are added (cap: one week)
+  while (!activeDaysUTC.includes(t.getUTCDay()) && idle < 168) { t.setUTCHours(t.getUTCHours() - 1); idle++; }
+  return baseH + idle;
+}

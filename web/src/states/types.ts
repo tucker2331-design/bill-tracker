@@ -39,6 +39,8 @@ export interface StateConfig {
   /** A fixed-position code field at the start of the source's action text, removed for display only (VA: LIS's
    *  "H "/"S " chamber column). null = none. Where an action happened is never read from it. */
   actionCodePrefix: RegExp | null;
+  /** The data job's run days (UTC weekday numbers, 0 = Sunday); [] = every day (rhythm learned from heartbeats). */
+  jobDaysUTC: number[];
   /** A sentence under the Calendar about what it can and cannot show for this state ("" = none). */
   calendarNote: string;
   /** Health "intake" rows: a completeness-payload key, its label, and the most that is still clean (grey). */

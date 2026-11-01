@@ -5,7 +5,7 @@
  * Run:  node web/tools/ts2mjs.mjs web/src/data/health_rules.ts /tmp/health_rules.mjs \
  *         && node web/src/views/__tests__/health_rules.regression.mjs
  */
-import { isClean, rings, dialPos, rhythmLimitHours, verdictOf } from "/tmp/health_rules.mjs";
+import { isClean, rings, dialPos, rhythmLimitHours, scheduleLimitHours, verdictOf } from "/tmp/health_rules.mjs";
 let pass = 0, fail = 0;
 const is = (n, g, w) => { const ok = JSON.stringify(g) === JSON.stringify(w);
   console.log(`  ${ok ? "ok  " : "FAIL"} ${n}${ok ? "" : `  got ${JSON.stringify(g)} want ${JSON.stringify(w)}`}`); ok ? pass++ : fail++; };
@@ -46,6 +46,14 @@ is("nothing open -> clean", verdictOf(insts, []).clean, true);
 is("verdict counts", verdictOf(insts, ["yes", "unknown", "no"]), { clean: false, problems: 3, wrong: 1, noResult: 1 });
 
 // (the 90-day strip lives with the counter in incidents.ts; its goldens are in test_counter_display.py)
+
+// Weekday-only job (PA: Mon-Fri UTC). Codex #266: a weekend must not relax Monday's limit; a weekend must not read stale.
+const WK = [1, 2, 3, 4, 5];
+is("weekday: the base limit", scheduleLimitHours(new Date("2026-11-04T15:00:00Z"), WK, 12), 12);
+is("Monday 10:00 UTC: base only (the weekend no longer counts)", scheduleLimitHours(new Date("2026-11-02T10:00:00Z"), WK, 12), 12);
+is("Saturday 10:00 UTC: base + the 11 skipped hours", scheduleLimitHours(new Date("2026-11-07T10:00:00Z"), WK, 12), 12 + 11);
+is("Sunday 23:00 UTC: base + 48 skipped hours", scheduleLimitHours(new Date("2026-11-08T23:00:00Z"), WK, 12), 12 + 48);
+is("every-day job: base", scheduleLimitHours(new Date("2026-11-07T10:00:00Z"), [], 12), 12);
 
 console.log(`\n${fail ? `${fail} FAILED` : "ALL PASS"} (${pass} ok)`);
 process.exit(fail ? 1 : 0);

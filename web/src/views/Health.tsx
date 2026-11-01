@@ -6,7 +6,7 @@
 //  * P26: counts as "k of n"; a coverage metric is shown as the count of what is MISSING.
 //  * P24/P25: problems are rows of structural fields (check, state, since, affects, published values wrong, fix).
 //  * The freshness limits follow each worker's observed write rhythm (Metrics_History heartbeats), not a fixed 6 h.
-import { SOURCE } from "../config";
+import { SOURCE, STALE_AFTER_HOURS } from "../config";
 import { STATE } from "../states";
 import { loadCalendarFreshness } from "../data/calendar";
 import { useEffect, useMemo, useState } from "react";
@@ -17,7 +17,7 @@ import { loadHistory, type HistoryData, type AlertSource } from "../data/history
 import { loadCounter, type CounterState } from "../data/incidents";
 import { loadGuardStatus, loadRuns, GUARD_OK, type GuardLoad, type RunMark } from "../data/guards";
 import {
-  isClean, rings, dialPos, rhythmLimitHours, verdictOf, type Instrument, type Impeach, type RingExtra, type Category,
+  isClean, rings, dialPos, rhythmLimitHours, scheduleLimitHours, verdictOf, type Instrument, type Impeach, type RingExtra, type Category,
 } from "../data/health_rules";
 
 const SEV_WORD: Record<string, string> = { CRITICAL: "Needs a look", WARN: "Heads up", INFO: "FYI" };
@@ -143,12 +143,14 @@ export function Health({ completeness, dataAsOf }: { completeness: Completeness 
   const billLimit = rhythmLimitHours(hist?.beats.bill ?? []), calLimit = rhythmLimitHours(hist?.beats.calendar ?? []);
   const num = (v: unknown) => (typeof v === "number" && Number.isFinite(v) ? v : null);
   // Rebuilt every render (ten objects): the data ages read the clock, so a memo kept them stale (Gemini #250).
+  // A weekday-only job: limit from its schedule, not a learned rhythm that includes the weekend (Codex #266).
+  const intakeLimit = STATE.jobDaysUTC.length ? scheduleLimitHours(new Date(), STATE.jobDaysUTC, STALE_AFTER_HOURS) : billLimit;
   const intakeInsts: Instrument[] = [
     { id: "missing", cat: "Completeness", name: "Bills missing from our list", value: c && universe > 0 ? universe - written : null, of: universe || undefined, limit: 0, max: 20, impeaches: "no" },
     ...STATE.intakeChecks.map((k): Instrument => ({ id: k.key, cat: k.cat, name: k.label,
       value: num((c as unknown as Record<string, unknown> | null)?.[k.key]), limit: k.limit, max: Math.max(10, k.limit * 4), impeaches: "unknown" })),
-    { id: "billage", cat: "Freshness", name: "Bill data age", value: dataAsOf ? +hoursSince(dataAsOf).toFixed(1) : null, limit: billLimit, max: billLimit * 4, unit: "h", impeaches: "no" },
-    { id: "calage", cat: "Freshness", name: "Calendar data age", value: calAsOf ? +hoursSince(calAsOf).toFixed(1) : null, limit: billLimit, max: billLimit * 4, unit: "h", impeaches: "no" },
+    { id: "billage", cat: "Freshness", name: "Bill data age", value: dataAsOf ? +hoursSince(dataAsOf).toFixed(1) : null, limit: intakeLimit, max: intakeLimit * 4, unit: "h", impeaches: "no" },
+    { id: "calage", cat: "Freshness", name: "Calendar data age", value: calAsOf ? +hoursSince(calAsOf).toFixed(1) : null, limit: intakeLimit, max: intakeLimit * 4, unit: "h", impeaches: "no" },
   ];
   const vaInsts: Instrument[] = [
     { id: "s9", cat: "Accuracy", name: "Meeting actions without a time", value: num(m.meeting_unsourced), limit: 0, max: 50, impeaches: "yes" },

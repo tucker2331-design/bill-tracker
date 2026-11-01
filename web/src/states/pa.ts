@@ -28,6 +28,7 @@ export const PA: StateConfig = {
   billUrl: () => "",
   features: { calendar: true, timeline: false, warroom: true, predictions: false, committeeRoster: true, summaries: false, health: "intake" },
   actionCodePrefix: null,
+  jobDaysUTC: [1, 2, 3, 4, 5],   // pa_bill_tracker.yml: cron "23 * * * 1-5" (hourly, weekdays, UTC)
   // PA publishes no feed of FUTURE session days (2026-11-01), so a session day is shown once the export records it.
   calendarNote: "Committee meetings come from the PA General Assembly's committee schedules. Session days are shown "
     + "once they have happened, from the floor actions in the bill history: no future list of session days is published.",
