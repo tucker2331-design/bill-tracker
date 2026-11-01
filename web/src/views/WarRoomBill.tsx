@@ -15,6 +15,7 @@ import type { Bill } from "../data/types";
 import { OutcomeChip, Star } from "../components/common";
 import { Copatrons, NextMeeting, Summary } from "../components/BillCard";
 import { MemberCalls } from "../components/MemberCalls";
+import { ClampedTitle } from "../components/ClampedTitle";
 import { CommitteeMembers } from "../components/CommitteeMembers";
 import { PositionControl } from "../components/PositionControl";
 import { ContactLog } from "../components/ContactLog";
@@ -46,7 +47,7 @@ export function WarRoomBill({ id, bills, sessionCode }: { id: string; bills: Bil
 
       <header className="wb-title">
         <h1>{bill.bill}</h1>
-        <p>{bill.title}</p>
+        <ClampedTitle className="wb-ttl" text={bill.title} />
         {!tracked && <p className="muted wb-untracked">Not tracked — star it to keep it in your War Room.</p>}
       </header>
 
