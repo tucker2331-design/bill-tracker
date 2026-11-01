@@ -39,7 +39,9 @@ status: active
   **5. PA leftovers:** "Status (LIS)" / "Mastermind DB sheet" wording (App.tsx, Calendar.tsx error lines); the 22
   `undefined_actions` in the intake. **Deploy PA** after each merge: `npm run build:pa` then
   `npx wrangler deploy --config wrangler.pa.toml` — not possible from a cloud session (no Cloudflare credentials;
-  `*.workers.dev` outside its network policy). [[architecture/multi_state_config]] · [[knowledge/pa_bill_history_xml]].
+  `*.workers.dev` outside its network policy). **2026-11-01: real PA sheet + D1 ids committed to `wrangler.pa.toml`;
+  owner connecting `bill-tracker-pa` to Cloudflare Workers Builds (branch main) so PA deploys itself like VA.**
+  [[architecture/multi_state_config]] · [[knowledge/pa_bill_history_xml]].
 
 - **🔒 The whole app goes private — 5 owner steps, in order:** team list secret → service-account secret → merge
   → set the Google Sheet to Restricted → Streamlit secret + private. Until step 4 the data is still readable by
