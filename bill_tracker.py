@@ -643,21 +643,42 @@ def _latest_vote(rows):
     return {"tally": "", "location": "", "date": ""}
 
 
-def _action_where(rows, bill):
-    """WHERE each history row happened, one code per row (action_where.py), from STRUCTURE only: the chamber of the
-    row's OWN committee refid (a referral, report or committee vote happens in that committee's chamber).
-    A row without a committee refid is "-" (unknown): no bracket on the site, never a guess.
+# LIS's HISTORY description column opens with a one-letter chamber code field: "H " (House), "S " (Senate), or a
+# blank (no chamber: Acts of Assembly, the Governor). Fixed position, closed vocabulary — read as a CODE, never as prose.
+_LIS_CHAMBER_CODE = {"H": "H", "S": "S"}
 
-    Measured on the cached 2026 HISTORY (65,414 rows): 10,011 rows carry a committee refid, and on every one of them
-    the chamber agrees with LIS's own leading chamber letter (10,011 of 10,011). Carrying the committee position
-    FORWARD onto the other rows was tried and rejected: it disagreed with LIS on 12,454 of 61,248 rows ("Enrolled",
-    "Signed by Speaker" in the House after a Senate committee), so a bracket would have been wrong 1 time in 5."""
+
+def _action_where(rows, bill, stats=None):
+    """WHERE each history row happened, one code per row (action_where.py).
+
+    1. STRUCTURAL first: the chamber of the row's OWN committee refid.
+    2. Otherwise LIS's own chamber code (the description's fixed first character, H/S) — owner 2026-11-01: "100%
+       accuracy, consistency, and coverage". Validated every run: where a row has BOTH, they must agree; a
+       disagreement is counted (`action_where_disagree`) and alerted, and the structural answer is kept.
+    3. LIS's code field is blank (Acts of Assembly, Governor's actions, conference reports: 4,166 rows in 2026) ->
+       "0" = the source lists no chamber, shown as "(No chamber)" — true, never a guessed chamber.
+    4. Anything else (the raw line had no code field) -> "-": counted as `action_where_unknown` and ALERTED, so a
+       row that should be labelled can never fall silently into "No chamber". 0 rows on 2026.
+    Census on 2026 (raw HISTORY): H 35,269 + S 25,985 + blank 4,160 = 65,414 — every row in an explicit form.
+
+    Measured on the cached 2026 HISTORY (65,414 rows): 10,011 rows have a committee refid and every one agrees with
+    the LIS code (10,011/10,011). Carrying the committee position FORWARD was rejected: wrong on 12,454 of 61,248."""
     codes = []
     for r in rows:
         refid = str(r.get("refid", "")).strip()
         name, _source = resolve_committee_from_refid(refid)
-        codes.append(action_where.CODE.get(_chamber_of(refid, "refid"), action_where.UNKNOWN) if name
-                     else action_where.UNKNOWN)
+        structural = action_where.CODE.get(_chamber_of(refid, "refid"), "") if name else ""
+        raw_code = r.get("code", "?")                 # captured at ingestion from the raw line (never prose)
+        lis = _LIS_CHAMBER_CODE.get(raw_code, "")
+        lis_blank = raw_code == " "                    # LIS's code field is blank: it lists no chamber
+        if structural and lis and structural != lis and stats is not None:
+            stats["action_where_disagree"] = stats.get("action_where_disagree", 0) + 1
+        code = structural or lis or (action_where.NO_CHAMBER if lis_blank else action_where.UNKNOWN)
+        if stats is not None:
+            key = ("action_where_structural" if structural else "action_where_lis_code" if lis
+                   else "action_where_no_chamber" if lis_blank else "action_where_unknown")
+            stats[key] = stats.get(key, 0) + 1
+        codes.append(code)
     return "".join(codes)
 
 
@@ -754,13 +775,17 @@ def build_bill_records(http_session, session_code, extras=None):
     dates = hist_df[date_col].fillna("").astype(str) if date_col else [""] * len(hist_df)
     refids = hist_df[refid_col].fillna("").astype(str) if refid_col else [""] * len(hist_df)
     for b, act, dt, rf in zip(bills, descs, dates, refids):
+        # LIS's fixed-position chamber code, read from the RAW line before the strip below: "H " / "S " / " " (blank).
+        # A description that is ONLY the code ("S ", 6 rows in 2026) would otherwise lose it to the strip.
+        code = (act[:1] if act[:1] in ("H", "S") and act[1:2] in (" ", "") else
+                " " if act[:1] == " " else "?")
         act = act.strip()
         if b and act:
             # Normalize the refid at this ingestion boundary — resolve_committee_from_refid matches
             # case-sensitive `^[HS]…` regexes, so a lowercase/mixed-case refid from LIS would silently
             # fail to resolve (Gemini #161). Upper-case once here so every downstream read is clean.
             hist_by_bill.setdefault(b, []).append(
-                {"action": act, "date": dt.strip(), "refid": rf.strip().upper()})
+                {"action": act, "date": dt.strip(), "refid": rf.strip().upper(), "code": code})
 
     # 3) Committee maps (populates the global COMMITTEE_CODE_MAP for resolve_committee_from_refid).
     #    Enrichment only: build_committee_maps already has its OWN static fallback, so this broad
@@ -960,7 +985,8 @@ def build_bill_records(http_session, session_code, extras=None):
             "copatrons": copatrons_by_bill.get(bill, []) if copatron_stats["rows"] else None,
         })
         if extras is not None:
-            extras.setdefault("action_where", {})[bill] = _action_where(rows, bill)
+            extras.setdefault("action_where", {})[bill] = _action_where(rows, bill,
+                                                                       extras.setdefault("action_where_stats", {}))
 
     # 5) COMPLETENESS (the top trust signal, free).
     history_bills = set(hist_by_bill)
@@ -1211,6 +1237,15 @@ def run_bill_tracker():
                              "summary_unknown_types": summary_stats["unknown_types"],
                              "summary_empty_text": summary_stats["empty_text"]})
         prior_unverified, prior_universe, _sheet = write_bill_tracker(records, completeness)
+        _aw = extras.get("action_where_stats", {})
+        if _aw.get("action_where_unknown"):
+            _alert("WARN", "DATA_ANOMALY", f"Action_Where: {_aw['action_where_unknown']} history rows carry no LIS chamber "
+                                           f"code field at all (steady state 0) — LIS may have changed the HISTORY "
+                                           f"description format; those rows show no bracket. {_aw}")
+        if _aw.get("action_where_disagree"):
+            _alert("WARN", "DATA_ANOMALY", f"Action_Where: {_aw['action_where_disagree']} history rows where LIS's chamber "
+                                           f"code disagrees with the committee refid's chamber (steady state 0); the "
+                                           f"refid's answer is shown. Check LIS's HISTORY description format. {_aw}")
         try:
             # What's new "(In the House)" — a separate, additive tab (Bill_Tracker stays byte-identical).
             action_where.write(_sheet, action_where.rows_for(extras.get("action_where", {})))

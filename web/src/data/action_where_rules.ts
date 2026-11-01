@@ -30,7 +30,8 @@ export function parseWhereGrid(grid: string[][]): WhereLoad {
   return byBill.size ? { status: "ok", byBill, unreadable } : { status: "unavailable", reason: "empty" };
 }
 
-export const WHERE_LABEL: Record<string, string> = { H: "In the House", S: "In the Senate", G: "With the Governor" };
+export const WHERE_LABEL: Record<string, string> = { H: "In the House", S: "In the Senate", G: "With the Governor",
+  "0": "No chamber" };   // 0 = the source itself lists no chamber for the action (VA: Governor, Acts of Assembly)
 
 /** Display only: a source line in sentence case — an all-capitals line is lowered after its first letter;
  *  otherwise only the first letter is raised. Nothing is decided from the text. */

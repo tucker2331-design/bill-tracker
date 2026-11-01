@@ -98,12 +98,12 @@ contract differs. Source facts: [[knowledge/pa_bill_history_xml]]. Scheduled job
 - **Data: a separate, additive `Action_Where` tab** (`action_where.py`; Bill | Where | Short), one code per history row
   (H / S / G / `-`). Chosen over a new Bill_Tracker field: Virginia's Bill_Tracker stays byte-identical (golden passes
   with the side output on), and the site reads one small tab.
-- **Virginia: structural only, so partial.** A code exists only where the row's OWN committee refid names a committee —
-  10,011 of 65,414 rows (2026), each agreeing with LIS's own leading chamber letter (10,011/10,011). Carrying the
-  committee position forward was measured and REJECTED: wrong on 12,454 of 61,248 rows (enrolment/signing in the
-  House after a Senate committee). So most VA lines show no bracket. **Owner decision pending:** LIS prefixes every
-  description with a one-letter chamber code ("H "/"S "); if that fixed-position code counts as a field (like the
-  "display a field verbatim" ruling in [[log]] 2026-06), VA gets full coverage at 100% agreement.
+- **Virginia: 100% coverage (owner 2026-11-01: "100% accuracy, consistency, and coverage").** Per row: the action's own
+  committee refid (structural) first — 10,011 rows; else LIS's own fixed-position chamber code (the description's first
+  character, H/S — a closed code, not prose) — 51,237 rows; else LIS lists no chamber (Governor's actions, Acts of
+  Assembly, conference reports) — 4,166 rows, shown as "(No chamber)". 0 unknown. Every run re-checks refid vs code
+  where both exist (2026: 10,011/10,011 agree); a disagreement is counted and alerted (DATA_ANOMALY) and the refid wins.
+  Carrying the committee position forward was measured and rejected (wrong on 12,454 of 61,248 rows).
 - **Pennsylvania:** `@actionChamber` (0 unknown) + a short line from verb + committee (roster name) + tally; verbs whose
   number sits in the prose ("Act No.", "Journal Page", "Prior Printer's No.") keep the source line (1,672 rows).
 - Display: VA's "H "/"S " code column is removed for display only (`StateConfig.actionCodePrefix`), never read for where.
