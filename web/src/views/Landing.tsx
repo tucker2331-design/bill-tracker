@@ -157,6 +157,7 @@ export function Landing({ bills, onOpen, calRefresh = 0 }: { bills: Bill[]; onOp
           <Summary n={tally.vetoed} o="vetoed" />
           <Summary n={tally.dead} o="dead" />
           <Summary n={tally.carried_over} o="carried_over" />
+          {tally.adopted > 0 && <Summary n={tally.adopted} o="adopted" />}   {/* resolutions (PA); 0 in VA → not shown */}
         </div>
       </div>
     </div>

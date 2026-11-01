@@ -8,6 +8,7 @@ status: active
 
 Append-only, reverse-chronological (newest at top). Each entry opens with `## [2026-11-01] pr | Pennsylvania as its own site (same code, built per state)
 - `VITE_STATE=PA` build, `wrangler.pa.toml` (own Worker/D1/secrets/sheet), `pa_bill_tracker.yml` + `pa_bill_tracker.py` (own sheet, VA's layout via `bill_rows.py`), PA intake Health, `adopted` outcome. PA job kept off VA's trust surface. UA contact = repo URL. [[architecture/multi_state_config]].
+- Fold-in (Codex on #255): the War Room link is hidden where War Room is off; adopted resolutions are counted in "Where the bills stand" (384 on the PA sample were missing).
 
 ## [2026-10-31] pr | Pennsylvania intake (no predictions)
 - robots.txt checked (UserWay-only group; owner confirmed). 5 polite requests to www.palegis.us; real samples committed with a manifest (`tools/historical_cache/pa/2025_0/`).

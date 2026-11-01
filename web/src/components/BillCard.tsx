@@ -87,7 +87,7 @@ export function BillCard({ bill, sessionCode, onClose }: { bill: Bill; sessionCo
             {sourceBillUrl(sessionCode, bill.bill) && <a href={sourceBillUrl(sessionCode, bill.bill)} target="_blank" rel="noopener noreferrer">
               View on {SOURCE} ↗
             </a>}
-            {tracked && <a className="card-wr" {...linkProps(warRoomBillPath(bill.bill))}>Open in War Room →</a>}
+            {tracked && STATE.features.warroom && <a className="card-wr" {...linkProps(warRoomBillPath(bill.bill))}>Open in War Room →</a>}
           </div>
         </div>
       </div>
