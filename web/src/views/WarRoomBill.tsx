@@ -9,10 +9,13 @@
 //   More          LIS summary (Summary) + the LIS bill link
 // Omitted because nothing in the product serves them yet: the "subcommittee record" tiles, "earlier versions"
 // (VA + other states), and "factors tested and not used". Add a section here only when its source ships.
+// A state with no vote model (PA) shows the current committee and its members (CommitteeMembers, from the state's
+// roster feed) where the member calls would be; a state with no summary text hides the summary, keeping the link.
 import type { Bill } from "../data/types";
 import { OutcomeChip, Star } from "../components/common";
 import { Copatrons, NextMeeting, Summary } from "../components/BillCard";
 import { MemberCalls } from "../components/MemberCalls";
+import { CommitteeMembers } from "../components/CommitteeMembers";
 import { PositionControl } from "../components/PositionControl";
 import { ContactLog } from "../components/ContactLog";
 import { sourceBillUrl, SOURCE } from "../config";
@@ -35,6 +38,7 @@ export function WarRoomBill({ id, bills, sessionCode }: { id: string; bills: Bil
   }
   const v = bill.latestVote;
   const last = bill.history.length ? bill.history[bill.history.length - 1] : null;
+  const link = sourceBillUrl(sessionCode, bill.bill);   // "" = the state has no per-bill page we link to
 
   return (
     <div className="wb">
@@ -67,9 +71,16 @@ export function WarRoomBill({ id, bills, sessionCode }: { id: string; bills: Bil
         </div>
       </section>
 
-      <section className="wb-group" aria-label="Members">
-        <MemberCalls bill={bill.bill} sessionCode={sessionCode} />
-      </section>
+      {STATE.features.predictions && (
+        <section className="wb-group" aria-label="Members">
+          <MemberCalls bill={bill.bill} sessionCode={sessionCode} />
+        </section>
+      )}
+      {STATE.features.committeeRoster && (
+        <section className="wb-group" aria-label="Committee">
+          <CommitteeMembers lastCommittee={bill.lastCommittee} chamber={bill.chamber} />
+        </section>
+      )}
 
       <section className="wb-group" aria-label="Your position">
         <h3 className="h">Your position</h3>
@@ -80,14 +91,18 @@ export function WarRoomBill({ id, bills, sessionCode }: { id: string; bills: Bil
         <ContactLog key={`contacts-${bill.bill}`} bill={bill.bill} sessionCode={sessionCode} />
       </section>
 
-      <section className="wb-group" aria-label="More">
-        <h3 className="h">More</h3>
-        <Summary key={`summary-${bill.bill}`} bill={bill.bill} lisUrl={sourceBillUrl(sessionCode, bill.bill)} />
-        <a href={sourceBillUrl(sessionCode, bill.bill)} target="_blank" rel="noopener noreferrer">Bill and history on {SOURCE} ↗</a>
-      </section>
+      {(STATE.features.summaries || link) && (
+        <section className="wb-group" aria-label="More">
+          <h3 className="h">More</h3>
+          {STATE.features.summaries && <Summary key={`summary-${bill.bill}`} bill={bill.bill} lisUrl={link} />}
+          {link && <a href={link} target="_blank" rel="noopener noreferrer">Bill and history on {SOURCE} ↗</a>}
+        </section>
+      )}
 
-      <p className="muted wb-foot">Status, votes, committees and the summary: {STATE.sourceLongName}. Member calls: the
-        vote model's served calls. Position and contacts: your team's own entries, not from {SOURCE}.</p>
+      <p className="muted wb-foot">Status, votes, committees{STATE.features.summaries ? " and the summary" : ""}
+        {STATE.features.committeeRoster ? ", committee members" : ""}: {STATE.sourceLongName}.
+        {STATE.features.predictions ? " Member calls: the vote model's served calls." : ""} Position and contacts: your
+        team's own entries, not from {SOURCE}.</p>
     </div>
   );
 }

@@ -11,6 +11,10 @@ import datetime
 import json
 import sys
 
+import urllib.error
+
+import gspread
+
 import bill_rows
 import pa_bill_tracker as J
 import test_pa_intake as S
@@ -37,12 +41,20 @@ class WS:
 
 class Sheet:
     def __init__(self): self.tabs = {"Bill_Tracker": WS(), "Metrics_History": WS()}
-    def worksheet(self, name): return self.tabs[name]
+    def worksheet(self, name):
+        if name not in self.tabs:
+            raise gspread.exceptions.WorksheetNotFound(name)
+        return self.tabs[name]
+    def add_worksheet(self, title, rows, cols):
+        ws = self.tabs[title] = WS()
+        ws.row_count, ws.col_count = rows, cols
+        return ws
 
 
-records, comp = J.build(S.SampleFetcher(), now=datetime.datetime(2026, 10, 31, 23, 36, tzinfo=datetime.timezone.utc))
+NOW = datetime.datetime(2026, 10, 31, 23, 36, tzinfo=datetime.timezone.utc)
+records, comp, roster = J.build(S.SampleFetcher(), now=NOW)
 sheet = Sheet()
-J.write(records, comp, sheet)
+J.write(records, comp, sheet, roster)
 bt = sheet.tabs["Bill_Tracker"]
 rows = bt.cells["A1"]
 check("same header as Virginia's Bill_Tracker", rows[0] == bill_rows.BILL_TRACKER_HEADER)
@@ -58,5 +70,41 @@ check("one heartbeat under the bill worker's origin", len(beat) == 1 and beat[0]
 hb17 = next(r for r in rows if r[0] == "HB17")
 check("HB17 row: signed, LDPC source, both floors passed", hb17[3] == "signed" and hb17[15] == J.PA.source_name
       and hb17[16] == hb17[17] == "passed")
+# Committee roster (the PA War Room's member list)
+rt = sheet.tabs.get("Committee_Roster")
+check("Committee_Roster tab created with its header", rt is not None and rt.cells["A1"][0] == J.pa_roster.ROSTER_HEADER)
+check("roster: 1,026 seats, 250 members, every bill's committee found",
+      len(rt.cells["A1"]) - 1 == 1026 and payload["roster_members"] == 250 and payload["roster_status"] == "ok"
+      and payload["bills_committee_without_roster"] == 0, json.dumps({k: payload.get(k) for k in ("roster_rows", "roster_status")}))
+check("heartbeat carries the roster check", json.loads(beat[0][3]).get("bills_committee_without_roster") == 0)
+
+
+class RosterDown(S.SampleFetcher):
+    def get(self, url):
+        if "assignments" in url:
+            raise urllib.error.URLError("unreachable")
+        return super().get(url)
+
+
+r2, c2, ro2 = J.build(RosterDown(), now=NOW)
+check("a broken roster feed never holds back the bills (published as roster_status)",
+      len(r2) == 5269 and ro2 is None and c2["roster_status"] == "unavailable: URLError")
+s2 = Sheet()
+J.write(r2, c2, s2, ro2)
+check("... and the previous roster tab is left alone (not cleared)", "Committee_Roster" not in s2.tabs)
+
+
+class Refused(S.SampleFetcher):
+    def get(self, url):
+        if "members" in url:
+            raise J.pa_fetch.FeedRefused("403")
+        return super().get(url)
+
+
+try:
+    J.build(Refused(), now=NOW)
+    check("a 403 on a roster feed still stops the whole run (owner rule)", False)
+except J.pa_fetch.FeedRefused:
+    check("a 403 on a roster feed still stops the whole run (owner rule)", True)
 check("nothing written for Virginia (no VA sheet id read)", "SPREADSHEET_ID" not in J.__dict__)
 sys.exit(1 if FAILS else 0)

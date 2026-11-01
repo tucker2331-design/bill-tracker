@@ -31,6 +31,8 @@ export interface StateConfig {
     calendar: boolean;     // Calendar tab, Today's calendar strip, next-meeting join, calendar freshness clock
     timeline: boolean;     // the pipeline drawing on Today
     warroom: boolean;      // War Room tab + bill page
+    predictions: boolean;  // the vote model's served calls (War Room member bar, order, bill-page member calls)
+    committeeRoster: boolean;   // the bill page lists the current committee's members from a roster tab
     summaries: boolean;    // the source's summary text on the bill card
     health: "full" | "intake";   // full = VA's guard/calendar Health; intake = the state's own intake checks
   };

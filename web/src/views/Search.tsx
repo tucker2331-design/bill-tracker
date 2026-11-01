@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { originChamber } from "../states";
+import { originChamber, STATE } from "../states";
 import type { Bill, Outcome, Chamber } from "../data/types";
 import { BillBox } from "../components/BillBox";
 import { splitByClass, ceremonialLabel } from "../data/billclass";
@@ -11,6 +11,8 @@ const OUTCOME_FILTERS: { key: Outcome; label: string }[] = [
   { key: "in_progress", label: "In progress" }, { key: "awaiting_governor", label: "To Governor" },
   { key: "signed", label: "Signed" }, { key: "vetoed", label: "Vetoed" },
   { key: "dead", label: "Dead" }, { key: "carried_over", label: "Carried over" },
+  // a resolution's end — offered only where the state has that stage (PA; Virginia's filters are unchanged)
+  ...(STATE.stages.some((s) => s.id === "adopted") ? [{ key: "adopted" as Outcome, label: "Adopted" }] : []),
 ];
 
 // A bill's ORIGIN chamber is structural — the id prefix (H* = House, S* = Senate). Its CURRENT chamber is

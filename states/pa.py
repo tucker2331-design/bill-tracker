@@ -41,6 +41,9 @@ PA = StateConfig(
         "data_index": "https://www.palegis.us/data",
         "bill_history": "https://www.palegis.us/data/file?documentType=BillHistoryData&session={session}",
         "committee_schedule": "https://www.palegis.us/{chamber}/rss/committee/schedule",
+        # committee rosters (states/pa_roster.py): member -> committees + role, and member -> party (joined on memberId)
+        "committee_assignments": "https://www.palegis.us/{chamber}/rss/committee/assignments",
+        "members": "https://www.palegis.us/{chamber}/rss/session/members",
     },
     two_chamber_bill_re=re.compile(r"^[HS]B"),
     adapter="states.pa_adapter",

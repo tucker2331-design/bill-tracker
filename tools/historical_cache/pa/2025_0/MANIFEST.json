@@ -30,5 +30,35 @@
    "bytes": 284,
    "sha256": "7428b8dee10f5bd4168c00fd6b2537a5e8a8776e9474fcb407dc706eeed3e4ce"
   }
- }
+ },
+ "later_fetches": [
+  {
+   "fetched_utc": "2026-11-01T20:45Z",
+   "requests": 4,
+   "user_agent": "bill-tracker-intake/0.1 (+https://github.com/tucker2331-design/bill-tracker)",
+   "why": "committee rosters for the PA War Room (one request per feed, states/pa_fetch.PoliteFetcher)",
+   "files": {
+    "house_committee_assignments.xml": {
+     "url": "https://www.palegis.us/house/rss/committee/assignments",
+     "bytes": 127097,
+     "sha256": "a9dae090d395eb16b0ae4395fad5e285cc7a969a18dd15bc9286bde5a40741a2"
+    },
+    "house_session_members.xml": {
+     "url": "https://www.palegis.us/house/rss/session/members",
+     "bytes": 379110,
+     "sha256": "11a1d7034afe1238f4550c86f10396595e4f57c6dfa74a80b2072bd151ace27e"
+    },
+    "senate_committee_assignments.xml": {
+     "url": "https://www.palegis.us/senate/rss/committee/assignments",
+     "bytes": 38149,
+     "sha256": "87adc4c81b8bf304894c4b2dd3529344a1d851b28b149b2cca5da78fb0b2e5c8"
+    },
+    "senate_session_members.xml": {
+     "url": "https://www.palegis.us/senate/rss/session/members",
+     "bytes": 215486,
+     "sha256": "f468e343a348bf4b2f4a5416923e7ea04ae4074b14c0386643582b619aa936fd"
+    }
+   }
+  }
+ ]
 }

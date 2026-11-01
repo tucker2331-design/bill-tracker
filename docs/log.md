@@ -6,7 +6,13 @@ status: active
 
 # Project Log
 
-Append-only, reverse-chronological (newest at top). Each entry opens with `## [2026-11-01] pr | New York off Virginia's Health / days clean
+Append-only, reverse-chronological (newest at top). Each entry opens with `## [2026-11-01] pr | PA War Room without vote predictions
+- palegis.us DOES publish committee rosters as bulk RSS (`/{house,senate}/rss/committee/assignments` + `/session/members`); 4 polite requests, samples committed with the manifest. `states/pa_roster.py` → `Committee_Roster` tab (1,026 seats, 250 members, 54 committees); every bill's current committee found ([[knowledge/pa_bill_history_xml]]).
+- SPA: `features.predictions` / `features.committeeRoster`; VA renders unchanged. Position + contact log now have a PA home. Goldens: `test_pa_roster.py`, `roster.regression.mjs`. [[architecture/multi_state_config]].
+- Fold-in (Codex #258 P2): adopted resolutions now group as Decided in the War Room; Search gains an "Adopted" filter where the state has that stage ([[failures/assumptions_audit]] #154).
+- Not deployed from the session: no Cloudflare credentials in the container and `*.workers.dev` is outside its network policy — screenshots are of the local PA build on the real sample.
+
+## [2026-11-01] pr | New York off Virginia's Health / days clean
 - `ny_bill_tracker.yml` added to `trust_surface_guard.OTHER_STATE_JOBS`: no longer on Virginia's Guard_Status or days-clean ledger; the NY workflow and its CI keep running ([[failures/assumptions_audit]] #153). #255 merged.
 - Not done (budget): splitting `calendar_worker.py` by state — still the open loop on [[architecture/multi_state_config]].
 

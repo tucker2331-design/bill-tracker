@@ -28,7 +28,16 @@ Adapter: `states/pa_adapter.py`; fetcher: `states/pa_fetch.py`; config: `states/
 | Data index | `/data` | HTML; lists every Bill History export (39 sessions, `1969_0` … `2025_0`) and every RSS feed. The current regular session is read from it (`current_regular_session`), never hardcoded. |
 | Bill History export | `/data/file?documentType=BillHistoryData&session=YYYY_N` | **A ZIP** (content-type says `application/xml`) holding one XML; filename stamps the export time (`…-202610311932.zip`). `2025_0`: 1.7 MB zipped, 19.9 MB XML. |
 | Committee schedule | `/{house,senate}/rss/committee/schedule` | RSS 2.0 + `parss:` namespace: `MeetingDate`, `MeetingTime` ("Call of Chair" = PA's to-be-announced), `Committee`, `Location`, **`Bills`** (the agenda), `InCapitol`. |
-| Others (not used yet) | `/{house,senate}/rss/session/{votes,calendar,journals,members,amendments,…}`, `/rss/committee/assignments` | per publication |
+| Committee assignments (rosters) | `/{house,senate}/rss/committee/assignments` | RSS, one `<item>` per MEMBER (House 201, Senate 49 on 2026-11-01): `<link>` carries the structural `memberId`; `<parss:Committee position="Chair\|Vice Chair\|Secretary\|">` per standing committee; `<parss:Subcommittee committee=…>`; `<parss:District>`. **No committee id** — committees are named, "&" spelled out. House labels BOTH the majority and the minority chair "Chair" (Education: Cutler R + Schweyer D); shown as the feed says. Read by `states/pa_roster.py`. |
+| Members | `/{house,senate}/rss/session/members` | RSS, one `<item>` per member, same `memberId` in `<link>`, `<parss:Party>` (D/R), addresses. Party joins on memberId (all 250 agree with the assignments title, checked in `test_pa_roster.py`). |
+| Others (not used yet) | `/{house,senate}/rss/session/{votes,calendar,journals,amendments,…}` | per publication |
+
+## Committee roster join (2026-11-01)
+The export's `<committee>` ("AGING AND OLDER ADULT SERVICES") and the roster feed ("Aging & Older Adult Services") name
+the same room. PA publishes no committee id, so `committee_key` = exact equality after ONE fixed mapping (upper case,
+"&" → "AND"). Measured on the real samples: 54 roster committees; **every one of the 5,184 bills that name a current
+committee finds its roster (0 missing)**. Runtime check: `bills_committee_without_roster` on PA Health, limit 0 — a
+rename on one side shows up red, never as an empty list. 4 requests (fetched once, committed with the manifest).
 
 ## Bill History XML (2025_0)
 `<historyExport exportDate totalDocuments=5269>` → `<session year=2025 session=0>` → 5,269 `<bill id="20250HB0017"

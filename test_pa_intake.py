@@ -51,6 +51,11 @@ FILES = {
         "PA-Bill-History-2025-RegularSession-202610311932.zip",
     "https://www.palegis.us/house/rss/committee/schedule": "house_committee_schedule.xml",
     "https://www.palegis.us/senate/rss/committee/schedule": "senate_committee_schedule.xml",
+    # committee rosters (fetched 2026-11-01, MANIFEST.json later_fetches) — read by states/pa_roster.py
+    "https://www.palegis.us/house/rss/committee/assignments": "house_committee_assignments.xml",
+    "https://www.palegis.us/senate/rss/committee/assignments": "senate_committee_assignments.xml",
+    "https://www.palegis.us/house/rss/session/members": "house_session_members.xml",
+    "https://www.palegis.us/senate/rss/session/members": "senate_session_members.xml",
 }
 FAILS = 0
 
@@ -175,7 +180,8 @@ def main():
     root = export_root()
     acts = [a.findtext("verb") for a in root.iter("action")]
     check("session discovered from the data page = 2025_0", comp["session_code"] == "2025_0")
-    check("only bulk feeds requested, each once", out["asked"] == list(FILES))
+    check("only bulk feeds requested, each once (the intake's four; rosters are pa_roster's)",
+          out["asked"] == [u for u in FILES if "assignments" not in u and "members" not in u])
     check("records == the export's own totalDocuments", len(recs) == int(root.get("totalDocuments")) == 5269)
     check("0 unclassified verbs, 0 unreadable dates", comp["verbs_unclassified"] == 0 and comp["action_dates_unreadable"] == 0)
     check("PA's own 'Undefined Action' rows counted (22)", comp["undefined_actions"] == acts.count("Undefined Action") == 22)
