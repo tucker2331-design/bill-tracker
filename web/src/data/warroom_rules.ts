@@ -102,7 +102,7 @@ export const WR_GROUPS: { id: WrGroup; label: string }[] = [
   { id: "decided", label: "Decided" },
 ];
 
-const DECIDED = new Set(["signed", "vetoed", "dead", "carried_over"]);
+const DECIDED = new Set(["signed", "vetoed", "dead", "carried_over", "adopted"]);   // adopted = a resolution's end (PA; Codex #258)
 
 /** "YYYY-MM-DD" from an ISO or M/D/YYYY date; "" when unreadable (then the bill counts as nothing scheduled). */
 export function dateKeyOf(raw: string | undefined): string {

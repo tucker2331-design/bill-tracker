@@ -13,6 +13,7 @@ const is = (n, g, w) => { const ok = JSON.stringify(g) === JSON.stringify(w);
 const T = "2026-02-02";
 is("decided wins over a calendar date", groupOf("signed", "2026-02-03", T), "decided");
 is("carried over is decided", groupOf("carried_over", "", T), "decided");
+is("an adopted resolution is decided (PA, Codex #258)", groupOf("adopted", "", T), "decided");
 is("hearing tomorrow -> next 7 days", groupOf("in_progress", "2026-02-03", T), "next7");
 is("hearing in exactly 7 days -> next 7 days", groupOf("in_progress", "2026-02-09", T), "next7");
 is("hearing in 8 days -> scheduled later", groupOf("in_progress", "2026-02-10", T), "later");
