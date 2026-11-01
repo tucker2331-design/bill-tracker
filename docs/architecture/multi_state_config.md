@@ -62,10 +62,15 @@ contract differs. Source facts: [[knowledge/pa_bill_history_xml]]. Scheduled job
   `pa.regression.mjs`, `test_states.py` (Python↔SPA agree for PA), CI builds both sites. Virginia: the record golden
   is unchanged and VA's config values are pinned; the VA *bundle bytes* do change (new code ships in it), but each
   build bakes its own state in at compile time (checked: `m="VA"` vs `m="PA"`).
-- **Owner steps** (passwords/accounts): see the PR and [[log]] 2026-11-01 — create the PA sheet + share it with the
-  service account; `PA_SPREADSHEET_ID` repo secret; `wrangler d1 create`, paste the id into `wrangler.pa.toml`, apply
-  migrations; `wrangler secret put` TEAM_EMAILS / GCP_SA_JSON for `bill-tracker-pa`; deploy; add the PA site's
-  address to the Google OAuth client's authorised origins.
+- **Provisioned 2026-11-01:** sheet **"PA · Live"** (`1ubknsyuzd0Oxl1t9t5FebcNa26zZzCqBnW-N_-sfaAg`, naming rule
+  `<Jurisdiction> · <Role>` from [[audits/fable_2026-07/autonomy_upgrades]] A-2) + the `PA_SPREADSHEET_ID` repo secret;
+  D1 `bill-tracker-pa-db` (`44bae9f4-a21c-43f2-9585-50d1a825e730`, ENAM, migrations 0001–0003 applied); deployed by hand to
+  https://bill-tracker-pa.tucker2331.workers.dev (`/api/health`: db ok, team NOT configured → locked, sheet_auth none).
+  Measured: the PA bundle still CONTAINS Virginia's config object (labels only, never selected) — "bakes its own state
+  in" means the selection, not tree-shaking. Not auto-deployed: Workers Builds is set up for `bill-tracker` only.
+- **Owner steps left:** `wrangler secret put TEAM_EMAILS --config wrangler.pa.toml`; add the PA address to the Google
+  OAuth client's authorised JavaScript origins; optional `GCP_SA_JSON` / `SLACK_WEBHOOK_URL`; optional Workers Builds
+  for `bill-tracker-pa` (build `npm run build:pa`, deploy `npx wrangler deploy --config wrangler.pa.toml`).
 
 ## Not split yet (the open loop)
 

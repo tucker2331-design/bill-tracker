@@ -6,7 +6,11 @@ status: active
 
 # Project Log
 
-Append-only, reverse-chronological (newest at top). Each entry opens with `## [2026-11-01] pr | New York off Virginia's Health / days clean
+Append-only, reverse-chronological (newest at top). Each entry opens with `## [2026-11-01] pr | PA site provisioned + deployed (sheet "PA · Live", D1 bill-tracker-pa-db)
+- Filled both `wrangler.pa.toml` ids, applied D1 migrations, deployed `bill-tracker-pa` by hand; live and locked until
+  TEAM_EMAILS + the OAuth origin are set. Ids recorded on [[architecture/multi_state_config]].
+
+## [2026-11-01] pr | New York off Virginia's Health / days clean
 - `ny_bill_tracker.yml` added to `trust_surface_guard.OTHER_STATE_JOBS`: no longer on Virginia's Guard_Status or days-clean ledger; the NY workflow and its CI keep running ([[failures/assumptions_audit]] #153). #255 merged.
 - Not done (budget): splitting `calendar_worker.py` by state — still the open loop on [[architecture/multi_state_config]].
 
