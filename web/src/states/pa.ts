@@ -26,11 +26,12 @@ export const PA: StateConfig = {
   crossoverBySession: {},
   // robots.txt protects /legislation/bills/* and no page URL is verified, so no per-bill link is guessed.
   billUrl: () => "",
-  features: { calendar: false, timeline: false, warroom: false, summaries: false, health: "intake" },
+  features: { calendar: false, timeline: false, warroom: true, predictions: false, committeeRoster: true, summaries: false, health: "intake" },
   intakeChecks: [
     { key: "verbs_unclassified", label: "Actions with an action type we do not recognise", limit: 0 },
     { key: "action_dates_unreadable", label: "Actions with an unreadable date", limit: 0 },
     { key: "schedule_bill_refs_unmatched", label: "Committee agenda entries naming no known bill", limit: 0 },
     { key: "schedule_dates_unreadable", label: "Committee meetings with an unreadable date", limit: 0 },
+    { key: "bills_committee_without_roster", label: "Bills whose committee has no published member list", limit: 0 },
   ],
 };

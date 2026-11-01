@@ -29,6 +29,6 @@ export const VA: StateConfig = {
   // Deterministic LIS bill-detail link (recovered shadow_v2.py:535) — no API, not brittle. Uses the DYNAMIC
   // 5-digit session code (never hardcode 20261).
   billUrl: (sessionCode, bill) => `https://lis.virginia.gov/bill-details/${sessionCode}/${bill}`,
-  features: { calendar: true, timeline: true, warroom: true, summaries: true, health: "full" },
+  features: { calendar: true, timeline: true, warroom: true, predictions: true, committeeRoster: false, summaries: true, health: "full" },
   intakeChecks: [],
 };

@@ -71,6 +71,8 @@ jobs:
         run: |
           node web/tools/ts2mjs.mjs web/src/data/warroom_rules.ts /tmp/warroom_rules.mjs
           node web/src/data/__tests__/warroom.regression.mjs
+          node web/tools/ts2mjs.mjs web/src/data/roster_rules.ts /tmp/roster_rules.mjs
+          node web/src/data/__tests__/roster.regression.mjs
           node web/tools/ts2mjs.mjs web/src/data/health_rules.ts /tmp/health_rules.mjs
           node web/src/views/__tests__/health_rules.regression.mjs
           node web/tools/ts2mjs.mjs web/src/state/routes.ts /tmp/routes.mjs

@@ -1,0 +1,43 @@
+{
+ "rows_sha256": "3ff4a59678247c1e54c26644e3286f27f84c8abc83b4da49f61e85940cb97957",
+ "spot": [
+  {
+   "chamber": "House",
+   "committee": "Education",
+   "district": "100",
+   "key": "House EDUCATION",
+   "member": "Bryan Cutler",
+   "member_id": "1105",
+   "party": "R",
+   "role": "Chair"
+  },
+  {
+   "chamber": "House",
+   "committee": "Education",
+   "district": "134",
+   "key": "House EDUCATION",
+   "member": "Peter Schweyer",
+   "member_id": "1706",
+   "party": "D",
+   "role": "Chair"
+  },
+  {
+   "chamber": "House",
+   "committee": "Education",
+   "district": "56",
+   "key": "House EDUCATION",
+   "member": "Brian C. Rasel",
+   "member_id": "2025",
+   "party": "R",
+   "role": "Secretary"
+  }
+ ],
+ "stats": {
+  "roster_committee_names_empty": 0,
+  "roster_committees": 54,
+  "roster_members": 250,
+  "roster_members_without_id": 0,
+  "roster_members_without_party": 0,
+  "roster_rows": 1026
+ }
+}

@@ -51,8 +51,8 @@ contract differs. Source facts: [[knowledge/pa_bill_history_xml]]. Scheduled job
 
 ## Pennsylvania site (built 2026-11-01) — a separate site, same code
 - **Build-time state:** `VITE_STATE=PA` (`npm run build:pa` → `dist-pa/`); unset = Virginia. No switcher; a screen is
-  shown or hidden only by `STATE.features` (PA: Search, bill card, Today's What's new + Tracking, intake Health;
-  Calendar, Timeline and War Room hidden). PA's Health (`views/HealthIntake.tsx`) shows only PA's own intake checks.
+  shown or hidden only by `STATE.features` (PA: Search, bill card, Today's What's new + Tracking, intake Health,
+  War Room without predictions (2026-11-01); Calendar and Timeline hidden). PA's Health (`views/HealthIntake.tsx`) shows only PA's own intake checks.
 - **Its own Worker:** `wrangler.pa.toml` — name `bill-tracker-pa`, its own D1 (`bill-tracker-pa-db`), its own secrets,
   its own `SPREADSHEET_ID`. Same `worker/index.js`.
 - **Its own job:** `pa_bill_tracker.yml` (hourly, weekdays) runs `pa_bill_tracker.py` on the existing fetch rules and
@@ -66,6 +66,17 @@ contract differs. Source facts: [[knowledge/pa_bill_history_xml]]. Scheduled job
   service account; `PA_SPREADSHEET_ID` repo secret; `wrangler d1 create`, paste the id into `wrangler.pa.toml`, apply
   migrations; `wrangler secret put` TEAM_EMAILS / GCP_SA_JSON for `bill-tracker-pa`; deploy; add the PA site's
   address to the Google OAuth client's authorised origins.
+
+## PA War Room (built 2026-11-01) — the VA War Room with PA data, no vote predictions
+- `features.predictions` (VA on, PA off): the War Room list hides the member bar, its key and the call-based order
+  (every group is bill-number order; calls are never fetched); the bill page hides the member calls.
+- `features.committeeRoster` (PA on, VA off): the bill page shows the current committee (`lastCommittee`) and its
+  members — name, party, district, the source's role — from the `Committee_Roster` tab that `pa_bill_tracker.py` writes
+  from PA's committee-assignments + members RSS (`states/pa_roster.py`; join rule in [[knowledge/pa_bill_history_xml]]).
+  A broken roster feed never holds back the bills (`roster_status` published, old tab kept); a 403 still stops the run.
+- Position and contact log: the same components, PA's own D1 (`bill-tracker-pa-db`), rows keyed `state = 'PA'`.
+- A state with no summaries and no per-bill link hides the bill page's "More" box instead of leaving it empty.
+- Goldens: `test_pa_roster.py` (real feeds), `roster.regression.mjs`, `pa.regression.mjs`, `test_pa_bill_tracker.py`.
 
 ## Not split yet (the open loop)
 

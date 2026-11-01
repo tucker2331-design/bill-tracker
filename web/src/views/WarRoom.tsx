@@ -7,6 +7,8 @@
 // otherwise "can't call"); position and contacts = your team's own entries (#241 / #243). A bill with no served
 // calls shows "can't call", never a guess. Grey by default; accent = times / links; amber = carried over;
 // red = dead / vetoed. State is small-caps text.
+// A state with no vote model (STATE.features.predictions false — PA) gets the same list with the member bar, its key
+// and the call-based order hidden: calls are never fetched, every group keeps bill-number order.
 import { useEffect, useMemo, useState } from "react";
 import type { Bill } from "../data/types";
 import { warRoomBillPath, linkProps } from "../state/router";
@@ -16,6 +18,7 @@ import { loadContacts, type ContactsResult } from "../state/contacts";
 import { dayKey } from "../data/dates";
 import { OutcomeChip } from "../components/common";
 import { SOURCE } from "../config";
+import { STATE } from "../states";
 import {
   loadCalls, callsFor, groupOf, sortGroup, dateKeyOf, WR_GROUPS, type BillCalls, type CallsLoad, type WrGroup,
 } from "../data/warroom";
@@ -29,7 +32,11 @@ export function WarRoom({ bills, starred, sessionCode }: { bills: Bill[]; starre
   const [calls, setCalls] = useState<CallsLoad | undefined>(undefined);
   const [filter, setFilter] = useState<Stance | "all">("all");
   const positions = usePositions(sessionCode);
-  useEffect(() => { let alive = true; loadCalls().then((r) => { if (alive) setCalls(r); }); return () => { alive = false; }; }, []);
+  const predictions = STATE.features.predictions;
+  useEffect(() => {
+    if (!predictions) return;   // no model for this state: nothing to read, the bar is not drawn
+    let alive = true; loadCalls().then((r) => { if (alive) setCalls(r); }); return () => { alive = false; };
+  }, [predictions]);
 
   const today = dayKey(new Date());
   const ours = useMemo(() => bills.filter((b) => starred.has(b.bill)
@@ -52,7 +59,7 @@ export function WarRoom({ bills, starred, sessionCode }: { bills: Bill[]; starre
   const heardOn = (k: string) => ours.filter((b) => dateKeyOf(b.upcoming[0]?.date) === k).map((b) => b.bill);
   const s = calls?.status === "ok" ? calls.summary : null;
   // the bar key is said once, above the first group whose cards carry a member bar
-  const firstBarGroup = WR_GROUPS.find(({ id }) => id !== "decided" ? groups[id].length > 0 : groups.decided.some((x) => !["signed", "vetoed"].includes(billOf.get(x.bill)!.outcome)))?.id;
+  const firstBarGroup = !predictions ? undefined : WR_GROUPS.find(({ id }) => id !== "decided" ? groups[id].length > 0 : groups.decided.some((x) => !["signed", "vetoed"].includes(billOf.get(x.bill)!.outcome)))?.id;
 
   return (
     <div className="wl">
@@ -80,11 +87,12 @@ export function WarRoom({ bills, starred, sessionCode }: { bills: Bill[]; starre
           <div className="wl-grp"><span>{label}</span><span className="n">{groups[id].length}</span></div>
           {id === firstBarGroup && <BarKey />}
           <div className="wl-cards">
-            {groups[id].map(({ bill, calls: c }) => <Card key={bill} b={billOf.get(bill)!} calls={c} sessionCode={sessionCode} />)}
+            {groups[id].map(({ bill, calls: c }) => <Card key={bill} b={billOf.get(bill)!} calls={c} sessionCode={sessionCode} predictions={predictions} />)}
           </div>
         </section>
       ))}
 
+      {predictions ? (
       <div className="wl-why">
         <b>Order inside each group.</b> Least likely to pass first: most called-yes votes still needed to reach a
         majority, then most called no, then most can't call. A bill that already has enough called yes goes to the
@@ -97,6 +105,13 @@ export function WarRoom({ bills, starred, sessionCode }: { bills: Bill[]; starre
           : <> No calls are served right now, so every member reads can't call.</>}
         {" "}Position and contacts: your team's own entries.
       </div>
+      ) : (
+      <div className="wl-why">
+        <b>Order inside each group.</b> Bill-number order.
+        <br /><br /><b>Where each card's facts come from.</b> Status, where it is, next hearing and last action: {SOURCE}.
+        Position and contacts: your team's own entries.
+      </div>
+      )}
     </div>
   );
 }
@@ -110,7 +125,7 @@ function BarKey() {
   );
 }
 
-function Card({ b, calls, sessionCode }: { b: Bill; calls: BillCalls | null; sessionCode: string }) {
+function Card({ b, calls, sessionCode, predictions }: { b: Bill; calls: BillCalls | null; sessionCode: string; predictions: boolean }) {
   const next = b.upcoming[0];
   const last = b.history.length ? b.history[b.history.length - 1] : null;
   return (
@@ -124,7 +139,7 @@ function Card({ b, calls, sessionCode }: { b: Bill; calls: BillCalls | null; ses
         <dt>Where</dt><dd>{b.lastCommittee || "—"}</dd>
         {next && <><dt>Next</dt><dd className="when">{shortDate(dateKeyOf(next.date)) || next.date}{next.committee ? ` · ${next.committee}` : ""}</dd></>}
         <dt>Last</dt><dd>{last ? `${shortDate(dateKeyOf(last.date)) || last.date} · ${last.action}` : "—"}</dd>
-        {b.outcome !== "signed" && b.outcome !== "vetoed" && <><dt>Members</dt><dd><MemberBar c={calls} /></dd></>}
+        {predictions && b.outcome !== "signed" && b.outcome !== "vetoed" && <><dt>Members</dt><dd><MemberBar c={calls} /></dd></>}
       </dl>
       <TeamRow bill={b.bill} sessionCode={sessionCode} />
     </a>

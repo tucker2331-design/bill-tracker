@@ -16,11 +16,14 @@ import json
 import os
 import sys
 
+import urllib.error
+import xml.etree.ElementTree as ET
+
 import pytz
 
 from bill_rows import BILL_TRACKER_HEADER, bill_tracker_rows
 from states import get_state
-from states import pa_adapter, pa_fetch
+from states import pa_adapter, pa_fetch, pa_roster
 
 PA = get_state("PA")
 TAB = "Bill_Tracker"
@@ -28,6 +31,7 @@ COMPLETENESS_CELL = "AA1"            # same reserved cell as Virginia (the site 
 # The data columns must never reach the metadata cell (the VA layout's rule, checked at import like bill_tracker.py).
 if len(BILL_TRACKER_HEADER) >= 27:
     raise RuntimeError(f"Bill_Tracker data ({len(BILL_TRACKER_HEADER)} cols) would reach {COMPLETENESS_CELL}")
+ROSTER_TAB = "Committee_Roster"     # the War Room's committee members (no vote calls in PA: no model)
 METRICS_TAB, METRICS_HEADER = "Metrics_History", ["RunTimestampUTC", "Status", "Origin", "Outcome"]
 ORIGIN = "bill_system_metrics"       # the bill worker's heartbeat origin, so Health reads PA the same way
 
@@ -43,12 +47,23 @@ def build(fetcher, now=None):
         "in_history_not_in_universe": [],
         "session_display": f"{year}-{year + 1} Regular Session" if comp["session_code"].endswith("_0")
                            else f"{year}-{year + 1} Special Session {comp['session_code'].split('_')[1]}",
-        "requests_made": getattr(fetcher, "requests_made", None),
     })
-    return records, comp
+    # Committee rosters. A refusal (FeedRefused) still stops the whole run (owner rule); a broken or unreachable
+    # roster feed does NOT hold back the bills — it is published as roster_status and the old tab is left alone.
+    roster = None
+    try:
+        roster, rstats = pa_roster.run_roster(fetcher, PA.urls)
+        comp.update(rstats)
+        comp.update(pa_roster.coverage(records, roster))
+        comp["roster_status"] = "ok"
+    except (urllib.error.URLError, ET.ParseError, OSError) as e:
+        comp["roster_status"] = f"unavailable: {type(e).__name__}"
+        print(f"::error::PA committee roster not refreshed ({type(e).__name__}: {e}); the previous tab stays")
+    comp["requests_made"] = getattr(fetcher, "requests_made", None)
+    return records, comp, roster
 
 
-def write(records, comp, sheet):
+def write(records, comp, sheet, roster=None):
     import gspread
     rows = bill_tracker_rows(records)
     need_rows, need_cols = len(rows) + 50, 27   # AA = column 27
@@ -62,6 +77,16 @@ def write(records, comp, sheet):
     # one call for the table + the completeness payload (Gemini #255)
     ws.batch_update([{"range": "A1", "values": rows},
                      {"range": COMPLETENESS_CELL, "values": [[json.dumps(comp, ensure_ascii=False)]]}])
+    if roster is not None:
+        rrows = pa_roster.roster_rows(roster)
+        try:
+            rw = sheet.worksheet(ROSTER_TAB)
+            if rw.row_count < len(rrows) + 20:
+                rw.resize(rows=len(rrows) + 20, cols=len(pa_roster.ROSTER_HEADER))
+            rw.batch_clear([f"A1:H{rw.row_count}"])
+        except gspread.exceptions.WorksheetNotFound:
+            rw = sheet.add_worksheet(title=ROSTER_TAB, rows=len(rrows) + 20, cols=len(pa_roster.ROSTER_HEADER))
+        rw.update(values=rrows, range_name="A1")
     try:
         mh = sheet.worksheet(METRICS_TAB)
     except gspread.exceptions.WorksheetNotFound:
@@ -69,12 +94,13 @@ def write(records, comp, sheet):
         mh.update(values=[METRICS_HEADER], range_name="A1")
     beat = {k: comp[k] for k in ("records_written", "universe_count", "verbs_unclassified", "undefined_actions",
                                  "action_dates_unreadable", "schedule_bill_refs_unmatched", "requests_made")}
+    beat.update({k: comp[k] for k in ("roster_status", "bills_committee_without_roster") if k in comp})
     mh.append_rows([[comp["checked_at_utc"], "OK", ORIGIN, json.dumps(beat, ensure_ascii=False)]])
 
 
 def main(argv):
     fetcher = pa_fetch.PoliteFetcher(os.environ.get("PA_CACHE_DIR", ".pa_cache"))
-    records, comp = build(fetcher)
+    records, comp, roster = build(fetcher)
     print(json.dumps({k: v for k, v in comp.items() if k != "verbs_unclassified_sample"}, ensure_ascii=False))
     if comp["verbs_unclassified"]:
         # Counted and published, never guessed — but a new verb is PA changing its vocabulary: say so loudly.
@@ -90,7 +116,7 @@ def main(argv):
     from google.oauth2.service_account import Credentials
     gc = gspread.authorize(Credentials.from_service_account_info(
         json.loads(creds), scopes=["https://www.googleapis.com/auth/spreadsheets"]))
-    write(records, comp, gc.open_by_key(sid))
+    write(records, comp, gc.open_by_key(sid), roster)
     print(f"wrote {len(records)} PA records to {TAB} (sheet {sid[:6]}…)")
     return 0
 

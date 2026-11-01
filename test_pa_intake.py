@@ -51,6 +51,11 @@ FILES = {
         "PA-Bill-History-2025-RegularSession-202610311932.zip",
     "https://www.palegis.us/house/rss/committee/schedule": "house_committee_schedule.xml",
     "https://www.palegis.us/senate/rss/committee/schedule": "senate_committee_schedule.xml",
+    # committee rosters (fetched 2026-11-01, MANIFEST.json later_fetches) — read by states/pa_roster.py
+    "https://www.palegis.us/house/rss/committee/assignments": "house_committee_assignments.xml",
+    "https://www.palegis.us/senate/rss/committee/assignments": "senate_committee_assignments.xml",
+    "https://www.palegis.us/house/rss/session/members": "house_session_members.xml",
+    "https://www.palegis.us/senate/rss/session/members": "senate_session_members.xml",
 }
 FAILS = 0
 
