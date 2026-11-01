@@ -67,7 +67,6 @@ PROVES = {
     "incident_ledger.yml": "the days-clean record can still be written (monthly fire drill)",
     "legevent_reconcile.yml": "our committee votes match the official minutes",
     "metrics_history_retention.yml": "the trend history stays within its size limit",
-    "ny_bill_tracker.yml": "the New York bill list is refreshed",
     "stm_order_invariance.yml": "results do not depend on the order data arrives in",
     "sustainability_audit.yml": "capacity, schema drift, retention and duplicate checks",
     "witness_retention.yml": "the change record stays within its size limit",
@@ -119,6 +118,9 @@ def cron_period(expr):
 # running; each state's site shows its own checks.
 OTHER_STATE_JOBS = {
     "pa_bill_tracker.yml": "Pennsylvania's site (own spreadsheet, own Health) — owner 2026-11-01",
+    # New York's bill job ran on Virginia's Health tab and counted toward Virginia's days clean (owner 2026-11-01:
+    # take it off; assumptions_audit #153). Its workflow and its own CI keep running unchanged.
+    "ny_bill_tracker.yml": "New York's pipeline — not Virginia's trust surface (owner 2026-11-01)",
 }
 
 

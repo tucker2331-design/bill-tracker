@@ -87,6 +87,8 @@ ok(T.judge_runs(T.production_runs(hist, "incident_ledger.yml"), day, NOW)["state
 ok(T.cron_period(15)[0] is None and T.cron_period(None)[0] is None, "non-string cron -> unreadable, not a crash")
 real = {fn for fn, _n, _c, _w in T.scheduled_workflows()}
 ok("pa_bill_tracker.yml" not in real, "another state's job is not on Virginia's trust surface")
+ok("ny_bill_tracker.yml" not in real, "New York's job is not on Virginia's trust surface (audit #153)")
+ok(os.path.exists(os.path.join(T.ROOT, ".github", "workflows", "ny_bill_tracker.yml")), "New York's job itself still exists and runs")
 ok("bill_tracker.yml" in real and "calendar_worker.yml" in real, "Virginia's own jobs are still watched")
 import tempfile  # noqa: E402
 d = tempfile.mkdtemp()
