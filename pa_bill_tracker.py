@@ -109,7 +109,12 @@ def write(records, comp, sheet, roster=None, calendar=None, where_grid=None):
         cw.batch_update([{"range": "A1", "values": calendar},
                          {"range": COMPLETENESS_CELL, "values": [[comp["checked_at_utc"]]]}])
     if where_grid is not None:
-        action_where.write(sheet, where_grid)
+        try:
+            action_where.write(sheet, where_grid)   # enrichment: never blocks the roster, calendar or heartbeat
+        except (gspread.exceptions.APIError, gspread.exceptions.GSpreadException) as e:
+            comp["action_where_status"] = f"write failed: {type(e).__name__}"   # rides in the heartbeat below
+            print(f"::warning::PA {action_where.ACTION_WHERE_TAB} write failed ({type(e).__name__}: {e}); "
+                  f"What's new shows actions without where they happened (Gemini #260)")
     if roster is not None:
         rrows = pa_roster.roster_rows(roster)
         try:
@@ -127,7 +132,7 @@ def write(records, comp, sheet, roster=None, calendar=None, where_grid=None):
         mh.update(values=[METRICS_HEADER], range_name="A1")
     beat = {k: comp[k] for k in ("records_written", "universe_count", "verbs_unclassified", "undefined_actions",
                                  "action_dates_unreadable", "schedule_bill_refs_unmatched", "requests_made")}
-    beat.update({k: comp[k] for k in ("roster_status", "bills_committee_without_roster", "calendar_meetings",
+    beat.update({k: comp[k] for k in ("roster_status", "action_where_status", "bills_committee_without_roster", "calendar_meetings",
                                       "calendar_meetings_without_bills", "calendar_session_days") if k in comp})
     mh.append_rows([[comp["checked_at_utc"], "OK", ORIGIN, json.dumps(beat, ensure_ascii=False)]])
 
