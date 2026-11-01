@@ -108,3 +108,10 @@ export function collapseFloorSessions(ms: Meeting[]): Meeting[] {
   }
   return out;
 }
+
+/** A freshness stamp must be an ISO date-time (YYYY-MM-DDTHH:MM…); anything else is "unknown" (null). */
+export function parseStamp(cell: string): Date | null {
+  if (!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}/.test(cell)) return null;
+  const d = new Date(cell);
+  return isNaN(d.getTime()) ? null : d;
+}

@@ -9,7 +9,7 @@
  * Run (from web/):
  *   node tools/ts2mjs.mjs src/data/agenda.ts /tmp/agenda.mjs && node src/data/__tests__/agenda.regression.mjs
  */
-import { collapseFloorSessions, classifyMeetingKind } from "/tmp/agenda.mjs";
+import { collapseFloorSessions, classifyMeetingKind, parseStamp } from "/tmp/agenda.mjs";
 let pass = 0, fail = 0;
 const is = (n, got, want) => {
   const ok = JSON.stringify(got) === JSON.stringify(want);
@@ -94,6 +94,11 @@ is("a real committee is not floor", classifyMeetingKind("Senate General Laws and
 is("PA session day (House Convened) is floor", classifyMeetingKind("House Convened"), "floor");
 is("PA agency meeting is not floor", classifyMeetingKind("INDEPENDENT REGULATORY REVIEW COMMISSION"), "committee");
 is("PA Call of Chair committee is not floor", classifyMeetingKind("House Appropriations"), "committee");
+// Freshness stamp (owner 2026-11-01: PA showed "Calendar 9650 days ago" on a not-yet-written tab)
+is("ISO stamp reads", parseStamp("2026-11-01T22:40:00Z")?.toISOString(), "2026-11-01T22:40:00.000Z");
+is("a bare number is not a stamp (new Date('1') = 2001)", parseStamp("1"), null);
+is("empty is unknown", parseStamp(""), null);
+is("a date without a time is not a stamp", parseStamp("2026-11-01"), null);
 is("a caucus is not floor", classifyMeetingKind("Rural Caucus"), "committee");
 
 console.log(`\n${pass} of ${pass + fail} passed`);

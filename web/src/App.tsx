@@ -205,7 +205,7 @@ function AppMain() {
       {/* Calendar needs the wider container (7 day columns + month picker); see `.main-wide` in index.css. */}
       <main className={tab === "calendar" ? "main main-wide" : "main"}>
         {error && <p className="center-msg" style={{ color: "var(--stale)" }}>
-          Couldn't load data: {error}<br /><span className="muted">The Mastermind DB sheet must be link-readable for gviz.</span>
+          Couldn't load data: {error}<br /><span className="muted">{STATE.name}'s data sheet must be readable by the site.</span>
         </p>}
         {!data && !error && <p className="center-msg">Loading {STATE.legislatureName}…</p>}
         {data && (

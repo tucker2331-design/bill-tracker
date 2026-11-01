@@ -9,6 +9,9 @@
 // red = dead / vetoed. State is small-caps text.
 // A state with no vote model (STATE.features.predictions false — PA) gets the same list with the member bar, its key
 // and the call-based order hidden: calls are never fetched, every group keeps bill-number order.
+// SCOPE (owner 2026-11-01: "follow the switch"): Tracking = your starred bills; Full GA = every bill, in the same
+// groups, 50 per group at a time. In Full GA a card shows the position (one bulk read) but not the contact count —
+// that would be one request per card; the count is on the bill page.
 import { useEffect, useMemo, useState } from "react";
 import type { Bill } from "../data/types";
 import { warRoomBillPath, linkProps } from "../state/router";
@@ -16,6 +19,7 @@ import { PositionTag } from "../components/PositionControl";
 import { usePositions, STANCES, STANCE_LABEL, type Stance } from "../state/positions";
 import { loadContacts, type ContactsResult } from "../state/contacts";
 import { dayKey } from "../data/dates";
+import { useScope } from "../state/tracking";
 import { OutcomeChip } from "../components/common";
 import { SOURCE } from "../config";
 import { STATE } from "../states";
@@ -28,8 +32,13 @@ const shortDate = (key: string) => {
   return y ? new Date(y, m - 1, d).toLocaleDateString(undefined, { day: "numeric", month: "short", year: "numeric" }) : key;
 };
 
+const PAGE = 50;   // Full GA: cards per group before "Show more" (no group is ever cut silently)
+
 export function WarRoom({ bills, starred, sessionCode }: { bills: Bill[]; starred: Set<string>; sessionCode: string }) {
   const [calls, setCalls] = useState<CallsLoad | undefined>(undefined);
+  const [scope] = useScope();
+  const all = scope === "full";
+  const [shown, setShown] = useState<Record<string, number>>({});
   const [filter, setFilter] = useState<Stance | "all">("all");
   const positions = usePositions(sessionCode);
   const predictions = STATE.features.predictions;
@@ -39,8 +48,8 @@ export function WarRoom({ bills, starred, sessionCode }: { bills: Bill[]; starre
   }, [predictions]);
 
   const today = dayKey(new Date());
-  const ours = useMemo(() => bills.filter((b) => starred.has(b.bill)
-    && (filter === "all" || positions.byBill.get(b.bill)?.stance === filter)), [bills, starred, filter, positions.byBill]);
+  const ours = useMemo(() => bills.filter((b) => (all || starred.has(b.bill))
+    && (filter === "all" || positions.byBill.get(b.bill)?.stance === filter)), [bills, starred, all, filter, positions.byBill]);
   const byBill = calls?.status === "ok" ? calls.byBill : null;
 
   const groups = useMemo(() => {
@@ -50,8 +59,9 @@ export function WarRoom({ bills, starred, sessionCode }: { bills: Bill[]; starre
   }, [ours, byBill, sessionCode, today]);
   const billOf = useMemo(() => new Map(bills.map((b) => [b.bill, b])), [bills]);
 
-  if (bills.filter((b) => starred.has(b.bill)).length === 0) {
-    return <p className="center-msg">No bills tracked yet. Star a bill in Search or Today and it appears here.</p>;
+  if (!all && bills.filter((b) => starred.has(b.bill)).length === 0) {
+    return <p className="center-msg">No bills tracked yet. Star a bill in Search or Today and it appears here,
+      or switch to <b>Full GA</b> to see every bill.</p>;
   }
 
   // the coming week, day by day: which of your bills are heard (the same next-hearing field the groups use)
@@ -72,7 +82,7 @@ export function WarRoom({ bills, starred, sessionCode }: { bills: Bill[]; starre
         </span>
       </div>
 
-      <div className="wl-grp"><span>This week · your bills</span>
+      <div className="wl-grp"><span>This week · {all ? "all bills" : "your bills"}</span>
         <span className="n">{(() => { const h = week.reduce((t, k) => t + heardOn(k).length, 0); return `${h} hearing${h === 1 ? "" : "s"}`; })()}</span></div>
       <div className="wl-week">
         {week.map((k) => {
@@ -87,14 +97,21 @@ export function WarRoom({ bills, starred, sessionCode }: { bills: Bill[]; starre
           <div className="wl-grp"><span>{label}</span><span className="n">{groups[id].length}</span></div>
           {id === firstBarGroup && <BarKey />}
           <div className="wl-cards">
-            {groups[id].map(({ bill, calls: c }) => <Card key={bill} b={billOf.get(bill)!} calls={c} sessionCode={sessionCode} predictions={predictions} />)}
+            {groups[id].slice(0, all ? (shown[id] ?? PAGE) : undefined).map(({ bill, calls: c }) =>
+              <Card key={bill} b={billOf.get(bill)!} calls={c} sessionCode={sessionCode} predictions={predictions} contacts={!all} />)}
           </div>
+          {all && groups[id].length > (shown[id] ?? PAGE) && (
+            <button type="button" className="wl-more" onClick={() => setShown((s) => ({ ...s, [id]: (s[id] ?? PAGE) + PAGE }))}>
+              Show {Math.min(PAGE, groups[id].length - (shown[id] ?? PAGE))} more of {(groups[id].length - (shown[id] ?? PAGE)).toLocaleString()}
+            </button>
+          )}
         </section>
       ))}
 
       {predictions ? (
       <div className="wl-why">
-        <b>Order inside each group.</b> Least likely to pass first: most called-yes votes still needed to reach a
+        <b>Showing.</b> {all ? "Every bill in the session (Full GA), 50 per group at a time." : "Your tracked bills (Tracking)."}
+        <br /><br /><b>Order inside each group.</b> Least likely to pass first: most called-yes votes still needed to reach a
         majority, then most called no, then most can't call. A bill that already has enough called yes goes to the
         bottom. Nothing scheduled and Decided keep bill-number order.
         <br /><br /><b>Where each card's facts come from.</b> Status, where it is, next hearing and last action: {SOURCE}.
@@ -107,7 +124,8 @@ export function WarRoom({ bills, starred, sessionCode }: { bills: Bill[]; starre
       </div>
       ) : (
       <div className="wl-why">
-        <b>Order inside each group.</b> Bill-number order.
+        <b>Showing.</b> {all ? "Every bill in the session (Full GA), 50 per group at a time." : "Your tracked bills (Tracking)."}
+        <br /><br /><b>Order inside each group.</b> Bill-number order.
         <br /><br /><b>Where each card's facts come from.</b> Status, where it is, next hearing and last action: {SOURCE}.
         Position and contacts: your team's own entries.
       </div>
@@ -125,7 +143,7 @@ function BarKey() {
   );
 }
 
-function Card({ b, calls, sessionCode, predictions }: { b: Bill; calls: BillCalls | null; sessionCode: string; predictions: boolean }) {
+function Card({ b, calls, sessionCode, predictions, contacts }: { b: Bill; calls: BillCalls | null; sessionCode: string; predictions: boolean; contacts: boolean }) {
   const next = b.upcoming[0];
   const last = b.history.length ? b.history[b.history.length - 1] : null;
   return (
@@ -141,7 +159,7 @@ function Card({ b, calls, sessionCode, predictions }: { b: Bill; calls: BillCall
         <dt>Last</dt><dd>{last ? `${shortDate(dateKeyOf(last.date)) || last.date} · ${last.action}` : "—"}</dd>
         {predictions && b.outcome !== "signed" && b.outcome !== "vetoed" && <><dt>Members</dt><dd><MemberBar c={calls} /></dd></>}
       </dl>
-      <TeamRow bill={b.bill} sessionCode={sessionCode} />
+      <TeamRow bill={b.bill} sessionCode={sessionCode} contacts={contacts} />
     </a>
   );
 }
@@ -166,9 +184,13 @@ function MemberBar({ c }: { c: BillCalls | null }) {
 }
 
 // The team's own facts for the bill. An absence is set in words, not as a zero (P27 corollary).
-function TeamRow({ bill, sessionCode }: { bill: string; sessionCode: string }) {
+function TeamRow({ bill, sessionCode, contacts: withContacts }: { bill: string; sessionCode: string; contacts: boolean }) {
   const [res, setRes] = useState<ContactsResult | undefined>(undefined);
-  useEffect(() => { let alive = true; loadContacts(sessionCode, bill).then((r) => { if (alive) setRes(r); }); return () => { alive = false; }; }, [bill, sessionCode]);
+  useEffect(() => {
+    if (!withContacts) return;   // Full GA: no per-card request; the count is on the bill page
+    let alive = true; loadContacts(sessionCode, bill).then((r) => { if (alive) setRes(r); }); return () => { alive = false; };
+  }, [bill, sessionCode, withContacts]);
+  if (!withContacts) return <div className="team"><PositionTag bill={bill} sessionCode={sessionCode} /><span>contacts on the bill page</span></div>;
   const contacts = res?.status === "ok" ? res.contacts : null;
   const lastOn = contacts && contacts.length ? contacts.map((c) => c.occurredOn).sort().slice(-1)[0] : "";
   return (

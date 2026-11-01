@@ -17,7 +17,7 @@ import { parseLisDate, dayKey } from "./dates";
 // Re-exported here so every existing importer of calendar.ts keeps working unchanged.
 export { classifyMeetingKind, collapseFloorSessions } from "./agenda";
 export type { MeetingKind, AgendaItem, Meeting, SessionMarker } from "./agenda";
-import { classifyMeetingKind, collapseFloorSessions } from "./agenda";
+import { classifyMeetingKind, collapseFloorSessions, parseStamp } from "./agenda";
 import type { MeetingKind, Meeting } from "./agenda";
 import type { Chamber } from "./types";
 
@@ -124,8 +124,9 @@ async function fetchFreshness(): Promise<Date | null> {
     const url = sheetUrl(SHEET1_TAB, { headers: "0", range: "AA1" });
     const txt = await fetchText(url, 8000);
     const cell = (parseCsv(txt)?.[0]?.[0] || "").trim();
-    const d = cell ? new Date(cell) : null;
-    return d && !isNaN(d.getTime()) ? d : null;
+    // Only a full ISO timestamp is a freshness stamp. Anything else (an empty tab's stray value, "0", a number)
+    // reads as "unknown" — new Date("1") is 2001, which showed "Calendar 9650 days ago" on a not-yet-written tab.
+    return parseStamp(cell);
   } catch (e) {
     // Optional must not mean SILENT (Qodo): freshness is non-blocking, but operators/devs still need an
     // observable signal when Sheet1!AA1 can't be read — surface it rather than swallow (Standard #4).
@@ -164,6 +165,10 @@ export function invalidateCalendar(): void {
   _calFreshPromise = null;
 }
 
+export class CalendarNotPublished extends Error {
+  constructor() { super("not_published"); this.name = "CalendarNotPublished"; }
+}
+
 async function _loadCalendar(): Promise<CalendarData> {
   const url = sheetUrl(SHEET1_TAB, { tq: PROJECTION });
   // Just the calendar payload — freshness (AA1) is read separately by loadCalendarFreshness() for the
@@ -171,6 +176,9 @@ async function _loadCalendar(): Promise<CalendarData> {
   const text = await fetchText(url, FETCH_TIMEOUT_MS);
 
   const rows = parseCsv(text);
+  // A tab with nothing in it is "not published yet" (a new state's sheet before its job's first run), which is a
+  // different, honest state from a wrong shape — say which.
+  if (!rows.some((r) => r.some((c) => c.trim() !== ""))) throw new CalendarNotPublished();
   const header = rows[0] ?? [];
   // Shape guard: a 200 that isn't our projected CSV (renamed tab, error page) must not parse to a silent
   // empty calendar. The projection's header is exactly these 9 names (…Origin col 7, LegEventRoute col 8).
