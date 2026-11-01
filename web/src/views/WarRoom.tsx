@@ -21,6 +21,7 @@ import { loadContacts, type ContactsResult } from "../state/contacts";
 import { dayKey } from "../data/dates";
 import { useScope } from "../state/tracking";
 import { OutcomeChip } from "../components/common";
+import { ClampedTitle } from "../components/ClampedTitle";
 import { SOURCE } from "../config";
 import { STATE } from "../states";
 import {
@@ -152,7 +153,7 @@ function Card({ b, calls, sessionCode, predictions, contacts }: { b: Bill; calls
         <span><span className="num">{b.bill}</span> <span className="pat">· {b.patron}</span></span>
         <OutcomeChip outcome={b.outcome} bill={b} />
       </div>
-      <div className="ttl">{b.title}</div>
+      <ClampedTitle className="ttl" text={b.title} />
       <dl className="kv">
         <dt>Where</dt><dd>{b.lastCommittee || "—"}</dd>
         {next && <><dt>Next</dt><dd className="when">{shortDate(dateKeyOf(next.date)) || next.date}{next.committee ? ` · ${next.committee}` : ""}</dd></>}

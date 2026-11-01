@@ -8,6 +8,10 @@ status: active
 
 Append-only, reverse-chronological (newest at top). Each entry opens with `## [YYYY-MM-DD] <type> | <title>`.
 
+## [2026-11-01] pr | Long titles on two lines; one look for the position switcher
+- Owner: PA titles ran to 20+ lines on War Room cards and the bill page. `ClampedTitle`: two lines, "Show full title" only when the title is actually cut (measured), never navigates from inside a card. Both sites.
+- The bill page's position control (plain uppercase words) now uses the same segmented pill style as the War Room list's position filter — one look for one function, both sites.
+
 ## [2026-11-01] pr | War Room follows the Tracking / Full GA switch; calendar first-run honesty
 - Owner: "follow the switch" — Tracking = starred bills; Full GA = every bill in the War Room groups, 50 per group with "Show more"; no per-card contact request in Full GA. Both sites.
 - "Calendar 9650 days ago" on PA (empty default Sheet1 before the first job run): strict ISO freshness stamp; an empty calendar tab says "not published yet"; Virginia wording removed from both error lines ([[failures/assumptions_audit]] #156). PA job triggered by hand (workflow_dispatch, write) to publish the tabs.
