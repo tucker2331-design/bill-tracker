@@ -31,6 +31,7 @@ class WS:
     def resize(self, rows, cols): self.row_count, self.col_count = rows, cols
     def batch_clear(self, ranges): self.cells.clear()
     def update(self, values, range_name): self.cells[range_name] = values
+    def batch_update(self, data): self.cells.update({d["range"]: d["values"] for d in data})
     def append_rows(self, rows): self.appended += rows
 
 

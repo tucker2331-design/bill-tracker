@@ -18,13 +18,16 @@ import sys
 
 import pytz
 
-from bill_rows import bill_tracker_rows
+from bill_rows import BILL_TRACKER_HEADER, bill_tracker_rows
 from states import get_state
 from states import pa_adapter, pa_fetch
 
 PA = get_state("PA")
 TAB = "Bill_Tracker"
 COMPLETENESS_CELL = "AA1"            # same reserved cell as Virginia (the site finds it by content anyway)
+# The data columns must never reach the metadata cell (the VA layout's rule, checked at import like bill_tracker.py).
+if len(BILL_TRACKER_HEADER) >= 27:
+    raise RuntimeError(f"Bill_Tracker data ({len(BILL_TRACKER_HEADER)} cols) would reach {COMPLETENESS_CELL}")
 METRICS_TAB, METRICS_HEADER = "Metrics_History", ["RunTimestampUTC", "Status", "Origin", "Outcome"]
 ORIGIN = "bill_system_metrics"       # the bill worker's heartbeat origin, so Health reads PA the same way
 
@@ -53,11 +56,12 @@ def write(records, comp, sheet):
         ws = sheet.worksheet(TAB)
         if ws.row_count < need_rows or ws.col_count < need_cols:
             ws.resize(rows=max(ws.row_count, need_rows), cols=max(ws.col_count, need_cols))
+        ws.batch_clear([f"A1:U{max(ws.row_count, need_rows)}"])   # old rows past today's universe must go
     except gspread.exceptions.WorksheetNotFound:
-        ws = sheet.add_worksheet(title=TAB, rows=need_rows, cols=need_cols)
-    ws.batch_clear([f"A1:U{max(ws.row_count, need_rows)}"])
-    ws.update(values=rows, range_name="A1")
-    ws.update(values=[[json.dumps(comp, ensure_ascii=False)]], range_name=COMPLETENESS_CELL)
+        ws = sheet.add_worksheet(title=TAB, rows=need_rows, cols=need_cols)   # new tab: nothing to clear
+    # one call for the table + the completeness payload (Gemini #255)
+    ws.batch_update([{"range": "A1", "values": rows},
+                     {"range": COMPLETENESS_CELL, "values": [[json.dumps(comp, ensure_ascii=False)]]}])
     try:
         mh = sheet.worksheet(METRICS_TAB)
     except gspread.exceptions.WorksheetNotFound:
