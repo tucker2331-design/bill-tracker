@@ -6,7 +6,9 @@
 //  * P26: counts as "k of n"; a coverage metric is shown as the count of what is MISSING.
 //  * P24/P25: problems are rows of structural fields (check, state, since, affects, published values wrong, fix).
 //  * The freshness limits follow each worker's observed write rhythm (Metrics_History heartbeats), not a fixed 6 h.
-import { SOURCE } from "../config";
+import { SOURCE, STALE_AFTER_HOURS } from "../config";
+import { STATE } from "../states";
+import { loadCalendarFreshness } from "../data/calendar";
 import { useEffect, useMemo, useState } from "react";
 import type { Completeness } from "../data/types";
 import { loadHealth, type HealthData, type HealthAlert } from "../data/health";
@@ -15,7 +17,7 @@ import { loadHistory, type HistoryData, type AlertSource } from "../data/history
 import { loadCounter, type CounterState } from "../data/incidents";
 import { loadGuardStatus, loadRuns, GUARD_OK, type GuardLoad, type RunMark } from "../data/guards";
 import {
-  isClean, rings, dialPos, rhythmLimitHours, verdictOf, type Instrument, type Impeach, type RingExtra, type Category,
+  isClean, rings, dialPos, rhythmLimitHours, scheduleLimitHours, verdictOf, type Instrument, type Impeach, type RingExtra, type Category,
 } from "../data/health_rules";
 
 const SEV_WORD: Record<string, string> = { CRITICAL: "Needs a look", WARN: "Heads up", INFO: "FYI" };
@@ -96,7 +98,13 @@ const OUTSIDE: Partial<Record<Category, string>> = {
 
 interface Problem { check: string; state: string; since: string; affects: string; wrong: Impeach; fix: { text: string; url: string } | null }
 
+// One Health screen for every state (owner 2026-11-01: "the designed VA Health screen, fed by PA's own checks").
+// A state whose health is "intake" has no Virginia guard jobs, incident ledger, circuit breaker or calendar-subsystem
+// counters, so those parts are not read and not drawn (hidden, never shown empty). Its instruments are its own job's
+// checks (STATE.intakeChecks) + completeness + both data ages; its alerts and rhythm come from the same
+// Metrics_History heartbeat rows Virginia's bill job writes.
 export function Health({ completeness, dataAsOf }: { completeness: Completeness | null; dataAsOf: Date | null }) {
+  const intake = STATE.features.health === "intake";
   const [h, setH] = useState<HealthData | null>(null);
   const [hErr, setHErr] = useState<string | null>(null);
   const [guards, setGuards] = useState<GuardRun[] | null>(null);
@@ -104,8 +112,15 @@ export function Health({ completeness, dataAsOf }: { completeness: Completeness 
   const [counter, setCounter] = useState<CounterState | null>(null);
   const [gs, setGs] = useState<GuardLoad | null>(null);
   const [runs, setRuns] = useState<Record<string, RunMark[] | null>>({});
+  const [calAsOf, setCalAsOf] = useState<Date | null | undefined>(undefined);
   useEffect(() => {
     let alive = true;
+    if (intake) {
+      // both together, so the screen never flashes red rings / "unreadable" before its reads land (Gemini #266)
+      Promise.all([loadHistory().catch(() => null), loadCalendarFreshness().catch(() => null)])
+        .then(([hd, cd]) => { if (alive) { setHist(hd); setCalAsOf(cd); } });
+      return () => { alive = false; };
+    }
     loadHealth().then((d) => alive && setH(d)).catch((e) => alive && setHErr(String(e?.message || e)));
     loadVerification().then((d) => alive && setGuards(d)).catch(() => alive && setGuards([]));
     loadHistory().then((d) => alive && setHist(d)).catch(() => alive && setHist(null));
@@ -121,7 +136,7 @@ export function Health({ completeness, dataAsOf }: { completeness: Completeness 
       }
     });
     return () => { alive = false; };
-  }, []);
+  }, [intake]);
 
   // ── THE ONE LIST ──
   const c = completeness, m = h?.metrics ?? {};
@@ -129,7 +144,16 @@ export function Health({ completeness, dataAsOf }: { completeness: Completeness 
   const billLimit = rhythmLimitHours(hist?.beats.bill ?? []), calLimit = rhythmLimitHours(hist?.beats.calendar ?? []);
   const num = (v: unknown) => (typeof v === "number" && Number.isFinite(v) ? v : null);
   // Rebuilt every render (ten objects): the data ages read the clock, so a memo kept them stale (Gemini #250).
-  const insts: Instrument[] = [
+  // A weekday-only job: limit from its schedule, not a learned rhythm that includes the weekend (Codex #266).
+  const intakeLimit = STATE.jobDaysUTC.length ? scheduleLimitHours(new Date(), STATE.jobDaysUTC, STALE_AFTER_HOURS) : billLimit;
+  const intakeInsts: Instrument[] = [
+    { id: "missing", cat: "Completeness", name: "Bills missing from our list", value: c && universe > 0 ? universe - written : null, of: universe || undefined, limit: 0, max: 20, impeaches: "no" },
+    ...STATE.intakeChecks.map((k): Instrument => ({ id: k.key, cat: k.cat, name: k.label,
+      value: num((c as unknown as Record<string, unknown> | null)?.[k.key]), limit: k.limit, max: Math.max(10, k.limit * 4), impeaches: "unknown" })),
+    { id: "billage", cat: "Freshness", name: "Bill data age", value: dataAsOf ? +hoursSince(dataAsOf).toFixed(1) : null, limit: intakeLimit, max: intakeLimit * 4, unit: "h", impeaches: "no" },
+    { id: "calage", cat: "Freshness", name: "Calendar data age", value: calAsOf ? +hoursSince(calAsOf).toFixed(1) : null, limit: intakeLimit, max: intakeLimit * 4, unit: "h", impeaches: "no" },
+  ];
+  const vaInsts: Instrument[] = [
     { id: "s9", cat: "Accuracy", name: "Meeting actions without a time", value: num(m.meeting_unsourced), limit: 0, max: 50, impeaches: "yes" },
     { id: "wrong", cat: "Accuracy", name: "Outcomes published wrong", value: num(c?.outcome_impeached), limit: 0, max: 5, impeaches: "yes" },
     { id: "noflag", cat: "Accuracy", name: "Settled bills with no flag", value: num(c?.outcome_unverified_terminal), limit: 0, max: 25, impeaches: "unknown" },
@@ -142,6 +166,7 @@ export function Health({ completeness, dataAsOf }: { completeness: Completeness 
     { id: "calage", cat: "Freshness", name: "Calendar data age", value: h?.calendarFreshness ? +hoursSince(h.calendarFreshness).toFixed(1) : null, limit: calLimit, max: calLimit * 4, unit: "h", impeaches: "no" },
     { id: "inv", cat: "Stability", name: "Rows failing a format rule at write", value: num(m.invariant_violations), limit: 0, max: 60, impeaches: "no", note: "breaker trips at 50" },
   ];
+  const insts = intake ? intakeInsts : vaInsts;
 
   // ── alert state (unchanged model: self-clearing conditions, judged on each worker's own clock) ──
   const alertModel: AlertModel | null = useMemo(() => {
@@ -160,10 +185,13 @@ export function Health({ completeness, dataAsOf }: { completeness: Completeness 
   }, [hist]);
   const liveNeedsLook = alertModel ? alertModel.needsLook.length : (h?.alerts ?? []).filter((a) => a.severity === "CRITICAL" || a.severity === "WARN").length;
 
-  if (!completeness && !h && !hErr) return <p className="center-msg">Loading health…</p>;
+  if (intake ? calAsOf === undefined : (!completeness && !h && !hErr)) return <p className="center-msg">Loading health…</p>;
 
   const ledgerOk = !!counter && counter.available && !counter.wrongSheet && counter.malformedRows === 0;
-  const extras: RingExtra[] = [
+  const extras: RingExtra[] = intake ? [
+    { cat: "Stability", name: "No alert needs a look", ok: hist !== null && liveNeedsLook === 0 },
+    { cat: "Stability", name: "Heartbeat readable", ok: !!hist?.available },
+  ] : [
     { cat: "Stability", name: "Circuit breaker armed", ok: !!h && !h.breakerTrip },
     { cat: "Stability", name: "No alert needs a look", ok: hist !== null && liveNeedsLook === 0 },
     { cat: "Stability", name: "Incident ledger readable, nothing open", ok: ledgerOk && counter!.openNow.length === 0 },
@@ -174,19 +202,21 @@ export function Health({ completeness, dataAsOf }: { completeness: Completeness 
   const problems: Problem[] = [];
   const guardRows = gs?.status === "ok" ? gs.rows : [];
   const checkedAt = guardRows.reduce<Date | null>((a, r) => (r.checked && (!a || r.checked > a) ? r.checked : a), null);
-  if (gs && gs.status !== "ok") problems.push({ check: "Watched jobs (Guard_Status)", state: "unreadable", since: "this read", affects: "every scheduled job", wrong: "unknown", fix: null });
-  else if (gs && hoursSince(checkedAt) > GUARD_STALE_H) problems.push({ check: "Trust-surface guard", state: "stale", since: shortDay(checkedAt), affects: "every scheduled job", wrong: "unknown", fix: null });
+  if (!intake && gs && gs.status !== "ok") problems.push({ check: "Watched jobs (Guard_Status)", state: "unreadable", since: "this read", affects: "every scheduled job", wrong: "unknown", fix: null });
+  else if (!intake && gs && hoursSince(checkedAt) > GUARD_STALE_H) problems.push({ check: "Trust-surface guard", state: "stale", since: shortDay(checkedAt), affects: "every scheduled job", wrong: "unknown", fix: null });
   for (const r of guardRows) {
     if (GUARD_OK.has(r.state)) continue;
     const [name, proves] = r.label.split(" — ");
     problems.push({ check: name, state: r.state.replace(/_/g, " "), since: shortDay(r.since), affects: proves || r.detail || "—",
       wrong: "unknown", fix: r.url ? { text: "latest run", url: r.url } : null });
   }
-  if (!ledgerOk) problems.push({ check: "Incident ledger", state: counter?.wrongSheet ? "wrong sheet" : counter?.available ? "unreadable rows" : "unreadable", since: "this read", affects: "days clean", wrong: "unknown", fix: null });
+  if (intake) { /* no incident ledger for this state: not read, not a problem */ }
+  else if (!ledgerOk) problems.push({ check: "Incident ledger", state: counter?.wrongSheet ? "wrong sheet" : counter?.available ? "unreadable rows" : "unreadable", since: "this read", affects: "days clean", wrong: "unknown", fix: null });
   // Every ring input that is not clean is ALSO a problem row (Codex #250): the verdict must never read clean beside
   // a red ring. Same fields, one row per input.
   else if (counter!.openNow.length > 0) problems.push({ check: "Open incident", state: "open", since: "—", affects: counter!.openNow.join(", "), wrong: "unknown", fix: null });
-  if (!h) problems.push({ check: "Circuit breaker", state: "no result", since: "this read", affects: "every write", wrong: "unknown", fix: null });
+  if (intake) { /* no circuit breaker for this state */ }
+  else if (!h) problems.push({ check: "Circuit breaker", state: "no result", since: "this read", affects: "every write", wrong: "unknown", fix: null });
   else if (h.breakerTrip) problems.push({ check: "Circuit breaker", state: "tripped", since: "this read", affects: "every write", wrong: "unknown", fix: null });
   if (hist === null || !hist.available) problems.push({ check: "Alert history", state: "unreadable", since: "this read", affects: "alerts", wrong: "unknown", fix: null });
   else if (hist.malformedRows > 0) problems.push({ check: "Alert history", state: "incomplete", since: "this read",
@@ -210,12 +240,12 @@ export function Health({ completeness, dataAsOf }: { completeness: Completeness 
         <span className="sub">as of {new Date().toLocaleDateString(undefined, { day: "numeric", month: "short", year: "numeric" })}</span>
       </div>
 
-      <div className="hx-glance">
-        <DaysClean counter={counter} />
+      <div className={`hx-glance${intake ? " solo" : ""}`}>
+        {!intake && <DaysClean counter={counter} />}
         <div className="hx-rings">
           {ring.map((r) => {
             const guard = OUTSIDE[r.cat] ? guards?.find((g) => g.key === OUTSIDE[r.cat]) : undefined;
-            const outside = !OUTSIDE[r.cat] ? { text: "no outside check", red: false }
+            const outside = intake ? { text: `${STATE.name}'s own checks`, red: false } : !OUTSIDE[r.cat] ? { text: "no outside check", red: false }
               : guard && guard.status === "pass" && !guard.stale ? { text: "outside check ✓", red: false }
               : { text: `outside check ${guard ? (guard.stale ? "stale" : guard.status) : "unknown"}`, red: true };
             return (
@@ -247,6 +277,7 @@ export function Health({ completeness, dataAsOf }: { completeness: Completeness 
       <div className="hx-sec"><span>Instruments</span><span className="n">needle in grey = fine · needle in red = over the limit</span></div>
       <div className="hx-row hx-r3">{insts.map((i) => <Dial key={i.id} i={i} />)}</div>
 
+      {!intake && <>
       <div className="hx-sec"><span>Scheduled jobs · last 10 runs</span>
         <span className="n">{guardRows.filter((r) => r.check.startsWith("workflow:")).length} jobs + {guardRows.filter((r) => !r.check.startsWith("workflow:")).length} check · {guardRows.filter((r) => !GUARD_OK.has(r.state)).length} not ok</span></div>
       <div className="hx-tile hx-beats">
@@ -281,6 +312,8 @@ export function Health({ completeness, dataAsOf }: { completeness: Completeness 
         <RowsByClass m={m} total={total} known={!!h} />
       </div>
 
+      </>}
+
       <div className="hx-tile" style={{ marginTop: 12 }}>
         <details className="hx-alerts">
           <summary><span className="lbl">Alerts</span> {liveNeedsLook ? <span className="red">{liveNeedsLook} need a look</span> : "nothing needs your attention"}
@@ -288,11 +321,11 @@ export function Health({ completeness, dataAsOf }: { completeness: Completeness 
             {hist && hist.malformedRows > 0 && <span className="red"> · history incomplete ({n(hist.malformedRows)} undateable rows)</span>} ›</summary>
           <AlertsPanel model={alertModel} liveAlerts={h?.alerts ?? []} />
         </details>
-        <details className="hx-alerts">
+        {!intake && <details className="hx-alerts">
           <summary><span className="lbl">Raw system counters</span> {Object.keys(m).length} ›</summary>
           <div className="hx-raw">{Object.entries(m).sort(([a], [b]) => a.localeCompare(b)).map(([k, val]) => (
             <div key={k}><span>{k}</span><b>{n(val)}</b></div>))}</div>
-        </details>
+        </details>}
         {hErr && <p className="red" style={{ marginBottom: 0 }}>Calendar signals unavailable: {hErr}</p>}
       </div>
     </div>
