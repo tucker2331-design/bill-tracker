@@ -116,8 +116,9 @@ export function Health({ completeness, dataAsOf }: { completeness: Completeness 
   useEffect(() => {
     let alive = true;
     if (intake) {
-      loadHistory().then((d) => alive && setHist(d)).catch(() => alive && setHist(null));
-      loadCalendarFreshness().then((d) => alive && setCalAsOf(d)).catch(() => alive && setCalAsOf(null));
+      // both together, so the screen never flashes red rings / "unreadable" before its reads land (Gemini #266)
+      Promise.all([loadHistory().catch(() => null), loadCalendarFreshness().catch(() => null)])
+        .then(([hd, cd]) => { if (alive) { setHist(hd); setCalAsOf(cd); } });
       return () => { alive = false; };
     }
     loadHealth().then((d) => alive && setH(d)).catch((e) => alive && setHErr(String(e?.message || e)));
@@ -184,7 +185,7 @@ export function Health({ completeness, dataAsOf }: { completeness: Completeness 
   }, [hist]);
   const liveNeedsLook = alertModel ? alertModel.needsLook.length : (h?.alerts ?? []).filter((a) => a.severity === "CRITICAL" || a.severity === "WARN").length;
 
-  if (!completeness && !h && !hErr && !intake) return <p className="center-msg">Loading health…</p>;
+  if (intake ? calAsOf === undefined : (!completeness && !h && !hErr)) return <p className="center-msg">Loading health…</p>;
 
   const ledgerOk = !!counter && counter.available && !counter.wrongSheet && counter.malformedRows === 0;
   const extras: RingExtra[] = intake ? [
