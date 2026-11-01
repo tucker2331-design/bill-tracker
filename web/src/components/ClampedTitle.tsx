@@ -7,6 +7,9 @@ export function ClampedTitle({ text, className = "" }: { text: string; className
   const ref = useRef<HTMLDivElement>(null);
   const [open, setOpen] = useState(false);
   const [cut, setCut] = useState(false);
+  // A new title (the same box reused for another bill) starts closed and is measured afresh (Gemini #265).
+  const [prevText, setPrevText] = useState(text);
+  if (text !== prevText) { setPrevText(text); setOpen(false); setCut(false); }
   useLayoutEffect(() => {
     const el = ref.current;
     if (!el || open) return;
@@ -19,14 +22,17 @@ export function ClampedTitle({ text, className = "" }: { text: string; className
     ro.observe(el);
     return () => ro.disconnect();
   }, [text, open]);
-  const toggle = (e: React.MouseEvent) => { e.preventDefault(); e.stopPropagation(); setOpen((o) => !o); };
+  const toggle = (e: React.SyntheticEvent) => { e.preventDefault(); e.stopPropagation(); setOpen((o) => !o); };
   return (
     <div className={className}>
       <div ref={ref} className={open ? "ttl-full" : "ttl-clamp"}>{text}</div>
       {(cut || open) && (
-        <button type="button" className="ttl-more" onClick={toggle} aria-expanded={open}>
+        // A span with button semantics, not a <button>: the War Room card is itself a link, and HTML forbids
+        // interactive content inside <a> (Gemini #265). Keyboard: Enter / Space.
+        <span role="button" tabIndex={0} className="ttl-more" aria-expanded={open} onClick={toggle}
+          onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") toggle(e); }}>
           {open ? "Show less" : "Show full title"}
-        </button>
+        </span>
       )}
     </div>
   );
