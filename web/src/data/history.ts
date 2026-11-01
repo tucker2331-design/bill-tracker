@@ -151,7 +151,8 @@ async function _loadHistory(): Promise<HistoryData> {
   const newestFirst = (x: Set<number>) => [...x].sort((a, b) => b - a);
   const beats = { calendar: newestFirst(beatSet.calendar), bill: newestFirst(beatSet.bill) };
   return { metricSeries, alerts, cycleTs, beats, malformedRows,
-           available: metricSeries.length > 0 || alerts.length > 0 };
+           // a bill-job heartbeat alone is a readable history too (PA has no calendar worker: heartbeats, no series)
+           available: metricSeries.length > 0 || alerts.length > 0 || beats.bill.length > 0 };
 }
 
 // The series for one metric key, OLDEST→NEWEST (sparkline draws left=old → right=now). Points where the

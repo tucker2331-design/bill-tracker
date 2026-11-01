@@ -8,6 +8,9 @@ status: active
 
 Append-only, reverse-chronological (newest at top). Each entry opens with `## [YYYY-MM-DD] <type> | <title>`.
 
+## [2026-11-01] pr | One Health screen for both states (item 4)
+- PA's Health = Virginia's design fed by PA's own checks; VA-only parts hidden; `HealthIntake.tsx` retired. A heartbeat-only Metrics_History now reads as available ([[failures/assumptions_audit]] #157).
+
 ## [2026-11-01] pr | Long titles on two lines; one look for the position switcher
 - Owner: PA titles ran to 20+ lines on War Room cards and the bill page. `ClampedTitle`: two lines, "Show full title" only when the title is actually cut (measured), never navigates from inside a card. Both sites.
 - The bill page's position control (plain uppercase words) now uses the same segmented pill style as the War Room list's position filter — one look for one function, both sites.

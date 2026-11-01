@@ -809,6 +809,8 @@ input::placeholder, textarea::placeholder { color: var(--ink-faint); }
 .hx-glance .gc { font-size: 13px; color: var(--ink-soft); }
 .hx-glance .gv { font-size: 12px; color: var(--ink-faint); }
 .hx-glance .gc.red, .hx-glance .gv.red { color: var(--red); }
+.hx-glance.solo { grid-template-columns: minmax(0, 1fr); }
+.hx-glance.solo .hx-rings { border-left: 0; padding-left: 0; }
 @media (max-width: 760px) { .hx-glance { grid-template-columns: 1fr; row-gap: 18px; } .hx-rings { border-left: 0; padding-left: 0; } }
 /* problems: one row of fields per not-clean check */
 .hx-tw { overflow-x: auto; }

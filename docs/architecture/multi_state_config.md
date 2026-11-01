@@ -52,7 +52,7 @@ contract differs. Source facts: [[knowledge/pa_bill_history_xml]]. Scheduled job
 ## Pennsylvania site (built 2026-11-01) — a separate site, same code
 - **Build-time state:** `VITE_STATE=PA` (`npm run build:pa` → `dist-pa/`); unset = Virginia. No switcher; a screen is
   shown or hidden only by `STATE.features` (PA: Search, bill card, Today's What's new + Tracking, intake Health,
-  War Room without predictions and Calendar (2026-11-01); Timeline hidden). PA's Health (`views/HealthIntake.tsx`) shows only PA's own intake checks.
+  War Room without predictions and Calendar (2026-11-01); Timeline hidden). Health is ONE screen for both states (2026-11-01): PA's is Virginia's design fed by PA's own job checks (`STATE.intakeChecks`, each with a ring category) + completeness + both data ages + the same Metrics_History heartbeat; Virginia-only parts (guard jobs, incident ledger, breaker, calendar-subsystem counters) are not read and not drawn. `HealthIntake.tsx` retired.
 - **Deploys itself (2026-11-01):** Cloudflare Workers Builds on `bill-tracker-pa`, branch `main`, build `npm run build:pa`, deploy `npx wrangler deploy --config wrangler.pa.toml`, preview builds OFF (the default preview command would read VA's `wrangler.toml`). Cloudflare offers to "fix" `wrangler.toml`'s name to `bill-tracker-pa` — never accept: that file is Virginia's.
 - **Its own Worker:** `wrangler.pa.toml` — name `bill-tracker-pa`, its own D1 (`bill-tracker-pa-db`), its own secrets,
   its own `SPREADSHEET_ID`. Same `worker/index.js`.

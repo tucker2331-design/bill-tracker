@@ -19,7 +19,6 @@ import { Search } from "./views/Search";
 import { Health } from "./views/Health";
 import { WarRoom } from "./views/WarRoom";
 import { WarRoomBill } from "./views/WarRoomBill";
-import { HealthIntake } from "./views/HealthIntake";
 import { APP_NAME } from "./config";
 import { STATE } from "./states";
 import { useRoute, navigate, tabPath, linkProps, detailPath, tabOf, type TabId } from "./state/router";
@@ -217,9 +216,7 @@ function AppMain() {
             {tab === "search" && <Search bills={visible} onOpen={open} />}
             {tab === "warroom" && !warRoomBill && <WarRoom bills={data.bills} starred={starred} sessionCode={data.sessionCode} />}
             {warRoomBill && <WarRoomBill id={warRoomBill} bills={data.bills} sessionCode={data.sessionCode} />}
-            {tab === "health" && (STATE.features.health === "full"
-              ? <Health completeness={data.completeness} dataAsOf={data.dataAsOf} />
-              : <HealthIntake completeness={data.completeness} dataAsOf={data.dataAsOf} />)}
+            {tab === "health" && <Health completeness={data.completeness} dataAsOf={data.dataAsOf} />}
           </ErrorBoundary>
         )}
       </main>

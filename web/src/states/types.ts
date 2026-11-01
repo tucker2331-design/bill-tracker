@@ -34,7 +34,7 @@ export interface StateConfig {
     predictions: boolean;  // the vote model's served calls (War Room member bar, order, bill-page member calls)
     committeeRoster: boolean;   // the bill page lists the current committee's members from a roster tab
     summaries: boolean;    // the source's summary text on the bill card
-    health: "full" | "intake";   // full = VA's guard/calendar Health; intake = the state's own intake checks
+    health: "full" | "intake";   // the same Health screen; intake = fed by the state's own job checks (no VA guards/ledger)
   };
   /** A fixed-position code field at the start of the source's action text, removed for display only (VA: LIS's
    *  "H "/"S " chamber column). null = none. Where an action happened is never read from it. */
@@ -42,5 +42,5 @@ export interface StateConfig {
   /** A sentence under the Calendar about what it can and cannot show for this state ("" = none). */
   calendarNote: string;
   /** Health "intake" rows: a completeness-payload key, its label, and the most that is still clean (grey). */
-  intakeChecks: { key: string; label: string; limit: number }[];
+  intakeChecks: { key: string; label: string; limit: number; cat: "Accuracy" | "Completeness" }[];
 }
