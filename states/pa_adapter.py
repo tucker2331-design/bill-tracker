@@ -163,7 +163,7 @@ def parse_schedule(rss: bytes, chamber: str) -> List[dict]:
 
 
 def build_records(export: ET.Element, meetings: List[dict], today: datetime.date,
-                  now_utc: str) -> Tuple[List[dict], dict]:
+                  now_utc: str, extras: Optional[dict] = None) -> Tuple[List[dict], dict]:
     session_el = export.find("session")
     if session_el is None:
         raise ValueError("PA export has no <session> element — refusing to build (fail closed)")
@@ -181,6 +181,7 @@ def build_records(export: ET.Element, meetings: List[dict], today: datetime.date
         concurrent = is_resolution and (b.findtext("subType") or "").strip() == "C"
         adopted_in = set()
         history, latest_vote = [], {"tally": "", "location": "", "date": ""}
+        parts: List[dict] = []   # per history row: the structural fields the What's new line is built from
         chamber, crossed, last_committee = origin, False, ""
         referred: List[str] = []
         floor = {"House": "", "Senate": ""}
@@ -198,6 +199,8 @@ def build_records(export: ET.Element, meetings: List[dict], today: datetime.date
                 bad_dates += 1
             row = {"action": (a.findtext("fullAction") or "").strip(), "date": date}
             history.append(row)
+            parts.append({"where": {"H": "H", "S": "S", "E": "G"}.get(ac, "-"), "verb": verb, "committee": com,
+                          "chamber": act_ch, "tally": (a.findtext("rollCallVote") or "").strip(), "full": row["action"]})
             if cls != "record":
                 # "(Remarks see … Journal Page)" rows are filed after the fact (their <date> is the filing date,
                 # e.g. 2026-05-13 for a 2025-09-30 vote), so they are history but never the status.
@@ -263,6 +266,8 @@ def build_records(export: ET.Element, meetings: List[dict], today: datetime.date
                           if s.get("sequenceNumber", "").isdigit() else (1, 0))
         chief = sponsors[0] if sponsors else None
         last_action = status
+        if extras is not None:
+            extras.setdefault("action_parts", {})[bill_key(body, typ, num)] = parts
         records.append({
             "bill": bill,
             "title": (b.findtext("shortTitle") or "").strip(),
@@ -329,13 +334,36 @@ def build_records(export: ET.Element, meetings: List[dict], today: datetime.date
     return records, completeness
 
 
+# Verbs whose number follows in the prose ("Act No. 2 of 2026", "… Journal Page 1234"): the short line keeps the
+# source's full action for these, since the number is not a structured field.
+_NUMBER_IN_PROSE = ("No.", "Page")
+
+
+def short_line(part: dict, committee_display: Dict[str, str]) -> Tuple[str, bool]:
+    """One What's new line from an action's STRUCTURAL fields, in sentence case, without the date:
+    verb + committee (the roster's display name when the room is known) + the roll-call tally.
+    Returns (line, used_full_action). An all-capitals verb or committee is lowered after its first letter
+    (display only; nothing is decided from the text)."""
+    verb = part["verb"].rstrip(", ").strip()
+    if verb.endswith(_NUMBER_IN_PROSE) or not verb:
+        return part["full"], True
+    if verb.isupper():
+        verb = verb[0] + verb[1:].lower()
+    com = part["committee"]
+    if com:
+        disp = committee_display.get(f"{part['chamber']} {com}".strip())
+        com = disp if disp else (com[0] + com[1:].lower() if com.isupper() else com)
+    tally = part["tally"]
+    return " ".join(x for x in (verb, com, tally if tally.startswith("(") else (f"({tally})" if tally else "")) if x), False
+
+
 def run_intake(fetcher, session: Optional[str], today: datetime.date, now_utc: str):
     """Fetch (politely) and build. `session=None` discovers the current regular session from the data page."""
     records, comp, _export, _meetings = run_intake_full(fetcher, session, today, now_utc)
     return records, comp
 
 
-def run_intake_full(fetcher, session: Optional[str], today: datetime.date, now_utc: str):
+def run_intake_full(fetcher, session: Optional[str], today: datetime.date, now_utc: str, extras: Optional[dict] = None):
     """run_intake, also handing back the parsed export and schedule (the calendar job reuses them: no new request)."""
     if session is None:
         session = current_regular_session(fetcher.get(PA.urls["data_index"]).decode("utf-8", "replace"))
@@ -343,7 +371,7 @@ def run_intake_full(fetcher, session: Optional[str], today: datetime.date, now_u
     meetings = []
     for ch in ("house", "senate"):
         meetings += parse_schedule(fetcher.get(PA.urls["committee_schedule"].format(chamber=ch)), ch)
-    records, comp = build_records(export, meetings, today, now_utc)
+    records, comp = build_records(export, meetings, today, now_utc, extras)
     if comp["records_written"] != comp["universe_declared"]:
         raise ValueError(f"PA export declares {comp['universe_declared']} documents but {comp['records_written']} "
                          f"parsed — refusing to publish a partial universe (fail closed)")

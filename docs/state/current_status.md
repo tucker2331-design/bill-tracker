@@ -34,13 +34,10 @@ status: active
 
 ## NEXT (needs owner infra / a decision — then I execute)
 
-- **🇵🇦 PA screens, items 3-5 of the owner's 2026-11-01 list (1 War Room + 2 Calendar are done, #258/#259):**
-  **3. What's new, one line per bill** (`SB509 (In the House) Referred to Transportation`) — **needs a decision:** the
-  Bill_Tracker history rows carry only `{action, date}` (`bill_tracker.py` ~l.930: "UI doesn't need refids"), so the SPA
-  has NO structural "where it was before the action" for Virginia. It must come from the backend (HISTORY's refid →
-  committee/chamber, the same resolver the pipeline uses) — either a new per-row field in Bill_Tracker (changes VA's
-  data output, which the owner wants byte-identical) or a separate additive tab. PA can derive it in `pa_adapter.py`
-  (`@actionChamber` + `<committee>`). **4. Health for PA** on the designed VA Health screen; retire `HealthIntake.tsx`.
+- **🇵🇦 PA screens, items 3-5 of the owner's 2026-11-01 list (1 War Room + 2 Calendar merged #258/#259; 3 built):**
+  **3. What's new — BUILT (#260):** one line per bill on both sites via an additive `Action_Where` tab. **Owner
+  decision:** VA brackets cover only 15% of rows structurally (100% correct); LIS's leading "H "/"S " chamber letter
+  would cover all — is it a field (allowed) or text (forbidden)? **4. Health for PA** on the designed VA Health screen; retire `HealthIntake.tsx`.
   **5. PA leftovers:** "Status (LIS)" / "Mastermind DB sheet" wording (App.tsx, Calendar.tsx error lines); the 22
   `undefined_actions` in the intake. **Deploy PA** after each merge: `npm run build:pa` then
   `npx wrangler deploy --config wrangler.pa.toml` — not possible from a cloud session (no Cloudflare credentials;

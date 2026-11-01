@@ -31,5 +31,6 @@ export const VA: StateConfig = {
   billUrl: (sessionCode, bill) => `https://lis.virginia.gov/bill-details/${sessionCode}/${bill}`,
   features: { calendar: true, timeline: true, warroom: true, predictions: true, committeeRoster: false, summaries: true, health: "full" },
   calendarNote: "",
+  actionCodePrefix: /^[HS] /,
   intakeChecks: [],
 };

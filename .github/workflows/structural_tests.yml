@@ -73,6 +73,8 @@ jobs:
           node web/src/data/__tests__/warroom.regression.mjs
           node web/tools/ts2mjs.mjs web/src/data/roster_rules.ts /tmp/roster_rules.mjs
           node web/src/data/__tests__/roster.regression.mjs
+          node web/tools/ts2mjs.mjs web/src/data/action_where_rules.ts /tmp/action_where_rules.mjs
+          node web/src/data/__tests__/action_where.regression.mjs
           node web/tools/ts2mjs.mjs web/src/data/agenda.ts /tmp/agenda.mjs
           node web/src/data/__tests__/agenda.regression.mjs
           node web/tools/ts2mjs.mjs web/src/data/health_rules.ts /tmp/health_rules.mjs

@@ -44,6 +44,7 @@ from html.parser import HTMLParser
 from google.oauth2.service_account import Credentials
 
 import states   # Standard #6: every Virginia assumption lives in states/va.py, not in this pipeline
+import action_where   # What's new "(In the House)" side tab (additive; Bill_Tracker unchanged)
 import cadence   # LIS-safety guardrail #5 — the SHARED cadence decision (same signal the calendar worker maintains)
 
 # Bill_Tracker tab layout. Data columns run A.. from the left; row-1 METADATA cells (the completeness payload +
@@ -642,8 +643,28 @@ def _latest_vote(rows):
     return {"tally": "", "location": "", "date": ""}
 
 
-def build_bill_records(http_session, session_code):
-    """Build one structural record per bill. Returns (records, completeness)."""
+def _action_where(rows, bill):
+    """WHERE each history row happened, one code per row (action_where.py), from STRUCTURE only: the chamber of the
+    row's OWN committee refid (a referral, report or committee vote happens in that committee's chamber).
+    A row without a committee refid is "-" (unknown): no bracket on the site, never a guess.
+
+    Measured on the cached 2026 HISTORY (65,414 rows): 10,011 rows carry a committee refid, and on every one of them
+    the chamber agrees with LIS's own leading chamber letter (10,011 of 10,011). Carrying the committee position
+    FORWARD onto the other rows was tried and rejected: it disagreed with LIS on 12,454 of 61,248 rows ("Enrolled",
+    "Signed by Speaker" in the House after a Senate committee), so a bracket would have been wrong 1 time in 5."""
+    codes = []
+    for r in rows:
+        refid = str(r.get("refid", "")).strip()
+        name, _source = resolve_committee_from_refid(refid)
+        codes.append(action_where.CODE.get(_chamber_of(refid, "refid"), action_where.UNKNOWN) if name
+                     else action_where.UNKNOWN)
+    return "".join(codes)
+
+
+def build_bill_records(http_session, session_code, extras=None):
+    """Build one structural record per bill. Returns (records, completeness).
+    `extras` (a dict, optional) receives side outputs that are NOT part of Bill_Tracker — today `action_where`
+    ({bill: codes}) for the Action_Where tab — so Bill_Tracker's bytes never depend on them."""
     blob_code = normalize_session_code(session_code)   # 5-digit (reuse, don't re-implement)
 
     # 1) Authoritative bill UNIVERSE (titles + status + the completeness source).
@@ -938,6 +959,8 @@ def build_bill_records(http_session, session_code):
             # than "none". The two must never collapse into one value (pre-push audit #15).
             "copatrons": copatrons_by_bill.get(bill, []) if copatron_stats["rows"] else None,
         })
+        if extras is not None:
+            extras.setdefault("action_where", {})[bill] = _action_where(rows, bill)
 
     # 5) COMPLETENESS (the top trust signal, free).
     history_bills = set(hist_by_bill)
@@ -1178,7 +1201,8 @@ def run_bill_tracker():
             _flush_best_effort()          # ditto: an authorization halt must reach the Health tab
             return
 
-        records, completeness = build_bill_records(http_session, session_code)
+        extras = {}
+        records, completeness = build_bill_records(http_session, session_code, extras)
         # Summaries (one guarded bulk blob) go to their OWN tab, read lazily by the bill card -- built before the
         # main write so their counts ride in this cycle's completeness payload.
         summary_rows, summary_stats = _build_summaries(completeness["session_code"])
@@ -1187,6 +1211,12 @@ def run_bill_tracker():
                              "summary_unknown_types": summary_stats["unknown_types"],
                              "summary_empty_text": summary_stats["empty_text"]})
         prior_unverified, prior_universe, _sheet = write_bill_tracker(records, completeness)
+        try:
+            # What's new "(In the House)" — a separate, additive tab (Bill_Tracker stays byte-identical).
+            action_where.write(_sheet, action_where.rows_for(extras.get("action_where", {})))
+        except (gspread.exceptions.APIError, gspread.exceptions.GSpreadException) as _aw_err:
+            _alert("WARN", "API_FAILURE", f"{action_where.ACTION_WHERE_TAB} write failed ({type(_aw_err).__name__}: "
+                                          f"{_aw_err}); What's new shows actions without where they happened.")
         if not summary_rows:
             _alert("WARN", "API_FAILURE",
                    f"Summaries.csv unavailable or unreadable ({summary_stats}); {BILL_SUMMARIES_TAB} left as last "
