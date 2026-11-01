@@ -17,15 +17,15 @@ binding = "ASSETS"
 # Same Google sign-in client as Virginia (the Worker checks the token's audience against it). If you create a
 # separate OAuth client for PA, put its id here AND in web/src/config.ts GOOGLE_CLIENT_ID for the PA build.
 GOOGLE_CLIENT_ID = "831223695835-cqd2fmjq3l61jc1t6pr9elobra0imhf5.apps.googleusercontent.com"
-# OWNER: paste the Pennsylvania spreadsheet's id here (the sheet pa_bill_tracker.yml writes to).
-SPREADSHEET_ID = "REPLACE_WITH_PA_SPREADSHEET_ID"
+# "PA · Live" (owner, 2026-11-01) -- the sheet pa_bill_tracker.yml writes to. An identifier, not a credential.
+SPREADSHEET_ID = "1ubknsyuzd0Oxl1t9t5FebcNa26zZzCqBnW-N_-sfaAg"
 BILL_TRACKER_STATE = "PA"
 
 [[d1_databases]]
 binding = "DB"
 database_name = "bill-tracker-pa-db"
-# OWNER: `npx wrangler d1 create bill-tracker-pa-db`, then paste the printed database_id here.
-database_id = "REPLACE_WITH_PA_D1_DATABASE_ID"
+# D1 — created 2026-11-01, region ENAM. `database_id` is an identifier, not a credential.
+database_id = "44bae9f4-a21c-43f2-9585-50d1a825e730"
 
 [triggers]
 crons = ["*/15 * * * *"]
