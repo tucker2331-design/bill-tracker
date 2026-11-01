@@ -23,5 +23,17 @@ export interface StateConfig {
   sessionYears: number;       // 1 = annual (VA), 2 = two-year (PA)
   /** Session code -> crossover day (YYYY-MM-DD). Empty for a state with no crossover deadline. */
   crossoverBySession: Record<string, string>;
+  /** "" = the source has no stable per-bill page we link to; the link is hidden rather than guessed. */
   billUrl: (sessionCode: string, bill: string) => string;
+  /** Which screens this state's site has (owner 2026-11-01: PA = Search, bill card, What's new, Tracking, Health).
+   *  Config only — a hidden screen is simply not offered; no screen branches on the state's name. */
+  features: {
+    calendar: boolean;     // Calendar tab, Today's calendar strip, next-meeting join, calendar freshness clock
+    timeline: boolean;     // the pipeline drawing on Today
+    warroom: boolean;      // War Room tab + bill page
+    summaries: boolean;    // the source's summary text on the bill card
+    health: "full" | "intake";   // full = VA's guard/calendar Health; intake = the state's own intake checks
+  };
+  /** Health "intake" rows: a completeness-payload key, its label, and the most that is still clean (grey). */
+  intakeChecks: { key: string; label: string; limit: number }[];
 }

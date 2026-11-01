@@ -18,7 +18,8 @@ Adapter: `states/pa_adapter.py`; fetcher: `states/pa_fetch.py`; config: `states/
 - **All feeds live on `www.palegis.us`** — the export is served from there directly (no redirect, no CDN host).
 - **No conditional GET:** none of the responses carried `ETag` or `Last-Modified`. The fetcher therefore caps
   each URL at one request per hour (the export's own cadence) and serves the cache otherwise.
-- User-Agent: `bill-tracker-intake/0.1 (+repo URL; contact address)`. A 401/403/429 stops the intake — no retry,
+- User-Agent: `bill-tracker-intake/0.1 (+https://github.com/tucker2331-design/bill-tracker)` — the repo is the contact
+  (owner 2026-11-01; the first fetches on 2026-10-31 also carried an email). A 401/403/429 stops the intake — no retry,
   no header change (`FeedRefused`).
 
 ## Feeds

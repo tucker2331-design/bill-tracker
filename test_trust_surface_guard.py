@@ -85,6 +85,9 @@ ok(T.judge_runs(T.production_runs(hist, "incident_ledger.yml"), day, NOW)["state
    "a workflow whose dispatch IS production work may recover by dispatch")
 # Gemini: malformed inputs are reported, never a crash.
 ok(T.cron_period(15)[0] is None and T.cron_period(None)[0] is None, "non-string cron -> unreadable, not a crash")
+real = {fn for fn, _n, _c, _w in T.scheduled_workflows()}
+ok("pa_bill_tracker.yml" not in real, "another state's job is not on Virginia's trust surface")
+ok("bill_tracker.yml" in real and "calendar_worker.yml" in real, "Virginia's own jobs are still watched")
 import tempfile  # noqa: E402
 d = tempfile.mkdtemp()
 open(os.path.join(d, "list.yml"), "w").write("- just\n- a list\n")

@@ -2,7 +2,8 @@
 // product types the UI works in. Everything here is structural (Standard #3) — no probabilistic guesses.
 
 export type Outcome =
-  | "signed" | "vetoed" | "dead" | "carried_over" | "awaiting_governor" | "in_progress";
+  | "signed" | "vetoed" | "dead" | "carried_over" | "awaiting_governor" | "in_progress"
+  | "adopted";   // a resolution's end (PA); Virginia never emits it
 
 export type Chamber = "House" | "Senate";
 

@@ -6,7 +6,7 @@ import type { Completeness } from "../data/types";
 
 const OUTCOME_LABEL: Record<Outcome, string> = {
   signed: "Signed", vetoed: "Vetoed", awaiting_governor: "To Governor",
-  dead: "Dead", carried_over: "Carried over", in_progress: "In progress",
+  dead: "Dead", carried_over: "Carried over", in_progress: "In progress", adopted: "Adopted",
 };
 
 /**

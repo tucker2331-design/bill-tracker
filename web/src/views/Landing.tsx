@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { STATE } from "../states";
 import type { Bill } from "../data/types";
 import { buildFeed, tallyOutcomes } from "../data/derive";
 import { parseLisDate, dateSort, dayKey } from "../data/dates";
@@ -57,6 +58,7 @@ export function Landing({ bills, onOpen, calRefresh = 0 }: { bills: Bill[]; onOp
   const [times, setTimes] = useState<TimeIndex | null>(null);
   useEffect(() => {
     let alive = true;
+    if (!STATE.features.calendar) return;   // this state's site has no calendar: no meeting times to join
     loadCalendar().then((cal) => {
       if (!alive) return;
       const exact: TimeIndex = new Map();
@@ -136,16 +138,18 @@ export function Landing({ bills, onOpen, calRefresh = 0 }: { bills: Bill[]; onOp
           <div className={`scrollcue${feedHasMore ? " on" : ""}`} aria-hidden="true"><span>⌄</span></div>
         </div>
 
-        <div>
+        {STATE.features.calendar && <div>
           <h2 className="h">Today</h2>
           <CalendarSliver bills={bills} onOpen={onOpen} calRefresh={calRefresh} />
-        </div>
+        </div>}
       </div>
 
       <div style={{ marginTop: "var(--s6)" }}>
-        <h2 className="h">The pipeline</h2>
-        <Timeline bills={bills} onOpen={onOpen} />
-        <h2 className="h" style={{ marginTop: "var(--s6)" }}>Where the bills stand</h2>
+        {STATE.features.timeline && <>
+          <h2 className="h">The pipeline</h2>
+          <Timeline bills={bills} onOpen={onOpen} />
+        </>}
+        <h2 className="h" style={STATE.features.timeline ? { marginTop: "var(--s6)" } : undefined}>Where the bills stand</h2>
         <div className="panel summaryrow">
           <Summary n={tally.in_progress} o="in_progress" />
           <Summary n={tally.awaiting_governor} o="awaiting_governor" />

@@ -60,3 +60,4 @@ tools/historical_cache/va_fiscal/pdf/
 tools/historical_cache/va_transcripts/raw/
 tools/calibration/content_votes_cache_venuefix.pkl
 tools/calibration/first_vote_cache_venuefix.pkl
+dist-pa

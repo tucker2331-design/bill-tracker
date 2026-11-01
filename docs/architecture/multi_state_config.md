@@ -49,6 +49,24 @@ becomes a profile lookup when a deployment serves more than one state).
 only, hourly cap, honest UA, stop on 403). PA does NOT use `bill_tracker.py`'s LIS-shaped pipeline — its source
 contract differs. Source facts: [[knowledge/pa_bill_history_xml]]. Scheduled job, sheet tab and screens come later.
 
+## Pennsylvania site (built 2026-11-01) — a separate site, same code
+- **Build-time state:** `VITE_STATE=PA` (`npm run build:pa` → `dist-pa/`); unset = Virginia. No switcher; a screen is
+  shown or hidden only by `STATE.features` (PA: Search, bill card, Today's What's new + Tracking, intake Health;
+  Calendar, Timeline and War Room hidden). PA's Health (`views/HealthIntake.tsx`) shows only PA's own intake checks.
+- **Its own Worker:** `wrangler.pa.toml` — name `bill-tracker-pa`, its own D1 (`bill-tracker-pa-db`), its own secrets,
+  its own `SPREADSHEET_ID`. Same `worker/index.js`.
+- **Its own job:** `pa_bill_tracker.yml` (hourly, weekdays) runs `pa_bill_tracker.py` on the existing fetch rules and
+  writes PA's own sheet (`PA_SPREADSHEET_ID`) in Virginia's Bill_Tracker layout (`bill_rows.py`, shared), so the site
+  reads PA exactly as it reads VA. It is NOT on Virginia's trust surface (`trust_surface_guard.OTHER_STATE_JOBS`).
+- **Proof:** `test_pa_bill_tracker.py` (real sample → fake sheet: same header, widths, AA1 payload, heartbeat),
+  `pa.regression.mjs`, `test_states.py` (Python↔SPA agree for PA), CI builds both sites. Virginia: the record golden
+  is unchanged and VA's config values are pinned; the VA *bundle bytes* do change (new code ships in it), but each
+  build bakes its own state in at compile time (checked: `m="VA"` vs `m="PA"`).
+- **Owner steps** (passwords/accounts): see the PR and [[log]] 2026-11-01 — create the PA sheet + share it with the
+  service account; `PA_SPREADSHEET_ID` repo secret; `wrangler d1 create`, paste the id into `wrangler.pa.toml`, apply
+  migrations; `wrangler secret put` TEAM_EMAILS / GCP_SA_JSON for `bill-tracker-pa`; deploy; add the PA site's
+  address to the Google OAuth client's authorised origins.
+
 ## Not split yet (the open loop)
 
 - **`calendar_worker.py`** — the calendar subsystem merges into the product only at 100% accuracy; its VA

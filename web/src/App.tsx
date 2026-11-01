@@ -19,6 +19,7 @@ import { Search } from "./views/Search";
 import { Health } from "./views/Health";
 import { WarRoom } from "./views/WarRoom";
 import { WarRoomBill } from "./views/WarRoomBill";
+import { HealthIntake } from "./views/HealthIntake";
 import { APP_NAME } from "./config";
 import { STATE } from "./states";
 import { useRoute, navigate, tabPath, linkProps, detailPath, tabOf, type TabId } from "./state/router";
@@ -29,13 +30,16 @@ const POLL_MS = 90_000;
 
 // No standalone Timeline tab — the timeline lives on the landing (owner, 2026-06-23: redundant).
 // Tab identity now comes from the URL (state/router.ts) rather than useState — every tab is linkable.
-const TABS: { id: TabId; label: string }[] = [
+// A state's site offers only the screens its config turns on (web/src/states/) — a hidden tab is not linked, and its
+// URL falls back to Today.
+const TABS: { id: TabId; label: string }[] = ([
   { id: "today", label: "Today" },
   { id: "calendar", label: "Calendar" },
   { id: "search", label: "Search" },
   { id: "warroom", label: "War Room" },
   { id: "health", label: "Health" },
-];
+] as { id: TabId; label: string }[]).filter((t) =>
+  (t.id !== "calendar" || STATE.features.calendar) && (t.id !== "warroom" || STATE.features.warroom));
 
 // The gate sits OUTSIDE everything that loads data (owner 2026-09-28: the whole app is private). AppMain — and so
 // every sheet read — mounts only once someone is signed in; signing out unmounts it. Every read now goes through
@@ -50,8 +54,9 @@ function AppMain() {
   const [route] = useRoute();
   // The tab is derived from the route. A detail/list route keeps the surrounding chrome on its parent tab so
   // the nav never blanks out while a bill card is open; a War Room bill page lights the War Room tab.
-  const tab: TabId = tabOf(route);
-  const warRoomBill = route.kind === "warroom_bill" ? route.id : null;
+  const routeTab: TabId = tabOf(route);
+  const tab: TabId = TABS.some((t) => t.id === routeTab) ? routeTab : "today";
+  const warRoomBill = route.kind === "warroom_bill" && STATE.features.warroom ? route.id : null;
   // `selected` is DERIVED from the route, not stored. Two sources of truth for "which bill is open" would
   // drift the moment someone used Back, and the card would outlive its URL.
   const selected: Bill | null =
@@ -107,12 +112,13 @@ function AppMain() {
     // Non-blocking: a lightweight AA1 read; failure just leaves the calendar clock "unknown" (never blocks).
     // loadCalendarFreshness() already resolves to null on error, but keep a defensive, OBSERVABLE catch —
     // never a silent swallow (Standard #4 / Qodo): log before falling back to "unknown".
-    loadCalendarFreshness()
+    // No calendar on this state's site → no calendar clock (and no read of a Sheet1 tab that does not exist there).
+    if (STATE.features.calendar) loadCalendarFreshness()
       .then((d) => { if (alive) setCalendarAsOf(d); })
       .catch((e) => { console.warn("calendar freshness load failed; header clock shows 'unknown'", e); if (alive) setCalendarAsOf(null); });
     // Seed the stamp refs from the SAME raw cells the poll reads, so the first comparison is like-for-like.
     fetchBillStamp().then((s) => { if (alive && s) billStamp.current = s; }).catch(() => {});
-    fetchCalendarStamp().then((s) => { if (alive && s) calStamp.current = s; }).catch(() => {});
+    if (STATE.features.calendar) fetchCalendarStamp().then((s) => { if (alive && s) calStamp.current = s; }).catch(() => {});
     return () => { alive = false; };
   }, []);
 
@@ -127,7 +133,8 @@ function AppMain() {
       if (!alive || running || document.visibilityState === "hidden") return;
       running = true;
       try {
-        const [bs, cs] = await Promise.all([fetchBillStamp(), fetchCalendarStamp()]);
+        const [bs, cs] = await Promise.all([fetchBillStamp(),
+          STATE.features.calendar ? fetchCalendarStamp() : Promise.resolve("")]);   // "" = unknown, never a change
         if (!alive) return;
         const billMoved = bs !== "" && billStamp.current !== "" && bs !== billStamp.current;
         const calMoved = cs !== "" && calStamp.current !== "" && cs !== calStamp.current;
@@ -210,7 +217,9 @@ function AppMain() {
             {tab === "search" && <Search bills={visible} onOpen={open} />}
             {tab === "warroom" && !warRoomBill && <WarRoom bills={data.bills} starred={starred} sessionCode={data.sessionCode} />}
             {warRoomBill && <WarRoomBill id={warRoomBill} bills={data.bills} sessionCode={data.sessionCode} />}
-            {tab === "health" && <Health completeness={data.completeness} dataAsOf={data.dataAsOf} />}
+            {tab === "health" && (STATE.features.health === "full"
+              ? <Health completeness={data.completeness} dataAsOf={data.dataAsOf} />
+              : <HealthIntake completeness={data.completeness} dataAsOf={data.dataAsOf} />)}
           </ErrorBoundary>
         )}
       </main>

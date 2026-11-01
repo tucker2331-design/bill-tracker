@@ -11,7 +11,8 @@ export function scopedBills(bills: Bill[], scope: Scope, starred: Set<string>): 
 
 // Is the outcome terminal? (governor acted / died) → "decided"; else the org can still act.
 export function isDecided(b: Bill): boolean {
-  return b.outcome === "signed" || b.outcome === "vetoed" || b.outcome === "dead" || b.outcome === "carried_over";
+  return b.outcome === "signed" || b.outcome === "vetoed" || b.outcome === "dead" || b.outcome === "carried_over"
+    || b.outcome === "adopted";
 }
 
 // The crossover-lane pipeline stage. Position = progress; the divider is crossover. The two FLOOR stages
@@ -80,10 +81,10 @@ export const STAGE_LABEL: Record<Stage, string> = {
 // Left→right pipeline order, with the crossover divider sitting between floor1 and committee2.
 export const STAGE_ORDER: Stage[] = ["prefiled", "committee1", "floor1", "committee2", "floor2", "governor"];
 
-export interface OutcomeTally { signed: number; vetoed: number; awaiting_governor: number; dead: number; carried_over: number; in_progress: number; }
+export interface OutcomeTally { signed: number; vetoed: number; awaiting_governor: number; dead: number; carried_over: number; in_progress: number; adopted: number; }
 
 export function tallyOutcomes(bills: Bill[]): OutcomeTally {
-  const t: OutcomeTally = { signed: 0, vetoed: 0, awaiting_governor: 0, dead: 0, carried_over: 0, in_progress: 0 };
+  const t: OutcomeTally = { signed: 0, vetoed: 0, awaiting_governor: 0, dead: 0, carried_over: 0, in_progress: 0, adopted: 0 };
   for (const b of bills) t[b.outcome]++;
   return t;
 }

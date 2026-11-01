@@ -52,10 +52,7 @@ import cadence   # LIS-safety guardrail #5 — the SHARED cadence decision (same
 # marker's U1 and was erased every cycle for two months (fixed 2026-09-28); then the co-patron column was about
 # to land on U1 again. Both were the same bug: a new data column (or payload) walking into a metadata cell.
 # The checks below run at IMPORT, so a layout that collides fails on the first run, never silently.
-BILL_TRACKER_HEADER = ["Bill", "Title", "Status (LIS)", "Outcome", "Patron", "Patron ID", "Chamber",
-                       "Crossed Over", "Last Committee", "Referrals", "Last Action", "Latest Vote (JSON)",
-                       "Upcoming (JSON)", "History (JSON)", "Data As Of (UTC)", "Source",
-                       "House Floor", "Senate Floor", "Outcome Origin", "Class", "Co-Patrons (JSON)"]
+from bill_rows import BILL_TRACKER_HEADER, bill_tracker_rows   # shared with every state's writer (PA job)
 COMPLETENESS_CELL = "AA1"
 METADATA_CELLS = {"completeness": COMPLETENESS_CELL, "cadence_last_run": cadence.BILL_LAST_RUN_CELL}
 
@@ -1069,18 +1066,7 @@ def write_bill_tracker(records, completeness):
     # completeness payload moves one right to U. Measured 2026-07-30: session 20262 is 215 commending +
     # 80 memorial = 295 of 300 ceremonial, so without this column a special session buries its 5 real
     # bills. Structural field, never a keyword match on the title (Standard #3).
-    header = BILL_TRACKER_HEADER
-    rows = [header] + [[
-        r["bill"], r["title"], r["status_lis"], r["outcome"], r["patron"], r["patron_id"], r["chamber"],
-        "yes" if r["crossed_over"] else "no", r["last_committee"], r["referral_count"], r["last_action_date"],
-        json.dumps(r["latest_vote"], ensure_ascii=False), json.dumps(r["upcoming"], ensure_ascii=False),
-        json.dumps(r["history"], ensure_ascii=False), r["data_as_of_utc"], r["source"],
-        r["floor_house"], r["floor_senate"], r["outcome_origin"], r.get("legislation_class", ""),
-        "" if r.get("copatrons") is None else json.dumps(r["copatrons"], ensure_ascii=False),
-    ] for r in records]
-    if any(len(row) != len(header) for row in rows):     # a row/header drift would shift every column after it
-        raise RuntimeError(f"Bill_Tracker row width != header width ({len(header)}); refusing to write a "
-                           f"shifted sheet")
+    rows = bill_tracker_rows(records)   # header + rows, width-checked (bill_rows.py)
     # Data A..U (U = co-patrons, appended so every A..T index the front end reads stays put). The row-1
     # metadata cells live in the reserved zone (Z1 cadence marker, AA1 completeness -- see BILL_TRACKER_HEADER
     # and the import-time checks). The FRONT END finds completeness by CONTENT (the cell that parses as JSON
