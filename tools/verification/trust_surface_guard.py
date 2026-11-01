@@ -394,6 +394,15 @@ def ledger(rows):
                 record_incident("unverified", f"{r['label']}: {r['state']}{since} — {r['detail']}", det)
         except Exception as e:            # fail-open: bookkeeping must never stop the status write
             print(f"⚠️ [trust_surface] ledger write failed for {det} (non-fatal): {e}")
+    # RETIRE incidents of jobs taken off Virginia's trust surface (OTHER_STATE_JOBS). They are no longer in `rows`,
+    # so without this an incident opened before the exclusion would stay open on Virginia's ledger forever, its only
+    # recovery path removed (Codex #256). close_incident is a no-op when nothing is open, so this is safe every run.
+    for fn in OTHER_STATE_JOBS:
+        det = f"{DETECTOR}:workflow:{fn}"
+        try:
+            close_incident("unverified", det)
+        except Exception as e:            # fail-open, loudly, like the loop above
+            print(f"⚠️ [trust_surface] could not retire {det} (non-fatal): {e}")
 
 
 def main(argv):

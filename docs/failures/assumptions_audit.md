@@ -2515,5 +2515,7 @@ And a golden on REAL bytes finds what fakes never will — the fakes all used th
 days-clean ledger. A state's trust surface is about that state. **Fix.** `trust_surface_guard.OTHER_STATE_JOBS`
 lists other states' jobs by name, with the reason (New York; Pennsylvania's from #255); they are skipped by
 discovery, their own CI keeps running, and a test pins both the exclusion and that the NY workflow still exists.
+Excluding a job also removed the only path that closed its incident, so `ledger()` now retires any open incident
+for every excluded job each run (Codex #256 — a stranded NY incident would have stayed on Virginia's count forever).
 **Lesson.** "Watch everything found" is the right default only within one product. When a second product shares the
 repo, discovery needs an explicit ownership boundary, decided by name and on record — never inferred from file names.
