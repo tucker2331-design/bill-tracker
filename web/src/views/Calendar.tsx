@@ -194,10 +194,14 @@ export function Calendar({ bills, sessionCode, onOpen, calRefresh = 0 }: {
     if (focusedDay) setMiniMonth(ymOf(focusedDay));
   }
 
+  if (error === "not_published") return (
+    <p className="center-msg">The calendar has not been published yet.<br />
+      <span className="muted">It appears after the next run of {STATE.name}'s data job.</span></p>
+  );
   if (error) return (
     <p className="center-msg" style={{ color: "var(--stale)" }}>
       Couldn't load the calendar: {error}<br />
-      <span className="muted">The Mastermind DB sheet (Sheet1) must be link-readable for gviz.</span>
+      <span className="muted">The calendar tab of {STATE.name}'s data sheet must be readable by the site.</span>
     </p>
   );
   if (!cal || !focusedDay || !miniMonth) return <p className="center-msg">Loading the session calendar…</p>;

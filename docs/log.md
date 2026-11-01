@@ -8,6 +8,10 @@ status: active
 
 Append-only, reverse-chronological (newest at top). Each entry opens with `## [YYYY-MM-DD] <type> | <title>`.
 
+## [2026-11-01] pr | War Room follows the Tracking / Full GA switch; calendar first-run honesty
+- Owner: "follow the switch" — Tracking = starred bills; Full GA = every bill in the War Room groups, 50 per group with "Show more"; no per-card contact request in Full GA. Both sites.
+- "Calendar 9650 days ago" on PA (empty default Sheet1 before the first job run): strict ISO freshness stamp; an empty calendar tab says "not published yet"; Virginia wording removed from both error lines ([[failures/assumptions_audit]] #156). PA job triggered by hand (workflow_dispatch, write) to publish the tabs.
+
 ## [2026-11-01] decision | PA deploys itself from main
 - Owner connected `bill-tracker-pa` to Cloudflare Workers Builds (main; build `npm run build:pa`; deploy with `--config wrangler.pa.toml`; preview builds off). First automatic build (#262) Ready. The earlier PA versions were manual Wrangler deploys from the owner's computer.
 
