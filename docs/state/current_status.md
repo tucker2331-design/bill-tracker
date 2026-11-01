@@ -88,6 +88,20 @@ status: active
 - Also open (owner-triggered): `/code-review ultra`. ~~co-patrons backfill~~ — superseded, see above.
 
 ## READY
+- **🧮 CENSUS GUARDS — fix list (owner 2026-11-01, after [[failures/assumptions_audit|#155]]):** every "unlabelled"
+  bucket on the site must be proven to hold ONLY rows the source leaves unlabelled — a census of the source's own
+  forms on the raw input, asserted equal to the output buckets, and shown on Health. Done: What's new "No chamber"
+  (`test_action_where.py`); already guarded: calendar §9 (meeting actions without time = 0, unclassified = 0), the
+  bill universe (records == universe), PA verbs (`verbs_unclassified` = 0), schedule agenda refs, roster coverage.
+  **Not yet guarded (to fix):**
+  1. PA calendar `calendar_meetings_not_a_committee` (agency names shown verbatim) — counted, never checked: a renamed
+     committee would show its raw upper-case name silently. Needs a census against the roster + an agency list.
+  2. PA What's new `action_short_from_full_action` (1,672 lines keep the source text) — counted, not on Health.
+  3. Action_Where stats (`action_where_unknown`, `_disagree`) alert but are not on either Health screen.
+  4. SPA outcome lists (Search filters, War Room groups, Timeline) are hand-written (#154 twice): add a census that
+     every outcome value in the data is one the SPA knows, else a visible "unrecognised outcome" count.
+  5. Calendar "no bills listed" meetings: prove each is the source's empty Bills field (PA `DiagnosticHint`), not a
+     parse miss — a census of raw `parss:Bills` empties vs written hints.
 - [[knowledge/pa_bill_history_xml]] — PA intake built and tested on a real download; the next-meeting join is unproven on a populated schedule (capture one in session, Jan 2027). Scheduled job, sheet tab and screens are owner-scheduled for later.
 - [[architecture/multi_state_config]] — bill pipeline + SPA split behind a per-state config (VA byte-identical). Residual: the calendar worker's inline VA logic (split it at the calendar↔product merge, golden-first) and a no-crossover Timeline drawing before PA screens.
 - [[testing/influence_and_sources]] — transcripts exist but every copy is robots/terms-blocked; relationships add nothing to fate forecasts, but **the chair co-sponsoring the bill: 92% vs 70% advance, same patron**. Testimony lineup predicted bill fate 2022–2025 (z 3.9) but **did not replicate on 2026**; chair co-sponsorship and chair alignment DID replicate on 2026. Open: fiscal-statement cost analysis (collection running).

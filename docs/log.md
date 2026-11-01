@@ -7,6 +7,7 @@ status: active
 # Project Log
 
 Append-only, reverse-chronological (newest at top). Each entry opens with `## [2026-11-01] pr | What's new: Virginia brackets on every line
+- Census fold-in: 6 code-only LIS rows ("S ") had leaked into "No chamber"; the code is now captured before the strip and a raw-form census is a golden ([[failures/assumptions_audit]] #155). Census-guard fix list added to [[state/current_status]].
 - Owner: "100% accuracy, consistency, and coverage". VA where = committee refid (10,011) → LIS's own chamber code (51,237) → "No chamber" where LIS lists none (4,166); 0 unknown; refid vs code checked every run (0 disagree), alerted if not. [[architecture/multi_state_config]].
 
 ## [2026-11-01] pr | What's new: one line per bill, with where the action happened (both sites)

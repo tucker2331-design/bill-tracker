@@ -39,9 +39,24 @@ aw, recs = ex["action_where"], {r["bill"]: r for r in out["records"]}
 check("VA: one code string per bill, one code per history row",
       set(aw) == set(recs) and all(len(aw[b]) == len(recs[b]["history"]) for b in aw))
 st = ex["action_where_stats"]
-check("VA: every row placed — 10,011 by refid, 51,237 by LIS's chamber code, 4,166 where LIS lists none, 0 unknown",
+check("VA: every row placed — 10,011 by refid, 51,243 by LIS's chamber code, 4,160 where LIS lists none, 0 unknown",
       (st.get("action_where_structural"), st.get("action_where_lis_code"), st.get("action_where_no_chamber", 0),
-       st.get("action_where_unknown", 0)) == (10011, 51237, 4166, 0), json.dumps(st))
+       st.get("action_where_unknown", 0)) == (10011, 51243, 4160, 0), json.dumps(st))
+# CENSUS (owner 2026-11-01: "how do we know nothing leaks into the unlabelled share?"): the raw HISTORY must split
+# into exactly the three explicit code forms, and "No chamber" must equal the raw blank-code count — not more.
+import pandas as pd
+raw = pd.read_csv(os.path.join(os.path.dirname(G.GOLDEN), "..", "tools", "historical_cache", "va", "20261", "HISTORY.CSV.gz"),
+                  dtype=str, encoding="latin-1")["History_description"].fillna("")
+forms = {"H": int(raw.str.startswith("H ").sum()), "S": int(raw.str.startswith("S ").sum()), "blank": int(raw.str.startswith(" ").sum())}
+check("census: raw HISTORY = H 35,269 + S 25,985 + blank 4,160 = every row",
+      forms == {"H": 35269, "S": 25985, "blank": 4160} and sum(forms.values()) == len(raw), json.dumps(forms))
+codes_all = "".join(aw.values())
+check("census: 'No chamber' == the raw blank count exactly (nothing leaks in); H/S == the raw H/S counts",
+      (codes_all.count("0"), codes_all.count("H"), codes_all.count("S")) == (forms["blank"], forms["H"], forms["S"]),
+      f"{codes_all.count('0')} / {codes_all.count('H')} / {codes_all.count('S')}")
+row6 = [aw[b][i] for b in ("HB212", "SB359") for i, h in enumerate(recs[b]["history"]) if h["action"] == "S"]
+check("the 6 code-only rows ('S ' with no text) are Senate, not 'No chamber' (the leak this census found)",
+      row6 and set(row6) == {"S"})
 check("VA: refid and LIS code never disagree (0)", st.get("action_where_disagree", 0) == 0)
 check("VA: only H / S / 0 codes", set("".join(aw.values())) <= {"H", "S", "0"})
 va_grid = action_where.rows_for(aw)
