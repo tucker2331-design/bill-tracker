@@ -70,7 +70,7 @@ ok(run, "240m elapsed >= EMPTY floor 175 -> RUN")
 run, _ = c.should_run(utc(2026, 2, 9, 12, 0), utc(2026, 2, 9, 11, 0), "EMPTY", F)  # 60m < 175
 ok(not run, "60m elapsed < EMPTY floor 175 -> SKIP")
 run, _ = c.should_run(utc(2026, 2, 9, 12, 0), utc(2026, 2, 9, 11, 0), "IN_WINDOW", F)  # floor 0
-ok(run, "IN_WINDOW floor 0 -> always RUN")
+ok(run, "IN_WINDOW 60m >= 12m floor -> RUN")
 run, _ = c.should_run(utc(2026, 2, 9, 12, 0), utc(2026, 2, 9, 11, 30), "IDLE", F)  # 30m < 55
 ok(not run, "30m elapsed < IDLE floor 55 -> SKIP")
 run, _ = c.should_run(utc(2026, 2, 9, 12, 0), utc(2026, 2, 9, 13, 0), "EMPTY", F)  # future marker
@@ -132,5 +132,21 @@ ok(not c.is_scheduled_tick({"GITHUB_EVENT_NAME": "workflow_dispatch", "CADENCE_T
 ok(not c.is_scheduled_tick({"GITHUB_EVENT_NAME": "workflow_dispatch"}), "a dispatch with no tick (Backfill Burst) bypasses")
 ok(not c.is_scheduled_tick({"GITHUB_EVENT_NAME": "push", "CADENCE_TICK": "scheduled"}), "tick only counts on workflow_dispatch")
 ok(not c.is_scheduled_tick({}), "local run (no event) bypasses, as before")
+
+# --- two tick sources, at most one full cycle per 12 min in a window (Codex #270) ---------------------------
+# markers are cycle STARTS. A duplicate tick queued behind a cycle that started 8 min ago -> SKIP.
+run, _ = c.should_run(utc(2026, 2, 9, 14, 8), utc(2026, 2, 9, 14, 0), "IN_WINDOW", c.CALENDAR_TIER_FLOORS)
+ok(not run, "duplicate tick 8m after the cycle started -> SKIP in a window")
+# the next real tick, 15 min after the last start -> RUN (the 15-min track in a meeting is kept)
+run, _ = c.should_run(utc(2026, 2, 9, 14, 15), utc(2026, 2, 9, 14, 0), "IN_WINDOW", c.BILL_TIER_FLOORS)
+ok(run, "next real tick 15m after the last start -> RUN")
+# a 19-min cycle: the :15 tick queues and starts at :19 -> 19m since the last START -> RUN (not starved)
+run, _ = c.should_run(utc(2026, 2, 9, 14, 19), utc(2026, 2, 9, 14, 0), "IN_WINDOW", c.CALENDAR_TIER_FLOORS)
+ok(run, "a long cycle never starves the next tick (19m since start -> RUN)")
+# off-window grid unchanged: calendar started 12:00, ran ~8 min; old end-based 175 floor first ran at the 15:15
+# tick; start-based 185 does too (15:00 SKIP, 15:15 RUN)
+ok(not c.should_run(utc(2026, 7, 4, 15, 0), utc(2026, 7, 4, 12, 0), "EMPTY", c.CALENDAR_TIER_FLOORS)[0]
+   and c.should_run(utc(2026, 7, 4, 15, 15), utc(2026, 7, 4, 12, 0), "EMPTY", c.CALENDAR_TIER_FLOORS)[0],
+   "calendar EMPTY: same 15-min tick as before (15:00 skip, 15:15 run)")
 
 print(f"ALL {_checks} cadence tests passed")

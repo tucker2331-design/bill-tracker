@@ -149,7 +149,11 @@ REQUIRED input `tick=scheduled` (`worker/ticks.js`). The workers treat that exac
 (`cadence.is_scheduled_tick`): quiet hours, the activity-correlated floor and jitter all still apply, so
 **LIS load is unchanged** -- only the tick arrives on time. Fail direction: the input is required, so a
 dispatch that omits it is rejected (422), never run ungated; a human "Run Now" picks `manual` to bypass.
-Duplicate ticks (both sources) are skipped by the same floor (one Sheets cell, ZERO LIS). Needs the Worker
+Duplicate ticks (both sources) are skipped: the cadence markers now record when a cycle STARTED, and a
+meeting window allows at most one full cycle per 12 min (`cadence.IN_WINDOW_MIN_INTERVAL`; was 0, which
+let a duplicate queued behind a running cycle run in full — Codex #270). The calendar's IDLE/EMPTY floors
+gained 10 min (65/185) so start-based timing lands on the same 15-min ticks as before (a calendar cycle runs
+~8 min); off-window LIS load is unchanged. Needs the Worker
 secret `GH_DISPATCH_TOKEN` (fine-grained token, this repo only, Actions: read & write); without it each
 tick logs "not configured" and GitHub's cron remains the only source. The trust-surface guard still judges
 liveness on GitHub's `schedule` runs.

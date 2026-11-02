@@ -10,7 +10,8 @@
  * (cadence.is_scheduled_tick): quiet hours 11pm-6am ET, the activity-correlated floor (calendar ~3 h / bill ~6 h
  * when nothing is scheduled; every tick only inside a real meeting window) and jitter all still apply. A skipped
  * tick reads one Sheets cell and ZERO LIS. GitHub's own cron stays on as a second source of ticks; a duplicate
- * tick is skipped by the same floor, and the workflow's concurrency group never runs two cycles at once.
+ * is skipped because the cadence markers record each cycle's START and a meeting window allows at most one full
+ * cycle per 12 minutes (cadence.IN_WINDOW_MIN_INTERVAL). The concurrency group never runs two cycles at once.
  *
  * FAIL DIRECTION: the input is REQUIRED, so a dispatch without it is rejected by GitHub (422) -- it can never
  * arrive as an ungated run. Without the GH_DISPATCH_TOKEN secret each tick logs "not configured" and dispatches

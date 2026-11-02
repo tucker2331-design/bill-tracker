@@ -46,6 +46,8 @@ from google.oauth2.service_account import Credentials
 import states   # Standard #6: every Virginia assumption lives in states/va.py, not in this pipeline
 import action_where   # What's new "(In the House)" side tab (additive; Bill_Tracker unchanged)
 import cadence   # LIS-safety guardrail #5 — the SHARED cadence decision (same signal the calendar worker maintains)
+# When this cycle STARTED (process start, before jitter) -- the cadence marker in Z1 (cadence.IN_WINDOW_MIN_INTERVAL).
+CYCLE_START_UTC = datetime.datetime.now(pytz.utc)
 
 # Bill_Tracker tab layout. Data columns run A.. from the left; row-1 METADATA cells (the completeness payload +
 # the cadence last-run marker) live in a RESERVED ZONE starting at Z, with blank columns between as headroom.
@@ -1173,7 +1175,7 @@ def write_bill_tracker(records, completeness):
         {"range": "A1", "values": rows},
         {"range": completeness_cell, "values": [[json.dumps(completeness, ensure_ascii=False)]]},
         {"range": cadence.BILL_LAST_RUN_CELL,
-         "values": [[datetime.datetime.now(pytz.utc).strftime("%Y-%m-%dT%H:%M:%SZ")]]},
+         "values": [[CYCLE_START_UTC.strftime("%Y-%m-%dT%H:%M:%SZ")]]},   # the cycle's START (cadence.py)
     ])
     return prior_unverified, prior_universe, sheet
 

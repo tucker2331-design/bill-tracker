@@ -25,6 +25,8 @@ from bs4 import BeautifulSoup
 import pdfplumber
 import logging
 import cadence   # LIS-safety guardrail #5 (activity-correlated cadence) — pure module, no back-import
+# When this cycle STARTED (process start, before jitter) -- the cadence marker in AC1 (cadence.IN_WINDOW_MIN_INTERVAL).
+CYCLE_START_UTC = datetime.now(timezone.utc)
 
 # pdfminer (pdfplumber's parsing engine) emits a "Could not get FontBBox from
 # font descriptor" WARNING for every malformed font in a parsed agenda PDF —
@@ -8570,7 +8572,7 @@ def run_calendar_update():
                     if worksheet.col_count < 29:
                         worksheet.add_cols(29 - worksheet.col_count)
                     worksheet.update_acell(
-                        cadence.CADENCE_STATE_CELL, cadence.serialize_state(datetime.now(pytz.utc), _cad_windows))
+                        cadence.CADENCE_STATE_CELL, cadence.serialize_state(CYCLE_START_UTC, _cad_windows))
                     print(f"⏱️ Cadence state (AC1) written: {_cad_stats['windows']} forward window(s) from "
                           f"{_cad_stats['parsed']} concrete meeting rows "
                           f"({_cad_stats['skipped']} unparseable, {_cad_stats['dropped_past']} past, "
