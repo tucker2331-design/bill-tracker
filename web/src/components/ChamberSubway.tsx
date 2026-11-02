@@ -24,7 +24,9 @@ export function ChamberSubway({ s, c, labels, hit }: {
     const swap = trackOf(st, "House", s) !== trackOf(s.stations[i - 1], "House", s);
     xs.push(xs[i - 1] + (swap ? 200 : 130));
   });
-  const GX = xs[xs.length - 1] + 150, W = GX + 230;
+  // W never drops below 1060: the totals row on the left runs to about x=590 at 4-digit counts, and the legend
+  // starts at W-400, so a state with fewer stations still keeps the two apart (Gemini, PR #268).
+  const GX = xs[xs.length - 1] + 150, W = Math.max(GX + 230, 1060);
   const path = (first: "House" | "Senate") => {
     let d = `M20 ${Y[trackOf(s.stations[0], first, s)]}`;
     s.stations.forEach((st, i) => {
