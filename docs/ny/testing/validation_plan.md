@@ -124,13 +124,54 @@ calendar bill links that are structurally release-only, not clocked events.
 This proves enough source shape for a later calendar worker design, but it does
 not yet promote rows into `Upcoming JSON`.
 
-Live OpenLeg agenda validation still needed:
+Live GitHub Actions validation on 2026-06-25:
 
 ```bash
-NY_OPENLEG_API_KEY=... python3 ny_calendar_probe.py --from-date 2026-01-01 --to-date 2026-02-01
+gh workflow run ny_calendar_probe.yml --ref main -f sources=openleg,assembly -f from_date=2026-01-01 -f to_date=2026-02-01 -f detail_limit=3
 ```
 
-GitHub Actions equivalent: run `New York Calendar Probe` manually. Use:
+First dispatch note: run `28182839228` used unsupported `sources=both` and
+failed safely in the configuration gate before any source probe ran.
+
+Corrected run:
+
+| Metric | Result |
+|---|---|
+| GitHub Actions run | `28182914032` |
+| artifact | `ny-calendar-probe-28182914032` |
+| checked_at_utc | `2026-06-25T15:54:03Z` |
+| status | `INFO` |
+| production_write | `false` |
+| total rows | 390 |
+| sources audited | 5 |
+| sources_with_errors | 0 |
+| health_findings | none |
+| openleg_agenda_meetings rows | 25 |
+| assembly_agenda_index rows | 17 |
+| assembly_floor_index rows | 5 |
+| assembly_agenda_detail_sample rows | 154 |
+| assembly_floor_detail_sample rows | 189 |
+| exact_clock | 0 |
+| relative_time | 154 |
+| no_clock_source | 42 |
+| terminal_or_timeless | 194 |
+| source_gap | 0 |
+| unknown_time_bucket | 0 |
+| time_bucket_denominator_drift | 0 |
+
+Per-source interpretation:
+
+- `openleg_agenda_meetings`: 25 fetched/parsed Senate committee rows, all with
+  committee names and source URLs. These rows currently report
+  `no_clock_source`, meaning the API path produced agenda meetings without a
+  usable clock time in this sampled window.
+- `assembly_agenda_detail_sample`: 154 bill rows with explicit relative timing
+  (`OFF_THE_FLOOR`), bill links, committee names, and source URLs.
+- `assembly_floor_detail_sample`: 189 bill rows marked as
+  `CALENDAR_RELEASE_ONLY`, with bill links and source URLs but no clocked event
+  semantics.
+
+Manual probe guidance:
 
 | Input | Value |
 |---|---|
@@ -145,8 +186,9 @@ surface for Senate agenda coverage before any calendar worker promotion.
 Probe windows must be valid zero-padded `YYYY-MM-DD` ranges, `from_date` must be
 before `to_date`, and the range is capped at 31 days.
 
-The OpenLeg live report should be recorded here and in [[ny/log]] before any
-Senate calendar worker or non-empty `Upcoming JSON` values are built.
+This first OpenLeg live report is now recorded here and in [[ny/log]]. A Senate
+calendar worker can be scoped from these source contracts, but non-empty
+`Upcoming JSON` still requires an explicit promotion design and review.
 
 ## Pre-live config check
 

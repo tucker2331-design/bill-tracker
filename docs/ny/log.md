@@ -9,6 +9,25 @@ status: active
 Append-only, reverse-chronological. Use the same prefix shape as the main log:
 `## [YYYY-MM-DD] <kind> | <title>`.
 
+## [2026-06-25] validation | Secret-backed NY calendar probe passed
+
+Post-merge `New York Calendar Probe` workflow validation passed on `main` in
+GitHub Actions run `28182914032` with sources `openleg,assembly`, date window
+`2026-01-01` through `2026-02-01`, and Assembly detail sample limit `3`.
+The run used `NY_OPENLEG_API_KEY`, had no Google Sheets credentials, uploaded
+the JSON artifact `ny-calendar-probe-28182914032`, and performed no production
+writes.
+
+Result: 390 rows across five audited source buckets, zero source errors, zero
+health findings, zero source gaps, zero unknown time buckets, and zero
+time-bucket denominator drift. Split: 25 OpenLeg Senate agenda meeting rows,
+17 Assembly agenda index rows, 5 Assembly floor index rows, 154 Assembly agenda
+detail sample rows, and 189 Assembly floor detail sample rows.
+
+An earlier manual dispatch in run `28182839228` used unsupported
+`sources=both`; the workflow failed safely in the configuration gate before any
+source probe ran.
+
 ## [2026-06-25] workflow | Manual NY calendar probe action
 
 Added a manual-only `New York Calendar Probe` workflow to run the read-only
