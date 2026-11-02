@@ -3,6 +3,9 @@ import type { Bill, Chamber } from "../data/types";
 import { deriveStage, furthestStage, stageSide, STAGE_ORDER, type Stage } from "../data/derive";
 import { BillBox } from "../components/BillBox";
 import { isCeremonial, splitByClass, ceremonialLabel } from "../data/billclass";
+import { STATE } from "../states";
+import { countPipeline } from "../data/pipeline_rules";
+import { ChamberSubway } from "../components/ChamberSubway";
 
 // The pipeline (vision §3b), drawn as the SUBWAY (owner-approved v9, 2026-10-27). The counting is unchanged from
 // the spine it replaces: still-here per stage per side, "✕ ended here" per stage per side, and the outcome fork.
@@ -22,8 +25,26 @@ const COLUMNS: { stage: Stage; label: string }[] = STAGE_ORDER.map((s) => ({ sta
 const lastReached = (b: Bill): Stage => furthestStage(b);
 type OutKind = "signed" | "awaiting" | "vetoed" | "carried" | "dead";
 
+// A state with pipeline settings draws the chamber subway (components/ChamberSubway.tsx); Virginia still draws its own.
+const PIPE = STATE.pipelineMap;
+const STAGE_LABEL: Record<string, string> = Object.fromEntries(STATE.stages.map((x) => [x.id, x.label]));
+// stations that share a label ("Committee" twice) get "· 1st" / "· 2nd" so the two columns read apart
+const PIPE_LABELS: Record<string, string> = PIPE ? Object.fromEntries(PIPE.stations.map((st) => {
+  const lab = STAGE_LABEL[st] ?? st, dup = PIPE.stations.filter((o) => (STAGE_LABEL[o] ?? o) === lab);
+  return [st, dup.length > 1 ? `${lab} · ${dup.indexOf(st) === 0 ? "1st" : "2nd"}` : lab];
+})) : {};
+const PIPE_ALL_LABELS: Record<string, string> = { ...PIPE_LABELS, governor: STAGE_LABEL.governor ?? "Governor", law: STAGE_LABEL.law ?? "Law" };
+
+function pipeDrillLabel(key: string): string {
+  const p = key.split("|");
+  if (p[0] === "out") return p[1] === "signed" ? PIPE_ALL_LABELS.law : p[1] === "awaiting_governor" ? "Waiting for the Governor" : p[1];
+  const where = `${p[2]} · ${PIPE_ALL_LABELS[p[1]] ?? p[1]}`;
+  return p[0] === "at" ? `${where} · here now` : `${where} · ${p[3]}`;
+}
+
 export function Timeline({ bills, onOpen }: { bills: Bill[]; onOpen: (b: Bill) => void }) {
-  const { alive, stranded, outcome, cellBills } = useMemo(() => {
+  const pipe = useMemo(() => PIPE ? countPipeline(bills, PIPE, STATE.chambers, new Date()) : null, [bills]);
+  const { alive, stranded, outcome, cellBills: vaCells } = useMemo(() => {
     const alive: Record<string, number> = {};      // "stage|side" -> advancing count
     const stranded: Record<string, number> = {};   // "stage|side" -> died/carried AT that stage
     const outcome: Record<OutKind, number> = { signed: 0, awaiting: 0, vetoed: 0, carried: 0, dead: 0 };
@@ -57,6 +78,12 @@ export function Timeline({ bills, onOpen }: { bills: Bill[]; onOpen: (b: Bill) =
     }
     return { alive, stranded, outcome, cellBills };
   }, [bills]);
+  // the drill lists: the chamber subway's keys map to bill ids; Virginia's map keeps its own
+  const cellBills = useMemo(() => {
+    if (!pipe) return vaCells;
+    const byId = new Map(bills.map((b) => [b.bill, b]));
+    return new Map([...pipe.keys].map(([k, ids]) => [k, ids.map((id) => byId.get(id)!).filter(Boolean)]));
+  }, [pipe, vaCells, bills]);
 
   const [drill, setDrill] = useState<string | null>(null);
   // Sort the drilled bills the way the rest of the app groups them (owner 2026-06-30): by chamber, then by
@@ -102,14 +129,18 @@ export function Timeline({ bills, onOpen }: { bills: Bill[]; onOpen: (b: Bill) =
   return (
     <div>
       <div className="subway" aria-label="Where every bill stands">
+        {PIPE && pipe ? <ChamberSubway s={PIPE} c={pipe} labels={PIPE_ALL_LABELS} hit={hit} /> : (
         <svg viewBox="0 0 1060 410" role="img" aria-label="Pipeline: two lines, one per starting chamber, that swap tracks at crossover and meet at the Governor">
           <SubwayMap alive={alive} stranded={stranded} outcome={outcome} hit={hit} />
-        </svg>
+        </svg>)}
       </div>
+      {pipe && pipe.skipped > 0 && (
+        <p className="muted" style={{ marginTop: "var(--s2)" }}>{pipe.skipped.toLocaleString()} bills carry no pipeline stage this cycle and are not drawn.</p>
+      )}
       {drill && (
         <div style={{ marginTop: "var(--s5)" }}>
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "var(--s2)" }}>
-            <h3 className="h" style={{ margin: 0 }}>{drillLabel(drill)} — {drillBills.length} bill(s)</h3>
+            <h3 className="h" style={{ margin: 0 }}>{PIPE ? pipeDrillLabel(drill) : drillLabel(drill)} — {drillBills.length} bill(s)</h3>
             <button type="button" className="filters" style={{ boxShadow: "none", background: "transparent" }} onClick={() => setDrill(null)}>✕ clear</button>
           </div>
           {(() => { let shown = 0; return drillGroups.map((g) => {

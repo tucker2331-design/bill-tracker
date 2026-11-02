@@ -50,6 +50,8 @@ export interface Bill {
   /** Co-patrons from LIS's Sponsors.csv, in LIS's order, chief patron excluded. [] = LIS lists none;
    *  null = unknown (the source was down that cycle, or the sheet predates the column) — never shown as "none". */
   copatrons: Copatron[] | null;
+  /** The pipeline map's station, from the state's own job (PA: column V). null = the state does not publish it. */
+  pipeline: { stage: string; parked: boolean } | null;
   source: string;          // "LIS"
 }
 

@@ -26,9 +26,19 @@ export const PA: StateConfig = {
   crossoverBySession: {},
   // robots.txt protects /legislation/bills/* and no page URL is verified, so no per-bill link is guessed.
   billUrl: () => "",
-  features: { calendar: true, timeline: false, warroom: true, predictions: false, committeeRoster: true, summaries: false, health: "intake" },
+  features: { calendar: true, timeline: true, warroom: true, predictions: false, committeeRoster: true, summaries: false, health: "intake" },
   actionCodePrefix: null,
-  jobDaysUTC: [1, 2, 3, 4, 5],   // pa_bill_tracker.yml: cron "23 * * * 1-5" (hourly, weekdays, UTC)
+  jobDaysUTC: [1, 2, 3, 4, 5],
+  // The chamber subway (owner 2026-11-02). Concurrence is drawn back on the first chamber's track: an amended bill
+  // returns there for agreement. No deadline; resolutions end in one chamber and are not drawn. The export carries
+  // no veto verb, so the Governor forks to law / waiting only.
+  pipelineMap: {
+    stations: ["introduced", "committee1", "floor1", "committee2", "floor2", "concurrence"],
+    otherChamber: ["committee2", "floor2"],
+    mapBills: /^[HS]B\d/,
+    idleDays: 365,
+    governorOutcomes: ["signed", "awaiting_governor"],
+  },   // pa_bill_tracker.yml: cron "23 * * * 1-5" (hourly, weekdays, UTC)
   // PA publishes no feed of FUTURE session days (2026-11-01), so a session day is shown once the export records it.
   calendarNote: "Committee meetings come from the PA General Assembly's committee schedules. Session days are shown "
     + "once they have happened, from the floor actions in the bill history: no future list of session days is published.",

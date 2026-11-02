@@ -41,6 +41,8 @@ export interface StateConfig {
   actionCodePrefix: RegExp | null;
   /** The data job's run days (UTC weekday numbers, 0 = Sunday); [] = every day (rhythm learned from heartbeats). */
   jobDaysUTC: number[];
+  /** The chamber subway's settings (data/pipeline_rules.ts). null = this state still draws its own map (VA, for now). */
+  pipelineMap: import("../data/pipeline_rules").PipelineSettings | null;
   /** A sentence under the Calendar about what it can and cannot show for this state ("" = none). */
   calendarNote: string;
   /** Health "intake" rows: a completeness-payload key, its label, and the most that is still clean (grey). */

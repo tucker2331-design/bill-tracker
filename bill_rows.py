@@ -12,13 +12,18 @@ BILL_TRACKER_HEADER = ["Bill", "Title", "Status (LIS)", "Outcome", "Patron", "Pa
                        "House Floor", "Senate Floor", "Outcome Origin", "Class", "Co-Patrons (JSON)"]
 
 
-def bill_tracker_rows(records, status_label=None):
+PIPELINE_HEADER = "Pipeline (JSON)"   # column V, written only by a state whose records carry `pipeline` (PA)
+
+
+def bill_tracker_rows(records, status_label=None, pipeline=False):
     """Header + one row per record, in BILL_TRACKER_HEADER order. Raises on a width drift (a shifted sheet).
     `status_label` renames column C for another state's sheet (PA: "Status (PA General Assembly)"); the site reads
     columns by POSITION, so only the label changes. Virginia passes nothing and keeps "Status (LIS)" byte-identical."""
     header = list(BILL_TRACKER_HEADER)
     if status_label:
         header[2] = status_label
+    if pipeline:
+        header.append(PIPELINE_HEADER)   # appended, so every existing column keeps its position (VA: not written)
     rows = [header] + [[
         r["bill"], r["title"], r["status_lis"], r["outcome"], r["patron"], r["patron_id"], r["chamber"],
         "yes" if r["crossed_over"] else "no", r["last_committee"], r["referral_count"], r["last_action_date"],
@@ -26,7 +31,7 @@ def bill_tracker_rows(records, status_label=None):
         json.dumps(r["history"], ensure_ascii=False), r["data_as_of_utc"], r["source"],
         r["floor_house"], r["floor_senate"], r["outcome_origin"], r.get("legislation_class", ""),
         "" if r.get("copatrons") is None else json.dumps(r["copatrons"], ensure_ascii=False),
-    ] for r in records]
+    ] + ([json.dumps(r["pipeline"], ensure_ascii=False)] if pipeline else []) for r in records]
     if any(len(row) != len(header) for row in rows):     # a row/header drift would shift every column after it
         raise RuntimeError(f"Bill_Tracker row width != header width ({len(header)}); refusing to write a "
                            f"shifted sheet")

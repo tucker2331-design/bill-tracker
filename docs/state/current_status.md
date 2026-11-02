@@ -85,6 +85,9 @@ status: active
 - Also open (owner-triggered): `/code-review ultra`. ~~co-patrons backfill~~ — superseded, see above.
 
 ## READY
+- **🚇 Move Virginia onto the chamber subway** ([[architecture/multi_state_config]]): PA's map is live on the shared
+  component; Virginia still draws its own. Settings: crossover deadline, tabled = ended; add parked/idle with an idle
+  threshold counted against the session calendar. Owner direction 2026-11-02: one map, state differences as settings.
 - **🧮 CENSUS GUARDS — fix list (owner 2026-11-01, after [[failures/assumptions_audit|#155]]):** every "unlabelled"
   bucket on the site must be proven to hold ONLY rows the source leaves unlabelled — a census of the source's own
   forms on the raw input, asserted equal to the output buckets, and shown on Health. Done: What's new "No chamber"

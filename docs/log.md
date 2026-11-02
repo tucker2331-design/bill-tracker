@@ -8,6 +8,9 @@ status: active
 
 Append-only, reverse-chronological (newest at top). Each entry opens with `## [YYYY-MM-DD] <type> | <title>`.
 
+## [2026-11-02] pr | The chamber subway: one map from state settings, live on PA
+- Owner: concurrence explained (an amended bill returns to its first chamber to agree, then is signed and sent to the Governor); the map is general, not PA-only. `ChamberSubway` + `pipeline_rules` (one sub-state per bill: ended > parked > idle); PA's job writes `{stage, parked}` in column V; Virginia unchanged, moves onto the same component next. [[architecture/multi_state_config]].
+
 ## [2026-11-01] pr | PA leftovers (item 5)
 - PA's sheet labels column C "Status (PA General Assembly)" (VA unchanged; the site reads by position). The "Mastermind DB sheet" wording went in #264. The 22 `undefined_actions` investigated: real uncoded motions, none moves a bill wrongly ([[knowledge/pa_bill_history_xml]]).
 

@@ -10,12 +10,16 @@ let pass = 0, fail = 0;
 const is = (n, g, w) => { const ok = JSON.stringify(g) === JSON.stringify(w);
   console.log(`  ${ok ? "ok  " : "FAIL"} ${n}${ok ? "" : `  got ${JSON.stringify(g)} want ${JSON.stringify(w)}`}`); ok ? pass++ : fail++; };
 
-is("PA screens: Calendar; War Room without vote predictions, with committee rosters; no timeline; intake Health",
-   PA.features, { calendar: true, timeline: false, warroom: true, predictions: false, committeeRoster: true, summaries: false, health: "intake" });
+is("PA screens: Calendar; War Room without vote predictions, with committee rosters; the chamber subway; intake Health",
+   PA.features, { calendar: true, timeline: true, warroom: true, predictions: false, committeeRoster: true, summaries: false, health: "intake" });
 is("VA screens unchanged: everything on incl. predictions, no roster section, full Health",
    VA.features, { calendar: true, timeline: true, warroom: true, predictions: true, committeeRoster: false, summaries: true, health: "full" });
 is("PA's calendar says future session days are not published; VA has no note",
    [/no future list of session days is published/.test(PA.calendarNote), VA.calendarNote], [true, ""]);
+is("PA's subway: concurrence back on the first chamber; resolutions not drawn; law and waiting at the Governor",
+   [PA.pipelineMap.otherChamber, PA.pipelineMap.mapBills.test("HB20"), PA.pipelineMap.mapBills.test("HR1"), PA.pipelineMap.governorOutcomes],
+   [["committee2", "floor2"], true, false, ["signed", "awaiting_governor"]]);
+is("VA still draws its own map (no pipeline settings yet)", VA.pipelineMap, null);
 is("PA has no crossover stage or dates", [PA.stages.some((s) => s.id === "crossover"), PA.crossoverBySession], [false, {}]);
 is("PA two-year session", PA.sessionYears, 2);
 is("PA links no per-bill page (robots-protected, unverified)", PA.billUrl("2025_0", "HB17"), "");

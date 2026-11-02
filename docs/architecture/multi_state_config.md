@@ -52,7 +52,7 @@ contract differs. Source facts: [[knowledge/pa_bill_history_xml]]. Scheduled job
 ## Pennsylvania site (built 2026-11-01) — a separate site, same code
 - **Build-time state:** `VITE_STATE=PA` (`npm run build:pa` → `dist-pa/`); unset = Virginia. No switcher; a screen is
   shown or hidden only by `STATE.features` (PA: Search, bill card, Today's What's new + Tracking, intake Health,
-  War Room without predictions and Calendar (2026-11-01); Timeline hidden). Health is ONE screen for both states (2026-11-01): PA's is Virginia's design fed by PA's own job checks (`STATE.intakeChecks`, each with a ring category) + completeness + both data ages + the same Metrics_History heartbeat; Virginia-only parts (guard jobs, incident ledger, breaker, calendar-subsystem counters) are not read and not drawn. `HealthIntake.tsx` retired.
+  War Room without predictions, Calendar, and the chamber subway (2026-11-01/02). Health is ONE screen for both states (2026-11-01): PA's is Virginia's design fed by PA's own job checks (`STATE.intakeChecks`, each with a ring category) + completeness + both data ages + the same Metrics_History heartbeat; Virginia-only parts (guard jobs, incident ledger, breaker, calendar-subsystem counters) are not read and not drawn. `HealthIntake.tsx` retired.
 - **Deploys itself (2026-11-01):** Cloudflare Workers Builds on `bill-tracker-pa`, branch `main`, build `npm run build:pa`, deploy `npx wrangler deploy --config wrangler.pa.toml`, preview builds OFF (the default preview command would read VA's `wrangler.toml`). Cloudflare offers to "fix" `wrangler.toml`'s name to `bill-tracker-pa` — never accept: that file is Virginia's.
 - **Its own Worker:** `wrangler.pa.toml` — name `bill-tracker-pa`, its own D1 (`bill-tracker-pa-db`), its own secrets,
   its own `SPREADSHEET_ID`. Same `worker/index.js`.
@@ -109,6 +109,20 @@ contract differs. Source facts: [[knowledge/pa_bill_history_xml]]. Scheduled job
   number sits in the prose ("Act No.", "Journal Page", "Prior Printer's No.") keep the source line (1,672 rows).
 - Display: VA's "H "/"S " code column is removed for display only (`StateConfig.actionCodePrefix`), never read for where.
 - Goldens: `test_action_where.py`, `action_where.regression.mjs`.
+
+## The chamber subway — one map, state settings (built 2026-11-02, live on PA)
+- Owner: "every subway map", not a PA-only drawing. `components/ChamberSubway.tsx` draws any state from
+  `STATE.pipelineMap` (`data/pipeline_rules.ts`): its stations, which stages happen in the second chamber (the line
+  moves track there, and back for a later first-chamber stage — PA's concurrence), which ids are bills on the map,
+  the idle threshold, and the Governor outcomes the source carries. A deadline line is drawn only for a state with one.
+- Each bill is counted once at its station and in at most one sub-state, most specific first: **ended** (defeated on
+  that chamber's floor) > **parked** (the source's own tabled / re-committed mark) > **idle** (no action for the
+  threshold); totals are plain sums. A bill with no stage is counted as "skipped" and said under the map.
+- Data: PA's job publishes `{stage, parked}` in Bill_Tracker column V ("Pipeline (JSON)"); parked = the latest
+  CLASSIFIED verb is "Laid on the table…" or "Re-committed to" (388 bills on 2025_0). Virginia writes no column V.
+- **Virginia still draws its own map** (`pipelineMap: null`). NEXT: move Virginia onto the same component (settings:
+  crossover deadline, "tabled" = ended) and add parked/idle there, with the idle threshold counted against the session
+  calendar (else every bill reads idle after adjournment). Goldens: `pipeline.regression.mjs`.
 
 ## Not split yet (the open loop)
 
