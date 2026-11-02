@@ -24,6 +24,10 @@ const SELECT = "select A,C,K,L,M";
 const D1_BATCH_MAX = 100;
 const SELECT_COLS = [0, 2, 10, 11, 12];   // the same columns as SELECT, 0-based, for the layout check on row 1
 const EXPECTED_HEADER = ["Bill", "Status (LIS)", "Last Action", "Latest Vote (JSON)", "Upcoming (JSON)"];
+// Column C names its state's publisher ("Status (LIS)" in Virginia, "Status (PA General Assembly)" in Pennsylvania —
+// bill_rows.bill_tracker_rows(status_label=…)). Its POSITION is the contract; its label must still read "Status (…)".
+const STATUS_LABEL = /^Status \(.+\)$/;
+const headerOk = (layout) => EXPECTED_HEADER.every((h, j) => (j === 1 ? STATUS_LABEL.test(layout[j]) : layout[j] === h));
 
 /** Minimal RFC 4180 parser (gviz quotes every field; JSON cells contain commas and doubled quotes). */
 export function parseCsv(text) {
@@ -112,7 +116,7 @@ export async function runAlerts(env, now = new Date()) {
   // starts at the first matching DATA row -- web/src/data/health.ts documents the same wire), so checking the
   // select's row 0 made every configured run throw before seeding a single snapshot (Codex P1 #244).
   const layout = SELECT_COLS.map((i) => (headerCells[i] || "").trim());
-  if (EXPECTED_HEADER.some((h, j) => layout[j] !== h)) {
+  if (!headerOk(layout)) {
     throw new Error(`alerts: Bill_Tracker columns moved (got ${JSON.stringify(layout)}) — refusing to guess`);
   }
 

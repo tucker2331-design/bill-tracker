@@ -33,6 +33,7 @@ COMPLETENESS_CELL = "AA1"            # same reserved cell as Virginia (the site 
 # The data columns must never reach the metadata cell (the VA layout's rule, checked at import like bill_tracker.py).
 if len(BILL_TRACKER_HEADER) >= 27:
     raise RuntimeError(f"Bill_Tracker data ({len(BILL_TRACKER_HEADER)} cols) would reach {COMPLETENESS_CELL}")
+STATUS_HEADER = "Status (PA General Assembly)"   # column C's label on PA's sheet (Virginia's says "Status (LIS)")
 CALENDAR_TAB = "Sheet1"              # the layout the Calendar screen reads (VA's calendar subsystem output)
 ROSTER_TAB = "Committee_Roster"     # the War Room's committee members (no vote calls in PA: no model)
 METRICS_TAB, METRICS_HEADER = "Metrics_History", ["RunTimestampUTC", "Status", "Origin", "Outcome"]
@@ -84,7 +85,7 @@ def build(fetcher, now=None):
 
 def write(records, comp, sheet, roster=None, calendar=None, where_grid=None):
     import gspread
-    rows = bill_tracker_rows(records)
+    rows = bill_tracker_rows(records, status_label=STATUS_HEADER)
     need_rows, need_cols = len(rows) + 50, 27   # AA = column 27
     try:
         ws = sheet.worksheet(TAB)

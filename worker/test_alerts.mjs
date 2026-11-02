@@ -93,6 +93,10 @@ is("…and the old session's snapshot is untouched", JSON.parse(env.DB.alertStat
 headerRow = [...REAL_HEADER.slice(0, 2), "Outcome", ...REAL_HEADER.slice(3), "", payload("20271")];
 threw = false; try { await runAlerts(env); } catch { threw = true; }
 is("a moved column -> refuses to guess", threw, true);
+// Pennsylvania's sheet names its own publisher in column C (Codex #267): same position, accepted
+headerRow = [...REAL_HEADER.slice(0, 2), "Status (PA General Assembly)", ...REAL_HEADER.slice(3), "", payload("20271")];
+threw = false; try { await runAlerts(env); } catch { threw = true; }
+is("PA's 'Status (PA General Assembly)' column C is accepted (position is the contract)", threw, false);
 // more than 100 watched bills: chunked batches
 headerRow = [...REAL_HEADER, "", payload("20271")];
 for (let i = 1; i <= 150; i++) positions.push({ state: "VA", session_code: "20271", bill_number: `SB${i}`, stance: "watching" });

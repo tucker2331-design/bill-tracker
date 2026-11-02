@@ -50,6 +50,17 @@ environment's network policy) — capture an in-session schedule in January 2027
 (`/{house,senate}/rss/session/calendar`, fetched once 2026-11-01: 36 / 37 items) lists the bills for "the next session
 day" without that day's date. So the PA calendar shows session days once the export records floor business.
 
+## The 22 "Undefined Action" rows (investigated 2026-11-01)
+PA's own `<verb>Undefined Action</verb>` labels real parliamentary motions it has not coded. On 2025_0: motion to
+reconsider final passage (3: HB1099, HB1859, HB1866, each after a defeat; the export never records the motion's
+result), first consideration rescinded (3), "Reconsider the vote by which the House accepted the report…" (4: SB146 ×2,
+HB2359, HB2460 — each followed by a coded re-report), referred to House/Session Calendar (5), removed from uncontested
+calendar (2), motion to report defeated (1: HB1200, 3-7 — a committee kill, text only), amended / bill gone over (1),
+originated in Committee on Rules (1), revert to prior printer's no. (1), amended on concurrence (1).
+**None moves a bill wrongly** (they never route — Standard #3); the only status they could change is the 3 House
+reconsideration motions, whose outcome the export does not carry. They show in history and in What's new as the
+source's own text (Codex #260).
+
 ## Committee roster join (2026-11-01)
 The export's `<committee>` ("AGING AND OLDER ADULT SERVICES") and the roster feed ("Aging & Older Adult Services") name
 the same room. PA publishes no committee id, so `committee_key` = exact equality after ONE fixed mapping (upper case,
