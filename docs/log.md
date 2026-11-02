@@ -8,6 +8,13 @@ status: active
 
 Append-only, reverse-chronological (newest at top). Each entry opens with `## [YYYY-MM-DD] <type> | <title>`.
 
+## [2026-11-02] pr | Health names every alert that needs a look
+VA Health read "Stability red · 1 condition" without saying which. Each condition that needs a look is now its own
+problem row (job, category, when, message). Case law [[failures/assumptions_audit]] #159. Also found: the bill
+job's 2026-11-01 22:24 UTC cycle lost its Action_Where/Bill_Summaries writes and its heartbeat to a Sheets 429 (it
+shared the minute with the calendar worker), and GitHub delivered the `*/15` ticks only every 4-7 h. Both queued in
+[[state/current_status]].
+
 ## [2026-11-02] pr | The chamber subway: one map from state settings, live on PA
 - Owner: concurrence explained (an amended bill returns to its first chamber to agree, then is signed and sent to the Governor); the map is general, not PA-only. `ChamberSubway` + `pipeline_rules` (one sub-state per bill: ended > parked > idle); PA's job writes `{stage, parked}` in column V; Virginia unchanged, moves onto the same component next. [[architecture/multi_state_config]].
 
