@@ -64,6 +64,15 @@ function groupConditions(rows: { severity: string; category: string; message: st
   return [...byKey.values()];
 }
 const SEV_RANK = (s: string) => (s === "CRITICAL" ? 0 : s === "WARN" ? 1 : s === "INFO" ? 2 : 3);
+const needsLookSev = (s: string) => s === "CRITICAL" || s === "WARN";
+
+// Fallback when Metrics_History is unreadable: the calendar worker's own SYSTEM_ALERT rows from Sheet1. That tab has
+// exactly one writer, so tagging them "calendar" is a structural fact, not a guess (the bill worker's alerts arrive
+// only via Metrics_History). Shared by the problem rows and the Alerts panel so the two cannot disagree.
+function liveConds(liveAlerts: HealthAlert[], nowMs: number): Cond[] {
+  const rows = liveAlerts.map((a) => ({ severity: a.severity, category: a.category, message: a.message, ts: Date.parse(a.date) || nowMs, source: "calendar" as AlertSource }));
+  return groupConditions(rows).sort((a, b) => SEV_RANK(a.severity) - SEV_RANK(b.severity) || b.lastTs - a.lastTs);
+}
 
 // Human names for the worker's error categories (Standard #4 vocabulary) — the raw ALL_CAPS token reads as
 // internal jargon on the lobbyist-facing page.
@@ -179,11 +188,15 @@ export function Health({ completeness, dataAsOf }: { completeness: Completeness 
     const isActive = (x: Cond) => x.lastTs >= cycleFor(x) - ACTIVE_TOL_MS;
     const active = conds.filter(isActive).sort(byActivity);
     const resolved = conds.filter((x) => !isActive(x)).sort((a, b) => b.lastTs - a.lastTs);
-    const needsLook = active.filter((x) => x.severity === "CRITICAL" || x.severity === "WARN");
+    const needsLook = active.filter((x) => needsLookSev(x.severity));
     const notes = active.filter((x) => x.severity === "INFO" || x.severity === "UNKNOWN");
     return { latestCycleTs, active, resolved, needsLook, notes };
   }, [hist]);
-  const liveNeedsLook = alertModel ? alertModel.needsLook.length : (h?.alerts ?? []).filter((a) => a.severity === "CRITICAL" || a.severity === "WARN").length;
+  // The conditions that need a look, NAMED (owner 2026-11-02: the screen said "alert" and red Stability without
+  // saying which). One problem row per condition; the count, the ring and the Alerts panel all read this list.
+  const [mountMs] = useState(() => Date.now());   // stable per mount (an undateable live alert reads "just now")
+  const lookConds: Cond[] = alertModel ? alertModel.needsLook : liveConds(h?.alerts ?? [], mountMs).filter((c) => needsLookSev(c.severity));
+  const liveNeedsLook = lookConds.length;
 
   if (intake ? calAsOf === undefined : (!completeness && !h && !hErr)) return <p className="center-msg">Loading health…</p>;
 
@@ -221,7 +234,9 @@ export function Health({ completeness, dataAsOf }: { completeness: Completeness 
   if (hist === null || !hist.available) problems.push({ check: "Alert history", state: "unreadable", since: "this read", affects: "alerts", wrong: "unknown", fix: null });
   else if (hist.malformedRows > 0) problems.push({ check: "Alert history", state: "incomplete", since: "this read",
     affects: `${n(hist.malformedRows)} undateable rows — a live alert could read as cleared`, wrong: "unknown", fix: null });
-  if (liveNeedsLook > 0) problems.push({ check: "Alerts", state: "need a look", since: "this read", affects: `${liveNeedsLook} condition${liveNeedsLook === 1 ? "" : "s"}`, wrong: "unknown", fix: null });
+  for (const c of lookConds) problems.push({ check: `Alert · ${c.source === "bill" ? "bill job" : "calendar job"} · ${catLabel(c.category)}`,
+    state: sevWord(c.severity).toLowerCase(), since: agoText(new Date(c.lastTs)) || "—",
+    affects: c.count > 1 ? `${c.message} (${n(c.count)} cycles)` : c.message, wrong: "unknown", fix: null });
   for (const i of insts) {
     if (isClean(i)) continue;
     problems.push({ check: i.name, state: i.value === null ? "no result" : "over limit", since: "this read",
@@ -489,13 +504,9 @@ function AlertsPanel({ model, liveAlerts }: { model: AlertModel | null; liveAler
   if (model) {
     ({ needsLook, notes, resolved } = model);
   } else {
-    // `liveAlerts` is the calendar worker's own SYSTEM_ALERT rows from Sheet1 (see data/health.ts) — that
-    // tab has exactly one writer, so tagging them "calendar" is a structural fact, not a guess. The bill
-    // worker's alerts never reach this fallback path: they arrive only via Metrics_History, i.e. the
-    // `model` branch above (W0d). Without this the two workers' alerts would share one cadence judgement.
-    const rows = liveAlerts.map((a) => ({ severity: a.severity, category: a.category, message: a.message, ts: Date.parse(a.date) || nowMs, source: "calendar" as AlertSource }));
-    const conds = groupConditions(rows).sort((a, b) => SEV_RANK(a.severity) - SEV_RANK(b.severity) || b.lastTs - a.lastTs);
-    needsLook = conds.filter((c) => c.severity === "CRITICAL" || c.severity === "WARN");
+    // see liveConds: the calendar worker's own Sheet1 alerts, never the bill worker's (W0d)
+    const conds = liveConds(liveAlerts, nowMs);
+    needsLook = conds.filter((c) => needsLookSev(c.severity));
     notes = conds.filter((c) => c.severity === "INFO" || c.severity === "UNKNOWN");
     resolved = [];
   }

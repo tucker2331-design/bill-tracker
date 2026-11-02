@@ -85,6 +85,13 @@ status: active
 - Also open (owner-triggered): `/code-review ultra`. ~~co-patrons backfill~~ — superseded, see above.
 
 ## READY
+- **🕒 Jobs: Sheets 429 + dropped GitHub ticks (found 2026-11-02, [[log]]):** (1) the bill job's 2026-11-01 22:24 UTC
+  cycle lost Action_Where, Bill_Summaries and its own heartbeat to a Sheets read-quota 429 while the calendar worker
+  ran in the same minute — retry on 429 and keep the heartbeat/alerts on any write failure, so a failure is never
+  invisible to Health. (2) GitHub delivered the `*/15` cron only every 4-7 h (none 08:15→17:30 UTC on 11-02) —
+  measure dropped ticks on Health, and consider a reliable external tick (Cloudflare cron → workflow_dispatch).
+  (3) Owner decision pending: clients see a one-line "last checked with LIS" status, the full Health stays ours
+  ([[design/health_operator_tab]] §4 says operator-only; the gate was never built).
 - **🚇 Move Virginia onto the chamber subway** ([[architecture/multi_state_config]]): PA's map is live on the shared
   component; Virginia still draws its own. Settings: crossover deadline, tabled = ended; add parked/idle with an idle
   threshold counted against the session calendar. Owner direction 2026-11-02: one map, state differences as settings.
