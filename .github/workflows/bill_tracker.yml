@@ -26,6 +26,15 @@ on:
   schedule:
     - cron: '*/15 * * * *'        # every 15 min; the worker self-throttles per guardrail #5 (AC1 + Z1)
   workflow_dispatch:              # manual "Run Now" — bypasses quiet hours + cadence + jitter
+    inputs:
+      tick:
+        # REQUIRED, no default: Cloudflare's cron Worker (worker/index.js) dispatches with tick=scheduled, which is
+        # gated exactly like the cron above (cadence.is_scheduled_tick). A dispatch that omits it is rejected by
+        # GitHub (422) -- it can never arrive ungated. A human picks "manual" to bypass the gates as before.
+        description: "manual = Run Now (bypasses quiet hours + cadence); scheduled = gated like the cron"
+        required: true
+        type: choice
+        options: [manual, scheduled]
 
 permissions:
   contents: read                  # least-privilege (CodeRabbit #163): only needs checkout; writes go to
@@ -60,5 +69,6 @@ jobs:
       - name: Run bill tracker
         env:
           GCP_CREDENTIALS: ${{ secrets.GCP_CREDENTIALS }}
+          CADENCE_TICK: ${{ inputs.tick }}   # '' on the cron; 'scheduled' from Cloudflare's tick
           SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
         run: python bill_tracker.py

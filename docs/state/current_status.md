@@ -89,7 +89,8 @@ status: active
   cycle lost Action_Where, Bill_Summaries and its own heartbeat to a Sheets read-quota 429 while the calendar worker
   ran in the same minute — retry on 429 and keep the heartbeat/alerts on any write failure, so a failure is never
   invisible to Health. (2) GitHub delivered the `*/15` cron only every 4-7 h (none 08:15→17:30 UTC on 11-02) —
-  measure dropped ticks on Health, and consider a reliable external tick (Cloudflare cron → workflow_dispatch).
+  a Cloudflare cron tick (gated like the cron) is built — PR "Cloudflare offers the workers' ticks"; live once
+  the owner adds the `GH_DISPATCH_TOKEN` Worker secret ([[knowledge/lis_api_safety]]).
   (3) Owner decision pending: clients see a one-line "last checked with LIS" status, the full Health stays ours
   ([[design/health_operator_tab]] §4 says operator-only; the gate was never built).
 - **🚇 Move Virginia onto the chamber subway** ([[architecture/multi_state_config]]): PA's map is live on the shared

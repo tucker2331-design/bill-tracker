@@ -1,6 +1,6 @@
 ---
 tags: [knowledge, api, lis, rule, sustainability, cadence]
-updated: 2026-09-28
+updated: 2026-11-02
 status: active
 ---
 
@@ -139,6 +139,24 @@ which is exactly what this charter governs.
 | **calendar_worker** (`🤖 Mastermind Ghost Worker 2`) | `*/15 * * * *` (15m offer) → self-throttle: IN_WINDOW ~15m / IDLE ~1h / EMPTY ~3h; + jitter + quiet hours | 1✅ 2✅ 3✅ 4✅ 5🟡 | The charter's primary subject. **PR #198**: 15-min cron only OFFERS a tick; `__main__` reads `Sheet1!AC1` (this worker maintains it) and skips (ZERO LIS) unless in a real meeting window. Off-window ticks exit in seconds, so the old "15m backs up vs ~19m runtime" pile-up is gone (full runs queue only IN a window, where the concurrency lock serializes them by design). |
 | **bill_tracker** (`🗂️ Bill Tracker`) | `*/15 * * * *` (15m offer) → self-throttle: IN_WINDOW ~15m / IDLE ~1h / EMPTY ~6h; + jitter + quiet hours | 1✅ 2✅ 3✅ 4✅ 5🟡 | Added 2026-06-22; cadence activity-correlated **PR #198**, then **EQUALIZED with the calendar worker in-window (owner 2026-07-05)** — bill floor votes / committee report outcomes post DURING a meeting, so they ride the SAME 15-min track (only the quiet EMPTY floor differs: ~6h, since bill data is static off-calendar). **Inherits 1/3/4** by reusing `get_armored_session()` + `safe_fetch_csv`. Adds **#2 jitter + quiet hours** via `_scheduled_gate()`, now also **#5**: `_cadence_should_run()` reads the SHARED `Sheet1!AC1` window signal + its OWN marker `Bill_Tracker!Z1` (was U1 until 2026-09-28). **OWN concurrency group** (`bill-tracker`, no longer the `calendar-worker` lock): the calendar worker runs back-to-back ~19-min cycles in a window, so sharing its lock would STARVE this worker off the 15-min track. Parallel runs stay ban-safe — LIGHT job (~7 reads, mostly 304s — `Sponsors.csv` + `Summaries.csv` added 2026-09-28 for co-patrons and summaries: one bulk blob on the same `lisfiles` host as BILLS/HISTORY/DOCKET, never per-bill), shared `.lis_blob_cache` (HISTORY not double-downloaded on overlap), both jittered 0–180s, both request-capped, different runner IPs (≈ one analyst with a couple of tabs). |
 | **backend_worker** (`🤖 Mastermind Ghost Worker (PAUSED)`, `update_database.yml`) | ⏸️ **PAUSED 2026-06-22** (was `*/15 * * * *`, 96×/day) | n/a (paused) | Was a **CHARTER VIOLATION — the project's single biggest ban risk:** raw `pd.read_csv(HISTORY.CSV)` (~4.7 MB) + `DOCKET.CSV` + the bill-list API, **UNCONDITIONAL** (no ETag/304), **no jitter, no request cap, no quiet hours** — a blind metronome re-downloading multi-MB blobs 96×/day. LEGACY text-driven backend feeding the OLD front end (`v2_shadow_test`), being replaced by `bill_tracker` + the new front end (B3). **Owner decision 2026-06-22: PAUSE for now** → its `schedule:` is commented out (manual `workflow_dispatch` still works; trivially resumable). Eliminates the ongoing exposure. See [[log]].
+
+### Two tick sources, one gate (2026-11-02)
+GitHub's scheduler is not a clock: on 2026-11-02 it delivered the `*/15` cron for both workers only every
+4-7 h (no run from 08:15 to 17:30 UTC), so data age was set by GitHub, not the legislature. A second tick
+source now offers the same ticks: the Cloudflare cron that already runs the Slack digest (`wrangler.toml`
+`*/15`, Workers Free) calls `workflow_dispatch` on `calendar_worker.yml` and `bill_tracker.yml` with the
+REQUIRED input `tick=scheduled` (`worker/ticks.js`). The workers treat that exactly like GitHub's cron
+(`cadence.is_scheduled_tick`): quiet hours, the activity-correlated floor and jitter all still apply, so
+**LIS load is unchanged** -- only the tick arrives on time. Fail direction: the input is required, so a
+dispatch that omits it is rejected (422), never run ungated; a human "Run Now" picks `manual` to bypass.
+Duplicate ticks (both sources) are skipped: the cadence markers now record when a cycle STARTED, and a
+meeting window allows at most one full cycle per 12 min (`cadence.IN_WINDOW_MIN_INTERVAL`; was 0, which
+let a duplicate queued behind a running cycle run in full — Codex #270). The calendar's IDLE/EMPTY floors
+gained 10 min (65/185) so start-based timing lands on the same 15-min ticks as before (a calendar cycle runs
+~8 min); off-window LIS load is unchanged. Needs the Worker
+secret `GH_DISPATCH_TOKEN` (fine-grained token, this repo only, Actions: read & write); without it each
+tick logs "not configured" and GitHub's cron remains the only source. The trust-surface guard still judges
+liveness on GitHub's `schedule` runs.
 
 ## 50-state scaling
 This charter is **per-source**. Every new state's source gets the same five guardrails and

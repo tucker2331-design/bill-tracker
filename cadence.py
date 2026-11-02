@@ -11,7 +11,7 @@ calendar worker maintains the cadence-state cell **Sheet1!AC1** every successful
 reads the same cell. Single source of truth.
 
 AC1 payload (JSON, compact):
-    {"lfr": "2026-02-09T14:03:11Z",                 # calendar worker's last full-run end (UTC)
+    {"lfr": "2026-02-09T14:03:11Z",                 # calendar worker's last full-run START (UTC; was end)
      "win": [["2026-02-09T08:30:00","2026-02-09T11:00:00"], ...]}  # forward meeting windows, ET-local
 
 Each window is [meeting_time - WINDOW_LEAD_MIN, meeting_time + WINDOW_TAIL_MIN] in ET wall-clock, merged so
@@ -72,11 +72,37 @@ MAX_WINDOWS = 300                    # seatbelt on AC1 size (a Sheets cell caps 
 #   IDLE       meetings on the forward calendar,      -> medium:  BOTH ~hourly
 #              but none active this instant
 #   EMPTY      nothing on the forward calendar        -> quiet baseline: calendar ~3h, bill ~6h
-CALENDAR_TIER_FLOORS = {"IN_WINDOW": 0,   "IDLE": 55,  "EMPTY": 175}
-BILL_TIER_FLOORS     = {"IN_WINDOW": 0,   "IDLE": 55,  "EMPTY": 355}
+#
+# The markers record when a full cycle STARTED (its process start, before jitter), not when it ended (since
+# 2026-11-02, Codex #270). With two tick sources (GitHub's cron + Cloudflare's dispatch) a duplicate tick can
+# queue behind a running cycle and start the moment it ends; measured from the START, it is <12 min after and
+# skips, while the next real tick (15 min after) runs -- even when a cycle takes longer than 15 min. So in a
+# meeting window there is AT MOST ONE full cycle per 12 minutes, whatever the number of tick sources.
+# The calendar's IDLE/EMPTY floors gained 10 min (55->65, 175->185) so start-based timing lands on the same
+# 15-min ticks as the old end-based floors: a calendar cycle runs ~8 min (measured 2026-11-02 01:37:52 ->
+# 01:45:27 UTC). The bill cycle runs <=3 min, inside one tick, so its floors are unchanged. Off-window LIS
+# load is therefore unchanged.
+IN_WINDOW_MIN_INTERVAL = 12
+CALENDAR_TIER_FLOORS = {"IN_WINDOW": IN_WINDOW_MIN_INTERVAL, "IDLE": 65,  "EMPTY": 185}
+BILL_TIER_FLOORS     = {"IN_WINDOW": IN_WINDOW_MIN_INTERVAL, "IDLE": 55,  "EMPTY": 355}
 
 
 # --- low-level parsing (total functions: never raise) ---------------------------------------------------
+
+# --- which ticks are gated -----------------------------------------------------------------------------
+# A SCHEDULED tick is gated (quiet hours, cadence floor, jitter); a human "Run Now" is not. Two sources offer
+# scheduled ticks: GitHub's own cron (event "schedule") and Cloudflare's cron Worker (worker/index.js), which
+# calls workflow_dispatch with the REQUIRED input tick=scheduled because GitHub delivered the `*/15` cron only
+# every 4-7 h (measured 2026-11-02). The workflow passes that input as CADENCE_TICK. Fail direction: the input is
+# required, so a dispatch that omits it is REJECTED by GitHub (HTTP 422) -- it can never arrive as an ungated
+# run; a human must pick "manual" to bypass. Structural (the event name + a choice input), never text.
+SCHEDULED_TICK = "scheduled"
+
+
+def is_scheduled_tick(env) -> bool:
+    event = env.get("GITHUB_EVENT_NAME", "")
+    return event == "schedule" or (event == "workflow_dispatch" and env.get("CADENCE_TICK", "") == SCHEDULED_TICK)
+
 
 def _parse_utc(s):
     """ISO string -> tz-aware UTC datetime, or None. Accepts a trailing 'Z' or an explicit offset."""
@@ -270,7 +296,8 @@ def build_windows(concrete_rows, now_et):
 
 
 def serialize_state(now_utc, windows_iso):
-    """Build the compact AC1 JSON string from this cycle's end time (UTC) and its forward windows."""
+    """Build the compact AC1 JSON string from this cycle's START time (UTC; see IN_WINDOW_MIN_INTERVAL) and its
+    forward windows. The key stays `lfr` so a cell written before 2026-11-02 still parses."""
     return json.dumps(
         {"lfr": now_utc.astimezone(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"), "win": windows_iso},
         ensure_ascii=False, separators=(",", ":"),
