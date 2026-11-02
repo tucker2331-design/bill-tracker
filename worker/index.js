@@ -26,6 +26,7 @@ import { membership, teamGate } from "./team.js";
 import { handleSheet } from "./sheets.js";
 import { validateContact } from "./contacts.js";
 import { runAlerts } from "./alerts.js";
+import { offerTicks } from "./ticks.js";
 
 const JSON_HEADERS = { "content-type": "application/json; charset=utf-8" };
 
@@ -250,14 +251,24 @@ export default {
     return env.ASSETS.fetch(request);
   },
 
-  // Cron Trigger (wrangler.toml [triggers]): the Slack digest. A failure is logged with its stack and re-thrown
-  // so Cloudflare records the run as failed (visible in the dashboard) -- never swallowed.
+  // Cron Trigger (wrangler.toml [triggers]): the Slack digest, and the scheduled ticks for the two Virginia
+  // workers (worker/ticks.js -- gated in the workers exactly like GitHub's cron). Each runs even if the other
+  // fails; any failure is logged and re-thrown so Cloudflare records the run as failed -- never swallowed.
   async scheduled(event, env, ctx) {
+    const errors = [];
     try {
       await runAlerts(env);
     } catch (err) {
       console.error("alerts_error", err && err.stack ? err.stack : String(err));
-      throw err;
+      errors.push(err);
     }
+    try {
+      const t = await offerTicks(env);
+      if (t.failed.length) errors.push(new Error(`tick dispatch failed: ${t.failed.join(" | ")}`));
+    } catch (err) {
+      console.error("ticks_error", err && err.stack ? err.stack : String(err));
+      errors.push(err);
+    }
+    if (errors.length) throw errors[0];
   },
 };

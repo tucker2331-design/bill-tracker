@@ -8705,8 +8705,8 @@ if __name__ == "__main__":
     # the time of day. GitHub sets GITHUB_EVENT_NAME on every run.
     QUIET_START_HOUR_ET = 23  # 11pm ET — no scheduled runs at/after this
     QUIET_END_HOUR_ET = 6     # 6am ET  — scheduled runs resume at/after this
-    _event_name = os.environ.get("GITHUB_EVENT_NAME", "")
-    if _event_name == "schedule":
+    # A scheduled tick = GitHub's cron OR Cloudflare's cron dispatch (tick=scheduled) — cadence.is_scheduled_tick.
+    if cadence.is_scheduled_tick(os.environ):
         _et_hour = datetime.now(pytz.timezone("America/New_York")).hour
         # Gemini medium (PR #62): handle both a midnight-spanning window
         # (start > end, the normal 23→6 case) AND a within-day window
@@ -8728,7 +8728,7 @@ if __name__ == "__main__":
         # active (now inside a real meeting window), else it skips down to the ~3h baseline (EMPTY tier).
         # The decision reads ONLY the cadence-state cell Sheet1!AC1 (this worker maintains it each
         # successful cycle) → ZERO LIS on a skip. Manual dispatch / Backfill Burst never reach here
-        # (GITHUB_EVENT_NAME != 'schedule', gated above with quiet hours). Fails OPEN on ANY error: a
+        # (not a scheduled tick, gated above with quiet hours). Fails OPEN on ANY error: a
         # cadence bug must never SILENCE the worker — only ever slow it. See docs/knowledge/lis_api_safety.md.
         try:
             _cad_creds = os.environ.get("GCP_CREDENTIALS")

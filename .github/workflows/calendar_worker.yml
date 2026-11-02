@@ -16,6 +16,15 @@ on:
     # scheduled runs; manual dispatch / Backfill Burst bypass all gates. See docs/knowledge/lis_api_safety.md.
     - cron: '*/15 * * * *' # every 15 min (UTC); the worker self-throttles per guardrail #5 (AC1)
   workflow_dispatch: # Adds a manual "Run Now" button (bypasses quiet hours + cadence gate)
+    inputs:
+      tick:
+        # REQUIRED, no default: Cloudflare's cron Worker (worker/index.js) dispatches with tick=scheduled, which is
+        # gated exactly like the cron above (cadence.is_scheduled_tick). A dispatch that omits it is rejected by
+        # GitHub (422) -- it can never arrive ungated. A human picks "manual" to bypass the gates as before.
+        description: "manual = Run Now (bypasses quiet hours + cadence); scheduled = gated like the cron"
+        required: true
+        type: choice
+        options: [manual, scheduled]
 
 # PR-C1: queue overlapping cycles rather than parallelizing them. If a cycle
 # N is still running when cycle N+1 fires (e.g. GitHub Actions is slow and
@@ -63,6 +72,7 @@ jobs:
       - name: Run Backend Worker
         env:
           GCP_CREDENTIALS: ${{ secrets.GCP_CREDENTIALS }}
+          CADENCE_TICK: ${{ inputs.tick }}   # '' on the cron; 'scheduled' from Cloudflare's tick
           # Optional ops/bug-alert channel. If this secret is unset, notify_slack
           # is a no-op and the worker runs unchanged (in-sheet SYSTEM_ALERT rows +
           # the GitHub failure email remain the baseline). Set repo secret

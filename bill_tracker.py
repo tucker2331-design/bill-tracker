@@ -1410,7 +1410,7 @@ def _scheduled_gate():
       - RUNTIME CHECK: the malformed-config WARN above; quiet-hours/jitter decisions are printed every
         scheduled run so the log is self-describing. See docs/knowledge/lis_api_safety.md.
     """
-    if os.environ.get("GITHUB_EVENT_NAME", "") != "schedule":
+    if not cadence.is_scheduled_tick(os.environ):   # GitHub cron or Cloudflare's tick=scheduled dispatch
         return True
     quiet_start_et, quiet_end_et = 23, 6
     et_hour = datetime.datetime.now(pytz.timezone(STATE.timezone)).hour

@@ -124,4 +124,13 @@ run, tier, _ = c.decide(raw_empty, utc(2026, 7, 4, 19, 0), et(2026, 7, 4, 15, 0)
                         c.BILL_TIER_FLOORS, last_run_utc=utc(2026, 7, 4, 12, 0))
 ok(run and tier == "EMPTY", f"bill empty 7h -> RUN/EMPTY, got {run}/{tier}")
 
+# --- which ticks are gated (GitHub cron, or Cloudflare's dispatch with tick=scheduled) -------------------
+ok(c.is_scheduled_tick({"GITHUB_EVENT_NAME": "schedule"}), "GitHub cron tick is gated")
+ok(c.is_scheduled_tick({"GITHUB_EVENT_NAME": "workflow_dispatch", "CADENCE_TICK": "scheduled"}),
+   "Cloudflare dispatch (tick=scheduled) is gated like the cron")
+ok(not c.is_scheduled_tick({"GITHUB_EVENT_NAME": "workflow_dispatch", "CADENCE_TICK": "manual"}), "human Run Now bypasses")
+ok(not c.is_scheduled_tick({"GITHUB_EVENT_NAME": "workflow_dispatch"}), "a dispatch with no tick (Backfill Burst) bypasses")
+ok(not c.is_scheduled_tick({"GITHUB_EVENT_NAME": "push", "CADENCE_TICK": "scheduled"}), "tick only counts on workflow_dispatch")
+ok(not c.is_scheduled_tick({}), "local run (no event) bypasses, as before")
+
 print(f"ALL {_checks} cadence tests passed")

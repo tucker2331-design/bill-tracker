@@ -8,6 +8,13 @@ status: active
 
 Append-only, reverse-chronological (newest at top). Each entry opens with `## [YYYY-MM-DD] <type> | <title>`.
 
+## [2026-11-02] pr | Cloudflare offers the workers' ticks (gated like GitHub's cron)
+GitHub delivered the `*/15` cron only every 4-7 h. Cloudflare's existing cron now dispatches both Virginia
+workers with the required input `tick=scheduled`; `cadence.is_scheduled_tick` gates it exactly like the cron
+(quiet hours, activity floor, jitter), so LIS load is unchanged. Owner OK 2026-11-02 ("if it's more consistent
+and still free ... remember the out-of-session timing"). Needs the `GH_DISPATCH_TOKEN` Worker secret.
+[[knowledge/lis_api_safety]].
+
 ## [2026-11-02] pr | Health names every alert that needs a look
 VA Health read "Stability red · 1 condition" without saying which. Each condition that needs a look is now its own
 problem row (job, category, when, message). Case law [[failures/assumptions_audit]] #159. Also found: the bill

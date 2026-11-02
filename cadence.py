@@ -78,6 +78,21 @@ BILL_TIER_FLOORS     = {"IN_WINDOW": 0,   "IDLE": 55,  "EMPTY": 355}
 
 # --- low-level parsing (total functions: never raise) ---------------------------------------------------
 
+# --- which ticks are gated -----------------------------------------------------------------------------
+# A SCHEDULED tick is gated (quiet hours, cadence floor, jitter); a human "Run Now" is not. Two sources offer
+# scheduled ticks: GitHub's own cron (event "schedule") and Cloudflare's cron Worker (worker/index.js), which
+# calls workflow_dispatch with the REQUIRED input tick=scheduled because GitHub delivered the `*/15` cron only
+# every 4-7 h (measured 2026-11-02). The workflow passes that input as CADENCE_TICK. Fail direction: the input is
+# required, so a dispatch that omits it is REJECTED by GitHub (HTTP 422) -- it can never arrive as an ungated
+# run; a human must pick "manual" to bypass. Structural (the event name + a choice input), never text.
+SCHEDULED_TICK = "scheduled"
+
+
+def is_scheduled_tick(env) -> bool:
+    event = env.get("GITHUB_EVENT_NAME", "")
+    return event == "schedule" or (event == "workflow_dispatch" and env.get("CADENCE_TICK", "") == SCHEDULED_TICK)
+
+
 def _parse_utc(s):
     """ISO string -> tz-aware UTC datetime, or None. Accepts a trailing 'Z' or an explicit offset."""
     if not isinstance(s, str) or not s.strip():
