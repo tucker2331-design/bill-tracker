@@ -85,13 +85,13 @@ def build(fetcher, now=None):
 
 def write(records, comp, sheet, roster=None, calendar=None, where_grid=None):
     import gspread
-    rows = bill_tracker_rows(records, status_label=STATUS_HEADER)
+    rows = bill_tracker_rows(records, status_label=STATUS_HEADER, pipeline=True)
     need_rows, need_cols = len(rows) + 50, 27   # AA = column 27
     try:
         ws = sheet.worksheet(TAB)
         if ws.row_count < need_rows or ws.col_count < need_cols:
             ws.resize(rows=max(ws.row_count, need_rows), cols=max(ws.col_count, need_cols))
-        ws.batch_clear([f"A1:U{max(ws.row_count, need_rows)}"])   # old rows past today's universe must go
+        ws.batch_clear([f"A1:V{max(ws.row_count, need_rows)}"])   # old rows past today's universe must go
     except gspread.exceptions.WorksheetNotFound:
         ws = sheet.add_worksheet(title=TAB, rows=need_rows, cols=need_cols)   # new tab: nothing to clear
     # one call for the table + the completeness payload (Gemini #255)

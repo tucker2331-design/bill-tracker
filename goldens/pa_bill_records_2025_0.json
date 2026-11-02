@@ -28,7 +28,7 @@
   "signed": 200
  },
  "records": 5269,
- "sha256": "a67cbaf657b0984cd6815dca113190a8743c754353462db8aba78392ba989f98",
+ "sha256": "710f33b0e7dac492e6cd50dab5b14fe048d8906e3a0c741e7ba6ee4bf56a5cb4",
  "spot": {
   "HB1099": {
    "bill": "HB1099",
@@ -64,6 +64,10 @@
    "outcome_origin": "structural_verb",
    "patron": "CEPHAS",
    "patron_id": "",
+   "pipeline": {
+    "parked": false,
+    "stage": "floor1"
+   },
    "referral_count": 2,
    "source": "PA General Assembly (LDPC)",
    "stage": "floor1",
@@ -105,6 +109,10 @@
    "outcome_origin": "structural_verb",
    "patron": "WATRO",
    "patron_id": "",
+   "pipeline": {
+    "parked": false,
+    "stage": "law"
+   },
    "referral_count": 4,
    "source": "PA General Assembly (LDPC)",
    "stage": "law",
@@ -146,6 +154,10 @@
    "outcome_origin": "structural_verb",
    "patron": "NEILSON",
    "patron_id": "",
+   "pipeline": {
+    "parked": false,
+    "stage": "concurrence"
+   },
    "referral_count": 5,
    "source": "PA General Assembly (LDPC)",
    "stage": "concurrence",
@@ -187,6 +199,10 @@
    "outcome_origin": "structural_verb",
    "patron": "McCLINTON",
    "patron_id": "",
+   "pipeline": {
+    "parked": false,
+    "stage": "adopted"
+   },
    "referral_count": 0,
    "source": "PA General Assembly (LDPC)",
    "stage": "adopted",
@@ -228,6 +244,10 @@
    "outcome_origin": "structural_verb",
    "patron": "MARTIN",
    "patron_id": "",
+   "pipeline": {
+    "parked": false,
+    "stage": "law"
+   },
    "referral_count": 5,
    "source": "PA General Assembly (LDPC)",
    "stage": "law",

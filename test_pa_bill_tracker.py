@@ -58,7 +58,8 @@ J.write(records, comp, sheet, roster, calendar, where_grid)
 bt = sheet.tabs["Bill_Tracker"]
 rows = bt.cells["A1"]
 check("same columns as Virginia's Bill_Tracker; column C names PA's source, not LIS",
-      rows[0][:2] + rows[0][3:] == bill_rows.BILL_TRACKER_HEADER[:2] + bill_rows.BILL_TRACKER_HEADER[3:]
+      rows[0][:2] + rows[0][3:21] == bill_rows.BILL_TRACKER_HEADER[:2] + bill_rows.BILL_TRACKER_HEADER[3:]
+      and rows[0][21:] == ["Pipeline (JSON)"]
       and rows[0][2] == "Status (PA General Assembly)" and bill_rows.BILL_TRACKER_HEADER[2] == "Status (LIS)")
 check("every row is the header's width", all(len(r) == len(rows[0]) for r in rows))
 check("one row per PA record (5,269)", len(rows) - 1 == len(records) == 5269)
@@ -117,5 +118,9 @@ check("calendar: 5 meetings (7 listed, 2 duplicates), none with bills, 214 past 
        payload["calendar_session_days"]) == (5, 2, 5, 214))
 check("a roster outage keeps the calendar (source names instead of display names)",
       cal2 is not None and any(r[4] == "HOUSE APPROPRIATIONS" for r in cal2[1:]))
+pipe = [json.loads(r[21]) for r in rows[1:] if r[0][1] == "B"]
+check("pipeline column: every bill has a stage; 388 parked (359 floor 1st, 29 floor 2nd)",
+      all(p.get("stage") for p in pipe) and sum(p["parked"] for p in pipe) == 388
+      and sum(p["parked"] and p["stage"] == "floor1" for p in pipe) == 359)
 check("nothing written for Virginia (no VA sheet id read)", "SPREADSHEET_ID" not in J.__dict__)
 sys.exit(1 if FAILS else 0)

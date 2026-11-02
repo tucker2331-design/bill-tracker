@@ -7,6 +7,15 @@ import type { Bill, BillData, Completeness, Copatron, FloorEvent, HistoryRow, La
 // gviz `tqx=out:csv` quotes any field containing a comma/quote/newline and escapes quotes as "".
 // The completeness cell (R1) is a JSON blob full of commas, so a real parser (not split-on-comma)
 // is required. State machine: handles quoted fields, "" escapes, and newlines inside quotes.
+/** Column V (PA's "Pipeline (JSON)"): {stage, parked}. Absent (Virginia) or unreadable -> null, never a guess. */
+function pipelineCell(raw: string | undefined): { stage: string; parked: boolean } | null {
+  if (!raw || !raw.trim()) return null;
+  try {
+    const v = JSON.parse(raw);
+    return v && typeof v.stage === "string" ? { stage: v.stage, parked: v.parked === true } : null;
+  } catch { return null; }   // the map counts such a bill as "skipped" (shown), never places it
+}
+
 export function parseCsv(text: string): string[][] {
   const rows: string[][] = [];
   let row: string[] = [];
@@ -44,7 +53,7 @@ function jsonOr<T>(raw: string | undefined, fallback: T): T {
 const COL = {
   bill: 0, title: 1, status: 2, outcome: 3, patron: 4, patronId: 5, chamber: 6, crossed: 7,
   lastCommittee: 8, referrals: 9, lastAction: 10, latestVote: 11, upcoming: 12, history: 13,
-  dataAsOf: 14, source: 15, floorHouse: 16, floorSenate: 17, legislationClass: 19, copatrons: 20,
+  dataAsOf: 14, source: 15, floorHouse: 16, floorSenate: 17, legislationClass: 19, copatrons: 20, pipeline: 21,
 } as const;
 
 /**
@@ -129,6 +138,7 @@ function toBill(r: string[]): Bill | null {
     dataAsOf: (r[COL.dataAsOf] || "").trim(),
     legislationClass: (r[COL.legislationClass] || "").trim(),
     copatrons: copatrons(r[COL.copatrons]),
+    pipeline: pipelineCell(r[COL.pipeline]),
     source: (r[COL.source] || STATE.sourceName).trim(),
   };
 }

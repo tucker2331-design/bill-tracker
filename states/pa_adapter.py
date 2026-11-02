@@ -187,6 +187,7 @@ def build_records(export: ET.Element, meetings: List[dict], today: datetime.date
         floor = {"House": "", "Senate": ""}
         outcome, stage = "in_progress", "introduced"
         status = {"action": "", "date": ""}   # the latest action that is not journal bookkeeping
+        last_move = ""   # the latest CLASSIFIED verb (record/undefined/unknown excluded) — the pipeline's "parked" test
         for a in b.iter("action"):
             actions_total += 1
             verb = (a.findtext("verb") or "").strip()
@@ -212,6 +213,8 @@ def build_records(export: ET.Element, meetings: List[dict], today: datetime.date
             if cls is None:
                 verbs_unclassified[verb] = verbs_unclassified.get(verb, 0) + 1
                 continue   # counted above; an unknown verb never moves a bill (no guessing)
+            if cls not in ("record", "undefined"):
+                last_move = verb
             if cls == "undefined":
                 undefined_actions += 1
                 continue   # PA's own "Undefined Action" label — counted, displayed in history, never routed
@@ -273,6 +276,12 @@ def build_records(export: ET.Element, meetings: List[dict], today: datetime.date
             "title": (b.findtext("shortTitle") or "").strip(),
             "status_lis": last_action["action"],                 # the source's own words (contract key name kept)
             "stage": stage,
+            # The pipeline map's station + whether the bill is PARKED there: its latest classified action tabled it
+            # ("Laid on the table…") or sent it back to a committee ("Re-committed to") and nothing has moved it
+            # since. In PA tabling parks a bill (255 of 325 House bills on the House floor sit tabled by vote,
+            # 2025_0); it does not end it. Structural: the verb, never the prose.
+            "pipeline": {"stage": stage, "parked": outcome == "in_progress"
+                         and (last_move.startswith("Laid on the table") or last_move == "Re-committed to")},
             "outcome": outcome,
             "outcome_origin": "structural_verb",                 # every outcome comes from a <verb> field
             "patron": (chief.text or "").strip() if chief is not None else "",

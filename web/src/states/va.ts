@@ -32,6 +32,7 @@ export const VA: StateConfig = {
   features: { calendar: true, timeline: true, warroom: true, predictions: true, committeeRoster: false, summaries: true, health: "full" },
   calendarNote: "",
   jobDaysUTC: [],
+  pipelineMap: null,
   actionCodePrefix: /^[HS] /,
   intakeChecks: [],
 };

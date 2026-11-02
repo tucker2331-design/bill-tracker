@@ -213,10 +213,10 @@ def main():
     check(f"co-sponsors in NUMERIC order past 99 ({rb['bill']}, {max(nums)} sponsors)",
           max(nums) > 99 and [rb["patron"]] + [c["name"] for c in rb["copatrons"]] == want)
     check("history keeps every action", sum(len(r["history"]) for r in recs) == comp["actions_total"] == 19915)
-    check("contract keys match VA's record + stage", set(recs[0]) == {
+    check("contract keys match VA's record + stage + pipeline", set(recs[0]) == {
         "bill", "title", "status_lis", "stage", "outcome", "outcome_origin", "patron", "patron_id", "chamber",
         "crossed_over", "floor_house", "floor_senate", "last_committee", "referral_count", "latest_vote", "upcoming",
-        "last_action_date", "history", "data_as_of_utc", "source", "legislation_class", "copatrons"})
+        "last_action_date", "history", "data_as_of_utc", "source", "legislation_class", "copatrons", "pipeline"})
 
     with open(GOLDEN, encoding="utf-8") as f:
         want = json.load(f)
