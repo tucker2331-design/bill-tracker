@@ -112,7 +112,9 @@ interface Problem { check: string; state: string; since: string; affects: string
 // counters, so those parts are not read and not drawn (hidden, never shown empty). Its instruments are its own job's
 // checks (STATE.intakeChecks) + completeness + both data ages; its alerts and rhythm come from the same
 // Metrics_History heartbeat rows Virginia's bill job writes.
-export function Health({ completeness, dataAsOf }: { completeness: Completeness | null; dataAsOf: Date | null }) {
+export function Health({ completeness, dataAsOf, unrecognisedOutcomes }: {
+  completeness: Completeness | null; dataAsOf: Date | null; unrecognisedOutcomes: { count: number; examples: string[] };
+}) {
   const intake = STATE.features.health === "intake";
   const [h, setH] = useState<HealthData | null>(null);
   const [hErr, setHErr] = useState<string | null>(null);
@@ -155,7 +157,13 @@ export function Health({ completeness, dataAsOf }: { completeness: Completeness 
   // Rebuilt every render (ten objects): the data ages read the clock, so a memo kept them stale (Gemini #250).
   // A weekday-only job: limit from its schedule, not a learned rhythm that includes the weekend (Codex #266).
   const intakeLimit = STATE.jobDaysUTC.length ? scheduleLimitHours(new Date(), STATE.jobDaysUTC, STALE_AFTER_HOURS) : billLimit;
+  // CENSUS checks (case law #155): every "unlabelled" bucket on the site holds only what the source leaves unlabelled.
+  const unknownOutcome: Instrument = { id: "outcome_unknown", cat: "Accuracy", name: "Bills with an outcome the site does not recognise",
+    value: unrecognisedOutcomes.count, limit: 0, max: 10, impeaches: "yes",
+    note: unrecognisedOutcomes.count ? `shown as in progress: ${unrecognisedOutcomes.examples.join(", ")}` : undefined };
+  const cx = c as unknown as Record<string, unknown> | null;
   const intakeInsts: Instrument[] = [
+    unknownOutcome,
     { id: "missing", cat: "Completeness", name: "Bills missing from our list", value: c && universe > 0 ? universe - written : null, of: universe || undefined, limit: 0, max: 20, impeaches: "no" },
     ...STATE.intakeChecks.map((k): Instrument => ({ id: k.key, cat: k.cat, name: k.label,
       value: num((c as unknown as Record<string, unknown> | null)?.[k.key]), limit: k.limit, max: Math.max(10, k.limit * 4), impeaches: "unknown" })),
@@ -174,6 +182,10 @@ export function Health({ completeness, dataAsOf }: { completeness: Completeness 
     { id: "billage", cat: "Freshness", name: "Bill data age", value: dataAsOf ? +hoursSince(dataAsOf).toFixed(1) : null, limit: billLimit, max: billLimit * 4, unit: "h", impeaches: "no" },
     { id: "calage", cat: "Freshness", name: "Calendar data age", value: h?.calendarFreshness ? +hoursSince(h.calendarFreshness).toFixed(1) : null, limit: calLimit, max: calLimit * 4, unit: "h", impeaches: "no" },
     { id: "inv", cat: "Stability", name: "Rows failing a format rule at write", value: num(m.invariant_violations), limit: 0, max: 60, impeaches: "no", note: "breaker trips at 50" },
+    unknownOutcome,
+    // What's new "(In the House)": the No-chamber bucket must be exactly the rows LIS leaves blank (bill_tracker.py)
+    { id: "aw_unknown", cat: "Completeness", name: "Bill actions with no chamber where LIS gives one", value: num(cx?.action_where_unknown), limit: 0, max: 20, impeaches: "no" },
+    { id: "aw_disagree", cat: "Accuracy", name: "Bill actions where LIS's chamber and the committee disagree", value: num(cx?.action_where_disagree), limit: 0, max: 20, impeaches: "no", note: "the committee's chamber is shown" },
   ];
   const insts = intake ? intakeInsts : vaInsts;
 

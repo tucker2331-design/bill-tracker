@@ -8,6 +8,15 @@ status: active
 
 Append-only, reverse-chronological (newest at top). Each entry opens with `## [YYYY-MM-DD] <type> | <title>`.
 
+## [2026-11-16] pr | Census guards on Health (5 buckets) + the speed switch
+Every "unlabelled" bucket is now proven to hold only what the source leaves unlabelled, and shown on Health: outcome
+the site does not recognise (both sites; it was silently "in progress" — case law #161), bill actions with no chamber
+(VA + PA) and VA's LIS-vs-committee disagreement, PA calendar committees the roster cannot name, PA "no bills listed"
+cards whose raw Bills field was not empty, PA What's new lines kept whole for no listed reason. All 0 on current data.
+Speed switch: `cadence_profiles.json` (normal / slow per state), read every tick ([[knowledge/lis_api_safety]]).
+Owner list 2026-11-16 organised in [[state/current_status]]; design ideas [[ideas/drafting_war_room]],
+[[ideas/legislator_portfolio]]; [[testing/pa_predictive_plan]].
+
 ## [2026-11-16] pr | Virginia moves onto the chamber subway (one map, state settings)
 Virginia's own v9 drawing retired; `ChamberSubway` draws both states from `STATE.pipelineMap`. New settings:
 ended/parked outcomes, stage source, swap label, words. VA: ended = "dead" (incl. tabled), parked = carried over,

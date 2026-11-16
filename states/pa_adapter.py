@@ -158,7 +158,7 @@ def parse_schedule(rss: bytes, chamber: str) -> List[dict]:
         bills = [b.strip() for b in g("Bills").split(",") if b.strip()]
         out.append({"chamber": chamber, "date": _iso(g("MeetingDate")), "date_raw": g("MeetingDate"),
                     "time": g("MeetingTime"), "committee": g("Committee"), "location": g("Location"),
-                    "bills": bills})
+                    "bills": bills, "bills_raw": g("Bills")})   # raw field text: the calendar's census (empty = source lists none)
     return out
 
 
@@ -348,6 +348,20 @@ def build_records(export: ET.Element, meetings: List[dict], today: datetime.date
 _NUMBER_IN_PROSE = ("No.", "Page")
 
 
+def keep_full_reason(part: dict) -> str:
+    """Why an action's line keeps the source's own text instead of being built from structure ("" = it is built).
+    The three reasons, each a structural fact about the action: its verb ends in a number written in prose; it has no
+    verb; or its verb is PA's own "Undefined Action". The census (pa_bill_tracker) counts lines per reason."""
+    verb = part["verb"].rstrip(", ").strip()
+    if not verb:
+        return "no_verb"
+    if verb.endswith(_NUMBER_IN_PROSE):
+        return "number_in_prose"
+    if VERB_CLASS.get(part["verb"]) == "undefined":
+        return "undefined_action"
+    return ""
+
+
 def short_line(part: dict, committee_display: Dict[str, str]) -> Tuple[str, bool]:
     """One What's new line from an action's STRUCTURAL fields, in sentence case, without the date:
     verb + committee (the roster's display name when the room is known) + the roll-call tally.
@@ -356,7 +370,7 @@ def short_line(part: dict, committee_display: Dict[str, str]) -> Tuple[str, bool
     verb = part["verb"].rstrip(", ").strip()
     # PA's own "Undefined Action" label carries no meaning; the description says what happened (Codex #260:
     # HB1099 "Motion to reconsider final passage") — keep the source line.
-    if verb.endswith(_NUMBER_IN_PROSE) or not verb or VERB_CLASS.get(part["verb"]) == "undefined":
+    if keep_full_reason(part):
         return part["full"], True
     if verb.isupper():
         verb = verb[0] + verb[1:].lower()

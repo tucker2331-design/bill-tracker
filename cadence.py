@@ -86,6 +86,43 @@ IN_WINDOW_MIN_INTERVAL = 12
 CALENDAR_TIER_FLOORS = {"IN_WINDOW": IN_WINDOW_MIN_INTERVAL, "IDLE": 65,  "EMPTY": 185}
 BILL_TIER_FLOORS     = {"IN_WINDOW": IN_WINDOW_MIN_INTERVAL, "IDLE": 55,  "EMPTY": 355}
 
+# --- the speed switch (owner 2026-11-16: "build it in the back end so you can toggle them onto slower speeds") -------
+# One word per state in cadence_profiles.json (repo root). "normal" = the floors above. "slow" = for a state nobody is
+# using yet: hourly even inside a meeting window, ~3 h when meetings are ahead, ~6 h (calendar) / ~12 h (bill) when
+# nothing is scheduled. Same 15-min tick grid (each floor sits just under a multiple of 15 min after the cycle START).
+# Fail direction: a missing/unreadable file or an unknown word -> "normal" (today's tested cadence) and a printed line,
+# never a silent speed change. PA's job has no tiers: slow = at most one full run per PA_SLOW_HOURS.
+PROFILES_FILE = "cadence_profiles.json"
+CALENDAR_SLOW_FLOORS = {"IN_WINDOW": 55, "IDLE": 175, "EMPTY": 355}
+BILL_SLOW_FLOORS     = {"IN_WINDOW": 55, "IDLE": 175, "EMPTY": 715}
+PA_SLOW_HOURS = 6
+KNOWN_PROFILES = ("normal", "slow")
+
+
+def profile_for(state: str, path: str = None) -> str:
+    """This state's speed: "normal" or "slow". Never raises; anything unreadable reads "normal" (printed)."""
+    import os
+    p = path or os.path.join(os.path.dirname(os.path.abspath(__file__)), PROFILES_FILE)
+    try:
+        with open(p, encoding="utf-8") as f:
+            word = str(json.load(f).get(state, "normal")).strip().lower()
+    except (OSError, ValueError, AttributeError) as e:
+        print(f"⏱️ Speed switch: {PROFILES_FILE} unreadable ({type(e).__name__}) — {state} runs at normal speed")
+        return "normal"
+    if word not in KNOWN_PROFILES:
+        print(f"⏱️ Speed switch: unknown speed {word!r} for {state} in {PROFILES_FILE} — runs at normal speed")
+        return "normal"
+    return word
+
+
+def floors_for(worker: str, state: str, path: str = None) -> dict:
+    """The tier floors for 'calendar' or 'bill' in this state's current speed."""
+    slow = profile_for(state, path) == "slow"
+    print(f"⏱️ Speed switch: {state} {worker} = {'slow' if slow else 'normal'} ({PROFILES_FILE})")
+    if worker == "calendar":
+        return CALENDAR_SLOW_FLOORS if slow else CALENDAR_TIER_FLOORS
+    return BILL_SLOW_FLOORS if slow else BILL_TIER_FLOORS
+
 
 # --- low-level parsing (total functions: never raise) ---------------------------------------------------
 

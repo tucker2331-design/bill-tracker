@@ -183,9 +183,17 @@ export async function loadBillData(): Promise<BillData> {
   const completeness = findCompleteness(header);
 
   const bills: Bill[] = [];
+  const unrecognisedOutcomes = { count: 0, examples: [] as string[] };
   for (let i = 1; i < rows.length; i++) {
     const b = toBill(rows[i]);
-    if (b) bills.push(b);
+    if (!b) continue;
+    bills.push(b);
+    const raw = (rows[i][COL.outcome] || "").trim();
+    if (!OUTCOMES.has(raw as Outcome)) {   // counted, never silently "in progress" (census, case law #155)
+      unrecognisedOutcomes.count++;
+      const shown = raw || "(blank)";
+      if (unrecognisedOutcomes.examples.length < 5 && !unrecognisedOutcomes.examples.includes(shown)) unrecognisedOutcomes.examples.push(shown);
+    }
   }
 
   // "Data as of" = the completeness stamp if present, else the FRESHEST per-bill timestamp (not row 0,
@@ -203,5 +211,5 @@ export async function loadBillData(): Promise<BillData> {
   const stamped = (completeness?.session_code || "").trim();
   const sessionCode = /^\d{5}$/.test(stamped) ? stamped : inferSessionCode(dataAsOf);
 
-  return { bills, completeness, dataAsOf, sessionCode };
+  return { bills, completeness, dataAsOf, sessionCode, unrecognisedOutcomes };
 }

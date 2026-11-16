@@ -22,6 +22,7 @@ import xml.etree.ElementTree as ET
 import pytz
 
 import action_where
+import cadence   # the speed switch (cadence_profiles.json)
 
 from bill_rows import BILL_TRACKER_HEADER, bill_tracker_rows
 from states import get_state
@@ -72,13 +73,21 @@ def build(fetcher, now=None):
     # What's new: where each action happened (@actionChamber) + a short line from the structural fields.
     display = {x["key"]: x["committee"] for x in (roster or [])}
     where, short, from_full = {}, {}, 0
+    reasons: dict = {}
     for bill, parts in extras.get("action_parts", {}).items():
         where[bill] = "".join(p["where"] for p in parts)
         lines = [pa_adapter.short_line(p, display) for p in parts]
         short[bill] = [ln for ln, _ in lines]
-        from_full += sum(1 for _, f in lines if f)
+        for p, (_, f) in zip(parts, lines):
+            if f:
+                from_full += 1
+                r = pa_adapter.keep_full_reason(p) or "none"
+                reasons[r] = reasons.get(r, 0) + 1
+    # CENSUS: every line kept as the source wrote it has a listed reason ("none" must stay 0 — a Health check)
     comp.update({"action_where_unknown": sum(c.count(action_where.UNKNOWN) for c in where.values()),
-                 "action_short_from_full_action": from_full})
+                 "action_short_from_full_action": from_full,
+                 "action_short_from_full_by_reason": dict(sorted(reasons.items())),
+                 "action_short_from_full_unexplained": reasons.get("none", 0)})
     comp["requests_made"] = getattr(fetcher, "requests_made", None)
     return records, comp, roster, calendar, action_where.rows_for(where, short)
 
@@ -134,11 +143,53 @@ def write(records, comp, sheet, roster=None, calendar=None, where_grid=None):
     beat = {k: comp[k] for k in ("records_written", "universe_count", "verbs_unclassified", "undefined_actions",
                                  "action_dates_unreadable", "schedule_bill_refs_unmatched", "requests_made")}
     beat.update({k: comp[k] for k in ("roster_status", "action_where_status", "bills_committee_without_roster", "calendar_meetings",
-                                      "calendar_meetings_without_bills", "calendar_session_days") if k in comp})
+                                      "calendar_meetings_without_bills", "calendar_session_days", "action_where_unknown",
+                                      "action_short_from_full_unexplained", "calendar_committee_not_in_roster",
+                                      "calendar_no_bills_not_from_source") if k in comp})
     mh.append_rows([[comp["checked_at_utc"], "OK", ORIGIN, json.dumps(beat, ensure_ascii=False)]])
 
 
+def slow_skip(now_utc: datetime.datetime, last_checked: str, hours: int) -> bool:
+    """The speed switch's PA rule (cadence_profiles.json "slow"): skip a scheduled run when the last published run
+    (Bill_Tracker AA1 `checked_at_utc`) is younger than `hours`. An unreadable stamp -> run (never a silent stop)."""
+    try:
+        last = datetime.datetime.fromisoformat(str(last_checked).replace("Z", "+00:00"))
+    except ValueError:
+        return False
+    if last.tzinfo is None:
+        return False
+    elapsed = (now_utc - last).total_seconds()
+    # a stamp in the FUTURE (bad clock / corrupt marker) -> run, so the job republishes a good one (Codex #273),
+    # the same rule as cadence.should_run's future-marker handling
+    return 0 <= elapsed < hours * 3600
+
+
+def _slow_gate() -> bool:
+    """True = skip this scheduled run (PA set to slow and published recently). Fails OPEN: any read problem runs."""
+    if os.environ.get("GITHUB_EVENT_NAME") != "schedule" or cadence.profile_for(PA.code) != "slow":
+        return False
+    sid, creds = os.environ.get("PA_SPREADSHEET_ID"), os.environ.get("GCP_CREDENTIALS")
+    try:
+        import sheets_retry
+        from google.oauth2.service_account import Credentials
+        gc = sheets_retry.authorize(Credentials.from_service_account_info(
+            json.loads(creds), scopes=["https://www.googleapis.com/auth/spreadsheets"]))
+        raw = gc.open_by_key(sid).worksheet(TAB).acell(COMPLETENESS_CELL).value or ""
+        stamp = json.loads(raw).get("checked_at_utc", "") if raw.strip().startswith("{") else ""
+    except Exception as e:   # fail OPEN: a read problem must never silence the job
+        print(f"⏱️ Speed switch: PA is slow but its last run time is unreadable ({type(e).__name__}) — running")
+        return False
+    now = datetime.datetime.now(datetime.timezone.utc)
+    if slow_skip(now, stamp, cadence.PA_SLOW_HOURS):
+        print(f"⏱️ Speed switch: PA = slow — last published {stamp}, under {cadence.PA_SLOW_HOURS} h ago; skipping (no PA request)")
+        return True
+    print(f"⏱️ Speed switch: PA = slow — last published {stamp or 'unknown'}; running")
+    return False
+
+
 def main(argv):
+    if _slow_gate():
+        return 0
     fetcher = pa_fetch.PoliteFetcher(os.environ.get("PA_CACHE_DIR", ".pa_cache"))
     records, comp, roster, calendar, where_grid = build(fetcher)
     print(json.dumps({k: v for k, v in comp.items() if k != "verbs_unclassified_sample"}, ensure_ascii=False))

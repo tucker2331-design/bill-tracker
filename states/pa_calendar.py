@@ -62,7 +62,12 @@ def meeting_rows(meetings: Iterable[dict], roster_display: Dict[str, str], bill_
     rows: List[List[str]] = []
     stats = {"calendar_meetings": 0, "calendar_meetings_without_bills": 0, "calendar_meetings_duplicate": 0,
              "calendar_meeting_dates_unreadable": 0, "calendar_agenda_bills_unmatched": 0,
-             "calendar_meetings_not_a_committee": 0}
+             "calendar_meetings_not_a_committee": 0,
+             # CENSUS (owner 2026-11-01, case law #155): each "unlabelled" bucket must hold ONLY what the source leaves
+             # unlabelled. Both of these are 0 on a healthy feed and are Health checks (states/pa intakeChecks):
+             "calendar_committee_not_in_roster": 0,     # a CHAMBER committee (named "HOUSE …"/"SENATE …" in its own
+                                                        # chamber's feed) the roster does not list: a rename/new room
+             "calendar_no_bills_not_from_source": 0}    # a "no bills listed" card whose raw Bills field was NOT empty
     seen = set()
     for m in meetings:
         if not m["date"]:
@@ -76,6 +81,11 @@ def meeting_rows(meetings: Iterable[dict], roster_display: Dict[str, str], bill_
         seen.add(key)
         if name is None:
             stats["calendar_meetings_not_a_committee"] += 1   # an agency, or a committee the roster does not list
+            # A chamber committee is named by its chamber in that chamber's own feed ("HOUSE APPROPRIATIONS" in the
+            # House feed). One the roster lacks is not an agency: it is a room we cannot name -> a Health check.
+            # Agencies (IRRC, the Center for Rural Pennsylvania) carry no chamber name and are listed in BOTH feeds.
+            if m["committee"].upper().startswith(m["chamber"].upper() + " "):
+                stats["calendar_committee_not_in_roster"] += 1
             name = m["committee"]
         stats["calendar_meetings"] += 1
         base = dict(Date=m["date"], Time=m["time"], SortTime=_sort_time(m["time"]), Committee=name,
@@ -88,6 +98,8 @@ def meeting_rows(meetings: Iterable[dict], roster_display: Dict[str, str], bill_
             bills.append(b or ref)
         if not bills:
             stats["calendar_meetings_without_bills"] += 1
+            if m.get("bills_raw", ""):   # the source listed something, yet no bill row: never a silent empty card
+                stats["calendar_no_bills_not_from_source"] += 1
             rows.append(_row(**base, DiagnosticHint="no_bills_listed"))
         for i, b in enumerate(bills, 1):
             rows.append(_row(**base, Bill=b, AgendaOrder=i, LegEventRoute="meeting"))

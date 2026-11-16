@@ -8755,7 +8755,8 @@ if __name__ == "__main__":
                     cadence.CADENCE_STATE_CELL).value
                 _run_now, _tier, _why = cadence.decide(
                     _raw_cadence, datetime.now(pytz.utc),
-                    datetime.now(pytz.timezone("America/New_York")), cadence.CALENDAR_TIER_FLOORS)
+                    # the calendar worker is Virginia's own (its VA logic splits out at the calendar<->product merge)
+                    datetime.now(pytz.timezone("America/New_York")), cadence.floors_for("calendar", "VA"))
                 print(f"⏱️ Cadence gate (guardrail #5): {_why}")
                 if not _run_now:
                     sys.exit(0)

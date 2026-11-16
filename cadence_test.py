@@ -149,4 +149,23 @@ ok(not c.should_run(utc(2026, 7, 4, 15, 0), utc(2026, 7, 4, 12, 0), "EMPTY", c.C
    and c.should_run(utc(2026, 7, 4, 15, 15), utc(2026, 7, 4, 12, 0), "EMPTY", c.CALENDAR_TIER_FLOORS)[0],
    "calendar EMPTY: same 15-min tick as before (15:00 skip, 15:15 run)")
 
+# --- the speed switch (cadence_profiles.json, owner 2026-11-16) -------------------------------------------------------
+import json as _json, os as _os, tempfile as _tf
+_d = _tf.mkdtemp(); _f = _os.path.join(_d, "p.json")
+def _w(obj):
+    with open(_f, "w") as fh: fh.write(obj if isinstance(obj, str) else _json.dumps(obj))
+_w({"VA": "slow", "PA": "normal"})
+ok(c.floors_for("calendar", "VA", _f) == c.CALENDAR_SLOW_FLOORS and c.floors_for("bill", "PA", _f) == c.BILL_TIER_FLOORS,
+   "VA slow -> slow floors; PA normal -> normal floors")
+_w({"VA": "turbo"}); ok(c.profile_for("VA", _f) == "normal", "unknown word -> normal (printed), never a guess")
+_w("{not json"); ok(c.profile_for("VA", _f) == "normal", "unreadable file -> normal")
+ok(c.profile_for("VA", _os.path.join(_d, "missing.json")) == "normal", "missing file -> normal")
+ok(c.profile_for("VA") in c.KNOWN_PROFILES and c.profile_for("PA") in c.KNOWN_PROFILES, "the committed file parses for both states")
+# slow floors stay on the 15-min grid from the cycle start: an in-window cycle at 14:00 -> 14:45 skip, 15:00 run
+ok(not c.should_run(utc(2026, 2, 9, 14, 45), utc(2026, 2, 9, 14, 0), "IN_WINDOW", c.CALENDAR_SLOW_FLOORS)[0]
+   and c.should_run(utc(2026, 2, 9, 15, 0), utc(2026, 2, 9, 14, 0), "IN_WINDOW", c.CALENDAR_SLOW_FLOORS)[0],
+   "slow in a window: hourly (14:45 skip, 15:00 run)")
+ok(all(c.CALENDAR_SLOW_FLOORS[k] >= c.CALENDAR_TIER_FLOORS[k] and c.BILL_SLOW_FLOORS[k] >= c.BILL_TIER_FLOORS[k]
+       for k in c.CALENDAR_TIER_FLOORS), "slow is never faster than normal, tier by tier")
+
 print(f"ALL {_checks} cadence tests passed")

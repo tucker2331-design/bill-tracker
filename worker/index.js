@@ -26,7 +26,7 @@ import { membership, teamGate } from "./team.js";
 import { handleSheet } from "./sheets.js";
 import { validateContact } from "./contacts.js";
 import { runAlerts } from "./alerts.js";
-import { offerTicks } from "./ticks.js";
+import { offerTicks, TICK_STATE } from "./ticks.js";
 
 const JSON_HEADERS = { "content-type": "application/json; charset=utf-8" };
 
@@ -73,6 +73,11 @@ async function handleApi(request, env, url) {
       sheet_auth_configured: env.GCP_SA_JSON ? "service_account" : "none",
       // Whether the 15-minute Slack digest can run (worker/alerts.js). Configuration only.
       alerts_configured: Boolean(env.SLACK_WEBHOOK_URL && env.BILL_TRACKER_STATE),
+      // Whether this Worker offers Virginia's scheduled ticks (worker/ticks.js): the GH_DISPATCH_TOKEN secret is
+      // set AND this is the VA Worker. Configuration only -- a set token can still be wrong; a failed dispatch is
+      // logged as "ticks_failed" (Workers Logs) and the GitHub run list shows tick runs as "workflow_dispatch".
+      ticks_configured: Boolean(env.GH_DISPATCH_TOKEN) && env.BILL_TRACKER_STATE === TICK_STATE,
+      ticks_token_on_wrong_worker: Boolean(env.GH_DISPATCH_TOKEN) && env.BILL_TRACKER_STATE !== TICK_STATE,
     });
   }
 
