@@ -55,9 +55,23 @@ class FakeSession:
         self.calls += 1
         c = self.codes.pop(0)
         return OkResp(c) if c == 200 else BadResp(c)
-client = R.RetryingHTTPClient(auth=None, session=FakeSession([429, 200]))
+client = R.client_class()(auth=None, session=FakeSession([429, 200]))
 R.WAITS_S[:] = [0, 0, 0, 0]   # no real sleeping in the integration check
 check("gspread's own request path retries a 429 and returns the 200", client.request("get", "https://x").status_code == 200
       and client.session.calls == 2)
-check("authorize() hands gspread the retrying client", "http_client=RetryingHTTPClient" in open(R.__file__).read())
+check("authorize() hands gspread the retrying client class", "http_client=client_class()" in open(R.__file__).read())
+import inspect
+from gspread.client import Client
+check("gspread builds the client from the class it is given (Gemini #271's 'pass an instance' would break this)",
+      "http_client(auth, session)" in inspect.getsource(Client.__init__))
+# a stubbed gspread (as test_pr_c3_helper_v2.py does) must not break importing this module
+import importlib, types
+real = sys.modules["gspread"]
+sys.modules["gspread"] = types.ModuleType("gspread")
+try:
+    importlib.reload(R); check("imports with gspread stubbed out (no submodules)", True)
+except Exception as e:
+    check(f"imports with gspread stubbed out — {e}", False)
+finally:
+    sys.modules["gspread"] = real; importlib.reload(R)
 sys.exit(1 if FAILS else 0)

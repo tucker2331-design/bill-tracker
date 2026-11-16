@@ -7950,6 +7950,7 @@ def run_calendar_update():
         push_system_alert(
             f"Sheets rate limit (429) hit {sheets_retry.retries()} time(s) this cycle; "
             + (f"{_gave_up} call(s) still failed after every retry." if _gave_up else "every call recovered on retry."),
+            status="WARN" if _gave_up else "INFO",   # Health reads the Status cell first (Codex #271)
             category="API_FAILURE", severity="WARN" if _gave_up else "INFO", dedup_key="sheets_429")
 
     # Health-observability: mirror THIS cycle's SYSTEM rows into the append-only Metrics_History
