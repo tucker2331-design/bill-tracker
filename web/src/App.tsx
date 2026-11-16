@@ -216,7 +216,7 @@ function AppMain() {
             {tab === "search" && <Search bills={visible} onOpen={open} />}
             {tab === "warroom" && !warRoomBill && <WarRoom bills={data.bills} starred={starred} sessionCode={data.sessionCode} />}
             {warRoomBill && <WarRoomBill id={warRoomBill} bills={data.bills} sessionCode={data.sessionCode} />}
-            {tab === "health" && <Health completeness={data.completeness} dataAsOf={data.dataAsOf} />}
+            {tab === "health" && <Health completeness={data.completeness} dataAsOf={data.dataAsOf} unrecognisedOutcomes={data.unrecognisedOutcomes} />}
           </ErrorBoundary>
         )}
       </main>

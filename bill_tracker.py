@@ -1244,8 +1244,13 @@ def run_bill_tracker():
                              "summary_skipped_bad_bill": summary_stats["skipped_bad_bill"],
                              "summary_unknown_types": summary_stats["unknown_types"],
                              "summary_empty_text": summary_stats["empty_text"]})
-        prior_unverified, prior_universe, _sheet = write_bill_tracker(records, completeness)
         _aw = extras.get("action_where_stats", {})
+        # CENSUS on Health (owner 2026-11-01, case law #155): the What's new "No chamber" bucket must hold only rows LIS
+        # leaves blank. These two are 0 on a healthy cycle; the Health screen reads them from this payload.
+        completeness.update({"action_where_unknown": _aw.get("action_where_unknown", 0),
+                             "action_where_disagree": _aw.get("action_where_disagree", 0),
+                             "action_where_no_chamber": _aw.get("action_where_no_chamber", 0)})
+        prior_unverified, prior_universe, _sheet = write_bill_tracker(records, completeness)
         if _aw.get("action_where_unknown"):
             _alert("WARN", "DATA_ANOMALY", f"Action_Where: {_aw['action_where_unknown']} history rows carry no LIS chamber "
                                            f"code field at all (steady state 0) — LIS may have changed the HISTORY "
@@ -1388,7 +1393,7 @@ def _cadence_should_run():
         run, tier, why = cadence.decide(
             raw_state, datetime.datetime.now(pytz.utc),
             datetime.datetime.now(pytz.timezone(STATE.timezone)),
-            cadence.BILL_TIER_FLOORS, last_run_utc=cadence.parse_marker(last_raw))
+            cadence.floors_for("bill", STATE.code), last_run_utc=cadence.parse_marker(last_raw))
         print(f"⏱️ Cadence gate (guardrail #5): {why}")
         return run
     except Exception as e:

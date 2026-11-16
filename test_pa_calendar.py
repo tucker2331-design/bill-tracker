@@ -82,6 +82,17 @@ no_roster, st2 = C.build_calendar(export, meetings, None, ids)
 check("without a roster the source's committee text is kept (never guessed)",
       any(r[col["Committee"]] == "HOUSE APPROPRIATIONS" for r in no_roster[1:]) and st2["calendar_roster_used"] is False)
 
+# CENSUS (case law #155): an "unlabelled" bucket holds only what the source leaves unlabelled
+check("census: every meeting shown by its raw name is an agency (no chamber committee the roster lacks)",
+      st["calendar_committee_not_in_roster"] == 0 and st["calendar_meetings_not_a_committee"] == 2)
+check("census: every 'no bills listed' card has an empty raw Bills field", st["calendar_no_bills_not_from_source"] == 0)
+_, bad = C.meeting_rows([
+    {"chamber": "house", "date": "2026-12-01", "time": "9:00 AM", "committee": "HOUSE NEW ROOM", "bills": [], "bills_raw": ""},
+    {"chamber": "senate", "date": "2026-12-01", "time": "9:00 AM", "committee": "SENATE TRANSPORTATION", "bills": [], "bills_raw": "H.B. 12"},
+], {"SENATE TRANSPORTATION": "Senate Transportation"}, ids)
+check("census catches a chamber committee the roster lacks, and a lost agenda", (bad["calendar_committee_not_in_roster"],
+      bad["calendar_no_bills_not_from_source"]) == (1, 1))
+
 digest = hashlib.sha256(json.dumps(rows).encode()).hexdigest()
 got = json.loads(json.dumps({"rows_sha256": digest, "stats": st, "spot_meetings": mt, "spot_oct21_house": oct21[:3]}))
 if "--write" in sys.argv:

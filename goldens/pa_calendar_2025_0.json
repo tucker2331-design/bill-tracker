@@ -113,11 +113,13 @@
  ],
  "stats": {
   "calendar_agenda_bills_unmatched": 0,
+  "calendar_committee_not_in_roster": 0,
   "calendar_meeting_dates_unreadable": 0,
   "calendar_meetings": 5,
   "calendar_meetings_duplicate": 2,
   "calendar_meetings_not_a_committee": 2,
   "calendar_meetings_without_bills": 5,
+  "calendar_no_bills_not_from_source": 0,
   "calendar_roster_used": true,
   "calendar_rows": 4732,
   "calendar_session_days": 214,

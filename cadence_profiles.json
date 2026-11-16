@@ -1,0 +1,5 @@
+{
+  "_doc": "Per-state speed switch for the scheduled jobs (owner 2026-11-16). normal = the tested activity-correlated cadence; slow = for a state nobody is using yet. Change one word and merge; the next tick reads it. Read by cadence.profile_for(). Later the master dashboard writes this switch.",
+  "VA": "normal",
+  "PA": "normal"
+}

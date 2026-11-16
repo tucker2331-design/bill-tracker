@@ -158,6 +158,20 @@ secret `GH_DISPATCH_TOKEN` (fine-grained token, this repo only, Actions: read & 
 tick logs "not configured" and GitHub's cron remains the only source. The trust-surface guard still judges
 liveness on GitHub's `schedule` runs.
 
+### The speed switch (2026-11-16)
+Owner: run on tight intervals sustainably, but do not strain the system 24/7 across states with no customers yet;
+a master-dashboard control later, a back-end switch now. `cadence_profiles.json` (repo root) holds one word per
+state, `normal` or `slow`, read every tick by `cadence.profile_for()`:
+
+| | normal (tested) | slow |
+|---|---|---|
+| VA calendar | in a meeting every 15 min · meetings ahead ~1 h · nothing ahead ~3 h | hourly · ~3 h · ~6 h |
+| VA bill | in a meeting every 15 min · ~1 h · ~6 h | hourly · ~3 h · ~12 h |
+| PA job | hourly on weekdays | at most every 6 h on weekdays (reads its own last run stamp, AA1) |
+
+Quiet hours, jitter and the 12-min in-window minimum apply in both. A missing/unreadable file or unknown word reads
+`normal` (printed). Toggle = change one word and merge; the next tick reads it. Every gate log line names the speed.
+
 ## 50-state scaling
 This charter is **per-source**. Every new state's source gets the same five guardrails and
 its own activity-correlated cadence, recorded as a sibling of this page. Never assume an

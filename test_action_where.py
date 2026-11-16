@@ -82,6 +82,11 @@ built = [ln for b in row for ln, full in zip(json.loads(row[b][2] or "[]"), hist
 check("PA: every line BUILT from structure carries no date (kept-whole source lines excepted)",
       len(built) > 15000 and not any(", 202" in ln or ", 201" in ln for ln in built), f"{len(built)} built")
 
+check("census: every PA line kept as the source wrote it has a listed reason (0 unexplained)",
+      comp["action_short_from_full_unexplained"] == 0
+      and sum(comp["action_short_from_full_by_reason"].values()) == comp["action_short_from_full_action"])
+print("     PA kept-whole lines by reason:", comp["action_short_from_full_by_reason"])
+
 got = {"va": hashlib.sha256(json.dumps(va_grid).encode()).hexdigest(),
        "pa": hashlib.sha256(json.dumps(pa_grid).encode()).hexdigest(),
        "pa_short_from_full_action": comp["action_short_from_full_action"]}

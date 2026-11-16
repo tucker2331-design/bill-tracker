@@ -105,4 +105,7 @@ export interface BillData {
   completeness: Completeness | null;
   dataAsOf: Date | null;   // freshest record timestamp
   sessionCode: string;     // derived "20261" — for the LIS bill link
+  // CENSUS (case law #155): rows whose outcome cell is not one the site knows. They are shown as "in progress" (the
+  // site needs a value) but COUNTED, and the count is a Health check, so a new outcome never hides as "in progress".
+  unrecognisedOutcomes: { count: number; examples: string[] };
 }

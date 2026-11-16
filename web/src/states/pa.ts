@@ -54,5 +54,10 @@ export const PA: StateConfig = {
     { key: "schedule_bill_refs_unmatched", label: "Committee agenda entries naming no known bill", limit: 0, cat: "Completeness" },
     { key: "schedule_dates_unreadable", label: "Committee meetings with an unreadable date", limit: 0, cat: "Completeness" },
     { key: "bills_committee_without_roster", label: "Bills whose committee has no published member list", limit: 0, cat: "Completeness" },
+    // CENSUS checks (case law #155): each "unlabelled" bucket holds only what the source leaves unlabelled
+    { key: "action_where_unknown", label: "Bill actions with no chamber", limit: 0, cat: "Completeness" },
+    { key: "action_short_from_full_unexplained", label: "What's new lines kept as PA wrote them, for no listed reason", limit: 0, cat: "Completeness" },
+    { key: "calendar_committee_not_in_roster", label: "Calendar meetings of a House or Senate committee we cannot name", limit: 0, cat: "Completeness" },
+    { key: "calendar_no_bills_not_from_source", label: "Meetings shown with no bills although PA lists some", limit: 0, cat: "Accuracy" },
   ],
 };
