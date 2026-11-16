@@ -8,6 +8,13 @@ status: active
 
 Append-only, reverse-chronological (newest at top). Each entry opens with `## [YYYY-MM-DD] <type> | <title>`.
 
+## [2026-11-16] pr | Sheets rate limit: wait and retry, counted; ticks only from Virginia's Worker
+`sheets_retry.py` — all three jobs (VA bill, VA calendar, PA) wait out a Sheets 429 (5/10/20/40 s) instead of losing
+the write; every retry printed and raised as an INFO alert (WARN if a call still failed). Case law
+[[failures/assumptions_audit]] #160. Also: `worker/ticks.js` offers ticks only when `BILL_TRACKER_STATE` is VA, so a
+token added to the PA Worker by mistake is ignored and reported, never starts Virginia's jobs twice. Owner added
+`GH_DISPATCH_TOKEN` to the VA Worker 2026-11-16.
+
 ## [2026-11-02] pr | Cloudflare offers the workers' ticks (gated like GitHub's cron)
 GitHub delivered the `*/15` cron only every 4-7 h. Cloudflare's existing cron now dispatches both Virginia
 workers with the required input `tick=scheduled`; `cadence.is_scheduled_tick` gates it exactly like the cron

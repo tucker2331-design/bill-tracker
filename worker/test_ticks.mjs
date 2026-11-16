@@ -20,15 +20,18 @@ const ok204 = async (url, init) => { calls.push([url, JSON.parse(init.body).inpu
 const errs = [], logs = [];
 const origErr = console.error, origLog = console.log;
 console.error = (...a) => errs.push(a.join(" ")); console.log = (...a) => logs.push(a.join(" "));
-const none = await offerTicks({}, ok204);
-const good = await offerTicks({ GH_DISPATCH_TOKEN: "T" }, ok204);
-const bad = await offerTicks({ GH_DISPATCH_TOKEN: "T" }, async (url) =>
+const none = await offerTicks({ BILL_TRACKER_STATE: "VA" }, ok204);
+const good = await offerTicks({ BILL_TRACKER_STATE: "VA", GH_DISPATCH_TOKEN: "T" }, ok204);
+const paCalls = calls.length;
+const pa = await offerTicks({ BILL_TRACKER_STATE: "PA", GH_DISPATCH_TOKEN: "T" }, ok204);
+const bad = await offerTicks({ BILL_TRACKER_STATE: "VA", GH_DISPATCH_TOKEN: "T" }, async (url) =>
   url.includes("bill_tracker") ? { status: 422, text: async () => "Workflow does not have 'workflow_dispatch' trigger" } : { status: 204, text: async () => "" });
-const thrown = await offerTicks({ GH_DISPATCH_TOKEN: "T" }, async () => { throw new Error("network down"); });
+const thrown = await offerTicks({ BILL_TRACKER_STATE: "VA", GH_DISPATCH_TOKEN: "T" }, async () => { throw new Error("network down"); });
 console.error = origErr; console.log = origLog;
 
 is("no token -> nothing dispatched, said so", [none.configured, none.dispatched, logs.some((l) => l.includes("not configured"))], [false, [], true]);
 is("token -> both dispatched, each with tick=scheduled", [good.dispatched, calls.map((c) => c[1])], [TICK_WORKFLOWS, ["scheduled", "scheduled"]]);
+is("PA Worker with a token: starts nothing, says the token is misplaced", [pa.dispatched, calls.length === paCalls, errs.some((e) => e.startsWith("ticks_misplaced"))], [[], true, true]);
 is("a 422 is a named failure, the other still dispatched", [bad.dispatched, bad.failed.length, bad.failed[0].startsWith("bill_tracker.yml: HTTP 422")], [["calendar_worker.yml"], 1, true]);
 is("a network error is a named failure for each workflow", thrown.failed.length, 2);
 is("failures are logged, never swallowed", errs.filter((e) => e.startsWith("ticks_failed")).length, 2);
