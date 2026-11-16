@@ -38,6 +38,7 @@ import random
 import datetime
 
 import gspread
+import sheets_retry   # Sheets 429: wait and retry, counted (2026-11-01 lost writes)
 import pytz
 import pandas as pd
 from html.parser import HTMLParser
@@ -151,6 +152,11 @@ def flush_alerts_to_metrics_history(sheet, completeness=None):
             v = completeness.get(k)
             if isinstance(v, int):
                 beat[k] = v
+    if sheets_retry.retries():   # the per-minute Sheets limit was hit and waited out: visible, never silent
+        _gave_up = sheets_retry.exhausted()
+        _alert("WARN" if _gave_up else "INFO", "API_FAILURE",
+               f"Sheets rate limit (429) hit {sheets_retry.retries()} time(s) this cycle; "
+               + (f"{_gave_up} call(s) still failed after every retry." if _gave_up else "every call recovered on retry."))
     rows = [[stamp, "OK", BILL_METRICS_ORIGIN, json.dumps(beat, ensure_ascii=False)]]
     rows += [[stamp, sev, BILL_ALERT_ORIGIN, msg] for sev, msg in _ALERT_BUFFER]
     try:
@@ -1105,7 +1111,7 @@ def write_bill_tracker(records, completeness):
     creds_json = os.environ.get("GCP_CREDENTIALS")
     if not creds_json:
         raise RuntimeError("GCP_CREDENTIALS not set")
-    gc = gspread.authorize(Credentials.from_service_account_info(
+    gc = sheets_retry.authorize(Credentials.from_service_account_info(
         json.loads(creds_json), scopes=["https://www.googleapis.com/auth/spreadsheets"]))
     sheet = gc.open_by_key(SPREADSHEET_ID)
 
@@ -1198,7 +1204,7 @@ def _flush_best_effort(sheet=None, completeness=None):
             creds = os.environ.get("GCP_CREDENTIALS")
             if not creds:
                 return                      # local/dev run with no creds: stdout already carried the alert
-            gc = gspread.authorize(Credentials.from_service_account_info(
+            gc = sheets_retry.authorize(Credentials.from_service_account_info(
                 json.loads(creds), scopes=["https://www.googleapis.com/auth/spreadsheets"]))
             sheet = gc.open_by_key(SPREADSHEET_ID)
         flush_alerts_to_metrics_history(sheet, completeness)
@@ -1364,7 +1370,7 @@ def _cadence_should_run():
         creds_json = os.environ.get("GCP_CREDENTIALS")
         if not creds_json:
             return True   # no creds here == a local/dev invocation; let the normal path handle auth
-        gc = gspread.authorize(Credentials.from_service_account_info(
+        gc = sheets_retry.authorize(Credentials.from_service_account_info(
             json.loads(creds_json), scopes=["https://www.googleapis.com/auth/spreadsheets"]))
         sheet = gc.open_by_key(SPREADSHEET_ID)
         raw_state = sheet.worksheet("Sheet1").acell(cadence.CADENCE_STATE_CELL).value

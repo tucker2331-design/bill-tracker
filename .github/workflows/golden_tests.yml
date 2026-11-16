@@ -17,6 +17,7 @@ on:
       - 'pa_bill_tracker.py'
       - 'bill_rows.py'
       - 'cadence.py'
+      - 'sheets_retry.py'
       - 'lis_authorization.py'
       - 'structural_router.py'
       - 'tools/session_archive/**'
@@ -33,6 +34,7 @@ on:
       - 'pa_bill_tracker.py'
       - 'bill_rows.py'
       - 'cadence.py'
+      - 'sheets_retry.py'
       - 'lis_authorization.py'
       - 'structural_router.py'
       - 'tools/session_archive/**'
@@ -68,6 +70,7 @@ jobs:
             test_clean_legevent_cell.py \
             test_meeting_links.py \
             cadence_test.py \
+            test_sheets_retry.py \
             lis_authorization_test.py \
             session_rollover_test.py \
             health_gap_test.py \

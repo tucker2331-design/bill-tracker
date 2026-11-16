@@ -85,10 +85,8 @@ status: active
 - Also open (owner-triggered): `/code-review ultra`. ~~co-patrons backfill~~ — superseded, see above.
 
 ## READY
-- **🕒 Jobs: Sheets 429 + dropped GitHub ticks (found 2026-11-02, [[log]]):** (1) the bill job's 2026-11-01 22:24 UTC
-  cycle lost Action_Where, Bill_Summaries and its own heartbeat to a Sheets read-quota 429 while the calendar worker
-  ran in the same minute — retry on 429 and keep the heartbeat/alerts on any write failure, so a failure is never
-  invisible to Health. (2) GitHub delivered the `*/15` cron only every 4-7 h (none 08:15→17:30 UTC on 11-02) —
+- **🕒 Jobs: dropped GitHub ticks (found 2026-11-02, [[log]]):** (1) Sheets 429 — DONE 2026-11-16 (`sheets_retry`,
+  case law #160). (2) GitHub delivered the `*/15` cron only every 4-7 h (none 08:15→17:30 UTC on 11-02) —
   a Cloudflare cron tick (gated like the cron) is built — PR "Cloudflare offers the workers' ticks"; live once
   the owner adds the `GH_DISPATCH_TOKEN` Worker secret ([[knowledge/lis_api_safety]]).
   (3) Owner decision pending: clients see a one-line "last checked with LIS" status, the full Health stays ours

@@ -152,12 +152,14 @@ def main(argv):
     if not sid or not creds:
         print("::error::PA_SPREADSHEET_ID and GCP_CREDENTIALS must both be set to write; nothing was written")
         return 1
-    import gspread
+    import sheets_retry   # Sheets 429: wait and retry, counted
     from google.oauth2.service_account import Credentials
-    gc = gspread.authorize(Credentials.from_service_account_info(
+    gc = sheets_retry.authorize(Credentials.from_service_account_info(
         json.loads(creds), scopes=["https://www.googleapis.com/auth/spreadsheets"]))
     write(records, comp, gc.open_by_key(sid), roster, calendar, where_grid)
     print(f"wrote {len(records)} PA records to {TAB} (sheet {sid[:6]}…)")
+    if sheets_retry.retries():   # visible, never silent: the limit was hit and waited out
+        print(f"::notice::Sheets rate limit hit {sheets_retry.retries()} time(s) this run; every call recovered on retry")
     return 0
 
 

@@ -7,6 +7,7 @@ import threading
 import hashlib
 import requests
 import gspread
+import sheets_retry   # Sheets 429: wait and retry, counted (2026-11-01 lost writes)
 import pandas as pd
 import re
 import io
@@ -4581,7 +4582,7 @@ def session_follow_gate(active_code, http_session, worksheet=None):
         creds = os.environ.get("GCP_CREDENTIALS")
         if not creds:
             return None
-        gc = gspread.authorize(Credentials.from_service_account_info(
+        gc = sheets_retry.authorize(Credentials.from_service_account_info(
             json.loads(creds), scopes=["https://www.googleapis.com/auth/spreadsheets"]))
         return gc.open_by_key(SPREADSHEET_ID).worksheet("Sheet1")
 
@@ -5223,7 +5224,7 @@ def run_calendar_update():
         try:
             _creds = os.environ.get("GCP_CREDENTIALS")
             if _creds:
-                _gc = gspread.authorize(Credentials.from_service_account_info(
+                _gc = sheets_retry.authorize(Credentials.from_service_account_info(
                     json.loads(_creds), scopes=["https://www.googleapis.com/auth/spreadsheets"]))
                 _gc.open_by_key(SPREADSHEET_ID).worksheet("Sheet1").update_acell("X1", _halt[:4500])
         except Exception as _e:
@@ -5280,7 +5281,7 @@ def run_calendar_update():
     creds_json = os.environ.get("GCP_CREDENTIALS")
     if not creds_json: sys.exit(1)
         
-    gc = gspread.authorize(Credentials.from_service_account_info(json.loads(creds_json), scopes=["https://www.googleapis.com/auth/spreadsheets"]))
+    gc = sheets_retry.authorize(Credentials.from_service_account_info(json.loads(creds_json), scopes=["https://www.googleapis.com/auth/spreadsheets"]))
     # PR-C7.1s (stress-test fix): retry the workbook open. A transient Google
     # Sheets 503 here fails the ENTIRE cycle (observed 2026-06-04) — the cron
     # recovers next run, but a short backoff avoids the gap and the false alarm.
@@ -7943,6 +7944,15 @@ def run_calendar_update():
     except Exception as _metrics_err:
         print(f"⚠️ Failed to emit source-miss metrics row: {_metrics_err}")
 
+    # Sheets per-minute limit (429) waited out by sheets_retry this cycle: visible on Health, never silent.
+    if sheets_retry.retries():
+        _gave_up = sheets_retry.exhausted()
+        push_system_alert(
+            f"Sheets rate limit (429) hit {sheets_retry.retries()} time(s) this cycle; "
+            + (f"{_gave_up} call(s) still failed after every retry." if _gave_up else "every call recovered on retry."),
+            status="WARN" if _gave_up else "INFO",   # Health reads the Status cell first (Codex #271)
+            category="API_FAILURE", severity="WARN" if _gave_up else "INFO", dedup_key="sheets_429")
+
     # Health-observability: mirror THIS cycle's SYSTEM rows into the append-only Metrics_History
     # tab (alert HISTORY + metric TRENDS — see _ensure_metrics_history_tab). Built from `alert_rows`
     # (which holds exactly this cycle's SYSTEM_ALERT + SYSTEM_METRICS dicts) and placed BEFORE the
@@ -8738,7 +8748,7 @@ if __name__ == "__main__":
                 # No creds (local/dev run) — can't read AC1; fail OPEN, run.mirrors bill_tracker (Gemini #198).
                 print("⏱️ Cadence gate: GCP_CREDENTIALS unset — cannot read AC1; running this cycle.")
             else:
-                _cad_gc = gspread.authorize(Credentials.from_service_account_info(
+                _cad_gc = sheets_retry.authorize(Credentials.from_service_account_info(
                     json.loads(_cad_creds),
                     scopes=["https://www.googleapis.com/auth/spreadsheets"]))
                 _raw_cadence = _cad_gc.open_by_key(SPREADSHEET_ID).worksheet("Sheet1").acell(

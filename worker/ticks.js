@@ -39,7 +39,16 @@ export function dispatchRequest(workflow, token, ref = "main") {
   };
 }
 
+// The ticks start VIRGINIA's two jobs, so only Virginia's Worker offers them. Pennsylvania's Worker runs this same
+// code on its own cron (wrangler.pa.toml); a token added there by mistake must not start Virginia's jobs twice.
+// Read from the Worker's own BILL_TRACKER_STATE var (wrangler.toml "VA", wrangler.pa.toml "PA") -- config, not a guess.
+export const TICK_STATE = "VA";
+
 export async function offerTicks(env, fetchFn = fetch) {
+  if (env.BILL_TRACKER_STATE !== TICK_STATE) {
+    if (env.GH_DISPATCH_TOKEN) console.error(`ticks_misplaced: GH_DISPATCH_TOKEN is set on the ${env.BILL_TRACKER_STATE || "unknown-state"} Worker; it is ignored -- only the ${TICK_STATE} Worker starts Virginia's jobs. Remove it.`);
+    return { dispatched: [], failed: [], configured: false };
+  }
   if (!env.GH_DISPATCH_TOKEN) {
     console.log("ticks: GH_DISPATCH_TOKEN not configured -- no dispatch (GitHub's own cron still runs)");
     return { dispatched: [], failed: [], configured: false };
