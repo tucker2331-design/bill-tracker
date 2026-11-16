@@ -158,7 +158,10 @@ def slow_skip(now_utc: datetime.datetime, last_checked: str, hours: int) -> bool
         return False
     if last.tzinfo is None:
         return False
-    return (now_utc - last).total_seconds() < hours * 3600
+    elapsed = (now_utc - last).total_seconds()
+    # a stamp in the FUTURE (bad clock / corrupt marker) -> run, so the job republishes a good one (Codex #273),
+    # the same rule as cadence.should_run's future-marker handling
+    return 0 <= elapsed < hours * 3600
 
 
 def _slow_gate() -> bool:

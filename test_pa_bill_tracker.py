@@ -124,7 +124,7 @@ check("pipeline column: every bill has a stage; 388 parked (359 floor 1st, 29 fl
       and sum(p["parked"] and p["stage"] == "floor1" for p in pipe) == 359)
 check("nothing written for Virginia (no VA sheet id read)", "SPREADSHEET_ID" not in J.__dict__)
 _now = __import__("datetime").datetime(2026, 11, 16, 18, 0, tzinfo=__import__("datetime").timezone.utc)
-check("speed switch (slow): skip when published under 6 h ago, run when older, run when the stamp is unreadable",
-      (J.slow_skip(_now, "2026-11-16T15:00:00Z", 6), J.slow_skip(_now, "2026-11-16T11:00:00Z", 6), J.slow_skip(_now, "garbage", 6))
-      == (True, False, False))
+check("speed switch (slow): skip when published under 6 h ago; run when older, unreadable, or in the future",
+      (J.slow_skip(_now, "2026-11-16T15:00:00Z", 6), J.slow_skip(_now, "2026-11-16T11:00:00Z", 6), J.slow_skip(_now, "garbage", 6),
+       J.slow_skip(_now, "2026-11-17T09:00:00Z", 6)) == (True, False, False, False))
 sys.exit(1 if FAILS else 0)
