@@ -91,9 +91,6 @@ status: active
   the owner adds the `GH_DISPATCH_TOKEN` Worker secret ([[knowledge/lis_api_safety]]).
   (3) Owner decision pending: clients see a one-line "last checked with LIS" status, the full Health stays ours
   ([[design/health_operator_tab]] §4 says operator-only; the gate was never built).
-- **🚇 Move Virginia onto the chamber subway** ([[architecture/multi_state_config]]): PA's map is live on the shared
-  component; Virginia still draws its own. Settings: crossover deadline, tabled = ended; add parked/idle with an idle
-  threshold counted against the session calendar. Owner direction 2026-11-02: one map, state differences as settings.
 - **🧮 CENSUS GUARDS — fix list (owner 2026-11-01, after [[failures/assumptions_audit|#155]]):** every "unlabelled"
   bucket on the site must be proven to hold ONLY rows the source leaves unlabelled — a census of the source's own
   forms on the raw input, asserted equal to the output buckets, and shown on Health. Done: What's new "No chamber"
@@ -118,6 +115,10 @@ status: active
 - [[knowledge/campaign_finance_ingest]] — the ELECT committee->legislator join resolves only 54 of 158 sitting patrons; needs a join on committee identity, not the free-text office field.
 
 ## RECENTLY LANDED (newest first; full detail in [[log]])
+- **2026-11-16 — Sheets retry + Virginia on the chamber subway.** All three jobs wait out a Sheets 429 instead of
+  losing the write (#271, case law #160); ticks only from Virginia's Worker. Virginia's map is now the shared chamber
+  subway: ended = dead (incl. tabled), parked = carried over, idle 31 d (measured), Crossover label
+  ([[architecture/multi_state_config]]).
 - **2026-11-01 — PA War Room + PA Calendar** (#258, #259). War Room without vote predictions, with committee rosters
   from PA's own bulk RSS (0 of 5,184 bills unmatched); Calendar from the schedule RSS + 214 past session days from the
   export's floor actions. Why the 7 meetings list no bills: hearings, agencies and unannounced slots in the lull
@@ -125,7 +126,6 @@ status: active
 - **2026-10-31 — Pennsylvania intake + DOCKET fix.** PA export → the bill contract with PA's own stages (no crossover), goldens on a real sample ([[knowledge/pa_bill_history_xml]]); VA bills now carry their upcoming meetings ([[failures/assumptions_audit|#152]]).
 - **2026-10-31 — Multi-state split (Standard #6)** — every VA assumption in the bill pipeline and the SPA now lives in `states/va.py` / `web/src/states/va.ts`; goldens prove VA output byte-identical on 3,645 real 2026 bills ([[architecture/multi_state_config]]). The DOCKET bug it surfaced is fixed: 0 → 1,162 bills with upcoming meetings on the frozen-clock replay ([[failures/assumptions_audit|#152]]).
 - **2026-10-31 — War Room bill page built** (`/war-room/<bill>`, [[ideas/war_room_scoping]]); the bill card is LIS facts only again; the masthead's "Tracking 3,645 / 3,645" was the completeness count mislabelled — fixed ([[failures/assumptions_audit|#151]]).
-- **2026-10-29 — THE RUN: app stack merged, Health unblocked, War Room calls SERVED, v9 redesign.** Merged #246 (ledger seeded; first drill read back), #238-#244 (private app + team positions + contact log + Slack alerts), #247/#248 (trust-surface guard), #245, #249. War Room calls: frozen arm C on venue-fixed rows, 2026 replay — **22,163 ballots, 14,092 called, 13,393 right, 8,071 can't call** (frozen expectation 14,096 / 13,386: a 4-call drift, stamped `matches_frozen: false`). Redesign: dark v9 theme, the subway, the War Room list, Health rebuilt. Case law #147-#150.
 
 ## Watch items
 - **⏰ 2027 SESSION OPEN → activate the gated build-wave features.** When the worker detects the 2027 regular

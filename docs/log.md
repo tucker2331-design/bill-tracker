@@ -8,6 +8,13 @@ status: active
 
 Append-only, reverse-chronological (newest at top). Each entry opens with `## [YYYY-MM-DD] <type> | <title>`.
 
+## [2026-11-16] pr | Virginia moves onto the chamber subway (one map, state settings)
+Virginia's own v9 drawing retired; `ChamberSubway` draws both states from `STATE.pipelineMap`. New settings:
+ended/parked outcomes, stage source, swap label, words. VA: ended = "dead" (incl. tabled), parked = carried over,
+idle 31 d (measured: p99 of the longest quiet gap among 2026 bills that reached the Governor), Crossover label.
+Ended bills now leave the station count (✕ only) for both states; resolutions counted under the map, not dropped.
+[[architecture/multi_state_config]].
+
 ## [2026-11-16] pr | Sheets rate limit: wait and retry, counted; ticks only from Virginia's Worker
 `sheets_retry.py` — all three jobs (VA bill, VA calendar, PA) wait out a Sheets 429 (5/10/20/40 s) instead of losing
 the write; every retry printed and raised as an INFO alert (WARN if a call still failed). Case law

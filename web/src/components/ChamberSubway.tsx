@@ -4,7 +4,7 @@
 // chamber's track for that state's second-chamber stages (and back, for a stage held in the first chamber again —
 // PA's concurrence); the lines meet at the Governor, which forks into the outcomes the source carries.
 // Counts: bills sitting at a station; under it, the ones parked / idle there; "✕ N" in red = ended there.
-// A deadline line is drawn only for a state that has one (none here: Virginia still draws its own map for now).
+// The first track change is labelled by the state (VA "Crossover", its deadline; PA "to the other chamber").
 import type { PipelineCounts, PipelineSettings } from "../data/pipeline_rules";
 import { trackOf } from "../data/pipeline_rules";
 
@@ -48,7 +48,7 @@ export function ChamberSubway({ s, c, labels, hit }: {
         {swaps.map((x, i) => (
           <g key={x}>
             <line x1={x} x2={x} y1="62" y2="352" stroke="var(--line-strong)" strokeDasharray="4 5" />
-            <text x={x} y="368" className="sw-th" textAnchor="middle">{i === 0 ? "to the other chamber" : "back to the first chamber"}</text>
+            <text x={x} y="368" className="sw-th" textAnchor="middle">{i === 0 ? s.swapLabel : "back to the first chamber"}</text>
           </g>
         ))}
         <text x="24" y={Y.Senate - 50} className="sw-th">Senate</text>
@@ -71,14 +71,14 @@ export function ChamberSubway({ s, c, labels, hit }: {
                     {...hit(`at|${k}`, still, `${where} · here now`)}>{n(still)}</text>
                   {(parked > 0 || idle > 0) && (
                     <text x={xs[i]} y={up ? y - 48 : y + 58} textAnchor="middle" className="sw-l">
-                      {parked > 0 && <tspan {...hit(`sub|${k}|parked`, parked, `${where} · parked`)}>{n(parked)} parked</tspan>}
+                      {parked > 0 && <tspan {...hit(`sub|${k}|parked`, parked, `${where} · ${s.parkedWord}`)}>{n(parked)} {s.parkedWord}</tspan>}
                       {parked > 0 && idle > 0 && " · "}
                       {idle > 0 && <tspan {...hit(`sub|${k}|idle`, idle, `${where} · idle`)}>{n(idle)} idle</tspan>}
                     </text>
                   )}
                   {ended > 0 && <>
                     <line x1={xs[i]} y1={y} x2={xs[i] + 20} y2={y + dy} stroke="var(--red)" strokeOpacity=".7" strokeWidth="3" strokeLinecap="round" />
-                    <text x={xs[i] + 26} y={y + dy + (up ? 10 : 0)} className="sw-e" {...hit(`sub|${k}|ended`, ended, `${where} · ended`)}>✕ {n(ended)}</text>
+                    <text x={xs[i] + 26} y={y + dy + (up ? 10 : 0)} className="sw-e" {...hit(`sub|${k}|ended`, ended, `${where} · ${s.endedWord}`)}>✕ {n(ended)}</text>
                   </>}
                 </g>
               );
@@ -100,9 +100,12 @@ export function ChamberSubway({ s, c, labels, hit }: {
             </g>
           );
         })}
-        <text x="20" y="400" className="sw-l">Ended along the line:</text>
-        <text x="152" y="400" className="sw-e">{n(c.totals.ended)} defeated</text>
-        <text x="250" y="400" className="sw-l">· Stopped, may return: {n(c.totals.parked)} parked · {n(c.totals.idle)} idle {s.idleDays >= 365 ? "1 yr+" : `${s.idleDays} d+`}</text>
+        <text x="20" y="400" className="sw-l">Ended along the line:
+          <tspan className="sw-e" dx="6" {...hit("tot|ended", c.totals.ended, `All ${s.endedWord}`)}>{n(c.totals.ended)} {s.endedWord}</tspan>
+          <tspan dx="6">· Stopped, may return: </tspan>
+          <tspan {...hit("tot|parked", c.totals.parked, `All ${s.parkedWord}`)}>{n(c.totals.parked)} {s.parkedWord}</tspan>
+          <tspan> · </tspan>
+          <tspan {...hit("tot|idle", c.totals.idle, "All idle")}>{n(c.totals.idle)} idle {s.idleDays >= 365 ? "1 yr+" : `${s.idleDays} d+`}</tspan></text>
         <line x1={W - 400} x2={W - 370} y1="396" y2="396" stroke={LINE.Senate} strokeWidth="5" />
         <text x={W - 362} y="400" className="sw-l">started in the Senate</text>
         <line x1={W - 200} x2={W - 170} y1="396" y2="396" stroke={LINE.House} strokeWidth="5" />

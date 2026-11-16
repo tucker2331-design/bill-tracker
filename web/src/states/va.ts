@@ -32,7 +32,24 @@ export const VA: StateConfig = {
   features: { calendar: true, timeline: true, warroom: true, predictions: true, committeeRoster: false, summaries: true, health: "full" },
   calendarNote: "",
   jobDaysUTC: [],
-  pipelineMap: null,
+  // The chamber subway (owner 2026-11-02: one map, state differences as settings). Stage derived from LIS's own floor
+  // and crossover fields (data/derive.ts furthestStage). Ended = outcome "dead": LIS's Failed flag, or a status of
+  // tabled / left in committee / passed by indefinitely (states/va.py outcome_vocab); parked = carried over. Idle = no action for 31 days: in 2026,
+  // 99 in 100 bills that went on to reach the Governor never sat quiet that long (median longest gap 15 d, max 40 d;
+  // measured on tools/historical_cache/va/20261/HISTORY.CSV, 1,123 HB/SB). Resolutions are not drawn (counted).
+  pipelineMap: {
+    stations: ["prefiled", "committee1", "floor1", "committee2", "floor2"],
+    otherChamber: ["committee2", "floor2"],
+    mapBills: /^[HS]B\d/,
+    idleDays: 31,
+    governorOutcomes: ["signed", "awaiting_governor", "vetoed"],
+    endedOutcomes: ["dead"],
+    parkedOutcomes: ["carried_over"],
+    stageSource: "derived",
+    swapLabel: "Crossover",
+    endedWord: "died",
+    parkedWord: "carried over",
+  },
   actionCodePrefix: /^[HS] /,
   intakeChecks: [],
 };

@@ -38,6 +38,12 @@ export const PA: StateConfig = {
     mapBills: /^[HS]B\d/,
     idleDays: 365,
     governorOutcomes: ["signed", "awaiting_governor"],
+    endedOutcomes: [],
+    parkedOutcomes: [],
+    stageSource: "pipeline",
+    swapLabel: "to the other chamber",
+    endedWord: "defeated",
+    parkedWord: "parked",
   },   // pa_bill_tracker.yml: cron "23 * * * 1-5" (hourly, weekdays, UTC)
   // PA publishes no feed of FUTURE session days (2026-11-01), so a session day is shown once the export records it.
   calendarNote: "Committee meetings come from the PA General Assembly's committee schedules. Session days are shown "

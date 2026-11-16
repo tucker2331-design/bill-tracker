@@ -19,7 +19,15 @@ is("PA's calendar says future session days are not published; VA has no note",
 is("PA's subway: concurrence back on the first chamber; resolutions not drawn; law and waiting at the Governor",
    [PA.pipelineMap.otherChamber, PA.pipelineMap.mapBills.test("HB20"), PA.pipelineMap.mapBills.test("HR1"), PA.pipelineMap.governorOutcomes],
    [["committee2", "floor2"], true, false, ["signed", "awaiting_governor"]]);
-is("VA still draws its own map (no pipeline settings yet)", VA.pipelineMap, null);
+is("one map, two settings: PA vs VA words, sources and the first track change",
+   [PA.pipelineMap.stageSource, VA.pipelineMap.stageSource, PA.pipelineMap.swapLabel, VA.pipelineMap.swapLabel,
+    PA.pipelineMap.endedWord, VA.pipelineMap.endedWord, PA.pipelineMap.parkedWord, VA.pipelineMap.parkedWord],
+   ["pipeline", "derived", "to the other chamber", "Crossover", "defeated", "died", "parked", "carried over"]);
+is("VA: dead ends a bill, carried over parks it, the Governor forks three ways, idle after 31 days (measured)",
+   [VA.pipelineMap.endedOutcomes, VA.pipelineMap.parkedOutcomes, VA.pipelineMap.governorOutcomes, VA.pipelineMap.idleDays],
+   [["dead"], ["carried_over"], ["signed", "awaiting_governor", "vetoed"], 31]);
+is("VA stations are its derived stages, second chamber on the other track",
+   [VA.pipelineMap.stations, VA.pipelineMap.otherChamber], [["prefiled", "committee1", "floor1", "committee2", "floor2"], ["committee2", "floor2"]]);
 is("PA has no crossover stage or dates", [PA.stages.some((s) => s.id === "crossover"), PA.crossoverBySession], [false, {}]);
 is("PA two-year session", PA.sessionYears, 2);
 is("PA links no per-bill page (robots-protected, unverified)", PA.billUrl("2025_0", "HB17"), "");

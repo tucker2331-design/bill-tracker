@@ -1,32 +1,20 @@
 import { useMemo, useState } from "react";
-import type { Bill, Chamber } from "../data/types";
-import { deriveStage, furthestStage, stageSide, STAGE_ORDER, type Stage } from "../data/derive";
+import type { Bill } from "../data/types";
+import { furthestStage } from "../data/derive";
 import { BillBox } from "../components/BillBox";
 import { isCeremonial, splitByClass, ceremonialLabel } from "../data/billclass";
 import { STATE } from "../states";
 import { countPipeline } from "../data/pipeline_rules";
 import { ChamberSubway } from "../components/ChamberSubway";
 
-// The pipeline (vision §3b), drawn as the SUBWAY (owner-approved v9, 2026-10-27). The counting is unchanged from
-// the spine it replaces: still-here per stage per side, "✕ ended here" per stage per side, and the outcome fork.
-// Death is shown WHERE it happened, and every count opens the same grouped bill list.
-// The spine's SHORT display labels, over the single-sourced STAGE_ORDER (CodeRabbit #191: the order must
-// never fork from derive.ts — only the compact wording is local to this view).
-const SPINE_LABEL: Record<Stage, string> = {
-  prefiled: "Prefiled", committee1: "Committee", floor1: "Floor",
-  committee2: "Committee · 2nd", floor2: "Floor · 2nd", governor: "To Governor", died: "Died",
-};
-const COLUMNS: { stage: Stage; label: string }[] = STAGE_ORDER.map((s) => ({ stage: s, label: SPINE_LABEL[s] }));
-
-// Stage of death for a dead/carried bill: the last stage it structurally reached — now the SAME
-// furthestStage() the live pipeline uses (origin/second floor via passedHouse/passedSenate), so a ✕ lands
-// at the true stage (e.g. a bill that cleared its origin floor then died crossing shows ✕ at Floor, not
-// Committee). deriveStage collapses all deaths into "died"; this recovers WHERE.
-const lastReached = (b: Bill): Stage => furthestStage(b);
-type OutKind = "signed" | "awaiting" | "vetoed" | "carried" | "dead";
-
-// A state with pipeline settings draws the chamber subway (components/ChamberSubway.tsx); Virginia still draws its own.
+// The pipeline (vision §3b), drawn as the chamber subway: ONE map for every state, each state supplying settings
+// (owner 2026-11-02; Virginia moved onto it 2026-11-16 -- its own v9 drawing retired). Two lines, one per chamber a
+// bill started in, swapping tracks for the second chamber and meeting at the Governor. Every count opens the same
+// grouped bill list. Rules: data/pipeline_rules.ts; drawing: components/ChamberSubway.tsx.
 const PIPE = STATE.pipelineMap;
+// Where a bill's stage comes from is a state setting: PA's job writes it; Virginia derives it from LIS's own floor
+// and crossover fields (data/derive.ts furthestStage -- the same rule its old map used).
+const stageOf = PIPE?.stageSource === "derived" ? (b: Bill) => furthestStage(b) : (b: Bill) => b.pipeline?.stage;
 const STAGE_LABEL: Record<string, string> = Object.fromEntries(STATE.stages.map((x) => [x.id, x.label]));
 // stations that share a label ("Committee" twice) get "· 1st" / "· 2nd" so the two columns read apart
 const PIPE_LABELS: Record<string, string> = PIPE ? Object.fromEntries(PIPE.stations.map((st) => {
@@ -34,56 +22,24 @@ const PIPE_LABELS: Record<string, string> = PIPE ? Object.fromEntries(PIPE.stati
   return [st, dup.length > 1 ? `${lab} · ${dup.indexOf(st) === 0 ? "1st" : "2nd"}` : lab];
 })) : {};
 const PIPE_ALL_LABELS: Record<string, string> = { ...PIPE_LABELS, governor: STAGE_LABEL.governor ?? "Governor", law: STAGE_LABEL.law ?? "Law" };
+const OUT_DRILL: Record<string, string> = { awaiting_governor: "Waiting for the Governor", vetoed: "Vetoed by the Governor" };
 
 function pipeDrillLabel(key: string): string {
   const p = key.split("|");
-  if (p[0] === "out") return p[1] === "signed" ? PIPE_ALL_LABELS.law : p[1] === "awaiting_governor" ? "Waiting for the Governor" : p[1];
+  if (p[0] === "out") return p[1] === "signed" ? PIPE_ALL_LABELS.law : OUT_DRILL[p[1]] ?? p[1];
+  if (p[0] === "tot") return p[1] === "ended" ? `All ${PIPE?.endedWord}` : p[1] === "parked" ? `All ${PIPE?.parkedWord}` : "All idle";
+  const sub = p[3] === "ended" ? PIPE?.endedWord : p[3] === "parked" ? PIPE?.parkedWord : p[3];
   const where = `${p[2]} · ${PIPE_ALL_LABELS[p[1]] ?? p[1]}`;
-  return p[0] === "at" ? `${where} · here now` : `${where} · ${p[3]}`;
+  return p[0] === "at" ? `${where} · here now` : `${where} · ${sub}`;
 }
 
 export function Timeline({ bills, onOpen }: { bills: Bill[]; onOpen: (b: Bill) => void }) {
-  const pipe = useMemo(() => PIPE ? countPipeline(bills, PIPE, STATE.chambers, new Date()) : null, [bills]);
-  const { alive, stranded, outcome, cellBills: vaCells } = useMemo(() => {
-    const alive: Record<string, number> = {};      // "stage|side" -> advancing count
-    const stranded: Record<string, number> = {};   // "stage|side" -> died/carried AT that stage
-    const outcome: Record<OutKind, number> = { signed: 0, awaiting: 0, vetoed: 0, carried: 0, dead: 0 };
-    const cellBills = new Map<string, Bill[]>();    // drill key -> bills
-    const push = (k: string, b: Bill) => (cellBills.get(k) ?? cellBills.set(k, []).get(k)!).push(b);
-    for (const b of bills) {
-      const cell = deriveStage(b);
-      const side = cell.side;
-      if (cell.stage === "died") {
-        // Lane from the DEATH stage (stageSide), not b.chamber — a crossed-then-returned bill would
-        // otherwise key an impossible cell like committee2|origin (Qodo #191).
-        const ds = lastReached(b);
-        const kk = `${ds}|${stageSide(b, ds)}`;
-        stranded[kk] = (stranded[kk] || 0) + 1;
-        push(`stranded|${kk}`, b);
-        // ALSO tally the terminal END-STATE so the Outcome fork shows the full branching tail (carried over /
-        // died) alongside the governor outcomes — the aggregate the old died-row tiles carried, now integrated
-        // into the spine's terminal fork (owner 2026-07-02). The per-stage ✕N above still shows WHERE it died.
-        const term: OutKind = b.outcome === "carried_over" ? "carried" : "dead";
-        outcome[term] += 1;
-        push(`out|${term}`, b);
-      } else if (cell.stage === "governor") {
-        const oc: OutKind = b.outcome === "signed" ? "signed" : b.outcome === "vetoed" ? "vetoed" : "awaiting";
-        outcome[oc] += 1;
-        push(`out|${oc}`, b);
-      } else {
-        const kk = `${cell.stage}|${side}`;
-        alive[kk] = (alive[kk] || 0) + 1;
-        push(`alive|${kk}`, b);
-      }
-    }
-    return { alive, stranded, outcome, cellBills };
-  }, [bills]);
-  // the drill lists: the chamber subway's keys map to bill ids; Virginia's map keeps its own
+  const pipe = useMemo(() => PIPE ? countPipeline(bills, PIPE, STATE.chambers, new Date(), stageOf) : null, [bills]);
+  // the drill lists: the subway's keys map to bill ids
   const cellBills = useMemo(() => {
-    if (!pipe) return vaCells;
     const byId = new Map(bills.map((b) => [b.bill, b]));
-    return new Map([...pipe.keys].map(([k, ids]) => [k, ids.map((id) => byId.get(id)!).filter(Boolean)]));
-  }, [pipe, vaCells, bills]);
+    return new Map([...(pipe?.keys ?? new Map<string, string[]>())].map(([k, ids]) => [k, ids.map((id) => byId.get(id)!).filter(Boolean)]));
+  }, [pipe, bills]);
 
   const [drill, setDrill] = useState<string | null>(null);
   // Sort the drilled bills the way the rest of the app groups them (owner 2026-06-30): by chamber, then by
@@ -129,18 +85,19 @@ export function Timeline({ bills, onOpen }: { bills: Bill[]; onOpen: (b: Bill) =
   return (
     <div>
       <div className="subway" aria-label="Where every bill stands">
-        {PIPE && pipe ? <ChamberSubway s={PIPE} c={pipe} labels={PIPE_ALL_LABELS} hit={hit} /> : (
-        <svg viewBox="0 0 1060 410" role="img" aria-label="Pipeline: two lines, one per starting chamber, that swap tracks at crossover and meet at the Governor">
-          <SubwayMap alive={alive} stranded={stranded} outcome={outcome} hit={hit} />
-        </svg>)}
+        {PIPE && pipe ? <ChamberSubway s={PIPE} c={pipe} labels={PIPE_ALL_LABELS} hit={hit} />
+          : <p className="center-msg">{STATE.name} has no pipeline map settings yet.</p>}
       </div>
       {pipe && pipe.skipped > 0 && (
-        <p className="muted" style={{ marginTop: "var(--s2)" }}>{pipe.skipped.toLocaleString()} bills carry no pipeline stage this cycle and are not drawn.</p>
+        <p className="muted" style={{ marginTop: "var(--s2)" }}>{pipe.skipped.toLocaleString()} bills have no place on the map this cycle (no stage, or an outcome the map does not draw) and are not drawn.</p>
+      )}
+      {pipe && pipe.notDrawn > 0 && (
+        <p className="muted" style={{ marginTop: "var(--s2)" }}>{pipe.notDrawn.toLocaleString()} resolutions are not drawn: they are settled in one chamber or never go to the Governor.</p>
       )}
       {drill && (
         <div style={{ marginTop: "var(--s5)" }}>
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "var(--s2)" }}>
-            <h3 className="h" style={{ margin: 0 }}>{PIPE ? pipeDrillLabel(drill) : drillLabel(drill)} — {drillBills.length} bill(s)</h3>
+            <h3 className="h" style={{ margin: 0 }}>{pipeDrillLabel(drill)} — {drillBills.length} bill(s)</h3>
             <button type="button" className="filters" style={{ boxShadow: "none", background: "transparent" }} onClick={() => setDrill(null)}>✕ clear</button>
           </div>
           {(() => { let shown = 0; return drillGroups.map((g) => {
@@ -170,89 +127,4 @@ export function Timeline({ bills, onOpen }: { bills: Bill[]; onOpen: (b: Bill) =
       )}
     </div>
   );
-}
-
-// ── The subway (v9, owner-approved 2026-10-27; built on real data 2026-10-29) ────────────────────────────────────
-// Two LINES, one per chamber a bill STARTED in. Before crossover each runs on its own chamber's track; at crossover
-// they swap tracks (a House bill is heard on the Senate side afterwards — the Timeline's "side" semantics, so every
-// station count is exactly the old spine's alive[stage|side]). "✕ N" branches off a station = bills that ENDED there
-// (died or carried over). The lines meet at the Governor, which forks into signed / awaiting / vetoed.
-// Colour: the two lines are greys (they only need telling apart); colour is reserved for standing meanings —
-// red = ended / vetoed, amber = carried over, accent = awaiting, near-white = signed. Geometry from the mockup.
-const SX: Partial<Record<Stage, number>> = { prefiled: 90, committee1: 230, floor1: 370, committee2: 570, floor2: 710 };
-const Y_SENATE = 140, Y_HOUSE = 280, GX = 840, GY = 210;
-const LINE_SENATE = "#C9D0D4", LINE_HOUSE = "#6E787E";   // the Senate-started and House-started lines
-const OUT_COLOR: Record<"signed" | "awaiting" | "vetoed", string> = { signed: "var(--o-signed)", awaiting: "var(--accent)", vetoed: "var(--red)" };
-type Hit = (k: string, n: number, label: string) => Record<string, unknown>;
-
-function SubwayMap({ alive, stranded, outcome, hit }: {
-  alive: Record<string, number>; stranded: Record<string, number>; outcome: Record<OutKind, number>; hit: Hit;
-}) {
-  const n = (v: number) => v.toLocaleString();
-  const stations = COLUMNS.filter((c) => c.stage !== "governor");
-  return (
-    <g className="sw">
-      <line x1="470" x2="470" y1="52" y2="352" stroke="var(--line-strong)" strokeDasharray="4 5" />
-      <text x="470" y="368" className="sw-th" textAnchor="middle">Crossover</text>
-      <text x="24" y={Y_SENATE - 50} className="sw-th">Senate</text>
-      <text x="24" y={Y_HOUSE + 66} className="sw-th">House</text>
-      {/* the Senate-started line: Senate track, swaps to the House track at crossover, ends at the Governor */}
-      <path d={`M20 ${Y_SENATE} H410 C470 ${Y_SENATE} 470 ${Y_HOUSE} 530 ${Y_HOUSE} H760 C805 ${Y_HOUSE} 805 ${GY} ${GX} ${GY}`}
-        fill="none" stroke={LINE_SENATE} strokeWidth="6" strokeLinecap="round" />
-      <path d={`M20 ${Y_HOUSE} H410 C470 ${Y_HOUSE} 470 ${Y_SENATE} 530 ${Y_SENATE} H760 C805 ${Y_SENATE} 805 ${GY} ${GX} ${GY}`}
-        fill="none" stroke={LINE_HOUSE} strokeWidth="6" strokeLinecap="round" />
-      {stations.map(({ stage, label }) => {
-        const x = SX[stage]!;
-        return (
-          <g key={stage}>
-            <text x={x} y="40" className="sw-th" textAnchor="middle">{label}</text>
-            {(["Senate", "House"] as Chamber[]).map((side) => {
-              const y = side === "Senate" ? Y_SENATE : Y_HOUSE, up = side === "Senate";
-              const post = stage === "committee2" || stage === "floor2";
-              const line = (side === "Senate") !== post ? LINE_SENATE : LINE_HOUSE;   // which line runs here
-              const kk = `${stage}|${side}`, still = alive[kk] || 0, ended = stranded[kk] || 0, dy = up ? 34 : -34;
-              return (
-                <g key={side}>
-                  <circle cx={x} cy={y} r="10" fill="var(--surface)" stroke={line} strokeWidth="4" />
-                  <text x={x} y={up ? y - 24 : y + 38} textAnchor="middle" className={`sw-n${still ? "" : " zero"}`}
-                    {...hit(`alive|${kk}`, still, `${side} · ${label} · still here`)}>{n(still)}</text>
-                  {ended > 0 && <>
-                    <line x1={x} y1={y} x2={x + 20} y2={y + dy} stroke="var(--red)" strokeOpacity=".7" strokeWidth="3" strokeLinecap="round" />
-                    <text x={x + 26} y={y + dy + (up ? 10 : 0)} className="sw-e"
-                      {...hit(`stranded|${kk}`, ended, `${side} · ${label} · ended here`)}>✕ {n(ended)}</text>
-                  </>}
-                </g>
-              );
-            })}
-          </g>
-        );
-      })}
-      <circle cx={GX} cy={GY} r="16" fill="var(--surface)" stroke="var(--o-signed)" strokeWidth="4" />
-      <text x={GX} y="40" className="sw-th" textAnchor="middle">Governor</text>
-      {([["signed", 150, "Signed"], ["awaiting", 210, "Awaiting"], ["vetoed", 270, "Vetoed"]] as const).map(([o, y, label]) => (
-        <g key={o}>
-          <path d={`M${GX + 16} ${GY} C${GX + 40} ${GY} ${GX + 40} ${y} ${GX + 66} ${y}`} fill="none" stroke={OUT_COLOR[o]} strokeWidth="3" />
-          <text x={GX + 74} y={y + 6}>
-            <tspan className={`sw-m${outcome[o] ? "" : " zero"}`} {...hit(`out|${o}`, outcome[o], label)}>{n(outcome[o])}</tspan>
-            <tspan className="sw-l" dx="8">{label}</tspan>
-          </text>
-        </g>
-      ))}
-      <text x="20" y="392" className="sw-l">Ended along the line:</text>
-      <text x="150" y="392" className="sw-carry" {...hit("out|carried", outcome.carried, "Carried over")}>{n(outcome.carried)} carried over</text>
-      <text x="290" y="392" className="sw-e" {...hit("out|dead", outcome.dead, "Died")}>{n(outcome.dead)} died</text>
-      <line x1="560" x2="590" y1="388" y2="388" stroke={LINE_SENATE} strokeWidth="5" />
-      <text x="598" y="392" className="sw-l">started in the Senate</text>
-      <line x1="760" x2="790" y1="388" y2="388" stroke={LINE_HOUSE} strokeWidth="5" />
-      <text x="798" y="392" className="sw-l">started in the House</text>
-    </g>
-  );
-}
-
-function drillLabel(key: string): string {
-  const p = key.split("|");
-  if (p[0] === "out") return ({ signed: "Signed by the Governor", vetoed: "Vetoed", awaiting: "Awaiting the Governor", carried: "Carried over to next session", dead: "Died / failed" } as Record<string, string>)[p[1]] ?? p[1];
-  const stage = COLUMNS.find((c) => c.stage === p[1])?.label ?? p[1];
-  if (p[0] === "stranded") return `Died / carried over · ${stage} · ${p[2]}`;
-  return `${p[2]} · ${stage}`; // alive
 }
