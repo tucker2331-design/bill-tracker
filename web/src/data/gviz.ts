@@ -191,7 +191,8 @@ export async function loadBillData(): Promise<BillData> {
     const raw = (rows[i][COL.outcome] || "").trim();
     if (!OUTCOMES.has(raw as Outcome)) {   // counted, never silently "in progress" (census, case law #155)
       unrecognisedOutcomes.count++;
-      if (unrecognisedOutcomes.examples.length < 5 && !unrecognisedOutcomes.examples.includes(raw)) unrecognisedOutcomes.examples.push(raw || "(blank)");
+      const shown = raw || "(blank)";
+      if (unrecognisedOutcomes.examples.length < 5 && !unrecognisedOutcomes.examples.includes(shown)) unrecognisedOutcomes.examples.push(shown);
     }
   }
 
