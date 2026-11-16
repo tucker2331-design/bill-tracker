@@ -110,27 +110,36 @@ contract differs. Source facts: [[knowledge/pa_bill_history_xml]]. Scheduled job
 - Display: VA's "H "/"S " code column is removed for display only (`StateConfig.actionCodePrefix`), never read for where.
 - Goldens: `test_action_where.py`, `action_where.regression.mjs`.
 
-## The chamber subway — one map, state settings (built 2026-11-02, live on PA)
+## The chamber subway — one map, state settings (built 2026-11-02 on PA; Virginia moved on 2026-11-16)
 - Owner: "every subway map", not a PA-only drawing. `components/ChamberSubway.tsx` draws any state from
   `STATE.pipelineMap` (`data/pipeline_rules.ts`): its stations, which stages happen in the second chamber (the line
   moves track there, and back for a later first-chamber stage — PA's concurrence), which ids are bills on the map,
   the idle threshold, and the Governor outcomes the source carries. A deadline line is drawn only for a state with one.
-- Each bill is counted once at its station and in at most one sub-state, most specific first: **ended** (defeated on
-  that chamber's floor) > **parked** (the source's own tabled / re-committed mark) > **idle** (no action for the
-  threshold); totals are plain sums. A bill with no stage is counted as "skipped" and said under the map.
-- Data: PA's job publishes `{stage, parked}` in Bill_Tracker column V ("Pipeline (JSON)"); parked = the latest
-  CLASSIFIED verb is "Laid on the table…" or "Re-committed to" (388 bills on 2025_0). Virginia writes no column V.
-- **Virginia still draws its own map** (`pipelineMap: null`). NEXT: move Virginia onto the same component (settings:
-  crossover deadline, "tabled" = ended) and add parked/idle there, with the idle threshold counted against the session
-  calendar (else every bill reads idle after adjournment). Goldens: `pipeline.regression.mjs`.
+- Each bill is counted at most once, most final first: **out** (an outcome at the Governor) > **ended** (an outcome the
+  state lists as ended, or defeated on that chamber's floor — drawn "✕ N", NOT in the station count) > **parked** (an
+  outcome the state lists as parked, or the source's own tabled / re-committed mark) > **idle** (no action for the
+  threshold). The station count is every bill still on the line there (moving + idle + parked); totals are plain sums
+  and the totals row opens every bill in that sub-state. Bills off the map are COUNTED and said under it: `notDrawn`
+  (ids off the pattern — resolutions) and `skipped` (no stage, or an outcome the map has no place for).
+- Settings per state: `stations`, `otherChamber`, `mapBills`, `idleDays`, `governorOutcomes`, `endedOutcomes`,
+  `parkedOutcomes`, `stageSource` ("pipeline" = the job writes it; "derived" = the SPA derives it), `swapLabel` (the
+  first track change: VA "Crossover", its deadline; PA "to the other chamber"), `endedWord`, `parkedWord`.
+- **PA:** the job publishes `{stage, parked}` in Bill_Tracker column V ("Pipeline (JSON)"); parked = the latest
+  CLASSIFIED verb is "Laid on the table…" or "Re-committed to" (388 bills on 2025_0); ended = floor defeated; idle 365 d.
+- **Virginia (2026-11-16):** stage derived from LIS's own floor/crossover fields (`data/derive.ts furthestStage`, the
+  rule its old v9 drawing used — retired); ended = outcome "dead" (LIS's Failed flag, or a status of tabled / left in
+  committee / passed by indefinitely — `states/va.py outcome_vocab`); parked = "carried_over"; Governor forks three ways.
+  Idle = 31 days: in 2026, 99 in 100 bills that went on to reach the Governor never sat quiet that long (median longest
+  gap 15 d, max 40 d; 1,123 HB/SB, `tools/historical_cache/va/20261/HISTORY.CSV`). After adjournment a bill still
+  in progress reads idle — which it is; carried-over bills read parked. HJ/SJ/HR/SR are not drawn (counted under the
+  map). Goldens: `pipeline.regression.mjs` (20), `pa.regression.mjs` (VA and PA settings).
 
 ## Not split yet (the open loop)
 
 - **`calendar_worker.py`** — the calendar subsystem merges into the product only at 100% accuracy; its VA
   logic (refid shapes, Schedule API, agenda PDFs) is inline. Split it when the calendar↔product merge happens,
   with the same golden-first method (capture, move, prove identical).
-- **The Timeline drawing** (`web/src/views/Timeline.tsx`) is two lanes that swap at crossover. A state with no
-  crossover (PA) needs its own drawing; `STATE.stages` already says whether a crossover exists.
+- ~~**The Timeline drawing**~~ RESOLVED 2026-11-16: one chamber subway for every state (section above).
 - ~~**The `Bill_Tracker` column header "Status (LIS)"**~~ RESOLVED 2026-11-01: the site reads columns by position, so
   PA's sheet labels column C "Status (PA General Assembly)" (`bill_rows.bill_tracker_rows(status_label=…)`); Virginia's
   header is unchanged. Original note: a sheet contract; renaming it is a coordinated
