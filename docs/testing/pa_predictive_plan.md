@@ -21,6 +21,23 @@ tuning year, a frozen pre-registration, ONE locked test, every number with its d
 | sponsor rows (party, district, sequence: 01 = prime) | 71,213 | patron party, majority status, co-sponsor count, bipartisan co-sponsorship |
 | committee rosters (chair / member) | from PA's RSS (`states/pa_roster.py`) | chair co-sponsors the bill? (VA's strongest replicated signal) |
 
+## First measurement — the majority gap (2026-11-16, descriptive, not a model)
+
+Bills only (HB/SB, 4,184), 2025-26 export of 31 Oct 2026. Majority party per chamber from PA's own member feeds
+(`parss:Party`: House D 103 / R 100, Senate R 27 / D 23). "Reported" = the bill has any action of verb class
+`reported` (out of committee); everything else is still in, or died in, its first committee.
+
+| chamber | prime sponsor | bills | reported out of committee | rate |
+|---|---|---|---|---|
+| House | majority (D) | 1,780 | 717 | 40% |
+| House | minority (R) | 977 | 132 | 14% |
+| Senate | majority (R) | 815 | 323 | 40% |
+| Senate | minority (D) | 612 | 41 | 7% |
+
+The same shape as Virginia's ([[testing/bill_fate]]: majority bills advance far more often) — so the fate model's
+strongest input carries over. Not yet a prediction: no tuning year, no locked test. Script: inline in the session of
+2026-11-16; to be moved into `tools/calibration/` with step 1.
+
 ## The steps, in order of what the data supports today
 
 1. **Bill fate at the first committee** (VA [[testing/bill_fate]]). Outcomes from PA's own verb classes
