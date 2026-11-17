@@ -1,0 +1,83 @@
+{
+ "roster": {
+  "snapshot": "committee assignments RSS, 2026-11-01",
+  "roster_members": 250,
+  "roster_members_without_id": 0,
+  "roster_members_without_party": 0,
+  "roster_committee_names_empty": 0,
+  "roster_rows": 1026,
+  "roster_committees": 54,
+  "majority_by_roster": {
+   "H": "D",
+   "S": "R"
+  },
+  "committees_with_majority_chair": 53,
+  "committees_with_minority_chair": 54
+ },
+ "bills_2025_26_with_a_rostered_first_committee": 4182,
+ "committee_seat (a = patron sits on the first committee, b = does not)": {
+  "majority patron": {
+   "a": 52.2,
+   "b": 32.1,
+   "diff_pts": 20.1,
+   "p": 2e-24,
+   "n": [
+    1028,
+    1567
+   ]
+  },
+  "minority patron": {
+   "a": 15.2,
+   "b": 9.0,
+   "diff_pts": 6.2,
+   "p": 0.00044,
+   "n": [
+    487,
+    1100
+   ]
+  },
+  "within_patron": {
+   "patrons": 207,
+   "mean_diff_pts": 13.5,
+   "better": 115,
+   "worse": 62,
+   "sign_test_p": 8.3e-05
+  },
+  "majority_chair_is_the_prime_sponsor (b = other majority members on the committee)": {
+   "a": 80.0,
+   "b": 40.8,
+   "diff_pts": 39.2,
+   "p": 1.1e-31,
+   "n": [
+    300,
+    728
+   ]
+  }
+ },
+ "chair_cosponsors_this_bill": {
+  "bills": 516,
+  "reported": 62.6,
+  "same_patrons_other_bills_reported": 21.9,
+  "within_patron": {
+   "patrons": 154,
+   "mean_diff_pts": 40.3,
+   "better": 123,
+   "worse": 23,
+   "sign_test_p": 1e-17
+  }
+ },
+ "ledger_stats (fit odd bill numbers -> predict even, 2025-26)": {
+  "patron_on_cmte": {
+   "out": 3.8,
+   "pass": 2.5
+  },
+  "cmte_member_copatrons": {
+   "out": 5.4,
+   "pass": 3.5
+  },
+  "committee_size": {
+   "out": 0.4,
+   "pass": 0.2
+  }
+ }
+}

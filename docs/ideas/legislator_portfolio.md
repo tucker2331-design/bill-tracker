@@ -1,49 +1,62 @@
 ---
-tags: [ideas, product, legislators, portfolio, owner-idea]
-updated: 2026-11-16
-status: stub
-open_loop: Owner idea 2026-11-16, scoped only — needs the owner's answers to the open questions below, then a grey-by-default mockup before any build.
+tags: [ideas, product, legislators, portfolio, owner-idea, design-research]
+updated: 2026-11-17
+status: active
+open_loop: Design researched + mocked on real PA data (2026-11-17, artifact CBPg2ZZ3uoiwiUkbirWL3o, Rep. Liz Hanbidge) — awaiting the owner's answers to the questions at the end; the votes section needs batch 3 (Open States).
 ---
 
-# The legislator portfolio — a member as a whole (owner idea, 2026-11-16)
+# The legislator portfolio — a member as a whole
 
-**Owner, in their words:** instead of only looking at committees or individual votes, look at a legislator as a
-whole — to decide who should carry what, or generally when we need to look at legislators for other reasons, or to
-see who is more likely to do what.
+**Owner (2026-11-16/17):** instead of only committees or individual votes, look at a legislator as a whole — to decide
+who should carry what, or whenever we need to look at legislators for other reasons, or who is more likely to do what.
 
-Sister page: [[ideas/drafting_war_room]] (its "who should carry this?" reads from here). Prior art:
-[[ideas/predictive_lane]] (REFRAME 2026-07-27: an entity-statistics layer, not a prediction widget — this page is
-that layer's member view), [[architecture/roster_and_votes_ingestion]], [[testing/first_vote]].
+**Mockup:** https://claude.ai/artifact/CBPg2ZZ3uoiwiUkbirWL3o (second screen: Rep. Liz Hanbidge, PA House, every number
+from PA's public record) · sister page [[ideas/drafting_war_room]] · stats [[testing/pa_replication]],
+[[testing/profiles]], [[testing/carrier_effect]].
 
-## What one member's page holds — facts first, every number with its denominator
+## 1. Why a whole-member page, and what exists
+- The drafting room's hardest question — *who carries it?* — is a question about a person, not a bill. So is "who do we
+  call first" in the War Room. Today the facts sit scattered (roster, bill list, votes, our contact log).
+- **The field:** commercial tools offer a legislator directory, contact logging and an "effectiveness" score — Quorum's
+  is the share of a member's bills out of committee and into law, ranked against party peers; FiscalNote's weights how far
+  each bill moves ([Bloomberg via Rep. Peters](https://scottpeters.house.gov/in-the-news/the-moneyball-effect-on-k-street-the-influence-game-gets-scientific),
+  [FiscalNote](https://ca.marketscreener.com/news/latest/FiscalNote-Names-Most-Effective-U-S-State-Legislators-24788755/)).
+  The research standard is the Center for Effective Lawmaking's State Legislative Effectiveness Score: bills sponsored ×
+  how far they move × substantive weight, judged against a **benchmark of what a member like them would do**
+  ([CEL](https://thelawmakers.org/legislative-research/legislative-effectiveness-in-the-american-states), APSR 2024).
+  CEL found effectiveness rises with majority status, chairs and seniority — the same things our tests found.
+- **What none of them do for our user:** say which numbers are *stable traits* (worth acting on) and which are noise,
+  and keep every number in "k of n" a volunteer can read.
 
-| section | facts | source (VA today) |
+## 2. What the page holds — only facts, each with its denominator
+| section | shows | evidence it is worth showing |
 |---|---|---|
-| **Who** | party, district, chamber, years served, leadership / chair roles | roster ingest (#236, structural) |
-| **Carries** | bills as chief patron, by subject and by how far they got (advanced / killed / carried / law), this session and past | Sponsors.csv + HISTORY.CSV (bulk blobs we already fetch) |
-| **Co-sponsors** | whose bills they sign, who signs theirs (across party?) | Sponsors.csv |
-| **Rooms** | committees and subcommittees they sit on; their vote record there | roster + VOTE.CSV (318,282 member-vote pairs, W5) |
-| **Votes** | how often with their party, on what kinds of bills they break | VOTE.CSV |
-| **Our history** | the team's contacts and positions with this member | contact log (D1, team-private) |
+| **Who** | party, district, standing this session, first session | structural (roster + export) |
+| **What they carry** | per session: bills, out of committee vs **expected**, passed their chamber, became law | the "expected" column is CEL's benchmark idea done our way: same session × chamber × standing × committee. Carrier record repeats session to session: PA r 0.46, VA r 0.46–0.51 |
+| **Rooms** | seats and roles now; where their bills went and how far | the seat on the deciding room matters (PA +20 majority; VA subcommittee +14) |
+| **Who they work with** | who co-signs their bills, whose they co-sign | co-sponsor ties are public and stable; the chair-as-co-signer effect (PA +40 within sponsor) makes "who signs whose" actionable |
+| **Habits that hold** | only traits shown to repeat: carrier record (PA r 0.46), signing with the other party (PA r 0.72, VA 0.78/0.48), focus on one room (PA r 0.60, VA 0.60/0.31) | traits that failed the repeat test are *left off* and listed in [[testing/what_we_left_off]] |
+| **How they vote** | VA: persuadability, independence, subject-specific defection ([[testing/persuadability]], [[testing/member_subject]]); PA: after batch 3 | VA measured; PA needs the Open States vote files |
+| **Our history** | the team's contacts and positions | team-private (contact log, D1) |
 
-Each section is a count out of a total ("carried 14 bills, 9 advanced"), never a bare rate — Standard #7.
+## 3. "Who is more likely to do what" — the line
+Describing what a member *has done* is Tier 1. A ranking of who *will* do something is Tier 3 under
+[[ideas/predictive_lane]] — it needs the calibration harness and the owner's go/no-go. The mock therefore shows
+percentiles and k-of-n facts, not a score. Measured so far: VA first-vote model 85.9% on the locked 2026 test
+([[testing/first_vote]]); PA vote models wait on batch 3.
 
-## "Who is more likely to do what" — the line we must not cross without the gate
+## 4. Rules it must follow
+P25 (one template per sentence), P26 (k of n), grey by default, small-caps states, no badges for provenance; names of
+real officials with public-record facts only; nothing from the contact log leaves the team.
 
-Describing what a member HAS done is Tier 1/2 (measured history). Ranking members by what they WILL do is Tier 3 and
-needs the calibration harness and the owner's go/no-go ([[ideas/predictive_lane]]). Measured so far in Virginia:
-the first-vote model scored 85.9% on the locked 2026 test (room outcome 91.5%) ([[testing/first_vote]]); content
-predicts which opposite-party member crosses, AUC 0.51 → 0.70 held out ([[testing/content_votes]]). Neither is
-approved for display yet.
+## 5. MVP cut (proposal)
+**First:** Who · What they carry (with expected) · Rooms · Who they work with · Habits that hold — both states, from data
+we already parse (VA: LIS + Open States; PA: exports + roster). **Then:** How they vote (PA after batch 3). **Later:**
+district facts, money (VA found donor alignment and race margin do not move votes — [[testing/money_and_vulnerability]] —
+so they would go to the "left off" drawer, not the page).
 
-## Multi-state
-
-The page is the same for every state, fed by that state's roster and votes. PA has a roster (committee members from
-PA's own RSS, `states/pa_roster.py`) but no per-member votes ingested yet — see [[testing/pa_predictive_plan]].
-
-## Open questions for the owner
-
-1. Where does it live — its own tab ("Legislators"), or reached by tapping any member name anywhere?
-2. Which sections first? (Carries + Rooms are fully sourced in VA today; Votes needs a display decision.)
-3. Does "who should carry X" rank members (Tier 3, gated), or show a shortlist with facts beside each?
-4. Our-history section: visible to the whole team, or per person?
+## 6. Questions for the owner
+1. Its own tab ("Legislators") or reached only by tapping a name?
+2. Show percentiles ("ranks 31 in 100 House members") or only the member's own k of n?
+3. "Our history" visible to the whole team or per person?
+4. Same page for both states now, with PA's votes section marked "not loaded" until batch 3?

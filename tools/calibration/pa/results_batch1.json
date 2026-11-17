@@ -1,0 +1,853 @@
+{
+ "calibration_ledger": {
+  "replicates": "testing/calibration_ledger",
+  "note": "",
+  "method": "fit 2021-22 -> predict 2023-24; % reduction in mean absolute error vs the 2021-22 base rate (VA: fit 2023 -> predict 2024)",
+  "stats": {
+   "patron_in_majority": {
+    "out": 10.0,
+    "pass": 5.3,
+    "verdict": "USABLE",
+    "replication_out_2023to2025": 9.9,
+    "unseen_buckets_2023": 0
+   },
+   "patron_party": {
+    "out": 4.8,
+    "pass": 6.2,
+    "verdict": "USABLE",
+    "replication_out_2023to2025": 0.0,
+    "unseen_buckets_2023": 0
+   },
+   "committee": {
+    "out": 2.5,
+    "pass": 1.2,
+    "verdict": "WEAK",
+    "replication_out_2023to2025": 3.0,
+    "unseen_buckets_2023": 198
+   },
+   "chamber": {
+    "out": 0.5,
+    "pass": 0.2,
+    "verdict": "NOISE",
+    "replication_out_2023to2025": -0.4,
+    "unseen_buckets_2023": 0
+   },
+   "bill_type (subtype: joint resolution J vs act)": {
+    "out": 0.7,
+    "pass": 0.7,
+    "verdict": "NOISE",
+    "replication_out_2023to2025": 1.4,
+    "unseen_buckets_2023": 0
+   },
+   "majority_copatron_share": {
+    "out": 6.1,
+    "pass": 4.0,
+    "verdict": "USABLE",
+    "replication_out_2023to2025": 9.3,
+    "unseen_buckets_2023": 0
+   },
+   "patron_volume": {
+    "out": 0.1,
+    "pass": 0.1,
+    "verdict": "NOISE",
+    "replication_out_2023to2025": 0.3,
+    "unseen_buckets_2023": 0
+   },
+   "member_tenure_band (member_id_band analog)": {
+    "out": -0.6,
+    "pass": -0.7,
+    "verdict": "NOISE",
+    "replication_out_2023to2025": 1.1,
+    "unseen_buckets_2023": 0
+   },
+   "cmte_load": {
+    "out": 0.4,
+    "pass": 0.5,
+    "verdict": "NOISE",
+    "replication_out_2023to2025": 1.0,
+    "unseen_buckets_2023": 0
+   },
+   "patron_bill_rank": {
+    "out": 0.6,
+    "pass": 0.8,
+    "verdict": "NOISE",
+    "replication_out_2023to2025": 0.8,
+    "unseen_buckets_2023": 0
+   },
+   "patron_prior_in_this_cmte": {
+    "out": 8.2,
+    "pass": 6.4,
+    "verdict": "USABLE",
+    "replication_out_2023to2025": 5.6,
+    "unseen_buckets_2023": 0
+   },
+   "patron_district_band": {
+    "out": 0.1,
+    "pass": 0.4,
+    "verdict": "NOISE",
+    "replication_out_2023to2025": 0.4,
+    "unseen_buckets_2023": 0
+   },
+   "patron_generosity": {
+    "out": -0.2,
+    "pass": -0.6,
+    "verdict": "NOISE",
+    "replication_out_2023to2025": 1.4,
+    "unseen_buckets_2023": 0
+   },
+   "same_day_batch": {
+    "out": 3.2,
+    "pass": 3.3,
+    "verdict": "WEAK",
+    "replication_out_2023to2025": 0.6,
+    "unseen_buckets_2023": 0
+   },
+   "bipartisan_copatrons": {
+    "out": 4.8,
+    "pass": 4.4,
+    "verdict": "WEAK",
+    "replication_out_2023to2025": 2.4,
+    "unseen_buckets_2023": 0
+   },
+   "patron_count": {
+    "out": 2.0,
+    "pass": 1.7,
+    "verdict": "WEAK",
+    "replication_out_2023to2025": 4.3,
+    "unseen_buckets_2023": 0
+   },
+   "copatron_district_spread": {
+    "out": 1.9,
+    "pass": 1.6,
+    "verdict": "NOISE",
+    "replication_out_2023to2025": 3.6,
+    "unseen_buckets_2023": 0
+   },
+   "cross_chamber_copatrons": {
+    "out": 0.0,
+    "pass": 0.0,
+    "verdict": "NOISE",
+    "replication_out_2023to2025": 0.0,
+    "unseen_buckets_2023": 0
+   },
+   "money_committee": {
+    "out": -0.0,
+    "pass": -0.0,
+    "verdict": "NOISE",
+    "replication_out_2023to2025": 0.1,
+    "unseen_buckets_2023": 0
+   },
+   "names_locality": {
+    "out": 0.2,
+    "pass": 0.6,
+    "verdict": "NOISE",
+    "replication_out_2023to2025": 0.0,
+    "unseen_buckets_2023": 0
+   },
+   "filing_recency_band": {
+    "out": -0.0,
+    "pass": 0.1,
+    "verdict": "NOISE",
+    "replication_out_2023to2025": -0.0,
+    "unseen_buckets_2023": 0
+   },
+   "patron_network_breadth": {
+    "out": -0.6,
+    "pass": -1.1,
+    "verdict": "HARMFUL",
+    "replication_out_2023to2025": -0.4,
+    "unseen_buckets_2023": 0
+   },
+   "patron_prior_rate": {
+    "out": 6.3,
+    "pass": 5.3,
+    "verdict": "USABLE",
+    "replication_out_2023to2025": 2.4,
+    "unseen_buckets_2023": 0
+   },
+   "PA: co-sponsorship memo filed": {
+    "out": 0.0,
+    "pass": 0.0,
+    "verdict": "NOISE",
+    "replication_out_2023to2025": 0.0,
+    "unseen_buckets_2023": 0
+   },
+   "PA: second year of the session": {
+    "out": 0.1,
+    "pass": 0.2,
+    "verdict": "NOISE",
+    "replication_out_2023to2025": 0.0,
+    "unseen_buckets_2023": 0
+   },
+   "PA: title form (enacting-clause analog)": {
+    "out": 0.7,
+    "pass": 1.1,
+    "verdict": "NOISE",
+    "replication_out_2023to2025": 1.1,
+    "unseen_buckets_2023": 0
+   }
+  },
+  "not_testable_here": {
+   "patron_matches_cmte_majority": "identical to patron_in_majority in PA (committee majorities mirror the chamber)",
+   "subject_primary / subject_count / cmte_prior_on_this_subject / subject_cmte_match / patron_prior_on_this_subject": "PA's export carries no subject vocabulary \u2014 BLOCKED (Open States subjects to be checked in batch 3)",
+   "patron_on_cmte / cmte_member_copatrons / committee_size": "need committee rosters \u2014 batch 2 (2025-26 only)",
+   "text_versions_at_intro": "every PA bill has exactly one printer's number at introduction \u2014 constant, untestable",
+   "dls_tag / catchline_segments / emergency / prefiled": "Virginia drafting/filing artefacts with no PA equivalent (PA's analog of prefiling, the co-sponsorship memo, is tested)",
+   "has_chief_copatron / bipartisan_chief_pair": "PA has no chief co-patron role",
+   "patron_absence / patron_prior_loyalty / patron_prior_floor_win_rate / patron_agrees_with_current_cmte": "need per-member votes \u2014 batch 3"
+  }
+ },
+ "bill_fate + panel_audit": {
+  "replicates": "testing/bill_fate \u00b7 testing/panel_audit",
+  "note": "",
+  "outcome": "gets out of its first committee (reported) \u2014 PA committees record no kill vote in the export, so fate is binary",
+  "model": "boosted trees depth 3 \u00d7 100, averaged 50:50 with the baseline (patron standing \u00d7 chamber \u00d7 session year), trained on earlier sessions only",
+  "year_ahead": {
+   "2021_0": {
+    "n": 4112,
+    "base_rate": 27.9,
+    "baseline_logloss": 0.497,
+    "model_logloss": 0.456,
+    "baseline_auc": 0.763,
+    "model_auc": 0.833,
+    "panel_audit_auc_ladder": {
+     "majority only": 0.739,
+     "+ room record": 0.785,
+     "+ carrier record": 0.803
+    }
+   },
+   "2023_0": {
+    "n": 3862,
+    "base_rate": 28.2,
+    "baseline_logloss": 0.54,
+    "model_logloss": 0.499,
+    "baseline_auc": 0.692,
+    "model_auc": 0.781,
+    "panel_audit_auc_ladder": {
+     "majority only": 0.668,
+     "+ room record": 0.72,
+     "+ carrier record": 0.735
+    }
+   },
+   "2025_0": {
+    "n": 4184,
+    "base_rate": 29.0,
+    "baseline_logloss": 0.551,
+    "model_logloss": 0.513,
+    "baseline_auc": 0.665,
+    "model_auc": 0.763,
+    "panel_audit_auc_ladder": {
+     "majority only": 0.667,
+     "+ room record": 0.707,
+     "+ carrier record": 0.714
+    },
+    "how_chances_hold_up": {
+     "(-0.001, 0.2]": {
+      "bills": 1533,
+      "actually_out_per_100": 9
+     },
+     "(0.2, 0.4]": {
+      "bills": 1693,
+      "actually_out_per_100": 33
+     },
+     "(0.4, 0.6]": {
+      "bills": 935,
+      "actually_out_per_100": 54
+     },
+     "(0.6, 0.8]": {
+      "bills": 23,
+      "actually_out_per_100": 78
+     }
+    },
+    "top_decile_out_per_100": 60
+   }
+  }
+ },
+ "bill_states": {
+  "replicates": "testing/bill_states",
+  "note": "PA's 'Laid on the table' is routine procedure (a reported bill is tabled, then removed when scheduled) \u2014 unlike Virginia, where tabling kills",
+  "sessions": "2009-2024 (completed)",
+  "states": {
+   "Reported (as committed/amended) -> passes its chamber": {
+    "bills": 8547,
+    "left_the_state": 5756,
+    "share": 67.3
+   },
+   "Re-referred to (another committee) -> re-reported": {
+    "bills": 3851,
+    "left_the_state": 2834,
+    "share": 73.6
+   },
+   "Re-committed to -> re-reported": {
+    "bills": 4780,
+    "left_the_state": 4442,
+    "share": 92.9
+   },
+   "Laid on the table -> removed from table": {
+    "bills": 6170,
+    "left_the_state": 5675,
+    "share": 92.0
+   },
+   "Laid on the table (Rule 71 / Rule 9) -> removed": {
+    "bills": 454,
+    "left_the_state": 119,
+    "share": 26.2
+   },
+   "Defeated on final passage -> later passes": {
+    "bills": 41,
+    "left_the_state": 23,
+    "share": 56.1
+   },
+   "Passed its chamber -> passes the other": {
+    "bills": 5757,
+    "left_the_state": 2527,
+    "share": 43.9
+   }
+  }
+ },
+ "continuance (PA analog: re-committal)": {
+  "replicates": "testing/continuance",
+  "note": "PA has no continuance (two-year session; bills die at its end). Its parking move is 'Re-committed to' (usually Appropriations or Rules, after second consideration).",
+  "bills_recommitted": 4780,
+  "ever_moved_again": 4442,
+  "share": 92.9,
+  "days_to_move_median": 5.0,
+  "days_to_move_p90": 86.0,
+  "moved_within_30_days_share_of_movers": 80.8
+ },
+ "kill_points (bill level)": {
+  "replicates": "testing/kill_points",
+  "note": "Virginia's kill_points also splits subcommittee vs full committee from committee roll calls; PA's export has no committee roll calls, so this is the bill-level half only",
+  "bills": 32468,
+  "stages": {
+   "died in its first committee (never reported)": {
+    "bills": 23794,
+    "share": 73.3
+   },
+   "reported, never passed its first floor (tabled / re-committed / not called)": {
+    "bills": 2901,
+    "share": 8.9
+   },
+   "passed one chamber, died in the second chamber's committee": {
+    "bills": 2430,
+    "share": 7.5
+   },
+   "became law": {
+    "bills": 2365,
+    "share": 7.3
+   },
+   "reported in the second chamber, never passed there": {
+    "bills": 800,
+    "share": 2.5
+   },
+   "passed both, not law (concurrence / conference / still with Governor)": {
+    "bills": 94,
+    "share": 0.3
+   },
+   "vetoed": {
+    "bills": 68,
+    "share": 0.2
+   },
+   "defeated on its first floor": {
+    "bills": 16,
+    "share": 0.0
+   }
+  }
+ },
+ "rooms / venue spread / profiles (room panel) / clock (never-acts)": {
+  "replicates": "testing/venue_shopping \u00b7 testing/profiles \u00b7 testing/clock \u00b7 testing/calibration_scope",
+  "note": "In PA a committee that never reports a bill is the kill \u2014 there is no recorded no-vote, so Virginia's 'never acts' and 'kills' collapse into one number here. Dies-on-a-record and unanimity need committee roll calls (not in the export).",
+  "rooms_with_100_plus_bills": 47,
+  "report_rate_range": [
+   15.5,
+   55.9
+  ],
+  "partisan_gap_range_pts": [
+   0.6,
+   70.0
+  ],
+  "rewrite_rate_range": [
+   11.7,
+   63.3
+  ],
+  "never_acts_range": [
+   44.1,
+   84.5
+  ],
+  "era_persistence_r (2009-16 vs 2017-24, rooms with 50+ bills each)": {
+   "report_rate": 0.79,
+   "partisan_gap": 0.55,
+   "rewrite_rate": 0.73
+  },
+  "widest_gaps": {
+   "S APPROPRIATIONS": "81.0% vs 11.0%",
+   "S VETERANS AFFAIRS AND EMERGENCY PREPAREDNESS": "62.2% vs 17.8%",
+   "S AGRICULTURE AND RURAL AFFAIRS": "50.0% vs 11.0%",
+   "S URBAN AFFAIRS AND HOUSING": "59.8% vs 23.9%",
+   "H COMMERCE": "48.8% vs 13.0%"
+  },
+  "narrowest_gaps": {
+   "S GAME AND FISHERIES": "56.1% vs 55.6%",
+   "H HEALTH AND HUMAN SERVICES": "26.9% vs 17.9%",
+   "H GAMING OVERSIGHT": "20.3% vs 7.1%",
+   "S COMMUNITY, ECONOMIC AND RECREATIONAL DEVELOPMENT": "25.0% vs 8.5%",
+   "H LIQUOR CONTROL": "31.8% vs 13.8%"
+  },
+  "committee_stat_by_chamber_out_pct_mae": {
+   "H": 1.8,
+   "S": 4.4
+  }
+ },
+ "venue_shopping": {
+  "replicates": "testing/venue_shopping",
+  "note": "Room rates are leave-group-out (computed without the group's own bills). In PA an exact title = same statute + section amended, not necessarily the same policy (see room_memory caveat) \u2014 read this as 'same part of the law, different room'.",
+  "same_idea_groups (exact title, same chamber, 2+ rooms)": 888,
+  "mean_diff_pts (higher-rate room minus lower-rate room)": 4.2,
+  "groups_where_higher_room_did_better": 185,
+  "groups_where_lower_room_did_better": 144,
+  "sign_test_p": 0.027
+ },
+ "venue_effect": {
+  "replicates": "testing/venue_effect",
+  "note": "Virginia: 272 of 1,443 pairs diverged with a 50/50 chamber split \u2014 variance at the room, not the body. PA caveat: an exact-title HB/SB pair is the same statute section, not always the same policy.",
+  "companion_pairs (exact title, one HB + one SB, same session)": 2261,
+  "both_reported": 435,
+  "neither": 1159,
+  "diverged": 667,
+  "house_bill_lived_in_diverged": 312,
+  "house_share_of_survivors": 46.8,
+  "binomial_p_vs_50_50": 0.1
+ },
+ "room_memory": {
+  "replicates": "testing/room_memory",
+  "note": "CAVEAT: a PA title names the statute and section amended ('\u2026Tax Reform Code\u2026, further providing for classes of income'), not the policy \u2014 38 carriers filed that one title. So PA's exact-title match means 'same part of the law', coarser than Virginia's catchline. The same-carrier refile rows are the closest PA gets to 'same idea' without bill text.",
+  "refiled_same_idea (exact title, earlier session, same chamber, same patron standing)": 9309,
+  "coverage_of_all_bills": 25.4,
+  "same_room": {
+   "died_before_dies_again": 91.3,
+   "cleared_before_dies": 36.6,
+   "odds_ratio": 18.2,
+   "p": 0.0,
+   "n": [
+    6723,
+    1722
+   ]
+  },
+  "different_room": {
+   "died_before_dies_again": 84.1,
+   "cleared_before_dies": 51.4,
+   "odds_ratio": 5.0,
+   "p": 1.3e-20,
+   "n": [
+    646,
+    218
+   ]
+  },
+  "same_room_vs_different_room_z": 7.02,
+  "p_two_sided": 2.2e-12,
+  "after_a_no_moving_rooms (dies: same room vs different room)": {
+   "a": 91.3,
+   "b": 84.1,
+   "diff_pts": 7.3,
+   "p": 2.3e-08,
+   "n": [
+    6723,
+    646
+   ]
+  },
+  "same_room_new_carrier": {
+   "died_before_dies_again": 83.7,
+   "cleared_before_dies": 42.8,
+   "odds_ratio": 6.9,
+   "p": 4.2e-52,
+   "n": [
+    1087,
+    400
+   ]
+  },
+  "same_room_same_carrier_refile (closest to 'same idea')": {
+   "died_before_dies_again": 92.8,
+   "cleared_before_dies": 34.7,
+   "odds_ratio": 24.2,
+   "p": 0.0,
+   "n": [
+    5636,
+    1322
+   ]
+  },
+  "different_room_same_carrier_refile": {
+   "died_before_dies_again": 88.2,
+   "cleared_before_dies": 47.9,
+   "odds_ratio": 8.2,
+   "p": 3.6e-22,
+   "n": [
+    492,
+    140
+   ]
+  },
+  "title_reuse": {
+   "distinct_titles": 19537,
+   "bills": 36652,
+   "titles_used_by_5_plus_different_carriers": 124
+  }
+ },
+ "enacting_clause (PA: the title's form)": {
+  "replicates": "testing/enacting_clause \u00b7 testing/blind_sweep",
+  "note": "PA's official title states what the act does ('An Act amending Title 75\u2026' vs 'An Act providing for\u2026'), the analog of Virginia's enacting clause. Title is the filed title (PA does not retitle on passage in the export).",
+  "amend_vs_new_act (a = 'An Act amending\u2026', b = 'An Act providing for / establishing\u2026')": {
+   "majority": {
+    "out": {
+     "a": 37.1,
+     "b": 32.8,
+     "diff_pts": 4.3,
+     "p": 0.00039,
+     "n": [
+      14898,
+      1769
+     ]
+    },
+    "passed": {
+     "a": 25.8,
+     "b": 21.4,
+     "diff_pts": 4.3,
+     "p": 5.8e-05,
+     "n": [
+      14898,
+      1769
+     ]
+    }
+   },
+   "minority": {
+    "out": {
+     "a": 9.9,
+     "b": 6.5,
+     "diff_pts": 3.4,
+     "p": 1.2e-05,
+     "n": [
+      10545,
+      1510
+     ]
+    },
+    "passed": {
+     "a": 4.5,
+     "b": 2.5,
+     "diff_pts": 2.1,
+     "p": 9.6e-05,
+     "n": [
+      10545,
+      1510
+     ]
+    }
+   }
+  },
+  "title_forms": {
+   "amend": 25443,
+   "provide": 2437,
+   "other_act": 2004,
+   "establish": 842,
+   "joint_resolution": 637,
+   "appropriate": 589,
+   "other": 407,
+   "repeal": 109
+  }
+ },
+ "contested_vs_routine + second_chamber": {
+  "replicates": "testing/contested_vs_routine \u00b7 testing/second_chamber",
+  "note": "Opposition share is measured on the ORIGIN-chamber passage roll call (PA's export carries floor tallies, not committee roll calls), so this conditions on reaching passage. Party-split surplus votes need member votes (batch 3).",
+  "bills_passed_origin_with_tally": 5756,
+  "routine_share (<5% no votes on passage)": 76.4,
+  "routine": {
+   "passes_second_chamber": 48.1,
+   "law": 46.2,
+   "own_party_runs_second_vs_not (passes second)": {
+    "a": 51.1,
+    "b": 39.6,
+    "diff_pts": 11.5,
+    "p": 1.9e-11,
+    "n": [
+     3250,
+     1147
+    ]
+   }
+  },
+  "contested": {
+   "passes_second_chamber": 30.3,
+   "law": 24.4,
+   "own_party_runs_second_vs_not (passes second)": {
+    "a": 33.8,
+    "b": 24.1,
+    "diff_pts": 9.7,
+    "p": 0.00018,
+    "n": [
+     866,
+     493
+    ]
+   }
+  }
+ },
+ "bill_mix_confound (2023 House flip)": {
+  "replicates": "testing/bill_mix_confound",
+  "note": "Same member, before and after their party gained/lost the House: if the majority effect were bill mix (majority members file easier bills), it would not move with control.",
+  "Democrats (gained the House in 2023)": {
+   "members": 64,
+   "within_member_change_pts": 32.7,
+   "p (Wilcoxon)": 3.5e-12
+  },
+  "Republicans (lost it)": {
+   "members": 66,
+   "within_member_change_pts": -34.0,
+   "p (Wilcoxon)": 9.5e-12
+  },
+  "same member + same title refiled, D": {
+   "bills": 393,
+   "out_2021": 4.1,
+   "out_2023": 14.5
+  },
+  "same member + same title refiled, R": {
+   "bills": 285,
+   "out_2021": 34.0,
+   "out_2023": 12.3
+  },
+  "placebo: Senate (R both sessions)": {
+   "D": -0.1,
+   "R": -4.0
+  }
+ },
+ "carrier_effect + profiles (member panel)": {
+  "replicates": "testing/carrier_effect \u00b7 testing/profiles",
+  "note": "PA has no incorporation; its analog contest is two carriers filing the same exact title in one chamber and session where exactly one is reported.",
+  "contests (same session+chamber+title, mixed-party carriers, exactly one reported)": 262,
+  "majority_carrier_kept": 232,
+  "kept_share": 88.5,
+  "expected_share_from_mix": 50.0,
+  "binomial_p": 3.9e-40,
+  "carrier_lift_sd_pts (members with 20+ bills)": 10.6,
+  "carrier_lift_split_half_r": [
+   0.53,
+   396
+  ],
+  "carrier_lift_session_to_session_r": [
+   0.46,
+   914
+  ],
+  "other_member_traits_session_to_session_r": {
+   "bipartisan filing": [
+    0.72,
+    914
+   ],
+   "specialisation (top-room share)": [
+    0.6,
+    914
+   ]
+  }
+ },
+ "blind_sweep": {
+  "replicates": "testing/blind_sweep",
+  "note": "",
+  "swept_on": "2009-2020",
+  "tested_on": "2021-2026",
+  "scored_against": "the patron's own standing (majority / minority), never the overall base \u2014 VA's v1 trap",
+  "nominated": 21,
+  "replicated": 16,
+  "replicated_cells": [
+   {
+    "feature": "title_form=appropriate",
+    "patron": "majority",
+    "sweep_lift_pts": 15.8,
+    "test_lift_pts": 56.7,
+    "test_p": 3e-37,
+    "n_test": 106
+   },
+   {
+    "feature": "subtype=A",
+    "patron": "majority",
+    "sweep_lift_pts": 24.2,
+    "test_lift_pts": 49.4,
+    "test_p": 1.1e-42,
+    "n_test": 174
+   },
+   {
+    "feature": "vol_b=2-5",
+    "patron": "majority",
+    "sweep_lift_pts": 16.5,
+    "test_lift_pts": 19.9,
+    "test_p": 5.8e-08,
+    "n_test": 186
+   },
+   {
+    "feature": "cosp_b=0",
+    "patron": "majority",
+    "sweep_lift_pts": 15.1,
+    "test_lift_pts": 16.9,
+    "test_p": 4.3e-11,
+    "n_test": 377
+   },
+   {
+    "feature": "title_form=other",
+    "patron": "majority",
+    "sweep_lift_pts": 15.6,
+    "test_lift_pts": 14.8,
+    "test_p": 0.041,
+    "n_test": 48
+   },
+   {
+    "feature": "names_locality=1",
+    "patron": "minority",
+    "sweep_lift_pts": 35.3,
+    "test_lift_pts": 11.6,
+    "test_p": 6e-07,
+    "n_test": 199
+   },
+   {
+    "feature": "subtype=J",
+    "patron": "majority",
+    "sweep_lift_pts": -15.4,
+    "test_lift_pts": -11.3,
+    "test_p": 0.0055,
+    "n_test": 146
+   },
+   {
+    "feature": "title_form=joint_resolution",
+    "patron": "majority",
+    "sweep_lift_pts": -15.4,
+    "test_lift_pts": -11.2,
+    "test_p": 0.0059,
+    "n_test": 149
+   },
+   {
+    "feature": "names_locality=1",
+    "patron": "majority",
+    "sweep_lift_pts": 30.3,
+    "test_lift_pts": 7.9,
+    "test_p": 0.0088,
+    "n_test": 278
+   },
+   {
+    "feature": "cosp_b=16+",
+    "patron": "majority",
+    "sweep_lift_pts": 7.8,
+    "test_lift_pts": 7.8,
+    "test_p": 1.3e-13,
+    "n_test": 2221
+   },
+   {
+    "feature": "vol_b=2-5",
+    "patron": "minority",
+    "sweep_lift_pts": 5.6,
+    "test_lift_pts": 7.2,
+    "test_p": 0.00013,
+    "n_test": 278
+   },
+   {
+    "feature": "cosp_b=1-5",
+    "patron": "majority",
+    "sweep_lift_pts": -6.5,
+    "test_lift_pts": -5.9,
+    "test_p": 1.3e-05,
+    "n_test": 1322
+   },
+   {
+    "feature": "bipartisan=0",
+    "patron": "minority",
+    "sweep_lift_pts": -5.9,
+    "test_lift_pts": -5.8,
+    "test_p": 2.2e-35,
+    "n_test": 2921
+   },
+   {
+    "feature": "vol_b=6-15",
+    "patron": "majority",
+    "sweep_lift_pts": 6.6,
+    "test_lift_pts": 5.5,
+    "test_p": 2.7e-06,
+    "n_test": 1802
+   },
+   {
+    "feature": "title_form=other_act",
+    "patron": "minority",
+    "sweep_lift_pts": 13.1,
+    "test_lift_pts": 4.9,
+    "test_p": 0.0078,
+    "n_test": 273
+   },
+   {
+    "feature": "cosp_b=6-15",
+    "patron": "majority",
+    "sweep_lift_pts": -7.8,
+    "test_lift_pts": -4.8,
+    "test_p": 1.9e-08,
+    "n_test": 3342
+   }
+  ]
+ },
+ "clock (time since referral)": {
+  "replicates": "testing/clock",
+  "note": "PA sessions run two years with no crossover deadline, so the cliff (if any) is the session's end, not a week.",
+  "unreported at 0 months": {
+   "bills": 32350,
+   "ever_reported": 26.8
+  },
+  "unreported at 1 months": {
+   "bills": 28776,
+   "ever_reported": 17.7
+  },
+  "unreported at 2 months": {
+   "bills": 27269,
+   "ever_reported": 13.2
+  },
+  "unreported at 3 months": {
+   "bills": 26324,
+   "ever_reported": 10.1
+  },
+  "unreported at 6 months": {
+   "bills": 24992,
+   "ever_reported": 5.3
+  },
+  "unreported at 12 months": {
+   "bills": 24102,
+   "ever_reported": 1.8
+  }
+ },
+ "second_chamber (surplus votes)": {
+  "replicates": "testing/second_chamber",
+  "note": "Surplus = yes votes beyond the patron's own party's seats (a floor on cross-party yes votes; exact party splits need member votes, batch 3). Virginia: surplus buys nothing where your party runs the second chamber.",
+  "patron's party runs the second chamber": {
+   "0": {
+    "bills": 195,
+    "passes_second": 26.7
+   },
+   "1-10": {
+    "bills": 201,
+    "passes_second": 30.3
+   },
+   "11-50": {
+    "bills": 1494,
+    "passes_second": 53.4
+   },
+   "51+": {
+    "bills": 2226,
+    "passes_second": 46.8
+   },
+   "chi2_p": 5e-17
+  },
+  "the other party runs it": {
+   "0": {
+    "bills": 90,
+    "passes_second": 22.2
+   },
+   "1-10": {
+    "bills": 98,
+    "passes_second": 21.4
+   },
+   "11-50": {
+    "bills": 680,
+    "passes_second": 38.5
+   },
+   "51+": {
+    "bills": 772,
+    "passes_second": 35.0
+   },
+   "chi2_p": 0.00041
+  }
+ }
+}
