@@ -49,7 +49,7 @@ for bad in ("https://leginfo.legislature.ca.gov/faces/billNavClient.xhtml?bill_i
         check(f"fetcher refuses {bad[:50]}", False)
     except NotABulkFeed:
         check(f"fetcher refuses {bad[:50]}", True)
-check("fetcher allows the session file", any(p.match("https://downloads.leginfo.legislature.ca.gov/pubinfo_2025.zip")
+check("fetcher allows the daily export", any(p.match("https://downloads.leginfo.legislature.ca.gov/pubinfo_daily_Wed.zip")
                                               for p in __import__("states.ca_fetch", fromlist=["_ALLOWED"])._ALLOWED))
 
 schema = ca_pubinfo.load_schema(open(os.path.join(SAMPLE, "pubinfo_load.zip"), "rb").read())
@@ -73,6 +73,87 @@ outs = {}
 for r in records:
     outs[r["outcome"]] = outs.get(r["outcome"], 0) + 1
 check("outcome counts match the measured sample", outs == expected["outcomes"], f"{outs} vs {expected['outcomes']}")
+
+# --- Codex #274 fold-ins ------------------------------------------------------------------------------------------
+# P2: a resolution's chapter number means ADOPTED (filed with the Secretary of State), never signed into law.
+acr = by.get("ACR44")
+check("ACR44 (status Chaptered, chapter 66) is adopted, not signed", acr is not None and acr["outcome"] == "adopted"
+      and acr["stage"] == "adopted", str({k: (acr or {}).get(k) for k in ("outcome", "stage")}))
+check("no resolution or constitutional amendment is ever 'signed'",
+      not [r["bill"] for r in records if r["outcome"] == "signed" and not r["bill"].startswith(("AB", "SB"))])
+# P2: the SPA finds the payload by a numeric universe_count (web/src/data/gviz.ts findCompleteness).
+check("payload carries universe_count = universe_declared", comp.get("universe_count") == comp["universe_declared"])
+check("payload carries the session's display name", comp.get("session_display") == "2025-2026 Regular Session",
+      str(comp.get("session_display")))
+check("in_history_not_in_universe is a list (Health reads its length)", isinstance(comp.get("in_history_not_in_universe"), list))
+# the job stamps records with the SOURCE's publication time, not the check time
+r2, c2 = ca_adapter.run_intake(ca_pubinfo.Export(os.path.join(SAMPLE, "pubinfo_sample.zip"), schema),
+                               datetime.date(2026, 11, 18), "2026-11-18T21:00:00Z", as_of_utc="2026-11-18T05:23:00Z")
+check("records are stamped as of the export, not as of our check",
+      all(r["data_as_of_utc"] == "2026-11-18T05:23:00Z" for r in r2) and c2["checked_at_utc"] == "2026-11-18T21:00:00Z")
+
+
+# P1: a malformed row in a universe table (BILL_TBL / BILL_HISTORY_TBL) refuses publication; elsewhere it is counted.
+def _corrupt(table):
+    """The real sample with ONE row of `table` cut short by a field (a wrong field count)."""
+    import io
+    import zipfile
+    src = zipfile.ZipFile(os.path.join(SAMPLE, "pubinfo_sample.zip"))
+    buf = io.BytesIO()
+    with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as out:
+        for n in src.namelist():
+            data = src.read(n)
+            if n.upper() == f"{table}.DAT":
+                lines = data.decode("utf-8").split("\n")
+                lines[0] = "\t".join(lines[0].split("\t")[:-1])
+                data = "\n".join(lines).encode("utf-8")
+            out.writestr(n, data)
+    return ca_pubinfo.Export(buf.getvalue(), schema)
+
+
+for tbl in ("BILL_TBL", "BILL_HISTORY_TBL"):
+    try:
+        ca_adapter.run_intake(_corrupt(tbl), datetime.date(2026, 11, 18), "2026-11-18T21:00:00Z")
+        check(f"a malformed {tbl} row refuses publication", False)
+    except ValueError as e:
+        check(f"a malformed {tbl} row refuses publication", "wrong field count" in str(e), str(e))
+_r, _c = ca_adapter.run_intake(_corrupt("LEGISLATOR_TBL"), datetime.date(2026, 11, 18), "2026-11-18T21:00:00Z")
+check("a malformed row elsewhere is counted (Health: 'Source rows we could not read')",
+      _c["rows_with_wrong_field_count_total"] == 1 and _c["rows_with_wrong_field_count"] == {"LEGISLATOR_TBL": 1},
+      str(_c["rows_with_wrong_field_count"]))
+
+# P1: the job reads the newest DAILY full export (the yearly file is rebuilt only on Sunday).
+from states.ca_fetch import newest_daily  # noqa: E402
+_IDX = ('<tr><td><a href="pubinfo_2025.zip">pubinfo_2025.zip</a></td><td align="right">2026-11-15 21:26  </td></tr>\n'
+        '<tr><td><a href="pubinfo_daily_Tue.zip">pubinfo_daily_Tue.zip</a></td><td align="right">2026-11-17 21:23  </td></tr>\n'
+        '<tr><td><a href="pubinfo_daily_Wed.zip">pubinfo_daily_Wed.zip</a></td><td align="right">2026-11-18 04:23  </td></tr>\n'
+        '<tr><td><a href="pubinfo_daily_Thu.zip">pubinfo_daily_Thu.zip</a></td><td align="right">2026-11-12 21:23  </td></tr>\n')
+check("the newest daily export is chosen by the index's own date", newest_daily(_IDX) == "pubinfo_daily_Wed.zip",
+      newest_daily(_IDX))
+try:
+    newest_daily(_IDX.replace("daily_", "x_"))
+    check("an index with no daily export refuses to guess", False)
+except ValueError:
+    check("an index with no daily export refuses to guess", True)
+
+
+class _Resp(__import__("io").BytesIO):
+    status = 200
+    headers = {"Last-Modified": "Wed, 18 Nov 2026 12:23:41 GMT"}
+
+
+_d = tempfile.mkdtemp(prefix="ca_fetch_prune_")
+open(os.path.join(_d, "0" * 24 + ".body"), "w").write("last week's file")
+open(os.path.join(_d, "0" * 24 + ".meta.json"), "w").write("{}")
+open(os.path.join(_d, "keep-me.txt"), "w").write("not the fetcher's")
+_f = BulkFetcher(_d, opener=lambda req, t: _Resp(b"PK"))
+_url = "https://downloads.leginfo.legislature.ca.gov/pubinfo_daily_Wed.zip"
+_f.path(_url)
+check("the export's date is the server's Last-Modified, in UTC", _f.published_utc(_url) == "2026-11-18T12:23:41Z",
+      _f.published_utc(_url))
+check("pruning removes only stale fetcher files (2), keeps this run's and foreign files",
+      _f.prune_untouched() == 2 and sorted(os.listdir(_d))[-1] == "keep-me.txt" and len(os.listdir(_d)) == 3,
+      str(sorted(os.listdir(_d))))
 
 print(f"\n{len(FAILS)} failed" if FAILS else "\nall passed")
 sys.exit(1 if FAILS else 0)

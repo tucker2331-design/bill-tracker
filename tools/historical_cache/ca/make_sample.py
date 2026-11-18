@@ -71,7 +71,9 @@ def main(full):
                     vid = row.get("BILL_VERSION_ID", "").strip("`")
                     if bid in ids or (t == "BILL_VERSION_AUTHORS_TBL" and vid in versions):
                         keep.append(raw)
-            zout.writestr(name.split("/")[-1], "".join(keep))
+            info = zipfile.ZipInfo(name.split("/")[-1], date_time=(2026, 11, 18, 0, 0, 0))   # reproducible bytes
+            info.compress_type = zipfile.ZIP_DEFLATED
+            zout.writestr(info, "".join(keep))
     with open(os.path.join(OUT, "pubinfo_sample.zip"), "wb") as f:
         f.write(buf.getvalue())
     sx = ca_pubinfo.Export(os.path.join(OUT, "pubinfo_sample.zip"), schema)
@@ -79,9 +81,14 @@ def main(full):
     outcomes = collections.Counter(r["outcome"] for r in records)
     raw = {f"{b['MEASURE_TYPE']}{int(b['MEASURE_NUM'])}": b for b in pick}
     checks = {}
-    # anchors read from BILL_TBL fields (independent of the history routing): a chapter number = law; Vetoed = vetoed
-    for b in [x for x in pick if x["CHAPTER_NUM"]][:3]:
+    # anchors read from BILL_TBL fields (independent of the history routing): a BILL's chapter number = law; a
+    # resolution's chapter number (or a one-house resolution's 'Passed') = adopted, never signed (Codex #274); Vetoed
+    for b in [x for x in pick if x["CHAPTER_NUM"] and x["MEASURE_TYPE"] in ("AB", "SB")][:3]:
         checks[f"{b['MEASURE_TYPE']}{int(b['MEASURE_NUM'])}"] = {"outcome": "signed", "stage": "law"}
+    for b in [x for x in pick if x["CHAPTER_NUM"] and x["MEASURE_TYPE"] not in ("AB", "SB")][:3]:
+        checks[f"{b['MEASURE_TYPE']}{int(b['MEASURE_NUM'])}"] = {"outcome": "adopted", "stage": "adopted"}
+    for b in [x for x in pick if x["MEASURE_TYPE"] in ("HR", "SR") and x["CURRENT_STATUS"] == "Passed"][:2]:
+        checks[f"{b['MEASURE_TYPE']}{int(b['MEASURE_NUM'])}"] = {"outcome": "adopted"}
     for b in [x for x in pick if x["CURRENT_STATUS"] == "Vetoed" and not x["CHAPTER_NUM"]][:3]:
         checks[f"{b['MEASURE_TYPE']}{int(b['MEASURE_NUM'])}"] = {"outcome": "vetoed"}
     for b in [x for x in pick if x["CURRENT_STATUS"] == "In Committee Process" and x["MEASURE_TYPE"] in ("AB", "SB")][:3]:

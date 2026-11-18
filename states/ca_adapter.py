@@ -18,7 +18,7 @@ from __future__ import annotations
 
 import collections
 import datetime
-from typing import Any, Dict, List, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 
 from .ca import CA
 from .ca_pubinfo import Export, bill_id_parts
@@ -41,6 +41,15 @@ END_CLASS: Dict[str, str] = {
 # counted as `end_status_blank`, never routed.
 PARTY = {"DEM": "D", "REP": "R"}
 HOUSES = {"Assembly", "Senate"}
+# Measures the Governor never acts on (Joint Rules; Cal. Const. Art. XVIII): concurrent and joint resolutions and
+# constitutional amendments are filed with the Secretary of State and given a RESOLUTION chapter number — that number
+# means "adopted", never "signed into law" (Codex #274: 414 resolutions + 5 ACAs on 2025-26 carry one).
+NO_GOVERNOR = {"ACR", "SCR", "AJR", "SJR", "HR", "SR", "ACA", "SCA"}
+# One-house resolutions end on their own house's vote: BILL_TBL CURRENT_STATUS 'Passed' (267 on 2025-26).
+ONE_HOUSE = {"HR", "SR"}
+# Malformed rows in these tables mean a bill (or one of its actions) is missing from the build: refuse to publish.
+# Measured 0 on the full 2025-26 export, so any count is an upstream anomaly, never routine (Codex #274).
+UNIVERSE_TABLES = ("BILL_TBL", "BILL_HISTORY_TBL")
 # pubinfo names the lower chamber "Assembly"; the contract calls it "House" (states/ca.py CHAMBER_DISPLAY shows it).
 TO_CONTRACT = {"Assembly": "House", "Senate": "Senate"}
 STAGE_RANK = {s.id: i for i, s in enumerate(CA.stages)}
@@ -70,7 +79,11 @@ def committee_names(ex: Export) -> Dict[str, str]:
     return out
 
 
-def build_records(ex: Export, today: datetime.date, now_utc: str) -> Tuple[List[dict], dict]:
+def build_records(ex: Export, today: datetime.date, now_utc: str,
+                  as_of_utc: Optional[str] = None) -> Tuple[List[dict], dict]:
+    """`now_utc` = when we checked; `as_of_utc` = when the source published the export (the job always passes it;
+    the goldens, which have no publication time, stamp records with the check time)."""
+    data_as_of = as_of_utc or now_utc
     names = committee_names(ex)
     bills = {r["BILL_ID"]: r for r in ex.rows("BILL_TBL")}
     session = collections.Counter(b["SESSION_YEAR"] for b in bills.values()).most_common(1)[0][0] if bills else ""
@@ -80,13 +93,26 @@ def build_records(ex: Export, today: datetime.date, now_utc: str) -> Tuple[List[
     outside = collections.Counter(v["MEASURE_TYPE"] for v in bills.values() if v["MEASURE_TYPE"] not in TYPE_NAME)
     bills = {k: v for k, v in bills.items() if v["MEASURE_TYPE"] in TYPE_NAME}
     hist: Dict[str, List[dict]] = collections.defaultdict(list)
+    prefix = f"{session}0"          # current session, regular (SESSION_NUM 0) — the same filter as the universe
+    orphans = set()
     for h in ex.rows("BILL_HISTORY_TBL"):
         if h["BILL_ID"] in bills:
             hist[h["BILL_ID"]].append(h)
+        elif h["BILL_ID"].startswith(prefix):
+            parts = bill_id_parts(h["BILL_ID"])
+            if parts is None or parts[1] in TYPE_NAME:   # GRP and other no-house measures are counted elsewhere
+                orphans.add(h["BILL_ID"])
     # latest version per bill: subject (title) + authors
     subject = {}
+    has_text = set()
     for v in ex.rows("BILL_VERSION_TBL"):
         subject[v["BILL_VERSION_ID"]] = v["SUBJECT"]
+        has_text.add(v["BILL_ID"])
+    # A history-only id WITH a published version is a real measure missing from BILL_TBL (an anomaly, Health limit 0).
+    # One with NO version ever published is a stray history row (2025-26: SB2510-2512, one "Introduced" row each,
+    # no text) — counted separately so a permanent upstream stray never holds the Health check red.
+    strays = sorted(o for o in orphans if o not in has_text)
+    orphans = {o for o in orphans if o in has_text}
     authors: Dict[str, List[dict]] = collections.defaultdict(list)
     latest_ver = {b["LATEST_BILL_VERSION_ID"]: k for k, b in bills.items()}
     for a in ex.rows("BILL_VERSION_AUTHORS_TBL"):
@@ -169,12 +195,15 @@ def build_records(ex: Export, today: datetime.date, now_utc: str) -> Tuple[List[
             if house == "Governor" and cls not in ("signed", "chaptered", "vetoed"):
                 stage = _advance(stage, "governor")
         status = b["CURRENT_STATUS"]
-        if b["CHAPTER_NUM"]:
+        if mtype in NO_GOVERNOR and (b["CHAPTER_NUM"] or status == "Chaptered"
+                                     or (mtype in ONE_HOUSE and status == "Passed")):
+            outcome, stage = "adopted", _advance(stage, "adopted")
+        elif mtype in NO_GOVERNOR:
+            outcome = "dead" if last_cls == "died" else "in_progress"
+        elif b["CHAPTER_NUM"]:
             outcome, stage = "signed", _advance(stage, "law")
         elif status == "Vetoed" or vetoed_seen:
             outcome = "vetoed"
-        elif is_res and status == "Chaptered":
-            outcome, stage = "adopted", _advance(stage, "adopted")
         elif last_cls == "died":
             outcome = "dead"
         elif stage == "governor":
@@ -210,7 +239,7 @@ def build_records(ex: Export, today: datetime.date, now_utc: str) -> Tuple[List[
             "upcoming": sorted(hearings.get(bid, []), key=lambda x: x["date"]),
             "last_action_date": last_row["date"],
             "history": history,
-            "data_as_of_utc": now_utc,
+            "data_as_of_utc": data_as_of,
             "source": CA.source_name,
             "legislation_class": TYPE_NAME.get(mtype, mtype),
             "copatrons": [{"name": a["NAME"], "member_id": "", "role": a["CONTRIBUTION"].title(),
@@ -221,6 +250,13 @@ def build_records(ex: Export, today: datetime.date, now_utc: str) -> Tuple[List[
         "state": CA.code,
         "session_code": session,
         "universe_declared": len(bills),
+        # the key the site's header + Health read for every state (web/src/data/gviz.ts findCompleteness)
+        "universe_count": len(bills),
+        # history rows naming a bill BILL_TBL does not hold (current session, regular) — a structural join miss
+        "in_history_not_in_universe": sorted(orphans)[:50],
+        "in_history_not_in_universe_count": len(orphans),
+        "history_only_no_text": strays[:50],
+        "history_only_no_text_count": len(strays),
         "measures_outside_both_houses": dict(outside),
         "records_written": len(records),
         "actions_total": actions_total,
@@ -230,13 +266,20 @@ def build_records(ex: Export, today: datetime.date, now_utc: str) -> Tuple[List[
         "end_status_unclassified": sum(unclassified.values()),
         "end_status_unclassified_sample": sorted(unclassified)[:10],
         "rows_with_wrong_field_count": dict(ex.bad_rows),
+        "rows_with_wrong_field_count_total": sum(ex.bad_rows.values()),
+        "session_display": f"{session[:4]}-{session[4:]} Regular Session" if len(session) == 8 else "",
         "checked_at_utc": now_utc,
     }
     return records, completeness
 
 
-def run_intake(export: Export, today: datetime.date, now_utc: str) -> Tuple[List[dict], dict]:
-    records, comp = build_records(export, today, now_utc)
+def run_intake(export: Export, today: datetime.date, now_utc: str,
+               as_of_utc: Optional[str] = None) -> Tuple[List[dict], dict]:
+    records, comp = build_records(export, today, now_utc, as_of_utc)
+    broken = {t: n for t, n in export.bad_rows.items() if t in UNIVERSE_TABLES and n}
+    if broken:
+        raise ValueError(f"CA export has rows with the wrong field count in {broken} — a bill or action would be "
+                         f"missing; refusing to publish (fail closed)")
     if comp["records_written"] != comp["universe_declared"]:
         raise ValueError(f"CA export holds {comp['universe_declared']} bills but {comp['records_written']} built — "
                          f"refusing to publish a partial universe (fail closed)")

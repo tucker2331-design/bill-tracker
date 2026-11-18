@@ -2,7 +2,7 @@
 tags: [knowledge, california, ca, pubinfo, source, terms, multi-state]
 updated: 2026-11-18
 status: active
-open_loop: CA site — intake built and tested on the real 2025-26 export; owner steps before it is live (CA spreadsheet, Cloudflare Worker, the Assembly display label in the SPA). See "To go live".
+open_loop: CA site — intake merged-ready and tested on the real 2025-26 export; owner step left before it is live (the Cloudflare Worker bill-tracker-ca). See "To go live".
 ---
 
 # California — pubinfo (Legislative Counsel's bulk database)
@@ -38,6 +38,14 @@ Governor, Chaptered, Vetoed). The adapter routes on those fields only — cleane
 except code tables, 1.1 GB, daily) · `pubinfo_<Day>.zip` (that day's changed rows, 27 KB–870 KB). **Daily by
 construction**; the site says "as of" the export date and never claims faster.
 
+**The job reads the newest `pubinfo_daily_<Day>.zip`** (by the index's Last-modified column), not the yearly file —
+the yearly file is rebuilt only on Sunday, so reading it would miss Monday–Saturday (Codex #274, case law #162).
+Verified 2026-11-18 by reading the daily zip's directory with one range request: it carries every table the contract
+reads (BILL, BILL_HISTORY, BILL_VERSION, BILL_VERSION_AUTHORS, LEGISLATOR, BILL_SUMMARY_VOTE, COMMITTEE_HEARING,
+LOCATION_CODE, + analysis/motion/daily-file/agenda/veto); only CODES_TBL and the LAW_* tables are absent. Records are
+stamped with the file's own HTTP `Last-Modified` (`source_published_utc`), never our clock. The CI fetch cache is
+pruned to the files a run used.
+
 ## Built (2026-11-18)
 - `states/ca.py` — the contract: two-year session (`20252026`), house-of-origin deadline as the crossover marker,
   Assembly shown via `CHAMBER_DISPLAY` (the contract's lower chamber is "House" — every consumer reads House/Senate).
@@ -53,8 +61,11 @@ construction**; the site says "as of" the export date and never claims faster.
 
 **Measured on the full 2025-26 export (2026-11-18):** 5,040 measures built (2,796 AB · 1,447 SB · 797 resolutions
 and amendments), 1 GRP counted outside both houses, 88,823 actions, 36 rescinded, 28 with a blank status (history
-only), **0 unclassified**, 0 malformed rows; outcomes: 2,249 chaptered · 771 died · 212 vetoed (incl. 31 with an
-override pending) · 31 → 0 awaiting the Governor after the veto fix · 1,777 in progress (session ends 30 Nov);
+only), **0 unclassified**, 0 malformed rows; outcomes (after the #274 fold-in): 1,830 signed (AB/SB with a chapter
+number) · 686 adopted (419 chaptered resolutions and ACAs + 267 HR/SR passed — none is "signed": the Governor never acts
+on them) · 771 died · 243 vetoed (212 with status Vetoed + 31 with a veto override pending) · 0 awaiting the Governor
+· 1,510 in progress (session ends 30 Nov); 3 stray history ids with no text (SB2510–2512) counted as
+`history_only_no_text`;
 281 House/Senate Resolutions have no subject line in the source (counted as `titles_blank`); co-author party joined
 for 31,468 of 31,472. Dry run: 1 request (the index) when the session file is cached.
 

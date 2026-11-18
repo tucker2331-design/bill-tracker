@@ -4,8 +4,11 @@ Metrics_History heartbeat row).
 
   * Fetching: states/ca_fetch.BulkFetcher — pubinfo bulk files only (the interactive leginfo site is never
     fetched), streamed to disk, at most once per URL per 20 h, honest User-Agent, a 401/403/429 stops the run.
-  * Session: the newest `pubinfo_<year>.zip` named on the download index (discovered, never hardcoded). That file is
-    rebuilt each Sunday; Legislative Counsel publishes daily — the site says "as of" the export, never faster.
+  * Source file: the newest `pubinfo_daily_<Day>.zip` on the download index, by the index's own Last-modified column
+    (discovered, never hardcoded). It is the FULL current session (every table the bill contract reads) rebuilt each
+    day; the yearly `pubinfo_<year>.zip` is rebuilt only on Sunday, so reading it would miss Monday–Saturday (Codex
+    #274). Records are stamped "as of" the file's own HTTP Last-Modified, never our clock — a source that stops
+    publishing shows its true age on Health.
   * Building: states/ca_adapter.run_intake (fail closed on a partial universe).
 
 Usage:  python3 ca_bill_tracker.py --dry-run   # fetch + build, print the completeness payload, write nothing
@@ -21,7 +24,7 @@ import pytz
 
 from bill_rows import BILL_TRACKER_HEADER, bill_tracker_rows
 from states import ca_adapter, ca_pubinfo, get_state
-from states.ca_fetch import BulkFetcher
+from states.ca_fetch import BulkFetcher, newest_daily
 
 CA = get_state("CA")
 TAB = "Bill_Tracker"
@@ -34,21 +37,19 @@ ORIGIN = "bill_system_metrics"
 CACHE = os.environ.get("CA_CACHE_DIR", os.path.join(os.path.dirname(os.path.abspath(__file__)), ".ca_cache"))
 
 
-def current_session_year(index_html: str) -> str:
-    years = sorted(set(re.findall(r'href="pubinfo_(\d{4})\.zip"', index_html)))
-    if not years:
-        raise ValueError("CA download index lists no pubinfo_<year>.zip — refusing to guess a session (fail closed)")
-    return years[-1]
-
-
 def build(fetcher: BulkFetcher, now=None):
     now = now or datetime.datetime.now(datetime.timezone.utc)
     today = now.astimezone(pytz.timezone(CA.timezone)).date()
-    year = current_session_year(fetcher.get(CA.urls["index"]).decode("utf-8", "replace"))
+    name = newest_daily(fetcher.get(CA.urls["index"]).decode("utf-8", "replace"))
+    url = CA.urls["index"] + name
     schema = ca_pubinfo.load_schema(fetcher.get(CA.urls["index"] + "pubinfo_load.zip"))
-    ex = ca_pubinfo.Export(fetcher.path(CA.urls["session_zip"].format(year=year)), schema)
-    records, comp = ca_adapter.run_intake(ex, today, now.strftime("%Y-%m-%dT%H:%M:%SZ"))
-    comp["requests_made"] = fetcher.requests_made
+    ex = ca_pubinfo.Export(fetcher.path(url), schema)
+    published = fetcher.published_utc(url)
+    if not published:
+        raise ValueError(f"{name} came with no Last-Modified — the export's own date is unknown; refusing to stamp it "
+                         f"with our clock (fail closed)")
+    records, comp = ca_adapter.run_intake(ex, today, now.strftime("%Y-%m-%dT%H:%M:%SZ"), as_of_utc=published)
+    comp.update({"source_file": name, "source_published_utc": published, "requests_made": fetcher.requests_made})
     return records, comp
 
 
@@ -91,7 +92,10 @@ def sheet_id() -> str:
 
 def main(argv):
     fetcher = BulkFetcher(CACHE)
-    records, comp = build(fetcher)
+    try:
+        records, comp = build(fetcher)
+    finally:
+        print(f"CA fetch cache: removed {fetcher.prune_untouched()} file(s) this run did not use")
     print(json.dumps(comp, indent=1))
     if "--dry-run" in argv:
         return 0

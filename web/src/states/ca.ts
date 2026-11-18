@@ -49,6 +49,7 @@ export const CA: StateConfig = {
   calendarNote: "",
   intakeChecks: [
     { key: "end_status_unclassified", label: "Actions with a status we do not recognise", limit: 0, cat: "Accuracy" },
+    { key: "rows_with_wrong_field_count_total", label: "Source rows we could not read", limit: 0, cat: "Completeness" },
     { key: "titles_blank", label: "Bills with no subject line in the source (House and Senate resolutions)", limit: 300, cat: "Completeness" },
   ],
 };

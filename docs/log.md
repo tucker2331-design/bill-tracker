@@ -8,6 +8,14 @@ status: active
 
 Append-only, reverse-chronological (newest at top). Each entry opens with `## [YYYY-MM-DD] <type> | <title>`.
 
+## [2026-11-18] fold-in | #274 Codex review — four CA findings fixed (case law #162)
+Codex (on 555516c): P1 malformed BILL_TBL rows skipped before the universe was counted → malformed BILL_TBL /
+BILL_HISTORY_TBL rows now refuse publication, others counted on Health; P1 the job read the Sunday-only yearly file →
+reads the newest `pubinfo_daily_<Day>.zip` and stamps records with its Last-Modified; P2 chaptered resolutions shown as
+signed → `NO_GOVERNOR` types are adopted (also caught 267 HR/SR "Passed" shown in progress); P2 the SPA could not find
+the payload → `universe_count` + `session_display` + a real `in_history_not_in_universe`. Full export: 1,830 signed ·
+686 adopted · 0 unclassified · 0 malformed. test_ca_intake 37 checks.
+
 ## [2026-11-18] pr | California site + four speeds + PA statistics and drafting-room research (#274 opened)
 Opened tucker2331-design/bill-tracker#274 from `claude/youthful-gauss-9lr2zy`: California intake/site scaffold (sheet +
 D1 wired), the four-speed switch (VA/CA/NY daily, PA fast), and the PA statistics / drafting-room research.
