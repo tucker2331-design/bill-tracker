@@ -101,6 +101,48 @@ def main():
                    "recent": [{"s": r.session[:4] + "–" + str(int(r.session[:4]) + 1)[2:], "bill": ("HB " if r.body == "H" else "SB ") + str(r.number),
                                "who": f"{r.p_name.title()} ({r.p_party})", "far": far(r)} for r in g.head(6).itertuples()]}
     out["earlier_bills"] = eb
+    # v4: law + part (the part = the "in <article>" phrase PA titles carry after the law's name)
+    import re as _re, html as _html, zipfile as _zf, glob as _glob
+
+    def part_of(t, law):
+        i = t.find(law)
+        seg = t[i + len(law):] if i >= 0 else t
+        m = _re.search(r"\bin ([a-z][a-z ,\-'&]+?)(?:,| and,|;| further| providing|$)", seg)
+        return m.group(1).strip() if m else "(whole law)"
+    F["part"] = [part_of(t, l) if isinstance(l, str) else None for t, l in zip(F.title, F.law)]
+    zf = _zf.ZipFile(_glob.glob(os.path.join(ROOT, "tools/historical_cache/pa/2025_0/*.zip"))[0])
+    xt = zf.read([x for x in zf.namelist() if x.lower().endswith(".xml")][0]).decode("utf-8", "replace")
+    memo = {}
+    for b in _re.finditer(r'<bill id="2025\d([HS])B(\d+)".*?</bill>', xt, _re.S):
+        mm = _re.search(r"<cosponsorshipMemo[^>]*>(.*?)</cosponsorshipMemo>", b.group(0), _re.S)
+        if mm:
+            memo[(b.group(1), int(b.group(2)))] = _html.unescape(mm.group(1)).strip()
+    parts = {}
+    for law in LAWS:
+        G = F[(F.law == law)]
+        Hh = G[(G.body == "H") & G.session.isin(RECENT) & (G.cmte != "(none)")]
+        plist = []
+        for pt, g in [("(all parts)", G)] + sorted(((p, x) for p, x in G.groupby("part")), key=lambda kv: -len(kv[1])):
+            hh = Hh if pt == "(all parts)" else Hh[Hh.part == pt]
+            if pt != "(all parts)" and len(g) < 6:
+                continue
+            vc = hh.cmte.value_counts()
+            rec_p = {"majority": {"k": int(hh[hh.in_maj == 1].out.sum()), "n": int((hh.in_maj == 1).sum())},
+                     "minority": {"k": int(hh[hh.in_maj == 0].out.sum()), "n": int((hh.in_maj == 0).sum())}}
+            done = g[g.session < "2025_0"]
+            gg = g.sort_values(["session", "number"], ascending=[False, False])
+            cur = g[g.session == "2025_0"]
+            plist.append({"part": pt, "bills": int(len(g)), "out": int(done.out.sum()), "done": int(len(done)), "laws": int(done.law_won.sum()),
+                          "rooms": [{"room": ROOMS.get(k, k.title()), "k": int(v), "n": int(len(hh))} for k, v in vc.head(3).items()],
+                          "record": rec_p,
+                          "recent": [{"s": r.session[:4] + "–" + str(int(r.session[:4]) + 1)[2:], "bill": ("HB " if r.body == "H" else "SB ") + str(r.number),
+                                      "who": f"{r.p_name.title()} ({r.p_party})",
+                                      "far": "law" if r.law_won else ("passed 2nd chamber" if r.passed2 else ("passed chamber" if r.passed else ("out of committee" if r.out else ("in committee" if r.session == "2025_0" else "died in committee"))))}
+                                     for r in gg.head(5).itertuples()],
+                          "memos": [{"title": memo[(r.body, r.number)], "who": f"{r.p_name.title()} ({r.p_party})",
+                                     "bill": ("HB " if r.body == "H" else "SB ") + str(r.number)} for r in cur.itertuples() if (r.body, r.number) in memo][:6]})
+        parts[law] = plist
+    out["parts"] = parts
     # 4. shapes for the map
     with open(os.path.join(ROOT, "tools", "historical_cache", "census", "district_shapes.json")) as f:
         out["shapes"] = json.load(f)["PA"]["lower"]
