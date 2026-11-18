@@ -1,0 +1,264 @@
+{
+ "fetched_utc": "2026-11-18",
+ "terms": "US federal government works (Census, NCES, CMS): public domain; Open States: CC0",
+ "sources": {
+  "acs5_2024_<table>.psv": {
+   "url": "https://www2.census.gov/programs-surveys/acs/summary_file/2024/table-based-SF/data/5YRData/acsdt5y2024-<table>.dat",
+   "note": "filtered to PA/VA state legislative districts (sumlev 610/620) and tracts; header kept"
+  },
+  "shells.psv": {
+   "url": "https://www2.census.gov/programs-surveys/acs/summary_file/2024/table-based-SF/documentation/ACS20245YR_Table_Shells.txt",
+   "note": "filtered to the tables used"
+  },
+  "shp/cb_2024_<st>_<layer>_500k.zip": {
+   "url": "https://www2.census.gov/geo/tiger/GENZ2024/shp/cb_2024_<st>_<layer>_500k.zip"
+  },
+  "rel/tab20_<sld>202420_<geo>_st<st>.txt": {
+   "url": "https://www2.census.gov/geo/docs/maps-data/data/rel2020/cd-sld/tab20_<sld>202420_<geo>_st<st>.txt"
+  },
+  "dl/publicsch.zip (NOT committed, 30 MB)": {
+   "url": "https://nces.ed.gov/programs/edge/data/EDGE_GEOCODE_PUBLICSCH_2425.zip"
+  },
+  "dl/nh.csv": {
+   "url": "https://data.cms.gov/provider-data/sites/default/files/resources/0970c657767e40f8521187d02ba8d0ed_1792181744/NH_ProviderInfo_Oct2026.csv",
+   "note": "CMS dataset 4pq5-n9py; URL changes monthly, resolve via the metastore"
+  },
+  "dl/hosp.csv": {
+   "url": "https://data.cms.gov/provider-data/sites/default/files/resources/d3bf87c5505155f549d603688414f3c6_1793059553/Hospital_General_Information_2.csv",
+   "note": "CMS dataset xubh-q36u"
+  },
+  "dl/hosp_geo.csv": {
+   "url": "https://geocoding.geo.census.gov/geocoder/locations/addressbatch",
+   "note": "PA+VA hospital addresses (public facility addresses), benchmark Public_AR_Current"
+  },
+  "../pa/openstates/va_people_current.csv": {
+   "url": "https://data.openstates.org/people/current/va.csv"
+  }
+ },
+ "files": {
+  "acs5_2024_b08201.psv": {
+   "bytes": 1328426,
+   "sha256": "253cce23e34b57d229ca8adaa3cf3de9e103d974b54493c97ef20eddcb069d1c"
+  },
+  "acs5_2024_b16005.psv": {
+   "bytes": 1698700,
+   "sha256": "315574367f984aeb8faeea7f29e1bdb0fe0b061ade41f4021cab36ab8ec9b1aa"
+  },
+  "zip_to_district.json": {
+   "bytes": 177582,
+   "sha256": "b70eb077042be7cad7197706c744edeeda4c694217750837eec560e8bebf8a2c"
+  },
+  "acs5_2024_b25070.psv": {
+   "bytes": 536576,
+   "sha256": "e26d905295cd4c4a3b718a7df15994ee3cec08a4780d98e348705b400e5da8d0"
+  },
+  "acs5_2024_b01003.psv": {
+   "bytes": 179037,
+   "sha256": "ba3a884fe8ed43e4efeb674d2823a5c8df8848f7dd233a5dd734eade5a391d60"
+  },
+  "acs5_2024_c24030.psv": {
+   "bytes": 2176978,
+   "sha256": "25d2cbbb3e2bca81223ec9c6c00fd393cb81416981e698a300b407b8dedb651b"
+  },
+  "acs5_2024_b22010.psv": {
+   "bytes": 447601,
+   "sha256": "3783d4212f889478c226107666c95227d54b7adb111dc7a618663e24d90bd963"
+  },
+  "acs5_2024_b28002.psv": {
+   "bytes": 677076,
+   "sha256": "1cd23676ae7d866f711f2a00bf6f20c3faab64db6c67925949b7bdcc7a2595cf"
+  },
+  "acs5_2024_b18101.psv": {
+   "bytes": 1774505,
+   "sha256": "414d6c1dbc3f0dc8af028eab7cf1fd1a7264bb6b3bac560089491ef388915b7c"
+  },
+  "acs5_2024_b25003.psv": {
+   "bytes": 274697,
+   "sha256": "06a32600c5e1898c9b4b48b08fb909a10d5928e767bb9a5db8394ef8cef6773a"
+  },
+  "acs5_2024_b17001.psv": {
+   "bytes": 2390080,
+   "sha256": "e518ebdf54b3ca39ac2c654159d004ffb844460a2d530de5dab90039c3b69e21"
+  },
+  "district_shapes.json": {
+   "bytes": 223468,
+   "sha256": "eaba7b63be41b8409968a0fe16b6f1d18b9258cbb1c66ef14570eb3b40f28b9d"
+  },
+  "acs5_2024_b01001.psv": {
+   "bytes": 2083472,
+   "sha256": "b17572d471d8230a690ecab8754504f19e2c7d6a6c59a18c2fd955047c7a4b1d"
+  },
+  "acs5_2024_b27010.psv": {
+   "bytes": 2606099,
+   "sha256": "7c0db3648581f28400e2e6881ab86fe6ceef1c632a1ebbf0df37b4d09dcdb619"
+  },
+  "acs5_2024_b21001.psv": {
+   "bytes": 1795837,
+   "sha256": "86acc81fa2ed9821079ab38c079f8435553dd834a4f1a602cc9d7f15eff73856"
+  },
+  "district_profiles.json": {
+   "bytes": 1012198,
+   "sha256": "f7891fea7ed99aff8ed02424c65b983d5cc2d847b3006b34f328b2fc4f9d93b9"
+  },
+  "acs5_2024_b19013.psv": {
+   "bytes": 198488,
+   "sha256": "56cbf0918d6085e48a0d3ad52396b7efb031e30af0d69aa15a9be9f5f8d6b789"
+  },
+  "acs5_2024_b05002.psv": {
+   "bytes": 1182402,
+   "sha256": "1608d0a1bb7018c9ed6840ba6ac80e0e7519a574b904cb42bb61e02f01c6cc77"
+  },
+  "shells.psv": {
+   "bytes": 61651,
+   "sha256": "95ac112adfe17811a909a3894ff08a53285eb9a6e47d8fa7e74561a5a77ad304"
+  },
+  "rel/tab20_sldl202420_place20_st42.txt": {
+   "bytes": 317854,
+   "sha256": "02ad72f8f729dd27c8d9baecbfef9f0dd93b5c8066f9342a61e1bd5d10515c61"
+  },
+  "rel/tab20_sldu202420_zcta520_st42.txt": {
+   "bytes": 343576,
+   "sha256": "7c53f78faa5b3e3b739713dcaff3f64c062c42b11f314ab0df18d5578e60833a"
+  },
+  "rel/tab20_sldl202420_zcta520_st42.txt": {
+   "bytes": 437189,
+   "sha256": "2bd865b972aa602cee855b711ff61e86f84ba862ec473e13743d27f023cb9b08"
+  },
+  "rel/tab20_sldl202420_county20_st51.txt": {
+   "bytes": 36977,
+   "sha256": "a0b261a10897bb9df42e3295bbf59d01641bc786ff0b19e0320fe1d7eb6c66b6"
+  },
+  "rel/tab20_sldu202420_tract20_st42.txt": {
+   "bytes": 548714,
+   "sha256": "f17aa961f1b3abc13ed7dd1cc49864f857386d88cca4c107f6495e21a5bfcf2b"
+  },
+  "rel/tab20_sldl202420_sdcombo20_st51.txt": {
+   "bytes": 41282,
+   "sha256": "0072d73a39e34300cf480a3734cabbf706ef0d94ed453d2fff8b0a85504f5da5"
+  },
+  "rel/tab20_sldu202420_cousub20_st51.txt": {
+   "bytes": 102064,
+   "sha256": "bf19635c8dff68bec6be0e14fbf31ecc6b423a6e8f017da4dc6de58969a9b74d"
+  },
+  "rel/tab20_sldl202420_tract20_st42.txt": {
+   "bytes": 593093,
+   "sha256": "fdd76ed353571e01345a63e4c159f1a82efe9dc27515876075b58a2f121d9abb"
+  },
+  "rel/tab20_sldu202420_sdcombo20_st51.txt": {
+   "bytes": 30562,
+   "sha256": "cbd4cf5e0bd2fcb471f6a579c3feae3cfc390eadb04e2874204cae53dcd3370e"
+  },
+  "rel/tab20_sldu202420_county20_st42.txt": {
+   "bytes": 18704,
+   "sha256": "37793458b636c2f2481592af2bc9223fa10736c8508df17e6dedf69b1405cb7b"
+  },
+  "rel/tab20_sldl202420_county20_st42.txt": {
+   "bytes": 40333,
+   "sha256": "4f305131621079304645fbf938f25965f10183c1b623d5e2b0a4a33d9c7f111d"
+  },
+  "rel/tab20_sldu202420_tract20_st51.txt": {
+   "bytes": 372924,
+   "sha256": "fdcf29d7f3a9a4a9bef76d24e63493e1e7a7cac5424931b28dbea6c15e3bcfdf"
+  },
+  "rel/tab20_sldl202420_place20_st51.txt": {
+   "bytes": 122742,
+   "sha256": "53523063d4b48b88c24be6ae96e27d02094f0d32d6ffaa77f5739256eec0dd51"
+  },
+  "rel/tab20_sldl202420_cousub20_st51.txt": {
+   "bytes": 119367,
+   "sha256": "23efad978493be4f2e7e604ea930720d7d3f5784a9f83fd52f3e7a11b4e56d54"
+  },
+  "rel/tab20_sldl202420_cousub20_st42.txt": {
+   "bytes": 421496,
+   "sha256": "60266467702a40aff52283f05fe92f20731d6767e117f2bfd1d40c9a70821188"
+  },
+  "rel/tab20_sldl202420_zcta520_st51.txt": {
+   "bytes": 212273,
+   "sha256": "d1294022ae7376ec189435e24957e8c462d4f65e78181ebcc209488919291029"
+  },
+  "rel/tab20_sldu202420_county20_st51.txt": {
+   "bytes": 27143,
+   "sha256": "5e6f203fa9814cfd6d2bb0bf9a639e872a118358ccc47bf006bc953f80ea7e12"
+  },
+  "rel/tab20_sldl202420_tract20_st51.txt": {
+   "bytes": 407190,
+   "sha256": "55360df2503f63de1fcca76fadf4255b36933f2cdd5f69aeedf758da90171e86"
+  },
+  "rel/tab20_sldu202420_zcta520_st51.txt": {
+   "bytes": 176846,
+   "sha256": "ccc93e0acbbf2fed31c748d7fabc002ba71098a646620712ba3ed599efdb303f"
+  },
+  "rel/tab20_sldl202420_sdcombo20_st42.txt": {
+   "bytes": 142885,
+   "sha256": "f628822cd56ca0e7ecd332d426750186b379d192d4047760fd142646dbcfdf23"
+  },
+  "rel/tab20_sldu202420_place20_st51.txt": {
+   "bytes": 110966,
+   "sha256": "bf2ee318b3d9e7225dfd5c1e153ee200f310465126fdb9c3379df3e9a129360e"
+  },
+  "rel/tab20_sldu202420_sdcombo20_st42.txt": {
+   "bytes": 105869,
+   "sha256": "010b13e373b43e754de0e5e642481c60cde98d679b06f54c6cc932aea8be8b2c"
+  },
+  "rel/tab20_sldu202420_cousub20_st42.txt": {
+   "bytes": 413184,
+   "sha256": "e79a93c4dc28ceea54cc31ae2799a56a44550c18ba68912f5551cb7acd6d939d"
+  },
+  "rel/tab20_sldu202420_place20_st42.txt": {
+   "bytes": 296199,
+   "sha256": "5f7c78f9075df501ec5fdaf7d2968930b1b8ea545cce13cbfd2aa3f21a0703d4"
+  },
+  "dl/hosp.csv": {
+   "bytes": 1461350,
+   "sha256": "ff2a82a7149975fb86348e7f901aa3bcd9f3701e8b0ecd0ab34702df193ff559"
+  },
+  "dl/publicsch_2526.zip": {
+   "bytes": 1245,
+   "sha256": "dc1d54dab6ec8c00f70137927504e4f222c8395f10760b6beecfcfa94e08249f"
+  },
+  "dl/hosp_addr.csv": {
+   "bytes": 13840,
+   "sha256": "0ff0e47d2737079717e017a8883c069ca70e4a332ada73c3ef67724c96ea72e1"
+  },
+  "dl/hosp_geo.csv": {
+   "bytes": 41512,
+   "sha256": "10b16ebd817a3179dd7b39f06269ff2964328afe5fda724704c2f4d35e530790"
+  },
+  "dl/nh.csv": {
+   "bytes": 9218563,
+   "sha256": "ab70309ae6f0ee86b19fe9acb61a6d2953f970d3b09e80bb9b090e4b19ce35a2"
+  },
+  "dl/publicsch.zip": {
+   "bytes": 30448565,
+   "sha256": "9dc51ecd5cdf6e38bdb679f7ac95e2bf73ee3fb48718b8612cf830800cffb288"
+  },
+  "dl/hosp_url.txt": {
+   "bytes": 148,
+   "sha256": "5fdacbd8a24a3df56a540097a11535fd77688ae777b2440e80153dc35df5d352"
+  },
+  "shp/cb_2024_51_sldu_500k.zip": {
+   "bytes": 294694,
+   "sha256": "66a49a917ddbba129e05ef71eab4840b9a69ef2b0eb03ae088a5eefdee756ed5"
+  },
+  "shp/cb_2024_51_tract_500k.zip": {
+   "bytes": 1773476,
+   "sha256": "6e3476bfd6380dc12e98544462395909239abf7f236f2a3a9dc0ce14775af247"
+  },
+  "shp/cb_2024_42_sldu_500k.zip": {
+   "bytes": 213083,
+   "sha256": "8e0b6aa4e9099cd9c10515f550ebf7acd94d1c11bef3888f41d343093460447a"
+  },
+  "shp/cb_2024_51_sldl_500k.zip": {
+   "bytes": 457509,
+   "sha256": "92056122ff710075621b521701dcfa94f25dd7ca9f642b247c38248ab9782907"
+  },
+  "shp/cb_2024_42_sldl_500k.zip": {
+   "bytes": 431780,
+   "sha256": "167882e4197742620cfe5f27d32d549e1cee85953ae449b7c5edf0f6b026c634"
+  },
+  "shp/cb_2024_42_tract_500k.zip": {
+   "bytes": 1678131,
+   "sha256": "6e26f41d57897c0fb3fc8e67ee0a297c0a94d28efddbd7e00da82e1e8c49f1ca"
+  }
+ }
+}

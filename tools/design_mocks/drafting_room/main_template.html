@@ -1,0 +1,336 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Drafting room — idea page</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<style>
+body{margin:0;background:#0B0D0E}
+a{color:#86B6D3;text-decoration:none}a:hover{text-decoration:underline}
+.seg{display:inline-flex;background:#22272A;border-radius:9px;padding:2px;gap:2px}
+.seg button{font:inherit;font-size:13px;font-weight:600;border:0;border-radius:7px;padding:7px 12px;min-height:36px;background:transparent;color:#A6AFB4;cursor:pointer}
+.seg button.on{background:#2A3034;color:#F0F2F3}
+.chip{font:inherit;font-size:13px;font-weight:600;border:1px solid rgba(255,255,255,.14);border-radius:999px;padding:7px 12px;min-height:36px;background:transparent;color:#A6AFB4;cursor:pointer;text-align:left}
+.chip.on{border-color:#86B6D3;color:#F0F2F3}
+.row{display:grid;gap:12px;align-items:center;padding:11px 16px;border-top:1px solid rgba(255,255,255,.08);min-height:48px}
+.row:first-child{border-top:0}
+.tap{cursor:pointer}.tap:hover{background:#22272A}
+.sc{font-size:10.5px;letter-spacing:.07em;text-transform:uppercase;font-weight:600;color:#A6AFB4}
+.gh{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.gh .gt{font-size:10.5px;font-weight:800;letter-spacing:.6px;text-transform:uppercase;color:#A6AFB4}
+.gh .rule{flex:1;height:1px;background:rgba(255,255,255,.14);min-width:24px}
+.faint{color:#727B80;font-size:12.5px}
+.soft{color:#A6AFB4}
+.num{font-weight:700;color:#F0F2F3}
+.tbl{overflow-x:auto}
+path.d{stroke:#0B0D0E;stroke-width:.6;cursor:pointer}
+path.d:hover{stroke:#F0F2F3;stroke-width:1.4}
+</style>
+</helmet>
+<div style="font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', system-ui, 'Segoe UI', Roboto, 'Helvetica Neue', sans-serif; color: #F0F2F3; background: #0B0D0E; font-size: 14px; line-height: 1.5; padding: 24px 16px 72px">
+<div style="max-width: 880px; margin: 0 auto; display: flex; flex-direction: column; gap: 28px">
+
+  <header style="display: flex; flex-direction: column; gap: 6px">
+    <a href="#" style="font-size: 13px">‹ Drafting room</a>
+    <h1 style="margin: 2px 0 0; font-size: 24px; font-weight: 700; letter-spacing: -.3px">Care for nursing-home residents</h1>
+    <div class="soft">An idea · not yet a bill · Pennsylvania House first</div>
+    <div class="faint">Only your team sees this page. Every number is from public records; tap any row for its source.</div>
+    <nav style="display: flex; flex-wrap: wrap; gap: 6px 14px; margin-top: 6px; font-size: 13px">
+      <a href="#s1">1 Who it affects</a><a href="#s2">2 Which room</a><a href="#s3">3 Who could carry it</a>
+      <a href="#s4">4 One district's case</a><a href="#s5">5 Support</a><a href="#s6">6 When to file</a><a href="#s7">7 Versions</a>
+    </nav>
+  </header>
+
+  <!-- 1 WHO IT AFFECTS -->
+  <section id="s1" style="display: flex; flex-direction: column; gap: 10px">
+    <div class="gh"><span class="gt">1 · Who it affects, and where</span><span class="rule"></span></div>
+    <div style="display: flex; flex-wrap: wrap; gap: 10px">
+      <div style="flex: 1 1 240px; background: #1A1E20; border-radius: 14px; padding: 14px 16px">
+        <div class="sc">Residents 65 and over</div>
+        <div style="font-size: 22px; font-weight: 700">{{ swSeniors }}</div>
+        <div class="soft">{{ swShare }} of Pennsylvanians</div>
+      </div>
+      <div style="flex: 1 1 240px; background: #1A1E20; border-radius: 14px; padding: 14px 16px">
+        <div class="sc">Nursing homes</div>
+        <div style="font-size: 22px; font-weight: 700">{{ swHomes }}</div>
+        <div class="soft">{{ swBeds }} certified beds</div>
+      </div>
+    </div>
+    <div class="gh" style="justify-content: space-between">
+      <div class="seg">
+        <button class="{{ mPeopleCls }}" onClick="{{ setPeople }}">Residents 65+</button>
+        <button class="{{ mBedsCls }}" onClick="{{ setBeds }}">Nursing-home beds</button>
+      </div>
+      <span class="faint">203 House districts · shade = {{ shadeLabel }}</span>
+    </div>
+    <div style="background: #1A1E20; border-radius: 14px; padding: 12px">
+      <svg viewBox="0 0 1000 {{ mapH }}" style="width: 100%; height: auto; display: block" role="img" aria-label="Map of Pennsylvania House districts">
+        <sc-for list="{{ paths }}" as="p" hint-placeholder-count="20">
+          <path class="d" d="{{ p.d }}" fill="{{ p.fill }}" onMouseEnter="{{ p.hover }}" onClick="{{ p.pick }}"></path>
+        </sc-for>
+        <sc-if value="{{ hasPicked }}" hint-placeholder-val="{{ false }}">
+          <path d="{{ pickedPath }}" fill="none" stroke="#86B6D3" stroke-width="2.2" pointer-events="none"></path>
+        </sc-if>
+      </svg>
+      <div style="display: flex; flex-wrap: wrap; align-items: center; gap: 10px; padding: 8px 4px 0">
+        <sc-for list="{{ legend }}" as="l" hint-placeholder-count="5">
+          <span style="display: inline-flex; align-items: center; gap: 5px; font-size: 12px; color: #A6AFB4"><span style="width: 14px; height: 10px; border-radius: 2px; background: {{ l.c }}"></span>{{ l.t }}</span>
+        </sc-for>
+      </div>
+      <div style="padding: 10px 4px 2px; min-height: 22px; font-size: 13px">
+        <span class="num">{{ hv.label }}</span> <span class="soft">{{ hv.line }}</span>
+      </div>
+    </div>
+    <div class="gh"><span class="gt" style="font-weight: 700">Most {{ rankLabel }}</span><span class="faint">top 10 of 203 · tap a district for its one-page case</span><span class="rule"></span></div>
+    <div class="tbl" style="background: #1A1E20; border-radius: 14px">
+      <div class="row" style="grid-template-columns: 28px minmax(150px,1.4fr) minmax(130px,1fr) minmax(120px,1fr) minmax(110px,.9fr); min-width: 600px; min-height: 36px">
+        <span class="sc">#</span><span class="sc">District</span><span class="sc">Residents 65+</span><span class="sc">Nursing homes</span><span class="sc">Seat on the rooms</span>
+      </div>
+      <sc-for list="{{ top10 }}" as="r" hint-placeholder-count="10">
+        <div class="row tap" onClick="{{ r.pick }}" style="grid-template-columns: 28px minmax(150px,1.4fr) minmax(130px,1fr) minmax(120px,1fr) minmax(110px,.9fr); min-width: 600px">
+          <span class="faint">{{ r.rank }}</span>
+          <span><span style="font-weight: 600">{{ r.name }}</span> <span class="faint">({{ r.party }}) · HD {{ r.dn }}</span></span>
+          <span><span class="num">{{ r.seniors }}</span> <span class="soft">· {{ r.share }}</span></span>
+          <span><span class="num">{{ r.homes }}</span> <span class="soft">· {{ r.beds }} beds</span></span>
+          <span class="sc">{{ r.seat }}</span>
+        </div>
+      </sc-for>
+    </div>
+    <div class="faint">House districts hold about the same number of people (about 64,000), so residents rank almost the same by count or by share. Places do not: a district can have few older residents and many beds. People: Census ACS 2020–24, 2024 districts. Places: CMS nursing-home file (Oct 2026), mapped by address. {{ hospGap }}</div>
+  </section>
+
+  <!-- 2 WHICH ROOM -->
+  <section id="s2" style="display: flex; flex-direction: column; gap: 10px">
+    <div class="gh"><span class="gt">2 · Which room it goes to, and what comes after</span><span class="rule"></span></div>
+    <div class="soft">The room is set by which law the draft changes. Pick one to see where bills like it went.</div>
+    <div style="display: flex; flex-wrap: wrap; gap: 8px">
+      <sc-for list="{{ lawChips }}" as="c" hint-placeholder-count="3">
+        <button class="{{ c.cls }}" onClick="{{ c.pick }}">{{ c.law }}</button>
+      </sc-for>
+    </div>
+    <div style="background: #1A1E20; border-radius: 14px">
+      <sc-for list="{{ roomsFor }}" as="m" hint-placeholder-count="3">
+        <div class="row" style="grid-template-columns: minmax(0,1fr) minmax(90px,200px) 90px">
+          <span style="font-weight: 600">{{ m.room }}</span>
+          <span style="height: 6px; background: #22272A; border-radius: 3px; overflow: hidden"><span style="display: block; height: 6px; width: {{ m.w }}; background: #A6AFB4; border-radius: 3px"></span></span>
+          <span style="text-align: right"><span class="num">{{ m.k }}</span> <span class="soft">of {{ m.n }}</span></span>
+        </div>
+      </sc-for>
+    </div>
+    <div class="faint">House bills that amended this law, 2019–2024 sessions. Across the 175 laws with 20 or more bills, a bill went to its law's usual room 83% of the time.</div>
+    <div class="gh" style="margin-top: 6px; justify-content: space-between">
+      <span class="gt" style="font-weight: 700">The path, gate by gate</span>
+      <div class="seg">
+        <button class="{{ sMajCls }}" onClick="{{ setMaj }}">Majority sponsor</button>
+        <button class="{{ sMinCls }}" onClick="{{ setMin }}">Minority sponsor</button>
+      </div>
+    </div>
+    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 10px">
+      <sc-for list="{{ gates }}" as="g" hint-placeholder-count="4">
+        <div style="background: #1A1E20; border-radius: 14px; padding: 14px 16px; display: flex; flex-direction: column; gap: 4px">
+          <span class="sc">{{ g.step }}</span>
+          <span style="font-weight: 600">{{ g.title }}</span>
+          <span><span style="font-size: 20px; font-weight: 700">{{ g.k }}</span> <span class="soft">of {{ g.n }}</span></span>
+          <span class="faint">{{ g.what }}</span>
+        </div>
+      </sc-for>
+    </div>
+    <div class="faint">Each gate is its own record. We do not multiply them into one chance: the bills that reach a later gate are not a random draw of the ones before it. Majority sponsor = from the party that ran the House when the bill was filed (Republicans 2019–22, Democrats since 2023).</div>
+  </section>
+
+  <!-- 3 WHO COULD CARRY IT -->
+  <section id="s3" style="display: flex; flex-direction: column; gap: 10px">
+    <div class="gh"><span class="gt">3 · Who could carry it</span><span class="faint">members of {{ roomName }} · A–Z, not ranked</span><span class="rule"></span></div>
+    <div class="tbl" style="background: #1A1E20; border-radius: 14px">
+      <div class="row" style="grid-template-columns: minmax(170px,1.5fr) 92px minmax(120px,1fr) minmax(110px,1fr) 70px 60px 74px; min-width: 760px; min-height: 36px">
+        <span class="sc">Member</span><span class="sc">Party</span><span class="sc">Residents 65+</span><span class="sc">Nursing homes</span><span class="sc">New</span><span class="sc">Bills</span><span class="sc">Carried</span>
+      </div>
+      <sc-for list="{{ carriers }}" as="c" hint-placeholder-count="8">
+        <div class="row tap" onClick="{{ c.pick }}" style="grid-template-columns: minmax(170px,1.5fr) 92px minmax(120px,1fr) minmax(110px,1fr) 70px 60px 74px; min-width: 760px">
+          <span><span style="font-weight: 600">{{ c.name }}</span> <span class="faint">HD {{ c.dn }}</span><br/><span class="sc">{{ c.seat }}</span></span>
+          <span class="sc">{{ c.standing }}</span>
+          <span><span class="num">{{ c.seniors }}</span> <span class="soft">· {{ c.share }}</span></span>
+          <span><span class="num">{{ c.homes }}</span> <span class="soft">· {{ c.beds }}</span></span>
+          <span class="soft">{{ c.isNew }}</span>
+          <span class="soft">{{ c.filed }}</span>
+          <span class="soft">{{ c.carried }}</span>
+        </div>
+      </sc-for>
+    </div>
+    <div class="faint">New = first session in the House. Bills = bills they have filed this session. Carried = bills on these three laws they filed since 2023. A seat on the room: majority members of a PA committee got 20 points more of their own bills out than majority members off it; a majority chair's own bills got out 80% vs 41%. New members file fewer bills (median 8 vs 14 in the majority) and got theirs out at about the same rate.</div>
+    <div style="background: #1A1E20; border-radius: 14px; padding: 12px 16px" class="soft">Tested, and it did not hold: <span style="color: #F0F2F3">districts' make-up barely predicts who carries a subject.</span> Of 16 subject-and-chamber tests, 2 held (farming in the Senate, schools in the House); about 1 would pass by chance alone. So these district numbers are your argument in the meeting, not a forecast of who says yes.</div>
+  </section>
+
+  <!-- 4 ONE DISTRICT'S CASE -->
+  <section id="s4" style="display: flex; flex-direction: column; gap: 10px">
+    <div class="gh"><span class="gt">4 · One district's case</span><span class="faint">the page you leave behind · tap any district above to change it</span><span class="rule"></span></div>
+    <div style="background: #1A1E20; border-radius: 14px; padding: 18px 20px; display: flex; flex-direction: column; gap: 10px">
+      <div><span style="font-size: 18px; font-weight: 700">House District {{ fs.d }}</span> <span class="soft">· {{ fs.name }} ({{ fs.party }})</span></div>
+      <div class="faint">{{ fs.where }}</div>
+      <div style="display: flex; flex-direction: column; gap: 6px">
+        <sc-for list="{{ fs.lines }}" as="ln" hint-placeholder-count="5">
+          <div style="display: grid; grid-template-columns: 150px minmax(0,1fr); gap: 12px; padding-top: 6px; border-top: 1px solid rgba(255,255,255,.08)">
+            <span class="sc">{{ ln.k }}</span><span><span class="num">{{ ln.v }}</span> <span class="soft">{{ ln.rest }}</span></span>
+          </div>
+        </sc-for>
+      </div>
+      <div class="faint">Census ACS 2020–24 (margin ± shown), CMS nursing-home and hospital files (Oct 2026), Census 2024 district relationship files. The wording is the same for every district; only the numbers change.</div>
+      <div><button class="chip">Save as one page (PDF)</button></div>
+    </div>
+  </section>
+
+  <!-- 5 SUPPORT -->
+  <section id="s5" style="display: flex; flex-direction: column; gap: 10px">
+    <div class="gh"><span class="gt">5 · Line up support before filing</span><span class="rule"></span></div>
+    <div style="background: #1A1E20; border-radius: 14px">
+      <div class="row" style="grid-template-columns: 170px minmax(0,1fr)">
+        <span class="sc">Your members here</span>
+        <span><span class="soft">[team data]</span> Upload your members' ZIP codes and see how many live in each district. We keep the district, never the address. <span class="faint">A ZIP that spans two districts is split by land area and labelled as split.</span></span>
+      </div>
+      <div class="row" style="grid-template-columns: 170px minmax(0,1fr)">
+        <span class="sc">Co-sponsors to ask</span>
+        <span>{{ cosponsors }}</span>
+      </div>
+      <div class="row" style="grid-template-columns: 170px minmax(0,1fr)">
+        <span class="sc">Senate partner</span>
+        <span>{{ senatePartner }}</span>
+      </div>
+      <div class="row" style="grid-template-columns: 170px minmax(0,1fr)">
+        <span class="sc">A Senate twin?</span>
+        <span>Bills filed with a Senate twin got out of committee more often: majority 44% vs 37%, minority 12% vs 10%. Twins whose two sponsors share residents did no better (49% vs 53%).</span>
+      </div>
+    </div>
+    <div class="faint">Co-sponsors to ask = members of {{ roomName }} whose districts are in the top quarter for this measure. Shared residents are estimated from census tracts.</div>
+  </section>
+
+  <!-- 6 WHEN TO FILE -->
+  <section id="s6" style="display: flex; flex-direction: column; gap: 10px">
+    <div class="gh"><span class="gt">6 · When to file</span><span class="faint">{{ standingLabel }} sponsors · bills out of their first committee, 2009–2024</span><span class="rule"></span></div>
+    <div style="background: #1A1E20; border-radius: 14px; padding: 16px">
+      <div style="display: grid; grid-template-columns: repeat(5, minmax(0,1fr)); gap: 10px; align-items: end; height: 150px">
+        <sc-for list="{{ bars }}" as="b" hint-placeholder-count="5">
+          <div style="display: flex; flex-direction: column; justify-content: flex-end; align-items: stretch; height: 100%; gap: 4px" title="{{ b.tip }}">
+            <span style="text-align: center; font-size: 12.5px; font-weight: 700">{{ b.pct }}</span>
+            <span style="height: {{ b.h }}; background: #A6AFB4; border-radius: 4px 4px 0 0"></span>
+          </div>
+        </sc-for>
+      </div>
+      <div style="display: grid; grid-template-columns: repeat(5, minmax(0,1fr)); gap: 10px; border-top: 1px solid rgba(255,255,255,.14); padding-top: 6px">
+        <sc-for list="{{ bars }}" as="b" hint-placeholder-count="5">
+          <span style="text-align: center"><span style="display: block; font-size: 12.5px">{{ b.when }}</span><span class="faint">{{ b.kn }}</span></span>
+        </sc-for>
+      </div>
+    </div>
+    <div class="faint">Months after the session opened. Pennsylvania has no filing deadline; the two-year session ends 30 November of the even year. The same member's bills filed in the first three months got out 5 points more often than their later ones (715 member-sessions better, 556 worse). Bills filed in the last six months rarely move.</div>
+  </section>
+
+  <!-- 7 VERSIONS -->
+  <section id="s7" style="display: flex; flex-direction: column; gap: 10px">
+    <div class="gh"><span class="gt">7 · Versions and offers</span><span class="faint">team only</span><span class="rule"></span></div>
+    <div style="background: #1A1E20; border-radius: 14px">
+      <div class="row" style="grid-template-columns: 44px minmax(0,1fr) auto"><span class="num">A</span><span>[legislator] <span class="faint">· House · amends Health Care Facilities Act</span></span><span class="sc">[offered]</span></div>
+      <div class="row" style="grid-template-columns: 44px minmax(0,1fr) auto"><span class="num">B</span><span>[legislator] <span class="faint">· House · amends Older Adults Protective Services Act</span></span><span class="sc">[agreed]</span></div>
+      <div class="row" style="grid-template-columns: 44px minmax(0,1fr) auto"><span class="num">B-S</span><span>[legislator] <span class="faint">· Senate twin of B</span></span><span class="sc">[not offered]</span></div>
+    </div>
+    <div class="faint">Drafts that are never filed exist only here. A version's law decides its room (section 2), so two versions of one idea can face two different rooms.</div>
+  </section>
+
+  <div class="faint" style="border-top: 1px solid rgba(255,255,255,.08); padding-top: 12px">What each section is based on, what we tested and what did not hold, and what we cannot show yet: <a href="Evidence.dc.html">the evidence page</a>.</div>
+</div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1280,"height":4200}}'>
+/*DATA*/
+const RAMP = ["#30373A", "#525C61", "#7C878D", "#AAB3B8", "#DCE1E4"];
+const ROOM_OF = {};
+const F = (n) => Number(n).toLocaleString("en-US");
+const P = (x) => (x == null ? "—" : (100 * x).toFixed(1) + "%");
+function rows() {
+  return DATA.dist.map((a) => ({ d: a[0], name: a[1], party: a[2], seniors: a[3], share: a[4], moe: a[5], people: a[6],
+    homes: a[7], beds: a[8], hosp: a[9], seats: a[10], isNew: a[11], filed: a[12], carried: a[13], munis: a[14], sds: a[15],
+    counties: a[16], overlap: a[17] }));
+}
+const R = rows();
+const BY = {}; R.forEach((r) => { BY[r.d] = r; });
+function breaks(vals) {
+  const s = vals.slice().sort((a, b) => a - b);
+  return [0.2, 0.4, 0.6, 0.8].map((q) => s[Math.floor(q * (s.length - 1))]);
+}
+class Component extends DCLogic {
+  constructor(p) { super(p); this.state = { measure: "people", law: 2, maj: true, picked: "168", hover: null }; }
+  renderVals() {
+    const st = this.state;
+    const key = st.measure === "people" ? "share" : "beds";
+    const br = breaks(R.map((r) => r[key]));
+    const cls = (v) => br.filter((b) => v > b).length;
+    const paths = R.map((r) => ({ d: DATA.shapes[0][r.d], fill: RAMP[cls(r[key])],
+      hover: () => this.setState({ hover: r.d }), pick: () => this.setState({ picked: r.d }) }));
+    const fmtB = (v) => (key === "share" ? P(v) : F(v));
+    const legend = RAMP.map((c, i) => ({ c, t: i === 0 ? "≤ " + fmtB(br[0]) : i === 4 ? "> " + fmtB(br[3]) : fmtB(br[i - 1]) + "–" + fmtB(br[i]) }));
+    const h = st.hover ? BY[st.hover] : null;
+    const hv = h ? { label: "HD " + Number(h.d) + " · " + h.name + " (" + h.party + ")", line: "· " + F(h.seniors) + " residents 65+ (" + P(h.share) + ") · " + h.homes + " nursing homes, " + F(h.beds) + " beds" }
+                 : { label: "", line: "Point at a district to read it; tap to make its case below." };
+    const sorted = R.slice().sort((a, b) => (st.measure === "people" ? b.seniors - a.seniors : b.beds - a.beds));
+    const seatTxt = (r) => (r.seats.length ? r.seats.join(" · ") : "—");
+    const top10 = sorted.slice(0, 10).map((r, i) => ({ rank: i + 1, d: r.d, dn: Number(r.d), name: r.name, party: r.party, seniors: F(r.seniors), share: P(r.share),
+      homes: r.homes, beds: F(r.beds), seat: seatTxt(r), pick: () => this.setState({ picked: r.d }) }));
+    // section 2
+    const law = DATA.steer[st.law];
+    const lawChips = DATA.steer.map((s, i) => ({ law: s.law, cls: "chip" + (i === st.law ? " on" : ""), pick: () => this.setState({ law: i }) }));
+    const roomsFor = law.rooms.map((m) => ({ room: m.room, k: m.k, n: m.n, w: Math.round((100 * m.k) / m.n) + "%" }));
+    const room = law.rooms[0].room;
+    const rec = (DATA.rec[room] || {})[st.maj ? "majority" : "minority"] || { k: 0, n: 0 };
+    const num = (s) => s.split(" of ").map((x) => x.split(" ")[0]);
+    const hA = num(DATA.ap.House.came_back_out), hP = num(DATA.ap.House.passed_chamber_if_it_came_back), sA = num(DATA.ap.Senate.came_back_out);
+    const gates = [
+      { step: "Gate 1 · the room", title: room, k: F(rec.k), n: F(rec.n), what: (st.maj ? "majority" : "minority") + "-party sponsors' bills that got out, 2019–24" },
+      { step: "Gate 2 · money", title: "House Appropriations", k: F(hA[0]), n: F(hA[1]), what: "bills sent there after their first committee that came back out, 2009–24" },
+      { step: "Gate 3 · the floor", title: "Passes the House", k: F(hP[0]), n: F(hP[1]), what: "of the bills that came back from Appropriations" },
+      { step: "Gate 4 · Senate money", title: "Senate Appropriations", k: F(sA[0]), n: F(sA[1]), what: "the Senate's money gate is stricter: 29% stay there" },
+    ];
+    // section 3
+    const carriers = R.filter((r) => r.seats.some((s) => s.indexOf(room) === 0)).sort((a, b) => a.name.split(" ").pop().localeCompare(b.name.split(" ").pop()))
+      .map((r) => ({ d: r.d, dn: Number(r.d), name: r.name, seat: r.seats.filter((s) => s.indexOf(room) === 0)[0].indexOf("chair") > 0 ? "majority chair" : "member",
+        standing: (r.party === "D" ? "Democrat · majority" : r.party === "R" ? "Republican · minority" : (r.party || "?")), seniors: F(r.seniors), share: P(r.share), homes: r.homes, beds: F(r.beds) + " beds",
+        isNew: r.isNew === 1 ? "new" : r.isNew === 0 ? "—" : "?", filed: r.filed, carried: r.carried, pick: () => this.setState({ picked: r.d }) }));
+    // section 4
+    const f = BY[st.picked] || R[0];
+    const sen = (f.overlap || []).map(([d, n]) => { const m = DATA.senators[d] || {}; return "Sen. " + (m.name || "?") + " (" + (m.party || "?") + "), SD " + Number(d) + " — about " + F(n) + " residents shared"; });
+    const fs = { d: Number(f.d), name: f.name, party: f.party, where: (f.counties || []).join(", "),
+      lines: [
+        { k: "Residents 65+", v: F(f.seniors), rest: "— " + P(f.share) + " of the district's " + F(f.people) + " residents (± " + F(f.moe) + "). Pennsylvania: " + P(DATA.sw.seniors_share) + "." },
+        { k: "Nursing homes", v: String(f.homes), rest: "with " + F(f.beds) + " certified beds" },
+        { k: "Hospitals", v: String(f.hosp), rest: "placed by address (24 hospitals statewide could not be placed)" },
+        { k: "Local governments", v: String(f.munis), rest: "municipalities and " + f.sds + " school districts, in whole or in part" },
+        { k: "Also represents them", v: sen.length ? "" : "—", rest: sen.join(" · ") },
+      ] };
+    // section 5
+    const q75 = (() => { const s = R.map((r) => r[st.measure === "people" ? "seniors" : "beds"]).sort((a, b) => a - b); return s[Math.floor(0.75 * (s.length - 1))]; })();
+    const co = R.filter((r) => r.seats.some((s) => s.indexOf(room) === 0) && r[st.measure === "people" ? "seniors" : "beds"] >= q75 && r.d !== st.picked)
+      .map((r) => r.name + " (" + r.party + ", HD " + Number(r.d) + ")");
+    // section 6
+    const ft = DATA.ft.by_filing_time[st.maj ? "majority" : "minority"];
+    const mx = Math.max(...Object.values(ft).map((x) => x.pct));
+    const bars = Object.entries(ft).map(([w, x]) => ({ when: w, pct: Math.round(x.pct) + "%", kn: F(x.k) + " of " + F(x.n), h: Math.round((100 * x.pct) / mx) + "%", tip: F(x.k) + " of " + F(x.n) + " bills" }));
+    return {
+      swSeniors: F(DATA.sw.seniors), swShare: P(DATA.sw.seniors_share), swHomes: F(DATA.sw.nursing_homes), swBeds: F(DATA.sw.beds),
+      mPeopleCls: st.measure === "people" ? "on" : "", mBedsCls: st.measure === "beds" ? "on" : "",
+      setPeople: () => this.setState({ measure: "people" }), setBeds: () => this.setState({ measure: "beds" }),
+      shadeLabel: st.measure === "people" ? "share of residents 65+" : "nursing-home beds (count)",
+      rankLabel: st.measure === "people" ? "residents 65+" : "nursing-home beds",
+      mapH: DATA.shapes[1].h, paths, legend, hv, hasPicked: !!DATA.shapes[0][st.picked], pickedPath: DATA.shapes[0][st.picked] || "",
+      top10, hospGap: "Hospitals: 24 of the state's hospitals could not be placed in a House district by address and are not counted.",
+      lawChips, roomsFor, gates, roomName: room,
+      sMajCls: st.maj ? "on" : "", sMinCls: st.maj ? "" : "on", setMaj: () => this.setState({ maj: true }), setMin: () => this.setState({ maj: false }),
+      carriers, fs, cosponsors: co.length ? co.join(" · ") : "No member of this room is in the top quarter for this measure.",
+      senatePartner: sen.length ? sen[0] : "—", bars, standingLabel: st.maj ? "Majority-party" : "Minority-party",
+    };
+  }
+}
+</script>
+</body>
+</html>

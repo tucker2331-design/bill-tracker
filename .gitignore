@@ -62,3 +62,7 @@ tools/calibration/content_votes_cache_venuefix.pkl
 tools/calibration/first_vote_cache_venuefix.pkl
 dist-pa
 tools/calibration/pa/.cache_corpus.pkl
+tools/historical_cache/census/dl/publicsch.zip
+tools/historical_cache/census/geos_pava.psv
+tools/calibration/pa/__pycache__/
+tools/districts/__pycache__/

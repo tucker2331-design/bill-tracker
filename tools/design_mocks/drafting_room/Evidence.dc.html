@@ -1,0 +1,94 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Drafting room — evidence</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<style>
+body{margin:0;background:#0B0D0E}
+a{color:#86B6D3;text-decoration:none}a:hover{text-decoration:underline}
+.row{display:grid;gap:14px;align-items:start;padding:12px 16px;border-top:1px solid rgba(255,255,255,.08)}
+.row:first-child{border-top:0}
+.sc{font-size:10.5px;letter-spacing:.07em;text-transform:uppercase;font-weight:600;color:#A6AFB4}
+.gh{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.gh .gt{font-size:10.5px;font-weight:800;letter-spacing:.6px;text-transform:uppercase;color:#A6AFB4}
+.gh .rule{flex:1;height:1px;background:rgba(255,255,255,.14);min-width:24px}
+.faint{color:#727B80;font-size:12.5px}.soft{color:#A6AFB4}
+.held{color:#F0F2F3}.no{color:#E0796B}.part{color:#D9B26A}
+.tbl{overflow-x:auto}
+</style>
+</helmet>
+<div style="font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', system-ui, 'Segoe UI', Roboto, 'Helvetica Neue', sans-serif; color: #F0F2F3; background: #0B0D0E; font-size: 14px; line-height: 1.5; padding: 24px 16px 72px">
+<div style="max-width: 880px; margin: 0 auto; display: flex; flex-direction: column; gap: 28px">
+
+  <header style="display: flex; flex-direction: column; gap: 6px">
+    <a href="Main.dc.html" style="font-size: 13px">‹ Care for nursing-home residents</a>
+    <h1 style="margin: 2px 0 0; font-size: 24px; font-weight: 700">What the drafting room rests on</h1>
+    <div class="soft">Every section was tested on Pennsylvania's record before it got a place on the page. This is what held, what did not, and what we cannot show yet.</div>
+    <div class="faint">Bills: PA Bill History exports, 9 sessions 2009–2026 (36,652 House and Senate bills). People: Census ACS 2020–24 on the 2024 district maps. Places: NCES school locations 2024–25, CMS nursing-home and hospital files (Oct 2026). Seats: PA committee roster feed and Open States legislator file.</div>
+  </header>
+
+  <section style="display: flex; flex-direction: column; gap: 10px">
+    <div class="gh"><span class="gt">Tested — and the verdict</span><span class="rule"></span></div>
+    <div class="tbl" style="background: #1A1E20; border-radius: 14px">
+      <div class="row" style="grid-template-columns: minmax(150px,1fr) minmax(260px,2fr) 110px; min-width: 620px"><span class="sc">Idea</span><span class="sc">What the record shows</span><span class="sc">On the page?</span></div>
+      <div class="row" style="grid-template-columns: minmax(150px,1fr) minmax(260px,2fr) 110px; min-width: 620px"><span>The law you change picks the room</span><span class="soft">74% of titles name one law. For the 175 laws with 20+ bills, a bill went to that law's usual room 83% of the time; 83 of those 175 laws go to one room 90%+ of the time. Some do not: Human Services Code bills split across Health, Human Services and Children &amp; Youth.</span><span class="sc held">held · shown</span></div>
+      <div class="row" style="grid-template-columns: minmax(150px,1fr) minmax(260px,2fr) 110px; min-width: 620px"><span>A second, money gate</span><span class="soft">After the first committee, House Appropriations sent back 3,881 of 4,241 bills (92%); only 2 of 1,124 House bills that skipped it passed the House. Senate Appropriations sent back 1,675 of 2,347 (71%).</span><span class="sc held">held · shown</span></div>
+      <div class="row" style="grid-template-columns: minmax(150px,1fr) minmax(260px,2fr) 110px; min-width: 620px"><span>Party standing</span><span class="soft">The 2023 House flip, same members: Democrats +33 points, Republicans −34 (64 / 66 members).</span><span class="sc held">held · shown</span></div>
+      <div class="row" style="grid-template-columns: minmax(150px,1fr) minmax(260px,2fr) 110px; min-width: 620px"><span>A seat on the room; the chair</span><span class="soft">Majority members on the committee: +20 points for their own bills; within the same sponsor +13.5. A majority chair's own bills: 80% vs 41%.</span><span class="sc held">held · shown</span></div>
+      <div class="row" style="grid-template-columns: minmax(150px,1fr) minmax(260px,2fr) 110px; min-width: 620px"><span>Tried before</span><span class="soft">A title that died before died again 91% vs 37%; same carrier refiling 93% vs 35%. Adds the most to a prediction of any element (+0.06 to +0.10 AUC on held-out sessions).</span><span class="sc held">held · shown</span></div>
+      <div class="row" style="grid-template-columns: minmax(150px,1fr) minmax(260px,2fr) 110px; min-width: 620px"><span>File early</span><span class="soft">The same member's bills filed in the first 3 months got out 5.2 points more often than their later ones (715 better, 556 worse). Last 6 months: 16% (majority) / 3% (minority).</span><span class="sc held">held · shown</span></div>
+      <div class="row" style="grid-template-columns: minmax(150px,1fr) minmax(260px,2fr) 110px; min-width: 620px"><span>New members as carriers</span><span class="soft">File fewer bills (median 8 vs 14, majority). Their bills got out at about the same rate (+1.7 points pooled; the same member's next session: +0.1).</span><span class="sc held">no penalty · shown</span></div>
+      <div class="row" style="grid-template-columns: minmax(150px,1fr) minmax(260px,2fr) 110px; min-width: 620px"><span>A Senate twin</span><span class="soft">Bills with a twin got out more: 44% vs 37% (majority), 12% vs 10% (minority); law 13% vs 11%. Observational: twins may be priority bills.</span><span class="sc part">modest · shown</span></div>
+      <div class="row" style="grid-template-columns: minmax(150px,1fr) minmax(260px,2fr) 110px; min-width: 620px"><span>District make-up predicts who carries a subject</span><span class="soft">9 subjects × 2 chambers, 16 with enough bills: 2 held (farming in the Senate, 26 of 54 bills from the top-quarter farm districts vs 30% expected; schools in the House, 33% vs 29%). About 1 would pass by chance.</span><span class="sc no">did not hold</span></div>
+      <div class="row" style="grid-template-columns: minmax(150px,1fr) minmax(260px,2fr) 110px; min-width: 620px"><span>The most-affected district's member gets it out more</span><span class="soft">Within each subject, sponsors from the top-quarter districts: no consistent difference (signs flip subject to subject).</span><span class="sc no">did not hold</span></div>
+      <div class="row" style="grid-template-columns: minmax(150px,1fr) minmax(260px,2fr) 110px; min-width: 620px"><span>Twins whose sponsors share residents</span><span class="soft">156 of 844 twin pairs: either got out 49% vs 53% for pairs that share none.</span><span class="sc no">did not hold</span></div>
+      <div class="row" style="grid-template-columns: minmax(150px,1fr) minmax(260px,2fr) 110px; min-width: 620px"><span>Bandwidth — a member's 30th bill</span><span class="soft">Majority members' first 5 bills 47% vs 31st+ 30%, but within the same member only −2.1 points: it is who files a lot, not the order.</span><span class="sc part">small · not shown</span></div>
+      <div class="row" style="grid-template-columns: minmax(150px,1fr) minmax(260px,2fr) 110px; min-width: 620px"><span>A co-sponsorship memo</span><span class="soft">95% of 2025–26 bills have one. The 5% without did far better (House majority 86% vs 39%) — they are leadership and urgent vehicles. Not a lever.</span><span class="sc no">not a lever</span></div>
+      <div class="row" style="grid-template-columns: minmax(150px,1fr) minmax(260px,2fr) 110px; min-width: 620px"><span>Map placement</span><span class="soft">Our placement of 2,949 PA and 2,159 VA public schools agrees with the federal school file's own district coding for 5,107 of 5,108.</span><span class="sc held">checked</span></div>
+    </div>
+  </section>
+
+  <section style="display: flex; flex-direction: column; gap: 10px">
+    <div class="gh"><span class="gt">What we cannot show yet</span><span class="rule"></span></div>
+    <div class="tbl" style="background: #1A1E20; border-radius: 14px">
+      <div class="row" style="grid-template-columns: minmax(150px,1fr) minmax(220px,1.6fr) minmax(170px,1.2fr); min-width: 620px"><span class="sc">Missing</span><span class="sc">Why</span><span class="sc">What unblocks it</span></div>
+      <div class="row" style="grid-template-columns: minmax(150px,1fr) minmax(220px,1.6fr) minmax(170px,1.2fr); min-width: 620px"><span>How each member votes</span><span class="soft">PA publishes no bulk vote file; the Open States copies are behind a login.</span><span>Owner pastes the 5 PA session links</span></div>
+      <div class="row" style="grid-template-columns: minmax(150px,1fr) minmax(220px,1.6fr) minmax(170px,1.2fr); min-width: 620px"><span>Tried in other states</span><span class="soft">Needs other states' Open States files.</span><span>Owner download links, per state</span></div>
+      <div class="row" style="grid-template-columns: minmax(150px,1fr) minmax(220px,1.6fr) minmax(170px,1.2fr); min-width: 620px"><span>What the bill would cost</span><span class="soft">PA fiscal notes sit on per-bill pages; our PA rule is bulk feeds only.</span><span>An owner decision on the rule, or a bulk source</span></div>
+      <div class="row" style="grid-template-columns: minmax(150px,1fr) minmax(220px,1.6fr) minmax(170px,1.2fr); min-width: 620px"><span>Allies and opponents</span><span class="soft">Who lobbied this law before: PA lobbying disclosure has no bulk export we have verified.</span><span>Scope the PA disclosure data</span></div>
+      <div class="row" style="grid-template-columns: minmax(150px,1fr) minmax(220px,1.6fr) minmax(170px,1.2fr); min-width: 620px"><span>Money by district</span><span class="soft">School-funding and grant amounts per district: the district-to-school-district link exists; the funding file is not fetched.</span><span>A state funding file (next step)</span></div>
+      <div class="row" style="grid-template-columns: minmax(150px,1fr) minmax(220px,1.6fr) minmax(170px,1.2fr); min-width: 620px"><span>Child-care centres, students per school</span><span class="soft">State licensing lists and enrolment are separate sources.</span><span>Add one source per place type</span></div>
+      <div class="row" style="grid-template-columns: minmax(150px,1fr) minmax(220px,1.6fr) minmax(170px,1.2fr); min-width: 620px"><span>Close vs safe seats</span><span class="soft">Needs election results. Virginia found margin and money do not move votes.</span><span>An election-results source</span></div>
+      <div class="row" style="grid-template-columns: minmax(150px,1fr) minmax(220px,1.6fr) minmax(170px,1.2fr); min-width: 620px"><span>Personal ties (former nurse, teacher)</span><span class="soft">No structured occupation field in any source we hold.</span><span>Not planned</span></div>
+      <div class="row" style="grid-template-columns: minmax(150px,1fr) minmax(220px,1.6fr) minmax(170px,1.2fr); min-width: 620px"><span>Your members by district</span><span class="soft">Your own list; we would keep districts, never addresses.</span><span>Team upload</span></div>
+      <div class="row" style="grid-template-columns: minmax(150px,1fr) minmax(220px,1.6fr) minmax(170px,1.2fr); min-width: 620px"><span>24 PA hospitals</span><span class="soft">33 hospital addresses did not match the Census geocoder; 9 were placed by a ZIP wholly inside one district.</span><span>Shown as "not placed"</span></div>
+    </div>
+  </section>
+
+  <section style="display: flex; flex-direction: column; gap: 10px">
+    <div class="gh"><span class="gt">How the page is laid out, and why</span><span class="rule"></span></div>
+    <div style="background: #1A1E20; border-radius: 14px">
+      <div class="row" style="grid-template-columns: 170px minmax(0,1fr)"><span class="sc">Count and share</span><span class="soft">Always together (owner rule): the share says how much it matters to this district, the count says how many people stand behind the ask. Places are counts only.</span></div>
+      <div class="row" style="grid-template-columns: 170px minmax(0,1fr)"><span class="sc">Map + table</span><span class="soft">The map answers "where"; the ranked table answers "how many" and is the way to read exact values. A map is never the only way to read a number.</span></div>
+      <div class="row" style="grid-template-columns: 170px minmax(0,1fr)"><span class="sc">Simulator</span><span class="soft">Choices the drafter controls (which law, whose name on it) are chips; each gate shows its own k of n. We never multiply gates into one percentage.</span></div>
+      <div class="row" style="grid-template-columns: 170px minmax(0,1fr)"><span class="sc">Carrier table</span><span class="soft">Facts per member, A–Z. A ranked "best carrier" is a prediction and needs the calibration gate and your go-ahead first.</span></div>
+      <div class="row" style="grid-template-columns: 170px minmax(0,1fr)"><span class="sc">Fact sheet</span><span class="soft">One wording for every district; only the numbers change. Margins of error shown.</span></div>
+      <div class="row" style="grid-template-columns: 170px minmax(0,1fr)"><span class="sc">Colour</span><span class="soft">Grey for data; blue only for links and the selected district; amber and red only for caution and "did not hold" on this page.</span></div>
+    </div>
+  </section>
+
+</div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1280,"height":2600}}'>
+class Component extends DCLogic {
+  renderVals() { return {}; }
+}
+</script>
+</body>
+</html>

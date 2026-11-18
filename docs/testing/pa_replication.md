@@ -1,6 +1,6 @@
 ---
 tags: [testing, prediction, pa, replication, calibration]
-updated: 2026-11-17
+updated: 2026-11-18
 status: active
 open_loop: Batch 3 (member votes — first_vote, content_votes, persuadability, member_signals, member_subject, coverage, rooms, money_and_vulnerability, the exact second-chamber party split) waits on the owner pasting the five Open States PA session-CSV links (environment now allows data.openstates.org).
 ---
@@ -72,6 +72,29 @@ reported on same-carrier refiles, the closest PA gets to "same idea" without bil
   ([[architecture/multi_state_config]]), now measured: 92% of tabled and 93% of re-committed bills move again.
 - **Patron history helps in PA** (prior rate +6.3/+5.3, prior record in this committee +8.2/+6.4), where Virginia found
   it harmful or conditional. PA's two-year sessions and long careers (nine sessions here) give the record more to say.
+
+## Does each design element mean anything? (held-out element value, 2026-11-17)
+`pa_element_value.py` → `results_element_value.json`. Each element added to a baseline that already knows party
+standing × chamber × session year; fit on earlier sessions, scored on one never seen.
+
+| element | AUC gain 2023–24 / 2025–26 | bills it speaks to | verdict |
+|---|---|---|---|
+| tried before (same law, same/other room) | +0.061 / +0.097 | 37% / 41% | strongest |
+| the room's record for this standing | +0.031 / +0.045 | ~95% | keep |
+| sponsor sits on the committee (2025–26, odd→even) | +0.044 | 35% | keep |
+| sponsor is the majority chair | +0.037 | 7% | keep |
+| carrier's own record | +0.030 / +0.030 (log loss barely moves) | 82–94% | small |
+| majority chair co-signs | +0.062 | 13% | **timing unverified** (co-sponsors undated) |
+| co-sponsor count / other-party co-sponsor | +0.017–0.057 | all | timing unverified |
+| majority co-sponsor share | −0.025 / −0.004 | all | drop |
+| title form (amend vs new act) | +0.002 / +0.005, log loss worse | all | drop |
+
+Baselines: AUC 0.692 (2023–24), 0.665 (2025–26). Everything together: +0.101 / +0.139.
+
+## Drafting-room tests (pre-introduction levers, 2026-11-18)
+Ten tests of what a drafter can still change — the law amended (→ room), Appropriations, filing time, new members,
+twins, district make-up, memo, bandwidth. Results and verdicts: [[ideas/drafting_war_room]] §0.2; code
+`pa_drafting.py` → `results_drafting.json`; district data [[knowledge/district_profiles]].
 
 ## Not yet run (batch 3, member votes) — and not runnable
 

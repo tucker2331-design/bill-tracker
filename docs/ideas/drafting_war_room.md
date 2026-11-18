@@ -1,8 +1,8 @@
 ---
 tags: [ideas, product, war-room, drafting, owner-idea, design-research]
-updated: 2026-11-17
+updated: 2026-11-18
 status: active
-open_loop: Design researched + mocked on real PA data (2026-11-17, artifact CBPg2ZZ3uoiwiUkbirWL3o) — awaiting the owner's answers to the four questions at the end before any build.
+open_loop: v2 (pre-introduction toolkit) mocked on real PA data 2026-11-18 (artifact CBPg2ZZ3uoiwiUkbirWL3o, Main + Evidence boards) — awaiting the owner's review; unbuilt pieces listed in §0.4.
 ---
 
 # The drafting room — a War Room for a bill before it has a number
@@ -15,6 +15,64 @@ this could look like … research what it should look like and how it could be u
 **Mockup (real PA public data; team-private parts are placeholders):** https://claude.ai/artifact/CBPg2ZZ3uoiwiUkbirWL3o
 · sister page [[ideas/legislator_portfolio]] · stats behind it [[testing/pa_replication]] (PA) and the Virginia pages
 linked inline.
+
+## 0. v2 — the PRE-INTRODUCTION toolkit (owner 2026-11-18)
+
+**Owner:** *"what you're showing would only be this good if a similar version had been introduced before … consider
+what tools and info a lobbyist would want to get their bill introduced in the first place … the lobbyist can
+manipulate the scenario more … e.g. demographic or district info: this will be especially important for this
+community, who represents a lot of these people."* Then: *"'14 nursing homes' and '18% over 65' — always both."*
+
+**Reframe:** after filing you watch a fixed bill; before filing the drafter still controls what it says, which law it
+changes (→ the room), its size and cost, who carries it, who signs on, when it is filed and which chamber goes
+first. The page answers the questions a legislator asks before saying yes, and lets the drafter try versions.
+
+### 0.1 The flow (mocked on one worked idea: care for nursing-home residents, PA House)
+1. **Who it affects, and where** — statewide tiles; map of 203 districts (grey ramp, by share or by beds); top-10
+   table with count + share + places + seats. Source: [[knowledge/district_profiles]].
+2. **Which room, and what comes after** — choose the law → where bills amending it went (k of n); then the gates:
+   the room's record for majority/minority sponsors, House Appropriations, the floor, Senate Appropriations — each
+   its own k of n, **never multiplied**.
+3. **Who could carry it** — members of that room, A–Z, with standing, seat, district numbers, new member, bills filed,
+   past carries. Facts, not a ranking ([[ideas/predictive_lane]] Tier 3).
+4. **One district's case** — the leave-behind: one template, numbers change (P25), margins shown.
+5. **Support** — our members by district (team data, districts not addresses), co-sponsors to ask, Senate partner
+   (shared residents), Senate twin.
+6. **When to file** — out-of-committee rate by month of filing for the chosen standing.
+7. **Versions and offers** — team-only.
+
+### 0.2 What the tests said (PA, `tools/calibration/pa/pa_drafting.py` → `results_drafting.json`)
+| idea | result | on the page |
+|---|---|---|
+| law amended → room | 74% of titles name one law; for 175 laws with 20+ bills, 83% (bill-weighted) went to the usual room; 83 of 175 go to one room 90%+ | shown (simulator) |
+| money gate | House Appropriations returned 3,881 of 4,241 (92%); only 2 of 1,124 House bills that skipped it passed. Senate returned 1,675 of 2,347 (71%) | shown |
+| file early | same member, first 3 months vs later: +5.2 pts (715 better / 556 worse); last 6 months 16% (maj) / 3% (min) | shown |
+| new members | median 8 vs 14 bills (majority); out rate about the same (+1.7 pooled, +0.1 within member) | shown ("no penalty") |
+| Senate twin | out 44% vs 37% (maj), 12% vs 10% (min); law 13% vs 11% — observational | shown, modest |
+| district make-up → who carries a subject | 2 of 16 subject×chamber tests held (farming Senate p .015, schools House p .028); ~1 expected by chance | **did not hold** — numbers are the argument, not a forecast |
+| most-affected sponsor gets it out more | signs flip by subject | **did not hold** |
+| twins whose sponsors share residents | 49% vs 53% (156 of 844 pairs) | **did not hold** |
+| bandwidth (a member's 30th bill) | raw 47% → 30% (maj) but −2.1 within member | small, not shown |
+| co-sponsorship memo | 95% of 2025–26 bills have one; the 5% without did far better (leadership vehicles) | not a lever |
+
+Virginia ran the district question on VOTES already ([[testing/first_vote]] round 3: census district make-up added
+nothing, 85.5% vs 86.1%). PA now says the same for who CARRIES a subject. Two states, same answer: district make-up is
+persuasion material, not a predictor.
+
+### 0.3 Design principles applied (the owner asked "which graphs, figures, models, simulators")
+Count + share together; map for *where* + table for *how many* (never map-only); the simulator for choices the drafter
+controls (chips) with k-of-n gates, never a composed probability; A–Z fact table for carriers; one-template fact
+sheet; grey data, blue only for links and the selected district, amber/red only for caution/"did not hold".
+
+### 0.4 What cannot be shown yet (owner was asked to be told)
+Member votes (Open States login — owner pastes 5 links) · tried in other states (other states' Open States files) ·
+bill cost (PA fiscal notes are per-bill pages; our PA rule is bulk-only) · allies/opponents (PA lobbying disclosure not
+scoped) · money by district (funding file not fetched; the school-district join exists) · child-care centres,
+enrolment (separate sources) · close vs safe seats (election results; VA found no effect on votes) · personal ties
+(no occupation field) · 24 PA hospitals not placed.
+
+---
+*v1 research (2026-11-17), kept for its sources:*
 
 ## 1. Who it is for, and what they are missing
 Our primary user writes its own bills: an advocacy org staffed by volunteers and newcomers

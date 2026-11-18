@@ -1,12 +1,29 @@
 ---
 tags: [log, meta]
-updated: 2026-09-28
+updated: 2026-11-18
 status: active
 ---
 
 # Project Log
 
 Append-only, reverse-chronological (newest at top). Each entry opens with `## [YYYY-MM-DD] <type> | <title>`.
+
+## [2026-11-18] decision | Drafting room v2: the pre-introduction toolkit, on real PA data
+Owner: before introduction the lobbyist can shape the scenario — who it affects and where, who represents them,
+which law (→ room), timing, support. Built district profiles for every PA and VA seat from bulk federal files
+([[knowledge/district_profiles]]; count + share always, owner rule), ran ten drafting tests on PA
+(`tools/calibration/pa/pa_drafting.py`), and redrew the mock in the site's v9 language with an evidence board
+(artifact CBPg2ZZ3uoiwiUkbirWL3o). Held: law→room 83%, Senate Appropriations keeps 29%, file early +5 within member,
+new members no penalty. Did not hold: district make-up predicts who carries a subject (2 of 16), shared-constituent
+twins. Census Data API now requires a key — bulk files used instead ([[knowledge/district_lookup]]). Environment:
+added www2.census.gov, api.census.gov, data.cms.gov, nces.ed.gov, geocoding.geo.census.gov.
+[[ideas/drafting_war_room]] · [[testing/pa_replication]].
+
+## [2026-11-17] decision | PA stats batches 1-2 + element-value test
+Virginia's tests re-run on Pennsylvania from 9 sessions of bulk exports (batch 1) and the roster feed (batch 2); the
+held-out element-value test answered the owner's "were you guessing their significance": tried-before, room record,
+seat and chair earn a place; title form and majority co-sponsor share do not. Batch 3 (votes) waits on the owner's
+Open States links. [[testing/pa_replication]].
 
 ## [2026-11-16] pr | Census guards on Health (5 buckets) + the speed switch
 Every "unlabelled" bucket is now proven to hold only what the source leaves unlabelled, and shown on Health: outcome

@@ -1,0 +1,446 @@
+Table ID|Line|Indent|Unique ID|Label|Title|Universe|Type
+B01001|1.0|0|B01001_001|Total:|Sex by Age|Total population|int
+B01001|2.0|1|B01001_002|Male:|Sex by Age|Total population|int
+B01001|3.0|2|B01001_003|Under 5 years|Sex by Age|Total population|int
+B01001|4.0|2|B01001_004|5 to 9 years|Sex by Age|Total population|int
+B01001|5.0|2|B01001_005|10 to 14 years|Sex by Age|Total population|int
+B01001|6.0|2|B01001_006|15 to 17 years|Sex by Age|Total population|int
+B01001|7.0|2|B01001_007|18 and 19 years|Sex by Age|Total population|int
+B01001|8.0|2|B01001_008|20 years|Sex by Age|Total population|int
+B01001|9.0|2|B01001_009|21 years|Sex by Age|Total population|int
+B01001|10.0|2|B01001_010|22 to 24 years|Sex by Age|Total population|int
+B01001|11.0|2|B01001_011|25 to 29 years|Sex by Age|Total population|int
+B01001|12.0|2|B01001_012|30 to 34 years|Sex by Age|Total population|int
+B01001|13.0|2|B01001_013|35 to 39 years|Sex by Age|Total population|int
+B01001|14.0|2|B01001_014|40 to 44 years|Sex by Age|Total population|int
+B01001|15.0|2|B01001_015|45 to 49 years|Sex by Age|Total population|int
+B01001|16.0|2|B01001_016|50 to 54 years|Sex by Age|Total population|int
+B01001|17.0|2|B01001_017|55 to 59 years|Sex by Age|Total population|int
+B01001|18.0|2|B01001_018|60 and 61 years|Sex by Age|Total population|int
+B01001|19.0|2|B01001_019|62 to 64 years|Sex by Age|Total population|int
+B01001|20.0|2|B01001_020|65 and 66 years|Sex by Age|Total population|int
+B01001|21.0|2|B01001_021|67 to 69 years|Sex by Age|Total population|int
+B01001|22.0|2|B01001_022|70 to 74 years|Sex by Age|Total population|int
+B01001|23.0|2|B01001_023|75 to 79 years|Sex by Age|Total population|int
+B01001|24.0|2|B01001_024|80 to 84 years|Sex by Age|Total population|int
+B01001|25.0|2|B01001_025|85 years and over|Sex by Age|Total population|int
+B01001|26.0|1|B01001_026|Female:|Sex by Age|Total population|int
+B01001|27.0|2|B01001_027|Under 5 years|Sex by Age|Total population|int
+B01001|28.0|2|B01001_028|5 to 9 years|Sex by Age|Total population|int
+B01001|29.0|2|B01001_029|10 to 14 years|Sex by Age|Total population|int
+B01001|30.0|2|B01001_030|15 to 17 years|Sex by Age|Total population|int
+B01001|31.0|2|B01001_031|18 and 19 years|Sex by Age|Total population|int
+B01001|32.0|2|B01001_032|20 years|Sex by Age|Total population|int
+B01001|33.0|2|B01001_033|21 years|Sex by Age|Total population|int
+B01001|34.0|2|B01001_034|22 to 24 years|Sex by Age|Total population|int
+B01001|35.0|2|B01001_035|25 to 29 years|Sex by Age|Total population|int
+B01001|36.0|2|B01001_036|30 to 34 years|Sex by Age|Total population|int
+B01001|37.0|2|B01001_037|35 to 39 years|Sex by Age|Total population|int
+B01001|38.0|2|B01001_038|40 to 44 years|Sex by Age|Total population|int
+B01001|39.0|2|B01001_039|45 to 49 years|Sex by Age|Total population|int
+B01001|40.0|2|B01001_040|50 to 54 years|Sex by Age|Total population|int
+B01001|41.0|2|B01001_041|55 to 59 years|Sex by Age|Total population|int
+B01001|42.0|2|B01001_042|60 and 61 years|Sex by Age|Total population|int
+B01001|43.0|2|B01001_043|62 to 64 years|Sex by Age|Total population|int
+B01001|44.0|2|B01001_044|65 and 66 years|Sex by Age|Total population|int
+B01001|45.0|2|B01001_045|67 to 69 years|Sex by Age|Total population|int
+B01001|46.0|2|B01001_046|70 to 74 years|Sex by Age|Total population|int
+B01001|47.0|2|B01001_047|75 to 79 years|Sex by Age|Total population|int
+B01001|48.0|2|B01001_048|80 to 84 years|Sex by Age|Total population|int
+B01001|49.0|2|B01001_049|85 years and over|Sex by Age|Total population|int
+B01003|1.0|0|B01003_001|Total|Total Population|Total population|int
+B05002|1.0|0|B05002_001|Total:|Place of Birth by Nativity and Citizenship Status|Total population|int
+B05002|2.0|1|B05002_002|Native:|Place of Birth by Nativity and Citizenship Status|Total population|int
+B05002|3.0|2|B05002_003|Born in state of residence|Place of Birth by Nativity and Citizenship Status|Total population|int
+B05002|4.0|2|B05002_004|Born in other state in the United States:|Place of Birth by Nativity and Citizenship Status|Total population|int
+B05002|5.0|3|B05002_005|Northeast|Place of Birth by Nativity and Citizenship Status|Total population|int
+B05002|6.0|3|B05002_006|Midwest|Place of Birth by Nativity and Citizenship Status|Total population|int
+B05002|7.0|3|B05002_007|South|Place of Birth by Nativity and Citizenship Status|Total population|int
+B05002|8.0|3|B05002_008|West|Place of Birth by Nativity and Citizenship Status|Total population|int
+B05002|9.0|2|B05002_009|Born outside the United States:|Place of Birth by Nativity and Citizenship Status|Total population|int
+B05002|10.0|3|B05002_010|Puerto Rico|Place of Birth by Nativity and Citizenship Status|Total population|int
+B05002|11.0|3|B05002_011|U.S. Island Areas|Place of Birth by Nativity and Citizenship Status|Total population|int
+B05002|12.0|3|B05002_012|Born abroad of American parent(s)|Place of Birth by Nativity and Citizenship Status|Total population|int
+B05002|13.0|1|B05002_013|Foreign-born:|Place of Birth by Nativity and Citizenship Status|Total population|int
+B05002|14.0|2|B05002_014|Naturalized U.S. citizen|Place of Birth by Nativity and Citizenship Status|Total population|int
+B05002|15.0|3|B05002_015|Europe|Place of Birth by Nativity and Citizenship Status|Total population|int
+B05002|16.0|3|B05002_016|Asia|Place of Birth by Nativity and Citizenship Status|Total population|int
+B05002|17.0|3|B05002_017|Africa|Place of Birth by Nativity and Citizenship Status|Total population|int
+B05002|18.0|3|B05002_018|Oceania|Place of Birth by Nativity and Citizenship Status|Total population|int
+B05002|19.0|3|B05002_019|Latin America|Place of Birth by Nativity and Citizenship Status|Total population|int
+B05002|20.0|3|B05002_020|Northern America|Place of Birth by Nativity and Citizenship Status|Total population|int
+B05002|21.0|2|B05002_021|Not a U.S. citizen|Place of Birth by Nativity and Citizenship Status|Total population|int
+B05002|22.0|3|B05002_022|Europe|Place of Birth by Nativity and Citizenship Status|Total population|int
+B05002|23.0|3|B05002_023|Asia|Place of Birth by Nativity and Citizenship Status|Total population|int
+B05002|24.0|3|B05002_024|Africa|Place of Birth by Nativity and Citizenship Status|Total population|int
+B05002|25.0|3|B05002_025|Oceania|Place of Birth by Nativity and Citizenship Status|Total population|int
+B05002|26.0|3|B05002_026|Latin America|Place of Birth by Nativity and Citizenship Status|Total population|int
+B05002|27.0|3|B05002_027|Northern America|Place of Birth by Nativity and Citizenship Status|Total population|int
+B08201|1.0|0|B08201_001|Total:|Household Size by Vehicles Available|Households|int
+B08201|2.0|1|B08201_002|No vehicle available|Household Size by Vehicles Available|Households|int
+B08201|3.0|1|B08201_003|1 vehicle available|Household Size by Vehicles Available|Households|int
+B08201|4.0|1|B08201_004|2 vehicles available|Household Size by Vehicles Available|Households|int
+B08201|5.0|1|B08201_005|3 vehicles available|Household Size by Vehicles Available|Households|int
+B08201|6.0|1|B08201_006|4 or more vehicles available|Household Size by Vehicles Available|Households|int
+B08201|7.0|1|B08201_007|1-person household:|Household Size by Vehicles Available|Households|int
+B08201|8.0|2|B08201_008|No vehicle available|Household Size by Vehicles Available|Households|int
+B08201|9.0|2|B08201_009|1 vehicle available|Household Size by Vehicles Available|Households|int
+B08201|10.0|2|B08201_010|2 vehicles available|Household Size by Vehicles Available|Households|int
+B08201|11.0|2|B08201_011|3 vehicles available|Household Size by Vehicles Available|Households|int
+B08201|12.0|2|B08201_012|4 or more vehicles available|Household Size by Vehicles Available|Households|int
+B08201|13.0|1|B08201_013|2-person household:|Household Size by Vehicles Available|Households|int
+B08201|14.0|2|B08201_014|No vehicle available|Household Size by Vehicles Available|Households|int
+B08201|15.0|2|B08201_015|1 vehicle available|Household Size by Vehicles Available|Households|int
+B08201|16.0|2|B08201_016|2 vehicles available|Household Size by Vehicles Available|Households|int
+B08201|17.0|2|B08201_017|3 vehicles available|Household Size by Vehicles Available|Households|int
+B08201|18.0|2|B08201_018|4 or more vehicles available|Household Size by Vehicles Available|Households|int
+B08201|19.0|1|B08201_019|3-person household:|Household Size by Vehicles Available|Households|int
+B08201|20.0|2|B08201_020|No vehicle available|Household Size by Vehicles Available|Households|int
+B08201|21.0|2|B08201_021|1 vehicle available|Household Size by Vehicles Available|Households|int
+B08201|22.0|2|B08201_022|2 vehicles available|Household Size by Vehicles Available|Households|int
+B08201|23.0|2|B08201_023|3 vehicles available|Household Size by Vehicles Available|Households|int
+B08201|24.0|2|B08201_024|4 or more vehicles available|Household Size by Vehicles Available|Households|int
+B08201|25.0|1|B08201_025|4-or-more-person household:|Household Size by Vehicles Available|Households|int
+B08201|26.0|2|B08201_026|No vehicle available|Household Size by Vehicles Available|Households|int
+B08201|27.0|2|B08201_027|1 vehicle available|Household Size by Vehicles Available|Households|int
+B08201|28.0|2|B08201_028|2 vehicles available|Household Size by Vehicles Available|Households|int
+B08201|29.0|2|B08201_029|3 vehicles available|Household Size by Vehicles Available|Households|int
+B08201|30.0|2|B08201_030|4 or more vehicles available|Household Size by Vehicles Available|Households|int
+B16005|1.0|0|B16005_001|Total:|Nativity by Language Spoken at Home by Ability to Speak English for the Population 5 Years and Over|Population 5 years and over|int
+B16005|2.0|1|B16005_002|Native:|Nativity by Language Spoken at Home by Ability to Speak English for the Population 5 Years and Over|Population 5 years and over|int
+B16005|3.0|2|B16005_003|Speak only English|Nativity by Language Spoken at Home by Ability to Speak English for the Population 5 Years and Over|Population 5 years and over|int
+B16005|4.0|2|B16005_004|Speak Spanish:|Nativity by Language Spoken at Home by Ability to Speak English for the Population 5 Years and Over|Population 5 years and over|int
+B16005|5.0|3|B16005_005|Speak English "very well"|Nativity by Language Spoken at Home by Ability to Speak English for the Population 5 Years and Over|Population 5 years and over|int
+B16005|6.0|3|B16005_006|Speak English "well"|Nativity by Language Spoken at Home by Ability to Speak English for the Population 5 Years and Over|Population 5 years and over|int
+B16005|7.0|3|B16005_007|Speak English "not well"|Nativity by Language Spoken at Home by Ability to Speak English for the Population 5 Years and Over|Population 5 years and over|int
+B16005|8.0|3|B16005_008|Speak English "not at all"|Nativity by Language Spoken at Home by Ability to Speak English for the Population 5 Years and Over|Population 5 years and over|int
+B16005|9.0|2|B16005_009|Speak other Indo-European languages:|Nativity by Language Spoken at Home by Ability to Speak English for the Population 5 Years and Over|Population 5 years and over|int
+B16005|10.0|3|B16005_010|Speak English "very well"|Nativity by Language Spoken at Home by Ability to Speak English for the Population 5 Years and Over|Population 5 years and over|int
+B16005|11.0|3|B16005_011|Speak English "well"|Nativity by Language Spoken at Home by Ability to Speak English for the Population 5 Years and Over|Population 5 years and over|int
+B16005|12.0|3|B16005_012|Speak English "not well"|Nativity by Language Spoken at Home by Ability to Speak English for the Population 5 Years and Over|Population 5 years and over|int
+B16005|13.0|3|B16005_013|Speak English "not at all"|Nativity by Language Spoken at Home by Ability to Speak English for the Population 5 Years and Over|Population 5 years and over|int
+B16005|14.0|2|B16005_014|Speak Asian and Pacific Island languages:|Nativity by Language Spoken at Home by Ability to Speak English for the Population 5 Years and Over|Population 5 years and over|int
+B16005|15.0|3|B16005_015|Speak English "very well"|Nativity by Language Spoken at Home by Ability to Speak English for the Population 5 Years and Over|Population 5 years and over|int
+B16005|16.0|3|B16005_016|Speak English "well"|Nativity by Language Spoken at Home by Ability to Speak English for the Population 5 Years and Over|Population 5 years and over|int
+B16005|17.0|3|B16005_017|Speak English "not well"|Nativity by Language Spoken at Home by Ability to Speak English for the Population 5 Years and Over|Population 5 years and over|int
+B16005|18.0|3|B16005_018|Speak English "not at all"|Nativity by Language Spoken at Home by Ability to Speak English for the Population 5 Years and Over|Population 5 years and over|int
+B16005|19.0|2|B16005_019|Speak other languages:|Nativity by Language Spoken at Home by Ability to Speak English for the Population 5 Years and Over|Population 5 years and over|int
+B16005|20.0|3|B16005_020|Speak English "very well"|Nativity by Language Spoken at Home by Ability to Speak English for the Population 5 Years and Over|Population 5 years and over|int
+B16005|21.0|3|B16005_021|Speak English "well"|Nativity by Language Spoken at Home by Ability to Speak English for the Population 5 Years and Over|Population 5 years and over|int
+B16005|22.0|3|B16005_022|Speak English "not well"|Nativity by Language Spoken at Home by Ability to Speak English for the Population 5 Years and Over|Population 5 years and over|int
+B16005|23.0|3|B16005_023|Speak English "not at all"|Nativity by Language Spoken at Home by Ability to Speak English for the Population 5 Years and Over|Population 5 years and over|int
+B16005|24.0|1|B16005_024|Foreign born:|Nativity by Language Spoken at Home by Ability to Speak English for the Population 5 Years and Over|Population 5 years and over|int
+B16005|25.0|2|B16005_025|Speak only English|Nativity by Language Spoken at Home by Ability to Speak English for the Population 5 Years and Over|Population 5 years and over|int
+B16005|26.0|2|B16005_026|Speak Spanish:|Nativity by Language Spoken at Home by Ability to Speak English for the Population 5 Years and Over|Population 5 years and over|int
+B16005|27.0|3|B16005_027|Speak English "very well"|Nativity by Language Spoken at Home by Ability to Speak English for the Population 5 Years and Over|Population 5 years and over|int
+B16005|28.0|3|B16005_028|Speak English "well"|Nativity by Language Spoken at Home by Ability to Speak English for the Population 5 Years and Over|Population 5 years and over|int
+B16005|29.0|3|B16005_029|Speak English "not well"|Nativity by Language Spoken at Home by Ability to Speak English for the Population 5 Years and Over|Population 5 years and over|int
+B16005|30.0|3|B16005_030|Speak English "not at all"|Nativity by Language Spoken at Home by Ability to Speak English for the Population 5 Years and Over|Population 5 years and over|int
+B16005|31.0|2|B16005_031|Speak other Indo-European languages:|Nativity by Language Spoken at Home by Ability to Speak English for the Population 5 Years and Over|Population 5 years and over|int
+B16005|32.0|3|B16005_032|Speak English "very well"|Nativity by Language Spoken at Home by Ability to Speak English for the Population 5 Years and Over|Population 5 years and over|int
+B16005|33.0|3|B16005_033|Speak English "well"|Nativity by Language Spoken at Home by Ability to Speak English for the Population 5 Years and Over|Population 5 years and over|int
+B16005|34.0|3|B16005_034|Speak English "not well"|Nativity by Language Spoken at Home by Ability to Speak English for the Population 5 Years and Over|Population 5 years and over|int
+B16005|35.0|3|B16005_035|Speak English "not at all"|Nativity by Language Spoken at Home by Ability to Speak English for the Population 5 Years and Over|Population 5 years and over|int
+B16005|36.0|2|B16005_036|Speak Asian and Pacific Island languages:|Nativity by Language Spoken at Home by Ability to Speak English for the Population 5 Years and Over|Population 5 years and over|int
+B16005|37.0|3|B16005_037|Speak English "very well"|Nativity by Language Spoken at Home by Ability to Speak English for the Population 5 Years and Over|Population 5 years and over|int
+B16005|38.0|3|B16005_038|Speak English "well"|Nativity by Language Spoken at Home by Ability to Speak English for the Population 5 Years and Over|Population 5 years and over|int
+B16005|39.0|3|B16005_039|Speak English "not well"|Nativity by Language Spoken at Home by Ability to Speak English for the Population 5 Years and Over|Population 5 years and over|int
+B16005|40.0|3|B16005_040|Speak English "not at all"|Nativity by Language Spoken at Home by Ability to Speak English for the Population 5 Years and Over|Population 5 years and over|int
+B16005|41.0|2|B16005_041|Speak other languages:|Nativity by Language Spoken at Home by Ability to Speak English for the Population 5 Years and Over|Population 5 years and over|int
+B16005|42.0|3|B16005_042|Speak English "very well"|Nativity by Language Spoken at Home by Ability to Speak English for the Population 5 Years and Over|Population 5 years and over|int
+B16005|43.0|3|B16005_043|Speak English "well"|Nativity by Language Spoken at Home by Ability to Speak English for the Population 5 Years and Over|Population 5 years and over|int
+B16005|44.0|3|B16005_044|Speak English "not well"|Nativity by Language Spoken at Home by Ability to Speak English for the Population 5 Years and Over|Population 5 years and over|int
+B16005|45.0|3|B16005_045|Speak English "not at all"|Nativity by Language Spoken at Home by Ability to Speak English for the Population 5 Years and Over|Population 5 years and over|int
+B17001|1.0|0|B17001_001|Total:|Poverty Status in the Past 12 Months by Sex by Age|Population for whom poverty status is determined|int
+B17001|2.0|1|B17001_002|Income in the past 12 months below poverty level:|Poverty Status in the Past 12 Months by Sex by Age|Population for whom poverty status is determined|int
+B17001|3.0|2|B17001_003|Male:|Poverty Status in the Past 12 Months by Sex by Age|Population for whom poverty status is determined|int
+B17001|4.0|3|B17001_004|Under 5 years|Poverty Status in the Past 12 Months by Sex by Age|Population for whom poverty status is determined|int
+B17001|5.0|3|B17001_005|5 years|Poverty Status in the Past 12 Months by Sex by Age|Population for whom poverty status is determined|int
+B17001|6.0|3|B17001_006|6 to 11 years|Poverty Status in the Past 12 Months by Sex by Age|Population for whom poverty status is determined|int
+B17001|7.0|3|B17001_007|12 to 14 years|Poverty Status in the Past 12 Months by Sex by Age|Population for whom poverty status is determined|int
+B17001|8.0|3|B17001_008|15 years|Poverty Status in the Past 12 Months by Sex by Age|Population for whom poverty status is determined|int
+B17001|9.0|3|B17001_009|16 and 17 years|Poverty Status in the Past 12 Months by Sex by Age|Population for whom poverty status is determined|int
+B17001|10.0|3|B17001_010|18 to 24 years|Poverty Status in the Past 12 Months by Sex by Age|Population for whom poverty status is determined|int
+B17001|11.0|3|B17001_011|25 to 34 years|Poverty Status in the Past 12 Months by Sex by Age|Population for whom poverty status is determined|int
+B17001|12.0|3|B17001_012|35 to 44 years|Poverty Status in the Past 12 Months by Sex by Age|Population for whom poverty status is determined|int
+B17001|13.0|3|B17001_013|45 to 54 years|Poverty Status in the Past 12 Months by Sex by Age|Population for whom poverty status is determined|int
+B17001|14.0|3|B17001_014|55 to 64 years|Poverty Status in the Past 12 Months by Sex by Age|Population for whom poverty status is determined|int
+B17001|15.0|3|B17001_015|65 to 74 years|Poverty Status in the Past 12 Months by Sex by Age|Population for whom poverty status is determined|int
+B17001|16.0|3|B17001_016|75 years and over|Poverty Status in the Past 12 Months by Sex by Age|Population for whom poverty status is determined|int
+B17001|17.0|2|B17001_017|Female:|Poverty Status in the Past 12 Months by Sex by Age|Population for whom poverty status is determined|int
+B17001|18.0|3|B17001_018|Under 5 years|Poverty Status in the Past 12 Months by Sex by Age|Population for whom poverty status is determined|int
+B17001|19.0|3|B17001_019|5 years|Poverty Status in the Past 12 Months by Sex by Age|Population for whom poverty status is determined|int
+B17001|20.0|3|B17001_020|6 to 11 years|Poverty Status in the Past 12 Months by Sex by Age|Population for whom poverty status is determined|int
+B17001|21.0|3|B17001_021|12 to 14 years|Poverty Status in the Past 12 Months by Sex by Age|Population for whom poverty status is determined|int
+B17001|22.0|3|B17001_022|15 years|Poverty Status in the Past 12 Months by Sex by Age|Population for whom poverty status is determined|int
+B17001|23.0|3|B17001_023|16 and 17 years|Poverty Status in the Past 12 Months by Sex by Age|Population for whom poverty status is determined|int
+B17001|24.0|3|B17001_024|18 to 24 years|Poverty Status in the Past 12 Months by Sex by Age|Population for whom poverty status is determined|int
+B17001|25.0|3|B17001_025|25 to 34 years|Poverty Status in the Past 12 Months by Sex by Age|Population for whom poverty status is determined|int
+B17001|26.0|3|B17001_026|35 to 44 years|Poverty Status in the Past 12 Months by Sex by Age|Population for whom poverty status is determined|int
+B17001|27.0|3|B17001_027|45 to 54 years|Poverty Status in the Past 12 Months by Sex by Age|Population for whom poverty status is determined|int
+B17001|28.0|3|B17001_028|55 to 64 years|Poverty Status in the Past 12 Months by Sex by Age|Population for whom poverty status is determined|int
+B17001|29.0|3|B17001_029|65 to 74 years|Poverty Status in the Past 12 Months by Sex by Age|Population for whom poverty status is determined|int
+B17001|30.0|3|B17001_030|75 years and over|Poverty Status in the Past 12 Months by Sex by Age|Population for whom poverty status is determined|int
+B17001|31.0|1|B17001_031|Income in the past 12 months at or above poverty level:|Poverty Status in the Past 12 Months by Sex by Age|Population for whom poverty status is determined|int
+B17001|32.0|2|B17001_032|Male:|Poverty Status in the Past 12 Months by Sex by Age|Population for whom poverty status is determined|int
+B17001|33.0|3|B17001_033|Under 5 years|Poverty Status in the Past 12 Months by Sex by Age|Population for whom poverty status is determined|int
+B17001|34.0|3|B17001_034|5 years|Poverty Status in the Past 12 Months by Sex by Age|Population for whom poverty status is determined|int
+B17001|35.0|3|B17001_035|6 to 11 years|Poverty Status in the Past 12 Months by Sex by Age|Population for whom poverty status is determined|int
+B17001|36.0|3|B17001_036|12 to 14 years|Poverty Status in the Past 12 Months by Sex by Age|Population for whom poverty status is determined|int
+B17001|37.0|3|B17001_037|15 years|Poverty Status in the Past 12 Months by Sex by Age|Population for whom poverty status is determined|int
+B17001|38.0|3|B17001_038|16 and 17 years|Poverty Status in the Past 12 Months by Sex by Age|Population for whom poverty status is determined|int
+B17001|39.0|3|B17001_039|18 to 24 years|Poverty Status in the Past 12 Months by Sex by Age|Population for whom poverty status is determined|int
+B17001|40.0|3|B17001_040|25 to 34 years|Poverty Status in the Past 12 Months by Sex by Age|Population for whom poverty status is determined|int
+B17001|41.0|3|B17001_041|35 to 44 years|Poverty Status in the Past 12 Months by Sex by Age|Population for whom poverty status is determined|int
+B17001|42.0|3|B17001_042|45 to 54 years|Poverty Status in the Past 12 Months by Sex by Age|Population for whom poverty status is determined|int
+B17001|43.0|3|B17001_043|55 to 64 years|Poverty Status in the Past 12 Months by Sex by Age|Population for whom poverty status is determined|int
+B17001|44.0|3|B17001_044|65 to 74 years|Poverty Status in the Past 12 Months by Sex by Age|Population for whom poverty status is determined|int
+B17001|45.0|3|B17001_045|75 years and over|Poverty Status in the Past 12 Months by Sex by Age|Population for whom poverty status is determined|int
+B17001|46.0|2|B17001_046|Female:|Poverty Status in the Past 12 Months by Sex by Age|Population for whom poverty status is determined|int
+B17001|47.0|3|B17001_047|Under 5 years|Poverty Status in the Past 12 Months by Sex by Age|Population for whom poverty status is determined|int
+B17001|48.0|3|B17001_048|5 years|Poverty Status in the Past 12 Months by Sex by Age|Population for whom poverty status is determined|int
+B17001|49.0|3|B17001_049|6 to 11 years|Poverty Status in the Past 12 Months by Sex by Age|Population for whom poverty status is determined|int
+B17001|50.0|3|B17001_050|12 to 14 years|Poverty Status in the Past 12 Months by Sex by Age|Population for whom poverty status is determined|int
+B17001|51.0|3|B17001_051|15 years|Poverty Status in the Past 12 Months by Sex by Age|Population for whom poverty status is determined|int
+B17001|52.0|3|B17001_052|16 and 17 years|Poverty Status in the Past 12 Months by Sex by Age|Population for whom poverty status is determined|int
+B17001|53.0|3|B17001_053|18 to 24 years|Poverty Status in the Past 12 Months by Sex by Age|Population for whom poverty status is determined|int
+B17001|54.0|3|B17001_054|25 to 34 years|Poverty Status in the Past 12 Months by Sex by Age|Population for whom poverty status is determined|int
+B17001|55.0|3|B17001_055|35 to 44 years|Poverty Status in the Past 12 Months by Sex by Age|Population for whom poverty status is determined|int
+B17001|56.0|3|B17001_056|45 to 54 years|Poverty Status in the Past 12 Months by Sex by Age|Population for whom poverty status is determined|int
+B17001|57.0|3|B17001_057|55 to 64 years|Poverty Status in the Past 12 Months by Sex by Age|Population for whom poverty status is determined|int
+B17001|58.0|3|B17001_058|65 to 74 years|Poverty Status in the Past 12 Months by Sex by Age|Population for whom poverty status is determined|int
+B17001|59.0|3|B17001_059|75 years and over|Poverty Status in the Past 12 Months by Sex by Age|Population for whom poverty status is determined|int
+B18101|1.0|0|B18101_001|Total:|Sex by Age by Disability Status|Civilian noninstitutionalized population|int
+B18101|2.0|1|B18101_002|Male:|Sex by Age by Disability Status|Civilian noninstitutionalized population|int
+B18101|3.0|2|B18101_003|Under 5 years:|Sex by Age by Disability Status|Civilian noninstitutionalized population|int
+B18101|4.0|3|B18101_004|With a disability|Sex by Age by Disability Status|Civilian noninstitutionalized population|int
+B18101|5.0|3|B18101_005|No disability|Sex by Age by Disability Status|Civilian noninstitutionalized population|int
+B18101|6.0|2|B18101_006|5 to 17 years:|Sex by Age by Disability Status|Civilian noninstitutionalized population|int
+B18101|7.0|3|B18101_007|With a disability|Sex by Age by Disability Status|Civilian noninstitutionalized population|int
+B18101|8.0|3|B18101_008|No disability|Sex by Age by Disability Status|Civilian noninstitutionalized population|int
+B18101|9.0|2|B18101_009|18 to 34 years:|Sex by Age by Disability Status|Civilian noninstitutionalized population|int
+B18101|10.0|3|B18101_010|With a disability|Sex by Age by Disability Status|Civilian noninstitutionalized population|int
+B18101|11.0|3|B18101_011|No disability|Sex by Age by Disability Status|Civilian noninstitutionalized population|int
+B18101|12.0|2|B18101_012|35 to 64 years:|Sex by Age by Disability Status|Civilian noninstitutionalized population|int
+B18101|13.0|3|B18101_013|With a disability|Sex by Age by Disability Status|Civilian noninstitutionalized population|int
+B18101|14.0|3|B18101_014|No disability|Sex by Age by Disability Status|Civilian noninstitutionalized population|int
+B18101|15.0|2|B18101_015|65 to 74 years:|Sex by Age by Disability Status|Civilian noninstitutionalized population|int
+B18101|16.0|3|B18101_016|With a disability|Sex by Age by Disability Status|Civilian noninstitutionalized population|int
+B18101|17.0|3|B18101_017|No disability|Sex by Age by Disability Status|Civilian noninstitutionalized population|int
+B18101|18.0|2|B18101_018|75 years and over:|Sex by Age by Disability Status|Civilian noninstitutionalized population|int
+B18101|19.0|3|B18101_019|With a disability|Sex by Age by Disability Status|Civilian noninstitutionalized population|int
+B18101|20.0|3|B18101_020|No disability|Sex by Age by Disability Status|Civilian noninstitutionalized population|int
+B18101|21.0|1|B18101_021|Female:|Sex by Age by Disability Status|Civilian noninstitutionalized population|int
+B18101|22.0|2|B18101_022|Under 5 years:|Sex by Age by Disability Status|Civilian noninstitutionalized population|int
+B18101|23.0|3|B18101_023|With a disability|Sex by Age by Disability Status|Civilian noninstitutionalized population|int
+B18101|24.0|3|B18101_024|No disability|Sex by Age by Disability Status|Civilian noninstitutionalized population|int
+B18101|25.0|2|B18101_025|5 to 17 years:|Sex by Age by Disability Status|Civilian noninstitutionalized population|int
+B18101|26.0|3|B18101_026|With a disability|Sex by Age by Disability Status|Civilian noninstitutionalized population|int
+B18101|27.0|3|B18101_027|No disability|Sex by Age by Disability Status|Civilian noninstitutionalized population|int
+B18101|28.0|2|B18101_028|18 to 34 years:|Sex by Age by Disability Status|Civilian noninstitutionalized population|int
+B18101|29.0|3|B18101_029|With a disability|Sex by Age by Disability Status|Civilian noninstitutionalized population|int
+B18101|30.0|3|B18101_030|No disability|Sex by Age by Disability Status|Civilian noninstitutionalized population|int
+B18101|31.0|2|B18101_031|35 to 64 years:|Sex by Age by Disability Status|Civilian noninstitutionalized population|int
+B18101|32.0|3|B18101_032|With a disability|Sex by Age by Disability Status|Civilian noninstitutionalized population|int
+B18101|33.0|3|B18101_033|No disability|Sex by Age by Disability Status|Civilian noninstitutionalized population|int
+B18101|34.0|2|B18101_034|65 to 74 years:|Sex by Age by Disability Status|Civilian noninstitutionalized population|int
+B18101|35.0|3|B18101_035|With a disability|Sex by Age by Disability Status|Civilian noninstitutionalized population|int
+B18101|36.0|3|B18101_036|No disability|Sex by Age by Disability Status|Civilian noninstitutionalized population|int
+B18101|37.0|2|B18101_037|75 years and over:|Sex by Age by Disability Status|Civilian noninstitutionalized population|int
+B18101|38.0|3|B18101_038|With a disability|Sex by Age by Disability Status|Civilian noninstitutionalized population|int
+B18101|39.0|3|B18101_039|No disability|Sex by Age by Disability Status|Civilian noninstitutionalized population|int
+B19013|1.0|0|B19013_001|Median household income in the past 12 months (in 2024 inflation-adjusted dollars)|Median Household Income in the Past 12 Months (in 2024 Inflation-Adjusted Dollars)|Households|int
+B21001|1.0|0|B21001_001|Total:|Sex by Age by Veteran Status for the Civilian Population 18 Years and Over|Civilian population 18 years and over|int
+B21001|2.0|1|B21001_002|Veteran|Sex by Age by Veteran Status for the Civilian Population 18 Years and Over|Civilian population 18 years and over|int
+B21001|3.0|1|B21001_003|Nonveteran|Sex by Age by Veteran Status for the Civilian Population 18 Years and Over|Civilian population 18 years and over|int
+B21001|4.0|1|B21001_004|Male:|Sex by Age by Veteran Status for the Civilian Population 18 Years and Over|Civilian population 18 years and over|int
+B21001|5.0|2|B21001_005|Veteran|Sex by Age by Veteran Status for the Civilian Population 18 Years and Over|Civilian population 18 years and over|int
+B21001|6.0|2|B21001_006|Nonveteran|Sex by Age by Veteran Status for the Civilian Population 18 Years and Over|Civilian population 18 years and over|int
+B21001|7.0|2|B21001_007|18 to 34 years:|Sex by Age by Veteran Status for the Civilian Population 18 Years and Over|Civilian population 18 years and over|int
+B21001|8.0|3|B21001_008|Veteran|Sex by Age by Veteran Status for the Civilian Population 18 Years and Over|Civilian population 18 years and over|int
+B21001|9.0|3|B21001_009|Nonveteran|Sex by Age by Veteran Status for the Civilian Population 18 Years and Over|Civilian population 18 years and over|int
+B21001|10.0|2|B21001_010|35 to 54 years:|Sex by Age by Veteran Status for the Civilian Population 18 Years and Over|Civilian population 18 years and over|int
+B21001|11.0|3|B21001_011|Veteran|Sex by Age by Veteran Status for the Civilian Population 18 Years and Over|Civilian population 18 years and over|int
+B21001|12.0|3|B21001_012|Nonveteran|Sex by Age by Veteran Status for the Civilian Population 18 Years and Over|Civilian population 18 years and over|int
+B21001|13.0|2|B21001_013|55 to 64 years:|Sex by Age by Veteran Status for the Civilian Population 18 Years and Over|Civilian population 18 years and over|int
+B21001|14.0|3|B21001_014|Veteran|Sex by Age by Veteran Status for the Civilian Population 18 Years and Over|Civilian population 18 years and over|int
+B21001|15.0|3|B21001_015|Nonveteran|Sex by Age by Veteran Status for the Civilian Population 18 Years and Over|Civilian population 18 years and over|int
+B21001|16.0|2|B21001_016|65 to 74 years:|Sex by Age by Veteran Status for the Civilian Population 18 Years and Over|Civilian population 18 years and over|int
+B21001|17.0|3|B21001_017|Veteran|Sex by Age by Veteran Status for the Civilian Population 18 Years and Over|Civilian population 18 years and over|int
+B21001|18.0|3|B21001_018|Nonveteran|Sex by Age by Veteran Status for the Civilian Population 18 Years and Over|Civilian population 18 years and over|int
+B21001|19.0|2|B21001_019|75 years and over:|Sex by Age by Veteran Status for the Civilian Population 18 Years and Over|Civilian population 18 years and over|int
+B21001|20.0|3|B21001_020|Veteran|Sex by Age by Veteran Status for the Civilian Population 18 Years and Over|Civilian population 18 years and over|int
+B21001|21.0|3|B21001_021|Nonveteran|Sex by Age by Veteran Status for the Civilian Population 18 Years and Over|Civilian population 18 years and over|int
+B21001|22.0|1|B21001_022|Female:|Sex by Age by Veteran Status for the Civilian Population 18 Years and Over|Civilian population 18 years and over|int
+B21001|23.0|2|B21001_023|Veteran|Sex by Age by Veteran Status for the Civilian Population 18 Years and Over|Civilian population 18 years and over|int
+B21001|24.0|2|B21001_024|Nonveteran|Sex by Age by Veteran Status for the Civilian Population 18 Years and Over|Civilian population 18 years and over|int
+B21001|25.0|2|B21001_025|18 to 34 years:|Sex by Age by Veteran Status for the Civilian Population 18 Years and Over|Civilian population 18 years and over|int
+B21001|26.0|3|B21001_026|Veteran|Sex by Age by Veteran Status for the Civilian Population 18 Years and Over|Civilian population 18 years and over|int
+B21001|27.0|3|B21001_027|Nonveteran|Sex by Age by Veteran Status for the Civilian Population 18 Years and Over|Civilian population 18 years and over|int
+B21001|28.0|2|B21001_028|35 to 54 years:|Sex by Age by Veteran Status for the Civilian Population 18 Years and Over|Civilian population 18 years and over|int
+B21001|29.0|3|B21001_029|Veteran|Sex by Age by Veteran Status for the Civilian Population 18 Years and Over|Civilian population 18 years and over|int
+B21001|30.0|3|B21001_030|Nonveteran|Sex by Age by Veteran Status for the Civilian Population 18 Years and Over|Civilian population 18 years and over|int
+B21001|31.0|2|B21001_031|55 to 64 years:|Sex by Age by Veteran Status for the Civilian Population 18 Years and Over|Civilian population 18 years and over|int
+B21001|32.0|3|B21001_032|Veteran|Sex by Age by Veteran Status for the Civilian Population 18 Years and Over|Civilian population 18 years and over|int
+B21001|33.0|3|B21001_033|Nonveteran|Sex by Age by Veteran Status for the Civilian Population 18 Years and Over|Civilian population 18 years and over|int
+B21001|34.0|2|B21001_034|65 to 74 years:|Sex by Age by Veteran Status for the Civilian Population 18 Years and Over|Civilian population 18 years and over|int
+B21001|35.0|3|B21001_035|Veteran|Sex by Age by Veteran Status for the Civilian Population 18 Years and Over|Civilian population 18 years and over|int
+B21001|36.0|3|B21001_036|Nonveteran|Sex by Age by Veteran Status for the Civilian Population 18 Years and Over|Civilian population 18 years and over|int
+B21001|37.0|2|B21001_037|75 years and over:|Sex by Age by Veteran Status for the Civilian Population 18 Years and Over|Civilian population 18 years and over|int
+B21001|38.0|3|B21001_038|Veteran|Sex by Age by Veteran Status for the Civilian Population 18 Years and Over|Civilian population 18 years and over|int
+B21001|39.0|3|B21001_039|Nonveteran|Sex by Age by Veteran Status for the Civilian Population 18 Years and Over|Civilian population 18 years and over|int
+B22010|1.0|0|B22010_001|Total:|Receipt of Food Stamps/SNAP in the Past 12 Months by Disability Status for Households|Households|int
+B22010|2.0|1|B22010_002|Household received Food Stamps/SNAP in the past 12 months:|Receipt of Food Stamps/SNAP in the Past 12 Months by Disability Status for Households|Households|int
+B22010|3.0|2|B22010_003|Households with 1 or more persons with a disability|Receipt of Food Stamps/SNAP in the Past 12 Months by Disability Status for Households|Households|int
+B22010|4.0|2|B22010_004|Households with no persons with a disability|Receipt of Food Stamps/SNAP in the Past 12 Months by Disability Status for Households|Households|int
+B22010|5.0|1|B22010_005|Household did not receive Food Stamps/SNAP in the past 12 months:|Receipt of Food Stamps/SNAP in the Past 12 Months by Disability Status for Households|Households|int
+B22010|6.0|2|B22010_006|Households with 1 or more persons with a disability|Receipt of Food Stamps/SNAP in the Past 12 Months by Disability Status for Households|Households|int
+B22010|7.0|2|B22010_007|Households with no persons with a disability|Receipt of Food Stamps/SNAP in the Past 12 Months by Disability Status for Households|Households|int
+B25003|1.0|0|B25003_001|Total:|Tenure|Occupied housing units|int
+B25003|2.0|1|B25003_002|Owner occupied|Tenure|Occupied housing units|int
+B25003|3.0|1|B25003_003|Renter occupied|Tenure|Occupied housing units|int
+B25070|1.0|0|B25070_001|Total:|Gross Rent as a Percentage of Household Income in the Past 12 Months|Renter-occupied housing units|int
+B25070|2.0|1|B25070_002|Less than 10.0 percent|Gross Rent as a Percentage of Household Income in the Past 12 Months|Renter-occupied housing units|int
+B25070|3.0|1|B25070_003|10.0 to 14.9 percent|Gross Rent as a Percentage of Household Income in the Past 12 Months|Renter-occupied housing units|int
+B25070|4.0|1|B25070_004|15.0 to 19.9 percent|Gross Rent as a Percentage of Household Income in the Past 12 Months|Renter-occupied housing units|int
+B25070|5.0|1|B25070_005|20.0 to 24.9 percent|Gross Rent as a Percentage of Household Income in the Past 12 Months|Renter-occupied housing units|int
+B25070|6.0|1|B25070_006|25.0 to 29.9 percent|Gross Rent as a Percentage of Household Income in the Past 12 Months|Renter-occupied housing units|int
+B25070|7.0|1|B25070_007|30.0 to 34.9 percent|Gross Rent as a Percentage of Household Income in the Past 12 Months|Renter-occupied housing units|int
+B25070|8.0|1|B25070_008|35.0 to 39.9 percent|Gross Rent as a Percentage of Household Income in the Past 12 Months|Renter-occupied housing units|int
+B25070|9.0|1|B25070_009|40.0 to 49.9 percent|Gross Rent as a Percentage of Household Income in the Past 12 Months|Renter-occupied housing units|int
+B25070|10.0|1|B25070_010|50.0 percent or more|Gross Rent as a Percentage of Household Income in the Past 12 Months|Renter-occupied housing units|int
+B25070|11.0|1|B25070_011|Not computed|Gross Rent as a Percentage of Household Income in the Past 12 Months|Renter-occupied housing units|int
+B27010|1.0|0|B27010_001|Total:|Types of Health Insurance Coverage by Age|Civilian noninstitutionalized population|int
+B27010|2.0|1|B27010_002|Under 19 years:|Types of Health Insurance Coverage by Age|Civilian noninstitutionalized population|int
+B27010|3.0|2|B27010_003|With one type of health insurance coverage:|Types of Health Insurance Coverage by Age|Civilian noninstitutionalized population|int
+B27010|4.0|3|B27010_004|With employer-based health insurance only|Types of Health Insurance Coverage by Age|Civilian noninstitutionalized population|int
+B27010|5.0|3|B27010_005|With direct-purchase health insurance only|Types of Health Insurance Coverage by Age|Civilian noninstitutionalized population|int
+B27010|6.0|3|B27010_006|With Medicare coverage only|Types of Health Insurance Coverage by Age|Civilian noninstitutionalized population|int
+B27010|7.0|3|B27010_007|With Medicaid/means-tested public coverage only|Types of Health Insurance Coverage by Age|Civilian noninstitutionalized population|int
+B27010|8.0|3|B27010_008|With TRICARE/military health coverage only|Types of Health Insurance Coverage by Age|Civilian noninstitutionalized population|int
+B27010|9.0|3|B27010_009|With VA Health Care only|Types of Health Insurance Coverage by Age|Civilian noninstitutionalized population|int
+B27010|10.0|2|B27010_010|With two or more types of health insurance coverage:|Types of Health Insurance Coverage by Age|Civilian noninstitutionalized population|int
+B27010|11.0|3|B27010_011|With employer-based and direct-purchase coverage|Types of Health Insurance Coverage by Age|Civilian noninstitutionalized population|int
+B27010|12.0|3|B27010_012|With employer-based and Medicare coverage|Types of Health Insurance Coverage by Age|Civilian noninstitutionalized population|int
+B27010|13.0|3|B27010_013|With Medicare and Medicaid/means-tested public coverage|Types of Health Insurance Coverage by Age|Civilian noninstitutionalized population|int
+B27010|14.0|3|B27010_014|Other private only combinations|Types of Health Insurance Coverage by Age|Civilian noninstitutionalized population|int
+B27010|15.0|3|B27010_015|Other public only combinations|Types of Health Insurance Coverage by Age|Civilian noninstitutionalized population|int
+B27010|16.0|3|B27010_016|Other coverage combinations|Types of Health Insurance Coverage by Age|Civilian noninstitutionalized population|int
+B27010|17.0|2|B27010_017|No health insurance coverage|Types of Health Insurance Coverage by Age|Civilian noninstitutionalized population|int
+B27010|18.0|1|B27010_018|19 to 34 years:|Types of Health Insurance Coverage by Age|Civilian noninstitutionalized population|int
+B27010|19.0|2|B27010_019|With one type of health insurance coverage:|Types of Health Insurance Coverage by Age|Civilian noninstitutionalized population|int
+B27010|20.0|3|B27010_020|With employer-based health insurance only|Types of Health Insurance Coverage by Age|Civilian noninstitutionalized population|int
+B27010|21.0|3|B27010_021|With direct-purchase health insurance only|Types of Health Insurance Coverage by Age|Civilian noninstitutionalized population|int
+B27010|22.0|3|B27010_022|With Medicare coverage only|Types of Health Insurance Coverage by Age|Civilian noninstitutionalized population|int
+B27010|23.0|3|B27010_023|With Medicaid/means-tested public coverage only|Types of Health Insurance Coverage by Age|Civilian noninstitutionalized population|int
+B27010|24.0|3|B27010_024|With TRICARE/military health coverage only|Types of Health Insurance Coverage by Age|Civilian noninstitutionalized population|int
+B27010|25.0|3|B27010_025|With VA Health Care only|Types of Health Insurance Coverage by Age|Civilian noninstitutionalized population|int
+B27010|26.0|2|B27010_026|With two or more types of health insurance coverage:|Types of Health Insurance Coverage by Age|Civilian noninstitutionalized population|int
+B27010|27.0|3|B27010_027|With employer-based and direct-purchase coverage|Types of Health Insurance Coverage by Age|Civilian noninstitutionalized population|int
+B27010|28.0|3|B27010_028|With employer-based and Medicare coverage|Types of Health Insurance Coverage by Age|Civilian noninstitutionalized population|int
+B27010|29.0|3|B27010_029|With Medicare and Medicaid/means-tested public coverage|Types of Health Insurance Coverage by Age|Civilian noninstitutionalized population|int
+B27010|30.0|3|B27010_030|Other private only combinations|Types of Health Insurance Coverage by Age|Civilian noninstitutionalized population|int
+B27010|31.0|3|B27010_031|Other public only combinations|Types of Health Insurance Coverage by Age|Civilian noninstitutionalized population|int
+B27010|32.0|3|B27010_032|Other coverage combinations|Types of Health Insurance Coverage by Age|Civilian noninstitutionalized population|int
+B27010|33.0|2|B27010_033|No health insurance coverage|Types of Health Insurance Coverage by Age|Civilian noninstitutionalized population|int
+B27010|34.0|1|B27010_034|35 to 64 years:|Types of Health Insurance Coverage by Age|Civilian noninstitutionalized population|int
+B27010|35.0|2|B27010_035|With one type of health insurance coverage:|Types of Health Insurance Coverage by Age|Civilian noninstitutionalized population|int
+B27010|36.0|3|B27010_036|With employer-based health insurance only|Types of Health Insurance Coverage by Age|Civilian noninstitutionalized population|int
+B27010|37.0|3|B27010_037|With direct-purchase health insurance only|Types of Health Insurance Coverage by Age|Civilian noninstitutionalized population|int
+B27010|38.0|3|B27010_038|With Medicare coverage only|Types of Health Insurance Coverage by Age|Civilian noninstitutionalized population|int
+B27010|39.0|3|B27010_039|With Medicaid/means-tested public coverage only|Types of Health Insurance Coverage by Age|Civilian noninstitutionalized population|int
+B27010|40.0|3|B27010_040|With TRICARE/military health coverage only|Types of Health Insurance Coverage by Age|Civilian noninstitutionalized population|int
+B27010|41.0|3|B27010_041|With VA Health Care only|Types of Health Insurance Coverage by Age|Civilian noninstitutionalized population|int
+B27010|42.0|2|B27010_042|With two or more types of health insurance coverage:|Types of Health Insurance Coverage by Age|Civilian noninstitutionalized population|int
+B27010|43.0|3|B27010_043|With employer-based and direct-purchase coverage|Types of Health Insurance Coverage by Age|Civilian noninstitutionalized population|int
+B27010|44.0|3|B27010_044|With employer-based and Medicare coverage|Types of Health Insurance Coverage by Age|Civilian noninstitutionalized population|int
+B27010|45.0|3|B27010_045|With direct-purchase and Medicare coverage|Types of Health Insurance Coverage by Age|Civilian noninstitutionalized population|int
+B27010|46.0|3|B27010_046|With Medicare and Medicaid/means-tested public coverage|Types of Health Insurance Coverage by Age|Civilian noninstitutionalized population|int
+B27010|47.0|3|B27010_047|Other private only combinations|Types of Health Insurance Coverage by Age|Civilian noninstitutionalized population|int
+B27010|48.0|3|B27010_048|Other public only combinations|Types of Health Insurance Coverage by Age|Civilian noninstitutionalized population|int
+B27010|49.0|3|B27010_049|Other coverage combinations|Types of Health Insurance Coverage by Age|Civilian noninstitutionalized population|int
+B27010|50.0|2|B27010_050|No health insurance coverage|Types of Health Insurance Coverage by Age|Civilian noninstitutionalized population|int
+B27010|51.0|1|B27010_051|65 years and over:|Types of Health Insurance Coverage by Age|Civilian noninstitutionalized population|int
+B27010|52.0|2|B27010_052|With one type of health insurance coverage:|Types of Health Insurance Coverage by Age|Civilian noninstitutionalized population|int
+B27010|53.0|3|B27010_053|With employer-based health insurance only|Types of Health Insurance Coverage by Age|Civilian noninstitutionalized population|int
+B27010|54.0|3|B27010_054|With direct-purchase health insurance only|Types of Health Insurance Coverage by Age|Civilian noninstitutionalized population|int
+B27010|55.0|3|B27010_055|With Medicare coverage only|Types of Health Insurance Coverage by Age|Civilian noninstitutionalized population|int
+B27010|56.0|3|B27010_056|With TRICARE/military health coverage only|Types of Health Insurance Coverage by Age|Civilian noninstitutionalized population|int
+B27010|57.0|3|B27010_057|With VA Health Care only|Types of Health Insurance Coverage by Age|Civilian noninstitutionalized population|int
+B27010|58.0|2|B27010_058|With two or more types of health insurance coverage:|Types of Health Insurance Coverage by Age|Civilian noninstitutionalized population|int
+B27010|59.0|3|B27010_059|With employer-based and direct-purchase coverage|Types of Health Insurance Coverage by Age|Civilian noninstitutionalized population|int
+B27010|60.0|3|B27010_060|With employer-based and Medicare coverage|Types of Health Insurance Coverage by Age|Civilian noninstitutionalized population|int
+B27010|61.0|3|B27010_061|With direct-purchase and Medicare coverage|Types of Health Insurance Coverage by Age|Civilian noninstitutionalized population|int
+B27010|62.0|3|B27010_062|With Medicare and Medicaid/means-tested public coverage|Types of Health Insurance Coverage by Age|Civilian noninstitutionalized population|int
+B27010|63.0|3|B27010_063|Other private only combinations|Types of Health Insurance Coverage by Age|Civilian noninstitutionalized population|int
+B27010|64.0|3|B27010_064|Other public only combinations|Types of Health Insurance Coverage by Age|Civilian noninstitutionalized population|int
+B27010|65.0|3|B27010_065|Other coverage combinations|Types of Health Insurance Coverage by Age|Civilian noninstitutionalized population|int
+B27010|66.0|2|B27010_066|No health insurance coverage|Types of Health Insurance Coverage by Age|Civilian noninstitutionalized population|int
+B28002|1.0|0|B28002_001|Total:|Presence and Types of Internet Subscriptions in Household|Households|int
+B28002|2.0|1|B28002_002|With an Internet subscription|Presence and Types of Internet Subscriptions in Household|Households|int
+B28002|3.0|2|B28002_003|Dial-up with no other type of Internet subscription|Presence and Types of Internet Subscriptions in Household|Households|int
+B28002|4.0|2|B28002_004|Broadband of any type|Presence and Types of Internet Subscriptions in Household|Households|int
+B28002|5.0|2|B28002_005|Cellular data plan|Presence and Types of Internet Subscriptions in Household|Households|int
+B28002|6.0|3|B28002_006|Cellular data plan with no other type of Internet subscription|Presence and Types of Internet Subscriptions in Household|Households|int
+B28002|7.0|2|B28002_007|Broadband such as cable, fiber optic or DSL|Presence and Types of Internet Subscriptions in Household|Households|int
+B28002|8.0|3|B28002_008|Broadband such as cable, fiber optic or DSL with no other type of Internet subscription|Presence and Types of Internet Subscriptions in Household|Households|int
+B28002|9.0|2|B28002_009|Satellite Internet service|Presence and Types of Internet Subscriptions in Household|Households|int
+B28002|10.0|3|B28002_010|Satellite Internet service with no other type of Internet subscription|Presence and Types of Internet Subscriptions in Household|Households|int
+B28002|11.0|2|B28002_011|Other service with no other type of Internet subscription|Presence and Types of Internet Subscriptions in Household|Households|int
+B28002|12.0|1|B28002_012|Internet access without a subscription|Presence and Types of Internet Subscriptions in Household|Households|int
+B28002|13.0|1|B28002_013|No Internet access|Presence and Types of Internet Subscriptions in Household|Households|int
+C24030|1.0|0|C24030_001|Total:|Sex by Industry for the Civilian Employed Population 16 Years and Over|Civilian employed population 16 years and over|int
+C24030|2.0|1|C24030_002|Male:|Sex by Industry for the Civilian Employed Population 16 Years and Over|Civilian employed population 16 years and over|int
+C24030|3.0|2|C24030_003|Agriculture, forestry, fishing and hunting, and mining:|Sex by Industry for the Civilian Employed Population 16 Years and Over|Civilian employed population 16 years and over|int
+C24030|4.0|3|C24030_004|Agriculture, forestry, fishing and hunting|Sex by Industry for the Civilian Employed Population 16 Years and Over|Civilian employed population 16 years and over|int
+C24030|5.0|3|C24030_005|Mining, quarrying, and oil and gas extraction|Sex by Industry for the Civilian Employed Population 16 Years and Over|Civilian employed population 16 years and over|int
+C24030|6.0|2|C24030_006|Construction|Sex by Industry for the Civilian Employed Population 16 Years and Over|Civilian employed population 16 years and over|int
+C24030|7.0|2|C24030_007|Manufacturing|Sex by Industry for the Civilian Employed Population 16 Years and Over|Civilian employed population 16 years and over|int
+C24030|8.0|2|C24030_008|Wholesale trade|Sex by Industry for the Civilian Employed Population 16 Years and Over|Civilian employed population 16 years and over|int
+C24030|9.0|2|C24030_009|Retail trade|Sex by Industry for the Civilian Employed Population 16 Years and Over|Civilian employed population 16 years and over|int
+C24030|10.0|2|C24030_010|Transportation and warehousing, and utilities:|Sex by Industry for the Civilian Employed Population 16 Years and Over|Civilian employed population 16 years and over|int
+C24030|11.0|3|C24030_011|Transportation and warehousing|Sex by Industry for the Civilian Employed Population 16 Years and Over|Civilian employed population 16 years and over|int
+C24030|12.0|3|C24030_012|Utilities|Sex by Industry for the Civilian Employed Population 16 Years and Over|Civilian employed population 16 years and over|int
+C24030|13.0|2|C24030_013|Information|Sex by Industry for the Civilian Employed Population 16 Years and Over|Civilian employed population 16 years and over|int
+C24030|14.0|2|C24030_014|Finance and insurance, and real estate, and rental and leasing:|Sex by Industry for the Civilian Employed Population 16 Years and Over|Civilian employed population 16 years and over|int
+C24030|15.0|3|C24030_015|Finance and insurance|Sex by Industry for the Civilian Employed Population 16 Years and Over|Civilian employed population 16 years and over|int
+C24030|16.0|3|C24030_016|Real estate and rental and leasing|Sex by Industry for the Civilian Employed Population 16 Years and Over|Civilian employed population 16 years and over|int
+C24030|17.0|2|C24030_017|Professional, scientific, and management, and administrative, and waste management services:|Sex by Industry for the Civilian Employed Population 16 Years and Over|Civilian employed population 16 years and over|int
+C24030|18.0|3|C24030_018|Professional, scientific, and technical services|Sex by Industry for the Civilian Employed Population 16 Years and Over|Civilian employed population 16 years and over|int
+C24030|19.0|3|C24030_019|Management of companies and enterprises|Sex by Industry for the Civilian Employed Population 16 Years and Over|Civilian employed population 16 years and over|int
+C24030|20.0|3|C24030_020|Administrative and support and waste management services|Sex by Industry for the Civilian Employed Population 16 Years and Over|Civilian employed population 16 years and over|int
+C24030|21.0|2|C24030_021|Educational services, and health care and social assistance:|Sex by Industry for the Civilian Employed Population 16 Years and Over|Civilian employed population 16 years and over|int
+C24030|22.0|3|C24030_022|Educational services|Sex by Industry for the Civilian Employed Population 16 Years and Over|Civilian employed population 16 years and over|int
+C24030|23.0|3|C24030_023|Health care and social assistance|Sex by Industry for the Civilian Employed Population 16 Years and Over|Civilian employed population 16 years and over|int
+C24030|24.0|2|C24030_024|Arts, entertainment, and recreation, and accommodation and food services:|Sex by Industry for the Civilian Employed Population 16 Years and Over|Civilian employed population 16 years and over|int
+C24030|25.0|3|C24030_025|Arts, entertainment, and recreation|Sex by Industry for the Civilian Employed Population 16 Years and Over|Civilian employed population 16 years and over|int
+C24030|26.0|3|C24030_026|Accommodation and food services|Sex by Industry for the Civilian Employed Population 16 Years and Over|Civilian employed population 16 years and over|int
+C24030|27.0|2|C24030_027|Other services, except public administration|Sex by Industry for the Civilian Employed Population 16 Years and Over|Civilian employed population 16 years and over|int
+C24030|28.0|2|C24030_028|Public administration|Sex by Industry for the Civilian Employed Population 16 Years and Over|Civilian employed population 16 years and over|int
+C24030|29.0|1|C24030_029|Female:|Sex by Industry for the Civilian Employed Population 16 Years and Over|Civilian employed population 16 years and over|int
+C24030|30.0|2|C24030_030|Agriculture, forestry, fishing and hunting, and mining:|Sex by Industry for the Civilian Employed Population 16 Years and Over|Civilian employed population 16 years and over|int
+C24030|31.0|3|C24030_031|Agriculture, forestry, fishing and hunting|Sex by Industry for the Civilian Employed Population 16 Years and Over|Civilian employed population 16 years and over|int
+C24030|32.0|3|C24030_032|Mining, quarrying, and oil and gas extraction|Sex by Industry for the Civilian Employed Population 16 Years and Over|Civilian employed population 16 years and over|int
+C24030|33.0|2|C24030_033|Construction|Sex by Industry for the Civilian Employed Population 16 Years and Over|Civilian employed population 16 years and over|int
+C24030|34.0|2|C24030_034|Manufacturing|Sex by Industry for the Civilian Employed Population 16 Years and Over|Civilian employed population 16 years and over|int
+C24030|35.0|2|C24030_035|Wholesale trade|Sex by Industry for the Civilian Employed Population 16 Years and Over|Civilian employed population 16 years and over|int
+C24030|36.0|2|C24030_036|Retail trade|Sex by Industry for the Civilian Employed Population 16 Years and Over|Civilian employed population 16 years and over|int
+C24030|37.0|2|C24030_037|Transportation and warehousing, and utilities:|Sex by Industry for the Civilian Employed Population 16 Years and Over|Civilian employed population 16 years and over|int
+C24030|38.0|3|C24030_038|Transportation and warehousing|Sex by Industry for the Civilian Employed Population 16 Years and Over|Civilian employed population 16 years and over|int
+C24030|39.0|3|C24030_039|Utilities|Sex by Industry for the Civilian Employed Population 16 Years and Over|Civilian employed population 16 years and over|int
+C24030|40.0|2|C24030_040|Information|Sex by Industry for the Civilian Employed Population 16 Years and Over|Civilian employed population 16 years and over|int
+C24030|41.0|2|C24030_041|Finance and insurance, and real estate, and rental and leasing:|Sex by Industry for the Civilian Employed Population 16 Years and Over|Civilian employed population 16 years and over|int
+C24030|42.0|3|C24030_042|Finance and insurance|Sex by Industry for the Civilian Employed Population 16 Years and Over|Civilian employed population 16 years and over|int
+C24030|43.0|3|C24030_043|Real estate and rental and leasing|Sex by Industry for the Civilian Employed Population 16 Years and Over|Civilian employed population 16 years and over|int
+C24030|44.0|2|C24030_044|Professional, scientific, and management, and administrative, and waste management services:|Sex by Industry for the Civilian Employed Population 16 Years and Over|Civilian employed population 16 years and over|int
+C24030|45.0|3|C24030_045|Professional, scientific, and technical services|Sex by Industry for the Civilian Employed Population 16 Years and Over|Civilian employed population 16 years and over|int
+C24030|46.0|3|C24030_046|Management of companies and enterprises|Sex by Industry for the Civilian Employed Population 16 Years and Over|Civilian employed population 16 years and over|int
+C24030|47.0|3|C24030_047|Administrative and support and waste management services|Sex by Industry for the Civilian Employed Population 16 Years and Over|Civilian employed population 16 years and over|int
+C24030|48.0|2|C24030_048|Educational services, and health care and social assistance:|Sex by Industry for the Civilian Employed Population 16 Years and Over|Civilian employed population 16 years and over|int
+C24030|49.0|3|C24030_049|Educational services|Sex by Industry for the Civilian Employed Population 16 Years and Over|Civilian employed population 16 years and over|int
+C24030|50.0|3|C24030_050|Health care and social assistance|Sex by Industry for the Civilian Employed Population 16 Years and Over|Civilian employed population 16 years and over|int
+C24030|51.0|2|C24030_051|Arts, entertainment, and recreation, and accommodation and food services:|Sex by Industry for the Civilian Employed Population 16 Years and Over|Civilian employed population 16 years and over|int
+C24030|52.0|3|C24030_052|Arts, entertainment, and recreation|Sex by Industry for the Civilian Employed Population 16 Years and Over|Civilian employed population 16 years and over|int
+C24030|53.0|3|C24030_053|Accommodation and food services|Sex by Industry for the Civilian Employed Population 16 Years and Over|Civilian employed population 16 years and over|int
+C24030|54.0|2|C24030_054|Other services, except public administration|Sex by Industry for the Civilian Employed Population 16 Years and Over|Civilian employed population 16 years and over|int
+C24030|55.0|2|C24030_055|Public administration|Sex by Industry for the Civilian Employed Population 16 Years and Over|Civilian employed population 16 years and over|int
