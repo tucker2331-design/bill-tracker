@@ -2,7 +2,7 @@
 tags: [ideas, product, war-room, drafting, owner-idea, design-research]
 updated: 2026-11-18
 status: active
-open_loop: v3 mocked 2026-11-18 (two team inputs drive the page; §0.6) — awaiting the owner's review; product build not started.
+open_loop: v4 queued — input becomes law + part, records shown at that level, memo feed section (§0.7); v3 awaiting review; product build not started.
 ---
 
 # The drafting room — a War Room for a bill before it has a number
@@ -100,6 +100,20 @@ enrolment (separate sources) · close vs safe seats (election results; VA found 
   "members of the committee this law usually goes to, A–Z, facts only — not a prediction"; District sheet = "one page
   for one district; leave it at the meeting".
 - Less text: one source line per section; the evidence lives on its own board.
+
+### 0.7 Owner, 2026-11-18 (after v3)
+- **District info stays.** "Not a historical predictor of who carries" ≠ "a bad lobbying tool": this is about
+  introductions, and members answer to voters. The page shows it as the argument; the evidence board says "not a
+  forecast · shown".
+- **Law AND part.** The team picks the law and the part of it (PA titles: "…Human Services Code, in public
+  assistance…"; VA: the code section). Measured (`results_law_part.json`, House 2017–24): the part barely moves the
+  committee (usual committee 80.9% by law → 83.3% by law + part) but moves the odds a lot — Public School Code
+  charter schools 4% out vs school health services 24%; Title 18 riot 5% vs assault 23%; Tax Reform Code realty
+  transfer tax 52% vs the whole-law bills 9%; Human Services Code public assistance → Health 68%. **v4: the input
+  becomes "law + part", and every record on the page is shown at that level (law-only as fallback when the part has
+  few bills).**
+- **Memo feed** → "memos in circulation on the same law" (ideas before they are bills); see
+  [[testing/pa_party_position]].
 
 ---
 *v1 research (2026-11-17), kept for its sources:*

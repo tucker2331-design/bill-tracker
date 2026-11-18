@@ -8,6 +8,12 @@ status: active
 
 Append-only, reverse-chronological (newest at top). Each entry opens with `## [YYYY-MM-DD] <type> | <title>`.
 
+## [2026-11-18] decision | Law + part, memo titles, district info kept, new bills need no reader
+The part of a law moves the odds far more than the committee (charter schools 4% vs school health 24%). Memo titles
+(bulk, inside the rules) improve reading (0.807 → 0.832) but not contested votes; memo text stays unfetched (per-page).
+District info stays on the drafting page as the argument. New bills are scored from filing facts — no human reader.
+[[ideas/drafting_war_room]] §0.7 · [[testing/pa_party_position]].
+
 ## [2026-11-18] decision | Drafting room v3: two team inputs drive the page
 Owner review of v2 answered: the team sets the law it changes and who it affects (16 census measures, 4 place types);
 map, top 10, committee path, earlier bills, possible sponsors and the district sheet follow. Sections collapse, names

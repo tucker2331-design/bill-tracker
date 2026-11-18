@@ -2,7 +2,7 @@
 tags: [testing, prediction, pa, votes, party-position]
 updated: 2026-11-18
 status: active
-open_loop: Party position — the two inputs that could move CONTESTED votes are not in hand: dated co-signatures (the PA co-sponsorship memo) and the bill's own words (memo or text; both are per-document pages under our PA bulk-only rule). Owner decision needed before either is fetched.
+open_loop: Contested votes still lack a strong input. Memo TITLES are in bulk (2025-26 export + memo RSS) and were tested (small gain for reading, none for contested). Memo TEXT and co-signer dates are per-document pages — outside the PA bulk-only rule, so not fetched (owner: 'if it follows our rules').
 ---
 
 # Predicting each party's position (PA, 2026-11-18)
@@ -71,3 +71,25 @@ title. `reading_pilot.json`.
    routine bills); memos for the ~1,500 bills a year likely to be contested ≈ 1–1.5 M tokens a session (several
    windows); full text for every bill ≈ 20–50 M tokens (not feasible, and not bulk).
 3. **Recalibrate after a change of majority** (2023–24 shows the cost of not doing it).
+
+## Memo titles (2026-11-18) — inside the rules
+PA's bulk export carries each 2025–26 bill's co-sponsorship memo title (`<cosponsorshipMemo>`, 3,959 bills; none
+before 2025), and the memo RSS feeds (`/house|senate/rss/legislation/memos`, allowed by `states/pa_fetch`) list new
+memos with circulator, co-circulators and the bill number once filed — **no memo text and no co-signers**.
+
+| (400-bill sample) | AUC | contested AUC |
+|---|---|---|
+| reading the law title | 0.807 | 0.630 |
+| reading law + memo title | **0.832** | **0.684** |
+| model + reading law + memo | 0.896 | 0.822 (model alone 0.868) |
+| memo-title word model (2025–26 only, grouped CV) | 0.617 | 0.565 |
+
+Memo titles state the policy ("Mandating Cursive Handwriting", "Requiring Voter ID") and improve a reader; they still
+do not beat the data model on contested votes. **Product use that needs no prediction:** the memo feed is an early
+list of ideas before they are bills — the drafting room can show "memos in circulation on the same law".
+
+## New bills on the live site — no human reader
+Every input above exists the day a bill is filed (sponsor, co-sponsors, law, committee, standing, date) and the
+title-word model scores any new title; nothing depends on the assistant having read the bill. A reader at runtime
+would be an automated API call per new bill (Virginia costed ~$4–8 per 11.6k summaries) — measured gain: routine
+bills only, so not built.
