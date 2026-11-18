@@ -1,6 +1,6 @@
 ---
 tags: [knowledge, api, districts, accounts, privacy, redistricting]
-updated: 2026-07-27
+updated: 2026-11-18
 status: active
 ---
 
@@ -79,3 +79,12 @@ event-triggered re-confirm was proposed without naming a source ([[state/va_buil
 - **#6 50-state scaling** — the same federal endpoint returns state legislative districts for **every**
   state. Nothing here is Virginia-specific, so state #2 inherits it unchanged.
 - **#8 zero routine maintenance** — the detector needs no human until it actually fires.
+
+## Census Data API now requires a key (found 2026-11-18)
+`api.census.gov/data/<year>/acs/acs5?...` without `&key=` returns **302 → `/data/missing_key.html`** (tested
+2024 and 2023 ACS 5-year, PA state legislative districts). The old "500 keyless queries a day" no longer holds.
+The key goes in the query string, not a header, so the network proxy's credential injection cannot supply it.
+**Keyless route that works:** the ACS table-based summary files on `www2.census.gov`
+(`programs-surveys/acs/summary_file/2024/table-based-SF/data/5YRData/acsdt5y2024-<table>.dat`, 1,198 tables,
+published 2026-01-29). Each file covers every geography, so filter to summary levels 610 (upper) / 620 (lower)
+by `GEO_ID`. Bulk, once a year, zero per-request load. Not yet used; scoped in [[ideas/drafting_war_room]].
