@@ -1,0 +1,332 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Drafting room — idea page</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<style>
+body{margin:0;background:#0B0D0E}
+a{color:#86B6D3;text-decoration:none}a:hover{text-decoration:underline}
+.list{background:#1A1E20;border-radius:14px;overflow:hidden}
+.row{display:grid;gap:12px;align-items:center;padding:11px 16px;border-top:1px solid rgba(255,255,255,.08);min-height:46px}
+.row:first-child{border-top:0}
+.tap{cursor:pointer}.tap:hover{background:#22272A}
+.sc{font-size:10.5px;letter-spacing:.07em;text-transform:uppercase;font-weight:600;color:#A6AFB4}
+.soft{color:#A6AFB4}.faint{color:#727B80;font-size:12.5px}.num{font-weight:700}
+.seg{display:inline-flex;background:#22272A;border-radius:9px;padding:2px;gap:2px;flex-wrap:wrap}
+.seg button{font:inherit;font-size:13px;font-weight:600;border:0;border-radius:7px;padding:7px 11px;min-height:36px;background:transparent;color:#A6AFB4;cursor:pointer}
+.seg button.on{background:#2A3034;color:#F0F2F3}
+select{font:inherit;font-size:14px;color:#F0F2F3;background:#22272A;border:0;border-radius:9px;padding:8px 10px;min-height:38px;max-width:100%}
+.sec{display:grid;grid-template-columns:minmax(0,1fr) auto 18px;gap:12px;align-items:center;padding:14px 16px;min-height:52px;cursor:pointer}
+.sec:hover{background:#22272A}
+.sec .t{font-weight:700}
+.chev{color:#727B80;font-size:14px;text-align:right}
+.body{padding:4px 16px 16px;display:flex;flex-direction:column;gap:10px}
+.tbl{overflow-x:auto}
+path.d{stroke:#0B0D0E;stroke-width:.6;cursor:pointer}
+path.d:hover{stroke:#F0F2F3;stroke-width:1.4}
+</style>
+</helmet>
+<div style="font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', system-ui, 'Segoe UI', Roboto, 'Helvetica Neue', sans-serif; color: #F0F2F3; background: #0B0D0E; font-size: 14px; line-height: 1.45; padding: 24px 16px 72px">
+<div style="max-width: 860px; margin: 0 auto; display: flex; flex-direction: column; gap: 18px">
+
+  <header style="display: flex; flex-direction: column; gap: 4px">
+    <a href="#" style="font-size: 13px">‹ Drafting room</a>
+    <h1 style="margin: 2px 0 0; font-size: 24px; font-weight: 700; letter-spacing: -.3px">Care for nursing-home residents</h1>
+    <div class="soft">Idea · no bill number yet · team only</div>
+  </header>
+
+  <!-- INPUTS: the only things the team sets -->
+  <div class="list">
+    <div class="row" style="grid-template-columns: 130px minmax(0,1fr)">
+      <span class="sc">Law it changes</span>
+      <div class="seg">
+        <sc-for list="{{ lawChips }}" as="c" hint-placeholder-count="3">
+          <button class="{{ c.cls }}" onClick="{{ c.pick }}">{{ c.law }}</button>
+        </sc-for>
+      </div>
+    </div>
+    <div class="row" style="grid-template-columns: 130px minmax(0,1fr)">
+      <span class="sc">Who it affects</span>
+      <select value="{{ measure }}" onChange="{{ setMeasure }}">
+        <sc-for list="{{ measureOpts }}" as="o" hint-placeholder-count="10">
+          <option value="{{ o.k }}">{{ o.label }}</option>
+        </sc-for>
+      </select>
+    </div>
+    <div class="row" style="grid-template-columns: 130px minmax(0,1fr)">
+      <span class="sc">Sponsor's party</span>
+      <div class="seg">
+        <button class="{{ majCls }}" onClick="{{ setMaj }}">Majority</button>
+        <button class="{{ minCls }}" onClick="{{ setMin }}">Minority</button>
+      </div>
+    </div>
+  </div>
+  <div class="faint" style="margin-top: -10px">The team sets these three. The page finds the rest.</div>
+
+  <div class="list">
+
+    <!-- WHERE -->
+    <div class="sec" onClick="{{ tg.map }}"><span class="t">Where they live</span><span class="soft">{{ sum.map }}</span><span class="chev">{{ ch.map }}</span></div>
+    <sc-if value="{{ op.map }}" hint-placeholder-val="{{ true }}">
+      <div class="body">
+        <svg viewBox="0 0 1000 {{ mapH }}" style="width: 100%; height: auto; display: block" role="img" aria-label="Map of Pennsylvania House districts">
+          <sc-for list="{{ paths }}" as="p" hint-placeholder-count="20">
+            <path class="d" d="{{ p.d }}" fill="{{ p.fill }}" onMouseEnter="{{ p.hover }}" onClick="{{ p.pick }}"></path>
+          </sc-for>
+          <sc-if value="{{ hasPicked }}" hint-placeholder-val="{{ false }}">
+            <path d="{{ pickedPath }}" fill="none" stroke="#86B6D3" stroke-width="2.2" pointer-events="none"></path>
+          </sc-if>
+        </svg>
+        <div style="display: flex; flex-wrap: wrap; gap: 10px">
+          <sc-for list="{{ legend }}" as="l" hint-placeholder-count="5">
+            <span style="display: inline-flex; align-items: center; gap: 5px; font-size: 12px; color: #A6AFB4"><span style="width: 14px; height: 10px; border-radius: 2px; background: {{ l.c }}"></span>{{ l.t }}</span>
+          </sc-for>
+        </div>
+        <div style="min-height: 20px"><span class="num">{{ hv.a }}</span> <span class="soft">{{ hv.b }}</span></div>
+        <div class="tbl list" style="background: #22272A">
+          <sc-for list="{{ top10 }}" as="r" hint-placeholder-count="10">
+            <div class="row tap" onClick="{{ r.pick }}" style="grid-template-columns: 24px minmax(150px,1fr) minmax(150px,auto); min-width: 380px; border-color: rgba(255,255,255,.06)">
+              <span class="faint">{{ r.rank }}</span>
+              <span><span style="font-weight: 600">{{ r.name }}</span> <span class="faint">{{ r.party }} · HD {{ r.dn }}</span></span>
+              <span style="text-align: right"><span class="num">{{ r.count }}</span> <span class="soft">{{ r.share }}</span></span>
+            </div>
+          </sc-for>
+        </div>
+        <div class="faint">Top 10 of 203 House districts. Tap one to open its district sheet. Census ACS 2020–24; CMS and NCES for places.</div>
+      </div>
+    </sc-if>
+
+    <!-- COMMITTEE PATH -->
+    <div class="sec" onClick="{{ tg.path }}" style="border-top: 1px solid rgba(255,255,255,.08)"><span class="t">Committee path</span><span class="soft">{{ sum.path }}</span><span class="chev">{{ ch.path }}</span></div>
+    <sc-if value="{{ op.path }}" hint-placeholder-val="{{ false }}">
+      <div class="body">
+        <div class="faint">Bills that changed this law went to:</div>
+        <div class="list" style="background: #22272A">
+          <sc-for list="{{ roomsFor }}" as="m" hint-placeholder-count="3">
+            <div class="row" style="grid-template-columns: minmax(0,1fr) 140px 80px; border-color: rgba(255,255,255,.06)">
+              <span>{{ m.room }}</span>
+              <span style="height: 6px; background: #1A1E20; border-radius: 3px; overflow: hidden"><span style="display: block; height: 6px; width: {{ m.w }}; background: #A6AFB4"></span></span>
+              <span style="text-align: right"><span class="num">{{ m.k }}</span> <span class="soft">of {{ m.n }}</span></span>
+            </div>
+          </sc-for>
+        </div>
+        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 8px">
+          <sc-for list="{{ gates }}" as="g" hint-placeholder-count="4">
+            <div style="background: #22272A; border-radius: 9px; padding: 10px 12px">
+              <div class="sc">{{ g.step }}</div>
+              <div><span class="num" style="font-size: 18px">{{ g.k }}</span> <span class="soft">of {{ g.n }}</span></div>
+              <div class="faint">{{ g.what }}</div>
+            </div>
+          </sc-for>
+        </div>
+        <div class="faint">House bills, 2019–24. Each step has its own count. We do not multiply them.</div>
+      </div>
+    </sc-if>
+
+    <!-- EARLIER BILLS -->
+    <div class="sec" onClick="{{ tg.eb }}" style="border-top: 1px solid rgba(255,255,255,.08)"><span class="t">Earlier bills</span><span class="soft">{{ sum.eb }}</span><span class="chev">{{ ch.eb }}</span></div>
+    <sc-if value="{{ op.eb }}" hint-placeholder-val="{{ false }}">
+      <div class="body">
+        <div class="list" style="background: #22272A">
+          <sc-for list="{{ ebRows }}" as="b" hint-placeholder-count="6">
+            <div class="row" style="grid-template-columns: 62px 70px minmax(0,1fr) auto; border-color: rgba(255,255,255,.06)">
+              <span class="faint">{{ b.s }}</span><span class="num">{{ b.bill }}</span><span>{{ b.who }}</span><span class="sc">{{ b.far }}</span>
+            </div>
+          </sc-for>
+        </div>
+        <div class="faint">Rule: same law named in the title. A title names the law, not the policy, so some are not about your idea.</div>
+      </div>
+    </sc-if>
+
+    <!-- POSSIBLE SPONSORS -->
+    <div class="sec" onClick="{{ tg.sp }}" style="border-top: 1px solid rgba(255,255,255,.08)"><span class="t">Possible sponsors</span><span class="soft">{{ sum.sp }}</span><span class="chev">{{ ch.sp }}</span></div>
+    <sc-if value="{{ op.sp }}" hint-placeholder-val="{{ false }}">
+      <div class="body">
+        <div class="tbl list" style="background: #22272A">
+          <div class="row" style="grid-template-columns: minmax(150px,1.4fr) 80px minmax(130px,1fr) 56px 56px; min-width: 520px; border-color: rgba(255,255,255,.06); min-height: 34px">
+            <span class="sc">Member</span><span class="sc">Party</span><span class="sc">{{ mShort }}</span><span class="sc">New</span><span class="sc">Bills</span>
+          </div>
+          <sc-for list="{{ carriers }}" as="c" hint-placeholder-count="8">
+            <div class="row tap" onClick="{{ c.pick }}" style="grid-template-columns: minmax(150px,1.4fr) 80px minmax(130px,1fr) 56px 56px; min-width: 520px; border-color: rgba(255,255,255,.06)">
+              <span><span style="font-weight: 600">{{ c.name }}</span> <span class="sc">{{ c.seat }}</span></span>
+              <span class="sc">{{ c.standing }}</span>
+              <span><span class="num">{{ c.count }}</span> <span class="soft">{{ c.share }}</span></span>
+              <span class="soft">{{ c.isNew }}</span><span class="soft">{{ c.filed }}</span>
+            </div>
+          </sc-for>
+        </div>
+        <div class="faint">Rule: members of {{ room }}, the committee this law usually goes to. A–Z. Facts only — not a prediction. Bills = filed this session.</div>
+      </div>
+    </sc-if>
+
+    <!-- DISTRICT SHEET -->
+    <div class="sec" onClick="{{ tg.ds }}" style="border-top: 1px solid rgba(255,255,255,.08)"><span class="t">District sheet</span><span class="soft">{{ sum.ds }}</span><span class="chev">{{ ch.ds }}</span></div>
+    <sc-if value="{{ op.ds }}" hint-placeholder-val="{{ false }}">
+      <div class="body">
+        <div class="faint">One page for one district. Leave it at the meeting.</div>
+        <div style="background: #22272A; border-radius: 9px; padding: 14px 16px; display: flex; flex-direction: column; gap: 6px">
+          <div><span class="num" style="font-size: 17px">House District {{ fs.dn }}</span> <span class="soft">· {{ fs.name }} ({{ fs.party }}) · {{ fs.where }}</span></div>
+          <sc-for list="{{ fs.lines }}" as="ln" hint-placeholder-count="5">
+            <div style="display: grid; grid-template-columns: 130px minmax(0,1fr); gap: 10px; border-top: 1px solid rgba(255,255,255,.06); padding-top: 6px">
+              <span class="sc">{{ ln.k }}</span><span><span class="num">{{ ln.v }}</span> <span class="soft">{{ ln.rest }}</span></span>
+            </div>
+          </sc-for>
+        </div>
+        <div><button style="font: inherit; font-weight: 600; border: 0; border-radius: 999px; padding: 9px 14px; background: #2A3034; color: #F0F2F3">Save as PDF</button></div>
+      </div>
+    </sc-if>
+
+    <!-- SUPPORT -->
+    <div class="sec" onClick="{{ tg.su }}" style="border-top: 1px solid rgba(255,255,255,.08)"><span class="t">Support</span><span class="soft">{{ sum.su }}</span><span class="chev">{{ ch.su }}</span></div>
+    <sc-if value="{{ op.su }}" hint-placeholder-val="{{ false }}">
+      <div class="body">
+        <div class="list" style="background: #22272A">
+          <div class="row" style="grid-template-columns: 130px minmax(0,1fr); border-color: rgba(255,255,255,.06)"><span class="sc">Co-sponsors</span><span>{{ cosponsors }}</span></div>
+          <div class="row" style="grid-template-columns: 130px minmax(0,1fr); border-color: rgba(255,255,255,.06)"><span class="sc">Senate partner</span><span>{{ senatePartner }}</span></div>
+          <div class="row" style="grid-template-columns: 130px minmax(0,1fr); border-color: rgba(255,255,255,.06)"><span class="sc">Our members</span><span class="soft">Upload ZIP codes. We keep districts, not addresses.</span></div>
+        </div>
+        <div class="faint">Co-sponsors = members of {{ room }} in the top quarter of districts for {{ mShortLower }}.</div>
+      </div>
+    </sc-if>
+
+    <!-- FILING TIME -->
+    <div class="sec" onClick="{{ tg.ft }}" style="border-top: 1px solid rgba(255,255,255,.08)"><span class="t">Filing time</span><span class="soft">{{ sum.ft }}</span><span class="chev">{{ ch.ft }}</span></div>
+    <sc-if value="{{ op.ft }}" hint-placeholder-val="{{ false }}">
+      <div class="body">
+        <div style="display: grid; grid-template-columns: repeat(5, minmax(0,1fr)); gap: 8px; align-items: end; height: 120px">
+          <sc-for list="{{ bars }}" as="b" hint-placeholder-count="5">
+            <div style="display: flex; flex-direction: column; justify-content: flex-end; height: 100%; gap: 3px" title="{{ b.kn }}">
+              <span style="text-align: center; font-size: 12.5px; font-weight: 700">{{ b.pct }}</span>
+              <span style="height: {{ b.h }}; background: #A6AFB4; border-radius: 4px 4px 0 0"></span>
+            </div>
+          </sc-for>
+        </div>
+        <div style="display: grid; grid-template-columns: repeat(5, minmax(0,1fr)); gap: 8px; border-top: 1px solid rgba(255,255,255,.14); padding-top: 4px">
+          <sc-for list="{{ bars }}" as="b" hint-placeholder-count="5"><span class="faint" style="text-align: center">{{ b.when }}</span></sc-for>
+        </div>
+        <div class="faint">Share out of first committee, by months after the session opened. 2009–24.</div>
+      </div>
+    </sc-if>
+
+    <!-- VERSIONS -->
+    <div class="sec" onClick="{{ tg.ve }}" style="border-top: 1px solid rgba(255,255,255,.08)"><span class="t">Versions</span><span class="soft">3 drafts · team only</span><span class="chev">{{ ch.ve }}</span></div>
+    <sc-if value="{{ op.ve }}" hint-placeholder-val="{{ false }}">
+      <div class="body">
+        <div class="list" style="background: #22272A">
+          <div class="row" style="grid-template-columns: 40px minmax(0,1fr) auto; border-color: rgba(255,255,255,.06)"><span class="num">A</span><span>[legislator] <span class="faint">House</span></span><span class="sc">[offered]</span></div>
+          <div class="row" style="grid-template-columns: 40px minmax(0,1fr) auto; border-color: rgba(255,255,255,.06)"><span class="num">B</span><span>[legislator] <span class="faint">House</span></span><span class="sc">[agreed]</span></div>
+          <div class="row" style="grid-template-columns: 40px minmax(0,1fr) auto; border-color: rgba(255,255,255,.06)"><span class="num">B-S</span><span>[legislator] <span class="faint">Senate twin of B</span></span><span class="sc">[not offered]</span></div>
+        </div>
+      </div>
+    </sc-if>
+  </div>
+
+  <div class="faint">What we tested, and what we cannot show yet: <a href="Evidence.dc.html">evidence</a>.</div>
+</div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1280,"height":2400}}'>
+/*DATA*/
+const RAMP = ["#30373A", "#525C61", "#7C878D", "#AAB3B8", "#DCE1E4"];
+const F = (n) => Number(n).toLocaleString("en-US");
+const P = (x) => (x == null ? "—" : (100 * x).toFixed(1) + "%");
+const PLACES = { nh: ["Nursing homes", 11], beds: ["Nursing-home beds", 12], hosp: ["Hospitals", 13], sch: ["Public schools", 14] };
+const SHORT = { seniors: "People 65+", children: "Children", under5: "Under 5", veterans: "Veterans", poverty: "In poverty", child_poverty: "Children in poverty",
+  uninsured: "Uninsured", disability: "Disability", renters: "Renters", rent_burdened: "Rent-burdened", no_vehicle: "No car", limited_english: "Limited English",
+  foreign_born: "Born abroad", snap: "On SNAP", no_internet: "No internet", farm_jobs: "Farm jobs", nh: "Nursing homes", beds: "Beds", hosp: "Hospitals", sch: "Schools" };
+const R = DATA.dist.map((a) => ({ d: a[0], name: a[1], party: a[2], seats: a[3], isNew: a[4], filed: a[5], munis: a[6], sds: a[7], counties: a[8],
+  overlap: a[9], people: a[10], nh: a[11], beds: a[12], hosp: a[13], sch: a[14] }));
+const BY = {}; R.forEach((r) => { BY[r.d] = r; });
+function val(r, m) { if (PLACES[m]) return [r[m], null]; return DATA.mv[r.d][m]; }
+function q(vals, p) { const s = vals.slice().sort((a, b) => a - b); return s[Math.floor(p * (s.length - 1))]; }
+const SECTIONS = ["map", "path", "eb", "sp", "ds", "su", "ft", "ve"];
+class Component extends DCLogic {
+  constructor(p) { super(p); this.state = { law: 0, measure: "seniors", maj: true, picked: null, hover: null, open: { map: true } }; }
+  renderVals() {
+    const st = this.state, m = st.measure, isPlace = !!PLACES[m];
+    const label = isPlace ? PLACES[m][0] : DATA.ml[m];
+    const key = (r) => (isPlace ? val(r, m)[0] : val(r, m)[1]);
+    const br = [0.2, 0.4, 0.6, 0.8].map((p) => q(R.map(key), p));
+    const cls = (v) => br.filter((b) => v > b).length;
+    const fmtK = (v) => (isPlace ? F(v) : P(v));
+    const paths = R.map((r) => ({ d: DATA.shapes[0][r.d], fill: RAMP[cls(key(r))], hover: () => this.setState({ hover: r.d }), pick: () => this.setState({ picked: r.d, open: { ...st.open, ds: true } }) }));
+    const legend = RAMP.map((c, i) => ({ c, t: i === 0 ? "≤ " + fmtK(br[0]) : i === 4 ? "> " + fmtK(br[3]) : fmtK(br[i - 1]) + "–" + fmtK(br[i]) }));
+    const cs = (r) => { const [c, s] = val(r, m); return { count: F(c), share: s == null ? "" : "· " + P(s) }; };
+    const h = st.hover ? BY[st.hover] : null;
+    const hv = h ? { a: "HD " + Number(h.d) + " · " + h.name + " (" + h.party + ")", b: cs(h).count + " " + cs(h).share } : { a: "", b: "Point at a district. Tap to open its sheet." };
+    const top = R.slice().sort((a, b) => val(b, m)[0] - val(a, m)[0]).slice(0, 10);
+    const top10 = top.map((r, i) => ({ rank: i + 1, dn: Number(r.d), name: r.name, party: r.party, ...cs(r), pick: () => this.setState({ picked: r.d, open: { ...st.open, ds: true } }) }));
+    // committee path
+    const law = DATA.steer[st.law];
+    const room = law.rooms[0].room;
+    const roomsFor = law.rooms.map((x) => ({ room: x.room, k: x.k, n: x.n, w: Math.round((100 * x.k) / x.n) + "%" }));
+    const rec = (DATA.rec[room] || {})[st.maj ? "majority" : "minority"] || { k: 0, n: 0 };
+    const num = (s) => s.split(" of ").map((x) => x.split(" ")[0]);
+    const hA = num(DATA.ap.House.came_back_out), hP = num(DATA.ap.House.passed_chamber_if_it_came_back), sA = num(DATA.ap.Senate.came_back_out);
+    const gates = [
+      { step: "1 · " + room, k: F(rec.k), n: F(rec.n), what: (st.maj ? "majority" : "minority") + "-party bills out" },
+      { step: "2 · House Appropriations", k: F(hA[0]), n: F(hA[1]), what: "sent back out" },
+      { step: "3 · House floor", k: F(hP[0]), n: F(hP[1]), what: "passed" },
+      { step: "4 · Senate Appropriations", k: F(sA[0]), n: F(sA[1]), what: "sent back out" },
+    ];
+    // earlier bills
+    const eb = DATA.eb[law.law];
+    const ebRows = eb.recent.map((b) => ({ ...b, far: b.s === "2025–26" && b.far === "died in committee" ? "in committee" : b.far }));
+    // possible sponsors
+    const inRoom = (r) => r.seats.some((s) => s.indexOf(room) === 0);
+    const carriers = R.filter(inRoom).sort((a, b) => a.name.split(" ").pop().localeCompare(b.name.split(" ").pop())).map((r) => ({
+      name: r.name, seat: r.seats.filter((s) => s.indexOf(room) === 0)[0].indexOf("chair") > 0 ? "chair" : "",
+      standing: r.party === "D" ? "D · majority" : r.party === "R" ? "R · minority" : r.party, ...cs(r),
+      isNew: r.isNew === 1 ? "yes" : r.isNew === 0 ? "—" : "?", filed: r.filed, pick: () => this.setState({ picked: r.d, open: { ...st.open, ds: true } }) }));
+    // district sheet
+    const f = BY[st.picked || top[0].d];
+    const [fc, fsh] = val(f, m);
+    let swC = 0, swD = 0; R.forEach((r) => { const [c, s] = val(r, m); swC += c; if (s) swD += c / s; });
+    const sen = (f.overlap || []).map(([d, n]) => { const x = DATA.senators[d] || {}; return "Sen. " + (x.name || "?") + " (" + (x.party || "?") + "), SD " + Number(d) + " — " + F(n) + " shared"; });
+    const fs = { dn: Number(f.d), name: f.name, party: f.party, where: (f.counties || []).join(", "), lines: [
+      { k: SHORT[m] || label, v: F(fc), rest: fsh == null ? "" : P(fsh) + " of " + (DATA.mu[m] || "residents") + ". Pennsylvania: " + P(swD ? swC / swD : null) + "." },
+      { k: "Nursing homes", v: String(f.nh), rest: F(f.beds) + " beds" },
+      { k: "Hospitals", v: String(f.hosp), rest: "" },
+      { k: "Public schools", v: String(f.sch), rest: "" },
+      { k: "Local governments", v: String(f.munis), rest: "municipalities · " + f.sds + " school districts" },
+      { k: "Senate", v: "", rest: sen.join(" · ") || "—" } ] };
+    // support
+    const t75 = q(R.map((r) => val(r, m)[0]), 0.75);
+    const co = R.filter((r) => inRoom(r) && val(r, m)[0] >= t75).map((r) => r.name + " (" + r.party + ")");
+    // filing time
+    const ft = DATA.ft.by_filing_time[st.maj ? "majority" : "minority"];
+    const mx = Math.max(...Object.values(ft).map((x) => x.pct));
+    const bars = Object.entries(ft).map(([w, x]) => ({ when: w, pct: Math.round(x.pct) + "%", kn: F(x.k) + " of " + F(x.n), h: Math.round((100 * x.pct) / mx) + "%" }));
+    // sections
+    const op = {}, ch = {}, tg = {};
+    SECTIONS.forEach((s) => { op[s] = !!st.open[s]; ch[s] = op[s] ? "▾" : "›"; tg[s] = () => this.setState({ open: { ...st.open, [s]: !st.open[s] } }); });
+    const tf = top[0];
+    const sum = {
+      map: "Most: HD " + Number(tf.d) + " · " + cs(tf).count,
+      path: room + " · then 3 steps",
+      eb: F(eb.bills) + " since 2009 · " + eb.out + " of " + eb.done + " out · " + eb.laws + " law",
+      sp: carriers.length + " members of " + room,
+      ds: "HD " + Number(f.d) + " · " + f.name,
+      su: co.length + " co-sponsors to ask",
+      ft: "Last 6 months: " + Math.round(ft["18+ mo"].pct) + "% out",
+    };
+    const measureOpts = Object.keys(DATA.ml).map((k) => ({ k, label: DATA.ml[k] })).concat(Object.keys(PLACES).map((k) => ({ k, label: PLACES[k][0] })));
+    return {
+      lawChips: DATA.steer.map((s, i) => ({ law: s.law, cls: i === st.law ? "on" : "", pick: () => this.setState({ law: i }) })),
+      measure: m, measureOpts, setMeasure: (e) => this.setState({ measure: e.target.value }),
+      majCls: st.maj ? "on" : "", minCls: st.maj ? "" : "on", setMaj: () => this.setState({ maj: true }), setMin: () => this.setState({ maj: false }),
+      op, ch, tg, sum, mapH: DATA.shapes[1].h, paths, legend, hv, top10,
+      hasPicked: !!st.picked, pickedPath: st.picked ? DATA.shapes[0][st.picked] : "",
+      roomsFor, gates, ebRows, carriers, room, mShort: SHORT[m] || label, mShortLower: (label || "").toLowerCase(), fs,
+      cosponsors: co.length ? co.join(" · ") : "None in the top quarter.", senatePartner: sen[0] || "—", bars,
+    };
+  }
+}
+</script>
+</body>
+</html>

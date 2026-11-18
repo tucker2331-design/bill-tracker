@@ -28,7 +28,9 @@ RECENT = ("2019_0", "2021_0", "2023_0")          # room names stable since 2019;
 
 def main():
     F = frame()
+    F["law_won"] = F["law"]          # the frame's became-law flag, before the column name is reused for the statute
     F["law"] = F.title.map(law_key)
+    F["law_flag"] = F["law_won"]
     H = F[F.body == "H"]
     out = {"idea": "Care for nursing-home residents", "chamber": "House"}
 
@@ -85,6 +87,20 @@ def main():
         r = json.load(f)
     out["appropriations"] = r["D4_appropriations"]
     out["filing_time"] = r["D5_filing_time"]
+    # 3b. every measure per district (the team picks which one shades the map) + earlier bills per law
+    M = P["measures"]
+    out["measures"] = {k: v["label"] for k, v in M.items()}
+    out["measure_values"] = {d: {k: [v[k]["count"], v[k]["share"]] for k in M} for d, v in D.items()}
+    eb = {}
+    far = lambda r: "law" if r.law_ else ("passed 2nd chamber" if r.passed2 else ("passed chamber" if r.passed else ("out of committee" if r.out else "died in committee")))
+    for law in LAWS:
+        g = F[(F.law == law)].sort_values(["session", "number"], ascending=[False, False])
+        g = g.assign(law_=g["law_flag"] if "law_flag" in g else 0)
+        done = g[g.session < "2025_0"]
+        eb[law] = {"bills": int(len(g)), "since": "2009", "out": int(done.out.sum()), "done": int(len(done)), "laws": int(done["law_won"].sum()),
+                   "recent": [{"s": r.session[:4] + "–" + str(int(r.session[:4]) + 1)[2:], "bill": ("HB " if r.body == "H" else "SB ") + str(r.number),
+                               "who": f"{r.p_name.title()} ({r.p_party})", "far": far(r)} for r in g.head(6).itertuples()]}
+    out["earlier_bills"] = eb
     # 4. shapes for the map
     with open(os.path.join(ROOT, "tools", "historical_cache", "census", "district_shapes.json")) as f:
         out["shapes"] = json.load(f)["PA"]["lower"]

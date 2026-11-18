@@ -2,7 +2,7 @@
 tags: [ideas, product, war-room, drafting, owner-idea, design-research]
 updated: 2026-11-18
 status: active
-open_loop: Owner review of v2 (2026-11-18) QUEUED after the stats work — §0.5 lists the eight changes (per-draft inputs, consolidation, naming, plain wording, similar-bill rule, carrier rule, one-district case, map per draft).
+open_loop: v3 mocked 2026-11-18 (two team inputs drive the page; §0.6) — awaiting the owner's review; product build not started.
 ---
 
 # The drafting room — a War Room for a bill before it has a number
@@ -86,6 +86,20 @@ enrolment (separate sources) · close vs safe seats (election results; VA found 
 7. **How is "who could carry it" chosen?** Make it clear it is NOT the prediction model (today: members of the room
    the law usually goes to, A–Z).
 8. **What is "one district's case"?** Name and explain it (the one-page leave-behind for a meeting).
+
+### 0.6 v3 — the answers (2026-11-18, same artifact, Main board)
+- **Two team inputs drive the page:** *Law it changes* (in the product: search the laws named in titles) and *Who it
+  affects* (pick one of 16 census measures or 4 place types). A third, *Sponsor's party*, picks which record to show.
+  Nothing is guessed from the draft's text.
+- **The map and the top 10 follow the pick**, any measure: share for people (with the measure's own base — households
+  for renters, workers for farm jobs, adults for veterans), count for places.
+- **Sections collapse** (only "Where they live" opens by default); each closed row shows a one-line summary.
+- **Short names:** Where they live · Committee path · Earlier bills · Possible sponsors · District sheet · Support ·
+  Filing time · Versions.
+- **Rules on screen:** Earlier bills = "same law named in the title" (and why some are off-topic); Possible sponsors =
+  "members of the committee this law usually goes to, A–Z, facts only — not a prediction"; District sheet = "one page
+  for one district; leave it at the meeting".
+- Less text: one source line per section; the evidence lives on its own board.
 
 ---
 *v1 research (2026-11-17), kept for its sources:*

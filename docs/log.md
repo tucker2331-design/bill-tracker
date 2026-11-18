@@ -8,6 +8,11 @@ status: active
 
 Append-only, reverse-chronological (newest at top). Each entry opens with `## [YYYY-MM-DD] <type> | <title>`.
 
+## [2026-11-18] decision | Drafting room v3: two team inputs drive the page
+Owner review of v2 answered: the team sets the law it changes and who it affects (16 census measures, 4 place types);
+map, top 10, committee path, earlier bills, possible sponsors and the district sheet follow. Sections collapse, names
+shortened, rules stated on screen, text cut. [[ideas/drafting_war_room]] §0.6.
+
 ## [2026-11-18] decision | Party position: what predicts how the other party votes (PA)
 Co-sponsors from the other party, the room's record and title words carry it (AUC 0.875, contested 0.839 on
 2025–26). The other party's committee leader co-signing: 97% yes vs 76%. A 400-title reading pilot by the assistant:

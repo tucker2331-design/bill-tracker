@@ -87,8 +87,7 @@ status: active
 ## READY
 - **📋 OWNER LIST 2026-11-16/18:** ✅ Sheets retry (#271) · ✅ VA on the chamber subway (#272) · ✅ census guards +
   speed switch (#273) · ✅ Cloudflare ticks verified · ✅ PA stats batches 1–2 + element-value + drafting tests
-  ([[testing/pa_replication]], plan [[testing/pa_predictive_plan]]) · ✅ batch 3 (member votes, 2026-11-18) · ✅ party position tested ([[testing/pa_party_position]] — owner decision on memos) · **NEXT: drafting room v3 — the owner's 8 review points**
-  (queued after the stats work)
+  ([[testing/pa_replication]], plan [[testing/pa_predictive_plan]]) · ✅ batch 3 (member votes, 2026-11-18) · ✅ party position tested ([[testing/pa_party_position]] — owner decision on memos) · drafting room v3 mocked (two inputs drive the page) — **awaiting review**
   ([[ideas/drafting_war_room]], [[knowledge/district_profiles]]) · portfolio mock needs the same redo
   ([[ideas/legislator_portfolio]]).
 - **🕒 Jobs: dropped GitHub ticks (found 2026-11-02, [[log]]):** (1) Sheets 429 — DONE 2026-11-16 (`sheets_retry`,
