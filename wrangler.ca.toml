@@ -3,8 +3,8 @@
 #
 # NOT LIVE YET — owner steps (docs/knowledge/ca_pubinfo.md → "To go live"):
 #   1. DONE 2026-11-18: "CA · Live" created and shared; its id is below (the job reads it from here — no repo secret).
-#   2. Create the D1 database bill-tracker-ca-db (dashboard: Storage & Databases → D1); put its id below; run the
-#      three files in migrations/ in its Console.
+#   2. DONE 2026-11-18: D1 bill-tracker-ca-db created; id below. Its tables: paste tools/d1/console_setup.sql into its
+#      Console (the end state of migrations/0001-0003, recorded as applied).
 #   3. Cloudflare Workers Builds: new Worker `bill-tracker-ca` on `main`, build `npm run build:ca`,
 #      deploy `npx wrangler deploy --config wrangler.ca.toml`.
 name = "bill-tracker-ca"
@@ -24,4 +24,4 @@ BILL_TRACKER_STATE = "CA"
 [[d1_databases]]
 binding = "DB"
 database_name = "bill-tracker-ca-db"
-database_id = ""               # owner step 2
+database_id = "450d84d0-e09d-4b8c-9a5f-265795e98f25"   # bill-tracker-ca-db (owner 2026-11-18)

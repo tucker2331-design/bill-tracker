@@ -61,6 +61,8 @@ for 31,468 of 31,472. Dry run: 1 request (the index) when the session file is ca
 ## To go live (owner steps, in order)
 1. ✅ 2026-11-18: "CA · Live" created and shared; id in `wrangler.ca.toml` (the job reads it there — no repo secret).
    The job is scheduled daily (06:41 UTC) once merged.
+   ✅ 2026-11-18: D1 `bill-tracker-ca-db` created (id in `wrangler.ca.toml`); tables from `tools/d1/console_setup.sql`
+   (one paste, proven identical to migrations 0001–0003 in SQLite, and recorded as applied).
 2. Cloudflare: a new Worker `bill-tracker-ca` connected to `main` (build `npm run build:ca`, deploy
    `npx wrangler deploy --config wrangler.ca.toml`), its own D1 database.
 3. Add the repo secret `CA_SPREADSHEET_ID`; run "CA bill tracker" once in write mode; then uncomment its schedule.
