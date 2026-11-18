@@ -59,7 +59,8 @@ override pending) · 31 → 0 awaiting the Governor after the veto fix · 1,777 
 for 31,468 of 31,472. Dry run: 1 request (the index) when the session file is cached.
 
 ## To go live (owner steps, in order)
-1. Create a Google Sheet "CA · Live", share it with the service account, give me its id.
+1. ✅ 2026-11-18: "CA · Live" created and shared; id in `wrangler.ca.toml` (the job reads it there — no repo secret).
+   The job is scheduled daily (06:41 UTC) once merged.
 2. Cloudflare: a new Worker `bill-tracker-ca` connected to `main` (build `npm run build:ca`, deploy
    `npx wrangler deploy --config wrangler.ca.toml`), its own D1 database.
 3. Add the repo secret `CA_SPREADSHEET_ID`; run "CA bill tracker" once in write mode; then uncomment its schedule.

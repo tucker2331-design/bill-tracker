@@ -75,16 +75,30 @@ def write(records, comp, sheet):
         "records_written", "end_status_unclassified", "actions_rescinded", "end_status_blank")})])
 
 
+def sheet_id() -> str:
+    """CA_SPREADSHEET_ID if set, else wrangler.ca.toml's SPREADSHEET_ID (not a secret: the sheet's sharing and the
+    Worker's sign-in check guard it, as for Pennsylvania). Empty = refuse to write."""
+    sid = os.environ.get("CA_SPREADSHEET_ID", "").strip()
+    if sid:
+        return sid
+    try:
+        with open(os.path.join(os.path.dirname(os.path.abspath(__file__)), "wrangler.ca.toml"), encoding="utf-8") as f:
+            m = re.search(r'^SPREADSHEET_ID\s*=\s*"([^"]*)"', f.read(), re.M)
+        return m.group(1).strip() if m else ""
+    except OSError:
+        return ""
+
+
 def main(argv):
     fetcher = BulkFetcher(CACHE)
     records, comp = build(fetcher)
     print(json.dumps(comp, indent=1))
     if "--dry-run" in argv:
         return 0
-    sid = os.environ.get("CA_SPREADSHEET_ID")
+    sid = sheet_id()
     creds = os.environ.get("GCP_CREDENTIALS")
     if not sid or not creds:
-        print("::error::CA_SPREADSHEET_ID and GCP_CREDENTIALS are required to write (owner step)")
+        print("::error::the CA sheet id (wrangler.ca.toml) and GCP_CREDENTIALS are required to write")
         return 1
     import gspread
     gc = gspread.service_account_from_dict(json.loads(creds))

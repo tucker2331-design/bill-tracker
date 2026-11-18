@@ -4,10 +4,12 @@ name: CA bill tracker (California site)
 # Fetch rules: Legislative Counsel's pubinfo bulk files only (the interactive leginfo site is never fetched), streamed
 # to disk, at most once per URL per 20 h, honest UA, stop on 401/403/429. pubinfo is published daily (~21:20 Pacific);
 # the session file is rebuilt each Sunday.
-# MANUAL ONLY until the owner creates the CA spreadsheet and sets CA_SPREADSHEET_ID (docs/knowledge/ca_pubinfo.md).
-# Then add:  schedule: - cron: "41 6 * * *"   (06:41 UTC, after the nightly publication)
+# Daily (the source publishes once a day; every speed in cadence_profiles.json is daily for CA). 06:41 UTC is after
+# Legislative Counsel's ~21:20 Pacific publication. The sheet id is read from wrangler.ca.toml (not a secret).
 # NOT part of Virginia's trust surface: trust_surface_guard.OTHER_STATE_JOBS lists it.
 on:
+  schedule:
+    - cron: "41 6 * * *"
   workflow_dispatch:
     inputs:
       mode:
@@ -43,7 +45,7 @@ jobs:
           CA_SPREADSHEET_ID: ${{ secrets.CA_SPREADSHEET_ID }}
           GCP_CREDENTIALS: ${{ secrets.GCP_CREDENTIALS }}
         run: |
-          if [ "${{ inputs.mode }}" = "write" ]; then
+          if [ "${{ github.event_name }}" = "schedule" ] || [ "${{ inputs.mode }}" = "write" ]; then
             python3 ca_bill_tracker.py
           else
             python3 ca_bill_tracker.py --dry-run

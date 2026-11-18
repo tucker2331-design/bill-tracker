@@ -165,8 +165,11 @@ def slow_skip(now_utc: datetime.datetime, last_checked: str, hours: int) -> bool
 
 
 def _slow_gate() -> bool:
-    """True = skip this scheduled run (PA set to slow and published recently). Fails OPEN: any read problem runs."""
-    if os.environ.get("GITHUB_EVENT_NAME") != "schedule" or cadence.profile_for(PA.code) != "slow":
+    """True = skip this scheduled run (PA set to a speed with an hour gap — daily / 4h / slow — and published within
+    it). fast and instant run every scheduled tick (PA's export updates hourly: its own floor). Fails OPEN."""
+    speed = cadence.profile_for(PA.code)
+    hours = cadence.JOB_HOURS.get(speed)
+    if os.environ.get("GITHUB_EVENT_NAME") != "schedule" or not hours:
         return False
     sid, creds = os.environ.get("PA_SPREADSHEET_ID"), os.environ.get("GCP_CREDENTIALS")
     try:
@@ -177,13 +180,13 @@ def _slow_gate() -> bool:
         raw = gc.open_by_key(sid).worksheet(TAB).acell(COMPLETENESS_CELL).value or ""
         stamp = json.loads(raw).get("checked_at_utc", "") if raw.strip().startswith("{") else ""
     except Exception as e:   # fail OPEN: a read problem must never silence the job
-        print(f"⏱️ Speed switch: PA is slow but its last run time is unreadable ({type(e).__name__}) — running")
+        print(f"⏱️ Speed switch: PA is {speed} but its last run time is unreadable ({type(e).__name__}) — running")
         return False
     now = datetime.datetime.now(datetime.timezone.utc)
-    if slow_skip(now, stamp, cadence.PA_SLOW_HOURS):
-        print(f"⏱️ Speed switch: PA = slow — last published {stamp}, under {cadence.PA_SLOW_HOURS} h ago; skipping (no PA request)")
+    if slow_skip(now, stamp, hours):
+        print(f"⏱️ Speed switch: PA = {speed} — last published {stamp}, under {hours} h ago; skipping (no PA request)")
         return True
-    print(f"⏱️ Speed switch: PA = slow — last published {stamp or 'unknown'}; running")
+    print(f"⏱️ Speed switch: PA = {speed} — last published {stamp or 'unknown'}; running")
     return False
 
 

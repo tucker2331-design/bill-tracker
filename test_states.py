@@ -9,6 +9,7 @@ on the code, the publisher, the stage ids and the bill link — so the backend a
 Run: python3 test_states.py
 """
 import os
+import json
 import re
 import sys
 
@@ -76,6 +77,18 @@ check("Python and SPA agree on CA stage ids", re.findall(r'\{ id: "([a-z0-9]+)"'
 check("Python and SPA agree on CA's code", f'code: "{ca.code}"' in ca_ts)
 check("Python and SPA agree on CA's publisher", f'sourceName: "{ca.source_name}"' in ca_ts)
 check("CA fetches only the bulk host", all(u.startswith("https://downloads.leginfo.legislature.ca.gov/") for u in ca.urls.values()))
+import cadence  # noqa: E402
+with open(os.path.join(HERE, "web", "src", "data", "speed.ts"), encoding="utf-8") as _f:
+    speed_ts = _f.read()
+_m = re.search(r"SPEED_INTERVAL_HOURS[^=]*=\s*\{([^}]*)\}", speed_ts)
+_ts_speeds = {}
+for k, v in re.findall(r'"?([a-z0-9]+)"?\s*:\s*([0-9.]+|null)', _m.group(1) if _m else ""):
+    _ts_speeds[k] = None if v == "null" else float(v)
+check("site and jobs agree on every speed's promised interval",
+      _ts_speeds == {k: (None if v is None else float(v)) for k, v in cadence.SPEED_INTERVAL_HOURS.items()}, f"{_ts_speeds}")
+check("every speed word in the switch is one the jobs know",
+      all(cadence.ALIASES.get(str(v).lower(), str(v).lower()) in cadence.KNOWN_PROFILES
+          for k, v in json.load(open(os.path.join(HERE, "cadence_profiles.json"))).items() if not k.startswith("_")))
 check("every registered state has a source adapter", all(states.get_state(c).adapter for c in states.registered()))
 
 sys.exit(1 if FAILS else 0)

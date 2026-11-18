@@ -8,6 +8,11 @@ status: active
 
 Append-only, reverse-chronological (newest at top). Each entry opens with `## [YYYY-MM-DD] <type> | <title>`.
 
+## [2026-11-18] decision | Four speeds (daily, 4h, fast, instant); VA/CA/NY daily, PA fast; CA sheet wired
+Owner: daily is the longest cadence, then 4 hours, then fast, then instant — all within terms. `cadence.py` speeds,
+PA job gate generalised, site freshness limits follow the same switch (baked at build). CA sheet "CA · Live" id in
+`wrangler.ca.toml`; CA job scheduled daily. [[knowledge/lis_api_safety]] · [[knowledge/ca_pubinfo]].
+
 ## [2026-11-18] decision | Drafting room v4, legislator page, health check, California scoped
 v4: input = law + part (records at that level, law fallback when thin), "Ideas in flight" from memo titles; the
 Standard #3 dependency (title-based matching) shown on screen. Legislator page in the v9 language with the owner's

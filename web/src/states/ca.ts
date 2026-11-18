@@ -12,6 +12,7 @@ export const CA: StateConfig = {
   legislatureName: "the Legislature",
   chambers: { A: "House", S: "Senate", H: "House" },
   chamberLabels: { House: "Assembly", Senate: "Senate" },
+  sourceMinIntervalHours: 24,   // Legislative Counsel publishes pubinfo once a day
   billIdPattern: /^(AB|SB|ACA|SCA|ACR|SCR|AJR|SJR|HR|SR)\d+$/,
   stages: [
     { id: "introduced", label: "Introduced" },
