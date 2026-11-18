@@ -1,11 +1,20 @@
 ---
 tags: [ideas, product, legislators, portfolio, owner-idea, design-research]
-updated: 2026-11-17
+updated: 2026-11-18
 status: active
-open_loop: Design researched + mocked on real PA data (2026-11-17, artifact CBPg2ZZ3uoiwiUkbirWL3o, Rep. Liz Hanbidge) — awaiting the owner's answers to the questions at the end; the votes section needs batch 3 (Open States).
+open_loop: Legislator page v2 mocked 2026-11-18 in the v9 language (artifact CBPg2ZZ3uoiwiUkbirWL3o, Legislator board, Rep. Lisa Borowski): district map with zoomed inset, district facts, bills vs expected, committees, votes, co-signers, memos, team history — awaiting review.
 ---
 
 # The legislator portfolio — a member as a whole
+
+> **v2 (2026-11-18), the page used from drafting through introduction to lobbying.** Sections: map (state view with
+> the district highlighted by default; a top-right inset zoomed to the district and every district that touches it —
+> owner's spec), District (every census measure as count + share vs the state, sorted by how much the district
+> differs; places; local governments; senators who share it; income), Bills they carry (k out of committee vs
+> expected per session; laws they work on), Committees, How they vote (contested roll calls: with party k of n,
+> crossed, rank in party; crossing repeats r 0.84 except across a majority change), Who they work with (co-signers
+> both ways, other-party share), Ideas they circulated (memo titles), Our history (team only). Facts only; no score.
+> Data: `tools/calibration/pa/pa_legislator_example.py`.
 
 **Owner (2026-11-16/17):** instead of only committees or individual votes, look at a legislator as a whole — to decide
 who should carry what, or whenever we need to look at legislators for other reasons, or who is more likely to do what.

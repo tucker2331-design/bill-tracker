@@ -49,6 +49,7 @@ Links use Obsidian `[[wikilink]]` format. Obsidian resolves by filename; path-qu
 - [[state/va_todo_2026-07-30]] — the current VA to-do, ordered by what unblocks what
 - [[state/va_build_queue]] — ordered VA backlog from the War Room design block (mockups → probes → foundations)
 - [[knowledge/district_lookup]] — address→district (Census, no key) + the redistricting signal from the layer vintage
+- [[knowledge/ca_pubinfo]] — **California (2026-11-18): pubinfo bulk database** — public domain by statute (Gov. Code §10248.5), bulk host has no robots rules, the interactive site is bot-challenged (never fetched); schema-driven reader + structural adapter (END_STATUS) + goldens; owner steps to go live.
 - [[knowledge/district_profiles]] — every PA/VA district: 16 census measures as count + share (with margins), schools / nursing homes / hospitals, municipalities, school districts, ZIP areas, Senate overlap, who holds the seat; bulk federal files, validated 5,107 of 5,108 schools
 - [[knowledge/campaign_finance_source]] — ELECT bulk CSVs (1999→now) replace VPAP; the "go to the agency, not the aggregator" rule
 - [[workflow/branching_rules]] — when to reuse vs create a branch (PR state decides)

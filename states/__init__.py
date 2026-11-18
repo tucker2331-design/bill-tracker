@@ -3,10 +3,11 @@
 Adding a state = one module here + one registry line. The pipeline must not branch on a state code.
 """
 from .base import Stage, StateConfig
+from .ca import CA
 from .pa import PA
 from .va import VA
 
-_REGISTRY = {VA.code: VA, PA.code: PA}
+_REGISTRY = {VA.code: VA, PA.code: PA, CA.code: CA}
 
 
 def get_state(code: str) -> StateConfig:
@@ -21,4 +22,4 @@ def registered() -> list:
     return sorted(_REGISTRY)
 
 
-__all__ = ["Stage", "StateConfig", "VA", "PA", "get_state", "registered"]
+__all__ = ["Stage", "StateConfig", "VA", "PA", "CA", "get_state", "registered"]

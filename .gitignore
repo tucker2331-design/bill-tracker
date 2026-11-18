@@ -68,3 +68,7 @@ tools/calibration/pa/__pycache__/
 tools/districts/__pycache__/
 tools/historical_cache/pa/openstates/sessions/*.zip
 tools/calibration/pa/.*.pkl
+tools/historical_cache/ca/2025/
+tools/historical_cache/ca/pubinfo_*.zip
+!tools/historical_cache/ca/pubinfo_load.zip
+tools/historical_cache/ca/load/

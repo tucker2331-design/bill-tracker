@@ -8,6 +8,14 @@ status: active
 
 Append-only, reverse-chronological (newest at top). Each entry opens with `## [YYYY-MM-DD] <type> | <title>`.
 
+## [2026-11-18] decision | Drafting room v4, legislator page, health check, California scoped
+v4: input = law + part (records at that level, law fallback when thin), "Ideas in flight" from memo titles; the
+Standard #3 dependency (title-based matching) shown on screen. Legislator page in the v9 language with the owner's
+map spec (state view + zoomed inset of the district and its neighbours). Health: 300 of 300 job runs succeeded since
+the last check (VA every 15 min, sentinel 98/98, PA 3 slow runs). California: pubinfo is public domain (Gov. Code
+§10248.5), bulk host only (interactive site bot-challenged); reader, adapter, fetcher, goldens built
+([[knowledge/ca_pubinfo]]). Environment: added the two Legislative Counsel hosts.
+
 ## [2026-11-18] decision | Law + part, memo titles, district info kept, new bills need no reader
 The part of a law moves the odds far more than the committee (charter schools 4% vs school health 24%). Memo titles
 (bulk, inside the rules) improve reading (0.807 → 0.832) but not contested votes; memo text stays unfetched (per-page).
