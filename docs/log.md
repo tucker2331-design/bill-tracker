@@ -8,6 +8,11 @@ status: active
 
 Append-only, reverse-chronological (newest at top). Each entry opens with `## [YYYY-MM-DD] <type> | <title>`.
 
+## [2026-11-18] pr | #274 merged — California site + four speeds + PA statistics (a545427)
+Merged after CI went green on 683ec86 (structural, golden, web build, mypy, Semgrep, pre-push audit, Workers build) and
+Codex's four findings were fixed and answered. The CA job's daily schedule (06:41 UTC) is now live; first write run
+dispatched by hand. Owner step left: the Cloudflare Worker `bill-tracker-ca`.
+
 ## [2026-11-18] fold-in | #274 Codex review — four CA findings fixed (case law #162)
 Codex (on 555516c): P1 malformed BILL_TBL rows skipped before the universe was counted → malformed BILL_TBL /
 BILL_HISTORY_TBL rows now refuse publication, others counted on Health; P1 the job read the Sunday-only yearly file →
