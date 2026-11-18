@@ -1,0 +1,118 @@
+{
+ "method": "One test for every element: add it to a baseline that already knows the sponsor's party standing (majority/minority)\nx chamber x session year, fit on earlier sessions, score on a later one never seen. Report the gain in AUC and in log\nloss, and how many bills the element says anything about (coverage). An element earns a place on a screen only if it\nadds on held-out data.",
+ "held_out": {
+  "A: 2023-24": {
+   "bills": 3862,
+   "baseline (party standing x chamber x session year)": {
+    "auc": 0.692,
+    "log_loss": 0.5402
+   },
+   "tried before (same title earlier, same/other room)": {
+    "auc_gain": 0.061,
+    "log_loss_gain": 0.0293,
+    "bills_it_speaks_to": "37%"
+   },
+   "the room's record for this standing": {
+    "auc_gain": 0.031,
+    "log_loss_gain": 0.0139,
+    "bills_it_speaks_to": "95%"
+   },
+   "the carrier's own record": {
+    "auc_gain": 0.03,
+    "log_loss_gain": 0.0067,
+    "bills_it_speaks_to": "82%"
+   },
+   "majority co-sponsor share [timing_unverified]": {
+    "auc_gain": -0.025,
+    "log_loss_gain": -0.0006,
+    "bills_it_speaks_to": "100%"
+   },
+   "co-sponsor count [timing_unverified]": {
+    "auc_gain": 0.017,
+    "log_loss_gain": 0.0037,
+    "bills_it_speaks_to": "100%"
+   },
+   "a co-sponsor from the other party [timing_unverified]": {
+    "auc_gain": 0.033,
+    "log_loss_gain": 0.008,
+    "bills_it_speaks_to": "100%"
+   },
+   "title form (amend vs new act)": {
+    "auc_gain": 0.002,
+    "log_loss_gain": -0.0019,
+    "bills_it_speaks_to": "100%"
+   },
+   "everything together": {
+    "auc_gain": 0.101,
+    "log_loss_gain": 0.0532
+   }
+  },
+  "B: 2025-26": {
+   "bills": 4184,
+   "baseline (party standing x chamber x session year)": {
+    "auc": 0.665,
+    "log_loss": 0.551
+   },
+   "tried before (same title earlier, same/other room)": {
+    "auc_gain": 0.097,
+    "log_loss_gain": 0.0481,
+    "bills_it_speaks_to": "41%"
+   },
+   "the room's record for this standing": {
+    "auc_gain": 0.045,
+    "log_loss_gain": 0.0103,
+    "bills_it_speaks_to": "94%"
+   },
+   "the carrier's own record": {
+    "auc_gain": 0.03,
+    "log_loss_gain": 0.0018,
+    "bills_it_speaks_to": "94%"
+   },
+   "majority co-sponsor share [timing_unverified]": {
+    "auc_gain": -0.004,
+    "log_loss_gain": 0.0033,
+    "bills_it_speaks_to": "100%"
+   },
+   "co-sponsor count [timing_unverified]": {
+    "auc_gain": 0.057,
+    "log_loss_gain": 0.0085,
+    "bills_it_speaks_to": "100%"
+   },
+   "a co-sponsor from the other party [timing_unverified]": {
+    "auc_gain": 0.046,
+    "log_loss_gain": 0.0081,
+    "bills_it_speaks_to": "100%"
+   },
+   "title form (amend vs new act)": {
+    "auc_gain": 0.005,
+    "log_loss_gain": -0.0024,
+    "bills_it_speaks_to": "100%"
+   },
+   "everything together": {
+    "auc_gain": 0.139,
+    "log_loss_gain": 0.0731
+   }
+  }
+ },
+ "roster_2025_26 (fit odd bill numbers, score even)": {
+  "baseline": {
+   "auc": 0.672,
+   "log_loss": 0.551
+  },
+  "sponsor sits on the committee": {
+   "auc_gain": 0.044,
+   "log_loss_gain": 0.0124,
+   "bills_it_speaks_to": "35%"
+  },
+  "sponsor is the majority chair": {
+   "auc_gain": 0.037,
+   "log_loss_gain": 0.0239,
+   "bills_it_speaks_to": "7%"
+  },
+  "the majority chair co-signs [timing_unverified]": {
+   "auc_gain": 0.062,
+   "log_loss_gain": 0.0239,
+   "bills_it_speaks_to": "13%"
+  }
+ }
+}

@@ -1,0 +1,27 @@
+# California's site — a SEPARATE Worker (same model as Pennsylvania's): its own name/address, its own D1 database,
+# its own secrets, its own spreadsheet. Same code (worker/index.js + the SPA built with VITE_STATE=CA).
+#
+# NOT LIVE YET — owner steps (docs/knowledge/ca_pubinfo.md → "To go live"):
+#   1. DONE 2026-11-18: "CA · Live" created and shared; its id is below (the job reads it from here — no repo secret).
+#   2. DONE 2026-11-18: D1 bill-tracker-ca-db created; id below. Its tables: paste tools/d1/console_setup.sql into its
+#      Console (the end state of migrations/0001-0003, recorded as applied).
+#   3. Cloudflare Workers Builds: new Worker `bill-tracker-ca` on `main`, build `npm run build:ca`,
+#      deploy `npx wrangler deploy --config wrangler.ca.toml`.
+name = "bill-tracker-ca"
+compatibility_date = "2025-01-01"
+main = "worker/index.js"
+
+[assets]
+directory = "./dist-ca"
+not_found_handling = "single-page-application"
+binding = "ASSETS"
+
+[vars]
+GOOGLE_CLIENT_ID = "831223695835-cqd2fmjq3l61jc1t6pr9elobra0imhf5.apps.googleusercontent.com"
+SPREADSHEET_ID = "1O7IgP-ZFnPLGk1b6wtRLPDYwCmPrQ8Ysg2Yl0eKSAGE"   # "CA · Live" (owner 2026-11-18)
+BILL_TRACKER_STATE = "CA"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "bill-tracker-ca-db"
+database_id = "450d84d0-e09d-4b8c-9a5f-265795e98f25"   # bill-tracker-ca-db (owner 2026-11-18)

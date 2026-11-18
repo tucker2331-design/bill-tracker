@@ -158,19 +158,25 @@ secret `GH_DISPATCH_TOKEN` (fine-grained token, this repo only, Actions: read & 
 tick logs "not configured" and GitHub's cron remains the only source. The trust-surface guard still judges
 liveness on GitHub's `schedule` runs.
 
-### The speed switch (2026-11-16)
-Owner: run on tight intervals sustainably, but do not strain the system 24/7 across states with no customers yet;
-a master-dashboard control later, a back-end switch now. `cadence_profiles.json` (repo root) holds one word per
-state, `normal` or `slow`, read every tick by `cadence.profile_for()`:
+### The speed switch (2026-11-16; four speeds 2026-11-18)
+Owner 2026-11-18: *"once a day should be the longest cadence, then a 4 hour version, then a super fast, then an
+instant — all within the terms and rules."* `cadence_profiles.json` (repo root) holds one word per state, read every
+tick by `cadence.profile_for()` and baked into the site at build (`web/vite.config.ts` → Health's freshness limits):
 
-| | normal (tested) | slow |
-|---|---|---|
-| VA calendar | in a meeting every 15 min · meetings ahead ~1 h · nothing ahead ~3 h | hourly · ~3 h · ~6 h |
-| VA bill | in a meeting every 15 min · ~1 h · ~6 h | hourly · ~3 h · ~12 h |
-| PA job | hourly on weekdays | at most every 6 h on weekdays (reads its own last run stamp, AA1) |
+| speed | VA calendar + bill | PA job (export hourly) | CA job (pubinfo daily) |
+|---|---|---|---|
+| **daily** (longest) | one full run a day (floor 1,435 min, every tier) | one a day | one a day |
+| **4h** | at most every 4 h, never faster than fast (bill stays ~6 h when nothing is scheduled) | every 4 h | one a day |
+| **fast** (was "normal") | in a meeting every 15 min · meetings ahead ~1 h · nothing ahead ~3 h / ~6 h | hourly on weekdays | one a day |
+| **instant** | every scheduled tick (≥12 min apart) at all hours outside quiet hours | hourly (its floor) | one a day (its floor) |
+| slow (2026-11-16, kept) | hourly · ~3 h · ~6 h / ~12 h | every 6 h | one a day |
 
-Quiet hours, jitter and the 12-min in-window minimum apply in both. A missing/unreadable file or unknown word reads
-`normal` (printed). Toggle = change one word and merge; the next tick reads it. Every gate log line names the speed.
+The source's own floor always wins. Quiet hours (23:00–06:00 ET), jitter, conditional fetch and the request cap
+apply at every speed. A missing/unreadable file or unknown word reads `fast` (printed). **Set 2026-11-18:** VA daily,
+CA daily, NY daily (its job is already a daily cron), PA fast. Health: a speed with a promised interval sets the
+data-age limit to 1.25 × interval + 7 quiet hours (daily → 37 h; a daily source like CA → 37 h at any speed), so a
+switch never raises a false "stale"; `fast`/`slow` keep the learned rhythm. `test_states.py` pins that the site's and
+the jobs' speed tables agree; `cadence_test.py` (62 checks) pins the floors and their order.
 
 ## 50-state scaling
 This charter is **per-source**. Every new state's source gets the same five guardrails and

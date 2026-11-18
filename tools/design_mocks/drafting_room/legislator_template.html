@@ -1,0 +1,229 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Legislator page</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<style>
+body{margin:0;background:#0B0D0E}
+a{color:#86B6D3;text-decoration:none}a:hover{text-decoration:underline}
+.list{background:#1A1E20;border-radius:14px;overflow:hidden}
+.row{display:grid;gap:12px;align-items:center;padding:10px 16px;border-top:1px solid rgba(255,255,255,.06);min-height:44px}
+.row:first-child{border-top:0}
+.sc{font-size:10.5px;letter-spacing:.07em;text-transform:uppercase;font-weight:600;color:#A6AFB4}
+.soft{color:#A6AFB4}.faint{color:#727B80;font-size:12.5px}.num{font-weight:700}
+.sec{display:grid;grid-template-columns:minmax(0,1fr) auto 18px;gap:12px;align-items:center;padding:14px 16px;min-height:52px;cursor:pointer;border-top:1px solid rgba(255,255,255,.08)}
+.sec:first-child{border-top:0}
+.sec:hover{background:#22272A}
+.sec .t{font-weight:700}
+.chev{color:#727B80;font-size:14px;text-align:right}
+.body{padding:2px 16px 16px;display:flex;flex-direction:column;gap:10px}
+.inner{background:#22272A;border-radius:9px;overflow:hidden}
+.tbl{overflow-x:auto}
+</style>
+</helmet>
+<div style="font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', system-ui, 'Segoe UI', Roboto, 'Helvetica Neue', sans-serif; color: #F0F2F3; background: #0B0D0E; font-size: 14px; line-height: 1.45; padding: 24px 16px 72px">
+<div style="max-width: 860px; margin: 0 auto; display: flex; flex-direction: column; gap: 16px">
+
+  <header style="display: flex; flex-direction: column; gap: 4px">
+    <a href="Main.dc.html" style="font-size: 13px">‹ Possible sponsors</a>
+    <h1 style="margin: 2px 0 0; font-size: 24px; font-weight: 700; letter-spacing: -.3px">{{ name }}</h1>
+    <div class="soft">{{ headline }}</div>
+    <div class="faint">{{ seatsLine }}</div>
+  </header>
+
+  <!-- MAP: state view by default; inset zoomed to the district and its neighbours -->
+  <div class="list" style="position: relative; padding: 12px">
+    <sc-if value="{{ bigIsState }}" hint-placeholder-val="{{ true }}">
+      <svg viewBox="0 0 1000 {{ stateH }}" style="width: 100%; height: auto; display: block" role="img" aria-label="District within the state">
+        <sc-for list="{{ statePaths }}" as="p" hint-placeholder-count="20">
+          <path d="{{ p.d }}" fill="{{ p.fill }}" stroke="#0B0D0E" stroke-width="0.6"></path>
+        </sc-for>
+        <path d="{{ mePathState }}" fill="#86B6D3" stroke="#F0F2F3" stroke-width="1.2"></path>
+      </svg>
+    </sc-if>
+    <sc-if value="{{ bigIsZoom }}" hint-placeholder-val="{{ false }}">
+      <svg viewBox="0 0 {{ inW }} {{ inH }}" style="width: 100%; max-height: 520px; display: block" role="img" aria-label="District and neighbouring districts">
+        <sc-for list="{{ neighbors }}" as="n" hint-placeholder-count="6">
+          <path d="{{ n.path }}" fill="#2A3034" stroke="#0B0D0E" stroke-width="1"></path>
+        </sc-for>
+        <path d="{{ meInset }}" fill="#86B6D3" fill-opacity="0.35" stroke="#86B6D3" stroke-width="2"></path>
+        <sc-for list="{{ neighbors }}" as="n" hint-placeholder-count="6">
+          <text x="{{ n.lx }}" y="{{ n.ly }}" fill="#A6AFB4" font-size="11" text-anchor="middle">{{ n.label }}</text>
+        </sc-for>
+        <text x="{{ meLx }}" y="{{ meLy }}" fill="#F0F2F3" font-size="13" font-weight="700" text-anchor="middle">HD {{ dn }}</text>
+      </svg>
+    </sc-if>
+    <div onClick="{{ swap }}" style="position: absolute; top: 12px; right: 12px; width: 30%; max-width: 230px; background: #0B0D0E; border: 1px solid rgba(255,255,255,.14); border-radius: 9px; padding: 4px; cursor: pointer">
+      <sc-if value="{{ bigIsState }}" hint-placeholder-val="{{ true }}">
+        <svg viewBox="0 0 {{ inW }} {{ inH }}" style="width: 100%; height: auto; display: block">
+          <sc-for list="{{ neighbors }}" as="n" hint-placeholder-count="6">
+            <path d="{{ n.path }}" fill="#2A3034" stroke="#0B0D0E" stroke-width="1.5"></path>
+          </sc-for>
+          <path d="{{ meInset }}" fill="#86B6D3" fill-opacity="0.35" stroke="#86B6D3" stroke-width="3"></path>
+        </svg>
+      </sc-if>
+      <sc-if value="{{ bigIsZoom }}" hint-placeholder-val="{{ false }}">
+        <svg viewBox="0 0 1000 {{ stateH }}" style="width: 100%; height: auto; display: block">
+          <sc-for list="{{ statePaths }}" as="p" hint-placeholder-count="20">
+            <path d="{{ p.d }}" fill="#2A3034" stroke="#0B0D0E" stroke-width="0.8"></path>
+          </sc-for>
+          <path d="{{ mePathState }}" fill="#86B6D3"></path>
+        </svg>
+      </sc-if>
+      <div class="faint" style="text-align: center; font-size: 11px">{{ insetHint }}</div>
+    </div>
+    <div class="faint" style="padding-top: 8px">{{ mapCaption }}</div>
+  </div>
+
+  <div class="list">
+    <!-- DISTRICT -->
+    <div class="sec" onClick="{{ tg.di }}"><span class="t">District</span><span class="soft">{{ sum.di }}</span><span class="chev">{{ ch.di }}</span></div>
+    <sc-if value="{{ op.di }}" hint-placeholder-val="{{ true }}">
+      <div class="body">
+        <div class="faint">Where the district differs most from Pennsylvania:</div>
+        <div class="inner tbl">
+          <div class="row" style="grid-template-columns: minmax(170px,1.6fr) minmax(130px,1fr) 70px; min-width: 420px; min-height: 32px"><span class="sc">Measure</span><span class="sc">District</span><span class="sc">PA</span></div>
+          <sc-for list="{{ facts }}" as="f" hint-placeholder-count="6">
+            <div class="row" style="grid-template-columns: minmax(170px,1.6fr) minmax(130px,1fr) 70px; min-width: 420px">
+              <span>{{ f.label }}</span><span><span class="num">{{ f.count }}</span> <span class="soft">· {{ f.share }}</span></span><span class="soft">{{ f.state }}</span>
+            </div>
+          </sc-for>
+        </div>
+        <div onClick="{{ toggleAll }}" style="cursor: pointer"><a>{{ allLabel }}</a></div>
+        <div class="inner">
+          <div class="row" style="grid-template-columns: 150px minmax(0,1fr)"><span class="sc">Places</span><span>{{ placesLine }}</span></div>
+          <div class="row" style="grid-template-columns: 150px minmax(0,1fr)"><span class="sc">Local governments</span><span>{{ localLine }}</span></div>
+          <div class="row" style="grid-template-columns: 150px minmax(0,1fr)"><span class="sc">Senate</span><span>{{ senateLine }}</span></div>
+          <div class="row" style="grid-template-columns: 150px minmax(0,1fr)"><span class="sc">Median income</span><span>{{ incomeLine }}</span></div>
+        </div>
+        <div class="faint">Census ACS 2020–24, 2024 maps. CMS, NCES for places. Shares use each measure's own base.</div>
+      </div>
+    </sc-if>
+
+    <!-- WHAT THEY CARRY -->
+    <div class="sec" onClick="{{ tg.ca }}"><span class="t">Bills they carry</span><span class="soft">{{ sum.ca }}</span><span class="chev">{{ ch.ca }}</span></div>
+    <sc-if value="{{ op.ca }}" hint-placeholder-val="{{ false }}">
+      <div class="body">
+        <div class="inner tbl">
+          <div class="row" style="grid-template-columns: 80px 60px minmax(150px,1fr) 80px 50px; min-width: 460px; min-height: 32px"><span class="sc">Session</span><span class="sc">Bills</span><span class="sc">Out of committee</span><span class="sc">Passed</span><span class="sc">Law</span></div>
+          <sc-for list="{{ carry }}" as="c" hint-placeholder-count="2">
+            <div class="row" style="grid-template-columns: 80px 60px minmax(150px,1fr) 80px 50px; min-width: 460px">
+              <span>{{ c.session }}</span><span class="num">{{ c.bills }}</span><span><span class="num">{{ c.out }}</span> <span class="soft">· expected {{ c.expected }}</span></span><span>{{ c.passed }}</span><span>{{ c.law }}</span>
+            </div>
+          </sc-for>
+        </div>
+        <div class="inner"><div class="row" style="grid-template-columns: 150px minmax(0,1fr)"><span class="sc">Laws they work on</span><span>{{ focusLine }}</span></div></div>
+        <div class="faint">Expected = what bills like theirs did (same committee and party standing, earlier sessions). {{ openNote }}</div>
+      </div>
+    </sc-if>
+
+    <!-- COMMITTEES -->
+    <div class="sec" onClick="{{ tg.co }}"><span class="t">Committees</span><span class="soft">{{ sum.co }}</span><span class="chev">{{ ch.co }}</span></div>
+    <sc-if value="{{ op.co }}" hint-placeholder-val="{{ false }}">
+      <div class="body"><div class="inner">
+        <sc-for list="{{ seats }}" as="s" hint-placeholder-count="6"><div class="row" style="grid-template-columns: minmax(0,1fr) auto"><span>{{ s.name }}</span><span class="sc">{{ s.role }}</span></div></sc-for>
+      </div></div>
+    </sc-if>
+
+    <!-- VOTES -->
+    <div class="sec" onClick="{{ tg.vo }}"><span class="t">How they vote</span><span class="soft">{{ sum.vo }}</span><span class="chev">{{ ch.vo }}</span></div>
+    <sc-if value="{{ op.vo }}" hint-placeholder-val="{{ false }}">
+      <div class="body">
+        <div class="inner tbl">
+          <div class="row" style="grid-template-columns: 80px minmax(140px,1fr) 80px minmax(120px,1fr); min-width: 440px; min-height: 32px"><span class="sc">Session</span><span class="sc">With party</span><span class="sc">Crossed</span><span class="sc">Rank in party</span></div>
+          <sc-for list="{{ votes }}" as="v" hint-placeholder-count="2">
+            <div class="row" style="grid-template-columns: 80px minmax(140px,1fr) 80px minmax(120px,1fr); min-width: 440px">
+              <span>{{ v.session }}</span><span><span class="num">{{ v.with_party }}</span> <span class="soft">of {{ v.contested_votes }}</span></span><span>{{ v.crossed }}</span><span class="soft">{{ v.rank }}</span>
+            </div>
+          </sc-for>
+        </div>
+        <div class="faint">Contested roll calls only (10% or more voted no). Rank 1 = most loyal. Crossing repeats session to session (r 0.84) unless the majority changes.</div>
+      </div>
+    </sc-if>
+
+    <!-- WHO THEY WORK WITH -->
+    <div class="sec" onClick="{{ tg.wo }}"><span class="t">Who they work with</span><span class="soft">{{ sum.wo }}</span><span class="chev">{{ ch.wo }}</span></div>
+    <sc-if value="{{ op.wo }}" hint-placeholder-val="{{ false }}">
+      <div class="body">
+        <div class="inner">
+          <div class="row" style="grid-template-columns: 150px minmax(0,1fr)"><span class="sc">Co-sign their bills</span><span>{{ cosignHers }}</span></div>
+          <div class="row" style="grid-template-columns: 150px minmax(0,1fr)"><span class="sc">They co-sign</span><span>{{ sheCosigns }}</span></div>
+          <div class="row" style="grid-template-columns: 150px minmax(0,1fr)"><span class="sc">Other party</span><span>{{ crossLine }}</span></div>
+        </div>
+        <div class="faint">2023–26. Number = bills.</div>
+      </div>
+    </sc-if>
+
+    <!-- IDEAS -->
+    <div class="sec" onClick="{{ tg.me }}"><span class="t">Ideas they circulated</span><span class="soft">{{ sum.me }}</span><span class="chev">{{ ch.me }}</span></div>
+    <sc-if value="{{ op.me }}" hint-placeholder-val="{{ false }}">
+      <div class="body"><div class="inner">
+        <sc-for list="{{ memos }}" as="m" hint-placeholder-count="8"><div class="row" style="grid-template-columns: minmax(0,1fr) auto"><span>{{ m.title }}</span><span class="sc">{{ m.bill }}</span></div></sc-for>
+      </div><div class="faint">Co-sponsorship memo titles, 2025–26. New memos arrive from PA's memo feed.</div></div>
+    </sc-if>
+
+    <!-- OUR HISTORY -->
+    <div class="sec" onClick="{{ tg.hi }}"><span class="t">Our history</span><span class="soft">team only</span><span class="chev">{{ ch.hi }}</span></div>
+    <sc-if value="{{ op.hi }}" hint-placeholder-val="{{ false }}">
+      <div class="body"><div class="inner">
+        <div class="row" style="grid-template-columns: 90px minmax(0,1fr) auto"><span class="faint">[date]</span><span>[meeting · who · note]</span><span class="sc">[position]</span></div>
+        <div class="row" style="grid-template-columns: 90px minmax(0,1fr) auto"><span class="faint">[date]</span><span>[call · who · note]</span><span class="sc">[asked to sponsor]</span></div>
+      </div></div>
+    </sc-if>
+  </div>
+</div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1280,"height":1800}}'>
+/*DATA*/
+const F = (n) => Number(n).toLocaleString("en-US");
+const P = (x) => (x == null ? "—" : (100 * x).toFixed(1) + "%");
+const SECT = ["di", "ca", "co", "vo", "wo", "me", "hi"];
+class Component extends DCLogic {
+  constructor(p) { super(p); this.state = { zoom: false, all: false, open: { di: true } }; }
+  renderVals() {
+    const st = this.state, L = DATA;
+    const m = L.member, d = L.district, dn = Number(d);
+    const statePaths = Object.entries(L.map.state).filter(([k]) => k !== d).map(([k, p]) => ({ d: p, fill: "#2A3034" }));
+    const ins = L.map.inset;
+    const neighbors = ins.neighbors.map((n) => ({ ...n, label: "HD " + Number(n.d) + (L.names[n.d] ? " · " + L.names[n.d].split(" ").pop() : "") }));
+    const facts = (st.all ? L.facts : L.facts.slice(0, 6)).map((f) => ({ label: f.label, count: F(f.count), share: P(f.share), state: P(f.state) }));
+    const sen = (L.senate_overlap || []).map(([s, n]) => { const x = L.senators[s] || {}; return "Sen. " + (x.name || "?") + " (" + (x.party || "?") + "), SD " + Number(s) + " · " + F(n) + " shared"; });
+    const op = {}, ch = {}, tg = {};
+    SECT.forEach((s) => { op[s] = !!st.open[s]; ch[s] = op[s] ? "▾" : "›"; tg[s] = () => this.setState({ open: { ...st.open, [s]: !st.open[s] } }); });
+    const cur = L.carry[L.carry.length - 1] || {};
+    const v0 = L.votes[L.votes.length - 1] || {};
+    const pretty = (k) => k.replace(/^House |^Senate /, "").toLowerCase().replace(/\b\w/g, (c) => c.toUpperCase()).replace(/\bAnd\b/g, "and");
+    return {
+      name: m.name,
+      headline: (m.party === "D" ? "Democrat" : m.party === "R" ? "Republican" : m.party) + " · House District " + dn + " · " + (L.local.counties || []).map((c) => c[0]).join(", ") + " · " + (cur.standing || "") + " party",
+      seatsLine: L.seats.length + " committees · in the data since " + (L.first_session_in_data || "").slice(0, 4),
+      bigIsState: !st.zoom, bigIsZoom: st.zoom, swap: () => this.setState({ zoom: !st.zoom }),
+      insetHint: st.zoom ? "Tap: state view" : "Tap: zoom in", mapCaption: st.zoom ? "District " + dn + " and the districts that border it." : "District " + dn + " in Pennsylvania. The box shows it zoomed in with its neighbors.",
+      statePaths, stateH: L.map.dims.h, mePathState: L.map.state[d], inW: ins.w, inH: ins.h, meInset: ins.me, neighbors, meLx: ins.label.x, meLy: ins.label.y, dn,
+      op, ch, tg,
+      sum: { di: F(L.people) + " residents · " + (L.local.municipalities || []).length + " municipalities", ca: (cur.bills || 0) + " bills this session · " + (cur.out || 0) + " out", co: L.seats.length + " seats",
+        vo: (v0.crossed != null ? "crossed " + v0.crossed + " of " + v0.contested_votes + " contested" : "—"), wo: "other party " + L.work.cross_party_on_hers.split(" of ")[0] + " co-signs", me: L.memos.length + " memos" },
+      facts, allLabel: st.all ? "Show fewer" : "Show all " + L.facts.length + " measures", toggleAll: () => this.setState({ all: !st.all }),
+      placesLine: L.places.schools + " public schools · " + L.places.nursing_homes + " nursing homes (" + F(L.places.nursing_home_beds) + " beds) · " + L.places.hospitals + (L.places.hospitals === 1 ? " hospital" : " hospitals"),
+      localLine: (L.local.municipalities || []).map((x) => x[0]).join(", ") + " · " + (L.local.school_districts || []).length + " school districts",
+      senateLine: sen.join(" · ") || "—", incomeLine: "$" + F(L.median_income.value) + " (± $" + F(L.median_income.moe) + ")",
+      carry: L.carry.map((c) => ({ ...c, session: c.session + (c.open ? " (open)" : "") })), focusLine: L.focus.map((f) => f[0] + " · " + f[1]).join("  ·  "),
+      openNote: "The current session is still open.",
+      seats: L.seats.map((s) => ({ name: pretty(s), role: L.chairs.indexOf(s) >= 0 ? "chair" : "member" })),
+      votes: L.votes.map((v) => ({ ...v, rank: v.rank_in_party.replace(" (1 = most loyal)", "") })),
+      cosignHers: L.work.cosign_her_bills.map((x) => x.name + " (" + x.party + ") " + x.n).join(" · "),
+      sheCosigns: L.work.she_cosigns.map((x) => x.name + " (" + x.party + ") " + x.n).join(" · "),
+      crossLine: "On their bills: " + L.work.cross_party_on_hers + " co-signers. Bills they signed: " + L.work.cross_party_she_signs + ".",
+      memos: L.memos.slice(0, 10),
+    };
+  }
+}
+</script>
+</body>
+</html>

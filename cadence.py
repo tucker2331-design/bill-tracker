@@ -86,42 +86,63 @@ IN_WINDOW_MIN_INTERVAL = 12
 CALENDAR_TIER_FLOORS = {"IN_WINDOW": IN_WINDOW_MIN_INTERVAL, "IDLE": 65,  "EMPTY": 185}
 BILL_TIER_FLOORS     = {"IN_WINDOW": IN_WINDOW_MIN_INTERVAL, "IDLE": 55,  "EMPTY": 355}
 
-# --- the speed switch (owner 2026-11-16: "build it in the back end so you can toggle them onto slower speeds") -------
-# One word per state in cadence_profiles.json (repo root). "normal" = the floors above. "slow" = for a state nobody is
-# using yet: hourly even inside a meeting window, ~3 h when meetings are ahead, ~6 h (calendar) / ~12 h (bill) when
-# nothing is scheduled. Same 15-min tick grid (each floor sits just under a multiple of 15 min after the cycle START).
-# Fail direction: a missing/unreadable file or an unknown word -> "normal" (today's tested cadence) and a printed line,
-# never a silent speed change. PA's job has no tiers: slow = at most one full run per PA_SLOW_HOURS.
+# --- the speed switch (owner 2026-11-16; four speeds 2026-11-18) ------------------------------------------------------
+# One word per state in cadence_profiles.json (repo root). Owner 2026-11-18: "once a day should be the longest cadence,
+# then a 4 hour version, then a super fast, then an instant — all within the terms and rules."
+#   daily    at most one full run per day                (every worker, every tier)
+#   4h       at most one full run per 4 hours            (every worker, every tier)
+#   fast     the tested activity-correlated cadence      (the tier floors above; was called "normal" — still accepted)
+#   instant  every scheduled tick (>= IN_WINDOW_MIN_INTERVAL apart) at all hours outside quiet hours
+#   slow     the 2026-11-16 in-between setting (kept so no file breaks)
+# The SOURCE's own floor always wins: PA's export updates hourly (instant = hourly), California's pubinfo daily
+# (every speed = daily). Quiet hours, jitter, the request cap and conditional fetch apply at every speed.
+# Fail direction: a missing/unreadable file or an unknown word -> "fast" (today's tested cadence) + a printed line.
+# The site reads the SAME file at build time (web/vite.config.ts) to set its freshness limits; test_states.py pins
+# that the two tables agree.
 PROFILES_FILE = "cadence_profiles.json"
 CALENDAR_SLOW_FLOORS = {"IN_WINDOW": 55, "IDLE": 175, "EMPTY": 355}
 BILL_SLOW_FLOORS     = {"IN_WINDOW": 55, "IDLE": 175, "EMPTY": 715}
-PA_SLOW_HOURS = 6
-KNOWN_PROFILES = ("normal", "slow")
+_ALL = lambda m: {"IN_WINDOW": m, "IDLE": m, "EMPTY": m}   # noqa: E731
+SPEED_FLOORS = {"daily": _ALL(1435), "instant": _ALL(IN_WINDOW_MIN_INTERVAL)}
+FOUR_HOUR_FLOOR = 235   # "4h" = never more often than every 4 h, and never more often than fast (bill EMPTY stays ~6 h)
+# Hours between runs for a job with no tiers (PA, CA). None = every scheduled tick (the job's own cron).
+JOB_HOURS = {"daily": 24, "4h": 4, "slow": 6, "fast": None, "instant": None}
+# The interval each speed promises, in hours (None = activity-correlated; the site keeps its learned rhythm).
+SPEED_INTERVAL_HOURS = {"daily": 24, "4h": 4, "instant": 0.25, "fast": None, "slow": None}
+PA_SLOW_HOURS = JOB_HOURS["slow"]
+KNOWN_PROFILES = ("daily", "4h", "fast", "instant", "slow")
+ALIASES = {"normal": "fast"}
 
 
 def profile_for(state: str, path: str = None) -> str:
-    """This state's speed: "normal" or "slow". Never raises; anything unreadable reads "normal" (printed)."""
+    """This state's speed (one of KNOWN_PROFILES). Never raises; anything unreadable reads "fast" (printed)."""
     import os
     p = path or os.path.join(os.path.dirname(os.path.abspath(__file__)), PROFILES_FILE)
     try:
         with open(p, encoding="utf-8") as f:
-            word = str(json.load(f).get(state, "normal")).strip().lower()
+            word = str(json.load(f).get(state, "fast")).strip().lower()
     except (OSError, ValueError, AttributeError) as e:
-        print(f"⏱️ Speed switch: {PROFILES_FILE} unreadable ({type(e).__name__}) — {state} runs at normal speed")
-        return "normal"
+        print(f"⏱️ Speed switch: {PROFILES_FILE} unreadable ({type(e).__name__}) — {state} runs at fast speed")
+        return "fast"
+    word = ALIASES.get(word, word)
     if word not in KNOWN_PROFILES:
-        print(f"⏱️ Speed switch: unknown speed {word!r} for {state} in {PROFILES_FILE} — runs at normal speed")
-        return "normal"
+        print(f"⏱️ Speed switch: unknown speed {word!r} for {state} in {PROFILES_FILE} — runs at fast speed")
+        return "fast"
     return word
 
 
 def floors_for(worker: str, state: str, path: str = None) -> dict:
     """The tier floors for 'calendar' or 'bill' in this state's current speed."""
-    slow = profile_for(state, path) == "slow"
-    print(f"⏱️ Speed switch: {state} {worker} = {'slow' if slow else 'normal'} ({PROFILES_FILE})")
-    if worker == "calendar":
-        return CALENDAR_SLOW_FLOORS if slow else CALENDAR_TIER_FLOORS
-    return BILL_SLOW_FLOORS if slow else BILL_TIER_FLOORS
+    speed = profile_for(state, path)
+    print(f"⏱️ Speed switch: {state} {worker} = {speed} ({PROFILES_FILE})")
+    if speed in SPEED_FLOORS:
+        return SPEED_FLOORS[speed]
+    if speed == "slow":
+        return CALENDAR_SLOW_FLOORS if worker == "calendar" else BILL_SLOW_FLOORS
+    tiers = CALENDAR_TIER_FLOORS if worker == "calendar" else BILL_TIER_FLOORS
+    if speed == "4h":
+        return {k: max(FOUR_HOUR_FLOOR, v) for k, v in tiers.items()}
+    return tiers
 
 
 # --- low-level parsing (total functions: never raise) ---------------------------------------------------

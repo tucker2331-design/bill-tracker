@@ -1,0 +1,84 @@
+{
+ "source": "pubinfo_2025.zip",
+ "cut_utc": "2026-11-18T23:41:48Z",
+ "bills": 240,
+ "outcomes": {
+  "signed": 60,
+  "in_progress": 87,
+  "vetoed": 36,
+  "dead": 28,
+  "adopted": 29
+ },
+ "bills_checked": {
+  "AB1906": {
+   "outcome": "signed",
+   "stage": "law"
+  },
+  "AB2227": {
+   "outcome": "signed",
+   "stage": "law"
+  },
+  "SB344": {
+   "outcome": "signed",
+   "stage": "law"
+  },
+  "SCR144": {
+   "outcome": "adopted",
+   "stage": "adopted"
+  },
+  "ACR76": {
+   "outcome": "adopted",
+   "stage": "adopted"
+  },
+  "ACR39": {
+   "outcome": "adopted",
+   "stage": "adopted"
+  },
+  "SR53": {
+   "outcome": "adopted"
+  },
+  "SR25": {
+   "outcome": "adopted"
+  },
+  "AB1224": {
+   "outcome": "vetoed"
+  },
+  "AB833": {
+   "outcome": "vetoed"
+  },
+  "AB1647": {
+   "outcome": "vetoed"
+  },
+  "AB2096": {
+   "outcome": "in_progress"
+  },
+  "SB1329": {
+   "outcome": "in_progress"
+  },
+  "AB2088": {
+   "outcome": "in_progress"
+  }
+ },
+ "completeness": {
+  "state": "CA",
+  "session_code": "20252026",
+  "universe_declared": 240,
+  "universe_count": 240,
+  "in_history_not_in_universe": [],
+  "in_history_not_in_universe_count": 0,
+  "history_only_no_text": [],
+  "history_only_no_text_count": 0,
+  "measures_outside_both_houses": {},
+  "records_written": 240,
+  "actions_total": 4503,
+  "actions_rescinded": 1,
+  "end_status_blank": 2,
+  "titles_blank": 9,
+  "end_status_unclassified": 0,
+  "end_status_unclassified_sample": [],
+  "rows_with_wrong_field_count": {},
+  "rows_with_wrong_field_count_total": 0,
+  "session_display": "2025-2026 Regular Session",
+  "checked_at_utc": "2026-11-18T21:00:00Z"
+ }
+}

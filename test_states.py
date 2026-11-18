@@ -9,6 +9,7 @@ on the code, the publisher, the stage ids and the bill link — so the backend a
 Run: python3 test_states.py
 """
 import os
+import json
 import re
 import sys
 
@@ -67,6 +68,34 @@ with open(os.path.join(HERE, "web", "src", "states", "pa.ts"), encoding="utf-8")
     pa_ts = _f.read()
 check("Python and SPA agree on PA stage ids", re.findall(r'\{ id: "([a-z0-9]+)"', pa_ts) == [s.id for s in pa.stages])
 check("Python and SPA agree on PA's code", f'code: "{pa.code}"' in pa_ts)
+ca = states.get_state("CA")
+with open(os.path.join(HERE, "web", "src", "states", "ca.ts"), encoding="utf-8") as _f:
+    ca_ts = _f.read()
+check("CA registered", "CA" in states.registered())
+check("CA has a crossover marker (house-of-origin deadline)", ca.has_crossover)
+check("Python and SPA agree on CA stage ids", re.findall(r'\{ id: "([a-z0-9]+)"', ca_ts) == [s.id for s in ca.stages])
+check("Python and SPA agree on CA's code", f'code: "{ca.code}"' in ca_ts)
+check("Python and SPA agree on CA's publisher", f'sourceName: "{ca.source_name}"' in ca_ts)
+check("CA fetches only the bulk host", all(u.startswith("https://downloads.leginfo.legislature.ca.gov/") for u in ca.urls.values()))
+# cadence.py imports pytz, which the structural-test job does not install: read its speed tables from the source
+# (literal assignments, ast.literal_eval) instead of importing it.
+import ast  # noqa: E402
+_cad = {}
+for _node in ast.parse(open(os.path.join(HERE, "cadence.py"), encoding="utf-8").read()).body:
+    if isinstance(_node, ast.Assign) and len(_node.targets) == 1 and isinstance(_node.targets[0], ast.Name) \
+            and _node.targets[0].id in ("SPEED_INTERVAL_HOURS", "KNOWN_PROFILES", "ALIASES"):
+        _cad[_node.targets[0].id] = ast.literal_eval(_node.value)
+with open(os.path.join(HERE, "web", "src", "data", "speed.ts"), encoding="utf-8") as _f:
+    speed_ts = _f.read()
+_m = re.search(r"SPEED_INTERVAL_HOURS[^=]*=\s*\{([^}]*)\}", speed_ts)
+_ts_speeds = {}
+for k, v in re.findall(r'"?([a-z0-9]+)"?\s*:\s*([0-9.]+|null)', _m.group(1) if _m else ""):
+    _ts_speeds[k] = None if v == "null" else float(v)
+check("site and jobs agree on every speed's promised interval",
+      _ts_speeds == {k: (None if v is None else float(v)) for k, v in _cad["SPEED_INTERVAL_HOURS"].items()}, f"{_ts_speeds}")
+check("every speed word in the switch is one the jobs know",
+      all(_cad["ALIASES"].get(str(v).lower(), str(v).lower()) in _cad["KNOWN_PROFILES"]
+          for k, v in json.load(open(os.path.join(HERE, "cadence_profiles.json"))).items() if not k.startswith("_")))
 check("every registered state has a source adapter", all(states.get_state(c).adapter for c in states.registered()))
 
 sys.exit(1 if FAILS else 0)

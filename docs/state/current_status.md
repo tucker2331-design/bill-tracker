@@ -1,6 +1,6 @@
 ---
 tags: [state, live]
-updated: 2026-11-01
+updated: 2026-11-18
 status: active
 ---
 
@@ -85,11 +85,11 @@ status: active
 - Also open (owner-triggered): `/code-review ultra`. ~~co-patrons backfill~~ — superseded, see above.
 
 ## READY
-- **📋 OWNER LIST 2026-11-16 (in order):** ✅ Sheets retry (#271) · ✅ VA on the chamber subway (#272) · census guards
-  (5 buckets, case law #161) + speed switch `cadence_profiles.json` — PR open · verify the
-  Cloudflare ticks (owner added `GH_DISPATCH_TOKEN` 2026-11-16) · then **PA predictive stats, step 1 bill fate**
-  ([[testing/pa_predictive_plan]]) · design ideas awaiting the owner's answers: [[ideas/drafting_war_room]],
-  [[ideas/legislator_portfolio]].
+- **📋 OWNER LIST 2026-11-16/18:** ✅ Sheets retry (#271) · ✅ VA on the chamber subway (#272) · ✅ census guards +
+  speed switch (#273) · ✅ Cloudflare ticks verified · ✅ PA stats batches 1–2 + element-value + drafting tests
+  ([[testing/pa_replication]], plan [[testing/pa_predictive_plan]]) · ✅ batch 3 (member votes, 2026-11-18) · ✅ party position tested ([[testing/pa_party_position]] — owner decision on memos) · drafting room v4 + legislator page mocked — **awaiting review** · 🇨🇦 California scoped + intake built ([[knowledge/ca_pubinfo]] — owner steps to go live)
+  ([[ideas/drafting_war_room]], [[knowledge/district_profiles]]) · portfolio mock needs the same redo
+  ([[ideas/legislator_portfolio]]).
 - **🕒 Jobs: dropped GitHub ticks (found 2026-11-02, [[log]]):** (1) Sheets 429 — DONE 2026-11-16 (`sheets_retry`,
   case law #160). (2) GitHub delivered the `*/15` cron only every 4-7 h (none 08:15→17:30 UTC on 11-02) —
   a Cloudflare cron tick (gated like the cron) is built — PR "Cloudflare offers the workers' ticks"; live once
@@ -106,6 +106,9 @@ status: active
 - [[knowledge/campaign_finance_ingest]] — the ELECT committee->legislator join resolves only 54 of 158 sitting patrons; needs a join on committee identity, not the free-text office field.
 
 ## RECENTLY LANDED (newest first; full detail in [[log]])
+- **2026-11-17/18 — PA statistics + the pre-introduction drafting room.** Virginia's tests re-run on 9 PA sessions
+  (batches 1–2), element-value test, ten drafting tests; district profiles for every PA/VA seat (count + share,
+  facilities, overlap); mock v2 in the v9 language ([[testing/pa_replication]], [[ideas/drafting_war_room]]).
 - **2026-11-16 — Sheets retry + Virginia on the chamber subway.** All three jobs wait out a Sheets 429 instead of
   losing the write (#271, case law #160); ticks only from Virginia's Worker. Virginia's map is now the shared chamber
   subway: ended = dead (incl. tabled), parked = carried over, idle 31 d (measured), Crossover label
@@ -116,7 +119,6 @@ status: active
   ([[knowledge/pa_bill_history_xml]]). Case law #154.
 - **2026-10-31 — Pennsylvania intake + DOCKET fix.** PA export → the bill contract with PA's own stages (no crossover), goldens on a real sample ([[knowledge/pa_bill_history_xml]]); VA bills now carry their upcoming meetings ([[failures/assumptions_audit|#152]]).
 - **2026-10-31 — Multi-state split (Standard #6)** — every VA assumption in the bill pipeline and the SPA now lives in `states/va.py` / `web/src/states/va.ts`; goldens prove VA output byte-identical on 3,645 real 2026 bills ([[architecture/multi_state_config]]). The DOCKET bug it surfaced is fixed: 0 → 1,162 bills with upcoming meetings on the frozen-clock replay ([[failures/assumptions_audit|#152]]).
-- **2026-10-31 — War Room bill page built** (`/war-room/<bill>`, [[ideas/war_room_scoping]]); the bill card is LIS facts only again; the masthead's "Tracking 3,645 / 3,645" was the completeness count mislabelled — fixed ([[failures/assumptions_audit|#151]]).
 
 ## Watch items
 - **⏰ 2027 SESSION OPEN → activate the gated build-wave features.** When the worker detects the 2027 regular

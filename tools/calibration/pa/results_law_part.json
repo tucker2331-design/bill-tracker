@@ -1,0 +1,211 @@
+{
+ "usual_committee_law_only": [
+  80.9,
+  14344
+ ],
+ "usual_committee_law_and_part": [
+  83.3,
+  12373
+ ],
+ "examples": {
+  "Human Services Code": [
+   {
+    "part": "public assistance",
+    "n": 127,
+    "room": "HEALTH",
+    "room_share": 0.68,
+    "out": 34.0
+   },
+   {
+    "part": "(whole law)",
+    "n": 28,
+    "room": "HUMAN SERVICES",
+    "room_share": 0.54,
+    "out": 29.0
+   },
+   {
+    "part": "departmental powers and duties as to licensing",
+    "n": 23,
+    "room": "HEALTH",
+    "room_share": 0.39,
+    "out": 30.0
+   }
+  ],
+  "Public School Code of 1949": [
+   {
+    "part": "(whole law)",
+    "n": 172,
+    "room": "EDUCATION",
+    "room_share": 0.92,
+    "out": 10.0
+   },
+   {
+    "part": "terms and courses of study",
+    "n": 154,
+    "room": "EDUCATION",
+    "room_share": 0.97,
+    "out": 14.0
+   },
+   {
+    "part": "pupils and attendance",
+    "n": 100,
+    "room": "EDUCATION",
+    "room_share": 0.94,
+    "out": 11.0
+   },
+   {
+    "part": "preliminary provisions",
+    "n": 82,
+    "room": "EDUCATION",
+    "room_share": 0.93,
+    "out": 29.0
+   },
+   {
+    "part": "school health services",
+    "n": 62,
+    "room": "EDUCATION",
+    "room_share": 0.94,
+    "out": 24.0
+   },
+   {
+    "part": "charter schools",
+    "n": 51,
+    "room": "EDUCATION",
+    "room_share": 1.0,
+    "out": 4.0
+   }
+  ],
+  "Title 75 (Vehicles)": [
+   {
+    "part": "registration of vehicles",
+    "n": 103,
+    "room": "TRANSPORTATION",
+    "room_share": 0.97,
+    "out": 30.0
+   },
+   {
+    "part": "licensing of drivers",
+    "n": 78,
+    "room": "TRANSPORTATION",
+    "room_share": 0.97,
+    "out": 18.0
+   },
+   {
+    "part": "general provisions",
+    "n": 51,
+    "room": "TRANSPORTATION",
+    "room_share": 0.96,
+    "out": 35.0
+   },
+   {
+    "part": "rules of the road in general",
+    "n": 48,
+    "room": "TRANSPORTATION",
+    "room_share": 0.98,
+    "out": 31.0
+   },
+   {
+    "part": "fees",
+    "n": 31,
+    "room": "TRANSPORTATION",
+    "room_share": 0.94,
+    "out": 32.0
+   },
+   {
+    "part": "other required equipment",
+    "n": 26,
+    "room": "TRANSPORTATION",
+    "room_share": 0.96,
+    "out": 8.0
+   }
+  ],
+  "Title 18 (Crimes and Offenses)": [
+   {
+    "part": "firearms and other dangerous articles",
+    "n": 198,
+    "room": "JUDICIARY",
+    "room_share": 0.98,
+    "out": 11.0
+   },
+   {
+    "part": "assault",
+    "n": 70,
+    "room": "JUDICIARY",
+    "room_share": 0.93,
+    "out": 23.0
+   },
+   {
+    "part": "riot",
+    "n": 39,
+    "room": "JUDICIARY",
+    "room_share": 0.87,
+    "out": 5.0
+   },
+   {
+    "part": "criminal history record information",
+    "n": 33,
+    "room": "JUDICIARY",
+    "room_share": 1.0,
+    "out": 9.0
+   },
+   {
+    "part": "minors",
+    "n": 32,
+    "room": "JUDICIARY",
+    "room_share": 0.94,
+    "out": 19.0
+   },
+   {
+    "part": "other offenses",
+    "n": 32,
+    "room": "JUDICIARY",
+    "room_share": 1.0,
+    "out": 6.0
+   }
+  ],
+  "Tax Reform Code of 1971": [
+   {
+    "part": "personal income tax",
+    "n": 135,
+    "room": "FINANCE",
+    "room_share": 0.94,
+    "out": 28.0
+   },
+   {
+    "part": "(whole law)",
+    "n": 113,
+    "room": "FINANCE",
+    "room_share": 0.84,
+    "out": 9.0
+   },
+   {
+    "part": "sales and use tax",
+    "n": 81,
+    "room": "FINANCE",
+    "room_share": 0.98,
+    "out": 16.0
+   },
+   {
+    "part": "corporate net income tax",
+    "n": 39,
+    "room": "FINANCE",
+    "room_share": 1.0,
+    "out": 13.0
+   },
+   {
+    "part": "realty transfer tax",
+    "n": 21,
+    "room": "FINANCE",
+    "room_share": 0.86,
+    "out": 52.0
+   },
+   {
+    "part": "inheritance tax",
+    "n": 13,
+    "room": "FINANCE",
+    "room_share": 1.0,
+    "out": 15.0
+   }
+  ]
+ }
+}

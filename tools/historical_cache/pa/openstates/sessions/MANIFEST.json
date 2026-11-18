@@ -1,0 +1,37 @@
+{
+ "license": "CC0 (Open States / Plural Open)",
+ "note": "links supplied by the owner from open.pluralpolicy.com/data/session-csv/ (login needed to see them; the files themselves are public). Zips are NOT committed (~400 MB); re-fetch from these URLs.",
+ "skipped": "PA_2023-2024S1 (special session; not in the PA export frame)",
+ "files": {
+  "PA_2017-2018_csv_6i4QbhFkrJLNtUUxCYx4Aq.zip": {
+   "url": "https://data.openstates.org/csv/latest/PA_2017-2018_csv_6i4QbhFkrJLNtUUxCYx4Aq.zip",
+   "bytes": 83560134,
+   "sha256": "0051b467823182e906ea04a47e8ab95588b656e81babc3d193cc672082f70181",
+   "fetched_utc": "2026-11-18"
+  },
+  "PA_2019-2020_csv_10tkHLpqmR71Rclajn5B3o.zip": {
+   "url": "https://data.openstates.org/csv/latest/PA_2019-2020_csv_10tkHLpqmR71Rclajn5B3o.zip",
+   "bytes": 79985079,
+   "sha256": "fe92f106e4c3a8d4cdd8c4da250dd8d0c54df76e414ee8c7ff96d4c084657653",
+   "fetched_utc": "2026-11-18"
+  },
+  "PA_2021-2022_csv_32GAA8hswx0uQ7c3r40P8t.zip": {
+   "url": "https://data.openstates.org/csv/latest/PA_2021-2022_csv_32GAA8hswx0uQ7c3r40P8t.zip",
+   "bytes": 69586331,
+   "sha256": "bda2b9db1ac747b6e714b19efb0bac1f9c8d23024c66834c7617d1a0ad06c22e",
+   "fetched_utc": "2026-11-18"
+  },
+  "PA_2023-2024_csv_3JyWQ6VzjiKwGqHXux6EyY.zip": {
+   "url": "https://data.openstates.org/csv/latest/PA_2023-2024_csv_3JyWQ6VzjiKwGqHXux6EyY.zip",
+   "bytes": 88937551,
+   "sha256": "553c27da39c0787dd44117ef422a8b1950bd4224542078cf1b6f224d78bebb8e",
+   "fetched_utc": "2026-11-18"
+  },
+  "PA_2025-2026_csv_1NfvBd9nhhuuKYmA37pIc7.zip": {
+   "url": "https://data.openstates.org/csv/latest/PA_2025-2026_csv_1NfvBd9nhhuuKYmA37pIc7.zip",
+   "bytes": 93604804,
+   "sha256": "1c5ae65fb54361eed237d2d96bf3158389c831d7163db4884178fa65402de235",
+   "fetched_utc": "2026-11-18"
+  }
+ }
+}

@@ -1,0 +1,218 @@
+{
+ "method": "Target, per roll call: did the majority of the party OPPOSITE the sponsor vote yes? (The sponsor's party votes yes on\nits own bills almost always \u2014 measured below.) Every input is knowable before the roll call (replayed by date):",
+ "roll_calls": 19223,
+ "2023-24": {
+  "label": "2023-24",
+  "words": {
+   "toward_no": [
+    "environmental",
+    "permit",
+    "regulatory",
+    "code",
+    "regulations",
+    "abortion",
+    "energy",
+    "definitions and",
+    "review",
+    "prohibiting",
+    "during",
+    "inspection",
+    "preemptions",
+    "in preemptions",
+    "inspection of"
+   ],
+   "toward_yes": [
+    "fund",
+    "military",
+    "township",
+    "from",
+    "service",
+    "act making",
+    "bridge",
+    "authority",
+    "municipal",
+    "training",
+    "child",
+    "contracts",
+    "the department",
+    "practice",
+    "as the"
+   ]
+  },
+  "first roll call in each chamber": {
+   "roll_calls": 1405,
+   "other_party_yes_rate": 78.3,
+   "sponsor_party_yes_rate": NaN,
+   "contested_share": 28.8,
+   "all_inputs": {
+    "accuracy": 80.4,
+    "auc": 0.779,
+    "accuracy_contested": 45.4,
+    "auc_contested": 0.684
+   },
+   "auc_lost_without": {
+    "standing": 0.01,
+    "motion": 0.02,
+    "cosponsors (undated)": 0.025,
+    "sponsor record": -0.014,
+    "law record": -0.022,
+    "room record": 0.027,
+    "title words": 0.016,
+    "companion's earlier vote": 0.002,
+    "moderation (sponsor, other-party co-sponsors)": -0.001
+   },
+   "auc_alone": {
+    "standing": 0.696,
+    "motion": 0.429,
+    "cosponsors (undated)": 0.695,
+    "sponsor record": 0.525,
+    "law record": 0.551,
+    "room record": 0.708,
+    "title words": 0.634,
+    "companion's earlier vote": 0.513,
+    "moderation (sponsor, other-party co-sponsors)": 0.626
+   }
+  },
+  "every roll call (+ same bill's earlier votes)": {
+   "roll_calls": 5246,
+   "other_party_yes_rate": 75.5,
+   "sponsor_party_yes_rate": NaN,
+   "contested_share": 37.8,
+   "all_inputs": {
+    "accuracy": 79.4,
+    "auc": 0.787,
+    "accuracy_contested": 54.5,
+    "auc_contested": 0.663
+   },
+   "auc_lost_without": {
+    "standing": 0.012,
+    "motion": 0.003,
+    "cosponsors (undated)": 0.021,
+    "sponsor record": 0.005,
+    "law record": -0.006,
+    "room record": -0.016,
+    "title words": -0.015,
+    "companion's earlier vote": -0.004,
+    "moderation (sponsor, other-party co-sponsors)": -0.004
+   },
+   "auc_alone": {
+    "standing": 0.588,
+    "motion": 0.474,
+    "cosponsors (undated)": 0.667,
+    "sponsor record": 0.553,
+    "law record": 0.581,
+    "room record": 0.645,
+    "title words": 0.604,
+    "companion's earlier vote": 0.508,
+    "moderation (sponsor, other-party co-sponsors)": 0.611
+   }
+  }
+ },
+ "2025-26": {
+  "label": "2025-26",
+  "words": {
+   "toward_no": [
+    "environmental",
+    "permit",
+    "regulatory",
+    "protection",
+    "energy",
+    "imposing",
+    "regulations",
+    "firearms",
+    "imposing penalties",
+    "hearing board",
+    "and other",
+    "control",
+    "environmental hearing",
+    "code of",
+    "of environmental"
+   ],
+   "toward_yes": [
+    "military",
+    "township",
+    "contracts",
+    "service",
+    "registration",
+    "schools",
+    "sexual",
+    "in emergency",
+    "of health",
+    "bridge",
+    "insurance",
+    "practice act",
+    "system and",
+    "the entitled",
+    "articles limitation"
+   ]
+  },
+  "first roll call in each chamber": {
+   "roll_calls": 1495,
+   "other_party_yes_rate": 78.1,
+   "sponsor_party_yes_rate": 96.8,
+   "contested_share": 28.2,
+   "all_inputs": {
+    "accuracy": 81.3,
+    "auc": 0.869,
+    "accuracy_contested": 74.2,
+    "auc_contested": 0.826
+   },
+   "auc_lost_without": {
+    "standing": 0.007,
+    "motion": 0.019,
+    "cosponsors (undated)": 0.016,
+    "sponsor record": 0.01,
+    "law record": -0.003,
+    "room record": 0.006,
+    "title words": 0.014,
+    "companion's earlier vote": -0.003,
+    "moderation (sponsor, other-party co-sponsors)": -0.006
+   },
+   "auc_alone": {
+    "standing": 0.681,
+    "motion": 0.553,
+    "cosponsors (undated)": 0.778,
+    "sponsor record": 0.538,
+    "law record": 0.595,
+    "room record": 0.765,
+    "title words": 0.714,
+    "companion's earlier vote": 0.54,
+    "moderation (sponsor, other-party co-sponsors)": 0.67
+   }
+  },
+  "every roll call (+ same bill's earlier votes)": {
+   "roll_calls": 4982,
+   "other_party_yes_rate": 77.2,
+   "sponsor_party_yes_rate": NaN,
+   "contested_share": 33.6,
+   "all_inputs": {
+    "accuracy": 82.7,
+    "auc": 0.885,
+    "accuracy_contested": 73.0,
+    "auc_contested": 0.801
+   },
+   "auc_lost_without": {
+    "standing": 0.003,
+    "motion": 0.03,
+    "cosponsors (undated)": 0.017,
+    "sponsor record": 0.001,
+    "law record": 0.003,
+    "room record": 0.007,
+    "title words": 0.013,
+    "companion's earlier vote": 0.005,
+    "moderation (sponsor, other-party co-sponsors)": -0.003
+   },
+   "auc_alone": {
+    "standing": 0.644,
+    "motion": 0.491,
+    "cosponsors (undated)": 0.73,
+    "sponsor record": 0.619,
+    "law record": 0.614,
+    "room record": 0.744,
+    "title words": 0.682,
+    "companion's earlier vote": 0.538,
+    "moderation (sponsor, other-party co-sponsors)": 0.646
+   }
+  }
+ }
+}

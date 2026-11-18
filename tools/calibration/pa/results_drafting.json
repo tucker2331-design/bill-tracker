@@ -1,0 +1,1028 @@
+{
+ "method": "Every test answers one drafting-room idea with PA's public record (Bill History exports 2009-2026 + 2024 district\ncensus profiles from tools/districts/build_profiles.py). Outcome = got out of its first committee (`out`) unless\nstated. Party standing (majority / minority) is always held fixed, because in PA it explains most of everything.",
+ "D1_D2_district_match": {
+  "farming": {
+   "measure": "farm_jobs",
+   "bills": 164,
+   "H": {
+    "subject_bills": 110,
+    "members": 202,
+    "from_top_quarter_districts": "32 of 110 (29%)",
+    "expected_from_their_share_of_all_bills": "18%",
+    "lift": 1.6,
+    "p": 0.3008,
+    "rank_corr_member_rate_vs_district_share": 0.075,
+    "D2_top_quarter_sponsor_out_of_committee": {
+     "pts": -19.7,
+     "by_standing": {
+      "(0,)": {
+       "with": {
+        "k": 2,
+        "n": 22,
+        "pct": 9.1
+       },
+       "without": {
+        "k": 2,
+        "n": 17,
+        "pct": 11.8
+       }
+      },
+      "(1,)": {
+       "with": {
+        "k": 3,
+        "n": 10,
+        "pct": 30.0
+       },
+       "without": {
+        "k": 36,
+        "n": 61,
+        "pct": 59.0
+       }
+      }
+     }
+    }
+   },
+   "S": {
+    "subject_bills": 54,
+    "members": 50,
+    "from_top_quarter_districts": "26 of 54 (48%)",
+    "expected_from_their_share_of_all_bills": "30%",
+    "lift": 1.61,
+    "p": 0.015,
+    "rank_corr_member_rate_vs_district_share": 0.32,
+    "D2_top_quarter_sponsor_out_of_committee": {
+     "pts": -7.4,
+     "by_standing": {
+      "(0,)": {
+       "with": {
+        "k": 0,
+        "n": 10,
+        "pct": 0.0
+       },
+       "without": {
+        "k": 0,
+        "n": 12,
+        "pct": 0.0
+       }
+      },
+      "(1,)": {
+       "with": {
+        "k": 7,
+        "n": 16,
+        "pct": 43.8
+       },
+       "without": {
+        "k": 9,
+        "n": 16,
+        "pct": 56.2
+       }
+      }
+     }
+    }
+   }
+  },
+  "veterans": {
+   "measure": "veterans",
+   "bills": 161,
+   "H": {
+    "subject_bills": 91,
+    "members": 202,
+    "from_top_quarter_districts": "21 of 91 (23%)",
+    "expected_from_their_share_of_all_bills": "18%",
+    "lift": 1.28,
+    "p": 0.6167,
+    "rank_corr_member_rate_vs_district_share": 0.037,
+    "D2_top_quarter_sponsor_out_of_committee": {
+     "pts": 10.6,
+     "by_standing": {
+      "(0,)": {
+       "with": {
+        "k": 7,
+        "n": 15,
+        "pct": 46.7
+       },
+       "without": {
+        "k": 3,
+        "n": 10,
+        "pct": 30.0
+       }
+      },
+      "(1,)": {
+       "with": {
+        "k": 3,
+        "n": 6,
+        "pct": 50.0
+       },
+       "without": {
+        "k": 25,
+        "n": 60,
+        "pct": 41.7
+       }
+      }
+     }
+    }
+   },
+   "S": {
+    "subject_bills": 70,
+    "members": 50,
+    "from_top_quarter_districts": "34 of 70 (49%)",
+    "expected_from_their_share_of_all_bills": "29%",
+    "lift": 1.66,
+    "p": 0.0825,
+    "rank_corr_member_rate_vs_district_share": 0.326,
+    "D2_top_quarter_sponsor_out_of_committee": {
+     "pts": 17.0,
+     "by_standing": {
+      "(1,)": {
+       "with": {
+        "k": 24,
+        "n": 34,
+        "pct": 70.6
+       },
+       "without": {
+        "k": 15,
+        "n": 28,
+        "pct": 53.6
+       }
+      }
+     }
+    }
+   }
+  },
+  "seniors": {
+   "measure": "seniors",
+   "bills": 82,
+   "H": {
+    "subject_bills": 64,
+    "members": 202,
+    "from_top_quarter_districts": "8 of 64 (12%)",
+    "expected_from_their_share_of_all_bills": "20%",
+    "lift": 0.61,
+    "p": 0.9745,
+    "rank_corr_member_rate_vs_district_share": -0.093,
+    "D2_top_quarter_sponsor_out_of_committee": {
+     "pts": -5.6,
+     "by_standing": {
+      "(0,)": {
+       "with": {
+        "k": 3,
+        "n": 6,
+        "pct": 50.0
+       },
+       "without": {
+        "k": 1,
+        "n": 19,
+        "pct": 5.3
+       }
+      },
+      "(1,)": {
+       "with": {
+        "k": 0,
+        "n": 2,
+        "pct": 0.0
+       },
+       "without": {
+        "k": 14,
+        "n": 37,
+        "pct": 37.8
+       }
+      }
+     }
+    }
+   },
+   "S": {
+    "subject_bills": 18,
+    "members": 50,
+    "from_top_quarter_districts": "2 of 18 (11%)",
+    "expected_from_their_share_of_all_bills": "25%",
+    "lift": 0.44,
+    "p": 0.963,
+    "rank_corr_member_rate_vs_district_share": 0.007,
+    "D2_top_quarter_sponsor_out_of_committee": {
+     "pts": -57.1,
+     "by_standing": {
+      "(1,)": {
+       "with": {
+        "k": 0,
+        "n": 2,
+        "pct": 0.0
+       },
+       "without": {
+        "k": 4,
+        "n": 7,
+        "pct": 57.1
+       }
+      }
+     }
+    }
+   }
+  },
+  "schools / children": {
+   "measure": "children",
+   "bills": 804,
+   "H": {
+    "subject_bills": 583,
+    "members": 202,
+    "from_top_quarter_districts": "195 of 583 (33%)",
+    "expected_from_their_share_of_all_bills": "29%",
+    "lift": 1.15,
+    "p": 0.028,
+    "rank_corr_member_rate_vs_district_share": 0.199,
+    "D2_top_quarter_sponsor_out_of_committee": {
+     "pts": 1.1,
+     "by_standing": {
+      "(0,)": {
+       "with": {
+        "k": 2,
+        "n": 42,
+        "pct": 4.8
+       },
+       "without": {
+        "k": 14,
+        "n": 153,
+        "pct": 9.2
+       }
+      },
+      "(1,)": {
+       "with": {
+        "k": 45,
+        "n": 153,
+        "pct": 29.4
+       },
+       "without": {
+        "k": 60,
+        "n": 235,
+        "pct": 25.5
+       }
+      }
+     }
+    }
+   },
+   "S": {
+    "subject_bills": 221,
+    "members": 50,
+    "from_top_quarter_districts": "54 of 221 (24%)",
+    "expected_from_their_share_of_all_bills": "25%",
+    "lift": 0.98,
+    "p": 0.6247,
+    "rank_corr_member_rate_vs_district_share": 0.262,
+    "D2_top_quarter_sponsor_out_of_committee": {
+     "pts": 6.1,
+     "by_standing": {
+      "(0,)": {
+       "with": {
+        "k": 0,
+        "n": 38,
+        "pct": 0.0
+       },
+       "without": {
+        "k": 5,
+        "n": 51,
+        "pct": 9.8
+       }
+      },
+      "(1,)": {
+       "with": {
+        "k": 10,
+        "n": 16,
+        "pct": 62.5
+       },
+       "without": {
+        "k": 53,
+        "n": 116,
+        "pct": 45.7
+       }
+      }
+     }
+    }
+   }
+  },
+  "renters": {
+   "measure": "renters",
+   "bills": 119,
+   "H": {
+    "subject_bills": 80,
+    "members": 202,
+    "from_top_quarter_districts": "29 of 80 (36%)",
+    "expected_from_their_share_of_all_bills": "29%",
+    "lift": 1.25,
+    "p": 0.072,
+    "rank_corr_member_rate_vs_district_share": 0.154,
+    "D2_top_quarter_sponsor_out_of_committee": {
+     "pts": 18.7,
+     "by_standing": {
+      "(1,)": {
+       "with": {
+        "k": 11,
+        "n": 29,
+        "pct": 37.9
+       },
+       "without": {
+        "k": 5,
+        "n": 26,
+        "pct": 19.2
+       }
+      }
+     }
+    }
+   },
+   "S": {
+    "subject_bills": 39,
+    "members": 50,
+    "from_top_quarter_districts": "14 of 39 (36%)",
+    "expected_from_their_share_of_all_bills": "21%",
+    "lift": 1.7,
+    "p": 0.2094,
+    "rank_corr_member_rate_vs_district_share": 0.236,
+    "D2_top_quarter_sponsor_out_of_committee": {
+     "pts": -17.9,
+     "by_standing": {
+      "(0,)": {
+       "with": {
+        "k": 1,
+        "n": 14,
+        "pct": 7.1
+       },
+       "without": {
+        "k": 1,
+        "n": 4,
+        "pct": 25.0
+       }
+      }
+     }
+    }
+   }
+  },
+  "poverty / assistance": {
+   "measure": "poverty",
+   "bills": 204,
+   "H": {
+    "subject_bills": 144,
+    "members": 202,
+    "from_top_quarter_districts": "39 of 144 (27%)",
+    "expected_from_their_share_of_all_bills": "22%",
+    "lift": 1.21,
+    "p": 0.3818,
+    "rank_corr_member_rate_vs_district_share": 0.038,
+    "D2_top_quarter_sponsor_out_of_committee": {
+     "pts": 6.3,
+     "by_standing": {
+      "(0,)": {
+       "with": {
+        "k": 0,
+        "n": 4,
+        "pct": 0.0
+       },
+       "without": {
+        "k": 8,
+        "n": 39,
+        "pct": 20.5
+       }
+      },
+      "(1,)": {
+       "with": {
+        "k": 20,
+        "n": 35,
+        "pct": 57.1
+       },
+       "without": {
+        "k": 26,
+        "n": 66,
+        "pct": 39.4
+       }
+      }
+     }
+    }
+   },
+   "S": {
+    "subject_bills": 60,
+    "members": 50,
+    "from_top_quarter_districts": "25 of 60 (42%)",
+    "expected_from_their_share_of_all_bills": "29%",
+    "lift": 1.46,
+    "p": 0.1044,
+    "rank_corr_member_rate_vs_district_share": 0.157,
+    "D2_top_quarter_sponsor_out_of_committee": {
+     "pts": -2.9,
+     "by_standing": {
+      "(0,)": {
+       "with": {
+        "k": 1,
+        "n": 12,
+        "pct": 8.3
+       },
+       "without": {
+        "k": 2,
+        "n": 12,
+        "pct": 16.7
+       }
+      },
+      "(1,)": {
+       "with": {
+        "k": 8,
+        "n": 13,
+        "pct": 61.5
+       },
+       "without": {
+        "k": 14,
+        "n": 23,
+        "pct": 60.9
+       }
+      }
+     }
+    }
+   }
+  },
+  "transit": {
+   "measure": "no_vehicle",
+   "bills": 24,
+   "H": {
+    "subject_bills": 17,
+    "members": 202,
+    "from_top_quarter_districts": "8 of 17 (47%)",
+    "expected_from_their_share_of_all_bills": "26%",
+    "lift": 1.81,
+    "p": 0.1094,
+    "rank_corr_member_rate_vs_district_share": 0.138,
+    "D2_top_quarter_sponsor_out_of_committee": {
+     "pts": -25.0,
+     "by_standing": {
+      "(1,)": {
+       "with": {
+        "k": 4,
+        "n": 8,
+        "pct": 50.0
+       },
+       "without": {
+        "k": 6,
+        "n": 8,
+        "pct": 75.0
+       }
+      }
+     }
+    }
+   },
+   "S": {
+    "bills": 7,
+    "verdict": "too few bills to test (shown as k of n)"
+   }
+  },
+  "immigrants / language": {
+   "measure": "foreign_born",
+   "bills": 25,
+   "H": {
+    "subject_bills": 18,
+    "members": 202,
+    "from_top_quarter_districts": "4 of 18 (22%)",
+    "expected_from_their_share_of_all_bills": "32%",
+    "lift": 0.69,
+    "p": 0.6737,
+    "rank_corr_member_rate_vs_district_share": 0.059,
+    "D2_top_quarter_sponsor_out_of_committee": {
+     "pts": 0.0,
+     "by_standing": {
+      "(1,)": {
+       "with": {
+        "k": 1,
+        "n": 4,
+        "pct": 25.0
+       },
+       "without": {
+        "k": 2,
+        "n": 8,
+        "pct": 25.0
+       }
+      }
+     }
+    }
+   },
+   "S": {
+    "bills": 7,
+    "verdict": "too few bills to test (shown as k of n)"
+   }
+  },
+  "broadband": {
+   "measure": "no_internet",
+   "bills": 31,
+   "H": {
+    "subject_bills": 17,
+    "members": 202,
+    "from_top_quarter_districts": "2 of 17 (12%)",
+    "expected_from_their_share_of_all_bills": "19%",
+    "lift": 0.62,
+    "p": 0.8926,
+    "rank_corr_member_rate_vs_district_share": -0.073,
+    "D2_top_quarter_sponsor_out_of_committee": {
+     "pts": -26.5,
+     "by_standing": {
+      "(0,)": {
+       "with": {
+        "k": 0,
+        "n": 1,
+        "pct": 0.0
+       },
+       "without": {
+        "k": 4,
+        "n": 8,
+        "pct": 50.0
+       }
+      },
+      "(1,)": {
+       "with": {
+        "k": 0,
+        "n": 1,
+        "pct": 0.0
+       },
+       "without": {
+        "k": 0,
+        "n": 7,
+        "pct": 0.0
+       }
+      }
+     }
+    }
+   },
+   "S": {
+    "subject_bills": 14,
+    "members": 50,
+    "from_top_quarter_districts": "3 of 14 (21%)",
+    "expected_from_their_share_of_all_bills": "25%",
+    "lift": 0.85,
+    "p": 0.6867,
+    "rank_corr_member_rate_vs_district_share": -0.01,
+    "D2_top_quarter_sponsor_out_of_committee": {
+     "pts": 8.3,
+     "by_standing": {
+      "(1,)": {
+       "with": {
+        "k": 1,
+        "n": 3,
+        "pct": 33.3
+       },
+       "without": {
+        "k": 2,
+        "n": 8,
+        "pct": 25.0
+       }
+      }
+     }
+    }
+   }
+  }
+ },
+ "D3_new_members": {
+  "bills_per_member_median": {
+   "returning / minority": 12.0,
+   "returning / majority": 14.0,
+   "new / minority": 7.0,
+   "new / majority": 8.0
+  },
+  "out_of_committee": {
+   "pts": 1.7,
+   "by_standing": {
+    "(0, 'H')": {
+     "with": {
+      "k": 80,
+      "n": 982,
+      "pct": 8.1
+     },
+     "without": {
+      "k": 621,
+      "n": 6762,
+      "pct": 9.2
+     }
+    },
+    "(0, 'S')": {
+     "with": {
+      "k": 38,
+      "n": 384,
+      "pct": 9.9
+     },
+     "without": {
+      "k": 393,
+      "n": 3489,
+      "pct": 11.3
+     }
+    },
+    "(1, 'H')": {
+     "with": {
+      "k": 548,
+      "n": 1291,
+      "pct": 42.4
+     },
+     "without": {
+      "k": 3407,
+      "n": 9549,
+      "pct": 35.7
+     }
+    },
+    "(1, 'S')": {
+     "with": {
+      "k": 241,
+      "n": 587,
+      "pct": 41.1
+     },
+     "without": {
+      "k": 2218,
+      "n": 5150,
+      "pct": 43.1
+     }
+    }
+   }
+  },
+  "within_member_second_minus_first_session": {
+   "members": 212,
+   "mean_pts": 0.1,
+   "better_in_second": 100,
+   "worse": 78
+  }
+ },
+ "D4_appropriations": {
+  "House": {
+   "reported_bills_sent_to_appropriations": "4241 of 5365",
+   "came_back_out": "3881 of 4241 (92%)",
+   "passed_chamber_if_it_came_back": "3671 of 3881",
+   "passed_chamber_never_sent": "2 of 1124"
+  },
+  "Senate": {
+   "reported_bills_sent_to_appropriations": "2347 of 3309",
+   "came_back_out": "1675 of 2347 (71%)",
+   "passed_chamber_if_it_came_back": "1506 of 1675",
+   "passed_chamber_never_sent": "578 of 962"
+  }
+ },
+ "D5_filing_time": {
+  "by_filing_time": {
+   "minority": {
+    "0-3 mo": {
+     "k": 628,
+     "n": 5752,
+     "pct": 10.9
+    },
+    "3-6 mo": {
+     "k": 314,
+     "n": 2463,
+     "pct": 12.7
+    },
+    "6-12 mo": {
+     "k": 186,
+     "n": 1851,
+     "pct": 10.0
+    },
+    "12-18 mo": {
+     "k": 231,
+     "n": 2257,
+     "pct": 10.2
+    },
+    "18+ mo": {
+     "k": 28,
+     "n": 1001,
+     "pct": 2.8
+    }
+   },
+   "majority": {
+    "0-3 mo": {
+     "k": 2844,
+     "n": 7887,
+     "pct": 36.1
+    },
+    "3-6 mo": {
+     "k": 1719,
+     "n": 3906,
+     "pct": 44.0
+    },
+    "6-12 mo": {
+     "k": 1061,
+     "n": 2575,
+     "pct": 41.2
+    },
+    "12-18 mo": {
+     "k": 1474,
+     "n": 3468,
+     "pct": 42.5
+    },
+    "18+ mo": {
+     "k": 188,
+     "n": 1191,
+     "pct": 15.8
+    }
+   }
+  },
+  "within_member_first_3_months_minus_later": {
+   "member_sessions": 1462,
+   "mean_pts": 5.2,
+   "better_early": 715,
+   "worse_early": 556
+  }
+ },
+ "D6_bandwidth": {
+  "by_order_of_filing": {
+   "minority": {
+    "1-5": {
+     "k": 595,
+     "n": 4079,
+     "pct": 14.6
+    },
+    "6-15": {
+     "k": 467,
+     "n": 5052,
+     "pct": 9.2
+    },
+    "16-30": {
+     "k": 227,
+     "n": 2861,
+     "pct": 7.9
+    },
+    "31+": {
+     "k": 98,
+     "n": 1401,
+     "pct": 7.0
+    }
+   },
+   "majority": {
+    "1-5": {
+     "k": 2569,
+     "n": 5451,
+     "pct": 47.1
+    },
+    "6-15": {
+     "k": 2644,
+     "n": 7204,
+     "pct": 36.7
+    },
+    "16-30": {
+     "k": 1340,
+     "n": 3972,
+     "pct": 33.7
+    },
+    "31+": {
+     "k": 733,
+     "n": 2448,
+     "pct": 29.9
+    }
+   }
+  },
+  "within_member_bills_after_20th_minus_first_10": {
+   "member_sessions": 259,
+   "mean_pts": -2.1
+  }
+ },
+ "D7_steering": {
+  "bills_whose_title_names_one_law": "74%",
+  "laws_with_20plus_bills": 175,
+  "bill_weighted_share_to_the_usual_room": 82.7,
+  "laws_that_go_to_one_room_90pct_plus": "83 of 175",
+  "examples": [
+   {
+    "body": "H",
+    "law": "Public School Code of 1949",
+    "bills": 1977,
+    "top_room": "EDUCATION",
+    "top_share": 0.929,
+    "rooms": 1
+   },
+   {
+    "body": "H",
+    "law": "Title 18 (Crimes and Offenses)",
+    "bills": 1344,
+    "top_room": "JUDICIARY",
+    "top_share": 0.913,
+    "rooms": 1
+   },
+   {
+    "body": "H",
+    "law": "Title 75 (Vehicles)",
+    "bills": 1312,
+    "top_room": "TRANSPORTATION",
+    "top_share": 0.926,
+    "rooms": 1
+   },
+   {
+    "body": "H",
+    "law": "Tax Reform Code of 1971",
+    "bills": 1203,
+    "top_room": "FINANCE",
+    "top_share": 0.894,
+    "rooms": 1
+   },
+   {
+    "body": "S",
+    "law": "Public School Code of 1949",
+    "bills": 923,
+    "top_room": "EDUCATION",
+    "top_share": 0.979,
+    "rooms": 1
+   },
+   {
+    "body": "H",
+    "law": "Title 42 (Judiciary and Judicial Procedure)",
+    "bills": 791,
+    "top_room": "JUDICIARY",
+    "top_share": 0.934,
+    "rooms": 1
+   },
+   {
+    "body": "S",
+    "law": "Tax Reform Code of 1971",
+    "bills": 723,
+    "top_room": "FINANCE",
+    "top_share": 0.953,
+    "rooms": 1
+   },
+   {
+    "body": "S",
+    "law": "Title 18 (Crimes and Offenses)",
+    "bills": 637,
+    "top_room": "JUDICIARY",
+    "top_share": 0.95,
+    "rooms": 1
+   },
+   {
+    "body": "S",
+    "law": "Title 75 (Vehicles)",
+    "bills": 559,
+    "top_room": "TRANSPORTATION",
+    "top_share": 0.914,
+    "rooms": 1
+   },
+   {
+    "body": "H",
+    "law": "Pennsylvania Election Code",
+    "bills": 502,
+    "top_room": "STATE GOVERNMENT",
+    "top_share": 0.968,
+    "rooms": 1
+   },
+   {
+    "body": "S",
+    "law": "Title 42 (Judiciary and Judicial Procedure)",
+    "bills": 435,
+    "top_room": "JUDICIARY",
+    "top_share": 0.975,
+    "rooms": 1
+   },
+   {
+    "body": "H",
+    "law": "Title 23 (Domestic Relations)",
+    "bills": 421,
+    "top_room": "JUDICIARY",
+    "top_share": 0.618,
+    "rooms": 2
+   }
+  ]
+ },
+ "D8_twins": {
+  "law_if_twin_filed": {
+   "pts": 1.8,
+   "by_standing": {
+    "(0,)": {
+     "with": {
+      "k": 67,
+      "n": 2831,
+      "pct": 2.4
+     },
+     "without": {
+      "k": 159,
+      "n": 10562,
+      "pct": 1.5
+     }
+    },
+    "(1,)": {
+     "with": {
+      "k": 543,
+      "n": 4131,
+      "pct": 13.1
+     },
+     "without": {
+      "k": 1596,
+      "n": 14944,
+      "pct": 10.7
+     }
+    }
+   }
+  },
+  "out_if_twin_filed": {
+   "pts": 5.5,
+   "by_standing": {
+    "(0,)": {
+     "with": {
+      "k": 340,
+      "n": 2831,
+      "pct": 12.0
+     },
+     "without": {
+      "k": 1047,
+      "n": 10562,
+      "pct": 9.9
+     }
+    },
+    "(1,)": {
+     "with": {
+      "k": 1835,
+      "n": 4131,
+      "pct": 44.4
+     },
+     "without": {
+      "k": 5451,
+      "n": 14944,
+      "pct": 36.5
+     }
+    }
+   }
+  },
+  "share_of_bills_with_a_twin": 21.4
+ },
+ "D9_memo": {
+  "share_with_memo_by_session": {
+   "2009_0": 0.0,
+   "2011_0": 0.0,
+   "2013_0": 0.0,
+   "2015_0": 0.0,
+   "2017_0": 0.0,
+   "2019_0": 0.0,
+   "2021_0": 0.0,
+   "2023_0": 0.0,
+   "2025_0": 0.946
+  },
+  "out_with_memo_completed_sessions": "no completed session carries memo links",
+  "out_with_memo_2025_first_committee": {
+   "pts": -35.0,
+   "by_standing": {
+    "(0, 'H')": {
+     "with": {
+      "k": 115,
+      "n": 940,
+      "pct": 12.2
+     },
+     "without": {
+      "k": 17,
+      "n": 37,
+      "pct": 45.9
+     }
+    },
+    "(0, 'S')": {
+     "with": {
+      "k": 33,
+      "n": 561,
+      "pct": 5.9
+     },
+     "without": {
+      "k": 8,
+      "n": 51,
+      "pct": 15.7
+     }
+    },
+    "(1, 'H')": {
+     "with": {
+      "k": 662,
+      "n": 1716,
+      "pct": 38.6
+     },
+     "without": {
+      "k": 55,
+      "n": 64,
+      "pct": 85.9
+     }
+    },
+    "(1, 'S')": {
+     "with": {
+      "k": 275,
+      "n": 742,
+      "pct": 37.1
+     },
+     "without": {
+      "k": 48,
+      "n": 73,
+      "pct": 65.8
+     }
+    }
+   }
+  }
+ },
+ "D10_shared_constituents": {
+  "twin_pairs": 844,
+  "pairs_whose_sponsors_share_constituents": 156,
+  "either_out_if_shared": {
+   "k": 76,
+   "n": 156,
+   "pct": 48.7
+  },
+  "either_out_if_not": {
+   "k": 365,
+   "n": 688,
+   "pct": 53.1
+  },
+  "same_party_only": {
+   "shared": {
+    "k": 62,
+    "n": 135,
+    "pct": 45.9
+   },
+   "not": {
+    "k": 216,
+    "n": 438,
+    "pct": 49.3
+   }
+  }
+ }
+}

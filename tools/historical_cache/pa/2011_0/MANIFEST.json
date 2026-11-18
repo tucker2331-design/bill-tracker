@@ -1,0 +1,24 @@
+{
+ "fetched_utc": "2026-11-17T19:2xZ",
+ "host": "www.palegis.us",
+ "user_agent": "bill-tracker-intake/0.1 (+https://github.com/tucker2331-design/bill-tracker)",
+ "requests": 1,
+ "spacing": "one request per session, 5 s apart (8 sessions, 2026-11-17)",
+ "files": {
+  "PA-Bill-History-2011-RegularSession-201408151108.zip": {
+   "url": "https://www.palegis.us/data/file?documentType=BillHistoryData&session=2011_0",
+   "bytes": 1938159,
+   "sha256": "965787d91edd0783521ea3e5f6f33652d478d175301e58ddd76d769591290be0"
+  }
+ },
+ "response_headers": [
+  "HTTP/1.1 200 Connection Established",
+  "HTTP/1.1 200 OK",
+  "Transfer-Encoding: chunked",
+  "Content-Type: application/xml;charset=UTF-8",
+  "Content-Disposition: Attachment;filename=PA-Bill-History-2011-RegularSession-201408151108.zip",
+  "X-Powered-By: ASP.NET",
+  "Strict-Transport-Security: max-age=63072000; includeSubDomains",
+  "Date: Tue, 17 Nov 2026 19:26:25 GMT"
+ ]
+}

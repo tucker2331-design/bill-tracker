@@ -1,0 +1,177 @@
+{
+ "method": "Outcome: got out of the first committee. Held out: A fit 2009-2021 -> score 2023-24; B fit 2009-2023 -> score\n2025-26 (first committee essentially settled). Every feature is knowable on the day of filing:\n  * nothing that counts a session's future (patron_volume and cmte_load are replaced by counts TO DATE);\n  * a twin counts only if the other chamber's twin was filed on or before this bill;\n  * co-sponsor features are a SEPARATE, labelled arm (PA lists final co-sponsors, undated \u2014 leakage risk).\nLadder: baseline (standing x chamber x year) -> logistic on clean features -> boosted trees on clean features ->\n+ co-sponsor arm (timing unverified).",
+ "virginia_locked_2026": {
+  "model_auc": 0.8,
+  "baseline_auc": 0.68
+ },
+ "held_out": {
+  "A: 2023-24": {
+   "bills": 3862,
+   "baseline": {
+    "auc": 0.692,
+    "log_loss": 0.5402,
+    "brier": 0.1824
+   },
+   "logistic_clean": {
+    "auc": 0.775,
+    "log_loss": 0.4946,
+    "brier": 0.1639
+   },
+   "trees_clean": {
+    "auc": 0.772,
+    "log_loss": 0.503,
+    "brier": 0.1671
+   },
+   "trees_plus_cosponsors_timing_unverified": {
+    "auc": 0.81,
+    "log_loss": 0.4679,
+    "brier": 0.154
+   },
+   "trees_clean_calibration": [
+    {
+     "pred": 0.022,
+     "actual": 0.034,
+     "n": 387
+    },
+    {
+     "pred": 0.047,
+     "actual": 0.06,
+     "n": 386
+    },
+    {
+     "pred": 0.072,
+     "actual": 0.104,
+     "n": 386
+    },
+    {
+     "pred": 0.107,
+     "actual": 0.176,
+     "n": 386
+    },
+    {
+     "pred": 0.158,
+     "actual": 0.223,
+     "n": 386
+    },
+    {
+     "pred": 0.227,
+     "actual": 0.272,
+     "n": 386
+    },
+    {
+     "pred": 0.305,
+     "actual": 0.378,
+     "n": 386
+    },
+    {
+     "pred": 0.407,
+     "actual": 0.425,
+     "n": 386
+    },
+    {
+     "pred": 0.53,
+     "actual": 0.487,
+     "n": 386
+    },
+    {
+     "pred": 0.701,
+     "actual": 0.661,
+     "n": 387
+    }
+   ],
+   "auc_lost_without": {
+    "tried before": 0.015,
+    "room record": 0.002,
+    "carrier records": -0.002,
+    "timing": 0.008,
+    "usual room": 0.001,
+    "twin filed first": 0.002,
+    "standing": 0.009
+   }
+  },
+  "B: 2025-26": {
+   "bills": 4184,
+   "baseline": {
+    "auc": 0.665,
+    "log_loss": 0.551,
+    "brier": 0.1869
+   },
+   "logistic_clean": {
+    "auc": 0.807,
+    "log_loss": 0.4744,
+    "brier": 0.1564
+   },
+   "trees_clean": {
+    "auc": 0.805,
+    "log_loss": 0.4785,
+    "brier": 0.1577
+   },
+   "trees_plus_cosponsors_timing_unverified": {
+    "auc": 0.828,
+    "log_loss": 0.456,
+    "brier": 0.1493
+   },
+   "trees_clean_calibration": [
+    {
+     "pred": 0.018,
+     "actual": 0.017,
+     "n": 419
+    },
+    {
+     "pred": 0.041,
+     "actual": 0.06,
+     "n": 418
+    },
+    {
+     "pred": 0.066,
+     "actual": 0.103,
+     "n": 419
+    },
+    {
+     "pred": 0.103,
+     "actual": 0.112,
+     "n": 418
+    },
+    {
+     "pred": 0.157,
+     "actual": 0.194,
+     "n": 418
+    },
+    {
+     "pred": 0.237,
+     "actual": 0.268,
+     "n": 418
+    },
+    {
+     "pred": 0.337,
+     "actual": 0.442,
+     "n": 419
+    },
+    {
+     "pred": 0.445,
+     "actual": 0.445,
+     "n": 418
+    },
+    {
+     "pred": 0.566,
+     "actual": 0.565,
+     "n": 418
+    },
+    {
+     "pred": 0.749,
+     "actual": 0.695,
+     "n": 419
+    }
+   ],
+   "auc_lost_without": {
+    "tried before": 0.036,
+    "room record": -0.003,
+    "carrier records": 0.0,
+    "timing": 0.008,
+    "usual room": -0.002,
+    "twin filed first": -0.0,
+    "standing": 0.006
+   }
+  }
+ }
+}

@@ -1,12 +1,79 @@
 ---
 tags: [log, meta]
-updated: 2026-09-28
+updated: 2026-11-18
 status: active
 ---
 
 # Project Log
 
 Append-only, reverse-chronological (newest at top). Each entry opens with `## [YYYY-MM-DD] <type> | <title>`.
+
+## [2026-11-18] fold-in | #274 Codex review — four CA findings fixed (case law #162)
+Codex (on 555516c): P1 malformed BILL_TBL rows skipped before the universe was counted → malformed BILL_TBL /
+BILL_HISTORY_TBL rows now refuse publication, others counted on Health; P1 the job read the Sunday-only yearly file →
+reads the newest `pubinfo_daily_<Day>.zip` and stamps records with its Last-Modified; P2 chaptered resolutions shown as
+signed → `NO_GOVERNOR` types are adopted (also caught 267 HR/SR "Passed" shown in progress); P2 the SPA could not find
+the payload → `universe_count` + `session_display` + a real `in_history_not_in_universe`. Full export: 1,830 signed ·
+686 adopted · 0 unclassified · 0 malformed. test_ca_intake 37 checks.
+
+## [2026-11-18] pr | California site + four speeds + PA statistics and drafting-room research (#274 opened)
+Opened tucker2331-design/bill-tracker#274 from `claude/youthful-gauss-9lr2zy`: California intake/site scaffold (sheet +
+D1 wired), the four-speed switch (VA/CA/NY daily, PA fast), and the PA statistics / drafting-room research.
+
+## [2026-11-18] decision | Four speeds (daily, 4h, fast, instant); VA/CA/NY daily, PA fast; CA sheet wired
+Owner: daily is the longest cadence, then 4 hours, then fast, then instant — all within terms. `cadence.py` speeds,
+PA job gate generalised, site freshness limits follow the same switch (baked at build). CA sheet "CA · Live" id in
+`wrangler.ca.toml`; CA job scheduled daily. [[knowledge/lis_api_safety]] · [[knowledge/ca_pubinfo]].
+
+## [2026-11-18] decision | Drafting room v4, legislator page, health check, California scoped
+v4: input = law + part (records at that level, law fallback when thin), "Ideas in flight" from memo titles; the
+Standard #3 dependency (title-based matching) shown on screen. Legislator page in the v9 language with the owner's
+map spec (state view + zoomed inset of the district and its neighbours). Health: 300 of 300 job runs succeeded since
+the last check (VA every 15 min, sentinel 98/98, PA 3 slow runs). California: pubinfo is public domain (Gov. Code
+§10248.5), bulk host only (interactive site bot-challenged); reader, adapter, fetcher, goldens built
+([[knowledge/ca_pubinfo]]). Environment: added the two Legislative Counsel hosts.
+
+## [2026-11-18] decision | Law + part, memo titles, district info kept, new bills need no reader
+The part of a law moves the odds far more than the committee (charter schools 4% vs school health 24%). Memo titles
+(bulk, inside the rules) improve reading (0.807 → 0.832) but not contested votes; memo text stays unfetched (per-page).
+District info stays on the drafting page as the argument. New bills are scored from filing facts — no human reader.
+[[ideas/drafting_war_room]] §0.7 · [[testing/pa_party_position]].
+
+## [2026-11-18] decision | Drafting room v3: two team inputs drive the page
+Owner review of v2 answered: the team sets the law it changes and who it affects (16 census measures, 4 place types);
+map, top 10, committee path, earlier bills, possible sponsors and the district sheet follow. Sections collapse, names
+shortened, rules stated on screen, text cut. [[ideas/drafting_war_room]] §0.6.
+
+## [2026-11-18] decision | Party position: what predicts how the other party votes (PA)
+Co-sponsors from the other party, the room's record and title words carry it (AUC 0.875, contested 0.839 on
+2025–26). The other party's committee leader co-signing: 97% yes vs 76%. A 400-title reading pilot by the assistant:
+alone 0.807, with the model 0.893 / 87.2% — but no help on contested votes. Contested votes need dated co-signatures
+or the bill's words (memo/text; owner decision under the PA bulk-only rule). [[testing/pa_party_position]].
+
+## [2026-11-18] decision | PA batch 3: member votes — every Virginia test now run or ruled out on PA
+Open States PA session CSVs (owner's links; 22,885 roll calls, 2.1 M ballots, 0.19% unresolved). First-vote model:
+89.2% vs 87.5% always-yes (2025–26); who in the other party crosses AUC 0.82 (VA 0.74); 97.7% on the most confident two
+thirds. The 2023 House flip breaks member records (defection r 0.07). Persuadability replicates (r 0.84); member × law
+does not (residual r 0.135 vs VA 0.487); PA committees kill by never voting (0 of 2,773). Not runnable: money and
+vulnerability, subject labels. Owner's drafting-room review queued ([[ideas/drafting_war_room]] §0.5).
+[[testing/pa_replication]].
+
+## [2026-11-18] decision | Drafting room v2: the pre-introduction toolkit, on real PA data
+Owner: before introduction the lobbyist can shape the scenario — who it affects and where, who represents them,
+which law (→ room), timing, support. Built district profiles for every PA and VA seat from bulk federal files
+([[knowledge/district_profiles]]; count + share always, owner rule), ran ten drafting tests on PA
+(`tools/calibration/pa/pa_drafting.py`), and redrew the mock in the site's v9 language with an evidence board
+(artifact CBPg2ZZ3uoiwiUkbirWL3o). Held: law→room 83%, Senate Appropriations keeps 29%, file early +5 within member,
+new members no penalty. Did not hold: district make-up predicts who carries a subject (2 of 16), shared-constituent
+twins. Census Data API now requires a key — bulk files used instead ([[knowledge/district_lookup]]). Environment:
+added www2.census.gov, api.census.gov, data.cms.gov, nces.ed.gov, geocoding.geo.census.gov.
+[[ideas/drafting_war_room]] · [[testing/pa_replication]].
+
+## [2026-11-17] decision | PA stats batches 1-2 + element-value test
+Virginia's tests re-run on Pennsylvania from 9 sessions of bulk exports (batch 1) and the roster feed (batch 2); the
+held-out element-value test answered the owner's "were you guessing their significance": tried-before, room record,
+seat and chair earn a place; title form and majority co-sponsor share do not. Batch 3 (votes) waits on the owner's
+Open States links. [[testing/pa_replication]].
 
 ## [2026-11-16] pr | Census guards on Health (5 buckets) + the speed switch
 Every "unlabelled" bucket is now proven to hold only what the source leaves unlabelled, and shown on Health: outcome

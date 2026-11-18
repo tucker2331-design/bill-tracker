@@ -157,9 +157,10 @@ def _w(obj):
 _w({"VA": "slow", "PA": "normal"})
 ok(c.floors_for("calendar", "VA", _f) == c.CALENDAR_SLOW_FLOORS and c.floors_for("bill", "PA", _f) == c.BILL_TIER_FLOORS,
    "VA slow -> slow floors; PA normal -> normal floors")
-_w({"VA": "turbo"}); ok(c.profile_for("VA", _f) == "normal", "unknown word -> normal (printed), never a guess")
-_w("{not json"); ok(c.profile_for("VA", _f) == "normal", "unreadable file -> normal")
-ok(c.profile_for("VA", _os.path.join(_d, "missing.json")) == "normal", "missing file -> normal")
+_w({"VA": "turbo"}); ok(c.profile_for("VA", _f) == "fast", "unknown word -> fast (printed), never a guess")
+_w("{not json"); ok(c.profile_for("VA", _f) == "fast", "unreadable file -> fast")
+ok(c.profile_for("VA", _os.path.join(_d, "missing.json")) == "fast", "missing file -> fast")
+_w({"VA": "normal"}); ok(c.profile_for("VA", _f) == "fast", "the old word 'normal' still reads as fast")
 ok(c.profile_for("VA") in c.KNOWN_PROFILES and c.profile_for("PA") in c.KNOWN_PROFILES, "the committed file parses for both states")
 # slow floors stay on the 15-min grid from the cycle start: an in-window cycle at 14:00 -> 14:45 skip, 15:00 run
 ok(not c.should_run(utc(2026, 2, 9, 14, 45), utc(2026, 2, 9, 14, 0), "IN_WINDOW", c.CALENDAR_SLOW_FLOORS)[0]
@@ -167,5 +168,27 @@ ok(not c.should_run(utc(2026, 2, 9, 14, 45), utc(2026, 2, 9, 14, 0), "IN_WINDOW"
    "slow in a window: hourly (14:45 skip, 15:00 run)")
 ok(all(c.CALENDAR_SLOW_FLOORS[k] >= c.CALENDAR_TIER_FLOORS[k] and c.BILL_SLOW_FLOORS[k] >= c.BILL_TIER_FLOORS[k]
        for k in c.CALENDAR_TIER_FLOORS), "slow is never faster than normal, tier by tier")
+
+# --- four speeds (owner 2026-11-18): daily is the longest, then 4h, then fast, then instant -----------------------
+_w({"VA": "daily", "PA": "4h", "CA": "instant"})
+ok(c.floors_for("bill", "VA", _f) == c.SPEED_FLOORS["daily"] and c.floors_for("calendar", "VA", _f) == c.SPEED_FLOORS["daily"],
+   "daily: both VA workers share one daily floor")
+ok(c.floors_for("bill", "CA", _f) == {k: c.IN_WINDOW_MIN_INTERVAL for k in c.BILL_TIER_FLOORS},
+   "instant: every tier at the 12-min minimum (never faster than the in-window floor)")
+# daily: a cycle that started 09:03 skips at 08:45 next day, runs at 09:00 next day (floor 1435 min = 23 h 55 m)
+ok(not c.should_run(utc(2026, 2, 10, 8, 45), utc(2026, 2, 9, 9, 3), "IN_WINDOW", c.SPEED_FLOORS["daily"])[0]
+   and c.should_run(utc(2026, 2, 10, 9, 0), utc(2026, 2, 9, 9, 3), "IN_WINDOW", c.SPEED_FLOORS["daily"])[0],
+   "daily: once a day even inside a meeting window (08:45 next day skip, 09:00 run)")
+_w({"VA": "4h"}); f4 = c.floors_for("calendar", "VA", _f)
+ok(not c.should_run(utc(2026, 2, 9, 12, 45), utc(2026, 2, 9, 9, 0), "IN_WINDOW", f4)[0]
+   and c.should_run(utc(2026, 2, 9, 13, 0), utc(2026, 2, 9, 9, 0), "IN_WINDOW", f4)[0],
+   "4h: every 4 hours even in a meeting (12:45 skip, 13:00 run)")
+order = ["daily", "4h", "fast", "instant"]
+fl = {"daily": c.SPEED_FLOORS["daily"], "4h": c.floors_for("bill", "VA", _f), "fast": c.BILL_TIER_FLOORS, "instant": c.SPEED_FLOORS["instant"]}
+ok(all(fl[a][k] >= fl[b][k] for a, b in zip(order, order[1:]) for k in c.BILL_TIER_FLOORS),
+   "speeds are ordered: daily >= 4h >= fast >= instant, tier by tier")
+ok(c.JOB_HOURS["daily"] == 24 and c.JOB_HOURS["4h"] == 4 and c.JOB_HOURS["fast"] is None and c.JOB_HOURS["instant"] is None,
+   "jobs with no tiers: daily 24 h, 4h 4 h, fast/instant every tick")
+ok(all(c.profile_for(st) in c.KNOWN_PROFILES for st in ("VA", "PA", "CA", "NY")), "the committed file parses for every state")
 
 print(f"ALL {_checks} cadence tests passed")
