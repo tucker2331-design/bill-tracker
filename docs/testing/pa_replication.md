@@ -153,6 +153,7 @@ Code: `pa_batch3.py` (first-vote model + roll rate, defection, pivotality, membe
   States began recording far more House committee votes in 2023 (1,428 → 3,836 committee roll calls). Records keyed
   to party letter break; records keyed to majority/minority role were added; training on post-flip sessions fixed it
   for 2025–26.
+- **Party position tested:** [[testing/pa_party_position]].
 - **To raise it:** (1) a party-position reader for bill content (PA ceiling 98.4% if party positions were known —
   the same gap Virginia hit); full bill text links are in PA's XML since Feb 2026, or an LLM read of each bill
   (Virginia costed ~$4–8 per 11.6k summaries); (2) show vote predictions only on bills likely to be contested

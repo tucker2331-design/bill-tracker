@@ -8,6 +8,12 @@ status: active
 
 Append-only, reverse-chronological (newest at top). Each entry opens with `## [YYYY-MM-DD] <type> | <title>`.
 
+## [2026-11-18] decision | Party position: what predicts how the other party votes (PA)
+Co-sponsors from the other party, the room's record and title words carry it (AUC 0.875, contested 0.839 on
+2025–26). The other party's committee leader co-signing: 97% yes vs 76%. A 400-title reading pilot by the assistant:
+alone 0.807, with the model 0.893 / 87.2% — but no help on contested votes. Contested votes need dated co-signatures
+or the bill's words (memo/text; owner decision under the PA bulk-only rule). [[testing/pa_party_position]].
+
 ## [2026-11-18] decision | PA batch 3: member votes — every Virginia test now run or ruled out on PA
 Open States PA session CSVs (owner's links; 22,885 roll calls, 2.1 M ballots, 0.19% unresolved). First-vote model:
 89.2% vs 87.5% always-yes (2025–26); who in the other party crosses AUC 0.82 (VA 0.74); 97.7% on the most confident two
