@@ -96,6 +96,28 @@ Ten tests of what a drafter can still change — the law amended (→ room), App
 twins, district make-up, memo, bandwidth. Results and verdicts: [[ideas/drafting_war_room]] §0.2; code
 `pa_drafting.py` → `results_drafting.json`; district data [[knowledge/district_profiles]].
 
+## Bill fate, round 2 — PA vs Virginia (2026-11-18)
+`pa_fate_v2.py` → `results_fate_v2.json`. Every input knowable on the filing day (counts to date, a twin only if filed
+first); co-sponsor inputs are a separate arm because PA's co-sponsor list is final and undated.
+
+| | 2023–24 (fit 2009–21) | 2025–26 (fit 2009–23) | Virginia, locked 2026 |
+|---|---|---|---|
+| baseline: standing × chamber × year | 0.692 | 0.665 | 0.68 |
+| logistic, clean inputs | **0.775** (log loss 0.495) | **0.807** (0.474) | **0.80** |
+| boosted trees, clean inputs | 0.772 | 0.805 | — |
+| + co-sponsor arm (timing unverified) | 0.810 | 0.828 | — |
+
+- **PA now matches Virginia** on the same protocol. Trees add nothing over logistic — the signal is a few strong
+  facts, not interactions.
+- What carries it (AUC lost when removed): **tried before** −0.015 / −0.036, standing −0.009 / −0.006, filing time
+  −0.008 / −0.008; room, carrier and usual-room records ≈ 0 once tried-before is in.
+- Calibration: 2023–24 runs low in the middle (predicted 11% → actual 18%) — the 2023 House flip put a new majority
+  in charge that the training years had never seen; 2025–26 is close (deciles within ±0.06 except one).
+- **To raise it:** (1) date the co-sponsors — the +0.02–0.04 arm is worth having only if signatures predate the
+  committee; the PA co-sponsorship memo (circulated before filing) is the clean source; (2) recalibrate on the most
+  recent session after a majority change; (3) historical committee seats from batch 3's committee roll calls (seat
+  and chair added +0.044 / +0.037 on 2025–26); (4) member votes for the later gates (batch 3).
+
 ## Not yet run (batch 3, member votes) — and not runnable
 
 | test | needs | status |
