@@ -8,6 +8,10 @@ status: active
 
 Append-only, reverse-chronological (newest at top). Each entry opens with `## [YYYY-MM-DD] <type> | <title>`.
 
+## [2026-11-18] run | California's first write — 5,040 bills in "CA · Live"
+Run 44423770882 (dispatched by hand after the merge): `pubinfo_daily_Wed.zip`, published 2026-11-18T12:23:47Z;
+universe_count 5,040 = records_written; 0 unclassified; 0 malformed; 3 requests; 3 m 16 s. Sheet ready for the site.
+
 ## [2026-11-18] pr | #274 merged — California site + four speeds + PA statistics (a545427)
 Merged after CI went green on 683ec86 (structural, golden, web build, mypy, Semgrep, pre-push audit, Workers build) and
 Codex's four findings were fixed and answered. The CA job's daily schedule (06:41 UTC) is now live; first write run

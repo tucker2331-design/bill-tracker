@@ -2,7 +2,7 @@
 tags: [knowledge, california, ca, pubinfo, source, terms, multi-state]
 updated: 2026-11-18
 status: active
-open_loop: CA site — intake merged-ready and tested on the real 2025-26 export; owner step left before it is live (the Cloudflare Worker bill-tracker-ca). See "To go live".
+open_loop: CA site — merged and writing its sheet daily (first run 2026-11-18: 5,040 bills); owner step left before it is live (the Cloudflare Worker bill-tracker-ca). See "To go live".
 ---
 
 # California — pubinfo (Legislative Counsel's bulk database)
@@ -76,6 +76,10 @@ for 31,468 of 31,472. Dry run: 1 request (the index) when the session file is ca
    (one paste, proven identical to migrations 0001–0003 in SQLite, and recorded as applied).
 2. Cloudflare: a new Worker `bill-tracker-ca` connected to `main` (build `npm run build:ca`, deploy
    `npx wrangler deploy --config wrangler.ca.toml`), its own D1 database.
-3. Add the repo secret `CA_SPREADSHEET_ID`; run "CA bill tracker" once in write mode; then uncomment its schedule.
+3. ✅ 2026-11-18: merged (#274) — the daily schedule (06:41 UTC) is live, no repo secret needed (the sheet id is read
+   from `wrangler.ca.toml`). **First write run** (dispatched by hand, run 44423770882): 5,040 bills written to
+   "CA · Live" from `pubinfo_daily_Wed.zip` (published 2026-11-18T12:23:47Z — so the index's Last-modified column is
+   Pacific time), 0 unclassified, 0 malformed rows, 3 requests, 3 m 16 s. Saved fetch cache: 1.16 GB (one day's file;
+   GitHub evicts the unused older entries, oldest-accessed first, after 7 days).
 Residual (engineering, not owner): CA committee rosters and hearings calendar (`COMMITTEE_HEARING_TBL`,
 `DAILY_FILE_TBL`) for the War Room and Calendar screens — off in `ca.ts` until built.
