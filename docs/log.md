@@ -8,6 +8,14 @@ status: active
 
 Append-only, reverse-chronological (newest at top). Each entry opens with `## [YYYY-MM-DD] <type> | <title>`.
 
+## [2026-11-18] decision | PA batch 3: member votes — every Virginia test now run or ruled out on PA
+Open States PA session CSVs (owner's links; 22,885 roll calls, 2.1 M ballots, 0.19% unresolved). First-vote model:
+89.2% vs 87.5% always-yes (2025–26); who in the other party crosses AUC 0.82 (VA 0.74); 97.7% on the most confident two
+thirds. The 2023 House flip breaks member records (defection r 0.07). Persuadability replicates (r 0.84); member × law
+does not (residual r 0.135 vs VA 0.487); PA committees kill by never voting (0 of 2,773). Not runnable: money and
+vulnerability, subject labels. Owner's drafting-room review queued ([[ideas/drafting_war_room]] §0.5).
+[[testing/pa_replication]].
+
 ## [2026-11-18] decision | Drafting room v2: the pre-introduction toolkit, on real PA data
 Owner: before introduction the lobbyist can shape the scenario — who it affects and where, who represents them,
 which law (→ room), timing, support. Built district profiles for every PA and VA seat from bulk federal files

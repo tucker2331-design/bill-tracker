@@ -2,7 +2,7 @@
 tags: [testing, prediction, pa, replication, calibration]
 updated: 2026-11-18
 status: active
-open_loop: Batch 3 (member votes — first_vote, content_votes, persuadability, member_signals, member_subject, coverage, rooms, money_and_vulnerability, the exact second-chamber party split) waits on the owner pasting the five Open States PA session-CSV links (environment now allows data.openstates.org).
+open_loop: Batch 3 DONE 2026-11-18. Not runnable on PA data — money_and_vulnerability (needs PA campaign finance + election results) and subject_labels (Open States PA bills carry no subjects); vote-model boosts listed under 'Member votes — PA vs Virginia'.
 ---
 
 # Virginia's tests, re-run on Pennsylvania (2026-11-17)
@@ -118,13 +118,52 @@ first); co-sponsor inputs are a separate arm because PA's co-sponsor list is fin
   recent session after a majority change; (3) historical committee seats from batch 3's committee roll calls (seat
   and chair added +0.044 / +0.037 on 2025–26); (4) member votes for the later gates (batch 3).
 
-## Not yet run (batch 3, member votes) — and not runnable
+## Batch 3 — member votes (2026-11-18)
+Source: Open States PA session CSVs 2017–2026 (CC0; links from the owner; `MANIFEST.json`, zips not committed).
+22,885 roll calls, 2.1 M ballots; 0.19% of ballots unresolved (counted, kept out of party statistics). PA's committee
+roll calls are in the files (11,440), recorded in the motion text ("Committee vote (Health): …"). The 2017–18 file
+ships without organizations.csv — chamber ids are stable across sessions, so they are taken from the other files.
+Code: `pa_batch3.py` (first-vote model + roll rate, defection, pivotality, member stats, rooms) and `pa_batch3b.py`
+(Virginia's exact definitions: second chamber, persuadability, denominator, member × law, rooms, kill points).
 
-| test | needs | status |
-|---|---|---|
-| [[testing/first_vote]], [[testing/content_votes]], [[testing/persuadability]], [[testing/member_signals]], [[testing/member_subject]], [[testing/coverage]] | per-legislator votes | Open States CSVs — owner's 5 links |
-| [[testing/rooms]], kill_points (committee half), profiles dies-on-a-record / unanimity, [[testing/venue_effect]] content-controlled kill rate | committee roll calls | check the Open States files; PA's export has none |
-| [[testing/second_chamber]] exact party split, ledger vote stats (absence, loyalty, floor win rate, agrees with committee) | per-legislator votes | batch 3 |
-| [[testing/money_and_vulnerability]] | votes + PA campaign finance + election margins | batch 3 + a new source, scoped after |
-| [[testing/subject_labels]] | a subject vocabulary | **blocked**: PA's export has none (check Open States) |
-| [[testing/redocketing]] | — | retired in VA on reasoning; not re-run |
+| Virginia test | Virginia finding | Pennsylvania | verdict |
+|---|---|---|---|
+| [[testing/first_vote]] | locked 2026: **85.9%** vs always-yes 73.9% (+12); ceiling 97.3% | 2025–26: **89.2%** vs always-yes 87.5% (+1.7); 2023–24: 87.6% vs 87.6% (+0); ceiling 98.4% | **differs** — PA's recorded first votes are 88% yes; the gain lives on contested ballots |
+| first_vote, contested ballots | the hardest third 66–68% | contested (≥10% no): 70.6% (2025–26, cutoff from 2023) to 79.1% (cutoff 0.5) vs 60.6% always-yes; 2023–24: 64.2% vs 61.3% | **replicates in 2025–26**; broken by the 2023 House flip |
+| first_vote, confident calls | 95%+ on 67% of ballots | 2025–26: **97.7% on the most confident 67%** (99.3% on 30%); 2023–24: 92.5% | **replicates** (2025–26) |
+| [[testing/content_votes]] (who in the other party crosses) | AUC 0.744 | 2025–26: **0.822** (basics 0.712); 2023–24: 0.616 (basics 0.751) | **replicates in 2025–26**; the flip again |
+| [[testing/persuadability]] | z year→year r 0.68; top third defects ~4× | r **0.84, 0.78, 0.50 (flip), 0.84**; top third next session 4.0% vs 1.3%, 7.5% vs 0.4% | **replicates, stronger** — except across the majority flip |
+| [[testing/member_signals]] denominator | 21% of committee roll calls have a caucus split | committees **16%**; floor 39% | **replicates** |
+| member_signals attendance | split-half 0.98, across eras 0.36 | absence is near zero in PA (median 0.06% of ballots); session r 0.15 / 0.05 / 0.59 / 0.03 | **differs** — no attendance signal in PA |
+| [[testing/member_subject]] | residual member × subject r 0.487 across eras | member × law residual r **0.135** (1,844 cells); same-law r ≈ general record r every session | **does not replicate** — a member's law-specific record adds nothing beyond their general record |
+| ledger: majority roll rate | majority rolled 1.4–5.6%, minority 20–43% | House majority 0.3–1.6%, minority 15–48%; Senate majority 0–1%, minority 14–28% | **replicates, sharper** |
+| ledger: loyalty, floor win rate | — | loyalty median 97.5%, session r 0.71/0.79/0.08/0.93; floor win median 94%, r ≥0.95 except −0.69 across the flip | stable traits **within** a majority, reset by a flip |
+| [[testing/second_chamber]] exact split | other party's chamber-1 support: buys nothing if your party runs chamber 2 (86–89% flat); 24% → 80% if not | not running: **14% → 50%**; running: 20% → 45%; slope weaker when running (interaction −1.11, p 0.004) | **asymmetry replicates**; in PA support helps either way |
+| [[testing/rooms]] | the room is a subcommittee of 8; favourable recs 62% unanimous | full committee: median **24** members recorded; 69% unanimous; 157 of 11,440 committee roll calls failed | **differs** — no subcommittee gate |
+| [[testing/kill_points]] committee half | subcommittee votes kill | **0 of 2,773** bills that died in their first committee (2023–24) ever got a committee roll call | **differs** — PA kills by never voting |
+| pivotality | — | 437 of 19,360 roll calls decided by one vote; 415 members ever on the winning side of one | descriptive |
+| [[testing/coverage]] | member × subject flags rarely apply | moot: the member × law signal does not hold (above) | — |
+| [[testing/venue_effect]] content-controlled kill rate | — | not applicable: PA committees do not vote bills down | — |
+
+### Member votes — PA vs Virginia, and how to raise PA's
+- **Overall accuracy is the wrong yardstick in PA.** Committees vote only on bills they report, so "everyone votes
+  yes" is 87.5%. The useful targets are contested roll calls and other-party crossovers, where the 2025–26 model
+  clearly works (AUC 0.82 on who crosses; 97.7% on the most confident two thirds).
+- **The 2023 House flip breaks member records** (defection r 0.07, floor-win r −0.69, model at baseline) — and Open
+  States began recording far more House committee votes in 2023 (1,428 → 3,836 committee roll calls). Records keyed
+  to party letter break; records keyed to majority/minority role were added; training on post-flip sessions fixed it
+  for 2025–26.
+- **To raise it:** (1) a party-position reader for bill content (PA ceiling 98.4% if party positions were known —
+  the same gap Virginia hit); full bill text links are in PA's XML since Feb 2026, or an LLM read of each bill
+  (Virginia costed ~$4–8 per 11.6k summaries); (2) show vote predictions only on bills likely to be contested
+  (16% of committee roll calls split a caucus); (3) recalibrate after every change of majority; (4) in PA the
+  bigger lever is the bill-fate model — PA kills by never voting, so whether the chair brings a bill up is the
+  decision that matters.
+
+## Not runnable on PA data
+| test | why |
+|---|---|
+| [[testing/money_and_vulnerability]] | needs PA campaign finance and election results — not ingested (Virginia's result was null) |
+| [[testing/subject_labels]] | Open States PA bills carry no subjects (0 of 26,138); the statute named in the title is the structural stand-in used above |
+| [[testing/redocketing]] | retired in Virginia on reasoning |
+

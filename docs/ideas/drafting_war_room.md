@@ -2,7 +2,7 @@
 tags: [ideas, product, war-room, drafting, owner-idea, design-research]
 updated: 2026-11-18
 status: active
-open_loop: v2 (pre-introduction toolkit) mocked on real PA data 2026-11-18 (artifact CBPg2ZZ3uoiwiUkbirWL3o, Main + Evidence boards) — awaiting the owner's review; unbuilt pieces listed in §0.4.
+open_loop: Owner review of v2 (2026-11-18) QUEUED after the stats work — §0.5 lists the eight changes (per-draft inputs, consolidation, naming, plain wording, similar-bill rule, carrier rule, one-district case, map per draft).
 ---
 
 # The drafting room — a War Room for a bill before it has a number
@@ -70,6 +70,22 @@ bill cost (PA fiscal notes are per-bill pages; our PA rule is bulk-only) · alli
 scoped) · money by district (funding file not fetched; the school-district join exists) · child-care centres,
 enrolment (separate sources) · close vs safe seats (election results; VA found no effect on votes) · personal ties
 (no occupation field) · 24 PA hospitals not placed.
+
+### 0.5 Owner review of v2 (2026-11-18) — queued after the stats work
+*"The map is good."* Changes asked for, in the owner's words where possible:
+1. **Per-draft inputs.** Residents 65+ and nursing homes are one example — how does the page find the affected people
+   and places for ANY draft? Does the site infer them or does the team enter them? (Design: the team picks from the
+   measure list in [[knowledge/district_profiles]]; any inference from the draft must be structural and shown.)
+2. **The map per draft** follows from 1: whichever measure the team picks shades the map.
+3. **Consolidate.** Sections are huge — collapse them, use drop-downs.
+4. **Cut the text.** Too many small and large text lines; keep what matters. "Write as concisely as possible always on
+   a site." Owner is considering writing the whole site in Simplified Technical English (owner wrote "STC").
+5. **Simple technical names.** "Which room it goes to, and what comes after" is a terrible name.
+6. **Why those bills?** For each draft, how are the earlier bills chosen — what counts as similar? (Today: the law the
+   title names — state that rule on screen, or replace it.)
+7. **How is "who could carry it" chosen?** Make it clear it is NOT the prediction model (today: members of the room
+   the law usually goes to, A–Z).
+8. **What is "one district's case"?** Name and explain it (the one-page leave-behind for a meeting).
 
 ---
 *v1 research (2026-11-17), kept for its sources:*

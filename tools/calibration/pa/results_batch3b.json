@@ -1,0 +1,102 @@
+{
+ "method": "second_chamber   Virginia's table: share of the OTHER party (vs the sponsor) voting yes in chamber 1, among bills\n                   passed with at least one no; passes chamber 2? split by whether the sponsor's party runs chamber 2\n  persuadability   z-score of defection within party x chamber x session; year-to-year r (VA r 0.68)\n  denominator      share of roll calls where a caucus actually split (VA committees: 21%)\n  member_subject   residual (member-on-law defection minus their general defection), early vs late era (VA r 0.487)\n  rooms            members recorded per committee roll call, unanimous share, decided by <=2 votes (VA: room of 8)\n  kill_points      how PA committees kill: by vote or by never voting",
+ "second_chamber": {
+  "sponsor's party does not": {
+   "0-10%": "18 of 126 (14%)",
+   "10-50%": "12 of 121 (10%)",
+   "50-90%": "28 of 102 (27%)",
+   "90-100%": "51 of 101 (50%)"
+  },
+  "sponsor's party runs chamber 2": {
+   "0-10%": "29 of 142 (20%)",
+   "10-50%": "38 of 122 (31%)",
+   "50-90%": "43 of 105 (41%)",
+   "90-100%": "121 of 271 (45%)"
+  },
+  "logit_other_yes_when_not_running": {
+   "coef": 2.257,
+   "p": 4.7e-12
+  },
+  "logit_interaction": {
+   "coef": -1.114,
+   "p": 0.0044
+  }
+ },
+ "persuadability": {
+  "z_year_to_year_r": [
+   {
+    "from": "2017_0",
+    "to": "2019_0",
+    "members": 191,
+    "r": 0.837
+   },
+   {
+    "from": "2019_0",
+    "to": "2021_0",
+    "members": 215,
+    "r": 0.775
+   },
+   {
+    "from": "2021_0",
+    "to": "2023_0",
+    "members": 191,
+    "r": 0.501
+   },
+   {
+    "from": "2023_0",
+    "to": "2025_0",
+    "members": 231,
+    "r": 0.837
+   }
+  ],
+  "top_vs_bottom_third_next_session_pct": [
+   {
+    "from": "2017_0",
+    "to": "2019_0",
+    "top_third_next": 3.97,
+    "bottom_third_next": 1.31
+   },
+   {
+    "from": "2019_0",
+    "to": "2021_0",
+    "top_third_next": 4.57,
+    "bottom_third_next": 1.28
+   },
+   {
+    "from": "2021_0",
+    "to": "2023_0",
+    "top_third_next": 3.45,
+    "bottom_third_next": 3.53
+   },
+   {
+    "from": "2023_0",
+    "to": "2025_0",
+    "top_third_next": 7.54,
+    "bottom_third_next": 0.39
+   }
+  ]
+ },
+ "denominator": {
+  "floor": "4439 of 11444 (39%) had a caucus split",
+  "committee": "1869 of 11440 (16%) had a caucus split"
+ },
+ "member_subject": {
+  "member_law_cells_in_both_eras": 1844,
+  "residual_r_early_vs_late": 0.135
+ },
+ "rooms": {
+  "committee_roll_calls": 11440,
+  "members_recorded_median": 24.0,
+  "members_quartiles": [
+   14.0,
+   26.0
+  ],
+  "unanimous": "7849 of 11440 (69%)",
+  "decided_by_2_or_fewer": "444 of 11440",
+  "favourable": 11283,
+  "failed_or_tied": 157
+ },
+ "kill_points": {
+  "2023_0": "0 of 2773 bills that died in their first committee ever got a committee roll call"
+ }
+}

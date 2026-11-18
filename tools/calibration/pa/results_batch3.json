@@ -1,0 +1,470 @@
+{
+ "method": "Tests (VA page in brackets):\n  coverage            share of HB/SB with any roll call, committee vs floor            [testing/coverage]\n  roll_rate           how often each party's majority loses a roll call                  [ledger: majority roll rate]\n  contested           unanimous / lopsided / contested first roll calls; majority edge   [testing/contested_vs_routine]\n  defection           member defection rate, split-half and session-to-session r        [testing/persuadability]\n  pivotality          member on the winning side of a one-vote-decides margin            [votes.py]\n  first_vote          predict each member's vote on a bill's first roll call             [testing/first_vote]\n  member_law          does defecting on a law predict defecting on that law later?       [testing/member_subject]\n  second_chamber      exact cross-party yes votes vs fate in the other chamber           [testing/second_chamber]\n  member_stats        absence, loyalty, floor win rate, agrees with committee; stability [ledger vote stats]\n  rooms               committee roll calls, if present: kill points, partisan rooms      [testing/rooms]",
+ "events": 22885,
+ "ballots": 2100327,
+ "unresolved_voters": {
+  "ballots": 4015,
+  "top": [
+   [
+    "KRUEGER",
+    2199
+   ],
+   [
+    "KELLER",
+    1129
+   ],
+   [
+    "George Margetas",
+    542
+   ],
+   [
+    "E  EVANS",
+    46
+   ],
+   [
+    "E  KRUEGER",
+    37
+   ],
+   [
+    "HARRIS",
+    9
+   ],
+   [
+    "E  ACOSTA",
+    3
+   ],
+   [
+    "nay",
+    1
+   ],
+   [
+    "David Argall",
+    1
+   ],
+   [
+    "Ryan Aument",
+    1
+   ],
+   [
+    "Lisa Baker",
+    1
+   ],
+   [
+    "Camera Bartolotta",
+    1
+   ]
+  ]
+ },
+ "coverage": {
+  "2017_0": {
+   "bills_with_a_roll_call": "884 of 3954",
+   "roll_calls": 3981,
+   "committee_roll_calls": 1133
+  },
+  "2019_0": {
+   "bills_with_a_roll_call": "940 of 4199",
+   "roll_calls": 3772,
+   "committee_roll_calls": 1181
+  },
+  "2021_0": {
+   "bills_with_a_roll_call": "947 of 4112",
+   "roll_calls": 3311,
+   "committee_roll_calls": 1428
+  },
+  "2023_0": {
+   "bills_with_a_roll_call": "1089 of 3862",
+   "roll_calls": 5954,
+   "committee_roll_calls": 3836
+  },
+  "2025_0": {
+   "bills_with_a_roll_call": "1217 of 4184",
+   "roll_calls": 5867,
+   "committee_roll_calls": 3863
+  }
+ },
+ "roll_rate": {
+  "2017_0 H": {
+   "majority_rolled": "36 of 2236",
+   "minority_rolled": "339 of 2236"
+  },
+  "2017_0 S": {
+   "majority_rolled": "3 of 612",
+   "minority_rolled": "86 of 610"
+  },
+  "2019_0 H": {
+   "majority_rolled": "6 of 1956",
+   "minority_rolled": "359 of 1956"
+  },
+  "2019_0 S": {
+   "majority_rolled": "1 of 635",
+   "minority_rolled": "136 of 632"
+  },
+  "2021_0 H": {
+   "majority_rolled": "10 of 1178",
+   "minority_rolled": "378 of 1177"
+  },
+  "2021_0 S": {
+   "majority_rolled": "0 of 705",
+   "minority_rolled": "195 of 705"
+  },
+  "2023_0 H": {
+   "majority_rolled": "12 of 1515",
+   "minority_rolled": "730 of 1512"
+  },
+  "2023_0 S": {
+   "majority_rolled": "0 of 602",
+   "minority_rolled": "117 of 602"
+  },
+  "2025_0 H": {
+   "majority_rolled": "6 of 1502",
+   "minority_rolled": "512 of 1502"
+  },
+  "2025_0 S": {
+   "majority_rolled": "5 of 501",
+   "minority_rolled": "100 of 501"
+  }
+ },
+ "contested": {
+  "unanimous": 5897,
+  "contested": 3732,
+  "lopsided (<10% no)": 1815
+ },
+ "defection": {
+  "median_defection_pct": {
+   "2017_0 D": 2.32,
+   "2017_0 R": 1.9,
+   "2019_0 D": 2.27,
+   "2019_0 R": 0.61,
+   "2021_0 D": 3.4,
+   "2021_0 R": 1.7,
+   "2023_0 D": 0.47,
+   "2023_0 R": 5.37,
+   "2025_0 D": 0.26,
+   "2025_0 R": 4.71
+  },
+  "split_half_r": 0.958,
+  "session_to_session_r": [
+   {
+    "from": "2017_0",
+    "to": "2019_0",
+    "members": 191,
+    "r": 0.676
+   },
+   {
+    "from": "2019_0",
+    "to": "2021_0",
+    "members": 215,
+    "r": 0.753
+   },
+   {
+    "from": "2021_0",
+    "to": "2023_0",
+    "members": 191,
+    "r": 0.07
+   },
+   {
+    "from": "2023_0",
+    "to": "2025_0",
+    "members": 231,
+    "r": 0.915
+   }
+  ]
+ },
+ "first_vote": {
+  "features": [
+   "same_party",
+   "member_maj",
+   "sponsor_maj_here",
+   "in_maj",
+   "committee_vote",
+   "senate",
+   "own_body",
+   "cosponsor",
+   "n_cosp",
+   "bipartisan",
+   "m_final",
+   "m_concur",
+   "m_re-report",
+   "m_report_amended",
+   "m_report",
+   "m_amendment",
+   "m_table",
+   "m_recommit",
+   "m_other",
+   "party_on_sponsor",
+   "party_on_sponsor_n",
+   "party_on_sponsor_contested",
+   "party_on_sponsor_contested_n",
+   "member_on_sponsor",
+   "member_on_sponsor_n",
+   "party_in_room_contested",
+   "party_in_room_contested_n",
+   "party_on_law",
+   "party_on_law_n",
+   "party_on_law_contested",
+   "party_on_law_contested_n",
+   "member_on_law",
+   "member_on_law_n",
+   "member_contested_yes",
+   "member_contested_yes_n",
+   "member_defects_contested",
+   "member_defects_contested_n",
+   "party_in_room_on_other_party_bills",
+   "party_in_room_on_other_party_bills_n",
+   "party_in_room_by_standing_contested",
+   "party_in_room_by_standing_contested_n",
+   "member_on_side_contested",
+   "member_on_side_contested_n",
+   "member_on_standing_contested",
+   "member_on_standing_contested_n"
+  ],
+  "2023-24": {
+   "ballots": 27556,
+   "always_yes": 87.6,
+   "ceiling_party_position_known": 98.5,
+   "basics": {
+    "threshold_from_2021_0": 0.3,
+    "all": 87.6,
+    "other_party": 77.7,
+    "contested": 61.3,
+    "hardest_third": 69.7,
+    "auc_other_party_contested": 0.751,
+    "acc_other_party_contested": 25.3
+   },
+   "full": {
+    "threshold_from_2021_0": 0.34,
+    "all": 87.6,
+    "other_party": 78.0,
+    "contested": 64.2,
+    "hardest_third": 77.8,
+    "auc_other_party_contested": 0.616,
+    "acc_other_party_contested": 32.2,
+    "confident_calls": {
+     "top 30%": 94.9,
+     "top 50%": 94.0,
+     "top 67%": 92.5,
+     "top 80%": 91.2
+    }
+   },
+   "always_yes_other_party_contested": 25.3,
+   "slices": {
+    "contested_ballots": 8514,
+    "always_yes_contested": 61.3,
+    "ceiling_contested": 96.6
+   }
+  },
+  "2025-26": {
+   "ballots": 32394,
+   "always_yes": 87.5,
+   "ceiling_party_position_known": 98.4,
+   "basics": {
+    "threshold_from_2023_0": 0.3,
+    "all": 87.5,
+    "other_party": 77.1,
+    "contested": 60.6,
+    "hardest_third": 69.4,
+    "auc_other_party_contested": 0.712,
+    "acc_other_party_contested": 23.8
+   },
+   "full": {
+    "threshold_from_2023_0": 0.32,
+    "all": 89.2,
+    "other_party": 80.7,
+    "contested": 70.6,
+    "hardest_third": 72.1,
+    "auc_other_party_contested": 0.822,
+    "acc_other_party_contested": 46.3,
+    "confident_calls": {
+     "top 30%": 99.3,
+     "top 50%": 98.9,
+     "top 67%": 97.7,
+     "top 80%": 95.4
+    }
+   },
+   "always_yes_other_party_contested": 23.8,
+   "slices": {
+    "contested_ballots": 9842,
+    "always_yes_contested": 60.6,
+    "ceiling_contested": 96.4
+   }
+  }
+ },
+ "pivotality": {
+  "one_vote_roll_calls": 437,
+  "of_roll_calls": 19360,
+  "members_ever_pivotal": 415
+ },
+ "member_law": [
+  {
+   "from": "2017_0",
+   "to": "2019_0",
+   "member_law_pairs": 1998,
+   "r_same_law": 0.271,
+   "r_general_record": 0.359
+  },
+  {
+   "from": "2019_0",
+   "to": "2021_0",
+   "member_law_pairs": 2007,
+   "r_same_law": 0.402,
+   "r_general_record": 0.424
+  },
+  {
+   "from": "2021_0",
+   "to": "2023_0",
+   "member_law_pairs": 1790,
+   "r_same_law": 0.137,
+   "r_general_record": 0.129
+  },
+  {
+   "from": "2023_0",
+   "to": "2025_0",
+   "member_law_pairs": 3991,
+   "r_same_law": 0.631,
+   "r_general_record": 0.632
+  }
+ ],
+ "second_chamber_exact": {
+  "other party runs chamber 2": {
+   "<50%": {
+    "k": 30,
+    "n": 247
+   },
+   "50-90%": {
+    "k": 28,
+    "n": 102
+   },
+   "90-99%": {
+    "k": 33,
+    "n": 73
+   },
+   "all": {
+    "k": 176,
+    "n": 410
+   }
+  },
+  "sponsor's party runs chamber 2": {
+   "<50%": {
+    "k": 0,
+    "n": 5
+   },
+   "50-90%": {
+    "k": 35,
+    "n": 85
+   },
+   "90-99%": {
+    "k": 97,
+    "n": 250
+   },
+   "all": {
+    "k": 673,
+    "n": 1471
+   }
+  }
+ },
+ "member_stats": {
+  "absence": {
+   "median": 0.0006,
+   "session_to_session_r": [
+    0.149,
+    0.051,
+    0.591,
+    0.027
+   ]
+  },
+  "loyalty": {
+   "median": 0.9746,
+   "session_to_session_r": [
+    0.708,
+    0.785,
+    0.077,
+    0.929
+   ]
+  },
+  "floor_win_rate": {
+   "median": 0.9421,
+   "session_to_session_r": [
+    0.954,
+    0.994,
+    -0.693,
+    0.993
+   ]
+  }
+ },
+ "rooms": {
+  "committee_roll_calls": 11440,
+  "failed": 157,
+  "contested_10pct_no": 2830,
+  "contested_that_split_by_party": "2485 of 2830",
+  "most_contested_rooms": [
+   {
+    "room": "ENVIRONMENTAL RESOURCES & ENERGY",
+    "contested_pct": 80.3,
+    "roll_calls": 76
+   },
+   {
+    "room": "LABOR & INDUSTRY",
+    "contested_pct": 60.9,
+    "roll_calls": 225
+   },
+   {
+    "room": "ENVIRONMENTAL RESOURCES AND ENERGY",
+    "contested_pct": 51.0,
+    "roll_calls": 96
+   },
+   {
+    "room": "EDUCATION",
+    "contested_pct": 38.8,
+    "roll_calls": 513
+   },
+   {
+    "room": "CHILDREN & YOUTH",
+    "contested_pct": 38.5,
+    "roll_calls": 130
+   },
+   {
+    "room": "STATE GOVERNMENT",
+    "contested_pct": 36.5,
+    "roll_calls": 578
+   },
+   {
+    "room": "FINANCE",
+    "contested_pct": 35.1,
+    "roll_calls": 328
+   },
+   {
+    "room": "HOUSING & COMMUNITY DEVELOPMENT",
+    "contested_pct": 34.0,
+    "roll_calls": 100
+   }
+  ],
+  "least_contested_rooms": [
+   {
+    "room": "CONSUMER PROTECTION AND PROFESSIONAL LICENSURE",
+    "contested_pct": 6.5,
+    "roll_calls": 124
+   },
+   {
+    "room": "PROFESSIONAL LICENSURE",
+    "contested_pct": 6.4,
+    "roll_calls": 94
+   },
+   {
+    "room": "VETERANS AFFAIRS AND EMERGENCY PREPAREDNESS",
+    "contested_pct": 6.3,
+    "roll_calls": 127
+   },
+   {
+    "room": "HUMAN SERVICES",
+    "contested_pct": 5.7,
+    "roll_calls": 87
+   },
+   {
+    "room": "AGRICULTURE AND RURAL AFFAIRS",
+    "contested_pct": 3.8,
+    "roll_calls": 52
+   }
+  ],
+  "room_contested_rate_era_r": 0.694
+ }
+}

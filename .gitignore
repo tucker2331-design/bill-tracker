@@ -66,3 +66,4 @@ tools/historical_cache/census/dl/publicsch.zip
 tools/historical_cache/census/geos_pava.psv
 tools/calibration/pa/__pycache__/
 tools/districts/__pycache__/
+tools/historical_cache/pa/openstates/sessions/*.zip
