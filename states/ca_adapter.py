@@ -186,7 +186,7 @@ def build_records(ex: Export, today: datetime.date, now_utc: str) -> Tuple[List[
         lead = [a for a in authors.get(bid, []) if a["CONTRIBUTION"].upper().startswith("LEAD")]
         others = [a for a in authors.get(bid, []) if a not in lead]
         chief = lead[0] if lead else None
-        sv = votes.get(bid)
+        last_vote = votes.get(bid)       # Optional: a bill with no recorded vote has none
         rec_bill = f"{mtype}{num}"
         records.append({
             "bill": rec_bill,
@@ -204,8 +204,9 @@ def build_records(ex: Export, today: datetime.date, now_utc: str) -> Tuple[List[
             "floor_senate": floor["Senate"],
             "last_committee": last_committee,
             "referral_count": len(referred),
-            "latest_vote": ({"tally": f"{sv['AYES']}-{sv['NOES']}", "location": names.get(sv["LOCATION_CODE"], sv["LOCATION_CODE"]),
-                             "date": _date(sv["VOTE_DATE_TIME"])} if sv else {"tally": "", "location": "", "date": ""}),
+            "latest_vote": ({"tally": f"{last_vote['AYES']}-{last_vote['NOES']}",
+                             "location": names.get(last_vote["LOCATION_CODE"], last_vote["LOCATION_CODE"]),
+                             "date": _date(last_vote["VOTE_DATE_TIME"])} if last_vote else {"tally": "", "location": "", "date": ""}),
             "upcoming": sorted(hearings.get(bid, []), key=lambda x: x["date"]),
             "last_action_date": last_row["date"],
             "history": history,
