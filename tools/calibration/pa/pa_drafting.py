@@ -25,7 +25,6 @@ from __future__ import annotations
 
 import collections
 import json
-import math
 import os
 import re
 import sys
@@ -144,7 +143,7 @@ def d4(F):
     res = {}
     T = F[F.session < "2025_0"]
     for body in ("H", "S"):
-        sent = back = passed_if_back = passed_if_stuck = 0
+        sent = back = passed_if_back = 0
         reported_no_approps = passed_no_approps = 0
         for acts, b, p in zip(T.actions, T.body, T.passed):
             if b != body:

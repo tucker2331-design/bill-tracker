@@ -212,10 +212,6 @@
    "bytes": 1461350,
    "sha256": "ff2a82a7149975fb86348e7f901aa3bcd9f3701e8b0ecd0ab34702df193ff559"
   },
-  "dl/publicsch_2526.zip": {
-   "bytes": 1245,
-   "sha256": "dc1d54dab6ec8c00f70137927504e4f222c8395f10760b6beecfcfa94e08249f"
-  },
   "dl/hosp_addr.csv": {
    "bytes": 13840,
    "sha256": "0ff0e47d2737079717e017a8883c069ca70e4a332ada73c3ef67724c96ea72e1"
