@@ -8,6 +8,10 @@ status: active
 
 Append-only, reverse-chronological (newest at top). Each entry opens with `## [YYYY-MM-DD] <type> | <title>`.
 
+## [2026-11-18] pr | California site + four speeds + PA statistics and drafting-room research (#274 opened)
+Opened tucker2331-design/bill-tracker#274 from `claude/youthful-gauss-9lr2zy`: California intake/site scaffold (sheet +
+D1 wired), the four-speed switch (VA/CA/NY daily, PA fast), and the PA statistics / drafting-room research.
+
 ## [2026-11-18] decision | Four speeds (daily, 4h, fast, instant); VA/CA/NY daily, PA fast; CA sheet wired
 Owner: daily is the longest cadence, then 4 hours, then fast, then instant — all within terms. `cadence.py` speeds,
 PA job gate generalised, site freshness limits follow the same switch (baked at build). CA sheet "CA · Live" id in
