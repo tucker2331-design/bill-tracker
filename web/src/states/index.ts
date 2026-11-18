@@ -3,9 +3,10 @@
 // web/src/states/ may name a state or its publisher — read STATE instead.
 import { VA } from "./va";
 import { PA } from "./pa";
+import { CA } from "./ca";
 import type { StateConfig } from "./types";
 
-export const STATES: Record<string, StateConfig> = { [VA.code]: VA, [PA.code]: PA };
+export const STATES: Record<string, StateConfig> = { [VA.code]: VA, [PA.code]: PA, [CA.code]: CA };
 // Chosen WHEN THE SITE IS BUILT (VITE_STATE=PA npm run build); unset = Virginia, the existing site. An unknown code
 // fails the build's first page load loudly rather than silently serving Virginia's rules under another name.
 const wanted = String(import.meta.env.VITE_STATE || "VA").toUpperCase();
@@ -17,3 +18,6 @@ export type { StateConfig, StageDef } from "./types";
  *  caller keeps its own pre-split fallback, so the split moves no VA output). */
 export const originChamber = (bill: string): "House" | "Senate" | null =>
   STATE.chambers[bill.charAt(0).toUpperCase()] ?? null;
+
+/** The chamber's name as this state shows it (CA: "Assembly" for the contract's "House"). Display only. */
+export const chamberLabel = (c: "House" | "Senate"): string => STATE.chamberLabels?.[c] ?? c;

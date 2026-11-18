@@ -44,11 +44,24 @@ construction**; the site says "as of" the export date and never claims faster.
 - `states/ca_pubinfo.py` — schema-driven reader; rows with the wrong field count are counted per table.
 - `states/ca_adapter.py` — pubinfo → the bill contract; END_STATUS matched exactly, unknown values counted, Rescinded
   rows never move a bill, outcomes from `CHAPTER_NUM` / `CURRENT_STATUS`; fail closed on a partial universe.
-- `test_ca_intake.py` — goldens on the real export (see the measured numbers there).
+- `states/ca_fetch.py` — bulk host only (the interactive site is refused before any request), streamed to disk,
+  20 h per-URL cap, stop on 401/403/429.
+- `test_ca_intake.py` (in CI) — 23 checks on 240 real bills cut by `tools/historical_cache/ca/make_sample.py`.
+- `ca_bill_tracker.py` — the job (`--dry-run` builds and prints the completeness payload; write needs the sheet).
+- Site: `web/src/states/ca.ts` (+ `chamberLabels` → "Assembly" on the subway legend and Search chips),
+  `npm run build:ca`, `wrangler.ca.toml` (placeholders), `.github/workflows/ca_bill_tracker.yml` (manual only).
+
+**Measured on the full 2025-26 export (2026-11-18):** 5,040 measures built (2,796 AB · 1,447 SB · 797 resolutions
+and amendments), 1 GRP counted outside both houses, 88,823 actions, 36 rescinded, 28 with a blank status (history
+only), **0 unclassified**, 0 malformed rows; outcomes: 2,249 chaptered · 771 died · 212 vetoed (incl. 31 with an
+override pending) · 31 → 0 awaiting the Governor after the veto fix · 1,777 in progress (session ends 30 Nov);
+281 House/Senate Resolutions have no subject line in the source (counted as `titles_blank`); co-author party joined
+for 31,468 of 31,472. Dry run: 1 request (the index) when the session file is cached.
 
 ## To go live (owner steps, in order)
 1. Create a Google Sheet "CA · Live", share it with the service account, give me its id.
 2. Cloudflare: a new Worker `bill-tracker-ca` connected to `main` (build `npm run build:ca`, deploy
    `npx wrangler deploy --config wrangler.ca.toml`), its own D1 database.
-3. SPA: add the Assembly display label (21 places read "House"); then the CA site config goes in `web/src/states/`.
-4. Then the scheduled job (daily, after Legislative Counsel's ~21:20 Pacific publication).
+3. Add the repo secret `CA_SPREADSHEET_ID`; run "CA bill tracker" once in write mode; then uncomment its schedule.
+Residual (engineering, not owner): CA committee rosters and hearings calendar (`COMMITTEE_HEARING_TBL`,
+`DAILY_FILE_TBL`) for the War Room and Calendar screens — off in `ca.ts` until built.

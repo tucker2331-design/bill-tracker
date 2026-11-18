@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { originChamber, STATE } from "../states";
+import { chamberLabel, originChamber, STATE } from "../states";
 import type { Bill, Outcome, Chamber } from "../data/types";
 import { BillBox } from "../components/BillBox";
 import { splitByClass, ceremonialLabel } from "../data/billclass";
@@ -117,10 +117,10 @@ export function Search({ bills, onOpen }: { bills: Bill[]; onOpen: (b: Bill) => 
           placeholder="Search bill number, title keyword, or patron…" autoFocus />
       </div>
       <div className="filters">
-        {chipBtn("o-h", originCh === "House", "House (origin)", () => setOrigin("House"), "Bills that STARTED in the House — HB/HJ/HR")}
+        {chipBtn("o-h", originCh === "House", `${chamberLabel("House")} (origin)`, () => setOrigin("House"), "Bills that STARTED in the House — HB/HJ/HR")}
         {chipBtn("o-s", originCh === "Senate", "Senate (origin)", () => setOrigin("Senate"), "Bills that STARTED in the Senate — SB/SJ/SR")}
         <span style={{ width: 8 }} />
-        {chipBtn("n-h", nowCh === "House", "House (now)", () => setNow("House"), "Bills CURRENTLY in the House (after any crossover)")}
+        {chipBtn("n-h", nowCh === "House", `${chamberLabel("House")} (now)`, () => setNow("House"), "Bills CURRENTLY in the House (after any crossover)")}
         {chipBtn("n-s", nowCh === "Senate", "Senate (now)", () => setNow("Senate"), "Bills CURRENTLY in the Senate (after any crossover)")}
         <span style={{ width: 8 }} />
         {chipBtn("crossed", crossedOnly, "Crossed over", () => setCrossedOnly(!crossedOnly), "Bills that reached the opposite chamber")}

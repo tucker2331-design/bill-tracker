@@ -17,6 +17,9 @@ export interface StateConfig {
   sourceLongName: string;     // "Virginia LIS"
   legislatureName: string;    // "the General Assembly"
   chambers: Record<string, "House" | "Senate">;   // bill-number prefix -> chamber name
+  /** How each contract chamber is SHOWN (CA: the lower chamber is the Assembly). Display only; logic keeps
+   *  "House"/"Senate". Omitted = the contract name. */
+  chamberLabels?: Partial<Record<"House" | "Senate", string>>;
   /** A real bill id in this state's numbering (the calendar's skeleton rows hold addresses, not bills). */
   billIdPattern: RegExp;
   stages: StageDef[];

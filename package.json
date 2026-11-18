@@ -4,6 +4,7 @@
   "description": "Root build shim so a repo-ROOT build (Cloudflare Pages' default when Root directory isn't set to web/) still builds the React SPA that lives in web/. Cloudflare runs `npm run build` here; this delegates into web/ and copies the output to a root-level dist/ that Cloudflare's default output dir picks up. If Root directory IS set to web/, Cloudflare builds web/ directly and this file is simply ignored \u2014 safe either way.",
   "scripts": {
     "build": "npm --prefix web ci && npm --prefix web run build && rm -rf dist && cp -r web/dist dist",
-    "build:pa": "npm --prefix web ci && VITE_STATE=PA npm --prefix web run build -- --outDir dist-pa && rm -rf dist-pa && cp -r web/dist-pa dist-pa"
+    "build:pa": "npm --prefix web ci && VITE_STATE=PA npm --prefix web run build -- --outDir dist-pa && rm -rf dist-pa && cp -r web/dist-pa dist-pa",
+    "build:ca": "npm --prefix web ci && VITE_STATE=CA npm --prefix web run build -- --outDir dist-ca && rm -rf dist-ca && cp -r web/dist-ca dist-ca"
   }
 }

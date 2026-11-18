@@ -1,0 +1,50 @@
+name: CA bill tracker (California site)
+
+# California's own job: the CA intake (states/ca_*) written to CA's OWN spreadsheet (CA_SPREADSHEET_ID).
+# Fetch rules: Legislative Counsel's pubinfo bulk files only (the interactive leginfo site is never fetched), streamed
+# to disk, at most once per URL per 20 h, honest UA, stop on 401/403/429. pubinfo is published daily (~21:20 Pacific);
+# the session file is rebuilt each Sunday.
+# MANUAL ONLY until the owner creates the CA spreadsheet and sets CA_SPREADSHEET_ID (docs/knowledge/ca_pubinfo.md).
+# Then add:  schedule: - cron: "41 6 * * *"   (06:41 UTC, after the nightly publication)
+# NOT part of Virginia's trust surface: trust_surface_guard.OTHER_STATE_JOBS lists it.
+on:
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: "write = production write; dry-run = fetch + build only"
+        default: dry-run
+        type: choice
+        options: [dry-run, write]
+
+concurrency:
+  group: ca-bill-tracker
+  cancel-in-progress: false
+
+jobs:
+  intake:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+      - run: pip install --quiet gspread google-auth pytz
+      - name: Restore the fetch cache (keeps the 20 h cap across runs)
+        uses: actions/cache@v4
+        with:
+          path: .ca_cache
+          key: ca-fetch-${{ github.run_id }}
+          restore-keys: ca-fetch-
+      - name: Run the CA intake
+        env:
+          PYTHONUNBUFFERED: "1"
+          CA_CACHE_DIR: .ca_cache
+          CA_SPREADSHEET_ID: ${{ secrets.CA_SPREADSHEET_ID }}
+          GCP_CREDENTIALS: ${{ secrets.GCP_CREDENTIALS }}
+        run: |
+          if [ "${{ inputs.mode }}" = "write" ]; then
+            python3 ca_bill_tracker.py
+          else
+            python3 ca_bill_tracker.py --dry-run
+          fi

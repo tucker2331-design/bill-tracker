@@ -121,6 +121,7 @@ OTHER_STATE_JOBS = {
     # New York's bill job ran on Virginia's Health tab and counted toward Virginia's days clean (owner 2026-11-01:
     # take it off; assumptions_audit #153). Its workflow and its own CI keep running unchanged.
     "ny_bill_tracker.yml": "New York's pipeline — not Virginia's trust surface (owner 2026-11-01)",
+    "ca_bill_tracker.yml": "California's site (own spreadsheet, own Health) — owner 2026-11-18",
 }
 
 

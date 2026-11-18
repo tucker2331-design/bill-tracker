@@ -72,3 +72,6 @@ tools/historical_cache/ca/2025/
 tools/historical_cache/ca/pubinfo_*.zip
 !tools/historical_cache/ca/pubinfo_load.zip
 tools/historical_cache/ca/load/
+.ca_cache/
+dist-ca
+web/dist-ca

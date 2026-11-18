@@ -7,6 +7,7 @@
 // The first track change is labelled by the state (VA "Crossover", its deadline; PA "to the other chamber").
 import type { PipelineCounts, PipelineSettings } from "../data/pipeline_rules";
 import { trackOf } from "../data/pipeline_rules";
+import { chamberLabel } from "../states";
 
 type Hit = (k: string, n: number, label: string) => Record<string, unknown>;
 const Y = { Senate: 140, House: 280 } as const, GY = 210;
@@ -63,7 +64,7 @@ export function ChamberSubway({ s, c, labels, hit }: {
               const first = trackOf(st, "House", s) === side ? "House" : "Senate";   // which line runs here
               const k = `${st}|${side}`, still = c.at[k] || 0;
               const parked = c.sub[`${k}|parked`] || 0, idle = c.sub[`${k}|idle`] || 0, ended = c.sub[`${k}|ended`] || 0;
-              const where = `${side} · ${labels[st] ?? st}`, dy = up ? 34 : -34;
+              const where = `${chamberLabel(side)} · ${labels[st] ?? st}`, dy = up ? 34 : -34;
               return (
                 <g key={side}>
                   <circle cx={xs[i]} cy={y} r="10" fill="var(--surface)" stroke={LINE[first]} strokeWidth="4" />
@@ -107,9 +108,9 @@ export function ChamberSubway({ s, c, labels, hit }: {
           <tspan> · </tspan>
           <tspan {...hit("tot|idle", c.totals.idle, "All idle")}>{n(c.totals.idle)} idle {s.idleDays >= 365 ? "1 yr+" : `${s.idleDays} d+`}</tspan></text>
         <line x1={W - 400} x2={W - 370} y1="396" y2="396" stroke={LINE.Senate} strokeWidth="5" />
-        <text x={W - 362} y="400" className="sw-l">started in the Senate</text>
+        <text x={W - 362} y="400" className="sw-l">started in the {chamberLabel("Senate")}</text>
         <line x1={W - 200} x2={W - 170} y1="396" y2="396" stroke={LINE.House} strokeWidth="5" />
-        <text x={W - 162} y="400" className="sw-l">started in the House</text>
+        <text x={W - 162} y="400" className="sw-l">started in the {chamberLabel("House")}</text>
       </g>
     </svg>
   );
