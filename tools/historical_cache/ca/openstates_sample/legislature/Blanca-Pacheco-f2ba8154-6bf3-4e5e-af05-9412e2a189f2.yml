@@ -1,0 +1,39 @@
+id: ocd-person/f2ba8154-6bf3-4e5e-af05-9412e2a189f2
+name: Blanca Pacheco
+given_name: Blanca
+family_name: Pacheco
+birth_date: 1974-04-17
+gender: Female
+email: assemblymember.pacheco@assembly.ca.gov
+image: https://webapi.assembly.ca.gov/district-media/assets/members/assembly_member_64.jpg
+party:
+- name: Democratic
+roles:
+- start_date: 2022-12-05
+  type: lower
+  jurisdiction: ocd-jurisdiction/country:us/state:ca/government
+  district: '64'
+offices:
+- classification: capitol
+  address: Room 4510, 1021 O St. P.O. Box 942849, Sacramento, CA 94249
+  voice: 916-319-2064
+- classification: district
+  address: 8255 Firestone Blvd. Suite 203, Downey, CA 90241
+  voice: 562-861-5803
+links:
+- url: https://a64.asmdc.org/
+- url: https://pacheco.asmdc.org/
+other_names:
+- name: B. Pacheco
+- name: B.N. Pacheco
+- name: Pacheco, B.
+sources:
+- url: https://a64.asmdc.org
+- url: https://a64.asmdc.org/biography
+- url: https://ballotpedia.org/Blanca_Pacheco
+- url: https://en.wikipedia.org/wiki/Blanca_Pacheco
+- url: https://justfacts.votesmart.org/candidate/biography/198033/blanca-pacheco
+- url: https://www.assembly.ca.gov/assemblymembers
+- url: https://www.linkedin.com/in/blanca-pacheco
+extras:
+  P.O. Box: P.O. Box 942849, Sacramento, CA 94249-0064;

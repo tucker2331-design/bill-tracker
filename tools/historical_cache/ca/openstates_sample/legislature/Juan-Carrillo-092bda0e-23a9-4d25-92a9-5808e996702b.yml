@@ -1,0 +1,44 @@
+id: ocd-person/092bda0e-23a9-4d25-92a9-5808e996702b
+name: Juan Carrillo
+given_name: Juan
+family_name: Carrillo
+gender: Male
+email: assemblymember.juancarrillo@assembly.ca.gov
+image: https://webapi.assembly.ca.gov/district-media/assets/members/assembly_member_39.jpg
+party:
+- name: Democratic
+roles:
+- start_date: 2022-12-05
+  type: lower
+  jurisdiction: ocd-jurisdiction/country:us/state:ca/government
+  district: '39'
+offices:
+- classification: capitol
+  address: Room 5610, 1021 O St. P.O. Box 942849, Sacramento, CA 94249
+  voice: 916-319-2039
+- classification: district
+  address: 11600 Air Express Way, Adelanto, CA 92301
+  voice: 760-530-0139
+- classification: district
+  address: 823 East Ave. Q-9 Suite B, Palmdale, CA 93550
+  voice: 661-266-3908
+links:
+- url: https://carrillo.asmdc.org/
+- url: https://www.assembly.ca.gov/assemblymembers/39
+other_names:
+- name: Carrillo, J.
+- name: J. Carrillo
+sources:
+- url: https://a39.asmdc.org
+- url: https://a39.asmdc.org/biography
+- url: https://ballotpedia.org/Juan_Carrillo
+- url: https://carrillo.asmdc.org
+- url: https://carrillo.asmdc.org/biography
+- url: https://en.wikipedia.org/wiki/Juan_Carrillo
+- url: https://hsr.ca.gov/juan-carrillo
+- url: https://justfacts.votesmart.org/candidate/biography/198100/juan-carrillo
+- url: https://votejuancarrillo.com/meet-the-candidate
+- url: https://www.assembly.ca.gov/assemblymembers
+- url: https://www.assembly.ca.gov/assemblymembers/39
+extras:
+  P.O. Box: P.O. Box 942849, Sacramento, CA 94249-0039;

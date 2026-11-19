@@ -1,0 +1,51 @@
+id: ocd-person/a8879d70-713c-4d0c-b723-77d0e96c18df
+name: Tom Lackey
+given_name: Tom
+family_name: Lackey
+birth_date: 1959-03-12
+gender: Male
+email: assemblymember.lackey@assembly.ca.gov
+image: https://webapi.assembly.ca.gov/district-media/assets/members/assembly_member_34.jpg
+party:
+- name: Republican
+roles:
+- start_date: 2022-12-05
+  type: lower
+  jurisdiction: ocd-jurisdiction/country:us/state:ca/government
+  district: '34'
+- end_date: 2022-12-05
+  type: lower
+  jurisdiction: ocd-jurisdiction/country:us/state:ca/government
+  district: '36'
+offices:
+- classification: capitol
+  address: Room 5340, 1021 O St. P.O. Box 942849, Sacramento, CA 94249
+  voice: 916-319-2034
+- classification: district
+  address: 14955 Dale Evans Parkway, Apple Valley, CA 92307
+  voice: 760-539-1341
+- classification: district
+  address: 41301 W. 12th St. Suite F, Palmdale, CA 93551
+  voice: 661-267-7636
+links:
+- url: https://ad34.asmrc.org/
+other_names:
+- name: Lackey, T.
+- name: T. Lackey
+- name: T.W. Lackey
+- name: Thomas W. Lackey
+other_identifiers:
+- scheme: legacy_openstates
+  identifier: CAL000481
+sources:
+- url: https://ad34.asmrc.org
+- url: https://ad34.asmrc.org/bio
+- url: https://ad34.asmrc.org/biography
+- url: https://assembly.ca.gov/assemblymembers
+- url: https://ballotpedia.org/Tom_Lackey
+- url: https://en.wikipedia.org/wiki/Tom_Lackey
+- url: https://justfacts.votesmart.org/candidate/biography/71099/tom-lackey
+- url: https://www.assembly.ca.gov/assemblymembers
+- url: https://www.linkedin.com/in/tom-lackey-85a9a365
+extras:
+  P.O. Box: P.O. Box 942849, Sacramento, CA  94249-0034;

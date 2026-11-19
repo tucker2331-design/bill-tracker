@@ -101,7 +101,8 @@ export function WarRoomBill({ id, bills, sessionCode }: { id: string; bills: Bil
       )}
 
       <p className="muted wb-foot">Status, votes, committees{STATE.features.summaries ? " and the summary" : ""}
-        {STATE.features.committeeRoster ? ", committee members" : ""}: {STATE.sourceLongName}.
+        {STATE.features.committeeRoster && !STATE.rosterSourceName ? ", committee members" : ""}: {STATE.sourceLongName}.
+        {STATE.features.committeeRoster && STATE.rosterSourceName ? ` Committee members: ${STATE.rosterSourceName}.` : ""}
         {STATE.features.predictions ? " Member calls: the vote model's served calls." : ""} Position and contacts: your
         team's own entries, not from {SOURCE}.</p>
     </div>

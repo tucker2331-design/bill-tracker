@@ -1,0 +1,48 @@
+id: ocd-person/e725b91e-1f7f-4510-a9cc-0b9a39d283c3
+name: Ben Allen
+given_name: Ben
+family_name: Allen
+birth_date: 1978-03-13
+gender: Male
+email: senator.allen@senate.ca.gov
+image: https://www.senate.ca.gov/sites/senate.ca.gov/files/senator_photos/allen_ben_d-26.jpg
+party:
+- name: Democratic
+roles:
+- start_date: 2022-12-05
+  type: upper
+  jurisdiction: ocd-jurisdiction/country:us/state:ca/government
+  district: '24'
+- end_date: 2022-12-04
+  type: upper
+  jurisdiction: ocd-jurisdiction/country:us/state:ca/government
+  district: '26'
+offices:
+- classification: capitol
+  address: 1021 O St. Suite 6610, Sacramento, CA 95814
+  voice: 916-651-4024
+- classification: district
+  address: 111 Penn St. Suite 101, El Segundo, CA 90245
+  voice: 310-414-8190
+links:
+- url: https://sd24.senate.ca.gov/
+- url: https://senate.ca.gov/sd26
+other_names:
+- name: Allen, B.
+- name: B. Allen
+- name: B.J. Allen
+- name: Ben Allen
+- name: Benjamin Allen
+- name: Benjamin J. Allen
+other_identifiers:
+- scheme: legacy_openstates
+  identifier: CAL000490
+sources:
+- url: https://ballotpedia.org/Ben_Allen
+- url: https://en.wikipedia.org/wiki/Ben_Allen_(California_politician)
+- url: https://sd24.senate.ca.gov
+- url: https://sd24.senate.ca.gov/biography
+- url: https://senate.ca.gov/senators
+- url: https://www.linkedin.com/in/ben-allen-47bb902
+- url: https://www.linkedin.com/in/ben-allen-79547113b
+- url: https://www.senate.ca.gov/senators

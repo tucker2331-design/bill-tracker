@@ -1,0 +1,53 @@
+id: ocd-organization/a2455d98-ec13-4ef2-b1b7-a4da6a079430
+jurisdiction: ocd-jurisdiction/country:us/state:ca/government
+classification: committee
+name: Health
+chamber: upper
+sources:
+- url: https://senate.ca.gov/committees
+  note: Committee List Page
+- url: https://shea.senate.ca.gov
+  note: Committee Detail Page
+- url: https://shea.senate.ca.gov/committeehome
+links:
+- url: https://shea.senate.ca.gov
+  note: homepage
+- url: https://shea.senate.ca.gov/committeehome
+members:
+- name: Akilah Weber Pierson
+  role: chair
+  person_id: ocd-person/6c2a35d5-c04c-44d0-8bd9-92a625e2b525
+- name: Suzette Valladares
+  role: vice chair
+  person_id: ocd-person/fb1c2c06-108c-41bf-9f08-44a9f8e0cb08
+- name: Anna Caballero
+  role: member
+  person_id: ocd-person/fe462917-df55-4a43-9fd8-970541544ca6
+- name: Caroline Menjivar
+  role: member
+  person_id: ocd-person/b19c0361-ca41-4cba-bcf4-b7342a67f28b
+- name: Lena Gonzalez
+  role: member
+  person_id: ocd-person/cb6cc457-59f8-4dd8-aeb5-691c3795ffb7
+- name: Lola Smallwood-Cuevas
+  role: member
+  person_id: ocd-person/37f2dc9f-d788-4f71-b794-093c8816333b
+- name: "Mar\xEDa Elena Durazo"
+  role: member
+  person_id: ocd-person/b3f55460-f87b-4db4-b6a5-35a735f34076
+- name: "Sasha P\xE9rez"
+  role: member
+  person_id: ocd-person/aa59bbc8-0f05-4974-a88a-2e805deb26b4
+- name: Shannon Grove
+  role: member
+  person_id: ocd-person/b4b8e8fb-831b-4cae-9081-b8f75477fcd0
+- name: Steve Padilla
+  role: member
+  person_id: ocd-person/eb745b9e-4ced-494a-a298-fdffa9207b0d
+- name: Susan Rubio
+  role: member
+  person_id: ocd-person/cb0f6477-568f-49db-aba3-f88e7bccbefc
+other_names:
+- name: Senate Committee on Health
+- name: Senate Health
+- name: Senate Health Committee

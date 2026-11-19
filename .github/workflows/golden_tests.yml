@@ -15,6 +15,8 @@ on:
       - 'states/**'
       - 'goldens/**'
       - 'pa_bill_tracker.py'
+      - 'ca_bill_tracker.py'
+      - 'tools/historical_cache/ca/**'
       - 'bill_rows.py'
       - 'cadence.py'
       - 'sheets_retry.py'
@@ -32,6 +34,8 @@ on:
       - 'states/**'
       - 'goldens/**'
       - 'pa_bill_tracker.py'
+      - 'ca_bill_tracker.py'
+      - 'tools/historical_cache/ca/**'
       - 'bill_rows.py'
       - 'cadence.py'
       - 'sheets_retry.py'
@@ -89,6 +93,8 @@ jobs:
             test_state_va_goldens.py \
             test_docket_ingest.py \
             test_pa_bill_tracker.py \
+            test_ca_bill_tracker.py \
+            test_ca_roster.py \
             test_pa_roster.py \
             test_pa_calendar.py \
             test_action_where.py; do

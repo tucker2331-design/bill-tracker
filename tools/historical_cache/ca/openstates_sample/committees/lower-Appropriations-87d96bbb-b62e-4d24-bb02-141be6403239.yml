@@ -1,0 +1,64 @@
+id: ocd-organization/87d96bbb-b62e-4d24-bb02-141be6403239
+jurisdiction: ocd-jurisdiction/country:us/state:ca/government
+classification: committee
+name: Appropriations
+chamber: lower
+sources:
+- url: https://apro.assembly.ca.gov
+- url: https://apro.assembly.ca.gov/
+  note: Committee Detail Page
+- url: https://www.assembly.ca.gov/committees
+  note: Committee List Page
+links:
+- url: https://apro.assembly.ca.gov
+  note: homepage
+members:
+- name: Buffy Wicks
+  role: chair
+  person_id: ocd-person/8230907e-9ae3-4ae9-b52a-c8464a157f64
+- name: Joshua Hoover
+  role: vice chair
+  person_id: ocd-person/71aa54c0-3fad-499c-928e-ffbb692a970b
+- name: Blanca Pacheco
+  role: member
+  person_id: ocd-person/f2ba8154-6bf3-4e5e-af05-9412e2a189f2
+- name: David Tangipa
+  role: member
+  person_id: ocd-person/748ce69c-a2bc-41a7-95e2-b09fba6e5ecd
+- name: Diane Dixon
+  role: member
+  person_id: ocd-person/0c4e1b43-c3d7-4a13-87c4-92e29903cb73
+- name: Gail Pellerin
+  role: member
+  person_id: ocd-person/2944d19a-c288-4f32-b6a0-72e35f48e570
+- name: Jessica Caloza
+  role: member
+  person_id: ocd-person/81d9225e-7584-43c9-9e9b-f12b7e7dbd4e
+- name: Joaquin Arambula
+  role: member
+  person_id: ocd-person/e2da0f08-1bd8-4ac2-95f1-002870238527
+- name: "Jos\xE9 Solache"
+  role: member
+  person_id: ocd-person/b9c75c1e-6ea8-4fae-9efa-a7bf0a0cb2cc
+- name: LaShae Sharp-Collins
+  role: member
+  person_id: ocd-person/895f777d-ae7b-429a-aa0f-1b2895c13945
+- name: Lisa Calderon
+  role: member
+  person_id: ocd-person/ed58ae30-ffe5-4395-9353-141e4018cbe3
+- name: Maggy Krell
+  role: member
+  person_id: ocd-person/e8ac7b26-03a5-4818-b05d-0f379029bbdb
+- name: "Mark Gonz\xE1lez"
+  role: member
+  person_id: ocd-person/4a6f5a5d-275e-4fb2-a8bf-bb1272d4dfbb
+- name: Mike Fong
+  role: member
+  person_id: ocd-person/3a7bde9c-8709-49c7-89e4-0835ea1f9eb6
+- name: Tri Ta
+  role: member
+  person_id: ocd-person/75229920-399d-4216-9b76-c27ea398665a
+other_names:
+- name: Assembly Appropriations
+- name: Assembly Appropriations Committee
+- name: Assembly Committee on Appropriations

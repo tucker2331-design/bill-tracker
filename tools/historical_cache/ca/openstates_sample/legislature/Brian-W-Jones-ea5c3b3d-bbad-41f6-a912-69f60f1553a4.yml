@@ -1,0 +1,67 @@
+id: ocd-person/ea5c3b3d-bbad-41f6-a912-69f60f1553a4
+name: Brian Jones
+given_name: Brian
+family_name: Jones
+birth_date: 1968-08-09
+gender: Male
+email: senator.jones@senate.ca.gov
+image: https://www.senate.ca.gov/sites/senate.ca.gov/files/senator_photos/brian_jones_headshot_blue.jpg
+party:
+- name: Republican
+roles:
+- start_date: 2022-12-05
+  type: upper
+  jurisdiction: ocd-jurisdiction/country:us/state:ca/government
+  district: '40'
+- start_date: 2010-12-06
+  end_date: 2012-11-30
+  type: lower
+  jurisdiction: ocd-jurisdiction/country:us/state:ca/government
+  district: '77'
+- start_date: 2012-12-03
+  end_date: 2016-11-30
+  type: lower
+  jurisdiction: ocd-jurisdiction/country:us/state:ca/government
+  district: '71'
+- start_date: 2018-12-03
+  end_date: 2022-12-05
+  type: upper
+  jurisdiction: ocd-jurisdiction/country:us/state:ca/government
+  district: '38'
+offices:
+- classification: capitol
+  address: 1021 O St. Suite 7640, Sacramento, CA 95814
+  voice: 916-651-4040
+- classification: district
+  address: 10650 Treena St. Suite 110, San Diego, CA 92131
+  voice: 858-547-3818
+- classification: district
+  address: 720 N. Broadway Suite 110, Escondido, CA 92025
+  voice: 760-796-4655
+links:
+- url: https://senate.ca.gov/sd38
+- url: https://senate.ca.gov/sd40
+- url: https://sr40.senate.ca.gov/
+other_names:
+- name: B. Jones
+- name: B.W. Jones
+- name: Brian Jones
+- name: Brian W. Jones
+- name: Jones, B.
+other_identifiers:
+- scheme: legacy_openstates
+  identifier: CAL000145
+- scheme: legacy_openstates
+  identifier: CAL000261
+- scheme: legacy_openstates
+  identifier: CAL000379
+- scheme: openstates
+  identifier: ocd-person/942b33d9-3458-459a-b817-bc8adbf2be77
+sources:
+- url: https://ballotpedia.org/Brian_Jones_(California)
+- url: https://en.wikipedia.org/wiki/Brian_Jones_(California_politician)
+- url: https://justfacts.votesmart.org/candidate/biography/70781/brian-jones
+- url: https://senate.ca.gov/senators
+- url: https://sr40.senate.ca.gov
+- url: https://www.linkedin.com/in/brian-jones-bb3365b
+- url: https://www.senate.ca.gov/senators

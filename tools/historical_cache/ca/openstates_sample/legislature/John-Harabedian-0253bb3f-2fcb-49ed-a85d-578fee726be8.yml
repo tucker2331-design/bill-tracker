@@ -1,0 +1,41 @@
+id: ocd-person/0253bb3f-2fcb-49ed-a85d-578fee726be8
+name: John Harabedian
+given_name: John
+family_name: Harabedian
+gender: Male
+email: assemblymember.harabedian@assembly.ca.gov
+image: https://storage.googleapis.com/enview-dev-public-general/legislative-people-photos/158662.jpg
+party:
+- name: Democratic
+roles:
+- start_date: 2024-12-02
+  type: lower
+  jurisdiction: ocd-jurisdiction/country:us/state:ca/government
+  district: '41'
+offices:
+- classification: capitol
+  address: Room 4350, 1021 O St. P.O. Box 942849, Sacramento, CA 94249
+  voice: 916-319-2041
+- classification: district
+  address: 415 W. Foothill Blvd. Suite 124, Claremont, CA 91711
+  voice: 909-624-7876
+- classification: district
+  address: 600 N. Rosemead Blvd. Suite 117, Pasadena, CA 91107
+  voice: 626-351-1917
+links:
+- url: https://harabedian.asmdc.org/
+- url: https://www.assembly.ca.gov/assemblymembers/41
+other_names:
+- name: Harabedian, J.
+- name: J. Harabedian
+- name: J.C. Harabedian
+sources:
+- url: https://a41.asmdc.org
+- url: https://a41.asmdc.org/biography
+- url: https://ballotpedia.org/John_Harabedian
+- url: https://en.wikipedia.org/wiki/John_Harabedian
+- url: https://harabedian.asmdc.org
+- url: https://harabedian.asmdc.org/biography
+- url: https://justfacts.votesmart.org/candidate/biography/213339/john-harabedian
+- url: https://www.assembly.ca.gov/assemblymembers/41
+- url: https://www.linkedin.com/in/john-harabedian-9ba716a

@@ -1,0 +1,39 @@
+id: ocd-person/c7a404d9-03f7-4e82-b730-1623da31d4cc
+name: Joe Patterson
+given_name: Joe
+family_name: Patterson
+birth_date: 1982-06-09
+gender: Male
+email: assemblymember.joepatterson@assembly.ca.gov
+image: https://webapi.assembly.ca.gov/district-media/assets/members/assembly_member_05.jpg
+party:
+- name: Republican
+roles:
+- start_date: 2022-12-05
+  type: lower
+  jurisdiction: ocd-jurisdiction/country:us/state:ca/government
+  district: '5'
+offices:
+- classification: capitol
+  address: Room 4530, 1021 O St. P.O. Box 942849, Sacramento, CA 94249
+  voice: 916-319-2005
+- classification: district
+  address: Rocklin Corporate Plaza, 6030 W. Oaks Blvd. Suite 145, Rocklin, CA 95765
+  voice: 916-435-0501
+links:
+- url: https://ad05.asmrc.org
+- url: https://ad05.asmrc.org/
+other_names:
+- name: J. Patterson
+- name: Patterson, J.
+sources:
+- url: https://ad05.asmrc.org
+- url: https://ad05.asmrc.org/biography
+- url: https://ballotpedia.org/Joe_Patterson_(California)
+- url: https://en.wikipedia.org/wiki/Joe_Patterson_(California_politician)
+- url: https://joepatterson.com/about
+- url: https://justfacts.votesmart.org/candidate/biography/198005/joe-patterson
+- url: https://www.assembly.ca.gov/assemblymembers
+- url: https://www.linkedin.com/in/joepatterson82
+extras:
+  P.O. Box: P.O. Box 942849, Sacramento, CA 94249-0005;

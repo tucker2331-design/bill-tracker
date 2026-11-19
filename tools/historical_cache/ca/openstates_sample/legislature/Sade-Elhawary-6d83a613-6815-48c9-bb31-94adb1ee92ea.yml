@@ -1,0 +1,37 @@
+id: ocd-person/6d83a613-6815-48c9-bb31-94adb1ee92ea
+name: Sade Elhawary
+given_name: Sade
+family_name: Elhawary
+birth_date: 1987-12-19
+gender: Female
+email: assemblymember.elhawary@assembly.ca.gov
+image: https://s3.amazonaws.com/ballotpedia-api4/files/thumbs/200/300/SadeElhawary2024.jpeg
+party:
+- name: Democratic
+roles:
+- start_date: 2024-12-02
+  type: lower
+  jurisdiction: ocd-jurisdiction/country:us/state:ca/government
+  district: '57'
+offices:
+- classification: capitol
+  address: Room 6320, 1021 O St. P.O. Box 942849, Sacramento, CA 94249
+  voice: 916-319-2057
+- classification: district
+  address: 700 Exposition Park Drive, Los Angeles, CA 90037
+  voice: 213-744-2111
+links:
+- url: https://a57.asmdc.org/
+- url: https://elhawary.asmdc.org/
+- url: https://www.assembly.ca.gov/assemblymembers/57
+other_names:
+- name: Elhawary, S.
+- name: S. Elhawary
+- name: Z.S. Elhawary
+sources:
+- url: https://a57.asmdc.org
+- url: https://a57.asmdc.org/biography
+- url: https://ballotpedia.org/Sade_Elhawary
+- url: https://en.wikipedia.org/wiki/Sade_Elhawary
+- url: https://www.assembly.ca.gov/assemblymembers/57
+- url: https://www.linkedin.com/in/sadeelhawary

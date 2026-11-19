@@ -1,0 +1,44 @@
+id: ocd-person/71590420-10d6-4deb-8d59-453256d625b6
+name: Chris Ward
+given_name: Chris
+family_name: Ward
+birth_date: 1976-08-03
+gender: Male
+email: assemblymember.ward@assembly.ca.gov
+image: https://webapi.assembly.ca.gov/district-media/assets/members/assembly_member_78.jpg
+party:
+- name: Democratic
+roles:
+- start_date: 2020-12-07
+  type: lower
+  jurisdiction: ocd-jurisdiction/country:us/state:ca/government
+  district: '78'
+offices:
+- classification: capitol
+  address: Room 6350, 1021 O St. P.O. Box 942849, Sacramento, CA 94249
+  voice: 916-319-2078
+- classification: district
+  address: 2700 Adams Ave. Suite 102, San Diego, CA 92116
+  voice: 619-280-7801
+links:
+- url: https://ward.asmdc.org/
+- url: https://www.assembly.ca.gov/assemblymembers/78
+other_names:
+- name: C. Ward
+- name: C.M. Ward
+- name: Christopher M. Ward
+- name: Christopher Ward
+- name: Ward, C.
+sources:
+- url: https://a78.asmdc.org
+- url: https://assembly.ca.gov/assemblymembers
+- url: https://ballotpedia.org/Christopher_Ward_(California)
+- url: https://en.wikipedia.org/wiki/Chris_Ward_(American_politician)
+- url: https://justfacts.votesmart.org/candidate/176914/chris-ward
+- url: https://ward.asmdc.org
+- url: https://ward.asmdc.org/biography
+- url: https://www.assembly.ca.gov/assemblymembers
+- url: https://www.assembly.ca.gov/assemblymembers/78
+- url: https://www.linkedin.com/in/harward
+extras:
+  P.O. Box: P.O. Box 942849, Sacramento, CA 94249-0078;

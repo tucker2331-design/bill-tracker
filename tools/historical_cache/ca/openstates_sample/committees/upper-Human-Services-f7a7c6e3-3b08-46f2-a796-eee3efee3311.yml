@@ -1,0 +1,33 @@
+id: ocd-organization/f7a7c6e3-3b08-46f2-a796-eee3efee3311
+jurisdiction: ocd-jurisdiction/country:us/state:ca/government
+classification: committee
+name: Human Services
+chamber: upper
+sources:
+- url: https://senate.ca.gov/committees
+  note: Committee List Page
+- url: https://shum.senate.ca.gov
+  note: Committee Detail Page
+links:
+- url: https://shum.senate.ca.gov
+  note: homepage
+members:
+- name: Josh Becker
+  role: chair
+  person_id: ocd-person/c71137b2-3fc3-48bf-b0ad-6c29aff98268
+- name: Rosilicie Ochoa Bogh
+  role: vice chair
+  person_id: ocd-person/cb5b9356-6798-44d2-8dc2-caf5651ac4e3
+- name: Akilah Weber Pierson
+  role: member
+  person_id: ocd-person/6c2a35d5-c04c-44d0-8bd9-92a625e2b525
+- name: John Laird
+  role: member
+  person_id: ocd-person/7476789f-49a4-491a-b294-9d1486f24193
+- name: "Sasha P\xE9rez"
+  role: member
+  person_id: ocd-person/aa59bbc8-0f05-4974-a88a-2e805deb26b4
+other_names:
+- name: Senate Committee on Human Services
+- name: Senate Human Services
+- name: Senate Human Services Committee

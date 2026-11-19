@@ -22,6 +22,9 @@ export interface StateConfig {
   chamberLabels?: Partial<Record<"House" | "Senate", string>>;
   /** The source's own publishing floor in hours (CA pubinfo: daily = 24). The speed switch can never beat it. */
   sourceMinIntervalHours?: number;
+  // Who publishes the committee member lists when it is not the bill source (California: Open States). Absent = the
+  // bill source itself (Pennsylvania's committee-assignments feed).
+  rosterSourceName?: string;
   /** A real bill id in this state's numbering (the calendar's skeleton rows hold addresses, not bills). */
   billIdPattern: RegExp;
   stages: StageDef[];

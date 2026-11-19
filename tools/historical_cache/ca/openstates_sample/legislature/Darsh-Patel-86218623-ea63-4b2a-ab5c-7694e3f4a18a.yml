@@ -1,0 +1,34 @@
+id: ocd-person/86218623-ea63-4b2a-ab5c-7694e3f4a18a
+name: Darsh Patel
+given_name: Darsh
+family_name: Patel
+gender: Female
+email: assemblymember.patel@assembly.ca.gov
+image: https://s3.amazonaws.com/ballotpedia-api4/files/thumbs/200/300/Darshana_Patel.jpg
+party:
+- name: Democratic
+roles:
+- start_date: 2024-12-02
+  type: lower
+  jurisdiction: ocd-jurisdiction/country:us/state:ca/government
+  district: '76'
+offices:
+- classification: capitol
+  address: Room 5140, 1021 O St. P.O. Box 942849, Sacramento, CA 94249
+  voice: 916-319-2076
+- classification: district
+  address: 12396 World Trade Drive Suite 118, San Diego, CA 92128
+  voice: 858-675-0760
+links:
+- url: https://a76.asmdc.org/
+- url: https://patel.asmdc.org/
+- url: https://www.assembly.ca.gov/assemblymembers/76
+other_names:
+- name: D. Patel
+- name: D.R. Patel
+- name: Patel, D.
+sources:
+- url: https://a76.asmdc.org
+- url: https://ballotpedia.org/Darshana_Patel
+- url: https://www.assembly.ca.gov/assemblymembers/76
+- url: https://www.linkedin.com/in/darshanapatelphd

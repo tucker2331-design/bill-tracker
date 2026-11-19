@@ -1,0 +1,37 @@
+id: ocd-person/748ce69c-a2bc-41a7-95e2-b09fba6e5ecd
+name: David Tangipa
+given_name: David
+family_name: Tangipa
+birth_date: 1995-12-09
+gender: Male
+email: assemblymember.tangipa@assembly.ca.gov
+image: https://youngamericans.berkeley.edu/wp-content/uploads/2024/04/David-Tangipa-1024x1024.jpg
+party:
+- name: Republican
+roles:
+- start_date: 2024-12-02
+  type: lower
+  jurisdiction: ocd-jurisdiction/country:us/state:ca/government
+  district: '8'
+offices:
+- classification: capitol
+  address: Room 4310, 1021 O St. P.O. Box 942849, Sacramento, CA 94249
+  voice: 916-319-2008
+- classification: district
+  address: 6245 N. Fresno St. Suite 106, Fresno, CA 93710
+  voice: 559-446-2029
+links:
+- url: https://ad08.asmrc.org/
+- url: https://www.assembly.ca.gov/assemblymembers/08
+other_names:
+- name: D. Tangipa
+- name: D.J. Tangipa
+- name: Tangipa, D.
+sources:
+- url: https://ad08.asmrc.org
+- url: https://ad08.asmrc.org/biography
+- url: https://ballotpedia.org/David_Tangipa
+- url: https://en.wikipedia.org/wiki/David_Tangipa
+- url: https://justfacts.votesmart.org/candidate/213160/david-tangipa
+- url: https://www.assembly.ca.gov/assemblymembers/08
+- url: https://www.linkedin.com/in/david-tangipa-819877b2

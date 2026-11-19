@@ -1,0 +1,52 @@
+id: ocd-person/6c2a35d5-c04c-44d0-8bd9-92a625e2b525
+name: Akilah Weber Pierson
+given_name: Akilah
+family_name: Weber Pierson
+birth_date: 1978-07-02
+gender: Female
+email: senator.weber@senate.ca.gov
+image: https://sd39.senate.ca.gov/sites/sd39.senate.ca.gov/files/website/sd39_bio_portrait.jpg
+party:
+- name: Democratic
+roles:
+- start_date: 2024-12-02
+  type: upper
+  jurisdiction: ocd-jurisdiction/country:us/state:ca/government
+  district: '39'
+- start_date: 2021-04-19
+  end_date: 2024-12-01
+  type: lower
+  jurisdiction: ocd-jurisdiction/country:us/state:ca/government
+  district: '79'
+offices:
+- classification: capitol
+  address: 1021 O St. Suite 7310, Sacramento, CA 95814
+  voice: 916-651-4039
+- classification: district
+  address: 7575 Metropolitan Drive Suite 100, San Diego, CA 92108
+  voice: 619-688-6700
+links:
+- url: https://sd39.senate.ca.gov/
+other_names:
+- name: A. Weber
+- name: A. Weber Pierson
+- name: A.F. Weber
+- name: A.F. Weber Pierson
+- name: Akilah Faizah Weber
+- name: Akilah Weber
+- name: Akilah Weber, M.D.
+- name: Weber Pierson
+- name: Weber Pierson, A.
+- name: Weber, A.
+sources:
+- url: https://a79.asmdc.org
+- url: https://a79.asmdc.org/
+- url: https://ballotpedia.org/Akilah_Weber
+- url: https://en.wikipedia.org/wiki/Akilah_Weber
+- url: https://justfacts.votesmart.org/candidate/biography/195832/akilah-weber
+- url: https://sd39.senate.ca.gov
+- url: https://sd39.senate.ca.gov/biography
+- url: https://www.assembly.ca.gov/assemblymembers
+- url: https://www.linkedin.com/in/akilah-weber-3164404
+extras:
+  P.O. Box: P.O. Box 942849, Sacramento, CA 94249-0079;

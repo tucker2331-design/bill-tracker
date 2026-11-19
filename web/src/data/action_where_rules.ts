@@ -33,6 +33,11 @@ export function parseWhereGrid(grid: string[][]): WhereLoad {
 export const WHERE_LABEL: Record<string, string> = { H: "In the House", S: "In the Senate", G: "With the Governor",
   "0": "No chamber" };   // 0 = the source itself lists no chamber for the action (VA: Governor, Acts of Assembly)
 
+/** The same labels with a state's own chamber names ("In the Assembly" in California). Pure: the caller passes them. */
+export function whereLabels(house: string, senate: string): Record<string, string> {
+  return { ...WHERE_LABEL, H: `In the ${house}`, S: `In the ${senate}` };
+}
+
 /** Display only: a source line in sentence case — an all-capitals line is lowered after its first letter;
  *  otherwise only the first letter is raised. Nothing is decided from the text. */
 export function sentenceCase(s: string): string {
@@ -49,7 +54,8 @@ export interface FeedLine { bill: string; where: string; text: string; action: s
  * `stripCode` removes a source's fixed-position code field from its text (VA: LIS's "H "/"S " chamber column);
  * a state's own short line, when present, replaces the source text.
  */
-export function feedLines(items: FeedLineIn[], where: Map<string, BillWhere> | null, stripCode: RegExp | null): FeedLine[] {
+export function feedLines(items: FeedLineIn[], where: Map<string, BillWhere> | null, stripCode: RegExp | null,
+  labels: Record<string, string> = WHERE_LABEL): FeedLine[] {
   const latest = new Map<string, FeedLineIn>(), count = new Map<string, number>();
   for (const it of items) {
     count.set(it.bill, (count.get(it.bill) ?? 0) + 1);
@@ -64,7 +70,7 @@ export function feedLines(items: FeedLineIn[], where: Map<string, BillWhere> | n
     const code = same ? w!.where[it.idx] : "";
     const own = same ? w!.short?.[it.idx] : undefined;
     const text = own ?? (stripCode ? it.action.replace(stripCode, "") : it.action);
-    out.push({ bill: it.bill, where: WHERE_LABEL[code] ?? "", text: sentenceCase(text), action: it.action,
+    out.push({ bill: it.bill, where: labels[code] ?? "", text: sentenceCase(text), action: it.action,
       others: (count.get(it.bill) ?? 1) - 1 });
   }
   return out;

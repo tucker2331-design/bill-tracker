@@ -87,7 +87,7 @@ status: active
 ## READY
 - **📋 OWNER LIST 2026-11-16/18:** ✅ Sheets retry (#271) · ✅ VA on the chamber subway (#272) · ✅ census guards +
   speed switch (#273) · ✅ Cloudflare ticks verified · ✅ PA stats batches 1–2 + element-value + drafting tests
-  ([[testing/pa_replication]], plan [[testing/pa_predictive_plan]]) · ✅ batch 3 (member votes, 2026-11-18) · ✅ party position tested ([[testing/pa_party_position]] — owner decision on memos) · drafting room v4 + legislator page mocked — **awaiting review** · 🇨🇦 California scoped + intake built ([[knowledge/ca_pubinfo]] — owner steps to go live)
+  ([[testing/pa_replication]], plan [[testing/pa_predictive_plan]]) · ✅ batch 3 (member votes, 2026-11-18) · ✅ party position tested ([[testing/pa_party_position]] — owner decision on memos) · drafting room v4 + legislator page mocked — **awaiting review** · 🇨🇦 California: bills (#274) + calendar + committee members (#275) + stats ([[testing/ca_replication]]) — **owner steps: Worker secrets + Google sign-in origin + turn off non-main branch builds** ([[knowledge/ca_pubinfo]])
   ([[ideas/drafting_war_room]], [[knowledge/district_profiles]]) · portfolio mock needs the same redo
   ([[ideas/legislator_portfolio]]).
 - **🕒 Jobs: dropped GitHub ticks (found 2026-11-02, [[log]]):** (1) Sheets 429 — DONE 2026-11-16 (`sheets_retry`,
@@ -106,6 +106,10 @@ status: active
 - [[knowledge/campaign_finance_ingest]] — the ELECT committee->legislator join resolves only 54 of 158 sitting patrons; needs a join on committee identity, not the free-text office field.
 
 ## RECENTLY LANDED (newest first; full detail in [[log]])
+- **2026-11-18 — California + four speeds (#274).** CA intake from Legislative Counsel's daily pubinfo export (public
+  domain; bulk files only): 5,040 measures, 0 unclassified, resolutions adopted never signed, fail closed on a
+  malformed bill row (Codex fold-in, case law #162). One speed switch: daily · 4h · fast · instant — VA/CA/NY daily, PA
+  fast ([[knowledge/ca_pubinfo]], [[knowledge/lis_api_safety]]).
 - **2026-11-17/18 — PA statistics + the pre-introduction drafting room.** Virginia's tests re-run on 9 PA sessions
   (batches 1–2), element-value test, ten drafting tests; district profiles for every PA/VA seat (count + share,
   facilities, overlap); mock v2 in the v9 language ([[testing/pa_replication]], [[ideas/drafting_war_room]]).
@@ -118,7 +122,6 @@ status: active
   export's floor actions. Why the 7 meetings list no bills: hearings, agencies and unannounced slots in the lull
   ([[knowledge/pa_bill_history_xml]]). Case law #154.
 - **2026-10-31 — Pennsylvania intake + DOCKET fix.** PA export → the bill contract with PA's own stages (no crossover), goldens on a real sample ([[knowledge/pa_bill_history_xml]]); VA bills now carry their upcoming meetings ([[failures/assumptions_audit|#152]]).
-- **2026-10-31 — Multi-state split (Standard #6)** — every VA assumption in the bill pipeline and the SPA now lives in `states/va.py` / `web/src/states/va.ts`; goldens prove VA output byte-identical on 3,645 real 2026 bills ([[architecture/multi_state_config]]). The DOCKET bug it surfaced is fixed: 0 → 1,162 bills with upcoming meetings on the frozen-clock replay ([[failures/assumptions_audit|#152]]).
 
 ## Watch items
 - **⏰ 2027 SESSION OPEN → activate the gated build-wave features.** When the worker detects the 2027 regular

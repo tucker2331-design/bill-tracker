@@ -1,0 +1,40 @@
+id: ocd-organization/b5e8807a-6ba1-4e0a-8841-a0e86b737d9f
+jurisdiction: ocd-jurisdiction/country:us/state:ca/government
+classification: committee
+name: Human Services
+chamber: lower
+sources:
+- url: https://ahum.assembly.ca.gov
+- url: https://ahum.assembly.ca.gov/
+  note: Committee Detail Page
+- url: https://www.assembly.ca.gov/committees
+  note: Committee List Page
+links:
+- url: https://ahum.assembly.ca.gov
+  note: homepage
+members:
+- name: Alex Lee
+  role: chair
+  person_id: ocd-person/5d0057a2-e04d-44ca-b1d5-fc55e113351a
+- name: David Tangipa
+  role: vice chair
+  person_id: ocd-person/748ce69c-a2bc-41a7-95e2-b09fba6e5ecd
+- name: Celeste Rodriguez
+  role: member
+  person_id: ocd-person/1dbf574d-4c03-40ce-8c30-a6727c4bd5ab
+- name: Corey Jackson
+  role: member
+  person_id: ocd-person/e351eaa3-8aa1-4f26-a8ff-2a260a0ad383
+- name: Kate Sanchez
+  role: member
+  person_id: ocd-person/76378b56-7ad9-463c-a4fd-47c665b26ee8
+- name: Lisa Calderon
+  role: member
+  person_id: ocd-person/ed58ae30-ffe5-4395-9353-141e4018cbe3
+- name: Sade Elhawary
+  role: member
+  person_id: ocd-person/6d83a613-6815-48c9-bb31-94adb1ee92ea
+other_names:
+- name: Assembly Committee on Human Services
+- name: Assembly Human Services
+- name: Assembly Human Services Committee

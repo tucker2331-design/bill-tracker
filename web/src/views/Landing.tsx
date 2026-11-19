@@ -1,12 +1,12 @@
 import { useEffect, useMemo, useState } from "react";
-import { STATE } from "../states";
+import { STATE, chamberLabel } from "../states";
 import type { Bill } from "../data/types";
 import { buildFeed, tallyOutcomes } from "../data/derive";
 import { parseLisDate, dateSort, dayKey } from "../data/dates";
 import { OutcomeChip } from "../components/common";
 import { CalendarSliver } from "../components/CalendarSliver";
 import { loadCalendar } from "../data/calendar";
-import { loadActionWhere, feedLines, type BillWhere } from "../data/action_where";
+import { loadActionWhere, feedLines, whereLabels, type BillWhere } from "../data/action_where";
 import { Timeline } from "./Timeline";
 import { useScrollCue } from "../components/useScrollCue";
 
@@ -104,7 +104,7 @@ export function Landing({ bills, onOpen, calRefresh = 0 }: { bills: Bill[]; onOp
   // useMemo: this sits after an early return, and a conditional hook would break the rules of hooks. A single
   // day's actions are bounded, so the sort is trivial. No row cap either — the panel scrolls (never cut data).
   // One line per bill (owner 2026-11-01): its latest action that day, with where it happened.
-  const lines = feedLines(items, where, STATE.actionCodePrefix);
+  const lines = feedLines(items, where, STATE.actionCodePrefix, whereLabels(chamberLabel("House"), chamberLabel("Senate")));
   const ordered = (() => {
     const rows = lines.map((it) => ({ it, t: timeFor(curDay, it.bill, it.action) }));
     const timed = rows.filter((r) => r.t).sort((a, b) => b.t!.minutes - a.t!.minutes);

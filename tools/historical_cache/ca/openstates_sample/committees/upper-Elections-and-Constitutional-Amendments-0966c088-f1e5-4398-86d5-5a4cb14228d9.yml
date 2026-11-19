@@ -1,0 +1,37 @@
+id: ocd-organization/0966c088-f1e5-4398-86d5-5a4cb14228d9
+jurisdiction: ocd-jurisdiction/country:us/state:ca/government
+classification: committee
+name: Elections and Constitutional Amendments
+chamber: upper
+sources:
+- url: https://selc.senate.ca.gov
+  note: Committee Detail Page
+- url: https://selc.senate.ca.gov/committeehome
+- url: https://senate.ca.gov/committees
+  note: Committee List Page
+links:
+- url: https://selc.senate.ca.gov
+  note: homepage
+- url: https://selc.senate.ca.gov/committeehome
+members:
+- name: Scott Wiener
+  role: chair
+  person_id: ocd-person/de84277e-1c23-4036-bd64-b27c310a1c0e
+- name: Steve Choi
+  role: vice chair
+  person_id: ocd-person/8b61aa87-d573-47e2-b17b-bd0edd3c8cf2
+- name: Ben Allen
+  role: member
+  person_id: ocd-person/e725b91e-1f7f-4510-a9cc-0b9a39d283c3
+- name: Sabrina Cervantes
+  role: member
+  person_id: ocd-person/61cc77e3-551f-40e6-bb6f-16edd89b04db
+- name: Tom Umberg
+  role: member
+  person_id: ocd-person/cecabb81-51ab-46f5-9815-cc3486da0632
+other_names:
+- name: Committee on Elections and Constitutional Amendments
+- name: Elections and Constitutional Amendments Committee
+- name: Senate Committee on Elections and Constitutional Amendments
+- name: Senate Elections and Constitutional Amendments
+- name: Senate Elections and Constitutional Amendments Committee

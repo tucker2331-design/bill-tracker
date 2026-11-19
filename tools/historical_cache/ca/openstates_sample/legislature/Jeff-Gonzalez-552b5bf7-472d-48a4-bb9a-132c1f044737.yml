@@ -1,0 +1,38 @@
+id: ocd-person/552b5bf7-472d-48a4-bb9a-132c1f044737
+name: Jeff Gonzalez
+given_name: Jeff
+family_name: Gonzalez
+birth_date: 1974-08-05
+gender: Male
+email: assemblymember.gonzalez@assembly.ca.gov
+image: https://californiaglobe.com/wp-content/uploads/2024/10/Screenshot-2024-10-03-at-7.03.49%E2%80%AFAM-708x642.png
+party:
+- name: Republican
+roles:
+- start_date: 2024-12-02
+  type: lower
+  jurisdiction: ocd-jurisdiction/country:us/state:ca/government
+  district: '36'
+offices:
+- classification: capitol
+  address: Room 4230, 1021 O St. P.O. Box 942849, Sacramento, CA 94249
+  voice: 916-319-2036
+- classification: district
+  address: 1101 Airport Road Suite D, Imperial, CA 92251
+  voice: 760-355-8656
+- classification: district
+  address: 48220 Jackson St. Suite A3, Coachella, CA 92236
+  voice: 760-347-2360
+links:
+- url: https://ad36.asmrc.org/
+- url: https://www.assembly.ca.gov/assemblymembers/36
+other_names:
+- name: Gonzalez, J.
+- name: J. Gonzalez
+sources:
+- url: https://ad36.asmrc.org
+- url: https://ballotpedia.org/Jeff_Gonzalez
+- url: https://en.wikipedia.org/wiki/Jeff_Gonzalez
+- url: https://justfacts.votesmart.org/candidate/biography/180114/jeff-gonzalez
+- url: https://www.assembly.ca.gov/assemblymembers/36
+- url: https://www.linkedin.com/in/jeffgonzalez-

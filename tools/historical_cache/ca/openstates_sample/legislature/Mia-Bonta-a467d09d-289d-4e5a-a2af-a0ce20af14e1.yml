@@ -1,0 +1,40 @@
+id: ocd-person/a467d09d-289d-4e5a-a2af-a0ce20af14e1
+name: Mia Bonta
+given_name: Mia
+family_name: Bonta
+birth_date: 1972-01-26
+gender: Female
+email: assemblymember.mbonta@assembly.ca.gov
+image: https://webapi.assembly.ca.gov/district-media/assets/members/assembly_member_18.jpg
+party:
+- name: Democratic
+roles:
+- start_date: 2021-09-07
+  type: lower
+  jurisdiction: ocd-jurisdiction/country:us/state:ca/government
+  district: '18'
+offices:
+- classification: capitol
+  address: Room 390, 1020 N St., Sacramento, CA 95814
+  voice: 916-319-2018
+- classification: district
+  address: 1515 Clay St. Suite 2204, Oakland, CA 94612
+  voice: 510-286-1670
+- classification: district-mail
+  address: P.O. Box 942849, Sacramento, CA 94249
+links:
+- url: https://a18.asmdc.org/
+- url: https://bonta.asmdc.org/
+other_names:
+- name: Bonta, M.
+- name: M. Bonta
+- name: M.T. Bonta
+- name: Mialisa Tania Bonta
+sources:
+- url: https://a18.asmdc.org
+- url: https://ballotpedia.org/Mia_Bonta
+- url: https://en.wikipedia.org/wiki/Mia_Bonta
+- url: https://www.assembly.ca.gov/assemblymembers
+- url: https://www.linkedin.com/in/mialisabonta
+extras:
+  P.O. Box: P.O. Box 942849, Sacramento, CA 94249-0018;

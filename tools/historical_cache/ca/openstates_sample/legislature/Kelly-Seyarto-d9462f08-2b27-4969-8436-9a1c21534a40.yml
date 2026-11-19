@@ -1,0 +1,49 @@
+id: ocd-person/d9462f08-2b27-4969-8436-9a1c21534a40
+name: Kelly Seyarto
+given_name: Kelly
+family_name: Seyarto
+birth_date: 1962-10-28
+gender: Male
+email: senator.seyarto@senate.ca.gov
+image: https://www.senate.ca.gov/sites/senate.ca.gov/files/senator_photos/seyarto_kelly_r-32c.jpg
+party:
+- name: Republican
+roles:
+- start_date: 2022-12-05
+  type: upper
+  jurisdiction: ocd-jurisdiction/country:us/state:ca/government
+  district: '32'
+- start_date: 2020-12-07
+  end_date: 2022-12-04
+  type: lower
+  jurisdiction: ocd-jurisdiction/country:us/state:ca/government
+  district: '67'
+offices:
+- classification: capitol
+  address: 1021 O St. Suite 7120, Sacramento, CA 95814
+  voice: 916-651-4032
+- classification: district
+  address: 24640 Jefferson Ave. Suite 202, Murrieta, CA 92562
+  voice: 951-894-2220
+- classification: district
+  address: 4740 Green River Road Suite 212, Corona, CA 92878
+  voice: 951-280-1260
+links:
+- url: https://senate.ca.gov/sd32
+- url: https://sr32.senate.ca.gov/
+other_names:
+- name: D.K. Seyarto
+- name: Dennis Kelly Seyarto
+- name: K. Seyarto
+- name: Seyarto, K.
+sources:
+- url: https://assembly.ca.gov/assemblymembers
+- url: https://ballotpedia.org/Kelly_Seyarto
+- url: https://en.wikipedia.org/wiki/Kelly_Seyarto
+- url: https://justfacts.votesmart.org/candidate/biography/188881/kelly-seyarto
+- url: https://sr32.senate.ca.gov
+- url: https://sr32.senate.ca.gov/about-kelly
+- url: https://www.assembly.ca.gov/assemblymembers
+- url: https://www.senate.ca.gov/senators
+extras:
+  P.O. Box: P.O. Box 942849  Sacramento, CA 94249-0067

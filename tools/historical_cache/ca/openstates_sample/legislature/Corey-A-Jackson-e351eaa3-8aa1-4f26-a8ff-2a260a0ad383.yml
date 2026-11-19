@@ -1,0 +1,43 @@
+id: ocd-person/e351eaa3-8aa1-4f26-a8ff-2a260a0ad383
+name: Corey Jackson
+given_name: Corey
+family_name: Jackson
+gender: Male
+email: assemblymember.jackson@assembly.ca.gov
+image: https://webapi.assembly.ca.gov/district-media/assets/members/assembly_member_60.jpg
+party:
+- name: Democratic
+roles:
+- start_date: 2022-12-05
+  type: lower
+  jurisdiction: ocd-jurisdiction/country:us/state:ca/government
+  district: '60'
+offices:
+- classification: capitol
+  address: Room 6120, 1021 O St. P.O. Box 942849, Sacramento, CA 94249
+  voice: 916-319-2060
+- classification: district
+  address: 22690 Cactus Ave. Suite 280, Moreno Valley, CA 92553
+  voice: 951-653-0960
+links:
+- url: https://jackson.asmdc.org/
+- url: https://www.assembly.ca.gov/assemblymembers/60
+other_names:
+- name: C. Jackson
+- name: C.A. Jackson
+- name: Corey A. Jackson
+- name: Jackson, C.
+sources:
+- url: https://a60.asmdc.org
+- url: https://ballotpedia.org/Corey_Jackson
+- url: https://en.wikipedia.org/wiki/Corey_Jackson_(politician)
+- url: https://jackson.asmdc.org
+- url: https://jackson.asmdc.org/biography
+- url: https://justfacts.votesmart.org/candidate/biography/205321/corey-jackson
+- url: https://lcmspubcontact.lc.ca.gov/PublicLCMS/ContactPopup.php?district=AD60&inframe=N
+- url: https://ww2.arb.ca.gov/about/leadership/dr-corey-jackson
+- url: https://www.assembly.ca.gov/assemblymembers
+- url: https://www.assembly.ca.gov/assemblymembers/60
+- url: https://www.linkedin.com/in/corey-jackson-msw-a250496
+extras:
+  P.O. Box: P.O. Box 942849, Sacramento, CA 94249-0060;

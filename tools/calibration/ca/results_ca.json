@@ -1,0 +1,578 @@
+{
+ "bill_fate": {
+  "out_first": {
+   "A_2023": {
+    "n_test": 4545,
+    "base_rate": 0.862,
+    "baseline_auc": 0.69,
+    "model_auc": 0.705,
+    "trees_auc": 0.734,
+    "model_log_loss": 0.407,
+    "baseline_log_loss": 0.416,
+    "auc_lost_without": {
+     "standing": 0.0316,
+     "timing": 0.0014,
+     "fiscal flags": -0.0043,
+     "co-authors": 0.0092,
+     "room record": 0.009,
+     "author record": -0.0042,
+     "tried before": 0.0015,
+     "topic record": -0.001,
+     "author volume + tenure": 0.0029
+    },
+    "calibration_deciles_pred_vs_actual": [
+     [
+      0.445,
+      0.651
+     ],
+     [
+      0.632,
+      0.729
+     ],
+     [
+      0.686,
+      0.851
+     ],
+     [
+      0.718,
+      0.899
+     ],
+     [
+      0.756,
+      0.901
+     ],
+     [
+      0.818,
+      0.861
+     ],
+     [
+      0.84,
+      0.894
+     ],
+     [
+      0.858,
+      0.908
+     ],
+     [
+      0.881,
+      0.956
+     ],
+     [
+      0.933,
+      0.976
+     ]
+    ],
+    "coef": {
+     "maj": 0.915,
+     "committee_bill": 2.167,
+     "year2": 3.353,
+     "months_in": -0.35,
+     "fiscal": 0.153,
+     "appropriation": 0.027,
+     "urgency": -0.325,
+     "vote_2_3": 0.111,
+     "local_program": 0.03,
+     "taxlevy": 0.12,
+     "log_co": 0.062,
+     "bipartisan": 0.602,
+     "co_other_house": 0.202,
+     "room_record": 1.003,
+     "room_known": 0.259,
+     "author_record": 0.654,
+     "author_known": -0.186,
+     "tried_before": -0.257,
+     "tried_record": 0.319,
+     "topic_record": -0.445,
+     "topic_known": 0.015,
+     "filed_to_date": 0.006,
+     "tenure": 0.048
+    }
+   },
+   "B_2025": {
+    "n_test": 4107,
+    "base_rate": 0.878,
+    "baseline_auc": 0.755,
+    "model_auc": 0.763,
+    "trees_auc": 0.714,
+    "model_log_loss": 0.357,
+    "baseline_log_loss": 0.362,
+    "auc_lost_without": {
+     "standing": 0.0246,
+     "timing": 0.002,
+     "fiscal flags": 0.0056,
+     "co-authors": 0.0041,
+     "room record": 0.0049,
+     "author record": -0.0037,
+     "tried before": -0.0003,
+     "topic record": -0.0002,
+     "author volume + tenure": 0.0
+    },
+    "calibration_deciles_pred_vs_actual": [
+     [
+      0.461,
+      0.633
+     ],
+     [
+      0.64,
+      0.71
+     ],
+     [
+      0.714,
+      0.849
+     ],
+     [
+      0.761,
+      0.92
+     ],
+     [
+      0.803,
+      0.908
+     ],
+     [
+      0.833,
+      0.92
+     ],
+     [
+      0.857,
+      0.951
+     ],
+     [
+      0.882,
+      0.937
+     ],
+     [
+      0.912,
+      0.968
+     ],
+     [
+      0.955,
+      0.988
+     ]
+    ],
+    "coef": {
+     "maj": 0.937,
+     "committee_bill": 2.197,
+     "year2": 3.913,
+     "months_in": -0.387,
+     "fiscal": 0.142,
+     "appropriation": -0.001,
+     "urgency": -0.415,
+     "vote_2_3": 0.082,
+     "local_program": 0.027,
+     "taxlevy": 0.102,
+     "log_co": 0.04,
+     "bipartisan": 0.686,
+     "co_other_house": 0.264,
+     "room_record": 1.042,
+     "room_known": 0.242,
+     "author_record": 0.614,
+     "author_known": -0.5,
+     "tried_before": -0.361,
+     "tried_record": 0.452,
+     "topic_record": -0.258,
+     "topic_known": 0.105,
+     "filed_to_date": 0.032,
+     "tenure": 0.209
+    }
+   }
+  },
+  "law": {
+   "A_2023": {
+    "n_test": 4545,
+    "base_rate": 0.419,
+    "baseline_auc": 0.581,
+    "model_auc": 0.612,
+    "trees_auc": 0.623,
+    "model_log_loss": 0.662,
+    "baseline_log_loss": 0.675,
+    "auc_lost_without": {
+     "standing": 0.0051,
+     "timing": -0.0053,
+     "fiscal flags": 0.0046,
+     "co-authors": 0.0005,
+     "room record": 0.0105,
+     "author record": 0.0007,
+     "tried before": 0.0032,
+     "topic record": 0.0009,
+     "author volume + tenure": 0.0039
+    },
+    "calibration_deciles_pred_vs_actual": [
+     [
+      0.157,
+      0.213
+     ],
+     [
+      0.247,
+      0.304
+     ],
+     [
+      0.307,
+      0.378
+     ],
+     [
+      0.34,
+      0.423
+     ],
+     [
+      0.368,
+      0.42
+     ],
+     [
+      0.396,
+      0.438
+     ],
+     [
+      0.425,
+      0.454
+     ],
+     [
+      0.46,
+      0.455
+     ],
+     [
+      0.51,
+      0.551
+     ],
+     [
+      0.62,
+      0.558
+     ]
+    ],
+    "coef": {
+     "maj": 0.56,
+     "committee_bill": 1.169,
+     "year2": 0.481,
+     "months_in": -0.057,
+     "fiscal": -0.158,
+     "appropriation": -0.25,
+     "urgency": 0.321,
+     "vote_2_3": -0.147,
+     "local_program": 0.256,
+     "taxlevy": -1.31,
+     "log_co": 0.045,
+     "bipartisan": 0.172,
+     "co_other_house": 0.085,
+     "room_record": 1.52,
+     "room_known": 0.041,
+     "author_record": 1.583,
+     "author_known": -0.277,
+     "tried_before": -0.192,
+     "tried_record": 0.311,
+     "topic_record": 0.547,
+     "topic_known": -0.042,
+     "filed_to_date": -0.201,
+     "tenure": 0.069
+    }
+   },
+   "B_2025": {
+    "n_test": 4107,
+    "base_rate": 0.446,
+    "baseline_auc": 0.602,
+    "model_auc": 0.656,
+    "trees_auc": 0.616,
+    "model_log_loss": 0.65,
+    "baseline_log_loss": 0.671,
+    "auc_lost_without": {
+     "standing": 0.0075,
+     "timing": -0.0035,
+     "fiscal flags": 0.0038,
+     "co-authors": 0.0021,
+     "room record": 0.0119,
+     "author record": 0.0074,
+     "tried before": 0.0033,
+     "topic record": 0.0018,
+     "author volume + tenure": 0.0087
+    },
+    "calibration_deciles_pred_vs_actual": [
+     [
+      0.145,
+      0.185
+     ],
+     [
+      0.236,
+      0.304
+     ],
+     [
+      0.309,
+      0.366
+     ],
+     [
+      0.351,
+      0.387
+     ],
+     [
+      0.382,
+      0.433
+     ],
+     [
+      0.408,
+      0.5
+     ],
+     [
+      0.437,
+      0.509
+     ],
+     [
+      0.471,
+      0.534
+     ],
+     [
+      0.515,
+      0.535
+     ],
+     [
+      0.645,
+      0.703
+     ]
+    ],
+    "coef": {
+     "maj": 0.503,
+     "committee_bill": 0.992,
+     "year2": 0.29,
+     "months_in": -0.03,
+     "fiscal": -0.155,
+     "appropriation": -0.21,
+     "urgency": 0.288,
+     "vote_2_3": -0.174,
+     "local_program": 0.253,
+     "taxlevy": -1.244,
+     "log_co": -0.02,
+     "bipartisan": 0.182,
+     "co_other_house": 0.148,
+     "room_record": 1.615,
+     "room_known": 0.036,
+     "author_record": 1.654,
+     "author_known": -0.258,
+     "tried_before": -0.217,
+     "tried_record": 0.464,
+     "topic_record": 0.604,
+     "topic_known": -0.014,
+     "filed_to_date": -0.209,
+     "tenure": 0.082
+    }
+   }
+  }
+ },
+ "kill_points": {
+  "2023": {
+   "bills": 4821,
+   "became_law": [
+    1907,
+    0.396
+   ],
+   "vetoed": [
+    278,
+    0.058
+   ],
+   "never_referred": [
+    275,
+    0.057
+   ],
+   "first_policy_committee": [
+    625,
+    0.13
+   ],
+   "origin_appropriations": [
+    672,
+    0.139
+   ],
+   "origin_other_after_first": [
+    136,
+    0.028
+   ],
+   "second_house_appropriations": [
+    568,
+    0.118
+   ],
+   "second_house_other": [
+    360,
+    0.075
+   ],
+   "unplaced": 0
+  },
+  "2025": {
+   "bills": 4243,
+   "became_law": [
+    1830,
+    0.431
+   ],
+   "vetoed": [
+    212,
+    0.05
+   ],
+   "never_referred": [
+    136,
+    0.032
+   ],
+   "first_policy_committee": [
+    500,
+    0.118
+   ],
+   "origin_appropriations": [
+    634,
+    0.149
+   ],
+   "origin_other_after_first": [
+    141,
+    0.033
+   ],
+   "second_house_appropriations": [
+    496,
+    0.117
+   ],
+   "second_house_other": [
+    294,
+    0.069
+   ],
+   "unplaced": 0
+  }
+ },
+ "room_memory": {
+  "by_session": [
+   {
+    "session": 2017,
+    "out_if_died_before": 0.745,
+    "n_died_before": 98,
+    "out_if_passed_before": 0.833,
+    "n_passed_before": 521,
+    "out_if_new": 0.818
+   },
+   {
+    "session": 2019,
+    "out_if_died_before": 0.505,
+    "n_died_before": 95,
+    "out_if_passed_before": 0.662,
+    "n_passed_before": 591,
+    "out_if_new": 0.609
+   },
+   {
+    "session": 2021,
+    "out_if_died_before": 0.732,
+    "n_died_before": 328,
+    "out_if_passed_before": 0.845,
+    "n_passed_before": 446,
+    "out_if_new": 0.8
+   },
+   {
+    "session": 2023,
+    "out_if_died_before": 0.676,
+    "n_died_before": 142,
+    "out_if_passed_before": 0.88,
+    "n_passed_before": 548,
+    "out_if_new": 0.867
+   },
+   {
+    "session": 2025,
+    "out_if_died_before": 0.755,
+    "n_died_before": 106,
+    "out_if_passed_before": 0.9,
+    "n_passed_before": 568,
+    "out_if_new": 0.879
+   }
+  ],
+  "dies_again_if_died_before": 0.302,
+  "n": 769,
+  "die_rate_all": 0.207,
+  "odds_ratio": 1.65
+ },
+ "author_effect": {
+  "split_half_r_2021": 0.713,
+  "authors_2021": 120,
+  "split_half_r_2023": 0.738,
+  "authors_2023": 119,
+  "split_half_r_2025": 0.792,
+  "authors_2025": 120,
+  "session_to_session_r_2021_2023": 0.746,
+  "session_to_session_r_2023_2025": 0.666,
+  "author_lift_sd_pts": 16.8
+ },
+ "committee_seat": {
+  "majority": {
+   "out_with_seat": 0.878,
+   "n_seat": 7100,
+   "out_without_seat": 0.83,
+   "n_without": 11832
+  },
+  "minority": {
+   "out_with_seat": 0.636,
+   "n_seat": 1829,
+   "out_without_seat": 0.569,
+   "n_without": 3816
+  },
+  "within_author_pts": 4.4,
+  "within_author_better_worse": [
+   407,
+   240
+  ]
+ },
+ "member_votes_first_committee": {
+  "A_2023": {
+   "member_votes": 35201,
+   "aye_rate": 0.883,
+   "always_yes_accuracy": 0.883,
+   "model_accuracy": 0.882,
+   "model_auc": 0.762,
+   "crossover_votes": 11503,
+   "crossover_aye_rate": 0.742,
+   "crossover_auc": 0.676,
+   "confident_share": 0.772,
+   "confident_accuracy": 0.943
+  },
+  "B_2025": {
+   "member_votes": 32867,
+   "aye_rate": 0.884,
+   "always_yes_accuracy": 0.884,
+   "model_accuracy": 0.884,
+   "model_auc": 0.775,
+   "crossover_votes": 10984,
+   "crossover_aye_rate": 0.743,
+   "crossover_auc": 0.675,
+   "confident_share": 0.784,
+   "confident_accuracy": 0.943
+  }
+ },
+ "party_position": {
+  "A_2023_filing_facts_only": {
+   "auc": 0.609
+  },
+  "B_2025_filing_facts_only": {
+   "auc": 0.617
+  },
+  "A_2023": {
+   "floor_votes": 4421,
+   "r_caucus_no_rate": 0.326,
+   "auc": 0.966
+  },
+  "B_2025": {
+   "floor_votes": 3943,
+   "r_caucus_no_rate": 0.337,
+   "auc": 0.964
+  }
+ },
+ "stage_two_law_after_first_committee": {
+  "A_2023": {
+   "n_test": 3920,
+   "law_rate": 0.486,
+   "filing_facts_auc": 0.623,
+   "plus_first_committee_roll_call_auc": 0.646
+  },
+  "B_2025": {
+   "n_test": 3607,
+   "law_rate": 0.507,
+   "filing_facts_auc": 0.635,
+   "plus_first_committee_roll_call_auc": 0.661
+  }
+ },
+ "clock": {
+  "died": 5524,
+  "top_death_dates_mm_dd": {
+   "02-01": 3610,
+   "02-03": 908,
+   "02-02": 730,
+   "10-24": 27,
+   "04-21": 17,
+   "05-23": 14
+  },
+  "share_on_top_3_dates": 0.95
+ }
+}

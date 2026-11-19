@@ -68,6 +68,17 @@ contract differs. Source facts: [[knowledge/pa_bill_history_xml]]. Scheduled job
   migrations; `wrangler secret put` TEAM_EMAILS / GCP_SA_JSON for `bill-tracker-pa`; deploy; add the PA site's
   address to the Google OAuth client's authorised origins.
 
+## California (built 2026-11-18/19) — same code, `VITE_STATE=CA`
+- Source and rules: [[knowledge/ca_pubinfo]] (public domain by statute; bulk files only). Job `ca_bill_tracker.py`
+  (daily) reads the newest daily export and writes the CA sheet: `Bill_Tracker` (+ AA1 payload), `Sheet1` (calendar —
+  `states/ca_calendar.py`), `Committee_Roster` (`states/ca_roster.py`, Open States CC0 data), `Metrics_History`.
+- Display labels: `chamberLabels` shows the lower chamber as "Assembly" (subway, Search chips, calendar meeting
+  chamber, committee members); logic keeps House/Senate. `rosterSourceName` credits Open States on the bill page.
+- War Room without predictions, with committee members (100% of bills in a committee joined); Calendar with every
+  committee hearing's bills and votes; intake Health with CA's own checks (each key pinned to the payload by
+  `test_ca_intake.py`). Goldens: `test_ca_intake.py`, `test_ca_bill_tracker.py`, `ca.regression.mjs`; CI builds VA,
+  PA and CA.
+
 ## PA War Room (built 2026-11-01) — the VA War Room with PA data, no vote predictions
 - `features.predictions` (VA on, PA off): the War Room list hides the member bar, its key and the call-based order
   (every group is bill-number order; calls are never fetched); the bill page hides the member calls.

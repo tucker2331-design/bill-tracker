@@ -1,0 +1,42 @@
+id: ocd-person/71aa54c0-3fad-499c-928e-ffbb692a970b
+name: Joshua Hoover
+given_name: Joshua
+family_name: Hoover
+birth_date: 1988-04-11
+gender: Male
+email: assemblymember.hoover@assembly.ca.gov
+image: https://webapi.assembly.ca.gov/district-media/assets/members/assembly_member_07.jpg
+party:
+- name: Republican
+roles:
+- start_date: 2022-12-05
+  type: lower
+  jurisdiction: ocd-jurisdiction/country:us/state:ca/government
+  district: '7'
+offices:
+- classification: capitol
+  address: Room 4540, 1021 O St. P.O. Box 942849, Sacramento, CA 94249
+  voice: 916-319-2007
+- classification: district
+  address: 13405 Folsom Blvd., Building 700 Suite A, Folsom, CA 95630
+  voice: 916-294-9774
+links:
+- url: https://ad07.asmrc.org
+- url: https://ad07.asmrc.org/
+other_names:
+- name: Hoover, J.
+- name: J. Hoover
+- name: J.R. Hoover
+- name: Josh Hoover
+- name: Joshua Ryan Hoover
+sources:
+- url: https://ad07.asmrc.org
+- url: https://ad07.asmrc.org/biography
+- url: https://ballotpedia.org/Josh_Hoover
+- url: https://cagop.org/alumni/josh-hoover
+- url: https://en.wikipedia.org/wiki/Josh_Hoover
+- url: https://justfacts.votesmart.org/candidate/biography/205249/josh-hoover
+- url: https://www.assembly.ca.gov/assemblymembers
+- url: https://www.linkedin.com/in/joshuaryanhoover
+extras:
+  P.O. Box: P.O. Box 942849, Sacramento, CA  94249-0007;

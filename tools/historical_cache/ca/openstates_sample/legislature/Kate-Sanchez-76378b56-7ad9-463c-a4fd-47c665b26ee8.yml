@@ -1,0 +1,41 @@
+id: ocd-person/76378b56-7ad9-463c-a4fd-47c665b26ee8
+name: Kate Sanchez
+given_name: Kate
+family_name: Sanchez
+gender: Female
+email: assemblymember.sanchez@assembly.ca.gov
+image: https://webapi.assembly.ca.gov/district-media/assets/members/assembly_member_71.jpg
+party:
+- name: Republican
+roles:
+- start_date: 2022-12-05
+  type: lower
+  jurisdiction: ocd-jurisdiction/country:us/state:ca/government
+  district: '71'
+offices:
+- classification: capitol
+  address: Room 4340, 1021 O St. P.O. Box 942849, Sacramento, CA 94249
+  voice: 916-319-2071
+- classification: district
+  address: 22342 Avenida Empresa Suite 275, Rancho Santa Margarita, CA 92688
+  voice: 949-459-7170
+- classification: district
+  address: 24630 Washington Ave. Suite 202, Murrieta, CA 92562
+  voice: 951-696-0002
+links:
+- url: https://ad71.asmrc.org/
+other_names:
+- name: K. Sanchez
+- name: K.A. Sanchez
+- name: Kathryn A. Sanchez
+- name: Sanchez, K.
+sources:
+- url: https://ad71.asmrc.org
+- url: https://ad71.asmrc.org/biography
+- url: https://ballotpedia.org/Kate_Sanchez
+- url: https://en.wikipedia.org/wiki/Kate_Sanchez
+- url: https://justfacts.votesmart.org/candidate/biography/205341/kate-sanchez
+- url: https://www.assembly.ca.gov/assemblymembers
+- url: https://www.linkedin.com/in/kate-sanchez-9aa099312
+extras:
+  P.O. Box: P.O. Box 942849, Sacramento, CA 94249-0071;

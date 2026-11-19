@@ -1,0 +1,41 @@
+id: ocd-person/cb6cc457-59f8-4dd8-aeb5-691c3795ffb7
+name: Lena Gonzalez
+given_name: Lena
+family_name: Gonzalez
+birth_date: 1981-01-26
+gender: Female
+email: senator.gonzalez@senate.ca.gov
+image: https://www.senate.ca.gov/sites/senate.ca.gov/files/senator_photos/senator-lena-gonzalez.jpg
+party:
+- name: Democratic
+roles:
+- start_date: 2019-06-12
+  type: upper
+  jurisdiction: ocd-jurisdiction/country:us/state:ca/government
+  district: '33'
+offices:
+- classification: capitol
+  address: 1021 O St. Suite 8610, Sacramento, CA 95814
+  voice: 916-651-4033
+- classification: district
+  address: 3355 E. Gage Ave., Huntington Park, CA 90255
+  voice: 323-277-4560
+- classification: district
+  address: 3939 Atlantic Ave. Suite 107, Long Beach, CA 90807
+  voice: 562-256-7921
+links:
+- url: https://sd33.senate.ca.gov/
+- url: https://senate.ca.gov/sd33
+other_names:
+- name: Gonzalez, L.
+- name: L. Gonzalez
+- name: L.A. Gonzalez
+- name: Lena A. Gonzalez
+- name: Lena Adriana Gonzalez
+sources:
+- url: https://ballotpedia.org/Lena_Gonzalez
+- url: https://en.wikipedia.org/wiki/Lena_Gonzalez
+- url: https://sd33.senate.ca.gov
+- url: https://senate.ca.gov/senators
+- url: https://www.linkedin.com/in/lena-a-gonzalez
+- url: https://www.senate.ca.gov/senators

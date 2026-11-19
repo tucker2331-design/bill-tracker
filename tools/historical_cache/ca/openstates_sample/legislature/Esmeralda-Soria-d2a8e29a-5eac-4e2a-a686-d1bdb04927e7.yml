@@ -1,0 +1,41 @@
+id: ocd-person/d2a8e29a-5eac-4e2a-a686-d1bdb04927e7
+name: Esmeralda Soria
+given_name: Esmeralda
+family_name: Soria
+birth_date: 1982-04-22
+gender: Female
+email: assemblymember.soria@assembly.ca.gov
+image: https://webapi.assembly.ca.gov/district-media/assets/members/assembly_member_27.jpg
+party:
+- name: Democratic
+roles:
+- start_date: 2022-12-05
+  type: lower
+  jurisdiction: ocd-jurisdiction/country:us/state:ca/government
+  district: '27'
+offices:
+- classification: capitol
+  address: Room 4110, 1021 O St. P.O. Box 942849, Sacramento, CA 94249
+  voice: 916-319-2027
+- classification: district
+  address: 2550 Mariposa Mall Suite 3088, Fresno, CA 93721
+  voice: 559-890-2705
+- classification: district
+  address: 512 W. 18th St. Suite 512, Merced, CA 95340
+  voice: 209-726-5465
+links:
+- url: https://a27.asmdc.org/
+- url: https://soria.asmdc.org/
+other_names:
+- name: E. Soria
+- name: Esmeralda Zamudio Soria
+- name: Soria, E.
+sources:
+- url: https://a27.asmdc.org
+- url: https://ballotpedia.org/Esmeralda_Soria
+- url: https://en.wikipedia.org/wiki/Esmeralda_Soria
+- url: https://soriaforcalifornia.com/meet-the-candidate
+- url: https://www.assembly.ca.gov/assemblymembers
+- url: https://www.linkedin.com/in/esmeraldas1
+extras:
+  P.O. Box: P.O. Box 942849, Sacramento, CA 94249-0027;

@@ -8,6 +8,33 @@ status: active
 
 Append-only, reverse-chronological (newest at top). Each entry opens with `## [YYYY-MM-DD] <type> | <title>`.
 
+## [2026-11-19] test | Virginia's tests re-run on California ([[testing/ca_replication]])
+Six sessions (2015–2026) of pubinfo tables pulled by range request (~600 MB, ~1 min; bill text never downloaded);
+27,559 bills, 3.15 M member votes. First committee is not CA's gate (87% get out): fate AUC 0.705/0.763 vs baseline
+0.690/0.755; becomes-law 0.612/0.656 vs 0.581/0.602. Kill points: Appropriations 26–27% vs first committee 12–13%.
+Author record strongest (split-half r 0.71–0.79). Party position 0.61 at filing → 0.96 with committee votes. Deaths:
+95% on 1–3 Feb (Art. IV §10(c)). Next lever: the Appropriations fiscal analysis (BILL_ANALYSIS_TBL; Standard #3 call).
+Also folded into #275: Codex (calendar AA1 = export time; malformed counts re-published after the calendar) and
+Gemini (per-file YAML validation, counted; session-prefix guard; broad except declined per case law #105).
+
+## [2026-11-19] build | California calendar + committee members (the CA site at parity with PA)
+Owner asked whether CA was built "the same as the other sites" — it was not (calendar and committee members off, CA
+stats not run). Built: `states/ca_calendar.py` (committee hearings + floor sessions + each bill's vote, from the daily
+export — 923/923 hearing days joined, 21,219 bill rows with votes), `states/ca_roster.py` (Open States CC0 committee
+data — 4,846/4,846 bills in a committee joined, 57 committees, 590 seats), `states/ca_committees.py` (house of a
+committee: code prefix checked against history, 0 disagreements). Site: Assembly label on calendar meetings and the
+committee panel, Open States credited, 7 new Health checks. Tests: test_ca_intake 72, test_ca_bill_tracker 11,
+ca.regression 9; CI now builds the CA site. Residual: extraordinary-session bills (24) not tracked.
+
+## [2026-11-18] run | California's first write — 5,040 bills in "CA · Live"
+Run 44423770882 (dispatched by hand after the merge): `pubinfo_daily_Wed.zip`, published 2026-11-18T12:23:47Z;
+universe_count 5,040 = records_written; 0 unclassified; 0 malformed; 3 requests; 3 m 16 s. Sheet ready for the site.
+
+## [2026-11-18] pr | #274 merged — California site + four speeds + PA statistics (a545427)
+Merged after CI went green on 683ec86 (structural, golden, web build, mypy, Semgrep, pre-push audit, Workers build) and
+Codex's four findings were fixed and answered. The CA job's daily schedule (06:41 UTC) is now live; first write run
+dispatched by hand. Owner step left: the Cloudflare Worker `bill-tracker-ca`.
+
 ## [2026-11-18] fold-in | #274 Codex review — four CA findings fixed (case law #162)
 Codex (on 555516c): P1 malformed BILL_TBL rows skipped before the universe was counted → malformed BILL_TBL /
 BILL_HISTORY_TBL rows now refuse publication, others counted on Health; P1 the job read the Sunday-only yearly file →

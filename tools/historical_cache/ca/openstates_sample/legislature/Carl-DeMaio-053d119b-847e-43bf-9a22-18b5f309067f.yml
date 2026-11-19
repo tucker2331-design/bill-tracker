@@ -1,0 +1,38 @@
+id: ocd-person/053d119b-847e-43bf-9a22-18b5f309067f
+name: Carl DeMaio
+given_name: Carl
+family_name: DeMaio
+birth_date: 1974-09-14
+gender: Male
+email: assemblymember.demaio@assembly.ca.gov
+image: https://storage.googleapis.com/enview-dev-public-general/legislative-people-photos/159263.jpg
+party:
+- name: Republican
+roles:
+- start_date: 2024-12-02
+  type: lower
+  jurisdiction: ocd-jurisdiction/country:us/state:ca/government
+  district: '75'
+offices:
+- classification: capitol
+  address: Room 4630, 1021 O St. P.O. Box 942849, Sacramento, CA 94249
+  voice: 916-319-2075
+- classification: district
+  address: 9820 Willow Creek Road Suite 240, San Diego, CA 92131
+  voice: 858-566-7538
+links:
+- url: https://ad75.asmrc.org/
+- url: https://www.assembly.ca.gov/assemblymembers/75
+other_names:
+- name: C. DeMaio
+- name: C.D. DeMaio
+- name: DeMaio, C.
+sources:
+- url: https://ad75.asmrc.org
+- url: https://ad75.asmrc.org/biography
+- url: https://ballotpedia.org/Carl_DeMaio
+- url: https://en.wikipedia.org/wiki/Carl_DeMaio
+- url: https://justfacts.votesmart.org/candidate/biography/112062/carl-demaio
+- url: https://www.assembly.ca.gov/assemblymembers/75
+- url: https://www.linkedin.com/in/carl-demaio-66361553
+- url: https://www.linkedin.com/in/carldemaio

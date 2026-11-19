@@ -23,6 +23,7 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 OUT = os.path.join(HERE, "sample")
 WHOLE = {"LOCATION_CODE_TBL", "LEGISLATOR_TBL", "BILL_MOTION_TBL", "CODES_TBL"}
 PER_STATUS = {"Chaptered": 60, "Vetoed": 30, "In Committee Process": 60, "In Floor Process": 30}
+SESSION_START = "2024-12-02"   # the 2025-26 session's first action (measured); earlier agenda rows are other sessions
 
 
 def main(full):
@@ -67,6 +68,10 @@ def main(full):
                     if len(parts) != len(cols):
                         continue
                     row = dict(zip(cols, parts))
+                    if t == "COMMITTEE_AGENDA_TBL":            # meeting slots carry no bill: keep this session's
+                        if row["AGENDA_DATE"].strip("`") >= SESSION_START:
+                            keep.append(raw)
+                        continue
                     bid = row.get("BILL_ID", "").strip("`")
                     vid = row.get("BILL_VERSION_ID", "").strip("`")
                     if bid in ids or (t == "BILL_VERSION_AUTHORS_TBL" and vid in versions):
@@ -77,7 +82,14 @@ def main(full):
     with open(os.path.join(OUT, "pubinfo_sample.zip"), "wb") as f:
         f.write(buf.getvalue())
     sx = ca_pubinfo.Export(os.path.join(OUT, "pubinfo_sample.zip"), schema)
-    records, comp = ca_adapter.run_intake(sx, datetime.date(2026, 11, 18), "2026-11-18T21:00:00Z")
+    extras: dict = {}
+    records, comp = ca_adapter.run_intake(sx, datetime.date(2026, 11, 18), "2026-11-18T21:00:00Z", extras=extras)
+    from states import ca_calendar
+    cal, cstats = ca_calendar.build_calendar(sx, extras)
+    body = cal[1:]
+    com_vote = next(r for r in body if r[9] == "ca_pubinfo_agenda" and r[6])
+    floor_vote = next(r for r in body if r[9] == "ca_pubinfo_floor" and r[6] and r[1] != "Time TBA")
+    no_bills = next(r for r in body if r[10] == "no_bills_listed" and r[9] == "ca_pubinfo_agenda")
     outcomes = collections.Counter(r["outcome"] for r in records)
     raw = {f"{b['MEASURE_TYPE']}{int(b['MEASURE_NUM'])}": b for b in pick}
     checks = {}
@@ -94,7 +106,8 @@ def main(full):
     for b in [x for x in pick if x["CURRENT_STATUS"] == "In Committee Process" and x["MEASURE_TYPE"] in ("AB", "SB")][:3]:
         checks[f"{b['MEASURE_TYPE']}{int(b['MEASURE_NUM'])}"] = {"outcome": "in_progress"}
     exp = {"source": os.path.basename(full), "cut_utc": datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
-           "bills": len(pick), "outcomes": dict(outcomes), "bills_checked": checks, "completeness": comp}
+           "bills": len(pick), "outcomes": dict(outcomes), "bills_checked": checks, "completeness": comp,
+           "calendar": {"stats": cstats, "rows": len(body), "anchors": [com_vote, floor_vote, no_bills]}}
     json.dump(exp, open(os.path.join(OUT, "expected.json"), "w"), indent=1)
     print(json.dumps({k: exp[k] for k in ("bills", "outcomes", "bills_checked")}, indent=1))
     print("sample zip", os.path.getsize(os.path.join(OUT, "pubinfo_sample.zip")), "bytes; raw kept", len(raw))

@@ -1,0 +1,39 @@
+id: ocd-person/cc6eb833-e16b-472a-83ec-31e7df1b1cd9
+name: Matt Haney
+given_name: Matt
+family_name: Haney
+birth_date: 1982-04-17
+gender: Male
+email: assemblymember.haney@assembly.ca.gov
+image: https://webapi.assembly.ca.gov/district-media/assets/members/assembly_member_17.jpg
+party:
+- name: Democratic
+roles:
+- start_date: 2022-05-03
+  type: lower
+  jurisdiction: ocd-jurisdiction/country:us/state:ca/government
+  district: '17'
+offices:
+- classification: capitol
+  address: Room 5740, 1021 O St. P.O. Box 942849, Sacramento, CA 94249
+  voice: 916-319-2017
+- classification: district
+  address: 455 Golden Gate Ave. Suite 14300, San Francisco, CA 94102
+  voice: 415-557-3013
+links:
+- url: https://a17.asmdc.org/
+- url: https://haney.asmdc.org/
+other_names:
+- name: Haney, M.
+- name: M. Haney
+- name: M.C. Haney
+- name: Matthew Craig Haney
+sources:
+- url: https://a17.asmdc.org
+- url: https://ballotpedia.org/Matt_Haney
+- url: https://en.wikipedia.org/wiki/Matt_Haney
+- url: https://justfacts.votesmart.org/candidate/biography/187414/matt-haney
+- url: https://www.assembly.ca.gov/assemblymembers
+- url: https://www.linkedin.com/in/matthaneysf
+extras:
+  P.O. Box: P.O. Box 942849, Sacramento, CA 94249-0017;

@@ -1,0 +1,47 @@
+id: ocd-person/78610d0e-c790-4fc9-ab8e-0887adbbe063
+name: Al Muratsuchi
+given_name: Al
+family_name: Muratsuchi
+birth_date: 1964-09-04
+gender: Male
+email: assemblymember.muratsuchi@assembly.ca.gov
+image: https://webapi.assembly.ca.gov/district-media/assets/members/assembly_member_66.jpg
+party:
+- name: Democratic
+roles:
+- start_date: 2016-12-05
+  type: lower
+  jurisdiction: ocd-jurisdiction/country:us/state:ca/government
+  district: '66'
+offices:
+- classification: capitol
+  address: Room 5310, 1021 O St. P.O. Box 942849, Sacramento, CA 94249
+  voice: 916-319-2066
+- classification: district
+  address: 3424 W. Carson St. Suite 450, Torrance, CA 90503
+  voice: 310-375-0691
+links:
+- url: https://a66.asmdc.org/
+- url: https://muratsuchi.asmdc.org/
+other_names:
+- name: A. Muratsuchi
+- name: A.Y. Muratsuchi
+- name: Albert Yasuro Muratsuchi
+- name: Muratsuchi, A.
+other_identifiers:
+- scheme: legacy_openstates
+  identifier: CAL000523
+- scheme: legacy_openstates
+  identifier: CAL000392
+- scheme: openstates
+  identifier: ocd-person/267964ec-a417-4abc-812d-25e6713acd6b
+sources:
+- url: https://a66.asmdc.org
+- url: https://assembly.ca.gov/assemblymembers
+- url: https://ballotpedia.org/Al_Muratsuchi
+- url: https://en.wikipedia.org/wiki/Al_Muratsuchi
+- url: https://justfacts.votesmart.org/candidate/biography/138450/al-muratsuchi
+- url: https://www.assembly.ca.gov/assemblymembers
+- url: https://www.linkedin.com/in/al-muratsuchi-ab916a7
+extras:
+  P.O. Box: P.O. Box 942849, Sacramento, CA  94249-0066;

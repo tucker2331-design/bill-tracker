@@ -4,13 +4,18 @@
 import { useEffect, useState } from "react";
 import { loadRoster, rosterFor, partySplit, type RosterLoad } from "../data/roster";
 import { SOURCE } from "../config";
+import { STATE, chamberLabel } from "../states";
+
+// The chamber as the state names it ("Assembly" in California); a non-chamber value (a joint body) as written.
+const label = (c: string) => (c === "House" || c === "Senate" ? chamberLabel(c) : c);
+const ROSTER_SOURCE = STATE.rosterSourceName || SOURCE;
 
 export function CommitteeMembers({ lastCommittee, chamber }: { lastCommittee: string; chamber: string }) {
   const [res, setRes] = useState<RosterLoad | undefined>(undefined);
   useEffect(() => { let alive = true; loadRoster().then((r) => { if (alive) setRes(r); }); return () => { alive = false; }; }, []);
   if (!lastCommittee) {
     return <div className="metarow"><span className="k">Committee</span>
-      <span className="muted">{chamber ? `${chamber} · ` : ""}no committee yet</span></div>;
+      <span className="muted">{chamber ? `${label(chamber)} · ` : ""}no committee yet</span></div>;
   }
   if (!res) return null;
   if (res.status !== "ok") {
@@ -20,12 +25,12 @@ export function CommitteeMembers({ lastCommittee, chamber }: { lastCommittee: st
   const c = rosterFor(res.byKey, lastCommittee);
   if (!c) {
     return <div className="metarow"><span className="k">Committee</span>
-      <span className="muted">{lastCommittee} · {SOURCE} publishes no member list for this committee</span></div>;
+      <span className="muted">{lastCommittee} · {ROSTER_SOURCE} publishes no member list for this committee</span></div>;
   }
   const officers = c.seats.filter((s) => s.role), members = c.seats.filter((s) => !s.role);
   return (
     <div className="mc">
-      <h3 className="h" style={{ marginTop: 16 }}>Committee · {c.chamber} {c.name}</h3>
+      <h3 className="h" style={{ marginTop: 16 }}>Committee · {label(c.chamber)} {c.name}</h3>
       <p className="mc-sum">{c.seats.length} members{partySplit(c.seats) ? ` · ${partySplit(c.seats)}` : ""}</p>
       {([["Officers", officers], ["Members", members]] as const).map(([label, list]) => list.length > 0 && (
         <div key={label}>
@@ -38,7 +43,7 @@ export function CommitteeMembers({ lastCommittee, chamber }: { lastCommittee: st
           ))}
         </div>
       ))}
-      <p className="mc-foot">Members and roles: {SOURCE}'s committee assignments.
+      <p className="mc-foot">Members and roles: {ROSTER_SOURCE}'s committee assignments.
         {res.unplaced > 0 && <> {res.unplaced} roster row{res.unplaced === 1 ? "" : "s"} named no committee and could not be placed.</>}</p>
     </div>
   );

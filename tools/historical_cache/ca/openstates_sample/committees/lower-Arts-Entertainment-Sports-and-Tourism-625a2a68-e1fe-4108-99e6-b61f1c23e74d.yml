@@ -1,0 +1,48 @@
+id: ocd-organization/625a2a68-e1fe-4108-99e6-b61f1c23e74d
+jurisdiction: ocd-jurisdiction/country:us/state:ca/government
+classification: committee
+name: Arts, Entertainment, Sports and Tourism
+chamber: lower
+sources:
+- url: https://aart.assembly.ca.gov
+- url: https://aart.assembly.ca.gov/
+  note: Committee Detail Page
+- url: https://www.assembly.ca.gov/committees
+  note: Committee List Page
+links:
+- url: https://aart.assembly.ca.gov
+- url: https://www.assembly.ca.gov/committees
+members:
+- name: Chris Ward
+  role: chair
+  person_id: ocd-person/71590420-10d6-4deb-8d59-453256d625b6
+- name: Tom Lackey
+  role: vice chair
+  person_id: ocd-person/a8879d70-713c-4d0c-b723-77d0e96c18df
+- name: Avelino Valencia
+  role: member
+  person_id: ocd-person/87062971-b583-4983-8ac5-4af98bef354d
+- name: Jeff Gonzalez
+  role: member
+  person_id: ocd-person/552b5bf7-472d-48a4-bb9a-132c1f044737
+- name: Liz Ortega
+  role: member
+  person_id: ocd-person/54e48d10-22e1-43da-b114-c1d3f741faff
+- name: Rick Zbur
+  role: member
+  person_id: ocd-person/6b7e3458-361f-4fce-8a8c-069282db2af7
+- name: Sade Elhawary
+  role: member
+  person_id: ocd-person/6d83a613-6815-48c9-bb31-94adb1ee92ea
+- name: Sharon Quirk-Silva
+  role: member
+  person_id: ocd-person/840aa009-3ae4-4484-b9f0-5c5f5060e7db
+- name: Tina McKinnor
+  role: member
+  person_id: ocd-person/1aa5dff4-3d71-4642-a5e6-e3d00a5b99f9
+other_names:
+- name: Arts, Entertainment, Sports and Tourism Committee
+- name: Assembly Arts, Entertainment, Sports and Tourism
+- name: Assembly Arts, Entertainment, Sports and Tourism Committee
+- name: Assembly Committee on Arts, Entertainment, Sports and Tourism
+- name: Committee on Arts, Entertainment, Sports and Tourism

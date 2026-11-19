@@ -1,0 +1,54 @@
+id: ocd-person/19f694d8-b409-40e5-9f87-d8e3e84afc7f
+name: Eloise Reyes
+given_name: Eloise
+family_name: Reyes
+birth_date: 1956-01-27
+gender: Female
+email: senator.reyes@senate.ca.gov
+image: https://www.assembly.ca.gov/sites/assembly.ca.gov/files/memberphotos/ad-50_reyes_e17_resized.jpg
+party:
+- name: Democratic
+roles:
+- start_date: 2024-12-02
+  type: upper
+  jurisdiction: ocd-jurisdiction/country:us/state:ca/government
+  district: '29'
+- start_date: 2022-12-05
+  end_date: 2024-12-01
+  type: lower
+  jurisdiction: ocd-jurisdiction/country:us/state:ca/government
+  district: '50'
+- end_date: 2022-12-05
+  type: lower
+  jurisdiction: ocd-jurisdiction/country:us/state:ca/government
+  district: '47'
+offices:
+- classification: capitol
+  address: 1021 O St. Suite 7210, Sacramento, CA 95814
+  voice: 916-651-4029
+- classification: district
+  address: 301 E. Vanderbilt Way Suite 400, San Bernardino, CA 92408
+  voice: 909-888-5360
+links:
+- url: https://sd29.senate.ca.gov/
+other_names:
+- name: E. Reyes
+- name: E.G. Reyes
+- name: Eloise Gomez Reyes
+- name: "Eloise G\xF3mez Reyes"
+- name: Reyes, E.
+other_identifiers:
+- scheme: legacy_openstates
+  identifier: CAL000515
+sources:
+- url: https://a50.asmdc.org
+- url: https://a50.asmdc.org/biography
+- url: https://assembly.ca.gov/assemblymembers
+- url: https://ballotpedia.org/Eloise_Reyes
+- url: https://en.wikipedia.org/wiki/Eloise_Reyes
+- url: https://justfacts.votesmart.org/candidate/biography/169395/eloise-reyes
+- url: https://sd29.senate.ca.gov
+- url: https://www.assembly.ca.gov/assemblymembers
+- url: https://www.linkedin.com/in/eloise-reyes-726759a
+extras:
+  P.O. Box: P.O. Box 942849, Sacramento, CA  94249-0050;

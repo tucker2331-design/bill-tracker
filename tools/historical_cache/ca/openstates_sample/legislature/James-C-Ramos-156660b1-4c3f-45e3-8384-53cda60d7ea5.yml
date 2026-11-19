@@ -1,0 +1,48 @@
+id: ocd-person/156660b1-4c3f-45e3-8384-53cda60d7ea5
+name: James Ramos
+given_name: James
+family_name: Ramos
+birth_date: 1967-01-29
+gender: Male
+email: assemblymember.ramos@assembly.ca.gov
+image: https://webapi.assembly.ca.gov/district-media/assets/members/assembly_member_45.jpg
+party:
+- name: Democratic
+roles:
+- start_date: 2022-12-05
+  type: lower
+  jurisdiction: ocd-jurisdiction/country:us/state:ca/government
+  district: '45'
+- start_date: 2018-12-03
+  end_date: 2022-12-05
+  type: lower
+  jurisdiction: ocd-jurisdiction/country:us/state:ca/government
+  district: '40'
+offices:
+- classification: capitol
+  address: Room 8310, 1021 O St. P.O. Box 942849, Sacramento, CA 94249
+  voice: 916-319-2045
+- classification: district
+  address: 290 N. D St. Suite 805, San Bernardino, CA 92401
+  voice: 909-889-7145
+links:
+- url: https://ramos.asmdc.org/
+- url: https://www.assembly.ca.gov/assemblymembers/45
+other_names:
+- name: J. Ramos
+- name: J.C. Ramos
+- name: James C. Ramos
+- name: James Ramos
+- name: Ramos, J.
+sources:
+- url: https://a45.asmdc.org
+- url: https://assembly.ca.gov/assemblymembers
+- url: https://ballotpedia.org/James_Ramos
+- url: https://en.wikipedia.org/wiki/James_Ramos
+- url: https://justfacts.votesmart.org/candidate/biography/144120/james-ramos
+- url: https://ramos.asmdc.org
+- url: https://ramos.asmdc.org/biography
+- url: https://www.assembly.ca.gov/assemblymembers
+- url: https://www.assembly.ca.gov/assemblymembers/45
+extras:
+  P.O. Box: P.O. Box 942849  Sacramento, CA 94249-0040

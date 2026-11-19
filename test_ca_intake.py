@@ -155,5 +155,43 @@ check("pruning removes only stale fetcher files (2), keeps this run's and foreig
       _f.prune_untouched() == 2 and sorted(os.listdir(_d))[-1] == "keep-me.txt" and len(os.listdir(_d)) == 3,
       str(sorted(os.listdir(_d))))
 
+# --- Calendar: committee hearings + floor sessions from the same export (states/ca_calendar.py) ---------------------
+from states import ca_calendar  # noqa: E402
+from states.ca_committees import sort_time  # noqa: E402
+from states.pa_calendar import SHEET1_HEADER  # noqa: E402
+_x: dict = {}
+_rc, _cc = ca_adapter.run_intake(ca_pubinfo.Export(os.path.join(SAMPLE, "pubinfo_sample.zip"), schema),
+                                 datetime.date(2026, 11, 18), "2026-11-18T21:00:00Z", extras=_x)
+cal, cst = ca_calendar.build_calendar(ca_pubinfo.Export(os.path.join(SAMPLE, "pubinfo_sample.zip"), schema), _x)
+want = expected["calendar"]
+check("calendar is written in the shared Sheet1 layout", cal[0] == SHEET1_HEADER)
+check("calendar counts match the measured sample", cst == want["stats"] and len(cal) - 1 == want["rows"],
+      str({k: (cst.get(k), v) for k, v in want["stats"].items() if cst.get(k) != v}))
+for a in want["anchors"]:
+    check(f"calendar row {a[0]} {a[4]} {a[5] or '(no bills)'}", a in cal[1:], str(a))
+check("every committee code's house agrees with the history (prefix rule checked)", _cc["committee_house_prefix_disagrees"] == 0)
+for k in ("calendar_floor_desc_unclassified", "calendar_floor_code_unknown", "calendar_slot_code_unknown",
+          "calendar_hearings_without_agenda", "calendar_agenda_bills_unmatched"):
+    check(f"{k} = 0 on the real sample", cst[k] == 0, str(cst[k]))
+_bills = {r["bill"] for r in _rc}
+check("every calendar bill row names a bill on the site",
+      all(r[5] in _bills for r in cal[1:] if r[5] and "Extraordinary" not in r[5]))
+check("Assembly committees are labelled Assembly, never House", not [r for r in cal[1:] if r[4].startswith("House")]
+      and any(r[4].startswith("Assembly ") for r in cal[1:]))
+check("a blank source time is shown as Time TBA and counted",
+      sum(1 for r in cal[1:] if r[1] == "Time TBA") >= 1 and cst["calendar_time_blank"] >= 1)
+for t, want_st in (("1:30 p.m.", "13:30"), ("9 a.m.", "09:00"), ("9:00 AM", "09:00"), ("12 noon", "12:00"),
+                   ("Upon Call of the Chair", ""), ("10 minutes prior to Session", ""), ("3 p.m. or upon adjournment", "15:00")):
+    check(f"sort_time({t!r}) = {want_st!r}", sort_time(t) == want_st, sort_time(t))
+check("a bill's committee in the record is house-qualified ('Assembly …' / 'Senate …')",
+      all(r["last_committee"].startswith(("Assembly ", "Senate ")) for r in _rc if r["last_committee"]))
+
+# What's new: where each action happened — one structural code per history row (states/ca_adapter.WHERE_CODE)
+check("every record's where-codes line up with its history (one per row), from H/S/G/0 only, none unknown",
+      all(len(_x["action_where"][r["bill"]]) == len(r["history"]) for r in _rc)
+      and set("".join(_x["action_where"].values())) <= set("HSG0") and _cc["action_where_unknown"] == 0)
+
+# Committee rosters (need PyYAML) are tested in test_ca_roster.py and test_ca_bill_tracker.py (golden CI job).
+
 print(f"\n{len(FAILS)} failed" if FAILS else "\nall passed")
 sys.exit(1 if FAILS else 0)

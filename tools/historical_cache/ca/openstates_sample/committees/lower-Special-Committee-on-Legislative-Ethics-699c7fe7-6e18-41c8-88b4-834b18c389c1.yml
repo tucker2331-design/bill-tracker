@@ -1,0 +1,40 @@
+id: ocd-organization/699c7fe7-6e18-41c8-88b4-834b18c389c1
+jurisdiction: ocd-jurisdiction/country:us/state:ca/government
+classification: committee
+name: Legislative Ethics Special
+chamber: lower
+sources:
+- url: https://committees.assembly.ca.gov/leg-ethics/about/overview
+- url: https://www.assembly.ca.gov/committees
+  note: Committee List Page
+- url: https://www.assembly.ca.gov/committees/special-committee-legislative-ethics
+  note: Committee Detail Page
+links:
+- url: https://committees.assembly.ca.gov/leg-ethics/about/overview
+- url: https://www.assembly.ca.gov/committees
+- url: https://www.assembly.ca.gov/committees/special-committee-legislative-ethics
+members:
+- name: Catherine Stefani
+  role: co-chair
+  person_id: ocd-person/3864202e-3b40-430e-a218-cfe56d83cee5
+- name: Phillip Chen
+  role: co-chair
+  person_id: ocd-person/6ba768a4-2756-42b5-a5c5-f6b8b5db0491
+- name: Heather Hadwick
+  role: member
+  person_id: ocd-person/3b125433-5362-42e2-a2b5-b608962c9481
+- name: Laurie Davies
+  role: member
+  person_id: ocd-person/1b3ac39e-7b50-4263-bd1d-add1e91d71b9
+- name: Marc Berman
+  role: member
+  person_id: ocd-person/24facf9e-7fb1-4475-9120-05cd0145c7c1
+other_names:
+- name: Assembly Committee on Legislative Ethics Special
+- name: Assembly Legislative Ethics
+- name: Assembly Legislative Ethics Special
+- name: Assembly Legislative Ethics Special Committee
+- name: Assembly Special Committee on Legislative Ethics
+- name: Legislative Ethics
+- name: Legislative Ethics Special Committee
+- name: Special Committee on Legislative Ethics

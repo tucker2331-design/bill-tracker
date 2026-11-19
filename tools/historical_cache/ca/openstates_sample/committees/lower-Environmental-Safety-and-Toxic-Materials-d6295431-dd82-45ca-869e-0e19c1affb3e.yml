@@ -1,0 +1,42 @@
+id: ocd-organization/d6295431-dd82-45ca-869e-0e19c1affb3e
+jurisdiction: ocd-jurisdiction/country:us/state:ca/government
+classification: committee
+name: Environmental Safety and Toxic Materials
+chamber: lower
+sources:
+- url: https://aesm.assembly.ca.gov
+- url: https://aesm.assembly.ca.gov/
+  note: Committee Detail Page
+- url: https://www.assembly.ca.gov/committees
+  note: Committee List Page
+links:
+- url: https://aesm.assembly.ca.gov
+  note: homepage
+members:
+- name: Damon Connolly
+  role: chair
+  person_id: ocd-person/32e06e60-77ac-4c5e-af1e-2110b602dc97
+- name: Stan Ellis
+  role: vice chair
+  person_id: ocd-person/01fddc24-a5ac-40b7-a9e1-80e918fee609
+- name: Alex Lee
+  role: member
+  person_id: ocd-person/5d0057a2-e04d-44ca-b1d5-fc55e113351a
+- name: Diane Papan
+  role: member
+  person_id: ocd-person/20c72bef-f518-4677-bbcb-83c502c36ede
+- name: Leticia Castillo
+  role: member
+  person_id: ocd-person/06d4d543-2374-436f-978d-b924c7ec7d53
+- name: Rebecca Bauer-Kahan
+  role: member
+  person_id: ocd-person/2918acca-40a2-4819-a79a-b2873c7895bc
+- name: Tina McKinnor
+  role: member
+  person_id: ocd-person/1aa5dff4-3d71-4642-a5e6-e3d00a5b99f9
+other_names:
+- name: Assembly Committee on Environmental Safety and Toxic Materials
+- name: Assembly Environmental Safety and Toxic Materials
+- name: Assembly Environmental Safety and Toxic Materials Committee
+- name: Committee on Environmental Safety and Toxic Materials
+- name: Environmental Safety and Toxic Materials Committee

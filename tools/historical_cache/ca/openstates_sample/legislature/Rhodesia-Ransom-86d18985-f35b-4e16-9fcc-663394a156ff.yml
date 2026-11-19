@@ -1,0 +1,34 @@
+id: ocd-person/86d18985-f35b-4e16-9fcc-663394a156ff
+name: Rhodesia Ransom
+given_name: Rhodesia
+family_name: Ransom
+gender: Female
+email: assemblymember.ransom@assembly.ca.gov
+image: https://ca.emergeamerica.org/wp-content/uploads/sites/4/2023/01/Rhodesia-Ransom.jpg
+party:
+- name: Democratic
+roles:
+- start_date: 2024-12-02
+  type: lower
+  jurisdiction: ocd-jurisdiction/country:us/state:ca/government
+  district: '13'
+offices:
+- classification: capitol
+  address: Room 6340, 1021 O St. P.O. Box 942849, Sacramento, CA 94249
+  voice: 916-319-2013
+- classification: district
+  address: 4643 Quail Lakes Drive Suite 200, Stockton, CA 95207
+  voice: 209-948-7479
+links:
+- url: https://a13.asmdc.org/
+- url: https://www.assembly.ca.gov/assemblymembers/13
+other_names:
+- name: R. Ransom
+- name: R.R. Ransom
+- name: Ransom, R.
+sources:
+- url: https://a13.asmdc.org
+- url: https://ballotpedia.org/Rhodesia_Ransom
+- url: https://en.wikipedia.org/wiki/Rhodesia_Ransom
+- url: https://www.assembly.ca.gov/assemblymembers/13
+- url: https://www.linkedin.com/in/rhodesia-ransom
