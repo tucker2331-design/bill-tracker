@@ -76,3 +76,5 @@ tools/historical_cache/ca/load/
 dist-ca
 web/dist-ca
 .openstates_people
+tools/historical_cache/ca/*/tables/
+tools/calibration/ca/.*.pkl

@@ -480,3 +480,24 @@ present. A stale finding dismissed from memory is indistinguishable from a real 
 Both hook commands ended `2>/dev/null || true`, so a broken gate silently did not run. **The
 silent-fallback anti-pattern, living inside the tool built to catch silent fallbacks.** Worth remembering
 that a safety mechanism is code too, and inherits none of its own protection by virtue of being one.
+
+## 2026-11-19 — PR #275 (CA calendar + committee members). Codex 2 × P2, Gemini 4 × high.
+
+### A freshness stamp copied from a sibling job carried the sibling's meaning
+The CA calendar's AA1 was written as `checked_at_utc` because Pennsylvania's calendar does that. But the CA bills
+had just been switched to the EXPORT's publication time (#274) — so the calendar would have looked fresh over a
+stale export while the bills, from the same file, showed their true age (Codex). **When one surface's clock is
+corrected, grep every other clock fed by the same source.** Fixed: AA1 = `source_published_utc`.
+
+### A counter snapshotted before the last reader ran
+`rows_with_wrong_field_count` was copied into the payload by the intake, and the calendar then read two more tables
+(motions, meeting slots). A malformed row there was counted by the reader but never published (Codex). **A
+lazily-filled counter must be published after its last consumer.** Fixed: re-published after the calendar pass.
+
+### "Catch Exception in a fail-open gate" — declined
+Gemini asked the roster's narrow `except (OSError, KeyError, yaml.YAMLError)` be widened to `except Exception`.
+Declined: case law #105 (a programming error inside a broad except wore an API-outage costume through three
+misdiagnoses). Instead the real failure mode it pointed at — one malformed file — is now handled where it happens:
+each Open States file is validated (a dict carrying its required keys) and an unreadable one is skipped and COUNTED
+(`roster_files_unreadable`, a Health check), so one bad file never sinks the roster and a code bug still fails loudly.
+Its session-prefix guard was already implied (an empty universe raises earlier) but made explicit — cheap.

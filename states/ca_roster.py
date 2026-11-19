@@ -39,27 +39,43 @@ def norm(name: str) -> str:
     return " ".join(name.upper().replace("&", " AND ").replace(",", " ").replace("-", " ").split())
 
 
-def load_people(ca_dir: str, today: datetime.date) -> Dict[str, Tuple[str, str]]:
-    """ocd-person id -> (party letter, district) for every member with a CURRENT legislative role."""
+def _load(path: str, required: Tuple[str, ...]) -> Optional[dict]:
+    """One Open States file as a dict carrying `required`, or None when it cannot be read (the caller COUNTS it)."""
     import yaml
-    out = {}
-    for f in sorted(glob.glob(os.path.join(ca_dir, "legislature", "*.yml"))):
-        with open(f, encoding="utf-8") as fh:
+    try:
+        with open(path, encoding="utf-8") as fh:
             d = yaml.safe_load(fh)
-        current = [r for r in d.get("roles", []) if r.get("type") in ("lower", "upper")
+    except (OSError, UnicodeDecodeError, yaml.YAMLError):
+        return None
+    if not isinstance(d, dict) or any(not d.get(k) for k in required):
+        return None
+    return d
+
+
+def load_people(ca_dir: str, today: datetime.date) -> Tuple[Dict[str, Tuple[str, str]], List[str]]:
+    """ocd-person id -> (party letter, district) for every member with a CURRENT legislative role; plus the files that
+    could not be read (counted by the caller, never silently dropped)."""
+    out, bad = {}, []
+    for f in sorted(glob.glob(os.path.join(ca_dir, "legislature", "*.yml"))):
+        d = _load(f, ("id",))
+        if d is None:
+            bad.append(os.path.basename(f))
+            continue
+        roles = [r for r in (d.get("roles") or []) if isinstance(r, dict)]
+        current = [r for r in roles if r.get("type") in ("lower", "upper")
                    and (not r.get("end_date") or str(r["end_date"]) >= today.isoformat())]
-        parties = [p["name"] for p in d.get("party", []) if not p.get("end_date") or str(p["end_date"]) >= today.isoformat()]
+        parties = [p["name"] for p in (d.get("party") or []) if isinstance(p, dict) and p.get("name")
+                   and (not p.get("end_date") or str(p["end_date"]) >= today.isoformat())]
         party = parties[0] if parties else ""
-        out[d["id"]] = (PARTY.get(party, party), str(current[0]["district"]) if current else "")
-    return out
+        out[d["id"]] = (PARTY.get(party, party), str(current[0].get("district", "")) if current else "")
+    return out, bad
 
 
 def build_roster(ca_dir: str, coms: Committees, today: datetime.date) -> Tuple[List[dict], dict]:
-    import yaml
     files = sorted(glob.glob(os.path.join(ca_dir, "committees", "*.yml")))
     if not files:
         raise FileNotFoundError(f"no committee files under {ca_dir}/committees — the Open States checkout is missing")
-    people = load_people(ca_dir, today)
+    people, bad_people = load_people(ca_dir, today)
     # pubinfo committees, keyed the way a bill's last_committee is: "{house} {name}" -> that exact display string
     pub: Dict[str, Tuple[str, str]] = {}
     for code, name in coms.names.items():
@@ -69,17 +85,23 @@ def build_roster(ca_dir: str, coms: Committees, today: datetime.date) -> Tuple[L
     stats: Counter[str] = collections.Counter()
     unmatched: List[str] = []
     rows: List[dict] = []
+    bad_files: List[str] = list(bad_people)
     for f in files:
-        with open(f, encoding="utf-8") as fh:
-            d = yaml.safe_load(fh)
-        house = CHAMBER.get(d.get("chamber", ""), d.get("chamber", ""))
+        d = _load(f, ("name", "chamber"))
+        if d is None:
+            bad_files.append(os.path.basename(f))      # one unreadable file never sinks the roster: counted, Health
+            continue
+        house = CHAMBER.get(d["chamber"], d["chamber"])
         match = pub.get(f"{house} {norm(d['name'])}")
         if match is None:
             stats["roster_committees_not_in_pubinfo"] += 1     # select / joint committees: they hear no bills
             unmatched.append(f"{house} {d['name']}")
             continue
         stats["roster_committees"] += 1
-        for m in d.get("members", []):
+        for m in (d.get("members") or []):
+            if not isinstance(m, dict) or not m.get("name"):
+                stats["roster_members_unreadable"] += 1
+                continue
             mapped: Optional[str] = ROLE.get((m.get("role") or "member").lower())
             if mapped is None:
                 stats["roster_roles_unrecognised"] += 1        # shown as the source wrote it, counted
@@ -94,7 +116,10 @@ def build_roster(ca_dir: str, coms: Committees, today: datetime.date) -> Tuple[L
                          "district": district, "role": role})
     rows.sort(key=lambda x: (x["key"], ROLE_ORDER.get(x["role"], 3), x["member"]))
     out: Dict[str, Any] = {k: stats.get(k, 0) for k in ("roster_committees", "roster_committees_not_in_pubinfo",
-                                        "roster_members_unresolved", "roster_roles_unrecognised")}
+                                        "roster_members_unresolved", "roster_roles_unrecognised",
+                                        "roster_members_unreadable")}
+    out["roster_files_unreadable"] = len(bad_files)
+    out["roster_files_unreadable_sample"] = bad_files[:10]
     out.update({"roster_seats": len(rows), "roster_committees_not_in_pubinfo_sample": sorted(unmatched)[:10],
                 "roster_source": "Open States people data (CC0), data/ca"})
     return rows, out

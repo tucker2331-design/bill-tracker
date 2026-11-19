@@ -111,7 +111,7 @@ check("completeness at AA1: universe_count == records_written == 240",
 check("session label from the export", payload["session_display"] == "2025-2026 Regular Session")
 ct = sheet.tabs.get("Sheet1")
 check("calendar written to Sheet1 in the shared header, with its freshness clock at AA1",
-      ct is not None and ct.cells["A1"][0] == SHEET1_HEADER and ct.cells["AA1"] == [[payload["checked_at_utc"]]]
+      ct is not None and ct.cells["A1"][0] == SHEET1_HEADER and ct.cells["AA1"] == [[payload["source_published_utc"]]]
       and len(ct.cells["A1"]) - 1 == payload["calendar_rows"])
 rt = sheet.tabs.get("Committee_Roster")
 check("Committee_Roster written in the shared header, every sample bill's committee found",
@@ -122,6 +122,38 @@ check("one OK heartbeat under the bill worker's origin, carrying the calendar an
       len(beat) == 1 and beat[0][1:3] == ["OK", "bill_system_metrics"]
       and json.loads(beat[0][3]).get("bills_committee_without_roster") == 0
       and json.loads(beat[0][3]).get("calendar_meetings") == payload["calendar_meetings"])
+
+# The site reads these payload keys as Health checks (web/src/states/ca.ts intakeChecks): each must be in the JOB's payload.
+import re  # noqa: E402
+_keys = re.findall(r'\{ key: "([a-z_]+)"', open(os.path.join(HERE, "web", "src", "states", "ca.ts"), encoding="utf-8").read())
+check("every Health check on the CA site reads a key the job publishes", bool(_keys) and all(k in payload for k in _keys),
+      str([k for k in _keys if k not in payload]))
+check("the calendar's freshness clock is the export's publication time, not our check time (Codex #275)",
+      ct.cells["AA1"] == [["2026-11-18T12:23:47Z"]])
+
+# a malformed row in a table only the CALENDAR reads (motions) still reaches Health and the heartbeat (Codex #275)
+import tempfile  # noqa: E402
+import zipfile  # noqa: E402
+_bad = os.path.join(tempfile.mkdtemp(prefix="ca_job_bad_"), "pubinfo_sample.zip")
+with zipfile.ZipFile(os.path.join(SAMPLE, "pubinfo_sample.zip")) as zi, zipfile.ZipFile(_bad, "w", zipfile.ZIP_DEFLATED) as zo:
+    for n in zi.namelist():
+        data = zi.read(n)
+        if n.upper() == "BILL_MOTION_TBL.DAT":
+            lines = data.decode("utf-8").split("\n")
+            lines[0] = "\t".join(lines[0].split("\t")[:-1])
+            data = "\n".join(lines).encode("utf-8")
+        zo.writestr(n, data)
+
+
+class BadMotions(SampleFetcher):
+    def path(self, url):
+        return _bad
+
+
+_r3, c3, _cal3, _ro3 = J.build(BadMotions(), now=NOW)
+check("a malformed row first read by the calendar is counted in the published payload",
+      c3["rows_with_wrong_field_count"] == {"BILL_MOTION_TBL": 1} and c3["rows_with_wrong_field_count_total"] == 1,
+      str(c3["rows_with_wrong_field_count"]))
 
 J.PEOPLE_DIR = os.path.join(OS_DIR, "missing")
 r2, c2, cal2, ro2 = J.build(SampleFetcher(), now=NOW)

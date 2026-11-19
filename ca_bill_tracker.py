@@ -42,7 +42,7 @@ CALENDAR_TAB = "Sheet1"              # the layout the Calendar screen reads (sha
 # every count that must be 0 on a healthy run (the same keys the site's Health screen checks, web/src/states/ca.ts)
 CHECKS_AT_ZERO = ("end_status_unclassified", "rows_with_wrong_field_count_total", "committee_house_prefix_disagrees",
                   "calendar_floor_desc_unclassified", "calendar_slot_code_unknown", "calendar_agenda_bills_unmatched",
-                  "calendar_hearings_without_agenda", "bills_committee_without_roster")
+                  "calendar_hearings_without_agenda", "bills_committee_without_roster", "roster_files_unreadable")
 METRICS_TAB, METRICS_HEADER = "Metrics_History", ["RunTimestampUTC", "Status", "Origin", "Outcome"]
 ORIGIN = "bill_system_metrics"
 CACHE = os.environ.get("CA_CACHE_DIR", os.path.join(os.path.dirname(os.path.abspath(__file__)), ".ca_cache"))
@@ -65,6 +65,10 @@ def build(fetcher: BulkFetcher, now=None):
     # Calendar: committee hearings + floor sessions from the same export (no new request)
     calendar, cstats = ca_calendar.build_calendar(ex, extras)
     comp.update(cstats)
+    # the calendar reads tables the intake did not (motions, meeting slots): re-publish the malformed-row counts so a
+    # source error first met there reaches Health and the heartbeat (Codex #275)
+    comp["rows_with_wrong_field_count"] = dict(ex.bad_rows)
+    comp["rows_with_wrong_field_count_total"] = sum(ex.bad_rows.values())
     # Committee rosters: Open States' public-domain people data (a git checkout the workflow makes). A missing or
     # broken checkout never holds back the bills: roster_status says why and the previous tab stays.
     roster = None
@@ -102,9 +106,10 @@ def write(records, comp, sheet, calendar=None, roster=None):
             cw.batch_clear([f"A1:Q{max(cw.row_count, need)}"])     # old rows past today's calendar must go
         except gspread.exceptions.WorksheetNotFound:
             cw = sheet.add_worksheet(title=CALENDAR_TAB, rows=need, cols=27)
-        # AA1 = the calendar's freshness clock (the site's header reads it, as for Virginia and Pennsylvania)
+        # AA1 = the calendar's freshness clock. It is the EXPORT's publication time, not our check time: a source that
+        # stops publishing must show its real age on the calendar too, as it does on the bills (Codex #275)
         cw.batch_update([{"range": "A1", "values": calendar},
-                         {"range": COMPLETENESS_CELL, "values": [[comp["checked_at_utc"]]]}])
+                         {"range": COMPLETENESS_CELL, "values": [[comp["source_published_utc"]]]}])
     if roster is not None:
         rrows = ca_roster.roster_rows(roster)
         try:

@@ -8,6 +8,15 @@ status: active
 
 Append-only, reverse-chronological (newest at top). Each entry opens with `## [YYYY-MM-DD] <type> | <title>`.
 
+## [2026-11-19] test | Virginia's tests re-run on California ([[testing/ca_replication]])
+Six sessions (2015–2026) of pubinfo tables pulled by range request (~600 MB, ~1 min; bill text never downloaded);
+27,559 bills, 3.15 M member votes. First committee is not CA's gate (87% get out): fate AUC 0.705/0.763 vs baseline
+0.690/0.755; becomes-law 0.612/0.656 vs 0.581/0.602. Kill points: Appropriations 26–27% vs first committee 12–13%.
+Author record strongest (split-half r 0.71–0.79). Party position 0.61 at filing → 0.96 with committee votes. Deaths:
+95% on 1–3 Feb (Art. IV §10(c)). Next lever: the Appropriations fiscal analysis (BILL_ANALYSIS_TBL; Standard #3 call).
+Also folded into #275: Codex (calendar AA1 = export time; malformed counts re-published after the calendar) and
+Gemini (per-file YAML validation, counted; session-prefix guard; broad except declined per case law #105).
+
 ## [2026-11-19] build | California calendar + committee members (the CA site at parity with PA)
 Owner asked whether CA was built "the same as the other sites" — it was not (calendar and committee members off, CA
 stats not run). Built: `states/ca_calendar.py` (committee hearings + floor sessions + each bill's vote, from the daily

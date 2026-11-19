@@ -59,6 +59,9 @@ def build_calendar(ex: Export, extras: dict) -> Tuple[List[List[str]], dict]:
     if not since:
         raise ValueError("CA calendar: the universe has no dated action — refusing to guess the session (fail closed)")
     session_prefix = next(iter(bill_name), "")[:8]      # '20252026' — every universe id starts with it
+    if not (len(session_prefix) == 8 and session_prefix.isdigit()):
+        raise ValueError(f"CA calendar: no valid session prefix ({session_prefix!r}) — refusing to read every "
+                         f"session's rows (fail closed)")
     stats: Counter[str] = collections.Counter()
     samples: Dict[str, List[str]] = collections.defaultdict(list)
     loc_type = {r["LOCATION_CODE"]: r["LOCATION_TYPE"] for r in ex.rows("LOCATION_CODE_TBL")

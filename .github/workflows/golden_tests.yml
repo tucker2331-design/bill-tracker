@@ -94,6 +94,7 @@ jobs:
             test_docket_ingest.py \
             test_pa_bill_tracker.py \
             test_ca_bill_tracker.py \
+            test_ca_roster.py \
             test_pa_roster.py \
             test_pa_calendar.py \
             test_action_where.py; do
