@@ -8,6 +8,11 @@ status: active
 
 Append-only, reverse-chronological (newest at top). Each entry opens with `## [YYYY-MM-DD] <type> | <title>`.
 
+## [2026-11-19] pr | #275 merged — CA calendar, committee members, What's new + CA stats (0c23f73)
+All GitHub CI green on 3aa6e48; `Workers Builds: bill-tracker-ca` red from the new Worker's non-production-branch
+builds (owner setting, commented on the PR). CA job dispatched in write mode to fill Sheet1, Committee_Roster and
+Action_Where. Owner steps left: Worker secrets, Google sign-in origin, turn off non-main branch builds.
+
 ## [2026-11-19] test | Virginia's tests re-run on California ([[testing/ca_replication]])
 Six sessions (2015–2026) of pubinfo tables pulled by range request (~600 MB, ~1 min; bill text never downloaded);
 27,559 bills, 3.15 M member votes. First committee is not CA's gate (87% get out): fate AUC 0.705/0.763 vs baseline

@@ -106,6 +106,9 @@ status: active
 - [[knowledge/campaign_finance_ingest]] — the ELECT committee->legislator join resolves only 54 of 158 sitting patrons; needs a join on committee identity, not the free-text office field.
 
 ## RECENTLY LANDED (newest first; full detail in [[log]])
+- **2026-11-19 — California at parity (#275).** Calendar (every hearing with its bills and votes, floor sessions),
+  committee members (Open States CC0, 100% of bills joined), What's new "In the Assembly", and Virginia's tests re-run
+  on CA ([[testing/ca_replication]]: Appropriations is the gate; the author's record is the strongest signal).
 - **2026-11-18 — California + four speeds (#274).** CA intake from Legislative Counsel's daily pubinfo export (public
   domain; bulk files only): 5,040 measures, 0 unclassified, resolutions adopted never signed, fail closed on a
   malformed bill row (Codex fold-in, case law #162). One speed switch: daily · 4h · fast · instant — VA/CA/NY daily, PA
@@ -121,7 +124,6 @@ status: active
   from PA's own bulk RSS (0 of 5,184 bills unmatched); Calendar from the schedule RSS + 214 past session days from the
   export's floor actions. Why the 7 meetings list no bills: hearings, agencies and unannounced slots in the lull
   ([[knowledge/pa_bill_history_xml]]). Case law #154.
-- **2026-10-31 — Pennsylvania intake + DOCKET fix.** PA export → the bill contract with PA's own stages (no crossover), goldens on a real sample ([[knowledge/pa_bill_history_xml]]); VA bills now carry their upcoming meetings ([[failures/assumptions_audit|#152]]).
 
 ## Watch items
 - **⏰ 2027 SESSION OPEN → activate the gated build-wave features.** When the worker detects the 2027 regular
