@@ -94,13 +94,13 @@ def build(fetcher, now=None):
 
 def write(records, comp, sheet, roster=None, calendar=None, where_grid=None):
     import gspread
-    rows = bill_tracker_rows(records, status_label=STATUS_HEADER, pipeline=True)
+    rows = bill_tracker_rows(records, status_label=STATUS_HEADER, pipeline=True, links=True)
     need_rows, need_cols = len(rows) + 50, 27   # AA = column 27
     try:
         ws = sheet.worksheet(TAB)
         if ws.row_count < need_rows or ws.col_count < need_cols:
             ws.resize(rows=max(ws.row_count, need_rows), cols=max(ws.col_count, need_cols))
-        ws.batch_clear([f"A1:V{max(ws.row_count, need_rows)}"])   # old rows past today's universe must go
+        ws.batch_clear([f"A1:W{max(ws.row_count, need_rows)}"])   # old rows past today's universe must go (A..W)
     except gspread.exceptions.WorksheetNotFound:
         ws = sheet.add_worksheet(title=TAB, rows=need_rows, cols=need_cols)   # new tab: nothing to clear
     # one call for the table + the completeness payload (Gemini #255)
@@ -141,7 +141,8 @@ def write(records, comp, sheet, roster=None, calendar=None, where_grid=None):
         mh = sheet.add_worksheet(title=METRICS_TAB, rows=1000, cols=4)
         mh.update(values=[METRICS_HEADER], range_name="A1")
     beat = {k: comp[k] for k in ("records_written", "universe_count", "verbs_unclassified", "undefined_actions",
-                                 "action_dates_unreadable", "schedule_bill_refs_unmatched", "requests_made")}
+                                 "action_dates_unreadable", "schedule_bill_refs_unmatched", "requests_made",
+                                 "links_rejected", "bills_with_text_link")}
     beat.update({k: comp[k] for k in ("roster_status", "action_where_status", "bills_committee_without_roster", "calendar_meetings",
                                       "calendar_meetings_without_bills", "calendar_session_days", "action_where_unknown",
                                       "action_short_from_full_unexplained", "calendar_committee_not_in_roster",

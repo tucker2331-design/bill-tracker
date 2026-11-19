@@ -92,11 +92,19 @@ export function WarRoomBill({ id, bills, sessionCode }: { id: string; bills: Bil
         <ContactLog key={`contacts-${bill.bill}`} bill={bill.bill} sessionCode={sessionCode} />
       </section>
 
-      {(STATE.features.summaries || link) && (
+      {(STATE.features.summaries || link || bill.links.length > 0) && (
         <section className="wb-group" aria-label="More">
           <h3 className="h">More</h3>
           {STATE.features.summaries && <Summary key={`summary-${bill.bill}`} bill={bill.bill} lisUrl={link} />}
           {link && <a href={link} target="_blank" rel="noopener noreferrer">Bill and history on {SOURCE} ↗</a>}
+          {/* The bill's own documents, as the state's export names them (PA: text, sponsor's memo, fiscal notes). */}
+          {bill.links.length > 0 && (
+            <ul className="wb-links">
+              {bill.links.map((l) => (
+                <li key={l.url}><a href={l.url} target="_blank" rel="noopener noreferrer">{l.label} ↗</a></li>
+              ))}
+            </ul>
+          )}
         </section>
       )}
 

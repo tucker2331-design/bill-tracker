@@ -8,6 +8,25 @@ status: active
 
 Append-only, reverse-chronological (newest at top). Each entry opens with `## [YYYY-MM-DD] <type> | <title>`.
 
+## [2026-11-19] decision | PA at Virginia's baseline (bill documents), admin role + executive site on the to-do
+Owner asked for PA at VA's baseline, full-screen design links, a per-state admin role to-do, and an executive-site
+brainstorm (justified, operator vs VOT legislative-manager lenses). Done: PA bill page lists the bill's own documents
+from the export (text, sponsor's memo, fiscal notes; 5,267/5,269 bills); [[ideas/state_baseline_parity]] (summaries and
+PA predictions are owner calls, full Health is next); [[ideas/state_admin_role]]; [[ideas/executive_site]] (F1: one org
+per state site, or several clients — must precede the admin role); the Virginia Worker rename parked
+([[workflow/va_worker_rename]]); brainstorm rule added to [[workflow/design_proposal_protocol]]. Full-screen design
+artifacts published (Drafting room, Legislator page).
+
+## [2026-11-19] run | California sheet filled after #275 — bills, calendar, committee members, What's new
+Run 44436420376: 5,040 bills; 25,171 calendar rows (1,065 committee meetings, 295 floor + 204 check-in sessions,
+21,219 bill rows with their vote); roster ok — 57 committees, 590 seats, 0 bills without a member list; Action_Where
+written; every Health zero-check 0; 0 requests to Legislative Counsel (the 20 h cache held — same export as last run).
+
+## [2026-11-19] pr | #275 merged — CA calendar, committee members, What's new + CA stats (0c23f73)
+All GitHub CI green on 3aa6e48; `Workers Builds: bill-tracker-ca` red from the new Worker's non-production-branch
+builds (owner setting, commented on the PR). CA job dispatched in write mode to fill Sheet1, Committee_Roster and
+Action_Where. Owner steps left: Worker secrets, Google sign-in origin, turn off non-main branch builds.
+
 ## [2026-11-19] test | Virginia's tests re-run on California ([[testing/ca_replication]])
 Six sessions (2015–2026) of pubinfo tables pulled by range request (~600 MB, ~1 min; bill text never downloaded);
 27,559 bills, 3.15 M member votes. First committee is not CA's gate (87% get out): fate AUC 0.705/0.763 vs baseline

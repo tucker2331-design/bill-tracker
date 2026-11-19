@@ -59,5 +59,6 @@ export const PA: StateConfig = {
     { key: "action_short_from_full_unexplained", label: "What's new lines kept as PA wrote them, for no listed reason", limit: 0, cat: "Completeness" },
     { key: "calendar_committee_not_in_roster", label: "Calendar meetings of a House or Senate committee we cannot name", limit: 0, cat: "Completeness" },
     { key: "calendar_no_bills_not_from_source", label: "Meetings shown with no bills although PA lists some", limit: 0, cat: "Accuracy" },
+    { key: "links_rejected", label: "Bill documents linked to a site we do not recognise (not shown)", limit: 0, cat: "Accuracy" },
   ],
 };

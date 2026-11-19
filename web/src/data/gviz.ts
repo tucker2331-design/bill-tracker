@@ -1,7 +1,7 @@
 import { STATE, originChamber } from "../states";
 import { sheetUrl, BILL_TRACKER_TAB } from "../config";
 import { apiFetch } from "../state/auth";
-import type { Bill, BillData, Completeness, Copatron, FloorEvent, HistoryRow, LatestVote, Meeting, Outcome, Chamber } from "./types";
+import type { Bill, BillData, BillLink, Completeness, Copatron, FloorEvent, HistoryRow, LatestVote, Meeting, Outcome, Chamber } from "./types";
 
 // --- CSV (RFC4180) parser ----------------------------------------------------------------------
 // gviz `tqx=out:csv` quotes any field containing a comma/quote/newline and escapes quotes as "".
@@ -14,6 +14,21 @@ function pipelineCell(raw: string | undefined): { stage: string; parked: boolean
     const v = JSON.parse(raw);
     return v && typeof v.stage === "string" ? { stage: v.stage, parked: v.parked === true } : null;
   } catch { return null; }   // the map counts such a bill as "skipped" (shown), never places it
+}
+
+// Column W (PA): the bill's own documents. Only https links are kept — a sheet cell is never trusted to be a safe
+// href (a `javascript:` value would run on click); a bad cell reads as no links, counted in the console.
+export function linksCell(raw: string | undefined): BillLink[] {
+  if (!raw || !raw.trim()) return [];
+  try {
+    const v = JSON.parse(raw);
+    if (!Array.isArray(v)) return [];
+    const ok = v.filter((x) => x && typeof x.label === "string" && typeof x.url === "string" && /^https:\/\//.test(x.url));
+    if (ok.length !== v.length) console.warn(`Links: ${v.length - ok.length} link(s) dropped (not https)`);
+    const seen = new Set<string>();   // one row per URL (an older sheet may repeat one; keys must be unique)
+    return ok.filter((x) => !seen.has(x.url) && (seen.add(x.url), true))
+      .map((x) => ({ label: x.label, url: x.url, kind: typeof x.kind === "string" ? x.kind : "" }));
+  } catch { console.warn("Links: unreadable cell"); return []; }
 }
 
 export function parseCsv(text: string): string[][] {
@@ -53,7 +68,7 @@ function jsonOr<T>(raw: string | undefined, fallback: T): T {
 const COL = {
   bill: 0, title: 1, status: 2, outcome: 3, patron: 4, patronId: 5, chamber: 6, crossed: 7,
   lastCommittee: 8, referrals: 9, lastAction: 10, latestVote: 11, upcoming: 12, history: 13,
-  dataAsOf: 14, source: 15, floorHouse: 16, floorSenate: 17, legislationClass: 19, copatrons: 20, pipeline: 21,
+  dataAsOf: 14, source: 15, floorHouse: 16, floorSenate: 17, legislationClass: 19, copatrons: 20, pipeline: 21, links: 22,
 } as const;
 
 /**
@@ -139,6 +154,7 @@ function toBill(r: string[]): Bill | null {
     legislationClass: (r[COL.legislationClass] || "").trim(),
     copatrons: copatrons(r[COL.copatrons]),
     pipeline: pipelineCell(r[COL.pipeline]),
+    links: linksCell(r[COL.links]),
     source: (r[COL.source] || STATE.sourceName).trim(),
   };
 }

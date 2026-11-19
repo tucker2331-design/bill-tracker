@@ -8,8 +8,12 @@
  "completeness": {
   "action_dates_unreadable": 0,
   "actions_total": 19915,
+  "bills_with_memo_link": 4959,
+  "bills_with_text_link": 5267,
   "checked_at_utc": "2026-10-31T23:36:00Z",
   "export_date": "October 31, 2026 7:30:14 PM EDT",
+  "links_duplicates_dropped": 5,
+  "links_rejected": 0,
   "records_written": 5269,
   "schedule_bill_refs_unmatched": 0,
   "schedule_dates_unreadable": 0,
@@ -28,7 +32,7 @@
   "signed": 200
  },
  "records": 5269,
- "sha256": "710f33b0e7dac492e6cd50dab5b14fe048d8906e3a0c741e7ba6ee4bf56a5cb4",
+ "sha256": "19efc19f55760e337595f1567c7cbff30ef02416074c844371d0cc6aef3894de",
  "spot": {
   "HB1099": {
    "bill": "HB1099",
@@ -60,6 +64,23 @@
     "tally": "101-102"
    },
    "legislation_class": "House Bill",
+   "links": [
+    {
+     "kind": "text",
+     "label": "Bill text (Printer's No. 1213)",
+     "url": "https://www.palegis.us/legislation/bills/text/PDF/2025/0/HB1099/PN1213"
+    },
+    {
+     "kind": "memo",
+     "label": "Sponsor's memo: Banning Ghost Guns & Prohibiting Undetectable Firearms",
+     "url": "https://www.palegis.us/house/co-sponsorship/memo?memoID=44247&document=HB1099"
+    },
+    {
+     "kind": "document",
+     "label": "House Fiscal Note",
+     "url": "https://www.palegis.us/WU01/LI/BI/FN/2025/0/HB1099P1213.pdf"
+    }
+   ],
    "outcome": "in_progress",
    "outcome_origin": "structural_verb",
    "patron": "CEPHAS",
@@ -105,6 +126,28 @@
     "tally": "42-5"
    },
    "legislation_class": "House Bill",
+   "links": [
+    {
+     "kind": "text",
+     "label": "Bill text (Printer's No. 0002)",
+     "url": "https://www.palegis.us/legislation/bills/text/PDF/2025/0/HB0017/PN0002"
+    },
+    {
+     "kind": "memo",
+     "label": "Sponsor's memo: Mandating Cursive Handwriting (Formerly HB1934)",
+     "url": "https://www.palegis.us/house/co-sponsorship/memo?memoID=43567&document=HB17"
+    },
+    {
+     "kind": "document",
+     "label": "House Fiscal Note",
+     "url": "https://www.palegis.us/WU01/LI/BI/FN/2025/0/HB0017P0002.pdf"
+    },
+    {
+     "kind": "document",
+     "label": "Senate Fiscal Note",
+     "url": "https://www.palegis.us/WU01/LI/BI/SFN/2025/0/HB0017P0002.pdf"
+    }
+   ],
    "outcome": "signed",
    "outcome_origin": "structural_verb",
    "patron": "WATRO",
@@ -150,6 +193,28 @@
     "tally": "27-22"
    },
    "legislation_class": "House Bill",
+   "links": [
+    {
+     "kind": "text",
+     "label": "Bill text (Printer's No. 0203)",
+     "url": "https://www.palegis.us/legislation/bills/text/PDF/2025/0/HB0257/PN0203"
+    },
+    {
+     "kind": "memo",
+     "label": "Sponsor's memo: Educating Our New Drivers on Safe Driving Habits in Work Zones",
+     "url": "https://www.palegis.us/house/co-sponsorship/memo?memoID=43488&document=HB257"
+    },
+    {
+     "kind": "document",
+     "label": "House Fiscal Note",
+     "url": "https://www.palegis.us/WU01/LI/BI/FN/2025/0/HB0257P0203.pdf"
+    },
+    {
+     "kind": "document",
+     "label": "Senate Fiscal Note",
+     "url": "https://www.palegis.us/WU01/LI/BI/SFN/2025/0/HB0257P0203.pdf"
+    }
+   ],
    "outcome": "in_progress",
    "outcome_origin": "structural_verb",
    "patron": "NEILSON",
@@ -195,6 +260,13 @@
     "tally": "196-6"
    },
    "legislation_class": "House Resolution",
+   "links": [
+    {
+     "kind": "text",
+     "label": "Bill text (Printer's No. 0001)",
+     "url": "https://www.palegis.us/legislation/bills/text/PDF/2025/0/HR0001/PN0001"
+    }
+   ],
    "outcome": "adopted",
    "outcome_origin": "structural_verb",
    "patron": "McCLINTON",
@@ -240,6 +312,23 @@
     "tally": "40-9"
    },
    "legislation_class": "Senate Bill",
+   "links": [
+    {
+     "kind": "text",
+     "label": "Bill text (Printer's No. 0529)",
+     "url": "https://www.palegis.us/legislation/bills/text/PDF/2025/0/SB0160/PN0529"
+    },
+    {
+     "kind": "document",
+     "label": "House Fiscal Note",
+     "url": "https://www.palegis.us/WU01/LI/BI/FN/2025/0/SB0160P0529.pdf"
+    },
+    {
+     "kind": "document",
+     "label": "Senate Fiscal Note",
+     "url": "https://www.palegis.us/WU01/LI/BI/SFN/2025/0/SB0160P0529.pdf"
+    }
+   ],
    "outcome": "signed",
    "outcome_origin": "structural_verb",
    "patron": "MARTIN",

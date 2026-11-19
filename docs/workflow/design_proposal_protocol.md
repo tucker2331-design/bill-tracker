@@ -1,6 +1,6 @@
 ---
 tags: [workflow, process, design, review, owner-rule]
-updated: 2026-09-30
+updated: 2026-11-19
 status: active
 ---
 
@@ -24,6 +24,14 @@ owner made was derivable from rules **already written in this vault**:
 
 **Each was a rule I owned and did not apply to my own proposal.** The owner's time is the scarcest resource in
 this project; spending it on checks a script or a checklist could have done is the waste this page eliminates.
+
+## Brainstorms of a design addition: justify its existence first (owner, 2026-11-19)
+> *"justify its existence (as you should when i tell u to brainstorm anything for design addition)"*
+
+Every brainstorm of a new screen, site or feature opens with the case for it before any feature list:
+**the question it answers that nothing else answers**, **what answering it costs today** (sourced, e.g. the places
+the owner has to look), **the case against** (when it would not be worth building), and **the line** where it
+becomes worth it. First worked example: [[ideas/executive_site]] §1.
 
 ## The protocol (mandatory before ANY design reaches the owner)
 

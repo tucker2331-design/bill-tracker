@@ -213,10 +213,26 @@ def main():
     check(f"co-sponsors in NUMERIC order past 99 ({rb['bill']}, {max(nums)} sponsors)",
           max(nums) > 99 and [rb["patron"]] + [c["name"] for c in rb["copatrons"]] == want)
     check("history keeps every action", sum(len(r["history"]) for r in recs) == comp["actions_total"] == 19915)
-    check("contract keys match VA's record + stage + pipeline", set(recs[0]) == {
+    check("contract keys match VA's record + stage + pipeline + links", set(recs[0]) == {
         "bill", "title", "status_lis", "stage", "outcome", "outcome_origin", "patron", "patron_id", "chamber",
         "crossed_over", "floor_house", "floor_senate", "last_committee", "referral_count", "latest_vote", "upcoming",
-        "last_action_date", "history", "data_as_of_utc", "source", "legislation_class", "copatrons", "pipeline"})
+        "last_action_date", "history", "data_as_of_utc", "source", "legislation_class", "copatrons", "pipeline",
+        "links"})
+    # The bill's own documents (owner 2026-11-19, PA at Virginia's baseline): from structural attributes only
+    hb17 = {r["bill"]: r for r in recs}["HB17"]["links"]
+    check("HB17 links: current text, the sponsor's memo (its own title), both fiscal notes — the export's own URLs",
+          [x["kind"] for x in hb17] == ["text", "memo", "document", "document"]
+          and hb17[0]["url"] == "https://www.palegis.us/legislation/bills/text/PDF/2025/0/HB0017/PN0002"
+          and hb17[1]["label"] == "Sponsor's memo: Mandating Cursive Handwriting (Formerly HB1934)"
+          and [x["label"] for x in hb17[2:]] == ["House Fiscal Note", "Senate Fiscal Note"], str(hb17))
+    check("links: 5,267 of 5,269 bills have their text, 4,959 a memo, none refused (palegis.us + the IFO only)",
+          (comp["bills_with_text_link"], comp["bills_with_memo_link"], comp["links_rejected"]) == (5267, 4959, 0),
+          str({k: comp[k] for k in ("bills_with_text_link", "bills_with_memo_link", "links_rejected")}))
+    check("every link is https on the source's own hosts (never a guessed or foreign URL)",
+          all(A._PA_DOC_URL.match(x["url"]) for r in recs for x in r["links"]))
+    check("a document listed twice is written once and counted (5 on 2025_0: SB160 ×2, HB1189, SB377, SB997)",
+          all(len({x["url"] for x in r["links"]}) == len(r["links"]) for r in recs)
+          and comp["links_duplicates_dropped"] == 5, str(comp.get("links_duplicates_dropped")))
 
     with open(GOLDEN, encoding="utf-8") as f:
         want = json.load(f)
