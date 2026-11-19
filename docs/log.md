@@ -8,6 +8,11 @@ status: active
 
 Append-only, reverse-chronological (newest at top). Each entry opens with `## [YYYY-MM-DD] <type> | <title>`.
 
+## [2026-11-19] pr | #276 merged — PA bill documents + admin-role to-do + executive-site brainstorm (136da07)
+GitHub CI green on d8f270b (Gemini fold-in: one row per URL — 5 duplicates on 2025_0 counted, empty-PN and
+non-numeric-sequence guards, optional www); Codex no findings. `bill-tracker-ca` Cloudflare check red from the
+owner's non-main branch-build setting (commented). PA's next job run writes the Links column (W).
+
 ## [2026-11-19] decision | PA at Virginia's baseline (bill documents), admin role + executive site on the to-do
 Owner asked for PA at VA's baseline, full-screen design links, a per-state admin role to-do, and an executive-site
 brainstorm (justified, operator vs VOT legislative-manager lenses). Done: PA bill page lists the bill's own documents
