@@ -42,7 +42,8 @@ for s, b, c, ck, d, maj in zip(F.session, F.body, F.cmte, F.cosp_keys, F.intro, 
         if ks:
             hits.append(ks[0])
     cos_on.append(len(set(hits)))
-    maj_cos_on.append(int(any(party_of.get(f"{b}|{k}") == maj for k in hits)))
+    # an unknown party never matches an unknown majority (None == None) (Gemini #277)
+    maj_cos_on.append(int(bool(maj) and any(party_of.get(f"{b}|{k}") == maj for k in hits)))
 clean = X.copy()
 for k in ("seat_before", "seat_before_known", "seat_prior", "seat_prior_known"):
     clean[k] = S[k]
@@ -55,6 +56,7 @@ for label, (until, test) in {"A: 2023-24": ("2021_0", "2023_0"), "B: 2025-26": (
     tr, te = (F.session <= until).to_numpy(), (F.session == test).to_numpy()
     res["held_out"][label] = {"filing_day_seats": fit_eval(clean, y, tr, te),
                               "plus_cosponsor_arm_timing_unverified": fit_eval(arm, y, tr, te)}
-json.dump(res, open(os.path.join(HERE, "results_fate_v3b.json"), "w"), indent=1)
+with open(os.path.join(HERE, "results_fate_v3b.json"), "w") as f:
+    json.dump(res, f, indent=1)
 for k, v in res["held_out"].items():
     print(k, {n: {m: v[n][m]["auc"] for m in v[n]} for n in v})

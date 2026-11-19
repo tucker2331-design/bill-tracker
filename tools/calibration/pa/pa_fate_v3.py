@@ -34,8 +34,10 @@ from pa_fate_v2 import features, score  # noqa: E402
 import pa_batch3  # noqa: E402
 
 
-def room_key(name: str) -> str:
-    return re.sub(r"[^A-Z]", "", (name or "").upper().replace("&", " AND "))
+def room_key(name) -> str:
+    if not isinstance(name, str):      # a missing room (NaN/None) is "", never a crash (Gemini #277)
+        return ""
+    return re.sub(r"[^A-Z]", "", name.upper().replace("&", " AND "))
 
 
 def _match(keys, nk: str):
@@ -50,7 +52,7 @@ def committee_ballots(F):
     j["room"] = j.org.map(room_key)
     j["key"] = j.who.str.split("|").str[1]
     j["date"] = pd.to_datetime(j.date, errors="coerce")
-    return j.dropna(subset=["date"]), B
+    return j.dropna(subset=["date", "key"]), B
 
 
 def seats(F, j):
