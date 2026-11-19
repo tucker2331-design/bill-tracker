@@ -38,6 +38,11 @@ END_CLASS: Dict[str, str] = {
     # a failed vote that can be reconsidered: recorded, does not end the bill
     "Failed": "failed", "Failed Passage in Committee": "committee_failed",
 }
+# Where each history action happened, for the site's What's new (action_where.py codes), from PRIMARY_LOCATION —
+# measured on 2025-26: Assembly 44,035 · Senate 38,192 · Governor 3,904 · Secretary of State 2,668 · blank 32. The
+# Secretary of State (chaptering, filing) is not a chamber and the blank rows name none: both are "0" (the source lists
+# no chamber). Any other value is "-" and counted (`action_where_unknown`, a Health check).
+WHERE_CODE = {"Assembly": "H", "Senate": "S", "Governor": "G", "Secretary of State": "0", "": "0"}
 # A blank END_STATUS (32 rows on 2025-26: rescissions, "Plan takes effect", a refused passage) is history only —
 # counted as `end_status_blank`, never routed.
 PARTY = {"DEM": "D", "REP": "R"}
@@ -146,7 +151,8 @@ def build_records(ex: Export, today: datetime.date, now_utc: str,
             hearings[ch["BILL_ID"]].append({"date": d, "committee": coms.label(ch["LOCATION_CODE"]),
                                             "time": slot_time(agenda.get((ch["LOCATION_CODE"], d)))})
     unclassified: Dict[str, int] = collections.Counter()
-    rescinded = actions_total = blank = 0
+    rescinded = actions_total = blank = where_unknown = 0
+    where_by_bill: Dict[str, str] = {}
     records: List[Dict[str, Any]] = []
     for bid, b in sorted(bills.items()):
         parts = bill_id_parts(bid)
@@ -162,8 +168,12 @@ def build_records(ex: Export, today: datetime.date, now_utc: str,
         referred: List[str] = []
         last_committee, last_row = "", {"action": "", "date": ""}
         last_cls, vetoed_seen = "", False
+        where = []
         for h in rows:
             actions_total += 1
+            code = WHERE_CODE.get(h["PRIMARY_LOCATION"], "-")
+            where_unknown += code == "-"
+            where.append(code)
             row = {"action": " ".join(h["ACTION"].split()), "date": _date(h["ACTION_DATE"])}
             history.append(row)
             last_row = row
@@ -232,6 +242,7 @@ def build_records(ex: Export, today: datetime.date, now_utc: str,
         last_vote = votes.get(bid)       # Optional: a bill with no recorded vote has none
         rec_bill = f"{mtype}{num}"
         bill_name[bid] = rec_bill
+        where_by_bill[rec_bill] = "".join(where)
         records.append({
             "bill": rec_bill,
             "title": subject.get(b["LATEST_BILL_VERSION_ID"], ""),
@@ -282,6 +293,7 @@ def build_records(ex: Export, today: datetime.date, now_utc: str,
         "end_status_unclassified_sample": sorted(unclassified)[:10],
         "rows_with_wrong_field_count": dict(ex.bad_rows),
         "rows_with_wrong_field_count_total": sum(ex.bad_rows.values()),
+        "action_where_unknown": where_unknown,
         "committee_house_prefix_disagrees": coms.stats["committee_house_prefix_disagrees"],
         "committee_house_prefix_disagrees_sample": coms.stats["committee_house_prefix_disagrees_sample"],
         "session_display": f"{session[:4]}-{session[4:]} Regular Session" if len(session) == 8 else "",
@@ -289,7 +301,7 @@ def build_records(ex: Export, today: datetime.date, now_utc: str,
     }
     if extras is not None:
         dates = [h["date"] for r in records for h in r["history"] if h["date"]]
-        extras.update({"bill_name": bill_name, "committees": coms,
+        extras.update({"bill_name": bill_name, "committees": coms, "action_where": where_by_bill,
                        "session_start": min(dates) if dates else "", "names": names})
     return records, completeness
 

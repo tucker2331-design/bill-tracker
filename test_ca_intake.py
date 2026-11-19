@@ -186,6 +186,11 @@ for t, want_st in (("1:30 p.m.", "13:30"), ("9 a.m.", "09:00"), ("9:00 AM", "09:
 check("a bill's committee in the record is house-qualified ('Assembly …' / 'Senate …')",
       all(r["last_committee"].startswith(("Assembly ", "Senate ")) for r in _rc if r["last_committee"]))
 
+# What's new: where each action happened — one structural code per history row (states/ca_adapter.WHERE_CODE)
+check("every record's where-codes line up with its history (one per row), from H/S/G/0 only, none unknown",
+      all(len(_x["action_where"][r["bill"]]) == len(r["history"]) for r in _rc)
+      and set("".join(_x["action_where"].values())) <= set("HSG0") and _cc["action_where_unknown"] == 0)
+
 # Committee rosters (need PyYAML) are tested in test_ca_roster.py and test_ca_bill_tracker.py (golden CI job).
 
 print(f"\n{len(FAILS)} failed" if FAILS else "\nall passed")

@@ -69,7 +69,9 @@ class WS:
         self.row_count, self.col_count, self.cells, self.appended = 10, 5, {}, []
 
     def resize(self, rows, cols): self.row_count, self.col_count = rows, cols
-    def batch_clear(self, ranges): self.cells.clear()
+    def batch_clear(self, ranges):
+        if any(r.startswith("A1:") for r in ranges):   # a clear of the tail (A{n}:…) leaves row 1 onward alone
+            self.cells.clear()
     def update(self, values, range_name): self.cells[range_name] = values
     def batch_update(self, data): self.cells.update({d["range"]: d["values"] for d in data})
     def append_row(self, row): self.appended.append(row)
@@ -92,13 +94,13 @@ class Sheet:
 NOW = datetime.datetime(2026, 11, 19, 6, 41, tzinfo=datetime.timezone.utc)
 J.PEOPLE_DIR = OS_DIR
 f = SampleFetcher()
-records, comp, calendar, roster = J.build(f, now=NOW)
+records, comp, calendar, roster, where_grid = J.build(f, now=NOW)
 check("the job reads the newest DAILY export, never the Sunday yearly file",
       any(u.endswith("pubinfo_daily_Wed.zip") for u in f.asked) and not any(u.endswith("pubinfo_2025.zip") for u in f.asked))
 check("records are stamped as of the export's own date", all(r["data_as_of_utc"] == "2026-11-18T12:23:47Z" for r in records)
       and comp["source_published_utc"] == "2026-11-18T12:23:47Z" and comp["source_file"] == "pubinfo_daily_Wed.zip")
 sheet = Sheet()
-J.write(records, comp, sheet, calendar, roster)
+J.write(records, comp, sheet, calendar, roster, where_grid)
 bt = sheet.tabs["Bill_Tracker"]
 rows = bt.cells["A1"]
 check("same columns as Virginia's Bill_Tracker; column C names California's source",
@@ -117,6 +119,10 @@ rt = sheet.tabs.get("Committee_Roster")
 check("Committee_Roster written in the shared header, every sample bill's committee found",
       rt is not None and rt.cells["A1"][0] == ROSTER_HEADER and payload["roster_status"] == "ok"
       and payload["bills_committee_without_roster"] == 0 and len(rt.cells["A1"]) - 1 == payload["roster_seats"])
+aw = sheet.tabs.get("Action_Where")
+check("Action_Where written (What's new: where each action happened), one row per bill",
+      aw is not None and aw.cells["A1"][0] == ["Bill", "Where", "Short"] and len(aw.cells["A1"]) - 1 == len(records)
+      and comp["action_where_status"] == "ok")
 beat = sheet.tabs["Metrics_History"].appended
 check("one OK heartbeat under the bill worker's origin, carrying the calendar and roster checks",
       len(beat) == 1 and beat[0][1:3] == ["OK", "bill_system_metrics"]
@@ -150,13 +156,13 @@ class BadMotions(SampleFetcher):
         return _bad
 
 
-_r3, c3, _cal3, _ro3 = J.build(BadMotions(), now=NOW)
+_r3, c3, _cal3, _ro3, _wg3 = J.build(BadMotions(), now=NOW)
 check("a malformed row first read by the calendar is counted in the published payload",
       c3["rows_with_wrong_field_count"] == {"BILL_MOTION_TBL": 1} and c3["rows_with_wrong_field_count_total"] == 1,
       str(c3["rows_with_wrong_field_count"]))
 
 J.PEOPLE_DIR = os.path.join(OS_DIR, "missing")
-r2, c2, cal2, ro2 = J.build(SampleFetcher(), now=NOW)
+r2, c2, cal2, ro2, _wg2 = J.build(SampleFetcher(), now=NOW)
 check("a missing Open States checkout never holds back the bills or the calendar (roster_status says why)",
       len(r2) == 240 and cal2 is not None and ro2 is None and c2["roster_status"] == "unavailable: FileNotFoundError")
 s2 = Sheet()

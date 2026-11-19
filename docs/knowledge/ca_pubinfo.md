@@ -93,6 +93,11 @@ normalised name (case, "&"/"and", commas, hyphens) — **every one of the 4,846 
 committees (select / joint) hear no bills: counted, not written. A broken checkout never holds back the bills
 (`roster_status`). Golden snapshot: `tools/historical_cache/ca/openstates_sample/` (commit `bcdda40`, 2026-11-05).
 
+## What's new — where each action happened (built 2026-11-19)
+`Action_Where` tab (the shared `action_where.py` layout VA and PA write): one code per history row from
+`PRIMARY_LOCATION` (Assembly → H, Senate → S, Governor → G; Secretary of State and blank → 0 "no chamber"); any other
+value "-" and counted (`action_where_unknown`, Health). The site says "In the Assembly" (`whereLabels`).
+
 ## Not on the site yet (engineering residuals)
 - **Extraordinary sessions.** The universe is the regular session (`SESSION_NUM` 0). 2025-26 has 24 First
   Extraordinary Session bills (`SESSION_NUM` 1); their 16 calendar rows are written with an "(Extraordinary Session 1)"

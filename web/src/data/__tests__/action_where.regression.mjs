@@ -5,7 +5,7 @@
  * Run:  node web/tools/ts2mjs.mjs web/src/data/action_where_rules.ts /tmp/action_where_rules.mjs \
  *         && node web/src/data/__tests__/action_where.regression.mjs
  */
-import { parseWhereGrid, feedLines, sentenceCase, ACTION_WHERE_HEADER } from "/tmp/action_where_rules.mjs";
+import { parseWhereGrid, feedLines, sentenceCase, whereLabels, ACTION_WHERE_HEADER } from "/tmp/action_where_rules.mjs";
 let pass = 0, fail = 0;
 const is = (n, g, w) => { const ok = JSON.stringify(g) === JSON.stringify(w);
   console.log(`  ${ok ? "ok  " : "FAIL"} ${n}${ok ? "" : `  got ${JSON.stringify(g)} want ${JSON.stringify(w)}`}`); ok ? pass++ : fail++; };
@@ -40,6 +40,11 @@ is("a short list that does not line up is counted and not used",
    parseWhereGrid([ACTION_WHERE_HEADER, ["HB1", "HH", JSON.stringify(["only one"])]]).unreadable, 1);
 is("bad JSON is counted", parseWhereGrid([ACTION_WHERE_HEADER, ["HB1", "HH", "{"]]).unreadable, 1);
 is("wrong header -> unavailable", parseWhereGrid([["Bill", "X"]]).status, "unavailable");
+is("California names its lower chamber the Assembly; Virginia/Pennsylvania keep the default House",
+   [feedLines([{ bill: "AB12", idx: 0, action: "Referred to Com. on HEALTH.", n: 1 }], new Map([["AB12", { where: "H", short: null }]]), null,
+              whereLabels("Assembly", "Senate"))[0].where,
+    feedLines([{ bill: "HB1", idx: 0, action: "a", n: 1 }], new Map([["HB1", { where: "H", short: null }]]), null)[0].where],
+   ["In the Assembly", "In the House"]);
 
 console.log(`\n${pass} passed, ${fail} failed`);
 if (fail) process.exit(1);

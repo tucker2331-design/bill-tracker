@@ -60,6 +60,7 @@ export const CA: StateConfig = {
     { key: "calendar_hearings_without_agenda", label: "Hearings with no meeting time in the source", limit: 0, cat: "Completeness" },
     { key: "bills_committee_without_roster", label: "Bills whose committee has no member list", limit: 0, cat: "Completeness" },
     { key: "roster_files_unreadable", label: "Member-list files we could not read", limit: 0, cat: "Completeness" },
+    { key: "action_where_unknown", label: "Bill actions at a place we cannot name", limit: 0, cat: "Completeness" },
     { key: "titles_blank", label: "Bills with no subject line in the source (House and Senate resolutions)", limit: 300, cat: "Completeness" },
   ],
 };

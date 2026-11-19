@@ -25,6 +25,8 @@ import sys
 import pytz
 import yaml
 
+import action_where
+
 from bill_rows import BILL_TRACKER_HEADER, bill_tracker_rows
 from states import ca_adapter, ca_calendar, ca_pubinfo, ca_roster, get_state
 from states.ca_fetch import BulkFetcher, newest_daily
@@ -42,7 +44,8 @@ CALENDAR_TAB = "Sheet1"              # the layout the Calendar screen reads (sha
 # every count that must be 0 on a healthy run (the same keys the site's Health screen checks, web/src/states/ca.ts)
 CHECKS_AT_ZERO = ("end_status_unclassified", "rows_with_wrong_field_count_total", "committee_house_prefix_disagrees",
                   "calendar_floor_desc_unclassified", "calendar_slot_code_unknown", "calendar_agenda_bills_unmatched",
-                  "calendar_hearings_without_agenda", "bills_committee_without_roster", "roster_files_unreadable")
+                  "calendar_hearings_without_agenda", "bills_committee_without_roster", "roster_files_unreadable",
+                  "action_where_unknown")
 METRICS_TAB, METRICS_HEADER = "Metrics_History", ["RunTimestampUTC", "Status", "Origin", "Outcome"]
 ORIGIN = "bill_system_metrics"
 CACHE = os.environ.get("CA_CACHE_DIR", os.path.join(os.path.dirname(os.path.abspath(__file__)), ".ca_cache"))
@@ -81,10 +84,11 @@ def build(fetcher: BulkFetcher, now=None):
         comp["roster_status"] = f"unavailable: {type(e).__name__}"
         print(f"::error::CA committee roster not refreshed ({type(e).__name__}: {e}); the previous tab stays")
     comp.update({"source_file": name, "source_published_utc": published, "requests_made": fetcher.requests_made})
-    return records, comp, calendar, roster
+    where_grid = action_where.rows_for(extras["action_where"])     # What's new: where each action happened
+    return records, comp, calendar, roster, where_grid
 
 
-def write(records, comp, sheet, calendar=None, roster=None):
+def write(records, comp, sheet, calendar=None, roster=None, where_grid=None):
     import gspread
     rows = bill_tracker_rows(records, status_label=STATUS_HEADER, pipeline=True)
     need_rows, need_cols = len(rows) + 50, 27
@@ -110,6 +114,14 @@ def write(records, comp, sheet, calendar=None, roster=None):
         # stops publishing must show its real age on the calendar too, as it does on the bills (Codex #275)
         cw.batch_update([{"range": "A1", "values": calendar},
                          {"range": COMPLETENESS_CELL, "values": [[comp["source_published_utc"]]]}])
+    if where_grid is not None:
+        try:
+            action_where.write(sheet, where_grid)   # enrichment: never blocks the roster or the heartbeat (as for PA)
+            comp["action_where_status"] = "ok"
+        except (gspread.exceptions.APIError, gspread.exceptions.GSpreadException) as e:
+            comp["action_where_status"] = f"write failed: {type(e).__name__}"   # rides in the heartbeat below
+            print(f"::warning::CA {action_where.ACTION_WHERE_TAB} write failed ({type(e).__name__}: {e}); "
+                  f"What's new shows actions without where they happened")
     if roster is not None:
         rrows = ca_roster.roster_rows(roster)
         try:
@@ -129,7 +141,7 @@ def write(records, comp, sheet, calendar=None, roster=None):
     mh.append_row([comp["checked_at_utc"], status, ORIGIN, json.dumps({k: comp[k] for k in (
         "records_written", "end_status_unclassified", "actions_rescinded", "end_status_blank", "calendar_meetings",
         "calendar_floor_sessions", "calendar_bill_rows_with_vote", "roster_status", "roster_seats",
-        "bills_committee_without_roster") if k in comp})])
+        "bills_committee_without_roster", "action_where_status", "action_where_unknown") if k in comp})])
 
 
 def sheet_id() -> str:
@@ -149,7 +161,7 @@ def sheet_id() -> str:
 def main(argv):
     fetcher = BulkFetcher(CACHE)
     try:
-        records, comp, calendar, roster = build(fetcher)
+        records, comp, calendar, roster, where_grid = build(fetcher)
     finally:
         print(f"CA fetch cache: removed {fetcher.prune_untouched()} file(s) this run did not use")
     print(json.dumps(comp, indent=1))
@@ -162,7 +174,7 @@ def main(argv):
         return 1
     import gspread
     gc = gspread.service_account_from_dict(json.loads(creds))
-    write(records, comp, gc.open_by_key(sid), calendar, roster)
+    write(records, comp, gc.open_by_key(sid), calendar, roster, where_grid)
     print(f"CA: wrote {len(records)} bills and {len(calendar) - 1} calendar rows")
     return 0
 
