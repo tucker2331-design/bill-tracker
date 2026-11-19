@@ -52,8 +52,13 @@ export interface Bill {
   copatrons: Copatron[] | null;
   /** The pipeline map's station, from the state's own job (PA: column V). null = the state does not publish it. */
   pipeline: { stage: string; parked: boolean } | null;
+  /** The bill's own documents as the state's export names them (PA: column W — current text, the sponsor's memo,
+   *  fiscal notes). [] = none published or a state that writes no Links column. Links only: never fetched. */
+  links: BillLink[];
   source: string;          // "LIS"
 }
+
+export interface BillLink { label: string; url: string; kind: string }
 
 export interface Copatron {
   name: string;

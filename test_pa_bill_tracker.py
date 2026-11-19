@@ -59,7 +59,7 @@ bt = sheet.tabs["Bill_Tracker"]
 rows = bt.cells["A1"]
 check("same columns as Virginia's Bill_Tracker; column C names PA's source, not LIS",
       rows[0][:2] + rows[0][3:21] == bill_rows.BILL_TRACKER_HEADER[:2] + bill_rows.BILL_TRACKER_HEADER[3:]
-      and rows[0][21:] == ["Pipeline (JSON)"]
+      and rows[0][21:] == ["Pipeline (JSON)", "Links (JSON)"]
       and rows[0][2] == "Status (PA General Assembly)" and bill_rows.BILL_TRACKER_HEADER[2] == "Status (LIS)")
 check("every row is the header's width", all(len(r) == len(rows[0]) for r in rows))
 check("one row per PA record (5,269)", len(rows) - 1 == len(records) == 5269)
@@ -71,6 +71,10 @@ check("grid grown to reach AA (col 27)", bt.col_count >= 27 and bt.row_count >= 
 beat = sheet.tabs["Metrics_History"].appended
 check("one heartbeat under the bill worker's origin", len(beat) == 1 and beat[0][1:3] == ["OK", "bill_system_metrics"])
 hb17 = next(r for r in rows if r[0] == "HB17")
+check("HB17's Links cell (column W) carries its text, memo and fiscal notes",
+      [x["kind"] for x in json.loads(hb17[22])] == ["text", "memo", "document", "document"])
+check("the grid clear reaches column W (A..W), so a stale Links cell can never survive a shorter run",
+      bt.col_count >= 23)
 check("HB17 row: signed, LDPC source, both floors passed", hb17[3] == "signed" and hb17[15] == J.PA.source_name
       and hb17[16] == hb17[17] == "passed")
 # Committee roster (the PA War Room's member list)

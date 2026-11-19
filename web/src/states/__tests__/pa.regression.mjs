@@ -36,7 +36,7 @@ is("PA bill ids", ["HB17", "SR398", "HJ1", "XB1"].map((b) => PA.billIdPattern.te
 is("PA intake checks are its own keys", PA.intakeChecks.map((c) => c.key),
    ["verbs_unclassified", "action_dates_unreadable", "schedule_bill_refs_unmatched", "schedule_dates_unreadable",
     "bills_committee_without_roster", "action_where_unknown", "action_short_from_full_unexplained",
-    "calendar_committee_not_in_roster", "calendar_no_bills_not_from_source"]);
+    "calendar_committee_not_in_roster", "calendar_no_bills_not_from_source", "links_rejected"]);
 is("VA has no intake checks (its Health is the full one)", VA.intakeChecks, []);
 
 console.log(`\n${pass} passed, ${fail} failed`);
