@@ -8,6 +8,14 @@ status: active
 
 Append-only, reverse-chronological (newest at top). Each entry opens with `## [YYYY-MM-DD] <type> | <title>`.
 
+## [2026-11-19] design + rule | Drafting room and legislator page rebuilt as desktop site pages
+- Owner: the earlier mocks looked like a phone app and bundled three boards per link. Rebuilt as two separate
+  artifacts in the PA site's real layout: header, trust line, tabs (War Room active), 1180px main, main column + sidebar.
+  Drafting room https://claude.ai/artifact/YSsrrSEFrFUtuGK4brkFf9 · Legislator page https://claude.ai/artifact/PZDNqxWPTBVFgJjD7z6aB4
+- Same sourced data as the v4 mocks. Generator `tools/design_mocks/desktop/gen_desktop.py`; chrome copied from `web/src/index.css`.
+- New rule in [[workflow/design_proposal_protocol]]: mockups use the real page (one page per artifact, copied chrome,
+  desktop layout, one render check at 1440px).
+
 ## [2026-11-19] pr | #277 merged — PA bill fate round 3 + executive-site decisions (cd1b06f)
 Codex P1 folded in (filing-day committee seats only; the leak was tiny: 0.791 / 0.820 clean). Gemini robustness notes
 taken where they applied; blanket `fillna("")` declined (it would break the filing-date comparisons). GitHub CI

@@ -1,0 +1,149 @@
+<title>Legislator Page</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<style>
+/*CHROME_CSS*/
+/* legislator page, laid out as the PA site shows it at desktop width */
+.maps { display: grid; grid-template-columns: minmax(0, 1.6fr) minmax(0, 1fr); gap: var(--s4); align-items: center; }
+@media (max-width: 600px) { .maps { grid-template-columns: minmax(0, 1fr); } }
+.maps figure { margin: 0; min-width: 0; }
+.maps svg { width: 100%; height: auto; display: block; max-height: 420px; }
+.maps figcaption { color: var(--ink-faint); font-size: 12px; margin-top: 6px; }
+.toggle { background: none; border: 0; padding: 0; color: var(--accent); font-size: 13px; margin-top: var(--s2); }
+.toggle:hover { text-decoration: underline; }
+.list .metarow { grid-template-columns: minmax(0, 1fr) auto; }
+</style>
+
+<!--CHROME:warroom-->
+<main class="main gut">
+  <nav class="wb-nav"><a class="wb-back" id="back" href="#">‹ Possible sponsors</a><span class="sc">Legislator</span></nav>
+  <header class="wb-title">
+    <h1 id="name"></h1>
+    <p id="headline"></p>
+    <p class="sub2" id="seatsLine"></p>
+  </header>
+
+  <div class="cols">
+    <div class="stack">
+      <section class="grp" id="sec-map" aria-label="District map"></section>
+      <section class="grp" id="sec-ca" aria-label="Bills they carry"></section>
+      <section class="grp" id="sec-vo" aria-label="How they vote"></section>
+      <section class="grp" id="sec-wo" aria-label="Who they work with"></section>
+      <section class="grp" id="sec-me" aria-label="Ideas they circulated"></section>
+    </div>
+    <div class="stack">
+      <section class="grp" id="sec-di" aria-label="District"></section>
+      <section class="grp" id="sec-fa" aria-label="Where the district differs"></section>
+      <section class="grp" id="sec-co" aria-label="Committees"></section>
+      <section class="grp" id="sec-hi" aria-label="Our history"></section>
+    </div>
+  </div>
+  <p class="foot">Mockup of the PA site at desktop width. Every number in the body is real public record: Census ACS 2020–24
+    and 2024 district maps; CMS and NCES for places; PA bill history exports and co-sponsor lists 2023–26; Open States
+    roll calls; co-sponsorship memos 2025–26; the House roster. Placeholders: the header clocks, the tracking count, the
+    signed-in name, and the Our history rows (team-entered, from the contact log).</p>
+</main>
+
+<script>
+/*DATA*/
+/*LINKS*/
+const F = (n) => Number(n).toLocaleString("en-US");
+const P = (x) => (x == null ? "—" : (100 * x).toFixed(1) + "%");
+const esc = (s) => String(s == null ? "" : s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+const plural = (n, one, many) => F(n) + " " + (Number(n) === 1 ? one : many);
+const $ = (id) => document.getElementById(id);
+const L = DATA, d = L.district, dn = Number(d);
+const st = { all: false };
+function head(title, sum) { return '<div class="gh"><h3 class="h">' + esc(title) + '</h3><span class="gsum">' + esc(sum || "") + "</span></div>"; }
+function pairs(rows) { return rows.map((r) => '<div class="metarow"><span class="k">' + esc(r[0]) + "</span><span>" + r[1] + "</span></div>").join(""); }
+const pretty = (k) => k.replace(/^House |^Senate /, "").toLowerCase().replace(/\b\w/g, (c) => c.toUpperCase()).replace(/\bAnd\b/g, "and");
+const partyWord = { D: "Democrat", R: "Republican" };
+
+// header
+const cur = L.carry[L.carry.length - 1] || {};
+if (LINKS.drafting) { $("back").href = LINKS.drafting; $("back").target = "_blank"; $("back").rel = "noopener"; }
+$("name").textContent = L.member.name;
+$("headline").textContent = (partyWord[L.member.party] || L.member.party) + " · House District " + dn + " · "
+  + (L.local.counties || []).map((c) => c[0]).join(", ") + " · " + (cur.standing || "—") + " party";
+$("seatsLine").textContent = plural(L.seats.length, "committee", "committees") + " · in the data since " + (L.first_session_in_data || "").slice(0, 4);
+
+// map: the state with the district lit, and the district with its neighbors
+const statePaths = Object.entries(L.map.state).filter(([k]) => k !== d).map(([, p]) => '<path d="' + p + '" fill="#2A3034" stroke="#0B0D0E" stroke-width="0.6"></path>').join("");
+const ins = L.map.inset;
+const nb = ins.neighbors;
+const nbLabel = (n) => "HD " + Number(n.d) + (L.names[n.d] ? " · " + L.names[n.d].split(" ").pop() : "");
+$("sec-map").innerHTML = head("House District " + dn, F(L.people) + " residents · " + plural((L.local.municipalities || []).length, "municipality", "municipalities"))
+  + '<div class="maps">'
+  + '<figure><svg viewBox="0 0 1000 ' + L.map.dims.h + '" role="img" aria-label="House District ' + dn + ' within Pennsylvania">' + statePaths
+  + '<path d="' + L.map.state[d] + '" fill="#86B6D3" stroke="#F0F2F3" stroke-width="1.2"></path></svg><figcaption>District ' + dn + " in Pennsylvania.</figcaption></figure>"
+  + '<figure><svg viewBox="-45 -12 ' + (ins.w + 90) + " " + (ins.h + 24) + '" role="img" aria-label="House District ' + dn + ' and the districts that border it">'
+  + nb.map((n) => '<path d="' + n.path + '" fill="#2A3034" stroke="#0B0D0E" stroke-width="1"></path>').join("")
+  + '<path d="' + ins.me + '" fill="#86B6D3" fill-opacity="0.35" stroke="#86B6D3" stroke-width="2"></path>'
+  + nb.map((n) => '<text x="' + n.lx + '" y="' + n.ly + '" fill="#A6AFB4" font-size="11" text-anchor="middle">' + esc(nbLabel(n)) + "</text>").join("")
+  + '<text x="' + ins.label.x + '" y="' + ins.label.y + '" fill="#F0F2F3" font-size="13" font-weight="700" text-anchor="middle">HD ' + dn + "</text>"
+  + "</svg><figcaption>The " + plural(nb.length, "district", "districts") + " that border it.</figcaption></figure></div>";
+
+// district
+const sen = (L.senate_overlap || []).map(([s, n]) => { const x = L.senators[s] || {}; return "Sen. " + esc(x.name || "?") + " (" + esc(x.party || "?") + "), SD " + Number(s) + ' <span class="soft">· ' + F(n) + " shared</span>"; });
+const pl = L.places;
+$("sec-di").innerHTML = head("District", "Census ACS 2020–24")
+  + pairs([
+    ["Residents", '<span class="num">' + F(L.people) + "</span>"],
+    ["Median income", '<span class="num">$' + F(L.median_income.value) + '</span> <span class="soft">± $' + F(L.median_income.moe) + "</span>"],
+    ["Places", plural(pl.schools, "public school", "public schools") + " · " + plural(pl.nursing_homes, "nursing home", "nursing homes") + ' <span class="soft">(' + F(pl.nursing_home_beds) + " beds)</span> · " + plural(pl.hospitals, "hospital", "hospitals")],
+    ["Municipalities", esc((L.local.municipalities || []).map((x) => x[0]).join(", "))],
+    ["School districts", esc((L.local.school_districts || []).map((x) => x[0]).join(", "))],
+    ["Senate", sen.join("<br>") || "—"],
+  ])
+  + '<div class="foot">2024 district maps. CMS for nursing homes and hospitals, NCES for schools. Senate = senators whose districts share residents with this one.</div>';
+
+function renderFacts() {
+  const rows = st.all ? L.facts : L.facts.slice(0, 6);
+  $("sec-fa").innerHTML = head("Where it differs from Pennsylvania", st.all ? "all " + L.facts.length + " measures" : "6 largest gaps")
+    + '<div class="tw"><table class="t"><thead><tr><th>Measure</th><th class="r">District</th><th class="r">Share</th><th class="r">PA</th></tr></thead><tbody>'
+    + rows.map((f) => "<tr><td>" + esc(f.label) + '</td><td class="r num">' + F(f.count) + '</td><td class="r">' + P(f.share) + '</td><td class="r soft">' + P(f.state) + "</td></tr>").join("")
+    + '</tbody></table></div><button type="button" class="toggle" id="factsToggle">' + (st.all ? "Show the 6 largest gaps" : "Show all " + L.facts.length + " measures") + "</button>"
+    + '<div class="foot">Shares use each measure\'s own base (children for child poverty, households for SNAP).</div>';
+}
+renderFacts();
+document.addEventListener("click", (e) => { if (e.target.id === "factsToggle") { st.all = !st.all; renderFacts(); } });
+
+// bills they carry
+$("sec-ca").innerHTML = head("Bills they carry", (cur.bills || 0) + " bills this session · " + (cur.out || 0) + " out of committee")
+  + '<div class="tw"><table class="t"><thead><tr><th>Session</th><th class="r">Bills</th><th class="r">Out of committee</th><th class="r">Expected</th><th class="r">Passed House</th><th class="r">Law</th></tr></thead><tbody>'
+  + L.carry.map((c) => "<tr><td>" + esc(c.session) + (c.open ? ' <span class="muted">open</span>' : "") + '</td><td class="r num">' + c.bills + '</td><td class="r num">' + c.out + '</td><td class="r soft">' + c.expected + '</td><td class="r">' + c.passed + '</td><td class="r">' + c.law + "</td></tr>").join("")
+  + "</tbody></table></div>"
+  + pairs([["Laws they work on", L.focus.map((f) => esc(f[0]) + ' <span class="soft">' + f[1] + "</span>").join(" · ")]])
+  + '<div class="foot">Expected = what bills like theirs did: same committee and party standing, earlier sessions. The current session is still open.</div>';
+
+// how they vote
+$("sec-vo").innerHTML = head("How they vote", "crossed " + (L.votes[L.votes.length - 1] || {}).crossed + " of " + F((L.votes[L.votes.length - 1] || {}).contested_votes) + " contested")
+  + '<div class="tw"><table class="t"><thead><tr><th>Session</th><th class="r">With party</th><th class="r">Contested votes</th><th class="r">Crossed</th><th class="r">Rank in party</th></tr></thead><tbody>'
+  + L.votes.map((v) => "<tr><td>" + esc(v.session) + '</td><td class="r num">' + F(v.with_party) + '</td><td class="r soft">' + F(v.contested_votes) + '</td><td class="r">' + v.crossed + '</td><td class="r soft">' + esc(v.rank_in_party.replace(" (1 = most loyal)", "")) + "</td></tr>").join("")
+  + '</tbody></table></div><div class="foot">Contested roll calls only (10% or more voted no). Rank 1 = most loyal. Crossing repeats from session to session (r 0.84) unless the majority changes.</div>';
+
+// who they work with
+const who = (xs) => xs.map((x) => esc(x.name) + ' <span class="muted">' + esc(x.party) + "</span> " + x.n).join(" · ");
+$("sec-wo").innerHTML = head("Who they work with", L.work.cross_party_on_hers.split(" of ")[0] + " other-party co-signatures on their bills")
+  + pairs([
+    ["Co-sign their bills", who(L.work.cosign_her_bills)],
+    ["They co-sign", who(L.work.she_cosigns)],
+    ["Other party", "On their bills: " + esc(L.work.cross_party_on_hers) + " co-signatures. On bills they signed: " + esc(L.work.cross_party_she_signs) + "."],
+  ])
+  + '<div class="foot">2023–26. Number after a name = bills.</div>';
+
+// committees
+$("sec-co").innerHTML = head("Committees", plural(L.seats.length, "seat", "seats"))
+  + '<div class="list">' + L.seats.map((s) => '<div class="metarow"><span>' + esc(pretty(s)) + '</span><span class="sc">' + (L.chairs.indexOf(s) >= 0 ? "chair" : "member") + "</span></div>").join("") + "</div>";
+
+// ideas they circulated
+$("sec-me").innerHTML = head("Ideas they circulated", plural(L.memos.length, "memo", "memos") + " · 2025–26")
+  + '<div class="list">' + L.memos.slice(0, 10).map((m) => '<div class="metarow"><span>' + esc(m.title) + '</span><span class="sc">' + esc(m.bill) + "</span></div>").join("") + "</div>"
+  + '<div class="foot">Co-sponsorship memo titles, newest 10 of ' + L.memos.length + ". New memos arrive from PA's memo feed.</div>";
+
+// our history (team-entered; placeholders)
+$("sec-hi").innerHTML = head("Our history", "team only")
+  + '<div class="list">'
+  + '<div class="metarow" style="grid-template-columns:90px minmax(0,1fr) auto"><span class="muted">[date]</span><span>[meeting · who · note]</span><span class="sc">[position]</span></div>'
+  + '<div class="metarow" style="grid-template-columns:90px minmax(0,1fr) auto"><span class="muted">[date]</span><span>[call · who · note]</span><span class="sc">[asked to sponsor]</span></div>'
+  + '</div><div class="foot">From the War Room contact log. Never leaves the team.</div>';
+</script>

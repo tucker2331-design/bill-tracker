@@ -70,6 +70,28 @@ https://claude.ai/artifact/311hd8hv1eaQpSmntDQDVE). A new screen silently drops 
 **Rule:** read the live War Room artifact first, change only the sections the feature touches, republish to the SAME
 URL, and say exactly which lines changed. A separate page only when the owner asks for one.
 
+## Mockups use the real page: site chrome, desktop width, one page per artifact (owner, 2026-11-19)
+
+> *"biggest complaint with the drafts on leg page and the drafting room is the format is for a mobile app we dont
+> have? … can you make them individually this time not 3 in one. and have them actually be the format id see them on
+> the page. and dont make this mistake again bc its wasting credits and usage fixing."*
+
+What happened: the drafting-room and legislator mockups were built as 860px single columns with tap-to-open
+accordions (a phone pattern), and each was published as a Design canvas holding three boards. The owner could not
+picture where anything would sit on the real site.
+
+**Rule (every page mockup):**
+1. **One page = one plain HTML artifact.** No canvases, no several boards in one link. A second page is a second
+   artifact.
+2. **The real chrome, copied from the site, not redrawn:** `tools/design_mocks/desktop/chrome.css` is copied from
+   `web/src/index.css` (tokens, `.appheader`/`.topbar`/`.nav`, `.main` 1180px, `.wb-*` page header). Brand, trust
+   line, sign-in and tabs as `App.tsx` renders them, with the right tab active.
+3. **Desktop layout:** the site's `.cols` grid (main column + sidebar), every section visible. No accordions on
+   desktop; it stacks to one column under 900px only because the site does.
+4. **Check the render once at 1440px** before publishing, and mark placeholders (clocks, names, team-entered rows)
+   in the page foot.
+Generator: `tools/design_mocks/desktop/gen_desktop.py`.
+
 ## The one-line test
 > **Before presenting: "Which of our own written rules would catch this if the owner ran the checklist on it?"**
 > If that question has an answer, the work isn't finished.
