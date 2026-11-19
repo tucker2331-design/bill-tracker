@@ -65,22 +65,34 @@ def _git(*args: str) -> bytes:
     return subprocess.run(["git", *args], capture_output=True, check=True).stdout
 
 
-def scan_tree() -> list[str]:
-    out = []
+def _read(path: str) -> bytes | None:
+    """The file's bytes (capped), or None when a tracked path has nothing to read here: deleted in the working tree,
+    or a submodule directory. The caller COUNTS those and prints them; they are never silently skipped."""
+    try:
+        with open(path, "rb") as f:
+            return f.read(MAX_BYTES + 1)
+    except (FileNotFoundError, IsADirectoryError):
+        return None
+
+
+def scan_tree(notes: list[str]) -> list[str]:
+    out, unreadable = [], []
     for path in _git("ls-files", "-z").decode().split("\0"):
         if not path:
+            continue                                # the trailing NUL's empty field, not a path
+        data = _read(path)
+        if data is None:
+            unreadable.append(path)
             continue
-        try:
-            with open(path, "rb") as f:
-                data = f.read(MAX_BYTES + 1)
-        except (FileNotFoundError, IsADirectoryError):
-            continue                                # deleted in the working tree, or a submodule dir: nothing to read
         if b"\x00" in data[:8192]:
             continue                                # binary (sqlite, pickle, images) at any size: no text shapes
         if len(data) > MAX_BYTES:
             out.append(f"{path}: larger than {MAX_BYTES // 2**20} MB — not scanned, check it by hand")
             continue
         out += [f"{path}:{ln}: {kind} ({fp})" for ln, kind, fp in scan_bytes(data)]
+    if unreadable:
+        notes.append(f"{len(unreadable)} tracked path(s) not in the working tree, not scanned: "
+                     + ", ".join(unreadable[:5]) + (" …" if len(unreadable) > 5 else ""))
     return out
 
 
@@ -117,7 +129,10 @@ def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--history", action="store_true")
     ns = ap.parse_args()
-    hits = scan_history() if ns.history else scan_tree()
+    notes: list[str] = []
+    hits = scan_history() if ns.history else scan_tree(notes)
+    for n in notes:
+        print("secret_scan: note: " + n)
     if hits:
         print("secret_scan: possible committed credential(s) — rotate first, then remove:")
         for h in hits:
