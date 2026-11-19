@@ -8,6 +8,11 @@ status: active
 
 Append-only, reverse-chronological (newest at top). Each entry opens with `## [YYYY-MM-DD] <type> | <title>`.
 
+## [2026-11-19] pr | #277 merged — PA bill fate round 3 + executive-site decisions (cd1b06f)
+Codex P1 folded in (filing-day committee seats only; the leak was tiny: 0.791 / 0.820 clean). Gemini robustness notes
+taken where they applied; blanket `fillna("")` declined (it would break the filing-date comparisons). GitHub CI
+green on bf9cce6; `bill-tracker-ca` Cloudflare check red from the owner's branch-build setting (commented).
+
 ## [2026-11-19] test + decision | PA bill fate level with Virginia; executive site shape decided
 PA fate round 3: committee seats from Open States committee roll calls, FILING-DAY ONLY after Codex #277 (roll calls
 before filing, or the previous session). 2023–24 goes from 0.775 to 0.791 and 2025–26 from 0.807 to 0.820 (clean);
