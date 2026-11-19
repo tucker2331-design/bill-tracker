@@ -127,7 +127,8 @@ jobs:
             test_governor_eventcode_drift.py \
             test_states.py \
             test_pa_intake.py \
-            test_ca_intake.py; do
+            test_ca_intake.py \
+            test_secret_scan.py; do
             echo "::group::$t"
             if python3 -u "$t"; then echo "PASS  $t"; else echo "FAIL  $t"; fail=1; fi
             echo "::endgroup::"

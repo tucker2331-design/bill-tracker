@@ -8,6 +8,13 @@ status: active
 
 Append-only, reverse-chronological (newest at top). Each entry opens with `## [YYYY-MM-DD] <type> | <title>`.
 
+## [2026-11-19] security + to-do | Going private: checklist and security audit
+- Owner is making the repo private. Full-history key scan (1,894 commits, 91 branches): no live credentials. 0 forks,
+  no Pages. Breaks on the flip: Actions minutes (~9–13k/month vs 2,000 free) and the VA Health page's token-free
+  GitHub reads. Common AI-built-app holes checked against the Worker, sheets, Streamlit and CI: [[ideas/going_private]].
+- Shipped: `tools/secret_scan.py` (+ `test_secret_scan.py`), pre-push audit point 18 (repo-wide), `.wrangler/`
+  untracked and ignored (account id + email + a local test DB), `.gitignore` covers `.env`/`.dev.vars`/Streamlit secrets.
+
 ## [2026-11-19] design + rule | Drafting room and legislator page rebuilt as desktop site pages
 - Owner: the earlier mocks looked like a phone app and bundled three boards per link. Rebuilt as two separate
   artifacts in the PA site's real layout: header, trust line, tabs (War Room active), 1180px main, main column + sidebar.

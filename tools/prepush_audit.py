@@ -241,6 +241,23 @@ def check_open_loops(fails):
                      f"      {detail or r.stdout.strip() or r.stderr.strip()}")
 
 
+def check_secrets(fails):
+    """Point 18 — no live credential in any tracked file (tools/secret_scan.py). Repo-wide on every push: the repo
+    is going private (docs/ideas/going_private.md) and GitHub's free secret scanning covers only public repos."""
+    tool = os.path.join(os.path.dirname(os.path.abspath(__file__)), "secret_scan.py")
+    if not os.path.isfile(tool):
+        fails.append("tools/secret_scan.py is missing — committed credentials are unchecked.")
+        return
+    try:
+        r = subprocess.run([sys.executable, tool], capture_output=True, text=True, timeout=120)
+    except subprocess.TimeoutExpired:
+        fails.append("secret_scan: tools/secret_scan.py did not finish within 120s.")
+        return
+    if r.returncode != 0:
+        fails.append("secret_scan: a tracked file holds what looks like a live credential. Rotate it, then remove it.\n"
+                     "      " + "\n      ".join(line for line in r.stdout.splitlines() if line.strip().startswith("✗")))
+
+
 def check_caselaw_index(fails):
     """Point B-2 — an audit entry must actually reach the generated `## Index`.
 
@@ -337,6 +354,7 @@ def main():
     # failure modes they exist for (a page that stopped being linked, an entry that never reached the
     # Index) are states of the repo, not lines in a diff — they are exactly the things a diff cannot see.
     check_open_loops(fails)
+    check_secrets(fails)
     check_caselaw_index(fails)
     check_claude_md_cadence(fails)
     warn_lines = warns(files)
