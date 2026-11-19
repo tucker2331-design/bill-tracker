@@ -25,7 +25,9 @@ export function linksCell(raw: string | undefined): BillLink[] {
     if (!Array.isArray(v)) return [];
     const ok = v.filter((x) => x && typeof x.label === "string" && typeof x.url === "string" && /^https:\/\//.test(x.url));
     if (ok.length !== v.length) console.warn(`Links: ${v.length - ok.length} link(s) dropped (not https)`);
-    return ok.map((x) => ({ label: x.label, url: x.url, kind: typeof x.kind === "string" ? x.kind : "" }));
+    const seen = new Set<string>();   // one row per URL (an older sheet may repeat one; keys must be unique)
+    return ok.filter((x) => !seen.has(x.url) && (seen.add(x.url), true))
+      .map((x) => ({ label: x.label, url: x.url, kind: typeof x.kind === "string" ? x.kind : "" }));
   } catch { console.warn("Links: unreadable cell"); return []; }
 }
 

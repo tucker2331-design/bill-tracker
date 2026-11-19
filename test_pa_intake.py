@@ -230,6 +230,9 @@ def main():
           str({k: comp[k] for k in ("bills_with_text_link", "bills_with_memo_link", "links_rejected")}))
     check("every link is https on the source's own hosts (never a guessed or foreign URL)",
           all(A._PA_DOC_URL.match(x["url"]) for r in recs for x in r["links"]))
+    check("a document listed twice is written once and counted (5 on 2025_0: SB160 ×2, HB1189, SB377, SB997)",
+          all(len({x["url"] for x in r["links"]}) == len(r["links"]) for r in recs)
+          and comp["links_duplicates_dropped"] == 5, str(comp.get("links_duplicates_dropped")))
 
     with open(GOLDEN, encoding="utf-8") as f:
         want = json.load(f)

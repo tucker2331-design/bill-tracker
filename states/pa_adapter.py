@@ -170,39 +170,47 @@ def parse_schedule(rss: bytes, chamber: str) -> List[dict]:
 # notes; actuarial notes live at the Independent Fiscal Office, 16 on 2025_0). Shown as LINKS only: we never fetch
 # them (the PA rule: bulk feeds only, never per-bill pages). A URL on any other host is never written: it is counted
 # (`links_rejected`, a Health check) — a new host is a decision, not a default.
-_PA_DOC_URL = re.compile(r"^https://www\.(palegis\.us|ifo\.state\.pa\.us)/[^\s\"'<>]+$")
+_PA_DOC_URL = re.compile(r"^https://(?:www\.)?(palegis\.us|ifo\.state\.pa\.us)/[^\s\"'<>]+$")
 
 
-def bill_links(b: ET.Element) -> Tuple[List[dict], int]:
+def bill_links(b: ET.Element) -> Tuple[List[dict], int, int]:
+    """(links, rejected, duplicates). A URL the export lists twice for one bill is written once and counted
+    (4 bills on 2025_0, e.g. SB160 — Gemini #276)."""
     links: List[dict] = []
-    rejected = 0
+    seen: set = set()
+    rejected = duplicates = 0
 
     def add(label: str, url: str, kind: str) -> None:
-        nonlocal rejected
+        nonlocal rejected, duplicates
         url = (url or "").strip()
         if not url:
             return
         if not _PA_DOC_URL.match(url):
             rejected += 1
             return
+        if url in seen:
+            duplicates += 1
+            return
+        seen.add(url)
         links.append({"label": " ".join(label.split()), "url": url, "kind": kind})
 
     hist_el = b.find("printersNumberHistory")
     pns = [n for n in (list(hist_el) if hist_el is not None else []) if n.get("billTextPdfUrl")]
-    latest = max(pns, key=lambda n: int(n.get("sequence", "0")) if n.get("sequence", "0").isdigit() else 0) if pns else None
+    # a missing or non-numeric sequence sorts LAST, never promoted to "current" (0 today; Gemini #276)
+    latest = max(pns, key=lambda n: int(n.get("sequence", "")) if n.get("sequence", "").isdigit() else -1) if pns else None
     if latest is not None:
         add(f"Bill text (Printer's No. {(latest.text or '').strip()})", latest.get("billTextPdfUrl", ""), "text")
     memo = b.find("cosponsorshipMemo")
     if memo is not None and memo.get("memoUrl"):
         title = (memo.text or "").strip()
         add(f"Sponsor's memo: {title}" if title else "Sponsor's memo", memo.get("memoUrl", ""), "memo")
-    if latest is not None:
-        pn = (latest.text or "").strip()
+    pn = (latest.text or "").strip() if latest is not None else ""
+    if pn:   # an empty printer's number must never match a group that names none (0 today; Gemini #276)
         for grp in b.iter("pnSupportingDocuments"):
             if grp.get("relatedPN", "") == pn:
                 for d in grp.iter("document"):
                     add((d.text or "").strip() or "Supporting document", d.get("documentUrl", ""), "document")
-    return links, rejected
+    return links, rejected, duplicates
 
 
 def build_records(export: ET.Element, meetings: List[dict], today: datetime.date,
@@ -212,7 +220,7 @@ def build_records(export: ET.Element, meetings: List[dict], today: datetime.date
         raise ValueError("PA export has no <session> element — refusing to build (fail closed)")
     declared = int(export.get("totalDocuments", "-1"))
     verbs_unclassified: Dict[str, int] = {}
-    undefined_actions = actions_total = bad_dates = links_rejected = 0
+    undefined_actions = actions_total = bad_dates = links_rejected = links_duplicates = 0
     records: List[Dict[str, Any]] = []
     for b in session_el.iter("bill"):
         body, typ, num = ((b.findtext(k) or "").strip() for k in ("body", "type", "number"))
@@ -314,8 +322,9 @@ def build_records(export: ET.Element, meetings: List[dict], today: datetime.date
         last_action = status
         if extras is not None:
             extras.setdefault("action_parts", {})[bill_key(body, typ, num)] = parts
-        links, rej = bill_links(b)
+        links, rej, dup = bill_links(b)
         links_rejected += rej
+        links_duplicates += dup
         records.append({
             "bill": bill,
             "title": (b.findtext("shortTitle") or "").strip(),
@@ -387,6 +396,7 @@ def build_records(export: ET.Element, meetings: List[dict], today: datetime.date
         "bills_with_text_link": sum(1 for r in records if any(x["kind"] == "text" for x in r["links"])),
         "bills_with_memo_link": sum(1 for r in records if any(x["kind"] == "memo" for x in r["links"])),
         "links_rejected": links_rejected,
+        "links_duplicates_dropped": links_duplicates,
         "checked_at_utc": now_utc,
     }
     return records, completeness
