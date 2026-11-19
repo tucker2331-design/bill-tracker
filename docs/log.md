@@ -8,6 +8,11 @@ status: active
 
 Append-only, reverse-chronological (newest at top). Each entry opens with `## [YYYY-MM-DD] <type> | <title>`.
 
+## [2026-11-19] run | California sheet filled after #275 — bills, calendar, committee members, What's new
+Run 44436420376: 5,040 bills; 25,171 calendar rows (1,065 committee meetings, 295 floor + 204 check-in sessions,
+21,219 bill rows with their vote); roster ok — 57 committees, 590 seats, 0 bills without a member list; Action_Where
+written; every Health zero-check 0; 0 requests to Legislative Counsel (the 20 h cache held — same export as last run).
+
 ## [2026-11-19] pr | #275 merged — CA calendar, committee members, What's new + CA stats (0c23f73)
 All GitHub CI green on 3aa6e48; `Workers Builds: bill-tracker-ca` red from the new Worker's non-production-branch
 builds (owner setting, commented on the PR). CA job dispatched in write mode to fill Sheet1, Committee_Roster and
