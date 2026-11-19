@@ -75,3 +75,4 @@ tools/historical_cache/ca/load/
 .ca_cache/
 dist-ca
 web/dist-ca
+.openstates_people

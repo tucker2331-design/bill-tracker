@@ -1,0 +1,33 @@
+id: ocd-organization/4f0dab78-1bbc-4b56-825e-a305d841b2f6
+jurisdiction: ocd-jurisdiction/country:us/state:ca/government
+classification: committee
+name: Agriculture
+chamber: upper
+sources:
+- url: https://sagri.senate.ca.gov
+  note: Committee Detail Page
+- url: https://senate.ca.gov/committees
+  note: Committee List Page
+links:
+- url: https://sagri.senate.ca.gov
+  note: homepage
+members:
+- name: Anna Caballero
+  role: chair
+  person_id: ocd-person/fe462917-df55-4a43-9fd8-970541544ca6
+- name: Marie Alvarado-Gil
+  role: vice chair
+  person_id: ocd-person/b6907bd6-05e1-44a4-bfc6-db4b672ff8b4
+- name: Angelique Ashby
+  role: member
+  person_id: ocd-person/564f2203-7cae-4a40-bc93-5c05a935b98f
+- name: Jerry McNerney
+  role: member
+  person_id: ocd-person/e9733632-df5d-48b4-b4a3-4768e7dcb5f7
+- name: Steve Padilla
+  role: member
+  person_id: ocd-person/eb745b9e-4ced-494a-a298-fdffa9207b0d
+other_names:
+- name: Senate Agriculture
+- name: Senate Agriculture Committee
+- name: Senate Committee on Agriculture

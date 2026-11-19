@@ -1,0 +1,51 @@
+id: ocd-organization/7eef03b1-5d2f-4fe1-b0fb-498a2d91a108
+jurisdiction: ocd-jurisdiction/country:us/state:ca/government
+classification: committee
+name: Higher Education
+chamber: lower
+sources:
+- url: https://ahed.assembly.ca.gov
+- url: https://ahed.assembly.ca.gov/
+  note: Committee Detail Page
+- url: https://www.assembly.ca.gov/committees
+  note: Committee List Page
+links:
+- url: https://ahed.assembly.ca.gov
+  note: homepage
+members:
+- name: Mike Fong
+  role: chair
+  person_id: ocd-person/3a7bde9c-8709-49c7-89e4-0835ea1f9eb6
+- name: Carl DeMaio
+  role: vice chair
+  person_id: ocd-person/053d119b-847e-43bf-9a22-18b5f309067f
+- name: Al Muratsuchi
+  role: member
+  person_id: ocd-person/78610d0e-c790-4fc9-ab8e-0887adbbe063
+- name: Celeste Rodriguez
+  role: member
+  person_id: ocd-person/1dbf574d-4c03-40ce-8c30-a6727c4bd5ab
+- name: Corey Jackson
+  role: member
+  person_id: ocd-person/e351eaa3-8aa1-4f26-a8ff-2a260a0ad383
+- name: Darsh Patel
+  role: member
+  person_id: ocd-person/86218623-ea63-4b2a-ab5c-7694e3f4a18a
+- name: David Tangipa
+  role: member
+  person_id: ocd-person/748ce69c-a2bc-41a7-95e2-b09fba6e5ecd
+- name: Jeff Gonzalez
+  role: member
+  person_id: ocd-person/552b5bf7-472d-48a4-bb9a-132c1f044737
+- name: LaShae Sharp-Collins
+  role: member
+  person_id: ocd-person/895f777d-ae7b-429a-aa0f-1b2895c13945
+- name: Tasha Boerner
+  role: member
+  person_id: ocd-person/9e69729e-4383-410b-840e-ad4ea0f1ab4a
+other_names:
+- name: Assembly Committee on Higher Education
+- name: Assembly Higher Education
+- name: Assembly Higher Education Committee
+- name: Committee on Higher Education
+- name: Higher Education Committee

@@ -1,0 +1,38 @@
+id: ocd-person/564f2203-7cae-4a40-bc93-5c05a935b98f
+name: Angelique Ashby
+given_name: Angelique
+family_name: Ashby
+birth_date: 1975-03-20
+gender: Female
+email: senator.ashby@senate.ca.gov
+image: https://www.senate.ca.gov/sites/senate.ca.gov/files/senator_photos/ashby_angelique_d-08.jpg
+party:
+- name: Democratic
+roles:
+- start_date: 2022-12-05
+  type: upper
+  jurisdiction: ocd-jurisdiction/country:us/state:ca/government
+  district: '8'
+offices:
+- classification: capitol
+  address: 1021 O St. Suite 8630, Sacramento, CA 95814
+  voice: 916-651-4008
+- classification: district
+  address: 1510 14th St., Sacramento, CA 95814
+  voice: 916-319-0309
+links:
+- url: https://sd08.senate.ca.gov/
+- url: https://senate.ca.gov/sd08
+other_names:
+- name: A. Ashby
+- name: A.V. Ashby
+- name: Angelique V. Ashby
+- name: Ashby, A.
+sources:
+- url: https://ballotpedia.org/Angelique_Ashby
+- url: https://en.wikipedia.org/wiki/Angelique_Ashby
+- url: https://justfacts.votesmart.org/candidate/biography/129642/angelique-ashby
+- url: https://sd08.senate.ca.gov
+- url: https://www.angeliqueashby.com
+- url: https://www.linkedin.com/in/angeliqueashby
+- url: https://www.senate.ca.gov/senators

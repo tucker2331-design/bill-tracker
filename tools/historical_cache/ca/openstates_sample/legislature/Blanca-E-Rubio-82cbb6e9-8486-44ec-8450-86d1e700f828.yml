@@ -1,0 +1,48 @@
+id: ocd-person/82cbb6e9-8486-44ec-8450-86d1e700f828
+name: Blanca Rubio
+given_name: Blanca
+family_name: Rubio
+birth_date: 1969-09-15
+gender: Female
+email: assemblymember.rubio@assembly.ca.gov
+image: https://webapi.assembly.ca.gov/district-media/assets/members/assembly_member_48.jpg
+party:
+- name: Democratic
+roles:
+- start_date: 2016-12-05
+  type: lower
+  jurisdiction: ocd-jurisdiction/country:us/state:ca/government
+  district: '48'
+offices:
+- classification: capitol
+  address: Room 5250, 1021 O St. P.O. Box 942849, Sacramento, CA 94249
+  voice: 916-319-2048
+- classification: district
+  address: 100 N. Barranca St. Suite 895, West Covina, CA 91791
+  voice: 626-960-4457
+links:
+- url: https://rubio.asmdc.org/
+- url: https://www.assembly.ca.gov/assemblymembers/48
+other_names:
+- name: B. Rubio
+- name: B.E. Rubio
+- name: Blanca E. Rubio
+- name: Blanca Estela Rubio
+- name: Blanca Rubio
+- name: Rubio, B.
+other_identifiers:
+- scheme: legacy_openstates
+  identifier: CAL000529
+sources:
+- url: https://a48.asmdc.org
+- url: https://assembly.ca.gov/assemblymembers
+- url: https://ballotpedia.org/Blanca_Rubio
+- url: https://en.wikipedia.org/wiki/Blanca_Rubio
+- url: https://justfacts.votesmart.org/candidate/biography/169399/blanca-rubio
+- url: https://rubio.asmdc.org
+- url: https://rubio.asmdc.org/biography
+- url: https://www.assembly.ca.gov/assemblymembers
+- url: https://www.assembly.ca.gov/assemblymembers/48
+- url: https://www.linkedin.com/in/blanca-rubio-california-state-assembly-74365a65
+extras:
+  P.O. Box: P.O. Box 942849, Sacramento, CA  94249-0048;

@@ -1,0 +1,42 @@
+id: ocd-person/20c72bef-f518-4677-bbcb-83c502c36ede
+name: Diane Papan
+given_name: Diane
+family_name: Papan
+birth_date: 1963-08-22
+gender: Female
+email: assemblymember.papan@assembly.ca.gov
+image: https://webapi.assembly.ca.gov/district-media/assets/members/assembly_member_21.jpg
+party:
+- name: Democratic
+roles:
+- start_date: 2022-12-05
+  type: lower
+  jurisdiction: ocd-jurisdiction/country:us/state:ca/government
+  district: '21'
+offices:
+- classification: capitol
+  address: Room 4220, 1021 O St. P.O. Box 942849, Sacramento, CA 94249
+  voice: 916-319-2021
+- classification: district
+  address: 1528 S. El Camino Real Suite 302, San Mateo, CA 94402
+  voice: 650-349-2200
+links:
+- url: https://papan.asmdc.org/
+- url: https://www.assembly.ca.gov/assemblymembers/21
+other_names:
+- name: D. Papan
+- name: D.D. Papan
+- name: Papan, D.
+sources:
+- url: https://a21.asmdc.org
+- url: https://a21.asmdc.org/biography
+- url: https://ballotpedia.org/Diane_Papan
+- url: https://en.wikipedia.org/wiki/Diane_Papan
+- url: https://justfacts.votesmart.org/candidate/biography/172943/diane-papan
+- url: https://papan.asmdc.org
+- url: https://papan.asmdc.org/biography
+- url: https://www.assembly.ca.gov/assemblymembers
+- url: https://www.assembly.ca.gov/assemblymembers/21
+- url: https://www.linkedin.com/in/diane-papan-a15b0365
+extras:
+  P.O. Box: P.O. Box 942849, Sacramento, CA 94249-0021;

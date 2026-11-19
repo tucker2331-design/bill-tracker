@@ -1,8 +1,8 @@
 ---
 tags: [knowledge, california, ca, pubinfo, source, terms, multi-state]
-updated: 2026-11-18
+updated: 2026-11-19
 status: active
-open_loop: CA site — merged and writing its sheet daily (first run 2026-11-18: 5,040 bills); owner step left before it is live (the Cloudflare Worker bill-tracker-ca). See "To go live".
+open_loop: CA site — bills, calendar and committee members built; owner steps left (Worker secrets TEAM_EMAILS / GCP_SA_JSON, Google sign-in origin); extraordinary-session bills not tracked yet. See "To go live" and "Not on the site yet".
 ---
 
 # California — pubinfo (Legislative Counsel's bulk database)
@@ -69,17 +69,52 @@ on them) · 771 died · 243 vetoed (212 with status Vetoed + 31 with a veto over
 281 House/Senate Resolutions have no subject line in the source (counted as `titles_blank`); co-author party joined
 for 31,468 of 31,472. Dry run: 1 request (the index) when the session file is cached.
 
+## Calendar (built 2026-11-19) — `states/ca_calendar.py`, from the same daily export (no new request)
+| piece | source table | measured on 2025-26 |
+|---|---|---|
+| meeting slots (committee + floor, future and past), time + room | `COMMITTEE_AGENDA_TBL` (code, date, `AGENDA_TIME`, `LINE1`) | 1,065 committee meetings · 295 floor sessions · 204 check-in sessions · 50 recess rows (not drawn) |
+| which bills a committee hears | `COMMITTEE_HEARING_TBL` joined on (code, date) | 923 of 923 hearing days joined; 142 meetings list no bills (shown "no bills listed") |
+| what happened | `BILL_SUMMARY_VOTE_TBL` at the same place + date, motion text from `BILL_MOTION_TBL` | 21,219 bill rows carry a vote, verbatim ("Do pass … (PASS) 8-0") |
+| floor bills | the bills VOTED on at AFLOOR/SFLOOR that day | future floor agendas are not listed (the site says so) |
+
+Times are shown exactly as the source writes them ("1:30 p.m.", "Upon Call of the Chair"); 42 blank times show
+"Time TBA" (counted). A committee's house: the code prefix (CX = Assembly, CS = Senate) checked every run against the
+history's `PRIMARY_LOCATION` — 0 disagreements. Committees are labelled the source's way ("Assembly Health"); the site
+maps "Assembly" to its House key (`chamberLabels`). Floor descriptions are a closed set (`FLOOR_KIND`), an unknown one
+is a Health check. 5 floor-vote days have no agenda slot (e.g. the 2024-12-02 organizational session): written, Time
+TBA, counted.
+
+## Committee members (built 2026-11-19) — `states/ca_roster.py`
+pubinfo has **no membership table**. Source: **Open States `people` repository, `data/ca`** — public domain (CC0,
+"all copyright waived"), maintained from the Assembly's and Senate's own committee pages; read as a plain git
+checkout in the workflow (no API, no key). Join: Open States (chamber, name) ↔ pubinfo (house, LONG_DESCRIPTION) on a
+normalised name (case, "&"/"and", commas, hyphens) — **every one of the 4,846 bills sitting in a committee joined**;
+57 committees, 590 seats, every member resolved to a sitting legislator's party and district. 61 Open States
+committees (select / joint) hear no bills: counted, not written. A broken checkout never holds back the bills
+(`roster_status`). Golden snapshot: `tools/historical_cache/ca/openstates_sample/` (commit `bcdda40`, 2026-11-05).
+
+## Not on the site yet (engineering residuals)
+- **Extraordinary sessions.** The universe is the regular session (`SESSION_NUM` 0). 2025-26 has 24 First
+  Extraordinary Session bills (`SESSION_NUM` 1); their 16 calendar rows are written with an "(Extraordinary Session 1)"
+  label and counted (`calendar_bills_extraordinary_session`), but the bills themselves are not tracked. Needs the
+  site's multi-session design (Virginia and Pennsylvania show one session per site too).
+- Upcoming floor agendas (`DAILY_FILE_TBL`: the bills on each day's file) and the hearing room on the calendar card.
+
 ## To go live (owner steps, in order)
 1. ✅ 2026-11-18: "CA · Live" created and shared; id in `wrangler.ca.toml` (the job reads it there — no repo secret).
    The job is scheduled daily (06:41 UTC) once merged.
    ✅ 2026-11-18: D1 `bill-tracker-ca-db` created (id in `wrangler.ca.toml`); tables from `tools/d1/console_setup.sql`
    (one paste, proven identical to migrations 0001–0003 in SQLite, and recorded as applied).
-2. Cloudflare: a new Worker `bill-tracker-ca` connected to `main` (build `npm run build:ca`, deploy
-   `npx wrangler deploy --config wrangler.ca.toml`), its own D1 database.
+2. ✅ 2026-11-19 (owner): Cloudflare Worker `bill-tracker-ca` connected to `main` (build `npm run build:ca`, deploy
+   `npx wrangler deploy --config wrangler.ca.toml`, previews off), its own D1 database.
+4. Owner: Worker → Settings → Variables and Secrets → secrets `TEAM_EMAILS` (same list as PA) and `GCP_SA_JSON` (the
+   service-account key file's JSON). Never pasted in chat.
+5. Owner: Google Cloud → APIs & Services → Credentials → the OAuth client `831223695835-cqd2…` → Authorized JavaScript
+   origins → add the CA site's address (`https://bill-tracker-ca.tucker2331.workers.dev` unless Cloudflare shows
+   another).
 3. ✅ 2026-11-18: merged (#274) — the daily schedule (06:41 UTC) is live, no repo secret needed (the sheet id is read
    from `wrangler.ca.toml`). **First write run** (dispatched by hand, run 44423770882): 5,040 bills written to
    "CA · Live" from `pubinfo_daily_Wed.zip` (published 2026-11-18T12:23:47Z — so the index's Last-modified column is
    Pacific time), 0 unclassified, 0 malformed rows, 3 requests, 3 m 16 s. Saved fetch cache: 1.16 GB (one day's file;
    GitHub evicts the unused older entries, oldest-accessed first, after 7 days).
-Residual (engineering, not owner): CA committee rosters and hearings calendar (`COMMITTEE_HEARING_TBL`,
-`DAILY_FILE_TBL`) for the War Room and Calendar screens — off in `ca.ts` until built.
+Residual (engineering): see "Not on the site yet" above.

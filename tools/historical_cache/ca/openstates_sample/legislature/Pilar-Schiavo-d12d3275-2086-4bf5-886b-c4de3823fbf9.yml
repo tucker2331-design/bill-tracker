@@ -1,0 +1,40 @@
+id: ocd-person/d12d3275-2086-4bf5-886b-c4de3823fbf9
+name: Pilar Schiavo
+given_name: Pilar
+family_name: Schiavo
+birth_date: 1975-01-22
+gender: Female
+email: assemblymember.schiavo@assembly.ca.gov
+image: https://webapi.assembly.ca.gov/district-media/assets/members/assembly_member_40.jpg
+party:
+- name: Democratic
+roles:
+- start_date: 2022-12-05
+  type: lower
+  jurisdiction: ocd-jurisdiction/country:us/state:ca/government
+  district: '40'
+offices:
+- classification: capitol
+  address: Room 4140, 1021 O St. P.O. Box 942849, Sacramento, CA 94249
+  voice: 916-319-2040
+- classification: district
+  address: 27441 Tourney Road Suite 240, Santa Clarita, CA 91355
+  voice: 661-286-1565
+links:
+- url: https://schiavo.asmdc.org/
+- url: https://www.assembly.ca.gov/assemblymembers/40
+other_names:
+- name: P. Schiavo
+- name: Schiavo, P.
+sources:
+- url: https://a40.asmdc.org
+- url: https://ballotpedia.org/Pilar_Schiavo
+- url: https://en.wikipedia.org/wiki/Pilar_Schiavo
+- url: https://justfacts.votesmart.org/candidate/biography/205304/pilar-schiavo
+- url: https://schiavo.asmdc.org
+- url: https://schiavo.asmdc.org/biography
+- url: https://www.assembly.ca.gov/assemblymembers
+- url: https://www.assembly.ca.gov/assemblymembers/40
+- url: https://www.linkedin.com/in/pilar-schiavo-840949
+extras:
+  P.O. Box: P.O. Box 942849, Sacramento, CA 94249-0040;

@@ -1,0 +1,52 @@
+id: ocd-person/1509d608-4d2b-4ebc-be73-b4cd6c06b7c6
+name: Megan Dahle
+given_name: Megan
+family_name: Dahle
+birth_date: 1975-07-29
+gender: Female
+email: senator.dahle@senate.ca.gov
+image: https://www.assembly.ca.gov/sites/assembly.ca.gov/files/memberphotos/mdahle-ad01.gif
+party:
+- name: Republican
+roles:
+- start_date: 2024-12-02
+  type: upper
+  jurisdiction: ocd-jurisdiction/country:us/state:ca/government
+  district: '1'
+- start_date: 2019-11-12
+  end_date: 2024-12-01
+  type: lower
+  jurisdiction: ocd-jurisdiction/country:us/state:ca/government
+  district: '1'
+offices:
+- classification: capitol
+  address: 1021 O St. Suite 7230, Sacramento, CA 95814
+  voice: 916-651-4001
+- classification: district
+  address: 120 N. Auburn St. Suite 214, Grass Valley, CA 95945
+  voice: 530-271-7412
+- classification: district
+  address: 1320 Yuba St. Suite 102, Redding, CA 96001
+  voice: 530-224-7001
+- classification: district
+  address: 2635 Forest Ave. Suite 100, Chico, CA 95928
+  voice: 530-879-7424
+links:
+- url: https://ad01.asmrc.org/
+- url: https://sr01.senate.ca.gov/
+other_names:
+- name: Dahle, M.
+- name: M. Dahle
+- name: M.E. Dahle
+- name: M.M. Dahle
+- name: Megan Elizabeth Dahle
+sources:
+- url: https://ad01.asmrc.org
+- url: https://assembly.ca.gov/assemblymembers
+- url: https://ballotpedia.org/Megan_Dahle
+- url: https://en.wikipedia.org/wiki/Megan_Dahle
+- url: https://justfacts.votesmart.org/candidate/186798/megan-dahle
+- url: https://sr01.senate.ca.gov
+- url: https://www.assembly.ca.gov/assemblymembers
+extras:
+  P.O. Box: P.O. Box 942849, Sacramento, CA  94249-0001;

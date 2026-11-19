@@ -1,0 +1,42 @@
+id: ocd-person/1e0ccfc0-2d57-4e57-8d16-589d07c1bc72
+name: Steve Bennett
+given_name: Steve
+family_name: Bennett
+birth_date: 1950-12-31
+gender: Male
+email: assemblymember.bennett@assembly.ca.gov
+image: https://webapi.assembly.ca.gov/district-media/assets/members/assembly_member_38.jpg
+party:
+- name: Democratic
+roles:
+- start_date: 2022-12-05
+  type: lower
+  jurisdiction: ocd-jurisdiction/country:us/state:ca/government
+  district: '38'
+- start_date: 2020-12-07
+  end_date: 2022-12-05
+  type: lower
+  jurisdiction: ocd-jurisdiction/country:us/state:ca/government
+  district: '37'
+offices:
+- classification: capitol
+  address: Room 4710, 1021 O St. P.O. Box 942849, Sacramento, CA 94249
+  voice: 916-319-2038
+- classification: district
+  address: 300 E. Esplanade Drive Suite 1790, Oxnard, CA 93036
+  voice: 805-485-4745
+links:
+- url: https://a38.asmdc.org/
+- url: https://bennett.asmdc.org/
+other_names:
+- name: Bennett, S.
+- name: S. Bennett
+sources:
+- url: https://a38.asmdc.org
+- url: https://assembly.ca.gov/assemblymembers
+- url: https://ballotpedia.org/Steve_Bennett
+- url: https://en.wikipedia.org/wiki/Steve_Bennett_(California_politician)
+- url: https://justfacts.votesmart.org/candidate/biography/81822/steve-bennett
+- url: https://www.assembly.ca.gov/assemblymembers
+extras:
+  P.O. Box: P.O. Box 942849  Sacramento, CA 94249-0037

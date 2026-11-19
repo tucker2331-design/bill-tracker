@@ -1,0 +1,40 @@
+id: ocd-organization/63b20e24-83ed-43da-8700-626352e3db6f
+jurisdiction: ocd-jurisdiction/country:us/state:ca/government
+classification: committee
+name: Legislative Ethics
+chamber: upper
+sources:
+- url: https://senate.ca.gov/committees
+  note: Committee List Page
+- url: https://seth.senate.ca.gov
+  note: Committee Detail Page
+- url: https://seth.senate.ca.gov/committeehome
+links:
+- url: https://seth.senate.ca.gov
+  note: homepage
+- url: https://seth.senate.ca.gov/committeehome
+members:
+- name: Eloise Reyes
+  role: chair
+  person_id: ocd-person/19f694d8-b409-40e5-9f87-d8e3e84afc7f
+- name: Shannon Grove
+  role: vice chair
+  person_id: ocd-person/b4b8e8fb-831b-4cae-9081-b8f75477fcd0
+- name: Anna Caballero
+  role: member
+  person_id: ocd-person/fe462917-df55-4a43-9fd8-970541544ca6
+- name: Dave Cortese
+  role: member
+  person_id: ocd-person/0fa65d2c-6020-4586-a6f1-5dfd41db38ff
+- name: Roger Niello
+  role: member
+  person_id: ocd-person/ee85bc79-20ee-4046-905e-ad797995fa41
+- name: Tim Grayson
+  role: member
+  person_id: ocd-person/972cffb0-32a6-4cef-8a0f-a8cd901395b0
+other_names:
+- name: Committee on Legislative Ethics
+- name: Legislative Ethics Committee
+- name: Senate Committee on Legislative Ethics
+- name: Senate Legislative Ethics
+- name: Senate Legislative Ethics Committee

@@ -1,0 +1,42 @@
+id: ocd-person/b6907bd6-05e1-44a4-bfc6-db4b672ff8b4
+name: Marie Alvarado-Gil
+given_name: Marie
+family_name: Alvarado-Gil
+birth_date: 1973-12-24
+gender: Female
+email: senator.alvarado-gil@senate.ca.gov
+image: https://www.senate.ca.gov/sites/senate.ca.gov/files/senator_photos/alvarado-gill_marie_d-04.jpg
+party:
+- name: Republican
+roles:
+- start_date: 2022-12-05
+  type: upper
+  jurisdiction: ocd-jurisdiction/country:us/state:ca/government
+  district: '4'
+offices:
+- classification: capitol
+  address: 1021 O St. Suite 7240, Sacramento, CA 95814
+  voice: 916-651-4004
+- classification: district
+  address: 1020 15th St. Suite 21, Modesto, CA 95354
+  voice: 209-576-6001
+- classification: district
+  address: 4364 Town Center Blvd. Suite 313, El Dorado Hills, CA 95762
+  voice: 916-933-8680
+links:
+- url: https://sd04.senate.ca.gov/
+- url: https://senate.ca.gov/sd04
+- url: https://sr04.senate.ca.gov/
+other_names:
+- name: Alvarado-Gil, M.
+- name: M. Alvarado-Gil
+- name: M.I. Alvarado-Gil
+sources:
+- url: https://ballotpedia.org/Marie_Alvarado-Gil
+- url: https://en.wikipedia.org/wiki/Marie_Alvarado-Gil
+- url: https://justfacts.votesmart.org/candidate/biography/205209/marie-alvarado-gil
+- url: https://sd04.senate.ca.gov
+- url: https://sd04.senate.ca.gov/biography
+- url: https://sr04.senate.ca.gov
+- url: https://www.linkedin.com/in/alvaradogilforsenate2022
+- url: https://www.senate.ca.gov/senators

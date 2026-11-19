@@ -1,0 +1,43 @@
+id: ocd-person/39e3ce0f-c2e2-4480-9e99-76e1e62f366d
+name: Catherine Blakespear
+given_name: Catherine
+family_name: Blakespear
+birth_date: 1976-02-29
+gender: Female
+email: senator.blakespear@senate.ca.gov
+image: https://www.senate.ca.gov/sites/senate.ca.gov/files/senator_photos/blakespear_catherine_d-38.jpg
+party:
+- name: Democratic
+roles:
+- start_date: 2022-12-05
+  type: upper
+  jurisdiction: ocd-jurisdiction/country:us/state:ca/government
+  district: '38'
+offices:
+- classification: capitol
+  address: 1021 O St. Suite 7720, Sacramento, CA 95814
+  voice: 916-651-4038
+- classification: district
+  address: 2385 Camino Vida Roble Unit 205, Carlsbad, CA 92011
+  voice: 760-438-2005
+- classification: district
+  address: 24031 El Toro Road Suite 201A, Laguna Hills, CA 92653
+  voice: 949-598-5850
+links:
+- url: https://sd38.senate.ca.gov/
+- url: https://senate.ca.gov/sd38
+other_names:
+- name: Blakespear, C.
+- name: C. Blakespear
+- name: C.S. Blakespear
+- name: Catherine S. Blakespear
+sources:
+- url: https://ballotpedia.org/Catherine_Blakespear
+- url: https://en.wikipedia.org/wiki/Catherine_Blakespear
+- url: https://justfacts.votesmart.org/candidate/biography/157195/catherine-blakespear
+- url: https://sd38.senate.ca.gov
+- url: https://sd38.senate.ca.gov/biography
+- url: https://women.ca.gov/senator-catherine-blakespear-bio
+- url: https://www.linkedin.com/in/catherine-blakespear-6549a24
+- url: https://www.linkedin.com/in/catherine-s-blakespear-6549a24
+- url: https://www.senate.ca.gov/senators

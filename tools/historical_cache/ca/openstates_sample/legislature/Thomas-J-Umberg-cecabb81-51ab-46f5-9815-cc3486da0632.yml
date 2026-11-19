@@ -1,0 +1,39 @@
+id: ocd-person/cecabb81-51ab-46f5-9815-cc3486da0632
+name: Tom Umberg
+given_name: Tom
+family_name: Umberg
+birth_date: 1955-09-25
+gender: Male
+email: senator.umberg@senate.ca.gov
+image: https://www.senate.ca.gov/sites/senate.ca.gov/files/senator_photos/senator_umberg.jpg
+party:
+- name: Democratic
+roles:
+- start_date: 2018-12-03
+  type: upper
+  jurisdiction: ocd-jurisdiction/country:us/state:ca/government
+  district: '34'
+offices:
+- classification: capitol
+  address: 1021 O St. Suite 7510, Sacramento, CA 95814
+  voice: 916-651-4034
+- classification: district
+  address: 1000 E. Santa Ana Blvd. Suite 220B, Santa Ana, CA 92701
+  voice: 714-558-3785
+links:
+- url: https://sd34.senate.ca.gov/
+- url: https://senate.ca.gov/sd34
+other_names:
+- name: T. Umberg
+- name: T.J. Umberg
+- name: Thomas J. Umberg
+- name: Thomas John Umberg
+- name: Umberg, T.
+sources:
+- url: https://ballotpedia.org/Tom_Umberg
+- url: https://en.wikipedia.org/wiki/Tom_Umberg
+- url: https://justfacts.votesmart.org/candidate/biography/29299/thomas-umberg
+- url: https://sd34.senate.ca.gov
+- url: https://senate.ca.gov/senators
+- url: https://www.linkedin.com/in/thomas-u-9152078a
+- url: https://www.senate.ca.gov/senators

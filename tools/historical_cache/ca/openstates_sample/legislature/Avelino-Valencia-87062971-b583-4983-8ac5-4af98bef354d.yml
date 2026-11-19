@@ -1,0 +1,38 @@
+id: ocd-person/87062971-b583-4983-8ac5-4af98bef354d
+name: Avelino Valencia
+given_name: Avelino
+family_name: Valencia
+birth_date: 1988-11-12
+gender: Male
+email: assemblymember.valencia@assembly.ca.gov
+image: https://webapi.assembly.ca.gov/district-media/assets/members/assembly_member_68.jpg
+party:
+- name: Democratic
+roles:
+- start_date: 2022-12-05
+  type: lower
+  jurisdiction: ocd-jurisdiction/country:us/state:ca/government
+  district: '68'
+offices:
+- classification: capitol
+  address: Room 5510, 1021 O St. P.O. Box 942849, Sacramento, CA 94249
+  voice: 916-319-2068
+- classification: district
+  address: 2400 E. Katella Ave. Suite 640, Anaheim, CA 92806
+  voice: 714-939-8469
+links:
+- url: https://a68.asmdc.org/
+- url: https://valencia.asmdc.org/
+other_names:
+- name: A. Valencia
+- name: Valencia, A.
+sources:
+- url: https://a68.asmdc.org
+- url: https://a68.asmdc.org/biography
+- url: https://ballotpedia.org/Avelino_Valencia
+- url: https://en.wikipedia.org/wiki/Avelino_Valencia
+- url: https://justfacts.votesmart.org/candidate/biography/196582/avelino-valencia
+- url: https://www.assembly.ca.gov/assemblymembers
+- url: https://www.linkedin.com/in/avelino-valencia-70395b62
+extras:
+  P.O. Box: P.O. Box 942849, Sacramento, CA 94249-0068;

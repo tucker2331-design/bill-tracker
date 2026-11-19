@@ -1,0 +1,47 @@
+id: ocd-person/407f6fda-8638-4cca-9704-7aa8df7de26e
+name: Jesse Gabriel
+given_name: Jesse
+family_name: Gabriel
+birth_date: 1981-09-25
+gender: Male
+email: assemblymember.gabriel@assembly.ca.gov
+image: https://webapi.assembly.ca.gov/district-media/assets/members/assembly_member_46.jpg
+party:
+- name: Democratic
+roles:
+- start_date: 2022-12-05
+  type: lower
+  jurisdiction: ocd-jurisdiction/country:us/state:ca/government
+  district: '46'
+- end_date: 2022-12-05
+  type: lower
+  jurisdiction: ocd-jurisdiction/country:us/state:ca/government
+  district: '45'
+offices:
+- classification: capitol
+  address: Room 8230, 1021 O St. P.O. Box 942849, Sacramento, CA 94249
+  voice: 916-319-2046
+- classification: district
+  address: 16501 Ventura Blvd. Suite 620, Encino, CA 91436
+  voice: 818-380-2460
+links:
+- url: https://a46.asmdc.org/
+- url: https://gabriel.asmdc.org/
+other_names:
+- name: Gabriel, J.
+- name: J. Gabriel
+- name: J.S. Gabriel
+- name: Jesse Samuel Gabriel
+other_identifiers:
+- scheme: legacy_openstates
+  identifier: CAL000538
+sources:
+- url: https://a46.asmdc.org
+- url: https://assembly.ca.gov/assemblymembers
+- url: https://ballotpedia.org/Jesse_Gabriel
+- url: https://en.wikipedia.org/wiki/Jesse_Gabriel
+- url: https://justfacts.votesmart.org/candidate/biography/178075/jesse-gabriel
+- url: https://www.assembly.ca.gov/assemblymembers
+- url: https://www.linkedin.com/in/jesse-gabriel-4111b32b
+extras:
+  P.O. Box: P.O. Box 942849, Sacramento, CA 94249-0046;

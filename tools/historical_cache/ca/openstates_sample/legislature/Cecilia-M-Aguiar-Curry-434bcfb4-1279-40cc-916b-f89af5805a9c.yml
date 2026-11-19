@@ -1,0 +1,52 @@
+id: ocd-person/434bcfb4-1279-40cc-916b-f89af5805a9c
+name: Cecilia Aguiar-Curry
+given_name: Cecilia
+family_name: Aguiar-Curry
+birth_date: 1954-09-25
+gender: Female
+email: assemblymember.aguiar-curry@assembly.ca.gov
+image: https://webapi.assembly.ca.gov/district-media/assets/members/assembly_member_04.jpg
+party:
+- name: Democratic
+roles:
+- start_date: 2016-12-05
+  type: lower
+  jurisdiction: ocd-jurisdiction/country:us/state:ca/government
+  district: '4'
+offices:
+- classification: capitol
+  address: Room 8210, 1021 O St. P.O. Box 942849, Sacramento, CA 94249
+  voice: 916-319-2004
+- classification: district
+  address: 2721 Napa Valley Corporate Drive, Napa, CA 94558
+  voice: 707-224-0440
+- classification: district
+  address: 600 A St. Suite D, Davis, CA 95616
+  voice: 530-757-1034
+links:
+- url: https://a04.asmdc.org/
+- url: https://aguiar-curry.asmdc.org/
+- url: https://www.assembly.ca.gov/assemblymembers/04
+other_names:
+- name: Aguiar-Curry, C.
+- name: C. Aguiar-Curry
+- name: C.M. Aguiar-Curry
+- name: Cecilia Aguiar-Curry
+- name: Cecilia M. Aguiar-Curry
+other_identifiers:
+- scheme: legacy_openstates
+  identifier: CAL000517
+sources:
+- url: https://a04.asmdc.org
+- url: https://a04.asmdc.org/biography
+- url: https://aguiar-curry.asmdc.org
+- url: https://aguiar-curry.asmdc.org/biography
+- url: https://assembly.ca.gov/assemblymembers
+- url: https://ballotpedia.org/Cecilia_Aguiar-Curry
+- url: https://en.wikipedia.org/wiki/Cecilia_Aguiar-Curry
+- url: https://justfacts.votesmart.org/candidate/biography/169297/cecilia-aguiar-curry
+- url: https://www.assembly.ca.gov/assemblymembers
+- url: https://www.assembly.ca.gov/assemblymembers/04
+- url: https://www.linkedin.com/in/cecilia-aguiar-curry-9810b526
+extras:
+  P.O. Box: P.O. Box 942849, Sacramento, CA  94249-0004;

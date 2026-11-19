@@ -1,0 +1,39 @@
+id: ocd-person/8b2f37bc-65b7-40ed-af14-5d93cb765a5d
+name: Robert Garcia
+given_name: Robert
+family_name: Garcia
+gender: Male
+email: assemblymember.garcia@assembly.ca.gov
+image: https://www.joincalifornia.com/candidate_pic.php?id=15124
+party:
+- name: Democratic
+roles:
+- start_date: 2024-12-02
+  type: lower
+  jurisdiction: ocd-jurisdiction/country:us/state:ca/government
+  district: '50'
+- end_date: 2022-06-07
+  type: mayor
+  jurisdiction: ocd-jurisdiction/country:us/state:ca/place:long_beach/government
+offices:
+- classification: capitol
+  address: Room 6240, 1021 O St. P.O. Box 942849, Sacramento, CA 94249
+  voice: 916-319-2050
+- classification: district
+  address: 10390 Commerce Center Drive Suite C-280, Rancho Cucamonga, CA 91730
+  voice: 909-966-5090
+links:
+- url: https://a50.asmdc.org/
+- url: https://garcia.asmdc.org/
+- url: https://www.assembly.ca.gov/assemblymembers/50
+other_names:
+- name: Garcia, R.
+- name: R. Garcia
+sources:
+- url: https://a50.asmdc.org
+- url: https://ballotpedia.org/Robert_Garcia_(Etiwanda_School_District)
+- url: https://en.wikipedia.org/wiki/Robert_Garcia_(California_assemblymember)
+- url: https://justfacts.votesmart.org/candidate/213364/robert-garcia
+- url: https://www.assembly.ca.gov/assemblymembers/50
+- url: https://www.longbeach.gov/mayor/contact
+- url: https://www.longbeach.gov/mayor/contact/

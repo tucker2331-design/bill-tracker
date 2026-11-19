@@ -1,0 +1,44 @@
+id: ocd-person/926d1337-0318-4c12-a291-178f10199b23
+name: Lori Wilson
+given_name: Lori
+family_name: Wilson
+birth_date: 1976-07-17
+gender: Female
+email: assemblymember.wilson@assembly.ca.gov
+image: https://webapi.assembly.ca.gov/district-media/assets/members/assembly_member_11.jpg
+party:
+- name: Democratic
+roles:
+- start_date: 2022-04-06
+  type: lower
+  jurisdiction: ocd-jurisdiction/country:us/state:ca/government
+  district: '11'
+offices:
+- classification: capitol
+  address: Room 8110, 1021 O St. P.O. Box 942849, Sacramento, CA 94249
+  voice: 916-319-2011
+- classification: district
+  address: 1 Harbor Center Suite 270, Suisun City, CA 94585
+  voice: 707-438-7359
+links:
+- url: https://a11.asmdc.org
+- url: https://a11.asmdc.org/
+- url: https://wilson.asmdc.org/
+- url: https://www.assembly.ca.gov/assemblymembers/11
+other_names:
+- name: L. Wilson
+- name: L.D. Wilson
+- name: Lori D. Wilson
+- name: Wilson, L.
+sources:
+- url: https://a11.asmdc.org
+- url: https://ballotpedia.org/Lori_Wilson
+- url: https://en.wikipedia.org/wiki/Lori_Wilson_(California_politician)
+- url: https://justfacts.votesmart.org/candidate/202065/lori-wilson
+- url: https://loridwilson.com
+- url: https://wilson.asmdc.org
+- url: https://www.assembly.ca.gov/assemblymembers
+- url: https://www.assembly.ca.gov/assemblymembers/11
+- url: https://www.linkedin.com/in/loridwilson
+extras:
+  P.O. Box: P.O. Box 942849, Sacramento, CA  94249-0011;

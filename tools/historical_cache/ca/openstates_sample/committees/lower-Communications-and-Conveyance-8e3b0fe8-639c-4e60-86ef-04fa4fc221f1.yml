@@ -1,0 +1,49 @@
+id: ocd-organization/8e3b0fe8-639c-4e60-86ef-04fa4fc221f1
+jurisdiction: ocd-jurisdiction/country:us/state:ca/government
+classification: committee
+name: Communications and Conveyance
+chamber: lower
+sources:
+- url: https://acom.assembly.ca.gov
+- url: https://acom.assembly.ca.gov/
+  note: Committee Detail Page
+- url: https://www.assembly.ca.gov/committees
+  note: Committee List Page
+links:
+- url: https://acom.assembly.ca.gov
+- url: https://acom.assembly.ca.gov/
+  note: homepage
+members:
+- name: Tasha Boerner
+  role: chair
+  person_id: ocd-person/9e69729e-4383-410b-840e-ad4ea0f1ab4a
+- name: Joshua Hoover
+  role: vice chair
+  person_id: ocd-person/71aa54c0-3fad-499c-928e-ffbb692a970b
+- name: Blanca Rubio
+  role: member
+  person_id: ocd-person/82cbb6e9-8486-44ec-8450-86d1e700f828
+- name: Chris Rogers
+  role: member
+  person_id: ocd-person/84a80bdb-37d5-4f52-8f55-e116fb97ca58
+- name: Jessica Caloza
+  role: member
+  person_id: ocd-person/81d9225e-7584-43c9-9e9b-f12b7e7dbd4e
+- name: Josh Lowenthal
+  role: member
+  person_id: ocd-person/b20254b0-437a-4d3d-9aa9-baa5db2bc5ef
+- name: Leticia Castillo
+  role: member
+  person_id: ocd-person/06d4d543-2374-436f-978d-b924c7ec7d53
+- name: Maggy Krell
+  role: member
+  person_id: ocd-person/e8ac7b26-03a5-4818-b05d-0f379029bbdb
+- name: Mia Bonta
+  role: member
+  person_id: ocd-person/a467d09d-289d-4e5a-a2af-a0ce20af14e1
+other_names:
+- name: Assembly Committee on Communications and Conveyance
+- name: Assembly Communications and Conveyance
+- name: Assembly Communications and Conveyance Committee
+- name: Committee on Communications and Conveyance
+- name: Communications and Conveyance Committee

@@ -1,0 +1,40 @@
+id: ocd-organization/2923f5be-89db-445a-a9a7-4faa4f3caf18
+jurisdiction: ocd-jurisdiction/country:us/state:ca/government
+classification: committee
+name: Revenue and Taxation
+chamber: lower
+sources:
+- url: https://arev.assembly.ca.gov
+- url: https://arev.assembly.ca.gov/
+  note: Committee Detail Page
+- url: https://www.assembly.ca.gov/committees
+  note: Committee List Page
+links:
+- url: https://arev.assembly.ca.gov
+  note: homepage
+members:
+- name: Mike Gipson
+  role: chair
+  person_id: ocd-person/404dbee4-6b74-4249-ab26-9644cab7c7d5
+- name: Kate Sanchez
+  role: vice chair
+  person_id: ocd-person/76378b56-7ad9-463c-a4fd-47c665b26ee8
+- name: Carl DeMaio
+  role: member
+  person_id: ocd-person/053d119b-847e-43bf-9a22-18b5f309067f
+- name: Juan Carrillo
+  role: member
+  person_id: ocd-person/092bda0e-23a9-4d25-92a9-5808e996702b
+- name: Michelle Rodriguez
+  role: member
+  person_id: ocd-person/c8e36b71-c739-4afb-b8e9-cbdd4d362693
+- name: Sharon Quirk-Silva
+  role: member
+  person_id: ocd-person/840aa009-3ae4-4484-b9f0-5c5f5060e7db
+- name: Tina McKinnor
+  role: member
+  person_id: ocd-person/1aa5dff4-3d71-4642-a5e6-e3d00a5b99f9
+other_names:
+- name: Assembly Committee on Revenue and Taxation
+- name: Assembly Revenue and Taxation
+- name: Assembly Revenue and Taxation Committee

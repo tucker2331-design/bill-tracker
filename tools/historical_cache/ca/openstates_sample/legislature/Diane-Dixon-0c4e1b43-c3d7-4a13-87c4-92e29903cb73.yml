@@ -1,0 +1,38 @@
+id: ocd-person/0c4e1b43-c3d7-4a13-87c4-92e29903cb73
+name: Diane Dixon
+given_name: Diane
+family_name: Dixon
+gender: Female
+email: assemblymember.dixon@assembly.ca.gov
+image: https://webapi.assembly.ca.gov/district-media/assets/members/assembly_member_72.jpg
+party:
+- name: Republican
+roles:
+- start_date: 2022-12-05
+  type: lower
+  jurisdiction: ocd-jurisdiction/country:us/state:ca/government
+  district: '72'
+offices:
+- classification: capitol
+  address: Room 5330, 1021 O St. P.O. Box 942849, Sacramento, CA 94249
+  voice: 916-319-2072
+- classification: district
+  address: 4100 MacArthur Blvd. Suite 340, Newport Beach, CA 92660
+  voice: 949-798-7221
+links:
+- url: https://ad72.asmrc.org
+- url: https://ad72.asmrc.org/
+other_names:
+- name: D. Dixon
+- name: D.B. Dixon
+- name: Diane Brooks Dixon
+- name: Dixon, D.
+sources:
+- url: https://ad72.asmrc.org
+- url: https://ad72.asmrc.org/biography
+- url: https://ballotpedia.org/Diane_Dixon
+- url: https://en.wikipedia.org/wiki/Diane_Dixon_(politician)
+- url: https://www.assembly.ca.gov/assemblymembers
+- url: https://www.linkedin.com/in/dianebrooksdixon
+extras:
+  P.O. Box: P.O. Box 942849, Sacramento, CA 94249-0072;

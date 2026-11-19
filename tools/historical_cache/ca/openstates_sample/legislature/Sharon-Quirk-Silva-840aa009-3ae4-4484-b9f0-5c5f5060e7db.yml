@@ -1,0 +1,55 @@
+id: ocd-person/840aa009-3ae4-4484-b9f0-5c5f5060e7db
+name: Sharon Quirk-Silva
+given_name: Sharon
+family_name: Quirk-Silva
+birth_date: 1962-09-17
+gender: Female
+email: assemblymember.quirk-silva@assembly.ca.gov
+image: https://webapi.assembly.ca.gov/district-media/assets/members/assembly_member_67.jpg
+party:
+- name: Democratic
+roles:
+- start_date: 2022-12-05
+  type: lower
+  jurisdiction: ocd-jurisdiction/country:us/state:ca/government
+  district: '67'
+- start_date: 2012-12-05
+  end_date: 2014-12-01
+  type: lower
+  jurisdiction: ocd-jurisdiction/country:us/state:ca/government
+  district: '65'
+- start_date: 2016-12-05
+  end_date: 2022-12-05
+  type: lower
+  jurisdiction: ocd-jurisdiction/country:us/state:ca/government
+  district: '65'
+offices:
+- classification: capitol
+  address: Room 4210, 1021 O St. P.O. Box 942849, Sacramento, CA 94249
+  voice: 916-319-2067
+- classification: district
+  address: 4 Centerpointe Drive Suite 120, La Palma, CA 90623
+  voice: 714-521-6713
+links:
+- url: https://a67.asmdc.org/
+- url: https://quirk-silva.asmdc.org/
+other_names:
+- name: Quirk-Silva, S.
+- name: S. Quirk-Silva
+other_identifiers:
+- scheme: legacy_openstates
+  identifier: CAL000524
+- scheme: legacy_openstates
+  identifier: CAL000402
+- scheme: openstates
+  identifier: ocd-person/586dd96f-9fe1-4d69-a048-d409f08f5eca
+sources:
+- url: https://a67.asmdc.org
+- url: https://assembly.ca.gov/assemblymembers
+- url: https://ballotpedia.org/Sharon_Quirk-Silva
+- url: https://en.wikipedia.org/wiki/Sharon_Quirk-Silva
+- url: https://justfacts.votesmart.org/candidate/biography/71051/sharon-quirk-silva
+- url: https://www.assembly.ca.gov/assemblymembers
+- url: https://www.linkedin.com/in/sharon-quirk-silva-7a240582
+extras:
+  P.O. Box: P.O. Box 942849, Sacramento, CA  94249-0067;

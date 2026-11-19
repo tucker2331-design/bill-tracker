@@ -1,0 +1,49 @@
+id: ocd-person/c830a90c-8964-4c0f-b31b-729cab1144fd
+name: Heath Flora
+given_name: Heath
+family_name: Flora
+birth_date: 1983-07-19
+gender: Male
+email: assemblymember.flora@assembly.ca.gov
+image: https://webapi.assembly.ca.gov/district-media/assets/members/assembly_member_09.jpg
+party:
+- name: Republican
+roles:
+- start_date: 2022-12-05
+  type: lower
+  jurisdiction: ocd-jurisdiction/country:us/state:ca/government
+  district: '9'
+- end_date: 2022-12-05
+  type: lower
+  jurisdiction: ocd-jurisdiction/country:us/state:ca/government
+  district: '12'
+offices:
+- classification: capitol
+  address: Room 4730, 1021 O St. P.O. Box 942849, Sacramento, CA 94249
+  voice: 916-319-2009
+- classification: district
+  address: 578 N. Wilma Ave. Suite B, Ripon, CA 95366
+  voice: 209-599-2112
+links:
+- url: https://ad09.asmrc.org/
+- url: https://www.assembly.ca.gov/assemblymembers/09
+other_names:
+- name: Flora, H.
+- name: H. Flora
+- name: H.H. Flora
+- name: Heath Hubert Flora
+other_identifiers:
+- scheme: legacy_openstates
+  identifier: CAL000502
+sources:
+- url: https://ad09.asmrc.org
+- url: https://ad09.asmrc.org/biography
+- url: https://assembly.ca.gov/assemblymembers
+- url: https://ballotpedia.org/Heath_Flora
+- url: https://en.wikipedia.org/wiki/Heath_Flora
+- url: https://justfacts.votesmart.org/candidate/biography/169309/heath-flora
+- url: https://www.assembly.ca.gov/assemblymembers
+- url: https://www.assembly.ca.gov/assemblymembers/09
+- url: https://www.linkedin.com/in/heath-flora-24060a47
+extras:
+  P.O. Box: P.O. Box 942849  Sacramento, CA 94249-0012

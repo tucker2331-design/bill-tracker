@@ -21,6 +21,7 @@ import datetime
 from typing import Any, Dict, List, Optional, Tuple
 
 from .ca import CA
+from .ca_committees import Committees, agenda_index, slot_time
 from .ca_pubinfo import Export, bill_id_parts
 
 # END_STATUS vocabulary -> structural class (exact values; measured on the 2025-26 export, docs/knowledge/ca_pubinfo.md)
@@ -80,10 +81,14 @@ def committee_names(ex: Export) -> Dict[str, str]:
 
 
 def build_records(ex: Export, today: datetime.date, now_utc: str,
-                  as_of_utc: Optional[str] = None) -> Tuple[List[dict], dict]:
+                  as_of_utc: Optional[str] = None, extras: Optional[dict] = None) -> Tuple[List[dict], dict]:
     """`now_utc` = when we checked; `as_of_utc` = when the source published the export (the job always passes it;
-    the goldens, which have no publication time, stamp records with the check time)."""
+    the goldens, which have no publication time, stamp records with the check time). `extras`, when given, receives
+    what the calendar reuses from this pass: bill_name {BILL_ID: "AB12"}, committee_house {code: Counter(house)},
+    session_start (the earliest action date of the universe)."""
     data_as_of = as_of_utc or now_utc
+    committee_house: Dict[str, Dict[str, int]] = collections.defaultdict(collections.Counter)
+    bill_name: Dict[str, str] = {}
     names = committee_names(ex)
     bills = {r["BILL_ID"]: r for r in ex.rows("BILL_TBL")}
     session = collections.Counter(b["SESSION_YEAR"] for b in bills.values()).most_common(1)[0][0] if bills else ""
@@ -127,11 +132,19 @@ def build_records(ex: Export, today: datetime.date, now_utc: str,
         k = sv["BILL_ID"]
         if k in bills and sv["VOTE_DATE_TIME"] >= votes.get(k, {}).get("VOTE_DATE_TIME", ""):
             votes[k] = sv
+    # a committee's house, from every history row that names it (the structural truth the code-prefix rule is checked on)
+    for rows_ in hist.values():
+        for h in rows_:
+            if h["SECONDARY_LOCATION"] == "Committee" and h["TERNARY_LOCATION"] and h["PRIMARY_LOCATION"] in HOUSES:
+                committee_house[h["TERNARY_LOCATION"]][h["PRIMARY_LOCATION"]] += 1
+    coms = Committees(names, committee_house)
+    agenda, _dup = agenda_index(ex.rows("COMMITTEE_AGENDA_TBL"), today.isoformat())
     hearings: Dict[str, List[dict]] = collections.defaultdict(list)
     for ch in ex.rows("COMMITTEE_HEARING_TBL"):
-        if ch["BILL_ID"] in bills and _date(ch["HEARING_DATE"]) >= today.isoformat():
-            hearings[ch["BILL_ID"]].append({"date": _date(ch["HEARING_DATE"]),
-                                            "committee": names.get(ch["LOCATION_CODE"], ch["LOCATION_CODE"]), "time": ""})
+        d = _date(ch["HEARING_DATE"])
+        if ch["BILL_ID"] in bills and d >= today.isoformat():
+            hearings[ch["BILL_ID"]].append({"date": d, "committee": coms.label(ch["LOCATION_CODE"]),
+                                            "time": slot_time(agenda.get((ch["LOCATION_CODE"], d)))})
     unclassified: Dict[str, int] = collections.Counter()
     rescinded = actions_total = blank = 0
     records: List[Dict[str, Any]] = []
@@ -171,7 +184,8 @@ def build_records(ex: Export, today: datetime.date, now_utc: str,
                 chamber = house
                 crossed = crossed or second
             if h["SECONDARY_LOCATION"] == "Committee" and h["TERNARY_LOCATION"]:
-                com = f"{TO_CONTRACT.get(house, house)} {names.get(h['TERNARY_LOCATION'], h['TERNARY_LOCATION'])}".strip()
+                # the source's own house word ("Assembly Health"): the contract's "House" is a chamber KEY, not a label
+                com = f"{house} {names.get(h['TERNARY_LOCATION'], h['TERNARY_LOCATION'])}".strip()
                 last_committee = com
                 if not referred or referred[-1] != com:
                     referred.append(com)
@@ -217,6 +231,7 @@ def build_records(ex: Export, today: datetime.date, now_utc: str,
         chief = lead[0] if lead else None
         last_vote = votes.get(bid)       # Optional: a bill with no recorded vote has none
         rec_bill = f"{mtype}{num}"
+        bill_name[bid] = rec_bill
         records.append({
             "bill": rec_bill,
             "title": subject.get(b["LATEST_BILL_VERSION_ID"], ""),
@@ -267,15 +282,21 @@ def build_records(ex: Export, today: datetime.date, now_utc: str,
         "end_status_unclassified_sample": sorted(unclassified)[:10],
         "rows_with_wrong_field_count": dict(ex.bad_rows),
         "rows_with_wrong_field_count_total": sum(ex.bad_rows.values()),
+        "committee_house_prefix_disagrees": coms.stats["committee_house_prefix_disagrees"],
+        "committee_house_prefix_disagrees_sample": coms.stats["committee_house_prefix_disagrees_sample"],
         "session_display": f"{session[:4]}-{session[4:]} Regular Session" if len(session) == 8 else "",
         "checked_at_utc": now_utc,
     }
+    if extras is not None:
+        dates = [h["date"] for r in records for h in r["history"] if h["date"]]
+        extras.update({"bill_name": bill_name, "committees": coms,
+                       "session_start": min(dates) if dates else "", "names": names})
     return records, completeness
 
 
 def run_intake(export: Export, today: datetime.date, now_utc: str,
-               as_of_utc: Optional[str] = None) -> Tuple[List[dict], dict]:
-    records, comp = build_records(export, today, now_utc, as_of_utc)
+               as_of_utc: Optional[str] = None, extras: Optional[dict] = None) -> Tuple[List[dict], dict]:
+    records, comp = build_records(export, today, now_utc, as_of_utc, extras)
     broken = {t: n for t, n in export.bad_rows.items() if t in UNIVERSE_TABLES and n}
     if broken:
         raise ValueError(f"CA export has rows with the wrong field count in {broken} — a bill or action would be "

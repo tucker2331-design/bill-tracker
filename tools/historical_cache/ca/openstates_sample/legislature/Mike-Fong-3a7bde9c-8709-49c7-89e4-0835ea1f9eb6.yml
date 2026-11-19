@@ -1,0 +1,40 @@
+id: ocd-person/3a7bde9c-8709-49c7-89e4-0835ea1f9eb6
+name: Mike Fong
+given_name: Mike
+family_name: Fong
+birth_date: 1976-02-29
+gender: Male
+email: assemblymember.mikefong@asm.ca.gov
+image: https://webapi.assembly.ca.gov/district-media/assets/members/assembly_member_49.jpg
+party:
+- name: Democratic
+roles:
+- start_date: 2022-02-22
+  type: lower
+  jurisdiction: ocd-jurisdiction/country:us/state:ca/government
+  district: '49'
+offices:
+- classification: capitol
+  address: Room 5650, 1021 O St. P.O. Box 942849, Sacramento, CA 94249
+  voice: 916-319-2049
+- classification: district
+  address: 1411 S. Garfield Ave. Suite 307, Alhambra, CA 91801
+  voice: 626-457-4918
+links:
+- url: https://fong.asmdc.org/
+- url: https://www.assembly.ca.gov/assemblymembers/49
+other_names:
+- name: Fong, M.
+- name: M. Fong
+- name: M.K. Fong
+sources:
+- url: https://a49.asmdc.org
+- url: https://ballotpedia.org/Mike_Fong
+- url: https://en.wikipedia.org/wiki/Mike_Fong
+- url: https://fong.asmdc.org
+- url: https://justfacts.votesmart.org/candidate/biography/176686/mike-fong
+- url: https://www.assembly.ca.gov/assemblymembers
+- url: https://www.assembly.ca.gov/assemblymembers/49
+- url: https://www.linkedin.com/in/mike-fong-89083967
+extras:
+  P.O. Box: P.O. Box 942849, Sacramento, CA 94249-0049;

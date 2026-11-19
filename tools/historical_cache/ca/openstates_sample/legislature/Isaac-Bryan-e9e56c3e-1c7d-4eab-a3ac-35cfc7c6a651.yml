@@ -1,0 +1,51 @@
+id: ocd-person/e9e56c3e-1c7d-4eab-a3ac-35cfc7c6a651
+name: Isaac Bryan
+given_name: Isaac
+family_name: Bryan
+birth_date: 1992-01-16
+gender: Male
+email: assemblymember.bryan@assembly.ca.gov
+image: https://webapi.assembly.ca.gov/district-media/assets/members/assembly_member_55.jpg
+party:
+- name: Democratic
+roles:
+- start_date: 2022-12-05
+  type: lower
+  jurisdiction: ocd-jurisdiction/country:us/state:ca/government
+  district: '55'
+- start_date: 2021-05-24
+  end_date: 2022-12-05
+  type: lower
+  jurisdiction: ocd-jurisdiction/country:us/state:ca/government
+  district: '54'
+offices:
+- classification: capitol
+  address: Room 5630, 1021 O St. P.O. Box 942849, Sacramento, CA 94249
+  voice: 916-319-2055
+- classification: district
+  address: 5601 W. Slauson Ave. Suite 200, Culver City, CA 90230
+  voice: 310-641-5410
+links:
+- url: https://bryan.asmdc.org/
+- url: https://www.assembly.ca.gov/assemblymembers/55
+other_names:
+- name: Bryan, I.
+- name: I. Bryan
+- name: I.G. Bryan
+- name: Isaac Bryan
+- name: Isaac G. Bryan
+- name: Isaac Gregory Bryan
+sources:
+- url: https://a54.asmdc.org
+- url: https://a54.asmdc.org/
+- url: https://a55.asmdc.org
+- url: https://ballotpedia.org/Isaac_Bryan
+- url: https://bryan.asmdc.org
+- url: https://bryan.asmdc.org/biography
+- url: https://en.wikipedia.org/wiki/Isaac_Bryan
+- url: https://justfacts.votesmart.org/candidate/biography/195907/isaac-bryan
+- url: https://www.assembly.ca.gov/assemblymembers
+- url: https://www.assembly.ca.gov/assemblymembers/55
+- url: https://www.linkedin.com/in/isaacbryan
+extras:
+  P.O. Box: P.O. Box 942849  Sacramento, CA 94249-0054

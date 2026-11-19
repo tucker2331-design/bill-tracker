@@ -1,0 +1,44 @@
+id: ocd-person/6b7e3458-361f-4fce-8a8c-069282db2af7
+name: Rick Zbur
+given_name: Rick
+family_name: Zbur
+birth_date: 1957-03-02
+gender: Male
+email: assemblymember.zbur@assembly.ca.gov
+image: https://webapi.assembly.ca.gov/district-media/assets/members/assembly_member_51.jpg
+party:
+- name: Democratic
+roles:
+- start_date: 2022-12-05
+  type: lower
+  jurisdiction: ocd-jurisdiction/country:us/state:ca/government
+  district: '51'
+offices:
+- classification: capitol
+  address: Room 4250, 1021 O St. P.O. Box 942849, Sacramento, CA 94249
+  voice: 916-319-2051
+- classification: district
+  address: 1445 N. Stanley Ave. Third Floor, Los Angeles, CA 90046
+  voice: 323-436-5184
+links:
+- url: https://www.assembly.ca.gov/assemblymembers/51
+- url: https://zbur.asmdc.org/
+other_names:
+- name: R. Zbur
+- name: R.C. Zbur
+- name: Rick Chavez Zbur
+- name: Zbur, R.
+sources:
+- url: https://a51.asmdc.org
+- url: https://a51.asmdc.org/biography
+- url: https://ballotpedia.org/Rick_Chavez_Zbur
+- url: https://en.wikipedia.org/wiki/Rick_Zbur
+- url: https://justfacts.votesmart.org/candidate/biography/185/rick-zbur
+- url: https://www.assembly.ca.gov/assemblymembers
+- url: https://www.assembly.ca.gov/assemblymembers/51
+- url: https://www.linkedin.com/in/rick-zbur-238489a1
+- url: https://www.rickchavezzbur.com/meet-rick
+- url: https://zbur.asmdc.org
+- url: https://zbur.asmdc.org/biography
+extras:
+  P.O. Box: P.O. Box 942849, Sacramento, CA 94249-0051;

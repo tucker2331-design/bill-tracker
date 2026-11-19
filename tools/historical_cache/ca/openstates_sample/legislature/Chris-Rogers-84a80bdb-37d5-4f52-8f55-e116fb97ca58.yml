@@ -1,0 +1,48 @@
+id: ocd-person/84a80bdb-37d5-4f52-8f55-e116fb97ca58
+name: Chris Rogers
+given_name: Chris
+family_name: Rogers
+birth_date: 1987-09-16
+gender: Male
+email: assemblymember.rogers@assembly.ca.gov
+image: https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcRsvc9FWYBOubY6iEQhH0tArBAvSS_ZMhoOGw&s
+party:
+- name: Democratic
+roles:
+- start_date: 2024-12-02
+  type: lower
+  jurisdiction: ocd-jurisdiction/country:us/state:ca/government
+  district: '2'
+- start_date: 2020-12-11
+  end_date: 2022-12-13
+  type: mayor
+  jurisdiction: ocd-jurisdiction/country:us/state:ca/place:santa_rosa/government
+offices:
+- classification: capitol
+  address: Room 5130, 1021 O St. P.O. Box 942849, Sacramento, CA 94249
+  voice: 916-319-2002
+- classification: district
+  address: 1036 5th St. Suite D, Eureka, CA 95501
+  voice: 707-445-7014
+- classification: district
+  address: 1036 5th St., Suite D, Eureka, CA 95501
+  voice: 707-445-7014
+- classification: district
+  address: 50 D St. Suite 450, Santa Rosa, CA 95404
+  voice: 707-576-2526
+links:
+- url: https://a02.asmdc.org/
+- url: https://www.assembly.ca.gov/assemblymembers/02
+other_names:
+- name: C. Rogers
+- name: C.J. Rogers
+- name: Christopher John Rogers
+- name: Rogers, C.
+sources:
+- url: https://a02.asmdc.org
+- url: https://ballotpedia.org/Chris_Rogers_(California)
+- url: https://en.wikipedia.org/wiki/Chris_Rogers_(politician)
+- url: https://justfacts.votesmart.org/candidate/biography/197818/chris-rogers
+- url: https://srcity.org/Directory.aspx?EID=378
+- url: https://www.assembly.ca.gov/assemblymembers/02
+- url: https://www.linkedin.com/in/chrisrogersforassembly

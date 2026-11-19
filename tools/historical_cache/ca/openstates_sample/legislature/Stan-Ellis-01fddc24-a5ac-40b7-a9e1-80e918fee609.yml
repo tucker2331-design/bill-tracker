@@ -1,0 +1,37 @@
+id: ocd-person/01fddc24-a5ac-40b7-a9e1-80e918fee609
+name: Stan Ellis
+given_name: Stan
+family_name: Ellis
+birth_date: 1952-07-04
+gender: Male
+email: assemblymember.ellis@assembly.ca.gov
+image: https://webapi.assembly.ca.gov/district-media/assets/members/assembly_member_32.jpg
+party:
+- name: Republican
+roles:
+- start_date: 2025-03-03
+  type: lower
+  jurisdiction: ocd-jurisdiction/country:us/state:ca/government
+  district: '32'
+offices:
+- classification: capitol
+  address: Room 5350, P.O. Box 942849 1021 O St., Sacramento, CA 94249
+  voice: 916-319-2032
+- classification: district
+  address: 4550 California Ave. Suite 740, Bakersfield, CA 93309
+  voice: 661-395-2995
+links:
+- url: https://ad32.asmrc.org/
+- url: https://www.assembly.ca.gov/assemblymembers/32
+other_names:
+- name: Ellis, S.
+- name: S. Ellis
+- name: S.W. Ellis
+sources:
+- url: https://ad32.asmrc.org
+- url: https://ad32.asmrc.org/biography
+- url: https://ballotpedia.org/Stan_Ellis
+- url: https://en.wikipedia.org/wiki/Stan_Ellis
+- url: https://justfacts.votesmart.org/candidate/biography/57658/stan-ellis
+- url: https://www.assembly.ca.gov/assemblymembers/32
+- url: https://www.linkedin.com/in/stanley-ellis-2a58b7234

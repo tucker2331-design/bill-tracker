@@ -1,0 +1,39 @@
+id: ocd-person/52f6ccc1-eb4a-4c09-8614-5e4022395605
+name: David Alvarez
+given_name: David
+family_name: Alvarez
+birth_date: 1980-07-27
+gender: Male
+email: assemblymember.alvarez@assembly.ca.gov
+image: https://webapi.assembly.ca.gov/district-media/assets/members/assembly_member_80.jpg
+party:
+- name: Democratic
+roles:
+- start_date: 2022-06-15
+  type: lower
+  jurisdiction: ocd-jurisdiction/country:us/state:ca/government
+  district: '80'
+offices:
+- classification: capitol
+  address: Room 5320, 1021 O St. P.O. Box 942849, Sacramento, CA 94249
+  voice: 916-319-2080
+- classification: district
+  address: 276 Church Ave. Suite D, Chula Vista, CA 91910
+  voice: 619-498-8580
+links:
+- url: https://a80.asmdc.org/
+- url: https://alvarez.asmdc.org/
+other_names:
+- name: Alvarez, D.
+- name: D. Alvarez
+- name: D.A. Alvarez
+- name: David A. Alvarez
+sources:
+- url: https://a80.asmdc.org
+- url: https://a80.asmdc.org/about/biography
+- url: https://ballotpedia.org/David_Alvarez_(California)
+- url: https://en.wikipedia.org/wiki/David_Alvarez_(politician)
+- url: https://www.assembly.ca.gov/assemblymembers
+- url: https://www.linkedin.com/in/alvarezsd
+extras:
+  P.O. Box: P.O. Box 942849, Sacramento, CA 94249-0080;

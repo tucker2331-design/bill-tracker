@@ -1,0 +1,42 @@
+id: ocd-organization/3c096395-7f06-4176-9dd7-c6c838b640d5
+jurisdiction: ocd-jurisdiction/country:us/state:ca/government
+classification: committee
+name: Aging and Long-Term Care
+chamber: lower
+sources:
+- url: https://altc.assembly.ca.gov
+- url: https://altc.assembly.ca.gov/
+  note: Committee Detail Page
+- url: https://www.assembly.ca.gov/committees
+  note: Committee List Page
+links:
+- url: https://altc.assembly.ca.gov
+  note: homepage
+members:
+- name: Patrick Ahrens
+  role: chair
+  person_id: ocd-person/a86994f3-ffe3-4dc6-9e79-bcba7346f919
+- name: Stan Ellis
+  role: vice chair
+  person_id: ocd-person/01fddc24-a5ac-40b7-a9e1-80e918fee609
+- name: Anamarie Avila Farias
+  role: member
+  person_id: ocd-person/c3921173-9680-4387-a70e-ebba5c599846
+- name: Blanca Rubio
+  role: member
+  person_id: ocd-person/82cbb6e9-8486-44ec-8450-86d1e700f828
+- name: Jeff Gonzalez
+  role: member
+  person_id: ocd-person/552b5bf7-472d-48a4-bb9a-132c1f044737
+- name: Joaquin Arambula
+  role: member
+  person_id: ocd-person/e2da0f08-1bd8-4ac2-95f1-002870238527
+- name: LaShae Sharp-Collins
+  role: member
+  person_id: ocd-person/895f777d-ae7b-429a-aa0f-1b2895c13945
+other_names:
+- name: Aging and Long-Term Care Committee
+- name: Assembly Aging and Long-Term Care
+- name: Assembly Aging and Long-Term Care Committee
+- name: Assembly Committee on Aging and Long-Term Care
+- name: Committee on Aging and Long-Term Care

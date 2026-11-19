@@ -1,0 +1,46 @@
+id: ocd-person/9e69729e-4383-410b-840e-ad4ea0f1ab4a
+name: Tasha Boerner
+given_name: Tasha
+family_name: Boerner
+birth_date: 1973-02-01
+gender: Female
+email: assemblymember.boerner@assembly.ca.gov
+image: https://webapi.assembly.ca.gov/district-media/assets/members/assembly_member_77.jpg
+party:
+- name: Democratic
+roles:
+- start_date: 2022-12-05
+  type: lower
+  jurisdiction: ocd-jurisdiction/country:us/state:ca/government
+  district: '77'
+- end_date: 2022-12-04
+  type: lower
+  jurisdiction: ocd-jurisdiction/country:us/state:ca/government
+  district: '76'
+offices:
+- classification: capitol
+  address: Room 4150, 1021 O St. P.O. Box 942849, Sacramento, CA 94249
+  voice: 916-319-2077
+- classification: district
+  address: 505 Lomas Santa Fe Drive Suite 110, Solana Beach, CA 92075
+  voice: 858-481-7704
+links:
+- url: https://a77.asmdc.org/
+- url: https://boerner.asmdc.org/
+other_names:
+- name: Boerner, T.
+- name: T. Boerner
+- name: T.N. Boerner
+- name: Tasha Boerner Horvath
+- name: Tasha Nicole Boerner
+sources:
+- url: https://a77.asmdc.org
+- url: https://a77.asmdc.org/biography
+- url: https://ballotpedia.org/Tasha_Boerner_Horvath
+- url: https://en.wikipedia.org/wiki/Tasha_Boerner
+- url: https://en.wikipedia.org/wiki/Tasha_Boerner_Horvath
+- url: https://justfacts.votesmart.org/candidate/biography/180144/tasha-boerner
+- url: https://www.assembly.ca.gov/assemblymembers
+- url: https://www.linkedin.com/in/boerner
+extras:
+  P.O. Box: P.O. Box 942849  Sacramento, CA  94249-0076

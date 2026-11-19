@@ -1,0 +1,35 @@
+id: ocd-person/895f777d-ae7b-429a-aa0f-1b2895c13945
+name: LaShae Sharp-Collins
+given_name: LaShae
+family_name: Sharp-Collins
+gender: Female
+email: assemblymember.sharpcollins@assembly.ca.gov
+image: https://s3.amazonaws.com/ballotpedia-api4/files/thumbs/200/300/lscollins.JPG
+party:
+- name: Democratic
+roles:
+- start_date: 2024-12-02
+  type: lower
+  jurisdiction: ocd-jurisdiction/country:us/state:ca/government
+  district: '79'
+offices:
+- classification: capitol
+  address: Room 4130, 1021 O St. P.O. Box 942849, Sacramento, CA 94249
+  voice: 916-319-2079
+- classification: district
+  address: 4700 Spring St. Suite 301, La Mesa, CA 91942
+  voice: 619-465-7903
+links:
+- url: https://a79.asmdc.org/
+- url: https://sharp-collins.asmdc.org/
+- url: https://www.assembly.ca.gov/assemblymembers/79
+other_names:
+- name: L. Sharp-Collins
+- name: L.N. Sharp-Collins
+- name: Sharp-Collins, L.
+sources:
+- url: https://a79.asmdc.org
+- url: https://ballotpedia.org/LaShae_Sharp-Collins
+- url: https://en.wikipedia.org/wiki/LaShae_Sharp-Collins
+- url: https://justfacts.votesmart.org/candidate/biography/213430/lashae-sharp-collins
+- url: https://www.assembly.ca.gov/assemblymembers/79

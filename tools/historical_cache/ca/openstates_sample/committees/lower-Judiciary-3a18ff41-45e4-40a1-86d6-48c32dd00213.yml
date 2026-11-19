@@ -1,0 +1,55 @@
+id: ocd-organization/3a18ff41-45e4-40a1-86d6-48c32dd00213
+jurisdiction: ocd-jurisdiction/country:us/state:ca/government
+classification: committee
+name: Judiciary
+chamber: lower
+sources:
+- url: https://ajud.assembly.ca.gov
+- url: https://ajud.assembly.ca.gov/
+  note: Committee Detail Page
+- url: https://www.assembly.ca.gov/committees
+  note: Committee List Page
+links:
+- url: https://ajud.assembly.ca.gov
+  note: homepage
+members:
+- name: Ash Kalra
+  role: chair
+  person_id: ocd-person/820619fd-d053-4915-b099-1d134a880228
+- name: Ali Macedo
+  role: vice chair
+  person_id: ocd-person/eb9c8103-ac9d-4342-9d95-5086d867a9bd
+- name: Blanca Pacheco
+  role: member
+  person_id: ocd-person/f2ba8154-6bf3-4e5e-af05-9412e2a189f2
+- name: Catherine Stefani
+  role: member
+  person_id: ocd-person/3864202e-3b40-430e-a218-cfe56d83cee5
+- name: Damon Connolly
+  role: member
+  person_id: ocd-person/32e06e60-77ac-4c5e-af1e-2110b602dc97
+- name: Diane Dixon
+  role: member
+  person_id: ocd-person/0c4e1b43-c3d7-4a13-87c4-92e29903cb73
+- name: Diane Papan
+  role: member
+  person_id: ocd-person/20c72bef-f518-4677-bbcb-83c502c36ede
+- name: Isaac Bryan
+  role: member
+  person_id: ocd-person/e9e56c3e-1c7d-4eab-a3ac-35cfc7c6a651
+- name: John Harabedian
+  role: member
+  person_id: ocd-person/0253bb3f-2fcb-49ed-a85d-578fee726be8
+- name: Kate Sanchez
+  role: member
+  person_id: ocd-person/76378b56-7ad9-463c-a4fd-47c665b26ee8
+- name: Rebecca Bauer-Kahan
+  role: member
+  person_id: ocd-person/2918acca-40a2-4819-a79a-b2873c7895bc
+- name: Rick Zbur
+  role: member
+  person_id: ocd-person/6b7e3458-361f-4fce-8a8c-069282db2af7
+other_names:
+- name: Assembly Committee on Judiciary
+- name: Assembly Judiciary
+- name: Assembly Judiciary Committee

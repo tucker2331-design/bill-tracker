@@ -7,7 +7,7 @@
 // gviz `tq` projection — ~5 MB vs ~9 MB full — and lazy-load it ONLY when the Calendar tab opens (keeps
 // the landing fast). A meeting = a (date, committee, time) where people were in a room; the Ledger-Updates
 // collapse (admin actions, no time) and the executive/meta rows are NOT meetings and are excluded.
-import { STATE } from "../states";
+import { STATE, chamberLabel } from "../states";
 import { parseCsv } from "./gviz";
 import { sheetUrl } from "../config";
 import { apiFetch } from "../state/auth";
@@ -211,8 +211,10 @@ async function _loadCalendar(): Promise<CalendarData> {
     const key = `${dk}|${committee}|${sortTime}`;
     let m = groups.get(key);
     if (!m) {
-      const chamber: Chamber | null = committee.startsWith("House") ? "House"
-        : committee.startsWith("Senate") ? "Senate" : null;
+      // A state may label a chamber its own way (California's lower chamber is the "Assembly"): the meeting name
+      // carries the label, the chamber KEY stays House/Senate.
+      const chamber: Chamber | null = committee.startsWith("House") || committee.startsWith(chamberLabel("House")) ? "House"
+        : committee.startsWith("Senate") || committee.startsWith(chamberLabel("Senate")) ? "Senate" : null;
       // Floor session markers vs committee meetings — see classifyMeetingKind (display-only; word-bounded).
       const kind: MeetingKind = classifyMeetingKind(committee);
       // [PLACEHOLDER "Time TBA"] honest display marker when LIS published no ScheduleTime — never a hidden

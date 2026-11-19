@@ -1,0 +1,85 @@
+id: ocd-organization/9f7fc1dc-3be0-4e96-b066-d01e7fd89a4a
+jurisdiction: ocd-jurisdiction/country:us/state:ca/government
+classification: committee
+name: Governmental Organization
+chamber: lower
+sources:
+- url: https://agov.assembly.ca.gov
+- url: https://agov.assembly.ca.gov/
+  note: Committee Detail Page
+- url: https://www.assembly.ca.gov/committees
+  note: Committee List Page
+links:
+- url: https://agov.assembly.ca.gov
+  note: homepage
+members:
+- name: Blanca Rubio
+  role: chair
+  person_id: ocd-person/82cbb6e9-8486-44ec-8450-86d1e700f828
+- name: Laurie Davies
+  role: vice chair
+  person_id: ocd-person/1b3ac39e-7b50-4263-bd1d-add1e91d71b9
+- name: Ali Macedo
+  role: member
+  person_id: ocd-person/eb9c8103-ac9d-4342-9d95-5086d867a9bd
+- name: Avelino Valencia
+  role: member
+  person_id: ocd-person/87062971-b583-4983-8ac5-4af98bef354d
+- name: Blanca Pacheco
+  role: member
+  person_id: ocd-person/f2ba8154-6bf3-4e5e-af05-9412e2a189f2
+- name: David Alvarez
+  role: member
+  person_id: ocd-person/52f6ccc1-eb4a-4c09-8614-5e4022395605
+- name: Diane Dixon
+  role: member
+  person_id: ocd-person/0c4e1b43-c3d7-4a13-87c4-92e29903cb73
+- name: Esmeralda Soria
+  role: member
+  person_id: ocd-person/d2a8e29a-5eac-4e2a-a686-d1bdb04927e7
+- name: Greg Wallis
+  role: member
+  person_id: ocd-person/50e55c91-8b18-45ea-a074-bf500e7a299e
+- name: Isaac Bryan
+  role: member
+  person_id: ocd-person/e9e56c3e-1c7d-4eab-a3ac-35cfc7c6a651
+- name: James Ramos
+  role: member
+  person_id: ocd-person/156660b1-4c3f-45e3-8384-53cda60d7ea5
+- name: Jesse Gabriel
+  role: member
+  person_id: ocd-person/407f6fda-8638-4cca-9704-7aa8df7de26e
+- name: "Jos\xE9 Solache"
+  role: member
+  person_id: ocd-person/b9c75c1e-6ea8-4fae-9efa-a7bf0a0cb2cc
+- name: Juan Carrillo
+  role: member
+  person_id: ocd-person/092bda0e-23a9-4d25-92a9-5808e996702b
+- name: Marc Berman
+  role: member
+  person_id: ocd-person/24facf9e-7fb1-4475-9120-05cd0145c7c1
+- name: Michelle Rodriguez
+  role: member
+  person_id: ocd-person/c8e36b71-c739-4afb-b8e9-cbdd4d362693
+- name: Mike Fong
+  role: member
+  person_id: ocd-person/3a7bde9c-8709-49c7-89e4-0835ea1f9eb6
+- name: Mike Gipson
+  role: member
+  person_id: ocd-person/404dbee4-6b74-4249-ab26-9644cab7c7d5
+- name: Phillip Chen
+  role: member
+  person_id: ocd-person/6ba768a4-2756-42b5-a5c5-f6b8b5db0491
+- name: Stephanie Nguyen
+  role: member
+  person_id: ocd-person/62102f53-b531-4290-9699-05a0d7687cae
+- name: Tina McKinnor
+  role: member
+  person_id: ocd-person/1aa5dff4-3d71-4642-a5e6-e3d00a5b99f9
+- name: Tri Ta
+  role: member
+  person_id: ocd-person/75229920-399d-4216-9b76-c27ea398665a
+other_names:
+- name: Assembly Committee on Governmental Organization
+- name: Assembly Governmental Organization
+- name: Assembly Governmental Organization Committee
